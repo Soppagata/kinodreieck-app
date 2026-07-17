@@ -5,6 +5,7 @@ import { IconExport } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
+import { GitSyncEinstellungen } from "../components/GitSyncEinstellungen.jsx";
 
 /* ================= EINSTELLUNGEN (früher "Daten") =================
    Darstellung/Verhalten, Datenbestand, Teilen & Tauschen, Vokabular,
@@ -65,6 +66,9 @@ export function DatenTab({
           </div>
         </div>
       )}
+      {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
+      <GitSyncEinstellungen />
+
       {/* Export-Wächter: Browser-Speicher ist KEIN Backup */}
       {(ungesichertMaster || ungesichertArtikel) && (
         <div data-tour="daten-waechter" style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "12px 16px", fontSize: 14, lineHeight: 1.6 }}>
