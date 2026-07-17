@@ -1,7 +1,14 @@
-/* ---------- Storage: localStorage, async-API beibehalten ----------
-   Gleiche Signatur wie der frühere Artifact-Storage (window.storage),
-   damit der portierte Code unverändert awaiten kann. */
-export const store = {
+/* ---------- Storage: Treiber-Modell (Phase 3a) ----------
+   `store` behält die bisherige async-Signatur (get/set/delete/list) exakt bei —
+   jeder Aufrufer bleibt unverändert. Intern delegiert `store` an den AKTIVEN
+   Treiber. Default ist der lokale Treiber (localStorage) = heutiges Verhalten.
+   Phase 3b hängt hier einen Git-Treiber ein, ohne einen einzigen Aufrufer zu
+   ändern. Die async-Signatur ist der Ankerpunkt: der portierte Code awaitet
+   bereits, ein Netzwerk-Treiber passt damit ohne Umbau dahinter. */
+
+/* Lokaler Treiber: exakt das bisherige localStorage-Verhalten. */
+export const localDriver = {
+  name: "lokal",
   async get(k) {
     const v = localStorage.getItem(k);
     return v === null ? null : { key: k, value: v };
@@ -16,6 +23,26 @@ export const store = {
   },
   async list(prefix = "") {
     return { keys: Object.keys(localStorage).filter((x) => x.startsWith(prefix)) };
+  },
+};
+
+let activeDriver = localDriver;
+
+/* Treiber wechseln (Phase 3b). null/undefined => zurück auf lokal. */
+export function setStorageDriver(driver) {
+  activeDriver = driver || localDriver;
+}
+export function storageDriverName() {
+  return activeDriver.name;
+}
+
+/* Fassade: unveränderte Signatur, delegiert an den aktiven Treiber. */
+export const store = {
+  get(k) { return activeDriver.get(k); },
+  set(k, v) { return activeDriver.set(k, v); },
+  delete(k) { return activeDriver.delete(k); },
+  list(prefix = "") {
+    return activeDriver.list ? activeDriver.list(prefix) : Promise.resolve({ keys: [] });
   },
 };
 
