@@ -1,0 +1,24 @@
+{
+  "name": "kinodreieck-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Kinodreieck Wien — persönliche Kino-/Streaming-Empfehlungs-App (öffentlicher App-Code; persönliche Daten liegen separat im privaten Daten-Repo).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:single": "node build-single.mjs",
+    "test": "node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^25.0.1",
+    "vite": "^6.0.7",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}

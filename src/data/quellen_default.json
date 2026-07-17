@@ -1,0 +1,21 @@
+{
+ "hinweis": "Startliste der Watchmode-Quellen (AT) nach Max' Abo-Lage, Stand 12.7.2026. Nach dem ersten Phase-0-Lauf ersetzt die live ermittelte Liste (mit Source-IDs) diese Datei als Anzeige-Quelle.",
+ "gruppen": [
+  {
+   "name": "Abos (Subscription)",
+   "typ": "sub",
+   "quellen": ["Netflix", "HBO Max", "Prime Video", "Disney+", "AppleTV+", "Hayu", "Paramount Plus", "Sky Go", "Crunchyroll Premium", "ARD Plus (Via Amazon Prime)", "Canal+", "Crunchyroll Premium (Via Prime)", "Curiosity Stream", "Discovery+", "Discovery+ (Via Amazon Prime)", "GuideDoc", "Hayu (Via Amazon Prime)", "Kocowa", "Lionsgate+ (Via Amazon Prime)", "MAX (Via Amazon Prime)", "MGM+ (Via Amazon Prime)", "MUBI", "Paramount+ (Via Amazon Prime)", "Paramount+ (Via Apple TV)", "RTL+", "WOW Presents Plus", "Zee5"]
+  },
+  {
+   "name": "Gratis (Free)",
+   "typ": "free",
+   "quellen": ["Amazon Freevee", "Youtube Premium", "Joyn", "Pluto TV", "ZDF"]
+  },
+  {
+   "name": "Kauf & Leihe (Purchase/Rental)",
+   "typ": "purchase",
+   "warnung": "Riesige Kataloge (je 150-250 Credits pro Lauf) mit wenig Aussagekraft — fast jeder Film ist irgendwo kaufbar. Nur gezielt aktivieren.",
+   "quellen": ["AppleTV", "Amazon", "YouTube", "maxdome Store", "Plex", "Rakuten TV", "Sky Store"]
+  }
+ ]
+}

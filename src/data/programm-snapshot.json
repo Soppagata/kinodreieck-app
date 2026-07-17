@@ -1,0 +1,80 @@
+{
+ "erstellt": "2026-07-15T12:00:00+02:00",
+ "quelle": "Demo-Programm (synthetisch)",
+ "zeitraum": {
+  "von": "2026-07-15",
+  "bis": "2026-07-28"
+ },
+ "filme": [
+  {
+   "film_at_id": 900000001,
+   "film_at_uri": "/demo/sommer_der_kometen",
+   "titel": "Sommer der Kometen",
+   "jahr": 2015,
+   "genres": [
+    "Drama"
+   ],
+   "beschreibung": "Demo-Vorstellung im Testfenster (Match-Film).",
+   "vorstellungen": [
+    {
+     "kino": "Demo-Lichtspiele",
+     "kino_id": 900100001,
+     "zeit": "2026-07-17T20:00:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": true
+    }
+   ],
+   "originaltitel": "Sommer der Kometen",
+   "jahr_quelle": "demo"
+  },
+  {
+   "film_at_id": 900000002,
+   "film_at_uri": "/demo/der_weite_weg",
+   "titel": "Der weite Weg nach Haus",
+   "jahr": 2012,
+   "genres": [
+    "Abenteuer"
+   ],
+   "beschreibung": "Demo-Kompakteintrag.",
+   "vorstellungen": [
+    {
+     "kino": "Demo-Kino Central",
+     "kino_id": 900100002,
+     "zeit": "2026-07-16T18:30:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    }
+   ],
+   "originaltitel": "Der weite Weg nach Haus",
+   "jahr_quelle": "demo"
+  },
+  {
+   "film_at_id": 900000003,
+   "film_at_uri": "/demo/zwoelf_minuten_stille",
+   "titel": "Zwölf Minuten Stille",
+   "jahr": 2020,
+   "genres": [
+    "Thriller"
+   ],
+   "beschreibung": "Demo-Kompakteintrag.",
+   "vorstellungen": [
+    {
+     "kino": "Demo-Lichtspiele",
+     "kino_id": 900100001,
+     "zeit": "2026-07-18T21:15:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": true
+    }
+   ],
+   "originaltitel": "Zwölf Minuten Stille",
+   "jahr_quelle": "demo"
+  }
+ ],
+ "warnungen": []
+}

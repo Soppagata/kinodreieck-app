@@ -1,0 +1,48 @@
+{
+ "hinweis": "Vokabular des Finders — reine Daten, kein Code. Erweitern nach Bedarf: neue Wörter einfach in die Listen (klein, ohne Umlaut-Sonderformen — der Abgleich normalisiert). Max' echte Anfragen schärfen diese Listen über die Zeit.",
+ "achsen": {
+  "wie": ["stylisch", "asthetisch", "asthetik", "optik", "optisch", "visuell", "atmosphare", "atmospharisch", "bildgewaltig", "look", "inszenierung", "schone bilder"],
+  "was": ["tiefgang", "anspruchsvoll", "story", "handlung", "thema", "gehalt", "philosophisch", "gesellschaftskritisch", "komplex", "clever", "zum nachdenken"],
+  "warum": ["spass", "cool", "unterhaltsam", "unterhaltung", "fun", "rewatch", "sog", "mitreissend", "kurzweilig", "popcorn"]
+ },
+ "kategorien": {
+  "immer_gut": ["immer gut", "verlasslich", "sichere bank", "safe"],
+  "kult": ["kult"],
+  "kult_klassiker": ["klassiker", "kanon", "alter film"],
+  "daemlich_aber_herrlich": ["damlich", "dumm aber", "herrlich blod", "bloed"],
+  "trash": ["trash", "schlecht aber gut"],
+  "sehenswert": ["sehenswert", "solide"]
+ },
+ "quellen": {
+  "kino": ["kino", "lauft", "spielt", "vorstellung", "leinwand", "im programm"],
+  "streaming": ["streaming", "stream", "netflix", "disney", "prime", "joyn", "paramount", "crunchyroll", "abrufbar", "zuhause schauen"],
+  "dvd": ["dvd", "regal", "sammlung", "besitz", "blu ray", "bluray"]
+ },
+ "zeit": { "heute": ["heute", "heut abend", "gleich"], "morgen": ["morgen"] },
+ "entdecken": ["neu", "neues", "unbekannt", "entdecken", "noch nie", "kenne nicht", "kenn ich nicht", "uberraschung", "uberrasch"],
+ "stimmungen": {
+  "traurig": { "genres": ["drama"], "tags": ["melancholisch", "melancholie", "trauer", "tragisch", "tragik", "emotional"] },
+  "melancholisch": { "genres": ["drama"], "tags": ["melancholisch", "noir", "einsamkeit"] },
+  "duster": { "genres": ["film-noir", "horror", "thriller"], "tags": ["noir", "dystopie", "duester", "dunkel"] },
+  "dunkel": { "genres": ["film-noir", "thriller"], "tags": ["noir", "dystopie"] },
+  "gemutlich": { "genres": ["komoedie", "romanze"], "tags": ["feelgood", "wohlfuehl", "warm"] },
+  "wohlfuhl": { "genres": ["komoedie", "romanze"], "tags": ["feelgood", "wohlfuehl"] },
+  "romantisch": { "genres": ["romanze"], "tags": ["liebe", "romantik"] },
+  "spannend": { "genres": ["thriller", "crime"], "tags": ["spannung"] },
+  "episch": { "genres": ["abenteuer", "fantasy"], "tags": ["episch", "weltenbau"] },
+  "verstorend": { "genres": ["horror"], "tags": ["verstoerend", "boese"] },
+  "oldschool": { "jahr_max": 1989 },
+  "retro": { "jahr_max": 1989 },
+  "klassisch": { "jahr_max": 1979 },
+  "modern": { "jahr_min": 2010 },
+  "aktuell": { "jahr_min": 2015 }
+ },
+ "genre_synonyme": {
+  "science fiction": "sci-fi", "sciencefiction": "sci-fi", "scifi": "sci-fi",
+  "horrorfilm": "horror", "gruselig": "horror", "grusel": "horror",
+  "zeichentrick": "anime", "animation": "anime",
+  "komodie": "komoedie", "comedy": "komoedie", "lustig": "komoedie", "witzig": "komoedie",
+  "liebesfilm": "romanze", "krimi": "crime", "doku": "dokumentation",
+  "actionfilm": "action", "kampf": "action"
+ }
+}

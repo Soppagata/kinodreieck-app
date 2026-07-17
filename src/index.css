@@ -1,0 +1,158 @@
+/* Lokal eingebettete Fonts: ?inline macht aus den WOFF2-Dateien Data-URIs in
+   der Doppelklick-HTML. Latin + Latin-Extended decken Deutsch und Europa ab;
+   andere Schriftsysteme fallen bewusst auf den jeweiligen Systemfont zurück. */
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+html, body { margin: 0; padding: 0; background: #17151A; font-weight: 400;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+#root { min-height: 100vh; }
+
+/* ---- Touch-Härtung (Handy) ---- */
+button, summary, input, select, textarea, label { touch-action: manipulation; }
+button, summary { -webkit-tap-highlight-color: rgba(255,255,255,0.08); cursor: pointer; }
+@media (pointer: coarse) {
+  button { min-height: 44px; }           /* Apple-Richtwert für Tap-Ziele */
+  input, select { min-height: 40px; font-size: 16px !important; } /* <16px löst iOS-Fokus-Zoom aus */
+  summary { padding: 10px 0; }
+}
+
+/* ---- Theme: body-Grundfarbe setzt setzeTheme() zur Laufzeit ---- */
+
+/* ---- Zustände: Hover, Tastatur-Fokus (focus-visible), Disabled (P3) ----
+   Global über Element-Selektoren, damit sie ohne Klassen auf alle
+   inline-gestylten Buttons/Inputs/Links greifen. */
+button, summary, [role="button"] { transition: filter .12s ease; }
+button:hover:not(:disabled), summary:hover, a:hover:not(:disabled) { filter: brightness(1.12); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid #E3A63B; outline-offset: 2px;
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+:root { --perfoTempo: 1.4s; }
+
+/* ================= MODI: KUROSAWA & GRINDHOUSE =================
+   Port aus modi-demo-v13.html (13 Iterationen, Werte sind Ergebnisse).
+   .kd-wrap trägt die Modus-Klasse; .kd-app ist der gefilterte Inhalt;
+   Overlays (.kd-fx, #kd-horizont, .kd-perfo, .kd-kantenriss) liegen
+   außerhalb des Filters (fixed am Viewport). */
+.kd-wrap { position: relative; }
+.kd-app { position: relative; transition: padding-bottom .2s; }
+.kd-fx { position: fixed; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+
+/* ---------- KUROSAWA — LIGHT-MODE-EXKLUSIV ----------
+   Tintenregen (dunkle Striche auf hell), tonal statt Tusche: Kontrast unter 1,
+   kein reines Schwarz/Weiß. Der Modus erzwingt das helle Theme. */
+.kd-kurosawa { --kd-lb: clamp(42px, 6.4vh, 82px); }
+/* Angepinntes Menü unter die obere Letterbox schieben (sonst dahinter verdeckt) */
+.kd-kurosawa .kd-menu { top: var(--kd-lb) !important; }
+.kd-kurosawa .kd-app { filter: grayscale(1) contrast(.9) brightness(1.02); padding-top: var(--kd-lb); padding-bottom: calc(150px + var(--kd-lb)); }
+/* Letterbox: simuliert ein Breitwand-Format (Tohoscope-Anmutung). Fix am
+   Viewport, dunkel; der Inhalt ist oben um die Balkenhöhe eingerückt. */
+.kd-kurosawa::before, .kd-kurosawa::after {
+  content: ""; position: fixed; left: 0; right: 0; height: var(--kd-lb); z-index: 50;
+  background: #0E0C10; pointer-events: none;
+}
+.kd-kurosawa::before { top: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.55); }
+.kd-kurosawa::after { bottom: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.55); }
+/* In Graustufe trägt Farbe keine Info -> Löschen wechselt den Kanal: Unterstrich */
+.kd-kurosawa .kd-del { text-decoration: underline !important; }
+/* Tintenregen: dunkel, nicht schwarz — Tinte im Wasser (JS erzeugt 90 Striche) */
+.kd-tropfen { position: absolute; top: -30%; width: 2.5px; border-radius: 1px;
+  background: linear-gradient(to bottom, rgba(40,37,33,0), rgba(40,37,33,.7), rgba(40,37,33,0));
+  animation: kd-fallen linear infinite; }
+@keyframes kd-fallen { from { transform: translate(0, -40vh) rotate(13deg) } to { transform: translate(-8vw, 160vh) rotate(13deg) } }
+/* Horizont: fest am unteren Viewport-Rand, nicht im scrollenden Inhalt */
+#kd-horizont { position: fixed; left: 0; right: 0; bottom: var(--kd-lb, 0); height: 120px; z-index: 40; pointer-events: none; overflow: visible; }
+#kd-horizont .boden { position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: #2E2B27; }
+.kd-halm { position: absolute; bottom: 14px; transform-origin: 50% 100%; animation: kd-wehen ease-in-out infinite alternate; }
+.kd-halm svg { display: block; }
+.kd-halm path { fill: none; stroke: #2E2B27; stroke-linecap: round; }
+@keyframes kd-wehen {
+  from { transform: rotate(var(--a1,-4deg)) skewX(var(--s1,-1deg)); }
+  to   { transform: rotate(var(--a2,7deg))  skewX(var(--s2,2.5deg)); }
+}
+#kd-nobori, #kd-nobori2 { position: absolute; bottom: 24px; transform-origin: 50% 100%;
+  animation: kd-wehen 5.2s ease-in-out infinite alternate; --a1:-1.6deg;--a2:1.8deg;--s1:-.6deg;--s2:.8deg; }
+#kd-nobori2 { display: none; }                 /* zweiter Banner erst ab Breitbild */
+@media (min-width: 1024px) { #kd-nobori2 { display: block; } }
+#kd-nobori .tuch, #kd-nobori2 .tuch { animation: kd-tuchwehen 2.7s ease-in-out infinite alternate; transform-origin: 0% 50%; }
+@keyframes kd-tuchwehen {
+  0%   { transform: skewY(-3.4deg) scaleX(.94); }
+  50%  { transform: skewY(3.8deg)  scaleX(1); }
+  100% { transform: skewY(-1.8deg) scaleX(.96); }
+}
+
+/* ---------- GRINDHOUSE — DARK-MODE-EXKLUSIV ----------
+   Ausgeblichene, verrottete Filmkopie: hell/warm-gelb, Bernstein-Lichter,
+   olivgrüne Schatten. Stich über zwei blend-mode-Schichten, nicht filter allein. */
+.kd-grindhouse .kd-app { filter: saturate(.95) contrast(1.02) brightness(1.2) sepia(.3) hue-rotate(-4deg);
+  animation: kd-gh-flacker 3.3s steps(1) infinite; padding-left: 52px; padding-right: 52px; }
+.kd-grindhouse .kd-del { color: #FF7A5E !important; border-color: #FF7A5E !important; }
+.kd-grindhouse .kd-achse { filter: brightness(1.05); }
+/* WIE/WAS/WARUM im Grindhouse: kräftiges sattes Grün, sonst im Sepia-Kontrast unlesbar */
+.kd-grindhouse .kd-achse span { color: #12B347 !important; }
+@keyframes kd-gh-flacker {
+  0%,100% { filter: saturate(.95) contrast(1.02) brightness(1.2) sepia(.3) hue-rotate(-4deg); }
+  38% { filter: saturate(.82) contrast(.96) brightness(1.34) sepia(.38) hue-rotate(-2deg); }
+  39% { filter: saturate(1.08) contrast(1.08) brightness(1.08) sepia(.24) hue-rotate(-6deg); }
+  74% { filter: saturate(.9) contrast(1) brightness(1.3) sepia(.34) hue-rotate(-3deg); }
+}
+.kd-fx > .grade, .kd-fx > .grade2, .kd-fx > .korn, .kd-fx > .kratzer, .kd-fx > .knitter { position: absolute; inset: 0; opacity: 0; }
+.kd-grindhouse .kd-fx > .grade { mix-blend-mode: overlay; opacity: .3;
+  background: radial-gradient(120% 90% at 50% 40%, rgba(232,170,58,.78) 0 40%, rgba(174,124,48,.75) 72%, rgba(104,96,48,.8) 100%); }
+.kd-grindhouse .kd-fx > .grade2 { mix-blend-mode: color; opacity: .18;
+  background: linear-gradient(160deg,#E0A828 0%, #C28434 48%, #8C7A38 100%); }
+.kd-grindhouse .kd-fx > .korn { mix-blend-mode: overlay; opacity: .32;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='170'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/></filter><rect width='170' height='170' filter='url(%23n)' opacity='0.6'/></svg>");
+  animation: kd-gh-korn .16s steps(3) infinite; }
+@keyframes kd-gh-korn { 0%{transform:translate(0,0)} 33%{transform:translate(-3%,2%)} 66%{transform:translate(2%,-3%)} 100%{transform:translate(0,0)} }
+.kd-grindhouse .kd-fx > .kratzer { opacity: .4;
+  background:
+    linear-gradient(90deg,transparent 0 17%,rgba(255,244,205,.55) 17% 17.2%,transparent 17.2%),
+    linear-gradient(90deg,transparent 0 49%,rgba(255,236,185,.25) 49% 49.15%,transparent 49.15%),
+    linear-gradient(90deg,transparent 0 74%,rgba(80,55,20,.45) 74% 74.3%,transparent 74.3%);
+  animation: kd-gh-kratzer 2.1s steps(1) infinite; }
+@keyframes kd-gh-kratzer { 0%{transform:translateX(0)} 30%{transform:translateX(-3%)} 60%{transform:translateX(2%)} 100%{transform:translateX(0)} }
+.kd-grindhouse .kd-fx > .knitter { mix-blend-mode: soft-light; opacity: .4;
+  background:
+    linear-gradient(97deg, transparent 0 22%, rgba(255,255,255,.5) 23%, rgba(0,0,0,.4) 24.2%, transparent 26%),
+    linear-gradient(84deg, transparent 0 58%, rgba(255,255,255,.35) 59%, rgba(0,0,0,.3) 60%, transparent 62%),
+    linear-gradient(103deg, transparent 0 79%, rgba(255,255,255,.3) 80%, rgba(0,0,0,.25) 81%, transparent 83%);
+  filter: blur(1.4px); }
+/* Perforation — Überstand = eine volle Kachelhöhe in px (nicht %), sonst Lücken */
+.kd-perfo { position: fixed; top: -456px; bottom: 0; width: 30px; z-index: 9;
+  background-repeat: repeat-y; background-size: 30px 456px;
+  animation: kd-perfo-lauf var(--perfoTempo) linear infinite; opacity: 0; visibility: hidden; pointer-events: none; }
+.kd-grindhouse .kd-perfo { opacity: 1; visibility: visible; }
+.kd-perfo.l { left: 0; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='456'><rect width='30' height='456' fill='%23231A0C'/><rect x='7' y='14' width='16' height='44' rx='3' fill='%23FFEDC0'/><path d='M7 90 h16 v28 l-6 5 l6 9 v6 H7 Z' fill='%23FFEDC0'/><path d='M7 166 h16 v18 l-16 12 Z M7 204 h10 l6 8 v22 H7 Z' fill='%23FFEDC0'/><rect x='7' y='242' width='16' height='44' rx='3' fill='%23FFEDC0' opacity='0.14'/><path d='M7 318 h16 v20 l-9 4 l9 10 v10 H7 Z' fill='%23FFEDC0'/><rect x='7' y='394' width='16' height='44' rx='3' fill='%23FFEDC0'/><rect x='26' y='0' width='4' height='456' fill='%23E0812A' opacity='0.3'/><rect x='0' y='120' width='3' height='70' fill='%23FFEDC0' opacity='0.22'/><rect x='0' y='330' width='2' height='50' fill='%23FFEDC0' opacity='0.16'/></svg>"); }
+.kd-perfo.r { right: 0; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='456'><rect width='30' height='456' fill='%23231A0C'/><rect x='7' y='38' width='16' height='44' rx='3' fill='%23FFEDC0'/><path d='M7 114 h16 v44 h-7 l-3 -11 l-6 7 Z' fill='%23FFEDC0'/><rect x='7' y='190' width='16' height='44' rx='3' fill='%23FFEDC0' opacity='0.1'/><path d='M9 266 h14 v40 h-16 l4 -20 Z' fill='%23FFEDC0'/><rect x='7' y='342' width='16' height='44' rx='3' fill='%23FFEDC0'/><path d='M7 418 h16 v24 l-8 -6 l-8 12 Z' fill='%23FFEDC0'/><rect x='0' y='0' width='4' height='456' fill='%23E0812A' opacity='0.3'/><rect x='27' y='60' width='3' height='96' fill='%23FFEDC0' opacity='0.2'/></svg>"); }
+@keyframes kd-perfo-lauf { from { transform: translateY(0); } to { transform: translateY(456px); } }
+/* Kantenrisse — 1824px-Kachel (4×456), Animation schiebt exakt eine Kachelhöhe */
+.kd-kantenriss { position: fixed; top: -1824px; bottom: 0; width: 170px; z-index: 8;
+  background-repeat: repeat-y; background-size: 170px 1824px; filter: url(#fransig) blur(.6px);
+  animation: kd-riss-lauf calc(var(--perfoTempo) * 4) linear infinite; opacity: 0; visibility: hidden; pointer-events: none; }
+.kd-grindhouse .kd-kantenriss { opacity: .55; visibility: visible; }
+.kd-kantenriss.l { left: 26px; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='1824'><path d='M0 640 h58 l22 9 h30 l14 7 l-20 4 h-34 l-24 -7 h-46 Z' fill='%23FFEDC0'/></svg>"); }
+.kd-kantenriss.r { right: 26px; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='170' height='1824'><path d='M170 1290 h-80 l-28 -10 h-26 l18 15 h46 l28 6 h42 Z' fill='%23261C0C'/></svg>"); }
+@keyframes kd-riss-lauf { from { transform: translateY(0); } to { transform: translateY(1824px); } }
+/* Klebestellen-Sprung (JS-getaktet, zufälliges Intervall) */
+.kd-riss .kd-app { transform: translateY(-9px); filter: saturate(.7) contrast(.92) brightness(1.55) sepia(.42) hue-rotate(-3deg); }
+.kd-riss .kd-fx > .korn { opacity: .95; }
+.kd-riss .kd-perfo { animation-duration: calc(var(--perfoTempo) * .35); }
+.kd-riss .kd-kantenriss { animation-duration: calc(var(--perfoTempo) * 1.4); }
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-tropfen, .kd-halm, #kd-nobori, #kd-nobori .tuch, .kd-grindhouse .kd-app, .kd-fx *, .kd-perfo, .kd-kantenriss { animation: none !important; }
+}

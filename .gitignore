@@ -1,0 +1,24 @@
+# Build-Ausgaben
+node_modules
+dist
+dist-single
+dist-ssr
+*.local
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# lokale Daten & Schlüssel — NIE versionieren
+.env
+.env.*
+streaming-daten/
+kino-daten/
+Archiv/
+
+# Transfer-/Aufräum-Reste (nicht committen)
+_to_delete/
+_kd_tree.tgz

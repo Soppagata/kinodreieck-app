@@ -1,0 +1,32 @@
+{
+  "_hinweis": "Kino-Webseiten. 'match' = Stichwort (kleingeschrieben), das im Kino-Namen aus dem Programm vorkommt (erste Übereinstimmung gewinnt). Endet die URL auf '?date=', hängt die App das heutige Datum (JJJJ-MM-TT) an (Cineplexx braucht das). Unbekannte Kinos -> nonstopkino.at. Neue Kinos einfach hier ergänzen.",
+  "kinos": [
+    { "match": "donau", "url": "https://cineplexx.at/cinemas/Donau-Plex?date=" },
+    { "match": "wienerberg", "url": "https://cineplexx.at/cinemas/Cineplexx-Wienerberg?date=" },
+    { "match": "millennium", "url": "https://cineplexx.at/cinemas/Cineplexx-Millennium-City?date=" },
+    { "match": "auhof", "url": "https://cineplexx.at/cinemas/Cineplexx-Auhof?date=" },
+    { "match": "apollo", "url": "https://cineplexx.at/cinemas/Apollo-Das-Kino?date=" },
+    { "match": "village", "url": "https://cineplexx.at/cinemas/Village-Cinema-Wien-Mitte?date=" },
+    { "match": "wien mitte", "url": "https://cineplexx.at/cinemas/Village-Cinema-Wien-Mitte?date=" },
+    { "match": "artis", "url": "https://cineplexx.at/cinemas/Artis-International?date=" },
+    { "match": "actors", "url": "https://www.actorsstudio.at" },
+    { "match": "admiral", "url": "https://www.admiralkino.at" },
+    { "match": "bellaria", "url": "https://www.bellariakino.at" },
+    { "match": "breitensee", "url": "https://www.breitenseer-lichtspiele.at" },
+    { "match": "burg", "url": "https://www.burgkino.at" },
+    { "match": "cinecenter", "url": "https://www.cinecenter.at" },
+    { "match": "de france", "url": "https://www.votivkino.at/de-france" },
+    { "match": "filmcasino", "url": "https://www.filmcasino.at" },
+    { "match": "filmhaus", "url": "https://www.filmhaus.at" },
+    { "match": "filmmuseum", "url": "https://www.filmmuseum.at" },
+    { "match": "gartenbau", "url": "https://www.gartenbaukino.at" },
+    { "match": "haydn", "url": "https://www.haydnkino.at" },
+    { "match": "metro", "url": "https://www.filmarchiv.at" },
+    { "match": "noch nie", "url": "https://www.wienxtra.at/film" },
+    { "match": "schikaneder", "url": "https://www.schikaneder.at" },
+    { "match": "stadtkino", "url": "https://www.stadtkino.at" },
+    { "match": "top kino", "url": "https://www.topkino.at" },
+    { "match": "urania", "url": "https://www.urania.at" },
+    { "match": "votiv", "url": "https://www.votivkino.at" }
+  ]
+}

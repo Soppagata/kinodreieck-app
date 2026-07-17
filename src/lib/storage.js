@@ -1,0 +1,42 @@
+/* ---------- Storage: localStorage, async-API beibehalten ----------
+   Gleiche Signatur wie der frühere Artifact-Storage (window.storage),
+   damit der portierte Code unverändert awaiten kann. */
+export const store = {
+  async get(k) {
+    const v = localStorage.getItem(k);
+    return v === null ? null : { key: k, value: v };
+  },
+  async set(k, v) {
+    localStorage.setItem(k, v);
+    return { key: k, value: v };
+  },
+  async delete(k) {
+    localStorage.removeItem(k);
+    return { key: k, deleted: true };
+  },
+  async list(prefix = "") {
+    return { keys: Object.keys(localStorage).filter((x) => x.startsWith(prefix)) };
+  },
+};
+
+/* ---------- Storage-Keys ---------- */
+export const K = {
+  master: "kd:master",
+  programm: "kd:programm-cache",
+  artikel: "kd:artikel",             // Blog-Bereich (Phase 2)
+  streamingDienste: "kd:streaming-dienste", // Anzeigefilter (Checkboxen) — Fetch steuert streaming_config.json
+  merkliste: "kd:merkliste",         // Entdecken-Merkliste (Übergabepunkt an den Daten-Chat)
+  exportStand: "kd:export-stand",    // Export-Wächter: wann zuletzt Master/Artikel exportiert
+  zeitgrenze: "kd:zeitgrenze",       // Kino-Tab: Zeitfilter für "Läuft auch" (Default 14:00)
+  kinoPins: "kd:kino-pins",          // Angepinnte Kinotermine [{t,j,z,seit}] — Basis fürs Dashboard-Pinboard
+  autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt
+  entdeckenStatus: "kd:entdecken-status", // {watchmode_id: "gesehen"|"erstellt"} — Erledigtes im Entdecken ausblenden
+  einstellungen: "kd:einstellungen",  // {theme, startTab, schrift, kurosawa}
+  filterMediathek: "kd:filter-mediathek", // Mediathek-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
+  filterKino: "kd:filter-kino",       // Kino-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
+  vokabular: "kd:vokabular",          // eigene Stimmungswörter für die Suche [{wort, genres[], tags[]}]
+  start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
+  startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
+};
+
+export const PROGRAMM_TTL_MS = 24 * 60 * 60 * 1000; // 24h

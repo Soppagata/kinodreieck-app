@@ -1,0 +1,78 @@
+{
+ "stand": "2026-07-15T11:00:00Z",
+ "region": "AT",
+ "dienste": [
+  "Netflix",
+  "Disney+",
+  "Prime Video"
+ ],
+ "verfuegbare_quellen": [
+  {
+   "name": "Netflix",
+   "typ": "sub"
+  },
+  {
+   "name": "Disney+",
+   "typ": "sub"
+  },
+  {
+   "name": "Prime Video",
+   "typ": "sub"
+  },
+  {
+   "name": "Joyn",
+   "typ": "free"
+  }
+ ],
+ "katalog_stand": "2026-07-15T11:00:00Z",
+ "quota_nach_lauf": 0,
+ "heuristik": true,
+ "titel": [
+  {
+   "id": "regenbogen_ueber_kreuzberg_2016",
+   "titel": "Regenbogen über Kreuzberg",
+   "jahr": 2016,
+   "watchmode_id": 900200001,
+   "dienste": [
+    "Netflix"
+   ],
+   "web_urls": {},
+   "bewertung": {
+    "wie": 3,
+    "was": 4,
+    "warum": 3
+   },
+   "kategorie": "sehenswert",
+   "begruendung": "Demo.",
+   "genre": [
+    "Drama"
+   ],
+   "bewertet_von": "demo",
+   "must_watch": false,
+   "quelle": "streaming"
+  },
+  {
+   "id": "der_stille_zeuge_2008",
+   "titel": "Der stille Zeuge",
+   "jahr": 2008,
+   "watchmode_id": 900200002,
+   "dienste": [
+    "Prime Video"
+   ],
+   "web_urls": {},
+   "bewertung": {
+    "wie": 3,
+    "was": 3,
+    "warum": 3
+   },
+   "kategorie": "gut",
+   "begruendung": "Demo.",
+   "genre": [
+    "Thriller"
+   ],
+   "bewertet_von": "demo",
+   "must_watch": false,
+   "quelle": "streaming"
+  }
+ ]
+}

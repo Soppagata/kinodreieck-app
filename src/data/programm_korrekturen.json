@@ -1,0 +1,6 @@
+{
+  "_hinweis": "Manuelle Korrekturen für film.at-Datenfehler. Schlüssel = film_at_id (als String). Felder pro Eintrag: 'jahr' (Zahl) und/oder 'titel' (String). Wird beim Laden über die film.at-Programmdaten gelegt — greift auch in der eingebackenen HTML (Tester). Neue Korrektur = eine Zeile ergänzen.",
+  "korrekturen": {
+    "400279425": { "jahr": 2026 }
+  }
+}

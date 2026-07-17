@@ -1,0 +1,110 @@
+{
+ "meta": {
+  "name": "Kinodreieck Demo-Liste",
+  "version": "demo-1",
+  "hinweis": "Synthetische Demo-Daten. Enthaelt bewusst keine persoenlichen Bewertungen. Echte Liste laedt zur Laufzeit aus dem privaten Daten-Repo.",
+  "bewertungsmodell": {
+   "wie": "Aesthetik/Inszenierung 0-5",
+   "was": "Handlung/Thema 0-5",
+   "warum": "Persoenliche Praegung 0-5"
+  }
+ },
+ "filme": [
+  {
+   "id": "der_letzte_vorfuehrer_1998",
+   "titel": "Der letzte Vorführer",
+   "originaltitel": "Der letzte Vorführer",
+   "jahr": 1998,
+   "jahr_bis": null,
+   "typ": "film",
+   "quelle": "dvd",
+   "must_watch": false,
+   "kategorie": "kult_klassiker",
+   "bewertet_von": "demo",
+   "bewertung": {
+    "wie": 4,
+    "was": 3,
+    "warum": 4
+   },
+   "genre": [
+    "Drama"
+   ],
+   "tags": [],
+   "begruendung": "Demo-Eintrag: hommage ans analoge Kino.",
+   "status": "gesetzt",
+   "notiz": ""
+  },
+  {
+   "id": "nachtbus_ins_nirgendwo_2011",
+   "titel": "Nachtbus ins Nirgendwo",
+   "originaltitel": "Nachtbus ins Nirgendwo",
+   "jahr": 2011,
+   "jahr_bis": null,
+   "typ": "film",
+   "quelle": "prime",
+   "must_watch": false,
+   "kategorie": "sehenswert",
+   "bewertet_von": "demo",
+   "bewertung": {
+    "wie": 3,
+    "was": 4,
+    "warum": 3
+   },
+   "genre": [
+    "Thriller"
+   ],
+   "tags": [],
+   "begruendung": "Demo-Eintrag: nächtliche Fahrt, offener Ausgang.",
+   "status": "gesetzt",
+   "notiz": ""
+  },
+  {
+   "id": "die_farbe_des_regens_2004",
+   "titel": "Die Farbe des Regens",
+   "originaltitel": "Die Farbe des Regens",
+   "jahr": 2004,
+   "jahr_bis": null,
+   "typ": "film",
+   "quelle": "apple",
+   "must_watch": false,
+   "kategorie": "sehenswert",
+   "bewertet_von": "demo",
+   "bewertung": {
+    "wie": 4,
+    "was": 4,
+    "warum": 2
+   },
+   "genre": [
+    "Romanze"
+   ],
+   "tags": [],
+   "begruendung": "Demo-Eintrag: stiller Bilderfilm.",
+   "status": "gesetzt",
+   "notiz": ""
+  },
+  {
+   "id": "stadt_aus_glas_2019",
+   "titel": "Stadt aus Glas",
+   "originaltitel": "Stadt aus Glas",
+   "jahr": 2019,
+   "jahr_bis": null,
+   "typ": "film",
+   "quelle": "dvd",
+   "must_watch": false,
+   "kategorie": "gut",
+   "bewertet_von": "demo",
+   "bewertung": {
+    "wie": 3,
+    "was": 3,
+    "warum": 3
+   },
+   "genre": [
+    "Science-Fiction"
+   ],
+   "tags": [],
+   "begruendung": "Demo-Eintrag: Utopie mit Rissen.",
+   "status": "gesetzt",
+   "notiz": ""
+  }
+ ]
+}
