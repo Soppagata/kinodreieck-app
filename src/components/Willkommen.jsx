@@ -19,7 +19,7 @@ export function Willkommen({ onClose }) {
   const box = {
     background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8,
     maxWidth: 560, width: "100%", padding: "26px 28px", boxShadow: "0 10px 48px rgba(0,0,0,0.6)",
-    maxHeight: "90vh", overflowY: "auto",
+    maxHeight: "90dvh", overflowY: "auto", overscrollBehavior: "contain",
   };
   const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "0.04em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 14px" };
   const p = { fontFamily: "'Space Grotesk', sans-serif", fontSize: 14.5, color: T.leinwand, lineHeight: 1.7, margin: "0 0 12px" };

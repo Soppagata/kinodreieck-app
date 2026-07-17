@@ -22,3 +22,6 @@ Archiv/
 # Transfer-/Aufräum-Reste (nicht committen)
 _to_delete/
 _kd_tree.tgz
+
+# Lose Debug-/Screenshot-PNGs im Root (echte Icons liegen in public/, Logo in logo/)
+/*.png

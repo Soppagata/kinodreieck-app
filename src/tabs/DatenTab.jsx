@@ -6,6 +6,8 @@ import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { GitSyncEinstellungen } from "../components/GitSyncEinstellungen.jsx";
+import { RestoreImport } from "../components/RestoreImport.jsx";
+import { PERSONAL_MODE } from "../lib/modus.js";
 
 /* ================= EINSTELLUNGEN (früher "Daten") =================
    Darstellung/Verhalten, Datenbestand, Teilen & Tauschen, Vokabular,
@@ -66,6 +68,9 @@ export function DatenTab({
           </div>
         </div>
       )}
+      {/* Datenmigration: Gesamt-Backup der alten App einspielen (vor Git verbinden). */}
+      <RestoreImport />
+
       {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
       <GitSyncEinstellungen />
 
@@ -168,7 +173,7 @@ export function DatenTab({
                   Browser-Stand verwerfen → {startWahl === "demo" ? "Demo neu laden" : "leeren"}
                 </button>
               )}
-              {onStartartWechseln && (
+              {!PERSONAL_MODE && onStartartWechseln && (
                 <button style={btnStyle(false)}
                   title="Zwischen leerem Start und Demo-Liste wechseln. Verwirft den Browser-Stand — vorher exportieren, falls nötig."
                   onClick={() => {
@@ -189,7 +194,7 @@ export function DatenTab({
               Leerer Start — noch keine Liste geladen. Du baust deine Mediathek über Kino, Streaming und Suche auf,
               oder spielst unten eine JSON-Masterliste ein (wird dauerhaft gespeichert).
             </p>
-            {onStartartWechseln && (
+            {!PERSONAL_MODE && onStartartWechseln && (
               <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px" }}
                 title="Beispiel-Liste laden, um zu sehen, wie die App mit Inhalt aussieht."
                 onClick={() => { if (window.confirm("Zur Demo-Liste wechseln? Zeigt eine fremde Beispiel-Liste nur zum Anschauen.")) onStartartWechseln(); }}>

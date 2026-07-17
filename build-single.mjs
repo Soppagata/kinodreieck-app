@@ -21,6 +21,11 @@ execSync(`npx vite build --config vite.singlefile.config.js --outDir "${OUT}" --
 console.log("2/3 Modul-Script -> klassisches Script …");
 let html = readFileSync(join(OUT, "index.html"), "utf8");
 html = html.replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
+/* PWA-Links sind nur für die gehostete Web-App (Pages) relevant; in der
+   file://-Doppelklick-Datei würden sie ins Leere zeigen und die Extern-Referenz-
+   Prüfung unten auslösen → hier entfernen. */
+html = html.replace(/<link rel="manifest"[^>]*>\s*/g, "");
+html = html.replace(/<link rel="apple-touch-icon"[^>]*>\s*/g, "");
 const bloecke = [];
 html = html.replace(/<script type="module"[^>]*>([\s\S]*?)<\/script>\s*/g, (_, code) => { bloecke.push(code); return ""; });
 if (!bloecke.length) { console.error("ABBRUCH: kein module-Script in der Vite-Ausgabe."); process.exit(1); }

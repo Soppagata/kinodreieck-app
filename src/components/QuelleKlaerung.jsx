@@ -16,7 +16,7 @@ export function QuelleKlaerung({ eintraege, onFertig, onSpaeter }) {
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Quellen klären"
       style={{ position: "fixed", inset: 0, zIndex: 100001, background: "rgba(23,21,26,0.9)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
-      <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 620, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "22px 24px", boxShadow: "0 12px 48px rgba(0,0,0,0.6)" }}>
+      <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 620, width: "100%", maxHeight: "88dvh", overflowY: "auto", overscrollBehavior: "contain", padding: "22px 24px", boxShadow: "0 12px 48px rgba(0,0,0,0.6)" }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 24, letterSpacing: "0.04em", textTransform: "uppercase", color: T.wolfram, marginBottom: 8 }}>
           Quellen klären ({eintraege.length})
         </div>

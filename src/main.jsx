@@ -13,7 +13,7 @@ const root = createRoot(document.getElementById("root"));
 
 function ladeanzeige(text) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center",
       background: "#171519", color: "#e8b64c", fontFamily: "system-ui, sans-serif", fontSize: 15 }}>
       {text}
     </div>
@@ -36,3 +36,11 @@ async function boot() {
 }
 
 boot();
+
+/* PWA: Service Worker registrieren (nur echte Browser mit Support; in file://
+   und jsdom fehlt navigator.serviceWorker → übersprungen, kein Testbruch). */
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => { /* PWA optional */ });
+  });
+}

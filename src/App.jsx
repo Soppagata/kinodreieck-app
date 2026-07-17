@@ -38,6 +38,9 @@ import { FinderTab } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 
 import nachtragDatei from "./data/nachtrag.json";
+import { PERSONAL_MODE } from "./lib/modus.js";
+import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
+import { NavBand } from "./components/NavBand.jsx";
 
 /* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
    Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
@@ -153,6 +156,13 @@ const NACHTRAG_FLACH = [].concat(nachtragDatei.beide || [], nachtragDatei.nur_dv
 export default function App() {
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
+  const [navOffen, setNavOffen] = useState(false); // Mobile-Nav-Drawer offen?
+  useEffect(() => {
+    if (!navOffen) return;
+    const onKey = (e) => { if (e.key === "Escape") setNavOffen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navOffen]);
   const [master, setMaster] = useState(null);
   const [masterMeta, setMasterMeta] = useState(null);
   const [programm, setProgramm] = useState(null);
@@ -309,6 +319,7 @@ export default function App() {
   /* Einrichtungsstatus ist pro Beta-Version. Alte Legacy-Flags dürfen den Hinweis
      nicht unterdrücken; initSetup verarbeitet auch den Finish-Link des Installers. */
   const [setupWarnung, setSetupWarnung] = useState(() => {
+    if (PERSONAL_MODE) return false; // Personal-Modus: kein Installer-Hinweis
     try {
       /* Die Terminal-Installer öffnen die App am Ende mit
          ?setup=done&install=command[&skip=…]. Der Prozess kann localStorage nicht schreiben —
@@ -320,6 +331,7 @@ export default function App() {
   /* Willkommen (Tutorial): einmalig nach abgeschlossener Einrichtung. Sichtbarkeit
      aus kd:setup/kd:tutorial; initSetup() (oben) hat beide bereits angelegt. */
   const [willkommenOffen, setWillkommenOffen] = useState(() => {
+    if (PERSONAL_MODE) return false; // Personal-Modus: kein Willkommens-/Tutorial-Popup
     try { return tutorialFrei() && !getTutorial().willkommen; } catch { return false; }
   });
   const [snapshotFreigabe, setSnapshotFreigabe] = useState(() => snapshotsFrei());
@@ -448,6 +460,10 @@ export default function App() {
             startModalNoetig = true; // zurück zur Wahl
           }
         } else if (wahl === "clean") {
+          try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
+        } else if (PERSONAL_MODE) {
+          // Personal-Modus: keine Demo/Clean-Wahl — leerer Start, echte Daten
+          // kommen per Restore-Import bzw. Git-Sync.
           try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
         } else {
           startModalNoetig = true;
@@ -1137,7 +1153,7 @@ export default function App() {
   }, []);
 
   const wrap = {
-    minHeight: "100vh",
+    minHeight: "100dvh",
     background: T.saal,
     color: T.leinwand,
     fontFamily: "'Space Grotesk', sans-serif",
@@ -1221,6 +1237,7 @@ export default function App() {
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 34, letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
+          <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>
         </div>
         <div style={{ height: 1, background: "linear-gradient(90deg, " + T.wolfram + ", transparent 70%)", marginTop: 14 }} />
       </header>
@@ -1228,10 +1245,12 @@ export default function App() {
           <header> — ein sticky-Element klebt nur, solange sein Eltern-Element
           sichtbar ist; als direktes Kind von .kd-app (volle Seitenhöhe) hält es
           über die ganze Seite. */}
-      <nav className="kd-menu" style={{ position: "sticky", top: 0, zIndex: 40, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
+      <NavBand offen={navOffen} onToggle={() => setNavOffen((o) => !o)} />
+      <div className={"kd-scrim" + (navOffen ? " offen" : "")} onClick={() => setNavOffen(false)} aria-hidden="true" />
+      <nav className={"kd-menu" + (navOffen ? " offen" : "")} style={{ position: "sticky", top: 0, zIndex: 40, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[["start", "Start"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"], ["finder", "Suche"], ["daten", "Einstellungen"]].map(([id, label]) => (
-            <button key={id} onClick={() => { setTab(id); try { window.scrollTo(0, 0); } catch { /* */ } }}
+            <button key={id} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}
               style={{
                 fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
                 letterSpacing: "0.08em", textTransform: "uppercase",

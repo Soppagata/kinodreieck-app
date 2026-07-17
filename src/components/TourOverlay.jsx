@@ -57,7 +57,7 @@ export function TourOverlay({ hinweis, onClose, onExport }) {
       const r = els[0].getBoundingClientRect();
       const vh = window.innerHeight || 800, vw = window.innerWidth || 400;
       const basis = {
-        position: "fixed", width: Math.min(400, vw - 24), maxWidth: "calc(100vw - 24px)", maxHeight: "70vh", overflowY: "auto",
+        position: "fixed", width: Math.min(400, vw - 24), maxWidth: "calc(100vw - 24px)", maxHeight: "70dvh", overflowY: "auto", overscrollBehavior: "contain",
         background: "#ECE8DF", color: "#1C1A1E", border: "2px solid " + ring, borderRadius: 6,
         padding: "18px 20px", boxShadow: "0 12px 48px rgba(0,0,0,0.55)", zIndex: Z_BOX,
         visibility: sichtbar ? "visible" : "hidden",

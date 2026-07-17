@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:single": "node build-single.mjs",
-    "test": "node gitdriver_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html"
+    "test": "node gitdriver_test.mjs && node restore_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html"
   },
   "dependencies": {
     "react": "^19.0.0",

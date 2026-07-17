@@ -223,7 +223,7 @@ function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       </div>
       {offen && (
         <div onClick={() => setPopup(null)} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 540, maxHeight: "82vh", overflowY: "auto", padding: "20px 24px" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 540, maxHeight: "82dvh", overflowY: "auto", overscrollBehavior: "contain", padding: "20px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
               <h2 style={{ ...h2, margin: 0 }}>{offen.titel}</h2>
               <button onClick={() => setPopup(null)} style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>Schließen</button>
