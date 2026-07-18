@@ -11,6 +11,7 @@ export const QUELLEN = [
   // --- Physisch ---
   { key: "dvd", label: "DVD", art: "physisch" },
   { key: "bluray", label: "Blu-ray", art: "physisch" },
+  { key: "cd", label: "CD", art: "physisch" },
   { key: "vhs", label: "VHS", art: "physisch" },
   { key: "dia", label: "Dia", art: "physisch" },
   { key: "rom", label: "ROM", art: "physisch" },
@@ -54,6 +55,14 @@ export function quelleLabel(key) {
 export function quelleText(q) {
   const a = quelleZuArray(q).filter((k) => k !== WUNSCH);
   return a.length ? a.map(quelleLabel).join(" · ") : "Wunschliste";
+}
+
+/* Besitz = mindestens EINE physische Quelle (Entscheidung 18.07.2026: digitale
+   Käufe zählen NICHT — Lizenzgeber können sie entziehen). Einzige Wahrheit für
+   den Besitz-Begriff; Array-Prüfung statt Substring (kein includes("dvd")). */
+const PHYSISCH_KEYS = new Set(QUELLEN.filter((q) => q.art === "physisch").map((q) => q.key));
+export function hatPhysischeQuelle(q) {
+  return quelleZuArray(q).some((k) => PHYSISCH_KEYS.has(k));
 }
 
 /* String ("vhs+netflix") <-> Array (["vhs","netflix"]) */

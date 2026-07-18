@@ -57,6 +57,45 @@ for (const t of ["Serien", "Musik", "Sonstiges", "Filme"]) {
 check("Mediathek: Eintrag-hinzufügen-Knopf", !!knopf(/\+ Eintrag hinzufügen/));
 check("Mediathek: Daten & Teilen-Leiste", /Daten & Teilen/.test(text()));
 
+/* ---- 2b. Ansicht-Umschalter: Bestand · Im Besitz · Must-Watch ---- */
+const besitzBtn = knopf(/^Im Besitz \(/);
+check("Mediathek: Ansicht 'Im Besitz' vorhanden", !!besitzBtn);
+if (besitzBtn) {
+  besitzBtn.click(); await warte(300);
+  check("Besitz-Ansicht rendert (Hinweis physische Quellen)", /physische Quellen/.test(text()));
+  check("Besitz-Ansicht: Chip 'nur unbewertete'", !!knopf(/^nur unbewertete/));
+}
+const mwBtn = knopf(/^Must-Watch \(/);
+check("Mediathek: Ansicht 'Must-Watch' vorhanden", !!mwBtn);
+if (mwBtn) {
+  mwBtn.click(); await warte(300);
+  const mwNeu = knopf(/^\+ Eintrag$/);
+  check("Must-Watch: eigene Liste rendert (+ Eintrag)", !!mwNeu);
+  if (mwNeu) {
+    mwNeu.click(); await warte(200);
+    const titelFeld = [...doc.querySelectorAll("input")].find((i) => i.placeholder === "Titel *");
+    check("Must-Watch: Formular öffnet", !!titelFeld);
+    if (titelFeld) {
+      setValue(titelFeld, "Struktur-Testeintrag");
+      await warte(100);
+      const hinzu = knopf(/^Hinzufügen$/);
+      if (hinzu) { hinzu.click(); await warte(300); }
+      check("Must-Watch: Eintrag angelegt + im Topf persistiert",
+        /Struktur-Testeintrag/.test(text()) && /Struktur-Testeintrag/.test(dom.window.localStorage.getItem("kd:mustwatch") || ""));
+    }
+  }
+}
+const bestandBtn = knopf(/^Bestand$/);
+if (bestandBtn) { bestandBtn.click(); await warte(200); }
+/* FilmForm: unbewertet-Schalter (Besitz erfassen ohne Dreieck) */
+const plusForm = knopf(/\+ Eintrag hinzufügen/);
+if (plusForm) {
+  plusForm.click(); await warte(200);
+  check("FilmForm: 'Ohne Bewertung speichern'-Schalter", /Ohne Bewertung speichern/.test(text()));
+  const abbr = knopf(/^Abbrechen$/);
+  if (abbr) { abbr.click(); await warte(150); }
+} else check("FilmForm: 'Ohne Bewertung speichern'-Schalter", false);
+
 /* ---- 3. Suche: Anfrage absenden -> Verlauf reagiert ---- */
 const sucheTab = knopf(/^suche$/i);
 if (sucheTab) { sucheTab.click(); await warte(400); }

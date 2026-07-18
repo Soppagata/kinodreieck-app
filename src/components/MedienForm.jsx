@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { arrayZuQuelle, WUNSCH } from "../lib/quellen.js";
+import { QuellenWahl } from "./QuellenWahl.jsx";
 
 /* ---------- Eingabemaske für Musik & Sonstiges ----------
    Bewusst schlicht: NUR Titel, Jahr, Art (Freitext, max 40), Beschreibung.
@@ -15,6 +17,7 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
   const [f, setF] = useState(leer);
   const [fehler, setFehler] = useState("");
   const [sub, setSub] = useState((initial && initial.sub) || ""); // Unterkategorie (nur Persönlichkeit)
+  const [quellen, setQuellen] = useState([]); // optional: Besitz/Verfügbarkeit (z.B. CD)
   const kategorien = typ === "musik"
     ? ["Album", "Soundtrack", "Konzert", "Single", "Sonstiges"]
     : ["Persönlichkeit", "Studio", "Videospiel", "Theaterstück", "Interview", "Buch", "Podcast", "Sonstiges"];
@@ -40,12 +43,17 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
           </select>
         )}
       </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>Quelle (optional — z.B. CD für Besitz)</span>
+        <QuellenWahl quellen={quellen} onChange={setQuellen} />
+      </div>
       <textarea placeholder={f.art === "Persönlichkeit" ? "Freitext (Rolle, Werke, Notizen …)" : "Beschreibung"} rows={2} value={f.beschreibung} onChange={set("beschreibung")}
         style={{ ...inputStyle, boxSizing: "border-box" }} />
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button style={btnStyle(true)} onClick={() => {
           if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
+          const q = arrayZuQuelle(quellen);
           onAdd({
             titel: f.titel.trim(),
             jahr: f.jahr ? Number(f.jahr) : null,
@@ -53,10 +61,11 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
             art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (sub ? " · " + sub : "")) : (f.art || null),
             kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
             beschreibung: f.beschreibung.trim(),
+            ...(q !== WUNSCH ? { quelle: q } : {}), // ohne Wahl KEIN quelle-Feld (wie bisher)
             bewertung: { wie: null, was: null, warum: null }, // hart null — kein Dreieck
             bewertet_von: null,
           });
-          setF(leer); setSub(""); setOpen(false); setFehler("");
+          setF(leer); setSub(""); setQuellen([]); setOpen(false); setFehler("");
           if (onDone) onDone();
         }}>Hinzufügen</button>
         <button style={btnStyle(false)} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>

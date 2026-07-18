@@ -250,6 +250,25 @@ const pullBig = await G.syncPull();
 check("encoding none: lokal NICHT mit Leerem überschrieben", localStorage.getItem("kd:master") === '{"wichtig":true}');
 check("encoding none: als Fehler + stale gemeldet", pullBig.fehler.some((f) => f.file === "masterliste.json") && G.syncStatus().stale.includes("masterliste.json"));
 
+/* 18) 10. Sync-Datei (Must-Watch): synct, konfliktet und schützt wie die übrigen */
+reset();
+check("SYNC_MAP: kd:mustwatch → mustwatch.json (10 Dateien)",
+  G.SYNC_MAP["kd:mustwatch"] === "mustwatch.json" && Object.keys(G.SYNC_MAP).length === 10);
+await G.gitDriver.set("kd:mustwatch", '{"eintraege":[{"id":"mw_test","titel":"T"}],"gespeichertAm":1}');
+await sleep(20);
+check("mustwatch: Commit legt mustwatch.json an", !!fakeRepoFiles["mustwatch.json"] && b64dec(fakeRepoFiles["mustwatch.json"].content).includes("mw_test"));
+check("mustwatch: kein Pending nach Erfolg", G.syncStatus().pending.length === 0);
+// Pull-Schutz (Offline-Edit + fremder Push) gilt auch für die 10. Datei
+reset();
+fakeRepoFiles["mustwatch.json"] = { content: b64enc('{"eintraege":[],"gespeichertAm":2}'), sha: "smw" };
+forceOffline = true;
+await G.gitDriver.set("kd:mustwatch", '{"eintraege":[{"id":"mw_offline"}]}');
+await sleep(20);
+forceOffline = false;
+const pullMw = await G.syncPull();
+check("mustwatch: Pull-Schutz meldet Konflikt statt Datenverlust",
+  pullMw.konflikt.includes("mustwatch.json") && localStorage.getItem("kd:mustwatch") === '{"eintraege":[{"id":"mw_offline"}]}');
+
 /* ---------- Auswertung ---------- */
 function b64dec(b64) {
   const bin = atob((b64 || "").replace(/\s/g, "")); const bytes = new Uint8Array(bin.length);

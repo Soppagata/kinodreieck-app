@@ -1,11 +1,20 @@
 import { T } from "../lib/tokens.js";
 
-/* ---------- Dreieck-Glyph (Signatur) ---------- */
+/* ---------- Dreieck-Glyph (Signatur) ----------
+   bw == null (unbewertet): NUR der Umriss, gestrichelt — ein leeres Dreieck ist
+   klar unterscheidbar von einer echten 0/0/0-Bewertung. */
 export function Dreieck({ bw, size = 44 }) {
   const c = size / 2, r = size / 2 - 3;
   const ang = [-90, 30, 150];
   const pt = (a, rad) => [c + rad * Math.cos((a * Math.PI) / 180), c + rad * Math.sin((a * Math.PI) / 180)];
   const outer = ang.map((a) => pt(a, r).join(",")).join(" ");
+  if (bw == null) {
+    return (
+      <svg width={size} height={size} viewBox={"0 0 " + size + " " + size} aria-label="unbewertet">
+        <polygon points={outer} fill="none" stroke={T.rauch} strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+      </svg>
+    );
+  }
   const vals = [bw?.wie ?? 0, bw?.was ?? 0, bw?.warum ?? 0];
   const inner = ang.map((a, i) => pt(a, (Math.max(vals[i], 0.35) / 5) * r).join(",")).join(" ");
   const dots = ang.map((a, i) => ({ p: pt(a, (Math.max(vals[i], 0.35) / 5) * r), col: [T.wie, T.was, T.warum][i] }));
@@ -17,6 +26,15 @@ export function Dreieck({ bw, size = 44 }) {
         <circle key={i} cx={d.p[0]} cy={d.p[1]} r="2.4" fill={d.col} />
       ))}
     </svg>
+  );
+}
+
+/* Sichtbarer unbewertet-Zustand (ersetzt den KategorieTag, solange bewertung null ist). */
+export function UnbewertetTag() {
+  return (
+    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: T.rauch, border: "1px dashed " + T.rauch, borderRadius: 3, padding: "2px 6px" }}>
+      UNBEWERTET
+    </span>
   );
 }
 

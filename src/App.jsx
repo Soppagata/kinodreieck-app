@@ -28,6 +28,7 @@ import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
 import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks } from "./lib/artikel.js";
+import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen } from "./lib/finder.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -617,6 +618,32 @@ export default function App() {
       : { typ: (masterHerkunft && masterHerkunft.typ) || "storage", zeit: Date.now(), basis: masterHerkunft && masterHerkunft.basis }
   ), [masterHerkunft]);
 
+  /* ================= MUST-WATCH-LISTE (eigener Topf, 10. Sync-Datei) =================
+     Ersetzt das must_watch-Flag (Entscheidung 18.07.2026): die Liste ist die
+     einzige Wahrheit; das Flag-Feld bleibt in den Daten (Kompatibilität), wird
+     aber im UI nirgends mehr angeboten. Ablageform: {eintraege, gespeichertAm}. */
+  const [mustwatch, setMustwatch] = useState([]);
+  useEffect(() => {
+    store.get(K.mustwatch).then((r) => { if (r && r.value) setMustwatch(parseMustwatch(r.value)); }).catch(() => {});
+  }, []);
+  const persistMustwatch = useCallback((liste) => {
+    store.set(K.mustwatch, JSON.stringify({ eintraege: liste, gespeichertAm: Date.now() })).catch(() => setErr("Must-Watch-Speichern fehlgeschlagen."));
+  }, []);
+
+  /* Blog-Referenz-Universum = Master ∪ Must-Watch. Ohne diese Erweiterung würde
+     gleicheArtikelAb eine mw_-ref beim nächsten Artikel-Edit still löschen
+     (masterIds-Check). Must-Watch-Pseudoeinträge: {id, titel, jahr: null, typ film}. */
+  const mitMustwatch = useCallback((masterArr, mwArr) => ([
+    ...(masterArr || []),
+    ...(mwArr || []).map((e) => ({ id: e.id, titel: e.titel, jahr: null, typ: "film" })),
+  ]), []);
+  const refUniversum = useMemo(() => mitMustwatch(master, mustwatch), [master, mustwatch, mitMustwatch]);
+  /* Master-IDs, die auf der Must-Watch-Liste stehen (FinderTab-Chip + Streaming-Filter
+     lesen die LISTE, nicht mehr das Flag). */
+  const mustwatchMasterIds = useMemo(() => new Set(
+    mustwatch.filter((e) => e.verknuepfung && e.verknuepfung.ziel === "master").map((e) => e.verknuepfung.id)
+  ), [mustwatch]);
+
   /* ================= BLOG: Artikel-Status & CRUD =================
      Artikel leben im Browser-Storage (kd:artikel) + Export im Einstellungen-Tab.
      "Erstellen" speichert sofort mit status "wartet" — nichts geht verloren. */
@@ -635,11 +662,11 @@ export default function App() {
 
   const erstelleArtikel = useCallback((daten) => {
     const id = neueArtikelId(daten.titel, artikelListe);
-    const abg = gleicheArtikelAb({ ...daten, id, status: "wartet", erstellt_am: new Date().toISOString() }, master || []);
+    const abg = gleicheArtikelAb({ ...daten, id, status: "wartet", erstellt_am: new Date().toISOString() }, refUniversum);
     const art = ohneAbgleichFelder(abg);
     setArtikelListe((prev) => { const next = [...prev, art]; persistArtikel(next); return next; });
     return id;
-  }, [artikelListe, master, persistArtikel]);
+  }, [artikelListe, refUniversum, persistArtikel]);
 
   const aktualisiereArtikel = useCallback((id, daten) => {
     setArtikelListe((prev) => {
@@ -647,13 +674,93 @@ export default function App() {
       if (!alt) return prev;
       // Unveränderte Referenzen behalten ihre stabile ref; nur Neues wird abgeglichen.
       const liste = uebernehmeRefs(daten.liste, alt.liste);
-      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet" }, master || []);
+      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet" }, refUniversum);
       const next = prev.map((a) => (a.id === id ? ohneAbgleichFelder(abg) : a));
       persistArtikel(next);
       return next;
     });
     return id;
-  }, [master, persistArtikel]);
+  }, [refUniversum, persistArtikel]);
+
+  /* ---- Must-Watch CRUD (Liste ist die einzige Wahrheit) ---- */
+  const addMustwatch = useCallback((daten) => {
+    setMustwatch((prev) => {
+      const eintrag = {
+        id: neueMustwatchId(daten.titel, prev),
+        titel: daten.titel,
+        im_besitz: !!daten.im_besitz,
+        beschreibung: daten.beschreibung || "",
+        notiz: daten.notiz || "",
+        verknuepfung: daten.verknuepfung || null,
+        erstellt_am: new Date().toISOString(),
+      };
+      const next = [...prev, eintrag];
+      persistMustwatch(next);
+      // Rotlink-Heilung: ein neuer Must-Watch-Eintrag kann offene Blog-Refs
+      // schließen — nur eindeutige Exakt-Treffer, nichts wird geraten.
+      setArtikelListe((alist) => {
+        const [geheilt, n] = heileRotlinks(alist, mitMustwatch(master, next));
+        if (n > 0) { persistArtikel(geheilt); return geheilt; }
+        return alist;
+      });
+      return next;
+    });
+  }, [persistMustwatch, master, mitMustwatch, persistArtikel]);
+  const updateMustwatch = useCallback((id, changes) => {
+    setMustwatch((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, ...changes } : e));
+      persistMustwatch(next);
+      return next;
+    });
+  }, [persistMustwatch]);
+  const deleteMustwatch = useCallback((id) => {
+    setMustwatch((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      persistMustwatch(next);
+      return next;
+    });
+  }, [persistMustwatch]);
+
+  /* ---- Migration must_watch-Flag -> Liste (einmalig, idempotent, mit Bericht) ---- */
+  const [migrationsBericht, setMigrationsBericht] = useState(null);
+  const offeneFlags = useMemo(() => offeneFlagAnzahl(master, mustwatch), [master, mustwatch]);
+  const migriereMustwatch = useCallback(() => {
+    const { neue, uebersprungen } = migriereFlags(master || [], mustwatch, new Date().toISOString());
+    if (neue.length) {
+      const next = [...mustwatch, ...neue];
+      setMustwatch(next);
+      persistMustwatch(next);
+    }
+    setMigrationsBericht({ angelegt: neue.length, uebersprungen });
+  }, [master, mustwatch, persistMustwatch]);
+
+  /* ---- Besitz-Nachtrag-Import (deterministisch, idempotent; NUR über die
+     App-eigenen Pfade ensureIds + persistMaster — nie roh) ---- */
+  const [besitzImportBericht, setBesitzImportBericht] = useState(null);
+  const importiereBesitz = useCallback(async (text) => {
+    setErr("");
+    try {
+      const datei = parseBesitzImport(text);
+      const { neue, bericht } = wendeBesitzImportAn(datei, master || [], new Date().toISOString());
+      if (neue.length) {
+        const next = ensureIds([...(master || []), ...neue]);
+        const h = naechsteHerkunft();
+        setMasterHerkunft(h);
+        setMaster(next);
+        await persistMaster(next, masterMeta, h);
+        setArtikelListe((prev) => {
+          const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
+          if (n > 0) { persistArtikel(geheilt); return geheilt; }
+          return prev;
+        });
+      }
+      setBesitzImportBericht({
+        uebernommen: bericht.filter((b) => b.status === "übernommen").length,
+        uebersprungen: bericht.filter((b) => b.status !== "übernommen").length,
+        zeilen: bericht,
+      });
+    } catch (e) { setErr("Besitz-Import fehlgeschlagen: " + e.message); }
+  }, [master, masterMeta, mustwatch, naechsteHerkunft, persistMaster, persistArtikel, mitMustwatch]);
 
   const setzeArtikelRef = useCallback((id, index, ref, rotlinkOk) => {
     setArtikelListe((prev) => {
@@ -876,24 +983,28 @@ export default function App() {
     }
     setArtikelListe((prev) => {
       let next = neueArtikel.length ? [...prev, ...neueArtikel] : prev;
-      const [geheilt, n] = heileRotlinks(next, neuerMaster);
+      const [geheilt, n] = heileRotlinks(next, mitMustwatch(neuerMaster, mustwatch));
       if (n > 0) next = geheilt;
       if (next !== prev) persistArtikel(next);
       return next;
     });
-  }, [master, masterMeta, naechsteHerkunft, persistMaster, persistArtikel]);
+  }, [master, masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, persistArtikel]);
 
   /* ---- Gesamt-Backup als Download (Datei in den eigenen Backup-Ordner legen) ---- */
   const backupGesamt = useCallback(async () => {
     const sammle = async (key) => { try { const r = await store.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; } };
     const b = {
       format: "kinodreieck-backup", version: 1, erstellt: new Date().toISOString(),
-      hinweis: "Wiederherstellen: masterliste/artikel über die normalen Import-Felder einspielen; der Rest sind Komfort-Stände.",
+      hinweis: "Wiederherstellen: über Einstellungen → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
       masterliste: { meta: masterMeta, filme: master || [] },
       artikel: artikelListe,
       kino_pins: kinoPins,
       merkliste: await sammle(K.merkliste),
       entdecken_status: await sammle(K.entdeckenStatus),
+      /* streaming_dienste fehlte hier bis 18.07.2026 — ein Restore eines
+         Gesamt-Backups hätte die Abo-Auswahl verloren. Jetzt dabei. */
+      streaming_dienste: await sammle(K.streamingDienste),
+      must_watch_liste: mustwatch,
       vokabular, einstellungen, autor: autorName,
     };
     const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
@@ -903,7 +1014,16 @@ export default function App() {
     a.download = "kinodreieck_backup_" + new Date().toISOString().slice(0, 10) + ".json";
     a.click();
     URL.revokeObjectURL(url);
-  }, [master, masterMeta, artikelListe, kinoPins, vokabular, einstellungen, autorName]);
+  }, [master, masterMeta, artikelListe, kinoPins, mustwatch, vokabular, einstellungen, autorName]);
+
+  /* Kandidaten für den Must-Watch-Verknüpfungs-Picker (explizit, kein Auto-Match):
+     Master (id) · Kinoprogramm (film_at_id — nur Einträge MIT stabiler ID) ·
+     Streaming-Entdecken (watchmode_id). */
+  const mwKandidaten = useMemo(() => ({
+    master: (master || []).map((f) => ({ id: f.id, titel: f.titel, jahr: f.jahr })),
+    programm: ((programm && programm.filme) || []).filter((pf) => pf.film_at_id).map((pf) => ({ id: pf.film_at_id, titel: pf.t, jahr: pf.j })),
+    streaming: ((streamingEntdecken && streamingEntdecken.titel) || []).map((t) => ({ id: t.watchmode_id, titel: t.titel, jahr: t.jahr })),
+  }), [master, programm, streamingEntdecken]);
 
   /* ---- Navigation zwischen Blog und Mediathek ---- */
   const [blogFokus, setBlogFokus] = useState(null);
@@ -936,12 +1056,12 @@ export default function App() {
     setMaster(next);
     persistMaster(next, masterMeta, h);
     setArtikelListe((prev) => {
-      const [geheilt, n] = heileRotlinks(prev, next);
+      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
       if (n > 0) { persistArtikel(geheilt); return geheilt; }
       return prev;
     });
     return id;
-  }, [master, persistMaster, masterMeta, naechsteHerkunft, persistArtikel]);
+  }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, persistArtikel]);
 
   /* ---- Browser-Stand verwerfen: zurück zum zuletzt gewählten Start ----
      Rettungsanker gegen file://-localStorage-Geister (alle lokalen HTMLs
@@ -1353,12 +1473,15 @@ export default function App() {
             exportMaster={exportMaster} importMaster={importMaster}
             autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket} setErr={setErr}
+            mustwatch={mustwatch} addMustwatch={addMustwatch}
+            updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
+            mwKandidaten={mwKandidaten}
           />
         )}
 
         {tab === "blog" && (
           <BlogTab
-            artikel={artikelListe} master={master || []}
+            artikel={artikelListe} master={refUniversum}
             fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
             onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
@@ -1371,6 +1494,7 @@ export default function App() {
           <StreamingTab
             bekannt={streamingBekannt} entdecken={streamingEntdecken}
             addFilm={addFilm} master={master} updateFilm={updateFilm}
+            mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
@@ -1382,6 +1506,7 @@ export default function App() {
           <FinderTab
             master={finderMaster} kinoMatches={kinoMatches}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
+            mustwatchIds={mustwatchMasterIds}
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
@@ -1410,6 +1535,8 @@ export default function App() {
             resetTag={resetTag} setResetTag={setResetTag}
             datenGesperrt={!snapshotFreigabe}
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
+            offeneFlags={offeneFlags} migriereMustwatch={migriereMustwatch} migrationsBericht={migrationsBericht}
+            importiereBesitz={importiereBesitz} besitzImportBericht={besitzImportBericht}
           />
         )}
       </main>

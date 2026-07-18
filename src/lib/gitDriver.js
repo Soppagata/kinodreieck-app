@@ -30,6 +30,7 @@ export const SYNC_MAP = {
   "kd:entdecken-status": "entdecken-status.json",
   "kd:autor-name": "autor-name.json",
   "kd:streaming-dienste": "streaming-dienste.json",
+  "kd:mustwatch": "mustwatch.json", // Must-Watch-Liste (10. Datei, seit 18.07.2026)
 };
 
 /* Konfig/Status — rein lokal, NICHT gesynct (nicht in SYNC_MAP). */
@@ -164,7 +165,7 @@ export async function syncPull() {
   const c = getGitConfig();
   if (!isGitConfigured()) return { ok: false, message: "nicht konfiguriert" };
   const ergebnis = { geladen: [], angelegt: [], konflikt: [], fehler: [] };
-  // Parallel statt sequentiell: 9 Dateien × Netz-Roundtrip würde den Boot sonst
+  // Parallel statt sequentiell: 10 Dateien × Netz-Roundtrip würde den Boot sonst
   // unnötig strecken (der Pull blockiert das erste Rendern).
   await Promise.all(Object.entries(SYNC_MAP).map(async ([key, file]) => {
     try {

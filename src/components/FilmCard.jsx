@@ -2,7 +2,7 @@ import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
 import { schlagseite, score } from "../lib/match.js";
 import { hatDreieck } from "../lib/typen.js";
-import { Dreieck, AxisChips, KategorieTag } from "./ui.jsx";
+import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
 
 /* Einfacher Editor für Einträge ohne Dreieck (musik/sonstiges):
@@ -32,7 +32,15 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
 export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick }) {
   const [editing, setEditing] = useState(false);
   const dreieck = hatDreieck(film.typ);
-  const ss = dreieck ? schlagseite(film.bewertung) : null;
+  /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
+  const unbewertet = dreieck && film.bewertung == null;
+  const ss = dreieck && !unbewertet ? schlagseite(film.bewertung) : null;
+  /* Schneller Bewerten-Einstieg: Karte aufklappen + direkt ins EditPanel. */
+  const jetztBewerten = (e) => {
+    e.stopPropagation();
+    if (!expanded && onToggle) onToggle();
+    setEditing(true);
+  };
   return (
     <div
       onClick={onToggle}
@@ -40,7 +48,7 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
       style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
     >
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-        {dreieck && <Dreieck bw={film.bewertung} />}
+        {dreieck && <Dreieck bw={unbewertet ? null : film.bewertung} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "baseline" }}>
             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 22, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em" }}>
@@ -56,9 +64,21 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
           </div>
           {dreieck && (
             <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
-              <AxisChips bw={film.bewertung} />
-              {ss && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>▸ Schlagseite: {ss.toUpperCase()}</span>}
-              <KategorieTag k={film.kategorie} />
+              {unbewertet ? (
+                <>
+                  <UnbewertetTag />
+                  {onSave && (
+                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", color: T.tinte, borderColor: T.tinteWeich }}
+                      onClick={jetztBewerten}>✎ Jetzt bewerten</button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <AxisChips bw={film.bewertung} />
+                  {ss && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>▸ Schlagseite: {ss.toUpperCase()}</span>}
+                  <KategorieTag k={film.kategorie} />
+                </>
+              )}
               {streamBadge}
             </div>
           )}
@@ -113,7 +133,7 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
         </div>
         {dreieck && (
           <div style={{ textAlign: "right", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, whiteSpace: "nowrap" }}>
-            {score(film).toFixed(1)}
+            {unbewertet ? "—" : score(film).toFixed(1)}
             <div style={{ fontSize: 10 }}>SCORE</div>
           </div>
         )}

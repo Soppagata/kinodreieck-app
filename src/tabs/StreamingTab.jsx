@@ -41,7 +41,7 @@ function DienstBadges({ dienste, webUrls }) {
   );
 }
 
-export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm, datenGesperrt = false }) {
+export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm, mustwatchIds, datenGesperrt = false }) {
   const [ansicht, setAnsicht] = useState("programm");
   useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
@@ -106,10 +106,12 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
     let l = bekannt.titel.filter((t) => dienstOk(t) && schnellOk(t));
     if (axis) l = l.filter((f) => schlagseite(f.bewertung) === axis);
     if (katF) l = l.filter((f) => f.kategorie === katF);
-    if (nurWunsch) l = l.filter((f) => f.must_watch);
+    /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
+       das eingebackene must_watch-Flag aus dem Katalog-Job (kann veraltet sein). */
+    if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return [...l].sort((a, b) => score(b) - score(a));
-  }, [bekannt, datenDa, dienstOk, schnellOk, axis, katF, nurWunsch, suche]);
+  }, [bekannt, datenDa, dienstOk, schnellOk, axis, katF, nurWunsch, mustwatchIds, suche]);
 
   const genresE = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -228,7 +230,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                 <Chip active={axis === "wie"} color={T.wie} onClick={() => setAxis(axis === "wie" ? null : "wie")}>WIE-lastig</Chip>
                 <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
                 <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
-                <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Wunschliste</Chip>
+                <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Must-Watch</Chip>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
                 {[["immer_gut", "Immer gut"], ["kult", "Kult"], ["kult_klassiker", "Kult-Klassiker"], ["daemlich_aber_herrlich", "Dämlich aber herrlich"], ["trash", "Trash"], ["sehenswert", "Sehenswert"]].map(([k, l]) => (

@@ -26,6 +26,8 @@ export function DatenTab({
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle, heuristikAn, setHeuristikAn,
   resetTag = null, setResetTag,
   datenGesperrt = false,
+  offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
+  importiereBesitz, besitzImportBericht = null,
 }) {
   const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 6px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -71,6 +73,67 @@ export function DatenTab({
       )}
       {/* Datenmigration: Gesamt-Backup der alten App einspielen (vor Git verbinden). */}
       <RestoreImport />
+
+      {/* ---- Must-Watch-Migration + Besitz-Nachtrag (einmalige, idempotente Läufe) ---- */}
+      {(offeneFlags > 0 || migrationsBericht || importiereBesitz) && (
+        <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+          <h2 style={h2Style}>Must-Watch-Migration & Besitz-Nachtrag</h2>
+          {migriereMustwatch && offeneFlags > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
+                <strong style={{ color: T.leinwand }}>{offeneFlags}</strong> Einträge tragen noch das alte
+                Wunschlisten-Flag. Die Migration legt sie einmalig als Must-Watch-Einträge an
+                (mit Verknüpfung auf den Mediathek-Eintrag; „im Besitz" aus den physischen Quellen abgeleitet).
+                Mehrfaches Ausführen ändert nichts.
+              </p>
+              <button style={btnStyle(true)} onClick={migriereMustwatch}>Flags in die Must-Watch-Liste migrieren</button>
+            </div>
+          )}
+          {migrationsBericht && (
+            <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, margin: "0 0 14px" }}>
+              Migration: {migrationsBericht.angelegt} angelegt · {migrationsBericht.uebersprungen} übersprungen (bereits verknüpft).
+            </p>
+          )}
+          {importiereBesitz && (
+            <div>
+              <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
+                <strong style={{ color: T.leinwand }}>Besitz-Nachtrag importieren:</strong> spielt die
+                vorbereitete Kandidaten-Datei (Format <code style={{ color: T.wolfram }}>kinodreieck-besitz-import</code>)
+                als UNBEWERTETE Besitz-Einträge ein. Bereits vorhandene IDs werden übersprungen und
+                berichtet — wiederholtes Einspielen ändert nichts.
+              </p>
+              <input type="file" accept=".json,application/json"
+                onChange={(e) => {
+                  const f = e.target.files && e.target.files[0]; if (!f) return;
+                  const rd = new FileReader();
+                  rd.onload = () => importiereBesitz(String(rd.result || ""));
+                  rd.readAsText(f);
+                  e.target.value = "";
+                }}
+                style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwand }} />
+              {besitzImportBericht && (
+                <div style={{ marginTop: 10 }}>
+                  <p style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, margin: "0 0 6px" }}>
+                    Import: {besitzImportBericht.uebernommen} übernommen · {besitzImportBericht.uebersprungen} übersprungen.
+                  </p>
+                  {besitzImportBericht.uebersprungen > 0 && (
+                    <details>
+                      <summary style={{ cursor: "pointer", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>Übersprungene zeigen</summary>
+                      <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 2 }}>
+                        {besitzImportBericht.zeilen.filter((z) => z.status !== "übernommen").map((z, i) => (
+                          <div key={i} style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.wolfram }}>
+                            {z.titel}{z.jahr ? " (" + z.jahr + ")" : ""} — {z.grund}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
       <GitSyncEinstellungen />

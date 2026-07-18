@@ -4,7 +4,8 @@ import { norm, schlagseite, score } from "../lib/match.js";
 import { store, K } from "../lib/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
-import { quelleText } from "../lib/quellen.js";
+import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
+import { istMustwatchId } from "../lib/mustwatch.js";
 import { Chip, IconExport } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
@@ -12,20 +13,39 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
+import { MustWatchListe } from "../components/MustWatchListe.jsx";
 
 /* ================= MEDIATHEK =================
-   Ein Bestand, typ als Diskriminator — die Tabs sind reine Filter.
-   Filme (film/filmreihe) · Serien (serie) · Musik · Sonstiges.
-   Dreieck-Filter (Besitz/Achse/Kategorie/Genre) nur in Filme/Serien.
+   Drei Ansichten über EINEN Umschalter (kein 8. Nav-Bereich):
+   - Bestand: die klassische Mediathek (typ als Diskriminator, Tabs = Filter).
+   - Im Besitz: NUR Einträge mit mindestens einer physischen Quelle
+     (quellen.js-Art — Prime/Apple-Käufe zählen NICHT als Besitz).
+     Unbewertete Einträge sind hier erstklassige Bürger (Filter + Badge).
+   - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
-  exportMaster, importMaster, autorName, saveAutorName, uebernehmePaket, setErr }) {
+  exportMaster, importMaster, autorName, saveAutorName, uebernehmePaket, setErr,
+  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] } }) {
+  const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
+  const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
   const [bewerteTitel, setBewerteTitel] = useState(null); // Nachtrag-Titel, der gerade bewertet wird
 
-  /* Sprung aus dem Blog: richtigen Typ-Tab wählen, Karte in Sicht scrollen */
+  /* Sprung aus dem Blog: Must-Watch-Refs (mw_…) öffnen die Must-Watch-Ansicht,
+     Master-Refs die Bestand-Ansicht (dort ist jeder Eintrag sicher sichtbar). */
   useEffect(() => {
-    if (!fokusFilmId || !master) return;
+    if (!fokusFilmId) return;
+    if (istMustwatchId(fokusFilmId)) {
+      setAnsicht("mustwatch");
+      const t = setTimeout(() => {
+        const el = document.getElementById("mw-" + fokusFilmId);
+        if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (onFokusVerbraucht) onFokusVerbraucht();
+      }, 150);
+      return () => clearTimeout(t);
+    }
+    if (!master) return;
+    setAnsicht("bestand");
     const f = master.find((x) => x.id === fokusFilmId);
     if (f) setTypTab(tabVonTyp(f.typ));
     const t = setTimeout(() => {
@@ -75,31 +95,42 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return map;
   }, [artikel]);
 
+  /* Basisbestand je Ansicht: Besitz = nur physische Quellen (Array-Prüfung,
+     kein Substring — Prime-/Apple-only fällt hier beweisbar raus). */
+  const basis = useMemo(() => {
+    if (!master) return [];
+    return ansicht === "besitz" ? master.filter((f) => hatPhysischeQuelle(f.quelle)) : master;
+  }, [master, ansicht]);
+  const besitzAnzahl = useMemo(() => (master || []).filter((f) => hatPhysischeQuelle(f.quelle)).length, [master]);
+  const unbewertetAnzahl = useMemo(() => basis.filter((f) => hatDreieck(f.typ) && f.bewertung == null).length, [basis]);
+
   const counts = useMemo(() => {
     const c = { filme: 0, serien: 0, musik: 0, sonstiges: 0 };
-    (master || []).forEach((f) => { c[tabVonTyp(f.typ)]++; });
+    basis.forEach((f) => { c[tabVonTyp(f.typ)]++; });
     return c;
-  }, [master]);
+  }, [basis]);
 
   const genres = useMemo(() => {
-    if (!master) return [];
     const c = {};
-    master.forEach((f) => (f.genre || []).forEach((g) => (c[g] = (c[g] || 0) + 1)));
+    basis.forEach((f) => (f.genre || []).forEach((g) => (c[g] = (c[g] || 0) + 1)));
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 14).map(([g]) => g);
-  }, [master]);
+  }, [basis]);
 
   const mediathek = useMemo(() => {
-    if (!master) return [];
-    let list = master.filter((f) => TYP_GRUPPEN[typTab].includes(f.typ || "film"));
+    if (!basis.length) return [];
+    let list = basis.filter((f) => TYP_GRUPPEN[typTab].includes(f.typ || "film"));
+    if (ansicht === "besitz" && nurUnbewertet) list = list.filter((f) => hatDreieck(f.typ) && f.bewertung == null);
     if (dreieckTab) {
-      list = list.filter((f) => {
-        const q = f.quelle || "";
-        if (besitz === "dvd") return q.includes("dvd");
-        if (besitz === "prime") return q.includes("prime"); // Prime-Snapshot (Watchmode)
-        if (besitz === "apple") return q.includes("apple");
-        if (besitz === "wunsch") return q === "must_watch";
-        return true; // "alle" = wirklich alle (Besitz UND Wunschliste)
-      });
+      if (ansicht === "bestand") {
+        list = list.filter((f) => {
+          const q = f.quelle || "";
+          if (besitz === "dvd") return q.includes("dvd");
+          if (besitz === "prime") return q.includes("prime"); // Prime-Snapshot (Watchmode)
+          if (besitz === "apple") return q.includes("apple");
+          if (besitz === "wunsch") return q === "must_watch";
+          return true; // "alle" = wirklich alle (Besitz UND Wunschliste)
+        });
+      }
       if (axis) list = list.filter((f) => schlagseite(f.bewertung) === axis);
       if (genreF) list = list.filter((f) => (f.genre || []).includes(genreF));
       if (katF) list = list.filter((f) => f.kategorie === katF);
@@ -120,10 +151,44 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     const aktiv = dreieckTab ? (sortierer[sortier] || sortierer.score)
       : (["titel", "jahr_neu", "jahr_alt"].includes(sortier) ? sortierer[sortier] : sortierer.titel);
     return list.sort(aktiv);
-  }, [master, typTab, dreieckTab, besitz, axis, genreF, katF, suche, sortier]);
+  }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, axis, genreF, katF, suche, sortier]);
+
+  const ansichtKnopf = (id, label) => (
+    <button key={id} onClick={() => { setAnsicht(id); setExpandedId(null); }}
+      style={{
+        fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
+        letterSpacing: "0.06em", textTransform: "uppercase", padding: "7px 14px",
+        border: "1px solid " + (ansicht === id ? T.wolfram : T.rauch), borderRadius: 4, cursor: "pointer",
+        background: ansicht === id ? T.wolfram : "transparent", color: ansicht === id ? T.tinte : T.rauch,
+      }}>{label}</button>
+  );
 
   return (
     <section>
+      {/* Ansicht-Umschalter: Bestand · Im Besitz · Must-Watch (immer sichtbar) */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        {ansichtKnopf("bestand", "Bestand")}
+        {ansichtKnopf("besitz", `Im Besitz (${besitzAnzahl})`)}
+        {ansichtKnopf("mustwatch", `Must-Watch (${mustwatch.length})`)}
+      </div>
+
+      {/* ===== Must-Watch: eigener Datentopf, eigene Liste ===== */}
+      {ansicht === "mustwatch" && (
+        <MustWatchListe eintraege={mustwatch}
+          onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
+          kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
+          onSpringeZuRef={(id) => {
+            setAnsicht("bestand");
+            const f = (master || []).find((x) => x.id === id);
+            if (f) setTypTab(tabVonTyp(f.typ));
+            setTimeout(() => {
+              const el = document.getElementById("film-" + id);
+              if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 150);
+          }} />
+      )}
+
+      {ansicht !== "mustwatch" && (<>
       {/* Typ-Tabs (Filter auf typ) */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {Object.keys(TYP_GRUPPEN).map((t) => (
@@ -156,6 +221,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         </select>
       </div>
 
+      {/* Besitz-Ansicht: unbewertet-Filter prominent (nicht im eingeklappten Menü) */}
+      {ansicht === "besitz" && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, alignItems: "center" }}>
+          <Chip active={nurUnbewertet} onClick={() => setNurUnbewertet(!nurUnbewertet)}>nur unbewertete ({unbewertetAnzahl})</Chip>
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>
+            Besitz = physische Quellen (DVD · Blu-ray · CD …) — Prime-/Apple-Käufe zählen nicht
+          </span>
+        </div>
+      )}
+
       {dreieckTab && (
         <>
           <button onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
@@ -165,12 +240,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           {filterMenueOffen && (
           <>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8, alignItems: "center" }}>
-            <Chip active={besitz === "alle"} onClick={() => setBesitz("alle")}>Besitz: alle</Chip>
-            <Chip active={besitz === "dvd"} onClick={() => setBesitz("dvd")}>DVD</Chip>
-            <Chip active={besitz === "prime"} onClick={() => setBesitz("prime")}>Prime (Snapshot)</Chip>
-            <Chip active={besitz === "apple"} onClick={() => setBesitz("apple")}>Apple</Chip>
-            <Chip active={besitz === "wunsch"} onClick={() => setBesitz("wunsch")}>Wunschliste</Chip>
-            <span style={{ width: 12 }} />
+            {ansicht === "bestand" && (
+              <>
+                <Chip active={besitz === "alle"} onClick={() => setBesitz("alle")}>Besitz: alle</Chip>
+                <Chip active={besitz === "dvd"} onClick={() => setBesitz("dvd")}>DVD</Chip>
+                <Chip active={besitz === "prime"} onClick={() => setBesitz("prime")}>Prime (Snapshot)</Chip>
+                <Chip active={besitz === "apple"} onClick={() => setBesitz("apple")}>Apple</Chip>
+                <Chip active={besitz === "wunsch"} onClick={() => setBesitz("wunsch")}>Wunschliste</Chip>
+                <span style={{ width: 12 }} />
+              </>
+            )}
             <Chip active={axis === "wie"} color={T.wie} onClick={() => setAxis(axis === "wie" ? null : "wie")}>WIE-lastig</Chip>
             <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
             <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
@@ -215,7 +294,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               expanded={expandedId === "b" + f.id}
               onToggle={() => setExpandedId(expandedId === "b" + f.id ? null : "b" + f.id)}
               onSave={(changes) => updateFilm(f.id, changes)}
-              kinoInfo={dreieckTab && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
+              kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
               kommtVorIn={kommtVorInMap[f.id]}
               onArtikelKlick={onArtikelKlick}
             />
@@ -225,7 +304,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {/* Offene Blog-Referenzen: Sammelstelle für "Später"-geklickte Rotlinks.
           Reiner Laufzeit-Filter über die Artikel — wird nicht gepflegt. */}
-      {offeneRefsTab.length > 0 && (
+      {ansicht === "bestand" && offeneRefsTab.length > 0 && (
         <details style={{ marginTop: 26 }} open>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: "#E06C6C" }}>
             Offene Blog-Referenzen ({offeneRefsTab.length}) — {TAB_LABELS[typTab]} ohne Mediathek-Eintrag
@@ -263,7 +342,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {/* Unbewerteter Besitz (Nachtrag) — nur im Filme-Tab relevant */}
-      {typTab === "filme" && nachtragFlach.length > 0 && (
+      {ansicht === "bestand" && typTab === "filme" && nachtragFlach.length > 0 && (
         <details style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
             Unbewerteter Besitz ({nachtragFlach.length}) — noch ohne Dreieck
@@ -312,7 +391,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {/* ---- Daten & Teilen direkt im Bereich (Punkt 6): Export/Import der
            Filmliste + komplettes Teilen/KI-Ingestion, ohne Tab-Wechsel. ---- */}
-      {exportMaster && (
+      {ansicht === "bestand" && exportMaster && (
         <details style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
             Daten & Teilen (Export · Import · KI-Listen)
@@ -331,6 +410,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           </div>
         </details>
       )}
+      </>)}
     </section>
   );
 }

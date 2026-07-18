@@ -92,7 +92,7 @@ function TrefferZeile({ t, onSpringeZuFilm }) {
 }
 
 /* Volle Meta-Karte für EINEN Film (Phase 4a) — "gesamte Metainfos samt Bewertung". */
-function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm }) {
+function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds }) {
   const ss = schlagseite(f.bewertung);
   const ssCol = ss ? { wie: T.wie, was: T.was, warum: T.warum }[ss] : T.rauch;
   const ot = (f.originaltitel && f.originaltitel !== f.titel)
@@ -119,7 +119,8 @@ function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm }) {
         <AxisChips bw={f.bewertung} />
         <KategorieTag k={f.kategorie} />
         {ss && <MetaChip color={ssCol}>{ss.toUpperCase()}-lastig</MetaChip>}
-        {f.must_watch && <MetaChip color={T.warum}>★ Wunschliste</MetaChip>}
+        {/* Must-Watch kommt aus der LISTE (kd:mustwatch), nicht mehr aus dem Flag. */}
+        {mustwatchIds && mustwatchIds.has(f.id) && <MetaChip color={T.warum}>★ Must-Watch</MetaChip>}
       </div>
       {/* Genres + Tags */}
       {((f.genre || []).length > 0 || (f.tags || []).length > 0) && (
@@ -192,7 +193,7 @@ function DisambigListe({ sig, master, onWaehle }) {
   );
 }
 
-export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe }) {
+export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* film.at-Genres aus dem Kinoprogramm -> Vokabular (parseAnfrage erkennt sie),
      damit z.B. "Sci-Fi im Kino" auch ohne passenden Master-Eintrag greift. */
@@ -248,7 +249,7 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
     const film = t ? t.film : (master || []).find((f) => f.id === id);
     if (!film) return null;
     const herkunft = t ? t.herkunft : filmHerkunft(film, { kinoMatches, streamingBekannt });
-    return <FilmDetail film={film} herkunft={herkunft} onSpringeZuFilm={onSpringeZuFilm} />;
+    return <FilmDetail film={film} herkunft={herkunft} onSpringeZuFilm={onSpringeZuFilm} mustwatchIds={mustwatchIds} />;
   };
 
   return (

@@ -34,6 +34,9 @@ const seedMaster = JSON.stringify({
   filme: [
     { id: "apple_testfilm_2000", titel: "Apple-Testfilm", originaltitel: "Apple-Testfilm", jahr: 2000, jahr_bis: null, typ: "film", quelle: "apple", must_watch: false, kategorie: "sehenswert", bewertet_von: "max", bewertung: { wie: 3, was: 4, warum: 2 }, genre: ["Drama"], tags: [], begruendung: "Besitz-Testeintrag (Apple).", status: "gesetzt", notiz: "" },
     { id: "match_test", titel: MATCH_TITEL, originaltitel: MATCH_TITEL, jahr: 2000, jahr_bis: null, typ: "film", quelle: "dvd", must_watch: false, kategorie: "sehenswert", bewertet_von: "max", bewertung: { wie: 3, was: 3, warum: 3 }, genre: [], tags: [], begruendung: "film_at_id-Match-Test.", status: "gesetzt", notiz: "", film_at_id: MATCH_ID },
+    // Besitz-/Unbewertet-/Migrations-Testfälle (Phase 2+3, 2026-07-18):
+    { id: "unbew_dvd_1980", titel: "Unbewertet-Testfilm", originaltitel: "Unbewertet-Testfilm", jahr: 1980, jahr_bis: null, typ: "film", quelle: "dvd+prime", must_watch: false, kategorie: null, bewertet_von: null, bewertung: null, genre: [], tags: [], begruendung: "", status: "gesetzt", notiz: "" },
+    { id: "flag_testfilm_1990", titel: "Flag-Testfilm", originaltitel: "Flag-Testfilm", jahr: 1990, jahr_bis: null, typ: "film", quelle: "bluray", must_watch: true, kategorie: "sehenswert", bewertet_von: "max", bewertung: { wie: 2, was: 2, warum: 2 }, genre: [], tags: [], begruendung: "Migrations-Testeintrag.", status: "gesetzt", notiz: "" },
     ...echteMaster.filme,
   ],
   herkunft: { typ: "storage" }, gespeichertAm: Date.now(),
@@ -176,6 +179,22 @@ check("Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Mit Stil|Weils cool ist)$/)
 check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
+
+/* ---- Must-Watch-Migration (Flag-Testfilm ist geseedet) ---- */
+check("Migration: Abschnitt sichtbar (offenes Flag)", /Must-Watch-Migration/.test(text()));
+const migKnopf = knopf(/Flags in die Must-Watch-Liste migrieren/);
+check("Migration: Knopf vorhanden", !!migKnopf);
+if (migKnopf) {
+  migKnopf.click(); await warte(500);
+  let mwTopf = null;
+  try { mwTopf = JSON.parse(dom.window.localStorage.getItem("kd:mustwatch") || "null"); } catch { /* */ }
+  const eintraege = (mwTopf && mwTopf.eintraege) || [];
+  check("Migration: 1 Eintrag angelegt + auf Master verknüpft",
+    eintraege.length === 1 && eintraege[0].verknuepfung && eintraege[0].verknuepfung.id === "flag_testfilm_1990");
+  check("Migration: im_besitz aus physischer Quelle abgeleitet (bluray)", eintraege.length === 1 && eintraege[0].im_besitz === true);
+  check("Migration: Bericht angezeigt (1 angelegt)", /Migration: 1 angelegt/.test(text()));
+  check("Migration: Knopf nach Lauf verschwunden (idempotent, nichts mehr offen)", !knopf(/Flags in die Must-Watch-Liste migrieren/));
+}
 /* Theme-Wechsel: Foyer anklicken -> Wrapper-Hintergrund hell, dann zurück */
 const foyer = knopf(/Foyer \(hell\)/i);
 check("Theme-Knöpfe vorhanden", !!foyer && !!knopf(/Saal \(dunkel\)/i));
@@ -232,6 +251,38 @@ if (karte) {
   check("Notiz-Feld im Edit-Panel (jeder Eintrag)", [...doc.querySelectorAll("textarea")].some((t) => /^Notiz/.test(t.placeholder || "")));
 } else {
   check("Mediathek-Karte für Notiz-Test gefunden", false);
+}
+
+/* ---- Besitz-Ansicht: nur physische Quellen, unbewertet erstklassig ---- */
+const besitzKnopf = knopf(/^Im Besitz \(/);
+check("Mediathek: Ansicht-Umschalter 'Im Besitz'", !!besitzKnopf);
+if (besitzKnopf) {
+  besitzKnopf.click(); await warte(600);
+  const tb = text();
+  check("Besitz: physischer Eintrag sichtbar (dvd+prime-Kombi)", /Unbewertet-Testfilm/.test(tb));
+  check("Besitz: bluray-Eintrag sichtbar", /Flag-Testfilm/.test(tb));
+  check("Besitz: Apple-only-Eintrag NICHT im Besitz-Bereich", !/Apple-Testfilm/.test(tb));
+  check("Besitz: UNBEWERTET-Badge sichtbar", /UNBEWERTET/.test(tb));
+  check("Besitz: 'Jetzt bewerten'-Einstieg vorhanden", !!knopf(/Jetzt bewerten/));
+  const nurUnbew = knopf(/^nur unbewertete/);
+  check("Besitz: Chip 'nur unbewertete'", !!nurUnbew);
+  if (nurUnbew) {
+    nurUnbew.click(); await warte(400);
+    const tu = text();
+    check("Besitz-Filter: unbewerteter Eintrag bleibt, bewerteter fliegt", /Unbewertet-Testfilm/.test(tu) && !/Flag-Testfilm/.test(tu));
+    const aus = knopf(/^nur unbewertete/);
+    if (aus) { aus.click(); await warte(200); }
+  }
+}
+
+/* ---- Must-Watch-Ansicht: migrierter Eintrag lebt in der eigenen Liste ---- */
+const mwKnopf = knopf(/^Must-Watch \(/);
+check("Mediathek: Ansicht-Umschalter 'Must-Watch'", !!mwKnopf);
+if (mwKnopf) {
+  mwKnopf.click(); await warte(500);
+  check("Must-Watch: migrierter Eintrag gelistet", /Flag-Testfilm/.test(text()));
+  check("Must-Watch: eigener '+ Eintrag'-Knopf", !!knopf(/^\+ Eintrag$/));
+  check("Must-Watch: im-Besitz-Häkchen pro Eintrag", [...doc.querySelectorAll('input[type="checkbox"]')].length > 0);
 }
 
 let ok = true;

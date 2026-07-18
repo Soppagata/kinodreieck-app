@@ -31,6 +31,7 @@ const backup = {
   einstellungen: { theme: "hell", startTab: "kino", schrift: "gross", modus: "kurosawa" },
   entdecken_status: { "100": "gesehen", "200": "erstellt" },
   autor: "Max",
+  must_watch_liste: [{ id: "mw_a", titel: "A", im_besitz: true, beschreibung: "", notiz: "", verknuepfung: { ziel: "master", id: "fest_1999" }, erstellt_am: "2026-07-18T00:00:00Z" }],
   // streaming_dienste bewusst NICHT enthalten (Alt-Backup-Lücke)
 };
 
@@ -71,6 +72,11 @@ check("Streaming-Dienste: Topf unangetastet (nicht überschrieben)", get("kd:str
 const sd = res.bericht.find((b) => b.topf === "Streaming-Dienste");
 check("Streaming-Dienste: als übersprungen berichtet", sd && /ÜBERSPRUNGEN/.test(sd.status));
 
+/* 7b) Must-Watch-Liste (10. Topf): Wrapper {eintraege, gespeichertAm} */
+const mwTopf = parse("kd:mustwatch");
+check("Must-Watch: Wrapper {eintraege:[...],gespeichertAm}", mwTopf && Array.isArray(mwTopf.eintraege) && mwTopf.eintraege.length === 1 && typeof mwTopf.gespeichertAm === "number");
+check("Must-Watch: Eintrag + Verknüpfung unversehrt", mwTopf && mwTopf.eintraege[0].id === "mw_a" && mwTopf.eintraege[0].verknuepfung.id === "fest_1999");
+
 /* 8) Zählbericht */
 const mb = res.bericht.find((b) => b.topf === "Masterliste");
 check("Bericht: Masterliste-Zählstand = 2", mb && mb.count === 2 && mb.status === "übernommen");
@@ -85,6 +91,7 @@ await R.restoreRueckgaengig();
 check("Undo: Master zurückgesetzt", /"id":"alt"/.test(get("kd:master") || ""));
 check("Undo: Autor zurückgesetzt", get("kd:autor-name") === "AlterName");
 check("Undo: neu geschriebene Töpfe (kino-pins) wieder entfernt", get("kd:kino-pins") === null);
+check("Undo: Must-Watch-Topf wieder entfernt", get("kd:mustwatch") === null);
 
 /* 11) Falsches Format wird abgelehnt, nichts geschrieben */
 _ls.clear();
@@ -99,6 +106,7 @@ const teil = await R.restoreBackup({ format: "kinodreieck-backup", version: 1, a
 check("Teil-Backup: läuft durch", teil.ok === true);
 check("Teil-Backup: Autor gesetzt", get("kd:autor-name") === "Nur");
 check("Teil-Backup: Master übersprungen", get("kd:master") === null && teil.bericht.find((b) => b.topf === "Masterliste").status.includes("übersprungen"));
+check("Teil-Backup: Must-Watch übersprungen, Topf unangetastet", get("kd:mustwatch") === null && teil.bericht.find((b) => b.topf === "Must-Watch-Liste").status.includes("übersprungen"));
 
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }

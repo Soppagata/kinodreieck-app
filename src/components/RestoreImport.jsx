@@ -25,7 +25,7 @@ export function RestoreImport() {
     const gitHinweis = isGitConfigured()
       ? "\n\nACHTUNG: Git-Sync ist bereits verbunden — der wiederhergestellte Stand wird beim nächsten Sync als neue Version ins Daten-Repo committet. Für die Erst-Migration gilt: Backup einspielen, DANN Git verbinden."
       : "";
-    const ok = window.confirm("Backup wiederherstellen?\n\nDas ERSETZT die aktuellen lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name). Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar." + gitHinweis);
+    const ok = window.confirm("Backup wiederherstellen?\n\nDas ERSETZT die aktuellen lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste). Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar." + gitHinweis);
     if (!ok) { setBusy(false); return; }
     try {
       const r = await restoreBackup(backup);

@@ -170,9 +170,12 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
           typ: eintrag.typ || "film",
           quelle: quelleWert,
           quelle_unklar: quelleUnklar || undefined,
-          kategorie: eintrag.kategorie || "sehenswert",
-          bewertet_von: eintrag.bewertet_von || analyse.autor, // Das Autoren-Feld wird scharf
-          bewertung: hatDreieck(eintrag.typ) ? (eintrag.bewertung || { wie: 0, was: 0, warum: 0 }) : null,
+          /* Fehlende Bewertung bei Dreieck-Typen bleibt null (= unbewertet) —
+             vorher wurde sie still zu {0,0,0} gemünzt und sah wie eine echte
+             Nullwertung aus. Kategorie folgt: ohne Bewertung keine erfundene. */
+          kategorie: hatDreieck(eintrag.typ) && !eintrag.bewertung ? (eintrag.kategorie || null) : (eintrag.kategorie || "sehenswert"),
+          bewertet_von: hatDreieck(eintrag.typ) && !eintrag.bewertung ? null : (eintrag.bewertet_von || analyse.autor), // Das Autoren-Feld wird scharf
+          bewertung: hatDreieck(eintrag.typ) ? (eintrag.bewertung ?? null) : null,
           genre: Array.isArray(eintrag.genre) ? eintrag.genre : [],
           tags: Array.isArray(eintrag.tags) ? eintrag.tags : [],
           begruendung: eintrag.begruendung || "",

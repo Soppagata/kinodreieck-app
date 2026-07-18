@@ -26,6 +26,9 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
   };
   const [f, setF] = useState(leer);
   const [fehler, setFehler] = useState("");
+  /* Unbewertet speichern (Besitz erfassen, Dreieck kommt später): blendet
+     Kategorie + Achsen aus; gespeichert wird bewertung: null. */
+  const [ohneBewertung, setOhneBewertung] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const clamp = (v) => Math.max(0, Math.min(5, Number(v) || 0));
   const bewertbar = hatDreieck(f.typ);
@@ -50,9 +53,9 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
         jahr_bis: null,
         typ: f.typ,
         quelle: arrayZuQuelle(f.quellen),
-        kategorie: f.kategorie,
-        bewertet_von: "max",
-        bewertung: { wie: f.wie, was: f.was, warum: f.warum },
+        kategorie: ohneBewertung ? null : f.kategorie,
+        bewertet_von: ohneBewertung ? null : "max",
+        bewertung: ohneBewertung ? null : { wie: f.wie, was: f.was, warum: f.warum },
         genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
         tags: [],
         begruendung: f.begruendung.trim(),
@@ -93,15 +96,19 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
 
         {bewertbar ? (
           <>
-            <select value={f.kategorie} onChange={set("kategorie")} style={{ ...inputStyle, padding: "9px 6px" }}>
-              {["immer_gut", "kult", "kult_klassiker", "daemlich_aber_herrlich", "trash", "sehenswert", "echter_schrott"].map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.wie }}>WIE</span>
-            <input type="number" min="0" max="5" value={f.wie} onChange={(e) => setF({ ...f, wie: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.was }}>WAS</span>
-            <input type="number" min="0" max="5" value={f.was} onChange={(e) => setF({ ...f, was: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.warum }}>WARUM</span>
-            <input type="number" min="0" max="5" value={f.warum} onChange={(e) => setF({ ...f, warum: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
+            {!ohneBewertung && (
+              <>
+                <select value={f.kategorie} onChange={set("kategorie")} style={{ ...inputStyle, padding: "9px 6px" }}>
+                  {["immer_gut", "kult", "kult_klassiker", "daemlich_aber_herrlich", "trash", "sehenswert", "echter_schrott"].map((k) => <option key={k} value={k}>{k}</option>)}
+                </select>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.wie }}>WIE</span>
+                <input type="number" min="0" max="5" value={f.wie} onChange={(e) => setF({ ...f, wie: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.was }}>WAS</span>
+                <input type="number" min="0" max="5" value={f.was} onChange={(e) => setF({ ...f, was: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.warum }}>WARUM</span>
+                <input type="number" min="0" max="5" value={f.warum} onChange={(e) => setF({ ...f, warum: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />
+              </>
+            )}
             <input placeholder="Genres, kommagetrennt" value={f.genre} onChange={set("genre")} style={{ ...inputStyle, flex: 1, minWidth: 150 }} />
           </>
         ) : (
@@ -119,6 +126,14 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
           </>
         )}
       </div>
+
+      {/* Unbewertet-Schalter: Besitz jetzt erfassen, Dreieck später vergeben. */}
+      {bewertbar && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
+          <input type="checkbox" checked={ohneBewertung} onChange={() => setOhneBewertung(!ohneBewertung)} />
+          Ohne Bewertung speichern (Eintrag bleibt „unbewertet“ — Dreieck kommt später)
+        </label>
+      )}
 
       {/* Quelle: wiederverwendbare Wahl-Komponente (Vorfilter + Combobox + Chips). */}
       {bewertbar && (

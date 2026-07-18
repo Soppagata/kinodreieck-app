@@ -1,8 +1,8 @@
 /* ---------- Restore-Import (Datenmigration alt → neu) ----------
-   Spielt ein `kinodreieck-backup`-JSON (Gesamt-Backup der alten App) in die 9
-   Sync-Töpfe der neuen App ein, damit der Git-Treiber sie beim ersten Commit als
-   9 Dateien schreibt. Rein lokal, deterministisch, kein Netz, kein LLM, kein
-   Merge (Restore = ERSETZEN). Snapshot vor dem Überschreiben (rückgängig machbar).
+   Spielt ein `kinodreieck-backup`-JSON (Gesamt-Backup) in die 10 Sync-Töpfe der
+   App ein, damit der Git-Treiber sie beim ersten Commit als 10 Dateien schreibt.
+   Rein lokal, deterministisch, kein Netz, kein LLM, kein Merge (Restore =
+   ERSETZEN). Snapshot vor dem Überschreiben (rückgängig machbar).
    Läuft VOR dem Git-Verbinden (Storage-Treiber ist dann lokal → keine Commits). */
 
 import { store, K } from "./storage.js";
@@ -21,7 +21,7 @@ export async function restoreBackup(backup) {
     ? `Backup-Version ${backup.version} (erwartet 1) — wird tolerant eingelesen.` : null;
 
   // 1) Snapshot des bisherigen Standes ALLER Zieltöpfe VOR dem Überschreiben.
-  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste];
+  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch];
   const vorher = {};
   for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
   try { localStorage.setItem(RESTORE_SNAP, JSON.stringify({ t: nowIso(), werte: vorher })); } catch { /* Snapshot best effort */ }
@@ -85,6 +85,12 @@ export async function restoreBackup(backup) {
     await store.set(K.streamingDienste, JSON.stringify(backup.streaming_dienste));
     add("Streaming-Dienste", "übernommen", 1);
   } else add("Streaming-Dienste", "ÜBERSPRUNGEN — nicht im Backup: Abos bitte manuell setzen", 0);
+
+  // 11) Must-Watch-Liste — Wrapper {eintraege, gespeichertAm} (10. Topf, seit 18.07.2026)
+  if (Array.isArray(backup.must_watch_liste)) {
+    await store.set(K.mustwatch, JSON.stringify({ eintraege: backup.must_watch_liste, gespeichertAm: now }));
+    add("Must-Watch-Liste", "übernommen", backup.must_watch_liste.length);
+  } else add("Must-Watch-Liste", "übersprungen (fehlte)", 0);
 
   return { ok: true, warnung, bericht };
 }
