@@ -97,6 +97,23 @@ const helpers = (dom) => {
   dom.window.close();
 }
 
+/* ---------- E: Credits-Reset-Anzeige koppelt an den konfigurierten Reset-Tag ---------- */
+{
+  const dom = baueDom({
+    seed(w) {
+      w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true, reset_tag: 11 }));
+    },
+  });
+  const { text, knopf } = helpers(dom);
+  await warte(2500);
+  const daten = knopf(/^einstellungen$/i);
+  if (daten) { daten.click(); await warte(600); }
+  check("E: Credits-Reset-Datum wird angezeigt (aus reset_tag)", /Credits-Reset:\s*11\./.test(text().replace(/ /g, " ")) || /Credits-Reset: \d{2}\.\d{2}\.\d{4}/.test(text()));
+  check("E: falscher 30-Tage-Countdown ist weg", !/Tage bis zum Monats-Refresh/.test(text()));
+  check("E: Reset-Tag-Eingabefeld vorhanden", /Credits-Reset-Tag \(1–28\)/.test(text()));
+  dom.window.close();
+}
+
 /* ---------- D: Struktur-Kanarien in der gebauten Datei (Scrim-Bug + Fonts) ---------- */
 {
   check("D: kein Inline-zIndex:40 mehr im Bundle (Scrim-Bug-Ursache)", !/zIndex:\s*40/.test(html));

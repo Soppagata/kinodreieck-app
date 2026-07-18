@@ -17,11 +17,33 @@ function download(dateiname, obj) {
   URL.revokeObjectURL(url);
 }
 
-export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggleQuelle, heuristikAn, setHeuristikAn, datenGesperrt = false }) {
+export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggleQuelle, heuristikAn, setHeuristikAn, resetTag = null, setResetTag, datenGesperrt = false }) {
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
   const alterTage = stand ? (Date.now() - stand.getTime()) / 86400000 : null;
+
+  /* Nächster Watchmode-Credits-Reset. Der frühere Countdown „30 − Alter(stand)"
+     war falsch: stand wird bei JEDEM Mo/Mi/Fr-Rotationslauf neu gesetzt, der
+     Zähler sprang also ständig auf ~30 zurück. Wahrheitskette jetzt:
+     1) Feld `naechster_reset` aus dem Katalog-Lauf (schreibt die Pipeline),
+     2) sonst aus dem konfigurierten Reset-Tag (Abrechnungstag des Accounts)
+        deterministisch berechnet, 3) sonst ehrlich „unbekannt". */
+  const resetDatum = (() => {
+    if (datenDa && bekannt.naechster_reset) {
+      const d = new Date(bekannt.naechster_reset);
+      if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) return d;
+    }
+    const tag = Number(resetTag);
+    if (Number.isInteger(tag) && tag >= 1 && tag <= 28) {
+      const jetzt = new Date();
+      const d = new Date(jetzt.getFullYear(), jetzt.getMonth(), tag);
+      if (d.getTime() <= jetzt.getTime()) d.setMonth(d.getMonth() + 1);
+      return d;
+    }
+    return null;
+  })();
+  const resetInTagen = resetDatum ? Math.ceil((resetDatum.getTime() - Date.now()) / 86400000) : null;
 
   const gruppen = useMemo(() => {
     const vq = (datenDa && bekannt.verfuegbare_quellen) || [];
@@ -87,6 +109,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
             min_tage_voll: 25,
             min_tage_haeufig: 2,
             heuristik: heuristikAn,
+            ...(Number.isInteger(Number(resetTag)) && resetTag >= 1 && resetTag <= 28 ? { reset_tag: Number(resetTag) } : {}),
           })}>
           Config exportieren (streaming_config.json)
         </button>
@@ -104,11 +127,30 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
             Stand: <strong>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong>
             {" · "}Quellen im Katalog: {(bekannt.dienste || []).join(", ")}
             {" · "}Titel: {bekannt.titel.length} bekannt / {entdeckenDa ? entdecken.titel.length : 0} entdecken
-            <br />Quota: <strong>{bekannt.quota_nach_lauf ?? "?"} / 2.500</strong> (Watchmode-Credits = API-Requests pro Monat)
-            {" · "}{alterTage <= 30 ? Math.max(0, Math.ceil(30 - alterTage)) + " Tage bis zum Monats-Refresh" : <strong style={{ color: T.gefahr }}>Refresh überfällig ({Math.floor(alterTage)} Tage alt)</strong>}
+            <br />Credits verbraucht (Stand letzter Lauf): <strong>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""}</strong> (Watchmode-Credits pro Monat)
+            {" · "}{resetDatum
+              ? <>Credits-Reset: <strong>{resetDatum.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong> (in {resetInTagen} {resetInTagen === 1 ? "Tag" : "Tagen"})</>
+              : <span style={{ color: T.wolfram }}>Credits-Reset: unbekannt — Reset-Tag unten setzen</span>}
+            {alterTage > 35 && <><br /><strong style={{ color: T.gefahr }}>Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig.</strong></>}
           </p>
         ) : (
           <p style={{ fontSize: 14, color: T.rauch, margin: 0 }}>Noch kein Katalog geladen.</p>
+        )}
+        {setResetTag && (
+          <label style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: "1px solid " + T.saal, fontSize: 13, color: T.leinwandTief }}>
+            Credits-Reset-Tag (1–28):
+            <input type="number" min={1} max={28} value={resetTag ?? ""} placeholder="—"
+              onChange={(e) => {
+                const roh = e.target.value;
+                if (roh === "") { setResetTag(null); return; }
+                const n = Math.round(Number(roh));
+                if (Number.isInteger(n)) setResetTag(Math.max(1, Math.min(28, n)));
+              }}
+              style={{ width: 64, background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: 4, padding: "5px 8px", fontFamily: "'Space Mono', monospace", fontSize: 13 }} />
+            <span style={{ fontSize: 12, color: T.rauch }}>
+              Tag im Monat, an dem Watchmode die Credits zurücksetzt (Abrechnungstag laut Account). Liefert der Katalog-Lauf selbst ein Reset-Datum, hat das Vorrang.
+            </span>
+          </label>
         )}
       </div>
 

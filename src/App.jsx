@@ -1117,6 +1117,11 @@ export default function App() {
   const ALTE_SLUGS = { netflix: "Netflix", disney_plus: "Disney+", prime_video: "Prime Video" };
   const [auswahl, setAuswahlRoh] = useState(["Netflix", "Disney+", "Prime Video"]);
   const [heuristikAn, setHeuristikAn] = useState(true);
+  /* Watchmode-Abrechnungstag (1–28): Tag im Monat, an dem die Credits real
+     zurückgesetzt werden. Grundlage der Reset-Anzeige (StreamingEinstellungen). */
+  const [resetTag, setResetTagRoh] = useState(null);
+  const streamingCfgJson = (quellen, heuristik, reset) =>
+    JSON.stringify({ quellen, heuristik, ...(Number.isInteger(reset) && reset >= 1 && reset <= 28 ? { reset_tag: reset } : {}) });
   useEffect(() => {
     store.get(K.streamingDienste).then((r) => {
       if (r && r.value) {
@@ -1125,6 +1130,7 @@ export default function App() {
           if (Array.isArray(v.quellen)) setAuswahlRoh(v.quellen);
           else if (Array.isArray(v.dienste)) setAuswahlRoh(v.dienste.map((d) => ALTE_SLUGS[d] || d)); // Migration Altformat
           if (typeof v.heuristik === "boolean") setHeuristikAn(v.heuristik);
+          if (Number.isInteger(v.reset_tag) && v.reset_tag >= 1 && v.reset_tag <= 28) setResetTagRoh(v.reset_tag);
         } catch { /* Default */ }
       }
     }).catch(() => {});
@@ -1133,10 +1139,15 @@ export default function App() {
   const toggleQuelle = useCallback((name) => {
     setAuswahlRoh((prev) => {
       const next = prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name];
-      store.set(K.streamingDienste, JSON.stringify({ quellen: next, heuristik: heuristikAn })).catch(() => {});
+      store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn, resetTag)).catch(() => {});
       return next;
     });
-  }, [heuristikAn]);
+  }, [heuristikAn, resetTag]);
+  const setResetTag = useCallback((tag) => {
+    const v = (Number.isInteger(tag) && tag >= 1 && tag <= 28) ? tag : null;
+    setResetTagRoh(v);
+    store.set(K.streamingDienste, streamingCfgJson(auswahl, heuristikAn, v)).catch(() => {});
+  }, [auswahl, heuristikAn]);
 
   /* ---- Streaming-Badges für Mediathek & Kino (aus streaming_bekannt) ---- */
   const streamingMap = useMemo(() => {
@@ -1362,7 +1373,7 @@ export default function App() {
             addFilm={addFilm} master={master} updateFilm={updateFilm}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
-            heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, JSON.stringify({ quellen: auswahl, heuristik: v })).catch(() => {}); }}
+            heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
           />
         )}
@@ -1395,7 +1406,8 @@ export default function App() {
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
-            setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, JSON.stringify({ quellen: auswahl, heuristik: v })).catch(() => {}); }}
+            setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
+            resetTag={resetTag} setResetTag={setResetTag}
             datenGesperrt={!snapshotFreigabe}
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
           />

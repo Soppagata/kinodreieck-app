@@ -24,6 +24,7 @@ export function DatenTab({
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle, heuristikAn, setHeuristikAn,
+  resetTag = null, setResetTag,
   datenGesperrt = false,
 }) {
   const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 6px" };
@@ -252,6 +253,7 @@ export function DatenTab({
       {toggleQuelle && (
         <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
           auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn} setHeuristikAn={setHeuristikAn}
+          resetTag={resetTag} setResetTag={setResetTag}
           datenGesperrt={datenGesperrt} />
       )}
 
