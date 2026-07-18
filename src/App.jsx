@@ -66,6 +66,10 @@ function liesStartWahl() {
    URL bleibt ein danach neu aufgebauter Browser-Stand deshalb erhalten. */
 let frischerStartMemo;
 function verbraucheFrischenStart() {
+  /* Personal-Modus: Der destruktive Installer-Pfad (?start=…&fresh=…) gehört zur
+     Tester-Kulisse. Ohne diesen Guard würde jeder alte Installer-/Bookmark-Link
+     8 persönliche Datentöpfe löschen — auf einem Gerät ohne Git-Sync unwiderruflich. */
+  if (PERSONAL_MODE) { frischerStartMemo = null; return null; }
   if (frischerStartMemo !== undefined) return frischerStartMemo;
   frischerStartMemo = null;
   try {
@@ -90,10 +94,17 @@ function verbraucheFrischenStart() {
 /* Willkommen und Tour werden erst nach einer bestätigten Einrichtung oder dem
    bewussten Überspringen des Installers freigeschaltet. */
 function tutorialFrei() {
+  /* Personal-Modus: Tour & kontextuelle Hinweise bewusst aus — explizit, damit
+     kein localStorage-Rückstand eines Beta-Builds (kd:setup.done) sie doch aktiviert. */
+  if (PERSONAL_MODE) return false;
   try { return !!getSetup().done; } catch { return false; }
 }
 
 function snapshotsFrei() {
+  /* Personal-Modus: Daten sind IMMER frei. Das Beta-Gate (Terminal-Installer/
+     Demo-Wahl) hat im Personal-Modus keinen Freischalt-Pfad — ohne diese Zeile
+     blieben Kino/Streaming/Programm-Autoload dauerhaft gesperrt. */
+  if (PERSONAL_MODE) return true;
   try { if (liesStartWahl() === "demo") return true; } catch { /* */ }
   try { return getSetup().installiert === true; } catch { return false; }
 }
@@ -161,7 +172,10 @@ export default function App() {
     if (!navOffen) return;
     const onKey = (e) => { if (e.key === "Escape") setNavOffen(false); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Hintergrund-Scroll sperren, solange der Drawer offen ist (Wisch auf dem Scrim).
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
   }, [navOffen]);
   const [master, setMaster] = useState(null);
   const [masterMeta, setMasterMeta] = useState(null);
@@ -398,7 +412,9 @@ export default function App() {
     setErr("");
     setLoading("programm");
     try {
-      const res = await fetch("/programm.json", { cache: "no-store" });
+      // BASE_URL statt absolutem "/…": auf GitHub Pages liegt die App unter einem
+      // Unterpfad (…/kinodreieck-app/) — "/programm.json" zielte auf die Domain-Root.
+      const res = await fetch(import.meta.env.BASE_URL + "programm.json", { cache: "no-store" });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const ct = res.headers.get("content-type") || "";
       const text = await res.text();
@@ -1081,11 +1097,11 @@ export default function App() {
         throw new Error("leer");
       } catch { return fallback && fallback.stand ? fallback : null; }
     };
-    const bekannt = await hol("/streaming_bekannt.json", streamingBekanntSnapshot);
+    const bekannt = await hol(import.meta.env.BASE_URL + "streaming_bekannt.json", streamingBekanntSnapshot);
     if (!snapshotFreigabeRef.current) return;
     setStreamingBekannt(bekannt);
     // Entdecken: served public/ (voll) -> externe Beilage (voll, file://) -> eingebackene Top 500
-    const entdeckenServed = await hol("/streaming_entdecken.json", null);
+    const entdeckenServed = await hol(import.meta.env.BASE_URL + "streaming_entdecken.json", null);
     if (!snapshotFreigabeRef.current) return;
     if (entdeckenServed) setStreamingEntdecken(entdeckenServed);
     else {
@@ -1247,7 +1263,10 @@ export default function App() {
           über die ganze Seite. */}
       <NavBand offen={navOffen} onToggle={() => setNavOffen((o) => !o)} />
       <div className={"kd-scrim" + (navOffen ? " offen" : "")} onClick={() => setNavOffen(false)} aria-hidden="true" />
-      <nav className={"kd-menu" + (navOffen ? " offen" : "")} style={{ position: "sticky", top: 0, zIndex: 40, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
+      {/* z-index bewusst NICHT inline: Inline-Styles schlagen CSS ohne !important —
+          ein inline zIndex hier hat den Drawer unter den Scrim (58) gedrückt.
+          Ebenen liegen in index.css: Desktop 40, Handy 60 (.kd-menu). */}
+      <nav className={"kd-menu" + (navOffen ? " offen" : "")} style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[["start", "Start"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"], ["finder", "Suche"], ["daten", "Einstellungen"]].map(([id, label]) => (
             <button key={id} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}

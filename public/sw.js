@@ -2,9 +2,13 @@
    aggressive Offline-Logik (Geräte sind praktisch immer online):
    - HTML/Navigation: network-first → neue Deploys (mit neuen Asset-Hashes) laden
      sofort; offline fällt es auf die zwischengespeicherte Shell zurück.
+   - .json-Datendateien (programm.json, streaming_*.json — ungehasht, ändern sich
+     bei jedem Daten-Job): ebenfalls network-first. Cache-first würde sie nach dem
+     ersten Fetch dauerhaft einfrieren.
    - Statische Assets (content-hashed, immutable): cache-first, sonst holen+cachen.
-   Kein Datenpfad, keine API-Caches (Git-Sync läuft nie über den SW). */
-const CACHE = "kd-shell-v1";
+   Kein API-Cache (Git-Sync/api.github.com läuft nie über den SW).
+   Cache-Name versioniert: Bump räumt beim activate alle Altbestände weg. */
+const CACHE = "kd-shell-v2";
 
 self.addEventListener("install", () => { self.skipWaiting(); });
 
@@ -24,14 +28,20 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return; // nie fremde Origins (v. a. api.github.com)
 
   const istHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
-  if (istHTML) {
+  const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien
+  if (istHTML || istDaten) {
     e.respondWith((async () => {
       try {
         const res = await fetch(req);
-        const c = await caches.open(CACHE); c.put(req, res.clone()); return res;
+        // Nur echte Erfolge cachen — eine 404-/Fehlerseite darf nie zum Offline-Fallback werden.
+        if (res && res.ok) { const c = await caches.open(CACHE); c.put(req, res.clone()); }
+        return res;
       } catch {
         const c = await caches.open(CACHE);
-        return (await c.match(req)) || (await c.match("./")) || (await c.match("index.html")) || Response.error();
+        const hit = await c.match(req);
+        if (hit) return hit;
+        if (istHTML) return (await c.match("./")) || (await c.match("index.html")) || Response.error();
+        return Response.error();
       }
     })());
     return;

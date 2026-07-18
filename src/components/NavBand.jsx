@@ -8,7 +8,7 @@ import { useSyncStatus } from "./SyncStatusChip.jsx";
 export function NavBand({ offen, onToggle }) {
   const s = useSyncStatus();
   const dot = !s.configured ? T.rauch : (s.conflict && s.conflict.length) ? T.gefahr
-    : (s.pending && s.pending.length) ? T.wolfram : "#6fce8f";
+    : ((s.pending && s.pending.length) || (s.stale && s.stale.length)) ? T.wolfram : "#6fce8f";
   return (
     <button className="kd-navband" aria-label={offen ? "Menü schließen" : "Menü öffnen"} aria-expanded={offen} onClick={onToggle}>
       <span className="kd-navband-dot" style={{ background: dot }} />

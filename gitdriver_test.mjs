@@ -14,9 +14,10 @@ globalThis.localStorage = {
 
 /* ---------- fetch-Mock: konfigurierbar pro Test ---------- */
 let fetchCalls = [];
-let fakeRepoFiles = {}; // file -> { content(b64), sha }
+let fakeRepoFiles = {}; // file -> { content(b64), sha, encoding? ("none" für >1MB-Fall) }
 let forceOffline = false;
 let nextPutStatus = null; // z.B. 409 erzwingen
+let failGetFiles = new Set(); // Dateien, deren GET mit 500 scheitert (Pull-Fehler-Fall)
 
 function b64enc(str) {
   const bytes = new TextEncoder().encode(str); let bin = "";
@@ -38,8 +39,9 @@ globalThis.fetch = (url, opts = {}) => {
     const mFile = p.match(/^\/repos\/[^/]+\/[^/]+\/contents\/(.+)$/);
     if (mFile) {
       const file = decodeURIComponent(mFile[1]);
+      if (failGetFiles.has(file)) return resp(500, { message: "kaputt (Test)" });
       const rec = fakeRepoFiles[file];
-      if (rec) return resp(200, { content: rec.content, sha: rec.sha, name: file });
+      if (rec) return resp(200, { content: rec.content, sha: rec.sha, name: file, encoding: rec.encoding || "base64" });
       return resp(404, { message: "Not Found" });
     }
   }
@@ -66,7 +68,7 @@ const G = await import("./src/lib/gitDriver.js");
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); };
 function reset() {
-  _ls.clear(); fetchCalls = []; fakeRepoFiles = {}; forceOffline = false; nextPutStatus = null;
+  _ls.clear(); fetchCalls = []; fakeRepoFiles = {}; forceOffline = false; nextPutStatus = null; failGetFiles = new Set();
   G.setGitConfig({ repo: "Soppagata/kinodreieck-daten", token: "github_pat_dummy", branch: "main" });
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -180,6 +182,73 @@ await sleep(50); // beide serialisierten Commits abwarten
 check("Race: kein Konflikt-Flag entstanden", G.syncStatus().conflict.length === 0);
 check("Race: nichts bleibt pending", G.syncStatus().pending.length === 0);
 check("Race: Remote trägt den NEUESTEN Wert", b64dec(fakeRepoFiles["masterliste.json"].content) === '{"v":2}');
+
+/* 13) REGRESSION (Review 2026-07): Pull darf ungesyncte lokale Änderungen NICHT
+   stillschweigend verwerfen — vorher: Offline-Edit + fremder Push = Datenverlust. */
+reset();
+fakeRepoFiles["masterliste.json"] = { content: b64enc('{"anderes":"geraet"}'), sha: "sha-r2" };
+forceOffline = true;
+await G.gitDriver.set("kd:master", '{"offline":"edit"}'); // Commit scheitert -> pending
+await sleep(20);
+forceOffline = false;
+const pullK = await G.syncPull();
+check("Pull-Schutz: lokaler Offline-Stand NICHT überschrieben", localStorage.getItem("kd:master") === '{"offline":"edit"}');
+check("Pull-Schutz: als Konflikt gemeldet", pullK.konflikt.includes("masterliste.json") && G.syncStatus().conflict.includes("masterliste.json"));
+check("Pull-Schutz: Snapshot des lokalen Stands vorhanden", G.getSnapshots("kd:master").some((s) => s.value === '{"offline":"edit"}'));
+
+/* 14) REGRESSION: Pull-Fehler wird stale, NICHT pending — Flush pusht dann nichts
+   (vorher: Pull-Fehler => pending => Flush committete evtl. veralteten Stand). */
+reset();
+localStorage.setItem("kd:vokabular", '["lokal"]');
+fakeRepoFiles["vokabular.json"] = { content: b64enc('["remote"]'), sha: "sv1" };
+failGetFiles.add("vokabular.json");
+await G.syncPull();
+check("Pull-Fehler: lokal unangetastet", localStorage.getItem("kd:vokabular") === '["lokal"]');
+check("Pull-Fehler: als stale geführt", G.syncStatus().stale.includes("vokabular.json"));
+check("Pull-Fehler: NICHT pending", !G.syncStatus().pending.includes("vokabular.json"));
+fetchCalls = [];
+await G.syncFlush();
+check("Pull-Fehler: Flush macht daraufhin KEINEN PUT", !fetchCalls.some((c) => c.method === "PUT"));
+failGetFiles.clear();
+await G.syncPull();
+check("Pull-Erfolg danach: stale abgeräumt", !G.syncStatus().stale.includes("vokabular.json"));
+
+/* 15) REGRESSION: Konfliktdatei — Flush überspringt sie (kein 409-Dauerfeuer),
+   nur die bewusste Nutzerwahl pusht. */
+reset();
+localStorage.setItem("kd:master", '{"lokal":true}');
+fakeRepoFiles["masterliste.json"] = { content: b64enc('{"remote":true}'), sha: "sha-X" };
+nextPutStatus = 409;
+await G.gitDriver.set("kd:master", '{"lokal":"neu"}');
+await sleep(20);
+check("Konflikt vorhanden (Ausgangslage)", G.syncStatus().conflict.includes("masterliste.json"));
+fetchCalls = [];
+await G.syncFlush();
+check("Flush überspringt Konfliktdatei (kein PUT)", !fetchCalls.some((c) => c.method === "PUT"));
+const rlokal = await G.resolveConflictPushLocal("kd:master");
+check("Bewusst pushen: ok + Remote trägt lokalen Stand", rlokal.ok === true && b64dec(fakeRepoFiles["masterliste.json"].content) === '{"lokal":"neu"}');
+check("Bewusst pushen: Flags geräumt", G.syncStatus().conflict.length === 0 && G.syncStatus().pending.length === 0);
+
+/* 16) REGRESSION: Konflikt per „Remote übernehmen" lösen — lokal gesichert, Remote gilt. */
+reset();
+localStorage.setItem("kd:artikel", '{"lokal":"a"}');
+fakeRepoFiles["artikel.json"] = { content: b64enc('{"remote":"b"}'), sha: "sa1" };
+nextPutStatus = 409;
+await G.gitDriver.set("kd:artikel", '{"lokal":"a2"}');
+await sleep(20);
+const rRemote = await G.resolveConflictUseRemote("kd:artikel");
+check("Remote übernehmen: ok + lokal = Remote", rRemote.ok === true && localStorage.getItem("kd:artikel") === '{"remote":"b"}');
+check("Remote übernehmen: lokaler Stand als Snapshot gesichert", G.getSnapshots("kd:artikel").some((s) => s.value === '{"lokal":"a2"}'));
+check("Remote übernehmen: Konflikt geräumt", G.syncStatus().conflict.length === 0);
+
+/* 17) REGRESSION: Datei >1MB (Contents-API: encoding "none", content "") darf
+   lokal NIE mit Leerem überschreiben. */
+reset();
+localStorage.setItem("kd:master", '{"wichtig":true}');
+fakeRepoFiles["masterliste.json"] = { content: "", sha: "sbig", encoding: "none" };
+const pullBig = await G.syncPull();
+check("encoding none: lokal NICHT mit Leerem überschrieben", localStorage.getItem("kd:master") === '{"wichtig":true}');
+check("encoding none: als Fehler + stale gemeldet", pullBig.fehler.some((f) => f.file === "masterliste.json") && G.syncStatus().stale.includes("masterliste.json"));
 
 /* ---------- Auswertung ---------- */
 function b64dec(b64) {

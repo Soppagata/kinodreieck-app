@@ -3,6 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import {
   getGitConfig, setGitConfig, isGitConfigured,
   connectionTest, syncPull, syncFlush, syncStatus,
+  SYNC_MAP, resolveConflictPushLocal, resolveConflictUseRemote,
 } from "../lib/gitDriver.js";
 
 /* ================= Geräte-Sync (Git) =================
@@ -71,7 +72,31 @@ export function GitSyncEinstellungen() {
     setMeldung(s.pending.length ? { art: "warn", text: `${s.pending.length} weiterhin ausstehend.` } : { art: "ok", text: "Alles synchronisiert ✓" });
   };
 
-  const tokenAnzeige = tokenSichtbar ? token : (token ? "•".repeat(Math.min(token.length, 24)) : "");
+  /* Konflikt bewusst auflösen — pro Datei, nie automatisch. */
+  const dateiZuKey = (file) => Object.keys(SYNC_MAP).find((k) => SYNC_MAP[k] === file);
+  const konfliktRemote = async (file) => {
+    const key = dateiZuKey(file); if (!key) return;
+    setBusy(true); setMeldung({ art: "warn", text: `Übernehme Remote-Stand für ${file} …` });
+    const r = await resolveConflictUseRemote(key);
+    setStatus(syncStatus());
+    if (r.ok) {
+      // Daten im Cache haben sich geändert → App muss neu laden, sonst hält der
+      // React-State den alten Wert und die nächste Bearbeitung überschriebe ihn.
+      setMeldung({ art: "ok", text: `${file}: Remote übernommen. App wird neu geladen …` });
+      try { setTimeout(() => location.reload(), 500); } catch { /* */ }
+      return;
+    }
+    setBusy(false);
+    setMeldung({ art: "err", text: `${file}: Fehlgeschlagen — ${r.message || r.error || ("HTTP " + r.status)}` });
+  };
+  const konfliktLokal = async (file) => {
+    const key = dateiZuKey(file); if (!key) return;
+    setBusy(true); setMeldung({ art: "warn", text: `Pushe lokalen Stand für ${file} …` });
+    const r = await resolveConflictPushLocal(key);
+    setStatus(syncStatus()); setBusy(false);
+    setMeldung(r && r.ok ? { art: "ok", text: `${file}: lokaler Stand gepusht ✓` }
+      : { art: "err", text: `${file}: Push fehlgeschlagen — ${(r && (r.message || r.error)) || ""}` });
+  };
 
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
@@ -96,7 +121,10 @@ export function GitSyncEinstellungen() {
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ ...mono, textTransform: "uppercase" }}>Fine-grained Token (nur dieses Gerät)</span>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input type={tokenSichtbar ? "text" : "password"} value={tokenSichtbar ? token : tokenAnzeige}
+            {/* value ist IMMER der echte Token; die Maskierung leistet type="password"
+                allein. Eine Punkte-Maske als value hätte beim Tippen die Punkte in
+                den State übernommen und beim Speichern den Token zerstört. */}
+            <input type={tokenSichtbar ? "text" : "password"} value={token}
               onChange={(e) => setToken(e.target.value)} placeholder="github_pat_…"
               autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
             <button style={{ ...btnStyle(false), fontSize: 12, padding: "6px 10px" }}
@@ -128,8 +156,26 @@ export function GitSyncEinstellungen() {
         <div style={mono}>Status: {status.configured ? "konfiguriert" : "nicht konfiguriert"}</div>
         <div style={mono}>Letzter Pull: {status.lastPull ? new Date(status.lastPull).toLocaleString("de-AT") : "—"}</div>
         <div style={mono}>Letzter Commit: {status.lastCommit ? new Date(status.lastCommit).toLocaleString("de-AT") : "—"}</div>
-        {status.pending.length > 0 && <div style={{ ...mono, color: T.wolfram }}>Ausstehend: {status.pending.join(", ")}</div>}
-        {status.conflict.length > 0 && <div style={{ ...mono, color: T.gefahr }}>Konflikt (manuell lösen): {status.conflict.join(", ")}</div>}
+        {status.pending.length > 0 && <div style={{ ...mono, color: T.wolfram }}>Ausstehend: {status.pending.filter((f) => !status.conflict.includes(f)).join(", ") || "—"}</div>}
+        {(status.stale || []).length > 0 && <div style={{ ...mono, color: T.wolfram }}>Nicht aktuell (letzter Pull fehlgeschlagen): {status.stale.join(", ")}</div>}
+        {status.conflict.length > 0 && (
+          <div style={{ marginTop: 6, padding: "10px 12px", background: "rgba(217,106,90,0.10)", border: "1px solid " + T.gefahr, borderRadius: 6 }}>
+            <div style={{ ...mono, color: T.gefahr, marginBottom: 6 }}>
+              Konflikt: Datei wurde auf einem anderen Gerät geändert, während hier ein
+              ungesyncter Stand liegt. Wähle pro Datei, welcher Stand gilt (der jeweils
+              andere bleibt als Snapshot gesichert):
+            </div>
+            {status.conflict.map((f) => (
+              <div key={f} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "4px 0" }}>
+                <span style={{ ...mono, color: T.leinwandTief, minWidth: 140 }}>{f}</span>
+                <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }} disabled={busy}
+                  onClick={() => konfliktRemote(f)}>Remote übernehmen</button>
+                <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", borderColor: T.wolfram, color: T.wolfram }} disabled={busy}
+                  onClick={() => konfliktLokal(f)}>Diesen Stand pushen</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

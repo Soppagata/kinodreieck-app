@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { restoreBackup, restoreRueckgaengig } from "../lib/restore.js";
+import { isGitConfigured } from "../lib/gitDriver.js";
 
 /* ================= Backup wiederherstellen (Datenmigration) =================
    Spielt ein Gesamt-Backup der alten App in die neue ein — einmaliger Schritt,
@@ -21,7 +22,10 @@ export function RestoreImport() {
     let backup;
     try { backup = JSON.parse(text); }
     catch { setBusy(false); setMeldung({ art: "err", text: "Keine gültige JSON-Datei." }); return; }
-    const ok = window.confirm("Backup wiederherstellen?\n\nDas ERSETZT die aktuellen lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name). Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar.");
+    const gitHinweis = isGitConfigured()
+      ? "\n\nACHTUNG: Git-Sync ist bereits verbunden — der wiederhergestellte Stand wird beim nächsten Sync als neue Version ins Daten-Repo committet. Für die Erst-Migration gilt: Backup einspielen, DANN Git verbinden."
+      : "";
+    const ok = window.confirm("Backup wiederherstellen?\n\nDas ERSETZT die aktuellen lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name). Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar." + gitHinweis);
     if (!ok) { setBusy(false); return; }
     try {
       const r = await restoreBackup(backup);

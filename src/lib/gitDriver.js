@@ -35,7 +35,7 @@ export const SYNC_MAP = {
 /* Konfig/Status — rein lokal, NICHT gesynct (nicht in SYNC_MAP). */
 const CFG = { repo: "kd:git:repo", token: "kd:git:token", branch: "kd:git:branch" };
 const SHA_KEY = "kd:git:sha";       // { file: sha }
-const STATUS_KEY = "kd:git:status"; // { lastPull, lastCommit, pending:{file:true}, conflict:{file:true} }
+const STATUS_KEY = "kd:git:status"; // { lastPull, lastCommit, pending:{file:true}, conflict:{file:true}, stale:{file:true} }
 const SNAP_KEY = "kd:git:snap";     // { file: [{t, value}] } — rollierend, letzte 5
 const SNAP_MAX = 5;
 
@@ -68,7 +68,9 @@ export function isGitConfigured() {
 function saeubere(s) { return (s == null ? "" : String(s)).trim(); }
 /* Token gegen unsichtbare Kopier-Zeichen härten (Lernpunkt aus dem Spike). */
 function saeubereToken(s) {
-  return (s == null ? "" : String(s)).replace(/[\s​-‍﻿ ⁠]/g, "");
+  /* Unsichtbare Kopier-Zeichen (NBSP, Zero-Width, BOM, Word-Joiner) UND
+     Masken-Punkte (\u2022/\u25CF) — Punkte dürfen nie als Token durchrutschen. */
+  return (s == null ? "" : String(s)).replace(/[\s\u00A0\u200B-\u200D\u2060\uFEFF\u2022\u25CF]/g, "");
 }
 
 /* ---------- base64 <-> UTF-8 (kein rohes btoa auf Unicode!) ---------- */
@@ -86,13 +88,20 @@ function b64decode(b64) {
 }
 
 /* ---------- Status-/SHA-/Snapshot-Verwaltung ---------- */
-function getStatus() { return readJSON(STATUS_KEY, { lastPull: null, lastCommit: null, pending: {}, conflict: {} }); }
+function getStatus() { return readJSON(STATUS_KEY, { lastPull: null, lastCommit: null, pending: {}, conflict: {}, stale: {} }); }
 function setStatus(patch) { const s = getStatus(); writeJSON(STATUS_KEY, { ...s, ...patch }); }
 function markPending(file, on) {
   const s = getStatus(); if (on) s.pending[file] = true; else delete s.pending[file]; writeJSON(STATUS_KEY, s);
 }
 function markConflict(file, on) {
   const s = getStatus(); if (on) s.conflict[file] = true; else delete s.conflict[file]; writeJSON(STATUS_KEY, s);
+}
+/* stale = Pull für diese Datei zuletzt fehlgeschlagen: lokal evtl. nicht aktuell.
+   Bewusst GETRENNT von pending — ein Pull-Fehler ist KEIN Grund, den lokalen
+   Stand zu pushen (pending würde beim nächsten Flush committen). */
+function markStale(file, on) {
+  const s = getStatus(); s.stale = s.stale || {};
+  if (on) s.stale[file] = true; else delete s.stale[file]; writeJSON(STATUS_KEY, s);
 }
 function getSha(file) { return readJSON(SHA_KEY, {})[file] || null; }
 function setSha(file, sha) { const m = readJSON(SHA_KEY, {}); m[file] = sha; writeJSON(SHA_KEY, m); }
@@ -117,12 +126,19 @@ function ghHeaders(token, withBody) {
   return h;
 }
 async function ghFetch(method, path, { token, body } = {}) {
-  const res = await fetch("https://api.github.com" + path, {
-    method, headers: ghHeaders(token, !!body), body: body ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try { data = await res.json(); } catch { /* leerer Body möglich */ }
-  return { status: res.status, ok: res.ok, data };
+  /* Timeout: fetch kann bei hängender Verbindung weder resolven noch rejecten —
+     ohne Abbruch bliebe der Boot-Pull (await vor dem Rendern) für immer stehen. */
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
+  try {
+    const res = await fetch("https://api.github.com" + path, {
+      method, headers: ghHeaders(token, !!body), body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    let data = null;
+    try { data = await res.json(); } catch { /* leerer Body möglich */ }
+    return { status: res.status, ok: res.ok, data };
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 export async function connectionTest() {
@@ -137,7 +153,7 @@ export async function connectionTest() {
 function deutung(status, data) {
   const msg = (data && data.message) || "";
   if (status === 401) return "Token ungültig oder abgelaufen. " + msg;
-  if (status === 403) return "Zugriff verweigert (Scope/Rate-Limit). " + msg;
+  if (status === 403 || status === 429) return "Zugriff verweigert (Scope/Rate-Limit). " + msg;
   if (status === 404) return "Nicht gefunden — Repo-Name falsch oder Token ohne Zugriff. " + msg;
   if (status === 409 || status === 422) return "SHA-Konflikt. " + msg;
   return "HTTP " + status + " " + msg;
@@ -147,32 +163,55 @@ function deutung(status, data) {
 export async function syncPull() {
   const c = getGitConfig();
   if (!isGitConfigured()) return { ok: false, message: "nicht konfiguriert" };
-  const ergebnis = { geladen: [], angelegt: [], fehler: [] };
-  for (const [key, file] of Object.entries(SYNC_MAP)) {
+  const ergebnis = { geladen: [], angelegt: [], konflikt: [], fehler: [] };
+  // Parallel statt sequentiell: 9 Dateien × Netz-Roundtrip würde den Boot sonst
+  // unnötig strecken (der Pull blockiert das erste Rendern).
+  await Promise.all(Object.entries(SYNC_MAP).map(async ([key, file]) => {
     try {
       const r = await ghFetch("GET", `/repos/${c.repo}/contents/${encodeURIComponent(file)}?ref=${encodeURIComponent(c.branch)}`, { token: c.token });
-      if (r.status === 200 && r.data && typeof r.data.content === "string") {
+      if (r.status === 200 && r.data && typeof r.data.content === "string" && r.data.encoding !== "none") {
         const remote = b64decode(r.data.content);
         const lokal = localStorage.getItem(key);
+        const st = getStatus();
+        const ungesynct = !!((st.pending && st.pending[file]) || (st.conflict && st.conflict[file]));
+        if (lokal !== remote && ungesynct && lokal != null) {
+          /* Lokale, noch nicht committete Änderung trifft auf abweichendes Remote
+             (z.B. offline editiert, anderes Gerät hat inzwischen gepusht):
+             NIE stillschweigend verwerfen. Konflikt markieren, Wahl der UI
+             überlassen. SHA bewusst NICHT aktualisieren — sonst würde der
+             nächste automatische Commit das Remote still überschreiben. */
+          snapshot(key, lokal);
+          markConflict(file, true); markStale(file, false);
+          ergebnis.konflikt.push(file);
+          return;
+        }
         if (lokal !== remote) {
           snapshot(key, lokal);                 // VOR dem Überschreiben sichern
           localStorage.setItem(key, remote);    // Remote ist Wahrheit beim Pull
         }
         setSha(file, r.data.sha);
-        markPending(file, false); markConflict(file, false);
+        markPending(file, false); markConflict(file, false); markStale(file, false);
         ergebnis.geladen.push(file);
       } else if (r.status === 404) {
         // Datei existiert noch nicht im Repo — lokal bleibt, wird bei erstem Commit angelegt.
         ergebnis.angelegt.push(file);
+      } else if (r.status === 200) {
+        /* content=="" mit encoding:"none": Datei >1MB — die Contents-API liefert
+           den Inhalt nicht inline. Lokal NIE mit Leerem überschreiben. */
+        markStale(file, true);
+        ergebnis.fehler.push({ file, status: r.status, grund: "zu gross fuer Contents-API" });
       } else {
-        markPending(file, true);
+        /* Pull-Fehler ist KEIN Push-Grund: als stale führen, nicht als pending —
+           pending würde beim nächsten Flush den evtl. veralteten lokalen Stand
+           committen und dem Nutzer einen Konflikt zeigen, den er nie erzeugt hat. */
+        markStale(file, true);
         ergebnis.fehler.push({ file, status: r.status });
       }
     } catch (e) {
-      markPending(file, true);                  // offline: lokal halten, später retry
+      markStale(file, true);                    // offline: lokal halten, nächster Pull versucht es erneut
       ergebnis.fehler.push({ file, error: String(e) });
     }
-  }
+  }));
   setStatus({ lastPull: nowIso() });
   return { ok: ergebnis.fehler.length === 0, ...ergebnis };
 }
@@ -206,7 +245,7 @@ async function commitFileNow(key, file) {
     const r = await ghFetch("PUT", `/repos/${c.repo}/contents/${encodeURIComponent(file)}`, { token: c.token, body });
     if (r.status === 200 || r.status === 201) {
       if (r.data && r.data.content && r.data.content.sha) setSha(file, r.data.content.sha);
-      markPending(file, false); markConflict(file, false);
+      markPending(file, false); markConflict(file, false); markStale(file, false);
       setStatus({ lastCommit: nowIso() });
       return { ok: true, status: r.status };
     }
@@ -227,9 +266,14 @@ async function commitFileNow(key, file) {
 /* Ausstehende (nicht synchronisierte) Änderungen erneut versuchen — über dieselbe
    Queue, damit kein Flush mit einem laufenden Hintergrund-Commit kollidiert. */
 export async function syncFlush() {
-  const pending = Object.keys(getStatus().pending || {});
+  const st = getStatus();
+  const pending = Object.keys(st.pending || {});
   const versuche = [];
   for (const file of pending) {
+    /* Konfliktdateien NIE automatisch pushen: jeder Flush liefe mit dem alten
+       SHA in denselben 409. Auflösung nur über die bewusste Nutzerwahl
+       (resolveConflictPushLocal / resolveConflictUseRemote). */
+    if (st.conflict && st.conflict[file]) continue;
     const key = Object.keys(SYNC_MAP).find((k) => SYNC_MAP[k] === file);
     if (!key) { markPending(file, false); continue; }
     versuche.push(await enqueueCommit(key, file));
@@ -250,11 +294,37 @@ export async function resolveConflictPushLocal(key) {
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 
+/* Konflikt auflösen: bewusst den REMOTE-Stand übernehmen. Lokalen Stand vorher
+   snapshoten (rückholbar), dann Remote in den Cache schreiben und alle Flags
+   der Datei löschen. Nur auf ausdrückliche Nutzerwahl. */
+export async function resolveConflictUseRemote(key) {
+  const file = SYNC_MAP[key]; if (!file) return { ok: false };
+  const c = getGitConfig();
+  try {
+    const g = await ghFetch("GET", `/repos/${c.repo}/contents/${encodeURIComponent(file)}?ref=${encodeURIComponent(c.branch)}`, { token: c.token });
+    if (g.status === 200 && g.data && typeof g.data.content === "string" && g.data.encoding !== "none") {
+      const remote = b64decode(g.data.content);
+      const lokal = localStorage.getItem(key);
+      if (lokal !== remote) { snapshot(key, lokal); localStorage.setItem(key, remote); }
+      setSha(file, g.data.sha);
+      markPending(file, false); markConflict(file, false); markStale(file, false);
+      return { ok: true };
+    }
+    if (g.status === 404) {
+      /* Remote weg: Konflikt hinfällig — lokal bleibt, nächster Commit legt neu an. */
+      setSha(file, null); markConflict(file, false);
+      return { ok: true, neuAnlegen: true };
+    }
+    return { ok: false, status: g.status, message: deutung(g.status, g.data) };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
 export function syncStatus() {
   const s = getStatus();
   return {
     lastPull: s.lastPull, lastCommit: s.lastCommit,
     pending: Object.keys(s.pending || {}), conflict: Object.keys(s.conflict || {}),
+    stale: Object.keys(s.stale || {}),
     configured: isGitConfigured(),
   };
 }

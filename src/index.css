@@ -1,18 +1,20 @@
-/* Lokal eingebettete Fonts: ?inline macht aus den WOFF2-Dateien Data-URIs in
-   der Doppelklick-HTML. Latin + Latin-Extended decken Deutsch und Europa ab;
+/* Lokale Fonts: Im Web-Build (Pages/PWA) bleiben die WOFF2 eigene Assets —
+   unicode-range lädt nur die gebrauchten Subsets, das CSS bleibt schlank.
+   Nur der Single-File-Build bettet sie als Data-URIs ein (assetsInlineLimit in
+   vite.singlefile.config.js). Latin + Latin-Extended decken Deutsch und Europa ab;
    andere Schriftsysteme fallen bewusst auf den jeweiligen Systemfont zurück. */
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin-ext.woff2?inline') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
-@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin.woff2?inline') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 500; font-display: swap; src: url('./assets/fonts/barlow-condensed-500-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/barlow-condensed-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Barlow Condensed'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/barlow-condensed-700-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 600; font-display: swap; src: url('./assets/fonts/space-grotesk-400-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
 html, body { margin: 0; padding: 0; background: #17151A; font-weight: 400;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
@@ -176,6 +178,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    damit Verdrahtung/Tests unberührt bleiben. */
 .kd-navband { display: none; }
 .kd-scrim { display: none; }
+/* Z-Ebene der Nav: Desktop 40 (unter der Kurosawa-Letterbox 50), am Handy 60
+   (ÜBER dem Scrim 58). WICHTIG: bewusst NICHT inline im JSX setzen — Inline-
+   Styles schlagen CSS ohne !important; genau das hat den Scrim-Tap-Bug erzeugt
+   (Panel effektiv 40 < Scrim 58 → Scrim schluckte jeden Menü-Tap). */
+.kd-menu { z-index: 40; }
 @media (max-width: 760px) {
   .kd-menu {
     position: fixed !important; top: 0; right: 0; bottom: 0; left: auto !important;
@@ -213,4 +220,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   /* Kurosawa: Panel fährt von top:0, nicht unter die Letterbox. */
   .kd-kurosawa .kd-menu { top: 0 !important; }
+
+  /* filter/transform auf .kd-app machen es zum Containing-Block für ALLE
+     position:fixed-Nachfahren — Drawer, Scrim und Band würden in den Modi dann
+     im Dokument statt am Viewport ankern (Band scrollt weg, Menü unerreichbar).
+     Am Handy laufen Kurosawa/Grindhouse deshalb ohne App-Filter; die Overlays
+     (Korn, Perfo, Letterbox, Horizont) liegen außerhalb und bleiben erhalten. */
+  .kd-kurosawa .kd-app, .kd-grindhouse .kd-app, .kd-riss .kd-app {
+    filter: none !important; animation: none !important; transform: none !important;
+  }
 }
