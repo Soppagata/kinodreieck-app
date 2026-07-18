@@ -165,9 +165,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
   return (
     <section>
-      {/* Ansicht-Umschalter: Bestand · Im Besitz · Must-Watch (immer sichtbar) */}
+      {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
+          Interner Key bleibt "bestand" — nur das Label heißt Einträge (Max, 18.07.). */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {ansichtKnopf("bestand", "Bestand")}
+        {ansichtKnopf("bestand", "Einträge")}
         {ansichtKnopf("besitz", `Im Besitz (${besitzAnzahl})`)}
         {ansichtKnopf("mustwatch", `Must-Watch (${mustwatch.length})`)}
       </div>

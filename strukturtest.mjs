@@ -85,7 +85,7 @@ if (mwBtn) {
     }
   }
 }
-const bestandBtn = knopf(/^Bestand$/);
+const bestandBtn = knopf(/^Einträge$/);
 if (bestandBtn) { bestandBtn.click(); await warte(200); }
 /* FilmForm: unbewertet-Schalter (Besitz erfassen ohne Dreieck) */
 const plusForm = knopf(/\+ Eintrag hinzufügen/);
