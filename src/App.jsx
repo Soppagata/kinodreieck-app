@@ -30,6 +30,7 @@ import { Logo } from "./components/ui.jsx";
 import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks } from "./lib/artikel.js";
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen } from "./lib/finder.js";
+import { sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
 import { MediathekTab } from "./tabs/MediathekTab.jsx";
@@ -1280,17 +1281,21 @@ export default function App() {
   const badgeFuer = useCallback((film) => {
     const t = film && streamingMap.get(film.id);
     if (!t) return null; // keine Daten oder nicht verfügbar -> kein Badge (Besitz-Feld quelle bleibt unberührt)
+    /* Joyn-Fix: nur Dienste der Abo-Auswahl taggen (leere Auswahl = alle);
+       bleibt nichts übrig -> gar kein Badge. */
+    const dienste = sichtbareDienste(t.dienste, auswahl);
+    if (!dienste.length) return null;
     return (
       <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
-        {t.dienste.slice(0, 3).map((d) => (
+        {dienste.slice(0, 3).map((d) => (
           <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 6px", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {d}
           </span>
         ))}
-        {t.dienste.length > 3 && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>+{t.dienste.length - 3}</span>}
+        {dienste.length > 3 && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>+{dienste.length - 3}</span>}
       </span>
     );
-  }, [streamingMap]);
+  }, [streamingMap, auswahl]);
   /* Badges brauchen die Daten auch außerhalb des Streaming-Tabs -> einmalig nachladen */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
 
@@ -1507,6 +1512,7 @@ export default function App() {
             master={finderMaster} kinoMatches={kinoMatches}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             mustwatchIds={mustwatchMasterIds}
+            auswahl={auswahl}
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}

@@ -104,17 +104,58 @@ const helpers = (dom) => {
       w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix", "Crunchyroll Premium (Via Amazon Prime)", "Spezialkanal 9000"], heuristik: true, reset_tag: 11 }));
     },
   });
-  const { text, knopf } = helpers(dom);
+  const { doc, text, knopf } = helpers(dom);
   await warte(2500);
   const daten = knopf(/^einstellungen$/i);
   if (daten) { daten.click(); await warte(600); }
   check("E: Credits-Reset-Datum wird angezeigt (aus reset_tag)", /Credits-Reset:\s*11\./.test(text().replace(/ /g, " ")) || /Credits-Reset: \d{2}\.\d{2}\.\d{4}/.test(text()));
   check("E: falscher 30-Tage-Countdown ist weg", !/Tage bis zum Monats-Refresh/.test(text()));
   check("E: Reset-Tag-Eingabefeld vorhanden", /Credits-Reset-Tag \(1–28\)/.test(text()));
-  // Demo-Snapshot darf die echte Quellenliste nicht verdrängen:
-  check("E: echte AT-Startliste statt Demo-Quellen (Hayu sichtbar)", /Hayu/.test(text()));
+  /* Neue Quellen-UI (Etappe 1): Angehakte immer sichtbar, Rest NUR als
+     Suchtreffer. Der alte Check "Hayu sichtbar" (Gruppen-Layout) zieht um:
+     Hayu ist nicht angehakt -> erst die Suche beweist die echte AT-Liste. */
+  check("E: Angehakt-Liste zeigt gewählte Quellen ohne Suche", /Crunchyroll Premium \(Via Amazon Prime\)/.test(text()) && /Netflix/.test(text()));
   check("E: gewählte Quelle außerhalb der Liste bleibt sichtbar (Union)", /Spezialkanal 9000/.test(text()));
+  check("E: nicht angehakte Quelle ist ohne Suche unsichtbar", !/Hayu/.test(text()));
+  const sucheInput = [...doc.querySelectorAll("input")].find((i) => (i.placeholder || "").startsWith("Quelle suchen"));
+  check("E: Quellen-Suchfeld vorhanden", !!sucheInput);
+  if (sucheInput) {
+    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+    setter.call(sucheInput, "hayu");
+    sucheInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    await warte(300);
+    check("E: Suchfeld findet nicht angehakte Quelle (Hayu, echte AT-Startliste statt Demo)", /Hayu/.test(text()));
+  }
   check("E: Demo-Daten sind als solche gekennzeichnet", /Demo-Beispieldaten/.test(text()));
+  dom.window.close();
+}
+
+/* ---------- F: Joyn-Fix — Badges taggen nur Dienste der Abo-Auswahl ---------- */
+{
+  /* Master enthält zwei Titel aus dem Demo-Streaming-Snapshot:
+     "Regenbogen über Kreuzberg" (nur Netflix — angehakt) und
+     "Der stille Zeuge" (nur Prime Video — NICHT angehakt).
+     Erwartung in der Mediathek: Netflix-Badge ja, Prime-Video-Badge nein. */
+  const dom = baueDom({
+    seed(w) {
+      w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+      w.localStorage.setItem("kd:master", JSON.stringify({
+        meta: null,
+        filme: [
+          { id: "regenbogen_ueber_kreuzberg_2016", titel: "Regenbogen über Kreuzberg", jahr: 2016, typ: "film", quelle: "dvd", kategorie: "sehenswert", bewertung: { wie: 4, was: 4, warum: 4 } },
+          { id: "der_stille_zeuge_2008", titel: "Der stille Zeuge", jahr: 2008, typ: "film", quelle: "dvd", kategorie: "sehenswert", bewertung: { wie: 3, was: 3, warum: 3 } },
+        ],
+        herkunft: { typ: "storage" }, gespeichertAm: 1,
+      }));
+    },
+  });
+  const { text, knopf } = helpers(dom);
+  await warte(2500);
+  const mediathek = knopf(/^mediathek$/i);
+  if (mediathek) { mediathek.click(); await warte(600); }
+  check("F: beide Titel in der Mediathek gerendert", /Regenbogen über Kreuzberg/i.test(text()) && /Der stille Zeuge/i.test(text()));
+  check("F: angehakter Dienst taggt weiter (Netflix-Badge)", /Netflix/.test(text()));
+  check("F: abgewählter Dienst taggt NICHT mehr (kein Prime-Video-Badge)", !/Prime Video/.test(text()));
   dom.window.close();
 }
 

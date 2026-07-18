@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { parseAnfrage, sucheFinder, sucheEntdecken, sucheKino, ohneStimmung, filmHerkunft } from "../lib/finder.js";
 import { schlagseite } from "../lib/match.js";
+import { sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 
@@ -60,7 +61,7 @@ function SignalChips({ sig, onToggle, versteckeTitel, stumm }) {
 }
 
 /* Kompakte Treffer-Zeile (Filter-Ergebnisliste, kein direkter Titel-Treffer). */
-function TrefferZeile({ t, onSpringeZuFilm }) {
+function TrefferZeile({ t, onSpringeZuFilm, auswahl }) {
   const f = t.film;
   const h = t.herkunft;
   return (
@@ -82,7 +83,7 @@ function TrefferZeile({ t, onSpringeZuFilm }) {
           </span>
         )}
         {h.dvd && <span style={{ ...mono, color: T.leinwandTief }}>DVD</span>}
-        {h.streaming && h.streaming.dienste.map((d) => (
+        {h.streaming && sichtbareDienste(h.streaming.dienste, auswahl).map((d) => (
           <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>
         ))}
         {t.gruende.length > 0 && <span style={mono}>({t.gruende.join(" · ")})</span>}
@@ -92,8 +93,11 @@ function TrefferZeile({ t, onSpringeZuFilm }) {
 }
 
 /* Volle Meta-Karte für EINEN Film (Phase 4a) — "gesamte Metainfos samt Bewertung". */
-function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds }) {
+function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswahl }) {
   const ss = schlagseite(f.bewertung);
+  /* Joyn-Fix: nur Dienste der Abo-Auswahl zeigen; ist danach nichts übrig,
+     entfällt der ganze STREAMING-Block (kein leeres Label). */
+  const streamingDienste = h && h.streaming ? sichtbareDienste(h.streaming.dienste, auswahl) : [];
   const ssCol = ss ? { wie: T.wie, was: T.was, warum: T.warum }[ss] : T.rauch;
   const ot = (f.originaltitel && f.originaltitel !== f.titel)
     ? f.originaltitel
@@ -154,10 +158,10 @@ function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds }) {
           </div>
         )}
         {h && h.dvd && <div style={{ ...mono, color: T.leinwandTief }}><strong>DVD</strong> · in deiner Sammlung</div>}
-        {h && h.streaming && (
+        {streamingDienste.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <strong style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.leinwand }}>STREAMING</strong>
-            {h.streaming.dienste.map((d) => (
+            {streamingDienste.map((d) => (
               <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>
             ))}
           </div>
@@ -193,7 +197,7 @@ function DisambigListe({ sig, master, onWaehle }) {
   );
 }
 
-export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe }) {
+export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, auswahl = [], onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* film.at-Genres aus dem Kinoprogramm -> Vokabular (parseAnfrage erkennt sie),
      damit z.B. "Sci-Fi im Kino" auch ohne passenden Master-Eintrag greift. */
@@ -249,7 +253,7 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
     const film = t ? t.film : (master || []).find((f) => f.id === id);
     if (!film) return null;
     const herkunft = t ? t.herkunft : filmHerkunft(film, { kinoMatches, streamingBekannt });
-    return <FilmDetail film={film} herkunft={herkunft} onSpringeZuFilm={onSpringeZuFilm} mustwatchIds={mustwatchIds} />;
+    return <FilmDetail film={film} herkunft={herkunft} onSpringeZuFilm={onSpringeZuFilm} mustwatchIds={mustwatchIds} auswahl={auswahl} />;
   };
 
   return (
@@ -293,7 +297,7 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
                   {e.treffer.length === 0 && !hatErgebnisse && <div style={{ color: T.rauch, fontSize: 14 }}>Kein Treffer — probier einen Titel, ein Genre oder ein Jahrzehnt.</div>}
                   {e.treffer.length === 0 && hatErgebnisse && <div style={{ ...mono }}>Nichts in deiner Liste — aber:</div>}
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {e.treffer.map((t) => <TrefferZeile key={t.film.id} t={t} onSpringeZuFilm={onSpringeZuFilm} />)}
+                    {e.treffer.map((t) => <TrefferZeile key={t.film.id} t={t} onSpringeZuFilm={onSpringeZuFilm} auswahl={auswahl} />)}
                   </div>
                 </>
               )}
@@ -338,7 +342,7 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
                           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, textTransform: "uppercase", letterSpacing: "0.02em" }}>{t.titel}</span>
                           <span style={{ ...mono, marginLeft: 8 }}>{t.jahr || ""}</span>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                            {(t.dienste || []).map((d) => <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>)}
+                            {sichtbareDienste(t.dienste, auswahl).map((d) => <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>)}
                           </div>
                           {addFilm && formFuer !== sid && (
                             <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(sid)}>Eintrag erstellen</button>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { FeldHinweis } from "./FeldHinweis.jsx";
 import quellenDefault from "../data/quellen_default.json";
@@ -8,6 +8,8 @@ import quellenDefault from "../data/quellen_default.json";
    Konfiguration. Bekommt bekannt/entdecken + die Quellen-Auswahl als Props. */
 
 const GRUPPEN_LABEL = { sub: "Abos (Subscription)", free: "Gratis (Free)", purchase: "Kauf & Leihe", tve: "TV-Anbieter", sonst: "Weitere" };
+/* Kurzform des Gruppen-Typs für die Suchtreffer-Zeilen (390px-tauglich). */
+const TYP_KURZ = { sub: "Abo", free: "Gratis", purchase: "Kauf/Leihe", tve: "TV", sonst: "Weitere", auswahl: "Deine Auswahl" };
 
 function download(dateiname, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
@@ -68,6 +70,25 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     return fehlend.length ? [...basis, { name: "Deine Auswahl (nicht in der Liste)", typ: "auswahl", quellen: fehlend }] : basis;
   }, [bekannt, datenDa, auswahl]);
 
+  /* Mobil-taugliche Quellen-Auswahl (Etappe 1): statt ~40 Checkbox-Zeilen
+     ein Suchfeld + kompakte Angehakt-Liste. Nicht angehakte Quellen erscheinen
+     NUR als Suchtreffer. Suchtext ist reiner UI-State, wird NICHT persistiert. */
+  const [quellenSuche, setQuellenSuche] = useState("");
+  const quellenIndex = useMemo(() => {
+    const m = new Map(); // Name -> Gruppen-Typ (erste Gruppe gewinnt)
+    for (const g of gruppen) for (const q of g.quellen) if (!m.has(q)) m.set(q, g.typ);
+    return m;
+  }, [gruppen]);
+  const suchTreffer = useMemo(() => {
+    const s = quellenSuche.trim().toLowerCase();
+    if (!s) return [];
+    return [...quellenIndex.entries()]
+      .filter(([name]) => name.toLowerCase().includes(s) && !auswahl.includes(name))
+      .map(([name, typ]) => ({ name, typ }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [quellenSuche, quellenIndex, auswahl]);
+  const purchaseWarnung = quellenDefault.gruppen.find((x) => x.typ === "purchase")?.warnung;
+
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
 
   if (datenGesperrt) return (
@@ -89,22 +110,44 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
           {" "}<code style={{ color: T.wolfram }}>streaming_config.json</code> im System-Ordner ersetzen.
           {" "}Nach Phase 0 erscheint hier die vollständige Live-Liste aller AT-Quellen.
         </p>
-        {gruppen.map((g) => (
-          <details key={g.name} open={g.typ === "sub" || g.typ === "auswahl"} style={{ marginBottom: 8 }}>
-            <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, letterSpacing: "0.05em", textTransform: "uppercase", color: T.leinwandTief, padding: "4px 0" }}>
-              {g.name} ({g.quellen.filter((q) => auswahl.includes(q)).length}/{g.quellen.length})
-            </summary>
-            {g.warnung && <div style={{ fontSize: 12, color: T.gefahr, margin: "4px 0 6px" }}>{g.warnung}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "2px 14px", padding: "4px 0 8px" }}>
-              {g.quellen.map((q) => (
-                <label key={q} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", fontSize: 13, cursor: "pointer" }}>
-                  <input type="checkbox" checked={auswahl.includes(q)} onChange={() => toggleQuelle(q)} />
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q}</span>
-                </label>
+        {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
+        <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
+          placeholder="Quelle suchen (z. B. Hayu, MUBI, Joyn) …"
+          style={{ width: "100%", boxSizing: "border-box", background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: 4, padding: "10px 12px", fontSize: 14, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }} />
+        {quellenSuche.trim() !== "" && (
+          <div style={{ marginBottom: 10 }}>
+            {suchTreffer.length === 0 && (
+              <div style={{ fontSize: 12, color: T.rauch, padding: "2px 0 4px" }}>Keine weitere Quelle gefunden (schon gewählt oder nicht in der Liste).</div>
+            )}
+            {suchTreffer.some((t) => t.typ === "purchase") && purchaseWarnung && (
+              <div style={{ fontSize: 12, color: T.gefahr, margin: "2px 0 6px" }}>{purchaseWarnung}</div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {suchTreffer.map(({ name, typ }) => (
+                <button key={name} onClick={() => toggleQuelle(name)} title={"„" + name + "“ zur Auswahl hinzufügen"}
+                  style={{ display: "flex", gap: 8, alignItems: "center", textAlign: "left", background: "transparent", color: T.leinwand, border: "1px solid " + T.saal, borderRadius: 4, padding: "9px 10px", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {name}</span>
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: typ === "purchase" ? T.gefahr : T.rauch, flexShrink: 0 }}>{TYP_KURZ[typ] || typ}</span>
+                </button>
               ))}
             </div>
-          </details>
-        ))}
+          </div>
+        )}
+        {/* Angehakte Quellen: immer sichtbar, per × abwählbar. Union-Garantie:
+            gerendert wird direkt aus `auswahl` — auch Namen außerhalb der
+            Katalog-/Startliste bleiben damit sichtbar und abwählbar. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+          {auswahl.length === 0 && (
+            <span style={{ fontSize: 12, color: T.rauch, padding: "2px 0" }}>Keine Quelle gewählt — der Streaming-Tab zeigt dann alle Dienste.</span>
+          )}
+          {[...auswahl].sort((a, b) => a.localeCompare(b)).map((q) => (
+            <button key={q} onClick={() => toggleQuelle(q)} title={"„" + q + "“ abwählen"}
+              style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinte, background: T.wolfram, border: "none", borderRadius: 4, padding: "7px 11px", cursor: "pointer", maxWidth: "100%" }}>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
         <label style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 0 4px", fontSize: 14, cursor: "pointer", borderTop: "1px solid " + T.saal, marginTop: 8 }}>
           <input type="checkbox" checked={heuristikAn} onChange={() => setHeuristikAn(!heuristikAn)} />
           Heuristik-Relevanz im nächsten Lauf berechnen (abschalten ist folgenlos)

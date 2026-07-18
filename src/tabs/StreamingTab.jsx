@@ -3,6 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
 import { store, K } from "../lib/storage.js";
 import { norm, schlagseite, score } from "../lib/match.js";
+import { sichtbareDienste } from "../lib/dienste.js";
 import { Chip } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -23,10 +24,12 @@ function download(dateiname, obj) {
   URL.revokeObjectURL(url);
 }
 
-function DienstBadges({ dienste, webUrls }) {
+function DienstBadges({ dienste, webUrls, auswahl }) {
+  /* Joyn-Fix: Badges UND web_urls-Links nur für Dienste der Abo-Auswahl
+     (leere Auswahl = alle) — der Link hängt am Dienst, fliegt also mit. */
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-      {(dienste || []).map((d) => {
+      {sichtbareDienste(dienste, auswahl).map((d) => {
         const url = webUrls && webUrls[d];
         const stil = {
           fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.05em",
@@ -250,7 +253,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                   expanded={expandedId === "s" + f.id}
                   onToggle={() => setExpandedId(expandedId === "s" + f.id ? null : "s" + f.id)}
                   onSave={updateFilm && mf ? (changes) => updateFilm(f.id, changes) : undefined}
-                  kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} />}
+                  kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
                 />
               );
             })}
@@ -334,7 +337,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                       </span>
                     )}
                   </span>
-                  <DienstBadges dienste={t.dienste} />
+                  <DienstBadges dienste={t.dienste} auswahl={auswahl} />
                   {t.relevanz != null && <span style={{ ...mono, color: T.wolfram }} title="Heuristik-Vorsortierung, keine Bewertung">Relevanz {t.relevanz}</span>}
                   {typeof t.user_score === "number" && <span style={mono}>Score {t.user_score}</span>}
                 </div>
