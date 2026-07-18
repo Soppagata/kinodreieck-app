@@ -101,7 +101,7 @@ const helpers = (dom) => {
 {
   const dom = baueDom({
     seed(w) {
-      w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true, reset_tag: 11 }));
+      w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix", "Crunchyroll Premium (Via Amazon Prime)", "Spezialkanal 9000"], heuristik: true, reset_tag: 11 }));
     },
   });
   const { text, knopf } = helpers(dom);
@@ -111,6 +111,10 @@ const helpers = (dom) => {
   check("E: Credits-Reset-Datum wird angezeigt (aus reset_tag)", /Credits-Reset:\s*11\./.test(text().replace(/ /g, " ")) || /Credits-Reset: \d{2}\.\d{2}\.\d{4}/.test(text()));
   check("E: falscher 30-Tage-Countdown ist weg", !/Tage bis zum Monats-Refresh/.test(text()));
   check("E: Reset-Tag-Eingabefeld vorhanden", /Credits-Reset-Tag \(1–28\)/.test(text()));
+  // Demo-Snapshot darf die echte Quellenliste nicht verdrängen:
+  check("E: echte AT-Startliste statt Demo-Quellen (Hayu sichtbar)", /Hayu/.test(text()));
+  check("E: gewählte Quelle außerhalb der Liste bleibt sichtbar (Union)", /Spezialkanal 9000/.test(text()));
+  check("E: Demo-Daten sind als solche gekennzeichnet", /Demo-Beispieldaten/.test(text()));
   dom.window.close();
 }
 

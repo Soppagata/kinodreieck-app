@@ -46,20 +46,27 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
   const resetInTagen = resetDatum ? Math.ceil((resetDatum.getTime() - Date.now()) / 86400000) : null;
 
   const gruppen = useMemo(() => {
-    const vq = (datenDa && bekannt.verfuegbare_quellen) || [];
+    /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
+       NICHT verdrängen — sonst schrumpft die Abo-Auswahl auf die 4 Testquellen. */
+    const vq = (datenDa && !bekannt.demo && bekannt.verfuegbare_quellen) || [];
+    let basis;
     if (vq.length) {
       const g = {};
       for (const q of vq) {
         const typ = ["sub", "free", "purchase", "tve"].includes(q.typ) ? q.typ : "sonst";
         (g[typ] = g[typ] || []).push(q.name);
       }
-      return Object.entries(g).map(([typ, quellen]) => ({
+      basis = Object.entries(g).map(([typ, quellen]) => ({
         name: GRUPPEN_LABEL[typ] || typ, typ, quellen: quellen.sort((a, b) => a.localeCompare(b)),
         warnung: typ === "purchase" ? quellenDefault.gruppen.find((x) => x.typ === "purchase")?.warnung : undefined,
       }));
-    }
-    return quellenDefault.gruppen;
-  }, [bekannt, datenDa]);
+    } else basis = quellenDefault.gruppen;
+    /* Union-Garantie: Jede aktiv gewählte Quelle muss sichtbar und abwählbar sein,
+       auch wenn Katalog/Startliste sie (noch) nicht kennen. */
+    const bekannteNamen = new Set(basis.flatMap((g) => g.quellen));
+    const fehlend = auswahl.filter((q) => !bekannteNamen.has(q));
+    return fehlend.length ? [...basis, { name: "Deine Auswahl (nicht in der Liste)", typ: "auswahl", quellen: fehlend }] : basis;
+  }, [bekannt, datenDa, auswahl]);
 
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
 
@@ -83,7 +90,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
           {" "}Nach Phase 0 erscheint hier die vollständige Live-Liste aller AT-Quellen.
         </p>
         {gruppen.map((g) => (
-          <details key={g.name} open={g.typ === "sub"} style={{ marginBottom: 8 }}>
+          <details key={g.name} open={g.typ === "sub" || g.typ === "auswahl"} style={{ marginBottom: 8 }}>
             <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, letterSpacing: "0.05em", textTransform: "uppercase", color: T.leinwandTief, padding: "4px 0" }}>
               {g.name} ({g.quellen.filter((q) => auswahl.includes(q)).length}/{g.quellen.length})
             </summary>
@@ -124,6 +131,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
         <h2 style={h2}>Katalog-Status</h2>
         {datenDa ? (
           <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.8, margin: 0 }}>
+            {bekannt.demo && <><strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — der echte Katalog kommt mit dem ersten Watchmode-Lauf.<br /></>}
             Stand: <strong>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong>
             {" · "}Quellen im Katalog: {(bekannt.dienste || []).join(", ")}
             {" · "}Titel: {bekannt.titel.length} bekannt / {entdeckenDa ? entdecken.titel.length : 0} entdecken

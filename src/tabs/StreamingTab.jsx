@@ -201,6 +201,12 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
         </div>
       )}
 
+      {datenDa && bekannt.demo && (
+        <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
+          <strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — die Titel hier sind Platzhalter. Der echte Katalog kommt mit dem ersten Watchmode-Lauf.
+        </div>
+      )}
+
       {/* ===== Mein Programm ===== */}
       {ansicht === "programm" && datenDa && (
         <>
