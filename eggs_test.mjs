@@ -8,6 +8,8 @@ import {
   berechneUnlocks, istVerfuegbar, liveVertreter,
   parseAchievements, serialisiereAchievements, ladeAchievements, speichereAchievements,
 } from "./src/lib/eggs.js";
+import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert } from "./src/lib/eggFrequenz.js";
+import { istKlaatu, crawlHeute, levenshtein } from "./src/lib/momentEggs.js";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -88,6 +90,43 @@ check("lade/speichere: Roundtrip über store", geladen.has("cage-alphabet") && g
 /* Einbahn (Aufrufer-Union simuliert): einmal freigeschaltet bleibt, auch bei leerem Master. */
 const einbahn = new Set([...geladen, ...berechneUnlocks([])]);
 check("Einbahn: Union verliert nichts bei leerem Master", einbahn.has("cage-alphabet"));
+
+/* ---- Egg-Auto-Trigger-Frequenz (test-sicher: injizierte Uhr + RNG) ---- */
+const lsMap = new Map();
+globalThis.localStorage = {
+  getItem: (k) => (lsMap.has(k) ? lsMap.get(k) : null),
+  setItem: (k, v) => { lsMap.set(k, String(v)); },
+  removeItem: (k) => { lsMap.delete(k); },
+};
+const MO = new Date(2026, 6, 20);   // Montag 20.07.2026 (19.07. ist Sonntag -> 20. = getDay 1)
+const DI = new Date(2026, 6, 21);   // Dienstag (getDay 2)
+check("Frequenz: tagesSchluessel YYYY-MM-DD", tagesSchluessel(MO) === "2026-07-20");
+check("Frequenz: erlaubter Tag + Treffer-RNG -> true", wuerfleTag("t1", 1 / 40, { jetzt: MO, rnd: () => 0.0, tage: [1, 4, 5] }) === true);
+check("Frequenz: erlaubter Tag + Fehl-RNG -> false", wuerfleTag("t2", 1 / 40, { jetzt: MO, rnd: () => 0.9, tage: [1, 4, 5] }) === false);
+check("Frequenz: falscher Wochentag -> false (kein Wurf)", wuerfleTag("t3", 1, { jetzt: DI, rnd: () => 0.0, tage: [1, 4, 5] }) === false);
+check("Frequenz: ohne Tage-Filter -> jeder Tag würfelt", wuerfleTag("t4", 1 / 50, { jetzt: DI, rnd: () => 0.0 }) === true);
+let rufe = 0; const rndOnce = () => { rufe++; return 0.0; };
+wuerfleTag("t5", 1, { jetzt: MO, rnd: rndOnce, tage: [1] });
+wuerfleTag("t5", 1, { jetzt: MO, rnd: rndOnce, tage: [1] });
+check("Frequenz: höchstens ein Wurf pro Tag (gecacht)", rufe === 1);
+check("Frequenz: schonGefeuertHeute initial false", schonGefeuertHeute("cage", MO) === false);
+markiereGefeuert("cage", MO);
+check("Frequenz: markiereGefeuert -> heute true", schonGefeuertHeute("cage", MO) === true);
+check("Frequenz: anderer Tag wieder false", schonGefeuertHeute("cage", DI) === false);
+delete globalThis.localStorage;
+
+/* ---- Moment-Eggs (B4): Klaatu (Tippfehler-tolerant) + Crawl (4. Mai + Kino) ---- */
+check("Klaatu: exakte Phrase", istKlaatu("klaatu barada nikto") === true);
+check("Klaatu: Tippfehler tolerant", istKlaatu("klatu barrada niktoo") === true);
+check("Klaatu: Groß/Kleinschreibung egal", istKlaatu("KLAATU BARADA NIKTO") === true);
+check("Klaatu: fehlt ein Wort -> false", istKlaatu("klaatu barada") === false);
+check("Klaatu: Unsinn -> false", istKlaatu("guten abend zusammen heute") === false);
+check("levenshtein: Referenz kitten/sitting = 3", levenshtein("kitten", "sitting") === 3);
+const MAI4 = new Date(2026, 4, 4), MAI5 = new Date(2026, 4, 5);
+const km1 = { matched: [{ film: { id: "x" } }] }, km0 = { matched: [] };
+check("Crawl: 4. Mai + Kino-Treffer -> true", crawlHeute({ jetzt: MAI4, kinoMatches: km1 }) === true);
+check("Crawl: 4. Mai ohne Treffer -> false", crawlHeute({ jetzt: MAI4, kinoMatches: km0 }) === false);
+check("Crawl: anderer Tag -> false", crawlHeute({ jetzt: MAI5, kinoMatches: km1 }) === false);
 
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);

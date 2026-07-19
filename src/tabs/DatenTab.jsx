@@ -24,7 +24,7 @@ export function DatenTab({
   artikelAnzahl = 0, exportArtikel, importArtikel,
   ungesichertMaster = false, ungesichertArtikel = false,
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket,
-  einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
+  einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt, zeigeCage, zeigeTeppich,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle, heuristikAn, setHeuristikAn,
   resetTag = null, setResetTag,
@@ -125,6 +125,10 @@ export function DatenTab({
                   </div>
                 );
               })}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              {zeigeCage && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeCage}>Cage-Alphabet zeigen</button>}
+              {zeigeTeppich && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeTeppich}>Teppich zeigen</button>}
             </div>
           </div>
         </Klappe>

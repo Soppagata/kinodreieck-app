@@ -31,7 +31,7 @@ import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgra
 import { Logo } from "./components/ui.jsx";
 import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks } from "./lib/artikel.js";
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
-import { setzeEigeneStimmungen } from "./lib/finder.js";
+import { setzeEigeneStimmungen, filmHerkunft } from "./lib/finder.js";
 import { sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -46,8 +46,11 @@ import { PERSONAL_MODE } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { NavBand } from "./components/NavBand.jsx";
 import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
-import { berechneUnlocks, ladeAchievements, speichereAchievements } from "./lib/eggs.js";
+import { berechneUnlocks, ladeAchievements, speichereAchievements, liveVertreter, SCHWELLEN_EGGS } from "./lib/eggs.js";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
+import { CageAlphabet } from "./components/CageAlphabet.jsx";
+import { Teppich } from "./components/Teppich.jsx";
+import { wuerfleTag, schonGefeuertHeute, markiereGefeuert } from "./lib/eggFrequenz.js";
 
 /* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
    Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
@@ -315,6 +318,21 @@ export default function App() {
     backfillRef.current = true;
   }, [master, achievements, zeigeToast]);
 
+  /* ---- Cage-Alphabet-Egg (B3): goldene Karte → Buchstaben-Stakkato → verfügbarer
+     Cage-Film. v1-Auslöser: Vorführmodus (zeigeCage). Verfügbarkeit vorerst über
+     physischen Besitz (leerer ctx); Abo/Kino-ctx ist ein Nachzug. Auto-Trigger
+     „selten beim App-Start" kommt mit einer test-sicheren Frequenz-Naht später. */
+  const [cageEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "cage-alphabet"));
+  const cageFilmeRef = useRef([]);
+  const [cageOffen, setCageOffen] = useState(false);
+  const [reducedMotion] = useState(() => {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch { return false; }
+  });
+  const [teppichEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "teppich"));
+  const teppichFilmeRef = useRef([]);
+  const [teppichOffen, setTeppichOffen] = useState(false);
+  // zeigeCage/zeigeTeppich/eggCtx: weiter unten definiert (brauchen kinoMatches/
+  // streamingBekannt/auswahl für echte Verfügbarkeit + Sprung-Link).
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -1305,6 +1323,79 @@ export default function App() {
   /* Badges brauchen die Daten auch außerhalb des Streaming-Tabs -> einmalig nachladen */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
 
+  /* ---- Egg-Verfügbarkeit + Sprung-Link (B3, für Cage & Teppich) ----
+     „Verfügbar" = physischer Besitz ∨ aktives Abo (streamingBekannt ∩ auswahl) ∨
+     aktuelles Kinoprogramm (kinoMatches). Damit spielen die Eggs NUR Filme aus, die
+     Max wirklich sehen kann. eggHerkunft = Wo-schaue-ich-das; eggZeigeEintrag springt
+     zum (immer vorhandenen) Mediathek-Eintrag, wo Kino-/Streaming-Badges hängen. */
+  const eggCtx = useMemo(() => ({
+    auswahl,
+    kinoIds: new Set((kinoMatches?.matched || []).map((m) => m.film.id)),
+    dienstePro: new Map(((streamingBekannt && streamingBekannt.titel) || []).map((t) => [t.id, t.dienste || []])),
+  }), [auswahl, kinoMatches, streamingBekannt]);
+  const zeigeCage = useCallback(() => {
+    cageFilmeRef.current = cageEgg ? liveVertreter(master || [], cageEgg, eggCtx) : [];
+    setCageOffen(true);
+  }, [cageEgg, master, eggCtx]);
+  const zeigeTeppich = useCallback(() => {
+    teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
+    setTeppichOffen(true);
+  }, [teppichEgg, master, eggCtx]);
+  const eggHerkunft = useCallback((film) => {
+    const h = filmHerkunft(film, { kinoMatches, streamingBekannt });
+    if (h.kino) return { text: "Läuft gerade im Kino", tab: "kino" };
+    const d = h.streaming ? sichtbareDienste(h.streaming.dienste, auswahl) : [];
+    if (d.length) return { text: "Streamst du auf " + d.slice(0, 2).join(" / "), tab: "streaming" };
+    if (h.dvd) return { text: "In deinem Besitz", tab: "mediathek" };
+    return { text: "In deiner Mediathek", tab: "mediathek" };
+  }, [kinoMatches, streamingBekannt, auswahl]);
+  const eggZeigeEintrag = useCallback((film, tab) => {
+    setCageOffen(false); setTeppichOffen(false);
+    if (tab === "kino") setTab("kino");
+    else if (tab === "streaming") setTab("streaming");
+    else if (film) springeZuFilm(film.id);
+  }, [springeZuFilm]);
+
+  /* ---- Egg-Auto-Trigger (B3, nur PERSONAL_MODE + freigeschaltet) ----
+     Test-sicher: gewürfelt wird NUR wenn das Egg freigeschaltet ist (Tests schalten
+     nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:50/Tag beim
+     Start. Teppich: 1:40 an Mo/Do/Fr, feuert beim Mediathek-Scrollen. */
+  const cageAutoRef = useRef(false);
+  useEffect(() => {
+    if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
+    if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
+    if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
+    cageAutoRef.current = true;
+    if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 50)) { markiereGefeuert("cage"); zeigeCage(); }
+  }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
+
+  const teppichArmRef = useRef(null);   // null = ungeprüft; true/false = armiert?
+  useEffect(() => {
+    if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
+    if (teppichArmRef.current !== null) return;
+    if (!achievements.has("teppich")) { teppichArmRef.current = false; return; }
+    teppichArmRef.current = wuerfleTag("teppich", 1 / 40, { tage: [1, 4, 5] }) && !schonGefeuertHeute("teppich");
+  }, [bootDone, achievements, master]);
+  useEffect(() => {
+    if (!PERSONAL_MODE || tab !== "mediathek" || !teppichArmRef.current) return;
+    const onScroll = () => {
+      if (!teppichArmRef.current) return;
+      if ((window.scrollY || 0) > 700) { teppichArmRef.current = false; markiereGefeuert("teppich"); zeigeTeppich(); }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [tab, zeigeTeppich]);
+
+  /* Scroll-Sperre, solange ein Egg-Overlay offen ist → die Liste bleibt an ihrer
+     Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
+     beim Weiterscrollen"). */
+  useEffect(() => {
+    if (!PERSONAL_MODE || !(cageOffen || teppichOffen)) return;
+    let vorher = "";
+    try { vorher = document.body.style.overflow; document.body.style.overflow = "hidden"; } catch { /* */ }
+    return () => { try { document.body.style.overflow = vorher; } catch { /* */ } };
+  }, [cageOffen, teppichOffen]);
+
   const clearProgrammCache = useCallback(async () => {
     try { await store.delete(K.programm); } catch { /* war leer */ }
     setProgramm(null); setProgrammArt(null); setProgStand(null); autoFetched.current = false;
@@ -1550,6 +1641,7 @@ export default function App() {
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
+            zeigeCage={zeigeCage} zeigeTeppich={zeigeTeppich}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
@@ -1572,6 +1664,14 @@ export default function App() {
             </div>
           ))}
         </div>
+      )}
+      {PERSONAL_MODE && cageOffen && (
+        <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
+          onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
+      )}
+      {PERSONAL_MODE && teppichOffen && (
+        <Teppich filme={teppichFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
+          onZeigeEintrag={eggZeigeEintrag} onClose={() => setTeppichOffen(false)} />
       )}
       <ZurueckObenKnopf />
     </div>

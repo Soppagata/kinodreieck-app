@@ -325,225 +325,62 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-kompakt select { max-width: 44vw; }
 }
 
-/* ================= MOMENT-EGGS: CRAWL & NECRONOMICON (B4 · CODEX-VISUALS) =================
-   Präsentationsvertrag für Claudes PERSONAL_MODE-Verdrahtung. Keine Trigger-
-   oder Persistenzlogik; Motive liegen als Inline-SVG in den Komponenten. */
+/* ================= EGG: CAGE-ALPHABET =================
+   Goldene Schlangenleder-Karte (Wild at Heart), Buchstaben-Stakkato in Barlow.
+   Animation ist JS-getaktet (Stakkato eskaliert) — reduced-motion springt im
+   Component direkt zum Ergebnis. */
+.kd-cage-karte {
+  background: radial-gradient(122% 104% at 50% 0%, #F6D67A 0%, #E7B740 44%, #C8912A 100%);
+  border: 7px solid #7A5A16;
+  box-shadow: 0 0 0 2px #F3D072 inset, 0 18px 60px rgba(0,0,0,0.62);
+  overflow: hidden;
+}
+.kd-cage-karte::before {   /* Schuppen-Textur */
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .16; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='30'><g fill='none' stroke='%235A3E0E' stroke-width='1.4'><path d='M0 15 q8 -12 17 0 q9 12 17 0'/><path d='M-17 30 q8 -12 17 0 q9 12 17 0'/><path d='M17 30 q8 -12 17 0 q9 12 17 0'/><path d='M0 0 q8 -12 17 0'/></g></svg>");
+  background-size: 34px 30px;
+}
+.kd-cage-titel { font-family: 'Fraunces', Georgia, serif; font-weight: 900; color: #2A1E06; letter-spacing: .01em; position: relative; }
+.kd-cage-flash { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; line-height: .86; color: #201705;
+  text-shadow: 2px 3px 0 rgba(122,90,22,.45); position: relative; }
 
-/* ---------- CRAWL — vollständiges Dashboard-Overlay ---------- */
-.kd-crawl {
-  position: fixed; inset: 0; z-index: 16000; overflow: hidden; isolation: isolate;
-  box-sizing: border-box; background: #000; color: #f5cf39; cursor: pointer;
-  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-}
-.kd-crawl::after {
-  content: ""; position: absolute; inset: 0; z-index: 5; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 48%, transparent 32%, rgba(0,0,0,.2) 68%, rgba(0,0,0,.72) 100%);
-}
-.kd-crawl:focus-visible { outline: 3px solid #f5cf39; outline-offset: -7px; }
-.kd-crawl-stars, .kd-crawl-hyperspace {
-  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
-}
-.kd-crawl-stars { z-index: 0; fill: #fff; animation: kd-crawl-sternatem 5s ease-in-out infinite alternate; }
-.kd-crawl-hyperspace {
-  z-index: 4; fill: none; stroke: #cfe8ff; stroke-width: 2.2; stroke-linecap: round;
-  opacity: 0; animation: kd-crawl-sprung 1.15s cubic-bezier(.12,.72,.24,1) both;
-}
-.kd-crawl-horizont {
-  position: absolute; z-index: 1; left: 5%; right: 5%; top: 36%; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(78,106,171,.5), rgba(255,255,255,.8), rgba(78,106,171,.5), transparent);
-  box-shadow: 0 0 24px 5px rgba(77,111,190,.19); opacity: .52;
-}
-.kd-crawl-stage {
-  position: absolute; z-index: 2; inset: 0; overflow: hidden;
-  perspective: 440px; perspective-origin: 50% 34%;
-}
-.kd-crawl-plane {
-  position: absolute; left: 50%; top: 33%; width: min(820px, 86vw);
-  transform-origin: 50% 0; transform: translateX(-50%) rotateX(24deg);
-}
-.kd-crawl-copy {
-  font-size: clamp(28px, 3.15vw, 47px); font-weight: 600; line-height: 1.43;
-  text-align: justify; text-wrap: pretty; letter-spacing: .012em;
-  text-shadow: 0 0 1px currentColor;
-  animation: kd-crawl-rollen 43s linear 1.05s both;
-}
-.kd-crawl-episode {
-  margin: 0 0 .12em; text-align: center; font-size: .72em; font-weight: 600;
-  letter-spacing: .14em; text-transform: uppercase;
-}
-.kd-crawl-copy h2 {
-  margin: 0 0 .95em; color: inherit; text-align: center; font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.55em; line-height: 1; font-weight: 600; letter-spacing: .11em;
-}
-.kd-crawl-intro { margin: 0 0 1.8em; }
-.kd-crawl-matches { display: grid; gap: 1.12em; }
-.kd-crawl-match { margin: 0; }
-.kd-crawl-match strong { display: inline; font-family: 'Space Grotesk', sans-serif; font-size: 1.04em; letter-spacing: .025em; }
-.kd-crawl-match span { font-weight: 500; }
-.kd-crawl-leer { margin: 1.7em 0 0; text-align: center; font-style: italic; }
-.kd-crawl-skip {
-  position: absolute; z-index: 7; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom));
-  transform: translateX(-50%); padding: 6px 11px; white-space: nowrap;
-  color: rgba(255,255,255,.62); background: rgba(0,0,0,.68); border: 1px solid rgba(255,255,255,.16);
-  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .13em;
-}
-@keyframes kd-crawl-rollen {
-  from { transform: translateY(62vh); }
-  to { transform: translateY(-235%); }
-}
-@keyframes kd-crawl-sternatem {
-  from { opacity: .66; transform: scale(1); }
-  to { opacity: .92; transform: scale(1.018); }
-}
-@keyframes kd-crawl-sprung {
-  0% { opacity: 0; transform: scale(.18); }
-  18% { opacity: .8; }
-  70% { opacity: .55; }
-  100% { opacity: 0; transform: scale(2.2); }
-}
+/* ================= EGG: TEPPICH (Choose Life) =================
+   Sturz durch den Boden — Teppich-Trichter oben (Lichtschacht, zieht sich weg),
+   Karte unten. Transforms NUR auf diesen In-Flow-Overlay-Elementen, nichts Fixes. */
+.kd-teppich-scrim { position: fixed; inset: 0; z-index: 11200; overflow: hidden;
+  background: #2E0912; display: flex; align-items: center; justify-content: center; }
+/* Roter, FLAUSCHIGER Teppich: feDiffuseLighting beleuchtet ein Turbulenz-Feld → plüschiges,
+   dreidimensionales Pile (echte Zotteln + Schatten) statt flachem Rauschen. */
+.kd-teppich-flausch { position: absolute; inset: 0; background-color: #4A1020;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='pile'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' seed='6' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' lighting-color='%23C63A54' surfaceScale='3.6' diffuseConstant='1.3'><feDistantLight azimuth='235' elevation='46'/></feDiffuseLighting></filter><rect width='320' height='320' filter='url(%23pile)'/></svg>");
+  background-size: 320px 320px; }
+/* Tiefen-Vignette (Schattierung — passt laut Max). */
+.kd-teppich-schacht { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(66% 62% at 50% 50%, rgba(6,2,4,0) 52%, rgba(6,2,4,.45) 100%); }
+/* Schachtkanten: JS hängt jede Bildschirm-Ecke an die zugehörige Ecke des sinkenden
+   Fensters (kein viewBox → 1 Einheit = 1px, Viewport-Koordinaten). Dezent. */
+.kd-teppich-kanten { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.kd-teppich-kanten line { stroke: rgba(255,228,208,.17); stroke-width: 1.2; }
+/* „Grab-Fenster": scharfkantiges Rechteck (kein Bloom), das nach unten versinkt
+   (kleiner + tiefer) = ein Sarg, den man von oben ins Grab sinken sieht. */
+.kd-teppich-oeffnung { position: absolute; z-index: 2; top: 50%; left: 50%; width: 84vw; height: 74vh;
+  transform: translate(-50%, -50%) scale(1); transform-origin: 50% 44%;
+  background: linear-gradient(162deg, #F4EFE6 0%, #CDAE9A 58%, #6F4C3E 100%);
+  box-shadow: 0 0 0 3px #17080D, 0 0 0 11px rgba(18,6,10,.5), 0 26px 70px rgba(0,0,0,.55);
+  transition: transform 3.4s cubic-bezier(.5,0,.35,1), opacity 3.4s; }
+.kd-teppich-oeffnung.weg { transform: translate(-50%, -22%) scale(.24); opacity: .72; }
+/* Karte = scharfkantiges dunkles Popup auf dem Teppich (Fonts/Layout unverändert). */
+.kd-teppich-karte { position: relative; z-index: 3; width: 100%; max-width: 336px; margin: 0 22px; text-align: center;
+  background: rgba(9,3,6,.92); border: 1px solid #2A0C14; border-radius: 10px; padding: 22px 22px 24px;
+  box-shadow: 0 22px 55px rgba(0,0,0,.6);
+  opacity: 0; transform: translateY(26px); transition: opacity .7s 2.7s ease, transform .7s 2.7s cubic-bezier(.2,.7,.3,1); }
+.kd-teppich-karte.da { opacity: 1; transform: translateY(0); }
+.kd-teppich-kicker { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 600; font-size: 15px; color: #E4872A; letter-spacing: .03em; }
+.kd-teppich-titel { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 33px; line-height: 1.06; color: #F3ECDD; margin: 9px 0 0; }
+.kd-teppich-jahr { font-family: 'Space Mono', monospace; font-size: 12px; color: #C0554B; margin: 9px 0 0; }
+.kd-teppich-verf { font-family: 'Space Mono', monospace; font-size: 11px; color: #A79AA0; margin: 6px 0 0; letter-spacing: .02em; }
 
-/* reduced-Prop: kein automatisches Wegrollen; der Inhalt bleibt scrollbar und
-   lesbar. Die Media-Query weiter unten ist das zusätzliche CSS-Sicherheitsnetz. */
-.kd-crawl-reduced { overflow: auto; }
-.kd-crawl-reduced .kd-crawl-stage { position: relative; min-height: 100%; overflow: visible; perspective: none; }
-.kd-crawl-reduced .kd-crawl-plane {
-  position: relative; left: auto; top: auto; width: min(720px, calc(100vw - 40px));
-  margin: 0 auto; padding: max(72px, calc(30px + env(safe-area-inset-top))) 0 100px;
-  transform: none;
-}
-.kd-crawl-reduced .kd-crawl-copy { font-size: clamp(22px, 4.4vw, 34px); animation: none; }
-.kd-crawl-reduced .kd-crawl-hyperspace, .kd-crawl-reduced .kd-crawl-horizont { display: none; }
-
-/* ---------- NECRONOMICON — Blog als aufgeschlagenes Hautbuch ---------- */
-.kd-necronomicon {
-  --kd-necro-haut: #d7ae70; --kd-necro-haut-hell: #efd39a; --kd-necro-falte: #9b6742;
-  --kd-necro-tinte: #3b2019; --kd-necro-blut: #741d18; --kd-necro-schwarz: #21130f;
-  position: relative; isolation: isolate; box-sizing: border-box; min-height: 62vh;
-  padding: clamp(28px, 4vw, 52px); color: var(--kd-necro-tinte) !important;
-  background:
-    radial-gradient(ellipse at 12% 18%, rgba(100,44,27,.24) 0 2px, transparent 3px),
-    radial-gradient(ellipse at 82% 74%, rgba(103,50,29,.2) 0 1px, transparent 4px),
-    repeating-radial-gradient(ellipse at 40% 30%, transparent 0 7px, rgba(101,55,33,.045) 8px 9px),
-    linear-gradient(93deg, #c28c55 0, var(--kd-necro-haut-hell) 7%, #dfb978 47%, #8f5a38 49.6%, #6f442e 50%, #9a6841 50.5%, #dfb978 53%, var(--kd-necro-haut-hell) 93%, #bc8151 100%) !important;
-  clip-path: polygon(1.2% 1.8%, 7% .8%, 13% 1.7%, 20% .5%, 28% 1.3%, 36% .7%, 44% 1.6%, 51% .5%, 59% 1.4%, 67% .7%, 75% 1.6%, 84% .6%, 92% 1.5%, 99% 2.6%, 98.2% 11%, 99.2% 21%, 98.1% 31%, 99.1% 42%, 98.2% 53%, 99% 64%, 98.1% 75%, 99% 87%, 97.8% 98%, 90% 99.1%, 82% 98.2%, 73% 99.2%, 64% 98.3%, 55% 99%, 47% 98.2%, 38% 99.3%, 29% 98.3%, 20% 99.1%, 11% 98.1%, 1.5% 97%, 2.2% 87%, 1% 76%, 2% 65%, .9% 54%, 1.8% 43%, .8% 32%, 1.9% 21%, .8% 11%);
-  box-shadow: inset 0 0 0 2px rgba(72,38,24,.5), inset 0 0 46px rgba(70,34,22,.38), 0 13px 34px rgba(20,10,7,.34);
-}
-.kd-necronomicon::before {
-  content: ""; position: absolute; z-index: 0; inset: 10px; pointer-events: none; opacity: .4;
-  background:
-    repeating-linear-gradient(11deg, transparent 0 12px, rgba(79,38,25,.1) 13px, transparent 15px),
-    repeating-linear-gradient(97deg, transparent 0 18px, rgba(255,240,190,.1) 19px, transparent 22px);
-  mix-blend-mode: multiply;
-}
-.kd-necronomicon::after {
-  content: ""; position: absolute; z-index: 1; top: 2%; bottom: 2%; left: 50%; width: 22px;
-  transform: translateX(-50%); pointer-events: none; opacity: .46;
-  background: radial-gradient(ellipse at center, rgba(47,24,17,.65), rgba(86,46,30,.18) 40%, transparent 72%);
-}
-.kd-necronomicon > * { position: relative; z-index: 2; }
-.kd-necronomicon, .kd-necronomicon p, .kd-necronomicon label, .kd-necronomicon summary {
-  font-family: 'Bradley Hand', 'Segoe Print', 'Marker Felt', 'Comic Sans MS', cursive;
-}
-.kd-necronomicon h1, .kd-necronomicon h2, .kd-necronomicon h3,
-.kd-necronomicon [data-tour="blog"] > h2 {
-  color: var(--kd-necro-blut) !important; font-family: 'Fraunces', Georgia, serif !important;
-  font-weight: 900 !important; text-transform: none !important; letter-spacing: .025em !important;
-  text-shadow: 1px 1px 0 rgba(255,220,153,.48), 2px 3px 0 rgba(73,31,22,.14);
-}
-.kd-necronomicon [data-tour="blog"]::before {
-  content: "𐌀 ᛉ ᛗ"; display: block; flex-basis: 100%; margin-bottom: -7px;
-  color: var(--kd-necro-blut); font-size: 13px; letter-spacing: .5em; opacity: .72;
-}
-.kd-necronomicon > div:not(.kd-necro-rand) > div[style*="background"],
-.kd-necronomicon > div[style*="display: flex"][style*="flex-direction: column"] > div,
-.kd-necronomicon details > div {
-  color: var(--kd-necro-tinte) !important; background:
-    radial-gradient(circle at 18% 21%, rgba(94,43,27,.11), transparent 24%),
-    linear-gradient(100deg, rgba(244,216,158,.84), rgba(213,169,102,.8)) !important;
-  border: 1px solid rgba(80,39,26,.47) !important; border-radius: 2px !important;
-  clip-path: polygon(0 3px, 6px 0, calc(100% - 9px) 1px, 100% 7px, calc(100% - 3px) calc(100% - 5px), calc(100% - 10px) 100%, 6px calc(100% - 2px), 0 calc(100% - 8px));
-  box-shadow: inset 0 0 17px rgba(85,42,26,.11), 1px 3px 0 rgba(75,39,25,.12);
-}
-.kd-necronomicon div[style*="color"] { color: var(--kd-necro-tinte) !important; }
-.kd-necronomicon span[style*="color"] { color: var(--kd-necro-blut) !important; }
-.kd-necronomicon input, .kd-necronomicon textarea, .kd-necronomicon select {
-  color: var(--kd-necro-schwarz) !important; background: rgba(239,207,146,.78) !important;
-  border: 1px solid rgba(69,31,23,.68) !important; border-radius: 1px !important;
-  box-shadow: inset 0 2px 10px rgba(82,42,26,.14);
-  font-family: 'Bradley Hand', 'Segoe Print', 'Marker Felt', cursive !important;
-}
-.kd-necronomicon input::placeholder, .kd-necronomicon textarea::placeholder { color: rgba(58,30,23,.58) !important; }
-.kd-necronomicon button {
-  color: var(--kd-necro-schwarz) !important; background: linear-gradient(#e6bd78, #c88e53) !important;
-  border: 1px solid rgba(73,34,24,.78) !important; border-radius: 1px !important;
-  clip-path: polygon(2px 0, calc(100% - 5px) 1px, 100% 5px, calc(100% - 2px) calc(100% - 4px), calc(100% - 7px) 100%, 3px calc(100% - 2px), 0 4px);
-  box-shadow: inset 0 0 8px rgba(78,36,25,.12); font-family: 'Fraunces', Georgia, serif !important;
-}
-.kd-necronomicon button:hover:not(:disabled) { filter: sepia(.25) contrast(1.08); }
-.kd-necronomicon a { color: var(--kd-necro-blut) !important; text-decoration-thickness: 2px; }
-.kd-necronomicon details > summary { color: var(--kd-necro-blut) !important; text-transform: none !important; }
-
-/* Optionaler Rand: liegt über der Buchfläche, aber immer unter dem Inhalt. */
-.kd-necro-rand { position: absolute !important; z-index: 1 !important; inset: 0; overflow: hidden; pointer-events: none; }
-.kd-necro-haut { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.kd-necro-kante { fill: none; stroke: #48271e; stroke-width: 24; opacity: .55; }
-.kd-necro-naht { fill: none; stroke: #553027; stroke-width: 5; stroke-linecap: round; opacity: .7; }
-.kd-necro-runen { fill: none; stroke: var(--kd-necro-blut); stroke-width: 4; stroke-linejoin: round; opacity: .62; }
-.kd-necro-gesicht { fill: rgba(81,42,30,.22); stroke: #532a20; stroke-width: 5; stroke-linejoin: round; opacity: .55; }
-.kd-necro-gesicht path:nth-child(n+2) { fill: #351d18; }
-.kd-necro-chainsaw {
-  position: absolute; top: 7px; right: clamp(76px, 12vw, 150px); width: clamp(104px, 17vw, 176px);
-  overflow: visible; transform: rotate(-4deg); filter: drop-shadow(2px 3px 0 rgba(58,28,20,.22));
-}
-.kd-necro-saegeblatt { fill: #6d4b36; stroke: #3e251c; stroke-width: 4; }
-.kd-necro-zaehne, .kd-necro-griff { fill: none; stroke: #3e251c; stroke-width: 7; stroke-linecap: square; stroke-linejoin: round; }
-.kd-necro-motor { fill: var(--kd-necro-blut); stroke: #3e251c; stroke-width: 5; }
-.kd-necro-niete { fill: #d0a25f; stroke: #3e251c; stroke-width: 4; }
-.kd-necronomicon:active .kd-necro-chainsaw { animation: kd-necro-saege .12s steps(2) infinite; }
-@keyframes kd-necro-saege {
-  from { transform: translateX(-2px) rotate(-5deg); }
-  to { transform: translateX(2px) rotate(-3deg); }
-}
-
-/* Claude liefert nur Text/Zustand; diese Klassen liefern die Quittungsoptik. */
-.kd-necronomicon .kd-toast, .kd-toast.kd-necronomicon-toast {
-  color: #f0d49b !important; background: #382019 !important; border: 2px solid #7b241d !important;
-  border-radius: 0 !important; clip-path: polygon(0 6px, 7px 0, calc(100% - 9px) 2px, 100% 8px, calc(100% - 4px) 100%, 8px calc(100% - 3px), 0 calc(100% - 8px));
-  box-shadow: inset 0 0 13px #160c09, 0 5px 18px rgba(24,10,7,.46) !important;
-  font-family: 'Bradley Hand', 'Segoe Print', 'Marker Felt', cursive !important;
-  font-size: 21px !important; font-weight: 700; letter-spacing: .025em;
-  animation: kd-necro-toast 360ms cubic-bezier(.2,.9,.24,1) both;
-}
-@keyframes kd-necro-toast {
-  from { opacity: 0; transform: translateY(-9px) rotate(-2deg) scale(.92); }
-  to { opacity: 1; transform: rotate(-.5deg); }
-}
-
-@media (max-width: 760px) {
-  .kd-crawl-stage { perspective: 330px; perspective-origin: 50% 30%; }
-  .kd-crawl-plane { top: 29%; width: 92vw; transform: translateX(-50%) rotateX(22deg); }
-  .kd-crawl-copy { font-size: clamp(23px, 6.2vw, 34px); line-height: 1.38; }
-  .kd-crawl-copy h2 { letter-spacing: .07em; }
-  .kd-necronomicon { padding: 36px 22px 42px; clip-path: polygon(2% 1%, 13% 2%, 25% .5%, 39% 1.8%, 53% .6%, 68% 1.7%, 82% .4%, 98% 2%, 99% 18%, 98% 35%, 99% 51%, 98% 68%, 99% 84%, 97% 99%, 82% 98%, 66% 99%, 50% 98%, 34% 99%, 18% 98%, 2% 99%, 1% 82%, 2% 65%, 1% 48%, 2% 31%, 1% 16%); }
-  .kd-necronomicon::after { display: none; }
-  .kd-necro-gesicht { opacity: .34; transform: translate(500px, 84px) scale(.78); transform-origin: center; }
-  .kd-necro-chainsaw { top: 8px; right: 26px; width: 92px; opacity: .78; }
-  .kd-necronomicon [data-tour="blog"] { padding-top: 14px; }
-}
-
+/* Egg-Modus-reduced-motion-Nachtrag (Teppich kam nach dem B2-Stand dazu). */
 @media (prefers-reduced-motion: reduce) {
-  .kd-crawl-stars, .kd-crawl-hyperspace, .kd-crawl-copy,
-  .kd-necronomicon .kd-toast, .kd-toast.kd-necronomicon-toast,
-  .kd-necronomicon .kd-necro-chainsaw { animation: none !important; }
-  .kd-crawl:not(.kd-crawl-reduced) { overflow: auto; }
-  .kd-crawl:not(.kd-crawl-reduced) .kd-crawl-stage { position: relative; min-height: 100%; overflow: visible; perspective: none; }
-  .kd-crawl:not(.kd-crawl-reduced) .kd-crawl-plane {
-    position: relative; left: auto; top: auto; width: min(720px, calc(100vw - 40px));
-    margin: 0 auto; padding: max(72px, calc(30px + env(safe-area-inset-top))) 0 100px; transform: none;
-  }
-  .kd-crawl:not(.kd-crawl-reduced) .kd-crawl-copy { font-size: clamp(22px, 4.4vw, 34px); }
-  .kd-crawl:not(.kd-crawl-reduced) .kd-crawl-hyperspace,
-  .kd-crawl:not(.kd-crawl-reduced) .kd-crawl-horizont { display: none; }
+  .kd-teppich-oeffnung, .kd-teppich-karte { transition: none !important; }
 }
-/* ================= ENDE MOMENT-EGGS: CRAWL & NECRONOMICON (B4) ================= */
