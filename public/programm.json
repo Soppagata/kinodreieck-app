@@ -1,9 +1,9 @@
 {
- "erstellt": "2026-07-18T10:45:47.881Z",
+ "erstellt": "2026-07-19T10:45:45.942Z",
  "quelle": "film.at API + nonstopkino.at",
  "zeitraum": {
-  "von": "2026-07-18",
-  "bis": "2026-07-31"
+  "von": "2026-07-19",
+  "bis": "2026-08-01"
  },
  "filme": [
   {
@@ -154,15 +154,6 @@
    ],
    "beschreibung": "Nachdem sie an einer Atemwegserkrankung gestorben ist, nimmt der Geist einer Mutter Besitz von einem Staubsauger, um ihren Mann zu beschützen, als dieser die gleichen Symptome zeigt.",
    "vorstellungen": [
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
-     "zeit": "2026-07-18T21:45:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
@@ -323,29 +314,6 @@
    "jahr_quelle": null
   },
   {
-   "film_at_id": 402498603,
-   "film_at_uri": "/filmat/all-we-imagine-as-light",
-   "titel": "All We Imagine As Light",
-   "jahr": 2023,
-   "genres": [
-    "Drama"
-   ],
-   "beschreibung": "In ihrem betörenden Cannes-Gewinner erzählt die indische Regisseurin Payal Kapadia von drei Frauen in Mumbai, die bei einem Ausflug zum Meer Raum für ihre Wünsche finden.",
-   "vorstellungen": [
-    {
-     "kino": "Stadtkino Wien",
-     "kino_id": 400155420,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": "All We Imagine As Light",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 403145286,
    "film_at_uri": "/filmat/allegro-pastell",
    "titel": "Allegro Pastell",
@@ -356,42 +324,6 @@
    ],
    "beschreibung": "Sommer in Berlin, 2018: Tanja und Jerome, eine Autorin und ein Webdesigner Anfang dreißig, führen eine scheinbar perfekte Fernbeziehung. Zwischen schlaflosen Nächten in der Großstadt und Entschleunigung im beschaulichen Maintal tarieren die beiden immer wieder Nähe und Distanz. An ihrem 34. Geburtstag überkommt Tanja eine Ahnung der gemeinsamen Zukunft – eine, die geordnet und verlässlich wirkt. Aber ist es wirklich das, wonach sie sucht?",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Stadtkino Wien",
-     "kino_id": 400155420,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Votiv Kino",
      "kino_id": 400155261,
@@ -492,6 +424,15 @@
      "format": null,
      "tags": [],
      "im_abo": true
+    },
+    {
+     "kino": "Admiral Kino",
+     "kino_id": 400155696,
+     "zeit": "2026-08-01T20:15:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": true
     }
    ],
    "originaltitel": null,
@@ -587,24 +528,6 @@
    "beschreibung": "Der Film erzählt, wie die in einem mittelalterlichen Kloster erfundene Uhr den Takt unserer Arbeit, unserer Gesellschaft und unseres Lebens bestimmt.",
    "vorstellungen": [
     {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
      "kino": "Actors Studio",
      "kino_id": 400155537,
      "zeit": "2026-07-19T15:30:00+02:00",
@@ -655,33 +578,6 @@
    ],
    "beschreibung": "Mathias und Philippe machen eine Fahrradtour von der französischen Atlantikküste bis zum Schwarzen Meer. Der bewegende Film avancierte zum französischen Publikumsliebling!",
    "vorstellungen": [
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T16:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Filmhaus Kino Spittelberg",
-     "kino_id": 400156062,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "CineCenter",
      "kino_id": 400156059,
@@ -880,15 +776,6 @@
    "beschreibung": "Luca ist Influencerin. Seit sie denken kann, ist sie der Star des Family-Social-Media-Business&#039; ihrer Eltern und deren einziger Stolz. Als sich ihre Eltern entscheiden, ein weiteres Kind zu bekommen, ändert sich die Lage.",
    "vorstellungen": [
     {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
      "kino": "Votiv Kino",
      "kino_id": 400155261,
      "zeit": "2026-07-21T18:30:00+02:00",
@@ -925,7 +812,7 @@
     {
      "kino": "Autokino Wien",
      "kino_id": 400156200,
-     "zeit": "2026-07-18T21:10:00+02:00",
+     "zeit": "2026-07-25T22:05:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -945,186 +832,6 @@
    ],
    "beschreibung": "Nach dem weltweiten Erfolg des Kinodebüts von Regisseur Kane Parsons kommt eine erweiterte Fassung mit 16 Minuten Bonusmaterial in die Kinos.",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T18:20:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T19:10:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T19:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T21:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Burg Kino",
      "kino_id": 400156383,
@@ -1804,15 +1511,6 @@
     {
      "kino": "Admiral Kino",
      "kino_id": 400155696,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Admiral Kino",
-     "kino_id": 400155696,
      "zeit": "2026-07-28T20:30:00+02:00",
      "fassung": "OmU",
      "format": null,
@@ -1909,15 +1607,6 @@
     {
      "kino": "Schikaneder",
      "kino_id": 400156092,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Schikaneder",
-     "kino_id": 400156092,
      "zeit": "2026-07-20T21:15:00+02:00",
      "fassung": "OmdU",
      "format": null,
@@ -1983,6 +1672,15 @@
      "format": null,
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Metro Kinokulturhaus",
+     "kino_id": 400155387,
+     "zeit": "2026-08-01T18:45:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Amarga Navidad",
@@ -2001,15 +1699,6 @@
    ],
    "beschreibung": "Ein eben aus dem Gefängnis entlassener Sträfling und eine abenteuerlustige junge Frau ziehen in den 20 Jahren durch den Südwesten der USA und verüben eine Reihe gewalttätiger Überfälle.",
    "vorstellungen": [
-    {
-     "kino": "Open Air Augartenspitz",
-     "kino_id": 400156134,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Metro Kinokulturhaus",
      "kino_id": 400155387,
@@ -2060,31 +1749,19 @@
      "format": null,
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Metro Kinokulturhaus",
+     "kino_id": 400155387,
+     "zeit": "2026-08-01T21:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Boogie Nights",
    "jahr_quelle": "film.at"
-  },
-  {
-   "film_at_id": 403166089,
-   "film_at_uri": "/filmat/brueder-0",
-   "titel": "Brüder",
-   "jahr": null,
-   "genres": [],
-   "beschreibung": null,
-   "vorstellungen": [
-    {
-     "kino": "Open Air Augartenspitz",
-     "kino_id": 400156134,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": null,
-   "jahr_quelle": null
   },
   {
    "film_at_id": 403093122,
@@ -2430,30 +2107,6 @@
    "jahr_quelle": null
   },
   {
-   "film_at_id": 400177884,
-   "film_at_uri": "/filmat/colors",
-   "titel": "Colors - Farben der Gewalt",
-   "jahr": 1988,
-   "genres": [
-    "Drama",
-    "Krimi"
-   ],
-   "beschreibung": "Colors ist ein Spielfilm, weil eine Dokumentation nie so direkt vom Leben der «street gangs» in Los Angeles hätte berichten können.",
-   "vorstellungen": [
-    {
-     "kino": "Gartenbaukino",
-     "kino_id": 400155336,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": "Colors",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 403113138,
    "film_at_uri": "/filmat/comeback-der-liebe",
    "titel": "Comeback der Liebe",
@@ -2560,15 +2213,6 @@
     {
      "kino": "Actors Studio",
      "kino_id": 400155537,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
      "zeit": "2026-07-20T18:00:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -2589,29 +2233,6 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 400180368,
-   "film_at_uri": "/filmat/la_strada",
-   "titel": "Das Lied der Straße (1954)",
-   "jahr": 1954,
-   "genres": [
-    "Drama"
-   ],
-   "beschreibung": "Mit dieser poetisch-bizarren Tragödie gelang Fellini der internationale Durchbruch.",
-   "vorstellungen": [
-    {
-     "kino": "Bellaria Kino",
-     "kino_id": 400155699,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": "La Strada",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 403172826,
    "film_at_uri": "/filmat/dastaar",
    "titel": "Dastaar",
@@ -2621,15 +2242,6 @@
    ],
    "beschreibung": "Im England des Jahres 1980 setzt sich ein indischer Immigrant, der bei einer rassistischen Attacke geliebte Personen verloren hat, radikal zur Wehr",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
@@ -2682,24 +2294,6 @@
    ],
    "beschreibung": "Als Ryland Grace erwacht, muss er feststellen, dass er ganz allein ist. Er ist anscheinend der einzige Überlebende einer Raumfahrtmission, Millionen Kilometer von zu Hause entfernt, auf einem Flug ins Tau-Ceti-Sternsystem.",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Apollo",
      "kino_id": 400156086,
@@ -2779,15 +2373,6 @@
    ],
    "beschreibung": "Ein Autor von Trivialromanen sucht im Wien der Nachkriegszeit seinen verschollenen Freund. Er findet einen Verbrecher und Arzneienschmuggler.",
    "vorstellungen": [
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Burg Kino",
      "kino_id": 400156383,
@@ -3015,87 +2600,6 @@
    ],
    "beschreibung": "Neue Galaxien. Neue Freunde. Yoshi schließt sich dem Abenteuer an!",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
@@ -3418,51 +2922,6 @@
    "beschreibung": "Miranda Priestly navigiert ihre Karriere inmitten des Niedergangs des traditionellen Zeitschriftenwesens.",
    "vorstellungen": [
     {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-19T15:00:00+02:00",
@@ -3677,6 +3136,15 @@
      "format": null,
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-26T21:25:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "The Devil Wears Prada 2",
@@ -3781,31 +3249,6 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 400204392,
-   "film_at_uri": "/filmat/der_wei_e_hai",
-   "titel": "Der weiße Hai",
-   "jahr": 1975,
-   "genres": [
-    "Drama",
-    "Horror",
-    "Kultfilme"
-   ],
-   "beschreibung": "Ein Weißer Hai terrorisiert eine Badeinsel an der amerikanischen Atlantikküste.",
-   "vorstellungen": [
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": "Jaws",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 403138319,
    "film_at_uri": "/filmat/der-wunderweltenbaum",
    "titel": "Der Wunderweltenbaum",
@@ -3817,24 +3260,6 @@
    ],
    "beschreibung": "Die zeitlose Geschichte von Erfolgsautorin Enid Blyton verzaubert als großes Familien-Abenteuer für die Kinoleinwand.",
    "vorstellungen": [
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
@@ -3876,29 +3301,6 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 403170587,
-   "film_at_uri": "/filmat/dhamaal-4",
-   "titel": "Dhamaal 4",
-   "jahr": 2026,
-   "genres": [
-    "Komödie"
-   ],
-   "beschreibung": "Was als Schatzsuche beginnt, wird bald zu einer wilden Achterbahnfahrt voller urkomischer Missgeschicke.",
-   "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T21:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    }
-   ],
-   "originaltitel": "Dhamaal 4",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 402982094,
    "film_at_uri": "/filmat/diamanti",
    "titel": "Diamanti",
@@ -3909,15 +3311,6 @@
    ],
    "beschreibung": "18 Frauen. Ein römisches Atelier in den 1970er Jahre. Ein fantastisches Kleid, das genäht werden soll.",
    "vorstellungen": [
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
-     "zeit": "2026-07-18T19:15:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
@@ -3996,24 +3389,6 @@
    ],
    "beschreibung": "Inspiriert von einer wahren Geschichte erzählt der Film von zwei Fremden, die auf dem Jakobsweg nicht nur zueinanderfinden, sondern auch zu sich selbst",
    "vorstellungen": [
-    {
-     "kino": "De France",
-     "kino_id": 400156389,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "CineCenter",
      "kino_id": 400156059,
@@ -4153,15 +3528,6 @@
     {
      "kino": "Lugner Kino City",
      "kino_id": 400155669,
-     "zeit": "2026-07-18T14:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
      "zeit": "2026-07-19T14:15:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -4226,60 +3592,6 @@
    ],
    "beschreibung": "Die bewegende Geschichte eines kleinen Jungen, der in einem Sandsturm den Anschluss an seine Familie und Karawane verliert und fortan inmitten einer Herde Straußen aufwächst.",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
@@ -4515,6 +3827,15 @@
      "format": null,
      "tags": [],
      "im_abo": true
+    },
+    {
+     "kino": "Metro Kinokulturhaus",
+     "kino_id": 400155387,
+     "zeit": "2026-08-01T20:00:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Les amants du Pont-Neuf",
@@ -4532,591 +3853,6 @@
    ],
    "beschreibung": "Christopher Nolan folgt Odysseus, dem legendären griechischen König von Ithaka, auf seiner langen und gefährlichen Heimreise nach dem Trojanischen Krieg.",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T13:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T15:10:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Filmcasino",
-     "kino_id": 400156377,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": "4D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T16:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T19:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:15:00+02:00",
-     "fassung": "DF",
-     "format": "4D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Filmcasino",
-     "kino_id": 400156377,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Apollo",
      "kino_id": 400156086,
@@ -5190,6 +3926,15 @@
      "im_abo": true
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T14:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
      "zeit": "2026-07-19T14:00:00+02:00",
@@ -5242,6 +3987,15 @@
      "format": null,
      "tags": [],
      "im_abo": true
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T15:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     },
     {
      "kino": "Artis International",
@@ -5460,6 +4214,15 @@
      "im_abo": true
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T17:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
      "zeit": "2026-07-19T17:30:00+02:00",
@@ -5523,6 +4286,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T18:30:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Artis International",
      "kino_id": 400155357,
      "zeit": "2026-07-19T18:30:00+02:00",
@@ -5535,6 +4307,15 @@
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-19T18:45:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T19:00:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -5739,6 +4520,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T15:30:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-20T15:30:00+02:00",
@@ -5751,6 +4541,15 @@
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-20T15:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T16:00:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -6009,6 +4808,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T19:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-20T19:00:00+02:00",
@@ -6023,6 +4831,15 @@
      "zeit": "2026-07-20T19:15:00+02:00",
      "fassung": "DF",
      "format": "4D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T19:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
      "tags": [],
      "im_abo": false
     },
@@ -6216,6 +5033,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T15:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-21T15:30:00+02:00",
@@ -6327,6 +5153,15 @@
      "kino": "Lugner Kino City",
      "kino_id": 400155669,
      "zeit": "2026-07-21T16:30:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T16:45:00+02:00",
      "fassung": "OV",
      "format": null,
      "tags": [],
@@ -6477,6 +5312,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T19:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-21T19:00:00+02:00",
@@ -6574,6 +5418,15 @@
      "format": null,
      "tags": [],
      "im_abo": true
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T20:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     },
     {
      "kino": "Artis International",
@@ -6693,6 +5546,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T15:30:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-22T15:30:00+02:00",
@@ -6705,6 +5567,15 @@
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-22T15:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T16:00:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -6954,6 +5825,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T19:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-22T19:00:00+02:00",
@@ -6968,6 +5848,15 @@
      "zeit": "2026-07-22T19:15:00+02:00",
      "fassung": "DF",
      "format": "4D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T19:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
      "tags": [],
      "im_abo": false
     },
@@ -8251,87 +7140,6 @@
    "beschreibung": "Steven Spielberg legt uns folgene Fragen vor: Was wäre, wenn du herausfinden würdest, dass wir nicht allein sind? Angenommen, jemand könnte dir das beweisen: Hättest du Angst?",
    "vorstellungen": [
     {
-     "kino": "Gartenbaukino",
-     "kino_id": 400155336,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T15:20:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T21:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
      "zeit": "2026-07-19T16:15:00+02:00",
@@ -8847,15 +7655,6 @@
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
      "zeit": "2026-07-19T17:15:00+02:00",
      "fassung": "OmdU",
      "format": null,
@@ -8899,51 +7698,6 @@
    ],
    "beschreibung": "Ein fesselndes Kammerspiel mit präzisem Blick auf zwischenmenschliche Dynamiken, das mit überraschenden Wendungen und emotionaler Intensität überzeugt.",
    "vorstellungen": [
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "De France",
-     "kino_id": 400156389,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
@@ -9128,6 +7882,15 @@
      "format": null,
      "tags": [],
      "im_abo": true
+    },
+    {
+     "kino": "Admiral Kino",
+     "kino_id": 400155696,
+     "zeit": "2026-08-01T18:15:00+02:00",
+     "fassung": "OmeU",
+     "format": null,
+     "tags": [],
+     "im_abo": true
     }
    ],
    "originaltitel": "Pierrot le fou / Il bandito delle 11",
@@ -9144,150 +7907,6 @@
    ],
    "beschreibung": "Für eine verwitwete Frau verwandelt sich ein Familientreffen auf einem abgelegenen Anwesen in den blanken Horror.",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T22:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": "4D",
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
@@ -9346,6 +7965,15 @@
      "kino": "Cineplexx Wienerberg",
      "kino_id": 400155891,
      "zeit": "2026-07-19T20:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T20:15:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -9842,15 +8470,6 @@
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
      "zeit": "2026-07-20T17:30:00+02:00",
      "fassung": "OmdU",
      "format": null,
@@ -10002,6 +8621,29 @@
    "jahr_quelle": "film.at"
   },
   {
+   "film_at_id": 400208373,
+   "film_at_uri": "/filmat/geheimnisse_einer_seele",
+   "titel": "Geheimnisse einer Seele",
+   "jahr": 1926,
+   "genres": [
+    "Drama"
+   ],
+   "beschreibung": "Ein Chemieprofessor leidet an pathologischer Angst vor scharfen Gegenständen und an Impotenz. Den Ärzten gelingt es, den Patienten zu heilen, als sie ihm erklären, woher sein &quot;Messerkomplex&quot; kommt.",
+   "vorstellungen": [
+    {
+     "kino": "Open Air Augartenspitz",
+     "kino_id": 400156134,
+     "zeit": "2026-08-01T21:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": true
+    }
+   ],
+   "originaltitel": null,
+   "jahr_quelle": "film.at"
+  },
+  {
    "film_at_id": 400280352,
    "film_at_uri": "/filmat/gimme-danger",
    "titel": "Gimme Danger",
@@ -10038,96 +8680,6 @@
    ],
    "beschreibung": "In dieser überaus charmanten und amüsanten Krimi-Komödie erleben wir Hugh Jackman als Schäfer, dessen Tiere Detektivarbeit leisten.",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T14:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T20:35:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
@@ -10550,78 +9102,6 @@
    "beschreibung": "Der oscarnominierte Regisseur Jan Komasa legt einen provokanten Gesellschaftsthriller vor, der bereits mit Kubricks &quot;A Clockwork Orange&quot; verglichen wurde.",
    "vorstellungen": [
     {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
      "kino": "CineCenter",
      "kino_id": 400156059,
      "zeit": "2026-07-19T15:45:00+02:00",
@@ -10887,55 +9367,28 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 403124340,
-   "film_at_uri": "/filmat/good-luck-have-fun-dont-die",
-   "titel": "Good Luck, Have Fun, Don't Die",
-   "jahr": 2026,
+   "film_at_id": 401229303,
+   "film_at_uri": "/filmat/grease-0",
+   "titel": "Grease",
+   "jahr": 1978,
    "genres": [
-    "Action",
-    "Abenteuer",
-    "Science Fiction",
+    "Liebesfilm",
     "Komödie"
    ],
-   "beschreibung": "Ein Zeitreisender aus der Zukunft motiviert die Gäste eines LA-Diners zu einer nächtlichen Mission, die das Schicksal der Welt entscheiden könnte.",
+   "beschreibung": "In den 50ern: Sandy und Danny – das ist eine wunderschöne Urlaubsliebe. Doch die Ferienzeit geht zu Ende und die beiden müssen sich schweren Herzens trennen. Doch dann hat Sandy Glück und sie gerät genau an Dannys High School. Doch in der Schule lernt sie einen anderen Danny kennen – nämlich als den Anführer der T-Birds, der niemals nur ein Mädchen lieben könnte. Enttäuscht schließt sich Sandy einer Mädchengruppe, den Pink Ladies an, doch auch hier kommt ihr prüdes Sandra-Dee-Image nicht an. Es ist Zeit für eine Veränderung und es ist Zeit, Danny zu zeigen, was ihm entgeht.",
    "vorstellungen": [
     {
-     "kino": "Hauptbücherei Wien",
-     "kino_id": 400156296,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [
-      "Kino am Dach 2026"
-     ],
-     "im_abo": false
-    }
-   ],
-   "originaltitel": "Good Luck, Have Fun, Don&#039;t Die",
-   "jahr_quelle": "film.at"
-  },
-  {
-   "film_at_id": 403170055,
-   "film_at_uri": "/filmat/gran-bankrott-die-telenovela",
-   "titel": "Gran Bankrott - Die Telenovela",
-   "jahr": null,
-   "genres": [],
-   "beschreibung": null,
-   "vorstellungen": [
-    {
-     "kino": "Open Air am Karlsplatz",
-     "kino_id": 400156695,
-     "zeit": "2026-07-18T21:00:00+02:00",
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-24T21:45:00+02:00",
      "fassung": "DF",
      "format": null,
-     "tags": [
-      "Sommerkino"
-     ],
+     "tags": [],
      "im_abo": false
     }
    ],
-   "originaltitel": null,
-   "jahr_quelle": null
+   "originaltitel": "Grease",
+   "jahr_quelle": "film.at"
   },
   {
    "film_at_id": 403118284,
@@ -11071,15 +9524,6 @@
     {
      "kino": "Admiral Kino",
      "kino_id": 400155696,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Admiral Kino",
-     "kino_id": 400155696,
      "zeit": "2026-07-26T20:30:00+02:00",
      "fassung": "OmU",
      "format": null,
@@ -11103,15 +9547,6 @@
    ],
    "beschreibung": "In Disney·Pixars Animationsspaß zeigen sich Tiere von einer neuen Seite - das garantiert knuddelige Charaktere und berührendenErkenntnisse.",
    "vorstellungen": [
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
@@ -11141,32 +9576,6 @@
     }
    ],
    "originaltitel": "Hoppers",
-   "jahr_quelle": "film.at"
-  },
-  {
-   "film_at_id": 403008331,
-   "film_at_uri": "/filmat/hysteria-0",
-   "titel": "Hysteria",
-   "jahr": 2025,
-   "genres": [
-    "Thriller",
-    "Horror"
-   ],
-   "beschreibung": "Ein Filmdreh nimmt eine dunkle Wendung, als die Verbrennung eines Korans das Team in Aufruhr versetzt. Die Praktikantin Elif wird in ein gefährliches Spiel aus Geheimnissen und Lügen hineingezogen.",
-   "vorstellungen": [
-    {
-     "kino": "Volxkino am Dornerplatz",
-     "kino_id": 400156341,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [
-      "Sommerkino"
-     ],
-     "im_abo": false
-    }
-   ],
-   "originaltitel": "Hysteria",
    "jahr_quelle": "film.at"
   },
   {
@@ -11247,105 +9656,6 @@
    ],
    "beschreibung": "Die kraftvolle Interpretation von Sandra Hüller und meisterhafte Archivmontagen ergeben ein filmisches Porträt zum 100. Geburtstag von Ingeborg Bachmann.",
    "vorstellungen": [
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "BSL Breitenseer Lichtspiele",
-     "kino_id": 400156416,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Bellaria Kino",
-     "kino_id": 400155699,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
@@ -11712,15 +10022,6 @@
    "beschreibung": "Innovative Ansätze für nachhaltige Landwirtschaft und Insektenschutz in atemberaubenden Makroaufnahmen einer oftmals unbekannten Welt.",
    "vorstellungen": [
     {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
      "zeit": "2026-07-19T15:45:00+02:00",
@@ -11817,60 +10118,6 @@
    ],
    "beschreibung": "Johnny Knoxville und seine Gang kehren für einen letzten Auftritt auf der großen Leinwand zurück.",
    "vorstellungen": [
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
@@ -12072,6 +10319,15 @@
      "kino": "Urania Kino Wien",
      "kino_id": 400156206,
      "zeit": "2026-07-19T18:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": true
+    },
+    {
+     "kino": "Urania Kino Wien",
+     "kino_id": 400156206,
+     "zeit": "2026-07-31T18:00:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -12358,15 +10614,6 @@
    "beschreibung": "Sophie Marceau ist zurück in der Fortsetzung des Kultfilms. Die erwachsenen Kinder konfrontieren Anne mit neuen Herausforderungen.",
    "vorstellungen": [
     {
-     "kino": "De France",
-     "kino_id": 400156389,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
      "kino": "Actors Studio",
      "kino_id": 400155537,
      "zeit": "2026-07-19T17:15:00+02:00",
@@ -12543,60 +10790,6 @@
    ],
    "beschreibung": "He-Man soll den Planeten Eternia gegen den finsteren Skeletor verteidigen und die Geheimnisse von Grayskull bewahren.",
    "vorstellungen": [
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Artis International",
      "kino_id": 400155357,
@@ -12822,33 +11015,6 @@
     {
      "kino": "CineCenter",
      "kino_id": 400156059,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
      "zeit": "2026-07-19T15:15:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -12989,42 +11155,6 @@
    ],
    "beschreibung": "Werden Conni und ihre Freunde es gemeinsam schaffen, dass Kranich Klaus rechtzeitig gesund wird, um mit den Zugvögeln nach Süden zu fliegen?",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T14:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Apollo",
      "kino_id": 400156086,
@@ -13185,78 +11315,6 @@
    ],
    "beschreibung": "Er ist einer der einflussreichsten Künstler aller Zeiten – der King of Pop. Das Portrait eines Ausnahmekünstlers, dessen Musik die Welt bewegt und jede Generation bis heute inspiriert hat.",
    "vorstellungen": [
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
@@ -13533,492 +11591,6 @@
    "beschreibung": "In ihrem neuen Kinoabenteuer wollen die Minions Hollywood erobern und müssen die Erde vor dem Monster-Chaos retten, das sie selbst angerichtet haben.",
    "vorstellungen": [
     {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T17:25:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Autokino Wien",
-     "kino_id": 400156200,
-     "zeit": "2026-07-18T21:10:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
      "zeit": "2026-07-19T12:30:00+02:00",
@@ -14067,6 +11639,15 @@
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
      "zeit": "2026-07-19T14:15:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T14:30:00+02:00",
      "fassung": "DF",
      "format": null,
      "tags": [],
@@ -14238,6 +11819,15 @@
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-19T16:30:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T16:45:00+02:00",
      "fassung": "DF",
      "format": "3D",
      "tags": [],
@@ -14577,6 +12167,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T16:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
      "zeit": "2026-07-20T16:00:00+02:00",
@@ -14735,6 +12334,15 @@
      "zeit": "2026-07-20T17:30:00+02:00",
      "fassung": "DF",
      "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T18:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
      "tags": [],
      "im_abo": false
     },
@@ -14991,6 +12599,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T16:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
      "zeit": "2026-07-21T16:00:00+02:00",
@@ -15149,6 +12766,15 @@
      "zeit": "2026-07-21T17:30:00+02:00",
      "fassung": "DF",
      "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T18:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
      "tags": [],
      "im_abo": false
     },
@@ -15405,6 +13031,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T16:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
      "zeit": "2026-07-22T16:00:00+02:00",
@@ -15558,6 +13193,15 @@
      "im_abo": false
     },
     {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T18:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-22T18:00:00+02:00",
@@ -15671,6 +13315,15 @@
      "zeit": "2026-07-22T19:30:00+02:00",
      "fassung": "DF",
      "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-22T20:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
      "tags": [],
      "im_abo": false
     },
@@ -16078,6 +13731,15 @@
      "format": "3D",
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-25T21:25:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Minions &amp; Monsters",
@@ -16096,15 +13758,6 @@
    ],
    "beschreibung": "Miss Moxy hält sich für etwas Besseres. Gemeinsam mit ihren Katzenfreunden schaut sie auf alle herab, die „anders“ sind. Doch dann ändert sich alles.",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
@@ -16218,15 +13871,6 @@
    ],
    "beschreibung": "Ein intensiver und tief menschlicher Blick auf die Verantwortung, die Menschen in medizinischen Berufen auf sich laden müssen. Preisgekröntes Spielfilmdebüt der dänischen Filmemacherin Zinnini Elkington",
    "vorstellungen": [
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Lugner Kino City",
      "kino_id": 400155669,
@@ -16393,15 +14037,6 @@
    "beschreibung": "Das historische Drama widmet sich ebenjenen Prozessen, in dem der Psychiater Douglas Kelley (Rami Malek) auf den Nazi Hermann Göring (Russell Crowe) trifft, der als Hitlers rechte Hand galt.",
    "vorstellungen": [
     {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
      "zeit": "2026-07-20T14:45:00+02:00",
@@ -16451,204 +14086,6 @@
    ],
    "beschreibung": "Als der hoffnungslose Romantiker Bear einen magischen Gegenstand nutzt, damit sein Crush endlich Gefühle für ihn entwickelt, muss er feststellen, dass manche Wünsche einen unheimlichen Tribut fordern.",
    "vorstellungen": [
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Burg Kino",
-     "kino_id": 400156383,
-     "zeit": "2026-07-18T20:50:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Autokino Wien",
-     "kino_id": 400156200,
-     "zeit": "2026-07-18T21:55:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T22:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Filmhaus Kino Spittelberg",
-     "kino_id": 400156062,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
@@ -17442,6 +14879,24 @@
      "im_abo": false
     },
     {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-24T22:05:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-26T21:55:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
      "kino": "Hauptbücherei Wien",
      "kino_id": 400156296,
      "zeit": "2026-07-31T21:00:00+02:00",
@@ -17466,15 +14921,6 @@
    ],
    "beschreibung": "Perverse Spiele, Rache und Tod sind die schockierenden Themen, die sich durch OBSESSION – TÖDLICHE SPIELE ziehen.",
    "vorstellungen": [
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "English Cinema Haydn",
      "kino_id": 400156098,
@@ -17520,15 +14966,6 @@
     {
      "kino": "Actors Studio",
      "kino_id": 400155537,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Actors Studio",
-     "kino_id": 400155537,
      "zeit": "2026-07-20T20:00:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -17560,15 +14997,6 @@
    ],
    "beschreibung": "Die zweifache Oscar-Preisträgerin Jodie Foster ist zurück auf der großen Leinwand und zieht alle Register ihres komödiantischen Könnens.",
    "vorstellungen": [
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "CineCenter",
      "kino_id": 400156059,
@@ -17885,31 +15313,6 @@
    "jahr_quelle": null
   },
   {
-   "film_at_id": 400229829,
-   "film_at_uri": "/filmat/repo_man",
-   "titel": "Repo Man",
-   "jahr": 1984,
-   "genres": [
-    "Komödie",
-    "Independent",
-    "Science Fiction"
-   ],
-   "beschreibung": "Teilzeit-Punk Otto muss sich nach dem Verlust seines Jobs, als Repoman, einem dieser berüchtigten, privaten Autopfänder verdingen.",
-   "vorstellungen": [
-    {
-     "kino": "Gartenbaukino",
-     "kino_id": 400155336,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": null,
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 402077194,
    "film_at_uri": "/filmat/resurrection",
    "titel": "Resurrection",
@@ -17968,28 +15371,29 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 400239009,
-   "film_at_uri": "/filmat/robocop",
-   "titel": "Robocop (1987)",
-   "jahr": 1987,
+   "film_at_id": 400171104,
+   "film_at_uri": "/filmat/rom_offene_stadt",
+   "titel": "Rom, offene Stadt",
+   "jahr": 1945,
    "genres": [
-    "Thriller",
-    "Science Fiction",
-    "Action"
+    "Drama",
+    "Kriegsfilm / Antikriegsfilm"
    ],
-   "beschreibung": "Die Mensch-Maschine Robocop erweist sich als der perfekte und absolut loyale Gesetzeshüter - bis sie außer Kontrolle gerät...",
+   "beschreibung": "Rome, 1944: Giorgio Manfredi, Mitglied der resistenza, wird von den Nazis entlarvt.",
    "vorstellungen": [
     {
-     "kino": "Metro Kinokulturhaus",
-     "kino_id": 400155387,
-     "zeit": "2026-07-18T20:00:00+02:00",
+     "kino": "Volxkino Baumgartner Höhe",
+     "kino_id": 403043469,
+     "zeit": "2026-08-01T20:30:00+02:00",
      "fassung": "OmU",
      "format": null,
-     "tags": [],
-     "im_abo": true
+     "tags": [
+      "Sommerkino"
+     ],
+     "im_abo": false
     }
    ],
-   "originaltitel": "Robocop (1987)",
+   "originaltitel": "Roma, città aperta",
    "jahr_quelle": "film.at"
   },
   {
@@ -18002,15 +15406,6 @@
    ],
    "beschreibung": "Für diese Darstellung wurde Sandra Hüller bei der 76. Berlinale mit dem Silbernen Bären für die Beste Schauspielerische Leistung in einer Hauptrolle ausgezeichnet.",
    "vorstellungen": [
-    {
-     "kino": "Votiv Kino",
-     "kino_id": 400155261,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "De France",
      "kino_id": 400156389,
@@ -18060,15 +15455,6 @@
    ],
    "beschreibung": "Die Liebesgeschichte zwischen Sakr und Canaria stößt auf viele Hindernisse und komische Situationen.",
    "vorstellungen": [
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Lugner Kino City",
      "kino_id": 400155669,
@@ -18147,78 +15533,6 @@
    ],
    "beschreibung": "Sechsundzwanzig Jahre nachdem sie einem verdächtig vertrauten maskierten Mörder entkommen sind, gerät die alte Truppe erneut ins Visier des Killers.",
    "vorstellungen": [
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T21:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T21:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
@@ -18416,33 +15730,28 @@
      "format": null,
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-25T21:45:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-26T21:40:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Scary Movie",
    "jahr_quelle": "film.at"
-  },
-  {
-   "film_at_id": 403171844,
-   "film_at_uri": "/filmat/shawn-mendes-for-friends-and-family-only",
-   "titel": "Shawn Mendes – For Friends And Family Only",
-   "jahr": null,
-   "genres": [],
-   "beschreibung": null,
-   "vorstellungen": [
-    {
-     "kino": "Rathausplatz Wien",
-     "kino_id": 400156029,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [
-      "Sommerkino"
-     ],
-     "im_abo": false
-    }
-   ],
-   "originaltitel": "Shawn Mendes – For Friends And Family Only",
-   "jahr_quelle": null
   },
   {
    "film_at_id": 400189290,
@@ -18527,6 +15836,27 @@
    "jahr_quelle": "film.at"
   },
   {
+   "film_at_id": 400302105,
+   "film_at_uri": "/filmat/sneak-preview",
+   "titel": "sneak preview",
+   "jahr": null,
+   "genres": [],
+   "beschreibung": "Eine Hunger.Macht.Profite.-Vorführung für Fortgeschrittene :)",
+   "vorstellungen": [
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-21T20:15:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    }
+   ],
+   "originaltitel": null,
+   "jahr_quelle": null
+  },
+  {
    "film_at_id": 403079375,
    "film_at_uri": "/filmat/so-klingt-das-leben",
    "titel": "So klingt das Leben",
@@ -18536,42 +15866,6 @@
    ],
    "beschreibung": "Warmherziges Kino aus Spanien, voller Humor und Lebensfreude.",
    "vorstellungen": [
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Filmhaus Kino Spittelberg",
-     "kino_id": 400156062,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Metro Kinokulturhaus",
-     "kino_id": 400155387,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Metro Kinokulturhaus",
      "kino_id": 400155387,
@@ -18712,29 +16006,6 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 400178304,
-   "film_at_uri": "/filmat/sombre",
-   "titel": "Sombre",
-   "jahr": 1998,
-   "genres": [
-    "Drama"
-   ],
-   "beschreibung": "Der Protagonist des Films ist ein Vergewaltiger und Mörder von Sexarbeiterinnen in der französischen Einöde.",
-   "vorstellungen": [
-    {
-     "kino": "Gartenbaukino",
-     "kino_id": 400155336,
-     "zeit": "2026-07-18T22:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    }
-   ],
-   "originaltitel": "Sombre",
-   "jahr_quelle": "film.at"
-  },
-  {
    "film_at_id": 403166737,
    "film_at_uri": "/filmat/sophie-passmann-pick-me-girls",
    "titel": "Sophie Passmann: Pick Me Girls",
@@ -18744,15 +16015,6 @@
    ],
    "beschreibung": "Mit scharfem Witz und Ehrlichkeit erzählt Passmann von Selbstverleugnung, dem Bedürfnis nach männlicher Anerkennung – und davon, wie sie selbst mittendrin steckte.",
    "vorstellungen": [
-    {
-     "kino": "Filmcasino",
-     "kino_id": 400156377,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Filmcasino",
      "kino_id": 400156377,
@@ -19356,6 +16618,267 @@
      "format": "3D",
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T14:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex SCN",
+     "kino_id": 400156140,
+     "zeit": "2026-07-31T14:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T16:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T16:30:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex SCN",
+     "kino_id": 400156140,
+     "zeit": "2026-07-31T16:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Wienerberg",
+     "kino_id": 400155891,
+     "zeit": "2026-07-31T17:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Donau Zentrum",
+     "kino_id": 400155396,
+     "zeit": "2026-07-31T17:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Wien Auhof",
+     "kino_id": 400155783,
+     "zeit": "2026-07-31T17:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T17:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex SCN",
+     "kino_id": 400156140,
+     "zeit": "2026-07-31T17:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-31T17:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Artis International",
+     "kino_id": 400155357,
+     "zeit": "2026-07-31T17:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Millennium City",
+     "kino_id": 400155264,
+     "zeit": "2026-07-31T17:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Village Cinema Wien Mitte",
+     "kino_id": 400156401,
+     "zeit": "2026-07-31T17:45:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Wienerberg",
+     "kino_id": 400155891,
+     "zeit": "2026-07-31T19:00:00+02:00",
+     "fassung": "OV",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T19:00:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Donau Zentrum",
+     "kino_id": 400155396,
+     "zeit": "2026-07-31T19:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T19:30:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex SCN",
+     "kino_id": 400156140,
+     "zeit": "2026-07-31T19:30:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T19:45:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Wienerberg",
+     "kino_id": 400155891,
+     "zeit": "2026-07-31T20:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Donau Zentrum",
+     "kino_id": 400155396,
+     "zeit": "2026-07-31T20:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex im Gasometer",
+     "kino_id": 400156188,
+     "zeit": "2026-07-31T20:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Hollywood Megaplex SCN",
+     "kino_id": 400156140,
+     "zeit": "2026-07-31T20:15:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-31T20:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Artis International",
+     "kino_id": 400155357,
+     "zeit": "2026-07-31T20:30:00+02:00",
+     "fassung": "OV",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Cineplexx Millennium City",
+     "kino_id": 400155264,
+     "zeit": "2026-07-31T20:30:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Lugner Kino City",
+     "kino_id": 400155669,
+     "zeit": "2026-07-31T20:30:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Village Cinema Wien Mitte",
+     "kino_id": 400156401,
+     "zeit": "2026-07-31T20:45:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Spider-Man: Brand New Day",
@@ -19373,42 +16896,6 @@
    ],
    "beschreibung": "Der legendäre mandalorianische Kopfgeldjäger Din Djarin und sein junger Lehrling Grogu erleben erstmals ein Abenteuer in Spielfilmlänge.",
    "vorstellungen": [
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Lugner Kino City",
      "kino_id": 400155669,
@@ -19564,6 +17051,33 @@
    "jahr_quelle": "film.at"
   },
   {
+   "film_at_id": 400211916,
+   "film_at_uri": "/filmat/stuermische_leidenschaft",
+   "titel": "Stürmische Leidenschaft",
+   "jahr": 1992,
+   "genres": [
+    "Drama",
+    "Romanze",
+    "Literaturverfilmung"
+   ],
+   "beschreibung": "Verfilmung des Romans von Emily Brontë mit Ralph Fiennes und Juliette Binoche in den Hauptrollen.",
+   "vorstellungen": [
+    {
+     "kino": "Hauptbücherei Wien",
+     "kino_id": 400156296,
+     "zeit": "2026-08-01T20:30:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [
+      "Kino am Dach 2026"
+     ],
+     "im_abo": false
+    }
+   ],
+   "originaltitel": "Wuthering Heights",
+   "jahr_quelle": "film.at"
+  },
+  {
    "film_at_id": 403164351,
    "film_at_uri": "/filmat/supergirl-woman-of-tomorrow",
    "titel": "Supergirl: Woman of Tomorrow",
@@ -19575,78 +17089,6 @@
    ],
    "beschreibung": "Kara Zor-El – alias Supergirl – sieht sich mit einem unerwarteten und skrupellosen Gegner konfrontiert.",
    "vorstellungen": [
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T15:10:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Village Cinema Wien Mitte",
      "kino_id": 400156401,
@@ -19673,15 +17115,6 @@
      "format": null,
      "tags": [],
      "im_abo": true
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-19T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
     },
     {
      "kino": "Cineplexx Millennium City",
@@ -19952,6 +17385,15 @@
      "format": "3D",
      "tags": [],
      "im_abo": false
+    },
+    {
+     "kino": "Autokino Wien",
+     "kino_id": 400156200,
+     "zeit": "2026-07-24T21:15:00+02:00",
+     "fassung": "DF",
+     "format": null,
+     "tags": [],
+     "im_abo": false
     }
    ],
    "originaltitel": "Supergirl",
@@ -20034,6 +17476,30 @@
    "jahr_quelle": "film.at"
   },
   {
+   "film_at_id": 403039767,
+   "film_at_uri": "/filmat/the-chronology-of-water",
+   "titel": "The Chronology of Water",
+   "jahr": 2025,
+   "genres": [
+    "Drama",
+    "Liebesfilm"
+   ],
+   "beschreibung": "Das Regie-Debüt von Kristen Stewart ist eine Adaption des autobiografischen Bestsellers von Lidia Yuknavitch.",
+   "vorstellungen": [
+    {
+     "kino": "Open Air Augartenspitz",
+     "kino_id": 400156134,
+     "zeit": "2026-08-01T21:00:00+02:00",
+     "fassung": "OmU",
+     "format": null,
+     "tags": [],
+     "im_abo": true
+    }
+   ],
+   "originaltitel": "The Chronology of Water",
+   "jahr_quelle": "film.at"
+  },
+  {
    "film_at_id": 403160169,
    "film_at_uri": "/filmat/the-death-of-robin-hood",
    "titel": "The Death of Robin Hood",
@@ -20044,33 +17510,6 @@
    ],
    "beschreibung": "Der Film zeigt die letzten Tage des gesetzlosen Robin Hood - dargestellt durch Hugh Jackman.",
    "vorstellungen": [
-    {
-     "kino": "BSL Breitenseer Lichtspiele",
-     "kino_id": 400156416,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "BSL Breitenseer Lichtspiele",
      "kino_id": 400156416,
@@ -20171,15 +17610,6 @@
     {
      "kino": "Metro Kinokulturhaus",
      "kino_id": 400155387,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Metro Kinokulturhaus",
-     "kino_id": 400155387,
      "zeit": "2026-07-19T21:00:00+02:00",
      "fassung": "OmU",
      "format": null,
@@ -20201,33 +17631,6 @@
    ],
    "beschreibung": "Kampfkunststar Xie Miao hebt perfekt choreografierte Martial-Arts-Action auf ein neues Level.",
    "vorstellungen": [
-    {
-     "kino": "Schikaneder",
-     "kino_id": 400156092,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T22:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Schikaneder",
      "kino_id": 400156092,
@@ -20356,20 +17759,18 @@
    "jahr_quelle": "film.at"
   },
   {
-   "film_at_id": 402907467,
-   "film_at_uri": "/filmat/the-life-of-sean-delear",
-   "titel": "The Life of Sean DeLear",
-   "jahr": 2024,
-   "genres": [
-    "Dokumentarfilm"
-   ],
-   "beschreibung": "Aufgewachsen in einer schwarzen, religiösen Mittelklassefamilie, war Sean DeLear in den Achtziger- und Neunzigerjahren Teil, vielleicht gar energetisches Zentrum der hedonistischen, queeren Silver-Lake-Post-Punk-Szene in Los Angeles.",
+   "film_at_id": 403171860,
+   "film_at_uri": "/filmat/the-killers-live-at-the-royal-albert-hall",
+   "titel": "The Killers – Live At The Royal Albert Hall",
+   "jahr": null,
+   "genres": [],
+   "beschreibung": null,
    "vorstellungen": [
     {
-     "kino": "Open Air am Karlsplatz",
-     "kino_id": 400156695,
-     "zeit": "2026-07-18T21:00:00+02:00",
-     "fassung": "OmU",
+     "kino": "Rathausplatz Wien",
+     "kino_id": 400156029,
+     "zeit": "2026-08-01T21:00:00+02:00",
+     "fassung": "DF",
      "format": null,
      "tags": [
       "Sommerkino"
@@ -20377,8 +17778,8 @@
      "im_abo": false
     }
    ],
-   "originaltitel": "The Life of Sean DeLear",
-   "jahr_quelle": "film.at"
+   "originaltitel": "The Killers – Live At The Royal Albert Hall",
+   "jahr_quelle": null
   },
   {
    "film_at_id": 403137799,
@@ -20550,87 +17951,6 @@
    ],
    "beschreibung": "Ein Klavierstimmer entdeckt sein Talent zum Knacken von Tresoren, wodurch sein Leben auf den Kopf gestellt wird.",
    "vorstellungen": [
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Filmhaus Kino Spittelberg",
-     "kino_id": 400156062,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "De France",
-     "kino_id": 400156389,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
@@ -20936,15 +18256,6 @@
     {
      "kino": "De France",
      "kino_id": 400156389,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "De France",
-     "kino_id": 400156389,
      "zeit": "2026-07-19T17:45:00+02:00",
      "fassung": "OmU",
      "format": null,
@@ -21103,24 +18414,6 @@
    ],
    "beschreibung": "Was als klassische Verfolgungsjagd beginnt, eskaliert schnell zu einer weltumspannenden Schatzsuche.",
    "vorstellungen": [
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
@@ -21815,123 +19108,6 @@
    "beschreibung": "Realversion des Disney-Animationshits. Dwayne Johnson spielt Halbgott Maui, während Catherine Lagaʻaia als Titelfigur zu sehen ist.",
    "vorstellungen": [
     {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T14:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T16:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T18:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T19:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T19:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Cineplexx Donau Zentrum",
      "kino_id": 400155396,
      "zeit": "2026-07-19T12:45:00+02:00",
@@ -22489,339 +19665,6 @@
    "beschreibung": "Die junge Südseeinsulanerin Moana wird von Halbgott Maui unterstützt, als sie sich auf die Suche nach einer geheimnisvollen Insel begibt.",
    "vorstellungen": [
     {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T14:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T14:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T15:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T15:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T15:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T16:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T17:10:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T17:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T17:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T17:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "English Cinema Haydn",
-     "kino_id": 400156098,
-     "zeit": "2026-07-18T19:20:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wien Auhof",
-     "kino_id": 400155783,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Wienerberg",
-     "kino_id": 400155891,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:00:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T20:15:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Artis International",
-     "kino_id": 400155357,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Donau Zentrum",
-     "kino_id": 400155396,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex SCN",
-     "kino_id": 400156140,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": "3D",
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T21:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Cineplexx Millennium City",
      "kino_id": 400155264,
      "zeit": "2026-07-19T12:30:00+02:00",
@@ -22908,6 +19751,15 @@
      "zeit": "2026-07-19T15:00:00+02:00",
      "fassung": "DF",
      "format": "3D",
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-19T15:15:00+02:00",
+     "fassung": "DF",
+     "format": null,
      "tags": [],
      "im_abo": false
     },
@@ -23119,15 +19971,6 @@
      "im_abo": false
     },
     {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-19T20:15:00+02:00",
-     "fassung": "OV",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
      "kino": "Hollywood Megaplex SCN",
      "kino_id": 400156140,
      "zeit": "2026-07-19T20:30:00+02:00",
@@ -23331,6 +20174,15 @@
      "zeit": "2026-07-20T19:45:00+02:00",
      "fassung": "OV",
      "format": null,
+     "tags": [],
+     "im_abo": false
+    },
+    {
+     "kino": "Apollo",
+     "kino_id": 400156086,
+     "zeit": "2026-07-20T20:00:00+02:00",
+     "fassung": "DF",
+     "format": "3D",
      "tags": [],
      "im_abo": false
     },
@@ -24297,15 +21149,6 @@
     {
      "kino": "Hollywood Megaplex im Gasometer",
      "kino_id": 400156188,
-     "zeit": "2026-07-18T18:45:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Hollywood Megaplex im Gasometer",
-     "kino_id": 400156188,
      "zeit": "2026-07-19T19:45:00+02:00",
      "fassung": "OmU",
      "format": null,
@@ -24354,15 +21197,6 @@
    ],
    "beschreibung": "Für seine Darstellung des britischen Tourette-Aktivisten John Davidson in gewann Robert Aramayo bei den BAFTA Awards die Auszeichnung als bester Darsteller sowie den Rising Star Award als Bester Newcomer.",
    "vorstellungen": [
-    {
-     "kino": "Top Kino",
-     "kino_id": 400156020,
-     "zeit": "2026-07-18T22:00:00+02:00",
-     "fassung": "OmdU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Top Kino",
      "kino_id": 400156020,
@@ -24530,42 +21364,6 @@
    ],
    "beschreibung": "Im London des frühen 20. Jahrhunderts sucht die brillante Astronomin Katharine Hilbery nach einem Leben jenseits gesellschaftlicher Erwartungen.",
    "vorstellungen": [
-    {
-     "kino": "Village Cinema Wien Mitte",
-     "kino_id": 400156401,
-     "zeit": "2026-07-18T16:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Apollo",
-     "kino_id": 400156086,
-     "zeit": "2026-07-18T17:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Cineplexx Millennium City",
-     "kino_id": 400155264,
-     "zeit": "2026-07-18T18:15:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
-    {
-     "kino": "Lugner Kino City",
-     "kino_id": 400155669,
-     "zeit": "2026-07-18T20:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": false
-    },
     {
      "kino": "Filmhaus Kino Spittelberg",
      "kino_id": 400156062,
@@ -24801,24 +21599,6 @@
     {
      "kino": "CineCenter",
      "kino_id": 400156059,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "De France",
-     "kino_id": 400156389,
-     "zeit": "2026-07-18T15:30:00+02:00",
-     "fassung": "OmU",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "CineCenter",
-     "kino_id": 400156059,
      "zeit": "2026-07-19T13:00:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -24937,15 +21717,6 @@
    ],
    "beschreibung": "Das Leben eines arbeitslosen Musikkritikers gerät innerhalb weniger Tage aus allen Fugen.",
    "vorstellungen": [
-    {
-     "kino": "Urania Kino Wien",
-     "kino_id": 400156206,
-     "zeit": "2026-07-18T19:45:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
     {
      "kino": "Urania Kino Wien",
      "kino_id": 400156206,
@@ -25079,15 +21850,6 @@
     {
      "kino": "Urania Kino Wien",
      "kino_id": 400156206,
-     "zeit": "2026-07-18T18:00:00+02:00",
-     "fassung": "DF",
-     "format": null,
-     "tags": [],
-     "im_abo": true
-    },
-    {
-     "kino": "Urania Kino Wien",
-     "kino_id": 400156206,
      "zeit": "2026-07-28T18:00:00+02:00",
      "fassung": "DF",
      "format": null,
@@ -25101,6 +21863,7 @@
  ],
  "warnungen": [
   "NEUES Wiener Kino ohne Mapping: Volxkino am Augustinplatz (cinema.id 400156557) — im_abo bleibt false. Nonstop-Partner? Dann in NONSTOP_KINOS eintragen, sonst in KEINE_PARTNER.",
-  "NEUES Wiener Kino ohne Mapping: Volxkino Usus am Wasser (cinema.id 402464075) — im_abo bleibt false. Nonstop-Partner? Dann in NONSTOP_KINOS eintragen, sonst in KEINE_PARTNER."
+  "NEUES Wiener Kino ohne Mapping: Volxkino Usus am Wasser (cinema.id 402464075) — im_abo bleibt false. Nonstop-Partner? Dann in NONSTOP_KINOS eintragen, sonst in KEINE_PARTNER.",
+  "NEUES Wiener Kino ohne Mapping: Volxkino Baumgartner Höhe (cinema.id 403043469) — im_abo bleibt false. Nonstop-Partner? Dann in NONSTOP_KINOS eintragen, sonst in KEINE_PARTNER."
  ]
 }
