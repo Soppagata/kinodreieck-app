@@ -36,6 +36,23 @@ export function storageDriverName() {
   return activeDriver.name;
 }
 
+/* Driver-agnostischer Sync-Status: liefert den Status des AKTIVEN Treibers, damit
+   Chip/Vertrauens-Zeile Git ODER Supabase anzeigen, ohne einen Treiber hart zu
+   importieren. Treiber ohne Sync (lokal): neutraler Default. */
+export function activeSyncStatus() {
+  try {
+    if (activeDriver && typeof activeDriver.status === "function") return activeDriver.status();
+  } catch { /* Treiber-Status best effort */ }
+  return { lastPull: null, lastCommit: null, pending: [], conflict: [], stale: [], configured: false };
+}
+
+/* Treiber-Wahl (Block 2): "git" | "supabase" | null(=bisheriges Verhalten). */
+export function getTreiber() { try { return localStorage.getItem("kd:treiber"); } catch { return null; } }
+export function setTreiber(name) {
+  try { if (name) localStorage.setItem("kd:treiber", name); else localStorage.removeItem("kd:treiber"); }
+  catch { /* Storage best effort */ }
+}
+
 /* Fassade: unveränderte Signatur, delegiert an den aktiven Treiber. */
 export const store = {
   get(k) { return activeDriver.get(k); },
@@ -65,6 +82,7 @@ export const K = {
   mustwatch: "kd:mustwatch",          // Must-Watch-Liste (eigener Topf, 10. Sync-Datei) — ersetzt das must_watch-Flag
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
+  treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
 };
 
 export const PROGRAMM_TTL_MS = 24 * 60 * 60 * 1000; // 24h

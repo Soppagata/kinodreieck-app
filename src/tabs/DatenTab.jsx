@@ -6,6 +6,7 @@ import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { GitSyncEinstellungen } from "../components/GitSyncEinstellungen.jsx";
+import { SupabaseSyncEinstellungen } from "../components/SupabaseSyncEinstellungen.jsx";
 import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { PERSONAL_MODE } from "../lib/modus.js";
@@ -169,6 +170,11 @@ export function DatenTab({
       {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
       <Klappe titel="Geräte-Sync (Git)">
         <GitSyncEinstellungen ohneKopf />
+      </Klappe>
+
+      {/* Geräte-Sync (Supabase): managed DB, login-frei über Sync-Schlüssel. Selbst-enthalten. */}
+      <Klappe titel="Geräte-Sync (Supabase)">
+        <SupabaseSyncEinstellungen ohneKopf />
       </Klappe>
 
       {/* Export-Wächter: Browser-Speicher ist KEIN Backup */}

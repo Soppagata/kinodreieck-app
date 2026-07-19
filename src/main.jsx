@@ -2,13 +2,16 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
-import { setStorageDriver } from "./lib/storage.js";
-import { gitDriver, isGitConfigured, syncPull, syncFlush } from "./lib/gitDriver.js";
+import { setStorageDriver, getTreiber } from "./lib/storage.js";
+import { gitDriver, isGitConfigured, syncPull as gitPull, syncFlush as gitFlush } from "./lib/gitDriver.js";
+import { supabaseDriver, isSupabaseConfigured, syncPull as sbPull, syncFlush as sbFlush } from "./lib/supabaseDriver.js";
 
-/* Boot: Ist ein Git-Sync konfiguriert, wird der Git-Treiber aktiviert und VOR
-   dem Mounten der App einmal gepullt (Pull-on-start) — so füllt der Pull den
-   localStorage-Cache, bevor die App ihn (teils synchron) liest. Ohne Konfig
-   bleibt der lokale Treiber aktiv: identisches Verhalten wie bisher. */
+/* Boot: Der aktive Treiber ergibt sich aus der Wahl kd:treiber:
+     "supabase" (+ konfiguriert) => Supabase-Treiber
+     "git" oder fehlend (+ Git konfiguriert) => Git-Treiber (bisheriges Verhalten)
+     sonst => lokaler Treiber (identisch wie bisher).
+   Der gewählte Treiber wird VOR dem Mounten einmal gepullt (Pull-on-start) — so
+   füllt der Pull den localStorage-Cache, bevor die App ihn (teils synchron) liest. */
 const root = createRoot(document.getElementById("root"));
 
 function ladeanzeige(text) {
@@ -21,10 +24,18 @@ function ladeanzeige(text) {
 }
 
 async function boot() {
-  if (isGitConfigured()) {
+  const t = getTreiber(); // "git" | "supabase" | null
+  let flush = null;
+  if (t === "supabase" && isSupabaseConfigured()) {
+    setStorageDriver(supabaseDriver);
+    root.render(ladeanzeige("Synchronisiere mit deiner Datenbank …"));
+    try { await sbPull(); } catch { /* offline: Cache bleibt gültig, App startet trotzdem */ }
+    flush = sbFlush;
+  } else if ((t === "git" || t == null) && isGitConfigured()) {
     setStorageDriver(gitDriver);
     root.render(ladeanzeige("Synchronisiere mit deinem Daten-Repo …"));
-    try { await syncPull(); } catch { /* offline: Cache bleibt gültig, App startet trotzdem */ }
+    try { await gitPull(); } catch { /* offline: Cache bleibt gültig, App startet trotzdem */ }
+    flush = gitFlush;
   }
   root.render(
     <StrictMode>
@@ -32,7 +43,7 @@ async function boot() {
     </StrictMode>,
   );
   // Nach dem Mounten ausstehende (offline liegen gebliebene) Commits nachreichen.
-  if (isGitConfigured()) { syncFlush().catch(() => { /* still, Status zeigt Pending */ }); }
+  if (flush) { flush().catch(() => { /* still, Status zeigt Pending */ }); }
 }
 
 boot();

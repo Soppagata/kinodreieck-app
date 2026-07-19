@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { T } from "../lib/tokens.js";
-import { syncStatus } from "../lib/gitDriver.js";
+import { activeSyncStatus } from "../lib/storage.js";
 
 /* Leitet aus dem Git-Sync-Status die drei Vertrauens-Zustände ab:
    synchron / ausstehend / Konflikt. Ohne Git-Konfig: neutral (null). */
@@ -15,9 +15,9 @@ function ableiten(s) {
 /* Pollt den Sync-Status leichtgewichtig (alle 3s + bei Fensterfokus). Der Status
    ändert sich durch asynchrone Commits/Pulls, ist aber nicht reaktiv — daher Poll. */
 export function useSyncStatus() {
-  const [s, setS] = useState(() => { try { return syncStatus(); } catch { return { configured: false, pending: [], conflict: [], stale: [] }; } });
+  const [s, setS] = useState(() => { try { return activeSyncStatus(); } catch { return { configured: false, pending: [], conflict: [], stale: [] }; } });
   useEffect(() => {
-    const tick = () => { try { setS(syncStatus()); } catch { /* */ } };
+    const tick = () => { try { setS(activeSyncStatus()); } catch { /* */ } };
     const iv = setInterval(tick, 3000);
     window.addEventListener("focus", tick);
     return () => { clearInterval(iv); window.removeEventListener("focus", tick); };

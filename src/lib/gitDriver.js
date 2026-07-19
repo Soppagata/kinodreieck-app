@@ -333,6 +333,7 @@ export function syncStatus() {
 /* ---------- Treiber-Fassade (implementiert die store-Signatur) ---------- */
 export const gitDriver = {
   name: "git",
+  status: syncStatus,                         // driver-agnostischer Status-Abgriff (storage.activeSyncStatus)
   async get(k) {
     // Cache-first, kein Netz pro Lesezugriff (Pull passiert beim Start).
     return localDriver.get(k);
