@@ -1551,7 +1551,7 @@ export default function App() {
         ) : null}
 
         {tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={setTab} onTutorialNeu={() => { try { resetTutorial(); } catch { /* */ } setWillkommenOffen(true); }}
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={setTab} zeigeEintrag={springeZuFilm} onTutorialNeu={() => { try { resetTutorial(); } catch { /* */ } setWillkommenOffen(true); }}
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */

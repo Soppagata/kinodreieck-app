@@ -389,7 +389,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
    die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/nerv;
    setzeTheme kennt keine :root-Vars). Mobil-first; kein filter/transform auf .kd-app. */
-.kd-dash { display: flex; flex-direction: column; gap: 16px; }
+.kd-dash { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
 
 /* Marquee-Kopf */
 .kd-dash-hero { padding: 14px 2px 2px; }
@@ -417,7 +417,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Grid */
 .kd-dash-grid { display: grid; grid-template-columns: 1fr; gap: 22px 18px; }
-@media (min-width: 760px) { .kd-dash-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+/* Desktop bewusst EINE Lesespalte (max-width an .kd-dash) statt ragged 2-Spalten-Grid. */
 
 /* Modul-Kopf (editorial: Mono-Kicker mit Filmstrip-Marker + →-Link) */
 .kd-dash-modul { display: flex; flex-direction: column; }
@@ -456,6 +456,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-karte { padding: 6px 14px; background: var(--kd-leinwand); color: var(--kd-tinte);
   border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.4); cursor: pointer; }
 .kd-dash-zeile { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+.kd-dash-karte .kd-dash-zeile, .kd-dash-ticket { cursor: pointer; }
 .kd-dash-zeile + .kd-dash-zeile { border-top: 1px solid var(--kd-leinwandTief); }
 .kd-dash-rang { flex: 0 0 auto; width: 24px; text-align: center; font-family: 'Fraunces', Georgia, serif;
   font-weight: 900; font-size: 20px; color: var(--kd-wolfram); }

@@ -101,7 +101,7 @@ check("Dashboard: Kino-für-dich-Modul mit Match + Termin", /Kino für dich/.tes
 check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
 check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /▶ NETFLIX/.test(startText));
 check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
-check("Dashboard: leeres Pinboard-Modul erscheint NICHT", !/Pinboard/.test(startText));
+check("Dashboard: Pinboard-Modul immer sichtbar (leer -> Hinweis)", /Pinboard/.test(startText) && /Noch nichts gepinnt/.test(startText));
 check("Dashboard: Erklärinhalte raus aus Start (kein Hero, keine Quicklinks)",
   !/LOKALE FILM-PLATTFORM/.test(startText) && !/Deine Filme, dein Kino, dein Urteil/.test(startText) && !/Direkt hinein/.test(startText) && !knopf(/Anleitung & Hilfe öffnen/i));
 

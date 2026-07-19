@@ -152,7 +152,7 @@ function naechsterTermin(zeiten) {
   return Number.isFinite(min) ? { wert: min, label } : null;
 }
 
-/* Modul-Rahmen: editorialer Kopf (Mono-Kicker + →-Link), Optik in index.css. */
+/* Modul-Rahmen: editorialer Kopf (Mono-Kicker + →-Link zum Bereich), Optik in index.css. */
 function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
   return (
     <section className="kd-dash-modul" data-tour={tour}>
@@ -167,8 +167,7 @@ function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
 
 /* Vertrauens-Zeile (FIX): Programm-Stand, Katalog-Stand, Sync-Status. Einziger
    Sync-Ort seit Etappe 4 (Griff-Punkt entfernt). Ohne Git-Konfiguration bewusst
-   KEIN Sync-Segment (kein „nicht verbunden"-Rauschen). Klasse .kd-vertrauen ist
-   Test-Kanarie (personalmodus_test B/G) — bleibt erhalten. */
+   KEIN Sync-Segment. Klasse .kd-vertrauen ist Test-Kanarie (personalmodus_test B/G). */
 function VertrauensZeile({ progStand, streamingBekannt }) {
   const s = useSyncStatus();
   const sync = !s || !s.configured ? null
@@ -197,10 +196,14 @@ function VertrauensZeile({ progStand, streamingBekannt }) {
 }
 
 function StartDashboard({
-  kinoPins = [], merkliste = [], onNavigiere,
+  kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
   kinoMatches = { matched: [] }, mustwatch = [], auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
 }) {
+  /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
+     Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
+  const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
+
   /* Kino für dich: Top 3 der (vor-)sortierten Treffer, nur mit nächstem Termin. */
   const kinoTop = useMemo(() => (kinoMatches.matched || [])
     .map((m) => ({ ...m, termin: naechsterTermin((m.prog.z || []).map(formatiereTermin)) }))
@@ -226,13 +229,13 @@ function StartDashboard({
     .sort((a, b) => pinSortWert({ z: a.zAnzeige }) - pinSortWert({ z: b.zAnzeige }))
     .slice(0, 5), [kinoPins]);
 
-  /* Zuletzt hinzugefügt: nur belegbare Zeitstempel (Must-Watch erstellt_am + Merkliste hinzugefuegt_am). */
+  /* Zuletzt hinzugefügt: nur belegbare Zeitstempel; ref = Sprung-Ziel (Must-Watch-ID). */
   const zuletzt = useMemo(() => {
     const mw = (mustwatch || []).filter((e) => e.erstellt_am).map((e) => ({
-      key: "mw" + e.id, label: e.titel, quelle: "MUST-WATCH", ziel: "mediathek", zeit: Date.parse(e.erstellt_am) || 0,
+      key: "mw" + e.id, label: e.titel, quelle: "MUST-WATCH", ziel: "mediathek", ref: e.id, zeit: Date.parse(e.erstellt_am) || 0,
     }));
     const mk = (merkliste || []).filter((m) => m.hinzugefuegt_am).map((m) => ({
-      key: "merk" + m.watchmode_id, label: m.titel + (m.jahr ? " (" + m.jahr + ")" : ""), quelle: "MERKLISTE", ziel: "streaming", zeit: Date.parse(m.hinzugefuegt_am) || 0,
+      key: "merk" + m.watchmode_id, label: m.titel + (m.jahr ? " (" + m.jahr + ")" : ""), quelle: "MERKLISTE", ziel: "streaming", ref: null, zeit: Date.parse(m.hinzugefuegt_am) || 0,
     }));
     return [...mw, ...mk].sort((a, b) => b.zeit - a.zeit).slice(0, 5);
   }, [mustwatch, merkliste]);
@@ -270,11 +273,11 @@ function StartDashboard({
       )}
 
       <div className="kd-dash-grid">
-        {/* ---- 1 · Kino für dich (Ticket-Stub-Karten) ---- */}
+        {/* ---- 1 · Kino für dich (Ticket-Stub, Klick -> Film-Eintrag) ---- */}
         {kinoTop.length > 0 && (
           <Modul name="Kino für dich" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere}>
             {kinoTop.map(({ prog, film, termin }, i) => (
-              <div key={(prog.film_at_id || prog.t) + "|" + i} className="kd-dash-ticket" onClick={() => onNavigiere && onNavigiere("kino")}>
+              <div key={(prog.film_at_id || prog.t) + "|" + i} className="kd-dash-ticket" onClick={() => zuEintrag(film.id, "kino")}>
                 <div className="kd-dash-stub">
                   <b className="kd-dash-stamp">{score(film)}</b>
                   <span className="kd-dash-stamp-lbl">MATCH</span>
@@ -289,12 +292,12 @@ function StartDashboard({
           </Modul>
         )}
 
-        {/* ---- 2 · Must-Watch (Billboard-Rang) ---- */}
+        {/* ---- 2 · Must-Watch (Klick pro Zeile -> Must-Watch-Eintrag) ---- */}
         {mwTop.length > 0 && (
           <Modul name="Must-Watch" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("mediathek")}>
+            <div className="kd-dash-karte">
               {mwTop.map((e, i) => (
-                <div key={e.id} className="kd-dash-zeile">
+                <div key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
                   <span className="kd-dash-rang">{i + 1}</span>
                   <span className="kd-dash-ztitel">{e.titel}</span>
                   {e.im_besitz && <span className="kd-dash-badge">IM BESITZ</span>}
@@ -304,7 +307,7 @@ function StartDashboard({
           </Modul>
         )}
 
-        {/* ---- 3 · Jetzt streambar ---- */}
+        {/* ---- 3 · Jetzt streambar (Streaming-Entdecken hat keinen Einzel-Fokus -> Bereich) ---- */}
         {streambar.length > 0 && (
           <Modul name="Jetzt streambar" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere}>
             <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("streaming")}>
@@ -318,26 +321,30 @@ function StartDashboard({
           </Modul>
         )}
 
-        {/* ---- 4 · Pinboard (Kanarie: Name + formatiereTermin) ---- */}
-        {pins.length > 0 && (
+        {/* ---- 4 · Pinboard — stabiles Modul: immer sichtbar, leer -> Hinweis (Max 2026-07-19) ---- */}
+        {!leer && (
           <Modul name="Pinboard" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere} tour="pinboard">
-            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("kino")}>
-              {pins.map((p) => (
-                <div key={p.t + "|" + p.z} className="kd-dash-zeile">
-                  <span className="kd-dash-ztitel">◇ {p.t}</span>
-                  <span className="kd-dash-showtime">{p.zAnzeige}</span>
-                </div>
-              ))}
-            </div>
+            {pins.length > 0 ? (
+              <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("kino")}>
+                {pins.map((p) => (
+                  <div key={p.t + "|" + p.z} className="kd-dash-zeile">
+                    <span className="kd-dash-ztitel">◇ {p.t}</span>
+                    <span className="kd-dash-showtime">{p.zAnzeige}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="kd-dash-leer">Noch nichts gepinnt — Termine pinnst du im Kino-Tab (◇ vor der Uhrzeit).</p>
+            )}
           </Modul>
         )}
 
-        {/* ---- 5 · Zuletzt hinzugefügt ---- */}
+        {/* ---- 5 · Zuletzt hinzugefügt (Must-Watch-Zeilen -> Eintrag, Merkliste -> Bereich) ---- */}
         {zuletzt.length > 0 && (
           <Modul name="Zuletzt hinzugefügt" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("mediathek")}>
+            <div className="kd-dash-karte">
               {zuletzt.map((z) => (
-                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={(e) => { e.stopPropagation(); onNavigiere && onNavigiere(z.ziel); }}>
+                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={() => zuEintrag(z.ref, z.ziel)}>
                   <span className="kd-dash-ztitel">{z.label}</span>
                   <span className="kd-dash-tag">{fmtTag(z.zeit)}</span>
                   <span className="kd-dash-badge">{z.quelle}</span>
