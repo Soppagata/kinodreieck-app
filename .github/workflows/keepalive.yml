@@ -1,0 +1,23 @@
+name: Supabase Keep-alive
+
+on:
+  schedule:
+    - cron: "17 6 */3 * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Anon-Read gegen kd_store
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON: ${{ vars.SUPABASE_ANON }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON" ]; then
+            echo "SUPABASE_URL / SUPABASE_ANON nicht gesetzt."; exit 1
+          fi
+          curl -fsS "${SUPABASE_URL}/rest/v1/kd_store?scope=eq.demo&select=key&limit=1" \
+            -H "apikey: ${SUPABASE_ANON}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON}" \
+            && echo "keep-alive ok"
