@@ -177,14 +177,14 @@ const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || 
 check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
 if (maxLink) {
   maxLink.click(); await warte(200);
-  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Mit Stil|Weils cool ist)$/.test((b.textContent || "").trim()));
+  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Showa|NERV)$/.test((b.textContent || "").trim()));
   check("Easter-Egg-Modus-Knopf erscheint", !!egg);
   if (egg) {
     egg.click(); await warte(300);
-    check("Modus-Klasse am Wrapper aktiv", /kd-(kurosawa|grindhouse)/.test(wrapper().className || ""));
-    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Mit Stil|Weils cool ist)$/.test((b.textContent || "").trim()));
+    check("Modus-Klasse am Wrapper aktiv", /kd-(showa|nerv)/.test(wrapper().className || ""));
+    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Showa|NERV)$/.test((b.textContent || "").trim()));
     if (egg2) { egg2.click(); await warte(200); }
-    check("Modus wieder aus (Toggle)", !/kd-(kurosawa|grindhouse)/.test(wrapper().className || ""));
+    check("Modus wieder aus (Toggle)", !/kd-(showa|nerv)/.test(wrapper().className || ""));
   }
 }
 // Schriftgröße -> zoom am Wrapper

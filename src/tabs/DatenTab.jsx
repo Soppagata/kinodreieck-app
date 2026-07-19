@@ -36,21 +36,15 @@ export function DatenTab({
   const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 6px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const wahlKnopf = (aktiv) => ({ ...btnStyle(false), fontSize: 13, padding: "7px 13px", borderColor: aktiv ? T.wolfram : T.rauch, color: aktiv ? T.wolfram : T.leinwand });
-  /* Easter-Egg-Modi: versteckt unter dem „Max"-Link. Ein Knopf, der das aktuelle
-     Theme erkennt — hell -> „Mit Stil" (Kurosawa), dunkel -> „Weils cool ist" (Grindhouse). Toggle. */
+  /* Easter-Egg-Modi: versteckt unter dem „Max"-Link. Zwei Dauer-Modi (Showa/NERV),
+     je ein Toggle-Knopf — theme-unabhängig (beide bringen ihre eigene Palette mit). */
   const [eggAn, setEggAn] = useState(false);
   /* „Über"-Einstieg (Etappe 4, nur PERSONAL_MODE): das Start-Dashboard trägt
      die Erklärinhalte nicht mehr — Hero, Dreieck-Erklärung und Anleitung
      (Erklaerstuecke.jsx, Inhalte unverändert) öffnen hier auf Knopfdruck.
      Im Beta-Build zeigt weiterhin die Landing selbst alles (kein Doppel). */
   const [ueberOffen, setUeberOffen] = useState(false);
-  const eggDunkel = einstellungen.theme !== "hell";
-  const eggAktiv = eggDunkel ? einstellungen.modus === "grindhouse" : einstellungen.modus === "kurosawa";
-  const eggKlick = () => {
-    if (!waehleModus) return;
-    if (eggDunkel) waehleModus(einstellungen.modus === "grindhouse" ? "saal" : "grindhouse");
-    else waehleModus(einstellungen.modus === "kurosawa" ? "foyer" : "kurosawa");
-  };
+  const eggModus = (wahl) => { if (waehleModus) waehleModus(einstellungen.modus === wahl ? "saal" : wahl); };
   /* Vorführmodus-Zahlen: qualifizierte Mediathek-Einträge je Schwellen-Egg. */
   const zaehlung = useMemo(() => zaehleQualifiziert(master || []), [master]);
   return (
@@ -416,7 +410,10 @@ export function DatenTab({
           Vorstellungen.
         </p>
         {eggAn && waehleModus && (
-          <button onClick={eggKlick} style={{ ...wahlKnopf(eggAktiv), marginTop: 12 }}>{eggDunkel ? "Weils cool ist" : "Mit Stil"}</button>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <button onClick={() => eggModus("showa")} style={wahlKnopf(einstellungen.modus === "showa")}>Showa</button>
+            <button onClick={() => eggModus("nerv")} style={wahlKnopf(einstellungen.modus === "nerv")}>NERV</button>
+          </div>
         )}
         {PERSONAL_MODE && (
           <div style={{ marginTop: 14 }}>

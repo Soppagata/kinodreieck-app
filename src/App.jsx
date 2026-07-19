@@ -45,6 +45,7 @@ import nachtragDatei from "./data/nachtrag.json";
 import { PERSONAL_MODE } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { NavBand } from "./components/NavBand.jsx";
+import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
 import { berechneUnlocks, ladeAchievements, speichereAchievements } from "./lib/eggs.js";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 
@@ -252,103 +253,36 @@ export default function App() {
   /* ---- Darstellungs-Modi: Saal/Foyer/Kurosawa/Grindhouse in EINER Gruppe.
      Der Modus erzwingt sein Theme (Kurosawa->hell, Grindhouse->dunkel),
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
-  const modusRegenRef = useRef(null), modusHalmeRef = useRef(null), modusNoboriRef = useRef(null), modusNobori2Ref = useRef(null), modusWrapRef = useRef(null);
+  const modusWrapRef = useRef(null);
   const waehleModus = useCallback((wahl) => {
     setEinstellungenState((prev) => {
       let next;
-      if (wahl === "kurosawa") next = { ...prev, modus: "kurosawa", theme: "hell" };
-      else if (wahl === "grindhouse") next = { ...prev, modus: "grindhouse", theme: "dunkel" };
+      if (wahl === "showa") next = { ...prev, modus: "showa", theme: "dunkel" };
+      else if (wahl === "nerv") next = { ...prev, modus: "nerv", theme: "dunkel" };
       else if (wahl === "foyer") next = { ...prev, modus: "", theme: "hell" };
       else next = { ...prev, modus: "", theme: "dunkel" };
-      setzeTheme(next.theme);
+      setzeTheme(next.modus || next.theme);
       store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
       return next;
     });
   }, []);
-  /* Regen (102 Striche), Horizont (320 Halme in 3 Lagen + Nobori), Grindhouse-
-     Klebesprünge (setTimeout, zufälliges Intervall) — Port aus modi-demo-v13.html. */
+  /* NERV-Glitch-Takt: seltener, kurzer Klassensprung am Wrapper (der Rest ist
+     reines CSS). Showa braucht keinen JS-Takt — Korn/Vignette/Skyline/Kaiju laufen
+     als CSS-Overlays. prefers-reduced-motion => gar kein Takt. */
   useEffect(() => {
-    const modus = einstellungen.modus;
-    const rnd = (a, b) => a + Math.random() * (b - a);
+    if (einstellungen.modus !== "nerv") return;
+    let reduziert = false;
+    try { reduziert = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch { /* */ }
+    if (reduziert) return;
     const timers = [];
-    function baueRegen(regen) {
-      if (!regen) return; regen.innerHTML = "";
-      for (let i = 0; i < 102; i++) {
-        const t = document.createElement("div"); t.className = "kd-tropfen";
-        t.style.left = rnd(-5, 102) + "%"; t.style.height = rnd(30, 100) + "px";
-        t.style.opacity = rnd(.18, .9).toFixed(2);
-        t.style.width = (Math.random() < .25 ? 4 : 2.5) + "px";
-        const d = rnd(.38, .85);
-        t.style.animationDuration = d + "s"; t.style.animationDelay = (-rnd(0, d)) + "s";
-        regen.appendChild(t);
-      }
-    }
-    function baueNobori(nobori, links) {
-      if (!nobori) return;
-      const H = 158;
-      if (links === undefined) links = Math.random() < .5;
-      nobori.style[links ? "left" : "right"] = rnd(6, 15) + "%";
-      nobori.style[links ? "right" : "left"] = "auto";
-      const schief = links ? rnd(3, 7) : -rnd(3, 7);
-      nobori.style.setProperty("--a1", (schief - 3.6).toFixed(1) + "deg");   // kräftigeres Wehen
-      nobori.style.setProperty("--a2", (schief + 4.4).toFixed(1) + "deg");
-      nobori.style.animationDuration = rnd(4.2, 6.4).toFixed(1) + "s";        // eigener Takt
-      const L = [15, 66], R = [41, 66], S = [28, 42], Z = [28, 60];
-      const p = (a, b, c) => "M" + a[0] + " " + a[1] + " L" + b[0] + " " + b[1] + " L" + c[0] + " " + c[1] + " Z";
-      nobori.innerHTML =
-        '<svg width="58" height="' + H + '" viewBox="0 0 58 ' + H + '">' +
-        '<line x1="8" y1="3" x2="8" y2="' + H + '" stroke="#2E2B27" stroke-width="2.8" stroke-linecap="round"/>' +
-        '<line x1="6" y1="6" x2="48" y2="6" stroke="#2E2B27" stroke-width="2.2" stroke-linecap="round"/>' +
-        '<g class="tuch">' +
-        '<path d="M10 8 h38 v96 q-10 5 -19 0 q-9 -5 -19 0 Z" fill="#6E6960" opacity="0.97"/>' +
-        '<path d="M10 8 h38 v96 q-10 5 -19 0 q-9 -5 -19 0 Z" fill="none" stroke="#3A3630" stroke-width="1" opacity="0.8"/>' +
-        '<g><path d="' + p(L, S, Z) + '" fill="#C9C4B9"/><path d="' + p(S, R, Z) + '" fill="#F2EFE8"/><path d="' + p(R, L, Z) + '" fill="#AEA99E"/></g>' +
-        '</g></svg>';
-    }
-    function baueHorizont(halme, nobori, nobori2) {
-      if (!halme) return; halme.innerHTML = "";
-      const lagen = [
-        { n: 150, h: [16, 34], op: [.10, .20], w: [.8, 1.3], dur: [3.6, 6.0], amp: .6, b: [16, 30] },
-        { n: 110, h: [28, 58], op: [.18, .34], w: [1.0, 1.9], dur: [2.8, 4.6], amp: 1, b: [10, 22] },
-        { n: 60, h: [50, 92], op: [.30, .55], w: [1.6, 2.6], dur: [2.2, 3.8], amp: 1.4, b: [2, 14] },
-      ];
-      lagen.forEach((La) => {
-        for (let i = 0; i < La.n; i++) {
-          const h = rnd(La.h[0], La.h[1]), bieg = rnd(-30, 30) * La.amp;
-          const d = document.createElement("div"); d.className = "kd-halm";
-          d.style.left = rnd(-2, 100) + "%";
-          d.style.bottom = rnd(La.b[0], La.b[1]) + "px";
-          d.style.opacity = rnd(La.op[0], La.op[1]).toFixed(2);
-          d.style.setProperty("--a1", (rnd(-8, -2) * La.amp).toFixed(1) + "deg");
-          d.style.setProperty("--a2", (rnd(3, 10) * La.amp).toFixed(1) + "deg");
-          d.style.setProperty("--s1", (rnd(-2.5, 0) * La.amp).toFixed(1) + "deg");
-          d.style.setProperty("--s2", (rnd(1, 4) * La.amp).toFixed(1) + "deg");
-          d.style.animationDuration = rnd(La.dur[0], La.dur[1]).toFixed(2) + "s";
-          d.style.animationDelay = (-rnd(0, 4)).toFixed(2) + "s";
-          const w = rnd(La.w[0], La.w[1]);
-          d.innerHTML = '<svg width="70" height="' + h + '" viewBox="0 0 70 ' + h + '">' +
-            '<path d="M35 ' + h + ' C 35 ' + (h * .62) + ', ' + (35 + bieg * .4) + ' ' + (h * .34) + ', ' + (35 + bieg) + ' 2" stroke-width="' + w.toFixed(1) + '"/></svg>';
-          halme.appendChild(d);
-        }
-      });
-      const links1 = Math.random() < .5;
-      baueNobori(nobori, links1);
-      baueNobori(nobori2, !links1);   // zweiter Banner: andere Seite, gegengeneigt
-    }
-    if (modus === "kurosawa") {
-      baueRegen(modusRegenRef.current);
-      baueHorizont(modusHalmeRef.current, modusNoboriRef.current, modusNobori2Ref.current);
-    } else if (modus === "grindhouse") {
-      const sprung = () => { const w = modusWrapRef.current; if (!w) return; w.classList.add("kd-riss"); timers.push(setTimeout(() => w.classList.remove("kd-riss"), rnd(70, 150))); };
-      const takt = () => { sprung(); timers.push(setTimeout(takt, rnd(3500, 14000))); };
-      timers.push(setTimeout(takt, rnd(2500, 7000)));
-    }
-    return () => {
-      timers.forEach(clearTimeout);
-      if (modusRegenRef.current) modusRegenRef.current.innerHTML = "";
-      if (modusHalmeRef.current) modusHalmeRef.current.innerHTML = "";
-      if (modusWrapRef.current) modusWrapRef.current.classList.remove("kd-riss");
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const puls = () => {
+      const w = modusWrapRef.current;
+      if (w) { w.classList.add("kd-glitch"); timers.push(setTimeout(() => w.classList.remove("kd-glitch"), rnd(90, 220))); }
+      timers.push(setTimeout(puls, rnd(4200, 11000)));
     };
+    timers.push(setTimeout(puls, rnd(2600, 6000)));
+    return () => { timers.forEach(clearTimeout); if (modusWrapRef.current) modusWrapRef.current.classList.remove("kd-glitch"); };
   }, [einstellungen.modus]);
 
   /* ---- Eastereggs (Block 3, nur PERSONAL_MODE): Achievement-Topf + Toast ----
@@ -380,6 +314,7 @@ export default function App() {
     if (backfillRef.current) zeigeToast("Easteregg freigeschalten");
     backfillRef.current = true;
   }, [master, achievements, zeigeToast]);
+
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -595,10 +530,10 @@ export default function App() {
         const r = await store.get(K.einstellungen);
         if (r && r.value) {
           const e = { theme: "dunkel", startTab: "start", schrift: "normal", modus: "", ...JSON.parse(r.value) };
-          if (e.kurosawa && !e.modus) { e.modus = "kurosawa"; e.theme = "hell"; } // Migration: alter Bool -> Modus
-          delete e.kurosawa;
+          delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
+          if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen (Showa/NERV lösen sie ab)
           setEinstellungenState(e);
-          setzeTheme(e.theme);
+          setzeTheme(e.modus || e.theme);                        // Modus (showa/nerv) überschreibt die Basis-Palette
           if (e.startTab && e.startTab !== "start") setTab(e.startTab);
         }
       } catch { /* Defaults */ }
@@ -1385,25 +1320,8 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "kurosawa" ? " kd-kurosawa" : einstellungen.modus === "grindhouse" ? " kd-grindhouse" : "") + (einstellungen.linkshaender ? " kd-links" : "")}>
-      {einstellungen.modus ? (
-        <div className="kd-fx">
-          <div className="grade" /><div className="grade2" /><div className="korn" /><div className="kratzer" /><div className="knitter" />
-          <div className="regen" ref={modusRegenRef} />
-        </div>
-      ) : null}
-      {einstellungen.modus === "grindhouse" && (
-        <>
-          <div className="kd-perfo l" /><div className="kd-perfo r" />
-          <div className="kd-kantenriss l" /><div className="kd-kantenriss r" />
-          <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
-            <filter id="fransig">
-              <feTurbulence type="fractalNoise" baseFrequency="0.03 0.14" numOctaves="4" seed="3" result="t" />
-              <feDisplacementMap in="SourceGraphic" in2="t" scale="26" xChannelSelector="R" yChannelSelector="G" />
-            </filter>
-          </svg>
-        </>
-      )}
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "")}>
+      <ModusFx modus={einstellungen.modus} />
       <div className="kd-app">
       {startModalOffen && !setupWarnung && (
         <StartWahl onWaehle={waehleStart}
@@ -1472,7 +1390,7 @@ export default function App() {
       )}
       <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Logo size={34} />
+          {einstellungen.modus === "nerv" ? <NervLogo size={38} /> : <Logo size={34} />}
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 34, letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
@@ -1645,14 +1563,6 @@ export default function App() {
         )}
       </main>
       </div>{/* .kd-app */}
-      {einstellungen.modus === "kurosawa" && (
-        <div id="kd-horizont">
-          <div className="boden" />
-          <div id="kd-halme" ref={modusHalmeRef} />
-          <div id="kd-nobori" ref={modusNoboriRef} />
-          <div id="kd-nobori2" ref={modusNobori2Ref} />
-        </div>
-      )}
       {PERSONAL_MODE && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">
           {toasts.map((t) => (

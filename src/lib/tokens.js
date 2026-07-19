@@ -39,6 +39,43 @@ export const THEMES = {
     gefahr: "#C14B3C",
     kartenFeld: "#2E2A36", // Eingabefelder AUF den (im Foyer dunklen) FilmCards
   },
+  /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, dramatisches S/W ----
+     Reiner Graustufen-Swap (KEIN filter auf .kd-app — mobil-tauglich). Werte aus
+     Godzilla-Nachtaufnahmen abgeleitet: nahezu schwarzer Nachthimmel, silbrig
+     angestrahlte Fassaden, neutrales Korn. Akzent = poliertes Bein/Silber statt Gold. */
+  showa: {
+    saal: "#2E2E31",
+    saalHoch: "#3C3C40",
+    leinwand: "#E7E6E1",
+    leinwandTief: "#C7C6C1",
+    tinte: "#131316",
+    tinteWeich: "#4C4C50",
+    rauch: "#8E8E93",
+    wolfram: "#CDCBC3",
+    wie: "#9CA1A6",
+    was: "#B8B2AA",
+    warum: "#E7E6E1",
+    gefahr: "#B58A82",
+    kartenFeld: "#F3F2ED",
+  },
+  /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot ----
+     Nahezu schwarzer Grund, warmes Bein für Fließtext (wie die weißen MAGI-Label),
+     Signal-Rot als Akzent/Buttons. Bewertungstrio = Konsolen-Tricolor Cyan/Rot/Amber. */
+  nerv: {
+    saal: "#070709",
+    saalHoch: "#120A0C",
+    leinwand: "#E9E4DC",
+    leinwandTief: "#CDC7BE",
+    tinte: "#140C0E",
+    tinteWeich: "#4A4046",
+    rauch: "#9E9098",
+    wolfram: "#E5352A",
+    wie: "#4FB4C4",
+    was: "#E5352A",
+    warum: "#F2A81E",
+    gefahr: "#E5352A",
+    kartenFeld: "#F4EFE8",
+  },
 };
 
 export const T = { ...THEMES.dunkel };

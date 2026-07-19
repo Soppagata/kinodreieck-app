@@ -188,7 +188,7 @@ check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
-check("Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Mit Stil|Weils cool ist)$/));
+check("Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Showa|NERV)$/));
 check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
