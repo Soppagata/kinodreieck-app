@@ -280,6 +280,18 @@ check("syncStatus: alle Felder inkl. stale/configured",
   ["lastPull", "lastCommit", "pending", "conflict", "stale", "configured"].every((k) => k in st) &&
   Array.isArray(st.pending) && Array.isArray(st.stale));
 
+/* 18) Demo-Blobs per anon-Read (Phase 5): nur scope=demo, OHNE Sync-Schlüssel */
+reset();
+seed("demo", "kd:master", '{"meta":{"erstellt_am":"2026-07-01"},"filme":[{"id":"d1","titel":"Demo-Film"}]}', "demo");
+seed("demo", "kd:artikel", '{"artikel":[{"id":"da1"}]}', "demo");
+seed("max", "kd:master", '{"geheim":true}', "user");
+fetchCalls = [];
+const demo = await S.ladeDemoBlobs();
+check("Demo-Read: liefert Demo-Master", !!demo["kd:master"] && JSON.parse(demo["kd:master"]).filme[0].titel === "Demo-Film");
+check("Demo-Read: liefert weitere Demo-Blobs", !!demo["kd:artikel"]);
+check("Demo-Read: KEINE User-Zeile enthalten", demo["kd:master"].indexOf("geheim") === -1);
+check("Demo-Read: sendet KEINEN x-kd-key (reiner anon-Read)", fetchCalls.length > 0 && fetchCalls.every((c) => c.keyHdr == null));
+
 /* ---------- Auswertung ---------- */
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }

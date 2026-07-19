@@ -25,6 +25,7 @@ import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { store, K, PROGRAMM_TTL_MS } from "./lib/storage.js";
 import { baueBackup } from "./lib/backup.js";
+import { ladeDemoBlobs } from "./lib/supabaseDriver.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
@@ -130,6 +131,18 @@ function ladeDemoGlobal() {
   return demoLadePromise;
 }
 async function demoLadung() {
+  /* Phase 5: Demo-Masterliste per anon-Read aus Supabase (scope=demo) statt der
+     synthetischen Beilage. Fallback auf die Beilage/__KD_DEMO_MASTER__ (Tests bzw.
+     wenn keine Demo-Quelle konfiguriert ist). Wie zuvor: NICHT persistiert bis zur
+     Bearbeitung — die Demo lebt in React-State, nicht im Storage. */
+  try {
+    const blobs = await ladeDemoBlobs();
+    const roh = blobs && blobs["kd:master"];
+    if (roh) {
+      const d = JSON.parse(roh);
+      return { filme: ensureIds(d.filme || []), meta: d.meta || null, herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null } };
+    }
+  } catch { /* keine Demo-Quelle erreichbar -> Beilage-Fallback */ }
   const d = await ladeDemoGlobal();
   return {
     filme: ensureIds(d.filme || []),

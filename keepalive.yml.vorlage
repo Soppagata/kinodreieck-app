@@ -1,0 +1,37 @@
+# ============================================================================
+# Kinodreieck · Supabase Keep-alive  —  V O R L A G E
+# ----------------------------------------------------------------------------
+# Nur Max darf .github/workflows/ beschreiben. Deshalb liegt diese Datei als
+# Vorlage im Repo-Wurzelverzeichnis. Zum Aktivieren:
+#   1) nach  .github/workflows/keepalive.yml  verschieben/umbenennen,
+#   2) unter  Settings → Secrets and variables → Actions → Variables  zwei
+#      Repository-Variablen setzen:  SUPABASE_URL  und  SUPABASE_ANON
+#      (der anon/publishable-Key ist öffentlich und RLS-gesichert — kein Secret
+#       nötig; du kannst URL+anon alternativ direkt unten hartkodieren).
+#
+# Zweck: Der Free-Tier pausiert nach ~1 Woche geringer Aktivität. Ein anon-Read
+# alle paar Tage hält das Projekt wach. KEIN Sync-Schlüssel, KEIN service_role.
+# ============================================================================
+name: Supabase Keep-alive
+
+on:
+  schedule:
+    - cron: "17 6 */3 * *"   # alle 3 Tage, 06:17 UTC
+  workflow_dispatch: {}       # manuell auslösbar
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Anon-Read gegen kd_store (Demo-Menge)
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON: ${{ vars.SUPABASE_ANON }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON" ]; then
+            echo "SUPABASE_URL / SUPABASE_ANON nicht gesetzt (Repo-Variablen)."; exit 1
+          fi
+          curl -fsS "${SUPABASE_URL}/rest/v1/kd_store?scope=eq.demo&select=key&limit=1" \
+            -H "apikey: ${SUPABASE_ANON}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON}" \
+            && echo "keep-alive ok"

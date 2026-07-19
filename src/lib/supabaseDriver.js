@@ -17,6 +17,7 @@
    die Sicherheitsgrenze. Der `service_role`-Key kommt hier nie vor. */
 
 import { localDriver } from "./storage.js";
+import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
 
 /* Die 10 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
    deckungsgleich). Beim Supabase-Treiber ist der Schlüssel zugleich der Zeilen-
@@ -142,6 +143,30 @@ export async function connectionTest() {
     if (r.ok) return { ok: true, status: r.status };
     return { ok: false, status: r.status, message: deutung(r.status, r.data) };
   } catch (e) { return { ok: false, status: 0, message: "Netzwerk/CORS: " + e }; }
+}
+
+/* ---------- Demo-Blobs per anon-Read (Phase 5) ----------
+   Liest die Demo-Menge (scope=demo) OHNE Sync-Schlüssel — nur mit dem öffentlichen
+   anon-Key. Nutzt die konfigurierte URL/anon oder die Build-Defaults. Für die
+   Demo-Startwahl im Tester-Build; Tester-Edits bleiben lokal (kein DB-Write). */
+export async function ladeDemoBlobs() {
+  const c = getSupabaseConfig();
+  const url = (c.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
+  const anon = c.anon || SB_DEFAULT_ANON || "";
+  if (!/^https?:\/\//.test(url) || !anon) throw new Error("Demo-Quelle nicht konfiguriert (Supabase-URL/anon-Key).");
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
+  try {
+    const res = await fetch(url + "/rest/v1/" + TABLE + "?scope=eq.demo&select=key,value", {
+      headers: { "apikey": anon, "Authorization": "Bearer " + anon },   // KEIN x-kd-key: reiner anon-Read
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    let data = null; try { data = await res.json(); } catch { /* leerer Body */ }
+    if (!res.ok || !Array.isArray(data)) throw new Error("Demo-Read fehlgeschlagen: HTTP " + res.status);
+    const blobs = {};
+    for (const row of data) { if (row && typeof row.key === "string") blobs[row.key] = (row.value == null ? null : String(row.value)); }
+    return blobs;
+  } finally { if (timer) clearTimeout(timer); }
 }
 
 /* ---------- Pull-on-start ---------- */
