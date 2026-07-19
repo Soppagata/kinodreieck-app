@@ -8,19 +8,26 @@ import nervLogoReference from "../assets/nerv-logo-reference.png";
 function Kaiju() {
   return (
     <g className="kd-kaiju-shape" transform="translate(520 63) scale(.75)">
-      {/* Organische Hauptsilhouette: kleiner Kopf, schwerer Hals/Körper,
-          getrennte Beine und langer bodennaher Schwanz. */}
-      <path d="M116 96 C101 98 89 95 74 90 L51 83 Q44 78 51 70 L88 64 C107 60 124 64 138 73 C153 83 164 96 170 112 C180 128 194 145 201 166 C211 197 208 226 196 253 C208 267 223 276 242 283 C270 293 292 306 319 322 L304 336 C276 327 246 318 216 314 C197 312 183 305 170 294 C166 315 156 333 139 340 L112 340 L103 330 L109 313 L112 288 C101 291 91 291 82 288 L79 312 L86 328 L76 340 L45 340 C34 335 30 326 34 313 L47 264 C36 242 32 217 37 192 C42 165 57 143 81 129 C89 115 101 104 116 96 Z" />
-      {/* Brust und kurze Krallenarme. */}
-      <path d="M85 137 C68 139 52 151 44 169 L50 176 C59 164 67 158 79 156 L67 171 L73 176 L88 160 L84 178 L91 180 L101 151 Z" />
-      <path d="M151 141 C133 145 121 157 116 174 L122 180 C130 164 140 159 153 157 L143 171 L149 176 L164 157 Z" opacity=".92" />
-      {/* Unregelmäßige, blattförmige Rückenplatten. */}
-      <path d="M162 107 L166 83 L174 92 L181 69 L187 94 L197 86 L194 116 Z" />
-      <path d="M179 135 L184 106 L193 118 L202 91 L209 119 L221 108 L214 145 Z" />
-      <path d="M190 168 L197 137 L205 150 L217 122 L222 153 L235 145 L224 181 Z" />
-      <path d="M194 202 L202 171 L211 184 L224 159 L227 190 L240 184 L225 215 Z" />
-      <path d="M189 235 L198 207 L206 220 L221 201 L219 229 L232 228 L211 249 Z" />
-      <circle className="kd-kaiju-eye" cx="75" cy="76" r="2.8" />
+      {/* Zusammenhängende Suitmation-Silhouette: nach vorn geneigter Kopf,
+          schwerer Bauch, massive Oberschenkel und langer schleifender Schwanz. */}
+      <path d="M12 326 C45 318 69 304 91 284 C87 259 86 237 90 213 C94 184 104 158 122 137 C126 115 136 94 152 75 C165 59 181 49 199 45 C217 41 235 46 248 56 C260 66 267 79 266 92 C265 102 258 109 247 114 L281 116 C296 117 305 122 304 130 C303 139 292 144 276 145 L249 144 C244 155 246 166 255 178 C267 190 278 198 287 204 C298 211 304 220 300 228 C296 236 287 237 277 232 L249 218 C238 212 229 208 218 208 C224 236 223 261 216 284 L234 318 C241 331 234 341 219 342 H198 C188 339 188 331 195 322 L201 309 L184 281 C179 303 176 319 180 329 C184 339 175 344 163 344 H129 C116 342 109 334 116 322 L124 302 L120 281 C108 283 100 286 91 293 C69 313 45 329 17 336 Z" />
+      {/* Langer Unterarm mit deutlich getrennten Krallen. */}
+      <path d="M220 164 C238 168 250 181 258 194 L283 209 C294 215 295 225 287 230 C279 233 273 227 267 220 L247 210 C238 205 229 202 219 201 L207 187 Z" />
+      <path d="M283 209 L302 211 L289 219 L306 224 L287 228 Z" />
+      {/* Große, unregelmäßige Rückenplatten entlang der gesamten Kontur. */}
+      <path d="M157 81 L145 58 L156 62 L158 37 L171 56 L180 42 L179 77 Z" />
+      <path d="M132 111 L113 87 L127 88 L124 58 L143 82 L151 65 L151 101 Z" />
+      <path d="M111 150 L87 126 L103 126 L95 94 L119 120 L127 99 L129 139 Z" />
+      <path d="M96 192 L68 171 L85 168 L72 137 L101 160 L107 137 L114 180 Z" />
+      <path d="M91 236 L62 221 L79 214 L61 187 L94 204 L98 180 L109 222 Z" />
+      <path d="M97 274 L68 265 L83 255 L61 235 L96 244 L96 222 L112 260 Z" />
+      {/* Mundspalt, Auge und raue Hautstruktur brechen die flache Paint-Fläche. */}
+      <path className="kd-kaiju-cut" d="M246 123 C266 126 281 127 296 130 C283 135 267 136 248 134 Z" />
+      <circle className="kd-kaiju-eye" cx="241" cy="105" r="3.1" />
+      <g className="kd-kaiju-texture" fill="none">
+        <path d="M151 111 C175 102 199 106 218 122 M125 147 C153 137 188 142 207 160 M111 188 C142 177 179 184 203 205 M108 229 C140 218 177 226 203 247 M126 269 C151 258 182 264 202 280" />
+        <path d="M151 113 l8 9 l9 -8 l9 10 l10 -8 M126 150 l9 10 l10 -9 l10 9 l10 -8 M114 191 l9 9 l10 -8 l11 10 l11 -8 M116 232 l10 9 l10 -8 l11 10 l11 -8" />
+      </g>
     </g>
   );
 }
@@ -93,8 +100,6 @@ function ShowaFx() {
   );
 }
 
-const syncSegmente = Array.from({ length: 20 }, (_, i) => i);
-
 function NervFx() {
   return (
     <div className="kd-fx kd-fx-nerv" aria-hidden="true">
@@ -129,13 +134,6 @@ function NervFx() {
       <div className="kd-nerv-micro m2"><b lang="ja">外部</b><span>EXTERNAL</span></div>
       <div className="kd-nerv-micro m3"><b lang="ja">内部</b><span>INTERNAL</span></div>
 
-      <div className="kd-nerv-sync">
-        <div className="kd-nerv-sync-head"><b>SYNCHRONRATE</b><span>87.2 %</span></div>
-        <div className="kd-nerv-segments">
-          {syncSegmente.map((i) => <i key={i} className={i < 17 ? "on" : ""} />)}
-        </div>
-        <small>MAGI · MELCHIOR / BALTHASAR / CASPER</small>
-      </div>
     </div>
   );
 }
