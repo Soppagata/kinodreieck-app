@@ -8,7 +8,9 @@ import { isGitConfigured } from "../lib/gitDriver.js";
    BEVOR Git verbunden wird. Ersetzt die lokalen Daten (kein Merge), sichert den
    vorherigen Stand als Snapshot (rückgängig machbar) und zeigt einen Zählbericht
    (der Abgleich gegen die alte App = Checkpoint B der Migration). */
-export function RestoreImport() {
+/* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe
+   (Einstellungs-Accordion, Etappe 2) steht. */
+export function RestoreImport({ ohneKopf = false } = {}) {
   const [bericht, setBericht] = useState(null);
   const [meldung, setMeldung] = useState(null); // {art:"ok"|"warn"|"err", text}
   const [busy, setBusy] = useState(false);
@@ -52,7 +54,7 @@ export function RestoreImport() {
 
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <h2 style={h2Style}>Backup wiederherstellen</h2>
+      {!ohneKopf && <h2 style={h2Style}>Backup wiederherstellen</h2>}
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
         Einmaliger Umzug: das <strong style={{ color: T.leinwand }}>Gesamt-Backup der alten App</strong> hier
         einspielen — Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status und

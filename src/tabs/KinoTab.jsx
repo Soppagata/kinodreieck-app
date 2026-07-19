@@ -3,7 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
 import { store, K } from "../lib/storage.js";
-import { Chip, IconDelete } from "../components/ui.jsx";
+import { Chip, ChipReihe, IconDelete } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -119,7 +119,7 @@ export function KinoTab({
 
   return (
     <section>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 12 }}>
+      <ChipReihe style={{ gap: 10, marginBottom: 12 }}>
         {/* Nur sinnvoll über einen Server: per Doppelklick (file://) blockiert der
             Browser jeden Datei-fetch. Beim Doppelklick liefert der tägliche Job den
             frischen Stand über den Neubau — nicht über diesen Button. */}
@@ -139,7 +139,7 @@ export function KinoTab({
             Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}{programm?.quelle_hinweis ? " · " + programm.quelle_hinweis : ""}
           </span>
         )}
-      </div>
+      </ChipReihe>
 
       {/* ---- Angepinnte Termine (überleben Programm-Refreshs, Boot räumt Vergangenes auf) ---- */}
       {pinsSortiert.length > 0 && (
@@ -175,7 +175,7 @@ export function KinoTab({
       {programm && (
         <>
           {/* ---- Suche (immer sichtbar) & Filter (einklappbar, P1.4) ---- */}
-          <div data-tour="kino-filter" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div data-tour="kino-filter" className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
             <input value={sucheK} onChange={(e) => setSucheK(e.target.value)} placeholder="Programm durchsuchen …"
               style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
             {sucheK && <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSucheK("")}>×</button>}
@@ -186,7 +186,7 @@ export function KinoTab({
           </div>
           {filterMenueOffen && (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <ChipReihe>
                 <select value={kinoF} onChange={(e) => setKinoF(e.target.value)} style={{ ...inputStyle, width: "auto", maxWidth: 220 }}>
                   <option value="">Alle Kinos</option>
                   {kinos.map((k) => <option key={k} value={k}>{k}</option>)}
@@ -195,8 +195,8 @@ export function KinoTab({
                 {fassungenDa && ["OmU", "OV", "DF"].map((fs) => (
                   <Chip key={fs} active={fassungF === fs} onClick={() => setFassungF(fassungF === fs ? null : fs)}>{fs}</Chip>
                 ))}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+              </ChipReihe>
+              <ChipReihe style={{ gap: 6 }}>
                 {tage.map((t) => <Chip key={t} active={tagF === t} onClick={() => setTagF(tagF === t ? null : t)}>{t}</Chip>)}
                 <span style={{ width: 12 }} />
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}
@@ -216,7 +216,7 @@ export function KinoTab({
                     Filter zurücksetzen
                   </button>
                 )}
-              </div>
+              </ChipReihe>
             </>
           )}
 

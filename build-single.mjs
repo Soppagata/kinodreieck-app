@@ -12,7 +12,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const OUT = join(ROOT, "dist-single");
+/* KD_OUT: alternativer Zielordner (betamodus_test.mjs baut mit KD_BETA=1 nach
+   dist-single-beta, ohne den Personal-Build in dist-single zu überschreiben). */
+const OUT = join(ROOT, process.env.KD_OUT || "dist-single");
 mkdirSync(OUT, { recursive: true });
 
 console.log("1/3 Vite-Single-File-Build …");

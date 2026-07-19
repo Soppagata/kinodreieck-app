@@ -40,13 +40,26 @@ await warte(3000);
 const checks = [];
 const check = (n, p) => checks.push([n, p]);
 
-/* ---- 1. Start: Quicklink-Mapping (Klick wechselt wirklich den Tab) ---- */
-const quickMediathek = [...doc.querySelectorAll("button")].find((b) => /Bestand, Bewertungen/.test(b.textContent || ""));
-check("Start: Quicklink-Karten vorhanden", !!quickMediathek);
-if (quickMediathek) {
-  quickMediathek.click(); await warte(500);
-  check("Start: Quicklink navigiert zur Mediathek", /Unbewerteter Besitz|Filme \(/.test(text()) || /typ als Diskriminator|Apple/.test(text()));
+/* ---- 1. Start: Dashboard (Etappe 4, Personal-Build) — Vertrauens-Zeile +
+   Modul-Link-Mapping (→-Link wechselt wirklich den Tab). Die Quicklinks der
+   Beta-Landing prüft betamodus_test.mjs gegen den Beta-Build. ---- */
+check("Start: Dashboard-Vertrauens-Zeile (Programm-/Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(text()));
+const modulLink = [...doc.querySelectorAll("button")].find((b) => /^→ (Kino|Mediathek|Streaming)$/.test((b.textContent || "").trim()));
+if (modulLink) {
+  const ziel = (modulLink.textContent || "").replace("→", "").trim();
+  modulLink.click(); await warte(500);
+  check("Start: Modul-→-Link navigiert (" + ziel + ")",
+    ziel === "Mediathek" ? (/Unbewerteter Besitz|Filme \(|Apple/.test(text()))
+      : ziel === "Kino" ? (/Läuft auch|Läuft & passt zu dir|Kinoprogramm/.test(text()))
+        : /Mein Programm|Entdecken/.test(text()));
+} else {
+  /* Demo-Stand ohne Module (keine Pins/Must-Watch/Matches mit Termin) — dann
+     muss wenigstens der Leer-Hinweis stehen und das Menü navigieren. */
+  check("Start: Dashboard-Leerzustand mit Hinweis", /Noch leer/.test(text()));
 }
+const zurMediathek = knopf(/^mediathek$/i);
+if (zurMediathek) { zurMediathek.click(); await warte(500); }
+check("Start: Menü navigiert zur Mediathek", /Unbewerteter Besitz|Filme \(/.test(text()) || /typ als Diskriminator|Apple/.test(text()));
 
 /* ---- 2. Mediathek: Typ-Tabs, Chips, Formular-Knöpfe, Daten&Teilen ---- */
 for (const t of ["Serien", "Musik", "Sonstiges", "Filme"]) {
@@ -125,6 +138,9 @@ if (neuKnopf) {
 const streamingTab = knopf(/^streaming$/i);
 if (streamingTab) { streamingTab.click(); await warte(600); }
 check("Streaming: Ansicht Mein Programm/Entdecken", !!knopf(/^Mein Programm/) || !!knopf(/^Entdecken/));
+/* Etappe 2: Umschalter ist jetzt SegmentedControl — der Tour-Anker
+   data-tour="streaming-views" muss am neuen .kd-seg-Container hängen. */
+check("Etappe 2: SegmentedControl trägt Tour-Anker streaming-views (kd-seg)", !!doc.querySelector('.kd-seg[data-tour="streaming-views"]'));
 // Streaming-Quellen sind jetzt im Einstellungen-Tab (verschoben)
 const einstNav5 = [...doc.querySelectorAll("nav button")].find((b) => /^einstellungen$/i.test((b.textContent || "").trim()));
 if (einstNav5) { einstNav5.click(); await warte(500); }
@@ -138,6 +154,11 @@ const tabs = [...doc.querySelectorAll("nav button")];
 const einstellungenTab = tabs.find((b) => /^einstellungen$/i.test((b.textContent || "").trim()));
 check("Einstellungen-Tab in der Nav", !!einstellungenTab);
 if (einstellungenTab) { einstellungenTab.click(); await warte(500); }
+/* Etappe 2: Hauptblöcke als <details>-Accordions (Klappe); nur
+   "Darstellung & Verhalten" startet offen. */
+const klappen = [...doc.querySelectorAll("details.kd-klappe")];
+check("Etappe 2: Einstellungen-Accordions (kd-klappe), Darstellung startet offen",
+  klappen.length >= 6 && klappen.some((d) => d.open && /Darstellung & Verhalten/.test((d.querySelector("summary") || {}).textContent || "")));
 // Easter-Egg-Modi: unter dem "Max"-Link versteckt, theme-abhängiger Toggle-Knopf
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
@@ -210,6 +231,8 @@ const kFilter = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((
 if (kFilter && /▸/.test(kFilter.textContent)) { kFilter.click(); await warte(300); }
 const aboChip = knopf(/^(Abo: alle|Nur NonStop|Kein NonStop)$/);
 check("Kino: Abo-Tri-State-Chip", !!aboChip);
+/* Etappe 2: Filterzeilen sind ChipReihen (eine wischbare Zeile am Handy). */
+check("Etappe 2: ChipReihe (kd-chiprow) im Kino-Tab gerendert", doc.querySelectorAll(".kd-chiprow").length > 0);
 if (aboChip) { aboChip.click(); await warte(300); aboChip.click(); await warte(200); aboChip.click(); await warte(200); check("Kino: Abo-Filter zyklisch ohne Fehler", text().length > 500); }
 check("Kino: Ganzes-Tagesprogramm-Schalter", !!knopf(/Ganzes Tagesprogramm|Zeitfilter an/));
 check("Kino: Nonstop-Link korrekt", [...doc.querySelectorAll("a")].some((a) => a.href === "https://www.nonstopkino.at/programm"));

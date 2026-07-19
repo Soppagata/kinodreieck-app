@@ -1314,7 +1314,7 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "kurosawa" ? " kd-kurosawa" : einstellungen.modus === "grindhouse" ? " kd-grindhouse" : "")}>
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "kurosawa" ? " kd-kurosawa" : einstellungen.modus === "grindhouse" ? " kd-grindhouse" : "") + (einstellungen.linkshaender ? " kd-links" : "")}>
       {einstellungen.modus ? (
         <div className="kd-fx">
           <div className="grade" /><div className="grade2" /><div className="korn" /><div className="kratzer" /><div className="knitter" />
@@ -1404,7 +1404,11 @@ export default function App() {
           Ebenen liegen in index.css: Desktop 40, Handy 60 (.kd-menu). */}
       <nav className={"kd-menu" + (navOffen ? " offen" : "")} style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {[["start", "Start"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"], ["finder", "Suche"], ["daten", "Einstellungen"]].map(([id, label]) => (
+          {/* DOM-Reihenfolge = bottom-up-Wichtigkeit (Etappe 3, Max 18.07.):
+              das Mobile-Popup stapelt per column-reverse von unten — Kino als
+              1. DOM-Kind landet daumennah. Labels/Handler bleiben unverändert
+              (Tests klicken per Text). */}
+          {[["kino", "Kino"], ["streaming", "Streaming"], ["mediathek", "Mediathek"], ["finder", "Suche"], ["blog", "Blog"], ["start", "Start"], ["daten", "Einstellungen"]].map(([id, label]) => (
             <button key={id} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}
               style={{
                 fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
@@ -1451,7 +1455,13 @@ export default function App() {
         ) : null}
 
         {tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={setTab} onTutorialNeu={() => { try { resetTutorial(); } catch { /* */ } setWillkommenOffen(true); }} />
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={setTab} onTutorialNeu={() => { try { resetTutorial(); } catch { /* */ } setWillkommenOffen(true); }}
+            /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
+               keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
+               Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
+            kinoMatches={kinoMatches} mustwatch={mustwatch} auswahl={auswahl}
+            streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
+            progStand={progStand} />
         )}
 
         {tab === "kino" && bootDone && (

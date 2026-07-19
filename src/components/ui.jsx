@@ -69,6 +69,56 @@ export function Chip({ active, onClick, children, color }) {
   );
 }
 
+/* ---------- Etappe 2: Mobile-Bausteine ----------
+   ChipReihe: EINE horizontal wischbare Zeile am Handy (<=760px); auf dem
+   Desktop wrappt sie wie die bisherigen Flex-Reihen. Das Verhalten steckt
+   KOMPLETT in .kd-chiprow (index.css, Media-Query) — hier bewusst KEIN
+   flexWrap/overflow inline, sonst schlägt der Inline-Style die Media-Query
+   (Scrim-Bug-Lehre, index.css:181-184). style nur für gap/marginBottom. */
+export function ChipReihe({ children, style }) {
+  return <div className="kd-chiprow" style={style}>{children}</div>;
+}
+
+/* SegmentedControl: exklusiver Umschalter. options = [{id, label, badge?}],
+   badge wird als " (n)" angehängt (Tests matchen auf diese Textform, z. B.
+   /^Im Besitz \(/). Optik = die bisherigen Inline-Knopf-Fabriken (Barlow 15px);
+   die Mobile-Verdichtung übernimmt .kd-seg (index.css). dataTour landet am
+   Container — Tour-Anker wie data-tour="streaming-views" bleiben erhalten. */
+export function SegmentedControl({ options, value, onChange, dataTour, style }) {
+  /* style nur für Layout im Umfeld (marginBottom/flex) — flexWrap/overflow
+     NIE inline setzen, das steuert .kd-seg per Media-Query. */
+  return (
+    <div className="kd-seg" role="group" data-tour={dataTour} style={style}>
+      {options.map((o) => (
+        <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={value === o.id}
+          style={{
+            fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
+            letterSpacing: "0.06em", textTransform: "uppercase", padding: "7px 14px",
+            border: "1px solid " + (value === o.id ? T.wolfram : T.rauch), borderRadius: 4, cursor: "pointer",
+            background: value === o.id ? T.wolfram : "transparent", color: value === o.id ? T.tinte : T.rauch,
+          }}>
+          {o.label}{o.badge != null ? ` (${o.badge})` : ""}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* Klappe: <details>-Accordion mit kompakter Kopfzeile für die Einstellungs-
+   Blöcke (Etappe 2). tour setzt data-tour am <details>, damit Tour-Anker
+   auch bei zugeklapptem Block ein Ziel haben. offen = Startzustand;
+   danach togglet der Browser nativ (kein JS-State). */
+export function Klappe({ titel, offen = false, tour, children }) {
+  return (
+    <details className="kd-klappe" open={offen || undefined} data-tour={tour}>
+      <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 18, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, padding: "6px 0" }}>
+        {titel}
+      </summary>
+      <div style={{ marginTop: 8 }}>{children}</div>
+    </details>
+  );
+}
+
 export function KategorieTag({ k }) {
   const map = {
     immer_gut: ["IMMER GUT", T.wolfram],

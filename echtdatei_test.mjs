@@ -62,6 +62,17 @@ const dom = new JSDOM(html, {
     window.localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: true, skip: [], am: "2026-07-15", version: "beta-2026-07-datenfreigabe-2" }));
     window.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
     window.localStorage.setItem("kd:master", seedMaster);
+    /* Etappe 4: Dashboard-Seeds — Must-Watch (mit erstellt_am) fürs Must-Watch-
+       und Zuletzt-hinzugefügt-Modul, Merkliste (Netflix-Titel aus dem Demo-
+       Entdecken-Snapshot, Default-Abos enthalten Netflix) für „Jetzt streambar". */
+    window.localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [
+      { id: "mw_stalker", titel: "Stalker", im_besitz: true, beschreibung: "", notiz: "", verknuepfung: null, erstellt_am: "2026-07-10T10:00:00.000Z" },
+      { id: "mw_der_dialog", titel: "Der Dialog", im_besitz: false, beschreibung: "", notiz: "", verknuepfung: null, erstellt_am: "2026-07-12T10:00:00.000Z" },
+    ], gespeichertAm: Date.now() }));
+    const merkTitel = (entdeckenSnapshot.titel || []).find((t) => (t.dienste || []).includes("Netflix"));
+    if (merkTitel) window.localStorage.setItem("kd:merkliste", JSON.stringify([
+      { watchmode_id: merkTitel.watchmode_id, titel: merkTitel.titel, jahr: merkTitel.jahr ?? null, hinzugefuegt_am: "2026-07-14" },
+    ]));
   },
 });
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -74,28 +85,25 @@ await warte(3000);
 const checks = [];
 const check = (name, pass) => checks.push([name, pass]);
 
-/* ---- Grundgerüst (Dashboard ist der Start-Tab) ---- */
+/* ---- Grundgerüst (Personal-Dashboard ist der Start-Tab, Etappe 4) ---- */
 const startText = text();
-check("App gerendert (#root gefüllt)", startText.length > 500);
+check("App gerendert (#root gefüllt)", startText.length > 300);
 const icon = doc.querySelector('link[rel="icon"]');
 check("Favicon eingebettet (data:-URI, kein file://-Bruch)", !!icon && (icon.getAttribute("href") || "").startsWith("data:image/svg"));
 for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG", "SUCHE"]) {
   check("Tab " + tab, new RegExp(tab, "i").test(startText));
 }
 
-/* ---- Dashboard: Hero, Ecken-Erklärung, Pinboard, Quicklinks, Doku ---- */
-check("Dashboard: Hero + Claim", /Deine Filme, dein Kino, dein Urteil/.test(startText));
-check("Dashboard: drei Ecken erklärt", /Wie ist es gemacht\?/.test(startText) && /Was erzählt es\?/.test(startText) && /Warum gerade für dich\?/.test(startText));
-check("Dashboard: Pinboard-Sektion", /Pinboard/.test(startText));
-check("Dashboard: Quicklinks", /Direkt hinein/.test(startText));
-const dokuKnopf = knopf(/Anleitung & Hilfe öffnen/i);
-check("Dashboard: Doku-Knopf", !!dokuKnopf);
-if (dokuKnopf) {
-  dokuKnopf.click(); await warte(300);
-  check("Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Rechtliches/.test(text()));
-  const zu = knopf(/Anleitung zuklappen/i);
-  if (zu) { zu.click(); await warte(200); }
-}
+/* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */
+const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(MATCH_TITEL).toLowerCase());
+check("Dashboard: Vertrauens-Zeile (Programm- + Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(startText) && /Katalog: \d+ Titel/.test(startText));
+check("Dashboard: Kino-für-dich-Modul mit Match + Termin", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && /MATCH/.test(startText));
+check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
+check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /JETZT AUF NETFLIX/.test(startText));
+check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
+check("Dashboard: leeres Pinboard-Modul erscheint NICHT", !/Pinboard/.test(startText));
+check("Dashboard: Erklärinhalte raus aus Start (kein Hero, keine Quicklinks)",
+  !/LOKALE FILM-PLATTFORM/.test(startText) && !/Deine Filme, dein Kino, dein Urteil/.test(startText) && !/Direkt hinein/.test(startText) && !knopf(/Anleitung & Hilfe öffnen/i));
 
 /* ---- Kino: kompakter Eintrag -> Pin -> Eintrag erstellen ----
    (kein Attribut-Selektor: jsdoms CSS-Engine nwsapi verschluckt sich am "&") */
@@ -132,6 +140,11 @@ if (enthaeltMatch(kinoText)) {
 } else {
   check(`"${MATCH_TITEL}" im Programm sichtbar (film_at_id ${MATCH_ID})`, false);
 }
+
+/* ---- Zurück zum Start: der eben gesetzte Pin füllt jetzt das Pinboard-Modul ---- */
+const startTabKnopf = knopf(/^start$/i);
+if (startTabKnopf) { startTabKnopf.click(); await warte(500); }
+check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Karte + Termin-Chip)", /Pinboard/.test(text()) && /→ Kino/.test(text()));
 
 /* ---- Streaming/Entdecken: Filter + gesehen + Eintrag erstellen ---- */
 const streamingTab = knopf(/^streaming$/i);
@@ -180,6 +193,25 @@ check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
 
+/* ---- „Über"-Einstieg (Etappe 4): Erklärstücke + Anleitung leben jetzt hier ---- */
+const ueberKnopf = knopf(/^Über Kinodreieck & Anleitung$/i);
+check("Über-Einstieg unter Über & Rechtliches vorhanden", !!ueberKnopf);
+if (ueberKnopf) {
+  ueberKnopf.click(); await warte(400);
+  check("Über: Hero + Dreieck-Erklärstück erscheinen", /LOKALE FILM-PLATTFORM/.test(text()) && /Deine Filme, dein Kino, dein Urteil/.test(text())
+    && /Wie ist es gemacht\?/.test(text()) && /Was erzählt es\?/.test(text()) && /Warum gerade für dich\?/.test(text()));
+  const dokuKnopf = knopf(/Anleitung & Hilfe öffnen/i);
+  check("Über: Doku-Knopf vorhanden", !!dokuKnopf);
+  if (dokuKnopf) {
+    dokuKnopf.click(); await warte(300);
+    check("Über: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Die vollständige Anleitung liegt als ANLEITUNG\.md/.test(text()));
+    const zu = knopf(/Anleitung zuklappen/i);
+    if (zu) { zu.click(); await warte(200); }
+  }
+  const ueberZu = knopf(/^Über Kinodreieck zuklappen$/i);
+  if (ueberZu) { ueberZu.click(); await warte(200); }
+}
+
 /* ---- Must-Watch-Migration (Flag-Testfilm ist geseedet) ---- */
 check("Migration: Abschnitt sichtbar (offenes Flag)", /Must-Watch-Migration/.test(text()));
 const migKnopf = knopf(/Flags in die Must-Watch-Liste migrieren/);
@@ -189,9 +221,11 @@ if (migKnopf) {
   let mwTopf = null;
   try { mwTopf = JSON.parse(dom.window.localStorage.getItem("kd:mustwatch") || "null"); } catch { /* */ }
   const eintraege = (mwTopf && mwTopf.eintraege) || [];
-  check("Migration: 1 Eintrag angelegt + auf Master verknüpft",
-    eintraege.length === 1 && eintraege[0].verknuepfung && eintraege[0].verknuepfung.id === "flag_testfilm_1990");
-  check("Migration: im_besitz aus physischer Quelle abgeleitet (bluray)", eintraege.length === 1 && eintraege[0].im_besitz === true);
+  /* Etappe 4: 2 Dashboard-Seeds + 1 migrierter Eintrag = 3 in der Liste. */
+  const migriert = eintraege.find((e) => e.verknuepfung && e.verknuepfung.id === "flag_testfilm_1990");
+  check("Migration: 1 Eintrag angelegt + auf Master verknüpft (Seeds unangetastet)",
+    eintraege.length === 3 && !!migriert);
+  check("Migration: im_besitz aus physischer Quelle abgeleitet (bluray)", !!migriert && migriert.im_besitz === true);
   check("Migration: Bericht angezeigt (1 angelegt)", /Migration: 1 angelegt/.test(text()));
   check("Migration: Knopf nach Lauf verschwunden (idempotent, nichts mehr offen)", !knopf(/Flags in die Must-Watch-Liste migrieren/));
 }

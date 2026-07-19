@@ -6,7 +6,7 @@ import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
-import { Chip, IconExport } from "../components/ui.jsx";
+import { Chip, ChipReihe, SegmentedControl, IconExport } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -153,25 +153,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return list.sort(aktiv);
   }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, axis, genreF, katF, suche, sortier]);
 
-  const ansichtKnopf = (id, label) => (
-    <button key={id} onClick={() => { setAnsicht(id); setExpandedId(null); }}
-      style={{
-        fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
-        letterSpacing: "0.06em", textTransform: "uppercase", padding: "7px 14px",
-        border: "1px solid " + (ansicht === id ? T.wolfram : T.rauch), borderRadius: 4, cursor: "pointer",
-        background: ansicht === id ? T.wolfram : "transparent", color: ansicht === id ? T.tinte : T.rauch,
-      }}>{label}</button>
-  );
-
   return (
     <section>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
           Interner Key bleibt "bestand" — nur das Label heißt Einträge (Max, 18.07.). */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {ansichtKnopf("bestand", "Einträge")}
-        {ansichtKnopf("besitz", `Im Besitz (${besitzAnzahl})`)}
-        {ansichtKnopf("mustwatch", `Must-Watch (${mustwatch.length})`)}
-      </div>
+      <SegmentedControl value={ansicht} onChange={(id) => { setAnsicht(id); setExpandedId(null); }}
+        options={[
+          { id: "bestand", label: "Einträge" },
+          { id: "besitz", label: "Im Besitz", badge: besitzAnzahl },
+          { id: "mustwatch", label: "Must-Watch", badge: mustwatch.length },
+        ]} />
 
       {/* ===== Must-Watch: eigener Datentopf, eigene Liste ===== */}
       {ansicht === "mustwatch" && (
@@ -191,23 +182,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {ansicht !== "mustwatch" && (<>
       {/* Typ-Tabs (Filter auf typ) */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {Object.keys(TYP_GRUPPEN).map((t) => (
-          <button key={t} onClick={() => { setTypTab(t); setExpandedId(null); }}
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              padding: "7px 14px", border: "1px solid " + (typTab === t ? T.wolfram : T.rauch),
-              borderRadius: 4, cursor: "pointer",
-              background: typTab === t ? T.wolfram : "transparent",
-              color: typTab === t ? T.tinte : T.rauch,
-            }}>
-            {TAB_LABELS[t]} ({counts[t]})
-          </button>
-        ))}
-      </div>
+      <SegmentedControl value={typTab} onChange={(t) => { setTypTab(t); setExpandedId(null); }}
+        options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
           style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
         {suche && <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}>×</button>}
@@ -240,7 +218,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           </button>
           {filterMenueOffen && (
           <>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <ChipReihe>
             {ansicht === "bestand" && (
               <>
                 <Chip active={besitz === "alle"} onClick={() => setBesitz("alle")}>Besitz: alle</Chip>
@@ -254,17 +232,17 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             <Chip active={axis === "wie"} color={T.wie} onClick={() => setAxis(axis === "wie" ? null : "wie")}>WIE-lastig</Chip>
             <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
             <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          </ChipReihe>
+          <ChipReihe style={{ gap: 6 }}>
             {[["immer_gut", "Immer gut"], ["kult", "Kult"], ["kult_klassiker", "Kult-Klassiker"], ["daemlich_aber_herrlich", "Dämlich aber herrlich"], ["trash", "Trash"], ["sehenswert", "Sehenswert"], ["echter_schrott", "Echter Schrott"]].map(([k, l]) => (
               <Chip key={k} active={katF === k} onClick={() => setKatF(katF === k ? null : k)}>{l}</Chip>
             ))}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+          </ChipReihe>
+          <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
             {genres.map((g) => (
               <Chip key={g} active={genreF === g} onClick={() => setGenreF(genreF === g ? null : g)}>{g}</Chip>
             ))}
-          </div>
+          </ChipReihe>
           </>
           )}
         </>

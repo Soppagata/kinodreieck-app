@@ -4,7 +4,7 @@ import { feuere } from "../lib/tour.js";
 import { store, K } from "../lib/storage.js";
 import { norm, schlagseite, score } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
-import { Chip } from "../components/ui.jsx";
+import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 
@@ -178,17 +178,12 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
 
   return (
     <section>
-      <div data-tour="streaming-views" style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-        {[["programm", "Mein Programm" + (datenDa ? ` (${programm.length})` : "")], ["entdecken", "Entdecken" + (entdeckenDa ? ` (${entdeckenListe.length})` : "")]].map(([id, label]) => (
-          <button key={id} onClick={() => setAnsicht(id)}
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
-              letterSpacing: "0.06em", textTransform: "uppercase", padding: "7px 14px",
-              border: "1px solid " + (ansicht === id ? T.wolfram : T.rauch), borderRadius: 4, cursor: "pointer",
-              background: ansicht === id ? T.wolfram : "transparent", color: ansicht === id ? T.tinte : T.rauch,
-            }}>{label}</button>
-        ))}
-      </div>
+      {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
+      <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={setAnsicht}
+        options={[
+          { id: "programm", label: "Mein Programm", badge: datenDa ? programm.length : undefined },
+          { id: "entdecken", label: "Entdecken", badge: entdeckenDa ? entdeckenListe.length : undefined },
+        ]} />
 
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
@@ -215,7 +210,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
       {/* ===== Mein Programm ===== */}
       {ansicht === "programm" && datenDa && (
         <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             <span style={mono}>Stand {stand.toLocaleDateString("de-AT")}</span>
             <button onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
@@ -225,7 +220,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
           </div>
           {streamFilterOffen && (
             <>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8, alignItems: "center" }}>
+              <ChipReihe>
                 {schnellOptionen.map((d) => (
                   <Chip key={d} active={schnellDienst === d} onClick={() => setSchnellDienst(schnellDienst === d ? null : d)}>{d}</Chip>
                 ))}
@@ -234,12 +229,12 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                 <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
                 <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
                 <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Must-Watch</Chip>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              </ChipReihe>
+              <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
                 {[["immer_gut", "Immer gut"], ["kult", "Kult"], ["kult_klassiker", "Kult-Klassiker"], ["daemlich_aber_herrlich", "Dämlich aber herrlich"], ["trash", "Trash"], ["sehenswert", "Sehenswert"]].map(([k, l]) => (
                   <Chip key={k} active={katF === k} onClick={() => setKatF(katF === k ? null : k)}>{l}</Chip>
                 ))}
-              </div>
+              </ChipReihe>
             </>
           )}
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
@@ -267,7 +262,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             Ungeprüft — Heuristik-Sortierung{entdecken && entdecken.heuristik === false ? " (abgeschaltet)" : ""}. Kein Dreieck, keine Bewertung. Merkliste = Übergabe an die Bewertung.
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             {/* data-tour auf dem Wrapper, NICHT dem <select>: native Form-Controls
                 schlucken den box-shadow-Rahmen, dann käme der Hinweis ohne Rahmen. */}
@@ -293,7 +288,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
           </div>
           {streamFilterOffen && (
             <>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              <ChipReihe style={{ gap: 6 }}>
                 {schnellOptionen.map((d) => <Chip key={d} active={schnellDienst === d} onClick={() => setSchnellDienst(schnellDienst === d ? null : d)}>{d}</Chip>)}
                 {schnellOptionen.length > 0 && <span style={{ width: 12 }} />}
                 <Chip active={typE === "movie"} onClick={() => setTypE(typE === "movie" ? null : "movie")}>Filme</Chip>
@@ -305,13 +300,13 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                     Erledigte zeigen ({erledigtAnzahl})
                   </Chip>
                 )}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              </ChipReihe>
+              <ChipReihe style={{ gap: 6 }}>
                 {genresE.map((g) => <Chip key={g} active={genreE === g} onClick={() => setGenreE(genreE === g ? null : g)}>{g}</Chip>)}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              </ChipReihe>
+              <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
                 {dekaden.map((d) => <Chip key={d} active={dekadeE === d} onClick={() => setDekadeE(dekadeE === d ? null : d)}>{d}er</Chip>)}
-              </div>
+              </ChipReihe>
             </>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

@@ -12,7 +12,9 @@ import {
    ausschließlich hier im Browser-Storage — nie in einer Datei, nie im Klartext-Log.
    Nach dem Verbinden lädt die App beim Start die Daten aus dem Repo (Pull) und
    committet jede Änderung zurück (Commit-on-change). */
-export function GitSyncEinstellungen() {
+/* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe
+   (Einstellungs-Accordion, Etappe 2) steht. */
+export function GitSyncEinstellungen({ ohneKopf = false } = {}) {
   const cfg = getGitConfig();
   const [repo, setRepo] = useState(cfg.repo);
   const [branch, setBranch] = useState(cfg.branch);
@@ -100,7 +102,7 @@ export function GitSyncEinstellungen() {
 
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <h2 style={h2Style}>Geräte-Sync (Git)</h2>
+      {!ohneKopf && <h2 style={h2Style}>Geräte-Sync (Git)</h2>}
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
         Synchronisiert deine Liste, Blogs, Pins &amp; Einstellungen über ein
         <strong style={{ color: T.leinwand }}> privates </strong> Daten-Repo — so sind alle Geräte auf demselben Stand.

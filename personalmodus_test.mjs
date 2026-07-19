@@ -63,6 +63,11 @@ const helpers = (dom) => {
   const { doc, text, knopf } = helpers(dom);
   await warte(3500); // Boot inkl. fehlgeschlagenem syncPull (offline)
   check("B: App bootet trotz Offline-Pull", text().length > 300);
+  /* Etappe 4: Git ist konfiguriert -> die Vertrauens-Zeile im Start-Dashboard
+     zeigt den Sync-Status (Nachfolger des Griff-Punkts; ableiten() liefert
+     konfiguriert immer einen der vier Zustände). */
+  check("B: Vertrauens-Zeile zeigt Sync-Status (synchron/ausstehend/nicht aktuell/Konflikt)",
+    !!doc.querySelector(".kd-vertrauen") && /(synchron|ausstehend \d|nicht aktuell|Konflikt)/.test(text()));
   const daten = knopf(/^einstellungen$/i);
   if (daten) { daten.click(); await warte(600); }
   const tokenInput = [...doc.querySelectorAll("input")].find((i) => i.placeholder === "github_pat_…");
@@ -127,6 +132,9 @@ const helpers = (dom) => {
     check("E: Suchfeld findet nicht angehakte Quelle (Hayu, echte AT-Startliste statt Demo)", /Hayu/.test(text()));
   }
   check("E: Demo-Daten sind als solche gekennzeichnet", /Demo-Beispieldaten/.test(text()));
+  /* Etappe 2: Einstellungs-Blöcke als Accordions — Streaming-Quellen startet offen. */
+  check("E: Accordion-Köpfe (kd-klappe) da, Streaming-Quellen startet offen",
+    [...doc.querySelectorAll("details.kd-klappe")].some((d) => d.open && /Streaming-Quellen/.test((d.querySelector("summary") || {}).textContent || "")));
   dom.window.close();
 }
 
@@ -159,11 +167,64 @@ const helpers = (dom) => {
   dom.window.close();
 }
 
+/* ---------- G: Drawer-Redesign (Etappe 3) — Menü-Reihenfolge + Linkshänder ---------- */
+{
+  const dom = baueDom({
+    seed(w) {
+      w.localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "", linkshaender: true }));
+      /* Etappe 4: Pin mit ROHER ISO-Zeit (fremd/alt geseedet) — das Pinboard-
+         Modul muss ihn über formatiereTermin lesbar machen (Mo 20.7. 21:30). */
+      w.localStorage.setItem("kd:kino-pins", JSON.stringify([{ t: "ISO-Pin-Test", j: null, z: "2026-07-20T21:30:00+02:00", seit: 1 }]));
+    },
+  });
+  const { doc, text, knopf } = helpers(dom);
+  await warte(2500);
+  /* DOM-Reihenfolge = bottom-up-Wichtigkeit; column-reverse stellt Kino nach unten. */
+  const labels = [...doc.querySelectorAll(".kd-menu button")].map((b) => (b.textContent || "").trim());
+  check("G: Menü-DOM-Reihenfolge bottom-up (Kino zuerst im DOM)",
+    labels.join("|") === "Kino|Streaming|Mediathek|Suche|Blog|Start|Einstellungen");
+  check("G: Griff mit drei Strichen im DOM (kd-navband + i)", doc.querySelectorAll(".kd-navband i").length === 3);
+  /* Etappe 4: der Übergangs-Sync-Punkt am Griff ist ENTFERNT — die Vertrauens-
+     Zeile im Start-Dashboard ist jetzt der einzige Sync-Ort (Sync-Anzeige
+     selbst: Block B, mit konfiguriertem Git). */
+  check("G: Sync-Punkt am Griff entfernt (Vertrauens-Zeile übernimmt)", !doc.querySelector(".kd-navband-dot"));
+  check("G: Vertrauens-Zeile im Start-Dashboard vorhanden (kd-vertrauen)", !!doc.querySelector(".kd-vertrauen"));
+  /* Sync-Semantik: OHNE Git-Konfiguration zeigt die Vertrauens-Zeile bewusst
+     KEIN Sync-Segment (kein „nicht verbunden"-Rauschen) — Gegenprobe mit
+     konfiguriertem Git: Block B. */
+  check("G: ohne Git-Konfiguration KEIN Sync-Segment in der Vertrauens-Zeile",
+    !/(synchron|ausstehend \d|nicht aktuell|Konflikt|nicht verbunden)/.test((doc.querySelector(".kd-vertrauen") || {}).textContent || ""));
+  /* Pinboard-Modul: ISO-Pin formatiert wie das Kino-für-dich-Modul (gemeinsamer
+     Helper formatiereTermin), roher ISO-String taucht nicht auf. */
+  check("G: Pinboard-Modul formatiert ISO-Pin-Termin (Mo 20.7. 21:30)",
+    /Pinboard/.test(text()) && /ISO-Pin-Test/.test(text()) && /Mo 20\.7\. 21:30/.test(text()) && !/2026-07-20T21:30/.test(text()));
+  check("G: Linkshänder-Einstellung setzt kd-links am Wrapper", !!doc.querySelector(".kd-wrap.kd-links"));
+  const daten = knopf(/^einstellungen$/i);
+  if (daten) { daten.click(); await warte(600); }
+  check("G: Bedienhand-Umschalter (Rechts/Links) in Darstellung & Verhalten", /Bedienhand/.test(text()));
+  /* Roundtrip: eine ANDERE Einstellung speichern darf linkshaender (und die
+     Bestandsfelder) nicht verlieren. */
+  const gross = knopf(/^Groß$/);
+  if (gross) { gross.click(); await warte(300); }
+  let gespeichert = {};
+  try { gespeichert = JSON.parse(dom.window.localStorage.getItem("kd:einstellungen") || "{}"); } catch { /* */ }
+  check("G: linkshaender übersteht Laden + Speichern (Roundtrip, Bestandsfelder intakt)",
+    gespeichert.linkshaender === true && gespeichert.schrift === "gross"
+    && gespeichert.theme === "dunkel" && gespeichert.startTab === "start" && gespeichert.modus === "");
+  dom.window.close();
+}
+
 /* ---------- D: Struktur-Kanarien in der gebauten Datei (Scrim-Bug + Fonts) ---------- */
 {
   check("D: kein Inline-zIndex:40 mehr im Bundle (Scrim-Bug-Ursache)", !/zIndex:\s*40/.test(html));
   check("D: Mobil-CSS führt Panel über dem Scrim (60 > 58)", html.includes("z-index:60") && html.includes("z-index:58"));
   check("D: Single-File trägt eingebettete Fonts (data:font)", html.includes("data:font"));
+  /* Etappe 3: Griff-Ebene + Blur-Scrim (mit -webkit-Präfix) müssen im Bundle-CSS stehen. */
+  check("D: Griff-Ebene 62 im Bundle-CSS (Scrim 58 < Panel 60 < Griff 62)", html.includes("z-index:62"));
+  check("D: Scrim-Blur im Bundle-CSS (blur(14px) inkl. -webkit-backdrop-filter)",
+    /backdrop-filter:\s*blur\(14px\)/.test(html) && /-webkit-backdrop-filter/.test(html));
+  check("D: Blur-Fallback (@supports not …) mit Dim 50% im Bundle-CSS",
+    /@supports not/.test(html) && /#00000080|rgba\(0,\s*0,\s*0,\s*0?\.5\)/.test(html));
 }
 
 const fails = checks.filter(([, p]) => !p);

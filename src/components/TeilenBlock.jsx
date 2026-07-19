@@ -16,7 +16,9 @@ import { TYP_GRUPPEN } from "../lib/typen.js";
 const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
 const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
 
-export function TeilenBlock({ master, artikel, autorName, saveAutorName, uebernehmePaket, setErr }) {
+/* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe steht
+   (DatenTab-Accordion, Etappe 2); der Mediathek-Einsatz behält den Kopf. */
+export function TeilenBlock({ master, artikel, autorName, saveAutorName, uebernehmePaket, setErr, ohneKopf = false }) {
   const [exportWahl, setExportWahl] = useState(["filme", "serien", "musik", "sonstiges", "artikel"]);
   const [promptOffen, setPromptOffen] = useState(false);
   const [kopiert, setKopiert] = useState(false);
@@ -91,7 +93,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
 
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <h2 style={h2Style}>Teilen & Tauschen</h2>
+      {!ohneKopf && <h2 style={h2Style}>Teilen & Tauschen</h2>}
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
         Bewertungen und Blog-Artikel als Paket weitergeben oder fremde Pakete übernehmen.
         Übernommenes behält seinen Autor — deine eigenen Einträge werden nie überschrieben.

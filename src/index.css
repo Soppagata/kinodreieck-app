@@ -167,59 +167,93 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   .kd-tropfen, .kd-halm, #kd-nobori, #kd-nobori .tuch, .kd-grindhouse .kd-app, .kd-fx *, .kd-perfo, .kd-kantenriss { animation: none !important; }
-  .kd-menu { transition: none !important; }
+  .kd-menu, .kd-scrim { transition: none !important; }   /* statischer Blur bleibt ok */
 }
 
-/* ================= MOBILE-NAV: EDGE-DRAWER RECHTS =================
-   Desktop behält die horizontale Leiste. Am Handy (schmal) wird die Nav ein
-   rechts einfahrendes Panel; ein sichtbares, tappbares Band an der rechten Kante
-   öffnet/schließt es — kein Swipe-Zwang, keine iOS-Randgesten-/Tastatur-Kollision
-   (Band rechts, Tastatur unten). Buttons bleiben immer im DOM (nur transformiert),
+/* ================= MOBILE-NAV: GRIFF + POPUP =================
+   Etappe 3 (Entscheidungen Max 18.07.2026, Schablone drawer_schablone.html):
+   Desktop (>760px) behält die horizontale Sticky-Leiste UNVERÄNDERT. Am Handy:
+   kompakter Griff LINKS (25×78, drei Striche, ohne Text) öffnet ein Popup
+   RECHTS UNTEN mit intrinsischer Höhe; column-reverse stapelt von unten nach
+   oben (1. DOM-Kind = Kino = daumennah). Die Linkshänder-Option (.kd-links am
+   Wrapper, persistiert als linkshaender in kd:einstellungen) invertiert Griff
+   UND Popup. Buttons bleiben immer im DOM (nur opacity/pointer-events),
    damit Verdrahtung/Tests unberührt bleiben. */
 .kd-navband { display: none; }
 .kd-scrim { display: none; }
-/* Z-Ebene der Nav: Desktop 40 (unter der Kurosawa-Letterbox 50), am Handy 60
-   (ÜBER dem Scrim 58). WICHTIG: bewusst NICHT inline im JSX setzen — Inline-
-   Styles schlagen CSS ohne !important; genau das hat den Scrim-Tap-Bug erzeugt
-   (Panel effektiv 40 < Scrim 58 → Scrim schluckte jeden Menü-Tap). */
+/* Z-Ebene der Nav: Desktop 40 (unter der Kurosawa-Letterbox 50), am Handy
+   Scrim 58 < Popup 60 < Griff 62. WICHTIG: bewusst NICHT inline im JSX setzen —
+   Inline-Styles schlagen CSS ohne !important; genau das hat den Scrim-Tap-Bug
+   erzeugt (Panel effektiv 40 < Scrim 58 → Scrim schluckte jeden Menü-Tap). */
 .kd-menu { z-index: 40; }
+/* Desktop-Leiste behält die gewohnte visuelle Reihenfolge (Start zuerst),
+   obwohl die DOM-Reihenfolge fürs Mobile-Bottom-up (column-reverse, Kino
+   zuunterst) umgestellt wurde — Nicht-Ziel: Desktop unverändert.
+   DOM: 1 Kino · 2 Streaming · 3 Mediathek · 4 Suche · 5 Blog · 6 Start · 7 Einstellungen */
+@media (min-width: 761px) {
+  .kd-menu > div > button:nth-child(1) { order: 2; }  /* Kino */
+  .kd-menu > div > button:nth-child(2) { order: 4; }  /* Streaming */
+  .kd-menu > div > button:nth-child(3) { order: 3; }  /* Mediathek */
+  .kd-menu > div > button:nth-child(4) { order: 6; }  /* Suche */
+  .kd-menu > div > button:nth-child(5) { order: 5; }  /* Blog */
+  .kd-menu > div > button:nth-child(6) { order: 1; }  /* Start */
+  .kd-menu > div > button:nth-child(7) { order: 7; }  /* Einstellungen */
+}
 @media (max-width: 760px) {
+  /* Popup rechts unten, bottom-anchored, intrinsische Höhe. position/top
+     stehen INLINE am <nav> (Desktop-Sticky-Leiste) -> !important nötig;
+     border ebenso (inline borderBottom). Hintergrund bleibt inline (Theme). */
   .kd-menu {
-    position: fixed !important; top: 0; right: 0; bottom: 0; left: auto !important;
+    position: fixed !important; top: auto !important; left: auto; right: 10px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
     width: min(76vw, 260px); z-index: 60;
-    border-left: 1px solid rgba(255,255,255,0.12); border-bottom: none !important;
-    transform: translateX(100%); transition: transform .22s ease;
-    padding-right: env(safe-area-inset-right);
-    overflow-y: auto; overscroll-behavior: contain;
+    border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+    max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain;
+    opacity: 0; transform: translateY(14px) scale(0.98); transform-origin: 100% 100%;
+    pointer-events: none; transition: opacity .22s ease, transform .22s ease;
   }
-  .kd-menu.offen { transform: translateX(0); box-shadow: -8px 0 32px rgba(0,0,0,0.5); }
+  .kd-menu.offen { opacity: 1; transform: none; pointer-events: auto; }
+  /* Stapel von unten nach oben: wichtigster Punkt (Kino) landet unten. */
   .kd-menu > div {
-    flex-direction: column !important; flex-wrap: nowrap !important; align-items: stretch !important;
+    flex-direction: column-reverse !important; flex-wrap: nowrap !important; align-items: stretch !important;
     max-width: none !important; gap: 4px !important;
-    padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)) !important;
+    padding: 10px !important;
   }
-  .kd-menu > div > button { width: 100%; text-align: left; border-radius: 6px !important; font-size: 19px !important; padding: 12px 16px !important; }
+  .kd-menu > div > button { width: 100%; text-align: left; border-radius: 8px !important; font-size: 19px !important; padding: 12px 16px !important; min-height: 44px; }
 
+  /* Griff (ersetzt das MENÜ/ZU-Band): kompakt, ohne Text, drei Striche. */
   .kd-navband {
-    display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-    position: fixed; top: 50%; right: 0; transform: translateY(-50%);
-    z-index: 62; width: 28px; min-height: 104px; padding: 12px 0;
-    margin-right: env(safe-area-inset-right);
-    background: #E3A63B; color: #141414; border: none; border-radius: 9px 0 0 9px;
-    box-shadow: -2px 0 12px rgba(0,0,0,0.4);
-    writing-mode: vertical-rl; text-orientation: mixed;
-    font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px;
-    letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    position: fixed; top: 50%; left: 0; right: auto; transform: translateY(-50%);
+    z-index: 62; width: 25px; height: 78px; min-height: 78px; padding: 0;
+    margin-left: env(safe-area-inset-left);
+    background: #E3A63B; color: #141414; border: none; border-radius: 0 10px 10px 0;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.4); cursor: pointer;
   }
-  .kd-navband-dot { writing-mode: horizontal-tb; width: 9px; height: 9px; border-radius: 5px; box-shadow: 0 0 0 2px rgba(0,0,0,0.15); }
+  .kd-navband i { display: block; width: 9px; height: 2px; border-radius: 1px; background: rgba(20,20,20,0.55); }
+  /* Sync-Status: seit Etappe 4 NICHT mehr am Griff, sondern in der
+     Vertrauens-Zeile des Start-Dashboards (StartTab, .kd-vertrauen). */
 
-  .kd-scrim.offen { display: block; position: fixed; inset: 0; z-index: 58; background: rgba(0,0,0,0.45); }
+  /* Scrim: Dim 35% + Blur 14px; Fallback ohne backdrop-filter: nur Dim 50%. */
+  .kd-scrim.offen { display: block; position: fixed; inset: 0; z-index: 58;
+    background: rgba(0,0,0,0.35);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .kd-scrim.offen { background: rgba(0,0,0,0.5); }
+  }
 
-  /* Sync-Chip im Header am Handy ausblenden — der Punkt am Band trägt den Status. */
+  /* Linkshänder-Option: Griff rechts, Popup links. */
+  .kd-links .kd-navband { left: auto; right: 0; margin-left: 0; margin-right: env(safe-area-inset-right);
+    border-radius: 10px 0 0 10px; box-shadow: -2px 0 12px rgba(0,0,0,0.4); }
+  .kd-links .kd-menu { right: auto; left: 10px; transform-origin: 0% 100%; }
+
+  /* Sync-Chip im Header am Handy ausblenden — der Punkt am Griff trägt den Status. */
   .kd-syncchip-head { display: none; }
 
-  /* Kurosawa: Panel fährt von top:0, nicht unter die Letterbox. */
-  .kd-kurosawa .kd-menu { top: 0 !important; }
+  /* Kurosawa: Popup ist bottom-anchored — der Desktop-top-Override
+     (var(--kd-lb), oben Z.71) darf hier nicht greifen. */
+  .kd-kurosawa .kd-menu { top: auto !important; }
 
   /* filter/transform auf .kd-app machen es zum Containing-Block für ALLE
      position:fixed-Nachfahren — Drawer, Scrim und Band würden in den Modi dann
@@ -229,4 +263,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-kurosawa .kd-app, .kd-grindhouse .kd-app, .kd-riss .kd-app {
     filter: none !important; animation: none !important; transform: none !important;
   }
+}
+
+/* ================= ETAPPE 2: MOBILE-BAUSTEINE =================
+   ChipReihe (.kd-chiprow), SegmentedControl (.kd-seg), Einstellungs-Accordion
+   (.kd-klappe) und kompakte Such-/Sortier-Zeilen (.kd-kompakt). Die Mobile-
+   Verdichtung passiert NUR hier per Klasse + Media-Query — tokens.js/btnStyle
+   bleiben unangetastet, damit der Desktop (>760px) unverändert aussieht. */
+.kd-chiprow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+@media (max-width: 760px) {
+  /* EINE wischbare Zeile statt Button-Stapel. Kein JS: allein diese Query
+     entscheidet — oberhalb 760px wrappen die Reihen weiter wie bisher. */
+  .kd-chiprow, .kd-seg {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;               /* Firefox: Scrollbar aus */
+  }
+  .kd-chiprow::-webkit-scrollbar, .kd-seg::-webkit-scrollbar { display: none; } /* WebKit: Scrollbar aus */
+  .kd-chiprow > *, .kd-seg > * { flex: 0 0 auto; scroll-snap-align: start; }
+  .kd-chiprow button, .kd-seg button { white-space: nowrap; }
+  /* !important nötig: fontSize/padding stehen INLINE an den Umschalter-Knöpfen
+     (SegmentedControl behält die Knopf-Fabrik-Optik inline) — ohne !important
+     gewinnt der Inline-Style (Scrim-Bug-Lehre, s. Kommentar oben Z.181-184).
+     Tap-Ziel bleibt >=44px über die pointer:coarse-Regel (min-height unberührt). */
+  .kd-seg > button { font-size: 14px !important; padding: 7px 11px !important; }
+  /* Such-/Sortier-Zeilen verdichten: gap und min-width stehen inline am
+     Container bzw. Input (inputStyle-Spread) -> !important; max-width am
+     Select kollidiert nicht mit inline width:auto und braucht keins. */
+  .kd-kompakt { gap: 6px !important; }
+  .kd-kompakt input { min-width: 100px !important; }
+  .kd-kompakt select { max-width: 44vw; }
 }

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
-import { IconExport } from "../components/ui.jsx";
+import { IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { GitSyncEinstellungen } from "../components/GitSyncEinstellungen.jsx";
 import { RestoreImport } from "../components/RestoreImport.jsx";
+import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { PERSONAL_MODE } from "../lib/modus.js";
 
 /* ================= EINSTELLUNGEN (früher "Daten") =================
@@ -35,6 +36,11 @@ export function DatenTab({
   /* Easter-Egg-Modi: versteckt unter dem „Max"-Link. Ein Knopf, der das aktuelle
      Theme erkennt — hell -> „Mit Stil" (Kurosawa), dunkel -> „Weils cool ist" (Grindhouse). Toggle. */
   const [eggAn, setEggAn] = useState(false);
+  /* „Über"-Einstieg (Etappe 4, nur PERSONAL_MODE): das Start-Dashboard trägt
+     die Erklärinhalte nicht mehr — Hero, Dreieck-Erklärung und Anleitung
+     (Erklaerstuecke.jsx, Inhalte unverändert) öffnen hier auf Knopfdruck.
+     Im Beta-Build zeigt weiterhin die Landing selbst alles (kein Doppel). */
+  const [ueberOffen, setUeberOffen] = useState(false);
   const eggDunkel = einstellungen.theme !== "hell";
   const eggAktiv = eggDunkel ? einstellungen.modus === "grindhouse" : einstellungen.modus === "kurosawa";
   const eggKlick = () => {
@@ -44,23 +50,45 @@ export function DatenTab({
   };
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* ---- Darstellung & Verhalten ---- */}
+      {/* ---- Darstellung & Verhalten ----
+          Etappe 2: Hauptblöcke als <details>-Accordions (Klappe) — dieser
+          startet als einziger OFFEN; konditionale Blöcke (Migration, Wächter-
+          Banner) bleiben bewusst Kästen/Banner und wandern NICHT in Klappen. */}
       {setzeEinstellung && (
+        <Klappe titel="Darstellung & Verhalten" offen>
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-          <h2 style={h2Style}>Darstellung & Verhalten</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Exklusive Umschalter als SegmentedControl (Etappe 2, Nachbesserung):
+                keine zweizeiligen Knopf-Stapel mehr auf 390px — die Reihe wischt.
+                Optionstexte bleiben EXAKT (Tests: /Foyer \(hell\)/, /^Groß$/).
+                Aktiver Modus (Kurosawa/Grindhouse) -> value null, kein Knopf aktiv
+                (entspricht der alten wahlKnopf-Bedingung !einstellungen.modus). */}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Erscheinung</span>
-              <button style={wahlKnopf(!einstellungen.modus && einstellungen.theme !== "hell")} onClick={() => waehleModus && waehleModus("saal")}>Saal (dunkel)</button>
-              <button style={wahlKnopf(!einstellungen.modus && einstellungen.theme === "hell")} onClick={() => waehleModus && waehleModus("foyer")}>Foyer (hell)</button>
+              <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                value={einstellungen.modus ? null : (einstellungen.theme === "hell" ? "foyer" : "saal")}
+                onChange={(id) => waehleModus && waehleModus(id)}
+                options={[{ id: "saal", label: "Saal (dunkel)" }, { id: "foyer", label: "Foyer (hell)" }]} />
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Schriftgröße</span>
-              {[["klein", "Klein"], ["normal", "Normal"], ["gross", "Groß"]].map(([w, l]) => (
-                <button key={w} style={wahlKnopf((einstellungen.schrift || "normal") === w)} onClick={() => setzeEinstellung("schrift", w)}>{l}</button>
-              ))}
+              <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                value={einstellungen.schrift || "normal"}
+                onChange={(w) => setzeEinstellung("schrift", w)}
+                options={[["klein", "Klein"], ["normal", "Normal"], ["gross", "Groß"]].map(([w, l]) => ({ id: w, label: l }))} />
             </div>
+            {/* Etappe 3: Linkshänder-Option — invertiert am Handy Griff UND
+                Menü-Popup (kd-links am Wrapper). Persistiert als linkshaender
+                in kd:einstellungen (synct via einstellungen.json). */}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Bedienhand</span>
+              <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                value={einstellungen.linkshaender ? "links" : "rechts"}
+                onChange={(id) => setzeEinstellung("linkshaender", id === "links")}
+                options={[{ id: "rechts", label: "Rechts" }, { id: "links", label: "Links" }]} />
+              <span style={mono}>spiegelt Griff & Menü am Handy</span>
+            </div>
+            <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Startbereich</span>
               <select value={einstellungen.startTab || "kino"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "auto" }}>
                 {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"], ["finder", "Suche"]].map(([id, l]) => <option key={id} value={id}>{l}</option>)}
@@ -70,9 +98,12 @@ export function DatenTab({
             {/* Modi (Kurosawa/Grindhouse) liegen als Easter-Egg unter „Über & Rechtliches" (Klick auf „Max"). */}
           </div>
         </div>
+        </Klappe>
       )}
       {/* Datenmigration: Gesamt-Backup der alten App einspielen (vor Git verbinden). */}
-      <RestoreImport />
+      <Klappe titel="Backup wiederherstellen">
+        <RestoreImport ohneKopf />
+      </Klappe>
 
       {/* ---- Must-Watch-Migration + Besitz-Nachtrag (einmalige, idempotente Läufe) ---- */}
       {(offeneFlags > 0 || migrationsBericht || importiereBesitz) && (
@@ -136,7 +167,9 @@ export function DatenTab({
       )}
 
       {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
-      <GitSyncEinstellungen />
+      <Klappe titel="Geräte-Sync (Git)">
+        <GitSyncEinstellungen ohneKopf />
+      </Klappe>
 
       {/* Export-Wächter: Browser-Speicher ist KEIN Backup */}
       {(ungesichertMaster || ungesichertArtikel) && (
@@ -153,26 +186,27 @@ export function DatenTab({
           </div>
         </div>
       )}
-      {/* Teilen & Tauschen: Paket-Export/Import + KI-Ingestion (Phase A) */}
+      {/* Teilen & Tauschen: Paket-Export/Import + KI-Ingestion (Phase A).
+          data-tour wandert an die Klappe — der Tour-Anker existiert auch zugeklappt. */}
       {master && uebernehmePaket && (
-        <div data-tour="teilen">
-          <TeilenBlock master={master} artikel={artikelListe}
+        <Klappe titel="Teilen & Tauschen" tour="teilen">
+          <TeilenBlock ohneKopf master={master} artikel={artikelListe}
             autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket} setErr={setErr} />
-        </div>
+        </Klappe>
       )}
 
       {/* ---- Vokabular: eigene Stimmungswörter für die Suche ---- */}
       {saveVokabular && (
-        <div data-tour="daten-vokabular">
-          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} h2Style={h2Style} mono={mono} />
-        </div>
+        <Klappe titel="Suche-Vokabular" tour="daten-vokabular">
+          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono} />
+        </Klappe>
       )}
 
       {/* ---- Backup ---- */}
       {backupGesamt && (
-        <div data-tour="daten-export" style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-          <h2 style={h2Style}>Backup</h2>
+        <Klappe titel="Backup" tour="daten-export">
+        <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
             Ein Klick sichert ALLES aus der App (Filmliste, Artikel, Pins, Merkliste,
             Einstellungen, Vokabular) in eine Datei. Sie landet in deinen Downloads —
@@ -183,6 +217,7 @@ export function DatenTab({
           <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>
           <FeldHinweis feld="backup" />
         </div>
+        </Klappe>
       )}
 
       {/* ---- Erweitert: Rohdaten-Dateien — bewusst eingeklappt. Sieht
@@ -321,8 +356,8 @@ export function DatenTab({
       )}
 
       {/* ---- Über & Rechtliches ---- */}
+      <Klappe titel="Über & Rechtliches">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <h2 style={h2Style}>Über & Rechtliches</h2>
         <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
           Kinodreieck — privates, nicht-kommerzielles Projekt. Läuft vollständig
           lokal: keine Cloud, keine Konten, keine Telemetrie.
@@ -338,7 +373,16 @@ export function DatenTab({
         {eggAn && waehleModus && (
           <button onClick={eggKlick} style={{ ...wahlKnopf(eggAktiv), marginTop: 12 }}>{eggDunkel ? "Weils cool ist" : "Mit Stil"}</button>
         )}
+        {PERSONAL_MODE && (
+          <div style={{ marginTop: 14 }}>
+            <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setUeberOffen((v) => !v)}>
+              {ueberOffen ? "Über Kinodreieck zuklappen" : "Über Kinodreieck & Anleitung"}
+            </button>
+            {ueberOffen && <UeberKinodreieck />}
+          </div>
+        )}
       </div>
+      </Klappe>
     </section>
   );
 }
@@ -347,7 +391,7 @@ export function DatenTab({
    Beispiel: "gemütlich" → Genres "komödie, animation" + Tags "wohlfühlfilm".
    Die Suche behandelt eigene Wörter wie eingebaute Stimmungen (weicher
    Boost auf passende Genres/Tags, kein harter Filter). */
-function VokabularEditor({ vokabular, saveVokabular, h2Style, mono }) {
+function VokabularEditor({ vokabular, saveVokabular, mono }) {
   const [wort, setWort] = useState("");
   const [genres, setGenres] = useState("");
   const [tags, setTags] = useState("");
@@ -362,7 +406,6 @@ function VokabularEditor({ vokabular, saveVokabular, h2Style, mono }) {
   };
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <h2 style={h2Style}>Suche-Vokabular</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
         Bring der Suche deine eigenen Wörter bei: ein Stichwort und worauf es zeigen
         soll (Genres und/oder Tags deiner Einträge, kommagetrennt). „Zeig mir was

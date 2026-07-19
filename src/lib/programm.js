@@ -56,6 +56,20 @@ export function parseNonstopHtml(html) {
 const ANZEIGE_TAGE = 4;
 const WT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
+/* Termin-String fürs UI (Etappe 4, gemeinsamer Helper fürs Dashboard):
+   Anzeige-Strings aus normalisiereProgramm ("Fr 17.7. 20:00 · Kino") gehen
+   unverändert durch; rohe ISO-Zeiten ("2026-07-20T21:30:00+02:00" — z. B.
+   aus alten/fremd geseedeten Pins) werden in dasselbe Format gebracht wie
+   der z-Builder oben (String-basiert, keine TZ-Fallen). */
+export function formatiereTermin(z) {
+  const s = String(z ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  const d = new Date(s.slice(0, 10) + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return s;
+  const uhr = (s.match(/T(\d{2}:\d{2})/) || [])[1] || "";
+  return WT[d.getDay()] + " " + d.getDate() + "." + (d.getMonth() + 1) + "." + (uhr ? " " + uhr : "");
+}
+
 /* Datum aus Altformat-Zeitstring ("Di 8.7. 20:30 · Filmcasino") ziehen.
    Jahr wird angenommen (aktuelles Jahr) — Snapshots sind Tage alt, nicht Monate.
    Ohne parsebares Datum -> null (Eintrag wird dann nie weggefiltert). */

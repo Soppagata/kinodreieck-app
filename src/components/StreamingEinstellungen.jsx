@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { FeldHinweis } from "./FeldHinweis.jsx";
+import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
@@ -102,8 +103,10 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div data-tour="streaming-quellen" style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <h2 style={h2}>Streaming-Quellen ({auswahl.length} gewählt)</h2>
+      {/* Etappe 2: Kästen als Accordions (Klappe). Streaming-Quellen startet
+          offen, Status/Refresh zu. data-tour wandert an die Klappe (Tour-Anker). */}
+      <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
+      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Nur angehakte Quellen werden beim nächsten Katalog-Lauf abgerufen (jede Quelle kostet ~1 Credit pro 250 Titel).
           Häkchen wirken sofort als Anzeigefilter im Streaming-Tab. Danach: <strong style={{ color: T.leinwand }}>Config exportieren</strong> und die Datei
@@ -169,9 +172,10 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
           Rotations-Kataloge (Zeitplan: <code>com.kinodreieck.streaming.plist</code>, siehe Anleitung).
         </p>
       </div>
+      </Klappe>
 
-      <div data-tour="streaming-status" style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <h2 style={h2}>Katalog-Status</h2>
+      <Klappe titel="Katalog-Status" tour="streaming-status">
+      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         {datenDa ? (
           <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.8, margin: 0 }}>
             {bekannt.demo && <><strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — der echte Katalog kommt mit dem ersten Watchmode-Lauf.<br /></>}
@@ -204,9 +208,10 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
           </label>
         )}
       </div>
+      </Klappe>
 
+      <Klappe titel="Refresh (manuell)">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <h2 style={h2}>Refresh (manuell)</h2>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
           <strong style={{ color: T.gefahr }}>Verbraucht Credits.</strong> Der Job läuft höchstens 1× pro 30 Tage
           (früher nur mit <code>--force</code>); kein Auto-Fetch aus der App. Im Terminal im System-Ordner
@@ -217,6 +222,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
 node build_streaming_ansicht.js
 npm run build:single   # frische Kinodreieck.html`}</pre>
       </div>
+      </Klappe>
     </div>
   );
 }
