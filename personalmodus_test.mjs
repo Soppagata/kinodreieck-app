@@ -167,6 +167,26 @@ const helpers = (dom) => {
   dom.window.close();
 }
 
+/* ---------- F2: Schnellfilter zeigt ALLE angehakten Dienste — auch ohne Katalog-Titel (Max, 19.07.) ---------- */
+{
+  /* „Magenta TV" ist angehakt, hat aber keine Titel im Katalog (bekannt.dienste führt es nicht) —
+     muss trotzdem als Schnellfilter-Chip erscheinen, damit die Abo-Auswahl im Filter sichtbar ist. */
+  const dom = baueDom({
+    seed(w) {
+      w.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix", "Magenta TV"], heuristik: true }));
+    },
+  });
+  const { doc, knopf } = helpers(dom);
+  await warte(2500);
+  const streaming = knopf(/^streaming$/i);
+  if (streaming) { streaming.click(); await warte(600); }
+  const filterBtn = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((b.textContent || "").trim()) && /[▸▾]/.test(b.textContent || ""));
+  if (filterBtn && /▸/.test(filterBtn.textContent || "")) { filterBtn.click(); await warte(300); }
+  const magentaChip = [...doc.querySelectorAll("button")].some((b) => (b.textContent || "").trim() === "Magenta TV");
+  check("F2: angehakter Dienst ohne Katalog-Titel erscheint als Schnellfilter-Chip (Magenta TV)", magentaChip);
+  dom.window.close();
+}
+
 /* ---------- G: Drawer-Redesign (Etappe 3) — Menü-Reihenfolge + Linkshänder ---------- */
 {
   const dom = baueDom({

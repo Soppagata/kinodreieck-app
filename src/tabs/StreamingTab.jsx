@@ -95,13 +95,11 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   const dienstOk = useCallback((t) => !auswahl.length || (t.dienste || []).some((d) => auswahl.includes(d)), [auswahl]);
   /* Chips in den Listen: nur Quellen, die im Katalog tatsächlich vorkommen */
   const katalogQuellen = useMemo(() => (datenDa && bekannt.dienste) || [], [bekannt, datenDa]);
-  /* Schnellfilter-Optionen = gewählte Dienste, ABER nur solche mit Titeln im Katalog
-     (tote Auswahl wie „Crunchyroll (Via Prime)" ohne Daten fliegt raus); ohne Auswahl
-     die Katalog-Dienste. */
-  const schnellOptionen = useMemo(() => {
-    const gefiltert = (auswahl || []).filter((d) => katalogQuellen.includes(d));
-    return gefiltert.length ? gefiltert : katalogQuellen;
-  }, [auswahl, katalogQuellen]);
+  /* Schnellfilter-Optionen = ALLE angehakten Dienste — auch ohne Katalog-Titel (Max, 19.07.):
+     die Abo-Auswahl soll im Filter sichtbar sein, ein leerer Treffer ist ok. Früher auf
+     bekannt.dienste gegatet; das ist aber unzuverlässig (führt z. B. Joyn NICHT, obwohl Titel
+     Joyn getaggt sind, und listet umgekehrt titel-lose Dienste). Ohne Auswahl: die Katalog-Dienste. */
+  const schnellOptionen = useMemo(() => (auswahl && auswahl.length ? auswahl : katalogQuellen), [auswahl, katalogQuellen]);
   const schnellOk = useCallback((t) => !schnellDienst || (t.dienste || []).includes(schnellDienst), [schnellDienst]);
 
   const programm = useMemo(() => {
