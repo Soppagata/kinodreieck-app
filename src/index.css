@@ -59,56 +59,136 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 :root { --perfoTempo: 1.4s; }
 
-/* ================= EGG-MODI: SHOWA & NERV (v2) =================
-   Dauer-Modi als reiner TOKEN-SWAP (tokens.js: THEMES.showa/.nerv) — die Farbwelt
-   steckt in den Tokens, hier NUR Textur & Motive. Bewusst KEIN `filter:` und kein
-   dauerhaftes `transform:` auf .kd-app (mobile Containing-Block-Falle — genau daran
-   scheiterten Kurosawa/Grindhouse). Overlays liegen in der fixen .kd-fx-Ebene. */
-.kd-wrap { position: relative; }
-.kd-app { position: relative; transition: padding-bottom .2s; }
-.kd-fx { position: fixed; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+/* ================= EGG-MODI: SHOWA & NERV (v3 · CODEX-TUNING) =================
+   Abgestimmter Block: Claude legt seine separaten Egg-Regeln außerhalb dieses
+   Abschnitts darüber. Farbwelt = tokens.js, Motive/HUD = ModusOverlay.jsx.
+   Kein dauerhafter filter/transform auf .kd-app (mobile Containing-Block-Falle). */
+.kd-wrap { position: relative; isolation: isolate; }
+.kd-app { position: relative; z-index: 1; transition: padding-bottom .2s; }
+.kd-fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 
-/* ---------- SHOWA — Kaiju-Eiga 1954, dramatisches S/W ----------
-   Graustufen kommen aus den Tokens; hier Vignette, Filmkorn, Lichtstrahl/Nebel,
-   50er-Skyline + Kaiju-Silhouette, Serifentitel. */
+/* ---------- SHOWA — heller S/W-Abzug, Miniatur-Tokio 1954 ---------- */
+.kd-fx-showa { z-index: 0; color: #242321; }
 .kd-fx-showa .grade { position: absolute; inset: 0;
-  background: radial-gradient(132% 104% at 50% 30%, rgba(0,0,0,0) 40%, rgba(0,0,0,.30) 74%, rgba(0,0,0,.62) 100%); }
-.kd-fx-showa .korn { position: absolute; inset: -20%; opacity: .06; mix-blend-mode: screen;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
-  background-size: 180px 180px; animation: kd-showa-korn .5s steps(2) infinite; }
-@keyframes kd-showa-korn { 0%{transform:translate(0,0)} 50%{transform:translate(-2%,1.6%)} 100%{transform:translate(1.6%,-2%)} }
-.kd-fx-showa .kd-beam { position: absolute; top: -12%; right: -8%; width: 78%; height: 128%;
-  background: linear-gradient(198deg, rgba(255,255,255,.12) 0%, rgba(255,255,255,.04) 30%, rgba(255,255,255,0) 52%);
+  background: radial-gradient(136% 112% at 50% 28%, rgba(255,255,255,.07) 0 43%, rgba(45,43,40,.05) 76%, rgba(30,29,27,.20) 100%); }
+.kd-fx-showa .korn { position: absolute; inset: -18%; opacity: .032; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.83' numOctaves='2'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px; animation: kd-showa-korn .65s steps(2) infinite; }
+@keyframes kd-showa-korn { 0%{transform:translate(0,0)} 50%{transform:translate(-1.4%,1%)} 100%{transform:translate(1%,-1.3%)} }
+.kd-fx-showa .kd-beam { position: absolute; top: -20%; right: -9%; width: 75%; height: 132%;
+  background: linear-gradient(198deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.07) 34%, rgba(255,255,255,0) 57%);
   transform: rotate(5deg); mix-blend-mode: screen; }
-.kd-skyline { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 118px;
-  color: #050507; opacity: .88; }
-/* Kaiju bewusst zurückhaltend (Platzhalter — Max gestaltet die Silhouette nach dem
-   Audit selbst); auf dem helleren Showa-Grund sonst zu präsent. */
-.kd-kaiju { position: absolute; right: 1%; bottom: 0; width: 168px; height: 218px;
-  color: #0A0A0C; opacity: .26; }
-/* Poster-Serife: der Haupttitel (inline Barlow) wird im Showa-Modus zur Fraunces-Platte.
-   !important überstimmt bewusst den Inline-Font. */
+.kd-showa-scene { position: absolute; left: 50%; bottom: 0; width: max(100%, 1080px);
+  height: clamp(235px, 34vh, 350px); transform: translateX(-50%); overflow: visible; }
+.kd-city-smoke { fill: #B9B5AB; opacity: .40; }
+.kd-city-back { fill: #77736C; opacity: .46; }
+.kd-city-mid { fill: #353431; opacity: .83; }
+.kd-city-front { fill: #1B1A19; opacity: .94; }
+.kd-city-roofline, .kd-city-detail { fill: none; stroke: #E5E2DA; stroke-width: 3; opacity: .68; }
+.kd-city-window { fill: #E5E2DA; opacity: .72; }
+.kd-clock { fill: #E5E2DA; stroke: #242321; stroke-width: 4; }
+.kd-clock-hand { fill: none; stroke: #242321; stroke-width: 3; stroke-linecap: round; }
+.kd-kaiju-shape { fill: #121211; opacity: .91; }
+.kd-kaiju-eye { fill: #E5E2DA; opacity: .88; }
+.kd-utility { stroke: #161514; stroke-width: 4; stroke-linecap: round; opacity: .82; }
+/* Poster-Serife: inline Barlow wird nur in Showa bewusst überstimmt. */
 .kd-showa header h1 { font-family: 'Fraunces', Georgia, serif !important; font-weight: 900 !important;
   letter-spacing: .015em !important; }
 
-/* ---------- NERV — Evangelion-Terminal, Schwarz/Rot ----------
-   Schwarz/Rot kommt aus den Tokens; hier Scanlines, Warnschraffur, HUD-Ecken,
-   Blatt-Marke, Glitch-Takt. */
-.kd-fx-nerv .kd-scan { position: absolute; inset: 0; opacity: .30; mix-blend-mode: multiply;
-  background: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.55) 2px 3.4px); }
-.kd-fx-nerv .kd-hazard { position: absolute; left: 0; right: 0; height: 9px; opacity: .42;
-  background: repeating-linear-gradient(45deg, #E5352A 0 11px, #0A0A0C 11px 22px); }
-.kd-fx-nerv .kd-hazard.t { top: 0; } .kd-fx-nerv .kd-hazard.b { bottom: 0; }
-.kd-fx-nerv .kd-hexcorner { position: absolute; width: 58px; height: 58px; opacity: .42; }
-.kd-fx-nerv .kd-hexcorner.tl { top: 16px; left: 12px; border-top: 2px solid #E5352A; border-left: 2px solid #E5352A; }
-.kd-fx-nerv .kd-hexcorner.br { bottom: 26px; right: 12px; border-bottom: 2px solid #E5352A; border-right: 2px solid #E5352A; }
-/* Glitch (JS-getaktet, nur Desktop — am Handy setzt die Media-Query transform zurück) */
-.kd-glitch .kd-app { animation: kd-nerv-glitch .16s steps(2) 1; }
+/* ---------- NERV — vollständiges Schwarz/Rot-Terminal ---------- */
+.kd-fx-nerv { z-index: 0; --nerv-red:#F0181D; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#FFAE18; --nerv-lime:#D7FF28;
+  font-family:'Space Mono', monospace; color:var(--nerv-red); }
+.kd-fx-nerv .kd-scan { position:absolute; inset:0; opacity:.075; mix-blend-mode:multiply;
+  background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.62) 3px 4px); }
+.kd-fx-nerv .kd-hazard { position:absolute; left:0; right:0; height:8px; opacity:.88;
+  background:repeating-linear-gradient(45deg, var(--nerv-lime) 0 10px, var(--nerv-black) 10px 20px); }
+.kd-fx-nerv .kd-hazard.t { top:0; } .kd-fx-nerv .kd-hazard.b { bottom:0; }
+.kd-nerv-grid { position:absolute; inset:50px 24px 86px; width:calc(100% - 48px); height:calc(100% - 136px); opacity:.30; }
+.kd-nerv-grid g { stroke:var(--nerv-red); stroke-width:2; }
+
+.kd-nerv-battle, .kd-nerv-episode, .kd-nerv-sync, .kd-nerv-alert, .kd-nerv-micro {
+  position:absolute; box-sizing:border-box; background:rgba(5,5,6,.88); text-transform:uppercase; }
+.kd-nerv-battle { top:14px; left:50%; width:min(430px, 42vw); min-height:64px; padding:8px 32px 8px 20px;
+  transform:translateX(-50%); border:2px solid var(--nerv-red);
+  clip-path:polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%); }
+.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(240,24,29,.62);
+  clip-path:inherit; pointer-events:none; }
+.kd-nerv-battle b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:clamp(17px,2vw,25px); line-height:1.05; letter-spacing:.08em; }
+.kd-nerv-battle span { display:block; margin-top:4px; color:#E9E4DC; font-size:9px; letter-spacing:.12em; }
+
+.kd-nerv-alert { top:42%; width:58px; padding:10px 6px 12px; text-align:center; border:2px solid var(--nerv-red);
+  transform:translateY(-50%); clip-path:polygon(50% 0,100% 16px,100% calc(100% - 16px),50% 100%,0 calc(100% - 16px),0 16px); }
+.kd-nerv-alert.l { left:10px; } .kd-nerv-alert.r { right:10px; }
+.kd-nerv-alert::before, .kd-nerv-alert::after { content:""; display:block; height:6px; margin:0 1px 8px;
+  background:repeating-linear-gradient(45deg,var(--nerv-lime) 0 5px,var(--nerv-black) 5px 10px); }
+.kd-nerv-alert::after { margin:8px 1px 0; }
+.kd-nerv-alert b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:24px; line-height:1; writing-mode:vertical-rl; margin:auto; }
+.kd-nerv-alert span { display:block; color:#E9E4DC; font-size:8px; margin-top:5px; letter-spacing:.1em; }
+
+.kd-nerv-episode { top:94px; right:18px; width:170px; min-height:126px; padding:10px 14px; border:2px solid var(--nerv-red);
+  clip-path:polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
+.kd-nerv-episode b { display:block; color:var(--nerv-red); font-family:'Hiragino Mincho ProN','Yu Mincho',serif; font-size:48px; line-height:1; }
+.kd-nerv-episode span { display:block; color:#E9E4DC; font-size:8px; margin-top:6px; letter-spacing:.08em; }
+.kd-nerv-episode em { display:block; color:var(--nerv-amber); font-size:10px; font-style:normal; font-weight:700; margin-top:8px; }
+
+.kd-nerv-micro { padding:5px 8px; border-left:3px solid var(--nerv-red); }
+.kd-nerv-micro b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:13px; line-height:1; }
+.kd-nerv-micro span { color:#E9E4DC; font-size:7px; letter-spacing:.08em; }
+.kd-nerv-micro.m1 { left:80px; top:112px; }
+.kd-nerv-micro.m2 { left:92px; bottom:118px; }
+.kd-nerv-micro.m3 { right:86px; bottom:118px; }
+
+.kd-nerv-sync { left:50%; bottom:16px; width:min(560px, 72vw); padding:8px 14px 7px; transform:translateX(-50%);
+  border:2px solid var(--nerv-red); clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px); }
+.kd-nerv-sync-head { display:flex; justify-content:space-between; align-items:baseline; gap:14px; }
+.kd-nerv-sync-head b { color:var(--nerv-red); font-size:12px; letter-spacing:.08em; }
+.kd-nerv-sync-head span { color:var(--nerv-amber); font-weight:700; font-size:15px; }
+.kd-nerv-segments { display:grid; grid-template-columns:repeat(20,1fr); gap:3px; height:13px; margin-top:5px; }
+.kd-nerv-segments i { display:block; border:1px solid rgba(85,200,211,.32); background:rgba(85,200,211,.07); }
+.kd-nerv-segments i.on { background:var(--nerv-cyan); border-color:var(--nerv-cyan); animation:kd-nerv-sync 1.8s steps(2) infinite; }
+.kd-nerv-segments i.on:nth-child(n+15) { background:var(--nerv-amber); border-color:var(--nerv-amber); }
+.kd-nerv-sync small { display:block; margin-top:4px; color:#B9ACB0; font-size:7px; letter-spacing:.06em; }
+@keyframes kd-nerv-sync { 0%,100%{opacity:.72} 50%{opacity:1} }
+
+/* Original-Screenshot: Wrapper blendet ausschließlich den 14px-Browserstreifen aus. */
+.kd-nerv-logo { display:block; flex:0 0 auto; width:clamp(52px,4.2vw,56px); aspect-ratio:932/900;
+  overflow:hidden; background:#000; }
+.kd-nerv-logo img { display:block; width:100%; height:auto; }
+.kd-nerv header h1 { color:#F0181D !important; letter-spacing:.075em !important; }
+.kd-nerv .kd-menu { border-bottom-color:rgba(240,24,29,.62) !important; }
+.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(240,24,29,.62);
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+  box-shadow:0 0 0 1px rgba(240,24,29,.12),0 5px 18px rgba(0,0,0,.5) !important; }
+.kd-nerv button, .kd-nerv input, .kd-nerv select, .kd-nerv textarea { border-radius:0 !important; }
+
+/* Glitch (JS-getaktet, mobil weiterhin durch die bestehende Query neutralisiert). */
+.kd-glitch .kd-app { animation:kd-nerv-glitch .16s steps(2) 1; }
 @keyframes kd-nerv-glitch { 0%{transform:translate(0,0)} 30%{transform:translate(-2px,1px)} 60%{transform:translate(2px,-1px)} 100%{transform:translate(0,0)} }
-@media (prefers-reduced-motion: reduce) {
-  .kd-fx *, .kd-glitch .kd-app, .kd-toast { animation: none !important; }
-  .kd-menu, .kd-scrim { transition: none !important; }   /* statischer Blur bleibt ok */
+
+@media (max-width:760px) {
+  .kd-showa-scene { width:820px; height:205px; }
+  .kd-city-back { opacity:.36; }
+  .kd-utility { display:none; }
+  .kd-nerv-logo { width:46px; }
+  .kd-nerv-grid { inset:88px 8px 84px; width:calc(100% - 16px); height:calc(100% - 172px); opacity:.20; }
+  .kd-nerv-battle { top:82px; width:calc(100% - 92px); min-height:48px; padding:7px 18px; opacity:.84; }
+  .kd-nerv-battle b { font-size:15px; } .kd-nerv-battle span { font-size:7px; }
+  .kd-nerv-alert { top:48%; width:42px; padding:7px 4px; opacity:.76; }
+  .kd-nerv-alert.l { left:3px; } .kd-nerv-alert.r { right:3px; }
+  .kd-nerv-alert b { font-size:18px; }
+  .kd-nerv-episode { top:142px; right:5px; width:116px; min-height:91px; padding:7px 9px; opacity:.78; }
+  .kd-nerv-episode b { font-size:32px; } .kd-nerv-episode span { font-size:6px; } .kd-nerv-episode em { font-size:7px; }
+  .kd-nerv-micro { display:none; }
+  .kd-nerv-sync { bottom:12px; width:calc(100% - 50px); padding:6px 10px; opacity:.9; }
+  .kd-nerv-sync-head b { font-size:9px; } .kd-nerv-sync-head span { font-size:12px; }
+  .kd-nerv-segments { gap:2px; height:9px; }
 }
+
+@media (prefers-reduced-motion:reduce) {
+  .kd-fx *, .kd-glitch .kd-app, .kd-toast { animation:none !important; }
+  .kd-menu, .kd-scrim { transition:none !important; }
+}
+/* ================= ENDE EGG-MODI: SHOWA & NERV (v3) ================= */
 
 /* ---- Easteregg-Toast (Block 3): 4 s, oben rechts, wiederverwendbares Primitiv.
    Overlay ohne filter/fixed-Falle; über allem, pointer-events aus (blockiert nichts).

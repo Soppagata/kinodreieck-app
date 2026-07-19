@@ -39,41 +39,40 @@ export const THEMES = {
     gefahr: "#C14B3C",
     kartenFeld: "#2E2A36", // Eingabefelder AUF den (im Foyer dunklen) FilmCards
   },
-  /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, dramatisches S/W ----
-     Reiner Graustufen-Swap (KEIN filter auf .kd-app — mobil-tauglich). Werte aus
-     Godzilla-Nachtaufnahmen abgeleitet: nahezu schwarzer Nachthimmel, silbrig
-     angestrahlte Fassaden, neutrales Korn. Akzent = poliertes Bein/Silber statt Gold. */
+  /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, heller S/W-Abzug ----
+     Reiner Token-Swap (KEIN filter auf .kd-app — mobil-tauglich). Die freie
+     App-Fläche ist helles Filmpapier; Karten bleiben wie Fototafeln dunkel. */
   showa: {
-    saal: "#2E2E31",
-    saalHoch: "#3C3C40",
-    leinwand: "#E7E6E1",
-    leinwandTief: "#C7C6C1",
-    tinte: "#131316",
-    tinteWeich: "#4C4C50",
-    rauch: "#8E8E93",
-    wolfram: "#CDCBC3",
-    wie: "#9CA1A6",
-    was: "#B8B2AA",
-    warum: "#E7E6E1",
-    gefahr: "#B58A82",
-    kartenFeld: "#F3F2ED",
+    saal: "#E5E2DA",
+    saalHoch: "#F4F1EA",
+    leinwand: "#242321",
+    leinwandTief: "#393735",
+    tinte: "#F2EFE7",
+    tinteWeich: "#C3BEB4",
+    rauch: "#66635D",
+    wolfram: "#3D3A35",
+    wie: "#A7B0B2",
+    was: "#C7C1B7",
+    warum: "#ECE9E2",
+    gefahr: "#A64E45",
+    kartenFeld: "#34322F",
   },
   /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot ----
      Nahezu schwarzer Grund, warmes Bein für Fließtext (wie die weißen MAGI-Label),
      Signal-Rot als Akzent/Buttons. Bewertungstrio = Konsolen-Tricolor Cyan/Rot/Amber. */
   nerv: {
-    saal: "#070709",
-    saalHoch: "#120A0C",
+    saal: "#050506",
+    saalHoch: "#150507",
     leinwand: "#E9E4DC",
     leinwandTief: "#CDC7BE",
     tinte: "#140C0E",
     tinteWeich: "#4A4046",
-    rauch: "#9E9098",
-    wolfram: "#E5352A",
-    wie: "#4FB4C4",
-    was: "#E5352A",
-    warum: "#F2A81E",
-    gefahr: "#E5352A",
+    rauch: "#AA969C",
+    wolfram: "#F0181D",
+    wie: "#55C8D3",
+    was: "#F0181D",
+    warum: "#FFAE18",
+    gefahr: "#F0181D",
     kartenFeld: "#F4EFE8",
   },
 };
@@ -84,7 +83,7 @@ export function setzeTheme(name) {
   Object.assign(T, THEMES[name] || THEMES.dunkel);
   if (typeof document !== "undefined" && document.body) {
     document.body.style.background = T.saal;
-    document.body.style.colorScheme = name === "hell" ? "light" : "dark"; // native Controls (Scrollbar, Select)
+    document.body.style.colorScheme = name === "hell" || name === "showa" ? "light" : "dark"; // native Controls (Scrollbar, Select)
   }
 }
 
