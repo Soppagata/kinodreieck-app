@@ -99,7 +99,7 @@ const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(M
 check("Dashboard: Vertrauens-Zeile (Programm- + Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(startText) && /Katalog: \d+ Titel/.test(startText));
 check("Dashboard: Kino-für-dich-Modul mit Match + Termin", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && /MATCH/.test(startText));
 check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
-check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /JETZT AUF NETFLIX/.test(startText));
+check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /▶ NETFLIX/.test(startText));
 check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
 check("Dashboard: leeres Pinboard-Modul erscheint NICHT", !/Pinboard/.test(startText));
 check("Dashboard: Erklärinhalte raus aus Start (kein Hero, keine Quicklinks)",
@@ -144,7 +144,7 @@ if (enthaeltMatch(kinoText)) {
 /* ---- Zurück zum Start: der eben gesetzte Pin füllt jetzt das Pinboard-Modul ---- */
 const startTabKnopf = knopf(/^start$/i);
 if (startTabKnopf) { startTabKnopf.click(); await warte(500); }
-check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Karte + Termin-Chip)", /Pinboard/.test(text()) && /→ Kino/.test(text()));
+check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Karte + Termin-Chip)", /Pinboard/.test(text()) && /Kino →/.test(text()));
 
 /* ---- Streaming/Entdecken: Filter + gesehen + Eintrag erstellen ---- */
 const streamingTab = knopf(/^streaming$/i);

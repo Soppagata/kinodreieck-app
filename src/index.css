@@ -384,3 +384,92 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   .kd-teppich-oeffnung, .kd-teppich-karte { transition: none !important; }
 }
+
+/* ================= START-DASHBOARD (Marquee-Rework, 2026-07-19) =================
+   Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
+   die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/nerv;
+   setzeTheme kennt keine :root-Vars). Mobil-first; kein filter/transform auf .kd-app. */
+.kd-dash { display: flex; flex-direction: column; gap: 16px; }
+
+/* Marquee-Kopf */
+.kd-dash-hero { padding: 14px 2px 2px; }
+.kd-dash-bulbs { display: block; height: 7px; margin-bottom: 12px; border-radius: 4px;
+  background-image: radial-gradient(circle at center, var(--kd-wolfram) 0 2.3px, transparent 2.8px);
+  background-size: 15px 7px; background-repeat: repeat-x; opacity: .9; }
+.kd-dash-datum { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--kd-rauch); }
+.kd-dash-headline { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 40px;
+  line-height: .96; letter-spacing: -.01em; color: var(--kd-leinwand); margin: 3px 0 10px; }
+
+/* Vertrauens-Zeile (Sync-Ort; .kd-vertrauen ist Test-Kanarie personalmodus_test B/G) */
+.kd-vertrauen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-rauch);
+  padding-top: 8px; border-top: 1px dashed var(--kd-rauch); }
+.kd-vertrauen-seg { display: inline-flex; align-items: center; gap: 6px; }
+.kd-vertrauen-dot { width: 7px; height: 7px; border-radius: 4px; display: inline-block; }
+
+/* Filmstrip-Trenner (zwei Loch-Reihen) */
+.kd-dash-strip { display: block; height: 13px; border-radius: 2px; opacity: .55;
+  background-color: var(--kd-saalHoch);
+  background-image: repeating-linear-gradient(90deg, var(--kd-rauch) 0 4px, transparent 4px 12px),
+                    repeating-linear-gradient(90deg, var(--kd-rauch) 0 4px, transparent 4px 12px);
+  background-size: 12px 3px, 12px 3px; background-position: 0 3px, 0 7px; background-repeat: repeat-x, repeat-x; }
+
+/* Grid */
+.kd-dash-grid { display: grid; grid-template-columns: 1fr; gap: 22px 18px; }
+@media (min-width: 760px) { .kd-dash-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } }
+
+/* Modul-Kopf (editorial: Mono-Kicker mit Filmstrip-Marker + →-Link) */
+.kd-dash-modul { display: flex; flex-direction: column; }
+.kd-dash-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding-bottom: 6px; margin-bottom: 10px; border-bottom: 1px solid var(--kd-saalHoch); }
+.kd-dash-kopfname { position: relative; padding-left: 14px; font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--kd-leinwand); }
+.kd-dash-kopfname::before { content: ""; position: absolute; left: 0; top: 50%; width: 8px; height: 8px;
+  margin-top: -4px; background: var(--kd-wolfram); border-radius: 1px; }
+.kd-dash-kopflink { background: none; border: none; padding: 0; cursor: pointer; white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--kd-wolfram); }
+
+/* Ticket-Stub-Karte (Flagship: Kino für dich) */
+.kd-dash-ticket { display: flex; align-items: stretch; margin-bottom: 10px; overflow: hidden;
+  background: var(--kd-leinwand); color: var(--kd-tinte); border-radius: 8px; cursor: pointer;
+  box-shadow: 0 3px 14px rgba(0,0,0,.4); }
+.kd-dash-ticket:last-child { margin-bottom: 0; }
+.kd-dash-stub { flex: 0 0 60px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 10px 4px; background: var(--kd-leinwandTief);
+  border-right: 2px dashed var(--kd-rauch); }
+.kd-dash-stamp { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 23px;
+  line-height: 1; color: var(--kd-wolfram); }
+.kd-dash-stamp-lbl { margin-top: 3px; font-family: 'Space Mono', monospace; font-size: 8px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--kd-rauch); }
+.kd-dash-tbody { flex: 1; min-width: 0; padding: 11px 13px; }
+.kd-dash-film { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 20px; line-height: 1.05;
+  color: var(--kd-tinte); overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.kd-dash-meta { margin-top: 4px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--kd-rauch); }
+.kd-dash-showtime { display: inline-block; margin-top: 8px; padding: 3px 8px; white-space: nowrap;
+  font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-tinte);
+  background: var(--kd-leinwandTief); border: 1px solid var(--kd-wolfram); border-radius: 3px; }
+
+/* Listen-Karte (Must-Watch / streambar / Pinboard / zuletzt) */
+.kd-dash-karte { padding: 6px 14px; background: var(--kd-leinwand); color: var(--kd-tinte);
+  border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.4); cursor: pointer; }
+.kd-dash-zeile { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+.kd-dash-zeile + .kd-dash-zeile { border-top: 1px solid var(--kd-leinwandTief); }
+.kd-dash-rang { flex: 0 0 auto; width: 24px; text-align: center; font-family: 'Fraunces', Georgia, serif;
+  font-weight: 900; font-size: 20px; color: var(--kd-wolfram); }
+.kd-dash-ztitel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 17px; letter-spacing: .02em;
+  text-transform: uppercase; color: var(--kd-tinte); }
+.kd-dash-badge { flex: 0 0 auto; padding: 2px 6px; white-space: nowrap; border-radius: 3px;
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--kd-rauch); border: 1px solid var(--kd-rauch); }
+.kd-dash-jetzt { flex: 0 0 auto; padding: 3px 7px; white-space: nowrap; border-radius: 3px;
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--kd-tinte); background: var(--kd-wolfram); }
+.kd-dash-tag { flex: 0 0 auto; font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-rauch); }
+.kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
+  letter-spacing: 0; text-transform: none; }
+
+.kd-dash-leer { margin: 0; font-size: 13px; line-height: 1.6; color: var(--kd-rauch); }

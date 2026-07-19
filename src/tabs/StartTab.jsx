@@ -152,38 +152,23 @@ function naechsterTermin(zeiten) {
   return Number.isFinite(min) ? { wert: min, label } : null;
 }
 
-/* Karten-/Modul-Stile nach start_dashboard_schablone.html (helle Karte auf
-   Saal-Grund; theme-reaktiv, daher Funktionen statt Konstanten). */
-const monoStil = () => ({ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch });
-const karteStil = () => ({ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "12px 14px", boxShadow: "0 2px 10px rgba(0,0,0,0.45)", cursor: "pointer" });
-const titelStil = (px = 20) => ({ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: px, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-const metaStil = () => ({ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.rauch, marginTop: 3 });
-const zeileStil = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 };
-const terminStil = () => ({ fontFamily: "'Space Mono', monospace", fontSize: 11, whiteSpace: "nowrap", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", color: T.tinte, background: "rgba(227,166,59,0.28)", border: "1px solid " + T.wolfram, borderRadius: 3, padding: "3px 7px" });
-const badgeStil = (an) => ({ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", borderRadius: 3, padding: "2px 6px", whiteSpace: "nowrap", border: "1px solid " + (an ? T.wolfram : T.rauch), color: an ? T.tinte : T.rauch, background: an ? "rgba(227,166,59,0.28)" : "transparent" });
-
+/* Modul-Rahmen: editorialer Kopf (Mono-Kicker + →-Link), Optik in index.css. */
 function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
   return (
-    <div data-tour={tour}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-        <span style={{ ...monoStil(), letterSpacing: "0.14em", textTransform: "uppercase" }}>{name}</span>
-        <button onClick={() => onNavigiere && onNavigiere(ziel)}
-          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 14, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram }}>
-          → {linkLabel}
-        </button>
+    <section className="kd-dash-modul" data-tour={tour}>
+      <div className="kd-dash-kopf">
+        <span className="kd-dash-kopfname">{name}</span>
+        <button className="kd-dash-kopflink" onClick={() => onNavigiere && onNavigiere(ziel)}>{linkLabel} →</button>
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
-/* Vertrauens-Zeile (FIX): Programm-Stand, Katalog-Stand, Sync-Status.
-   Einziger Sync-Ort seit Etappe 4 — der Übergangs-Punkt am Griff (NavBand)
-   ist entfernt. Entscheidungs-Log: kein Zeitfenster ohne sichtbaren Sync-Status.
-   Sync-Semantik (wie SyncStatusChip.ableiten): OHNE Git-Konfiguration bewusst
-   KEIN Sync-Segment — „nicht verbunden" wäre Dauer-Rauschen ohne Handlung.
-   Sobald Sync konfiguriert ist, erscheint immer genau einer der vier Zustände
-   synchron / ausstehend n / nicht aktuell / Konflikt (useSyncStatus, 3s-Poll). */
+/* Vertrauens-Zeile (FIX): Programm-Stand, Katalog-Stand, Sync-Status. Einziger
+   Sync-Ort seit Etappe 4 (Griff-Punkt entfernt). Ohne Git-Konfiguration bewusst
+   KEIN Sync-Segment (kein „nicht verbunden"-Rauschen). Klasse .kd-vertrauen ist
+   Test-Kanarie (personalmodus_test B/G) — bleibt erhalten. */
 function VertrauensZeile({ progStand, streamingBekannt }) {
   const s = useSyncStatus();
   const sync = !s || !s.configured ? null
@@ -199,14 +184,14 @@ function VertrauensZeile({ progStand, streamingBekannt }) {
   const katalog = streamingBekannt && streamingBekannt.stand ? (streamingBekannt.titel || []).length : null;
   if (!sync && !progStand && katalog == null) return null;
   return (
-    <div className="kd-vertrauen" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", ...monoStil() }}>
+    <div className="kd-vertrauen">
       {sync && (
-        <span title="Geräte-Sync" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: sync.farbe }}>
-          <span style={{ width: 7, height: 7, borderRadius: 4, background: sync.farbe, display: "inline-block" }} />{sync.text}
+        <span className="kd-vertrauen-seg" title="Geräte-Sync" style={{ color: sync.farbe }}>
+          <span className="kd-vertrauen-dot" style={{ background: sync.farbe }} />{sync.text}
         </span>
       )}
-      {progStand ? <span>Programm: {fmt(progStand)}</span> : null}
-      {katalog != null && <span>Katalog: {katalog} Titel</span>}
+      {progStand ? <span className="kd-vertrauen-seg">Programm: {fmt(progStand)}</span> : null}
+      {katalog != null && <span className="kd-vertrauen-seg">Katalog: {katalog} Titel</span>}
     </div>
   );
 }
@@ -216,9 +201,7 @@ function StartDashboard({
   kinoMatches = { matched: [] }, mustwatch = [], auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
 }) {
-  /* Kino für dich: Top 3 der (vor-)sortierten Treffer, nur mit nächstem Termin.
-     Termin-Strings laufen durch formatiereTermin (gemeinsamer Helper, auch
-     Pinboard) — ISO-Rohzeiten werden lesbar, Anzeige-Strings bleiben wie sie sind. */
+  /* Kino für dich: Top 3 der (vor-)sortierten Treffer, nur mit nächstem Termin. */
   const kinoTop = useMemo(() => (kinoMatches.matched || [])
     .map((m) => ({ ...m, termin: naechsterTermin((m.prog.z || []).map(formatiereTermin)) }))
     .filter((m) => m.termin)
@@ -227,8 +210,7 @@ function StartDashboard({
   /* Must-Watch: oberste 5 in Listenreihenfolge. */
   const mwTop = (mustwatch || []).slice(0, 5);
 
-  /* Jetzt streambar: Merkliste ∩ angehakte Abos (Konvention wie dienstOk /
-     sichtbareDienste: leere Auswahl = alles zählt). */
+  /* Jetzt streambar: Merkliste ∩ angehakte Abos (leere Auswahl = alles zählt). */
   const streambar = useMemo(() => {
     const map = new Map((((streamingEntdecken || {}).titel) || []).map((t) => [t.watchmode_id, t]));
     return (merkliste || []).map((m) => {
@@ -238,15 +220,13 @@ function StartDashboard({
     }).filter(Boolean).slice(0, 5);
   }, [merkliste, streamingEntdecken, auswahl]);
 
-  /* Pinboard: nächster Termin zuerst — Termin über denselben Helper formatiert
-     wie im Kino-für-dich-Modul (Sortierung auf dem formatierten String, damit
-     auch ISO-Pins richtig einsortiert werden). */
+  /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
   const pins = useMemo(() => kinoPins
     .map((p) => ({ ...p, zAnzeige: formatiereTermin(p.z) }))
     .sort((a, b) => pinSortWert({ z: a.zAnzeige }) - pinSortWert({ z: b.zAnzeige }))
     .slice(0, 5), [kinoPins]);
 
-  /* Zuletzt hinzugefügt: nur belegbare Zeitstempel (siehe Kopfkommentar). */
+  /* Zuletzt hinzugefügt: nur belegbare Zeitstempel (Must-Watch erstellt_am + Merkliste hinzugefuegt_am). */
   const zuletzt = useMemo(() => {
     const mw = (mustwatch || []).filter((e) => e.erstellt_am).map((e) => ({
       key: "mw" + e.id, label: e.titel, quelle: "MUST-WATCH", ziel: "mediathek", zeit: Date.parse(e.erstellt_am) || 0,
@@ -257,108 +237,110 @@ function StartDashboard({
     return [...mw, ...mk].sort((a, b) => b.zeit - a.zeit).slice(0, 5);
   }, [mustwatch, merkliste]);
 
-  const mono = monoStil();
   const leer = !kinoTop.length && !mwTop.length && !streambar.length && !pins.length && !zuletzt.length;
   const datum = new Date().toLocaleDateString("de-AT", { weekday: "long", day: "numeric", month: "long" });
   const fmtTag = (ms) => { const d = new Date(ms); const z = (n) => String(n).padStart(2, "0"); return z(d.getDate()) + "." + z(d.getMonth() + 1) + "."; };
 
-  return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* ---- Kopf ---- */}
-      <div>
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "0.06em", textTransform: "uppercase", lineHeight: 1 }}>Start</div>
-        <div style={{ ...mono, marginTop: 4, textTransform: "uppercase" }}>{datum} · Dein Abend</div>
-      </div>
+  /* Theme-Tokens als CSS-Variablen an die Dashboard-Wurzel (setzeTheme kennt keine
+     :root-Vars) — pro Render aus T, damit dunkel/hell/showa/nerv korrekt durchschlagen. */
+  const themeVars = {
+    "--kd-saal": T.saal, "--kd-saalHoch": T.saalHoch, "--kd-leinwand": T.leinwand,
+    "--kd-leinwandTief": T.leinwandTief, "--kd-tinte": T.tinte, "--kd-tinteWeich": T.tinteWeich,
+    "--kd-rauch": T.rauch, "--kd-wolfram": T.wolfram, "--kd-gefahr": T.gefahr,
+  };
 
-      {/* ---- Vertrauens-Zeile (FIX, schmal) ---- */}
-      <VertrauensZeile progStand={progStand} streamingBekannt={streamingBekannt} />
+  return (
+    <section className="kd-dash" style={themeVars}>
+      {/* ---- Marquee-Kopf ---- */}
+      <header className="kd-dash-hero">
+        <span className="kd-dash-bulbs" aria-hidden="true" />
+        <div className="kd-dash-datum">{datum} · Wien</div>
+        <h1 className="kd-dash-headline">Dein Abend</h1>
+        <VertrauensZeile progStand={progStand} streamingBekannt={streamingBekannt} />
+      </header>
+
+      <span className="kd-dash-strip" aria-hidden="true" />
 
       {leer && (
-        <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
+        <p className="kd-dash-leer">
           Noch leer. Kino-Treffer, Must-Watch, Merkliste und angepinnte Termine
           erscheinen hier, sobald es sie gibt — Termine pinnst du im Kino-Tab
           (◇ vor der Uhrzeit), gemerkt wird im Entdecken-Bereich (★).
         </p>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px 18px" }}>
-        {/* ---- 1 · Kino für dich ---- */}
+      <div className="kd-dash-grid">
+        {/* ---- 1 · Kino für dich (Ticket-Stub-Karten) ---- */}
         {kinoTop.length > 0 && (
           <Modul name="Kino für dich" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere}>
             {kinoTop.map(({ prog, film, termin }, i) => (
-              <div key={(prog.film_at_id || prog.t) + "|" + i} onClick={() => onNavigiere && onNavigiere("kino")}
-                style={{ ...karteStil(), marginTop: i ? 8 : 0 }}>
-                <div style={zeileStil}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={titelStil()}>{film.titel}</div>
-                    <div style={metaStil()}>{[film.jahr, (prog.k || [])[0]].filter(Boolean).join(" · ")}</div>
-                  </div>
-                  <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.rauch, textAlign: "right", whiteSpace: "nowrap" }}>
-                    <b style={{ display: "block", fontSize: 15, color: T.tinte }}>{score(film)}</b>MATCH
-                  </div>
+              <div key={(prog.film_at_id || prog.t) + "|" + i} className="kd-dash-ticket" onClick={() => onNavigiere && onNavigiere("kino")}>
+                <div className="kd-dash-stub">
+                  <b className="kd-dash-stamp">{score(film)}</b>
+                  <span className="kd-dash-stamp-lbl">MATCH</span>
                 </div>
-                <div style={{ ...zeileStil, marginTop: 8 }}>
-                  <span style={metaStil()}>{prog.f || ""}</span>
-                  <span style={terminStil()}>{termin.label}</span>
+                <div className="kd-dash-tbody">
+                  <div className="kd-dash-film">{film.titel}</div>
+                  <div className="kd-dash-meta">{[film.jahr, (prog.k || [])[0]].filter(Boolean).join(" · ")}</div>
+                  <div className="kd-dash-showtime">◷ {termin.label}</div>
                 </div>
               </div>
             ))}
           </Modul>
         )}
 
-        {/* ---- 2 · Must-Watch ---- */}
+        {/* ---- 2 · Must-Watch (Billboard-Rang) ---- */}
         {mwTop.length > 0 && (
           <Modul name="Must-Watch" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-            <div style={karteStil()} onClick={() => onNavigiere && onNavigiere("mediathek")}>
+            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("mediathek")}>
               {mwTop.map((e, i) => (
-                <div key={e.id} style={{ ...zeileStil, marginTop: i ? 10 : 0 }}>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.rauch, width: 22 }}>{i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0, ...titelStil(18) }}>{e.titel}</div>
-                  {e.im_besitz && <span style={badgeStil(false)}>IM BESITZ</span>}
+                <div key={e.id} className="kd-dash-zeile">
+                  <span className="kd-dash-rang">{i + 1}</span>
+                  <span className="kd-dash-ztitel">{e.titel}</span>
+                  {e.im_besitz && <span className="kd-dash-badge">IM BESITZ</span>}
                 </div>
               ))}
             </div>
           </Modul>
         )}
 
-        {/* ---- 3 · Jetzt streambar (Merkliste ∩ Abos) ---- */}
+        {/* ---- 3 · Jetzt streambar ---- */}
         {streambar.length > 0 && (
           <Modul name="Jetzt streambar" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere}>
-            <div style={karteStil()} onClick={() => onNavigiere && onNavigiere("streaming")}>
-              {streambar.map((m, i) => (
-                <div key={m.watchmode_id} style={{ ...zeileStil, marginTop: i ? 10 : 0 }}>
-                  <div style={{ flex: 1, minWidth: 0, ...titelStil(18) }}>{m.titel}{m.jahr ? " (" + m.jahr + ")" : ""}</div>
-                  <span style={badgeStil(true)}>JETZT AUF {String(m.dienst).toUpperCase()}</span>
+            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("streaming")}>
+              {streambar.map((m) => (
+                <div key={m.watchmode_id} className="kd-dash-zeile">
+                  <span className="kd-dash-ztitel">{m.titel}{m.jahr ? " (" + m.jahr + ")" : ""}</span>
+                  <span className="kd-dash-jetzt">▶ {String(m.dienst).toUpperCase()}</span>
                 </div>
               ))}
             </div>
           </Modul>
         )}
 
-        {/* ---- 4 · Pinboard ---- */}
+        {/* ---- 4 · Pinboard (Kanarie: Name + formatiereTermin) ---- */}
         {pins.length > 0 && (
           <Modul name="Pinboard" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere} tour="pinboard">
-            <div style={karteStil()} onClick={() => onNavigiere && onNavigiere("kino")}>
-              {pins.map((p, i) => (
-                <div key={p.t + "|" + p.z} style={{ ...zeileStil, marginTop: i ? 10 : 0 }}>
-                  <div style={{ flex: 1, minWidth: 0, ...titelStil(18) }}>{p.t}</div>
-                  <span style={terminStil()}>{p.zAnzeige}</span>
+            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("kino")}>
+              {pins.map((p) => (
+                <div key={p.t + "|" + p.z} className="kd-dash-zeile">
+                  <span className="kd-dash-ztitel">◇ {p.t}</span>
+                  <span className="kd-dash-showtime">{p.zAnzeige}</span>
                 </div>
               ))}
             </div>
           </Modul>
         )}
 
-        {/* ---- 5 · Zuletzt hinzugefügt (Kandidat, angenommen) ---- */}
+        {/* ---- 5 · Zuletzt hinzugefügt ---- */}
         {zuletzt.length > 0 && (
           <Modul name="Zuletzt hinzugefügt" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
-            <div style={karteStil()} onClick={() => onNavigiere && onNavigiere("mediathek")}>
-              {zuletzt.map((z, i) => (
-                <div key={z.key} onClick={(e) => { e.stopPropagation(); onNavigiere && onNavigiere(z.ziel); }}
-                  style={{ ...zeileStil, marginTop: i ? 8 : 0, fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinte }}>
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{z.label}</span>
-                  <span style={{ color: T.rauch }}>{fmtTag(z.zeit)}</span>
-                  <span style={badgeStil(false)}>{z.quelle}</span>
+            <div className="kd-dash-karte" onClick={() => onNavigiere && onNavigiere("mediathek")}>
+              {zuletzt.map((z) => (
+                <div key={z.key} className="kd-dash-zeile kd-dash-log" onClick={(e) => { e.stopPropagation(); onNavigiere && onNavigiere(z.ziel); }}>
+                  <span className="kd-dash-ztitel">{z.label}</span>
+                  <span className="kd-dash-tag">{fmtTag(z.zeit)}</span>
+                  <span className="kd-dash-badge">{z.quelle}</span>
                 </div>
               ))}
             </div>
