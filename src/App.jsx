@@ -24,6 +24,7 @@ import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { store, K, PROGRAMM_TTL_MS } from "./lib/storage.js";
+import { baueBackup } from "./lib/backup.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
@@ -1012,23 +1013,11 @@ export default function App() {
     });
   }, [master, masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, persistArtikel]);
 
-  /* ---- Gesamt-Backup als Download (Datei in den eigenen Backup-Ordner legen) ---- */
+  /* ---- Gesamt-Backup als Download (treiber-agnostisch: frischer Pull + Lesen über store) ----
+     Liest NICHT mehr aus React-State (v2-Falle), sondern nach einem erzwungenen frischen
+     Pull des aktiven Treibers alle 10 Schlüssel über `store` (backup.js). */
   const backupGesamt = useCallback(async () => {
-    const sammle = async (key) => { try { const r = await store.get(key); return r ? JSON.parse(r.value) : null; } catch { return null; } };
-    const b = {
-      format: "kinodreieck-backup", version: 1, erstellt: new Date().toISOString(),
-      hinweis: "Wiederherstellen: über Einstellungen → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
-      masterliste: { meta: masterMeta, filme: master || [] },
-      artikel: artikelListe,
-      kino_pins: kinoPins,
-      merkliste: await sammle(K.merkliste),
-      entdecken_status: await sammle(K.entdeckenStatus),
-      /* streaming_dienste fehlte hier bis 18.07.2026 — ein Restore eines
-         Gesamt-Backups hätte die Abo-Auswahl verloren. Jetzt dabei. */
-      streaming_dienste: await sammle(K.streamingDienste),
-      must_watch_liste: mustwatch,
-      vokabular, einstellungen, autor: autorName,
-    };
+    const b = await baueBackup();
     const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1036,7 +1025,7 @@ export default function App() {
     a.download = "kinodreieck_backup_" + new Date().toISOString().slice(0, 10) + ".json";
     a.click();
     URL.revokeObjectURL(url);
-  }, [master, masterMeta, artikelListe, kinoPins, mustwatch, vokabular, einstellungen, autorName]);
+  }, []);
 
   /* Kandidaten für den Must-Watch-Verknüpfungs-Picker (explizit, kein Auto-Match):
      Master (id) · Kinoprogramm (film_at_id — nur Einträge MIT stabiler ID) ·

@@ -5,7 +5,7 @@
    ERSETZEN). Snapshot vor dem Überschreiben (rückgängig machbar).
    Läuft VOR dem Git-Verbinden (Storage-Treiber ist dann lokal → keine Commits). */
 
-import { store, K } from "./storage.js";
+import { store, K, storageDriverName, activeSyncStatus } from "./storage.js";
 import { ensureIds } from "./match.js";
 
 const RESTORE_SNAP = "kd:restore:vorher"; // Rollback-Snapshot (nicht in SYNC_MAP)
@@ -92,7 +92,25 @@ export async function restoreBackup(backup) {
     add("Must-Watch-Liste", "übernommen", backup.must_watch_liste.length);
   } else add("Must-Watch-Liste", "übersprungen (fehlte)", 0);
 
-  return { ok: true, warnung, bericht };
+  // Treiber-agnostischer Hinweis: Restore schreibt über `store`. Ist ein Sync-Treiber
+  // aktiv, pusht er die Schlüssel in die Owner-Zeilen (Hintergrund-Commit). Ohne gültige
+  // Konfiguration (z.B. fehlender Sync-Schlüssel) landet der Import nur im lokalen Cache —
+  // das wird sauber gemeldet, kein stiller „Erfolg".
+  let dbHinweis = null, dbWarnung = false;
+  try {
+    const drv = storageDriverName();
+    if (drv && drv !== "lokal") {
+      const st = activeSyncStatus();
+      if (st.configured) {
+        dbHinweis = `Treiber „${drv}" aktiv: die Schlüssel werden im Hintergrund in deine Owner-Zeilen geschrieben.`;
+      } else {
+        dbWarnung = true;
+        dbHinweis = `Treiber „${drv}" ist nicht vollständig konfiguriert (Sync-Schlüssel fehlt): die Daten liegen nur LOKAL, NICHT in der Datenbank. Schlüssel eintragen und „Ausstehende senden".`;
+      }
+    }
+  } catch { /* Hinweis best effort */ }
+
+  return { ok: true, warnung, bericht, dbHinweis, dbWarnung };
 }
 
 /* Rückgängig: den vor dem letzten Restore gesicherten Stand zurückschreiben. */

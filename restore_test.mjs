@@ -11,7 +11,52 @@ globalThis.localStorage = {
   clear: () => _ls.clear(),
 };
 
+/* ---------- PostgREST-Mock (für den Phase-4-Supabase-Teil unten) ---------- */
+const SB_URL = "https://test.supabase.co";
+const SB_KEY = "RESTKEY-9";
+let sbTable = new Map(); // "owner|key" -> {owner,key,value,scope,rev}
+const sbSeed = (owner, key, value, scope = "user", rev = 1) => sbTable.set(owner + "|" + key, { owner, key, value, scope, rev });
+const sbGet = (owner, key) => { const r = sbTable.get(owner + "|" + key); return r ? r.value : null; };
+const sbResp = (status, data) => Promise.resolve({ status, ok: status >= 200 && status < 300, json: () => Promise.resolve(data) });
+globalThis.fetch = (url, opts = {}) => {
+  const method = opts.method || "GET";
+  const body = opts.body ? JSON.parse(opts.body) : null;
+  const keyOk = (opts.headers || {})["x-kd-key"] === SB_KEY;
+  const u = new URL(url);
+  if (!u.pathname.endsWith("/kd_store")) return sbResp(404, { message: "no table" });
+  const P = u.searchParams;
+  const filt = (n) => { const v = P.get(n); return v == null ? null : v.replace(/^eq\./, ""); };
+  const fOwner = filt("owner"), fKey = filt("key"), fScope = filt("scope"), fRev = filt("rev");
+  const match = (r) => (!fOwner || r.owner === fOwner) && (!fKey || r.key === fKey) && (!fScope || r.scope === fScope);
+  const vis = (r) => (r.scope !== "user" ? true : keyOk);
+  if (method === "GET") {
+    const rows = [...sbTable.values()].filter(match).filter(vis).filter((r) => fRev == null || String(r.rev) === String(fRev));
+    return sbResp(200, rows.map((r) => ({ key: r.key, value: r.value, rev: r.rev, owner: r.owner, scope: r.scope })));
+  }
+  if (method === "POST") {
+    if (!keyOk) return sbResp(401, { message: "RLS" });
+    const ins = Array.isArray(body) ? body[0] : body;
+    const id = ins.owner + "|" + ins.key;
+    if (sbTable.has(id)) return sbResp(409, { message: "dup", code: "23505" });
+    const row = { owner: ins.owner, key: ins.key, value: ins.value, scope: ins.scope || "user", rev: 1 };
+    sbTable.set(id, row);
+    return sbResp(201, [{ ...row }]);
+  }
+  if (method === "PATCH") {
+    const rows = [...sbTable.values()].filter(match).filter(vis).filter((r) => fRev == null || String(r.rev) === String(fRev));
+    if (rows.length === 0) return sbResp(200, []);
+    const r = rows[0];
+    if (body && typeof body.value !== "undefined") r.value = body.value;
+    r.rev += 1;
+    return sbResp(200, [{ ...r }]);
+  }
+  return sbResp(200, []);
+};
+
 const R = await import("./src/lib/restore.js");
+const S = await import("./src/lib/supabaseDriver.js");
+const B = await import("./src/lib/backup.js");
+const ST = await import("./src/lib/storage.js");
 
 const checks = [];
 const check = (n, p) => checks.push([n, p]);
@@ -108,7 +153,72 @@ check("Teil-Backup: Autor gesetzt", get("kd:autor-name") === "Nur");
 check("Teil-Backup: Master übersprungen", get("kd:master") === null && teil.bericht.find((b) => b.topf === "Masterliste").status.includes("übersprungen"));
 check("Teil-Backup: Must-Watch übersprungen, Topf unangetastet", get("kd:mustwatch") === null && teil.bericht.find((b) => b.topf === "Must-Watch-Liste").status.includes("übersprungen"));
 
+/* ===== Phase 4: Backup/Restore über den Supabase-Treiber ===== */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const ZEHN = {
+  "kd:master": JSON.stringify({ meta: { name: "Max" }, filme: [{ id: "f1", titel: "DB-Film" }], herkunft: { typ: "storage" }, gespeichertAm: 1 }),
+  "kd:artikel": JSON.stringify({ artikel: [{ id: "a1", titel: "DB-Blog" }], gespeichertAm: 1 }),
+  "kd:kino-pins": JSON.stringify([{ t: "P", j: 2020 }]),
+  "kd:merkliste": JSON.stringify([{ watchmode_id: 1 }]),
+  "kd:vokabular": JSON.stringify([{ wort: "db" }]),
+  "kd:einstellungen": JSON.stringify({ theme: "hell" }),
+  "kd:entdecken-status": JSON.stringify({ "1": "gesehen" }),
+  "kd:autor-name": "DB-Autor",
+  "kd:streaming-dienste": JSON.stringify({ auswahl: { netflix: true } }),
+  "kd:mustwatch": JSON.stringify({ eintraege: [{ id: "mw1" }], gespeichertAm: 2 }),
+};
+
+// Aktiver Treiber = Supabase (konfiguriert), DB mit allen 10 Schlüsseln geseedet.
+_ls.clear(); sbTable = new Map();
+ST.setStorageDriver(S.supabaseDriver);
+S.setSupabaseConfig({ url: SB_URL, anon: "anon_pub", owner: "max", key: SB_KEY });
+for (const [k, v] of Object.entries(ZEHN)) sbSeed("max", k, v);
+
+// (b) Export trägt nach frischem Pull den DB-Stand (nicht veralteten State)
+await S.syncPull();
+const bk = await B.baueBackup();
+check("P4 Export: master aus DB (Pull, nicht State)", bk.masterliste.filme[0].titel === "DB-Film" && bk.masterliste.meta.name === "Max");
+check("P4 Export: artikel entpackt {artikel:[...]}", Array.isArray(bk.artikel) && bk.artikel[0].titel === "DB-Blog");
+check("P4 Export: must_watch_liste entpackt {eintraege:[...]}", Array.isArray(bk.must_watch_liste) && bk.must_watch_liste[0].id === "mw1");
+check("P4 Export: autor roher String", bk.autor === "DB-Autor");
+check("P4 Export: streaming_dienste enthalten", bk.streaming_dienste && bk.streaming_dienste.auswahl.netflix === true);
+check("P4 Export: alle 10 Felder befüllt", [bk.masterliste, bk.artikel, bk.kino_pins, bk.merkliste, bk.vokabular, bk.einstellungen, bk.entdecken_status, bk.autor, bk.streaming_dienste, bk.must_watch_liste].every((x) => x != null));
+
+// (a) Roundtrip: Backup in leere DB einspielen -> alle 10 Owner-Zeilen geschrieben
+_ls.clear(); sbTable = new Map();
+S.setSupabaseConfig({ url: SB_URL, anon: "anon_pub", owner: "max", key: SB_KEY }); // Config lebt in localStorage -> nach clear neu setzen
+const rr = await R.restoreBackup(bk);
+check("P4 Restore: ok + kein dbWarnung (Schlüssel da)", rr.ok === true && rr.dbWarnung === false && /aktiv/.test(rr.dbHinweis || ""));
+await sleep(80); // Hintergrund-Commits abwarten
+check("P4 Roundtrip: master-Wrapper in DB", JSON.parse(sbGet("max", "kd:master") || "{}").filme[0].titel === "DB-Film");
+check("P4 Roundtrip: mustwatch-Wrapper in DB", JSON.parse(sbGet("max", "kd:mustwatch") || "{}").eintraege[0].id === "mw1");
+check("P4 Roundtrip: autor roh in DB", sbGet("max", "kd:autor-name") === "DB-Autor");
+check("P4 Roundtrip: alle 10 Schlüssel in DB", S.SYNC_KEYS.every((k) => sbGet("max", k) != null));
+check("P4 Roundtrip: Snapshot vor Überschreiben angelegt", R.hatRestoreSnapshot() === true);
+
+// (c) ohne Schlüssel: kein DB-Write, dbWarnung, lokaler Cache konsistent
+_ls.clear(); sbTable = new Map();
+S.setSupabaseConfig({ url: SB_URL, anon: "anon_pub", owner: "max", key: "" }); // konfiguriert, aber OHNE Schlüssel
+const rc = await R.restoreBackup(bk);
+await sleep(50);
+check("P4 ohne Schlüssel: dbWarnung + klarer Hinweis", rc.dbWarnung === true && /NICHT in der Datenbank/.test(rc.dbHinweis || ""));
+check("P4 ohne Schlüssel: lokaler Cache geschrieben", JSON.parse(localStorage.getItem("kd:master") || "{}").filme[0].titel === "DB-Film");
+check("P4 ohne Schlüssel: KEINE DB-Zeile", sbGet("max", "kd:master") === null);
+
+// (d) Snapshot + Undo stellt den Vorher-Stand her (Supabase aktiv)
+_ls.clear(); sbTable = new Map();
+S.setSupabaseConfig({ url: SB_URL, anon: "anon_pub", owner: "max", key: SB_KEY });
+localStorage.setItem("kd:autor-name", "VorherAutor");
+await R.restoreBackup(bk);
+await sleep(50);
+check("P4 Undo-Vorlage: Autor überschrieben", localStorage.getItem("kd:autor-name") === "DB-Autor");
+await R.restoreRueckgaengig();
+check("P4 Undo: Autor lokal zurückgesetzt", localStorage.getItem("kd:autor-name") === "VorherAutor");
+
+ST.setStorageDriver(null); // Hygiene: zurück auf lokal
+
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }
+console.log(`\n${checks.filter(([, p]) => p).length}/${checks.length} Checks bestanden.`);
 console.log(ok ? "RESTORE-TEST BESTANDEN" : "RESTORE-TEST: BEFUNDE OBEN");
 process.exit(ok ? 0 : 1);

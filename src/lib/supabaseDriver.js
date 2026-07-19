@@ -350,6 +350,7 @@ export function syncStatus() {
 export const supabaseDriver = {
   name: "supabase",
   status: syncStatus,                         // driver-agnostischer Status-Abgriff (storage.activeSyncStatus)
+  pull: syncPull,                             // driver-agnostischer Pull (storage.activePull)
   async get(k) {
     // Cache-first, kein Netz pro Lesezugriff (Pull passiert beim Start).
     return localDriver.get(k);

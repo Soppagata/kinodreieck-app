@@ -32,7 +32,11 @@ export function RestoreImport({ ohneKopf = false } = {}) {
     try {
       const r = await restoreBackup(backup);
       setBericht(r.bericht);
-      setMeldung({ art: r.warnung ? "warn" : "ok", text: (r.warnung ? r.warnung + " " : "") + "Wiederhergestellt. Zum Anwenden die App neu laden." });
+      const teile = [];
+      if (r.warnung) teile.push(r.warnung);
+      teile.push("Wiederhergestellt. Zum Anwenden die App neu laden.");
+      if (r.dbHinweis) teile.push(r.dbHinweis);
+      setMeldung({ art: (r.warnung || r.dbWarnung) ? "warn" : "ok", text: teile.join(" ") });
     } catch (e) { setMeldung({ art: "err", text: "Fehlgeschlagen: " + e.message }); }
     setBusy(false);
   };

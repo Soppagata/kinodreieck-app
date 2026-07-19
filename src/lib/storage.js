@@ -46,6 +46,14 @@ export function activeSyncStatus() {
   return { lastPull: null, lastCommit: null, pending: [], conflict: [], stale: [], configured: false };
 }
 
+/* Driver-agnostischer Pull: erzwingt einen frischen Pull des AKTIVEN Treibers
+   (z.B. vor dem Backup-Export). Treiber ohne Sync (lokal): No-op. */
+export async function activePull() {
+  try { if (activeDriver && typeof activeDriver.pull === "function") return await activeDriver.pull(); }
+  catch (e) { return { ok: false, error: String(e) }; }
+  return { ok: true, noop: true };
+}
+
 /* Treiber-Wahl (Block 2): "git" | "supabase" | null(=bisheriges Verhalten). */
 export function getTreiber() { try { return localStorage.getItem("kd:treiber"); } catch { return null; } }
 export function setTreiber(name) {
