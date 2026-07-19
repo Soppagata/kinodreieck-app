@@ -31,6 +31,7 @@ export const SYNC_MAP = {
   "kd:autor-name": "autor-name.json",
   "kd:streaming-dienste": "streaming-dienste.json",
   "kd:mustwatch": "mustwatch.json", // Must-Watch-Liste (10. Datei, seit 18.07.2026)
+  "kd:achievements": "achievements.json", // Egg-Achievements (11. Datei, Block 3) — additiv, Treiber-Mechanik unverändert
 };
 
 /* Konfig/Status — rein lokal, NICHT gesynct (nicht in SYNC_MAP). */

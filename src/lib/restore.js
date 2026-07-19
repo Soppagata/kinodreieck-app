@@ -1,6 +1,6 @@
 /* ---------- Restore-Import (Datenmigration alt → neu) ----------
-   Spielt ein `kinodreieck-backup`-JSON (Gesamt-Backup) in die 10 Sync-Töpfe der
-   App ein, damit der Git-Treiber sie beim ersten Commit als 10 Dateien schreibt.
+   Spielt ein `kinodreieck-backup`-JSON (Gesamt-Backup) in die 11 Sync-Töpfe der
+   App ein, damit der Git-Treiber sie beim ersten Commit als 11 Dateien schreibt.
    Rein lokal, deterministisch, kein Netz, kein LLM, kein Merge (Restore =
    ERSETZEN). Snapshot vor dem Überschreiben (rückgängig machbar).
    Läuft VOR dem Git-Verbinden (Storage-Treiber ist dann lokal → keine Commits). */
@@ -21,7 +21,7 @@ export async function restoreBackup(backup) {
     ? `Backup-Version ${backup.version} (erwartet 1) — wird tolerant eingelesen.` : null;
 
   // 1) Snapshot des bisherigen Standes ALLER Zieltöpfe VOR dem Überschreiben.
-  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch];
+  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements];
   const vorher = {};
   for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
   try { localStorage.setItem(RESTORE_SNAP, JSON.stringify({ t: nowIso(), werte: vorher })); } catch { /* Snapshot best effort */ }
@@ -91,6 +91,12 @@ export async function restoreBackup(backup) {
     await store.set(K.mustwatch, JSON.stringify({ eintraege: backup.must_watch_liste, gespeichertAm: now }));
     add("Must-Watch-Liste", "übernommen", backup.must_watch_liste.length);
   } else add("Must-Watch-Liste", "übersprungen (fehlte)", 0);
+
+  // 12) Egg-Achievements — {eggs:[...]} (11. Artefakt, Block 3); Alt-Backups ohne Feld werden übersprungen.
+  if (backup.achievements && typeof backup.achievements === "object") {
+    await store.set(K.achievements, JSON.stringify(backup.achievements));
+    add("Achievements", "übernommen", Array.isArray(backup.achievements.eggs) ? backup.achievements.eggs.length : 0);
+  } else add("Achievements", "übersprungen (fehlte)", 0);
 
   // Treiber-agnostischer Hinweis: Restore schreibt über `store`. Ist ein Sync-Treiber
   // aktiv, pusht er die Schlüssel in die Owner-Zeilen (Hintergrund-Commit). Ohne gültige

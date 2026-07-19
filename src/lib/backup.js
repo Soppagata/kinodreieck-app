@@ -2,7 +2,7 @@
    Baut das `kinodreieck-backup`-Objekt (Format v1, unverändert). Reihenfolge:
    1) erzwungener frischer Pull des AKTIVEN Treibers (bei localDriver No-op) — so
       trägt das Backup den DB-Stand, nicht veralteten React-State (die v2-Falle);
-   2) ALLE 10 Owner-Schlüssel über `store` lesen (nicht aus React-State).
+   2) ALLE 11 Owner-Schlüssel über `store` lesen (nicht aus React-State).
    Enthält nur Owner-Daten, nie Demo/Tester. Der lokale Datei-Export bleibt der
    robusteste Notweg (funktioniert ohne Netz/Schlüssel — der Pull ist dann best effort). */
 
@@ -34,5 +34,6 @@ export async function baueBackup({ pull = true } = {}) {
     vokabular: await obj(K.vokabular),
     einstellungen: await obj(K.einstellungen),
     autor: await roh(K.autorName),   // roher String (kein JSON)
+    achievements: await obj(K.achievements),  // {eggs:[...]} — 11. Artefakt (Block 3); null wenn nie freigeschaltet
   };
 }

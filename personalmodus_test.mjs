@@ -119,7 +119,7 @@ const helpers = (dom) => {
   /* Neue Quellen-UI (Etappe 1): Angehakte immer sichtbar, Rest NUR als
      Suchtreffer. Der alte Check "Hayu sichtbar" (Gruppen-Layout) zieht um:
      Hayu ist nicht angehakt -> erst die Suche beweist die echte AT-Liste. */
-  check("E: Angehakt-Liste zeigt gewählte Quellen ohne Suche", /Crunchyroll Premium \(Via Amazon Prime\)/.test(text()) && /Netflix/.test(text()));
+  check("E: Angehakt-Liste zeigt gewählte Quellen ohne Suche (Chip-Label gekürzt)", /Crunchyroll \(Prime\)/.test(text()) && /Netflix/.test(text()));
   check("E: gewählte Quelle außerhalb der Liste bleibt sichtbar (Union)", /Spezialkanal 9000/.test(text()));
   check("E: nicht angehakte Quelle ist ohne Suche unsichtbar", !/Hayu/.test(text()));
   const sucheInput = [...doc.querySelectorAll("input")].find((i) => (i.placeholder || "").startsWith("Quelle suchen"));

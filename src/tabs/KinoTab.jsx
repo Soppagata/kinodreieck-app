@@ -357,6 +357,7 @@ export function KinoTab({
 function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, master, updateFilm }) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
+  const [zeigeAlle, setZeigeAlle] = useState(false);
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
@@ -369,10 +370,12 @@ function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, mas
             {pf.im_abo ? <span style={{ color: T.wolfram, fontSize: 11, marginLeft: 8, fontFamily: "'Space Mono', monospace" }}>✓Abo</span> : null}
           </div>
           <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, margin: "1px 0" }}>{pf.j || "Jahr unbekannt"}{pf.ot && pf.ot !== pf.t ? " · " + pf.ot : ""}</div>
-          {/* Collapsed: nur Kinos (verlinkt) + Termin-Anzahl — die genauen Termine
-              inkl. Kino stehen aufgeklappt im Dropdown (schöne Reihe). */}
-          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal" }}>
-            <span onClick={(e) => e.stopPropagation()}><KinoLinks kinos={kinos} /></span>
+          {/* Collapsed: kompakt in EINER Zeile. Bei vielen Kinos nur die Anzahl (Max 2026-07-19:
+              die volle Kinoliste sprengte die Zeile). Kinos + Termine stehen aufgeklappt. */}
+          <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {kinos.length <= 2
+              ? <span onClick={(e) => e.stopPropagation()}><KinoLinks kinos={kinos} /></span>
+              : <span style={{ color: T.rauch }}>{kinos.length} Kinos</span>}
             {zeiten.length ? <span style={{ color: T.rauch }}>{" · "}{zeiten.length} Termin{zeiten.length > 1 ? "e" : ""}</span> : null}
           </div>
           {pf.b && (
@@ -390,7 +393,7 @@ function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, mas
             <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>{pf.g.join(" · ")}</div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {zeiten.map((z) => (
+            {(zeigeAlle ? zeiten : zeiten.slice(0, 16)).map((z) => (
               <button key={z} onClick={() => togglePin && togglePin(pf.t, pf.j, z)}
                 title={istGepinnt(pf.t, z) ? "Pin lösen" : "Termin anpinnen"}
                 style={{
@@ -401,6 +404,12 @@ function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, mas
               </button>
             ))}
           </div>
+          {zeiten.length > 16 && (
+            <button onClick={() => setZeigeAlle((v) => !v)}
+              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 11px", alignSelf: "flex-start" }}>
+              {zeigeAlle ? "Weniger Termine" : `Alle ${zeiten.length} Termine zeigen`}
+            </button>
+          )}
           {!formAn ? (
             addFilm && (
               <div>

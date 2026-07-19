@@ -252,12 +252,16 @@ check("encoding none: als Fehler + stale gemeldet", pullBig.fehler.some((f) => f
 
 /* 18) 10. Sync-Datei (Must-Watch): synct, konfliktet und schützt wie die übrigen */
 reset();
-check("SYNC_MAP: kd:mustwatch → mustwatch.json (10 Dateien)",
-  G.SYNC_MAP["kd:mustwatch"] === "mustwatch.json" && Object.keys(G.SYNC_MAP).length === 10);
+check("SYNC_MAP: kd:mustwatch → mustwatch.json + kd:achievements → achievements.json (11 Dateien)",
+  G.SYNC_MAP["kd:mustwatch"] === "mustwatch.json" && G.SYNC_MAP["kd:achievements"] === "achievements.json" && Object.keys(G.SYNC_MAP).length === 11);
 await G.gitDriver.set("kd:mustwatch", '{"eintraege":[{"id":"mw_test","titel":"T"}],"gespeichertAm":1}');
 await sleep(20);
 check("mustwatch: Commit legt mustwatch.json an", !!fakeRepoFiles["mustwatch.json"] && b64dec(fakeRepoFiles["mustwatch.json"].content).includes("mw_test"));
 check("mustwatch: kein Pending nach Erfolg", G.syncStatus().pending.length === 0);
+/* 11. Sync-Datei (Achievements, Block 3): committet wie die übrigen */
+await G.gitDriver.set("kd:achievements", '{"eggs":["cage-alphabet"],"gespeichertAm":1}');
+await sleep(20);
+check("achievements: Commit legt achievements.json an", !!fakeRepoFiles["achievements.json"] && b64dec(fakeRepoFiles["achievements.json"].content).includes("cage-alphabet"));
 // Pull-Schutz (Offline-Edit + fremder Push) gilt auch für die 10. Datei
 reset();
 fakeRepoFiles["mustwatch.json"] = { content: b64enc('{"eintraege":[],"gespeichertAm":2}'), sha: "smw" };

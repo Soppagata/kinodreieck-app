@@ -12,6 +12,15 @@ const GRUPPEN_LABEL = { sub: "Abos (Subscription)", free: "Gratis (Free)", purch
 /* Kurzform des Gruppen-Typs für die Suchtreffer-Zeilen (390px-tauglich). */
 const TYP_KURZ = { sub: "Abo", free: "Gratis", purchase: "Kauf/Leihe", tve: "TV", sonst: "Weitere", auswahl: "Deine Auswahl" };
 
+/* Lange Quellen-Namen fürs Handy kürzen — NUR das Chip-Label. Der volle Name bleibt
+   im title (Tooltip) und als Toggle-/Speicher-Wert unverändert. */
+function kurzQuelle(n) {
+  return String(n || "")
+    .replace(/\s*\((?:via|über)\s+amazon\s+prime\)/i, " (Prime)")
+    .replace(/^Crunchyroll\s+Premium\b/i, "Crunchyroll")
+    .trim();
+}
+
 function download(dateiname, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -129,7 +138,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
               {suchTreffer.map(({ name, typ }) => (
                 <button key={name} onClick={() => toggleQuelle(name)} title={"„" + name + "“ zur Auswahl hinzufügen"}
                   style={{ display: "flex", gap: 8, alignItems: "center", textAlign: "left", background: "transparent", color: T.leinwand, border: "1px solid " + T.saal, borderRadius: 4, padding: "9px 10px", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {name}</span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {kurzQuelle(name)}</span>
                   <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: typ === "purchase" ? T.gefahr : T.rauch, flexShrink: 0 }}>{TYP_KURZ[typ] || typ}</span>
                 </button>
               ))}
@@ -139,15 +148,18 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
         {/* Angehakte Quellen: immer sichtbar, per × abwählbar. Union-Garantie:
             gerendert wird direkt aus `auswahl` — auch Namen außerhalb der
             Katalog-/Startliste bleiben damit sichtbar und abwählbar. */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+        {/* Angehakte Quellen als ruhige dunkle Liste (Max 2026-07-19): kein goldener
+            Block mehr — goldenes ✓ zeigt auf einen Blick „gewählt", × wählt ab. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 4 }}>
           {auswahl.length === 0 && (
             <span style={{ fontSize: 12, color: T.rauch, padding: "2px 0" }}>Keine Quelle gewählt — der Streaming-Tab zeigt dann alle Dienste.</span>
           )}
           {[...auswahl].sort((a, b) => a.localeCompare(b)).map((q) => (
             <button key={q} onClick={() => toggleQuelle(q)} title={"„" + q + "“ abwählen"}
-              style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinte, background: T.wolfram, border: "none", borderRadius: 4, padding: "7px 11px", cursor: "pointer", maxWidth: "100%" }}>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q}</span>
-              <span aria-hidden="true">×</span>
+              style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, background: T.saal, border: "1px solid " + T.saalHoch, borderRadius: 4, padding: "7px 10px", cursor: "pointer" }}>
+              <span aria-hidden="true" style={{ color: T.wolfram, flexShrink: 0, fontSize: 13 }}>✓</span>
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{kurzQuelle(q)}</span>
+              <span aria-hidden="true" style={{ color: T.rauch, flexShrink: 0 }}>×</span>
             </button>
           ))}
         </div>

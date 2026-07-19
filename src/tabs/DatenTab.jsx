@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
@@ -10,6 +10,7 @@ import { SupabaseSyncEinstellungen } from "../components/SupabaseSyncEinstellung
 import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { PERSONAL_MODE } from "../lib/modus.js";
+import { SCHWELLEN_EGGS, zaehleQualifiziert } from "../lib/eggs.js";
 
 /* ================= EINSTELLUNGEN (früher "Daten") =================
    Darstellung/Verhalten, Datenbestand, Teilen & Tauschen, Vokabular,
@@ -30,6 +31,7 @@ export function DatenTab({
   datenGesperrt = false,
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
+  achievements = [],
 }) {
   const h2Style = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 6px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -49,6 +51,8 @@ export function DatenTab({
     if (eggDunkel) waehleModus(einstellungen.modus === "grindhouse" ? "saal" : "grindhouse");
     else waehleModus(einstellungen.modus === "kurosawa" ? "foyer" : "kurosawa");
   };
+  /* Vorführmodus-Zahlen: qualifizierte Mediathek-Einträge je Schwellen-Egg. */
+  const zaehlung = useMemo(() => zaehleQualifiziert(master || []), [master]);
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* ---- Darstellung & Verhalten ----
@@ -64,14 +68,14 @@ export function DatenTab({
                 Optionstexte bleiben EXAKT (Tests: /Foyer \(hell\)/, /^Groß$/).
                 Aktiver Modus (Kurosawa/Grindhouse) -> value null, kein Knopf aktiv
                 (entspricht der alten wahlKnopf-Bedingung !einstellungen.modus). */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Erscheinung</span>
               <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
                 value={einstellungen.modus ? null : (einstellungen.theme === "hell" ? "foyer" : "saal")}
                 onChange={(id) => waehleModus && waehleModus(id)}
                 options={[{ id: "saal", label: "Saal (dunkel)" }, { id: "foyer", label: "Foyer (hell)" }]} />
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Schriftgröße</span>
               <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
                 value={einstellungen.schrift || "normal"}
@@ -81,7 +85,7 @@ export function DatenTab({
             {/* Etappe 3: Linkshänder-Option — invertiert am Handy Griff UND
                 Menü-Popup (kd-links am Wrapper). Persistiert als linkshaender
                 in kd:einstellungen (synct via einstellungen.json). */}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Bedienhand</span>
               <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
                 value={einstellungen.linkshaender ? "links" : "rechts"}
@@ -101,10 +105,43 @@ export function DatenTab({
         </div>
         </Klappe>
       )}
-      {/* Datenmigration: Gesamt-Backup der alten App einspielen (vor Git verbinden). */}
-      <Klappe titel="Backup wiederherstellen">
-        <RestoreImport ohneKopf />
-      </Klappe>
+      {/* ---- Vorführmodus (Block 3, nur PERSONAL_MODE): Eggs erzwingen + reale Vertreter-Zahlen ---- */}
+      {PERSONAL_MODE && setzeEinstellung && (
+        <Klappe titel="Vorführmodus (Test)">
+          <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+            <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
+              Erzwingt Eastereggs (Trigger 100 %) und zeigt pro Egg die real gefundenen Vertreter.
+              Nur für dich sichtbar — im Beta-Build gibt es weder Eggs noch diesen Schalter.
+            </p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+              <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Eggs erzwingen</span>
+              <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                value={einstellungen.vorfuehr ? "an" : "aus"}
+                onChange={(id) => setzeEinstellung("vorfuehr", id === "an")}
+                options={[{ id: "aus", label: "Aus" }, { id: "an", label: "An" }]} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {SCHWELLEN_EGGS.map((egg) => {
+                const anzahl = zaehlung[egg.id] || 0;
+                const frei = achievements.includes(egg.id);
+                return (
+                  <div key={egg.id} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, borderTop: "1px solid " + T.saal, paddingTop: 8 }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15, letterSpacing: "0.04em", textTransform: "uppercase", color: T.leinwand }}>{egg.name}</span>
+                    <span style={{ ...mono, whiteSpace: "nowrap" }}>{anzahl}/{egg.schwelle} · {frei ? "freigeschaltet" : "gesperrt"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Klappe>
+      )}
+      {/* Datenmigration: Gesamt-Backup einspielen. Am Handy ausgeblendet (Max 2026-07-19:
+          selten gebraucht; Sicherheitsnetz bleibt am Desktop, kd-nur-desktop). */}
+      <div className="kd-nur-desktop">
+        <Klappe titel="Backup wiederherstellen">
+          <RestoreImport ohneKopf />
+        </Klappe>
+      </div>
 
       {/* ---- Must-Watch-Migration + Besitz-Nachtrag (einmalige, idempotente Läufe) ---- */}
       {(offeneFlags > 0 || migrationsBericht || importiereBesitz) && (
@@ -167,12 +204,14 @@ export function DatenTab({
         </div>
       )}
 
-      {/* Geräte-Sync (Git): Repo + Token + Sync-Status. Selbst-enthalten. */}
-      <Klappe titel="Geräte-Sync (Git)">
-        <GitSyncEinstellungen ohneKopf />
-      </Klappe>
-
-      {/* Geräte-Sync (Supabase): managed DB, login-frei über Sync-Schlüssel. Selbst-enthalten. */}
+      {/* Geräte-Sync: Supabase ist der aktive Treiber. Die Git-Sync-Klappe ist am Handy
+          ausgeblendet (Max 2026-07-19: eine Sync-Sektion am Handy) — am Desktop bleibt sie
+          als Fallback-UI (der Git-Treiber-Code bleibt ohnehin erhalten, kd-nur-desktop). */}
+      <div className="kd-nur-desktop">
+        <Klappe titel="Geräte-Sync (Git)">
+          <GitSyncEinstellungen ohneKopf />
+        </Klappe>
+      </div>
       <Klappe titel="Geräte-Sync (Supabase)">
         <SupabaseSyncEinstellungen ohneKopf />
       </Klappe>

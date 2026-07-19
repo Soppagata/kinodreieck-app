@@ -62,6 +62,10 @@ const daten = knopf(/^einstellungen$/i);
 if (daten) { daten.click(); await warte(600); }
 check("Beta: Startart-wechseln-Knopf in den Einstellungen (nur !PERSONAL_MODE)", !!knopf(/Startart wechseln/i));
 
+/* ---- Block 3: Eastereggs sind PERSONAL_MODE-only → im Beta-Build nicht vorhanden ---- */
+check("Beta: kein Egg-Toast im DOM", !doc.querySelector(".kd-toast-wrap") && !doc.querySelector(".kd-toast"));
+check("Beta: kein Vorführmodus-Schalter in den Einstellungen", !/Vorführmodus/.test(text()));
+
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);
 console.log(fails.length ? "BETA-MODUS-TEST: BEFUNDE OBEN" : "BETA-MODUS-TEST BESTANDEN");

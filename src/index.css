@@ -166,9 +166,21 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-riss .kd-kantenriss { animation-duration: calc(var(--perfoTempo) * 1.4); }
 
 @media (prefers-reduced-motion: reduce) {
-  .kd-tropfen, .kd-halm, #kd-nobori, #kd-nobori .tuch, .kd-grindhouse .kd-app, .kd-fx *, .kd-perfo, .kd-kantenriss { animation: none !important; }
+  .kd-tropfen, .kd-halm, #kd-nobori, #kd-nobori .tuch, .kd-grindhouse .kd-app, .kd-fx *, .kd-perfo, .kd-kantenriss, .kd-toast { animation: none !important; }
   .kd-menu, .kd-scrim { transition: none !important; }   /* statischer Blur bleibt ok */
 }
+
+/* ---- Easteregg-Toast (Block 3): 4 s, oben rechts, wiederverwendbares Primitiv.
+   Overlay ohne filter/fixed-Falle; über allem, pointer-events aus (blockiert nichts).
+   Einfahrt respektiert prefers-reduced-motion (Liste oben). ---- */
+.kd-toast-wrap { position: fixed; top: calc(88px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); z-index: 12000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; max-width: min(86vw, 340px); }
+.kd-toast { animation: kd-toast-ein 240ms cubic-bezier(.2,.8,.2,1); }
+@keyframes kd-toast-ein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ---- Zurück-nach-oben-Knopf (Block 3 Polish): Position/Größe hier, Farben inline (Theme). ---- */
+.kd-nachoben { position: fixed; right: calc(12px + env(safe-area-inset-right)); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 55; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.45); cursor: pointer; }
+/* „Nur Desktop"-Blöcke (z. B. Backup wiederherstellen) am Handy ausblenden. */
+@media (max-width: 760px) { .kd-nur-desktop { display: none !important; } }
 
 /* ================= MOBILE-NAV: GRIFF + POPUP =================
    Etappe 3 (Entscheidungen Max 18.07.2026, Schablone drawer_schablone.html):
@@ -221,6 +233,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     padding: 10px !important;
   }
   .kd-menu > div > button { width: 100%; text-align: left; border-radius: 8px !important; font-size: 19px !important; padding: 12px 16px !important; min-height: 44px; }
+  /* Mobile-Menü-Reihenfolge (Max 2026-07-19). column-reverse: order 1 = unten.
+     Sichtbar oben→unten: Einstellungen · Start · Mediathek · Kino · Streaming · Blog · Suche.
+     Nur hier (≤760px) — der Desktop behält die Reihenfolge aus den globalen order-Regeln. */
+  .kd-menu > div > button:nth-child(1) { order: 4; }  /* Kino */
+  .kd-menu > div > button:nth-child(2) { order: 3; }  /* Streaming */
+  .kd-menu > div > button:nth-child(3) { order: 5; }  /* Mediathek */
+  .kd-menu > div > button:nth-child(4) { order: 1; }  /* Suche */
+  .kd-menu > div > button:nth-child(5) { order: 2; }  /* Blog */
+  .kd-menu > div > button:nth-child(6) { order: 6; }  /* Start */
+  .kd-menu > div > button:nth-child(7) { order: 7; }  /* Einstellungen */
 
   /* Griff (ersetzt das MENÜ/ZU-Band): kompakt, ohne Text, drei Striche. */
   .kd-navband {
@@ -293,5 +315,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; }
   .kd-kompakt input { min-width: 100px !important; }
+  /* Einstellungs-Zeilen am Handy stapeln: Label ÜBER den Umschalter, damit die
+     SegmentedControls (Erscheinung/Schriftgröße) die volle Breite bekommen und
+     „Foyer (hell)"/„Groß" nicht mehr am Rand abschneiden (Max 2026-07-19, P2). */
+  .kd-einstellzeile { flex-direction: column !important; align-items: stretch !important; gap: 4px !important; }
+  .kd-einstellzeile > span { width: auto !important; }
   .kd-kompakt select { max-width: 44vw; }
 }

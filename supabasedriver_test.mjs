@@ -265,13 +265,14 @@ check("Remote übernehmen: ok + lokal = Remote", rRemote.ok === true && localSto
 check("Remote übernehmen: lokaler Stand als Snapshot", S.getSnapshots("kd:artikel").some((s) => s.value === '{"lokal":"a2"}'));
 check("Remote übernehmen: Konflikt geräumt", S.syncStatus().conflict.length === 0);
 
-/* 16) 10 Sync-Schlüssel — deckungsgleich mit der Git-SYNC_MAP */
+/* 16) 11 Sync-Schlüssel — deckungsgleich mit der Git-SYNC_MAP */
 reset();
 const gitKeys = Object.keys(G.SYNC_MAP).sort();
 const sbKeys = [...S.SYNC_KEYS].sort();
-check("SYNC_KEYS: genau 10", S.SYNC_KEYS.length === 10);
+check("SYNC_KEYS: genau 11", S.SYNC_KEYS.length === 11);
 check("SYNC_KEYS deckungsgleich mit Git-SYNC_MAP", JSON.stringify(gitKeys) === JSON.stringify(sbKeys));
 check("SYNC_KEYS enthält kd:mustwatch (10. Datei)", S.SYNC_KEYS.includes("kd:mustwatch"));
+check("SYNC_KEYS enthält kd:achievements (11. Artefakt)", S.SYNC_KEYS.includes("kd:achievements"));
 
 /* 17) syncStatus-Form (inkl. stale) exakt wie der Git-Treiber */
 reset();

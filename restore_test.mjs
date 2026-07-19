@@ -166,9 +166,10 @@ const ZEHN = {
   "kd:autor-name": "DB-Autor",
   "kd:streaming-dienste": JSON.stringify({ auswahl: { netflix: true } }),
   "kd:mustwatch": JSON.stringify({ eintraege: [{ id: "mw1" }], gespeichertAm: 2 }),
+  "kd:achievements": JSON.stringify({ eggs: ["cage-alphabet"], gespeichertAm: 3 }),
 };
 
-// Aktiver Treiber = Supabase (konfiguriert), DB mit allen 10 Schlüsseln geseedet.
+// Aktiver Treiber = Supabase (konfiguriert), DB mit allen 11 Schlüsseln geseedet.
 _ls.clear(); sbTable = new Map();
 ST.setStorageDriver(S.supabaseDriver);
 S.setSupabaseConfig({ url: SB_URL, anon: "anon_pub", owner: "max", key: SB_KEY });
@@ -182,7 +183,8 @@ check("P4 Export: artikel entpackt {artikel:[...]}", Array.isArray(bk.artikel) &
 check("P4 Export: must_watch_liste entpackt {eintraege:[...]}", Array.isArray(bk.must_watch_liste) && bk.must_watch_liste[0].id === "mw1");
 check("P4 Export: autor roher String", bk.autor === "DB-Autor");
 check("P4 Export: streaming_dienste enthalten", bk.streaming_dienste && bk.streaming_dienste.auswahl.netflix === true);
-check("P4 Export: alle 10 Felder befüllt", [bk.masterliste, bk.artikel, bk.kino_pins, bk.merkliste, bk.vokabular, bk.einstellungen, bk.entdecken_status, bk.autor, bk.streaming_dienste, bk.must_watch_liste].every((x) => x != null));
+check("P4 Export: alle 11 Felder befüllt", [bk.masterliste, bk.artikel, bk.kino_pins, bk.merkliste, bk.vokabular, bk.einstellungen, bk.entdecken_status, bk.autor, bk.streaming_dienste, bk.must_watch_liste, bk.achievements].every((x) => x != null));
+check("P4 Export: achievements entpackt {eggs:[...]}", bk.achievements && Array.isArray(bk.achievements.eggs) && bk.achievements.eggs.includes("cage-alphabet"));
 
 // (a) Roundtrip: Backup in leere DB einspielen -> alle 10 Owner-Zeilen geschrieben
 _ls.clear(); sbTable = new Map();
@@ -193,7 +195,8 @@ await sleep(80); // Hintergrund-Commits abwarten
 check("P4 Roundtrip: master-Wrapper in DB", JSON.parse(sbGet("max", "kd:master") || "{}").filme[0].titel === "DB-Film");
 check("P4 Roundtrip: mustwatch-Wrapper in DB", JSON.parse(sbGet("max", "kd:mustwatch") || "{}").eintraege[0].id === "mw1");
 check("P4 Roundtrip: autor roh in DB", sbGet("max", "kd:autor-name") === "DB-Autor");
-check("P4 Roundtrip: alle 10 Schlüssel in DB", S.SYNC_KEYS.every((k) => sbGet("max", k) != null));
+check("P4 Roundtrip: achievements in DB", JSON.parse(sbGet("max", "kd:achievements") || "{}").eggs[0] === "cage-alphabet");
+check("P4 Roundtrip: alle 11 Schlüssel in DB", S.SYNC_KEYS.every((k) => sbGet("max", k) != null));
 check("P4 Roundtrip: Snapshot vor Überschreiben angelegt", R.hatRestoreSnapshot() === true);
 
 // (c) ohne Schlüssel: kein DB-Write, dbWarnung, lokaler Cache konsistent

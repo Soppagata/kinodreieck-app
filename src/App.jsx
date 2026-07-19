@@ -23,7 +23,7 @@ import { baueHinweis, onTour, SICHTBAR_TRIGGER, setTourOffen } from "./lib/tour.
 import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
-import { store, K, PROGRAMM_TTL_MS } from "./lib/storage.js";
+import { store, K, PROGRAMM_TTL_MS, getTreiber } from "./lib/storage.js";
 import { baueBackup } from "./lib/backup.js";
 import { ladeDemoBlobs } from "./lib/supabaseDriver.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
@@ -45,6 +45,8 @@ import nachtragDatei from "./data/nachtrag.json";
 import { PERSONAL_MODE } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { NavBand } from "./components/NavBand.jsx";
+import { berechneUnlocks, ladeAchievements, speichereAchievements } from "./lib/eggs.js";
+import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 
 /* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
    Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
@@ -349,6 +351,36 @@ export default function App() {
     };
   }, [einstellungen.modus]);
 
+  /* ---- Eastereggs (Block 3, nur PERSONAL_MODE): Achievement-Topf + Toast ----
+     kd:achievements = Set freigeschalteter Egg-IDs (Einbahn). Der Check läuft als
+     Effekt über `master`: der erste volle Durchlauf ist der stille Backfill (setzt
+     den Anfangs-Unlock-Stand OHNE Toast), danach feuert jeder NEUE Unlock einen
+     4-s-Toast. Verfügbarkeit gatet erst das Feuern (B3), nicht den Unlock. */
+  const [achievements, setAchievements] = useState(null);
+  const backfillRef = useRef(false);
+  const toastSeq = useRef(0);
+  const [toasts, setToasts] = useState([]);
+  const zeigeToast = useCallback((text, sub) => {
+    const id = ++toastSeq.current;
+    setToasts((t) => [...t, { id, text, sub }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  }, []);
+  useEffect(() => {
+    if (!PERSONAL_MODE) return;
+    ladeAchievements().then((s) => setAchievements(s)).catch(() => setAchievements(new Set()));
+  }, []);
+  useEffect(() => {
+    if (!PERSONAL_MODE) return;
+    if (achievements == null || master == null) return;
+    const neu = [...berechneUnlocks(master)].filter((id) => !achievements.has(id));
+    if (neu.length === 0) { backfillRef.current = true; return; }
+    const naechste = new Set([...achievements, ...neu]);
+    setAchievements(naechste);
+    speichereAchievements(naechste);
+    if (backfillRef.current) zeigeToast("Easteregg freigeschalten");
+    backfillRef.current = true;
+  }, [master, achievements, zeigeToast]);
+
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
   const vokabularZuMap = (liste) => {
@@ -385,6 +417,22 @@ export default function App() {
     if (PERSONAL_MODE) return false; // Personal-Modus: kein Willkommens-/Tutorial-Popup
     try { return tutorialFrei() && !getTutorial().willkommen; } catch { return false; }
   });
+  /* Geräte-Sync-Onboarding: einmalig beim allerersten Start, solange noch kein
+     Sync-Treiber gewählt ist. Danach ist Sync nur noch schlank unter
+     Einstellungen → „Geräte-Sync (Supabase)" sichtbar/änderbar. Wird von den
+     höherrangigen Boot-Modalen (Installer-Warnung, Startwahl, Willkommen)
+     verdrängt und erst nach ihnen gezeigt. */
+  const [syncOnboardingOffen, setSyncOnboardingOffen] = useState(() => {
+    try {
+      if (localStorage.getItem("kd:sync-onboarding-gesehen")) return false;
+      return !getTreiber();
+    } catch { return false; }
+  });
+  const syncOnboardingFertig = useCallback((zuEinstellungen) => {
+    try { localStorage.setItem("kd:sync-onboarding-gesehen", "1"); } catch { /* */ }
+    setSyncOnboardingOffen(false);
+    if (zuEinstellungen) setTab("daten");
+  }, []);
   const [snapshotFreigabe, setSnapshotFreigabe] = useState(() => snapshotsFrei());
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
@@ -1391,6 +1439,22 @@ export default function App() {
       {willkommenOffen && (
         <Willkommen onClose={() => { try { setWillkommen(true); } catch { /* */ } setWillkommenOffen(false); }} />
       )}
+      {syncOnboardingOffen && !setupWarnung && !startModalOffen && !willkommenOffen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 440, padding: "22px 24px", boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, marginBottom: 10 }}>
+              Geräte-Sync einrichten
+            </div>
+            <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.6, margin: "0 0 16px" }}>
+              Verbinde dieses Gerät mit deiner Datenbank, damit Mediathek, Bewertungen und Streaming-Abos automatisch zwischen allen Geräten synchron bleiben. Du brauchst dafür deinen Sync-Schlüssel. Alles lässt sich jederzeit später unter <strong>Einstellungen → Geräte-Sync</strong> nachholen oder ändern.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button style={btnStyle(true)} onClick={() => syncOnboardingFertig(true)}>Jetzt einrichten</button>
+              <button style={btnStyle(false)} onClick={() => syncOnboardingFertig(false)}>Später</button>
+            </div>
+          </div>
+        </div>
+      )}
       {aktiverHinweis && (
         <TourOverlay hinweis={aktiverHinweis} onClose={schliesseHinweis}
           onExport={aktiverHinweis.export ? () => { try { exportMaster(); } catch { /* */ } setTab("daten"); } : undefined} />
@@ -1568,6 +1632,7 @@ export default function App() {
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
+            achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
             setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
@@ -1588,6 +1653,17 @@ export default function App() {
           <div id="kd-nobori2" ref={modusNobori2Ref} />
         </div>
       )}
+      {PERSONAL_MODE && toasts.length > 0 && (
+        <div className="kd-toast-wrap" aria-live="polite" role="status">
+          {toasts.map((t) => (
+            <div key={t.id} className="kd-toast" style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, padding: "10px 14px", boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram }}>{t.text}</div>
+              {t.sub ? <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwand, marginTop: 2 }}>{t.sub}</div> : null}
+            </div>
+          ))}
+        </div>
+      )}
+      <ZurueckObenKnopf />
     </div>
   );
 }

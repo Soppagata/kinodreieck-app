@@ -91,6 +91,7 @@ export const K = {
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
   treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
+  achievements: "kd:achievements",    // Egg-Achievements (11. Sync-/Backup-Artefakt, Block 3): Set freigeschalteter Egg-IDs
 };
 
 export const PROGRAMM_TTL_MS = 24 * 60 * 60 * 1000; // 24h

@@ -19,13 +19,13 @@
 import { localDriver } from "./storage.js";
 import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
 
-/* Die 10 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
+/* Die 11 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
    deckungsgleich). Beim Supabase-Treiber ist der Schlüssel zugleich der Zeilen-
    Schlüssel (Spalte `key`); es gibt keine Datei-Indirektion. */
 export const SYNC_KEYS = [
   "kd:master", "kd:artikel", "kd:kino-pins", "kd:merkliste", "kd:vokabular",
   "kd:einstellungen", "kd:entdecken-status", "kd:autor-name", "kd:streaming-dienste",
-  "kd:mustwatch",
+  "kd:mustwatch", "kd:achievements",
 ];
 const SYNC_SET = new Set(SYNC_KEYS);
 const TABLE = "kd_store";
