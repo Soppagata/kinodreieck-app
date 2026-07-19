@@ -11,9 +11,22 @@ const vc = new VirtualConsole();
 vc.on("error", (...a) => fehlerKonsole.push(a.map(String).join(" ").slice(0, 160)));
 vc.on("jsdomError", (e) => { if (!/Could not load/.test(e.message)) fehlerKonsole.push("jsdom: " + e.message.slice(0, 160)); });
 
+/* Test-Uhr in den Snapshot-Zeitraum fixieren (wie echtdatei_test), sonst filtert die App
+   vergangene Vorstellungen weg, sobald das echte Datum an den Demo-Terminen vorbei ist:
+   Kino-Tab rendert leeres Programm -> #root-Text < 500 -> "Abo-Filter zyklisch" kippt zeitgebunden. */
+const snap = JSON.parse(readFileSync(new URL("./src/data/programm-snapshot.json", import.meta.url), "utf8"));
+const FIXED_ISO = ((snap.zeitraum && snap.zeitraum.von) || new Date().toISOString().slice(0, 10)) + "T12:00:00+02:00";
+
 const dom = new JSDOM(readFileSync(pfad, "utf8"), {
   url: "http://localhost/Kinodreieck.html", runScripts: "dangerously", pretendToBeVisual: true, virtualConsole: vc,
   beforeParse(w) {
+    const FIXED = Date.parse(FIXED_ISO);
+    const RealDate = w.Date;
+    class MockDate extends RealDate {
+      constructor(...a) { super(...(a.length ? a : [FIXED])); }
+      static now() { return FIXED; }
+    }
+    w.Date = MockDate;
     w.fetch = () => Promise.reject(new Error("offline (Test)"));
       w.scrollTo = () => {};
     if (!w.URL.createObjectURL) w.URL.createObjectURL = () => "blob:test";

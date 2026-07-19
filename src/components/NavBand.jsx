@@ -6,10 +6,12 @@
    Der ÜBERGANGS-Sync-Punkt (Etappe 3) ist seit Etappe 4 entfernt — die
    Vertrauens-Zeile im Start-Dashboard ist jetzt der Sync-Ort
    (Entscheidungs-Log: kein Zeitfenster ohne sichtbaren Sync-Status). */
-export function NavBand({ offen, onToggle }) {
+import { forwardRef } from "react";
+
+export const NavBand = forwardRef(function NavBand({ offen, onToggle }, ref) {
   return (
-    <button className="kd-navband" aria-label={offen ? "Menü schließen" : "Menü öffnen"} aria-expanded={offen} onClick={onToggle}>
+    <button ref={ref} className="kd-navband" aria-label={offen ? "Menü schließen" : "Menü öffnen"} aria-expanded={offen} onClick={onToggle}>
       <i /><i /><i />
     </button>
   );
-}
+});

@@ -211,6 +211,22 @@ const helpers = (dom) => {
   check("G: linkshaender übersteht Laden + Speichern (Roundtrip, Bestandsfelder intakt)",
     gespeichert.linkshaender === true && gespeichert.schrift === "gross"
     && gespeichert.theme === "dunkel" && gespeichert.startTab === "start" && gespeichert.modus === "");
+  /* Etappe 5 — Drawer-a11y: inert am zugeklappten Popup (nur Handy), Fokus-Transfer beim
+     Öffnen, Fokus-Rückgabe an den Griff beim Schließen. Desktop (1024px) bleibt unberührt;
+     hier Handy-Viewport simulieren (resize -> istMobil). */
+  Object.defineProperty(dom.window, "innerWidth", { value: 390, configurable: true, writable: true });
+  dom.window.dispatchEvent(new dom.window.Event("resize"));
+  await warte(150);
+  const navEl = doc.querySelector("nav.kd-menu");
+  const griff = doc.querySelector("button.kd-navband");
+  check("G: Drawer zu am Handy -> Popup ist inert", !!navEl && navEl.hasAttribute("inert"));
+  if (griff) { griff.click(); await warte(200); }
+  check("G: Drawer offen -> inert weg + Fokus auf erstem Menüpunkt",
+    !!navEl && !navEl.hasAttribute("inert")
+    && !!doc.activeElement && doc.activeElement.closest("nav.kd-menu") === navEl);
+  if (griff) { griff.click(); await warte(200); }
+  check("G: Drawer wieder zu -> inert zurück + Fokus zurück auf Griff",
+    !!navEl && navEl.hasAttribute("inert") && doc.activeElement === griff);
   dom.window.close();
 }
 

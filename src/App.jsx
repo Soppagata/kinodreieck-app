@@ -170,6 +170,13 @@ export default function App() {
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
   const [navOffen, setNavOffen] = useState(false); // Mobile-Nav-Drawer offen?
+  const navRef = useRef(null);
+  const griffRef = useRef(null);
+  const drawerWarOffen = useRef(false);
+  // Drawer-a11y gilt nur am Handy: dort ist .kd-menu das Popup; am Desktop (>760px)
+  // ist dasselbe Element die Sticky-Leiste und muss bedienbar bleiben (kein inert).
+  // jsdom-Tests laufen mit innerWidth 1024 = Desktop -> keine Verhaltensänderung dort.
+  const [istMobil, setIstMobil] = useState(() => typeof window !== "undefined" && window.innerWidth <= 760);
   useEffect(() => {
     if (!navOffen) return;
     const onKey = (e) => { if (e.key === "Escape") setNavOffen(false); };
@@ -179,6 +186,20 @@ export default function App() {
     document.body.style.overflow = "hidden";
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
   }, [navOffen]);
+  // Viewport beobachten (Drawer-a11y gilt nur am Handy).
+  useEffect(() => {
+    const onResize = () => setIstMobil(window.innerWidth <= 760);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  // Fokus-Management (nur Handy): beim Öffnen auf den ersten Menüpunkt, beim Schließen
+  // zurück auf den Griff — kein Tastatur-/SR-Fokus im inerten, verborgenen Popup.
+  useEffect(() => {
+    if (!istMobil) { drawerWarOffen.current = navOffen; return; }
+    if (navOffen && !drawerWarOffen.current) navRef.current?.querySelector("button")?.focus();
+    else if (!navOffen && drawerWarOffen.current) griffRef.current?.focus();
+    drawerWarOffen.current = navOffen;
+  }, [navOffen, istMobil]);
   const [master, setMaster] = useState(null);
   const [masterMeta, setMasterMeta] = useState(null);
   const [programm, setProgramm] = useState(null);
@@ -1397,12 +1418,12 @@ export default function App() {
           <header> — ein sticky-Element klebt nur, solange sein Eltern-Element
           sichtbar ist; als direktes Kind von .kd-app (volle Seitenhöhe) hält es
           über die ganze Seite. */}
-      <NavBand offen={navOffen} onToggle={() => setNavOffen((o) => !o)} />
+      <NavBand ref={griffRef} offen={navOffen} onToggle={() => setNavOffen((o) => !o)} />
       <div className={"kd-scrim" + (navOffen ? " offen" : "")} onClick={() => setNavOffen(false)} aria-hidden="true" />
       {/* z-index bewusst NICHT inline: Inline-Styles schlagen CSS ohne !important —
           ein inline zIndex hier hat den Drawer unter den Scrim (58) gedrückt.
           Ebenen liegen in index.css: Desktop 40, Handy 60 (.kd-menu). */}
-      <nav className={"kd-menu" + (navOffen ? " offen" : "")} style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
+      <nav ref={navRef} className={"kd-menu" + (navOffen ? " offen" : "")} inert={istMobil && !navOffen} style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {/* DOM-Reihenfolge = bottom-up-Wichtigkeit (Etappe 3, Max 18.07.):
               das Mobile-Popup stapelt per column-reverse von unten — Kino als
