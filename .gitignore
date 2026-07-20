@@ -25,3 +25,4 @@ _kd_tree.tgz
 
 # Lose Debug-/Screenshot-PNGs im Root (echte Icons liegen in public/, Logo in logo/)
 /*.png
+dist-single-beta/

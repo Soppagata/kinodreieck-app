@@ -27,6 +27,7 @@ import { store, K, PROGRAMM_TTL_MS, getTreiber } from "./lib/storage.js";
 import { baueBackup } from "./lib/backup.js";
 import { ladeDemoBlobs, publishBlog, unpublishBlog, ladeSharedBlogs } from "./lib/supabaseDriver.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
+import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
 import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, reconcileGezogene } from "./lib/artikel.js";
@@ -50,7 +51,10 @@ import { berechneUnlocks, ladeAchievements, speichereAchievements, liveVertreter
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { Teppich } from "./components/Teppich.jsx";
+import { Crawl } from "./components/Crawl.jsx";                       // B4-Egg
+import { NecronomiconRand } from "./components/NecronomiconRand.jsx"; // B4-Egg
 import { wuerfleTag, schonGefeuertHeute, markiereGefeuert } from "./lib/eggFrequenz.js";
+import { crawlHeute } from "./lib/momentEggs.js";                     // B4-Egg
 
 /* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
    Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
@@ -186,6 +190,31 @@ import masterWikidata from "./data/master_wikidata.json"; // Sidecar (Phase 4b):
 /* Nachtrag flach: [{titel, jahr, quellen[], edition}] */
 const NACHTRAG_FLACH = [].concat(nachtragDatei.beide || [], nachtragDatei.nur_dvd || [], nachtragDatei.nur_prime || [], nachtragDatei.nur_apple || []);
 
+/* KD-004: Fail-closed Rollback-Snapshot vor einem destruktiven Import (analog
+   restore.js KD-008). Schreibt den aktuellen Stand nach kd:import:vorher:* und
+   liest zurück (fängt stille No-op-Writes/vollen Speicher). Ohne gesicherten
+   Snapshot wird der Import NICHT ausgeführt — sonst ginge ein Fehlimport
+   unwiederbringlich verloren. */
+function schreibeImportSnapshot(key, wert) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ t: new Date().toISOString(), wert }));
+    return localStorage.getItem(key) != null;
+  } catch { return false; }
+}
+
+/* KD-006: struktursicherer Blog-Artikel (Schema artikel.js: {id,titel,text,liste[]}).
+   Der Blog rendert a.liste.map(...) und a.text — ein Array-loses `liste` oder ein
+   Nicht-String-`text` crasht die Ansicht. Nur diese harten Felder werden geprüft;
+   der Rest bleibt tolerant. */
+function gueltigerArtikel(a) {
+  return !!a && typeof a === "object"
+    && typeof a.id === "string" && a.id.length > 0
+    && typeof a.titel === "string"
+    && Array.isArray(a.liste)
+    && a.liste.every((le) => !!le && typeof le === "object")
+    && (a.text === undefined || a.text === null || typeof a.text === "string");
+}
+
 export default function App() {
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
@@ -235,6 +264,7 @@ export default function App() {
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   const autoFetched = useRef(false);
   const streamingGeladen = useRef(false);
+  const entdeckenGeladen = useRef(false); // KD-031: Voll-Katalog getrennt vom leichten Boot-Nachladen
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
@@ -333,6 +363,13 @@ export default function App() {
   const [teppichOffen, setTeppichOffen] = useState(false);
   // zeigeCage/zeigeTeppich/eggCtx: weiter unten definiert (brauchen kinoMatches/
   // streamingBekannt/auswahl für echte Verfügbarkeit + Sprung-Link).
+  // B4-Egg: Moment-Eggs (Star-Wars-Crawl am 4. Mai, Klaatu→Necronomicon). Wie
+  // Cage/Teppich ausschließlich im Personal-Modus gemountet (Mount + Vorführknopf
+  // + Trigger hinter PERSONAL_MODE) — der Beta-Build bleibt egg-frei.
+  const crawlMatchesRef = useRef([]);
+  const [crawlOffen, setCrawlOffen] = useState(false);
+  const [necroAktiv, setNecroAktiv] = useState(false);
+  const necroTimerRef = useRef(null);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -376,6 +413,7 @@ export default function App() {
      höherrangigen Boot-Modalen (Installer-Warnung, Startwahl, Willkommen)
      verdrängt und erst nach ihnen gezeigt. */
   const [syncOnboardingOffen, setSyncOnboardingOffen] = useState(() => {
+    if (!PERSONAL_MODE) return false; // B5: Sync-Onboarding NUR im Personal-Modus (in Beta/Demo nie)
     try {
       if (localStorage.getItem("kd:sync-onboarding-gesehen")) return false;
       return !getTreiber();
@@ -590,6 +628,9 @@ export default function App() {
       const parsed = JSON.parse(text);
       const filme = Array.isArray(parsed) ? parsed : parsed.filme;
       if (!Array.isArray(filme) || filme.length === 0) throw new Error("Kein 'filme'-Array gefunden.");
+      // KD-004: bestehende Masterliste wird ersetzt -> Rollback-Snapshot ZUERST (fail-closed).
+      if (master && master.length && !schreibeImportSnapshot("kd:import:vorher:master", { meta: masterMeta, filme: master, herkunft: masterHerkunft }))
+        throw new Error("Sicherungs-Snapshot vor dem Ersetzen fehlgeschlagen (Speicher voll/blockiert) — nichts überschrieben.");
       const mitIds = ensureIds(filme);
       const meta = Array.isArray(parsed) ? null : parsed.meta || null;
       const h = { typ: "manuell", zeit: Date.now() };
@@ -601,7 +642,7 @@ export default function App() {
     } catch (e) {
       setErr("Master-Import fehlgeschlagen: " + e.message);
     }
-  }, [persistMaster]);
+  }, [persistMaster, master, masterMeta, masterHerkunft]);
 
   /* ---- Programm-Snapshot-Import ---- */
   const importProgramm = useCallback(async (text) => {
@@ -1037,10 +1078,15 @@ export default function App() {
       const p = JSON.parse(text);
       const liste = Array.isArray(p) ? p : p.artikel;
       if (!Array.isArray(liste)) throw new Error("Kein 'artikel'-Array gefunden.");
+      // KD-006: Schema-Müll ablehnen statt zu persistieren (sonst Blog-Crash an a.liste.map/a.text).
+      if (!liste.every(gueltigerArtikel)) throw new Error("Datei enthält ungültige Artikel (id/titel/text/liste) — nicht importiert.");
+      // KD-004: bestehende Artikel werden ersetzt -> Rollback-Snapshot ZUERST (fail-closed).
+      if (artikelListe.length && !schreibeImportSnapshot("kd:import:vorher:artikel", artikelListe))
+        throw new Error("Sicherungs-Snapshot vor dem Ersetzen fehlgeschlagen (Speicher voll/blockiert) — nichts überschrieben.");
       setArtikelListe(liste);
       persistArtikel(liste);
     } catch (e) { setErr("Artikel-Import fehlgeschlagen: " + e.message); }
-  }, [persistArtikel]);
+  }, [persistArtikel, artikelListe]);
 
   /* ---- Teilen & Tauschen (Phase A): Autorname + Bulk-Übernahme ---- */
   const [autorName, setAutorName] = useState("");
@@ -1226,9 +1272,11 @@ export default function App() {
       if (m) matched.push({ prog: pf, film: m });
       else rest.push(pf);
     }
-    // Besitz (dvd/prime) vor must_watch, innerhalb dessen Dreieck-Score.
+    // Besitz vor must_watch, innerhalb dessen Dreieck-Score.
     // Master-Treffer werden IMMER angezeigt — kein Zeitfilter auf matched.
-    const besitzRang = (f) => (/(dvd|prime)/.test(f.quelle || "") ? 0 : 1);
+    // B4: kanonisches Besitz-Modell (physische Quelle) statt Substring /(dvd|prime)/
+    // — digitale Käufe (prime) zählen nicht als Besitz (Entscheidung 18.07.2026).
+    const besitzRang = (f) => (hatPhysischeQuelle(f.quelle) ? 0 : 1);
     matched.sort((a, b) =>
       besitzRang(a.film) - besitzRang(b.film) || score(b.film) - score(a.film)
     );
@@ -1279,10 +1327,12 @@ export default function App() {
      montiert; FinderTab wird beim Tab-Wechsel ab-/wieder-montiert). */
   const [finderVerlauf, setFinderVerlauf] = useState([]);
   const [finderEingabe, setFinderEingabe] = useState("");
-  const ladeStreamingDateien = useCallback(async () => {
+  /* KD-031: `vollKatalog` trennt das leichte Boot-Nachladen vom teuren
+     Entdecken-Katalog. Ohne Flag (Boot/Badges): nur die leichte streaming_bekannt
+     + der schon gebündelte Top-500-Snapshot als Ersatz fürs Dashboard. Mit Flag
+     (Streaming-Tab offen): der volle 3,8-MB-Entdecken-Katalog wird gefetcht/geparst. */
+  const ladeStreamingDateien = useCallback(async (vollKatalog = false) => {
     if (!snapshotFreigabe) return;
-    if (streamingGeladen.current) return;
-    streamingGeladen.current = true;
     const hol = async (pfad, fallback) => {
       try {
         const res = await fetch(pfad, { cache: "no-store" });
@@ -1292,9 +1342,20 @@ export default function App() {
         throw new Error("leer");
       } catch { return fallback && fallback.stand ? fallback : null; }
     };
-    const bekannt = await hol(import.meta.env.BASE_URL + "streaming_bekannt.json", streamingBekanntSnapshot);
-    if (!snapshotFreigabeRef.current) return;
-    setStreamingBekannt(bekannt);
+    // Leichte bekannt-Datei (Badges/Mein Programm/Katalog-Zähler): einmalig, auch am Boot.
+    if (!streamingGeladen.current) {
+      streamingGeladen.current = true;
+      const bekannt = await hol(import.meta.env.BASE_URL + "streaming_bekannt.json", streamingBekanntSnapshot);
+      if (!snapshotFreigabeRef.current) return;
+      setStreamingBekannt(bekannt);
+      // Leichter Ersatz fürs Dashboard („Jetzt streambar"): der bereits gebündelte
+      // Top-500-Snapshot — KEIN Fetch/Parse des Vollkatalogs am Boot. Ein später
+      // geladener Vollkatalog (Streaming-Tab) überschreibt ihn (cur || …).
+      setStreamingEntdecken((cur) => cur || streamingEntdeckenSnapshot);
+    }
+    // Voller Entdecken-Katalog (3,8 MB): erst wenn der Streaming-Tab wirklich offen ist.
+    if (!vollKatalog || entdeckenGeladen.current) return;
+    entdeckenGeladen.current = true;
     // Entdecken: served public/ (voll) -> externe Beilage (voll, file://) -> eingebackene Top 500
     const entdeckenServed = await hol(import.meta.env.BASE_URL + "streaming_entdecken.json", null);
     if (!snapshotFreigabeRef.current) return;
@@ -1305,7 +1366,7 @@ export default function App() {
       setStreamingEntdecken(beilage && beilage.stand ? beilage : streamingEntdeckenSnapshot);
     }
   }, [snapshotFreigabe]);
-  useEffect(() => { if (tab === "streaming") ladeStreamingDateien(); }, [tab, ladeStreamingDateien]);
+  useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
@@ -1370,7 +1431,8 @@ export default function App() {
       </span>
     );
   }, [streamingMap, auswahl]);
-  /* Badges brauchen die Daten auch außerhalb des Streaming-Tabs -> einmalig nachladen */
+  /* Badges/Mein-Programm/Katalog-Zähler brauchen die LEICHTE bekannt-Datei auch
+     außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
 
   /* ---- Egg-Verfügbarkeit + Sprung-Link (B3, für Cage & Teppich) ----
@@ -1391,6 +1453,31 @@ export default function App() {
     teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
     setTeppichOffen(true);
   }, [teppichEgg, master, eggCtx]);
+  /* B4-Egg: Star-Wars-Crawl — die realen Kino-Treffer (kinoMatches, dieselbe Quelle
+     wie „Läuft auch") in die von Crawl.jsx gelesene Form {titel,jahr,kinos[],zeiten[]}
+     bringen: film liefert Titel/Jahr, das Programm (m.prog) die Kinos (k) und Zeiten (z). */
+  const crawlMatchesBauen = useCallback(() => (
+    (kinoMatches?.matched || []).map((m) => ({
+      titel: (m.film && m.film.titel) || (m.prog && m.prog.t) || "Unbekannter Film",
+      jahr: (m.film && m.film.jahr) || (m.prog && m.prog.j) || null,
+      kinos: Array.isArray(m.prog && m.prog.k) ? m.prog.k : [],
+      zeiten: Array.isArray(m.prog && m.prog.z) ? m.prog.z : [],
+    }))
+  ), [kinoMatches]);
+  const zeigeCrawl = useCallback(() => {
+    crawlMatchesRef.current = crawlMatchesBauen();
+    setCrawlOffen(true);
+  }, [crawlMatchesBauen]);
+  /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand einblenden und in den Blog
+     wechseln. Selbst-abklingend (7 s-Timer ODER nächster Tab-Wechsel weg vom Blog),
+     kein Dauerzustand. Zusätzlich zur Mount-Gatterung hier hart auf PERSONAL_MODE. */
+  const zeigeKlaatu = useCallback(() => {
+    if (!PERSONAL_MODE) return;
+    setNecroAktiv(true);
+    setTab("blog");
+    if (necroTimerRef.current) { try { clearTimeout(necroTimerRef.current); } catch { /* */ } }
+    necroTimerRef.current = setTimeout(() => setNecroAktiv(false), 7000);
+  }, []);
   const eggHerkunft = useCallback((film) => {
     const h = filmHerkunft(film, { kinoMatches, streamingBekannt });
     if (h.kino) return { text: "Läuft gerade im Kino", tab: "kino" };
@@ -1419,6 +1506,28 @@ export default function App() {
     if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 50)) { markiereGefeuert("cage"); zeigeCage(); }
   }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
 
+  /* ---- B4-Egg: Star-Wars-Crawl Auto-Trigger (nur PERSONAL_MODE) ----
+     Deterministisch statt Würfel: crawlHeute() ist am 4. Mai bei ≥1 Kino-Treffer
+     wahr — der seltene Tag IST die Bedingung. Feuert genau EINMAL pro Tag
+     (schonGefeuertHeute/markiereGefeuert wie Cage) und nur, wenn kein anderes
+     Overlay/Modal offen ist. An allen anderen Tagen liefert crawlHeute false. */
+  const crawlAutoRef = useRef(false);
+  useEffect(() => {
+    if (!PERSONAL_MODE || !bootDone || master == null) return;
+    if (crawlAutoRef.current) return;
+    if (crawlOffen || cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
+    if (!crawlHeute({ jetzt: new Date(), kinoMatches })) return;
+    crawlAutoRef.current = true;
+    if (!schonGefeuertHeute("crawl")) { markiereGefeuert("crawl"); zeigeCrawl(); }
+  }, [bootDone, master, kinoMatches, crawlOffen, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCrawl]);
+
+  /* B4-Egg: Necronomicon klingt beim Verlassen des Blog-Tabs sofort ab (der 7 s-Timer
+     in zeigeKlaatu ist der zweite Weg) — kein Dauerzustand. */
+  useEffect(() => {
+    if (!PERSONAL_MODE) return;
+    if (necroAktiv && tab !== "blog") setNecroAktiv(false);
+  }, [tab, necroAktiv]);
+
   const teppichArmRef = useRef(null);   // null = ungeprüft; true/false = armiert?
   useEffect(() => {
     if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
@@ -1440,11 +1549,11 @@ export default function App() {
      Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
      beim Weiterscrollen"). */
   useEffect(() => {
-    if (!PERSONAL_MODE || !(cageOffen || teppichOffen)) return;
+    if (!PERSONAL_MODE || !(cageOffen || teppichOffen || crawlOffen)) return;   // B4-Egg: Crawl-Vollbild mitsperren
     let vorher = "";
     try { vorher = document.body.style.overflow; document.body.style.overflow = "hidden"; } catch { /* */ }
     return () => { try { document.body.style.overflow = vorher; } catch { /* */ } };
-  }, [cageOffen, teppichOffen]);
+  }, [cageOffen, teppichOffen, crawlOffen]);
 
   const clearProgrammCache = useCallback(async () => {
     try { await store.delete(K.programm); } catch { /* war leer */ }
@@ -1621,6 +1730,7 @@ export default function App() {
             loading={loading} ladeProgrammDatei={ladeProgrammDatei}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             datenGesperrt={!snapshotFreigabe}
+            autorName={autorName} /* KD-030: echter Autor für neue Bewertungen (EintragForm/EditPanel) */
           />
         )}
 
@@ -1673,6 +1783,7 @@ export default function App() {
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
+            onKlaatu={PERSONAL_MODE ? zeigeKlaatu : undefined} /* B4-Egg: Klaatu-Meldung nur Personal-Modus */
           />
         )}
 
@@ -1693,6 +1804,7 @@ export default function App() {
             uebernehmePaket={uebernehmePaket}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             zeigeCage={zeigeCage} zeigeTeppich={zeigeTeppich}
+            zeigeCrawl={zeigeCrawl} zeigeKlaatu={zeigeKlaatu} /* B4-Egg: Vorführknöpfe */
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
@@ -1724,6 +1836,12 @@ export default function App() {
         <Teppich filme={teppichFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setTeppichOffen(false)} />
       )}
+      {/* B4-Egg: Moment-Eggs — exakt wie Cage/Teppich hinter PERSONAL_MODE gegatet,
+          also im Beta-Build (PERSONAL_MODE=false) weder gerendert noch triggerbar. */}
+      {PERSONAL_MODE && crawlOffen && (
+        <Crawl matches={crawlMatchesRef.current} onSkip={() => setCrawlOffen(false)} reduced={reducedMotion} />
+      )}
+      {PERSONAL_MODE && necroAktiv && <NecronomiconRand />}
       <ZurueckObenKnopf />
     </div>
   );

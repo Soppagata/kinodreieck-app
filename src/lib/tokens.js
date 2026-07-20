@@ -22,6 +22,7 @@ export const THEMES = {
     was: "#B08BD9",
     warum: "#E3A63B",
     gefahr: "#D96A5A",
+    ok: "#6FCE8F", // C4: Erfolg/„OK"-Grün (nur Definition; Nutzung folgt in einem späteren Durchgang)
     kartenFeld: "#FFFFFF", // Eingabefelder AUF den (hellen) FilmCards
   },
   hell: {
@@ -37,6 +38,7 @@ export const THEMES = {
     was: "#7B4FB0",
     warum: "#B07E1F",
     gefahr: "#C14B3C",
+    ok: "#2E8B57", // C4
     kartenFeld: "#2E2A36", // Eingabefelder AUF den (im Foyer dunklen) FilmCards
   },
   /* ---- Egg-Modus SHOWA — Kaiju-Eiga 1954, heller S/W-Abzug ----
@@ -55,6 +57,7 @@ export const THEMES = {
     was: "#C7C1B7",
     warum: "#ECE9E2",
     gefahr: "#A64E45",
+    ok: "#5E7D63", // C4: gedämpftes S/W-Grün (Showa)
     kartenFeld: "#34322F",
   },
   /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot ----
@@ -73,6 +76,7 @@ export const THEMES = {
     was: "#F0181D",
     warum: "#FFAE18",
     gefahr: "#F0181D",
+    ok: "#49B06E", // C4: gedämpftes Terminal-Grün (NERV)
     kartenFeld: "#F4EFE8",
   },
 };
@@ -81,9 +85,19 @@ export const T = { ...THEMES.dunkel };
 
 export function setzeTheme(name) {
   Object.assign(T, THEMES[name] || THEMES.dunkel);
-  if (typeof document !== "undefined" && document.body) {
-    document.body.style.background = T.saal;
-    document.body.style.colorScheme = name === "hell" || name === "showa" ? "light" : "dark"; // native Controls (Scrollbar, Select)
+  if (typeof document !== "undefined") {
+    if (document.body) {
+      document.body.style.background = T.saal;
+      document.body.style.colorScheme = name === "hell" || name === "showa" ? "light" : "dark"; // native Controls (Scrollbar, Select)
+    }
+    // C3: Akzent-/Tinte-Werte als CSS-Variablen an :root spiegeln, damit reine
+    // CSS-Regeln (Fokusring, Nav-Griff) dem aktiven Theme/Modus folgen statt auf
+    // einem Dunkel-Literal (#E3A63B) einzufrieren.
+    const root = document.documentElement;
+    if (root && root.style) {
+      root.style.setProperty("--wolfram", T.wolfram);
+      root.style.setProperty("--tinte", T.tinte);
+    }
   }
 }
 

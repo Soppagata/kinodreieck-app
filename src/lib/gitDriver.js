@@ -195,7 +195,13 @@ export async function syncPull() {
         markPending(file, false); markConflict(file, false); markStale(file, false);
         ergebnis.geladen.push(file);
       } else if (r.status === 404) {
-        // Datei existiert noch nicht im Repo — lokal bleibt, wird bei erstem Commit angelegt.
+        // Datei existiert (noch) nicht im Repo — lokal bleibt, wird bei erstem Commit angelegt.
+        // KD-016: Wurde die Datei remote GELÖSCHT, wäre der gecachte SHA jetzt veraltet
+        // -> der nächste Commit liefe damit in 409/422. Der Pull hat den Zustand
+        // definitiv geklärt (nicht vorhanden): SHA nullen und die Datei-Flags räumen,
+        // damit der nächste Schreibzugriff sauber neu anlegt statt zu kollidieren.
+        setSha(file, null);
+        markPending(file, false); markConflict(file, false); markStale(file, false);
         ergebnis.angelegt.push(file);
       } else if (r.status === 200) {
         /* content=="" mit encoding:"none": Datei >1MB — die Contents-API liefert
@@ -313,9 +319,16 @@ export async function resolveConflictUseRemote(key) {
       return { ok: true };
     }
     if (g.status === 404) {
-      /* Remote weg: Konflikt hinfällig — lokal bleibt, nächster Commit legt neu an. */
-      setSha(file, null); markConflict(file, false);
-      return { ok: true, neuAnlegen: true };
+      /* KD-017: „Remote übernehmen" trifft auf gelöschtes Remote => der GELÖSCHTE
+         Zustand IST der zu übernehmende Stand. Lokalen Wert vorher snapshoten
+         (rückholbar), dann lokal entfernen + pending/SHA räumen — sonst legte der
+         nächste Flush die Daten entgegen der Nutzerwahl remote NEU an. */
+      const lokal = localStorage.getItem(key);
+      if (lokal != null) snapshot(key, lokal);
+      localStorage.removeItem(key);
+      setSha(file, null);
+      markPending(file, false); markConflict(file, false); markStale(file, false);
+      return { ok: true, geloescht: true };
     }
     return { ok: false, status: g.status, message: deutung(g.status, g.data) };
   } catch (e) { return { ok: false, error: String(e) }; }

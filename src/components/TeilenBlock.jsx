@@ -70,11 +70,17 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
   /* ---------- Import: Übernahme ---------- */
   const uebernehme = () => {
     if (!analyse) return;
-    const { neueFilme, neueArtikel, report: rep } = bauePaketUebernahme(analyse, importWahl, master || [], artikel || []);
-    if (!neueFilme.length && !neueArtikel.length) { setErr("Nichts übernommen — die gewählten Bereiche enthalten nur bereits Vorhandenes."); return; }
-    uebernehmePaket({ neueFilme, neueArtikel });
-    setReport({ ...rep, autor: analyse.autor, artikelDabei: neueArtikel.length > 0 });
-    setAnalyse(null);
+    // KD-007: Übernahme kann bei kaputten Fremd-Strukturen werfen — abfangen und
+    // dem Nutzer zeigen statt uncaught in die Konsole laufen zu lassen.
+    try {
+      const { neueFilme, neueArtikel, report: rep } = bauePaketUebernahme(analyse, importWahl, master || [], artikel || []);
+      if (!neueFilme.length && !neueArtikel.length) { setErr("Nichts übernommen — die gewählten Bereiche enthalten nur bereits Vorhandenes."); return; }
+      uebernehmePaket({ neueFilme, neueArtikel });
+      setReport({ ...rep, autor: analyse.autor, artikelDabei: neueArtikel.length > 0 });
+      setAnalyse(null);
+    } catch (e) {
+      setErr("Paket-Übernahme fehlgeschlagen: " + (e && e.message ? e.message : String(e)));
+    }
   };
 
   /* ---------- Prompt kopieren (Clipboard-API mit Fallback) ---------- */

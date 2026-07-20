@@ -24,7 +24,16 @@ export async function restoreBackup(backup) {
   const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements];
   const vorher = {};
   for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
-  try { localStorage.setItem(RESTORE_SNAP, JSON.stringify({ t: nowIso(), werte: vorher })); } catch { /* Snapshot best effort */ }
+  // KD-008 (fail-closed): Ohne gesicherten Rollback-Snapshot NICHT überschreiben.
+  // Schlägt oder verschluckt der Snapshot-Write (localStorage voll/blockiert/privat),
+  // den Restore ABBRECHEN, BEVOR ein Zieltopf angefasst wird — sonst verspräche die UI
+  // fälschlich „als Snapshot gesichert, rückgängig machbar".
+  let snapshotOk = false;
+  try {
+    localStorage.setItem(RESTORE_SNAP, JSON.stringify({ t: nowIso(), werte: vorher }));
+    snapshotOk = localStorage.getItem(RESTORE_SNAP) != null; // Rücklese: fängt auch stille No-op-Writes
+  } catch { snapshotOk = false; }
+  if (!snapshotOk) throw new Error("Rollback-Snapshot konnte nicht gesichert werden (Speicher voll oder blockiert) — Restore abgebrochen, es wurde nichts überschrieben.");
 
   const bericht = [];
   const now = Date.now();

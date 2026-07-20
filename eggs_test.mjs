@@ -128,6 +128,17 @@ check("Crawl: 4. Mai + Kino-Treffer -> true", crawlHeute({ jetzt: MAI4, kinoMatc
 check("Crawl: 4. Mai ohne Treffer -> false", crawlHeute({ jetzt: MAI4, kinoMatches: km0 }) === false);
 check("Crawl: anderer Tag -> false", crawlHeute({ jetzt: MAI5, kinoMatches: km1 }) === false);
 
+/* B4-Egg-Verdrahtung: die beiden Trigger sind rein & deterministisch (kein Netz,
+   kein RNG, keine Seiteneffekte) — App stützt Auto-Trigger + Gating darauf. */
+check("Crawl: deterministisch (zwei Aufrufe, gleiches Ergebnis)",
+  crawlHeute({ jetzt: MAI4, kinoMatches: km1 }) === crawlHeute({ jetzt: MAI4, kinoMatches: km1 }));
+check("Crawl: robust ohne Argumente/kinoMatches -> boolean, kein Wurf",
+  typeof crawlHeute() === "boolean" && crawlHeute({ jetzt: MAI4 }) === false);
+check("Crawl: mehrere Treffer -> true (≥1 genügt)",
+  crawlHeute({ jetzt: MAI4, kinoMatches: { matched: [{}, {}, {}] } }) === true);
+check("Klaatu: deterministisch + robust (null/leer -> false, kein Throw)",
+  istKlaatu("klaatu barada nikto") === istKlaatu("klaatu barada nikto") && istKlaatu(null) === false && istKlaatu("") === false);
+
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);
 console.log(fails.length ? "EGGS-TEST: BEFUNDE OBEN" : "EGGS-TEST BESTANDEN");

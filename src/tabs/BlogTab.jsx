@@ -340,6 +340,15 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusId]);
 
+  /* KD-029: Zeigt die aktive Ansicht (Popup/Lese) auf einen fehlenden Artikel —
+     z.B. gelöscht oder per Import ersetzt —, Reset auf die Liste. Als Effekt,
+     NIE während des Renders (sonst Render-Phase-Update / StrictMode-Warnung). */
+  useEffect(() => {
+    if ((ansicht.typ === "popup" || ansicht.typ === "lese") && !artikel.find((x) => x.id === ansicht.id)) {
+      setAnsicht({ typ: "liste" });
+    }
+  }, [ansicht, artikel]);
+
   const aktiv = (id) => artikel.find((a) => a.id === id);
 
   if (ansicht.typ === "maske") {
@@ -352,7 +361,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   }
   if (ansicht.typ === "popup") {
     const a = aktiv(ansicht.id);
-    if (!a) { setAnsicht({ typ: "liste" }); return null; }
+    if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
     return <AbgleichPopup artikel={a} master={master}
       onSetzeRef={onSetzeRef}
       onFreigeben={(id) => { onFreigeben(id); setAnsicht({ typ: "lese", id }); }}
@@ -362,7 +371,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   }
   if (ansicht.typ === "lese") {
     const a = aktiv(ansicht.id);
-    if (!a) { setAnsicht({ typ: "liste" }); return null; }
+    if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
     return <LeseAnsicht artikel={a} master={master}
       onZurueck={() => setAnsicht({ typ: "liste" })}
       onBearbeiten={(id) => setAnsicht({ typ: "maske", id })}
@@ -395,6 +404,12 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
           const auszug = a.text.length > 280 ? a.text.slice(0, 280).replace(/\s+\S*$/, "") + " …" : a.text;
           return (
             <div key={a.id} onClick={() => setOffenId(offen ? null : a.id)}
+              // KD-027: Tastatur-Zugang für die klickbare Karte (Enter/Space wie onClick), nur der Karten-Root
+              role="button" tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return; // innere Buttons nicht doppelt auslösen
+                if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); setOffenId(offen ? null : a.id); }
+              }}
               style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", cursor: "pointer", opacity: wartend ? 0.6 : 1 }}>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 {a.titel}{wartend && <span style={{ color: T.wolfram, fontSize: 13, marginLeft: 10 }}>· WARTET</span>}

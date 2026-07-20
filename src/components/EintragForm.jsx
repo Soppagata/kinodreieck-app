@@ -12,7 +12,7 @@ import { QuellenWahl } from "./QuellenWahl.jsx";
    Der Eintrag landet automatisch in der richtigen Gruppe (Zuordnung über typ).
    typOptionen kommt vom Aufrufer; der erste Eintrag ist der Default-Typ.
    Rückwärtskompatibel: nur bewertbare Typen -> reines Film-Formular wie zuvor. */
-export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"], onAdd, initial = null, startOffen = false, onDone }) {
+export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"], onAdd, initial = null, startOffen = false, onDone, autorName }) { // KD-030: optionaler autorName
   const [open, setOpen] = useState(startOffen);
   const leer = {
     titel: (initial && initial.titel) || "",
@@ -44,9 +44,21 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
   const speichern = () => {
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
     if (bewertbar && !f.jahr) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
+    // KD-018: nicht-leeres Jahr muss eine ganze Zahl im sinnvollen Bereich sein,
+    // sonst wird z.B. "abc" still zu NaN→null und fehlt im ID-Schlüssel.
+    if (f.jahr.trim()) {
+      const j = Number(f.jahr);
+      const maxJahr = new Date().getFullYear() + 5;
+      if (!Number.isFinite(j) || !Number.isInteger(j) || j < 1870 || j > maxJahr) {
+        setFehler("Jahr muss eine ganze Zahl zwischen 1870 und " + maxJahr + " sein.");
+        return;
+      }
+    }
     setFehler("");
+    // KD-019: Rückgabewert von onAdd/addFilm auswerten (null/false = Dublette).
+    let ergebnis;
     if (bewertbar) {
-      onAdd({
+      ergebnis = onAdd({
         titel: f.titel.trim(),
         originaltitel: f.originaltitel.trim() || f.titel.trim(),
         jahr: Number(f.jahr),
@@ -54,7 +66,7 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
         typ: f.typ,
         quelle: arrayZuQuelle(f.quellen),
         kategorie: ohneBewertung ? null : f.kategorie,
-        bewertet_von: ohneBewertung ? null : "max",
+        bewertet_von: ohneBewertung ? null : (autorName || "max"), // KD-030
         bewertung: ohneBewertung ? null : { wie: f.wie, was: f.was, warum: f.warum },
         genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
         tags: [],
@@ -64,7 +76,7 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
       });
     } else {
       // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
-      onAdd({
+      ergebnis = onAdd({
         titel: f.titel.trim(),
         jahr: f.jahr ? Number(f.jahr) : null,
         typ: f.typ,
@@ -74,6 +86,12 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
         bewertung: { wie: null, was: null, warum: null },
         bewertet_von: null,
       });
+    }
+    // KD-019: nur bei Erfolg zurücksetzen/schließen; Dublette (null/false) lässt
+    // das Formular offen und bewahrt die Eingabe.
+    if (ergebnis === null || ergebnis === false) {
+      setFehler("Eintrag existiert bereits (Titel + Jahr) — nichts gespeichert, Eingabe bleibt erhalten.");
+      return;
     }
     setF(leer); setOpen(false); setFehler("");
     if (onDone) onDone();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { parseAnfrage, sucheFinder, sucheEntdecken, sucheKino, ohneStimmung, filmHerkunft } from "../lib/finder.js";
+import { istKlaatu } from "../lib/momentEggs.js"; // B4-Egg
 import { schlagseite } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
@@ -197,7 +198,7 @@ function DisambigListe({ sig, master, onWaehle }) {
   );
 }
 
-export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, auswahl = [], onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe }) {
+export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, auswahl = [], onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe, onKlaatu }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* film.at-Genres aus dem Kinoprogramm -> Vokabular (parseAnfrage erkennt sie),
      damit z.B. "Sci-Fi im Kino" auch ohne passenden Master-Eintrag greift. */
@@ -217,6 +218,10 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
   const frage = () => {
     const text = eingabe.trim();
     if (!text) return;
+    // B4-Egg: „klaatu barada nikto" (tippfehler-tolerant) → Necronomicon melden.
+    // Personal-Modus-Gate + Optik/Tab-Wechsel liegen in App (onKlaatu); die normale
+    // Suche läuft danach unverändert weiter.
+    if (onKlaatu && istKlaatu(text)) onKlaatu();
     const sig = parseAnfrage(text, master || [], kinoGenres());
     setVerlauf((v) => [...v, { frage: text, ...suche(sig) }]);
     setEingabe("");

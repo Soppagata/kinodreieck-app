@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react"; // KD-028
 import { createPortal } from "react-dom";
 import { T, btnStyle } from "../lib/tokens.js";
 
@@ -13,7 +14,31 @@ import { T, btnStyle } from "../lib/tokens.js";
    onWaehle("clean"|"demo") schreibt die Wahl weg und lädt entsprechend.
    Umkehrbar über den Einstellungen-Tab ("Startart wechseln") — deshalb ist die
    Entscheidung hier bewusst leichtgewichtig. */
-export function StartWahl({ onWaehle, aktuelle }) {
+export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optionaler onClose (Escape)
+  const dialogRef = useRef(null); // KD-028
+  // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay)
+  useEffect(() => {
+    const el = dialogRef.current; if (!el) return;
+    const vorherFokus = document.activeElement;
+    const focusables = () => [...el.querySelectorAll("button, [href], input, [tabindex]")].filter((n) => !n.disabled);
+    const f = focusables(); if (f.length) f[0].focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); if (onClose) onClose(); return; }
+      if (e.key === "Tab") {
+        const list = focusables(); if (!list.length) return;
+        const erst = list[0], letzt = list[list.length - 1];
+        if (!el.contains(document.activeElement)) { e.preventDefault(); erst.focus(); return; }
+        if (e.shiftKey && document.activeElement === erst) { e.preventDefault(); letzt.focus(); }
+        else if (!e.shiftKey && document.activeElement === letzt) { e.preventDefault(); erst.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      if (vorherFokus && vorherFokus.focus) vorherFokus.focus(); // Fokus-Rückgabe
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const overlay = {
     position: "fixed", inset: 0, zIndex: 10002, background: "rgba(23,21,26,0.92)",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto",
@@ -32,7 +57,7 @@ export function StartWahl({ onWaehle, aktuelle }) {
   const kText = { fontSize: 13.5, color: T.leinwandTief, lineHeight: 1.6, margin: 0 };
 
   return createPortal(
-    <div style={overlay} role="dialog" aria-modal="true" aria-label="Wie möchtest du starten?">
+    <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true" aria-label="Wie möchtest du starten?">
       <div style={box}>
         <h2 style={h}>Wie möchtest du starten?</h2>
         <p style={{ fontSize: 14, color: T.rauch, lineHeight: 1.6, margin: "0 0 4px" }}>

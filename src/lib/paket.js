@@ -74,7 +74,22 @@ export function parsePaket(text) {
   if (Number(p.version) > PAKET_VERSION) throw new Error("Paket-Version " + p.version + " ist neuer als diese App versteht (" + PAKET_VERSION + ").");
   if (!p.bereiche || typeof p.bereiche !== "object") throw new Error("Paket ohne 'bereiche'.");
   const autor = String(p.autor || "unbekannt").trim() || "unbekannt";
-  return { ...p, autor };
+  // KD-007: verschachtelte Formen härten statt nur den Root zu prüfen. Pro Bereich
+  // nur brauchbare Einträge behalten; bei Artikeln `liste` immer auf ein Array
+  // normalisieren (liste:{} ließ sonst (liste||[]).slice mit TypeError platzen).
+  const bereiche = {};
+  for (const b of BEREICHE) {
+    const roh = p.bereiche[b];
+    if (!Array.isArray(roh)) continue;
+    if (b === "artikel") {
+      bereiche.artikel = roh
+        .filter((a) => a && typeof a === "object")
+        .map((a) => (Array.isArray(a.liste) ? a : { ...a, liste: [] }));
+    } else {
+      bereiche[b] = roh.filter((f) => f && typeof f === "object" && f.titel);
+    }
+  }
+  return { ...p, autor, bereiche };
 }
 
 /* ---------- Import Schritt 2: Analyse (Vorschau, nichts wird verändert) ----------

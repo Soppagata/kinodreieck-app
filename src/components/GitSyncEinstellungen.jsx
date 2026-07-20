@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { setTreiber } from "../lib/storage.js"; // KD-015: Git als aktiven Treiber setzen
 import {
   getGitConfig, setGitConfig, isGitConfigured,
   connectionTest, syncPull, syncFlush, syncStatus,
@@ -42,6 +43,9 @@ export function GitSyncEinstellungen({ ohneKopf = false } = {}) {
   const verbindenNeuLaden = () => {
     speichern();
     if (!isGitConfigured()) { setMeldung({ art: "err", text: "Repo (owner/name) und Token nötig." }); return; }
+    // KD-015: Git als aktiven Treiber setzen — sonst bliebe bei kd:treiber='supabase'
+    // nach dem Reload weiterhin Supabase aktiv (main.jsx wählt Git nur bei t==='git'|null).
+    setTreiber("git");
     // Pull passiert beim nächsten Start (main.jsx) — kontrolliert neu laden.
     setMeldung({ art: "warn", text: "Gespeichert. App wird neu geladen und synchronisiert …" });
     try { setTimeout(() => location.reload(), 400); } catch { /* */ }

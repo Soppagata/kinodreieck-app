@@ -62,7 +62,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   const [entdeckenStatus, setEntdeckenStatus] = useState(() => {
     try { return JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}"); } catch { return {}; }
   });
-  const [zeigeErledigte, setZeigeErledigte] = useState(true);
+  const [zeigeErledigte, setZeigeErledigte] = useState(false); // KD-021: gesehene/erledigte Titel standardmaessig ausgeblendet (Tooltip/Copy sagen genau das)
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
@@ -348,7 +348,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                         <FilmForm startOffen
                           typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
                           initial={{ titel: t.titel, jahr: t.jahr, quelle: "must_watch", genre: (t.genres || []).join(", ") }}
-                          onAdd={(f) => { const id = addFilm(f); if (id) setEntdeckenStatus((prev) => { const next = { ...prev, [t.watchmode_id]: "erstellt" }; store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {}); return next; }); }}
+                          onAdd={(f) => { const id = addFilm(f); if (id) setEntdeckenStatus((prev) => { const next = { ...prev, [t.watchmode_id]: "erstellt" }; store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {}); return next; }); return id; /* KD-019: Rückgabe durchreichen -> Maske bleibt bei Dublette offen */ }}
                           onDone={() => setFormFuer(null)} />
                       </div>
                     )}

@@ -43,7 +43,8 @@ export function SupabaseSyncEinstellungen({ ohneKopf = false } = {}) {
     setBusy(true); setMeldung({ art: "warn", text: "Teste Verbindung …" });
     const r = await connectionTest();
     setBusy(false);
-    if (r.ok) setMeldung({ art: "ok", text: "Verbunden ✓ (Projekt erreichbar, anon-Key gültig)" });
+    // KD-013: nicht als „Verbunden" überverkaufen — der Test prüft nur Lesbarkeit, nicht das Schreibrecht.
+    if (r.ok) setMeldung({ art: "ok", text: "Projekt erreichbar, anon-Key gültig ✓ · Schreibzugriff nicht geprüft" });
     else setMeldung({ art: "err", text: `Fehlgeschlagen: ${r.message || ("HTTP " + r.status)}` });
   };
 
@@ -133,9 +134,11 @@ export function SupabaseSyncEinstellungen({ ohneKopf = false } = {}) {
           <button style={{ ...btnStyle(false), fontSize: 12, padding: "6px 10px" }}
             onClick={() => setKeySichtbar((v) => !v)}>{keySichtbar ? "verbergen" : "zeigen"}</button>
         </div>
-        <span style={mono}>Wird nur als Header gesendet, nie gespeichert oder committet. Auf jedem Gerät gleich eintragen.</span>
+        {/* KD-014: ehrlich — setSupabaseConfig legt den Schlüssel lokal in localStorage['kd:sb:key'] ab. */}
+        <span style={mono}>Wird lokal in diesem Browser gespeichert (localStorage) und nur als Header gesendet — nie ins Repo committet oder geteilt. Auf jedem Gerät gleich eintragen.</span>
       </label>
-      <Klappe titel="Erweitert · Projekt-URL & anon-Key">
+      {/* B7: „Verbindungsdetails" statt „Erweitert" — eindeutig ggü. dem zweiten „Erweitert" (Rohdaten) im selben Tab. */}
+      <Klappe titel="Verbindungsdetails · Projekt-URL & anon-Key">
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
           <span style={mono}>Vorbelegt — nur bei Projektwechsel oder Ersteinrichtung ändern.</span>
           <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>

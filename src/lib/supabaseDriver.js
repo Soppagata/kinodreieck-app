@@ -138,9 +138,13 @@ export async function connectionTest() {
   const c = getSupabaseConfig();
   if (!/^https?:\/\//.test(c.url) || !c.anon) return { ok: false, status: 0, message: "Projekt-URL und anon-Key nötig." };
   try {
-    // Reine Erreichbarkeit/Auth: gültiger anon-Key => 200 (auch bei 0 Zeilen).
-    const r = await sbFetch("GET", `/${TABLE}?select=key&limit=1`, { withKey: true });
-    if (r.ok) return { ok: true, status: r.status };
+    /* KD-013: Auf den konfigurierten Owner scopen (soweit vorhanden) — 200 beweist
+       Erreichbarkeit, gültigen anon-Key und lesbare Owner-Sicht. Das Schreibrecht
+       (RLS-INSERT/UPDATE via x-kd-key) wird BEWUSST NICHT geprüft — kein invasiver
+       Test-Write. Die ehrliche Aussage („Schreibzugriff nicht geprüft") macht die UI. */
+    const scope = c.owner ? `owner=eq.${q(c.owner)}&scope=eq.user&` : "";
+    const r = await sbFetch("GET", `/${TABLE}?${scope}select=key&limit=1`, { withKey: true });
+    if (r.ok) return { ok: true, status: r.status, schreibGeprueft: false };
     return { ok: false, status: r.status, message: deutung(r.status, r.data) };
   } catch (e) { return { ok: false, status: 0, message: "Netzwerk/CORS: " + e }; }
 }
@@ -352,9 +356,16 @@ export async function resolveConflictUseRemote(key) {
       return { ok: true };
     }
     if (g.ok && Array.isArray(g.data) && g.data.length === 0) {
-      // Remote weg: Konflikt hinfällig — lokal bleibt, nächster Commit legt neu an.
-      setVer(key, null); markConflict(key, false);
-      return { ok: true, neuAnlegen: true };
+      /* KD-017: „Remote übernehmen" trifft auf gelöschtes Remote => der GELÖSCHTE
+         Zustand IST der zu übernehmende Stand. Lokalen Wert snapshoten (rückholbar),
+         dann lokal entfernen + pending/rev räumen — sonst legte der nächste Flush die
+         Daten entgegen der Nutzerwahl remote NEU an (konsistent zum Git-Treiber). */
+      const lokal = localStorage.getItem(key);
+      if (lokal != null) snapshot(key, lokal);
+      localStorage.removeItem(key);
+      setVer(key, null);
+      markPending(key, false); markConflict(key, false); markStale(key, false);
+      return { ok: true, geloescht: true };
     }
     return { ok: false, status: g.status, message: deutung(g.status, g.data) };
   } catch (e) { return { ok: false, error: String(e) }; }

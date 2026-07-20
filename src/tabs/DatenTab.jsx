@@ -25,6 +25,7 @@ export function DatenTab({
   ungesichertMaster = false, ungesichertArtikel = false,
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt, zeigeCage, zeigeTeppich,
+  zeigeCrawl, zeigeKlaatu, /* B4-Egg: Moment-Egg-Vorführknöpfe */
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle, heuristikAn, setHeuristikAn,
   resetTag = null, setResetTag,
@@ -129,6 +130,9 @@ export function DatenTab({
             <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
               {zeigeCage && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeCage}>Cage-Alphabet zeigen</button>}
               {zeigeTeppich && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeTeppich}>Teppich zeigen</button>}
+              {/* B4-Egg: die zwei Moment-Eggs erzwingen (nur PERSONAL_MODE, dieser Block ist ohnehin gegatet). */}
+              {zeigeCrawl && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeCrawl}>Star-Wars-Crawl zeigen</button>}
+              {zeigeKlaatu && <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={zeigeKlaatu}>Klaatu/Necronomicon zeigen</button>}
             </div>
           </div>
         </Klappe>
@@ -142,7 +146,9 @@ export function DatenTab({
       </div>
 
       {/* ---- Must-Watch-Migration + Besitz-Nachtrag (einmalige, idempotente Läufe) ---- */}
-      {(offeneFlags > 0 || migrationsBericht || importiereBesitz) && (
+      {/* B6: nur zeigen, wenn wirklich etwas offen ist oder berichtet wird — vorher hing der
+          Guard an der immer-truthy Funktion importiereBesitz, sodass die Box dauerhaft stand. */}
+      {(offeneFlags > 0 || migrationsBericht || besitzImportBericht) && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
           <h2 style={h2Style}>Must-Watch-Migration & Besitz-Nachtrag</h2>
           {migriereMustwatch && offeneFlags > 0 && (
@@ -310,7 +316,8 @@ export function DatenTab({
                 <button style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}
                   title={"Wirft den im Browser gespeicherten Stand weg und lädt den gewählten Start neu (" + (startWahl === "demo" ? "Demo-Liste" : "leerer Start") + "). Nutzen, wenn die Mediathek alte/falsche Daten zeigt (file://-Speicher wird von allen lokalen HTMLs geteilt)."}
                   onClick={() => {
-                    if (window.confirm("Browser-Stand verwerfen und den gewählten Start neu laden?\n\nACHTUNG: Bewertungen/Einträge, die du NUR in der App gemacht und nie exportiert hast, gehen dabei verloren.")) resetMaster();
+                    /* KD-003: unter aktivem Geräte-Sync holt der Boot-Pull synchronisierte Daten zurück — ehrlicher Wortlaut statt „gehen verloren". */
+                    if (window.confirm("Browser-Stand verwerfen und den gewählten Start neu laden?\n\nNur der lokale Browser-Stand wird geleert. Bei aktivem Geräte-Sync werden synchronisierte Daten beim nächsten Laden wieder vom Server geholt — nur NICHT synchronisierte und nie exportierte Änderungen gehen verloren.")) resetMaster();
                   }}>
                   Browser-Stand verwerfen → {startWahl === "demo" ? "Demo neu laden" : "leeren"}
                 </button>

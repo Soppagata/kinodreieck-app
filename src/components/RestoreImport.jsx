@@ -27,7 +27,8 @@ export function RestoreImport({ ohneKopf = false } = {}) {
     const gitHinweis = isGitConfigured()
       ? "\n\nACHTUNG: Git-Sync ist bereits verbunden — der wiederhergestellte Stand wird beim nächsten Sync als neue Version ins Daten-Repo committet. Für die Erst-Migration gilt: Backup einspielen, DANN Git verbinden."
       : "";
-    const ok = window.confirm("Backup wiederherstellen?\n\nDas ERSETZT die aktuellen lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste). Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar." + gitHinweis);
+    // KD-008: fail-closed Snapshot-Zusage · KD-009: Wortlaut (vorhandene Felder ersetzen, im Backup fehlende bleiben)
+    const ok = window.confirm("Backup wiederherstellen?\n\nVorhandene Felder des Backups ERSETZEN die entsprechenden lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste); im Backup fehlende Bereiche bleiben unverändert. Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar — lässt sich der Snapshot nicht sichern, wird abgebrochen und nichts überschrieben." + gitHinweis);
     if (!ok) { setBusy(false); return; }
     try {
       const r = await restoreBackup(backup);
@@ -62,8 +63,10 @@ export function RestoreImport({ ohneKopf = false } = {}) {
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
         Einmaliger Umzug: das <strong style={{ color: T.leinwand }}>Gesamt-Backup der alten App</strong> hier
         einspielen — Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status und
-        Autor-Name in einem Schritt. <strong>Ersetzt</strong> die aktuellen lokalen Daten (kein Zusammenführen),
-        der vorherige Stand wird gesichert. Danach neu laden und die Zählstände prüfen, <em>bevor</em> du Git verbindest.
+        {/* KD-009: Wortlaut — Restore ist preserve-missing (fehlende Backup-Bereiche bleiben), nicht „alles ersetzen". Verhalten in restore.js unverändert. */}
+        Autor-Name in einem Schritt. <strong>Vorhandene Felder des Backups ersetzen die lokalen; im Backup fehlende
+        Bereiche bleiben unverändert.</strong> Der vorherige Stand wird gesichert. Danach neu laden und die Zählstände
+        prüfen, <em>bevor</em> du Git verbindest.
         Deine Abo-Auswahl (Streaming-Dienste) ist im alten Backup nicht enthalten — die setzt du einmal manuell.
       </p>
       <input type="file" accept=".json,application/json" onChange={aufDatei} disabled={busy}

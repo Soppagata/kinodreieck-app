@@ -72,11 +72,21 @@ export function formatiereTermin(z) {
 
 /* Datum aus Altformat-Zeitstring ("Di 8.7. 20:30 · Filmcasino") ziehen.
    Jahr wird angenommen (aktuelles Jahr) — Snapshots sind Tage alt, nicht Monate.
+   KD-020: Über den Jahreswechsel bricht die Jahres-Annahme (Dez-Snapshot listet
+   Jan-Termine, Jan-Snapshot listet Dez-Termine). Rollover-Heuristik wie in den
+   Termin-/Pin-Helfern (KinoTab.terminWert, App.pinAbgelaufen): liegt das Datum
+   weit vor der Referenz (>300 Tage), ist es das Folgejahr; weit danach, das Vorjahr.
    Ohne parsebares Datum -> null (Eintrag wird dann nie weggefiltert). */
-function parseAltDatum(s, refJahr) {
+function parseAltDatum(s, refJahr, ref = new Date()) {
   const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(s));
   if (!m) return null;
-  return new Date(refJahr, Number(m[2]) - 1, Number(m[1]));
+  const monat = Number(m[2]) - 1, tag = Number(m[1]);
+  const TAG = 86400000;
+  const bezug = (ref instanceof Date ? ref : new Date()).getTime();
+  let d = new Date(refJahr, monat, tag);
+  if (bezug - d.getTime() > 300 * TAG) d = new Date(refJahr + 1, monat, tag);       // weit vor Referenz -> Folgejahr
+  else if (d.getTime() - bezug > 300 * TAG) d = new Date(refJahr - 1, monat, tag);  // weit nach Referenz -> Vorjahr
+  return d;
 }
 
 /* Altformat aufräumen: vergangene Vorstellungen raus (der Snapshot deckt oft
@@ -90,7 +100,7 @@ export function bereinigeAltFormat(data) {
   const filme = [];
   for (const f of data.filme) {
     const z = f.z || [];
-    const bewertet = z.map((s) => ({ s, d: parseAltDatum(s, jetzt.getFullYear()) }));
+    const bewertet = z.map((s) => ({ s, d: parseAltDatum(s, jetzt.getFullYear(), jetzt) })); // KD-020: jetzt als Rollover-Referenz
     const rest = bewertet.filter((x) => !x.d || x.d >= h0);
     entfernteZeiten += z.length - rest.length;
     if (!rest.length && z.length) { entfernteFilme++; continue; }

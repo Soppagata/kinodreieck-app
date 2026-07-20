@@ -44,6 +44,13 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
   return (
     <div
       onClick={onToggle}
+      // KD-027: Tastatur-Zugang für die klickbare Karte (Enter/Space wie onClick), nur der Karten-Root
+      role={onToggle ? "button" : undefined}
+      tabIndex={onToggle ? 0 : undefined}
+      onKeyDown={onToggle ? (e) => {
+        if (e.target !== e.currentTarget) return; // innere Buttons/Felder nicht doppelt auslösen
+        if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); onToggle(); }
+      } : undefined}
       className="kd-karte"
       style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
     >

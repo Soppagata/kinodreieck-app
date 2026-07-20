@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react"; // KD-028
 import { createPortal } from "react-dom";
 import { T, btnStyle } from "../lib/tokens.js";
 import { DreieckRegler } from "./DreieckRegler.jsx";
@@ -11,6 +11,30 @@ import { DreieckRegler } from "./DreieckRegler.jsx";
 
 export function Willkommen({ onClose }) {
   const [karte, setKarte] = useState(1);
+  const dialogRef = useRef(null); // KD-028
+  // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay)
+  useEffect(() => {
+    const el = dialogRef.current; if (!el) return;
+    const vorherFokus = document.activeElement;
+    const focusables = () => [...el.querySelectorAll("button, [href], input, [tabindex]")].filter((n) => !n.disabled);
+    const f = focusables(); if (f.length) f[0].focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); if (onClose) onClose(); return; }
+      if (e.key === "Tab") {
+        const list = focusables(); if (!list.length) return;
+        const erst = list[0], letzt = list[list.length - 1];
+        if (!el.contains(document.activeElement)) { e.preventDefault(); erst.focus(); return; }
+        if (e.shiftKey && document.activeElement === erst) { e.preventDefault(); letzt.focus(); }
+        else if (!e.shiftKey && document.activeElement === letzt) { e.preventDefault(); erst.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      if (vorherFokus && vorherFokus.focus) vorherFokus.focus(); // Fokus-Rückgabe
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const overlay = {
     position: "fixed", inset: 0, zIndex: 10001, background: "rgba(23,21,26,0.9)",
@@ -25,7 +49,7 @@ export function Willkommen({ onClose }) {
   const p = { fontFamily: "'Space Grotesk', sans-serif", fontSize: 14.5, color: T.leinwand, lineHeight: 1.7, margin: "0 0 12px" };
 
   return createPortal(
-    <div style={overlay} role="dialog" aria-modal="true" aria-label="Willkommen bei Kinodreieck">
+    <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true" aria-label="Willkommen bei Kinodreieck">
       <div style={box}>
         {karte === 1 ? (
           <>

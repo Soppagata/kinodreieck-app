@@ -80,7 +80,17 @@ export function slugId(titel, jahr) {
    fehlende IDs deterministisch ergänzen, Kollisionen mit Suffix auflösen.
    Migration: kategorie_frei (alter Feldname, nur sonstiges) -> art (musik+sonstiges). */
 export function ensureIds(filme) {
+  /* seen = alle schon existierenden IDs (damit NEU erzeugte IDs nicht mit
+     ihnen kollidieren). vergeben = in DIESEM Durchlauf bereits benutzte IDs —
+     trägt den Dublettenschutz (KD-005). */
   const seen = new Set(filme.filter((f) => f.id).map((f) => f.id));
+  const vergeben = new Set();
+  const eindeutig = (basis) => {
+    const base = basis || "id";
+    let id = base, n = 2;
+    while (seen.has(id) || vergeben.has(id)) { id = base + "_" + n; n++; }
+    return id;
+  };
   return filme.map((roh) => {
     let f = roh;
     if (f.kategorie_frei && !f.art) {
@@ -98,11 +108,18 @@ export function ensureIds(filme) {
     if (f.typ === "trilogie") f = { ...f, typ: "filmreihe" };
     if (f.typ === "filmreihe") f = { ...f, typ: "film" }; // Filmreihe 2026-07 gestrichen -> Film
     if (f.typ === "franchise") f = { ...f, typ: "serie" };
-    if (f.id) return f;
-    const base = slugId(f.titel, f.jahr);
-    let id = base, n = 2;
-    while (seen.has(id)) { id = base + "_" + n; n++; }
-    seen.add(id);
+    /* KD-005: eine bereits im selben Import/Restore vergebene ID wird NICHT
+       durchgereicht (das erzeugte sonst echte Doppel-IDs → bricht React-Keys,
+       Update-by-ID, Matching, Sync). Erste Verwendung behält ihre ID, jede
+       weitere bekommt deterministisch eine neue eindeutige. */
+    if (f.id) {
+      if (!vergeben.has(f.id)) { vergeben.add(f.id); return f; }
+      const neuId = eindeutig(slugId(f.titel, f.jahr) || f.id);
+      vergeben.add(neuId);
+      return { ...f, id: neuId };
+    }
+    const id = eindeutig(slugId(f.titel, f.jahr));
+    vergeben.add(id);
     return { id, ...f };
   });
 }

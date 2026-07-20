@@ -10,11 +10,23 @@ import { store, K, activePull } from "./storage.js";
 
 export async function baueBackup({ pull = true } = {}) {
   // 1) Frischer Pull des aktiven Treibers. Offline/ohne Schlüssel: Export aus lokalem Cache.
-  if (pull) { try { await activePull(); } catch { /* best effort: lokaler Cache */ } }
+  // KD-011: Pull-Ergebnis auswerten statt verschlucken — activePull() wirft nicht, sondern
+  // liefert {ok:false,...} bzw. ein Ergebnis mit konflikt[]; ein fehlgeschlagener oder
+  // konfligierter Pull darf nicht unbemerkt zu einem „aktuell" aussehenden Backup führen.
+  const warnungen = [];
+  if (pull) {
+    try {
+      const pr = await activePull();
+      if (pr && pr.ok === false) warnungen.push({ bereich: "pull", grund: "Frischer Pull fehlgeschlagen — Daten stammen evtl. aus veraltetem lokalem Cache." });
+      else if (pr && Array.isArray(pr.konflikt) && pr.konflikt.length) warnungen.push({ bereich: "pull", grund: "Offene Sync-Konflikte (" + pr.konflikt.join(", ") + ") — Backup kann lokale, nicht abgeglichene Stände enthalten." });
+    } catch (e) { warnungen.push({ bereich: "pull", grund: "Pull-Fehler: " + String((e && e.message) || e) }); }
+  }
 
   // 2) Alles über store lesen (verbatim-String -> gezielt entpacken).
-  const roh = async (key) => { try { const r = await store.get(key); return r ? r.value : null; } catch { return null; } };
-  const obj = async (key) => { const v = await roh(key); if (v == null) return null; try { return JSON.parse(v); } catch { return null; } };
+  // KD-011: Lese-/Parse-Fehler nicht mehr still zu null machen — als Diagnose vermerken.
+  // (Ein legitim leerer/nie gesetzter Topf liefert r==null OHNE Warnung — nur echte Fehler.)
+  const roh = async (key) => { try { const r = await store.get(key); return r ? r.value : null; } catch { warnungen.push({ bereich: key, grund: "Lesefehler — als leer gesichert." }); return null; } };
+  const obj = async (key) => { const v = await roh(key); if (v == null) return null; try { return JSON.parse(v); } catch { warnungen.push({ bereich: key, grund: "nicht parsebar (JSON beschädigt) — als leer gesichert." }); return null; } };
 
   const master = await obj(K.master);         // {meta, filme, herkunft, gespeichertAm}
   const artikel = await obj(K.artikel);       // {artikel, gespeichertAm}
@@ -35,5 +47,9 @@ export async function baueBackup({ pull = true } = {}) {
     einstellungen: await obj(K.einstellungen),
     autor: await roh(K.autorName),   // roher String (kein JSON)
     achievements: await obj(K.achievements),  // {eggs:[...]} — 11. Artefakt (Block 3); null wenn nie freigeschaltet
+    // KD-011: optionales Diagnosefeld, MUSS letzte Eigenschaft sein (die obj()-Aufrufe oben füllen
+    // `warnungen` erst während der Objekt-Konstruktion). Nur bei Problemen gesetzt → rückwärtskompatibel,
+    // Kernstruktur/-schlüssel unverändert. Restore ignoriert unbekannte Felder wie dieses.
+    ...(warnungen.length ? { _warnungen: warnungen } : {}),
   };
 }

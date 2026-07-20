@@ -2,7 +2,7 @@ import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
 
 /* ---------- Inline-Editor für Bewertungen ---------- */
-export function EditPanel({ film, onSave, onCancel }) {
+export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: optionaler autorName
   // Rohstring im State: leeres Feld bleibt leer, kein erzwungenes 0
   const [wie, setWie] = useState(String(film.bewertung?.wie ?? ""));
   const [was, setWas] = useState(String(film.bewertung?.was ?? ""));
@@ -51,7 +51,7 @@ export function EditPanel({ film, onSave, onCancel }) {
         <button style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }}
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
-            : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: "max" })}>
+            : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: autorName || "max" /* KD-030 */ })}>
           {alleLeer ? "Als unbewertet speichern" : "Speichern"}
         </button>
         <button style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>

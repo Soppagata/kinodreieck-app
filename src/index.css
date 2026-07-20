@@ -15,9 +15,9 @@
 @font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./assets/fonts/space-mono-400-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 @font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 @font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
-/* Fraunces (OFL) — Serifen-Display nur für die Egg-Modi: Showa-Plakattitel (600/900),
-   NERV-Tagline (400 italic). Latin-Subset (deckt Deutsch inkl. Umlaute ab). */
-@font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 600; font-display: swap; src: url('./assets/fonts/fraunces-600-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+/* Fraunces (OFL) — Serifen-Display nur für die Egg-Modi: Showa-Plakattitel (900),
+   Teppich-Kicker/NERV-Tagline (400 italic). Latin-Subset (deckt Deutsch inkl. Umlaute ab).
+   Normal-600 entfernt (Block 4 Cleanup): kein Selektor forderte es an. */
 @font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 900; font-display: swap; src: url('./assets/fonts/fraunces-900-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 @font-face { font-family: 'Fraunces'; font-style: italic; font-weight: 400; font-display: swap; src: url('./assets/fonts/fraunces-400-italic-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 
@@ -53,7 +53,7 @@ button, summary, [role="button"] { transition: filter .12s ease; }
 button:hover:not(:disabled), summary:hover, a:hover:not(:disabled) { filter: brightness(1.12); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
 textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid #E3A63B; outline-offset: 2px;
+  outline: 2px solid var(--wolfram, #E3A63B); outline-offset: 2px; /* C3: folgt dem aktiven Theme */
 }
 button:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -256,7 +256,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     position: fixed; top: 50%; left: 0; right: auto; transform: translateY(-50%);
     z-index: 62; width: 25px; height: 78px; min-height: 78px; padding: 0;
     margin-left: env(safe-area-inset-left);
-    background: #E3A63B; color: #141414; border: none; border-radius: 0 10px 10px 0;
+    background: var(--wolfram, #E3A63B); color: #141414; border: none; border-radius: 0 10px 10px 0; /* C3: folgt dem aktiven Theme */
     box-shadow: 2px 0 12px rgba(0,0,0,0.4); cursor: pointer;
   }
   .kd-navband i { display: block; width: 9px; height: 2px; border-radius: 1px; background: rgba(20,20,20,0.55); }
@@ -385,6 +385,152 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-teppich-oeffnung, .kd-teppich-karte { transition: none !important; }
 }
 
+/* ================= B4-EGG: STAR-WARS-CRAWL (Klaatu bleibt der Nachbar unten) =================
+   Vollbild-Weltraum-Overlay (nur PERSONAL_MODE gemountet). Klassischer gelber Opening-
+   Crawl: Sternfeld + Hyperraum-Linien, ein perspektivisch gekipptes Textfeld, das nach
+   oben in die Ferne kriecht. z-index bewusst hoch (über der Mobile-Nav; die Nav ist in
+   .kd-app z-index:1 gefangen, dieses Overlay ist Geschwister davon). Klick/Enter/Space
+   überspringt (role=button am Wurzel-<div>). Nichts Fixes trägt hier einen fixed-Nachfahren
+   der Nav — das Overlay hängt selbst am Viewport. */
+.kd-crawl {
+  position: fixed; inset: 0; z-index: 11500; overflow: hidden; cursor: pointer;
+  background: radial-gradient(120% 90% at 50% 42%, #05060c 0%, #010103 62%, #000 100%);
+  color: #FFE81F; user-select: none; -webkit-tap-highlight-color: transparent;
+  animation: kd-crawl-auf .6s ease both;
+}
+@keyframes kd-crawl-auf { from { opacity: 0; } to { opacity: 1; } }
+.kd-crawl-stars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0;
+  animation: kd-crawl-funkeln 6.5s ease-in-out infinite; }
+.kd-crawl-stars circle { fill: #ffffff; }
+@keyframes kd-crawl-funkeln { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
+.kd-crawl-hyperspace { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: .5;
+  animation: kd-crawl-sprung 7s ease-in-out infinite; transform-origin: 50% 50%; }
+.kd-crawl-hyperspace line { stroke: rgba(150,190,255,.35); stroke-width: 1.4; }
+@keyframes kd-crawl-sprung { 0%, 100% { opacity: .28; transform: scale(1); } 50% { opacity: .6; transform: scale(1.06); } }
+/* Ferne Horizontglut am Fluchtpunkt (oben Mitte), in die der Text hineinkriecht. */
+.kd-crawl-horizont { position: absolute; top: 0; left: 0; right: 0; height: 46%; z-index: 1; pointer-events: none;
+  background: radial-gradient(120% 100% at 50% 0%, rgba(255,232,31,.10) 0%, rgba(255,232,31,.02) 40%, transparent 70%); }
+/* Perspektiv-Bühne: der gekippte Plane liegt am unteren Rand, der Text schiebt sich
+   nach oben in die Tiefe; Maske blendet ihn am Fluchtpunkt aus. */
+.kd-crawl-stage {
+  position: absolute; inset: 0; z-index: 2; overflow: hidden;
+  perspective: 340px; perspective-origin: 50% 44%;
+  -webkit-mask-image: linear-gradient(to top, #000 34%, rgba(0,0,0,.9) 52%, transparent 88%);
+          mask-image: linear-gradient(to top, #000 34%, rgba(0,0,0,.9) 52%, transparent 88%);
+}
+.kd-crawl-plane {
+  position: absolute; left: 50%; bottom: -6%; width: min(92vw, 720px);
+  transform-origin: 50% 100%; transform: translateX(-50%) rotateX(50deg);
+  will-change: transform;
+}
+.kd-crawl-copy {
+  transform-origin: 50% 100%; text-align: center;
+  animation: kd-crawl-lauf 56s linear both;
+}
+@keyframes kd-crawl-lauf { from { transform: translateY(80vh); } to { transform: translateY(-268vh); } }
+.kd-crawl-episode {
+  font-family: 'Space Mono', monospace; font-weight: 700;
+  font-size: clamp(13px, 3.4vw, 21px); letter-spacing: .28em; text-transform: uppercase;
+  margin: 0 0 10px; opacity: .92;
+}
+.kd-crawl h2 {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+  font-size: clamp(38px, 12vw, 96px); line-height: .92; letter-spacing: .04em; text-transform: uppercase;
+  margin: 0 0 30px; text-shadow: 0 0 18px rgba(255,232,31,.28);
+}
+.kd-crawl-intro, .kd-crawl-match, .kd-crawl-leer {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 600;
+  font-size: clamp(20px, 5vw, 33px); line-height: 1.32; letter-spacing: .015em;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+.kd-crawl-intro { margin: 0 0 26px; text-align: justify; }
+.kd-crawl-matches { display: flex; flex-direction: column; gap: 16px; }
+.kd-crawl-match { margin: 0; }
+.kd-crawl-match strong { display: block; font-weight: 700; letter-spacing: .02em; }
+.kd-crawl-match span {
+  font-family: 'Space Mono', monospace; font-weight: 400;
+  font-size: clamp(12px, 3vw, 18px); letter-spacing: .04em; opacity: .82; text-transform: uppercase;
+}
+.kd-crawl-leer { margin: 0; opacity: .85; font-style: italic; }
+.kd-crawl-skip {
+  position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); z-index: 3;
+  text-align: center; font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .22em;
+  text-transform: uppercase; color: rgba(255,232,31,.55); pointer-events: none;
+  animation: kd-crawl-blink 2.4s ease-in-out infinite;
+}
+@keyframes kd-crawl-blink { 0%, 100% { opacity: .3; } 50% { opacity: .8; } }
+/* Reduced-Motion (Klasse kd-crawl-reduced ODER System-Präferenz): KEIN Kriechen,
+   kein Kippen, kein Funkeln — der Text steht ruhig und voll lesbar in einem
+   scrollbaren, oben-ausgerichteten Panel. */
+.kd-crawl-reduced .kd-crawl-stars,
+.kd-crawl-reduced .kd-crawl-hyperspace,
+.kd-crawl-reduced .kd-crawl-skip { animation: none !important; }
+.kd-crawl-reduced .kd-crawl-stage {
+  -webkit-mask-image: none; mask-image: none; perspective: none;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  display: flex; justify-content: center; align-items: flex-start; padding: 8vh 7vw 12vh;
+}
+.kd-crawl-reduced .kd-crawl-plane {
+  position: relative; left: auto; bottom: auto; transform: none; width: min(92vw, 640px);
+}
+.kd-crawl-reduced .kd-crawl-copy { animation: none !important; transform: none !important; text-align: left; }
+.kd-crawl-reduced .kd-crawl-intro { text-align: left; }
+@media (prefers-reduced-motion: reduce) {
+  .kd-crawl-stars, .kd-crawl-hyperspace, .kd-crawl-skip, .kd-crawl { animation: none !important; }
+  .kd-crawl-copy { animation: none !important; transform: none !important; text-align: left; }
+  .kd-crawl-plane { position: relative; left: auto; bottom: auto; transform: none; width: min(92vw, 640px); }
+  .kd-crawl-stage {
+    -webkit-mask-image: none; mask-image: none; perspective: none;
+    overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; padding: 8vh 7vw 12vh;
+  }
+  .kd-crawl-intro { text-align: left; }
+}
+
+/* ================= B4-EGG: KLAATU → NECRONOMICON (Buch der Toten) =================
+   Dekorativer Buch-/Haut-Rahmen ums Viewport, im Blog eingeblendet (7 s, selbst-
+   abklingend). aria-hidden + pointer-events:none → verdeckt/blockiert den Blog NICHT,
+   nur ein Rand. Fleischiger Deckel = solider Innenrahmen (box-shadow) + verzerrter
+   Leder-Randstrich (SVG-Haut mit feDisplacement) + Nähte/Runen/Schrei-Gesicht; unten
+   die Kettensäge (Evil Dead). Bewusst KEIN transform/filter auf .kd-necro-rand selbst,
+   damit keine fixed-Nachfahren umgehängt werden (Containing-Block-Falle der Nav). */
+.kd-necro-rand {
+  position: fixed; inset: 0; z-index: 8000; pointer-events: none;
+  box-shadow:
+    inset 0 0 0 9px #3a0f12,
+    inset 0 0 0 17px #6d2a24,
+    inset 0 0 44px 14px rgba(8,2,3,.82),
+    inset 0 0 130px 30px rgba(24,7,9,.34);
+  animation: kd-necro-ein .9s ease both;
+}
+@keyframes kd-necro-ein { from { opacity: 0; } to { opacity: 1; } }
+.kd-necro-haut {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  filter: saturate(1.05) contrast(1.06);
+  animation: kd-necro-atem 5.5s ease-in-out infinite;
+}
+@keyframes kd-necro-atem { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }
+/* Kante als dicker, per feDisplacement verzerrter Lederstrich am Rand — als Fläche
+   gefüllt würde die geschlossene Perimeter-Kontur die Mitte decken; darum fill:none. */
+.kd-necro-kante { fill: none; stroke: #7c2f28; stroke-width: 34; stroke-linejoin: round; opacity: .9; }
+.kd-necro-naht { fill: none; stroke: #e6d3a6; stroke-width: 2.4; stroke-linecap: round; opacity: .48; }
+.kd-necro-runen { fill: #caa14b; opacity: .55; }
+.kd-necro-gesicht { fill: #23090b; stroke: #9a5a3a; stroke-width: 1.6; stroke-linejoin: round; opacity: .82; }
+.kd-necro-gesicht path:first-of-type { fill: #3a1512; }
+.kd-necro-chainsaw {
+  position: absolute; z-index: 2; left: clamp(10px, 4vw, 44px); bottom: clamp(14px, 4vh, 46px);
+  width: clamp(148px, 34vw, 250px); height: auto;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,.6));
+  transform-origin: 30% 60%; animation: kd-necro-saege .16s linear infinite;
+}
+@keyframes kd-necro-saege { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(1px, -1px) rotate(.6deg); } }
+.kd-necro-saegeblatt { fill: #7d8288; stroke: #23262a; stroke-width: 2; }
+.kd-necro-zaehne { fill: none; stroke: #d7dbde; stroke-width: 2; stroke-linejoin: round; }
+.kd-necro-motor { fill: #7a2a1f; stroke: #250c0a; stroke-width: 2; }
+.kd-necro-griff { fill: none; stroke: #d8cdbf; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.kd-necro-niete { fill: #e7dccb; }
+@media (prefers-reduced-motion: reduce) {
+  .kd-necro-rand, .kd-necro-haut, .kd-necro-chainsaw { animation: none !important; }
+}
 /* ================= START-DASHBOARD (Marquee-Rework, 2026-07-19) =================
    Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
    die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/nerv;
