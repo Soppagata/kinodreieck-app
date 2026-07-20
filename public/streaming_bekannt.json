@@ -1,5 +1,5 @@
 {
- "stand": "2026-07-18T11:54:39.131Z",
+ "stand": "2026-07-20T12:58:05.735Z",
  "region": "AT",
  "dienste": [
   "Netflix",
@@ -166,8 +166,8 @@
    "typ": "sub"
   }
  ],
- "katalog_stand": "2026-07-15T11:29:18.087Z",
- "quota_nach_lauf": 214,
+ "katalog_stand": "2026-07-20T11:04:58.710Z",
+ "quota_nach_lauf": 262,
  "heuristik": true,
  "naechster_reset": "2026-08-11",
  "letzter_voll_lauf": "2026-07-11T22:42:35.244Z",
@@ -204,37 +204,6 @@
    "bewertet_von": "claude",
    "must_watch": false,
    "quelle": "prime"
-  },
-  {
-   "id": "akira_1988",
-   "titel": "Akira",
-   "jahr": 1988,
-   "watchmode_id": 120219,
-   "dienste": [
-    "Netflix"
-   ],
-   "web_urls": {
-    "Netflix": "https://www.netflix.com/title/60021103",
-    "Amazon": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.26e4fe65-ab18-48ea-8cab-cec0372c2a74",
-    "AppleTV": "https://tv.apple.com/at/movie/akira/umc.cmc.1qw1vvytz94vebdipefc4y3ey?at=1000l3V2&ct=app_tv&itscg=30200&itsct=&playableId=tvs.sbd.9001%3A929218948",
-    "Rakuten TV": "https://www.rakuten.tv/at/movies/akira",
-    "Sky Store": "https://store.sky.at/product/akira/f92c0cb6-ecc5-468f-8036-26225d818fff"
-   },
-   "bewertung": {
-    "wie": 5,
-    "was": 3,
-    "warum": 4
-   },
-   "kategorie": "immer_gut",
-   "begruendung": "Animations-Referenz schlechthin: Neo-Tokyo, der Motorrad-Slide, die Detailversessenheit jedes Frames — Cyberpunk-Ästhetik auf bis heute unerreichtem Niveau. Die Story wird im letzten Drittel verworren (Manga-Kompressionsproblem), aber die Bilder rechtfertigen alles.",
-   "genre": [
-    "anime",
-    "sci-fi",
-    "action"
-   ],
-   "bewertet_von": "claude",
-   "must_watch": false,
-   "quelle": "dvd+apple"
   },
   {
    "id": "alien_1979",
@@ -860,6 +829,40 @@
    "bewertet_von": "max",
    "must_watch": false,
    "quelle": "dvd+apple"
+  },
+  {
+   "id": "final_destination_2000",
+   "titel": "Final Destination",
+   "jahr": 2000,
+   "watchmode_id": 1133423,
+   "dienste": [
+    "Prime Video"
+   ],
+   "web_urls": {
+    "Sky Go": "https://www.sky.at/produkte/sky-go-158150",
+    "HBO Max": "https://www.hbomax.com/at/en/movies/final-destination/0ae3ced5-06ed-444d-b29f-4157e7871fa1",
+    "Max (Via Amazon Prime)": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.43e03643-4399-4d07-a78e-323ab09ed820",
+    "Prime Video": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.43e03643-4399-4d07-a78e-323ab09ed820",
+    "AppleTV": "https://tv.apple.com/at/movie/final-destination/umc.cmc.375wggjet2bgi387e9u6k5d3m?at=1000l3V2&ct=app_tv&itscg=30200&itsct=&playableId=tvs.sbd.9001%3A636490259",
+    "Amazon": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.43e03643-4399-4d07-a78e-323ab09ed820",
+    "Rakuten TV": "https://www.rakuten.tv/at/movies/final-destination",
+    "Sky Store": "https://store.sky.at/product/final-destination/7ce92eff-f055-4816-a28d-4fb6dd288d6a",
+    "maxdome Store": "https://store.maxdome.at/mo40280115"
+   },
+   "bewertung": {
+    "wie": 2,
+    "was": 2,
+    "warum": 4
+   },
+   "kategorie": "daemlich_aber_herrlich",
+   "begruendung": "Konzept schlägt Figuren: Der Tod als unsichtbarer Rube-Goldberg-Ingenieur — jede Alltagsszene wird zur Gefahrenanalyse. Genau ein Trick, aber der funktioniert. 2000er-Teenie-Horror mit bleibendem Popkultur-Effekt (Holztransporter!).",
+   "genre": [
+    "horror",
+    "thriller"
+   ],
+   "bewertet_von": "claude",
+   "must_watch": false,
+   "quelle": null
   },
   {
    "id": "from_dusk_till_dawn_1996",
@@ -1883,6 +1886,30 @@
    "quelle": null
   },
   {
+   "id": "pulp_fiction_1994",
+   "titel": "Pulp Fiction",
+   "jahr": 1994,
+   "watchmode_id": 1310542,
+   "dienste": [
+    "Prime Video"
+   ],
+   "web_urls": {},
+   "bewertung": {
+    "wie": 3,
+    "was": 3,
+    "warum": 5
+   },
+   "kategorie": "immer_gut",
+   "begruendung": "Popkultur-Gravitationszentrum der 90er: Dialoge, Struktur, Soundtrack, Tanzszene — tausendfach kopiert, nie erreicht. Auch beim x-ten Mal noch Sog. Der Tarantino-Einstieg.",
+   "genre": [
+    "crime",
+    "komödie"
+   ],
+   "bewertet_von": "claude",
+   "must_watch": false,
+   "quelle": null
+  },
+  {
    "id": "raiders_of_the_lost_ark_1981",
    "titel": "Raiders of the Lost Ark",
    "jahr": 1981,
@@ -2418,41 +2445,6 @@
    "bewertet_von": "claude",
    "must_watch": false,
    "quelle": "dvd"
-  },
-  {
-   "id": "the_dark_knight_2008",
-   "titel": "The Dark Knight",
-   "jahr": 2008,
-   "watchmode_id": 1386160,
-   "dienste": [
-    "Prime Video"
-   ],
-   "web_urls": {
-    "HBO Max": "https://www.hbomax.com/at/en/movies/dark-knight/52217243-a137-45d6-9c6a-0dfab4633034",
-    "Prime Video": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.4aa9f68b-5e9d-1955-a451-d4d0087ef56c",
-    "Max (Via Amazon Prime)": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.4aa9f68b-5e9d-1955-a451-d4d0087ef56c",
-    "RTL+": "https://plus.rtl.de/video-tv/filme/the-dark-knight-1029049",
-    "Amazon": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.4aa9f68b-5e9d-1955-a451-d4d0087ef56c",
-    "AppleTV": "https://tv.apple.com/at/movie/the-dark-knight/umc.cmc.1uf4c3neuc9yxhnjv7t4rd5wa?at=1000l3V2&ct=app_tv&itscg=30200&itsct=&playableId=tvs.sbd.9001%3A308223159",
-    "Rakuten TV": "https://www.rakuten.tv/at/movies/the-dark-knight",
-    "Sky Store": "https://store.sky.at/product/the-dark-knight/0963d84a-22b1-4ec8-aa45-8e978ac2861c",
-    "maxdome Store": "https://store.maxdome.at/mo40078056"
-   },
-   "bewertung": {
-    "wie": 3,
-    "was": 4,
-    "warum": 4
-   },
-   "kategorie": "kult",
-   "begruendung": "Der letzte gute DC-Film. Ledgers Joker als Popkultur-Ereignis: Chaos-Prinzip gegen Ordnung, Truck-Flip in echt, IMAX-Ernst. Nolan macht den Comic-Film gesellschaftsfähig — Pflicht im Superhelden-Kanon.",
-   "genre": [
-    "superheldenfilm",
-    "crime",
-    "action"
-   ],
-   "bewertet_von": "claude",
-   "must_watch": false,
-   "quelle": "dvd+prime"
   },
   {
    "id": "the_fast_and_the_furious_tokyo_drift_2006",
