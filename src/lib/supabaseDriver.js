@@ -371,6 +371,81 @@ export function syncStatus() {
   };
 }
 
+/* ============================================================
+   Shared-Blogs ("Blogs für alle", scope=shared) — Folge-Feature.
+   Ein publizierter Blog ist EINE Zeile:
+     owner=<Autor-Owner>, key="kd:blog:<artikelId>", scope="shared",
+     author=<Anzeigename>, value=<Artikel-JSON OHNE lokale refs>.
+   - Lesen ist offen (anon, KEIN Sync-Schlüssel) — RLS-Policy sel_shared.
+   - Schreiben/Löschen nur der Autor: x-kd-key bindet via kd_key_ok(owner).
+   - Lokale Mediathek-refs werden NICHT publiziert; sie sind pro Nutzer und
+     werden beim Ziehen gegen DIE EIGENE Masterliste neu aufgelöst (Rotlinks).
+   ============================================================ */
+const BLOG_PREFIX = "kd:blog:";
+export function blogKey(artikelId) { return BLOG_PREFIX + artikelId; }
+
+/* Nur die teilbaren Felder serialisieren — lokale refs bewusst weglassen. */
+function blogValue(artikel) {
+  return JSON.stringify({
+    id: artikel.id, titel: artikel.titel, autor: artikel.autor, text: artikel.text,
+    geordnet: !!artikel.geordnet, erstellt_am: artikel.erstellt_am || null,
+    liste: (artikel.liste || []).map((le) => ({
+      eingabe: le.eingabe, jahr: le.jahr == null ? null : le.jahr, typ: le.typ || null,
+    })),
+  });
+}
+
+/* Eigenen Blog veröffentlichen/aktualisieren (Upsert auf PK owner,key). */
+export async function publishBlog(artikel) {
+  if (!isSupabaseConfigured()) return { ok: false, message: "Kein Sync-Schlüssel — Veröffentlichen braucht den eingeloggten Autor." };
+  const c = getSupabaseConfig();
+  const r = await sbFetch("POST", `/${TABLE}`, {
+    body: { owner: c.owner, key: blogKey(artikel.id), value: blogValue(artikel), scope: "shared", author: artikel.autor || c.owner },
+    withKey: true, prefer: "resolution=merge-duplicates,return=representation",
+  });
+  if ((r.status === 200 || r.status === 201) && Array.isArray(r.data)) { setStatus({ lastCommit: nowIso() }); return { ok: true, status: r.status }; }
+  return { ok: false, status: r.status, message: deutung(r.status, r.data) };
+}
+
+/* Eigenen Blog aus dem geteilten Ordner entfernen (Autor-Delete = DB-weit).
+   Fremde, bereits lokal gezogene Kopien bleiben — sie räumt deren Start-Abgleich. */
+export async function unpublishBlog(artikelId) {
+  if (!isSupabaseConfigured()) return { ok: false, message: "Kein Sync-Schlüssel." };
+  const c = getSupabaseConfig();
+  const r = await sbFetch("DELETE", `/${TABLE}?owner=eq.${q(c.owner)}&key=eq.${q(blogKey(artikelId))}`, { withKey: true });
+  if (r.ok || r.status === 204) return { ok: true, status: r.status };
+  return { ok: false, status: r.status, message: deutung(r.status, r.data) };
+}
+
+/* Alle geteilten Blogs lesen — offener anon-Read (kein Schlüssel). Speist
+   "Blogs entdecken" UND die Start-Reconciliation. Normalisierte Einträge:
+   { db_owner, db_key, author, updated_at, artikel }. */
+export async function ladeSharedBlogs() {
+  const c = getSupabaseConfig();
+  const url = (c.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
+  const anon = c.anon || SB_DEFAULT_ANON || "";
+  if (!/^https?:\/\//.test(url) || !anon) return { ok: false, blogs: [], message: "nicht konfiguriert" };
+  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
+  try {
+    const res = await fetch(url + "/rest/v1/" + TABLE + "?scope=eq.shared&select=owner,key,value,author,updated_at", {
+      headers: { "apikey": anon, "Authorization": "Bearer " + anon },   // KEIN x-kd-key: offener Read
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    let data = null; try { data = await res.json(); } catch { /* leerer Body */ }
+    if (!res.ok || !Array.isArray(data)) return { ok: false, blogs: [], status: res.status };
+    const blogs = [];
+    for (const row of data) {
+      if (!row || typeof row.key !== "string") continue;
+      let artikel = null; try { artikel = JSON.parse(row.value); } catch { continue; }
+      if (!artikel || !artikel.titel) continue;
+      blogs.push({ db_owner: row.owner, db_key: row.key, author: row.author || artikel.autor || row.owner, updated_at: row.updated_at || null, artikel });
+    }
+    return { ok: true, blogs };
+  } catch (e) { return { ok: false, blogs: [], error: String(e) }; }
+  finally { if (timer) clearTimeout(timer); }
+}
+
 /* ---------- Treiber-Fassade (implementiert die store-Signatur) ---------- */
 export const supabaseDriver = {
   name: "supabase",

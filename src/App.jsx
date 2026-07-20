@@ -25,11 +25,11 @@ import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { store, K, PROGRAMM_TTL_MS, getTreiber } from "./lib/storage.js";
 import { baueBackup } from "./lib/backup.js";
-import { ladeDemoBlobs } from "./lib/supabaseDriver.js";
+import { ladeDemoBlobs, publishBlog, unpublishBlog, ladeSharedBlogs } from "./lib/supabaseDriver.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
-import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks } from "./lib/artikel.js";
+import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, reconcileGezogene } from "./lib/artikel.js";
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen, filmHerkunft } from "./lib/finder.js";
 import { sichtbareDienste } from "./lib/dienste.js";
@@ -810,12 +810,62 @@ export default function App() {
   }, [persistArtikel]);
 
   const freigebeArtikel = useCallback((id) => {
-    setArtikelListe((prev) => { const next = prev.map((a) => (a.id === id ? { ...a, status: "freigegeben" } : a)); persistArtikel(next); return next; });
+    setArtikelListe((prev) => {
+      const next = prev.map((a) => (a.id === id ? { ...a, status: "freigegeben" } : a));
+      persistArtikel(next);
+      // Bei Freigabe den DB-Ordner mit dem "geteilt"-Schalter synchronisieren.
+      // Gezogene Fremd-Blogs werden nie (re-)publiziert.
+      const art = next.find((a) => a.id === id);
+      if (art && art.herkunft !== "gezogen") {
+        if (art.geteilt) publishBlog(art).then((r) => { if (!r.ok) setErr("Veröffentlichen fehlgeschlagen: " + (r.message || r.status || "")); });
+        else unpublishBlog(art.id).catch(() => {});   // war evtl. geteilt -> idempotent aus DB nehmen
+      }
+      return next;
+    });
   }, [persistArtikel]);
 
   const loescheArtikel = useCallback((id) => {
-    setArtikelListe((prev) => { const next = prev.filter((a) => a.id !== id); persistArtikel(next); return next; });
+    setArtikelListe((prev) => {
+      const art = prev.find((a) => a.id === id);
+      // Eigener geteilter Blog: auch aus dem DB-Ordner (Autor-Delete). Gezogener: nur lokal.
+      if (art && art.geteilt && art.herkunft !== "gezogen") unpublishBlog(art.id).catch(() => {});
+      const next = prev.filter((a) => a.id !== id);
+      persistArtikel(next);
+      return next;
+    });
   }, [persistArtikel]);
+
+  /* Einen geteilten Blog in die eigene Mediathek ziehen: lokale Kopie mit Herkunft,
+     Referenzen gegen die eigene Master neu aufgelöst (fehlende = Rotlink). */
+  const zieheSharedBlog = useCallback((sharedBlog) => {
+    let neueId = null;
+    setArtikelListe((prev) => {
+      const art = blogZuArtikel(sharedBlog, prev, refUniversum);
+      neueId = art.id;
+      const next = [...prev, art];
+      persistArtikel(next);
+      return next;
+    });
+    return neueId;
+  }, [refUniversum, persistArtikel]);
+
+  /* Start-Reconciliation: gezogene Blogs gegen den DB-Ordner abgleichen. Läuft nach
+     dem Boot; verschwundene Originale (der Autor hat gelöscht) fliegen still raus.
+     Selbst geschriebene und importierte Artikel bleiben unberührt. */
+  useEffect(() => {
+    if (!bootDone) return;
+    let abbruch = false;
+    ladeSharedBlogs().then((r) => {
+      if (abbruch || !r.ok) return;
+      const keys = new Set((r.blogs || []).map((b) => b.db_owner + "|" + b.db_key));
+      setArtikelListe((prev) => {
+        const [next, entfernt] = reconcileGezogene(prev, keys);
+        if (entfernt > 0) persistArtikel(next);
+        return next;
+      });
+    }).catch(() => {});
+    return () => { abbruch = true; };
+  }, [bootDone, persistArtikel]);
 
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
@@ -1598,6 +1648,7 @@ export default function App() {
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
             onAddFilm={addFilm} onSpringeZuFilm={springeZuFilm}
             exportArtikel={exportArtikel} importArtikel={importArtikel}
+            onZiehe={zieheSharedBlog}
           />
         )}
 

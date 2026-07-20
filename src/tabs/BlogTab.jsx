@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
+import { ladeSharedBlogs } from "../lib/supabaseDriver.js";
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
@@ -23,6 +24,8 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [autor, setAutor] = useState(vorlage ? vorlage.autor : "Max");
   const [text, setText] = useState(vorlage ? vorlage.text : "");
   const [geordnet, setGeordnet] = useState(vorlage ? !!vorlage.geordnet : false);
+  const gezogen = !!(vorlage && vorlage.herkunft === "gezogen");
+  const [geteilt, setGeteilt] = useState(vorlage ? !!vorlage.geteilt : false);
   const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ || "" })) : []);
   const [fehler, setFehler] = useState("");
 
@@ -41,6 +44,12 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
         <input type="checkbox" checked={geordnet} onChange={() => setGeordnet(!geordnet)} />
         Liste ist eine Reihenfolge (nummeriert — z.B. Watch-Order) statt einer Sammlung
       </label>
+      {!gezogen && (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.wolfram, cursor: "pointer" }}>
+          <input type="checkbox" checked={geteilt} onChange={() => setGeteilt(!geteilt)} />
+          Shared — bei Freigabe im geteilten Ordner „Blogs für alle“ veröffentlichen
+        </label>
+      )}
       <div style={mono}>Referenzen ({liste.length}/{MAX_LISTE}) — Titel Pflicht, Typ/Jahr optional. Der Abgleich läuft nach „Erstellen“.</div>
       {liste.map((z, i) => (
         <div key={i} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
@@ -64,7 +73,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
           const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
             eingabe: z.eingabe.trim(), jahr: z.jahr ? Number(z.jahr) : null, typ: z.typ || null, ref: null,
           }));
-          onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, liste: l });
+          onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
         }}>{vorlage ? "Speichern & neu abgleichen" : "Erstellen"}</button>
         <button style={btnStyle(false)} onClick={onAbbrechen}>Abbrechen</button>
       </div>
@@ -232,10 +241,91 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
   );
 }
 
+/* ---------- "Blogs entdecken": geteilte Blogs aus dem DB-Ordner ---------- */
+function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
+  const [zustand, setZustand] = useState({ lade: true, fehler: "", blogs: [] });
+  const [offen, setOffen] = useState(null);            // aufgeklappter Blog-Key
+  const [gezogenLokal, setGezogenLokal] = useState({}); // frisch gezogene (key -> true)
+
+  useEffect(() => {
+    let ab = false;
+    ladeSharedBlogs().then((r) => {
+      if (ab) return;
+      if (!r.ok) setZustand({ lade: false, fehler: r.message || "Konnte den geteilten Ordner nicht laden — ist der Sync eingerichtet?", blogs: [] });
+      else setZustand({ lade: false, fehler: "", blogs: r.blogs || [] });
+    }).catch((e) => { if (!ab) setZustand({ lade: false, fehler: String(e), blogs: [] }); });
+    return () => { ab = true; };
+  }, []);
+
+  const schonLokal = useMemo(() => {
+    const s = new Set();
+    for (const a of vorhandene || []) if (a.herkunft === "gezogen" && a.db_key) s.add((a.db_owner || "") + "|" + a.db_key);
+    return s;
+  }, [vorhandene]);
+
+  return (
+    <section>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+        <h2 style={{ ...h2, margin: 0 }}>Blogs entdecken{zustand.blogs.length ? " (" + zustand.blogs.length + ")" : ""}</h2>
+        <button style={btnStyle(false)} onClick={onZurueck}>← Blog</button>
+      </div>
+      {zustand.lade && <p style={{ color: T.rauch, fontSize: 14 }}>Lade geteilte Blogs …</p>}
+      {zustand.fehler && <p style={{ color: T.gefahr, fontSize: 13 }}>{zustand.fehler}</p>}
+      {!zustand.lade && !zustand.fehler && zustand.blogs.length === 0 && (
+        <p style={{ color: T.rauch, fontSize: 14 }}>Noch keine geteilten Blogs im Ordner.</p>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {zustand.blogs.map((b) => {
+          const key = (b.db_owner || "") + "|" + b.db_key;
+          const q = b.artikel || {};
+          const auf = offen === key;
+          const drin = schonLokal.has(key) || !!gezogenLokal[key];
+          return (
+            <div key={key} style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px" }}>
+              <div onClick={() => setOffen(auf ? null : key)} style={{ cursor: "pointer" }}>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 19, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                  {q.titel || "(ohne Titel)"}
+                </div>
+                <div style={{ ...mono, marginTop: 3 }}>
+                  {b.author}{b.updated_at ? " · " + String(b.updated_at).slice(0, 10) : ""} · {(q.liste || []).length} Referenzen{drin ? " · in deiner Mediathek" : ""}
+                </div>
+              </div>
+              {auf && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, lineHeight: 1.7 }}>
+                    {(q.text || "").split(/\n\s*\n/).map((abs, i) => <p key={i} style={{ margin: "0 0 12px" }}>{abs}</p>)}
+                  </div>
+                  {(q.liste || []).length > 0 && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                      {q.liste.map((le, i) => (
+                        <span key={i} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, padding: "2px 7px", borderRadius: 3, border: "1px solid " + T.rauch, color: T.rauch }}>
+                          {le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", opacity: drin ? 0.5 : 1, cursor: drin ? "default" : "pointer" }}
+                      disabled={drin}
+                      onClick={() => { onZiehe(b); setGezogenLokal((g) => ({ ...g, [key]: true })); }}>
+                      {drin ? "✓ In deiner Mediathek" : "In meine Mediathek ziehen"}
+                    </button>
+                    <span style={mono}>Referenzen, die du nicht hast, werden zu Rotlinks.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* ---------- Haupt-Tab ---------- */
 export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm,
-  exportArtikel, importArtikel }) {
+  exportArtikel, importArtikel, onZiehe }) {
   const [ansicht, setAnsicht] = useState({ typ: "liste" });
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
   const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
@@ -278,6 +368,9 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       onBearbeiten={(id) => setAnsicht({ typ: "maske", id })}
       onSpringeZuFilm={onSpringeZuFilm} onAddFilm={onAddFilm} onSetzeRef={onSetzeRef} />;
   }
+  if (ansicht.typ === "entdecken") {
+    return <EntdeckenAnsicht vorhandene={artikel} onZiehe={onZiehe} onZurueck={() => setAnsicht({ typ: "liste" })} />;
+  }
 
   /* Liste — der Hub: Karten klappen auf (Auszug + Referenz-Chips), erst der
      zweite Klick öffnet Lesen/Abgleich. Hält den Bereich bei vielen Artikeln
@@ -286,7 +379,10 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
     <section>
       <div data-tour="blog" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
         <h2 style={{ ...h2, margin: 0 }}>Blog ({artikel.length})</h2>
-        <button style={btnStyle(true)} onClick={() => setAnsicht({ typ: "maske" })}>+ Neuer Artikel</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button style={btnStyle(false)} onClick={() => setAnsicht({ typ: "entdecken" })}>Blogs entdecken</button>
+          <button style={btnStyle(true)} onClick={() => setAnsicht({ typ: "maske" })}>+ Neuer Artikel</button>
+        </div>
       </div>
       {artikel.length === 0 && (
         <p style={{ color: T.rauch, fontSize: 14 }}>Noch keine Artikel. „+ Neuer Artikel“ — der Abgleich mit der Mediathek läuft nach dem Erstellen automatisch.</p>
