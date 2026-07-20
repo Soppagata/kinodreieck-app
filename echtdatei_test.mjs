@@ -199,12 +199,12 @@ check("Über-Einstieg unter Über & Rechtliches vorhanden", !!ueberKnopf);
 if (ueberKnopf) {
   ueberKnopf.click(); await warte(400);
   check("Über: Hero + Dreieck-Erklärstück erscheinen", /LOKALE FILM-PLATTFORM/.test(text()) && /Deine Filme, dein Kino, dein Urteil/.test(text())
-    && /Wie ist es gemacht\?/.test(text()) && /Was erzählt es\?/.test(text()) && /Warum gerade für dich\?/.test(text()));
+    && /Wie ist es gemacht\?/.test(text()) && /Was erzählt es\?/.test(text()) && /Warum sollte man ihn gesehen haben\?/.test(text()));
   const dokuKnopf = knopf(/Anleitung & Hilfe öffnen/i);
   check("Über: Doku-Knopf vorhanden", !!dokuKnopf);
   if (dokuKnopf) {
     dokuKnopf.click(); await warte(300);
-    check("Über: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Die vollständige Anleitung liegt als ANLEITUNG\.md/.test(text()));
+    check("Über: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Datenerfassung läuft außerhalb der PWA/.test(text()));
     const zu = knopf(/Anleitung zuklappen/i);
     if (zu) { zu.click(); await warte(200); }
   }

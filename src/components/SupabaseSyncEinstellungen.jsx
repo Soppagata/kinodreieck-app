@@ -191,7 +191,7 @@ export function SupabaseSyncEinstellungen({ ohneKopf = false } = {}) {
         /* ---- VERBUNDEN: schlank ---- */
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, color: T.leinwand }}>
-            <span aria-hidden="true" style={{ color: "#6fce8f" }}>✓</span>
+            <span aria-hidden="true" style={{ color: T.ok }}>✓</span>
             <span>Verbunden mit der Datenbank</span>
           </div>
           <div style={{ ...mono, margin: "4px 0 12px" }}>owner: {owner || "—"} · Sync-Schlüssel auf diesem Gerät hinterlegt</div>

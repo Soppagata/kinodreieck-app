@@ -160,8 +160,10 @@ async function demoLadung() {
     herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null },
   };
 }
-/* Streaming-Entdecken-Beilage (VOLLER Katalog) laden — file://-tauglich, optional.
-   Fehlt sie, wird null geliefert (App fällt auf die eingebackenen Top 500 zurück).
+/* Legacy-Beilage für die alte Single-File-/file://-Ausgabe laden, optional.
+   Die gehostete PWA lädt zuerst public/streaming_entdecken.json; dieser Sidecar-Pfad
+   bleibt nur für alte Kinodreieck.html-Pakete bestehen und wird dort von
+   build_streaming_ansicht.js erzeugt. Fehlt er, greift der eingebettete Snapshot.
    Tests setzen window.__KD_STREAMING_ENTDECKEN__ direkt. */
 let entdeckenBeilagePromise = null;
 function ladeEntdeckenBeilage() {
@@ -271,7 +273,7 @@ export default function App() {
     try { await store.set(K.zeitgrenze, v); } catch { /* nicht fatal */ }
   }, []);
 
-  /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Kurosawa ----
+  /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Darstellungsmodus ----
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
   const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
@@ -283,8 +285,8 @@ export default function App() {
       return next;
     });
   }, []);
-  /* ---- Darstellungs-Modi: Saal/Foyer/Kurosawa/Grindhouse in EINER Gruppe.
-     Der Modus erzwingt sein Theme (Kurosawa->hell, Grindhouse->dunkel),
+  /* ---- Darstellungs-Modi: Saal/Foyer/Showa/NERV in EINER Gruppe.
+     Die Spezialmodi erzwingen jeweils ihr dunkles Theme;
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
   const modusWrapRef = useRef(null);
   const waehleModus = useCallback((wahl) => {
@@ -1691,7 +1693,7 @@ export default function App() {
         )}
 
         {bootDone && loading === "programm" && !progStand && (
-          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 13.5, color: T.leinwandTief, lineHeight: 1.6 }}>
+          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 14, color: T.leinwandTief, lineHeight: 1.6 }}>
             <strong style={{ color: T.wolfram }}>Erststart —</strong> Kinoprogramm und Streaming-Kataloge werden frisch geladen.
             Das kann einen Moment dauern; bitte nicht abbrechen. Die App füllt sich, sobald die Daten da sind.
           </div>

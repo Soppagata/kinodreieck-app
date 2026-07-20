@@ -54,7 +54,7 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
     padding: "16px 18px", margin: "14px 0 0", display: "flex", flexDirection: "column", gap: 8,
   };
   const kTitel = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 19, letterSpacing: "0.05em", textTransform: "uppercase", color: T.leinwand, margin: 0 };
-  const kText = { fontSize: 13.5, color: T.leinwandTief, lineHeight: 1.6, margin: 0 };
+  const kText = { fontSize: 14, color: T.leinwandTief, lineHeight: 1.6, margin: 0 };
 
   return createPortal(
     <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true" aria-label="Wie möchtest du starten?">

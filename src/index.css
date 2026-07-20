@@ -39,8 +39,8 @@ button, summary, [role="button"], .kd-menu { -webkit-tap-highlight-color: transp
   summary { padding: 10px 0; }
 }
 /* ---- Safe-Area (Standalone/Notch/Home-Indikator) ----
-   Inhalt einrücken, Hintergründe/Overlays bleiben full-bleed. Modi (Kurosawa/
-   Grindhouse) setzen eigenes Padding und überschreiben das hier bewusst. */
+   Inhalt einrücken, Hintergründe/Overlays bleiben full-bleed. Die Spezialmodi
+   Showa/NERV setzen eigenes Padding und überschreiben das hier bewusst. */
 .kd-app { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .kd-wrap { padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
 
@@ -97,8 +97,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-showa header h1 { font-family: 'Fraunces', Georgia, serif !important; font-weight: 900 !important;
   letter-spacing: .015em !important; }
 
-/* ---------- NERV — vollständiges Schwarz/Rot-Terminal ---------- */
-.kd-fx-nerv { z-index: 0; --nerv-red:#F0181D; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#FFAE18; --nerv-lime:#D7FF28;
+/* ---------- NERV — vollständiges Schwarz/Rot-Orange-Terminal ---------- */
+.kd-fx-nerv { z-index: 0; --nerv-red:#F04A24; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#FFAE18; --nerv-lime:#D7FF28;
   font-family:'Space Mono', monospace; color:var(--nerv-red); }
 .kd-fx-nerv .kd-scan { position:absolute; inset:0; opacity:.075; mix-blend-mode:multiply;
   background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.62) 3px 4px); }
@@ -111,9 +111,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-battle, .kd-nerv-episode, .kd-nerv-alert, .kd-nerv-micro {
   position:absolute; box-sizing:border-box; background:rgba(5,5,6,.88); text-transform:uppercase; }
 .kd-nerv-battle { top:18px; left:16px; width:250px; min-height:50px; padding:7px 22px 7px 18px;
-  border:1px solid rgba(240,24,29,.72); opacity:.64;
+  border:1px solid rgba(240,74,36,.72); opacity:.64;
   clip-path:polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%); }
-.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(240,24,29,.62);
+.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(240,74,36,.62);
   clip-path:inherit; pointer-events:none; }
 .kd-nerv-battle b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:16px; line-height:1.05; letter-spacing:.08em; }
 .kd-nerv-battle span { display:block; margin-top:4px; color:#E9E4DC; font-size:9px; letter-spacing:.12em; }
@@ -127,7 +127,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-alert b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:24px; line-height:1; writing-mode:vertical-rl; margin:auto; }
 .kd-nerv-alert span { display:block; color:#E9E4DC; font-size:8px; margin-top:5px; letter-spacing:.1em; }
 
-.kd-nerv-episode { top:94px; right:18px; width:156px; min-height:112px; padding:9px 12px; border:1px solid rgba(240,24,29,.72); opacity:.58;
+.kd-nerv-episode { top:94px; right:18px; width:156px; min-height:112px; padding:9px 12px; border:1px solid rgba(240,74,36,.72); opacity:.58;
   clip-path:polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
 .kd-nerv-episode b { display:block; color:var(--nerv-red); font-family:'Hiragino Mincho ProN','Yu Mincho',serif; font-size:42px; line-height:1; }
 .kd-nerv-episode span { display:block; color:#E9E4DC; font-size:8px; margin-top:6px; letter-spacing:.08em; }
@@ -144,11 +144,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-logo { display:block; flex:0 0 auto; width:clamp(52px,4.2vw,56px); aspect-ratio:932/900;
   overflow:hidden; background:#000; }
 .kd-nerv-logo img { display:block; width:100%; height:auto; }
-.kd-nerv header h1 { color:#F0181D !important; letter-spacing:.075em !important; }
-.kd-nerv .kd-menu { border-bottom-color:rgba(240,24,29,.62) !important; }
-.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(240,24,29,.62);
+.kd-nerv header h1 { color:#F04A24 !important; letter-spacing:.075em !important; }
+.kd-nerv .kd-menu { border-bottom-color:rgba(240,74,36,.62) !important; }
+.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(240,74,36,.62);
   clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
-  box-shadow:0 0 0 1px rgba(240,24,29,.12),0 5px 18px rgba(0,0,0,.5) !important; }
+  box-shadow:0 0 0 1px rgba(240,74,36,.12),0 5px 18px rgba(0,0,0,.5) !important; }
 .kd-nerv button, .kd-nerv input, .kd-nerv select, .kd-nerv textarea { border-radius:0 !important; }
 
 /* Glitch (JS-getaktet, mobil weiterhin durch die bestehende Query neutralisiert). */
@@ -199,7 +199,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    damit Verdrahtung/Tests unberührt bleiben. */
 .kd-navband { display: none; }
 .kd-scrim { display: none; }
-/* Z-Ebene der Nav: Desktop 40 (unter der Kurosawa-Letterbox 50), am Handy
+/* Z-Ebene der Nav: Desktop 40 (unter der Showa-Letterbox 50), am Handy
    Scrim 58 < Popup 60 < Griff 62. WICHTIG: bewusst NICHT inline im JSX setzen —
    Inline-Styles schlagen CSS ohne !important; genau das hat den Scrim-Tap-Bug
    erzeugt (Panel effektiv 40 < Scrim 58 → Scrim schluckte jeden Menü-Tap). */

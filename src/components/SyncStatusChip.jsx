@@ -9,7 +9,7 @@ function ableiten(s) {
   if (s.conflict && s.conflict.length) return { farbe: T.gefahr, bg: "rgba(217,106,90,0.14)", text: "Konflikt" };
   if (s.pending && s.pending.length) return { farbe: T.wolfram, bg: "rgba(227,166,59,0.14)", text: "ausstehend " + s.pending.length };
   if (s.stale && s.stale.length) return { farbe: T.wolfram, bg: "rgba(227,166,59,0.14)", text: "nicht aktuell" };
-  return { farbe: "#6fce8f", bg: "rgba(111,206,143,0.12)", text: "synchron" };
+  return { farbe: T.ok, bg: "rgba(111,206,143,0.12)", text: "synchron" };
 }
 
 /* Pollt den Sync-Status leichtgewichtig (alle 3s + bei Fensterfokus). Der Status

@@ -1,3 +1,5 @@
+export const ROTLINK = "#E06C6C"; // Wikipedia-Prinzip: offene Referenz
+
 /* ---------- Design-Tokens: "Saal & Leinwand" ----------
    Themes über EIN mutables T-Objekt: alle Komponenten lesen T.x zur
    Renderzeit — setzeTheme() tauscht die Werte, die App stößt einen
@@ -22,7 +24,7 @@ export const THEMES = {
     was: "#B08BD9",
     warum: "#E3A63B",
     gefahr: "#D96A5A",
-    ok: "#6FCE8F", // C4: Erfolg/„OK"-Grün (nur Definition; Nutzung folgt in einem späteren Durchgang)
+    ok: "#6FCE8F", // C4: Erfolg/„OK"-Grün
     kartenFeld: "#FFFFFF", // Eingabefelder AUF den (hellen) FilmCards
   },
   hell: {
@@ -60,7 +62,7 @@ export const THEMES = {
     ok: "#5E7D63", // C4: gedämpftes S/W-Grün (Showa)
     kartenFeld: "#34322F",
   },
-  /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot ----
+  /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot-Orange ----
      Nahezu schwarzer Grund, warmes Bein für Fließtext (wie die weißen MAGI-Label),
      Signal-Rot als Akzent/Buttons. Bewertungstrio = Konsolen-Tricolor Cyan/Rot/Amber. */
   nerv: {
@@ -71,11 +73,11 @@ export const THEMES = {
     tinte: "#140C0E",
     tinteWeich: "#4A4046",
     rauch: "#AA969C",
-    wolfram: "#F0181D",
+    wolfram: "#F04A24",
     wie: "#55C8D3",
-    was: "#F0181D",
+    was: "#F04A24",
     warum: "#FFAE18",
-    gefahr: "#F0181D",
+    gefahr: "#F04A24",
     ok: "#49B06E", // C4: gedämpftes Terminal-Grün (NERV)
     kartenFeld: "#F4EFE8",
   },

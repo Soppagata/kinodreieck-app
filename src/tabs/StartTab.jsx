@@ -174,7 +174,7 @@ function VertrauensZeile({ progStand, streamingBekannt }) {
     : (s.conflict && s.conflict.length) ? { farbe: T.gefahr, text: "Konflikt" }
     : (s.pending && s.pending.length) ? { farbe: T.wolfram, text: "ausstehend " + s.pending.length }
     : (s.stale && s.stale.length) ? { farbe: T.wolfram, text: "nicht aktuell" }
-    : { farbe: "#6fce8f", text: "synchron" };
+    : { farbe: T.ok, text: "synchron" };
   const fmt = (ms) => {
     const d = new Date(ms);
     const z = (n) => String(n).padStart(2, "0");

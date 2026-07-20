@@ -105,7 +105,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-        Anbieterlisten und Kataloge werden in Clean erst nach <code style={{ color: T.wolfram }}>Installation-Mac.command</code> oder <code style={{ color: T.wolfram }}>Installation-Windows.bat</code> freigeschaltet. Demo darf die beigepackten Daten ohne Installation verwenden.
+        Für diese Startart sind die vorbereiteten Streaming-Daten nicht freigegeben. Die Demo kann den beigepackten Katalog verwenden; die PWA selbst lädt keine Daten live von Watchmode.
       </p>
     </div>
   );
@@ -117,10 +117,10 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
       <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
-          Nur angehakte Quellen werden beim nächsten Katalog-Lauf abgerufen (jede Quelle kostet ~1 Credit pro 250 Titel).
-          Häkchen wirken sofort als Anzeigefilter im Streaming-Tab. Danach: <strong style={{ color: T.leinwand }}>Config exportieren</strong> und die Datei
-          {" "}<code style={{ color: T.wolfram }}>streaming_config.json</code> im System-Ordner ersetzen.
-          {" "}Nach Phase 0 erscheint hier die vollständige Live-Liste aller AT-Quellen.
+          Häkchen wirken sofort als Anzeigefilter im Streaming-Tab. Für den nächsten externen
+          Katalog-Lauf zusätzlich <strong style={{ color: T.leinwand }}>Config exportieren</strong> und als
+          {" "}<code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System/streaming_config.json</code> im separaten Datenordner ablegen.
+          Erst der nächste Lauf übernimmt diese Auswahl beim Abruf (jede Quelle kostet etwa 1 Credit pro 250 Titel).
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
         <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
@@ -180,8 +180,8 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
         </button>
         <FeldHinweis feld="config_export" />
         <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
-          Rhythmus: 1. des Monats Voll-Lauf über alle gewählten Quellen; Mo/Mi/Fr 13:00 nur die großen
-          Rotations-Kataloge (Zeitplan: <code>com.kinodreieck.streaming.plist</code>, siehe Anleitung).
+          Externer Rhythmus: 1. des Monats Voll-Lauf über alle gewählten Quellen; Mo/Mi/Fr 13:00 nur die großen
+          Rotations-Kataloge (Zeitplan: <code>com.kinodreieck.streaming.plist</code> im Datenordner).
         </p>
       </div>
       </Klappe>
@@ -225,14 +225,16 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
       <Klappe titel="Refresh (manuell)">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
-          <strong style={{ color: T.gefahr }}>Verbraucht Credits.</strong> Der Job läuft höchstens 1× pro 30 Tage
-          (früher nur mit <code>--force</code>); kein Auto-Fetch aus der App. Im Terminal im System-Ordner
-          (<code>cd KinoFilm/Programmdateien/System</code>):
+          <strong style={{ color: T.gefahr }}>Verbraucht Watchmode-Credits.</strong> Die PWA führt
+          keine Live-Abfragen aus. Starte den geschützten Ablauf nur bei Bedarf im Terminal im
+          separaten Datenordner (<code>cd KinoFilm/Programmdateien/System</code>):
         </p>
         <pre style={{ background: T.saal, borderRadius: 4, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwand, overflowX: "auto", margin: 0 }}>
-{`node fetch_streaming_katalog.js --force
-node build_streaming_ansicht.js
-npm run build:single   # frische Kinodreieck.html`}</pre>
+{`node streaming_auto.mjs`}</pre>
+        <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
+          Der Job erzeugt die Kataloge und ruft anschließend <code>liefere_an_pwa.mjs</code> auf.
+          Kein <code>--force</code> für Tests verwenden.
+        </p>
       </div>
       </Klappe>
     </div>

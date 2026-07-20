@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm, schlagseite, score } from "../lib/match.js";
 import { store, K } from "../lib/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
@@ -250,9 +250,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {(master || []).length === 0 && (
         <div style={{ background: "rgba(217,106,90,0.10)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: T.leinwandTief, lineHeight: 1.6 }}>
-          <strong style={{ color: T.gefahr }}>Bevor du loslegst:</strong> Deine Einträge leben nur im
-          Browser-Speicher dieses Rechners — Cache bzw. Browserdaten löschen = alles weg. Sichere
-          regelmäßig über <strong>Einstellungen → Master exportieren (JSON)</strong> und lege die Datei in einen Backup-Ordner.
+          <strong style={{ color: T.gefahr }}>Bevor du loslegst:</strong> Deine Einträge werden im
+          Browser gespeichert und können optional über den Geräte-Sync abgeglichen werden.
+          Sichere den vollständigen Stand trotzdem regelmäßig über
+          <strong> Einstellungen → Gesamt-Backup herunterladen</strong>.
         </div>
       )}
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
@@ -285,7 +286,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           Reiner Laufzeit-Filter über die Artikel — wird nicht gepflegt. */}
       {ansicht === "bestand" && offeneRefsTab.length > 0 && (
         <details style={{ marginTop: 26 }} open>
-          <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: "#E06C6C" }}>
+          <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: ROTLINK }}>
             Offene Blog-Referenzen ({offeneRefsTab.length}) — {TAB_LABELS[typTab]} ohne Mediathek-Eintrag
           </summary>
           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -295,7 +296,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               return (
                 <div key={i} style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
                   <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: "#E06C6C", flex: 1, minWidth: 160 }}>{o.eingabe}{o.jahr ? " (" + o.jahr + ")" : ""}{o.typ ? " · " + o.typ : ""}</span>
+                    <span style={{ color: ROTLINK, flex: 1, minWidth: 160 }}>{o.eingabe}{o.jahr ? " (" + o.jahr + ")" : ""}{o.typ ? " · " + o.typ : ""}</span>
                     <span style={{ color: T.rauch }}>aus „{o.artikelTitel}“</span>
                     <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }} onClick={() => setRefAnlegen(aktiv ? null : i)}>
                       {aktiv ? "Schließen" : "✎ Anlegen"}

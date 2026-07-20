@@ -16,7 +16,7 @@ function kategorieLabel(bw) {
 /* Kurzformel je Schlagseite — die alte, greifbare Erklärung, jetzt live. */
 function kategorieFormel(bw) {
   const s = schlagseite(bw);
-  return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Wirkung vor Machart" }[s] || "alle drei im Gleichgewicht";
+  return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Relevanz vor Form und Stoff" }[s] || "alle drei im Gleichgewicht";
 }
 
 export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.1, size = 54 }) {
@@ -39,7 +39,7 @@ export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.
         {slider("WIE", "wie", T.wie)}
         {slider("WAS", "was", T.was)}
         {slider("WARUM", "warum", T.warum)}
-        <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: 12.5, color: T.rauch, lineHeight: 1.5 }}>
+        <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.rauch, lineHeight: 1.5 }}>
           Kategorie: <span style={{ color: T.wolfram }}>{kategorieLabel(bw)}</span>
           <span style={{ color: T.leinwandTief }}> — {kategorieFormel(bw)}</span>
         </div>

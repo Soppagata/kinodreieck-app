@@ -46,7 +46,7 @@ export function Willkommen({ onClose }) {
     maxHeight: "90dvh", overflowY: "auto", overscrollBehavior: "contain",
   };
   const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "0.04em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 14px" };
-  const p = { fontFamily: "'Space Grotesk', sans-serif", fontSize: 14.5, color: T.leinwand, lineHeight: 1.7, margin: "0 0 12px" };
+  const p = { fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, color: T.leinwand, lineHeight: 1.7, margin: "0 0 12px" };
 
   return createPortal(
     <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true" aria-label="Willkommen bei Kinodreieck">
@@ -71,9 +71,9 @@ export function Willkommen({ onClose }) {
 
             <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.wie }}>WIE — wie ist es gemacht?</strong><br />Alles Handwerkliche und Ästhetische. Kameraarbeit, Schnitt, Szenenbild, Ton, Licht. Wie sich der Film anfühlt, bevor er irgendetwas erzählt hat. Ein Film kann hier stark sein und sonst fast nichts anbieten — das ist kein Widerspruch, das ist eine Schlagseite.</p>
             <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.was }}>WAS — was erzählt es?</strong><br />Der Stoff selbst. Handlung, Figuren, Dialoge, das Universum, das aufgemacht wird, und wie tief es trägt. Hier entscheidet sich, ob ein Film etwas zu sagen hat — nicht, ob er es schön sagt.</p>
-            <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.warum }}>WARUM — warum gerade für dich?</strong><br />Der persönliche Teil. Ob der Film seine eigenen Stärken auch wirklich ausspielt. Ob du ihn wieder sehen würdest. Ob er dich packt, hängen bleibt, dich nicht loslässt — oder dich einfach umhaut, ohne dass du erklären könntest, warum.</p>
-            <p style={{ ...p, margin: "0 0 10px" }}><strong>Wichtig:</strong> Eine 0 heißt nicht „schlecht“. Sie heißt, dass diese Achse hier kaum ausgeprägt ist — oder dass sie Voraussetzungen braucht, die du gerade nicht mitbringst.</p>
-            <p style={{ ...p, margin: "0 0 10px" }}><strong>Und: Schlagseite schlägt Ausgewogenheit.</strong> Ein Film mit 1/1/5 sagt mehr über dich als einer mit 3/3/3.</p>
+            <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.warum }}>WARUM — warum sollte man ihn gesehen haben?</strong><br />Seine filmhistorische und popkulturelle Relevanz: Was hat er geprägt, ermöglicht oder ikonisch gemacht? Wie oft wird er zitiert, weitergedacht oder als Bezugspunkt gebraucht? Persönliche Bedeutung darf mitschwingen, bleibt aber ein Nebenfaktor.</p>
+            <p style={{ ...p, margin: "0 0 10px" }}><strong>Wichtig:</strong> Eine 0 heißt nicht „schlecht“. Sie heißt nur, dass diese Achse kaum ausgeprägt ist. Beim WARUM reicht die Skala von keiner erkennbaren Folgewirkung bis zum grundlegenden, kanonischen Werk.</p>
+            <p style={{ ...p, margin: "0 0 10px" }}><strong>Und: Schlagseite schlägt Ausgewogenheit.</strong> Ein Film mit 1/1/5 kann als kultureller Bezugspunkt entscheidender sein als ein rundes 3/3/3.</p>
             <p style={p}>Die <strong>Kategorie</strong> darunter tippst du nicht ein — sie folgt aus den drei Werten. Zieh die Regler und sieh zu.</p>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>

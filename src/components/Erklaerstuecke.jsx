@@ -5,8 +5,7 @@ import { DreieckRegler } from "./DreieckRegler.jsx";
 
 /* ================= Erklärstücke (Etappe 4, ausgelagert aus StartTab) =================
    Hero („LOKALE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
-   und die eingebaute Anleitung (DokuAnsicht). Inhalte UNVERÄNDERT — nur
-   ausgelagert, damit zwei Orte sie rendern können:
+   und die eingebaute Anleitung (DokuAnsicht). Zwei Orte rendern sie:
    · Beta-Landing (StartTab, PERSONAL_MODE=false) — wie bisher.
    · „Über"-Einstieg in den Einstellungen (PERSONAL_MODE=true), weil das
      Start-Dashboard die Erklärinhalte nicht mehr trägt.
@@ -27,13 +26,13 @@ export const ECKEN = [
     text: "Die Substanz: Stoff, Ideen, Themen, Fallhöhe. Trägt die Geschichte? Hat sie etwas zu sagen? Das WAS bewertet den Gehalt — auch wenn die Umsetzung wackelt.",
   },
   {
-    achse: "WARUM", frage: "Warum gerade für dich?",
+    achse: "WARUM", frage: "Warum sollte man ihn gesehen haben?",
     farbe: (t) => t.warum,
-    text: "Der persönliche Zünder: das, was kein Kritiker messen kann. Nostalgie, Nerv, Timing, Herz. Das WARUM erklärt, weshalb ein objektiv mittelmäßiger Film trotzdem ein Lieblingsfilm sein darf.",
+    text: "Die Relevanz: Einfluss auf spätere Filme, Genres, Karrieren und Bildsprachen — oder darauf, was Popkultur bis heute zitiert und weitererzählt. Persönliche Bedeutung darf ergänzen, ersetzt diese Wirkung aber nicht.",
   },
 ];
 
-/* ---- Hero (unverändert aus StartTab) ---- */
+/* ---- Hero ---- */
 export function ErklaerHero() {
   const mono = monoOf();
   return (
@@ -47,15 +46,15 @@ export function ErklaerHero() {
       </div>
       <div style={{ width: 120, height: 2, margin: "16px auto 0", background: "linear-gradient(90deg, transparent, " + T.wolfram + ", transparent)" }} />
       <p style={{ fontSize: 15, color: T.leinwandTief, maxWidth: 520, margin: "18px auto 0", lineHeight: 1.65 }}>
-        Deine Filme, dein Kino, dein Urteil — eine lokale Plattform für Programm,
-        Mediathek, Streaming und Blog. Keine Cloud, keine Konten, kein Algorithmus,
-        der dir etwas verkaufen will.
+        Deine Filme, dein Kino, dein Urteil — eine persönliche Plattform für Programm,
+        Mediathek, Streaming und Blog. Deine Daten bleiben im Browser und können optional
+        zwischen Geräten synchronisiert werden. Keine Telemetrie, kein Verkaufsalgorithmus.
       </p>
     </div>
   );
 }
 
-/* ---- Das Dreieck: eine Karte pro Ecke (unverändert aus StartTab) ---- */
+/* ---- Das Dreieck: eine Karte pro Ecke ---- */
 export function DreieckErklaerung() {
   const h2 = h2Of(); const mono = monoOf();
   return (
@@ -63,7 +62,7 @@ export function DreieckErklaerung() {
       <h2 style={h2}>Das Dreieck</h2>
       <p style={{ fontSize: 14, color: T.leinwandTief, margin: "0 0 12px", lineHeight: 1.6 }}>
         Jeder Film wird auf drei Achsen bewertet (je 0–5). Die Form des Dreiecks
-        IST das Urteil — ein Blick zeigt, ob ein Film Können, Gehalt oder Herz ist.
+        IST das Urteil — ein Blick zeigt, ob ein Film Können, Gehalt oder Relevanz ist.
       </p>
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ flex: "2 1 330px", display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
@@ -109,7 +108,7 @@ export function UeberKinodreieck({ onTutorialNeu }) {
   );
 }
 
-/* ---------- Eingebaute Anleitung — deckungsgleich mit ANLEITUNG.md ---------- */
+/* ---------- Eingebaute Anleitung ---------- */
 export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
   const block = { background: T.saalHoch, borderRadius: 6, padding: "14px 16px" };
   const p = { fontSize: 13, color: T.leinwandTief, lineHeight: 1.65, margin: "0 0 8px" };
@@ -142,8 +141,8 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
     ] },
     { id: "daten", titel: "Einstellungen", text: [
       "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Import/Export/Backup deiner Daten, das Such-Vokabular und die Streaming-Quellen (Katalog-Status, Config-Export, Refresh).",
-      "Der Export-Wächter warnt, sobald ungesicherte Änderungen im Browser liegen — der Browser ist kein Backup. „Browser-Stand verwerfen” lädt die Projektdatei neu, falls die App alte Daten zeigt.",
-      "Die Modi Kurosawa & Grindhouse liegen als Easter-Egg hinter dem „Max”-Link unter „Über & Rechtliches”.",
+      "Der Export-Wächter erinnert an einen neuen Rohdaten-Export. Für eine vollständige Sicherung aller App-Daten ist das Gesamt-Backup gedacht; optionaler Geräte-Sync ersetzt dieses Backup nicht.",
+      "Die Modi Showa & NERV liegen als Easter-Egg hinter dem „Max”-Link unter „Über & Rechtliches”.",
     ] },
   ];
   const offen = BEREICHE.find((b) => b.id === popup);
@@ -181,45 +180,49 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       )}
       <div style={block}>
         <h2 style={h2}>Alltag</h2>
-        <p style={p}>Doppelklick auf <span style={code}>Kinodreieck.html</span> — mehr braucht es nicht.
-          Bewertungen und Artikel merkt sich der Browser. Der ist <strong>kein Backup</strong>:
-          Sobald der Wächter in den Einstellungen ungesicherte Änderungen meldet, exportieren —
-          die Filmliste ersetzt <span style={code}>System/src/data/masterliste.json</span>,
-          Artikel legst du als <span style={code}>artikel.json</span> neben die App.</p>
-        <p style={{ ...p, margin: 0 }}>Zeigt die App plötzlich alte Daten: Einstellungen → „Browser-Stand verwerfen".</p>
+        <p style={p}>Kinodreieck läuft als PWA im Browser und kann auf dem Startbildschirm
+          installiert werden. Bewertungen, Artikel und Einstellungen liegen zunächst im
+          Browser; optional hält der Geräte-Sync diesen Stand auf mehreren Geräten aktuell.</p>
+        <p style={{ ...p, margin: 0 }}>Der Browser und der Geräte-Sync sind kein vollständiges
+          Backup. Lade deshalb regelmäßig unter Einstellungen ein Gesamt-Backup herunter.
+          Programm- und Katalog-Stand zeigen, wie frisch die separat gelieferten Daten sind.</p>
       </div>
       <div style={block}>
         <h2 style={h2}>Automatik</h2>
-        <p style={p}><strong>Kino</strong> täglich 12:45 (frisches Programm, Abo-Abgleich, Tages-Backup nach
-          <span style={code}> Archiv/</span>) · <strong>Streaming</strong> Mo/Mi/Fr + 1. des Monats, 13:00
-          (Watchmode-Kataloge, Quota-Guard schützt das Budget).</p>
-        <p style={{ ...p, margin: 0 }}>Eingerichtet über <span style={code}>Installation-Mac.command</span> (Mac) bzw.
-          <span style={code}> Installation-Windows.bat</span>. Reparieren: einfach erneut ausführen.</p>
+        <p style={p}>Die Datenerfassung läuft außerhalb der PWA im separaten Datenordner:
+          <span style={code}> kino_auto.mjs</span> liest das Kinoprogramm über den inoffiziellen
+          Seitenabruf von film.at und gleicht Abo-Daten ab;
+          <span style={code}> streaming_auto.mjs</span> erstellt die Watchmode-Kataloge mit Quota-Schutz.</p>
+        <p style={{ ...p, margin: 0 }}><span style={code}>liefere_an_pwa.mjs</span> übergibt danach nur
+          geprüfte JSON-Dateien an die App. Kinodreieck selbst ruft weder die Kino-Seite noch
+          die Streaming-API live auf.</p>
       </div>
       <div style={block}>
-        <h2 style={h2}>Teilen & Ordner weitergeben</h2>
-        <p style={p}>Pakete (Bewertungen, Blog) exportierst und importierst du in der Mediathek
-          unter „Daten & Teilen" oder in den Einstellungen — Fremdes behält seinen Autor,
-          Eigenes wird nie überschrieben.</p>
-        <p style={{ ...p, margin: 0 }}>Vor der Weitergabe des Ordners IMMER entfernen:
-          <span style={code}> System/.env</span> (API-Key!), <span style={code}>System/streaming-daten/</span>,
-          <span style={code}> System/kino-daten/</span>, <span style={code}>Archiv/</span>.</p>
+        <h2 style={h2}>Teilen & Sichern</h2>
+        <p style={p}>Pakete mit Bewertungen und Blog-Texten exportierst und importierst du
+          unter Einstellungen → „Teilen & Tauschen”. Fremdes behält seinen Autor; eigene
+          Inhalte werden beim Paket-Import nicht still überschrieben.</p>
+        <p style={{ ...p, margin: 0 }}>Das Gesamt-Backup ist dagegen deine vollständige private
+          Sicherung und nicht zum Weitergeben gedacht. Teile keine Sync-Zugangsdaten,
+          Konfigurationsdateien oder persönlichen Backup-Dateien.</p>
       </div>
       <div style={block}>
         <h2 style={h2}>Wenn etwas klemmt</h2>
-        <p style={{ ...p, margin: 0 }}>App geht nicht auf → Installer erneut ausführen (baut neu).
-          Automatik prüfen: <span style={code}>launchctl list | grep kinodreieck</span> (Mac) bzw.
-          Aufgabenplanung „Kinodreieck" (Windows). Streaming-Tab leer → Key fehlt
-          (<span style={code}>System/.env</span>) oder noch kein Lauf.</p>
+        <p style={{ ...p, margin: 0 }}>App neu laden und zuerst Programm- bzw. Katalog-Stand
+          prüfen. Sind die gelieferten Daten leer oder veraltet, läuft die Diagnose im
+          separaten Datenordner: dort <span style={code}>node kino_auto.mjs</span> oder
+          <span style={code}> node streaming_auto.mjs</span> starten und das jeweilige
+          <span style={code}> auto_log.txt</span> prüfen. Die PWA enthält keine API-Schlüssel.</p>
       </div>
       <div style={block}>
         <h2 style={h2}>Rechtliches</h2>
-        <p style={{ ...p, margin: 0 }}>Privates, nicht-kommerzielles Projekt — läuft vollständig lokal.
-          Programmdaten: film.at & nonstopkino.at · Streaming: Watchmode. Alle Angaben ohne
-          Gewähr; verbindlich sind Kino- und Anbieterseiten. Marken gehören ihren Eigentümern.
-          © {new Date().getFullYear()} Max — Nutzung auf eigene Verantwortung.</p>
+        <p style={{ ...p, margin: 0 }}>Privates, nicht-kommerzielles Projekt. Persönliche Daten
+          liegen im Browser und können optional über den gewählten Geräte-Sync übertragen
+          werden; Kinodreieck verwendet keine Telemetrie. Programmdaten: film.at & nonstopkino.at ·
+          Streaming: Watchmode. Alle Angaben ohne Gewähr; verbindlich sind Kino- und
+          Anbieterseiten. Marken gehören ihren Eigentümern. © {new Date().getFullYear()} Max —
+          Nutzung auf eigene Verantwortung.</p>
       </div>
-      <p style={mono}>Die vollständige Anleitung liegt als ANLEITUNG.md im Ordner Programmdateien.</p>
     </div>
   );
 }

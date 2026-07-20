@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { MasterImport } from "../components/MasterImport.jsx";
-import { T, btnStyle, inputStyle } from "../lib/tokens.js";
+import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
 import { ladeSharedBlogs } from "../lib/supabaseDriver.js";
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
@@ -16,8 +16,6 @@ import { MedienForm } from "../components/MedienForm.jsx";
 
 const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
 const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
-const ROT = "#E06C6C"; // Rotlink (Wikipedia-Prinzip)
-
 /* ---------- Eingabemaske ---------- */
 function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
@@ -105,7 +103,7 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
               <span style={{
                 fontFamily: "'Space Mono', monospace", fontSize: 11, padding: "2px 7px", borderRadius: 3,
-                color: T.tinte, background: le.abgleich.status === "verlinkt" ? T.wolfram : le.abgleich.status === "rotlink" ? ROT : T.rauch,
+                color: T.tinte, background: le.abgleich.status === "verlinkt" ? T.wolfram : le.abgleich.status === "rotlink" ? ROTLINK : T.rauch,
               }}>
                 {le.abgleich.status === "verlinkt" ? "✓ verlinkt" : le.abgleich.status === "rotlink" ? "Rotlink" : "Mehrfach?"}
               </span>
@@ -206,7 +204,7 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
                   ) : (
                     <>
                       <a href="#" onClick={(e) => { e.preventDefault(); setRotFuer(rotFuer === i ? null : i); setRotTyp(le.typ || "film"); }}
-                        style={{ color: ROT, textDecorationColor: ROT, textUnderlineOffset: 3, fontWeight: 600 }}
+                        style={{ color: ROTLINK, textDecorationColor: ROTLINK, textUnderlineOffset: 3, fontWeight: 600 }}
                         title="Eintrag existiert noch nicht in der Mediathek — klicken zum Ergänzen">
                         {le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}
                       </a>
@@ -425,7 +423,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                       {a.liste.map((le, i) => (
                         <span key={i} style={{
                           fontFamily: "'Space Mono', monospace", fontSize: 10, padding: "2px 7px", borderRadius: 3,
-                          border: "1px solid " + (le.ref ? T.wolfram : ROT), color: le.ref ? T.wolfram : ROT,
+                          border: "1px solid " + (le.ref ? T.wolfram : ROTLINK), color: le.ref ? T.wolfram : ROTLINK,
                         }}>{le.eingabe}</span>
                       ))}
                     </div>

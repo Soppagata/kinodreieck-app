@@ -169,7 +169,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   if (datenGesperrt) return (
     <section>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Clean ohne Terminal-Installation.</strong> Streaming-Kataloge und Anbieterlisten bleiben gesperrt. Starte <code style={{ color: T.wolfram }}>Installation-Mac.command</code> oder <code style={{ color: T.wolfram }}>Installation-Windows.bat</code> – oder wechsle zur Demo.
+        <strong style={{ color: T.wolfram }}>Streaming-Daten nicht freigegeben.</strong> Diese Startart liest keine beigepackten Kataloge. Wechsle zur Demo oder nutze die persönliche PWA; ein Live-Abruf bei Watchmode findet hier nicht statt.
       </div>
     </section>
   );
@@ -185,11 +185,13 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
 
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-          <strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Zwei mögliche Ursachen — die App kann sie unter <code style={{ color: T.wolfram }}>file://</code> nicht unterscheiden (sie liest nur die fertigen Katalog-Dateien, nie die API):
-          <br />1. <strong>Kein Watchmode-Key</strong> in <code style={{ color: T.wolfram }}>Programmdateien/System/.env</code> — nachtragbar über Installation.html (Schritt „Watchmode-API-Key") oder <code style={{ color: T.wolfram }}>Installation-Mac.command</code> erneut. Ohne Key bleibt nur dieser Tab leer.
-          <br />2. <strong>Key da, aber noch kein Katalog-Lauf.</strong> Im Ordner <code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System</code>:
-          <br /><code style={{ color: T.wolfram }}>node streaming_phase0_test.js</code> → <code style={{ color: T.wolfram }}>node map_masterliste.js</code> → <code style={{ color: T.wolfram }}>node fetch_streaming_katalog.js</code> → <code style={{ color: T.wolfram }}>node build_streaming_ansicht.js</code>
-          <br />Jeder Schritt meldet im Terminal die genaue Ursache (fehlender Key, HTTP 401/429, Region AT nicht gesetzt, Quota erschöpft). Vorher unter Einstellungen die Abos anhaken und die Config exportieren.
+          <strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich
+          vorbereitete Katalog-Dateien und ruft Watchmode nie live auf. Der veröffentlichte
+          Katalog fehlt, wurde noch nicht erzeugt oder konnte gerade nicht geladen werden.
+          <br />Prüfe unter Einstellungen den Katalog-Status. Für die Administration läuft im
+          separaten Ordner <code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System</code> der Befehl
+          {" "}<code style={{ color: T.wolfram }}>node streaming_auto.mjs</code>; Einzelheiten stehen im dortigen
+          <span style={{ color: T.wolfram }}> streaming-daten/auto_log.txt</span>. API-Schlüssel gehören nicht in die PWA.
         </div>
       )}
 

@@ -44,14 +44,14 @@ const knopf = (re) => [...doc.querySelectorAll("button")].find((b) => re.test((b
 /* ---- Landing komplett da (die früheren echtdatei-Landing-Checks leben hier) ---- */
 const t = text();
 check("Beta: Hero + Claim auf der Startseite", /LOKALE FILM-PLATTFORM/.test(t) && /Deine Filme, dein Kino, dein Urteil/.test(t));
-check("Beta: drei Ecken erklärt", /Wie ist es gemacht\?/.test(t) && /Was erzählt es\?/.test(t) && /Warum gerade für dich\?/.test(t));
+check("Beta: drei Ecken erklärt", /Wie ist es gemacht\?/.test(t) && /Was erzählt es\?/.test(t) && /Warum sollte man ihn gesehen haben\?/.test(t));
 check("Beta: Pinboard-Sektion", /Pinboard/.test(t));
 check("Beta: Quicklinks (Direkt hinein)", /Direkt hinein/.test(t));
 const dokuKnopf = knopf(/Anleitung & Hilfe öffnen/i);
 check("Beta: Doku-Knopf auf der Landing", !!dokuKnopf);
 if (dokuKnopf) {
   dokuKnopf.click(); await warte(300);
-  check("Beta: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Die vollständige Anleitung liegt als ANLEITUNG\.md/.test(text()));
+  check("Beta: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Datenerfassung läuft außerhalb der PWA/.test(text()));
 }
 
 /* ---- Kein Dashboard im Beta-Pfad ---- */

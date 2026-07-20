@@ -212,9 +212,9 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
 }
 
 /* ---------- Ingestion-Prompt (tokensparend, Autor wird eingesetzt) ----------
-   Für eine fremde KI: Titel entgegennehmen, Jahr+Genre per Websuche
-   verifizieren, den Nutzer einige Titel selbst bewerten lassen, für den
-   Rest grobe personalisierte Reviews schätzen, EIN JSON im Paketformat. */
+   Für eine fremde KI: Titel entgegennehmen, Jahr+Genre sowie die kulturelle
+   Relevanz per Websuche verifizieren, einige Urteile vom Nutzer einholen und
+   EIN JSON im Paketformat erzeugen. */
 export function ingestionPrompt(autor) {
   const a = (autor || "").trim() || "unbekannt";
   const phys = QUELLEN.filter((q) => q.art === "physisch").map((q) => q.key).join(", ");
@@ -223,10 +223,10 @@ export function ingestionPrompt(autor) {
 
 ABLAUF
 1) Ich gebe dir Titel (roh, unsortiert, auch Serien/Musik/Sonstiges).
-2) Recherchiere per Websuche pro Titel: Jahr (Erstveröffentlichung) und 1-3 Genres. typ: film|serie|musik|sonstiges (im Zweifel film). Unsicheres Jahr: "jahr_unsicher":true. Erfinde nichts.
+2) Recherchiere per Websuche pro Titel: Jahr (Erstveröffentlichung), 1-3 Genres und bei Filmen/Serien die konkrete filmhistorische oder popkulturelle Relevanz. Prüfe dafür Einfluss auf spätere Werke, Genres, Karrieren, Schauspiel- oder Filmtechnik sowie häufige Zitate, Referenzen, Parodien oder ikonische Wirkung. typ: film|serie|musik|sonstiges (im Zweifel film). Unsicheres Jahr: "jahr_unsicher":true. Erfinde nichts.
    Für Filme/Serien zusätzlich "quelle": wo der Titel typischerweise verfügbar ist — ein oder mehrere Keys mit "+" verbunden. Physisch: ${phys}. Virtuell (Abos/Shops): ${virt}. Weißt du es nicht oder unsicher: "quelle":"unklar" (kläre ich dann selbst).
-3) Bitte mich dann, 5-10 Titel selbst zu bewerten. Mein Format je Titel: WIE x/5 (Handwerk) · WAS x/5 (Substanz) · WARUM x/5 (persönlicher Zünder) · Kategorie aus [immer_gut, kult, kult_klassiker, daemlich_aber_herrlich, trash, sehenswert, echter_schrott] · 1-2 Sätze Begründung.
-4) Leite daraus meinen Geschmack ab und schreibe für die RESTLICHEN Titel: geschätzte Bewertung, Kategorie, 1-2 Sätze "begruendung" in meinem Ton. Markiere Geschätztes mit "geschaetzt":true.
+3) Bitte mich dann, 5-10 Titel selbst zu bewerten. Mein Format je Titel: WIE x/5 (Handwerk) · WAS x/5 (Substanz) · WARUM x/5 (film-/popkulturelle Relevanz) · Kategorie aus [immer_gut, kult, kult_klassiker, daemlich_aber_herrlich, trash, sehenswert, echter_schrott] · 1-2 Sätze Begründung.
+4) Leite daraus meinen Geschmack für WIE, WAS, Kategorie und Ton ab. Bewerte das WARUM der RESTLICHEN Titel dagegen aus der Recherche, nicht aus meinem Geschmack: 0 keine erkennbare Folgewirkung · 1 kleine Kuriosität/Nische · 2 relevanter Beitrag innerhalb einer Nische, Karriere oder Strömung · 3 wichtiger Bezugspunkt · 4 stark einflussreich, ikonisch oder oft referenziert · 5 grundlegendes, kanonisches Werk mit nachhaltiger Wirkung. Persönlicher Bezug darf die Begründung ergänzen, aber die kulturelle Relevanz nicht ersetzen. Schreibe eine geschätzte Bewertung, Kategorie und 1-2 konkrete Sätze "begruendung" in meinem Ton. Markiere Geschätztes mit "geschaetzt":true.
 5) Gib am Ende GENAU EINEN JSON-Codeblock aus:
 
 {"format":"kinodreieck-paket","version":1,"autor":"${a}","quelle":"ki-ingestion","bereiche":{"filme":[{"titel":"","jahr":2000,"typ":"film","quelle":"unklar","kategorie":"sehenswert","bewertung":{"wie":0,"was":0,"warum":0},"genre":[],"tags":[],"begruendung":"","geschaetzt":true}],"serien":[],"musik":[],"sonstiges":[]}}

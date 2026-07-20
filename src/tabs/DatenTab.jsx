@@ -61,7 +61,7 @@ export function DatenTab({
             {/* Exklusive Umschalter als SegmentedControl (Etappe 2, Nachbesserung):
                 keine zweizeiligen Knopf-Stapel mehr auf 390px — die Reihe wischt.
                 Optionstexte bleiben EXAKT (Tests: /Foyer \(hell\)/, /^Groß$/).
-                Aktiver Modus (Kurosawa/Grindhouse) -> value null, kein Knopf aktiv
+                Aktiver Modus (Showa/NERV) -> value null, kein Knopf aktiv
                 (entspricht der alten wahlKnopf-Bedingung !einstellungen.modus). */}
             <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Erscheinung</span>
@@ -95,7 +95,7 @@ export function DatenTab({
               </select>
               <span style={mono}>öffnet sich beim Start der App</span>
             </div>
-            {/* Modi (Kurosawa/Grindhouse) liegen als Easter-Egg unter „Über & Rechtliches" (Klick auf „Max"). */}
+            {/* Modi (Showa/NERV) liegen als Easter-Egg unter „Über & Rechtliches" (Klick auf „Max"). */}
           </div>
         </div>
         </Klappe>
@@ -227,8 +227,8 @@ export function DatenTab({
           {ungesichertMaster && <> Masterliste (Bewertungen/Einträge)</>}
           {ungesichertMaster && ungesichertArtikel && <> und</>}
           {ungesichertArtikel && <> Blog-Artikel</>}
-          {" "}— seit dem letzten Export geändert. Der Browser-Speicher kann verloren gehen (Cache leeren, Browserwechsel).
-          {ungesichertMaster ? " Die exportierte Datei ersetzt System/src/data/masterliste.json." : ""} Das tägliche Archiv sichert nur, was als Datei existiert.
+          {" "}— seit dem letzten separaten Rohdaten-Export geändert. Der Browser-Speicher kann verloren gehen (Cache leeren, Browserwechsel).
+          {" "}Das Gesamt-Backup unten sichert den vollständigen App-Stand; externe Archive der Daten-Jobs ersetzen es nicht.
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
             {ungesichertMaster && exportMaster && <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportMaster}><IconExport size={15} />Filmliste jetzt exportieren</button>}
             {ungesichertArtikel && exportArtikel && <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportArtikel}><IconExport size={15} />Artikel jetzt exportieren</button>}
@@ -260,8 +260,8 @@ export function DatenTab({
             Ein Klick sichert ALLES aus der App (Filmliste, Artikel, Pins, Merkliste,
             Einstellungen, Vokabular) in eine Datei. Sie landet in deinen Downloads —
             am besten in einen eigenen <strong style={{ color: T.leinwand }}>Backup</strong>-Ordner
-            verschieben. Unabhängig davon sichert der tägliche Kino-Lauf die Projektdateien
-            automatisch nach <code style={{ color: T.wolfram }}>Archiv/</code>.
+            verschieben. Archive der externen Kino- und Streaming-Jobs enthalten nur deren
+            Dateien und ersetzen dieses persönliche Gesamt-Backup nicht.
           </p>
           <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>
           <FeldHinweis feld="backup" />
@@ -280,9 +280,9 @@ export function DatenTab({
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <h2 style={{ ...h2Style, margin: "0 0 10px" }}>Deine Filmliste (Masterliste)</h2>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
-          Das Herz der App: alle Einträge und Bewertungen. Sie lebt als Datei im
-          System-Ordner — Änderungen in der App landen zunächst nur im Browser.
-          Deshalb: nach dem Bearbeiten unten exportieren und die Datei ersetzen.
+          Das Herz der App: alle Einträge und Bewertungen. Der aktive Stand liegt im
+          Browser und kann optional über den Geräte-Sync abgeglichen werden. Der JSON-Export
+          ist eine separate Rohdatenkopie für Archivierung, Kontrolle und Kompatibilität.
         </p>
         {master ? (
           <>
@@ -333,8 +333,9 @@ export function DatenTab({
               )}
             </div>
             <p style={{ fontSize: 12, color: T.rauch, margin: "0 0 12px" }}>
-              Export nach Bearbeitungen ausführen und deine lokale Datei ersetzen — sonst divergieren App und Datei.
-              Zeigt „Quelle: Storage (Browser)" einen veralteten Stand, hilft der rote Knopf.
+              Der JSON-Export ist eine Momentaufnahme des aktuellen Browser-Stands; spätere
+              Änderungen aktualisieren diese Datei nicht automatisch. Zeigt „Quelle: Storage (Browser)"
+              einen veralteten Stand, hilft der rote Knopf.
             </p>
           </>
         ) : (
@@ -364,7 +365,7 @@ export function DatenTab({
             hinweis='Programm-JSON hier einfügen ({"erstellt":…,"data":{"filme":[…]}})' />
         </div>
         <p style={{ fontSize: 13, color: T.rauch, margin: "14px 0 10px", lineHeight: 1.5 }}>
-          <strong style={{ color: T.wolfram }}>Oder deterministisch ohne jede Abhängigkeit:</strong> nonstopkino.at/programm im Browser öffnen, Seite speichern (Strg+S, „nur HTML“) und die Datei hier laden — die App parst alle Wiener Abo-Vorstellungen der Woche selbst, fehlerfrei und deterministisch. Demnächst-Einträge bleiben dabei erhalten.
+          <strong style={{ color: T.wolfram }}>Oder deterministisch ohne API-Abhängigkeit:</strong> nonstopkino.at/programm im Browser öffnen, Seite speichern (Strg+S, „nur HTML“) und die Datei hier laden — die App parst daraus die Wiener Abo-Vorstellungen der Woche. Demnächst-Einträge bleiben dabei erhalten.
         </p>
         <MasterImport onImport={importNonstop} hasMaster={!!programm}
           labelNeu="Nonstop-Seite (HTML) laden" labelErsetzen="Nonstop-Seite (HTML) laden"
@@ -409,8 +410,9 @@ export function DatenTab({
       <Klappe titel="Über & Rechtliches">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
-          Kinodreieck — privates, nicht-kommerzielles Projekt. Läuft vollständig
-          lokal: keine Cloud, keine Konten, keine Telemetrie.
+          Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen
+          im Browser und können optional über Git oder Supabase zwischen Geräten
+          synchronisiert werden; die App verwendet keine Telemetrie.
           Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode.
           Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten.
           Genannte Marken und Dienste gehören ihren jeweiligen Eigentümern.

@@ -33,7 +33,7 @@ const DEF = {
   },
   eintrag: {
     titel: "Wie ein Eintrag aussieht",
-    absaetze: [{ ziel: "eintrag-form", text: "Titel und Jahr sind Pflicht (das Jahr ist der Schlüssel für den Programm-Abgleich). Dann Typ, Quelle (wo der Titel liegt) und Genre — und das Dreieck: WIE / WAS / WARUM, je 0 bis 5. Die Bewertung darfst du leer lassen und später nachtragen; die Kategorie folgt aus den Werten." }],
+    absaetze: [{ ziel: "eintrag-form", text: "Titel und Jahr sind Pflicht (das Jahr ist der Schlüssel für den Programm-Abgleich). Dann Typ, Quelle (wo der Titel liegt) und Genre — und das Dreieck: WIE für das Handwerk, WAS für den Gehalt und WARUM für die filmhistorische oder popkulturelle Relevanz, je 0 bis 5. Die Bewertung darfst du leer lassen und später nachtragen; die Kategorie folgt aus den Werten." }],
   },
 
   /* --- Streaming --- */
@@ -55,7 +55,7 @@ const DEF = {
   /* --- Einstellungen: drei getrennte Sichtbar-Hinweise (kein Scroll-Sprung) --- */
   teilen: {
     titel: "Teilen & Tauschen",
-    absaetze: [{ ziel: "teilen", text: "Der Browser ist kein Backup. Hier exportierst und importierst du deine Filmliste und tauschst Pakete (Bewertungen, Blog) mit anderen — Fremdes behält seinen Autor, Eigenes wird nie überschrieben. Ein Gesamt-Backup liegt gleich darunter; exportierte Bewertungen ersetzen System/src/data/masterliste.json." }],
+    absaetze: [{ ziel: "teilen", text: "Hier tauschst du Pakete mit Bewertungen und Blog-Texten aus — Fremdes behält seinen Autor, Eigenes wird nie still überschrieben. Der separate Rohdaten-Export ist eine Momentaufnahme; für die vollständige private Sicherung aller App-Daten liegt das Gesamt-Backup gleich darunter." }],
   },
   vokabular: {
     titel: "Such-Vokabular",
@@ -63,7 +63,7 @@ const DEF = {
   },
   "streaming-quellen": {
     titel: "Streaming-Quellen",
-    absaetze: [{ ziel: "streaming-quellen", text: "Welche Dienste du hast, wählst du hier — nur angehakte Quellen werden beim nächsten Katalog-Lauf abgerufen (jede kostet Credits). Danach die Config exportieren und im System-Ordner ersetzen. Ohne hinterlegten Watchmode-Key bleibt der Streaming-Bereich leer." }],
+    absaetze: [{ ziel: "streaming-quellen", text: "Welche Dienste du hast, wählst du hier — die Häkchen filtern die Anzeige sofort. Damit der nächste externe Katalog-Lauf dieselbe Auswahl abruft, exportierst du die Config in den separaten Datenordner. Die PWA enthält keinen Watchmode-Key und liest nur den fertig gelieferten Katalog." }],
   },
 
   /* --- Wächter: Sonderfall (A8) — feuert bei erster ungesicherter Änderung --- */
@@ -72,7 +72,7 @@ const DEF = {
     gefahr: true,
     keinEscape: true,
     export: true,
-    absaetze: [{ ziel: "daten-waechter", text: "Deine Bewertungen liegen gerade nur im Browser. Beim nächsten Neubau der App sind sie weg. Exportieren → die Datei ersetzt System/src/data/masterliste.json. Erst dann sind sie sicher und werden vom täglichen Archiv-Backup miterfasst." }],
+    absaetze: [{ ziel: "daten-waechter", text: "Seit dem letzten separaten Rohdaten-Export wurden Bewertungen im Browser geändert. Der Export erzeugt eine neue Momentaufnahme; er aktualisiert keine Projektdatei automatisch. Für eine vollständige Sicherung aller persönlichen App-Daten verwende zusätzlich das Gesamt-Backup." }],
   },
 };
 
