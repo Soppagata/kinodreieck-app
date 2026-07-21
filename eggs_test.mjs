@@ -8,8 +8,8 @@ import {
   berechneUnlocks, istVerfuegbar, liveVertreter,
   parseAchievements, serialisiereAchievements, ladeAchievements, speichereAchievements,
 } from "./src/lib/eggs.js";
-import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert } from "./src/lib/eggFrequenz.js";
-import { istKlaatu, crawlHeute, levenshtein } from "./src/lib/momentEggs.js";
+import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt } from "./src/lib/eggFrequenz.js";
+import { istKlaatu, crawlHeute, istVierterMai, levenshtein } from "./src/lib/momentEggs.js";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -113,28 +113,36 @@ check("Frequenz: schonGefeuertHeute initial false", schonGefeuertHeute("cage", M
 markiereGefeuert("cage", MO);
 check("Frequenz: markiereGefeuert -> heute true", schonGefeuertHeute("cage", MO) === true);
 check("Frequenz: anderer Tag wieder false", schonGefeuertHeute("cage", DI) === false);
+check("Teppich: Karte passiert die Lesezone beim Abwärtsscrollen", istVorbeiGescrollt({ bottom: 180 }, { viewportHoehe: 800, scrolltAbwaerts: true }) === true);
+check("Teppich: Karte noch lesbar -> kein Trigger", istVorbeiGescrollt({ bottom: 360 }, { viewportHoehe: 800, scrolltAbwaerts: true }) === false);
+check("Teppich: Aufwärtsscrollen -> kein Trigger", istVorbeiGescrollt({ bottom: 120 }, { viewportHoehe: 800, scrolltAbwaerts: false }) === false);
+check("Teppich: 1:10-Chance ist deterministisch injizierbar", wuerfleTag("teppich-10", 1 / 10, { jetzt: MO, rnd: () => 0.09 }) === true);
 delete globalThis.localStorage;
 
-/* ---- Moment-Eggs (B4): Klaatu (Tippfehler-tolerant) + Crawl (4. Mai + Kino) ---- */
+/* ---- Moment-Eggs (B4): Klaatu (Tippfehler-tolerant) + Crawl (ganzer 4. Mai) ---- */
 check("Klaatu: exakte Phrase", istKlaatu("klaatu barada nikto") === true);
 check("Klaatu: Tippfehler tolerant", istKlaatu("klatu barrada niktoo") === true);
 check("Klaatu: Groß/Kleinschreibung egal", istKlaatu("KLAATU BARADA NIKTO") === true);
-check("Klaatu: fehlt ein Wort -> false", istKlaatu("klaatu barada") === false);
+check("Klaatu: zwei erinnerte Wörter genügen", istKlaatu("klaatu barada") === true);
+check("Klaatu: zwei halbrichtige Wörter genügen", istKlaatu("barata niktu") === true);
+check("Klaatu: nur ein Wort reicht nicht", istKlaatu("klaatu") === false);
 check("Klaatu: Unsinn -> false", istKlaatu("guten abend zusammen heute") === false);
+check("Klaatu: gewöhnlicher langer Suchsatz bleibt Suche", istKlaatu("ich suche einen film wie klaatu mit nikto im titel") === false);
 check("levenshtein: Referenz kitten/sitting = 3", levenshtein("kitten", "sitting") === 3);
 const MAI4 = new Date(2026, 4, 4), MAI5 = new Date(2026, 4, 5);
 const km1 = { matched: [{ film: { id: "x" } }] }, km0 = { matched: [] };
 check("Crawl: 4. Mai + Kino-Treffer -> true", crawlHeute({ jetzt: MAI4, kinoMatches: km1 }) === true);
-check("Crawl: 4. Mai ohne Treffer -> false", crawlHeute({ jetzt: MAI4, kinoMatches: km0 }) === false);
+check("Crawl: 4. Mai ohne Treffer -> ebenfalls true", crawlHeute({ jetzt: MAI4, kinoMatches: km0 }) === true);
 check("Crawl: anderer Tag -> false", crawlHeute({ jetzt: MAI5, kinoMatches: km1 }) === false);
+check("4.-Mai-Theme: reine Datumsprüfung", istVierterMai(MAI4) === true && istVierterMai(MAI5) === false);
 
 /* B4-Egg-Verdrahtung: die beiden Trigger sind rein & deterministisch (kein Netz,
    kein RNG, keine Seiteneffekte) — App stützt Auto-Trigger + Gating darauf. */
 check("Crawl: deterministisch (zwei Aufrufe, gleiches Ergebnis)",
   crawlHeute({ jetzt: MAI4, kinoMatches: km1 }) === crawlHeute({ jetzt: MAI4, kinoMatches: km1 }));
 check("Crawl: robust ohne Argumente/kinoMatches -> boolean, kein Wurf",
-  typeof crawlHeute() === "boolean" && crawlHeute({ jetzt: MAI4 }) === false);
-check("Crawl: mehrere Treffer -> true (≥1 genügt)",
+  typeof crawlHeute() === "boolean" && crawlHeute({ jetzt: MAI4 }) === true);
+check("Crawl: Trefferzahl ist am Feiertag unerheblich",
   crawlHeute({ jetzt: MAI4, kinoMatches: { matched: [{}, {}, {}] } }) === true);
 check("Klaatu: deterministisch + robust (null/leer -> false, kein Throw)",
   istKlaatu("klaatu barada nikto") === istKlaatu("klaatu barada nikto") && istKlaatu(null) === false && istKlaatu("") === false);

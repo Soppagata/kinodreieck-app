@@ -137,14 +137,6 @@ export function DatenTab({
           </div>
         </Klappe>
       )}
-      {/* Datenmigration: Gesamt-Backup einspielen. Am Handy ausgeblendet (Max 2026-07-19:
-          selten gebraucht; Sicherheitsnetz bleibt am Desktop, kd-nur-desktop). */}
-      <div className="kd-nur-desktop">
-        <Klappe titel="Backup wiederherstellen">
-          <RestoreImport ohneKopf />
-        </Klappe>
-      </div>
-
       {/* ---- Must-Watch-Migration + Besitz-Nachtrag (einmalige, idempotente Läufe) ---- */}
       {/* B6: nur zeigen, wenn wirklich etwas offen ist oder berichtet wird — vorher hing der
           Guard an der immer-truthy Funktion importiereBesitz, sodass die Box dauerhaft stand. */}
@@ -208,18 +200,6 @@ export function DatenTab({
         </div>
       )}
 
-      {/* Geräte-Sync: Supabase ist der aktive Treiber. Die Git-Sync-Klappe ist am Handy
-          ausgeblendet (Max 2026-07-19: eine Sync-Sektion am Handy) — am Desktop bleibt sie
-          als Fallback-UI (der Git-Treiber-Code bleibt ohnehin erhalten, kd-nur-desktop). */}
-      <div className="kd-nur-desktop">
-        <Klappe titel="Geräte-Sync (Git)">
-          <GitSyncEinstellungen ohneKopf />
-        </Klappe>
-      </div>
-      <Klappe titel="Geräte-Sync (Supabase)">
-        <SupabaseSyncEinstellungen ohneKopf />
-      </Klappe>
-
       {/* Export-Wächter: Browser-Speicher ist KEIN Backup */}
       {(ungesichertMaster || ungesichertArtikel) && (
         <div data-tour="daten-waechter" style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "12px 16px", fontSize: 14, lineHeight: 1.6 }}>
@@ -230,11 +210,19 @@ export function DatenTab({
           {" "}— seit dem letzten separaten Rohdaten-Export geändert. Der Browser-Speicher kann verloren gehen (Cache leeren, Browserwechsel).
           {" "}Das Gesamt-Backup unten sichert den vollständigen App-Stand; externe Archive der Daten-Jobs ersetzen es nicht.
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {ungesichertMaster && exportMaster && <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportMaster}><IconExport size={15} />Filmliste jetzt exportieren</button>}
-            {ungesichertArtikel && exportArtikel && <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportArtikel}><IconExport size={15} />Artikel jetzt exportieren</button>}
+            {ungesichertMaster && exportMaster && <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportMaster}><IconExport size={15} />Filmlisten-Rohdaten jetzt exportieren</button>}
+            {ungesichertArtikel && exportArtikel && <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 13px", display: "inline-flex", alignItems: "center", gap: 7 }} onClick={exportArtikel}><IconExport size={15} />Artikel-Rohdaten jetzt exportieren</button>}
           </div>
         </div>
       )}
+
+      {/* ---- Vokabular: eigene Stimmungswörter für die Suche ---- */}
+      {saveVokabular && (
+        <Klappe titel="Suche-Vokabular" tour="daten-vokabular">
+          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono} />
+        </Klappe>
+      )}
+
       {/* Teilen & Tauschen: Paket-Export/Import + KI-Ingestion (Phase A).
           data-tour wandert an die Klappe — der Tour-Anker existiert auch zugeklappt. */}
       {master && uebernehmePaket && (
@@ -245,16 +233,9 @@ export function DatenTab({
         </Klappe>
       )}
 
-      {/* ---- Vokabular: eigene Stimmungswörter für die Suche ---- */}
-      {saveVokabular && (
-        <Klappe titel="Suche-Vokabular" tour="daten-vokabular">
-          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono} />
-        </Klappe>
-      )}
-
-      {/* ---- Backup ---- */}
-      {backupGesamt && (
-        <Klappe titel="Backup" tour="daten-export">
+      {/* ---- Vollständiger App-Stand: Backup + Wiederherstellung ---- */}
+      <Klappe titel="Gesamt-Backup" tour="daten-export">
+        {backupGesamt && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
             Ein Klick sichert ALLES aus der App (Filmliste, Artikel, Pins, Merkliste,
@@ -266,19 +247,43 @@ export function DatenTab({
           <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>
           <FeldHinweis feld="backup" />
         </div>
-        </Klappe>
-      )}
+        )}
+        {/* Restore bleibt aus Sicherheitsgründen am Desktop; die bestehende
+            Importlogik und ihre Sicherheitshinweise bleiben unverändert. */}
+        <div className="kd-nur-desktop" style={{ marginTop: backupGesamt ? 14 : 0 }}>
+          <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+            <h2 style={{ ...h2Style, margin: "0 0 10px" }}>Backup wiederherstellen</h2>
+            <RestoreImport ohneKopf />
+          </div>
+        </div>
+      </Klappe>
 
-      {/* ---- Erweitert: Rohdaten-Dateien — bewusst eingeklappt. Sieht
-           gefährlicher aus als es ist und wird selten gebraucht; der
-           Wächter oben verlinkt hierher, wenn ein Export fällig ist. ---- */}
+      {/* ---- Erweitert: Sync, Rohdaten und Wartung — bewusst eingeklappt. ---- */}
       <details>
         <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch, padding: "4px 0" }}>
-          Erweitert — Dateien & Rohdaten (Filmliste · Programm · Artikel · Cache)
+          Erweitert — Sync, Rohdaten & Wartung
         </summary>
         <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 12 }}>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <h2 style={{ ...h2Style, margin: "0 0 10px" }}>Deine Filmliste (Masterliste)</h2>
+        <h2 style={{ ...h2Style, margin: "0 0 8px" }}>Geräte-Sync verwalten</h2>
+        <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
+          Die normale Einrichtung erfolgt beim ersten Öffnen. Hier kannst du eine
+          bestehende Verbindung später prüfen oder ändern.
+        </p>
+        {/* Supabase ist der aktive Treiber. Git bleibt am Desktop als Fallback-UI;
+            Treiber und Sicherheitstexte werden durch diese Gruppierung nicht geändert. */}
+        <div className="kd-nur-desktop">
+          <Klappe titel="Geräte-Sync (Git)">
+            <GitSyncEinstellungen ohneKopf />
+          </Klappe>
+        </div>
+        <Klappe titel="Geräte-Sync (Supabase)">
+          <SupabaseSyncEinstellungen ohneKopf />
+        </Klappe>
+      </div>
+
+      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
+        <h2 style={{ ...h2Style, margin: "0 0 10px" }}>Rohdaten: Filmliste (Masterliste)</h2>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
           Das Herz der App: alle Einträge und Bewertungen. Der aktive Stand liegt im
           Browser und kann optional über den Geräte-Sync abgeglichen werden. Der JSON-Export
@@ -310,7 +315,7 @@ export function DatenTab({
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
               <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={exportMaster}>
-                <IconExport size={16} />Master exportieren (JSON)
+                <IconExport size={16} />Filmliste als Rohdaten exportieren (JSON)
               </button>
               {resetMaster && (
                 <button style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}
@@ -353,7 +358,8 @@ export function DatenTab({
             )}
           </div>
         )}
-        <MasterImport onImport={importMaster} hasMaster={!!master} />
+        <MasterImport onImport={importMaster} hasMaster={!!master}
+          labelNeu="Filmlisten-Rohdaten importieren" labelErsetzen="Filmlisten-Rohdaten ersetzen" />
         <div style={{ height: 1, background: T.saal, margin: "16px 0" }} />
         <h2 style={h2Style}>Programm-Snapshot</h2>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
@@ -380,7 +386,7 @@ export function DatenTab({
             {artikelAnzahl} Artikel im Browser-Speicher. Wie bei der Masterliste gilt:
             regelmäßig exportieren und die Datei sichern — der Browser-Speicher ist kein Backup.
           </p>
-          <button style={{ ...btnStyle(true), marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 8 }} onClick={exportArtikel}><IconExport size={16} />Artikel exportieren (JSON)</button>
+          <button style={{ ...btnStyle(true), marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 8 }} onClick={exportArtikel}><IconExport size={16} />Artikel als Rohdaten exportieren (JSON)</button>
           <MasterImport onImport={importArtikel} hasMaster={artikelAnzahl > 0}
             labelNeu="Artikel importieren" labelErsetzen="Artikel ersetzen (überschreibt!)"
             hinweis='artikel.json hier einfügen ({"artikel":[…]})' />

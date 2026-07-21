@@ -74,14 +74,14 @@ const zurMediathek = knopf(/^mediathek$/i);
 if (zurMediathek) { zurMediathek.click(); await warte(500); }
 check("Start: Menü navigiert zur Mediathek", /Unbewerteter Besitz|Filme \(/.test(text()) || /typ als Diskriminator|Apple/.test(text()));
 
-/* ---- 2. Mediathek: Typ-Tabs, Chips, Formular-Knöpfe, Daten&Teilen ---- */
+/* ---- 2. Mediathek: Typ-Tabs, Chips und Formular-Knöpfe ---- */
 for (const t of ["Serien", "Musik", "Sonstiges", "Filme"]) {
   const k = knopf(new RegExp("^" + t + "( \\(|$)"));
   if (k) { k.click(); await warte(200); }
   check("Mediathek: Typ-Tab " + t + " klickbar", !!k);
 }
 check("Mediathek: Eintrag-hinzufügen-Knopf", !!knopf(/\+ Eintrag hinzufügen/));
-check("Mediathek: Daten & Teilen-Leiste", /Daten & Teilen/.test(text()));
+check("Mediathek: kein redundanter Daten-&-Teilen-Block", !/Daten & Teilen/.test(text()));
 
 /* ---- 2b. Ansicht-Umschalter: Bestand · Im Besitz · Must-Watch ---- */
 const besitzBtn = knopf(/^Im Besitz \(/);
@@ -218,16 +218,28 @@ if (wortFeld) {
   if (merken) { merken.click(); await warte(300); }
   check("Vokabular: Wort gespeichert + gelistet", /testwort/.test(text()) && /"wort":"testwort"/.test(dom.window.localStorage.getItem("kd:vokabular") || ""));
 }
+// Phase 2: klare Reihenfolge und Zwecke — Vokabular, Teilen, Gesamt-Backup, Erweitert
+const einstellTexte = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
+const vokIndex = einstellTexte.findIndex((s) => /^Suche-Vokabular/.test(s));
+const teilenIndex = einstellTexte.findIndex((s) => /^Teilen & Tauschen/.test(s));
+const backupIndex = einstellTexte.findIndex((s) => /^Gesamt-Backup/.test(s));
+const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — Sync, Rohdaten & Wartung/.test(s));
+check("Phase 2: Vokabular vor Teilen, Backup und Erweitert",
+  vokIndex >= 0 && teilenIndex > vokIndex && backupIndex > teilenIndex && erweitertIndex > backupIndex);
+check("Phase 2: Restore nicht mehr als eigene Hauptklappe", !einstellTexte.some((s) => s === "Backup wiederherstellen"));
 // Backup-Knopf crasht nicht
 const backup = knopf(/Gesamt-Backup herunterladen/);
 check("Backup-Knopf vorhanden", !!backup);
 if (backup) { backup.click(); await warte(400); check("Backup-Klick ohne Fehler", true); }
 // Erweitert-Dropdown: Inhalte + Reset-Knopf (confirm=false -> folgenlos)
-const erwSummary = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — Dateien/.test(s.textContent || ""));
+const erwSummary = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — Sync, Rohdaten & Wartung/.test(s.textContent || ""));
 check("Erweitert-Dropdown vorhanden", !!erwSummary);
 if (erwSummary) {
   erwSummary.click(); await warte(300);
-  check("Erweitert: Master-Export-Knopf", !!knopf(/^Master exportieren/));
+  const erwDetails = erwSummary.parentElement;
+  const syncKlappen = [...doc.querySelectorAll("details.kd-klappe")].filter((d) => /Geräte-Sync \((Git|Supabase)\)/.test((d.querySelector("summary") || {}).textContent || ""));
+  check("Erweitert: beide Geräte-Sync-Klappen einsortiert", syncKlappen.length === 2 && syncKlappen.every((d) => erwDetails.contains(d)));
+  check("Erweitert: Filmlisten-Rohdaten-Export", !!knopf(/^Filmliste als Rohdaten exportieren/));
   check("Erweitert: Programm-Snapshot-Import", /Programm-Snapshot/.test(text()));
   check("Erweitert: Artikel-Block", /Blog-Artikel/.test(text()));
   check("Erweitert: Cache-Knopf", !!knopf(/Programm-Cache leeren/));

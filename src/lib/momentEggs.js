@@ -6,9 +6,9 @@
 import { norm } from "./match.js";
 
 /* --- Klaatu barada nikto (Evil Dead), Tippfehler-tolerant ---
-   „Jede halbrichtige Variante zählt" (Max). Vorgehen: Eingabe normalisieren, in
-   Tokens zerlegen; jedes der drei Soll-Wörter muss von IRGENDEINEM Eingabe-Token
-   innerhalb einer längenabhängigen Levenshtein-Toleranz getroffen werden. Rein
+   „Jede halbrichtige Variante zählt" (Max). Zwei erinnerte Wortfragmente genügen;
+   jedes Eingabe-Token darf dabei nur ein Soll-Wort treffen. Kurze Eingaben halten
+   das Egg gezielt und vermeiden Treffer in gewöhnlichen langen Suchsätzen. Rein
    deterministisch, kein Fuzzy gegen externe Quellen. Schwellen bewusst tunebar. */
 const KLAATU_WORTE = ["klaatu", "barada", "nikto"];
 
@@ -31,18 +31,25 @@ export function levenshtein(a, b) {
 
 export function istKlaatu(query) {
   const toks = norm(query || "").split(/\s+/).filter(Boolean);
-  if (toks.length < 3) return false;
-  return KLAATU_WORTE.every((soll) => {
+  if (toks.length < 2 || toks.length > 6) return false;
+  const vergeben = new Set();
+  let treffer = 0;
+  for (const soll of KLAATU_WORTE) {
     const tol = soll.length <= 5 ? 1 : 2;   // klaatu/barada/nikto -> 1..2 Fehler ok
-    return toks.some((t) => levenshtein(t, soll) <= tol);
-  });
+    const index = toks.findIndex((t, i) => !vergeben.has(i) && levenshtein(t, soll) <= tol);
+    if (index >= 0) { vergeben.add(index); treffer++; }
+  }
+  return treffer >= 2;
 }
 
-/* --- Star-Wars-Crawl: am 4. Mai, wenn mindestens ein Kino-Treffer vorliegt ---
-   Datum + Datenbedingung (≥1 kinoMatches.matched). `jetzt` injizierbar (Tests). */
-export function crawlHeute({ jetzt, kinoMatches } = {}) {
+/* --- Star-Wars-Tag: der gesamte 4. Mai, ohne weitere Bedingung --- */
+export function istVierterMai(jetzt) {
   const d = jetzt || new Date();
-  const istMai4 = d.getMonth() === 4 && d.getDate() === 4;   // getMonth()===4 => Mai
-  const treffer = ((kinoMatches && kinoMatches.matched) || []).length;
-  return istMai4 && treffer >= 1;
+  return d.getMonth() === 4 && d.getDate() === 4;   // getMonth()===4 => Mai
+}
+
+/* Kompatible Objekt-Signatur; `kinoMatches` ist absichtlich keine Bedingung mehr.
+   `jetzt` bleibt injizierbar, damit Datum und Auto-Trigger exakt testbar sind. */
+export function crawlHeute({ jetzt } = {}) {
+  return istVierterMai(jetzt);
 }

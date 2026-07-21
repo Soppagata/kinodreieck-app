@@ -98,7 +98,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   letter-spacing: .015em !important; }
 
 /* ---------- NERV — vollständiges Schwarz/Rot-Orange-Terminal ---------- */
-.kd-fx-nerv { z-index: 0; --nerv-red:#F04A24; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#FFAE18; --nerv-lime:#D7FF28;
+.kd-fx-nerv { z-index: 0; --nerv-red:#D86B2D; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#E99A23; --nerv-lime:#D7FF28;
   font-family:'Space Mono', monospace; color:var(--nerv-red); }
 .kd-fx-nerv .kd-scan { position:absolute; inset:0; opacity:.075; mix-blend-mode:multiply;
   background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.62) 3px 4px); }
@@ -111,9 +111,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-battle, .kd-nerv-episode, .kd-nerv-alert, .kd-nerv-micro {
   position:absolute; box-sizing:border-box; background:rgba(5,5,6,.88); text-transform:uppercase; }
 .kd-nerv-battle { top:18px; left:16px; width:250px; min-height:50px; padding:7px 22px 7px 18px;
-  border:1px solid rgba(240,74,36,.72); opacity:.64;
+  border:1px solid rgba(216,107,45,.72); opacity:.64;
   clip-path:polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%); }
-.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(240,74,36,.62);
+.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(216,107,45,.62);
   clip-path:inherit; pointer-events:none; }
 .kd-nerv-battle b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:16px; line-height:1.05; letter-spacing:.08em; }
 .kd-nerv-battle span { display:block; margin-top:4px; color:#E9E4DC; font-size:9px; letter-spacing:.12em; }
@@ -127,7 +127,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-alert b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:24px; line-height:1; writing-mode:vertical-rl; margin:auto; }
 .kd-nerv-alert span { display:block; color:#E9E4DC; font-size:8px; margin-top:5px; letter-spacing:.1em; }
 
-.kd-nerv-episode { top:94px; right:18px; width:156px; min-height:112px; padding:9px 12px; border:1px solid rgba(240,74,36,.72); opacity:.58;
+.kd-nerv-episode { top:94px; right:18px; width:156px; min-height:112px; padding:9px 12px; border:1px solid rgba(216,107,45,.72); opacity:.58;
   clip-path:polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
 .kd-nerv-episode b { display:block; color:var(--nerv-red); font-family:'Hiragino Mincho ProN','Yu Mincho',serif; font-size:42px; line-height:1; }
 .kd-nerv-episode span { display:block; color:#E9E4DC; font-size:8px; margin-top:6px; letter-spacing:.08em; }
@@ -144,11 +144,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-nerv-logo { display:block; flex:0 0 auto; width:clamp(52px,4.2vw,56px); aspect-ratio:932/900;
   overflow:hidden; background:#000; }
 .kd-nerv-logo img { display:block; width:100%; height:auto; }
-.kd-nerv header h1 { color:#F04A24 !important; letter-spacing:.075em !important; }
-.kd-nerv .kd-menu { border-bottom-color:rgba(240,74,36,.62) !important; }
-.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(240,74,36,.62);
+.kd-nerv header h1 { color:#D86B2D !important; letter-spacing:.075em !important; }
+.kd-nerv .kd-menu { border-bottom-color:rgba(216,107,45,.62) !important; }
+.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(216,107,45,.62);
   clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
-  box-shadow:0 0 0 1px rgba(240,74,36,.12),0 5px 18px rgba(0,0,0,.5) !important; }
+  box-shadow:0 0 0 1px rgba(216,107,45,.12),0 5px 18px rgba(0,0,0,.5) !important; }
 .kd-nerv button, .kd-nerv input, .kd-nerv select, .kd-nerv textarea { border-radius:0 !important; }
 
 /* Glitch (JS-getaktet, mobil weiterhin durch die bestehende Query neutralisiert). */
@@ -345,44 +345,56 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   text-shadow: 2px 3px 0 rgba(122,90,22,.45); position: relative; }
 
 /* ================= EGG: TEPPICH (Choose Life) =================
-   Sturz durch den Boden — Teppich-Trichter oben (Lichtschacht, zieht sich weg),
-   Karte unten. Transforms NUR auf diesen In-Flow-Overlay-Elementen, nichts Fixes. */
+   Senkrechte Trainspotting-Kamerafahrt über rotem Teppich: Figur nah, dann Totale.
+   Transforms NUR auf den Szenenelementen; der Fixed-Wrapper selbst bleibt stabil. */
 .kd-teppich-scrim { position: fixed; inset: 0; z-index: 11200; overflow: hidden;
-  background: #2E0912; display: flex; align-items: center; justify-content: center; }
-/* Roter, FLAUSCHIGER Teppich: feDiffuseLighting beleuchtet ein Turbulenz-Feld → plüschiges,
-   dreidimensionales Pile (echte Zotteln + Schatten) statt flachem Rauschen. */
-.kd-teppich-flausch { position: absolute; inset: 0; background-color: #4A1020;
+  background: #3a0c0b; display: flex; align-items: center; justify-content: center; }
+/* Roter, schwerer Flor wie in der Referenz: feDiffuseLighting modelliert den Pile,
+   zwei dunkle Radialfelder vermeiden eine gleichmäßige Tapetenfläche. */
+.kd-teppich-flausch { position: absolute; inset: -3%; background-color: #681b17;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='pile'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' seed='6' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' lighting-color='%23C63A54' surfaceScale='3.6' diffuseConstant='1.3'><feDistantLight azimuth='235' elevation='46'/></feDiffuseLighting></filter><rect width='320' height='320' filter='url(%23pile)'/></svg>");
-  background-size: 320px 320px; }
-/* Tiefen-Vignette (Schattierung — passt laut Max). */
-.kd-teppich-schacht { position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(66% 62% at 50% 50%, rgba(6,2,4,0) 52%, rgba(6,2,4,.45) 100%); }
-/* Schachtkanten: JS hängt jede Bildschirm-Ecke an die zugehörige Ecke des sinkenden
-   Fensters (kein viewBox → 1 Einheit = 1px, Viewport-Koordinaten). Dezent. */
-.kd-teppich-kanten { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-.kd-teppich-kanten line { stroke: rgba(255,228,208,.17); stroke-width: 1.2; }
-/* „Grab-Fenster": scharfkantiges Rechteck (kein Bloom), das nach unten versinkt
-   (kleiner + tiefer) = ein Sarg, den man von oben ins Grab sinken sieht. */
-.kd-teppich-oeffnung { position: absolute; z-index: 2; top: 50%; left: 50%; width: 84vw; height: 74vh;
-  transform: translate(-50%, -50%) scale(1); transform-origin: 50% 44%;
-  background: linear-gradient(162deg, #F4EFE6 0%, #CDAE9A 58%, #6F4C3E 100%);
-  box-shadow: 0 0 0 3px #17080D, 0 0 0 11px rgba(18,6,10,.5), 0 26px 70px rgba(0,0,0,.55);
-  transition: transform 3.4s cubic-bezier(.5,0,.35,1), opacity 3.4s; }
-.kd-teppich-oeffnung.weg { transform: translate(-50%, -22%) scale(.24); opacity: .72; }
-/* Karte = scharfkantiges dunkles Popup auf dem Teppich (Fonts/Layout unverändert). */
+  background-size: 320px 320px; box-shadow: inset 0 0 140px rgba(19,2,3,.58); }
+/* Erst bei größerer Distanz werden die kalten Zimmerkanten sichtbar. */
+.kd-teppich-zimmer { position: absolute; inset: -14%; z-index: 1; opacity: 0; transform: scale(1.7);
+  border: clamp(38px, 8vw, 112px) solid rgba(22,17,16,.84);
+  box-shadow: inset 0 0 0 3px rgba(224,211,192,.16), inset 0 0 80px rgba(3,2,2,.72);
+  transition: transform 3.8s cubic-bezier(.42,0,.28,1), opacity 2.8s ease; }
+.kd-teppich-zimmer.weit { opacity: .82; transform: scale(.94); }
+/* Stilisiertes Close-up aus der Aufnahme: Hemd, gelockerte Krawatte, Zigarette und
+   harter seitlicher Schatten. Die Figur schrumpft durch die Kamerafahrt, nicht der Teppich. */
+.kd-teppich-figur { position: absolute; z-index: 2; left: 50%; top: 50%; width: clamp(330px, 42vw, 430px);
+  height: auto; overflow: visible; transform: translate(-50%, -28%) scale(1.45); transform-origin: 50% 38%;
+  filter: drop-shadow(-22px 18px 18px rgba(0,0,0,.44));
+  transition: transform 3.8s cubic-bezier(.42,0,.28,1), filter 3.8s ease, opacity 3.8s ease; }
+.kd-teppich-figur.weit { transform: translate(-50%, -48%) scale(.25); filter: drop-shadow(-8px 8px 7px rgba(0,0,0,.52)); opacity: .92; }
+.kd-teppich-schatten { fill: rgba(12,2,3,.58); transform: translate(-35px,16px) rotate(-8deg); transform-origin: center; }
+.kd-teppich-hose { fill: #242426; stroke: #110e10; stroke-width: 3; }
+.kd-teppich-hemd { fill: #d8d2c5; stroke: #81796d; stroke-width: 3; }
+.kd-teppich-arm { fill: #c8c1b4; stroke: #756d63; stroke-width: 3; }
+.kd-teppich-kragen { fill: #ece7dc; stroke: #766f66; stroke-width: 2.4; }
+.kd-teppich-krawatte { fill: #69615d; stroke: #373130; stroke-width: 2; transform: rotate(4deg); transform-origin: 140px 205px; }
+.kd-teppich-kopf { fill: #cbb3a1; stroke: #72564c; stroke-width: 3; }
+.kd-teppich-haar { fill: #6d5146; opacity: .92; }
+.kd-teppich-gesicht { fill: none; stroke: #684c43; stroke-width: 3; stroke-linecap: round; }
+.kd-teppich-pupille { fill: #352727; }
+.kd-teppich-zigarette { fill: none; stroke: #e8dfce; stroke-width: 5; stroke-linecap: round; }
+/* Karte erscheint erst, wenn die Kamerafahrt die Totale fast erreicht hat. */
 .kd-teppich-karte { position: relative; z-index: 3; width: 100%; max-width: 336px; margin: 0 22px; text-align: center;
-  background: rgba(9,3,6,.92); border: 1px solid #2A0C14; border-radius: 10px; padding: 22px 22px 24px;
-  box-shadow: 0 22px 55px rgba(0,0,0,.6);
-  opacity: 0; transform: translateY(26px); transition: opacity .7s 2.7s ease, transform .7s 2.7s cubic-bezier(.2,.7,.3,1); }
+  background: rgba(13,5,6,.93); border: 1px solid rgba(211,136,74,.42); border-radius: 3px; padding: 22px 22px 24px;
+  box-shadow: 0 22px 55px rgba(0,0,0,.64), 0 0 0 5px rgba(25,5,7,.24);
+  opacity: 0; transform: translateY(26px); transition: opacity .7s 3.05s ease, transform .7s 3.05s cubic-bezier(.2,.7,.3,1); }
 .kd-teppich-karte.da { opacity: 1; transform: translateY(0); }
 .kd-teppich-kicker { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 600; font-size: 15px; color: #E4872A; letter-spacing: .03em; }
 .kd-teppich-titel { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 33px; line-height: 1.06; color: #F3ECDD; margin: 9px 0 0; }
 .kd-teppich-jahr { font-family: 'Space Mono', monospace; font-size: 12px; color: #C0554B; margin: 9px 0 0; }
 .kd-teppich-verf { font-family: 'Space Mono', monospace; font-size: 11px; color: #A79AA0; margin: 6px 0 0; letter-spacing: .02em; }
+@media (max-width:640px) {
+  .kd-teppich-figur.weit { transform:translate(-50%,-90%) scale(.23); }
+}
 
 /* Egg-Modus-reduced-motion-Nachtrag (Teppich kam nach dem B2-Stand dazu). */
 @media (prefers-reduced-motion: reduce) {
-  .kd-teppich-oeffnung, .kd-teppich-karte { transition: none !important; }
+  .kd-teppich-zimmer, .kd-teppich-figur, .kd-teppich-karte { transition: none !important; }
 }
 
 /* ================= B4-EGG: STAR-WARS-CRAWL (Klaatu bleibt der Nachbar unten) =================
@@ -407,6 +419,24 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   animation: kd-crawl-sprung 7s ease-in-out infinite; transform-origin: 50% 50%; }
 .kd-crawl-hyperspace line { stroke: rgba(150,190,255,.35); stroke-width: 1.4; }
 @keyframes kd-crawl-sprung { 0%, 100% { opacity: .28; transform: scale(1); } 50% { opacity: .6; transform: scale(1.06); } }
+.kd-crawl-nebel { position:absolute; inset:0; z-index:0; opacity:.48; mix-blend-mode:screen; pointer-events:none;
+  background:
+    radial-gradient(ellipse at 18% 34%,rgba(57,93,180,.17),transparent 30%),
+    radial-gradient(ellipse at 78% 62%,rgba(133,55,159,.13),transparent 32%),
+    radial-gradient(ellipse at 50% 104%,rgba(255,232,31,.08),transparent 38%); }
+.kd-crawl-mond { position:absolute; z-index:1; top:clamp(34px,7vh,82px); right:clamp(24px,6vw,90px); width:clamp(92px,18vw,188px);
+  height:auto; opacity:.34; filter:drop-shadow(0 0 28px rgba(153,187,230,.22)); animation:kd-crawl-mond-drift 18s ease-in-out infinite; }
+.kd-crawl-mond path, .kd-crawl-mond ellipse { fill:none; stroke:rgba(23,31,44,.52); stroke-width:3; }
+.kd-crawl-mond circle:last-child { fill:#313c51; opacity:.8; }
+@keyframes kd-crawl-mond-drift { 0%,100%{transform:translateY(0) rotate(-2deg)} 50%{transform:translateY(8px) rotate(1deg)} }
+.kd-crawl-rahmen { position:absolute; z-index:3; inset:clamp(10px,2vw,24px); border:1px solid rgba(255,232,31,.18); pointer-events:none; }
+.kd-crawl-rahmen::before, .kd-crawl-rahmen::after { content:""; position:absolute; width:44px; height:44px; border-color:rgba(255,232,31,.54); }
+.kd-crawl-rahmen::before { left:-1px; top:-1px; border-left:3px solid; border-top:3px solid; }
+.kd-crawl-rahmen::after { right:-1px; bottom:-1px; border-right:3px solid; border-bottom:3px solid; }
+.kd-crawl-rahmen span, .kd-crawl-rahmen i, .kd-crawl-rahmen b { position:absolute; font-family:'Space Mono',monospace; color:rgba(255,232,31,.58); }
+.kd-crawl-rahmen span { left:14px; top:10px; font-size:10px; letter-spacing:.24em; }
+.kd-crawl-rahmen i { right:12px; bottom:9px; font-style:normal; font-size:8px; letter-spacing:.14em; }
+.kd-crawl-rahmen b { right:13px; top:7px; font-size:22px; font-weight:400; }
 /* Ferne Horizontglut am Fluchtpunkt (oben Mitte), in die der Text hineinkriecht. */
 .kd-crawl-horizont { position: absolute; top: 0; left: 0; right: 0; height: 46%; z-index: 1; pointer-events: none;
   background: radial-gradient(120% 100% at 50% 0%, rgba(255,232,31,.10) 0%, rgba(255,232,31,.02) 40%, transparent 70%); }
@@ -463,7 +493,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    kein Kippen, kein Funkeln — der Text steht ruhig und voll lesbar in einem
    scrollbaren, oben-ausgerichteten Panel. */
 .kd-crawl-reduced .kd-crawl-stars,
-.kd-crawl-reduced .kd-crawl-hyperspace,
+.kd-crawl-reduced .kd-crawl-hyperspace, .kd-crawl-reduced .kd-crawl-mond,
 .kd-crawl-reduced .kd-crawl-skip { animation: none !important; }
 .kd-crawl-reduced .kd-crawl-stage {
   -webkit-mask-image: none; mask-image: none; perspective: none;
@@ -476,7 +506,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-crawl-reduced .kd-crawl-copy { animation: none !important; transform: none !important; text-align: left; }
 .kd-crawl-reduced .kd-crawl-intro { text-align: left; }
 @media (prefers-reduced-motion: reduce) {
-  .kd-crawl-stars, .kd-crawl-hyperspace, .kd-crawl-skip, .kd-crawl { animation: none !important; }
+  .kd-crawl-stars, .kd-crawl-hyperspace, .kd-crawl-mond, .kd-crawl-skip, .kd-crawl { animation: none !important; }
   .kd-crawl-copy { animation: none !important; transform: none !important; text-align: left; }
   .kd-crawl-plane { position: relative; left: auto; bottom: auto; transform: none; width: min(92vw, 640px); }
   .kd-crawl-stage {
@@ -487,49 +517,97 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 
 /* ================= B4-EGG: KLAATU → NECRONOMICON (Buch der Toten) =================
-   Dekorativer Buch-/Haut-Rahmen ums Viewport, im Blog eingeblendet (7 s, selbst-
-   abklingend). aria-hidden + pointer-events:none → verdeckt/blockiert den Blog NICHT,
-   nur ein Rand. Fleischiger Deckel = solider Innenrahmen (box-shadow) + verzerrter
+   Dekorativer Buch-/Haut-Rahmen ums Viewport, tabübergreifend bis X/Escape.
+   pointer-events:none → verdeckt/blockiert die App NICHT; nur das X ist interaktiv.
+   Fleischiger Deckel = solider Innenrahmen (box-shadow) + verzerrter
    Leder-Randstrich (SVG-Haut mit feDisplacement) + Nähte/Runen/Schrei-Gesicht; unten
    die Kettensäge (Evil Dead). Bewusst KEIN transform/filter auf .kd-necro-rand selbst,
    damit keine fixed-Nachfahren umgehängt werden (Containing-Block-Falle der Nav). */
 .kd-necro-rand {
   position: fixed; inset: 0; z-index: 8000; pointer-events: none;
-  box-shadow:
-    inset 0 0 0 9px #3a0f12,
-    inset 0 0 0 17px #6d2a24,
-    inset 0 0 44px 14px rgba(8,2,3,.82),
-    inset 0 0 130px 30px rgba(24,7,9,.34);
+  display: grid; place-items: center; padding: clamp(8px, 3vw, 34px); box-sizing: border-box;
+  background: radial-gradient(ellipse at center, rgba(24,8,5,.34), rgba(4,2,2,.88));
   animation: kd-necro-ein .9s ease both;
 }
+.kd-necro-schliessen {
+  position: fixed; z-index: 9; top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
+  width: 46px; height: 46px; padding: 0; pointer-events: auto; border-radius: 50%;
+  border: 2px solid #d3b77b; color: #f1d9a4; background: rgba(39,17,13,.94);
+  box-shadow: 0 5px 20px rgba(0,0,0,.72), inset 0 0 12px rgba(142,63,40,.55);
+  font: 700 30px/1 Georgia, serif; cursor: pointer;
+}
+.kd-necro-schliessen:hover { filter: brightness(1.18); }
+.kd-necro-schliessen:focus-visible { outline: 3px solid #f1d9a4; outline-offset: 3px; }
 @keyframes kd-necro-ein { from { opacity: 0; } to { opacity: 1; } }
+.kd-necro-buch {
+  position: relative; width: min(96vw, 1040px); height: min(90vh, 760px); min-height: 430px;
+  background: #4b2519; border-radius: 4% 3% 3.5% 4.5%;
+  box-shadow: 0 28px 70px rgba(0,0,0,.8), inset 0 0 30px rgba(18,5,3,.8), 0 0 0 3px #24100d;
+  animation: kd-necro-buch-auf .75s cubic-bezier(.2,.68,.25,1) both;
+}
+@keyframes kd-necro-buch-auf { from { transform: perspective(900px) rotateX(12deg) scale(.9); opacity: .2; } to { transform: none; opacity: 1; } }
 .kd-necro-haut {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  filter: saturate(1.05) contrast(1.06);
+  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%;
+  filter: saturate(.72) contrast(1.16) drop-shadow(0 4px 5px rgba(0,0,0,.65));
   animation: kd-necro-atem 5.5s ease-in-out infinite;
 }
 @keyframes kd-necro-atem { 0%, 100% { opacity: .9; } 50% { opacity: 1; } }
 /* Kante als dicker, per feDisplacement verzerrter Lederstrich am Rand — als Fläche
    gefüllt würde die geschlossene Perimeter-Kontur die Mitte decken; darum fill:none. */
-.kd-necro-kante { fill: none; stroke: #7c2f28; stroke-width: 34; stroke-linejoin: round; opacity: .9; }
-.kd-necro-naht { fill: none; stroke: #e6d3a6; stroke-width: 2.4; stroke-linecap: round; opacity: .48; }
-.kd-necro-runen { fill: #caa14b; opacity: .55; }
-.kd-necro-gesicht { fill: #23090b; stroke: #9a5a3a; stroke-width: 1.6; stroke-linejoin: round; opacity: .82; }
-.kd-necro-gesicht path:first-of-type { fill: #3a1512; }
-.kd-necro-chainsaw {
-  position: absolute; z-index: 2; left: clamp(10px, 4vw, 44px); bottom: clamp(14px, 4vh, 46px);
-  width: clamp(148px, 34vw, 250px); height: auto;
-  filter: drop-shadow(0 6px 10px rgba(0,0,0,.6));
-  transform-origin: 30% 60%; animation: kd-necro-saege .16s linear infinite;
+.kd-necro-kante { fill: none; stroke: #60412d; stroke-width: 43; stroke-linejoin: round; opacity: .98; }
+.kd-necro-naht { fill: none; stroke: #bca273; stroke-width: 2.5; stroke-linecap: round; opacity: .52; }
+.kd-necro-runen { fill: #341a13; opacity: .72; }
+.kd-necro-gesicht { fill: #20130e; stroke: #6f4f38; stroke-width: 1.8; stroke-linejoin: round; opacity: .92; }
+.kd-necro-gesicht path:first-of-type { fill: #3c281d; }
+
+/* Aufgeschlagene, ungleichmäßig vergilbte Doppelseite. Das feine Raster und die
+   Flecken liegen rein im CSS, damit keine externen Bildassets nötig sind. */
+.kd-necro-seiten { position: absolute; z-index: 1; inset: clamp(34px, 5.2vw, 68px); display: grid; grid-template-columns: 1fr 1fr;
+  filter: sepia(.2) contrast(1.03); box-shadow: 0 8px 24px rgba(9,3,2,.62); }
+.kd-necro-seiten::after { content:""; position:absolute; z-index:4; top:-1%; bottom:-1%; left:50%; width:18px; transform:translateX(-50%);
+  background:linear-gradient(90deg,rgba(60,32,17,.34),rgba(255,226,161,.24) 43%,rgba(48,25,15,.43)); box-shadow:0 0 8px rgba(45,21,12,.26); }
+.kd-necro-seite { position: relative; overflow: hidden; padding: clamp(18px, 3vw, 40px); box-sizing: border-box; color:#5f2b25;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(122,72,31,.16) 0 2%, transparent 8%),
+    radial-gradient(circle at 83% 72%, rgba(111,51,23,.13) 0 3%, transparent 11%),
+    repeating-linear-gradient(2deg, rgba(95,55,22,.025) 0 1px, transparent 1px 5px),
+    linear-gradient(102deg,#d9ba79 0%,#ead092 46%,#cfa864 100%);
+  box-shadow: inset 0 0 34px rgba(78,42,17,.28); }
+.kd-necro-links { transform:rotate(-.35deg); border-radius:3px 0 0 7px; }
+.kd-necro-rechts { transform:rotate(.45deg); border-radius:0 6px 4px 0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.kd-necro-glyphen, .kd-necro-fussglyphen { font-family:Georgia,serif; font-weight:700; color:#6f3028; letter-spacing:.22em; text-align:center; opacity:.86; }
+.kd-necro-glyphen { font-size:clamp(12px,2vw,20px); transform:rotate(-2deg); }
+.kd-necro-fussglyphen { margin-top:clamp(10px,2vh,22px); font-size:clamp(9px,1.2vw,14px); }
+.kd-necro-studie { width:100%; height:calc(100% - 52px); overflow:visible; }
+.kd-necro-zeichnung { stroke:#71362f; stroke-width:3.4; stroke-linecap:round; stroke-linejoin:round; opacity:.84; }
+.kd-necro-randnotiz { position:absolute; left:9px; bottom:50px; font-family:'Fraunces',Georgia,serif; font-style:italic;
+  font-size:clamp(9px,1.1vw,13px); letter-spacing:.08em; color:#7d392d; transform:rotate(-88deg); transform-origin:left bottom; }
+.kd-necro-kapitel { font-family:Georgia,serif; font-size:clamp(14px,2.2vw,27px); font-weight:700; line-height:1.08; letter-spacing:.08em;
+  color:#6c2a23; transform:rotate(-1.2deg); text-shadow:1px 1px 0 rgba(116,62,27,.18); }
+.kd-necro-siegel { position:relative; width:clamp(86px,12vw,138px); aspect-ratio:1; margin:clamp(8px,2vh,18px) 0; border:3px solid #75352e;
+  border-radius:50%; transform:rotate(7deg); opacity:.88; }
+.kd-necro-siegel::before, .kd-necro-siegel::after { content:""; position:absolute; inset:13%; border:2px solid #75352e; transform:rotate(45deg); }
+.kd-necro-siegel::after { transform:rotate(-45deg); }
+.kd-necro-siegel span { position:absolute; inset:0; display:grid; place-items:center; font-family:Georgia,serif; font-size:clamp(42px,7vw,78px); color:#702c26; }
+.kd-necro-siegel i, .kd-necro-siegel b { position:absolute; left:50%; top:-9%; bottom:-9%; width:2px; background:#75352e; transform:rotate(17deg); }
+.kd-necro-siegel b { transform:rotate(-17deg); }
+.kd-necro-beschwoerung { font-family:'Fraunces',Georgia,serif; font-style:italic; font-weight:400; font-size:clamp(22px,4.3vw,55px);
+  line-height:.88; letter-spacing:.035em; color:#7c1f1a; transform:rotate(-2deg) skewX(-2deg); text-shadow:1px 2px 0 rgba(94,33,20,.18); }
+.kd-necro-rechts p { margin:clamp(10px,2vh,20px) 0 0; font-family:Georgia,serif; font-style:italic; font-size:clamp(12px,1.8vw,19px);
+  line-height:1.42; color:#63352d; transform:rotate(.7deg); }
+.kd-necro-blutspur { position:absolute; right:13%; bottom:7%; width:8px; height:22%; border-radius:70%; transform:rotate(12deg);
+  background:linear-gradient(#7c1f1a,rgba(124,31,26,.12)); box-shadow:13px 28px 0 -2px rgba(124,31,26,.6),-8px 52px 0 -3px rgba(124,31,26,.5); opacity:.72; }
+@media (max-width:640px) {
+  .kd-necro-rand { padding:6px; }
+  .kd-necro-buch { width:98vw; height:88vh; min-height:520px; }
+  .kd-necro-seiten { inset:30px 24px 32px; grid-template-columns:.82fr 1.18fr; }
+  .kd-necro-seite { padding:15px 12px; }
+  .kd-necro-studie { height:calc(100% - 34px); }
+  .kd-necro-seiten::after { width:12px; }
+  .kd-necro-randnotiz { display:none; }
 }
-@keyframes kd-necro-saege { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(1px, -1px) rotate(.6deg); } }
-.kd-necro-saegeblatt { fill: #7d8288; stroke: #23262a; stroke-width: 2; }
-.kd-necro-zaehne { fill: none; stroke: #d7dbde; stroke-width: 2; stroke-linejoin: round; }
-.kd-necro-motor { fill: #7a2a1f; stroke: #250c0a; stroke-width: 2; }
-.kd-necro-griff { fill: none; stroke: #d8cdbf; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
-.kd-necro-niete { fill: #e7dccb; }
 @media (prefers-reduced-motion: reduce) {
-  .kd-necro-rand, .kd-necro-haut, .kd-necro-chainsaw { animation: none !important; }
+  .kd-necro-rand, .kd-necro-buch, .kd-necro-haut { animation: none !important; }
 }
 /* ================= START-DASHBOARD (Marquee-Rework, 2026-07-19) =================
    Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
@@ -620,3 +698,123 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   letter-spacing: 0; text-transform: none; }
 
 .kd-dash-leer { margin: 0; font-size: 13px; line-height: 1.6; color: var(--kd-rauch); }
+
+/* ================= 4. MAI: GANZTÄGIGER GALAXIS-MODUS =================
+   Datumsabhängig am Wrapper aktiviert, unabhängig vom Kinoprogramm. Keine externen
+   Assets: Sternfeld, Lichtkegel und goldene Interface-Kanten entstehen vollständig
+   aus CSS. Der Crawl bleibt ein eigenes, schließbares Einmal-pro-Tag-Overlay. */
+.kd-may4 {
+  --may4-gold: #f5cf63;
+  --may4-blue: #68b9ff;
+  --may4-deep: #030611;
+  background:
+    radial-gradient(ellipse at 76% 10%, rgba(44, 91, 172, .34), transparent 34%),
+    radial-gradient(ellipse at 14% 72%, rgba(115, 49, 133, .22), transparent 38%),
+    linear-gradient(165deg, #050918 0%, #02040b 48%, #0b1021 100%) !important;
+  overflow-x: clip;
+}
+.kd-may4::before,
+.kd-may4::after {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+}
+.kd-may4::before {
+  opacity: .8;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.96) 0 1px, transparent 1.5px),
+    radial-gradient(circle, rgba(104,185,255,.82) 0 1px, transparent 1.7px),
+    radial-gradient(circle, rgba(245,207,99,.76) 0 1.2px, transparent 1.8px);
+  background-size: 71px 71px, 113px 113px, 167px 167px;
+  background-position: 9px 18px, 43px 67px, 81px 11px;
+  animation: kd-may4-sternenflug 42s linear infinite;
+}
+.kd-may4::after {
+  inset: auto -13vw -28vw auto; width: min(76vw, 850px); aspect-ratio: 1;
+  border-radius: 50%; opacity: .44;
+  background: radial-gradient(circle at 36% 34%, #c6e8ff 0 1%, #397bc2 8%, #102c61 28%, rgba(3,6,17,0) 68%);
+  filter: blur(.4px); box-shadow: -48vw -62vh 120px rgba(87,55,155,.12);
+}
+@keyframes kd-may4-sternenflug {
+  from { background-position: 9px 18px, 43px 67px, 81px 11px; }
+  to { background-position: 80px 160px, 156px 293px, 248px 345px; }
+}
+.kd-may4 .kd-app { position: relative; z-index: 1; }
+.kd-may4 .kd-app > header {
+  position: relative; padding-top: 64px !important;
+  filter: drop-shadow(0 12px 28px rgba(0,0,0,.5));
+}
+.kd-may4 .kd-app > header::before {
+  content: "MAY THE FOURTH · EIN FEIERTAG FÜR ALLE";
+  position: absolute; top: 20px; left: 22px; right: 22px;
+  color: var(--may4-gold); font: 700 10px/1 'Space Mono', monospace;
+  letter-spacing: .22em; text-align: center; text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(245,207,99,.5);
+}
+.kd-may4 .kd-app > header::after {
+  content: ""; position: absolute; left: 22px; right: 22px; bottom: 10px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--may4-blue) 18%, var(--may4-gold) 50%, var(--may4-blue) 82%, transparent);
+  box-shadow: 0 0 12px rgba(104,185,255,.72);
+}
+.kd-may4 header h1 {
+  color: #fff5be !important; letter-spacing: .15em !important;
+  text-shadow: 0 0 8px rgba(245,207,99,.75), 0 0 26px rgba(104,185,255,.42);
+}
+.kd-may4 header svg { filter: drop-shadow(0 0 7px rgba(104,185,255,.9)); }
+.kd-may4 .kd-menu {
+  background: rgba(3,6,17,.88) !important;
+  border-bottom: 1px solid rgba(245,207,99,.55) !important;
+  box-shadow: 0 10px 32px rgba(0,0,0,.5), 0 1px 15px rgba(104,185,255,.13);
+  backdrop-filter: blur(13px) saturate(1.25);
+}
+.kd-may4 .kd-menu button {
+  color: #b9cff0 !important; background: transparent !important;
+  border: 1px solid transparent !important; border-radius: 3px !important;
+  text-shadow: 0 0 9px rgba(104,185,255,.3);
+}
+.kd-may4 .kd-menu button:hover { color: #fff5be !important; border-color: rgba(104,185,255,.42) !important; }
+.kd-may4 .kd-menu button.kd-nav-aktiv {
+  color: #090b13 !important;
+  background: linear-gradient(135deg, #fff0a7, #dca632) !important;
+  border-color: #fff2ae !important;
+  box-shadow: 0 0 16px rgba(245,207,99,.45);
+  text-shadow: none;
+}
+.kd-may4 main {
+  position: relative;
+  border-inline: 1px solid rgba(104,185,255,.13);
+  box-shadow: inset 18px 0 40px -34px rgba(104,185,255,.65), inset -18px 0 40px -34px rgba(104,185,255,.65);
+}
+.kd-may4 main h2,
+.kd-may4 main h3 { color: #ffe786 !important; text-shadow: 0 0 13px rgba(245,207,99,.28); }
+.kd-may4 .kd-karte,
+.kd-may4 .kd-dash-karte,
+.kd-may4 .kd-dash-ticket {
+  border: 1px solid rgba(245,207,99,.58) !important;
+  box-shadow: 0 7px 22px rgba(0,0,0,.55), 0 0 0 1px rgba(104,185,255,.12), inset 0 0 22px rgba(245,207,99,.06) !important;
+}
+.kd-may4 .kd-karte { background: linear-gradient(145deg, #f4edcf 0%, #e7d8a8 100%) !important; }
+.kd-may4 .kd-dash-bulbs {
+  background-image: radial-gradient(circle at center, #fff4b6 0 2.3px, transparent 2.8px);
+  filter: drop-shadow(0 0 5px var(--may4-gold));
+}
+.kd-may4 .kd-dash-strip { border: 1px solid rgba(104,185,255,.4); box-shadow: 0 0 12px rgba(104,185,255,.2); }
+.kd-may4 input,
+.kd-may4 select,
+.kd-may4 textarea { border-color: rgba(245,207,99,.72) !important; box-shadow: 0 0 0 1px rgba(104,185,255,.08); }
+.kd-may4 button:focus-visible,
+.kd-may4 input:focus-visible,
+.kd-may4 select:focus-visible,
+.kd-may4 textarea:focus-visible { outline-color: var(--may4-blue) !important; }
+.kd-may4 .kd-navband {
+  border-color: var(--may4-gold) !important; background: rgba(3,6,17,.94) !important;
+  box-shadow: 0 0 18px rgba(104,185,255,.42) !important;
+}
+.kd-may4 .kd-navband i { background: var(--may4-gold) !important; }
+@media (max-width: 760px) {
+  .kd-may4 .kd-app > header { padding-top: 58px !important; }
+  .kd-may4 .kd-app > header::before { font-size: 8px; letter-spacing: .13em; }
+  .kd-may4 main { border-inline: 0; box-shadow: none; }
+  .kd-may4::after { width: 118vw; right: -40vw; bottom: -28vw; opacity: .32; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kd-may4::before { animation: none !important; }
+}

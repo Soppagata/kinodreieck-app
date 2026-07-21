@@ -7,6 +7,10 @@ import { sichtbareDienste } from "../lib/dienste.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
+import {
+  statusVon, neuerGesehenEintrag, initialisiereStaffelstaende,
+  neueStaffeln, bestaetigeStaffel,
+} from "../lib/staffeln.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -79,8 +83,8 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   const setzeStatus = (t, wert) => {
     setEntdeckenStatus((prev) => {
       const next = { ...prev };
-      if (next[t.watchmode_id] === wert) delete next[t.watchmode_id]; // Toggle
-      else next[t.watchmode_id] = wert;
+      if (statusVon(next[t.watchmode_id]) === wert) delete next[t.watchmode_id]; // Toggle
+      else next[t.watchmode_id] = wert === "gesehen" && t.typ === "tv_series" ? neuerGesehenEintrag(t) : wert;
       store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
       return next;
     });
@@ -133,6 +137,32 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
     if (!entdeckenDa) return 0;
     return entdecken.titel.filter((t) => entdeckenStatus[t.watchmode_id]).length;
   }, [entdecken, entdeckenDa, entdeckenStatus]);
+
+  /* Alte String-Häkchen bekommen beim ersten real gelieferten Staffelwert nur
+     einen Ausgangsstand. Dadurch entsteht kein rückwirkender „neu“-Alarm. */
+  useEffect(() => {
+    if (!entdeckenDa) return;
+    setEntdeckenStatus((prev) => {
+      const next = initialisiereStaffelstaende(prev, entdecken.titel);
+      if (next !== prev) store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [entdecken, entdeckenDa]);
+
+  const staffelHinweise = useMemo(() => {
+    if (!entdeckenDa) return [];
+    return neueStaffeln(entdecken.titel, entdeckenStatus);
+  }, [entdecken, entdeckenDa, entdeckenStatus]);
+
+  const bestaetigeHinweis = (hinweis) => {
+    const t = entdecken && entdecken.titel.find((x) => x.watchmode_id === hinweis.watchmode_id);
+    if (!t) return;
+    setEntdeckenStatus((prev) => {
+      const next = { ...prev, [t.watchmode_id]: bestaetigeStaffel(prev[t.watchmode_id], t) };
+      store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
 
   const entdeckenListe = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -262,6 +292,26 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
             Ungeprüft — Heuristik-Sortierung{entdecken && entdecken.heuristik === false ? " (abgeschaltet)" : ""}. Kein Dreieck, keine Bewertung. Merkliste = Übergabe an die Bewertung.
           </div>
+          {staffelHinweise.length > 0 && (
+            <div className="kd-staffelhinweise" style={{ marginBottom: 14 }}>
+              <div style={{ ...h2, marginBottom: 8 }}>Neue Staffeln</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {staffelHinweise.map((h) => (
+                  <div key={h.watchmode_id} className="kd-staffelhinweis" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "rgba(216,160,61,.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 12px" }}>
+                    <span aria-hidden="true" style={{ color: T.wolfram, fontSize: 18 }}>★</span>
+                    <span style={{ flex: 1, minWidth: 180 }}>
+                      <strong style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17 }}>{h.titel}</strong>
+                      <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>Staffel {h.staffel_verfuegbar} verfügbar</span>
+                      {h.dienste.length > 0 && <span style={{ ...mono, display: "block", marginTop: 2 }}>{h.dienste.join(", ")}</span>}
+                    </span>
+                    <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 10px" }} onClick={() => bestaetigeHinweis(h)}>
+                      Als neuen Stand bestätigen
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             {/* data-tour auf dem Wrapper, NICHT dem <select>: native Form-Controls
@@ -320,15 +370,15 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); setzeStatus(t, "gesehen"); }}
-                    title={entdeckenStatus[t.watchmode_id] === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren (fliegt aus der Liste)"}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: entdeckenStatus[t.watchmode_id] === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
+                    title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren (fliegt aus der Liste)"}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     ✓
                   </button>
                   <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17, flex: 1, minWidth: 160 }}>
                     {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{t.typ === "tv_series" ? " · Serie" : ""}
                     {entdeckenStatus[t.watchmode_id] && (
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
-                        {entdeckenStatus[t.watchmode_id] === "erstellt" ? "in deiner Mediathek" : "gesehen"}
+                        {statusVon(entdeckenStatus[t.watchmode_id]) === "erstellt" ? "in deiner Mediathek" : "gesehen"}
                       </span>
                     )}
                   </span>

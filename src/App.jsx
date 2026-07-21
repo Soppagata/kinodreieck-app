@@ -53,8 +53,8 @@ import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { Teppich } from "./components/Teppich.jsx";
 import { Crawl } from "./components/Crawl.jsx";                       // B4-Egg
 import { NecronomiconRand } from "./components/NecronomiconRand.jsx"; // B4-Egg
-import { wuerfleTag, schonGefeuertHeute, markiereGefeuert } from "./lib/eggFrequenz.js";
-import { crawlHeute } from "./lib/momentEggs.js";                     // B4-Egg
+import { wuerfleTag, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt, tagesSchluessel } from "./lib/eggFrequenz.js";
+import { crawlHeute, istVierterMai } from "./lib/momentEggs.js";       // B4-Egg
 
 /* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
    Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
@@ -371,7 +371,14 @@ export default function App() {
   const crawlMatchesRef = useRef([]);
   const [crawlOffen, setCrawlOffen] = useState(false);
   const [necroAktiv, setNecroAktiv] = useState(false);
-  const necroTimerRef = useRef(null);
+  const [may4Aktiv, setMay4Aktiv] = useState(() => PERSONAL_MODE && istVierterMai(new Date()));
+  useEffect(() => {
+    if (!PERSONAL_MODE) return;
+    const aktualisieren = () => setMay4Aktiv(istVierterMai(new Date()));
+    aktualisieren();
+    const timer = setInterval(aktualisieren, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -1471,14 +1478,13 @@ export default function App() {
     setCrawlOffen(true);
   }, [crawlMatchesBauen]);
   /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand einblenden und in den Blog
-     wechseln. Selbst-abklingend (7 s-Timer ODER nächster Tab-Wechsel weg vom Blog),
-     kein Dauerzustand. Zusätzlich zur Mount-Gatterung hier hart auf PERSONAL_MODE. */
+     wechseln. Bleibt tabübergreifend bis zum sichtbaren X oder globalem Escape;
+     nur In-Memory-State, nach Reload sicher weg. Zusätzlich zur Mount-Gatterung
+     hier hart auf PERSONAL_MODE. */
   const zeigeKlaatu = useCallback(() => {
     if (!PERSONAL_MODE) return;
     setNecroAktiv(true);
     setTab("blog");
-    if (necroTimerRef.current) { try { clearTimeout(necroTimerRef.current); } catch { /* */ } }
-    necroTimerRef.current = setTimeout(() => setNecroAktiv(false), 7000);
   }, []);
   const eggHerkunft = useCallback((film) => {
     const h = filmHerkunft(film, { kinoMatches, streamingBekannt });
@@ -1497,20 +1503,20 @@ export default function App() {
 
   /* ---- Egg-Auto-Trigger (B3, nur PERSONAL_MODE + freigeschaltet) ----
      Test-sicher: gewürfelt wird NUR wenn das Egg freigeschaltet ist (Tests schalten
-     nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:50/Tag beim
-     Start. Teppich: 1:40 an Mo/Do/Fr, feuert beim Mediathek-Scrollen. */
+     nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:30/Tag beim
+     Start. Teppich: 1:10/Tag beim Vorbeiscrollen an einem passenden Live-Film. */
   const cageAutoRef = useRef(false);
   useEffect(() => {
     if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
     if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
     if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
     cageAutoRef.current = true;
-    if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 50)) { markiereGefeuert("cage"); zeigeCage(); }
+    if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 30)) { markiereGefeuert("cage"); zeigeCage(); }
   }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
 
   /* ---- B4-Egg: Star-Wars-Crawl Auto-Trigger (nur PERSONAL_MODE) ----
-     Deterministisch statt Würfel: crawlHeute() ist am 4. Mai bei ≥1 Kino-Treffer
-     wahr — der seltene Tag IST die Bedingung. Feuert genau EINMAL pro Tag
+     Deterministisch statt Würfel: crawlHeute() ist den gesamten 4. Mai wahr —
+     ohne Film-/Kino-Bedingung. Feuert genau EINMAL pro Tag
      (schonGefeuertHeute/markiereGefeuert wie Cage) und nur, wenn kein anderes
      Overlay/Modal offen ist. An allen anderen Tagen liefert crawlHeute false. */
   const crawlAutoRef = useRef(false);
@@ -1518,34 +1524,64 @@ export default function App() {
     if (!PERSONAL_MODE || !bootDone || master == null) return;
     if (crawlAutoRef.current) return;
     if (crawlOffen || cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
-    if (!crawlHeute({ jetzt: new Date(), kinoMatches })) return;
+    if (!crawlHeute({ jetzt: new Date() })) return;
     crawlAutoRef.current = true;
     if (!schonGefeuertHeute("crawl")) { markiereGefeuert("crawl"); zeigeCrawl(); }
   }, [bootDone, master, kinoMatches, crawlOffen, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCrawl]);
 
-  /* B4-Egg: Necronomicon klingt beim Verlassen des Blog-Tabs sofort ab (der 7 s-Timer
-     in zeigeKlaatu ist der zweite Weg) — kein Dauerzustand. */
+  /* Nachfreigabe: dauerhaft, aber nie gefangen. Escape bleibt global erreichbar,
+     weil der rein dekorative Rand selbst weder fokussierbar noch interaktiv ist. */
   useEffect(() => {
-    if (!PERSONAL_MODE) return;
-    if (necroAktiv && tab !== "blog") setNecroAktiv(false);
-  }, [tab, necroAktiv]);
+    if (!PERSONAL_MODE || !necroAktiv) return;
+    const schliessenMitEsc = (e) => { if (e.key === "Escape") setNecroAktiv(false); };
+    window.addEventListener("keydown", schliessenMitEsc);
+    return () => window.removeEventListener("keydown", schliessenMitEsc);
+  }, [necroAktiv]);
 
-  const teppichArmRef = useRef(null);   // null = ungeprüft; true/false = armiert?
+  const teppichPassiertRef = useRef(new Set());
+  const teppichLetztesYRef = useRef(0);
+  const teppichTagRef = useRef(tagesSchluessel());
   useEffect(() => {
-    if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
-    if (teppichArmRef.current !== null) return;
-    if (!achievements.has("teppich")) { teppichArmRef.current = false; return; }
-    teppichArmRef.current = wuerfleTag("teppich", 1 / 40, { tage: [1, 4, 5] }) && !schonGefeuertHeute("teppich");
-  }, [bootDone, achievements, master]);
-  useEffect(() => {
-    if (!PERSONAL_MODE || tab !== "mediathek" || !teppichArmRef.current) return;
+    if (!PERSONAL_MODE || !bootDone || tab !== "mediathek" || achievements == null || master == null) return;
+    if (!achievements.has("teppich") || schonGefeuertHeute("teppich") || !teppichEgg) return;
+    const zielIds = new Set(liveVertreter(master, teppichEgg, eggCtx).map((f) => String(f.id)));
+    if (!zielIds.size) return;
+    teppichLetztesYRef.current = window.scrollY || 0;
+
+    /* Karten, die beim Betreten bereits oberhalb der Lesezone liegen, gelten nicht
+       nachträglich als „vorbeigescrollt". Erst eine neue Abwärtsbewegung zählt. */
+    for (const el of document.querySelectorAll("[data-film-id]")) {
+      const id = el.dataset.filmId;
+      if (zielIds.has(id) && istVorbeiGescrollt(el.getBoundingClientRect(), {
+        viewportHoehe: window.innerHeight, scrolltAbwaerts: true,
+      })) teppichPassiertRef.current.add(id);
+    }
+
     const onScroll = () => {
-      if (!teppichArmRef.current) return;
-      if ((window.scrollY || 0) > 700) { teppichArmRef.current = false; markiereGefeuert("teppich"); zeigeTeppich(); }
+      const tag = tagesSchluessel();
+      if (teppichTagRef.current !== tag) {
+        teppichTagRef.current = tag;
+        teppichPassiertRef.current.clear();
+      }
+      const jetztY = window.scrollY || 0;
+      const scrolltAbwaerts = jetztY > teppichLetztesYRef.current;
+      teppichLetztesYRef.current = jetztY;
+      if (!scrolltAbwaerts || schonGefeuertHeute("teppich")) return;
+      for (const el of document.querySelectorAll("[data-film-id]")) {
+        const id = el.dataset.filmId;
+        if (!zielIds.has(id) || teppichPassiertRef.current.has(id)) continue;
+        if (!istVorbeiGescrollt(el.getBoundingClientRect(), { viewportHoehe: window.innerHeight, scrolltAbwaerts })) continue;
+        teppichPassiertRef.current.add(id);
+        if (wuerfleTag("teppich", 1 / 10)) {
+          markiereGefeuert("teppich");
+          zeigeTeppich();
+        }
+        break; // wuerfleTag garantiert genau eine gespeicherte Tageschance.
+      }
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [tab, zeigeTeppich]);
+  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, zeigeTeppich]);
 
   /* Scroll-Sperre, solange ein Egg-Overlay offen ist → die Liste bleibt an ihrer
      Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
@@ -1572,7 +1608,7 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "")}>
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + (may4Aktiv ? " kd-may4" : "")}>
       <ModusFx modus={einstellungen.modus} />
       <div className="kd-app">
       {startModalOffen && !setupWarnung && (
@@ -1616,7 +1652,7 @@ export default function App() {
               Geräte-Sync einrichten
             </div>
             <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.6, margin: "0 0 16px" }}>
-              Verbinde dieses Gerät mit deiner Datenbank, damit Mediathek, Bewertungen und Streaming-Abos automatisch zwischen allen Geräten synchron bleiben. Du brauchst dafür deinen Sync-Schlüssel. Alles lässt sich jederzeit später unter <strong>Einstellungen → Geräte-Sync</strong> nachholen oder ändern.
+              Verbinde dieses Gerät mit deiner Datenbank, damit Mediathek, Bewertungen und Streaming-Abos automatisch zwischen allen Geräten synchron bleiben. Du brauchst dafür deinen Sync-Schlüssel. Alles lässt sich jederzeit später unter <strong>Einstellungen → Erweitert → Geräte-Sync</strong> nachholen oder ändern.
             </p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button style={btnStyle(true)} onClick={() => syncOnboardingFertig(true)}>Jetzt einrichten</button>
@@ -1666,7 +1702,7 @@ export default function App() {
               1. DOM-Kind landet daumennah. Labels/Handler bleiben unverändert
               (Tests klicken per Text). */}
           {[["kino", "Kino"], ["streaming", "Streaming"], ["mediathek", "Mediathek"], ["finder", "Suche"], ["blog", "Blog"], ["start", "Start"], ["daten", "Einstellungen"]].map(([id, label]) => (
-            <button key={id} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}
+            <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}
               style={{
                 fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
                 letterSpacing: "0.08em", textTransform: "uppercase",
@@ -1743,9 +1779,6 @@ export default function App() {
             updateFilm={updateFilm} addFilm={addFilm} badgeFuer={badgeFuer}
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
-            exportMaster={exportMaster} importMaster={importMaster}
-            autorName={autorName} saveAutorName={saveAutorName}
-            uebernehmePaket={uebernehmePaket} setErr={setErr}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
             mwKandidaten={mwKandidaten}
@@ -1843,7 +1876,7 @@ export default function App() {
       {PERSONAL_MODE && crawlOffen && (
         <Crawl matches={crawlMatchesRef.current} onSkip={() => setCrawlOffen(false)} reduced={reducedMotion} />
       )}
-      {PERSONAL_MODE && necroAktiv && <NecronomiconRand />}
+      {PERSONAL_MODE && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
       <ZurueckObenKnopf />
     </div>
   );

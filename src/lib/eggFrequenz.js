@@ -4,9 +4,10 @@
    sind vollständig deterministisch, und ohne erfüllte Bedingung (Unlock/Interaktion)
    wird gar nicht gewürfelt, also poppt in den jsdom-Tests nie zufällig ein Egg auf.
 
-   Spec (Max, 19.07.):
-   - Cage:    1:50 pro Tag, beim App-Start (jeder Wochentag).
-   - Teppich: 1:40, nur an Montagen/Donnerstagen/Freitagen; feuert beim Scrollen. */
+   Spec (Max, 21.07.):
+   - Cage:    1:30 pro Tag, beim App-Start (jeder Wochentag).
+   - Teppich: 1:10 pro Tag, wenn in der Mediathek an einem passenden,
+     tatsächlich verfügbaren Film nach unten vorbeigescrollt wird. */
 
 export function tagesSchluessel(jetzt) {
   const d = jetzt || new Date();
@@ -39,4 +40,15 @@ export function schonGefeuertHeute(key, jetzt) {
 }
 export function markiereGefeuert(key, jetzt) {
   try { localStorage.setItem("kd:eggfired:" + key, tagesSchluessel(jetzt)); } catch { /* */ }
+}
+
+/* Hat eine Karte beim Abwärtsscrollen die obere Lesezone verlassen? Die reine
+   Geometrie bleibt unabhängig vom DOM testbar; die App liefert nur rect + Viewport. */
+export function istVorbeiGescrollt(rect, { viewportHoehe = 0, scrolltAbwaerts = false } = {}) {
+  if (!scrolltAbwaerts || !rect) return false;
+  const unten = Number(rect.bottom);
+  const hoehe = Number(viewportHoehe);
+  if (!Number.isFinite(unten) || !Number.isFinite(hoehe) || hoehe <= 0) return false;
+  const leselinie = Math.max(80, Math.min(260, hoehe * 0.32));
+  return unten <= leselinie;
 }

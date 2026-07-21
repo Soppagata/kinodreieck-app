@@ -6,13 +6,10 @@ import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
-import { Chip, ChipReihe, SegmentedControl, IconExport } from "../components/ui.jsx";
-import { FeldHinweis } from "../components/FeldHinweis.jsx";
+import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
-import { MasterImport } from "../components/MasterImport.jsx";
-import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { MustWatchListe } from "../components/MustWatchListe.jsx";
 
 /* ================= MEDIATHEK =================
@@ -24,7 +21,6 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
    - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
-  exportMaster, importMaster, autorName, saveAutorName, uebernehmePaket, setErr,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] } }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
@@ -267,7 +263,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {mediathek.map((f) => (
-          <div key={f.id} id={"film-" + f.id}>
+          <div key={f.id} id={"film-" + f.id} data-film-id={String(f.id)}>
             <FilmCard
               film={f}
               streamBadge={dreieckTab && badgeFuer ? badgeFuer(f) : null}
@@ -369,27 +365,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         </details>
       )}
 
-      {/* ---- Daten & Teilen direkt im Bereich (Punkt 6): Export/Import der
-           Filmliste + komplettes Teilen/KI-Ingestion, ohne Tab-Wechsel. ---- */}
-      {ansicht === "bestand" && exportMaster && (
-        <details style={{ marginTop: 26 }}>
-          <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
-            Daten & Teilen (Export · Import · KI-Listen)
-          </summary>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 12 }}>
-            <div data-tour="master-import" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px" }}>
-              <button style={{ ...btnStyle(true), marginBottom: 10, display: "inline-flex", alignItems: "center", gap: 8 }} onClick={exportMaster}><IconExport size={16} />Filmliste exportieren (JSON)</button>
-              <FeldHinweis feld="export_liste" />
-              <MasterImport onImport={importMaster} hasMaster={!!master} />
-            </div>
-            {uebernehmePaket && (
-              <TeilenBlock master={master} artikel={artikel}
-                autorName={autorName} saveAutorName={saveAutorName}
-                uebernehmePaket={uebernehmePaket} setErr={setErr} />
-            )}
-          </div>
-        </details>
-      )}
       </>)}
     </section>
   );

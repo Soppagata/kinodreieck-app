@@ -3,6 +3,8 @@ import { T, btnStyle } from "../lib/tokens.js";
 import { FeldHinweis } from "./FeldHinweis.jsx";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
+import { K } from "../lib/storage.js";
+import { serienBeobachten } from "../lib/staffeln.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
@@ -56,6 +58,12 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     return null;
   })();
   const resetInTagen = resetDatum ? Math.ceil((resetDatum.getTime() - Date.now()) / 86400000) : null;
+  const beobachteteSerien = () => {
+    try {
+      const status = JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}");
+      return serienBeobachten(status, entdecken && entdecken.titel);
+    } catch { return []; }
+  };
 
   const gruppen = useMemo(() => {
     /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
@@ -119,7 +127,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
           Häkchen wirken sofort als Anzeigefilter im Streaming-Tab. Für den nächsten externen
           Katalog-Lauf zusätzlich <strong style={{ color: T.leinwand }}>Config exportieren</strong> und als
-          {" "}<code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System/streaming_config.json</code> im separaten Datenordner ablegen.
+          {" "}<code style={{ color: T.wolfram, overflowWrap: "anywhere" }}>KinoFilm/Programmdateien/System/streaming_config.json</code> im separaten Datenordner ablegen.
           Erst der nächste Lauf übernimmt diese Auswahl beim Abruf (jede Quelle kostet etwa 1 Credit pro 250 Titel).
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
@@ -174,6 +182,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
             min_tage_voll: 25,
             min_tage_haeufig: 2,
             heuristik: heuristikAn,
+            serien_beobachten: beobachteteSerien(),
             ...(Number.isInteger(Number(resetTag)) && resetTag >= 1 && resetTag <= 28 ? { reset_tag: Number(resetTag) } : {}),
           })}>
           Config exportieren (streaming_config.json)
@@ -181,7 +190,8 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
         <FeldHinweis feld="config_export" />
         <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
           Externer Rhythmus: 1. des Monats Voll-Lauf über alle gewählten Quellen; Mo/Mi/Fr 13:00 nur die großen
-          Rotations-Kataloge (Zeitplan: <code>com.kinodreieck.streaming.plist</code> im Datenordner).
+          Rotations-Kataloge (Zeitplan: <code style={{ overflowWrap: "anywhere" }}>com.kinodreieck.streaming.plist</code> im Datenordner).
+          {" "}{beobachteteSerien().length} ausdrücklich gesehene {beobachteteSerien().length === 1 ? "Serie wird" : "Serien werden"} im Config-Export für den späteren Staffel-Abgleich vorgemerkt.
         </p>
       </div>
       </Klappe>

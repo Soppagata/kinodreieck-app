@@ -79,13 +79,28 @@ export function Crawl({ matches, episode, onSkip, reduced }) {
     >
       <Sternfeld />
       <Hyperraum />
+      <div className="kd-crawl-nebel" aria-hidden="true" />
+      <svg className="kd-crawl-mond" viewBox="0 0 220 220" aria-hidden="true">
+        <defs>
+          <radialGradient id="kd-crawl-kugel" cx="34%" cy="30%" r="72%">
+            <stop offset="0" stopColor="#dce4ef" /><stop offset=".58" stopColor="#8793a5" /><stop offset="1" stopColor="#202737" />
+          </radialGradient>
+        </defs>
+        <circle cx="110" cy="110" r="102" fill="url(#kd-crawl-kugel)" />
+        <path d="M12 119 H208 M22 83 H198 M32 153 H188 M110 9 V211 M68 18 Q92 110 66 202 M153 18 Q128 110 155 202" />
+        <ellipse cx="146" cy="78" rx="32" ry="23" transform="rotate(-24 146 78)" />
+        <circle cx="146" cy="78" r="6" />
+      </svg>
       <div className="kd-crawl-horizont" aria-hidden="true" />
+      <div className="kd-crawl-rahmen" aria-hidden="true">
+        <span>MAY THE FOURTH</span><i>WIEN · LICHTSPIELHÄUSER · 04/05</i><b>◇</b>
+      </div>
 
       <div className="kd-crawl-stage">
         <div className="kd-crawl-plane">
           <div className="kd-crawl-copy">
             <p className="kd-crawl-episode">EPISODE {episode || "CDXII"}</p>
-            <h2>DEIN ABEND</h2>
+            <h2>DEIN KINOABEND</h2>
             <p className="kd-crawl-intro">
               In den Lichtspielhäusern der Stadt beginnt ein neuer Kinoabend.
               Die Projektoren laufen, die Säle warten – und diese Vorstellungen

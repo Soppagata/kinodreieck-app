@@ -41,7 +41,7 @@ export function ErklaerHero() {
         <Logo size={132} />
       </div>
       <div style={{ ...mono, letterSpacing: "0.3em", color: T.rauch, marginBottom: 8 }}>LOKALE FILM-PLATTFORM</div>
-      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 54, letterSpacing: "0.16em", textTransform: "uppercase", lineHeight: 1 }}>
+      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "clamp(38px, 8vw, 46px)", letterSpacing: "0.14em", textTransform: "uppercase", lineHeight: 1 }}>
         Kinodreieck
       </div>
       <div style={{ width: 120, height: 2, margin: "16px auto 0", background: "linear-gradient(90deg, transparent, " + T.wolfram + ", transparent)" }} />
@@ -123,7 +123,7 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
     { id: "mediathek", titel: "Mediathek", text: [
       "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
       "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Schlagseite (WIE/WAS/WARUM-lastig), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
-      "Ganz unten liegt „Daten & Teilen”: Export/Import deiner Liste und der Paket-Austausch mit anderen.",
+      "Pakete mit anderen tauschst du unter Einstellungen → Teilen & Tauschen. Filmlisten-Rohdaten liegen getrennt davon unter Einstellungen → Erweitert.",
     ] },
     { id: "streaming", titel: "Streaming", text: [
       "„Mein Programm” zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken” liefert Vorschläge aus den Watchmode-Katalogen, nach Relevanz sortiert. Einträge in Mein Programm sind editierbar.",

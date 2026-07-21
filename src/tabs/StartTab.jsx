@@ -97,7 +97,7 @@ function StartLanding({ kinoPins = [], toggleKinoPin, merkliste = [], toggleMerk
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {[
             ["kino", "Kino", "Wiener Programm mit Abo-Wahrheit, Pins und deinen Treffern"],
-            ["mediathek", "Mediathek", "Bestand, Bewertungen, Nachtrag — und Daten & Teilen"],
+            ["mediathek", "Mediathek", "Bestand, Bewertungen, Besitz und Must-Watch"],
             ["streaming", "Streaming", "Was läuft auf deinen Diensten? Plus Entdecken"],
             ["blog", "Blog", "Artikel schreiben, Filme verlinken, freigeben"],
             ["finder", "Suche", "»Traurige Komödie auf Netflix« — frag einfach"],

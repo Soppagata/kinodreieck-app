@@ -1,11 +1,11 @@
 import React from "react";
 
-/* Dekorativer, eigenständiger Buchrand. Keine Logik, keine Interaktion und
-   keine externen Assets – dadurch kann Claude ihn gezielt nur im Personal-
-   Modus mounten. */
-export function NecronomiconRand() {
+/* Dekorativer, eigenständiger Buchrand ohne externe Assets. Die Randfläche bleibt
+   klickdurchlässig; nur das sichtbare X ist interaktiv. Escape verdrahtet App. */
+export function NecronomiconRand({ onClose }) {
   return (
-    <div className="kd-necro-rand" aria-hidden="true">
+    <div className="kd-necro-rand">
+      <div className="kd-necro-buch" aria-hidden="true">
       <svg className="kd-necro-haut" viewBox="0 0 1000 760" preserveAspectRatio="none">
         <defs>
           <filter id="kd-necro-rau" x="-10%" y="-10%" width="120%" height="120%">
@@ -38,13 +38,38 @@ export function NecronomiconRand() {
         </g>
       </svg>
 
-      <svg className="kd-necro-chainsaw" viewBox="0 0 260 92">
-        <path className="kd-necro-saegeblatt" d="M12 31 H177 L209 42 L177 55 H12 L1 47 Z" />
-        <path className="kd-necro-zaehne" d="M18 28 l8 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 l9 -8 l8 8 M20 58 l8 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8 l9 8 l8 -8" />
-        <path className="kd-necro-motor" d="M169 27 L214 20 L245 36 L250 63 L226 79 L181 72 L164 55 Z" />
-        <path className="kd-necro-griff" d="M199 24 Q201 3 221 4 H244 V16 H224 Q214 16 214 27 M207 72 Q205 87 188 88 H169 V77 H186 Q194 77 194 68" />
-        <circle className="kd-necro-niete" cx="210" cy="49" r="8" />
-      </svg>
+      <div className="kd-necro-seiten">
+        <div className="kd-necro-seite kd-necro-links">
+          <div className="kd-necro-glyphen">ᛉ ᚾ 𐌀 △ ᛟ ᚲ 𐌔</div>
+          <svg className="kd-necro-studie" viewBox="0 0 390 500">
+            <g className="kd-necro-zeichnung" fill="none">
+              <circle cx="197" cy="83" r="42" />
+              <path d="M171 79 Q180 64 192 78 M203 78 Q216 64 225 80 M197 84 L190 102 L204 102 M178 115 Q197 130 219 114" />
+              <path d="M197 126 L197 317 M144 166 Q197 137 250 166 M151 180 Q197 153 243 180 M158 195 Q197 171 236 195 M166 211 Q197 191 228 211" />
+              <path d="M197 155 L116 269 M197 155 L277 269 M197 315 L128 451 M197 315 L266 451" />
+              <path d="M109 262 l-18 32 m24 -26 l-6 38 m11 -33 l8 34 M284 262 l17 32 m-23 -25 l5 38 m-10 -33 l-8 34" />
+              <path d="M127 451 l-17 22 m24 -18 l2 28 m128 -32 l18 22 m-25 -18 l-1 28" />
+              <path d="M133 157 Q82 103 47 121 Q85 159 90 214 Q117 187 151 183 M257 158 Q308 103 343 121 Q306 158 300 214 Q273 187 240 183" />
+              <path d="M51 121 Q77 128 104 154 M338 122 Q313 130 286 154" />
+              <circle cx="53" cy="380" r="31" /><path d="M34 378 l38 0 M53 349 v62 M31 357 l44 46 M76 357 l-45 46" />
+              <path d="M302 352 q42 24 15 70 q-45 7 -49 -35 q5 -27 34 -35 z M281 380 q12 -18 25 1 M300 400 q14 -15 25 1" />
+            </g>
+          </svg>
+          <div className="kd-necro-randnotiz">SANGUIS · OSSA · VERBUM</div>
+        </div>
+
+        <div className="kd-necro-seite kd-necro-rechts">
+          <div className="kd-necro-kapitel">NECRONOMICON<br />EX MORTIS</div>
+          <div className="kd-necro-siegel" aria-hidden="true"><span>△</span><i /><b /></div>
+          <div className="kd-necro-beschwoerung">KLAATU<br />BARADA<br />NIKTO</div>
+          <p>Die Worte sind gefallen.<br />Das Buch hat zugehört.</p>
+          <div className="kd-necro-blutspur" />
+          <div className="kd-necro-fussglyphen">ᚲ · ᛚ · ᚨ · ᚢ · ᛏ · ᚢ</div>
+        </div>
+      </div>
+      </div>
+      <button type="button" className="kd-necro-schliessen" onClick={onClose}
+        aria-label="Necronomicon-Rand schließen" title="Schließen (Esc)">×</button>
     </div>
   );
 }
