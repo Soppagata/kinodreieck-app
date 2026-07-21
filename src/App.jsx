@@ -363,6 +363,7 @@ export default function App() {
   const [teppichEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "teppich"));
   const teppichFilmeRef = useRef([]);
   const [teppichOffen, setTeppichOffen] = useState(false);
+  const [teppichVorschau, setTeppichVorschau] = useState(false);
   // zeigeCage/zeigeTeppich/eggCtx: weiter unten definiert (brauchen kinoMatches/
   // streamingBekannt/auswahl für echte Verfügbarkeit + Sprung-Link).
   // B4-Egg: Moment-Eggs (Star-Wars-Crawl am 4. Mai, Klaatu→Necronomicon). Wie
@@ -372,6 +373,7 @@ export default function App() {
   const [crawlOffen, setCrawlOffen] = useState(false);
   const [necroAktiv, setNecroAktiv] = useState(false);
   const [may4Aktiv, setMay4Aktiv] = useState(() => PERSONAL_MODE && istVierterMai(new Date()));
+  const [may4Vorschau, setMay4Vorschau] = useState(false);
   useEffect(() => {
     if (!PERSONAL_MODE) return;
     const aktualisieren = () => setMay4Aktiv(istVierterMai(new Date()));
@@ -379,6 +381,9 @@ export default function App() {
     const timer = setInterval(aktualisieren, 60_000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    if (PERSONAL_MODE && einstellungen.vorfuehr) setMay4Vorschau(true);
+  }, [einstellungen.vorfuehr]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -1460,6 +1465,12 @@ export default function App() {
   }, [cageEgg, master, eggCtx]);
   const zeigeTeppich = useCallback(() => {
     teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
+    setTeppichVorschau(false);
+    setTeppichOffen(true);
+  }, [teppichEgg, master, eggCtx]);
+  const zeigeTeppichVorschau = useCallback(() => {
+    teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
+    setTeppichVorschau(true);
     setTeppichOffen(true);
   }, [teppichEgg, master, eggCtx]);
   /* B4-Egg: Star-Wars-Crawl — die realen Kino-Treffer (kinoMatches, dieselbe Quelle
@@ -1477,14 +1488,18 @@ export default function App() {
     crawlMatchesRef.current = crawlMatchesBauen();
     setCrawlOffen(true);
   }, [crawlMatchesBauen]);
-  /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand einblenden und in den Blog
-     wechseln. Bleibt tabübergreifend bis zum sichtbaren X oder globalem Escape;
+  const zeigeCrawlVorschau = useCallback(() => {
+    setMay4Vorschau(true);
+    crawlMatchesRef.current = crawlMatchesBauen();
+    setCrawlOffen(true);
+  }, [crawlMatchesBauen]);
+  /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand über dem AKTUELLEN Tab
+     einblenden. Bleibt tabübergreifend bis zum sichtbaren X oder globalem Escape;
      nur In-Memory-State, nach Reload sicher weg. Zusätzlich zur Mount-Gatterung
      hier hart auf PERSONAL_MODE. */
   const zeigeKlaatu = useCallback(() => {
     if (!PERSONAL_MODE) return;
     setNecroAktiv(true);
-    setTab("blog");
   }, []);
   const eggHerkunft = useCallback((film) => {
     const h = filmHerkunft(film, { kinoMatches, streamingBekannt });
@@ -1504,15 +1519,26 @@ export default function App() {
   /* ---- Egg-Auto-Trigger (B3, nur PERSONAL_MODE + freigeschaltet) ----
      Test-sicher: gewürfelt wird NUR wenn das Egg freigeschaltet ist (Tests schalten
      nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:30/Tag beim
-     Start. Teppich: 1:10/Tag beim Vorbeiscrollen an einem passenden Live-Film. */
+     Start. Teppich: 1:10/Tag beim Vorbeiscrollen an einem passenden Live-Film.
+     Vorführmodus hebt nur Chance/Unlock/Tagessperre auf; der Teppich braucht weiter
+     die echte Scroll-Situation und einen passenden verfügbaren Film. */
   const cageAutoRef = useRef(false);
+  const cageVorfuehrRef = useRef(false);
   useEffect(() => {
     if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
+    if (einstellungen.vorfuehr) {
+      if (cageVorfuehrRef.current) return;
+      if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
+      cageVorfuehrRef.current = true;
+      zeigeCage();
+      return;
+    }
+    cageVorfuehrRef.current = false;
     if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
     if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
     cageAutoRef.current = true;
     if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 30)) { markiereGefeuert("cage"); zeigeCage(); }
-  }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
+  }, [bootDone, achievements, master, einstellungen.vorfuehr, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
 
   /* ---- B4-Egg: Star-Wars-Crawl Auto-Trigger (nur PERSONAL_MODE) ----
      Deterministisch statt Würfel: crawlHeute() ist den gesamten 4. Mai wahr —
@@ -1542,8 +1568,12 @@ export default function App() {
   const teppichLetztesYRef = useRef(0);
   const teppichTagRef = useRef(tagesSchluessel());
   useEffect(() => {
+    if (einstellungen.vorfuehr) teppichPassiertRef.current.clear();
+  }, [einstellungen.vorfuehr]);
+  useEffect(() => {
     if (!PERSONAL_MODE || !bootDone || tab !== "mediathek" || achievements == null || master == null) return;
-    if (!achievements.has("teppich") || schonGefeuertHeute("teppich") || !teppichEgg) return;
+    const vorfuehr = !!einstellungen.vorfuehr;
+    if ((!achievements.has("teppich") && !vorfuehr) || (!vorfuehr && schonGefeuertHeute("teppich")) || !teppichEgg) return;
     const zielIds = new Set(liveVertreter(master, teppichEgg, eggCtx).map((f) => String(f.id)));
     if (!zielIds.size) return;
     teppichLetztesYRef.current = window.scrollY || 0;
@@ -1566,14 +1596,14 @@ export default function App() {
       const jetztY = window.scrollY || 0;
       const scrolltAbwaerts = jetztY > teppichLetztesYRef.current;
       teppichLetztesYRef.current = jetztY;
-      if (!scrolltAbwaerts || schonGefeuertHeute("teppich")) return;
+      if (!scrolltAbwaerts || (!vorfuehr && schonGefeuertHeute("teppich"))) return;
       for (const el of document.querySelectorAll("[data-film-id]")) {
         const id = el.dataset.filmId;
         if (!zielIds.has(id) || teppichPassiertRef.current.has(id)) continue;
         if (!istVorbeiGescrollt(el.getBoundingClientRect(), { viewportHoehe: window.innerHeight, scrolltAbwaerts })) continue;
         teppichPassiertRef.current.add(id);
-        if (wuerfleTag("teppich", 1 / 10)) {
-          markiereGefeuert("teppich");
+        if (vorfuehr || wuerfleTag("teppich", 1 / 10)) {
+          if (!vorfuehr) markiereGefeuert("teppich");
           zeigeTeppich();
         }
         break; // wuerfleTag garantiert genau eine gespeicherte Tageschance.
@@ -1581,7 +1611,7 @@ export default function App() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, zeigeTeppich]);
+  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, einstellungen.vorfuehr, zeigeTeppich]);
 
   /* Scroll-Sperre, solange ein Egg-Overlay offen ist → die Liste bleibt an ihrer
      Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
@@ -1608,7 +1638,7 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + (may4Aktiv ? " kd-may4" : "")}>
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + ((may4Aktiv || may4Vorschau) ? " kd-may4" : "")}>
       <ModusFx modus={einstellungen.modus} />
       <div className="kd-app">
       {startModalOffen && !setupWarnung && (
@@ -1838,8 +1868,9 @@ export default function App() {
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
-            zeigeCage={zeigeCage} zeigeTeppich={zeigeTeppich}
-            zeigeCrawl={zeigeCrawl} zeigeKlaatu={zeigeKlaatu} /* B4-Egg: Vorführknöpfe */
+            zeigeCage={zeigeCage} zeigeTeppich={zeigeTeppichVorschau}
+            zeigeCrawl={zeigeCrawlVorschau} zeigeKlaatu={zeigeKlaatu} /* B4-Egg: Vorführknöpfe */
+            may4Vorschau={may4Vorschau} setMay4Vorschau={setMay4Vorschau}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
@@ -1868,8 +1899,8 @@ export default function App() {
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
       {PERSONAL_MODE && teppichOffen && (
-        <Teppich filme={teppichFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
-          onZeigeEintrag={eggZeigeEintrag} onClose={() => setTeppichOffen(false)} />
+        <Teppich filme={teppichFilmeRef.current} vorschau={teppichVorschau} reduced={reducedMotion} herkunftVon={eggHerkunft}
+          onZeigeEintrag={eggZeigeEintrag} onClose={() => { setTeppichOffen(false); setTeppichVorschau(false); }} />
       )}
       {/* B4-Egg: Moment-Eggs — exakt wie Cage/Teppich hinter PERSONAL_MODE gegatet,
           also im Beta-Build (PERSONAL_MODE=false) weder gerendert noch triggerbar. */}

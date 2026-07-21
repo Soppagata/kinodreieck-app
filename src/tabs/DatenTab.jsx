@@ -26,6 +26,7 @@ export function DatenTab({
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt, zeigeCage, zeigeTeppich,
   zeigeCrawl, zeigeKlaatu, /* B4-Egg: Moment-Egg-Vorführknöpfe */
+  may4Vorschau = false, setMay4Vorschau,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle, heuristikAn, setHeuristikAn,
   resetTag = null, setResetTag,
@@ -105,15 +106,28 @@ export function DatenTab({
         <Klappe titel="Vorführmodus (Test)">
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
             <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
-              Erzwingt Eastereggs (Trigger 100 %) und zeigt pro Egg die real gefundenen Vertreter.
+              Setzt automatische Egg-Chancen im passenden Kontext auf 100 %. Die Knöpfe darunter
+              öffnen jede Optik sofort; fehlt ein verfügbarer Vertreter, erscheint eine neutrale Vorschau.
               Nur für dich sichtbar — im Beta-Build gibt es weder Eggs noch diesen Schalter.
             </p>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+            <div data-testid="egg-vorfuehr" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
               <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Eggs erzwingen</span>
               <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
                 value={einstellungen.vorfuehr ? "an" : "aus"}
-                onChange={(id) => setzeEinstellung("vorfuehr", id === "an")}
+                onChange={(id) => {
+                  const an = id === "an";
+                  setzeEinstellung("vorfuehr", an);
+                  if (setMay4Vorschau) setMay4Vorschau(an);
+                }}
                 options={[{ id: "aus", label: "Aus" }, { id: "an", label: "An" }]} />
+            </div>
+            <div data-testid="may4-vorschau" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
+              <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>4.-Mai-Theme</span>
+              <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+                value={may4Vorschau ? "an" : "aus"}
+                onChange={(id) => setMay4Vorschau && setMay4Vorschau(id === "an")}
+                options={[{ id: "aus", label: "Aus" }, { id: "an", label: "An" }]} />
+              <span style={mono}>ganze App · ohne Crawl</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {SCHWELLEN_EGGS.map((egg) => {

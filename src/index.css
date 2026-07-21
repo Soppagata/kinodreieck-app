@@ -345,56 +345,58 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   text-shadow: 2px 3px 0 rgba(122,90,22,.45); position: relative; }
 
 /* ================= EGG: TEPPICH (Choose Life) =================
-   Senkrechte Trainspotting-Kamerafahrt über rotem Teppich: Figur nah, dann Totale.
-   Transforms NUR auf den Szenenelementen; der Fixed-Wrapper selbst bleibt stabil. */
+   Wieder die ursprüngliche Ich-Perspektive: Man ist selbst unten im sinkenden
+   Schacht/Sarg und blickt zur rechteckigen Öffnung hinauf. Keine Figur im Bild. */
 .kd-teppich-scrim { position: fixed; inset: 0; z-index: 11200; overflow: hidden;
-  background: #3a0c0b; display: flex; align-items: center; justify-content: center; }
-/* Roter, schwerer Flor wie in der Referenz: feDiffuseLighting modelliert den Pile,
-   zwei dunkle Radialfelder vermeiden eine gleichmäßige Tapetenfläche. */
-.kd-teppich-flausch { position: absolute; inset: -3%; background-color: #681b17;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='pile'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' seed='6' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' lighting-color='%23C63A54' surfaceScale='3.6' diffuseConstant='1.3'><feDistantLight azimuth='235' elevation='46'/></feDiffuseLighting></filter><rect width='320' height='320' filter='url(%23pile)'/></svg>");
-  background-size: 320px 320px; box-shadow: inset 0 0 140px rgba(19,2,3,.58); }
-/* Erst bei größerer Distanz werden die kalten Zimmerkanten sichtbar. */
-.kd-teppich-zimmer { position: absolute; inset: -14%; z-index: 1; opacity: 0; transform: scale(1.7);
-  border: clamp(38px, 8vw, 112px) solid rgba(22,17,16,.84);
-  box-shadow: inset 0 0 0 3px rgba(224,211,192,.16), inset 0 0 80px rgba(3,2,2,.72);
-  transition: transform 3.8s cubic-bezier(.42,0,.28,1), opacity 2.8s ease; }
-.kd-teppich-zimmer.weit { opacity: .82; transform: scale(.94); }
-/* Stilisiertes Close-up aus der Aufnahme: Hemd, gelockerte Krawatte, Zigarette und
-   harter seitlicher Schatten. Die Figur schrumpft durch die Kamerafahrt, nicht der Teppich. */
-.kd-teppich-figur { position: absolute; z-index: 2; left: 50%; top: 50%; width: clamp(330px, 42vw, 430px);
-  height: auto; overflow: visible; transform: translate(-50%, -28%) scale(1.45); transform-origin: 50% 38%;
-  filter: drop-shadow(-22px 18px 18px rgba(0,0,0,.44));
-  transition: transform 3.8s cubic-bezier(.42,0,.28,1), filter 3.8s ease, opacity 3.8s ease; }
-.kd-teppich-figur.weit { transform: translate(-50%, -48%) scale(.25); filter: drop-shadow(-8px 8px 7px rgba(0,0,0,.52)); opacity: .92; }
-.kd-teppich-schatten { fill: rgba(12,2,3,.58); transform: translate(-35px,16px) rotate(-8deg); transform-origin: center; }
-.kd-teppich-hose { fill: #242426; stroke: #110e10; stroke-width: 3; }
-.kd-teppich-hemd { fill: #d8d2c5; stroke: #81796d; stroke-width: 3; }
-.kd-teppich-arm { fill: #c8c1b4; stroke: #756d63; stroke-width: 3; }
-.kd-teppich-kragen { fill: #ece7dc; stroke: #766f66; stroke-width: 2.4; }
-.kd-teppich-krawatte { fill: #69615d; stroke: #373130; stroke-width: 2; transform: rotate(4deg); transform-origin: 140px 205px; }
-.kd-teppich-kopf { fill: #cbb3a1; stroke: #72564c; stroke-width: 3; }
-.kd-teppich-haar { fill: #6d5146; opacity: .92; }
-.kd-teppich-gesicht { fill: none; stroke: #684c43; stroke-width: 3; stroke-linecap: round; }
-.kd-teppich-pupille { fill: #352727; }
-.kd-teppich-zigarette { fill: none; stroke: #e8dfce; stroke-width: 5; stroke-linecap: round; }
-/* Karte erscheint erst, wenn die Kamerafahrt die Totale fast erreicht hat. */
+  background: #25070d; display: flex; align-items: center; justify-content: center; }
+/* Schwerer roter Flor: dicht, unregelmäßig und an den Rändern fast schwarz. */
+.kd-teppich-flausch { position: absolute; inset: -2%; background-color: #55101b;
+  background-image:
+    radial-gradient(ellipse at 50% 45%, transparent 22%, rgba(18,2,7,.24) 72%, rgba(7,1,3,.72) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='pile'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' seed='6' stitchTiles='stitch' result='n'/><feDiffuseLighting in='n' lighting-color='%23B93648' surfaceScale='4.2' diffuseConstant='1.25'><feDistantLight azimuth='225' elevation='42'/></feDiffuseLighting></filter><rect width='320' height='320' filter='url(%23pile)'/></svg>");
+  background-size: 100% 100%, 320px 320px; filter: saturate(.9) contrast(1.08); }
+/* Tiefenschacht plus dunkler, hautnaher Sarg-/Grabrand im eigenen Blickfeld. */
+.kd-teppich-schacht { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(8,2,3,.76), transparent 24% 76%, rgba(8,2,3,.76)),
+    linear-gradient(25deg, rgba(8,2,3,.68), transparent 22% 78%, rgba(8,2,3,.68)),
+    radial-gradient(64% 59% at 50% 47%, rgba(8,2,4,0) 42%, rgba(8,2,4,.48) 76%, rgba(4,1,2,.92) 100%);
+  box-shadow: inset 0 0 0 clamp(10px,2.2vw,28px) rgba(35,15,12,.68), inset 0 0 0 clamp(13px,2.7vw,35px) rgba(8,3,3,.66); }
+/* Vier Fluchtlinien halten die Öffnung geometrisch im Schacht. */
+.kd-teppich-kanten { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+.kd-teppich-kanten line { stroke: rgba(231,190,166,.24); stroke-width: 1.5; filter: drop-shadow(0 2px 2px rgba(0,0,0,.8)); }
+/* Blick nach oben: Decke, kalte Leuchte und ein entfernter Tür-/Fensterstreifen.
+   Das Rechteck zieht nach oben weg — die Kamera bzw. der Betrachter sinkt. */
+.kd-teppich-oeffnung { position: absolute; z-index: 2; top: 50%; left: 50%; width: 84vw; height: 74vh;
+  overflow: hidden; transform: translate(-50%, -50%) scale(1); transform-origin: 50% 44%;
+  background:
+    linear-gradient(90deg, transparent 48.8%, rgba(82,72,65,.22) 49%, rgba(82,72,65,.22) 51%, transparent 51.2%),
+    linear-gradient(0deg, transparent 48.8%, rgba(82,72,65,.18) 49%, rgba(82,72,65,.18) 51%, transparent 51.2%),
+    linear-gradient(162deg, #f1eadf 0%, #d2c4b6 58%, #8a7265 100%);
+  box-shadow: 0 0 0 3px #1a090a, 0 0 0 12px rgba(31,10,12,.76), 0 26px 74px rgba(0,0,0,.66), inset 0 0 44px rgba(72,50,43,.25);
+  transition: transform 3.7s cubic-bezier(.52,0,.34,1), opacity 3.7s, filter 3.7s; }
+.kd-teppich-oeffnung::before { content:""; position:absolute; left:31%; top:18%; width:38%; height:13%; border-radius:2px;
+  background:linear-gradient(90deg,#fffdf0,#dce8e5 47%,#fffce4); box-shadow:0 0 28px rgba(255,250,217,.76); opacity:.88; }
+.kd-teppich-oeffnung::after { content:""; position:absolute; right:7%; top:17%; width:13%; height:66%;
+  background:linear-gradient(90deg,#75655a,#b49e8b 20%,#3d302c 22% 28%,#d9c9b9 30%); box-shadow:-7px 0 17px rgba(0,0,0,.2); opacity:.62; }
+.kd-teppich-oeffnung i, .kd-teppich-oeffnung b, .kd-teppich-oeffnung span { position:absolute; display:block; pointer-events:none; }
+.kd-teppich-oeffnung i { left:7%; bottom:7%; width:24%; height:20%; background:#9d8a7b; box-shadow:inset 0 0 0 2px rgba(60,44,39,.23); }
+.kd-teppich-oeffnung b { left:10%; bottom:10%; width:18%; height:5%; background:#5c4a43; opacity:.65; }
+.kd-teppich-oeffnung span { left:47%; top:7%; width:6%; height:86%; border-inline:1px solid rgba(94,76,66,.16); }
+.kd-teppich-oeffnung.weg { transform: translate(-50%, -22%) scale(.235); opacity: .72; filter: brightness(.84) saturate(.72); }
+/* Die Empfehlung erscheint erst, wenn die Öffnung weit genug entfernt ist. */
 .kd-teppich-karte { position: relative; z-index: 3; width: 100%; max-width: 336px; margin: 0 22px; text-align: center;
-  background: rgba(13,5,6,.93); border: 1px solid rgba(211,136,74,.42); border-radius: 3px; padding: 22px 22px 24px;
-  box-shadow: 0 22px 55px rgba(0,0,0,.64), 0 0 0 5px rgba(25,5,7,.24);
-  opacity: 0; transform: translateY(26px); transition: opacity .7s 3.05s ease, transform .7s 3.05s cubic-bezier(.2,.7,.3,1); }
+  background: rgba(10,3,5,.94); border: 1px solid rgba(198,112,75,.48); border-radius: 5px; padding: 22px 22px 24px;
+  box-shadow: 0 22px 55px rgba(0,0,0,.68), 0 0 0 5px rgba(23,5,8,.3);
+  opacity: 0; transform: translateY(26px); transition: opacity .7s 2.95s ease, transform .7s 2.95s cubic-bezier(.2,.7,.3,1); }
 .kd-teppich-karte.da { opacity: 1; transform: translateY(0); }
 .kd-teppich-kicker { font-family: 'Fraunces', Georgia, serif; font-style: italic; font-weight: 600; font-size: 15px; color: #E4872A; letter-spacing: .03em; }
 .kd-teppich-titel { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 33px; line-height: 1.06; color: #F3ECDD; margin: 9px 0 0; }
 .kd-teppich-jahr { font-family: 'Space Mono', monospace; font-size: 12px; color: #C0554B; margin: 9px 0 0; }
 .kd-teppich-verf { font-family: 'Space Mono', monospace; font-size: 11px; color: #A79AA0; margin: 6px 0 0; letter-spacing: .02em; }
-@media (max-width:640px) {
-  .kd-teppich-figur.weit { transform:translate(-50%,-90%) scale(.23); }
-}
-
 /* Egg-Modus-reduced-motion-Nachtrag (Teppich kam nach dem B2-Stand dazu). */
 @media (prefers-reduced-motion: reduce) {
-  .kd-teppich-zimmer, .kd-teppich-figur, .kd-teppich-karte { transition: none !important; }
+  .kd-teppich-oeffnung, .kd-teppich-karte { transition: none !important; }
 }
 
 /* ================= B4-EGG: STAR-WARS-CRAWL (Klaatu bleibt der Nachbar unten) =================
