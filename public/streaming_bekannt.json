@@ -1,5 +1,5 @@
 {
- "stand": "2026-07-20T12:58:05.735Z",
+ "stand": "2026-07-22T11:00:01.616Z",
  "region": "AT",
  "dienste": [
   "Netflix",
@@ -167,7 +167,7 @@
   }
  ],
  "katalog_stand": "2026-07-20T11:04:58.710Z",
- "quota_nach_lauf": 262,
+ "quota_nach_lauf": 263,
  "heuristik": true,
  "naechster_reset": "2026-08-11",
  "letzter_voll_lauf": "2026-07-11T22:42:35.244Z",
@@ -1893,7 +1893,16 @@
    "dienste": [
     "Prime Video"
    ],
-   "web_urls": {},
+   "web_urls": {
+    "Paramount+": "https://www.paramountplus.com/movies/pulp-fiction/GliQztWneaDE_136OH3GxD5Q7SI0dfn0?searchReferral=",
+    "Prime Video": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.a391bb9d-4315-4b8a-a835-2a3159eeac73",
+    "Paramount+ (Via Amazon Prime)": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.a391bb9d-4315-4b8a-a835-2a3159eeac73",
+    "AppleTV": "https://tv.apple.com/at/movie/pulp-fiction/umc.cmc.1hfvw2p79f9qdeydow8nmrn7t?at=1000l3V2&ct=app_tv&itscg=30200&itsct=&playableId=tvs.sbd.9001%3A1531229347",
+    "Rakuten TV": "https://www.rakuten.tv/at/movies/pulp-fiction",
+    "Sky Store": "https://store.sky.at/product/pulp-fiction/acb6d13e-bee8-43a8-9fe7-ea1e2ed5f9ed",
+    "maxdome Store": "https://store.maxdome.at/mo40266321",
+    "Amazon": "https://watch.amazon.de/detail?gti=amzn1.dv.gti.a391bb9d-4315-4b8a-a835-2a3159eeac73"
+   },
    "bewertung": {
     "wie": 3,
     "was": 3,

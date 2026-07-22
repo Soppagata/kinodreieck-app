@@ -1,5 +1,5 @@
 {
- "stand": "2026-07-20T12:58:05.735Z",
+ "stand": "2026-07-22T11:00:01.616Z",
  "region": "AT",
  "dienste": [
   "Netflix",
@@ -167,7 +167,7 @@
   }
  ],
  "katalog_stand": "2026-07-20T11:04:58.710Z",
- "quota_nach_lauf": 262,
+ "quota_nach_lauf": 263,
  "heuristik": true,
  "naechster_reset": "2026-08-11",
  "letzter_voll_lauf": "2026-07-11T22:42:35.244Z",
