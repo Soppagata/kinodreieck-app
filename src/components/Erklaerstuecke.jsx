@@ -123,7 +123,7 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
     { id: "mediathek", titel: "Mediathek", text: [
       "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
       "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Schlagseite (WIE/WAS/WARUM-lastig), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
-      "Pakete mit anderen tauschst du unter Einstellungen → Teilen & Tauschen. Filmlisten-Rohdaten liegen getrennt davon unter Einstellungen → Erweitert.",
+      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Einstellungen. Blog-Artikel besitzen ihre eigenen Werkzeuge direkt im Blog.",
     ] },
     { id: "streaming", titel: "Streaming", text: [
       "„Mein Programm” zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken” liefert Vorschläge aus den Watchmode-Katalogen, nach Relevanz sortiert. Einträge in Mein Programm sind editierbar.",
@@ -140,9 +140,9 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       "Eigene Stimmungswörter hinterlegst du in den Einstellungen (Vokabular), damit die Suche deinen Wortschatz kennt.",
     ] },
     { id: "daten", titel: "Einstellungen", text: [
-      "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Import/Export/Backup deiner Daten, das Such-Vokabular und die Streaming-Quellen (Katalog-Status, Config-Export, Refresh).",
-      "Der Export-Wächter erinnert an einen neuen Rohdaten-Export. Für eine vollständige Sicherung aller App-Daten ist das Gesamt-Backup gedacht; optionaler Geräte-Sync ersetzt dieses Backup nicht.",
-      "Die Modi Showa & NERV liegen als Easter-Egg hinter dem „Max”-Link unter „Über & Rechtliches”.",
+      "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Datenmodus, Masterliste, Gesamt-Backup, Such-Vokabular, Streaming-Quellen und Katalog-Status.",
+      "Unter „Erweitert” kannst du den Datenbank-Katalog manuell neu laden, Notfall-Importe ausführen und den Programm-Cache leeren.",
+      "Ein unbeschriftetes Detail liegt hinter dem „Max”-Link unter „Über & Rechtliches”.",
     ] },
   ];
   const offen = BEREICHE.find((b) => b.id === popup);
@@ -182,9 +182,9 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
         <h2 style={h2}>Alltag</h2>
         <p style={p}>Kinodreieck läuft als PWA im Browser und kann auf dem Startbildschirm
           installiert werden. Bewertungen, Artikel und Einstellungen liegen zunächst im
-          Browser; optional hält der Geräte-Sync diesen Stand auf mehreren Geräten aktuell.</p>
-        <p style={{ ...p, margin: 0 }}>Der Browser und der Geräte-Sync sind kein vollständiges
-          Backup. Lade deshalb regelmäßig unter Einstellungen ein Gesamt-Backup herunter.
+          Browser. Der gemeinsame Programm-Katalog enthält keine persönlichen Änderungen.</p>
+        <p style={{ ...p, margin: 0 }}>Der Browser ist kein vollständiges Backup. Lade deshalb
+          regelmäßig unter Einstellungen ein Gesamt-Backup herunter.
           Programm- und Katalog-Stand zeigen, wie frisch die separat gelieferten Daten sind.</p>
       </div>
       <div style={block}>
@@ -193,18 +193,17 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
           <span style={code}> kino_auto.mjs</span> liest das Kinoprogramm über den inoffiziellen
           Seitenabruf von film.at und gleicht Abo-Daten ab;
           <span style={code}> streaming_auto.mjs</span> erstellt die Watchmode-Kataloge mit Quota-Schutz.</p>
-        <p style={{ ...p, margin: 0 }}><span style={code}>liefere_an_pwa.mjs</span> übergibt danach nur
-          geprüfte JSON-Dateien an die App. Kinodreieck selbst ruft weder die Kino-Seite noch
+        <p style={{ ...p, margin: 0 }}><span style={code}>liefere_an_supabase.mjs</span> übergibt danach nur
+          geprüfte JSON-Daten an den zentralen Katalog. Kinodreieck selbst ruft weder die Kino-Seite noch
           die Streaming-API live auf.</p>
       </div>
       <div style={block}>
         <h2 style={h2}>Teilen & Sichern</h2>
-        <p style={p}>Pakete mit Bewertungen und Blog-Texten exportierst und importierst du
-          unter Einstellungen → „Teilen & Tauschen”. Fremdes behält seinen Autor; eigene
-          Inhalte werden beim Paket-Import nicht still überschrieben.</p>
+        <p style={p}>Blog-Artikel importierst, exportierst oder veröffentlichst du direkt im Blog.
+          Die Masterliste besitzt ihren eigenen Import und Export in den Einstellungen.</p>
         <p style={{ ...p, margin: 0 }}>Das Gesamt-Backup ist dagegen deine vollständige private
           Sicherung und nicht zum Weitergeben gedacht. Teile keine Sync-Zugangsdaten,
-          Konfigurationsdateien oder persönlichen Backup-Dateien.</p>
+          Leseschlüssel oder persönlichen Backup-Dateien.</p>
       </div>
       <div style={block}>
         <h2 style={h2}>Wenn etwas klemmt</h2>

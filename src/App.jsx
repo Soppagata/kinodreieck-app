@@ -23,9 +23,11 @@ import { baueHinweis, onTour, SICHTBAR_TRIGGER, setTourOffen } from "./lib/tour.
 import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
-import { store, K, PROGRAMM_TTL_MS, getTreiber } from "./lib/storage.js";
+import { KatalogZugang } from "./components/KatalogZugang.jsx";
+import { store, K, PROGRAMM_TTL_MS } from "./lib/storage.js";
 import { baueBackup } from "./lib/backup.js";
 import { ladeDemoBlobs, publishBlog, unpublishBlog, ladeSharedBlogs } from "./lib/supabaseDriver.js";
+import { hatKatalogZugang, ladeKatalogAsset, baueStreamingAnsichten } from "./lib/katalog.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
@@ -43,7 +45,7 @@ import { FinderTab } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 
 import nachtragDatei from "./data/nachtrag.json";
-import { PERSONAL_MODE } from "./lib/modus.js";
+import { PERSONAL_MODE, EGGS_ENABLED } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { NavBand } from "./components/NavBand.jsx";
 import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
@@ -108,19 +110,11 @@ function verbraucheFrischenStart() {
 /* Willkommen und Tour werden erst nach einer bestätigten Einrichtung oder dem
    bewussten Überspringen des Installers freigeschaltet. */
 function tutorialFrei() {
-  /* Personal-Modus: Tour & kontextuelle Hinweise bewusst aus — explizit, damit
-     kein localStorage-Rückstand eines Beta-Builds (kd:setup.done) sie doch aktiviert. */
-  if (PERSONAL_MODE) return false;
-  try { return !!getSetup().done; } catch { return false; }
+  try { return !!liesStartWahl(); } catch { return false; }
 }
 
 function snapshotsFrei() {
-  /* Personal-Modus: Daten sind IMMER frei. Das Beta-Gate (Terminal-Installer/
-     Demo-Wahl) hat im Personal-Modus keinen Freischalt-Pfad — ohne diese Zeile
-     blieben Kino/Streaming/Programm-Autoload dauerhaft gesperrt. */
-  if (PERSONAL_MODE) return true;
-  try { if (liesStartWahl() === "demo") return true; } catch { /* */ }
-  try { return getSetup().installiert === true; } catch { return false; }
+  return hatKatalogZugang();
 }
 
 /* Demo-Beilage bei Bedarf laden (einmalig, idempotent). Tests setzen
@@ -150,9 +144,26 @@ async function demoLadung() {
     const roh = blobs && blobs["kd:master"];
     if (roh) {
       const d = JSON.parse(roh);
-      return { filme: ensureIds(d.filme || []), meta: d.meta || null, herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null } };
+      const parse = (key, fallback = null) => {
+        try { return blobs[key] ? JSON.parse(blobs[key]) : fallback; } catch { return fallback; }
+      };
+      return {
+        filme: ensureIds(d.filme || []), meta: d.meta || null,
+        herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null },
+        streaming: parse("kd:streaming-dienste"),
+        artikel: parse("kd:artikel"),
+        pins: parse("kd:kino-pins", []),
+        mustwatch: parse("kd:mustwatch"),
+        merkliste: parse("kd:merkliste", []),
+      };
     }
-  } catch { /* keine Demo-Quelle erreichbar -> Beilage-Fallback */ }
+  } catch (e) {
+    /* Tests und die alte file://-Ausgabe besitzen weiterhin die Beilage. In der
+       gehosteten PWA darf ein DB-Fehler nicht unbemerkt synthetische Daten laden. */
+    const file = typeof location !== "undefined" && location.protocol === "file:";
+    const test = typeof window !== "undefined" && !!window.__KD_DEMO_MASTER__;
+    if (!file && !test) throw e;
+  }
   const d = await ladeDemoGlobal();
   return {
     filme: ensureIds(d.filme || []),
@@ -267,6 +278,7 @@ export default function App() {
   const autoFetched = useRef(false);
   const streamingGeladen = useRef(false);
   const entdeckenGeladen = useRef(false); // KD-031: Voll-Katalog getrennt vom leichten Boot-Nachladen
+  const streamingRohRef = useRef(null);
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
@@ -292,10 +304,11 @@ export default function App() {
   const waehleModus = useCallback((wahl) => {
     setEinstellungenState((prev) => {
       let next;
-      if (wahl === "showa") next = { ...prev, modus: "showa", theme: "dunkel" };
-      else if (wahl === "nerv") next = { ...prev, modus: "nerv", theme: "dunkel" };
-      else if (wahl === "foyer") next = { ...prev, modus: "", theme: "hell" };
-      else next = { ...prev, modus: "", theme: "dunkel" };
+      if (wahl === "showa" || wahl === "nerv") {
+        const basisTheme = prev.modus ? (prev.basisTheme || "dunkel") : prev.theme;
+        next = { ...prev, modus: wahl, basisTheme, theme: "dunkel" };
+      } else if (wahl === "foyer") next = { ...prev, modus: "", basisTheme: undefined, theme: "hell" };
+      else next = { ...prev, modus: "", basisTheme: undefined, theme: "dunkel" };
       setzeTheme(next.modus || next.theme);
       store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
       return next;
@@ -335,11 +348,11 @@ export default function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   }, []);
   useEffect(() => {
-    if (!PERSONAL_MODE) return;
+    if (!EGGS_ENABLED) return;
     ladeAchievements().then((s) => setAchievements(s)).catch(() => setAchievements(new Set()));
   }, []);
   useEffect(() => {
-    if (!PERSONAL_MODE) return;
+    if (!EGGS_ENABLED) return;
     if (achievements == null || master == null) return;
     const neu = [...berechneUnlocks(master)].filter((id) => !achievements.has(id));
     if (neu.length === 0) { backfillRef.current = true; return; }
@@ -372,18 +385,15 @@ export default function App() {
   const crawlMatchesRef = useRef([]);
   const [crawlOffen, setCrawlOffen] = useState(false);
   const [necroAktiv, setNecroAktiv] = useState(false);
-  const [may4Aktiv, setMay4Aktiv] = useState(() => PERSONAL_MODE && istVierterMai(new Date()));
-  const [may4Vorschau, setMay4Vorschau] = useState(false);
+  const [may4Aktiv, setMay4Aktiv] = useState(() => EGGS_ENABLED && istVierterMai(new Date()));
+  const may4Vorschau = false;
   useEffect(() => {
-    if (!PERSONAL_MODE) return;
+    if (!EGGS_ENABLED) return;
     const aktualisieren = () => setMay4Aktiv(istVierterMai(new Date()));
     aktualisieren();
     const timer = setInterval(aktualisieren, 60_000);
     return () => clearInterval(timer);
   }, []);
-  useEffect(() => {
-    if (PERSONAL_MODE && einstellungen.vorfuehr) setMay4Vorschau(true);
-  }, [einstellungen.vorfuehr]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -403,45 +413,23 @@ export default function App() {
      Vergangene Termine werden beim Boot aufgeräumt (Jahres-Wrap beachtet:
      ein im Dezember gepinnter Januar-Termin gehört ins Folgejahr). */
   const [kinoPins, setKinoPins] = useState([]);
-  /* Einrichtungsstatus ist pro Beta-Version. Alte Legacy-Flags dürfen den Hinweis
-     nicht unterdrücken; initSetup verarbeitet auch den Finish-Link des Installers. */
-  const [setupWarnung, setSetupWarnung] = useState(() => {
-    if (PERSONAL_MODE) return false; // Personal-Modus: kein Installer-Hinweis
-    try {
-      /* Die Terminal-Installer öffnen die App am Ende mit
-         ?setup=done&install=command[&skip=…]. Der Prozess kann localStorage nicht schreiben —
-         initSetup liest die EIGENE URL und schreibt kd:setup/kd:tutorial.
-         Rückgabe .done steuert die Warnung. */
-      return !initSetup().done;
-    } catch { return false; }
+  /* Initialisiert ausschließlich den Tutorial-Speicher. Ein Terminal-Installer
+     ist für die DB-basierte Tester-PWA nicht mehr Teil des Starts. */
+  const [setupWarnung] = useState(() => {
+    try { initSetup(); } catch { /* Tutorial-Speicher optional */ }
+    return false;
   });
   /* Willkommen (Tutorial): einmalig nach abgeschlossener Einrichtung. Sichtbarkeit
      aus kd:setup/kd:tutorial; initSetup() (oben) hat beide bereits angelegt. */
   const [willkommenOffen, setWillkommenOffen] = useState(() => {
-    if (PERSONAL_MODE) return false; // Personal-Modus: kein Willkommens-/Tutorial-Popup
     try { return tutorialFrei() && !getTutorial().willkommen; } catch { return false; }
   });
-  /* Geräte-Sync-Onboarding: einmalig beim allerersten Start, solange noch kein
-     Sync-Treiber gewählt ist. Danach ist Sync nur noch schlank unter
-     Einstellungen → „Geräte-Sync (Supabase)" sichtbar/änderbar. Wird von den
-     höherrangigen Boot-Modalen (Installer-Warnung, Startwahl, Willkommen)
-     verdrängt und erst nach ihnen gezeigt. */
-  const [syncOnboardingOffen, setSyncOnboardingOffen] = useState(() => {
-    if (!PERSONAL_MODE) return false; // B5: Sync-Onboarding NUR im Personal-Modus (in Beta/Demo nie)
-    try {
-      if (localStorage.getItem("kd:sync-onboarding-gesehen")) return false;
-      return !getTreiber();
-    } catch { return false; }
-  });
-  const syncOnboardingFertig = useCallback((zuEinstellungen) => {
-    try { localStorage.setItem("kd:sync-onboarding-gesehen", "1"); } catch { /* */ }
-    setSyncOnboardingOffen(false);
-    if (zuEinstellungen) setTab("daten");
-  }, []);
+  const syncOnboardingOffen = false; // Login-/Geräte-Sync ist nicht Teil der Demo-PWA.
   const [snapshotFreigabe, setSnapshotFreigabe] = useState(() => snapshotsFrei());
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
   const [startTick, setStartTick] = useState(0); // bump nach Startwahl -> Tour-Effekte neu binden
+  const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !hatKatalogZugang());
   const pinAbgelaufen = (pin, jetzt = new Date()) => {
     const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(pin.z));
     if (!m) return false; // unparsebar -> nie automatisch wegwerfen
@@ -497,32 +485,32 @@ export default function App() {
     }
   }, []);
 
-  /* ---- programm.json aus public/ laden (geplanter Job legt sie dort ab) ---- */
+  /* ---- Kinoprogramm direkt aus dem zentralen Supabase-Katalog laden ---- */
   const ladeProgrammDatei = useCallback(async (manuell) => {
     setErr("");
     setLoading("programm");
     try {
-      // BASE_URL statt absolutem "/…": auf GitHub Pages liegt die App unter einem
-      // Unterpfad (…/kinodreieck-app/) — "/programm.json" zielte auf die Domain-Root.
-      const res = await fetch(import.meta.env.BASE_URL + "programm.json", { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const ct = res.headers.get("content-type") || "";
-      const text = await res.text();
-      if (!ct.includes("json") && !text.trim().startsWith("{")) throw new Error("keine JSON-Datei gefunden");
-      const parsed = JSON.parse(text);
+      let parsed;
+      if (manuell) {
+        /* Der manuelle Knopf bleibt ein DB-Refresh; Dateiimporte besitzen ihre
+           eigenen Funktionen weiter unten. */
+        parsed = (await ladeKatalogAsset("programm")).payload;
+      } else {
+        parsed = (await ladeKatalogAsset("programm")).payload;
+      }
       const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
       if (!manuell && !snapshotFreigabeRef.current) return false;
       setProgramm(data);
-      setProgrammArt(manuell ? "manuell" : "snapshot");
+      setProgrammArt(manuell ? "db-refresh" : "datenbank");
       setProgStand(Date.now());
       try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: Date.now(), art: manuell ? "manuell" : "snapshot", data }));
+        await store.set(K.programm, JSON.stringify({ fetchedAt: Date.now(), art: manuell ? "db-refresh" : "datenbank", data }));
       } catch { /* Cache-Fehler nicht fatal */ }
       return true;
     } catch (e) {
       if (manuell) {
-        setErr("programm.json nicht ladbar (" + e.message + "). Datei nach public/ legen — oder Nonstop-HTML im Einstellungen-Tab einspielen.");
-      } else if (snapshotFreigabeRef.current && programmSnapshot && (Array.isArray(programmSnapshot.filme) || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)))) {
+        setErr("Programmdaten nicht aktualisierbar: " + e.message);
+      } else if (typeof location !== "undefined" && location.protocol === "file:" && programmSnapshot && (Array.isArray(programmSnapshot.filme) || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)))) {
         // Autoload gescheitert (z.B. file://) -> eingebetteter Snapshot vom Bauzeitpunkt.
         // Bewusst NICHT gecached, damit ein späterer fetch/Import gewinnt.
         try {
@@ -560,10 +548,33 @@ export default function App() {
           try {
             const d = await demoLadung();
             m = d.filme; meta = d.meta; herkunft = d.herkunft;
-            try { localStorage.setItem("kd:start", "demo"); } catch { /* */ }
+            try {
+              localStorage.setItem("kd:start", "demo");
+              const seed = { masterIds: d.filme.map((f) => f.id), artikelIds: [], geladenAm: new Date().toISOString() };
+              if (d.streaming && Array.isArray(d.streaming.quellen)) {
+                localStorage.setItem(K.streamingDienste, JSON.stringify(d.streaming));
+                setAuswahlRoh(d.streaming.quellen);
+                if (typeof d.streaming.heuristik === "boolean") setHeuristikAn(d.streaming.heuristik);
+                seed.streaming = true;
+              }
+              if (d.artikel) {
+                const al = Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || [];
+                setArtikelListe(al);
+                localStorage.setItem(K.artikel, JSON.stringify({ artikel: al, gespeichertAm: Date.now() }));
+                seed.artikelIds = al.map((a) => a.id);
+              }
+              if (Array.isArray(d.pins)) { setKinoPins(d.pins); localStorage.setItem(K.kinoPins, JSON.stringify(d.pins)); seed.pins = true; }
+              if (d.mustwatch) {
+                const mw = parseMustwatch(JSON.stringify(d.mustwatch));
+                setMustwatch(mw); localStorage.setItem(K.mustwatch, JSON.stringify({ eintraege: mw, gespeichertAm: Date.now() }));
+                seed.mustwatchIds = mw.map((e) => e.id);
+              }
+              if (Array.isArray(d.merkliste)) { setMerkliste(d.merkliste); localStorage.setItem(K.merkliste, JSON.stringify(d.merkliste)); seed.merkliste = true; }
+              localStorage.setItem(K.demoSeed, JSON.stringify(seed));
+            } catch { /* Seed-State bleibt mindestens in React erhalten */ }
           } catch (e) {
             setErr("Demo-Daten nicht ladbar: " + e.message);
-            startModalNoetig = true; // zurück zur Wahl
+            setKatalogZugangOffen(true);
           }
         } else if (wahl === "clean") {
           try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
@@ -579,7 +590,7 @@ export default function App() {
         const r = await store.get(K.programm);
         if (r) {
           const p = JSON.parse(r.value);
-          const frisch = Date.now() - p.fetchedAt < (p.art === "snapshot" ? 7 * PROGRAMM_TTL_MS : PROGRAMM_TTL_MS);
+          const frisch = Date.now() - p.fetchedAt < (p.art === "datenbank" || p.art === "db-refresh" ? 7 * PROGRAMM_TTL_MS : PROGRAMM_TTL_MS);
           if (frisch && (snapshotFreigabe || p.art === "manuell")) cachedProg = p;
         }
       } catch { /* kein Cache */ }
@@ -961,11 +972,15 @@ export default function App() {
       if (aktiverHinweisRef.current) return;     // nicht stapeln — feuert beim nächsten Mal erneut
       if (istGesehen(id)) return;
       const h = baueHinweis(id, getSetup().skip || []);
-      markGesehen(id);                            // jeder Hinweis feuert genau einmal
-      if (!h) return;                             // nichts zu zeigen (z.B. Einstellungen ohne skip)
+      if (!h) return false;                       // nichts zu zeigen (z.B. Einstellungen ohne skip)
+      /* Ein Hinweis zählt erst, wenn alle seine Ziele wirklich im DOM stehen.
+         Zugeklappte/noch nicht gerenderte Bereiche werden beim nächsten passenden
+         Besuch erneut geprüft und nicht versehentlich für immer übersprungen. */
+      if (h.absaetze.some((a) => !document.querySelector('[data-tour="' + a.ziel + '"]'))) return false;
+      markGesehen(id);                            // jeder tatsächlich sichtbare Hinweis feuert genau einmal
       if (einstellungen.modus) {                  // A7.1: Modus aus, sonst sitzt das Spotlight daneben
         modusVorHinweis.current = einstellungen.modus;
-        waehleModus(einstellungen.theme === "hell" ? "foyer" : "saal");
+        waehleModus(einstellungen.basisTheme === "hell" ? "foyer" : "saal");
       }
       // Scroll SOFORT einfrieren (synchron beim Auslösen) — sonst trägt schnelles
       // Scrollen das Element weiter, bevor der Overlay misst, und der Rahmen sitzt daneben.
@@ -973,8 +988,9 @@ export default function App() {
       setTourOffen(true); // Feld-Tooltips (Teil B) währenddessen aus
       aktiverHinweisRef.current = h;
       setAktiverHinweis(h);
-    } catch { /* nicht fatal */ }
-  }, [einstellungen.modus, einstellungen.theme, waehleModus]);
+      return true;
+    } catch { return false; }
+  }, [einstellungen.modus, einstellungen.basisTheme, waehleModus]);
 
   const zeigeHinweisRef = useRef(zeigeHinweis);
   zeigeHinweisRef.current = zeigeHinweis;
@@ -997,11 +1013,11 @@ export default function App() {
     else if (tab === "streaming") zeigeHinweisRef.current("streaming");
     else if (tab === "blog") zeigeHinweisRef.current("blog");
     // Einstellungen: keine Sammel-Erklärung mehr — die Bereiche feuern per
-    // Sichtbar-Anker (Teilen & Tauschen / Vokabular / Streaming-Quellen).
+    // Sichtbar-Anker (Vokabular / Streaming-Quellen / Erweitert).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, bootDone, startTick]);
 
-  // Sichtbar-Anker (Pinboard, Teilen, Vokabular, Streaming-Quellen): der Rahmen
+  // Sichtbar-Anker (Pinboard, Vokabular, Streaming-Quellen, Erweitert): der Rahmen
   // triggert, wenn der MITTELPUNKT des Elements zwischen 35% und 55% der Höhe
   // steht (kurz vor/über der oberen Bildschirmhälfte) UND der Scroll langsam ist
   // (< ~35% eines schnellen Flicks). IntersectionObserver liefert Sichtbarkeit +
@@ -1020,9 +1036,9 @@ export default function App() {
     // Hohes Element (höher als der Schirm): sobald sein oberer Teil die Mitte deckt.
     const imBand = (r, id) => {
       const h = vh(), mitte = r.top + r.height / 2;
-      // Streaming-Quellen feuert später (Oberkante muss den oberen Rand erreichen)
+      // Große Einstellungsblöcke feuern später (Oberkante nähert sich dem oberen Rand).
       // — die Box ist groß und triggerte sonst zu früh.
-      const spaet = id === "streaming-quellen";
+      const spaet = id === "streaming-quellen" || id === "erweitert";
       if (r.height > h) return r.top <= (spaet ? 0 : h * 0.15) && r.bottom >= h * 0.5;
       const oben = spaet ? h * 0.2 : h * 0.35, unten = spaet ? h * 0.4 : h * 0.55;
       return mitte >= oben && mitte <= unten;
@@ -1053,7 +1069,7 @@ export default function App() {
       for (const [el] of rects) {
         if (!el.isConnected || istGesehen(SICHTBAR_TRIGGER[el.getAttribute("data-tour")])) continue;
         const r = rectVon(el);
-        if (r && imBand(r)) { feuer(el); break; }
+        if (r && imBand(r, el.getAttribute("data-tour"))) { feuer(el); break; }
       }
     };
     const onScroll = () => {
@@ -1072,10 +1088,9 @@ export default function App() {
   // Wächter (A8): sobald die erste ungesicherte Änderung entsteht
   useEffect(() => {
     if ((ungesichertMaster || ungesichertArtikel) && !waechterGefeuert.current) {
-      waechterGefeuert.current = true;
-      zeigeHinweisRef.current("waechter");
+      waechterGefeuert.current = !!zeigeHinweisRef.current("waechter");
     }
-  }, [ungesichertMaster, ungesichertArtikel]);
+  }, [ungesichertMaster, ungesichertArtikel, tab, bootDone]);
 
   /* ---- Artikel-Export/-Import (Sicherung, analog Master) ---- */
   const exportArtikel = useCallback(() => {
@@ -1223,41 +1238,53 @@ export default function App() {
      Schreibt kd:start und lädt entsprechend. "Startart wechseln" (Einstellungen-Tab)
      verwirft dabei den Browser-Stand — beide Wege ohne Datei-Gefummel. */
   const waehleStart = useCallback((wahl) => {
-    // Alten Storage-Stand entfernen, sonst überschreibt der beim nächsten Boot
-    // die Wahl (Storage gewinnt vor kd:start). Idempotent, wenn nichts da war.
     store.delete(K.master).catch(() => {});
-    try { localStorage.setItem("kd:start", wahl); } catch { /* */ }
-    const frei = wahl === "demo" || (() => {
-      try { return getSetup().installiert === true; } catch { return false; }
-    })();
-    setSnapshotFreigabe(frei);
-    snapshotFreigabeRef.current = frei;
-    streamingGeladen.current = false;
-    if (frei) {
-      autoFetched.current = false;
-    } else {
-      setStreamingBekannt(null); setStreamingEntdecken(null);
-      if (programmArt !== "manuell") {
-        setProgramm(null); setProgrammArt(null); setProgStand(null);
-      }
+    try {
+      localStorage.setItem(K.start, wahl);
+      localStorage.removeItem(K.demoSeed);
+      setupUeberspringen();
+    } catch { /* */ }
+    setStartModalOffen(false);
+    if (!hatKatalogZugang()) {
+      setKatalogZugangOffen(true);
+      return;
     }
-    if (wahl === "demo") {
-      setStartModalOffen(false); setErr(""); setLoading("demo");
-      demoLadung().then((d) => {
-        setMaster(d.filme); setMasterMeta(d.meta); setMasterHerkunft(d.herkunft); setLoading("");
-      }).catch((e) => {
-        setLoading(""); setErr("Demo-Daten nicht ladbar: " + e.message); setStartModalOffen(true);
-      });
-    } else {
+    /* Ein Reload hält den Start atomar: Demo-Seeds werden vor allen übrigen
+       Storage-Effekten geladen, Clean startet garantiert ohne Alt-Master. */
+    try { location.reload(); } catch {
       setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
-      setStartModalOffen(false);
+      setSnapshotFreigabe(true); setWillkommenOffen(true); setStartTick((t) => t + 1);
     }
-    // Tutorial auch OHNE Installer starten (dieser Button ist der Auslöser beim
-    // Leer-/Demo-Start): Willkommen einmalig zeigen + Tour-Trigger aktivieren.
-    try { if (!getTutorial().willkommen) setWillkommenOffen(true); } catch { /* */ }
-    setStartTick((t) => t + 1);
-  }, [programmArt]);
+  }, []);
   const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
+
+  /* Entfernt ausschließlich die beim Demo-Start protokollierten Beilagen.
+     Standardisiertes Kino-/Streamingprogramm und spätere Tester-Einträge bleiben. */
+  const entferneDemoDaten = useCallback(async () => {
+    let seed = {};
+    try { seed = JSON.parse(localStorage.getItem(K.demoSeed) || "{}"); } catch { /* */ }
+    const masterIds = new Set(seed.masterIds || []);
+    const nextMaster = (master || []).filter((f) => !masterIds.has(f.id));
+    if (nextMaster.length) {
+      const h = { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" };
+      setMaster(nextMaster); setMasterHerkunft(h); await persistMaster(nextMaster, masterMeta, h);
+    } else {
+      try { await store.delete(K.master); } catch { /* */ }
+      setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
+    }
+    const artIds = new Set(seed.artikelIds || []);
+    setArtikelListe((prev) => { const next = prev.filter((a) => !artIds.has(a.id)); persistArtikel(next); return next; });
+    const mwIds = new Set(seed.mustwatchIds || []);
+    setMustwatch((prev) => { const next = prev.filter((e) => !mwIds.has(e.id)); persistMustwatch(next); return next; });
+    if (seed.pins) { setKinoPins([]); persistPins([]); }
+    if (seed.merkliste) { setMerkliste([]); persistMerk([]); }
+    if (seed.streaming) {
+      setAuswahlRoh([]); setHeuristikAn(true);
+      try { await store.set(K.streamingDienste, JSON.stringify({ quellen: [], heuristik: true })); } catch { /* */ }
+    }
+    try { localStorage.setItem(K.start, "clean"); localStorage.removeItem(K.demoSeed); } catch { /* */ }
+    setErr(""); setStartTick((t) => t + 1);
+  }, [master, masterMeta, persistMaster, persistArtikel, persistMustwatch, persistPins, persistMerk]);
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
   const exportMaster = useCallback(() => {
@@ -1334,9 +1361,8 @@ export default function App() {
     });
   }, [master]);
 
-  /* ---- Streaming-Daten (Watchmode-Jobs schreiben public/*.json) ----
-     KEIN API-Call im Frontend — nur Dateien lesen. Lazy beim ersten
-     Öffnen des Streaming-Tabs; Fallback: eingebettete Snapshots. */
+  /* ---- Streaming-Daten direkt aus Supabase. Die DB liefert beide bisherigen
+     Ansichten; „Mein Programm" wird lokal gegen die aktive Masterliste gebaut. */
   /* Finder-Suchverlauf im App-State halten -> überlebt Tab-Wechsel (App bleibt
      montiert; FinderTab wird beim Tab-Wechsel ab-/wieder-montiert). */
   const [finderVerlauf, setFinderVerlauf] = useState([]);
@@ -1347,51 +1373,38 @@ export default function App() {
      (Streaming-Tab offen): der volle 3,8-MB-Entdecken-Katalog wird gefetcht/geparst. */
   const ladeStreamingDateien = useCallback(async (vollKatalog = false) => {
     if (!snapshotFreigabe) return;
-    const hol = async (pfad, fallback) => {
-      try {
-        const res = await fetch(pfad, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const j = JSON.parse(await res.text());
-        if (j && j.stand) return j;
-        throw new Error("leer");
-      } catch { return fallback && fallback.stand ? fallback : null; }
-    };
-    // Leichte bekannt-Datei (Badges/Mein Programm/Katalog-Zähler): einmalig, auch am Boot.
-    if (!streamingGeladen.current) {
-      streamingGeladen.current = true;
-      const bekannt = await hol(import.meta.env.BASE_URL + "streaming_bekannt.json", streamingBekanntSnapshot);
-      if (!snapshotFreigabeRef.current) return;
-      setStreamingBekannt(bekannt);
-      // Leichter Ersatz fürs Dashboard („Jetzt streambar"): der bereits gebündelte
-      // Top-500-Snapshot — KEIN Fetch/Parse des Vollkatalogs am Boot. Ein später
-      // geladener Vollkatalog (Streaming-Tab) überschreibt ihn (cur || …).
-      setStreamingEntdecken((cur) => cur || streamingEntdeckenSnapshot);
+    if (streamingGeladen.current && streamingRohRef.current) {
+      const a = baueStreamingAnsichten(streamingRohRef.current, master || []);
+      setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken); return;
     }
-    // Voller Entdecken-Katalog (3,8 MB): erst wenn der Streaming-Tab wirklich offen ist.
-    if (!vollKatalog || entdeckenGeladen.current) return;
-    entdeckenGeladen.current = true;
-    // Entdecken: served public/ (voll) -> externe Beilage (voll, file://) -> eingebackene Top 500
-    const entdeckenServed = await hol(import.meta.env.BASE_URL + "streaming_entdecken.json", null);
-    if (!snapshotFreigabeRef.current) return;
-    if (entdeckenServed) setStreamingEntdecken(entdeckenServed);
-    else {
-      const beilage = await ladeEntdeckenBeilage();
+    streamingGeladen.current = true;
+    try {
+      const r = await ladeKatalogAsset("streaming", { timeout: vollKatalog ? 20000 : 15000 });
       if (!snapshotFreigabeRef.current) return;
-      setStreamingEntdecken(beilage && beilage.stand ? beilage : streamingEntdeckenSnapshot);
+      streamingRohRef.current = r.payload;
+      const a = baueStreamingAnsichten(r.payload, master || []);
+      setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
+      entdeckenGeladen.current = true;
+      if (r.quelle === "cache" && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
+    } catch (e) {
+      streamingGeladen.current = false;
+      const file = typeof location !== "undefined" && location.protocol === "file:";
+      if (file) {
+        const roh = { bekannt: streamingBekanntSnapshot, entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot };
+        streamingRohRef.current = roh;
+        const a = baueStreamingAnsichten(roh, master || []);
+        setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
+      } else setErr("Streamingkatalog nicht ladbar: " + e.message);
     }
-  }, [snapshotFreigabe]);
+  }, [snapshotFreigabe, master]);
   useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
   const ALTE_SLUGS = { netflix: "Netflix", disney_plus: "Disney+", prime_video: "Prime Video" };
-  const [auswahl, setAuswahlRoh] = useState(["Netflix", "Disney+", "Prime Video"]);
+  const [auswahl, setAuswahlRoh] = useState([]);
   const [heuristikAn, setHeuristikAn] = useState(true);
-  /* Watchmode-Abrechnungstag (1–28): Tag im Monat, an dem die Credits real
-     zurückgesetzt werden. Grundlage der Reset-Anzeige (StreamingEinstellungen). */
-  const [resetTag, setResetTagRoh] = useState(null);
-  const streamingCfgJson = (quellen, heuristik, reset) =>
-    JSON.stringify({ quellen, heuristik, ...(Number.isInteger(reset) && reset >= 1 && reset <= 28 ? { reset_tag: reset } : {}) });
+  const streamingCfgJson = (quellen, heuristik) => JSON.stringify({ quellen, heuristik });
   useEffect(() => {
     store.get(K.streamingDienste).then((r) => {
       if (r && r.value) {
@@ -1400,7 +1413,6 @@ export default function App() {
           if (Array.isArray(v.quellen)) setAuswahlRoh(v.quellen);
           else if (Array.isArray(v.dienste)) setAuswahlRoh(v.dienste.map((d) => ALTE_SLUGS[d] || d)); // Migration Altformat
           if (typeof v.heuristik === "boolean") setHeuristikAn(v.heuristik);
-          if (Number.isInteger(v.reset_tag) && v.reset_tag >= 1 && v.reset_tag <= 28) setResetTagRoh(v.reset_tag);
         } catch { /* Default */ }
       }
     }).catch(() => {});
@@ -1409,15 +1421,10 @@ export default function App() {
   const toggleQuelle = useCallback((name) => {
     setAuswahlRoh((prev) => {
       const next = prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name];
-      store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn, resetTag)).catch(() => {});
+      store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {});
       return next;
     });
-  }, [heuristikAn, resetTag]);
-  const setResetTag = useCallback((tag) => {
-    const v = (Number.isInteger(tag) && tag >= 1 && tag <= 28) ? tag : null;
-    setResetTagRoh(v);
-    store.set(K.streamingDienste, streamingCfgJson(auswahl, heuristikAn, v)).catch(() => {});
-  }, [auswahl, heuristikAn]);
+  }, [heuristikAn]);
 
   /* ---- Streaming-Badges für Mediathek & Kino (aus streaming_bekannt) ---- */
   const streamingMap = useMemo(() => {
@@ -1468,11 +1475,6 @@ export default function App() {
     setTeppichVorschau(false);
     setTeppichOffen(true);
   }, [teppichEgg, master, eggCtx]);
-  const zeigeTeppichVorschau = useCallback(() => {
-    teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
-    setTeppichVorschau(true);
-    setTeppichOffen(true);
-  }, [teppichEgg, master, eggCtx]);
   /* B4-Egg: Star-Wars-Crawl — die realen Kino-Treffer (kinoMatches, dieselbe Quelle
      wie „Läuft auch") in die von Crawl.jsx gelesene Form {titel,jahr,kinos[],zeiten[]}
      bringen: film liefert Titel/Jahr, das Programm (m.prog) die Kinos (k) und Zeiten (z). */
@@ -1488,17 +1490,12 @@ export default function App() {
     crawlMatchesRef.current = crawlMatchesBauen();
     setCrawlOffen(true);
   }, [crawlMatchesBauen]);
-  const zeigeCrawlVorschau = useCallback(() => {
-    setMay4Vorschau(true);
-    crawlMatchesRef.current = crawlMatchesBauen();
-    setCrawlOffen(true);
-  }, [crawlMatchesBauen]);
   /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand über dem AKTUELLEN Tab
      einblenden. Bleibt tabübergreifend bis zum sichtbaren X oder globalem Escape;
      nur In-Memory-State, nach Reload sicher weg. Zusätzlich zur Mount-Gatterung
      hier hart auf PERSONAL_MODE. */
   const zeigeKlaatu = useCallback(() => {
-    if (!PERSONAL_MODE) return;
+    if (!EGGS_ENABLED) return;
     setNecroAktiv(true);
   }, []);
   const eggHerkunft = useCallback((film) => {
@@ -1516,29 +1513,20 @@ export default function App() {
     else if (film) springeZuFilm(film.id);
   }, [springeZuFilm]);
 
-  /* ---- Egg-Auto-Trigger (B3, nur PERSONAL_MODE + freigeschaltet) ----
+  /* ---- Egg-Auto-Trigger: in jedem Tester-Modus, sobald freigeschaltet. ----
      Test-sicher: gewürfelt wird NUR wenn das Egg freigeschaltet ist (Tests schalten
      nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:30/Tag beim
      Start. Teppich: 1:10/Tag beim Vorbeiscrollen an einem passenden Live-Film.
-     Vorführmodus hebt nur Chance/Unlock/Tagessperre auf; der Teppich braucht weiter
-     die echte Scroll-Situation und einen passenden verfügbaren Film. */
+     Der Teppich braucht zusätzlich die echte Scroll-Situation und einen passenden
+     verfügbaren Film. */
   const cageAutoRef = useRef(false);
-  const cageVorfuehrRef = useRef(false);
   useEffect(() => {
-    if (!PERSONAL_MODE || !bootDone || achievements == null || master == null) return;
-    if (einstellungen.vorfuehr) {
-      if (cageVorfuehrRef.current) return;
-      if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
-      cageVorfuehrRef.current = true;
-      zeigeCage();
-      return;
-    }
-    cageVorfuehrRef.current = false;
+    if (!EGGS_ENABLED || !bootDone || achievements == null || master == null) return;
     if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
     if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
     cageAutoRef.current = true;
     if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 30)) { markiereGefeuert("cage"); zeigeCage(); }
-  }, [bootDone, achievements, master, einstellungen.vorfuehr, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
+  }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
 
   /* ---- B4-Egg: Star-Wars-Crawl Auto-Trigger (nur PERSONAL_MODE) ----
      Deterministisch statt Würfel: crawlHeute() ist den gesamten 4. Mai wahr —
@@ -1547,7 +1535,7 @@ export default function App() {
      Overlay/Modal offen ist. An allen anderen Tagen liefert crawlHeute false. */
   const crawlAutoRef = useRef(false);
   useEffect(() => {
-    if (!PERSONAL_MODE || !bootDone || master == null) return;
+    if (!EGGS_ENABLED || !bootDone || master == null) return;
     if (crawlAutoRef.current) return;
     if (crawlOffen || cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
     if (!crawlHeute({ jetzt: new Date() })) return;
@@ -1558,7 +1546,7 @@ export default function App() {
   /* Nachfreigabe: dauerhaft, aber nie gefangen. Escape bleibt global erreichbar,
      weil der rein dekorative Rand selbst weder fokussierbar noch interaktiv ist. */
   useEffect(() => {
-    if (!PERSONAL_MODE || !necroAktiv) return;
+    if (!EGGS_ENABLED || !necroAktiv) return;
     const schliessenMitEsc = (e) => { if (e.key === "Escape") setNecroAktiv(false); };
     window.addEventListener("keydown", schliessenMitEsc);
     return () => window.removeEventListener("keydown", schliessenMitEsc);
@@ -1568,12 +1556,8 @@ export default function App() {
   const teppichLetztesYRef = useRef(0);
   const teppichTagRef = useRef(tagesSchluessel());
   useEffect(() => {
-    if (einstellungen.vorfuehr) teppichPassiertRef.current.clear();
-  }, [einstellungen.vorfuehr]);
-  useEffect(() => {
-    if (!PERSONAL_MODE || !bootDone || tab !== "mediathek" || achievements == null || master == null) return;
-    const vorfuehr = !!einstellungen.vorfuehr;
-    if ((!achievements.has("teppich") && !vorfuehr) || (!vorfuehr && schonGefeuertHeute("teppich")) || !teppichEgg) return;
+    if (!EGGS_ENABLED || !bootDone || tab !== "mediathek" || achievements == null || master == null) return;
+    if (!achievements.has("teppich") || schonGefeuertHeute("teppich") || !teppichEgg) return;
     const zielIds = new Set(liveVertreter(master, teppichEgg, eggCtx).map((f) => String(f.id)));
     if (!zielIds.size) return;
     teppichLetztesYRef.current = window.scrollY || 0;
@@ -1596,14 +1580,14 @@ export default function App() {
       const jetztY = window.scrollY || 0;
       const scrolltAbwaerts = jetztY > teppichLetztesYRef.current;
       teppichLetztesYRef.current = jetztY;
-      if (!scrolltAbwaerts || (!vorfuehr && schonGefeuertHeute("teppich"))) return;
+      if (!scrolltAbwaerts || schonGefeuertHeute("teppich")) return;
       for (const el of document.querySelectorAll("[data-film-id]")) {
         const id = el.dataset.filmId;
         if (!zielIds.has(id) || teppichPassiertRef.current.has(id)) continue;
         if (!istVorbeiGescrollt(el.getBoundingClientRect(), { viewportHoehe: window.innerHeight, scrolltAbwaerts })) continue;
         teppichPassiertRef.current.add(id);
-        if (vorfuehr || wuerfleTag("teppich", 1 / 10)) {
-          if (!vorfuehr) markiereGefeuert("teppich");
+        if (wuerfleTag("teppich", 1 / 10)) {
+          markiereGefeuert("teppich");
           zeigeTeppich();
         }
         break; // wuerfleTag garantiert genau eine gespeicherte Tageschance.
@@ -1611,13 +1595,13 @@ export default function App() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, einstellungen.vorfuehr, zeigeTeppich]);
+  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, zeigeTeppich]);
 
   /* Scroll-Sperre, solange ein Egg-Overlay offen ist → die Liste bleibt an ihrer
      Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
      beim Weiterscrollen"). */
   useEffect(() => {
-    if (!PERSONAL_MODE || !(cageOffen || teppichOffen || crawlOffen)) return;   // B4-Egg: Crawl-Vollbild mitsperren
+    if (!EGGS_ENABLED || !(cageOffen || teppichOffen || crawlOffen)) return;
     let vorher = "";
     try { vorher = document.body.style.overflow; document.body.style.overflow = "hidden"; } catch { /* */ }
     return () => { try { document.body.style.overflow = vorher; } catch { /* */ } };
@@ -1627,6 +1611,14 @@ export default function App() {
     try { await store.delete(K.programm); } catch { /* war leer */ }
     setProgramm(null); setProgrammArt(null); setProgStand(null); autoFetched.current = false;
   }, []);
+
+  const refreshKatalog = useCallback(async () => {
+    streamingGeladen.current = false;
+    entdeckenGeladen.current = false;
+    streamingRohRef.current = null;
+    const [programmOk] = await Promise.all([ladeProgrammDatei(true), ladeStreamingDateien(true)]);
+    if (programmOk) setErr("");
+  }, [ladeProgrammDatei, ladeStreamingDateien]);
 
   const wrap = {
     minHeight: "100dvh",
@@ -1638,58 +1630,25 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + ((may4Aktiv || may4Vorschau) ? " kd-may4" : "")}>
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + ((may4Aktiv || may4Vorschau) && !einstellungen.modus ? " kd-may4" : "")}>
       <ModusFx modus={einstellungen.modus} />
       <div className="kd-app">
-      {startModalOffen && !setupWarnung && (
+      {startModalOffen && (
         <StartWahl onWaehle={waehleStart}
           aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()} />
       )}
-      {setupWarnung && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: T.saalHoch, border: "1px solid " + T.gefahr, borderRadius: 8, maxWidth: 440, padding: "22px 24px", boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, letterSpacing: "0.06em", textTransform: "uppercase", color: T.gefahr, marginBottom: 10 }}>
-              Installation noch nicht abgeschlossen
-            </div>
-            <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.6, margin: "0 0 16px" }}>
-              Die Terminal-Installation wurde noch nicht bestätigt. Ohne <strong>Installation-Mac.command</strong> beziehungsweise <strong>Installation-Windows.bat</strong> bleiben die beigepackten Kino- und Streamingdaten im leeren Start gesperrt. Mediathek, Blog und manuelle Eingabe funktionieren trotzdem; Demo zeigt auch die Datenbeilagen.
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <a href="Installation.html" style={{ ...btnStyle(true), textDecoration: "none" }}>Zur Installation</a>
-              <button style={btnStyle(false)} onClick={() => {
-                try { setupUeberspringen(); } catch { /* */ }
-                setSetupWarnung(false);
-                let wahl = null;
-                try { wahl = localStorage.getItem(K.start); } catch { /* */ }
-                if (wahl === "demo" || wahl === "clean") {
-                  try { if (!getTutorial().willkommen) setWillkommenOffen(true); } catch { /* */ }
-                } else {
-                  setStartModalOffen(true);
-                }
-                setStartTick((t) => t + 1);
-              }}>Trotzdem fortfahren</button>
-            </div>
-          </div>
-        </div>
+      {katalogZugangOffen && !startModalOffen && (
+        <KatalogZugang zwingend={!hatKatalogZugang()}
+          onAbbrechen={() => setKatalogZugangOffen(false)}
+          onFertig={() => {
+            setKatalogZugangOffen(false);
+            setSnapshotFreigabe(true); snapshotFreigabeRef.current = true;
+            try { setupUeberspringen(); location.reload(); }
+            catch { autoFetched.current = false; streamingGeladen.current = false; setStartTick((t) => t + 1); }
+          }} />
       )}
-      {willkommenOffen && (
+      {willkommenOffen && !startModalOffen && !katalogZugangOffen && (
         <Willkommen onClose={() => { try { setWillkommen(true); } catch { /* */ } setWillkommenOffen(false); }} />
-      )}
-      {syncOnboardingOffen && !setupWarnung && !startModalOffen && !willkommenOffen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 440, padding: "22px 24px", boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, marginBottom: 10 }}>
-              Geräte-Sync einrichten
-            </div>
-            <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.6, margin: "0 0 16px" }}>
-              Verbinde dieses Gerät mit deiner Datenbank, damit Mediathek, Bewertungen und Streaming-Abos automatisch zwischen allen Geräten synchron bleiben. Du brauchst dafür deinen Sync-Schlüssel. Alles lässt sich jederzeit später unter <strong>Einstellungen → Erweitert → Geräte-Sync</strong> nachholen oder ändern.
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button style={btnStyle(true)} onClick={() => syncOnboardingFertig(true)}>Jetzt einrichten</button>
-              <button style={btnStyle(false)} onClick={() => syncOnboardingFertig(false)}>Später</button>
-            </div>
-          </div>
-        </div>
       )}
       {aktiverHinweis && (
         <TourOverlay hinweis={aktiverHinweis} onClose={schliesseHinweis}
@@ -1771,7 +1730,7 @@ export default function App() {
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: 24, textAlign: "center", marginBottom: 16 }}>
             <p style={{ fontSize: 15, color: T.rauch, margin: "0 0 14px" }}>
               Deine Mediathek ist noch leer. Du kannst Einträge selbst anlegen oder importieren.
-              {!snapshotFreigabe ? " Beigepacktes Kinoprogramm und Streaming bleiben bis zum Terminal-Installer oder bis zur Demo-Wahl gesperrt." : " Kino, Streaming und Suche funktionieren; nur der Abgleich mit deinem Geschmack fehlt."}
+              {!snapshotFreigabe ? " Verbinde den gemeinsamen Kino- und Streamingkatalog mit dem mitgeschickten Leseschlüssel." : " Kino, Streaming und Suche funktionieren; nur der Abgleich mit deinem Geschmack fehlt."}
             </p>
             <button style={btnStyle(true)} onClick={() => setTab("mediathek")}>Ersten Eintrag anlegen</button>
           </div>
@@ -1834,7 +1793,7 @@ export default function App() {
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
-            heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
+            heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
           />
         )}
@@ -1848,7 +1807,7 @@ export default function App() {
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
-            onKlaatu={PERSONAL_MODE ? zeigeKlaatu : undefined} /* B4-Egg: Klaatu-Meldung nur Personal-Modus */
+            onKlaatu={EGGS_ENABLED ? zeigeKlaatu : undefined}
           />
         )}
 
@@ -1862,20 +1821,19 @@ export default function App() {
             setErr={setErr} clearProgrammCache={clearProgrammCache}
             resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
-            onStartartWechseln={oeffneStartWahl}
+            onDemoEntfernen={entferneDemoDaten}
+            katalogVerbunden={snapshotFreigabe}
+            onKatalogVerbinden={() => setKatalogZugangOffen(true)}
+            onKatalogRefresh={refreshKatalog}
             artikelAnzahl={artikelListe.length} exportArtikel={exportArtikel} importArtikel={importArtikel}
             ungesichertMaster={ungesichertMaster} ungesichertArtikel={ungesichertArtikel}
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
-            zeigeCage={zeigeCage} zeigeTeppich={zeigeTeppichVorschau}
-            zeigeCrawl={zeigeCrawlVorschau} zeigeKlaatu={zeigeKlaatu} /* B4-Egg: Vorführknöpfe */
-            may4Vorschau={may4Vorschau} setMay4Vorschau={setMay4Vorschau}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
-            setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v, resetTag)).catch(() => {}); }}
-            resetTag={resetTag} setResetTag={setResetTag}
+            setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
             offeneFlags={offeneFlags} migriereMustwatch={migriereMustwatch} migrationsBericht={migrationsBericht}
@@ -1884,7 +1842,7 @@ export default function App() {
         )}
       </main>
       </div>{/* .kd-app */}
-      {PERSONAL_MODE && toasts.length > 0 && (
+      {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">
           {toasts.map((t) => (
             <div key={t.id} className="kd-toast" style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, padding: "10px 14px", boxShadow: "0 6px 20px rgba(0,0,0,0.5)" }}>
@@ -1894,20 +1852,20 @@ export default function App() {
           ))}
         </div>
       )}
-      {PERSONAL_MODE && cageOffen && (
+      {EGGS_ENABLED && cageOffen && (
         <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
-      {PERSONAL_MODE && teppichOffen && (
+      {EGGS_ENABLED && teppichOffen && (
         <Teppich filme={teppichFilmeRef.current} vorschau={teppichVorschau} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => { setTeppichOffen(false); setTeppichVorschau(false); }} />
       )}
       {/* B4-Egg: Moment-Eggs — exakt wie Cage/Teppich hinter PERSONAL_MODE gegatet,
           also im Beta-Build (PERSONAL_MODE=false) weder gerendert noch triggerbar. */}
-      {PERSONAL_MODE && crawlOffen && (
+      {EGGS_ENABLED && crawlOffen && (
         <Crawl matches={crawlMatchesRef.current} onSkip={() => setCrawlOffen(false)} reduced={reducedMotion} />
       )}
-      {PERSONAL_MODE && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
+      {EGGS_ENABLED && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
       <ZurueckObenKnopf />
     </div>
   );

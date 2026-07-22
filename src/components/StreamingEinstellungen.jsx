@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
-import { FeldHinweis } from "./FeldHinweis.jsx";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { K } from "../lib/storage.js";
@@ -23,37 +22,18 @@ function kurzQuelle(n) {
     .trim();
 }
 
-function download(dateiname, obj) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = dateiname; a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggleQuelle, heuristikAn, setHeuristikAn, resetTag = null, setResetTag, datenGesperrt = false }) {
+export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggleQuelle, teil = "alle", onRefresh, datenGesperrt = false }) {
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
   const alterTage = stand ? (Date.now() - stand.getTime()) / 86400000 : null;
 
-  /* Nächster Watchmode-Credits-Reset. Der frühere Countdown „30 − Alter(stand)"
-     war falsch: stand wird bei JEDEM Mo/Mi/Fr-Rotationslauf neu gesetzt, der
-     Zähler sprang also ständig auf ~30 zurück. Wahrheitskette jetzt:
-     1) Feld `naechster_reset` aus dem Katalog-Lauf (schreibt die Pipeline),
-     2) sonst aus dem konfigurierten Reset-Tag (Abrechnungstag des Accounts)
-        deterministisch berechnet, 3) sonst ehrlich „unbekannt". */
+  /* Nur das exakte Pipeline-Datum zählt. Kein manuelles Tagesfeld und keine
+     28-/30-Tage-Schätzung mehr. */
   const resetDatum = (() => {
     if (datenDa && bekannt.naechster_reset) {
       const d = new Date(bekannt.naechster_reset);
       if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) return d;
-    }
-    const tag = Number(resetTag);
-    if (Number.isInteger(tag) && tag >= 1 && tag <= 28) {
-      const jetzt = new Date();
-      const d = new Date(jetzt.getFullYear(), jetzt.getMonth(), tag);
-      if (d.getTime() <= jetzt.getTime()) d.setMonth(d.getMonth() + 1);
-      return d;
     }
     return null;
   })();
@@ -68,7 +48,8 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
   const gruppen = useMemo(() => {
     /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
        NICHT verdrängen — sonst schrumpft die Abo-Auswahl auf die 4 Testquellen. */
-    const vq = (datenDa && !bekannt.demo && bekannt.verfuegbare_quellen) || [];
+    const abgedeckt = new Set((datenDa && bekannt.dienste) || []);
+    const vq = ((datenDa && !bekannt.demo && bekannt.verfuegbare_quellen) || []).filter((q) => abgedeckt.has(q.name));
     let basis;
     if (vq.length) {
       const g = {};
@@ -113,7 +94,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-        Für diese Startart sind die vorbereiteten Streaming-Daten nicht freigegeben. Die Demo kann den beigepackten Katalog verwenden; die PWA selbst lädt keine Daten live von Watchmode.
+        Der zentrale Katalog ist noch nicht verbunden. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
       </p>
     </div>
   );
@@ -122,13 +103,11 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Etappe 2: Kästen als Accordions (Klappe). Streaming-Quellen startet
           offen, Status/Refresh zu. data-tour wandert an die Klappe (Tour-Anker). */}
-      <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
+      {(teil === "alle" || teil === "quellen") && <Klappe titel={`Streaming-Quellen (${auswahl.length} gewählt)`} offen tour="streaming-quellen">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.5 }}>
-          Häkchen wirken sofort als Anzeigefilter im Streaming-Tab. Für den nächsten externen
-          Katalog-Lauf zusätzlich <strong style={{ color: T.leinwand }}>Config exportieren</strong> und als
-          {" "}<code style={{ color: T.wolfram, overflowWrap: "anywhere" }}>KinoFilm/Programmdateien/System/streaming_config.json</code> im separaten Datenordner ablegen.
-          Erst der nächste Lauf übernimmt diese Auswahl beim Abruf (jede Quelle kostet etwa 1 Credit pro 250 Titel).
+          Wähle die Dienste, die du tatsächlich nutzt. Die Auswahl filtert den gemeinsamen
+          Katalog sofort. Angeboten werden nur Quellen, die der aktuelle Datenstand wirklich abdeckt.
         </p>
         {/* Suchfeld: einzige Tür zu den nicht angehakten Quellen (~40 Namen). */}
         <input value={quellenSuche} onChange={(e) => setQuellenSuche(e.target.value)}
@@ -171,32 +150,13 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
             </button>
           ))}
         </div>
-        <label style={{ display: "flex", gap: 8, alignItems: "center", padding: "10px 0 4px", fontSize: 14, cursor: "pointer", borderTop: "1px solid " + T.saal, marginTop: 8 }}>
-          <input type="checkbox" checked={heuristikAn} onChange={() => setHeuristikAn(!heuristikAn)} />
-          Heuristik-Relevanz im nächsten Lauf berechnen (abschalten ist folgenlos)
-        </label>
-        <button style={{ ...btnStyle(true), marginTop: 10 }}
-          onClick={() => download("streaming_config.json", {
-            quellen: auswahl,
-            quellen_haeufig: ["Netflix", "Disney+", "Prime Video", "HBO Max"].filter((q) => auswahl.includes(q)),
-            min_tage_voll: 25,
-            min_tage_haeufig: 2,
-            heuristik: heuristikAn,
-            serien_beobachten: beobachteteSerien(),
-            ...(Number.isInteger(Number(resetTag)) && resetTag >= 1 && resetTag <= 28 ? { reset_tag: Number(resetTag) } : {}),
-          })}>
-          Config exportieren (streaming_config.json)
-        </button>
-        <FeldHinweis feld="config_export" />
         <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
-          Externer Rhythmus: 1. des Monats Voll-Lauf über alle gewählten Quellen; Mo/Mi/Fr 13:00 nur die großen
-          Rotations-Kataloge (Zeitplan: <code style={{ overflowWrap: "anywhere" }}>com.kinodreieck.streaming.plist</code> im Datenordner).
-          {" "}{beobachteteSerien().length} ausdrücklich gesehene {beobachteteSerien().length === 1 ? "Serie wird" : "Serien werden"} im Config-Export für den späteren Staffel-Abgleich vorgemerkt.
+          {beobachteteSerien().length} ausdrücklich gesehene {beobachteteSerien().length === 1 ? "Serie wird" : "Serien werden"} für neue Staffelstände beobachtet.
         </p>
       </div>
-      </Klappe>
+      </Klappe>}
 
-      <Klappe titel="Katalog-Status" tour="streaming-status">
+      {(teil === "alle" || teil === "status") && <Klappe titel="Katalog-Status" tour="streaming-status">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         {datenDa ? (
           <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.8, margin: 0 }}>
@@ -207,46 +167,23 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
             <br />Credits verbraucht (Stand letzter Lauf): <strong>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""}</strong> (Watchmode-Credits pro Monat)
             {" · "}{resetDatum
               ? <>Credits-Reset: <strong>{resetDatum.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong> (in {resetInTagen} {resetInTagen === 1 ? "Tag" : "Tagen"})</>
-              : <span style={{ color: T.wolfram }}>Credits-Reset: unbekannt — Reset-Tag unten setzen</span>}
+              : <span style={{ color: T.wolfram }}>Credits-Reset: vom letzten Lauf nicht gemeldet</span>}
             {alterTage > 35 && <><br /><strong style={{ color: T.gefahr }}>Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig.</strong></>}
           </p>
         ) : (
           <p style={{ fontSize: 14, color: T.rauch, margin: 0 }}>Noch kein Katalog geladen.</p>
         )}
-        {setResetTag && (
-          <label style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10, paddingTop: 10, borderTop: "1px solid " + T.saal, fontSize: 13, color: T.leinwandTief }}>
-            Credits-Reset-Tag (1–28):
-            <input type="number" min={1} max={28} value={resetTag ?? ""} placeholder="—"
-              onChange={(e) => {
-                const roh = e.target.value;
-                if (roh === "") { setResetTag(null); return; }
-                const n = Math.round(Number(roh));
-                if (Number.isInteger(n)) setResetTag(Math.max(1, Math.min(28, n)));
-              }}
-              style={{ width: 64, background: T.saal, color: T.leinwand, border: "1px solid " + T.rauch, borderRadius: 4, padding: "5px 8px", fontFamily: "'Space Mono', monospace", fontSize: 13 }} />
-            <span style={{ fontSize: 12, color: T.rauch }}>
-              Tag im Monat, an dem Watchmode die Credits zurücksetzt (Abrechnungstag laut Account). Liefert der Katalog-Lauf selbst ein Reset-Datum, hat das Vorrang.
-            </span>
-          </label>
-        )}
       </div>
-      </Klappe>
+      </Klappe>}
 
-      <Klappe titel="Refresh (manuell)">
+      {(teil === "alle" || teil === "refresh") && <Klappe titel="Programmdaten aktualisieren">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
-          <strong style={{ color: T.gefahr }}>Verbraucht Watchmode-Credits.</strong> Die PWA führt
-          keine Live-Abfragen aus. Starte den geschützten Ablauf nur bei Bedarf im Terminal im
-          separaten Datenordner (<code>cd KinoFilm/Programmdateien/System</code>):
+          Lädt den letzten von der Pipeline bereitgestellten Kino- und Streamingstand erneut aus der Datenbank. Dabei entstehen keine Watchmode-Requests.
         </p>
-        <pre style={{ background: T.saal, borderRadius: 4, padding: "10px 12px", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwand, overflowX: "auto", margin: 0 }}>
-{`node streaming_auto.mjs`}</pre>
-        <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
-          Der Job erzeugt die Kataloge und ruft anschließend <code>liefere_an_pwa.mjs</code> auf.
-          Kein <code>--force</code> für Tests verwenden.
-        </p>
+        {onRefresh && <button style={btnStyle(false)} onClick={onRefresh}>Jetzt aus der Datenbank neu laden</button>}
       </div>
-      </Klappe>
+      </Klappe>}
     </div>
   );
 }

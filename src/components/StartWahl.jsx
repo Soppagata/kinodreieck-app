@@ -2,18 +2,17 @@ import { useEffect, useRef } from "react"; // KD-028
 import { createPortal } from "react-dom";
 import { T, btnStyle } from "../lib/tokens.js";
 
-/* ---------- Startwahl (Beta) ----------
+/* ---------- Startwahl (Tester-PWA) ----------
    Erscheint beim allerersten Öffnen, wenn weder ein Storage-Stand noch eine
    frühere Wahl (kd:start) noch ein ?start=-Parameter vorliegt. Zwei Wege,
    eindeutig benannt und erklärt — NICHT im Tutorial versteckt (§7.4):
 
      clean  = leerer Start, eigene Mediathek über die Tour aufbauen (Default)
-     demo   = Schaufenster mit einer fremden Beispiel-Liste (Bewertungen sind
-              nicht deine, Besitz bewusst leer)
+     demo   = Schaufenster mit Max' Mediathek, Blog, Listen und Diensten
 
    onWaehle("clean"|"demo") schreibt die Wahl weg und lädt entsprechend.
-   Umkehrbar über den Einstellungen-Tab ("Startart wechseln") — deshalb ist die
-   Entscheidung hier bewusst leichtgewichtig. */
+   Max' Demo-Beilagen können später in den Einstellungen gezielt entfernt
+   werden; der gemeinsame Programm-Katalog bleibt dabei erhalten. */
 export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optionaler onClose (Escape)
   const dialogRef = useRef(null); // KD-028
   // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay)
@@ -61,15 +60,14 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
       <div style={box}>
         <h2 style={h}>Wie möchtest du starten?</h2>
         <p style={{ fontSize: 14, color: T.rauch, lineHeight: 1.6, margin: "0 0 4px" }}>
-          Zwei Wege. Du kannst später jederzeit wechseln (Einstellungen → Startart).
+          Beide Wege laden dasselbe Kino- und Streamingprogramm aus der Datenbank.
         </p>
 
         <div style={karte} data-tour="startwahl-clean">
           <h3 style={kTitel}>Leer starten <span style={{ color: T.wolfram, fontSize: 13 }}>· empfohlen</span></h3>
           <p style={kText}>
-            Nichts ist vorbelegt. Du baust deine eigene Mediathek Schritt für Schritt
-            auf — eine kurze Tour zeigt dir, wie. Der ehrliche Weg, um die App
-            kennenzulernen.
+            Deine Mediathek, Listen und Streamingdienste sind leer. Du baust alles
+            selbst auf — eine kurze Tour zeigt dir die wichtigsten Stellen.
           </p>
           <div>
             <button style={btnStyle(true)} onClick={() => onWaehle("clean")}>Leer starten</button>
@@ -79,10 +77,9 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
         <div style={karte} data-tour="startwahl-demo">
           <h3 style={kTitel}>Demo ansehen</h3>
           <p style={kText}>
-            Lädt Max' echte Sammlung (255 Titel) als Schaufenster — seine Bewertungen,
-            sein Besitz, damit du eine mögliche Ordnung und Logik siehst, statt bei null
-            anzufangen. Du kannst alles ansehen und frei editieren; das Original bleibt
-            bei Max. Zum Kennenlernen der App mit echtem Inhalt.
+            Lädt Max' Mediathek, Bewertungen, Blog-Beispiele, Listen und ausgewählte
+            Streamingdienste. Du kannst alles ansehen und bearbeiten. Die Demo-Beilagen
+            lassen sich später mit einer kurzen Warnung entfernen; das Programm bleibt.
           </p>
           <div>
             <button style={btnStyle(false)} onClick={() => onWaehle("demo")}>Demo ansehen</button>

@@ -15,6 +15,8 @@ vc.on("jsdomError", (e) => { if (!/Could not load/.test(e.message)) fehlerKonsol
    vergangene Vorstellungen weg, sobald das echte Datum an den Demo-Terminen vorbei ist:
    Kino-Tab rendert leeres Programm -> #root-Text < 500 -> "Abo-Filter zyklisch" kippt zeitgebunden. */
 const snap = JSON.parse(readFileSync(new URL("./src/data/programm-snapshot.json", import.meta.url), "utf8"));
+const streamingBekanntTest = JSON.parse(readFileSync(new URL("./src/data/streaming_bekannt_snapshot.json", import.meta.url), "utf8"));
+const streamingEntdeckenTest = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecken_snapshot.json", import.meta.url), "utf8"));
 const FIXED_ISO = ((snap.zeitraum && snap.zeitraum.von) || new Date().toISOString().slice(0, 10)) + "T12:00:00+02:00";
 
 const dom = new JSDOM(readFileSync(pfad, "utf8"), {
@@ -27,13 +29,25 @@ const dom = new JSDOM(readFileSync(pfad, "utf8"), {
       static now() { return FIXED; }
     }
     w.Date = MockDate;
-    w.fetch = () => Promise.reject(new Error("offline (Test)"));
+    w.fetch = async (url) => {
+      const s = String(url);
+      if (s.includes("/rest/v1/kd_catalog")) {
+        const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
+        const payload = name === "manifest" ? { stand: FIXED_ISO }
+          : name === "programm" ? snap
+            : name === "streaming" ? { bekannt: streamingBekanntTest, entdecken: streamingEntdeckenTest } : null;
+        return { ok: true, status: 200, json: async () => payload ? [{ payload, updated_at: FIXED_ISO }] : [], text: async () => "" };
+      }
+      throw new Error("offline (Test)");
+    };
       w.scrollTo = () => {};
     if (!w.URL.createObjectURL) w.URL.createObjectURL = () => "blob:test";
     if (!w.URL.revokeObjectURL) w.URL.revokeObjectURL = () => {}; // jsdom kennt es nicht
     w.confirm = () => false; // Reset-Knopf: anklicken ja, ausführen nein
     w.localStorage.setItem("kd:start", "demo"); // Beta-Startwahl: Demo-Master laden (sonst Startwahl-Modal, master=null)
-    w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino","pinboard","mediathek","eintrag","streaming","entdecken","blog","teilen","vokabular","streaming-quellen","waechter"] })); // Tour aus: dieser Test prüft die App, nicht das Tutorial
+    w.localStorage.setItem("kd:katalog:url", "https://test.supabase.co");
+    w.localStorage.setItem("kd:katalog:key", "x".repeat(30));
+    w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino","pinboard","mediathek","eintrag","streaming","entdecken","blog","vokabular","streaming-quellen","erweitert","waechter"] })); // Tour aus: dieser Test prüft die App, nicht das Tutorial
     w.__KD_DEMO_MASTER__ = JSON.parse(readFileSync(new URL("./src/data/masterliste.json", import.meta.url), "utf8")); // Demo-Beilage (in prod: demo_masterliste.js)
   },
 });
@@ -147,7 +161,7 @@ if (neuKnopf) {
   check("Blog: Maske öffnet (Titel-Feld)", [...doc.querySelectorAll("input")].some((i) => /titel/i.test(i.placeholder || "")));
 }
 
-/* ---- 5. Streaming: Ansichts-Schalter + Quellen-Checkboxen + Config-Export ---- */
+/* ---- 5. Streaming: Ansichts-Schalter + Quellen-Auswahl ---- */
 const streamingTab = knopf(/^streaming$/i);
 if (streamingTab) { streamingTab.click(); await warte(600); }
 check("Streaming: Ansicht Mein Programm/Entdecken", !!knopf(/^Mein Programm/) || !!knopf(/^Entdecken/));
@@ -158,9 +172,8 @@ check("Etappe 2: SegmentedControl trägt Tour-Anker streaming-views (kd-seg)", !
 const einstNav5 = [...doc.querySelectorAll("nav button")].find((b) => /^einstellungen$/i.test((b.textContent || "").trim()));
 if (einstNav5) { einstNav5.click(); await warte(500); }
 check("Streaming-Quellen im Einstellungen-Tab", /Streaming-Quellen/.test(text()));
-check("Config-Export-Knopf", !!knopf(/Config exportieren/i));
-const checkbox = [...doc.querySelectorAll('input[type="checkbox"]')][0];
-check("Quellen-Checkboxen vorhanden", !!checkbox);
+check("Kein überholter Config-Export", !knopf(/Config exportieren/i));
+check("Quellen-Suchfeld vorhanden", [...doc.querySelectorAll("input")].some((i) => (i.placeholder || "").startsWith("Quelle suchen")));
 
 /* ---- 6. Einstellungen: alle Schalter wirken ---- */
 const tabs = [...doc.querySelectorAll("nav button")];
@@ -177,12 +190,12 @@ const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || 
 check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
 if (maxLink) {
   maxLink.click(); await warte(200);
-  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Showa|NERV)$/.test((b.textContent || "").trim()));
-  check("Easter-Egg-Modus-Knopf erscheint", !!egg);
+  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Mit Stil|Weils cool ist)$/.test((b.textContent || "").trim()));
+  check("Unklar beschrifteter Easter-Egg-Knopf erscheint", !!egg && !/(Showa|NERV)/.test(egg.textContent || ""));
   if (egg) {
     egg.click(); await warte(300);
     check("Modus-Klasse am Wrapper aktiv", /kd-(showa|nerv)/.test(wrapper().className || ""));
-    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Showa|NERV)$/.test((b.textContent || "").trim()));
+    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Mit Stil|Weils cool ist)$/.test((b.textContent || "").trim()));
     if (egg2) { egg2.click(); await warte(200); }
     check("Modus wieder aus (Toggle)", !/kd-(showa|nerv)/.test(wrapper().className || ""));
   }
@@ -207,7 +220,7 @@ if (startSelect) {
   startSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 }
 // Vokabular: Merken-Flow
-const wortFeld = [...doc.querySelectorAll("input")].find((i) => /Wort \(z\.B\./.test(i.placeholder || ""));
+const wortFeld = [...doc.querySelectorAll("input")].find((i) => /Wort \(z\.\s*B\./.test(i.placeholder || ""));
 check("Vokabular-Editor: Felder da", !!wortFeld);
 if (wortFeld) {
   setValue(wortFeld, "testwort");
@@ -218,34 +231,34 @@ if (wortFeld) {
   if (merken) { merken.click(); await warte(300); }
   check("Vokabular: Wort gespeichert + gelistet", /testwort/.test(text()) && /"wort":"testwort"/.test(dom.window.localStorage.getItem("kd:vokabular") || ""));
 }
-// Phase 2: klare Reihenfolge und Zwecke — Vokabular, Teilen, Gesamt-Backup, Erweitert
+// Demo-Reihenfolge: Streaming-Quellen exakt an Position 5, Erweitert nach Status.
 const einstellTexte = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
-const vokIndex = einstellTexte.findIndex((s) => /^Suche-Vokabular/.test(s));
-const teilenIndex = einstellTexte.findIndex((s) => /^Teilen & Tauschen/.test(s));
+const darstellungIndex = einstellTexte.findIndex((s) => /^Darstellung & Verhalten/.test(s));
+const modusIndex = einstellTexte.findIndex((s) => /^Datenmodus & Verbindung/.test(s));
+const masterIndex = einstellTexte.findIndex((s) => /^Masterliste/.test(s));
 const backupIndex = einstellTexte.findIndex((s) => /^Gesamt-Backup/.test(s));
-const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — Sync, Rohdaten & Wartung/.test(s));
-check("Phase 2: Vokabular vor Teilen, Backup und Erweitert",
-  vokIndex >= 0 && teilenIndex > vokIndex && backupIndex > teilenIndex && erweitertIndex > backupIndex);
+const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(s));
+const vokIndex = einstellTexte.findIndex((s) => /^Suche-Vokabular/.test(s));
+const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
+const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
+check("Demo: feste Reihenfolge inkl. Streaming-Quellen auf Platz 5",
+  darstellungIndex < modusIndex && modusIndex < masterIndex && masterIndex < backupIndex && backupIndex < streamingIndex && streamingIndex < vokIndex && vokIndex < statusIndex && statusIndex < erweitertIndex);
+check("Teilen & Tauschen aus Einstellungen entfernt", !einstellTexte.some((s) => /Teilen & Tauschen/.test(s)));
 check("Phase 2: Restore nicht mehr als eigene Hauptklappe", !einstellTexte.some((s) => s === "Backup wiederherstellen"));
 // Backup-Knopf crasht nicht
 const backup = knopf(/Gesamt-Backup herunterladen/);
 check("Backup-Knopf vorhanden", !!backup);
 if (backup) { backup.click(); await warte(400); check("Backup-Klick ohne Fehler", true); }
 // Erweitert-Dropdown: Inhalte + Reset-Knopf (confirm=false -> folgenlos)
-const erwSummary = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — Sync, Rohdaten & Wartung/.test(s.textContent || ""));
+const erwSummary = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — manuelle Aktualisierung & Wartung/.test(s.textContent || ""));
 check("Erweitert-Dropdown vorhanden", !!erwSummary);
 if (erwSummary) {
   erwSummary.click(); await warte(300);
   const erwDetails = erwSummary.parentElement;
-  const syncKlappen = [...doc.querySelectorAll("details.kd-klappe")].filter((d) => /Geräte-Sync \((Git|Supabase)\)/.test((d.querySelector("summary") || {}).textContent || ""));
-  check("Erweitert: beide Geräte-Sync-Klappen einsortiert", syncKlappen.length === 2 && syncKlappen.every((d) => erwDetails.contains(d)));
-  check("Erweitert: Filmlisten-Rohdaten-Export", !!knopf(/^Filmliste als Rohdaten exportieren/));
+  check("Erweitert: Datenbank-Refresh", !!knopf(/^Katalog jetzt neu laden/));
   check("Erweitert: Programm-Snapshot-Import", /Programm-Snapshot/.test(text()));
-  check("Erweitert: Artikel-Block", /Blog-Artikel/.test(text()));
   check("Erweitert: Cache-Knopf", !!knopf(/Programm-Cache leeren/));
-  const reset = knopf(/Browser-Stand verwerfen/);
-  check("Reset-Knopf vorhanden", !!reset);
-  if (reset) { reset.click(); await warte(300); check("Reset mit confirm=false folgenlos (App lebt)", text().length > 500); }
+  check("Erweitert: kein Geräte-Sync und kein Blog-Doppelimport", !/Geräte-Sync|Blog-Artikel/.test(erwDetails.textContent || ""));
 }
 
 /* ---- 7. Kino: Filter-Schalter ---- */

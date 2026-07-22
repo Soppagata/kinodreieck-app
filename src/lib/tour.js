@@ -8,7 +8,7 @@
      sofort sichtbar). Der Overlay misst OHNE zu scrollen.
    - Sichtbar-Anker (IntersectionObserver): feuern, sobald das Element im Blick
      ist — kein Scroll-Sprung, der Rahmen sitzt. Für tiefer liegende Bereiche
-     (Pinboard, Teilen & Tauschen, Vokabular, Streaming-Quellen).
+     (Pinboard, Vokabular, Streaming-Quellen, Erweitert).
 
    gesehen-Tracking über kd:tutorial.gesehen[] (lib/tutorial.js).
    Texte sind Starter-Formulierungen. Easter-Eggs werden NIRGENDS erwähnt. */
@@ -52,18 +52,18 @@ const DEF = {
     absaetze: [{ ziel: "blog", text: "Eigene Artikel schreiben und Filme oder Personen aus deiner Mediathek referenzieren. Nicht auflösbare Referenzen bleiben „Rotlinks“ (rot) — sie blockieren die Freigabe nie und heilen automatisch, sobald du den passenden Eintrag anlegst. Freigegebene Artikel erscheinen als „Kommt vor in“ bei den referenzierten Einträgen." }],
   },
 
-  /* --- Einstellungen: drei getrennte Sichtbar-Hinweise (kein Scroll-Sprung) --- */
-  teilen: {
-    titel: "Teilen & Tauschen",
-    absaetze: [{ ziel: "teilen", text: "Hier tauschst du Pakete mit Bewertungen und Blog-Texten aus — Fremdes behält seinen Autor, Eigenes wird nie still überschrieben. Der separate Rohdaten-Export ist eine Momentaufnahme; für die vollständige private Sicherung aller App-Daten liegt das Gesamt-Backup gleich darunter." }],
-  },
+  /* --- Einstellungen: getrennte Sichtbar-Hinweise (kein Scroll-Sprung) --- */
   vokabular: {
     titel: "Such-Vokabular",
     absaetze: [{ ziel: "daten-vokabular", text: "Hinterlege eigene Stimmungswörter, damit die natürlichsprachige Suche deinen Wortschatz kennt — etwa „wohlfühl“, „kopfkino“ oder „sonntagabend“. Danach findet die Suche deine Filme auch über diese Begriffe." }],
   },
   "streaming-quellen": {
     titel: "Streaming-Quellen",
-    absaetze: [{ ziel: "streaming-quellen", text: "Welche Dienste du hast, wählst du hier — die Häkchen filtern die Anzeige sofort. Damit der nächste externe Katalog-Lauf dieselbe Auswahl abruft, exportierst du die Config in den separaten Datenordner. Die PWA enthält keinen Watchmode-Key und liest nur den fertig gelieferten Katalog." }],
+    absaetze: [{ ziel: "streaming-quellen", text: "Welche Dienste du nutzt, wählst du hier — die Auswahl filtert den gemeinsamen Streamingkatalog sofort. Im Demo-Modus sind Max’ Dienste bereits gesetzt; im Clean Mode bestimmst du sie selbst." }],
+  },
+  erweitert: {
+    titel: "Manuell aktualisieren",
+    absaetze: [{ ziel: "erweitert", text: "Unter „Erweitert“ kannst du Kino- und Streamingdaten manuell aus der Datenbank neu laden, Notfall-Importe ausführen und den lokalen Programm-Cache leeren. Der Import und Export deiner Masterliste bleibt weiter oben als eigener, leichter auffindbarer Bereich." }],
   },
 
   /* --- Wächter: Sonderfall (A8) — feuert bei erster ungesicherter Änderung --- */
@@ -104,9 +104,9 @@ export function hinweisIds() { return Object.keys(DEF); }
 /* Anker, die per IntersectionObserver feuern (Sichtbar-Anker) -> Hinweis-ID. */
 export const SICHTBAR_TRIGGER = {
   pinboard: "pinboard",
-  teilen: "teilen",
   "daten-vokabular": "vokabular",
   "streaming-quellen": "streaming-quellen",
+  erweitert: "erweitert",
 };
 
 /* Event-Bus: Kind-Komponenten feuern Trigger (feuere), App reagiert (onTour). */

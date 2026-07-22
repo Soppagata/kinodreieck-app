@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { IconDelete } from "../components/ui.jsx";
-import { PERSONAL_MODE } from "../lib/modus.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { ErklaerHero, DreieckErklaerung, DokuAnsicht } from "../components/Erklaerstuecke.jsx";
 import { sichtbareDienste } from "../lib/dienste.js";
@@ -20,7 +19,7 @@ import { formatiereTermin } from "../lib/programm.js";
    Reine Anzeige-Schicht — alle Daten kommen als Props aus dem App-State. */
 
 export function StartTab(props) {
-  return PERSONAL_MODE ? <StartDashboard {...props} /> : <StartLanding {...props} />;
+  return <StartDashboard {...props} />;
 }
 
 /* Pin-Sortierung (nächster Termin zuerst) — unverändert aus der Landing,

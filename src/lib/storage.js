@@ -92,6 +92,9 @@ export const K = {
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
   treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
   achievements: "kd:achievements",    // Egg-Achievements (11. Sync-/Backup-Artefakt, Block 3): Set freigeschalteter Egg-IDs
+  katalogKey: "kd:katalog:key",       // vom Tester eingegebener Supabase-Publishable-Key (nur Lesen)
+  katalogUrl: "kd:katalog:url",       // lokaler URL-Fallback; im Pages-Build vorbelegt
+  demoSeed: "kd:demo-seed",           // IDs/Schlüssel der geladenen Demo-Beilage für gezieltes Entfernen
 };
 
 export const PROGRAMM_TTL_MS = 24 * 60 * 60 * 1000; // 24h

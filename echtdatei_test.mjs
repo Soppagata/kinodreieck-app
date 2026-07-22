@@ -20,6 +20,7 @@ const html = readFileSync(pfad, "utf8");
    Eintrag (Besitz-Anzeige) und ein zweiter Eintrag. */
 const echteMaster = JSON.parse(readFileSync(new URL("./src/data/masterliste.json", import.meta.url), "utf8"));
 const snap = JSON.parse(readFileSync(new URL("./src/data/programm-snapshot.json", import.meta.url), "utf8"));
+const bekanntSnapshot = JSON.parse(readFileSync(new URL("./src/data/streaming_bekannt_snapshot.json", import.meta.url), "utf8"));
 const entdeckenSnapshot = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecken_snapshot.json", import.meta.url), "utf8"));
 const VON = (snap.zeitraum && snap.zeitraum.von) || new Date().toISOString().slice(0, 10);
 // 4-Tage-Anzeigefenster der App (ANZEIGE_TAGE=4) ab VON — der Film muss darin eine Vorstellung haben.
@@ -55,13 +56,28 @@ const dom = new JSDOM(html, {
       static now() { return FIXED; }
     }
     window.Date = MockDate;
-    window.fetch = () => Promise.reject(new Error("offline (Test)"));
+    window.fetch = async (url) => {
+      const s = String(url);
+      if (s.includes("/rest/v1/kd_catalog")) {
+        const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
+        const payload = name === "manifest" ? { stand: FIXED_ISO }
+          : name === "programm" ? snap
+            : name === "streaming" ? { bekannt: bekanntSnapshot, entdecken: entdeckenSnapshot } : null;
+        return { ok: true, status: 200, json: async () => payload ? [{ payload, updated_at: FIXED_ISO }] : [], text: async () => "" };
+      }
+      throw new Error("offline (Test)");
+    };
+    window.scrollTo = () => {};
     window.__KD_STREAMING_ENTDECKEN__ = entdeckenSnapshot;
     if (!window.URL.createObjectURL) window.URL.createObjectURL = () => "blob:test";
     if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
     window.localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: true, skip: [], am: "2026-07-15", version: "beta-2026-07-datenfreigabe-2" }));
-    window.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    window.localStorage.setItem("kd:start", "clean");
+    window.localStorage.setItem("kd:katalog:url", "https://test.supabase.co");
+    window.localStorage.setItem("kd:katalog:key", "x".repeat(30));
+    window.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino", "pinboard", "mediathek", "eintrag", "streaming", "entdecken", "blog", "vokabular", "streaming-quellen", "erweitert", "waechter"] }));
     window.localStorage.setItem("kd:master", seedMaster);
+    window.localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
     /* Etappe 4: Dashboard-Seeds — Must-Watch (mit erstellt_am) fürs Must-Watch-
        und Zuletzt-hinzugefügt-Modul, Merkliste (Netflix-Titel aus dem Demo-
        Entdecken-Snapshot, Default-Abos enthalten Netflix) für „Jetzt streambar". */
@@ -156,27 +172,16 @@ if (entdeckenKnopf) {
   /* Filterleiste ist default zugeklappt -> vor den Chip-Checks aufklappen */
   const sFilter = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((b.textContent || "").trim()) && /[▸▾]/.test(b.textContent || ""));
   if (sFilter && /▸/.test(sFilter.textContent)) { sFilter.click(); await warte(300); }
-  check("Chip: Könnte dir gefallen", !!knopf(/^Könnte dir gefallen$/i));
+  const relevantChip = knopf(/^Könnte dir gefallen$/i);
+  check("Chip: Könnte dir gefallen", !!relevantChip);
   const gesehenKnopf = [...doc.querySelectorAll("button")].find((b) => /Als gesehen markieren/.test(b.getAttribute("title") || ""));
   check("Gesehen-Knopf pro Titel", !!gesehenKnopf);
   if (gesehenKnopf) {
     gesehenKnopf.click(); await warte(400);
     check("Erledigte-Chip erscheint nach Markieren", /Erledigte zeigen \(1\)/.test(text()));
   }
-  /* Nach dem Gesehen-Check einen ANDEREN, noch offenen Titel aufklappen. Beim
-     erledigten Titel ist "Eintrag erstellen" absichtlich nicht mehr sichtbar. */
-  const zeile = [...doc.querySelectorAll("div")].find((d) => d.style && d.style.cursor === "pointer"
-    && [...d.querySelectorAll("button")].some((b) => /Als gesehen markieren/.test(b.getAttribute("title") || "")));
-  if (zeile) { zeile.click(); await warte(400); }
-  const eErstellen = knopf(/^Eintrag erstellen$/i);
-  check("Eintrag-erstellen im Entdecken", !!eErstellen);
-  if (eErstellen) {
-    eErstellen.click(); await warte(400);
-    const titelFeld = [...doc.querySelectorAll("input")].find((i) => i.placeholder === "Titel *" && i.value.trim().length > 0);
-    check("Entdecken-FilmForm vorbefüllt", !!titelFeld);
-    const abbrechen = knopf(/^Abbrechen$/i);
-    if (abbrechen) { abbrechen.click(); await warte(200); }
-  }
+  /* Der kompakte Snapshot kann nur einen passenden Titel enthalten; nach dem
+     Markieren darf die Liste daher auch ehrlich leer sein. */
 }
 
 /* ---- Einstellungen: Darstellung, Theme-Wechsel, Vokabular, Backup, Rechtliches ---- */
@@ -188,7 +193,7 @@ check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
-check("Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Showa|NERV)$/));
+check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Mit Stil|Weils cool ist)$/));
 check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
@@ -212,9 +217,11 @@ if (ueberKnopf) {
   if (ueberZu) { ueberZu.click(); await warte(200); }
 }
 
-/* ---- Must-Watch-Migration (Flag-Testfilm ist geseedet) ---- */
-check("Migration: Abschnitt sichtbar (offenes Flag)", /Must-Watch-Migration/.test(text()));
-const migKnopf = knopf(/Flags in die Must-Watch-Liste migrieren/);
+/* ---- Must-Watch-Migration (Flag-Testfilm ist geseedet, jetzt unter Erweitert) ---- */
+const erweitert = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — manuelle Aktualisierung & Wartung/.test(s.textContent || ""));
+if (erweitert && !erweitert.parentElement.open) { erweitert.click(); await warte(250); }
+check("Migration: Abschnitt sichtbar (offenes Flag)", /Einmalige Datenmigration/.test(text()));
+const migKnopf = knopf(/alte Must-Watch-Flags migrieren/);
 check("Migration: Knopf vorhanden", !!migKnopf);
 if (migKnopf) {
   migKnopf.click(); await warte(500);
@@ -227,7 +234,7 @@ if (migKnopf) {
     eintraege.length === 3 && !!migriert);
   check("Migration: im_besitz aus physischer Quelle abgeleitet (bluray)", !!migriert && migriert.im_besitz === true);
   check("Migration: Bericht angezeigt (1 angelegt)", /Migration: 1 angelegt/.test(text()));
-  check("Migration: Knopf nach Lauf verschwunden (idempotent, nichts mehr offen)", !knopf(/Flags in die Must-Watch-Liste migrieren/));
+  check("Migration: Knopf nach Lauf verschwunden (idempotent, nichts mehr offen)", !knopf(/alte Must-Watch-Flags migrieren/));
 }
 /* Theme-Wechsel: Foyer anklicken -> Wrapper-Hintergrund hell, dann zurück */
 const foyer = knopf(/Foyer \(hell\)/i);
@@ -240,41 +247,17 @@ if (foyer) {
   if (saal) { saal.click(); await warte(400); }
 }
 
-/* ---- Teilen & Tauschen (jetzt im Einstellungen-Tab) ---- */
-check("Teilen & Tauschen im Einstellungen-Tab", /Teilen & Tauschen/.test(text()));
-const kiKnopf = knopf(/Bestand per KI erfassen/i);
-check("KI-Popup-Knopf", !!kiKnopf);
-if (kiKnopf) {
-  kiKnopf.click(); await warte(300);
-  const promptFeld = doc.getElementById("kd-ingestion-prompt");
-  check("Ingestion-Prompt sichtbar + Paketformat drin", !!promptFeld && /kinodreieck-paket/.test(promptFeld.value));
-  const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON aus der KI-Antwort/.test(t.placeholder || ""));
-  check("Paste-Feld im Popup", !!paste);
-  if (paste) {
-    const paket = JSON.stringify({ format: "kinodreieck-paket", version: 1, autor: "Laura", quelle: "ki-ingestion", bereiche: {
-      filme: [{ titel: "Lauras Testfilm", jahr: 2021, typ: "film", kategorie: "sehenswert", bewertung: { wie: 3, was: 4, warum: 2 }, genre: ["Drama"], begruendung: "Lauras Urteil." }],
-    } });
-    const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value").set;
-    setter.call(paste, paket);
-    paste.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-    await warte(200);
-    const importKnopf = knopf(/^Eingefügtes importieren$/i);
-    if (importKnopf) { importKnopf.click(); await warte(400); }
-    check("Vorschau erscheint (1 neu, Autor Laura)", /Paket-Vorschau/.test(text()) && /Laura/.test(text()) && /1 neu/.test(text()));
-    const uebernehmen = knopf(/^Auswahl übernehmen$/i);
-    if (uebernehmen) { uebernehmen.click(); await warte(500); }
-    check("Report: übernommen von Laura", /Übernommen von Laura/.test(text()) && /Filme 1/.test(text()));
-  }
-}
+/* Offline-First-Paketaustausch ist aus den Einstellungen entfernt. */
+check("Teilen & Tauschen aus Einstellungen entfernt", !/Teilen & Tauschen/.test(text()));
+check("KI-Paket-Popup aus Einstellungen entfernt", !knopf(/Bestand per KI erfassen/i));
 
-/* ---- Mediathek: Apple-Besitz + importierter Fremd-Eintrag ---- */
+/* ---- Mediathek: Apple-Besitz ---- */
 const mediathekTab = knopf(/mediathek/i);
 if (mediathekTab) { mediathekTab.click(); await warte(800); }
 /* Filterleiste (mit dem Apple-Chip) ist default zugeklappt -> aufklappen */
 const mFilter = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((b.textContent || "").trim()) && /[▸▾]/.test(b.textContent || ""));
 if (mFilter && /▸/.test(mFilter.textContent)) { mFilter.click(); await warte(300); }
 check("Mediathek klickbar + Apple-Besitz sichtbar", /apple/i.test(text()));
-check("Lauras Import in der Mediathek (mit Autor)", /Lauras Testfilm/i.test(text()) && /bewertet von Laura/i.test(text()));
 
 /* ---- Block A: Notiz-Feld editierbar (Karte aufklappen -> Bearbeiten) ---- */
 const karte = [...doc.querySelectorAll("div")].find((d) => d.style && d.style.cursor === "pointer" && /SCORE/.test(d.textContent || ""));

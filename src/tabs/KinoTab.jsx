@@ -120,13 +120,12 @@ export function KinoTab({
   return (
     <section>
       <ChipReihe style={{ gap: 10, marginBottom: 12 }}>
-        {/* Nur sinnvoll über einen Server: per Doppelklick (file://) blockiert der
-            Browser jeden Datei-fetch. Beim Doppelklick liefert der tägliche Job den
-            frischen Stand über den Neubau — nicht über diesen Button. */}
+        {/* Der tägliche Job schreibt den Katalog in die DB; dieser Knopf liest
+            den dort zuletzt erfolgreich gelieferten Stand erneut ein. */}
         {(typeof location === "undefined" || location.protocol !== "file:") && (
           <button style={btnStyle(false)} disabled={loading === "programm"} onClick={() => ladeProgrammDatei(true)}
-            title="Liest public/programm.json neu ein (nur wenn die App über einen Server läuft).">
-            {loading === "programm" ? "Lade programm.json …" : "programm.json neu laden"}
+            title="Lädt den letzten Kinoprogramm-Stand erneut aus der Datenbank.">
+            {loading === "programm" ? "Lade Datenbank …" : "Kinoprogramm neu laden"}
           </button>
         )}
         <a href="https://www.nonstopkino.at/programm" target="_blank" rel="noopener noreferrer"
@@ -163,11 +162,9 @@ export function KinoTab({
       {!programm && loading !== "programm" && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.6 }}>
           {datenGesperrt ? (
-            <><strong style={{ color: T.wolfram }}>Clean ohne Terminal-Installation.</strong> Die beigepackten Kinodaten bleiben gesperrt. Starte <code style={{ color: T.wolfram }}>Installation-Mac.command</code> oder <code style={{ color: T.wolfram }}>Installation-Windows.bat</code>, wechsle zur Demo oder importiere bewusst eigene Programm-/Nonstop-Daten.</>
+            <><strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Einstellungen → Datenmodus &amp; Verbindung ein.</>
           ) : (
-            <>Kein Kinoprogramm geladen. Zwei Wege:
-              <br />1. <strong style={{ color: T.leinwand }}>programm.json</strong> in den <code style={{ color: T.wolfram }}>public/</code>-Ordner legen (geplanter Job) und oben neu laden.
-              <br />2. Nonstop-Seite öffnen (Button oben), mit Strg+S speichern („nur HTML“) und im Einstellungen-Tab einspielen.</>
+            <>Kein Kinoprogramm geladen. Lade den Datenbankstand oben erneut. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.</>
           )}
         </div>
       )}

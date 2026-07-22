@@ -11,5 +11,10 @@
      export const SB_DEFAULT_URL  = "https://<ref>.supabase.co";
      export const SB_DEFAULT_ANON = "sb_publishable_…";
 */
-export const SB_DEFAULT_URL = "";
+const BUILD_URL = (typeof import.meta.env !== "undefined" && import.meta.env.VITE_SUPABASE_URL) || "";
+
+/* Die Projekt-URL ist keine geheime Information und wird beim Pages-Build aus
+   der Repository-Variable VITE_SUPABASE_URL eingesetzt. Der Publishable-Key
+   bleibt absichtlich leer: Tester tragen ihn im Freischalt-Popup ein. */
+export const SB_DEFAULT_URL = String(BUILD_URL).trim().replace(/\/+$/, "");
 export const SB_DEFAULT_ANON = "";

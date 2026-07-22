@@ -20,7 +20,7 @@ const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : ""
 /* 1) Keine absoluten Pfade — auf Pages zeigt "/x" auf die Domain-Root, nicht die App. */
 check("index.html: alle src/href relativ (kein =\"/…\")", !/(?:src|href)="\/(?!\/)/.test(indexHtml));
 check("JS-Bundle: kein fetch(\"/…\") (absoluter Datenpfad)", !/fetch\(\s*["']\//.test(js));
-check("JS-Bundle: Datenfetches laufen über BASE_URL (./programm.json)", js.includes("./programm.json") || js.includes('"programm.json"'));
+check("JS-Bundle: Katalog läuft über Supabase/PostgREST", js.includes("kd_catalog") && js.includes("/rest/v1/"));
 
 /* 2) Fonts: im Web-Build eigene Assets, NICHT ins CSS eingebettet. */
 check("CSS: keine eingebetteten Fonts (kein data:font)", !css.includes("data:font"));

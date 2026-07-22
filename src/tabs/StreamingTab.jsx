@@ -199,7 +199,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   if (datenGesperrt) return (
     <section>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Streaming-Daten nicht freigegeben.</strong> Diese Startart liest keine beigepackten Kataloge. Wechsle zur Demo oder nutze die persönliche PWA; ein Live-Abruf bei Watchmode findet hier nicht statt.
+        <strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Einstellungen ein. Die App selbst ruft Watchmode nie live auf.
       </div>
     </section>
   );
@@ -216,7 +216,7 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
           <strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich
-          vorbereitete Katalog-Dateien und ruft Watchmode nie live auf. Der veröffentlichte
+          den vorbereiteten Datenbank-Katalog und ruft Watchmode nie live auf. Der veröffentlichte
           Katalog fehlt, wurde noch nicht erzeugt oder konnte gerade nicht geladen werden.
           <br />Prüfe unter Einstellungen den Katalog-Status. Für die Administration läuft im
           separaten Ordner <code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System</code> der Befehl
