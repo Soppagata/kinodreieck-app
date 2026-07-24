@@ -193,7 +193,7 @@ check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
-check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Mit Stil|Weils cool ist)$/));
+check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Back to the Roots|Dauerburner)$/));
 check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
@@ -247,9 +247,13 @@ if (foyer) {
   if (saal) { saal.click(); await warte(400); }
 }
 
-/* Offline-First-Paketaustausch ist aus den Einstellungen entfernt. */
+/* Offline-First-Paketaustausch bleibt entfernt; der eigenständige KI-Prompt
+   gehört wieder direkt in den Masterlisten-Bereich. */
 check("Teilen & Tauschen aus Einstellungen entfernt", !/Teilen & Tauschen/.test(text()));
-check("KI-Paket-Popup aus Einstellungen entfernt", !knopf(/Bestand per KI erfassen/i));
+const kiPrompt = knopf(/^KI-Prompt öffnen$/i);
+check("KI-Prompt im Masterlisten-Bereich vorhanden", !!kiPrompt);
+if (kiPrompt) { kiPrompt.click(); await warte(200); }
+check("KI-Prompt öffnet den kopierbaren Masterlisten-Prompt", !!doc.getElementById("kd-ingestion-prompt") && !!knopf(/^Prompt kopieren$/));
 
 /* ---- Mediathek: Apple-Besitz ---- */
 const mediathekTab = knopf(/mediathek/i);
