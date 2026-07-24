@@ -37,7 +37,7 @@ export function DatenTab({
      wieder beendet. Namen und Bedingungen werden in der UI nicht verraten. */
   const eggZiel = einstellungen.modus || ((einstellungen.basisTheme || einstellungen.theme) === "hell" ? "showa" : "nerv");
   const eggAktiv = einstellungen.modus === eggZiel;
-  const eggLabel = eggZiel === "showa" ? "Mit Stil" : "Weils cool ist";
+  const eggLabel = eggZiel === "showa" ? "Back to the Roots" : "Dauerburner";
   const eggToggle = () => {
     if (!waehleModus) return;
     if (eggAktiv) waehleModus(einstellungen.basisTheme === "hell" ? "foyer" : "saal");
