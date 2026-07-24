@@ -6,6 +6,7 @@ import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
+import { TeilenBlock } from "../components/TeilenBlock.jsx";
 
 /* ================= EINSTELLUNGEN =================
    Tester-Oberfläche in stabiler Reihenfolge. Persönliche Daten, der gemeinsame
@@ -23,6 +24,7 @@ export function DatenTab({
   datenGesperrt = false,
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
+  artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
 }) {
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -118,6 +120,11 @@ export function DatenTab({
           )}
           <MasterImport onImport={importMaster} hasMaster={!!master}
             labelNeu="Masterliste importieren" labelErsetzen="Masterliste ersetzen" />
+          {uebernehmePaket && saveAutorName && (
+            <TeilenBlock nurKi ohneKopf master={master || []} artikel={artikelListe}
+              autorName={autorName} saveAutorName={saveAutorName}
+              uebernehmePaket={uebernehmePaket} setErr={setErr} />
+          )}
         </div>
       </Klappe>
 

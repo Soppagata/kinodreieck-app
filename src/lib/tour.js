@@ -29,7 +29,7 @@ const DEF = {
   /* --- Mediathek --- */
   mediathek: {
     titel: "Deine Mediathek",
-    absaetze: [{ ziel: "eintrag-neu", text: "Dein Bestand: Filme, Serien, Musik, Sonstiges. Eine Karte antippen öffnet Details und Bewertung; der Filter grenzt nach Besitz, Schlagseite, Kategorie und Genre ein. Neu anlegen über „+ Eintrag hinzufügen“ — oder eine ganze Titelliste auf einmal über „Bestand per KI erfassen“." }],
+    absaetze: [{ ziel: "eintrag-neu", text: "Dein Bestand: Filme, Serien, Musik, Sonstiges. Eine Karte antippen öffnet Details und Bewertung; der Filter grenzt nach Besitz, Schlagseite, Kategorie und Genre ein. Neu anlegen über „+ Eintrag hinzufügen“ — oder eine ganze Titelliste unter Einstellungen → Masterliste über „KI-Prompt öffnen“." }],
   },
   eintrag: {
     titel: "Wie ein Eintrag aussieht",

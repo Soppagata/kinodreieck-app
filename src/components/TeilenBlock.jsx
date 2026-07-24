@@ -18,7 +18,7 @@ const monoKlein = { fontFamily: "'Space Mono', monospace", fontSize: 11, get col
 
 /* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe steht
    (DatenTab-Accordion, Etappe 2); der Mediathek-Einsatz behält den Kopf. */
-export function TeilenBlock({ master, artikel, autorName, saveAutorName, uebernehmePaket, setErr, ohneKopf = false }) {
+export function TeilenBlock({ master, artikel, autorName, saveAutorName, uebernehmePaket, setErr, ohneKopf = false, nurKi = false }) {
   const [exportWahl, setExportWahl] = useState(["filme", "serien", "musik", "sonstiges", "artikel"]);
   const [promptOffen, setPromptOffen] = useState(false);
   const [kopiert, setKopiert] = useState(false);
@@ -98,23 +98,35 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
     setListe(liste.includes(wert) ? liste.filter((x) => x !== wert) : [...liste, wert]);
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      {!ohneKopf && <h2 style={h2Style}>Teilen & Tauschen</h2>}
-      <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
-        Bewertungen und Blog-Artikel als Paket weitergeben oder fremde Pakete übernehmen.
-        Übernommenes behält seinen Autor — deine eigenen Einträge werden nie überschrieben.
-      </p>
+    <div style={{ background: nurKi ? "transparent" : T.saalHoch, borderRadius: 6, padding: nurKi ? "16px 0 0" : "16px 18px", marginTop: nurKi ? 14 : 0, borderTop: nurKi ? "1px solid " + T.saal : "none" }}>
+      <input ref={dateiRef} type="file" accept=".json" style={{ display: "none" }} onChange={dateiGewaehlt} />
+      {nurKi ? (
+        <>
+          <h2 style={{ ...h2Style, fontSize: 17 }}>Masterliste mit KI erstellen</h2>
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
+            Erstellt aus einer rohen Titelliste einen recherchierten, importierbaren Entwurf. Vor der Übernahme siehst du eine Vorschau; vorhandene Einträge werden nicht überschrieben.
+          </p>
+        </>
+      ) : (
+        <>
+          {!ohneKopf && <h2 style={h2Style}>Teilen & Tauschen</h2>}
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
+            Bewertungen und Blog-Artikel als Paket weitergeben oder fremde Pakete übernehmen.
+            Übernommenes behält seinen Autor — deine eigenen Einträge werden nie überschrieben.
+          </p>
+        </>
+      )}
 
       {/* Autor-Name (steht in jedem Export und im KI-Prompt) */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 14 }}>
         <span style={{ ...monoKlein, textTransform: "uppercase", letterSpacing: "0.06em" }}>Dein Autorname</span>
         <input value={autorName} onChange={(e) => saveAutorName(e.target.value)} placeholder="z.B. Max"
           style={{ ...inputStyle, width: 160 }} />
-        <span style={monoKlein}>steht in jedem Export — so wissen andere, wessen Urteil sie lesen</span>
+        <span style={monoKlein}>{nurKi ? "wird im KI-Prompt als Autor deiner Bewertungen eingesetzt" : "steht in jedem Export — so wissen andere, wessen Urteil sie lesen"}</span>
       </div>
 
       {/* ---- Export ---- */}
-      <div style={{ borderTop: "1px solid " + T.saal, paddingTop: 12, marginBottom: 14 }}>
+      {!nurKi && <div style={{ borderTop: "1px solid " + T.saal, paddingTop: 12, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           {BEREICHE.map((b) => (
             <label key={b} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer", opacity: anzahlIm(b) ? 1 : 0.45 }}>
@@ -126,10 +138,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
           <button style={btnStyle(true)} onClick={exportiere}>Paket exportieren (JSON)</button>
           <FeldHinweis feld="paket" />
-          <label style={{ ...btnStyle(false), display: "inline-block", cursor: "pointer" }}>
-            Paket importieren
-            <input ref={dateiRef} type="file" accept=".json" style={{ display: "none" }} onChange={dateiGewaehlt} />
-          </label>
+          <button style={btnStyle(false)} onClick={() => dateiRef.current?.click()}>Paket importieren</button>
         </div>
         <p style={{ ...monoKlein, margin: "8px 0 0" }}>
           Ein Paket enthält die kompletten Einträge der gewählten Bereiche — Bewertung,
@@ -146,7 +155,16 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           </button>
           <FeldHinweis feld="ki_erfassung" />
         </p>
-      </div>
+      </div>}
+
+      {nurKi && (
+        <div style={{ marginBottom: 14 }}>
+          <button data-tour="ki-ingestion" style={btnStyle(true)} onClick={() => { setPromptOffen(!promptOffen); setAnalyse(null); }}>
+            {promptOffen ? "KI-Prompt schließen" : "KI-Prompt öffnen"}
+          </button>
+          <FeldHinweis feld="ki_erfassung" />
+        </div>
+      )}
 
       {/* ---- Ingestion-Popup: Prompt für die fremde KI ---- */}
       {promptOffen && (
@@ -181,7 +199,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
       {/* ---- Import-Vorschau: erst schauen, dann übernehmen ---- */}
       {analyse && (
         <div style={{ border: "1px solid " + T.wolfram, borderRadius: 6, padding: "12px 14px", marginBottom: 6 }}>
-          <div style={{ ...h2Style, fontSize: 16, margin: "0 0 6px" }}>Paket-Vorschau — noch wird nichts übernommen</div>
+          <div style={{ ...h2Style, fontSize: 16, margin: "0 0 6px" }}>{nurKi ? "Masterlisten-Vorschau" : "Paket-Vorschau"} — noch wird nichts übernommen</div>
           <p style={{ ...monoKlein, margin: "0 0 10px" }}>
             Autor: <span style={{ color: T.wolfram }}>{analyse.autor}</span>
             {analyse.erstellt ? " · erstellt " + String(analyse.erstellt).slice(0, 10) : ""}
@@ -225,7 +243,7 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
           {report.artikelDabei && (
             <><br />Artikel stehen auf „wartet" — Freigabe wie gewohnt im Blog. Verweise: {report.verlinkt} verknüpft, {report.rotlinks} offen (Rotlinks heilen automatisch, sobald passende Einträge entstehen).</>
           )}
-          <br /><span style={monoKlein}>Fremde Einträge erkennst du am Autor im Eintrag (bewertet von …). Export nicht vergessen — der Wächter oben erinnert dich.</span>
+          <br /><span style={monoKlein}>{nurKi ? "Die KI-Einträge wurden deiner Mediathek hinzugefügt; vorhandene Einträge blieben unverändert." : "Fremde Einträge erkennst du am Autor im Eintrag (bewertet von …). Export nicht vergessen — der Wächter oben erinnert dich."}</span>
         </div>
       )}
     </div>
