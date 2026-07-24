@@ -33,7 +33,12 @@ globalThis.fetch = (url, opts = {}) => {
   const body = opts.body ? JSON.parse(opts.body) : null;
   const headers = opts.headers || {};
   const keyOk = headers["x-kd-key"] === MOCK_KEY;
-  fetchCalls.push({ url, method, body, keyHdr: headers["x-kd-key"] || null });
+  fetchCalls.push({
+    url, method, body,
+    apikey: headers.apikey || null,
+    authorization: headers.Authorization || null,
+    keyHdr: headers["x-kd-key"] || null,
+  });
   if (forceOffline) return Promise.reject(new TypeError("Load failed"));
   const u = new URL(url);
   if (!u.pathname.endsWith("/kd_store")) return resp(404, { message: "no table" });
@@ -92,6 +97,14 @@ check("ohne Sync-Schlüssel: NICHT konfiguriert (Schreiben gesperrt)", S.isSupab
 reset();
 const ct = await S.connectionTest();
 check("connectionTest ok bei erreichbarem Projekt", ct.ok === true);
+check("Publishable-Key wird als apikey ohne Bearer gesendet",
+  fetchCalls.at(-1)?.apikey === "sb_publishable_dummy" && fetchCalls.at(-1)?.authorization == null);
+S.setSupabaseConfig({ anon: "eyJ" + "x".repeat(40) });
+fetchCalls = [];
+const ctJwt = await S.connectionTest();
+check("JWT-Anon-Key funktioniert weiterhin", ctJwt.ok === true);
+check("JWT-Anon-Key wird als apikey und Bearer gesendet",
+  fetchCalls.at(-1)?.apikey?.startsWith("eyJ") && fetchCalls.at(-1)?.authorization === "Bearer " + fetchCalls.at(-1)?.apikey);
 
 /* 2) set(sync-Key): sofort lokal + Insert legt Zeile an (rev=1), kein Pending */
 reset();
@@ -292,6 +305,18 @@ check("Demo-Read: liefert Demo-Master", !!demo["kd:master"] && JSON.parse(demo["
 check("Demo-Read: liefert weitere Demo-Blobs", !!demo["kd:artikel"]);
 check("Demo-Read: KEINE User-Zeile enthalten", demo["kd:master"].indexOf("geheim") === -1);
 check("Demo-Read: sendet KEINEN x-kd-key (reiner anon-Read)", fetchCalls.length > 0 && fetchCalls.every((c) => c.keyHdr == null));
+
+/* 19) Tester gibt nur den neuen Katalogzugang ein: derselbe Publishable-Key
+   muss auch für die Demo-Zeilen reichen, ohne die alte Sync-Konfiguration. */
+localStorage.removeItem("kd:sb:url");
+localStorage.removeItem("kd:sb:anon");
+localStorage.setItem("kd:katalog:url", MOCK_URL);
+localStorage.setItem("kd:katalog:key", "sb_publishable_katalogtest");
+fetchCalls = [];
+const demoPerKatalog = await S.ladeDemoBlobs();
+check("Demo-Read verwendet ersatzweise den eingegebenen Katalogzugang", !!demoPerKatalog["kd:master"] && fetchCalls.some((c) => c.url.startsWith(MOCK_URL + "/rest/v1/kd_store")));
+check("Demo-Read sendet den Katalog-Publishable-Key nur als apikey",
+  fetchCalls.at(-1)?.apikey === "sb_publishable_katalogtest" && fetchCalls.at(-1)?.authorization == null && fetchCalls.at(-1)?.keyHdr == null);
 
 /* ---------- Auswertung ---------- */
 let ok = true;

@@ -83,10 +83,9 @@ async function direktLesen(name, signal) {
   const c = getKatalogZugang();
   if (!hatKatalogZugang()) throw new Error("Datenbank-Zugang noch nicht eingerichtet");
   const url = c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name) + "&select=payload,updated_at&limit=1";
-  const res = await fetch(url, {
-    cache: "no-store", signal,
-    headers: { apikey: c.key, Authorization: "Bearer " + c.key, Accept: "application/json" },
-  });
+  const headers = { apikey: c.key, Accept: "application/json" };
+  if (/^eyJ/.test(c.key)) headers.Authorization = "Bearer " + c.key;
+  const res = await fetch(url, { cache: "no-store", signal, headers });
   let body = null;
   try { body = await res.json(); } catch { /* Fehlertext ist nicht zwingend JSON */ }
   if (!res.ok) throw new Error("Datenbank HTTP " + res.status + (body && body.message ? ": " + body.message : ""));

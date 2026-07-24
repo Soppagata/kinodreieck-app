@@ -18,6 +18,7 @@
 
 import { localDriver } from "./storage.js";
 import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
+import { getKatalogZugang } from "./katalog.js";
 
 /* Die 11 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
    deckungsgleich). Beim Supabase-Treiber ist der Schlüssel zugleich der Zeilen-
@@ -102,7 +103,10 @@ function nowIso() { try { return new Date().toISOString(); } catch { return Stri
 function restBase() { return getSupabaseConfig().url + "/rest/v1"; }
 function sbHeaders({ withBody, withKey, prefer } = {}) {
   const c = getSupabaseConfig();
-  const h = { "apikey": c.anon, "Authorization": "Bearer " + c.anon };
+  const h = { "apikey": c.anon };
+  /* Neue sb_publishable_-Keys sind keine JWTs. Der Bearer-Header ist nur für
+     die alten anon-JWTs nötig; als Bearer würde ein moderner Key abgelehnt. */
+  if (/^eyJ/.test(c.anon)) h["Authorization"] = "Bearer " + c.anon;
   if (withBody) h["Content-Type"] = "application/json";
   if (withKey && c.key) h["x-kd-key"] = c.key;   // Sync-Schlüssel NUR im Header, nie in einer Zeile
   if (prefer) h["Prefer"] = prefer;
@@ -155,14 +159,17 @@ export async function connectionTest() {
    Demo-Startwahl im Tester-Build; Tester-Edits bleiben lokal (kein DB-Write). */
 export async function ladeDemoBlobs() {
   const c = getSupabaseConfig();
-  const url = (c.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
-  const anon = c.anon || SB_DEFAULT_ANON || "";
+  const katalog = getKatalogZugang();
+  const url = (c.url || katalog.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
+  const anon = c.anon || katalog.key || SB_DEFAULT_ANON || "";
   if (!/^https?:\/\//.test(url) || !anon) throw new Error("Demo-Quelle nicht konfiguriert (Supabase-URL/anon-Key).");
   const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
   try {
     const res = await fetch(url + "/rest/v1/" + TABLE + "?scope=eq.demo&select=key,value", {
-      headers: { "apikey": anon, "Authorization": "Bearer " + anon },   // KEIN x-kd-key: reiner anon-Read
+      headers: /^eyJ/.test(anon)
+        ? { "apikey": anon, "Authorization": "Bearer " + anon }
+        : { "apikey": anon },   // KEIN x-kd-key: reiner Publishable-Read
       signal: ctrl ? ctrl.signal : undefined,
     });
     let data = null; try { data = await res.json(); } catch { /* leerer Body */ }
