@@ -91,6 +91,9 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
             Aktuell aktiv: {aktuelle === "demo" ? "Demo" : "Leerer Start"}
           </p>
         )}
+        {onClose && (
+          <button style={{ ...btnStyle(false), marginTop: 12 }} onClick={onClose}>Abbrechen</button>
+        )}
       </div>
     </div>,
     document.body

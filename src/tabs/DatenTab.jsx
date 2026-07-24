@@ -14,7 +14,7 @@ export function DatenTab({
   master, masterMeta, masterHerkunft, nachtragCount,
   exportMaster, importMaster, importProgramm, importNonstop,
   programm, clearProgrammCache,
-  startWahl = null, onDemoEntfernen,
+  startWahl = null, demoAktiv = false, onStartWahl, onDemoEntfernen,
   katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh,
   ungesichertMaster = false, ungesichertArtikel = false,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
@@ -85,13 +85,14 @@ export function DatenTab({
       {/* 2 — Datenmodus */}
       <Klappe titel="Datenmodus & Verbindung">
         <div style={kasten}>
-          <h2 style={h2}>{startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
+          <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
             Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Einstellungen bleiben nur in diesem Browser. Datenbankzugang: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{katalogVerbunden ? "verbunden" : "nicht verbunden"}</strong>.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{katalogVerbunden ? "Datenbankzugang prüfen/ändern" : "Datenbank verbinden"}</button>}
-            {startWahl === "demo" && onDemoEntfernen && (
+            {onStartWahl && !demoAktiv && !(master && master.length) && <button style={btnStyle(false)} onClick={onStartWahl}>Startmodus wählen</button>}
+            {(demoAktiv || startWahl === "demo") && onDemoEntfernen && (
               <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={() => {
                 if (window.confirm("Max’ Demo-Einträge entfernen?\n\nDas gemeinsame Kino- und Streamingprogramm bleibt erhalten. Eigene, später ergänzte Einträge bleiben ebenfalls erhalten.")) onDemoEntfernen();
               }}>Demo-Daten entfernen</button>

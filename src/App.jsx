@@ -77,6 +77,19 @@ function liesStartWahl() {
   return null;
 }
 
+/* Ein alter Test-/Beta-Build konnte `kd:start=clean` still setzen. Dieser Wert
+   darf die neue, ausdrücklich verlangte Clean-/Demo-Entscheidung nicht für immer
+   überspringen. Die Versionsmarke entsteht nur durch eine bewusste Wahl im
+   aktuellen Dialog; URL-Parameter bleiben eine ebenso bewusste Ausnahme. */
+const START_WAHL_VERSION = "demo-v1";
+function startWahlBestaetigt() {
+  try {
+    const url = (typeof location !== "undefined") ? (location.search + location.hash) : "";
+    if (/[?&#]start=(demo|clean)(?:[&#]|$)/.test(url)) return true;
+    return localStorage.getItem(K.startVersion) === START_WAHL_VERSION;
+  } catch { return false; }
+}
+
 /* Ein Installer-Auftrag ist absichtlich destruktiv, aber nur genau einmal. Der
    Token wird VOR dem Löschen als verbraucht markiert. Bei einem Reload derselben
    URL bleibt ein danach neu aufgebauter Browser-Stand deshalb erhalten. */
@@ -110,7 +123,7 @@ function verbraucheFrischenStart() {
 /* Willkommen und Tour werden erst nach einer bestätigten Einrichtung oder dem
    bewussten Überspringen des Installers freigeschaltet. */
 function tutorialFrei() {
-  try { return !!liesStartWahl(); } catch { return false; }
+  try { return !!liesStartWahl() && startWahlBestaetigt(); } catch { return false; }
 }
 
 function snapshotsFrei() {
@@ -435,7 +448,8 @@ export default function App() {
     if (!m) return false; // unparsebar -> nie automatisch wegwerfen
     let d = new Date(jetzt.getFullYear(), Number(m[2]) - 1, Number(m[1]));
     if (jetzt - d > 180 * 86400000) d = new Date(jetzt.getFullYear() + 1, Number(m[2]) - 1, Number(m[1]));
-    return jetzt - d > 1 * 86400000; // gestern gesehen? Heute noch stehen lassen.
+    const heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+    return heute - d > 1 * 86400000; // gestern gesehen? Heute noch stehen lassen.
   };
   const persistPins = useCallback(async (pins) => {
     try { await store.set(K.kinoPins, JSON.stringify(pins)); } catch { /* nicht fatal */ }
@@ -543,7 +557,7 @@ export default function App() {
         // Kein Storage-Stand -> Beta-Startwahl entscheidet (§6.1: NICHT mehr
         // automatisch Echtdaten laden). demo lädt die bereinigte Liste (nicht
         // persistiert bis Bearbeitung), clean bleibt leer, keine Wahl -> Modal.
-        const wahl = frischerStart || liesStartWahl();
+        const wahl = frischerStart || (startWahlBestaetigt() ? liesStartWahl() : null);
         if (wahl === "demo") {
           try {
             const d = await demoLadung();
@@ -555,7 +569,7 @@ export default function App() {
                 localStorage.setItem(K.streamingDienste, JSON.stringify(d.streaming));
                 setAuswahlRoh(d.streaming.quellen);
                 if (typeof d.streaming.heuristik === "boolean") setHeuristikAn(d.streaming.heuristik);
-                seed.streaming = true;
+                seed.streamingQuellen = [...d.streaming.quellen];
               }
               if (d.artikel) {
                 const al = Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || [];
@@ -563,13 +577,19 @@ export default function App() {
                 localStorage.setItem(K.artikel, JSON.stringify({ artikel: al, gespeichertAm: Date.now() }));
                 seed.artikelIds = al.map((a) => a.id);
               }
-              if (Array.isArray(d.pins)) { setKinoPins(d.pins); localStorage.setItem(K.kinoPins, JSON.stringify(d.pins)); seed.pins = true; }
+              if (Array.isArray(d.pins)) {
+                setKinoPins(d.pins); localStorage.setItem(K.kinoPins, JSON.stringify(d.pins));
+                seed.pinKeys = d.pins.map((p) => String(p.t || "") + "|" + String(p.z || ""));
+              }
               if (d.mustwatch) {
                 const mw = parseMustwatch(JSON.stringify(d.mustwatch));
                 setMustwatch(mw); localStorage.setItem(K.mustwatch, JSON.stringify({ eintraege: mw, gespeichertAm: Date.now() }));
                 seed.mustwatchIds = mw.map((e) => e.id);
               }
-              if (Array.isArray(d.merkliste)) { setMerkliste(d.merkliste); localStorage.setItem(K.merkliste, JSON.stringify(d.merkliste)); seed.merkliste = true; }
+              if (Array.isArray(d.merkliste)) {
+                setMerkliste(d.merkliste); localStorage.setItem(K.merkliste, JSON.stringify(d.merkliste));
+                seed.merklisteIds = d.merkliste.map((m) => String(m.watchmode_id));
+              }
               localStorage.setItem(K.demoSeed, JSON.stringify(seed));
             } catch { /* Seed-State bleibt mindestens in React erhalten */ }
           } catch (e) {
@@ -1238,9 +1258,21 @@ export default function App() {
      Schreibt kd:start und lädt entsprechend. "Startart wechseln" (Einstellungen-Tab)
      verwirft dabei den Browser-Stand — beide Wege ohne Datei-Gefummel. */
   const waehleStart = useCallback((wahl) => {
+    if (wahl !== "clean" && wahl !== "demo") return;
+    let aktuelle = null;
+    try { aktuelle = localStorage.getItem(K.start); } catch { /* */ }
+    if (startWahlBestaetigt() && aktuelle === wahl) {
+      setStartModalOffen(false);
+      if (!hatKatalogZugang()) setKatalogZugangOffen(true);
+      return;
+    }
+    const hatPersoenlicheDaten = !!((master && master.length) || artikelListe.length || mustwatch.length || merkliste.length || kinoPins.length);
+    if (startWahlBestaetigt() && aktuelle && aktuelle !== wahl && hatPersoenlicheDaten
+      && !window.confirm("Startmodus wechseln?\n\nDabei wird die aktuelle Mediathek im Browser verworfen. Lade vorher ein Gesamt-Backup herunter, wenn du sie behalten möchtest.")) return;
     store.delete(K.master).catch(() => {});
     try {
       localStorage.setItem(K.start, wahl);
+      localStorage.setItem(K.startVersion, START_WAHL_VERSION);
       localStorage.removeItem(K.demoSeed);
       setupUeberspringen();
     } catch { /* */ }
@@ -1255,7 +1287,7 @@ export default function App() {
       setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
       setSnapshotFreigabe(true); setWillkommenOffen(true); setStartTick((t) => t + 1);
     }
-  }, []);
+  }, [master, artikelListe, mustwatch, merkliste, kinoPins]);
   const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
 
   /* Entfernt ausschließlich die beim Demo-Start protokollierten Beilagen.
@@ -1263,6 +1295,33 @@ export default function App() {
   const entferneDemoDaten = useCallback(async () => {
     let seed = {};
     try { seed = JSON.parse(localStorage.getItem(K.demoSeed) || "{}"); } catch { /* */ }
+    /* Kompatibilität mit einem kurz ausgelieferten Seed-Format, das diese drei
+       Bereiche nur als Boolean protokollierte: Demo erneut read-only laden und
+       daraus exakte IDs bilden. Scheitert das Netz, wird lieber zu wenig als ein
+       später vom Tester ergänzter Eintrag gelöscht. */
+    const legacyPins = seed.pins && !Array.isArray(seed.pinKeys);
+    const legacyMerkliste = seed.merkliste && !Array.isArray(seed.merklisteIds);
+    const legacyStreaming = seed.streaming && !Array.isArray(seed.streamingQuellen);
+    if (legacyPins || legacyMerkliste || legacyStreaming) {
+      try {
+        const alt = await demoLadung();
+        if (legacyPins) {
+          if (!Array.isArray(alt.pins)) throw new Error("Demo-Pins fehlen");
+          seed.pinKeys = alt.pins.map((p) => String(p.t || "") + "|" + String(p.z || ""));
+        }
+        if (legacyMerkliste) {
+          if (!Array.isArray(alt.merkliste)) throw new Error("Demo-Merkliste fehlt");
+          seed.merklisteIds = alt.merkliste.map((m) => String(m.watchmode_id));
+        }
+        if (legacyStreaming) {
+          if (!Array.isArray(alt.streaming?.quellen)) throw new Error("Demo-Streamingdienste fehlen");
+          seed.streamingQuellen = [...alt.streaming.quellen];
+        }
+      } catch {
+        setErr("Alte Demo-Daten können gerade nicht sicher zugeordnet werden. Bitte Datenbankverbindung prüfen und erneut versuchen; es wurde nichts gelöscht.");
+        return;
+      }
+    }
     const masterIds = new Set(seed.masterIds || []);
     const nextMaster = (master || []).filter((f) => !masterIds.has(f.id));
     if (nextMaster.length) {
@@ -1276,13 +1335,34 @@ export default function App() {
     setArtikelListe((prev) => { const next = prev.filter((a) => !artIds.has(a.id)); persistArtikel(next); return next; });
     const mwIds = new Set(seed.mustwatchIds || []);
     setMustwatch((prev) => { const next = prev.filter((e) => !mwIds.has(e.id)); persistMustwatch(next); return next; });
-    if (seed.pins) { setKinoPins([]); persistPins([]); }
-    if (seed.merkliste) { setMerkliste([]); persistMerk([]); }
-    if (seed.streaming) {
-      setAuswahlRoh([]); setHeuristikAn(true);
-      try { await store.set(K.streamingDienste, JSON.stringify({ quellen: [], heuristik: true })); } catch { /* */ }
+    if (Array.isArray(seed.pinKeys)) {
+      const demoPins = new Set(seed.pinKeys.map(String));
+      setKinoPins((prev) => {
+        const next = prev.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
+        persistPins(next); return next;
+      });
     }
-    try { localStorage.setItem(K.start, "clean"); localStorage.removeItem(K.demoSeed); } catch { /* */ }
+    if (Array.isArray(seed.merklisteIds)) {
+      const demoMerker = new Set(seed.merklisteIds.map(String));
+      setMerkliste((prev) => {
+        const next = prev.filter((m) => !demoMerker.has(String(m.watchmode_id)));
+        persistMerk(next); return next;
+      });
+    }
+    if (Array.isArray(seed.streamingQuellen)) {
+      const demoQuellen = new Set(seed.streamingQuellen.map(String));
+      setAuswahlRoh((prev) => {
+        const next = prev.filter((q) => !demoQuellen.has(String(q)));
+        store.set(K.streamingDienste, JSON.stringify({ quellen: next, heuristik: true })).catch(() => {});
+        return next;
+      });
+      setHeuristikAn(true);
+    }
+    try {
+      localStorage.setItem(K.start, "clean");
+      localStorage.setItem(K.startVersion, START_WAHL_VERSION);
+      localStorage.removeItem(K.demoSeed);
+    } catch { /* */ }
     setErr(""); setStartTick((t) => t + 1);
   }, [master, masterMeta, persistMaster, persistArtikel, persistMustwatch, persistPins, persistMerk]);
 
@@ -1635,7 +1715,8 @@ export default function App() {
       <div className="kd-app">
       {startModalOffen && (
         <StartWahl onWaehle={waehleStart}
-          aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()} />
+          aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
+          onClose={startWahlBestaetigt() ? () => setStartModalOffen(false) : undefined} />
       )}
       {katalogZugangOffen && !startModalOffen && (
         <KatalogZugang zwingend={!hatKatalogZugang()}
@@ -1821,6 +1902,8 @@ export default function App() {
             setErr={setErr} clearProgrammCache={clearProgrammCache}
             resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
+            demoAktiv={masterHerkunft?.typ === "demo" || (() => { try { return !!localStorage.getItem(K.demoSeed); } catch { return false; } })()}
+            onStartWahl={oeffneStartWahl}
             onDemoEntfernen={entferneDemoDaten}
             katalogVerbunden={snapshotFreigabe}
             onKatalogVerbinden={() => setKatalogZugangOffen(true)}

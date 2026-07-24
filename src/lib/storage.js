@@ -89,6 +89,7 @@ export const K = {
   vokabular: "kd:vokabular",          // eigene Stimmungswörter für die Suche [{wort, genres[], tags[]}]
   mustwatch: "kd:mustwatch",          // Must-Watch-Liste (eigener Topf, 10. Sync-Datei) — ersetzt das must_watch-Flag
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
+  startVersion: "kd:start-version",   // bestätigt, dass die Wahl im aktuellen Demo-Onboarding bewusst getroffen wurde
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
   treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
   achievements: "kd:achievements",    // Egg-Achievements (11. Sync-/Backup-Artefakt, Block 3): Set freigeschalteter Egg-IDs

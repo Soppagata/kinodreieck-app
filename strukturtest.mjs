@@ -45,6 +45,7 @@ const dom = new JSDOM(readFileSync(pfad, "utf8"), {
     if (!w.URL.revokeObjectURL) w.URL.revokeObjectURL = () => {}; // jsdom kennt es nicht
     w.confirm = () => false; // Reset-Knopf: anklicken ja, ausführen nein
     w.localStorage.setItem("kd:start", "demo"); // Beta-Startwahl: Demo-Master laden (sonst Startwahl-Modal, master=null)
+    w.localStorage.setItem("kd:start-version", "demo-v1");
     w.localStorage.setItem("kd:katalog:url", "https://test.supabase.co");
     w.localStorage.setItem("kd:katalog:key", "x".repeat(30));
     w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino","pinboard","mediathek","eintrag","streaming","entdecken","blog","vokabular","streaming-quellen","erweitert","waechter"] })); // Tour aus: dieser Test prüft die App, nicht das Tutorial
