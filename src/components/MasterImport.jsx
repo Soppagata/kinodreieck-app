@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { btnStyle, inputStyle } from "../lib/tokens.js";
 import { IconImport } from "./ui.jsx";
 import { FeldHinweis } from "./FeldHinweis.jsx";
@@ -6,6 +6,7 @@ import { FeldHinweis } from "./FeldHinweis.jsx";
 /* ---------- Import-Baustein (Master / Programm-Snapshot / Nonstop-HTML) ---------- */
 export function MasterImport({ onImport, hasMaster, labelNeu, labelErsetzen, hinweis, accept }) {
   const [text, setText] = useState("");
+  const dateiRef = useRef(null);
   // KD-004: vorhandener Bestand (hasMaster) wird erst nach Rückfrage ersetzt. Der Master-/Artikel-Import
   // sichert App-seitig zusätzlich einen Rollback-Snapshot; hier die letzte Bestätigung vor dem Überschreiben.
   const sicherImport = (payload) => {
@@ -22,13 +23,14 @@ export function MasterImport({ onImport, hasMaster, labelNeu, labelErsetzen, hin
         style={{ ...inputStyle, width: "100%", boxSizing: "border-box", fontFamily: "'Space Mono', monospace", fontSize: 12 }}
       />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button style={{ ...btnStyle(false), display: "inline-flex", alignItems: "center", gap: 7 }} onClick={() => text.trim() && sicherImport(text)}>
+        <button style={{ ...btnStyle(false), display: "inline-flex", alignItems: "center", gap: 7 }}
+          onClick={() => text.trim() ? sicherImport(text) : dateiRef.current?.click()}>
           <IconImport size={15} />{hasMaster ? (labelErsetzen || "Master ersetzen") : (labelNeu || "Master importieren")}
         </button>
         <FeldHinweis feld="import_datei" />
         <label style={{ ...btnStyle(false), display: "inline-block" }}>
           Datei wählen
-          <input type="file" accept={accept || ".json"} style={{ display: "none" }}
+          <input ref={dateiRef} type="file" accept={accept || ".json"} style={{ display: "none" }}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
