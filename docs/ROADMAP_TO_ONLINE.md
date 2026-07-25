@@ -179,6 +179,9 @@ eindeutig einer neuen Änderung zuordnen lassen.
 
 ## Etappe 1: Architekturgrenzen schärfen, ohne die App neu zu schreiben
 
+**Status: abgeschlossen am 24. Juli 2026.** Die technische Abnahme und die
+bewusst erhaltenen Legacy-Grenzen stehen in `ETAPPE_1_ABNAHME.md`.
+
 ### Ziel
 
 Die Stellen entkoppeln, an denen Onlinebetrieb neue Verantwortung erzeugt.
