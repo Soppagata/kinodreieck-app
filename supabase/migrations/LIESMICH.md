@@ -20,12 +20,20 @@ ausfüllen.
 | Datei | Projekt-Ref | Datum | Ausgeführt von | Ergebnis |
 |---|---|---|---|---|
 | `20260725120000_kd_personal.sql` | Produktion (EU-West) | 2026-07-25 | Max | erfolgreich; `npm run test:rls` danach 18/18 grün |
+| `20260725220000_etappe4_quellenregister_zugriff.sql` | | | | |
 
 ## Nach Migration 1
 
 `node tools/rls_test_personal.mjs` gegen dieselbe Datenbank laufen lassen (braucht
 zwei Testaccounts, Konfiguration nur über Umgebungsvariablen — siehe Kopf der Datei).
 Erst ein grüner Negativtest belegt, dass die Account-Isolation wirklich greift.
+
+## Nach Migration 2 (Etappe 4)
+
+Abschnitt D der Datei trennt den Katalog-Lesezugriff (E1=b): anon liest nur noch
+`manifest` + `*_demo`; `programm`/`streaming` verlangen eine Sitzung. Bis Phase 2
+(App sendet Sitzungs-Token am Katalogpfad) zehren Geräte vom Katalog-Cache.
+Kontrollabfragen stehen am Dateiende.
 
 ## Was NICHT hier liegt
 
