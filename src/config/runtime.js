@@ -1,0 +1,45 @@
+/* Öffentliche Build-/Laufzeitkonfiguration.
+   Alles in diesem Objekt darf im Browser-Bundle sichtbar sein. Persönliche
+   Sync-Schlüssel, Service-Role- oder KI-Anbieter-Keys gehören nie hierher. */
+
+export const RUNTIME_SCHEMA_VERSION = 1;
+
+const STANDARD = Object.freeze({
+  appUrl: "",
+  supabaseUrl: "",
+  supabasePublishableKey: "",
+  aiEndpointName: "ai-task",
+  buildVersion: "dev",
+  schemaVersion: RUNTIME_SCHEMA_VERSION,
+});
+
+function text(wert) { return String(wert == null ? "" : wert).trim(); }
+function url(wert) { return text(wert).replace(/\/+$/, ""); }
+function endpoint(wert) {
+  const v = text(wert);
+  return /^[a-z0-9][a-z0-9_-]*$/i.test(v) ? v : "";
+}
+
+export function createRuntimeConfig(env = {}) {
+  const aiWert = text(env.VITE_AI_ENDPOINT_NAME);
+  return Object.freeze({
+    appUrl: url(env.VITE_APP_URL),
+    supabaseUrl: url(env.VITE_SUPABASE_URL),
+    supabasePublishableKey: text(env.VITE_SUPABASE_PUBLISHABLE_KEY),
+    aiEndpointName: aiWert ? endpoint(aiWert) : STANDARD.aiEndpointName,
+    buildVersion: text(env.VITE_BUILD_VERSION) || STANDARD.buildVersion,
+    schemaVersion: RUNTIME_SCHEMA_VERSION,
+  });
+}
+
+export function validateRuntimeConfig(config = STANDARD) {
+  const fehler = [];
+  if (config.appUrl && !/^https:\/\/[^\s]+$/i.test(config.appUrl)) fehler.push({ feld: "appUrl", code: "invalid-url" });
+  if (config.supabaseUrl && !/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(config.supabaseUrl)) fehler.push({ feld: "supabaseUrl", code: "invalid-url" });
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(config.aiEndpointName || "")) fehler.push({ feld: "aiEndpointName", code: "invalid-endpoint" });
+  if (Number(config.schemaVersion) !== RUNTIME_SCHEMA_VERSION) fehler.push({ feld: "schemaVersion", code: "unsupported-schema" });
+  return Object.freeze({ ok: fehler.length === 0, fehler: Object.freeze(fehler) });
+}
+
+const viteEnv = (typeof import.meta.env !== "undefined" && import.meta.env) || {};
+export const runtimeConfig = createRuntimeConfig(viteEnv);

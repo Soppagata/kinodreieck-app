@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { T } from "../lib/tokens.js";
-import { activeSyncStatus } from "../lib/storage.js";
+import { activeSyncStatus } from "../services/storage.js";
 
 /* Leitet aus dem Git-Sync-Status die drei Vertrauens-Zustände ab:
    synchron / ausstehend / Konflikt. Ohne Git-Konfig: neutral (null). */

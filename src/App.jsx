@@ -24,10 +24,11 @@ import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
-import { store, K, PROGRAMM_TTL_MS } from "./lib/storage.js";
+import { store, K, PROGRAMM_TTL_MS, storageService } from "./services/storage.js";
 import { baueBackup } from "./lib/backup.js";
-import { ladeDemoBlobs, publishBlog, unpublishBlog, ladeSharedBlogs } from "./lib/supabaseDriver.js";
-import { hatKatalogZugang, ladeKatalogAsset, baueStreamingAnsichten } from "./lib/katalog.js";
+import { catalogService } from "./services/catalog.js";
+import { authService } from "./services/auth.js";
+import { errorText } from "./services/errors.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
@@ -127,7 +128,7 @@ function tutorialFrei() {
 }
 
 function snapshotsFrei() {
-  return hatKatalogZugang();
+  return catalogService.hasConnection();
 }
 
 /* Demo-Beilage bei Bedarf laden (einmalig, idempotent). Tests setzen
@@ -153,7 +154,7 @@ async function demoLadung() {
      wenn keine Demo-Quelle konfiguriert ist). Wie zuvor: NICHT persistiert bis zur
      Bearbeitung — die Demo lebt in React-State, nicht im Storage. */
   try {
-    const blobs = await ladeDemoBlobs();
+    const blobs = await catalogService.loadDemo();
     const roh = blobs && blobs["kd:master"];
     if (roh) {
       const d = JSON.parse(roh);
@@ -242,6 +243,8 @@ function gueltigerArtikel(a) {
 }
 
 export default function App() {
+  const [session, setSession] = useState(() => authService.getSnapshot());
+  useEffect(() => authService.subscribe(setSession), []);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
   const [navOffen, setNavOffen] = useState(false); // Mobile-Nav-Drawer offen?
@@ -442,7 +445,7 @@ export default function App() {
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
   const [startTick, setStartTick] = useState(0); // bump nach Startwahl -> Tour-Effekte neu binden
-  const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !hatKatalogZugang());
+  const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !catalogService.hasConnection());
   const pinAbgelaufen = (pin, jetzt = new Date()) => {
     const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(pin.z));
     if (!m) return false; // unparsebar -> nie automatisch wegwerfen
@@ -508,9 +511,9 @@ export default function App() {
       if (manuell) {
         /* Der manuelle Knopf bleibt ein DB-Refresh; Dateiimporte besitzen ihre
            eigenen Funktionen weiter unten. */
-        parsed = (await ladeKatalogAsset("programm")).payload;
+        parsed = (await catalogService.loadAsset("programm")).payload;
       } else {
-        parsed = (await ladeKatalogAsset("programm")).payload;
+        parsed = (await catalogService.loadAsset("programm")).payload;
       }
       const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
       if (!manuell && !snapshotFreigabeRef.current) return false;
@@ -903,8 +906,8 @@ export default function App() {
       // Gezogene Fremd-Blogs werden nie (re-)publiziert.
       const art = next.find((a) => a.id === id);
       if (art && art.herkunft !== "gezogen") {
-        if (art.geteilt) publishBlog(art).then((r) => { if (!r.ok) setErr("Veröffentlichen fehlgeschlagen: " + (r.message || r.status || "")); });
-        else unpublishBlog(art.id).catch(() => {});   // war evtl. geteilt -> idempotent aus DB nehmen
+        if (art.geteilt) storageService.publishSharedArticle(art).catch((error) => { setErr("Veröffentlichen fehlgeschlagen: " + errorText(error)); });
+        else storageService.unpublishSharedArticle(art.id).catch(() => {});   // war evtl. geteilt -> idempotent aus DB nehmen
       }
       return next;
     });
@@ -914,7 +917,7 @@ export default function App() {
     setArtikelListe((prev) => {
       const art = prev.find((a) => a.id === id);
       // Eigener geteilter Blog: auch aus dem DB-Ordner (Autor-Delete). Gezogener: nur lokal.
-      if (art && art.geteilt && art.herkunft !== "gezogen") unpublishBlog(art.id).catch(() => {});
+      if (art && art.geteilt && art.herkunft !== "gezogen") storageService.unpublishSharedArticle(art.id).catch(() => {});
       const next = prev.filter((a) => a.id !== id);
       persistArtikel(next);
       return next;
@@ -941,7 +944,7 @@ export default function App() {
   useEffect(() => {
     if (!bootDone) return;
     let abbruch = false;
-    ladeSharedBlogs().then((r) => {
+    catalogService.listSharedBlogs().then((r) => {
       if (abbruch || !r.ok) return;
       const keys = new Set((r.blogs || []).map((b) => b.db_owner + "|" + b.db_key));
       setArtikelListe((prev) => {
@@ -1263,7 +1266,7 @@ export default function App() {
     try { aktuelle = localStorage.getItem(K.start); } catch { /* */ }
     if (startWahlBestaetigt() && aktuelle === wahl) {
       setStartModalOffen(false);
-      if (!hatKatalogZugang()) setKatalogZugangOffen(true);
+      if (!catalogService.hasConnection()) setKatalogZugangOffen(true);
       return;
     }
     const hatPersoenlicheDaten = !!((master && master.length) || artikelListe.length || mustwatch.length || merkliste.length || kinoPins.length);
@@ -1277,7 +1280,7 @@ export default function App() {
       setupUeberspringen();
     } catch { /* */ }
     setStartModalOffen(false);
-    if (!hatKatalogZugang()) {
+    if (!catalogService.hasConnection()) {
       setKatalogZugangOffen(true);
       return;
     }
@@ -1454,15 +1457,15 @@ export default function App() {
   const ladeStreamingDateien = useCallback(async (vollKatalog = false) => {
     if (!snapshotFreigabe) return;
     if (streamingGeladen.current && streamingRohRef.current) {
-      const a = baueStreamingAnsichten(streamingRohRef.current, master || []);
+      const a = catalogService.buildStreamingViews(streamingRohRef.current, master || []);
       setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken); return;
     }
     streamingGeladen.current = true;
     try {
-      const r = await ladeKatalogAsset("streaming", { timeout: vollKatalog ? 20000 : 15000 });
+      const r = await catalogService.loadAsset("streaming", { timeout: vollKatalog ? 20000 : 15000 });
       if (!snapshotFreigabeRef.current) return;
       streamingRohRef.current = r.payload;
-      const a = baueStreamingAnsichten(r.payload, master || []);
+      const a = catalogService.buildStreamingViews(r.payload, master || []);
       setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
       entdeckenGeladen.current = true;
       if (r.quelle === "cache" && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
@@ -1472,7 +1475,7 @@ export default function App() {
       if (file) {
         const roh = { bekannt: streamingBekanntSnapshot, entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot };
         streamingRohRef.current = roh;
-        const a = baueStreamingAnsichten(roh, master || []);
+        const a = catalogService.buildStreamingViews(roh, master || []);
         setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
       } else setErr("Streamingkatalog nicht ladbar: " + e.message);
     }
@@ -1712,14 +1715,14 @@ export default function App() {
   return (
     <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + ((may4Aktiv || may4Vorschau) && !einstellungen.modus ? " kd-may4" : "")}>
       <ModusFx modus={einstellungen.modus} />
-      <div className="kd-app">
+      <div className="kd-app" data-session-mode={session.mode}>
       {startModalOffen && (
         <StartWahl onWaehle={waehleStart}
           aktuelle={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
           onClose={startWahlBestaetigt() ? () => setStartModalOffen(false) : undefined} />
       )}
       {katalogZugangOffen && !startModalOffen && (
-        <KatalogZugang zwingend={!hatKatalogZugang()}
+        <KatalogZugang zwingend={!catalogService.hasConnection()}
           onAbbrechen={() => setKatalogZugangOffen(false)}
           onFertig={() => {
             setKatalogZugangOffen(false);

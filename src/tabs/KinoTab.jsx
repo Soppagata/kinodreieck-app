@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
-import { store, K } from "../lib/storage.js";
+import { store, K } from "../services/storage.js";
 import { Chip, ChipReihe, IconDelete } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";

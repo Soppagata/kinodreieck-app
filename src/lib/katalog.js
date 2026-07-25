@@ -13,7 +13,8 @@
    ein Fehler gemeldet. */
 
 import { K } from "./storage.js";
-import { SB_DEFAULT_URL } from "./supabaseDefaults.js";
+import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
+import { istSupabaseProjektUrl, publicSupabaseHeaders } from "./supabasePublic.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
@@ -23,10 +24,10 @@ function sauber(s) { return String(s == null ? "" : s).trim(); }
 function geheim(s) { return sauber(s).replace(/[\s\u00A0\u200B-\u200D\u2060\uFEFF\u2022\u25CF]/g, ""); }
 
 export function getKatalogZugang() {
-  let url = SB_DEFAULT_URL || "", key = "";
+  let url = SB_DEFAULT_URL || "", key = SB_DEFAULT_ANON || "";
   try {
     url = sauber(localStorage.getItem(K.katalogUrl) || url).replace(/\/+$/, "");
-    key = geheim(localStorage.getItem(K.katalogKey) || "");
+    key = geheim(localStorage.getItem(K.katalogKey) || key);
   } catch { /* Storage blockiert */ }
   return { url, key };
 }
@@ -44,7 +45,7 @@ export function loescheKatalogZugang() {
 
 export function hatKatalogZugang() {
   const c = getKatalogZugang();
-  return /^https:\/\/[^\s]+\.supabase\.co$/i.test(c.url) && c.key.length >= 20;
+  return istSupabaseProjektUrl(c.url) && c.key.length >= 20;
 }
 
 function cacheUrl(name) {
@@ -83,12 +84,15 @@ async function direktLesen(name, signal) {
   const c = getKatalogZugang();
   if (!hatKatalogZugang()) throw new Error("Datenbank-Zugang noch nicht eingerichtet");
   const url = c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name) + "&select=payload,updated_at&limit=1";
-  const headers = { apikey: c.key, Accept: "application/json" };
-  if (/^eyJ/.test(c.key)) headers.Authorization = "Bearer " + c.key;
+  const headers = publicSupabaseHeaders(c.key, { Accept: "application/json" });
   const res = await fetch(url, { cache: "no-store", signal, headers });
   let body = null;
   try { body = await res.json(); } catch { /* Fehlertext ist nicht zwingend JSON */ }
-  if (!res.ok) throw new Error("Datenbank HTTP " + res.status + (body && body.message ? ": " + body.message : ""));
+  if (!res.ok) {
+    const error = new Error("Datenbank HTTP " + res.status + (body && body.message ? ": " + body.message : ""));
+    error.status = res.status;
+    throw error;
+  }
   if (!Array.isArray(body) || !body[0]) throw new Error("Asset „" + name + "“ fehlt in der Datenbank");
   let payload = body[0].payload;
   if (typeof payload === "string") payload = JSON.parse(payload);
@@ -121,7 +125,11 @@ export async function testeKatalogZugang() {
     const r = await ladeKatalogAsset("manifest", { timeout: 10000 });
     return { ok: true, manifest: r.payload, quelle: r.quelle };
   } catch (e) {
-    return { ok: false, message: e && e.name === "AbortError" ? "Zeitüberschreitung" : String(e && e.message || e) };
+    return {
+      ok: false,
+      status: Number.isFinite(e?.status) ? e.status : null,
+      message: e && e.name === "AbortError" ? "Zeitüberschreitung" : String(e && e.message || e),
+    };
   }
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { restoreBackup, restoreRueckgaengig } from "../lib/restore.js";
-import { isGitConfigured } from "../lib/gitDriver.js";
+import { storageService } from "../services/storage.js";
 
 /* ================= Backup wiederherstellen (Datenmigration) =================
    Spielt ein Gesamt-Backup der alten App in die neue ein — einmaliger Schritt,
@@ -24,7 +24,7 @@ export function RestoreImport({ ohneKopf = false } = {}) {
     let backup;
     try { backup = JSON.parse(text); }
     catch { setBusy(false); setMeldung({ art: "err", text: "Keine gültige JSON-Datei." }); return; }
-    const gitHinweis = isGitConfigured()
+    const gitHinweis = storageService.hasLegacyGitConnection()
       ? "\n\nACHTUNG: Git-Sync ist bereits verbunden — der wiederhergestellte Stand wird beim nächsten Sync als neue Version ins Daten-Repo committet. Für die Erst-Migration gilt: Backup einspielen, DANN Git verbinden."
       : "";
     // KD-008: fail-closed Snapshot-Zusage · KD-009: Wortlaut (vorhandene Felder ersetzen, im Backup fehlende bleiben)

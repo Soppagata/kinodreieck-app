@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { setTreiber } from "../lib/storage.js"; // KD-015: Git als aktiven Treiber setzen
+import { setTreiber } from "../lib/storage.js"; // Legacy: nicht Teil des aktiven UI-Modulgraphen
 import {
   getGitConfig, setGitConfig, isGitConfigured,
   connectionTest, syncPull, syncFlush, syncStatus,

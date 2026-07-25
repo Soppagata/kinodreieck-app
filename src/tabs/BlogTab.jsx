@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
-import { ladeSharedBlogs } from "../lib/supabaseDriver.js";
+import { catalogService } from "../services/catalog.js";
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
@@ -247,7 +247,7 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
 
   useEffect(() => {
     let ab = false;
-    ladeSharedBlogs().then((r) => {
+    catalogService.listSharedBlogs().then((r) => {
       if (ab) return;
       if (!r.ok) setZustand({ lade: false, fehler: r.message || "Konnte den geteilten Ordner nicht laden — ist der Sync eingerichtet?", blogs: [] });
       else setZustand({ lade: false, fehler: "", blogs: r.blogs || [] });

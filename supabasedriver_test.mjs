@@ -105,6 +105,14 @@ const ctJwt = await S.connectionTest();
 check("JWT-Anon-Key funktioniert weiterhin", ctJwt.ok === true);
 check("JWT-Anon-Key wird als apikey und Bearer gesendet",
   fetchCalls.at(-1)?.apikey?.startsWith("eyJ") && fetchCalls.at(-1)?.authorization === "Bearer " + fetchCalls.at(-1)?.apikey);
+reset();
+S.setSupabaseConfig({ url: "https://evil.example" });
+fetchCalls = [];
+const ctFremd = await S.connectionTest();
+await S.supabaseDriver.set("kd:master", '{"geheim":"lokal"}');
+await sleep(20);
+check("Fremde Sync-URL wird abgelehnt", ctFremd.ok === false);
+check("Fremde Sync-URL erhält weder Request noch Sync-Schlüssel", fetchCalls.length === 0);
 
 /* 2) set(sync-Key): sofort lokal + Insert legt Zeile an (rev=1), kein Pending */
 reset();
@@ -296,6 +304,9 @@ check("syncStatus: alle Felder inkl. stale/configured",
 
 /* 18) Demo-Blobs per anon-Read (Phase 5): nur scope=demo, OHNE Sync-Schlüssel */
 reset();
+localStorage.setItem("kd:katalog:url", MOCK_URL);
+localStorage.setItem("kd:katalog:key", "sb_publishable_katalogtest");
+S.setSupabaseConfig({ url: "https://private.supabase.co", anon: "sb_publishable_private", key: MOCK_KEY, owner: MOCK_OWNER });
 seed("demo", "kd:master", '{"meta":{"erstellt_am":"2026-07-01"},"filme":[{"id":"d1","titel":"Demo-Film"}]}', "demo");
 seed("demo", "kd:artikel", '{"artikel":[{"id":"da1"}]}', "demo");
 seed("max", "kd:master", '{"geheim":true}', "user");
@@ -305,6 +316,8 @@ check("Demo-Read: liefert Demo-Master", !!demo["kd:master"] && JSON.parse(demo["
 check("Demo-Read: liefert weitere Demo-Blobs", !!demo["kd:artikel"]);
 check("Demo-Read: KEINE User-Zeile enthalten", demo["kd:master"].indexOf("geheim") === -1);
 check("Demo-Read: sendet KEINEN x-kd-key (reiner anon-Read)", fetchCalls.length > 0 && fetchCalls.every((c) => c.keyHdr == null));
+check("Demo-Read ignoriert abweichende persönliche Sync-Credentials",
+  fetchCalls.every((c) => c.url.startsWith(MOCK_URL) && c.apikey === "sb_publishable_katalogtest"));
 
 /* 19) Tester gibt nur den neuen Katalogzugang ein: derselbe Publishable-Key
    muss auch für die Demo-Zeilen reichen, ohne die alte Sync-Konfiguration. */
@@ -317,6 +330,22 @@ const demoPerKatalog = await S.ladeDemoBlobs();
 check("Demo-Read verwendet ersatzweise den eingegebenen Katalogzugang", !!demoPerKatalog["kd:master"] && fetchCalls.some((c) => c.url.startsWith(MOCK_URL + "/rest/v1/kd_store")));
 check("Demo-Read sendet den Katalog-Publishable-Key nur als apikey",
   fetchCalls.at(-1)?.apikey === "sb_publishable_katalogtest" && fetchCalls.at(-1)?.authorization == null && fetchCalls.at(-1)?.keyHdr == null);
+
+/* 20) Geteilte Blogs verwenden dieselbe reine Public-Read-Grenze. */
+seed("andere", "blog:alien", JSON.stringify({ id: "alien", titel: "Alien", liste: [] }), "shared");
+fetchCalls = [];
+const shared = await S.ladeSharedBlogs();
+check("Shared-Blog-Read liefert öffentliche Beiträge", shared.ok && shared.blogs[0]?.artikel?.titel === "Alien");
+check("Shared-Blog-Read sendet Publishable-Key ohne Bearer und ohne Sync-Key",
+  fetchCalls.at(-1)?.apikey === "sb_publishable_katalogtest"
+  && fetchCalls.at(-1)?.authorization == null
+  && fetchCalls.at(-1)?.keyHdr == null);
+localStorage.setItem("kd:katalog:key", "eyJ" + "z".repeat(40));
+fetchCalls = [];
+await S.ladeSharedBlogs();
+check("Shared-Blog-Read unterstützt Legacy-JWT weiterhin",
+  fetchCalls.at(-1)?.authorization === "Bearer " + fetchCalls.at(-1)?.apikey
+  && fetchCalls.at(-1)?.keyHdr == null);
 
 /* ---------- Auswertung ---------- */
 let ok = true;

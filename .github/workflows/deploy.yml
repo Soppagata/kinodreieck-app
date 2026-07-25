@@ -25,7 +25,11 @@ jobs:
       - run: npm ci
       - run: npm run build
         env:
+          VITE_APP_URL: ${{ vars.APP_URL }}
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
+          VITE_BUILD_VERSION: ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

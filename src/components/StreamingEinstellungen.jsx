@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
-import { K } from "../lib/storage.js";
+import { K } from "../services/storage.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================

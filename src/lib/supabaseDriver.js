@@ -17,8 +17,8 @@
    die Sicherheitsgrenze. Der `service_role`-Key kommt hier nie vor. */
 
 import { localDriver } from "./storage.js";
-import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
-import { getKatalogZugang } from "./katalog.js";
+import { istSupabaseProjektUrl } from "./supabasePublic.js";
+export { ladeDemoBlobs, ladeSharedBlogs } from "./catalogPublic.js";
 
 /* Die 11 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
    deckungsgleich). Beim Supabase-Treiber ist der Schlüssel zugleich der Zeilen-
@@ -72,7 +72,7 @@ export function setSupabaseConfig({ url, anon, key, owner } = {}) {
    isSupabaseConfigured() = bereit für den Alltag (Lesen+Schreiben) => Schlüssel Pflicht. */
 export function isSupabaseConfigured() {
   const c = getSupabaseConfig();
-  return /^https?:\/\/[^\s]+$/.test(c.url) && c.anon.length > 0 && c.owner.length > 0 && c.key.length > 0;
+  return istSupabaseProjektUrl(c.url) && c.anon.length > 0 && c.owner.length > 0 && c.key.length > 0;
 }
 export function hatSyncSchluessel() { return getSupabaseConfig().key.length > 0; }
 
@@ -100,7 +100,11 @@ export function getSnapshots(key) { return readJSON(SNAP_KEY, {})[key] || []; }
 function nowIso() { try { return new Date().toISOString(); } catch { return String(Date.now()); } }
 
 /* ---------- PostgREST-Zugriff ---------- */
-function restBase() { return getSupabaseConfig().url + "/rest/v1"; }
+function restBase() {
+  const url = getSupabaseConfig().url;
+  if (!istSupabaseProjektUrl(url)) throw new Error("Ungültige Supabase-Projekt-URL.");
+  return url + "/rest/v1";
+}
 function sbHeaders({ withBody, withKey, prefer } = {}) {
   const c = getSupabaseConfig();
   const h = { "apikey": c.anon };
@@ -140,7 +144,7 @@ function deutung(status, data) {
 
 export async function connectionTest() {
   const c = getSupabaseConfig();
-  if (!/^https?:\/\//.test(c.url) || !c.anon) return { ok: false, status: 0, message: "Projekt-URL und anon-Key nötig." };
+  if (!istSupabaseProjektUrl(c.url) || !c.anon) return { ok: false, status: 0, message: "Gültige Supabase-Projekt-URL und anon-Key nötig." };
   try {
     /* KD-013: Auf den konfigurierten Owner scopen (soweit vorhanden) — 200 beweist
        Erreichbarkeit, gültigen anon-Key und lesbare Owner-Sicht. Das Schreibrecht
@@ -151,33 +155,6 @@ export async function connectionTest() {
     if (r.ok) return { ok: true, status: r.status, schreibGeprueft: false };
     return { ok: false, status: r.status, message: deutung(r.status, r.data) };
   } catch (e) { return { ok: false, status: 0, message: "Netzwerk/CORS: " + e }; }
-}
-
-/* ---------- Demo-Blobs per anon-Read (Phase 5) ----------
-   Liest die Demo-Menge (scope=demo) OHNE Sync-Schlüssel — nur mit dem öffentlichen
-   anon-Key. Nutzt die konfigurierte URL/anon oder die Build-Defaults. Für die
-   Demo-Startwahl im Tester-Build; Tester-Edits bleiben lokal (kein DB-Write). */
-export async function ladeDemoBlobs() {
-  const c = getSupabaseConfig();
-  const katalog = getKatalogZugang();
-  const url = (c.url || katalog.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
-  const anon = c.anon || katalog.key || SB_DEFAULT_ANON || "";
-  if (!/^https?:\/\//.test(url) || !anon) throw new Error("Demo-Quelle nicht konfiguriert (Supabase-URL/anon-Key).");
-  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
-  try {
-    const res = await fetch(url + "/rest/v1/" + TABLE + "?scope=eq.demo&select=key,value", {
-      headers: /^eyJ/.test(anon)
-        ? { "apikey": anon, "Authorization": "Bearer " + anon }
-        : { "apikey": anon },   // KEIN x-kd-key: reiner Publishable-Read
-      signal: ctrl ? ctrl.signal : undefined,
-    });
-    let data = null; try { data = await res.json(); } catch { /* leerer Body */ }
-    if (!res.ok || !Array.isArray(data)) throw new Error("Demo-Read fehlgeschlagen: HTTP " + res.status);
-    const blobs = {};
-    for (const row of data) { if (row && typeof row.key === "string") blobs[row.key] = (row.value == null ? null : String(row.value)); }
-    return blobs;
-  } finally { if (timer) clearTimeout(timer); }
 }
 
 /* ---------- Pull-on-start ---------- */
@@ -415,7 +392,7 @@ function blogValue(artikel) {
 
 /* Eigenen Blog veröffentlichen/aktualisieren (Upsert auf PK owner,key). */
 export async function publishBlog(artikel) {
-  if (!isSupabaseConfigured()) return { ok: false, message: "Kein Sync-Schlüssel — Veröffentlichen braucht den eingeloggten Autor." };
+  if (!isSupabaseConfigured()) return { ok: false, message: "Kein Legacy-Sync-Schlüssel — Veröffentlichen braucht eine verbundene persönliche Datenablage." };
   const c = getSupabaseConfig();
   const r = await sbFetch("POST", `/${TABLE}`, {
     body: { owner: c.owner, key: blogKey(artikel.id), value: blogValue(artikel), scope: "shared", author: artikel.autor || c.owner },
@@ -433,35 +410,6 @@ export async function unpublishBlog(artikelId) {
   const r = await sbFetch("DELETE", `/${TABLE}?owner=eq.${q(c.owner)}&key=eq.${q(blogKey(artikelId))}`, { withKey: true });
   if (r.ok || r.status === 204) return { ok: true, status: r.status };
   return { ok: false, status: r.status, message: deutung(r.status, r.data) };
-}
-
-/* Alle geteilten Blogs lesen — offener anon-Read (kein Schlüssel). Speist
-   "Blogs entdecken" UND die Start-Reconciliation. Normalisierte Einträge:
-   { db_owner, db_key, author, updated_at, artikel }. */
-export async function ladeSharedBlogs() {
-  const c = getSupabaseConfig();
-  const url = (c.url || SB_DEFAULT_URL || "").replace(/\/+$/, "");
-  const anon = c.anon || SB_DEFAULT_ANON || "";
-  if (!/^https?:\/\//.test(url) || !anon) return { ok: false, blogs: [], message: "nicht konfiguriert" };
-  const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), 10000) : null;
-  try {
-    const res = await fetch(url + "/rest/v1/" + TABLE + "?scope=eq.shared&select=owner,key,value,author,updated_at", {
-      headers: { "apikey": anon, "Authorization": "Bearer " + anon },   // KEIN x-kd-key: offener Read
-      signal: ctrl ? ctrl.signal : undefined,
-    });
-    let data = null; try { data = await res.json(); } catch { /* leerer Body */ }
-    if (!res.ok || !Array.isArray(data)) return { ok: false, blogs: [], status: res.status };
-    const blogs = [];
-    for (const row of data) {
-      if (!row || typeof row.key !== "string") continue;
-      let artikel = null; try { artikel = JSON.parse(row.value); } catch { continue; }
-      if (!artikel || !artikel.titel) continue;
-      blogs.push({ db_owner: row.owner, db_key: row.key, author: row.author || artikel.autor || row.owner, updated_at: row.updated_at || null, artikel });
-    }
-    return { ok: true, blogs };
-  } catch (e) { return { ok: false, blogs: [], error: String(e) }; }
-  finally { if (timer) clearTimeout(timer); }
 }
 
 /* ---------- Treiber-Fassade (implementiert die store-Signatur) ---------- */

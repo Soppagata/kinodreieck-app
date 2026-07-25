@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm, schlagseite, score } from "../lib/match.js";
-import { store, K } from "../lib/storage.js";
+import { store, K } from "../services/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";

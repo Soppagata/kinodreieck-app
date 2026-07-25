@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { getKatalogZugang, setKatalogZugang, testeKatalogZugang } from "../lib/katalog.js";
-import { setSupabaseConfig } from "../lib/supabaseDriver.js";
+import { catalogService } from "../services/catalog.js";
+import { errorText } from "../services/errors.js";
 
 export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
-  const cfg = getKatalogZugang();
+  const cfg = catalogService.getConnection();
   const [url, setUrl] = useState(cfg.url);
   const [key, setKey] = useState(cfg.key);
   const [sichtbar, setSichtbar] = useState(false);
@@ -24,16 +24,17 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
   }, [onAbbrechen, zwingend]);
 
   const verbinden = async () => {
-    setKatalogZugang({ url, key });
-    /* Dieselbe reine Lesekonfiguration speist Demo- und Shared-Blog-Reads. Owner
-       und Sync-Schlüssel bleiben unberührt; der Geräte-Sync wird nicht aktiviert. */
-    setSupabaseConfig({ url, anon: key });
+    catalogService.setConnection({ url, key });
     setBusy(true); setMeldung("Verbindung wird geprüft …");
-    const r = await testeKatalogZugang();
-    setBusy(false);
-    if (!r.ok) { setMeldung("Verbindung fehlgeschlagen: " + r.message); return; }
-    setMeldung("Verbunden ✓");
-    onFertig?.(r.manifest);
+    try {
+      const r = await catalogService.testConnection();
+      setMeldung("Verbunden ✓");
+      onFertig?.(r.manifest);
+    } catch (error) {
+      setMeldung("Verbindung fehlgeschlagen: " + errorText(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return createPortal(

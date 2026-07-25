@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { Klappe } from "./ui.jsx";
+import { Klappe } from "../components/ui.jsx";
 import { getTreiber, setTreiber } from "../lib/storage.js";
 import {
   getSupabaseConfig, setSupabaseConfig, isSupabaseConfigured,

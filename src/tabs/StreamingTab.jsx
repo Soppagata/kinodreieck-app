@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
-import { store, K } from "../lib/storage.js";
+import { store, K } from "../services/storage.js";
 import { norm, schlagseite, score } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
