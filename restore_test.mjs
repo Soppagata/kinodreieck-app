@@ -218,6 +218,87 @@ check("P4 Undo-Vorlage: Autor überschrieben", localStorage.getItem("kd:autor-na
 await R.restoreRueckgaengig();
 check("P4 Undo: Autor lokal zurückgesetzt", localStorage.getItem("kd:autor-name") === "VorherAutor");
 
+/* ===== Phase 5: Backup/Restore über den Konto-Treiber (Etappe 3) =====
+   Die Roadmap verlangt ausdrücklich, dass Sichern und Wiederherstellen AUCH mit
+   Kontodaten funktioniert — sonst wäre der sicherste Notweg der App ausgerechnet
+   im Onlinebetrieb der unzuverlässigste. */
+_ls.clear();
+const AD = await import("./src/lib/accountDriver.js");
+let kontoTabelle = new Map();
+const kontoDriver = AD.createAccountDriver({
+  config: { supabaseUrl: "https://projekt.supabase.co", supabasePublishableKey: "sb_publishable_test" },
+  getAccessToken: async () => "at-test",
+  fetchImpl: async (url, opt = {}) => {
+    const method = opt.method || "GET";
+    const body = opt.body ? JSON.parse(opt.body) : null;
+    const p = new URLSearchParams(new URL(String(url)).search);
+    const keyFilter = (p.get("key") || "").replace("eq.", "");
+    const revFilter = p.get("revision") ? Number(p.get("revision").replace("eq.", "")) : null;
+    const antwort = (status, data) => ({ ok: status >= 200 && status < 300, status, json: async () => data });
+    if (method === "GET") {
+      const rows = [...kontoTabelle.values()].filter((r) => !keyFilter || r.key === keyFilter);
+      return antwort(200, rows.map((r) => ({ ...r })));
+    }
+    if (method === "POST") {
+      if (kontoTabelle.has(body.key)) return antwort(409, { code: "23505" });
+      const zeile = { key: body.key, value: String(body.value), revision: 1 };
+      kontoTabelle.set(body.key, zeile);
+      return antwort(201, [{ ...zeile }]);
+    }
+    if (method === "PATCH") {
+      const zeile = kontoTabelle.get(keyFilter);
+      if (!zeile || (revFilter != null && zeile.revision !== revFilter)) return antwort(200, []);
+      zeile.value = String(body.value); zeile.revision += 1;
+      return antwort(200, [{ ...zeile }]);
+    }
+    return antwort(204, null);
+  },
+});
+ST.setStorageDriver(kontoDriver);
+
+/* Backup mit allen 15 Konto-Töpfen — inklusive der vier Präferenzen, die vorher
+   nur auf dem Gerät lagen und beim Gerätewechsel still verloren gingen. */
+const FUENFZEHN = {
+  ...ZEHN,
+  "kd:zeitgrenze": "16:30",
+  "kd:filter-mediathek": "1",
+  "kd:filter-kino": "0",
+  "kd:filter-streaming": "1",
+};
+for (const [k, v] of Object.entries(FUENFZEHN)) kontoTabelle.set(k, { key: k, value: v, revision: 1 });
+await kontoDriver.pull();
+const bk5 = await B.baueBackup();
+check("P5 Export enthält die vier Sicht-/Zeit-Präferenzen",
+  bk5.zeitgrenze === "16:30" && bk5.filter_mediathek === "1" && bk5.filter_kino === "0" && bk5.filter_streaming === "1");
+check("P5 Export trägt weiterhin alle bisherigen Bereiche",
+  bk5.masterliste.filme[0].titel === "DB-Film" && bk5.autor === "DB-Autor" && bk5.achievements.eggs[0] === "cage-alphabet");
+check("P5 Das Backup-Format bleibt Version 1 (rückwärtskompatibel)", bk5.version === 1 && bk5.format === "kinodreieck-backup");
+
+/* Roundtrip in ein leeres Konto. */
+_ls.clear(); kontoTabelle = new Map();
+const rr5 = await R.restoreBackup(bk5);
+await sleep(120);
+check("P5 Wiederherstellung meldet den Kontobetrieb verständlich",
+  rr5.ok === true && rr5.dbWarnung === false && /Konto aktiv/.test(rr5.dbHinweis || ""));
+check("P5 Wiederherstellung schreibt alle 15 Töpfe ins Konto",
+  AD.ACCOUNT_SYNC_KEYS.every((k) => kontoTabelle.get(k) != null));
+check("P5 Die Präferenzen kommen im Konto an",
+  kontoTabelle.get("kd:zeitgrenze").value === "16:30" && kontoTabelle.get("kd:filter-streaming").value === "1");
+check("P5 Der Rückholpunkt wurde vor dem Überschreiben gesichert", R.hatRestoreSnapshot() === true);
+
+/* Alt-Backup ohne die neuen Felder bleibt einspielbar. */
+_ls.clear(); kontoTabelle = new Map();
+const altBackup = { ...bk5 };
+delete altBackup.zeitgrenze; delete altBackup.filter_mediathek;
+delete altBackup.filter_kino; delete altBackup.filter_streaming;
+const rrAlt = await R.restoreBackup(altBackup);
+await sleep(80);
+check("P5 Ein älteres Backup ohne die neuen Felder läuft weiterhin durch", rrAlt.ok === true);
+check("P5 Fehlende Präferenzen werden als übersprungen berichtet, nicht als Fehler",
+  rrAlt.bericht.filter((b) => /Filtermenü|Zeitfilter/.test(b.topf)).every((b) => /übersprungen/.test(b.status)));
+check("P5 Die übrigen Bereiche kommen trotzdem vollständig an",
+  JSON.parse(kontoTabelle.get("kd:master").value).filme[0].titel === "DB-Film");
+
 ST.setStorageDriver(null); // Hygiene: zurück auf lokal
 
 let ok = true;

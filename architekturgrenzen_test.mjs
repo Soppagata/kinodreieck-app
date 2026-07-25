@@ -184,18 +184,21 @@ check("Storage-Service normalisiert auch alte Result-Envelopes ohne Rohmeldung",
 
 const uiRoots = ["src/App.jsx", "src/components", "src/tabs"];
 const jsFiles = [];
-for (const root of uiRoots) {
+/* Rekursiv: eine Oberflächendatei in einem Unterordner würde sonst an ALLEN
+   Grenzprüfungen vorbeilaufen — auch am Verbot direkter Netzwerkaufrufe. */
+function sammle(root) {
   const stat = fs.statSync(root);
-  if (stat.isFile()) jsFiles.push(root);
-  else {
-    for (const name of fs.readdirSync(root)) {
-      if (/\.[cm]?[jt]sx?$/.test(name)) jsFiles.push(path.join(root, name));
-    }
-  }
+  if (stat.isFile()) { if (/\.[cm]?[jt]sx?$/.test(root)) jsFiles.push(root); return; }
+  for (const name of fs.readdirSync(root)) sammle(path.join(root, name));
 }
+for (const root of uiRoots) sammle(root);
+check("Oberflächen-Prüfung erfasst auch Dateien in Unterordnern",
+  jsFiles.length >= fs.readdirSync("src/components").filter((n) => /\.jsx?$/.test(n)).length);
 const uiSource = jsFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
-check("UI importiert keine Legacy-Netzwerk- oder Storage-Treiber direkt",
-  !/from\s+["'][^"']*lib\/(?:gitDriver|supabaseDriver|katalog|storage)\.js["']/.test(uiSource));
+check("UI importiert keine Netzwerk- oder Storage-Treiber direkt",
+  !/from\s+["'][^"']*lib\/(?:gitDriver|supabaseDriver|accountDriver|authDriver|katalog|storage)\.js["']/.test(uiSource));
+check("UI greift nicht selbst auf die Sitzungsablage zu",
+  !/kd:auth:/.test(uiSource));
 check("Aktive UI kennt keine treiberspezifischen Service-Namen",
   !/\b(?:git|supabase)SyncService\b/.test(uiSource));
 check("UI führt keine direkten Netzwerkaufrufe aus",
@@ -204,5 +207,73 @@ check("App macht Gast- und Accountmodus technisch unterscheidbar",
   /data-session-mode=\{session\.mode\}/.test(fs.readFileSync("src/App.jsx", "utf8")));
 check("Katalogzugang spiegelt keine Credentials in persönlichen Sync",
   !/setSupabaseConfig/.test(fs.readFileSync("src/components/KatalogZugang.jsx", "utf8")));
+
+/* ---------- Etappe 3: Accountgrenzen ---------- */
+const { SESSION_STATES, abgelaufeneSession } = await import("./src/services/auth.js");
+const { createAccountDriver, ACCOUNT_SYNC_KEYS } = await import("./src/lib/accountDriver.js");
+const { AUTH_SESSION_KEY } = await import("./src/lib/authDriver.js");
+
+/* Ein Token darf nirgends in einem an die Oberfläche gereichten Objekt auftauchen —
+   weder als Feldname noch als Wert. Deshalb rekursiv über beides. */
+function enthaeltToken(objekt) {
+  const jwtMuster = /eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\./;
+  const gesehen = new Set();
+  function pruefe(wert) {
+    if (wert == null) return false;
+    if (typeof wert === "string") return jwtMuster.test(wert);
+    if (typeof wert !== "object") return false;
+    if (gesehen.has(wert)) return false;
+    gesehen.add(wert);
+    for (const [k, v] of Object.entries(wert)) {
+      if (/access.?token|refresh.?token|\btoken\b|passwor[dt]/i.test(k)) return true;
+      if (pruefe(v)) return true;
+    }
+    return false;
+  }
+  return pruefe(objekt);
+}
+const kontoSnapshot = accountSession({
+  id: "konto-1", displayName: "max", expiresAt: new Date().toISOString(),
+  capabilities: { remoteStorage: true, personalAi: false },
+});
+check("Account-Snapshot enthält rekursiv weder Tokenfelder noch Tokenwerte",
+  !enthaeltToken(kontoSnapshot) && !enthaeltToken(guestSession()));
+check("Der Tokenscan würde ein Leck auch wirklich finden",
+  enthaeltToken({ account: { tief: { access_token: "x" } } })
+  && enthaeltToken({ irgendwas: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig" }));
+
+check("Abgelaufene Anmeldung bleibt ein betriebsbereiter Gast mit Hinweis", (() => {
+  const s = abgelaufeneSession();
+  return s.mode === SESSION_MODES.GUEST && s.state === "ready"
+    && s.error?.code === ERROR_CODES.UNAUTHENTICATED && s.account === null;
+})());
+check("Eingeschränkte Verbindung bleibt Accountmodus (kein stiller Logout)", (() => {
+  const s = accountSession({ id: "k", state: SESSION_STATES.DEGRADED });
+  return s.mode === SESSION_MODES.ACCOUNT && s.state === "degraded";
+})());
+
+/* Der Account-Treiber ist die einzige Stelle, die Kontodaten schreibt — und er
+   darf ohne Sitzung überhaupt nichts tun. */
+let netzZugriffe = 0;
+const stummerTreiber = createAccountDriver({
+  config: { supabaseUrl: "https://projekt.supabase.co", supabasePublishableKey: "sb_publishable_test" },
+  getAccessToken: async () => null,
+  fetchImpl: async () => { netzZugriffe++; return { ok: true, status: 200, json: async () => [] }; },
+});
+await stummerTreiber.set("kd:master", "x");
+await new Promise((r) => setTimeout(r, 20));
+check("Ohne Sitzung stellt der Account-Treiber keine Netzwerkanfrage", netzZugriffe === 0);
+check("Ohne Sitzung bleibt der Wert trotzdem lokal erhalten",
+  (await stummerTreiber.get("kd:master"))?.value === "x");
+
+check("Sitzungsablage und Datentöpfe liegen in getrennten Namensräumen",
+  AUTH_SESSION_KEY.startsWith("kd:auth:") && !ACCOUNT_SYNC_KEYS.some((k) => k.startsWith("kd:auth")));
+
+/* Der Gastbetrieb ist die Rückfallebene: er muss ohne Konto vollständig laufen. */
+check("Gastbetrieb bleibt die Standardbetriebsart", storageService.mode === "guest-local");
+await storageService.set("kd:architekturtest2", "gast");
+check("Gast schreibt und liest weiterhin ohne jede Anmeldung",
+  (await storageService.get("kd:architekturtest2"))?.value === "gast");
+await storageService.delete("kd:architekturtest2");
 
 console.log(`\n${ok} Architekturgrenzen-Checks bestanden.`);

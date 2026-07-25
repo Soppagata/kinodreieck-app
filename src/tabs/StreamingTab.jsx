@@ -73,12 +73,18 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
      mutiert die Master-Auswahl (auswahl / Einstellungen) NICHT. */
   const [schnellDienst, setSchnellDienst] = useState(null);
-  /* Filterleiste auf/zu — pro Session, Default ZUGEKLAPPT (gilt für Programm & Entdecken). */
-  const [streamFilterOffen, setStreamFilterOffen] = useState(() => {
-    try { return sessionStorage.getItem("kd:filter-streaming") === "1"; } catch { return false; }
-  });
+  /* Filterleiste auf/zu — Default ZUGEKLAPPT (gilt für Programm & Entdecken).
+     Seit Etappe 3 dauerhafte Sicht-Präferenz im Datentopf statt sessionStorage. */
+  const [streamFilterOffen, setStreamFilterOffen] = useState(false);
+  useEffect(() => {
+    let aktiv = true;
+    store.get(K.filterStreaming).then((r) => { if (aktiv && r?.value === "1") setStreamFilterOffen(true); }).catch(() => {});
+    return () => { aktiv = false; };
+  }, []);
   const toggleStreamFilter = () => setStreamFilterOffen((v) => {
-    const nv = !v; try { sessionStorage.setItem("kd:filter-streaming", nv ? "1" : "0"); } catch { /* egal */ } return nv;
+    const nv = !v;
+    store.set(K.filterStreaming, nv ? "1" : "0").catch(() => {});
+    return nv;
   });
   const setzeStatus = (t, wert) => {
     setEntdeckenStatus((prev) => {

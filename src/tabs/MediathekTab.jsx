@@ -64,13 +64,19 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const [katF, setKatF] = useState(null);
   const [suche, setSuche] = useState("");
   const [sortier, setSortier] = useState("score");
-  /* Filtermenü (Chip-Filter) auf/zu — pro Session, Default ZUGEKLAPPT.
-     sessionStorage: jedes Neu-Öffnen der App startet zu; innerhalb der Session gemerkt. */
-  const [filterMenueOffen, setFilterMenueOffen] = useState(() => {
-    try { return sessionStorage.getItem("kd:filter-mediathek") === "1"; } catch { return false; }
-  });
+  /* Filtermenü (Chip-Filter) auf/zu — Default ZUGEKLAPPT. Seit Etappe 3 eine
+     dauerhafte Sicht-Präferenz im Datentopf (vorher nur sessionStorage): sie
+     überlebt den App-Neustart und wandert bei angemeldetem Konto mit. */
+  const [filterMenueOffen, setFilterMenueOffen] = useState(false);
+  useEffect(() => {
+    let aktiv = true;
+    store.get(K.filterMediathek).then((r) => { if (aktiv && r?.value === "1") setFilterMenueOffen(true); }).catch(() => {});
+    return () => { aktiv = false; };
+  }, []);
   const toggleFilterMenue = () => setFilterMenueOffen((v) => {
-    const nv = !v; try { sessionStorage.setItem("kd:filter-mediathek", nv ? "1" : "0"); } catch { /* egal */ } return nv;
+    const nv = !v;
+    store.set(K.filterMediathek, nv ? "1" : "0").catch(() => {});
+    return nv;
   });
 
   const dreieckTab = typTab === "filme" || typTab === "serien";

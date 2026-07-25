@@ -93,7 +93,24 @@ check("Auth/API-Anfragen sind network-only", (await res.text()) === "frisch");
 check("Auth/API-Antworten landen nicht im Shell-Cache",
   (await (await shell.match(apiReq)).text()) === "veraltet");
 
+/* Etappe 3: beide Erkennungswege getrennt prüfen. Der Fall oben erfüllt Pfad UND
+   Header gleichzeitig — fiele einer der beiden Zweige weg, bliebe er trotzdem grün. */
+const authPfad = anfrage("https://kino.example/auth/v1/token");
+await shell.put(authPfad, new Response("veraltet"));
+fetchImpl = async () => new Response("frisch", { status: 200 });
+res = await fetchEvent(authPfad);
+check("Anmeldepfade sind auch ohne Auth-Header network-only", (await res.text()) === "frisch");
+check("Anmeldeantworten landen nicht im Shell-Cache",
+  (await (await shell.match(authPfad)).text()) === "veraltet");
+
+const apikeyReq = anfrage("https://kino.example/daten.json", { headers: { apikey: "sb_publishable_test" } });
+await shell.put(apikeyReq, new Response("veraltet"));
+res = await fetchEvent(apikeyReq);
+check("Anfragen mit Datenbank-Schlüssel sind network-only", (await res.text()) === "frisch");
+
 const fremd = await fetchEvent(anfrage("https://api.github.com/repos/demo"));
 check("Fremde Origins werden vom Service Worker nicht abgefangen", fremd === undefined);
+const fremdAuth = await fetchEvent(anfrage("https://projekt.supabase.co/auth/v1/token"));
+check("Die Anmeldung beim Datenbankanbieter läuft am Service Worker vorbei", fremdAuth === undefined);
 
 console.log(`SERVICE-WORKER-TEST BESTANDEN (${ok}/${ok})`);

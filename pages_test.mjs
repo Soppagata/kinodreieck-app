@@ -71,9 +71,21 @@ const secretMuster = [
   /github_pat_[A-Za-z0-9_]{30,}/,  // fine-grained GitHub-PAT
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /SUPABASE_SERVICE_ROLE_KEY/,
+  /* Etappe 3: ein versehentlich fest eingetragenes Sitzungs- oder Erneuerungstoken.
+     Bewusst nur die DREIteilige JWT-Form — die zweiteilige Attrappe aus den
+     Testdateien (alte anon-JWTs) soll hier nicht anschlagen, und der
+     Publishable-Key (sb_publishable_…) gehört ausdrücklich ins Bundle und
+     darf NIE in diese Liste. */
+  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+  /* Ein gespeicherter Sitzungsschlüssel MIT Wert (der Schlüsselname allein ist Code). */
+  /kd:auth:session["']\s*[,:]\s*["'][A-Za-z0-9._-]{20,}/,
 ];
 check("Browser-Bundle enthält keine bekannte Secret-Signatur",
   !secretMuster.some((muster) => muster.test(auslieferung)));
+check("Der öffentliche Publishable-Key bleibt erlaubt (er MUSS im Bundle stehen)",
+  !secretMuster.some((muster) => muster.test("sb_publishable_abcdefghijklmnop")));
+check("Ein eingebautes Sitzungstoken würde erkannt",
+  secretMuster.some((muster) => muster.test("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk")));
 
 /* 7) Keine Personen- oder Rohprogrammdaten im öffentlichen Deploy.
    Programm/Streaming kommen zur Laufzeit aus dem read-only Supabase-Katalog

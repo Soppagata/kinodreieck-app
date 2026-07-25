@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
@@ -37,13 +37,20 @@ export function KinoTab({
   const aboCycle = () => setAboFilter((v) => (v === "alle" ? "nonstop" : v === "nonstop" ? "kein" : "alle"));
   const [fassungF, setFassungF] = useState(null);
   const [zeigeMehr, setZeigeMehr] = useState(false);
-  /* Filtermenü auf/zu — pro Session, Default ZUGEKLAPPT. Suche bleibt sichtbar.
-     sessionStorage: jedes Neu-Öffnen der App startet zu; innerhalb der Session gemerkt. */
-  const [filterMenueOffen, setFilterMenueOffen] = useState(() => {
-    try { return sessionStorage.getItem("kd:filter-kino") === "1"; } catch { return false; }
-  });
+  /* Filtermenü auf/zu — Default ZUGEKLAPPT. Suche bleibt sichtbar.
+     Seit Etappe 3 eine dauerhafte Sicht-Präferenz im Datentopf (vorher nur
+     sessionStorage): so überlebt sie den App-Neustart und wandert bei
+     angemeldetem Konto auf die anderen Geräte mit. */
+  const [filterMenueOffen, setFilterMenueOffen] = useState(false);
+  useEffect(() => {
+    let aktiv = true;
+    store.get(K.filterKino).then((r) => { if (aktiv && r?.value === "1") setFilterMenueOffen(true); }).catch(() => {});
+    return () => { aktiv = false; };
+  }, []);
   const toggleFilterMenue = () => setFilterMenueOffen((v) => {
-    const nv = !v; try { sessionStorage.setItem("kd:filter-kino", nv ? "1" : "0"); } catch { /* egal */ } return nv;
+    const nv = !v;
+    store.set(K.filterKino, nv ? "1" : "0").catch(() => {});
+    return nv;
   });
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */

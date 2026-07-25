@@ -138,7 +138,7 @@ bauen.
 | 0. Stabilisieren | reproduzierbar grüner Stand | jede weitere Änderung |
 | 1. Grenzen schärfen | klare Module und Konfiguration | Hosting, Auth und KI |
 | 2. Öffentliche Hülle | eigene Domain und Staging | frühe Online-Stufe 1 |
-| 3. Accounts und Speicher | echte Sitzung und RLS | persönliche Online-Daten |
+| 3. Accounts und Speicher ✅ | echte Sitzung und RLS | persönliche Online-Daten |
 | 4. Katalog und Rechte | erlaubte gemeinsame Daten | vollständiges Programm |
 | 5. KI-Unterbau | geschützter, limitierter Endpunkt | alle KI-Funktionen |
 | 6. Intelligente Suche | erster echter KI-Produktpfad | geschlossene Beta |
@@ -288,6 +288,18 @@ oder Gastmodus, aber noch ohne offenen persönlichen KI-Betrieb.
 ---
 
 ## Etappe 3: Echte Accounts und persönlicher Speicher
+
+**Status: umgesetzt am 25. Juli 2026, Testsuite grün; Anmelde-Spike auf dem
+iPhone, Einspielen der Migration und Staging-Durchstich stehen aus.** Umsetzung,
+Entscheidungen und Runbook stehen in `ETAPPE_3_ACCOUNTS.md`.
+
+**Abweichung von der Leitentscheidung unten:** Statt Magic Link oder Einmalcode
+kommt eine Anmeldung mit **Benutzername und Passwort** ohne echte E-Mail-Adressen
+(synthetische Adresse in eigener Domain, kein Mailversand). Begründung: Die
+Anmeldung dient allein der Zuordnung des Datenbereichs, nicht der
+Identitätsprüfung; Postfächer wären eine Hürde ohne Gegenwert, und in der
+installierten iPhone-App ist der Passwortweg der robusteste. Preis: keine
+Selbstregistrierung, kein Zurücksetzen ohne Max. Vor Etappe 9 neu zu bewerten.
 
 ### Ziel
 

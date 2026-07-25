@@ -1263,6 +1263,14 @@ export default function App() {
      verwirft dabei den Browser-Stand — beide Wege ohne Datei-Gefummel. */
   const waehleStart = useCallback((wahl) => {
     if (wahl !== "clean" && wahl !== "demo") return;
+    /* Etappe 3: Im Kontobetrieb würde ein Startart-Wechsel den lokalen Bestand
+       leeren — der nächste Abgleich holte ihn aber sofort aus dem Konto zurück.
+       Statt dieses verwirrende Hin und Her: sauber sperren und erklären. */
+    if (session.mode === "account") {
+      setErr("Startart wechseln geht nur ohne Konto. Melde dich unter Einstellungen → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
+      setStartModalOffen(false);
+      return;
+    }
     let aktuelle = null;
     try { aktuelle = localStorage.getItem(K.start); } catch { /* */ }
     if (startWahlBestaetigt() && aktuelle === wahl) {
@@ -1291,12 +1299,18 @@ export default function App() {
       setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
       setSnapshotFreigabe(true); setWillkommenOffen(true); setStartTick((t) => t + 1);
     }
-  }, [master, artikelListe, mustwatch, merkliste, kinoPins]);
+  }, [master, artikelListe, mustwatch, merkliste, kinoPins, session.mode]);
   const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
 
   /* Entfernt ausschließlich die beim Demo-Start protokollierten Beilagen.
      Standardisiertes Kino-/Streamingprogramm und spätere Tester-Einträge bleiben. */
   const entferneDemoDaten = useCallback(async () => {
+    /* Wie beim Startart-Wechsel: lokales Entfernen käme beim nächsten Abgleich
+       aus dem Konto zurück. Erst abmelden, dann aufräumen. */
+    if (session.mode === "account") {
+      setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Einstellungen → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
+      return;
+    }
     let seed = {};
     try { seed = JSON.parse(localStorage.getItem(K.demoSeed) || "{}"); } catch { /* */ }
     /* Kompatibilität mit einem kurz ausgelieferten Seed-Format, das diese drei
@@ -1925,6 +1939,7 @@ export default function App() {
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
             offeneFlags={offeneFlags} migriereMustwatch={migriereMustwatch} migrationsBericht={migrationsBericht}
             importiereBesitz={importiereBesitz} besitzImportBericht={besitzImportBericht}
+            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
           />
         )}
       </main>

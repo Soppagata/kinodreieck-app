@@ -7,6 +7,7 @@ import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx
 import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
+import { KontoBereich } from "../components/KontoBereich.jsx";
 
 /* ================= EINSTELLUNGEN =================
    Tester-Oberfläche in stabiler Reihenfolge. Persönliche Daten, der gemeinsame
@@ -25,6 +26,7 @@ export function DatenTab({
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
+  onKontoDatenGeaendert,
 }) {
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -100,6 +102,14 @@ export function DatenTab({
               }}>Demo-Daten entfernen</button>
             )}
           </div>
+        </div>
+      </Klappe>
+
+      {/* 2b — Konto & Geräte-Sync (Etappe 3) */}
+      <Klappe titel="Konto & Geräte-Sync">
+        <div style={kasten}>
+          <h2 style={h2}>Zwischen Handy und Rechner</h2>
+          <KontoBereich onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={backupGesamt} />
         </div>
       </Klappe>
 

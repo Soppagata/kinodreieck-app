@@ -21,7 +21,8 @@ export async function restoreBackup(backup) {
     ? `Backup-Version ${backup.version} (erwartet 1) — wird tolerant eingelesen.` : null;
 
   // 1) Snapshot des bisherigen Standes ALLER Zieltöpfe VOR dem Überschreiben.
-  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements];
+  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements,
+    K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming];
   const vorher = {};
   for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
   // KD-008 (fail-closed): Ohne gesicherten Rollback-Snapshot NICHT überschreiben.
@@ -107,6 +108,20 @@ export async function restoreBackup(backup) {
     add("Achievements", "übernommen", Array.isArray(backup.achievements.eggs) ? backup.achievements.eggs.length : 0);
   } else add("Achievements", "übersprungen (fehlte)", 0);
 
+  // 13) Sicht-/Zeit-Präferenzen (Etappe 3) — rohe Strings. Alt-Backups haben sie nicht.
+  const prefs = [
+    [K.zeitgrenze, backup.zeitgrenze, "Kino-Zeitfilter"],
+    [K.filterMediathek, backup.filter_mediathek, "Filtermenü Mediathek"],
+    [K.filterKino, backup.filter_kino, "Filtermenü Kino"],
+    [K.filterStreaming, backup.filter_streaming, "Filtermenü Streaming"],
+  ];
+  for (const [topfKey, wert, label] of prefs) {
+    if (typeof wert === "string" && wert.length) {
+      await store.set(topfKey, wert);
+      add(label, "übernommen", 1);
+    } else add(label, "übersprungen (fehlte)", 0);
+  }
+
   // Treiber-agnostischer Hinweis: Restore schreibt über `store`. Ist ein Sync-Treiber
   // aktiv, pusht er die Schlüssel in die Owner-Zeilen (Hintergrund-Commit). Ohne gültige
   // Konfiguration (z.B. fehlender Sync-Schlüssel) landet der Import nur im lokalen Cache —
@@ -114,7 +129,15 @@ export async function restoreBackup(backup) {
   let dbHinweis = null, dbWarnung = false;
   try {
     const drv = storageDriverName();
-    if (drv && drv !== "lokal") {
+    if (drv === "konto") {
+      /* Etappe 3: im Kontobetrieb gibt es keinen Schlüssel mehr, den man vergessen
+         könnte — die Sitzung entscheidet. Entsprechend ehrlicher Hinweis. */
+      const st = activeSyncStatus();
+      dbHinweis = st.configured
+        ? "Konto aktiv: die wiederhergestellten Bereiche werden im Hintergrund in dein Konto übertragen."
+        : "Konto-Verbindung nicht eingerichtet: die Daten liegen nur LOKAL, NICHT in der Datenbank.";
+      dbWarnung = !st.configured;
+    } else if (drv && drv !== "lokal") {
       const st = activeSyncStatus();
       if (st.configured) {
         dbHinweis = `Treiber „${drv}" aktiv: die Schlüssel werden im Hintergrund in deine Owner-Zeilen geschrieben.`;

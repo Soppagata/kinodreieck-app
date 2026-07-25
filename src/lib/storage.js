@@ -86,6 +86,7 @@ export const K = {
   einstellungen: "kd:einstellungen",  // {theme, startTab, schrift, kurosawa}
   filterMediathek: "kd:filter-mediathek", // Mediathek-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
   filterKino: "kd:filter-kino",       // Kino-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
+  filterStreaming: "kd:filter-streaming", // Streaming-Filterleiste auf/zu (Sicht-Präferenz, "0"=zu)
   vokabular: "kd:vokabular",          // eigene Stimmungswörter für die Suche [{wort, genres[], tags[]}]
   mustwatch: "kd:mustwatch",          // Must-Watch-Liste (eigener Topf, 10. Sync-Datei) — ersetzt das must_watch-Flag
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset

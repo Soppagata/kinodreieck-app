@@ -47,6 +47,13 @@ export async function baueBackup({ pull = true } = {}) {
     einstellungen: await obj(K.einstellungen),
     autor: await roh(K.autorName),   // roher String (kein JSON)
     achievements: await obj(K.achievements),  // {eggs:[...]} — 11. Artefakt (Block 3); null wenn nie freigeschaltet
+    /* Etappe 3: die vier Sicht-/Zeit-Präferenzen. Additive Felder, Format bleibt v1 —
+       ältere Wiederherstellungen ignorieren sie, ältere Backups überspringen sie.
+       Ohne sie gingen sie bei einer Kontoübernahme oder einem Gerätewechsel still verloren. */
+    zeitgrenze: await roh(K.zeitgrenze),            // roher String (z.B. "14:00")
+    filter_mediathek: await roh(K.filterMediathek), // "0"/"1"
+    filter_kino: await roh(K.filterKino),           // "0"/"1"
+    filter_streaming: await roh(K.filterStreaming), // "0"/"1"
     // KD-011: optionales Diagnosefeld, MUSS letzte Eigenschaft sein (die obj()-Aufrufe oben füllen
     // `warnungen` erst während der Objekt-Konstruktion). Nur bei Problemen gesetzt → rückwärtskompatibel,
     // Kernstruktur/-schlüssel unverändert. Restore ignoriert unbekannte Felder wie dieses.

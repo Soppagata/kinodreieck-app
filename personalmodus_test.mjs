@@ -345,6 +345,43 @@ function seedKatalog(w, start = "clean") {
   dom.window.close();
 }
 
+/* J — Etappe 3: Anmelden ist ein Angebot, kein Tor.
+   Der Gastbetrieb ist die Rückfallebene der ganzen App. Wenn ein Konto ihn je
+   verstellt (Login-Overlay beim Start, Zwangsanmeldung vor der Mediathek), ist
+   das ein Etappenfehler — genau davor bewacht dieser Block. */
+{
+  const dom = baueDom((w) => seedKatalog(w, "clean"));
+  const { doc, text, knopf } = hilfen(dom);
+  await warte(2200);
+  check("J: Ohne Konto startet die App direkt ins Dashboard (kein Anmeldefenster)",
+    /Dein Abend/.test(text()) && !/Anmelden/.test(text()));
+
+  knopf(/^Mediathek$/i)?.click(); await warte(300);
+  check("J: Die Mediathek ist ohne jede Anmeldung erreichbar", !/Anmelden/i.test(text()));
+  knopf(/^Kino$/i)?.click(); await warte(300);
+  check("J: Der Kinobereich ist ohne jede Anmeldung erreichbar", !/Anmelden/i.test(text()));
+
+  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  const summaries = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
+  check("J: Konto & Geräte-Sync ist als eigener Bereich vorhanden",
+    summaries.some((s) => /Konto & Geräte-Sync/.test(s)));
+
+  const kontoKlappe = [...doc.querySelectorAll("details")]
+    .find((d) => /Konto & Geräte-Sync/.test(d.querySelector("summary")?.textContent || ""));
+  if (kontoKlappe) { kontoKlappe.open = true; await warte(250); }
+  const kontoText = kontoKlappe?.textContent || "";
+  check("J: Der Kontobereich erklärt den Gastbetrieb ehrlich",
+    /ohne Konto/i.test(kontoText) || /Ohne Konto bleibt alles/i.test(kontoText));
+  check("J: Im Gastmodus steht dort weder ein Benutzername noch ein Token",
+    !/Angemeldet als/.test(kontoText) && !/eyJ/.test(kontoText) && !/kd:auth/.test(kontoText));
+  check("J: Es gibt bewusst keinen Passwort-vergessen-Automatismus",
+    !/Passwort zurücksetzen/i.test(kontoText));
+
+  const gespeichert = Object.keys(dom.window.localStorage).filter((k) => /^kd:(auth|acct)/.test(k));
+  check("J: Ein Gast legt weder Sitzungs- noch Kontodaten an", gespeichert.length === 0);
+  dom.window.close();
+}
+
 const fehler = checks.filter(([, ok]) => !ok);
 console.log(`\n${checks.length - fehler.length}/${checks.length} Checks bestanden.`);
 process.exit(fehler.length ? 1 : 0);
