@@ -19,7 +19,7 @@ ausfüllen.
 
 | Datei | Projekt-Ref | Datum | Ausgeführt von | Ergebnis |
 |---|---|---|---|---|
-| `20260725120000_kd_personal.sql` | | | | |
+| `20260725120000_kd_personal.sql` | Produktion (EU-West) | 2026-07-25 | Max | erfolgreich; `npm run test:rls` danach 18/18 grün |
 
 ## Nach Migration 1
 

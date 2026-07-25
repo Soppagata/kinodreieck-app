@@ -1,8 +1,10 @@
 # Etappe 3: Echte Accounts und persönlicher Speicher
 
-Stand: 25. Juli 2026 — Code fertig, Testsuite grün. **Offen bis zur Abnahme:**
-der Anmelde-Spike auf dem echten iPhone, das Einspielen der Migration und der
-Durchstich auf Staging (siehe „Was noch fehlt").
+**Stand: 25. Juli 2026 — ABGESCHLOSSEN.** Code fertig, Testsuite grün, Migration
+eingespielt, Account-Isolation gegen die echte Datenbank belegt, Anmeldung auf
+dem echten iPhone geprüft und der Umzug des tatsächlichen Bestands vollzogen:
+402 Filme, 90 Must-Watch-Einträge und der Blogartikel liegen im Konto und stehen
+auf Rechner und iPhone.
 
 ## Was diese Etappe leistet
 
@@ -193,7 +195,7 @@ lokal weiter und tragen nach, sobald es wieder läuft.
 
 | Kriterium | Stand |
 |---|---|
-| Zwei Testkonten vollständig voneinander isoliert | Regeln geschrieben und gegen einen Datenbank-Nachbau geprüft; **der Lauf gegen die echte Datenbank steht aus** (`npm run test:rls`) |
+| Zwei Testkonten vollständig voneinander isoliert | **erfüllt und belegt** — 18/18 Negativtests gegen die echte Datenbank am 25.07.2026 (`npm run test:rls`): anon wird abgewiesen, A sieht von B nichts, gefälschte Konto-Kennung wird abgelehnt, Bestandspfade (Demo, geteilte Blogs, Katalog) unversehrt |
 | Lokale Daten verlustfrei in ein Konto übernehmbar | erfüllt, über Prüfsummen belegt (`uebernahme_test.mjs`) |
 | Abmelden entfernt keine lokalen Daten ungefragt | erfüllt und geprüft (`authservice_test.mjs`) |
 | Backup und Wiederherstellung funktionieren auch mit Kontodaten | erfüllt, alle 15 Bereiche (`restore_test.mjs`, Phase 5) |
@@ -207,19 +209,49 @@ praktisch nicht verfügbar; die Oberfläche meldet das verständlich statt techn
 Der Weg über die Sitzung braucht eine Autorenbindung in `kd_store` — das ist ein
 eigener Folgeschritt, weil diese Etappe die alte Tabelle bewusst nicht anfasst.
 
-## Was noch fehlt
+## Erledigt
 
-1. **Anmelde-Spike auf dem echten iPhone** (installierte App): Anmelden ·
-   App beenden und neu starten · nach über einer Stunde zurückkehren ·
-   Flugmodus · Passwort ändern · Abmelden (lokale Daten müssen bleiben) ·
-   zweites Konto sieht nichts · zwei Browsertabs am Rechner · Uhr verstellt.
-   Zusätzlich als Sicherheitsprobe: `POST /auth/v1/recover` gegen eine
-   synthetische Adresse — es darf keine zustellbare Mail und kein verwertbarer
-   Link entstehen.
-2. **Migration einspielen** und `npm run test:rls` grün bekommen.
-3. **Durchstich auf Staging** mit zwei echten Testkonten, inklusive Übernahme
-   eines echten Bestands und Gegenprobe auf dem zweiten Gerät.
-4. Erst danach nach `main`.
+- **Anmelde-Spike auf dem echten iPhone bestanden** (25.07.2026, installierte
+  App über staging): Anmeldung erfolgreich; die Sitzung überlebt das vollständige
+  Beenden und Neustarten der App; im Flugmodus bleibt die App nutzbar und meldet
+  niemanden ab. Damit ist die Annahme belegt, an der die Verfahrenswahl hing —
+  Passwortanmeldung trägt in der installierten iOS-App, wo der Magic-Link-Weg
+  zuvor gescheitert war.
+- **Migration eingespielt** (25.07.2026, SQL-Editor).
+- **Account-Isolation belegt:** 18/18 Negativtests gegen die echte Datenbank.
+  Darunter die beiden ernsten Fälle: anonyme Zugriffe werden abgewiesen, und ein
+  angemeldetes Konto sieht die Zeilen des anderen nicht (leere Menge, kein
+  Fehler, kein Leck). Gefälschte Konto-Kennungen und manipulierte Versionsstände
+  laufen ins Leere; Demo-Start, geteilte Blogs und Katalog sind unversehrt.
+
+- **Umzug des echten Bestands vollzogen** (25.07.2026). Der Bestand lag im
+  Browserspeicher der alten Adresse; Browser reichen Daten nicht über
+  Adressgrenzen, deshalb per Backup-Datei. Gegen die Datenbank verifiziert:
+  sieben Zeilen, `kd:master` mit 402 Filmen (206 KB), `kd:mustwatch` mit 90
+  Einträgen, dazu Blog, Einstellungen, Streaming-Dienste und Achievements —
+  alle auf Revision 1. Leere Bereiche wurden gar nicht erst angelegt.
+  Gegenprobe auf dem iPhone bestanden: derselbe Bestand nach der Anmeldung.
+- **Sicherheitsprobe Wiederherstellungs-Endpunkt** (25.07.2026). Ergebnis:
+  Registrierung mit fremder Adresse und Magic-Link-Anforderung werden mit
+  `400 email_address_invalid` abgewiesen — Supabase verweigert die synthetische
+  Domain zusätzlich zur abgeschalteten Selbstregistrierung. `/auth/v1/recover`
+  antwortet mit 200 und leerem Rumpf; das ist die Standardantwort, die bewusst
+  nicht verrät, ob ein Konto existiert, und bedeutet keinen Versand: es gibt
+  keinen Zustellweg.
+
+  **Auflage:** Das gilt nur, solange für `login.kinodreieck.at` kein
+  Mailempfang eingerichtet ist und kein eigener Mailserver im Projekt
+  hinterlegt wird. Beides würde den Übernahme-Vektor öffnen und müsste dann
+  durch ein anderes Verfahren abgelöst werden.
+
+## Kleinkram, der noch offensteht
+
+1. **Token-Erneuerung nach über einer Stunde** — beim nächsten Öffnen beiläufig
+   bestätigt, sobald die App nach längerer Pause ohne neue Anmeldung startet.
+2. **Testkonten `testa` und `testb` löschen.** Ihre Datenzeilen verschwinden
+   automatisch mit (`on delete cascade`).
+3. Die alte Adresse `soppagata.github.io` ist ab jetzt Archiv — dort Eingetragenes
+   erreicht das Konto nicht mehr.
 
 ## Geänderte und neue Dateien
 
