@@ -55,6 +55,14 @@ Der Workflow erzeugt daraus ausschließlich `VITE_APP_ENV`, `VITE_APP_URL`,
 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
 `VITE_AI_ENDPOINT_NAME` und `VITE_BUILD_VERSION`.
 
+Zusätzlich müssen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` auch als
+**Repository-Variablen** (Ebene Repository, nicht Environment) angelegt werden:
+Der zeitgesteuerte Keep-alive-Workflow (`keepalive.yml`) läuft ohne
+GitHub-Environment und liest nur Repository-Variablen. Er bekommt bewusst kein
+Environment zugewiesen, weil der erforderliche Production-Reviewer sonst jeden
+Cron-Lauf blockieren würde. Beide Werte sind öffentlich; es entsteht kein
+Secret auf Repository-Ebene.
+
 ### Server-/Deployment-Secrets
 
 | Name | Ablage | Zweck |
@@ -171,7 +179,11 @@ bestehen:
 - neue JSON-Daten verdrängen den Cache,
 - Sicherheitsheader sind auf der echten Domain vorhanden,
 - `/download/` lädt die separate Einzeldatei als Attachment,
-- Browser-Bundle enthält keine Secret-Signatur.
+- Browser-Bundle enthält keine Secret-Signatur,
+- Deploy enthält keine persönlichen Bewertungsdaten und keine
+  Rohprogrammdateien (`programm.json`, `streaming_bekannt.json`,
+  `streaming_entdecken.json` liegen nicht in `dist/`; Programm/Streaming
+  kommen ausschließlich aus dem read-only Supabase-Katalog).
 
 ## Rückrollverfahren
 

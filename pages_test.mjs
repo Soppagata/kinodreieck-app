@@ -58,17 +58,44 @@ check("Single-File als Download vorhanden", existsSync(join(DIST, "download", "K
 check("Single-File wird als Attachment ausgeliefert", headers.includes('Content-Disposition: attachment; filename="Kinodreieck.html"'));
 check("Service Worker umgeht Downloadpfade", sw.includes("(?:api|auth|download)"));
 
-/* 6) Keine hochsicheren Secret-Signaturen im ausgelieferten HTML/JS. */
-const auslieferung = indexHtml + "\n" + js;
+/* 6) Keine hochsicheren Secret-Signaturen im ausgelieferten HTML/JS.
+   Der Scan umfasst auch die Download-Einzeldatei — sie wird mit ausgeliefert. */
+const downloadHtmlPfad = join(DIST, "download", "Kinodreieck.html");
+const downloadHtml = existsSync(downloadHtmlPfad) ? readFileSync(downloadHtmlPfad, "utf8") : "";
+const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml;
 const secretMuster = [
   /sb_secret_[a-z0-9_-]+/i,
   /sk-ant-[a-z0-9_-]{16,}/i,
   /sk-proj-[a-z0-9_-]{16,}/i,
+  /ghp_[A-Za-z0-9]{30,}/,          // klassischer GitHub-PAT (Legacy-Git-Sync)
+  /github_pat_[A-Za-z0-9_]{30,}/,  // fine-grained GitHub-PAT
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
   /SUPABASE_SERVICE_ROLE_KEY/,
 ];
 check("Browser-Bundle enthält keine bekannte Secret-Signatur",
   !secretMuster.some((muster) => muster.test(auslieferung)));
+
+/* 7) Keine Personen- oder Rohprogrammdaten im öffentlichen Deploy.
+   Programm/Streaming kommen zur Laufzeit aus dem read-only Supabase-Katalog
+   (kd_catalog); persönliche Bewertungen gehören nie in dist/. Die früheren
+   public/-Rohdateien (programm.json, streaming_bekannt.json,
+   streaming_entdecken.json) sind entfernt und dürfen nicht zurückkehren. */
+for (const alt of ["programm.json", "streaming_bekannt.json", "streaming_entdecken.json"]) {
+  check(`dist/ enthält keine Rohdatendatei ${alt}`, !existsSync(join(DIST, alt)));
+}
+function alleDateien(ordner) {
+  return readdirSync(ordner, { withFileTypes: true }).flatMap((e) => {
+    const pfad = join(ordner, e.name);
+    return e.isDirectory() ? alleDateien(pfad) : [pfad];
+  });
+}
+const persoenlichMuster = /"bewertet_von"\s*:\s*"max"/;
+const persoenlichTreffer = alleDateien(DIST).filter((pfad) =>
+  /\.(?:json|js|html|webmanifest|txt|css)$/.test(pfad)
+  && persoenlichMuster.test(readFileSync(pfad, "utf8")));
+check("dist/ enthält keine persönlichen Bewertungsdaten (bewertet_von: max)",
+  persoenlichTreffer.length === 0);
+if (persoenlichTreffer.length) console.log("  Treffer: " + persoenlichTreffer.join(", "));
 
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);
