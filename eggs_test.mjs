@@ -10,6 +10,7 @@ import {
 } from "./src/lib/eggs.js";
 import { wuerfleTag, tagesSchluessel, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt } from "./src/lib/eggFrequenz.js";
 import { istKlaatu, crawlHeute, istVierterMai, levenshtein } from "./src/lib/momentEggs.js";
+import { EGG_AKTIV } from "./src/lib/modus.js";
 
 const checks = [];
 const check = (n, p) => { checks.push([n, p]); console.log((p ? "✓ " : "✗ ") + n); };
@@ -146,6 +147,16 @@ check("Crawl: Trefferzahl ist am Feiertag unerheblich",
   crawlHeute({ jetzt: MAI4, kinoMatches: { matched: [{}, {}, {}] } }) === true);
 check("Klaatu: deterministisch + robust (null/leer -> false, kein Throw)",
   istKlaatu("klaatu barada nikto") === istKlaatu("klaatu barada nikto") && istKlaatu(null) === false && istKlaatu("") === false);
+
+/* ---- EGG-PAUSE (2026-07-25): Überarbeitung durch Max. Diese Checks pinnen den
+   bewussten Pausen-Zustand der App-Verdrahtung; Reaktivierung ist eine bewusste
+   Änderung an modus.js UND hier. Die Bibliotheks-Checks oben bleiben unberührt —
+   die Engines sind weiterhin korrekt und getestet, nur nicht verdrahtet. */
+check("Pause: EGG_AKTIV ist eingefroren (kein stilles Umschalten)", Object.isFrozen(EGG_AKTIV));
+check("Pause: Cage-Alphabet bleibt aktiv", EGG_AKTIV.cage === true);
+check("Pause: Teppich ist stillgelegt", EGG_AKTIV.teppich === false);
+check("Pause: Star-Wars-Crawl/4.-Mai ist stillgelegt", EGG_AKTIV.crawl === false);
+check("Pause: Klaatu→Necronomicon ist stillgelegt", EGG_AKTIV.klaatu === false);
 
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);

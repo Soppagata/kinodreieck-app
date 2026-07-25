@@ -46,7 +46,7 @@ import { FinderTab } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 
 import nachtragDatei from "./data/nachtrag.json";
-import { PERSONAL_MODE, EGGS_ENABLED } from "./lib/modus.js";
+import { PERSONAL_MODE, EGGS_ENABLED, EGG_AKTIV } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { NavBand } from "./components/NavBand.jsx";
 import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
@@ -401,10 +401,11 @@ export default function App() {
   const crawlMatchesRef = useRef([]);
   const [crawlOffen, setCrawlOffen] = useState(false);
   const [necroAktiv, setNecroAktiv] = useState(false);
-  const [may4Aktiv, setMay4Aktiv] = useState(() => EGGS_ENABLED && istVierterMai(new Date()));
+  // EGG-PAUSE: 4.-Mai-Thema hängt am Crawl-Flag (gleiches Egg-Paar).
+  const [may4Aktiv, setMay4Aktiv] = useState(() => EGGS_ENABLED && EGG_AKTIV.crawl && istVierterMai(new Date()));
   const may4Vorschau = false;
   useEffect(() => {
-    if (!EGGS_ENABLED) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.crawl) return; // EGG-PAUSE
     const aktualisieren = () => setMay4Aktiv(istVierterMai(new Date()));
     aktualisieren();
     const timer = setInterval(aktualisieren, 60_000);
@@ -1578,7 +1579,7 @@ export default function App() {
      nur In-Memory-State, nach Reload sicher weg. Zusätzlich zur Mount-Gatterung
      hier hart auf PERSONAL_MODE. */
   const zeigeKlaatu = useCallback(() => {
-    if (!EGGS_ENABLED) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.klaatu) return; // EGG-PAUSE
     setNecroAktiv(true);
   }, []);
   const eggHerkunft = useCallback((film) => {
@@ -1618,7 +1619,7 @@ export default function App() {
      Overlay/Modal offen ist. An allen anderen Tagen liefert crawlHeute false. */
   const crawlAutoRef = useRef(false);
   useEffect(() => {
-    if (!EGGS_ENABLED || !bootDone || master == null) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.crawl || !bootDone || master == null) return; // EGG-PAUSE
     if (crawlAutoRef.current) return;
     if (crawlOffen || cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
     if (!crawlHeute({ jetzt: new Date() })) return;
@@ -1639,7 +1640,7 @@ export default function App() {
   const teppichLetztesYRef = useRef(0);
   const teppichTagRef = useRef(tagesSchluessel());
   useEffect(() => {
-    if (!EGGS_ENABLED || !bootDone || tab !== "mediathek" || achievements == null || master == null) return;
+    if (!EGGS_ENABLED || !EGG_AKTIV.teppich || !bootDone || tab !== "mediathek" || achievements == null || master == null) return; // EGG-PAUSE
     if (!achievements.has("teppich") || schonGefeuertHeute("teppich") || !teppichEgg) return;
     const zielIds = new Set(liveVertreter(master, teppichEgg, eggCtx).map((f) => String(f.id)));
     if (!zielIds.size) return;
@@ -1891,7 +1892,7 @@ export default function App() {
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
-            onKlaatu={EGGS_ENABLED ? zeigeKlaatu : undefined}
+            onKlaatu={EGGS_ENABLED && EGG_AKTIV.klaatu ? zeigeKlaatu : undefined}
           />
         )}
 
@@ -1942,16 +1943,16 @@ export default function App() {
         <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
-      {EGGS_ENABLED && teppichOffen && (
+      {EGGS_ENABLED && EGG_AKTIV.teppich && teppichOffen && (
         <Teppich filme={teppichFilmeRef.current} vorschau={teppichVorschau} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => { setTeppichOffen(false); setTeppichVorschau(false); }} />
       )}
-      {/* B4-Egg: Moment-Eggs — exakt wie Cage/Teppich hinter PERSONAL_MODE gegatet,
-          also im Beta-Build (PERSONAL_MODE=false) weder gerendert noch triggerbar. */}
-      {EGGS_ENABLED && crawlOffen && (
+      {/* EGG-PAUSE: Teppich/Crawl/Necronomicon sind zusätzlich zu EGGS_ENABLED
+          über EGG_AKTIV (modus.js) stillgelegt, bis Max sie überarbeitet hat. */}
+      {EGGS_ENABLED && EGG_AKTIV.crawl && crawlOffen && (
         <Crawl matches={crawlMatchesRef.current} onSkip={() => setCrawlOffen(false)} reduced={reducedMotion} />
       )}
-      {EGGS_ENABLED && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
+      {EGGS_ENABLED && EGG_AKTIV.klaatu && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
       <ZurueckObenKnopf />
     </div>
   );
