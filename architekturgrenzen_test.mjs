@@ -10,7 +10,7 @@ globalThis.localStorage = {
 };
 
 const {
-  createRuntimeConfig, validateRuntimeConfig, RUNTIME_SCHEMA_VERSION,
+  APP_ENVIRONMENTS, createRuntimeConfig, validateRuntimeConfig, RUNTIME_SCHEMA_VERSION,
 } = await import("./src/config/runtime.js");
 const {
   BoundaryError, ERROR_CODES, errorFromStatus, errorText, normalizeBoundaryError,
@@ -31,6 +31,7 @@ const check = (name, value) => {
 };
 
 const config = createRuntimeConfig({
+  VITE_APP_ENV: "staging",
   VITE_APP_URL: " https://kino.example/app/ ",
   VITE_SUPABASE_URL: "https://projekt.supabase.co/",
   VITE_SUPABASE_PUBLISHABLE_KEY: " sb_publishable_test ",
@@ -38,7 +39,8 @@ const config = createRuntimeConfig({
   VITE_BUILD_VERSION: "abc123",
 });
 check("Runtime-Konfiguration enthält den vollständigen öffentlichen Vertrag",
-  config.appUrl === "https://kino.example/app"
+  config.appEnvironment === APP_ENVIRONMENTS.STAGING
+  && config.appUrl === "https://kino.example/app"
   && config.supabaseUrl === "https://projekt.supabase.co"
   && config.supabasePublishableKey === "sb_publishable_test"
   && config.aiEndpointName === "ai-v1"
@@ -48,7 +50,13 @@ check("Runtime-Konfiguration ist unveränderlich", Object.isFrozen(config));
 check("Runtime-Konfiguration enthält keine geheimen Vertragsfelder",
   !Object.keys(config).some((key) => /secret|service.?role|provider.?key|sync.?key|token/i.test(key)));
 check("Leere Runtime-Werte bleiben sicher und lokal funktionsfähig",
-  createRuntimeConfig({}).supabaseUrl === "" && createRuntimeConfig({}).buildVersion === "dev");
+  createRuntimeConfig({}).appEnvironment === APP_ENVIRONMENTS.LOCAL
+  && createRuntimeConfig({}).supabaseUrl === ""
+  && createRuntimeConfig({}).buildVersion === "dev"
+  && validateRuntimeConfig(createRuntimeConfig({})).ok);
+check("Staging und Produktion verlangen vollständige öffentliche Konfiguration",
+  !validateRuntimeConfig(createRuntimeConfig({ VITE_APP_ENV: "staging" })).ok
+  && !validateRuntimeConfig(createRuntimeConfig({ VITE_APP_ENV: "production" })).ok);
 check("Ungültige Runtime-Werte werden strukturiert gemeldet",
   !validateRuntimeConfig(createRuntimeConfig({
     VITE_APP_URL: "http://unsicher.example",

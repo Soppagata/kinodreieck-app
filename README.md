@@ -13,10 +13,15 @@ lauffähige Demo, keine echten Bewertungen.
 ```
 npm install
 npm run dev        # lokaler Dev-Server
-npm run build      # Web-Build (dist/) — für GitHub Pages
+npm run build      # Web-Build (dist/)
 npm run build:single  # eine eigenständige Kinodreieck.html (dist-single/)
+npm run build:online  # Cloudflare-Paket inkl. separatem Download in dist/
 npm test           # baut Single-File + jsdom-Regressionstests
 ```
+
+Staging, Produktion, Runtime-Variablen, eigene Domain, Sicherheitsheader und
+Rollback sind in `docs/ETAPPE_2_HOSTING.md` beschrieben. Lokale öffentliche
+Konfiguration kann aus `.env.example` abgeleitet werden.
 
 ## Sicherheit
 Der Personal Access Token für den Git-Sync existiert ausschließlich im lokalen Browser-Storage des

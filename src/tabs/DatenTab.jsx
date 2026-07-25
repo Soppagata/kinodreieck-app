@@ -210,6 +210,11 @@ export function DatenTab({
           {eggOffen && waehleModus && <div style={{ marginTop: 12 }}><button onClick={eggToggle} style={btnStyle(eggAktiv)}>{eggLabel}</button></div>}
           <div style={{ marginTop: 14 }}>
             <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setUeberOffen((v) => !v)}>{ueberOffen ? "Anleitung zuklappen" : "Über Kinodreieck & Anleitung"}</button>
+            {typeof location !== "undefined" && location.protocol !== "file:" && (
+              <a href={import.meta.env.BASE_URL + "download/"} style={{ ...btnStyle(false), display: "inline-block", marginLeft: 8, fontSize: 13, textDecoration: "none" }}>
+                Einzeldatei herunterladen
+              </a>
+            )}
             {ueberOffen && <UeberKinodreieck />}
           </div>
         </div>

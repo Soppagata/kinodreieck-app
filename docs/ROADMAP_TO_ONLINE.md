@@ -231,6 +231,11 @@ Bestehende, funktionierende UI muss dafür nicht flächendeckend umgebaut werden
 
 ## Etappe 2: Öffentliche App-Hülle und eigene Domain
 
+**Status: technisch umgesetzt am 25. Juli 2026; Live-Aktivierung und
+Domain-Abnahme ausstehend.** Konfiguration, Sicherheitsmodell,
+Service-Worker-Regeln, Deployment-Tore und Rückrollweg stehen in
+`ETAPPE_2_HOSTING.md`.
+
 ### Ziel
 
 Kinodreieck ist als statische App sicher erreichbar, bevor Accounts und

@@ -1,8 +1,5 @@
-/* Pages-Build-Test (Regression zu P4, 2026-07): prüft den WEB-Build (dist/),
-   den GitHub Pages unter einem UNTERPFAD ausliefert — die übrige Suite testet
-   nur die Single-File. Fängt: absolute "/…"-Datenfetches, absolute Asset-Pfade,
-   wieder eingeschleppte Font-Inlines, fehlende PWA-Dateien.
-   Aufruf: vite build && node pages_test.mjs */
+/* Hosting-Build-Test für Cloudflare Pages. Prüft relative Pfade, PWA-Dateien,
+   Security Header, Download-Ausgabe und Secretfreiheit des fertigen dist/. */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +13,7 @@ const jsDatei = assets.find((f) => f.endsWith(".js"));
 const cssDatei = assets.find((f) => f.endsWith(".css"));
 const js = jsDatei ? readFileSync(join(DIST, "assets", jsDatei), "utf8") : "";
 const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : "";
+const headers = existsSync(join(DIST, "_headers")) ? readFileSync(join(DIST, "_headers"), "utf8") : "";
 
 /* 1) Keine absoluten Pfade — auf Pages zeigt "/x" auf die Domain-Root, nicht die App. */
 check("index.html: alle src/href relativ (kein =\"/…\")", !/(?:src|href)="\/(?!\/)/.test(indexHtml));
@@ -32,8 +30,45 @@ check("dist/sw.js vorhanden", existsSync(join(DIST, "sw.js")));
 const sw = existsSync(join(DIST, "sw.js")) ? readFileSync(join(DIST, "sw.js"), "utf8") : "";
 check("sw.js: versionierter Cache-Name (v2+)", /kd-shell-v(?!1\b)\d+/.test(sw));
 check("sw.js: .json-Datendateien network-first (kein Einfrieren)", sw.includes('endsWith(".json")'));
+check("sw.js: gehashte JS-/CSS-App-Shell wird vorab gecacht",
+  /PRECACHE[^\n]+assets\/[^"]+\.js/.test(sw) && /PRECACHE[^\n]+assets\/[^"]+\.css/.test(sw));
 check("dist/manifest.webmanifest vorhanden", existsSync(join(DIST, "manifest.webmanifest")));
 check("index.html: Manifest verlinkt", indexHtml.includes("manifest.webmanifest"));
+const manifest = existsSync(join(DIST, "manifest.webmanifest"))
+  ? JSON.parse(readFileSync(join(DIST, "manifest.webmanifest"), "utf8")) : {};
+check("Manifest: relative Start-URL und Scope", manifest.start_url === "." && manifest.scope === ".");
+check("Manifest: 192- und 512-PWA-Icon", [192, 512].every((groesse) =>
+  manifest.icons?.some((icon) => icon.sizes === `${groesse}x${groesse}`)
+  && existsSync(join(DIST, `icon-${groesse}.png`))));
+check("Apple-Touch-Icon vorhanden", existsSync(join(DIST, "icon-180.png")));
+
+/* 4) Cloudflare-Sicherheitsregeln und Cache-Disziplin. */
+check("Cloudflare _headers vorhanden", Boolean(headers));
+for (const wert of [
+  "Content-Security-Policy:", "default-src 'self'", "frame-ancestors 'none'",
+  "Referrer-Policy:", "X-Content-Type-Options: nosniff",
+  "Permissions-Policy:", "X-Frame-Options: DENY",
+]) check(`_headers enthält ${wert}`, headers.includes(wert));
+check("_headers: gehashte Assets immutable", /\/assets\/\*[\s\S]*?max-age=31536000, immutable/.test(headers));
+check("_headers: Service Worker muss revalidieren", /\/sw\.js[\s\S]*?max-age=0, must-revalidate/.test(headers));
+
+/* 5) Single-File bleibt ein getrennter Download und wird nicht versehentlich gecacht. */
+check("Downloadseite vorhanden", existsSync(join(DIST, "download", "index.html")));
+check("Single-File als Download vorhanden", existsSync(join(DIST, "download", "Kinodreieck.html")));
+check("Single-File wird als Attachment ausgeliefert", headers.includes('Content-Disposition: attachment; filename="Kinodreieck.html"'));
+check("Service Worker umgeht Downloadpfade", sw.includes("(?:api|auth|download)"));
+
+/* 6) Keine hochsicheren Secret-Signaturen im ausgelieferten HTML/JS. */
+const auslieferung = indexHtml + "\n" + js;
+const secretMuster = [
+  /sb_secret_[a-z0-9_-]+/i,
+  /sk-ant-[a-z0-9_-]{16,}/i,
+  /sk-proj-[a-z0-9_-]{16,}/i,
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
+  /SUPABASE_SERVICE_ROLE_KEY/,
+];
+check("Browser-Bundle enthält keine bekannte Secret-Signatur",
+  !secretMuster.some((muster) => muster.test(auslieferung)));
 
 const fails = checks.filter(([, p]) => !p);
 console.log(`\n${checks.length - fails.length}/${checks.length} Checks bestanden.`);

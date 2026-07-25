@@ -6,16 +6,33 @@
      bei jedem Daten-Job): ebenfalls network-first. Cache-first würde sie nach dem
      ersten Fetch dauerhaft einfrieren.
    - Statische Assets (content-hashed, immutable): cache-first, sonst holen+cachen.
-   Kein API-Cache (Git-Sync/api.github.com läuft nie über den SW).
-   Cache-Name versioniert: Bump räumt beim activate alle Altbestände weg. */
-const CACHE = "kd-shell-v2";
+   Kein API-, Auth- oder Download-Cache. Fremde App-Caches (zum Beispiel der
+   getrennte Katalog-Fallback) werden beim Update nicht gelöscht.
+   Cache-Name versioniert: Bump räumt nur alte App-Shell-Bestände weg. */
+const CACHE_PREFIX = "kd-shell-";
+const CACHE = "kd-shell-v3";
+/* Der Online-Build ergänzt hier die gehashten CSS-/JS-Dateien aus index.html. */
+const PRECACHE = ["./", "index.html", "manifest.webmanifest"];
 
-self.addEventListener("install", () => { self.skipWaiting(); });
+self.addEventListener("install", (e) => {
+  e.waitUntil((async () => {
+    const c = await caches.open(CACHE);
+    const scope = self.registration.scope;
+    const shell = PRECACHE.map((pfad) => new URL(pfad, scope));
+    await Promise.all(shell.map(async (url) => {
+      try {
+        const res = await fetch(url);
+        if (res && res.ok) await c.put(url, res.clone());
+      } catch { /* Erstinstallation bleibt auch bei kurzem Offline-Zustand möglich. */ }
+    }));
+    await self.skipWaiting();
+  })());
+});
 
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
   })());
 });
@@ -29,6 +46,14 @@ self.addEventListener("fetch", (e) => {
 
   const istHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
   const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien
+  const istNetzwerkNur = /\/(?:api|auth|download)\//.test(url.pathname)
+    || req.headers.has("authorization")
+    || req.headers.has("apikey")
+    || (req.headers.get("cache-control") || "").includes("no-store");
+  if (istNetzwerkNur) {
+    e.respondWith(fetch(req));
+    return;
+  }
   if (istHTML || istDaten) {
     e.respondWith((async () => {
       try {

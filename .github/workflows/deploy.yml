@@ -1,45 +1,131 @@
-name: Deploy to GitHub Pages
+name: Test and deploy Cloudflare Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
   workflow_dispatch:
+    inputs:
+      target:
+        description: Zielumgebung
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  deployments: write
 
 concurrency:
-  group: pages
+  group: cloudflare-pages-${{ github.ref }}-${{ inputs.target || 'test' }}
   cancel-in-progress: false
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - run: npm ci
-      - run: npm run build
-        env:
-          VITE_APP_URL: ${{ vars.APP_URL }}
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
-          VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
-          VITE_BUILD_VERSION: ${{ github.sha }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+      - run: npm test
 
-  deploy:
-    needs: build
+  deploy-staging:
+    if: >-
+      (github.event_name == 'push' && github.ref_name == 'staging') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+    needs: test
     runs-on: ubuntu-latest
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: staging
+      url: ${{ vars.APP_URL }}
+    env:
+      DEPLOY_TARGET: staging
+      VITE_APP_ENV: staging
+      VITE_APP_URL: ${{ vars.APP_URL }}
+      VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
+      VITE_BUILD_VERSION: ${{ github.sha }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:deploy-env
+      - run: npm run build:online
+      - id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          wranglerVersion: "4.102.0"
+          command: >-
+            pages deploy dist
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+            --branch=staging
+            --commit-hash=${{ github.sha }}
+      - name: Atomic deployment prüfen
+        env:
+          APP_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: npm run check:remote
+      - name: Staging-Domain prüfen
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: npm run check:remote
+
+  deploy-production:
+    if: >-
+      github.ref_name == 'main' &&
+      ((github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production'))
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    env:
+      DEPLOY_TARGET: production
+      VITE_APP_ENV: production
+      VITE_APP_URL: ${{ vars.APP_URL }}
+      VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+      VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
+      VITE_BUILD_VERSION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run check:deploy-env
+      - run: npm run build:online
+      - id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          wranglerVersion: "4.102.0"
+          command: >-
+            pages deploy dist
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+            --branch=main
+            --commit-hash=${{ github.sha }}
+      - name: Atomic deployment prüfen
+        env:
+          APP_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: npm run check:remote
+      - name: Produktions-Domain prüfen
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: npm run check:remote

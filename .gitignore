@@ -15,6 +15,7 @@ dist-ssr
 # lokale Daten & Schlüssel — NIE versionieren
 .env
 .env.*
+!.env.example
 streaming-daten/
 kino-daten/
 Archiv/
