@@ -525,7 +525,14 @@ Deno.serve(async (req: Request) => {
     p_reservierung: reservierung,
   });
   if (startFehler) {
-    return fehlerAntwort(CODES.SERVER, origin, { grund: "auftrag-start-fehlgeschlagen", vorgangId });
+    /* Den Postgres-Fehlercode mitgeben: „auftrag-start-fehlgeschlagen" allein
+       war beim ersten Auftreten nicht diagnostizierbar — die Ursache war eine
+       nicht eingespielte Migration (Signatur ohne Reservierung). Der Code ist
+       Schema-Information, keine Nutzerdaten. */
+    return fehlerAntwort(CODES.SERVER, origin, {
+      grund: "auftrag-start-fehlgeschlagen:" + ((startFehler as { code?: string }).code ?? "?"),
+      vorgangId,
+    });
   }
   const start = startRoh as { ok?: boolean; code?: string; grund?: string; log_id?: number } | null;
   if (!start?.ok) {

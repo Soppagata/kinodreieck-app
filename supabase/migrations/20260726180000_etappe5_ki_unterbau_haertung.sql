@@ -251,6 +251,30 @@ revoke execute on function public.kd_ai_stand(uuid) from anon, authenticated, pu
 revoke execute on function public.kd_ai_verwaiste_schliessen() from anon, authenticated, public;
 
 -- ---------------------------------------------------------------------------
+-- E12 — Modell-IDs, jetzt am echten Anbieter belegt
+--      Die Liste von GET /v1/models (26.07.2026) führt `claude-sonnet-5`
+--      genau so, den Haiku aber NUR als datierte Fassung
+--      `claude-haiku-4-5-20251001` — der Alias `claude-haiku-4-5` taucht dort
+--      nicht auf. Aliasse funktionieren als Modellparameter zwar weiterhin,
+--      aber konfiguriert wird ab hier das, was der Anbieter tatsächlich nennt.
+--      Bewusst UPDATE statt INSERT: die Startwerte aus Migration 1 stammten
+--      aus der Doku, diese hier aus einer echten Antwort.
+-- ---------------------------------------------------------------------------
+update public.kd_ai_limits
+   set wert = '{"klein": "claude-haiku-4-5-20251001", "gross": "claude-sonnet-5"}'::jsonb,
+       notiz = 'Modell-IDs am 26.07.2026 per GET /v1/models belegt. Sonnet fuer Suche und Bewertung, Haiku fuer kleine Aufgaben.',
+       geaendert_at = now()
+ where schluessel = 'modell_alias';
+
+update public.kd_ai_limits
+   set wert = '{"claude-haiku-4-5": {"in": 100, "out": 500},
+                "claude-haiku-4-5-20251001": {"in": 100, "out": 500},
+                "claude-sonnet-5": {"in": 200, "out": 1000}}'::jsonb,
+       notiz = 'US-Cent je 1 Mio Tokens. Alias UND datierte Fassung eingetragen, weil der Anbieter in der Antwort die aufgeloeste ID zurueckmeldet. ACHTUNG: Sonnet 5 laeuft bis 31.08.2026 zum Einfuehrungspreis (200/1000); danach 300/1500.',
+       geaendert_at = now()
+ where schluessel = 'preise_usd_cent_pro_mtok';
+
+-- ---------------------------------------------------------------------------
 -- Selbstprobe
 -- ---------------------------------------------------------------------------
 do $$
@@ -266,4 +290,6 @@ begin
   select count(*) into v_fn from pg_proc
    where proname = 'kd_ai_auftrag_starten' and pronamespace = 'public'::regnamespace;
   raise notice 'kd_ai_auftrag_starten: % Fassung(en) (erwartet: 1)', v_fn;
+
+  raise notice 'modell_alias: %', (select wert from public.kd_ai_limits where schluessel = 'modell_alias');
 end $$;
