@@ -171,9 +171,11 @@ REST-Schnittstelle und deckt zusätzlich `kd_quellen` und die Statusfunktion ab.
    (120 Filme mit Bewertung und Begründung, `tools/demo_mediathek.mjs`), der
    Kino-Tab bleibt in der Demo aber leer, bis `programm_demo` befüllt ist. Dafür
    braucht `tools/demo_snapshot.mjs` eine Programm-Payload als Eingabe.
-2. **`npm run test:rls` scharf laufen lassen.** Zurückgestellt, bis wieder
-   Testkonten existieren — die aus Etappe 3 wurden planmäßig gelöscht. Die
-   anon-Hälfte der Prüfung ist über `set local role anon` bereits belegt.
+2. ~~**`npm run test:rls` scharf laufen lassen.**~~ **Erledigt am 26.07.2026**
+   im Zuge von Etappe 5: mit zwei frischen Testkonten lief der Test zum ersten
+   Mal scharf gegen die Produktionsdatenbank — 33/33. Damit ist die
+   Kontotrennung von `kd_personal`, `kd_catalog` und `kd_quellen` nicht mehr
+   nur gegen einen Nachbau belegt.
 
 ## Bewusste Grenzen
 

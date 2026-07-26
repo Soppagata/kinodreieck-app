@@ -6,6 +6,12 @@ ausgeliefert, die Testsuite ist grün (941 Checks, davon 91 neu) und die
 Rauchprobe meldet **11 von 11** gegen die deployte Function — einschließlich
 eines echten Modellaufrufs.
 
+`npm run test:rls` gegen die echte Datenbank: **33/33**, davon neun neu für
+`kd_ai_log` und `kd_ai_limits`. Das war zugleich der erste scharfe Lauf dieses
+Tests überhaupt — er stand seit Etappe 3 aus, weil dafür zwei Testkonten nötig
+sind. Damit ist auch die Kontotrennung der älteren Tabellen erstmals gegen die
+Produktionsdatenbank belegt statt nur gegen einen Nachbau.
+
 Gemessener Kettenbeweis (`echo-struct`, 26.07.): Modellalias `klein`,
 247 Eingabe- und 18 Ausgabe-Tokens, **0,0337 US-Cent**, 2597 ms — korrekt
 protokolliert und im Monatsverbrauch sichtbar. Die Größenordnung ist der
@@ -358,7 +364,7 @@ Alle sechs sind gegen die echte Umgebung belegt, nicht gegen einen Nachbau.
 | Der Claude-Key ist weder im Repository noch im Browser-Bundle | erfüllt — nur als Supabase-Secret; `pages_test.mjs` scannt das ausgelieferte Bundle auf `sk-ant-…` |
 | Ein Account kann sein Limit nicht durch frei gewählte IDs umgehen | erfüllt — die Konto-ID wird nicht gesendet; Grenzen atomar in der Datenbank, unter Sperre geprüft |
 | Ungültige Modellantworten erreichen keine persönliche Datenbank | erfüllt — strukturelle und fachliche Prüfung vor jeder Rückgabe; `echo-struct` schreibt ohnehin in keine persönliche Tabelle |
-| Kosten und Fehler sind pro Funktion nachvollziehbar | erfüllt — eine Zeile je Vorgang, auch für Fehlschläge; Kosten nie still 0. Gemessen: 0,0337 US-Cent für den Kettenbeweis, im Monatsverbrauch sichtbar |
+| Kosten und Fehler sind pro Funktion nachvollziehbar | erfüllt — eine Zeile je Vorgang, auch für Fehlschläge; Kosten nie still 0. Gemessen: 0,0337 US-Cent für den Kettenbeweis, im Monatsverbrauch sichtbar. Dass ein Konto seinen Verbrauch nicht umschreiben kann, belegt `test:rls` T13a–T13i gegen die echte Datenbank |
 | Bei KI-Ausfall bleiben deterministische App-Funktionen nutzbar | erfüllt — der KI-Pfad ist ein eigener Block im Konto-Bereich; kein anderer Teil der App importiert ihn |
 
 ## Bewusste Grenzen
