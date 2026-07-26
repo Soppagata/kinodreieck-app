@@ -107,6 +107,55 @@ check("Katalog-Verbindungsfehler leakt keine Backenddetails in UI-Texte",
   !errorText(catalogError).includes("INTERNAL_TABLE_DETAIL")
   && !catalogError.message.includes("INTERNAL_TABLE_DETAIL"));
 
+/* Der Check oben deckt nur den GEWORFENEN Fehler ab. testConnection() kann aber
+   auch erfolgreich zurückkehren und den Backendtext im Ergebnis mitführen:
+   manifest ist anon lesbar, nur die geprüfte Zeile scheitert. Genau dieses
+   `asset`-Objekt rendert die Oberfläche (KatalogZugang/Katalog-Status). */
+const fetchVorher = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
+  if (name === "manifest") {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => [{ payload: { stand: "2026-07-22T12:00:00Z" }, updated_at: "2026-07-22T12:00:00Z", stand: "2026-07-22T12:00:00Z", gueltig_bis: null, quelle: "manifest" }],
+    };
+  }
+  return { ok: false, status: 500, json: async () => ({ message: "INTERNAL_TABLE_DETAIL" }) };
+};
+/* Alles einsammeln, was eine Oberfläche aus dem Ergebnis anzeigen könnte.
+   `cause`/`stack` sind bewusst ausgenommen: die Diagnosekette darf den rohen
+   Text behalten, nur nichts Anzeigbares. */
+function anzeigbareTexte(wert, tiefe = 0, gesehen = new Set()) {
+  if (wert == null || tiefe > 5) return [];
+  if (typeof wert === "string") return [wert];
+  if (typeof wert !== "object" || gesehen.has(wert)) return [];
+  gesehen.add(wert);
+  const raus = wert instanceof Error ? [String(wert.message || "")] : [];
+  for (const [k, v] of Object.entries(wert)) {
+    if (k === "cause" || k === "stack") continue;
+    raus.push(...anzeigbareTexte(v, tiefe + 1, gesehen));
+  }
+  return raus;
+}
+const assetPruefung = await catalogService.testConnection({ bereich: "programm", variante: "demo" });
+const assetTexte = anzeigbareTexte(assetPruefung.asset);
+check("Katalog-Assetprüfung meldet den Fehlzustand überhaupt (sonst prüfte der Leak-Check nichts)",
+  assetPruefung.ok === true && assetPruefung.asset?.ok === false
+  && assetPruefung.asset.code === ERROR_CODES.SERVER && assetTexte.length > 0);
+/* Das frühere dritte Glied (`asset.message === undefined`) war leer: ein Feld
+   `message` setzt testeKatalogZugang() auf `asset` nirgends, die Bedingung
+   konnte also gar nicht fehlschlagen. An seine Stelle tritt der Mechanismus,
+   auf dem der Leak-Schutz wirklich beruht: die Grenzschicht ERSETZT den rohen
+   Bibliotheksfehler durch ihren normalisierten — nur deshalb bleibt der
+   Servertext draußen. */
+check("testConnection().asset reicht keinen rohen Servertext an die Oberfläche",
+  !assetTexte.some((t) => t.includes("INTERNAL_TABLE_DETAIL"))
+  && !errorText(assetPruefung.asset.fehler).includes("INTERNAL_TABLE_DETAIL")
+  && assetPruefung.asset.fehler instanceof BoundaryError
+  && assetPruefung.asset.fehler.code === ERROR_CODES.SERVER);
+globalThis.fetch = fetchVorher;
+
 const guest = guestSession();
 check("Gast ist ein gültiger betriebsbereiter Sessionzustand",
   guest.mode === SESSION_MODES.GUEST && guest.state === "ready" && guest.account === null);
@@ -207,6 +256,70 @@ check("App macht Gast- und Accountmodus technisch unterscheidbar",
   /data-session-mode=\{session\.mode\}/.test(fs.readFileSync("src/App.jsx", "utf8")));
 check("Katalogzugang spiegelt keine Credentials in persönlichen Sync",
   !/setSupabaseConfig/.test(fs.readFileSync("src/components/KatalogZugang.jsx", "utf8")));
+
+/* P5 — der Boot darf für die Frage „passt der gespeicherte Programm-Topf zur
+   Betriebsart?" NICHT auf activeVariant() zurückfallen. Das ginge über
+   getAccessToken() und stieße bei fast abgelaufener Sitzung eine Erneuerung mit
+   Netz-Zeitgrenze an; die App stünde dann bei hängender Verbindung vor der
+   Startseite. Der tokenfreie, synchrone Weg ist storedVariant() — das Verhalten
+   selbst ist in katalog_test.mjs (P5) gepinnt, hier die Aufrufstelle. */
+const appQuelle = fs.readFileSync("src/App.jsx", "utf8");
+check("Boot urteilt über die Betriebsart tokenfrei (storedVariant), nicht über activeVariant",
+  /catalogService\.storedVariant\(\)/.test(appQuelle)
+  && !/await\s+catalogService\.activeVariant\(\)/.test(appQuelle));
+/* B6 — bewusst ein QUELLCODE-Pin, kein Verhaltensnachweis.
+   `autoFetched` heißt „es wurde etwas geladen", nicht „es wurde einmal
+   versucht". Bleibt es nach einem erfolglosen Betriebsart-Nachladen gesetzt, ist
+   der Autoload für den Rest der Sitzung stillgelegt.
+   Warum das hier steht und nicht als Browsertest: der Autoload-Effekt hängt an
+   [bootDone, programm, snapshotFreigabe]. Nach einem gescheiterten Wechsel
+   ändert sich keine dieser Abhängigkeiten je wieder — `programm` bleibt null,
+   `snapshotFreigabe` kippt ausschließlich false→true, und jeder weitere Wechsel
+   setzt `autoFetched` ohnehin selbst. Beobachtbar bliebe allein das Wettrennen
+   zwischen der Freigabe und Reacts Re-Render (personalmodus R2). Darauf einen
+   Check zu gründen hieße, eine Scheduling-Reihenfolge festzunageln — deshalb
+   wird hier die Zeile selbst gepinnt, mit ehrlichem Namen. */
+check("Quellcode-Pin: der Wechsel-Effekt gibt autoFetched nach erfolglosem Nachladen wieder frei",
+  /if \(!programmOk\) autoFetched\.current = false;/.test(appQuelle));
+
+/* N1–N3 — Quellcode-Pin für den STREAMING-Zwilling.
+   Verhaltensseitig sind `anmeldungNoetig` und `code` von `streamingInfo` im
+   Ergänzen-Zweig nicht beobachtbar: beide werden ausschließlich gerendert, wenn
+   GAR KEINE Katalogdaten dastehen (StreamingTab: `!datenDa`; StartTab: nur wenn
+   `katalog == null`). Der Ergänzen-Zweig setzt aber voraus, dass Daten weiter
+   angezeigt werden — genau dann zeigt keine Oberfläche diese beiden Felder.
+   Nachgewiesen: der Rückbau beider Felder im Streaming-Zwilling ließ die volle
+   Suite mit 129/129 grün. `abgelaufen` ist dagegen sichtbar und deshalb in
+   personalmodus Y/N3 verhaltensseitig gepinnt — beide Zwillinge einzeln.
+   Was hier bleibt, ist die tragende Aussage: beide Zwillinge formulieren den
+   Ergänzen-Zweig IDENTISCH. Fällt einer von beiden zurück, sinkt die Zahl. */
+const ergaenzenZweig = /\?\s*\{\s*\.\.\.vorher,\s*abgelaufen: Number\.isFinite\(vorher\.gueltigBis\) \? vorher\.gueltigBis < Date\.now\(\) : vorher\.abgelaufen,\s*anmeldungNoetig, fehler: text, code,\s*\}/g;
+check("Quellcode-Pin: beide Info-Zwillinge formulieren den Ergänzen-Zweig identisch (N1–N3)",
+  (appQuelle.match(ergaenzenZweig) || []).length === 2);
+
+/* N4 — Quellcode-Pin, und zwar bewusst.
+   Die Zusicherung lautet: ein Wurf aus `ladeStreamingDateien` darf die IIFE des
+   Wechsel-Effekts nicht abbrechen, sonst wird `autoFetched` nie freigegeben.
+   Eine Verhaltensprobe scheitert an zwei Dingen gleichzeitig:
+   · Zum Werfen braucht es den `file:`-Zweig im catch von ladeStreamingDateien
+     (`ladeEntdeckenBeilage()`). Der verlangt ein file://-Dokument — in jsdom ein
+     opaker Ursprung ohne localStorage, und der Programmpfad schaltet dort
+     ebenfalls auf seinen eingebetteten Snapshot um. Gefahren würde also eine
+     andere Betriebsart als die, um die es geht.
+   · Selbst dann wäre die FOLGE (`autoFetched` wieder frei) dieselbe
+     strukturell unbeobachtbare Eigenschaft wie beim Pin darunter: der
+     Autoload-Effekt hängt an [bootDone, programm, snapshotFreigabe], von denen
+     sich nach einem gescheiterten Wechsel keine mehr ändert.
+   Statt einer Notlösung also die Zeile selbst — mit ehrlichem Namen. */
+check("Quellcode-Pin: der Wechsel-Effekt fängt einen Wurf des Streaming-Laufs ab (allSettled, N4)",
+  /const \[programmErgebnis\] = await Promise\.allSettled\(\[/.test(appQuelle)
+  && /programmErgebnis\.status === "fulfilled" && programmErgebnis\.value/.test(appQuelle));
+
+check("storedVariant() bleibt in der Grenzschicht ohne Token- und ohne Netzweg",
+  /function gespeicherteVariante\(\)\s*\{[^}]*authDriver\.konto\(\)[^}]*\}/
+    .test(fs.readFileSync("src/services/catalog.js", "utf8"))
+  && !/function gespeicherteVariante\(\)\s*\{[^}]*(?:await|getAccessToken|fetch)/
+    .test(fs.readFileSync("src/services/catalog.js", "utf8")));
 
 /* ---------- Etappe 3: Accountgrenzen ---------- */
 const { SESSION_STATES, abgelaufeneSession } = await import("./src/services/auth.js");

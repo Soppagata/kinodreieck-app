@@ -3,6 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
 import { store, K } from "../services/storage.js";
+import { ERROR_CODES } from "../services/errors.js";
 import { Chip, ChipReihe, IconDelete } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
@@ -20,6 +21,7 @@ export function KinoTab({
   zeitgrenze, saveZeitgrenze, zeigeAlles, setZeigeAlles,
   expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, loading, ladeProgrammDatei,
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
+  programmInfo = null, angemeldet = false,
 }) {
   const istGepinnt = (t, z) => kinoPins.some((p) => p.t === t && p.z === z);
   /* Pins chronologisch: Monat/Tag/Uhrzeit aus dem Terminstring */
@@ -140,11 +142,17 @@ export function KinoTab({
           title="Verlässlicher Fallback: Seite öffnen → Strg+S („nur HTML“) → Datei im Einstellungen-Tab einspielen.">
           Nonstop-Seite ↗
         </a>
-        {progStand && (
-          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>
-            Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}{programm?.quelle_hinweis ? " · " + programm.quelle_hinweis : ""}
+        {progStand ? (
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: programmInfo?.abgelaufen ? T.gefahr : T.rauch }}>
+            Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            {programmInfo?.variante === "demo" ? " · Demo-Schnappschuss" : ""}
+            {programmInfo?.abgelaufen ? " · abgelaufen" : ""}
+            {programmInfo?.ausCache ? " · aus dem Browser-Speicher, nicht neu geladen" : ""}
+            {programm?.quelle_hinweis ? " · " + programm.quelle_hinweis : ""}
           </span>
-        )}
+        ) : programm ? (
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.gefahr }}>Stand unbekannt</span>
+        ) : null}
       </ChipReihe>
 
       {/* ---- Angepinnte Termine (überleben Programm-Refreshs, Boot räumt Vergangenes auf) ---- */}
@@ -170,8 +178,21 @@ export function KinoTab({
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.6 }}>
           {datenGesperrt ? (
             <><strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Einstellungen → Datenmodus &amp; Verbindung ein.</>
+          ) : programmInfo?.code === ERROR_CODES.NO_DEMO_DATA ? (
+            /* Kein Fehler, sondern ein ehrlicher Zwischenstand: die Demo-Zeile
+               ist in der Datenbank noch nicht veröffentlicht. */
+            <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Das laufende Kinoprogramm siehst du nach der Anmeldung unter Einstellungen → Konto.</>
+          ) : programmInfo?.code === ERROR_CODES.INVALID_KEY ? (
+            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den hinterlegten Leseschlüssel ab — prüfe ihn unter Einstellungen → Datenmodus &amp; Verbindung. Eine Anmeldung hilft hier nicht.</>
+          ) : programmInfo?.anmeldungNoetig ? (
+            <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Einstellungen → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
+          ) : programmInfo?.fehler ? (
+            <>
+              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Versuch es oben erneut. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.
+              {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme das laufende Programm."}
+            </>
           ) : (
-            <>Kein Kinoprogramm geladen. Lade den Datenbankstand oben erneut. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.</>
+            <>Noch kein Kinoprogramm geladen. Hol es oben mit „Kinoprogramm neu laden“. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.</>
           )}
         </div>
       )}

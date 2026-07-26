@@ -8,6 +8,7 @@ import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
+import { ERROR_CODES } from "../services/errors.js";
 
 /* ================= EINSTELLUNGEN =================
    Tester-Oberfläche in stabiler Reihenfolge. Persönliche Daten, der gemeinsame
@@ -18,6 +19,7 @@ export function DatenTab({
   programm, clearProgrammCache,
   startWahl = null, demoAktiv = false, onStartWahl, onDemoEntfernen,
   katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh,
+  programmInfo = null,
   ungesichertMaster = false, ungesichertArtikel = false,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
   vokabular = [], saveVokabular,
@@ -28,6 +30,23 @@ export function DatenTab({
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
   onKontoDatenGeaendert,
 }) {
+  /* Ein verbundener Zugang heißt seit der Zugriffstrennung NICHT mehr, dass
+     das Programm auch da ist (anon sieht die Live-Zeilen nicht). Beides wird
+     deshalb getrennt gemeldet. */
+  const programmStatus = !programmInfo
+    ? { ok: false, text: "noch nicht geladen" }
+    : programmInfo.code === ERROR_CODES.INVALID_KEY ? { ok: false, text: "Zugangsschlüssel wird abgelehnt" }
+    : programmInfo.code === ERROR_CODES.NO_DEMO_DATA ? { ok: false, text: "noch keine Beispieldaten veröffentlicht" }
+    : programmInfo.anmeldungNoetig ? { ok: false, text: "Anmeldung nötig" }
+    : programmInfo.fehler ? { ok: false, text: "nicht geladen" }
+    : programmInfo.abgelaufen ? { ok: false, text: "abgelaufener Schnappschuss" }
+    : programmInfo.ausCache ? { ok: false, text: "aus dem Browser-Speicher" }
+    : programmInfo.variante === "demo" ? { ok: true, text: "Demo-Schnappschuss" }
+    /* Der Notfallweg beschreibt sich selbst: ein eingespieltes Programm ist da,
+       stammt aber nicht aus der Datenbank — „aktuell geladen" wäre die Aussage
+       eines Datenbankstands, den es hier nicht gibt. */
+    : programmInfo.art === "manuell" ? { ok: true, text: "manuell eingespielt" }
+    : { ok: true, text: "aktuell geladen" };
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
@@ -92,6 +111,7 @@ export function DatenTab({
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
             Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Einstellungen bleiben nur in diesem Browser. Datenbankzugang: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{katalogVerbunden ? "verbunden" : "nicht verbunden"}</strong>.
+            {" "}Kinoprogramm: <strong style={{ color: programmStatus.ok ? T.wolfram : T.gefahr }}>{programmStatus.text}</strong>.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{katalogVerbunden ? "Datenbankzugang prüfen/ändern" : "Datenbank verbinden"}</button>}

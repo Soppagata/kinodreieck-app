@@ -30,6 +30,50 @@ const matchFilm = (snap.filme || []).find((f) => f.film_at_id && (f.vorstellunge
 const MATCH_TITEL = matchFilm.titel;
 const MATCH_ID = matchFilm.film_at_id;
 const FIXED_ISO = VON + "T12:00:00+02:00"; // Test-Uhr in den Snapshot-Zeitraum
+
+/* ---- Katalog-Mock mit echtem Datenbankverhalten (Etappe 4) ----
+   `anon` sieht nur manifest + die *_demo-Zeilen; programm/streaming verlangen
+   eine angemeldete Sitzung. PostgREST filtert per RLS OHNE 403 — die Antwort ist
+   HTTP 200 mit LEEREM Array. Der Mock bildet genau das nach und macht die
+   Live-Zeilen erst mit Authorization-Header sichtbar. Dieser Test läuft ohne
+   Sitzung, prüft also den Gast-/Demo-Weg der App.
+   Demo-Payloads haben dieselbe Struktur wie ihr Live-Pendant (filme[] bzw.
+   bekannt/entdecken); quelle/stand/gueltig_bis sind realistisch belegt. */
+const KATALOG_GUELTIG_BIS = new Date(Date.parse(FIXED_ISO) + 30 * 86400000).toISOString();
+/* Demo- und Live-Zeile MÜSSEN unterscheidbar sein: mit identischer Payload könnte
+   kein Check sagen, WELCHE Zeile in der Oberfläche gelandet ist. Die Demo-Zeile
+   trägt deshalb einen zusätzlichen, klar markierten Film (ans Ende des Programms
+   sortiert, damit die Reihenfolge der Bestandsfilme unberührt bleibt) und — wie
+   der echte Demo-Schnappschuss — demo: true im Streamingkatalog; die Live-Zeile
+   hat beides nicht. */
+const DEMO_MARKER_TITEL = "Demo-Zeilen-Marker";
+const SPAETESTE_ZEIT = (snap.filme || []).flatMap((f) => (f.vorstellungen || []).map((v) => v.zeit)).sort().at(-1);
+const snapDemo = {
+  ...snap,
+  filme: [...(snap.filme || []), {
+    ...(snap.filme || [])[0],
+    film_at_id: 999000001, titel: DEMO_MARKER_TITEL, originaltitel: DEMO_MARKER_TITEL,
+    vorstellungen: [{ ...((snap.filme || [])[0].vorstellungen || [])[0], zeit: SPAETESTE_ZEIT }],
+  }],
+};
+const KATALOG_ZEILEN = {
+  manifest: { payload: { stand: FIXED_ISO }, quelle: "manifest" },
+  programm: { payload: snap, quelle: "film-at" },
+  programm_demo: { payload: snapDemo, quelle: "demo-schnappschuss" },
+  streaming: { payload: { bekannt: { ...bekanntSnapshot, demo: false }, entdecken: { ...entdeckenSnapshot, demo: false } }, quelle: "watchmode" },
+  streaming_demo: { payload: { bekannt: bekanntSnapshot, entdecken: entdeckenSnapshot }, quelle: "demo-schnappschuss" },
+};
+const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+function katalogAntwort(url, opts = {}) {
+  const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
+  const zeile = KATALOG_ZEILEN[name];
+  const mitToken = !!(opts.headers && opts.headers.Authorization);
+  const sichtbar = !!zeile && (mitToken || !NUR_ANGEMELDET.has(name));
+  const zeilen = sichtbar
+    ? [{ payload: zeile.payload, updated_at: FIXED_ISO, stand: FIXED_ISO, gueltig_bis: KATALOG_GUELTIG_BIS, quelle: zeile.quelle }]
+    : [];
+  return { ok: true, status: 200, json: async () => zeilen, text: async () => "" };
+}
 const seedMaster = JSON.stringify({
   meta: echteMaster.meta || { name: "Test" },
   filme: [
@@ -56,15 +100,9 @@ const dom = new JSDOM(html, {
       static now() { return FIXED; }
     }
     window.Date = MockDate;
-    window.fetch = async (url) => {
+    window.fetch = async (url, opts = {}) => {
       const s = String(url);
-      if (s.includes("/rest/v1/kd_catalog")) {
-        const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
-        const payload = name === "manifest" ? { stand: FIXED_ISO }
-          : name === "programm" ? snap
-            : name === "streaming" ? { bekannt: bekanntSnapshot, entdecken: entdeckenSnapshot } : null;
-        return { ok: true, status: 200, json: async () => payload ? [{ payload, updated_at: FIXED_ISO }] : [], text: async () => "" };
-      }
+      if (s.includes("/rest/v1/kd_catalog")) return katalogAntwort(s, opts);
       throw new Error("offline (Test)");
     };
     window.scrollTo = () => {};
@@ -126,6 +164,16 @@ check("Dashboard: Erklärinhalte raus aus Start (kein Hero, keine Quicklinks)",
 const kinoTabKnopf = knopf(/^kino$/i);
 if (kinoTabKnopf) { kinoTabKnopf.click(); await warte(600); }
 const kinoText = text();
+/* Etappe 4: Dieser Test läuft ohne Sitzung. Der Gastbetrieb muss deshalb die
+   DEMO-Zeile bekommen — und zwar nachweisbar, nicht nur behauptet: der Marker
+   steckt in der Demo-Payload, die Live-Payload hat ihn nicht. */
+check("Gastbetrieb: die Demo-Payload landet wirklich in der Oberfläche (Marker-Titel sichtbar)",
+  kinoText.includes(DEMO_MARKER_TITEL));
+/* Der Marker des STAND-Etiketts („· Demo-Schnappschuss"). Ein blankes
+   /Demo-Schnappschuss/ über das ganze #root träfe auch den Fehlerkasten des
+   Kino-Tabs — der erscheint aber genau dann, wenn GAR KEIN Stand da ist. */
+check("Gastbetrieb: der angezeigte Programm-Stand ist als Demo-Schnappschuss ausgewiesen",
+  /· Demo-Schnappschuss/.test(kinoText));
 const kopf = [...doc.querySelectorAll("[title]")].find((e) => e.getAttribute("title") === "Details & Eintrag erstellen");
 check("Kompakte Einträge vorhanden (Läuft auch)", !!kopf);
 if (kopf) {
@@ -165,6 +213,8 @@ check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Karte + Termin-Chip)
 /* ---- Streaming/Entdecken: Filter + gesehen + Eintrag erstellen ---- */
 const streamingTab = knopf(/^streaming$/i);
 if (streamingTab) { streamingTab.click(); await warte(800); }
+check("Gastbetrieb: auch der Streamingkatalog kommt aus der Demo-Zeile (Demo-Hinweis sichtbar)",
+  /Demo-Beispieldaten/.test(text()));
 const entdeckenKnopf = knopf(/^entdecken/i);
 check("Entdecken-Ansicht erreichbar", !!entdeckenKnopf);
 if (entdeckenKnopf) {

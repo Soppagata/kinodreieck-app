@@ -22,4 +22,78 @@ await hole("/manifest.webmanifest", "application/manifest+json");
 await hole("/sw.js", "javascript");
 await hole("/download/", "text/html");
 
+/* --- Katalog-Sichtprüfung als anon ---------------------------------------
+   Die Prüfungen oben belegen nur, dass Dateien und Header ausgeliefert werden —
+   eine funktional leere App käme damit grün durch. Diese Prüfung fragt den
+   Katalog so ab, wie ihn ein nicht angemeldeter Besucher sieht.
+
+   ZENTRAL: PostgREST liefert bei RLS-Filterung HTTP 200 mit LEEREM Array, nie
+   einen 403. Geprüft wird deshalb ausschließlich der Zeileninhalt.
+
+   Erwartung seit Etappe 4 (Migration 20260725220000, 25.07.2026):
+     manifest                      → muss da sein (sonst ist der Katalog tot)
+     programm_demo, streaming_demo → öffentlicher Auftritt; fehlen sie noch,
+                                     ist das ein Hinweis, kein Fehlschlag
+     programm, streaming           → dürfen für anon NIE sichtbar sein
+
+   Konfiguration über Umgebungsvariablen (keine Werte im Code):
+     VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY  (so heißen sie im
+     Deploy-Job) oder ersatzweise KD_SB_URL / KD_SB_ANON für Läufe von Hand.
+   Fehlt eine davon, wird die Prüfung sichtbar ÜBERSPRUNGEN statt den Deploy
+   zu brechen. */
+
+const sbUrl = String(process.env.VITE_SUPABASE_URL || process.env.KD_SB_URL || "").trim().replace(/\/+$/, "");
+const sbKey = String(process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.KD_SB_ANON || "").trim();
+
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(sbUrl) || !sbKey) {
+  console.warn("");
+  console.warn("!! ÜBERSPRUNGEN: Katalog-Sichtprüfung als anon.");
+  console.warn("   Grund: VITE_SUPABASE_URL und/oder VITE_SUPABASE_PUBLISHABLE_KEY sind in diesem");
+  console.warn("   Schritt nicht gesetzt (alternativ KD_SB_URL / KD_SB_ANON).");
+  console.warn("   Solange das so bleibt, prüft der Smoke-Test NUR Auslieferung und Header —");
+  console.warn("   eine funktional leere App käme grün durch.");
+  console.warn("");
+} else {
+  const kopf = { apikey: sbKey, "Cache-Control": "no-cache" };
+  if (/^eyJ/.test(sbKey)) kopf.Authorization = "Bearer " + sbKey;
+
+  const res = await fetch(`${sbUrl}/rest/v1/kd_catalog?select=name&order=name`, { headers: kopf });
+  if (!res.ok) {
+    // Kein Key/keine URL im Text: nur Status und Fehlercode der Datenbank.
+    const rohtext = await res.text().catch(() => "");
+    const code = (rohtext.match(/"code"\s*:\s*"([^"]{0,20})"/) || [])[1] || "-";
+    throw new Error(`Katalog-Sichtprüfung: kd_catalog nicht abrufbar (HTTP ${res.status}, Code ${code}).`);
+  }
+
+  const daten = await res.json().catch(() => null);
+  if (!Array.isArray(daten)) throw new Error("Katalog-Sichtprüfung: unerwartete Antwortform von kd_catalog.");
+  const sichtbar = daten.map((zeile) => zeile?.name).filter(Boolean);
+
+  // Harter Fehlschlag: die Rechte-Regression, gegen die Etappe 4 gebaut wurde.
+  const geleakt = ["programm", "streaming"].filter((name) => sichtbar.includes(name));
+  if (geleakt.length) {
+    throw new Error(
+      `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht Live-Zeilen ${geleakt.join(", ")}. `
+      + "Der getrennte Lesezugriff aus Migration 20260725220000 ist nicht (mehr) aktiv.");
+  }
+
+  // Harter Fehlschlag: ohne manifest ist der Katalog für Besucher tot.
+  if (!sichtbar.includes("manifest")) {
+    throw new Error(
+      `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht die Zeile manifest nicht (sichtbar: ${sichtbar.join(", ") || "nichts"}).`);
+  }
+
+  // Weicher Hinweis: die Demo-Zeilen entstehen erst in einer späteren Phase.
+  const fehlendeDemo = ["programm_demo", "streaming_demo"].filter((name) => !sichtbar.includes(name));
+  if (fehlendeDemo.length) {
+    console.warn("");
+    console.warn(`!! HINWEIS: Demo-Zeilen fehlen noch für anon: ${fehlendeDemo.join(", ")}.`);
+    console.warn("   Der öffentliche Auftritt zeigt bis dahin keine Programm-/Streaming-Inhalte.");
+    console.warn("   Das ist bis zur Demo-Befüllung erwartet und macht den Smoke-Test nicht rot.");
+    console.warn("");
+  }
+
+  console.log(`Katalog-Sichtprüfung als anon bestanden (sichtbar: ${sichtbar.join(", ")}).`);
+}
+
 console.log(`HTTPS-Smoke-Test und Sicherheitsheader bestanden: ${basis}`);

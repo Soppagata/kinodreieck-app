@@ -28,7 +28,7 @@ import { store, K, PROGRAMM_TTL_MS, storageService } from "./services/storage.js
 import { baueBackup } from "./lib/backup.js";
 import { catalogService } from "./services/catalog.js";
 import { authService } from "./services/auth.js";
-import { errorText } from "./services/errors.js";
+import { errorText, ERROR_CODES } from "./services/errors.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
@@ -130,6 +130,26 @@ function tutorialFrei() {
 function snapshotsFrei() {
   return catalogService.hasConnection();
 }
+
+/* ISO-Zeitstempel des Katalogs -> ms. Liefert null statt „jetzt", damit ein
+   fehlender Stand nirgends als frischer Stand durchgeht. */
+function zeitpunkt(wert) {
+  if (wert == null || wert === "") return null;
+  const t = typeof wert === "number" ? wert : Date.parse(wert);
+  return Number.isFinite(t) ? t : null;
+}
+
+/* Beschreibung eines manuell eingespielten Programms (Notfallweg über
+   Einstellungen → Erweitert). Die Daten kommen aus der Hand des Nutzers, nicht
+   aus dem Katalog: kein Ablaufurteil, keine Betriebsart — `variante` bleibt
+   bewusst leer, damit der Varianten-Abgleich beim Boot den Import nicht als
+   fremden Stand verwirft — und selbstverständlich kein geerbter Fehler.
+   Ohne dieses eigene Etikett behielte der Import die Beschreibung des zuvor
+   gescheiterten oder abgelaufenen Versuchs. */
+const IMPORT_INFO = (stand) => ({
+  art: "manuell", variante: null, stand, gueltigBis: null,
+  abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null,
+});
 
 /* Demo-Beilage bei Bedarf laden (einmalig, idempotent). Tests setzen
    window.__KD_DEMO_MASTER__ direkt -> kein Script-Load nötig. */
@@ -247,6 +267,10 @@ export default function App() {
   useEffect(() => authService.subscribe(setSession), []);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
+  /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
+     sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   const [navOffen, setNavOffen] = useState(false); // Mobile-Nav-Drawer offen?
   const navRef = useRef(null);
   const griffRef = useRef(null);
@@ -283,6 +307,15 @@ export default function App() {
   const [programm, setProgramm] = useState(null);
   const [programmArt, setProgrammArt] = useState(null);
   const [progStand, setProgStand] = useState(null);
+  /* Datenwahrheit (Etappe 4): woher das angezeigte Programm bzw. der Katalog
+     stammt und was daran gerade nicht stimmt. Reine Beschreibung des Zustands —
+     die Tabs formulieren daraus ihren Text, sie raten nicht mehr.
+     { art, variante, stand, gueltigBis, abgelaufen, ausCache, anmeldungNoetig, fehler, code }
+     `code` ist der stabile Fehlercode der Grenzschicht (services/errors.js) —
+     damit unterscheiden die Tabs „Anmeldung nötig" von „Schlüssel abgelehnt"
+     und „noch keine Beispieldaten", ohne Texte zu deuten. */
+  const [programmInfo, setProgrammInfo] = useState(null);
+  const [streamingInfo, setStreamingInfo] = useState(null);
   const [streamingBekannt, setStreamingBekannt] = useState(null);
   const [streamingEntdecken, setStreamingEntdecken] = useState(null);
   const [loading, setLoading] = useState("");
@@ -292,6 +325,22 @@ export default function App() {
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   const autoFetched = useRef(false);
+  /* Der Boot hat einen Anzeigestand übernommen, der trotzdem nachgeladen gehört
+     (abgelaufener Schnappschuss). Der Autoload feuert sonst nur bei leerem
+     `programm` und würde den alten Stand ewig stehen lassen. */
+  const nachladenNoetig = useRef(false);
+  /* Betriebsart der letzten Beobachtung ("live"/"demo"). Der erste beobachtete
+     Wert ist der Startzustand, KEIN Wechsel — sonst lädt der Start doppelt. */
+  const letzteBetriebsart = useRef(null);
+  /* Zähler der Betriebsart-Wechsel. JEDER Katalog-Ladevorgang merkt sich beim
+     Start den Stand und schreibt weder State noch Topf, wenn er beim Eintreffen
+     seiner Antwort nicht mehr stimmt. Ein Abbruch-Flag im Wechsel-Effekt genügt
+     dafür NICHT: der Effekt bricht dann zwar seinen eigenen Ablauf ab, die
+     bereits laufenden Lader (Autoload, Streaming-Tab, der Lauf der vorigen
+     Betriebsart) rufen ihre setProgramm/store.set aber ungebremst weiter auf —
+     und eine langsame Live-Antwort landete so nach dem Abmelden als „aktueller
+     Stand" im Topf. */
+  const betriebsartGen = useRef(0);
   const streamingGeladen = useRef(false);
   const entdeckenGeladen = useRef(false); // KD-031: Voll-Katalog getrennt vom leichten Boot-Nachladen
   const streamingRohRef = useRef(null);
@@ -505,42 +554,127 @@ export default function App() {
 
   /* ---- Kinoprogramm direkt aus dem zentralen Supabase-Katalog laden ---- */
   const ladeProgrammDatei = useCallback(async (manuell) => {
+    /* Betriebsart-Stand beim Start dieses Laufs. Wechselt die Betriebsart,
+       während die Antwort unterwegs ist, gehört sie zu einer überholten Zeile
+       und darf weder Anzeige noch Topf berühren (siehe betriebsartGen). */
+    const gen = betriebsartGen.current;
+    const veraltet = () => betriebsartGen.current !== gen;
     setErr("");
     setLoading("programm");
     try {
-      let parsed;
-      if (manuell) {
-        /* Der manuelle Knopf bleibt ein DB-Refresh; Dateiimporte besitzen ihre
-           eigenen Funktionen weiter unten. */
-        parsed = (await catalogService.loadAsset("programm")).payload;
-      } else {
-        parsed = (await catalogService.loadAsset("programm")).payload;
-      }
-      const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
+      /* Der manuelle Knopf bleibt ein DB-Refresh; Dateiimporte besitzen ihre
+         eigenen Funktionen weiter unten. Welche Zeile (live/demo) gelesen wird,
+         entscheidet die Service-Grenze anhand der Sitzung. */
+      const r = await catalogService.loadArea("programm");
+      const data = normalisiereProgramm(r.payload); // Alt- und film.at-Format
+      if (veraltet()) return false;
       if (!manuell && !snapshotFreigabeRef.current) return false;
+      const ausCache = r.quelle === "cache";
+      /* Der Stand kommt aus den Daten, NIE aus der Uhr des Geräts: sonst sähe
+         ein Cache-Treffer von vorletzter Woche aus wie frisch geladen. */
+      const stand = zeitpunkt(r.stand) ?? (ausCache ? r.gecachtAm : Date.now());
+      const gueltigBis = zeitpunkt(r.gueltigBis);
+      const art = ausCache ? "cache" : manuell ? "db-refresh" : "datenbank";
       setProgramm(data);
-      setProgrammArt(manuell ? "db-refresh" : "datenbank");
-      setProgStand(Date.now());
+      setProgrammArt(art);
+      setProgStand(stand);
+      setProgrammInfo({
+        art, variante: r.variante, stand, gueltigBis,
+        abgelaufen: !!r.abgelaufen, ausCache, anmeldungNoetig: !!r.anmeldungNoetig, fehler: null,
+        code: ausCache ? (r.code || null) : null,
+      });
+      if (ausCache) {
+        setErr(r.anmeldungNoetig
+          ? "Kinoprogramm aus dem letzten Browser-Stand — für das aktuelle Programm ist eine Anmeldung nötig."
+          : r.code === ERROR_CODES.INVALID_KEY
+            ? "Kinoprogramm aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Einstellungen → Datenmodus & Verbindung)."
+            : "Kinoprogramm aus dem letzten Browser-Stand geladen (Datenbank derzeit nicht erreichbar).");
+      } else if (r.abgelaufen) {
+        setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
+      }
       try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: Date.now(), art: manuell ? "db-refresh" : "datenbank", data }));
+        /* `gueltigBis` und `variante` MÜSSEN mit in den Topf: ohne sie hielte der
+           nächste Start einen abgelaufenen Schnappschuss für frisches Programm
+           und eine Live-Payload für den Stand eines Gastes. */
+        await store.set(K.programm, JSON.stringify({
+          fetchedAt: Date.now(), stand, gueltigBis, art, variante: r.variante, data,
+        }));
       } catch { /* Cache-Fehler nicht fatal */ }
-      return true;
+      return !ausCache;
     } catch (e) {
-      if (manuell) {
-        setErr("Programmdaten nicht aktualisierbar: " + e.message);
-      } else if (typeof location !== "undefined" && location.protocol === "file:" && programmSnapshot && (Array.isArray(programmSnapshot.filme) || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)))) {
-        // Autoload gescheitert (z.B. file://) -> eingebetteter Snapshot vom Bauzeitpunkt.
+      /* Auch der FEHLER gehört zur alten Betriebsart: sonst überschriebe ein
+         spät eintreffendes „Anmeldung nötig" die Meldung des neuen Standes. */
+      if (veraltet()) return false;
+      const dateiNetz = typeof location !== "undefined" && location.protocol === "file:"
+        && programmSnapshot && (Array.isArray(programmSnapshot.filme) || (programmSnapshot.data && Array.isArray(programmSnapshot.data.filme)));
+      if (!manuell && dateiNetz) {
+        // Autoload gescheitert (nur file://) -> eingebetteter Snapshot vom Bauzeitpunkt.
         // Bewusst NICHT gecached, damit ein späterer fetch/Import gewinnt.
         try {
           const d = normalisiereProgramm(programmSnapshot);
+          const stand = zeitpunkt(programmSnapshot.erstellt);
           setProgramm({ ...d, quelle_hinweis: (d.quelle_hinweis || "") + " · eingebettet beim Bauen" });
           setProgrammArt("snapshot");
-          setProgStand(programmSnapshot.erstellt ? new Date(programmSnapshot.erstellt).getTime() : Date.now());
-        } catch { /* Snapshot unbrauchbar — dann eben leer */ }
+          setProgStand(stand);
+          setProgrammInfo({ art: "snapshot", variante: null, stand, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
+          return false;
+        } catch { /* Snapshot unbrauchbar — dann eben der ehrliche Fehler unten */ }
       }
+      /* B6: Auch der stille Autoload meldet jetzt. Ein leerer Kino-Tab ohne
+         jede Erklärung war der eigentliche Fehler. Jeder Zustand bekommt seinen
+         eigenen Satz — „Anmeldung nötig" ist nicht dasselbe wie ein abgelehnter
+         Schlüssel und nicht dasselbe wie fehlende Beispieldaten. */
+      const code = e?.code || null;
+      const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
+      const text = anmeldungNoetig
+        ? "Für das aktuelle Kinoprogramm ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
+        : code === ERROR_CODES.NO_DEMO_DATA
+          ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du das laufende Kinoprogramm."
+          : code === ERROR_CODES.INVALID_KEY
+            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
+            : (manuell ? "Programmdaten nicht aktualisierbar: " : "Kinoprogramm nicht ladbar: ") + errorText(e);
+      setErr(text);
+      /* Dieser Zweig räumt `programm`, `programmArt` und `progStand` NICHT weg —
+         der bisherige Stand bleibt also sichtbar. Dann muss auch seine
+         BESCHREIBUNG stehen bleiben: `programmInfo` ist seit Etappe 4 die
+         einzige Quelle für „Demo-Schnappschuss", „abgelaufen" und „aus dem
+         Browser-Speicher". Ein reines Fehlerobjekt an dieser Stelle nähme den
+         weiterhin angezeigten Daten ihre Warnetiketten — ein abgelaufener
+         Demo-Stand stünde danach in Normalfarbe als gültiges Programm da.
+         Ehrlicher als das Wegräumen der Daten ist das Ergänzen: das Programm
+         wegzuwerfen, weil eine Aktualisierung scheiterte, nähme dem Nutzer
+         ausgerechnet im Störungsfall die letzte Kopie — auch die manuell
+         eingespielte. Der Fehler kommt also DAZU, er ersetzt die Beschreibung
+         nicht. Nur wenn nichts angezeigt wird (kein früherer Stand, art null),
+         ist das reine Fehlerobjekt die ganze Wahrheit. */
+      /* N1/N2/N3: Die Diagnose des JÜNGSTEN Versuchs gilt — `anmeldungNoetig`
+         und `code` werden übernommen, nicht mit dem alten Wert verodert bzw.
+         hinterfangen. Sonst bliebe „Anmeldung nötig" kleben, nachdem die
+         Ursache längst ein 503 ist, und ein erneutes Anmelden heilte es nicht.
+         `abgelaufen` wird beim Ergänzen neu bewertet: der Stand kann zwischen
+         Ladung und Fehlversuch abgelaufen sein. */
+      setProgrammInfo((vorher) => (vorher && vorher.art
+        ? {
+          ...vorher,
+          abgelaufen: Number.isFinite(vorher.gueltigBis) ? vorher.gueltigBis < Date.now() : vorher.abgelaufen,
+          anmeldungNoetig, fehler: text, code,
+        }
+        : {
+          art: null, variante: null, stand: null, gueltigBis: null,
+          abgelaufen: false, ausCache: false, anmeldungNoetig, fehler: text, code,
+        }));
       return false;
     } finally {
-      setLoading("");
+      /* C3: auch dieser Schreibzugriff gehört der Generation dieses Laufs. Ein
+         überholter Lauf räumte sonst die Ladeanzeige des GERADE laufenden neuen
+         Laufs ab — der Knopf „Kinoprogramm neu laden" würde wieder aktiv, ein
+         dritter paralleler Request wäre einen Klick entfernt.
+         Hängen bleibt die Anzeige dadurch nicht: die Generation steigt einzig im
+         Betriebsart-Effekt, und der startet danach entweder sofort (synchron,
+         vor dem ersten await) einen neuen Programm-Lauf, der die Anzeige in
+         seinem eigenen finally wieder freigibt — oder er räumt sie in seinem
+         frühen Ausstieg selbst ab. */
+      if (!veraltet()) setLoading("");
     }
   }, []);
 
@@ -618,6 +752,15 @@ export default function App() {
           if (frisch && (snapshotFreigabe || p.art === "manuell")) cachedProg = p;
         }
       } catch { /* kein Cache */ }
+      /* Welche Zeile die App JETZT lesen dürfte — allein daran misst sich, ob ein
+         gespeicherter Topf noch ein gültiger Anzeigestand ist.
+         Bewusst der TOKENFREIE Weg (storedVariant, synchron): activeVariant()
+         holt ein Zugriffstoken und stößt bei fast abgelaufener Sitzung eine
+         Erneuerung mit 10-Sekunden-Zeitgrenze an — der Boot stünde dann bei
+         hängender Verbindung minutenlang vor der Startseite. Für dieses Urteil
+         genügt die Frage, ob überhaupt eine gespeicherte Sitzung vorliegt. */
+      let betriebsartJetzt = "demo";
+      try { betriebsartJetzt = catalogService.storedVariant(); } catch { /* Gast ist die sichere Annahme */ }
       try {
         const r = await store.get(K.zeitgrenze);
         if (r && r.value) setZeitgrenze(r.value);
@@ -654,7 +797,38 @@ export default function App() {
       if (cachedProg) {
         // Auch gecachte Programme durch die Normalisierung: filtert inzwischen
         // vergangene Vorstellungen raus (Cache kann bis 7 Tage alt sein).
-        try { setProgramm(normalisiereProgramm(cachedProg.data)); setProgrammArt(cachedProg.art || "snapshot"); setProgStand(cachedProg.fetchedAt); }
+        try {
+          const art = cachedProg.art || "snapshot";
+          const stand = zeitpunkt(cachedProg.stand) ?? cachedProg.fetchedAt;
+          const gueltigBis = zeitpunkt(cachedProg.gueltigBis);
+          /* Dieselbe Ablaufprüfung wie beim frischen Laden — sonst gilt ein
+             abgelaufener Schnappschuss nach einem Neustart als aktuelles
+             Programm (Töpfe ohne das Feld: gueltigBis = null = kein Urteil). */
+          const abgelaufen = gueltigBis != null && gueltigBis < Date.now();
+          /* Und dieselbe Betriebsart: ein als „live" gespeicherter Topf ist für
+             einen Gast kein gültiger Anzeigestand (und umgekehrt). Dann lieber
+             nichts zeigen und neu laden, als Fremdes als frisch etikettieren.
+             Importe/Snapshots tragen keine Variante und bleiben unberührt. */
+          const passt = !cachedProg.variante || cachedProg.variante === betriebsartJetzt;
+          if (!passt) {
+            /* Nicht anzeigen. Der Autoload greift, weil `programm` null bleibt. */
+          } else {
+            setProgramm(normalisiereProgramm(cachedProg.data));
+            setProgrammArt(art);
+            setProgStand(stand);
+            setProgrammInfo({
+              art, variante: cachedProg.variante || null, stand, gueltigBis,
+              abgelaufen, ausCache: art === "cache", anmeldungNoetig: false, fehler: null, code: null,
+            });
+            if (abgelaufen) {
+              setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
+              /* Anzeigen UND nachladen: ohne das bliebe der abgelaufene Stand
+                 bis zum nächsten Klick stehen (der Autoload feuert nur bei
+                 leerem `programm`). */
+              nachladenNoetig.current = true;
+            }
+          }
+        }
         catch { /* Cache unbrauchbar — Autoload übernimmt */ }
       }
       setStartModalOffen(startModalNoetig);
@@ -662,11 +836,24 @@ export default function App() {
     })();
   }, [frischerStart]);
 
-  /* ---- Autoload: ohne frischen Cache einmalig programm.json probieren ---- */
+  /* ---- Autoload: ohne frischen Cache einmalig programm.json probieren ----
+     Zusätzlicher Anlass: der Boot hat zwar etwas angezeigt, es aber als
+     nachladebedürftig markiert (abgelaufener Schnappschuss). */
   useEffect(() => {
-    if (bootDone && snapshotFreigabe && !programm && !autoFetched.current) {
+    if (bootDone && snapshotFreigabe && (!programm || nachladenNoetig.current) && !autoFetched.current) {
       autoFetched.current = true;
-      ladeProgrammDatei(false);
+      nachladenNoetig.current = false;
+      /* B6: `autoFetched` heißt „es wurde etwas geladen", nicht „es wurde
+         einmal versucht". Ein erfolgloser Versuch gibt das Flag deshalb wieder
+         frei — sonst bliebe der Autoload für den Rest der Sitzung stillgelegt,
+         obwohl nie etwas angekommen ist. Eine Ladeschleife entsteht dadurch
+         nicht: dieser Effekt läuft nur bei einer Änderung von [bootDone,
+         programm, snapshotFreigabe] erneut, und ein gescheiterter Versuch
+         lässt `programm` unverändert auf null. */
+      const gen = betriebsartGen.current;
+      ladeProgrammDatei(false).then((ok) => {
+        if (!ok && betriebsartGen.current === gen) autoFetched.current = false;
+      });
     }
   }, [bootDone, programm, snapshotFreigabe, ladeProgrammDatei]);
 
@@ -699,11 +886,13 @@ export default function App() {
     try {
       const parsed = JSON.parse(text);
       const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
+      const jetzt = Date.now();
       setProgramm(data);
       setProgrammArt("manuell");
-      setProgStand(Date.now());
+      setProgStand(jetzt);
+      setProgrammInfo(IMPORT_INFO(jetzt));      // eigenes Etikett statt des geerbten
       try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: Date.now(), art: "manuell", data }));
+        await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
       } catch { /* Cache-Fehler nicht fatal */ }
       setTab("kino");
     } catch (e) {
@@ -724,11 +913,13 @@ export default function App() {
         events: (programm && programm.events) || [],
         demnaechst: (programm && programm.demnaechst) || [], // Demnächst bleibt erhalten
       });
+      const jetzt = Date.now();
       setProgramm(data);
       setProgrammArt("manuell");
-      setProgStand(Date.now());
+      setProgStand(jetzt);
+      setProgrammInfo(IMPORT_INFO(jetzt));      // eigenes Etikett statt des geerbten
       try {
-        await store.set(K.programm, JSON.stringify({ fetchedAt: Date.now(), art: "manuell", data }));
+        await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
       } catch { /* Cache-Fehler nicht fatal */ }
       setTab("kino");
     } catch (e) {
@@ -1471,20 +1662,42 @@ export default function App() {
      (Streaming-Tab offen): der volle 3,8-MB-Entdecken-Katalog wird gefetcht/geparst. */
   const ladeStreamingDateien = useCallback(async (vollKatalog = false) => {
     if (!snapshotFreigabe) return;
+    /* Wie beim Programm: eine Antwort, die zu einer inzwischen überholten
+       Betriebsart gehört, darf die Anzeige nicht mehr anfassen. */
+    const gen = betriebsartGen.current;
+    const veraltet = () => betriebsartGen.current !== gen;
     if (streamingGeladen.current && streamingRohRef.current) {
       const a = catalogService.buildStreamingViews(streamingRohRef.current, master || []);
       setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken); return;
     }
     streamingGeladen.current = true;
     try {
-      const r = await catalogService.loadAsset("streaming", { timeout: vollKatalog ? 20000 : 15000 });
+      const r = await catalogService.loadArea("streaming", { timeout: vollKatalog ? 20000 : 15000 });
+      if (veraltet()) return;
       if (!snapshotFreigabeRef.current) return;
       streamingRohRef.current = r.payload;
       const a = catalogService.buildStreamingViews(r.payload, master || []);
       setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
       entdeckenGeladen.current = true;
-      if (r.quelle === "cache" && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
+      const ausCache = r.quelle === "cache";
+      setStreamingInfo({
+        art: ausCache ? "cache" : "datenbank", variante: r.variante,
+        stand: zeitpunkt(r.stand) ?? (ausCache ? r.gecachtAm : Date.now()),
+        gueltigBis: zeitpunkt(r.gueltigBis), abgelaufen: !!r.abgelaufen,
+        ausCache, anmeldungNoetig: !!r.anmeldungNoetig, fehler: null,
+        code: ausCache ? (r.code || null) : null,
+      });
+      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) setErr("Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Einstellungen → Datenmodus & Verbindung).");
+      else if (ausCache && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
+      else if (r.abgelaufen) setErr("Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
     } catch (e) {
+      /* C4: erst die Generation prüfen, DANN das Ref anfassen. `streamingGeladen`
+         gehört dem laufenden — womöglich längst erfolgreichen — Lauf der neuen
+         Betriebsart; ein überholter Lauf, der es zurücksetzt, entwertet dessen
+         Memo-Zweig und lässt den mehrere MB großen Entdecken-Katalog beim
+         nächsten Öffnen des Streaming-Tabs neu über die Leitung. Der
+         Betriebsart-Effekt setzt das Ref beim Wechsel ohnehin selbst zurück. */
+      if (veraltet()) return;   // Fehler der alten Betriebsart, siehe oben
       streamingGeladen.current = false;
       const file = typeof location !== "undefined" && location.protocol === "file:";
       if (file) {
@@ -1492,7 +1705,32 @@ export default function App() {
         streamingRohRef.current = roh;
         const a = catalogService.buildStreamingViews(roh, master || []);
         setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
-      } else setErr("Streamingkatalog nicht ladbar: " + e.message);
+        setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
+      } else {
+        const code = e?.code || null;
+        const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
+        const text = anmeldungNoetig
+          ? "Für den aktuellen Streamingkatalog ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
+          : code === ERROR_CODES.NO_DEMO_DATA
+            ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du den laufenden Streamingkatalog."
+            : code === ERROR_CODES.INVALID_KEY
+              ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
+              : "Streamingkatalog nicht ladbar: " + errorText(e);
+        setErr(text);
+        /* Wie beim Programm (C1): `streamingBekannt`/`streamingEntdecken` bleiben
+           hier stehen, also bleibt auch ihre Beschreibung stehen. Sonst
+           verschwänden die Hinweisbänder „abgelaufener Schnappschuss" und „aus
+           dem Browser-Speicher" im Streaming-Tab, während genau diese Daten
+           weiter angezeigt werden. */
+        /* N1/N2/N3 wie beim Programm: jüngste Diagnose gilt, Ablauf neu bewertet. */
+        setStreamingInfo((vorher) => (vorher && vorher.art
+          ? {
+            ...vorher,
+            abgelaufen: Number.isFinite(vorher.gueltigBis) ? vorher.gueltigBis < Date.now() : vorher.abgelaufen,
+            anmeldungNoetig, fehler: text, code,
+          }
+          : { art: null, variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig, fehler: text, code }));
+      }
     }
   }, [snapshotFreigabe, master]);
   useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
@@ -1553,6 +1791,90 @@ export default function App() {
   /* Badges/Mein-Programm/Katalog-Zähler brauchen die LEICHTE bekannt-Datei auch
      außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
+
+  /* ---- Betriebsart-Wechsel (Gast ↔ Konto): Katalog wirklich neu laden ----
+     An- und Abmelden ändert, welche Zeile der Katalogpfad überhaupt lesen darf.
+     Ohne dieses Nachladen bliebe der Stand der alten Betriebsart stehen — nach
+     dem Anmelden stünde im Kino-Tab weiter „Anmeldung nötig", nach dem Abmelden
+     die Live-Payload als frischer Stand. Der ERSTE beobachtete Wert ist der
+     Startzustand und damit kein Wechsel; der Autoload wird für die Dauer des
+     Wechsels stillgelegt, damit nicht zweimal geladen wird.
+
+     Dieser Effekt LÖSCHT NICHTS. Das ist bewusst und war früher anders:
+       · Der Katalog-Cache ist nach ZEILENNAMEN geschlüsselt (cacheUrl(name) in
+         lib/katalog.js) — `programm` und `programm_demo` liegen unter
+         verschiedenen Einträgen und können sich gar nicht überlagern. Ein
+         Demo-Read fällt also nie auf einen Live-Cache zurück; das Verwerfen
+         beim Wechsel wäre reiner Verlust.
+       · Der gespeicherte Programm-Topf wird beim nächsten Start ohnehin gegen
+         die dann geltende Betriebsart geprüft (Varianten-Abgleich im Boot) und
+         als Anzeigestand verworfen, wenn er nicht passt. Ihn hier zu löschen
+         bringt nichts — kostet aber im Fehlerfall alles: ein über den
+         Notfallweg eingespieltes Programm (art "manuell", ohne variante) ist
+         die EINZIGE Kopie auf dem Gerät und ausgerechnet die Quelle für den
+         Fall, dass die Datenbank nicht liefert.
+     Ehrlich bleibt der Wechsel trotzdem: die ANZEIGE wird zurückgesetzt, der
+     Nutzer sieht nach dem Wechsel nie mehr den Stand der alten Betriebsart.
+     Scheitert das Nachladen (heutiger Produktionsfall: die Zeilen
+     programm_demo/streaming_demo sind noch nicht veröffentlicht), sieht er den
+     ehrlichen Fehlertext — und nichts ist unwiederbringlich weg.
+
+     B7 (nur vermerkt, KEIN Umbau): „Betriebsart" hat hier zwei Definitionen.
+     Dieser Effekt entscheidet an `session.mode`, alle Leser (activeVariant,
+     loadArea, die Boot-Prüfung) am Vorhandensein einer Sitzung bzw. eines
+     Tokens. Bei einer degradierten Sitzung (mode "account", Server nicht
+     erreichbar) fallen die auseinander. Heute folgenlos, weil beide Seiten
+     dann dasselbe Ergebnis liefern — aber eine Doppel-Wahrheit, die bei der
+     nächsten Änderung an der Sitzungslogik zuerst zu prüfen ist. */
+  useEffect(() => {
+    if (!bootDone) return undefined;
+    const jetzt = session.mode === "account" ? "live" : "demo";
+    if (letzteBetriebsart.current === null) { letzteBetriebsart.current = jetzt; return undefined; }
+    if (letzteBetriebsart.current === jetzt) return undefined;
+    letzteBetriebsart.current = jetzt;
+    /* Generation hochzählen, BEVOR irgendetwas geladen wird: alles, was aus der
+       alten Betriebsart noch unterwegs ist, ist ab hier veraltet und schreibt
+       weder Anzeige noch Topf. */
+    const gen = ++betriebsartGen.current;
+    autoFetched.current = true;          // dieser Effekt lädt selbst
+    nachladenNoetig.current = false;
+    streamingGeladen.current = false;
+    entdeckenGeladen.current = false;
+    streamingRohRef.current = null;
+    /* Der bisherige ANZEIGESTAND gehört der anderen Betriebsart — verwerfen
+       statt umetikettieren. Persönliche Daten und der gespeicherte Topf bleiben
+       unberührt. Synchron, damit zwischen Wechsel und Reset nichts Altes mehr
+       gerendert wird. */
+    setProgramm(null); setProgrammArt(null); setProgStand(null); setProgrammInfo(null);
+    setStreamingBekannt(null); setStreamingEntdecken(null); setStreamingInfo(null);
+    /* Ohne Datenbankzugang lädt dieser Wechsel nichts nach. Dann muss er die
+       Ladeanzeige selbst freigeben: ein noch laufender Programm-Lauf der alten
+       Betriebsart überspringt sein `setLoading("")` seit C3 (er ist veraltet),
+       und ein neuer Lauf, der sie freigäbe, startet hier nicht. */
+    if (!snapshotFreigabeRef.current) { autoFetched.current = false; setLoading(""); return undefined; }
+    (async () => {
+      /* N4: `ladeStreamingDateien` kann in seinem eigenen Fehlerzweig noch
+         werfen (file://-Beilage). Ohne Auffangnetz bräche die IIFE ab und gäbe
+         `autoFetched` nie wieder frei — der Autoload wäre für den Rest der
+         Sitzung tot. Der Programm-Lauf zählt allein für die Freigabe. */
+      const [programmErgebnis] = await Promise.allSettled([
+        ladeProgrammDatei(false),
+        ladeStreamingDateien(tabRef.current === "streaming"),
+      ]);
+      const programmOk = programmErgebnis.status === "fulfilled" && programmErgebnis.value;
+      /* Ein weiterer Wechsel ist dazwischengekommen — dessen Effekt führt. */
+      if (betriebsartGen.current !== gen) return;
+      /* B6: Brachte dieser Lauf keinen frischen Datenbankstand, darf der
+         Autoload nicht für den Rest der Sitzung stillgelegt bleiben. Freigeben
+         ist gefahrlos: der Autoload-Effekt hängt an [bootDone, programm,
+         snapshotFreigabe] und feuert erst wieder, wenn sich einer davon ändert
+         — ein erfolgloser Versuch lässt `programm` auf null und erzeugt daher
+         keine Schleife; ein Cache-Treffer hat `programm` gefüllt, womit die
+         Bedingung des Autoloads ohnehin nicht mehr greift. */
+      if (!programmOk) autoFetched.current = false;
+    })();
+    return undefined;
+  }, [session.mode, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
 
   /* ---- Egg-Verfügbarkeit + Sprung-Link (B3, für Cage & Teppich) ----
      „Verfügbar" = physischer Besitz ∨ aktives Abo (streamingBekannt ∩ auswahl) ∨
@@ -1707,7 +2029,12 @@ export default function App() {
 
   const clearProgrammCache = useCallback(async () => {
     try { await store.delete(K.programm); } catch { /* war leer */ }
-    setProgramm(null); setProgrammArt(null); setProgStand(null); autoFetched.current = false;
+    /* Der Programm-Topf war nur die halbe Miete: ohne den Cache-Storage-Eintrag
+       gewann beim nächsten fehlgeschlagenen Direkt-Read wieder derselbe alte
+       Stand — „neu laden" hätte nichts verworfen. */
+    try { await catalogService.discardCache("programm"); } catch { /* Cache ist Komfort */ }
+    setProgramm(null); setProgrammArt(null); setProgStand(null); setProgrammInfo(null);
+    autoFetched.current = false;
   }, []);
 
   const refreshKatalog = useCallback(async () => {
@@ -1842,7 +2169,7 @@ export default function App() {
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
             kinoMatches={kinoMatches} mustwatch={mustwatch} auswahl={auswahl}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
-            progStand={progStand} />
+            progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}
 
         {tab === "kino" && bootDone && (
@@ -1856,6 +2183,7 @@ export default function App() {
             loading={loading} ladeProgrammDatei={ladeProgrammDatei}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             datenGesperrt={!snapshotFreigabe}
+            programmInfo={programmInfo} angemeldet={session.mode === "account"}
             autorName={autorName} /* KD-030: echter Autor für neue Bewertungen (EintragForm/EditPanel) */
           />
         )}
@@ -1894,6 +2222,7 @@ export default function App() {
             merkliste={merkliste} toggleMerk={toggleMerk}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
+            katalogInfo={streamingInfo} angemeldet={session.mode === "account"}
           />
         )}
 
@@ -1924,6 +2253,7 @@ export default function App() {
             onStartWahl={oeffneStartWahl}
             onDemoEntfernen={entferneDemoDaten}
             katalogVerbunden={snapshotFreigabe}
+            programmInfo={programmInfo}
             onKatalogVerbinden={() => setKatalogZugangOffen(true)}
             onKatalogRefresh={refreshKatalog}
             artikelAnzahl={artikelListe.length} exportArtikel={exportArtikel} importArtikel={importArtikel}

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/* RLS-Negativtest für kd_personal — läuft gegen die ECHTE Datenbank.
+/* RLS-Negativtest für kd_personal, kd_catalog und kd_quellen — läuft gegen die
+   ECHTE Datenbank.
    ============================================================================
    Bewusst NICHT Teil von `npm test`: braucht ein erreichbares Supabase-Projekt
    und zwei echte Testaccounts. Vor jeder Migration ausführen, die RLS berührt.
@@ -156,12 +157,82 @@ const t11a = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1");
 pruefe("T11a anon liest weiterhin kd_store scope=demo (Demo-Start intakt)", t11a.status === 200, "HTTP " + t11a.status);
 const t11b = await rest("GET", "/kd_store?scope=eq.shared&select=key&limit=1");
 pruefe("T11b anon liest weiterhin kd_store scope=shared (geteilte Blogs intakt)", t11b.status === 200, "HTTP " + t11b.status);
-const t11c = await rest("GET", "/kd_catalog?select=name&limit=1");
-pruefe("T11c anon liest weiterhin kd_catalog (Programmkatalog intakt)", t11c.status === 200, "HTTP " + t11c.status);
+/* --- T11c-T11i: getrennter Katalogzugriff (Etappe 4, 25.07.2026) ---------
+   ACHTUNG, zentral für alle Prüfungen hier unten: PostgREST antwortet bei
+   RLS-Filterung mit HTTP 200 und LEEREM Array, nicht mit 403. Ein Statuscode
+   beweist deshalb gar nichts über die Sichtbarkeit — geprüft wird der
+   Zeileninhalt. (Die Vorgängerfassung von T11c prüfte status === 200 auf
+   /kd_catalog und meldete „Programmkatalog intakt"; das blieb nach der
+   Trennung falsch-grün, weil die manifest-Zeile den 200er allein trägt.) */
+function namen(antwort) {
+  return Array.isArray(antwort.data) ? antwort.data.map((z) => z?.name) : [];
+}
 
-/* --- T12: User-Token gehört nicht auf Katalogpfade ----------------------- */
+const t11cat = await rest("GET", "/kd_catalog?select=name&order=name");
+const anonNamen = namen(t11cat);
+pruefe("T11c anon sieht die kd_catalog-Zeile manifest (Verbindungsnachweis)",
+  t11cat.status === 200 && anonNamen.includes("manifest"),
+  "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
+pruefe("T11d anon sieht die kd_catalog-Zeile programm NICHT",
+  t11cat.status === 200 && !anonNamen.includes("programm"),
+  anonNamen.includes("programm") ? "LECK: Live-Programmdaten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
+pruefe("T11e anon sieht die kd_catalog-Zeile streaming NICHT",
+  t11cat.status === 200 && !anonNamen.includes("streaming"),
+  anonNamen.includes("streaming") ? "LECK: Streaming-Daten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
+
+const t11f = await rest("GET", "/kd_catalog?select=name&order=name", { token: A.token });
+const kontoNamen = namen(t11f);
+pruefe("T11f angemeldete Sitzung sieht programm UND streaming",
+  t11f.status === 200 && kontoNamen.includes("programm") && kontoNamen.includes("streaming"),
+  "HTTP " + t11f.status + " sichtbar=[" + kontoNamen.join(",") + "]"
+  + " (fehlt eine Zeile ganz, ist nicht die Policy schuld, sondern die Pipeline)");
+
+/* kd_quellen: anon hat GAR KEINE Rechte (revoke all) → PostgREST antwortet
+   401 oder 403 mit Code 42501. Entscheidend bleibt: keine Zeilen. */
+const t11g = await rest("GET", "/kd_quellen?select=slug&limit=1");
+const t11gText = JSON.stringify(t11g.data || {});
+const t11gZeilen = Array.isArray(t11g.data) ? t11g.data.length : 0;
+const t11gRechteFehler = t11g.status === 401 || t11g.status === 403 || /42501/.test(t11gText);
+pruefe("T11g anon bekommt auf kd_quellen KEINE Zeilen (erwartet: Rechte-Fehler 401/403 mit 42501)",
+  t11gZeilen === 0 && (t11gRechteFehler || t11g.status === 200),
+  "HTTP " + t11g.status + " rows=" + t11gZeilen
+  + (t11gZeilen > 0 ? " — LECK: anon liest das Quellenregister!" : ""));
+if (t11gZeilen === 0 && !t11gRechteFehler) {
+  console.log("  Hinweis zu T11g: keine Zeilen, aber auch kein Rechte-Fehler (HTTP " + t11g.status
+    + "). Erwartet war 401/403 mit 42501 — prüfen, ob das revoke aus Abschnitt A noch steht.");
+}
+
+const t11h = await rest("GET", "/kd_quellen?select=slug,status&limit=5", { token: A.token });
+pruefe("T11h angemeldete Sitzung darf kd_quellen lesen",
+  t11h.status === 200 && Array.isArray(t11h.data) && t11h.data.length > 0 && !!t11h.data[0]?.slug,
+  "HTTP " + t11h.status + " rows=" + (Array.isArray(t11h.data) ? t11h.data.length : "?"));
+
+/* Statusfunktion: EXECUTE ist anon und authenticated entzogen. Aufruf bewusst
+   mit einem Slug, den es nicht gibt — selbst wenn das Recht fälschlich noch
+   bestünde, bricht die Funktion vor jedem UPDATE/DELETE ab. Es wird also unter
+   keinen Umständen etwas verändert. */
+const t11i = await rest("POST", "/rpc/kd_quelle_status_setzen", {
+  body: { p_slug: "__kd_rls_test_gibt_es_nicht__", p_status: "offen" },
+});
+const t11iText = JSON.stringify(t11i.data || {});
+const funktionLief = /Unbekannte Quelle/.test(t11iText);
+pruefe("T11i anon darf kd_quelle_status_setzen NICHT ausführen",
+  !t11i.ok && !funktionLief
+  && (t11i.status === 401 || t11i.status === 403 || t11i.status === 404 || /42501|PGRST202/.test(t11iText)),
+  "HTTP " + t11i.status
+  + (t11i.ok || funktionLief ? " — LECK: anon kann Quellen-Status setzen (und damit Katalogzeilen löschen)!" : ""));
+
+/* --- T12: Sitzungstoken auf kd_store bleibt tabu -------------------------
+   DOKTRINWECHSEL, bewusst getroffen in Etappe 4 am 25.07.2026 (Entscheidung
+   E1=b, Migration 20260725220000): Der frühere Wächter „Tokens gehören nicht
+   auf Katalogpfade" ist AUFGEHOBEN. Auf kd_catalog ist das Sitzungstoken ab
+   sofort erwünscht — ohne Anmeldung gibt es programm/streaming nicht mehr
+   (T11d/T11e/T11f). Unverändert gilt die Regel für kd_store: der alte
+   schlüsselbasierte Sync ist ein rein öffentlicher Pfad, seine Policy hängt an
+   anon; ein mitgeschicktes Sitzungstoken macht die Antwort dort leer. Wer hier
+   ein Token anhängt, hat den Pfad verwechselt — das soll auffallen. */
 const t12 = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1", { token: A.token });
-pruefe("T12 User-JWT auf Demo-Read liefert leer statt Daten (Wächter: Tokens gehören nicht auf Katalogpfade)",
+pruefe("T12 Sitzungstoken auf kd_store-Demo-Read liefert leer (Wächter: kd_store bleibt tokenfrei)",
   t12.status === 200 && Array.isArray(t12.data) && t12.data.length === 0,
   "HTTP " + t12.status + " rows=" + (Array.isArray(t12.data) ? t12.data.length : "?"));
 

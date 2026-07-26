@@ -19,6 +19,49 @@ const streamingBekanntTest = JSON.parse(readFileSync(new URL("./src/data/streami
 const streamingEntdeckenTest = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecken_snapshot.json", import.meta.url), "utf8"));
 const FIXED_ISO = ((snap.zeitraum && snap.zeitraum.von) || new Date().toISOString().slice(0, 10)) + "T12:00:00+02:00";
 
+/* ---- Katalog-Mock mit echtem Datenbankverhalten (Etappe 4) ----
+   `anon` sieht nur manifest + die beiden *_demo-Zeilen; die Live-Zeilen
+   programm/streaming verlangen eine angemeldete Sitzung. PostgREST filtert per
+   RLS OHNE 403 — die Antwort ist HTTP 200 mit LEEREM Array. Der Mock bildet das
+   nach: ohne Authorization-Header bleiben die Live-Zeilen leer. Dieser Test läuft
+   als Gast, sieht also genau das, was ein Tester ohne Konto sieht.
+   Die Demo-Payloads haben dieselbe Struktur wie ihr Live-Pendant (filme[] bzw.
+   bekannt/entdecken) und tragen die neuen Spalten quelle/stand/gueltig_bis. */
+const KATALOG_GUELTIG_BIS = new Date(Date.parse(FIXED_ISO) + 30 * 86400000).toISOString();
+/* Demo- und Live-Zeile MÜSSEN unterscheidbar sein: mit identischer Payload könnte
+   kein Check sagen, WELCHE Zeile in der Oberfläche gelandet ist. Die Demo-Zeile
+   trägt einen zusätzlichen, klar markierten Film (ans Ende sortiert, damit die
+   Reihenfolge der Bestandsfilme unberührt bleibt) und — wie der echte
+   Demo-Schnappschuss — demo: true im Streamingkatalog; die Live-Zeile nicht. */
+const DEMO_MARKER_TITEL = "Demo-Zeilen-Marker";
+const SPAETESTE_ZEIT = (snap.filme || []).flatMap((f) => (f.vorstellungen || []).map((v) => v.zeit)).sort().at(-1);
+const snapDemo = {
+  ...snap,
+  filme: [...(snap.filme || []), {
+    ...(snap.filme || [])[0],
+    film_at_id: 999000001, titel: DEMO_MARKER_TITEL, originaltitel: DEMO_MARKER_TITEL,
+    vorstellungen: [{ ...((snap.filme || [])[0].vorstellungen || [])[0], zeit: SPAETESTE_ZEIT }],
+  }],
+};
+const KATALOG_ZEILEN = {
+  manifest: { payload: { stand: FIXED_ISO }, quelle: "manifest" },
+  programm: { payload: snap, quelle: "film-at" },
+  programm_demo: { payload: snapDemo, quelle: "demo-schnappschuss" },
+  streaming: { payload: { bekannt: { ...streamingBekanntTest, demo: false }, entdecken: { ...streamingEntdeckenTest, demo: false } }, quelle: "watchmode" },
+  streaming_demo: { payload: { bekannt: streamingBekanntTest, entdecken: streamingEntdeckenTest }, quelle: "demo-schnappschuss" },
+};
+const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+function katalogAntwort(url, opts = {}) {
+  const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
+  const zeile = KATALOG_ZEILEN[name];
+  const mitToken = !!(opts.headers && opts.headers.Authorization);
+  const sichtbar = !!zeile && (mitToken || !NUR_ANGEMELDET.has(name));
+  const zeilen = sichtbar
+    ? [{ payload: zeile.payload, updated_at: FIXED_ISO, stand: FIXED_ISO, gueltig_bis: KATALOG_GUELTIG_BIS, quelle: zeile.quelle }]
+    : [];
+  return { ok: true, status: 200, json: async () => zeilen, text: async () => "" };
+}
+
 const dom = new JSDOM(readFileSync(pfad, "utf8"), {
   url: "http://localhost/Kinodreieck.html", runScripts: "dangerously", pretendToBeVisual: true, virtualConsole: vc,
   beforeParse(w) {
@@ -29,15 +72,9 @@ const dom = new JSDOM(readFileSync(pfad, "utf8"), {
       static now() { return FIXED; }
     }
     w.Date = MockDate;
-    w.fetch = async (url) => {
+    w.fetch = async (url, opts = {}) => {
       const s = String(url);
-      if (s.includes("/rest/v1/kd_catalog")) {
-        const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
-        const payload = name === "manifest" ? { stand: FIXED_ISO }
-          : name === "programm" ? snap
-            : name === "streaming" ? { bekannt: streamingBekanntTest, entdecken: streamingEntdeckenTest } : null;
-        return { ok: true, status: 200, json: async () => payload ? [{ payload, updated_at: FIXED_ISO }] : [], text: async () => "" };
-      }
+      if (s.includes("/rest/v1/kd_catalog")) return katalogAntwort(s, opts);
       throw new Error("offline (Test)");
     };
       w.scrollTo = () => {};
@@ -276,6 +313,13 @@ if (aboChip) { aboChip.click(); await warte(300); aboChip.click(); await warte(2
 check("Kino: Ganzes-Tagesprogramm-Schalter", !!knopf(/Ganzes Tagesprogramm|Zeitfilter an/));
 check("Kino: Nonstop-Link korrekt", [...doc.querySelectorAll("a")].some((a) => a.href === "https://www.nonstopkino.at/programm"));
 check("Kino: Kino-Filter-Select", [...doc.querySelectorAll("select")].some((s) => [...s.options].some((o) => /Alle Kinos/.test(o.textContent))));
+/* Etappe 4: dieser Durchlauf hat keine Sitzung. Der Gastbetrieb muss die
+   DEMO-Zeile bekommen — nachweisbar am Marker, den nur die Demo-Payload trägt. */
+check("Gastbetrieb: die Demo-Payload landet wirklich im Kino-Tab (Marker-Titel sichtbar)", text().includes(DEMO_MARKER_TITEL));
+/* Der Marker des STAND-Etiketts („· Demo-Schnappschuss"). Ein blankes
+   /Demo-Schnappschuss/ über das ganze #root träfe auch den Fehlerkasten des
+   Kino-Tabs, der genau dann erscheint, wenn gar kein Stand angezeigt wird. */
+check("Gastbetrieb: der Programm-Stand ist als Demo-Schnappschuss ausgewiesen", /· Demo-Schnappschuss/.test(text()));
 
 /* ---- Ergebnis ---- */
 let ok = true;

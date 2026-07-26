@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
+import { ERROR_CODES } from "../services/errors.js";
 import { norm, schlagseite, score } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
@@ -48,7 +49,7 @@ function DienstBadges({ dienste, webUrls, auswahl }) {
   );
 }
 
-export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm, mustwatchIds, datenGesperrt = false }) {
+export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm, mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false }) {
   const [ansicht, setAnsicht] = useState("programm");
   useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
@@ -221,13 +222,29 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
 
       {!datenDa && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-          <strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich
-          den vorbereiteten Datenbank-Katalog und ruft Watchmode nie live auf. Der veröffentlichte
-          Katalog fehlt, wurde noch nicht erzeugt oder konnte gerade nicht geladen werden.
-          <br />Prüfe unter Einstellungen den Katalog-Status. Für die Administration läuft im
-          separaten Ordner <code style={{ color: T.wolfram }}>KinoFilm/Programmdateien/System</code> der Befehl
-          {" "}<code style={{ color: T.wolfram }}>node streaming_auto.mjs</code>; Einzelheiten stehen im dortigen
-          <span style={{ color: T.wolfram }}> streaming-daten/auto_log.txt</span>. API-Schlüssel gehören nicht in die PWA.
+          {katalogInfo?.code === ERROR_CODES.NO_DEMO_DATA ? (
+            /* Noch nichts veröffentlicht ist weder ein Server- noch ein
+               Anmeldungsproblem — und schon gar keine „ungültige Antwort". */
+            <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Der
+              laufende Streamingkatalog steht nach der Anmeldung unter Einstellungen → Konto bereit.</>
+          ) : katalogInfo?.code === ERROR_CODES.INVALID_KEY ? (
+            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den
+              hinterlegten Leseschlüssel ab — prüfe ihn unter Einstellungen → Datenmodus &amp; Verbindung.
+              Eine Anmeldung hilft hier nicht.</>
+          ) : katalogInfo?.anmeldungNoetig ? (
+            <><strong style={{ color: T.wolfram }}>Für den aktuellen Streamingkatalog ist eine Anmeldung nötig.</strong> Melde
+              dich unter Einstellungen → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss —
+              der steht für diesen Zugang gerade nicht bereit.</>
+          ) : katalogInfo?.fehler ? (
+            <><strong style={{ color: T.wolfram }}>Streamingkatalog konnte nicht geladen werden.</strong> {katalogInfo.fehler}
+              {" "}Der Katalog wird nicht live abgefragt, sondern vorbereitet ausgeliefert; du kannst ihn unter
+              Einstellungen → Datenmodus &amp; Verbindung erneut anfordern.
+              {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme der laufende Katalog."}</>
+          ) : (
+            <><strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich den
+              vorbereiteten Datenbank-Katalog und ruft Watchmode nie live auf. Für diesen Zugang ist noch
+              kein Katalog hinterlegt. Prüfe unter Einstellungen → Datenmodus &amp; Verbindung den Status.</>
+          )}
         </div>
       )}
 
@@ -240,6 +257,20 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
       {datenDa && bekannt.demo && (
         <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
           <strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — die Titel hier sind Platzhalter. Der echte Katalog kommt mit dem ersten Watchmode-Lauf.
+        </div>
+      )}
+
+      {/* Ein abgelaufener Schnappschuss ist kein aktueller Katalog — sagen statt zeigen. */}
+      {datenDa && katalogInfo?.abgelaufen && (
+        <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
+          <strong style={{ color: T.gefahr }}>Abgelaufener Schnappschuss</strong> — diese Verfügbarkeiten galten bis
+          {" "}{new Date(katalogInfo.gueltigBis).toLocaleDateString("de-AT")} und stimmen heute nicht mehr zwingend.
+          {katalogInfo.variante === "demo" ? " Mit einer Anmeldung siehst du den laufenden Katalog." : ""}
+        </div>
+      )}
+      {datenDa && katalogInfo?.ausCache && (
+        <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
+          <strong style={{ color: T.wolfram }}>Aus dem Browser-Speicher</strong> — die Datenbank war beim letzten Versuch nicht erreichbar. Angezeigt wird der zuletzt geladene Stand.
         </div>
       )}
 

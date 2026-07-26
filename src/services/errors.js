@@ -5,6 +5,14 @@ export const ERROR_CODES = Object.freeze({
   LIMIT: "limit",
   SERVER: "server",
   INVALID_RESPONSE: "invalid-response",
+  /* Etappe 4: zwei Zustände, die vorher fälschlich als „Anmeldung nötig" bzw.
+     „ungültige Antwort" durchgingen. Beide sind weder Nutzer- noch Serverfehler:
+     INVALID_KEY  = der eingetragene Leseschlüssel wird abgelehnt (echter 401),
+     NO_DEMO_DATA = für den öffentlichen Zugang ist noch nichts veröffentlicht.
+     errorFromStatus() bildet weiterhin nur die sechs HTTP-Codes ab — diese
+     beiden entstehen ausschließlich aus einem erkannten Grund am Fehler. */
+  INVALID_KEY: "invalid-key",
+  NO_DEMO_DATA: "no-demo-data",
 });
 
 const TEXTE = Object.freeze({
@@ -14,6 +22,8 @@ const TEXTE = Object.freeze({
   [ERROR_CODES.LIMIT]: "Das Nutzungslimit ist erreicht. Bitte später erneut versuchen.",
   [ERROR_CODES.SERVER]: "Der Server ist vorübergehend nicht verfügbar.",
   [ERROR_CODES.INVALID_RESPONSE]: "Der Server hat eine ungültige Antwort geliefert.",
+  [ERROR_CODES.INVALID_KEY]: "Der hinterlegte Zugangsschlüssel wird nicht akzeptiert.",
+  [ERROR_CODES.NO_DEMO_DATA]: "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.",
 });
 
 export class BoundaryError extends Error {

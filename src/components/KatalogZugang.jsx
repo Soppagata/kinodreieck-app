@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { catalogService } from "../services/catalog.js";
-import { errorText } from "../services/errors.js";
+import { errorText, ERROR_CODES } from "../services/errors.js";
 
 export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
   const cfg = catalogService.getConnection();
@@ -11,6 +11,9 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
   const [sichtbar, setSichtbar] = useState(false);
   const [busy, setBusy] = useState(false);
   const [meldung, setMeldung] = useState("");
+  /* "ok" | "warnung" | "fehler" — der Ton der Rückmeldung wird gesetzt, nicht
+     aus dem Text geraten (früher: meldung.includes("fehl")). */
+  const [art, setArt] = useState("ok");
   const dialog = useRef(null);
 
   useEffect(() => {
@@ -25,12 +28,41 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
 
   const verbinden = async () => {
     catalogService.setConnection({ url, key });
-    setBusy(true); setMeldung("Verbindung wird geprüft …");
+    setBusy(true); setArt("ok"); setMeldung("Verbindung wird geprüft …");
     try {
+      /* Der Test prüft nicht mehr nur das (für alle lesbare) Manifest, sondern
+         auch die Zeile, die diese Sitzung wirklich braucht. Sonst stünde hier
+         „Verbunden ✓", während Kino und Streaming leer bleiben. */
       const r = await catalogService.testConnection();
-      setMeldung("Verbunden ✓");
+      const a = r.asset;
+      if (a && !a.ok && a.code === ERROR_CODES.INVALID_KEY) {
+        /* Der häufigste Einrichtungsfehler überhaupt — und der einzige, den der
+           Tester selbst beheben kann. Er darf sich nicht als „Anmeldung nötig"
+           tarnen, sonst sucht man an der falschen Stelle. Und der Dialog bleibt
+           offen: mit abgelehntem Schlüssel ist nichts eingerichtet. */
+        setArt("fehler");
+        setMeldung("Der Zugangsschlüssel wird nicht akzeptiert. Prüfe den mitgeschickten Leseschlüssel (vollständig kopiert, keine Leerzeichen).");
+        return;
+      }
+      if (a && !a.ok && a.code === ERROR_CODES.NO_DEMO_DATA) {
+        setArt("warnung");
+        setMeldung("Verbindung steht ✓ — für den öffentlichen Zugang sind allerdings noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung (Einstellungen → Konto) siehst du das laufende Programm.");
+      } else if (a && !a.ok && a.anmeldungNoetig) {
+        setArt("warnung");
+        setMeldung("Verbindung steht ✓ — für das laufende Kinoprogramm ist zusätzlich eine Anmeldung nötig (Einstellungen → Konto).");
+      } else if (a && !a.ok) {
+        setArt("warnung");
+        setMeldung("Verbindung steht ✓ — das Kinoprogramm ist gerade nicht abrufbar: " + errorText(a.fehler));
+      } else if (a && a.abgelaufen) {
+        setArt("warnung");
+        setMeldung("Verbindung steht ✓ — der hinterlegte Demo-Schnappschuss ist allerdings abgelaufen.");
+      } else {
+        setArt("ok");
+        setMeldung(a && a.variante === "demo" ? "Verbunden ✓ — Demo-Programm ist abrufbar." : "Verbunden ✓ — Programm ist abrufbar.");
+      }
       onFertig?.(r.manifest);
     } catch (error) {
+      setArt("fehler");
       setMeldung("Verbindung fehlgeschlagen: " + errorText(error));
     } finally {
       setBusy(false);
@@ -58,7 +90,7 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
             <button style={{ ...btnStyle(false), padding: "7px 10px" }} onClick={() => setSichtbar((v) => !v)}>{sichtbar ? "Verbergen" : "Zeigen"}</button>
           </div>
         </label>
-        {meldung && <p style={{ color: meldung.includes("fehl") ? T.gefahr : T.wolfram, fontFamily: "'Space Mono', monospace", fontSize: 12, margin: "12px 0 0" }}>{meldung}</p>}
+        {meldung && <p style={{ color: art === "fehler" ? T.gefahr : T.wolfram, fontFamily: "'Space Mono', monospace", fontSize: 12, margin: "12px 0 0", lineHeight: 1.5 }}>{meldung}</p>}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
           <button style={btnStyle(true)} disabled={busy || !key.trim() || !url.trim()} onClick={verbinden}>{busy ? "Prüfe …" : "Verbinden & laden"}</button>
           {!zwingend && onAbbrechen && <button style={btnStyle(false)} disabled={busy} onClick={onAbbrechen}>Abbrechen</button>}

@@ -166,8 +166,11 @@ function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
 
 /* Vertrauens-Zeile (FIX): Programm-Stand, Katalog-Stand, Sync-Status. Einziger
    Sync-Ort seit Etappe 4 (Griff-Punkt entfernt). Ohne Git-Konfiguration bewusst
-   KEIN Sync-Segment. Klasse .kd-vertrauen ist Test-Kanarie (personalmodus_test B/G). */
-function VertrauensZeile({ progStand, streamingBekannt }) {
+   KEIN Sync-Segment. Klasse .kd-vertrauen ist Test-Kanarie (personalmodus_test B/G).
+   B13: Fehlende Programm-/Katalogdaten werden NICHT mehr ausgeblendet — eine
+   Vertrauenszeile, die bei fehlenden Daten verschwindet, ist das Gegenteil von
+   Vertrauen. Fehlt etwas, steht das hier. */
+function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, streamingInfo = null }) {
   const s = useSyncStatus();
   const sync = !s || !s.configured ? null
     : (s.conflict && s.conflict.length) ? { farbe: T.gefahr, text: "Konflikt" }
@@ -180,7 +183,9 @@ function VertrauensZeile({ progStand, streamingBekannt }) {
     return z(d.getDate()) + "." + z(d.getMonth() + 1) + ". " + z(d.getHours()) + ":" + z(d.getMinutes());
   };
   const katalog = streamingBekannt && streamingBekannt.stand ? (streamingBekannt.titel || []).length : null;
-  if (!sync && !progStand && katalog == null) return null;
+  const fehltText = (info) => (info?.anmeldungNoetig ? "Anmeldung nötig" : info?.fehler ? "nicht geladen" : "noch nicht geladen");
+  const zusatz = programmInfo?.abgelaufen ? " · abgelaufen"
+    : programmInfo?.ausCache ? " · aus dem Browser-Speicher" : "";
   return (
     <div className="kd-vertrauen">
       {sync && (
@@ -188,8 +193,12 @@ function VertrauensZeile({ progStand, streamingBekannt }) {
           <span className="kd-vertrauen-dot" style={{ background: sync.farbe }} />{sync.text}
         </span>
       )}
-      {progStand ? <span className="kd-vertrauen-seg">Programm: {fmt(progStand)}</span> : null}
-      {katalog != null && <span className="kd-vertrauen-seg">Katalog: {katalog} Titel</span>}
+      {progStand
+        ? <span className="kd-vertrauen-seg" style={programmInfo?.abgelaufen ? { color: T.gefahr } : undefined}>Programm: {fmt(progStand)}{zusatz}</span>
+        : <span className="kd-vertrauen-seg" style={{ color: T.gefahr }}>Programm: {fehltText(programmInfo)}</span>}
+      {katalog != null
+        ? <span className="kd-vertrauen-seg">Katalog: {katalog} Titel</span>
+        : <span className="kd-vertrauen-seg" style={{ color: T.gefahr }}>Katalog: {fehltText(streamingInfo)}</span>}
     </div>
   );
 }
@@ -198,6 +207,7 @@ function StartDashboard({
   kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
   kinoMatches = { matched: [] }, mustwatch = [], auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
+  programmInfo = null, streamingInfo = null,
 }) {
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
@@ -258,7 +268,8 @@ function StartDashboard({
         <span className="kd-dash-bulbs" aria-hidden="true" />
         <div className="kd-dash-datum">{datum} · Wien</div>
         <h1 className="kd-dash-headline">Dein Abend</h1>
-        <VertrauensZeile progStand={progStand} streamingBekannt={streamingBekannt} />
+        <VertrauensZeile progStand={progStand} streamingBekannt={streamingBekannt}
+          programmInfo={programmInfo} streamingInfo={streamingInfo} />
       </header>
 
       <span className="kd-dash-strip" aria-hidden="true" />

@@ -1,27 +1,125 @@
 /* ================= Zentraler Programm-/Streaming-Katalog =================
    Der Rechner von Max schreibt validierte JSON-Payloads in `kd_catalog`.
-   Die PWA liest ausschließlich mit dem vom Tester eingegebenen Supabase-
-   Publishable-Key. Persönlicher Sync und service_role sind hiervon getrennt.
+   Gelesen wird mit dem Supabase-Publishable-Key; liegt eine Sitzung vor, geht
+   zusätzlich deren Token mit (Etappe 4). Persönlicher Sync und service_role
+   sind hiervon getrennt.
 
    Tabelle/Assets:
-     manifest   -> kleiner Verbindungs- und Versionsnachweis
-     programm   -> normalisiertes film.at-/Nonstop-Programm
-     streaming  -> { bekannt, entdecken } aus dem letzten Pipeline-Lauf
+     manifest        -> kleiner Verbindungs- und Versionsnachweis (anon lesbar)
+     programm        -> normalisiertes film.at-/Nonstop-Programm  (nur angemeldet)
+     streaming       -> { bekannt, entdecken } aus dem Pipeline-Lauf (nur angemeldet)
+     programm_demo   -> ehrlicher Demo-Schnappschuss des Programms (anon lesbar)
+     streaming_demo  -> ehrlicher Demo-Schnappschuss des Katalogs  (anon lesbar)
+
+   Zugriffstrennung (Migration 20260725220000): `anon` sieht nur manifest und
+   die beiden *_demo-Zeilen. PostgREST filtert per RLS OHNE 403 — die Antwort
+   ist HTTP 200 mit leerem Array. Ein leeres Ergebnis auf einer Live-Zeile ohne
+   wirksames Token ist deshalb KEIN Datenfehler, sondern „Anmeldung nötig"
+   (error.status = 401), damit die Grenzschicht daraus UNAUTHENTICATED macht.
+
+   Genau deshalb wird der Grund am Fehler VERMERKT statt aus dem Status geraten
+   (KATALOG_GRUENDE): weil RLS ohne 403 filtert, heißt ein ECHTER HTTP-401 auf
+   dieser Tabelle praktisch immer „apikey/JWT wird abgelehnt" — also ungültiger
+   Zugangsschlüssel, nicht „melde dich an". Beides muss unterscheidbar bleiben,
+   sonst hört ein Tester mit vertipptem Schlüssel ewig „Anmeldung nötig".
+
+   Token-Naht: das Sitzungstoken wird per setKatalogTokenProvider() injiziert
+   (services/catalog.js reicht den Auth-Treiber durch). Ohne Provider verhält
+   sich dieses Modul exakt wie vorher — nur apikey. publicSupabaseHeaders()
+   bleibt unangetastet und sieht NIE ein Sitzungstoken; kd_store-Reads in
+   catalogPublic.js laufen weiter ausschließlich über den Publishable-Key.
+
+   Rückgabekontrakt von ladeKatalogAsset() (klein und bewusst stabil):
+     {
+       payload,                       // geprüfte Nutzlast
+       quelle: "datenbank" | "cache", // Herkunft der BYTES (wie bisher)
+       warnung?,                      // gesetzt, wenn der Cache eingesprungen ist
+       status?,                       // HTTP-Status des gescheiterten Direkt-Reads
+       grund?,                        // KATALOG_GRUENDE-Marke des gescheiterten Reads
+       anmeldungNoetig?,              // true NUR beim synthetischen „Anmeldung nötig"
+       asset,                         // tatsächlich gelesene Zeile
+       variante: "live" | "demo",     // Betriebsart der Zeile
+       stand,                         // DB-Spalte stand (Fallback updated_at), ISO
+       gueltigBis,                    // DB-Spalte gueltig_bis, ISO
+       datenquelle,                   // DB-Spalte quelle (slug aus kd_quellen)
+       abgelaufen,                    // gueltigBis liegt in der Vergangenheit
+       gecachtAm,                     // ms, nur bei quelle === "cache"
+     }
+   `quelle` bleibt die Bytes-Herkunft (Bestandsverhalten); die gleichnamige
+   DB-Spalte heißt hier `datenquelle`, damit sich beide nie überlagern.
 
    Große Payloads werden im Cache-Storage gehalten. Ist Supabase kurz offline,
-   gewinnt der letzte erfolgreiche Stand; beim allerersten Start wird ehrlich
-   ein Fehler gemeldet. */
+   gewinnt der letzte erfolgreiche Stand — dann aber sichtbar als „cache". */
 
 import { K } from "./storage.js";
 import { SB_DEFAULT_URL, SB_DEFAULT_ANON } from "./supabaseDefaults.js";
-import { istSupabaseProjektUrl, publicSupabaseHeaders } from "./supabasePublic.js";
+import { istSupabaseProjektUrl } from "./supabasePublic.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
-const ERLAUBT = new Set(["manifest", "programm", "streaming"]);
+const ERLAUBT = new Set(["manifest", "programm", "streaming", "programm_demo", "streaming_demo"]);
+/* Zeilen, die `anon` per RLS NICHT sieht. Nur hier ist ein leeres Ergebnis ein
+   Anmeldungs- und kein Datenproblem. */
+const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+const CACHE_MARKE = "kd-katalog-1";
+
+/* Gründe, die dieses Modul an einen Fehler heftet. Die Grenzschicht liest sie
+   (statt Statuscodes zu deuten) und macht daraus die Nutzerzustände. */
+export const KATALOG_GRUENDE = Object.freeze({
+  ANMELDUNG: "katalog-anmeldung-noetig",     // synthetisch: Live-Zeile leer, kein Token
+  DEMO_FEHLT: "katalog-demo-fehlt",          // Demo-Zeile in der DB noch nicht veröffentlicht
+  SCHLUESSEL: "katalog-schluessel-ungueltig", // echter HTTP-401: apikey/JWT abgelehnt
+});
 
 function sauber(s) { return String(s == null ? "" : s).trim(); }
 function geheim(s) { return sauber(s).replace(/[\s\u00A0\u200B-\u200D\u2060\uFEFF\u2022\u25CF]/g, ""); }
+
+/* ---------- Token-Naht (reine Injektion, kein Import des Auth-Treibers) ----------
+   Kein Provider gesetzt = exakt das bisherige Verhalten. Der Provider bekommt
+   dieselben Optionen wie im Account-Treiber ({ erzwingeErneuerung }). Tokens
+   werden hier nie zwischengespeichert. */
+let tokenProvider = null;
+export function setKatalogTokenProvider(fn) {
+  tokenProvider = typeof fn === "function" ? fn : null;
+}
+async function holeToken(opts) {
+  if (!tokenProvider) return null;
+  try {
+    const t = await tokenProvider(opts || {});
+    return t ? String(t) : null;
+  } catch { return null; }
+}
+
+/* Katalog-Header. Bewusst NICHT publicSupabaseHeaders(): dort darf nie ein
+   Sitzungstoken landen (kd_store-Pfade teilen sich die Funktion). Ohne Token
+   bleibt das Verhalten identisch \u2014 inklusive Altbestand-Regel, dass ein als
+   Katalogschl\u00FCssel eingetragener anon-JWT auch als Bearer mitgeht. */
+function katalogKopf(key, token, extra = {}) {
+  const k = sauber(key);
+  const headers = { ...extra, apikey: k };
+  if (token) headers.Authorization = "Bearer " + token;
+  else if (/^eyJ/.test(k)) headers.Authorization = "Bearer " + k;
+  return headers;
+}
+
+export function varianteVon(name) { return String(name || "").endsWith("_demo") ? "demo" : "live"; }
+
+function istAbgelaufen(gueltigBis) {
+  if (!gueltigBis) return false;
+  const t = Date.parse(gueltigBis);
+  return Number.isFinite(t) && t < Date.now();
+}
+
+function meldung(name, meta = {}) {
+  return {
+    asset: name,
+    variante: varianteVon(name),
+    stand: meta.stand || null,
+    gueltigBis: meta.gueltigBis || null,
+    datenquelle: meta.datenquelle || null,
+    abgelaufen: istAbgelaufen(meta.gueltigBis),
+  };
+}
 
 export function getKatalogZugang() {
   let url = SB_DEFAULT_URL || "", key = SB_DEFAULT_ANON || "";
@@ -54,11 +152,15 @@ function cacheUrl(name) {
   return basis + "/__kd_katalog_cache__" + "/" + name;
 }
 
-async function cacheSchreiben(name, payload) {
+/* Der Cache trägt seit Etappe 4 eine Hülle mit den Herkunfts-Metadaten mit —
+   sonst wüsste ein Cache-Treffer nicht, von wann seine Daten sind. Altbestand
+   (blanke Payload) wird weiter gelesen, dann eben ohne Metadaten. */
+async function cacheSchreiben(name, payload, meta) {
   if (typeof caches === "undefined" || typeof Response === "undefined") return;
   try {
     const c = await caches.open(CACHE);
-    await c.put(cacheUrl(name), new Response(JSON.stringify(payload), { headers: { "Content-Type": "application/json" } }));
+    const huelle = { __kd: CACHE_MARKE, gecachtAm: Date.now(), meta: meta || {}, payload };
+    await c.put(cacheUrl(name), new Response(JSON.stringify(huelle), { headers: { "Content-Type": "application/json" } }));
   } catch { /* Cache ist Komfort, nie Wahrheitsquelle */ }
 }
 
@@ -67,68 +169,210 @@ async function cacheLesen(name) {
   try {
     const c = await caches.open(CACHE);
     const r = await c.match(cacheUrl(name));
-    return r ? await r.json() : null;
+    if (!r) return null;
+    const roh = await r.json();
+    if (roh && roh.__kd === CACHE_MARKE) {
+      return { payload: roh.payload, meta: roh.meta || {}, gecachtAm: roh.gecachtAm || null };
+    }
+    return { payload: roh, meta: {}, gecachtAm: null };
   } catch { return null; }
 }
 
+/* Cache-Storage-Eintrag wirklich verwerfen. Ohne das blieb „neu laden" ein
+   halber Schritt: der Programm-Topf war leer, der Cache-Storage aber voll und
+   gewann beim nächsten fehlgeschlagenen Direkt-Read erneut. */
+export async function verwerfeKatalogCache(namen) {
+  const liste = (Array.isArray(namen) ? namen : namen ? [namen] : [...ERLAUBT]).filter((n) => ERLAUBT.has(n));
+  if (typeof caches === "undefined") return false;
+  try {
+    const c = await caches.open(CACHE);
+    let weg = false;
+    for (const n of liste) { if (await c.delete(cacheUrl(n))) weg = true; }
+    return weg;
+  } catch { return false; }
+}
+
+/* Demo-Payloads durchlaufen dieselbe Strukturprüfung wie ihr Live-Pendant —
+   ein kaputter Demo-Schnappschuss darf nicht ungeprüft in die Oberfläche. */
 function pruefePayload(name, p) {
   if (!p || typeof p !== "object") throw new Error(name + ": leere oder ungültige Payload");
   if (name === "manifest" && !p.updated_at && !p.stand) throw new Error("Manifest ohne Stand");
-  if (name === "programm" && !Array.isArray(p.filme) && !(p.data && Array.isArray(p.data.filme))) throw new Error("Programm ohne filme[]");
-  if (name === "streaming" && !(p.bekannt && p.entdecken)) throw new Error("Streaming ohne bekannt/entdecken");
+  if ((name === "programm" || name === "programm_demo")
+    && !Array.isArray(p.filme) && !(p.data && Array.isArray(p.data.filme))) throw new Error("Programm ohne filme[]");
+  if ((name === "streaming" || name === "streaming_demo")
+    && !(p.bekannt && p.entdecken)) throw new Error("Streaming ohne bekannt/entdecken");
   return p;
 }
 
+/* Ein Katalog-Read. Bei 401 GENAU EIN erzwungener Erneuerungsversuch (Vorbild:
+   accountDriver.rest). Bleibt es dabei, fällt der Katalogpfad auf den anon-Weg
+   zurück — ein totes Token meldet hier NIEMALS ab, darüber entscheidet allein
+   der Auth-Treiber. */
 async function direktLesen(name, signal) {
   if (!ERLAUBT.has(name)) throw new Error("Unbekanntes Katalog-Asset: " + name);
   const c = getKatalogZugang();
   if (!hatKatalogZugang()) throw new Error("Datenbank-Zugang noch nicht eingerichtet");
-  const url = c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name) + "&select=payload,updated_at&limit=1";
-  const headers = publicSupabaseHeaders(c.key, { Accept: "application/json" });
-  const res = await fetch(url, { cache: "no-store", signal, headers });
-  let body = null;
-  try { body = await res.json(); } catch { /* Fehlertext ist nicht zwingend JSON */ }
+  const url = c.url + "/rest/v1/" + TABLE + "?name=eq." + encodeURIComponent(name)
+    + "&select=payload,updated_at,quelle,stand,gueltig_bis&limit=1";
+
+  /* Die Katalog-URL geht an den Token-Provider mit: nur er weiß, zu welcher
+     Projekt-URL die Sitzung gehört, und hält das Token bei Abweichung zurück
+     (Zugang bleibt lesbar, dann eben anon). */
+  let token = await holeToken({ katalogUrl: c.url });
+  let mitToken = !!token;
+  const hole = (t) => fetch(url, { cache: "no-store", signal, headers: katalogKopf(c.key, t, { Accept: "application/json" }) });
+  let res = await hole(token);
+  if (res.status === 401 && mitToken) {
+    token = await holeToken({ erzwingeErneuerung: true, katalogUrl: c.url });
+    if (token) res = await hole(token);
+    if (res.status === 401) { mitToken = false; res = await hole(null); }   // anon-Rückfall
+  }
+
+  /* `jsonOk` trennt zwei Fälle, die sonst verschmelzen: „PostgREST antwortete
+     mit einem leeren Array" (RLS/Zeile fehlt) und „die Antwort war überhaupt
+     kein JSON". Captive Portal, Firmenproxy und CDN-Fehlerseiten liefern
+     regelmäßig HTTP 200 mit HTML — daraus darf nie das endgültige Urteil
+     „noch keine Beispieldaten veröffentlicht" werden. */
+  let body = null, jsonOk = false;
+  try { body = await res.json(); jsonOk = true; } catch { /* Fehlertext ist nicht zwingend JSON */ }
   if (!res.ok) {
     const error = new Error("Datenbank HTTP " + res.status + (body && body.message ? ": " + body.message : ""));
     error.status = res.status;
+    /* Ein 401, der trotz anon-Rückfall bleibt, kommt nicht von der RLS (die
+       filtert lautlos), sondern vom abgelehnten Schlüssel. */
+    if (res.status === 401) error.reason = KATALOG_GRUENDE.SCHLUESSEL;
     throw error;
   }
-  if (!Array.isArray(body) || !body[0]) throw new Error("Asset „" + name + "“ fehlt in der Datenbank");
+  /* HTTP 200, aber kein JSON-Array: das kam nicht von PostgREST. Weder
+     Anmeldungs- noch Veröffentlichungsfrage — eine ungültige Antwort. */
+  if (!jsonOk || !Array.isArray(body)) {
+    throw new Error("Datenbank lieferte für „" + name + "“ keine gültige JSON-Antwort.");
+  }
+  if (!body[0]) {
+    /* PostgREST filtert per RLS ohne 403: 200 + leeres Array. Ohne wirksames
+       Token ist das auf einer Live-Zeile der Anmeldungs-, kein Datenfehler. */
+    if (NUR_ANGEMELDET.has(name) && !mitToken) {
+      const error = new Error("Für „" + name + "“ ist eine Anmeldung nötig.");
+      error.status = 401;
+      error.reason = KATALOG_GRUENDE.ANMELDUNG;
+      throw error;
+    }
+    /* Die Demo-Zeilen sind für alle lesbar. Fehlen sie, ist schlicht noch nichts
+       veröffentlicht — weder ein Server- noch ein Anmeldungsproblem. */
+    if (varianteVon(name) === "demo") {
+      const error = new Error("Für „" + name + "“ ist noch nichts veröffentlicht.");
+      error.reason = KATALOG_GRUENDE.DEMO_FEHLT;
+      throw error;
+    }
+    throw new Error("Asset „" + name + "“ fehlt in der Datenbank");
+  }
   let payload = body[0].payload;
   if (typeof payload === "string") payload = JSON.parse(payload);
   const p = pruefePayload(name, payload);
   if (body[0].updated_at && !p.db_updated_at) p.db_updated_at = body[0].updated_at;
-  return p;
+  return {
+    payload: p,
+    meta: {
+      stand: body[0].stand || body[0].updated_at || null,
+      gueltigBis: body[0].gueltig_bis || null,
+      datenquelle: body[0].quelle || null,
+    },
+  };
+}
+
+async function direktMitZeitgrenze(name, timeout) {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
+  try { return await direktLesen(name, ctrl ? ctrl.signal : undefined); }
+  finally { if (timer) clearTimeout(timer); }
 }
 
 export async function ladeKatalogAsset(name, { nurCache = false, timeout = 12000 } = {}) {
   if (!ERLAUBT.has(name)) throw new Error("Unbekanntes Katalog-Asset: " + name);
   if (!nurCache) {
-    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
     try {
-      const p = await direktLesen(name, ctrl ? ctrl.signal : undefined);
-      await cacheSchreiben(name, p);
-      return { payload: p, quelle: "datenbank" };
+      const r = await direktMitZeitgrenze(name, timeout);
+      await cacheSchreiben(name, r.payload, r.meta);
+      return { payload: r.payload, quelle: "datenbank", ...meldung(name, r.meta) };
     } catch (e) {
       const alt = await cacheLesen(name);
-      if (alt) return { payload: pruefePayload(name, alt), quelle: "cache", warnung: String(e && e.message || e) };
+      if (alt) {
+        return {
+          payload: pruefePayload(name, alt.payload),
+          quelle: "cache",
+          warnung: String(e && e.message || e),
+          status: Number.isFinite(e?.status) ? e.status : null,
+          grund: e?.reason || null,
+          /* Nur der synthetische Grund heißt „Anmeldung nötig". Ein echter 401
+             wäre ein abgelehnter Schlüssel und darf sich nicht so verkleiden. */
+          anmeldungNoetig: e?.reason === KATALOG_GRUENDE.ANMELDUNG,
+          gecachtAm: alt.gecachtAm,
+          ...meldung(name, alt.meta),
+        };
+      }
       throw e;
-    } finally { if (timer) clearTimeout(timer); }
+    }
   }
-  const p = await cacheLesen(name);
-  return p ? { payload: pruefePayload(name, p), quelle: "cache" } : null;
+  const alt = await cacheLesen(name);
+  return alt
+    ? { payload: pruefePayload(name, alt.payload), quelle: "cache", gecachtAm: alt.gecachtAm, ...meldung(name, alt.meta) }
+    : null;
 }
 
-export async function testeKatalogZugang() {
+function fehlerText(e) {
+  return e && e.name === "AbortError" ? "Zeitüberschreitung" : String(e && e.message || e);
+}
+
+/* Verbindungsprüfung. `manifest` bleibt anon lesbar — es allein zu prüfen hieß
+   „Verbunden ✓" zu melden, während Programm und Streaming leer bleiben. Wird
+   ein `asset` übergeben (die für die aktuelle Betriebsart wirklich benötigte
+   Zeile), wird sie zusätzlich direkt geprüft, bewusst ohne Cache-Rückfall:
+   die Frage lautet „geht es JETZT?", nicht „lag mal etwas im Browser".
+   `ok` meint die Verbindung; ob das Asset da ist, steht getrennt in `asset`. */
+export async function testeKatalogZugang({ asset = null, timeout = 10000 } = {}) {
+  let manifest = null, quelle = null;
   try {
-    const r = await ladeKatalogAsset("manifest", { timeout: 10000 });
-    return { ok: true, manifest: r.payload, quelle: r.quelle };
+    const r = await ladeKatalogAsset("manifest", { timeout });
+    manifest = r.payload; quelle = r.quelle;
   } catch (e) {
     return {
-      ok: false,
+      ok: false, verbindung: false, manifest: null, asset: null,
       status: Number.isFinite(e?.status) ? e.status : null,
-      message: e && e.name === "AbortError" ? "Zeitüberschreitung" : String(e && e.message || e),
+      grund: e?.reason || null,
+      message: fehlerText(e),
+    };
+  }
+  const basis = { ok: true, verbindung: true, manifest, quelle };
+  if (!asset) return { ...basis, asset: null };
+  try {
+    const r = await direktMitZeitgrenze(asset, timeout);
+    const m = meldung(asset, r.meta);
+    return {
+      ...basis,
+      asset: {
+        ok: true, name: asset, variante: m.variante, status: 200, anmeldungNoetig: false,
+        stand: m.stand, gueltigBis: m.gueltigBis, datenquelle: m.datenquelle, abgelaufen: m.abgelaufen,
+      },
+    };
+  } catch (e) {
+    const status = Number.isFinite(e?.status) ? e.status : null;
+    /* Kein roher Backendtext nach draußen: der Grund reist als Marke, den Satz
+       für den Menschen formuliert die Grenzschicht (services/catalog.js) —
+       derselbe Weg, den auch ein geworfener Fehler nimmt. */
+    return {
+      ...basis,
+      asset: {
+        ok: false,
+        name: asset,
+        variante: varianteVon(asset),
+        status,
+        grund: e?.reason || null,
+        anmeldungNoetig: e?.reason === KATALOG_GRUENDE.ANMELDUNG,
+        /* Der rohe Fehler NUR für die Grenzschicht (Netz-/Zeitüberschreitung
+           erkennt sie an ihm). Sie ersetzt dieses Feld durch ihren eigenen,
+           normalisierten Fehler, bevor irgendeine Oberfläche ihn sieht. */
+        fehler: e,
+      },
     };
   }
 }
