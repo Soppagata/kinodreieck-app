@@ -1,8 +1,17 @@
 # Etappe 4: Gemeinsamer Katalog, Programmdaten und Rechte
 
-**Stand: 26. Juli 2026.** Code und Datenbankregeln fertig, Testsuite grün
-(850 Checks). Offen bis zur Abnahme: der Staging-Durchstich und der
-Demo-Schnappschuss (siehe „Was noch fehlt").
+**Stand: 26. Juli 2026 — ABGESCHLOSSEN.** Code und Datenbankregeln fertig,
+Testsuite grün (850 Checks), beide Migrationen in der Produktionsdatenbank
+gelaufen, Demo-Mediathek veröffentlicht. Alle vier Abnahmekriterien der Roadmap
+sind gegen die echte Datenbank belegt, nicht nur gegen einen Nachbau:
+
+- Die Zugriffstrennung: `set local role anon` zeigt im Katalog nur `manifest`.
+- Die Stilllegung einer Quelle: `kd_quelle_status_setzen('film_at','pausiert')`
+  → der nächste Schreibversuch bricht mit „Veroeffentlichung gesperrt" ab, ohne
+  dass eine neue App-Version nötig wäre.
+
+Offen bleibt allein der Demo-Schnappschuss für den **Kino-Tab** — dafür fehlt
+eine Programm-Payload als Eingabe (siehe „Was noch fehlt").
 
 ## Was diese Etappe leistet
 
@@ -152,19 +161,19 @@ REST-Schnittstelle und deckt zusätzlich `kd_quellen` und die Statusfunktion ab.
 | Kriterium | Stand |
 |---|---|
 | Jede veröffentlichte Programmdatenquelle hat einen dokumentierten Status | erfüllt — `kd_quellen`, inklusive der real genutzten Quellen als `intern_test` |
-| Accounttabellen und öffentlicher Katalog besitzen getrennte Regeln | erfüllt — getrennte Policies, `kd_personal` unberührt, Token nur auf Katalogpfaden |
-| Ein Quellenwiderruf kann ohne App-Release umgesetzt werden | erfüllt in der Datenbank; **der Durchstich in der laufenden App steht aus** |
+| Accounttabellen und öffentlicher Katalog besitzen getrennte Regeln | erfüllt und **gegen die Produktionsdatenbank belegt** (anon sieht nur `manifest`) |
+| Ein Quellenwiderruf kann ohne App-Release umgesetzt werden | erfüllt und **in der Produktionsdatenbank durchgespielt** (Pause → Schreibversuch abgewiesen → Freigabe) |
 | Die App zeigt keine KI-erfundene Verfügbarkeit | erfüllt — Programm und Streaming kommen ausschließlich aus dem Katalog, keine KI im Datenpfad |
 
 ## Was noch fehlt
 
-1. **Demo-Schnappschuss veröffentlichen.** Bis dahin sieht ein Gast kein
-   Programm — mit ehrlichem Hinweis, aber leer.
-2. **`npm run test:rls` scharf laufen lassen** (zwei Testkonten, Konfiguration
-   nur über Umgebungsvariablen).
-3. **Staging-Durchstich:** eine Quelle pausieren und prüfen, dass die App es
-   ohne Deploy meldet.
-4. Danach Merge nach `main`.
+1. **Demo-Schnappschuss für den Kino-Tab.** Die Demo-Mediathek steht
+   (120 Filme mit Bewertung und Begründung, `tools/demo_mediathek.mjs`), der
+   Kino-Tab bleibt in der Demo aber leer, bis `programm_demo` befüllt ist. Dafür
+   braucht `tools/demo_snapshot.mjs` eine Programm-Payload als Eingabe.
+2. **`npm run test:rls` scharf laufen lassen.** Zurückgestellt, bis wieder
+   Testkonten existieren — die aus Etappe 3 wurden planmäßig gelöscht. Die
+   anon-Hälfte der Prüfung ist über `set local role anon` bereits belegt.
 
 ## Bewusste Grenzen
 

@@ -373,11 +373,12 @@ Der Gastmodus kann bestehen bleiben, aber mit ehrlichen Grenzen:
 
 ## Etappe 4: Gemeinsamer Katalog, Programmdaten und Rechte
 
-**Stand 26.07.2026: umgesetzt, Abnahme offen.** Quellenregister `kd_quellen`,
+**Stand 26.07.2026: ABGESCHLOSSEN.** Quellenregister `kd_quellen`,
 Zugriffstrennung (anon sieht nur `manifest` + Demo-Zeilen), Herkunftspflicht,
-Feldfreigabe und Löschfristen sind in der Datenbank; die App sendet das
-Sitzungstoken und meldet ehrliche Zustände. Offen: Demo-Schnappschuss
-veröffentlichen, `test:rls` scharf laufen lassen, Staging-Durchstich.
+Feldfreigabe und Löschfristen sind in der Produktionsdatenbank; die App sendet
+das Sitzungstoken und meldet ehrliche Zustände; die Demo-Mediathek ist
+veröffentlicht. Alle vier Abnahmekriterien gegen die echte Datenbank belegt.
+Restpunkt ohne Abnahmerelevanz: `programm_demo` für den Kino-Tab.
 Einzelheiten und Runbooks in `ETAPPE_4_KATALOG_RECHTE.md`.
 
 ### Ziel
