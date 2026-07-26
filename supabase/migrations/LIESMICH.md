@@ -21,6 +21,7 @@ ausfüllen.
 |---|---|---|---|---|
 | `20260725120000_kd_personal.sql` | Produktion (EU-West) | 2026-07-25 | Max | erfolgreich; `npm run test:rls` danach 18/18 grün |
 | `20260725220000_etappe4_quellenregister_zugriff.sql` | | | | |
+| `20260726120000_etappe4_guard_ausbaustufe.sql` | | | | |
 
 ## Nach Migration 1
 
@@ -34,6 +35,20 @@ Abschnitt D der Datei trennt den Katalog-Lesezugriff (E1=b): anon liest nur noch
 `manifest` + `*_demo`; `programm`/`streaming` verlangen eine Sitzung. Bis Phase 2
 (App sendet Sitzungs-Token am Katalogpfad) zehren Geräte vom Katalog-Cache.
 Kontrollabfragen stehen am Dateiende.
+
+## Nach Migration 3 (Etappe 4, Ausbaustufe)
+
+Ab hier braucht **jede** bewirtschaftete Katalogzeile (`programm`, `streaming`,
+`programm_demo`, `streaming_demo`) eine Herkunft aus `kd_quellen`; `manifest`
+bleibt ausgenommen. Bestandszeilen sind nachgetragen, und der Guard bewahrt die
+Herkunft bei Aktualisierungen — **die Mac-Pipeline muss nicht angepasst werden.**
+
+Zwei neue Handgriffe im SQL-Editor:
+
+- Feldfreigabe einer Quelle hinterlegen (wird erst durch den Eintrag scharf):
+  `update kd_quellen set erlaubte_felder = array['titel','kino','beginn'] where slug = '…';`
+- Abgelaufene Schnappschüsse: erst `select * from kd_catalog_abgelaufene();`
+  ansehen, dann `select kd_catalog_abraeumen();`. Bewusst kein Automatismus.
 
 ## Was NICHT hier liegt
 
