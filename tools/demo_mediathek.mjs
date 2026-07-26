@@ -152,21 +152,38 @@ const bloecke = {
 
 writeFileSync(join(out, "demo_bloecke.json"), JSON.stringify(bloecke, null, 1));
 
+/* kd_store hat den Primaerschluessel (owner, key) — NICHT (scope, key). Spalten
+   sind owner, key, value, scope, rev, author; belegt durch den Legacy-Treiber
+   src/lib/supabaseDriver.js, der als einziger dorthin schreibt („Upsert auf PK
+   owner,key"). Ein Schema-Dump liegt nicht im Repo — deshalb die Fundstelle
+   hier vermerkt.
+   Statt eines Upserts wird der Demo-Bereich vollstaendig ersetzt: erst
+   loeschen, dann einfuegen. Das ist unabhaengig davon richtig, unter welchem
+   `owner` frueher Demo-Zeilen angelegt wurden; sonst blieben Altzeilen mit
+   demselben `key` unter anderem `owner` liegen und es waere Zufall, welcher
+   Wert die App erreicht. Alles in einer Transaktion. */
+const OWNER = "demo";
 const marke = "kddemo";
 const zeilen = Object.entries(bloecke).map(([key, wertObj]) => {
   const json = JSON.stringify(wertObj);
   if (json.includes("$" + marke + "$")) fehler("Inhalt enthaelt die SQL-Trennmarke — bitte melden.");
-  return "  ('demo', '" + key + "', $" + marke + "$" + json + "$" + marke + "$)";
+  return "  ('" + OWNER + "', '" + key + "', $" + marke + "$" + json + "$" + marke + "$, 'demo')";
 });
 
 const sql = [
   "-- Demo-Mediathek veroeffentlichen (kd_store, scope=demo).",
   "-- ACHTUNG: alles hier ist danach OHNE Anmeldung oeffentlich lesbar.",
-  "insert into public.kd_store (scope, key, value) values",
-  zeilen.join(",\n"),
-  "on conflict (scope, key) do update set value = excluded.value;",
+  "-- Ersetzt den gesamten Demo-Bereich; laeuft als eine Transaktion.",
+  "begin;",
   "",
-  "-- Gegenprobe:",
+  "delete from public.kd_store where scope = 'demo';",
+  "",
+  "insert into public.kd_store (owner, key, value, scope) values",
+  zeilen.join(",\n") + ";",
+  "",
+  "commit;",
+  "",
+  "-- Gegenprobe (als Gast):",
   "--   begin; set local role anon;",
   "--   select key, length(value) from public.kd_store where scope = 'demo' order by key;",
   "--   rollback;",
