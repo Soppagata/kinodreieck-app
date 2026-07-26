@@ -24,6 +24,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
+    "supabase": "^2.109.1",
     "vite": "^6.0.7",
     "vite-plugin-singlefile": "^2.1.0"
   }
