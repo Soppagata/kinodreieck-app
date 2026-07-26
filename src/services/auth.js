@@ -114,7 +114,7 @@ export function createAuthService({ loadSession, driver = null } = {}) {
           id: konto.id,
           displayName: konto.benutzername,
           expiresAt: new Date(konto.gueltigBis).toISOString(),
-          capabilities: { remoteStorage: true, personalAi: false },
+          capabilities: { remoteStorage: true, personalAi: true },
         }));
       } catch (error) {
         throw normalizeBoundaryError(error, { source: "auth", operation: "session.sign-in" });

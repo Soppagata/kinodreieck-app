@@ -13,6 +13,21 @@ export const ERROR_CODES = Object.freeze({
      beiden entstehen ausschließlich aus einem erkannten Grund am Fehler. */
   INVALID_KEY: "invalid-key",
   NO_DEMO_DATA: "no-demo-data",
+  /* Etappe 5: drei Zustände des KI-Pfads, die weder Nutzer- noch Serverfehler
+     sind und deshalb nicht in SERVER oder INVALID_RESPONSE gehören:
+     AI_DISABLED     = der Betreiber hat die KI abgeschaltet (Not-Aus),
+     AI_REFUSED      = das Modell hat die Bearbeitung abgelehnt (kommt als
+                       reguläre Anbieterantwort, nicht als Fehler),
+     NOT_IMPLEMENTED = die Aufgabe ist registriert, aber noch nicht gebaut.
+     Wie INVALID_KEY/NO_DEMO_DATA entstehen sie ausschließlich aus einem
+     gemeldeten Grund, nie aus einem HTTP-Status — errorFromStatus() bleibt
+     unverändert bei den sechs Ursprungscodes. */
+  AI_DISABLED: "ai-disabled",
+  AI_REFUSED: "ai-refused",
+  NOT_IMPLEMENTED: "not-implemented",
+  /* Nachtrag Review: ein doppelt gestarteter Vorgang meldete vorher
+     "Nutzungslimit erreicht" — das war schlicht gelogen. */
+  AI_DUPLICATE: "ai-duplicate",
 });
 
 const TEXTE = Object.freeze({
@@ -24,6 +39,10 @@ const TEXTE = Object.freeze({
   [ERROR_CODES.INVALID_RESPONSE]: "Der Server hat eine ungültige Antwort geliefert.",
   [ERROR_CODES.INVALID_KEY]: "Der hinterlegte Zugangsschlüssel wird nicht akzeptiert.",
   [ERROR_CODES.NO_DEMO_DATA]: "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.",
+  [ERROR_CODES.AI_DISABLED]: "Die KI-Funktionen sind vorübergehend abgeschaltet. Alles andere funktioniert unverändert.",
+  [ERROR_CODES.AI_REFUSED]: "Die KI hat die Bearbeitung dieser Anfrage abgelehnt.",
+  [ERROR_CODES.NOT_IMPLEMENTED]: "Diese Funktion ist noch nicht verfügbar.",
+  [ERROR_CODES.AI_DUPLICATE]: "Dieser Vorgang läuft bereits.",
 });
 
 export class BoundaryError extends Error {

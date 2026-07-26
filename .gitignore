@@ -27,3 +27,6 @@ _kd_tree.tgz
 # Lose Debug-/Screenshot-PNGs im Root (echte Icons liegen in public/, Logo in logo/)
 /*.png
 dist-single-beta/
+
+# Supabase-CLI-Zustand (pro Gerät, gehört nicht ins Repo)
+supabase/.temp/

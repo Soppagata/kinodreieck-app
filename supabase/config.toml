@@ -1,0 +1,21 @@
+# Supabase-CLI-Konfiguration — bewusst MINIMAL.
+#
+# Diese Datei existiert nur, damit `supabase functions deploy` die
+# Funktionseinstellungen versioniert vorfindet. Sie bildet NICHT den
+# Gesamtzustand des Projekts ab.
+#
+# WARNUNG: Niemals `supabase config push` oder `supabase db push` ausführen.
+# Beides würde aus dieser unvollständigen Datei heraus Live-Einstellungen
+# beziehungsweise die Migrationshistorie überschreiben. Schemaänderungen laufen
+# in diesem Projekt ausschließlich von Hand über den SQL-Editor
+# (Laufprotokoll: supabase/migrations/LIESMICH.md).
+
+project_id = "bscjgwcntapobyxsiyce"
+
+[functions.ai-task]
+# Plattformprüfung des Sitzungstokens bleibt an — als Vorhut.
+# Die Funktion prüft den Aufrufer zusätzlich selbst (role == "authenticated"),
+# weil die Plattformprüfung laut Doku bei einer Rotation auf asymmetrische
+# Signaturschlüssel abgeschaltet werden müsste. Fällt sie weg, schützt die
+# eigene Prüfung weiter.
+verify_jwt = true

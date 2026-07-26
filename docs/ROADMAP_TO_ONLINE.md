@@ -140,7 +140,7 @@ bauen.
 | 2. Öffentliche Hülle | eigene Domain und Staging | frühe Online-Stufe 1 |
 | 3. Accounts und Speicher ✅ | echte Sitzung und RLS | persönliche Online-Daten |
 | 4. Katalog und Rechte | erlaubte gemeinsame Daten | vollständiges Programm |
-| 5. KI-Unterbau | geschützter, limitierter Endpunkt | alle KI-Funktionen |
+| 5. KI-Unterbau ✅ | geschützter, limitierter Endpunkt | alle KI-Funktionen |
 | 6. Intelligente Suche | erster echter KI-Produktpfad | geschlossene Beta |
 | 7. Betrieb und Datenschutz | lösch- und wiederherstellbarer Dienst | Online-Stufe 2 |
 | 8. Geschlossene Beta | reale Nutzung mit wenigen Testern | Freigabeentscheidung |
@@ -417,6 +417,13 @@ im Programmdatenplan beschriebenen Freigaben.
 ---
 
 ## Etappe 5: Geschützter KI-Unterbau
+
+**Stand 26.07.2026: umgesetzt.** Edge Function `ai-task` mit Sitzungsprüfung,
+providerneutralem Auftragsformat, serverseitig erzwungenen Grenzen
+(Monatsbudget, Tageslimit, Gleichzeitigkeit), Nutzungsprotokoll als
+Budgetzähler, Modellrouting per Konfiguration und getrennten Fehlerklassen.
+Ohne fachliche KI-Funktion — die kommt in Etappe 6. Einzelheiten, Runbooks und
+bewusste Grenzen in `ETAPPE_5_KI_UNTERBAU.md`.
 
 ### Ziel
 

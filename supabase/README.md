@@ -39,3 +39,30 @@ Isolationstest nach jeder RLS-berührenden Migration: `npm run test:rls`
 **Hinweis zur Aktualität:** Die App wird seit Etappe 2 über Cloudflare Pages
 auf `kinodreieck.at` ausgeliefert, nicht mehr über GitHub Pages. Ältere
 Formulierungen oben beziehen sich auf den früheren Stand.
+
+---
+
+## Edge Functions (seit Etappe 5)
+
+Der geschützte KI-Endpunkt liegt als **eine Datei** unter
+`supabase/functions/ai-task/index.ts`. Ausgeliefert wird er von Hand:
+
+```bash
+npx supabase functions deploy ai-task
+```
+
+Die Supabase-CLI ist als devDependency im Projekt (`npx supabase …`), das
+Projekt ist per `supabase link` verknüpft. Der Anthropic-Schlüssel liegt
+ausschließlich als Supabase-Secret (`ANTHROPIC_API_KEY`) — nie im Repo, nie im
+Browser-Bundle.
+
+`config.toml` ist bewusst **minimal** und bildet nicht den Gesamtzustand des
+Projekts ab. **Niemals `supabase config push` oder `supabase db push`
+ausführen** — beides würde aus dieser unvollständigen Datei heraus
+Live-Einstellungen beziehungsweise die Migrationshistorie überschreiben.
+Schemaänderungen laufen weiterhin von Hand über den SQL-Editor.
+
+Nach jedem Deploy: `node tools/ai_smoke.mjs` (elf Proben gegen die echte
+Function, Konfiguration nur über Umgebungsvariablen). Runbooks für Not-Aus,
+Limits, Modellwechsel und Protokollpflege stehen in
+`docs/ETAPPE_5_KI_UNTERBAU.md`.

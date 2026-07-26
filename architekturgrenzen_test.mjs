@@ -245,7 +245,7 @@ check("Oberflächen-Prüfung erfasst auch Dateien in Unterordnern",
   jsFiles.length >= fs.readdirSync("src/components").filter((n) => /\.jsx?$/.test(n)).length);
 const uiSource = jsFiles.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 check("UI importiert keine Netzwerk- oder Storage-Treiber direkt",
-  !/from\s+["'][^"']*lib\/(?:gitDriver|supabaseDriver|accountDriver|authDriver|katalog|storage)\.js["']/.test(uiSource));
+  !/from\s+["'][^"']*lib\/(?:gitDriver|supabaseDriver|accountDriver|authDriver|katalog|storage|aiDriver)\.js["']/.test(uiSource));
 check("UI greift nicht selbst auf die Sitzungsablage zu",
   !/kd:auth:/.test(uiSource));
 check("Aktive UI kennt keine treiberspezifischen Service-Namen",

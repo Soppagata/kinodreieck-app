@@ -8,6 +8,7 @@ import { istUebernommen } from "../services/uebernahme.js";
 import { topfLabel } from "../services/uebernahme.js";
 import { KontoUebernahme } from "./KontoUebernahme.jsx";
 import { errorText } from "../services/errors.js";
+import { aiService } from "../services/ai.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -51,6 +52,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
   const [pwNeu, setPwNeu] = useState("");
   const [pwMeldung, setPwMeldung] = useState(null);
   const [meldung, setMeldung] = useState(null);
+  const [kiMeldung, setKiMeldung] = useState(null);
 
   useEffect(() => authService.subscribe(setSession), []);
 
@@ -223,6 +225,35 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
           {pwMeldung && <p style={{ color: pwMeldung.ok ? T.ok : T.gefahr, fontSize: 13, margin: 0 }}>{pwMeldung.text}</p>}
         </div>
       )}
+
+      {/* Diagnose, kein Produktmerkmal: prüft die Kette Anmeldung -> Endpunkt ->
+          Limits, ohne ein Modell aufzurufen. Deshalb entstehen keine Kosten. */}
+      <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
+        <button style={{ ...btnStyle(false), fontSize: 13 }} disabled={laeuft} onClick={async () => {
+          setLaeuft(true); setKiMeldung(null);
+          try {
+            const bericht = await aiService.runTask("health", {});
+            /* Der Endpunkt antwortet auch dann, wenn die KI abgeschaltet ist —
+               eine Diagnose, die das verschweigt, meldet gruen und der naechste
+               echte Aufruf scheitert. */
+            if (bericht?.betrieb?.aiAktiv === false) {
+              setKiMeldung({ ok: false, text: "Endpunkt erreichbar, aber die KI-Funktionen sind derzeit abgeschaltet." });
+            } else if (bericht?.betrieb?.stand?.budgetErschoepft) {
+              setKiMeldung({ ok: false, text: "Endpunkt erreichbar, aber das Monatsbudget ist ausgeschöpft." });
+            } else {
+              setKiMeldung({ ok: true, text: "KI-Endpunkt erreichbar und deine Anmeldung wird akzeptiert." });
+            }
+          } catch (e) {
+            setKiMeldung({ ok: false, text: errorText(e) });
+          } finally { setLaeuft(false); }
+        }}>KI-Verbindung prüfen</button>
+        {kiMeldung && (
+          <p style={{ color: kiMeldung.ok ? T.ok : T.gefahr, fontSize: 13, margin: "8px 0 0" }}>{kiMeldung.text}</p>
+        )}
+        <p style={{ color: T.rauch, fontSize: 12, opacity: 0.75, margin: "6px 0 0" }}>
+          Reine Diagnose — es wird kein Modell befragt und es entstehen keine Kosten.
+        </p>
+      </div>
 
       <p style={{ color: T.rauch, fontSize: 12, opacity: 0.75, marginTop: 12 }}>
         Abmelden entfernt keine Daten von diesem Gerät. Der Bestand bleibt lokal nutzbar,

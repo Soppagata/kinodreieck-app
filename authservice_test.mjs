@@ -105,7 +105,7 @@ const snapText = JSON.stringify(snap);
 check("A3 Session-Snapshot enthält weder Token-Felder noch Tokenwerte",
   snap.mode === "account" && !/token/i.test(snapText) && !snapText.includes("at-") && !snapText.includes("rt-"));
 check("A3 Snapshot trägt Anzeigename und Fähigkeiten",
-  snap.account.displayName === "max" && snap.capabilities.remoteStorage === true && snap.capabilities.personalAi === false);
+  snap.account.displayName === "max" && snap.capabilities.remoteStorage === true && snap.capabilities.personalAi === true);
 
 /* ---------- A4: Erneuerung nur einmal, auch bei parallelen Anfragen ---------- */
 jetztMs += 3600_000;                        // Token ist jetzt abgelaufen

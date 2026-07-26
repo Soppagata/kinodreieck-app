@@ -315,7 +315,7 @@ export function createAuthDriver({
       mode: "account",
       account: { id: k.id, displayName: k.benutzername },
       expiresAt: new Date(k.gueltigBis).toISOString(),
-      capabilities: { remoteStorage: true, personalAi: false },
+      capabilities: { remoteStorage: true, personalAi: true },
       degradiert: zustand === AUTH_ZUSTAND.DEGRADIERT,
     };
   }
