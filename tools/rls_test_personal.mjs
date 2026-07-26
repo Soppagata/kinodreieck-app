@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/* RLS-Negativtest für kd_personal, kd_catalog und kd_quellen — läuft gegen die
+/* RLS-Negativtest für kd_personal, kd_catalog, kd_quellen und die KI-Tabellen
+   kd_ai_log/kd_ai_limits — läuft gegen die
    ECHTE Datenbank.
    ============================================================================
    Bewusst NICHT Teil von `npm test`: braucht ein erreichbares Supabase-Projekt
@@ -235,6 +236,76 @@ const t12 = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1", { to
 pruefe("T12 Sitzungstoken auf kd_store-Demo-Read liefert leer (Wächter: kd_store bleibt tokenfrei)",
   t12.status === 200 && Array.isArray(t12.data) && t12.data.length === 0,
   "HTTP " + t12.status + " rows=" + (Array.isArray(t12.data) ? t12.data.length : "?"));
+
+/* --- T13: KI-Protokoll und -Konfiguration (Etappe 5) ----------------------
+   Das Protokoll kd_ai_log ist zugleich der Budgetzähler. Ein Konto, das darin
+   schreiben, löschen oder fremde Zeilen lesen könnte, könnte seinen eigenen
+   Verbrauch umschreiben — die Kostengrenze wäre wertlos. kd_ai_limits trägt
+   Not-Aus und Budgets und geht keinen Client etwas an.
+
+   Besonderheit gegenüber kd_personal: Dort verhindert eine fehlende POLICY das
+   Schreiben. Hier muss zusätzlich das GRANT weg sein — der adversariale Review
+   fand, dass Supabase auf neue Tabellen per Standardrecht ALL an `authenticated`
+   vergibt, und TRUNCATE unterliegt keiner RLS. T13e prüft deshalb das Recht
+   selbst, nicht nur seine Wirkung. */
+const t13a = await rest("GET", "/kd_ai_log?select=id&limit=1");
+pruefe("T13a anon LESEN auf kd_ai_log wird abgewiesen",
+  t13a.status === 401 || t13a.status === 403,
+  "HTTP " + t13a.status + (t13a.status === 200 ? " — LECK: anon sieht das Nutzungsprotokoll!" : ""));
+
+const t13b = await rest("GET", "/kd_ai_limits?select=schluessel&limit=1", { token: A.token });
+pruefe("T13b angemeldetes Konto darf kd_ai_limits NICHT lesen",
+  !t13b.ok || (Array.isArray(t13b.data) && t13b.data.length === 0),
+  "HTTP " + t13b.status + " rows=" + (Array.isArray(t13b.data) ? t13b.data.length : "?")
+  + (Array.isArray(t13b.data) && t13b.data.length ? " — LECK: Betriebskonfiguration ist einsehbar!" : ""));
+
+const t13c = await rest("PATCH", "/kd_ai_limits?schluessel=eq.ai_aktiv", {
+  token: A.token, body: { wert: false }, prefer: "return=representation",
+});
+const aiAusGeschaltet = t13c.ok && Array.isArray(t13c.data) && t13c.data.length > 0;
+pruefe("T13c Konto kann den Not-Aus NICHT umlegen",
+  !aiAusGeschaltet,
+  "HTTP " + t13c.status + (aiAusGeschaltet ? " — LECK: ein Nutzer kann die KI fuer alle abschalten!" : ""));
+
+/* Fremde Protokollzeilen: A darf B nicht sehen. RLS filtert ohne 403 — die
+   Antwort ist 200 mit leerer Menge, deshalb wird der Inhalt geprüft, nie der
+   Status (Lehre aus Etappe 4). */
+const t13d = await rest("GET", `/kd_ai_log?account_id=eq.${B.id}&select=id,task&limit=5`, { token: A.token });
+pruefe("T13d A sieht keine Protokollzeilen von B (200 mit leerer Menge)",
+  t13d.status === 200 && Array.isArray(t13d.data) && t13d.data.length === 0,
+  "HTTP " + t13d.status + " rows=" + (Array.isArray(t13d.data) ? t13d.data.length : "?")
+  + (t13d.data?.length ? " — LECK: fremder Verbrauch ist sichtbar!" : ""));
+
+/* Schreibversuch auf das eigene Protokoll: ein Konto darf seinen Verbrauch
+   nicht erfinden (und damit auch nicht das Budget anderer verbrauchen). */
+const t13e = await rest("POST", "/kd_ai_log", {
+  token: A.token,
+  body: { vorgang_id: "00000000-0000-4000-8000-00000000feed", task: "rls-probe", status: "fertig", kosten_usd_cent: 0 },
+  prefer: "return=representation",
+});
+const konnteSchreiben = t13e.ok && Array.isArray(t13e.data) && t13e.data.length > 0;
+pruefe("T13e Konto kann KEINE eigene Protokollzeile anlegen",
+  !konnteSchreiben,
+  "HTTP " + t13e.status + (konnteSchreiben ? " — LECK: Verbrauch ist frei erfindbar, das Budget waere wertlos!" : ""));
+
+const t13f = await rest("DELETE", `/kd_ai_log?account_id=eq.${A.id}`, { token: A.token, prefer: "return=representation" });
+const konnteLoeschen = t13f.ok && Array.isArray(t13f.data) && t13f.data.length > 0;
+pruefe("T13f Konto kann eigene Protokollzeilen NICHT löschen",
+  !konnteLoeschen,
+  "HTTP " + t13f.status + (konnteLoeschen ? " — LECK: der eigene Verbrauch laesst sich wegraeumen!" : ""));
+
+/* Die drei Betriebsfunktionen sind service_role vorbehalten. */
+for (const [nr, fn, koerper] of [
+  ["T13g", "kd_ai_auftrag_starten", { p_account: A.id, p_task: "rls-probe", p_vorgang: "00000000-0000-4000-8000-00000000beef" }],
+  ["T13h", "kd_ai_log_abraeumen", { p_tage: 1 }],
+  ["T13i", "kd_ai_verwaiste_schliessen", {}],
+]) {
+  const r = await rest("POST", "/rpc/" + fn, { token: A.token, body: koerper });
+  const lief = r.ok && r.data !== null && r.data !== undefined;
+  pruefe(`${nr} angemeldetes Konto darf ${fn} NICHT ausführen`,
+    !lief && (r.status === 401 || r.status === 403 || r.status === 404 || /42501|PGRST202/.test(JSON.stringify(r.data || ""))),
+    "HTTP " + r.status + (lief ? ` — LECK: ${fn} ist fuer Konten aufrufbar!` : ""));
+}
 
 /* --- Cleanup ------------------------------------------------------------- */
 const cA = await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}`, { token: A.token });
