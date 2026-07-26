@@ -205,7 +205,13 @@ async function pruefeAufrufer(req: Request): Promise<Aufrufer> {
      Projektschlüssel kommt an der Plattformprüfung vorbei und wird erst hier
      gestoppt. */
   if (rolle !== "authenticated") throw new AufrufFehler(CODES.UNAUTHENTICATED, "rolle-nicht-authenticated");
-  if (!/^[0-9a-f-]{36}$/i.test(sub)) throw new AufrufFehler(CODES.UNAUTHENTICATED, "subject-keine-konto-id");
+  /* Exakte UUID-Form, dieselbe wie bei `vorgangId`. Die alte Fassung akzeptierte
+     36 Zeichen Hex und Bindestriche in beliebiger Anordnung; ein formfremdes
+     `sub` ginge dann als `p_account` an einen uuid-Parameter und käme als
+     nichtssagendes `auftrag-start-fehlgeschlagen:22P02` zurück. */
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sub)) {
+    throw new AufrufFehler(CODES.UNAUTHENTICATED, "subject-keine-konto-id");
+  }
 
   return { accountId: sub, rolle, claimsSchluessel: Object.keys(claims), weg };
 }
@@ -294,6 +300,15 @@ async function rufeAnbieter(
       throw new AufrufFehler(CODES.SERVER, "anbieterschluessel-abgelehnt");
     }
     if (antwort.status === 402) throw new AufrufFehler(CODES.SERVER, "anbieter-guthaben");
+    /* Ein zu komplexes Schema ist UNSER Programmierfehler, kein Anbieterausfall.
+       Als "anbieterfehler:400" gemeldet läse es sich als vorübergehende Störung
+       und würde endlos wiederholt, statt einmal repariert zu werden. */
+    if (antwort.status === 400) {
+      const meldung = String((daten as { error?: { message?: string } } | null)?.error?.message ?? "");
+      if (/schema/i.test(meldung) && /(complex|compil)/i.test(meldung)) {
+        throw new AufrufFehler(CODES.SERVER, "schema-zu-komplex");
+      }
+    }
     throw new AufrufFehler(CODES.SERVER, "anbieterfehler:" + antwort.status + ":" + typ);
   }
 
@@ -307,12 +322,39 @@ async function rufeAnbieter(
      Serverfehler und darf nicht als solcher erscheinen. Der Verbrauch wird
      VORHER ausgelesen: diese Tokens sind abgerechnet, auch wenn nichts
      Brauchbares herauskam. */
+  const verbrauch = {
+    modell: modellAusAntwort,
+    inputTokens: Number(usage.input_tokens ?? 0),
+    outputTokens: Number(usage.output_tokens ?? 0),
+  };
+
   if (stopReason === "refusal") {
-    throw new AufrufFehler(CODES.AI_REFUSED, "modell-hat-abgelehnt", {
-      modell: modellAusAntwort,
-      inputTokens: Number(usage.input_tokens ?? 0),
-      outputTokens: Number(usage.output_tokens ?? 0),
-    });
+    /* Die Policy-Kategorie ist ein Enum des Anbieters, kein Freitext und keine
+       Nutzereingabe — sie darf ins Protokoll und unterscheidet einen echten
+       Sicherheits-Refusal von einem Formatproblem. */
+    const kategorie = (daten as { stop_details?: { type?: string } } | null)?.stop_details?.type ?? null;
+    /* Kleinschreibung erzwingen: die Fehlerklassen-Form ist lowercase-only.
+       Ein Anbieter-Enum in Großschreibung hätte sonst die GANZE Klasse auf
+       `unklassifiziert` fallen lassen — samt Code, also genau die Diagnose
+       gelöscht, für die die Kategorie mitgenommen wird. */
+    const rein = typeof kategorie === "string" && /^[a-z0-9_-]{1,30}$/i.test(kategorie)
+      ? ":" + kategorie.toLowerCase()
+      : "";
+    throw new AufrufFehler(CODES.AI_REFUSED, "modell-hat-abgelehnt" + rein, verbrauch);
+  }
+
+  /* Alle drei Fälle liefern unvollständiges JSON und landeten bisher erst bei
+     JSON.parse als "kein JSON" — das liest sich wie Modellversagen, ist aber
+     etwas ganz anderes mit klarer Abhilfe. Der Verbrauch reist mit: diese
+     Tokens sind abgerechnet. */
+  if (stopReason === "max_tokens") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "antwort-abgeschnitten", verbrauch);
+  }
+  if (stopReason === "model_context_window_exceeded") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "kontextfenster-ueberschritten", verbrauch);
+  }
+  if (stopReason === "pause_turn") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "antwort-pausiert", verbrauch);
   }
 
   return {
@@ -351,8 +393,90 @@ function kostenAus(preis: { in: number; out: number }, ein: number, aus: number)
   return (ein / 1_000_000) * preis.in + (aus / 1_000_000) * preis.out;
 }
 
-/* ---------- Einstieg -------------------------------------------------------------- */
-Deno.serve(async (req: Request) => {
+/* ---------- Protokoll-Hygiene -------------------------------------------------
+   `kd_ai_log` führt ausdrücklich KEINE Inhalte. Die Fehlerklasse wird aber aus
+   Code und Grund zusammengesetzt — ein „hilfreicher" Grund mit einem
+   Nutzerwert darin (`schema:genre-unbekannt:<wert>`) schriebe genau diesen Wert
+   in die Datenbank.
+
+   Deshalb PRÜFEN statt SÄUBERN: Wer säubert, behält Bruchstücke — aus einem
+   Suchsatz würde nach dem Entfernen der Leerzeichen immer noch ein lesbares
+   Wortband. Was nicht der engen Form entspricht, wird deshalb komplett
+   verworfen und als `unklassifiziert` geführt. Lieber eine Zeile ohne
+   Diagnose als eine Zeile mit fremdem Inhalt. */
+/* Drei Doppelpunkt-Abschnitte, nicht zwei: die längste echte Klasse ist
+   `server:anbieterfehler:400:invalid_request_error`. Mit nur zwei Abschnitten
+   fiel jeder Anbieter-HTTP-Fehler außer 429/529/401/403/402 auf
+   `unklassifiziert` — kein Leck, aber im Protokoll diagnostisch blind. */
+const FEHLERKLASSE_FORM = /^[a-z][a-z0-9-]{0,39}(:[a-z0-9][a-z0-9._-]{0,39}){0,3}$/;
+
+function sichereFehlerklasse(roh: unknown): string | null {
+  if (typeof roh !== "string" || roh.length === 0) return null;
+  return FEHLERKLASSE_FORM.test(roh) ? roh : "unklassifiziert";
+}
+
+/* Gleiche Regel für die Versionsangaben: sie kommen aus dem Client-Body und
+   gehen direkt in die Protokollzeile. Enge Form oder Abweisung. */
+const VERSION_FORM = /^[A-Za-z0-9._-]{1,20}$/;
+
+/* ---------- Aufgaben-Tabelle ---------------------------------------------------
+   Der zahlende Pfad war bis Etappe 6 flach auf `echo-struct` verdrahtet:
+   Systemprompt und Nutzertext als Stringliterale mitten im Ablauf, das Schema
+   als lokale Konstante, die fachliche Prüfung hart auf zwei Feldnamen. Eine
+   zweite Aufgabe war so nicht zu ergänzen, ohne den ganzen Ablauf zu kopieren.
+
+   Jede Aufgabe beschreibt jetzt nur noch DREI Dinge; alles andere — Grenzen,
+   Reservierung, Anbieteraufruf, Protokoll — ist gemeinsamer Rumpf:
+     bauAuftrag      Payload prüfen und in System-/Nutzertext + Schema übersetzen
+     pruefeErgebnis  fachliche Prüfung NACH der strukturellen (null = in Ordnung)
+
+   `bauAuftrag` darf `AufrufFehler` werfen; der Grund wird als Kennung gemeldet
+   und landet nie mit Nutzerinhalt im Protokoll. */
+type Auftrag = { system: string; nutzertext: string; schema: Record<string, unknown> | null };
+
+type Aufgabe = {
+  bauAuftrag: (payload: Record<string, unknown>) => Auftrag;
+  pruefeErgebnis: (inhalt: unknown) => string | null;
+};
+
+const ECHO_SCHEMA = {
+  type: "object",
+  properties: {
+    echo: { type: "string" },
+    zeichen: { type: "integer" },
+  },
+  required: ["echo", "zeichen"],
+  additionalProperties: false,
+};
+
+export const AUFGABEN: Record<string, Aufgabe> = {
+  /* Der Kettenbeweis aus Etappe 5: kleinster möglicher echter Aufruf mit
+     striktem Antwortschema, ohne jede persönliche Angabe. Er ist zugleich das
+     Sicherheitsnetz dieses Umbaus — seine elf Rauchproben müssen unverändert
+     durchlaufen. */
+  "echo-struct": {
+    bauAuftrag(payload) {
+      const wort = typeof payload.wort === "string" ? payload.wort.slice(0, 40) : "Kinodreieck";
+      const strikt = payload.strikt !== false;
+      return {
+        system: "Du bist ein Testendpunkt. Antworte ausschliesslich mit JSON nach dem vorgegebenen Schema, ohne weiteren Text.",
+        nutzertext: `Gib das Wort "${wort}" unveraendert als Feld "echo" zurueck und seine Zeichenzahl als "zeichen".`,
+        schema: strikt ? ECHO_SCHEMA : null,
+      };
+    },
+    pruefeErgebnis(inhalt) {
+      const g = inhalt as { echo?: unknown; zeichen?: unknown };
+      return typeof g?.echo === "string" && typeof g?.zeichen === "number" ? null : "schema";
+    },
+  },
+};
+
+/* ---------- Einstieg --------------------------------------------------------------
+   Der Anfragebehandler ist ausgelagert und exportiert, damit ihn ein Test
+   aufrufen kann, ohne einen Server zu starten. Bis Etappe 6 hatte diese Datei
+   KEINEN einzigen automatisierten Test — geprüft wurde nur über die Rauchprobe
+   gegen die deployte Fassung, und die kostet Geld. */
+export async function handhabeAnfrage(req: Request): Promise<Response> {
   const origin = req.headers.get("Origin");
   const beginn = Date.now();
 
@@ -399,6 +523,15 @@ Deno.serve(async (req: Request) => {
      verfügbar", obwohl seine Eingabe schuld war. */
   if (vorgangId !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vorgangId)) {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "vorgangid-keine-uuid", status: 400, vorgangId: null });
+  }
+
+  /* Beide Versionsangaben kamen bisher unvalidiert und unbegrenzt aus dem
+     Client-Body und gingen direkt in `kd_ai_log`. Das war der schnellste Weg,
+     auf dem ein Suchsatz im Protokoll landen kann — obwohl die Tabelle
+     ausdrücklich keine Inhalte führt. Enge Form oder Abweisung. */
+  if ((promptVersion !== null && !VERSION_FORM.test(promptVersion))
+    || (profilVersion !== null && !VERSION_FORM.test(profilVersion))) {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "versionsangabe-ungueltig", status: 400, vorgangId });
   }
 
   const admin = adminClient();
@@ -478,19 +611,30 @@ Deno.serve(async (req: Request) => {
     return jsonAntwort({ ok: true, task, vorgangId, modelle: liste }, 200, origin);
   }
 
-  /* ---- Fachaufgaben: registriert, noch nicht gebaut ---- */
-  if (FACHAUFGABEN.has(task)) {
-    return fehlerAntwort(CODES.NOT_IMPLEMENTED, origin, { grund: "kommt-in-etappe-6", vorgangId });
+  /* ---- Aufgabe auflösen. Eine Aufgabe in AUFGABEN ist gebaut; eine in
+          FACHAUFGABEN ist registriert, aber noch nicht gebaut; alles andere
+          kennt der Endpunkt nicht. ---- */
+  const aufgabe = AUFGABEN[task];
+  if (!aufgabe) {
+    const grund = FACHAUFGABEN.has(task)
+      ? "kommt-in-etappe-6"
+      : (task ? "unbekannte-aufgabe" : "kein-task");
+    return fehlerAntwort(CODES.NOT_IMPLEMENTED, origin, { grund, vorgangId });
   }
 
-  if (task !== "echo-struct") {
-    return fehlerAntwort(CODES.NOT_IMPLEMENTED, origin, { grund: task ? "unbekannte-aufgabe" : "kein-task", vorgangId });
+  /* Payload-Prüfung VOR der Reservierung: ein unbrauchbarer Auftrag soll weder
+     Geld kosten noch eine Protokollzeile hinterlassen. */
+  let auftrag: Auftrag;
+  try {
+    auftrag = aufgabe.bauAuftrag(payload);
+  } catch (e) {
+    const f = e as AufrufFehler;
+    return fehlerAntwort(f.code ?? CODES.INVALID_RESPONSE, origin, {
+      grund: f.grund ?? "payload-ungueltig",
+      status: 400,
+      vorgangId,
+    });
   }
-
-  /* ---- echo-struct: der Kettenbeweis. Kleinster möglicher echter Aufruf mit
-          striktem Antwortschema — ohne jede persönliche Angabe. ---- */
-  const wort = typeof payload.wort === "string" ? payload.wort.slice(0, 40) : "Kinodreieck";
-  const strikt = payload.strikt !== false;
 
   const aliasse = (konfig["modell_alias"] ?? {}) as Record<string, string>;
   const taskModell = (konfig["task_modell"] ?? {}) as Record<string, string>;
@@ -554,32 +698,22 @@ Deno.serve(async (req: Request) => {
         p_input_tokens: felder.inputTokens ?? null,
         p_output_tokens: felder.outputTokens ?? null,
         p_kosten: felder.kosten ?? null,
-        p_fehlerklasse: felder.fehlerklasse ?? null,
+        p_fehlerklasse: sichereFehlerklasse(felder.fehlerklasse),
       });
     } catch {
       /* Protokollieren darf den Aufruf nie zum Absturz bringen. */
     }
   }
 
-  const SCHEMA = {
-    type: "object",
-    properties: {
-      echo: { type: "string" },
-      zeichen: { type: "integer" },
-    },
-    required: ["echo", "zeichen"],
-    additionalProperties: false,
-  };
-
   let ergebnis: AnbieterErgebnis;
   try {
     ergebnis = await rufeAnbieter(
       modell,
-      "Du bist ein Testendpunkt. Antworte ausschliesslich mit JSON nach dem vorgegebenen Schema, ohne weiteren Text.",
-      `Gib das Wort "${wort}" unveraendert als Feld "echo" zurueck und seine Zeichenzahl als "zeichen".`,
+      auftrag.system,
+      auftrag.nutzertext,
       maxTokens,
       timeoutMs,
-      strikt ? SCHEMA : null,
+      auftrag.schema,
     );
   } catch (e) {
     const f = e as AufrufFehler;
@@ -619,9 +753,22 @@ Deno.serve(async (req: Request) => {
     await beende("fehler", { modell: ergebnis.modell, inputTokens: ergebnis.inputTokens, outputTokens: ergebnis.outputTokens, kosten, fehlerklasse: CODES.INVALID_RESPONSE + ":kein-json" });
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "antwort-kein-json", vorgangId });
   }
-  const geprueft = inhalt as { echo?: unknown; zeichen?: unknown };
-  if (typeof geprueft?.echo !== "string" || typeof geprueft?.zeichen !== "number") {
-    await beende("fehler", { modell: ergebnis.modell, inputTokens: ergebnis.inputTokens, outputTokens: ergebnis.outputTokens, kosten, fehlerklasse: CODES.INVALID_RESPONSE + ":schema" });
+  /* Fachliche Prüfung NACH der strukturellen: ein technisch gültiges JSON ist
+     noch kein brauchbares Ergebnis. Die Aufgabe liefert nur eine Kennung
+     zurück — nie einen Text mit Nutzerinhalt darin. */
+  let fachfehler: string | null;
+  try {
+    fachfehler = aufgabe.pruefeErgebnis(inhalt);
+  } catch {
+    /* Eine werfende Prüfung darf die Protokollzeile nicht offen lassen: sie
+       bliebe auf `laufend` stehen und blockierte den Parallelzähler bis zur
+       Zeitgrenze, die Reservierung bliebe dauerhaft gebucht. Für `echo-struct`
+       ist das unmöglich — aber ab Etappe 6 bringt jede neue Aufgabe eigenen
+       Prüfcode mit, und dann ist genau das die naheliegendste Fehlerquelle. */
+    fachfehler = "pruefung-abgestuerzt";
+  }
+  if (fachfehler) {
+    await beende("fehler", { modell: ergebnis.modell, inputTokens: ergebnis.inputTokens, outputTokens: ergebnis.outputTokens, kosten, fehlerklasse: CODES.INVALID_RESPONSE + ":" + fachfehler });
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "antwort-verletzt-schema", vorgangId });
   }
 
@@ -638,7 +785,7 @@ Deno.serve(async (req: Request) => {
     task,
     vorgangId,
     modellAlias: alias,
-    data: geprueft,
+    data: inhalt,
     verbrauch: {
       inputTokens: ergebnis.inputTokens,
       outputTokens: ergebnis.outputTokens,
@@ -647,4 +794,13 @@ Deno.serve(async (req: Request) => {
       stopReason: ergebnis.stopReason,
     },
   }, 200, origin);
-});
+}
+
+/* Der Server startet immer — AUSSER ein Test schaltet ihn ausdrücklich ab.
+   Bewusst diese Richtung: eine nicht gesetzte Variable in der ausgelieferten
+   Umgebung führt zum Serven, nie zum Schweigen. Ein Schalter, der andersherum
+   gepolt wäre (nur serven wenn X gesetzt), würde bei einem Fehlgriff eine
+   stumme Function deployen — und das fiele erst im Betrieb auf. */
+if (Deno.env.get("KD_KEIN_SERVER") !== "1") {
+  Deno.serve(handhabeAnfrage);
+}

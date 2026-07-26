@@ -19,7 +19,7 @@
    "typ": "film",
    "quelle": "dvd",
    "must_watch": false,
-   "kategorie": "kult_klassiker",
+   "kategorie": "referenz",
    "bewertet_von": "demo",
    "bewertung": {
     "wie": 4,
@@ -43,7 +43,7 @@
    "typ": "film",
    "quelle": "prime",
    "must_watch": false,
-   "kategorie": "sehenswert",
+   "kategorie": "wahrscheinlich_passend",
    "bewertet_von": "demo",
    "bewertung": {
     "wie": 3,
@@ -67,7 +67,7 @@
    "typ": "film",
    "quelle": "apple",
    "must_watch": false,
-   "kategorie": "sehenswert",
+   "kategorie": "wahrscheinlich_passend",
    "bewertet_von": "demo",
    "bewertung": {
     "wie": 4,
@@ -75,7 +75,7 @@
     "warum": 2
    },
    "genre": [
-    "Romanze"
+    "romance"
    ],
    "tags": [],
    "begruendung": "Demo-Eintrag: stiller Bilderfilm.",
@@ -91,7 +91,7 @@
    "typ": "film",
    "quelle": "dvd",
    "must_watch": false,
-   "kategorie": "gut",
+   "kategorie": "wahrscheinlich_passend",
    "bewertet_von": "demo",
    "bewertung": {
     "wie": 3,
@@ -99,7 +99,7 @@
     "warum": 3
    },
    "genre": [
-    "Science-Fiction"
+    "sci-fi"
    ],
    "tags": [],
    "begruendung": "Demo-Eintrag: Utopie mit Rissen.",

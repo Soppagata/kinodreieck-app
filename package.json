@@ -15,7 +15,9 @@
     "test:service-worker": "node serviceworker_test.mjs",
     "test:legacy": "node gitdriver_test.mjs && node supabasedriver_test.mjs",
     "test:rls": "node tools/rls_test_personal.mjs",
-    "test": "node architekturgrenzen_test.mjs && node authservice_test.mjs && node accountdriver_test.mjs && node uebernahme_test.mjs && node gitdriver_test.mjs && node supabasedriver_test.mjs && node katalog_test.mjs && node ai_test.mjs && node restore_test.mjs && node mustwatch_test.mjs && node blog_test.mjs && node eggs_test.mjs && node staffeln_test.mjs && node staffel_pipeline_test.mjs && node serviceworker_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html && node personalmodus_test.mjs dist-single/Kinodreieck.html && node betamodus_test.mjs && vite build && node tools/prepare-online-build.mjs && node pages_test.mjs"
+    "test:finder": "FINDER_SOLL=1 node finder_test.mjs",
+    "test:function": "deno test --allow-env --allow-net --allow-read --node-modules-dir=auto ai_task_test.ts",
+    "test": "node architekturgrenzen_test.mjs && node authservice_test.mjs && node accountdriver_test.mjs && node uebernahme_test.mjs && node gitdriver_test.mjs && node supabasedriver_test.mjs && node katalog_test.mjs && node ai_test.mjs && FINDER_SOLL=1 node finder_test.mjs && node restore_test.mjs && node mustwatch_test.mjs && node blog_test.mjs && node eggs_test.mjs && node staffeln_test.mjs && node staffel_pipeline_test.mjs && node serviceworker_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html && node personalmodus_test.mjs dist-single/Kinodreieck.html && node betamodus_test.mjs && vite build && node tools/prepare-online-build.mjs && node pages_test.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

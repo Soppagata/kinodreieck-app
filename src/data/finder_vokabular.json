@@ -1,17 +1,17 @@
 {
  "hinweis": "Vokabular des Finders — reine Daten, kein Code. Erweitern nach Bedarf: neue Wörter einfach in die Listen (klein, ohne Umlaut-Sonderformen — der Abgleich normalisiert). Max' echte Anfragen schärfen diese Listen über die Zeit.",
+ "hinweis_genre_ziele": "WICHTIG: Ein Synonym-Ziel muss auf die Schreibweise zeigen, die WIRKLICH in der Masterliste steht — sonst wirkt es im positiven Fall wie 'keine Treffer' und im Ausschlussfall STILL GAR NICHT (der Nutzer bekommt genau das, was er ausgeschlossen hat). genreKey() zieht beim Vergleich Bindestriche/Leerzeichen ein und faltet oe/ue/ae zu o/u/a; 'komoedie' trifft damit 'komödie'. Es überbrückt aber KEINE echten Wortunterschiede: 'scifi' trifft 'sciencefiction' nicht. Stand der echten Masterliste (177 Einträge, geprüft 26.07.2026): sci-fi, romance, komödie, crime, film-noir, neo-noir, horror, drama, thriller, action, abenteuer, fantasy, anime, animation, western, satire, parodie, mystery, familie, musical, musikfilm, arthouse, exploitation, superheldenfilm, monsterfilm, martial-arts, kriegsfilm, historienfilm, tragikomödie, biopic, stunt. Achtung: 'anime' und 'animation' sind dort ZWEI verschiedene Genres — das Synonym zeichentrick/animation->anime verbreitert also bewusst.",
  "achsen": {
   "wie": ["stylisch", "asthetisch", "asthetik", "optik", "optisch", "visuell", "atmosphare", "atmospharisch", "bildgewaltig", "look", "inszenierung", "schone bilder"],
   "was": ["tiefgang", "anspruchsvoll", "story", "handlung", "thema", "gehalt", "philosophisch", "gesellschaftskritisch", "komplex", "clever", "zum nachdenken"],
   "warum": ["einfluss", "einflussreich", "wegweisend", "referenz", "referenziert", "zitiert", "ikonisch", "klassiker", "kanon", "kanonisch", "schluesselwerk", "meilenstein", "genrepraegend", "vorlaeufer", "popkulturell", "filmhistorisch", "praegend"]
  },
+ "hinweis_kategorien": "Nur die vier Kategoriewerte der Masterliste v3. Die alten Werte (immer_gut, kult, kult_klassiker, daemlich_aber_herrlich, trash, sehenswert) sind gestrichen — sie kamen in den echten Daten nicht vor, jeder Kategorie-Filter lief still ins Leere. Was dort als Kategorie geführt wurde, aber in v3 keine ist (kult, klassiker, trash), steht jetzt unter stimmungen und zielt auf die gleichnamigen TAGS, die es in den Daten wirklich gibt.",
  "kategorien": {
-  "immer_gut": ["immer gut", "verlasslich", "sichere bank", "safe"],
-  "kult": ["kult"],
-  "kult_klassiker": ["klassiker", "kanon", "alter film"],
-  "daemlich_aber_herrlich": ["damlich", "dumm aber", "herrlich blod", "bloed"],
-  "trash": ["trash", "schlecht aber gut"],
-  "sehenswert": ["sehenswert", "solide"]
+  "sicher_gut": ["immer gut", "verlasslich", "sichere bank", "safe", "sicher gut"],
+  "wahrscheinlich_passend": ["sehenswert", "solide", "wahrscheinlich passend"],
+  "referenz": ["referenz", "kanon", "pflicht", "alter film"],
+  "zu_pruefen": ["ungepruft", "zu prufen", "noch unklar"]
  },
  "quellen": {
   "kino": ["kino", "lauft", "spielt", "vorstellung", "leinwand", "im programm"],
@@ -20,14 +20,21 @@
  },
  "zeit": { "heute": ["heute", "heut abend", "gleich"], "morgen": ["morgen"] },
  "entdecken": ["neu", "neues", "unbekannt", "entdecken", "noch nie", "kenne nicht", "kenn ich nicht", "uberraschung", "uberrasch"],
+ "negation": ["kein", "keine", "keinen", "keinem", "keiner", "nicht", "nichts", "nix", "ohne", "ausser", "niemals"],
+ "grenzwoerter": ["aber", "und", "oder", "sondern", "jedoch", "trotzdem", "dafuer"],
  "stimmungen": {
   "traurig": { "genres": ["drama"], "tags": ["melancholisch", "melancholie", "trauer", "tragisch", "tragik", "emotional"] },
   "melancholisch": { "genres": ["drama"], "tags": ["melancholisch", "noir", "einsamkeit"] },
   "duster": { "genres": ["film-noir", "horror", "thriller"], "tags": ["noir", "dystopie", "duester", "dunkel"] },
   "dunkel": { "genres": ["film-noir", "thriller"], "tags": ["noir", "dystopie"] },
-  "gemutlich": { "genres": ["komoedie", "romanze"], "tags": ["feelgood", "wohlfuehl", "warm"] },
-  "wohlfuhl": { "genres": ["komoedie", "romanze"], "tags": ["feelgood", "wohlfuehl"] },
-  "romantisch": { "genres": ["romanze"], "tags": ["liebe", "romantik"] },
+  "gemutlich": { "genres": ["komoedie", "romance"], "tags": ["feelgood", "wohlfuehl", "warm", "comfort-watch"] },
+  "kult": { "tags": ["kult"] },
+  "klassiker": { "tags": ["klassiker"] },
+  "trash": { "tags": ["trash", "camp"] },
+  "damlich": { "tags": ["trash", "camp"] },
+  "bloed": { "tags": ["trash", "camp"] },
+  "wohlfuhl": { "genres": ["komoedie", "romance"], "tags": ["feelgood", "wohlfuehl"] },
+  "romantisch": { "genres": ["romance"], "tags": ["liebe", "romantik"] },
   "spannend": { "genres": ["thriller", "crime"], "tags": ["spannung"] },
   "episch": { "genres": ["abenteuer", "fantasy"], "tags": ["episch", "weltenbau"] },
   "verstorend": { "genres": ["horror"], "tags": ["verstoerend", "boese"] },
@@ -42,7 +49,7 @@
   "horrorfilm": "horror", "gruselig": "horror", "grusel": "horror",
   "zeichentrick": "anime", "animation": "anime",
   "komodie": "komoedie", "comedy": "komoedie", "lustig": "komoedie", "witzig": "komoedie",
-  "liebesfilm": "romanze", "krimi": "crime", "doku": "dokumentation",
-  "actionfilm": "action", "kampf": "action"
+  "liebesfilm": "romance", "krimi": "crime", "doku": "dokumentation",
+  "actionfilm": "action", "kampf": "action", "powpow": "action"
  }
 }
