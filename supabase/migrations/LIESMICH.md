@@ -23,7 +23,7 @@ ausfüllen.
 | `20260725220000_etappe4_quellenregister_zugriff.sql` | | | | |
 | `20260726120000_etappe4_guard_ausbaustufe.sql` | | | | |
 | `20260726160000_etappe5_ki_unterbau.sql` | Produktion (EU-West) | 2026-07-26 | Max | erfolgreich; 11 Konfigurationszeilen |
-| `20260726180000_etappe5_ki_unterbau_haertung.sql` | | | | |
+| `20260726180000_etappe5_ki_unterbau_haertung.sql` | Produktion (EU-West) | 2026-07-26 | Max | erfolgreich; Rauchprobe danach 11/11 |
 
 ## Nach Migration 1
 

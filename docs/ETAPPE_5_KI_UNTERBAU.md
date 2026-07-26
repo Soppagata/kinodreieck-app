@@ -1,8 +1,16 @@
 # Etappe 5: Geschützter KI-Unterbau
 
-**Stand: 26. Juli 2026.** Endpunkt gebaut, Datenbankregeln in der
-Produktionsdatenbank, Testsuite grün (941 Checks, davon 91 neu),
-Rauchprobe gegen die echte Function bestanden.
+**Stand: 26. Juli 2026 — umgesetzt und gegen die echte Umgebung belegt.**
+Beide Migrationen sind in der Produktionsdatenbank gelaufen, die Function ist
+ausgeliefert, die Testsuite ist grün (941 Checks, davon 91 neu) und die
+Rauchprobe meldet **11 von 11** gegen die deployte Function — einschließlich
+eines echten Modellaufrufs.
+
+Gemessener Kettenbeweis (`echo-struct`, 26.07.): Modellalias `klein`,
+247 Eingabe- und 18 Ausgabe-Tokens, **0,0337 US-Cent**, 2597 ms — korrekt
+protokolliert und im Monatsverbrauch sichtbar. Die Größenordnung ist der
+belastbarste Anhaltspunkt für die Budgetplanung: bei diesem Zuschnitt kostet
+ein kleiner Auftrag rund ein Dreißigstel Cent.
 
 Diese Etappe enthält **bewusst keine fachliche KI-Funktion**. Sie baut das
 Fundament, auf dem die intelligente Suche (Etappe 6) und später Vorbewertung
@@ -95,13 +103,19 @@ verschweigt genau die teuren Fälle.
 ### Ein unbekannter Modellpreis wird geschätzt, nicht auf null gesetzt
 
 Der Anbieter antwortet mit der aufgelösten, datierten Modell-ID
-(`claude-haiku-4-5-20251001`), konfiguriert ist der Alias
-(`claude-haiku-4-5`). Ein exakter Nachschlag ging deshalb ins Leere und die
-erste Fassung buchte stillschweigend 0 — das Monatsbudget wäre **nie**
+(`claude-haiku-4-5-20251001`); konfiguriert war zunächst der Alias aus der
+Doku (`claude-haiku-4-5`). Ein exakter Nachschlag ging deshalb ins Leere und
+die erste Fassung buchte stillschweigend 0 — das Monatsbudget wäre **nie**
 hochgezählt und der Deckel nie wirksam geworden; bemerkt hätte man es auf der
-Anbieterrechnung. Jetzt: exakt, sonst über das Präfix, sonst der teuerste
-bekannte Preis plus ein Vermerk in der Fehlerklasse. Lieber zu viel buchen als
-blind.
+Anbieterrechnung.
+
+Zwei Konsequenzen: Die Preissuche geht jetzt exakt, sonst über das Präfix,
+sonst auf den teuersten bekannten Satz — plus ein Vermerk `kosten-geschaetzt`
+in der Fehlerklasse. Lieber zu viel buchen als blind. Und die Konfiguration
+führt seit Migration 2 die **am Anbieter belegten** IDs: `GET /v1/models`
+listet `claude-sonnet-5` genau so, den Haiku aber nur datiert — der Alias
+steht dort gar nicht. Vor jedem Modellwechsel gilt deshalb: erst
+`task: "anbieter-modelle"` fragen, dann konfigurieren.
 
 ### Fehlende Konfiguration weist ab, statt durchzulassen
 
@@ -336,13 +350,15 @@ in die Erklärung.
 
 ## Abnahmekriterien der Roadmap
 
+Alle sechs sind gegen die echte Umgebung belegt, nicht gegen einen Nachbau.
+
 | Kriterium | Stand |
 |---|---|
 | Anonyme Aufrufe werden abgewiesen | erfüllt und **gegen die echte Function belegt** (Rauchprobe P2–P4), inklusive des öffentlichen Projektschlüssels, der die Plattformprüfung passiert |
 | Der Claude-Key ist weder im Repository noch im Browser-Bundle | erfüllt — nur als Supabase-Secret; `pages_test.mjs` scannt das ausgelieferte Bundle auf `sk-ant-…` |
 | Ein Account kann sein Limit nicht durch frei gewählte IDs umgehen | erfüllt — die Konto-ID wird nicht gesendet; Grenzen atomar in der Datenbank, unter Sperre geprüft |
 | Ungültige Modellantworten erreichen keine persönliche Datenbank | erfüllt — strukturelle und fachliche Prüfung vor jeder Rückgabe; `echo-struct` schreibt ohnehin in keine persönliche Tabelle |
-| Kosten und Fehler sind pro Funktion nachvollziehbar | erfüllt — eine Zeile je Vorgang, auch für Fehlschläge; Kosten nie still 0 |
+| Kosten und Fehler sind pro Funktion nachvollziehbar | erfüllt — eine Zeile je Vorgang, auch für Fehlschläge; Kosten nie still 0. Gemessen: 0,0337 US-Cent für den Kettenbeweis, im Monatsverbrauch sichtbar |
 | Bei KI-Ausfall bleiben deterministische App-Funktionen nutzbar | erfüllt — der KI-Pfad ist ein eigener Block im Konto-Bereich; kein anderer Teil der App importiert ihn |
 
 ## Bewusste Grenzen
@@ -366,6 +382,12 @@ in die Erklärung.
   Auftrag darf den Deckel um bis zu diesen Betrag reißen. Bewusst so: die
   Alternative wäre, den letzten Auftrag zu früh abzulehnen.
 - **Kein Passwort-Reset ohne Max**, unverändert aus Etappe 3.
+- **Staging und Produktion teilen sich denselben KI-Endpunkt.** Beide
+  Umgebungen zeigen auf dasselbe Supabase-Projekt; eine eigene Staging-Function
+  gibt es nicht. Ein Test auf `staging.kinodreieck.at` verbraucht deshalb
+  dasselbe Budget und schreibt in dasselbe Protokoll wie die Produktion. Für
+  die geschlossene Beta bewusst akzeptiert — vor einer öffentlichen Öffnung neu
+  zu bewerten.
 
 ## Geänderte und neue Dateien
 
