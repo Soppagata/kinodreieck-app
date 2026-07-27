@@ -38,6 +38,13 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(URL) || !ANON || !A_PASS || !B
 
 const TESTKEY = "kd:vokabular";     // erlaubter Topf, den die App selten nutzt
 const FREMDKEY = "kd:boeser-topf";  // steht NICHT in der Key-Allowlist
+/* Etappe 7: Der Profil-Topf wird EINZELN geprueft, nicht stellvertretend ueber
+   TESTKEY. Grund: Er ist der juengste Eintrag der Key-Whitelist, und deren
+   CHECK-Constraint ist die Stelle, deren Verfehlen laut Migrationskopf
+   "jeden Profil-Sync still und endgueltig" bricht -- der Treiber behandelt
+   23514 als terminal, ohne Wiederholung. Nur ein scharfer Lauf gegen die
+   ECHTE Datenbank belegt, dass die Migration wirklich gelaufen ist. */
+const PROFILKEY = "kd:geschmacksprofil";
 
 let ok = 0; const fehler = [];
 function pruefe(name, bedingung, detail = "") {
@@ -152,6 +159,31 @@ const t10 = await rest("POST", "/kd_personal", { token: A.token, body: { key: FR
 pruefe("T10 Nicht erlaubter Topf-Name wird abgelehnt (CHECK 23514)",
   t10.status === 400 && /23514|kd_personal_key_erlaubt/.test(JSON.stringify(t10.data || {})),
   "HTTP " + t10.status);
+
+/* --- T10b-T10d: Profil-Topf (Etappe 7) ----------------------------------
+   Der Topf ist neu in der Key-Whitelist (Migration 20260727210000). Diese
+   drei Proben belegen gegen die ECHTE Datenbank, dass die Migration gelaufen
+   ist UND die Kontotrennung auch fuer den persoenlichsten Topf der App gilt.
+   Schlaegt T10b fehl, fehlt die Migration -- dann bricht jeder Profil-Sync
+   mit 23514, und zwar terminal (der Treiber wiederholt bei diesem Code
+   nicht). */
+const t10b = await rest("POST", "/kd_personal", {
+  token: A.token,
+  body: { key: PROFILKEY, value: JSON.stringify({ format: 1, version: "p1", signale: [] }) },
+});
+pruefe("T10b Profil-Topf ist in der Key-Whitelist (Migration Etappe 7 gelaufen)",
+  t10b.status === 201 || t10b.status === 200,
+  "HTTP " + t10b.status + (t10b.status === 400 ? " — MIGRATION FEHLT" : ""));
+
+const t10c = await rest("GET", "/kd_personal?key=eq." + PROFILKEY + "&select=key,value", { token: B.token });
+pruefe("T10c Konto B sieht das Profil von Konto A NICHT",
+  t10c.status === 200 && Array.isArray(t10c.data) && t10c.data.length === 0,
+  "HTTP " + t10c.status + ", Zeilen " + (Array.isArray(t10c.data) ? t10c.data.length : "?"));
+
+const t10d = await rest("GET", "/kd_personal?key=eq." + PROFILKEY + "&select=key");
+pruefe("T10d anon sieht das Profil nicht",
+  t10d.status === 401 || t10d.status === 403 || (t10d.status === 200 && Array.isArray(t10d.data) && t10d.data.length === 0),
+  "HTTP " + t10d.status);
 
 /* --- T11: Regressionswächter — Bestandspfade unversehrt ------------------ */
 const t11a = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1");

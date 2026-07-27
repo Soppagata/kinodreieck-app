@@ -256,16 +256,30 @@ const kontoDriver = AD.createAccountDriver({
 });
 ST.setStorageDriver(kontoDriver);
 
-/* Backup mit allen 15 Konto-Töpfen — inklusive der vier Präferenzen, die vorher
-   nur auf dem Gerät lagen und beim Gerätewechsel still verloren gingen. */
-const FUENFZEHN = {
+/* Backup mit allen 16 Konto-Töpfen — inklusive der vier Präferenzen, die vorher
+   nur auf dem Gerät lagen und beim Gerätewechsel still verloren gingen, und
+   seit Etappe 7 des Geschmacksprofils. Das Profil muss hier stehen, weil der
+   Check darunter fordert, dass JEDER Konto-Topf den Roundtrip übersteht —
+   genau diese Wache faengt einen Topf, den jemand in ACCOUNT_SYNC_KEYS
+   eintraegt, ohne Backup und Restore mitzuziehen. */
+const PROFIL_TESTWERT = JSON.stringify({
+  format: 1, version: "p1", erstellt: "2026-07-27T20:00:00.000Z",
+  geaendert: "2026-07-27T20:00:00.000Z",
+  einwilligung: { erteilt: true, am: "2026-07-27T20:00:00.000Z", textVersion: "v1" },
+  signale: [{ art: "genre", wert: "neo-noir", richtung: "zieht_an", staerke: 4,
+              sicherheit: "hoch", quelle: "onboarding", beleg: "Blade Runner",
+              erfasst: "2026-07-27T20:00:00.000Z" }],
+  offen: [], achsen: { wie: 4, was: 2, warum: 5 }, filme: [], nichtDeutbar: [],
+});
+const SECHZEHN = {
   ...ZEHN,
   "kd:zeitgrenze": "16:30",
   "kd:filter-mediathek": "1",
   "kd:filter-kino": "0",
   "kd:filter-streaming": "1",
+  "kd:geschmacksprofil": PROFIL_TESTWERT,
 };
-for (const [k, v] of Object.entries(FUENFZEHN)) kontoTabelle.set(k, { key: k, value: v, revision: 1 });
+for (const [k, v] of Object.entries(SECHZEHN)) kontoTabelle.set(k, { key: k, value: v, revision: 1 });
 await kontoDriver.pull();
 const bk5 = await B.baueBackup();
 check("P5 Export enthält die vier Sicht-/Zeit-Präferenzen",
@@ -280,11 +294,24 @@ const rr5 = await R.restoreBackup(bk5);
 await sleep(120);
 check("P5 Wiederherstellung meldet den Kontobetrieb verständlich",
   rr5.ok === true && rr5.dbWarnung === false && /Konto aktiv/.test(rr5.dbHinweis || ""));
-check("P5 Wiederherstellung schreibt alle 15 Töpfe ins Konto",
+check("P5 Wiederherstellung schreibt alle 16 Töpfe ins Konto",
   AD.ACCOUNT_SYNC_KEYS.every((k) => kontoTabelle.get(k) != null));
 check("P5 Die Präferenzen kommen im Konto an",
   kontoTabelle.get("kd:zeitgrenze").value === "16:30" && kontoTabelle.get("kd:filter-streaming").value === "1");
 check("P5 Der Rückholpunkt wurde vor dem Überschreiben gesichert", R.hatRestoreSnapshot() === true);
+/* Etappe 7: Das Profil überlebt den Roundtrip inhaltlich, nicht nur als
+   vorhandener Schlüssel — ein leeres Profil an dieser Stelle hätte den
+   Topf-Check oben ebenso bestanden. */
+check("P5 Das Geschmacksprofil übersteht den Roundtrip inhaltlich", (() => {
+  const roh = kontoTabelle.get("kd:geschmacksprofil");
+  if (!roh) return false;
+  try {
+    const p = JSON.parse(roh.value);
+    return p.version === "p1" && p.einwilligung?.erteilt === true
+      && p.signale.length === 1 && p.signale[0].wert === "neo-noir"
+      && p.achsen.warum === 5;
+  } catch { return false; }
+})());
 
 /* Alt-Backup ohne die neuen Felder bleibt einspielbar. */
 _ls.clear(); kontoTabelle = new Map();
@@ -298,6 +325,35 @@ check("P5 Fehlende Präferenzen werden als übersprungen berichtet, nicht als Fe
   rrAlt.bericht.filter((b) => /Filtermenü|Zeitfilter/.test(b.topf)).every((b) => /übersprungen/.test(b.status)));
 check("P5 Die übrigen Bereiche kommen trotzdem vollständig an",
   JSON.parse(kontoTabelle.get("kd:master").value).filme[0].titel === "DB-Film");
+
+/* ---------- P6: Ein Alt-Backup darf ein vorhandenes Profil nicht LÖSCHEN ----
+   Ergänzt von der Testhand 27.07.2026. Der Alt-Backup-Fall oben entfernt nur
+   die vier Präferenz-Felder und leert vorher `_ls` UND die Kontotabelle — es
+   gibt dort also gar kein vorhandenes Profil, das verloren gehen könnte.
+   Damit war die Zusage aus restore.js („dann wird uebersprungen, NICHT
+   geleert, sonst loeschte ein aelteres Backup das Profil still") ungeprüft:
+   der else-Zweig hätte ebenso gut den Topf leeren können, ohne dass ein Test
+   es bemerkt. Dieser Block stellt den echten Fall her — Profil vorhanden,
+   Backup ohne das Feld — und ist der einzige Ort, an dem stilles Löschen
+   auffiele. */
+_ls.clear(); kontoTabelle = new Map();
+kontoTabelle.set("kd:geschmacksprofil", { key: "kd:geschmacksprofil", value: PROFIL_TESTWERT, revision: 1 });
+await kontoDriver.pull();
+const altOhneProfil = { ...bk5 };
+delete altOhneProfil.geschmacksprofil;
+const rrAlt2 = await R.restoreBackup(altOhneProfil);
+await sleep(120);
+check("P6 Ein Backup ohne Geschmacksprofil läuft durch", rrAlt2.ok === true);
+check("P6 Das fehlende Profil wird als übersprungen berichtet, nicht als Fehler",
+  rrAlt2.bericht.some((b) => /Geschmacksprofil/.test(b.topf) && /übersprungen/.test(b.status)));
+check("P6 Ein Alt-Backup LÖSCHT das vorhandene Profil nicht", (() => {
+  const roh = kontoTabelle.get("kd:geschmacksprofil");
+  if (!roh || !roh.value) return false;
+  try {
+    const p = JSON.parse(roh.value);
+    return p.signale?.length === 1 && p.signale[0].wert === "neo-noir" && p.einwilligung?.erteilt === true;
+  } catch { return false; }
+})());
 
 ST.setStorageDriver(null); // Hygiene: zurück auf lokal
 

@@ -113,8 +113,18 @@ function verbraucheFrischenStart() {
 
     localStorage.setItem(K.startAuftrag, token);
     localStorage.setItem(K.start, startMatch[1]);
+    /* Alles, was einen frischen Start persönlich machen würde. Die Liste ist
+       der Link, der an Beta-Tester geht — was hier fehlt, überlebt einen
+       „frischen Start" still. Etappe 7 ergänzt das Geschmacksprofil: es ist
+       die persönlichste Ablage der App und trug den Einwilligungsvermerk
+       samt allen Signalen über den Reset hinweg. Die vier Präferenz-Töpfe,
+       Must-Watch und Achievements kommen aus demselben Grund dazu — bei
+       ihnen ist es Kosmetik, beim Profil war es ein Datenschutzloch. */
     const persoenlich = [K.master, K.artikel, K.merkliste, K.kinoPins,
-      K.entdeckenStatus, K.vokabular, K.exportStand, K.autorName];
+      K.entdeckenStatus, K.vokabular, K.exportStand, K.autorName,
+      K.geschmacksprofil, K.mustwatch, K.achievements,
+      K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming,
+      K.einstellungen, K.streamingDienste];   // damit sind alle 16 Konto-Toepfe gedeckt
     persoenlich.forEach((key) => localStorage.removeItem(key));
     frischerStartMemo = startMatch[1];
   } catch { /* Storage blockiert: normaler, nicht-destruktiver Boot */ }
