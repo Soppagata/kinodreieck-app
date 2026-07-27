@@ -83,7 +83,7 @@ export function DreieckErklaerung() {
         </div>
       </div>
       <p style={{ ...mono, marginTop: 8 }}>
-        Schlagseite = eine Achse liegt 2+ Punkte vor den anderen — die Karte sagt dir dann, WOFÜR du den Film schaust.
+        Schlagseite = eine Achse liegt mindestens 2 Punkte vor der schwächsten und erreicht selbst mindestens 3 — die Karte sagt dir dann, WOFÜR du den Film schaust. Liegen zwei Achsen gleichauf vorn, nennt sie beide.
       </p>
     </div>
   );

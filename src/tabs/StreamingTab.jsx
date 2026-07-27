@@ -3,7 +3,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
-import { norm, schlagseite, score } from "../lib/match.js";
+import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
@@ -116,7 +116,13 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   const programm = useMemo(() => {
     if (!datenDa) return [];
     let l = bekannt.titel.filter((t) => dienstOk(t) && schnellOk(t));
-    if (axis) l = l.filter((f) => schlagseite(f.bewertung) === axis);
+    /* schlagseiten(), nicht schlagseite(): Die Karte darunter nennt bei
+       geteilter Spitze BEIDE Achsen ("WIE/WARUM"). Einwertig gefiltert
+       verschwand Sin City (4/2/4) beim Klick auf "WARUM-lastig", obwohl die
+       Karte eine Zeile hoeher WARUM behauptet. Der Filterchip ist eine
+       explizite Nutzerabfrage, keine Rangfrage — Ranking (score, finder.js)
+       bleibt bewusst einwertig. */
+    if (axis) l = l.filter((f) => schlagseiten(f.bewertung).includes(axis));
     if (katF) l = l.filter((f) => f.kategorie === katF);
     /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
        das eingebackene must_watch-Flag aus dem Katalog-Job (kann veraltet sein). */

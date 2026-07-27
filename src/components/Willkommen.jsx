@@ -9,17 +9,31 @@ import { DreieckRegler } from "./DreieckRegler.jsx";
    Karte 2 ist interaktiv: drei Regler verziehen live das Dreieck (DreieckRegler,
    auch auf dem Dashboard eingebunden), darunter folgt die Kategorie. */
 
+/* Startwerte des Erklär-Reglers auf Karte 2. Eine Quelle — der Default in
+   DreieckRegler ist bewusst derselbe Wert, driftet aber sonst auseinander. */
+const REGLER_START = { wie: 4, was: 2, warum: 5 };
+
+/* Fangbare Elemente der Fokus-Falle. `select`/`textarea`/`area[href]` waren
+   nicht gelistet; auf Karte 1–2 gibt es sie heute nicht, ein weiterer
+   Onboarding-Schritt mit Auswahlfeld ließe die Falle aber still auseinander-
+   fallen. */
+const FOKUS_SELEKTOR = "button, [href], input, select, textarea, area[href], [tabindex]";
+
 export function Willkommen({ onClose }) {
   const [karte, setKarte] = useState(1);
   const dialogRef = useRef(null); // KD-028
-  // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay)
+  // KD-028: Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay).
+  // Läuft einmal: Handler und Rückgabe hängen nicht an der Karte.
   useEffect(() => {
     const el = dialogRef.current; if (!el) return;
     const vorherFokus = document.activeElement;
-    const focusables = () => [...el.querySelectorAll("button, [href], input, [tabindex]")].filter((n) => !n.disabled);
-    const f = focusables(); if (f.length) f[0].focus();
+    const focusables = () => [...el.querySelectorAll(FOKUS_SELEKTOR)].filter((n) => !n.disabled);
     const onKey = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); if (onClose) onClose(); return; }
+      // Escape = abgebrochen, NICHT durchgeklickt. Vorher markierte ein
+      // versehentliches Escape auf Karte 1 die einmalige Erklärung dauerhaft
+      // als gesehen; zurück ging es nur über StartTab → Doku → „Tutorial neu
+      // starten". Der einzige Einmal-Dialog der App ohne Rückfrage.
+      if (e.key === "Escape") { e.preventDefault(); if (onClose) onClose({ durchgeklickt: false }); return; }
       if (e.key === "Tab") {
         const list = focusables(); if (!list.length) return;
         const erst = list[0], letzt = list[list.length - 1];
@@ -36,6 +50,16 @@ export function Willkommen({ onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Fokus-Eintritt je Karte: Der Kartenwechsel tauscht den kompletten Inhalt
+  // aus und zerstört dabei den fokussierten Knopf — ohne diesen Effekt fällt
+  // der Fokus auf document.body, und Tastatur-/Screenreader-Nutzer landen im
+  // Nichts. Deshalb hängt er an `karte`, nicht an [].
+  useEffect(() => {
+    const el = dialogRef.current; if (!el) return;
+    const f = [...el.querySelectorAll(FOKUS_SELEKTOR)].filter((n) => !n.disabled);
+    if (f.length) f[0].focus();
+  }, [karte]);
+
   const overlay = {
     position: "fixed", inset: 0, zIndex: 10001, background: "rgba(23,21,26,0.9)",
     display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto",
@@ -49,7 +73,8 @@ export function Willkommen({ onClose }) {
   const p = { fontFamily: "'Space Grotesk', sans-serif", fontSize: 15, color: T.leinwand, lineHeight: 1.7, margin: "0 0 12px" };
 
   return createPortal(
-    <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true" aria-label="Willkommen bei Kinodreieck">
+    <div ref={dialogRef} style={overlay} role="dialog" aria-modal="true"
+         aria-label={karte === 1 ? "Willkommen bei Kinodreieck" : "Das Dreieck"}>
       <div style={box}>
         {karte === 1 ? (
           <>
@@ -66,7 +91,7 @@ export function Willkommen({ onClose }) {
             <p style={p}>Jeder Eintrag bekommt drei Werte von 0 bis 5. Zusammen ergeben sie kein Urteil, sondern ein Profil.</p>
 
             <div style={{ background: T.saal, borderRadius: 6, padding: "18px 18px 14px", margin: "4px 0 16px" }}>
-              <DreieckRegler start={{ wie: 4, was: 2, warum: 5 }} scale={2.1} size={54} />
+              <DreieckRegler start={REGLER_START} scale={2.1} size={54} />
             </div>
 
             <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.wie }}>WIE — wie ist es gemacht?</strong><br />Alles Handwerkliche und Ästhetische. Kameraarbeit, Schnitt, Szenenbild, Ton, Licht. Wie sich der Film anfühlt, bevor er irgendetwas erzählt hat. Ein Film kann hier stark sein und sonst fast nichts anbieten — das ist kein Widerspruch, das ist eine Schlagseite.</p>
@@ -78,7 +103,12 @@ export function Willkommen({ onClose }) {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
               <button style={{ ...btnStyle(false), fontSize: 13, padding: "8px 14px" }} onClick={() => setKarte(1)}>Zurück</button>
-              <button style={btnStyle(true)} onClick={onClose}>Los geht's</button>
+              {/* Explizites Argument statt onClick={onClose}: React hätte dort
+                  das SyntheticEvent durchgereicht, während der Escape-Pfad leer
+                  ruft — zwei Verträge für denselben Callback. Jetzt sagt das
+                  Argument, WIE geschlossen wurde; nur der Knopf gilt als
+                  durchgeklickt und markiert die Erklärung als gesehen. */}
+              <button style={btnStyle(true)} onClick={() => { if (onClose) onClose({ durchgeklickt: true }); }}>Los geht's</button>
             </div>
           </>
         )}

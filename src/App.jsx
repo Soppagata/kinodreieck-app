@@ -2074,7 +2074,14 @@ export default function App() {
           }} />
       )}
       {willkommenOffen && !startModalOffen && !katalogZugangOffen && (
-        <Willkommen onClose={() => { try { setWillkommen(true); } catch { /* */ } setWillkommenOffen(false); }} />
+        /* Nur „Los geht's" markiert die Erklärung dauerhaft als gesehen.
+           Escape schließt bloß — die Box kommt beim nächsten Start wieder.
+           Vorher verbrannte ein versehentliches Escape auf Karte 1 die
+           einmalige Erklärung ohne jede Rückfrage. */
+        <Willkommen onClose={(art) => {
+          if (art && art.durchgeklickt) { try { setWillkommen(true); } catch { /* */ } }
+          setWillkommenOffen(false);
+        }} />
       )}
       {aktiverHinweis && (
         <TourOverlay hinweis={aktiverHinweis} onClose={schliesseHinweis}

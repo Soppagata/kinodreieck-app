@@ -346,7 +346,9 @@ Original lang ist und die vier Fragen zählen, die dieses Projekt betreffen:
   verpflichtete Vertreter.
 - **Aufbewahrungsdauer beim Anbieter:** in den Commercial Terms **nicht
   geregelt**; das Dokument verweist dafür auf die Data Processing Addendum.
-  Vor Etappe 7 (Datenschutzerklärung) nachzuziehen.
+  Vor **Etappe 10** (Datenschutzerklärung) nachzuziehen — die Formalien sind
+  beim Roadmap-Umbau vom 26.07.2026 ans Ende gewandert; Etappe 7 ist seither
+  das Geschmacksprofil.
 
 Für die Datenschutzerklärung relevant: Es geht ein Aufgabentext an einen
 US-Anbieter. In diesem Stand enthält er keine persönlichen Daten — `health`

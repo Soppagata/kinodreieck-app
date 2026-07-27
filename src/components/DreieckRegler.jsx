@@ -1,22 +1,33 @@
 import { useState } from "react";
 import { T } from "../lib/tokens.js";
 import { Dreieck } from "./ui.jsx";
-import { schlagseite } from "../lib/match.js";
+import { schlagseiten, ohneSchlagseiteGrund } from "../lib/match.js";
 
 /* ---------- DreieckRegler ----------
    Interaktives Dreieck mit drei Reglern (WIE/WAS/WARUM) + abgeleiteter Kategorie.
    Rendert nur den Inhalt (kein eigener Rahmen) — der Aufrufer umschließt.
-   Verwendet in der Willkommen-Box und auf dem Dashboard. */
+   Verwendet in der Willkommen-Box (Karte 2) und in Erklaerstuecke. */
 
+/* Anzeige über `schlagseiten()` (Mehrzahl): Teilen sich zwei Achsen die
+   Spitze, werden BEIDE genannt. Vorher gewann still die zuerst genannte —
+   4/2/4 las sich als „WIE-lastig", obwohl WARUM gleich stark ist. */
 function kategorieLabel(bw) {
-  const s = schlagseite(bw);
-  if (!s) return "Ausgewogen";
-  return { wie: "WIE-lastig", was: "WAS-lastig", warum: "WARUM-lastig" }[s];
+  const s = schlagseiten(bw);
+  if (!s.length) return ohneSchlagseiteGrund(bw) === "gleichgewicht" ? "Ausgewogen" : "Ohne Schlagseite";
+  return s.map((a) => a.toUpperCase()).join("/") + "-lastig";
 }
-/* Kurzformel je Schlagseite — die alte, greifbare Erklärung, jetzt live. */
+/* Kurzformel je Schlagseite — die alte, greifbare Erklärung, jetzt live.
+   Bei geteilter Spitze gibt es keine Vorrang-Aussage, weil es keinen
+   Vorrang gibt. */
 function kategorieFormel(bw) {
-  const s = schlagseite(bw);
-  return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Relevanz vor Form und Stoff" }[s] || "alle drei im Gleichgewicht";
+  const s = schlagseiten(bw);
+  if (!s.length) {
+    return ohneSchlagseiteGrund(bw) === "gleichgewicht"
+      ? "alle drei im Gleichgewicht"
+      : "alle drei kaum ausgeprägt"; // Sprache der Willkommens-Karte: „kaum ausgeprägt", nicht „schlecht"
+  }
+  if (s.length > 1) return "gleichauf vorn";
+  return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Relevanz vor Form und Stoff" }[s[0]];
 }
 
 export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.1, size = 54 }) {
@@ -24,8 +35,11 @@ export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.
   const slider = (achse, key, col) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "7px 0" }}>
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: "0.06em", color: col, width: 66 }}>{achse}</span>
+      {/* funktionales Update: `{ ...bw }` liest aus dem Render-Closure. Heute
+          folgenlos, weil React diskrete Events einzeln flusht — kippt aber,
+          sobald der Zustand nach außen gehoben oder gebatcht wird. */}
       <input type="range" min="0" max="5" step="1" value={bw[key]} aria-label={achse}
-        onChange={(e) => setBw({ ...bw, [key]: Number(e.target.value) })}
+        onChange={(e) => { const n = Number(e.target.value); setBw((v) => ({ ...v, [key]: n })); }}
         style={{ flex: 1, accentColor: col, cursor: "pointer" }} />
       <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, width: 14, textAlign: "right" }}>{bw[key]}</span>
     </div>
@@ -39,7 +53,10 @@ export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.
         {slider("WIE", "wie", T.wie)}
         {slider("WAS", "was", T.was)}
         {slider("WARUM", "warum", T.warum)}
-        <div style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.rauch, lineHeight: 1.5 }}>
+        {/* aria-live: Die Karte fordert „Zieh die Regler und sieh zu" — ohne
+            Ansage bekommt ein Screenreader-Nutzer die einzige Lehre der Karte
+            nie mit. */}
+        <div aria-live="polite" style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.rauch, lineHeight: 1.5 }}>
           Kategorie: <span style={{ color: T.wolfram }}>{kategorieLabel(bw)}</span>
           <span style={{ color: T.leinwandTief }}> — {kategorieFormel(bw)}</span>
         </div>
