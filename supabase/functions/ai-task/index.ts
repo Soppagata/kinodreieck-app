@@ -503,6 +503,74 @@ const KLARTEXT_MAX_ZEICHEN = 220;
 const WUNSCH_MAX_ZEICHEN = 60;
 const REIHEN_TYPEN = ["reihe", "franchise", "regie"];
 
+/* Nur EIGENE Schlüssel. `o["constructor"]` liefert sonst etwas von
+   Object.prototype statt undefined — und der Aufgabenname kommt aus dem
+   Anfragekörper. */
+export function eigenerWert(o: Record<string, unknown>, k: string): unknown {
+  return Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined;
+}
+
+/* Ausgabebudget je Aufgabe — ein RÜCKFALL, kein Stellhebel.
+
+   ACHTUNG BEIM ÄNDERN: Diese Tabelle greift nur, wenn `task_max_tokens` in
+   `kd_ai_limits` für die Aufgabe NICHTS sagt. Die Datenbank gewinnt. Wer den
+   Wert für eine Aufgabe im Betrieb ändern will, ändert ihn dort — eine Änderung
+   hier bleibt sonst wirkungslos, und zwar unauffällig.
+
+   Genau darauf bin ich am 27.07. hereingefallen: Nach einem 502
+   `antwort-abgeschnitten` habe ich angenommen, `intelligent-search` fehle in
+   `task_max_tokens` und erbe deshalb die 256 von `echo-struct`. Nachgeprüft
+   habe ich es nicht — die Etappe-5-Migration setzt dort seit jeher 1024. Die
+   Diagnose war falsch, und die Erhöhung an dieser Stelle hat nichts bewirkt.
+   Ein `grep task_max_tokens supabase/migrations/` hätte gereicht.
+
+   Warum die Tabelle trotzdem bleibt: ohne sie erbt eine neue Aufgabe, die in
+   der Datenbank noch nicht steht, stillschweigend einen Vorgabewert, der für
+   eine ganz andere Aufgabe gewählt wurde. Wer hier einträgt, muss das Budget
+   mitbedenken — und sieht beim Lesen, warum.
+
+   Exportiert, damit der Test die Auflösung gegen dieselbe Tabelle prüfen kann
+   statt gegen eine abgeschriebene Kopie. */
+export const MAX_TOKENS_STANDARD: Record<string, number> = {
+  "echo-struct": 256,
+  /* 8192, und zwar bewusst REICHLICH statt knapp bemessen (Entscheidung Max,
+     26.07.: „groß genug und nicht genau passend … wichtig ist, dass es sauber
+     funktioniert, egal wie teuer. Ich werde drosseln, sobald die ersten Tester
+     Zugang haben").
+
+     Die Rechnung dahinter, zum Nachziehen beim späteren Drosseln: der erste
+     Ansatz mit 1024 war an der GEWÖHNLICHEN Antwort bemessen (~190 Token) —
+     die falsche Bezugsgröße. Maßgeblich ist die grösste Antwort, die das Schema
+     noch zulässt: 12 Werte je Liste, 12 Reihen, 24 gemeldete Wünsche à 60
+     Zeichen, 220 Zeichen Klartext. Das sind rund 9000 Zeichen JSON, also ~2270
+     Token bei vier Zeichen je Token und ~3030 bei den konservativeren drei.
+     8192 liegt mit Faktor 2,7 darüber.
+
+     Das kostet im Betrieb nichts: abgerechnet werden die TATSÄCHLICH erzeugten
+     Token (gemessen 0,82 US-Cent je Deutung). Vom Höchstwert geht allein die
+     Reservierung aus — 8,2 Cent, die beim Abschluss durch den Istwert ersetzt
+     werden. Ein zu knapper Wert kostet dagegen den vollen Aufruf und liefert
+     nichts: genau das war der 502 vom 26.07.
+
+     Beim Drosseln vor der Testerrunde ist 4096 die naheliegende Stufe — immer
+     noch Faktor 1,35 über der konservativen Rechnung. Unter 3072 sollte
+     niemand gehen, ohne die Schemagrenzen oben neu zu rechnen. */
+  "intelligent-search": 8192,
+};
+
+/* Nur eine brauchbare Zahl zählt. Eine Null, ein negativer Wert, eine
+   Zeichenkette oder ein einelementiges Feld darf nicht als `max_tokens` beim
+   Anbieter landen — das wäre ein Fehler, den erst der Anbieter meldet, wenn die
+   Reservierung schon gebucht ist.
+
+   Bewusst STRENG: `Number("512")` wäre 512 und `Number([512])` ebenfalls, und
+   `Math.trunc(300.5)` wäre 300. Alle drei kämen unbemerkt durch und setzten
+   eine Aufgabe auf ein Budget, das so nirgends steht. Was keine echte ganze
+   Zahl ist, gilt als nicht gesetzt und fällt auf den Standard zurück. */
+export function zuTokens(w: unknown): number | null {
+  return typeof w === "number" && Number.isInteger(w) && w >= 16 && w <= 8192 ? w : null;
+}
+
 /* Liste auf `max` kuerzen, ohne den Rest stumm zu verlieren: der letzte Platz
    sagt, wie viele Eintraege fehlen. Ein stiller Abschnitt hier waere die
    teuerste Sorte Fehler — er sieht aus wie "es gab nichts weiter". */
@@ -698,6 +766,20 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         "- Laufzeit, Altersfreigabe, Schauspieler und fremde Bewertungen gibt es in diesen Daten nicht.",
         "  Solche Wuensche gehoeren immer nach nicht_unterstuetzt.",
         "- titel nur, wenn die Anfrage einen konkreten Filmtitel nennt.",
+        /* Mengengrenzen gehoeren in den Prompt, weil das Schema sie nicht
+           ausdruecken kann: Anzahlbegrenzungen fuer Felder sind in diesen
+           strukturierten Ausgaben nicht zuverlaessig durchsetzbar, `max_tokens`
+           ist also die einzige harte Schranke. Und die trifft zu spaet — sie
+           bricht die Antwort mitten im JSON ab, der Aufruf ist bezahlt und
+           liefert nichts. Genau so sind am 27.07. zwei Anfragen gescheitert:
+           beide luden zum Aufzaehlen ein ("welche Filme werden in Scary Movie
+           referenziert"), und das Modell hat losgezaehlt. Die Grenze muss
+           deshalb VOR der Erzeugung stehen, nicht dahinter. */
+        "- Hoechstens 12 Werte je Liste und hoechstens 3 Eintraege in nicht_unterstuetzt.",
+        "- Zaehle NIE Filme auf. Weder in titel noch in nicht_unterstuetzt noch im Klartext.",
+        "  Kennst du zu einer Frage viele Filme, ist das keine Aufgabe fuer dich: melde die",
+        "  Frage EINMAL unter nicht_unterstuetzt und nenne keinen einzigen Titel.",
+        "- Fasse dich kurz. Eine gute Antwort ist wenige Zeilen lang.",
         "- interpretation_klartext: ein kurzer Satz, was du verstanden hast. Keine Empfehlung,",
         "  kein Titel, der nicht in der Anfrage stand.",
         "",
@@ -1130,12 +1212,24 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   const aliasse = (konfig["modell_alias"] ?? {}) as Record<string, string>;
   const taskModell = (konfig["task_modell"] ?? {}) as Record<string, string>;
-  const alias = taskModell[task] ?? "klein";
-  const modell = aliasse[alias];
+  /* Auch hier nur eigene Schlüssel. Mit einem geerbten Namen als `task` wurde
+     `alias` sonst zu einem Fremdwert und der Aufruf endete als 500
+     `kein-modell-fuer-alias:…`. Es scheitert sicher und vor der Reservierung —
+     aber es war die letzte Stelle ohne die Härtung, die zwei Zeilen weiter
+     unten längst steht. */
+  const aliasRoh = eigenerWert(taskModell, task);
+  const alias = typeof aliasRoh === "string" && aliasRoh ? aliasRoh : "klein";
+  const modellRoh = eigenerWert(aliasse, alias);
+  /* Auch der Modellname aus der Konfiguration muss eine Zeichenkette sein —
+     sonst reicht ein Konfigurationsfehler bis in `preisFuer` und den
+     Anbieteraufruf durch. */
+  const modell = typeof modellRoh === "string" ? modellRoh.trim() : "";
   if (!modell) return fehlerAntwort(CODES.SERVER, origin, { grund: "kein-modell-fuer-alias:" + alias, vorgangId });
 
-  const maxTokensJeTask = (konfig["task_max_tokens"] ?? {}) as Record<string, number>;
-  const maxTokens = Number(maxTokensJeTask[task] ?? 256);
+  const maxTokensJeTask = (konfig["task_max_tokens"] ?? {}) as Record<string, unknown>;
+  const maxTokens = zuTokens(eigenerWert(maxTokensJeTask, task))
+    ?? zuTokens(eigenerWert(MAX_TOKENS_STANDARD, task))
+    ?? 256;
   const timeoutMs = zahl(konfig, "timeout_ms", 30000);
 
   /* 4) Not-Aus, Budget, Tageslimit, Parallelität — geprüft UND protokolliert in

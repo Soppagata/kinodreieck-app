@@ -32,3 +32,8 @@ dist-single-beta/
 supabase/.temp/
 
 *.bundle
+
+# Roh-Antworten des Eval-Laufs (tools/ai_eval_etappe6.mjs --holen). Enthalten
+# nur Suchsätze und Modellausgaben, keine Schlüssel — gehören trotzdem nicht ins
+# Repo: sie sind ein Messprotokoll eines Laufs, kein Quelltext.
+eval_rohdaten_*.json

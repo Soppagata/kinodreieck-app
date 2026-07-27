@@ -1,50 +1,61 @@
 #!/usr/bin/env node
-/* Eval der intelligenten Suche (Etappe 6) — laeuft gegen die ECHTE deployte
-   Edge Function und ruft fuer JEDE Anfrage den Anbieter.
+/* Eval der intelligenten Suche (Etappe 6).
    ============================================================================
-   Zweck: Max' 20 goldene Anfragen in EINEM Lauf durchschicken und in einer
-   Tabelle zeigen, was die KI daraus gemacht hat. Kein Pass/Fail-Urteil — die
-   Deutung einer Stimmungsanfrage ist Geschmack, und darueber entscheidet nicht
-   ein Skript. Ausgegeben wird deshalb nebeneinander: die Anfrage, das ERWARTETE
-   Verhalten (aus eval_demo_anfragen_max.md) und die tatsaechliche Deutung.
+   ZWEI GETRENNTE SCHRITTE. Das ist die Lehre aus dem ersten Lauf am 26.07.:
+   die Bewertung war falsch, die Antworten waren es nicht — und weil beides in
+   einem Durchgang lief, war das Material weg und die Korrektur haette einen
+   zweiten bezahlten Lauf gekostet.
 
-   ABGEPRUEFT wird nur, was objektiv falsch waere:
-     - ein Wert ausserhalb der mitgeschickten Weissliste (das Modell erfindet)
-     - ein Titel in `interpretation_klartext`, der nicht in der Anfrage stand
-     - eine C-Anfrage (ausserhalb der Etappe), die NICHT als nicht unterstuetzt
-       gemeldet wird, sondern stillschweigend zu Filtern wird
-     - eine leere Deutung ohne jede Meldung (stilles Verschwinden)
-   Diese vier zaehlen in den Exit-Code. Alles andere ist Material fuer dein Auge.
+     node tools/ai_eval_etappe6.mjs --holen    ruft den Anbieter, schreibt die
+                                               Rohantworten in eine Datei. KOSTET.
+     node tools/ai_eval_etappe6.mjs --pruefen  liest die Datei und urteilt.
+                                               Kostenlos, beliebig oft.
 
-   KOSTEN: 20 Anfragen * ~0,82 US-Cent = **rund 16 US-Cent**. Der Lauf zaehlt
-   auf das Tageslimit. Vor dem Start wird die Summe genannt und eine Bestaetigung
-   verlangt (ausser mit KD_EVAL_JA=1).
+   Ohne Argument laeuft --holen und direkt danach --pruefen.
 
-   Konfiguration ausschliesslich ueber Umgebungsvariablen — nie in Dateien, nie
-   im Repo, nie im Chat. Den Schluessel NICHT als Argument tippen; die
-   Eingabeaufforderung unten liest ihn verdeckt:
+   Die Rohdatei heisst `eval_rohdaten_<zeitstempel>.json`, liegt im Arbeits-
+   verzeichnis und ist in .gitignore. Sie enthaelt Suchsaetze und Modell-
+   ausgaben, keine Schluessel.
 
-     read -rs "A?Publishable Key: " && read -rs "P?Passwort testa: " && \
-     KD_SB_URL=https://<projekt>.supabase.co KD_SB_ANON="$A" KD_TESTA_PASS="$P" \
-     node tools/ai_eval_etappe6.mjs; unset A P
+   WAS GEPRUEFT WIRD. Nicht die Deutungsqualitaet — ob „nicht gut drauf" eher
+   gemuetlich oder eher melancholisch heisst, ist Geschmack und kein
+   Skriptthema. In den Exit-Code zaehlen nur Faelle, die objektiv falsch sind:
+
+     1. ein Filterwert ausserhalb der mitgeschickten Weissliste
+        -> dann ist die Durchsetzung im Endpunkt kaputt, nicht das Modell
+     2. ein TITEL in harte_filter.titel, dessen Woerter in der Anfrage fehlen
+        -> das waere ein erfundener Titel an der einzigen Stelle, an der ein
+           Titel etwas bewirkt
+     3. eine Anfrage AUSSERHALB der Etappe, die nicht als nicht unterstuetzt
+        gemeldet wird, sondern still zu Filtern wird
+        -> der schlimmste Fall: der Nutzer haelt seinen Wunsch fuer erfuellt
+     4. eine voellig leere Deutung ohne jede Meldung
+
+   AUSDRUECKLICH NICHT MEHR GEPRUEFT: grossgeschriebene Woerter im Klartext.
+   Der erste Entwurf hat sie als moegliche Filmtitel gemeldet — im Deutschen
+   ist jedes Substantiv gross, und so wurden „Anfrage", „Wuensche",
+   „Einschraenkungen" zu angeblich erfundenen Titeln. 18 von 20 Anfragen rot,
+   alle falsch. Ein Hinweis auf Anfuehrungszeichen im Klartext bleibt, aber
+   nur als Notiz fuer das Auge, NICHT im Exit-Code: der Klartext ist reiner
+   Anzeigetext, er kann keinen Treffer erzeugen.
+
+   Konfiguration nur ueber Umgebungsvariablen. Den Schluessel NICHT als
+   Argument tippen — die Eingabeaufforderung liest ihn verdeckt:
+
+     cd <repo> && \
+     read -rs "A?Publishable Key: " && echo && read -rs "P?Passwort testa: " && echo && \
+     KD_SB_URL=https://<projektref>.supabase.co KD_SB_ANON="$A" KD_TESTA_PASS="$P" \
+     node tools/ai_eval_etappe6.mjs --holen; unset A P
 
    Nicht Teil von `npm test`: braucht ein erreichbares Projekt, ein Testkonto
    und kostet Geld.
    ========================================================================== */
 
-const URL_BASIS = (process.env.KD_SB_URL || "").trim().replace(/\/+$/, "");
-const ANON = (process.env.KD_SB_ANON || "").trim();
-const USER = (process.env.KD_TESTA_USER || "testa").trim();
-const PASS = process.env.KD_TESTA_PASS || "";
-const MAIL_DOMAIN = (process.env.KD_MAIL_DOMAIN || "login.kinodreieck.at").trim();
-const FUNKTION = (process.env.KD_AI_FUNKTION || "ai-task").trim();
-const ORIGIN = (process.env.KD_ORIGIN || "https://kinodreieck.at").trim();
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 
-if (!URL_BASIS || !ANON || !PASS) {
-  console.error("Fehlende Konfiguration. Erwartet: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS.");
-  console.error("Siehe Kopf dieser Datei.");
-  process.exit(2);
-}
+const MODUS = process.argv.includes("--pruefen") ? "pruefen"
+  : process.argv.includes("--holen") ? "holen"
+    : "beides";
 
 /* Wertelisten wie der Client sie aus dem eigenen Bestand baut. Der Endpunkt
    bekommt NUR diese Listen — nie den Katalog, nie einen Film. */
@@ -100,53 +111,104 @@ const ANFRAGEN = [
   { id: "E4", text: "ich will was schauen", soll: "leere oder minimale Deutung — aber gemeldet, nicht still" },
 ];
 
-const ENDPUNKT = `${URL_BASIS}/functions/v1/${FUNKTION}`;
-const JSON_KOPF = { "Content-Type": "application/json" };
 const KOSTEN_JE_ANFRAGE_CENT = 0.82;
 
-async function meldeAn() {
-  const antwort = await fetch(`${URL_BASIS}/auth/v1/token?grant_type=password`, {
+/* ===================== HOLEN (kostet) ===================================== */
+
+async function holen() {
+  const URL_BASIS = (process.env.KD_SB_URL || "").trim().replace(/\/+$/, "");
+  const ANON = (process.env.KD_SB_ANON || "").trim();
+  const USER = (process.env.KD_TESTA_USER || "testa").trim();
+  const PASS = process.env.KD_TESTA_PASS || "";
+  const MAIL_DOMAIN = (process.env.KD_MAIL_DOMAIN || "login.kinodreieck.at").trim();
+  const FUNKTION = (process.env.KD_AI_FUNKTION || "ai-task").trim();
+  const ORIGIN = (process.env.KD_ORIGIN || "https://kinodreieck.at").trim();
+
+  if (!URL_BASIS || !ANON || !PASS) {
+    console.error("Fehlende Konfiguration. Erwartet: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS.");
+    console.error("Siehe Kopf dieser Datei.");
+    process.exit(2);
+  }
+  if (URL_BASIS.includes("<") || URL_BASIS.includes(">")) {
+    console.error("KD_SB_URL enthaelt spitze Klammern — da steht noch ein Platzhalter drin.");
+    process.exit(2);
+  }
+
+  const ENDPUNKT = `${URL_BASIS}/functions/v1/${FUNKTION}`;
+  const anmeldung = await fetch(`${URL_BASIS}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: ANON, "Content-Type": "application/json" },
     body: JSON.stringify({ email: `${USER}@${MAIL_DOMAIN}`, password: PASS }),
   });
-  const daten = await antwort.json().catch(() => null);
-  if (!antwort.ok || !daten?.access_token) {
-    console.error(`\nAnmeldung als ${USER}@${MAIL_DOMAIN} fehlgeschlagen (HTTP ${antwort.status}).`);
-    console.error(`Grund laut Server: ${daten?.error_description || daten?.msg || daten?.error || "unbekannt"}`);
+  const anmeldeDaten = await anmeldung.json().catch(() => null);
+  if (!anmeldung.ok || !anmeldeDaten?.access_token) {
+    console.error(`\nAnmeldung als ${USER}@${MAIL_DOMAIN} fehlgeschlagen (HTTP ${anmeldung.status}).`);
+    console.error(`Grund laut Server: ${anmeldeDaten?.error_description || anmeldeDaten?.msg || anmeldeDaten?.error || "unbekannt"}`);
     process.exit(2);
   }
-  return daten.access_token;
+  const token = anmeldeDaten.access_token;
+
+  /* Bestaetigung vor dem Geld. */
+  if (process.env.KD_EVAL_JA !== "1") {
+    if (!process.stdin.isTTY) {
+      console.error("Kein Terminal — Abbruch. Mit KD_EVAL_JA=1 laufen lassen, wenn das gewollt ist.");
+      process.exit(2);
+    }
+    process.stdout.write(
+      `\n${ANFRAGEN.length} Anfragen an den Anbieter, geschaetzt `
+      + `${(ANFRAGEN.length * KOSTEN_JE_ANFRAGE_CENT).toFixed(1)} US-Cent.\nWeiter? [j/N] `,
+    );
+    const antwort = await new Promise((loese) => {
+      process.stdin.setEncoding("utf8");
+      process.stdin.once("data", (d) => loese(String(d).trim().toLowerCase()));
+    });
+    if (antwort !== "j" && antwort !== "ja") {
+      console.log("Abgebrochen. Kein Aufruf, keine Kosten.");
+      process.exit(0);
+    }
+  }
+
+  console.log(`\nHole ${ANFRAGEN.length} Deutungen von ${ENDPUNKT}\n`);
+  const roh = [];
+  for (const anfrage of ANFRAGEN) {
+    const antwort = await fetch(ENDPUNKT, {
+      method: "POST",
+      headers: { Origin: ORIGIN, "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: ANON },
+      body: JSON.stringify({
+        task: "intelligent-search",
+        vorgangId: crypto.randomUUID(),
+        promptVersion: "eval1",
+        payload: { suchsatz: anfrage.text, listen: LISTEN },
+      }),
+    });
+    const koerper = await antwort.json().catch(() => null);
+    roh.push({ id: anfrage.id, status: antwort.status, antwort: koerper });
+    console.log(`  ${antwort.status === 200 ? "·" : "✗"} ${anfrage.id}  ${anfrage.text.slice(0, 56)}`);
+  }
+
+  /* Zeitstempel ohne Doppelpunkte — der Dateiname soll auf jedem System gehen. */
+  const stempel = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const datei = `eval_rohdaten_${stempel}.json`;
+  writeFileSync(datei, JSON.stringify({ erstellt: new Date().toISOString(), listen: LISTEN, roh }, null, 2));
+  console.log(`\nRohantworten geschrieben: ${datei}`);
+  console.log(`Kosten dieses Laufs: rund ${(ANFRAGEN.length * KOSTEN_JE_ANFRAGE_CENT).toFixed(1)} US-Cent.`);
+  console.log("Ab jetzt kostenlos beliebig oft auswertbar: node tools/ai_eval_etappe6.mjs --pruefen");
+  return datei;
 }
 
-/* Bestaetigung vor dem Geld. Ein Eval-Lauf ist billig, aber nicht kostenlos,
-   und ein versehentlicher Doppellauf soll auffallen, bevor er passiert. */
-async function bestaetige(summeCent) {
-  if (process.env.KD_EVAL_JA === "1") return;
-  if (!process.stdin.isTTY) {
-    console.error("Kein Terminal — Abbruch. Mit KD_EVAL_JA=1 laufen lassen, wenn das gewollt ist.");
+/* ===================== PRUEFEN (kostenlos) ================================ */
+
+function neuesteRohdatei() {
+  const treffer = readdirSync(".").filter((n) => /^eval_rohdaten_.*\.json$/.test(n)).sort();
+  if (!treffer.length) {
+    console.error("Keine Rohdatei gefunden. Erst `node tools/ai_eval_etappe6.mjs --holen` laufen lassen.");
     process.exit(2);
   }
-  process.stdout.write(
-    `\n${ANFRAGEN.length} Anfragen an den Anbieter, geschaetzt ${summeCent.toFixed(1)} US-Cent.\n`
-    + "Weiter? [j/N] ",
-  );
-  const antwort = await new Promise((loese) => {
-    process.stdin.setEncoding("utf8");
-    process.stdin.once("data", (d) => loese(String(d).trim().toLowerCase()));
-  });
-  if (antwort !== "j" && antwort !== "ja") {
-    console.log("Abgebrochen. Kein Aufruf, keine Kosten.");
-    process.exit(0);
-  }
+  return treffer[treffer.length - 1];
 }
 
-const alleWerte = new Set([
-  ...LISTEN.genres, ...LISTEN.kategorien, ...LISTEN.stimmungen,
-  ...LISTEN.achsen, ...LISTEN.quellen, ...LISTEN.zeit,
-]);
+const wortMenge = (s) => new Set(String(s).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean));
 
-/* Kurzfassung der Deutung fuer die Tabelle. */
 function fasse(d) {
   const teile = [];
   const h = d.harte_filter || {};
@@ -162,6 +224,7 @@ function fasse(d) {
   if (h.jahrMax != null) teile.push(`bis ${h.jahrMax}`);
   if (Array.isArray(h.titel) && h.titel.length) teile.push(`titel=${h.titel.join("/")}`);
   if (Array.isArray(h.reihen) && h.reihen.length) teile.push(`reihe=${h.reihen.map((r) => r.name).join("/")}`);
+  if (Array.isArray(w.reihen) && w.reihen.length) teile.push(`reihe=${w.reihen.map((r) => r.name).join("/")}`);
   liste("stimmung", w.stimmungen);
   liste("achse", w.achsen);
   liste("ohne-genre", a.genres);
@@ -170,8 +233,6 @@ function fasse(d) {
   return teile.length ? teile.join(", ") : "— nichts —";
 }
 
-/* Jeder Wert, den das Modell genannt hat, in einer flachen Liste — fuer die
-   Weisslisten-Pruefung. Jahre und Jahrzehnte sind Zahlen und zaehlen nicht mit. */
 function genannteWerte(d) {
   const h = d.harte_filter || {};
   const w = d.weiche_wuensche || {};
@@ -182,87 +243,101 @@ function genannteWerte(d) {
   ].filter((x) => typeof x === "string");
 }
 
-const token = await meldeAn();
-await bestaetige(ANFRAGEN.length * KOSTEN_JE_ANFRAGE_CENT);
+function pruefen(datei) {
+  const inhalt = JSON.parse(readFileSync(datei, "utf8"));
+  const listen = inhalt.listen || LISTEN;
+  const erlaubt = new Set([
+    ...listen.genres, ...listen.kategorien, ...listen.stimmungen,
+    ...listen.achsen, ...listen.quellen, ...listen.zeit,
+  ]);
+  const nachId = new Map(inhalt.roh.map((r) => [r.id, r]));
 
-console.log(`\nEval Etappe 6 — ${ANFRAGEN.length} Anfragen gegen ${ENDPUNKT}\n`);
+  console.log(`\nAusgewertet: ${datei}   (erstellt ${inhalt.erstellt})\n`);
+  console.log("=".repeat(100));
 
-let fehler = 0;
-const zeilen = [];
+  let befunde = 0;
+  let hinweise = 0;
 
-for (const anfrage of ANFRAGEN) {
-  const antwort = await fetch(ENDPUNKT, {
-    method: "POST",
-    headers: { Origin: ORIGIN, ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
-    body: JSON.stringify({
-      task: "intelligent-search",
-      vorgangId: crypto.randomUUID(),
-      promptVersion: "eval1",
-      payload: { suchsatz: anfrage.text, listen: LISTEN },
-    }),
-  });
-  const roh = await antwort.json().catch(() => null);
-  const d = roh?.data;
+  for (const anfrage of ANFRAGEN) {
+    const r = nachId.get(anfrage.id);
+    const d = r?.antwort?.data;
+    const zeilen = [];
 
-  if (antwort.status !== 200 || !d) {
-    fehler += 1;
-    zeilen.push({ ...anfrage, ist: `FEHLER HTTP ${antwort.status}: ${roh?.grund || roh?.code || "?"}`, offen: [], befund: "Aufruf gescheitert" });
-    console.log(`✗ ${anfrage.id}  HTTP ${antwort.status} — ${roh?.grund || roh?.code || "?"}`);
-    continue;
+    console.log(`\n${anfrage.id}${anfrage.aussen ? "  (ausserhalb der Etappe)" : ""}  „${anfrage.text}"`);
+    console.log(`     SOLL: ${anfrage.soll}`);
+
+    if (!r || r.status !== 200 || !d) {
+      befunde += 1;
+      console.log(`     IST:  FEHLER HTTP ${r?.status ?? "?"} — ${r?.antwort?.grund || r?.antwort?.code || "?"}`);
+      console.log("     BEFUND: Aufruf gescheitert");
+      continue;
+    }
+
+    const offen = (d.nicht_unterstuetzt || []).map((e) => (typeof e === "string" ? e : `${e.wunsch} (${e.grund})`));
+    const klartext = String(d.interpretation_klartext || "");
+    const ist = fasse(d);
+    console.log(`     IST:  ${ist}`);
+    if (klartext) console.log(`     Text: ${klartext}`);
+    if (offen.length) console.log(`     offen: ${offen.join(" · ")}`);
+
+    /* 1. Wert ausserhalb der Weissliste — das waere ein Riss im Endpunkt. */
+    const fremd = genannteWerte(d).filter((x) => !erlaubt.has(x));
+    if (fremd.length) zeilen.push(`Wert ausserhalb der Weissliste: ${fremd.join(", ")}`);
+
+    /* 2. Erfundener TITEL. Nur `harte_filter.titel` zaehlt — das ist die
+          einzige Stelle, an der ein Titel etwas bewirkt. Geprueft wird, ob
+          mindestens ein Wort des Titels in der Anfrage vorkommt; ein Titel,
+          den der Nutzer nicht genannt hat, hat dort nichts verloren.
+          Ein-Buchstaben-Woerter zaehlen nicht als Beleg. */
+    const anfrageWorte = wortMenge(anfrage.text);
+    const erfundeneTitel = (d.harte_filter?.titel || [])
+      .filter((t) => typeof t === "string")
+      .filter((t) => ![...wortMenge(t)].some((wort) => wort.length > 1 && anfrageWorte.has(wort)));
+    if (erfundeneTitel.length) zeilen.push(`Titel ohne Entsprechung in der Anfrage: ${erfundeneTitel.join(", ")}`);
+
+    /* 3. Ausserhalb der Etappe, aber nicht gemeldet. */
+    if (anfrage.aussen && !offen.length) {
+      zeilen.push("ausserhalb der Etappe, aber NICHT als nicht unterstuetzt gemeldet");
+    }
+
+    /* 4. Nichts verstanden und nichts gesagt. */
+    if (ist === "— nichts —" && !offen.length && !klartext) {
+      zeilen.push("leere Deutung ohne jede Meldung");
+    }
+
+    /* HINWEIS, nicht Befund: etwas in Anfuehrungszeichen im Klartext, das nicht
+       aus der Anfrage stammt. Modelle setzen Filmtitel gern in Anfuehrungs-
+       zeichen. Das ist reiner Anzeigetext und kann keinen Treffer erzeugen —
+       deshalb nur fuers Auge, nicht im Exit-Code. */
+    const zitate = (klartext.match(/[„"»']([^„"»']{2,60})["«']/g) || [])
+      .map((z) => z.replace(/^[„"»']|["«']$/g, ""))
+      .filter((z) => ![...wortMenge(z)].some((wort) => anfrageWorte.has(wort)));
+    if (zitate.length) {
+      hinweise += 1;
+      console.log(`     Hinweis: Zitat im Klartext, nicht aus der Anfrage: ${zitate.join(" · ")}`);
+    }
+
+    if (zeilen.length) {
+      befunde += 1;
+      console.log(`     BEFUND: ${zeilen.join(" | ")}`);
+    }
   }
 
-  const offen = (d.nicht_unterstuetzt || []).map((e) => (typeof e === "string" ? e : `${e.wunsch} (${e.grund})`));
-  const befunde = [];
-
-  /* 1. Erfundener Wert. Der Endpunkt setzt die Weissliste durch — schlaegt das
-        hier an, ist die Durchsetzung selbst kaputt, nicht das Modell. */
-  const fremd = genannteWerte(d).filter((x) => !alleWerte.has(x));
-  if (fremd.length) befunde.push(`Wert ausserhalb der Weissliste: ${fremd.join(", ")}`);
-
-  /* 2. Titel im Klartext, der nicht in der Anfrage stand. Grob geprueft: ein
-        Wort mit Grossbuchstaben im Klartext, das in der Anfrage fehlt. */
-  const klartext = String(d.interpretation_klartext || "");
-  const anfrageWorte = new Set(anfrage.text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean));
-  const verdacht = (klartext.match(/\p{Lu}[\p{L}]{3,}/gu) || [])
-    .filter((wort) => !anfrageWorte.has(wort.toLowerCase()))
-    .filter((wort) => !["Filme", "Film", "Kino", "Suche", "Nutzer", "Genre", "Der", "Die", "Das", "Ein", "Eine", "Es", "Ich", "Du"].includes(wort));
-  if (verdacht.length) befunde.push(`moeglicher erfundener Name im Klartext: ${verdacht.join(", ")}`);
-
-  /* 3. Eine Anfrage ausserhalb der Etappe MUSS gemeldet werden. Wird sie
-        stattdessen zu Filtern, ist das der schlimmste Fall: der Nutzer haelt
-        seinen Wunsch fuer erfuellt. */
-  const hatFilter = fasse(d) !== "— nichts —";
-  if (anfrage.aussen && !offen.length) {
-    befunde.push("ausserhalb der Etappe, aber NICHT als nicht unterstuetzt gemeldet");
-  }
-
-  /* 4. Nichts verstanden und nichts gesagt. */
-  if (!hatFilter && !offen.length && !klartext) befunde.push("leere Deutung ohne jede Meldung");
-
-  if (befunde.length) fehler += 1;
-  zeilen.push({ ...anfrage, ist: fasse(d), offen, klartext, befund: befunde.join(" | ") });
-  console.log(`${befunde.length ? "✗" : "✓"} ${anfrage.id}  ${anfrage.text.slice(0, 58)}`);
+  console.log(`\n${"=".repeat(100)}`);
+  console.log(`${ANFRAGEN.length - befunde}/${ANFRAGEN.length} ohne objektiven Befund.`);
+  if (hinweise) console.log(`${hinweise} Hinweis(e) zum Anschauen — zaehlen nicht als Fehler.`);
+  console.log(
+    befunde === 0
+      ? "\nKeine erfundenen Werte, keine erfundenen Titel, keine stillen Ablehnungen.\nOb die Deutung GUT ist, beurteilst du an den SOLL/IST-Paaren oben."
+      : `\n${befunde} Anfrage(n) mit objektivem Befund — siehe BEFUND-Zeilen.`,
+  );
+  return befunde;
 }
 
-console.log("\n".padEnd(1) + "=".repeat(100));
-console.log("EVAL-TABELLE — die Spalte 'IST' ist zum Abnicken oder Korrigieren, nicht zum Bestehen.\n");
+/* ===================== Ablauf ============================================= */
 
-for (const z of zeilen) {
-  console.log(`${z.id}${z.aussen ? " (ausserhalb)" : ""}  „${z.text}"`);
-  console.log(`     SOLL: ${z.soll}`);
-  console.log(`     IST:  ${z.ist}`);
-  if (z.klartext) console.log(`     Text: ${z.klartext}`);
-  if (z.offen?.length) console.log(`     offen: ${z.offen.join(" · ")}`);
-  if (z.befund) console.log(`     BEFUND: ${z.befund}`);
-  console.log("");
-}
-
-console.log("=".repeat(100));
-console.log(`${ANFRAGEN.length - fehler}/${ANFRAGEN.length} ohne objektiven Befund.`);
-console.log(`Geschaetzte Kosten dieses Laufs: ${(ANFRAGEN.length * KOSTEN_JE_ANFRAGE_CENT).toFixed(1)} US-Cent.`);
-console.log(
-  fehler === 0
-    ? "\nKeine erfundenen Werte, keine stillen Ablehnungen. Die Deutungsqualitaet beurteilst du."
-    : `\n${fehler} Anfrage(n) mit objektivem Befund — siehe BEFUND-Zeilen oben.`,
-);
-process.exit(fehler === 0 ? 0 : 1);
+let datei = null;
+if (MODUS === "holen" || MODUS === "beides") datei = await holen();
+if (MODUS === "holen") process.exit(0);
+const befunde = pruefen(datei || neuesteRohdatei());
+process.exit(befunde === 0 ? 0 : 1);

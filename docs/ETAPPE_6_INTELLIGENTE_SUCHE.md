@@ -144,6 +144,48 @@ bremst deshalb vorher und sagt die Zeichenzahl.
 | Rauchprobe gegen die deployte Function | 15/15, davon P12–P15 neu für die Suche |
 | Injektionsversuch (P14) | Modell hat abgelehnt und es gemeldet — Abbruch war sauber protokolliert |
 
+### Das Ausgabebudget, und warum es großzügig ist
+
+Der erste echte Eval-Lauf hat einen Fehler zutage gefördert, den keine der drei
+Testsuiten sehen konnte: das Ausgabebudget von `intelligent-search` stand auf
+**1024** und deckte damit nicht die größte Antwort, die das Schema noch zulässt.
+Das Antwortschema verlangt jedes Feld in `required` (Anbietervorgabe für
+strukturierte Ausgaben); am Maximum sind das rund 9000 Zeichen JSON, also 2270
+bis 3030 Token. Drei von zwanzig Eval-Anfragen endeten deshalb als **bezahlter
+502 `antwort-abgeschnitten`** — betroffen waren durchweg Anfragen, die zum
+Aufzählen einladen.
+
+**Wie ich die Diagnose zuerst verpatzt habe**, weil es die eigentliche Lehre
+ist: Ich hatte angenommen, `intelligent-search` fehle in `task_max_tokens` und
+erbe deshalb die 256 von `echo-struct`. Nachgeprüft habe ich es nicht — die
+Etappe-5-Migration setzt dort seit jeher 1024, ein `grep` hätte gereicht. Auf
+dieser Annahme habe ich eine Vorgabetabelle in den Code gebaut, sie erhöht, und
+die Erhöhung war wirkungslos: die Datenbank gewinnt gegen die Codetabelle. Ein
+Deploy später war der Fehler unverändert da. Eine Vermutung, die nach einer
+Ursache klingt, kostet mehr als gar keine Ursache — sie beendet die Suche.
+
+Behoben wird es deshalb dort, wo der Wert wirklich steht: per
+Konfigurationsmigration in `kd_ai_limits`. Die Codetabelle
+`MAX_TOKENS_STANDARD` bleibt als Rückfall für Aufgaben, die in der Datenbank
+noch nicht stehen, und trägt jetzt einen Warnhinweis, dass sie eben NICHT der
+Stellhebel ist. Ein Test meckert, wenn eine gebaute Aufgabe darin fehlt.
+
+**Die wirksamere Hälfte der Behebung steht im Prompt**, nicht im Budget: Das
+Schema kann Anzahlgrenzen nicht zuverlässig ausdrücken, `max_tokens` ist die
+einzige harte Schranke — und die greift zu spät, weil sie die Antwort mitten im
+JSON abbricht und der Aufruf trotzdem bezahlt ist. Der Systemprompt begrenzt
+deshalb jetzt ausdrücklich: höchstens 12 Werte je Liste, höchstens 3 Meldungen,
+und niemals Filme aufzählen. Die Mengengrenze gehört vor die Erzeugung, das
+Budget ist nur das Auffangnetz dahinter.
+
+Der Wert selbst ist **8192 und bewusst reichlich** (Entscheidung Max, 26.07.:
+großzügig bis die ersten Tester da sind, dann drosseln). Die größte vom Schema
+noch erlaubte Antwort sind rund 9000 Zeichen JSON, also 2270 bis 3030 Token —
+8192 liegt mit Faktor 2,7 darüber. Im Betrieb kostet das nichts: abgerechnet
+werden die tatsächlich erzeugten Token, vom Höchstwert geht nur die Reservierung
+aus. Beim späteren Drosseln ist 4096 die naheliegende Stufe; unter 3072 sollte
+niemand gehen, ohne die Schemagrenzen neu zu rechnen.
+
 **Offene Rechnung, Entscheidung steht aus:** Tageslimit 50 Aufrufe × 30 Tage ×
 0,82 Cent = **12,32 USD** und übersteigt damit das Monatsbudget von 10 USD. Für
 einen Vielnutzer widersprechen sich die beiden Grenzen. Entweder Tageslimit auf
@@ -219,9 +261,11 @@ Verlaufskennung), `src/components/ui.jsx` (`Chip` reicht `title` durch),
 (Aufgabe `intelligent-search`, Härtung), `tools/ai_smoke.mjs` (P12–P15),
 `package.json` (`test:finder`, `test:findertab`, `test:function`).
 
-**Nicht geändert:** kein Datenbankschema. Diese Etappe braucht keine
-Migration — `p_task` ist eine freie Textspalte, sodass auch die neu
-protokollierte Diagnose ohne Schemaänderung auskommt.
+**Datenbank:** kein Schemawechsel — keine Tabelle, keine Spalte, keine Policy,
+keine Funktion. Aber **eine Konfigurationsmigration**
+(`20260727180000_etappe6_ausgabebudget_suche.sql`): `task_max_tokens` für
+`intelligent-search` von 1024 auf 8192. Ich hatte hier zunächst „keine
+Migration nötig" geschrieben und lag falsch — siehe unten.
 
 ## Runbook: eine Änderung an der Suche ausliefern
 
@@ -232,6 +276,15 @@ protokollierte Diagnose ohne Schemaänderung auskommt.
    einzige Datei.
 4. `node tools/ai_smoke.mjs` gegen die deployte Function. P13–P15 kosten
    zusammen rund einen Cent; die Ausgabe zeigt beide Deutungen zum Nachlesen.
+4b. Bei Änderungen an Schema oder Systemprompt zusätzlich den Eval-Lauf. Er ist
+   **zweistufig**, und das ist die Lehre aus dem ersten Lauf: `--holen` ruft den
+   Anbieter und schreibt die Rohantworten in eine Datei, `--pruefen` urteilt
+   darüber — kostenlos und beliebig oft. Beim ersten Lauf steckte beides in
+   einem Durchgang, die Bewertung war falsch (sie hielt großgeschriebene
+   deutsche Substantive für erfundene Filmtitel und meldete 18 von 20 Anfragen
+   als Befund), und weil das Material weg war, hätte die Korrektur einen zweiten
+   bezahlten Lauf gekostet. Ein Prüfschritt, der teure Messdaten verbraucht,
+   statt sie abzulegen, ist ein Konstruktionsfehler.
 5. Schlüssel werden **nie** als Befehlszeilenargument übergeben. Der Smoke-Test
    liest sie über eine Eingabeaufforderung (`read -rs`). Ein Platzhalter in
    einem Befehlsmuster ist in `zsh` zudem eine Umleitung und scheitert — das ist
@@ -239,7 +292,16 @@ protokollierte Diagnose ohne Schemaänderung auskommt.
 
 ## Was als nächstes ansteht
 
-Nach dieser Etappe ist die Roadmap bei **Etappe 7: Datenschutz, Sicherheit und
-Betrieb**. Zwei Dinge aus dieser Etappe gehören dort hinein: die Entscheidung
-zum Widerspruch zwischen Tageslimit und Monatsbudget, und eine Sichtung der
-Protokollfelder daraufhin, ob wirklich nur Diagnose darin steht.
+Bewusst **ohne Etappennummer**: die Roadmap wird gerade umgebaut (Geschmacks-
+profil und KI-Funktionsausbau werden zu eigenen Etappen, die Betriebsetappe
+rutscht nach hinten), und eine Nummer hier wäre in einer Woche falsch. Was
+inhaltlich aus dieser Etappe weitergereicht wird, steht fest:
+
+**In die Betriebs- und Datenschutzetappe:** die Entscheidung zum Widerspruch
+zwischen Tageslimit und Monatsbudget, eine Sichtung der Protokollfelder
+daraufhin, ob wirklich nur Diagnose darin steht, und das Drosseln des
+Ausgabebudgets vor der Testerrunde (siehe die Rechnung oben).
+
+**In die Geschmacksprofil-Etappe:** das entworfene Onboarding-Interview. Der
+Endpunkt kennt heute keine Bewertungen; ein Profil wäre eine zusätzliche,
+getrennt zu entscheidende Datenübermittlung.

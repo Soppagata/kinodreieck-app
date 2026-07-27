@@ -165,12 +165,20 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
    Fix hält, ohne die Arbeitsdatei anzufassen. Ohne die Variable läuft alles
    gegen die echte Datei — der Normalfall bleibt unberührt. */
 const IMPL_PFAD = Deno.env.get("KD_IMPL") ?? "./supabase/functions/ai-task/index.ts";
-const { handhabeAnfrage, AUFGABEN } = await import(
+const { handhabeAnfrage, AUFGABEN, MAX_TOKENS_STANDARD, zuTokens, eigenerWert } = await import(
   new URL(IMPL_PFAD, import.meta.url).href
 ) as {
   handhabeAnfrage: (req: Request) => Promise<Response>;
   // deno-lint-ignore no-explicit-any
   AUFGABEN: Record<string, any>;
+  /* Seit dem Umbau exportiert. Der MT-Block prüft damit die AUFLÖSUNG gegen
+     dieselbe Tabelle, gegen die der Endpunkt auflöst, statt gegen eine
+     abgeschriebene Kopie — sonst hielte der Test eine begründete Änderung des
+     Werts für einen Fehler. Gemessen wird nach wie vor der Anbieterkörper: die
+     Tabelle liefert nur das SOLL, nicht das Ergebnis. */
+  MAX_TOKENS_STANDARD: Record<string, number>;
+  zuTokens: (w: unknown) => number | null;
+  eigenerWert: (o: Record<string, unknown>, k: string) => unknown;
 };
 
 /* Der Vergleichsschlüssel des CLIENTS, als Orakel. Der Server muss mindestens
@@ -2269,12 +2277,23 @@ test("R6b eine gültige Modell-ID aus der Antwort wird weiterhin übernommen", a
   gleich(genauEinAbschluss().p_modell, "claude-sonnet-5", "die gemeldete ID gewinnt, wenn sie eine ist");
 });
 
-test("R6c preisFuer hat einen eigenen Boden: ein formfremder Modellname stürzt nicht ab", async () => {
-  /* Der zweite Boden. `preisFuer` wird aus dem Abrechnungspfad AUSSERHALB
-     jedes try gerufen und darf unter keinen Umständen werfen. Erreichbar ist
-     das über einen formfremden `modell_alias` in der Konfiguration — der ist
-     Fremddaten wie alles andere. */
-  for (const krumm of [42, { a: 1 }, ["x"], true]) {
+test("R6c ein formfremder Modellname aus der Konfiguration scheitert VOR der Reservierung", async () => {
+  /* Früher hielt dieser Test den IST-Zustand fest: ein nicht-String in
+     `modell_alias` lief bis zum Anbieter durch, und der einzige Schutz war der
+     `String(...)`-Boden in `preisFuer`. Seit `modell` typgeprüft ist
+     (`typeof modellRoh === "string"`), ist das geschlossen — und die richtige
+     Zusicherung ist die umgekehrte: ein Konfigurationsfehler muss SICHTBAR und
+     FOLGENLOS scheitern.
+
+     Sichtbar heisst: 500 mit `kein-modell-fuer-alias:<alias>`, nicht ein
+     Anbieteraufruf mit `"model": 42` im Körper und einem 400 vom Anbieter, das
+     erst nach der Buchung kommt. Folgenlos heisst: keine Reservierung, keine
+     Protokollzeile, kein Anbieteraufruf — der Abbruch steht vor allen dreien.
+
+     Der Boden in `preisFuer` bleibt trotzdem richtig; er ist nur nicht mehr von
+     hier aus erreichbar. Was der Anbieter als `model` MELDET, ist der andere
+     Weg dorthin und steht in R6. */
+  for (const krumm of [42, { a: 1 }, ["x"], true, null, 0, "", "   ", ["claude-sonnet-5"]]) {
     stelleZurueck();
     z.konfig.modell_alias = { klein: krumm, gross: "claude-sonnet-5" };
     let geflogen: string | null = null;
@@ -2286,12 +2305,43 @@ test("R6c preisFuer hat einen eigenen Boden: ein formfremder Modellname stürzt 
     }
     const wo = `modell_alias.klein=${JSON.stringify(krumm)}`;
     gleich(geflogen, null, `${wo}: die Ausnahme verlässt den Handler nicht`);
-    gleich(r!.status, 200, `${wo}: Status`);
-    gleich(starten().length, 1, `${wo}: genau eine Reservierung`);
-    const k = genauEinAbschluss();
-    gleich(k.p_status, "fertig", `${wo}: vollständige Abschlusszeile`);
-    pruefeFehlerklasseSauber(k);
+    gleich(r!.status, 500, `${wo}: Status`);
+    gleich(r!.daten.code, "server", `${wo}: stabiler Code`);
+    gleich(r!.daten.grund, "kein-modell-fuer-alias:klein",
+      `${wo}: der Alias steht im Grund — sonst ist nicht auffindbar, WELCHER Eintrag krumm ist`);
+    gleich(starten().length, 0, `${wo}: KEINE Reservierung — der Abbruch steht davor`);
+    gleich(beenden().length, 0, `${wo}: keine Protokollzeile, die offen bliebe`);
+    gleich(anbieterAufrufe().length, 0, `${wo}: kein Anbieteraufruf, also kein Geld`);
   }
+});
+
+test("R6e ein nicht-String in task_modell wird NICHT zum Alias", async () => {
+  /* Die andere Hälfte derselben Härtung, bisher ungeprüft: `task_modell[task]`
+     ist Fremddaten wie `modell_alias[alias]`. Ohne `typeof aliasRoh ===
+     "string"` würde eine 42 zum Alias, `modell_alias[42]` wäre leer und der
+     Aufruf endete als 500 `kein-modell-fuer-alias:42` — sichtbar zwar, aber
+     die Aufgabe fiele bei jedem Aufruf aus, statt auf den dokumentierten
+     Vorgabealias zurückzufallen.
+     Geprüft wird die zugesagte Rückfallregel, nicht ein neuer Wunsch: was
+     keine Zeichenkette (oder leer) ist, gilt als nicht gesetzt -> "klein". */
+  for (const krumm of [42, null, {}, ["gross"], true, ""]) {
+    stelleZurueck();
+    (z.konfig.task_modell as Record<string, unknown>)["echo-struct"] = krumm;
+    const r = await echoRuf();
+    const wo = `task_modell["echo-struct"]=${JSON.stringify(krumm)}`;
+    gleich(r.status, 200, `${wo}: der Aufruf fällt auf den Vorgabealias zurück statt auszufallen`);
+    gleich(startKoerper().p_modell_alias, "klein", `${wo}: und zwar auf "klein"`);
+    gleich(anbieterKoerper().model, KONFIGURIERTES_KLEIN, `${wo}: mit dessen Modell`);
+  }
+});
+
+test("R6d eine gültige Alias-Zeichenkette läuft weiterhin durch", async () => {
+  /* Gegenprobe zu R6c: ohne sie wäre ein Endpunkt, der IMMER 500 liefert,
+     ebenfalls grün. Randlage mit Leerraum, weil `modell` getrimmt wird. */
+  z.konfig.modell_alias = { klein: "  " + KONFIGURIERTES_KLEIN + " ", gross: "claude-sonnet-5" };
+  const r = await echoRuf();
+  gleich(r.status, 200, "der reguläre Aufruf läuft");
+  gleich(anbieterKoerper().model, KONFIGURIERTES_KLEIN, "und zwar mit dem getrimmten Modellnamen");
 });
 
 /* ---------------------------------------------------------------------------
@@ -2483,4 +2533,471 @@ test("H5d BEFUND: im Diagnosepfad fehlt die Wache, die der zahlende Pfad hat", a
   gleich(r.status, 200, "IST-Zustand: der Aufruf läuft durch");
   gleich(modelleGerufen, 1, "der echte Schlüssel WIRD benutzt");
   gleich(beenden().length, 0, "aber die Zeile wird nie geschlossen — sie bleibt auf laufend");
+});
+
+/* ===========================================================================
+   MT. Ausgabebudget je Aufgabe (`max_tokens`) — der Vorfall vom 26.07.
+   ===========================================================================
+   `intelligent-search` stand nicht in der Konfiguration `task_max_tokens` und
+   erbte damit stillschweigend die anonyme 256 — einen Wert, der für
+   `echo-struct` gewählt worden war. Das Antwortschema verlangt aber JEDES Feld
+   in `required`; schon das leere Gerüst kostet Token, bevor ein einziger Wert
+   darinsteht. Die erste etwas gesprächigere Antwort kippte drüber: HTTP 502,
+   Fehlerklasse `antwort-abgeschnitten`, bezahlt und ohne Ergebnis.
+
+   GEMESSEN wird deshalb NICHT eine Konstante im Modul, sondern der Wert, der
+   wirklich im Anbieter-Körper ankommt (`max_tokens`) und der Wert, der wirklich
+   in `p_reservierung` geht. Ein Test, der `MAX_TOKENS_STANDARD` bloß liest,
+   bliebe grün, wenn die Auflösung darunter zerbricht.
+
+   Seit dem Umbau ist `MAX_TOKENS_STANDARD` exportiert. Es liefert hier das
+   SOLL, nie das Ergebnis: die Tests halten damit die AUFLÖSUNG fest („was in
+   der Tabelle steht, kommt beim Anbieter an") statt einer abgeschriebenen Zahl.
+   So übersteht der Block die nächste begründete Anpassung des Werts, ohne dass
+   jemand ihn anfassen muss — und geht trotzdem rot, wenn die Auflösung reisst.
+   Wo eine feste Zahl die bessere Zusicherung ist, steht sie weiter da: die 256
+   in MT3 ist der historische Fehlwert des Vorfalls, kein Tabelleneintrag, und
+   die Schranken in MT3/MT8 sind aus dem Antwortschema gerechnet.
+
+   GRENZE DER ATTRAPPE: die Konfiguration kommt über `/rest/v1/kd_ai_limits`,
+   also durch JSON. `NaN`, `Infinity` und `undefined` überleben diesen Weg nicht
+   — sie kommen als `null` bzw. gar nicht an. Genau so ist es auch in echt:
+   in einer jsonb-Spalte gibt es kein NaN. Die Fälle stehen trotzdem in der
+   Liste, weil das der Weg ist, auf dem sie real auftreten.
+   =========================================================================== */
+
+/* Je gebauter Aufgabe ein vollständiger, gültiger Durchlauf. Die Tabelle ist
+   zugleich der Wächter aus MT7: eine neue Aufgabe ohne Eintrag hier fällt auf. */
+const BUDGET_SONDEN: Record<string, { payload: () => Record<string, unknown>; vorbereiten: () => void }> = {
+  "echo-struct": {
+    payload: () => ({ wort: "Kinodreieck" }),
+    vorbereiten: () => { z.anbieter = () => anbieterErfolg(); },
+  },
+  "intelligent-search": {
+    payload: () => suchPayload(),
+    vorbereiten: () => sucheMitAntwort(antwortMit({})),
+  },
+};
+
+/* Steht für „die Konfiguration sagt zu dieser Aufgabe NICHTS" — der Zustand,
+   in dem der Vorfall entstand. Nicht mit `undefined` verwechselbar, das über
+   JSON ohnehin zum fehlenden Schlüssel würde. */
+const OHNE_KONFIG = Symbol("keine Angabe in task_max_tokens");
+
+/* Ein Durchlauf; zurück kommt, was WIRKLICH rausging. */
+async function messeBudget(task: string, wert: unknown = OHNE_KONFIG) {
+  stelleZurueck();
+  const sonde = BUDGET_SONDEN[task];
+  wahr(sonde, `keine Budget-Sonde für Aufgabe "${task}" — siehe MT7`);
+  if (wert === OHNE_KONFIG) delete (z.konfig as Record<string, unknown>).task_max_tokens;
+  else (z.konfig as Record<string, unknown>).task_max_tokens = { [task]: wert };
+  sonde.vorbereiten();
+  const r = await ruf({ task, vorgangId: neueVorgangId(), payload: sonde.payload() });
+  gleich(r.status, 200, `${task}: der Durchlauf muss durchgehen, sonst misst der Test nichts`);
+  gleich(anbieterAufrufe().length, 1, `${task}: genau ein Anbieteraufruf`);
+  return {
+    maxTokens: anbieterKoerper().max_tokens as unknown,
+    reservierung: startKoerper().p_reservierung as number,
+  };
+}
+
+/* Der Wert, mit dem eine Aufgabe ohne Konfiguration laufen SOLL — gelesen aus
+   der exportierten Tabelle, nicht abgeschrieben. Eine Abschrift hätte genau
+   den Ärger gemacht, der diesen Auftrag ausgelöst hat: drei Tests gingen rot,
+   weil der Wert aus gutem Grund von 1024 auf 4096 stieg.
+
+   Die Funktion ist zugleich eine Prüfung: `MAX_TOKENS_STANDARD` muss für die
+   Aufgabe einen EIGENEN Schlüssel haben (ein geerbter zählt nicht, siehe MT5b)
+   und dort eine Zahl, die `zuTokens` selbst durchlassen würde. Eine geleerte
+   oder krumme Tabelle fällt hier auf, statt die Tests still leerlaufen zu
+   lassen. */
+function standardBudget(task: string): number {
+  const roh = eigenerWert(MAX_TOKENS_STANDARD, task);
+  wahr(roh !== undefined,
+    `Aufgabe "${task}" hat keinen eigenen Eintrag in MAX_TOKENS_STANDARD — sie erbt damit `
+    + `still die anonyme 256 aus dem letzten Rückfall — einen Wert, der für eine ANDERE Aufgabe `
+    + `gewählt wurde. Genau das war der Vorfall.`);
+  const wert = zuTokens(roh);
+  wahr(wert !== null,
+    `MAX_TOKENS_STANDARD["${task}"] = ${JSON.stringify(roh)} ist kein Wert, den zuTokens durchlässt — `
+    + `der Standard fiele damit auf den letzten Rückfall durch`);
+  return wert as number;
+}
+
+/* Der Ausgabepreis je Modell-Alias aus STANDARD_KONFIG — gebraucht für MT8. */
+const AUSGABEPREIS: Record<string, number> = {
+  "echo-struct": 500,        // Alias klein  -> claude-haiku-4-5
+  "intelligent-search": 1000, // Alias gross -> claude-sonnet-5
+};
+
+test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln", async () => {
+  for (const task of Object.keys(BUDGET_SONDEN)) {
+    const soll = standardBudget(task);
+    /* Zwei Werte, die BEIDE vom Standardwert dieser Aufgabe abweichen — sonst
+       prüfte der Fall mit `gesetzt === soll` nichts. Gewählt wird deshalb
+       relativ zum Tabellenwert, nicht absolut. */
+    for (const gesetzt of [soll === 512 ? 1024 : 512, soll === 2048 ? 4096 : 2048]) {
+      wahr(zuTokens(gesetzt) === gesetzt, `${gesetzt} muss eine gültige Angabe sein, sonst misst MT1 nichts`);
+      const m = await messeBudget(task, gesetzt);
+      gleich(m.maxTokens, gesetzt, `${task}: konfigurierte ${gesetzt} kommen beim Anbieter an`);
+      falsch(m.maxTokens === soll,
+        `${task}: die Konfiguration gewinnt gegen den Standardwert ${soll}`);
+    }
+  }
+});
+
+test("MT2 ohne Konfiguration greift die Standardtabelle, nicht die anonyme 256", async () => {
+  /* Festgehalten wird die AUFLÖSUNG, nicht die Zahl: was in MAX_TOKENS_STANDARD
+     steht, muss beim Anbieter ankommen. Der Test übersteht damit eine
+     begründete Änderung des Werts — und geht rot, sobald die Auflösung an der
+     Tabelle vorbeiläuft oder die Tabelle den Eintrag verliert. */
+  for (const task of Object.keys(BUDGET_SONDEN)) {
+    const soll = standardBudget(task);
+    const m = await messeBudget(task);
+    gleich(m.maxTokens, soll,
+      `${task}: ohne Konfiguration kommt genau MAX_TOKENS_STANDARD["${task}"] beim Anbieter an`);
+  }
+});
+
+test("MT3 DER VORFALL: intelligent-search bekommt ohne Konfiguration NICHT 256", async () => {
+  /* Hier stehen bewusst feste Zahlen statt der Tabelle. 256 ist der historische
+     FEHLWERT des 26.07. und 1024 die Schranke, unter der es wieder am Rand
+     liefe — beides Aussagen über den Vorfall, nicht über den heutigen
+     Tabelleneintrag. Gegen die Tabelle geprüft wäre der Test zirkulär: er wäre
+     auch dann grün, wenn jemand 256 in MAX_TOKENS_STANDARD schriebe. */
+  const m = await messeBudget("intelligent-search");
+  falsch(m.maxTokens === 256,
+    `intelligent-search erbt wieder die anonyme 256 — genau das endete am 26.07. als bezahlter 502 antwort-abgeschnitten`);
+  wahr(typeof m.maxTokens === "number" && (m.maxTokens as number) >= 1024,
+    `intelligent-search braucht spürbar Luft über 256 (war ${m.maxTokens})`);
+  /* Und zum Vergleich: echo-struct bleibt bei seinen 256. Beide Aufgaben aus
+     DERSELBEN Auflösung, aber mit verschiedenen Werten — sonst hielte der Test
+     auch eine global hochgedrehte Zahl für richtig. */
+  const e = await messeBudget("echo-struct");
+  gleich(e.maxTokens, 256, "echo-struct behält sein eigenes, kleines Budget");
+});
+
+test("MT4 unbrauchbare Konfigurationswerte fallen auf den Standard durch", async () => {
+  /* Was hier NICHT durchfallen darf, ist der Fehler selbst: eine 0 oder ein
+     NaN als max_tokens meldet erst der Anbieter — nachdem die Reservierung
+     schon gebucht ist. */
+  const KRUMM: Array<[string, unknown]> = [
+    ["null", null],
+    ["0", 0],
+    ["negativ", -128],
+    ["unter der Untergrenze", 15],
+    ["über der Obergrenze", 9000],
+    ["knapp über der Obergrenze", 8193],
+    ["Zeichenkette ohne Zahl", "viel"],
+    ["leere Zeichenkette", ""],
+    ["Objekt", { wert: 1024 }],
+    ["leere Liste", []],
+    ["Wahrheitswert", true],
+    /* NaN und Infinity kommen über JSON als null an — siehe Kopfkommentar. */
+    ["NaN (über JSON: null)", Number.NaN],
+    ["Infinity (über JSON: null)", Number.POSITIVE_INFINITY],
+  ];
+  for (const [name, wert] of KRUMM) {
+    /* Die Liste und die Regel dürfen nicht auseinanderlaufen: was `zuTokens`
+       durchliesse, gehört nicht in KRUMM. Geprüft gegen die EXPORTIERTE
+       Funktion, nicht gegen eine nachgebaute Regel. */
+    gleich(zuTokens(wert), null, `KRUMM[${name}]: zuTokens muss diesen Wert verwerfen`);
+    for (const task of Object.keys(BUDGET_SONDEN)) {
+      const soll = standardBudget(task);
+      const m = await messeBudget(task, wert);
+      const wo = `${task}, task_max_tokens=${name}`;
+      gleich(m.maxTokens, soll, `${wo}: fällt auf den Standardwert der Tabelle durch`);
+      wahr(Number.isInteger(m.maxTokens), `${wo}: eine ganze Zahl, nie NaN (war ${m.maxTokens})`);
+      wahr((m.maxTokens as number) >= 16, `${wo}: nie 0 und nie negativ (war ${m.maxTokens})`);
+    }
+  }
+});
+
+test("MT4b was sich bloss in eine Zahl VERWANDELN lässt, gilt nicht als Angabe", async () => {
+  /* War ein BEFUND: die alte Fassung rechnete `Math.trunc(Number(w))` und nahm
+     damit auch an, was gar keine Zahl IST, solange `Number()` etwas Brauchbares
+     daraus machte:
+       "512"  -> 512   (Zeichenkette)
+       [512]  -> 512   (einelementige Liste)
+       300.5  -> 300   (Nachkommawert: abgeschnitten statt verworfen)
+     Schaden richtete das nicht an — der Wert blieb eine ganze Zahl im erlaubten
+     Band. Es wich aber von der Zusage ab, dass nur eine brauchbare ZAHL zählt:
+     eine Konfiguration konnte eine Aufgabe so unbemerkt auf ein Budget setzen,
+     das so nirgends steht. Der BEFUND ist mit der Härtung erledigt; hier steht
+     jetzt die Zusicherung.
+
+     Eigener Test neben MT4, obwohl die Erwartung dieselbe ist: das sind die
+     Fälle, die eine Rückkehr zu `Number()` NICHT bemerkt — MT4s Liste fiele
+     auch dann noch durch. Diese drei sind die Wache gegen genau diesen
+     Rückschritt, deshalb stehen sie sichtbar für sich. */
+  const FAELLE: Array<[string, unknown]> = [
+    ['Zeichenkette "512"', "512"],
+    ["einelementige Liste [512]", [512]],
+    ["Nachkommawert 300.5", 300.5],
+  ];
+  for (const [name, wert] of FAELLE) {
+    gleich(zuTokens(wert), null, `zuTokens(${name}) verwirft den Wert`);
+    for (const task of Object.keys(BUDGET_SONDEN)) {
+      const soll = standardBudget(task);
+      const m = await messeBudget(task, wert);
+      const wo = `${task}, task_max_tokens=${name}`;
+      gleich(m.maxTokens, soll,
+        `${wo}: keine echte ganze Zahl, also keine Angabe — es gilt der Standard der Tabelle`);
+      wahr(Number.isInteger(m.maxTokens) && (m.maxTokens as number) >= 16,
+        `${wo}: und beim Anbieter kommt eine brauchbare ganze Zahl an (war ${m.maxTokens})`);
+    }
+  }
+});
+
+test("MT5 vererbte Schlüssel setzen kein Budget — weder über die Konfiguration …", async () => {
+  /* Ein `Object.prototype`-Eintrag ist der Weg, auf dem ein geerbter Schlüssel
+     real wirksam würde. Mit direktem Zugriff (`o[k]`) läse die Auflösung die
+     4096 aus dem Prototyp; nur `hasOwnProperty` schließt das aus. */
+  Object.defineProperty(Object.prototype, "echo-struct", {
+    value: 4096, configurable: true, enumerable: false, writable: true,
+  });
+  try {
+    /* task_max_tokens fehlt ganz: `{}` hat den Schlüssel nur geerbt. */
+    const m = await messeBudget("echo-struct");
+    gleich(m.maxTokens, 256, "der geerbte Schlüssel setzt kein Budget über die Konfiguration");
+  } finally {
+    delete (Object.prototype as Record<string, unknown>)["echo-struct"];
+  }
+});
+
+test("MT5b … noch über die Standardtabelle", async () => {
+  /* Eine Aufgabe, die in KEINER der beiden Tabellen einen eigenen Schlüssel
+     hat: die Konfiguration nennt sie mit einem unbrauchbaren Wert (0), die
+     Standardtabelle kennt sie nicht. Bliebe dort der direkte Zugriff, käme die
+     4096 aus dem Prototyp durch. */
+  const SONDE = "budget-sonde";
+  Object.defineProperty(Object.prototype, SONDE, {
+    value: 4096, configurable: true, enumerable: false, writable: true,
+  });
+  AUFGABEN[SONDE] = {
+    bauAuftrag() { return { system: "s", nutzertext: "n", schema: null }; },
+    pruefeErgebnis() { return { daten: { ok: true } }; },
+  };
+  BUDGET_SONDEN[SONDE] = {
+    payload: () => ({}),
+    /* KEIN eigener Eintrag in `task_modell` mehr. Der stand hier, weil
+       `task_modell[task]` früher DIREKT gelesen wurde: die Prototyp-Belegung
+       schlug schon vor der Budgetauflösung zu (Alias 4096 ->
+       "kein-modell-fuer-alias", HTTP 500) und der Test kam nie bis zur
+       Messung. Seit die Alias-Auflösung dieselbe Härtung hat, ist der Umweg
+       überflüssig — und sein Wegfall prüft sie gleich mit: fällt sie zurück,
+       endet dieser Durchlauf wieder als 500 und `messeBudget` schlägt an. */
+    vorbereiten: () => { z.anbieter = () => anbieterErfolg(); },
+  };
+  try {
+    const m = await messeBudget(SONDE, 0);
+    gleich(m.maxTokens, 256,
+      "unbekannte Aufgabe: 0 aus der Konfiguration gilt nicht, der Prototyp auch nicht — bleibt der letzte Rückfall");
+  } finally {
+    delete AUFGABEN[SONDE];
+    delete BUDGET_SONDEN[SONDE];
+    delete (Object.prototype as Record<string, unknown>)[SONDE];
+  }
+});
+
+test("MT5c ein geerbter Name als task bekommt gar kein Budget", async () => {
+  /* Nachbarprüfung zu R10: diese Namen kommen nie bis zur Budgetauflösung,
+     also auch nie bis zum Anbieter. */
+  for (const task of ["constructor", "__proto__", "toString"]) {
+    stelleZurueck();
+    const r = await ruf({ task, vorgangId: neueVorgangId(), payload: {} });
+    gleich(r.status, 501, `task=${task}: abgewiesen`);
+    gleich(anbieterAufrufe().length, 0, `task=${task}: kein Anbieteraufruf, also kein Budget`);
+    gleich(starten().length, 0, `task=${task}: keine Reservierung`);
+  }
+});
+
+test("MT6 die Reservierung hängt am selben Budget, nicht an einer festen Zahl", async () => {
+  /* Die Reservierung ist der einzige Schutz des Monatsbudgets gegen
+     gleichzeitig laufende Aufträge. Steigt das Ausgabebudget einer Aufgabe,
+     MUSS sie mitgehen — sonst schützt sie nichts mehr.
+     Geprüft wird der Zusammenhang, nicht der Zahlenwert: bei identischem
+     Anfragekörper darf sich zwischen zwei Budgets genau der Ausgabeanteil
+     ändern, also (B2 - B1) / 1e6 * Ausgabepreis. */
+  for (const task of Object.keys(BUDGET_SONDEN)) {
+    const klein = await messeBudget(task, 256);
+    const gross = await messeBudget(task, 2048);
+    wahr(gross.reservierung > klein.reservierung,
+      `${task}: mehr Budget reserviert mehr (${gross.reservierung} vs ${klein.reservierung})`);
+    const erwartet = ((2048 - 256) / 1_000_000) * AUSGABEPREIS[task];
+    const gemessen = gross.reservierung - klein.reservierung;
+    wahr(Math.abs(gemessen - erwartet) < 1e-9,
+      `${task}: die Reservierung folgt dem Budget mit dem Ausgabepreis (erwartet ${erwartet}, gemessen ${gemessen})`);
+  }
+});
+
+test("MT6b auch das Standardbudget geht vollständig in die Reservierung", async () => {
+  /* Der Fall, um den es geht: OHNE Konfiguration. Reservierte der Endpunkt
+     hier weiter nach dem letzten Rückfall 256, während er den Tabellenwert
+     anfragt, wäre das Monatsbudget genau um den Unterschied unterschätzt — bei
+     4096 um den Faktor sechzehn.
+
+     Auch hier die Auflösung statt der Zahl: verglichen wird gegen den
+     Tabellenwert, und der Abstand zur 256 wird exakt nachgerechnet, statt sich
+     mit "grösser" zu begnügen. */
+  const TASK = "intelligent-search";
+  const soll = standardBudget(TASK);
+  const RUECKFALL = 256;
+  wahr(soll > RUECKFALL,
+    `Vorbedingung: der Tabellenwert (${soll}) muss über dem letzten Rückfall ${RUECKFALL} liegen, `
+    + "sonst kann dieser Test die beiden gar nicht unterscheiden");
+
+  const ohne = await messeBudget(TASK);
+  const mitSoll = await messeBudget(TASK, soll);
+  const mitRueckfall = await messeBudget(TASK, RUECKFALL);
+  gleich(ohne.reservierung, mitSoll.reservierung,
+    "ohne Konfiguration wird dasselbe reserviert wie mit dem ausdrücklich gesetzten Tabellenwert");
+  const erwartet = ((soll - RUECKFALL) / 1_000_000) * AUSGABEPREIS[TASK];
+  const gemessen = ohne.reservierung - mitRueckfall.reservierung;
+  wahr(Math.abs(gemessen - erwartet) < 1e-9,
+    `der Vorsprung gegenüber ${RUECKFALL} ist genau der Ausgabeanteil `
+    + `(erwartet ${erwartet}, gemessen ${gemessen})`);
+});
+
+test("MT7 Wächter: jede gebaute Aufgabe hat ein bewusst gewähltes Budget", async () => {
+  /* Genau dieser Schritt wurde beim Bau von intelligent-search vergessen.
+
+     Bis der Umbau `MAX_TOKENS_STANDARD` exportierte, konnte der Wächter nur
+     das ERGEBNIS der Auflösung messen — und ein Budget von 256 ohne
+     Konfiguration ist von aussen nicht davon zu unterscheiden, ob es aus der
+     Tabelle kommt oder der letzte Rückfall ist. Dafür gab es die
+     Bestätigungsliste BUDGET_BEWUSST_256: eine zweite, von Hand gepflegte
+     Stelle, an der jemand dasselbe noch einmal versichern musste.
+
+     Die ist jetzt weg. Der eigene Schlüssel in der Tabelle IST die Bestätigung
+     — an derselben Stelle, an der auch die Begründung steht. Geprüft wird
+     beides zusammen: der Eintrag muss da sein UND die Auflösung muss ihn
+     liefern. Eine geleerte Tabelle fällt damit hier auf, nicht erst beim
+     nächsten bezahlten Aufruf. */
+  for (const task of Object.keys(AUFGABEN)) {
+    wahr(BUDGET_SONDEN[task],
+      `neue Aufgabe "${task}": trag eine Sonde in BUDGET_SONDEN ein, sonst prüft niemand ihr Ausgabebudget`);
+    /* Wirft mit klarer Meldung, wenn der eigene Eintrag fehlt oder krumm ist. */
+    const soll = standardBudget(task);
+    const m = await messeBudget(task);
+    gleich(m.maxTokens, soll,
+      `${task}: ohne Konfiguration muss genau der eigene Tabellenwert ankommen`);
+    wahr(Number.isInteger(m.maxTokens) && (m.maxTokens as number) >= 16,
+      `${task}: brauchbares Budget (war ${m.maxTokens})`);
+  }
+});
+
+/* ---------------------------------------------------------------------------
+   MT8 — reicht das Budget für die größtmögliche gültige Antwort?
+   Grobe Faustregel: VIER Zeichen serialisiertes JSON je Token. Die Regel
+   unterschätzt eher, weil JSON viel Zeichensetzung enthält, die einzeln
+   tokenisiert; als untere Schranke taugt sie.
+
+   Deshalb wird zusätzlich mit DREI Zeichen je Token gerechnet. Der ganze
+   Vorfall bestand darin, an der falschen, freundlicheren Bezugsgröße zu messen
+   — ein Test, der nur die optimistische Regel prüft, machte denselben Fehler
+   eine Ebene höher.
+   --------------------------------------------------------------------------- */
+
+const ZEICHEN_JE_TOKEN = 4;
+/* Konservative Gegenrechnung, keine zweite Faustregel: so dicht kommt JSON mit
+   viel Zeichensetzung und kurzen Feldwerten der Tokenzahl realistisch. */
+const ZEICHEN_JE_TOKEN_ENG = 3;
+/* Spiegel der Grenzen aus index.ts (dort nicht exportiert). Die Vorbedingung
+   in MT8 prüft sie am laufenden Endpunkt nach, damit sie nicht auseinanderlaufen. */
+const T_SUCHE_MAX_WERTE = 12;
+const T_KLARTEXT_MAX_ZEICHEN = 220;
+const T_WUNSCH_MAX_ZEICHEN = 60;
+const T_LISTE_MAX_ZEICHEN = 40;
+
+function groessteGueltigeAntwort() {
+  const fuellung = (n: number, c: string) => c.repeat(n);
+  const werte = (c: string) =>
+    Array.from({ length: T_SUCHE_MAX_WERTE }, () => fuellung(T_LISTE_MAX_ZEICHEN, c));
+  return {
+    harte_filter: {
+      genres: werte("g"),
+      kategorien: werte("k"),
+      quellen: werte("q"),
+      zeit: werte("z"),
+      jahrMin: 1980,
+      jahrMax: 2099,
+      dekaden: Array.from({ length: T_SUCHE_MAX_WERTE }, () => 1980),
+      titel: werte("t"),
+      reihen: Array.from({ length: T_SUCHE_MAX_WERTE }, () => ({
+        typ: "franchise",
+        name: fuellung(T_LISTE_MAX_ZEICHEN, "r"),
+      })),
+    },
+    weiche_wuensche: { stimmungen: werte("s"), achsen: werte("a") },
+    ausschluesse: {
+      genres: werte("x"),
+      dekaden: Array.from({ length: T_SUCHE_MAX_WERTE }, () => 1990),
+    },
+    entdecken: true,
+    nicht_unterstuetzt: Array.from({ length: T_SUCHE_MAX_WERTE * 2 }, () => ({
+      wunsch: fuellung(T_WUNSCH_MAX_ZEICHEN, "w"),
+      grund: fuellung(T_WUNSCH_MAX_ZEICHEN, "b"),
+    })),
+    interpretation_klartext: fuellung(T_KLARTEXT_MAX_ZEICHEN, "i"),
+  };
+}
+
+test("MT8 das Budget deckt die größtmögliche gültige Antwort", async () => {
+  /* War ein BEFUND („1024 deckt sie nicht") und ist mit der Anhebung auf 4096
+     erledigt: 9071 Zeichen / 4 = ~2268 Token, konservativ / 3 = ~3024 Token,
+     Budget 4096. Der Test erkennt die Anhebung nicht mehr bloss, er verlangt
+     sie — die Rechnung steht in der Meldung, damit eine spätere Senkung mit
+     Zahlen dasteht statt mit „Test rot".
+
+     Zwei Schranken, beide aus dem Antwortschema gerechnet, keine aus einer
+     Konstanten abgeschrieben:
+       OBEN  — die grösste Antwort, die das Schema noch zulässt, muss ins
+               Budget passen. Sonst endet sie wie am 26.07. als bezahlter 502.
+       UNTEN — das Budget muss mindestens das Doppelte einer GEWÖHNLICHEN
+               Antwort tragen. Das ist der eigentliche Wert des Tests: er hält
+               fest, dass am gewöhnlichen Fall gemessen zu knapp ist, und
+               bleibt auch dann sinnvoll, wenn das Schema einmal kleiner wird.
+
+     Vorbedingung: die Grenzen oben sind die des Endpunkts. Sonst rechnete der
+     Test an einem Schema vorbei, das es nicht gibt. */
+  const viele = await suche({
+    harte_filter: { genres: Array.from({ length: 20 }, (_, i) => "genre" + i) },
+    interpretation_klartext: "y".repeat(400),
+  });
+  gleich(daten(viele).harte_filter.genres.length + daten(viele).nicht_unterstuetzt.length >= T_SUCHE_MAX_WERTE, true,
+    "Vorbedingung: Listen werden gedeckelt");
+  gleich(String(daten(viele).interpretation_klartext).length, T_KLARTEXT_MAX_ZEICHEN,
+    "Vorbedingung: der Klartext wird bei 220 Zeichen gekappt");
+
+  const gross = JSON.stringify(groessteGueltigeAntwort()).length;
+  const geschaetzt = Math.ceil(gross / ZEICHEN_JE_TOKEN);
+  const geschaetztEng = Math.ceil(gross / ZEICHEN_JE_TOKEN_ENG);
+  const budget = (await messeBudget("intelligent-search")).maxTokens as number;
+  const rechnung = `${gross} Zeichen, / ${ZEICHEN_JE_TOKEN} = ~${geschaetzt} Token, `
+    + `konservativ / ${ZEICHEN_JE_TOKEN_ENG} = ~${geschaetztEng} Token, Budget ${budget}`;
+
+  wahr(budget >= geschaetzt,
+    `eine Antwort am Schemamaximum würde abgeschnitten — bezahlt und ohne Ergebnis (${rechnung})`);
+  wahr(budget >= geschaetztEng,
+    `das Budget trägt die Faustregel, aber nicht die konservative Rechnung — und JSON ist `
+    + `zeichensetzungslastig, das echte Verhältnis liegt eher bei ${ZEICHEN_JE_TOKEN_ENG} (${rechnung})`);
+
+  /* Was das Budget mindestens tragen MUSS, damit es nicht wieder am Rand
+     läuft: eine gewöhnliche Antwort mit vollem Klartext und drei gemeldeten
+     Wünschen. Diese Schranke ist der eigentliche Wächter dieses Tests. */
+  const gewoehnlich = JSON.stringify({
+    ...groessteGueltigeAntwort(),
+    harte_filter: { ...groessteGueltigeAntwort().harte_filter, genres: ["sci-fi", "horror"], kategorien: [], quellen: [], zeit: [], titel: [], reihen: [], dekaden: [1980] },
+    weiche_wuensche: { stimmungen: ["duester"], achsen: [] },
+    ausschluesse: { genres: [], dekaden: [] },
+    nicht_unterstuetzt: Array.from({ length: 3 }, () => ({
+      wunsch: "w".repeat(T_WUNSCH_MAX_ZEICHEN),
+      grund: "b".repeat(T_WUNSCH_MAX_ZEICHEN),
+    })),
+  }).length;
+  const gewoehnlichTok = Math.ceil(gewoehnlich / ZEICHEN_JE_TOKEN);
+  wahr(budget >= gewoehnlichTok * 2,
+    `das Budget muss mindestens das Doppelte einer gewöhnlichen Antwort tragen `
+    + `(gewöhnlich ~${gewoehnlichTok} Token, Budget ${budget})`);
 });
