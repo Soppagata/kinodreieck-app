@@ -191,7 +191,34 @@ async function holen() {
   const datei = `eval_rohdaten_${stempel}.json`;
   writeFileSync(datei, JSON.stringify({ erstellt: new Date().toISOString(), listen: LISTEN, roh }, null, 2));
   console.log(`\nRohantworten geschrieben: ${datei}`);
-  console.log(`Kosten dieses Laufs: rund ${(ANFRAGEN.length * KOSTEN_JE_ANFRAGE_CENT).toFixed(1)} US-Cent.`);
+
+  /* Die TATSAECHLICHEN Kosten, nicht die geschaetzten. Vorher stand hier die
+     Schaetzung mal Anzahl der Anfragen -- unabhaengig davon, was wirklich
+     passiert ist. Am 27.07. liefen alle 20 Anfragen ins Tageslimit, es gab
+     keinen einzigen Anbieteraufruf, und das Skript meldete trotzdem "rund
+     16.4 US-Cent". Ein Werkzeug, das Kosten meldet, die es nicht kennt, ist
+     schlimmer als eines, das schweigt: man glaubt ihm.
+
+     Bezahlt wird nur, was den Anbieter erreicht hat. 429 (Limit) und 400
+     (Payload abgewiesen) werden VOR der Reservierung abgewiesen und kosten
+     nichts; 502 dagegen bedeutet, dass der Aufruf lief und abgebrochen ist --
+     der ist bezahlt. */
+  const bezahlt = roh.filter((r) => r.status === 200 || r.status === 502).length;
+  const gelimitet = roh.filter((r) => r.status === 429).length;
+  console.log(bezahlt === 0
+    ? "Kosten dieses Laufs: KEINE - kein Aufruf hat den Anbieter erreicht."
+    : `Kosten dieses Laufs: rund ${(bezahlt * KOSTEN_JE_ANFRAGE_CENT).toFixed(1)} US-Cent `
+      + `(${bezahlt} von ${roh.length} Anfragen sind beim Anbieter angekommen).`);
+
+  if (gelimitet) {
+    console.log("");
+    console.log(`ACHTUNG: ${gelimitet} von ${roh.length} Anfragen wurden mit "tageslimit-erreicht"`);
+    console.log("abgewiesen. Diese Rohdatei ist als Eval damit WERTLOS - sie misst nicht die");
+    console.log("Deutungsqualitaet, sondern nur, dass das Limit greift.");
+    console.log("Das Tageslimit gilt je Konto und Kalendertag (Europe/Vienna) und steht in");
+    console.log("kd_ai_limits unter tageslimit_auftraege. Entweder morgen erneut laufen lassen");
+    console.log("oder den Wert fuer die Bauphase anheben.");
+  }
   console.log("Ab jetzt kostenlos beliebig oft auswertbar: node tools/ai_eval_etappe6.mjs --pruefen");
   return datei;
 }
@@ -257,6 +284,7 @@ function pruefen(datei) {
 
   let befunde = 0;
   let hinweise = 0;
+  let abgewiesen = 0;   // 429: nie beim Anbieter gewesen, nicht bewertbar
 
   for (const anfrage of ANFRAGEN) {
     const r = nachId.get(anfrage.id);
@@ -267,9 +295,14 @@ function pruefen(datei) {
     console.log(`     SOLL: ${anfrage.soll}`);
 
     if (!r || r.status !== 200 || !d) {
-      befunde += 1;
-      console.log(`     IST:  FEHLER HTTP ${r?.status ?? "?"} — ${r?.antwort?.grund || r?.antwort?.code || "?"}`);
-      console.log("     BEFUND: Aufruf gescheitert");
+      const grund = r?.antwort?.grund || r?.antwort?.code || "?";
+      console.log(`     IST:  FEHLER HTTP ${r?.status ?? "?"} — ${grund}`);
+      /* Ein Limit ist kein Befund AN DER SUCHE. Der Aufruf hat den Anbieter nie
+         erreicht, es gibt nichts zu beurteilen. Das als "Befund" zu zaehlen
+         wuerde eine Aussage ueber die Deutungsqualitaet vortaeuschen, die diese
+         Zeile gar nicht treffen kann. */
+      if (r?.status === 429) { abgewiesen += 1; console.log("     (nicht bewertbar: Aufruf abgewiesen, bevor er den Anbieter erreicht hat)"); }
+      else { befunde += 1; console.log("     BEFUND: Aufruf gescheitert"); }
       continue;
     }
 
@@ -324,14 +357,22 @@ function pruefen(datei) {
   }
 
   console.log(`\n${"=".repeat(100)}`);
-  console.log(`${ANFRAGEN.length - befunde}/${ANFRAGEN.length} ohne objektiven Befund.`);
+  if (abgewiesen) {
+    console.log(`${abgewiesen} von ${ANFRAGEN.length} Anfragen wurden abgewiesen, bevor sie den Anbieter erreicht haben.`);
+    console.log("Dieser Lauf taugt NICHT als Abnahme. Erst wiederholen, wenn das Limit wieder Luft hat.");
+    console.log("");
+  }
+  const bewertbar = ANFRAGEN.length - abgewiesen;
+  console.log(`${bewertbar - befunde}/${bewertbar} bewertbare Anfragen ohne objektiven Befund.`);
   if (hinweise) console.log(`${hinweise} Hinweis(e) zum Anschauen — zaehlen nicht als Fehler.`);
   console.log(
-    befunde === 0
-      ? "\nKeine erfundenen Werte, keine erfundenen Titel, keine stillen Ablehnungen.\nOb die Deutung GUT ist, beurteilst du an den SOLL/IST-Paaren oben."
-      : `\n${befunde} Anfrage(n) mit objektivem Befund — siehe BEFUND-Zeilen.`,
+    bewertbar === 0
+      ? "\nNichts gemessen, also auch nichts belegt. Keine Aussage ueber die Deutungsqualitaet."
+      : befunde === 0
+        ? "\nKeine erfundenen Werte, keine erfundenen Titel, keine stillen Ablehnungen.\nOb die Deutung GUT ist, beurteilst du an den SOLL/IST-Paaren oben."
+        : `\n${befunde} Anfrage(n) mit objektivem Befund — siehe BEFUND-Zeilen.`,
   );
-  return befunde;
+  return { befunde, abgewiesen };
 }
 
 /* ===================== Ablauf ============================================= */
@@ -339,5 +380,7 @@ function pruefen(datei) {
 let datei = null;
 if (MODUS === "holen" || MODUS === "beides") datei = await holen();
 if (MODUS === "holen") process.exit(0);
-const befunde = pruefen(datei || neuesteRohdatei());
-process.exit(befunde === 0 ? 0 : 1);
+/* Ein Lauf, der wegen Limits gar nicht stattgefunden hat, darf nicht mit 0
+   enden -- das laese sich als bestandene Abnahme lesen. */
+const ergebnis = pruefen(datei || neuesteRohdatei());
+process.exit(ergebnis.befunde === 0 && ergebnis.abgewiesen === 0 ? 0 : 1);

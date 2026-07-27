@@ -186,12 +186,18 @@ werden die tatsächlich erzeugten Token, vom Höchstwert geht nur die Reservieru
 aus. Beim späteren Drosseln ist 4096 die naheliegende Stufe; unter 3072 sollte
 niemand gehen, ohne die Schemagrenzen neu zu rechnen.
 
-**Offene Rechnung, Entscheidung steht aus:** Tageslimit 50 Aufrufe × 30 Tage ×
-0,82 Cent = **12,32 USD** und übersteigt damit das Monatsbudget von 10 USD. Für
-einen Vielnutzer widersprechen sich die beiden Grenzen. Entweder Tageslimit auf
-etwa 40 senken oder Monatsbudget anheben. Bis zur Entscheidung greift das
-Monatsbudget als die härtere der beiden Grenzen — es wird also nicht teurer als
-gewollt, aber der Nutzer läuft eventuell vor Monatsende in eine Wand.
+**Offene Rechnung, Entscheidung steht aus.** Ich habe hier zunächst von einem
+Tageslimit von 50 geschrieben — falsch, es steht seit Etappe 5 auf **25**
+(`tageslimit_auftraege`). Für die Bauphase ist es am 27.07. auf 200 angehoben
+worden, weil ein einziger Eval-Lauf 20 Aufträge kostet und der zweite Lauf des
+Tages vollständig ins Limit lief.
+
+Vor der Testerrunde gehört das zurückgedreht, und dabei ist der Widerspruch
+aufzulösen: Tageslimit × 30 Tage × 0,82 Cent darf das Monatsbudget von 1000
+Cent nicht übersteigen, sonst läuft ein Vielnutzer vor Monatsende in eine Wand,
+die er nicht versteht. Das ergibt rund **40** Aufträge je Tag. Das Tageslimit
+ist ohnehin nicht der Kostenschutz — das ist das Monatsbudget über alle Konten;
+das Tageslimit schützt gegen den Ausreißer eines einzelnen Kontos.
 
 ## Abnahmekriterien der Roadmap
 
