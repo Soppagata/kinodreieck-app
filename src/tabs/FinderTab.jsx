@@ -8,6 +8,7 @@ import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import { istKlaatu } from "../lib/momentEggs.js"; // B4-Egg
 import { schlagseiten } from "../lib/match.js";
+import { kiAn } from "../lib/kiSchalter.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -540,8 +541,15 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
               <div style={{ marginBottom: 8 }}>
                 <SignalChips sig={e.sig} versteckeTitel={titelSig.length > 1} stumm={hatErgebnisse} onToggle={(feld, wert) => toggleSignal(i, feld, wert)} />
                 {/* Angebot statt Automatik: erscheint nur bei unklarer Anfrage und
-                    nur, solange noch keine Deutung vorliegt. */}
-                {!e.ki && istUnklar(e.sig) && (
+                    nur, solange noch keine Deutung vorliegt.
+                    Etappe 7: zusaetzlich hinter dem KI-Schalter. Bei KI=aus
+                    existiert der Knopf nicht -- kein Fehlertext nach dem Klick,
+                    keine Erklaerung. Die deterministische Suche ist an dieser
+                    Stelle laengst gelaufen; der Finder bleibt vollwertig.
+                    Nebenwirkung, die eine echte Luecke schliesst: Der Knopf
+                    wurde bisher auch Gaesten angeboten, obwohl `aiService` ein
+                    Konto verlangt -- der Fehlschlag kam erst NACH dem Klick. */}
+                {kiAn("suche") && !e.ki && istUnklar(e.sig) && (
                   <div style={{ marginTop: 6 }}>
                     <button style={btnStyle(false)} disabled={kiLaeuft !== null}
                       onClick={() => deuteMitKi(i)}

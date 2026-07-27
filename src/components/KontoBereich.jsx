@@ -9,6 +9,7 @@ import { topfLabel } from "../services/uebernahme.js";
 import { KontoUebernahme } from "./KontoUebernahme.jsx";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
+import { kiAn } from "../lib/kiSchalter.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -227,7 +228,11 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
       )}
 
       {/* Diagnose, kein Produktmerkmal: prüft die Kette Anmeldung -> Endpunkt ->
-          Limits, ohne ein Modell aufzurufen. Deshalb entstehen keine Kosten. */}
+          Limits, ohne ein Modell aufzurufen. Deshalb entstehen keine Kosten.
+          Etappe 7: hinter dem KI-Schalter. Eine reine KI-Diagnose hat bei
+          KI=aus kein deterministisches Gegenstueck -- es gaebe sie nur als
+          Luege. Deshalb ausblenden, nicht ersetzen. */}
+      {kiAn("diagnose") && (
       <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
         <button style={{ ...btnStyle(false), fontSize: 13 }} disabled={laeuft} onClick={async () => {
           setLaeuft(true); setKiMeldung(null);
@@ -254,6 +259,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
           Reine Diagnose — es wird kein Modell befragt und es entstehen keine Kosten.
         </p>
       </div>
+      )}
 
       <p style={{ color: T.rauch, fontSize: 12, opacity: 0.75, marginTop: 12 }}>
         Abmelden entfernt keine Daten von diesem Gerät. Der Bestand bleibt lokal nutzbar,
