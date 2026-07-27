@@ -49,10 +49,16 @@ export function AxisChips({ bw }) {
   );
 }
 
-export function Chip({ active, onClick, children, color }) {
+/* `title` wird DURCHGEREICHT. Es fehlte, und damit war jeder Tooltip, den ein
+   Aufrufer mitgab, wirkungslos — betroffen sämtliche Signal-Chips im Finder
+   ("Harter Filter — schränkt die Treffer ein" / "Weicher Wunsch — sortiert nur
+   um") und der Merken-Chip mit seiner Erklärung des Lern-Kreislaufs. Die
+   Unterscheidung der Chip-Klassen hing danach allein an der Farbe. */
+export function Chip({ active, onClick, children, color, title }) {
   return (
     <button
       onClick={onClick}
+      title={title}
       style={{
         fontFamily: "'Space Mono', monospace",
         fontSize: 12,

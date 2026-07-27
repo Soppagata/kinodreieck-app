@@ -485,6 +485,28 @@ zu verlagern.
 
 ## Etappe 6: Erste KI-Funktion – intelligente Suche
 
+**Stand 26.07.2026: umgesetzt.** Aufgabe `intelligent-search` im Endpunkt
+`ai-task`: das Modell übersetzt einen Suchsatz in ein enges Filterschema und
+liefert nie einen Treffer. Der Finder deutet zuerst deterministisch, bietet die
+KI nur bei unklarer Anfrage an und rechnet die Suche danach mit demselben Code.
+Jeder Filter ist als Chip sichtbar und abwählbar, jeder nicht abbildbare Wunsch
+wird benannt statt still verworfen. Dazu ein Lern-Kreislauf: was die KI einmal
+bezahlt gedeutet hat, kann als eigene Vokabel gemerkt werden und läuft danach
+kostenlos deterministisch.
+
+**Keine Datenbankänderung.** Diese Etappe braucht keine Migration.
+
+Belegt: `npm test` 1292 Checks, `npm run test:function` 158, Rauchprobe 15/15
+gegen die deployte Function. Drei neue Testsuiten, jede von einer anderen Hand
+als die Implementierung — `src/lib/finder.js` und die Finder-Oberfläche hatten
+davor keinen einzigen Test. Einzelheiten, gemessene Kosten, bewusste Grenzen und
+bekannte Lücken in `ETAPPE_6_INTELLIGENTE_SUCHE.md`.
+
+**Offen und in Etappe 7 zu entscheiden:** Tageslimit 50 Aufrufe und
+Monatsbudget 10 USD widersprechen sich bei gemessenen 0,82 US-Cent je Deutung
+(50 × 30 × 0,82 = 12,32 USD). Bis zur Entscheidung greift das Monatsbudget als
+die härtere Grenze.
+
 ### Ziel
 
 Claude übersetzt schwierige natürliche Suchwünsche in ein enges Filterschema.
@@ -541,6 +563,10 @@ Claude erhält:
 - Filter sind sichtbar und änderbar,
 - ein KI-Fehler beschädigt weder Verlauf noch normale Suche,
 - jeder kostenpflichtige Aufruf ist bewusst ausgelöst und protokolliert.
+
+**Alle sechs erfüllt.** Die Belegtabelle mit der jeweiligen Messung oder dem
+Test, der es hält, steht in `ETAPPE_6_INTELLIGENTE_SUCHE.md` unter
+„Abnahmekriterien der Roadmap".
 
 ---
 

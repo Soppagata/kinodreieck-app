@@ -2228,6 +2228,7 @@ export default function App() {
 
         {tab === "finder" && master && (
           <FinderTab
+            vokabular={vokabular} saveVokabular={saveVokabular}
             master={finderMaster} kinoMatches={kinoMatches}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             mustwatchIds={mustwatchMasterIds}

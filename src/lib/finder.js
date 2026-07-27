@@ -510,6 +510,222 @@ export function sucheKino(sig, kinoRest) {
   return treffer.slice(0, 15);
 }
 
+/* ---------- Naht zur intelligenten Suche (Etappe 6) ----------------------------
+   Zwei Funktionen, mehr braucht der KI-Pfad vom Finder nicht: die Werte, die es
+   in DIESEM Bestand wirklich gibt, und die Rückübersetzung der Antwort in ein
+   Signal-Objekt. Alles dazwischen ist Sache des Endpunkts. */
+
+/* Was darf die KI überhaupt vorschlagen? Genau das, was hier vorkommt. Die
+   Genres werden in ihrer ANZEIGEFORM gesammelt ("sci-fi", "komödie"), nicht
+   normalisiert — das Modell soll die Schreibweise zurückgeben, die auch in den
+   Daten steht, damit kein Rateschritt dazwischen liegt. Entdoppelt wird über
+   genreKey, damit "Sci-Fi" und "sci-fi" nicht zweimal in der Liste stehen. */
+export function bekannteWerte(master, zusatzGenres = []) {
+  const genres = [];
+  const gesehen = new Set();
+  const sammle = (roh) => {
+    const t = String(roh || "").trim();
+    if (!t) return;
+    const k = genreKey(t);
+    if (!k || gesehen.has(k)) return;
+    gesehen.add(k);
+    genres.push(t);
+  };
+  for (const f of master || []) for (const g of f.genre || []) sammle(g);
+  for (const g of zusatzGenres || []) sammle(g);
+  return {
+    genres,
+    kategorien: Object.keys(vokabular.kategorien || {}),
+    stimmungen: Object.keys(alleStimmungen()),
+    achsen: Object.keys(vokabular.achsen || {}),
+    quellen: Object.keys(vokabular.quellen || {}),
+    zeit: Object.keys(vokabular.zeit || {}),
+  };
+}
+
+/* Alle Reihen-/Franchise-/Regie-Namen des Bestands — Grundlage dafür, einen
+   KI-Vorschlag ehrlich als "nicht in deinen Daten" abzuweisen, statt ihn als
+   Filter zu verwenden, der nie greifen kann. */
+export function bekannteReihen(master) {
+  const raus = [];
+  const gesehen = new Set();
+  for (const f of master || []) {
+    for (const [typ, feld] of [["reihe", f.reihe], ["franchise", f.franchise], ["regie", f.regie]]) {
+      for (const name of feld || []) {
+        const n = norm(name);
+        if (!n || gesehen.has(typ + "|" + n)) continue;
+        gesehen.add(typ + "|" + n);
+        raus.push({ typ, name });
+      }
+    }
+  }
+  return raus;
+}
+
+/* Antwort der KI -> Signal-Objekt. Die KI liefert NIE Treffer, nur Filter; die
+   Suche darüber ist dieselbe wie bei der getippten Anfrage.
+
+   Titel und Reihen kann der Endpunkt nicht prüfen — er sieht den Bestand nie.
+   Das passiert hier: Was sich nicht auflösen lässt, wird NICHT zum Filter,
+   sondern als "nicht in deinen Daten" zurückgegeben. Damit kann ein Vorschlag
+   ins Leere gehen, aber nie einen erfundenen Treffer erzeugen. */
+export function sigAusSchema(antwort, master, zusatzGenres = []) {
+  const a = antwort && typeof antwort === "object" ? antwort : {};
+  const hart = a.harte_filter || {};
+  const weich = a.weiche_wuensche || {};
+  const aus = a.ausschluesse || {};
+  const alsListe = (x) => (Array.isArray(x) ? x : []);
+  const nichtInDaten = [];
+
+  const werte = bekannteWerte(master, zusatzGenres);
+  /* Modellausgabe ist Rohmaterial: in einer Liste kann eine Zahl, ein Objekt
+     oder null stehen. Was keine Zeichenkette ist, wird VERWORFEN, nicht
+     umgewandelt — `String(42)` wäre ein Wert, den niemand gemeint hat. Eine
+     einzelne 42 in einer Genre-Liste hat vorher den ganzen Suchpfad abgerissen. */
+  const alsText = (w) => (typeof w === "string" ? w.trim() : "");
+  /* Doppelter Boden: die Weißliste steht serverseitig, hier steht sie noch
+     einmal. Der Client darf sich nicht darauf verlassen, dass der Endpunkt
+     dieselbe Fassung hat — ein älterer Deploy wäre sonst ein stiller Riss.
+     Zurück geht die Schreibweise der LISTE, nicht die des Modells: der Chip
+     soll „komödie" zeigen, auch wenn das Modell „Komoedie" geliefert hat.
+
+     Und zwar UNVERÄNDERT. Hier stand `norm(treffer)`, und das war ein stiller
+     Totalausfall: `sucheFinder` vergleicht Kategorien, Achsen, Quellen und Zeit
+     buchstabengetreu (`f.kategorie === k`) und schlägt Stimmungen unter ihrem
+     Schlüssel nach. `norm("sicher_gut")` ergibt "sicher gut" — ein Filter, der
+     nie greifen kann. Nur Genres werden über `genreKey` verglichen und hätten
+     die Umformung überlebt. Die Weißliste ist die Wahrheit; ihre Schreibweise
+     wird nicht angetastet. */
+  const nurBekannte = (roh, liste, feld) => {
+    const raus = [];
+    for (const w of alsListe(roh)) {
+      const text = alsText(w);
+      if (!text) continue;
+      const k = genreKey(text);
+      const treffer = liste.find((e) => genreKey(e) === k);
+      if (treffer) {
+        if (!raus.includes(treffer)) raus.push(treffer);
+      } else {
+        /* Nicht stumm verwerfen: sonst bleibt die Frage „warum wurde mein
+           Wunsch ignoriert?" unbeantwortet. */
+        nichtInDaten.push({ art: feld, name: text.slice(0, 60) });
+      }
+    }
+    return raus;
+  };
+
+  /* Titel gegen den Bestand auflösen. Ohne Treffer: ehrlich melden. */
+  const titel = [];
+  for (const roh of alsListe(hart.titel)) {
+    const gesucht = norm(alsText(roh));
+    if (!gesucht) continue;
+    const f = (master || []).find((x) => norm(x.titel) === gesucht || norm(x.originaltitel || "") === gesucht);
+    if (f) { if (!titel.some((t) => t.id === f.id)) titel.push({ id: f.id, label: f.titel }); }
+    else nichtInDaten.push({ art: "titel", name: String(roh).slice(0, 60) });
+  }
+
+  const vorhandeneReihen = bekannteReihen(master);
+  const reihen = [];
+  /* `reihen` ist am 26.07. von `weiche_wuensche` nach `harte_filter` gewandert:
+     ein Reihen-Signal ist ein harter Filter (unten `if (!treff.length) continue`),
+     stand aber unter einer Ueberschrift, die "sortiert nur um" verspricht.
+     Beide Orte werden gelesen, damit ein Endpunkt im alten Stand — Deploy und
+     Client gehen nicht in derselben Sekunde live — den Wert nicht still
+     verliert. */
+  const rohReihen = Array.isArray(hart.reihen) ? hart.reihen : weich.reihen;
+  for (const r of alsListe(rohReihen)) {
+    const name = alsText(r?.name);
+    const typ = alsText(r?.typ);
+    if (!name) continue;
+    const treffer = vorhandeneReihen.find((v) => v.typ === typ && norm(v.name) === norm(name));
+    if (treffer) reihen.push({ typ: treffer.typ, name: treffer.name });
+    else nichtInDaten.push({ art: typ || "reihe", name: name.slice(0, 60) });
+  }
+
+  /* Modelle liefern Jahre gern als Zeichenkette. Eine reine Ziffernfolge ist
+     eindeutig gemeint und wird angenommen; alles andere verworfen. */
+  const zahl = (w) => {
+    if (typeof w === "number" && Number.isFinite(w)) return Math.trunc(w);
+    if (typeof w === "string" && /^\s*\d{1,6}\s*$/.test(w)) return Number(w.trim());
+    return null;
+  };
+  const dekaden = (roh) => alsListe(roh).map(zahl).filter((n) => n !== null && n % 10 === 0);
+
+  const sig = {
+    genres: nurBekannte(hart.genres, werte.genres, "genre"),
+    achsen: nurBekannte(weich.achsen, werte.achsen, "achse"),
+    kategorien: nurBekannte(hart.kategorien, werte.kategorien, "kategorie"),
+    dekaden: dekaden(hart.dekaden),
+    quellen: nurBekannte(hart.quellen, werte.quellen, "quelle"),
+    zeit: nurBekannte(hart.zeit, werte.zeit, "zeit"),
+    stimmungen: nurBekannte(weich.stimmungen, werte.stimmungen, "stimmung"),
+    reihen,
+    jahrMin: null,
+    jahrMax: null,
+    entdecken: a.entdecken === true,
+    genresAusschluss: nurBekannte(aus.genres, werte.genres, "genre"),
+    dekadenAusschluss: dekaden(aus.dekaden),
+    kategorienAusschluss: [],
+    stimmungenAbschlag: [],
+    achsenAbschlag: [],
+    jahrExplizitMin: zahl(hart.jahrMin),
+    jahrExplizitMax: zahl(hart.jahrMax),
+    jahrUnterdrueckt: { min: false, max: false },
+    negiertIgnoriert: [],
+    titel,
+    nichtZugeordnet: [],
+    /* Bewusst LEER. `sucheKino` und `sucheEntdecken` benutzen `frage` als
+       Freitext-Titelfilter — ein KI-`sig` trägt aber keinen Titelwunsch, sondern
+       Filter. Nachgemessen ändert das heute nichts am Ergebnis: sobald ein
+       Genre, Jahrzehnt oder Jahr gesetzt ist, überspringen beide Sucher den
+       Freitextzweig ohnehin, und ohne solches Signal liefern beide so oder so
+       nichts. Die Festlegung nimmt also keine bestehende Fehlwirkung weg,
+       sondern schließt eine Tür, bevor jemand hindurchgeht: Wer später die
+       Gates lockert, hätte sonst plötzlich einen Wortlautfilter im KI-Pfad.
+       Der Anzeigetext lebt im Verlaufseintrag, nicht im Signal. */
+    frage: "",
+  };
+  /* Ein positiv genannter Wert schlägt den Ausschluss — dieselbe Regel wie beim
+     Parser, damit beide Pfade sich gleich verhalten. */
+  sig.genresAusschluss = sig.genresAusschluss.filter((g) => !sig.genres.some((p) => genreKey(p) === genreKey(g)));
+  sig.dekadenAusschluss = sig.dekadenAusschluss.filter((d) => !sig.dekaden.includes(d));
+
+  /* Jahresgrenzen auf Plausibilität. Der Endpunkt prüft jede Zahl EINZELN
+     (1900–2099), aber nicht das Paar — "ab 2010, bis 1995" kommt formgerecht
+     durch und ergibt eine Menge, die leer sein MUSS. Der Nutzer sähe dann
+     zwei plausible Chips und null Treffer und hätte keine Chance zu erkennen,
+     woran es liegt. Beide Grenzen fallen weg und der Widerspruch wird
+     benannt — die übrigen Filter bleiben und liefern weiter etwas. */
+  if (sig.jahrExplizitMin != null && sig.jahrExplizitMax != null
+    && sig.jahrExplizitMin > sig.jahrExplizitMax) {
+    nichtInDaten.push({
+      art: "jahr",
+      name: `ab ${sig.jahrExplizitMin} und bis ${sig.jahrExplizitMax} zugleich`,
+    });
+    sig.jahrExplizitMin = null;
+    sig.jahrExplizitMax = null;
+  }
+  Object.assign(sig, jahrGrenzen(sig));
+
+  return {
+    sig,
+    nichtInDaten,
+    /* Der Endpunkt liefert Objekte; eine reine Zeichenkette wird trotzdem
+       angenommen, statt sie fallen zu lassen. Ein gemeldeter, aber nicht
+       umsetzbarer Wunsch ist die wichtigste Auskunft für den Nutzer — der darf
+       nicht an einer Formfrage scheitern. */
+    nichtUnterstuetzt: alsListe(a.nicht_unterstuetzt)
+      .map((e) => (typeof e === "string"
+        ? { wunsch: e.trim(), grund: "" }
+        : (e && typeof e === "object" && typeof e.wunsch === "string"
+          ? { wunsch: e.wunsch.trim(), grund: typeof e.grund === "string" ? e.grund : "" }
+          : null)))
+      .filter((e) => e && e.wunsch)
+      .map((e) => ({ wunsch: e.wunsch.slice(0, 80), grund: e.grund.slice(0, 80) })),
+    klartext: String(a.interpretation_klartext || "").slice(0, 240),
+  };
+}
+
 /* Stimmung abwählen: Jahr-Bereiche aus den verbleibenden neu ableiten — und die
    Vorrangregel danach ERNEUT anwenden. Vorher rechnete diese Funktion allein
    aus den restlichen Stimmungen; eine ausdrücklich genannte Grenze
