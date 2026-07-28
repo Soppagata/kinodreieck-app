@@ -95,7 +95,12 @@ bleiben ignoriert.
 
 Die Pipeline baut Web-App und Einzeldatei, prüft die öffentliche
 Konfiguration, lädt exakt `dist/` hoch und testet anschließend sowohl die
-atomare Deployment-URL als auch die feste Umgebungs-Domain.
+atomare Deployment-URL als auch die feste Umgebungs-Domain. Jeder Build
+liefert dafür eine öffentliche `build-meta.json` mit Commit und Umgebung aus;
+die feste Domain muss nach dem Upload exakt den erwarteten Commit melden.
+Push- und manuelle Läufe teilen pro Zielumgebung dieselbe Concurrency-Gruppe
+und können daher nicht gleichzeitig nach Staging beziehungsweise Produktion
+schreiben.
 
 ## Eigene Domain und Staging-Subdomain
 
@@ -140,6 +145,12 @@ Gehashte Assets erhalten ein Jahr Immutable-Cache. HTML, Manifest, JSON und
 Service Worker müssen bei jedem Besuch revalidieren. Die Single-File-Ausgabe
 wird mit `Content-Disposition: attachment` ausgeliefert.
 
+Wichtig bei einer vorgeschalteten Cloudflare-Zone: `Browser Cache TTL` muss
+auf **Respect Existing Headers** stehen. Ein fester Mindestwert überschreibt
+sonst bei cachefähigen JavaScript-Dateien die `max-age=0`-Regel aus
+`_headers` — und damit ausgerechnet beim Service Worker. Der Remote-Smoke
+weist einen solchen Zustand hart zurück.
+
 ## Service Worker
 
 Die Regeln sind bewusst nach Datentyp getrennt:
@@ -168,6 +179,13 @@ Vor Staging und Produktion laufen:
 5. Service-Worker-Verhaltenstest,
 6. Cloudflare-Upload,
 7. HTTPS-Smoke-Test für atomare Deployment-URL und feste Domain.
+
+Der Remote-Smoke prüft zusätzlich, dass `sw.js` keinen positiven Browser-TTL
+trägt und dass `build-meta.json` auf der festen Domain den gerade
+bereitgestellten Commit ausweist. Ein erfolgreicher Dateiaufruf allein genügt
+nicht als Domain-Abnahme. Nur die feste Domain erhält für die mögliche kurze
+Alias-Umschaltung ein begrenztes Wiederholungsfenster; die atomare
+Deployment-URL muss sofort stimmen.
 
 Die Live-Abnahme ist erst erfüllt, wenn beide Umgebungen folgende Prüfungen
 bestehen:

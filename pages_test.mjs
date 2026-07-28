@@ -2,6 +2,10 @@
    Security Header, Download-Ausgabe und Secretfreiheit des fertigen dist/. */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import {
+  buildMetaFehler,
+  serviceWorkerRevalidiert,
+} from "./tools/deployment_contract.mjs";
 
 const DIST = "dist";
 const checks = [];
@@ -41,6 +45,12 @@ check("Manifest: 192- und 512-PWA-Icon", [192, 512].every((groesse) =>
   manifest.icons?.some((icon) => icon.sizes === `${groesse}x${groesse}`)
   && existsSync(join(DIST, `icon-${groesse}.png`))));
 check("Apple-Touch-Icon vorhanden", existsSync(join(DIST, "icon-180.png")));
+const buildMeta = existsSync(join(DIST, "build-meta.json"))
+  ? JSON.parse(readFileSync(join(DIST, "build-meta.json"), "utf8")) : {};
+check("Build-Metadaten belegen Version und Umgebung für den Domain-Smoke",
+  buildMeta.format === 1
+  && buildMeta.buildVersion === String(process.env.VITE_BUILD_VERSION || "local").trim()
+  && buildMeta.appEnvironment === String(process.env.VITE_APP_ENV || "local").trim());
 
 /* 4) Cloudflare-Sicherheitsregeln und Cache-Disziplin. */
 check("Cloudflare _headers vorhanden", Boolean(headers));
@@ -51,6 +61,28 @@ for (const wert of [
 ]) check(`_headers enthält ${wert}`, headers.includes(wert));
 check("_headers: gehashte Assets immutable", /\/assets\/\*[\s\S]*?max-age=31536000, immutable/.test(headers));
 check("_headers: Service Worker muss revalidieren", /\/sw\.js[\s\S]*?max-age=0, must-revalidate/.test(headers));
+
+const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
+check("Staging-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
+  /deploy-staging:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-staging/.test(workflow));
+check("Production-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
+  /deploy-production:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-production/.test(workflow));
+check("Feste Domains werden gegen den erwarteten Commit geprüft",
+  (workflow.match(/EXPECTED_BUILD_VERSION:\s*\$\{\{\s*github\.sha\s*\}\}/g) || []).length === 2
+  && (workflow.match(/SMOKE_RETRY_BUILD_META:\s*"1"/g) || []).length === 2
+  && readFileSync(join("tools", "smoke-deployment.mjs"), "utf8")
+    .includes("buildMetaFehler(meta, erwarteteVersion)"));
+check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
+  !serviceWorkerRevalidiert("public, max-age=14400, must-revalidate")
+  && !serviceWorkerRevalidiert("")
+  && !serviceWorkerRevalidiert("public, max-age=0, s-maxage=14400, must-revalidate")
+  && !serviceWorkerRevalidiert("public, max-age=0", ["public, max-age=14400"])
+  && serviceWorkerRevalidiert("public, max-age=0, must-revalidate")
+  && serviceWorkerRevalidiert("no-cache")
+  && serviceWorkerRevalidiert("no-store"));
+check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
+  buildMetaFehler({ format: 1, buildVersion: "alt" }, "neu") !== null
+  && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null);
 
 /* 5) Single-File bleibt ein getrennter Download und wird nicht versehentlich gecacht. */
 check("Downloadseite vorhanden", existsSync(join(DIST, "download", "index.html")));

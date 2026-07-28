@@ -341,11 +341,16 @@ Weitere Hosting-Auffälligkeiten:
 - [ ] Live liefert `/sw.js` mit
   `Cache-Control: public, max-age=14400, must-revalidate`, obwohl
   `public/_headers` und das Hosting-Handbuch `max-age=0` verlangen. Das kann
-  PWA-Aktualisierungen um bis zu vier Stunden verzögern.
-- [ ] Push- und manuelle Production-Läufe können wegen unterschiedlicher
-  Concurrency-Gruppen parallel deployen.
-- [ ] Der Domain-Smoke-Test prüft nicht, ob die feste Domain wirklich den
-  erwarteten Commit-SHA ausliefert.
+  PWA-Aktualisierungen um bis zu vier Stunden verzögern. Am 28.07. erneut auf
+  Produktion und Staging gemessen; HTML und Manifest revalidieren korrekt,
+  die Zonenregel hebt nur cachefähige JavaScript-Dateien an. **Lokal
+  abgesichert:** Der Remote-Smoke wird bei positivem `sw.js`-TTL rot. Offen
+  bleibt die externe Cloudflare-Einstellung `Browser Cache TTL = Respect
+  Existing Headers`.
+- [x] Push- und manuelle Läufe teilen jetzt je Zielumgebung eine feste
+  Concurrency-Gruppe und können nicht parallel auf dasselbe Ziel deployen.
+- [x] Jeder Online-Build liefert `build-meta.json`; der Domain-Smoke vergleicht
+  deren Version cache-bustend mit dem erwarteten Commit-SHA.
 
 ## Dokumentationsdrift
 
