@@ -62,7 +62,9 @@ ausführen** — beides würde aus dieser unvollständigen Datei heraus
 Live-Einstellungen beziehungsweise die Migrationshistorie überschreiben.
 Schemaänderungen laufen weiterhin von Hand über den SQL-Editor.
 
-Nach jedem Deploy: `node tools/ai_smoke.mjs` (elf Proben gegen die echte
-Function, Konfiguration nur über Umgebungsvariablen). Runbooks für Not-Aus,
-Limits, Modellwechsel und Protokollpflege stehen in
-`docs/ETAPPE_5_KI_UNTERBAU.md`.
+Nach jedem Deploy: `npm run test:ai:live` gegen die echte Function. Dieser
+Aufruf legt den Budgetwächter vor und nach die Rauchprobe; ein direkter Aufruf
+von `tools/ai_smoke.mjs` ist für autonome Agenten nicht erlaubt. Konfiguration
+nur über Umgebungsvariablen. Runbooks für Not-Aus, Limits, Modellwechsel,
+Protokollpflege und den autonomen Testdeckel stehen in
+`docs/ETAPPE_5_KI_UNTERBAU.md` und `docs/KI_TESTBUDGET.md`.

@@ -12,6 +12,7 @@
     "build:single": "node build-single.mjs",
     "check:deploy-env": "node tools/check-deploy-env.mjs",
     "check:remote": "node tools/smoke-deployment.mjs",
+    "check:ai-budget": "node tools/ai_budget_guard.mjs --check",
     "test:service-worker": "node serviceworker_test.mjs",
     "test:legacy": "node gitdriver_test.mjs && node supabasedriver_test.mjs",
     "test:rls": "node tools/rls_test_personal.mjs",
@@ -22,9 +23,12 @@
     "test:geschmack": "node geschmack_test.mjs",
     "test:geschmackui": "node geschmackui_test.mjs",
     "test:extraktion": "node extraktion_test.mjs",
+    "test:budget": "node budget_agent_test.mjs",
     "test:kischalter": "node kischalter_test.mjs",
     "test:function": "deno test --allow-env --allow-net --allow-read --node-modules-dir=auto ai_task_test.ts",
-    "test": "node architekturgrenzen_test.mjs && node authservice_test.mjs && node kischalter_test.mjs && node profil_test.mjs && node geschmack_test.mjs && node accountdriver_test.mjs && node uebernahme_test.mjs && node gitdriver_test.mjs && node supabasedriver_test.mjs && node katalog_test.mjs && node ai_test.mjs && FINDER_SOLL=1 node finder_test.mjs && node findertab_test.mjs && node willkommen_test.mjs && node geschmackui_test.mjs && node extraktion_test.mjs && node restore_test.mjs && node mustwatch_test.mjs && node blog_test.mjs && node eggs_test.mjs && node staffeln_test.mjs && node staffel_pipeline_test.mjs && node serviceworker_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html && node personalmodus_test.mjs dist-single/Kinodreieck.html && node betamodus_test.mjs && vite build && node tools/prepare-online-build.mjs && node pages_test.mjs"
+    "test:ai:live": "node tools/ai_budget_guard.mjs -- node tools/ai_smoke.mjs",
+    "test:ai:eval": "node tools/ai_budget_guard.mjs -- node tools/ai_eval_etappe6.mjs --holen",
+    "test": "node architekturgrenzen_test.mjs && node authservice_test.mjs && node kischalter_test.mjs && node profil_test.mjs && node geschmack_test.mjs && node budget_agent_test.mjs && node accountdriver_test.mjs && node uebernahme_test.mjs && node gitdriver_test.mjs && node supabasedriver_test.mjs && node katalog_test.mjs && node ai_test.mjs && FINDER_SOLL=1 node finder_test.mjs && node findertab_test.mjs && node willkommen_test.mjs && node geschmackui_test.mjs && node extraktion_test.mjs && node restore_test.mjs && node mustwatch_test.mjs && node blog_test.mjs && node eggs_test.mjs && node staffeln_test.mjs && node staffel_pipeline_test.mjs && node serviceworker_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html && node personalmodus_test.mjs dist-single/Kinodreieck.html && node betamodus_test.mjs && vite build && node tools/prepare-online-build.mjs && node pages_test.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

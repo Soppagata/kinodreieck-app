@@ -325,11 +325,14 @@ cd ~/Documents/GitHub/kinodreieck-app && \
 KD_SB_URL=https://bscjgwcntapobyxsiyce.supabase.co \
 KD_SB_ANON=<publishable-key> \
 KD_TESTA_PASS=<testkonto> \
-node tools/ai_smoke.mjs
+npm run test:ai:live
 ```
 
-Elf Proben gegen die echte Function. **P9 kostet echtes Geld** (ein Bruchteil
-eines Cents). Exit-Code ungleich 0 bei jeder Abweichung.
+Proben gegen die echte Function. P9, P12 und P14 kosten echtes Geld. Der
+Budgetwächter liest davor und danach den serverseitig gebuchten Istverbrauch
+des Testkontos. `AUTONOMIE_STOPP` beziehungsweise Exit-Code 75 verbietet
+weitere autonome Live-Tests, bis Max sie ausdrücklich wieder freigibt.
+Exit-Code ungleich 0 bei jeder Abweichung.
 
 ## Anbieterbedingungen (Kurzfassung)
 
