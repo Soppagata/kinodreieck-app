@@ -758,9 +758,11 @@ export const EXTRAKT_QUELLEN = ["K1", "K2", "K4"];
 export const ANTWORT_MAX_ZEICHEN = 2000;
 export const WERT_MAX_ZEICHEN = 60;
 export const BELEG_MAX_ZEICHEN = 200;
-/* Untergrenze fuer einen Beleg. Zwei Zeichen stehen in fast jedem Text und
-   belegten damit alles -- die Pruefung ginge durch, ohne zu pruefen. */
-export const BELEG_MIN_ZEICHEN = 8;
+/* Untergrenze fuer einen Beleg. Acht Zeichen liessen selbst „und dass" als
+   Beleg fuer eine beliebige Behauptung passieren. Die Laenge allein beweist
+   noch keine Bedeutung; sie ist die erste Schranke vor der Inhaltswortprobe
+   weiter unten. */
+export const BELEG_MIN_ZEICHEN = 16;
 export const EXTRAKT_MAX_SIGNALE = 20;
 export const EXTRAKT_MAX_FILME = 12;
 export const EXTRAKT_MAX_OFFEN = 6;
@@ -785,6 +787,37 @@ export function vergleichsform(t: unknown): string {
     .replace(/[\u2010-\u2015]/g, "-")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const BELEG_STOPPWOERTER = new Set([
+  "aber", "alle", "als", "also", "auch", "auf", "aus", "bei", "bin", "bis",
+  "da", "das", "dass", "dem", "den", "der", "des", "die", "doch", "du",
+  "ein", "eine", "einem", "einen", "einer", "er", "es", "für", "hat", "habe",
+  "ich", "im", "in", "ist", "man", "mehr", "mich", "mir", "mit", "nicht",
+  "noch", "nur", "oder", "schon", "sein", "sind", "sie", "so", "über", "und",
+  "von", "war", "was", "wenn", "wie", "wir", "zu",
+]);
+
+/* Mindestens ein lexikalisches Wort jenseits reinen Satzbaus. Das macht aus
+   einem Beleg noch keinen semantischen Beweis — den letzten Inhaltsschritt
+   bestätigt der Nutzer in der Vorschau —, verhindert aber den konkret
+   belegten Durchrutscher aus häufigen Bindewörtern. */
+export function belegHatInhalt(t: unknown): boolean {
+  const woerter = vergleichsform(t).match(/[\p{L}\p{N}]+/gu) || [];
+  return woerter.some((wort) => wort.length >= 3 && !BELEG_STOPPWOERTER.has(wort));
+}
+
+/* Exakte zusammenhängende Wortfolge statt beliebigem Teilstring. So ist
+   „It" in „damit" kein genannter Film, ein eigenständiges „It" aber schon.
+   Tokenisierung auf beiden Seiten hält Bindestriche und Satzzeichen tolerant,
+   ohne Antwortgrenzen zusammenzukleben. */
+export function enthaeltWortfolge(text: unknown, phrase: unknown): boolean {
+  const tokens = (wert: unknown) => vergleichsform(wert).match(/[\p{L}\p{N}]+/gu) || [];
+  const alle = tokens(text);
+  const gesucht = tokens(phrase);
+  if (!gesucht.length || gesucht.length > alle.length) return false;
+  return alle.some((_, i) =>
+    i + gesucht.length <= alle.length && gesucht.every((wort, j) => alle[i + j] === wort));
 }
 
 /* Nur eine ECHTE ganze Zahl im Bereich. `Number("3")` waere 3 und
@@ -864,6 +897,51 @@ const EXTRAKT_SCHEMA = {
     nicht_deutbar: { type: "array", items: { type: "string" } },
   },
 };
+
+const istReinesObjekt = (w: unknown): w is Record<string, unknown> =>
+  !!w && typeof w === "object" && !Array.isArray(w);
+
+function hatGenauSchluessel(o: Record<string, unknown>, erwartet: string[]): boolean {
+  const ist = Object.keys(o).sort();
+  const soll = [...erwartet].sort();
+  return ist.length === soll.length && ist.every((k, i) => k === soll[i]);
+}
+
+/* Das Provider-Schema ist streng, aber die eigene Function-Grenze muss
+   dieselbe Zusage halten. Providerantworten bleiben Fremddaten; außerdem
+   umgehen Tests, spätere Adapter und Ausnahmewege die Provider-Grammatik.
+   Strukturfehler werden als GANZER Schemabruch behandelt. Erst nach dieser
+   Grenze dürfen fachlich unbrauchbare, aber korrekt geformte Werte einzeln
+   gefiltert und gezählt werden. */
+export function extraktFormGueltig(w: unknown): w is Record<string, unknown> {
+  if (!istReinesObjekt(w)
+    || !hatGenauSchluessel(w, ["signale", "filme", "achsen_tendenz", "nicht_deutbar"])) return false;
+  if (!Array.isArray(w.signale) || !Array.isArray(w.filme) || !Array.isArray(w.nicht_deutbar)
+    || !istReinesObjekt(w.achsen_tendenz)) return false;
+
+  const signalFelder = ["art", "wert", "richtung", "staerke", "sicherheit", "quelle", "beleg"];
+  for (const s of w.signale) {
+    if (!istReinesObjekt(s) || !hatGenauSchluessel(s, signalFelder)
+      || typeof s.art !== "string" || typeof s.wert !== "string"
+      || typeof s.richtung !== "string" || !Number.isInteger(s.staerke)
+      || typeof s.sicherheit !== "string" || typeof s.quelle !== "string"
+      || typeof s.beleg !== "string") return false;
+  }
+
+  for (const f of w.filme) {
+    if (!istReinesObjekt(f) || !hatGenauSchluessel(f, ["titel", "jahr", "richtung"])
+      || typeof f.titel !== "string"
+      || !(f.jahr === null || Number.isInteger(f.jahr))
+      || !(f.richtung === null || typeof f.richtung === "string")) return false;
+  }
+
+  if (!hatGenauSchluessel(w.achsen_tendenz, ["wie", "was", "warum"])) return false;
+  for (const k of ["wie", "was", "warum"]) {
+    const wert = eigenerWert(w.achsen_tendenz, k);
+    if (!(wert === null || Number.isInteger(wert))) return false;
+  }
+  return w.nicht_deutbar.every((x) => typeof x === "string");
+}
 
 export const AUFGABEN: Record<string, Aufgabe> = {
   /* Der Kettenbeweis aus Etappe 5: kleinster möglicher echter Aufruf mit
@@ -1195,7 +1273,7 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         "  Lass nie etwas still verschwinden.",
         "- `filme`: nur Titel, die die Person WOERTLICH nennt. `richtung` nur setzen, wenn sie sagt,",
         "  wie sie dazu steht -- sonst weglassen. Eine Nennung ist keine Zuneigung.",
-        "- `achsen_tendenz` (1 bis 5 oder null): WIE = Handwerk und Form, WAS = Stoff und Inhalt,",
+        "- `achsen_tendenz` (0 bis 5 oder null): WIE = Handwerk und Form, WAS = Stoff und Inhalt,",
         "  WARUM = Relevanz und Wirkung. Nur setzen, wo die Antworten es wirklich hergeben.",
         /* Mengengrenzen in den Prompt, nicht ins Schema -- dieselbe Lehre wie
            bei `intelligent-search`: Anzahlbegrenzungen sind in strukturierten
@@ -1230,21 +1308,22 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
 
     pruefeErgebnis(inhalt, payload) {
-      const a = inhalt as Record<string, unknown> | null;
-      if (!a || typeof a !== "object") return { fehler: "schema" };
+      if (!extraktFormGueltig(inhalt)) return { fehler: "schema" };
+      const a = inhalt;
       const antworten = leseAntworten(payload);
       /* Dieselbe Werteliste wie beim Bau des Auftrags -- `leseListen` ist die
          einzige Lesart des Feldes. Zwei Lesarten waeren der stillste Weg,
          die Genre-Weissliste wirkungslos zu machen. */
       const listen = leseListen(payload);
-      /* Ein Nachschlagewerk je Frage UND eines ueber alles: Das Modell soll
-         die Frage richtig zuordnen, aber ein Beleg, der in einer ANDEREN
-         Antwort steht, ist immer noch ein echter Beleg -- nur falsch
-         beschriftet. Ihn ganz zu verwerfen waere strenger als noetig und
-         verlore eine richtige Beobachtung wegen eines Etikettenfehlers. */
+      /* Ein Nachschlagewerk je Frage. Ein echter Beleg aus einer anderen
+         Antwort bleibt brauchbar, aber seine PERSISTIERTE Herkunft muss die
+         tatsächliche Fundstelle nennen. Die vom Modell behauptete Quelle
+         unter einer falschen Frage anzuzeigen wäre gerade im
+         Frage-zu-Signal-Eval keine neutrale Diagnose, sondern falsche
+         Profildaten. Bei mehreren möglichen Fundstellen und falschem Etikett
+         ist die Herkunft nicht eindeutig genug — lieber verwerfen als raten. */
       const proFrage = new Map<string, string>();
       for (const x of antworten) proFrage.set(x.frage, vergleichsform(x.text));
-      const gesamt = antworten.map((x) => vergleichsform(x.text)).join(" \u0001 ");
 
       const offen: string[] = [];
       const signale: Array<Record<string, unknown>> = [];
@@ -1278,11 +1357,19 @@ export const AUFGABEN: Record<string, Aufgabe> = {
 
            Die Untergrenze ist Absicht: Ein Beleg aus zwei Zeichen steht in
            fast jedem Text und belegte damit alles. */
-        if (beleg.length < BELEG_MIN_ZEICHEN) { verworfenOhneBeleg++; continue; }
+        if (beleg.length < BELEG_MIN_ZEICHEN || !belegHatInhalt(beleg)) {
+          verworfenOhneBeleg++;
+          continue;
+        }
         const belegForm = vergleichsform(beleg);
-        const inFrage = proFrage.get(quelle);
-        const gefunden = (inFrage && inFrage.includes(belegForm)) || gesamt.includes(belegForm);
-        if (!gefunden) { verworfenOhneBeleg++; continue; }
+        const fundstellen = [...proFrage.entries()]
+          .filter(([, text]) => text.includes(belegForm))
+          .map(([frage]) => frage);
+        if (!fundstellen.length) { verworfenOhneBeleg++; continue; }
+        const echteQuelle = fundstellen.includes(quelle)
+          ? quelle
+          : fundstellen.length === 1 ? fundstellen[0] : null;
+        if (!echteQuelle) { verworfenOhneBeleg++; continue; }
 
         /* Genres gegen die Werteliste, alles andere nicht: Fuer `thema`,
            `ton` oder `kritikpunkt` gibt es keine geschlossene Liste, und eine
@@ -1292,10 +1379,10 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         if (art === "genre" && listen.genres.length) {
           const treffer = listen.genres.find((g) => vergleichsform(g) === vergleichsform(wert));
           if (!treffer) { offen.push(kurzText(wert, WUNSCH_MAX_ZEICHEN)); continue; }
-          signale.push({ art, wert: treffer, richtung, staerke, sicherheit, quelle, beleg });
+          signale.push({ art, wert: treffer, richtung, staerke, sicherheit, quelle: echteQuelle, beleg });
           continue;
         }
-        signale.push({ art, wert, richtung, staerke, sicherheit, quelle, beleg });
+        signale.push({ art, wert, richtung, staerke, sicherheit, quelle: echteQuelle, beleg });
       }
 
       const filme: Array<Record<string, unknown>> = [];
@@ -1307,7 +1394,10 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         /* Auch der Titel muss in den Antworten VORKOMMEN. Ohne diese Pruefung
            waere `filme` die bequemste Umgehung der Belegpflicht: ein Feld
            ohne Belegfeld, das ab Etappe 8 in jede Prompt-Fassung reist. */
-        if (!gesamt.includes(vergleichsform(titel))) continue;
+        if (!antworten.some((x) => enthaeltWortfolge(x.text, titel))) {
+          verworfenOhneBeleg++;
+          continue;
+        }
         const jahr = ganzzahlImBereich(o.jahr, 1880, 2200);
         const richtung = String(o.richtung ?? "").trim().toLowerCase();
         const eintrag: Record<string, unknown> = { titel, jahr };
@@ -1324,7 +1414,14 @@ export const AUFGABEN: Record<string, Aufgabe> = {
       const rohOffen = Array.isArray(a.nicht_deutbar) ? a.nicht_deutbar : [];
       for (const w of rohOffen.slice(0, EXTRAKT_MAX_OFFEN)) {
         const t = kurzText(w, WUNSCH_MAX_ZEICHEN);
-        if (t) offen.push(t);
+        /* `nicht_deutbar` ist sichtbarer, synchronisierter Profiltext. Der
+           Prompt verlangt Worte der Person; freie Modellzusammenfassungen
+           duerfen nicht als ihre Aussage gespeichert werden. */
+        if (t && antworten.some((x) => vergleichsform(x.text).includes(vergleichsform(t)))) {
+          offen.push(t);
+        } else if (t) {
+          verworfenOhneBeleg++;
+        }
       }
 
       /* Ein Lauf, der ALLES verworfen hat, ist kein Erfolg mit leerer Liste.

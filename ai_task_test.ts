@@ -3457,7 +3457,7 @@ test("PEB4 die Untergrenze BELEG_MIN_ZEICHEN greift, auch bei echtem Text", asyn
   gleich(g.signale.length, 1, `genau ${BELEG_MIN_ZEICHEN} Zeichen reichen`);
 });
 
-test("PEB4b BEFUND: bei BELEG_MIN_ZEICHEN=8 trägt ein inhaltsleeres Bindewort als Beleg", async () => {
+test("PEB4b ein inhaltsleeres Bindewortpaar kann kein Signal belegen", async () => {
   /* GEMESSEN, nicht vermutet (Messreihe vom 28.07., 20 000 Ziehungen je Länge
      gegen einen FREMDEN deutschen Text derselben Domäne — so sieht eine
      Halluzination realistisch aus, nicht wie Zufallsbuchstaben):
@@ -3486,35 +3486,16 @@ test("PEB4b BEFUND: bei BELEG_MIN_ZEICHEN=8 trägt ein inhaltsleeres Bindewort a
   gleich(LEER.length, 8, "Vorbedingung: es ist genau acht Zeichen lang");
 
   const { signale } = await peEinSignal({ art: "kritikpunkt", wert: "laute musik", beleg: LEER });
-  if (BELEG_MIN_ZEICHEN > LEER.length) {
-    gleich(signale.length, 0,
-      `gehärtet: BELEG_MIN_ZEICHEN=${BELEG_MIN_ZEICHEN} lässt ein blosses Bindewortpaar nicht mehr durch`);
-    return;
-  }
-  gleich(signale.length, 1,
-    `IST-Zustand: mit BELEG_MIN_ZEICHEN=${BELEG_MIN_ZEICHEN} belegt ${JSON.stringify(LEER)} `
-    + `die frei erfundene Behauptung „kritikpunkt: laute musik" — obwohl im Text davon nichts steht`);
-  gleich(signale[0].wert, "laute musik",
-    "und der erfundene Wert steht unverändert im Ergebnis, das der Client übernimmt");
+  gleich(signale.length, 0,
+    `BELEG_MIN_ZEICHEN=${BELEG_MIN_ZEICHEN} plus Inhaltswortprobe verwirft ${JSON.stringify(LEER)}`);
 });
 
-test("PEB5 der Frage-Fehlgriff wird bewusst akzeptiert — mit der ANGEGEBENEN Quelle", async () => {
-  /* BEWUSSTE ENTSCHEIDUNG, hier festgehalten, damit sie niemand später für
-     einen Fehler hält: Ein Beleg, der in einer ANDEREN Antwort steht als der
-     angegebenen, ist immer noch ein ECHTER Beleg — nur falsch beschriftet. Ihn
-     ganz zu verwerfen wäre strenger als nötig und verlöre eine richtige
-     Beobachtung wegen eines Etikettenfehlers.
-
-     Die Kehrseite ist die Zusicherung darunter: die Quelle bleibt die, die das
-     Modell angegeben hat. Sie stillschweigend auf die Fundstelle umzubiegen
-     wäre eine Korrektur, die der Eval in Phase 4 nicht mehr sehen könnte — er
-     stellt SOLL und IST je Frage gegenüber und braucht dafür die Angabe des
-     Modells, nicht die Vermutung des Servers. */
+test("PEB5 ein Frage-Fehlgriff wird auf die eindeutige echte Fundstelle korrigiert", async () => {
   const { signale, verworfen } = await peEinSignal({ quelle: "K1", beleg: PE_BELEG.K2 });
   gleich(signale.length, 1, "der Beleg ist echt — er steht in K2 statt in K1, aber er steht da");
   gleich(verworfen, 0, "kein Verwurf");
-  gleich(signale[0].quelle, "K1",
-    "die Quelle bleibt die ANGEGEBENE — der Server biegt sie nicht still auf die Fundstelle um");
+  gleich(signale[0].quelle, "K2",
+    "die gespeicherte Quelle nennt die echte Fundstelle, nicht die falsche Modellangabe");
   gleich(signale[0].beleg, PE_BELEG.K2, "und der Beleg bleibt der genannte");
 });
 
@@ -3607,13 +3588,7 @@ test("PEF2b BEFUND: ein verworfener Filmtitel verschwindet still", async () => {
   // deno-lint-ignore no-explicit-any
   const d = daten(r) as any;
   gleich(d.filme.length, 0, "der erfundene Titel kommt nicht durch — die Belegstrecke hält");
-  if (d.verworfen_ohne_beleg > 0 || JSON.stringify(d.nicht_deutbar).includes("Pate")) {
-    wahr(true, "gehärtet: der Verwurf ist für den Client sichtbar");
-    return;
-  }
-  gleich(d.verworfen_ohne_beleg, 0,
-    "IST-Zustand: der Filmzweig zählt nicht mit — drei erfundene Filme sehen aus wie keine Filme");
-  gleich(d.nicht_deutbar.length, 0, "und er meldet auch nichts unter nicht_deutbar");
+  gleich(d.verworfen_ohne_beleg, 1, "der Filmverwurf ist für den Client sichtbar gezählt");
 });
 
 test("PEF3 Jahr und Richtung werden einzeln geprüft, der Titel trägt den Eintrag", async () => {
@@ -3621,7 +3596,7 @@ test("PEF3 Jahr und Richtung werden einzeln geprüft, der Titel trägt den Eintr
     filme: [
       { titel: "Stalker", jahr: 1979, richtung: "wirkt gut" },   // Richtung nicht in der Liste
       { titel: "Heat", jahr: 3000, richtung: "stoesst_ab" },      // Jahr ausserhalb 1880..2200
-      { titel: "Blade Runner", jahr: "1982", richtung: null },    // Jahr keine echte Zahl
+      { titel: "Blade Runner", jahr: null, richtung: null },
     ],
   });
   // deno-lint-ignore no-explicit-any
@@ -3632,7 +3607,41 @@ test("PEF3 Jahr und Richtung werden einzeln geprüft, der Titel trägt den Eintr
   falsch("richtung" in nach("Stalker"), "eine unbekannte Richtung wird weggelassen, nicht geraten");
   gleich(nach("Heat").jahr, null, "ein unplausibles Jahr wird null");
   gleich(nach("Heat").richtung, "stoesst_ab", "die gültige Richtung bleibt");
-  gleich(nach("Blade Runner").jahr, null, `"1982" ist keine Zahl — ganzzahlImBereich verwirft es`);
+  gleich(nach("Blade Runner").jahr, null, "null bleibt unbekannt");
+});
+
+test("PEF3b ein Filmjahr als Text ist ein Schemabruch, keine halbe Rettung", async () => {
+  const r = await extrakt({ filme: [{ titel: "Blade Runner", jahr: "1982", richtung: null }] });
+  gleich(r.status, 502, "Status");
+  gleich(r.daten.grund, "antwort-verletzt-schema", "Kennung");
+});
+
+test("PEF3c kurze Filmtitel brauchen echte Wortgrenzen", async () => {
+  const payload = pePayload({ antworten: {
+    K1: "Damit wird es super und nachher deutlich ruhiger.",
+    K2: "It, Up und Her habe ich dagegen wirklich genannt.",
+  } });
+  const r = await extrakt({ filme: [
+    { titel: "It", jahr: 2017, richtung: null },
+    { titel: "Up", jahr: 2009, richtung: null },
+    { titel: "Her", jahr: 2013, richtung: null },
+  ] }, payload);
+  // deno-lint-ignore no-explicit-any
+  gleich((daten(r) as any).filme.map((f: Record<string, unknown>) => f.titel).join("|"),
+    "It|Up|Her", "eigenständige Kurztitel kommen durch");
+
+  stelleZurueck();
+  const nurTeilstrings = pePayload({ antworten: {
+    K1: "Damit wird es super und nachher deutlich ruhiger.",
+  } });
+  const r2 = await extrakt({ filme: [
+    { titel: "It", jahr: 2017, richtung: null },
+    { titel: "Up", jahr: 2009, richtung: null },
+    { titel: "Her", jahr: 2013, richtung: null },
+  ] }, nurTeilstrings);
+  // deno-lint-ignore no-explicit-any
+  gleich((daten(r2) as any).filme.length, 0, "Teilstrings gelten nicht als Nennung");
+  gleich((daten(r2) as any).verworfen_ohne_beleg, 3, "alle drei Verwürfe werden gezählt");
 });
 
 test("PEF4 die Filmliste wird gedeckelt", async () => {
@@ -3893,7 +3902,7 @@ test("PEI3 die Rückrichtung: kein Wert und kein Beleg aus der MODELLANTWORT bri
     ...d.filme.map((f: Record<string, unknown>) => f.titel),
     ...d.nicht_deutbar,
   ].filter((x) => typeof x === "string") as string[];
-  wahr(alleTexte.length >= 3, `es wurden wirklich Texte geprüft (waren ${alleTexte.length})`);
+  wahr(alleTexte.length >= 2, `es wurden wirklich Texte geprüft (waren ${alleTexte.length})`);
   for (const t of alleTexte) {
     falsch(TRENNER_RE().test(t), `kein Steuer- oder Trennzeichen: ${JSON.stringify(t)}`);
     falsch(t.includes("\n"), `keine zweite Zeile: ${JSON.stringify(t)}`);
@@ -4066,18 +4075,26 @@ test("PER5 eine krumme staerke lässt das Signal fallen — sie wird nie zurecht
      durch und schrieben eine Stärke ins Profil, die das Modell so nie geliefert
      hat. `profil.js` verlangt eine ganze Zahl 1..5 — ein zurechtgebogener Wert
      wäre eine erfundene Angabe unter dem Anschein einer gemessenen. */
-  for (const [name, staerke] of [
+  const strukturellFalsch: Array<[string, unknown]> = [
     ["Zeichenkette", "4"],
     ["einelementige Liste", [4]],
     ["Fließkommazahl", 3.5],
     ["Fließkommazahl knapp", 4.0000001],
     ["null", null],
     ["Wahrheitswert", true],
+    ["fehlt ganz", undefined],
+  ];
+  for (const [name, staerke] of strukturellFalsch) {
+    stelleZurueck();
+    gleich(ganzzahlImBereich(staerke, 1, 5), null, `${name}: ganzzahlImBereich verwirft den Wert`);
+    const r = await extrakt({ signale: [peSignal({ staerke })] });
+    gleich(r.status, 502, `${name}: verletzt die strukturierte Providerform vollständig`);
+  }
+  for (const [name, staerke] of [
     ["unter dem Bereich", 0],
     ["negativ", -3],
     ["über dem Bereich", 6],
     ["weit über dem Bereich", 99],
-    ["fehlt ganz", undefined],
   ] as Array<[string, unknown]>) {
     stelleZurueck();
     gleich(ganzzahlImBereich(staerke, 1, 5), null, `${name}: ganzzahlImBereich verwirft den Wert`);
@@ -4107,23 +4124,22 @@ test("PER6 achsen_tendenz: 0 ist ein GÜLTIGER Wert", async () => {
   gleich(a.warum, 3, "und die Mitte bleibt auch");
 });
 
-test("PER6b krumme Achsenwerte werden null, nicht zurechtgebogen", async () => {
-  const r = await extrakt({ achsen_tendenz: { wie: -1, was: 6, warum: "3" } });
+test("PER6b fachlich krumme Achsenwerte werden null, Strukturfehler ganz abgewiesen", async () => {
+  const r = await extrakt({ achsen_tendenz: { wie: -1, was: 6, warum: 99 } });
   // deno-lint-ignore no-explicit-any
   const a = (daten(r) as any).achsen_tendenz;
   gleich(a.wie, null, "unter dem Band");
   gleich(a.was, null, "über dem Band");
-  gleich(a.warum, null, `"3" ist keine Zahl`);
+  gleich(a.warum, null, "auch 99 liegt außerhalb");
 
-  /* Auch ein fehlendes oder formfremdes Achsenobjekt liefert die drei Felder —
-     der Client liest sie, er fragt sie nicht ab. */
-  for (const krumm of [null, undefined, "nichts", [1, 2, 3], 42]) {
+  /* Die Providerform selbst wird nicht halb gerettet. */
+  for (const krumm of [
+    { wie: -1, was: 6, warum: "3" },
+    null, undefined, "nichts", [1, 2, 3], 42,
+  ]) {
     stelleZurueck();
     const r2 = await extrakt({ achsen_tendenz: krumm });
-    // deno-lint-ignore no-explicit-any
-    const a2 = (daten(r2) as any).achsen_tendenz;
-    gleich(JSON.stringify(a2), JSON.stringify({ wie: null, was: null, warum: null }),
-      `achsen_tendenz=${JSON.stringify(krumm)} liefert trotzdem alle drei Felder`);
+    gleich(r2.status, 502, `achsen_tendenz=${JSON.stringify(krumm)} ist ein Schemabruch`);
   }
 });
 
@@ -4131,7 +4147,6 @@ test("PER7 unbekannte Arten, Richtungen, Sicherheiten und Quellen fallen durch",
   for (const [name, zusatz] of [
     ["Art", { art: "stimmung" }],
     ["Art leer", { art: "" }],
-    ["Art als Zahl", { art: 7 }],
     ["Richtung", { richtung: "mag ich" }],
     ["Richtung leer", { richtung: "" }],
     ["Sicherheit", { sicherheit: "sehr hoch" }],
@@ -4145,6 +4160,9 @@ test("PER7 unbekannte Arten, Richtungen, Sicherheiten und Quellen fallen durch",
     const { signale } = await peEinSignal(zusatz);
     gleich(signale.length, 0, `${name}: ${JSON.stringify(zusatz)} kommt nicht durch`);
   }
+  stelleZurueck();
+  const formbruch = await extrakt({ signale: [peSignal({ art: 7 })] });
+  gleich(formbruch.status, 502, "Art als Zahl verletzt die strukturierte Providerform");
 });
 
 test("PER7b Groß-/Kleinschreibung und Weißraum bei den Listenwerten werden verziehen", async () => {
@@ -4214,6 +4232,20 @@ test("PER9b beim Überlauf sagt der letzte Platz, wie viele fehlen — als TEXT,
   }
 });
 
+test("PER9c nicht_deutbar übernimmt nur wirkliche Worte aus den Antworten", async () => {
+  const r = await extrakt({
+    nicht_deutbar: [
+      "die ruhige Kamera rein",
+      "frei erfundene Charakterdiagnose",
+    ],
+  });
+  // deno-lint-ignore no-explicit-any
+  const d = daten(r) as any;
+  gleich(d.nicht_deutbar.join("|"), "die ruhige Kamera rein",
+    "die echte Textstelle bleibt, erfundener Modelltext nicht");
+  gleich(d.verworfen_ohne_beleg, 1, "der nicht belegte persönliche Modelltext wird gezählt");
+});
+
 test("PER10 eine formfremde Modellantwort wird abgewiesen, nicht halb verarbeitet", async () => {
   for (const [name, inhalt] of [
     ["null", null],
@@ -4227,17 +4259,15 @@ test("PER10 eine formfremde Modellantwort wird abgewiesen, nicht halb verarbeite
     gleich(r.status, 502, `${name}: Status`);
     gleich(r.daten.grund, "antwort-verletzt-schema", `${name}: Kennung`);
   }
-  /* Ein Objekt OHNE die vier Felder ist dagegen kein Formfehler, sondern eine
-     leere Extraktion — der Endpunkt liefert die leere Struktur statt 502.
-     Festgehalten, damit die Grenze zwischen beidem sichtbar bleibt. */
+  /* Auch ein Objekt ohne Pflichtfelder ist formfremd. Das Provider-Schema
+     verlangt sie alle; die eigene Grenze spiegelt denselben Vertrag. */
   stelleZurueck();
   const r = await extrakt({ signale: undefined, filme: undefined });
-  gleich(r.status, 200, "ein Objekt ohne die Listen ist eine leere Extraktion, kein Formfehler");
-  // deno-lint-ignore no-explicit-any
-  gleich((daten(r) as any).signale.length, 0, "und liefert eine leere Signalliste");
+  gleich(r.status, 502, "ein Objekt ohne Pflichtlisten ist ein Formfehler");
+  gleich(r.daten.grund, "antwort-verletzt-schema", "mit stabiler Kennung");
 });
 
-test("PER11 krumme Einträge in den Listen lassen den Lauf nicht abstürzen", async () => {
+test("PER11 krumme Listeneinträge werden als ganzer Schemabruch geschlossen", async () => {
   /* Eine werfende Prüfung liesse die Protokollzeile offen — sie bliebe auf
      `laufend` und blockierte den Parallelzähler bis zur Zeitgrenze. Das ist
      der teuerste Ausgang, den dieser Endpunkt hat. */
@@ -4246,13 +4276,9 @@ test("PER11 krumme Einträge in den Listen lassen den Lauf nicht abstürzen", as
     filme: [null, 7, "Heat", { titel: null }, { titel: "Heat", jahr: 1995, richtung: null }],
     nicht_deutbar: [null, 42, {}, [], "echter Eintrag"],
   });
-  gleich(r.status, 200, "der Lauf geht durch");
-  // deno-lint-ignore no-explicit-any
-  const d = daten(r) as any;
-  gleich(d.signale.length, 1, "nur das gültige Signal bleibt");
-  gleich(d.filme.length, 1, "nur der gültige Film bleibt");
-  gleich(d.nicht_deutbar.join("|"), "echter Eintrag", "nur der gültige Texteintrag bleibt");
-  gleich(genauEinAbschluss().p_status, "fertig", "und die Protokollzeile ist geschlossen");
+  gleich(r.status, 502, "keine halbe Rettung einer strukturell falschen Antwort");
+  gleich(r.daten.grund, "antwort-verletzt-schema", "stabile Kennung");
+  gleich(genauEinAbschluss().p_status, "fehler", "und die Protokollzeile ist sauber geschlossen");
 });
 
 test("PER12 ein doppelt geführtes antworten-Feld über den Prototyp wird nicht gelesen", async () => {

@@ -2,7 +2,7 @@
 
 Stand: 28.07.2026
 Arbeitsbranch: `feat/etappe-7-geschmacksprofil`
-Letzter geprüfter Commit: `ccb6fc7`
+Letzter geprüfter Claude-Commit: `ccb6fc7`
 
 ## Kurzurteil
 
@@ -17,10 +17,12 @@ nicht protokolliert, jedes Signal braucht einen serverseitig nachgeschlagenen
 Beleg, Filmtitel müssen in den Antworten vorkommen, und die Übernahme geht
 durch die Zwei-Bühnen-Mechanik des Profilmodells.
 
-Phase 3 ist trotzdem noch nicht abnahmefähig. Der echte UI-Pfad kann derzeit
-keinen erfolgreichen `profile-extract`-Aufruf auslösen, mehrere Vorschläge
-können bei der Bestätigung ungewollt gekoppelt werden, und die neue
-Function-Absicherung sowie der Clienttest sind nicht grün.
+Der Claude-Stand war deshalb noch nicht abnahmefähig: Der echte UI-Pfad
+konnte keinen erfolgreichen `profile-extract`-Aufruf auslösen, mehrere
+Vorschläge wurden bei der Bestätigung ungewollt gekoppelt, und die neue
+Function-Absicherung sowie der Clienttest waren nicht grün. Die nachstehende
+Liste hält sowohl diesen verifizierten Ausgangsbefund als auch den aktuellen
+Reparaturstand fest.
 
 ## Gegenprüfung der Befundliste
 
@@ -124,7 +126,7 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
 
 ### Hoch
 
-- [ ] **H1 – Die eigene Function-Grenze akzeptiert formfremde Antworten
+- [x] **H1 – Die eigene Function-Grenze akzeptiert formfremde Antworten
   teilweise als Erfolg.**
   `pruefeErgebnis` schließt Arrays nicht aus und ignoriert unbekannte
   Top-Level-Felder. Eine Liste oder ein Objekt wie `{ nichts: true }` kann
@@ -135,11 +137,14 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   werden. Das beim Anbieter verwendete Structured-Output-Schema ist bereits
   streng und macht diese Formen im normalen Erfolgsfall unwahrscheinlich;
   die fehlende eigene Grenze bleibt dennoch ein echter Robustheitsfehler.
-  Stellen: `supabase/functions/ai-task/index.ts:1232`,
-  `ai_task_test.ts:3747`, `ai_task_test.ts:3770`,
-  `ai_task_test.ts:4217`.
+  **Behoben:** Vor jeder Fachprüfung erzwingt die Function nun die exakte
+  Objektform des Extraktschemas – einschließlich Pflichtfeldern,
+  Feldtypen und unbekannten Schlüsseln. Ein Strukturbruch beendet die
+  gesamte Antwort mit 502; nur fachlich unbrauchbare Werte in einer korrekt
+  geformten Antwort werden weiterhin einzeln verworfen. Dieser eigene
+  Vertrag ist unabhängig von den Structured Outputs des Anbieters getestet.
 
-- [ ] **H2 – `nicht_deutbar` wird weder belegt noch sauber typgeprüft und
+- [x] **H2 – `nicht_deutbar` wird weder belegt noch sauber typgeprüft und
   ist nicht einzeln abwählbar.**
   Nicht-Textwerte werden durch `kurzText` in sichtbaren Modelltext verwandelt:
   `42` wird `"42"`, ein Objekt wird `"[object Object]"`. Inhaltlich muss ein
@@ -147,8 +152,10 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   der Vorschau sichtbar und wird erst mit der gemeinsamen Bestätigung
   gespeichert; der Client macht ihre Einträge aber ausdrücklich unabwahlbar
   und speichert sie anschließend im persönlichen Profil.
-  Stellen: `supabase/functions/ai-task/index.ts:1324`,
-  `src/components/DreiFragen.jsx:59`.
+  **Behoben:** Die strenge Formgrenze lässt ausschließlich Texte zu; jeder
+  Eintrag muss in einer tatsächlichen Antwort vorkommen. Die Vorschau bietet
+  pro Eintrag eine eigene Wahl, und die Profilansicht erlaubt die spätere
+  Einzellöschung.
 
 - [x] **H3 – Gespeicherte `nichtDeutbar`-Einträge sind in der Profilansicht
   weder sichtbar noch löschbar.**
@@ -170,16 +177,16 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   der sichtbare Einzel-Übernahmeklick setzt ausgewählte Filme auf
   `sicher:true`. Danach erscheinen sie wie vorgesehen in der Prompt-Fassung.
 
-- [ ] **H5 – Acht Zeichen sind als Mindestbeleg zu schwach.**
+- [x] **H5 – Acht Zeichen sind als Mindestbeleg zu schwach.**
   Der vorhandene Test zeigt, dass ein inhaltsarmes Bindewort wie
   `"und dass"` eine frei erfundene Behauptung passieren lässt, solange diese
   häufige Wortfolge in der Antwort vorkommt. Das trifft die tragende Zusage
   der Phase: Nicht nur der Beleg, sondern das daraus abgeleitete Signal muss
-  nachvollziehbar sein. Der Test nennt 16 Zeichen als robustere Messlatte;
-  zusätzlich sollte die Beziehung zwischen Beleg und Wert geprüft werden.
-  Stellen: `supabase/functions/ai-task/index.ts:761`,
-  `supabase/functions/ai-task/index.ts:1281`,
-  `ai_task_test.ts:3460`.
+  nachvollziehbar sein. **Behoben:** Die Untergrenze liegt nun bei 16
+  Zeichen; reine Stoppwort-Belege werden zusätzlich abgewiesen. Der Server
+  prüft weiterhin den wörtlichen Ursprung, während die inhaltliche Deutung
+  bewusst erst durch die sichtbare Einzelbestätigung des Nutzers verbindlich
+  wird.
 
 ### Mittel
 
@@ -193,21 +200,23 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   dem globalen und dem Funktionsschalter, bevor der Drei-Fragen-Weg sichtbar
   wird. Die bestehende Servicegrenze bleibt die zweite, harte Schranke.
 
-- [ ] **M2 – Die Film-Belegprüfung arbeitet mit beliebigen Teilstrings.**
+- [x] **M2 – Die Film-Belegprüfung arbeitet mit beliebigen Teilstrings.**
   Kurztitel wie `It`, `Up` oder `Her` können zufällig innerhalb gewöhnlicher
   Wörter vorkommen und dadurch als „genannt“ gelten. In der Vorschau werden
   Filme außerdem nur über den Titel ausgewählt und als React-Key geführt;
   gleichnamige Filme verschiedener Jahre sind nicht unabhängig behandelbar.
-  Stellen: `supabase/functions/ai-task/index.ts:1303`,
-  `src/components/DreiFragen.jsx:141`.
+  **Behoben:** Titel werden als vollständige Unicode-Wortfolge gesucht.
+  `It`, `Up` und `Her` treffen damit nicht mehr auf `damit`, `super` oder
+  `nachher`. Lokale Vorschau-IDs halten auch gleichnamige Filme unabhängig
+  wählbar.
 
-- [ ] **M3 – Verworfene erfundene Filmtitel verschwinden ohne sichtbare
+- [x] **M3 – Verworfene erfundene Filmtitel verschwinden ohne sichtbare
   Zählung.**
   Die Sicherheitsprüfung funktioniert, aber anders als bei Signalen erfährt
   der Client nicht, dass ein Filmeintrag verworfen wurde. Das widerspricht
   dem Versprechen, nichts still verschwinden zu lassen.
-  Stellen: `supabase/functions/ai-task/index.ts:1301`,
-  `ai_task_test.ts:3591`.
+  **Behoben:** Jeder unbelegte Filmtitel erhöht nun denselben sichtbaren
+  Verwurfzähler wie ein unbelegtes Signal.
 
 - [x] **M4 – `profilVersion` wird nicht an `profile-extract` übergeben.**
   Die KI-Fassade kann die Profilversion sauber protokollieren, der erste
@@ -217,26 +226,25 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   **Behoben:** `GeschmackBereich` übergibt die geladene Fassung im dritten
   `runTask`-Argument; ohne Profil bleibt der Wert ehrlich `null`.
 
-- [ ] **M5 – Achsen sind nur als Paket bestätigbar und der Wertevertrag ist
+- [x] **M5 – Achsen sind nur als Paket bestätigbar und der Wertevertrag ist
   widersprüchlich.**
   WIE, WAS und WARUM hängen an einem gemeinsamen Schalter. Der Nutzer kann
   nicht zwei Achsen akzeptieren und die dritte ablehnen. Der Prompt nennt
   außerdem `1..5 oder null`, während Server, Client, Profilmodell und Tests
   ausdrücklich auch `0` akzeptieren.
-  **Teilweise behoben:** WIE, WAS und WARUM sind in der Vorschau jetzt
-  unabhängig wählbar; eine Mischwahl ist getestet. Der Prompttext `1..5`
-  wird mit dem Function-Paket auf den bereits bindenden Vertrag `0..5`
-  korrigiert.
+  **Behoben:** WIE, WAS und WARUM sind in der Vorschau unabhängig wählbar;
+  eine Mischwahl ist getestet. Der Prompt und der Clientkommentar verwenden
+  nun ebenfalls den bereits bindenden Vertrag `0..5 oder null`.
 
-- [ ] **M6 – Eine falsche Fragenquelle bleibt trotz Gegenfund bestehen.**
+- [x] **M6 – Eine falsche Fragenquelle bleibt trotz Gegenfund bestehen.**
   Findet der Server einen Beleg nicht in der behaupteten Frage, sucht er
   ersatzweise über alle Antworten, behält danach aber die falsche
   Quellenkennung. Die Oberfläche zeigt den richtigen Text dann unter der
   falschen Frage, und die spätere fragebezogene Evaluation erhält ein
   falsches Etikett.
-  Stellen: `supabase/functions/ai-task/index.ts:1240`,
-  `supabase/functions/ai-task/index.ts:1282`,
-  `ai_task_test.ts:3501`.
+  **Behoben:** Liegt der Beleg eindeutig in genau einer anderen Antwort,
+  korrigiert der Server die Quelle. Bei mehreren möglichen Fundstellen wird
+  der Vorschlag verworfen, statt eine falsche Sicherheit zu erzeugen.
 
 - [x] **M7 – Der Datenschutzhinweis ist stärker als der belegte Vertrag.**
   Die Oberfläche sagt, der Freitext werde „nicht gespeichert“. Sicher belegt
