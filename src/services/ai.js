@@ -29,6 +29,14 @@ import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } f
    Serverfehlers. */
 export const AI_TASKS = Object.freeze([
   "health", "echo-struct", "intelligent-search", "masterlist-enrichment",
+  /* Etappe 7, Phase 3: liest aus den drei freien Antworten Geschmacks-Signale.
+     Die Belegpflicht wird SERVERSEITIG erzwungen — der Endpunkt schlägt nach,
+     ob jede gemeldete Textstelle wirklich in der Antwort steht. Hier wäre sie
+     zwar auch prüfbar (der Client kennt die Antworten), aber eine Prüfung,
+     die der Aufrufer überspringen kann, ist keine: `profil.js` sieht die
+     Antworttexte nie und kann den Beleg nur auf Vorhandensein prüfen, nicht
+     auf Wahrheit. */
+  "profile-extract",
 ]);
 
 export const AI_PROMPT_VERSION = "v1";

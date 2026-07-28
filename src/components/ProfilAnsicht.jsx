@@ -55,6 +55,13 @@ export function ProfilAnsicht({
   onEntfernen,
   onWiderrufen,
   onNeuErheben,
+  /* Der KI-Weg wird AUSGEBLENDET, wenn er nicht offensteht — nicht erklärt
+     und nicht gesperrt angeboten. Ein sichtbarer, aber toter Knopf wäre die
+     Einladung, ihn zu drücken und einen Fehler zu ernten; und die einzige
+     ehrliche Erklärung („du hast KI abgeschaltet") steht ohnehin in den
+     Einstellungen zwei Klappen weiter oben. */
+  kiWegOffen = false,
+  onKiErheben,
 }) {
   const [widerrufOffen, setWiderrufOffen] = useState(false);
 
@@ -77,7 +84,12 @@ export function ProfilAnsicht({
           Du hast noch kein Geschmacksprofil. Kinodreieck merkt sich dann nichts über
           deinen Geschmack — Suche, Sammlung und Bewertungen funktionieren unverändert.
         </p>
-        <button style={btnStyle(true)} onClick={() => onNeuErheben?.()}>Profil anlegen</button>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button style={btnStyle(true)} onClick={() => onNeuErheben?.()}>Profil anlegen</button>
+          {kiWegOffen && (
+            <button style={btnStyle(false)} onClick={() => onKiErheben?.()}>Mit drei Fragen anlegen</button>
+          )}
+        </div>
       </div>
     );
   }
@@ -162,6 +174,13 @@ export function ProfilAnsicht({
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
         <button style={btnStyle(false)} onClick={() => onNeuErheben?.()}>Weitere Angaben machen</button>
+        {/* Der KI-Weg ERGÄNZT den deterministischen, er ersetzt ihn nie —
+            bindende Zusage aus dem Steckbrief („späteres Zuschalten von KI
+            verwirft das deterministische Profil nicht"). Deshalb steht er
+            hier als gleichrangiges zweites Angebot und nicht als Ersatz. */}
+        {kiWegOffen && (
+          <button style={btnStyle(false)} onClick={() => onKiErheben?.()}>Drei Fragen beantworten</button>
+        )}
         <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setWiderrufOffen((v) => !v)}>
           Einwilligung widerrufen
         </button>

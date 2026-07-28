@@ -1751,18 +1751,35 @@ dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
 /* Quelltext-Zusicherung: Das Geschmacksprofil darf NICHTS aus services/ai.js
    brauchen. Ein Import dort machte den KI-losen Weg von der KI abhängig — die
    Bündelprüfung sähe das nicht, weil DatenTab die Datei ohnehin mitzieht. */
-const ohneKi = ["bereich", "onboarding", "ansicht", "geschmack"];
+/* Phase 3 VERENGT diese Zusage bewusst, statt sie aufzugeben. Der Container
+   `GeschmackBereich` importiert seit dem KI-Weg `services/ai.js` und
+   `kiSchalter.js` -- er ist die Stelle, die den bezahlten Aufruf macht und
+   das Gate haelt. Die drei anderen duerfen es weiterhin NICHT: Sobald das
+   Formular, die Ansicht oder die Umrechnung von der KI abhaengen, ist der
+   KI-lose Weg keiner mehr, und der Abnahme-Anker der Etappe faellt.
+   `bereich` steht deshalb nicht mehr in der Liste -- aber die Verengung ist
+   nur dann ehrlich, wenn stattdessen GEPRUEFT wird, dass der Container ohne
+   KI vollstaendig bedienbar bleibt. Das tun die Checks im Abschnitt L
+   (`kiWegOffen === false`) und der komplette Durchlauf weiter oben. */
+const ohneKi = ["onboarding", "ansicht", "geschmack"];
 /* Auf IMPORT-Zeilen geprüft, nicht auf das blosse Vorkommen der Zeichenkette:
    der Modulkopf von geschmack.js NENNT `services/ai.js` ausdrücklich („dieses
    Modul darf davon nichts brauchen und tut es nicht"), und ein Test, der über
    einen Kommentar stolpert, misst die Rechtschreibung statt der Abhängigkeit. */
 const importiert = (k, muster) => new RegExp("^\\s*(import|export)[^\\n]*" + muster, "m").test(QUELLEN[k].text);
-check("M", "kein Modul des Geschmacksprofils importiert services/ai.js  [gemessen: "
+check("M", "ausser dem Container importiert kein Geschmacks-Modul services/ai.js  [gemessen: "
   + JSON.stringify(ohneKi.filter((k) => importiert(k, "services/ai\\.js"))) + "]",
   () => ohneKi.every((k) => !importiert(k, "services/ai\\.js")));
-check("M", "…und keines den KI-Schalter (`kiSchalter.js`)  [gemessen: "
+check("M", "…und keines von ihnen den KI-Schalter (`kiSchalter.js`)  [gemessen: "
   + JSON.stringify(ohneKi.filter((k) => importiert(k, "kiSchalter"))) + "]",
   () => ohneKi.every((k) => !importiert(k, "kiSchalter")));
+/* Die Gegenrichtung, damit die Verengung keine Luecke wird: Der Container
+   MUSS beides fuehren. Ohne `kiSchalter` gaebe es kein Gate, ohne
+   `services/ai.js` keinen Aufruf -- und ein Test, der nur das Fehlen
+   verbietet, saehe beides nicht. */
+check("M", "der Container fuehrt Gate und Aufruf selbst  [gemessen: ai="
+  + importiert("bereich", "services/ai\\.js") + ", schalter=" + importiert("bereich", "kiSchalter") + "]",
+  () => importiert("bereich", "services/ai\\.js") && importiert("bereich", "kiSchalter"));
 check("M", "in DatenTab hängt die Klappe nicht an einer Bedingung mit `kiStand`"
   + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}Klappe titel="Geschmacksprofil"/s) || [])[0]?.slice(-60)) + "]",
   () => {
