@@ -51,10 +51,18 @@ In beiden Fällen gilt fail-closed:
 3. auf ausdrückliche Freigabe warten,
 4. Grenze niemals autonom erhöhen oder umgehen.
 
-Ein reiner Kontrollaufruf kostet nichts:
+Ein reiner Kontrollaufruf kostet nichts. Auf dem lokalen Mac lädt er das
+Passwort gezielt aus dem Login-Schlüsselbund:
 
 ```bash
 npm run check:ai-budget
+```
+
+Ob beide begrenzten Testkonten im Schlüsselbund vorhanden sind, prüft ohne
+Anmeldung und ohne Netzaufruf:
+
+```bash
+npm run check:keychain
 ```
 
 ## Benötigte Werte
@@ -74,6 +82,36 @@ Der Anthropic-Key, ein Anthropic-Admin-Key und der Supabase-Service-Role-Key
 werden nicht benötigt. Sie gehören weder in den Chat noch in lokale
 Projektdateien. Zugangsdaten werden nur über die Prozessumgebung oder einen
 lokalen Secret-Speicher bereitgestellt.
+
+### Lokaler macOS-Schlüsselbund
+
+Der feste Service heißt:
+
+`at.kinodreieck.codex.live-tests.shared`
+
+Darunter liegen nur die Accounts `KD_TESTA_PASS` und `KD_TESTB_PASS`. Der
+Loader `tools/keychain_runner.mjs` liest diese Werte über `/usr/bin/security`,
+gibt sie nie aus und übergibt sie nur an fest verdrahtete Testprogramme. Freie
+Befehle oder zusätzliche Argumente sind nicht möglich. Zufällig gesetzte
+Anthropic-, Service-Role-, Datenbank- oder Cloudflare-Schlüssel werden nicht
+an die Kindprozesse vererbt.
+
+Die nicht geheime Zielkonfiguration liegt lokal in `.env.live.local`, das von
+Git ignoriert wird. Erlaubt sind ausschließlich:
+
+```dotenv
+KD_SB_URL=https://projekt-ref.supabase.co
+KD_SB_ANON=sb_publishable_...
+KD_TESTA_USER=testa
+KD_TESTB_USER=testb
+KD_MAIL_DOMAIN=login.kinodreieck.at
+KD_AI_FUNKTION=ai-task
+KD_ORIGIN=https://staging.kinodreieck.at
+```
+
+Passwörter, `KD_AI_AUTONOM_LIMIT_USD_CENT` und `KD_EVAL_JA` werden in dieser
+Datei ausdrücklich abgelehnt. Die Eval-Freigabe entsteht ausschließlich für
+den einen ausdrücklich gestarteten, budgetüberwachten Lauf.
 
 Für `npm run test:rls` kommt ein zweites begrenztes Testkonto mit
 `KD_TESTB_USER` und dem geheimen `KD_TESTB_PASS` hinzu. Dieser Test macht
