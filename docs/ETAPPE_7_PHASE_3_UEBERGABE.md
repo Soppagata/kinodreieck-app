@@ -68,6 +68,15 @@ gültig, übersteht die Speicher-Rundreise inhaltsgleich und behält seine
 bisherige Promptzeile. Da Etappe 7 noch nicht live war, ist keine
 Bestandsmigration erforderlich.
 
+Die erneute Prüfung von **B5** ergab keinen fehlenden Film-Signal-Erzeuger,
+sondern einen zu schwachen Test für eine bewusste Modellgrenze: Bestätigte
+Filmwahlen liegen ausschließlich in `profil.filme` und werden im Prompt
+getrennt von Signalen ausgegeben. Ein zweiter Signalpfad würde dieselbe
+Nutzerwahl doppelt gewichten. `filmwahl:` bleibt deshalb nur als
+kollisionsfreier Namensraum für eine mögliche spätere, ausdrücklich
+bestätigte Ableitung reserviert. Harte Film-only-Tests sichern nun ab, dass
+Onboarding, Profileintrag, Prompt und Signalzähler diese Grenze einhalten.
+
 ## Was Claude zuletzt fertiggestellt hat
 
 | Commit | Stand |
@@ -275,7 +284,7 @@ Am 28.07.2026 nach den Reparaturen lokal reproduziert:
 | Prüfung | Ergebnis | Einordnung |
 | --- | ---: | --- |
 | `npm test` | grün | Vollständiger Bestandstest einschließlich Online-Paket |
-| `node geschmack_test.mjs` | 120/120 | K2 ist eine harte Kuration-Regel statt eines weichen Befunds |
+| `node geschmack_test.mjs` | 124/124 | K2 und die B5-Trennung von Filmwahl und Signal sind harte Verträge |
 | `node profil_test.mjs` | 286/286 | Einschließlich `ton/kult`-Altprofil über Validierung, Speicher und Prompt |
 | `node extraktion_test.mjs` | 391/391 | Alle zwölf nachgezogenen Befunde und die sichere Arten-Teilmenge grün |
 | `deno test … ai_task_test.ts` | 247/247 | Function-Vertrag einschließlich neuer Negativfälle grün |
@@ -338,6 +347,12 @@ Die Backend-Gegenprüfung vom 28.07.2026 hat Claudes Übergabestand präzisiert:
 
 Weitere Hosting-Auffälligkeiten:
 
+- [ ] Der lokale Branch enthält vier geprüfte Commits, die noch nicht auf
+  GitHub liegen. Der vorhandene Personal Access Token darf
+  `.github/workflows/deploy.yml` nicht aktualisieren, weil ihm die
+  `workflow`-Berechtigung fehlt. Der Push muss mit entsprechend berechtigter
+  GitHub-Anmeldung wiederholt werden; es wurde weder die Historie umgebaut
+  noch der Workflow aus dem Commit entfernt.
 - [ ] Live liefert `/sw.js` mit
   `Cache-Control: public, max-age=14400, must-revalidate`, obwohl
   `public/_headers` und das Hosting-Handbuch `max-age=0` verlangen. Das kann
@@ -369,15 +384,17 @@ Weitere Hosting-Auffälligkeiten:
 Die lokalen Produkt- und Testpakete 1–5 des ursprünglichen Plans sind
 erledigt. Für die Auslieferung bleibt:
 
-1. Die Edge Function deployen; Staging und Produktion teilen diesen Backend-
+1. Die GitHub-Anmeldung für Workflow-Änderungen freigeben und die vier
+   lokalen Commits auf den Feature-Branch pushen.
+2. Die Edge Function deployen; Staging und Produktion teilen diesen Backend-
    Endpunkt, deshalb vorher den Function-Test und den Rollback-Stand sichern.
-2. `npm run test:ai:contract` wiederholen; erst HTTP 400
+3. `npm run test:ai:contract` wiederholen; erst HTTP 400
    `wertelisten-fehlen` bei unverändertem Budget belegt den neuen Vertrag.
-3. Das Frontend nach Staging veröffentlichen.
-4. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
+4. Das Frontend nach Staging veröffentlichen.
+5. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
    und anschließend `test:rls` gegen Staging laufen lassen.
-5. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
-6. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
+6. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
+7. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
    Arbeitspaketen bereinigen.
 
 ## Arbeitsbaum-Hinweis
