@@ -141,6 +141,7 @@ export function Willkommen({ onClose, jetzt = null }) {
             <p style={{ ...p, margin: "0 0 10px" }}><strong style={{ color: T.warum }}>WARUM — warum sollte man ihn gesehen haben?</strong><br />Seine filmhistorische und popkulturelle Relevanz: Was hat er geprägt, ermöglicht oder ikonisch gemacht? Wie oft wird er zitiert, weitergedacht oder als Bezugspunkt gebraucht? Persönliche Bedeutung darf mitschwingen, bleibt aber ein Nebenfaktor.</p>
             <p style={{ ...p, margin: "0 0 10px" }}><strong>Wichtig:</strong> Eine 0 heißt nicht „schlecht“. Sie heißt nur, dass diese Achse kaum ausgeprägt ist. Beim WARUM reicht die Skala von keiner erkennbaren Folgewirkung bis zum grundlegenden, kanonischen Werk.</p>
             <p style={{ ...p, margin: "0 0 10px" }}><strong>Und: Schlagseite schlägt Ausgewogenheit.</strong> Ein Film mit 1/1/5 kann als kultureller Bezugspunkt entscheidender sein als ein rundes 3/3/3.</p>
+            <p style={{ ...p, margin: "0 0 10px" }}>Eine Schlagseite zählt erst, wenn die stärkste Achse <strong>mindestens 3</strong> erreicht. Liegt sie darunter, heißt die Kategorie <strong>„Ohne Schlagseite“</strong>: Eine Achse kann vorn liegen, ist aber noch nicht stark genug für eine Aussage.</p>
             <p style={p}>Die <strong>Kategorie</strong> darunter tippst du nicht ein — sie folgt aus den drei Werten. Zieh die Regler und sieh zu.</p>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>

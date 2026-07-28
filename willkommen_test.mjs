@@ -652,6 +652,10 @@ check("W2", "Karte 2 nennt die Skala 0 bis 5 und dass die Kategorie folgt, nicht
 check("W2", "Karte 2 nennt „Schlagseite schlägt Ausgewogenheit\" mit dem 1/1/5-Beispiel",
   () => dialogText().includes("Schlagseite schlägt Ausgewogenheit")
     && dialogText().includes("Ein Film mit 1/1/5 kann als kultureller Bezugspunkt entscheidender sein als ein rundes 3/3/3."));
+check("W2", "Karte 2 erklärt den dritten Fall „Ohne Schlagseite\" und seine Mindesthöhe",
+  () => dialogText().includes("Ohne Schlagseite")
+    && /mindestens 3/.test(dialogText())
+    && dialogText().includes("noch nicht stark genug für eine Aussage"));
 });
 
 /* =========================================================================
@@ -2124,24 +2128,9 @@ console.log("\n--- F: Auffälligkeiten (heute offen, nicht exit-relevant) ---");
    Ein doppelter Pin auf dieselbe Zusage macht die spätere Änderung teurer,
    ohne mehr zu beweisen — deshalb gestrichen, nicht behalten.
 
-   OFFEN GEBLIEBEN — F6: der Erklärtext kennt den dritten Fall nicht.
-   Der Fix hat die Kategorie-Zeile ehrlich gemacht, aber die Karte, die das
-   Modell erklärt, spricht weiter von zwei Zuständen. Willkommen-Karte 2 nennt
-   „Schlagseite schlägt Ausgewogenheit" und erklärt die 0 als legitim; ein
-   Nutzer, der daraufhin 2/0/0 zieht, liest darunter „Ohne Schlagseite — alle
-   drei kaum ausgeprägt" — eine dritte Kategorie, die im Text nicht vorkommt
-   und die auch nicht selbsterklärend ist (warum ist 2/0/0 keine Schlagseite,
-   wenn WIE doch vorn liegt? Antwort: die Mindesthöhe — steht nirgends).
-   Dasselbe in Erklaerstuecke.jsx:86: der Satz ist seit heute korrekt für die
-   Schlagseite, nennt aber nur sie und ihr Gegenteil, nicht die Dreiteilung.
-   Gemessen wird am Quelltext von Willkommen.jsx, weil die Lücke im TEXT liegt
-   und nicht im Verhalten. Kein Codefehler — zwei Halbsätze räumen es aus. */
-const kartenText = QUELLEN.willkommen.text;
-check("F", "F6: Karte 2 erklärt den dritten Fall („Ohne Schlagseite\" / die Mindesthöhe) im Fließtext"
-  + "  [gemessen: „Ohne Schlagseite\" im Kartentext=" + /Ohne Schlagseite/.test(kartenText)
-  + ", Mindesthöhe erwähnt=" + /mindestens\s+3|Mindesth[öo]he|erreicht selbst/.test(kartenText) + "]",
-  () => /Ohne Schlagseite/.test(kartenText)
-    && /mindestens\s+3|Mindesth[öo]he|erreicht selbst/.test(kartenText));
+   F6  dritter Textfall       → W2. Karte 2 nennt jetzt „Ohne Schlagseite",
+         die Mindesthöhe 3 und den fachlichen Grund; die Über-Erklärung
+         trennt zusätzlich Mindesthöhe und Spanne. */
 
 /* ---------------------------------------------------------------------------
    NEU AUS PHASE 2b — die KI-Frage auf Karte 3.
