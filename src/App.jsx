@@ -19,6 +19,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
 import { initSetup, getSetup, getTutorial, setWillkommen, resetTutorial, istGesehen, markGesehen, setupUeberspringen } from "./lib/tutorial.js";
 import { Willkommen } from "./components/Willkommen.jsx";
+import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { baueHinweis, onTour, SICHTBAR_TRIGGER, setTourOffen } from "./lib/tour.js";
 import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
@@ -505,6 +506,19 @@ export default function App() {
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
   const [startTick, setStartTick] = useState(0); // bump nach Startwahl -> Tour-Effekte neu binden
+  /* Etappe 7: KI-Schalter. Geraetelokal (kd:ki), deshalb eigener State statt
+     `einstellungen` -- und ein Tick, damit die Gates (kiAn) nach einer
+     Aenderung neu gelesen werden; sie werden beim Render abgefragt, nicht
+     abonniert. */
+  const [kiStand, setKiStand] = useState(() => ladeKiStand());
+  const setzeKiGlobal = useCallback((an) => {
+    const { stand } = setzeKiGlobalRoh(an, new Date().toISOString());
+    setKiStand(stand); setStartTick((x) => x + 1);
+  }, []);
+  const setzeKiFunktion = useCallback((name, an) => {
+    const { stand } = setzeKiFunktionRoh(name, an);
+    setKiStand(stand); setStartTick((x) => x + 1);
+  }, []);
   const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !catalogService.hasConnection());
   const pinAbgelaufen = (pin, jetzt = new Date()) => {
     const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(pin.z));
@@ -2089,8 +2103,18 @@ export default function App() {
            Vorher verbrannte ein versehentliches Escape auf Karte 1 die
            einmalige Erklärung ohne jede Rückfrage. */
         <Willkommen onClose={(art) => {
-          if (art && art.durchgeklickt) { try { setWillkommen(true); } catch { /* */ } }
+          /* Nur als gesehen markieren, wenn die KI-Wahl auch WIRKLICH
+             gespeichert wurde. Bei blockiertem Storage (Privatmodus, volle
+             Quote) faellt der Schalter fail-closed aus -- die Box muss dann
+             beim naechsten Start erneut fragen, statt eine Entscheidung zu
+             behaupten, die nirgends steht. */
+          if (art && art.durchgeklickt && art.gespeichert !== false) { try { setWillkommen(true); } catch { /* */ } }
           setWillkommenOffen(false);
+          /* Etappe 7: Die KI-Wahl ist beim Durchklicken bereits geschrieben
+             (kd:ki, geraetelokal). Der Neuaufbau hier holt die Gates ab --
+             `kiAn()` wird beim Render gelesen, nicht abonniert, und der
+             Finder-Knopf soll ohne Reload erscheinen bzw. verschwinden. */
+          if (art && art.durchgeklickt) { setKiStand(ladeKiStand()); setStartTick((x) => x + 1); }
         }} />
       )}
       {aktiverHinweis && (
@@ -2265,6 +2289,7 @@ export default function App() {
             importProgramm={importProgramm} importNonstop={importNonstop}
             programm={programm}
             setErr={setErr} clearProgrammCache={clearProgrammCache}
+            kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
             resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
             demoAktiv={masterHerkunft?.typ === "demo" || (() => { try { return !!localStorage.getItem(K.demoSeed); } catch { return false; } })()}

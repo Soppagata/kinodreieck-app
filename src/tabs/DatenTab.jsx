@@ -22,6 +22,10 @@ export function DatenTab({
   programmInfo = null,
   ungesichertMaster = false, ungesichertArtikel = false,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
+  /* Etappe 7: Der KI-Schalter liegt NICHT in `einstellungen` (das ist ein
+     Sync-Topf), sondern in `kd:ki`. Stand und Setter kommen deshalb als
+     eigene Props von App. */
+  kiStand = { global: null, funktionen: {} }, onKiGlobal, onKiFunktion,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle,
   datenGesperrt = false,
@@ -126,6 +130,53 @@ export function DatenTab({
       </Klappe>
 
       {/* 2b — Konto & Geräte-Sync (Etappe 3) */}
+      {/* KI-Funktionen (Etappe 7). Steht VOR dem Konto-Block, weil die
+          Grundentscheidung ohne Konto getroffen wird und den Rest praegt.
+          Der Schalter ist geraetelokal (kd:ki) -- deshalb der Hinweis, dass
+          er nicht mitreist. */}
+      <Klappe titel="KI-Funktionen">
+        <div style={kasten}>
+          <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
+            Ohne KI funktioniert alles — Suche, Sammlung, Bewertungen — vollständig
+            und kostenlos auf diesem Gerät. Mit KI kommen Deutungs- und
+            Profil-Funktionen dazu.
+          </p>
+          <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>KI insgesamt</span>
+            <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+              value={kiStand.global === true ? "an" : "aus"}
+              onChange={(id) => onKiGlobal?.(id === "an")}
+              options={[{ id: "an", label: "Mit KI" }, { id: "aus", label: "Ohne KI" }]} />
+          </div>
+
+          {/* Einzelschalter nur bei offenem Dach: Sie unter einem
+              geschlossenen Dach anzuboten haette suggeriert, sie wuerden
+              etwas bewirken. */}
+          {kiStand.global === true && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 4, borderLeft: "2px solid " + T.saalHoch }}>
+              {Object.entries(KI_FUNKTIONEN).map(([id, f]) => (
+                <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <SegmentedControl style={{ marginBottom: 0, minWidth: 120 }}
+                    value={kiStand.funktionen?.[id] === false ? "aus" : "an"}
+                    onChange={(w) => onKiFunktion?.(id, w === "an")}
+                    options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
+                  <div style={{ flex: "1 1 220px" }}>
+                    <div style={{ ...mono, color: T.leinwand }}>{f.label}</div>
+                    <div style={{ ...mono, opacity: 0.75 }}>{f.beschreibung}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ ...mono, opacity: 0.75, margin: "12px 0 0", lineHeight: 1.6 }}>
+            Diese Wahl gilt nur für dieses Gerät und reist nicht mit dem Konto mit —
+            auf einem zweiten Gerät entscheidest du erneut. KI-Funktionen brauchen
+            außerdem ein Konto.
+          </p>
+        </div>
+      </Klappe>
+
       <Klappe titel="Konto & Geräte-Sync">
         <div style={kasten}>
           <h2 style={h2}>Zwischen Handy und Rechner</h2>

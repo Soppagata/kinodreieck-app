@@ -175,8 +175,19 @@ if (process.env.APP_QUELLE) GETAUSCHT.push("app=" + APP_DATEI);
 /* Der Eintritt ist ein virtuelles Modul: es holt beide Komponenten aus den
    (tauschbaren) Quellen, damit DreieckRegler auch einzeln montierbar ist. */
 const EINTRITT = `
-export { Willkommen } from "./Willkommen.jsx";
+export { Willkommen, SCHRITTE } from "./Willkommen.jsx";
 export { DreieckRegler } from "./DreieckRegler.jsx";
+`;
+
+/* Der Stub steht fuer src/services/auth.js. Er kennt kein Netz, keinen
+   Endpunkt und keinen Treiber; jeder Aufruf landet in einem Zaehler im
+   Testprozess. */
+const AUTH_STUB = `
+export const authService = {
+  getSnapshot: () => globalThis.__WK_AUTH__.snapshot(),
+  signIn: (b, p) => globalThis.__WK_AUTH__.signIn(b, p),
+  subscribe: () => () => {},
+};
 `;
 
 const AUSGABE_DIR = path.join(WURZEL, "node_modules/.cache/willkommen-test");
@@ -201,6 +212,13 @@ await esbuild.build({
       bau.onResolve({ filter: /(^|[\\/])Willkommen\.jsx$/ }, () => ({ path: "willkommen", namespace: "wk" }));
       bau.onResolve({ filter: /(^|[\\/])DreieckRegler\.jsx$/ }, () => ({ path: "regler", namespace: "wk" }));
       bau.onResolve({ filter: /(^|[\\/])match\.js$/ }, () => ({ path: "match", namespace: "wk" }));
+      /* services/auth.js wird beim Buendeln durch einen Stub ERSETZT (Plugin,
+         nicht Monkeypatching: `authService` ist eine Modulkonstante). Damit ist
+         ausgeschlossen, dass eine echte Anmeldung ueber die Leitung geht --
+         der Netzpfad ist nicht bloss ungenutzt, er ist nicht im Buendel.
+         Das Anmelde-Angebot auf Karte 3 ist seit Phase 2b Teil der Box. */
+      bau.onResolve({ filter: /services[/\\\\]auth\.js$/ }, () => ({ path: "auth-stub", namespace: "wk-stub" }));
+      bau.onLoad({ filter: /.*/, namespace: "wk-stub" }, () => ({ contents: AUTH_STUB, loader: "js" }));
       bau.onLoad({ filter: /.*/, namespace: "wk" }, (args) => {
         if (args.path === "eintritt") {
           return { contents: EINTRITT, loader: "js", resolveDir: path.join(WURZEL, "src/components") };
@@ -223,7 +241,7 @@ const dom = new JSDOM(
   "<div id=\"wurzel\"></div><div id=\"reglerwurzel\"></div>" +
   "</body></html>", { url: "http://localhost/" });
 for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement",
-  "SVGElement", "Element", "Event", "MouseEvent", "KeyboardEvent", "CustomEvent", "Node", "NodeList", "getComputedStyle"]) {
+  "SVGElement", "Element", "Event", "MouseEvent", "KeyboardEvent", "CustomEvent", "Node", "NodeList", "getComputedStyle", "localStorage"]) {
   Object.defineProperty(globalThis, name, {
     value: name === "window" ? dom.window : dom.window[name], configurable: true, writable: true,
   });
@@ -234,7 +252,92 @@ const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act, useState, createElement: h } = React;
 const { T } = await import("./src/lib/tokens.js");
-const { Willkommen, DreieckRegler } = await import(AUSGABE);
+/* ---------------------------------------------------- Attrappe der Anmeldung */
+/* Zwei Betriebsarten und ein Zaehler. „haengen" ist die wichtigste: sie haelt
+   die Anmeldung offen, so wie ein echter fetch offen bleibt, waehrend der
+   Nutzer Escape drueckt. */
+/* FÄHIGKEITEN (28.07.2026, Phase 2b): Das Doppel lieferte bis heute nur
+   `{ mode }`. Damit war der Unterschied zwischen „angemeldet" und „darf KI"
+   im Test gar nicht darstellbar — jede Fähigkeitsprüfung der Box wäre
+   stillschweigend als richtig durchgegangen. Die Box hängt seit dem F8-Fix an
+   `capabilities.personalAi === true`, weil `aiService` hart
+   `requireAccount("personalAi")` verlangt.
+   Die Vorgabewerte sind aus `src/services/auth.js` abgeschrieben (Zeile 20
+   für den Gast, Zeile 117 für ein Konto): ein Gast trägt sehr wohl ein
+   `capabilities`-Objekt, nur mit lauter `false`. Ein Doppel, das dem Gast
+   gar keine Fähigkeiten gäbe, ließe eine Prüfung „hat überhaupt
+   capabilities" schon als Fähigkeitsprüfung durchgehen.
+   `faehigkeiten === undefined` heißt: wie der echte Dienst. Ein gesetzter
+   Wert überschreibt für beide Modi; `null` heißt ÜBERHAUPT KEIN
+   `capabilities`-Feld (alter Server). Das ist ein anderer Fall als
+   `{ personalAi: false }`, und beide müssen unterscheidbar bleiben — sonst
+   ginge eine Prüfung `capabilities?.personalAi !== false` als richtig durch,
+   die den fehlenden Schlüssel großzügig als „ja" liest.
+
+   ZUSTAND (28.07.2026, nachgezogen): Dasselbe Versäumnis eine Dimension
+   weiter. Das Doppel kannte `state` nicht — und damit ging jede Prüfung
+   darauf still durch, genau wie vorher bei `capabilities`. `requireAccount`
+   (`services/auth.js:148`) verlangt DREI Dinge: Modus, `state === "ready"`
+   und die Fähigkeit. `SESSION_STATES.DEGRADED` (`auth.js:11`) heißt: die
+   Anmeldung gilt weiter, der Server ist nur gerade nicht erreichbar — ein
+   Zustand, den ein echtes Konto jederzeit erreicht.
+   `guestSession()` (auth.js:17) und `accountSession()` (auth.js:41/51)
+   setzen beide `"ready"`; das ist deshalb der Vorgabewert. `zustand = null`
+   heißt ÜBERHAUPT KEIN `state`-Feld — derselbe Trennschnitt wie bei den
+   Fähigkeiten, damit eine Prüfung `state !== "degraded"` nicht als richtig
+   durchgeht. */
+const GAST_FAEHIG = { remoteStorage: false, personalAi: false };   // auth.js:20
+const KONTO_FAEHIG = { remoteStorage: true, personalAi: true };    // auth.js:117
+const auth = {
+  rufe: [],
+  modus: "erfolg",            // erfolg | fehler | haengen
+  konto: false,               // Ausgangslage: Gast
+  fehler: null,
+  faehigkeiten: undefined,    // undefined = wie echt · null = ohne capabilities
+  zustand: undefined,         // undefined = wie echt ("ready") · null = ohne state
+  aufloesen: null, ablehnen: null,
+  snapshot() {
+    const s = { mode: this.konto ? "account" : "guest" };
+    const z = this.zustand === undefined ? "ready" : this.zustand;   // auth.js:17/51
+    if (z !== null) s.state = z;
+    const f = this.faehigkeiten === undefined
+      ? (this.konto ? KONTO_FAEHIG : GAST_FAEHIG)
+      : this.faehigkeiten;
+    if (f !== null) s.capabilities = f;
+    return s;
+  },
+  signIn(b, pw) {
+    this.rufe.push({ benutzer: b, passwort: pw });
+    if (this.modus === "haengen") return new Promise((res, rej) => { this.aufloesen = res; this.ablehnen = rej; });
+    if (this.modus === "fehler") return Promise.reject(this.fehler || new Error("Anmeldung fehlgeschlagen"));
+    this.konto = true;
+    /* Wie der echte Dienst: signIn liefert denselben Snapshot, den getSnapshot
+       danach liefert — samt Fähigkeiten. */
+    return Promise.resolve(this.snapshot());
+  },
+};
+globalThis.__WK_AUTH__ = { snapshot: () => auth.snapshot(), signIn: (b, pw) => auth.signIn(b, pw) };
+const authAuf = () => {
+  auth.rufe = []; auth.modus = "erfolg"; auth.konto = false; auth.fehler = null;
+  auth.faehigkeiten = undefined; auth.zustand = undefined;   // zurück auf „wie echt"
+};
+
+/* ---------------------------------------------------- KI-Schalter im Test */
+/* Der echte Schalter, nicht gestubbt: Karte 3 schreibt ihn, und genau das ist
+   die Zusage. Gelesen wird ueber `globalThis.localStorage` (JSDOM). */
+const KS = await import("./src/lib/kiSchalter.js");
+/* errorText und die Codes sind rein — der Test benutzt dieselbe Quelle wie die
+   Box, statt einen Fehlertext zu erraten. `errorText` bildet auf den CODE ab,
+   nicht auf die Message; ein blanker Error liefert deshalb den Server-Text. */
+const ERR = await import("./src/services/errors.js");
+const kiTopfLeeren = () => { dom.window.localStorage.removeItem("kd:ki"); dom.window.localStorage.removeItem("kd:ki-version"); };
+const kiTopf = () => {
+  const roh = dom.window.localStorage.getItem("kd:ki");
+  return { roh, marke: dom.window.localStorage.getItem("kd:ki-version"),
+    stand: roh ? (() => { try { return JSON.parse(roh); } catch { return null; } })() : null };
+};
+
+const { Willkommen, DreieckRegler, SCHRITTE } = await import(AUSGABE);
 
 /* ------------------------------------------------------------ Bedienhilfen */
 const dialog = () => document.querySelector("[role=\"dialog\"]");
@@ -294,7 +397,17 @@ const kategorieTeile = () => {
   const m = /^Kategorie:\s*(.+?)\s+—\s+(.+)$/.exec(t);
   return m ? { label: m[1], formel: m[2] } : null;
 };
+/* Dieselbe Liste, die Willkommen.jsx fuer die Fokus-Falle benutzt. Sie steht
+   hier bewusst als Kopie: der Test soll bemerken, wenn sie sich aendert. */
+const FOKUS_SELEKTOR_TEST = "button, [href], input, select, textarea, area[href], [tabindex]";
 const wertSetzer = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+const tippeIn = async (el, wert) => {
+  if (!el) throw new Error("Feld nicht gefunden");
+  await act(async () => {
+    wertSetzer.call(el, String(wert));
+    el.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
+};
 const ziehe = async (achse, wert) => {
   const el = regler(achse);
   if (!el) throw new Error("Regler nicht gefunden: " + achse);
@@ -479,13 +592,25 @@ check("W2", "das aria-label des Dialogs folgt der Karte („Das Dreieck\")",
 check("W2", "der Text von Karte 1 ist vollständig weg",
   () => !dialogText().includes("Die App gleicht das Wiener Kinoprogramm")
     && !dialogText().includes("Bevor du losläufst"));
-check("W2", "Karte 2 hat GENAU ZWEI Knöpfe: „Zurück\" und „Los geht's\"",
+/* VERTRAGSÄNDERUNG 28.07.2026 (Etappe 7, Phase 2b) — DIE KARTENFOLGE IST
+   GEWACHSEN. Aus zwei Karten sind DREI geworden, und die hartcodierte
+   `karte === 1 ? … : …`-Verzweigung ist einer Kette gewichen; `SCHRITTE`
+   ist jetzt exportiert (Befund C2 der Testhand aus Runde 1, eingelöst).
+   Karte 3 ist die KI-Frage, und sie sitzt bewusst HINTER der Dreieck-Karte:
+   erst dort weiß der Nutzer, wofür KI in dieser App überhaupt gut wäre.
+   Folge für diesen Check: „Los geht's" steht nicht mehr auf Karte 2. Karte 2
+   trägt jetzt „Zurück" und „Weiter" — der Abschluss ist eine Karte weiter. */
+check("W2", "Karte 2 hat GENAU ZWEI Knöpfe: „Zurück\" und „Weiter\"",
   () => knoepfe().length === 2
     && knoepfe()[0].textContent.trim() === "Zurück"
-    && knoepfe()[1].textContent.trim() === "Los geht's");
-check("W2", "„Zurück\" ist sekundär (transparent), „Los geht's\" primär (T.wolfram)",
+    && knoepfe()[1].textContent.trim() === "Weiter");
+check("W2", "„Zurück\" ist sekundär (transparent), „Weiter\" primär (T.wolfram)",
   () => knopf("Zurück").style.background === "transparent"
-    && knopf("Los geht's").style.background === alsRgb(T.wolfram));
+    && knopf("Weiter").style.background === alsRgb(T.wolfram));
+check("W2", "auf Karte 2 gibt es „Los geht's\" NICHT — der Abschluss sitzt hinter der KI-Frage",
+  () => !knopfTeil("Los geht"));
+check("W2", "SCHRITTE ist exportiert und nennt die drei Schritte in ihrer Reihenfolge",
+  () => Array.isArray(SCHRITTE) && SCHRITTE.join(",") === "was,dreieck,ki");
 check("W2", "der Kartenwechsel schließt die Box NICHT (kein onClose)", schliessRufe.length === 0);
 check("W2", "Karte 2 erklärt alle drei Achsen im Text",
   () => ["WIE — wie ist es gemacht?", "WAS — was erzählt es?", "WARUM — warum sollte man ihn gesehen haben?"]
@@ -626,67 +751,47 @@ console.log("\n--- W5: onClose, Escape, Fokus ---");
    beim Bauen des Checknamens abreißen lässt (er soll ROT werden, nicht
    die restlichen Checks verschlucken). */
 const ruf = (i) => schliessRufe[i] || [];
-await klick(knopf("Los geht's"));
-check("W5", "„Los geht's\" ruft onClose GENAU EINMAL  [gemessen: " + schliessRufe.length + "]",
-  schliessRufe.length === 1);
-/* VERTRAGSÄNDERUNG 27.07.2026 (Etappe 7) — dieser Check hat schon zweimal
-   etwas anderes gepinnt, und die Reihenfolge ist die Begründung:
-     Stand 0 (bis 27.07.): `onClick={onClose}`. React reichte das
-       SyntheticEvent durch, der Knopf rief also mit EINEM Argument, Escape
-       mit KEINEM. Zwei Verträge für denselben Callback (Befund F1).
-     Stand 1 (Zwischenschritt): beide Pfade argumentlos — gemeinsame
-       Grundlage, damit ein späteres Argument überhaupt eindeutig sein KANN.
-     Stand 2 (jetzt): beide Pfade rufen mit GENAU EINEM Argument, einem
-       schlichten Objekt `{ durchgeklickt: bool }`. Es sagt, WIE geschlossen
-       wurde. Nur der Knopf gilt als durchgeklickt.
-   Das Argument ist die Voraussetzung für Befund B: vorher verbrannte ein
-   versehentliches Escape auf Karte 1 die einmalige Erklärung, weil der
-   Aufrufer beide Pfade nicht unterscheiden konnte.
-   Gepinnt wird die GENAUE Form — ein SyntheticEvent hätte auch ein „Argument"
-   gewesen sein können, deshalb Objektform und Schlüsselmenge mitprüfen. */
 const artVon = (i) => (ruf(i)[0] && typeof ruf(i)[0] === "object" ? ruf(i)[0] : null);
-check("W5", "onClose bekommt beim Knopf GENAU EIN Argument, und zwar ein schlichtes Objekt"
-  + "  [gemessen: " + ruf(0).length + " Argument(e), " + JSON.stringify(artVon(0)) + "]",
-  () => ruf(0).length === 1 && artVon(0) !== null
-    && Object.keys(artVon(0)).join(",") === "durchgeklickt"
-    && artVon(0).type === undefined);          // kein durchgereichtes Ereignis
-check("W5", "der Knopf meldet durchgeklickt = true (nur er markiert die Erklärung als gesehen)",
-  () => artVon(0) !== null && artVon(0).durchgeklickt === true);
-check("W5", "„Los geht's\" schließt die Box nicht selbst — das entscheidet der Aufrufer",
-  () => !!dialog() && inDialog("h2")[0].textContent.trim() === "Das Dreieck");
 
+/* VERTRAGSÄNDERUNG 28.07.2026 (Phase 2b): „Los geht's" sitzt seit der dritten
+   Karte NICHT mehr hier. Dieser Abschnitt prüft nur noch den Escape-Pfad und
+   die Fokus-Falle; der Abschluss samt onClose-Argument steht in W6, weil er
+   ohne die KI-Wahl gar nicht auslösbar ist (der Knopf ist deaktiviert,
+   solange nichts gewählt wurde).
+   Der Escape-Pfad ist hier genau richtig aufgehoben: Er muss von JEDER Karte
+   aus funktionieren, und Karte 2 ist die mittlere. */
 const vorEscape = schliessRufe.length;
 await taste("Escape");
-check("W5", "Escape ruft onClose ein weiteres Mal  [gemessen: " + vorEscape + " → " + schliessRufe.length + "]",
+check("W5", "Escape ruft onClose  [gemessen: " + vorEscape + " → " + schliessRufe.length + "]",
   schliessRufe.length === vorEscape + 1);
-check("W5", "Escape ruft onClose mit DERSELBEN Form wie der Knopf — ein Objekt, ein Schlüssel"
+/* Gepinnt wird die GENAUE Form — ein SyntheticEvent wäre auch ein „Argument"
+   gewesen, deshalb Objektform und Schlüsselmenge mitprüfen (Befund F1). */
+check("W5", "Escape ruft onClose mit GENAU EINEM Argument, einem schlichten Objekt"
   + "  [gemessen: " + ruf(vorEscape).length + " Argument(e), " + JSON.stringify(artVon(vorEscape)) + "]",
-  () => schliessRufe.length === vorEscape + 1 && ruf(vorEscape).length === 1
-    && artVon(vorEscape) !== null
-    && Object.keys(artVon(vorEscape)).join(",") === "durchgeklickt");
+  () => ruf(vorEscape).length === 1 && artVon(vorEscape) !== null
+    && artVon(vorEscape).type === undefined);
 check("W5", "Escape meldet durchgeklickt = false — abgebrochen, nicht durchgeklickt",
   () => artVon(vorEscape) !== null && artVon(vorEscape).durchgeklickt === false);
-/* Beide Pfade sind formgleich und inhaltlich unterscheidbar. Genau das war
-   vorher nicht der Fall und ist der Kern der Änderung. */
-check("W5", "beide Pfade haben dieselbe Stelligkeit und dieselben Schlüssel, aber verschiedene Werte",
-  () => ruf(0).length === ruf(vorEscape).length
-    && Object.keys(artVon(0) || {}).join(",") === Object.keys(artVon(vorEscape) || {}).join(",")
-    && artVon(0).durchgeklickt !== artVon(vorEscape).durchgeklickt);
+/* Escape von der MITTLEREN Karte darf keine KI-Wahl hinterlassen — auf Karte 2
+   ist noch gar nichts gewählt, und der Topf muss unberührt bleiben. */
+check("W5", "Escape von Karte 2 schreibt nichts in den KI-Topf"
+  + "  [gemessen: " + JSON.stringify(kiTopf().roh) + "]",
+  () => kiTopf().roh === null && kiTopf().marke === null);
 
 /* Fokus-Falle: die Liste der fangbaren Elemente umfasst auch die drei Regler.
-   Reihenfolge auf Karte 2: WIE, WAS, WARUM, Zurück, Los geht's. */
+   Reihenfolge auf Karte 2 seit Phase 2b: WIE, WAS, WARUM, Zurück, Weiter. */
 const fangbar = () => [...dialog().querySelectorAll("button, [href], input, [tabindex]")].filter((n) => !n.disabled);
 check("W5", "auf Karte 2 sind fünf Elemente fangbar: drei Regler, dann zwei Knöpfe",
   () => fangbar().length === 5
-    && fangbar()[0] === regler("WIE") && fangbar()[4] === knopf("Los geht's"));
+    && fangbar()[0] === regler("WIE") && fangbar()[4] === knopf("Weiter"));
 
-knopf("Los geht's").focus();
+knopf("Weiter").focus();
 await taste("Tab");
 check("W5", "Tab auf dem letzten Element springt auf das erste (Fokus-Falle)",
   () => document.activeElement === regler("WIE"));
 await taste("Tab", { shiftKey: true });
 check("W5", "Shift+Tab auf dem ersten Element springt auf das letzte",
-  () => document.activeElement === knopf("Los geht's"));
+  () => document.activeElement === knopf("Weiter"));
 aussen.focus();
 await taste("Tab");
 check("W5", "Tab von außerhalb der Box holt den Fokus zurück auf das erste Element",
@@ -725,6 +830,630 @@ check("W5", "in App.jsx steht setWillkommen(true) INNERHALB der durchgeklickt-Ve
 check("W5", "App.jsx schließt die Box in BEIDEN Fällen (setWillkommenOffen(false) ungeschützt)",
   () => !!wkAufruf && /setWillkommenOffen\(false\)/.test(wkAufruf[1])
     && wkAufruf[1].indexOf("setWillkommenOffen(false)") > wkAufruf[1].indexOf("setWillkommen(true)"));
+});
+
+/* =========================================================================
+   W6 — KARTE 3: DIE KI-FRAGE (neu in Phase 2b)
+   Der Abschluss der Box ist zugleich die Entscheidung über einen bezahlten
+   Pfad. Vier Zusagen hängen hier:
+     1. „Los geht's" ist gesperrt, solange nichts gewählt ist.
+     2. Die Wahl wird ERST beim Durchklicken geschrieben — wer zurückgeht und
+        abbricht, hat nichts hinterlassen.
+     3. onClose trägt { durchgeklickt, ki }.
+     4. Das Anmelde-Angebot ist ein ANGEBOT, kein Tor — und erscheint nur bei
+        „Mit KI" und ohne Konto.
+   Jeder Fall startet mit einer frischen Box UND einem leeren KI-Topf, damit
+   kein Rest aus dem vorigen Fall die Messung trägt.
+   ========================================================================= */
+abschnitt("W6", async () => {
+console.log("\n--- W6: Karte 3, die KI-Frage ---");
+
+/* Frische Box, leerer Topf, Gast — und bis Karte 3 durchklicken.
+   `sitzung` stellt die Anmeldelage ein, BEVOR die Box aufgebaut wird. Nur so
+   ist der useState-Initialweg von `kiFaehig` überhaupt messbar; wer die Lage
+   erst nach dem Aufbau ändert, misst immer den signIn-Weg. */
+const zuKarte3 = async (sitzung = null) => {
+  kiTopfLeeren();
+  authAuf();
+  if (sitzung) {
+    auth.konto = sitzung.konto;
+    if ("faehigkeiten" in sitzung) auth.faehigkeiten = sitzung.faehigkeiten;
+    if ("zustand" in sitzung) auth.zustand = sitzung.zustand;
+  }
+  schliessRufe.length = 0;
+  await act(async () => { steuer.setOffen(false); });
+  await act(async () => { steuer.setOffen(true); });
+  await klick(knopf("Weiter"));   // 1 → 2
+  await klick(knopf("Weiter"));   // 2 → 3
+};
+const ruf = (i) => schliessRufe[i] || [];
+const artVon = (i) => (ruf(i)[0] && typeof ruf(i)[0] === "object" ? ruf(i)[0] : null);
+const losKnopf = () => knopf("Los geht's");
+
+await zuKarte3();
+check("W6", "Karte 3 trägt die Überschrift „Mit oder ohne KI?“",
+  () => inDialog("h2").length === 1 && inDialog("h2")[0].textContent.trim() === "Mit oder ohne KI?");
+check("W6", "das aria-label des Dialogs folgt auf die dritte Karte",
+  () => dialog().getAttribute("aria-label") === "Mit oder ohne KI");
+check("W6", "Karte 3 nennt ausdrücklich, dass ohne KI alles funktioniert",
+  () => /Ohne KI funktioniert alles/.test(dialogText())
+    && /vollständig und kostenlos auf deinem Gerät/.test(dialogText()));
+check("W6", "Karte 3 sagt zu, dass jede Funktion einzeln schaltbar bleibt",
+  () => /in den Einstellungen an- und abschalten/.test(dialogText()));
+check("W6", "Karte 3 hat die vier Knöpfe: Mit KI, Ohne KI, Zurück, Los geht's",
+  () => knoepfe().map((b) => b.textContent.trim()).join("|") === "Mit KI|Ohne KI|Zurück|Los geht's");
+check("W6", "der Fokus-Eintritt greift auch auf Karte 3 — er landet auf „Mit KI“",
+  () => document.activeElement === knopf("Mit KI"));
+
+/* ---- Zusage 1: gesperrt, solange nichts gewählt ist. */
+check("W6", "vor der Wahl ist „Los geht's“ DEAKTIVIERT",
+  () => losKnopf().disabled === true);
+check("W6", "und trägt eine Begründung als Tooltip",
+  () => /zuerst mit oder ohne KI/i.test(losKnopf().getAttribute("title") || ""));
+check("W6", "vor der Wahl steht kein aria-pressed auf true",
+  () => knopf("Mit KI").getAttribute("aria-pressed") === "false"
+    && knopf("Ohne KI").getAttribute("aria-pressed") === "false");
+/* Ein gesperrter Knopf darf auch per Klick-Ereignis nicht auslösen — und
+   ebenso wenig per Tastatur. Beides wird ausdrücklich versucht. */
+await klick(losKnopf());
+check("W6", "ein Klick auf den gesperrten Knopf löst NICHTS aus"
+  + "  [gemessen: " + schliessRufe.length + " onClose, Topf " + JSON.stringify(kiTopf().roh) + "]",
+  () => schliessRufe.length === 0 && kiTopf().roh === null);
+losKnopf().focus();
+for (const key of ["Enter", " ", "Spacebar"]) {
+  await act(async () => {
+    losKnopf().dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    losKnopf().dispatchEvent(new dom.window.KeyboardEvent("keyup", { key, bubbles: true, cancelable: true }));
+  });
+}
+check("W6", "auch Enter und Leertaste lösen den gesperrten Knopf nicht aus"
+  + "  [gemessen: " + schliessRufe.length + " onClose]",
+  () => schliessRufe.length === 0 && kiTopf().roh === null);
+/* Ein gesperrter Knopf gehört auch nicht in die Fokus-Falle — sonst liefe
+   die Tab-Reihenfolge auf ein Element zu, das nichts tut. */
+const fangbar3 = () => [...dialog().querySelectorAll(FOKUS_SELEKTOR_TEST)].filter((n) => !n.disabled);
+check("W6", "der gesperrte Knopf ist nicht fangbar — die Falle endet auf „Zurück“"
+  + "  [fangbar: " + fangbar3().map((n) => n.textContent.trim() || n.getAttribute("aria-label")).join(", ") + "]",
+  () => fangbar3().length === 3 && fangbar3()[2] === knopf("Zurück"));
+
+/* ---- Zusage 1b: nach der Wahl offen. */
+await klick(knopf("Ohne KI"));
+check("W6", "nach der Wahl ist „Los geht's“ freigegeben",
+  () => losKnopf().disabled === false && !losKnopf().getAttribute("title"));
+check("W6", "die Wahl ist über aria-pressed ablesbar",
+  () => knopf("Ohne KI").getAttribute("aria-pressed") === "true"
+    && knopf("Mit KI").getAttribute("aria-pressed") === "false");
+check("W6", "„Ohne KI“ bekommt eine Bestätigung, die auf die Einstellungen zeigt",
+  () => /jederzeit in den Einstellungen einschalten/.test(dialogText()));
+/* ---- Zusage 2: NICHTS ist geschrieben, bevor „Los geht's" geklickt wurde. */
+check("W6", "das ANTIPPEN der Wahl schreibt noch nichts in den KI-Topf"
+  + "  [gemessen: " + JSON.stringify(kiTopf().roh) + "]",
+  () => kiTopf().roh === null && kiTopf().marke === null);
+await klick(knopf("Mit KI"));
+check("W6", "auch das Umentscheiden schreibt nichts",
+  () => kiTopf().roh === null && knopf("Mit KI").getAttribute("aria-pressed") === "true");
+
+/* ---- Zusage 2b: der Abbruch hinterlässt nichts. Drei Wege raus. */
+await klick(knopf("Zurück"));
+check("W6", "„Zurück“ von Karte 3 führt auf Karte 2 und schreibt nichts",
+  () => inDialog("h2")[0].textContent.trim() === "Das Dreieck" && kiTopf().roh === null);
+await klick(knopf("Weiter"));
+check("W6", "der Rückweg 3 → 2 → 3 verliert die Wahl NICHT",
+  () => knopf("Mit KI").getAttribute("aria-pressed") === "true" && losKnopf().disabled === false);
+await taste("Escape");
+check("W6", "Escape nach getroffener Wahl schreibt NICHTS — abgebrochen ist abgebrochen"
+  + "  [gemessen: Topf " + JSON.stringify(kiTopf().roh) + ", onClose " + JSON.stringify(artVon(0)) + "]",
+  () => kiTopf().roh === null && kiTopf().marke === null
+    && artVon(0) !== null && artVon(0).durchgeklickt === false);
+check("W6", "und der Escape-Ruf trägt kein `ki` — es gab keine Entscheidung",
+  () => artVon(0).ki === undefined);
+/* NEU 28.07.2026 — die Schlüsselmenge des Abbruchwegs, exakt.
+   Sie ist am 28.07. gemessen worden (ein Schlüssel: `durchgeklickt`) und
+   danach gepinnt. Der Abschlussweg trägt seit dem F7-Fix DREI Schlüssel; der
+   Abbruchweg darf davon keinen einzigen mitbekommen. Ein `gespeichert: false`
+   hier wäre besonders tückisch: App.jsx:2111 verzweigt auf
+   `art.gespeichert !== false`, und die Verzweigung würde damit auf einem Weg
+   greifen, auf dem gar nichts zu speichern war — der Abbruch sähe aus wie ein
+   fehlgeschlagener Schreibvorgang. */
+check("W6", "der Escape-Ruf trägt GENAU einen Schlüssel: durchgeklickt"
+  + "  [gemessen: " + JSON.stringify(Object.keys(artVon(0) || {}).sort()) + "]",
+  () => artVon(0) !== null && Object.keys(artVon(0)).sort().join(",") === "durchgeklickt");
+check("W6", "insbesondere kein `gespeichert` auf dem Abbruchweg — es wurde nichts versucht",
+  () => artVon(0) !== null && !("gespeichert" in artVon(0)));
+
+/* ---- Zusage 3: beide Wege schreiben den richtigen Wert. */
+for (const [label, erwartet] of [["Ohne KI", false], ["Mit KI", true]]) {
+  await zuKarte3();
+  await klick(knopf(label));
+  await klick(losKnopf());
+  const topf = kiTopf();
+  check("W6", "„" + label + "“ + „Los geht's“ schreibt global = " + erwartet
+    + "  [gemessen: " + JSON.stringify(topf.stand && topf.stand.global) + "]",
+    () => !!topf.stand && topf.stand.global === erwartet);
+  check("W6", "„" + label + "“ setzt die Versionsmarke — ohne sie zählt die Wahl nicht"
+    + "  [gemessen: " + JSON.stringify(topf.marke) + "]",
+    () => topf.marke === KS.KI_WAHL_VERSION);
+  check("W6", "„" + label + "“: die Wahl gilt danach auch für den Schalter selbst",
+    () => KS.wahlBestaetigt(dom.window.localStorage) === true
+      && KS.kiGrundsaetzlichAn(dom.window.localStorage) === erwartet
+      && KS.kiAn("suche", dom.window.localStorage) === erwartet);
+  /* VERTRAGSÄNDERUNG 28.07.2026 (F7-Fix) — DER ABSCHLUSSWEG TRÄGT DREI
+     SCHLÜSSEL. Vorher waren es zwei; `gespeichert` sagt dem Aufrufer, ob die
+     Wahl den Speicher wirklich erreicht hat. App.jsx:2111 hängt daran:
+     `art.gespeichert !== false` entscheidet, ob die Box je wiederkommt.
+     Die Schlüsselmenge wird EXAKT geprüft, nicht als Teilmenge — ein
+     vierter Schlüssel wäre eine stille Vertragserweiterung, ein fehlender
+     eine stille Verengung, und beides bemerkt ein Teilmengen-Check nicht. */
+  check("W6", "„" + label + "“: onClose trägt GENAU { durchgeklickt, ki, gespeichert }"
+    + "  [gemessen: " + JSON.stringify(Object.keys(artVon(0) || {}).sort()) + "]",
+    () => artVon(0) !== null && Object.keys(artVon(0)).sort().join(",") === "durchgeklickt,gespeichert,ki");
+  check("W6", "„" + label + "“: die Werte sind { durchgeklickt: true, ki: " + erwartet + " }"
+    + "  [gemessen: " + JSON.stringify(artVon(0)) + "]",
+    () => artVon(0) !== null && artVon(0).durchgeklickt === true && artVon(0).ki === erwartet);
+  /* Der Gegenpol zum blockierten Speicher weiter unten: Wenn das Schreiben
+     WIRKLICH durchging, muss `gespeichert === true` stehen. Gegengeprüft am
+     Topf selbst — sonst wäre auch ein fest verdrahtetes `true` grün. */
+  check("W6", "„" + label + "“: erfolgreiches Schreiben meldet gespeichert === true"
+    + "  [gemessen: " + JSON.stringify(artVon(0) && artVon(0).gespeichert)
+    + ", Topf wirklich beschrieben: " + (kiTopf().marke === KS.KI_WAHL_VERSION) + "]",
+    () => artVon(0) !== null && artVon(0).gespeichert === true
+      && kiTopf().marke === KS.KI_WAHL_VERSION);
+  check("W6", "„" + label + "“: genau ein onClose", schliessRufe.length === 1);
+  check("W6", "„" + label + "“: der Topf trägt einen Zeitstempel",
+    () => typeof topf.stand.gefragtAm === "string" && topf.stand.gefragtAm.length > 0);
+}
+
+/* ---- Zusage 3b (NEU 28.07.2026, F7-Fix): BLOCKIERTER SPEICHER.
+   Im Privatmodus und bei voller Quote wirft `storage.setItem`. `setzeGlobal`
+   fängt das ab und bleibt fail-closed — die Wahl ist dann NICHT wirksam.
+   Genau das muss die Box nach außen melden: App.jsx:2111 markiert die
+   Willkommensbox nur bei `gespeichert !== false` als gesehen. Ohne die
+   Meldung wäre die einzige Stelle, an der je nach KI gefragt wird, verbrannt
+   — der Nutzer hätte ausdrücklich „Mit KI" gewählt, fände keine einzige
+   KI-Funktion und bekäme nie wieder eine Gelegenheit.
+   Geprüft wird das ganze Bündel: die Meldung, die Wahl darin, die Form der
+   Meldung, ihre Einmaligkeit und der Zustand, den der Rest der App danach
+   tatsächlich vorfindet. */
+const echterSpeicherW6 = dom.window.localStorage;
+const setzeSpeicher = (s) => Object.defineProperty(globalThis, "localStorage",
+  { value: s, configurable: true, writable: true });
+/* Privatmodus: nichts drin, nichts geht rein. */
+const totalBlockiert = {
+  getItem: () => null,
+  setItem: () => { throw new Error("QuotaExceededError"); },
+  removeItem: () => {},
+};
+for (const [label, wahl] of [["Mit KI", true], ["Ohne KI", false]]) {
+  await zuKarte3();
+  await klick(knopf(label));
+  setzeSpeicher(totalBlockiert);
+  await klick(losKnopf());
+  setzeSpeicher(echterSpeicherW6);
+  const art = artVon(0);
+  check("W6", "blockierter Speicher, „" + label + "“: onClose meldet gespeichert === false"
+    + "  [gemessen: " + JSON.stringify(art) + "]",
+    () => art !== null && art.gespeichert === false);
+  check("W6", "blockierter Speicher, „" + label + "“: `ki` trägt trotzdem die getroffene Wahl (" + wahl + ")"
+    + "  [gemessen: ki=" + JSON.stringify(art && art.ki) + "]",
+    () => art !== null && art.durchgeklickt === true && art.ki === wahl);
+  check("W6", "blockierter Speicher, „" + label + "“: dieselbe Schlüsselmenge wie sonst — kein Sonderformat"
+    + "  [gemessen: " + JSON.stringify(Object.keys(art || {}).sort()) + "]",
+    () => art !== null && Object.keys(art).sort().join(",") === "durchgeklickt,gespeichert,ki");
+  check("W6", "blockierter Speicher, „" + label + "“: trotzdem GENAU ein onClose"
+    + "  [gemessen: " + schliessRufe.length + "]",
+    () => schliessRufe.length === 1);
+  check("W6", "blockierter Speicher, „" + label + "“: im echten Topf steht nichts — auch keine Versionsmarke"
+    + "  [gemessen: Topf " + JSON.stringify(kiTopf().roh) + ", Marke " + JSON.stringify(kiTopf().marke) + "]",
+    () => kiTopf().roh === null && kiTopf().marke === null);
+  check("W6", "blockierter Speicher, „" + label + "“: die Frage gilt als UNBEANTWORTET — fail-closed"
+    + "  [gemessen: wahlBestaetigt=" + KS.wahlBestaetigt(echterSpeicherW6)
+    + ", kiGrundsaetzlichAn=" + KS.kiGrundsaetzlichAn(echterSpeicherW6) + "]",
+    () => KS.wahlBestaetigt(echterSpeicherW6) === false
+      && KS.kiGrundsaetzlichAn(echterSpeicherW6) === false
+      && KS.kiAn("suche", echterSpeicherW6) === false);
+}
+
+/* ---- Zusage 3c: DER HALBE SCHREIBVORGANG.
+   Der schlimmere Fall, und der einzige, in dem die Versionsmarke wirklich
+   arbeitet: `kd:ki` geht durch, die Marke wirft (die Quote läuft genau
+   dazwischen voll). Im Topf steht danach `global: true` — die Wahl ist aber
+   nicht bestätigt. Erst die Marken-Prüfung in `kiGrundsaetzlichAn` (K1) hält
+   das fail-closed; ohne sie stünde der bezahlte Pfad offen, während die Box
+   nach außen `gespeichert: false` meldet und App.jsx die Frage wiederholt.
+   kischalter_test prüft K1 an synthetischen Töpfen — hier entsteht der halbe
+   Topf zum ersten Mal auf dem echten Schreibweg der Box. */
+await zuKarte3();
+await klick(knopf("Mit KI"));
+const halbGeschrieben = {
+  getItem: (k) => echterSpeicherW6.getItem(k),
+  setItem: (k, v) => {
+    if (k === "kd:ki-version") throw new Error("QuotaExceededError");
+    echterSpeicherW6.setItem(k, v);
+  },
+  removeItem: (k) => echterSpeicherW6.removeItem(k),
+};
+setzeSpeicher(halbGeschrieben);
+await klick(losKnopf());
+setzeSpeicher(echterSpeicherW6);
+check("W6", "halber Schreibvorgang: der Wert steht im Topf, die Versionsmarke fehlt"
+  + "  [gemessen: global=" + JSON.stringify(kiTopf().stand && kiTopf().stand.global)
+  + ", Marke=" + JSON.stringify(kiTopf().marke) + "]",
+  () => !!kiTopf().stand && kiTopf().stand.global === true && kiTopf().marke === null);
+check("W6", "halber Schreibvorgang: die Box meldet trotzdem gespeichert === false"
+  + "  [gemessen: " + JSON.stringify(artVon(0)) + "]",
+  () => artVon(0) !== null && artVon(0).gespeichert === false && artVon(0).ki === true
+    && schliessRufe.length === 1);
+check("W6", "halber Schreibvorgang: der halbe Topf schaltet NICHTS frei — fail-closed über die Marke"
+  + "  [gemessen: wahlBestaetigt=" + KS.wahlBestaetigt(echterSpeicherW6)
+  + ", kiGrundsaetzlichAn=" + KS.kiGrundsaetzlichAn(echterSpeicherW6)
+  + ", kiAn('suche')=" + KS.kiAn("suche", echterSpeicherW6) + "]",
+  () => KS.wahlBestaetigt(echterSpeicherW6) === false
+    && KS.kiGrundsaetzlichAn(echterSpeicherW6) === false
+    && KS.kiAn("suche", echterSpeicherW6) === false);
+kiTopfLeeren();
+
+/* ---- Zusage 4: das Anmelde-Angebot. */
+const anmeldeBlock = () => dialogText().includes("KI-Funktionen laufen über dein Konto");
+const feld = (label) => inDialog("input").find((i) => i.getAttribute("aria-label") === label);
+/* BEFUND AN MIR SELBST, behoben am 28.07.2026: Bis eben prüften diese Checks
+   die Zusage mit `/Angemeldet/` auf dem Dialogtext. Seit dem F9-Fix beginnt
+   auch der Hinweis für ein Konto OHNE KI-Freischaltung mit „Angemeldet" —
+   zu Recht, der Nutzer IST angemeldet. Damit matchte das Muster in der
+   Zusage UND in ihrer Verneinung: gemessen trägt der kontoOhneKi-Zweig
+   `wortAngemeldet = true` bei `zusage = false`. Ein Wächter über eine
+   Zusage darf nicht auf einem Wort stehen, das auch in ihrem Gegenteil
+   vorkommt — sonst wäre der dritte Zweig als „Zusage steht" durchgegangen.
+   Deshalb ab hier die VOLLEN Sätze, alle drei wörtlich aus Willkommen.jsx.
+
+   NACHGEZOGEN 28.07.2026 (F10-Fix): Es sind jetzt DREI Lagen, nicht zwei.
+   Der Hinweis hat zwei Wortlaute, weil `kiFaehig` die Zusage aus zwei
+   verschiedenen Gründen zurückhält — fehlende Freischaltung (dagegen hilft
+   nur der Betreiber) und degradierte Sitzung (gibt sich von selbst). Genau
+   diese Unterscheidung WAR der Befund F10; ein Prädikat, das bloß „irgendein
+   Hinweis steht da" prüft, hätte ihn nicht gefunden und würde seine
+   Rückkehr nicht bemerken. Deshalb zwei getrennte Prädikate, und
+   `hinweisOhneKi()` nur noch dort, wo wirklich „einer von beiden" gemeint
+   ist. */
+const ZUSAGE_SATZ = "Angemeldet — die KI-Funktionen stehen dir zur Verfügung.";
+const HINWEIS_DEGRADIERT = "Angemeldet — die KI-Funktionen sind gerade nicht erreichbar.";
+const HINWEIS_NICHT_FREI = "Angemeldet — dein Konto ist für die KI-Funktionen aber noch nicht freigeschaltet.";
+/* Ohne Satzzeichen: Der degradierte Text setzt danach ein Semikolon fort,
+   der andere einen Punkt. Gemessen — die Zusage selbst ist wortgleich. */
+const WEITERBETRIEB = "Alles andere funktioniert unverändert weiter";
+const zusage = () => dialogText().includes(ZUSAGE_SATZ);
+const hinweisDegradiert = () => dialogText().includes(HINWEIS_DEGRADIERT);
+const hinweisNichtFrei = () => dialogText().includes(HINWEIS_NICHT_FREI);
+const hinweisOhneKi = () => hinweisDegradiert() || hinweisNichtFrei();
+/* Was von einer „Angemeldet"-Zeile tatsächlich dasteht — für die Messwerte
+   in den Check-Beschriftungen. Die Lagen müssen unterscheidbar bleiben,
+   sonst meldet die Messhilfe bei einer Vertragsänderung nur „irgendetwas". */
+const angemeldetLage = () => (zusage() ? "ZUSAGE"
+  : hinweisDegradiert() ? "HINWEIS degradiert"
+  : hinweisNichtFrei() ? "HINWEIS nicht freigeschaltet"
+  : /Angemeldet/.test(dialogText()) ? "irgendein anderer Angemeldet-Text" : "(nichts)");
+await zuKarte3();
+check("W6", "vor der Wahl gibt es kein Anmelde-Angebot", () => !anmeldeBlock());
+await klick(knopf("Ohne KI"));
+check("W6", "bei „Ohne KI“ gibt es NIE ein Anmelde-Angebot", () => !anmeldeBlock() && !feld("Benutzername"));
+await klick(knopf("Mit KI"));
+/* Verschärft am 28.07.2026: Der Gast bekommt WEDER Zusage NOCH einen der
+   beiden Hinweise — ihm fehlt tatsächlich die Anmeldung, nicht eine
+   Freischaltung und auch keine Verbindung. Das ist dieselbe Zusage, die
+   weiter unten der Gast-mit-personalAi-Fall bewacht; sie steht zusätzlich
+   HIER, weil diese Stelle als erste im Abschnitt läuft. Eine Mutation, die
+   `kontoOhneKi` den Modus vergessen lässt, riss W6 bisher an genau dieser
+   Stelle ab, bevor der gezielte Check überhaupt drankam — jetzt benennt der
+   erste rote Check auch gleich die Ursache. */
+check("W6", "bei „Mit KI“ und ohne Konto erscheint das Angebot mit zwei Feldern"
+  + "  [gemessen: " + angemeldetLage() + "]",
+  () => anmeldeBlock() && !!feld("Benutzername") && !!feld("Passwort")
+    && !zusage() && !hinweisOhneKi());
+check("W6", "das Passwortfeld ist als solches ausgezeichnet",
+  () => feld("Passwort").getAttribute("type") === "password");
+/* Die Zusage aus KontoBereich.jsx: „Anmelden ist ein Angebot, kein Tor." */
+check("W6", "das Angebot sagt sichtbar, dass ohne Anmeldung alles nutzbar bleibt",
+  () => /Ohne Anmeldung bleibt alles nutzbar/.test(dialogText()));
+check("W6", "„Los geht's“ bleibt trotz leerem Anmeldeformular freigegeben — kein Pflichtschritt",
+  () => losKnopf().disabled === false);
+check("W6", "der Anmelde-Knopf ist gesperrt, solange Benutzername oder Passwort fehlen",
+  () => knopf("Anmelden").disabled === true);
+await tippeIn(feld("Benutzername"), "max");
+check("W6", "nur Benutzername genügt nicht", () => knopf("Anmelden").disabled === true);
+await tippeIn(feld("Passwort"), "geheim");
+check("W6", "mit beiden Angaben ist der Anmelde-Knopf offen", () => knopf("Anmelden").disabled === false);
+check("W6", "bis hierher ist KEIN Anmeldeversuch gelaufen", auth.rufe.length === 0);
+
+/* Die neuen Felder müssen in der Fokus-Falle auftauchen — sonst führt Tab
+   aus dem Dialog heraus, sobald das Angebot erscheint. */
+check("W6", "die Anmeldefelder sind Teil der Fokus-Falle"
+  + "  [fangbar: " + fangbar3().length + "]",
+  () => fangbar3().includes(feld("Benutzername")) && fangbar3().includes(feld("Passwort"))
+    && fangbar3().includes(knopf("Anmelden")));
+knopf("Los geht's").focus();
+await taste("Tab");
+check("W6", "Tab am Ende springt zurück auf „Mit KI“ — die Falle hält mit dem Angebot",
+  () => document.activeElement === knopf("Mit KI"));
+
+/* Der Anmeldeweg selbst. */
+await klick(knopf("Anmelden"));
+check("W6", "die Anmeldung geht mit genau den eingegebenen Daten an authService"
+  + "  [gemessen: " + JSON.stringify(auth.rufe) + "]",
+  () => auth.rufe.length === 1 && auth.rufe[0].benutzer === "max" && auth.rufe[0].passwort === "geheim");
+check("W6", "nach erfolgreicher Anmeldung verschwindet das Formular",
+  () => !anmeldeBlock() && !feld("Benutzername"));
+check("W6", "und die Box gibt die VOLLE Zusage — wörtlich, nicht bloß das Wort „Angemeldet“"
+  + "  [gemessen: " + angemeldetLage() + "]",
+  () => zusage() && !hinweisOhneKi());
+check("W6", "die Anmeldung allein schließt die Box nicht und schreibt keine KI-Wahl",
+  () => !!dialog() && schliessRufe.length === 0 && kiTopf().roh === null);
+await klick(losKnopf());
+check("W6", "danach schreibt „Los geht's“ ganz normal die Wahl",
+  () => kiTopf().stand.global === true && artVon(0).ki === true);
+
+/* Ein fehlgeschlagener Anmeldeversuch. */
+await zuKarte3();
+auth.modus = "fehler";
+auth.fehler = new ERR.BoundaryError(ERR.ERROR_CODES.UNAUTHENTICATED, { source: "auth", operation: "signIn" });
+await klick(knopf("Mit KI"));
+await tippeIn(feld("Benutzername"), "max");
+await tippeIn(feld("Passwort"), "falsch");
+await klick(knopf("Anmelden"));
+check("W6", "ein Fehlschlag zeigt GENAU den Text aus errorText und lässt das Formular stehen"
+  + "  [erwartet: „" + ERR.errorText(auth.fehler).slice(0, 40) + "…“]",
+  () => dialogText().includes(ERR.errorText(auth.fehler)) && !!feld("Benutzername"));
+check("W6", "ein Fehlschlag schließt die Box nicht und sperrt „Los geht's“ nicht",
+  () => !!dialog() && schliessRufe.length === 0 && losKnopf().disabled === false);
+check("W6", "der Fehlschlag ist kein Server-Sammeltext, sondern der Code-genaue",
+  () => ERR.errorText(auth.fehler) !== ERR.errorText({ code: ERR.ERROR_CODES.SERVER })
+    && dialogText().includes(ERR.errorText(auth.fehler)));
+await klick(losKnopf());
+check("W6", "„Los geht's“ funktioniert auch nach einem gescheiterten Anmeldeversuch"
+  + "  [gemessen: " + JSON.stringify(artVon(0)) + "]",
+  () => artVon(0) !== null && artVon(0).durchgeklickt === true && artVon(0).ki === true
+    && kiTopf().stand.global === true);
+
+/* Escape MITTEN in einer laufenden Anmeldung. Der Fall ist real: der Nutzer
+   tippt sich vertippt, wartet, verliert die Geduld. Geprüft wird, dass die
+   Box sauber zumacht und dass die spätere Auflösung des Anmelde-Versprechens
+   nichts mehr umwirft. */
+await zuKarte3();
+auth.modus = "haengen";
+await klick(knopf("Mit KI"));
+await tippeIn(feld("Benutzername"), "max");
+await tippeIn(feld("Passwort"), "geheim");
+await klick(knopf("Anmelden"));
+check("W6", "während der Anmeldung ist der Anmelde-Knopf gesperrt und zeigt es an",
+  () => auth.rufe.length === 1 && !!knopfTeil("…") && knopfTeil("…").disabled === true);
+check("W6", "während der Anmeldung bleibt „Los geht's“ bedienbar — die Anmeldung ist kein Tor",
+  () => losKnopf().disabled === false);
+const vorEsc = schliessRufe.length;
+await taste("Escape");
+check("W6", "Escape während laufender Anmeldung schließt sauber ab"
+  + "  [gemessen: " + JSON.stringify(artVon(vorEsc)) + "]",
+  () => schliessRufe.length === vorEsc + 1 && artVon(vorEsc).durchgeklickt === false);
+check("W6", "und schreibt keine KI-Wahl", () => kiTopf().roh === null);
+/* Die Box ist danach abgebaut; die Auflösung darf nicht werfen. */
+await act(async () => { steuer.setOffen(false); });
+let aufloesungWarf = false;
+try { await act(async () => { auth.aufloesen({ mode: "account" }); await new Promise((r) => setTimeout(r, 0)); }); }
+catch { aufloesungWarf = true; }
+check("W6", "die Auflösung nach dem Abbau wirft nicht  [gemessen: " + (aufloesungWarf ? "wirft" : "sauber") + "]",
+  () => !aufloesungWarf);
+auth.modus = "erfolg";
+
+/* Wer bereits angemeldet ist, bekommt kein Formular. */
+await zuKarte3();
+auth.konto = true;
+await act(async () => { steuer.setOffen(false); });
+await act(async () => { steuer.setOffen(true); });
+await klick(knopf("Weiter")); await klick(knopf("Weiter"));
+await klick(knopf("Mit KI"));
+/* Der GRÜNE Weg des F8-Fixes: Konto UND `capabilities.personalAi === true`.
+   Das Doppel liefert die Fähigkeit seit dem 28.07.2026 mit — vorher war
+   dieser Fall vom Gegenfall darunter gar nicht zu unterscheiden. */
+check("W6", "wer schon ein Konto MIT personalAi hat, sieht kein Anmeldeformular, sondern die Zusage"
+  + "  [gemessen: " + angemeldetLage() + "]",
+  () => !anmeldeBlock() && !feld("Benutzername") && zusage() && !hinweisOhneKi());
+
+/* ---- Zusage 5 (NEU 28.07.2026, F8-Fix): ANGEMELDET IST NICHT GENUG.
+   „Angemeldet — die KI-Funktionen stehen dir zur Verfügung" ist eine Zusage
+   über einen Pfad, den die Box selbst nicht öffnet: `aiService` verlangt
+   `requireAccount("personalAi")`. Fehlt die Fähigkeit, ist die Zeile eine
+   Lüge, die der Nutzer erst beim ersten Klick auf eine KI-Funktion als
+   solche erkennt — nachdem die Box ihm das Gegenteil versprochen hat.
+   Die Box wendet `kiFaehig` an ZWEI Stellen an (der Snapshot beim Aufbau,
+   der Snapshot nach `signIn`). Beide werden einzeln geprüft; eine Prüfung
+   an nur einer Stelle ließe die andere ungeschützt.
+
+   NACHGEZOGEN 28.07.2026: `kiFaehig` prüft seither DREI Bedingungen, weil
+   `requireAccount` drei prüft — Modus, `state === "ready"` und die
+   Fähigkeit. Jede fehlende Bedingung erzeugt dieselbe Sorte Lüge, nur eine
+   Stelle weiter. Die Fälle unten decken alle drei ab. */
+
+/* (a) Der AUFBAU-Weg: die Sitzung steht schon, bevor die Box aufgeht.
+   Sieben Spielarten von „nicht freigeschaltet". `{}` und `capabilities:
+   null` trennen die strenge Prüfung `=== true` von einem großzügigen
+   `!== false`, das den fehlenden Schlüssel als Ja läse; `"ja"` trennt sie
+   von einer bloßen Wahrheitswert-Prüfung; die drei `state`-Fälle trennen
+   sie von einer Prüfung, die den Zustand gar nicht ansieht. „degraded mit
+   personalAi === true" ist der eigentlich gefährliche: Modus und Fähigkeit
+   stimmen, nur der Zustand nicht — die Zusage wäre erteilt worden, und der
+   erste Klick wäre durch `requireAccount` gefallen. */
+/* Die vierte Spalte ist neu (F10): WELCHER der beiden Hinweise fallen muss.
+   Sie wird EXKLUSIV geprüft — der jeweils andere Text darf nicht dastehen.
+   Genau daran hing der Befund: Vorher bekam auch die degradierte Sitzung
+   den Satz „dein Konto ist nicht freigeschaltet", also eine Diagnose über
+   eine Berechtigung, die das Konto in Wahrheit besitzt. */
+for (const [name, faehigkeiten, zustand, erwartet] of [
+  ["personalAi === false", { personalAi: false }, undefined, "nichtFrei"],
+  ["capabilities fehlt ganz (alter Server)", null, undefined, "nichtFrei"],
+  ["capabilities ist leer", {}, undefined, "nichtFrei"],
+  ["personalAi ist wahrheitswertig, aber nicht true", { personalAi: "ja" }, undefined, "nichtFrei"],
+  ["state === degraded, personalAi === true", { personalAi: true }, "degraded", "degradiert"],
+  ["VORRANGREGEL: degraded UND personalAi === false", { personalAi: false }, "degraded", "degradiert"],
+  ["state fehlt ganz, personalAi === true", { personalAi: true }, null, "nichtFrei"],
+]) {
+  await zuKarte3({ konto: true, faehigkeiten, zustand });
+  await klick(knopf("Mit KI"));
+  /* Zwei getrennte Checks mit Absicht: Der erste bewacht, dass die Zusage
+     NICHT fällt — das ist die Lüge, um die es geht. Der zweite bewacht, dass
+     der RICHTIGE Grund genannt wird. Zusammengelegt könnte eine spätere
+     Änderung am Hinweistext eine echte Regression an der Zusage verdecken. */
+  check("W6", "Konto ohne KI-Freischaltung (" + name + "): KEINE Zusage, die KI stünde bereit"
+    + "  [gemessen: " + angemeldetLage() + "]",
+    () => !zusage());
+  check("W6", "Konto ohne KI-Freischaltung (" + name + "): genau der Hinweis „" + erwartet
+    + "“ — und der andere NICHT  [gemessen: " + angemeldetLage() + "]",
+    () => hinweisDegradiert() === (erwartet === "degradiert")
+      && hinweisNichtFrei() === (erwartet === "nichtFrei"));
+}
+
+/* (b) Die erste Hälfte der Bedingung: `mode === "account"`. Ein Gast mit
+   `personalAi` im Snapshot ist keine Anmeldung — ohne diesen Fall wäre eine
+   Prüfung, die den Modus vergisst, durch alles andere hier grün. Der Gast
+   bekommt WEDER Zusage NOCH Hinweis, sondern das Angebot: Ihm fehlt
+   tatsächlich die Anmeldung, nicht die Freischaltung. */
+await zuKarte3({ konto: false, faehigkeiten: { personalAi: true } });
+await klick(knopf("Mit KI"));
+check("W6", "Gast MIT personalAi im Snapshot gilt trotzdem nicht als angemeldet"
+  + "  [gemessen: " + angemeldetLage() + ", Formular=" + anmeldeBlock() + "]",
+  () => !zusage() && !hinweisOhneKi() && anmeldeBlock());
+
+/* (c) Der signIn-Weg: die Anmeldung SELBST liefert ein Konto ohne
+   `personalAi`. Der Aufruf geht durch, wirft nicht, meldet keinen Fehler —
+   und trotzdem darf die Box die Zusage nicht geben. */
+await zuKarte3({ konto: false, faehigkeiten: { personalAi: false } });
+await klick(knopf("Mit KI"));
+await tippeIn(feld("Benutzername"), "max");
+await tippeIn(feld("Passwort"), "geheim");
+await klick(knopf("Anmelden"));
+check("W6", "die Anmeldung ohne personalAi läuft erfolgreich durch — kein Fehler, keine Ausnahme"
+  + "  [gemessen: " + auth.rufe.length + " Ruf(e), Sitzung " + JSON.stringify(auth.snapshot()) + "]",
+  () => auth.rufe.length === 1 && auth.snapshot().mode === "account" && !!dialog());
+check("W6", "eine ERFOLGREICHE Anmeldung ohne personalAi bekommt trotzdem keine KI-Zusage"
+  + "  [gemessen: " + angemeldetLage() + "]",
+  () => !zusage());
+check("W6", "und „Los geht's“ bleibt dabei offen — der Nutzer sitzt nicht fest",
+  () => losKnopf().disabled === false);
+
+/* (c2) Derselbe Weg mit der neuen dritten Bedingung: Die Anmeldung liefert
+   ein Konto, das `personalAi` SEHR WOHL trägt — aber degradiert ist. Ohne
+   die `state`-Prüfung sähe dieser Snapshot aus wie ein voll berechtigtes
+   Konto. Das ist der Fall, den das Doppel bis heute gar nicht darstellen
+   konnte, weil es `state` nicht kannte. */
+await zuKarte3({ konto: false, faehigkeiten: { personalAi: true }, zustand: "degraded" });
+await klick(knopf("Mit KI"));
+check("W6", "vor der Anmeldung steht das Angebot — der Gast ist noch kein Konto",
+  () => anmeldeBlock() && !zusage() && !hinweisOhneKi());
+await tippeIn(feld("Benutzername"), "max");
+await tippeIn(feld("Passwort"), "geheim");
+await klick(knopf("Anmelden"));
+check("W6", "Anmeldung liefert ein DEGRADIERTES Konto mit personalAi: die Anmeldung selbst glückt"
+  + "  [gemessen: " + auth.rufe.length + " Ruf(e), Sitzung " + JSON.stringify(auth.snapshot()) + "]",
+  () => auth.rufe.length === 1 && auth.snapshot().state === "degraded"
+    && auth.snapshot().capabilities.personalAi === true);
+check("W6", "…und trotzdem fällt die Zusage NICHT — `state` zählt mit"
+  + "  [gemessen: " + angemeldetLage() + "]",
+  () => !zusage() && hinweisDegradiert() && !hinweisNichtFrei());
+
+/* (d) Der Rückfall `s || authService.getSnapshot()`: Ein Dienst, der nach
+   erfolgreicher Anmeldung nichts zurückgibt, darf die Box nicht in „nicht
+   angemeldet" stehen lassen. Sonst hinge der grüne Weg allein am Rückgabewert
+   von `signIn` — einer Zusage, die `services/auth.js` nirgends schriftlich
+   gibt. */
+await zuKarte3({ konto: false, faehigkeiten: { personalAi: true } });
+const echterSignIn = auth.signIn;
+auth.signIn = function (b, pw) {
+  this.rufe.push({ benutzer: b, passwort: pw }); this.konto = true;
+  return Promise.resolve(undefined);   // liefert nichts zurück
+};
+await klick(knopf("Mit KI"));
+await tippeIn(feld("Benutzername"), "max");
+await tippeIn(feld("Passwort"), "geheim");
+await klick(knopf("Anmelden"));
+check("W6", "liefert signIn nichts zurück, zieht die Box den Snapshot nach"
+  + "  [gemessen: " + angemeldetLage() + ", Formular=" + anmeldeBlock() + "]",
+  () => zusage() && !hinweisOhneKi() && !anmeldeBlock());
+auth.signIn = echterSignIn;
+
+/* ---- Zusage 6 (NEU 28.07.2026, F9-Fix): DER DRITTE ZWEIG SELBST.
+   Die Checks oben bewachen, dass die Zusage ausbleibt. Hier steht, was
+   stattdessen passiert — und das war der eigentliche Befund F9: Vorher
+   stellte die Box dem Nutzer wortlos wieder das Anmeldeformular hin, das er
+   gerade erfolgreich ausgefüllt hatte, mit geleertem Passwortfeld und
+   gesperrtem Knopf. Eine geglückte Anmeldung sah aus wie ein stiller
+   Fehlschlag. Der dritte Zweig ist die Zusage, dass das nicht mehr
+   passiert; er wird deshalb hier vollständig festgenagelt, statt als
+   offener F-Hinweis mitzulaufen.
+   (F9 stand bis heute im F-Abschnitt und ist NICHT verschwunden, sondern
+   hierher umgezogen — dieselbe Buchführung wie bei F1–F5.)
+
+   ERWEITERT 28.07.2026 (F10-Fix): Der Zweig hat zwei Wortlaute. Alles, was
+   ihn ausmacht — Formular weg, Grund genannt, Weiterbetrieb zugesagt, keine
+   Fehlerfarbe, nicht festgesteckt — muss für BEIDE gelten, sonst hätte der
+   zweite Wortlaut keine einzige Zusage hinter sich. Deshalb läuft die
+   ganze Gruppe zweimal, einmal je Ursache, und jeder Durchgang prüft
+   zusätzlich, dass der jeweils ANDERE Text nicht dasteht. */
+/* Eigene Farbhilfe: `farbeGleich` liegt im Funktionsrumpf von W3 und ist
+   hier nicht sichtbar. React schreibt Hex, jsdom liest rgb() zurück. */
+const farbeIst = (ist, hex) => ist === hex || ist === alsRgb(hex);
+const gefahrRgb = alsRgb(T.gefahr);
+for (const [ursache, faehigkeiten, zustand, satz, gegensatz] of [
+  ["Freischaltung fehlt", { personalAi: false }, undefined, HINWEIS_NICHT_FREI, HINWEIS_DEGRADIERT],
+  ["Sitzung degradiert", { personalAi: true }, "degraded", HINWEIS_DEGRADIERT, HINWEIS_NICHT_FREI],
+]) {
+  await zuKarte3({ konto: false, faehigkeiten, zustand });
+  await klick(knopf("Mit KI"));
+  const textVorAnmeldung = dialogText();
+  await tippeIn(feld("Benutzername"), "max");
+  await tippeIn(feld("Passwort"), "geheim");
+  await klick(knopf("Anmelden"));
+  check("W6", "F9 (" + ursache + "): die geglückte Anmeldung ändert die Box sichtbar"
+    + "  [gemessen: Text ändert sich=" + (textVorAnmeldung !== dialogText()) + "]",
+    () => textVorAnmeldung !== dialogText());
+  check("W6", "F9 (" + ursache + "): das Anmeldeformular steht NICHT wieder da"
+    + "  [gemessen: Block=" + anmeldeBlock() + ", Benutzerfeld=" + !!feld("Benutzername")
+    + ", Anmelden-Knopf=" + !!knopf("Anmelden") + "]",
+    () => !anmeldeBlock() && !feld("Benutzername") && !knopf("Anmelden"));
+  check("W6", "F9 (" + ursache + "): genau dieser Grund steht da, der andere nicht"
+    + "  [gemessen: " + angemeldetLage() + "]",
+    () => dialogText().includes(satz) && !dialogText().includes(gegensatz));
+  check("W6", "F9 (" + ursache + "): der Weiterbetrieb wird ausdrücklich zugesagt"
+    + "  [gemessen: " + dialogText().includes(WEITERBETRIEB) + "]",
+    () => dialogText().includes(WEITERBETRIEB));
+  /* Der Hinweis ist KEIN Fehler. Der Unterschied ist nicht kosmetisch: Eine
+     Fehlerfarbe sagt „du hast etwas falsch gemacht, versuch es nochmal" —
+     und genau das kann der Nutzer in beiden Fällen nicht. Gegenprobe ist der
+     echte Anmeldefehler weiter oben, der sehr wohl in T.gefahr steht. */
+  const hinweisAbsatz = () => [...dialog().querySelectorAll("p")]
+    .find((el) => el.textContent.replace(/\s+/g, " ").includes(satz));
+  check("W6", "F9 (" + ursache + "): steht nicht in der Fehlerfarbe, sondern im Fließtext"
+    + "  [gemessen: " + JSON.stringify(hinweisAbsatz() && hinweisAbsatz().style.color)
+    + ", T.gefahr wäre " + JSON.stringify(gefahrRgb) + "]",
+    () => !!hinweisAbsatz() && farbeIst(hinweisAbsatz().style.color, T.leinwand)
+      && !farbeIst(hinweisAbsatz().style.color, T.gefahr));
+  check("W6", "F9 (" + ursache + "): sitzt in einem ruhigen Kasten (T.saal), nicht in einer Warnfläche"
+    + "  [gemessen: " + JSON.stringify(hinweisAbsatz() && hinweisAbsatz().parentElement.style.background) + "]",
+    () => !!hinweisAbsatz() && farbeIst(hinweisAbsatz().parentElement.style.background, T.saal));
+  check("W6", "F9 (" + ursache + "): im ganzen Dialog steht kein Element in der Fehlerfarbe"
+    + "  [gemessen: " + [...dialog().querySelectorAll("*")]
+      .filter((el) => el.style && el.style.color === gefahrRgb).length + " Treffer]",
+    () => [...dialog().querySelectorAll("*")].every((el) => !el.style || el.style.color !== gefahrRgb));
+  /* Und der Nutzer steckt nicht fest: Er kann die Box ganz normal abschließen,
+     seine KI-Wahl wird geschrieben wie in jedem anderen Fall. */
+  check("W6", "F9 (" + ursache + "): „Los geht's“ ist offen und trägt keine Sperrbegründung",
+    () => losKnopf().disabled === false && !losKnopf().getAttribute("title"));
+  await klick(losKnopf());
+  check("W6", "F9 (" + ursache + "): der Abschluss schreibt die Wahl ganz normal"
+    + "  [gemessen: " + JSON.stringify(artVon(0)) + ", Topf global="
+    + JSON.stringify(kiTopf().stand && kiTopf().stand.global) + "]",
+    () => artVon(0) !== null && schliessRufe.length === 1
+      && Object.keys(artVon(0)).sort().join(",") === "durchgeklickt,gespeichert,ki"
+      && artVon(0).durchgeklickt === true && artVon(0).ki === true && artVon(0).gespeichert === true
+      && !!kiTopf().stand && kiTopf().stand.global === true
+      && kiTopf().marke === KS.KI_WAHL_VERSION);
+}
+authAuf();
 });
 
 /* =========================================================================
@@ -1204,6 +1933,99 @@ check("F", "F6: Karte 2 erklärt den dritten Fall („Ohne Schlagseite\" / die M
   + ", Mindesthöhe erwähnt=" + /mindestens\s+3|Mindesth[öo]he|erreicht selbst/.test(kartenText) + "]",
   () => /Ohne Schlagseite/.test(kartenText)
     && /mindestens\s+3|Mindesth[öo]he|erreicht selbst/.test(kartenText));
+
+/* ---------------------------------------------------------------------------
+   NEU AUS PHASE 2b — die KI-Frage auf Karte 3.
+   --------------------------------------------------------------------------- */
+
+/* F7 — DER PRIVATMODUS VERBRENNT DIE KI-FRAGE, STATT SIE ZU WIEDERHOLEN.
+   `setzeGlobal` liefert seit K3 `{ stand, gespeichert }` — genau damit ein
+   Aufrufer merken kann, dass nichts geschrieben wurde. Willkommen.jsx wertet
+   die Rückgabe nicht aus:
+       setzeGlobal(kiWahl === true, jetzt || new Date().toISOString());
+       if (onClose) onClose({ durchgeklickt: true, ki: kiWahl === true });
+   Bei blockiertem Storage (Privatmodus, volle Quote) heißt das: die Box meldet
+   `{ durchgeklickt: true, ki: true }`, App.jsx:2106 setzt daraufhin
+   `setWillkommen(true)` — und die Box kommt NIE wieder. Die Frage ist damit
+   verbrannt UND unbeantwortet: `wahlBestaetigt()` bleibt false, `kiAn()` ist
+   fail-closed aus, und der Nutzer, der ausdrücklich „Mit KI" gewählt hat,
+   findet keine einzige KI-Funktion und keinen Hinweis, warum.
+   Die Frage aus dem Auftrag war, ob „beim nächsten Start kommt die Frage
+   wieder" der richtige Ausgang sei — sie kommt eben NICHT wieder, und das ist
+   der schlechtere von beiden.
+   Billigster Fix: `gespeichert` durchreichen —
+   `onClose({ durchgeklickt: true, ki, gespeichert })` — und in App.jsx nur bei
+   `gespeichert` als gesehen markieren. Dann fragt die Box beim nächsten Start
+   erneut, was ehrlich ist. Eine sichtbare Zeile in der Box wäre die Kür. */
+const echterSpeicher = dom.window.localStorage;
+const blockierterSpeicher = {
+  getItem: () => null,
+  setItem: () => { throw new Error("QuotaExceededError"); },
+  removeItem: () => {},
+};
+schliessRufe.length = 0;
+authAuf();
+await act(async () => { steuer.setOffen(false); });
+await act(async () => { steuer.setOffen(true); });
+await klick(knopf("Weiter")); await klick(knopf("Weiter"));
+await klick(knopf("Mit KI"));
+Object.defineProperty(globalThis, "localStorage", { value: blockierterSpeicher, configurable: true, writable: true });
+await klick(knopf("Los geht's"));
+Object.defineProperty(globalThis, "localStorage", { value: echterSpeicher, configurable: true, writable: true });
+const privatRuf = (schliessRufe[0] || [])[0] || {};
+check("F", "F7: bei blockiertem Storage meldet die Box nicht „durchgeklickt“, als wäre alles gespeichert"
+  + "  [gemessen: onClose = " + JSON.stringify(privatRuf)
+  + ", gespeichert-Feld = " + JSON.stringify(privatRuf.gespeichert) + "]",
+  () => privatRuf.gespeichert === false || privatRuf.durchgeklickt === false);
+check("F", "F7a: der Aufrufer kann erkennen, dass die KI-Wahl nicht angekommen ist"
+  + "  [gemessen: Schlüssel " + JSON.stringify(Object.keys(privatRuf)) + "]",
+  () => Object.keys(privatRuf).includes("gespeichert"));
+
+/* F8 — „ANGEMELDET — DIE KI-FUNKTIONEN STEHEN DIR ZUR VERFÜGUNG" IST EINE
+   ZUSAGE, DIE DIE BOX NICHT PRÜFEN KANN. Sie hängt allein an
+   `authService.getSnapshot().mode === "account"`. Der KI-Pfad verlangt aber
+   mehr: `aiService` fordert `requireAccount("personalAi")`, und diese
+   Fähigkeit steht in `session.capabilities`. Ein angemeldetes Konto OHNE
+   `personalAi` bekommt hier die Auskunft, die KI-Funktionen stünden bereit —
+   und läuft beim ersten Versuch in einen Fehler.
+   Der Snapshot trägt die Antwort bereits mit; es ist eine Bedingung mehr. */
+schliessRufe.length = 0;
+authAuf();
+/* Der Fall wird über das Doppel eingestellt, NICHT durch Überschreiben von
+   `auth.snapshot`: Die frühere Fassung ersetzte die Methode und stellte
+   danach eine ALTE, fähigkeitslose Variante wieder her — jeder Abschnitt
+   nach F hätte damit stillschweigend ohne `capabilities` gemessen. */
+auth.konto = true; auth.faehigkeiten = { personalAi: false };
+await act(async () => { steuer.setOffen(false); });
+await act(async () => { steuer.setOffen(true); });
+await klick(knopf("Weiter")); await klick(knopf("Weiter"));
+await klick(knopf("Mit KI"));
+const behauptung = dialogText();
+/* Der volle Satz, nicht das Wort „Angemeldet": Seit dem F9-Fix beginnt auch
+   der Hinweis für ein Konto ohne Freischaltung mit „Angemeldet". */
+check("F", "F8: ein Konto OHNE personalAi bekommt keine Zusage, die KI stünde bereit"
+  + "  [gemessen: " + (behauptung.includes("Angemeldet — die KI-Funktionen stehen dir zur Verfügung.")
+    ? "ZUSAGE" : behauptung.includes("Angemeldet — dein Konto ist für die KI-Funktionen aber noch nicht freigeschaltet.")
+    ? "HINWEIS ohne KI" : "(nichts)") + "]",
+  () => !behauptung.includes("Angemeldet — die KI-Funktionen stehen dir zur Verfügung."));
+authAuf();
+
+/* F9 — UMGEZOGEN AM 28.07.2026, NICHT GESTRICHEN.
+   Der Befund lautete: Die erfolgreiche Anmeldung ohne `personalAi` endete
+   in einer Sackgasse ohne ein Wort Erklärung — `signIn` lief durch, die Box
+   stellte wortlos wieder das Anmeldeformular hin, mit geleertem Passwortfeld
+   und dadurch gesperrtem Knopf, ohne Fehlerzeile. Eine geglückte Anmeldung
+   sah aus wie ein stiller Fehlschlag, und der zweite Versuch endete
+   zwangsläufig genauso.
+   Er ist behoben: Karte 3 hat jetzt einen dritten Zweig (`kontoOhneKi`) mit
+   einem erklärenden Hinweis. Damit gehört der Fall nicht mehr in die Liste
+   der Auffälligkeiten, sondern unter die scharfen Zusagen — er steht als
+   Gruppe „Zusage 6" in W6 und prüft dort deutlich mehr als die alte
+   F-Fassung: dass der Text sich ändert, dass das Formular NICHT wieder
+   dasteht, dass der Hinweis den Grund nennt und den Weiterbetrieb zusagt,
+   dass er nicht in der Fehlerfarbe steht, und dass „Los geht's" offen
+   bleibt und die Wahl ganz normal schreibt.
+   Dieselbe Buchführung wie bei F1–F5: hier dokumentiert, dort geprüft. */
 });
 
 for (const [name, lauf] of ABSCHNITTE) {
@@ -1222,7 +2044,8 @@ const TITEL = {
   W2: "„Weiter\" → Karte 2",
   W3: "DreieckRegler auf Karte 2",
   W4: "Rückweg Karte 2 → Karte 1",
-  W5: "onClose, Escape, Fokus",
+  W5: "Escape und Fokus-Falle",
+  W6: "Karte 3: die KI-Frage",
   D1: "Startwerte aus der start-Prop",
   D2: "Reglerbewegung wirkt",
   D3: "Kategorie-Ableitung",

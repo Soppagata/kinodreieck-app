@@ -471,6 +471,58 @@ check("H", "auch __proto__, constructor und toString fallen auf „ausblenden“
 });
 
 /* =========================================================================
+   U — DIE OBERFLÄCHEN-NAHT (DatenTab)
+   Der KI-Block in DatenTab.jsx wird NICHT gerendert: der Tab zieht neun
+   Geschwister-Komponenten nach (MasterImport, TeilenBlock, KontoBereich,
+   RestoreImport …), und der Block selbst ist reine Darstellung über drei
+   Props. Ein Rendertest kostete den halben Komponentengraphen für drei
+   Aussagen — und zwei davon prüfen die Module oben schon.
+   Was ein Rendertest NICHT ersetzen könnte und hier stattdessen steht: die
+   drei Stellen, an denen die Oberfläche die Modulregeln DUPLIZIERT und
+   deshalb still auseinanderlaufen kann. Läuft eine, zeigt die App einen
+   Zustand an, den `kiAn` anders beantwortet — und der Nutzer sieht „an“,
+   während die Funktion aus ist.
+   ========================================================================= */
+abschnitt("U", async () => {
+console.log("\n--- U: Oberflächen-Naht (DatenTab, statisch) ---");
+const NAHT_WURZEL = process.env.NAHT_WURZEL || WURZEL;
+const dt = fs.readFileSync(path.join(NAHT_WURZEL, "src/tabs/DatenTab.jsx"), "utf8");
+/* Genau der eine Klappen-Block. „Konto & Geräte-Sync" kommt weiter oben schon
+   in einem Kommentar vor, deshalb wird ab der Klappe gesucht, nicht ab dem
+   ersten Vorkommen. */
+const blockStart = dt.indexOf('<Klappe titel="KI-Funktionen">');
+const block = blockStart < 0 ? "" : dt.slice(blockStart, dt.indexOf("Konto & Geräte-Sync", blockStart));
+check("U", "der KI-Block ist als eigene Klappe „KI-Funktionen“ auffindbar",
+  () => blockStart > 0 && block.length > 400);
+
+check("U", "der KI-Block bekommt Stand und Setter als PROPS — nicht über `einstellungen`",
+  () => /kiStand[^=]*=|kiStand\s*=/.test(dt) && /onKiGlobal/.test(dt) && /onKiFunktion/.test(dt)
+    && !/setzeEinstellung\(\s*["'`]ki/.test(dt));
+/* Die Dach-Regel in der Oberfläche: Einzelschalter unter geschlossenem Dach
+   anzubieten hätte suggeriert, sie bewirkten etwas. */
+check("U", "die Einzelschalter hängen sichtbar an `kiStand.global === true` (Dach-Regel gespiegelt)",
+  () => /kiStand\.global === true &&/.test(block));
+/* Die Voreinstellung: „nicht ausdrücklich abgewählt" heißt AN — dieselbe
+   Regel wie `kiAn` (`funktionen[name] !== false`). Prüfte die Oberfläche auf
+   `=== true`, stünde bei einer nie berührten Funktion „aus", während sie
+   tatsächlich an ist. */
+check("U", "der Einzelschalter leitet seinen Wert aus `=== false` ab, wie kiAn — nicht aus `=== true`",
+  () => /kiStand\.funktionen\?\.\[id\] === false \? "aus" : "an"/.test(block));
+/* Die Liste wird aus KI_FUNKTIONEN aufgebaut, nicht abgeschrieben: eine neue
+   Funktion taucht sonst im Modul auf, aber nie in den Einstellungen. */
+/* Die Labels dürfen NICHT im Tab stehen: sonst hat eine neue Funktion im
+   Modul zwar einen Namen, aber keinen Schalter — oder zwei verschiedene. */
+check("U", "die Liste kommt aus KI_FUNKTIONEN, und kein Label ist abgeschrieben"
+  + "  [abgeschrieben: " + JSON.stringify(NAMEN().filter((n) => block.includes(K.KI_FUNKTIONEN[n].label))) + "]",
+  () => /Object\.entries\(KI_FUNKTIONEN\)/.test(block)
+    && NAMEN().every((n) => !block.includes(K.KI_FUNKTIONEN[n].label)));
+check("U", "und der Block nennt die Gerätelokalität, damit niemand sie im Konto sucht",
+  () => /nur für dieses Gerät|nicht mit dem Konto/.test(block));
+check("U", "der Block sagt zu, dass ohne KI alles funktioniert — dieselbe Zusage wie die Willkommens-Karte",
+  () => /Ohne KI funktioniert alles/.test(block));
+});
+
+/* =========================================================================
    X — BEFUNDE AN kiSchalter.js
    Heute rot, NICHT exit-relevant.
    ========================================================================= */
@@ -562,6 +614,7 @@ const TITEL = {
   F: "Storage-Unfälle",
   G: "Funktionsnamen",
   H: "verhaltenBeiAus",
+  U: "Oberflächen-Naht (DatenTab)",
 };
 /* Wache: eine Gruppe ohne TITEL-Eintrag würde weder gezählt noch
    exit-relevant sein — ihre roten Checks verschwänden lautlos. */
