@@ -355,7 +355,9 @@ check("A", "SCHLAGWORT_SICHERHEIT steht in SICHERHEITEN und ist `hoch` — der N
 check("A", "SCHLAGWORT_QUELLE steht in QUELLEN",
   () => G.SCHLAGWORT_QUELLE === "schlagwort" && P.QUELLEN.includes(G.SCHLAGWORT_QUELLE));
 check("A", "BELEG_PRAEFIX ist `schlagwort:` — Phase 4 zählt daran den deterministischen Anteil",
-  () => G.BELEG_PRAEFIX === "schlagwort:" && G.FILM_BELEG_PRAEFIX === "filmwahl:");
+  () => G.BELEG_PRAEFIX === "schlagwort:");
+check("A", "FILM_BELEG_PRAEFIX reserviert einen eigenen Namensraum, ist aber kein erzeugter Beleg",
+  () => G.FILM_BELEG_PRAEFIX === "filmwahl:" && G.FILM_BELEG_PRAEFIX !== G.BELEG_PRAEFIX);
 /* Ein Chip trägt ein Bit, keine Abstufung. Eine Stärke, die je Schlagwort
    variiert, wäre genau die Behauptung, die profil.js sonst überall verbietet. */
 check("A", "ALLE Schlagwörter tragen dieselbe Stärke — ein Chip sagt nicht, wie stark",
@@ -825,6 +827,12 @@ check("G", "jeder Film × jede Richtung ergibt einen gültigen `profil.filme`-Ei
   () => angebot.length > 0 && fehler.length === 0);
 check("G", "`sicher: true` — die Filmwahl ist die sicherste Quelle, die es gibt: der Nutzer hat geklickt",
   () => G.filmeAusAuswahl({ [angebot[0].id]: "zieht_an" }, angebot).filme[0].sicher === true);
+check("G", "B5: eine Filmwahl bleibt ein Rahmen-Eintrag — ohne Signalquelle oder künstlichen Beleg",
+  () => {
+    const film = G.filmeAusAuswahl({ [angebot[0].id]: "zieht_an" }, angebot).filme[0];
+    return film && !("quelle" in film) && !("beleg" in film)
+      && !JSON.stringify(film).includes(G.FILM_BELEG_PRAEFIX);
+  });
 check("G", "ein Film, der nicht im Angebot steht, wird mit Grund übergangen — keine Titel aus der Luft",
   () => {
     const a = G.filmeAusAuswahl({ untergeschoben: "zieht_an" }, angebot);
@@ -884,6 +892,15 @@ check("H", "ohne jede Eingabe entsteht nichts: keine Signale, KEIN Rahmen (null,
   }));
 check("H", "B6: auch ohne JEDES Argument — der Aufruf ohne Klammerinhalt ist der Normalfall der Oberfläche",
   () => { const r = G.onboardingErgebnis(); return r.signale.length === 0 && r.rahmen === null; });
+check("H", "B5: eine reine Filmwahl erzeugt null Signale und genau einen Filmeintrag im Rahmen",
+  () => {
+    const r = G.onboardingErgebnis({
+      filme: { [angebot[0].id]: "zieht_an" },
+      angebot,
+    });
+    return r.signale.length === 0 && r.rahmen && r.rahmen.filme.length === 1
+      && r.rahmen.filme[0].masterId === angebot[0].id;
+  });
 check("H", "KERNZUSAGE: eine unberührte Achse erzeugt keine Achsen-Angabe — nicht angefasst heißt nicht gesagt",
   () => [undefined, null, {}, { wie: null, was: null, warum: null }, "abc", [1, 2, 3], { WIE: 4 }]
     .every((a) => G.onboardingErgebnis({ achsen: a }).rahmen === null));
@@ -1024,6 +1041,10 @@ const FILME = [
 const text = P.promptFassung({ ...ein(), filme: FILME }).text;
 const zeilen = text.split("\n");
 const WORT = { zieht_an: "Filme, die ihn treffen", stoesst_ab: "Filme, die ihn abstoßen", ambivalent: "Filme, zu denen er zwiespältig steht", null: "Genannte Filme" };
+const nurFilm = P.promptFassung({ ...ein(), filme: [FILME[0]] });
+check("J", "B5: ein Film erscheint im Prompt, ohne die gemeldete Signalzahl zu erhöhen",
+  () => nurFilm.text === WORT.zieht_an + ": Alien (1979)"
+    && nurFilm.signale === 0 && nurFilm.signaleGesamt === 0);
 check("J", "KERNZUSAGE: vier Richtungen ergeben VIER Zeilen, nicht eine  [gemessen: " + zeilen.length + " Zeilen]",
   () => zeilen.length === 4);
 check("J", "jede Richtung bekommt ihren eigenen Wortlaut",
@@ -1475,29 +1496,12 @@ fs.rmSync(SPIEGEL, { recursive: true, force: true });
    ERLEDIGT AM 28.07.: B1, B1a, B2, B3, B4, B5, B6, B7, K2 und M1
    sind gebaut. Sie stehen nicht mehr hier, sondern als harte Checks in den
    Gruppen, deren Zusage sie betreffen — F (max, Artikel), G (Angebot kein
-   Array), H (null-Eingabe), J (Signalzahl), M (Messskript). Ein reparierter
-   Befund, der als Befund stehen bleibt, verliert seine Wache.
+   Array, Film-Rahmen), H (null-Eingabe, Film-only), J (Signalzahl,
+   Film-Prompt), M (Messskript). Ein reparierter Befund, der als Befund
+   stehen bleibt, verliert seine Wache.
    ========================================================================= */
 abschnitt("X", async () => {
 console.log("\n--- X: Befunde (offen, nicht exit-relevant) ---");
-
-/* B5 ist nicht durch Code erledigt, sondern durch eine ausdrückliche
-   Kennzeichnung: `FILM_BELEG_PRAEFIX` hat weiterhin keinen Erzeuger, ist
-   aber jetzt als Reservierung für Phase 3 markiert, samt Warnung an Phase 4,
-   keinen Zähler darauf zu bauen. Gewacht wird deshalb die KENNZEICHNUNG —
-   verschwindet sie, ist der Präfix wieder eine unbelegte Zusage. */
-const QUELLE_GESCHMACK = fs.readFileSync(GESCHMACK_ORIG, "utf8");
-check("X", "B5: FILM_BELEG_PRAEFIX ist als Reservierung gekennzeichnet, solange nichts ihn erzeugt"
-  + "  [gemessen: Erzeuger im Modul: " + (JSON.stringify(G.filmeAusAuswahl(
-    { [G.filmAuswahl(KORPUS)[0].id]: "zieht_an" }, G.filmAuswahl(KORPUS)).filme).includes(G.FILM_BELEG_PRAEFIX) ? "ja" : "nein") + "]",
-  () => {
-    const angebot = G.filmAuswahl(KORPUS);
-    const { filme } = G.filmeAusAuswahl({ [angebot[0].id]: "zieht_an" }, angebot);
-    const hatErzeuger = JSON.stringify(filme).includes(G.FILM_BELEG_PRAEFIX);
-    const istGekennzeichnet = /RESERVIERT F(Ü|UE)R PHASE 3/i.test(QUELLE_GESCHMACK)
-      && /FILM_BELEG_PRAEFIX/.test(QUELLE_GESCHMACK);
-    return hatErzeuger || istGekennzeichnet;
-  });
 
 });
 

@@ -72,7 +72,7 @@ export const QUELLEN = [
   "K4",           // ein Pflichtfilm fuer eine fremde Person
   "vertiefung",   // längerer Fragenkatalog in den Einstellungen
   "schlagwort",   // deterministische Auswahl aus der kuratierten Liste
-  "filmwahl",     // „diese Filme treffen mich"
+  "filmwahl",     // reserviert für bestätigte Ableitungen; aktuelle Auswahl liegt in profil.filme
   "bewertung",    // eigene, abgegebene Bewertung
   "prognose",     // Reaktion auf eine KI-Prognose (angenommen/korrigiert/verworfen)
   "korrektur",    // ausdrückliche Änderung im Profil selbst
@@ -139,8 +139,8 @@ export function naechsteVersion(version) {
    Fachlich, nicht nur strukturell: Ein Signal ohne Beleg oder mit einer Art,
    die es nicht gibt, ist kein gültiges Signal — egal wie wohlgeformt das JSON
    aussieht. Diese Funktion ist die Wache vor dem Schreibpfad; sie gilt für
-   BEIDE Erhebungswege, damit der deterministische Weg nicht schwächer
-   geprüft wird als der bezahlte. */
+   BEIDE Erhebungswege, damit der deterministische Weg aus bestätigten
+   Auswahlen nicht schwächer geprüft wird als der bezahlte. */
 export function pruefeSignal(s) {
   const fehler = [];
   if (!s || typeof s !== "object") return ["Signal ist kein Objekt"];

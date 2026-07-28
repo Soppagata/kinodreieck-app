@@ -43,12 +43,12 @@ export const SCHLAGWORT_QUELLE = "schlagwort";
    Phase 4 zählt daran den deterministischen Anteil, und die Profil-Ansicht
    erkennt daran, welche Züge sie zum Bearbeiten anbieten darf. */
 export const BELEG_PRAEFIX = "schlagwort:";
-/* RESERVIERT FÜR PHASE 3, heute ohne Erzeuger. `filmeAusAuswahl` schreibt
-   nach `profil.filme`, und dieser Eintrag hat gar kein `beleg`-Feld — die
-   Filmwahl belegt sich über ihre Aufnahme in `filme`. Erst wenn die
-   Extraktion Filme als SIGNALE führt (Quelle `filmwahl` steht in `QUELLEN`),
-   bekommt der Präfix einen Erzeuger. Ausdrücklich hier vermerkt, damit
-   Phase 4 ihn nicht für belegt hält und einen Zähler darauf baut. */
+/* BEWUSST OHNE ERZEUGER. Filmwahlen sind keine Signale: `filmeAusAuswahl`
+   schreibt sie ausschließlich nach `profil.filme`, wo die bestätigte
+   Auswahl bereits vollständig und ohne `beleg`-Feld abgebildet ist. Der
+   Präfix reserviert nur einen kollisionsfreien Namensraum für eine mögliche
+   spätere, ausdrücklich bestätigte Ableitung. Solange es die nicht gibt,
+   darf weder die Extraktion noch ein Eval Filmwahlen als Signale zählen. */
 export const FILM_BELEG_PRAEFIX = "filmwahl:";
 
 /* ---------- Die kuratierte Liste ---------- */
