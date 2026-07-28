@@ -113,7 +113,7 @@ export function leeresProfil() {
     einwilligung: null,      // { erteilt, am, textVersion } — ohne sie kein Profil
     signale: [],             // bestätigt, fließen in die Prompt-Fassung
     offen: [],               // gesammelt, warten auf Bestätigung (UPDATE_SCHWELLE)
-    achsen: { wie: null, was: null, warum: null },  // Tendenz 1..5, null = unbekannt
+    achsen: { wie: null, was: null, warum: null },  // Tendenz 0..5, null = unbekannt
     filme: [],               // { titel, jahr, masterId, sicher, richtung? }
     nichtDeutbar: [],        // ehrlich benannt statt still geschluckt
   };
@@ -331,7 +331,12 @@ export function widerrufeEinwilligung(p, jetzt) {
    Der BELEG gehört bewusst nicht dazu — zwei verschiedene Textstellen, die
    denselben Zug stützen, sind echte Information und sollen zusammengeführt,
    nicht verworfen werden. */
-const signalId = (s) => [s.art, String(s.wert).toLowerCase().replace(/\s+/g, " ").trim(), s.richtung].join("\u0001");
+/* Auch der schreibende UI-Pfad braucht exakt dieselbe Identität, um nur die
+   Vorschläge zu bestätigen, die der Nutzer gerade gesehen hat. Exportiert
+   statt dort nachgebaut: Drift zwischen Dublettenprüfung und Auswahl wäre
+   ein Bestätigungsfehler, kein bloßes Darstellungsdetail. */
+export const signalId = (s) =>
+  [s.art, String(s.wert).toLowerCase().replace(/\s+/g, " ").trim(), s.richtung].join("\u0001");
 
 /* Neue Signale landen in `offen`, nie direkt in `signale`. Erst die
    Bestätigung durch den Nutzer hebt sie hinüber (V4: Vorschau/Bestätigung,

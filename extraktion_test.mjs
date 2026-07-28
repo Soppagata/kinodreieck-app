@@ -170,7 +170,6 @@ export { ProfilAnsicht } from "./ProfilAnsicht.jsx";
 export * as EX from "../lib/extraktion.js";
 export * as P from "../lib/profil.js";
 export * as G from "../lib/geschmack.js";
-export * as KI from "../lib/kiSchalter.js";
 export { AI_TASKS } from "../services/ai.js";
 export { BoundaryError, ERROR_CODES, errorText } from "../services/errors.js";
 `;
@@ -231,7 +230,7 @@ const { act, createElement: h } = React;
 
 const {
   GeschmackBereich, DreiFragen, ProfilAnsicht,
-  EX, P, G, KI, AI_TASKS, BoundaryError, ERROR_CODES, errorText,
+  EX, P, G, AI_TASKS, BoundaryError, ERROR_CODES, errorText,
 } = await import(ZIEL);
 const { K: TOPF } = await import("./src/lib/storage.js");
 
@@ -271,8 +270,7 @@ const tippe = async (id, wert) => {
    Signale sind daran erkennbar, dass ihre Zeile eine Sicherheit ausweist;
    Achsen- und Filmknöpfe fallen damit heraus. */
 const ABWAHL = /^(weglassen|doch übernehmen)$/;
-const zeilen = () => alles("button[aria-pressed]")
-  .filter((b) => ABWAHL.test(b.textContent.trim()))
+const zeilen = () => alles("button[data-vorschlag-art=\"signal\"]")
   .map((b) => ({ knopf: b, zeile: b.parentElement && b.parentElement.parentElement }))
   .filter((x) => x.zeile && x.zeile.textContent.includes("Sicherheit "))
   .map((x) => {
@@ -287,9 +285,9 @@ const zeilen = () => alles("button[aria-pressed]")
       staerke: Number((t.match(/Stärke (\d)\/5/) || [])[1]),
     };
   });
-const filmKnoepfe = () => alles("button[aria-pressed]").filter((b) => !ABWAHL.test(b.textContent.trim()));
-const achsenKnopf = () => alles("button[aria-pressed]").find((b) => ABWAHL.test(b.textContent.trim())
-  && b.parentElement && b.parentElement.textContent.includes("Achsen-Tendenz"));
+const filmKnoepfe = () => alles("button[data-vorschlag-art=\"film\"]");
+const achsenKnoepfe = () => alles("button[data-vorschlag-art=\"achse\"]");
+const nichtDeutbarKnoepfe = () => alles("button[data-vorschlag-art=\"nicht-deutbar\"]");
 
 /* =========================================================================
    DAS SPEICHER-DOPPEL
@@ -392,13 +390,10 @@ const DATEN = () => ({
    ECHTE — Abschnitt J und F messen, ob der Client sie liest. */
 const HUELLE_ECHT = (daten) => ({ ok: true, task: "profile-extract", vorgangId: "v1", data: daten,
   verbrauch: { inputTokens: 1, outputTokens: 1, kostenUsdCent: 0.5, dauerMs: 1, stopReason: "end_turn" } });
-/* Die Hülle, die `GeschmackBereich.extrahiere` heute liest. */
-const HUELLE_GELESEN = (daten) => ({ ok: true, daten });
-
-/* Welche Hülle trägt heute durch? Einmal gemessen statt geraten — alle
-   Abschnitte, die eine funktionierende Extraktion brauchen, benutzen sie,
-   damit ein Fix an EINER Stelle (`antwort.data`) diese Datei nicht umwirft. */
-let HUELLE = HUELLE_GELESEN;
+/* Alle Funktionsproben benutzen die produktive Hülle. Ein Testdoppel mit
+   `daten` hatte den früher falschen Clientpfad verdeckt und danach fast alle
+   UI-Abschnitte rot gehalten, obwohl der Fix längst gebaut war. */
+const HUELLE = HUELLE_ECHT;
 
 /* =========================================================================
    MONTAGE
@@ -559,9 +554,9 @@ for (const [was, ueber, imGrund] of [
   ["Wert mit Steuerzeichen", { wert: "ab" }, "Steuerzeichen"],
   ["Wert 61 Zeichen", { wert: "w".repeat(61) }, "wert zu lang"],
   ["Beleg 401 Zeichen", { beleg: "b".repeat(401) }, "beleg zu lang"],
-  ["staerke 0", { staerke: 0 }, "staerke muss 1..5 sein"],
-  ["staerke 6", { staerke: 6 }, "staerke muss 1..5 sein"],
-  ["staerke negativ", { staerke: -2 }, "staerke muss 1..5 sein"],
+  ["staerke 0", { staerke: 0 }, "staerke fehlt oder liegt ausserhalb 1..5"],
+  ["staerke 6", { staerke: 6 }, "staerke fehlt oder liegt ausserhalb 1..5"],
+  ["staerke negativ", { staerke: -2 }, "staerke fehlt oder liegt ausserhalb 1..5"],
 ]) {
   const r = nur(SIG(ueber));
   check("B", "verworfen: " + was + "  [Grund: " + JSON.stringify(r.verworfen[0]?.grund || null) + "]",
@@ -617,19 +612,19 @@ check("B", "signale: \"keine Liste\" → leer statt Absturz  [gemessen: "
   + kurz({ s: rKeineListe.signale.length, v: rKeineListe.verworfen.length, r: rKeineListe.rahmen }) + "]",
   () => rKeineListe.signale.length === 0 && rKeineListe.verworfen.length === 0 && rKeineListe.rahmen === null);
 
-/* Die Vorgabe `staerke: 3`. ERST GEMESSEN, dann bewertet — Abschnitt F führt
-   das Urteil. */
+/* Fehlende oder formfremde Stärke wird nicht erfunden. Sie steuert später
+   die Prompt-Reihenfolge und ist deshalb ein Pflichtwert. */
 const rOhneStaerke = nur(SIG({ staerke: undefined }));
-check("B", "staerke fehlt → Vorgabe 3, Signal kommt durch  [gemessen: "
+check("B", "staerke fehlt → Signal wird mit Grund verworfen  [gemessen: "
   + kurz({ s: rOhneStaerke.signale[0]?.staerke, v: rOhneStaerke.verworfen.length }) + "]",
-  () => rOhneStaerke.signale.length === 1 && rOhneStaerke.signale[0].staerke === 3);
+  () => rOhneStaerke.signale.length === 0 && /staerke/.test(rOhneStaerke.verworfen[0]?.grund || ""));
 const rStrStaerke = nur(SIG({ staerke: "5" }));
-check("B", "staerke \"5\" (Text) → wird zu 3, nicht zu 5  [gemessen: "
+check("B", "staerke \"5\" (Text) → wird nicht still umgedeutet  [gemessen: "
   + kurz(rStrStaerke.signale[0]?.staerke) + "]",
-  () => rStrStaerke.signale.length === 1 && rStrStaerke.signale[0].staerke === 3);
+  () => rStrStaerke.signale.length === 0 && rStrStaerke.verworfen.length === 1);
 const rKommaStaerke = nur(SIG({ staerke: 4.5 }));
-check("B", "staerke 4.5 → wird zu 3  [gemessen: " + kurz(rKommaStaerke.signale[0]?.staerke) + "]",
-  () => rKommaStaerke.signale.length === 1 && rKommaStaerke.signale[0].staerke === 3);
+check("B", "staerke 4.5 → wird verworfen  [gemessen: " + kurz(rKommaStaerke.verworfen[0]?.grund) + "]",
+  () => rKommaStaerke.signale.length === 0 && rKommaStaerke.verworfen.length === 1);
 check("B", "staerke 1 und 5 bleiben unverändert  [gemessen: "
   + JSON.stringify([nur(SIG({ staerke: 1 })).signale[0]?.staerke, nur(SIG({ staerke: 5 })).signale[0]?.staerke]) + "]",
   () => nur(SIG({ staerke: 1 })).signale[0].staerke === 1 && nur(SIG({ staerke: 5 })).signale[0].staerke === 5);
@@ -847,8 +842,10 @@ check("E", "…jedes mit einem beschrifteten <label>  [gemessen: " + alles("labe
 check("E", "…und die Hilfetexte stehen dabei",
   () => EX.FRAGEN.every((f) => text().includes(f.hilfe.slice(0, 30))));
 check("E", "der Text sagt ausdrücklich, dass nichts gespeichert wird  [gemessen: "
-  + JSON.stringify(text().slice(text().indexOf("Was du schreibst"), text().indexOf("Was du schreibst") + 130)) + "]",
-  () => /nicht gespeichert/.test(text()) && /ausdrücklich übernimmst/.test(text()));
+  + JSON.stringify(text().slice(text().indexOf("Kinodreieck speichert"), text().indexOf("Kinodreieck speichert") + 180)) + "]",
+  () => /Kinodreieck speichert deine Antworten nicht/.test(text())
+    && /an den KI-Anbieter übertragen/.test(text())
+    && /ausdrücklich übernimmst/.test(text()));
 
 check("E", "„Antworten auswerten\" ist ohne Antwort gesperrt", () => knopf("Antworten auswerten").disabled === true);
 check("E", "…und der Grund steht im title  [gemessen: "
@@ -920,11 +917,17 @@ console.log("\n--- G: Die Vorschau lügt nicht ---");
 const ergebnis = EX.ausExtraktion(DATEN());
 let letzteAuswahl = null;
 let abbrueche = 0;
-const zeige = () => zeigeFragen({
-  ergebnis,
-  onUebernehmen: (a) => { letzteAuswahl = tief(a); },
-  onAbbruch: () => { abbrueche++; },
-});
+const zeige = async () => {
+  /* Jede Probe beginnt mit einer frischen Vorschau. In Produktion erzeugt
+     jeder Extraktionslauf ein neues Ergebnisobjekt; hier wird dieselbe
+     Fixture absichtlich wiederverwendet und deshalb explizit neu montiert. */
+  await fragenAbraeumen();
+  await zeigeFragen({
+    ergebnis,
+    onUebernehmen: (a) => { letzteAuswahl = tief(a); },
+    onAbbruch: () => { abbrueche++; },
+  });
+};
 await zeige();
 
 check("G", "die Vorschau sagt ausdrücklich, dass noch nichts gespeichert ist",
@@ -1011,8 +1014,9 @@ check("G", "…und alle drei sind wieder in der Auswahl  [gemessen: " + letzteAu
 /* Alles abwählen. */
 await zeige();
 for (const z of zeilen()) await klick(z.knopf, "weglassen");
-await klick(achsenKnopf(), "Achsen weglassen");
+for (const b of achsenKnoepfe()) await klick(b, "Achse weglassen");
 for (const b of filmKnoepfe()) await klick(b, "Film weglassen");
+for (const b of nichtDeutbarKnoepfe()) await klick(b, "Nicht-Gedeutetes weglassen");
 check("G", "alles abgewählt → der Übernehmen-Knopf ist gesperrt  [gemessen: "
   + JSON.stringify({ d: knopf("Ausgewähltes übernehmen").disabled,
     t: knopf("Ausgewähltes übernehmen").getAttribute("title") }) + "]",
@@ -1039,29 +1043,36 @@ check("G", "…die Achsen sind noch dabei  [gemessen: " + kurz(letzteAuswahl.rah
 await zeige();
 letzteAuswahl = null;
 check("G", "die Achsen-Tendenz steht mit ihren Werten da  [gemessen: "
-  + JSON.stringify(/Achsen-Tendenz: [^A-Z]*[A-Z ,0-9]*/.exec(text())?.[0]?.slice(0, 40)) + "]",
-  () => /Achsen-Tendenz: WIE 5, WAS 3/.test(text()));
+  + JSON.stringify(achsenKnoepfe().map((b) => b.textContent.trim())) + "]",
+  () => gleich(achsenKnoepfe().map((b) => b.textContent.trim()), ["WIE 5", "WAS 3"]));
 check("G", "…und WARUM (null) steht NICHT da", () => !/WARUM/.test(text()));
-await klick(achsenKnopf(), "Achsen weglassen");
+await klick(achsenKnoepfe()[0], "WIE weglassen");
 await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
-check("G", "abgewählte Achsen fehlen in der Auswahl  [gemessen: "
-  + kurz(letzteAuswahl?.rahmen) + "]", () => !letzteAuswahl.rahmen.achsen);
+check("G", "Achsen sind einzeln abwählbar  [gemessen: "
+  + kurz(letzteAuswahl?.rahmen?.achsen) + "]",
+  () => gleich(letzteAuswahl.rahmen.achsen, { was: 3 }));
 check("G", "…die Filme sind noch dabei", () => letzteAuswahl.rahmen.filme.length === 2);
 
-/* nichtDeutbar ist bewusst NICHT abwählbar. */
+/* Persönlicher Modelltext ist ebenfalls einzeln kontrollierbar. */
 await zeige();
 check("G", "Nicht-Gedeutetes wird genannt  [gemessen: "
-  + JSON.stringify(/Nicht gedeutet: [^·]*/.exec(text())?.[0]) + "]",
-  () => /Nicht gedeutet: etwas mit dem Ende/.test(text()));
-check("G", "…und ist NICHT abwählbar (die eigene Lücke bleibt sichtbar)  [gemessen: "
-  + alles("button[aria-pressed]").length + " abwählbare Elemente]",
-  () => alles("button[aria-pressed]").length === 3 + 1 + 2);
+  + JSON.stringify(nichtDeutbarKnoepfe()[0]?.textContent.trim()) + "]",
+  () => text().includes("Nicht gedeutet:") && nichtDeutbarKnoepfe()[0]?.textContent.includes("etwas mit dem Ende"));
+check("G", "…und ist einzeln abwählbar  [gemessen: "
+  + nichtDeutbarKnoepfe().length + " Element]",
+  () => nichtDeutbarKnoepfe().length === 1);
+await klick(nichtDeutbarKnoepfe()[0], "Nicht-Gedeutetes weglassen");
 await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
-check("G", "…und reist immer mit  [gemessen: " + kurz(letzteAuswahl?.rahmen?.nichtDeutbar) + "]",
-  () => gleich(letzteAuswahl.rahmen.nichtDeutbar, ["etwas mit dem Ende"]));
+check("G", "…und abgewählter Modelltext reist nicht ins Profil  [gemessen: "
+  + kurz(letzteAuswahl?.rahmen?.nichtDeutbar) + "]",
+  () => !letzteAuswahl.rahmen?.nichtDeutbar);
 
 /* Ein leeres Ergebnis. */
-await zeigeFragen({ ergebnis: EX.ausExtraktion({ verworfen_ohne_beleg: 3 }), onUebernehmen: () => {} });
+await zeigeFragen({
+  ergebnis: EX.ausExtraktion({ verworfen_ohne_beleg: 3 }),
+  onUebernehmen: () => {},
+  onAbbruch: () => { abbrueche++; },
+});
 check("G", "ohne Signale steht ein ehrlicher Satz da  [gemessen: " + JSON.stringify(text().slice(0, 60)) + "]",
   () => /nichts Belegbares/.test(text()));
 check("G", "…der die Frageform verantwortlich macht und nicht den Nutzer",
@@ -1116,7 +1127,7 @@ zaehle("nach dem Ergebnis (Vorschau steht)");
 
 await klick(zeilen()[0].knopf, "weglassen");
 zaehle("nach dem Abwählen eines Vorschlags");
-await klick(achsenKnopf(), "Achsen weglassen");
+await klick(achsenKnoepfe()[0], "Achse weglassen");
 await klick(filmKnoepfe()[0], "Film weglassen");
 zaehle("nach dem Abwählen von Achsen und Film");
 
@@ -1164,17 +1175,17 @@ check("I", "`uebernehmeExtrakt` ruft `uebernehmen` und nichts anderes  [gemessen
 check("I", "…und der KI-Zweig setzt `signale` nirgends selbst  [gemessen: "
   + JSON.stringify((ohneKommentare.match(/signale:\s*/g) || []).length) + " Vorkommen von `signale:`]",
   () => !/signale:\s*/.test(ohneKommentare.replace(/const signale = \[\.\.\.\(profil\.signale[^]*?\n  };/, "")));
-check("I", "…`speichereProfil` steht nur in der Import-Zeile und in der Ersetzung  [gemessen: "
+check("I", "…`speichereProfil` steht nur in Import und Speicher-Ersetzung  [gemessen: "
   + JSON.stringify((ohneKommentare.match(/speichereProfil/g) || []).length) + "]",
-  () => (ohneKommentare.match(/speichereProfil/g) || []).length === 2
+  () => (ohneKommentare.match(/speichereProfil/g) || []).length === 3
     && /speicher\?\.speichereProfil \|\| speichereProfil/.test(ohneKommentare));
 check("I", "…und `schreiben(` wird an GENAU EINER Stelle gerufen  [gemessen: "
   + JSON.stringify((ohneKommentare.match(/await schreiben\(/g) || []).length) + "]",
   () => (ohneKommentare.match(/await schreiben\(/g) || []).length === 1);
-check("I", "`uebernehmen` benutzt sammle + uebernimmAlle und vorschlagRahmen + uebernimmRahmen",
+check("I", "`uebernehmen` benutzt sammle + gezieltes uebernimm und vorschlagRahmen + uebernimmRahmen",
   () => {
     const k = (/const uebernehmen\s*=[^]*?\n  };/.exec(ohneKommentare) || [])[0] || "";
-    return /sammle\(/.test(k) && /uebernimmAlle\(/.test(k)
+    return /sammle\(/.test(k) && /uebernimm\(p, t, auswahl\)/.test(k)
       && /vorschlagRahmen\(/.test(k) && /uebernimmRahmen\(/.test(k);
   });
 check("I", "DreiFragen.jsx importiert nichts aus profil.js oder services  [gemessen: "
@@ -1218,8 +1229,9 @@ check("I", "…und die Quelle bleibt die Frage (K1/K2/K4), keine Sammelkennung  
 check("I", "die Filme der Vorschau stehen im Profil  [gemessen: "
   + JSON.stringify(p.filme.map((f) => f.titel)) + "]",
   () => gleich(p.filme.map((f) => f.titel), vorschauFilme));
-check("I", "…mit sicher: false  [gemessen: " + JSON.stringify(p.filme.map((f) => f.sicher)) + "]",
-  () => p.filme.every((f) => f.sicher === false));
+check("I", "…nach der Einzelbestätigung mit sicher: true  [gemessen: "
+  + JSON.stringify(p.filme.map((f) => f.sicher)) + "]",
+  () => p.filme.every((f) => f.sicher === true));
 check("I", "die Achsen der Vorschau stehen im Profil, die dritte bleibt null  [gemessen: "
   + kurz(p.achsen) + "]", () => gleich(p.achsen, { wie: 5, was: 3, warum: null }));
 check("I", "Nicht-Gedeutetes steht im Profil  [gemessen: " + kurz(p.nichtDeutbar) + "]",
@@ -1244,7 +1256,7 @@ const belegRaus = raus.beleg;
 const wertRaus = EX.ausExtraktion(DATEN()).signale[2].wert;
 await klick(raus.knopf, "weglassen");
 await klick(filmKnoepfe()[0], "Alien weglassen");
-await klick(achsenKnopf(), "Achsen weglassen");
+await klick(achsenKnoepfe()[0], "WIE weglassen");
 const nochDa = zeilen().filter((z) => !z.weg).map((z) => z.beleg);
 await klick(knopf("Ausgewähltes übernehmen"), "übernehmen");
 const p2 = s2.letzteNutzlast();
@@ -1259,8 +1271,8 @@ check("I", "…was dastand, steht im Profil — Zeichen für Zeichen  [gemessen:
 check("I", "…der abgewählte Film fehlt  [gemessen: " + JSON.stringify(p2.filme.map((f) => f.titel)) + "]",
   () => gleich(p2.filme.map((f) => f.titel), ["Stalker"]));
 check("I", "…die abgewählten Achsen sind unverändert null  [gemessen: " + kurz(p2.achsen) + "]",
-  () => gleich(p2.achsen, { wie: null, was: null, warum: null }));
-check("I", "…und Nicht-Gedeutetes ist trotzdem da (nicht abwählbar)",
+  () => gleich(p2.achsen, { wie: null, was: 3, warum: null }));
+check("I", "…und nicht abgewähltes Nicht-Gedeutetes ist trotzdem da",
   () => gleich(p2.nichtDeutbar, ["etwas mit dem Ende"]));
 
 /* Zweiter Durchlauf auf einem bestehenden Profil. */
@@ -1333,7 +1345,7 @@ for (const name of CODES) {
   const s = neuerSpeicher(null);
   const ki = neueKi();
   ki.wirft = new Error("TypeError: cannot read property 'x' of undefined");
-  await neuMontieren({ ai: ki.api, speicher: s.api });
+  await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: true });
   await klickT("drei Fragen");
   await tippe("K1", A_K1);
   await klick(knopf("Antworten auswerten"), "auswerten");
@@ -1422,7 +1434,7 @@ for (const [was, antwort, sollFormfehler] of [
   const ki = neueKi();
   ki.antwort = () => HUELLE(DATEN());
   await neuMontieren({ ai: ki.api, speicher: s.api, bekannteGenres: GENRES });
-  await klickT("drei Fragen");
+  await klickT("Drei Fragen beantworten");
   await tippe("K1", A_K1);
   await klick(knopf("Antworten auswerten"), "auswerten");
   check("J", "ein bestehendes Profil reist als `profilVersion` ins KI-Protokoll  [gemessen: "
@@ -1494,13 +1506,6 @@ await abraeumen();
 abschnitt("L", async () => {
 console.log("\n--- L: KI-Gate und der KI-lose Weg ---");
 
-const LS = dom.window.localStorage;
-const setzeSchalter = (stand, version = KI.KI_WAHL_VERSION) => {
-  if (stand === null) { LS.removeItem("kd:ki"); LS.removeItem("kd:ki-version"); return; }
-  LS.setItem("kd:ki", JSON.stringify(stand));
-  LS.setItem("kd:ki-version", version);
-};
-
 /* kiAktiv als ausdrückliche Prop. */
 for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, false]]) {
   const s = neuerSpeicher(null);
@@ -1538,29 +1543,13 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
   check("L", "…und „Einwilligung widerrufen\" ebenso", () => !!knopfTeil("Einwilligung widerrufen"));
 }
 
-/* kiAktiv=null → der echte Schalter, fail-closed. */
-for (const [was, stand, version, soll] of [
-  ["kein Schalterstand", null, null, false],
-  ["global null", { global: null, funktionen: {} }, KI.KI_WAHL_VERSION, false],
-  ["global false", { global: false, funktionen: {} }, KI.KI_WAHL_VERSION, false],
-  ["global true", { global: true, funktionen: {} }, KI.KI_WAHL_VERSION, true],
-  ["global true, profil abgewählt", { global: true, funktionen: { profil: false } }, KI.KI_WAHL_VERSION, false],
-  ["global true, andere Funktion aus", { global: true, funktionen: { suche: false } }, KI.KI_WAHL_VERSION, true],
-  ["global true, ALTE Versionsmarke", { global: true, funktionen: {} }, "e6-alt", false],
-]) {
-  setzeSchalter(stand, version || undefined);
-  const s = neuerSpeicher(null);
-  const ki = neueKi();
-  await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: null });
-  check("L", "ohne kiAktiv-Prop entscheidet der Schalter: " + was + " → Einstieg "
-    + (soll ? "da" : "weg") + "  [gemessen: " + JSON.stringify(!!knopfTeil("Mit drei Fragen")) + "]",
-    () => !!knopfTeil("Mit drei Fragen anlegen") === soll);
-}
-setzeSchalter(null);
+/* Ohne die von App/DatenTab bereits zusammengesetzte Aussage bleibt die
+   wiederverwendbare Komponente geschlossen. So kann kein isolierter Aufrufer
+   Konto- oder Capability-Gate versehentlich umgehen. */
 {
   const s = neuerSpeicher(null);
   const ki = neueKi();
-  await neuMontieren({ ai: ki.api, speicher: s.api });
+  await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: undefined });
   check("L", "auch ohne jede KI-Prop ist der Einstieg fail-closed weg  [gemessen: "
     + JSON.stringify(knoepfe().map((b) => b.textContent.trim())) + "]",
     () => !knopfTeil("Mit drei Fragen anlegen"));
@@ -1576,12 +1565,12 @@ check("L", "ProfilAnsicht blendet den KI-Einstieg aus statt ihn zu sperren  [gem
     && !/disabled=\{!kiWegOffen\}/.test(QUELLEN.ansicht.text));
 check("L", "…und `kiWegOffen` hat den Vorgabewert false (fail-closed)",
   () => /kiWegOffen = false/.test(QUELLEN.ansicht.text));
-check("L", "GeschmackBereich liest den Schalter nur, wenn kiAktiv kein Boolean ist  [gemessen: "
+check("L", "GeschmackBereich öffnet ausschließlich bei ausdrücklichem kiAktiv=true  [gemessen: "
   + JSON.stringify((/const kiWegOffen[^\n]*/.exec(QUELLEN.bereich.text) || [])[0]?.trim()) + "]",
-  () => /typeof kiAktiv === "boolean" \? kiAktiv : kiAn\("profil"\)/.test(QUELLEN.bereich.text));
+  () => /const kiWegOffen = kiAktiv === true/.test(QUELLEN.bereich.text)
+    && !/kiAn\(/.test(QUELLEN.bereich.text));
 
 /* DER ABNAHME-ANKER: das komplette Schlagwort-Onboarding bei KI=aus. */
-setzeSchalter({ global: false, funktionen: {} });
 const s = neuerSpeicher(null);
 const ki = neueKi();
 await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv: false, bekannteTitel: [
@@ -1630,7 +1619,6 @@ check("L", "…entfernen wirkt  [gemessen: " + s.letzteNutzlast().signale.length
   () => s.letzteNutzlast().signale.length === vorZahl - 1);
 check("L", "…und ai.runTask blieb ungerufen  [gemessen: " + ki.rufe.length + "]", () => ki.rufe.length === 0);
 
-setzeSchalter(null);
 check("L", "kein einziger Netzzugriff im ganzen Lauf  [gemessen: " + netzVersuche.length + "]",
   () => netzVersuche.length === 0);
 check("L", "keine unbehandelte Ablehnung im ganzen Lauf  [gemessen: "
@@ -1639,14 +1627,10 @@ await abraeumen();
 });
 
 /* =========================================================================
-   M — `filme` AUS DER EXTRAKTION SIND UNSICHER
-   -------------------------------------------------------------------------
-   Der Server hat nur geprüft, dass der Titel VORKOMMT, nicht dass es den Film
-   gibt. `promptFassung` lässt unsichere Filme weg; sie wandern also erst dann
-   in einen Prompt, wenn sie bestätigt sind.
+   M — FILME WERDEN ERST DURCH DIE SICHTBARE AUSWAHL SICHER
    ========================================================================= */
 abschnitt("M", async () => {
-console.log("\n--- M: extrahierte Filme sind unsicher, bis sie bestätigt sind ---");
+console.log("\n--- M: Film-Bestätigung öffnet den Prompt-Weg ---");
 
 const s = neuerSpeicher(null);
 const ki = neueKi();
@@ -1657,40 +1641,35 @@ const p = s.letzteNutzlast();
 
 check("M", "die extrahierten Filme stehen im Profil  [gemessen: "
   + JSON.stringify(p.filme.map((f) => f.titel)) + "]", () => p.filme.length === 2);
-check("M", "…alle mit sicher: false  [gemessen: " + JSON.stringify(p.filme.map((f) => f.sicher)) + "]",
-  () => p.filme.every((f) => f.sicher === false));
+check("M", "…nach dem sichtbaren Übernahmeklick alle mit sicher: true  [gemessen: "
+  + JSON.stringify(p.filme.map((f) => f.sicher)) + "]",
+  () => p.filme.every((f) => f.sicher === true));
 
 const fassung = P.promptFassung(p);
 check("M", "die Prompt-Fassung entsteht (Einwilligung liegt vor)  [gemessen: "
   + kurz({ b: fassung?.bytes, s: fassung?.signale }) + "]", () => !!fassung);
 for (const f of p.filme) {
-  check("M", "KEIN unsicherer Film im Prompt: " + JSON.stringify(f.titel)
+  check("M", "der bestätigte Film steht im Prompt: " + JSON.stringify(f.titel)
     + "  [gemessen: " + JSON.stringify(fassung.text.includes(f.titel)) + "]",
-    () => !fassung.text.includes(f.titel));
+    () => fassung.text.includes(f.titel));
 }
-check("M", "…und keine Filmzeile überhaupt  [gemessen: "
+check("M", "…und Filmzeilen sind vorhanden  [gemessen: "
   + JSON.stringify(fassung.text.split("\n").filter((z) => /Filme/.test(z))) + "]",
-  () => !/Genannte Filme|Filme, die ihn/.test(fassung.text));
+  () => /Genannte Filme|Filme, die ihn/.test(fassung.text));
 check("M", "die Signale stehen dagegen sehr wohl im Prompt  [gemessen: "
   + fassung.signale + " Signalzeilen]", () => fassung.signale === 3);
 check("M", "…und die Achsen-Tendenz  [gemessen: "
   + JSON.stringify(fassung.text.split("\n")[0]) + "]",
   () => /Achsen-Tendenz: WIE 5, WAS 3/.test(fassung.text));
 
-/* Erst die Bestätigung öffnet den Weg in den Prompt. */
-const bestaetigt = { ...p, filme: p.filme.map((f) => ({ ...f, sicher: true })) };
-const fassung2 = P.promptFassung(bestaetigt);
-check("M", "nach der Bestätigung (sicher: true) steht der Titel im Prompt  [gemessen: "
-  + JSON.stringify(fassung2.text.split("\n").filter((z) => /Filme/.test(z))) + "]",
-  () => fassung2.text.includes("Alien") && fassung2.text.includes("Stalker"));
 check("M", "…und der ohne Richtung landet unter „Genannte Filme\" (keine erfundene Zuneigung)",
-  () => /Genannte Filme: Stalker/.test(fassung2.text)
-    && /Filme, die ihn treffen: Alien \(1979\)/.test(fassung2.text));
+  () => /Genannte Filme: Stalker/.test(fassung.text)
+    && /Filme, die ihn treffen: Alien \(1979\)/.test(fassung.text));
 
 /* Gegenprobe: der deterministische Weg liefert sicher: true. */
 check("M", "GEGENPROBE: geschmack.js setzt für Filme aus dem Bestand sicher: true",
   () => /sicher:\s*true/.test(fs.readFileSync(path.join(WURZEL, "src/lib/geschmack.js"), "utf8")));
-check("M", "…und extraktion.js ausdrücklich sicher: false  [gemessen: "
+check("M", "die rohe Extraktion bleibt bis zur Vorschau ausdrücklich sicher: false  [gemessen: "
   + JSON.stringify((/sicher:\s*(true|false)/.exec(QUELLEN.extraktion.text) || [])[0]) + "]",
   () => /sicher:\s*false/.test(QUELLEN.extraktion.text) && !/sicher:\s*true/.test(QUELLEN.extraktion.text));
 await abraeumen();

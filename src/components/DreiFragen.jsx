@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { FRAGEN, ANTWORT_MAX_ZEICHEN, antwortenBrauchbar, frageZu } from "../lib/extraktion.js";
 
@@ -39,29 +39,51 @@ export function DreiFragen({
   onAbbruch,
 }) {
   const [antworten, setAntworten] = useState(() => ({ ...(startAntworten || {}) }));
-  /* Abgewählte Vorschläge, als Menge von Belegen. Der Beleg ist der
-     natürliche Schlüssel: Er ist für jedes Signal verschieden (er zeigt auf
-     eine andere Textstelle), und `profil.js` führt ihn ohnehin mit. Ein
-     Index wäre brüchig, sobald sich die Liste ändert. */
+  /* Diese Vorschau ist während ihrer Lebensdauer unveränderlich. Deshalb
+     sind die Array-Indizes hier die ehrlichsten lokalen Auswahl-IDs: Zwei
+     fachlich verschiedene Vorschläge dürfen denselben Beleg oder Filmtitel
+     tragen und müssen trotzdem unabhängig bleiben. Ein Beleg ist Inhalt,
+     kein Primärschlüssel. */
   const [abgewaehlt, setAbgewaehlt] = useState(() => new Set());
   const [filmeAus, setFilmeAus] = useState(() => new Set());
-  const [achsenAus, setAchsenAus] = useState(false);
+  const [achsenAus, setAchsenAus] = useState(() => new Set());
+  const [nichtDeutbarAus, setNichtDeutbarAus] = useState(() => new Set());
+
+  /* Ein zweiter Extraktionslauf kann dieselbe Komponente mit einem neuen
+     Ergebnis weiterverwenden. Auswahl-Indizes gehören nur zum jeweiligen
+     Snapshot und dürfen nicht auf den nächsten Lauf überspringen. */
+  useEffect(() => {
+    setAbgewaehlt(new Set());
+    setFilmeAus(new Set());
+    setAchsenAus(new Set());
+    setNichtDeutbarAus(new Set());
+  }, [ergebnis]);
+
+  useEffect(() => {
+    setAntworten({ ...(startAntworten || {}) });
+  }, [startAntworten]);
 
   const brauchbar = antwortenBrauchbar(antworten);
 
   const auswahl = useMemo(() => {
     if (!ergebnis) return null;
-    const signale = ergebnis.signale.filter((s) => !abgewaehlt.has(s.beleg));
+    const signale = ergebnis.signale.filter((_, i) => !abgewaehlt.has(i));
     const rahmen = {};
-    const filme = (ergebnis.rahmen?.filme || []).filter((f) => !filmeAus.has(f.titel));
+    /* Der Server bestätigt nur, dass der Titel in der Antwort vorkommt.
+       Der Klick des Nutzers in DIESER Vorschau ist der Übergang zu
+       `sicher:true`; erst dann darf der Film später in eine Prompt-Fassung. */
+    const filme = (ergebnis.rahmen?.filme || [])
+      .filter((_, i) => !filmeAus.has(i))
+      .map((f) => ({ ...f, sicher: true }));
     if (filme.length) rahmen.filme = filme;
-    if (ergebnis.rahmen?.achsen && !achsenAus) rahmen.achsen = ergebnis.rahmen.achsen;
-    /* `nichtDeutbar` ist nicht abwählbar und soll es nicht sein: Es ist die
-       ehrliche Liste dessen, was NICHT gedeutet werden konnte. Sie
-       wegklicken zu können hieße, die eigene Lücke verstecken zu dürfen. */
-    if (ergebnis.rahmen?.nichtDeutbar?.length) rahmen.nichtDeutbar = ergebnis.rahmen.nichtDeutbar;
+    const achsen = Object.fromEntries(Object.entries(ergebnis.rahmen?.achsen || {})
+      .filter(([k]) => !achsenAus.has(k)));
+    if (Object.keys(achsen).length) rahmen.achsen = achsen;
+    const nichtDeutbar = (ergebnis.rahmen?.nichtDeutbar || [])
+      .filter((_, i) => !nichtDeutbarAus.has(i));
+    if (nichtDeutbar.length) rahmen.nichtDeutbar = nichtDeutbar;
     return { signale, rahmen: Object.keys(rahmen).length ? rahmen : null };
-  }, [ergebnis, abgewaehlt, filmeAus, achsenAus]);
+  }, [ergebnis, abgewaehlt, filmeAus, achsenAus, nichtDeutbarAus]);
 
   const nichtsUebrig = auswahl && auswahl.signale.length === 0 && !auswahl.rahmen;
 
@@ -88,11 +110,11 @@ export function DreiFragen({
           </p>
         )}
 
-        {ergebnis.signale.map((s) => {
-          const weg = abgewaehlt.has(s.beleg);
+        {ergebnis.signale.map((s, index) => {
+          const weg = abgewaehlt.has(index);
           const frage = frageZu(s.quelle);
           return (
-            <div key={s.beleg} style={{ padding: "10px 0", borderBottom: "1px solid " + T.saal, opacity: weg ? 0.45 : 1 }}>
+            <div key={"signal-" + index} style={{ padding: "10px 0", borderBottom: "1px solid " + T.saal, opacity: weg ? 0.45 : 1 }}>
               <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
                 <span style={{ color: s.richtung === "zieht_an" ? T.ok : s.richtung === "stoesst_ab" ? T.gefahr : T.rauch,
                   fontFamily: "'Space Mono', monospace", fontSize: 13 }}>
@@ -108,10 +130,11 @@ export function DreiFragen({
                   Sicherheit {s.sicherheit}
                 </span>
                 <button style={{ ...btnStyle(false), fontSize: 12, padding: "3px 9px" }}
+                  data-vorschlag-art="signal"
                   aria-pressed={weg}
                   onClick={() => setAbgewaehlt((v) => {
                     const n = new Set(v);
-                    if (n.has(s.beleg)) n.delete(s.beleg); else n.add(s.beleg);
+                    if (n.has(index)) n.delete(index); else n.add(index);
                     return n;
                   })}>
                   {weg ? "doch übernehmen" : "weglassen"}
@@ -125,12 +148,25 @@ export function DreiFragen({
         })}
 
         {ergebnis.rahmen?.achsen && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
-            <span style={{ ...klein, margin: 0, opacity: achsenAus ? 0.45 : 1 }}>
-              Achsen-Tendenz: {Object.entries(ergebnis.rahmen.achsen).map(([k, v]) => k.toUpperCase() + " " + v).join(", ")}
-            </span>
-            <button style={{ ...btnStyle(false), fontSize: 12, padding: "3px 9px" }} aria-pressed={achsenAus}
-              onClick={() => setAchsenAus((v) => !v)}>{achsenAus ? "doch übernehmen" : "weglassen"}</button>
+          <div style={{ marginTop: 14 }}>
+            <span style={{ ...klein, display: "block", marginBottom: 6 }}>Achsen-Tendenz:</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Object.entries(ergebnis.rahmen.achsen).map(([k, v]) => {
+                const weg = achsenAus.has(k);
+                return (
+                  <button key={k} style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                    data-vorschlag-art="achse"
+                    aria-pressed={!weg}
+                    onClick={() => setAchsenAus((alt) => {
+                      const neu = new Set(alt);
+                      if (neu.has(k)) neu.delete(k); else neu.add(k);
+                      return neu;
+                    })}>
+                    {k.toUpperCase()} {v}{weg ? " ✕" : ""}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -138,14 +174,15 @@ export function DreiFragen({
           <div style={{ marginTop: 10 }}>
             <span style={klein}>Genannte Filme:</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
-              {ergebnis.rahmen.filme.map((f) => {
-                const weg = filmeAus.has(f.titel);
+              {ergebnis.rahmen.filme.map((f, index) => {
+                const weg = filmeAus.has(index);
                 return (
-                  <button key={f.titel} aria-pressed={!weg}
+                  <button key={"film-" + index} aria-pressed={!weg}
+                    data-vorschlag-art="film"
                     style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
                     onClick={() => setFilmeAus((v) => {
                       const n = new Set(v);
-                      if (n.has(f.titel)) n.delete(f.titel); else n.add(f.titel);
+                      if (n.has(index)) n.delete(index); else n.add(index);
                       return n;
                     })}>
                     {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}{weg ? " ✕" : ""}
@@ -159,9 +196,26 @@ export function DreiFragen({
         {/* Ehrlichkeit über die eigenen Lücken. Beide Zahlen bedeuten
             Verschiedenes und stehen deshalb getrennt da. */}
         {ergebnis.rahmen?.nichtDeutbar?.length > 0 && (
-          <p style={{ ...klein, marginTop: 12 }}>
-            Nicht gedeutet: {ergebnis.rahmen.nichtDeutbar.join(" · ")}
-          </p>
+          <div style={{ marginTop: 12 }}>
+            <span style={{ ...klein, display: "block", marginBottom: 6 }}>Nicht gedeutet:</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {ergebnis.rahmen.nichtDeutbar.map((eintrag, index) => {
+                const weg = nichtDeutbarAus.has(index);
+                return (
+                  <button key={"unklar-" + index} aria-pressed={!weg}
+                    data-vorschlag-art="nicht-deutbar"
+                    style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px", opacity: weg ? 0.45 : 1 }}
+                    onClick={() => setNichtDeutbarAus((alt) => {
+                      const neu = new Set(alt);
+                      if (neu.has(index)) neu.delete(index); else neu.add(index);
+                      return neu;
+                    })}>
+                    {eintrag}{weg ? " ✕" : ""}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
         {ergebnis.ohneBeleg > 0 && (
           <p style={{ ...klein, color: T.wolfram }}>
@@ -192,8 +246,9 @@ export function DreiFragen({
       <h3 style={h}>Drei Fragen</h3>
       <p style={p}>
         Antworte so, wie du es einem Menschen erzählen würdest — Halbsätze sind in Ordnung.
-        Du musst nicht alle drei beantworten. Was du schreibst, geht einmal an das Modell und
-        wird nicht gespeichert; gespeichert wird nur, was du danach ausdrücklich übernimmst.
+        Du musst nicht alle drei beantworten. Kinodreieck speichert deine Antworten nicht.
+        Sie werden einmal zur Auswertung an den KI-Anbieter übertragen; im Profil gespeichert
+        wird nur, was du danach ausdrücklich übernimmst.
       </p>
 
       {FRAGEN.map((f) => {

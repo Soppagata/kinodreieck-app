@@ -109,7 +109,7 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   `src/lib/extraktion.js:77`,
   `supabase/functions/ai-task/index.ts:1165`.
 
-- [ ] **B2 – Gleiche Belege koppeln mehrere Vorschläge.**
+- [x] **B2 – Gleiche Belege koppeln mehrere Vorschläge.**
   Ein Satz kann legitim gleichzeitig etwa ein Genre und einen Ton belegen.
   `DreiFragen` benutzt aber den Beleg als React-Key und als Auswahl-ID;
   `GeschmackBereich` ordnet auch die spätere Bestätigung über eine
@@ -117,10 +117,10 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   abgewählt oder bestätigt, obwohl die Oberfläche Einzelwahl zusagt. React
   meldet zusätzlich doppelte Keys. Der vorhandene F2-Test reproduziert den
   Fehler.
-  Stellen: `src/components/DreiFragen.jsx:42`,
-  `src/components/DreiFragen.jsx:91`,
-  `src/components/GeschmackBereich.jsx:137`,
-  `extraktion_test.mjs:1708`.
+  **Behoben:** Die unveränderliche Vorschau verwendet lokale Index-IDs;
+  die Schreibschicht ordnet mit derselben fachlichen Signalidentität wie
+  `sammle` zu. Gleicher Beleg koppelt weder React-Key noch Auswahl oder
+  Bestätigung.
 
 ### Hoch
 
@@ -150,24 +150,25 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   Stellen: `supabase/functions/ai-task/index.ts:1324`,
   `src/components/DreiFragen.jsx:59`.
 
-- [ ] **H3 – Gespeicherte `nichtDeutbar`-Einträge sind in der Profilansicht
+- [x] **H3 – Gespeicherte `nichtDeutbar`-Einträge sind in der Profilansicht
   weder sichtbar noch löschbar.**
   Sie werden gespeichert und über den Profil-Topf synchronisiert, aber
   `ProfilAnsicht` bietet dafür keine Korrektur. Damit kann persönlicher
   Modelltext im Konto liegen, den der Nutzer nach der Übernahme nicht mehr
   einzeln kontrollieren kann.
-  Stellen: `src/components/ProfilAnsicht.jsx`,
-  `src/lib/profil.js`.
+  **Behoben:** Die Profilansicht zeigt jeden Eintrag und bietet eine
+  einzeln beschriftete Löschung; sie schreibt genau einmal und hebt die
+  Profilfassung.
 
-- [ ] **H4 – Bestätigte Filmnennungen bleiben dauerhaft `sicher: false`.**
+- [x] **H4 – Bestätigte Filmnennungen bleiben dauerhaft `sicher: false`.**
   Extrahierte Filme werden vor der Übernahme einzeln gezeigt, danach aber
   weiterhin unsicher gespeichert. `promptFassung` filtert unsichere Filme
   aus, und die Profilansicht hat keinen Weg, sie auf sicher zu setzen. Die
   bestätigten Daten bleiben damit für den vorgesehenen Folgeeinsatz in
   Etappe 8 wirkungslos.
-  Stellen: `src/lib/extraktion.js:183`,
-  `src/lib/profil.js:621`,
-  `src/components/ProfilAnsicht.jsx:159`.
+  **Behoben:** Die rohe Extraktion bleibt bis zur Vorschau unsicher; erst
+  der sichtbare Einzel-Übernahmeklick setzt ausgewählte Filme auf
+  `sicher:true`. Danach erscheinen sie wie vorgesehen in der Prompt-Fassung.
 
 - [ ] **H5 – Acht Zeichen sind als Mindestbeleg zu schwach.**
   Der vorhandene Test zeigt, dass ein inhaltsarmes Bindewort wie
@@ -222,9 +223,10 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   nicht zwei Achsen akzeptieren und die dritte ablehnen. Der Prompt nennt
   außerdem `1..5 oder null`, während Server, Client, Profilmodell und Tests
   ausdrücklich auch `0` akzeptieren.
-  Stellen: `src/components/DreiFragen.jsx:127`,
-  `supabase/functions/ai-task/index.ts:1198`,
-  `supabase/functions/ai-task/index.ts:1318`.
+  **Teilweise behoben:** WIE, WAS und WARUM sind in der Vorschau jetzt
+  unabhängig wählbar; eine Mischwahl ist getestet. Der Prompttext `1..5`
+  wird mit dem Function-Paket auf den bereits bindenden Vertrag `0..5`
+  korrigiert.
 
 - [ ] **M6 – Eine falsche Fragenquelle bleibt trotz Gegenfund bestehen.**
   Findet der Server einen Beleg nicht in der behaupteten Frage, sucht er
@@ -236,14 +238,15 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   `supabase/functions/ai-task/index.ts:1282`,
   `ai_task_test.ts:3501`.
 
-- [ ] **M7 – Der Datenschutzhinweis ist stärker als der belegte Vertrag.**
+- [x] **M7 – Der Datenschutzhinweis ist stärker als der belegte Vertrag.**
   Die Oberfläche sagt, der Freitext werde „nicht gespeichert“. Sicher belegt
   ist, dass Kinodreieck und `kd_ai_log` ihn nicht speichern. Die Antworten
   werden aber an den KI-Anbieter übertragen; dessen Aufbewahrungsdauer ist in
   der Projektdokumentation noch ausdrücklich offen. Der Text sollte App-
   Speicherung und Anbieter-Verarbeitung auseinanderhalten.
-  Stellen: `src/components/DreiFragen.jsx:193`,
-  `docs/ETAPPE_5_KI_UNTERBAU.md:347`.
+  **Behoben:** Der Text trennt nun ausdrücklich
+  „Kinodreieck speichert nicht“ von der einmaligen Übertragung an den
+  KI-Anbieter und der späteren, bestätigten Profilspeicherung.
 
 ## Teststand
 

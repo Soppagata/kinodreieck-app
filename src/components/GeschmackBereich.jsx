@@ -4,14 +4,13 @@ import {
   ladeProfil, speichereProfil, loescheProfil,
   erteileEinwilligung, widerrufeEinwilligung,
   sammle, uebernimm, vorschlagRahmen, uebernimmRahmen,
-  naechsteVersion, pruefeProfil,
+  naechsteVersion, pruefeProfil, signalId,
 } from "../lib/profil.js";
 import { GeschmackOnboarding } from "./GeschmackOnboarding.jsx";
 import { ProfilAnsicht } from "./ProfilAnsicht.jsx";
 import { DreiFragen } from "./DreiFragen.jsx";
 import { bauePayload, ausExtraktion } from "../lib/extraktion.js";
 import { aiService } from "../services/ai.js";
-import { kiAn } from "../lib/kiSchalter.js";
 import { errorText } from "../services/errors.js";
 
 /* ---------- Der Profil-Lebenszyklus an einem Ort (Etappe 7, Phase 2c) ----------
@@ -52,7 +51,7 @@ export function GeschmackBereich({
   /* Fuer Tests: der KI-Dienst und der Schalter sind einsetzbar, damit die
      Pruefung ohne Netz und ohne echten localStorage laufen kann. */
   ai = aiService,
-  kiAktiv = null,
+  kiAktiv = false,
   /* Nur für Tests und den Demo-Modus: erlaubt, die Speicher-Schicht zu
      ersetzen, ohne das echte `store` zu berühren. */
   speicher = null,
@@ -81,7 +80,7 @@ export function GeschmackBereich({
      wird AUSGEBLENDET, nicht erklaert. `ai-disabled` waere die falsche
      Meldung; sie heisst "der Betreiber hat abgeschaltet", nicht "du hast
      abgeschaltet". */
-  const kiWegOffen = typeof kiAktiv === "boolean" ? kiAktiv : kiAn("profil");
+  const kiWegOffen = kiAktiv === true;
 
   useEffect(() => {
     let lebt = true;
@@ -134,14 +133,14 @@ export function GeschmackBereich({
          Bruch der Zusage, auf der die ganze Zwei-Bühnen-Mechanik steht:
          nichts wandert ins Profil, was nicht vorher gezeigt wurde.
 
-         Zugeordnet wird über den Beleg. Er ist der natürliche Schlüssel —
-         für jedes Signal verschieden, weil er auf eine andere Textstelle
-         zeigt, und `signalId` in `profil.js` führt ihn nicht mit, taugt hier
-         also nicht. Ein Index wäre brüchig: `sammle` fügt hinten an, aber
-         führt Dubletten zusammen, verschiebt also die Liste. */
-      const gezeigt = new Set(ergebnis.signale.map((s) => s.beleg));
+         Zugeordnet wird über dieselbe fachliche Identität wie in `sammle`:
+         Art, Wert und Richtung. Ein Beleg ist KEIN eindeutiger Schlüssel —
+         derselbe Satz kann gleichzeitig ein Genre und einen Ton tragen.
+         Indizes wären ebenfalls falsch, weil `sammle` Dubletten
+         zusammenführt. */
+      const gezeigt = new Set(ergebnis.signale.map(signalId));
       const auswahl = (p.offen || [])
-        .map((s, i) => (gezeigt.has(s.beleg) ? i : -1))
+        .map((s, i) => (gezeigt.has(signalId(s)) ? i : -1))
         .filter((i) => i >= 0);
       const u = uebernimm(p, t, auswahl);
       if (u.fehler) { setMeldung("Nicht übernommen: " + u.fehler); return false; }
@@ -256,6 +255,15 @@ export function GeschmackBereich({
     await schreibe({ ...profil, signale, version: naechsteVersion(profil.version), geaendert: t }, "Entfernt.");
   };
 
+  const nichtDeutbarEntfernen = async (index) => {
+    const nichtDeutbar = (profil.nichtDeutbar || []).filter((_, i) => i !== index);
+    const t = jetzt();
+    await schreibe(
+      { ...profil, nichtDeutbar, version: naechsteVersion(profil.version), geaendert: t },
+      "Nicht gedeutete Angabe entfernt.",
+    );
+  };
+
   const widerrufen = async () => {
     const t = jetzt();
     try {
@@ -323,6 +331,7 @@ export function GeschmackBereich({
           kiGeraeteweiseAus={kiGeraeteweiseAus}
           onRichtungAendern={richtungAendern}
           onEntfernen={entfernen}
+          onNichtDeutbarEntfernen={nichtDeutbarEntfernen}
           onWiderrufen={widerrufen}
           onNeuErheben={() => { setMeldung(null); setErhebe(true); }}
           kiWegOffen={kiWegOffen}

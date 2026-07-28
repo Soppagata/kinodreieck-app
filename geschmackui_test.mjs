@@ -1338,7 +1338,7 @@ await klickT("Einwilligung widerrufen");
 check("I", "die Rückfrage benennt, was genau gelöscht wird  [gemessen: "
   + JSON.stringify((text().match(/Das löscht[^D]*/) || [])[0]) + "]",
   () => text().includes("Das löscht dein Geschmacksprofil vollständig")
-    && text().includes("bestätigten Angaben, offene Vorschläge, Filme und Achsen"));
+    && text().includes("bestätigten Angaben, offene Vorschläge, Filme, Achsen und nicht gedeuteten Angaben"));
 check("I", "…und sagt zu, was UNBERÜHRT bleibt",
   () => text().includes("Deine Bewertungen, deine Sammlung und alles andere bleiben unberührt."));
 check("I", "die Rückfrage lässt sich abbrechen", () => !!knopf("Abbrechen"));
@@ -1627,6 +1627,22 @@ check("L", "…und sagt es  [gemessen: " + JSON.stringify(liveRegionen()) + "]",
 check("L", "…die Ansicht sagt danach ehrlich, dass nichts Bestätigtes mehr da ist",
   () => text().includes("Im Profil steht noch nichts Bestätigtes."));
 
+/* `nichtDeutbar` ist persönlicher Modelltext und läuft über Backup/Sync.
+   Deshalb muss er nach der Übernahme genauso einsehbar und einzeln löschbar
+   sein wie ein Signal — Gesamtwiderruf allein ist keine Korrekturfunktion. */
+sp.topf = { ...sp.topf, version: "p4", nichtDeutbar: ["das Ende blieb unklar"] };
+await neuMontieren({ speicher: sp.api });
+check("L", "nicht gedeutete Modellangaben sind im gespeicherten Profil sichtbar",
+  () => text().includes("Nicht gedeutet:") && text().includes("das Ende blieb unklar"));
+const unklarEntfernen = alles("button").find((b) =>
+  b.getAttribute("aria-label") === "„das Ende blieb unklar“ entfernen");
+check("L", "…und haben einen einzeln beschrifteten Entfernen-Knopf", () => !!unklarEntfernen);
+sp.leeren();
+await klick(unklarEntfernen, "nicht gedeutete Angabe entfernen");
+check("L", "…der persönliche Modelltext wird mit genau einem Schreibvorgang entfernt",
+  () => sp.schreibOps().length === 1 && sp.topf.nichtDeutbar.length === 0);
+check("L", "…und die Löschung hebt die Profilfassung", () => sp.topf.version === "p5");
+
 /* Der KI=aus-Hinweis. Der Schalter ist gerätelokal, das Profil kontogebunden —
    beides schweigend zu übergehen wäre irreführend, beides gleichzusetzen auch. */
 await montiere({ speicher: sp.api, kiGeraeteweiseAus: true });
@@ -1648,7 +1664,8 @@ await montiere({ speicher: sp.api, kiGeraeteweiseAus: false });
 check("L", "bei KI=an steht der Hinweis NICHT  [gemessen: "
   + JSON.stringify(text().includes("bleibt erhalten")) + "]",
   () => !text().includes("Dein Profil ist angelegt und bleibt erhalten."));
-check("L", "…und die übrige Ansicht ist dieselbe", () => text().includes("Fassung p3"));
+check("L", "…und die übrige Ansicht ist dieselbe",
+  () => text().includes("Fassung " + sp.topf.version));
 
 /* Offene Vorschläge werden genannt, auch wenn sie hier nicht bestätigt werden
    können — sonst hält der Nutzer das Profil für vollständig. */
@@ -1786,9 +1803,11 @@ dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
    brauchen. Ein Import dort machte den KI-losen Weg von der KI abhängig — die
    Bündelprüfung sähe das nicht, weil DatenTab die Datei ohnehin mitzieht. */
 /* Phase 3 VERENGT diese Zusage bewusst, statt sie aufzugeben. Der Container
-   `GeschmackBereich` importiert seit dem KI-Weg `services/ai.js` und
-   `kiSchalter.js` -- er ist die Stelle, die den bezahlten Aufruf macht und
-   das Gate haelt. Die drei anderen duerfen es weiterhin NICHT: Sobald das
+   `GeschmackBereich` importiert seit dem KI-Weg `services/ai.js` und macht
+   den bezahlten Aufruf. Das zusammengesetzte Gate liegt in DatenTab, wo
+   Konto-Fähigkeit, globaler Schalter, Funktionsschalter und Werteliste
+   gleichzeitig vorliegen. Die drei inhaltlichen Komponenten duerfen beides
+   weiterhin NICHT: Sobald das
    Formular, die Ansicht oder die Umrechnung von der KI abhaengen, ist der
    KI-lose Weg keiner mehr, und der Abnahme-Anker der Etappe faellt.
    `bereich` steht deshalb nicht mehr in der Liste -- aber die Verengung ist
@@ -1808,12 +1827,13 @@ check("M", "…und keines von ihnen den KI-Schalter (`kiSchalter.js`)  [gemessen
   + JSON.stringify(ohneKi.filter((k) => importiert(k, "kiSchalter"))) + "]",
   () => ohneKi.every((k) => !importiert(k, "kiSchalter")));
 /* Die Gegenrichtung, damit die Verengung keine Luecke wird: Der Container
-   MUSS beides fuehren. Ohne `kiSchalter` gaebe es kein Gate, ohne
-   `services/ai.js` keinen Aufruf -- und ein Test, der nur das Fehlen
-   verbietet, saehe beides nicht. */
-check("M", "der Container fuehrt Gate und Aufruf selbst  [gemessen: ai="
-  + importiert("bereich", "services/ai\\.js") + ", schalter=" + importiert("bereich", "kiSchalter") + "]",
-  () => importiert("bereich", "services/ai\\.js") && importiert("bereich", "kiSchalter"));
+   führt den Aufruf, DatenTab setzt das fertige Gate als Boolean. */
+check("M", "Container führt den Aufruf, DatenTab das zusammengesetzte Gate  [gemessen: ai="
+  + importiert("bereich", "services/ai\\.js") + ", kiAktiv="
+  + /kiAktiv=\{kiProfilFaehig/.test(QUELLEN.datentab.text) + "]",
+  () => importiert("bereich", "services/ai\\.js")
+    && /kiAktiv=\{kiProfilFaehig/.test(QUELLEN.datentab.text)
+    && !importiert("bereich", "kiSchalter"));
 check("M", "in DatenTab hängt die Klappe nicht an einer Bedingung mit `kiStand`"
   + "  [gemessen: " + JSON.stringify((QUELLEN.datentab.text.match(/.{0,60}Klappe titel="Geschmacksprofil"/s) || [])[0]?.slice(-60)) + "]",
   () => {

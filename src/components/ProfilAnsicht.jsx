@@ -53,6 +53,7 @@ export function ProfilAnsicht({
   kiGeraeteweiseAus = false,
   onRichtungAendern,
   onEntfernen,
+  onNichtDeutbarEntfernen,
   onWiderrufen,
   onNeuErheben,
   /* Der KI-Weg wird AUSGEBLENDET, wenn er nicht offensteht — nicht erklärt
@@ -72,6 +73,7 @@ export function ProfilAnsicht({
   const signale = Array.isArray(profil?.signale) ? profil.signale : [];
   const offen = Array.isArray(profil?.offen) ? profil.offen : [];
   const filme = Array.isArray(profil?.filme) ? profil.filme : [];
+  const nichtDeutbar = Array.isArray(profil?.nichtDeutbar) ? profil.nichtDeutbar : [];
   const achsen = profil?.achsen || {};
   const achsText = ["wie", "was", "warum"]
     .filter((a) => Number.isInteger(achsen[a]))
@@ -163,6 +165,23 @@ export function ProfilAnsicht({
         </p>
       )}
 
+      {nichtDeutbar.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ ...klein, marginBottom: 6 }}>Nicht gedeutet:</p>
+          {nichtDeutbar.map((eintrag, index) => (
+            <div key={"unklar-" + index}
+              style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <span style={{ ...klein, margin: 0, flex: 1 }}>{eintrag}</span>
+              <button style={{ ...btnStyle(false), fontSize: 12, padding: "3px 8px" }}
+                aria-label={"„" + eintrag + "“ entfernen"}
+                onClick={() => onNichtDeutbarEntfernen?.(index)}>
+                entfernen
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Offene Vorschläge werden GENANNT, auch wenn sie hier nicht bestätigt
           werden können. Ein Nutzer, der weiß, dass etwas wartet, sucht danach;
           einer, der es nicht weiß, hält das Profil für vollständig. */}
@@ -190,8 +209,8 @@ export function ProfilAnsicht({
         <div style={{ background: T.saal, borderRadius: 6, padding: "12px 14px", marginTop: 12 }}>
           <p style={{ ...p, margin: "0 0 10px" }}>
             Das löscht dein Geschmacksprofil vollständig — alle {signale.length} bestätigten
-            Angaben, offene Vorschläge, Filme und Achsen. Deine Bewertungen, deine Sammlung
-            und alles andere bleiben unberührt.
+            Angaben, offene Vorschläge, Filme, Achsen und nicht gedeuteten Angaben. Deine
+            Bewertungen, deine Sammlung und alles andere bleiben unberührt.
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}
