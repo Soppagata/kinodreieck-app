@@ -299,8 +299,24 @@ function nurProfilFelder(p) {
   return aus;
 }
 
+function inhaltsfreieMetadaten(p) {
+  const aus = {};
+  if (!p || typeof p !== "object") return aus;
+  if (VERSION_FORM.test(String(p.version || ""))) aus.version = p.version;
+  if (typeof p.erstellt === "string" && p.erstellt) aus.erstellt = p.erstellt;
+  return aus;
+}
+
 export function erteileEinwilligung(p, jetzt, textVersion = "v1") {
-  const neu = { ...leeresProfil(), ...nurProfilFelder(p) };
+  /* Nur ein bereits wirksam eingewilligtes UND gültiges Profil darf seinen
+     bestätigten Inhalt durch eine erneute Zustimmung tragen. Ein beliebiges
+     Objekt vor dem Opt-in ist keine Profilquelle: Sonst könnte ein Aufrufer
+     Achsen, Filme oder Signale am Bestätigungs-Gate vorbeischmuggeln. Nach
+     einem Widerruf bleiben ausschließlich Fassung und Erstellzeitpunkt als
+     inhaltsfreie Kontinuitätsmerkmale erhalten. */
+  const bestaetigterBestand = hatEinwilligung(p) && pruefeProfil(p).length === 0;
+  const basis = bestaetigterBestand ? nurProfilFelder(p) : inhaltsfreieMetadaten(p);
+  const neu = { ...leeresProfil(), ...basis };
   neu.einwilligung = { erteilt: true, am: jetzt, textVersion };
   if (!neu.erstellt) neu.erstellt = jetzt;
   neu.geaendert = jetzt;
@@ -557,7 +573,24 @@ export function uebernimmRahmen(p, jetzt, annehmen = true) {
      das ueber den Restore-Pfad ins System kam, hat diese Funktion nie
      gesehen. Lieber hier melden als beim Speichern werfen. */
   const fehler = pruefeProfil(ergebnis);
-  if (fehler.length) return { profil: basis, uebernommen: false, fehler: fehler.join("; ") };
+  if (fehler.length) {
+    /* Der fehlerhafte Vorschlag darf nicht als Teil des Rückgabeprofils
+       weiterleben. Im Normalfall ist der Bestand ohne `rahmenOffen` gültig;
+       kam zusätzlich ein beschädigtes Profil über Restore herein, liefert
+       der Fehlerweg wenigstens einen gültigen, inhaltsleeren Quarantänestand
+       statt erneut eines unspeicherbaren Objekts. `uebernommen:false`
+       verhindert, dass der UI-Pfad diesen Ersatz als Bestätigung speichert. */
+    const quarantiniert = { ...ohne, geaendert: jetzt };
+    if (pruefeProfil(quarantiniert).length === 0) {
+      return { profil: quarantiniert, uebernommen: false, fehler: fehler.join("; ") };
+    }
+    const leer = erteileEinwilligung(
+      inhaltsfreieMetadaten(basis),
+      jetzt,
+      basis?.einwilligung?.textVersion || "v1",
+    );
+    return { profil: leer, uebernommen: false, fehler: fehler.join("; ") };
+  }
   return { profil: ergebnis, uebernommen: true, fehler: null };
 }
 
