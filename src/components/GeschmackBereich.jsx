@@ -184,7 +184,11 @@ export function GeschmackBereich({
     setExtraktLaeuft(true);
     setExtraktFehler(null);
     try {
-      const antwort = await ai.runTask("profile-extract", bauePayload(antworten, { genres: bekannteGenres }));
+      const antwort = await ai.runTask(
+        "profile-extract",
+        bauePayload(antworten, { genres: bekannteGenres }),
+        { profilVersion: profil?.version || null },
+      );
       /* `daten` ist die Hülle des Endpunkts. Fehlt sie, ist die Antwort
          nicht die erwartete — dann lieber ehrlich melden als eine leere
          Extraktion anzeigen, die wie „deine Antworten geben nichts her"

@@ -477,11 +477,11 @@ function neuerSpeicher(start = null) {
    (`sehenswert`) bleibt draußen; „Der Sehenswerte" ist hier, damit der Test
    das auch misst statt es zu glauben. */
 const TITEL = [
-  { id: "m1", titel: "Alien", jahr: 1979, kategorie: "kult" },
-  { id: "m2", titel: "Jackass Number Two", jahr: 2006, kategorie: "trash" },
-  { id: "m3", titel: "Jackass Forever", jahr: 2022, kategorie: "trash" },
-  { id: "m4", titel: "Casablanca", jahr: 1942, kategorie: "immer_gut" },
-  { id: "m5", titel: "Der Sehenswerte", jahr: 2001, kategorie: "sehenswert" },
+  { id: "m1", titel: "Alien", jahr: 1979, kategorie: "kult", genre: ["Science-Fiction", "Horror"] },
+  { id: "m2", titel: "Jackass Number Two", jahr: 2006, kategorie: "trash", genre: ["Komödie"] },
+  { id: "m3", titel: "Jackass Forever", jahr: 2022, kategorie: "trash", genre: ["Komödie"] },
+  { id: "m4", titel: "Casablanca", jahr: 1942, kategorie: "immer_gut", genre: ["Drama"] },
+  { id: "m5", titel: "Der Sehenswerte", jahr: 2001, kategorie: "sehenswert", genre: ["Drama"] },
 ];
 
 /* =========================================================================
@@ -1676,9 +1676,14 @@ console.log("\n--- M: Erreichbarkeit ohne KI ---");
 
 const tabWurzel = createRoot(document.getElementById("tabwurzel"));
 feld = () => document.getElementById("tabwurzel");
-const tabProps = (kiStand) => ({
-  master: [], masterMeta: {}, programm: [], einstellungen: {}, kiStand,
-  streamingBekannt: TITEL, streamingEntdecken: [], auswahl: [], vokabular: [], artikelListe: [],
+const tabProps = (kiStand, extra = {}) => ({
+  master: TITEL, masterMeta: {}, programm: [], einstellungen: {}, kiStand,
+  /* Echte Laufzeitform: Streamingdateien sind Hüllen mit `titel`, nicht
+     direkt die Titelliste. Der alte Test hatte dadurch den falschen
+     `bekannteTitel={streamingBekannt}`-Pfad versehentlich grün gehalten. */
+  streamingBekannt: { stand: "test", titel: TITEL }, streamingEntdecken: { titel: [] },
+  auswahl: [], vokabular: [], artikelListe: [],
+  ...extra,
 });
 const klappen = () => alles("details").map((d) => ({ el: d, titel: d.querySelector("summary")?.textContent.trim() }));
 const geschmackKlappe = () => klappen().find((k) => k.titel === "Geschmacksprofil")?.el || null;
@@ -1719,9 +1724,38 @@ for (const stand of [null, false, true]) {
     () => !!g && g.textContent.includes("Du hast noch kein Geschmacksprofil."));
 }
 
+/* Der Dienst schützt den Transport bereits mit `requireAccount`, aber die
+   Oberfläche muss die persönlichen Antworten VOR dem Formular abfangen.
+   Gleichzeitig pinnt diese Probe den echten Genrepfad: Nur wenn DatenTab die
+   Genres aus der Masterliste bis zu GeschmackBereich führt, darf der KI-Weg
+   für ein berechtigtes Konto sichtbar werden. */
+const montiereTabNeu = async (props) => {
+  await act(async () => { tabWurzel.render(null); });
+  dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
+  feld = () => document.getElementById("tabwurzel");
+  await act(async () => { tabWurzel.render(h(DatenTab, props)); });
+  await ruhe();
+  const bereich = geschmackKlappe();
+  feld = () => bereich;
+};
+await montiereTabNeu(tabProps(
+  { global: true, funktionen: { profil: true } },
+  { kiProfilFaehig: false },
+));
+check("M", "Gast/fehlende KI-Fähigkeit: das persönliche Freitextformular öffnet gar nicht",
+  () => !text().includes("Mit drei Fragen anlegen"));
+
+await montiereTabNeu(tabProps(
+  { global: true, funktionen: { profil: true } },
+  { kiProfilFaehig: true },
+));
+check("M", "Konto + Schalter + echte Master-Genres: der Drei-Fragen-Weg ist erreichbar",
+  () => text().includes("Mit drei Fragen anlegen"));
+
 /* Und vollständig bedienbar bei KI=aus — mit dem ECHTEN Speicher, also ohne
    die `speicher`-Prop. Das ist der Weg, den DatenTab tatsächlich einhängt. */
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
+feld = () => document.getElementById("tabwurzel");
 await act(async () => { tabWurzel.render(h(DatenTab, tabProps({ global: false, funktionen: {} }))); });
 await ruhe();
 const g = geschmackKlappe();

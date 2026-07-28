@@ -22,6 +22,38 @@ keinen erfolgreichen `profile-extract`-Aufruf auslösen, mehrere Vorschläge
 können bei der Bestätigung ungewollt gekoppelt werden, und die neue
 Function-Absicherung sowie der Clienttest sind nicht grün.
 
+## Gegenprüfung der Befundliste
+
+Am 28.07.2026 wurden alle Befunde noch einmal über die vollständigen UI-,
+Speicher-, Transport- und Function-Pfade geprüft. Dabei wurden keine
+vermeintlichen Fehler gefunden, die an anderer Stelle bereits vollständig
+gelöst sind. Vier Einordnungen mussten aber präzisiert werden:
+
+- **H1:** Anthropic Structured Outputs erzwingt beim normalen Providerlauf
+  bereits die strenge Form des `EXTRAKT_SCHEMA`. Das senkt die
+  Eintrittswahrscheinlichkeit deutlich, ersetzt aber nicht die eigene
+  Laufzeitgrenze für fremde Antworten, Provider-Ausnahmen und spätere Adapter.
+- **H2:** `nichtDeutbar` umgeht das Bestätigungs-Gate nicht vollständig. Die
+  Liste ist in der Vorschau sichtbar und wird erst mit dem gemeinsamen
+  Übernahmeknopf gespeichert. Der echte Fehler ist, dass die Einträge nicht
+  einzeln abwählbar, nicht gegen die Antworten belegt und später nicht
+  einzeln kontrollierbar sind.
+- **M1:** Das späte Konto-Gate ist kein Sicherheitsleck. `aiService` stoppt
+  Gäste und Konten ohne `personalAi` sicher vor dem Transport. Es ist ein
+  Vorlauf-/UI-Fehler, weil persönliche Antworten trotzdem bis zum Absenden
+  eingegeben werden können.
+- **M5:** Der Wertebereich ist bereits eindeutig entschieden: `0..5` oder
+  `null`. Profilmodell, Serverprüfung und Bestandstests tragen die `0`; nur
+  der neue KI-Prompt und ein alter Kommentar behaupten noch `1..5`.
+
+Zusätzlich zeigte die Vollpfadprüfung einen zweiten Teil von B1: `DatenTab`
+übergibt die Streaming-Hülle als `bekannteTitel`, obwohl der deterministische
+Weg eine echte Filmliste erwartet. Der Test hatte diesen Fehler verdeckt,
+indem er `streamingBekannt` in einer Laufzeitform übergab, die Produktion nie
+verwendet. Die vorhandene, bereits bewährte Genre-Lösung ist
+`bekannteWerte()` aus `src/lib/finder.js`; sie soll wiederverwendet statt
+nachgebaut werden.
+
 ## Was Claude zuletzt fertiggestellt hat
 
 | Commit | Stand |
@@ -57,12 +89,21 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
 
 ### Blocker
 
-- [ ] **B1 – Der echte UI-Pfad übergibt keine Genre-Liste.**
+- [x] **B1 – Der echte UI-Pfad übergibt weder die richtige Filmliste noch
+  eine Genre-Liste.**
   `DatenTab.jsx` rendert `GeschmackBereich` nur mit `bekannteTitel`.
-  `bekannteGenres` bleibt dadurch `[]`; `bauePayload` sendet
+  Dafür reicht es aber die Hülle `streamingBekannt` statt einer Filmliste;
+  der deterministische Filmschritt erhält deshalb keine Angebote.
+  `bekannteGenres` bleibt zugleich `[]`; `bauePayload` sendet
   `listen.genres: []`. Die Edge Function weist genau diesen Fall vor dem
   Anbieteraufruf mit `wertelisten-fehlen` ab. Der KI-Profilweg kann aus der
-  echten Oberfläche deshalb nie erfolgreich extrahieren.
+  echten Oberfläche deshalb nie erfolgreich extrahieren. Die App besitzt die
+  nötigen Rohdaten bereits in `master`, Programm und Streamingkatalog; die
+  bestehende Funktion `bekannteWerte()` sammelt und entdoppelt die
+  Genre-Anzeigeformen bereits korrekt. **Behoben:** `DatenTab` führt
+  Master-, Programm- und Kataloggenres über `bekannteWerte()` zusammen,
+  übergibt `master` als echte Filmliste und blendet den KI-Einstieg bei einer
+  tatsächlich leeren Werteliste aus.
   Stellen: `src/tabs/DatenTab.jsx:195`,
   `src/components/GeschmackBereich.jsx:45`,
   `src/lib/extraktion.js:77`,
@@ -83,25 +124,29 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
 
 ### Hoch
 
-- [ ] **H1 – Die Function-Grenze akzeptiert formfremde Antworten teilweise
-  als Erfolg.**
+- [ ] **H1 – Die eigene Function-Grenze akzeptiert formfremde Antworten
+  teilweise als Erfolg.**
   `pruefeErgebnis` schließt Arrays nicht aus und ignoriert unbekannte
   Top-Level-Felder. Eine Liste oder ein Objekt wie `{ nichts: true }` kann
   dadurch als leere Extraktion mit HTTP 200 enden, statt als Schemabruch.
   Vier der fünf roten Function-Tests berühren diese Grenze. Die Tests führen
   gleichzeitig zwei unterschiedliche Verträge für fehlende bekannte Felder;
   vor dem Fix muss die beabsichtigte Toleranz einmal eindeutig festgelegt
-  werden.
+  werden. Das beim Anbieter verwendete Structured-Output-Schema ist bereits
+  streng und macht diese Formen im normalen Erfolgsfall unwahrscheinlich;
+  die fehlende eigene Grenze bleibt dennoch ein echter Robustheitsfehler.
   Stellen: `supabase/functions/ai-task/index.ts:1232`,
   `ai_task_test.ts:3747`, `ai_task_test.ts:3770`,
   `ai_task_test.ts:4217`.
 
-- [ ] **H2 – `nicht_deutbar` wird weder belegt noch sauber typgeprüft.**
+- [ ] **H2 – `nicht_deutbar` wird weder belegt noch sauber typgeprüft und
+  ist nicht einzeln abwählbar.**
   Nicht-Textwerte werden durch `kurzText` in sichtbaren Modelltext verwandelt:
   `42` wird `"42"`, ein Objekt wird `"[object Object]"`. Inhaltlich muss ein
-  Eintrag außerdem nicht in den Antworten vorkommen. Der Client macht diese
-  Einträge ausdrücklich unabwahlbar und speichert sie anschließend im
-  persönlichen Profil.
+  Eintrag außerdem nicht in den Antworten vorkommen. Die Liste ist zwar in
+  der Vorschau sichtbar und wird erst mit der gemeinsamen Bestätigung
+  gespeichert; der Client macht ihre Einträge aber ausdrücklich unabwahlbar
+  und speichert sie anschließend im persönlichen Profil.
   Stellen: `supabase/functions/ai-task/index.ts:1324`,
   `src/components/DreiFragen.jsx:59`.
 
@@ -137,12 +182,15 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
 
 ### Mittel
 
-- [ ] **M1 – Das Konto-Gate sitzt erst hinter dem Freitextformular.**
+- [x] **M1 – Das Konto-Gate sitzt erst hinter dem Freitextformular.**
   `kiWegOffen` prüft den KI-Schalter, aber nicht den Kontozustand. Ein Gast
   darf die persönlichen Antworten vollständig eingeben und erfährt erst beim
   Absenden, dass persönliche KI ein Konto verlangt. Der Kommentar verspricht
   ein früheres Ausblenden.
-  Stelle: `src/components/GeschmackBereich.jsx:79`.
+  **Behoben:** App leitet aus dem reaktiven Sitzungssnapshot
+  `account + ready + personalAi` ab; `DatenTab` verbindet diese Fähigkeit mit
+  dem globalen und dem Funktionsschalter, bevor der Drei-Fragen-Weg sichtbar
+  wird. Die bestehende Servicegrenze bleibt die zweite, harte Schranke.
 
 - [ ] **M2 – Die Film-Belegprüfung arbeitet mit beliebigen Teilstrings.**
   Kurztitel wie `It`, `Up` oder `Her` können zufällig innerhalb gewöhnlicher
@@ -160,13 +208,13 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
   Stellen: `supabase/functions/ai-task/index.ts:1301`,
   `ai_task_test.ts:3591`.
 
-- [ ] **M4 – `profilVersion` wird nicht an `profile-extract` übergeben.**
+- [x] **M4 – `profilVersion` wird nicht an `profile-extract` übergeben.**
   Die KI-Fassade kann die Profilversion sauber protokollieren, der erste
   Profil-Task ruft `runTask` aber ohne dieses Optionsfeld auf. Bei einem
   bestehenden Profil fehlt im KI-Protokoll dadurch der Bezug zum
   Ausgangsstand.
-  Stellen: `src/components/GeschmackBereich.jsx:183`,
-  `src/services/ai.js:103`.
+  **Behoben:** `GeschmackBereich` übergibt die geladene Fassung im dritten
+  `runTask`-Argument; ohne Profil bleibt der Wert ehrlich `null`.
 
 - [ ] **M5 – Achsen sind nur als Paket bestätigbar und der Wertevertrag ist
   widersprüchlich.**

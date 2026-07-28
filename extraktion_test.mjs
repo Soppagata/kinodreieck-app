@@ -1404,8 +1404,30 @@ for (const [was, antwort, sollFormfehler] of [
   check("J", "…und sonst nichts (kein Profil, kein Konto, keine Titel)  [gemessen: "
     + JSON.stringify(Object.keys(ruf.payload)) + "]",
     () => gleich(Object.keys(ruf.payload).sort(), ["antworten", "listen"]));
+  check("J", "…und protokolliert bei einem neuen Profil ehrlich keine Profilversion  [gemessen: "
+    + JSON.stringify(ruf.optionen) + "]",
+    () => ruf.optionen?.profilVersion === null);
   check("J", "genau EIN bezahlter Aufruf für einen Durchlauf  [gemessen: " + ki.rufe.length + "]",
     () => ki.rufe.length === 1);
+}
+
+/* Die Version ist keine Nutzlast und kein Profilinhalt, sondern der
+   Protokollbezug des Etappe-5-Unterbaus. Ein vorhandenes Profil muss deshalb
+   im dritten Argument von `runTask` auftauchen. */
+{
+  const vorhanden = { ...LEER(), version: "p3", erstellt: "2026-07-28T10:00:00.000Z",
+    geaendert: "2026-07-28T10:00:00.000Z",
+    einwilligung: { erteilt: true, am: "2026-07-28T10:00:00.000Z", textVersion: "v1" } };
+  const s = neuerSpeicher(vorhanden);
+  const ki = neueKi();
+  ki.antwort = () => HUELLE(DATEN());
+  await neuMontieren({ ai: ki.api, speicher: s.api, bekannteGenres: GENRES });
+  await klickT("drei Fragen");
+  await tippe("K1", A_K1);
+  await klick(knopf("Antworten auswerten"), "auswerten");
+  check("J", "ein bestehendes Profil reist als `profilVersion` ins KI-Protokoll  [gemessen: "
+    + JSON.stringify(ki.rufe[0]?.optionen) + "]",
+    () => ki.rufe[0]?.optionen?.profilVersion === "p3");
 }
 await abraeumen();
 });

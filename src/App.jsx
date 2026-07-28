@@ -2290,6 +2290,8 @@ export default function App() {
             programm={programm}
             setErr={setErr} clearProgrammCache={clearProgrammCache}
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
+            kiProfilFaehig={session.mode === "account" && session.state === "ready"
+              && session.capabilities?.personalAi === true}
             resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
             demoAktiv={masterHerkunft?.typ === "demo" || (() => { try { return !!localStorage.getItem(K.demoSeed); } catch { return false; } })()}

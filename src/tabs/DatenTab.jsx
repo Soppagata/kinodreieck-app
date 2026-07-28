@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
@@ -9,6 +9,7 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+import { bekannteWerte } from "../lib/finder.js";
 /* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
    ReferenceError. Die App hat keine Fehlergrenze — React raeumt den Baum ab,
    der Nutzer sieht eine weisse Seite. Durch alle Gates gerutscht, weil kein
@@ -32,6 +33,11 @@ export function DatenTab({
      Sync-Topf), sondern in `kd:ki`. Stand und Setter kommen deshalb als
      eigene Props von App. */
   kiStand = { global: null, funktionen: {} }, onKiGlobal, onKiFunktion,
+  /* Der persönliche KI-Pfad verlangt ein bereites Konto mit der Fähigkeit
+     `personalAi`. App besitzt den reaktiven Sitzungssnapshot und reicht nur
+     diese fachliche Aussage weiter — DatenTab soll weder Auth-Zustände
+     nachbauen noch erst nach dem Ausfüllen des Freitextformulars scheitern. */
+  kiProfilFaehig = false,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle,
   datenGesperrt = false,
@@ -62,6 +68,34 @@ export function DatenTab({
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
   const [eggOffen, setEggOffen] = useState(false);
   const [ueberOffen, setUeberOffen] = useState(false);
+
+  /* Dieselbe Wertelisten-Logik wie die intelligente Suche. `bekannteWerte`
+     bewahrt die echte Anzeigeschreibweise und entdoppelt robust; eine zweite
+     Genre-Normalisierung hier würde früher oder später abweichen.
+
+     Die Masterliste ist die verlässlichste Quelle. Programm und Streaming
+     ergänzen sie, weil ein neues/noch leeres Konto sonst trotz geladenem
+     Katalog keine KI-Extraktion starten könnte. Die Quellen führen das Feld
+     historisch unter `genre`, `genres` oder `g`, deshalb wird diese kleine
+     Formgrenze hier einmal tolerant gelesen. */
+  const bekannteGenres = useMemo(() => {
+    const zusaetzlich = [];
+    const nimm = (quelle) => {
+      const filme = Array.isArray(quelle) ? quelle
+        : Array.isArray(quelle?.titel) ? quelle.titel
+        : Array.isArray(quelle?.filme) ? quelle.filme
+        : [];
+      for (const film of filme) {
+        const genres = film?.genre ?? film?.genres ?? film?.g;
+        if (Array.isArray(genres)) zusaetzlich.push(...genres);
+        else if (typeof genres === "string") zusaetzlich.push(genres);
+      }
+    };
+    nimm(programm);
+    nimm(streamingBekannt);
+    nimm(streamingEntdecken);
+    return bekannteWerte(Array.isArray(master) ? master : [], zusaetzlich).genres;
+  }, [master, programm, streamingBekannt, streamingEntdecken]);
 
   /* Im hellen Grundmodus öffnet der unklare Knopf Showa, im dunklen NERV.
      Bei aktivem Spezialmodus bleibt sein Ziel stabil, damit derselbe Knopf ihn
@@ -193,7 +227,12 @@ export function DatenTab({
       <Klappe titel="Geschmacksprofil">
         <div style={kasten}>
           <GeschmackBereich
-            bekannteTitel={streamingBekannt}
+            bekannteTitel={Array.isArray(master) ? master : []}
+            bekannteGenres={bekannteGenres}
+            kiAktiv={kiProfilFaehig
+              && kiStand.global === true
+              && kiStand.funktionen?.profil !== false
+              && bekannteGenres.length > 0}
             kiGeraeteweiseAus={kiStand.global !== true}
             onFehler={(e) => setErr?.(e)}
           />
