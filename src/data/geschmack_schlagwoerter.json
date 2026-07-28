@@ -1,0 +1,946 @@
+{
+ "hinweis": "Kuratierte Schlagwort-Liste fuer das deterministische Geschmacks-Onboarding (Etappe 7, Phase 2c). REINE DATEN, kein Code. Jedes Schlagwort traegt eine an echten Daten GEMESSENE Trefferzahl. Wer etwas aendert oder ergaenzt, laesst tools/schlagwort_belege.mjs laufen — das Skript rechnet die Zahlen neu und bricht bei Abweichung ab.",
+ "hinweis_belegpflicht": "Ein Schlagwort, das niemand waehlt, ist harmlos. Ein Schlagwort, das gewaehlt wird und nichts bewirkt, ist eine Luege im Profil: Der Nutzer glaubt, dort stehe etwas ueber ihn, und es steht totes Gewicht. Das E18-Muster (Vokabular nach Plausibilitaet, das die echten Schreibweisen verfehlt und STILL ins Leere laeuft) wird hier durch Messung statt Plausibilitaet verhindert.",
+ "hinweis_anzeige_wert": "anzeige und wert sind getrennt. `anzeige` darf jederzeit umformuliert werden; `wert` ist der gespeicherte Signalwert und aendert sich NIE — sonst verlieren bestehende Profile ihre Signale. `beleg` haengt ebenfalls an der id, nicht am Anzeigetext.",
+ "hinweis_sicherheit": "Alle `wert`-Angaben erfuellen /^[a-z0-9_]{1,32}$/ — ASCII, keine Anfuehrungszeichen, Doppelpunkte, Klammern, Backticks, Unicode-Trennzeichen. Sie reisen ab Etappe 8 in jede Prompt-Fassung (profil.js:promptFassung) und sehen dort NICHT wie Nutzereingabe aus; die schaerfere Form ist die Antwort darauf. profil.js selbst verbietet nur Steuerzeichen.",
+ "hinweis_ziele": "`ziele` sind die Schreibweisen, wie sie WIRKLICH in den Daten stehen — mehrere pro Schlagwort, weil Kino- und Bewertungsbestand verschieden schreiben (Kino: \"Science Fiction\", bewertet: \"sci-fi\"; genreKey() ueberbrueckt das NICHT). Die Ziele sind Messgrundlage und Matching-Grundlage; sie wandern nie in einen Prompt.",
+ "format": 1,
+ "erzeugt": "2026-07-28",
+ "quelle_messung": {
+  "skript": "tools/schlagwort_belege.mjs",
+  "normalisierung": "genreKey() aus src/lib/finder.js und norm()/schlagseite() aus src/lib/match.js — importiert, nicht nachgebaut",
+  "vergleich": "exakter genreKey-Vergleich (die STRENGERE der beiden Regeln der App; sucheKino/sucheEntdecken vergleichen toleranter, finden also mindestens diese Treffer)",
+  "korpora": {
+   "kino": "programm.json / filme[] — 221 Wiener Kinofilme, Fenster 2026-07-22 bis 2026-08-04",
+   "bekannt": "streaming_bekannt.json / titel[] — 100 bewertete Titel (33 von max, 67 von claude)",
+   "entdecken": "streaming_entdecken.json / titel[] — 12540 Titel, nur Jahr auswertbar (genres ist bei ALLEN 12540 null)"
+  },
+  "stand": "Beta-Daten vom 2026-07-28"
+ },
+ "schwelle": {
+  "min_kino": 10,
+  "min_bekannt": 5,
+  "max_konzentration": 0.5,
+  "regel": "Aufnahme, wenn kino >= 10 ODER bekannt >= 5 — und hoechstens 50% der Treffer aus EINER Filmreihe.",
+  "begruendung_kino": "An einem gut belegten Tag laufen 66-77 der 221 Filme, also rund ein Drittel des Bestands. Ein Schlagwort mit 10 Kinotreffern laesst an einem normalen Abend rund 3 Filme uebrig — genug fuer eine Auswahl statt fuer einen Zufallstreffer. Bei 5 waere es rechnerisch 1,5.",
+  "begruendung_bekannt": "sucheFinder() liefert hoechstens 20 Treffer. 5 von 100 bewerteten Titeln = 5% = rechnerisch ein Platz in dieser Liste. Darunter ist die Wirkung im Rauschen.",
+  "begruendung_oder": "Kino und Mediathek sind zwei getrennte Antwortwege (sucheKino vs. sucheFinder). Ein Schlagwort, das nur einen davon bedient, wirkt dort trotzdem echt — die Spalten kino/bekannt sagen, welcher.",
+  "begruendung_konzentration": "Gemessen an einem Titel-Cluster (erstes Wort des normalisierten Titels), weil diese Daten kein Feld `reihe`/`franchise` fuehren. `stunt` hatte 5 Treffer — alle fuenf hiessen Jackass. Eine Zahl, die eine einzige Reihe traegt, belegt keinen Geschmack, sondern einen Sammlungszufall."
+ },
+ "richtung": {
+  "hinweis": "Jedes Schlagwort ist in BEIDEN Richtungen brauchbar (zieht_an / stoesst_ab): alle Ziele sind filterfaehige Strukturfelder (Genre, Kategorie, Jahr), und die gemessene Zahl ist zugleich die Zahl der Filme, die eine Ablehnung betrifft. `ambivalent` entsteht auf diesem Weg nicht — dafuer braucht es Max' eigene Worte (KI-Weg).",
+  "warnung_ui": "profil.js:319 nimmt die Richtung in die Signal-Identitaet auf. `zieht_an drama` und `stoesst_ab drama` koennen deshalb GLEICHZEITIG im Profil stehen, ohne dass das Modul widerspricht. Die Oberflaeche muss die Richtung je Schlagwort exklusiv halten."
+ },
+ "signalvorlage": {
+  "hinweis": "So entsteht aus einer Auswahl ein Signal. quelle und beleg sind fix; staerke und sicherheit setzt die Oberflaeche.",
+  "quelle": "schlagwort",
+  "sicherheit": "hoch",
+  "sicherheit_begruendung": "Der Nutzer hat selbst geklickt — keine Extraktion, keine Schaetzung. Der KI-Weg (K1/K2/K4) liefert niedrigere Sicherheiten.",
+  "staerke_vorschlag": 3,
+  "staerke_hinweis": "3 ist der neutrale Vorschlag. Ob das Onboarding eine Staerke abfragt (ein Klick = 3, zwei Klicks = 5) oder pauschal 3 setzt, ist eine Produktentscheidung.",
+  "beleg": "das Feld `beleg` des jeweiligen Schlagworts — es haengt an der id, nicht am Anzeigetext"
+ },
+ "gruppen": [
+  {
+   "id": "genre",
+   "titel": "Was du gern schaust",
+   "hinweis": "15 Chips. Deckt den Bestand strukturell ab — Genre ist das einzige inhaltliche Feld, das BEIDE Korpora fuehren."
+  },
+  {
+   "id": "haltung",
+   "titel": "Wie du zu Filmen stehst",
+   "hinweis": "2 Chips. Quer zum Genre, getragen vom Feld `kategorie` des bewerteten Bestands."
+  },
+  {
+   "id": "epoche",
+   "titel": "Aus welcher Zeit",
+   "hinweis": "4 Chips, luecken- und ueberschneidungsfrei. Jahr ist das einzige Feld, das alle drei Korpora fuehren."
+  }
+ ],
+ "schlagwoerter": [
+  {
+   "id": "drama",
+   "gruppe": "genre",
+   "anzeige": "Drama",
+   "art": "genre",
+   "wert": "drama",
+   "beleg": "schlagwort:drama",
+   "ziele": {
+    "genres": [
+     "drama",
+     "Drama"
+    ]
+   },
+   "treffer": {
+    "kino": 100,
+    "bekannt": 15,
+    "gesamt": 115,
+    "konzentration": 0.02,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "komoedie",
+   "gruppe": "genre",
+   "anzeige": "Komödie",
+   "art": "genre",
+   "wert": "komoedie",
+   "beleg": "schlagwort:komoedie",
+   "ziele": {
+    "genres": [
+     "komödie",
+     "Komödie",
+     "tragikomödie",
+     "Tragikomödie"
+    ]
+   },
+   "treffer": {
+    "kino": 58,
+    "bekannt": 24,
+    "gesamt": 82,
+    "konzentration": 0.07,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "romantik",
+   "gruppe": "genre",
+   "anzeige": "Romantik & Liebesfilm",
+   "art": "genre",
+   "wert": "romantik",
+   "beleg": "schlagwort:romantik",
+   "ziele": {
+    "genres": [
+     "romance",
+     "Romanze",
+     "Liebesfilm"
+    ]
+   },
+   "treffer": {
+    "kino": 29,
+    "bekannt": 1,
+    "gesamt": 30,
+    "konzentration": 0.07,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "abenteuer",
+   "gruppe": "genre",
+   "anzeige": "Abenteuer",
+   "art": "genre",
+   "wert": "abenteuer",
+   "beleg": "schlagwort:abenteuer",
+   "ziele": {
+    "genres": [
+     "abenteuer",
+     "Abenteuer"
+    ]
+   },
+   "treffer": {
+    "kino": 24,
+    "bekannt": 25,
+    "gesamt": 49,
+    "konzentration": 0.1,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "thriller",
+   "gruppe": "genre",
+   "anzeige": "Thriller",
+   "art": "genre",
+   "wert": "thriller",
+   "beleg": "schlagwort:thriller",
+   "ziele": {
+    "genres": [
+     "thriller",
+     "Thriller"
+    ]
+   },
+   "treffer": {
+    "kino": 22,
+    "bekannt": 13,
+    "gesamt": 35,
+    "konzentration": 0.06,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "familie",
+   "gruppe": "genre",
+   "anzeige": "Familien- & Kinderfilm",
+   "art": "genre",
+   "wert": "familie",
+   "beleg": "schlagwort:familie",
+   "ziele": {
+    "genres": [
+     "familie",
+     "Familie",
+     "Familienfilm",
+     "Kinderfilm"
+    ]
+   },
+   "treffer": {
+    "kino": 21,
+    "bekannt": 2,
+    "gesamt": 23,
+    "konzentration": 0.04,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "doku",
+   "gruppe": "genre",
+   "anzeige": "Dokumentarfilm",
+   "art": "genre",
+   "wert": "doku",
+   "beleg": "schlagwort:doku",
+   "ziele": {
+    "genres": [
+     "Dokumentation",
+     "Dokumentarfilm",
+     "dokumentation"
+    ]
+   },
+   "treffer": {
+    "kino": 18,
+    "bekannt": 0,
+    "gesamt": 18,
+    "konzentration": 0.06,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "action",
+   "gruppe": "genre",
+   "anzeige": "Action",
+   "art": "genre",
+   "wert": "action",
+   "beleg": "schlagwort:action",
+   "ziele": {
+    "genres": [
+     "action",
+     "Action"
+    ]
+   },
+   "treffer": {
+    "kino": 16,
+    "bekannt": 39,
+    "gesamt": 55,
+    "konzentration": 0.07,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "scifi",
+   "gruppe": "genre",
+   "anzeige": "Science-Fiction",
+   "art": "genre",
+   "wert": "scifi",
+   "beleg": "schlagwort:scifi",
+   "ziele": {
+    "genres": [
+     "sci-fi",
+     "Science Fiction"
+    ]
+   },
+   "treffer": {
+    "kino": 14,
+    "bekannt": 34,
+    "gesamt": 48,
+    "konzentration": 0.1,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "animation",
+   "gruppe": "genre",
+   "anzeige": "Animation & Anime",
+   "art": "genre",
+   "wert": "animation",
+   "beleg": "schlagwort:animation",
+   "ziele": {
+    "genres": [
+     "animation",
+     "anime",
+     "Animation"
+    ]
+   },
+   "treffer": {
+    "kino": 15,
+    "bekannt": 12,
+    "gesamt": 27,
+    "konzentration": 0.15,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "krimi",
+   "gruppe": "genre",
+   "anzeige": "Krimi",
+   "art": "genre",
+   "wert": "krimi",
+   "beleg": "schlagwort:krimi",
+   "ziele": {
+    "genres": [
+     "crime",
+     "Krimi"
+    ]
+   },
+   "treffer": {
+    "kino": 14,
+    "bekannt": 11,
+    "gesamt": 25,
+    "konzentration": 0.08,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "fantasy",
+   "gruppe": "genre",
+   "anzeige": "Fantasy",
+   "art": "genre",
+   "wert": "fantasy",
+   "beleg": "schlagwort:fantasy",
+   "ziele": {
+    "genres": [
+     "fantasy",
+     "Fantasy"
+    ]
+   },
+   "treffer": {
+    "kino": 12,
+    "bekannt": 13,
+    "gesamt": 25,
+    "konzentration": 0.12,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "musikfilm",
+   "gruppe": "genre",
+   "anzeige": "Musik & Musical",
+   "art": "genre",
+   "wert": "musikfilm",
+   "beleg": "schlagwort:musikfilm",
+   "ziele": {
+    "genres": [
+     "musical",
+     "musikfilm",
+     "Musik",
+     "Musikfilm / Musical",
+     "Tanzfilm"
+    ]
+   },
+   "treffer": {
+    "kino": 13,
+    "bekannt": 2,
+    "gesamt": 15,
+    "konzentration": 0.07,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "horror",
+   "gruppe": "genre",
+   "anzeige": "Horror",
+   "art": "genre",
+   "wert": "horror",
+   "beleg": "schlagwort:horror",
+   "ziele": {
+    "genres": [
+     "horror",
+     "Horror"
+    ]
+   },
+   "treffer": {
+    "kino": 12,
+    "bekannt": 14,
+    "gesamt": 26,
+    "konzentration": 0.08,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "satire",
+   "gruppe": "genre",
+   "anzeige": "Satire & Parodie",
+   "art": "genre",
+   "wert": "satire",
+   "beleg": "schlagwort:satire",
+   "ziele": {
+    "genres": [
+     "satire",
+     "parodie",
+     "Satire",
+     "Parodie"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 5,
+    "gesamt": 5,
+    "konzentration": 0.2,
+    "entdecken": 0
+   }
+  },
+  {
+   "id": "kult",
+   "gruppe": "haltung",
+   "anzeige": "Kultfilme",
+   "art": "ton",
+   "wert": "kult",
+   "beleg": "schlagwort:kult",
+   "ziele": {
+    "genres": [
+     "Kultfilme"
+    ],
+    "kategorien": [
+     "kult",
+     "kult_klassiker"
+    ]
+   },
+   "treffer": {
+    "kino": 6,
+    "bekannt": 31,
+    "gesamt": 37,
+    "konzentration": 0.08,
+    "entdecken": 0
+   },
+   "ziele_unbelegt": {
+    "tags": [
+     "kult",
+     "klassiker"
+    ],
+    "kategorien": [
+     "referenz"
+    ]
+   }
+  },
+  {
+   "id": "trash",
+   "gruppe": "haltung",
+   "anzeige": "Trash — dämlich, aber herrlich",
+   "art": "ton",
+   "wert": "trash",
+   "beleg": "schlagwort:trash",
+   "ziele": {
+    "kategorien": [
+     "trash",
+     "daemlich_aber_herrlich"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 12,
+    "gesamt": 12,
+    "konzentration": 0.33,
+    "entdecken": 0
+   },
+   "ziele_unbelegt": {
+    "tags": [
+     "trash",
+     "camp"
+    ]
+   }
+  },
+  {
+   "id": "bis_1979",
+   "gruppe": "epoche",
+   "anzeige": "Älter als 1980",
+   "art": "epoche",
+   "wert": "bis_1979",
+   "beleg": "schlagwort:bis_1979",
+   "ziele": {
+    "jahr_max": 1979
+   },
+   "treffer": {
+    "kino": 23,
+    "bekannt": 4,
+    "gesamt": 27,
+    "konzentration": 0.07,
+    "entdecken": 526
+   }
+  },
+  {
+   "id": "1980_1999",
+   "gruppe": "epoche",
+   "anzeige": "80er & 90er",
+   "art": "epoche",
+   "wert": "1980_1999",
+   "beleg": "schlagwort:1980_1999",
+   "ziele": {
+    "jahr_min": 1980,
+    "jahr_max": 1999
+   },
+   "treffer": {
+    "kino": 23,
+    "bekannt": 33,
+    "gesamt": 56,
+    "konzentration": 0.04,
+    "entdecken": 1060
+   }
+  },
+  {
+   "id": "2000_2019",
+   "gruppe": "epoche",
+   "anzeige": "2000er & 2010er",
+   "art": "epoche",
+   "wert": "2000_2019",
+   "beleg": "schlagwort:2000_2019",
+   "ziele": {
+    "jahr_min": 2000,
+    "jahr_max": 2019
+   },
+   "treffer": {
+    "kino": 30,
+    "bekannt": 54,
+    "gesamt": 84,
+    "konzentration": 0.05,
+    "entdecken": 5632
+   }
+  },
+  {
+   "id": "ab_2020",
+   "gruppe": "epoche",
+   "anzeige": "Ganz aktuell (ab 2020)",
+   "art": "epoche",
+   "wert": "ab_2020",
+   "beleg": "schlagwort:ab_2020",
+   "ziele": {
+    "jahr_min": 2020
+   },
+   "treffer": {
+    "kino": 124,
+    "bekannt": 9,
+    "gesamt": 133,
+    "konzentration": 0.02,
+    "entdecken": 5321
+   }
+  }
+ ],
+ "hinweis_verworfen": "Diese Kandidaten sind GEMESSEN und danach abgelehnt worden. Die Liste ist so wichtig wie die Aufnahmeliste: Sie zeigt, wo der Bestand duenn ist, und verhindert, dass ein spaeterer Durchgang dieselben Kandidaten aus Plausibilitaet wieder aufnimmt. Das Skript misst sie mit — die Zahlen bleiben pruefbar.",
+ "verworfen": [
+  {
+   "id": "historie",
+   "anzeige": "Historienfilm",
+   "ziele": {
+    "genres": [
+     "historienfilm",
+     "Historie",
+     "Historiendrama",
+     "Geschichtsfilm",
+     "Biografie"
+    ]
+   },
+   "treffer": {
+    "kino": 9,
+    "bekannt": 1,
+    "gesamt": 10,
+    "konzentration": 0.1,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle (Kino < 10, bewertet < 5). Der Bestand fuehrt Historisches in fuenf verschiedenen Schreibweisen, die zusammen nicht tragen."
+  },
+  {
+   "id": "mystery",
+   "anzeige": "Mystery",
+   "ziele": {
+    "genres": [
+     "mystery",
+     "Mystery"
+    ]
+   },
+   "treffer": {
+    "kino": 6,
+    "bekannt": 1,
+    "gesamt": 7,
+    "konzentration": 0.14,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle. Ueberschneidet sich zudem fast vollstaendig mit Thriller/Horror."
+  },
+  {
+   "id": "arthouse",
+   "anzeige": "Arthouse & Experimentelles",
+   "ziele": {
+    "genres": [
+     "Independent",
+     "Avantgarde",
+     "Stummfilm",
+     "arthouse"
+    ]
+   },
+   "treffer": {
+    "kino": 7,
+    "bekannt": 0,
+    "gesamt": 7,
+    "konzentration": 0.14,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle. Im bewerteten Bestand kommt keine dieser Schreibweisen vor — die Ablehnung 'kein Arthouse' wuerde dort NICHTS ausschliessen."
+  },
+  {
+   "id": "tragikomoedie",
+   "anzeige": "Tragikomödie",
+   "ziele": {
+    "genres": [
+     "tragikomödie",
+     "Tragikomödie"
+    ]
+   },
+   "treffer": {
+    "kino": 3,
+    "bekannt": 2,
+    "gesamt": 5,
+    "konzentration": 0.2,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle; als Ziel in `komoedie` aufgegangen."
+  },
+  {
+   "id": "kriegsfilm",
+   "anzeige": "Kriegsfilm",
+   "ziele": {
+    "genres": [
+     "kriegsfilm",
+     "Kriegsfilm",
+     "Kriegsfilm / Antikriegsfilm"
+    ]
+   },
+   "treffer": {
+    "kino": 2,
+    "bekannt": 0,
+    "gesamt": 2,
+    "konzentration": 0.5,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle. Naheliegender Kandidat fuer eine Abneigung, aber im Bestand praktisch nicht vorhanden — die Ablehnung waere folgenlos."
+  },
+  {
+   "id": "western",
+   "anzeige": "Western",
+   "ziele": {
+    "genres": [
+     "western",
+     "Western"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 1,
+    "gesamt": 1,
+    "konzentration": 1,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle (ein einziger Titel)."
+  },
+  {
+   "id": "superheldenfilm",
+   "anzeige": "Superhelden",
+   "ziele": {
+    "genres": [
+     "superheldenfilm",
+     "Superheldenfilm"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 4,
+    "gesamt": 4,
+    "konzentration": 0.25,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle. Knapp — und ein klassischer Kandidat fuer die Gegenrichtung; bei wachsendem Bestand erneut messen."
+  },
+  {
+   "id": "noir",
+   "anzeige": "Film noir / Neo-noir",
+   "ziele": {
+    "genres": [
+     "neo-noir",
+     "film-noir"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 2,
+    "gesamt": 2,
+    "konzentration": 1,
+    "entdecken": 0
+   },
+   "grund": "unter Schwelle. Steht im Finder-Vokabular als Stimmungsziel, traegt hier aber nur zwei Titel (beide Blade Runner)."
+  },
+  {
+   "id": "stunt",
+   "anzeige": "Stunt & Mutproben",
+   "ziele": {
+    "genres": [
+     "stunt"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 5,
+    "gesamt": 5,
+    "konzentration": 1,
+    "entdecken": 0
+   },
+   "grund": "Schwelle formal erreicht (5 bewertete), aber 100% der Treffer sind EINE Reihe (Jackass). Belegt eine Sammlung, keinen Geschmack."
+  },
+  {
+   "id": "anime",
+   "anzeige": "Anime",
+   "ziele": {
+    "genres": [
+     "anime"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 6,
+    "gesamt": 6,
+    "konzentration": 0.67,
+    "entdecken": 0
+   },
+   "grund": "Schwelle formal erreicht (6 bewertete), aber 4 davon sind Evangelion — 67% eine Reihe. In `animation` aufgegangen, dort sinkt die Konzentration auf ein Drittel."
+  },
+  {
+   "id": "immer_gut",
+   "anzeige": "Sichere Bank",
+   "ziele": {
+    "kategorien": [
+     "immer_gut"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 9,
+    "gesamt": 9,
+    "konzentration": 0.11,
+    "entdecken": 0
+   },
+   "grund": "Zahl traegt, Bedeutung nicht: `immer_gut` ist Max' URTEIL ueber einen Film, keine Geschmacksrichtung. Als Onboarding-Chip wuerde es Bewertung und Profil vermischen — genau das Nicht-Ziel aus profil.js."
+  },
+  {
+   "id": "achse_wie",
+   "anzeige": "Mir ist die Optik am wichtigsten",
+   "ziele": {
+    "achse": "wie"
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 5,
+    "gesamt": 5,
+    "konzentration": 0.2,
+    "entdecken": 0
+   },
+   "grund": "Gehoert nicht in die Signalliste, sondern in profil.achsen (Tendenz 1..5). Ausserdem duenn: nur 5 Titel haben eine WIE-Schlagseite."
+  },
+  {
+   "id": "achse_was",
+   "anzeige": "Mir ist die Story am wichtigsten",
+   "ziele": {
+    "achse": "was"
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 3,
+    "gesamt": 3,
+    "konzentration": 0.67,
+    "entdecken": 0
+   },
+   "grund": "Wie achse_wie — und mit 3 Titeln der duennste Fall im ganzen Bestand. Eine WAS-Vorliebe haette derzeit fast nichts zum Greifen."
+  },
+  {
+   "id": "achse_warum",
+   "anzeige": "Mir ist die Bedeutung am wichtigsten",
+   "ziele": {
+    "achse": "warum"
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 35,
+    "gesamt": 35,
+    "konzentration": 0.14,
+    "entdecken": 0
+   },
+   "grund": "Zahl traegt deutlich, gehoert aber trotzdem nach profil.achsen. Als einziger Achsen-Chip von dreien waere er zudem irrefuehrend."
+  },
+  {
+   "id": "stimmung_tags",
+   "anzeige": "Stimmungen über Tags (düster, feelgood, …)",
+   "ziele": {
+    "tags": [
+     "kult",
+     "noir",
+     "feelgood",
+     "wohlfuehl",
+     "duester",
+     "melancholisch",
+     "trash",
+     "klassiker"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 0,
+    "gesamt": 0,
+    "konzentration": 0,
+    "entdecken": 0
+   },
+   "grund": "Messung 0: WEDER programm.json NOCH streaming_bekannt.json fuehren ein Feld `tags`. Die tag-basierten Stimmungen aus finder_vokabular.json haben in diesen Daten keine Grundlage — sie greifen nur auf der Masterliste."
+  },
+  {
+   "id": "ton_duester",
+   "anzeige": "Düster & hart",
+   "ziele": {
+    "text": [
+     "duster",
+     "dunkel",
+     "noir",
+     "dystop",
+     "bedruckend"
+    ]
+   },
+   "treffer": {
+    "kino": 2,
+    "bekannt": 5,
+    "gesamt": 7,
+    "konzentration": 0.14,
+    "entdecken": 0
+   },
+   "grund": "Nur Freitext-Treffer (Beschreibung/Begruendung). KEIN Suchpfad der App liest diese Felder — die Zahl belegt Vorkommen, nicht Wirkung. Ausserdem zu duenn."
+  },
+  {
+   "id": "ton_wohlfuehl",
+   "anzeige": "Wohlfühlfilm",
+   "ziele": {
+    "text": [
+     "feelgood",
+     "wohlfuhl",
+     "warm",
+     "charmant",
+     "charme",
+     "herzerwarmend"
+    ]
+   },
+   "treffer": {
+    "kino": 2,
+    "bekannt": 4,
+    "gesamt": 6,
+    "konzentration": 0.17,
+    "entdecken": 0
+   },
+   "grund": "wie ton_duester: reiner Freitext-Treffer, zu duenn."
+  },
+  {
+   "id": "tempo_ruhig",
+   "anzeige": "Ruhig & langsam",
+   "ziele": {
+    "text": [
+     "ruhig",
+     "leise",
+     "langsam",
+     "meditativ",
+     "still"
+    ]
+   },
+   "treffer": {
+    "kino": 2,
+    "bekannt": 4,
+    "gesamt": 6,
+    "konzentration": 0.17,
+    "entdecken": 0
+   },
+   "grund": "wie ton_duester. `tempo` bleibt damit eine Art ohne Schlagwort — Tempo steht in diesen Daten in keinem Feld."
+  },
+  {
+   "id": "inszenierung_handwerk",
+   "anzeige": "Handwerk & Effekte",
+   "ziele": {
+    "text": [
+     "practical",
+     "effects",
+     "design",
+     "inszeniert",
+     "inszenierung",
+     "kamera"
+    ]
+   },
+   "treffer": {
+    "kino": 0,
+    "bekannt": 13,
+    "gesamt": 13,
+    "konzentration": 0.08,
+    "entdecken": 0
+   },
+   "grund": "Zahl sieht tragfaehig aus, ist aber ein Freitext-Treffer in `begruendung` — und die stammt ueberwiegend nicht von Max, sondern von claude (67 der 100 Eintraege). Ein Schlagwort auf fremdem Text ist kein Beleg fuer Max' Geschmack."
+  },
+  {
+   "id": "thema_familie",
+   "anzeige": "Familie & Generationen (als Thema)",
+   "ziele": {
+    "text": [
+     "familie",
+     "eltern",
+     "kinder",
+     "mutter",
+     "vater",
+     "tochter",
+     "sohn"
+    ]
+   },
+   "treffer": {
+    "kino": 34,
+    "bekannt": 3,
+    "gesamt": 37,
+    "konzentration": 0.03,
+    "entdecken": 0
+   },
+   "grund": "Hohe Zahl, aber sie kommt aus Inhaltsangaben des Kinoprogramms — 'Mutter' im Plot heisst nicht 'Familienfilm'. Strukturell deckt der Chip `familie` dasselbe sauber ab."
+  },
+  {
+   "id": "regie",
+   "anzeige": "Lieblingsregie",
+   "ziele": {},
+   "treffer": {
+    "kino": 0,
+    "bekannt": 0,
+    "gesamt": 0,
+    "konzentration": 0,
+    "entdecken": 0
+   },
+   "grund": "Messung 0, weil es das Feld nicht gibt: weder programm.json noch streaming_bekannt.json fuehren `regie`. Die Art `regie` bleibt dem KI-Weg vorbehalten (Max nennt Namen selbst)."
+  },
+  {
+   "id": "land",
+   "anzeige": "Herkunftsland / Sprache",
+   "ziele": {},
+   "treffer": {
+    "kino": 0,
+    "bekannt": 0,
+    "gesamt": 0,
+    "konzentration": 0,
+    "entdecken": 0
+   },
+   "grund": "Messung 0, kein Feld `land` in beiden Korpora. Die Fassung (DF/OV/OmU) steht zwar je Vorstellung, ist aber eine Vorfuehrform, keine Geschmacksrichtung — und kein Suchpfad wertet sie aus."
+  },
+  {
+   "id": "kritikpunkt",
+   "anzeige": "Was dich stört (zu lang, zu laut, …)",
+   "ziele": {},
+   "treffer": {
+    "kino": 0,
+    "bekannt": 0,
+    "gesamt": 0,
+    "konzentration": 0,
+    "entdecken": 0
+   },
+   "grund": "Messung 0. Kritikpunkte sind in diesen Daten nur als Fliesstext vorhanden ('Sehr lang und nicht mein Genre'). Die Art `kritikpunkt` gehoert damit zum KI-Weg, nicht ins Schlagwort-Onboarding."
+  }
+ ],
+ "hinweis_uebertreffer": "Ziele sind bewusst KNAPP gehalten. sucheKino()/sucheEntdecken() vergleichen Genre-Schluessel mit includes() in beide Richtungen (finder.js:483, :750) — ein Ziel \"Historiendrama\" haette dort auch \"Historie\" eingefangen, \"Action & Adventure\" auch \"Action\", \"Sci-Fi & Fantasy\" auch beide Nachbargenres. Diese vier Ziele wurden deshalb gestrichen; sie kosteten je einen Film. Pruefbar mit: node tools/schlagwort_belege.mjs --kollisionen",
+ "hinweis_ziele_unbelegt": "ACHTUNG, offene Messung: streaming_bekannt.json fuehrt die ALTEN Kategoriewerte (kult, kult_klassiker, trash, daemlich_aber_herrlich, immer_gut, sehenswert) — 100 von 100 Eintraegen. finder_vokabular.json:9 behauptet dagegen, die Masterliste v3 kenne nur noch sicher_gut/wahrscheinlich_passend/referenz/zu_pruefen und fuehre kult/klassiker/trash als TAGS. Beides kann nicht gleichzeitig stimmen. Das Feld `ziele` enthaelt nur die GEMESSENEN (alten) Werte; `ziele_unbelegt` ist die Hypothese fuer die v3-Masterliste und darf erst benutzt werden, NACHDEM sie dort gemessen wurde. Ein ungemessenes Ziel ist genau der E18-Fehler."
+}

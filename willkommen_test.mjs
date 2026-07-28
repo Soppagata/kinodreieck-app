@@ -68,8 +68,10 @@
          Nicht-Schlagseiten-Aussagen, die Paarungsprüfung Label↔Formel, alle
          drei Kanten (Spanne, Mindesthöhe, Gleichstand) benannt UND erfahren,
          und die VOLLSTÄNDIGE Menge der 27 geteilten Spitzen.
-     D4  Der Zustand dringt heute NICHT nach außen (kein Callback) und die
-         `start`-Prop wirkt nach der Montage nicht mehr.
+     D4  Die Naht nach außen — nur, wenn der Aufrufer sie benutzt: die
+         Willkommens-Box übergibt keine, der gesteuerte Betrieb meldet jede
+         Bewegung, beide Betriebsarten vermischen sich nicht, und die
+         `start`-Prop wirkt nach der Montage weiterhin nicht mehr.
      F   Auffälligkeiten am Ist-Verhalten. Heute rot, NICHT exit-relevant.
          Bewusst nicht als grüner Check auf das Ist-Verhalten gepinnt: ein Pin
          auf falsches Verhalten macht die Reparatur später zur „Regression"
@@ -179,6 +181,29 @@ export { Willkommen, SCHRITTE } from "./Willkommen.jsx";
 export { DreieckRegler } from "./DreieckRegler.jsx";
 `;
 
+/* ---------------------------------------------------- Hülle um DreieckRegler
+   NACHGEZOGEN AM 28.07.2026. Seit Etappe 7, Phase 2c kann der Regler GESTEUERT
+   laufen: sind `wert` und `onChange` gesetzt, besitzt der Aufrufer den Zustand.
+   Damit ist die alte D4-Zusage („keine Naht nach außen") als Aussage über die
+   KOMPONENTE hinfällig — sie war aber nie als solche gemeint. Gemeint war: DIE
+   WILLKOMMENS-BOX stört niemanden nach außen, sie ist ein Erklärstück. Diese
+   Zusage darf nicht verlorengehen, nur weil die Naht jetzt existiert.
+
+   Nachweisen lässt sie sich nur an den PROPS, die die Box hereinreicht — ein
+   Spion von außen greift ins Leere, weil `Willkommen` nichts von uns annimmt.
+   Deshalb wird `DreieckRegler.jsx` beim Bündeln durch eine Hülle ersetzt, die
+   jeden Aufruf mit seinen Props mitschreibt und danach unverändert an die echte
+   Komponente durchreicht. Die Hülle rendert kein eigenes DOM (React-Komponenten
+   tun das nicht), alle übrigen Checks messen also weiter dasselbe. */
+const REGLER_HUELLE = `
+import { createElement } from "react";
+import { DreieckRegler as Echt } from "regler-echt";
+export function DreieckRegler(props) {
+  globalThis.__REGLER_PROPS__.push(props);
+  return createElement(Echt, props);
+}
+`;
+
 /* Der Stub steht fuer src/services/auth.js. Er kennt kein Netz, keinen
    Endpunkt und keinen Treiber; jeder Aufruf landet in einem Zaehler im
    Testprozess. */
@@ -210,7 +235,8 @@ await esbuild.build({
     setup(bau) {
       bau.onResolve({ filter: /^willkommen-eintritt$/ }, () => ({ path: "eintritt", namespace: "wk" }));
       bau.onResolve({ filter: /(^|[\\/])Willkommen\.jsx$/ }, () => ({ path: "willkommen", namespace: "wk" }));
-      bau.onResolve({ filter: /(^|[\\/])DreieckRegler\.jsx$/ }, () => ({ path: "regler", namespace: "wk" }));
+      bau.onResolve({ filter: /(^|[\\/])DreieckRegler\.jsx$/ }, () => ({ path: "huelle", namespace: "wk" }));
+      bau.onResolve({ filter: /^regler-echt$/ }, () => ({ path: "regler", namespace: "wk" }));
       bau.onResolve({ filter: /(^|[\\/])match\.js$/ }, () => ({ path: "match", namespace: "wk" }));
       /* services/auth.js wird beim Buendeln durch einen Stub ERSETZT (Plugin,
          nicht Monkeypatching: `authService` ist eine Modulkonstante). Damit ist
@@ -222,6 +248,9 @@ await esbuild.build({
       bau.onLoad({ filter: /.*/, namespace: "wk" }, (args) => {
         if (args.path === "eintritt") {
           return { contents: EINTRITT, loader: "js", resolveDir: path.join(WURZEL, "src/components") };
+        }
+        if (args.path === "huelle") {
+          return { contents: REGLER_HUELLE, loader: "js", resolveDir: path.join(WURZEL, "src/components") };
         }
         const q = QUELLEN[args.path];
         return { contents: q.text, loader: q.loader, resolveDir: q.dir };
@@ -247,6 +276,8 @@ for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInput
   });
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+/* Ablage der Hülle. Muss stehen, BEVOR das Bündel geladen wird. */
+globalThis.__REGLER_PROPS__ = [];
 
 const React = await import("react");
 const { createRoot } = await import("react-dom/client");
@@ -1844,32 +1875,210 @@ check("D3", "WARUM zurück auf 4: die Vorrang-Aussage kommt zurück",
 });
 
 abschnitt("D4", async () => {
-console.log("\n--- D4: keine Naht nach außen (IST-Zustand) ---");
-feld = () => document.getElementById("reglerwurzel");
+console.log("\n--- D4: die Naht nach außen — nur, wenn der Aufrufer sie benutzt ---");
 
-/* Der Zustand bleibt heute IM Regler. Gepinnt mit Spionen auf allen Namen,
-   unter denen eine Anzeige-Naht plausibel hieße: keiner darf feuern.
-   ACHTUNG BAUENDE HAND: genau dieser Check geht rot, sobald die Naht
-   eingezogen wird. Das ist beabsichtigt — er markiert die Stelle, an der
-   der Vertrag der Komponente sich ändert, und muss dann BEWUSST angepasst
-   werden (nicht stillschweigend). Alle übrigen Checks müssen grün bleiben. */
+/* NACHGEZOGEN AM 28.07.2026 (Etappe 7, Phase 2c).
+   ---------------------------------------------------------------------------
+   WAS HIER VORHER STAND. Ein Check pinnte: „18 Reglerbewegungen, kein einziger
+   Aufruf nach außen", gemessen mit Spionen auf elf Namen, unter denen eine
+   Anzeige-Naht plausibel hieße — darunter `onChange`. Er trug den Hinweis
+   „ACHTUNG BAUENDE HAND: genau dieser Check geht rot, sobald die Naht
+   eingezogen wird. Das ist beabsichtigt … und muss dann BEWUSST angepasst
+   werden (nicht stillschweigend)."
+
+   Die Naht ist eingezogen, der Check ist rot geworden, hier ist die bewusste
+   Anpassung. Sie ist SCHÄRFER als vorher, nicht weicher:
+
+     * Die alte Zusage bleibt, aber am richtigen Ort. Sie war nie eine Aussage
+       über die Komponente, sondern über die WILLKOMMENS-BOX: dort ist der
+       Regler ein Erklärstück, das niemanden nach außen stören soll. Das wird
+       jetzt an den Props gemessen, die die Box hereinreicht (Hülle, siehe
+       oben) — und zwar strenger als ein Spion es könnte: Ein Spion beweist nur,
+       dass DIESE elf Namen nicht feuern. Die Props beweisen, dass die Box
+       ÜBERHAUPT KEINE Rückrufnaht übergibt.
+     * Dazu kommt das Gegenstück: Der gesteuerte Betrieb muss das Gegenteil
+       leisten, sonst wäre die Naht eingebaut und funktionslos.
+     * Und die Trennung: Im gesteuerten Fall darf KEIN innerer Zustand die
+       Anzeige bestimmen. Setzt der Aufrufer den Wert nicht, bewegt sich der
+       Regler nicht — sonst gäbe es zwei Speicherorte, die auseinanderlaufen
+       können, und der Aufrufer glaubte, er besitze einen Zustand, den er nicht
+       besitzt. Im ungesteuerten Fall muss der Regler weiterhin allein
+       funktionieren.
+   Keine Zusage wurde gestrichen; die alte steht unten als D4/1 und D4/2. */
+
+/* ---------------------------------------------------------------- D4/1
+   Die Willkommens-Box. Frisch aufgebaut, damit die Aufzeichnung nur ihre
+   Props enthält. */
+feld = () => dialog();
+schliessRufe.length = 0;
+await act(async () => { steuer.setOffen(false); });
+await act(async () => { steuer.setOffen(true); });
+globalThis.__REGLER_PROPS__.length = 0;
+await klick(knopf("Weiter"));                       // Karte 1 → Karte 2
+const boxProps = [...globalThis.__REGLER_PROPS__];
+check("D4", "die Willkommens-Box baut genau EINEN Regler auf  [gemessen: "
+  + boxProps.length + "]", () => boxProps.length === 1);
+check("D4", "sie übergibt KEIN onChange — die Naht bleibt in der Box ungenutzt"
+  + "  [gemessen: Schlüssel " + JSON.stringify(Object.keys(boxProps[0] || {})) + "]",
+  () => boxProps.length === 1 && boxProps[0].onChange === undefined);
+check("D4", "sie übergibt auch KEIN `wert` — der Regler bleibt dort ungesteuert",
+  () => boxProps[0].wert === undefined || boxProps[0].wert === null);
+/* Der eigentliche Beweis, und er ist stärker als jeder Spion: Es gibt in den
+   Props der Box ÜBERHAUPT keinen Rückruf. Was nicht übergeben wird, kann auch
+   nicht feuern — unabhängig davon, wie eine künftige Naht heißt. */
+check("D4", "die Box übergibt überhaupt keine Funktion — nichts KANN nach außen dringen"
+  + "  [gemessen: " + JSON.stringify(Object.entries(boxProps[0] || {})
+    .filter(([, v]) => typeof v === "function").map(([k]) => k)) + "]",
+  () => Object.values(boxProps[0]).every((v) => typeof v !== "function"));
+check("D4", "sie übergibt genau das, was W3 pinnt: start, scale, size  [gemessen: "
+  + JSON.stringify(boxProps[0]) + "]",
+  () => JSON.stringify(Object.keys(boxProps[0]).sort()) === JSON.stringify(["scale", "size", "start"]));
+/* Und der Regler IN der Box lässt sich trotzdem spielen — sonst wäre die
+   Zusage „stört niemanden" mit einem toten Regler erkauft. */
+await ziehe("WIE", 0); await ziehe("WAS", 5); await ziehe("WARUM", 0);
+check("D4", "…und der Regler in der Box hält seinen Zustand weiterhin selbst",
+  () => glyphLabel() === "wie 0, was 5, warum 0"
+    && globalThis.__REGLER_PROPS__.every((q) => typeof q.onChange !== "function"));
+await klick(knopf("Zurück"));
+
+/* ---------------------------------------------------------------- D4/2
+   Der alte Spion-Check, unverändert im Verfahren und nur um `onChange`
+   verkürzt: OHNE eine übergebene Naht feuert nichts. Die elf Namen bleiben
+   stehen, weil jeder von ihnen eine plausible künftige Naht benennt und der
+   Check sie weiterhin ausschliesst. */
+feld = () => document.getElementById("reglerwurzel");
 const spionRufe = [];
-const NAMEN = ["onChange", "onAendern", "onAenderung", "onBw", "onWerte", "setBw", "onSlider", "onKategorie", "onCategoryChange", "aendere", "onStartChange"];
+const NAMEN = ["onAendern", "onAenderung", "onBw", "onWerte", "setBw", "onSlider", "onKategorie", "onCategoryChange", "aendere", "onStartChange"];
 const spione = {};
 for (const n of NAMEN) spione[n] = (...a) => spionRufe.push([n, a]);
 
 await montiere({ start: { wie: 2, was: 2, warum: 2 }, ...spione });
 for (const achse of ["WIE", "WAS", "WARUM"]) for (const wert of [0, 1, 2, 3, 4, 5]) await ziehe(achse, wert);
-check("D4", "18 Reglerbewegungen, kein einziger Aufruf nach außen  [gemessen: " + spionRufe.length + " Aufruf(e)"
-  + (spionRufe[0] ? " an " + spionRufe[0][0] : "") + "]",
+check("D4", "18 Reglerbewegungen OHNE onChange: kein einziger Aufruf nach außen  [gemessen: "
+  + spionRufe.length + " Aufruf(e)" + (spionRufe[0] ? " an " + spionRufe[0][0] : "") + "]",
   () => spionRufe.length === 0);
 check("D4", "die Bewegungen sind trotzdem angekommen (der Spion-Lauf war kein Leerlauf)",
   () => glyphLabel() === "wie 5, was 5, warum 5");
 check("D4", "unbekannte Props landen auch nicht als DOM-Attribute auf dem Wurzelelement",
   () => { const w = feld().firstElementChild; return !!w && NAMEN.every((n) => !w.hasAttribute(n.toLowerCase())); });
 
-/* Die start-Prop wird nur beim Aufbau gelesen (useState-Initialwert). Ein
-   neuer Wert von außen erreicht die Anzeige heute NICHT. */
+/* ---------------------------------------------------------------- D4/3
+   Der ungesteuerte Betrieb mit Naht: Der Regler hält den Zustand selbst UND
+   meldet. Das ist der Zwischenfall, den `gesteuert = !!wert` erzeugt — er wird
+   hier gemessen, nicht angenommen. */
+const meldungen = [];
+await montiere({ start: { wie: 1, was: 1, warum: 1 }, onChange: (v) => meldungen.push(v) });
+await ziehe("WIE", 4);
+check("D4", "onChange OHNE `wert`: der Regler bewegt sich selbst  [gemessen: " + glyphLabel() + "]",
+  () => glyphLabel() === "wie 4, was 1, warum 1");
+check("D4", "…und meldet die vollständige Wertegruppe  [gemessen: " + JSON.stringify(meldungen) + "]",
+  () => meldungen.length === 1 && JSON.stringify(meldungen[0]) === JSON.stringify({ wie: 4, was: 1, warum: 1 }));
+await ziehe("WAS", 0);
+check("D4", "…und meldet beim zweiten Zug den fortgeschriebenen Stand, nicht den Startwert"
+  + "  [gemessen: " + JSON.stringify(meldungen[1]) + "]",
+  () => JSON.stringify(meldungen[1]) === JSON.stringify({ wie: 4, was: 0, warum: 1 }));
+
+/* ---------------------------------------------------------------- D4/4
+   Der GESTEUERTE Betrieb. 18 Bewegungen, 18 Meldungen — das Gegenteil von
+   D4/2, mit demselben Verfahren gemessen. */
+const gesteuerteMeldungen = [];
+await montiere({ wert: { wie: 2, was: 2, warum: 2 }, onChange: (v) => gesteuerteMeldungen.push(v) });
+for (const achse of ["WIE", "WAS", "WARUM"]) for (const wert of [0, 1, 2, 3, 4, 5]) await ziehe(achse, wert);
+/* 18 Zugversuche, aber 15 Meldungen — und das ist richtig: Die Anzeige steht
+   im gesteuerten Betrieb dauerhaft auf 2, drei der 18 Züge setzen den Regler
+   also auf den Wert, den er schon zeigt, und der Browser feuert dafür kein
+   Ereignis. Gemessen und ausgewiesen statt auf 18 gerundet — eine Zahl, die
+   nur mit einer Ausrede stimmt, ist keine Messung. */
+check("D4", "gesteuert: 18 Zugversuche ergeben 15 Meldungen nach außen (3 Züge treffen "
+  + "den bereits angezeigten Wert 2)  [gemessen: " + gesteuerteMeldungen.length + "]",
+  () => gesteuerteMeldungen.length === 15);
+check("D4", "jede Meldung trägt genau die drei Achsen  [gemessen: "
+  + JSON.stringify(Object.keys(gesteuerteMeldungen[0] || {})) + "]",
+  () => gesteuerteMeldungen.every((m) => JSON.stringify(Object.keys(m).sort()) === JSON.stringify(["warum", "was", "wie"])));
+/* Und jetzt die Trennung: Der Aufrufer hat den Wert NICHT übernommen, also
+   darf sich nichts bewegt haben. Ein innerer Zustand, der im gesteuerten
+   Betrieb weiter die Anzeige bestimmte, wäre ein zweiter Speicherort. */
+check("D4", "…die ANZEIGE bleibt trotzdem beim Wert des Aufrufers  [gemessen: " + glyphLabel() + "]",
+  () => glyphLabel() === "wie 2, was 2, warum 2");
+check("D4", "…auch die Reglerstellungen selbst  [gemessen: "
+  + JSON.stringify(reglerAlle().map((e) => e.value)) + "]",
+  () => reglerAlle().every((e) => e.value === "2"));
+check("D4", "…und die Zahlen rechts daneben  [gemessen: "
+  + JSON.stringify(["WIE", "WAS", "WARUM"].map(anzeige)) + "]",
+  () => ["WIE", "WAS", "WARUM"].every((a) => anzeige(a) === "2"));
+check("D4", "…und die Kategorie-Zeile  [gemessen: " + JSON.stringify(kategorieText()) + "]",
+  () => kategorieText() === "Kategorie: Ausgewogen — alle drei im Gleichgewicht");
+/* Die Meldung selbst rechnet auf dem Wert des Aufrufers weiter, nicht auf
+   einem eigenen Stand: Die letzte Bewegung war WARUM=5, gemeldet werden muss
+   2/2/5 und nicht 5/5/5. */
+check("D4", "die Meldungen rechnen auf dem Wert des AUFRUFERS, nicht auf einem eigenen Stand"
+  + "  [gemessen: letzte Meldung " + JSON.stringify(gesteuerteMeldungen[gesteuerteMeldungen.length - 1]) + "]",
+  () => JSON.stringify(gesteuerteMeldungen[gesteuerteMeldungen.length - 1])
+    === JSON.stringify({ wie: 2, was: 2, warum: 5 }));
+check("D4", "…und keine einzige Meldung trägt einen Wert, den der Aufrufer nie gesetzt hat "
+  + "(je Meldung genau EINE Achse abweichend von 2/2/2)  [gemessen: "
+  + gesteuerteMeldungen.filter((m) => ["wie", "was", "warum"].filter((a) => m[a] !== 2).length > 1).length
+  + " Ausreisser]",
+  () => gesteuerteMeldungen.every((m) => ["wie", "was", "warum"].filter((a) => m[a] !== 2).length <= 1));
+
+/* ---------------------------------------------------------------- D4/5
+   Übernimmt der Aufrufer, folgt die Anzeige — sonst wäre der gesteuerte
+   Betrieb eine Sackgasse. Ein Halter mit echtem Zustand, wie ihn das
+   Geschmacks-Onboarding baut. */
+function ReglerHalter() {
+  const [w, setW] = useState({ wie: 1, was: 1, warum: 1 });
+  steuer.reglerWert = w;
+  return h(DreieckRegler, { wert: w, onChange: setW });
+}
+await act(async () => { reglerWurzel.render(h(ReglerHalter, { key: "halter" })); });
+await ziehe("WIE", 4); await ziehe("WARUM", 5); await ziehe("WAS", 0);
+check("D4", "übernimmt der Aufrufer, folgt die Anzeige  [gemessen: " + glyphLabel() + "]",
+  () => glyphLabel() === "wie 4, was 0, warum 5");
+check("D4", "…und der Aufrufer hält denselben Wert  [gemessen: " + JSON.stringify(steuer.reglerWert) + "]",
+  () => JSON.stringify(steuer.reglerWert) === JSON.stringify({ wie: 4, was: 0, warum: 5 }));
+check("D4", "…und die Kategorie folgt mit  [gemessen: " + JSON.stringify(kategorieText()) + "]",
+  () => kategorieText() === "Kategorie: WARUM-lastig — Relevanz vor Form und Stoff");
+
+/* ---------------------------------------------------------------- D4/6
+   Keine Vermischung: Der ungesteuerte Regler funktioniert weiter allein, und
+   der gesteuerte trägt keinen Rest aus dem ungesteuerten Betrieb. */
+await montiere({ start: { wie: 0, was: 0, warum: 0 } });
+await ziehe("WAS", 4);
+check("D4", "ungesteuert bleibt ungesteuert: der Regler funktioniert allein  [gemessen: "
+  + glyphLabel() + "]", () => glyphLabel() === "wie 0, was 4, warum 0");
+await montiere({ start: { wie: 5, was: 5, warum: 5 }, wert: { wie: 1, was: 1, warum: 1 }, onChange: () => {} });
+check("D4", "gesteuert schlägt `start`: die Anzeige folgt `wert`, nicht dem Startwert"
+  + "  [gemessen: " + glyphLabel() + "]", () => glyphLabel() === "wie 1, was 1, warum 1");
+/* NACHGEZOGEN AM 28.07.2026 (F7b-Fix). Vorher stand hier: „`wert` ohne
+   `onChange`: der Regler steht still" — das war das gemeldete Problem, nicht
+   die gewollte Grenze. `gesteuert` hängt jetzt an BEIDEN Props, ein
+   vergessener `onChange` ergibt also keinen stummen Regler mehr, sondern
+   einen ganz normalen ungesteuerten. Der Check ist nicht gestrichen, sondern
+   umgedreht und um die Frage erweitert, die dabei offenblieb: Wirkt `wert` im
+   ungesteuerten Betrieb wenigstens als Startwert? Nachgemessen: NEIN, er wird
+   vollständig ignoriert, die Anzeige kommt aus `start`. Das ist die Grenze,
+   die jetzt gepinnt gehört — sie ist die eigentliche Falle für den nächsten
+   Aufrufer, der „ich gebe halt mal `wert` mit" denkt. */
+await montiere({ wert: { wie: 1, was: 2, warum: 3 } });
+check("D4", "`wert` ohne `onChange` macht NICHT gesteuert: die Anzeige kommt aus `start`"
+  + " (Vorgabe 4/2/5), nicht aus `wert`  [gemessen: " + glyphLabel() + "]",
+  () => glyphLabel() === "wie 4, was 2, warum 5");
+await ziehe("WIE", 5);
+check("D4", "…und der Regler lässt sich ganz normal bewegen (kein stummer Regler mehr)"
+  + "  [gemessen: " + glyphLabel() + "]", () => glyphLabel() === "wie 5, was 2, warum 5");
+await montiere({ wert: { wie: 1, was: 2, warum: 3 }, start: { wie: 0, was: 0, warum: 0 } });
+check("D4", "…`wert` wirkt dabei auch nicht als Startwert — `start` gewinnt  [gemessen: "
+  + glyphLabel() + "]", () => glyphLabel() === "wie 0, was 0, warum 0");
+/* Und die Gegenprobe: Erst BEIDE Props zusammen schalten den gesteuerten
+   Betrieb ein. Sonst wäre die neue Bedingung nicht belegt, sondern geraten. */
+await montiere({ wert: { wie: 1, was: 2, warum: 3 }, start: { wie: 0, was: 0, warum: 0 }, onChange: () => {} });
+check("D4", "erst `wert` UND `onChange` zusammen machen gesteuert  [gemessen: "
+  + glyphLabel() + "]", () => glyphLabel() === "wie 1, was 2, warum 3");
+
+/* ---------------------------------------------------------------- D4/7
+   Unverändert übernommen: Die `start`-Prop wird nur beim Aufbau gelesen
+   (useState-Initialwert). Ein neuer Wert von außen erreicht die Anzeige
+   NICHT — das ist genau der Grund, warum es die `wert`-Naht braucht. */
 await montiere({ start: { wie: 1, was: 1, warum: 1 } });
 await ziehe("WIE", 5);
 await montiereGleich({ start: { wie: 0, was: 0, warum: 0 } });
@@ -2010,6 +2219,38 @@ check("F", "F8: ein Konto OHNE personalAi bekommt keine Zusage, die KI stünde b
   () => !behauptung.includes("Angemeldet — die KI-Funktionen stehen dir zur Verfügung."));
 authAuf();
 
+/* F7 — ABGERÄUMT AM 28.07.2026, NICHT GESTRICHEN.
+   Der Befund lautete zweiteilig: (a) Der Modulkopf behauptete, der innere
+   Zustand laufe im gesteuerten Betrieb „weiter mit", während `setBw` ihn dort
+   ausdrücklich nicht fortschreibt; (b) `gesteuert = !!wert` hing allein an
+   `wert`, ein vergessener `onChange` ergab also einen Regler, der sich nicht
+   bewegen liess und das nirgends sagte — die unauffälligste Art, eine Erhebung
+   stumm zu schalten.
+   Beides ist behoben: `gesteuert = !!wert && typeof onChange === "function"`,
+   und der Kommentar benennt jetzt, was der Code tut. Die Zusagen stehen als
+   scharfe Checks in D4/6 und prüfen dort mehr als die alte F-Fassung: dass
+   `wert` allein nicht gesteuert macht, dass der Regler in diesem Fall normal
+   bedienbar ist, dass `wert` dabei auch nicht als Startwert einspringt (das
+   war offen und ist nachgemessen worden), und dass erst beide Props zusammen
+   den gesteuerten Betrieb einschalten.
+
+   F8 — NEU AM 28.07.2026, Nachwehe des F7-Fixes.
+   `gesteuert` prüft jetzt `typeof onChange === "function"`, die Aufrufstelle
+   aber weiterhin nur `onChange?.(neu)` — der Optional-Aufruf fängt `null` und
+   `undefined`, nicht einen truthy Nicht-Funktionswert. Ein `onChange`, das
+   etwas anderes als eine Funktion ist, läuft also durch die neue Bedingung in
+   den ungesteuerten Betrieb und wirft dann bei der ersten Reglerbewegung.
+   Schmale Reichweite — ein Aufrufer muss dafür etwas übergeben, das keine
+   Funktion und trotzdem truthy ist —, aber es ist genau die Asymmetrie, die
+   der Fix an der einen Stelle beseitigt und an der anderen stehen gelassen
+   hat. Billigster Fix: an der Aufrufstelle dieselbe Prüfung,
+   `if (typeof onChange === "function") onChange(neu);`. */
+check("F", "F8: die Aufrufstelle prüft `onChange` genauso streng wie `gesteuert`"
+  + "  [gemessen: gesteuert=" + JSON.stringify((QUELLEN.regler.text.match(/const gesteuert = [^;]*/) || [])[0])
+  + ", Aufruf=" + JSON.stringify((QUELLEN.regler.text.match(/^\s*onChange\??\.?\(neu\);/m) || [])[0]?.trim()
+    || (QUELLEN.regler.text.match(/typeof onChange === "function"\) onChange\(neu\)/) || [])[0]) + "]",
+  () => /typeof onChange === "function"\)\s*onChange\(neu\)/.test(QUELLEN.regler.text));
+
 /* F9 — UMGEZOGEN AM 28.07.2026, NICHT GESTRICHEN.
    Der Befund lautete: Die erfolgreiche Anmeldung ohne `personalAi` endete
    in einer Sackgasse ohne ein Wort Erklärung — `signIn` lief durch, die Box
@@ -2049,7 +2290,7 @@ const TITEL = {
   D1: "Startwerte aus der start-Prop",
   D2: "Reglerbewegung wirkt",
   D3: "Kategorie-Ableitung",
-  D4: "keine Naht nach außen",
+  D4: "Naht nach außen: nur auf Verlangen",
 };
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");

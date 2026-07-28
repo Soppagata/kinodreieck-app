@@ -114,7 +114,7 @@ export function leeresProfil() {
     signale: [],             // bestätigt, fließen in die Prompt-Fassung
     offen: [],               // gesammelt, warten auf Bestätigung (UPDATE_SCHWELLE)
     achsen: { wie: null, was: null, warum: null },  // Tendenz 1..5, null = unbekannt
-    filme: [],               // { titel, jahr, masterId, sicher }
+    filme: [],               // { titel, jahr, masterId, sicher, richtung? }
     nichtDeutbar: [],        // ehrlich benannt statt still geschluckt
   };
 }
@@ -205,6 +205,21 @@ export function pruefeProfil(p) {
       if (typeof f.titel === "string" && f.titel.length > 200) fehler.push(pre + "titel zu lang (max 200)");
       if (typeof f.titel === "string" && VERBOTENE_ZEICHEN.test(f.titel)) fehler.push(pre + "titel enthaelt Zeilenumbruch oder Steuerzeichen");
       if (f.jahr != null && (!Number.isInteger(f.jahr) || f.jahr < 1880 || f.jahr > 2200)) fehler.push(pre + "jahr unplausibel");
+      /* `richtung` ist OPTIONAL und bleibt es (Etappe 7, Phase 2c).
+         Der Filmschritt des Onboardings fragt ausdruecklich nach beiden
+         Seiten -- „trifft mich" und „trifft mich gar nicht" -- weil die
+         Ablehnung oft die trennschaerfere Haelfte ist: Wer Jackass und
+         Transformers abwaehlt, sagt mehr ueber sich als jeder Genre-Chip.
+         Vorher konnte `filme` das ueberhaupt nicht ausdruecken.
+
+         Warum optional und nicht pflichtig mit Vorgabewert: Die
+         KI-Extraktion (Phase 3) liefert „genannte Filme" -- Titel, die in
+         einer Antwort VORKAMEN. Ob sie gemocht oder verrissen wurden, weiss
+         sie oft nicht. Ein Vorgabewert `zieht_an` wuerde aus jeder Nennung
+         eine Zuneigung machen und damit genau die Behauptung erfinden, die
+         das Modul an jeder anderen Stelle verbietet. Fehlende Richtung
+         heisst „nur genannt" und wird im Prompt auch so ausgewiesen. */
+      if (f.richtung != null && !RICHTUNGEN.includes(f.richtung)) fehler.push(pre + "richtung unbekannt");
     });
   }
   if (Array.isArray(p.nichtDeutbar)) {
@@ -595,12 +610,26 @@ export function promptFassung(p, { maxBytes = 6000 } = {}) {
       + " (" + flach(s.art, 20) + ", Stärke " + flach(s.staerke, 3) + "/5, Sicherheit " + flach(s.sicherheit, 10) + ")");
   }
 
-  let filmZeile = false;
+  /* Filme nach Richtung GETRENNT ausweisen. Eine gemeinsame Zeile war
+     harmlos, solange `filme` nur „genannt" bedeuten konnte -- mit der
+     Ablehnung ist sie aktiv schaedlich: „Genannte Filme: Alien, Jackass"
+     laedt jedes Modell dazu ein, beide als Vorlieben zu lesen, und ein
+     Profil, das Abneigung als Zuneigung ausliefert, ist schlechter als
+     eines ohne Filme. Drei Zeilen statt einer, jede mit eigenem Wortlaut;
+     die richtungslose bleibt woertlich wie bisher, damit bestehende
+     Prompt-Erwartungen tragen. */
   if (Array.isArray(p.filme) && p.filme.length) {
-    const sichere = p.filme
-      .filter((f) => f && f.sicher !== false && f.titel)
-      .map((f) => flach(f.titel, 200) + (Number.isInteger(f.jahr) ? " (" + f.jahr + ")" : ""));
-    if (sichere.length) { zeilen.push("Genannte Filme: " + sichere.join(", ")); filmZeile = true; }
+    const sichere = p.filme.filter((f) => f && f.sicher !== false && f.titel);
+    const nenne = (f) => flach(f.titel, 200) + (Number.isInteger(f.jahr) ? " (" + f.jahr + ")" : "");
+    for (const [richtung, wort] of [
+      ["zieht_an", "Filme, die ihn treffen"],
+      ["stoesst_ab", "Filme, die ihn abstoßen"],
+      ["ambivalent", "Filme, zu denen er zwiespältig steht"],
+      [null, "Genannte Filme"],
+    ]) {
+      const teil = sichere.filter((f) => (f.richtung == null ? null : f.richtung) === richtung).map(nenne);
+      if (teil.length) zeilen.push(wort + ": " + teil.join(", "));
+    }
   }
 
   let text = zeilen.join("\n");
@@ -634,11 +663,15 @@ export function promptFassung(p, { maxBytes = 6000 } = {}) {
     /* `signale` meldete bisher ALLE Signale des Profils, auch die
        weggekürzten — wer daran ein Budget rechnete, bekam eine bis zu
        16-fach zu große Zahl. Jetzt: was wirklich im Text steht. */
-    /* Zaehlt die tatsaechlichen Signalzeilen: die Rahmenzeilen (Achsen oben,
-       "Genannte Filme" unten) gehoeren nicht dazu. Vorher wurde nur die
-       Achsen-Zeile abgezogen -- mit Filmliste meldete die Funktion eine zu
-       hohe Zahl. */
-    signale: Math.max(0, drin - (achsText.length ? 1 : 0) - (filmZeile ? 1 : 0)),
+    /* AM FERTIGEN TEXT gezaehlt, nicht aus Zeilenzahl minus Rahmenzeilen
+       gerechnet. Die Rechnung war zweifach falsch: Sie zog `filmZeile` als
+       EINS ab, obwohl es seit der Aufteilung nach Richtung bis zu VIER
+       Filmzeilen gibt (gemessen: 1 Signal + 4 Filme meldete `signale: 4`
+       bei `signaleGesamt: 1` -- eine Teilmenge groesser als ihre Menge).
+       Und unter Kuerzung zog sie Rahmenzeilen ab, die laengst weggefallen
+       waren, meldete also zu wenig. Signalzeilen sind genau die, die mit
+       "- " beginnen; das gilt vor wie nach der Kuerzung. */
+    signale: text.split("\n").filter((z) => z.startsWith("- ")).length,
     signaleGesamt: signale.length,
     bytes: bytes(text),
     gekuerzt,

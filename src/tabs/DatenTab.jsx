@@ -8,6 +8,12 @@ import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
+import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+/* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
+   ReferenceError. Die App hat keine Fehlergrenze — React raeumt den Baum ab,
+   der Nutzer sieht eine weisse Seite. Durch alle Gates gerutscht, weil kein
+   Test `DatenTab` je gerendert hat; `geschmackui_test.mjs` tut es jetzt. */
+import { KI_FUNKTIONEN } from "../lib/kiSchalter.js";
 import { ERROR_CODES } from "../services/errors.js";
 
 /* ================= EINSTELLUNGEN =================
@@ -174,6 +180,23 @@ export function DatenTab({
             auf einem zweiten Gerät entscheidest du erneut. KI-Funktionen brauchen
             außerdem ein Konto.
           </p>
+        </div>
+      </Klappe>
+
+      {/* Geschmacksprofil (Etappe 7, Phase 2c). Steht NACH dem KI-Block,
+          weil der Schalter die Rahmenentscheidung ist — aber ausdrücklich
+          NICHT unter ihm: Der deterministische Weg ist vollwertig und muss
+          auch bei KI=aus erreichbar sein. Ein Profil-Block, der sich mit
+          dem KI-Schalter versteckt, hätte den Abnahme-Anker der Etappe
+          („ein KI-loser Start ist vollwertig") in der Oberfläche
+          zurückgenommen. */}
+      <Klappe titel="Geschmacksprofil">
+        <div style={kasten}>
+          <GeschmackBereich
+            bekannteTitel={streamingBekannt}
+            kiGeraeteweiseAus={kiStand.global !== true}
+            onFehler={(e) => setErr?.(e)}
+          />
         </div>
       </Klappe>
 

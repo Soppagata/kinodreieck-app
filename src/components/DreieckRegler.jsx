@@ -30,8 +30,42 @@ function kategorieFormel(bw) {
   return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Relevanz vor Form und Stoff" }[s[0]];
 }
 
-export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.1, size = 54 }) {
-  const [bw, setBw] = useState(start);
+/* GESTEUERT ODER UNGESTEUERT — beides, aus Rücksicht auf die Bestandsnutzer.
+   In der Willkommens-Box und in `Erklaerstuecke` ist der Regler ein
+   Erklärstück: Er soll spielbar sein und niemanden nach außen stören, also
+   hält er seinen Zustand selbst. Im Geschmacks-Onboarding (Etappe 7, 2c)
+   erhebt er dagegen eine Angabe, die ins Profil wandert — dort muss der
+   Aufrufer den Wert besitzen.
+
+   Beides in einer Komponente statt in zweien, weil die Alternative eine
+   Kopie gewesen wäre: `kategorieLabel`/`kategorieFormel` tragen die
+   Erklärung der Schlagseiten-Regel, und zwei Fassungen davon laufen
+   garantiert irgendwann auseinander.
+
+   Gesteuert ist er nur, wenn BEIDES da ist: `wert` UND `onChange`. Hinge es
+   allein an `wert`, ergäbe ein vergessener `onChange` einen Regler, der sich
+   nicht bewegen lässt und das nirgends sagt — die unauffälligste Art, eine
+   Erhebung stumm zu schalten.
+
+   Der innere Zustand wird im gesteuerten Betrieb NICHT mitgeführt: Er bliebe
+   auf `start` stehen, und ein Regler, der von gesteuert auf ungesteuert
+   zurückfiele, spränge sichtbar zurück. Ein zweiter Speicherort, der
+   abweichen kann, ist schlimmer als gar keiner. */
+export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.1, size = 54, wert = null, onChange = null }) {
+  const [eigen, setEigen] = useState(start);
+  const gesteuert = !!wert && typeof onChange === "function";
+  const bw = gesteuert ? wert : eigen;
+  const setBw = (f) => {
+    const neu = typeof f === "function" ? f(bw) : f;
+    if (!gesteuert) setEigen(neu);
+    /* Dieselbe Prüfung wie in `gesteuert`, nicht die schwächere Optionalkette:
+       `?.` fängt nur `null`/`undefined`. Ein `onChange`, das truthy und keine
+       Funktion ist, fiel durch `gesteuert` in den ungesteuerten Betrieb und
+       warf hier bei der ersten Reglerbewegung. Zwei verschiedene Maßstäbe
+       für dieselbe Frage im selben Modul sind genau die Asymmetrie, die
+       solche Fälle erzeugt. */
+    if (typeof onChange === "function") onChange(neu);
+  };
   const slider = (achse, key, col) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "7px 0" }}>
       <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: "0.06em", color: col, width: 66 }}>{achse}</span>
