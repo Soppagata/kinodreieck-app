@@ -40,6 +40,12 @@
 --
 -- WIEDERHOLBAR: setzt eine feste Menge, kein Inkrement. Mehrfaches Ausführen
 -- ist folgenlos.
+--
+-- LIVE-BELEG 28.07.2026
+-- `npm run test:rls` bestätigt gegen Projekt bscjgwcntapobyxsiyce:
+-- T10b Profil-Topf erlaubt, T10c Konto-Isolation, T10d anon-Sperre;
+-- vollständiger Lauf 36/36. Der ursprüngliche Ausführungszeitpunkt ist nicht
+-- mehr sicher rekonstruierbar, deshalb wird er im Protokoll nicht erfunden.
 -- ===========================================================================
 
 alter table public.kd_personal drop constraint if exists kd_personal_key_erlaubt;

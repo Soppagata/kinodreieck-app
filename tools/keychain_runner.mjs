@@ -2,7 +2,7 @@
 /* Sichere lokale Brücke vom macOS-Schlüsselbund zu den Infrastrukturtests.
    ==========================================================================
    Die beiden Testpasswörter bleiben im Login-Schlüsselbund. Dieses Programm
-   liest nur die fest benannten Einträge und reicht sie ausschließlich an vier
+   liest nur die fest benannten Einträge und reicht sie ausschließlich an
    fest verdrahtete Testwege weiter. Es gibt keine freie Befehlsausführung.
 
    Öffentliche Zielwerte liegen in `.env.live.local`; Geheimnisse und
@@ -72,6 +72,15 @@ export const MODI = Object.freeze({
       "--",
       process.execPath,
       SKRIPT("ai_smoke.mjs"),
+    ],
+  },
+  "profile-contract": {
+    accounts: [KEYCHAIN_ACCOUNTS.testa],
+    argv: [
+      SKRIPT("ai_budget_guard.mjs"),
+      "--",
+      process.execPath,
+      SKRIPT("profile_extract_contract.mjs"),
     ],
   },
   "ai-eval": {
@@ -308,7 +317,7 @@ export async function main(
   if (!MODI[modus] || (rest.length > 0 && !confirmPaid)) {
     fehlerAusgabe(
       "Erlaubt: keychain-check | budget-check | ai-live | "
-      + "ai-eval --confirm-paid | rls",
+      + "profile-contract | ai-eval --confirm-paid | rls",
     );
     return EXIT_KONFIG;
   }

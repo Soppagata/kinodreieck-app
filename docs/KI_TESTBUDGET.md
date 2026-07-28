@@ -58,6 +58,15 @@ Passwort gezielt aus dem Login-Schlüsselbund:
 npm run check:ai-budget
 ```
 
+Die Etappe-7-Remoteprobe ist ebenfalls kostenfrei: Sie schickt absichtlich
+keine Genre-Werteliste, sodass `profile-extract` vor Reservierung und Anbieter
+mit `wertelisten-fehlen` abbrechen muss. Der Budgetwächter misst trotzdem
+davor und danach:
+
+```bash
+npm run test:ai:contract
+```
+
 Ob beide begrenzten Testkonten im Schlüsselbund vorhanden sind, prüft ohne
 Anmeldung und ohne Netzaufruf:
 

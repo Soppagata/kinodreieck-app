@@ -296,12 +296,13 @@ Produktion und Staging liefern nachweislich denselben Build:
 
 `14cf3ec5657df720751200c3aff5b73402ee0968` – **Pre-Etappe 7**
 
-Damit gilt:
+Damit gilt für die ausgelieferten Frontends weiterhin:
 
 - Etappe 7 ist weder auf `kinodreieck.at` noch auf
   `staging.kinodreieck.at` enthalten.
-- Der Remote-Feature-Branch endet bei `43bf773` (Phase 2a).
-- Phase 2b, Phase 2c und Phase 3 existieren nur lokal.
+- Der Remote-Feature-Branch enthält inzwischen Phase 2b, Phase 2c, Phase 3,
+  die nachgezogenen Reparaturen sowie Budget- und Profilhärtung. Er ist noch
+  auf keine feste Domain deployt.
 - Die Live-Oberfläche war im Desktop-Sichttest stabil und ohne
   Console-Fehler. Im Einstellungsbereich fehlen erwartungsgemäß
   Geschmacksprofil und Etappe-7-KI-Wahl.
@@ -309,11 +310,16 @@ Damit gilt:
   Das ist zunächst eine Auffälligkeit zur Datenfrische, noch kein belegter
   Programmfehler.
 
-Vor einem Staging-Lauf sind zusätzlich nötig:
+Die Backend-Gegenprüfung vom 28.07.2026 hat Claudes Übergabestand präzisiert:
 
-- [ ] Migration `20260727210000_etappe7_profil_topf.sql` ausführen; sie ist im
-  Migrationsprotokoll noch als **STEHT AUS** markiert.
+- [x] Migration `20260727210000_etappe7_profil_topf.sql` ist bereits gelaufen.
+  Der echte RLS-Lauf belegt den Profil-Topf, die Trennung der Testkonten und
+  die anon-Sperre; 36/36 Prüfungen grün. Nur der ursprüngliche Laufzeitpunkt
+  war im Migrationsprotokoll nicht nachgetragen.
 - [ ] Die Edge Function manuell deployen; der Pages-Workflow tut das nicht.
+  `npm run test:ai:contract` erhält derzeit HTTP 501
+  `not-implemented/unbekannte-aufgabe`. Die Probe ist absichtlich
+  anbieterfrei und hat den Monatsverbrauch um exakt 0,0000 US-Cent verändert.
 - [ ] Danach erst das Etappe-7-Frontend auf Staging veröffentlichen.
 
 Weitere Hosting-Auffälligkeiten:
@@ -343,8 +349,10 @@ Weitere Hosting-Auffälligkeiten:
 Die lokalen Produkt- und Testpakete 1–5 des ursprünglichen Plans sind
 erledigt. Für die Auslieferung bleibt:
 
-1. Migration `20260727210000_etappe7_profil_topf.sql` in Staging ausführen.
-2. Die Edge Function nach Staging deployen.
+1. Die Edge Function deployen; Staging und Produktion teilen diesen Backend-
+   Endpunkt, deshalb vorher den Function-Test und den Rollback-Stand sichern.
+2. `npm run test:ai:contract` wiederholen; erst HTTP 400
+   `wertelisten-fehlen` bei unverändertem Budget belegt den neuen Vertrag.
 3. Das Frontend nach Staging veröffentlichen.
 4. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
    und anschließend `test:rls` gegen Staging laufen lassen.

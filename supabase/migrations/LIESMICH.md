@@ -26,7 +26,7 @@ ausfüllen.
 | `20260726180000_etappe5_ki_unterbau_haertung.sql` | Produktion (EU-West) | 2026-07-26 | Max | erfolgreich; Rauchprobe danach 11/11 |
 | `20260727180000_etappe6_ausgabebudget_suche.sql` | Produktion (EU-West) | 2026-07-27 | Max | erfolgreich; `task_max_tokens` fuer `intelligent-search` auf 8192 |
 | `20260727190000_etappe6_tageslimit_bauphase.sql` | Produktion (EU-West) | 2026-07-27 | Max | erfolgreich; Tageslimit fuer die Bauphase auf 200 -- VOR DER TESTERRUNDE ZURUECKDREHEN |
-| `20260727210000_etappe7_profil_topf.sql` | | | | **STEHT AUS** -- Key-Whitelist 15 -> 16 (`kd:geschmacksprofil`). Ohne sie schlaegt jeder Profil-Sync mit 23514 terminal fehl. Danach `npm run test:rls`. |
+| `20260727210000_etappe7_profil_topf.sql` | `bscjgwcntapobyxsiyce` | spätestens 2026-07-28 | ursprünglicher Lauf unbekannt; von Codex verifiziert | erfolgreich belegt; `npm run test:rls` 36/36, darunter Profil-Topf, Konto-Isolation und anon-Sperre |
 
 ## Nach Migration 1
 

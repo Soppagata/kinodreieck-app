@@ -181,6 +181,29 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 }
 
 {
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
+    modus: "profile-contract",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
+  });
+  pruefe("Profil-Remoteprobe ist fest hinter dem Budgetwächter verdrahtet",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["profile-contract"].argv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/ai_budget_guard.mjs"))
+      && starts[0].argv.some((arg) => arg.endsWith("/profile_extract_contract.mjs")));
+}
+
+{
   const aus = [];
   const err = [];
   const code = await main(["keychain-check"], {
