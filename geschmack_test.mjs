@@ -374,6 +374,13 @@ check("A", "kein `wert` trägt Anführungszeichen, Backtick, Doppelpunkt, Klamme
   () => ALLE.every((s) => !/["'`:(){}<>\[\]\\\r\n\u0000-\u001f\u2028\u2029]/.test(s.wert)));
 check("A", "jede `art` steht in SIGNAL_ARTEN  [gemessen: " + [...new Set(ALLE.map((s) => s.art))].join(", ") + "]",
   () => ALLE.every((s) => P.SIGNAL_ARTEN.includes(s.art)));
+/* `kult` und `trash` werden aus Kategorien abgeleitet. Sie beschreiben die
+   Haltung zu Filmen, nicht deren Tonfall. Eine eigene Signalart hält diese
+   Messgrundlage auch in der späteren Prompt-Fassung ehrlich. */
+const HALTUNGS_WOERTER = ALLE.filter((s) => s.gruppe === "haltung");
+check("A", "Haltungschips tragen die eigene Art `haltung`, nicht den irreführenden Tonfall"
+  + "  [gemessen: " + HALTUNGS_WOERTER.map((s) => s.id + "=" + s.art).join(", ") + "]",
+  () => HALTUNGS_WOERTER.length > 0 && HALTUNGS_WOERTER.every((s) => s.art === "haltung"));
 /* Die Richtungs-Exklusivität aus Gruppe C ruht auf dieser Eindeutigkeit:
    Zwei IDs mit demselben (art, wert) könnten über zwei Chips beide Richtungen
    desselben Zuges erzeugen — die Abbildung `id -> richtung` schützt dann
@@ -1465,7 +1472,7 @@ fs.rmSync(SPIEGEL, { recursive: true, force: true });
    Heute rot, NICHT exit-relevant. Ein Pin auf falsches Verhalten machte die
    Reparatur später zur „Regression".
 
-   ERLEDIGT AUS RUNDE 1 (28.07.): B1, B1a, B2, B3, B4, B5, B6, B7 und M1
+   ERLEDIGT AM 28.07.: B1, B1a, B2, B3, B4, B5, B6, B7, K2 und M1
    sind gebaut. Sie stehen nicht mehr hier, sondern als harte Checks in den
    Gruppen, deren Zusage sie betreffen — F (max, Artikel), G (Angebot kein
    Array), H (null-Eingabe), J (Signalzahl), M (Messskript). Ein reparierter
@@ -1492,20 +1499,6 @@ check("X", "B5: FILM_BELEG_PRAEFIX ist als Reservierung gekennzeichnet, solange 
     return hatErzeuger || istGekennzeichnet;
   });
 
-/* K2 (Kuration, bewusst offen gelassen): `kult` und `trash` tragen die Art
-   `ton`, obwohl beide über das Feld `kategorie` gemessen werden und keinen
-   Tonfall beschreiben. Im Prompt liest sich „mag kult (ton, …)" schief.
-   `SIGNAL_ARTEN` hat keinen passenderen Wert — die saubere Lösung wäre ein
-   neuer, und das ist eine Modelländerung, die in Phase 3 gehört (dort
-   entscheidet sich ohnehin, welche Arten die Extraktion braucht). Steht
-   hier, damit es nicht in Vergessenheit gerät. */
-const tonWoerter = ALLE.filter((s) => s.art === "ton");
-check("X", "K2: kein Schlagwort trägt eine Art, die seine Messgrundlage nicht beschreibt"
-  + "  [gemessen: " + tonWoerter.map((s) => s.id + " (art ton, gemessen über " + Object.keys(s.ziele || {}).join("+") + ")").join(", ") + "]",
-  () => tonWoerter.every((s) => {
-    const ueberKategorie = !!(s.ziele && Array.isArray(s.ziele.kategorien) && s.ziele.kategorien.length);
-    return !ueberKategorie;
-  }));
 });
 
 /* =========================================================================

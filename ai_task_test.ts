@@ -3954,8 +3954,14 @@ test("PEI4 ein gekappter Beleg gilt nicht mehr als belegt — und das ist richti
    =========================================================================== */
 
 test("PEV1 die Wertelisten decken sich mit src/lib/profil.js", () => {
-  gleich(EXTRAKT_ARTEN.join("|"), P_ARTEN.join("|"),
-    "EXTRAKT_ARTEN gegen SIGNAL_ARTEN — gleiche Werte in gleicher Reihenfolge");
+  for (const art of EXTRAKT_ARTEN) {
+    wahr(P_ARTEN.includes(art),
+      `EXTRAKT_ARTEN nennt "${art}" — der Client kennt diese Art nicht`);
+  }
+  wahr(P_ARTEN.includes("haltung"),
+    "SIGNAL_ARTEN kennt die Haltung der deterministischen Kult-/Trash-Chips");
+  falsch(EXTRAKT_ARTEN.includes("haltung"),
+    "haltung bleibt aus der KI-Extraktion, bis Prompt und Eval sie fachlich abgrenzen");
   gleich(EXTRAKT_RICHTUNGEN.join("|"), P_RICHTUNGEN.join("|"), "EXTRAKT_RICHTUNGEN gegen RICHTUNGEN");
   gleich(EXTRAKT_SICHERHEITEN.join("|"), P_SICHERHEITEN.join("|"), "EXTRAKT_SICHERHEITEN gegen SICHERHEITEN");
 

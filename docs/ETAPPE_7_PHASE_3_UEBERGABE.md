@@ -56,6 +56,18 @@ verwendet. Die vorhandene, bereits bewährte Genre-Lösung ist
 `bekannteWerte()` aus `src/lib/finder.js`; sie soll wiederverwendet statt
 nachgebaut werden.
 
+Ein späterer Kurationstest markierte außerdem **K2**: Die Chips `kult` und
+`trash` lagen zwar in der fachlichen Gruppe `haltung`, erzeugten aber Signale
+der Art `ton`. Das war kein Tonfall und machte die spätere Promptzeile
+irreführend. **Behoben:** Der globale Profilvertrag kennt additiv die Art
+`haltung`; beide Chips verwenden sie. Die KI-Extraktion erhält diese neue Art
+bewusst noch nicht: Ihre Artenliste ist eine sichere Teilmenge des
+Profilvertrags, bis Prompt und Phase-4-Eval `haltung` von der bloßen
+Signalrichtung abgrenzen. Ein gespeichertes Altprofil mit `ton/kult` bleibt
+gültig, übersteht die Speicher-Rundreise inhaltsgleich und behält seine
+bisherige Promptzeile. Da Etappe 7 noch nicht live war, ist keine
+Bestandsmigration erforderlich.
+
 ## Was Claude zuletzt fertiggestellt hat
 
 | Commit | Stand |
@@ -263,7 +275,9 @@ Am 28.07.2026 nach den Reparaturen lokal reproduziert:
 | Prüfung | Ergebnis | Einordnung |
 | --- | ---: | --- |
 | `npm test` | grün | Vollständiger Bestandstest einschließlich Online-Paket |
-| `node extraktion_test.mjs` | 390/390 | Alle zwölf nachgezogenen Befunde ebenfalls grün |
+| `node geschmack_test.mjs` | 120/120 | K2 ist eine harte Kuration-Regel statt eines weichen Befunds |
+| `node profil_test.mjs` | 286/286 | Einschließlich `ton/kult`-Altprofil über Validierung, Speicher und Prompt |
+| `node extraktion_test.mjs` | 391/391 | Alle zwölf nachgezogenen Befunde und die sichere Arten-Teilmenge grün |
 | `deno test … ai_task_test.ts` | 247/247 | Function-Vertrag einschließlich neuer Negativfälle grün |
 | `npm run build` | grün | Hauptbundle-Warnung bei rund 656,9 kB bleibt |
 

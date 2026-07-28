@@ -770,8 +770,14 @@ check("D", "…und alle drei stehen in QUELLEN von profil.js  [gemessen: "
   + JSON.stringify(P.QUELLEN.slice(0, 3)) + "]",
   () => EX.FRAGEN.every((f) => P.QUELLEN.includes(f.id)));
 
+const fnArten = liste("EXTRAKT_ARTEN");
+check("D", "EXTRAKT_ARTEN ist eine sichere Teilmenge von SIGNAL_ARTEN  [gemessen: "
+  + JSON.stringify(fnArten) + "]",
+  () => Array.isArray(fnArten) && fnArten.every((art) => P.SIGNAL_ARTEN.includes(art)));
+check("D", "`haltung` bleibt deterministisch, bis der KI-Prompt die Art fachlich definiert",
+  () => P.SIGNAL_ARTEN.includes("haltung") && !fnArten.includes("haltung"));
+
 for (const [fnName, clientListe, clientName] of [
-  ["EXTRAKT_ARTEN", P.SIGNAL_ARTEN, "SIGNAL_ARTEN"],
   ["EXTRAKT_RICHTUNGEN", P.RICHTUNGEN, "RICHTUNGEN"],
   ["EXTRAKT_SICHERHEITEN", P.SICHERHEITEN, "SICHERHEITEN"],
 ]) {

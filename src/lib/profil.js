@@ -45,7 +45,7 @@ export const UPDATE_SCHWELLE = 5;
    vermeiden soll (Leitfaden: „kein wachsender Fließtext"). */
 export const SIGNAL_ARTEN = [
   "genre", "thema", "erzaehlweise", "inszenierung", "tempo", "ton",
-  "regie", "epoche", "land", "kritikpunkt", "achse",
+  "haltung", "regie", "epoche", "land", "kritikpunkt", "achse",
 ];
 
 /* `ambivalent` ist keine Verlegenheitsoption, sondern ein belegter Fall aus

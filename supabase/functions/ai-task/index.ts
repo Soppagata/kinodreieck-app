@@ -740,11 +740,12 @@ export function kurzText(w: unknown, max = WUNSCH_MAX_ZEICHEN): string {
 }
 
 /* ---------- profile-extract: Grenzen und Wertelisten -------------------------
-   Die Listen spiegeln `src/lib/profil.js`. Sie sind hier NOCHMAL aufgezaehlt
-   statt importiert, weil die Edge Function unter Deno laeuft und den
-   Browser-Code nicht laedt -- eine Abweichung faellt sonst erst auf, wenn ein
-   Signal den Server passiert und der Client es verwirft. Der Test haelt beide
-   Listen gegeneinander; wer hier etwas aendert, aendert es dort mit. */
+   Die Listen werden hier NOCHMAL aufgezaehlt statt importiert, weil die Edge
+   Function unter Deno laeuft und den Browser-Code nicht laedt. Richtungen und
+   Sicherheiten spiegeln `src/lib/profil.js`; Arten sind bewusst eine sichere
+   Teilmenge davon. `haltung` gehoert vorerst nur zum deterministischen
+   Schlagwortweg, bis Prompt und Eval die Abgrenzung zur Richtung tragen.
+   Entscheidend bleibt: Alles, was der Server sendet, muss der Client kennen. */
 export const EXTRAKT_ARTEN = [
   "genre", "thema", "erzaehlweise", "inszenierung", "tempo", "ton",
   "regie", "epoche", "land", "kritikpunkt", "achse",

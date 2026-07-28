@@ -389,7 +389,7 @@
    "id": "kult",
    "gruppe": "haltung",
    "anzeige": "Kultfilme",
-   "art": "ton",
+   "art": "haltung",
    "wert": "kult",
    "beleg": "schlagwort:kult",
    "ziele": {
@@ -422,7 +422,7 @@
    "id": "trash",
    "gruppe": "haltung",
    "anzeige": "Trash — dämlich, aber herrlich",
-   "art": "ton",
+   "art": "haltung",
    "wert": "trash",
    "beleg": "schlagwort:trash",
    "ziele": {

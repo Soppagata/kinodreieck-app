@@ -187,9 +187,9 @@ check("A", "UPDATE_SCHWELLE ist 5 und PROFIL_FORMAT ist 1",
   () => P.UPDATE_SCHWELLE === 5 && P.PROFIL_FORMAT === 1);
 /* Die geschlossenen Listen sind Zusagen, keine Bequemlichkeit: ein freies
    Feld erzeugte genau die Wildwuchs-Sammlung, die das Profil vermeiden soll. */
-check("A", "SIGNAL_ARTEN ist die geschlossene Liste aus dem Steckbrief (11 Arten)",
-  () => P.SIGNAL_ARTEN.length === 11
-    && P.SIGNAL_ARTEN.join(",") === "genre,thema,erzaehlweise,inszenierung,tempo,ton,regie,epoche,land,kritikpunkt,achse");
+check("A", "SIGNAL_ARTEN ist die geschlossene Liste aus dem Steckbrief plus die Haltung der kuratierten Chips (12 Arten)",
+  () => P.SIGNAL_ARTEN.length === 12
+    && P.SIGNAL_ARTEN.join(",") === "genre,thema,erzaehlweise,inszenierung,tempo,ton,haltung,regie,epoche,land,kritikpunkt,achse");
 check("A", "RICHTUNGEN enthält `ambivalent` — sonst würde das Modell binär werten",
   () => P.RICHTUNGEN.join(",") === "zieht_an,stoesst_ab,ambivalent");
 check("A", "SICHERHEITEN hat drei Stufen", () => P.SICHERHEITEN.join(",") === "hoch,mittel,niedrig");
@@ -975,6 +975,32 @@ check("H", "ein gespeichertes Profil kommt inhaltsgleich zurück",
 check("H", "ladeProfil liest ebenfalls nur den eigenen Topf"
   + "  [angefasst: " + JSON.stringify(leseZugriffe) + "]",
   () => leseZugriffe.length === 1 && leseZugriffe[0] === "kd:geschmacksprofil");
+
+/* K2 änderte nur neu erzeugte Kult-/Trash-Chips von `ton` auf `haltung`.
+   Entwicklungsstände vor dieser Korrektur dürfen weder beschädigt noch
+   still umgedeutet werden. Etappe 7 war noch nicht live, deshalb genügt
+   diese echte Speicher-Rundreise statt einer Bestandsmigration. */
+const altTonKult = {
+  ...mitEinwilligung(),
+  version: "p1",
+  geaendert: T1,
+  signale: [sig({
+    art: "ton", wert: "kult", quelle: "schlagwort",
+    beleg: "schlagwort:kult", bestaetigt: T1,
+  })],
+};
+const altFehler = P.pruefeProfil(altTonKult);
+check("H", "K2-Altprofil: ein bestätigtes `ton/kult`-Signal bleibt vollständig gültig"
+  + "  [Fehler: " + JSON.stringify(altFehler) + "]",
+  () => altFehler.length === 0);
+await P.speichereProfil(altTonKult);
+const altZurueck = await P.ladeProfil();
+check("H", "K2-Altprofil: Speicher und Laden erhalten es inhaltsgleich, ohne stille Umdeutung",
+  () => JSON.stringify(altZurueck) === JSON.stringify(altTonKult)
+    && altZurueck.signale[0].art === "ton");
+const altPrompt = P.promptFassung(altZurueck);
+check("H", "K2-Altprofil: die bisherige Promptzeile bleibt verwendbar",
+  () => altPrompt && altPrompt.text.includes("- mag kult (ton, Stärke 4/5, Sicherheit hoch)"));
 
 /* Ab hier werden die Messungen VOR dem Check ausgerechnet — check() ist
    synchron (siehe die Wache im Zählwerk). */
