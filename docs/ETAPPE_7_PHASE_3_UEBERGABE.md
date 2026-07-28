@@ -354,14 +354,15 @@ Weitere Hosting-Auffälligkeiten:
 
 ## Dokumentationsdrift
 
-- [ ] `ROADMAP_TO_ONLINE.md` behandelt Live-Aktivierung und Domain-Abnahme
-  teilweise noch als ausstehend, obwohl beide Domains erreichbar sind.
-- [ ] Das Kapitel „Sofort nächste Arbeitspakete“ fordert noch den bereits
-  erledigten Etappe-6-Merge.
-- [ ] `README.md` beschreibt den privaten GitHub-Datenpfad noch als aktuellen
-  Hauptweg, obwohl der Onlinepfad inzwischen Accounts und Supabase nutzt.
-- [ ] Die Definition der Achse „Warum“ in `README.md` entspricht nicht mehr
-  der späteren Roadmap-Entscheidung.
+- [x] `ROADMAP_TO_ONLINE.md` hält Produktion und Staging nun als live und auf
+  den Pre-Etappe-7-Stand abgenommen fest; der offene `sw.js`-Cachebefund
+  bleibt getrennt sichtbar.
+- [x] „Sofort nächste Arbeitspakete“ beginnt nicht mehr mit dem bereits
+  erledigten Etappe-6-Merge, sondern mit dem kontrollierten Etappe-7-Rollout.
+- [x] `README.md` beschreibt Supabase mit kontogebundener RLS als aktuellen
+  Onlinepfad und den privaten GitHub-Datenweg nur noch als Legacy.
+- [x] `README.md` verwendet die bindende WARUM-Definition: filmhistorische
+  und popkulturelle Relevanz; persönliche Prägung ergänzt nur.
 
 ## Nächste Arbeitsreihenfolge
 

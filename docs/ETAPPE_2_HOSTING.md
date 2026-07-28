@@ -16,10 +16,14 @@ Die öffentliche App-Hülle ist im Repository technisch umgesetzt:
 - HTTPS-Smoke-Test nach jedem Deployment,
 - dokumentierte Domain-Aktivierung und Rückrollmöglichkeit.
 
-Die Live-Abnahme bleibt gesperrt, bis Domain, Cloudflare-Projekt und GitHub-
-Environments tatsächlich eingerichtet, der Feature-Stand nach `staging`
-übernommen und beide URLs erfolgreich geprüft wurden. `main` wird in dieser
-Etappe nicht lokal verändert oder gepusht.
+Cloudflare-Projekt, GitHub-Environments und beide festen Domains sind
+inzwischen eingerichtet. Produktion unter `https://kinodreieck.at` und
+Staging unter `https://staging.kinodreieck.at` liefern den abgenommenen
+Pre-Etappe-7-Build. Offen bleibt ein nachträglich gemessener Zonenbefund:
+`sw.js` erhält trotz `_headers` einen Browser-TTL von vier Stunden. Das
+verschärfte Remote-Tor erkennt ihn; die Live-Abnahme des Cacheverhaltens ist
+erst nach `Browser Cache TTL = Respect Existing Headers` wieder vollständig
+grün.
 
 ## Umgebungen
 
