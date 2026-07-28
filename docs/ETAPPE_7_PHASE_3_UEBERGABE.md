@@ -258,35 +258,37 @@ Rahmenfehler bleiben sichtbar und titellose Filme werden gemeldet.
 
 ## Teststand
 
-Am 28.07.2026 lokal reproduziert:
+Am 28.07.2026 nach den Reparaturen lokal reproduziert:
 
 | Prüfung | Ergebnis | Einordnung |
 | --- | ---: | --- |
-| `npm test` | rot, Abbruch bei `ai_test.mjs` mit 90/91 | Staler Vertragstest erwartet vier statt fünf registrierte Tasks |
-| `node extraktion_test.mjs` | 315/344 | Mischung aus echtem F2-Fehler und nicht nachgezogener Testtechnik |
-| `deno test … ai_task_test.ts` | 239/244 | Function-Grenze und `nicht_deutbar` noch rot |
-| `npm run build` | grün | Hauptbundle-Warnung bei rund 654,5 kB |
+| `npm test` | grün | Vollständiger Bestandstest einschließlich Online-Paket |
+| `node extraktion_test.mjs` | 390/390 | Alle zwölf nachgezogenen Befunde ebenfalls grün |
+| `deno test … ai_task_test.ts` | 247/247 | Function-Vertrag einschließlich neuer Negativfälle grün |
+| `npm run build` | grün | Hauptbundle-Warnung bei rund 656,9 kB bleibt |
 
-Offene Testschuld:
+Erledigte Testschuld und bewusste Ausnahme:
 
-- [ ] `ai_test.mjs` auf den fünften Task `profile-extract` nachziehen.
-- [ ] In `extraktion_test.mjs` die Standardhülle von `daten` auf `data`
+- [x] `ai_test.mjs` auf den fünften Task `profile-extract` nachziehen.
+- [x] In `extraktion_test.mjs` die Standardhülle von `daten` auf `data`
   umstellen.
-- [ ] Den Signalzeilen-Selektor so verengen, dass die Achsenzeile nicht als
+- [x] Den Signalzeilen-Selektor so verengen, dass die Achsenzeile nicht als
   viertes Signal zählt.
-- [ ] Erwartungen entfernen, die noch die bewusst abgeschaffte
+- [x] Erwartungen entfernen, die noch die bewusst abgeschaffte
   Standardstärke 3 verlangen.
-- [ ] Den restlichen Clienttest nach den bereits umgesetzten
+- [x] Den restlichen Clienttest nach den bereits umgesetzten
   `uebernimm`-/`data`-Änderungen neu eichen, ohne echte Befunde grünzuschreiben.
-- [ ] `extraktion_test.mjs` in das normale Test-Gate aufnehmen.
-- [ ] Deno im CI einrichten und `test:function` vor jedem Pages-Deploy
+- [x] `extraktion_test.mjs` in das normale Test-Gate aufnehmen.
+- [x] Deno im CI einrichten und `test:function` vor jedem Pages-Deploy
   ausführen.
-- [ ] `test:rls` ebenfalls bewusst als Deployment-Gate einordnen oder den
-  manuellen Charakter ausdrücklich dokumentieren.
+- [x] `test:rls` bleibt ausdrücklich ein manueller Infrastrukturtest. Er
+  braucht echte Zugangsdaten und eine vorbereitete Zielumgebung und ist
+  deshalb kein hermetischer Pull-Request- oder Pages-Test.
 
-Wichtig: Der Cloudflare-Workflow führt derzeit nur `npm test` aus.
-`test:function` und `test:rls` sind getrennte Skripte. Die fünf roten
-Function-Tests würden einen Frontend-Deploy daher nicht verhindern.
+Der Cloudflare-Workflow richtet Deno nun im Testjob ein und führt sowohl
+`npm test` als auch `npm run test:function` aus. Jeder Staging- und
+Production-Deploy hängt von diesem Job ab. `test:rls` bleibt wie oben
+beschrieben ein bewusster manueller Abnahmeschritt.
 
 ## Live- und Deploymentstand
 
@@ -336,20 +338,19 @@ Weitere Hosting-Auffälligkeiten:
 - [ ] Die Definition der Achse „Warum“ in `README.md` entspricht nicht mehr
   der späteren Roadmap-Entscheidung.
 
-## Empfohlene Arbeitsreihenfolge
+## Nächste Arbeitsreihenfolge
 
-1. B1 beheben und den echten UI-Aufruf mit einer befüllten Genre-Liste
-   festnageln.
-2. B2 mit stabilen, pro Vorschlag eindeutigen Auswahl-IDs reparieren; die
-   Übernahme darf nicht mehr über den Beleg allein zuordnen.
-3. Function-Grenze und `nicht_deutbar`-Vertrag entscheiden und die 244
-   Function-Tests vollständig grün machen.
-4. Konto-Gate sowie den Lebenszyklus von Filmen und `nichtDeutbar` klären.
-5. Clienttests reparieren, alle Phase-3-Prüfungen ins CI-Gate aufnehmen und
-   erst dann den gesamten Bestandstest laufen lassen.
-6. Migration und Function auf Staging ausliefern, dort den echten
-   kostenpflichtigen Pfad einmal kontrolliert prüfen.
-7. Erst nach Staging-Abnahme den Production-Merge vorbereiten.
+Die lokalen Produkt- und Testpakete 1–5 des ursprünglichen Plans sind
+erledigt. Für die Auslieferung bleibt:
+
+1. Migration `20260727210000_etappe7_profil_topf.sql` in Staging ausführen.
+2. Die Edge Function nach Staging deployen.
+3. Das Frontend nach Staging veröffentlichen.
+4. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
+   und anschließend `test:rls` gegen Staging laufen lassen.
+5. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
+6. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
+   Arbeitspaketen bereinigen.
 
 ## Arbeitsbaum-Hinweis
 

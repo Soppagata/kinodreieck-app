@@ -62,18 +62,18 @@
         profil.js, gelesen als TEXT (die Function läuft unter Deno).
      E  DreiFragen, Formularseite: Zähler, Knopfzustände, Nutzlast.
      G  DreiFragen, Vorschau: Beleg und Sicherheit sichtbar, Abwahl in beide
-        Richtungen, nichtDeutbar bewusst nicht abwählbar.
+        Richtungen, einschließlich Achsen und nichtDeutbar.
      H  NULL Schreibversuche vor der Übernahme — an jeder Station.
      I  Die Übernahme läuft über GENAU denselben Weg wie der deterministische.
      J  Die Fehlerfälle des Aufrufs: echte Fehlercodes, kaputte Hüllen.
      K  Das Ergebnis überlebt einen fehlgeschlagenen Schreibversuch — der
         BEZAHLTE Aufruf wird nicht wiederholt.
      L  Das KI-Gate ist fail-closed; der deterministische Weg bleibt vollwertig.
-     M  `filme` aus der Extraktion sind unsicher — die Kette bis promptFassung.
-     F  Auffälligkeiten am Ist-Verhalten. Heute rot, NICHT exit-relevant — ein
-        Pin auf falsches Verhalten macht die Reparatur später zur
-        „Regression" (Regel aus dem Kopf von finder_test.mjs).
-        EXTRAKTION_FORDERUNG=1 schaltet sie scharf.
+     M  `filme` bleiben bis zur Vorschau unsicher und werden erst durch die
+        Einzelbestätigung für promptFassung freigegeben.
+     F  Nachgezogene frühere Auffälligkeiten. Sie bleiben als
+        Mutationsproben erhalten; EXTRAKTION_FORDERUNG=1 schaltet neue
+        offene Befunde scharf.
 
    Kein Framework, keine neue Abhängigkeit. Aufruf: node extraktion_test.mjs
    =========================================================================== */
@@ -1684,7 +1684,7 @@ await abraeumen();
    von finder_test.mjs). EXTRAKTION_FORDERUNG=1 schaltet sie scharf.
    ========================================================================= */
 abschnitt("F", async () => {
-console.log("\n--- F: Auffälligkeiten (heute offen, nicht exit-relevant) ---");
+console.log("\n--- F: Nachgezogene frühere Auffälligkeiten ---");
 
 /* F1 — DIE HÜLLE. Der Endpunkt legt die Nutzlast unter `data` ab
    (ai-task/index.ts:1777), `aiDriver` reicht den Rumpf unverändert durch
@@ -1884,7 +1884,7 @@ const TITEL_GRUPPEN = {
   J: "Fehlerfälle des Aufrufs",
   K: "Vorschau überlebt Schreibfehler",
   L: "KI-Gate fail-closed, KI-loser Weg vollwertig",
-  M: "Extrahierte Filme sind unsicher",
+  M: "Film-Bestätigung öffnet den Prompt-Weg",
 };
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");
