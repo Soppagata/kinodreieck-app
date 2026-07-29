@@ -532,9 +532,10 @@ begin
     with betroffen as (
       select w.id, w.aktuelle_version_id
         from public.kd_filmwerke w
-        join public.kd_filmwissen_belege b
+       join public.kd_filmwissen_belege b
           on b.version_id = w.aktuelle_version_id
        where b.quelle_slug = v_slug
+       order by w.id
        for update of w
     ), geaendert as (
       update public.kd_filmwerke w
@@ -1292,6 +1293,9 @@ revoke all on table
   public.kd_filmwissen_versionen,
   public.kd_filmwissen_belege,
   public.kd_filmwissen_zeigerlog
+from public, anon, authenticated, service_role;
+
+revoke all on sequence public.kd_filmwissen_zeigerlog_id_seq
 from public, anon, authenticated, service_role;
 
 revoke all on function public.kd_filmwissen_aktuell_lesen(text,text) from public, anon;

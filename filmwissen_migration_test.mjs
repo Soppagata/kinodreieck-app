@@ -49,6 +49,10 @@ pruefe(
   /revoke all on table[\s\S]+from public, anon, authenticated, service_role;/i.test(sql),
 );
 pruefe(
+  "Die Zeigerlog-Sequenz ist fuer Browserrollen und service_role gesperrt",
+  /revoke all on sequence public\.kd_filmwissen_zeigerlog_id_seq\s+from public, anon, authenticated, service_role;/i.test(sql),
+);
+pruefe(
   "Nur authenticated erhaelt die enge Lese-RPC",
   /grant execute on function public\.kd_filmwissen_aktuell_lesen\(text,text\) to authenticated;/i.test(sql),
 );
