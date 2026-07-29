@@ -602,37 +602,6 @@ begin
     from jsonb_each_text(p_kennungen) e
    order by lower(e.key), public.kd_filmwissen_kennung_norm(lower(e.key), e.value);
 
-  if exists (
-    select 1
-      from jsonb_each_text(p_kennungen) e
-      join public.kd_filmwerk_kennungen k
-        on k.werk_id = p_werk
-       and k.namespace = lower(e.key)
-       and k.status <> 'gesperrt'
-     where k.kennung <> public.kd_filmwissen_kennung_norm(lower(e.key), e.value)
-  ) then
-    update public.kd_filmwerke
-       set identitaetsstatus = 'gesperrt',
-           identitaetsgrund = 'Mehrere starke Kennungen desselben Anbieters fuer ein Werk.'
-     where id = p_werk;
-    update public.kd_filmwerk_kennungen
-       set status = 'gesperrt'
-     where werk_id = p_werk;
-    for v_namespace, v_kennung in
-      select
-        lower(key),
-        public.kd_filmwissen_kennung_norm(lower(key), value)
-      from jsonb_each_text(p_kennungen)
-    loop
-      insert into public.kd_filmwerk_kennungen(namespace,kennung,werk_id,status)
-      values (v_namespace,v_kennung,p_werk,'gesperrt')
-      on conflict (namespace,kennung) do nothing;
-    end loop;
-    return jsonb_build_object(
-      'status','konflikt','werkId',p_werk,'grund','mehrere_kennungen_eines_anbieters'
-    );
-  end if;
-
   select array_agg(distinct k.werk_id)
     into v_treffer
     from jsonb_each_text(p_kennungen) e
@@ -768,6 +737,37 @@ begin
     )
     from jsonb_each_text(p_kennungen) e
    order by lower(e.key), public.kd_filmwissen_kennung_norm(lower(e.key), e.value);
+
+  if exists (
+    select 1
+      from jsonb_each_text(p_kennungen) e
+      join public.kd_filmwerk_kennungen k
+        on k.werk_id = p_werk
+       and k.namespace = lower(e.key)
+       and k.status <> 'gesperrt'
+     where k.kennung <> public.kd_filmwissen_kennung_norm(lower(e.key), e.value)
+  ) then
+    update public.kd_filmwerke
+       set identitaetsstatus = 'gesperrt',
+           identitaetsgrund = 'Mehrere starke Kennungen desselben Anbieters fuer ein Werk.'
+     where id = p_werk;
+    update public.kd_filmwerk_kennungen
+       set status = 'gesperrt'
+     where werk_id = p_werk;
+    for v_namespace, v_kennung in
+      select
+        lower(key),
+        public.kd_filmwissen_kennung_norm(lower(key), value)
+      from jsonb_each_text(p_kennungen)
+    loop
+      insert into public.kd_filmwerk_kennungen(namespace,kennung,werk_id,status)
+      values (v_namespace,v_kennung,p_werk,'gesperrt')
+      on conflict (namespace,kennung) do nothing;
+    end loop;
+    return jsonb_build_object(
+      'status','konflikt','werkId',p_werk,'grund','mehrere_kennungen_eines_anbieters'
+    );
+  end if;
 
   select array_agg(distinct k.werk_id)
     into v_konflikte

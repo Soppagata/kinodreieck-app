@@ -10,6 +10,12 @@ const pfad = new URL(
   import.meta.url,
 );
 const sql = readFileSync(pfad, "utf8");
+const sicherstellenSql = sql.split(
+  "create or replace function public.kd_filmwissen_werk_sicherstellen",
+)[1]?.split("create or replace function public.kd_filmwissen_werk_pruefen")[0] || "";
+const pruefenSql = sql.split(
+  "create or replace function public.kd_filmwissen_werk_pruefen",
+)[1]?.split("create or replace function public.kd_filmwissen_auftrag_starten")[0] || "";
 const pruefungen = [];
 
 function pruefe(name, bedingung) {
@@ -85,6 +91,15 @@ pruefe(
 pruefe(
   "Pro Werk bleibt hoechstens eine aktive Kennung je Anbieter",
   /kd_fwk_ein_namespace_pro_werk[\s\S]+on public\.kd_filmwerk_kennungen\(werk_id, namespace\)[\s\S]+where status <> 'gesperrt'/i.test(sql),
+);
+pruefe(
+  "Werk-Sicherstellung verwechselt v_werk nicht mit einem fremden p_werk",
+  !/\bp_werk\b/i.test(sicherstellenSql) && /\bv_werk\b/i.test(sicherstellenSql),
+);
+pruefe(
+  "Werk-Pruefung setzt Same-Namespace-Konflikte persistent auf gesperrt",
+  /mehrere_kennungen_eines_anbieters/i.test(pruefenSql)
+    && /identitaetsstatus = 'gesperrt'/i.test(pruefenSql),
 );
 pruefe(
   "Identitaetspruefung ist gegen parallele Kennungspruefung gesperrt",
