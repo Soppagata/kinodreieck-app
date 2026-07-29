@@ -196,6 +196,28 @@ Fehler indirekt als neues Nutzerprofil einschreibt.
 
 ## Bauabschnitte
 
+### 0. Querschnittsverträge reparieren
+
+Der Audit vom 29.07.2026 hat vier bestehende Widersprüche gefunden, die vor
+dem neuen kostenpflichtigen Pfad geschlossen werden:
+
+- Der Browser bricht KI-Aufträge noch nach 45 Sekunden ab, obwohl Function
+  und Parallelreservierung seit Etappe 7 bewusst 120 Sekunden tragen.
+- Der React-State des KI-Schalters übernimmt beim Schreiben einen Stand auch
+  dann, wenn der gerätelokale Speicher ihn nicht sichern konnte; die
+  kostenpflichtigen Gates müssen auch in diesem Fehlerfall geschlossen
+  bleiben.
+- Der alte KI-Ingestion-Prompt schreibt geschätzte Werte in `bewertung` und
+  verliert das Merkmal `geschaetzt` bei der Übernahme. Neue Schätzungen dürfen
+  nicht länger als echte Bewertungen ankommen.
+- Finder und Etappe-8-Plan verwenden vier Kategorien, während Editor,
+  Profilwahl, Streamingfilter, Ingestion und der veröffentlichte Demo-Bestand
+  noch das ältere Kategorienvokabular verwenden. Vor Modelloutput und
+  Korrekturfluss braucht das Projekt einen einheitlichen Vertrag.
+
+Zusätzlich wird die vorhandene Autorenzuschreibung bis zum Bewertungseditor
+durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
+
 ### 1. Reines Prognosemodell
 
 - `src/lib/prognose.js` mit strikter Prüfung,
@@ -245,9 +267,28 @@ Fehler indirekt als neues Nutzerprofil einschreibt.
 - adversarialer Review gegen Vermischung von Prognose, WARUM und echter
   Bewertung.
 
-## Noch von Max benötigte Demo-Entscheidung
+## Demo-Vertrag und noch offene Demo-Entscheidung
 
-Für das eingefrorene Demo-Beispiel wird später genau ein Beispiel-Film samt
-gewünschter Beispiel-Prognose benötigt. Das blockiert Datenvertrag,
-Serveraufgabe und echte Kontooberfläche nicht; es blockiert nur die
-abschließende Demo-Abnahme dieses Etappe-8-Blocks.
+Klarstellung von Max am 29.07.2026: Der Demo-Modus zeigt Max’ veröffentlichte
+Einträge zusammen mit datierten Kino- und Streaming-Schnappschüssen. Es wird
+kein zusätzlicher oder erfundener „Demofilm“ angelegt.
+
+Der Audit des öffentlichen Produktionsstands zeigt:
+
+- Die Demo-Mediathek enthält 120 bereinigte Einträge von Max.
+- Alle 120 Einträge sind bewertet; es gibt dort derzeit keinen unbewerteten
+  Kandidaten und keine Prognose.
+- Die öffentlichen Katalogzeilen `programm_demo` und `streaming_demo` fehlen
+  derzeit; sichtbar ist nur `manifest`.
+- Die bestehende App wählt den Katalog allein nach Anmeldung
+  (Gast = Demo-Schnappschuss, Konto = live), nicht nach der gewählten
+  Startart. Ob die Startart `demo` auch nach einer Anmeldung stets die
+  Schnappschüsse erzwingt, ist deshalb eine echte Produktentscheidung.
+
+Falls die öffentliche Demo später eine eingefrorene Prognose zeigen soll,
+darf sie nur an einem bereits vorhandenen, unbewerteten und ausdrücklich
+freigegebenen Eintrag aus Max’ Bestand hängen. Das Demo-Werkzeug muss ihn
+gezielt in die Auswahl aufnehmen und Prognose sowie Signalschnappschuss über
+eine Positivliste bereinigen. Ohne diese Entscheidung bleibt die Live-
+Vorbewertung im Konto vollständig umsetzbar; nur die öffentliche
+Demo-Abnahme bleibt offen.
