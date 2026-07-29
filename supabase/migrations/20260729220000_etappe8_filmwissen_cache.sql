@@ -11,6 +11,10 @@
 -- Browserkonten erhalten keinerlei Tabellenrecht. Angemeldete Konten duerfen
 -- ausschliesslich die enge Lese-RPC aufrufen; alle Schreib-RPCs sind nur fuer
 -- service_role freigegeben. Es wird keine Website vorbelegt oder freigegeben.
+--
+-- Ausgefuehrt: 2026-07-29 durch Codex ueber die verknuepfte Management-API
+-- Projekt: bscjgwcntapobyxsiyce
+-- Nachweis: 44/44 statische Vertragspruefungen und 54/54 echte RLS-Checks gruen
 -- ===========================================================================
 
 begin;
