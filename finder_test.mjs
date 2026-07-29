@@ -50,6 +50,7 @@ import fs from "node:fs";
 
 const F = await import("./src/lib/finder.js");
 const { score, schlagseite, norm } = await import("./src/lib/match.js");
+const { BEWERTUNGSKATEGORIE_IDS } = await import("./src/lib/kategorien.js");
 const VOK = JSON.parse(fs.readFileSync(new URL("./src/data/finder_vokabular.json", import.meta.url), "utf8"));
 
 /* ---------------------------------------------------------------- Zählwerk */
@@ -96,34 +97,34 @@ const relFallend = (treffer) => treffer.every((t, i) => i === 0 || treffer[i - 1
    die Titel-Erkennung (umgeht alle Filter) die Filtertests verfälschen.
    bewertung: { wie, was, warum } 0-5 (Form aus src/data/masterliste.json,
    ausgewertet von match.js score()/schlagseite()).
-   ========================================================================= */
+  ========================================================================= */
 const MASTER = [
   { id: "nacht_der_glut_1984", titel: "Nacht der Glut", originaltitel: "Night of Embers", jahr: 1984, typ: "film",
-    quelle: "dvd", kategorie: "wahrscheinlich_passend", genre: ["horror"], tags: ["duester", "boese", "kult"],
+    quelle: "dvd", kategorie: "kult", genre: ["horror"], tags: ["duester", "boese", "kult"],
     bewertung: { wie: 4, was: 2, warum: 4 }, reihe: ["Glutnacht Zyklus"], regie: ["Orla Vendt"] },            // score 12.5, schlagseite wie
   { id: "stiller_hafen_1972", titel: "Stiller Hafen", originaltitel: "Quiet Harbour", jahr: 1972, typ: "film",
-    quelle: "dvd", kategorie: "wahrscheinlich_passend", genre: ["drama"], tags: ["melancholisch", "klassiker"],
+    quelle: "dvd", kategorie: "kult_klassiker", genre: ["drama"], tags: ["melancholisch", "klassiker"],
     bewertung: { wie: 3, was: 5, warum: 2 } },                                                                // score 12.5, schlagseite was
   { id: "zwei_linke_pfoten_2015", titel: "Zwei linke Pfoten", originaltitel: "Two Left Paws", jahr: 2015, typ: "film",
-    quelle: "netflix", kategorie: "sicher_gut", genre: ["komödie"], tags: ["feelgood"],
+    quelle: "netflix", kategorie: "immer_gut", genre: ["komödie"], tags: ["feelgood"],
     bewertung: { wie: 2, was: 3, warum: 2 } },                                                                // score 9
   { id: "herz_aus_papier_2004", titel: "Herz aus Papier", originaltitel: "Herz aus Papier", jahr: 2004, typ: "film",
-    quelle: "dvd", kategorie: "referenz", genre: ["romance"], tags: ["liebe"],
+    quelle: "dvd", kategorie: "sehenswert", genre: ["romance"], tags: ["liebe"],
     bewertung: { wie: 3, was: 3, warum: 3 } },                                                                // score 9
   { id: "gebrochene_bahn_1994", titel: "Gebrochene Bahn", originaltitel: "Broken Track", jahr: 1994, typ: "film",
-    quelle: "prime", kategorie: "zu_pruefen", genre: ["thriller"], tags: ["spannung"],
+    quelle: "prime", kategorie: "echter_schrott", genre: ["thriller"], tags: ["spannung"],
     bewertung: { wie: 2, was: 4, warum: 2 } },                                                                // score 9.5
   { id: "sternenpfad_2019", titel: "Sternenpfad", originaltitel: "Starpath", jahr: 2019, typ: "film",
-    quelle: "kino", kategorie: "zu_pruefen", genre: ["sci-fi"], tags: ["weltenbau"],
+    quelle: "kino", kategorie: "daemlich_aber_herrlich", genre: ["sci-fi"], tags: ["weltenbau"],
     bewertung: { wie: 5, was: 3, warum: 3 }, franchise: ["Kosmoswacht Saga"] },                               // score 12.5, schlagseite wie
   { id: "lange_funke_2021", titel: "Der lange Funke", originaltitel: "The Long Spark", jahr: 2021, typ: "film",
-    quelle: "disney", kategorie: "zu_pruefen", genre: ["sci-fi"], tags: [],
+    quelle: "disney", kategorie: "sehenswert", genre: ["sci-fi"], tags: [],
     bewertung: { wie: 3, was: 3, warum: 4 }, franchise: ["Kosmoswacht Saga"] },                               // score 10
   { id: "billiger_schund_1988", titel: "Billiger Schund", originaltitel: "Cheap Junk", jahr: 1988, typ: "film",
-    quelle: "dvd", kategorie: "zu_pruefen", genre: ["horror"], tags: ["trash", "camp"],
+    quelle: "dvd", kategorie: "trash", genre: ["horror"], tags: ["trash", "camp"],
     bewertung: { wie: 1, was: 1, warum: 2 } },                                                                // score 4
   { id: "letzte_kurve_1979", titel: "Letzte Kurve", originaltitel: "Last Bend", jahr: 1979, typ: "film",
-    quelle: "dvd", kategorie: "zu_pruefen", genre: ["action"], tags: ["spannung"],
+    quelle: "dvd", kategorie: "kult", genre: ["action"], tags: ["spannung"],
     bewertung: { wie: 3, was: 2, warum: 3 } },                                                                // score 8
 ];
 const ALLE_IDS = MASTER.map((f) => f.id);
@@ -180,7 +181,7 @@ const ENTDECKEN_VIEL = { titel: Array.from({ length: 15 }, (_, i) => (
 /* Masterliste allein für die Kappungs-Checks (Reihen > 20, Titel > 12) */
 const MASTER_MANY = Array.from({ length: 21 }, (_, i) => (
   { id: "sammelfilm_" + (i + 1), titel: "Sammelfilm " + (i + 1), originaltitel: "Sammelfilm " + (i + 1),
-    jahr: 1980 + i, typ: "film", quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [],
+    jahr: 1980 + i, typ: "film", quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [],
     bewertung: { wie: 3, was: 3, warum: 3 }, reihe: ["Sammelsaga " + (i + 1)] }));
 
 const P = (text, master = MASTER, zusatz = []) => F.parseAnfrage(text, master, zusatz);
@@ -228,18 +229,16 @@ checkA("Ein Wort kann zwei Signale setzen: 'klassiker' -> Achse warum + Stimmung
   const s = P("klassiker");
   return gleich(s.achsen, ["warum"]) && gleich(s.stimmungen, ["klassiker"]) && gleich(s.kategorien, []);
 });
-/* "kult" und "trash" waren Kategorien und sind in v3 TAGS — die Wörter müssen
-   weiter erkannt werden, nur im richtigen Feld. Und sie müssen wirken: ein
-   Signal, das keinen Film erreicht, ist so gut wie keins (die Lehre aus den
-   Genre-Lücken). Beide Prüfungen deshalb zusammen. */
-checkA("'kult' und 'trash' werden als Stimmung erkannt und erreichen ihre Filme über die Tags", () => {
+/* "kult" und "trash" sind sowohl persönliche Kategorien als auch Stimmungen.
+   Beide Signale müssen sichtbar bleiben und denselben Film erreichen. */
+checkA("'kult' und 'trash' werden als Stimmung und Kategorie erkannt", () => {
   const k = P("kult"), t = P("trash");
   const kt = F.sucheFinder(k, KTX).find((x) => x.film.id === "nacht_der_glut_1984");   // tag: kult
   const tt = F.sucheFinder(t, KTX).find((x) => x.film.id === "billiger_schund_1988");  // tags: trash, camp
-  return gleich(k.stimmungen, ["kult"]) && gleich(k.kategorien, [])
-    && gleich(t.stimmungen, ["trash"]) && gleich(t.kategorien, [])
-    && kt.rel === 2 && kt.gruende.includes("stimmung:kult")
-    && tt.rel === 2 && tt.gruende.includes("stimmung:trash");
+  return gleich(k.stimmungen, ["kult"]) && gleich(k.kategorien, ["kult"])
+    && gleich(t.stimmungen, ["trash"]) && gleich(t.kategorien, ["trash"])
+    && kt.gruende.includes("stimmung:kult") && kt.gruende.includes("kategorie:kult")
+    && tt.gruende.includes("stimmung:trash") && tt.gruende.includes("kategorie:trash");
 });
 checkA("Quellen: kino / streaming (netflix) / dvd", () =>
   gleich(P("kino").quellen, ["kino"]) && gleich(P("netflix").quellen, ["streaming"]) && gleich(P("dvd").quellen, ["dvd"]));
@@ -316,7 +315,7 @@ checkA("HART: jahrMin aus Stimmung (modern) schließt ältere Filme aus", () =>
     ["zwei_linke_pfoten_2015", "sternenpfad_2019", "lange_funke_2021"]));
 checkA("HART: Filme ohne Jahr fallen bei jahrMin/jahrMax immer heraus", () => {
   const m = [...MASTER, { id: "ohne_jahr", titel: "Undatiertes Fragment", originaltitel: "", jahr: null,
-    typ: "film", quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
+    typ: "film", quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
   const r = F.sucheFinder(P("oldschool", m), { ...KTX, master: m });
   return !ids(r).includes("ohne_jahr");
 });
@@ -326,12 +325,12 @@ checkA("Genre-Treffer gibt +2 und einen sichtbaren Grund", () => {
   const t = F.sucheFinder(P("Horror"), KTX).find((x) => x.film.id === "nacht_der_glut_1984");
   return t.rel === 2 && t.gruende.includes("genre:horror");
 });
-checkA("HART: Kategorie verlangt = Filter (+3 Bonus) — mit v3-Werten", () => {
-  const a = F.sucheFinder(P("immer gut"), KTX);        // -> sicher_gut
-  const b = F.sucheFinder(P("referenz"), KTX);         // -> referenz
-  return gleichMenge(ids(a), ["zwei_linke_pfoten_2015"]) && a[0].gruende.includes("kategorie:sicher_gut")
+checkA("HART: Kategorie verlangt = Filter (+3 Bonus) — mit den kanonischen Werten", () => {
+  const a = F.sucheFinder(P("immer gut"), KTX);
+  const b = F.sucheFinder(P("referenz"), KTX);
+  return gleichMenge(ids(a), ["zwei_linke_pfoten_2015"]) && a[0].gruende.includes("kategorie:immer_gut")
     && a[0].rel === 3
-    && gleichMenge(ids(b), ["herz_aus_papier_2004"]) && b[0].gruende.includes("kategorie:referenz");
+    && gleichMenge(ids(b), ["stiller_hafen_1972"]) && b[0].gruende.includes("kategorie:kult_klassiker");
 });
 checkA("HART: Reihe/Franchise verlangt = Filter (+3 Bonus)", () => {
   const r = F.sucheFinder(P("Kosmoswacht"), KTX);
@@ -651,20 +650,16 @@ checkB("B4/E11: 'kein Horror' allein liefert die Masterliste OHNE Horrorfilme (n
 });
 checkB("B4: dekadenAusschluss wirft die betroffene Dekade aus sucheFinder", () =>
   gleichMenge(ids(F.sucheFinder(P("nicht aus den 2000ern"), KTX)), OHNE("herz_aus_papier_2004")));
-/* Semantikwechsel mit v3: "trash" ist keine Kategorie mehr, sondern ein Tag —
-   also eine Stimmung, und Stimmungen sind ausnahmslos weich. "ohne Trash"
-   schließt deshalb nicht mehr hart aus, sondern wertet ab: die Trash-Filme
-   rutschen ans Ende, verschwinden aber nicht. Geprüft wird die RANGFOLGE, nicht
-   nur die Liste — sonst bliebe offen, ob der Abschlag überhaupt wirkt. */
-checkB("B4: 'ohne Trash' schließt nicht aus, sondern wertet ab (Trash landet hinten)", () => {
+/* "trash" ist bewusst sowohl Kategorie als auch Stimmung. Negiert wird daher
+   die Kategorie hart ausgeschlossen; der weiche Stimmungsabschlag bleibt als
+   zweites Signal erhalten, falls ein anders kategorisierter Film Trash-Tags
+   trägt. */
+checkB("B4: 'ohne Trash' schließt die Kategorie aus und behält den Stimmungsabschlag", () => {
   const s = P("ohne Trash");
   const r = F.sucheFinder(s, KTX);
-  const t = r[r.length - 1];
   return gleich(feld(s.stimmungenAbschlag), ["trash"]) && gleich(s.kategorien, [])
-    && gleich(feld(s.kategorienAusschluss), [])
-    && gleichMenge(ids(r), ALLE_IDS)                       // niemand fällt raus
-    && t.film.id === "billiger_schund_1988" && t.rel === -2
-    && t.gruende.includes("nicht-stimmung:trash") && relFallend(r);
+    && gleich(feld(s.kategorienAusschluss), ["trash"])
+    && gleichMenge(ids(r), OHNE("billiger_schund_1988"));
 });
 checkB("B4: ein direkter Titeltreffer umgeht auch den Genre-Ausschluss", () => {
   const r = F.sucheFinder(P("Nacht der Glut, aber kein Horror"), KTX);
@@ -780,13 +775,13 @@ checkB("Antwort 5: Grenzwörter gelten als zugeordnet und erscheinen nicht als V
   !P("melancholisch, aber kein Liebesfilm").nichtZugeordnet.includes("aber"));
 
 /* Antwort 6/7 — Gate und Titeltreffer-Ausnahme */
-/* "kein alter Film" trifft die Vokabelphrase "alter film" -> Kategorie referenz.
+/* "kein alter Film" trifft die Vokabelphrase "alter film" -> Kategorie kult_klassiker.
    ACHTUNG: "ohne alte Filme" greift NICHT — die Phrase wird als Zeichenkette
    gesucht, die Flexion "alte Filme" trifft "alter film" nicht. */
 checkB("Antwort 6: reiner Kategorie-Ausschluss öffnet das hatSignal-Gate", () => {
   const s = P("kein alter Film");
-  return gleich(feld(s.kategorienAusschluss), ["referenz"]) && gleich(s.kategorien, [])
-    && gleichMenge(ids(F.sucheFinder(s, KTX)), OHNE("herz_aus_papier_2004"));
+  return gleich(feld(s.kategorienAusschluss), ["kult_klassiker"]) && gleich(s.kategorien, [])
+    && gleichMenge(ids(F.sucheFinder(s, KTX)), OHNE("stiller_hafen_1972"));
 });
 checkB("Antwort 6: reiner Stimmungs-/Achsen-Abschlag öffnet das hatSignal-Gate", () =>
   F.sucheFinder(P("nicht traurig"), KTX).length === ALLE_IDS.length
@@ -797,13 +792,13 @@ checkB("Antwort 7: Titeltreffer umgeht auch den Kategorie-Ausschluss", () =>
 /* Antwort 8 — bewusste Asymmetrie: Ausschluss braucht positive Evidenz */
 checkB("Antwort 8: Dekaden-Ausschluss BEHÄLT Filme ohne Jahr (Ausschluss braucht positive Evidenz)", () => {
   const m = [...MASTER, { id: "ohne_jahr", titel: "Undatiertes Fragment", originaltitel: "", jahr: null,
-    typ: "film", quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
+    typ: "film", quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
   const r = F.sucheFinder(P("nicht aus den 2000ern", m), { ...KTX, master: m });
   return ids(r).includes("ohne_jahr") && !ids(r).includes("herz_aus_papier_2004");
 });
 checkB("Antwort 8: jahrMin/jahrMax sieben Filme ohne Jahr weiter aus — die Asymmetrie ist gewollt", () => {
   const m = [...MASTER, { id: "ohne_jahr", titel: "Undatiertes Fragment", originaltitel: "", jahr: null,
-    typ: "film", quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
+    typ: "film", quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: { wie: 3, was: 3, warum: 3 } }];
   return !ids(F.sucheFinder(P("ab 1990", m), { ...KTX, master: m })).includes("ohne_jahr");
 });
 
@@ -866,7 +861,7 @@ checkB("Vokabular: 'powpow' ist als Action-Synonym ergänzt", () => gleich(P("po
    der Boost kann nur über den Tag kommen. */
 checkB("Nachtrag: Stimmungs-Tags werden über genreKey() verglichen — 'duester' trifft 'düster'", () => {
   const m = [{ id: "umlaut_tag", titel: "Schattenspiel im Regen", originaltitel: "", jahr: 1990, typ: "film",
-    quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: ["düster"], bewertung: { wie: 3, was: 3, warum: 3 } }];
+    quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: ["düster"], bewertung: { wie: 3, was: 3, warum: 3 } }];
   const t = F.sucheFinder(P("duster", m), { ...KTX, master: m })[0];
   return !!t && t.gruende.includes("stimmung:duster") && t.rel === 2;
 });
@@ -1130,9 +1125,9 @@ checkB("P3: dieselbe Regel für die Ausschlussliste", () => {
     && gleichMenge(ids(F.sucheFinder(mitQuelle, KTX)), ["sternenpfad_2019"]);
 });
 checkB("P3: Weißliste Kategorien, Quellen und Zeit", () => {
-  const { sig } = AUS({ harte_filter: { kategorien: ["referenz", "grandios"], quellen: ["dvd", "vhs"],
+  const { sig } = AUS({ harte_filter: { kategorien: ["kult_klassiker", "grandios"], quellen: ["dvd", "vhs"],
     zeit: ["heute", "uebermorgen"] } });
-  return gleich(sig.kategorien, ["referenz"]) && gleich(sig.quellen, ["dvd"]) && gleich(sig.zeit, ["heute"]);
+  return gleich(sig.kategorien, ["kult_klassiker"]) && gleich(sig.quellen, ["dvd"]) && gleich(sig.zeit, ["heute"]);
 });
 checkB("P3: Weißliste Stimmungen und Achsen", () => {
   const { sig } = AUS({ weiche_wuensche: { stimmungen: ["melancholisch", "frohlich"], achsen: ["wie", "wieso"] } });
@@ -1152,10 +1147,10 @@ checkB("P3: eine erfundene Kategorie erzeugt keinen leeren Filter, sondern gar k
    -------------------------------------------------------------------------
    Warum als Schleife und nicht als Stichprobe: der Befund vom 26.07.2026.
    `nurBekannte` gab `norm(treffer)` zurück; der Check darüber prüfte mit
-   "referenz" — dem EINZIGEN der vier Kategoriewerte ohne Unterstrich, also dem
-   einzigen, den norm() unbeschädigt lässt. Der Check blieb grün, während drei
-   Viertel der Kategoriefilter still ins Leere liefen ("sicher gut" trifft nie
-   `f.kategorie === "sicher_gut"`). Der Stimmungs-Check benutzte aus demselben
+   "kult" — einem Wert ohne Unterstrich, also einem, den norm() unbeschädigt
+   lässt. Eine solche Stichprobe kann grün bleiben, während andere Filter still
+   ins Leere laufen ("kult klassiker" trifft nie `f.kategorie ===
+   "kult_klassiker"`). Der Stimmungs-Check benutzte aus demselben
    Grund ein reines ASCII-Wort. Eine Stichprobe kann diese Fehlerklasse
    grundsätzlich nicht sehen: sie ist wertabhängig.
 
@@ -1178,7 +1173,7 @@ const VARIANTEN = (w) => [...new Set([w, norm(w), w.toUpperCase(), norm(w).repla
 checkB("P3 Rundlauf: JEDE Kategorie der Weißliste kommt schreibgleich zurück und filtert wirklich", () => {
   const fehler = [];
   const liste = F.bekannteWerte(MASTER, []).kategorien;
-  if (liste.length < 4) fehler.push("      Weißliste unerwartet klein: " + JSON.stringify(liste));
+  if (liste.length < BEWERTUNGSKATEGORIE_IDS.length) fehler.push("      Weißliste unerwartet klein: " + JSON.stringify(liste));
   for (const k of liste) {
     const erwartet = MASTER.filter((f) => f.kategorie === k).map((f) => f.id);
     if (!erwartet.length) { fehler.push("      Fixture-Lücke: kein Film mit kategorie " + k); continue; }
@@ -1277,7 +1272,7 @@ checkB("P3 Rundlauf: JEDE Achse kommt schreibgleich zurück und boostet wirklich
     const bw = { wie: 1, was: 1, warum: 1 };
     bw[a] = 5;
     const probe = [{ id: "achsenprobe", titel: "Achsenprobe", originaltitel: "Axis Probe", jahr: 1995, typ: "film",
-      quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: bw }];
+      quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: bw }];
     if (schlagseite(bw) !== a) { fehler.push("      Probefilm für " + a + " hat Schlagseite " + schlagseite(bw)); continue; }
     for (const genannt of VARIANTEN(a)) {
       const { sig } = AUS({ weiche_wuensche: { achsen: [genannt] } }, probe);
@@ -1305,7 +1300,7 @@ checkB("P3 Rundlauf: JEDE Achse kommt schreibgleich zurück und boostet wirklich
     const schwach = { wie: 0, was: 0, warum: 0 };
     schwach[a] = 2;
     const schwachProbe = [{ id: "schwachprobe", titel: "Schwachprobe", originaltitel: "Weak Probe", jahr: 1996, typ: "film",
-      quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: schwach }];
+      quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: schwach }];
     if (schlagseite(schwach) !== null) {
       fehler.push("      Mindesthoehe: " + JSON.stringify(schwach) + " gilt noch als Schlagseite " + schlagseite(schwach));
     }
@@ -1348,7 +1343,7 @@ const stimmungsProbe = (def) => {
   const g = (def.genres || [])[0];
   const t = (def.tags || [])[0];
   return [{ id: "stimmungsprobe", titel: "Stimmungsprobe", originaltitel: "Mood Probe", jahr: 1995, typ: "film",
-    quelle: "dvd", kategorie: "zu_pruefen", genre: g ? [g] : [], tags: t ? [t] : [],
+    quelle: "dvd", kategorie: "sehenswert", genre: g ? [g] : [], tags: t ? [t] : [],
     bewertung: { wie: 3, was: 3, warum: 3 } }];
 };
 checkB("P3 Rundlauf: JEDE Stimmung kommt schreibgleich zurück und wirkt (Boost oder Jahresgrenze)", () => {
@@ -1845,23 +1840,19 @@ const GENRE_SCHREIBWEISEN = ["sci-fi", "romance", "komödie", "crime", "film-noi
   "historienfilm", "tragikomödie", "biopic", "stunt"];
 const VOKAB_MASTER = GENRE_SCHREIBWEISEN.map((g, i) => ({
   id: "probe_" + F.genreKey(g), titel: "Probestueck " + (i + 1), originaltitel: "Probestueck " + (i + 1),
-  jahr: 1995, typ: "film", quelle: "dvd", kategorie: "zu_pruefen", genre: [g], tags: [],
+  jahr: 1995, typ: "film", quelle: "dvd", kategorie: "sehenswert", genre: [g], tags: [],
   bewertung: { wie: 3, was: 3, warum: 3 },
 }));
 const VOKAB_KTX = { master: VOKAB_MASTER, kinoMatches: { matched: [], rest: [] }, streamingBekannt: { titel: [] } };
 const filmFuerGenre = (ziel) => VOKAB_MASTER.find((f) => F.genreKey(f.genre[0]) === F.genreKey(ziel));
 
-/* Wächter über die Kategorieschlüssel. Anders als bei den Genres gibt es hier
-   eine geschlossene, kurze Menge — die vier Werte der Masterliste v3. Der
-   Finder kannte davor sechs Werte (immer_gut, kult, kult_klassiker,
-   daemlich_aber_herrlich, trash, sehenswert), von denen KEINER in den echten
-   Daten vorkam: jeder Kategorie-Filter lief still ins Leere. Ein exakter
-   Mengenvergleich verhindert, dass ein Legacy-Wert zurückschleicht. */
-const KATEGORIEN_V3 = ["sicher_gut", "wahrscheinlich_passend", "referenz", "zu_pruefen"];
-checkA("Wächter: vokabular.kategorien kennt genau die vier Kategorien der Masterliste v3", () =>
-  gleichMenge(Object.keys(VOK.kategorien || {}), KATEGORIEN_V3));
-checkA("Wächter: kein gestrichener Legacy-Kategoriewert im Vokabular", () => {
-  const legacy = ["immer_gut", "kult", "kult_klassiker", "daemlich_aber_herrlich", "trash", "sehenswert", "gut"];
+/* Wächter über die Kategorieschlüssel. Die sieben vom Produkt festgelegten
+   Werte kommen aus demselben kanonischen Modul wie Formulare und Anzeige. */
+const KATEGORIEN_KANON = [...BEWERTUNGSKATEGORIE_IDS];
+checkA("Wächter: vokabular.kategorien kennt genau die sieben kanonischen Kategorien", () =>
+  gleichMenge(Object.keys(VOK.kategorien || {}), KATEGORIEN_KANON));
+checkA("Wächter: kein gestrichener Zwischenwert im Vokabular", () => {
+  const legacy = ["sicher_gut", "wahrscheinlich_passend", "referenz", "zu_pruefen", "gut"];
   const schluessel = Object.keys(VOK.kategorien || {});
   return legacy.every((l) => !schluessel.includes(l));
 });
@@ -1899,7 +1890,7 @@ for (const [name, def] of Object.entries(F.alleStimmungen())) {
 /* Dieselbe Prüfung eine Ebene höher: JEDES Vokabelwort einer Kategorie muss
    seinen Schlüssel setzen UND einen Film dieser Kategorie erreichen. Genau das
    fehlte, als der Finder sechs Kategorien kannte, die es nicht gab. Geprüft
-   wird gegen die Haupt-Fixture, die alle vier v3-Werte belegt. */
+   wird gegen die Haupt-Fixture geprüft, die alle sieben Werte belegt. */
 for (const [kat, woerter] of Object.entries(VOK.kategorien || {})) {
   const filmDa = MASTER.some((f) => f.kategorie === kat);
   if (!filmDa) {
@@ -1959,7 +1950,7 @@ if (rotB.length) {
 }
 console.log("\nABDECKUNGSBERICHT Vokabular -> echte Datenwerte"
   + "\n  Genres (Prüfmaßstab): " + GENRE_SCHREIBWEISEN.join(", ")
-  + "\n  Kategorien v3:        " + KATEGORIEN_V3.join(", "));
+  + "\n  Kategorien (kanonisch): " + KATEGORIEN_KANON.join(", "));
 if (!abdeckung.length) console.log("  keine Lücke — jedes Genre- und Kategorieziel findet seinen Film.");
 for (const l of abdeckung) {
   console.log("  " + (BEKANNTE_LUECKEN.has(l.schluessel) ? "bekannt: " : "NEU:     ") + l.text);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
+import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 
 /* ---------- Inline-Editor für Bewertungen ---------- */
 export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: optionaler autorName
@@ -37,7 +38,7 @@ export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: op
         <label style={{ display: "flex", flexDirection: "column", gap: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>
           KATEGORIE
           <select value={kat} onChange={(e) => setKat(e.target.value)} style={{ ...lightInput, padding: "7px 6px" }}>
-            {["immer_gut", "kult", "kult_klassiker", "daemlich_aber_herrlich", "trash", "sehenswert", "echter_schrott"].map((k) => <option key={k} value={k}>{k}</option>)}
+            {BEWERTUNGSKATEGORIEN.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
           </select>
         </label>
       </div>

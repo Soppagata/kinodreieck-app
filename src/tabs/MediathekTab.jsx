@@ -6,6 +6,7 @@ import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
+import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -238,8 +239,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
           </ChipReihe>
           <ChipReihe style={{ gap: 6 }}>
-            {[["immer_gut", "Immer gut"], ["kult", "Kult"], ["kult_klassiker", "Kult-Klassiker"], ["daemlich_aber_herrlich", "Dämlich aber herrlich"], ["trash", "Trash"], ["sehenswert", "Sehenswert"], ["echter_schrott", "Echter Schrott"]].map(([k, l]) => (
-              <Chip key={k} active={katF === k} onClick={() => setKatF(katF === k ? null : k)}>{l}</Chip>
+            {BEWERTUNGSKATEGORIEN.map((k) => (
+              <Chip key={k.id} active={katF === k.id} onClick={() => setKatF(katF === k.id ? null : k.id)}>{k.label}</Chip>
             ))}
           </ChipReihe>
           <ChipReihe style={{ gap: 6, marginBottom: 14 }}>

@@ -16,8 +16,10 @@ import { norm, slugId, matchFilm } from "./match.js";
 import { TYP_GRUPPEN, tabVonTyp, hatDreieck } from "./typen.js";
 import { neueArtikelId, gleicheArtikelAb } from "./artikel.js";
 import { QUELLEN, quelleZuArray } from "./quellen.js";
+import { BEWERTUNGSKATEGORIE_IDS, istBewertungskategorie } from "./kategorien.js";
 
 const QUELLE_KEYS = new Set(QUELLEN.map((q) => q.key));
+const sichereAchse = (wert) => Number.isInteger(wert) && wert >= 0 && wert <= 5 ? wert : null;
 
 export const PAKET_FORMAT = "kinodreieck-paket";
 export const PAKET_VERSION = 1;
@@ -131,7 +133,10 @@ export function analysierePaket(paket, master, artikelListe) {
    Liefert {neueFilme, neueArtikel, report} — die App persistiert selbst
    (ein Bulk-Write, keine Einzel-Races). Eigenes wird nie überschrieben. */
 export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelListe) {
-  const report = { uebernommen: {}, uebersprungen: {}, rotlinks: 0, verlinkt: 0 };
+  const report = {
+    uebernommen: {}, uebersprungen: {}, rotlinks: 0, verlinkt: 0,
+    schaetzungenQuarantiniert: 0,
+  };
   const neueFilme = [];
   const vergebeneIds = new Set((master || []).map((f) => f.id));
   const neueArtikel = [];
@@ -164,6 +169,26 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
     } else {
       for (const { eintrag, status } of bereich.eintraege) {
         if (status === "vorhanden") { uebersprungen++; continue; } // Eigenes gewinnt immer
+        /* Altvertrag der externen KI-Ingestion: Geschätztes stand in denselben
+           Feldern wie echte Urteile und `geschaetzt` ging bei der Übernahme
+           verloren. Solche Pakete dürfen weiterhin ihre TITEL importieren,
+           aber ihre Schätzung landet in einem getrennten Quarantänefeld und
+           niemals in `bewertung`, `kategorie` oder `begruendung`. */
+        const geschaetzt = analyse.quelle === "ki-ingestion" && eintrag.geschaetzt === true;
+        const kategorie = istBewertungskategorie(eintrag.kategorie) ? eintrag.kategorie : null;
+        const importSchaetzung = geschaetzt ? {
+          format: "ki-ingestion-schaetzung-v1",
+          bewertung: eintrag.bewertung && typeof eintrag.bewertung === "object"
+            ? {
+              wie: sichereAchse(eintrag.bewertung.wie),
+              was: sichereAchse(eintrag.bewertung.was),
+              warum: sichereAchse(eintrag.bewertung.warum),
+            }
+            : null,
+          kategorie,
+          begruendung: typeof eintrag.begruendung === "string" ? eintrag.begruendung.slice(0, 1200) : "",
+        } : null;
+        if (geschaetzt) report.schaetzungenQuarantiniert++;
         let id = slugId(eintrag.titel, eintrag.jahr ?? null);
         while (vergebeneIds.has(id)) id += "_x"; // Kollision (gleicher Slug, anderer Eintrag)
         vergebeneIds.add(id);
@@ -188,12 +213,15 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
           /* Fehlende Bewertung bei Dreieck-Typen bleibt null (= unbewertet) —
              vorher wurde sie still zu {0,0,0} gemünzt und sah wie eine echte
              Nullwertung aus. Kategorie folgt: ohne Bewertung keine erfundene. */
-          kategorie: hatDreieck(eintrag.typ) && !eintrag.bewertung ? (eintrag.kategorie || null) : (eintrag.kategorie || "sehenswert"),
-          bewertet_von: hatDreieck(eintrag.typ) && !eintrag.bewertung ? null : (eintrag.bewertet_von || analyse.autor), // Das Autoren-Feld wird scharf
-          bewertung: hatDreieck(eintrag.typ) ? (eintrag.bewertung ?? null) : null,
+          kategorie: geschaetzt ? null
+            : hatDreieck(eintrag.typ) && !eintrag.bewertung ? null : (kategorie || null),
+          bewertet_von: geschaetzt || (hatDreieck(eintrag.typ) && !eintrag.bewertung)
+            ? null : (eintrag.bewertet_von || analyse.autor), // Das Autoren-Feld wird scharf
+          bewertung: hatDreieck(eintrag.typ) && !geschaetzt ? (eintrag.bewertung ?? null) : null,
           genre: Array.isArray(eintrag.genre) ? eintrag.genre : [],
           tags: Array.isArray(eintrag.tags) ? eintrag.tags : [],
-          begruendung: eintrag.begruendung || "",
+          begruendung: geschaetzt ? "" : (eintrag.begruendung || ""),
+          import_schaetzung: importSchaetzung || undefined,
           beschreibung: eintrag.beschreibung || undefined,
           art: eintrag.art || undefined,
           film_at_id: eintrag.film_at_id ?? null,
@@ -219,17 +247,18 @@ export function ingestionPrompt(autor) {
   const a = (autor || "").trim() || "unbekannt";
   const phys = QUELLEN.filter((q) => q.art === "physisch").map((q) => q.key).join(", ");
   const virt = QUELLEN.filter((q) => q.art === "virtuell").map((q) => q.key).join(", ");
+  const kategorien = BEWERTUNGSKATEGORIE_IDS.join(", ");
   return `Du erstellst eine Import-Datei für meine private Film-App "Kinodreieck". Antworte knapp, keine Erklärtexte.
 
 ABLAUF
 1) Ich gebe dir Titel (roh, unsortiert, auch Serien/Musik/Sonstiges).
 2) Recherchiere per Websuche pro Titel: Jahr (Erstveröffentlichung), 1-3 Genres und bei Filmen/Serien die konkrete filmhistorische oder popkulturelle Relevanz. Prüfe dafür Einfluss auf spätere Werke, Genres, Karrieren, Schauspiel- oder Filmtechnik sowie häufige Zitate, Referenzen, Parodien oder ikonische Wirkung. typ: film|serie|musik|sonstiges (im Zweifel film). Unsicheres Jahr: "jahr_unsicher":true. Erfinde nichts.
    Für Filme/Serien zusätzlich "quelle": wo der Titel typischerweise verfügbar ist — ein oder mehrere Keys mit "+" verbunden. Physisch: ${phys}. Virtuell (Abos/Shops): ${virt}. Weißt du es nicht oder unsicher: "quelle":"unklar" (kläre ich dann selbst).
-3) Bitte mich dann, 5-10 Titel selbst zu bewerten. Mein Format je Titel: WIE x/5 (Handwerk) · WAS x/5 (Substanz) · WARUM x/5 (film-/popkulturelle Relevanz) · Kategorie aus [immer_gut, kult, kult_klassiker, daemlich_aber_herrlich, trash, sehenswert, echter_schrott] · 1-2 Sätze Begründung.
-4) Leite daraus meinen Geschmack für WIE, WAS, Kategorie und Ton ab. Bewerte das WARUM der RESTLICHEN Titel dagegen aus der Recherche, nicht aus meinem Geschmack: 0 keine erkennbare Folgewirkung · 1 kleine Kuriosität/Nische · 2 relevanter Beitrag innerhalb einer Nische, Karriere oder Strömung · 3 wichtiger Bezugspunkt · 4 stark einflussreich, ikonisch oder oft referenziert · 5 grundlegendes, kanonisches Werk mit nachhaltiger Wirkung. Persönlicher Bezug darf die Begründung ergänzen, aber die kulturelle Relevanz nicht ersetzen. Schreibe eine geschätzte Bewertung, Kategorie und 1-2 konkrete Sätze "begruendung" in meinem Ton. Markiere Geschätztes mit "geschaetzt":true.
+3) Bitte mich dann, 5-10 Titel selbst zu bewerten. Mein Format je Titel: WIE x/5 (Handwerk) · WAS x/5 (Substanz) · WARUM x/5 (film-/popkulturelle Relevanz) · Kategorie aus [${kategorien}] · 1-2 Sätze Begründung.
+4) Nur diese von mir ausdrücklich bewerteten Titel bekommen "bewertung", "kategorie", "begruendung" und "bewertet_von". Alle übrigen Filme und Serien bleiben unbewertet: "bewertung":null, "kategorie":null, "begruendung":"" und KEINE automatische oder geschätzte Bewertung. Eine spätere KI-Prognose läuft in der App in einem technisch getrennten Feld.
 5) Gib am Ende GENAU EINEN JSON-Codeblock aus:
 
-{"format":"kinodreieck-paket","version":1,"autor":"${a}","quelle":"ki-ingestion","bereiche":{"filme":[{"titel":"","jahr":2000,"typ":"film","quelle":"unklar","kategorie":"sehenswert","bewertung":{"wie":0,"was":0,"warum":0},"genre":[],"tags":[],"begruendung":"","geschaetzt":true}],"serien":[],"musik":[],"sonstiges":[]}}
+{"format":"kinodreieck-paket","version":1,"autor":"${a}","quelle":"ki-ingestion","bereiche":{"filme":[{"titel":"","jahr":2000,"typ":"film","quelle":"unklar","kategorie":null,"bewertung":null,"genre":[],"tags":[],"begruendung":""}],"serien":[],"musik":[],"sonstiges":[]}}
 
 REGELN: jahr ist Pflicht. musik/sonstiges ohne "bewertung" (null). Titel in den Bereich passend zum typ. Keine weiteren Felder, kein Text außerhalb des Codeblocks.`;
 }

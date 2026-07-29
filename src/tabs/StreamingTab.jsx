@@ -5,6 +5,7 @@ import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
 import { sichtbareDienste } from "../lib/dienste.js";
+import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -304,8 +305,8 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                 <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Must-Watch</Chip>
               </ChipReihe>
               <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
-                {[["immer_gut", "Immer gut"], ["kult", "Kult"], ["kult_klassiker", "Kult-Klassiker"], ["daemlich_aber_herrlich", "Dämlich aber herrlich"], ["trash", "Trash"], ["sehenswert", "Sehenswert"]].map(([k, l]) => (
-                  <Chip key={k} active={katF === k} onClick={() => setKatF(katF === k ? null : k)}>{l}</Chip>
+                {BEWERTUNGSKATEGORIEN.map((k) => (
+                  <Chip key={k.id} active={katF === k.id} onClick={() => setKatF(katF === k.id ? null : k.id)}>{k.label}</Chip>
                 ))}
               </ChipReihe>
             </>

@@ -6,12 +6,15 @@
   "was": ["tiefgang", "anspruchsvoll", "story", "handlung", "thema", "gehalt", "philosophisch", "gesellschaftskritisch", "komplex", "clever", "zum nachdenken"],
   "warum": ["einfluss", "einflussreich", "wegweisend", "referenz", "referenziert", "zitiert", "ikonisch", "klassiker", "kanon", "kanonisch", "schluesselwerk", "meilenstein", "genrepraegend", "vorlaeufer", "popkulturell", "filmhistorisch", "praegend"]
  },
- "hinweis_kategorien": "Nur die vier Kategoriewerte der Masterliste v3. Die alten Werte (immer_gut, kult, kult_klassiker, daemlich_aber_herrlich, trash, sehenswert) sind gestrichen — sie kamen in den echten Daten nicht vor, jeder Kategorie-Filter lief still ins Leere. Was dort als Kategorie geführt wurde, aber in v3 keine ist (kult, klassiker, trash), steht jetzt unter stimmungen und zielt auf die gleichnamigen TAGS, die es in den Daten wirklich gibt.",
+ "hinweis_kategorien": "Etappe 8 hat den widerspruechlichen v3-Zwischenstand aufgeloest: Massgeblich sind die sieben im Bewertungseditor und im veroeffentlichten Demo-Bestand tatsaechlich verwendeten Kategorien. Kult/Trash duerfen zugleich als Stimmung auf gleichnamige Tags wirken.",
  "kategorien": {
-  "sicher_gut": ["immer gut", "verlasslich", "sichere bank", "safe", "sicher gut"],
-  "wahrscheinlich_passend": ["sehenswert", "solide", "wahrscheinlich passend"],
-  "referenz": ["referenz", "kanon", "pflicht", "alter film"],
-  "zu_pruefen": ["ungepruft", "zu prufen", "noch unklar"]
+  "immer_gut": ["immer gut", "verlasslich", "sichere bank", "safe", "sicher gut"],
+  "kult": ["kult"],
+  "kult_klassiker": ["kult klassiker", "kultklassiker", "referenz", "kanon", "pflicht", "alter film"],
+  "daemlich_aber_herrlich": ["damlich aber herrlich", "daemlich aber herrlich"],
+  "trash": ["trash"],
+  "sehenswert": ["sehenswert", "solide", "wahrscheinlich passend"],
+  "echter_schrott": ["echter schrott", "totaler schrott"]
  },
  "quellen": {
   "kino": ["kino", "lauft", "spielt", "vorstellung", "leinwand", "im programm"],

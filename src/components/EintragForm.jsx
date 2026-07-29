@@ -3,6 +3,7 @@ import { feuere } from "../lib/tour.js";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { hatDreieck } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
+import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 
 /* ---------- Adaptive Eingabemaske ----------
@@ -117,7 +118,7 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
             {!ohneBewertung && (
               <>
                 <select value={f.kategorie} onChange={set("kategorie")} style={{ ...inputStyle, padding: "9px 6px" }}>
-                  {["immer_gut", "kult", "kult_klassiker", "daemlich_aber_herrlich", "trash", "sehenswert", "echter_schrott"].map((k) => <option key={k} value={k}>{k}</option>)}
+                  {BEWERTUNGSKATEGORIEN.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
                 </select>
                 <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.wie }}>WIE</span>
                 <input type="number" min="0" max="5" value={f.wie} onChange={(e) => setF({ ...f, wie: clamp(e.target.value) })} style={{ ...inputStyle, width: 54 }} />

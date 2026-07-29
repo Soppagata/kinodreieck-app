@@ -1,4 +1,5 @@
 import { T } from "../lib/tokens.js";
+import { bewertungskategorieLabel } from "../lib/kategorien.js";
 
 /* ---------- Dreieck-Glyph (Signatur) ----------
    bw == null (unbewertet): NUR der Umriss, gestrichelt — ein leeres Dreieck ist
@@ -126,21 +127,28 @@ export function Klappe({ titel, offen = false, tour, children }) {
 }
 
 export function KategorieTag({ k }) {
-  const map = {
-    immer_gut: ["IMMER GUT", T.wolfram],
-    kult: ["KULT", T.wie],
-    kult_klassiker: ["KULT-KLASSIKER", T.was],
-    daemlich_aber_herrlich: ["DÄMLICH ABER HERRLICH", T.warum],
-    trash: ["TRASH", T.gefahr],
-    sehenswert: ["SEHENSWERT", T.rauch],
-    echter_schrott: ["ECHTER SCHROTT", T.gefahr],
+  const farben = {
+    immer_gut: T.wolfram,
+    kult: T.wie,
+    kult_klassiker: T.was,
+    daemlich_aber_herrlich: T.warum,
+    trash: T.gefahr,
+    sehenswert: T.rauch,
+    echter_schrott: T.gefahr,
     // Legacy (alte Storage-Stände):
-    sicher_gut: ["SICHER GUT", T.wolfram],
-    wahrscheinlich_passend: ["PASSEND", T.wie],
-    referenz: ["REFERENZ", T.rauch],
-    zu_pruefen: ["ZU PRÜFEN", T.gefahr],
+    sicher_gut: T.wolfram,
+    wahrscheinlich_passend: T.wie,
+    referenz: T.rauch,
+    zu_pruefen: T.gefahr,
   };
-  const [label, col] = map[k] || [k || "—", T.rauch];
+  const legacyLabel = {
+    sicher_gut: "SICHER GUT",
+    wahrscheinlich_passend: "PASSEND",
+    referenz: "REFERENZ",
+    zu_pruefen: "ZU PRÜFEN",
+  };
+  const label = (bewertungskategorieLabel(k) || legacyLabel[k] || k || "—").toUpperCase();
+  const col = farben[k] || T.rauch;
   return (
     <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.08em", color: col, border: "1px solid " + col, borderRadius: 3, padding: "2px 6px" }}>
       {label}

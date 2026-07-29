@@ -241,16 +241,16 @@ const zaehlerAuf = () => { stub.rufe = []; };
    ========================================================================= */
 const MASTER = [
   { id: "nacht_der_glut_1984", titel: "Nacht der Glut", originaltitel: "Night of Embers", jahr: 1984, typ: "film",
-    quelle: "dvd", kategorie: "wahrscheinlich_passend", genre: ["horror"], tags: ["duester", "kult"],
+    quelle: "dvd", kategorie: "sehenswert", genre: ["horror"], tags: ["duester", "kult"],
     bewertung: { wie: 4, was: 2, warum: 4 }, reihe: ["Glutnacht Zyklus"], regie: ["Orla Vendtberg"] },
   { id: "stiller_hafen_1972", titel: "Stiller Hafen", originaltitel: "Quiet Harbour", jahr: 1972, typ: "film",
-    quelle: "dvd", kategorie: "referenz", genre: ["drama"], tags: ["melancholisch"],
+    quelle: "dvd", kategorie: "kult_klassiker", genre: ["drama"], tags: ["melancholisch"],
     bewertung: { wie: 3, was: 5, warum: 2 } },
   { id: "zwei_linke_pfoten_2015", titel: "Zwei linke Pfoten", originaltitel: "Two Left Paws", jahr: 2015, typ: "film",
-    quelle: "netflix", kategorie: "sicher_gut", genre: ["komödie"], tags: ["feelgood"],
+    quelle: "netflix", kategorie: "immer_gut", genre: ["komödie"], tags: ["feelgood"],
     bewertung: { wie: 2, was: 3, warum: 2 } },
   { id: "sternenpfad_2019", titel: "Sternenpfad", originaltitel: "Starpath", jahr: 2019, typ: "film",
-    quelle: "kino", kategorie: "zu_pruefen", genre: ["sci-fi"], tags: ["weltenbau"],
+    quelle: "kino", kategorie: "daemlich_aber_herrlich", genre: ["sci-fi"], tags: ["weltenbau"],
     bewertung: { wie: 5, was: 3, warum: 3 }, franchise: ["Kosmoswacht Saga"] },
 ];
 const KINO_MATCHES = { matched: [], rest: [] };
@@ -543,7 +543,7 @@ await leere();
 /* Harte Signale. „ab 1990 bis 2020" wird als Bereich gelesen -> beide Grenzen. */
 await suche("horror solide 80er dvd heute ab 1990 bis 2020");
 check("G4", "hart: Genre", () => chipArt("Genre: horror") === "hart");
-check("G4", "hart: Kategorie", () => chipArt("wahrscheinlich passend") === "hart");
+check("G4", "hart: Kategorie", () => chipArt("sehenswert") === "hart");
 check("G4", "hart: Jahrzehnt", () => chipArt("1980er") === "hart");
 check("G4", "hart: Quelle", () => chipArt("Quelle: dvd") === "hart");
 check("G4", "hart: Zeit", () => chipArt("heute") === "hart");
@@ -561,7 +561,7 @@ check("G4", "ausschluss: Genre", () => chipArt("ohne drama") === "ausschluss");
 check("G4", "ausschluss: Jahrzehnt", () => chipArt("ohne 1970er") === "ausschluss");
 check("G4", "ausschluss: Stimmungsabschlag", () => chipArt("nicht spannend") === "ausschluss");
 check("G4", "ausschluss: Achsenabschlag", () => chipArt("nicht WIE-lastig") === "ausschluss");
-check("G4", "ausschluss: Kategorie", () => chipArt("ohne wahrscheinlich passend") === "ausschluss");
+check("G4", "ausschluss: Kategorie", () => chipArt("ohne sehenswert") === "ausschluss");
 check("G4", "Ausschluss-Chips tragen das Minuszeichen als Vorzeichen",
   () => chips().filter((c) => c.art === "ausschluss").every((c) => /^−/.test(c.knopf.textContent.trim())));
 
@@ -717,7 +717,7 @@ const FORMEN = [
   ["entdecken ist eine Zeichenkette", { ok: true, data: { entdecken: "ja" } }],
   ["das Modell liefert Treffer statt Filter (Fremdfelder)", { ok: true, data: { treffer: [{ titel: "erfunden" }], foo: 1 } }],
   ["alle Abschnitte auf einmal, alle vermüllt", { ok: true, data: {
-    harte_filter: { genres: [1, null], kategorien: "sicher_gut", dekaden: {}, titel: 5, reihen: 9, jahrMin: "ja", jahrMax: [] },
+    harte_filter: { genres: [1, null], kategorien: "immer_gut", dekaden: {}, titel: 5, reihen: 9, jahrMin: "ja", jahrMax: [] },
     weiche_wuensche: { stimmungen: null, achsen: 3, reihen: "x" },
     ausschluesse: 7, nicht_unterstuetzt: 1, interpretation_klartext: {}, entdecken: 1,
   } }],
