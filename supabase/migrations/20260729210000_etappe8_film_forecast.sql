@@ -6,6 +6,10 @@
 -- Anbieteraufruf. Damit kann ein ausgelassener Migrationsschritt nicht still
 -- einen bezahlten Haiku-Aufruf erzeugen.
 --
+-- Ausgeführt: 2026-07-29 durch Codex über die verknüpfte Management-API auf
+-- Projekt bscjgwcntapobyxsiyce. Ergebnis erfolgreich; anschließende echte
+-- Rauchprobe 17/17 und RLS-Negativtest 36/36 grün.
+--
 -- Wiederholbar und additiv: jsonb_set ersetzt nur den einen Task-Eintrag und
 -- erhaelt alle bereits vorhandenen Aufgaben.
 -- ===========================================================================

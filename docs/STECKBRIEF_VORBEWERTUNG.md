@@ -1,8 +1,9 @@
 # Steckbrief: Vorbewertung / KI-Prognose (Etappe 8, erster Block)
 
-Status: Produktentscheidungen von Max, ergänzt 29.07.2026. Grundlage: KI-Leitfaden
-Funktion 1 („Automatische Vorbewertung"). Baut auf dem Geschmacksprofil
-(Etappe 7) auf — deshalb erster Block der Etappe 8, nach dem Profil.
+Status: Produktentscheidungen von Max und technischer MVP umgesetzt,
+Backend-Abnahme 29.07.2026. Grundlage: KI-Leitfaden Funktion 1
+(„Automatische Vorbewertung"). Baut auf dem Geschmacksprofil (Etappe 7) auf
+— deshalb erster Block der Etappe 8, nach dem Profil.
 
 ## Zweck
 

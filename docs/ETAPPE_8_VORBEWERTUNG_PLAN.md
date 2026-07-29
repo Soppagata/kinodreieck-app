@@ -6,13 +6,16 @@ Branch: `feat/etappe-8-vorbewertung`
 
 Produktvertrag: `docs/STECKBRIEF_VORBEWERTUNG.md`
 
-## Ausgangslage
+Status: technisch implementiert; Backend und echte Anbieterprobe abgenommen,
+Staging-Abnahme läuft.
+
+## Ausgangslage zum Baubeginn
 
 Etappe 7 ist auf Produktion abgenommen. Die Vorbewertung beginnt deshalb auf
 dem Merge-Commit `db8199c16a8f6121468ada831ec0f1546fb54986`.
 
-Im aktuellen Code gibt es noch keinen Prognosepfad und kein Prognosefeld. Die
-benötigten Grenzen sind aber vorhanden:
+Im damaligen Code gab es noch keinen Prognosepfad und kein Prognosefeld. Die
+benötigten Grenzen waren aber vorhanden:
 
 - `src/services/ai.js` ist die einzige KI-Fassade der Oberfläche.
 - `supabase/functions/ai-task/index.ts` enthält Schema, Prompt,
@@ -73,7 +76,8 @@ angeblich verwendeten Signale erfinden.
 
 ### Ausgabeformat
 
-Die Modellantwort besitzt genau diese fachlichen Teile:
+Das an die App ausgelieferte Prognoseergebnis besitzt genau diese fachlichen
+Teile:
 
 ```json
 {
@@ -90,6 +94,15 @@ Die Modellantwort besitzt genau diese fachlichen Teile:
   "verwendete_signal_ids": ["S1", "S3"]
 }
 ```
+
+Der geschlossene Anbieter-Vertrag ist absichtlich noch enger: Das Modell gibt
+nur WIE und WAS aus; WARUM ist im Provider-Schema nicht vorhanden und kann
+wegen `additionalProperties: false` auch nicht eingeschleust werden. Der
+Server ergänzt danach unveränderlich `warum: null`. Für den optionalen
+Kategorie-Vorschlag verwendet der Anbieter intern den reinen String
+`kein_vorschlag`; ausschließlich der Server bildet diesen Wert auf das
+öffentliche `null` ab. Der interne Platzhalter ist keine achte Kategorie und
+verlässt den Server nicht.
 
 Grenzen:
 
@@ -269,6 +282,30 @@ durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
 - anschließende Kostenmessung und RLS-Gegenprüfung,
 - adversarialer Review gegen Vermischung von Prognose, WARUM und echter
   Bewertung.
+
+## Technischer Abnahmestand vom 29.07.2026
+
+- App-Gesamtsuite vor dem Backend-Deploy vollständig grün; Produktionsbuild
+  nach dem finalen Schemafix erneut grün.
+- Gemockte Edge-Function-Suite nach dem finalen Schemafix: 262/262 grün.
+- Migration `20260729210000_etappe8_film_forecast.sql` einzeln und erfolgreich
+  auf Projekt `bscjgwcntapobyxsiyce` ausgeführt.
+- Edge Function `ai-task` mit dem finalen Providervertrag erfolgreich
+  deployed.
+- Budgetgeschützte echte Rauchprobe über `npm run test:ai:live`: 17/17 grün.
+  P16 belegt, dass ein leeres Profil vor dem Anbieteraufruf endet; P17 belegt
+  einen echten Sonnet-Prognoseerfolg mit getrenntem WARUM-`null`,
+  aufgelösten Profilsignalen, echter Modell-ID und gemessenen Kosten.
+- Budgetstand nach der Abnahme: 60,8296 von 500,0000 US-Cent im
+  Testkonto-Monat; der finale Lauf verbrauchte 2,4331 US-Cent.
+- RLS-Negativtests nach Migration und Function-Deploy: 36/36 grün;
+  Account-Isolation und Sperre der KI-Tabellen für Konten bleiben intakt.
+- Die technische P17-Probe verwendet ausschließlich eine flüchtige
+  Testanforderung. Sie erzeugt keinen erfundenen Demofilm und schreibt keinen
+  Filmeintrag in Demo- oder Kontodaten.
+- Staging wird aus dem Feature-Branch über den vorhandenen
+  `workflow_dispatch`-Pfad gebaut. Die manuelle Oberflächenabnahme bleibt der
+  letzte Schritt vor Merge beziehungsweise Produktionsfreigabe.
 
 ## Demo- und Konto-Vertrag
 
