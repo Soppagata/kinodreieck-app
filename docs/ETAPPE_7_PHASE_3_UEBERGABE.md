@@ -1,6 +1,6 @@
 # Etappe 7, Phase 3: Übergabe und offene Befunde
 
-Stand: 28.07.2026
+Stand: 29.07.2026
 Arbeitsbranch: `feat/etappe-7-geschmacksprofil`
 Letzter geprüfter Claude-Commit: `ccb6fc7`
 
@@ -315,23 +315,16 @@ beschrieben ein bewusster manueller Abnahmeschritt.
 
 ## Live- und Deploymentstand
 
-Produktion und Staging liefern nachweislich denselben Build:
+Produktion und Staging sind nun bewusst auf unterschiedlichen Ständen:
 
-`14cf3ec5657df720751200c3aff5b73402ee0968` – **Pre-Etappe 7**
-
-Damit gilt für die ausgelieferten Frontends weiterhin:
-
-- Etappe 7 ist weder auf `kinodreieck.at` noch auf
-  `staging.kinodreieck.at` enthalten.
-- Der Remote-Feature-Branch enthält inzwischen Phase 2b, Phase 2c, Phase 3,
-  die nachgezogenen Reparaturen sowie Budget- und Profilhärtung. Er ist noch
-  auf keine feste Domain deployt.
-- Die Live-Oberfläche war im Desktop-Sichttest stabil und ohne
-  Console-Fehler. Im Einstellungsbereich fehlen erwartungsgemäß
-  Geschmacksprofil und Etappe-7-KI-Wahl.
-- Die Live-Anzeige meldete am 28.07. einen Programmstand vom 25.07. 20:17.
-  Das ist zunächst eine Auffälligkeit zur Datenfrische, noch kein belegter
-  Programmfehler.
+- `kinodreieck.at` bleibt auf
+  `14cf3ec5657df720751200c3aff5b73402ee0968` – **Pre-Etappe 7**.
+- `staging.kinodreieck.at` enthält Etappe 7. Workflow
+  `30470411165` hat am 29.07. den vollständigen Testjob, den
+  Function-Vertrag, den Build, den atomaren Deployment-Smoke und die feste
+  Staging-Domain grün abgeschlossen.
+- Der Production-Merge ist damit der nächste Release-Schritt, nicht mehr
+  Teil der Phase-3-Implementierung.
 
 Die Backend-Gegenprüfung vom 28.07.2026 und der kontrollierte Rollout vom
 29.07.2026 haben Claudes Übergabestand präzisiert:
@@ -348,25 +341,35 @@ Die Backend-Gegenprüfung vom 28.07.2026 und der kontrollierte Rollout vom
   `wertelisten-fehlen`. Damit ist `profile-extract` deployt und das
   Wertelisten-Gate stoppt vor dem Anbieter. Der Budgetwächter maß davor und
   danach 49,7615 US-Cent, also exakt 0,0000 US-Cent Mehrverbrauch.
-- [ ] Danach erst das Etappe-7-Frontend auf Staging veröffentlichen.
+- [x] Das Etappe-7-Frontend ist auf Staging veröffentlicht; der feste
+  Domain-Smoke prüfte den erwarteten Build-SHA.
+- [x] Der echte Profilweg ist mit synthetischen Drei-Fragen-Antworten
+  abgenommen. Der erste Lauf machte einen echten Betriebsfehler sichtbar:
+  `timeout_ms=30000` trug die Erstkompilierung des Structured-Output-Schemas
+  nicht und endete nach +4,1452 US-Cent als `anbieter-zeitgrenze`.
+  Migration `20260729200000_etappe7_structured_output_timeout.sql` setzt
+  Function und Parallel-Reservierung gemeinsam auf 120 Sekunden, ordnet
+  `profile-extract` explizit Haiku zu und begrenzt die Ausgabe auf 4096
+  Tokens. Der einzelne Post-Fix-Lauf bestand mit 6 Signalen, 3 Filmen und
+  einem korrekt verworfenen unbelegten Vorschlag für +0,4849 US-Cent.
+  Endstand des Testkontos: 54,3916/500 US-Cent.
+- [x] `npm run test:rls` ist 36/36 grün. Der Lauf ist nun wiederholbar und
+  datenbewahrend: vorhandene Profile werden nur gelesen, temporäre Proben
+  eindeutig markiert und ausschließlich über ihren exakten Testwert
+  entfernt.
+- [x] Eine alte, exakt dem früheren RLS-Prüfwert entsprechende beschädigte
+  Profilzeile von Testkonto A wurde gezielt entfernt. Anschließend zeigt
+  Staging wieder beide Profil-Anlagewege; der Geräte-Sync kehrte auf
+  `synchron` zurück. Es wurde dafür kein weiterer Anbieteraufruf ausgelöst.
 
 Weitere Hosting-Auffälligkeiten:
 
-- [ ] Der lokale Branch enthält fünf geprüfte Commits, die noch nicht auf
-  GitHub liegen. Der vorhandene Personal Access Token darf
-  `.github/workflows/deploy.yml` nicht aktualisieren, weil ihm die
-  `workflow`-Berechtigung fehlt. Der Push muss mit entsprechend berechtigter
-  GitHub-Anmeldung wiederholt werden; es wurde weder die Historie umgebaut
-  noch der Workflow aus dem Commit entfernt.
-- [ ] Live liefert `/sw.js` mit
-  `Cache-Control: public, max-age=14400, must-revalidate`, obwohl
-  `public/_headers` und das Hosting-Handbuch `max-age=0` verlangen. Das kann
-  PWA-Aktualisierungen um bis zu vier Stunden verzögern. Am 28.07. erneut auf
-  Produktion und Staging gemessen; HTML und Manifest revalidieren korrekt,
-  die Zonenregel hebt nur cachefähige JavaScript-Dateien an. **Lokal
-  abgesichert:** Der Remote-Smoke wird bei positivem `sw.js`-TTL rot. Offen
-  bleibt die externe Cloudflare-Einstellung `Browser Cache TTL = Respect
-  Existing Headers`.
+- [x] Der Feature-Branch ist mit workflow-berechtigter GitHub-Anmeldung
+  gepusht; die frühere PAT-Sperre ist erledigt.
+- [x] Cloudflare `Browser Cache TTL` steht auf `Respect Existing Headers`.
+  Produktion und Staging liefern `/sw.js` mit
+  `Cache-Control: public, max-age=0, must-revalidate`; der Remote-Smoke hält
+  diese Kante dauerhaft.
 - [x] Push- und manuelle Läufe teilen jetzt je Zielumgebung eine feste
   Concurrency-Gruppe und können nicht parallel auf dasselbe Ziel deployen.
 - [x] Jeder Online-Build liefert `build-meta.json`; der Domain-Smoke vergleicht
@@ -374,9 +377,9 @@ Weitere Hosting-Auffälligkeiten:
 
 ## Dokumentationsdrift
 
-- [x] `ROADMAP_TO_ONLINE.md` hält Produktion und Staging nun als live und auf
-  den Pre-Etappe-7-Stand abgenommen fest; der offene `sw.js`-Cachebefund
-  bleibt getrennt sichtbar.
+- [x] `ROADMAP_TO_ONLINE.md` hält Produktion bewusst auf dem
+  Pre-Etappe-7-Rollback-Stand und Staging auf dem abgenommenen
+  Etappe-7-Stand fest.
 - [x] „Sofort nächste Arbeitspakete“ beginnt nicht mehr mit dem bereits
   erledigten Etappe-6-Merge, sondern mit dem kontrollierten Etappe-7-Rollout.
 - [x] `README.md` beschreibt Supabase mit kontogebundener RLS als aktuellen
@@ -386,19 +389,13 @@ Weitere Hosting-Auffälligkeiten:
 
 ## Nächste Arbeitsreihenfolge
 
-Die lokalen Produkt- und Testpakete 1–5 des ursprünglichen Plans sind
-erledigt. Für die Auslieferung bleibt:
+Die Phase-3-Implementierung und ihre Staging-Abnahme sind erledigt. Für die
+Auslieferung bleibt nur der getrennte Release-Schritt:
 
-1. Die GitHub-Anmeldung für Workflow-Änderungen freigeben und die fünf
-   lokalen Commits auf den Feature-Branch pushen.
-2. Die Cloudflare-Zone auf `Browser Cache TTL = Respect Existing Headers`
-   stellen und beide festen Domains erneut prüfen.
-3. Das Frontend nach Staging veröffentlichen.
-4. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
-   und anschließend `test:rls` gegen Staging laufen lassen.
-5. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
-6. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
-   Arbeitspaketen bereinigen.
+1. Feature-Branch und Staging-Befund reviewen.
+2. Production-Merge vorbereiten und den bestehenden Pre-Etappe-7-Stand als
+   Rollback-Punkt behalten.
+3. Erst nach dem Production-Smoke Etappe 8 mit der Vorbewertung beginnen.
 
 ## Arbeitsbaum-Hinweis
 

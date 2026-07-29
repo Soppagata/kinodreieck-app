@@ -673,6 +673,15 @@ Bewertungen bleiben getrennte Töpfe.
 - jeder kostenpflichtige Aufruf läuft über den Etappe-5-Unterbau und ist
   protokolliert.
 
+**Alle fünf auf Staging erfüllt (29.07.2026).** Function v14, der
+anbieterfreie Remote-Vertrag, der echte budgetüberwachte Profilaufruf,
+36/36 RLS-Prüfungen und der feste Staging-Domain-Smoke sind grün. Der erste
+Profil-Livetest fand eine zu kurze 30-Sekunden-Grenze für die
+Structured-Output-Erstkompilierung; die auditierte Migration
+`20260729200000_etappe7_structured_output_timeout.sql` hebt Function und
+Parallel-Reservierung gemeinsam auf 120 Sekunden. Produktion bleibt bis zum
+bewussten Merge auf dem Pre-Etappe-7-Rollback-Stand.
+
 ---
 
 ## Etappe 8: KI-Funktionsausbau
@@ -976,19 +985,12 @@ Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
 - normalisiertes Datenmodell für jeden heutigen Storage-Topf,
 - öffentliche Registrierung ohne Begrenzung.
 
-## Sofort nächste Arbeitspakete (Stand 28.07.2026)
+## Sofort nächste Arbeitspakete (Stand 29.07.2026)
 
-1. Den lokal grünen Etappe-7-Function-Stand nach ausdrücklicher Freigabe auf
-   den von Staging und Produktion gemeinsam genutzten Supabase-Endpunkt
-   deployen.
-2. Den anbieterfreien Remote-Vertrag prüfen; erwartet ist
-   `wertelisten-fehlen` bei unverändertem KI-Budget.
-3. Erst danach das Etappe-7-Frontend auf Staging veröffentlichen und dort den
-   echten Drei-Fragen-Weg unter der 5-USD-Testbremse abnehmen.
-4. Nach erfolgreicher Staging-Abnahme den Production-Merge vorbereiten.
-5. Die Cloudflare-Zone auf `Browser Cache TTL = Respect Existing Headers`
-   stellen; der Remote-Smoke hält diese Kante anschließend dauerhaft.
-6. Danach Etappe 8 mit der Vorbewertung beginnen. Parallel dürfen
+1. Den auf Staging abgenommenen Etappe-7-Branch reviewen und den
+   Production-Merge vorbereiten; der Pre-Etappe-7-Build bleibt Rollback.
+2. Nach dem Production-Smoke Etappe 8 mit der Vorbewertung beginnen.
+3. Parallel dürfen
    Landingpage-Schablone, Distributions-Spec und Runbook-Entwürfe reifen.
 
 ## Definition of Done für „online“

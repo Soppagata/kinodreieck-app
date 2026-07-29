@@ -1,8 +1,15 @@
 # Datenbank-Migrationen
 
-Dieser Ordner ist die **auditierbare Reihenfolge** aller Schemaänderungen. Es gibt
-bewusst kein CLI-Setup: die Dateien werden von Hand im **Supabase-SQL-Editor**
-ausgeführt (Dashboard → SQL Editor → Datei komplett einfügen → Run).
+Dieser Ordner ist die **auditierbare Reihenfolge** aller Schemaänderungen. Die
+historischen Dateien wurden von Hand im **Supabase-SQL-Editor** ausgeführt.
+Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
+
+`supabase db query --linked --file <genau-eine-migration.sql>`
+
+Die alte Remote-Migrationshistorie wurde dabei nicht nachträglich erfunden und
+ist deshalb leer. **Kein `db push --include-all`**: Das würde alle historischen
+Dateien erneut als ausstehend behandeln. Neue Läufe bleiben dateiweise,
+kontrolliert und werden unten protokolliert.
 
 **Regel:** Was hier liegt, ist gelaufen oder läuft als Nächstes. Kein „noch nicht
 ausführen"-SQL im Ordner. Jede Datei ist idempotent formuliert, mehrfaches
@@ -27,6 +34,7 @@ ausfüllen.
 | `20260727180000_etappe6_ausgabebudget_suche.sql` | Produktion (EU-West) | 2026-07-27 | Max | erfolgreich; `task_max_tokens` fuer `intelligent-search` auf 8192 |
 | `20260727190000_etappe6_tageslimit_bauphase.sql` | Produktion (EU-West) | 2026-07-27 | Max | erfolgreich; Tageslimit fuer die Bauphase auf 200 -- VOR DER TESTERRUNDE ZURUECKDREHEN |
 | `20260727210000_etappe7_profil_topf.sql` | `bscjgwcntapobyxsiyce` | spätestens 2026-07-28 | ursprünglicher Lauf unbekannt; von Codex verifiziert | erfolgreich belegt; `npm run test:rls` 36/36, darunter Profil-Topf, Konto-Isolation und anon-Sperre |
+| `20260729200000_etappe7_structured_output_timeout.sql` | `bscjgwcntapobyxsiyce` | 2026-07-29 | Codex über Management-API | erfolgreich; 120 s Timeout, `profile-extract` explizit Haiku/4096 Tokens; Post-Fix-Livetest grün |
 
 ## Nach Migration 1
 
