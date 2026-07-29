@@ -250,6 +250,45 @@ type AnbieterErgebnis = {
   stopReason: string;
 };
 
+/* EIN gemeinsamer Anbieterkoerper fuer Reservierung und echten Aufruf.
+   Vor Etappe 8, Block 2 wurde die Eingabe aus dem rohen Browser-Request
+   geschaetzt. Das unterschlug den gesamten Systemprompt und das Antwortschema
+   und zaehlte umgekehrt fremde, vom Auftrag verworfene Zusatzfelder mit.
+   Bei spaeter serverseitig geladenen Fundstellen waere die Reservierung damit
+   praktisch blind gewesen. Diese reine Funktion ist deshalb die verbindliche
+   Kosten- und Sendenaht. */
+export function baueAnbieterKoerper(
+  modell: string,
+  system: string,
+  nutzertext: string,
+  maxTokens: number,
+  schema: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const koerper: Record<string, unknown> = {
+    model: modell,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content: nutzertext }],
+  };
+  if (schema) koerper.output_config = { format: { type: "json_schema", schema } };
+  return koerper;
+}
+
+export function schaetzeAnbieterEingabeTokens(
+  modell: string,
+  system: string,
+  nutzertext: string,
+  maxTokens: number,
+  schema: Record<string, unknown> | null,
+): number {
+  const koerper = baueAnbieterKoerper(modell, system, nutzertext, maxTokens, schema);
+  const bytes = new TextEncoder().encode(JSON.stringify(koerper)).length;
+  /* Drei UTF-8-Bytes je Token plus 300 Token Sicherheitsaufschlag ist bewusst
+     konservativ. Entscheidend ist jetzt, dass die Schaetzung ALLE wirklich
+     gesendeten Anweisungen und das Schema umfasst. */
+  return Math.ceil(bytes / 3) + 300;
+}
+
 async function rufeAnbieter(
   modell: string,
   system: string,
@@ -261,15 +300,9 @@ async function rufeAnbieter(
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new AufrufFehler(CODES.SERVER, "anbieterschluessel-fehlt");
 
-  const koerper: Record<string, unknown> = {
-    model: modell,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: nutzertext }],
-  };
   /* Striktes Antwortschema (GA, kein Beta-Header nötig). Feldform aus der
      Anbieterdoku vom 26.07.2026; der erste echte Aufruf belegt sie. */
-  if (schema) koerper.output_config = { format: { type: "json_schema", schema } };
+  const koerper = baueAnbieterKoerper(modell, system, nutzertext, maxTokens, schema);
 
   const uhr = new AbortController();
   const stopp = setTimeout(() => uhr.abort(), timeoutMs);
@@ -2063,12 +2096,16 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         überschreiten. Die Schätzung wird beim Abschluss durch den Istwert
         ersetzt — und bleibt stehen, wenn der Lauf abstürzt. */
   const preis = preisFuer(konfig, modell);
-  /* Gezählt werden BYTES, nicht UTF-16-Einheiten. `rohtext.length` unterschätzt
-     alles ausserhalb von ASCII — deutsche Umlaute um ein Drittel, CJK und
-     Emoji um das Zwei- bis Vierfache. Die Reservierung soll nach oben irren,
-     nicht nach unten: sie ist der einzige Schutz des Monatsbudgets gegen
-     gleichzeitig laufende Aufträge. */
-  const geschaetzteEingabe = Math.ceil(new TextEncoder().encode(rohtext).length / 3) + 300;
+  /* Reserviert wird anhand GENAU des Anbieterkoerpers, nicht anhand des rohen
+     Browser-Requests. So werden Systemprompt und Schema mitgerechnet, waehrend
+     verworfene Zusatzfelder keine scheinbaren Kosten erzeugen. */
+  const geschaetzteEingabe = schaetzeAnbieterEingabeTokens(
+    modell,
+    auftrag.system,
+    auftrag.nutzertext,
+    maxTokens,
+    auftrag.schema,
+  );
   const reservierung = kostenAus(preis, geschaetzteEingabe, maxTokens);
 
   const { data: startRoh, error: startFehler } = await admin.rpc("kd_ai_auftrag_starten", {

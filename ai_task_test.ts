@@ -176,6 +176,7 @@ const IMPL_PFAD = Deno.env.get("KD_IMPL") ?? "./supabase/functions/ai-task/index
 const {
   handhabeAnfrage, AUFGABEN, MAX_TOKENS_STANDARD, zuTokens, eigenerWert,
   kurzText, vergleichsform, ganzzahlImBereich, leseAntworten,
+  baueAnbieterKoerper, schaetzeAnbieterEingabeTokens,
   EXTRAKT_ARTEN, EXTRAKT_RICHTUNGEN, EXTRAKT_SICHERHEITEN, EXTRAKT_QUELLEN,
   ANTWORT_MAX_ZEICHEN, WERT_MAX_ZEICHEN, BELEG_MAX_ZEICHEN, BELEG_MIN_ZEICHEN,
   EXTRAKT_MAX_SIGNALE, EXTRAKT_MAX_FILME, EXTRAKT_MAX_OFFEN,
@@ -204,6 +205,14 @@ const {
   vergleichsform: (t: unknown) => string;
   ganzzahlImBereich: (w: unknown, min: number, max: number) => number | null;
   leseAntworten: (p: Record<string, unknown>) => Array<{ frage: string; text: string }>;
+  baueAnbieterKoerper: (
+    modell: string, system: string, nutzertext: string, maxTokens: number,
+    schema: Record<string, unknown> | null,
+  ) => Record<string, unknown>;
+  schaetzeAnbieterEingabeTokens: (
+    modell: string, system: string, nutzertext: string, maxTokens: number,
+    schema: Record<string, unknown> | null,
+  ) => number;
   EXTRAKT_ARTEN: string[];
   EXTRAKT_RICHTUNGEN: string[];
   EXTRAKT_SICHERHEITEN: string[];
@@ -2714,35 +2723,78 @@ test("R8 in p_modell geht nur eine Modell-ID-Form, sonst null", async () => {
 });
 
 /* ---------------------------------------------------------------------------
-   R9 — Reservierung in BYTES (Rotteam #7)
-   `rohtext.length` unterschätzt alles außerhalb ASCII: deutsche Umlaute um ein
-   Drittel, CJK und Emoji um das Zwei- bis Vierfache. Die Reservierung ist der
-   einzige Schutz des Monatsbudgets gegen gleichzeitig laufende Aufträge und
-   muss deshalb nach OBEN irren.
+   R9 — Reservierung des TATSAECHLICHEN Anbieterkoerpers
+   Systemprompt und Schema entstehen erst serverseitig. Der rohe Browserbody
+   ist deshalb weder eine Ober- noch eine Untergrenze des bezahlten Inputs.
    --------------------------------------------------------------------------- */
 
-test("R9 die Reservierung zählt BYTES, nicht UTF-16-Einheiten", async () => {
-  const N = 600;
-  const messe = async (fuellung: string) => {
+test("R9 die Reservierung zählt den gesendeten Anbieterkoerper in UTF-8-Bytes", async () => {
+  const messe = async (wort: string, fuellung = "") => {
     stelleZurueck();
-    await ruf({ task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" }, fuellung });
-    return startKoerper().p_reservierung as number;
+    await ruf({ task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort }, fuellung });
+    return {
+      reservierung: startKoerper().p_reservierung as number,
+      koerper: anbieterKoerper(),
+    };
   };
-  /* Alle drei Körper sind in UTF-16-Einheiten GLEICH LANG — nur in Bytes
-     nicht (600 / 1200 / 1800). Die alte Fassung hätte dreimal denselben Wert
-     reserviert. */
-  gleich(JSON.stringify("a".repeat(N)).length, JSON.stringify("ä".repeat(N)).length,
+  /* Alle drei Werte sind in UTF-16-Einheiten gleich lang, aber im wirklich
+     gesendeten Nutzertext unterschiedlich viele UTF-8-Bytes. */
+  gleich(JSON.stringify("a".repeat(40)).length, JSON.stringify("ä".repeat(40)).length,
     "Vorbedingung: ASCII und Umlaut sind in UTF-16 gleich lang");
-  gleich(JSON.stringify("a".repeat(N)).length, JSON.stringify("喛".repeat(N)).length,
+  gleich(JSON.stringify("a".repeat(40)).length, JSON.stringify("喛".repeat(40)).length,
     "Vorbedingung: ASCII und CJK sind in UTF-16 gleich lang");
 
-  const ascii = await messe("a".repeat(N));
-  const umlaut = await messe("ä".repeat(N));
-  const cjk = await messe("喛".repeat(N));
+  const ascii = await messe("a".repeat(40));
+  const umlaut = await messe("ä".repeat(40));
+  const cjk = await messe("喛".repeat(40));
 
-  wahr(ascii > 0, `die Reservierung ist überhaupt gesetzt (war ${ascii})`);
-  wahr(umlaut > ascii, `Umlaute (2 Byte) reservieren mehr als ASCII (${umlaut} vs ${ascii})`);
-  wahr(cjk > umlaut, `CJK (3 Byte) reserviert mehr als Umlaute (${cjk} vs ${umlaut})`);
+  wahr(ascii.reservierung > 0,
+    `die Reservierung ist überhaupt gesetzt (war ${ascii.reservierung})`);
+  wahr(umlaut.reservierung > ascii.reservierung,
+    `Umlaute reservieren mehr als ASCII (${umlaut.reservierung} vs ${ascii.reservierung})`);
+  wahr(cjk.reservierung > umlaut.reservierung,
+    `CJK reserviert mehr als Umlaute (${cjk.reservierung} vs ${umlaut.reservierung})`);
+
+  const soll = schaetzeAnbieterEingabeTokens(
+    String(cjk.koerper.model),
+    String(cjk.koerper.system),
+    String((cjk.koerper.messages as Array<Record<string, unknown>>)[0].content),
+    Number(cjk.koerper.max_tokens),
+    ((cjk.koerper.output_config as Record<string, Record<string, Record<string, unknown>>>)
+      .format.schema),
+  );
+  wahr(soll > 300, "die reine Hilfsrechnung umfasst Anbieterkoerper und Sicherheitsaufschlag");
+});
+
+test("R9b verworfene Browser-Zusatzfelder erhöhen die Reservierung nicht", async () => {
+  const ohne = await (async () => {
+    stelleZurueck();
+    await ruf({ task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" } });
+    return startKoerper().p_reservierung;
+  })();
+  stelleZurueck();
+  await ruf({
+    task: "echo-struct",
+    vorgangId: neueVorgangId(),
+    payload: { wort: "Kinodreieck" },
+    ungenutzterBrowserinhalt: "喛".repeat(1000),
+  });
+  gleich(startKoerper().p_reservierung, ohne,
+    "nur der gebaute Auftrag bestimmt die Kostenreservierung");
+});
+
+test("R9c Systemprompt und Structured-Output-Schema liegen in derselben Kostennaht wie der echte Aufruf", async () => {
+  const mitSchema = baueAnbieterKoerper("claude-test", "SYSTEM", "NUTZER", 512, {
+    type: "object",
+    additionalProperties: false,
+    required: ["wert"],
+    properties: { wert: { type: "string" } },
+  });
+  const ohneSchema = baueAnbieterKoerper("claude-test", "SYSTEM", "NUTZER", 512, null);
+  wahr(JSON.stringify(mitSchema).length > JSON.stringify(ohneSchema).length,
+    "das Schema ist Teil des reservierten und gesendeten Körpers");
+  gleich((mitSchema.output_config as Record<string, Record<string, unknown>>).format.type,
+    "json_schema", "Anbieterformat");
 });
 
 /* ---------------------------------------------------------------------------
@@ -2917,6 +2969,12 @@ const AUSGABEPREIS: Record<string, number> = {
      bekommen soll; MT-PE1 unten hält den Rückfall ausdrücklich fest. */
   "profile-extract": 500,
   "film-forecast": 1000,      // Alias gross -> claude-sonnet-5
+};
+const EINGABEPREIS: Record<string, number> = {
+  "echo-struct": 100,
+  "intelligent-search": 200,
+  "profile-extract": 100,
+  "film-forecast": 200,
 };
 
 test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln", async () => {
@@ -3106,8 +3164,9 @@ test("MT6 die Reservierung hängt am selben Budget, nicht an einer festen Zahl",
      gleichzeitig laufende Aufträge. Steigt das Ausgabebudget einer Aufgabe,
      MUSS sie mitgehen — sonst schützt sie nichts mehr.
      Geprüft wird der Zusammenhang, nicht der Zahlenwert: bei identischem
-     Anfragekörper darf sich zwischen zwei Budgets genau der Ausgabeanteil
-     ändern, also (B2 - B1) / 1e6 * Ausgabepreis. */
+     Anbieterkoerper darf sich zwischen zwei Budgets im Feld `max_tokens` um
+     wenige Bytes aendern. Neben dem Ausgabeanteil ist deshalb hoechstens ein
+     zusaetzlich geschaetztes Eingabetoken erlaubt. */
   for (const task of Object.keys(BUDGET_SONDEN)) {
     const klein = await messeBudget(task, 256);
     const gross = await messeBudget(task, 2048);
@@ -3115,7 +3174,8 @@ test("MT6 die Reservierung hängt am selben Budget, nicht an einer festen Zahl",
       `${task}: mehr Budget reserviert mehr (${gross.reservierung} vs ${klein.reservierung})`);
     const erwartet = ((2048 - 256) / 1_000_000) * AUSGABEPREIS[task];
     const gemessen = gross.reservierung - klein.reservierung;
-    wahr(Math.abs(gemessen - erwartet) < 1e-9,
+    const eingabeToleranz = EINGABEPREIS[task] / 1_000_000 + 1e-9;
+    wahr(Math.abs(gemessen - erwartet) <= eingabeToleranz,
       `${task}: die Reservierung folgt dem Budget mit dem Ausgabepreis (erwartet ${erwartet}, gemessen ${gemessen})`);
   }
 });
@@ -3143,7 +3203,8 @@ test("MT6b auch das Standardbudget geht vollständig in die Reservierung", async
     "ohne Konfiguration wird dasselbe reserviert wie mit dem ausdrücklich gesetzten Tabellenwert");
   const erwartet = ((soll - RUECKFALL) / 1_000_000) * AUSGABEPREIS[TASK];
   const gemessen = ohne.reservierung - mitRueckfall.reservierung;
-  wahr(Math.abs(gemessen - erwartet) < 1e-9,
+  const eingabeToleranz = EINGABEPREIS[TASK] / 1_000_000 + 1e-9;
+  wahr(Math.abs(gemessen - erwartet) <= eingabeToleranz,
     `der Vorsprung gegenüber ${RUECKFALL} ist genau der Ausgabeanteil `
     + `(erwartet ${erwartet}, gemessen ${gemessen})`);
 });
