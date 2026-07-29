@@ -254,11 +254,11 @@ Bestehende, funktionierende UI muss dafür nicht flächendeckend umgebaut werden
 ## Etappe 2: Öffentliche App-Hülle und eigene Domain
 
 **Status: technisch umgesetzt am 25. Juli 2026; Produktion und Staging sind
-live und auf den Pre-Etappe-7-Stand abgenommen (erneut geprüft am
-28. Juli 2026).** Konfiguration, Sicherheitsmodell, Service-Worker-Regeln,
-Deployment-Tore und Rückrollweg stehen in `ETAPPE_2_HOSTING.md`. Offen ist
-die gesondert dokumentierte Cloudflare-Zonenregel, die den Browsercache von
-`sw.js` entgegen `_headers` auf vier Stunden anhebt.
+live. Produktion wurde am 29. Juli 2026 mit Etappe 7 auf Merge-Commit
+`db8199c` abgenommen.** Konfiguration, Sicherheitsmodell,
+Service-Worker-Regeln, Deployment-Tore und Rückrollweg stehen in
+`ETAPPE_2_HOSTING.md`. Die frühere Cloudflare-Zonenabweichung ist behoben:
+`sw.js` respektiert wieder die in `_headers` gesetzte Revalidierung.
 
 ### Ziel
 
@@ -673,14 +673,15 @@ Bewertungen bleiben getrennte Töpfe.
 - jeder kostenpflichtige Aufruf läuft über den Etappe-5-Unterbau und ist
   protokolliert.
 
-**Alle fünf auf Staging erfüllt (29.07.2026).** Function v14, der
-anbieterfreie Remote-Vertrag, der echte budgetüberwachte Profilaufruf,
-36/36 RLS-Prüfungen und der feste Staging-Domain-Smoke sind grün. Der erste
+**Alle fünf auf Staging und Produktion erfüllt (29.07.2026).** Function v14,
+der anbieterfreie Remote-Vertrag, der echte budgetüberwachte Profilaufruf,
+36/36 RLS-Prüfungen und beide festen Domain-Smokes sind grün. Der erste
 Profil-Livetest fand eine zu kurze 30-Sekunden-Grenze für die
 Structured-Output-Erstkompilierung; die auditierte Migration
 `20260729200000_etappe7_structured_output_timeout.sql` hebt Function und
-Parallel-Reservierung gemeinsam auf 120 Sekunden. Produktion bleibt bis zum
-bewussten Merge auf dem Pre-Etappe-7-Rollback-Stand.
+Parallel-Reservierung gemeinsam auf 120 Sekunden. Pull Request #1 wurde als
+`db8199c` nach `main` übernommen; `14cf3ec` bleibt der dokumentierte
+Pre-Etappe-7-Rollback-Punkt.
 
 ---
 
@@ -688,9 +689,10 @@ bewussten Merge auf dem Pre-Etappe-7-Rollback-Stand.
 
 Reihenfolge innerhalb der Etappe: zuerst die Vorbewertung (sie braucht das
 Profil aus Etappe 7), danach Filmscan und Bloganalyse — deren Reihenfolge
-ist offen. Produktentscheidungen bindend in
-`claude/steckbrief_vorbewertung.md`, `claude/steckbrief_filmscan.md` und
-`claude/steckbrief_bloganalyse.md`.
+ist offen. Produktentscheidungen für den ersten Block bindend in
+`docs/STECKBRIEF_VORBEWERTUNG.md`. Die Steckbriefe für Filmscan und
+Bloganalyse liegen weiterhin im Claude-Projekt und werden vor ihrem jeweiligen
+Bau ebenfalls ins Repository übernommen.
 
 ### Ziel
 
@@ -987,9 +989,10 @@ Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
 
 ## Sofort nächste Arbeitspakete (Stand 29.07.2026)
 
-1. Den auf Staging abgenommenen Etappe-7-Branch reviewen und den
-   Production-Merge vorbereiten; der Pre-Etappe-7-Build bleibt Rollback.
-2. Nach dem Production-Smoke Etappe 8 mit der Vorbewertung beginnen.
+1. Etappe 8 mit der Vorbewertung auf Basis von
+   `docs/STECKBRIEF_VORBEWERTUNG.md` beginnen.
+2. Zuerst Datenvertrag, Profil-Mindestmenge, Statusfluss und
+   WARUM-/Kategorie-Grenze festzurren; danach den On-demand-MVP bauen.
 3. Parallel dürfen
    Landingpage-Schablone, Distributions-Spec und Runbook-Entwürfe reifen.
 

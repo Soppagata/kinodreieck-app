@@ -315,16 +315,19 @@ beschrieben ein bewusster manueller Abnahmeschritt.
 
 ## Live- und Deploymentstand
 
-Produktion und Staging sind nun bewusst auf unterschiedlichen Ständen:
+Produktion und Staging enthalten Etappe 7:
 
-- `kinodreieck.at` bleibt auf
-  `14cf3ec5657df720751200c3aff5b73402ee0968` – **Pre-Etappe 7**.
-- `staging.kinodreieck.at` enthält Etappe 7. Workflow
-  `30470411165` hat am 29.07. den vollständigen Testjob, den
-  Function-Vertrag, den Build, den atomaren Deployment-Smoke und die feste
-  Staging-Domain grün abgeschlossen.
-- Der Production-Merge ist damit der nächste Release-Schritt, nicht mehr
-  Teil der Phase-3-Implementierung.
+- `kinodreieck.at` liefert Merge-Commit
+  `db8199c16a8f6121468ada831ec0f1546fb54986`. Workflow `30476307220`
+  schloss Testjob, atomaren Deployment-Smoke und festen
+  Produktions-Domain-Smoke am 29.07. vollständig grün ab.
+- `staging.kinodreieck.at` liefert den in Pull Request #1 enthaltenen
+  Feature-Stand `35051a7ecf0a446cc919220d3560d7d52f62f1df`. Workflow
+  `30473608271` hat den vollständigen Testjob, den Function-Vertrag, den
+  Build, den atomaren Deployment-Smoke und die feste Staging-Domain grün
+  abgeschlossen.
+- `14cf3ec5657df720751200c3aff5b73402ee0968` bleibt als
+  **Pre-Etappe-7-Rollback-Punkt** erhalten.
 
 Die Backend-Gegenprüfung vom 28.07.2026 und der kontrollierte Rollout vom
 29.07.2026 haben Claudes Übergabestand präzisiert:
@@ -377,11 +380,11 @@ Weitere Hosting-Auffälligkeiten:
 
 ## Dokumentationsdrift
 
-- [x] `ROADMAP_TO_ONLINE.md` hält Produktion bewusst auf dem
-  Pre-Etappe-7-Rollback-Stand und Staging auf dem abgenommenen
-  Etappe-7-Stand fest.
-- [x] „Sofort nächste Arbeitspakete“ beginnt nicht mehr mit dem bereits
-  erledigten Etappe-6-Merge, sondern mit dem kontrollierten Etappe-7-Rollout.
+- [x] `ROADMAP_TO_ONLINE.md` hält Produktion und Staging auf dem
+  abgenommenen Etappe-7-Stand fest und nennt den Pre-Etappe-7-Commit nur
+  noch als Rollback-Punkt.
+- [x] „Sofort nächste Arbeitspakete“ beginnt mit Etappe 8 und dem
+  versionierten Vorbewertungs-Steckbrief.
 - [x] `README.md` beschreibt Supabase mit kontogebundener RLS als aktuellen
   Onlinepfad und den privaten GitHub-Datenweg nur noch als Legacy.
 - [x] `README.md` verwendet die bindende WARUM-Definition: filmhistorische
@@ -389,13 +392,17 @@ Weitere Hosting-Auffälligkeiten:
 
 ## Nächste Arbeitsreihenfolge
 
-Die Phase-3-Implementierung und ihre Staging-Abnahme sind erledigt. Für die
-Auslieferung bleibt nur der getrennte Release-Schritt:
+Die Phase-3-Implementierung, ihre Staging-Abnahme und der getrennte
+Produktionsrelease sind erledigt. Pull Request #1 wurde am 29.07.2026 als
+Merge-Commit `db8199c16a8f6121468ada831ec0f1546fb54986` nach `main`
+übernommen. Workflow `30476307220` schloss Testjob, atomaren
+Produktionsdeploy und festen Domain-Smoke vollständig grün ab.
+`kinodreieck.at/build-meta.json` bestätigt denselben Merge-Commit in der
+Umgebung `production`; `14cf3ec5657df720751200c3aff5b73402ee0968` bleibt
+der dokumentierte Pre-Etappe-7-Rollback-Punkt.
 
-1. Feature-Branch und Staging-Befund reviewen.
-2. Production-Merge vorbereiten und den bestehenden Pre-Etappe-7-Stand als
-   Rollback-Punkt behalten.
-3. Erst nach dem Production-Smoke Etappe 8 mit der Vorbewertung beginnen.
+Etappe 8 beginnt anschließend mit der Vorbewertung auf Branch
+`feat/etappe-8-vorbewertung`.
 
 ## Arbeitsbaum-Hinweis
 
