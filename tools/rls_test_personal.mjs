@@ -36,7 +36,19 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(URL) || !ANON || !A_PASS || !B
   process.exit(2);
 }
 
-const TESTKEY = "kd:vokabular";     // erlaubter Topf, den die App selten nutzt
+/* Der RLS-Test darf keinen echten Testkonto-Topf überschreiben oder beim
+   Cleanup löschen. Nach der Anmeldung wird deshalb aus dieser sicheren
+   Teilmenge ein Key gewählt, der bei A UND B nachweislich noch nicht
+   existiert. Gibt es keinen, stoppt der Lauf vor dem ersten Schreibzugriff. */
+const TESTKEY_KANDIDATEN = [
+  "kd:vokabular",
+  "kd:filter-kino",
+  "kd:filter-streaming",
+  "kd:filter-mediathek",
+  "kd:zeitgrenze",
+  "kd:achievements",
+];
+let TESTKEY = null;
 const FREMDKEY = "kd:boeser-topf";  // steht NICHT in der Key-Allowlist
 /* Etappe 7: Der Profil-Topf wird EINZELN geprueft, nicht stellvertretend ueber
    TESTKEY. Grund: Er ist der juengste Eintrag der Key-Whitelist, und deren
@@ -87,6 +99,25 @@ const A = await login(A_USER, A_PASS);
 const B = await login(B_USER, B_PASS);
 pruefe("Zwei getrennte Testaccounts eingeloggt", !!A.id && !!B.id && A.id !== B.id);
 
+for (const kandidat of TESTKEY_KANDIDATEN) {
+  const [standA, standB] = await Promise.all([
+    rest("GET", `/kd_personal?key=eq.${encodeURIComponent(kandidat)}&select=key&limit=1`, { token: A.token }),
+    rest("GET", `/kd_personal?key=eq.${encodeURIComponent(kandidat)}&select=key&limit=1`, { token: B.token }),
+  ]);
+  const aLeer = standA.status === 200 && Array.isArray(standA.data) && standA.data.length === 0;
+  const bLeer = standB.status === 200 && Array.isArray(standB.data) && standB.data.length === 0;
+  if (aLeer && bLeer) { TESTKEY = kandidat; break; }
+  if (standA.status !== 200 || !Array.isArray(standA.data)
+    || standB.status !== 200 || !Array.isArray(standB.data)) {
+    console.error("RLS-Testtopf konnte nicht sicher als frei belegt werden. Kein Schreibtest gestartet.");
+    process.exit(2);
+  }
+}
+if (!TESTKEY) {
+  console.error("Kein gemeinsamer freier RLS-Testtopf vorhanden. Bestehende Kontodaten bleiben unangetastet.");
+  process.exit(2);
+}
+
 /* --- T1/T2: anon darf gar nichts --------------------------------------- */
 const t1 = await rest("GET", "/kd_personal?select=key&limit=1");
 pruefe("T1 anon LESEN wird abgewiesen (kein 200)", t1.status === 401 || t1.status === 403,
@@ -96,24 +127,38 @@ const t2 = await rest("POST", "/kd_personal", { body: { key: TESTKEY, value: "x"
 pruefe("T2 anon SCHREIBEN wird abgewiesen", t2.status === 401 || t2.status === 403, "HTTP " + t2.status);
 
 /* --- T3/T7: A schreibt und liest eigene Zeilen -------------------------- */
-const wertA = JSON.stringify([{ wort: "rls-test-a", t: Date.now() }]);
+const probeId = crypto.randomUUID();
+const wertA = JSON.stringify([{ wort: "rls-test-a", probeId }]);
 const t7 = await rest("POST", "/kd_personal", {
   token: A.token, body: { key: TESTKEY, value: wertA }, prefer: "return=representation",
 });
 const zeileA = Array.isArray(t7.data) ? t7.data[0] : null;
+const testAAngelegt = (t7.status === 201 || t7.status === 200)
+  && zeileA?.account_id === A.id
+  && zeileA?.key === TESTKEY
+  && zeileA?.value === wertA
+  && zeileA?.revision === 1;
 pruefe("T7 A legt eigene Zeile OHNE account_id an (Server setzt sie)",
-  (t7.status === 201 || t7.status === 200) && zeileA?.account_id === A.id && zeileA?.revision === 1,
+  testAAngelegt,
   "HTTP " + t7.status + " account_id=" + (zeileA?.account_id || "?"));
 
 const t3 = await rest("GET", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}&select=key,value,revision`, { token: A.token });
 pruefe("T3 A liest die eigene Zeile", t3.ok && Array.isArray(t3.data) && t3.data[0]?.value === wertA);
 
 /* --- T4: A sieht nichts von B ------------------------------------------ */
-const wertB = JSON.stringify([{ wort: "rls-test-b", t: Date.now() }]);
-await rest("POST", "/kd_personal", { token: B.token, body: { key: TESTKEY, value: wertB }, prefer: "return=representation" });
+const wertB = JSON.stringify([{ wort: "rls-test-b", probeId }]);
+const anlageB = await rest("POST", "/kd_personal", {
+  token: B.token, body: { key: TESTKEY, value: wertB }, prefer: "return=representation",
+});
+const zeileB = Array.isArray(anlageB.data) ? anlageB.data[0] : null;
+const testBAngelegt = (anlageB.status === 201 || anlageB.status === 200)
+  && zeileB?.account_id === B.id
+  && zeileB?.key === TESTKEY
+  && zeileB?.value === wertB
+  && zeileB?.revision === 1;
 const t4 = await rest("GET", `/kd_personal?account_id=eq.${B.id}&select=key,value`, { token: A.token });
 pruefe("T4 A liest B: 200 mit LEERER Menge (RLS filtert, kein Leck)",
-  t4.status === 200 && Array.isArray(t4.data) && t4.data.length === 0,
+  testBAngelegt && t4.status === 200 && Array.isArray(t4.data) && t4.data.length === 0,
   "HTTP " + t4.status + " rows=" + (Array.isArray(t4.data) ? t4.data.length : "?"));
 
 /* --- T5: A schreibt für B ---------------------------------------------- */
@@ -142,7 +187,7 @@ pruefe("T8 revision-Spoof wirkungslos (Server zählt auf 2)",
 
 /* --- T8b: optimistische Sperre ------------------------------------------ */
 const t8b = await rest("PATCH", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}&revision=eq.1`, {
-  token: A.token, body: { value: "veraltet" }, prefer: "return=representation",
+  token: A.token, body: { value: wertA + " veraltet" }, prefer: "return=representation",
 });
 pruefe("T8b PATCH mit veralteter revision trifft 0 Zeilen (Konfliktsignal)",
   t8b.status === 200 && Array.isArray(t8b.data) && t8b.data.length === 0);
@@ -172,35 +217,72 @@ pruefe("T10 Nicht erlaubter Topf-Name wird abgelehnt (CHECK 23514)",
    angelegt haben; ein blindes INSERT endet dann korrekt mit 409 und wurde
    bislang fälschlich als fehlende Migration gemeldet. Vorhandene Profildaten
    dürfen wir weder überschreiben noch beim Cleanup löschen. */
+const profilProbeWert = JSON.stringify({
+  format: 1,
+  version: "p0",
+  erstellt: null,
+  geaendert: null,
+  einwilligung: null,
+  signale: [],
+  offen: [],
+  achsen: { wie: null, was: null, warum: null },
+  filme: [],
+  nichtDeutbar: [],
+  _rlsProbe: crypto.randomUUID(),
+});
 const t10Vorher = await rest(
   "GET",
-  `/kd_personal?key=eq.${encodeURIComponent(PROFILKEY)}&select=key&limit=1`,
+  `/kd_personal?account_id=eq.${A.id}&key=eq.${encodeURIComponent(PROFILKEY)}&select=account_id,key&limit=2`,
   { token: A.token },
 );
+const profilVorherLesbar = t10Vorher.status === 200
+  && Array.isArray(t10Vorher.data)
+  && t10Vorher.data.length <= 1;
 const profilSchonDa = t10Vorher.status === 200
   && Array.isArray(t10Vorher.data)
+  && t10Vorher.data.length === 1
+  && t10Vorher.data[0]?.account_id === A.id
   && t10Vorher.data[0]?.key === PROFILKEY;
-const t10b = profilSchonDa
-  ? t10Vorher
-  : await rest("POST", "/kd_personal", {
+let profilAnlageVersucht = false;
+let t10b = t10Vorher;
+if (profilVorherLesbar && !profilSchonDa) {
+  profilAnlageVersucht = true;
+  t10b = await rest("POST", "/kd_personal", {
     token: A.token,
-    body: { key: PROFILKEY, value: JSON.stringify({ format: 1, version: "p1", signale: [] }) },
+    body: { key: PROFILKEY, value: profilProbeWert },
+    prefer: "return=representation",
   });
-const profilVomTestAngelegt = !profilSchonDa && (t10b.status === 201 || t10b.status === 200);
+}
+const profilZeile = Array.isArray(t10b.data) ? t10b.data[0] : null;
+const profilVomTestAngelegt = !profilSchonDa
+  && (t10b.status === 201 || t10b.status === 200)
+  && profilZeile?.account_id === A.id
+  && profilZeile?.key === PROFILKEY
+  && profilZeile?.value === profilProbeWert;
+const profilABelegt = profilSchonDa || profilVomTestAngelegt;
 pruefe("T10b Profil-Topf ist in der Key-Whitelist (Migration Etappe 7 gelaufen)",
-  profilSchonDa || profilVomTestAngelegt,
+  profilABelegt,
   profilSchonDa
     ? "bereits vorhanden und für Konto A lesbar"
     : "HTTP " + t10b.status + (t10b.status === 400 ? " — MIGRATION FEHLT" : ""));
 
-const t10c = await rest("GET", "/kd_personal?key=eq." + PROFILKEY + "&select=key,value", { token: B.token });
+const t10c = await rest(
+  "GET",
+  `/kd_personal?account_id=eq.${A.id}&key=eq.${encodeURIComponent(PROFILKEY)}&select=account_id,key`,
+  { token: B.token },
+);
 pruefe("T10c Konto B sieht das Profil von Konto A NICHT",
-  t10c.status === 200 && Array.isArray(t10c.data) && t10c.data.length === 0,
+  profilABelegt && t10c.status === 200 && Array.isArray(t10c.data) && t10c.data.length === 0,
   "HTTP " + t10c.status + ", Zeilen " + (Array.isArray(t10c.data) ? t10c.data.length : "?"));
 
-const t10d = await rest("GET", "/kd_personal?key=eq." + PROFILKEY + "&select=key");
+const t10d = await rest(
+  "GET",
+  `/kd_personal?account_id=eq.${A.id}&key=eq.${encodeURIComponent(PROFILKEY)}&select=account_id,key`,
+);
 pruefe("T10d anon sieht das Profil nicht",
-  t10d.status === 401 || t10d.status === 403 || (t10d.status === 200 && Array.isArray(t10d.data) && t10d.data.length === 0),
+  profilABelegt
+  && (t10d.status === 401 || t10d.status === 403
+    || (t10d.status === 200 && Array.isArray(t10d.data) && t10d.data.length === 0)),
   "HTTP " + t10d.status);
 
 /* --- T11: Regressionswächter — Bestandspfade unversehrt ------------------ */
@@ -358,15 +440,45 @@ for (const [nr, fn, koerper] of [
 }
 
 /* --- Cleanup ------------------------------------------------------------- */
-const cA = await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}`, { token: A.token });
-const cB = await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}`, { token: B.token });
-const cProfil = profilVomTestAngelegt
-  ? await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(PROFILKEY)}`, { token: A.token })
-  : { ok: true, status: 204 };
+async function raeumeEigeneProbe(token, accountId, key, erlaubteWerte, angelegt) {
+  if (!angelegt) return true;
+  const stand = await rest(
+    "GET",
+    `/kd_personal?account_id=eq.${accountId}&key=eq.${encodeURIComponent(key)}&select=value&limit=1`,
+    { token },
+  );
+  if (stand.status !== 200 || !Array.isArray(stand.data) || stand.data.length !== 1) return false;
+  const wert = stand.data[0]?.value;
+  if (!erlaubteWerte.includes(wert)) return false;
+  const geloescht = await rest(
+    "DELETE",
+    `/kd_personal?account_id=eq.${accountId}&key=eq.${encodeURIComponent(key)}&value=eq.${encodeURIComponent(wert)}`,
+    { token, prefer: "return=representation" },
+  );
+  return geloescht.status === 200
+    && Array.isArray(geloescht.data)
+    && geloescht.data.length === 1
+    && geloescht.data[0]?.value === wert;
+}
+
+const cA = await raeumeEigeneProbe(
+  A.token, A.id, TESTKEY, [wertA, wertA + " ", wertA + " veraltet"], testAAngelegt,
+);
+const cB = await raeumeEigeneProbe(B.token, B.id, TESTKEY, [wertB], testBAngelegt);
+const cProfil = profilAnlageVersucht
+  ? await rest(
+    "DELETE",
+    `/kd_personal?account_id=eq.${A.id}&key=eq.${encodeURIComponent(PROFILKEY)}&value=eq.${encodeURIComponent(profilProbeWert)}`,
+    { token: A.token, prefer: "return=representation" },
+  )
+  : { ok: true, status: 204, data: [] };
+const profilCleanupOk = !profilAnlageVersucht
+  || (cProfil.status === 200
+    && Array.isArray(cProfil.data)
+    && (profilVomTestAngelegt ? cProfil.data.length === 1 : cProfil.data.length === 0)
+    && cProfil.data.every((zeile) => zeile?.value === profilProbeWert));
 pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt",
-  (cA.ok || cA.status === 204)
-  && (cB.ok || cB.status === 204)
-  && (cProfil.ok || cProfil.status === 204));
+  cA && cB && profilCleanupOk);
 
 console.log("");
 if (fehler.length) {
