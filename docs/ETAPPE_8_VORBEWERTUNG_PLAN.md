@@ -35,7 +35,11 @@ benötigt keine zusätzliche RLS-Fläche.
 ### Auslöser und Sichtbarkeit
 
 - Aufgabe: `film-forecast`.
-- Genau ein On-demand-Knopf an einem unbewerteten Film.
+- Genau ein On-demand-Knopf an einem unbewerteten Film sowie die direkte
+  Aktion „Anlegen & KI-Prognose erstellen“ im Formular für neue Einträge.
+- Der neue Eintrag wird zuerst als unbewertet persistiert. Schlägt das
+  Speichern fehl, beginnt kein bezahlter Aufruf; schlägt nur die KI fehl,
+  bleibt der Eintrag erhalten und bietet Wiederholen an.
 - Kein Import-Batch, keine Hintergrundberechnung, kein automatischer Retry.
 - Bei KI=aus existiert der Knopf nicht.
 - Ohne Konto ist kein bezahlter Aufruf möglich.
@@ -51,7 +55,7 @@ An den Anbieter gehen nur:
 - Titel, Originaltitel, Jahr, Typ, Genres und Tags des gewählten Films,
 - die Version des bestätigten Profils,
 - bestätigte Profilsignale in kompakter Form mit neutralen IDs,
-- bestätigte Profilachsen und bestätigte Filmrichtungen.
+- bestätigte Profilachsen.
 
 Nicht übertragen werden:
 
@@ -60,7 +64,7 @@ Nicht übertragen werden:
 - gespeicherte Begründungen,
 - die ursprünglichen persönlichen Textbelege der Profilsignale,
 - andere Filme der Mediathek,
-- echte Bewertungen anderer Titel,
+- echte Bewertungen und Titel anderer Filme,
 - Konto-ID oder Sitzungsdaten im Payload.
 
 Die Signal-IDs werden serverseitig vergeben beziehungsweise normalisiert.
@@ -80,7 +84,7 @@ Die Modellantwort besitzt genau diese fachlichen Teile:
     "warum": null
   },
   "passung": 0,
-  "kategorie_vorschlag": "wahrscheinlich_passend",
+  "kategorie_vorschlag": "sehenswert",
   "sicherheit": "niedrig",
   "begruendung": "Kurze Begründung.",
   "verwendete_signal_ids": ["S1", "S3"]
@@ -92,9 +96,9 @@ Grenzen:
 - `wie` und `was`: ganze Zahl 0 bis 5 oder `null`.
 - `warum`: im MVP immer `null`.
 - `passung`: ganze Zahl 0 bis 100.
-- `kategorie_vorschlag`: ausschließlich
-  `sicher_gut`, `wahrscheinlich_passend`, `referenz`, `zu_pruefen`
-  oder `null`.
+- `kategorie_vorschlag`: ausschließlich `immer_gut`, `kult`,
+  `kult_klassiker`, `daemlich_aber_herrlich`, `trash`, `sehenswert`,
+  `echter_schrott` oder `null`.
 - `sicherheit`: `sehr_niedrig`, `niedrig`, `mittel`, `hoch`.
 - `begruendung`: kurze, bereinigte Anzeigezeichenkette; keine Quellenbehauptung.
 - `verwendete_signal_ids`: nur IDs, die im Auftrag vorhanden waren.
@@ -111,9 +115,9 @@ sichtbar den Status „noch unbelegt“. Er wird weder als echte Kategorie
 gespeichert noch für Filter oder Ranking benutzt, solange der Nutzer ihn
 nicht im Korrekturablauf als echte Angabe übernimmt.
 
-Die vier Kategorien stammen aus der aktuellen Masterliste und
-`finder_vokabular.json`. Ältere Demo-/Legacy-Werte wie `sehenswert`,
-`kult` oder `immer_gut` sind keine erlaubten Modellausgaben.
+Die sieben Kategorien stammen aus dem zentralen Vertrag
+`src/lib/kategorien.js`; Formulare, Finder und Modellprüfung verwenden
+dieselbe Menge.
 
 ### Profil-Mindestmenge
 
@@ -210,10 +214,9 @@ dem neuen kostenpflichtigen Pfad geschlossen werden:
 - Der alte KI-Ingestion-Prompt schreibt geschätzte Werte in `bewertung` und
   verliert das Merkmal `geschaetzt` bei der Übernahme. Neue Schätzungen dürfen
   nicht länger als echte Bewertungen ankommen.
-- Finder und Etappe-8-Plan verwenden vier Kategorien, während Editor,
-  Profilwahl, Streamingfilter, Ingestion und der veröffentlichte Demo-Bestand
-  noch das ältere Kategorienvokabular verwenden. Vor Modelloutput und
-  Korrekturfluss braucht das Projekt einen einheitlichen Vertrag.
+- Finder und Formulare verwendeten unterschiedliche Kategorien. Der
+  zentrale Vertrag führt jetzt die sieben tatsächlichen Werte und verhindert,
+  dass Modelloutput, Filter und Korrekturfluss erneut auseinanderlaufen.
 
 Zusätzlich wird die vorhandene Autorenzuschreibung bis zum Bewertungseditor
 durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
@@ -267,7 +270,7 @@ durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
 - adversarialer Review gegen Vermischung von Prognose, WARUM und echter
   Bewertung.
 
-## Demo-Vertrag und noch offene Demo-Entscheidung
+## Demo- und Konto-Vertrag
 
 Klarstellung von Max am 29.07.2026: Der Demo-Modus zeigt Max’ veröffentlichte
 Einträge zusammen mit datierten Kino- und Streaming-Schnappschüssen. Es wird
@@ -282,13 +285,24 @@ Der Audit des öffentlichen Produktionsstands zeigt:
   derzeit; sichtbar ist nur `manifest`.
 - Die bestehende App wählt den Katalog allein nach Anmeldung
   (Gast = Demo-Schnappschuss, Konto = live), nicht nach der gewählten
-  Startart. Ob die Startart `demo` auch nach einer Anmeldung stets die
-  Schnappschüsse erzwingt, ist deshalb eine echte Produktentscheidung.
+  Startart.
 
-Falls die öffentliche Demo später eine eingefrorene Prognose zeigen soll,
-darf sie nur an einem bereits vorhandenen, unbewerteten und ausdrücklich
-freigegebenen Eintrag aus Max’ Bestand hängen. Das Demo-Werkzeug muss ihn
-gezielt in die Auswahl aufnehmen und Prognose sowie Signalschnappschuss über
-eine Positivliste bereinigen. Ohne diese Entscheidung bleibt die Live-
-Vorbewertung im Konto vollständig umsetzbar; nur die öffentliche
-Demo-Abnahme bleibt offen.
+Festlegung: Nach einer Anmeldung ist der aktuelle Kontostand vollständig
+maßgeblich — Kino, Streaming, Einträge, Blog, Vokabular und alle weiteren
+Kontotöpfe. Fehlende Kontotöpfe werden leer dargestellt und nicht mit
+lokalen Demo-Inhalten aufgefüllt. Ein Rückholpunkt wird vor dem Wechsel
+gesichert.
+
+Auch im anonymen Demo-Modus darf ein neuer unbewerteter Eintrag angelegt
+werden. Der echte Prognoseaufruf verlangt jedoch ein Konto; nach der
+Anmeldung und dem Kontowechsel kann er für den angelegten beziehungsweise
+erneut angelegten Eintrag ausgelöst werden. Es gibt keine eingefrorene,
+erfundene Beispiel-Prognose.
+
+## Kosten- und Quellenentscheidung
+
+Der Vorbewertungs-MVP arbeitet ohne Websuche. Domainfilter bei Anthropic
+beschränken die aufrufbaren Seiten, senken aber nicht den festen Preis je
+tatsächlich ausgeführter Suche. IMDb, Rotten Tomatoes und film.at werden
+ohne belastbare Lizenz beziehungsweise API-Erlaubnis nicht automatisiert
+abgefragt. Der spätere Filmwissens-Cache ist ein eigener Block.
