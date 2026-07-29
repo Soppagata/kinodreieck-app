@@ -31,10 +31,13 @@
      P8 der Anbieter ist erreichbar und nennt seine Modell-IDs
         -> belegt die IDs am echten Anbieter, statt sie der Doku zu glauben
      P9 Kettenbeweis: echter Modellaufruf mit striktem Antwortschema
-        -> kostet einen Bruchteil eines Cent; der einzige zahlende Aufruf hier
+        -> kostet einen Bruchteil eines Cent
      P10 derselbe Vorgang wird nicht zweimal abgerechnet (eigener Code, nicht
          faelschlich „Limit erreicht")
      P11 der Gesundheitsbericht zeigt Betriebswerte und eigenen Verbrauch
+     P12–P15 intelligente Suche (zwei zahlende, zwei lokal abgewiesene Proben)
+     P16 leerer Prognoseauftrag wird vor Reservierung abgewiesen
+     P17 genau eine echte persönliche Vorbewertung mit getrenntem WARUM
 
    Der Gesundheitsbericht aus P5 wird vollständig ausgegeben. Er enthält
    ausschließlich Namen und Formen (welche Umgebungsvariablen gesetzt sind,
@@ -333,6 +336,91 @@ pruefe(
   `HTTP ${p15.status}, grund: ${p15.daten?.grund}`,
 );
 
+/* ===========================================================================
+   P16–P17: Vorbewertung (Etappe 8)
+
+   P16 belegt die kostenlose lokale Grenze am Server. P17 ist genau EINE echte
+   Prognose mit synthetischen, aber fachlich realistischen Profilsignalen.
+   Weder andere Filme noch Bewertungen, Notizen oder Profilbelege werden
+   mitgeschickt. Die Aufgabe besitzt keine Websuche.
+   =========================================================================== */
+const FORECAST_FILM = {
+  titel: "Alien",
+  originaltitel: "Alien",
+  jahr: 1979,
+  typ: "film",
+  genres: ["Horror", "Science-Fiction"],
+  tags: ["düster", "konzentriert"],
+};
+const FORECAST_SIGNALE = [
+  { art: "genre", wert: "Horror", richtung: "zieht_an", staerke: 5, sicherheit: "hoch" },
+  { art: "ton", wert: "düster", richtung: "zieht_an", staerke: 4, sicherheit: "hoch" },
+  { art: "tempo", wert: "langsamer Aufbau", richtung: "zieht_an", staerke: 4, sicherheit: "mittel" },
+  { art: "inszenierung", wert: "atmosphärisch", richtung: "zieht_an", staerke: 5, sicherheit: "hoch" },
+  { art: "haltung", wert: "unironisch", richtung: "zieht_an", staerke: 3, sicherheit: "mittel" },
+];
+
+/* --- P16: leeres Profil kostet nichts -------------------------------------- */
+const p16 = await ruf(
+  "POST",
+  { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
+  {
+    task: "film-forecast",
+    vorgangId: crypto.randomUUID(),
+    promptVersion: "v1",
+    profilVersion: "p-test",
+    payload: {
+      film: FORECAST_FILM,
+      profil: { signale: [], achsen: { wie: 4, was: 4, warum: null } },
+    },
+  },
+);
+pruefe(
+  "Vorbewertung ohne bestätigtes Profilsignal wird vor dem Bezahlen abgewiesen",
+  p16.status === 400 && p16.daten?.grund === "forecast-profil-leer",
+  `HTTP ${p16.status}, grund: ${p16.daten?.grund}`,
+);
+
+/* --- P17: genau eine echte Vorbewertung (kostet) --------------------------- */
+const p17 = await ruf(
+  "POST",
+  { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
+  {
+    task: "film-forecast",
+    vorgangId: crypto.randomUUID(),
+    promptVersion: "v1",
+    profilVersion: "p-test",
+    payload: {
+      film: FORECAST_FILM,
+      profil: {
+        signale: FORECAST_SIGNALE,
+        achsen: { wie: 4, was: 4, warum: null },
+      },
+    },
+  },
+);
+const d17 = p17.daten?.data;
+pruefe(
+  "Echte Vorbewertung bleibt getrennt, nachvollziehbar und weist reale Kosten aus",
+  p17.status === 200 && p17.daten?.ok === true
+    && p17.daten?.modellAlias === "gross"
+    && typeof p17.daten?.modell === "string"
+    && p17.daten.modell.length > 0
+    && d17?.format === "film-prognose-v1"
+    && d17?.achsen?.warum === null
+    && Number.isInteger(d17?.passung)
+    && d17.passung >= 0 && d17.passung <= 100
+    && Array.isArray(d17?.verwendete_signale)
+    && d17.verwendete_signale.length > 0
+    && d17.verwendete_signale.every((s) =>
+      /^S[1-9][0-9]*$/.test(s?.id)
+      && Object.keys(s || {}).sort().join(",") === "art,id,richtung,wert")
+    && p17.daten?.verbrauch?.kostenUsdCent > 0,
+  p17.status === 200
+    ? `Modell ${p17.daten?.modell}, ${p17.daten?.verbrauch?.kostenUsdCent} US-Cent, Sicherheit ${d17?.sicherheit}`
+    : `HTTP ${p17.status}: ${JSON.stringify(p17.daten)?.slice(0, 300)}`,
+);
+
 /* --- Diagnose -------------------------------------------------------------- */
 if (d12) {
   console.log("\n───────── Deutung von P12 (zum Abnicken oder Korrigieren) ─────────");
@@ -344,6 +432,11 @@ if (d14) {
   console.log("\n───────── Deutung des Einschleusversuchs (P14) ─────────");
   console.log(JSON.stringify(d14, null, 2));
   console.log("────────────────────────────────────────────────────────");
+}
+if (d17) {
+  console.log("\n───────── Etappe-8-Vorbewertung (P17) ─────────");
+  console.log(JSON.stringify(d17, null, 2));
+  console.log("───────────────────────────────────────────────");
 }
 
 if (modellIds.length) {
