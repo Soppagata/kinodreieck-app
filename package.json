@@ -22,6 +22,7 @@
     "test:willkommen": "node willkommen_test.mjs",
     "test:profil": "node profil_test.mjs",
     "test:filmwissen-migration": "node filmwissen_migration_test.mjs",
+    "test:filmwissen-service": "node filmwissen_service_test.mjs",
     "test:geschmack": "node geschmack_test.mjs",
     "test:geschmackui": "node geschmackui_test.mjs",
     "test:extraktion": "node extraktion_test.mjs",
