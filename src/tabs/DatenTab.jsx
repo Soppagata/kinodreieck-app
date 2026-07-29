@@ -242,7 +242,8 @@ export function DatenTab({
       <Klappe titel="Konto & Geräte-Sync">
         <div style={kasten}>
           <h2 style={h2}>Zwischen Handy und Rechner</h2>
-          <KontoBereich onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={backupGesamt} />
+          <KontoBereich demoAktiv={demoAktiv}
+            onDatenGeaendert={onKontoDatenGeaendert} onBackupWunsch={backupGesamt} />
         </div>
       </Klappe>
 

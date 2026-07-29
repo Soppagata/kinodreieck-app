@@ -10,6 +10,7 @@ import { KontoUebernahme } from "./KontoUebernahme.jsx";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
 import { kiAn } from "../lib/kiSchalter.js";
+import { ladeKontostandNachDemo } from "../services/demoAccountWechsel.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -41,7 +42,7 @@ function Statuszeile({ status }) {
   );
 }
 
-export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
+export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = false }) {
   const [session, setSession] = useState(() => authService.getSnapshot());
   const [benutzer, setBenutzer] = useState("");
   const [passwort, setPasswort] = useState("");
@@ -70,8 +71,16 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
 
   /* Nach dem Anmelden einmalig prüfen, ob ein Bestand zu übernehmen ist. */
   useEffect(() => {
-    if (angemeldet && session.account?.id && !istUebernommen(session.account.id)) setZeigeUebernahme(true);
-  }, [angemeldet, session.account?.id]);
+    if (angemeldet && !demoAktiv && session.account?.id && !istUebernommen(session.account.id)) setZeigeUebernahme(true);
+  }, [angemeldet, demoAktiv, session.account?.id]);
+
+  async function ladeDemoKonto(accountId) {
+    await ladeKontostandNachDemo({ accountId });
+    setStatus(accountSync.status());
+    setZeigeUebernahme(false);
+    setMeldung("Aktueller Kontostand geladen. Demo-Daten wurden entfernt.");
+    onDatenGeaendert?.();
+  }
 
   async function anmelden(e) {
     e?.preventDefault?.();
@@ -79,7 +88,10 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
     try {
       const neu = await authService.signIn(benutzer, passwort);
       setPasswort("");
-      if (neu.account?.id) aktiviereKontoTreiber(neu.account.id);
+      if (neu.account?.id) {
+        aktiviereKontoTreiber(neu.account.id);
+        if (demoAktiv) await ladeDemoKonto(neu.account.id);
+      }
     } catch (err) {
       setFehler(err?.message || errorText(err));
     } finally { setLaeuft(false); }
@@ -148,6 +160,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
         Angemeldet als <strong>{session.account?.displayName || session.account?.id}</strong>
       </p>
       <Statuszeile status={status} />
+      {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
 
       {status?.zuGross?.length > 0 && (
         <div style={{ border: "1px solid " + T.gefahr, background: "rgba(217,106,90,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
@@ -182,7 +195,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
         </div>
       )}
 
-      {zeigeUebernahme && istKontoTreiberAktiv() && (
+      {zeigeUebernahme && !demoAktiv && istKontoTreiberAktiv() && (
         <div style={{ border: "1px solid " + T.rauch, borderRadius: 8, padding: "12px", marginBottom: 12 }}>
           <h4 style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 14 }}>Bestand übernehmen</h4>
           <KontoUebernahme
@@ -195,10 +208,20 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch }) {
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
         <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
-          setLaeuft(true); setMeldung(null);
-          try { await accountSync.pull(); setStatus(accountSync.status()); onDatenGeaendert?.(); setMeldung("Abgeglichen."); }
+          setLaeuft(true); setMeldung(null); setFehler(null);
+          try {
+            if (demoAktiv) await ladeDemoKonto(session.account?.id);
+            else {
+              await accountSync.pull();
+              setStatus(accountSync.status());
+              onDatenGeaendert?.();
+              setMeldung("Abgeglichen.");
+            }
+          } catch (err) {
+            setFehler(err?.message || errorText(err));
+          }
           finally { setLaeuft(false); }
-        }}>Jetzt abgleichen</button>
+        }}>{demoAktiv ? "Aktuellen Kontostand laden" : "Jetzt abgleichen"}</button>
         <button style={btnStyle(false)} disabled={laeuft || !status?.pending?.length} onClick={async () => {
           setLaeuft(true);
           try { await accountSync.flush(); setStatus(accountSync.status()); }
