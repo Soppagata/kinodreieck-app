@@ -333,21 +333,26 @@ Damit gilt für die ausgelieferten Frontends weiterhin:
   Das ist zunächst eine Auffälligkeit zur Datenfrische, noch kein belegter
   Programmfehler.
 
-Die Backend-Gegenprüfung vom 28.07.2026 hat Claudes Übergabestand präzisiert:
+Die Backend-Gegenprüfung vom 28.07.2026 und der kontrollierte Rollout vom
+29.07.2026 haben Claudes Übergabestand präzisiert:
 
 - [x] Migration `20260727210000_etappe7_profil_topf.sql` ist bereits gelaufen.
   Der echte RLS-Lauf belegt den Profil-Topf, die Trennung der Testkonten und
   die anon-Sperre; 36/36 Prüfungen grün. Nur der ursprüngliche Laufzeitpunkt
   war im Migrationsprotokoll nicht nachgetragen.
-- [ ] Die Edge Function manuell deployen; der Pages-Workflow tut das nicht.
-  `npm run test:ai:contract` erhält derzeit HTTP 501
-  `not-implemented/unbekannte-aufgabe`. Die Probe ist absichtlich
-  anbieterfrei und hat den Monatsverbrauch um exakt 0,0000 US-Cent verändert.
+- [x] Die Edge Function wurde nach 247/247 lokalen Vertragstests manuell von
+  Version 13 auf Version 14 deployt; der Pages-Workflow tut das weiterhin
+  bewusst nicht. Der vorherige Plattformstand und dessen Quellcode wurden
+  als Rollback-Punkt gesichert.
+- [x] `npm run test:ai:contract` erhält nun HTTP 400
+  `wertelisten-fehlen`. Damit ist `profile-extract` deployt und das
+  Wertelisten-Gate stoppt vor dem Anbieter. Der Budgetwächter maß davor und
+  danach 49,7615 US-Cent, also exakt 0,0000 US-Cent Mehrverbrauch.
 - [ ] Danach erst das Etappe-7-Frontend auf Staging veröffentlichen.
 
 Weitere Hosting-Auffälligkeiten:
 
-- [ ] Der lokale Branch enthält vier geprüfte Commits, die noch nicht auf
+- [ ] Der lokale Branch enthält fünf geprüfte Commits, die noch nicht auf
   GitHub liegen. Der vorhandene Personal Access Token darf
   `.github/workflows/deploy.yml` nicht aktualisieren, weil ihm die
   `workflow`-Berechtigung fehlt. Der Push muss mit entsprechend berechtigter
@@ -384,17 +389,15 @@ Weitere Hosting-Auffälligkeiten:
 Die lokalen Produkt- und Testpakete 1–5 des ursprünglichen Plans sind
 erledigt. Für die Auslieferung bleibt:
 
-1. Die GitHub-Anmeldung für Workflow-Änderungen freigeben und die vier
+1. Die GitHub-Anmeldung für Workflow-Änderungen freigeben und die fünf
    lokalen Commits auf den Feature-Branch pushen.
-2. Die Edge Function deployen; Staging und Produktion teilen diesen Backend-
-   Endpunkt, deshalb vorher den Function-Test und den Rollback-Stand sichern.
-3. `npm run test:ai:contract` wiederholen; erst HTTP 400
-   `wertelisten-fehlen` bei unverändertem Budget belegt den neuen Vertrag.
-4. Das Frontend nach Staging veröffentlichen.
-5. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
+2. Die Cloudflare-Zone auf `Browser Cache TTL = Respect Existing Headers`
+   stellen und beide festen Domains erneut prüfen.
+3. Das Frontend nach Staging veröffentlichen.
+4. Den echten kostenpflichtigen Drei-Fragen-Pfad mit einem Testkonto prüfen
    und anschließend `test:rls` gegen Staging laufen lassen.
-6. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
-7. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
+5. Erst nach dieser Staging-Abnahme den Production-Merge vorbereiten.
+6. Die getrennt aufgeführten Hosting- und Dokumentationsbefunde in eigenen
    Arbeitspaketen bereinigen.
 
 ## Arbeitsbaum-Hinweis
