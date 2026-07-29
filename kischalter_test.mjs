@@ -372,6 +372,20 @@ check("F", "setItem wirft: setzeFunktion wirft ebenfalls nicht",
     return !geworfen; });
 check("F", "ein Storage, der nur beim Schreiben scheitert, verfälscht den gelesenen Stand nicht",
   () => { const s = nurSchreibenWirft(AUS()); K.setzeGlobal(true, T0, s); return K.kiAn("suche", s) === false; });
+check("F", "scheitert das AUSSCHALTEN eines zuvor aktiven Stands, sperrt die Laufzeitsicherung trotzdem jede KI",
+  () => {
+    const s = nurSchreibenWirft(AN());
+    const r = K.setzeGlobal(false, T1, s);
+    return r.gespeichert === false && r.stand.global === false
+      && NAMEN().every((n) => K.kiAn(n, s) === false);
+  });
+check("F", "scheitert das Ausschalten einer Einzelfunktion, schließt die Laufzeitsicherung vorsichtshalber das ganze KI-Dach",
+  () => {
+    const s = nurSchreibenWirft(AN());
+    const r = K.setzeFunktion("suche", false, s);
+    return r.gespeichert === false && r.stand.global === false
+      && NAMEN().every((n) => K.kiAn(n, s) === false);
+  });
 /* Fremde Objekte statt eines Storage: ein Aufrufer könnte versehentlich
    irgendetwas übergeben. Nichts davon darf werfen oder öffnen. */
 const FREMD = [{}, [], 0, "", "text", true, false, () => {}, { getItem: 5 }, { getItem: () => ({}) }, Object.create(null)];

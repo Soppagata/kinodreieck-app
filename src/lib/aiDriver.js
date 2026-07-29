@@ -23,10 +23,12 @@
    =========================================================================== */
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
 
-/* Etwas großzügiger als die serverseitige Zeitgrenze (30 s): der Server soll
-   seinen eigenen Timeout melden dürfen, statt dass der Client vorher abbricht
-   und den Vorgang als unbekannt zurücklässt. */
-export const AI_TIMEOUT_MS = 45000;
+/* Etwas großzügiger als die serverseitige Zeitgrenze (seit Etappe 7: 120 s):
+   Der Server soll seinen eigenen Timeout melden dürfen, statt dass der Client
+   vorher abbricht und einen möglicherweise bereits bezahlten Vorgang als
+   unbekannt zurücklässt. Zugleich bleiben 15 s Reserve bis zum dokumentierten
+   Supabase-Request-Idle-Timeout von 150 s. */
+export const AI_TIMEOUT_MS = 135000;
 
 export function baueAiEndpunktUrl(projektUrl, endpointName) {
   const basis = String(projektUrl == null ? "" : projektUrl).trim().replace(/\/+$/, "");

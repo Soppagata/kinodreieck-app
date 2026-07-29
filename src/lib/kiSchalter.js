@@ -34,6 +34,27 @@ const KEY = "kd:ki";
 const KEY_VERSION = "kd:ki-version";
 export const KI_WAHL_VERSION = "e7-v1";
 
+/* Ein fehlgeschlagenes Schreiben darf besonders beim AUSSCHALTEN nicht den
+   zuvor gespeicherten An-Stand wirksam lassen. Das lässt sich bei blockiertem
+   Storage nicht dauerhaft reparieren; für die laufende App-Sitzung sperren wir
+   deshalb genau dieses Storage-Objekt vollständig. WeakSet verhindert, dass
+   Test-/Iframe-Speicher oder aufgegebene Window-Objekte festgehalten werden. */
+const laufzeitGesperrt = new WeakSet();
+function sperre(storage) {
+  if (storage && (typeof storage === "object" || typeof storage === "function")) {
+    laufzeitGesperrt.add(storage);
+  }
+}
+function entsperre(storage) {
+  if (storage && (typeof storage === "object" || typeof storage === "function")) {
+    laufzeitGesperrt.delete(storage);
+  }
+}
+function istLaufzeitGesperrt(storage) {
+  return !!storage && (typeof storage === "object" || typeof storage === "function")
+    && laufzeitGesperrt.has(storage);
+}
+
 /* Die einzelnen Funktionen. Der globale Schalter ist das Dach: steht er auf
    „aus", ist jede Funktion aus, unabhängig von ihrem eigenen Wert. */
 export const KI_FUNKTIONEN = {
@@ -103,8 +124,16 @@ export function setzeGlobal(an, jetzt, storage = globalThis.localStorage) {
     storage.setItem(KEY, JSON.stringify(stand));
     storage.setItem(KEY_VERSION, KI_WAHL_VERSION);
     gespeichert = true;
-  } catch { /* Storage blockiert: der Schalter bleibt aus — fail-closed */ }
-  return { stand, gespeichert };
+    entsperre(storage);
+  } catch {
+    /* Auch wenn erst der zweite Write scheitert, gilt die Sitzung als gesperrt:
+       ein halber KI-Vertrag darf keinen kostenpflichtigen Pfad öffnen. */
+    sperre(storage);
+  }
+  return {
+    stand: gespeichert ? stand : { ...ladeStand(storage), global: false },
+    gespeichert,
+  };
 }
 
 export function setzeFunktion(name, an, storage = globalThis.localStorage) {
@@ -114,8 +143,17 @@ export function setzeFunktion(name, an, storage = globalThis.localStorage) {
   const vorher = ladeStand(storage);
   const stand = { ...vorher, funktionen: { ...vorher.funktionen, [name]: an === true } };
   let gespeichert = false;
-  try { storage.setItem(KEY, JSON.stringify(stand)); gespeichert = true; } catch { /* s.o. */ }
-  return { stand, gespeichert };
+  try {
+    storage.setItem(KEY, JSON.stringify(stand));
+    gespeichert = true;
+    entsperre(storage);
+  } catch {
+    sperre(storage);
+  }
+  return {
+    stand: gespeichert ? stand : { ...ladeStand(storage), global: false },
+    gespeichert,
+  };
 }
 
 /* Die einzige Frage, die der Rest der App stellen muss.
@@ -128,6 +166,7 @@ export function setzeFunktion(name, an, storage = globalThis.localStorage) {
    nicht ausdrücklich abgewählt wurde. Der globale Schalter ist das Dach:
    steht er auf aus, hilft kein Einzelwert. */
 export function kiGrundsaetzlichAn(storage = globalThis.localStorage) {
+  if (istLaufzeitGesperrt(storage)) return false;
   /* K1: Die Versionsmarke wirkt hier, nicht nur im Dialog. Vorher steuerte
      sie allein, OB die Frage noch einmal erscheint -- die alte Wahl blieb
      trotzdem wirksam. Folge: Hebt ein Build `KI_WAHL_VERSION`, weil sich die

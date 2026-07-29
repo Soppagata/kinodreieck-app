@@ -121,8 +121,8 @@ check("aiTokenErlaubt gilt nur für die Projektform https://<ref>.supabase.co",
   && aiTokenErlaubt("https://projekt-a.supabase.co.angreifer.example") === false
   && aiTokenErlaubt("http://projekt-a.supabase.co") === false
   && aiTokenErlaubt("") === false);
-check("AI_TIMEOUT_MS ist gesetzt und großzügiger als die Serverzeitgrenze von 30 s",
-  Number.isFinite(AI_TIMEOUT_MS) && AI_TIMEOUT_MS > 30000);
+check("AI_TIMEOUT_MS trägt die Serverzeitgrenze von 120 s, bleibt aber unter dem 150-s-Idle-Limit",
+  Number.isFinite(AI_TIMEOUT_MS) && AI_TIMEOUT_MS > 120000 && AI_TIMEOUT_MS < 150000);
 
 /* ===========================================================================
    T1/T4/T5 — was wirklich über die Leitung geht

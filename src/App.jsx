@@ -512,12 +512,14 @@ export default function App() {
      abonniert. */
   const [kiStand, setKiStand] = useState(() => ladeKiStand());
   const setzeKiGlobal = useCallback((an) => {
-    const { stand } = setzeKiGlobalRoh(an, new Date().toISOString());
+    const { stand, gespeichert } = setzeKiGlobalRoh(an, new Date().toISOString());
     setKiStand(stand); setStartTick((x) => x + 1);
+    if (!gespeichert) setErr("Die KI-Wahl konnte auf diesem Gerät nicht gespeichert werden. KI bleibt vorsichtshalber aus.");
   }, []);
   const setzeKiFunktion = useCallback((name, an) => {
-    const { stand } = setzeKiFunktionRoh(name, an);
+    const { stand, gespeichert } = setzeKiFunktionRoh(name, an);
     setKiStand(stand); setStartTick((x) => x + 1);
+    if (!gespeichert) setErr("Die KI-Wahl konnte auf diesem Gerät nicht gespeichert werden. KI bleibt vorsichtshalber aus.");
   }, []);
   const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !catalogService.hasConnection());
   const pinAbgelaufen = (pin, jetzt = new Date()) => {
