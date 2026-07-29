@@ -1291,6 +1291,41 @@ checkB("P3 Rundlauf: JEDE Achse kommt schreibgleich zurück und boostet wirklich
         fehler.push('      "' + genannt + '" -> kein Boost: ' + JSON.stringify(t ? { gruende: t.gruende, rel: t.rel } : null));
       }
     }
+    /* Etappe 7, Mindesthoehe: `schlagseite()` verlangt seit 27.07.2026 eine
+       Spitze von mindestens 3 -- 0/0/2 galt vorher als "WARUM-lastig", also
+       als Relevanz-Aussage auf einem Wert, der das Gegenteil von Relevanz
+       ist. Die Regel sitzt in `schlagseite()` selbst und wirkt damit AUCH
+       auf dieses Ranking (+-2.5) und auf `score()` (+1.5), nicht nur auf die
+       Anzeige. Genau 12 der 216 Kombinationen aendern sich, und alle zwoelf
+       enthalten eine 0 (mx<3 zusammen mit mx-mn>=2 erzwingt mx=2, mn=0) --
+       fuer jede Bewertung ohne 0 ist die Regel beweisbar folgenlos.
+       Diese Probe deckt sie ab: Der Scope-Waechter hat zu Recht angemerkt,
+       dass die bestehenden Fixtures keine 0 enthalten und "gruen" hier
+       "ungetestet" bedeutete, nicht "unveraendert". */
+    const schwach = { wie: 0, was: 0, warum: 0 };
+    schwach[a] = 2;
+    const schwachProbe = [{ id: "schwachprobe", titel: "Schwachprobe", originaltitel: "Weak Probe", jahr: 1996, typ: "film",
+      quelle: "dvd", kategorie: "zu_pruefen", genre: ["drama"], tags: [], bewertung: schwach }];
+    if (schlagseite(schwach) !== null) {
+      fehler.push("      Mindesthoehe: " + JSON.stringify(schwach) + " gilt noch als Schlagseite " + schlagseite(schwach));
+    }
+    {
+      const { sig: sigS } = AUS({ weiche_wuensche: { achsen: [a] } }, schwachProbe);
+      const tS = F.sucheFinder(sigS, { ...KTX, master: schwachProbe })[0];
+      if (tS && tS.gruende.includes("schlagseite:" + a.toUpperCase())) {
+        fehler.push("      Mindesthoehe: " + JSON.stringify(schwach) + " bekommt trotzdem den Achsen-Boost");
+      }
+      /* Gegenkante: eine Stufe hoeher MUSS wieder boosten -- sonst wuerde die
+         Regel mehr wegnehmen als beabsichtigt. */
+      const stark = { ...schwach }; stark[a] = 3;
+      const starkProbe = [{ ...schwachProbe[0], id: "starkprobe", bewertung: stark }];
+      const { sig: sigK } = AUS({ weiche_wuensche: { achsen: [a] } }, starkProbe);
+      const tK = F.sucheFinder(sigK, { ...KTX, master: starkProbe })[0];
+      if (!tK || !tK.gruende.includes("schlagseite:" + a.toUpperCase())) {
+        fehler.push("      Mindesthoehe: " + JSON.stringify(stark) + " bekommt den Boost NICHT, obwohl die Spitze reicht");
+      }
+    }
+
     /* Zusätzlich gegen die echten Fixtures: genau die Filme mit dieser
        Schlagseite bekommen den Boost, kein anderer. */
     const { sig } = AUS({ weiche_wuensche: { achsen: [a] } });

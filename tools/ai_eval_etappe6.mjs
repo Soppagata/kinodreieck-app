@@ -6,7 +6,8 @@
    einem Durchgang lief, war das Material weg und die Korrektur haette einen
    zweiten bezahlten Lauf gekostet.
 
-     node tools/ai_eval_etappe6.mjs --holen    ruft den Anbieter, schreibt die
+     npm run test:ai:eval                      ruft den Anbieter über den
+                                               Budgetwächter und schreibt die
                                                Rohantworten in eine Datei. KOSTET.
      node tools/ai_eval_etappe6.mjs --pruefen  liest die Datei und urteilt.
                                                Kostenlos, beliebig oft.
@@ -45,7 +46,7 @@
      cd <repo> && \
      read -rs "A?Publishable Key: " && echo && read -rs "P?Passwort testa: " && echo && \
      KD_SB_URL=https://<projektref>.supabase.co KD_SB_ANON="$A" KD_TESTA_PASS="$P" \
-     node tools/ai_eval_etappe6.mjs --holen; unset A P
+     npm run test:ai:eval; unset A P
 
    Nicht Teil von `npm test`: braucht ein erreichbares Projekt, ein Testkonto
    und kostet Geld.
@@ -228,7 +229,7 @@ async function holen() {
 function neuesteRohdatei() {
   const treffer = readdirSync(".").filter((n) => /^eval_rohdaten_.*\.json$/.test(n)).sort();
   if (!treffer.length) {
-    console.error("Keine Rohdatei gefunden. Erst `node tools/ai_eval_etappe6.mjs --holen` laufen lassen.");
+    console.error("Keine Rohdatei gefunden. Erst `npm run test:ai:eval` laufen lassen.");
     process.exit(2);
   }
   return treffer[treffer.length - 1];

@@ -253,10 +253,12 @@ Bestehende, funktionierende UI muss dafür nicht flächendeckend umgebaut werden
 
 ## Etappe 2: Öffentliche App-Hülle und eigene Domain
 
-**Status: technisch umgesetzt am 25. Juli 2026; Live-Aktivierung und
-Domain-Abnahme ausstehend.** Konfiguration, Sicherheitsmodell,
-Service-Worker-Regeln, Deployment-Tore und Rückrollweg stehen in
-`ETAPPE_2_HOSTING.md`.
+**Status: technisch umgesetzt am 25. Juli 2026; Produktion und Staging sind
+live und auf den Pre-Etappe-7-Stand abgenommen (erneut geprüft am
+28. Juli 2026).** Konfiguration, Sicherheitsmodell, Service-Worker-Regeln,
+Deployment-Tore und Rückrollweg stehen in `ETAPPE_2_HOSTING.md`. Offen ist
+die gesondert dokumentierte Cloudflare-Zonenregel, die den Browsercache von
+`sw.js` entgegen `_headers` auf vier Stunden anhebt.
 
 ### Ziel
 
@@ -671,6 +673,15 @@ Bewertungen bleiben getrennte Töpfe.
 - jeder kostenpflichtige Aufruf läuft über den Etappe-5-Unterbau und ist
   protokolliert.
 
+**Alle fünf auf Staging erfüllt (29.07.2026).** Function v14, der
+anbieterfreie Remote-Vertrag, der echte budgetüberwachte Profilaufruf,
+36/36 RLS-Prüfungen und der feste Staging-Domain-Smoke sind grün. Der erste
+Profil-Livetest fand eine zu kurze 30-Sekunden-Grenze für die
+Structured-Output-Erstkompilierung; die auditierte Migration
+`20260729200000_etappe7_structured_output_timeout.sql` hebt Function und
+Parallel-Reservierung gemeinsam auf 120 Sekunden. Produktion bleibt bis zum
+bewussten Merge auf dem Pre-Etappe-7-Rollback-Stand.
+
 ---
 
 ## Etappe 8: KI-Funktionsausbau
@@ -695,8 +706,8 @@ Verhalten bei KI=aus.
 2. Filmscan gemäß Steckbrief (drei Scanarten; der Streaming-Bildschirm ist
    als Scanart verworfen).
 3. Bloganalyse gemäß Steckbrief, mit eigenem Opt-in.
-4. Restpunkte abarbeiten: Blog-Kontoweg, `programm_demo` für den Kino-Tab,
-   README- und Doku-Angleichung an den WARUM-Entscheid, kleinere Baustellen.
+4. Restpunkte abarbeiten: Blog-Kontoweg, `programm_demo` für den Kino-Tab und
+   kleinere Baustellen.
 5. Je Funktion ein eingefrorenes Demo-Beispiel (Beispiel-Blogtext und
    Beispiel-Scanfoto wählt Max).
 
@@ -953,8 +964,8 @@ Suchprototyp mit erlaubten beziehungsweise persönlichen Daten.
 
 - ~~Bedeutung von WARUM endgültig vereinheitlichen~~ — **entschieden
   26.07.2026, projektweit endgültig: WARUM = kulturelle Relevanz** (wie der
-  Ingestion-Code; persönliche Verbindung ergänzt nur). Restarbeit:
-  README- und Doku-Angleichung als Restpunkt in Etappe 8,
+  Ingestion-Code; persönliche Verbindung ergänzt nur). README und Roadmap
+  wurden am 28.07.2026 daran angeglichen,
 - Inhalt des Downloadpakets festlegen (Etappe 9a),
 - Programmdatenrechte dokumentieren,
 - Datenschutz-, Lösch- und Supportprozesse abnehmen (Etappe 10).
@@ -974,19 +985,13 @@ Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
 - normalisiertes Datenmodell für jeden heutigen Storage-Topf,
 - öffentliche Registrierung ohne Begrenzung.
 
-## Sofort nächste Arbeitspakete (Stand 27.07.2026)
+## Sofort nächste Arbeitspakete (Stand 29.07.2026)
 
-1. Etappe-6-Branch nach `staging` und `main` mergen; den Etappe-7-Branch
-   erst danach von der aktuellen `main` abzweigen.
-2. Prüfagenten aktivieren: `mkdir -p .claude/agents && cp
-   docs/pruefagenten/*-pruefer.md docs/pruefagenten/scope-waechter.md
-   .claude/agents/`.
-3. Etappe 7 bauen: Geschmacksprofil und KI-Schalter (Plan im
-   Claude-Projekt).
-4. Danach Etappe 8, beginnend mit der Vorbewertung.
-5. Nebenher: Landingpage-Schablone und Distributions-Spec,
-   Runbook-Entwürfe Betriebsminimum, Demo-Rohmaterial (Beispiel-Blogtext
-   und Beispiel-Scanfoto wählt Max).
+1. Den auf Staging abgenommenen Etappe-7-Branch reviewen und den
+   Production-Merge vorbereiten; der Pre-Etappe-7-Build bleibt Rollback.
+2. Nach dem Production-Smoke Etappe 8 mit der Vorbewertung beginnen.
+3. Parallel dürfen
+   Landingpage-Schablone, Distributions-Spec und Runbook-Entwürfe reifen.
 
 ## Definition of Done für „online“
 

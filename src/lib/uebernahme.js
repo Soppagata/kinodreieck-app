@@ -39,6 +39,7 @@ const TOPF_INFO = {
   [K.filterMediathek]: { label: "Filtermenü Mediathek", zaehle: null, einheit: "" },
   [K.filterKino]: { label: "Filtermenü Kino", zaehle: null, einheit: "" },
   "kd:filter-streaming": { label: "Filtermenü Streaming", zaehle: null, einheit: "" },
+  [K.geschmacksprofil]: { label: "Geschmacksprofil", zaehle: (o) => (Array.isArray(o?.signale) ? o.signale.length : 0), einheit: "Signale" },
 };
 
 export function topfLabel(key) { return TOPF_INFO[key]?.label || key; }

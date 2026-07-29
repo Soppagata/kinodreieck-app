@@ -11,7 +11,10 @@
      KD_SB_URL=https://<projekt>.supabase.co \
      KD_SB_ANON=<publishable-key> \
      KD_TESTA_USER=testa KD_TESTA_PASS=... \
-     node tools/ai_smoke.mjs
+     npm run test:ai:live
+
+   Autonome Agenten dürfen dieses Skript nicht direkt starten. Das npm-Skript
+   legt den Kostenwächter davor und danach.
 
    Was geprüft wird (Exit-Code != 0 bei jeder Abweichung):
      P1 CORS-Preflight ohne Anmeldung kommt durch      — sonst scheitert jeder

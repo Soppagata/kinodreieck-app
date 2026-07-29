@@ -32,8 +32,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - run: npm ci
       - run: npm test
+      - run: npm run test:function
 
   deploy-staging:
     if: >-
@@ -41,6 +45,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
     needs: test
     runs-on: ubuntu-latest
+    concurrency:
+      group: kinodreieck-cloudflare-pages-staging
+      cancel-in-progress: false
     environment:
       name: staging
       url: ${{ vars.APP_URL }}
@@ -52,6 +59,7 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
       VITE_BUILD_VERSION: ${{ github.sha }}
+      EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -80,6 +88,7 @@ jobs:
       - name: Staging-Domain prüfen
         env:
           APP_URL: ${{ vars.APP_URL }}
+          SMOKE_RETRY_BUILD_META: "1"
         run: npm run check:remote
 
   deploy-production:
@@ -89,6 +98,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.target == 'production'))
     needs: test
     runs-on: ubuntu-latest
+    concurrency:
+      group: kinodreieck-cloudflare-pages-production
+      cancel-in-progress: false
     environment:
       name: production
       url: ${{ vars.APP_URL }}
@@ -100,6 +112,7 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
       VITE_BUILD_VERSION: ${{ github.sha }}
+      EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -128,4 +141,5 @@ jobs:
       - name: Produktions-Domain prüfen
         env:
           APP_URL: ${{ vars.APP_URL }}
+          SMOKE_RETRY_BUILD_META: "1"
         run: npm run check:remote

@@ -22,7 +22,8 @@ export async function restoreBackup(backup) {
 
   // 1) Snapshot des bisherigen Standes ALLER Zieltöpfe VOR dem Überschreiben.
   const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements,
-    K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming];
+    K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming,
+    K.geschmacksprofil];   // Etappe 7 -- diese Liste ist ZUGLEICH der Rollback-Snapshot
   const vorher = {};
   for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
   // KD-008 (fail-closed): Ohne gesicherten Rollback-Snapshot NICHT überschreiben.
@@ -121,6 +122,15 @@ export async function restoreBackup(backup) {
       add(label, "übernommen", 1);
     } else add(label, "übersprungen (fehlte)", 0);
   }
+
+  /* 14) Geschmacksprofil (Etappe 7) -- Objekt-Topf. Alt-Backups haben ihn nicht;
+     dann wird uebersprungen, NICHT geleert (sonst loeschte ein aelteres Backup
+     das Profil still). */
+  if (backup.geschmacksprofil && typeof backup.geschmacksprofil === "object") {
+    await store.set(K.geschmacksprofil, JSON.stringify(backup.geschmacksprofil));
+    add("Geschmacksprofil", "übernommen",
+      Array.isArray(backup.geschmacksprofil.signale) ? backup.geschmacksprofil.signale.length : 0);
+  } else add("Geschmacksprofil", "übersprungen (fehlte)", 0);
 
   // Treiber-agnostischer Hinweis: Restore schreibt über `store`. Ist ein Sync-Treiber
   // aktiv, pusht er die Schlüssel in die Owner-Zeilen (Hintergrund-Commit). Ohne gültige

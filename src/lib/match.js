@@ -125,12 +125,63 @@ export function ensureIds(filme) {
 }
 
 /* ---------- Ranking ---------- */
+const ACHSEN = ["wie", "was", "warum"];
+
+/* Mindesthöhe der Spitze, damit eine Schlagseite behauptet wird.
+   Ohne sie kennt die Regel nur die SPANNE, nicht die HÖHE: 0/0/2 galt als
+   „WARUM-lastig — Relevanz vor Form und Stoff", obwohl WARUM=2 auf einer
+   Skala bis 5 das Gegenteil von Relevanz ist. In Max' Bestand (250 bewertete
+   Einträge, Stand 27.07.2026) trifft die Regel KEINEN Eintrag — er hat nie 0
+   vergeben. Sie greift trotzdem, weil die Willkommens-Karte ausdrücklich
+   erklärt, dass eine 0 legitim ist, und Beta-Konten sie also vergeben werden.
+
+   ACHTUNG, anders als der Gleichstand-Fix darunter: Diese Regel sitzt in
+   `schlagseite()` selbst und wirkt damit AUCH auf `score()` (+1.5),
+   `finder.js` (±2.5) und die Achsen-Filter — nicht nur auf die Anzeige.
+   Sie ändert genau 12 der 216 Wertekombinationen, und alle zwölf enthalten
+   eine 0: `mx < 3` zusammen mit `mx - mn >= 2` erzwingt mx=2, mn=0. Für jede
+   Bewertung ohne 0 ist die Regel folgenlos — beweisbar, nicht nur gemessen. */
+const SPITZE_MIN = 3;
+
 export function schlagseite(bw) {
   if (!bw) return null;
   const v = [bw.wie ?? 0, bw.was ?? 0, bw.warum ?? 0];
   const mx = Math.max(...v), mn = Math.min(...v);
   if (mx - mn < 2) return null;
-  return ["wie", "was", "warum"][v.indexOf(mx)];
+  if (mx < SPITZE_MIN) return null;
+  return ACHSEN[v.indexOf(mx)];
+}
+
+/* ALLE Achsen, die sich die Spitze teilen — die ehrliche Fassung für die
+   ANZEIGE. `schlagseite()` selbst bleibt einwertig: Sie trägt Filter, Score
+   (+1.5) und das E6-Suchranking (±2.5), und dort würde ein Gleichstand-Fix
+   Treffer verschieben. Gemessen an Max' Bestand betrifft der Gleichstand
+   10 von 250 Einträgen — u. a. Sin City, Kill Bill Vol. 1, The Fifth Element
+   und Scott Pilgrim (je 4/2/4): Mehr als die Hälfte der als „WIE-lastig"
+   geführten Filme sind in Wahrheit WIE+WARUM. `v.indexOf(mx)` entschied das
+   still zugunsten der zuerst genannten Achse.
+   Entscheidung Max 27.07.2026: Anzeige ehrlich machen, Suche unangetastet
+   lassen — damit Sin City bei „was Stylisches" auffindbar bleibt. */
+export function schlagseiten(bw) {
+  if (!schlagseite(bw)) return [];
+  const v = [bw.wie ?? 0, bw.was ?? 0, bw.warum ?? 0];
+  const mx = Math.max(...v);
+  return ACHSEN.filter((_, i) => v[i] === mx);
+}
+
+/* WARUM es keine Schlagseite gibt — die beiden Fälle meinen nicht dasselbe:
+   3/3/3 ist ausgewogen, 2/0/0 ist sichtbar schief, aber die Spitze bleibt
+   unter `SPITZE_MIN`. Beides „alle drei im Gleichgewicht" zu nennen war für
+   2/0/0 nachweislich falsch — der Glyph zeichnet daneben schief.
+   Steht hier und nicht in der Komponente, weil die Antwort an denselben zwei
+   Schwellen hängt wie `schlagseite()`; als Kopie in der Anzeige würden beide
+   auseinanderlaufen, sobald eine Schwelle sich ändert (Befund C1 der
+   Testhand: eine divergierende Spannen-Schwelle beschrieb 3/3/5 als „alle
+   drei kaum ausgeprägt"). Rückgabe `null`, wenn es sehr wohl eine gibt. */
+export function ohneSchlagseiteGrund(bw) {
+  if (schlagseite(bw)) return null;
+  const v = [bw?.wie ?? 0, bw?.was ?? 0, bw?.warum ?? 0];
+  return Math.max(...v) - Math.min(...v) < 2 ? "gleichgewicht" : "schwach";
 }
 
 export function score(film) {

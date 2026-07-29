@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
-import { norm, schlagseite, score } from "../lib/match.js";
+import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
@@ -133,7 +133,9 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           return true; // "alle" = wirklich alle (Besitz UND Wunschliste)
         });
       }
-      if (axis) list = list.filter((f) => schlagseite(f.bewertung) === axis);
+      /* schlagseiten(): siehe StreamingTab — Chip und Karte muessen dasselbe
+         sagen. Ranking bleibt einwertig. */
+      if (axis) list = list.filter((f) => schlagseiten(f.bewertung).includes(axis));
       if (genreF) list = list.filter((f) => (f.genre || []).includes(genreF));
       if (katF) list = list.filter((f) => f.kategorie === katF);
     }

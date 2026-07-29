@@ -54,6 +54,10 @@ export async function baueBackup({ pull = true } = {}) {
     filter_mediathek: await roh(K.filterMediathek), // "0"/"1"
     filter_kino: await roh(K.filterKino),           // "0"/"1"
     filter_streaming: await roh(K.filterStreaming), // "0"/"1"
+    /* Etappe 7: Geschmacksprofil. Additives Feld, Format bleibt v1.
+       Ohne diesen Eintrag waere das Profil im Gesamt-Backup UNSICHTBAR --
+       backup.js listet jeden Topf einzeln und hart auf. */
+    geschmacksprofil: await obj(K.geschmacksprofil),
     // KD-011: optionales Diagnosefeld, MUSS letzte Eigenschaft sein (die obj()-Aufrufe oben füllen
     // `warnungen` erst während der Objekt-Konstruktion). Nur bei Problemen gesetzt → rückwärtskompatibel,
     // Kernstruktur/-schlüssel unverändert. Restore ignoriert unbekannte Felder wie dieses.

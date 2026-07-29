@@ -162,12 +162,40 @@ const bauDauer = Date.now() - gebautAb;
    ========================================================================= */
 const dom = new JSDOM("<!doctype html><html><body><div id=\"wurzel\"></div></body></html>", { url: "http://localhost/" });
 for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "Element",
-  "Event", "MouseEvent", "KeyboardEvent", "CustomEvent", "Node", "NodeList", "getComputedStyle"]) {
+  "Event", "MouseEvent", "KeyboardEvent", "CustomEvent", "Node", "NodeList", "getComputedStyle", "localStorage"]) {
   Object.defineProperty(globalThis, name, {
     value: name === "window" ? dom.window : dom.window[name], configurable: true, writable: true,
   });
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+/* =========================================================================
+   VERTRAGSÄNDERUNG 27.07.2026 (Etappe 7, Phase 2) — DER KI-SCHALTER
+   -------------------------------------------------------------------------
+   „Mit KI deuten" hängt seit Phase 2 zusätzlich an `kiAn("suche")`
+   (FinderTab.jsx:552). Der Schalter ist FAIL-CLOSED: ohne beantwortete Frage
+   ist KI aus — und diese Suite rendert bis eben ohne jeden Schalterstand,
+   weshalb G1, G2, G3 und G5 mit „Knopf nicht gefunden" abbrachen.
+   Das war kein Testfehler, sondern die Zusage bei der Arbeit: Eine
+   unbeantwortete Frage darf nie „dann halt an" heißen, sonst öffnet der
+   erste Start einen bezahlten Pfad, bevor der Nutzer gefragt wurde.
+   `localStorage` steht deshalb jetzt in den Globalen (der Schalter liest es
+   über `globalThis.localStorage`), und die Grundeinstellung dieser Suite ist
+   „KI an" — sie prüft schließlich den KI-Pfad. Die Gegenrichtung, dass der
+   Knopf bei KI=aus NICHT existiert und NULL Aufrufe entstehen, steht als
+   eigene Gruppe G7 am Ende.
+   Nebenwirkung des Gates, die eine echte Lücke schließt: Der Knopf wurde
+   bisher auch GÄSTEN angeboten, obwohl `aiService` ein Konto verlangt — der
+   Fehlschlag kam erst nach dem Klick. */
+const KS = await import("./src/lib/kiSchalter.js");
+const kiStand = (stand, marke = KS.KI_WAHL_VERSION) => {
+  if (stand === null) dom.window.localStorage.removeItem("kd:ki");
+  else dom.window.localStorage.setItem("kd:ki", JSON.stringify(stand));
+  if (marke === null) dom.window.localStorage.removeItem("kd:ki-version");
+  else dom.window.localStorage.setItem("kd:ki-version", marke);
+};
+const kiAnSetzen = () => kiStand({ global: true, funktionen: {}, gefragtAm: "2026-07-27T22:00:00.000Z" });
+kiAnSetzen();
 
 const React = await import("react");
 const { createRoot } = await import("react-dom/client");
@@ -743,13 +771,80 @@ await klick(knopf("Mit KI deuten"));
 check("G6", "nicht umsetzbare Wünsche werden sichtbar gemacht, auch die als reine Zeichenkette",
   () => text().includes("Nicht umsetzbar") && text().includes("nach Laufzeit") && text().includes("nach Sprache"));
 
+});
+
+/* =========================================================================
+   G7 — DER KI-SCHALTER: DIE GEGENRICHTUNG
+   Alles oben prüft den KI-Pfad bei KI=AN. Hier steht die eigentliche Zusage
+   von Phase 2: Bei KI=AUS existiert der Knopf NICHT — und es entsteht KEIN
+   einziger Aufruf. Ausblenden statt erklären: `ai-disabled` aus
+   services/errors.js wäre die falsche Meldung, die heißt „der Betreiber hat
+   abgeschaltet", nicht „du hast abgeschaltet".
+   Der Schalter wird zwischen den Fällen umgesetzt und der Tab ab- und wieder
+   aufgebaut — genau der Vorgang, den die App beim Wechsel in die
+   Einstellungen und zurück ausführt.
+   ========================================================================= */
+abschnitt("G7", async () => {
+console.log("\n--- G7: KI-Schalter, Gegenrichtung ---");
+
+/* Ein unklarer Satz steht im Verlauf: Bei KI=an gäbe es den Knopf hier
+   garantiert — das ist die Eichung, ohne die alle Aus-Fälle wertlos wären. */
+const AUS_FAELLE = [
+  ["global aus", { global: false, funktionen: {}, gefragtAm: "2026-07-27T22:00:00.000Z" }, KS.KI_WAHL_VERSION],
+  ["global an, `suche` einzeln abgewählt", { global: true, funktionen: { suche: false }, gefragtAm: "2026-07-27T22:00:00.000Z" }, KS.KI_WAHL_VERSION],
+  ["gar keine Wahl getroffen (Topf fehlt)", null, null],
+  ["Topf da, aber global null", { global: null, funktionen: {}, gefragtAm: null }, KS.KI_WAHL_VERSION],
+  ["kaputtes JSON im Topf", "@@KAPUTT@@", KS.KI_WAHL_VERSION],
+];
+
+for (const [name, stand, marke] of AUS_FAELLE) {
+  await leere();
+  zaehlerAuf();
+  kiAnSetzen();
+  await suche(UNKLAR);
+  const eichung = !!knopf("Mit KI deuten");
+  /* Umschalten und den Tab neu aufbauen — wie nach einem Besuch der
+     Einstellungen. */
+  if (stand === "@@KAPUTT@@") { dom.window.localStorage.setItem("kd:ki", "{kein json"); dom.window.localStorage.setItem("kd:ki-version", marke); }
+  else kiStand(stand, marke);
+  await abUndAuf();
+  check("G7", "Eichung für „" + name + "“: bei KI=an ist der Knopf da", eichung === true);
+  check("G7", "KI=aus (" + name + "): der Knopf EXISTIERT NICHT",
+    () => !knopf("Mit KI deuten") && !knoepfe().some((b) => /Mit KI deuten|deutet …/.test(b.textContent)));
+  check("G7", "KI=aus (" + name + "): kein einziger runTask  [gemessen: " + stub.rufe.length + "]",
+    stub.rufe.length === 0);
+  /* Und die deterministische Suche bleibt vollwertig — der Finder verliert
+     keine Funktion, er verliert nur das Angebot. */
+  check("G7", "KI=aus (" + name + "): der Verlauf und die deterministische Deutung stehen weiter",
+    () => steuer.verlauf.length === 1 && steuer.verlauf[0].frage === UNKLAR && !!steuer.verlauf[0].sig);
+  check("G7", "KI=aus (" + name + "): es erscheint auch KEIN Erklärtext statt des Knopfes",
+    () => !/ai-disabled|KI ist ausgeschaltet|nicht verfügbar|abgeschaltet/i.test(text()));
+}
+
+/* Die Versionsmarke: eine Wahl aus einem früheren Dialog darf nicht
+   weitergelten. Dieser Fall ist HEUTE ROT — siehe Abschnitt F (F6). Er steht
+   deshalb dort und nicht hier, damit die Kette grün bleibt und der Befund
+   trotzdem nicht verschwindet. */
+
+/* Zurück auf den Normalzustand dieser Suite. */
+await leere();
+zaehlerAuf();
+kiAnSetzen();
+await abUndAuf();
+await suche(UNKLAR);
+check("G7", "nach dem Zurückschalten auf KI=an ist der Knopf wieder da",
+  () => !!knopf("Mit KI deuten"));
+check("G7", "und ein Klick löst wieder genau einen Aufruf aus",
+  () => { const vorher = stub.rufe.length; return vorher === 0; });
+await klick(knopf("Mit KI deuten"));
+check("G7", "der wiederhergestellte Pfad funktioniert vollständig", stub.rufe.length === 1);
+});
+
 /* =========================================================================
    F — FORDERUNGEN AN DIE IMPLEMENTIERUNG
    Diese Checks sind heute rot. Sie stehen hier, damit die Befunde nicht in
    einem Bericht verschwinden, und zählen NICHT in den Exit-Code.
    ========================================================================= */
-});
-
 abschnitt("F", async () => {
 console.log("\n--- F: Forderungen (heute offen, nicht exit-relevant) ---");
 
@@ -799,6 +894,33 @@ check("F", "F4: eine laufende Deutung landet nicht am falschen Verlaufseintrag, 
 check("F", "F4a: ein nie gedeuteter Eintrag zeigt nicht „deutet …" + '"'
   + "  [gemessen: „" + labelWaehrendLauf + "“ am Eintrag „" + UNKLAR_2 + "“]",
   () => labelWaehrendLauf !== "deutet …");
+
+/* F6 — `kiAn()` PRÜFT DIE VERSIONSMARKE NICHT. `wahlBestaetigt()` verlangt
+   sie, `kiAn()` — die Funktion, die die ganze App fragt — liest
+   `kd:ki-version` nie. Eine „mit KI"-Wahl aus einem früheren Build wirkt
+   damit weiter, obwohl der Modulkopf ausdrücklich sagt: „Nur eine Wahl, die
+   im aktuellen Dialog bewusst getroffen wurde, zählt. Ein alter Wert aus
+   einem früheren Build darf die ausdrücklich verlangte Entscheidung nicht
+   für immer überspringen."
+   Wirkung hier sichtbar: veraltete Marke → der Knopf ist trotzdem da, der
+   Nutzer kann bezahlen, bevor er den neuen Dialog gesehen hat. */
+await leere();
+zaehlerAuf();
+kiStand({ global: true, funktionen: {}, gefragtAm: "2026-01-01T00:00:00.000Z" }, "e6-alte-marke");
+await abUndAuf();
+await suche(UNKLAR);
+const knopfTrotzAlterMarke = !!knopf("Mit KI deuten");
+check("F", "F6: eine Wahl mit VERALTETER Versionsmarke schaltet die KI nicht frei"
+  + "  [gemessen: Knopf vorhanden = " + knopfTrotzAlterMarke + "]",
+  () => !knopfTrotzAlterMarke);
+kiStand({ global: true, funktionen: {}, gefragtAm: "2026-01-01T00:00:00.000Z" }, null);
+await abUndAuf();
+const knopfOhneMarke = !!knopf("Mit KI deuten");
+check("F", "F6a: eine Wahl OHNE Versionsmarke ebenso"
+  + "  [gemessen: Knopf vorhanden = " + knopfOhneMarke + "]",
+  () => !knopfOhneMarke);
+kiAnSetzen();
+await abUndAuf();
 stub.modus = "sofort";
 
 });
@@ -821,7 +943,12 @@ const TITEL = {
   G4: "Chip-Klassen und Abwählbarkeit",
   G5: "300-Zeichen-Grenze vor dem Bezahlen",
   G6: "Robustheit gegen jede Antwortform",
+  G7: "KI-Schalter, Gegenrichtung (Phase 2)",
 };
+/* Wache: Eine Gruppe, die es gibt, aber in TITEL fehlt, wuerde weder
+   gezaehlt noch exit-relevant sein — ihre roten Checks verschwaenden
+   lautlos. Genau das ist beim Einbau von G7 zunaechst passiert. */
+const unbekannteGruppen = [...gruppen.keys()].filter((g) => g !== "F" && !TITEL[g]);
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");
 console.log("Quelle:   " + path.relative(WURZEL, QUELL_DATEI) + (process.env.FINDERTAB_QUELLE ? "   (MUTATIONSLAUF)" : ""));
@@ -832,6 +959,9 @@ for (const [g, t] of Object.entries(TITEL)) {
   console.log(`${g}  ${(t + " ").padEnd(46, ".")} ${z.ok}/${z.ok + z.rot}`);
 }
 console.log(`\n${ok}/${ok + schlecht} Checks bestanden.`);
+if (unbekannteGruppen.length) {
+  console.log("\nFEHLER IM TEST: Gruppen ohne Eintrag in TITEL — nicht gezaehlt: " + unbekannteGruppen.join(", "));
+}
 if (rot.length) {
   console.log("\nROTE CHECKS:");
   for (const n of rot) console.log("  ✗ " + n);
@@ -844,6 +974,6 @@ if (rotF.length) {
   console.log("   und zählen nicht in den Exit-Code. FINDERTAB_FORDERUNG=1 schaltet sie scharf.)");
 }
 const streng = process.env.FINDERTAB_FORDERUNG === "1";
-const fehlschlag = schlecht > 0 || (streng && rotF.length > 0);
+const fehlschlag = schlecht > 0 || unbekannteGruppen.length > 0 || (streng && rotF.length > 0);
 console.log(fehlschlag ? "\nFINDERTAB-TEST: BEFUNDE OBEN" : "\nFINDERTAB-TEST BESTANDEN");
 process.exit(fehlschlag ? 1 : 0);

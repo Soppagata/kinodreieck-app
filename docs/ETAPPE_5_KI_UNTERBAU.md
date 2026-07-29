@@ -325,11 +325,14 @@ cd ~/Documents/GitHub/kinodreieck-app && \
 KD_SB_URL=https://bscjgwcntapobyxsiyce.supabase.co \
 KD_SB_ANON=<publishable-key> \
 KD_TESTA_PASS=<testkonto> \
-node tools/ai_smoke.mjs
+npm run test:ai:live
 ```
 
-Elf Proben gegen die echte Function. **P9 kostet echtes Geld** (ein Bruchteil
-eines Cents). Exit-Code ungleich 0 bei jeder Abweichung.
+Proben gegen die echte Function. P9, P12 und P14 kosten echtes Geld. Der
+Budgetwächter liest davor und danach den serverseitig gebuchten Istverbrauch
+des Testkontos. `AUTONOMIE_STOPP` beziehungsweise Exit-Code 75 verbietet
+weitere autonome Live-Tests, bis Max sie ausdrücklich wieder freigibt.
+Exit-Code ungleich 0 bei jeder Abweichung.
 
 ## Anbieterbedingungen (Kurzfassung)
 
@@ -346,7 +349,9 @@ Original lang ist und die vier Fragen zählen, die dieses Projekt betreffen:
   verpflichtete Vertreter.
 - **Aufbewahrungsdauer beim Anbieter:** in den Commercial Terms **nicht
   geregelt**; das Dokument verweist dafür auf die Data Processing Addendum.
-  Vor Etappe 7 (Datenschutzerklärung) nachzuziehen.
+  Vor **Etappe 10** (Datenschutzerklärung) nachzuziehen — die Formalien sind
+  beim Roadmap-Umbau vom 26.07.2026 ans Ende gewandert; Etappe 7 ist seither
+  das Geschmacksprofil.
 
 Für die Datenschutzerklärung relevant: Es geht ein Aufgabentext an einen
 US-Anbieter. In diesem Stand enthält er keine persönlichen Daten — `health`

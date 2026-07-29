@@ -7,7 +7,8 @@ import {
 import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import { istKlaatu } from "../lib/momentEggs.js"; // B4-Egg
-import { schlagseite } from "../lib/match.js";
+import { schlagseiten } from "../lib/match.js";
+import { kiAn } from "../lib/kiSchalter.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -203,11 +204,17 @@ function TrefferZeile({ t, onSpringeZuFilm, auswahl }) {
 
 /* Volle Meta-Karte für EINEN Film (Phase 4a) — "gesamte Metainfos samt Bewertung". */
 function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswahl }) {
-  const ss = schlagseite(f.bewertung);
+  /* Anzeige über schlagseiten(): geteilte Spitze nennt beide Achsen. */
+  const ssListe = schlagseiten(f.bewertung);
+  const ss = ssListe[0] || null;
   /* Joyn-Fix: nur Dienste der Abo-Auswahl zeigen; ist danach nichts übrig,
      entfällt der ganze STREAMING-Block (kein leeres Label). */
   const streamingDienste = h && h.streaming ? sichtbareDienste(h.streaming.dienste, auswahl) : [];
-  const ssCol = ss ? { wie: T.wie, was: T.was, warum: T.warum }[ss] : T.rauch;
+  /* Farbe nur bei EINDEUTIGER Spitze. T.wie/was/warum sind in dieser App
+     Achsensprache (AxisChips, Glyph, Regler-accentColor) — ein blauer Chip
+     SAGT WIE. Bei geteilter Spitze haette die Bevorzugung, die aus dem Text
+     entfernt wurde, still in der Farbe weitergelebt. */
+  const ssCol = ssListe.length === 1 ? { wie: T.wie, was: T.was, warum: T.warum }[ssListe[0]] : T.wolfram;
   const ot = (f.originaltitel && f.originaltitel !== f.titel)
     ? f.originaltitel
     : (h && h.kino && h.kino.ot && h.kino.ot !== f.titel ? h.kino.ot : null);
@@ -231,7 +238,7 @@ function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswa
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
         <AxisChips bw={f.bewertung} />
         <KategorieTag k={f.kategorie} />
-        {ss && <MetaChip color={ssCol}>{ss.toUpperCase()}-lastig</MetaChip>}
+        {ss && <MetaChip color={ssCol}>{ssListe.map((a) => a.toUpperCase()).join("/")}-lastig</MetaChip>}
         {/* Must-Watch kommt aus der LISTE (kd:mustwatch), nicht mehr aus dem Flag. */}
         {mustwatchIds && mustwatchIds.has(f.id) && <MetaChip color={T.warum}>★ Must-Watch</MetaChip>}
       </div>
@@ -534,8 +541,15 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
               <div style={{ marginBottom: 8 }}>
                 <SignalChips sig={e.sig} versteckeTitel={titelSig.length > 1} stumm={hatErgebnisse} onToggle={(feld, wert) => toggleSignal(i, feld, wert)} />
                 {/* Angebot statt Automatik: erscheint nur bei unklarer Anfrage und
-                    nur, solange noch keine Deutung vorliegt. */}
-                {!e.ki && istUnklar(e.sig) && (
+                    nur, solange noch keine Deutung vorliegt.
+                    Etappe 7: zusaetzlich hinter dem KI-Schalter. Bei KI=aus
+                    existiert der Knopf nicht -- kein Fehlertext nach dem Klick,
+                    keine Erklaerung. Die deterministische Suche ist an dieser
+                    Stelle laengst gelaufen; der Finder bleibt vollwertig.
+                    Nebenwirkung, die eine echte Luecke schliesst: Der Knopf
+                    wurde bisher auch Gaesten angeboten, obwohl `aiService` ein
+                    Konto verlangt -- der Fehlschlag kam erst NACH dem Klick. */}
+                {kiAn("suche") && !e.ki && istUnklar(e.sig) && (
                   <div style={{ marginTop: 6 }}>
                     <button style={btnStyle(false)} disabled={kiLaeuft !== null}
                       onClick={() => deuteMitKi(i)}

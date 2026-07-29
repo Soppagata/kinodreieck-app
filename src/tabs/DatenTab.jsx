@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
@@ -8,6 +8,13 @@ import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
+import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+import { bekannteWerte } from "../lib/finder.js";
+/* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
+   ReferenceError. Die App hat keine Fehlergrenze — React raeumt den Baum ab,
+   der Nutzer sieht eine weisse Seite. Durch alle Gates gerutscht, weil kein
+   Test `DatenTab` je gerendert hat; `geschmackui_test.mjs` tut es jetzt. */
+import { KI_FUNKTIONEN } from "../lib/kiSchalter.js";
 import { ERROR_CODES } from "../services/errors.js";
 
 /* ================= EINSTELLUNGEN =================
@@ -22,6 +29,15 @@ export function DatenTab({
   programmInfo = null,
   ungesichertMaster = false, ungesichertArtikel = false,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
+  /* Etappe 7: Der KI-Schalter liegt NICHT in `einstellungen` (das ist ein
+     Sync-Topf), sondern in `kd:ki`. Stand und Setter kommen deshalb als
+     eigene Props von App. */
+  kiStand = { global: null, funktionen: {} }, onKiGlobal, onKiFunktion,
+  /* Der persönliche KI-Pfad verlangt ein bereites Konto mit der Fähigkeit
+     `personalAi`. App besitzt den reaktiven Sitzungssnapshot und reicht nur
+     diese fachliche Aussage weiter — DatenTab soll weder Auth-Zustände
+     nachbauen noch erst nach dem Ausfüllen des Freitextformulars scheitern. */
+  kiProfilFaehig = false,
   vokabular = [], saveVokabular,
   streamingBekannt, streamingEntdecken, auswahl, toggleQuelle,
   datenGesperrt = false,
@@ -52,6 +68,34 @@ export function DatenTab({
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
   const [eggOffen, setEggOffen] = useState(false);
   const [ueberOffen, setUeberOffen] = useState(false);
+
+  /* Dieselbe Wertelisten-Logik wie die intelligente Suche. `bekannteWerte`
+     bewahrt die echte Anzeigeschreibweise und entdoppelt robust; eine zweite
+     Genre-Normalisierung hier würde früher oder später abweichen.
+
+     Die Masterliste ist die verlässlichste Quelle. Programm und Streaming
+     ergänzen sie, weil ein neues/noch leeres Konto sonst trotz geladenem
+     Katalog keine KI-Extraktion starten könnte. Die Quellen führen das Feld
+     historisch unter `genre`, `genres` oder `g`, deshalb wird diese kleine
+     Formgrenze hier einmal tolerant gelesen. */
+  const bekannteGenres = useMemo(() => {
+    const zusaetzlich = [];
+    const nimm = (quelle) => {
+      const filme = Array.isArray(quelle) ? quelle
+        : Array.isArray(quelle?.titel) ? quelle.titel
+        : Array.isArray(quelle?.filme) ? quelle.filme
+        : [];
+      for (const film of filme) {
+        const genres = film?.genre ?? film?.genres ?? film?.g;
+        if (Array.isArray(genres)) zusaetzlich.push(...genres);
+        else if (typeof genres === "string") zusaetzlich.push(genres);
+      }
+    };
+    nimm(programm);
+    nimm(streamingBekannt);
+    nimm(streamingEntdecken);
+    return bekannteWerte(Array.isArray(master) ? master : [], zusaetzlich).genres;
+  }, [master, programm, streamingBekannt, streamingEntdecken]);
 
   /* Im hellen Grundmodus öffnet der unklare Knopf Showa, im dunklen NERV.
      Bei aktivem Spezialmodus bleibt sein Ziel stabil, damit derselbe Knopf ihn
@@ -126,6 +170,75 @@ export function DatenTab({
       </Klappe>
 
       {/* 2b — Konto & Geräte-Sync (Etappe 3) */}
+      {/* KI-Funktionen (Etappe 7). Steht VOR dem Konto-Block, weil die
+          Grundentscheidung ohne Konto getroffen wird und den Rest praegt.
+          Der Schalter ist geraetelokal (kd:ki) -- deshalb der Hinweis, dass
+          er nicht mitreist. */}
+      <Klappe titel="KI-Funktionen">
+        <div style={kasten}>
+          <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
+            Ohne KI funktioniert alles — Suche, Sammlung, Bewertungen — vollständig
+            und kostenlos auf diesem Gerät. Mit KI kommen Deutungs- und
+            Profil-Funktionen dazu.
+          </p>
+          <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+            <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>KI insgesamt</span>
+            <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
+              value={kiStand.global === true ? "an" : "aus"}
+              onChange={(id) => onKiGlobal?.(id === "an")}
+              options={[{ id: "an", label: "Mit KI" }, { id: "aus", label: "Ohne KI" }]} />
+          </div>
+
+          {/* Einzelschalter nur bei offenem Dach: Sie unter einem
+              geschlossenen Dach anzuboten haette suggeriert, sie wuerden
+              etwas bewirken. */}
+          {kiStand.global === true && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 4, borderLeft: "2px solid " + T.saalHoch }}>
+              {Object.entries(KI_FUNKTIONEN).map(([id, f]) => (
+                <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <SegmentedControl style={{ marginBottom: 0, minWidth: 120 }}
+                    value={kiStand.funktionen?.[id] === false ? "aus" : "an"}
+                    onChange={(w) => onKiFunktion?.(id, w === "an")}
+                    options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
+                  <div style={{ flex: "1 1 220px" }}>
+                    <div style={{ ...mono, color: T.leinwand }}>{f.label}</div>
+                    <div style={{ ...mono, opacity: 0.75 }}>{f.beschreibung}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p style={{ ...mono, opacity: 0.75, margin: "12px 0 0", lineHeight: 1.6 }}>
+            Diese Wahl gilt nur für dieses Gerät und reist nicht mit dem Konto mit —
+            auf einem zweiten Gerät entscheidest du erneut. KI-Funktionen brauchen
+            außerdem ein Konto.
+          </p>
+        </div>
+      </Klappe>
+
+      {/* Geschmacksprofil (Etappe 7, Phase 2c). Steht NACH dem KI-Block,
+          weil der Schalter die Rahmenentscheidung ist — aber ausdrücklich
+          NICHT unter ihm: Der deterministische Weg ist vollwertig und muss
+          auch bei KI=aus erreichbar sein. Ein Profil-Block, der sich mit
+          dem KI-Schalter versteckt, hätte den Abnahme-Anker der Etappe
+          („ein KI-loser Start ist vollwertig") in der Oberfläche
+          zurückgenommen. */}
+      <Klappe titel="Geschmacksprofil">
+        <div style={kasten}>
+          <GeschmackBereich
+            bekannteTitel={Array.isArray(master) ? master : []}
+            bekannteGenres={bekannteGenres}
+            kiAktiv={kiProfilFaehig
+              && kiStand.global === true
+              && kiStand.funktionen?.profil !== false
+              && bekannteGenres.length > 0}
+            kiGeraeteweiseAus={kiStand.global !== true}
+            onFehler={(e) => setErr?.(e)}
+          />
+        </div>
+      </Klappe>
+
       <Klappe titel="Konto & Geräte-Sync">
         <div style={kasten}>
           <h2 style={h2}>Zwischen Handy und Rechner</h2>

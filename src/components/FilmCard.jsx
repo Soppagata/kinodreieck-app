@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
-import { schlagseite, score } from "../lib/match.js";
+import { schlagseiten, score } from "../lib/match.js";
 import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
@@ -34,7 +34,10 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
   const dreieck = hatDreieck(film.typ);
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
   const unbewertet = dreieck && film.bewertung == null;
-  const ss = dreieck && !unbewertet ? schlagseite(film.bewertung) : null;
+  /* Anzeige über schlagseiten(): teilen sich zwei Achsen die Spitze, werden
+     beide genannt (4/2/4 → „WIE/WARUM"). Filter und Ranking bleiben einwertig. */
+  const ssListe = dreieck && !unbewertet ? schlagseiten(film.bewertung) : [];
+  const ss = ssListe.length ? ssListe.map((a) => a.toUpperCase()).join("/") : null;
   /* Schneller Bewerten-Einstieg: Karte aufklappen + direkt ins EditPanel. */
   const jetztBewerten = (e) => {
     e.stopPropagation();
@@ -82,7 +85,7 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
               ) : (
                 <>
                   <AxisChips bw={film.bewertung} />
-                  {ss && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>▸ Schlagseite: {ss.toUpperCase()}</span>}
+                  {ss && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>▸ Schlagseite: {ss}-lastig</span>}
                   <KategorieTag k={film.kategorie} />
                 </>
               )}

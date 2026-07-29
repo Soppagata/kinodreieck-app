@@ -1,5 +1,12 @@
+import {
+  buildMetaFehler,
+  serviceWorkerRevalidiert,
+} from "./deployment_contract.mjs";
+
 const basis = String(process.env.APP_URL || process.argv[2] || "").replace(/\/+$/, "");
 if (!basis.startsWith("https://")) throw new Error("APP_URL muss eine HTTPS-URL sein.");
+const erwarteteVersion = String(process.env.EXPECTED_BUILD_VERSION || "").trim();
+const domainRetry = process.env.SMOKE_RETRY_BUILD_META === "1";
 
 async function hole(pfad, erwarteterTyp) {
   const url = basis + pfad;
@@ -19,8 +26,36 @@ if (start.headers.get("x-content-type-options") !== "nosniff") throw new Error("
 if (start.headers.get("x-frame-options") !== "DENY") throw new Error("X-Frame-Options fehlt.");
 
 await hole("/manifest.webmanifest", "application/manifest+json");
-await hole("/sw.js", "javascript");
+const sw = await hole("/sw.js", "javascript");
+const swCache = (sw.headers.get("cache-control") || "").toLowerCase();
+const swSharedCache = [
+  sw.headers.get("cloudflare-cdn-cache-control"),
+  sw.headers.get("cdn-cache-control"),
+].filter(Boolean);
+if (!serviceWorkerRevalidiert(swCache, swSharedCache)) {
+  throw new Error(
+    `/sw.js: Browsercache ist nicht kurzlebig (${swCache || "Header fehlt"}). `
+    + "Cloudflare muss die _headers-Regel respektieren; sonst bleiben PWA-Updates bis zum TTL-Ablauf liegen.");
+}
 await hole("/download/", "text/html");
+
+const metaVersuche = domainRetry ? 6 : 1;
+let metaFehler = "nicht geprüft";
+for (let versuch = 1; versuch <= metaVersuche; versuch++) {
+  try {
+    const parameter = new URLSearchParams();
+    if (erwarteteVersion) parameter.set("expected", erwarteteVersion);
+    parameter.set("attempt", String(versuch));
+    const metaAntwort = await hole(`/build-meta.json?${parameter}`, "application/json");
+    const meta = await metaAntwort.json().catch(() => null);
+    metaFehler = buildMetaFehler(meta, erwarteteVersion);
+  } catch (fehler) {
+    metaFehler = fehler instanceof Error ? fehler.message : String(fehler);
+  }
+  if (!metaFehler) break;
+  if (versuch < metaVersuche) await new Promise((resolve) => setTimeout(resolve, 5000));
+}
+if (metaFehler) throw new Error(`/build-meta.json: ${metaFehler}.`);
 
 /* --- Katalog-Sichtprüfung als anon ---------------------------------------
    Die Prüfungen oben belegen nur, dass Dateien und Header ausgeliefert werden —

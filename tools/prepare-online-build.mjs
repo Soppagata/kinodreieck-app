@@ -15,6 +15,7 @@ await copyFile(quelle, ziel);
 
 const indexPfad = join("dist", "index.html");
 const swPfad = join("dist", "sw.js");
+const metaPfad = join("dist", "build-meta.json");
 const [indexHtml, sw] = await Promise.all([
   readFile(indexPfad, "utf8"),
   readFile(swPfad, "utf8"),
@@ -32,4 +33,15 @@ if (swMitAssets === sw || !assets.some((pfad) => pfad.endsWith(".js"))
 }
 await writeFile(swPfad, swMitAssets);
 
-console.log(`Online-Paket vorbereitet: ${ziel} (${info.size} Bytes), ${precache.length} Shell-Dateien.`);
+/* Der feste Domain-Smoke braucht einen vom HTML unabhängigen Beleg, welcher
+   Commit dort wirklich liegt. Ein Query-Parameter im Abruf umgeht dabei
+   alte Browser-/Edge-Einträge, ohne den Dateinamen pro Build zu verändern. */
+const buildVersion = String(process.env.VITE_BUILD_VERSION || "local").trim();
+const appEnvironment = String(process.env.VITE_APP_ENV || "local").trim();
+await writeFile(metaPfad, JSON.stringify({
+  format: 1,
+  buildVersion,
+  appEnvironment,
+}) + "\n");
+
+console.log(`Online-Paket vorbereitet: ${ziel} (${info.size} Bytes), ${precache.length} Shell-Dateien, Build ${buildVersion}.`);

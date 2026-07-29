@@ -280,7 +280,8 @@ Migration nötig" geschrieben und lag falsch — siehe unten.
 3. Nur bei Änderungen am Endpunkt: `npx supabase functions deploy ai-task`.
    Es wird **nur** `index.ts` hochgeladen — die Function ist absichtlich eine
    einzige Datei.
-4. `node tools/ai_smoke.mjs` gegen die deployte Function. P13–P15 kosten
+4. `npm run test:ai:live` gegen die deployte Function. Der Budgetwächter
+   prüft den gebuchten Istverbrauch davor und danach. P12 und P14 kosten
    zusammen rund einen Cent; die Ausgabe zeigt beide Deutungen zum Nachlesen.
 4b. Bei Änderungen an Schema oder Systemprompt zusätzlich den Eval-Lauf. Er ist
    **zweistufig**, und das ist die Lehre aus dem ersten Lauf: `--holen` ruft den

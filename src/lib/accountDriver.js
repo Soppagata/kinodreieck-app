@@ -34,6 +34,7 @@ export const ACCOUNT_SYNC_KEYS = [
   "kd:einstellungen", "kd:entdecken-status", "kd:autor-name", "kd:streaming-dienste",
   "kd:mustwatch", "kd:achievements",
   "kd:zeitgrenze", "kd:filter-mediathek", "kd:filter-kino", "kd:filter-streaming",
+  "kd:geschmacksprofil",
 ];
 const SYNC_SET = new Set(ACCOUNT_SYNC_KEYS);
 
