@@ -6,8 +6,8 @@ Branch: `feat/etappe-8-vorbewertung`
 
 Produktvertrag: `docs/STECKBRIEF_VORBEWERTUNG.md`
 
-Status: technisch implementiert; Backend und echte Anbieterprobe abgenommen,
-Staging-Abnahme läuft.
+Status: technisch implementiert; Backend, echte Anbieterprobe und
+Staging-Deploy abgenommen. Manuelle Konto-Oberflächenabnahme offen.
 
 ## Ausgangslage zum Baubeginn
 
@@ -303,9 +303,13 @@ durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
 - Die technische P17-Probe verwendet ausschließlich eine flüchtige
   Testanforderung. Sie erzeugt keinen erfundenen Demofilm und schreibt keinen
   Filmeintrag in Demo- oder Kontodaten.
-- Staging wird aus dem Feature-Branch über den vorhandenen
-  `workflow_dispatch`-Pfad gebaut. Die manuelle Oberflächenabnahme bleibt der
-  letzte Schritt vor Merge beziehungsweise Produktionsfreigabe.
+- Staging-Workflow `30484827013` aus Commit `8662fe3`: vollständige CI,
+  Function-Suite, Cloudflare-Deploy und beide Remote-Smokechecks erfolgreich;
+  Produktionsjob erwartungsgemäß übersprungen. Die Staging-App lädt, der
+  Neuer-Eintrag-Dialog wurde ohne Speicherung geprüft und wieder geschlossen.
+  Die bewusste Oberflächenabnahme mit Max' Konto und einem von Max gewählten
+  unbewerteten Titel bleibt der letzte Schritt vor Merge beziehungsweise
+  Produktionsfreigabe.
 
 ## Demo- und Konto-Vertrag
 
