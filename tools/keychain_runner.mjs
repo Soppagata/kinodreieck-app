@@ -83,6 +83,16 @@ export const MODI = Object.freeze({
       SKRIPT("profile_extract_contract.mjs"),
     ],
   },
+  "profile-live": {
+    accounts: [KEYCHAIN_ACCOUNTS.testa],
+    argv: [
+      SKRIPT("ai_budget_guard.mjs"),
+      "--",
+      process.execPath,
+      SKRIPT("profile_extract_live.mjs"),
+    ],
+    bezahlt: true,
+  },
   "ai-eval": {
     accounts: [KEYCHAIN_ACCOUNTS.testa],
     argv: [
@@ -311,13 +321,15 @@ export async function main(
 
   const modus = argv[0];
   const rest = argv.slice(1);
-  const confirmPaid = modus === "ai-eval"
+  const bezahlt = MODI[modus]?.bezahlt === true;
+  const confirmPaid = bezahlt
     && rest.length === 1
     && rest[0] === "--confirm-paid";
-  if (!MODI[modus] || (rest.length > 0 && !confirmPaid)) {
+  if (!MODI[modus] || (bezahlt && !confirmPaid) || (!bezahlt && rest.length > 0)) {
     fehlerAusgabe(
       "Erlaubt: keychain-check | budget-check | ai-live | "
-      + "profile-contract | ai-eval --confirm-paid | rls",
+      + "profile-contract | profile-live --confirm-paid | "
+      + "ai-eval --confirm-paid | rls",
     );
     return EXIT_KONFIG;
   }

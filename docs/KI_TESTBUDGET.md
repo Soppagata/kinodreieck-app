@@ -12,6 +12,7 @@ Autonome Agenten dürfen solche Läufe nur noch über den Budgetwächter starten
 
 ```bash
 npm run test:ai:live
+npm run test:ai:profile-live
 npm run test:ai:eval
 ```
 
@@ -65,6 +66,15 @@ davor und danach:
 
 ```bash
 npm run test:ai:contract
+```
+
+Die kostenpflichtige Etappe-7-Abnahme sendet genau einen Satz ausdrücklich
+synthetischer Antworten an `profile-extract`. Sie speichert weder Antworten
+noch Profilvorschlag und darf wie alle bezahlten Läufe nur hinter dem
+Budgetwächter starten:
+
+```bash
+npm run test:ai:profile-live
 ```
 
 Ob beide begrenzten Testkonten im Schlüsselbund vorhanden sind, prüft ohne

@@ -30,6 +30,7 @@
     "test:function": "deno test --allow-env --allow-net --allow-read --node-modules-dir=auto ai_task_test.ts",
     "test:ai:live": "node tools/keychain_runner.mjs ai-live",
     "test:ai:contract": "node tools/keychain_runner.mjs profile-contract",
+    "test:ai:profile-live": "node tools/keychain_runner.mjs profile-live --confirm-paid",
     "test:ai:eval": "node tools/keychain_runner.mjs ai-eval --confirm-paid",
     "test": "node architekturgrenzen_test.mjs && node authservice_test.mjs && node kischalter_test.mjs && node profil_test.mjs && node geschmack_test.mjs && node budget_agent_test.mjs && node keychain_runner_test.mjs && node accountdriver_test.mjs && node uebernahme_test.mjs && node gitdriver_test.mjs && node supabasedriver_test.mjs && node katalog_test.mjs && node ai_test.mjs && FINDER_SOLL=1 node finder_test.mjs && node findertab_test.mjs && node willkommen_test.mjs && node geschmackui_test.mjs && node extraktion_test.mjs && node restore_test.mjs && node mustwatch_test.mjs && node blog_test.mjs && node eggs_test.mjs && node staffeln_test.mjs && node staffel_pipeline_test.mjs && node serviceworker_test.mjs && node build-single.mjs && node strukturtest.mjs dist-single/Kinodreieck.html && node echtdatei_test.mjs dist-single/Kinodreieck.html && node personalmodus_test.mjs dist-single/Kinodreieck.html && node betamodus_test.mjs && vite build && node tools/prepare-online-build.mjs && node pages_test.mjs"
   },

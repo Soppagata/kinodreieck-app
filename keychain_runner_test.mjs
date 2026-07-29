@@ -154,6 +154,28 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 }
 
 {
+  let ohneFreigabe = false;
+  try {
+    baueKindUmgebung({
+      modus: "profile-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS,
+    });
+  } catch { ohneFreigabe = true; }
+  pruefe("bezahlte Profil-Abnahme startet ohne exakte Freigabe nicht", ohneFreigabe);
+
+  const env = baueKindUmgebung({
+    modus: "profile-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    confirmPaid: true,
+  });
+  pruefe("Profil-Abnahme erhält die Freigabe nur im Kindprozess", env.KD_EVAL_JA === "1");
+}
+
+{
   const starts = [];
   const spawnImpl = (programm, argv, optionen) => {
     starts.push({ programm, argv, optionen });
@@ -201,6 +223,30 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       && starts[0].argv.join("|") === MODI["profile-contract"].argv.join("|")
       && starts[0].argv.some((arg) => arg.endsWith("/ai_budget_guard.mjs"))
       && starts[0].argv.some((arg) => arg.endsWith("/profile_extract_contract.mjs")));
+}
+
+{
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
+    modus: "profile-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
+    confirmPaid: true,
+  });
+  pruefe("Bezahlte Profil-Abnahme ist fest hinter dem Budgetwächter verdrahtet",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["profile-live"].argv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/ai_budget_guard.mjs"))
+      && starts[0].argv.some((arg) => arg.endsWith("/profile_extract_live.mjs")));
 }
 
 {
