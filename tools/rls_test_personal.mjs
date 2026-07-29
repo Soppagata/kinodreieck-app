@@ -439,6 +439,66 @@ for (const [nr, fn, koerper] of [
     "HTTP " + r.status + (lief ? ` — LECK: ${fn} ist fuer Konten aufrufbar!` : ""));
 }
 
+/* --- T14: gemeinsamer Filmwissens-Cache (Etappe 8, Block 2) --------------
+   Die Tabellen enthalten gemeinsames Wissen, sind aber trotzdem keine
+   Browser-API: Rechtewiderruf und unveraenderliche Versionen duerfen nur ueber
+   die engen RPC-Grenzen laufen. Authenticated darf genau die Lese-RPC nutzen. */
+const filmwissenTabellen = [
+  "kd_filmwissen_quellen",
+  "kd_filmwerke",
+  "kd_filmwerk_kennungen",
+  "kd_filmwissen_auftraege",
+  "kd_filmwissen_versionen",
+  "kd_filmwissen_belege",
+  "kd_filmwissen_zeigerlog",
+];
+for (const [index, tabelle] of filmwissenTabellen.entries()) {
+  const [anonRead, kontoRead] = await Promise.all([
+    rest("GET", `/${tabelle}?select=*&limit=1`),
+    rest("GET", `/${tabelle}?select=*&limit=1`, { token: A.token }),
+  ]);
+  pruefe(`T14${String.fromCharCode(97 + index)} anon liest ${tabelle} NICHT`,
+    anonRead.status === 401 || anonRead.status === 403,
+    "HTTP " + anonRead.status + (anonRead.status === 200 ? " — LECK: rohe Cachetabelle ist oeffentlich!" : ""));
+  pruefe(`T14${String.fromCharCode(104 + index)} Konto liest ${tabelle} NICHT direkt`,
+    kontoRead.status === 401 || kontoRead.status === 403,
+    "HTTP " + kontoRead.status + (kontoRead.status === 200 ? " — LECK: RPC-Grenze ist umgehbar!" : ""));
+}
+
+const filmwissenProbeId = "rls-probe-" + crypto.randomUUID();
+const t14o = await rest("POST", "/rpc/kd_filmwissen_aktuell_lesen", {
+  body: { p_namespace: "kinodreieck", p_kennung: filmwissenProbeId },
+});
+pruefe("T14o anon darf die Filmwissen-Lese-RPC NICHT ausführen",
+  t14o.status === 401 || t14o.status === 403,
+  "HTTP " + t14o.status + (t14o.ok ? " — LECK: Filmwissen ist trotz Auth-Vertrag anonym lesbar!" : ""));
+
+const [t14p, t14q] = await Promise.all([
+  rest("POST", "/rpc/kd_filmwissen_aktuell_lesen", {
+    token: A.token, body: { p_namespace: "kinodreieck", p_kennung: filmwissenProbeId },
+  }),
+  rest("POST", "/rpc/kd_filmwissen_aktuell_lesen", {
+    token: B.token, body: { p_namespace: "kinodreieck", p_kennung: filmwissenProbeId },
+  }),
+]);
+pruefe("T14p angemeldetes Konto erhaelt ehrlich cache_miss",
+  t14p.status === 200 && t14p.data?.status === "cache_miss",
+  "HTTP " + t14p.status + " status=" + (t14p.data?.status || "?"));
+pruefe("T14q gemeinsamer Leseweg antwortet beiden Konten gleich",
+  t14q.status === 200 && JSON.stringify(t14q.data) === JSON.stringify(t14p.data),
+  "A=" + JSON.stringify(t14p.data) + " B=" + JSON.stringify(t14q.data));
+
+const t14r = await rest("POST", "/rpc/kd_filmwissen_quelle_speichern", {
+  token: A.token, body: { p_quelle: null },
+});
+const t14rText = JSON.stringify(t14r.data || {});
+pruefe("T14r Konto darf Quellenregister-RPC NICHT ausführen",
+  !t14r.ok
+  && !/quelle_ungueltig/.test(t14rText)
+  && (t14r.status === 401 || t14r.status === 403 || t14r.status === 404 || /42501|PGRST202/.test(t14rText)),
+  "HTTP " + t14r.status + (t14r.ok || /quelle_ungueltig/.test(t14rText)
+    ? " — LECK: service_role-RPC wurde als Konto ausgeführt!" : ""));
+
 /* --- Cleanup ------------------------------------------------------------- */
 async function raeumeEigeneProbe(token, accountId, key, erlaubteWerte, angelegt) {
   if (!angelegt) return true;
