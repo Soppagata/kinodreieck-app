@@ -181,3 +181,11 @@ export function prognoseIstVeraltet(prognose, aktuelleProfilVersion) {
     && typeof aktuelleProfilVersion === "string"
     && prognose.profilVersion !== aktuelleProfilVersion;
 }
+
+export function passungsBand(passung) {
+  if (!Number.isInteger(passung) || passung < 0 || passung > 100) return null;
+  if (passung < 25) return { id: "sehr_unwahrscheinlich", label: "passt wahrscheinlich nicht" };
+  if (passung < 50) return { id: "eher_nicht", label: "passt eher nicht" };
+  if (passung < 75) return { id: "eher_passend", label: "passt eher zu dir" };
+  return { id: "sehr_passend", label: "passt wahrscheinlich sehr gut" };
+}

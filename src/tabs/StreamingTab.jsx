@@ -50,7 +50,13 @@ function DienstBadges({ dienste, webUrls, auswahl }) {
   );
 }
 
-export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm, mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false }) {
+export function StreamingTab({
+  bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm,
+  addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
+  prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
+  onPrognoseErstellen, onPrognoseStatus,
+  mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
+}) {
   const [ansicht, setAnsicht] = useState("programm");
   useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
@@ -72,6 +78,15 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
+  const markiereAlsErstellt = useCallback((watchmodeId, id) => {
+    if (!id) return id;
+    setEntdeckenStatus((prev) => {
+      const next = { ...prev, [watchmodeId]: "erstellt" };
+      store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+    return id;
+  }, []);
   /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
      mutiert die Master-Auswahl (auswahl / Einstellungen) NICHT. */
   const [schnellDienst, setSchnellDienst] = useState(null);
@@ -322,6 +337,15 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                   expanded={expandedId === "s" + f.id}
                   onToggle={() => setExpandedId(expandedId === "s" + f.id ? null : "s" + f.id)}
                   onSave={updateFilm && mf ? (changes) => updateFilm(f.id, changes) : undefined}
+                  vorbewertung={vorbewertungAktiv && mf ? {
+                    laeuft: prognoseLaufId === f.id,
+                    fehler: prognoseFehler[f.id] || null,
+                    sperrgrund: prognoseSperrgrund,
+                    aktuelleProfilVersion,
+                    onErstellen: () => onPrognoseErstellen?.(mf),
+                    onAnnehmen: () => onPrognoseStatus?.(mf, "angenommen"),
+                    onVerwerfen: () => onPrognoseStatus?.(mf, "verworfen"),
+                  } : null}
                   kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
                 />
               );
@@ -443,8 +467,17 @@ export function StreamingTab({ bekannt, entdecken, auswahl, merkliste = [], togg
                       <div style={{ marginTop: 8 }}>
                         <FilmForm startOffen
                           typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
-                          initial={{ titel: t.titel, jahr: t.jahr, quelle: "must_watch", genre: (t.genres || []).join(", ") }}
-                          onAdd={(f) => { const id = addFilm(f); if (id) setEntdeckenStatus((prev) => { const next = { ...prev, [t.watchmode_id]: "erstellt" }; store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {}); return next; }); return id; /* KD-019: Rückgabe durchreichen -> Maske bleibt bei Dublette offen */ }}
+                          initial={{
+                            titel: t.titel, jahr: t.jahr, quelle: "must_watch",
+                            genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
+                          }}
+                          onAdd={(f) => markiereAlsErstellt(t.watchmode_id, addFilm(f))}
+                          onAddMitPrognose={async (f) => markiereAlsErstellt(
+                            t.watchmode_id,
+                            await addFilmMitPrognose?.(f),
+                          )}
+                          prognoseAktiv={vorbewertungAktiv}
+                          prognoseSperrgrund={prognoseSperrgrund}
                           onDone={() => setFormFuer(null)} />
                       </div>
                     )}

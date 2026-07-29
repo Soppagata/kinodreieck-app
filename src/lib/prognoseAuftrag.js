@@ -3,7 +3,7 @@ import {
 } from "./profil.js";
 
 export const PROGNOSE_TYPEN = Object.freeze(["film", "filmreihe", "serie"]);
-export const MAX_PROGNOSE_SIGNALE = 40;
+export const MAX_PROGNOSE_SIGNALE = 20;
 
 const VERBOTEN = /[\r\n\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const istObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
@@ -37,12 +37,12 @@ export function bauePrognoseAuftrag(film, profil) {
 
   const titel = text(film.titel, 160);
   const originaltitel = optionText(film.originaltitel, 160);
-  const jahr = film.jahr == null || film.jahr === "" ? null : film.jahr;
+  const jahr = film.jahr;
   const genres = textListe(film.genre ?? film.genres, 20, 40);
-  const tags = textListe(film.tags, 30, 40);
+  const tags = textListe(film.tags, 20, 40);
   if (!titel) fehler.push("Titel ist ungültig");
   if (film.originaltitel != null && film.originaltitel !== "" && !originaltitel) fehler.push("Originaltitel ist ungültig");
-  if (jahr !== null && (!Number.isInteger(jahr) || jahr < 1888 || jahr > 2100)) fehler.push("Jahr ist ungültig");
+  if (!Number.isInteger(jahr) || jahr < 1870 || jahr > 2200) fehler.push("Jahr ist ungültig");
   if (!genres) fehler.push("Genres sind ungültig");
   if (!tags) fehler.push("Tags sind ungültig");
 

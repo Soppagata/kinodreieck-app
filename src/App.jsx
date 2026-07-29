@@ -19,7 +19,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
 import { initSetup, getSetup, getTutorial, setWillkommen, resetTutorial, istGesehen, markGesehen, setupUeberspringen } from "./lib/tutorial.js";
 import { Willkommen } from "./components/Willkommen.jsx";
-import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
+import { kiAn, ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { baueHinweis, onTour, SICHTBAR_TRIGGER, setTourOffen } from "./lib/tour.js";
 import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
@@ -30,6 +30,9 @@ import { baueBackup } from "./lib/backup.js";
 import { catalogService } from "./services/catalog.js";
 import { authService } from "./services/auth.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
+import { erstelleVorbewertung } from "./services/vorbewertung.js";
+import { ladeProfil } from "./lib/profil.js";
+import { setzePrognoseStatus } from "./lib/prognose.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
 import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
@@ -314,6 +317,8 @@ export default function App() {
     drawerWarOffen.current = navOffen;
   }, [navOffen, istMobil]);
   const [master, setMaster] = useState(null);
+  const masterRef = useRef(master);
+  masterRef.current = master;
   const [masterMeta, setMasterMeta] = useState(null);
   const [programm, setProgramm] = useState(null);
   const [programmArt, setProgrammArt] = useState(null);
@@ -573,8 +578,10 @@ export default function App() {
     try {
       const h = herkunft || { typ: "storage", zeit: Date.now() };
       await store.set(K.master, JSON.stringify({ meta, filme, herkunft: h, gespeichertAm: Date.now() }));
+      return true;
     } catch {
       setErr("Speichern der Masterliste fehlgeschlagen.");
+      return false;
     }
   }, []);
 
@@ -1454,6 +1461,140 @@ export default function App() {
     return id;
   }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, persistArtikel]);
 
+  /* ---- Etappe 8: zentraler Vorbewertungs-Auftrag -------------------------
+     Der Lauf lebt in App, nicht in einer Karte oder einem Formular. Dadurch
+     kann ein Tabwechsel keinen zweiten bezahlten Auftrag starten und die
+     Antwort landet weiterhin am Film mit derselben stabilen ID. */
+  const prognoseLaufRef = useRef(null);
+  const [prognoseLaufId, setPrognoseLaufId] = useState(null);
+  const [prognoseFehler, setPrognoseFehler] = useState({});
+  const [aktuellesProfil, setAktuellesProfil] = useState(undefined);
+  const [aktuelleProfilVersion, setAktuelleProfilVersion] = useState(null);
+
+  useEffect(() => {
+    if (!["mediathek", "kino", "streaming"].includes(tab)) return;
+    let aktiv = true;
+    ladeProfil().then((profil) => {
+      if (!aktiv) return;
+      setAktuellesProfil(profil);
+      setAktuelleProfilVersion(profil && !profil.beschaedigt ? profil.version : null);
+    }).catch(() => {
+      if (!aktiv) return;
+      setAktuellesProfil({ beschaedigt: true });
+      setAktuelleProfilVersion(null);
+    });
+    return () => { aktiv = false; };
+  }, [tab, master]);
+
+  const vorbewertungAktiv = session.mode === "account"
+    && session.state === "ready"
+    && session.capabilities?.personalAi === true
+    && kiAn("vorbewertung");
+  const vorbewertungSperrgrund = aktuellesProfil === undefined
+    ? "Geschmacksprofil wird geladen …"
+    : !aktuellesProfil
+      ? "Richte zuerst unter Einstellungen dein Geschmacksprofil ein."
+      : aktuellesProfil.beschaedigt
+        ? "Das Geschmacksprofil ist beschädigt und muss zuerst repariert werden."
+        : aktuellesProfil.einwilligung?.erteilt !== true
+          ? "Gib zuerst dein Geschmacksprofil für persönliche KI-Aufgaben frei."
+          : !Array.isArray(aktuellesProfil.signale) || aktuellesProfil.signale.length === 0
+            ? "Bestätige zuerst mindestens ein Signal in deinem Geschmacksprofil."
+            : null;
+
+  const speichereFilmAenderungStrikt = useCallback(async (id, changes) => {
+    const aktuell = masterRef.current || [];
+    if (!aktuell.some((film) => film.id === id)) return false;
+    const next = aktuell.map((film) => (film.id === id ? { ...film, ...changes } : film));
+    const h = naechsteHerkunft();
+    if (!await persistMaster(next, masterMeta, h)) return false;
+    masterRef.current = next;
+    setMasterHerkunft(h);
+    setMaster(next);
+    return true;
+  }, [masterMeta, naechsteHerkunft, persistMaster]);
+
+  const starteVorbewertung = useCallback(async (film) => {
+    if (!film?.id || !vorbewertungAktiv) return false;
+    if (prognoseLaufRef.current) return false;
+    if (film.prognose && !window.confirm(
+      "Die bestehende KI-Prognose durch eine neue kostenpflichtige Prognose ersetzen?",
+    )) return false;
+
+    prognoseLaufRef.current = film.id;
+    setPrognoseLaufId(film.id);
+    setPrognoseFehler((alt) => ({ ...alt, [film.id]: null }));
+    try {
+      const prognose = await erstelleVorbewertung(film);
+      if (!await speichereFilmAenderungStrikt(film.id, { prognose })) {
+        throw new Error("Die KI-Prognose konnte nicht im Eintrag gespeichert werden.");
+      }
+      setAktuelleProfilVersion(prognose.profilVersion);
+      return true;
+    } catch (error) {
+      const lokal = error?.source === "forecast" && error?.operation === "forecast.validate";
+      const basis = lokal ? error.message : errorText(error);
+      const hinweis = lokal
+        ? basis
+        : `${basis} Der Eintrag bleibt erhalten. Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`;
+      setPrognoseFehler((alt) => ({ ...alt, [film.id]: hinweis }));
+      return false;
+    } finally {
+      if (prognoseLaufRef.current === film.id) {
+        prognoseLaufRef.current = null;
+        setPrognoseLaufId(null);
+      }
+    }
+  }, [speichereFilmAenderungStrikt, vorbewertungAktiv]);
+
+  const setzeFilmPrognoseStatus = useCallback(async (film, status) => {
+    const wechsel = setzePrognoseStatus(film?.prognose, status);
+    if (!wechsel.ok) {
+      setPrognoseFehler((alt) => ({ ...alt, [film?.id]: wechsel.fehler.join("; ") }));
+      return false;
+    }
+    const gespeichert = await speichereFilmAenderungStrikt(film.id, { prognose: wechsel.prognose });
+    if (!gespeichert) {
+      setPrognoseFehler((alt) => ({ ...alt, [film.id]: "Der Prognosestatus konnte nicht gespeichert werden." }));
+    }
+    return gespeichert;
+  }, [speichereFilmAenderungStrikt]);
+
+  const addFilmMitPrognose = useCallback(async (film) => {
+    if (!vorbewertungAktiv) return null;
+    const kandidat = {
+      ...film,
+      bewertung: null,
+      kategorie: null,
+      bewertet_von: null,
+      begruendung: "",
+    };
+    const id = kandidat.id || slugId(kandidat.titel, kandidat.jahr);
+    const aktuell = masterRef.current || [];
+    if (aktuell.some((eintrag) => eintrag.id === id)) {
+      setErr("Eintrag existiert bereits: " + kandidat.titel + (kandidat.jahr ? " (" + kandidat.jahr + ")" : ""));
+      return null;
+    }
+    const neu = { id, ...kandidat };
+    const next = [...aktuell, neu];
+    const h = naechsteHerkunft();
+    /* Harte Reihenfolge: erst lokal nachweisbar speichern, dann bezahlen. */
+    if (!await persistMaster(next, masterMeta, h)) return null;
+    masterRef.current = next;
+    setMasterHerkunft(h);
+    setMaster(next);
+    setArtikelListe((prev) => {
+      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
+      if (n > 0) { persistArtikel(geheilt); return geheilt; }
+      return prev;
+    });
+    await starteVorbewertung(neu);
+    return id;
+  }, [
+    masterMeta, mitMustwatch, mustwatch, naechsteHerkunft, persistArtikel,
+    persistMaster, starteVorbewertung, vorbewertungAktiv,
+  ]);
+
   /* ---- Browser-Stand verwerfen: zurück zum zuletzt gewählten Start ----
      Rettungsanker gegen file://-localStorage-Geister (alle lokalen HTMLs
      teilen sich denselben Speicher-Schlüssel). Reset lädt den gewählten
@@ -2223,6 +2364,14 @@ export default function App() {
             zeigeAlles={zeigeAlles} setZeigeAlles={setZeigeAlles}
             expandedId={expandedId} setExpandedId={setExpandedId}
             updateFilm={updateFilm} addFilm={addFilm} badgeFuer={badgeFuer}
+            addFilmMitPrognose={addFilmMitPrognose}
+            vorbewertungAktiv={vorbewertungAktiv}
+            prognoseSperrgrund={vorbewertungSperrgrund}
+            prognoseLaufId={prognoseLaufId}
+            prognoseFehler={prognoseFehler}
+            aktuelleProfilVersion={aktuelleProfilVersion}
+            onPrognoseErstellen={starteVorbewertung}
+            onPrognoseStatus={setzeFilmPrognoseStatus}
             loading={loading} ladeProgrammDatei={ladeProgrammDatei}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             datenGesperrt={!snapshotFreigabe}
@@ -2236,6 +2385,14 @@ export default function App() {
             master={master || []} nachtragFlach={master ? nachtragSichtbar : []}
             expandedId={expandedId} setExpandedId={setExpandedId}
             updateFilm={updateFilm} addFilm={addFilm} badgeFuer={badgeFuer}
+            addFilmMitPrognose={addFilmMitPrognose}
+            vorbewertungAktiv={vorbewertungAktiv}
+            prognoseSperrgrund={vorbewertungSperrgrund}
+            prognoseLaufId={prognoseLaufId}
+            prognoseFehler={prognoseFehler}
+            aktuelleProfilVersion={aktuelleProfilVersion}
+            onPrognoseErstellen={starteVorbewertung}
+            onPrognoseStatus={setzeFilmPrognoseStatus}
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
@@ -2260,6 +2417,14 @@ export default function App() {
           <StreamingTab
             bekannt={streamingBekannt} entdecken={streamingEntdecken}
             addFilm={addFilm} master={master} updateFilm={updateFilm}
+            addFilmMitPrognose={addFilmMitPrognose}
+            vorbewertungAktiv={vorbewertungAktiv}
+            prognoseSperrgrund={vorbewertungSperrgrund}
+            prognoseLaufId={prognoseLaufId}
+            prognoseFehler={prognoseFehler}
+            aktuelleProfilVersion={aktuelleProfilVersion}
+            onPrognoseErstellen={starteVorbewertung}
+            onPrognoseStatus={setzeFilmPrognoseStatus}
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}

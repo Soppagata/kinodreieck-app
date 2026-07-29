@@ -22,7 +22,10 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
    - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
-  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] } }) {
+  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] },
+  addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
+  prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
+  onPrognoseErstellen, onPrognoseStatus }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
@@ -82,7 +85,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };
-  const typReihe = [HAUPTTYP[typTab]].concat(["film", "serie", "musik", "sonstiges"].filter((t) => t !== HAUPTTYP[typTab]));
+  const typReihe = [HAUPTTYP[typTab]].concat(["film", "filmreihe", "serie", "musik", "sonstiges"].filter((t) => t !== HAUPTTYP[typTab]));
 
   /* "Kommt vor in:" — Laufzeit-berechnet, ein Durchlauf über alle Artikel.
      Wird nicht gepflegt, sonst existiert die Verbindung zweimal. */
@@ -264,7 +267,9 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
           schlichte MedienForm. key=typTab: Tab-Wechsel klappt das Formular zu. */}
       <div data-tour="eintrag-neu" style={{ marginBottom: 16 }}>
-        <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm} />
+        <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
+          onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
+          prognoseSperrgrund={prognoseSperrgrund} />
       </div>
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>
@@ -282,6 +287,15 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
               kommtVorIn={kommtVorInMap[f.id]}
               onArtikelKlick={onArtikelKlick}
+              vorbewertung={vorbewertungAktiv && hatDreieck(f.typ) ? {
+                laeuft: prognoseLaufId === f.id,
+                fehler: prognoseFehler[f.id] || null,
+                sperrgrund: prognoseSperrgrund,
+                aktuelleProfilVersion,
+                onErstellen: () => onPrognoseErstellen?.(f),
+                onAnnehmen: () => onPrognoseStatus?.(f, "angenommen"),
+                onVerwerfen: () => onPrognoseStatus?.(f, "verworfen"),
+              } : null}
             />
           </div>
         ))}

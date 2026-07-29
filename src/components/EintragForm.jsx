@@ -13,7 +13,17 @@ import { QuellenWahl } from "./QuellenWahl.jsx";
    Der Eintrag landet automatisch in der richtigen Gruppe (Zuordnung über typ).
    typOptionen kommt vom Aufrufer; der erste Eintrag ist der Default-Typ.
    Rückwärtskompatibel: nur bewertbare Typen -> reines Film-Formular wie zuvor. */
-export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"], onAdd, initial = null, startOffen = false, onDone, autorName }) { // KD-030: optionaler autorName
+export function FilmForm({
+  typOptionen = ["film", "filmreihe", "serie", "musik", "sonstiges"],
+  onAdd,
+  onAddMitPrognose,
+  prognoseAktiv = false,
+  prognoseSperrgrund = null,
+  initial = null,
+  startOffen = false,
+  onDone,
+  autorName,
+}) { // KD-030: optionaler autorName
   const [open, setOpen] = useState(startOffen);
   const leer = {
     titel: (initial && initial.titel) || "",
@@ -27,6 +37,7 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
   };
   const [f, setF] = useState(leer);
   const [fehler, setFehler] = useState("");
+  const [prognoseLauf, setPrognoseLauf] = useState(false);
   /* Unbewertet speichern (Besitz erfassen, Dreieck kommt später): blendet
      Kategorie + Achsen aus; gespeichert wird bewertung: null. */
   const [ohneBewertung, setOhneBewertung] = useState(false);
@@ -42,7 +53,7 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
     return <button style={btnStyle(false)} onClick={() => { setOpen(true); feuere("eintrag"); }}>+ Eintrag hinzufügen</button>;
   }
 
-  const speichern = () => {
+  const speichern = async (mitPrognose = false) => {
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
     if (bewertbar && !f.jahr) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
     // KD-018: nicht-leeres Jahr muss eine ganze Zahl im sinnvollen Bereich sein,
@@ -56,37 +67,52 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
       }
     }
     setFehler("");
+    if (mitPrognose) setPrognoseLauf(true);
     // KD-019: Rückgabewert von onAdd/addFilm auswerten (null/false = Dublette).
     let ergebnis;
-    if (bewertbar) {
-      ergebnis = onAdd({
-        titel: f.titel.trim(),
-        originaltitel: f.originaltitel.trim() || f.titel.trim(),
-        jahr: Number(f.jahr),
-        jahr_bis: null,
-        typ: f.typ,
-        quelle: arrayZuQuelle(f.quellen),
-        kategorie: ohneBewertung ? null : f.kategorie,
-        bewertet_von: ohneBewertung ? null : (autorName || "max"), // KD-030
-        bewertung: ohneBewertung ? null : { wie: f.wie, was: f.was, warum: f.warum },
-        genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
-        tags: [],
-        begruendung: f.begruendung.trim(),
-        notiz: (initial && initial.notiz) || "",
-        status: "gesetzt",
-      });
-    } else {
-      // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
-      ergebnis = onAdd({
-        titel: f.titel.trim(),
-        jahr: f.jahr ? Number(f.jahr) : null,
-        typ: f.typ,
-        art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (f.sub ? " · " + f.sub : "")) : (f.art || null),
-        kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
-        beschreibung: f.beschreibung.trim(),
-        bewertung: { wie: null, was: null, warum: null },
-        bewertet_von: null,
-      });
+    try {
+      if (bewertbar) {
+        const unbewertet = mitPrognose || ohneBewertung;
+        const eintrag = {
+          titel: f.titel.trim(),
+          originaltitel: f.originaltitel.trim() || f.titel.trim(),
+          jahr: Number(f.jahr),
+          jahr_bis: null,
+          typ: f.typ,
+          quelle: arrayZuQuelle(f.quellen),
+          kategorie: unbewertet ? null : f.kategorie,
+          bewertet_von: unbewertet ? null : (autorName || "max"), // KD-030
+          bewertung: unbewertet ? null : { wie: f.wie, was: f.was, warum: f.warum },
+          genre: f.genre.split(",").map((g) => g.trim()).filter(Boolean),
+          tags: [],
+          begruendung: unbewertet ? "" : f.begruendung.trim(),
+          notiz: (initial && initial.notiz) || "",
+          status: "gesetzt",
+          /* Externe IDs aus Kino/Streaming nicht beim Anlegen verlieren. */
+          ...(initial?.film_at_id ? { film_at_id: initial.film_at_id } : {}),
+          ...(initial?.watchmode_id ? { watchmode_id: initial.watchmode_id } : {}),
+        };
+        ergebnis = mitPrognose
+          ? await onAddMitPrognose?.(eintrag)
+          : onAdd(eintrag);
+      } else {
+        // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
+        ergebnis = onAdd({
+          titel: f.titel.trim(),
+          jahr: f.jahr ? Number(f.jahr) : null,
+          typ: f.typ,
+          art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (f.sub ? " · " + f.sub : "")) : (f.art || null),
+          kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
+          beschreibung: f.beschreibung.trim(),
+          bewertung: { wie: null, was: null, warum: null },
+          bewertet_von: null,
+        });
+      }
+    } catch (error) {
+      setFehler(error?.message || "Eintrag konnte nicht gespeichert werden.");
+      return;
+    } finally {
+      if (mitPrognose) setPrognoseLauf(false);
     }
     // KD-019: nur bei Erfolg zurücksetzen/schließen; Dublette (null/false) lässt
     // das Formular offen und bewahrt die Eingabe.
@@ -173,9 +199,23 @@ export function FilmForm({ typOptionen = ["film", "serie", "musik", "sonstiges"]
 
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={btnStyle(true)} onClick={speichern}>Hinzufügen</button>
+        <button style={btnStyle(true)} disabled={prognoseLauf} onClick={() => speichern(false)}>Hinzufügen</button>
+        {bewertbar && prognoseAktiv && onAddMitPrognose && (
+          <button style={btnStyle(false)} disabled={prognoseLauf || !!prognoseSperrgrund}
+            title="Speichert zuerst einen unbewerteten Eintrag und startet danach genau einen kostenpflichtigen KI-Aufruf"
+            onClick={() => speichern(true)}>
+            {prognoseLauf ? "Speichert & prognostiziert …" : "Anlegen & KI-Prognose erstellen"}
+          </button>
+        )}
         <button style={btnStyle(false)} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
       </div>
+      {bewertbar && prognoseAktiv && onAddMitPrognose && (
+        <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>
+          {prognoseSperrgrund
+            ? prognoseSperrgrund
+            : "Der Eintrag wird zuerst unbewertet gespeichert. Danach folgt genau ein kostenpflichtiger KI-Aufruf ohne Websuche."}
+        </span>
+      )}
     </div>
   );
 }

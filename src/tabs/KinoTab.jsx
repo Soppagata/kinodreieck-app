@@ -20,8 +20,11 @@ export function KinoTab({
   programm, progStand, master, kinoMatches, restSichtbar,
   zeitgrenze, saveZeitgrenze, zeigeAlles, setZeigeAlles,
   expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, loading, ladeProgrammDatei,
+  addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
+  prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
+  onPrognoseErstellen, onPrognoseStatus,
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
-  programmInfo = null, angemeldet = false,
+  programmInfo = null, angemeldet = false, autorName,
 }) {
   const istGepinnt = (t, z) => kinoPins.some((p) => p.t === t && p.z === z);
   /* Pins chronologisch: Monat/Tag/Uhrzeit aus dem Terminstring */
@@ -272,6 +275,15 @@ export function KinoTab({
                       expanded={expandedId === "k" + film.id}
                       onToggle={() => setExpandedId(expandedId === "k" + film.id ? null : "k" + film.id)}
                       onSave={(changes) => updateFilm(film.id, changes)}
+                      vorbewertung={vorbewertungAktiv ? {
+                        laeuft: prognoseLaufId === film.id,
+                        fehler: prognoseFehler[film.id] || null,
+                        sperrgrund: prognoseSperrgrund,
+                        aktuelleProfilVersion,
+                        onErstellen: () => onPrognoseErstellen?.(film),
+                        onAnnehmen: () => onPrognoseStatus?.(film, "angenommen"),
+                        onVerwerfen: () => onPrognoseStatus?.(film, "verworfen"),
+                      } : null}
                       kinoInfo={
                         <>
                           <span style={{ fontWeight: 700 }}><KinoLinks kinos={kinoF ? [kinoF] : prog.k} /></span>
@@ -354,7 +366,11 @@ export function KinoTab({
                 {(zeigeMehr ? restGefiltert : restGefiltert.slice(0, 40)).map((pf) => (
                   <KompaktEintrag key={pf.film_at_id || pf.t}
                     pf={pf} zeiten={zeitenGefiltert(pf)} kinos={kinoF ? [kinoF] : pf.k}
-                    addFilm={addFilm} istGepinnt={istGepinnt} togglePin={toggleKinoPin}
+                    addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
+                    vorbewertungAktiv={vorbewertungAktiv}
+                    prognoseSperrgrund={prognoseSperrgrund}
+                    autorName={autorName}
+                    istGepinnt={istGepinnt} togglePin={toggleKinoPin}
                     master={master} updateFilm={updateFilm} />
                 ))}
               </div>
@@ -379,7 +395,10 @@ export function KinoTab({
    startet mit Titel/Jahr/Genres/Beschreibung vorbefüllt, damit niemand bei
    null anfängt. Nach dem Anlegen matcht der Film und wandert automatisch
    in "Läuft & passt zu dir". */
-function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, master, updateFilm }) {
+function KompaktEintrag({
+  pf, zeiten, kinos, addFilm, addFilmMitPrognose, vorbewertungAktiv, prognoseSperrgrund,
+  autorName, istGepinnt, togglePin, master, updateFilm,
+}) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
   const [zeigeAlle, setZeigeAlle] = useState(false);
@@ -445,8 +464,17 @@ function KompaktEintrag({ pf, zeiten, kinos, addFilm, istGepinnt, togglePin, mas
             )
           ) : (
             <FilmForm startOffen typOptionen={["film"]}
-              initial={{ titel: pf.t, jahr: pf.j, quelle: "must_watch", genre: (pf.g || []).join(", "), begruendung: pf.b || "" }}
-              onAdd={(f) => addFilm(f)} onDone={() => setFormAn(false)} />
+              initial={{
+                titel: pf.t, jahr: pf.j, quelle: "must_watch",
+                genre: (pf.g || []).join(", "), begruendung: pf.b || "",
+                film_at_id: pf.film_at_id,
+              }}
+              onAdd={(f) => addFilm(f)}
+              onAddMitPrognose={addFilmMitPrognose}
+              prognoseAktiv={vorbewertungAktiv}
+              prognoseSperrgrund={prognoseSperrgrund}
+              autorName={autorName}
+              onDone={() => setFormAn(false)} />
           )}
           {/* Übersetzungsfälle ("Das siebente Siegel" vs. "The Seventh Seal")
              erkennt keine Heuristik — hier von Hand verknüpfen: setzt die

@@ -1,7 +1,7 @@
 import {
   PROGNOSE_FORMAT, PROGNOSE_SICHERHEIT, PROGNOSE_STATUS,
   deckeleSicherheit, erstellePrognose, lesePrognose,
-  prognoseIstVeraltet, pruefePrognose, pruefePrognoseErgebnis,
+  passungsBand, prognoseIstVeraltet, pruefePrognose, pruefePrognoseErgebnis,
   setzePrognoseStatus,
 } from "./src/lib/prognose.js";
 import { BEWERTUNGSKATEGORIE_IDS } from "./src/lib/kategorien.js";
@@ -143,6 +143,12 @@ check("unbekannte Sicherheit fällt sicher auf sehr niedrig", () =>
   deckeleSicherheit("sicher!", { signalAnzahl: 20, signalArten: 5, achsen: { wie: 5, was: 5 } }) === "sehr_niedrig");
 check("abweichende Profilversion markiert die Prognose als veraltet", () =>
   prognoseIstVeraltet(prognose, "p4") && !prognoseIstVeraltet(prognose, "p3"));
+check("Passung wird als Band statt als scheinpräzise Prozentzahl formuliert", () =>
+  [[0, "sehr_unwahrscheinlich"], [24, "sehr_unwahrscheinlich"], [25, "eher_nicht"],
+    [49, "eher_nicht"], [50, "eher_passend"], [74, "eher_passend"],
+    [75, "sehr_passend"], [100, "sehr_passend"]]
+    .every(([wert, id]) => passungsBand(wert)?.id === id)
+  && passungsBand(72.5) === null);
 
 console.log(`\n${ok}/${ok + rot.length} Prognose-Checks bestanden.`);
 if (rot.length) {

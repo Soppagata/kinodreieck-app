@@ -4,6 +4,8 @@ import { schlagseiten, score } from "../lib/match.js";
 import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
+import { PrognoseBereich } from "./PrognoseBereich.jsx";
+import { setzePrognoseStatus } from "../lib/prognose.js";
 
 /* Einfacher Editor für Einträge ohne Dreieck (musik/sonstiges):
    Beschreibung + Notiz — die Notiz ist bei JEDEM Eintrag editierbar. */
@@ -29,7 +31,7 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
    musik/sonstiges: reduzierte Karte (kein Dreieck — Modell ist auf
    Filmwirkung kalibriert), Beschreibung statt Begründung.
    kommtVorIn: Artikel-Referenzen aus dem Blog (Phase 2), Laufzeit-berechnet. */
-export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick }) {
+export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick, vorbewertung = null }) {
   const [editing, setEditing] = useState(false);
   const dreieck = hatDreieck(film.typ);
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
@@ -131,10 +133,35 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
               )}
             </div>
           )}
+          {expanded && !editing && vorbewertung && (unbewertet || film.prognose) && (
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
+              <PrognoseBereich
+                film={film}
+                laeuft={vorbewertung.laeuft}
+                fehler={vorbewertung.fehler}
+                erstellenMoeglich={!vorbewertung.sperrgrund}
+                sperrgrund={vorbewertung.sperrgrund}
+                aktuelleProfilVersion={vorbewertung.aktuelleProfilVersion}
+                onErstellen={vorbewertung.onErstellen}
+                onAnnehmen={vorbewertung.onAnnehmen}
+                onVerwerfen={vorbewertung.onVerwerfen}
+                onKorrigieren={() => setEditing(true)}
+              />
+            </div>
+          )}
           {expanded && editing && (
             dreieck ? (
               <EditPanel film={film} onCancel={() => setEditing(false)}
-                onSave={(changes) => { setEditing(false); onSave(changes); }} />
+                onSave={(changes) => {
+                  let next = changes;
+                  if (changes?.bewertung != null && ["offen", "angenommen"].includes(film.prognose?.status)) {
+                    const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
+                    if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
+                  }
+                  setEditing(false);
+                  onSave(next);
+                }} />
             ) : (
               <BeschreibungEditor eintrag={film} onCancel={() => setEditing(false)}
                 onSave={(changes) => { setEditing(false); onSave(changes); }} />

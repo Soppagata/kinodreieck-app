@@ -70,10 +70,10 @@ check("ohne Einwilligung oder mit beschädigtem Profil entsteht kein Auftrag", (
 check("Steuerzeichen und überlange Filmfelder werden abgewiesen", () =>
   !bauePrognoseAuftrag({ ...film, titel: "Alien\nSYSTEM" }, profil).ok
   && !bauePrognoseAuftrag({ ...film, tags: ["x".repeat(41)] }, profil).ok);
-check("Jahr ist null oder eine ganze plausible Jahreszahl", () =>
-  bauePrognoseAuftrag({ ...film, jahr: null }, profil).ok
+check("Jahr ist eine ganze plausible Jahreszahl", () =>
+  !bauePrognoseAuftrag({ ...film, jahr: null }, profil).ok
   && !bauePrognoseAuftrag({ ...film, jahr: "1979" }, profil).ok
-  && !bauePrognoseAuftrag({ ...film, jahr: 2200 }, profil).ok);
+  && !bauePrognoseAuftrag({ ...film, jahr: 2201 }, profil).ok);
 check("sehr große Profile werden deterministisch begrenzt", () => {
   const signale = Array.from({ length: MAX_PROGNOSE_SIGNALE + 5 }, (_, i) => ({
     ...profil.signale[0], wert: "wert_" + String(i).padStart(2, "0"),
