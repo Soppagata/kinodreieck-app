@@ -983,6 +983,7 @@ export const FORECAST_SIGNAL_SICHERHEITEN = ["hoch", "mittel", "niedrig"];
 export const FORECAST_TYPEN = ["film", "filmreihe", "serie"];
 export const FORECAST_FORMAT = "film-prognose-v1";
 export const FORECAST_MAX_SIGNALE = 20;
+export const FORECAST_KEINE_KATEGORIE = "kein_vorschlag";
 
 const FORECAST_TEXT_ZEICHEN = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/;
 
@@ -1134,19 +1135,16 @@ const FORECAST_SCHEMA = {
     achsen: {
       type: "object",
       additionalProperties: false,
-      required: ["wie", "was", "warum"],
+      required: ["wie", "was"],
       properties: {
         wie: { type: ["integer", "null"] },
         was: { type: ["integer", "null"] },
-        /* Absichtlich nur null, nicht integer|null: WARUM braucht belegtes
-           gemeinsames Filmwissen und darf in diesem MVP nicht entstehen. */
-        warum: { type: "null" },
       },
     },
     passung: { type: "integer" },
     kategorie_vorschlag: {
-      type: ["string", "null"],
-      enum: [...FORECAST_KATEGORIEN, null],
+      type: "string",
+      enum: [...FORECAST_KATEGORIEN, FORECAST_KEINE_KATEGORIE],
     },
     sicherheit: { type: "string", enum: FORECAST_SICHERHEITEN },
     begruendung: { type: "string" },
@@ -1160,17 +1158,17 @@ function forecastAntwortFormGueltig(wert: unknown): wert is Record<string, unkno
     "begruendung", "verwendete_signal_ids",
   ])) return false;
   if (wert.format !== FORECAST_FORMAT || !istReinesObjekt(wert.achsen)
-    || !hatGenauSchluessel(wert.achsen, ["wie", "was", "warum"])) return false;
+    || !hatGenauSchluessel(wert.achsen, ["wie", "was"])) return false;
   for (const achse of ["wie", "was"]) {
     const v = eigenerWert(wert.achsen, achse);
     if (!(v === null || (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 5))) return false;
   }
-  if (eigenerWert(wert.achsen, "warum") !== null) return false;
   if (typeof wert.passung !== "number" || !Number.isInteger(wert.passung)
     || wert.passung < 0 || wert.passung > 100) return false;
-  if (!(wert.kategorie_vorschlag === null
-    || (typeof wert.kategorie_vorschlag === "string"
-      && FORECAST_KATEGORIEN.includes(wert.kategorie_vorschlag)))) return false;
+  if (typeof wert.kategorie_vorschlag !== "string"
+    || ![...FORECAST_KATEGORIEN, FORECAST_KEINE_KATEGORIE].includes(wert.kategorie_vorschlag)) {
+    return false;
+  }
   if (typeof wert.sicherheit !== "string" || !FORECAST_SICHERHEITEN.includes(wert.sicherheit)) return false;
   if (typeof wert.begruendung !== "string") return false;
   if (!Array.isArray(wert.verwendete_signal_ids)
@@ -1725,14 +1723,15 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         "Fuehre kein externes Filmwissen, keine Quellenbehauptung und keine kulturelle Relevanz ein.",
         "WIE beschreibt die erwartete persoenliche Passung von Form, Handwerk und Inszenierung.",
         "WAS beschreibt die erwartete persoenliche Passung von Stoff, Thema und Erzaehlung.",
-        "WARUM waere kulturelle bzw. filmhistorische Relevanz. Dafuer fehlt hier belegtes Filmwissen;",
-        "setze `achsen.warum` deshalb IMMER auf null und behaupte dazu nichts in der Begruendung.",
+        "WARUM waere kulturelle bzw. filmhistorische Relevanz. Dafuer fehlt hier belegtes Filmwissen.",
+        "Das Ausgabeschema enthaelt WARUM deshalb absichtlich nicht. Behaupte dazu nichts in der Begruendung.",
         "",
         "Regeln:",
         "- `format` ist exakt `" + FORECAST_FORMAT + "`.",
         "- WIE und WAS sind ganze Zahlen 0 bis 5 oder null. Null ist ehrlicher als erfundene Praezision.",
         "- `passung` ist eine ganze Zahl 0 bis 100 und meint nur die persoenliche Passung.",
-        "- `kategorie_vorschlag` ist null oder genau eine der erlaubten persoenlichen Kategorien.",
+        "- `kategorie_vorschlag` ist genau eine erlaubte persoenliche Kategorie oder",
+        "  `" + FORECAST_KEINE_KATEGORIE + "`, wenn kein ehrlicher Vorschlag moeglich ist.",
         "  Sie ist nur ein unbelegter Vorschlag, keine gespeicherte echte Kategorie.",
         "- `sicherheit` ist sehr_niedrig, niedrig, mittel oder hoch. Im Zweifel niedriger.",
         "- `begruendung` ist eine kurze einzelne Aussage ohne Quellenbehauptung, hoechstens 280 Zeichen.",
@@ -1784,7 +1783,9 @@ export const AUFGABEN: Record<string, Aufgabe> = {
             warum: null,
           },
           passung: inhalt.passung,
-          kategorie_vorschlag: inhalt.kategorie_vorschlag,
+          kategorie_vorschlag: inhalt.kategorie_vorschlag === FORECAST_KEINE_KATEGORIE
+            ? null
+            : inhalt.kategorie_vorschlag,
           sicherheit: deckeleForecastSicherheit(String(inhalt.sicherheit), eingabe, achsen),
           begruendung,
           verwendete_signale: verwendet,

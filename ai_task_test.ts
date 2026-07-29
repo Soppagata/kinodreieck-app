@@ -181,7 +181,7 @@ const {
   EXTRAKT_MAX_SIGNALE, EXTRAKT_MAX_FILME, EXTRAKT_MAX_OFFEN,
   FORECAST_KATEGORIEN, FORECAST_SICHERHEITEN, FORECAST_SIGNAL_ARTEN,
   FORECAST_SIGNAL_RICHTUNGEN, FORECAST_SIGNAL_SICHERHEITEN, FORECAST_TYPEN,
-  FORECAST_FORMAT, FORECAST_MAX_SIGNALE, leseForecastEingabe,
+  FORECAST_FORMAT, FORECAST_MAX_SIGNALE, FORECAST_KEINE_KATEGORIE, leseForecastEingabe,
 } = await import(
   new URL(IMPL_PFAD, import.meta.url).href
 ) as {
@@ -223,6 +223,7 @@ const {
   FORECAST_TYPEN: string[];
   FORECAST_FORMAT: string;
   FORECAST_MAX_SIGNALE: number;
+  FORECAST_KEINE_KATEGORIE: string;
   leseForecastEingabe: (p: Record<string, unknown>) => Record<string, unknown>;
 };
 
@@ -588,7 +589,7 @@ const ffPayload = (zusatz: Record<string, unknown> = {}) => ({
 
 const FF_ANTWORT = () => ({
   format: FORECAST_FORMAT,
-  achsen: { wie: 4, was: 3, warum: null },
+  achsen: { wie: 4, was: 3 },
   passung: 72,
   kategorie_vorschlag: "sehenswert",
   sicherheit: "hoch",
@@ -4492,6 +4493,8 @@ test("FF1 Function-Spiegel stimmen exakt mit Profil-, Kategorien- und Prognoseve
   gleich(JSON.stringify(FORECAST_TYPEN), JSON.stringify(["film", "filmreihe", "serie"]),
     "nur Dreieck-Typen");
   gleich(FORECAST_MAX_SIGNALE, 20, "Signalgrenze");
+  falsch(FORECAST_KATEGORIEN.includes(FORECAST_KEINE_KATEGORIE),
+    "der Provider-Platzhalter ist keine achte Produktkategorie");
   gleich(AUFGABEN["film-forecast"].modellAliasPflicht, "gross",
     "film-forecast verlangt den gross-Alias ausdrücklich");
 });
@@ -4549,16 +4552,20 @@ test("FF3 Prompt enthält nur erlaubte Minimaldaten und serverseitige neutrale I
   }
 });
 
-test("FF4 das Structured-Output-Schema ist geschlossen und erzwingt WARUM null sowie alle Enums", async () => {
+test("FF4 das Structured-Output-Schema schließt WARUM aus und begrenzt alle Enums", async () => {
   forecastMit(FF_ANTWORT());
   await forecastRuf();
   const schema = anbieterKoerper().output_config.format.schema as Record<string, unknown>;
   gleich(schema.additionalProperties, false, "Wurzel geschlossen");
   const properties = schema.properties as Record<string, Record<string, unknown>>;
   const achsen = properties.achsen.properties as Record<string, Record<string, unknown>>;
-  gleich(achsen.warum.type, "null", "WARUM ist bereits im Provider-Schema nur null");
+  falsch("warum" in achsen, "WARUM kann im Provider-Schema gar nicht entstehen");
+  gleich(JSON.stringify(properties.achsen.required), JSON.stringify(["wie", "was"]),
+    "nur WIE und WAS werden vom Anbieter angefordert");
+  gleich(properties.achsen.additionalProperties, false,
+    "ein Modell kann WARUM nicht als Zusatzfeld einschleusen");
   gleich(JSON.stringify(properties.kategorie_vorschlag.enum),
-    JSON.stringify([...FORECAST_KATEGORIEN, null]), "Kategorien-Enum");
+    JSON.stringify([...FORECAST_KATEGORIEN, FORECAST_KEINE_KATEGORIE]), "Provider-Kategorien-Enum");
   gleich(JSON.stringify(properties.sicherheit.enum), JSON.stringify(FORECAST_SICHERHEITEN),
     "Sicherheits-Enum");
   const required = schema.required as string[];
@@ -4570,7 +4577,8 @@ test("FF4 das Structured-Output-Schema ist geschlossen und erzwingt WARUM null s
 test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien nicht", async () => {
   for (const kategorie of [...FORECAST_KATEGORIEN, null]) {
     stelleZurueck();
-    const r = await forecast({ kategorie_vorschlag: kategorie });
+    const providerKategorie = kategorie === null ? FORECAST_KEINE_KATEGORIE : kategorie;
+    const r = await forecast({ kategorie_vorschlag: providerKategorie });
     gleich(r.status, 200, `Kategorie ${String(kategorie)}`);
     gleich(daten(r).kategorie_vorschlag, kategorie, `Kategorie ${String(kategorie)} bleibt erhalten`);
   }
@@ -4581,12 +4589,17 @@ test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien nic
     gleich(r.status, 502, `Legacy-Zwischenwert ${alt} wird abgewiesen`);
     gleich(genauEinAbschluss().p_status, "fehler", `${alt}: Abschluss`);
   }
+  stelleZurueck();
+  forecastMit({ ...FF_ANTWORT(), kategorie_vorschlag: null });
+  const nullDirekt = await forecastRuf();
+  gleich(nullDirekt.status, 502, "Provider-null wird nur über die explizite Mappinggrenze akzeptiert");
+  gleich(genauEinAbschluss().p_status, "fehler", "Provider-null: Abschluss");
 });
 
 test("FF6 formfremde oder fachlich unmögliche Modellantworten werden vollständig verworfen und abgeschlossen", async () => {
   const faelle: Array<[string, (a: Record<string, unknown>) => void]> = [
     ["Zusatzfeld", (a) => { a.systemprompt = "leak"; }],
-    ["WARUM-Zahl", (a) => { (a.achsen as Record<string, unknown>).warum = 4; }],
+    ["WARUM-Zusatz", (a) => { (a.achsen as Record<string, unknown>).warum = 4; }],
     ["WIE außerhalb", (a) => { (a.achsen as Record<string, unknown>).wie = 6; }],
     ["Passung außerhalb", (a) => { a.passung = 101; }],
     ["Passung Dezimalzahl", (a) => { a.passung = 72.5; }],
@@ -4636,7 +4649,7 @@ test("FF8 Sicherheit wird serverseitig nach Profilmenge, Artenvielfalt und Ergeb
     name: string,
     signale: Array<Record<string, unknown>>,
     soll: string,
-    achsen: Record<string, number | null> = { wie: 4, was: 3, warum: null },
+    achsen: Record<string, number | null> = { wie: 4, was: 3 },
   ) => {
     stelleZurueck();
     const payload = ffAendere((p) => {
@@ -4656,7 +4669,7 @@ test("FF8 Sicherheit wird serverseitig nach Profilmenge, Artenvielfalt und Ergeb
     [0, 1, 2, 3, 4].map((i) => ffSignal(i, { art: "genre", wert: "genre-" + i })), "niedrig");
   await erwarte("fehlendes WIE deckelt hoch auf mittel",
     [ffSignal(0), ffSignal(1), ffSignal(2), ffSignal(3), ffSignal(4)], "mittel",
-    { wie: null, was: 3, warum: null });
+    { wie: null, was: 3 });
 });
 
 test("FF9 ungültige Eingaben enden vor Reservierung und Anbieter — einschließlich Datenschutz-Zusatzfeldern", async () => {
