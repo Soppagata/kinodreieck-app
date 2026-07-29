@@ -37,6 +37,10 @@ export const AI_TASKS = Object.freeze([
      Antworttexte nie und kann den Beleg nur auf Vorhandensein prüfen, nicht
      auf Wahrheit. */
   "profile-extract",
+  /* Etappe 8: persönliche Vorbewertung eines einzelnen unbewerteten Films.
+     Der Payload-Builder hält fremde Filme, Bewertungen, Notizen und Belege
+     schon vor dieser Fassade zurück; der Server prüft dieselbe Grenze erneut. */
+  "film-forecast",
 ]);
 
 export const AI_PROMPT_VERSION = "v1";

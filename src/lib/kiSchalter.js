@@ -32,7 +32,7 @@
 
 const KEY = "kd:ki";
 const KEY_VERSION = "kd:ki-version";
-export const KI_WAHL_VERSION = "e7-v1";
+export const KI_WAHL_VERSION = "e8-v1";
 
 /* Ein fehlgeschlagenes Schreiben darf besonders beim AUSSCHALTEN nicht den
    zuvor gespeicherten An-Stand wirksam lassen. Das lässt sich bei blockiertem
@@ -72,6 +72,13 @@ export const KI_FUNKTIONEN = {
     /* Doktrin-Ausnahmefall: Es gibt kein deterministisches Gegenstück zu
        „Freitext verstehen". Der Ersatz ist ein Formular (Schlagwörter),
        keine simulierte KI. */
+    beiAus: "ausblenden",
+  },
+  vorbewertung: {
+    label: "KI-Prognosen",
+    beschreibung: "Für unbewertete Filme auf Wunsch eine persönliche Vorbewertung erstellen.",
+    /* Kern-KI-Task: Ein deterministischer Ersatz wäre keine Prognose, sondern
+       eine falsch etikettierte Heuristik. */
     beiAus: "ausblenden",
   },
   diagnose: {

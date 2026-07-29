@@ -129,8 +129,8 @@ check("A", "leererStand() ist der fail-closed Zustand: global null, keine Funkti
   () => { const s = K.leererStand();
     return s.global === null && JSON.stringify(s.funktionen) === "{}" && s.gefragtAm === null
       && Object.keys(s).sort().join(",") === "funktionen,gefragtAm,global"; });
-check("A", "KI_FUNKTIONEN führt genau die drei Kern-KI-Funktionen",
-  () => NAMEN().join(",") === "suche,profil,diagnose");
+check("A", "KI_FUNKTIONEN führt genau die vier Kern-KI-Funktionen",
+  () => NAMEN().join(",") === "suche,profil,vorbewertung,diagnose");
 check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
   () => NAMEN().every((n) => { const f = K.KI_FUNKTIONEN[n];
     return typeof f.label === "string" && f.label.length > 0
@@ -139,7 +139,7 @@ check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
 /* „ausblenden" ist die Doktrin: Bei KI=aus existiert der Knopf nicht. Ein
    Erklärtext wäre die falsche Auskunft — `ai-disabled` heißt „der Betreiber
    hat abgeschaltet", nicht „du hast abgeschaltet". */
-check("A", "alle drei blenden bei Aus AUS — keine erklärt sich nach dem Klick",
+check("A", "alle vier blenden bei Aus AUS — keine erklärt sich nach dem Klick",
   () => NAMEN().every((n) => K.KI_FUNKTIONEN[n].beiAus === "ausblenden"));
 check("A", "KI_WAHL_VERSION ist eine nicht-leere Marke",
   () => typeof K.KI_WAHL_VERSION === "string" && K.KI_WAHL_VERSION.length > 0);
@@ -188,7 +188,7 @@ const UNBEANTWORTET = [
   ["JSON Zeichenkette", { "kd:ki": "\"an\"", "kd:ki-version": K.KI_WAHL_VERSION }],
   ["JSON Liste", { "kd:ki": "[]", "kd:ki-version": K.KI_WAHL_VERSION }],
   ["JSON Zahl", { "kd:ki": "42", "kd:ki-version": K.KI_WAHL_VERSION }],
-  ["nur funktionen gesetzt", { "kd:ki": JSON.stringify({ funktionen: { suche: true, profil: true, diagnose: true } }), "kd:ki-version": K.KI_WAHL_VERSION }],
+  ["nur funktionen gesetzt", { "kd:ki": JSON.stringify({ funktionen: { suche: true, profil: true, vorbewertung: true, diagnose: true } }), "kd:ki-version": K.KI_WAHL_VERSION }],
 ];
 const offen = [];
 for (const [name, inhalt] of UNBEANTWORTET) {
@@ -206,12 +206,12 @@ check("B", "FAIL-CLOSED: ladeStand liefert dabei nie ein `global: true`",
   () => UNBEANTWORTET.every(([, inhalt]) => K.ladeStand(speicher(inhalt)).global !== true));
 /* Der interessanteste Fall: alle Einzelfunktionen ausdrücklich AN, aber die
    Grundfrage nie beantwortet. Das darf nichts öffnen. */
-const nurFunktionen = speicher({ "kd:ki": JSON.stringify({ funktionen: { suche: true, profil: true, diagnose: true } }), "kd:ki-version": K.KI_WAHL_VERSION });
-check("B", "FAIL-CLOSED: drei ausdrücklich eingeschaltete Funktionen ohne Grundentscheidung bleiben AUS",
+const nurFunktionen = speicher({ "kd:ki": JSON.stringify({ funktionen: { suche: true, profil: true, vorbewertung: true, diagnose: true } }), "kd:ki-version": K.KI_WAHL_VERSION });
+check("B", "FAIL-CLOSED: vier ausdrücklich eingeschaltete Funktionen ohne Grundentscheidung bleiben AUS",
   () => NAMEN().every((n) => K.kiAn(n, nurFunktionen) === false));
 /* Und der Normalfall zur Eichung — ohne ihn wäre „alles aus" trivial grün. */
 const an = speicher(AN());
-check("B", "EICHUNG: mit beantworteter Frage und global an sind alle drei AN",
+check("B", "EICHUNG: mit beantworteter Frage und global an sind alle vier AN",
   () => NAMEN().every((n) => K.kiAn(n, an) === true));
 check("B", "ein fehlender Storage (undefined/null) ist ebenfalls AUS, ohne zu werfen",
   () => K.kiAn("suche", undefined) === false && K.kiAn("suche", null) === false
@@ -224,18 +224,20 @@ check("B", "ein fehlender Storage (undefined/null) ist ebenfalls AUS, ohne zu we
    ========================================================================= */
 abschnitt("C", async () => {
 console.log("\n--- C: Dach-Regel ---");
-/* Alle 2³ Kombinationen der drei Einzelwerte unter einem geschlossenen Dach.
+/* Alle 3⁴ Kombinationen der vier Einzelwerte unter einem geschlossenen Dach.
    Nicht ein Beispiel — alle, damit keine Kombination durchrutscht. */
 const durchgerutscht = [];
-for (const suche of [true, false, undefined]) for (const profil of [true, false, undefined]) for (const diagnose of [true, false, undefined]) {
+for (const suche of [true, false, undefined]) for (const profil of [true, false, undefined])
+for (const vorbewertung of [true, false, undefined]) for (const diagnose of [true, false, undefined]) {
   const f = {};
   if (suche !== undefined) f.suche = suche;
   if (profil !== undefined) f.profil = profil;
+  if (vorbewertung !== undefined) f.vorbewertung = vorbewertung;
   if (diagnose !== undefined) f.diagnose = diagnose;
   const s = speicher({ "kd:ki": JSON.stringify({ global: false, funktionen: f, gefragtAm: T0 }), "kd:ki-version": K.KI_WAHL_VERSION });
   for (const n of NAMEN()) if (K.kiAn(n, s) !== false) durchgerutscht.push(JSON.stringify(f) + " / " + n);
 }
-check("C", "DACH: 27 Kombinationen der Einzelwerte unter global=false — keine ist an"
+check("C", "DACH: 81 Kombinationen der Einzelwerte unter global=false — keine ist an"
   + "  [durchgerutscht: " + durchgerutscht.length + (durchgerutscht[0] ? ", zuerst " + durchgerutscht[0] : "") + "]",
   () => durchgerutscht.length === 0);
 check("C", "DACH: auch die globale Frage `kiAn()` ist unter geschlossenem Dach aus",
