@@ -167,13 +167,31 @@ pruefe("T10 Nicht erlaubter Topf-Name wird abgelehnt (CHECK 23514)",
    Schlaegt T10b fehl, fehlt die Migration -- dann bricht jeder Profil-Sync
    mit 23514, und zwar terminal (der Treiber wiederholt bei diesem Code
    nicht). */
-const t10b = await rest("POST", "/kd_personal", {
-  token: A.token,
-  body: { key: PROFILKEY, value: JSON.stringify({ format: 1, version: "p1", signale: [] }) },
-});
+/* Der Test muss beliebig oft gegen dieselben Konten laufen können. Ein früherer
+   erfolgreicher Lauf oder ein echter UI-Test kann den Profil-Topf bereits
+   angelegt haben; ein blindes INSERT endet dann korrekt mit 409 und wurde
+   bislang fälschlich als fehlende Migration gemeldet. Vorhandene Profildaten
+   dürfen wir weder überschreiben noch beim Cleanup löschen. */
+const t10Vorher = await rest(
+  "GET",
+  `/kd_personal?key=eq.${encodeURIComponent(PROFILKEY)}&select=key&limit=1`,
+  { token: A.token },
+);
+const profilSchonDa = t10Vorher.status === 200
+  && Array.isArray(t10Vorher.data)
+  && t10Vorher.data[0]?.key === PROFILKEY;
+const t10b = profilSchonDa
+  ? t10Vorher
+  : await rest("POST", "/kd_personal", {
+    token: A.token,
+    body: { key: PROFILKEY, value: JSON.stringify({ format: 1, version: "p1", signale: [] }) },
+  });
+const profilVomTestAngelegt = !profilSchonDa && (t10b.status === 201 || t10b.status === 200);
 pruefe("T10b Profil-Topf ist in der Key-Whitelist (Migration Etappe 7 gelaufen)",
-  t10b.status === 201 || t10b.status === 200,
-  "HTTP " + t10b.status + (t10b.status === 400 ? " — MIGRATION FEHLT" : ""));
+  profilSchonDa || profilVomTestAngelegt,
+  profilSchonDa
+    ? "bereits vorhanden und für Konto A lesbar"
+    : "HTTP " + t10b.status + (t10b.status === 400 ? " — MIGRATION FEHLT" : ""));
 
 const t10c = await rest("GET", "/kd_personal?key=eq." + PROFILKEY + "&select=key,value", { token: B.token });
 pruefe("T10c Konto B sieht das Profil von Konto A NICHT",
@@ -342,7 +360,13 @@ for (const [nr, fn, koerper] of [
 /* --- Cleanup ------------------------------------------------------------- */
 const cA = await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}`, { token: A.token });
 const cB = await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(TESTKEY)}`, { token: B.token });
-pruefe("Cleanup: beide Testzeilen entfernt", (cA.ok || cA.status === 204) && (cB.ok || cB.status === 204));
+const cProfil = profilVomTestAngelegt
+  ? await rest("DELETE", `/kd_personal?key=eq.${encodeURIComponent(PROFILKEY)}`, { token: A.token })
+  : { ok: true, status: 204 };
+pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt",
+  (cA.ok || cA.status === 204)
+  && (cB.ok || cB.status === 204)
+  && (cProfil.ok || cProfil.status === 204));
 
 console.log("");
 if (fehler.length) {
