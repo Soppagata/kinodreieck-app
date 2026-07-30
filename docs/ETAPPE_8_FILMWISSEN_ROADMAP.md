@@ -42,8 +42,9 @@ ohne offene Rechte- oder Produktfragen still zu entscheiden.
 
 Ergebnisse:
 
-- Block 1 bleibt unverändert und führt keine Webrecherche aus.
-- WARUM bleibt bei fehlendem veröffentlichtem Filmwissen `null`.
+- Block 1 führt keine Webrecherche aus.
+- WARUM darf dort als persönliche Sonnet-Schätzung entstehen; der gemeinsame
+  Cache akzeptiert weiterhin nur belegtes WARUM.
 - Gemeinsames Filmwissen enthält Werkidentität, veröffentlichte Version,
   kurze belegte Einordnung und Fundstellen.
 - Die erste Implementierung verwendet keine ungeklärte Website.
@@ -182,8 +183,9 @@ Ergebnisse:
 - sichtbarer Cache-Miss ohne erfundene Zahl,
 - getrennte Schaltfläche für einen späteren Recherchebericht,
 - Block-1-Prognose startet nie still Recherche,
-- eigene, versionierte Entscheidung vor der Übernahme von WARUM in
-  `film-prognose-v1`.
+- klar gekennzeichnete Berücksichtigung belegter Filmwissenssignale in einer
+  persönlichen Prognose, ohne Übernahme in echte Bewertung oder gemeinsamen
+  Cache.
 
 Fertig, wenn:
 

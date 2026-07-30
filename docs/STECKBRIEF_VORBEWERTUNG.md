@@ -18,17 +18,17 @@ seit Etappe 3); nichts wird ungefragt überschrieben.
 |---|---|
 | Auslöser | **On-demand**: Knopf am unbewerteten Film und direkte Aktion beim Erstellen eines neuen Eintrags („Anlegen & KI-Prognose erstellen"). Der unbewertete Eintrag wird zuerst sicher gespeichert, erst danach beginnt genau ein kostenpflichtiger Aufruf. **Kein Import-Batch im MVP** |
 | Rubrik | **Volle Rubrik**: WIE-Prognose, WAS-Prognose, persönliche Passung, Kategorie-Vorschlag, Sicherheit, Kurzbegründung, verwendete Profilsignale, Modell- und Profilversion, Status (angenommen/korrigiert/verworfen) |
-| WARUM | **Projektweit entschieden 26.07.2026: WARUM = kulturelle Relevanz** (wie der Ingestion-Code heute). WARUM kommt aus gemeinsamem, möglichst belegtem Filmwissen, nicht aus dem Profil; persönliche Verbindung darf die Erklärung ergänzen, nicht ersetzen. Folgearbeit: README/Doku-Angleichung (Restpunkt) |
+| WARUM | **WARUM = kulturelle Relevanz.** Seit der Beta-Entscheidung vom 30.07.2026 darf Sonnet dafür eine ausdrücklich vorläufige persönliche Schätzung aus Filmkontext und Geschmacksprofil liefern. Das ist weder belegtes gemeinsames Filmwissen noch eine echte Bewertung. |
 | KI-Schalter | Vorbewertung ist ein **Kern-KI-Task** (Max: „Tasks, die Sonnet macht"): bei KI=aus ehrlich gekennzeichnet und ausgeblendet — kein deterministischer Ersatz |
 
 ## Konsequenz der WARUM-Entscheidung für den MVP
 
-Der gemeinsame Filmwissens-Cache (Leitfaden Funktion 2) existiert noch nicht.
-Die Prognose kann daher im MVP keinen belegten WARUM-Anteil liefern — der
-Kategorie-Vorschlag (der im Kinodreieck am WARUM hängt) wird als Vorschlag
-mit sichtbarer Unsicherheit geführt, nicht als belegte Einordnung. WARUM
-bleibt im Ergebnis `null`; die Oberfläche erklärt, dass kulturelle Relevanz
-erst mit dem gemeinsamen Filmwissens-Cache belegbar wird.
+Der gemeinsame Filmwissens-Cache (Leitfaden Funktion 2) ist kein Beta-Tor.
+Sonnet darf WARUM im persönlichen Prognosefeld als `0..5` schätzen oder bei
+zu dünner Grundlage `null` liefern. Oberfläche und Speichervertrag markieren
+den Wert als KI-Prognose. Ein belegter gemeinsamer Filmwissens-Wert bleibt ein
+separates, versioniertes Objekt mit Quellen; eine echte Nutzerbewertung bleibt
+weiterhin im Feld `bewertung`.
 
 Der MVP verwendet im Vorbewertungs-Aufruf keine Websuche. Eine Domain-
 Beschränkung würde den festen Suchpreis nicht senken und ersetzt keine
@@ -78,5 +78,5 @@ belegbaren Quellen in den Cache aufgenommen.
 
 ## Abhängigkeiten
 
-Geschmacksprofil (Etappe 7) zwingend. Etappe-5-Unterbau. WARUM-Belegbarkeit
-später über Filmwissens-Cache (nicht Beta-Tor).
+Geschmacksprofil (Etappe 7) zwingend. Etappe-5-Unterbau. Belegtes gemeinsames
+WARUM später über Filmwissens-Cache (nicht Beta-Tor).

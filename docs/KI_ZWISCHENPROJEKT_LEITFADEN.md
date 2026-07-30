@@ -858,7 +858,9 @@ Danach kann jede Produktfunktion diesen Unterbau verwenden.
 Diese Punkte sind absichtlich nicht endgültig festgelegt:
 
 - Bleibt ein vollständiger Gastmodus Teil des öffentlichen Produkts?
-- Ist WARUM endgültig kulturelle Relevanz oder persönliche Prägung?
+- WARUM ist kulturelle Relevanz. Eine persönliche KI-Prognose darf sie
+  vorläufig aus Filmkontext und Geschmack schätzen; belegtes gemeinsames
+  Filmwissen und echte Nutzerbewertung bleiben getrennt.
 - Welche Daten enthält das feste Download-Paket tatsächlich?
 - Erfolgt Account-Login vollständig über Supabase Auth?
 - Läuft die KI-Schnittstelle zunächst als Cloudflare Worker oder

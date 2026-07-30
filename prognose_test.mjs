@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   PROGNOSE_FORMAT, PROGNOSE_SICHERHEIT, PROGNOSE_STATUS,
   deckeleSicherheit, erstellePrognose, lesePrognose,
@@ -20,9 +21,10 @@ function check(name, fn) {
 }
 
 const ZEIT = "2026-07-29T12:00:00.000Z";
+const PROGNOSE_UI = readFileSync(new URL("./src/components/PrognoseBereich.jsx", import.meta.url), "utf8");
 const ergebnis = {
   format: PROGNOSE_FORMAT,
-  achsen: { wie: 4, was: 3, warum: null },
+  achsen: { wie: 4, was: 3, warum: 4 },
   passung: 72,
   kategorie_vorschlag: "sehenswert",
   sicherheit: "mittel",
@@ -59,8 +61,12 @@ check("null ist als unbelegter Kategorie-Vorschlag erlaubt", () =>
   pruefePrognoseErgebnis({ ...ergebnis, kategorie_vorschlag: null }).length === 0);
 check("alter Vier-Kategorien-Zwischenwert wird abgewiesen", () =>
   pruefePrognoseErgebnis({ ...ergebnis, kategorie_vorschlag: "wahrscheinlich_passend" }).length > 0);
-check("WARUM bleibt im MVP zwingend null", () =>
-  pruefePrognoseErgebnis({ ...ergebnis, achsen: { ...ergebnis.achsen, warum: 4 } }).some((f) => /WARUM/.test(f)));
+check("WARUM akzeptiert persönliche Schätzungen von 0..5 oder null", () =>
+  [0, 1, 2, 3, 4, 5, null].every((warum) =>
+    pruefePrognoseErgebnis({ ...ergebnis, achsen: { ...ergebnis.achsen, warum } }).length === 0));
+check("WARUM weist formfremde oder unmögliche Schätzungen ab", () =>
+  [-1, 2.5, 6, "4"].every((warum) =>
+    pruefePrognoseErgebnis({ ...ergebnis, achsen: { ...ergebnis.achsen, warum } }).some((f) => /WARUM/.test(f))));
 check("WIE/WAS akzeptieren nur ganze 0..5 oder null", () =>
   [-1, 2.5, 6, "4"].every((wie) =>
     pruefePrognoseErgebnis({ ...ergebnis, achsen: { ...ergebnis.achsen, wie } }).length > 0)
@@ -118,6 +124,11 @@ check("Annehmen erzeugt weiterhin keine echte Bewertung", () => {
   const r = setzePrognoseStatus(prognose, "angenommen", ZEIT);
   return !("bewertung" in r.prognose) && !("kategorie" in r.prognose);
 });
+check("Oberfläche zeigt WARUM aus der Prognose statt eines festen Leerwerts", () =>
+  PROGNOSE_UI.includes('<Achse name="WARUM" wert={e.achsen.warum}'));
+check("Oberfläche kennzeichnet WARUM als Schätzung und nie als echte Bewertung", () =>
+  PROGNOSE_UI.includes("vorläufige Sonnet-Schätzung")
+  && PROGNOSE_UI.includes("keine echte Bewertung"));
 check("ungültige gespeicherte Prognose wird beim Lesen quarantänisiert", () => {
   const r = lesePrognose({ titel: "Test", prognose: { ...prognose, status: "erfunden" } });
   return !r.ok && r.prognose === null && r.fehler.length > 0;
@@ -129,18 +140,23 @@ check("fehlende Prognose ist ein sauberer Leerzustand", () => {
 
 check("0 bis 2 Signale deckeln auf sehr niedrig", () =>
   [0, 1, 2].every((signalAnzahl) =>
-    deckeleSicherheit("hoch", { signalAnzahl, signalArten: 2, achsen: { wie: 4, was: 3 } }) === "sehr_niedrig"));
+    deckeleSicherheit("hoch", { signalAnzahl, signalArten: 2, achsen: { wie: 4, was: 3, warum: 4 } }) === "sehr_niedrig"));
 check("3 bis 4 Signale deckeln auf niedrig", () =>
   [3, 4].every((signalAnzahl) =>
-    deckeleSicherheit("hoch", { signalAnzahl, signalArten: 2, achsen: { wie: 4, was: 3 } }) === "niedrig"));
+    deckeleSicherheit("hoch", { signalAnzahl, signalArten: 2, achsen: { wie: 4, was: 3, warum: 4 } }) === "niedrig"));
 check("auch viele Signale nur einer Art deckeln auf niedrig", () =>
-  deckeleSicherheit("hoch", { signalAnzahl: 8, signalArten: 1, achsen: { wie: 4, was: 3 } }) === "niedrig");
+  deckeleSicherheit("hoch", { signalAnzahl: 8, signalArten: 1, achsen: { wie: 4, was: 3, warum: 4 } }) === "niedrig");
 check("ab 5 Signalen aus 2 Arten kann hoch bestehen bleiben", () =>
-  deckeleSicherheit("hoch", { signalAnzahl: 5, signalArten: 2, achsen: { wie: 4, was: 3 } }) === "hoch");
-check("fehlendes WIE oder WAS deckelt hoch auf mittel", () =>
-  deckeleSicherheit("hoch", { signalAnzahl: 5, signalArten: 2, achsen: { wie: null, was: 3 } }) === "mittel");
+  deckeleSicherheit("hoch", { signalAnzahl: 5, signalArten: 2, achsen: { wie: 4, was: 3, warum: 4 } }) === "hoch");
+check("fehlendes WIE, WAS oder WARUM deckelt hoch auf mittel", () =>
+  ["wie", "was", "warum"].every((achse) =>
+    deckeleSicherheit("hoch", {
+      signalAnzahl: 5,
+      signalArten: 2,
+      achsen: { wie: 4, was: 3, warum: 4, [achse]: null },
+    }) === "mittel"));
 check("unbekannte Sicherheit fällt sicher auf sehr niedrig", () =>
-  deckeleSicherheit("sicher!", { signalAnzahl: 20, signalArten: 5, achsen: { wie: 5, was: 5 } }) === "sehr_niedrig");
+  deckeleSicherheit("sicher!", { signalAnzahl: 20, signalArten: 5, achsen: { wie: 5, was: 5, warum: 5 } }) === "sehr_niedrig");
 check("abweichende Profilversion markiert die Prognose als veraltet", () =>
   prognoseIstVeraltet(prognose, "p4") && !prognoseIstVeraltet(prognose, "p3"));
 check("Passung wird als Band statt als scheinpräzise Prozentzahl formuliert", () =>

@@ -85,7 +85,7 @@ Teile:
   "achsen": {
     "wie": 0,
     "was": 0,
-    "warum": null
+    "warum": 0
   },
   "passung": 0,
   "kategorie_vorschlag": "sehenswert",
@@ -95,10 +95,11 @@ Teile:
 }
 ```
 
-Der geschlossene Anbieter-Vertrag ist absichtlich noch enger: Das Modell gibt
-nur WIE und WAS aus; WARUM ist im Provider-Schema nicht vorhanden und kann
-wegen `additionalProperties: false` auch nicht eingeschleust werden. Der
-Server ergänzt danach unveränderlich `warum: null`. Für den optionalen
+Der geschlossene Anbieter-Vertrag fordert alle drei Achsen. WARUM bleibt
+kulturelle Relevanz, darf in der Freundeskreis-Beta aber ausdrücklich als
+persönliche Sonnet-Schätzung aus Filmkontext und Geschmacksprofil entstehen.
+Der Wert ist keine belegte gemeinsame Einordnung und keine echte Bewertung;
+bei zu dünner Grundlage liefert das Modell `null`. Für den optionalen
 Kategorie-Vorschlag verwendet der Anbieter intern den reinen String
 `kein_vorschlag`; ausschließlich der Server bildet diesen Wert auf das
 öffentliche `null` ab. Der interne Platzhalter ist keine achte Kategorie und
@@ -106,8 +107,7 @@ verlässt den Server nicht.
 
 Grenzen:
 
-- `wie` und `was`: ganze Zahl 0 bis 5 oder `null`.
-- `warum`: im MVP immer `null`.
+- `wie`, `was` und `warum`: ganze Zahl 0 bis 5 oder `null`.
 - `passung`: ganze Zahl 0 bis 100.
 - `kategorie_vorschlag`: ausschließlich `immer_gut`, `kult`,
   `kult_klassiker`, `daemlich_aber_herrlich`, `trash`, `sehenswert`,
@@ -142,8 +142,8 @@ dieselbe Menge.
 - Drei oder vier Signale: höchstens `niedrig`.
 - Ab fünf Signalen aus mindestens zwei Signalarten darf das Modell
   `mittel` oder `hoch` vorschlagen.
-- Eine hohe Modellsicherheit wird zusätzlich heruntergestuft, wenn WIE oder
-  WAS `null` bleibt.
+- Eine hohe Modellsicherheit wird zusätzlich heruntergestuft, wenn WIE, WAS
+  oder WARUM `null` bleibt.
 
 Damit wird ein junges Profil nicht als präzise verkauft, aber ein bewusst
 gewünschter Einzelaufruf auch nicht künstlich blockiert.
@@ -156,7 +156,7 @@ Die Prognose liegt separat als `film.prognose`, nie in `film.bewertung`:
 {
   "format": "film-prognose-v1",
   "erstellt": "ISO-8601",
-  "promptVersion": "v1",
+  "promptVersion": "v2",
   "profilVersion": "p3",
   "modell": "claude-sonnet-5",
   "verbrauch": {

@@ -94,15 +94,16 @@ export function PrognoseBereich({
       <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
         <Achse name="WIE" wert={e.achsen.wie} farbe={T.wie} />
         <Achse name="WAS" wert={e.achsen.was} farbe={T.was} />
-        <Achse name="WARUM" wert={null} farbe={T.warum} />
+        <Achse name="WARUM" wert={e.achsen.warum} farbe={T.warum} />
       </div>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
-        WARUM bedeutet kulturelle Relevanz und kann ohne gemeinsamen Filmwissens-Cache noch nicht belegt werden.
+        WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil
+        {" "}– kein belegter gemeinsamer Filmwissen-Wert und keine echte Bewertung.
       </p>
       <div style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.55 }}>{e.begruendung}</div>
       <div style={{ ...mono }}>
         Kategorie-Vorschlag: <strong style={{ color: T.leinwand }}>{e.kategorie_vorschlag ? bewertungskategorieLabel(e.kategorie_vorschlag) : "keiner"}</strong>
-        {" "}· noch unbelegt · {SICHERHEIT_LABEL[e.sicherheit]}
+        {" "}· KI-Vorschlag · {SICHERHEIT_LABEL[e.sicherheit]}
       </div>
 
       {e.verwendete_signale.length > 0 && (

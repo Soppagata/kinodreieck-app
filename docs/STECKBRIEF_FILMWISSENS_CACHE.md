@@ -21,24 +21,25 @@ gespeichert. Weitere Accounts verwenden denselben Cache, statt dieselben
 Quellen erneut abzurufen. Der daraus abgeleitete persönliche Bericht bleibt
 dagegen im jeweiligen Account.
 
-**WARUM bedeutet kulturelle Relevanz.** Es wird aus den recherchierten Belegen
-abgeleitet, nicht aus persönlichem Geschmack, Popularität oder dem Gedächtnis
-des Sprachmodells.
+**WARUM bedeutet kulturelle Relevanz.** Im gemeinsamen Cache wird es aus den
+recherchierten Belegen abgeleitet, nicht aus persönlichem Geschmack,
+Popularität oder dem Gedächtnis des Sprachmodells. Eine persönliche
+KI-Prognose darf denselben Begriff vorläufig schätzen, ist aber kein
+Cache-Eintrag.
 
 ## Schutz von Etappe 8, Block 1
 
-Der bestehende Vorbewertungs-MVP bleibt unverändert:
+Der Vorbewertungs-MVP bleibt technisch getrennt:
 
 - Der normale Knopf „KI-Prognose erstellen“ führt keine Webrecherche aus.
-- Bei fehlendem Filmwissen bleibt `warum` in `film-prognose-v1` weiterhin
-  `null`.
+- Bei fehlendem Filmwissen darf Sonnet `warum` in der persönlichen Prognose
+  vorsichtig aus Filmkontext und Geschmacksprofil schätzen oder `null` lassen.
 - Ein Cache-Miss löst nicht still einen zweiten kostenpflichtigen Auftrag aus.
 - Prognose und echte Bewertung bleiben getrennt.
-- Dieser Steckbrief ändert weder Code noch Datenformat noch Statusfluss von
-  Block 1.
+- Der gemeinsame Cache übernimmt niemals eine persönliche Schätzung.
 
-Die spätere Verbindung von Filmwissen und persönlicher Prognose braucht eine
-eigene Formatversion und eine eigene Abnahme.
+Eine spätere Übergabe belegter Filmwissenssignale an die persönliche Prognose
+braucht eine eigene Abnahme.
 
 ## Wie die Vorbewertung heute arbeitet
 
@@ -282,7 +283,8 @@ eine kontrollierte interne Kennung aus geprüfter Werkidentität verwendet.
 
 - **Cache-Treffer:** vorhandene veröffentlichte Version verwenden; kein
   Quellen- oder KI-Aufruf.
-- **Cache-Miss bei normaler Vorbewertung:** `warum: null`; keine Recherche.
+- **Cache-Miss bei normaler Vorbewertung:** keine Recherche; eine persönliche
+  Sonnet-Schätzung von WARUM bleibt erlaubt und getrennt gekennzeichnet.
 - **Ausdrücklich ausgelöster Auto-Bewertungsbericht:** Positivliste und
   Kostenmaximum anzeigen, danach gezielte Recherche starten.
 - **Gleichzeitige identische Aufträge:** auf einen laufenden Auftrag

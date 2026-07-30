@@ -608,7 +608,7 @@ const ffPayload = (zusatz: Record<string, unknown> = {}) => ({
 
 const FF_ANTWORT = () => ({
   format: FORECAST_FORMAT,
-  achsen: { wie: 4, was: 3 },
+  achsen: { wie: 4, was: 3, warum: 4 },
   passung: 72,
   kategorie_vorschlag: "sehenswert",
   sicherheit: "hoch",
@@ -629,7 +629,7 @@ const forecastRuf = (payload: Record<string, unknown> = ffPayload()) =>
   ruf({
     task: "film-forecast",
     vorgangId: neueVorgangId(),
-    promptVersion: "v1",
+    promptVersion: "v2",
     profilVersion: "p5",
     payload,
   });
@@ -4581,14 +4581,14 @@ test("FF2 Erfolgsfall liefert Client-gültige Daten, echte Modell-ID und vollst�
   const d = daten(r);
   gleich(pruefeClientPrognoseErgebnis(d).length, 0,
     "die bereinigte Serverausgabe besteht die echte Clientprüfung");
-  gleich(d.achsen.warum, null, "WARUM bleibt null");
+  gleich(d.achsen.warum, 4, "persönliche WARUM-Schätzung bleibt erhalten");
   gleich(d.verwendete_signale[0].id, "S1", "Signal-ID");
   gleich(d.verwendete_signale[0].wert, "horror", "Signal wird serverseitig aufgelöst");
   gleich((r.daten.verbrauch as Record<string, unknown>).inputTokens, 700, "Inputtokens");
   gleich((r.daten.verbrauch as Record<string, unknown>).outputTokens, 180, "Outputtokens");
   wahr(((r.daten.verbrauch as Record<string, unknown>).kostenUsdCent as number) > 0, "Kosten > 0");
   gleich(startKoerper().p_modell_alias, "gross", "gross reserviert");
-  gleich(startKoerper().p_prompt_version, "v1", "Promptversion protokolliert");
+  gleich(startKoerper().p_prompt_version, "v2", "Promptversion protokolliert");
   gleich(startKoerper().p_profil_version, "p5", "Profilversion protokolliert");
   gleich(genauEinAbschluss().p_modell, "claude-sonnet-5-20260715", "echtes Modell protokolliert");
 });
@@ -4614,6 +4614,14 @@ test("FF3 Prompt enthält nur erlaubte Minimaldaten und serverseitige neutrale I
   };
   gleich(JSON.stringify(gesendet), JSON.stringify(eingabe),
     "genau die geprüfte Eingabe geht an den Anbieter");
+  const system = systemtext();
+  wahr(system.includes("WARUM beschreibt kulturelle bzw. filmhistorische Relevanz"),
+    "WARUM behält die vereinbarte Bedeutung");
+  wahr(system.includes("persoenliche KI-Schaetzung")
+    && system.includes("kein belegter gemeinsamer Filmwissen-Wert"),
+  "der Auftrag trennt persönliche Schätzung von belegtem Filmwissen");
+  wahr(system.includes("Behaupte keine Recherche, Quelle oder Beleglage"),
+    "das Modell darf trotz Schätzung keine Recherche oder Quellen erfinden");
   const roh = JSON.stringify(gesendet);
   for (const verboten of [
     "beleg", "weitereBelege", "quelle", "bewertung", "notiz", "begruendung",
@@ -4623,16 +4631,16 @@ test("FF3 Prompt enthält nur erlaubte Minimaldaten und serverseitige neutrale I
   }
 });
 
-test("FF4 das Structured-Output-Schema schließt WARUM aus und begrenzt alle Enums", async () => {
+test("FF4 das Structured-Output-Schema fordert alle drei Achsen und begrenzt alle Enums", async () => {
   forecastMit(FF_ANTWORT());
   await forecastRuf();
   const schema = anbieterKoerper().output_config.format.schema as Record<string, unknown>;
   gleich(schema.additionalProperties, false, "Wurzel geschlossen");
   const properties = schema.properties as Record<string, Record<string, unknown>>;
   const achsen = properties.achsen.properties as Record<string, Record<string, unknown>>;
-  falsch("warum" in achsen, "WARUM kann im Provider-Schema gar nicht entstehen");
-  gleich(JSON.stringify(properties.achsen.required), JSON.stringify(["wie", "was"]),
-    "nur WIE und WAS werden vom Anbieter angefordert");
+  wahr("warum" in achsen, "WARUM ist als persönliche Schätzung im Provider-Schema enthalten");
+  gleich(JSON.stringify(properties.achsen.required), JSON.stringify(["wie", "was", "warum"]),
+    "WIE, WAS und WARUM werden vom Anbieter angefordert");
   gleich(properties.achsen.additionalProperties, false,
     "ein Modell kann WARUM nicht als Zusatzfeld einschleusen");
   gleich(JSON.stringify(properties.kategorie_vorschlag.enum),
@@ -4670,7 +4678,11 @@ test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien nic
 test("FF6 formfremde oder fachlich unmögliche Modellantworten werden vollständig verworfen und abgeschlossen", async () => {
   const faelle: Array<[string, (a: Record<string, unknown>) => void]> = [
     ["Zusatzfeld", (a) => { a.systemprompt = "leak"; }],
-    ["WARUM-Zusatz", (a) => { (a.achsen as Record<string, unknown>).warum = 4; }],
+    ["WARUM außerhalb", (a) => { (a.achsen as Record<string, unknown>).warum = 6; }],
+    ["WARUM negativ", (a) => { (a.achsen as Record<string, unknown>).warum = -1; }],
+    ["WARUM Dezimalzahl", (a) => { (a.achsen as Record<string, unknown>).warum = 2.5; }],
+    ["WARUM als String", (a) => { (a.achsen as Record<string, unknown>).warum = "4"; }],
+    ["WARUM fehlt", (a) => { delete (a.achsen as Record<string, unknown>).warum; }],
     ["WIE außerhalb", (a) => { (a.achsen as Record<string, unknown>).wie = 6; }],
     ["Passung außerhalb", (a) => { a.passung = 101; }],
     ["Passung Dezimalzahl", (a) => { a.passung = 72.5; }],
@@ -4720,7 +4732,7 @@ test("FF8 Sicherheit wird serverseitig nach Profilmenge, Artenvielfalt und Ergeb
     name: string,
     signale: Array<Record<string, unknown>>,
     soll: string,
-    achsen: Record<string, number | null> = { wie: 4, was: 3 },
+    achsen: Record<string, number | null> = { wie: 4, was: 3, warum: 4 },
   ) => {
     stelleZurueck();
     const payload = ffAendere((p) => {
@@ -4738,9 +4750,14 @@ test("FF8 Sicherheit wird serverseitig nach Profilmenge, Artenvielfalt und Ergeb
     [ffSignal(0), ffSignal(1), ffSignal(2), ffSignal(3), ffSignal(4)], "hoch");
   await erwarte("viele aus nur einer Art -> niedrig",
     [0, 1, 2, 3, 4].map((i) => ffSignal(i, { art: "genre", wert: "genre-" + i })), "niedrig");
-  await erwarte("fehlendes WIE deckelt hoch auf mittel",
-    [ffSignal(0), ffSignal(1), ffSignal(2), ffSignal(3), ffSignal(4)], "mittel",
-    { wie: null, was: 3 });
+  for (const [name, achsen] of [
+    ["fehlendes WIE", { wie: null, was: 3, warum: 4 }],
+    ["fehlendes WAS", { wie: 4, was: null, warum: 4 }],
+    ["fehlendes WARUM", { wie: 4, was: 3, warum: null }],
+  ] as Array<[string, Record<string, number | null>]>) {
+    await erwarte(name + " deckelt hoch auf mittel",
+      [ffSignal(0), ffSignal(1), ffSignal(2), ffSignal(3), ffSignal(4)], "mittel", achsen);
+  }
 });
 
 test("FF9 ungültige Eingaben enden vor Reservierung und Anbieter — einschließlich Datenschutz-Zusatzfeldern", async () => {

@@ -1208,10 +1208,11 @@ const FORECAST_SCHEMA = {
     achsen: {
       type: "object",
       additionalProperties: false,
-      required: ["wie", "was"],
+      required: ["wie", "was", "warum"],
       properties: {
         wie: { type: ["integer", "null"] },
         was: { type: ["integer", "null"] },
+        warum: { type: ["integer", "null"] },
       },
     },
     passung: { type: "integer" },
@@ -1231,8 +1232,8 @@ function forecastAntwortFormGueltig(wert: unknown): wert is Record<string, unkno
     "begruendung", "verwendete_signal_ids",
   ])) return false;
   if (wert.format !== FORECAST_FORMAT || !istReinesObjekt(wert.achsen)
-    || !hatGenauSchluessel(wert.achsen, ["wie", "was"])) return false;
-  for (const achse of ["wie", "was"]) {
+    || !hatGenauSchluessel(wert.achsen, ["wie", "was", "warum"])) return false;
+  for (const achse of ["wie", "was", "warum"]) {
     const v = eigenerWert(wert.achsen, achse);
     if (!(v === null || (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 5))) return false;
   }
@@ -1263,7 +1264,8 @@ function deckeleForecastSicherheit(
   let maximum = 3;
   if (anzahl <= 2) maximum = 0;
   else if (anzahl <= 4 || arten < 2) maximum = 1;
-  if (eigenerWert(achsen, "wie") === null || eigenerWert(achsen, "was") === null) {
+  if (eigenerWert(achsen, "wie") === null || eigenerWert(achsen, "was") === null
+    || eigenerWert(achsen, "warum") === null) {
     maximum = Math.min(maximum, 2);
   }
   return FORECAST_SICHERHEITEN[Math.min(rang, maximum)];
@@ -1777,9 +1779,9 @@ export const AUFGABEN: Record<string, Aufgabe> = {
 
   /* ---------- film-forecast (Etappe 8) --------------------------------------
      Eine persoenliche Prognose fuer genau EINEN unbewerteten Film bzw. eine
-     Serie. Sie ist ausdruecklich keine echte Bewertung. WARUM bleibt null,
-     weil der gemeinsame, belegte Filmwissens-Cache erst ein spaeterer Block
-     ist. Auch die Kategorie bleibt deshalb ein sichtbar unbelegter Vorschlag.
+     Serie. Sie ist ausdruecklich keine echte Bewertung. WARUM darf hier als
+     persoenliche, vorlaeufige Schaetzung entstehen; gemeinsames belegtes
+     Filmwissen bleibt davon technisch und sprachlich getrennt.
 
      `modellAliasPflicht` wird im gemeinsamen Rumpf VOR Reservierung geprueft:
      fehlt die Migration oder ist die Aufgabe falsch geroutet, gibt es keinen
@@ -1792,16 +1794,18 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         "Du erstellst eine persoenliche KI-Prognose fuer einen unbewerteten Film oder eine Serie.",
         "Das Ergebnis ist KEINE Bewertung der Person und KEINE bereits abgegebene Filmbewertung.",
         "",
-        "Verwende ausschliesslich die Metadaten und bestaetigten Profilsignale in <forecast_json>.",
-        "Fuehre kein externes Filmwissen, keine Quellenbehauptung und keine kulturelle Relevanz ein.",
+        "Verwende die Filmdaten und bestaetigten Profilsignale in <forecast_json>.",
+        "Du darfst daraus und aus deinem allgemeinen Filmkontext vorsichtig schaetzen.",
+        "Behaupte keine Recherche, Quelle oder Beleglage, die nicht in der Eingabe steht.",
         "WIE beschreibt die erwartete persoenliche Passung von Form, Handwerk und Inszenierung.",
         "WAS beschreibt die erwartete persoenliche Passung von Stoff, Thema und Erzaehlung.",
-        "WARUM waere kulturelle bzw. filmhistorische Relevanz. Dafuer fehlt hier belegtes Filmwissen.",
-        "Das Ausgabeschema enthaelt WARUM deshalb absichtlich nicht. Behaupte dazu nichts in der Begruendung.",
+        "WARUM beschreibt kulturelle bzw. filmhistorische Relevanz.",
+        "WARUM ist hier nur eine persoenliche KI-Schaetzung, kein belegter gemeinsamer Filmwissen-Wert.",
         "",
         "Regeln:",
         "- `format` ist exakt `" + FORECAST_FORMAT + "`.",
-        "- WIE und WAS sind ganze Zahlen 0 bis 5 oder null. Null ist ehrlicher als erfundene Praezision.",
+        "- WIE, WAS und WARUM sind ganze Zahlen 0 bis 5 oder null.",
+        "  Null ist ehrlicher als erfundene Praezision.",
         "- `passung` ist eine ganze Zahl 0 bis 100 und meint nur die persoenliche Passung.",
         "- `kategorie_vorschlag` ist genau eine erlaubte persoenliche Kategorie oder",
         "  `" + FORECAST_KEINE_KATEGORIE + "`, wenn kein ehrlicher Vorschlag moeglich ist.",
@@ -1853,7 +1857,7 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           achsen: {
             wie: eigenerWert(achsen, "wie"),
             was: eigenerWert(achsen, "was"),
-            warum: null,
+            warum: eigenerWert(achsen, "warum"),
           },
           passung: inhalt.passung,
           kategorie_vorschlag: inhalt.kategorie_vorschlag === FORECAST_KEINE_KATEGORIE

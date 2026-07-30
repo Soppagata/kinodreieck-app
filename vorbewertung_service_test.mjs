@@ -36,7 +36,7 @@ const antwort = {
   modellAlias: "gross",
   data: {
     format: "film-prognose-v1",
-    achsen: { wie: 4, was: 3, warum: null },
+    achsen: { wie: 4, was: 3, warum: 4 },
     passung: 78,
     kategorie_vorschlag: "kult",
     sicherheit: "sehr_niedrig",
@@ -73,7 +73,7 @@ await check("Aufgabe, Payload und Profilversion gehen an die richtige Grenze", a
   await erstelleVorbewertung(film, { profil, ai: d.ai });
   const [task, payload, optionen] = d.rufe[0];
   return task === "film-forecast" && optionen.profilVersion === "p2"
-    && optionen.promptVersion === "v1"
+    && optionen.promptVersion === "v2"
     && Object.keys(payload).sort().join(",") === "film,profil";
 });
 await check("Vorgangs-ID und Abbruchsignal werden ohne Retry durchgereicht", async () => {
@@ -104,8 +104,13 @@ await check("fehlende tatsächliche Modell-ID macht die Antwort ungültig", asyn
   await erstelleVorbewertung(film, { profil, ai: d.ai }).catch(() => { abgewiesen = true; });
   return d.rufe.length === 1 && abgewiesen;
 });
-await check("WARUM-Wert aus einer manipulierten Antwort wird nie gespeichert", async () => {
-  const d = aiDoppel({ ...antwort, data: { ...antwort.data, achsen: { wie: 4, was: 3, warum: 5 } } });
+await check("gültige persönliche WARUM-Schätzung wird getrennt gespeichert", async () => {
+  const d = aiDoppel();
+  const p = await erstelleVorbewertung(film, { profil, ai: d.ai });
+  return p?.ergebnis.achsen.warum === 4 && !("bewertung" in p);
+});
+await check("ungültiger WARUM-Wert aus einer manipulierten Antwort wird nie gespeichert", async () => {
+  const d = aiDoppel({ ...antwort, data: { ...antwort.data, achsen: { wie: 4, was: 3, warum: 6 } } });
   let p = null;
   await erstelleVorbewertung(film, { profil, ai: d.ai }).then((x) => { p = x; }).catch(() => {});
   return p === null;

@@ -1,7 +1,7 @@
 import { BEWERTUNGSKATEGORIE_IDS } from "./kategorien.js";
 
 export const PROGNOSE_FORMAT = "film-prognose-v1";
-export const PROGNOSE_PROMPT_VERSION = "v1";
+export const PROGNOSE_PROMPT_VERSION = "v2";
 export const PROGNOSE_STATUS = Object.freeze(["offen", "angenommen", "korrigiert", "verworfen"]);
 export const PROGNOSE_SICHERHEIT = Object.freeze(["sehr_niedrig", "niedrig", "mittel", "hoch"]);
 
@@ -53,7 +53,7 @@ export function pruefePrognoseErgebnis(ergebnis) {
   } else {
     if (!istSkala(ergebnis.achsen.wie)) fehler.push("WIE muss 0..5 oder null sein");
     if (!istSkala(ergebnis.achsen.was)) fehler.push("WAS muss 0..5 oder null sein");
-    if (ergebnis.achsen.warum !== null) fehler.push("WARUM muss im MVP null sein");
+    if (!istSkala(ergebnis.achsen.warum)) fehler.push("WARUM muss 0..5 oder null sein");
   }
   if (!Number.isInteger(ergebnis.passung) || ergebnis.passung < 0 || ergebnis.passung > 100) {
     fehler.push("Passung muss eine ganze Zahl von 0 bis 100 sein");
@@ -172,7 +172,9 @@ export function deckeleSicherheit(sicherheit, {
   let maximum = 3;
   if (signalAnzahl <= 2) maximum = 0;
   else if (signalAnzahl <= 4 || signalArten < 2) maximum = 1;
-  if (achsen?.wie == null || achsen?.was == null) maximum = Math.min(maximum, 2);
+  if (achsen?.wie == null || achsen?.was == null || achsen?.warum == null) {
+    maximum = Math.min(maximum, 2);
+  }
   return PROGNOSE_SICHERHEIT[Math.min(rang, maximum)];
 }
 

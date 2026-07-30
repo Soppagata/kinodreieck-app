@@ -266,7 +266,7 @@ const p12 = await ruf(
   {
     task: "intelligent-search",
     vorgangId: crypto.randomUUID(),
-    promptVersion: "v1",
+    promptVersion: "v2",
     payload: { suchsatz: suchsatzEcht, listen: SUCH_LISTEN },
   },
 );
@@ -305,7 +305,7 @@ const p14 = await ruf(
   {
     task: "intelligent-search",
     vorgangId: crypto.randomUUID(),
-    promptVersion: "v1",
+    promptVersion: "v2",
     payload: { suchsatz: angriff, listen: SUCH_LISTEN },
   },
 );
@@ -407,7 +407,8 @@ pruefe(
     && typeof p17.daten?.modell === "string"
     && p17.daten.modell.length > 0
     && d17?.format === "film-prognose-v1"
-    && d17?.achsen?.warum === null
+    && (d17?.achsen?.warum === null
+      || (Number.isInteger(d17.achsen.warum) && d17.achsen.warum >= 0 && d17.achsen.warum <= 5))
     && Number.isInteger(d17?.passung)
     && d17.passung >= 0 && d17.passung <= 100
     && Array.isArray(d17?.verwendete_signale)
