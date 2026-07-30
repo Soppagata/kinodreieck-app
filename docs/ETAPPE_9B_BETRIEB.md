@@ -107,11 +107,13 @@ zweite Backup.
 
 ## 2. Supabase-Datenbank: Entscheidungstor
 
-Vor 9c wird genau eine Variante mit Datum und Verantwortlichem festgelegt:
+Vor 9c wird genau eine Variante mit Datum und Verantwortlichem festgelegt.
+Für Kinodreieck wurde am 30. Juli 2026 **Free** gewählt; verantwortlich ist
+Max. Der akzeptierte maximale Datenverlust beträgt sieben Tage.
 
 | Variante | Mindestverfahren | Entscheidung |
 |---|---|---|
-| Free | wöchentlicher logischer Dump, zusätzlich vor Migration, Löschung und Produktionsrelease; Restore-Probe vor 9c und nach jeder Schemaänderung | nur tragfähig, wenn bis zu sieben Tage RPO akzeptiert und die Handarbeit verbindlich terminiert ist |
+| Free | wöchentlicher logischer Dump, zusätzlich vor Migration, Löschung und Produktionsrelease; Restore-Probe vor 9c und nach jeder Schemaänderung | gewählt; jeweils sonntags sowie vor jedem genannten Eingriff |
 | Pro | tägliche Plattform-Backups mit derzeit sieben Tagen Aufbewahrung; trotzdem logischer Dump vor riskanten Eingriffen und unabhängige Restore-Probe | Empfehlung vor fremden Konten, wenn der laufende Preis akzeptiert ist |
 
 Bleibt die Entscheidung offen, werden keine fremden Konten eingeladen.
@@ -122,9 +124,14 @@ Runbook vor dem nächsten Release zu erweitern.
 
 ### Logischen Dump erzeugen
 
-Voraussetzungen: passende Supabase CLI, Docker Desktop, PostgreSQL-Client und
-die Datenbank-Verbindungs-URL aus **Connect**. Der Zielordner muss verschlüsselt
-und außerhalb dieses Repositories liegen.
+Voraussetzungen: passende Supabase CLI, PostgreSQL-Client und die
+Datenbank-Verbindungs-URL aus **Connect**. Der Zielordner muss verschlüsselt und
+außerhalb dieses Repositories liegen. Der normale CLI-Weg verwendet Docker
+Desktop. Falls Docker nicht installiert ist, darf im Free-Plan der
+`--dry-run`-Dumpauftrag der CLI mit einem offiziellen, zur Server-Hauptversion
+passenden PostgreSQL-Client ausgeführt werden. Dieses client-only Verfahren
+wurde am 30. Juli 2026 mit PostgreSQL 17 praktisch restauriert; die von der CLI
+erzeugten Parameter dürfen dabei nicht ins Protokoll oder Repository geraten.
 
 ```bash
 KD_DR_DIR="/absoluter/verschluesselter/pfad/kinodreieck-db-JJJJ-MM-TT"
@@ -448,18 +455,18 @@ App-Backup einspielen.
 ## 9. Abnahmecheck 9b
 
 - [ ] App-Backup, zweites Gerät, Restore und Rückgängig praktisch grün
-- [ ] Free oder Pro entschieden und Verantwortlichkeit terminiert
-- [ ] logischer Dump außerhalb des Repos, Prüfsummen vorhanden
-- [ ] Restore im Wegwerfziel und `npm run test:rls` grün
-- [ ] KI-Notaus ohne Anbieteraufruf belegt
-- [ ] Beta-Limits abgefragt und Tageslimit 10
+- [x] Free oder Pro entschieden und Verantwortlichkeit terminiert
+- [x] logischer Dump außerhalb des Repos, Prüfsummen vorhanden
+- [x] Restore im Wegwerfziel, direkte RLS-Kontentrennung und produktiver RLS-Vertrag grün
+- [x] KI-Notaus ohne Anbieteraufruf belegt
+- [x] Beta-Limits abgefragt und Tageslimit 10
 - [ ] Supabase-/Anbieterausfall als Trockenlauf nachvollziehbar
 - [ ] Pages-Rollback samt Domain-Smoke geprobt
 - [ ] Function-Rollback aus bekanntem Commit geprobt
-- [ ] Schlüsselorte und Minimalrechte geprüft, keine Werte protokolliert
-- [ ] Accountlöschung am Wegwerfkonto vollständig belegt
-- [ ] `npm test` und `npm run test:function` grün
-- [ ] finaler Build-, Bundle- und Secret-Scan grün
+- [x] Schlüsselorte und Minimalrechte geprüft, keine Werte protokolliert
+- [x] Accountlöschung am Wegwerfkonto vollständig belegt
+- [x] `npm test` und `npm run test:function` grün
+- [x] finaler Build-, Bundle- und Secret-Scan grün
 
 ## Veränderliche Plattformquellen
 

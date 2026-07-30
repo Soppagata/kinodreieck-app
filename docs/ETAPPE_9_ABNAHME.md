@@ -29,6 +29,7 @@ vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 | Accountlöschung | grün gegen Produktion | technisches Wegwerfkonto samt persönlicher Testzeile angelegt, gelöscht und das Fehlen beider Ebenen direkt geprüft |
 | GitHub-Produktion | gehärtet | Required Reviewer aktiv; ausschließlich `main` darf die Produktionsumgebung deployen |
 | Supabase-Registrierung | geschlossen | neue Sign-ups aus; Confirm email für manuell angelegte Beta-Konten aus |
+| Datenbank-Disaster-Recovery | grün im Free-Plan | Produktionsdump mit getrennten Rollen-, Schema- und Datendateien; vollständiger lokaler Restore in PostgreSQL 17, 16 Tabellen, 38 Funktionen, 17 Policies, zwei Konten und direkte RLS-Kontentrennung geprüft |
 | Betriebsrunbook | grün | Not-Aus, Ausfälle, Rollback, Schlüsselrotation, Löschung sowie Rückweg und Beleg dokumentiert |
 | Beta-Paket | fertig vorbereitet | Rollen, 11 Szenarien, Testerhinweis, Ergebnisbogen, Stopkriterien und Abschlussauswertung |
 | Gesamtprüfung | grün | vollständiges `npm test`; 23/23 Etappe-9-Betriebschecks |
@@ -52,16 +53,34 @@ Bestätigung des Zieles `Soppagata/kinodreieck-app`. Erst danach folgen:
 
 ### Datenbank-Disaster-Recovery
 
-Das offizielle Supabase-Dumpwerkzeug erreicht das verknüpfte Projekt, bricht
-vor dem Dump aber kontrolliert ab, weil Docker Desktop auf dem Mac nicht
-installiert ist. Es wurde kein Ersatzdump gebaut und kein Inhalt im Repository
-gespeichert.
+Die Entscheidung ist am 30. Juli 2026 für **Supabase Free** gefallen.
+Verantwortlich ist Max; der logische Dump wird wöchentlich sowie zusätzlich vor
+Migration, Löschung und Produktionsrelease erzeugt. Das akzeptierte
+Wiederherstellungsziel beträgt höchstens sieben Tage.
 
-Vor der Beta ist eine der zwei einfachen Varianten festzulegen:
+Für die erste praktische Probe wurde der von der Supabase CLI erzeugte
+Dumpauftrag mit einem offiziellen PostgreSQL-17-Client ausgeführt. Damit war
+kein Docker Desktop und kein kostenpflichtiges Supabase-Projekt nötig. Die
+unveränderten Produktionsdumps wurden nur temporär außerhalb des Repositories
+mit Modus 600 abgelegt:
 
-1. Free-Plan behalten, Docker bereitstellen und den dokumentierten logischen
-   Dump in ein Wegwerfziel restaurieren, oder
-2. Supabase Pro buchen und trotzdem einmal den unabhängigen Restore proben.
+| Datei | Größe | SHA-256 |
+|---|---:|---|
+| Rollen | 297 Byte | `25873cec56a2cc6514e204f420231777f85c03da818caa7090cdcdfa89776ecd` |
+| Schema | 125.261 Byte | `504c8391a4fc7ab2459952970bdfc2d49fcbbee8ff19d07bde4c6c45416408bd` |
+| Daten | 4.547.402 Byte | `ac17cbed01647e1e1932129b51249b163f6cd355d7f0614891f46805ab91255a` |
+
+Der Restore lief in einer lokalen, nur über einen Unix-Socket erreichbaren
+Wegwerfdatenbank. Supabase-eigene Plattform-Grundbausteine wurden minimal
+nachgebildet; das Kinodreieck-Schema und die Anwendungsdaten kamen unverändert
+aus dem Dump. Geprüft wurden 16 Tabellen, 38 Funktionen, 17 Policies, zwei
+Konten, null verwaiste Auth-Verweise, Tageslimit 10, Antwortlimit 4096 sowie
+eigene sichtbare und fremde unsichtbare Kontodaten. Der bereits zuvor direkt
+gegen Produktion gelaufene RLS-Vertrag blieb zusätzlich 54/54 grün.
+
+Die temporären Dumps und die lokale Wegwerfdatenbank werden nach Abschluss des
+Nachweises gelöscht. Dauerhafte Wochensicherungen gehören in einen
+verschlüsselten Speicherort außerhalb dieses Repositories.
 
 ### Reale Geräte und geschlossene Kohorte
 
