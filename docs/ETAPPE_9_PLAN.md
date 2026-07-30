@@ -2,7 +2,8 @@
 
 Stand: 30.07.2026
 
-Status: Etappe 9a begonnen; erster lokaler Bauabschnitt automatisiert grün
+Status: Technischer Release von 9a und die ausführbaren 9b-Gates sind
+produktiv grün; 9c ist vorbereitet und wartet auf reale Geräte und Kohorte
 
 Ausgangspunkt: Etappe 8 vollständig abgenommen, Commit `d4876f2`
 

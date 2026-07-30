@@ -32,34 +32,41 @@ vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 | GitHub-Produktion | gehärtet | Required Reviewer aktiv; ausschließlich `main` darf die Produktionsumgebung deployen |
 | Supabase-Registrierung | geschlossen | neue Sign-ups aus; Confirm email für manuell angelegte Beta-Konten aus |
 | Datenbank-Disaster-Recovery | grün im Free-Plan | Produktionsdump mit getrennten Rollen-, Schema- und Datendateien; vollständiger lokaler Restore in PostgreSQL 17, 16 Tabellen, 38 Funktionen, 17 Policies, zwei Konten und direkte RLS-Kontentrennung geprüft |
+| GitHub-Release | grün | `codex/etappe-9a-distribution`, `staging` und `main` stehen auf `341d76b`; Staging-Workflow 71 und geschützter Produktionsworkflow 72 erfolgreich |
+| Cloudflare-Release | grün | Staging-Deploy `d2ed4568`, Produktionsdeploy `0e277ed6`; feste Staging- und Produktionsdomain melden Build `341d76b` |
+| Cloudflare-Rollback | grün gegen Produktion | Produktion von `341d76b` auf das geprüfte Ziel `db8199c` (`8aa0e505`) zurückgerollt, vollständiger Domain-Smoke grün, danach `341d76b` (`0e277ed6`) wiederhergestellt und erneut grün |
+| Function-Version | unverändert grün | `ai-task` stammt aus Commit `c91c2b0`; Etappe 9 änderte die Function nicht, 276/276 kostenfreie Vertragschecks |
 | Betriebsrunbook | grün | Not-Aus, Ausfälle, Rollback, Schlüsselrotation, Löschung sowie Rückweg und Beleg dokumentiert |
 | Beta-Paket | fertig vorbereitet | Rollen, 11 Szenarien, Testerhinweis, Ergebnisbogen, Stopkriterien und Abschlussauswertung |
 | Gesamtprüfung | grün | vollständiges `npm test`; 23/23 Etappe-9-Betriebschecks |
 
 Für keinen dieser Belege wurde ein kostenpflichtiger KI-Aufruf ausgeführt.
 
-## Noch nicht als praktisch abgenommen
+## Weitere praktische Belege
 
 ### GitHub, Staging und Produktion
 
 Der Etappe-9-Zweig und derselbe Stand auf `staging` wurden am 30. Juli zu
-`Soppagata/kinodreieck-app` übertragen. Cloudflare hat Commit `1986161`
-erfolgreich als atomaren Preview-Deploy `100635eb` veröffentlicht.
+`Soppagata/kinodreieck-app` übertragen. Nach dem Demo-Nachweis wurden
+Arbeitszweig, `staging` und `main` am 31. Juli auf Commit `341d76b` gebracht.
 
-Der erste Workflow stoppte anschließend wie vorgesehen, weil die beiden
+Der erste Staging-Workflow stoppte wie vorgesehen, weil die beiden
 öffentlichen Demo-Zeilen zu diesem Zeitpunkt noch fehlten. Nach ausdrücklicher
 Freigabe wurden am 31. Juli ein stark gekürzter Programm-Schnappschuss vom
 15.–18. Juli und fünf Streaming-Beispieltitel veröffentlicht. Der vollständige
 Smoke ist seither sowohl gegen das atomare Deployment als auch gegen
 `staging.kinodreieck.at` grün.
 
-Noch ausständig sind:
+Staging-Workflow 71 lief danach vollständig grün. Produktionsworkflow 72
+bestand dieselben Tests, wartete auf den Required Reviewer und wurde erst nach
+der sichtbaren Freigabe deployt. Der Produktions-Smoke bestätigte `341d76b`.
 
-1. ein neuer durchgehend grüner Staging-Workflow,
-2. praktischer Cloudflare-Rollback auf den letzten guten Stand,
-3. erneuter Staging-Deploy,
-4. geschützte Produktionsfreigabe,
-5. Produktions-Domain-Smoke mit der erwarteten Commit-Version.
+Anschließend wurde Cloudflare praktisch auf den zuvor geprüften Produktionsstand
+`db8199c` (`8aa0e505`) zurückgerollt. Der vollständige Domain-Smoke bestätigte
+den alten Commit, CSP, Sicherheitsheader und Demo-Katalog. Über denselben
+Rollbackmechanismus wurde danach der Etappe-9-Deploy `0e277ed6` wieder
+aktiviert; Produktions- und Staging-Domain bestätigten abschließend erneut
+`341d76b`.
 
 ### Datenbank-Disaster-Recovery
 
@@ -91,6 +98,8 @@ gegen Produktion gelaufene RLS-Vertrag blieb zusätzlich 54/54 grün.
 Die temporären Dumps und die lokale Wegwerfdatenbank wurden nach Abschluss des
 Nachweises gelöscht. Dauerhafte Wochensicherungen gehören in einen
 verschlüsselten Speicherort außerhalb dieses Repositories.
+
+## Noch nicht als praktisch abgenommen
 
 ### Reale Geräte und geschlossene Kohorte
 

@@ -27,11 +27,11 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
 
 ### Produkt und Release
 
-- [ ] Etappe 8 ist vollständig abgenommen und in Produktion.
+- [x] Etappe 8 ist vollständig abgenommen und in Produktion.
 - [ ] Etappe 9a ist abgenommen; Demo, PWA-Installation und Download funktionieren.
 - [ ] Etappe 9b ist abgenommen; Nutzerbackup, Datenbank-Restore, Not-Aus,
       Accountlöschung und Pages-Rollback wurden praktisch geprüft.
-- [ ] Der einzuladende Build ist auf Staging und Produktion per Domain-Smoke
+- [x] Der einzuladende Build ist auf Staging und Produktion per Domain-Smoke
       belegt; Build- und Function-Version stehen im Releaseprotokoll.
 - [x] `npm test`, `npm run test:function` und `npm run test:rls` sind für diesen
       Stand grün.

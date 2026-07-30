@@ -461,7 +461,7 @@ App-Backup einspielen.
 - [x] KI-Notaus ohne Anbieteraufruf belegt
 - [x] Beta-Limits abgefragt und Tageslimit 10
 - [ ] Supabase-/Anbieterausfall als Trockenlauf nachvollziehbar
-- [ ] Pages-Rollback samt Domain-Smoke geprobt
+- [x] Pages-Rollback samt Domain-Smoke geprobt
 - [ ] Function-Rollback aus bekanntem Commit geprobt
 - [x] Schlüsselorte und Minimalrechte geprüft, keine Werte protokolliert
 - [x] Accountlöschung am Wegwerfkonto vollständig belegt
