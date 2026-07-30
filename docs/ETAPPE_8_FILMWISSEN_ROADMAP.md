@@ -8,8 +8,9 @@ gemeinsamen Filmwissens-Cache. Die Phasentitel werden in Chat-Updates,
 Dokumentation und Abnahme wortgleich verwendet.
 
 Status: **Phasen A bis F am 30.07.2026 technisch abgeschlossen.** Die
-budgetgeschützte echte Kette P1–P21 ist grün. Vor einem Merge nach `main`
-bleibt nur die bewusste Staging-Kontoabnahme durch Max.
+budgetgeschützte echte Kette P1–P21 und der finale Staging-Workflow
+`30579041676` sind grün. Vor einem Merge nach `main` bleibt nur die bewusste
+Staging-Kontoabnahme durch Max.
 
 ## Statusmeldungen im Chat
 

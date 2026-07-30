@@ -115,6 +115,12 @@ Die Migration
 erfolgreich auf das verknüpfte Projekt angewandt. `ai-task` wurde danach mit
 dem finalen Adapter- und Speichervertrag veröffentlicht.
 
+Der manuell auf Ziel `staging` gestartete GitHub-Workflow
+[`30579041676`](https://github.com/Soppagata/kinodreieck-app/actions/runs/30579041676)
+für Commit `c91c2b0` ist vollständig grün: App-Gesamtsuite, Function-Suite,
+Cloudflare-Deploy, atomare Deployment-URL-Prüfung und feste
+Staging-Domain-Prüfung. Der Produktionsjob wurde erwartungsgemäß übersprungen.
+
 ## Manuelle Staging-Abnahme vor Merge
 
 Max prüft mit einem angemeldeten Konto nur noch:

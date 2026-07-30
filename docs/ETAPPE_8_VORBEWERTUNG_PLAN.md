@@ -325,12 +325,12 @@ durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
   Filmeintrag in Demo- oder Kontodaten. P18 erzeugt dagegen bewusst eine
   gemeinsame, accountunabhängige Filmwissensversion für das kanonisch über
   IMDb `tt0078748` identifizierte Werk.
-- Der frühere Staging-Workflow `30484827013` aus Commit `8662fe3` war
-  vollständig grün, lag aber vor der Filmwissen-Oberfläche. Der finale
-  Staging-Nachweis wird nach dem Abschlusscommit dieser Phase ergänzt. Die
-  bewusste Oberflächenabnahme mit Max' Konto und einem von Max gewählten
-  unbewerteten Titel bleibt der letzte Schritt vor Merge beziehungsweise
-  Produktionsfreigabe.
+- Finaler Staging-Workflow `30579041676` aus Commit `c91c2b0`: App-Gesamtsuite,
+  276/276 Function-Tests, Cloudflare-Deploy, atomare Deployment-Prüfung und
+  feste Staging-Domain-Prüfung erfolgreich; Produktion erwartungsgemäß
+  übersprungen. Die bewusste Oberflächenabnahme mit Max' Konto und einem von
+  Max gewählten unbewerteten Titel bleibt der letzte Schritt vor Merge
+  beziehungsweise Produktionsfreigabe.
 
 ## Demo- und Konto-Vertrag
 
