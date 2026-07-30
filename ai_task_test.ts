@@ -7573,6 +7573,16 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   gleich(abschluss.p_auftrag, auftragId, "Auftrag ist fest zugeordnet");
   const version = abschluss.p_version as Record<string, unknown>;
   gleich(version.warum, 5, "inhaltlich begründeter WARUM-Wert");
+  gleich(
+    version.pipelineVersion,
+    "wikidata-loc-v1",
+    "Pipelineversion bleibt innerhalb des Datenbankvertrags",
+  );
+  wahr(
+    typeof version.pipelineVersion === "string" &&
+      /^[A-Za-z0-9._-]{1,20}$/.test(version.pipelineVersion),
+    "Pipelineversion ist speicherbar",
+  );
   const belege = abschluss.p_belege as Array<Record<string, unknown>>;
   gleich(belege.length, 2, "Wikidata und LOC werden gemeinsam versioniert");
   wahr(

@@ -5,8 +5,9 @@
 -- offiziellen Adapter fuer Wikidata (CC0) und die Library of Congress frei.
 -- Freie URLs, Domains oder Quellen aus dem Browser bleiben ausgeschlossen.
 --
--- Ausfuehrung: noch offen; nach Mock-Abnahme dateiweise ueber
--- `supabase db query --linked --file ...`.
+-- Ausfuehrung: 30.07.2026 durch Codex dateiweise ueber die verknuepfte
+-- Management-API; erfolgreich. Danach 276/276 Function-Tests und die
+-- budgetgeschuetzte echte Rauchprobe P1-P21 gruen.
 -- ===========================================================================
 
 begin;
@@ -319,7 +320,7 @@ begin
   if v_pruefung->>'status' <> 'geprueft' then return v_pruefung; end if;
 
   v_auftrag := public.kd_filmwissen_auftrag_starten(
-    v_werk_id,p_vorgang,'auto-bericht',p_quellen
+    v_werk_id,p_vorgang,'ausdruecklich',p_quellen
   );
   return v_auftrag || jsonb_build_object('werkId',v_werk_id);
 end

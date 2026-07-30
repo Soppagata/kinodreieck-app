@@ -54,6 +54,8 @@ check("B6 Werkprüfung und Auftragsstart sind eine DB-Transaktion", () => {
   return /kd_filmwissen_werk_sicherstellen/i.test(vorbereiten)
     && /kd_filmwissen_werk_pruefen/i.test(vorbereiten)
     && /kd_filmwissen_auftrag_starten/i.test(vorbereiten)
+    && /v_werk_id\s*,\s*p_vorgang\s*,\s*'ausdruecklich'\s*,\s*p_quellen/i.test(vorbereiten)
+    && !/auto-bericht/i.test(vorbereiten)
     && vorbereiten.indexOf("kd_filmwissen_werk_sicherstellen")
       < vorbereiten.indexOf("kd_filmwissen_werk_pruefen")
     && vorbereiten.indexOf("kd_filmwissen_werk_pruefen")

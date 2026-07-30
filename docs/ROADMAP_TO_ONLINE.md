@@ -688,11 +688,11 @@ Pre-Etappe-7-Rollback-Punkt.
 ## Etappe 8: KI-Funktionsausbau
 
 Reihenfolge innerhalb der Etappe: zuerst die Vorbewertung (sie braucht das
-Profil aus Etappe 7), danach Filmscan und Bloganalyse — deren Reihenfolge
-ist offen. Produktentscheidungen für den ersten Block bindend in
-`docs/STECKBRIEF_VORBEWERTUNG.md`. Die Steckbriefe für Filmscan und
-Bloganalyse liegen weiterhin im Claude-Projekt und werden vor ihrem jeweiligen
-Bau ebenfalls ins Repository übernommen.
+Profil aus Etappe 7), danach der gemeinsame Filmwissens-Cache und anschließend
+Filmscan und Bloganalyse. Vorbewertung und Filmwissen sind am 30.07.2026
+technisch abgenommen; siehe `docs/ETAPPE_8_ABNAHME.md`. Die Steckbriefe für
+Filmscan und Bloganalyse liegen weiterhin im Claude-Projekt und werden vor
+ihrem jeweiligen Bau ins Repository übernommen.
 
 ### Ziel
 
@@ -705,13 +705,18 @@ Verhalten bei KI=aus.
 
 1. Vorbewertung: KI-Prognose sichtbar getrennt von echten Bewertungen;
    Status angenommen, korrigiert oder verworfen wird persistiert.
-2. Filmscan gemäß Steckbrief (drei Scanarten; der Streaming-Bildschirm ist
+2. Gemeinsames Filmwissen: feste freigegebene Quellen, versionierter Cache,
+   sichtbare Belege und unveränderte Übernahme von WARUM samt Versions-ID in
+   die Prognose.
+3. Filmscan gemäß Steckbrief (drei Scanarten; der Streaming-Bildschirm ist
    als Scanart verworfen).
-3. Bloganalyse gemäß Steckbrief, mit eigenem Opt-in.
-4. Restpunkte abarbeiten: Blog-Kontoweg, `programm_demo` für den Kino-Tab und
+4. Bloganalyse gemäß Steckbrief, mit eigenem Opt-in.
+5. Restpunkte abarbeiten: Blog-Kontoweg, `programm_demo` für den Kino-Tab und
    kleinere Baustellen.
-5. Je Funktion ein eingefrorenes Demo-Beispiel (Beispiel-Blogtext und
-   Beispiel-Scanfoto wählt Max).
+6. Für Filmscan und Bloganalyse je ein geeignetes Abnahmebeispiel
+   (Beispiel-Blogtext und Beispiel-Scanfoto wählt Max). Für die Vorbewertung
+   gibt es keinen erfundenen Demofilm; Demo zeigt Max’ Einträge sowie Kino-
+   und Streaming-Schnappschüsse.
 
 ### Abnahmekriterium
 
@@ -736,7 +741,9 @@ der App, Web-Funktionen hinter Login.
    (PWA bestätigt; ein iOS-Downloadpaket von der eigenen Website ist
    verworfen, siehe Entscheidungs-Log).
 2. Downloadpaket-Inhalt festlegen (nur freigegebene Daten).
-3. Demo-KI als eingefrorene Beispiele; Live-KI nur mit Konto.
+3. Für Filmscan und Bloganalyse dürfen geeignete eingefrorene Beispiele
+   verwendet werden. Die Vorbewertung hat keinen erfundenen Demofilm; Live-KI
+   bleibt kontogebunden.
 4. Folgefrage dieser Etappe: anonymer Web-Demo-Pfad ja oder nein.
 
 ### Abnahmekriterium
@@ -987,14 +994,16 @@ Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
 - normalisiertes Datenmodell für jeden heutigen Storage-Topf,
 - öffentliche Registrierung ohne Begrenzung.
 
-## Sofort nächste Arbeitspakete (Stand 29.07.2026)
+## Sofort nächste Arbeitspakete (Stand 30.07.2026)
 
-1. Etappe 8 mit der Vorbewertung auf Basis von
-   `docs/STECKBRIEF_VORBEWERTUNG.md` beginnen.
-2. Zuerst Datenvertrag, Profil-Mindestmenge, Statusfluss und
-   WARUM-/Kategorie-Grenze festzurren; danach den On-demand-MVP bauen.
-3. Parallel dürfen
-   Landingpage-Schablone, Distributions-Spec und Runbook-Entwürfe reifen.
+1. Die abgenommene Vorbewertung und den gemeinsamen Filmwissens-Cache auf
+   Staging mit einem angemeldeten Konto kurz bedienen und danach den Branch
+   zur Produktionsfreigabe zusammenführen.
+2. Den bereits im Claude-Projekt geplanten Filmscan-Steckbrief als nächsten
+   Etappe-8-Block ins Repository übernehmen und gegen den bestehenden
+   Account-, Kosten- und KI-Unterbau bauen.
+3. Danach Bloganalyse und die verbliebenen Kino-/Streaming-Demo-Restpunkte
+   abarbeiten. Landingpage und Distribution bleiben parallel planbar.
 
 ## Definition of Done für „online“
 

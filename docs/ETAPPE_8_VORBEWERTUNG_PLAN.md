@@ -1,13 +1,13 @@
 # Etappe 8, Block 1: Vorbewertung
 
-Stand: 29.07.2026
+Stand: 30.07.2026
 
 Branch: `feat/etappe-8-vorbewertung`
 
 Produktvertrag: `docs/STECKBRIEF_VORBEWERTUNG.md`
 
-Status: technisch implementiert; Backend, echte Anbieterprobe und
-Staging-Deploy abgenommen. Manuelle Konto-Oberflächenabnahme offen.
+Status: technisch implementiert und gemeinsam mit dem Filmwissens-Cache
+abgenommen. Backend, echte Anbieterprobe und Staging-Deploy sind grün.
 
 ## Ausgangslage zum Baubeginn
 
@@ -58,7 +58,9 @@ An den Anbieter gehen nur:
 - Titel, Originaltitel, Jahr, Typ, Genres und Tags des gewählten Films,
 - die Version des bestätigten Profils,
 - bestätigte Profilsignale in kompakter Form mit neutralen IDs,
-- bestätigte Profilachsen.
+- bestätigte Profilachsen,
+- falls vorhanden: das serverseitig geladene veröffentlichte Filmwissen mit
+  WARUM, Sicherheit, Kurztext, Kernaussagen und Versions-ID.
 
 Nicht übertragen werden:
 
@@ -72,7 +74,9 @@ Nicht übertragen werden:
 
 Die Signal-IDs werden serverseitig vergeben beziehungsweise normalisiert.
 Das Modell gibt nur verwendete IDs zurück; freier Modelltext darf keine
-angeblich verwendeten Signale erfinden.
+angeblich verwendeten Signale erfinden. Der Browser darf eine starke IMDb-,
+TMDB- oder Wikidata-Kennung zur serverseitigen Auflösung mitsenden, aber weder
+Filmwissen, Quelle, URL noch Fundstelle vorgeben.
 
 ### Ausgabeformat
 
@@ -96,10 +100,12 @@ Teile:
 ```
 
 Der geschlossene Anbieter-Vertrag fordert alle drei Achsen. WARUM bleibt
-kulturelle Relevanz, darf in der Freundeskreis-Beta aber ausdrücklich als
-persönliche Sonnet-Schätzung aus Filmkontext und Geschmacksprofil entstehen.
-Der Wert ist keine belegte gemeinsame Einordnung und keine echte Bewertung;
-bei zu dünner Grundlage liefert das Modell `null`. Für den optionalen
+kulturelle Relevanz. Liegt veröffentlichtes Filmwissen vor, muss das Ergebnis
+dessen belegten Wert unverändert übernehmen. Nur bei Cache-Miss darf WARUM in
+der Freundeskreis-Beta als persönliche Sonnet-Schätzung aus Filmkontext und
+Geschmacksprofil entstehen; diese ist keine belegte gemeinsame Einordnung und
+keine echte Bewertung. Bei zu dünner Grundlage liefert das Modell `null`. Für
+den optionalen
 Kategorie-Vorschlag verwendet der Anbieter intern den reinen String
 `kein_vorschlag`; ausschließlich der Server bildet diesen Wert auf das
 öffentliche `null` ab. Der interne Platzhalter ist keine achte Kategorie und
@@ -118,15 +124,19 @@ Grenzen:
 
 ### WARUM und Kategorie
 
-Der MVP zeigt keine numerische WARUM-Prognose und keinen freien
-WARUM-Modelltext. Die Oberfläche erklärt stattdessen mit festem App-Text:
+Ist für den Film eine veröffentlichte Filmwissensversion vorhanden, übernimmt
+die Prognose deren belegten WARUM-Wert unverändert und speichert die genaue
+Versions-ID als Herkunft. Das Modell darf den belegten Wert weder ersetzen
+noch umdeuten.
 
-> WARUM kann ohne gemeinsamen Filmwissens-Cache noch nicht belegt werden.
+Bei einem Cache-Miss beginnt keine stille Recherche. Sonnet darf WARUM dann
+aus den vorhandenen Filmdaten und dem persönlichen Geschmacksprofil vorsichtig
+schätzen oder `null` lassen. Die Oberfläche kennzeichnet das ausdrücklich als
+„persönlich geschätzt“, nicht als belegtes gemeinsames Filmwissen.
 
-Der Kategorie-Vorschlag bleibt Bestandteil der vollen Rubrik, trägt aber
-sichtbar den Status „noch unbelegt“. Er wird weder als echte Kategorie
-gespeichert noch für Filter oder Ranking benutzt, solange der Nutzer ihn
-nicht im Korrekturablauf als echte Angabe übernimmt.
+Der Kategorie-Vorschlag bleibt in beiden Fällen ein Prognosefeld. Er wird
+weder als echte Kategorie gespeichert noch für Filter oder Ranking benutzt,
+solange der Nutzer ihn nicht im Korrekturablauf als echte Angabe übernimmt.
 
 Die sieben Kategorien stammen aus dem zentralen Vertrag
 `src/lib/kategorien.js`; Formulare, Finder und Modellprüfung verwenden
@@ -159,8 +169,15 @@ Die Prognose liegt separat als `film.prognose`, nie in `film.bewertung`:
   "promptVersion": "v2",
   "profilVersion": "p3",
   "modell": "claude-sonnet-5",
+  "modellAlias": "gross",
+  "vorgangId": "UUID",
+  "warumHerkunft": "filmwissen",
+  "filmwissenVersionId": "UUID oder null",
   "verbrauch": {
-    "kostenUsdCent": 0
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "kostenUsdCent": 0,
+    "dauerMs": 0
   },
   "ergebnis": {},
   "status": "offen",
@@ -204,7 +221,7 @@ Fehler indirekt als neues Nutzerprofil einschreibt.
 - Modellalias: `gross` (der bestehende Sonnet-Alias).
 - Antwortbudget: zunächst 2048 Tokens; das strikte Schema und die kurzen
   Textgrenzen müssen darunter mit deutlicher Reserve passen.
-- Promptversion: `v1`.
+- Promptversion: `v2`.
 - Profilversion wird in `kd_ai_log` mitgeführt.
 - Der serverseitige Budget-, Tages- und Parallelwächter bleibt unverändert
   vorgeschaltet.
@@ -283,31 +300,35 @@ durchgereicht, damit eine Korrektur nicht still `"max"` einträgt.
 - adversarialer Review gegen Vermischung von Prognose, WARUM und echter
   Bewertung.
 
-## Technischer Abnahmestand vom 29.07.2026
+## Technischer Abnahmestand vom 30.07.2026
 
 - App-Gesamtsuite vor dem Backend-Deploy vollständig grün; Produktionsbuild
   nach dem finalen Schemafix erneut grün.
-- Gemockte Edge-Function-Suite nach dem finalen Schemafix: 262/262 grün.
+- Gemockte Edge-Function-Suite nach der Filmwissensintegration: 276/276 grün.
 - Migration `20260729210000_etappe8_film_forecast.sql` einzeln und erfolgreich
   auf Projekt `bscjgwcntapobyxsiyce` ausgeführt.
 - Edge Function `ai-task` mit dem finalen Providervertrag erfolgreich
   deployed.
-- Budgetgeschützte echte Rauchprobe über `npm run test:ai:live`: 17/17 grün.
-  P16 belegt, dass ein leeres Profil vor dem Anbieteraufruf endet; P17 belegt
-  einen echten Sonnet-Prognoseerfolg mit getrenntem WARUM-`null`,
-  aufgelösten Profilsignalen, echter Modell-ID und gemessenen Kosten.
-- Budgetstand nach der Abnahme: 60,8296 von 500,0000 US-Cent im
-  Testkonto-Monat; der finale Lauf verbrauchte 2,4331 US-Cent.
-- RLS-Negativtests nach Migration und Function-Deploy: 36/36 grün;
-  Account-Isolation und Sperre der KI-Tabellen für Konten bleiben intakt.
+- Budgetgeschützte echte Rauchprobe über `npm run test:ai:live`: 21/21 grün.
+  P16 belegt den kostenfreien Abbruch bei leerem Profil, P17 eine echte
+  persönliche Sonnet-Prognose. P18 veröffentlicht quellengeführtes Filmwissen
+  zu `Alien`, P19 trifft dieselbe Version ohne weitere Kosten, P20 liest sie
+  über die enge Konto-RPC und P21 übernimmt WARUM und Versions-ID unverändert
+  in die persönliche Prognose.
+- Budgetstand nach der Abnahme: 77,4985 von 500,0000 US-Cent im
+  Testkonto-Monat; der finale Lauf verbrauchte 4,2025 US-Cent.
+- RLS-Negativtests der Vorbewertung: 36/36 grün. Nach dem gemeinsamen
+  Filmwissens-Cache: 54/54 grün; Account-Isolation sowie Schreibsperren der
+  KI- und Filmwissenstabellen für Konten bleiben intakt.
 - Die technische P17-Probe verwendet ausschließlich eine flüchtige
   Testanforderung. Sie erzeugt keinen erfundenen Demofilm und schreibt keinen
-  Filmeintrag in Demo- oder Kontodaten.
-- Staging-Workflow `30484827013` aus Commit `8662fe3`: vollständige CI,
-  Function-Suite, Cloudflare-Deploy und beide Remote-Smokechecks erfolgreich;
-  Produktionsjob erwartungsgemäß übersprungen. Die Staging-App lädt, der
-  Neuer-Eintrag-Dialog wurde ohne Speicherung geprüft und wieder geschlossen.
-  Die bewusste Oberflächenabnahme mit Max' Konto und einem von Max gewählten
+  Filmeintrag in Demo- oder Kontodaten. P18 erzeugt dagegen bewusst eine
+  gemeinsame, accountunabhängige Filmwissensversion für das kanonisch über
+  IMDb `tt0078748` identifizierte Werk.
+- Der frühere Staging-Workflow `30484827013` aus Commit `8662fe3` war
+  vollständig grün, lag aber vor der Filmwissen-Oberfläche. Der finale
+  Staging-Nachweis wird nach dem Abschlusscommit dieser Phase ergänzt. Die
+  bewusste Oberflächenabnahme mit Max' Konto und einem von Max gewählten
   unbewerteten Titel bleibt der letzte Schritt vor Merge beziehungsweise
   Produktionsfreigabe.
 
@@ -346,4 +367,5 @@ Der Vorbewertungs-MVP arbeitet ohne Websuche. Domainfilter bei Anthropic
 beschränken die aufrufbaren Seiten, senken aber nicht den festen Preis je
 tatsächlich ausgeführter Suche. IMDb, Rotten Tomatoes und film.at werden
 ohne belastbare Lizenz beziehungsweise API-Erlaubnis nicht automatisiert
-abgefragt. Der spätere Filmwissens-Cache ist ein eigener Block.
+abgefragt. Der getrennte Filmwissens-Cache verwendet ausschließlich die
+freigegebenen festen Wikidata- und LOC-Adapter.

@@ -7,6 +7,10 @@ Diese Roadmap ist der verbindliche Bau- und Kommunikationsrahmen für den
 gemeinsamen Filmwissens-Cache. Die Phasentitel werden in Chat-Updates,
 Dokumentation und Abnahme wortgleich verwendet.
 
+Status: **Phasen A bis F am 30.07.2026 technisch abgeschlossen.** Die
+budgetgeschützte echte Kette P1–P21 ist grün. Vor einem Merge nach `main`
+bleibt nur die bewusste Staging-Kontoabnahme durch Max.
+
 ## Statusmeldungen im Chat
 
 Beim Beginn einer Phase:
@@ -37,6 +41,8 @@ flowchart LR
 
 ## Phase A — Vertrag einfrieren
 
+Status: abgeschlossen.
+
 Ziel: Den übergroßen ersten Steckbrief auf einen ausführbaren MVP reduzieren,
 ohne offene Rechte- oder Produktfragen still zu entscheiden.
 
@@ -62,6 +68,8 @@ Fertig, wenn:
 
 ## Phase B — Gemeinsamer Datengrund
 
+Status: abgeschlossen.
+
 Ziel: Einen gemeinsamen, accountunabhängigen und fail-closed geschützten
 Filmwissensspeicher schaffen.
 
@@ -84,6 +92,8 @@ Fertig, wenn:
 
 ## Phase C — Sicherer Leseweg
 
+Status: abgeschlossen.
+
 Ziel: Gemeinsames Wissen in der Browser-App streng geprüft und ohne Vermischung
 mit persönlichen Daten lesen.
 
@@ -104,6 +114,8 @@ Fertig, wenn:
 - Offline- und Cache-Miss-Zustände unterscheidbar bleiben.
 
 ## Phase D — Quellengeführte Synthese
+
+Status: abgeschlossen.
 
 Ziel: Aus bereits erlaubten, übergebenen Fundstellen einen belegten
 WARUM-Vorschlag erzeugen, ohne offene Websuche oder ungeklärtes Scraping.
@@ -126,7 +138,7 @@ Fertig, wenn:
 - ohne freigegebene Fundstellen kein Anbieteraufruf beginnt,
 - Modellwissen nie als Quelle behandelt wird.
 
-Zwischenstand 30.07.2026:
+Abnahmestand 30.07.2026:
 
 - Der bestehende `ai-task` besitzt den deployten, fail-closed
   Vorbereitungspfad `filmwissen-synthese`; der Browser darf ausschließlich
@@ -149,9 +161,9 @@ Zwischenstand 30.07.2026:
 - LOC lädt ausschließlich die vollständige offizielle Registry-Tabelle,
   validiert den gesamten Snapshot und ordnet einen Film nur über die zuvor
   Wikidata-geprüfte Identität mit exaktem Titel und Erscheinungsjahr zu.
-- Beide Adapter sind in Produktion nur als `kandidat` registriert; alle
-  Rechteflags sind weiterhin `false`. Wikidata bleibt zusätzlich gesperrt,
-  solange keine öffentliche Kontaktangabe für den User-Agent konfiguriert ist.
+- Genau die beiden Adapter sind in Produktion freigegeben. Die öffentliche
+  Wikimedia-Kontaktangabe ist serverseitig gesetzt. Browserdaten können weder
+  Quelle noch freie URL oder Fundstelle vorgeben.
 - Der Datenbank-Unterbau besitzt nun einen Reaper für verwaiste Aufträge,
   ein quellenweites Minutenlimit, unveränderliche Herkunftsgruppen und einen
   harten Task-Deckel von 5 US-Cent. Modellalias `gross` und 2048 Ausgabetokens
@@ -167,25 +179,28 @@ Zwischenstand 30.07.2026:
   Adapterpaars.
 - Guardian bleibt bis zu einem Commercial-Vertrag gesperrt; IMDb, Rotten
   Tomatoes und film.at bleiben ohne schriftliche Lizenz gesperrt.
-- Nächster Block: atomare Vorbereitung mit beiden Adaptern, gemeinsamer
-  LOC-Snapshot-Cache und Einbindung in die bestehende Providernaht. Erst danach
-  darf der Status `bereit` existieren.
+- Atomare Vorbereitung, gemeinsamer service-only LOC-Snapshot und die
+  Einbindung in die bestehende Providernaht sind umgesetzt. Die echte Probe
+  veröffentlichte eine Version für `Alien` und traf sie im Folgeaufruf ohne
+  Anbieter- oder Quellenkosten erneut.
 
 ## Phase E — Produktintegration
 
-Ziel: Belegtes gemeinsames Wissen verständlich anzeigen und später kontrolliert
-mit der persönlichen Prognose verbinden.
+Status: abgeschlossen.
+
+Ziel: Belegtes gemeinsames Wissen verständlich anzeigen und kontrolliert mit
+der persönlichen Prognose verbinden.
 
 Ergebnisse:
 
 - kompakte Filmwissensanzeige mit WARUM, Sicherheit, Stand und Quellenlinks,
 - aufgeklappte Belegansicht mit eigenen Paraphrasen statt Artikelvolltext,
 - sichtbarer Cache-Miss ohne erfundene Zahl,
-- getrennte Schaltfläche für einen späteren Recherchebericht,
+- getrennte Schaltfläche für den ausdrücklich ausgelösten Filmwissensbericht,
 - Block-1-Prognose startet nie still Recherche,
-- klar gekennzeichnete Berücksichtigung belegter Filmwissenssignale in einer
-  persönlichen Prognose, ohne Übernahme in echte Bewertung oder gemeinsamen
-  Cache.
+- exakte, klar gekennzeichnete Übernahme von belegtem WARUM und
+  Filmwissensversions-ID in die persönliche Prognose, ohne Übernahme in echte
+  Bewertung oder Rückwirkung auf den gemeinsamen Cache.
 
 Fertig, wenn:
 
@@ -194,6 +209,9 @@ Fertig, wenn:
 - Rücknahme einer Version keine historische Prognose umschreibt.
 
 ## Phase F — Abnahme und Freigabe
+
+Status: technisch abgeschlossen; bewusste Staging-Kontoabnahme vor Merge
+offen.
 
 Ziel: Den Block gegen Datenlecks, Quellenfehler, Kostenüberschreitung und
 Produktvermischung abnehmen.
@@ -216,11 +234,11 @@ Fertig, wenn:
 - keine ungeklärte Quelle produktiv aktiviert ist,
 - Max den Staging-Stand freigibt.
 
-## Derzeit bewusste Restpunkte
+## Bewusst spätere Erweiterungen
 
-- erste produktive Adapterfreigabe aus den dokumentierten Kandidaten,
-- endgültige einfache Skalenanker für WARUM 0 bis 5,
-- verbindliche Film-Prüfliste,
-- Berechtigung für redaktionelle Zweifelsfälle,
-- Integration des veröffentlichten WARUM-Werts in eine spätere
-  Prognoseformat-Version.
+- weitere Quellen erst nach dokumentierter Rechte- und Adapterprüfung,
+- redaktioneller Korrekturweg für Zweifelsfälle,
+- zusätzliche Testwerke jenseits des technischen Kettenbeweises,
+- automatische Neuberechnung persönlicher Prognosen nach einer neuen
+  Filmwissensversion,
+- breiter Filmwissensbericht über WARUM hinaus.

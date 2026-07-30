@@ -363,7 +363,11 @@ function wikimediaHeader(optionen: WikimediaOptionen): Record<string, string> {
 }
 
 function basisParameter(): Record<string, string> {
-  return { format: "json", formatversion: "2", maxlag: "5" };
+  /* `maxlag` ist für schreibende Bots ein sinnvoller Rückstau-Schutz, lehnt
+     aber auch unsere rein lesenden, bereits serverseitig ratenbegrenzten
+     Requests mit HTTP 200 + Fehlerobjekt ab. Die gelesene Revision und ihr
+     Änderungszeitpunkt werden ohnehin als Provenienz eingefroren. */
+  return { format: "json", formatversion: "2" };
 }
 
 function pruefeWikidataApiAntwort(json: unknown): void {

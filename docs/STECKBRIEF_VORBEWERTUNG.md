@@ -1,7 +1,7 @@
 # Steckbrief: Vorbewertung / KI-Prognose (Etappe 8, erster Block)
 
-Status: Produktentscheidungen von Max und technischer MVP umgesetzt,
-Backend-Abnahme 29.07.2026. Grundlage: KI-Leitfaden Funktion 1
+Status: Produktentscheidungen von Max und technischer MVP einschließlich
+Filmwissensübergabe umgesetzt, Abnahme 30.07.2026. Grundlage: KI-Leitfaden Funktion 1
 („Automatische Vorbewertung"). Baut auf dem Geschmacksprofil (Etappe 7) auf
 — deshalb erster Block der Etappe 8, nach dem Profil.
 
@@ -18,23 +18,25 @@ seit Etappe 3); nichts wird ungefragt überschrieben.
 |---|---|
 | Auslöser | **On-demand**: Knopf am unbewerteten Film und direkte Aktion beim Erstellen eines neuen Eintrags („Anlegen & KI-Prognose erstellen"). Der unbewertete Eintrag wird zuerst sicher gespeichert, erst danach beginnt genau ein kostenpflichtiger Aufruf. **Kein Import-Batch im MVP** |
 | Rubrik | **Volle Rubrik**: WIE-Prognose, WAS-Prognose, persönliche Passung, Kategorie-Vorschlag, Sicherheit, Kurzbegründung, verwendete Profilsignale, Modell- und Profilversion, Status (angenommen/korrigiert/verworfen) |
-| WARUM | **WARUM = kulturelle Relevanz.** Seit der Beta-Entscheidung vom 30.07.2026 darf Sonnet dafür eine ausdrücklich vorläufige persönliche Schätzung aus Filmkontext und Geschmacksprofil liefern. Das ist weder belegtes gemeinsames Filmwissen noch eine echte Bewertung. |
+| WARUM | **WARUM = kulturelle Relevanz.** Vorhandenes belegtes Filmwissen wird mit seiner Versions-ID unverändert übernommen. Bei Cache-Miss darf Sonnet eine ausdrücklich vorläufige persönliche Schätzung aus Filmkontext und Geschmacksprofil liefern. Beides bleibt von einer echten Bewertung getrennt. |
 | KI-Schalter | Vorbewertung ist ein **Kern-KI-Task** (Max: „Tasks, die Sonnet macht"): bei KI=aus ehrlich gekennzeichnet und ausgeblendet — kein deterministischer Ersatz |
 
 ## Konsequenz der WARUM-Entscheidung für den MVP
 
-Der gemeinsame Filmwissens-Cache (Leitfaden Funktion 2) ist kein Beta-Tor.
-Sonnet darf WARUM im persönlichen Prognosefeld als `0..5` schätzen oder bei
-zu dünner Grundlage `null` liefern. Oberfläche und Speichervertrag markieren
-den Wert als KI-Prognose. Ein belegter gemeinsamer Filmwissens-Wert bleibt ein
-separates, versioniertes Objekt mit Quellen; eine echte Nutzerbewertung bleibt
-weiterhin im Feld `bewertung`.
+Der gemeinsame Filmwissens-Cache (Leitfaden Funktion 2) ist implementiert.
+Liegt eine veröffentlichte Fassung vor, bindet der Server deren WARUM-Wert und
+Versions-ID in die Prognose ein; das Modell kann diesen Wert nicht verändern.
+Bei Cache-Miss darf Sonnet WARUM im persönlichen Prognosefeld als `0..5`
+schätzen oder bei zu dünner Grundlage `null` liefern. Oberfläche und
+Speichervertrag unterscheiden `filmwissen` und `persoenlich_geschaetzt`. Eine
+echte Nutzerbewertung bleibt weiterhin ausschließlich im Feld `bewertung`.
 
 Der MVP verwendet im Vorbewertungs-Aufruf keine Websuche. Eine Domain-
 Beschränkung würde den festen Suchpreis nicht senken und ersetzt keine
 Lizenz zur automatisierten Nutzung von IMDb, Rotten Tomatoes oder film.at.
-Gemeinsames Filmwissen wird in einem späteren Block einmalig aus erlaubten,
-belegbaren Quellen in den Cache aufgenommen.
+Gemeinsames Filmwissen wird nur über die festen serverseitigen Adapter für
+Wikidata und Library of Congress einmalig aus erlaubten, belegbaren Quellen in
+den Cache aufgenommen.
 
 ## Geparkt
 
@@ -79,4 +81,4 @@ belegbaren Quellen in den Cache aufgenommen.
 ## Abhängigkeiten
 
 Geschmacksprofil (Etappe 7) zwingend. Etappe-5-Unterbau. Belegtes gemeinsames
-WARUM später über Filmwissens-Cache (nicht Beta-Tor).
+WARUM über den versionierten Filmwissens-Cache.

@@ -4,17 +4,19 @@ Etappe 8, Block 2
 
 Stand: 30.07.2026
 
-Status: vereinfachte Produkt- und Planungsgrundlage, keine Implementierung
+Status: MVP implementiert und technisch abgenommen
 
 Diese Fassung ersetzt den ausführlicheren Erstentwurf vom 29.07.2026. Sie
 beschreibt nur, was für einen belastbaren MVP tatsächlich nötig ist.
 
 ## Kurzentscheidung
 
-Kinodreieck recherchiert für einen ausdrücklich ausgelösten
-Auto-Bewertungsbericht gezielt einzelne Kritiken zu genau einem Film. Die
-Recherche läuft nur auf einer kleinen Positivliste freigegebener Websites. Sie
-liest keine vollständigen Websites, Archive, Sitemaps oder Kritikbestände aus.
+Kinodreieck ruft für einen ausdrücklich ausgelösten Filmwissensbericht feste
+offizielle Datensätze zu genau einem Film ab. Der erste MVP verwendet
+Wikidata für geprüfte Werkidentität und strukturierten Kontext sowie die
+vollständige offizielle National-Film-Registry-Liste der Library of Congress
+für eine mögliche institutionelle Einordnung. Freie Websuche und das Lesen
+einzelner Kritiken sind nicht Teil dieses MVP.
 
 Das recherchierte Filmwissen wird einmal gemeinsam, belegt und versioniert
 gespeichert. Weitere Accounts verwenden denselben Cache, statt dieselben
@@ -38,8 +40,9 @@ Der Vorbewertungs-MVP bleibt technisch getrennt:
 - Prognose und echte Bewertung bleiben getrennt.
 - Der gemeinsame Cache übernimmt niemals eine persönliche Schätzung.
 
-Eine spätere Übergabe belegter Filmwissenssignale an die persönliche Prognose
-braucht eine eigene Abnahme.
+Die Übergabe belegter Filmwissenssignale an die persönliche Prognose ist
+umgesetzt und über die echte Probe P21 abgenommen: WARUM und Versions-ID
+werden serverseitig unverändert gebunden.
 
 ## Wie die Vorbewertung heute arbeitet
 
@@ -53,11 +56,14 @@ Der aktuelle Task verwendet Claude Sonnet, nicht GPT. Sonnet erhält:
 Sonnet schlägt WIE, WAS, persönliche Passung, Kategorie, Sicherheit und eine
 Kurzbegründung vor. Es gibt keine mathematische Bewertungsformel. Der Server
 prüft Wertebereiche, Format und verwendete Signal-IDs und begrenzt die
-Sicherheit. WARUM wird technisch auf `null` erzwungen.
+Sicherheit. Liegt belegtes gemeinsames Filmwissen vor, bindet der Server dessen
+WARUM-Wert und Versions-ID unveränderlich ein. Bei einem Cache-Miss darf Sonnet
+WARUM vorsichtig persönlich schätzen oder `null` lassen; das löst keine
+Recherche aus und wird getrennt gekennzeichnet.
 
-Diese freie Modellbeurteilung ist für eine persönliche Prognose grundsätzlich
-ausreichend. Für WARUM braucht es dagegen recherchierte Belege und eine kurze,
-gemeinsame Skalenbedeutung.
+Diese freie Modellbeurteilung ist für eine ausdrücklich als persönlich
+geschätzt markierte Prognose ausreichend. Ein gemeinsamer WARUM-Wert braucht
+dagegen serverseitig beschaffte Belege und die gemeinsame Skalenbedeutung.
 
 ## Zielbild
 
@@ -74,7 +80,7 @@ persönlicher Auto-Bewertungsbericht
 ### Gemeinsamer Teil
 
 - geprüfte Werkidentität,
-- gefundene Einzelkritiken und institutionelle Belege,
+- gefundene strukturierte und institutionelle Fundstellen,
 - kurze eigene Paraphrasen der relevanten Aussagen,
 - WARUM-Vorschlag mit Quellen,
 - Stand, Modell-, Prompt- und Cache-Version.
@@ -94,18 +100,18 @@ den gemeinsamen Cache.
 
 Eine Filmrecherche ist eng begrenzt:
 
-1. Der Film wird anhand von Titel, Originaltitel, Jahr, Typ und – falls
-   vorhanden – Regie oder starker Fremdkennung aufgelöst.
-2. Pro freigegebener Website wird gezielt nach diesem Werk gesucht.
-3. Höchstens zwei Kandidatenseiten je Website werden auf die richtige
-   Werkidentität geprüft.
-4. Pro Website wird höchstens eine eindeutig passende Einzelkritik inhaltlich
-   gelesen; eine zweite nur zur Klärung einer Mehrdeutigkeit.
-5. Gespeichert werden URL, Website, Autor, Datum, eigene kurze Paraphrasen und
-   die belegten Kernaussagen – nicht der vollständige Artikel.
-6. Nicht gefunden, gesperrt, paywallgeschützt oder mehrdeutig wird ehrlich als
-   Status gespeichert. Es gibt keinen Ausweich-Crawl.
-7. Ein erfolgreicher Bericht wird gemeinsam gecacht und bei späteren
+1. Der Browser liefert genau eine starke IMDb-, TMDB- oder Wikidata-Kennung.
+2. Wikidata löst diese Kennung exakt auf, prüft Filmtyp und Kennung erneut und
+   gibt nur erlaubte strukturierte Fakten weiter.
+3. Die Library of Congress liefert ausschließlich die feste vollständige
+   Registry-Tabelle. Der Service prüft den gesamten Snapshot und ordnet nur
+   exaktes Titelalias plus exaktes Erscheinungsjahr zu.
+4. Nur die daraus serverseitig erzeugten Fundstellen gelangen zu Sonnet.
+5. Gespeichert werden Werkidentität, URL, Abrufstand, Abrufhash, kurze eigene
+   Kernaussagen, Belegklasse und Synthese – keine fremden Volltexte.
+6. Nichtfund, Mehrdeutigkeit, Schemaabweichung, Rate-Limit oder Quellenfehler
+   führen ehrlich zu keinem veröffentlichten Bericht.
+7. Ein erfolgreicher Bericht wird gemeinsam versioniert und bei späteren
    Anforderungen wiederverwendet.
 
 Nicht erlaubt sind:
@@ -123,26 +129,17 @@ Quellenfreigabe.
 
 ## Quellenstrategie
 
-### Empfohlene erste Positivliste
+### Freigegebene erste Positivliste
 
 | Quelle | Rolle | MVP-Status |
 |---|---|---|
-| The Guardian Open Platform | englische Filmkritiken über ein offizielles Content-API | technisch bevorzugt; nichtkommerzielle Nutzung und kommerziellen/abgeleiteten Einsatz vertraglich passend wählen |
-| Filmdienst | große deutschsprachige Kritik- und Filmwissensbasis | Partnerschaft anfragen; RSS darf Inhalte entdecken, erlaubt aber keine automatische Wiederveröffentlichung ohne Absprache |
-| epd Film | professionelle deutschsprachige Kritiken | schriftlichen begrenzten Such-, Lese-, Paraphrase- und Cache-Zugang anfragen |
-| critic.de | cinephile, formbezogene und festivalnahe Kritik | schriftlichen kleinen Pilotzugang anfragen |
-| BFI / Sight & Sound | Filmgeschichte und kulturelle Einordnung | nur mit passender schriftlicher Erlaubnis beziehungsweise Lizenz |
+| Wikidata Action API | exakte Werkidentität und enger strukturierter Kontext, CC0 | produktiv freigegeben; identifizierter User-Agent und serverseitiges Limit |
+| Library of Congress / National Film Registry | ausdrückliche institutionelle kulturelle, historische oder ästhetische Einordnung | produktiv freigegeben; ausschließlich vollständige Registry-Tabelle |
 
-Ergänzende Belegquellen:
-
-- Library of Congress, National Film Registry, für ausdrücklich kulturell oder
-  historisch bedeutsame US-Filme und Filmessays,
-- Wikimedia-APIs für Werkidentität und Kontext unter Beachtung der jeweiligen
-  freien Lizenz und Attribution.
-
-Die Positivliste startet mit höchstens drei bis fünf Kritikquellen. Eine Quelle
-wird erst aktiviert, wenn Zugangsweg, Abruffrequenz, erlaubte Speicherung,
-Paraphrase, Quellenanzeige und Attribution dokumentiert sind.
+Weitere Kritik- oder Filminformationsquellen bleiben Erweiterungskandidaten.
+Eine Quelle wird erst aktiviert, wenn Zugangsweg, Abruffrequenz, erlaubte
+Speicherung, Paraphrase, Quellenanzeige und Attribution dokumentiert und als
+fester Adapter getestet sind.
 
 ### Gesperrte oder ungeeignete Quellen
 
@@ -207,77 +204,26 @@ nicht nötig.
 
 ## Schlankes Datenmodell
 
-Für den MVP reichen zwei neue gemeinsame Datenbereiche. Das bestehende
-`kd_ai_log` bleibt für Kosten- und Vorgangsmetadaten zuständig.
+Der gemeinsame Cache ist relational und versioniert:
 
-### 1. Quellen-Positivliste
+- `kd_filmwissen_quellen`: Positivliste, Rechte, Belegklasse und Attribution,
+- `kd_filmwerke` und `kd_filmwerk_kennungen`: kanonische Werkidentität und
+  starke IMDb-, TMDB- oder Wikidata-Kennungen,
+- `kd_filmwissen_auftraege`: gesperrte Syntheseaufträge,
+- `kd_filmwissen_versionen`: unveränderliche veröffentlichte Fassungen,
+- `kd_filmwissen_belege`: konkrete Fundstellen und eigene Kernaussagen,
+- `kd_filmwissen_zeigerlog`: atomare Historie der aktuellen Fassung,
+- `kd_filmwissen_quellen_abrufe`: quellenweites Rate-Limit,
+- `kd_filmwissen_adapter_snapshots`: kurzlebiger service-only LOC-Snapshot.
 
-Sie kann zunächst als kontrollierte Serverkonfiguration oder kleine Tabelle
-geführt werden:
+Das bestehende `kd_ai_log` hält Kosten- und Vorgangsmetadaten. Veröffentlichung
+und KI-Logabschluss erfolgen gemeinsam in einer Transaktion. Eine neue
+Recherche erzeugt eine neue unveränderliche Version; ältere Versionen bleiben
+für historische Prognosen referenzierbar.
 
-```text
-quelle
-domain
-zugangsart
-status
-erlaubte_nutzung
-attribution
-abruflimit
-rechte_geprueft_am
-```
-
-Status: `kandidat`, `freigegeben`, `pausiert` oder `gesperrt`.
-
-### 2. Versionierter Filmwissens-Cache
-
-Eine unveränderliche Fassung pro Werk und Version:
-
-```json
-{
-  "format": "filmwissen-cache-v1",
-  "werkKey": "interne-stabile-kennung",
-  "identitaet": {
-    "titel": "…",
-    "originaltitel": "…",
-    "jahr": 2026,
-    "typ": "film"
-  },
-  "version": 1,
-  "stand": "ISO-8601",
-  "status": "veroeffentlicht",
-  "quellen": [
-    {
-      "anbieter": "…",
-      "url": "https://…",
-      "titel": "…",
-      "autor": "…",
-      "publiziert": "ISO-Datum oder null",
-      "abgerufen": "ISO-8601",
-      "status": "verwendet",
-      "kernaussagen": ["Kurze eigene Paraphrase."]
-    }
-  ],
-  "warum": {
-    "wert": 3,
-    "sicherheit": "mittel",
-    "begruendung": "Kurze belegte Synthese."
-  },
-  "verarbeitung": {
-    "promptVersion": "v1",
-    "modell": "…",
-    "kostenUsdCent": 0
-  }
-}
-```
-
-Quellen, Aussagen, WARUM, Bericht und Versionsmetadaten müssen im MVP keine
-eigenen Tabellen bilden. Sie bleiben als begrenztes, streng geprüftes JSON
-zusammen. Eine neue Recherche erzeugt eine neue unveränderliche Version; ältere
-Versionen bleiben für historische Prognosen referenzierbar.
-
-Die stabile Werkkennung darf nicht allein aus einem frei geschriebenen Titel
-bestehen. Starke erlaubte Fremdkennungen werden bevorzugt; andernfalls wird
-eine kontrollierte interne Kennung aus geprüfter Werkidentität verwendet.
+Die stabile Werkkennung entsteht nie allein aus einem frei geschriebenen
+Titel. Der MVP verlangt eine starke Fremdkennung und prüft sie am aufgelösten
+Wikidata-Objekt erneut.
 
 ## Cache-Verhalten
 
@@ -285,20 +231,20 @@ eine kontrollierte interne Kennung aus geprüfter Werkidentität verwendet.
   Quellen- oder KI-Aufruf.
 - **Cache-Miss bei normaler Vorbewertung:** keine Recherche; eine persönliche
   Sonnet-Schätzung von WARUM bleibt erlaubt und getrennt gekennzeichnet.
-- **Ausdrücklich ausgelöster Auto-Bewertungsbericht:** Positivliste und
-  Kostenmaximum anzeigen, danach gezielte Recherche starten.
+- **Ausdrücklich ausgelöster Filmwissensbericht:** Die Oberfläche nennt genau
+  einen Sonnet-Aufruf, höchstens 5 US-Cent und keine automatische
+  Wiederholung; danach startet die feste Quellenkette.
 - **Gleichzeitige identische Aufträge:** auf einen laufenden Auftrag
   zusammenführen.
 - **Teilfehler:** keine halbe neue Version veröffentlichen.
 - **Mehrdeutige Werkidentität:** nicht recherchieren oder veröffentlichen,
   bevor die Zuordnung geklärt ist.
 
-Ein fester 90-/365-Tage-Aktualisierungsplan ist nicht nötig. Aktualisiert wird:
-
-- auf ausdrücklichen neuen Bericht,
-- nach einer gemeldeten sachlichen Korrektur,
-- bei geändertem oder widerrufenem Quellenrecht,
-- wenn eine Quelle eine relevante neue Fassung meldet.
+Ein fester 90-/365-Tage-Aktualisierungsplan ist nicht nötig. Ein vorhandener
+Bericht liefert im MVP immer einen Cache-Treffer; die Oberfläche besitzt
+keinen erzwungenen Refresh. Künftige service- oder redaktionelle Aktualisierung
+kann für sachliche Korrektur, geändertes Quellenrecht oder eine relevante neue
+Quellenfassung eine neue unveränderliche Version veröffentlichen.
 
 Die Oberfläche zeigt immer den Stand. Ein Nichtfund ist kein Beweis fehlender
 kultureller Relevanz.
@@ -317,9 +263,9 @@ Zusätzlich braucht der Bericht nur:
 - keine automatische bezahlte Wiederholung außerhalb derselben Reservierung,
 - Wiederverwendung jedes erfolgreichen Cache-Treffers.
 
-Der konkrete Höchstbetrag pro Bericht wird erst nach Mock-Messung von
-Eingabegröße und Antwortbudget festgelegt. Unbekannter Preis oder nicht
-messbarer Verbrauch stoppt den bezahlten Auftrag.
+Der feste zusätzliche Task-Deckel beträgt 5 US-Cent pro
+`filmwissen-synthese`-Auftrag. Unbekannter Preis oder nicht messbarer
+Verbrauch stoppt den bezahlten Auftrag.
 
 Für echte Entwicklungsproben und Evals gelten weiterhin die Budgetregeln aus
 `AGENTS.md`; sie bestimmen nicht automatisch das spätere Produktbudget.
@@ -339,8 +285,8 @@ Bei unzureichender Belegung:
 
 „Quellen anzeigen“ öffnet:
 
-- Website, Titel, Autor und Datum,
-- direkten Link zur Einzelkritik,
+- Quelle, Titel und Abrufstand,
+- direkten Link zur verwendeten offiziellen Fundstelle,
 - ein bis drei eigene kurze Kernaussagen pro Quelle,
 - sichtbare Nichtfund-, Sperr- oder Konfliktstatus,
 - Cache-, Prompt- und Modellversion in den technischen Details.
@@ -379,9 +325,9 @@ gemeldete Korrektur.
 
 ### Recherche und Rechte
 
-- Es werden ausschließlich freigegebene Domains und erlaubte Zugangswege
-  verwendet.
-- Pro Website wird nur eine eindeutig passende Einzelkritik gelesen.
+- Es werden ausschließlich die zwei freigegebenen Adapter und erlaubten
+  Zugangswege verwendet.
+- Es wird keine Einzelkritik und kein freier Website-Inhalt gelesen.
 - Es gibt keinen Archiv-, Sitemap-, Paginierungs- oder Massendownloadpfad.
 - IMDb, Rotten Tomatoes und film.at bleiben ohne passende Erlaubnis technisch
   gesperrt.
@@ -421,12 +367,12 @@ gemeldete Korrektur.
 
 Sechs Fälle genügen für den MVP:
 
-1. gut dokumentierter Klassiker,
-2. aktueller Film mit mehreren Kritiken,
-3. wenig dokumentierter Film mit ehrlichem `null`,
-4. Original und Remake mit ähnlichem Titel,
-5. widersprüchliche Kritiken,
-6. Film, dessen Treffer nur von einer gesperrten Quelle kämen.
+1. `Alien` mit institutionellem LOC-Einzelbeleg,
+2. derselbe Film als kostenfreier Cache-Treffer,
+3. Film ohne LOC-Treffer mit ehrlichem `nicht belegt`,
+4. Original/Remake oder gleichnamiges Werk mit ID-/Jahr-Abweichung,
+5. manipulierte URL, Redirect oder Quellenantwort,
+6. Film, dessen Treffer nur von einer gesperrten Quelle käme.
 
 ## Bewusst nicht Teil des MVP
 
@@ -440,27 +386,22 @@ Sechs Fälle genügen für den MVP:
 - automatische Rückwirkung auf das Geschmacksprofil,
 - Änderung von Block 1.
 
-## Spätere Baufolge
+## Umgesetzte Baufolge
 
-1. Drei bis fünf konkrete Quellen und deren Rechte festziehen.
-2. Quellen-Positivliste und stabile Werkkennung definieren.
-3. Versioniertes Cache-JSON und strikte Prüfung festlegen.
-4. Gezielte Einzelkritik-Recherche für eine Quelle als Pilot planen.
-5. Einfache WARUM-Skala und sechs Prüffälle abnehmen.
-6. Kostenreservierung und Wiederverwendung planen.
-7. Beleganzeige planen.
-8. Erst danach eine eigene Integration in die persönliche Vorbewertung
-   beschließen.
+1. Quellenrechte und feste Adaptergrenzen dokumentiert.
+2. Positivliste und starke Werkkennungen definiert.
+3. Versionierten Cache und strikte Lese-/Schreibrechte gebaut.
+4. Wikidata- und LOC-Adapter mit konservativer Identitätsprüfung gebaut.
+5. WARUM-Skala und Belegklassen serverseitig eingefroren.
+6. Kostenreservierung, 5-US-Cent-Deckel und Cache-Wiederverwendung gebaut.
+7. Beleganzeige in der aufgeklappten Filmkarte integriert.
+8. Belegtes WARUM samt Versions-ID in die persönliche Prognose integriert.
 
-## Noch zu entscheiden
+## Später zu entscheiden
 
-- Welche drei bis fünf Websites bilden die erste Positivliste?
-- Welche Quelle bekommt den ersten technischen und rechtlichen Pilot?
-- Sind veröffentlichte Belege öffentlich oder zunächst nur für angemeldete
-  Beta-Konten sichtbar?
-- Wie wird die interne Werkkennung gebildet, wenn keine starke erlaubte
-  Fremdkennung vorhanden ist?
-- Welches Kostenmaximum pro Bericht ergibt die Mock-Messung?
-- Soll eine spätere Prognoseversion weiterhin sowohl Prozent-Passung als auch
-  Kategorie zeigen, oder reicht ein verständliches Passungsband? Diese Frage
-  ändert Block 1 jetzt nicht.
+- Welche weitere Quelle nach eigener Rechte- und Adapterprüfung folgt.
+- Ob veröffentlichte Belege später auch anonym sichtbar werden; im MVP lesen
+  nur angemeldete Konten.
+- Wie Werke ohne starke erlaubte Fremdkennung redaktionell aufgenommen werden.
+- Ob eine spätere Prognoseversion weiterhin Prozent-Passung und Kategorie
+  zeigt oder nur ein verständliches Passungsband.

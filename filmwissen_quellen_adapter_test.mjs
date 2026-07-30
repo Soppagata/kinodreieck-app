@@ -113,6 +113,7 @@ await check("Q2 IMDb wird nur per exaktem haswbstatement aufgeloest", async () =
   const suche = urls[0];
   return suche.url.searchParams.get("srsearch") === "haswbstatement:P345=tt0078748"
     && suche.url.searchParams.get("srlimit") === "2"
+    && !suche.url.searchParams.has("maxlag")
     && suche.init.redirect === "manual"
     && /KinodreieckFilmwissenBot\/1\.0 \(https:\/\/kinodreieck\.example\/kontakt\)/.test(suche.init.headers["User-Agent"]);
 });

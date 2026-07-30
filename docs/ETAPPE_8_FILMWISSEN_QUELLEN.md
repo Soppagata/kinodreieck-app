@@ -9,11 +9,11 @@ Diese technische Produktprüfung ist keine Rechtsberatung. Jede Quelle bleibt
 im Datenbankregister standardmäßig gesperrt und wird erst zusammen mit einem
 engen, getesteten Adapter aktiviert.
 
-## Adapterkandidaten
+## Freigegebene MVP-Adapter
 
 ### Wikidata-Strukturdaten
 
-Status: **Kandidat für Freigabe**, ausschließlich strukturierte Daten.
+Status: **produktiv freigegeben**, ausschließlich strukturierte Daten.
 
 - Haupt-, Property- und Lexeme-Strukturdaten stehen unter CC0:
   <https://www.wikidata.org/wiki/Wikidata:Licensing>
@@ -33,12 +33,14 @@ Implementierter Adaptervertrag:
 - keine Titel-, Jahres- oder Freitextsuche als Fallback,
 - feste Filmtyp- und Property-Positivliste; Bewertungsscores, Wikipedia-Texte
   und LOC-abgeleitete Aussagen werden verworfen,
-- identifizierbarer User-Agent ist Pflicht. Vor Aktivierung muss Max eine
-  öffentlich erreichbare Produkt-/Support-Kontaktangabe festlegen.
+- identifizierbarer User-Agent ist Pflicht. Die öffentlich erreichbare
+  Produktkontaktangabe ist serverseitig gesetzt und reist nicht aus dem
+  Browser an.
 
 ### Library of Congress / National Film Registry
 
-Status: **Kandidat für Freigabe**, nur freigegebene offizielle Dokumenttypen.
+Status: **produktiv freigegeben**, nur der unten genannte offizielle
+Dokumenttyp.
 
 - Die Registry dokumentiert Aufnahmen wegen kultureller, historischer oder
   ästhetischer Bedeutung:
@@ -138,5 +140,7 @@ automatisierten Recherche-, Cache- und KI-Paraphrasepfad:
   strukturierten Kontext, zählt aber nicht als kulturelle Einordnung. Die
   Aufnahme ins National Film Registry ist eine ausdrückliche institutionelle
   Einordnung und erfüllt deshalb allein die fachliche Mindestbelegung.
-- Beide Quellen stehen in der Produktionsdatenbank weiterhin auf `kandidat`;
-  Abruf, Cache, Paraphrase und Anzeige sind noch nicht freigegeben.
+- Beide Quellen stehen in der Produktionsdatenbank auf `freigegeben`; Abruf,
+  Cache, Paraphrase und Anzeige wurden mit der echten Kette P18–P21
+  nachgewiesen. Alle anderen Quellen bleiben gesperrt beziehungsweise
+  Kandidaten ohne aktiven Abrufpfad.

@@ -282,20 +282,21 @@ Profilupdates oder Neuberechnungen niemals überschrieben.
 
 ### WARUM und kulturelle Relevanz
 
-Im aktuellen Ingestion-Code und in Teilen der App steht WARUM für
-filmhistorische oder popkulturelle Relevanz. Der ältere README-Text nennt dagegen
-„persönliche Prägung“. Vor einem größeren Umbau muss diese Begriffsabweichung
-bewusst entschieden und anschließend in UI, Datenmodell und Dokumentation
-vereinheitlicht werden.
+WARUM steht projektweit für filmhistorische oder popkulturelle Relevanz.
+Veröffentlichtes gemeinsames WARUM wird aus freigegebenem, versioniertem
+Filmwissen abgeleitet und nicht aus persönlichem Geschmack. Eine ausdrückliche
+institutionelle Einordnung kann dabei allein stark genug sein; entscheidend
+ist ihr Inhalt, nicht eine bloße Quellenanzahl.
 
-Solange WARUM die kulturelle Relevanz meint, wird der Wert aus gemeinsamem,
-möglichst belegtem Filmwissen abgeleitet und nicht aus persönlichem Geschmack.
-Eine persönliche Verbindung darf die Erklärung ergänzen, die kulturelle
-Einordnung aber nicht ersetzen.
+Eine persönliche KI-Prognose darf WARUM bei fehlendem Cache vorsichtig aus
+Filmkontext und Geschmack schätzen. Diese Schätzung bleibt sichtbar und
+technisch von belegtem gemeinsamen Filmwissen sowie von einer echten
+Nutzerbewertung getrennt. Liegt belegtes Filmwissen vor, übernimmt die
+Prognose dessen Wert und Versions-ID unverändert.
 
-### Separater Bau-Chat
+### Im Bau-Chat entschieden
 
-Der Einzelchat sollte mindestens klären:
+Der Bau-Chat hat verbindlich festgelegt:
 
 - genaues Ausgabeformat,
 - Darstellung von Sicherheit,
@@ -305,6 +306,10 @@ Der Einzelchat sollte mindestens klären:
 - Annahme-, Korrektur- und Feedbackablauf,
 - Speicherung und Neuberechnung,
 - Tests mit bekannten Gegenbeispielen.
+
+Der ausführliche Vertrag und die Abnahme stehen in
+`docs/STECKBRIEF_VORBEWERTUNG.md`,
+`docs/ETAPPE_8_VORBEWERTUNG_PLAN.md` und `docs/ETAPPE_8_ABNAHME.md`.
 
 ### Fertig, wenn
 
@@ -336,9 +341,9 @@ widersprüchliche Einzelrecherchen.
 Aktuelle Streaming- und Kinodaten kommen weiterhin aus strukturierten und
 rechtlich erlaubten Datenquellen, nicht aus dem Sprachmodell.
 
-### Separater Bau-Chat
+### Im Bau-Chat entschieden
 
-Der Einzelchat sollte mindestens klären:
+Der Bau-Chat hat für den ersten MVP festgelegt:
 
 - gemeinsames Datenmodell,
 - Quellen- und Belegregeln,
@@ -346,7 +351,14 @@ Der Einzelchat sollte mindestens klären:
 - Statusfolge von „unbestätigt“ bis „geprüft“,
 - Caching und Aktualisierung,
 - Zusammenführung widersprüchlicher Ergebnisse,
-- Administrations- und Freigabeoberfläche.
+- redaktionelle Administration bleibt eine spätere Erweiterung.
+
+Der implementierte Pfad verwendet feste Wikidata- und LOC-Adapter, einen
+gemeinsamen relationalen und unveränderlich versionierten Cache sowie eine
+enge Konto-Lese-RPC. Eine institutionelle Einordnung darf WARUM allein tragen;
+ansonsten sind zwei unabhängige verantwortete Quellen nötig. Details und
+Abnahme stehen in `docs/STECKBRIEF_FILMWISSENS_CACHE.md` und
+`docs/ETAPPE_8_ABNAHME.md`.
 
 ### Fertig, wenn
 
@@ -858,16 +870,11 @@ Danach kann jede Produktfunktion diesen Unterbau verwenden.
 Diese Punkte sind absichtlich nicht endgültig festgelegt:
 
 - Bleibt ein vollständiger Gastmodus Teil des öffentlichen Produkts?
-- WARUM ist kulturelle Relevanz. Eine persönliche KI-Prognose darf sie
-  vorläufig aus Filmkontext und Geschmack schätzen; belegtes gemeinsames
-  Filmwissen und echte Nutzerbewertung bleiben getrennt.
 - Welche Daten enthält das feste Download-Paket tatsächlich?
 - Erfolgt Account-Login vollständig über Supabase Auth?
 - Läuft die KI-Schnittstelle zunächst als Cloudflare Worker oder
   Supabase-Funktion?
 - Welche Profiländerungen benötigen eine ausdrückliche Bestätigung?
-- Welche Filmwissensdaten dürfen accountübergreifend verwendet werden?
-- Welche Quellen und Belege sind für die Relevanzbewertung ausreichend?
 - Welche Bilddaten dürfen beim Filmscan an Claude geschickt werden?
 - Welche Funktion erhält zuerst ein reales Monatsbudget?
 - Wie lange werden KI-Protokolle und abgeleitete Signale aufbewahrt?
@@ -928,8 +935,7 @@ Die Zuschnitte können je nach Arbeitsfortschritt kleiner oder größer werden:
 
 ## Bestehende Anknüpfungspunkte im Projekt
 
-- `README.md`: heutige Grundbeschreibung der App; die WARUM-Definition ist mit
-  dem aktuellen Ingestion-Ablauf abzugleichen.
+- `README.md`: Grundbeschreibung der App mit der bindenden WARUM-Definition.
 - `src/lib/paket.js`: vorhandenes Paketformat und bisheriger
   Masterlisten-Ingestion-Prompt.
 - `src/lib/storage.js`: treiberunabhängige lokale Speicheroberfläche.

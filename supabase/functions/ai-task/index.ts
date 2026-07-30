@@ -3467,7 +3467,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     const version = {
       schemaVersion: "filmwissen-cache-v1",
       rubrikVersion: "warum-v1",
-      pipelineVersion: "adapter-wikidata-loc-v1",
+      pipelineVersion: "wikidata-loc-v1",
       promptVersion: FILMWISSEN_PROMPT_VERSION,
       warum: synthese.warum,
       sicherheit: synthese.sicherheit,

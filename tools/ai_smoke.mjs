@@ -38,6 +38,10 @@
      P12–P15 intelligente Suche (zwei zahlende, zwei lokal abgewiesene Proben)
      P16 leerer Prognoseauftrag wird vor Reservierung abgewiesen
      P17 genau eine echte persönliche Vorbewertung mit getrenntem WARUM
+     P18 echte, quellengeführte Filmwissen-Synthese für Alien
+     P19 derselbe Film ist danach ein kostenfreier Cache-Treffer
+     P20 der gemeinsame Bericht ist über die enge Lese-RPC sichtbar
+     P21 eine neue Prognose übernimmt exakt dessen belegtes WARUM
 
    Der Gesundheitsbericht aus P5 wird vollständig ausgegeben. Er enthält
    ausschließlich Namen und Formen (welche Umgebungsvariablen gesetzt sind,
@@ -101,6 +105,20 @@ async function meldeAn() {
     process.exit(2);
   }
   return daten.access_token;
+}
+
+async function rpc(name, token, body) {
+  const antwort = await fetch(`${URL_BASIS}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: {
+      apikey: ANON,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const daten = await antwort.json().catch(() => null);
+  return { status: antwort.status, daten };
 }
 
 const JSON_KOPF = { "Content-Type": "application/json" };
@@ -422,6 +440,107 @@ pruefe(
     : `HTTP ${p17.status}: ${JSON.stringify(p17.daten)?.slice(0, 300)}`,
 );
 
+/* ===========================================================================
+   P18–P21: gemeinsames Filmwissen und die Naht zurück in die Prognose
+
+   P18 ist der einzige möglicherweise zahlende Syntheselauf. P19 darf danach
+   nur noch dieselbe veröffentlichte Version aus dem Cache liefern. Schlägt
+   P18 fehl, wird er innerhalb dieser Rauchprobe ausdrücklich NICHT wiederholt.
+   =========================================================================== */
+const FILMWISSEN_KENNUNG = { namespace: "imdb", kennung: "tt0078748" };
+const p18 = await ruf(
+  "POST",
+  { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
+  {
+    task: "filmwissen-synthese",
+    vorgangId: crypto.randomUUID(),
+    payload: FILMWISSEN_KENNUNG,
+  },
+);
+const d18 = p18.daten?.data;
+const p18Erfolg = p18.status === 200
+  && p18.daten?.ok === true
+  && ["belegt", "cache_hit"].includes(d18?.status)
+  && typeof d18?.versionId === "string";
+pruefe(
+  "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",
+  p18Erfolg,
+  p18.status === 200
+    ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
+    : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
+);
+
+const p19 = p18Erfolg
+  ? await ruf(
+    "POST",
+    { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
+    {
+      task: "filmwissen-synthese",
+      vorgangId: crypto.randomUUID(),
+      payload: FILMWISSEN_KENNUNG,
+    },
+  )
+  : null;
+const d19 = p19?.daten?.data;
+pruefe(
+  "Zweiter Syntheseaufruf ist ein kostenfreier Cache-Treffer derselben Version",
+  p19?.status === 200
+    && d19?.status === "cache_hit"
+    && d19?.versionId === d18?.versionId
+    && p19?.daten?.verbrauch == null,
+  p19
+    ? `HTTP ${p19.status}, Status ${d19?.status}, Version ${d19?.versionId}`
+    : "übersprungen, weil P18 fehlgeschlagen ist — kein automatischer Wiederholungsversuch",
+);
+
+const p20 = p18Erfolg
+  ? await rpc("kd_filmwissen_aktuell_lesen", token, {
+    p_namespace: FILMWISSEN_KENNUNG.namespace,
+    p_kennung: FILMWISSEN_KENNUNG.kennung,
+  })
+  : null;
+pruefe(
+  "Der veröffentlichte gemeinsame Bericht ist über die enge Lese-RPC sichtbar",
+  p20?.status === 200
+    && p20?.daten?.status === "belegt"
+    && p20?.daten?.version?.id === d18?.versionId
+    && Number.isInteger(p20?.daten?.warum?.wert),
+  p20
+    ? `HTTP ${p20.status}, WARUM ${p20.daten?.warum?.wert}, Version ${p20.daten?.version?.id}`
+    : "übersprungen, weil P18 fehlgeschlagen ist",
+);
+
+const p21 = p20?.status === 200 && p20?.daten?.status === "belegt"
+  ? await ruf(
+    "POST",
+    { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
+    {
+      task: "film-forecast",
+      vorgangId: crypto.randomUUID(),
+      promptVersion: "v2",
+      profilVersion: "p-test",
+      payload: {
+        film: FORECAST_FILM,
+        filmkennung: FILMWISSEN_KENNUNG,
+        profil: {
+          signale: FORECAST_SIGNALE,
+          achsen: { wie: 4, was: 4, warum: null },
+        },
+      },
+    },
+  )
+  : null;
+pruefe(
+  "Persönliche Prognose übernimmt exakt das belegte Cache-WARUM samt Version",
+  p21?.status === 200
+    && p21?.daten?.data?.achsen?.warum === p20?.daten?.warum?.wert
+    && p21?.daten?.provenienz?.warumHerkunft === "filmwissen"
+    && p21?.daten?.provenienz?.filmwissenVersionId === p20?.daten?.version?.id,
+  p21
+    ? `HTTP ${p21.status}, WARUM ${p21.daten?.data?.achsen?.warum}, Herkunft ${p21.daten?.provenienz?.warumHerkunft}`
+    : "übersprungen, weil kein belegter Bericht lesbar war",
+);
+
 /* --- Diagnose -------------------------------------------------------------- */
 if (d12) {
   console.log("\n───────── Deutung von P12 (zum Abnicken oder Korrigieren) ─────────");
@@ -438,6 +557,21 @@ if (d17) {
   console.log("\n───────── Etappe-8-Vorbewertung (P17) ─────────");
   console.log(JSON.stringify(d17, null, 2));
   console.log("───────────────────────────────────────────────");
+}
+if (p20?.daten?.status === "belegt") {
+  console.log("\n───────── Gemeinsames Filmwissen (P20, gekürzt) ─────────");
+  console.log(JSON.stringify({
+    status: p20.daten.status,
+    werk: p20.daten.werk,
+    version: p20.daten.version,
+    warum: p20.daten.warum,
+    fundstellen: (p20.daten.fundstellen || []).map((f) => ({
+      quelle: f.quelle,
+      attribution: f.attribution,
+      kernaussagen: f.kernaussagen,
+    })),
+  }, null, 2));
+  console.log("─────────────────────────────────────────────────────────");
 }
 
 if (modellIds.length) {
