@@ -154,13 +154,17 @@ Zwischenstand 30.07.2026:
   ein quellenweites Minutenlimit, unveränderliche Herkunftsgruppen und einen
   harten Task-Deckel von 5 US-Cent. Modellalias `gross` und 2048 Ausgabetokens
   sind fail-closed hinterlegt.
+- Erfolgreiche Publikation und Abschluss des exakt zugeordneten KI-Protokolls
+  erfolgen über eine gemeinsame Transaktion. Auch der Fehlerabschluss nach
+  einem Anbieteraufruf schließt beide Aufträge zusammen und erhält unbekannte
+  Kosten als Reservierung.
 - Europeana bleibt ein späterer Metadatenkandidat und ist nicht Teil des ersten
   Adapterpaars.
 - Guardian bleibt bis zu einem Commercial-Vertrag gesperrt; IMDb, Rotten
   Tomatoes und film.at bleiben ohne schriftliche Lizenz gesperrt.
 - Nächster Block: atomare Vorbereitung mit beiden Adaptern, gemeinsamer
-  LOC-Snapshot-Cache sowie atomarer Abschluss von Filmwissen-Version und
-  KI-Protokoll. Erst danach darf der Status `bereit` existieren.
+  LOC-Snapshot-Cache und Einbindung in die bestehende Providernaht. Erst danach
+  darf der Status `bereit` existieren.
 
 ## Phase E — Produktintegration
 

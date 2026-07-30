@@ -39,6 +39,7 @@ ausfüllen.
 | `20260729220000_etappe8_filmwissen_cache.sql` | `bscjgwcntapobyxsiyce` | 2026-07-29 | Codex über Management-API | erfolgreich; gemeinsamer accountfreier Cache, keine Quelle vorab freigegeben; Vertragstest 44/44 und RLS 54/54 grün |
 | `20260730110000_etappe8_filmwissen_synthese_sicherung.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; fail-closed Vorbereitung und Fehlerabschluss; beide RPCs remote nur für `postgres`/`service_role` ausführbar |
 | `20260730140000_etappe8_filmwissen_adapter_sperren.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; feste Wikidata-/LOC-Kandidaten weiterhin ohne Rechte, DB-weites Rate-Limit, Reaper, Beleg-Ursprung NOT NULL und 5-US-Cent-Task-Cap remote geprüft |
+| `20260730160000_etappe8_filmwissen_atomarer_abschluss.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; Filmwissen-Publikation und zugehöriges KI-Log schließen bei Erfolg oder Anbieterfehler atomar; beide RPCs remote nur für `postgres`/`service_role` ausführbar |
 
 ## Nach Migration 1
 
