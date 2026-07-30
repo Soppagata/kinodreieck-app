@@ -138,14 +138,29 @@ Zwischenstand 30.07.2026:
 - Der Synthesevertrag nutzt die gemeinsame Providernaht, verlangt exakt fünf
   Ausgabefelder und mindestens zwei Domains sowie zwei unabhängige
   Herkunftsgruppen.
-- Plausible Adapterkandidaten sind Wikidata-Strukturdaten (CC0), eng
-  abgegrenzte offizielle National-Film-Registry-Daten der Library of Congress
-  und Europeana-Metadaten (CC0). Noch ist keiner produktiv aktiviert.
+- Die festen Adapter `wikidata-action-v1` und `loc-nfr-listing-v1` sind
+  implementiert und mit Mocks abgesichert. Sie erlauben weder freie URLs noch
+  Titelsuche als Identitätsersatz, folgen keinen Redirects und stoppen bei
+  falschem Inhaltstyp, Übergröße, Timeout, Rate-Limit oder Schemaabweichung.
+- Wikidata löst QID, IMDb- oder TMDB-Kennung ausschließlich über die offizielle
+  Action API auf und übernimmt nur einen engen Satz strukturierter Fakten.
+- LOC lädt ausschließlich die vollständige offizielle Registry-Tabelle,
+  validiert den gesamten Snapshot und ordnet einen Film nur über die zuvor
+  Wikidata-geprüfte Identität mit exaktem Titel und Erscheinungsjahr zu.
+- Beide Adapter sind in Produktion nur als `kandidat` registriert; alle
+  Rechteflags sind weiterhin `false`. Wikidata bleibt zusätzlich gesperrt,
+  solange keine öffentliche Kontaktangabe für den User-Agent konfiguriert ist.
+- Der Datenbank-Unterbau besitzt nun einen Reaper für verwaiste Aufträge,
+  ein quellenweites Minutenlimit, unveränderliche Herkunftsgruppen und einen
+  harten Task-Deckel von 5 US-Cent. Modellalias `gross` und 2048 Ausgabetokens
+  sind fail-closed hinterlegt.
+- Europeana bleibt ein späterer Metadatenkandidat und ist nicht Teil des ersten
+  Adapterpaars.
 - Guardian bleibt bis zu einem Commercial-Vertrag gesperrt; IMDb, Rotten
   Tomatoes und film.at bleiben ohne schriftliche Lizenz gesperrt.
-- Nächster Block: ein enger serverseitiger Adapter mit Endpoint-,
-  Dokumenttyp-, Größen-, Zeit-, Weiterleitungs- und Herkunftsprüfung. Erst
-  danach darf der Status `bereit` existieren.
+- Nächster Block: atomare Vorbereitung mit beiden Adaptern, gemeinsamer
+  LOC-Snapshot-Cache sowie atomarer Abschluss von Filmwissen-Version und
+  KI-Protokoll. Erst danach darf der Status `bereit` existieren.
 
 ## Phase E — Produktintegration
 

@@ -26,6 +26,16 @@ Status: **Kandidat für Freigabe**, ausschließlich strukturierte Daten.
   auf die Library of Congress, erhält es dieselbe Herkunftsgruppe wie der
   LOC-Beleg und zählt nicht als unabhängige zweite Quelle.
 
+Implementierter Adaptervertrag:
+
+- ausschließlich `https://www.wikidata.org/w/api.php`,
+- QID direkt oder exakte Auflösung von IMDb über `P345` und TMDB über `P4947`,
+- keine Titel-, Jahres- oder Freitextsuche als Fallback,
+- feste Filmtyp- und Property-Positivliste; Bewertungsscores, Wikipedia-Texte
+  und LOC-abgeleitete Aussagen werden verworfen,
+- identifizierbarer User-Agent ist Pflicht. Vor Aktivierung muss Max eine
+  öffentlich erreichbare Produkt-/Support-Kontaktangabe festlegen.
+
 ### Library of Congress / National Film Registry
 
 Status: **Kandidat für Freigabe**, nur freigegebene offizielle Dokumenttypen.
@@ -43,6 +53,20 @@ Status: **Kandidat für Freigabe**, nur freigegebene offizielle Dokumenttypen.
 - Gastessays, Interviews, Bilder, Filme und nachgedruckte Texte sind nicht
   pauschal freigegeben. Der Adapter braucht deshalb eine Endpoint- und
   Dokumenttyp-Allowlist, nicht bloß `loc.gov` als Domain.
+
+Implementierter Adaptervertrag:
+
+- ausschließlich die vollständige offizielle Registry-Liste unter
+  <https://www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/?fo=json&at=content.markup>,
+- genau die drei Tabellenspalten Filmtitel, Erscheinungsjahr und Aufnahmejahr;
+  keine Essays, Bilder, Interviews, Filme oder verlinkten Dokumente,
+- vollständige Snapshot-Prüfung mit 25 Einträgen je abgeschlossenem
+  Aufnahmejahr und konservativer Größenbegrenzung,
+- Zuordnung nur nach Wikidata-geprüfter Filmidentität, exaktem Titelalias und
+  exakt einem vierstelligen Erscheinungsjahr; kein ±1-Jahr- oder
+  Remake-Fallback,
+- eine Nichtübereinstimmung bedeutet nur `kein Beleg`, niemals
+  „nicht im Registry“.
 
 ### Europeana-Metadaten
 
@@ -109,3 +133,7 @@ automatisierten Recherche-, Cache- und KI-Paraphrasepfad:
   Herkunftsgruppen unabhängig sind.
 - Fehlt mindestens ein starker kultureller Beleg, lautet das Ergebnis
   `nicht belegt`; es wird keine WARUM-Zahl erfunden.
+- Der erste Synthesepfad braucht beide unabhängigen Herkunftsgruppen:
+  `wikidata-community` und `loc-national-film-registry`.
+- Beide Quellen stehen in der Produktionsdatenbank weiterhin auf `kandidat`;
+  Abruf, Cache, Paraphrase und Anzeige sind noch nicht freigegeben.
