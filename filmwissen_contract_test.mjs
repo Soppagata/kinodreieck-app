@@ -6,14 +6,33 @@ let ok = 0; const fehler = [];
 function check(name, fn) { try { if (!fn()) throw new Error("falsch"); ok++; console.log("✓ " + name); } catch (e) { fehler.push(name); console.error("✗ " + name + ": " + e.message); } }
 const werk = { typ: "film", titel: "Alien", originaltitel: "Alien", jahr: 1979 };
 const fundstellen = [
-  { id: "F1", quelle: "quelle-a", domain: "a.example", ursprung: "archiv-a", titel: "A", veroeffentlichtAm: null, kernaussagen: ["Praegte das Genre."] },
-  { id: "F2", quelle: "quelle-b", domain: "b.example", ursprung: "redaktion-b", titel: "B", veroeffentlichtAm: null, kernaussagen: ["Wurde breit rezipiert."] },
+  { id: "F1", quelle: "quelle-a", domain: "a.example", belegklasse: "redaktionell", ursprung: "archiv-a", titel: "A", veroeffentlichtAm: null, kernaussagen: ["Praegte das Genre."] },
+  { id: "F2", quelle: "quelle-b", domain: "b.example", belegklasse: "redaktionell", ursprung: "redaktion-b", titel: "B", veroeffentlichtAm: null, kernaussagen: ["Wurde breit rezipiert."] },
 ];
-check("D1 verlangt 2-5 unterschiedliche Quellen, Domains und Urspruenge", () =>
+check("D1 verlangt zwei unabhaengige verantwortete Quellen", () =>
   pruefeSyntheseEingabe(werk, fundstellen).length === 0
-  && pruefeSyntheseEingabe(werk, [fundstellen[0]]).includes("fundstellen-anzahl")
-  && pruefeSyntheseEingabe(werk, [fundstellen[0], { ...fundstellen[1], domain: "a.example" }]).includes("zwei-domains")
-  && pruefeSyntheseEingabe(werk, [fundstellen[0], { ...fundstellen[1], ursprung: "archiv-a" }]).includes("zwei-urspruenge"));
+  && pruefeSyntheseEingabe(werk, [fundstellen[0]]).includes("mindestbelegung")
+  && pruefeSyntheseEingabe(werk, [fundstellen[0], { ...fundstellen[1], domain: "a.example" }]).includes("mindestbelegung")
+  && pruefeSyntheseEingabe(werk, [fundstellen[0], { ...fundstellen[1], ursprung: "archiv-a" }]).includes("mindestbelegung"));
+check("D1a eine ausdrueckliche institutionelle Einordnung darf allein tragen", () => {
+  const institution = {
+    ...fundstellen[0],
+    quelle: "loc-nfr",
+    domain: "www.loc.gov",
+    belegklasse: "institutionell",
+    ursprung: "loc-national-film-registry",
+  };
+  const struktur = {
+    ...fundstellen[1],
+    quelle: "wikidata",
+    domain: "www.wikidata.org",
+    belegklasse: "strukturiert",
+    ursprung: "wikidata-community",
+  };
+  return pruefeSyntheseEingabe(werk, [institution]).length === 0
+    && pruefeSyntheseEingabe(werk, [struktur]).includes("mindestbelegung")
+    && pruefeSyntheseEingabe(werk, [struktur, institution]).length === 0;
+});
 check("D2 Auftrag enthaelt keine URLs oder persoenliche Felder", () => {
   const body = baueSyntheseAuftrag(werk, fundstellen); const serialisiert = JSON.stringify(body);
   return !/https?:\/\//.test(serialisiert) && !/account|profil|notiz|passung/i.test(serialisiert)
@@ -46,8 +65,14 @@ check("D7 ausgewaehlte Belege muessen selbst zwei unabhaengige Urspruenge tragen
   ];
   const basis = { format: FILMWISSEN_SYNTHESE_FORMAT, warum: 4, sicherheit: "mittel", kurztext: "Relevant." };
   return pruefeSyntheseEingabe(werk, drei).length === 0
-    && pruefeSyntheseAusgabe({ ...basis, belegIds: ["F1", "F2"] }, drei).includes("belegIds-zwei-urspruenge")
+    && pruefeSyntheseAusgabe({ ...basis, belegIds: ["F1", "F2"] }, drei).includes("belegIds-mindestbelegung")
     && pruefeSyntheseAusgabe({ ...basis, belegIds: ["F1", "F3"] }, drei).length === 0;
+});
+check("D8 Ausgabe darf genau einen institutionellen Beleg waehlen", () => {
+  const institution = { ...fundstellen[0], belegklasse: "institutionell" };
+  const basis = { format: FILMWISSEN_SYNTHESE_FORMAT, warum: 4, sicherheit: "mittel", kurztext: "Relevant." };
+  return pruefeSyntheseAusgabe({ ...basis, belegIds: ["F1"] }, [institution]).length === 0
+    && pruefeSyntheseAusgabe({ ...basis, belegIds: ["F1"] }, [fundstellen[0]]).includes("belegIds-mindestbelegung");
 });
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Synthesevertrag-Checks bestanden.`);
 if (fehler.length) process.exit(1);

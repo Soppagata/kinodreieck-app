@@ -9,6 +9,11 @@ export type Fundstelle = {
   id: string;
   quelle: string;
   domain: string;
+  /* Strukturquellen sichern Identitaet und Fakten, tragen aber allein keine
+     kulturelle Wertung. Eine ausdrueckliche institutionelle Einordnung darf
+     laut Produktvertrag allein genuegen; sonst braucht es zwei unabhaengige
+     verantwortete Quellen. */
+  belegklasse: "strukturiert" | "institutionell" | "redaktionell";
   /* Zwei Domains sind nicht automatisch zwei unabhaengige Belege:
      Ein Wikidata-Statement, das seinerseits auf die Library of Congress
      verweist, hat denselben Ursprung wie die LOC-Seite. Der serverseitige
@@ -28,11 +33,24 @@ export type Werk = {
 function text(v: unknown): string { return typeof v === "string" ? v.trim() : ""; }
 const STEUERZEICHEN = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/;
 
+export function pruefeMindestbelegung(fundstellen: Fundstelle[]): string[] {
+  const verantwortet = fundstellen.filter((f) =>
+    f?.belegklasse === "institutionell" || f?.belegklasse === "redaktionell");
+  if (verantwortet.some((f) => f.belegklasse === "institutionell")) return [];
+  if (verantwortet.length < 2) return ["mindestbelegung"];
+  if (new Set(verantwortet.map((f) => text(f.quelle))).size < 2
+      || new Set(verantwortet.map((f) => text(f.domain))).size < 2
+      || new Set(verantwortet.map((f) => text(f.ursprung))).size < 2) {
+    return ["mindestbelegung"];
+  }
+  return [];
+}
+
 export function pruefeSyntheseEingabe(werk: Werk, fundstellen: Fundstelle[]): string[] {
   const fehler: string[] = [];
   if (!werk || !["film", "filmreihe", "serie"].includes(werk.typ)
       || !text(werk.titel) || !Number.isInteger(werk.jahr)) fehler.push("werk");
-  if (!Array.isArray(fundstellen) || fundstellen.length < 2 || fundstellen.length > 5) return [...fehler, "fundstellen-anzahl"];
+  if (!Array.isArray(fundstellen) || fundstellen.length < 1 || fundstellen.length > 5) return [...fehler, "fundstellen-anzahl"];
   const ids = new Set<string>();
   const quellen = new Set<string>();
   const domains = new Set<string>();
@@ -43,7 +61,9 @@ export function pruefeSyntheseEingabe(werk: Werk, fundstellen: Fundstelle[]): st
     quellen.add(text(f?.quelle));
     domains.add(text(f?.domain));
     urspruenge.add(text(f?.ursprung));
-    if (!text(f?.quelle) || !text(f?.domain) || !text(f?.ursprung) || !text(f?.titel)
+    if (!text(f?.quelle) || !text(f?.domain) || !text(f?.ursprung)
+        || !["strukturiert", "institutionell", "redaktionell"].includes(f?.belegklasse)
+        || !text(f?.titel)
         || STEUERZEICHEN.test(f.titel)
         || !Array.isArray(f?.kernaussagen) || f.kernaussagen.length < 1
         || f.kernaussagen.length > 10
@@ -51,8 +71,7 @@ export function pruefeSyntheseEingabe(werk: Werk, fundstellen: Fundstelle[]): st
           !text(a) || text(a).length > 500 || STEUERZEICHEN.test(a))) fehler.push("fundstelle");
   }
   if (quellen.size !== fundstellen.length) fehler.push("quelle-doppelt");
-  if (domains.size < 2) fehler.push("zwei-domains");
-  if (urspruenge.size < 2) fehler.push("zwei-urspruenge");
+  fehler.push(...pruefeMindestbelegung(fundstellen));
   return [...new Set(fehler)];
 }
 
@@ -111,14 +130,13 @@ export function pruefeSyntheseAusgabe(ausgabe: unknown, fundstellen: Fundstelle[
   if (!["sehr_niedrig", "niedrig", "mittel", "hoch"].includes(String(a.sicherheit))) fehler.push("sicherheit");
   if (typeof a.kurztext !== "string" || !text(a.kurztext)
       || text(a.kurztext).length > 1000 || STEUERZEICHEN.test(a.kurztext)) fehler.push("kurztext");
-  if (!Array.isArray(a.belegIds) || a.belegIds.length < 2 || a.belegIds.length > 5
+  if (!Array.isArray(a.belegIds) || a.belegIds.length < 1 || a.belegIds.length > 5
       || new Set(a.belegIds).size !== a.belegIds.length
       || a.belegIds.some((id) => typeof id !== "string" || !erlaubt.has(id))) {
     fehler.push("belegIds");
   } else {
     const belege = a.belegIds.map((id) => nachId.get(id as string)!);
-    if (new Set(belege.map((f) => f.domain)).size < 2) fehler.push("belegIds-zwei-domains");
-    if (new Set(belege.map((f) => f.ursprung)).size < 2) fehler.push("belegIds-zwei-urspruenge");
+    if (pruefeMindestbelegung(belege).length) fehler.push("belegIds-mindestbelegung");
   }
   return [...new Set(fehler)];
 }

@@ -135,9 +135,10 @@ Zwischenstand 30.07.2026:
   gestoppt.
 - Eine service-only Fehlerabschluss-RPC verhindert, dass ein gescheiterter
   Rechercheauftrag ein Werk dauerhaft blockiert.
-- Der Synthesevertrag nutzt die gemeinsame Providernaht, verlangt exakt fünf
-  Ausgabefelder und mindestens zwei Domains sowie zwei unabhängige
-  Herkunftsgruppen.
+- Der Synthesevertrag nutzt die gemeinsame Providernaht und verlangt exakt
+  fünf Ausgabefelder. Eine ausdrückliche institutionelle Einordnung darf den
+  WARUM-Wert allein tragen; sonst sind zwei unabhängige verantwortete Quellen
+  nötig. Reine Strukturquellen zählen nicht als kulturelle Einordnung.
 - Die festen Adapter `wikidata-action-v1` und `loc-nfr-listing-v1` sind
   implementiert und mit Mocks abgesichert. Sie erlauben weder freie URLs noch
   Titelsuche als Identitätsersatz, folgen keinen Redirects und stoppen bei
@@ -158,6 +159,9 @@ Zwischenstand 30.07.2026:
   erfolgen über eine gemeinsame Transaktion. Auch der Fehlerabschluss nach
   einem Anbieteraufruf schließt beide Aufträge zusammen und erhält unbekannte
   Kosten als Reservierung.
+- Die Belegklasse wird serverseitig unveränderlich mitgespeichert: Wikidata
+  ist `strukturiert`, LOC/National Film Registry `institutionell`; unbekannte
+  Quellen bleiben bis zur Prüfung konservativ `strukturiert`.
 - Europeana bleibt ein späterer Metadatenkandidat und ist nicht Teil des ersten
   Adapterpaars.
 - Guardian bleibt bis zu einem Commercial-Vertrag gesperrt; IMDb, Rotten

@@ -129,11 +129,14 @@ automatisierten Recherche-, Cache- und KI-Paraphrasepfad:
 - Freigabe gilt pro Adapter, Endpoint/Dokumenttyp und Inhaltsklasse.
 - Redirect-Ziel, Domain, Content-Type, Größe, Zeitlimit und Abrufhash werden
   serverseitig geprüft.
-- Zwei Domains zählen nur dann als zwei Belege, wenn auch ihre
-  Herkunftsgruppen unabhängig sind.
+- Eine ausdrückliche institutionelle Einordnung darf den WARUM-Wert allein
+  tragen. Andernfalls zählen zwei Domains nur dann als zwei Belege, wenn sie
+  verantwortete Quellen mit unabhängigen Herkunftsgruppen sind.
 - Fehlt mindestens ein starker kultureller Beleg, lautet das Ergebnis
   `nicht belegt`; es wird keine WARUM-Zahl erfunden.
-- Der erste Synthesepfad braucht beide unabhängigen Herkunftsgruppen:
-  `wikidata-community` und `loc-national-film-registry`.
+- Wikidata dient im ersten Synthesepfad der geprüften Werkidentität und dem
+  strukturierten Kontext, zählt aber nicht als kulturelle Einordnung. Die
+  Aufnahme ins National Film Registry ist eine ausdrückliche institutionelle
+  Einordnung und erfüllt deshalb allein die fachliche Mindestbelegung.
 - Beide Quellen stehen in der Produktionsdatenbank weiterhin auf `kandidat`;
   Abruf, Cache, Paraphrase und Anzeige sind noch nicht freigegeben.
