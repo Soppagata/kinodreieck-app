@@ -42,6 +42,8 @@ ausfüllen.
 | `20260730160000_etappe8_filmwissen_atomarer_abschluss.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; Filmwissen-Publikation und zugehöriges KI-Log schließen bei Erfolg oder Anbieterfehler atomar; beide RPCs remote nur für `postgres`/`service_role` ausführbar |
 | `20260730180000_etappe8_filmwissen_belegklassen.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; institutionell/ redaktionell/ strukturiert als eingefrorene Belegklasse; LOC institutionell, Wikidata strukturiert, alle Quellenrechte weiterhin aus und Publikation service-only remote geprüft |
 | `20260730210000_etappe8_filmwissen_adapter_betrieb.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; ausschließlich Wikidata und LOC freigegeben, atomare Adaptervorbereitung, service-only LOC-Snapshot, `filmwissen-synthese` auf Sonnet/2048 Tokens; echte Rauchprobe P1–P21 grün |
+| `20260730230000_etappe9_beta_tageslimit.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; Bauphasenlimit von 200 auf 10 Aufträge pro Konto und Tag gesenkt; Wert und Bereitschaft des `ai_aktiv`-Not-Aus danach remote verifiziert |
+| `20260730231000_etappe9_beta_antwortlimit.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; `intelligent-search` für die geschlossene Beta von 8192 auf 4096 Ausgabetokens begrenzt und remote verifiziert |
 
 ## Nach Migration 1
 
