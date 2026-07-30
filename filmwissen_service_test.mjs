@@ -62,5 +62,78 @@ await check("Ohne starke ID gibt es keinen Netzaufruf", async () => {
   let rufe = 0; const s = createFilmwissenService({ auth: authDoppel(), transport: async () => { rufe++; } });
   return (await s.read({ titel: "Alien", jahr: 1979 })).status === "nicht_zuordenbar" && rufe === 0;
 });
+await check("Recherche liest zuerst den gemeinsamen Cache und spart bei Treffer die KI", async () => {
+  let kiRufe = 0;
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => ({ ok: true, data: bereit }),
+    ai: { runTask: async () => { kiRufe++; } },
+  });
+  return (await s.recherchiere({ imdb_id: "tt0078748" })).status === "belegt" && kiRufe === 0;
+});
+await check("Cache-Miss startet genau eine kennungsenge Synthese und liest danach die Version", async () => {
+  let liest = 0; const kiRufe = [];
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => {
+      liest++;
+      return { ok: true, data: liest === 1
+        ? { format: "filmwissen-cache-v1", status: "cache_miss" }
+        : bereit };
+    },
+    ai: { runTask: async (task, payload) => {
+      kiRufe.push({ task, payload });
+      return { ok: true, data: { status: "belegt", versionId: bereit.version.id } };
+    } },
+  });
+  const ergebnis = await s.recherchiere({ imdb_id: "TT0078748", titel: "wird nicht gesendet" });
+  return ergebnis.status === "belegt" && liest === 2 && kiRufe.length === 1
+    && kiRufe[0].task === "filmwissen-synthese"
+    && JSON.stringify(kiRufe[0].payload) === JSON.stringify({ namespace: "imdb", kennung: "tt0078748" });
+});
+await check("Noch nicht zugeordnete starke ID darf den ersten Bericht anlegen", async () => {
+  let liest = 0; let kiRufe = 0;
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => ({
+      ok: true,
+      data: liest++ === 0
+        ? { format: "filmwissen-cache-v1", status: "cache_miss" }
+        : bereit,
+    }),
+    ai: { runTask: async () => {
+      kiRufe++;
+      return { ok: true, data: { status: "belegt", versionId: bereit.version.id } };
+    } },
+  });
+  return (await s.recherchiere({ imdb_id: "tt0078748" })).status === "belegt"
+    && kiRufe === 1;
+});
+await check("Parallele Recherchen werden bis zum Abschluss dedupliziert", async () => {
+  let kiRufe = 0; let loese;
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => ({ ok: true, data: { format: "filmwissen-cache-v1", status: "cache_miss" } }),
+    ai: { runTask: () => {
+      kiRufe++;
+      return new Promise((resolve) => { loese = resolve; });
+    } },
+  });
+  const a = s.recherchiere({ imdb_id: "tt0078748" });
+  const b = s.recherchiere({ imdb_id: "tt0078748" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  loese({ ok: true, data: { status: "nicht_belegt" } });
+  return (await a).status === "nicht_belegt" && (await b).status === "nicht_belegt" && kiRufe === 1;
+});
+await check("Watchmode allein darf keine Quellenrecherche ausloesen", async () => {
+  let kiRufe = 0; let reads = 0;
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => { reads++; },
+    ai: { runTask: async () => { kiRufe++; } },
+  });
+  return (await s.recherchiere({ watchmode_id: "42" })).status === "nicht_zuordenbar"
+    && kiRufe === 0 && reads === 0;
+});
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Service-Checks bestanden.`);
 if (fehler.length) process.exit(1);

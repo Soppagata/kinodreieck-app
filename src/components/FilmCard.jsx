@@ -5,6 +5,7 @@ import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
+import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
 import { setzePrognoseStatus } from "../lib/prognose.js";
 
 /* Einfacher Editor für Einträge ohne Dreieck (musik/sonstiges):
@@ -31,7 +32,10 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
    musik/sonstiges: reduzierte Karte (kein Dreieck — Modell ist auf
    Filmwirkung kalibriert), Beschreibung statt Begründung.
    kommtVorIn: Artikel-Referenzen aus dem Blog (Phase 2), Laufzeit-berechnet. */
-export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick, vorbewertung = null }) {
+export function FilmCard({
+  film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick,
+  vorbewertung = null, filmwissen = null,
+}) {
   const [editing, setEditing] = useState(false);
   const dreieck = hatDreieck(film.typ);
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
@@ -147,6 +151,19 @@ export function FilmCard({ film, kinoInfo, streamBadge, expanded, onToggle, onSa
                 onAnnehmen={vorbewertung.onAnnehmen}
                 onVerwerfen={vorbewertung.onVerwerfen}
                 onKorrigieren={() => setEditing(true)}
+              />
+            </div>
+          )}
+          {expanded && !editing && unbewertet && filmwissen && (
+            <div onClick={(e) => e.stopPropagation()}
+              style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
+              <FilmwissenBereich
+                phase={filmwissen.phase}
+                daten={filmwissen.daten}
+                fehler={filmwissen.fehler}
+                rechercheLaeuft={filmwissen.rechercheLaeuft}
+                rechercheMoeglich={filmwissen.rechercheMoeglich}
+                onRecherchieren={filmwissen.onRecherchieren}
               />
             </div>
           )}

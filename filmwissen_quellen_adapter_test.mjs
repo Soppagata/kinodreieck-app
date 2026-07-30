@@ -132,6 +132,23 @@ await check("Q3 0 oder mehrere Wikidata-Treffer werden nie geraten", async () =>
   return true;
 });
 
+await check("Q3b Wikidata-maxlag ist ein vorübergehender Quellenfehler, keine Mehrdeutigkeit", async () => {
+  try {
+    await holeWikidataFundstelle(
+      { namespace: "imdb", kennung: "tt0078748" },
+      {
+        kontakt: "support@example.com",
+        fetcher: async () => jsonAntwort({
+          error: { code: "maxlag", info: "Waiting for replicas" },
+        }),
+      },
+    );
+    return false;
+  } catch (error) {
+    return error instanceof QuellenFehler && error.code === "wikidata-voruebergehend";
+  }
+});
+
 await check("Q4 Filmtyp und externe Kennung werden am Objekt erneut geprueft", async () => {
   for (const entity of [
     { ...entityAlien, claims: { ...entityAlien.claims, P31: [claim(qwert("Q5398426"))] } },
@@ -231,7 +248,11 @@ await check("Q10 LOC-Snapshot wird vollstaendig validiert und ergibt starken Bel
   for (let jahr = 1989; jahr <= 2025; jahr++) {
     for (let index = 0; index < 25; index++) {
       const titel = jahr === 2002 && index === 0 ? "Alien" : `Fixture ${jahr}-${index}`;
-      const release = jahr === 2002 && index === 0 ? "1979" : String(1900 + ((jahr + index) % 120));
+      const release = jahr === 2002 && index === 0
+        ? "1979"
+        : jahr === 1990 && index === 1
+          ? "1975-76"
+          : String(1900 + ((jahr + index) % 120));
       rows.push(row(titel, release, String(jahr)));
     }
   }

@@ -12,6 +12,44 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- 0. Synthese explizit auf Sonnet/gross routen
+-- ---------------------------------------------------------------------------
+
+do $ki_routing$
+begin
+  update public.kd_ai_limits
+     set wert = jsonb_set(
+           coalesce(wert, '{}'::jsonb),
+           '{filmwissen-synthese}',
+           '"gross"'::jsonb,
+           true
+         ),
+         notiz = 'Zuordnung Aufgabe zu Modellalias. filmwissen-synthese nutzt '
+                 || 'verpflichtend gross (Sonnet); kein stiller Fallback.',
+         geaendert_at = now()
+   where schluessel = 'task_modell';
+  if not found then
+    raise exception 'kd_ai_limits.task_modell fehlt';
+  end if;
+
+  update public.kd_ai_limits
+     set wert = jsonb_set(
+           coalesce(wert, '{}'::jsonb),
+           '{filmwissen-synthese}',
+           '2048'::jsonb,
+           true
+         ),
+         notiz = 'Obergrenze der Antwortlaenge je Aufgabe. '
+                 || 'filmwissen-synthese: 2048 Tokens.',
+         geaendert_at = now()
+   where schluessel = 'task_max_tokens';
+  if not found then
+    raise exception 'kd_ai_limits.task_max_tokens fehlt';
+  end if;
+end
+$ki_routing$;
+
+-- ---------------------------------------------------------------------------
 -- 1. Enger Rechteentscheid fuer genau die beiden festen Adapter
 -- ---------------------------------------------------------------------------
 

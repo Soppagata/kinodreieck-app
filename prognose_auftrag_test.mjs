@@ -37,8 +37,9 @@ const profil = {
 const gebaut = bauePrognoseAuftrag(film, profil);
 
 check("gültiger unbewerteter Film und bestätigtes Profil ergeben einen Auftrag", () => gebaut.ok);
-check("Payload hat ausschließlich Film und Profil", () =>
-  Object.keys(gebaut.payload).sort().join(",") === "film,profil");
+check("Payload hat ausschließlich Film, Profil und serverlesbare Filmkennung", () =>
+  Object.keys(gebaut.payload).sort().join(",") === "film,filmkennung,profil"
+  && gebaut.payload.filmkennung === null);
 check("Film-Payload enthält nur die sechs erlaubten Felder", () =>
   Object.keys(gebaut.payload.film).sort().join(",") === "genres,jahr,originaltitel,tags,titel,typ");
 check("Profil-Payload enthält nur Signale und Achsen", () =>
@@ -83,6 +84,13 @@ check("sehr große Profile werden deterministisch begrenzt", () => {
   const b = bauePrognoseAuftrag(film, { ...profil, signale: [...signale].reverse() });
   return a.ok && a.payload.profil.signale.length === MAX_PROGNOSE_SIGNALE
     && JSON.stringify(a.payload) === JSON.stringify(b.payload);
+});
+check("Eine starke Filmkennung reist ohne Filmwissen-Texte mit", () => {
+  const auftrag = bauePrognoseAuftrag({ ...film, imdb_id: "TT0078748" }, profil);
+  return auftrag.ok
+    && JSON.stringify(auftrag.payload.filmkennung)
+      === JSON.stringify({ namespace: "imdb", kennung: "tt0078748" })
+    && !("filmwissen" in auftrag.payload);
 });
 
 console.log(`\n${ok}/${ok + rot.length} Prognose-Auftrag-Checks bestanden.`);

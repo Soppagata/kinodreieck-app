@@ -403,11 +403,24 @@ export function baueStreamingAnsichten(streaming, master = []) {
        bereits sicher, dass Master-IDs/Titel normalisiert sind. */
     const n = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
     const tt = n(t.titel);
-    const film = (master || []).find((f) => {
+    const exakterFilm = (master || []).find((f) =>
+      f.watchmode_id != null && String(f.watchmode_id) === String(t.watchmode_id));
+    const film = exakterFilm || (master || []).find((f) => {
       const jahrOk = !t.jahr || !f.jahr || Math.abs(Number(f.jahr) - Number(t.jahr)) <= 2;
       return jahrOk && (n(f.titel) === tt || n(f.originaltitel) === tt);
     });
-    if (film) meine.push({ ...film, watchmode_id: t.watchmode_id, dienste: t.dienste || [], web_urls: t.web_urls || null });
+    if (film) {
+      meine.push({
+        ...film,
+        ...(exakterFilm ? {
+          watchmode_id: t.watchmode_id,
+          tmdb_id: t.tmdb_id ?? film.tmdb_id ?? null,
+          imdb_id: t.imdb_id ?? film.imdb_id ?? null,
+        } : {}),
+        dienste: t.dienste || [],
+        web_urls: t.web_urls || null,
+      });
+    }
     else entdecken.push(t);
   }
   const meta = { ...entdeckenAlt, ...bekanntAlt, titel: undefined };

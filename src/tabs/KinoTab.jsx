@@ -8,6 +8,7 @@ import { Chip, ChipReihe, IconDelete } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
+import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 
 /* ================= KINO (Dashboard) =================
    Programmquellen: public/programm.json (Job) · Nonstop-HTML-Import ·
@@ -23,6 +24,9 @@ export function KinoTab({
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
+  filmwissenAktiv = false, filmwissenRechercheAktiv = false,
+  filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
+  onFilmwissenLaden, onFilmwissenRecherchieren,
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
   programmInfo = null, angemeldet = false, autorName,
 }) {
@@ -273,7 +277,12 @@ export function KinoTab({
                       film={film}
                       streamBadge={badgeFuer ? badgeFuer(film) : null}
                       expanded={expandedId === "k" + film.id}
-                      onToggle={() => setExpandedId(expandedId === "k" + film.id ? null : "k" + film.id)}
+                      onToggle={() => {
+                        const key = "k" + film.id;
+                        const oeffnen = expandedId !== key;
+                        setExpandedId(oeffnen ? key : null);
+                        if (oeffnen) onFilmwissenLaden?.(film);
+                      }}
                       onSave={(changes) => updateFilm(film.id, changes)}
                       vorbewertung={vorbewertungAktiv ? {
                         laeuft: prognoseLaufId === film.id,
@@ -283,6 +292,13 @@ export function KinoTab({
                         onErstellen: () => onPrognoseErstellen?.(film),
                         onAnnehmen: () => onPrognoseStatus?.(film, "angenommen"),
                         onVerwerfen: () => onPrognoseStatus?.(film, "verworfen"),
+                      } : null}
+                      filmwissen={filmwissenAktiv ? {
+                        ...(filmwissenProFilm[film.id] || { phase: "idle", daten: null, fehler: null }),
+                        rechercheLaeuft: filmwissenRechercheLaufId === String(film.id),
+                        rechercheMoeglich: filmwissenRechercheAktiv
+                          && !!filmwissenRechercheKennung(film),
+                        onRecherchieren: () => onFilmwissenRecherchieren?.(film),
                       } : null}
                       kinoInfo={
                         <>

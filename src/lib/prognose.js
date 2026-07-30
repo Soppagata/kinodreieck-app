@@ -4,6 +4,7 @@ export const PROGNOSE_FORMAT = "film-prognose-v1";
 export const PROGNOSE_PROMPT_VERSION = "v2";
 export const PROGNOSE_STATUS = Object.freeze(["offen", "angenommen", "korrigiert", "verworfen"]);
 export const PROGNOSE_SICHERHEIT = Object.freeze(["sehr_niedrig", "niedrig", "mittel", "hoch"]);
+export const PROGNOSE_WARUM_HERKUNFT = Object.freeze(["persoenlich_geschaetzt", "filmwissen"]);
 
 const STATUS_WECHSEL = Object.freeze({
   offen: new Set(["angenommen", "korrigiert", "verworfen"]),
@@ -14,6 +15,7 @@ const STATUS_WECHSEL = Object.freeze({
 const VERSION_FORM = /^[a-z][a-z0-9._-]{0,31}$/;
 const MODELL_FORM = /^[a-z0-9][a-z0-9._:-]{0,79}$/;
 const SIGNAL_ID_FORM = /^S[1-9][0-9]{0,3}$/;
+const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STEUERZEICHEN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 const istObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
@@ -79,10 +81,15 @@ export function pruefePrognoseErgebnis(ergebnis) {
 
 export function pruefePrognose(prognose) {
   const fehler = [];
-  if (!hatExakt(prognose, [
+  const basisFelder = [
     "format", "erstellt", "geaendert", "promptVersion", "profilVersion",
     "modell", "modellAlias", "vorgangId", "verbrauch", "ergebnis", "status",
-  ])) return ["Prognose hat nicht die erwartete Form"];
+  ];
+  const neueFelder = [...basisFelder, "warumHerkunft", "filmwissenVersionId"];
+  const istAltbestand = hatExakt(prognose, basisFelder);
+  if (!istAltbestand && !hatExakt(prognose, neueFelder)) {
+    return ["Prognose hat nicht die erwartete Form"];
+  }
   if (prognose.format !== PROGNOSE_FORMAT) fehler.push("Prognoseformat ist unbekannt");
   if (!istIso(prognose.erstellt) || !istIso(prognose.geaendert)) fehler.push("Zeitstempel ist ungültig");
   if (!VERSION_FORM.test(prognose.promptVersion || "")) fehler.push("Promptversion ist ungültig");
@@ -91,6 +98,18 @@ export function pruefePrognose(prognose) {
   if (!istKurztext(prognose.modellAlias, 40)) fehler.push("Modellalias ist ungültig");
   if (!istKurztext(prognose.vorgangId, 80)) fehler.push("Vorgangs-ID ist ungültig");
   if (!PROGNOSE_STATUS.includes(prognose.status)) fehler.push("Status ist unbekannt");
+  if (!istAltbestand) {
+    if (!PROGNOSE_WARUM_HERKUNFT.includes(prognose.warumHerkunft)) {
+      fehler.push("WARUM-Herkunft ist unbekannt");
+    }
+    if (prognose.warumHerkunft === "filmwissen") {
+      if (!UUID_FORM.test(prognose.filmwissenVersionId || "")) {
+        fehler.push("Filmwissen-Version ist ungültig");
+      }
+    } else if (prognose.filmwissenVersionId !== null) {
+      fehler.push("Persönliche WARUM-Schätzung darf keine Filmwissen-Version tragen");
+    }
+  }
   if (!hatExakt(prognose.verbrauch, [
     "inputTokens", "outputTokens", "kostenUsdCent", "dauerMs",
   ])) {
@@ -118,6 +137,8 @@ export function erstellePrognose({
   modellAlias,
   vorgangId,
   verbrauch,
+  warumHerkunft = "persoenlich_geschaetzt",
+  filmwissenVersionId = null,
   promptVersion = PROGNOSE_PROMPT_VERSION,
   jetzt = new Date().toISOString(),
 } = {}) {
@@ -130,6 +151,8 @@ export function erstellePrognose({
     modell,
     modellAlias,
     vorgangId,
+    warumHerkunft,
+    filmwissenVersionId,
     verbrauch: {
       inputTokens: verbrauch?.inputTokens,
       outputTokens: verbrauch?.outputTokens,

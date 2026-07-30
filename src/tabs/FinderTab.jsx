@@ -313,7 +313,13 @@ function DisambigListe({ sig, master, onWaehle }) {
   );
 }
 
-export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds, auswahl = [], onSpringeZuFilm, addFilm, verlauf, setVerlauf, eingabe, setEingabe, onKlaatu, vokabular = [], saveVokabular }) {
+export function FinderTab({
+  master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds,
+  auswahl = [], onSpringeZuFilm, addFilm, addFilmMitPrognose,
+  vorbewertungAktiv = false, prognoseSperrgrund = null,
+  verlauf, setVerlauf, eingabe, setEingabe, onKlaatu,
+  vokabular = [], saveVokabular,
+}) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* Index des Verlaufseintrags, der gerade gedeutet wird. Der Wahrheitswert
      liegt im Modul (laufendeDeutung), NICHT hier: dieser Tab wird beim
@@ -604,8 +610,15 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
                           )}
                           {formFuer === kid && (
                             <div style={{ marginTop: 8 }} onClick={(ev) => ev.stopPropagation()}>
-                              <FilmForm startOffen initial={{ titel: k.pf.t, jahr: k.pf.j, quelle: "must_watch", genre: (k.pf.g || []).join(", ") }}
-                                onAdd={(f) => addFilm(f)} onDone={() => setFormFuer(null)} />
+                              <FilmForm startOffen initial={{
+                                titel: k.pf.t, jahr: k.pf.j, quelle: "must_watch",
+                                genre: (k.pf.g || []).join(", "), film_at_id: k.pf.film_at_id,
+                              }}
+                                onAdd={(f) => addFilm(f)}
+                                onAddMitPrognose={addFilmMitPrognose}
+                                prognoseAktiv={vorbewertungAktiv}
+                                prognoseSperrgrund={prognoseSperrgrund}
+                                onDone={() => setFormFuer(null)} />
                             </div>
                           )}
                         </div>
@@ -633,8 +646,16 @@ export function FinderTab({ master, kinoMatches, streamingBekannt, streamingEntd
                           {formFuer === sid && (
                             <div style={{ marginTop: 8 }} onClick={(ev) => ev.stopPropagation()}>
                               <FilmForm startOffen typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
-                                initial={{ titel: t.titel, jahr: t.jahr, quelle: "must_watch", genre: (t.genres || []).join(", ") }}
-                                onAdd={(f) => addFilm(f)} onDone={() => setFormFuer(null)} />
+                                initial={{
+                                  titel: t.titel, jahr: t.jahr, quelle: "must_watch",
+                                  genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
+                                  imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
+                                }}
+                                onAdd={(f) => addFilm(f)}
+                                onAddMitPrognose={addFilmMitPrognose}
+                                prognoseAktiv={vorbewertungAktiv}
+                                prognoseSperrgrund={prognoseSperrgrund}
+                                onDone={() => setFormFuer(null)} />
                             </div>
                           )}
                         </div>

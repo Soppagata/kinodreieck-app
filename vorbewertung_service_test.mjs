@@ -34,6 +34,7 @@ const antwort = {
   vorgangId: "00000000-0000-4000-8000-000000000008",
   modell: "claude-sonnet-5-20260715",
   modellAlias: "gross",
+  provenienz: { warumHerkunft: "persoenlich_geschaetzt", filmwissenVersionId: null },
   data: {
     format: "film-prognose-v1",
     achsen: { wie: 4, was: 3, warum: 4 },
@@ -74,7 +75,7 @@ await check("Aufgabe, Payload und Profilversion gehen an die richtige Grenze", a
   const [task, payload, optionen] = d.rufe[0];
   return task === "film-forecast" && optionen.profilVersion === "p2"
     && optionen.promptVersion === "v2"
-    && Object.keys(payload).sort().join(",") === "film,profil";
+    && Object.keys(payload).sort().join(",") === "film,filmkennung,profil";
 });
 await check("Vorgangs-ID und Abbruchsignal werden ohne Retry durchgereicht", async () => {
   const d = aiDoppel();
@@ -107,7 +108,17 @@ await check("fehlende tatsächliche Modell-ID macht die Antwort ungültig", asyn
 await check("gültige persönliche WARUM-Schätzung wird getrennt gespeichert", async () => {
   const d = aiDoppel();
   const p = await erstelleVorbewertung(film, { profil, ai: d.ai });
-  return p?.ergebnis.achsen.warum === 4 && !("bewertung" in p);
+  return p?.ergebnis.achsen.warum === 4 && p.warumHerkunft === "persoenlich_geschaetzt"
+    && p.filmwissenVersionId === null && !("bewertung" in p);
+});
+await check("belegtes Filmwissen wird mit seiner Version in der Prognose markiert", async () => {
+  const versionId = "22222222-2222-4222-8222-222222222222";
+  const d = aiDoppel({
+    ...antwort,
+    provenienz: { warumHerkunft: "filmwissen", filmwissenVersionId: versionId },
+  });
+  const p = await erstelleVorbewertung(film, { profil, ai: d.ai });
+  return p.warumHerkunft === "filmwissen" && p.filmwissenVersionId === versionId;
 });
 await check("ungültiger WARUM-Wert aus einer manipulierten Antwort wird nie gespeichert", async () => {
   const d = aiDoppel({ ...antwort, data: { ...antwort.data, achsen: { wie: 4, was: 3, warum: 6 } } });

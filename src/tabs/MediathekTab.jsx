@@ -7,6 +7,7 @@ import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js"
 import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
+import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -25,7 +26,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] },
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
-  onPrognoseErstellen, onPrognoseStatus }) {
+  onPrognoseErstellen, onPrognoseStatus,
+  filmwissenAktiv = false, filmwissenRechercheAktiv = false,
+  filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
+  onFilmwissenLaden, onFilmwissenRecherchieren }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
@@ -282,7 +286,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               film={f}
               streamBadge={dreieckTab && badgeFuer ? badgeFuer(f) : null}
               expanded={expandedId === "b" + f.id}
-              onToggle={() => setExpandedId(expandedId === "b" + f.id ? null : "b" + f.id)}
+              onToggle={() => {
+                const key = "b" + f.id;
+                const oeffnen = expandedId !== key;
+                setExpandedId(oeffnen ? key : null);
+                if (oeffnen) onFilmwissenLaden?.(f);
+              }}
               onSave={(changes) => updateFilm(f.id, changes)}
               kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
               kommtVorIn={kommtVorInMap[f.id]}
@@ -295,6 +304,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                 onErstellen: () => onPrognoseErstellen?.(f),
                 onAnnehmen: () => onPrognoseStatus?.(f, "angenommen"),
                 onVerwerfen: () => onPrognoseStatus?.(f, "verworfen"),
+              } : null}
+              filmwissen={filmwissenAktiv && hatDreieck(f.typ) ? {
+                ...(filmwissenProFilm[f.id] || { phase: "idle", daten: null, fehler: null }),
+                rechercheLaeuft: filmwissenRechercheLaufId === String(f.id),
+                rechercheMoeglich: filmwissenRechercheAktiv && !!filmwissenRechercheKennung(f),
+                onRecherchieren: () => onFilmwissenRecherchieren?.(f),
               } : null}
             />
           </div>

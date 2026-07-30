@@ -1,13 +1,21 @@
 import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
-import { FILMWISSEN_STATUS, dekodiereFilmwissen, filmwissenKennungen, filmwissenSonderstatus } from "../lib/filmwissen.js";
+import {
+  FILMWISSEN_STATUS, dekodiereFilmwissen, filmwissenKennungen,
+  filmwissenRechercheKennung, filmwissenSonderstatus,
+} from "../lib/filmwissen.js";
 import { createFilmwissenTransport } from "../lib/filmwissenTransport.js";
+import { aiService } from "./ai.js";
 const kontoVon = (s) => s?.mode === "account" && s?.state === "ready" ? s.account?.id || null : null;
-export function createFilmwissenService({ auth = authService, transport } = {}) {
-  const offen = new Map(); let generation = 0; let konto = kontoVon(auth.getSnapshot?.());
+export function createFilmwissenService({ auth = authService, transport, ai = aiService } = {}) {
+  const offen = new Map(); const rechercheOffen = new Map();
+  let generation = 0; let konto = kontoVon(auth.getSnapshot?.());
   const unsubscribe = auth.subscribe?.((s) => {
-    const neu = kontoVon(s); if (neu !== konto) { konto = neu; generation++; offen.clear(); }
+    const neu = kontoVon(s);
+    if (neu !== konto) {
+      konto = neu; generation++; offen.clear(); rechercheOffen.clear();
+    }
   }) || (() => {});
   async function read(film, options = {}) {
     const ids = filmwissenKennungen(film);
@@ -38,8 +46,63 @@ export function createFilmwissenService({ auth = authService, transport } = {}) 
     })();
     offen.set(key, promise); return promise;
   }
-  return Object.freeze({ read, invalidate() { generation++; offen.clear(); },
-    dispose() { generation++; offen.clear(); unsubscribe(); } });
+  async function recherchiere(film, options = {}) {
+    const id = filmwissenRechercheKennung(film);
+    if (!id) return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_ZUORDENBAR);
+    const accountId = auth.requireAccount("personalAi").account.id;
+    const start = generation;
+    const key = accountId + "|" + id.namespace + ":" + id.kennung;
+    if (rechercheOffen.has(key)) return rechercheOffen.get(key);
+    const promise = (async () => {
+      try {
+        const vorhanden = await read(film, options);
+        if (![FILMWISSEN_STATUS.CACHE_MISS, FILMWISSEN_STATUS.NICHT_ZUORDENBAR,
+          FILMWISSEN_STATUS.VERALTET].includes(vorhanden.status)) {
+          return vorhanden;
+        }
+        if (vorhanden.status === FILMWISSEN_STATUS.VERALTET) return vorhanden;
+        const result = await ai.runTask("filmwissen-synthese", id, {
+          signal: options.signal,
+          vorgangId: options.vorgangId,
+          /* Der Server ersetzt diese Marke durch seine eigene, fest gebaute
+             Promptfassung. Die Clientmarke bleibt absichtlich generisch. */
+          promptVersion: "v1",
+        });
+        if (generation !== start || kontoVon(auth.getSnapshot?.()) !== accountId) {
+          return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
+        }
+        const status = result?.data?.status;
+        if (status === "nicht_belegt") {
+          return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_BELEGT);
+        }
+        if (status === "nicht_zuordenbar") {
+          return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_ZUORDENBAR);
+        }
+        if (status === "quellen_nicht_verfuegbar") {
+          return filmwissenSonderstatus(FILMWISSEN_STATUS.GESPERRT);
+        }
+        if (!["belegt", "cache_hit"].includes(status)) {
+          throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+            source: "filmwissen", operation: "research.decode", reason: "status-unbekannt",
+          });
+        }
+        return await read(film, options);
+      } catch (error) {
+        if (error instanceof BoundaryError) throw error;
+        throw normalizeBoundaryError(error, { source: "filmwissen", operation: "research" });
+      } finally {
+        rechercheOffen.delete(key);
+      }
+    })();
+    rechercheOffen.set(key, promise);
+    return promise;
+  }
+  return Object.freeze({
+    read,
+    recherchiere,
+    invalidate() { generation++; offen.clear(); rechercheOffen.clear(); },
+    dispose() { generation++; offen.clear(); rechercheOffen.clear(); unsubscribe(); },
+  });
 }
 export const filmwissenService = createFilmwissenService({ transport: createFilmwissenTransport({
   config: runtimeConfig, getAccessToken: (opts) => authDriver.getAccessToken(opts),

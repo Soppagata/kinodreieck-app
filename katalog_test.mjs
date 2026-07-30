@@ -118,6 +118,20 @@ const ansichten = baueStreamingAnsichten({
 }, [{ id: "alien_1979", titel: "Alien", jahr: 1979, bewertung: { wie: 5, was: 5, warum: 5 } }]);
 check("aktiver Master wird lokal zu Mein Programm gematcht", ansichten.bekannt.titel.length === 1 && ansichten.bekannt.titel[0].id === "alien_1979");
 check("übriger Titel bleibt in Entdecken", ansichten.entdecken.titel.length === 1 && ansichten.entdecken.titel[0].titel === "Arrival");
+const doppelt = baueStreamingAnsichten({
+  bekannt: { titel: [{
+    watchmode_id: 77, titel: "Doppelter Titel", jahr: 2000,
+    imdb_id: "tt1234567", tmdb_id: 123, dienste: ["Prime"],
+  }] },
+  entdecken: { titel: [] },
+}, [
+  { id: "heuristisch", titel: "Doppelter Titel", jahr: 2000 },
+  { id: "exakt", titel: "Doppelter Titel", jahr: 2000, watchmode_id: 77 },
+]);
+check("exakte Watchmode-ID schlägt bei gleichem Titel die Titel-/Jahr-Heuristik",
+  doppelt.bekannt.titel[0]?.id === "exakt"
+  && doppelt.bekannt.titel[0]?.imdb_id === "tt1234567"
+  && doppelt.bekannt.titel[0]?.tmdb_id === 123);
 
 /* ================= Etappe 4: Token-Naht (src/lib/katalog.js) =================
    Bis hierher lief das Modul OHNE Token-Provider — die beiden Header-Checks oben

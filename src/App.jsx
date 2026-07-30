@@ -25,12 +25,16 @@ import { TourOverlay } from "./components/TourOverlay.jsx";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
-import { store, K, PROGRAMM_TTL_MS, storageService } from "./services/storage.js";
+import {
+  store, K, PROGRAMM_TTL_MS, storageService, aktiviereKontoTreiber,
+} from "./services/storage.js";
+import { ladeKontostandNachDemo } from "./services/demoAccountWechsel.js";
 import { baueBackup } from "./lib/backup.js";
 import { catalogService } from "./services/catalog.js";
 import { authService } from "./services/auth.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
 import { erstelleVorbewertung } from "./services/vorbewertung.js";
+import { filmwissenService } from "./services/filmwissen.js";
 import { ladeProfil } from "./lib/profil.js";
 import { setzePrognoseStatus } from "./lib/prognose.js";
 import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
@@ -569,6 +573,21 @@ export default function App() {
   /* ---- Herkunft der geladenen Liste ----
      typ: "storage" | "demo" | "manuell" · zeit: ms oder Datums-String · basis: optionaler Vermerk */
   const [masterHerkunft, setMasterHerkunft] = useState(null);
+  const demoAktiv = useMemo(() => {
+    if (masterHerkunft?.typ === "demo") return true;
+    try { return !!localStorage.getItem(K.demoSeed); } catch { return false; }
+  }, [masterHerkunft, startTick]);
+  const anmeldenAusWillkommen = useCallback(async (benutzer, passwort) => {
+    const neu = await authService.signIn(benutzer, passwort);
+    const kontoId = neu?.account?.id;
+    if (!kontoId) throw new Error("Die Anmeldung hat keine Konto-ID geliefert.");
+    aktiviereKontoTreiber(kontoId);
+    if (demoAktiv) {
+      await ladeKontostandNachDemo({ accountId: kontoId });
+      try { location.reload(); } catch { setStartTick((t) => t + 1); }
+    }
+    return neu;
+  }, [demoAktiv]);
   /* Startwahl-Modal (Beta): sichtbar, wenn beim Erststart weder Storage-Stand
      noch frühere Wahl noch ?start-Parameter vorliegt. Boot entscheidet. */
   const [startModalOffen, setStartModalOffen] = useState(false);
@@ -1466,6 +1485,7 @@ export default function App() {
      kann ein Tabwechsel keinen zweiten bezahlten Auftrag starten und die
      Antwort landet weiterhin am Film mit derselben stabilen ID. */
   const prognoseLaufRef = useRef(null);
+  const prognoseAbortRef = useRef(null);
   const [prognoseLaufId, setPrognoseLaufId] = useState(null);
   const [prognoseFehler, setPrognoseFehler] = useState({});
   const [aktuellesProfil, setAktuellesProfil] = useState(undefined);
@@ -1501,18 +1521,44 @@ export default function App() {
           : !Array.isArray(aktuellesProfil.signale) || aktuellesProfil.signale.length === 0
             ? "Bestätige zuerst mindestens ein Signal in deinem Geschmacksprofil."
             : null;
+  const accountId = session.mode === "account" && session.state === "ready"
+    ? session.account?.id || null
+    : null;
 
-  const speichereFilmAenderungStrikt = useCallback(async (id, changes) => {
+  /* Ein Konto- oder Sitzungswechsel entwertet jede persönliche Prognose, die
+     noch unterwegs ist. Ohne diese Wache könnte eine Antwort aus Konto A bei
+     gleicher Film-ID nach dem Wechsel in Konto B gespeichert werden. */
+  useEffect(() => {
+    prognoseAbortRef.current?.abort();
+    prognoseAbortRef.current = null;
+    prognoseLaufRef.current = null;
+    setPrognoseLaufId(null);
+  }, [accountId]);
+
+  const kontoIstAktuell = useCallback((erwarteteKontoId) => {
+    const jetzt = authService.getSnapshot();
+    return jetzt.mode === "account"
+      && jetzt.state === "ready"
+      && jetzt.account?.id === erwarteteKontoId;
+  }, []);
+
+  const speichereFilmAenderungStrikt = useCallback(async (id, changes, erwarteteKontoId = accountId) => {
+    if (!erwarteteKontoId || !kontoIstAktuell(erwarteteKontoId)) return false;
     const aktuell = masterRef.current || [];
     if (!aktuell.some((film) => film.id === id)) return false;
     const next = aktuell.map((film) => (film.id === id ? { ...film, ...changes } : film));
     const h = naechsteHerkunft();
+    /* Kein await zwischen Kontoprüfung und Aufruf: store.set bindet dadurch
+       den zu diesem Zeitpunkt aktiven Kontotreiber. Nach dem await darf nur
+       noch derselbe Kontostand die React-Anzeige verändern. */
+    if (!kontoIstAktuell(erwarteteKontoId)) return false;
     if (!await persistMaster(next, masterMeta, h)) return false;
+    if (!kontoIstAktuell(erwarteteKontoId)) return false;
     masterRef.current = next;
     setMasterHerkunft(h);
     setMaster(next);
     return true;
-  }, [masterMeta, naechsteHerkunft, persistMaster]);
+  }, [accountId, kontoIstAktuell, masterMeta, naechsteHerkunft, persistMaster]);
 
   const starteVorbewertung = useCallback(async (film) => {
     if (!film?.id || !vorbewertungAktiv) return false;
@@ -1521,17 +1567,24 @@ export default function App() {
       "Die bestehende KI-Prognose durch eine neue kostenpflichtige Prognose ersetzen?",
     )) return false;
 
-    prognoseLaufRef.current = film.id;
+    const startKonto = accountId;
+    const controller = new AbortController();
+    const lauf = { accountId: startKonto, filmId: String(film.id), controller };
+    prognoseLaufRef.current = lauf;
+    prognoseAbortRef.current = controller;
     setPrognoseLaufId(film.id);
     setPrognoseFehler((alt) => ({ ...alt, [film.id]: null }));
     try {
-      const prognose = await erstelleVorbewertung(film);
-      if (!await speichereFilmAenderungStrikt(film.id, { prognose })) {
+      const prognose = await erstelleVorbewertung(film, { signal: controller.signal });
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
+      if (!await speichereFilmAenderungStrikt(film.id, { prognose }, startKonto)) {
         throw new Error("Die KI-Prognose konnte nicht im Eintrag gespeichert werden.");
       }
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       setAktuelleProfilVersion(prognose.profilVersion);
       return true;
     } catch (error) {
+      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       const lokal = error?.source === "forecast" && error?.operation === "forecast.validate";
       const basis = lokal ? error.message : errorText(error);
       const hinweis = lokal
@@ -1540,28 +1593,38 @@ export default function App() {
       setPrognoseFehler((alt) => ({ ...alt, [film.id]: hinweis }));
       return false;
     } finally {
-      if (prognoseLaufRef.current === film.id) {
+      if (prognoseLaufRef.current === lauf) {
         prognoseLaufRef.current = null;
+        if (prognoseAbortRef.current === controller) prognoseAbortRef.current = null;
         setPrognoseLaufId(null);
       }
     }
-  }, [speichereFilmAenderungStrikt, vorbewertungAktiv]);
+  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt, vorbewertungAktiv]);
 
   const setzeFilmPrognoseStatus = useCallback(async (film, status) => {
+    const startKonto = accountId;
     const wechsel = setzePrognoseStatus(film?.prognose, status);
     if (!wechsel.ok) {
-      setPrognoseFehler((alt) => ({ ...alt, [film?.id]: wechsel.fehler.join("; ") }));
+      if (kontoIstAktuell(startKonto)) {
+        setPrognoseFehler((alt) => ({ ...alt, [film?.id]: wechsel.fehler.join("; ") }));
+      }
       return false;
     }
-    const gespeichert = await speichereFilmAenderungStrikt(film.id, { prognose: wechsel.prognose });
-    if (!gespeichert) {
+    const gespeichert = await speichereFilmAenderungStrikt(
+      film.id,
+      { prognose: wechsel.prognose },
+      startKonto,
+    );
+    if (!gespeichert && kontoIstAktuell(startKonto)) {
       setPrognoseFehler((alt) => ({ ...alt, [film.id]: "Der Prognosestatus konnte nicht gespeichert werden." }));
     }
     return gespeichert;
-  }, [speichereFilmAenderungStrikt]);
+  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt]);
 
   const addFilmMitPrognose = useCallback(async (film) => {
     if (!vorbewertungAktiv) return null;
+    const startKonto = accountId;
+    if (!startKonto || !kontoIstAktuell(startKonto)) return null;
     const kandidat = {
       ...film,
       bewertung: null,
@@ -1579,7 +1642,9 @@ export default function App() {
     const next = [...aktuell, neu];
     const h = naechsteHerkunft();
     /* Harte Reihenfolge: erst lokal nachweisbar speichern, dann bezahlen. */
+    if (!kontoIstAktuell(startKonto)) return null;
     if (!await persistMaster(next, masterMeta, h)) return null;
+    if (!kontoIstAktuell(startKonto)) return null;
     masterRef.current = next;
     setMasterHerkunft(h);
     setMaster(next);
@@ -1591,9 +1656,96 @@ export default function App() {
     await starteVorbewertung(neu);
     return id;
   }, [
-    masterMeta, mitMustwatch, mustwatch, naechsteHerkunft, persistArtikel,
-    persistMaster, starteVorbewertung, vorbewertungAktiv,
+    accountId, kontoIstAktuell, masterMeta, mitMustwatch, mustwatch,
+    naechsteHerkunft, persistArtikel, persistMaster, starteVorbewertung,
+    vorbewertungAktiv,
   ]);
+
+  /* ---- Gemeinsames Filmwissen -------------------------------------------
+     Der Bericht bleibt ausschließlich im gemeinsamen Servercache. In der
+     persönlichen Masterliste speichern wir weder Quellen noch WARUM-Wert. */
+  const [filmwissenProFilm, setFilmwissenProFilm] = useState({});
+  const filmwissenReadsRef = useRef(new Map());
+  const filmwissenRechercheRef = useRef(null);
+  const filmwissenLesenAktiv = !!accountId;
+  const filmwissenRechercheAktiv = vorbewertungAktiv;
+
+  useEffect(() => {
+    filmwissenReadsRef.current.clear();
+    filmwissenRechercheRef.current = null;
+    setFilmwissenProFilm({});
+    filmwissenService.invalidate();
+  }, [accountId]);
+
+  const ladeFilmwissen = useCallback(async (film) => {
+    if (!film?.id || !filmwissenLesenAktiv) return null;
+    const key = String(film.id);
+    if (filmwissenReadsRef.current.has(key)) return null;
+    const startKonto = accountId;
+    const lauf = { accountId: startKonto, filmId: key };
+    filmwissenReadsRef.current.set(key, lauf);
+    setFilmwissenProFilm((alt) => ({
+      ...alt,
+      [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
+    }));
+    try {
+      const daten = await filmwissenService.read(film);
+      if (filmwissenReadsRef.current.get(key) !== lauf || !kontoIstAktuell(startKonto)) return null;
+      setFilmwissenProFilm((alt) => ({
+        ...alt,
+        [key]: { phase: "fertig", daten, fehler: null },
+      }));
+      return daten;
+    } catch (error) {
+      if (filmwissenReadsRef.current.get(key) !== lauf || !kontoIstAktuell(startKonto)) return null;
+      setFilmwissenProFilm((alt) => ({
+        ...alt,
+        [key]: { phase: "fehler", daten: null, fehler: errorText(error) },
+      }));
+      return null;
+    } finally {
+      if (filmwissenReadsRef.current.get(key) === lauf) {
+        filmwissenReadsRef.current.delete(key);
+      }
+    }
+  }, [accountId, filmwissenLesenAktiv, kontoIstAktuell]);
+
+  const recherchiereFilmwissen = useCallback(async (film) => {
+    if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
+    if (!window.confirm(
+      "Jetzt einen belegten Recherchebericht erstellen? Das startet genau einen Sonnet-Aufruf und kostet höchstens 5 US-Cent. Es gibt keine automatische Wiederholung.",
+    )) return false;
+    const key = String(film.id);
+    const startKonto = accountId;
+    const lauf = { accountId: startKonto, filmId: key };
+    filmwissenRechercheRef.current = lauf;
+    setFilmwissenProFilm((alt) => ({
+      ...alt,
+      [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
+    }));
+    try {
+      const daten = await filmwissenService.recherchiere(film);
+      if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
+      setFilmwissenProFilm((alt) => ({
+        ...alt,
+        [key]: { phase: "fertig", daten, fehler: null },
+      }));
+      return true;
+    } catch (error) {
+      if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
+      setFilmwissenProFilm((alt) => ({
+        ...alt,
+        [key]: {
+          ...(alt[key] || {}),
+          phase: "fehler",
+          fehler: `${errorText(error)} Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`,
+        },
+      }));
+      return false;
+    } finally {
+      if (filmwissenRechercheRef.current === lauf) filmwissenRechercheRef.current = null;
+    }
+  }, [accountId, filmwissenRechercheAktiv, kontoIstAktuell]);
 
   /* ---- Browser-Stand verwerfen: zurück zum zuletzt gewählten Start ----
      Rettungsanker gegen file://-localStorage-Geister (alle lokalen HTMLs
@@ -2258,7 +2410,7 @@ export default function App() {
              `kiAn()` wird beim Render gelesen, nicht abonniert, und der
              Finder-Knopf soll ohne Reload erscheinen bzw. verschwinden. */
           if (art && art.durchgeklickt) { setKiStand(ladeKiStand()); setStartTick((x) => x + 1); }
-        }} />
+        }} onAnmelden={anmeldenAusWillkommen} />
       )}
       {aktiverHinweis && (
         <TourOverlay hinweis={aktiverHinweis} onClose={schliesseHinweis}
@@ -2372,6 +2524,12 @@ export default function App() {
             aktuelleProfilVersion={aktuelleProfilVersion}
             onPrognoseErstellen={starteVorbewertung}
             onPrognoseStatus={setzeFilmPrognoseStatus}
+            filmwissenAktiv={filmwissenLesenAktiv}
+            filmwissenRechercheAktiv={filmwissenRechercheAktiv}
+            filmwissenProFilm={filmwissenProFilm}
+            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            onFilmwissenLaden={ladeFilmwissen}
+            onFilmwissenRecherchieren={recherchiereFilmwissen}
             loading={loading} ladeProgrammDatei={ladeProgrammDatei}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             datenGesperrt={!snapshotFreigabe}
@@ -2393,6 +2551,12 @@ export default function App() {
             aktuelleProfilVersion={aktuelleProfilVersion}
             onPrognoseErstellen={starteVorbewertung}
             onPrognoseStatus={setzeFilmPrognoseStatus}
+            filmwissenAktiv={filmwissenLesenAktiv}
+            filmwissenRechercheAktiv={filmwissenRechercheAktiv}
+            filmwissenProFilm={filmwissenProFilm}
+            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            onFilmwissenLaden={ladeFilmwissen}
+            onFilmwissenRecherchieren={recherchiereFilmwissen}
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
@@ -2425,6 +2589,12 @@ export default function App() {
             aktuelleProfilVersion={aktuelleProfilVersion}
             onPrognoseErstellen={starteVorbewertung}
             onPrognoseStatus={setzeFilmPrognoseStatus}
+            filmwissenAktiv={filmwissenLesenAktiv}
+            filmwissenRechercheAktiv={filmwissenRechercheAktiv}
+            filmwissenProFilm={filmwissenProFilm}
+            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            onFilmwissenLaden={ladeFilmwissen}
+            onFilmwissenRecherchieren={recherchiereFilmwissen}
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
@@ -2442,6 +2612,9 @@ export default function App() {
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl}
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
+            addFilmMitPrognose={addFilmMitPrognose}
+            vorbewertungAktiv={vorbewertungAktiv}
+            prognoseSperrgrund={vorbewertungSperrgrund}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
             onKlaatu={EGGS_ENABLED && EGG_AKTIV.klaatu ? zeigeKlaatu : undefined}
@@ -2461,7 +2634,7 @@ export default function App() {
               && session.capabilities?.personalAi === true}
             resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
-            demoAktiv={masterHerkunft?.typ === "demo" || (() => { try { return !!localStorage.getItem(K.demoSeed); } catch { return false; } })()}
+            demoAktiv={demoAktiv}
             onStartWahl={oeffneStartWahl}
             onDemoEntfernen={entferneDemoDaten}
             katalogVerbunden={snapshotFreigabe}

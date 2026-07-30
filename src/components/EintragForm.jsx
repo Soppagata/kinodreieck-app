@@ -4,6 +4,7 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { hatDreieck } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
+import { normalisiereFilmkennung } from "../lib/filmwissen.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
 
 /* ---------- Adaptive Eingabemaske ----------
@@ -30,8 +31,12 @@ export function FilmForm({
     jahr: initial && initial.jahr ? String(initial.jahr) : "",
     typ: typOptionen[0],
     // Film/Serie
-    originaltitel: "", quellen: quelleZuArray(initial && initial.quelle), kategorie: "sehenswert",
+    originaltitel: (initial && initial.originaltitel) || "",
+    quellen: quelleZuArray(initial && initial.quelle), kategorie: "sehenswert",
     wie: 0, was: 0, warum: 0, genre: (initial && initial.genre) || "", begruendung: (initial && initial.begruendung) || "",
+    imdbId: (initial && (initial.imdb_id || initial.imdbId)) || "",
+    tmdbId: (initial && (initial.tmdb_id || initial.tmdbId)) || "",
+    wikidataId: (initial && (initial.wikidata_id || initial.wikidataId)) || "",
     // Musik/Sonstiges
     art: "", sub: "", beschreibung: "",
   };
@@ -66,6 +71,17 @@ export function FilmForm({
         return;
       }
     }
+    const externeKennungen = {
+      imdb: f.imdbId ? normalisiereFilmkennung("imdb", f.imdbId) : null,
+      tmdb: f.tmdbId ? normalisiereFilmkennung("tmdb", f.tmdbId) : null,
+      wikidata: f.wikidataId ? normalisiereFilmkennung("wikidata", f.wikidataId) : null,
+    };
+    if ((f.imdbId && !externeKennungen.imdb)
+        || (f.tmdbId && !externeKennungen.tmdb)
+        || (f.wikidataId && !externeKennungen.wikidata)) {
+      setFehler("Die Filmkennung ist nicht gültig. Beispiele: tt0078748, 348 oder Q24962.");
+      return;
+    }
     setFehler("");
     if (mitPrognose) setPrognoseLauf(true);
     // KD-019: Rückgabewert von onAdd/addFilm auswerten (null/false = Dublette).
@@ -91,6 +107,9 @@ export function FilmForm({
           /* Externe IDs aus Kino/Streaming nicht beim Anlegen verlieren. */
           ...(initial?.film_at_id ? { film_at_id: initial.film_at_id } : {}),
           ...(initial?.watchmode_id ? { watchmode_id: initial.watchmode_id } : {}),
+          ...(externeKennungen.imdb ? { imdb_id: externeKennungen.imdb } : {}),
+          ...(externeKennungen.tmdb ? { tmdb_id: externeKennungen.tmdb } : {}),
+          ...(externeKennungen.wikidata ? { wikidata_id: externeKennungen.wikidata } : {}),
         };
         ergebnis = mitPrognose
           ? await onAddMitPrognose?.(eintrag)
@@ -186,6 +205,25 @@ export function FilmForm({
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>Quelle</span>
           <QuellenWahl quellen={f.quellen} onChange={(arr) => setF({ ...f, quellen: arr })} />
         </div>
+      )}
+
+      {bewertbar && (
+        <details>
+          <summary style={{ cursor: "pointer", color: T.tinteWeich, fontSize: 12 }}>
+            Filmkennung verknüpfen (optional, für belegtes Filmwissen)
+          </summary>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <input placeholder="IMDb · tt0078748" value={f.imdbId} onChange={set("imdbId")}
+              style={{ ...inputStyle, flex: "1 1 150px" }} />
+            <input placeholder="TMDB · 348" value={f.tmdbId} onChange={set("tmdbId")}
+              style={{ ...inputStyle, flex: "1 1 120px" }} />
+            <input placeholder="Wikidata · Q24962" value={f.wikidataId} onChange={set("wikidataId")}
+              style={{ ...inputStyle, flex: "1 1 140px" }} />
+          </div>
+          <p style={{ margin: "6px 0 0", color: T.rauch, fontSize: 11 }}>
+            Nur eindeutige IDs; Kinodreieck rät nie anhand von Titel und Jahr.
+          </p>
+        </details>
       )}
 
       {/* Zeile 3: Freitext (Begründung bei Film/Serie, sonst Beschreibung) */}

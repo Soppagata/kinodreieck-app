@@ -1,6 +1,7 @@
 import {
   RICHTUNGEN, SIGNAL_ARTEN, SICHERHEITEN, hatEinwilligung, pruefeProfil,
 } from "./profil.js";
+import { filmwissenRechercheKennung } from "./filmwissen.js";
 
 export const PROGNOSE_TYPEN = Object.freeze(["film", "filmreihe", "serie"]);
 export const MAX_PROGNOSE_SIGNALE = 20;
@@ -104,6 +105,10 @@ export function bauePrognoseAuftrag(film, profil) {
         tags,
       },
       profil: { signale, achsen },
+      /* Nur die Kennung reist mit. Gemeinsame Texte und Quellen liest die
+         Edge Function selbst aus dem freigegebenen Cache; der Browser kann
+         keine angebliche Beleglage einschleusen. */
+      filmkennung: filmwissenRechercheKennung(film),
     },
   };
 }

@@ -47,6 +47,8 @@ export async function erstelleVorbewertung(film, {
     modellAlias: antwort.modellAlias,
     vorgangId: antwort.vorgangId,
     verbrauch: antwort.verbrauch,
+    warumHerkunft: antwort.provenienz?.warumHerkunft || "persoenlich_geschaetzt",
+    filmwissenVersionId: antwort.provenienz?.filmwissenVersionId ?? null,
     promptVersion: PROGNOSE_PROMPT_VERSION,
     jetzt,
   });

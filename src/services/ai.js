@@ -41,6 +41,10 @@ export const AI_TASKS = Object.freeze([
      Der Payload-Builder hält fremde Filme, Bewertungen, Notizen und Belege
      schon vor dieser Fassade zurück; der Server prüft dieselbe Grenze erneut. */
   "film-forecast",
+  /* Etappe 8: gemeinsames, belegtes Filmwissen. Der Client darf nur eine
+     starke Kennung senden; Quellenwahl, Abruf und Synthese bleiben auf dem
+     Server. */
+  "filmwissen-synthese",
 ]);
 
 export const AI_PROMPT_VERSION = "v1";

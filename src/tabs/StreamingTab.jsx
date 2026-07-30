@@ -13,6 +13,7 @@ import {
   statusVon, neuerGesehenEintrag, initialisiereStaffelstaende,
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
+import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -55,6 +56,9 @@ export function StreamingTab({
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
+  filmwissenAktiv = false, filmwissenRechercheAktiv = false,
+  filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
+  onFilmwissenLaden, onFilmwissenRecherchieren,
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
 }) {
   const [ansicht, setAnsicht] = useState("programm");
@@ -332,19 +336,34 @@ export function StreamingTab({
               /* Editierbar: den Master-Eintrag überlagern (frische Begründung/Bewertung),
                  Streaming-Felder behalten. onSave schreibt in die Masterliste. */
               const mf = master && master.find((m) => m.id === f.id);
+              const kartenFilm = mf
+                ? { ...f, ...mf, dienste: f.dienste, web_urls: f.web_urls }
+                : f;
               return (
-                <FilmCard key={f.id} film={mf ? { ...mf, dienste: f.dienste, web_urls: f.web_urls } : f}
+                <FilmCard key={f.id} film={kartenFilm}
                   expanded={expandedId === "s" + f.id}
-                  onToggle={() => setExpandedId(expandedId === "s" + f.id ? null : "s" + f.id)}
+                  onToggle={() => {
+                    const key = "s" + f.id;
+                    const oeffnen = expandedId !== key;
+                    setExpandedId(oeffnen ? key : null);
+                    if (oeffnen) onFilmwissenLaden?.(kartenFilm);
+                  }}
                   onSave={updateFilm && mf ? (changes) => updateFilm(f.id, changes) : undefined}
                   vorbewertung={vorbewertungAktiv && mf ? {
                     laeuft: prognoseLaufId === f.id,
                     fehler: prognoseFehler[f.id] || null,
                     sperrgrund: prognoseSperrgrund,
                     aktuelleProfilVersion,
-                    onErstellen: () => onPrognoseErstellen?.(mf),
+                    onErstellen: () => onPrognoseErstellen?.(kartenFilm),
                     onAnnehmen: () => onPrognoseStatus?.(mf, "angenommen"),
                     onVerwerfen: () => onPrognoseStatus?.(mf, "verworfen"),
+                  } : null}
+                  filmwissen={filmwissenAktiv && mf ? {
+                    ...(filmwissenProFilm[f.id] || { phase: "idle", daten: null, fehler: null }),
+                    rechercheLaeuft: filmwissenRechercheLaufId === String(f.id),
+                    rechercheMoeglich: filmwissenRechercheAktiv
+                      && !!filmwissenRechercheKennung(kartenFilm),
+                    onRecherchieren: () => onFilmwissenRecherchieren?.(kartenFilm),
                   } : null}
                   kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
                 />
@@ -470,6 +489,7 @@ export function StreamingTab({
                           initial={{
                             titel: t.titel, jahr: t.jahr, quelle: "must_watch",
                             genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
+                            imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
                           }}
                           onAdd={(f) => markiereAlsErstellt(t.watchmode_id, addFilm(f))}
                           onAddMitPrognose={async (f) => markiereAlsErstellt(

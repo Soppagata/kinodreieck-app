@@ -97,8 +97,10 @@ export function PrognoseBereich({
         <Achse name="WARUM" wert={e.achsen.warum} farbe={T.warum} />
       </div>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
-        WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil
-        {" "}– kein belegter gemeinsamer Filmwissen-Wert und keine echte Bewertung.
+        {prognose.warumHerkunft === "filmwissen"
+          ? "WARUM übernimmt die belegte kulturelle Einordnung aus dem gemeinsamen Filmwissen; Sonnet erklärt nur die persönliche Verbindung dazu."
+          : "WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil – kein belegter gemeinsamer Filmwissen-Wert."}
+        {" "}Die KI-Prognose ist keine echte Bewertung.
       </p>
       <div style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.55 }}>{e.begruendung}</div>
       <div style={{ ...mono }}>
@@ -121,6 +123,7 @@ export function PrognoseBereich({
 
       <div style={{ ...mono, opacity: 0.8 }}>
         Profil {prognose.profilVersion} · Modell {prognose.modell}
+        {prognose.warumHerkunft === "filmwissen" ? ` · Filmwissen ${prognose.filmwissenVersionId}` : ""}
         {kosten ? ` · ${kosten}` : ""}
         {veraltet ? " · mit älterem Profil erstellt" : ""}
       </div>

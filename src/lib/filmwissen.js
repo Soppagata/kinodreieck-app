@@ -39,6 +39,11 @@ export function filmwissenKennungen(film) {
   }
   return Object.freeze(aus);
 }
+const RECHERCHE_KENNUNGEN = new Set(["imdb", "tmdb", "wikidata"]);
+export function filmwissenRechercheKennung(film) {
+  return filmwissenKennungen(film)
+    .find((kennung) => RECHERCHE_KENNUNGEN.has(kennung.namespace)) || null;
+}
 function ungueltig(grund) { throw new Error("Ungueltige Filmwissen-Antwort: " + grund); }
 export function dekodiereFilmwissen(raw) {
   if (!objekt(raw) || raw.format !== FILMWISSEN_FORMAT) ungueltig("format");

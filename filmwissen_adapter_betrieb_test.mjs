@@ -62,6 +62,13 @@ check("B6 Werkprüfung und Auftragsstart sind eine DB-Transaktion", () => {
 check("B7 Browserrollen können keine neue Betriebsnaht ausführen", () =>
   (sql.match(/revoke all on function public\.kd_filmwissen_(?:loc_snapshot_lesen|loc_snapshot_speichern|adapter_vorbereiten)[\s\S]+?from public, anon, authenticated;/gi) || []).length === 3
   && (sql.match(/grant execute on function public\.kd_filmwissen_(?:loc_snapshot_lesen|loc_snapshot_speichern|adapter_vorbereiten)[\s\S]+?to service_role;/gi) || []).length === 3);
+check("B8 Synthese ist explizit auf Sonnet und 2048 Tokens geroutet", () => {
+  const routing = sql.match(/do \$ki_routing\$[\s\S]+?\$ki_routing\$;/i)?.[0] ?? "";
+  return /'\{filmwissen-synthese\}'[\s\S]+?'"gross"'[\s\S]+?where schluessel = 'task_modell'/i.test(routing)
+    && /'\{filmwissen-synthese\}'[\s\S]+?'2048'[\s\S]+?where schluessel = 'task_max_tokens'/i.test(routing)
+    && /if not found then[\s\S]+?task_modell fehlt/i.test(routing)
+    && /if not found then[\s\S]+?task_max_tokens fehlt/i.test(routing);
+});
 
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Adapterbetriebs-Checks bestanden.`);
 if (fehler.length) process.exit(1);

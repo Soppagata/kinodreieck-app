@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import {
-  PROGNOSE_FORMAT, PROGNOSE_SICHERHEIT, PROGNOSE_STATUS,
+  PROGNOSE_FORMAT, PROGNOSE_SICHERHEIT, PROGNOSE_STATUS, PROGNOSE_WARUM_HERKUNFT,
   deckeleSicherheit, erstellePrognose, lesePrognose,
   passungsBand, prognoseIstVeraltet, pruefePrognose, pruefePrognoseErgebnis,
   setzePrognoseStatus,
@@ -46,12 +46,15 @@ const gebaut = erstellePrognose({ ergebnis, ...meta });
 const prognose = gebaut.prognose;
 
 check("gültige Prognose wird offen und getrennt aufgebaut", () =>
-  gebaut.ok && prognose.status === "offen" && !("bewertung" in prognose));
+  gebaut.ok && prognose.status === "offen" && !("bewertung" in prognose)
+  && prognose.warumHerkunft === "persoenlich_geschaetzt"
+  && prognose.filmwissenVersionId === null);
 check("vollständige Prognose besteht die strikte Prüfung", () => pruefePrognose(prognose).length === 0);
 check("Format und geschlossene Status-/Sicherheitsmengen sind versioniert", () =>
   PROGNOSE_FORMAT === "film-prognose-v1"
   && JSON.stringify(PROGNOSE_STATUS) === JSON.stringify(["offen", "angenommen", "korrigiert", "verworfen"])
-  && JSON.stringify(PROGNOSE_SICHERHEIT) === JSON.stringify(["sehr_niedrig", "niedrig", "mittel", "hoch"]));
+  && JSON.stringify(PROGNOSE_SICHERHEIT) === JSON.stringify(["sehr_niedrig", "niedrig", "mittel", "hoch"])
+  && JSON.stringify(PROGNOSE_WARUM_HERKUNFT) === JSON.stringify(["persoenlich_geschaetzt", "filmwissen"]));
 
 for (const kat of BEWERTUNGSKATEGORIE_IDS) {
   check(`Kategorie ${kat} ist als Vorschlag erlaubt`, () =>
@@ -95,6 +98,22 @@ check("Zusatzfelder im Ergebnis werden nicht still übernommen", () =>
   pruefePrognoseErgebnis({ ...ergebnis, warum_text: "Kult!" }).length > 0);
 check("Zusatzfelder in Metadaten werden nicht ungeprüft angezeigt", () =>
   pruefePrognose({ ...prognose, providerRohtext: "intern" }).length > 0);
+check("belegtes WARUM verlangt eine echte Filmwissen-Version", () => {
+  const versionId = "22222222-2222-4222-8222-222222222222";
+  const r = erstellePrognose({
+    ergebnis,
+    ...meta,
+    warumHerkunft: "filmwissen",
+    filmwissenVersionId: versionId,
+  });
+  return r.ok && r.prognose.warumHerkunft === "filmwissen"
+    && r.prognose.filmwissenVersionId === versionId
+    && pruefePrognose({ ...r.prognose, filmwissenVersionId: null }).length > 0;
+});
+check("bestehende v1-Prognosen ohne Herkunft bleiben lesbar", () => {
+  const { warumHerkunft, filmwissenVersionId, ...altbestand } = prognose;
+  return warumHerkunft && filmwissenVersionId === null && pruefePrognose(altbestand).length === 0;
+});
 check("Kosten, Tokenzahlen, Modell und Versionen werden geprüft", () =>
   pruefePrognose({ ...prognose, verbrauch: { ...prognose.verbrauch, kostenUsdCent: -1 } }).length > 0
   && pruefePrognose({ ...prognose, modell: "Claude Sonnet" }).length > 0
@@ -126,8 +145,10 @@ check("Annehmen erzeugt weiterhin keine echte Bewertung", () => {
 });
 check("Oberfläche zeigt WARUM aus der Prognose statt eines festen Leerwerts", () =>
   PROGNOSE_UI.includes('<Achse name="WARUM" wert={e.achsen.warum}'));
-check("Oberfläche kennzeichnet WARUM als Schätzung und nie als echte Bewertung", () =>
-  PROGNOSE_UI.includes("vorläufige Sonnet-Schätzung")
+check("Oberfläche unterscheidet geschätztes und belegtes WARUM und nennt beides nie Bewertung", () =>
+  PROGNOSE_UI.includes('prognose.warumHerkunft === "filmwissen"')
+  && PROGNOSE_UI.includes("vorläufige Sonnet-Schätzung")
+  && PROGNOSE_UI.includes("belegte kulturelle Einordnung")
   && PROGNOSE_UI.includes("keine echte Bewertung"));
 check("ungültige gespeicherte Prognose wird beim Lesen quarantänisiert", () => {
   const r = lesePrognose({ titel: "Test", prognose: { ...prognose, status: "erfunden" } });

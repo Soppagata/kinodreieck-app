@@ -34,7 +34,11 @@ const FOKUS_SELEKTOR = "button, [href], input, select, textarea, area[href], [ta
 
 export const SCHRITTE = ["was", "dreieck", "ki"];
 
-export function Willkommen({ onClose, jetzt = null }) {
+export function Willkommen({
+  onClose,
+  onAnmelden = (benutzer, passwort) => authService.signIn(benutzer, passwort),
+  jetzt = null,
+}) {
   const [karte, setKarte] = useState(1);          // 1-basiert, wie gehabt
   const [kiWahl, setKiWahl] = useState(null);     // null = noch nicht gewählt
   const [benutzer, setBenutzer] = useState("");
@@ -198,7 +202,7 @@ export function Willkommen({ onClose, jetzt = null }) {
                     onClick={async () => {
                       setAnmeldeLaeuft(true); setAnmeldeFehler(null);
                       try {
-                        const s = await authService.signIn(benutzer, passwort);
+                        const s = await onAnmelden(benutzer, passwort);
                         setSitzung(s || authService.getSnapshot()); setPasswort("");
                       } catch (f) { setAnmeldeFehler(errorText(f)); }
                       finally { setAnmeldeLaeuft(false); }

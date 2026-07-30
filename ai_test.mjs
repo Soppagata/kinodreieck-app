@@ -562,9 +562,9 @@ check("Ohne konfigurierten Transport meldet die Fassade SERVER mit vermerktem Gr
    =========================================================================== */
 console.log("\n--- Fassade: Aufgabenprüfung vor dem Transport ---");
 
-check("Die Etappe kennt genau sechs registrierte Aufgaben",
-  AI_TASKS.length === 6
-  && ["health", "echo-struct", "intelligent-search", "masterlist-enrichment", "profile-extract", "film-forecast"]
+check("Die Etappe kennt genau sieben registrierte Aufgaben",
+  AI_TASKS.length === 7
+  && ["health", "echo-struct", "intelligent-search", "masterlist-enrichment", "profile-extract", "film-forecast", "filmwissen-synthese"]
     .every((t) => AI_TASKS.includes(t)));
 
 const unbekannteAufgabe = dienstMit({ ok: true });
