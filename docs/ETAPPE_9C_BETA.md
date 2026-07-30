@@ -33,21 +33,21 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
       Accountlöschung und Pages-Rollback wurden praktisch geprüft.
 - [ ] Der einzuladende Build ist auf Staging und Produktion per Domain-Smoke
       belegt; Build- und Function-Version stehen im Releaseprotokoll.
-- [ ] `npm test`, `npm run test:function` und `npm run test:rls` sind für diesen
+- [x] `npm test`, `npm run test:function` und `npm run test:rls` sind für diesen
       Stand grün.
-- [ ] Bundle-, Secret-, CSP- und RLS-Prüfung sind grün.
-- [ ] `programm_demo` und `streaming_demo` sind öffentlich verfügbar und enthalten
+- [x] Bundle-, Secret-, CSP- und RLS-Prüfung sind grün.
+- [x] `programm_demo` und `streaming_demo` sind öffentlich verfügbar und enthalten
       nur freigegebene Daten.
 
 ### Konten, Kosten und Rückweg
 
-- [ ] Selbstregistrierung ist aus; Konten werden manuell angelegt.
+- [x] Selbstregistrierung ist aus; Konten werden manuell angelegt.
 - [ ] Für jede Rolle A bis D und optional E ist ein Konto vorbereitet.
 - [ ] Startpasswörter und Zugangsdaten werden nur einzeln über einen vertraulichen
       Weg weitergegeben und stehen weder im Ergebnisbogen noch im Feedbackkanal.
-- [ ] Tageslimit, Monatsbudget und Parallelgrenze entsprechen der abgenommenen
+- [x] Tageslimit, Monatsbudget und Parallelgrenze entsprechen der abgenommenen
       Etappe-9b-Konfiguration.
-- [ ] KI-Not-Aus und verantwortliche Bedienung sind geklärt.
+- [x] KI-Not-Aus und verantwortliche Bedienung sind geklärt.
 - [ ] Jeder Tester weiß vor der ersten Datenübernahme, wie ein Gesamt-Backup
       heruntergeladen wird.
 - [ ] Ein Wegwerfkonto ist für Lösch- und Kontowechselproben vorhanden.

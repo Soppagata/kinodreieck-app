@@ -1,6 +1,6 @@
 # Etappe 9: Abnahmeprotokoll
 
-Stand: 30. Juli 2026
+Stand: 31. Juli 2026
 
 Dieses Protokoll trennt fertige Belege von den Schritten, die reale Geräte,
 Personen, Material oder eine ausdrückliche externe Freigabe brauchen. Ein
@@ -11,6 +11,7 @@ vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 - Arbeitszweig: `codex/etappe-9a-distribution`
 - 9a Distribution: Commit `1fb608f`
 - 9b/9c Betrieb und Beta-Paket: Commit `ef8d278`
+- Free-Plan-Recovery: Commit `1986161`
 - Supabase-Projekt: Produktion, EU-West
 - Cloudflare-Projekt: bestehendes Pages-Projekt `kinodreieck`
 
@@ -19,6 +20,7 @@ vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 | Bereich | Ergebnis | Beleg |
 |---|---|---|
 | Öffentliche Distribution | grün | Demo- und Leereinstieg, bestehende PWA-Installation, iOS-Hinweis und Einzeldatei-Download; 11/11 Distribution-Checks |
+| Öffentlicher Demo-Katalog | grün gegen Produktion | anonym sichtbar sind genau `manifest`, `programm_demo` und `streaming_demo`; drei alte Programmfilme sowie fünf Streaming-Beispieltitel, ohne Bewertungen, Beschreibungen, Notizen oder Kontodaten |
 | Datenschutz im Paket | grün | keine persönlichen Rohdaten, Sitzungswerte oder bekannte Secret-Signaturen im Build; 48/48 Pages-Checks |
 | App-Backup/Restore | grün im vollständigen technischen Roundtrip | 63/63 Restore-Checks einschließlich Snapshot, Rückgängig, Konto-Treiber, Alt-Backup und Profil |
 | Kontentrennung | grün gegen Produktion | 54/54 RLS-Negativtests mit zwei getrennten Testkonten |
@@ -40,16 +42,24 @@ Für keinen dieser Belege wurde ein kostenpflichtiger KI-Aufruf ausgeführt.
 
 ### GitHub, Staging und Produktion
 
-Der lokale Stand ist noch nicht zu GitHub übertragen. Die Sicherheitsprüfung
-verlangt vor dem Export des größeren Repository-Stands eine ausdrückliche
-Bestätigung des Zieles `Soppagata/kinodreieck-app`. Erst danach folgen:
+Der Etappe-9-Zweig und derselbe Stand auf `staging` wurden am 30. Juli zu
+`Soppagata/kinodreieck-app` übertragen. Cloudflare hat Commit `1986161`
+erfolgreich als atomaren Preview-Deploy `100635eb` veröffentlicht.
 
-1. Push des Etappe-9-Zweigs,
-2. Staging-Deployment und Domain-Smoke,
-3. praktischer Cloudflare-Rollback auf den letzten guten Stand,
-4. erneuter Staging-Deploy,
-5. geschützte Produktionsfreigabe,
-6. Produktions-Domain-Smoke mit der erwarteten Commit-Version.
+Der erste Workflow stoppte anschließend wie vorgesehen, weil die beiden
+öffentlichen Demo-Zeilen zu diesem Zeitpunkt noch fehlten. Nach ausdrücklicher
+Freigabe wurden am 31. Juli ein stark gekürzter Programm-Schnappschuss vom
+15.–18. Juli und fünf Streaming-Beispieltitel veröffentlicht. Der vollständige
+Smoke ist seither sowohl gegen das atomare Deployment als auch gegen
+`staging.kinodreieck.at` grün.
+
+Noch ausständig sind:
+
+1. ein neuer durchgehend grüner Staging-Workflow,
+2. praktischer Cloudflare-Rollback auf den letzten guten Stand,
+3. erneuter Staging-Deploy,
+4. geschützte Produktionsfreigabe,
+5. Produktions-Domain-Smoke mit der erwarteten Commit-Version.
 
 ### Datenbank-Disaster-Recovery
 
@@ -78,7 +88,7 @@ Konten, null verwaiste Auth-Verweise, Tageslimit 10, Antwortlimit 4096 sowie
 eigene sichtbare und fremde unsichtbare Kontodaten. Der bereits zuvor direkt
 gegen Produktion gelaufene RLS-Vertrag blieb zusätzlich 54/54 grün.
 
-Die temporären Dumps und die lokale Wegwerfdatenbank werden nach Abschluss des
+Die temporären Dumps und die lokale Wegwerfdatenbank wurden nach Abschluss des
 Nachweises gelöscht. Dauerhafte Wochensicherungen gehören in einen
 verschlüsselten Speicherort außerhalb dieses Repositories.
 
