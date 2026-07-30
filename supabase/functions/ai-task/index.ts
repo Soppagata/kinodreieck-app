@@ -1,13 +1,12 @@
-/* Kinodreieck — geschützter KI-Endpunkt (Etappe 5)
+/* Kinodreieck — geschützter KI-Endpunkt (Etappe 5–8)
    ===========================================================================
    Ein Endpunkt für genau definierte KI-Aufgaben. Der Anbieterschlüssel, die
    Kostenkontrolle und die Identitätsprüfung liegen hier — nie im Browser.
 
    Gebaute Anbieteraufgaben stehen in AUFGABEN. `filmwissen-synthese` besitzt
-   zunaechst nur eine serverseitige, fail-closed Vorbereitungsstufe: Solange
-   keine erlaubten Quellenadapter Fundstellen liefern, endet sie garantiert
-   vor Reservierung und Anbieter. `masterlist-enrichment` ist registriert,
-   aber noch nicht gebaut und meldet `not-implemented`.
+   einen serverseitigen Adapterpfad; der Browser darf dabei nur eine starke
+   Filmkennung liefern. `masterlist-enrichment` ist registriert, aber noch
+   nicht gebaut und meldet `not-implemented`.
 
    Die fachlichen Aufgaben beschreiben nur, wie ihr Auftrag entsteht und wie ihr
    Ergebnis zu prüfen ist. Grenzen, Kostenreservierung, Anbieteraufruf und
@@ -41,6 +40,26 @@
    =========================================================================== */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  FILMWISSEN_PROMPT_VERSION,
+  FILMWISSEN_SYNTHESE_FORMAT,
+  baueSyntheseAuftrag,
+  pruefeSyntheseAusgabe,
+  type Fundstelle,
+  type Werk,
+} from "../filmwissen-task/vertrag.ts";
+import {
+  LOC_NFR_ADAPTER_VERSION,
+  QuellenFehler,
+  fundstelleAusLocNfrSnapshot,
+  fundstellenFuerSynthese,
+  holeLocNfrSnapshot,
+  holeWikidataFundstelle,
+  pruefeLocNfrSnapshot,
+  type AdapterFundstelle,
+  type LocNfrSnapshot,
+  type StarkeFilmkennung,
+} from "../filmwissen-task/quellen.ts";
 
 const ANBIETER_URL = "https://api.anthropic.com/v1/messages";
 const ANBIETER_MODELLE_URL = "https://api.anthropic.com/v1/models";
@@ -659,6 +678,7 @@ export const MAX_TOKENS_STANDARD: Record<string, number> = {
      20 kurzen Signal-IDs. 2048 traegt das strikte Schema mit reichlich Reserve
      und ist zugleich der explizite Betriebswert der Etappe-8-Migration. */
   "film-forecast": 2048,
+  "filmwissen-synthese": 2048,
 };
 
 /* Nur eine brauchbare Zahl zählt. Eine Null, ein negativer Wert, eine
@@ -1271,6 +1291,28 @@ function deckeleForecastSicherheit(
   return FORECAST_SICHERHEITEN[Math.min(rang, maximum)];
 }
 
+type FilmwissenInternerPayload = {
+  werk: Werk;
+  fundstellen: Fundstelle[];
+};
+
+function leseFilmwissenIntern(
+  payload: Record<string, unknown>,
+): FilmwissenInternerPayload {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+      || Object.keys(payload).sort().join(",") !== "fundstellen,werk") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-intern-form");
+  }
+  const werk = eigenerWert(payload, "werk") as Werk;
+  const fundstellen = eigenerWert(payload, "fundstellen") as Fundstelle[];
+  try {
+    baueSyntheseAuftrag(werk, fundstellen);
+  } catch {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-intern-ungueltig");
+  }
+  return { werk, fundstellen };
+}
+
 export const AUFGABEN: Record<string, Aufgabe> = {
   /* Der Kettenbeweis aus Etappe 5: kleinster möglicher echter Aufruf mit
      striktem Antwortschema, ohne jede persönliche Angabe. Er ist zugleich das
@@ -1777,6 +1819,21 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
   },
 
+  "filmwissen-synthese": {
+    modellAliasPflicht: "gross",
+    bauAuftrag(payload) {
+      const eingabe = leseFilmwissenIntern(payload);
+      return baueSyntheseAuftrag(eingabe.werk, eingabe.fundstellen);
+    },
+    pruefeErgebnis(inhalt, payload) {
+      const eingabe = leseFilmwissenIntern(payload);
+      const fehler = pruefeSyntheseAusgabe(inhalt, eingabe.fundstellen);
+      return fehler.length
+        ? { fehler: "filmwissen-" + fehler[0] }
+        : { daten: inhalt };
+    },
+  },
+
   /* ---------- film-forecast (Etappe 8) --------------------------------------
      Eine persoenliche Prognose fuer genau EINEN unbewerteten Film bzw. eine
      Serie. Sie ist ausdruecklich keine echte Bewertung. WARUM darf hier als
@@ -1901,6 +1958,12 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   const payload = (koerper.payload && typeof koerper.payload === "object" && !Array.isArray(koerper.payload))
     ? koerper.payload as Record<string, unknown>
     : {};
+  let aufgabenPayload = payload;
+  let protokollPromptVersion = promptVersion;
+  let filmwissenLauf: {
+    auftragId: string;
+    belege: AdapterFundstelle[];
+  } | null = null;
 
   /* 1) Größe zuerst. Sie ist die einzige Prüfung ohne Netzrunde — ein
         aufgeblähter Auftrag soll nicht erst zwei Abfragen auslösen.
@@ -1937,6 +2000,18 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   const admin = adminClient();
   if (!admin) return fehlerAntwort(CODES.SERVER, origin, { grund: "kein-admin-zugang", vorgangId });
+  const schliesseFilmwissenVorAi = async (fehlerklasse: string) => {
+    if (!filmwissenLauf) return;
+    try {
+      await admin.rpc("kd_filmwissen_auftrag_fehlgeschlagen", {
+        p_auftrag: filmwissenLauf.auftragId,
+        p_kosten: null,
+        p_fehlerklasse: fehlerklasse,
+      });
+    } catch {
+      /* Der zeitgesteuerte Reaper bleibt die letzte Sicherung. */
+    }
+  };
 
   let konfig: Konfig;
   try {
@@ -2069,15 +2144,11 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     return jsonAntwort({ ok: true, task, vorgangId, modelle: liste }, 200, origin);
   }
 
-  /* ---- filmwissen-synthese: vorerst absichtlich fail-closed ----------------
-     Dieser Sonderpfad liegt VOR der allgemeinen Anbieteraufloesung. Er kann
-     daher einen vorhandenen gemeinsamen Cache melden oder ehrlich sagen, dass
-     keine Quellen bereitstehen, ohne KI-Log, Reservierung oder Providercall.
-
-     Erst wenn ein serverseitiger Adapter mindestens zwei unabhaengige,
-     URL-gebundene Fundstellen bereitstellt, darf der Status `bereit` in einen
-     Anbieterauftrag uebergehen. Bis dahin wird selbst ein unerwartetes
-     `bereit` aus der DB als Serverfehler gestoppt. */
+  /* ---- filmwissen-synthese: feste serverseitige Adapter --------------------
+     Der Browser liefert weiterhin nur eine starke Kennung. Cache, Rechte,
+     Ratenplaetze, Wikidata-Identitaet, LOC-Snapshot und Werkauftrag entstehen
+     ausschliesslich serverseitig. Erst das daraus gebaute interne Payload
+     faellt in die gemeinsame Providernaht weiter unten. */
   if (task === "filmwissen-synthese") {
     if (konfig["ai_aktiv"] !== true) {
       return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "not-aus-gesetzt", vorgangId });
@@ -2129,14 +2200,6 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         data: { status: "cache_hit", versionId: vorbereitet.versionId ?? null },
       }, 200, origin);
     }
-    if (vorbereitet?.status === "quellen_nicht_verfuegbar") {
-      return jsonAntwort({
-        ok: true,
-        task,
-        vorgangId,
-        data: { status: "quellen_nicht_verfuegbar" },
-      }, 200, origin);
-    }
     if (vorbereitet?.status === "nicht_zuordenbar") {
       return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
         grund: "filmwissen-nicht-zuordenbar",
@@ -2150,12 +2213,190 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         vorgangId,
       });
     }
-    return fehlerAntwort(CODES.SERVER, origin, {
-      grund: vorbereitet?.status === "bereit"
-        ? "filmwissen-beschaffung-nicht-angebunden"
-        : "filmwissen-vorbereitung-formfremd",
-      vorgangId,
-    });
+    /* Die alte, absichtlich fail-closed Vorbereitung kennt noch keine
+       serverseitigen Fundstellen und liefert deshalb
+       `quellen_nicht_verfuegbar`. Genau dieser Zustand ist jetzt das Signal
+       für die festen Adapter. Unbekannte Zustände dürfen dagegen keinen
+       Netzabruf auslösen. */
+    if (!["quellen_nicht_verfuegbar", "bereit"].includes(vorbereitet?.status ?? "")) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-vorbereitung-formfremd",
+        vorgangId,
+      });
+    }
+
+    if (!["imdb", "tmdb", "wikidata"].includes(eingabe.namespace)) {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: { status: "nicht_zuordenbar" },
+      }, 200, origin);
+    }
+    const kontakt = Deno.env.get("FILMWISSEN_WIKIMEDIA_KONTAKT")?.trim() ?? "";
+    if (!kontakt) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-kontakt-fehlt",
+        vorgangId,
+      });
+    }
+
+    const reserviereQuelle = async (quelle: string) => {
+      const { data, error } = await admin.rpc("kd_filmwissen_quelle_abruf_reservieren", {
+        p_quelle: quelle,
+      });
+      if (error) throw new AufrufFehler(CODES.SERVER, "filmwissen-quellen-rpc");
+      const antwort = data as { ok?: boolean; code?: string } | null;
+      if (!antwort?.ok) {
+        throw new AufrufFehler(
+          antwort?.code === "quellen-rate-limit" ? CODES.LIMIT : CODES.SERVER,
+          antwort?.code ?? "filmwissen-quelle-gesperrt",
+        );
+      }
+    };
+
+    let wikidata;
+    let locSnapshot: LocNfrSnapshot;
+    let loc: AdapterFundstelle | null;
+    try {
+      await reserviereQuelle("wikidata");
+      wikidata = await holeWikidataFundstelle(
+        eingabe as StarkeFilmkennung,
+        { kontakt },
+      );
+
+      const { data: snapshotRoh, error: snapshotFehler } = await admin.rpc(
+        "kd_filmwissen_loc_snapshot_lesen",
+      );
+      if (snapshotFehler) throw new AufrufFehler(CODES.SERVER, "filmwissen-snapshot-rpc");
+      const snapshotAntwort = snapshotRoh as Record<string, unknown> | null;
+      if (snapshotAntwort?.status === "hit") {
+        locSnapshot = pruefeLocNfrSnapshot({
+          eintraege: snapshotAntwort.eintraege,
+          abgerufenAm: snapshotAntwort.abgerufenAm,
+          abrufSha256: snapshotAntwort.abrufSha256,
+          etag: snapshotAntwort.etag ?? null,
+        });
+      } else if (snapshotAntwort?.status === "miss") {
+        await reserviereQuelle("loc-nfr");
+        locSnapshot = await holeLocNfrSnapshot();
+        const { error: speichernFehler } = await admin.rpc(
+          "kd_filmwissen_loc_snapshot_speichern",
+          {
+            p_snapshot: {
+              adapterVersion: LOC_NFR_ADAPTER_VERSION,
+              ...locSnapshot,
+            },
+          },
+        );
+        if (speichernFehler) {
+          throw new AufrufFehler(CODES.SERVER, "filmwissen-snapshot-speichern");
+        }
+      } else {
+        throw new AufrufFehler(CODES.SERVER, "filmwissen-snapshot-gesperrt");
+      }
+      loc = fundstelleAusLocNfrSnapshot(wikidata.identitaet, locSnapshot);
+    } catch (error) {
+      const f = error as AufrufFehler | QuellenFehler;
+      const code = f instanceof AufrufFehler ? f.code : CODES.SERVER;
+      const grund = f instanceof QuellenFehler
+        ? "filmwissen-quelle:" + f.code
+        : f.grund;
+      return fehlerAntwort(code, origin, { grund, vorgangId });
+    }
+
+    if (!loc) {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: {
+          status: "nicht_belegt",
+          grund: "kein-institutioneller-beleg",
+        },
+      }, 200, origin);
+    }
+
+    const jahr = wikidata.identitaet.erscheinungsjahre.length === 1
+      ? wikidata.identitaet.erscheinungsjahre[0]
+      : null;
+    const titel = wikidata.identitaet.titelAliase[0] ?? null;
+    if (!titel || !Number.isInteger(jahr)) {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: { status: "nicht_zuordenbar" },
+      }, 200, origin);
+    }
+    const kennungen: Record<string, string> = {
+      wikidata: wikidata.identitaet.canonicalQid,
+      [eingabe.namespace]: eingabe.kennung,
+    };
+    const adapterBelege = [wikidata.fundstelle, loc];
+    const { data: startRoh, error: startFehler } = await admin.rpc(
+      "kd_filmwissen_adapter_vorbereiten",
+      {
+        p_vorgang: vorgangId,
+        p_werk: {
+          typ: wikidata.identitaet.typ,
+          titel,
+          originaltitel: wikidata.identitaet.titelAliase[1] ?? null,
+          jahr,
+        },
+        p_kennungen: kennungen,
+        p_quellen: adapterBelege.map((beleg) => beleg.quelle),
+      },
+    );
+    if (startFehler) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-adapter-vorbereitung:"
+          + ((startFehler as { code?: string }).code ?? "?"),
+        vorgangId,
+      });
+    }
+    const adapterStart = startRoh as {
+      status?: string;
+      auftragId?: string;
+      versionId?: string;
+    } | null;
+    if (adapterStart?.status === "cache_hit") {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: { status: "cache_hit", versionId: adapterStart.versionId ?? null },
+      }, 200, origin);
+    }
+    if (adapterStart?.status === "bereits_laufend") {
+      return fehlerAntwort(CODES.AI_DUPLICATE, origin, {
+        grund: "filmwissen-bereits-laufend",
+        vorgangId,
+      });
+    }
+    if (adapterStart?.status !== "neu"
+        || typeof adapterStart.auftragId !== "string") {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: adapterStart?.status === "konflikt"
+          ? "filmwissen-identitaetskonflikt"
+          : "filmwissen-adapter-vorbereitung-formfremd",
+        vorgangId,
+      });
+    }
+    filmwissenLauf = {
+      auftragId: adapterStart.auftragId,
+      belege: adapterBelege,
+    };
+    aufgabenPayload = {
+      werk: {
+        typ: wikidata.identitaet.typ,
+        titel,
+        originaltitel: wikidata.identitaet.titelAliase[1] ?? null,
+        jahr,
+      },
+      fundstellen: fundstellenFuerSynthese(wikidata, loc),
+    };
+    protokollPromptVersion = FILMWISSEN_PROMPT_VERSION;
   }
 
   /* ---- Aufgabe auflösen. Eine Aufgabe in AUFGABEN ist gebaut; eine in
@@ -2178,9 +2419,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      Geld kosten noch eine Protokollzeile hinterlassen. */
   let auftrag: Auftrag;
   try {
-    auftrag = aufgabe.bauAuftrag(payload);
+    auftrag = aufgabe.bauAuftrag(aufgabenPayload);
   } catch (e) {
     const f = e as AufrufFehler;
+    await schliesseFilmwissenVorAi("invalid-response:interner-auftrag");
     return fehlerAntwort(f.code ?? CODES.INVALID_RESPONSE, origin, {
       grund: f.grund ?? "payload-ungueltig",
       status: 400,
@@ -2198,6 +2440,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   const aliasRoh = eigenerWert(taskModell, task);
   if (aufgabe.modellAliasPflicht
     && (typeof aliasRoh !== "string" || aliasRoh !== aufgabe.modellAliasPflicht)) {
+    await schliesseFilmwissenVorAi("server:task-modell");
     return fehlerAntwort(CODES.SERVER, origin, {
       grund: "task-modell-fehlt-oder-falsch:" + task,
       vorgangId,
@@ -2210,6 +2453,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      Anbieteraufruf durch. */
   const modell = typeof modellRoh === "string" ? modellRoh.trim() : "";
   if (!modell || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(modell)) {
+    await schliesseFilmwissenVorAi("server:modell");
     return fehlerAntwort(CODES.SERVER, origin, { grund: "kein-modell-fuer-alias:" + alias, vorgangId });
   }
 
@@ -2246,7 +2490,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     p_task: task,
     p_vorgang: vorgangId ?? crypto.randomUUID(),
     p_modell_alias: alias,
-    p_prompt_version: promptVersion,
+    p_prompt_version: protokollPromptVersion,
     p_profil_version: profilVersion,
     p_reservierung: reservierung,
   });
@@ -2255,6 +2499,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        war beim ersten Auftreten nicht diagnostizierbar — die Ursache war eine
        nicht eingespielte Migration (Signatur ohne Reservierung). Der Code ist
        Schema-Information, keine Nutzerdaten. */
+    await schliesseFilmwissenVorAi("server:ai-start");
     return fehlerAntwort(CODES.SERVER, origin, {
       grund: "auftrag-start-fehlgeschlagen:" + ((startFehler as { code?: string }).code ?? "?"),
       vorgangId,
@@ -2262,6 +2507,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
   const start = startRoh as { ok?: boolean; code?: string; grund?: string; log_id?: number } | null;
   if (!start?.ok) {
+    await schliesseFilmwissenVorAi("server:ai-abgelehnt");
     return fehlerAntwort(start?.code ?? CODES.LIMIT, origin, { grund: start?.grund ?? "abgelehnt", vorgangId });
   }
   /* Ohne brauchbare Protokoll-ID darf der Anbieter NICHT gerufen werden. Vorher
@@ -2278,6 +2524,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      Protokoll-ID ist eine positive ganze Zahl. */
   const logId = Number(start.log_id);
   if (!Number.isInteger(logId) || logId <= 0) {
+    await schliesseFilmwissenVorAi("server:ai-log");
     return fehlerAntwort(CODES.SERVER, origin, { grund: "protokoll-id-fehlt", vorgangId });
   }
 
@@ -2288,6 +2535,21 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        als nackter „Internal Server Error" statt als saubere Fehlerklasse
        ankam. Im Spike belegt (P9, 26.07.). */
     try {
+      if (filmwissenLauf) {
+        if (status === "fehler") {
+          await admin!.rpc("kd_filmwissen_synthese_fehlgeschlagen", {
+            p_auftrag: filmwissenLauf.auftragId,
+            p_ai_log: logId,
+            p_modell: typeof felder.modell === "string" ? felder.modell : null,
+            p_input_tokens: felder.inputTokens ?? null,
+            p_output_tokens: felder.outputTokens ?? null,
+            p_kosten: felder.kosten ?? null,
+            p_fehlerklasse: sichereFehlerklasse(felder.fehlerklasse)
+              ?? "unklassifiziert",
+          });
+        }
+        return;
+      }
       await admin!.rpc("kd_ai_auftrag_beenden", {
         p_id: logId,
         p_status: status,
@@ -2360,7 +2622,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      zurück — nie einen Text mit Nutzerinhalt darin. */
   let pruefung: Pruefung;
   try {
-    const roh = aufgabe.pruefeErgebnis(inhalt, payload);
+    const roh = aufgabe.pruefeErgebnis(inhalt, aufgabenPayload);
     /* Auch die FORMPRÜFUNG gehört in den Schutz, nicht nur der Aufruf: gibt
        eine Aufgabe die alte Rückgabeform zurück — einen rohen String, wie ihn
        jede Kopiervorlage aus der Versionsgeschichte liefert —, dann wirft
@@ -2380,6 +2642,92 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   if ("fehler" in pruefung) {
     await beende("fehler", { modell: ergebnis.modell, inputTokens: ergebnis.inputTokens, outputTokens: ergebnis.outputTokens, kosten, fehlerklasse: CODES.INVALID_RESPONSE + ":" + pruefung.fehler });
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, { grund: "antwort-verletzt-schema", vorgangId });
+  }
+
+  if (filmwissenLauf) {
+    const synthese = pruefung.daten as {
+      format: string;
+      warum: number;
+      sicherheit: string;
+      kurztext: string;
+      belegIds: string[];
+    };
+    const version = {
+      schemaVersion: "filmwissen-cache-v1",
+      rubrikVersion: "warum-v1",
+      pipelineVersion: "adapter-wikidata-loc-v1",
+      promptVersion: FILMWISSEN_PROMPT_VERSION,
+      warum: synthese.warum,
+      sicherheit: synthese.sicherheit,
+      kurztext: synthese.kurztext,
+      modell: ergebnis.modell,
+      kostenUsdCent: Number(kosten.toFixed(6)),
+    };
+    const belege = filmwissenLauf.belege.map((beleg) => ({
+      quelle: beleg.quelle,
+      url: beleg.url,
+      titel: beleg.titel,
+      veroeffentlichtAm: beleg.veroeffentlichtAm,
+      abgerufenAm: beleg.abgerufenAm,
+      kernaussagen: beleg.kernaussagen,
+      abrufSha256: beleg.abrufSha256,
+    }));
+    const { data: abschlussRoh, error: abschlussFehler } = await admin.rpc(
+      "kd_filmwissen_synthese_abschliessen",
+      {
+        p_auftrag: filmwissenLauf.auftragId,
+        p_ai_log: logId,
+        p_version: version,
+        p_belege: belege,
+        p_modell: ergebnis.modell,
+        p_input_tokens: ergebnis.inputTokens,
+        p_output_tokens: ergebnis.outputTokens,
+        p_kosten: Number(kosten.toFixed(6)),
+      },
+    );
+    if (abschlussFehler) {
+      try {
+        await admin.rpc("kd_filmwissen_synthese_fehlgeschlagen", {
+          p_auftrag: filmwissenLauf.auftragId,
+          p_ai_log: logId,
+          p_modell: ergebnis.modell,
+          p_input_tokens: ergebnis.inputTokens,
+          p_output_tokens: ergebnis.outputTokens,
+          p_kosten: Number(kosten.toFixed(6)),
+          p_fehlerklasse: "server:abschluss-fehlgeschlagen",
+        });
+      } catch { /* der Reaper bleibt die letzte Sicherung */ }
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-abschluss-fehlgeschlagen:"
+          + ((abschlussFehler as { code?: string }).code ?? "?"),
+        vorgangId,
+      });
+    }
+    const abschluss = abschlussRoh as { status?: string; versionId?: string } | null;
+    if (abschluss?.status !== "fertig" || typeof abschluss.versionId !== "string") {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-abschluss-formfremd",
+        vorgangId,
+      });
+    }
+    return jsonAntwort({
+      ok: true,
+      task,
+      vorgangId,
+      modellAlias: alias,
+      modell: ergebnis.modell,
+      data: {
+        status: "belegt",
+        versionId: abschluss.versionId,
+      },
+      verbrauch: {
+        inputTokens: ergebnis.inputTokens,
+        outputTokens: ergebnis.outputTokens,
+        kostenUsdCent: Number(kosten.toFixed(6)),
+        dauerMs: Date.now() - beginn,
+        stopReason: ergebnis.stopReason,
+      },
+    }, 200, origin);
   }
 
   await beende("fertig", {

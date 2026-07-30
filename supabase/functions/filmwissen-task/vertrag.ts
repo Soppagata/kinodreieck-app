@@ -88,6 +88,9 @@ export function baueSyntheseAuftrag(werk: Werk, fundstellen: Fundstelle[]) {
     "Erfinde keine Quelle, URL, Person, Auszeichnung oder Wirkung.",
     "Jede Kernaussage der Begruendung muss durch die ausgegebenen belegIds gedeckt sein.",
     "Persoenlicher Geschmack, Popularitaet und Nutzerbewertungen sind kein Ersatz fuer kulturelle Relevanz.",
+    "Die Anzahl der Fundstellen bestimmt nur, ob die Mindestbelegung erfuellt ist, niemals die Hoehe von WARUM.",
+    "WARUM 0 bis 5 folgt Inhalt, Reichweite und Dauerhaftigkeit der belegten kulturellen Wirkung.",
+    "Viele schwache Fakten erhoehen WARUM nicht. Ein einzelner starker institutioneller Beleg darf einen hohen Wert tragen.",
   ].join("\n");
   const nutzertext = "<fundstellen_json>\n"
     + JSON.stringify({ werk, fundstellen }).replace(/</g, "\\u003c")

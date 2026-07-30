@@ -24,6 +24,7 @@ Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
 Deno.env.set("SUPABASE_ANON_KEY", "anon-test");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-test");
 Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
+Deno.env.set("FILMWISSEN_WIKIMEDIA_KONTAKT", "https://kinodreieck.at");
 
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
 function gleich(ist: unknown, soll: unknown, was = "Wert") {
@@ -66,11 +67,13 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "echo-struct": "klein",
     "intelligent-search": "gross",
     "film-forecast": "gross",
+    "filmwissen-synthese": "gross",
   },
   task_max_tokens: {
     "echo-struct": 256,
     "intelligent-search": 1024,
     "film-forecast": 2048,
+    "filmwissen-synthese": 2048,
   },
   preise_usd_cent_pro_mtok: {
     "claude-haiku-4-5-20251001": { in: 100, out: 500 },
@@ -100,6 +103,80 @@ function anbieterStop(stopReason: string, extra: Record<string, unknown> = {}) {
   });
 }
 
+function locSnapshotAlien(): Record<string, unknown> {
+  const eintraege: Array<Record<string, unknown>> = [];
+  for (let jahr = 1989; jahr <= 2025; jahr++) {
+    for (let nr = 0; nr < 25; nr++) {
+      eintraege.push({
+        titel: jahr === 2002 && nr === 0 ? "Alien" : `Registry ${jahr}-${nr}`,
+        erscheinungsjahr: jahr === 2002 && nr === 0 ? 1979 : 1900 + ((jahr + nr) % 120),
+        aufnahmejahr: jahr,
+      });
+    }
+  }
+  return {
+    status: "hit",
+    adapterVersion: "loc-nfr-listing-v1",
+    eintraege,
+    abrufSha256: "a".repeat(64),
+    etag: "\"loc-test\"",
+    abgerufenAm: "2026-07-30T12:00:00.000Z",
+  };
+}
+
+function wikidataAntwort(url: string): Response {
+  const parameter = new URL(url).searchParams;
+  if (parameter.get("list") === "search") {
+    return antwort({
+      query: {
+        searchinfo: { totalhits: 1 },
+        search: [{ ns: 0, title: "Q24962" }],
+      },
+    });
+  }
+  return antwort({
+    entities: {
+      Q24962: {
+        id: "Q24962",
+        type: "item",
+        lastrevid: 123456,
+        modified: "2026-07-29T10:00:00Z",
+        labels: {
+          de: { language: "de", value: "Alien – Das unheimliche Wesen aus einer fremden Welt" },
+          en: { language: "en", value: "Alien" },
+        },
+        claims: {
+          P31: [{
+            rank: "normal",
+            mainsnak: {
+              snaktype: "value",
+              datavalue: { value: { id: "Q11424", "numeric-id": 11424 } },
+            },
+          }],
+          P345: [{
+            rank: "normal",
+            mainsnak: { snaktype: "value", datavalue: { value: "tt0078748" } },
+          }],
+          P577: [{
+            rank: "normal",
+            mainsnak: {
+              snaktype: "value",
+              datavalue: { value: { time: "+1979-05-25T00:00:00Z" } },
+            },
+          }],
+          P1476: [{
+            rank: "normal",
+            mainsnak: {
+              snaktype: "value",
+              datavalue: { value: { language: "en", text: "Alien" } },
+            },
+          }],
+        },
+      },
+    },
+  });
+}
+
 const z = {
   konfig: STANDARD_KONFIG(),
   konfigLesbar: true,
@@ -109,6 +186,11 @@ const z = {
   startHttpFehler: null as null | { status: number; koerper: unknown },
   stand: { heute: 0 } as unknown,
   filmwissenVorbereitung: { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() } as unknown,
+  filmwissenQuellenReservierung: { ok: true } as unknown,
+  filmwissenSnapshot: locSnapshotAlien() as unknown,
+  filmwissenAdapterStart: { status: "neu", auftragId: crypto.randomUUID() } as unknown,
+  filmwissenAbschluss: { status: "fertig", versionId: crypto.randomUUID() } as unknown,
+  filmwissenFehlerabschluss: { status: "fehler" } as unknown,
   anbieter: ((_init?: RequestInit) => anbieterErfolg()) as (init?: RequestInit) => Response | Promise<Response>,
   modelle: (() => antwort({ data: [{ id: "claude-sonnet-5", display_name: "Sonnet 5" }] })) as () => Response,
 };
@@ -123,6 +205,11 @@ function stelleZurueck() {
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
   z.filmwissenVorbereitung = { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() };
+  z.filmwissenQuellenReservierung = { ok: true };
+  z.filmwissenSnapshot = locSnapshotAlien();
+  z.filmwissenAdapterStart = { status: "neu", auftragId: crypto.randomUUID() };
+  z.filmwissenAbschluss = { status: "fertig", versionId: crypto.randomUUID() };
+  z.filmwissenFehlerabschluss = { status: "fehler" };
   z.anbieter = () => anbieterErfolg();
   z.modelle = () => antwort({ data: [{ id: "claude-sonnet-5", display_name: "Sonnet 5" }] });
 }
@@ -164,6 +251,28 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   if (url.includes("/rest/v1/rpc/kd_filmwissen_synthese_vorbereiten")) {
     return antwort(z.filmwissenVorbereitung);
   }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_quelle_abruf_reservieren")) {
+    return antwort(z.filmwissenQuellenReservierung);
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_loc_snapshot_lesen")) {
+    return antwort(z.filmwissenSnapshot);
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_loc_snapshot_speichern")) {
+    return antwort({ status: "gespeichert" });
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_adapter_vorbereiten")) {
+    return antwort(z.filmwissenAdapterStart);
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_synthese_abschliessen")) {
+    return antwort(z.filmwissenAbschluss);
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_synthese_fehlgeschlagen")) {
+    return antwort(z.filmwissenFehlerabschluss);
+  }
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_auftrag_fehlgeschlagen")) {
+    return antwort({ status: "fehler" });
+  }
+  if (url.includes("www.wikidata.org/w/api.php")) return wikidataAntwort(url);
 
   if (url.includes("api.anthropic.com/v1/messages")) return await z.anbieter(init);
   if (url.includes("api.anthropic.com/v1/models")) return z.modelle();
@@ -2922,6 +3031,24 @@ const BUDGET_SONDEN: Record<string, { payload: () => Record<string, unknown>; vo
     payload: () => ffPayload(),
     vorbereiten: () => forecastMit(FF_ANTWORT()),
   },
+  "filmwissen-synthese": {
+    payload: () => ({ namespace: "imdb", kennung: "tt0078748" }),
+    vorbereiten: () => {
+      z.filmwissenVorbereitung = {
+        status: "quellen_nicht_verfuegbar",
+        werkId: crypto.randomUUID(),
+      };
+      z.filmwissenAdapterStart = { status: "neu", auftragId: crypto.randomUUID() };
+      z.filmwissenAbschluss = { status: "fertig", versionId: crypto.randomUUID() };
+      z.anbieter = () => anbieterErfolg({
+        format: "filmwissen-synthese-v1",
+        warum: 5,
+        sicherheit: "hoch",
+        kurztext: "Die Aufnahme in das National Film Registry belegt dauerhaft institutionelle Relevanz.",
+        belegIds: ["F2"],
+      });
+    },
+  },
 };
 
 /* Steht für „die Konfiguration sagt zu dieser Aufgabe NICHTS" — der Zustand,
@@ -2979,12 +3106,14 @@ const AUSGABEPREIS: Record<string, number> = {
      bekommen soll; MT-PE1 unten hält den Rückfall ausdrücklich fest. */
   "profile-extract": 500,
   "film-forecast": 1000,      // Alias gross -> claude-sonnet-5
+  "filmwissen-synthese": 1000, // Alias gross -> claude-sonnet-5
 };
 const EINGABEPREIS: Record<string, number> = {
   "echo-struct": 100,
   "intelligent-search": 200,
   "profile-extract": 100,
   "film-forecast": 200,
+  "filmwissen-synthese": 200,
 };
 
 test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln", async () => {
@@ -4907,6 +5036,17 @@ const filmwissenRuf = (
   vorgangId: string | null = neueVorgangId(),
 ) => ruf({ task: "filmwissen-synthese", vorgangId, payload });
 
+function filmwissenAnbieterAntwort(aenderung: Record<string, unknown> = {}) {
+  return {
+    format: "filmwissen-synthese-v1",
+    warum: 5,
+    sicherheit: "hoch",
+    kurztext: "Die Aufnahme in das National Film Registry belegt dauerhaft institutionelle Relevanz.",
+    belegIds: ["F2"],
+    ...aenderung,
+  };
+}
+
 test("FW1 Filmwissen akzeptiert ausschliesslich eine starke Kennung", async () => {
   gleich(FILMWISSEN_KENNUNGSRAEUME.join(","),
     "imdb,tmdb,watchmode,film_at,wikidata,kinodreieck", "Kennungsraeume");
@@ -4932,17 +5072,20 @@ test("FW1 Filmwissen akzeptiert ausschliesslich eine starke Kennung", async () =
   }
 });
 
-test("FW2 keine freigegebenen Fundstellen endet ehrlich und ohne Kosten", async () => {
+test("FW2 fehlender Wikimedia-Kontakt endet vor Quelle, Reservierung und Anbieter", async () => {
   stelleZurueck();
-  z.filmwissenVorbereitung = { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() };
-  const r = await filmwissenRuf();
-  gleich(r.status, 200, "Status");
-  gleich((r.daten.data as Record<string, unknown>).status,
-    "quellen_nicht_verfuegbar", "sichtbarer Ergebnisstatus");
+  const kontakt = Deno.env.get("FILMWISSEN_WIKIMEDIA_KONTAKT");
+  Deno.env.delete("FILMWISSEN_WIKIMEDIA_KONTAKT");
+  const r = await filmwissenRuf().finally(() => {
+    if (kontakt) Deno.env.set("FILMWISSEN_WIKIMEDIA_KONTAKT", kontakt);
+  });
+  gleich(r.status, 500, "Status");
+  gleich(r.daten.grund, "filmwissen-kontakt-fehlt", "sichtbare Diagnose");
   gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 1, "genau eine Vorbereitung");
   const k = rpc("kd_filmwissen_synthese_vorbereiten")[0].koerper as Record<string, unknown>;
   gleich(Object.keys(k).sort().join(","), "p_kennung,p_namespace,p_vorgang", "enger RPC-Koerper");
   gleich(k.p_kennung, "tt0078748", "nur normalisierte Kennung");
+  gleich(rpc("kd_filmwissen_quelle_abruf_reservieren").length, 0, "keine Quellenrate verbraucht");
   gleich(starten().length, 0, "keine KI-Reservierung");
   gleich(beenden().length, 0, "keine KI-Protokollzeile");
   gleich(anbieterAufrufe().length, 0, "kein Anbieter");
@@ -4967,7 +5110,7 @@ test("FW3 Cache-Treffer und laufender Auftrag rufen keinen Anbieter", async () =
   gleich(anbieterAufrufe().length, 0, "Doppelter Auftrag: kein Anbieter");
 });
 
-test("FW4 Not-Aus, fehlende Vorgangs-ID und unerwartetes bereit bleiben fail-closed", async () => {
+test("FW4 Not-Aus, fehlende Vorgangs-ID und formfremde Vorbereitung bleiben fail-closed", async () => {
   stelleZurueck();
   z.konfig.ai_aktiv = false;
   let r = await filmwissenRuf();
@@ -4981,10 +5124,88 @@ test("FW4 Not-Aus, fehlende Vorgangs-ID und unerwartetes bereit bleiben fail-clo
   gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 0, "ohne Vorgang keine Vorbereitung");
 
   stelleZurueck();
-  z.filmwissenVorbereitung = { status: "bereit", auftragId: crypto.randomUUID() };
+  z.filmwissenVorbereitung = { status: "irgendetwas-neues", auftragId: crypto.randomUUID() };
   r = await filmwissenRuf();
-  gleich(r.status, 500, "unerwartetes bereit");
-  gleich(r.daten.grund, "filmwissen-beschaffung-nicht-angebunden", "fail-closed Diagnose");
-  gleich(starten().length, 0, "bereit reserviert noch nicht");
-  gleich(anbieterAufrufe().length, 0, "bereit ruft Anbieter noch nicht");
+  gleich(r.status, 500, "formfremder Status");
+  gleich(r.daten.grund, "filmwissen-vorbereitung-formfremd", "fail-closed Diagnose");
+  gleich(rpc("kd_filmwissen_quelle_abruf_reservieren").length, 0, "keine Quelle");
+  gleich(starten().length, 0, "keine KI-Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieter");
+});
+
+test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", async () => {
+  stelleZurueck();
+  const auftragId = crypto.randomUUID();
+  const versionId = crypto.randomUUID();
+  z.filmwissenAdapterStart = { status: "neu", auftragId };
+  z.filmwissenAbschluss = { status: "fertig", versionId };
+  z.anbieter = () => anbieterErfolg(filmwissenAnbieterAntwort());
+
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status, "belegt", "Ergebnisstatus");
+  gleich((r.daten.data as Record<string, unknown>).versionId, versionId, "publizierte Version");
+  gleich(rpc("kd_filmwissen_quelle_abruf_reservieren").length, 1,
+    "nur Wikidata reserviert; LOC kommt aus gemeinsamem Snapshot");
+  gleich(rpc("kd_filmwissen_loc_snapshot_lesen").length, 1, "Snapshot gelesen");
+  gleich(rpc("kd_filmwissen_loc_snapshot_speichern").length, 0, "Cache-Treffer nicht neu gespeichert");
+  gleich(rpc("kd_filmwissen_adapter_vorbereiten").length, 1, "atomare Adaptervorbereitung");
+  gleich(anbieterAufrufe().length, 1, "genau ein Anbieteraufruf");
+  gleich(rpc("kd_filmwissen_synthese_abschliessen").length, 1, "atomarer Abschluss");
+  gleich(beenden().length, 0, "kein zweiter generischer Abschluss");
+  const start = startKoerper();
+  gleich(start.p_prompt_version, "filmwissen-war-v1", "Promptversion kommt vom Server");
+  const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0].koerper as Record<string, unknown>;
+  gleich(abschluss.p_auftrag, auftragId, "Auftrag ist fest zugeordnet");
+  const version = abschluss.p_version as Record<string, unknown>;
+  gleich(version.warum, 5, "inhaltlich begründeter WARUM-Wert");
+  const belege = abschluss.p_belege as Array<Record<string, unknown>>;
+  gleich(belege.length, 2, "Wikidata und LOC werden gemeinsam versioniert");
+  wahr(belege.some((b) => b.quelle === "loc-nfr"), "institutioneller Beleg gespeichert");
+});
+
+test("FW6 Film ohne LOC-Treffer endet ehrlich vor KI-Kosten", async () => {
+  stelleZurueck();
+  const snapshot = locSnapshotAlien() as Record<string, unknown>;
+  snapshot.eintraege = (snapshot.eintraege as Array<Record<string, unknown>>)
+    .map((eintrag) => eintrag.titel === "Alien"
+      ? { ...eintrag, titel: "Anderer Film", erscheinungsjahr: 1979 }
+      : eintrag);
+  z.filmwissenSnapshot = snapshot;
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status, "nicht_belegt", "ehrlicher Status");
+  gleich((r.daten.data as Record<string, unknown>).grund,
+    "kein-institutioneller-beleg", "sichtbarer Grund");
+  gleich(rpc("kd_filmwissen_adapter_vorbereiten").length, 0, "kein Auftrag ohne institutionellen Treffer");
+  gleich(starten().length, 0, "keine KI-Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieter");
+});
+
+test("FW7 ungültige Synthese schliesst Auftrag und KI-Log gemeinsam als Fehler", async () => {
+  stelleZurueck();
+  const auftragId = crypto.randomUUID();
+  z.filmwissenAdapterStart = { status: "neu", auftragId };
+  z.anbieter = () => anbieterErfolg(filmwissenAnbieterAntwort({
+    belegIds: ["F1"],
+    warum: 5,
+  }));
+  const r = await filmwissenRuf();
+  gleich(r.status, 502, "Schemafehler");
+  gleich(r.daten.code, "invalid-response", "stabiler Fehlercode");
+  gleich(rpc("kd_filmwissen_synthese_fehlgeschlagen").length, 1, "atomarer Fehlerabschluss");
+  gleich(rpc("kd_filmwissen_synthese_abschliessen").length, 0, "keine Publikation");
+  gleich(beenden().length, 0, "kein generischer Doppelabschluss");
+});
+
+test("FW8 Konfigurationsfehler nach Adaptervorbereitung gibt den Auftrag sofort frei", async () => {
+  stelleZurueck();
+  const taskModell = z.konfig.task_modell as Record<string, string>;
+  delete taskModell["filmwissen-synthese"];
+  const r = await filmwissenRuf();
+  gleich(r.status, 500, "Status");
+  gleich(r.daten.grund, "task-modell-fehlt-oder-falsch:filmwissen-synthese", "Diagnose");
+  gleich(rpc("kd_filmwissen_auftrag_fehlgeschlagen").length, 1, "Auftrag freigegeben");
+  gleich(starten().length, 0, "keine KI-Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieter");
 });

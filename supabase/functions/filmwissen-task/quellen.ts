@@ -308,7 +308,8 @@ function laengenHashTeile(teile: Uint8Array[]): Uint8Array {
 }
 
 async function sha256(teile: Uint8Array[]): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", laengenHashTeile(teile));
+  const bytes = laengenHashTeile(teile);
+  const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -490,6 +491,12 @@ export async function holeWikidataFundstelle(
 }
 
 export type LocEintrag = { titel: string; erscheinungsjahr: number; aufnahmejahr: number };
+export type LocNfrSnapshot = {
+  eintraege: LocEintrag[];
+  abgerufenAm: string;
+  abrufSha256: string;
+  etag: string | null;
+};
 
 function decodeHtml(text: string): string {
   const benannt: Record<string, string> = {
@@ -515,7 +522,12 @@ function ohneTags(html: string): string | null {
 
 export function parseLocNfrTabelle(
   markup: string,
-  grenzen: { minRows?: number; maxRows?: number; vollstaendig?: boolean } = {},
+  grenzen: {
+    minRows?: number;
+    maxRows?: number;
+    vollstaendig?: boolean;
+    erwartetesLetztesAufnahmejahr?: number;
+  } = {},
 ): LocEintrag[] {
   if (typeof markup !== "string" || markup.length > 512 * 1024
       || UNGUELTIGE_MARKUP_ZEICHEN.test(markup)) {
@@ -560,6 +572,9 @@ export function parseLocNfrTabelle(
   if (new Set(keys).size !== keys.length) throw new QuellenFehler("loc-doppelte-identitaet");
   if (grenzen.vollstaendig !== false) {
     const maxJahr = Math.max(...eintraege.map((e) => e.aufnahmejahr));
+    const erwartet = grenzen.erwartetesLetztesAufnahmejahr
+      ?? new Date().getUTCFullYear() - 1;
+    if (maxJahr < erwartet) throw new QuellenFehler("loc-jahrgang-fehlt");
     for (let jahr = 1989; jahr <= maxJahr; jahr++) {
       if (eintraege.filter((e) => e.aufnahmejahr === jahr).length !== 25) {
         throw new QuellenFehler("loc-jahrgang-unvollstaendig");
@@ -577,6 +592,61 @@ export function normalisiereLocTitel(titel: string): string {
   return text.toLocaleLowerCase("en-US");
 }
 
+export function pruefeLocNfrSnapshot(wert: unknown): LocNfrSnapshot {
+  const snapshot = objekt(wert);
+  if (!snapshot || !Array.isArray(snapshot.eintraege)
+      || typeof snapshot.abgerufenAm !== "string"
+      || !Number.isFinite(Date.parse(snapshot.abgerufenAm))
+      || typeof snapshot.abrufSha256 !== "string"
+      || !/^[a-f0-9]{64}$/.test(snapshot.abrufSha256)
+      || !(snapshot.etag === null || typeof snapshot.etag === "string")
+      || snapshot.eintraege.length < 900 || snapshot.eintraege.length > 1_200) {
+    throw new QuellenFehler("loc-snapshot-schema");
+  }
+  const eintraege: LocEintrag[] = [];
+  const identitaeten = new Set<string>();
+  for (const roh of snapshot.eintraege) {
+    const eintrag = objekt(roh);
+    if (!eintrag || Object.keys(eintrag).sort().join(",")
+        !== "aufnahmejahr,erscheinungsjahr,titel") {
+      throw new QuellenFehler("loc-snapshot-eintrag");
+    }
+    const titel = normalisiereText(eintrag.titel, 300);
+    const erscheinungsjahr = eintrag.erscheinungsjahr;
+    const aufnahmejahr = eintrag.aufnahmejahr;
+    if (!titel || !Number.isInteger(erscheinungsjahr)
+        || Number(erscheinungsjahr) < 1870 || Number(erscheinungsjahr) > 2200
+        || !Number.isInteger(aufnahmejahr)
+        || Number(aufnahmejahr) < 1989
+        || Number(aufnahmejahr) > new Date().getUTCFullYear()) {
+      throw new QuellenFehler("loc-snapshot-eintrag");
+    }
+    const key = `${normalisiereLocTitel(titel)}\0${erscheinungsjahr}`;
+    if (identitaeten.has(key)) throw new QuellenFehler("loc-snapshot-doppelt");
+    identitaeten.add(key);
+    eintraege.push({
+      titel,
+      erscheinungsjahr: Number(erscheinungsjahr),
+      aufnahmejahr: Number(aufnahmejahr),
+    });
+  }
+  const maxJahr = Math.max(...eintraege.map((e) => e.aufnahmejahr));
+  if (maxJahr < new Date().getUTCFullYear() - 1) {
+    throw new QuellenFehler("loc-snapshot-jahrgang-fehlt");
+  }
+  for (let jahr = 1989; jahr <= maxJahr; jahr++) {
+    if (eintraege.filter((e) => e.aufnahmejahr === jahr).length !== 25) {
+      throw new QuellenFehler("loc-snapshot-jahrgang");
+    }
+  }
+  return {
+    eintraege,
+    abgerufenAm: snapshot.abgerufenAm,
+    abrufSha256: snapshot.abrufSha256,
+    etag: snapshot.etag,
+  };
+}
+
 export function findeLocNfrEintrag(
   eintraege: LocEintrag[],
   identitaet: WikidataErgebnis["identitaet"],
@@ -592,10 +662,9 @@ export function findeLocNfrEintrag(
   return treffer[0] ?? null;
 }
 
-export async function holeLocNfrFundstelle(
-  identitaet: WikidataErgebnis["identitaet"],
+export async function holeLocNfrSnapshot(
   optionen: AbrufOptionen = {},
-): Promise<AdapterFundstelle | null> {
+): Promise<LocNfrSnapshot> {
   const abruf = await holeJson(LOC_NFR_URL, LOC_NFR_URL, 192 * 1024, {
     "Accept": "application/json",
     "User-Agent": "KinodreieckFilmwissenBot/1.0",
@@ -606,9 +675,22 @@ export async function holeLocNfrFundstelle(
     throw new QuellenFehler("loc-json-schema");
   }
   const eintraege = parseLocNfrTabelle(json["content.markup"]);
+  return pruefeLocNfrSnapshot({
+    eintraege,
+    abgerufenAm: (optionen.now ?? (() => new Date()))().toISOString(),
+    abrufSha256: await sha256([abruf.bytes]),
+    etag: abruf.etag,
+  });
+}
+
+export function fundstelleAusLocNfrSnapshot(
+  identitaet: WikidataErgebnis["identitaet"],
+  rohSnapshot: unknown,
+): AdapterFundstelle | null {
+  const snapshot = pruefeLocNfrSnapshot(rohSnapshot);
+  const eintraege = snapshot.eintraege;
   const treffer = findeLocNfrEintrag(eintraege, identitaet);
   if (!treffer) return null;
-  const abgerufenAm = (optionen.now ?? (() => new Date()))().toISOString();
   return {
     id: "F2",
     quelle: "loc-nfr",
@@ -622,12 +704,22 @@ export async function holeLocNfrFundstelle(
       `${treffer.titel} (${treffer.erscheinungsjahr}) wurde ${treffer.aufnahmejahr} in das National Film Registry aufgenommen.`,
       "Die Aufnahme kennzeichnet ein Werk von kultureller, historischer oder ästhetischer Bedeutung und dauerhafter Relevanz; das konkrete Kriterium wird nicht einzeln ausgewiesen.",
     ],
-    abgerufenAm,
-    abrufSha256: await sha256([abruf.bytes]),
+    abgerufenAm: snapshot.abgerufenAm,
+    abrufSha256: snapshot.abrufSha256,
     adapterVersion: LOC_NFR_ADAPTER_VERSION,
     lizenz: "US-federal-facts-only",
-    etag: abruf.etag,
+    etag: snapshot.etag,
   };
+}
+
+export async function holeLocNfrFundstelle(
+  identitaet: WikidataErgebnis["identitaet"],
+  optionen: AbrufOptionen = {},
+): Promise<AdapterFundstelle | null> {
+  return fundstelleAusLocNfrSnapshot(
+    identitaet,
+    await holeLocNfrSnapshot(optionen),
+  );
 }
 
 export function fundstellenFuerSynthese(
