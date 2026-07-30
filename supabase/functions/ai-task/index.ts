@@ -3,8 +3,10 @@
    Ein Endpunkt für genau definierte KI-Aufgaben. Der Anbieterschlüssel, die
    Kostenkontrolle und die Identitätsprüfung liegen hier — nie im Browser.
 
-   Gebaute Aufgaben stehen in AUFGABEN: `echo-struct` (Kettenbeweis, Etappe 5)
-   und `intelligent-search` (Etappe 6). `masterlist-enrichment` ist registriert,
+   Gebaute Anbieteraufgaben stehen in AUFGABEN. `filmwissen-synthese` besitzt
+   zunaechst nur eine serverseitige, fail-closed Vorbereitungsstufe: Solange
+   keine erlaubten Quellenadapter Fundstellen liefern, endet sie garantiert
+   vor Reservierung und Anbieter. `masterlist-enrichment` ist registriert,
    aber noch nicht gebaut und meldet `not-implemented`.
 
    Die fachlichen Aufgaben beschreiben nur, wie ihr Auftrag entsteht und wie ihr
@@ -474,6 +476,44 @@ function sichereFehlerklasse(roh: unknown): string | null {
 /* Gleiche Regel für die Versionsangaben: sie kommen aus dem Client-Body und
    gehen direkt in die Protokollzeile. Enge Form oder Abweisung. */
 const VERSION_FORM = /^[A-Za-z0-9._-]{1,20}$/;
+
+/* ---------- Filmwissen-Vorbereitung (Etappe 8, Phase D) ---------------------
+   Der Browser darf fuer gemeinsames Filmwissen nur eine starke Kennung nennen.
+   Insbesondere nimmt diese Grenze weder Titel/Jahr als Identitaetsersatz noch
+   Quellen, URLs oder Kernaussagen entgegen. Die Fundstellen muessen spaeter
+   vollstaendig serverseitig aus freigegebenen Adaptern kommen. */
+export const FILMWISSEN_KENNUNGSRAEUME = [
+  "imdb", "tmdb", "watchmode", "film_at", "wikidata", "kinodreieck",
+];
+
+export function leseFilmwissenSyntheseAnfrage(
+  payload: Record<string, unknown>,
+): { namespace: string; kennung: string } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+      || Object.keys(payload).sort().join(",") !== "kennung,namespace") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-payload-form");
+  }
+  const namespaceRoh = eigenerWert(payload, "namespace");
+  const kennungRoh = eigenerWert(payload, "kennung");
+  if (typeof namespaceRoh !== "string" || typeof kennungRoh !== "string") {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-kennung-form");
+  }
+  const namespace = namespaceRoh.trim().toLowerCase();
+  const roh = kennungRoh.trim();
+  let kennung: string | null = null;
+  if (namespace === "imdb" && /^tt[0-9]{7,10}$/i.test(roh)) kennung = roh.toLowerCase();
+  if (["tmdb", "watchmode", "film_at"].includes(namespace)
+      && /^[0-9]{1,18}$/.test(roh) && !/^0+$/.test(roh)) {
+    kennung = roh.replace(/^0+/, "");
+  }
+  if (namespace === "wikidata" && /^Q[1-9][0-9]{0,17}$/i.test(roh)) kennung = roh.toUpperCase();
+  if (namespace === "kinodreieck"
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(roh)) kennung = roh;
+  if (!FILMWISSEN_KENNUNGSRAEUME.includes(namespace) || !kennung) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-kennung-ungueltig");
+  }
+  return { namespace, kennung };
+}
 
 /* ---------- Aufgaben-Tabelle ---------------------------------------------------
    Der zahlende Pfad war bis Etappe 6 flach auf `echo-struct` verdrahtet:
@@ -2023,6 +2063,95 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       .map((m) => ({ id: m.id ?? null, name: m.display_name ?? null }));
     await diagBeende("fertig");
     return jsonAntwort({ ok: true, task, vorgangId, modelle: liste }, 200, origin);
+  }
+
+  /* ---- filmwissen-synthese: vorerst absichtlich fail-closed ----------------
+     Dieser Sonderpfad liegt VOR der allgemeinen Anbieteraufloesung. Er kann
+     daher einen vorhandenen gemeinsamen Cache melden oder ehrlich sagen, dass
+     keine Quellen bereitstehen, ohne KI-Log, Reservierung oder Providercall.
+
+     Erst wenn ein serverseitiger Adapter mindestens zwei unabhaengige,
+     URL-gebundene Fundstellen bereitstellt, darf der Status `bereit` in einen
+     Anbieterauftrag uebergehen. Bis dahin wird selbst ein unerwartetes
+     `bereit` aus der DB als Serverfehler gestoppt. */
+  if (task === "filmwissen-synthese") {
+    if (konfig["ai_aktiv"] !== true) {
+      return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "not-aus-gesetzt", vorgangId });
+    }
+    if (!vorgangId) {
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "vorgangid-fehlt",
+        status: 400,
+        vorgangId,
+      });
+    }
+    let eingabe: { namespace: string; kennung: string };
+    try {
+      eingabe = leseFilmwissenSyntheseAnfrage(payload);
+    } catch (e) {
+      const f = e as AufrufFehler;
+      return fehlerAntwort(f.code ?? CODES.INVALID_RESPONSE, origin, {
+        grund: f.grund ?? "filmwissen-payload-ungueltig",
+        status: 400,
+        vorgangId,
+      });
+    }
+    const { data: vorbereitungsRoh, error: vorbereitungsFehler } = await admin.rpc(
+      "kd_filmwissen_synthese_vorbereiten",
+      {
+        p_namespace: eingabe.namespace,
+        p_kennung: eingabe.kennung,
+        p_vorgang: vorgangId,
+      },
+    );
+    if (vorbereitungsFehler) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "filmwissen-vorbereitung-fehlgeschlagen:"
+          + ((vorbereitungsFehler as { code?: string }).code ?? "?"),
+        vorgangId,
+      });
+    }
+    const vorbereitet = vorbereitungsRoh as {
+      status?: string;
+      werkId?: string;
+      versionId?: string;
+      auftragId?: string;
+    } | null;
+    if (vorbereitet?.status === "cache_hit") {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: { status: "cache_hit", versionId: vorbereitet.versionId ?? null },
+      }, 200, origin);
+    }
+    if (vorbereitet?.status === "quellen_nicht_verfuegbar") {
+      return jsonAntwort({
+        ok: true,
+        task,
+        vorgangId,
+        data: { status: "quellen_nicht_verfuegbar" },
+      }, 200, origin);
+    }
+    if (vorbereitet?.status === "nicht_zuordenbar") {
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "filmwissen-nicht-zuordenbar",
+        status: 404,
+        vorgangId,
+      });
+    }
+    if (vorbereitet?.status === "bereits_laufend") {
+      return fehlerAntwort(CODES.AI_DUPLICATE, origin, {
+        grund: "filmwissen-bereits-laufend",
+        vorgangId,
+      });
+    }
+    return fehlerAntwort(CODES.SERVER, origin, {
+      grund: vorbereitet?.status === "bereit"
+        ? "filmwissen-beschaffung-nicht-angebunden"
+        : "filmwissen-vorbereitung-formfremd",
+      vorgangId,
+    });
   }
 
   /* ---- Aufgabe auflösen. Eine Aufgabe in AUFGABEN ist gebaut; eine in

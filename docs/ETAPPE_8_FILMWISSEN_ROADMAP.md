@@ -1,6 +1,6 @@
 # Etappe 8, Block 2: Roadmap Filmwissen
 
-Stand: 29.07.2026  
+Stand: 30.07.2026
 Branch: `feat/etappe-8-vorbewertung`
 
 Diese Roadmap ist der verbindliche Bau- und Kommunikationsrahmen für den
@@ -125,6 +125,28 @@ Fertig, wenn:
 - ohne freigegebene Fundstellen kein Anbieteraufruf beginnt,
 - Modellwissen nie als Quelle behandelt wird.
 
+Zwischenstand 30.07.2026:
+
+- Der bestehende `ai-task` besitzt den deployten, fail-closed
+  Vorbereitungspfad `filmwissen-synthese`; der Browser darf ausschließlich
+  eine starke Kennung senden.
+- Ohne serverseitig beschaffte Fundstellen endet der Pfad vor KI-Reservierung,
+  Protokollzeile und Anbieter. Ein unerwartetes `bereit` wird ebenfalls
+  gestoppt.
+- Eine service-only Fehlerabschluss-RPC verhindert, dass ein gescheiterter
+  Rechercheauftrag ein Werk dauerhaft blockiert.
+- Der Synthesevertrag nutzt die gemeinsame Providernaht, verlangt exakt fünf
+  Ausgabefelder und mindestens zwei Domains sowie zwei unabhängige
+  Herkunftsgruppen.
+- Plausible Adapterkandidaten sind Wikidata-Strukturdaten (CC0), eng
+  abgegrenzte offizielle National-Film-Registry-Daten der Library of Congress
+  und Europeana-Metadaten (CC0). Noch ist keiner produktiv aktiviert.
+- Guardian bleibt bis zu einem Commercial-Vertrag gesperrt; IMDb, Rotten
+  Tomatoes und film.at bleiben ohne schriftliche Lizenz gesperrt.
+- Nächster Block: ein enger serverseitiger Adapter mit Endpoint-,
+  Dokumenttyp-, Größen-, Zeit-, Weiterleitungs- und Herkunftsprüfung. Erst
+  danach darf der Status `bereit` existieren.
+
 ## Phase E — Produktintegration
 
 Ziel: Belegtes gemeinsames Wissen verständlich anzeigen und später kontrolliert
@@ -171,7 +193,7 @@ Fertig, wenn:
 
 ## Derzeit bewusste Restpunkte
 
-- erste freigegebene Website beziehungsweise API,
+- erste produktive Adapterfreigabe aus den dokumentierten Kandidaten,
 - endgültige einfache Skalenanker für WARUM 0 bis 5,
 - verbindliche Film-Prüfliste,
 - Berechtigung für redaktionelle Zweifelsfälle,

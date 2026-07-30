@@ -108,6 +108,7 @@ const z = {
   start: { ok: true, log_id: LOG_ID, modell_alias: "klein" } as unknown,
   startHttpFehler: null as null | { status: number; koerper: unknown },
   stand: { heute: 0 } as unknown,
+  filmwissenVorbereitung: { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() } as unknown,
   anbieter: ((_init?: RequestInit) => anbieterErfolg()) as (init?: RequestInit) => Response | Promise<Response>,
   modelle: (() => antwort({ data: [{ id: "claude-sonnet-5", display_name: "Sonnet 5" }] })) as () => Response,
 };
@@ -121,6 +122,7 @@ function stelleZurueck() {
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
+  z.filmwissenVorbereitung = { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() };
   z.anbieter = () => anbieterErfolg();
   z.modelle = () => antwort({ data: [{ id: "claude-sonnet-5", display_name: "Sonnet 5" }] });
 }
@@ -159,6 +161,9 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   }
   if (url.includes("/rest/v1/rpc/kd_ai_auftrag_beenden")) return antwort(null);
   if (url.includes("/rest/v1/rpc/kd_ai_stand")) return antwort(z.stand);
+  if (url.includes("/rest/v1/rpc/kd_filmwissen_synthese_vorbereiten")) {
+    return antwort(z.filmwissenVorbereitung);
+  }
 
   if (url.includes("api.anthropic.com/v1/messages")) return await z.anbieter(init);
   if (url.includes("api.anthropic.com/v1/models")) return z.modelle();
@@ -183,6 +188,7 @@ const {
   FORECAST_KATEGORIEN, FORECAST_SICHERHEITEN, FORECAST_SIGNAL_ARTEN,
   FORECAST_SIGNAL_RICHTUNGEN, FORECAST_SIGNAL_SICHERHEITEN, FORECAST_TYPEN,
   FORECAST_FORMAT, FORECAST_MAX_SIGNALE, FORECAST_KEINE_KATEGORIE, leseForecastEingabe,
+  FILMWISSEN_KENNUNGSRAEUME, leseFilmwissenSyntheseAnfrage,
 } = await import(
   new URL(IMPL_PFAD, import.meta.url).href
 ) as {
@@ -234,6 +240,10 @@ const {
   FORECAST_MAX_SIGNALE: number;
   FORECAST_KEINE_KATEGORIE: string;
   leseForecastEingabe: (p: Record<string, unknown>) => Record<string, unknown>;
+  FILMWISSEN_KENNUNGSRAEUME: string[];
+  leseFilmwissenSyntheseAnfrage: (
+    p: Record<string, unknown>,
+  ) => { namespace: string; kennung: string };
 };
 
 /* Der Vergleichsschlüssel des CLIENTS, als Orakel. Der Server muss mindestens
@@ -4869,4 +4879,95 @@ test("FF15 Inhalt bleibt aus Start- und Abschlussprotokoll vollständig draußen
     falsch(protokoll.includes(geheim), `Protokoll enthält nicht ${geheim}`);
   }
   pruefeKeinInhaltImProtokoll([titel, signal, begruendung]);
+});
+
+/* ===========================================================================
+   FW. filmwissen-synthese — fail-closed Vorbereitung (Etappe 8, Phase D)
+   =========================================================================== */
+
+const filmwissenRuf = (
+  payload: Record<string, unknown> = { namespace: "imdb", kennung: "tt0078748" },
+  vorgangId: string | null = neueVorgangId(),
+) => ruf({ task: "filmwissen-synthese", vorgangId, payload });
+
+test("FW1 Filmwissen akzeptiert ausschliesslich eine starke Kennung", async () => {
+  gleich(FILMWISSEN_KENNUNGSRAEUME.join(","),
+    "imdb,tmdb,watchmode,film_at,wikidata,kinodreieck", "Kennungsraeume");
+  const imdb = leseFilmwissenSyntheseAnfrage({ namespace: " IMDb ", kennung: "TT0078748" });
+  gleich(imdb.namespace, "imdb", "Namespace normalisiert");
+  gleich(imdb.kennung, "tt0078748", "IMDb-ID normalisiert");
+  const wikidata = leseFilmwissenSyntheseAnfrage({ namespace: "wikidata", kennung: "q42" });
+  gleich(wikidata.kennung, "Q42", "Wikidata-ID normalisiert");
+
+  for (const [name, payload] of [
+    ["URL", { namespace: "imdb", kennung: "tt0078748", url: "https://example.test" }],
+    ["Fundstellen", { namespace: "imdb", kennung: "tt0078748", fundstellen: [] }],
+    ["Titel statt ID", { namespace: "imdb", kennung: "Alien" }],
+    ["zu kurze IMDb-ID", { namespace: "imdb", kennung: "tt123" }],
+  ] as Array<[string, Record<string, unknown>]>) {
+    stelleZurueck();
+    const r = await filmwissenRuf(payload);
+    gleich(r.status, 400, `${name}: Status`);
+    gleich(r.daten.code, "invalid-response", `${name}: Code`);
+    gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 0, `${name}: keine Vorbereitung`);
+    gleich(starten().length, 0, `${name}: keine Reservierung`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Anbieter`);
+  }
+});
+
+test("FW2 keine freigegebenen Fundstellen endet ehrlich und ohne Kosten", async () => {
+  stelleZurueck();
+  z.filmwissenVorbereitung = { status: "quellen_nicht_verfuegbar", werkId: crypto.randomUUID() };
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status,
+    "quellen_nicht_verfuegbar", "sichtbarer Ergebnisstatus");
+  gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 1, "genau eine Vorbereitung");
+  const k = rpc("kd_filmwissen_synthese_vorbereiten")[0].koerper as Record<string, unknown>;
+  gleich(Object.keys(k).sort().join(","), "p_kennung,p_namespace,p_vorgang", "enger RPC-Koerper");
+  gleich(k.p_kennung, "tt0078748", "nur normalisierte Kennung");
+  gleich(starten().length, 0, "keine KI-Reservierung");
+  gleich(beenden().length, 0, "keine KI-Protokollzeile");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieter");
+});
+
+test("FW3 Cache-Treffer und laufender Auftrag rufen keinen Anbieter", async () => {
+  stelleZurueck();
+  const versionId = crypto.randomUUID();
+  z.filmwissenVorbereitung = { status: "cache_hit", versionId };
+  let r = await filmwissenRuf();
+  gleich(r.status, 200, "Cache-Treffer Status");
+  gleich(((r.daten.data as Record<string, unknown>).versionId), versionId, "Version");
+  gleich(starten().length, 0, "Cache: keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "Cache: kein Anbieter");
+
+  stelleZurueck();
+  z.filmwissenVorbereitung = { status: "bereits_laufend", auftragId: crypto.randomUUID() };
+  r = await filmwissenRuf();
+  gleich(r.status, 409, "Dublettenstatus");
+  gleich(r.daten.code, "ai-duplicate", "Dubletten-Code");
+  gleich(starten().length, 0, "Doppelter Auftrag: keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "Doppelter Auftrag: kein Anbieter");
+});
+
+test("FW4 Not-Aus, fehlende Vorgangs-ID und unerwartetes bereit bleiben fail-closed", async () => {
+  stelleZurueck();
+  z.konfig.ai_aktiv = false;
+  let r = await filmwissenRuf();
+  gleich(r.status, 503, "Not-Aus Status");
+  gleich(r.daten.code, "ai-disabled", "Not-Aus Code");
+  gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 0, "Not-Aus vor Vorbereitung");
+
+  stelleZurueck();
+  r = await filmwissenRuf({ namespace: "imdb", kennung: "tt0078748" }, null);
+  gleich(r.status, 400, "fehlende Vorgangs-ID");
+  gleich(rpc("kd_filmwissen_synthese_vorbereiten").length, 0, "ohne Vorgang keine Vorbereitung");
+
+  stelleZurueck();
+  z.filmwissenVorbereitung = { status: "bereit", auftragId: crypto.randomUUID() };
+  r = await filmwissenRuf();
+  gleich(r.status, 500, "unerwartetes bereit");
+  gleich(r.daten.grund, "filmwissen-beschaffung-nicht-angebunden", "fail-closed Diagnose");
+  gleich(starten().length, 0, "bereit reserviert noch nicht");
+  gleich(anbieterAufrufe().length, 0, "bereit ruft Anbieter noch nicht");
 });

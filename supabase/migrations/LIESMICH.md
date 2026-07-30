@@ -37,6 +37,7 @@ ausfüllen.
 | `20260729200000_etappe7_structured_output_timeout.sql` | `bscjgwcntapobyxsiyce` | 2026-07-29 | Codex über Management-API | erfolgreich; 120 s Timeout, `profile-extract` explizit Haiku/4096 Tokens; Post-Fix-Livetest grün |
 | `20260729210000_etappe8_film_forecast.sql` | `bscjgwcntapobyxsiyce` | 2026-07-29 | Codex über Management-API | erfolgreich; `film-forecast` verpflichtend auf `gross`, 2048 Tokens; Function-Tests 262/262, echte Rauchprobe 17/17 und RLS 36/36 grün |
 | `20260729220000_etappe8_filmwissen_cache.sql` | `bscjgwcntapobyxsiyce` | 2026-07-29 | Codex über Management-API | erfolgreich; gemeinsamer accountfreier Cache, keine Quelle vorab freigegeben; Vertragstest 44/44 und RLS 54/54 grün |
+| `20260730110000_etappe8_filmwissen_synthese_sicherung.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; fail-closed Vorbereitung und Fehlerabschluss; beide RPCs remote nur für `postgres`/`service_role` ausführbar |
 
 ## Nach Migration 1
 
