@@ -31,3 +31,12 @@ export function buildMetaFehler(meta, erwarteteVersion = "") {
   }
   return null;
 }
+
+export function demoKatalogFehler(sichtbar) {
+  if (!Array.isArray(sichtbar)) return "unerwartete Katalog-Sicht";
+  const fehlend = ["programm_demo", "streaming_demo"]
+    .filter((name) => !sichtbar.includes(name));
+  return fehlend.length
+    ? `Demo-Zeilen fehlen für anon: ${fehlend.join(", ")}`
+    : null;
+}

@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildMetaFehler,
+  demoKatalogFehler,
   serviceWorkerRevalidiert,
 } from "./tools/deployment_contract.mjs";
 
@@ -18,6 +19,14 @@ const cssDatei = assets.find((f) => f.endsWith(".css"));
 const js = jsDatei ? readFileSync(join(DIST, "assets", jsDatei), "utf8") : "";
 const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : "";
 const headers = existsSync(join(DIST, "_headers")) ? readFileSync(join(DIST, "_headers"), "utf8") : "";
+const downloadSeitePfad = join(DIST, "download", "index.html");
+const downloadInstallPfad = join(DIST, "download", "install.js");
+const downloadSeite = existsSync(downloadSeitePfad) ? readFileSync(downloadSeitePfad, "utf8") : "";
+const downloadInstall = existsSync(downloadInstallPfad) ? readFileSync(downloadInstallPfad, "utf8") : "";
+const headerBlock = (pfad) => {
+  const escaped = pfad.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return headers.match(new RegExp(`^${escaped}\\n(?:^  .+\\n?)*`, "m"))?.[0] || "";
+};
 
 /* 1) Keine absoluten Pfade — auf Pages zeigt "/x" auf die Domain-Root, nicht die App. */
 check("index.html: alle src/href relativ (kein =\"/…\")", !/(?:src|href)="\/(?!\/)/.test(indexHtml));
@@ -63,6 +72,7 @@ check("_headers: gehashte Assets immutable", /\/assets\/\*[\s\S]*?max-age=315360
 check("_headers: Service Worker muss revalidieren", /\/sw\.js[\s\S]*?max-age=0, must-revalidate/.test(headers));
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
+const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
 check("Staging-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
   /deploy-staging:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-staging/.test(workflow));
 check("Production-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
@@ -70,8 +80,7 @@ check("Production-Deploys teilen über Push und manuellen Lauf dieselbe Concurre
 check("Feste Domains werden gegen den erwarteten Commit geprüft",
   (workflow.match(/EXPECTED_BUILD_VERSION:\s*\$\{\{\s*github\.sha\s*\}\}/g) || []).length === 2
   && (workflow.match(/SMOKE_RETRY_BUILD_META:\s*"1"/g) || []).length === 2
-  && readFileSync(join("tools", "smoke-deployment.mjs"), "utf8")
-    .includes("buildMetaFehler(meta, erwarteteVersion)"));
+  && remoteSmoke.includes("buildMetaFehler(meta, erwarteteVersion)"));
 check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
   !serviceWorkerRevalidiert("public, max-age=14400, must-revalidate")
   && !serviceWorkerRevalidiert("")
@@ -83,18 +92,48 @@ check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
 check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
   buildMetaFehler({ format: 1, buildVersion: "alt" }, "neu") !== null
   && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null);
+check("Remote-Smoke stoppt ein Release ohne beide öffentlichen Demo-Zeilen",
+  demoKatalogFehler(["manifest"])?.includes("programm_demo, streaming_demo")
+  && demoKatalogFehler(["manifest", "programm_demo"])?.includes("streaming_demo")
+  && demoKatalogFehler(["manifest", "programm_demo", "streaming_demo"]) === null
+  && remoteSmoke.includes("const demoFehler = demoKatalogFehler(sichtbar);")
+  && remoteSmoke.includes("if (demoFehler) {"));
 
 /* 5) Single-File bleibt ein getrennter Download und wird nicht versehentlich gecacht. */
-check("Downloadseite vorhanden", existsSync(join(DIST, "download", "index.html")));
+check("Öffentliche Distributionsseite vorhanden", Boolean(downloadSeite));
 check("Single-File als Download vorhanden", existsSync(join(DIST, "download", "Kinodreieck.html")));
 check("Single-File wird als Attachment ausgeliefert", headers.includes('Content-Disposition: attachment; filename="Kinodreieck.html"'));
 check("Service Worker umgeht Downloadpfade", sw.includes("(?:api|auth|download)"));
+check("Distributionsseite darf indexiert werden, nur die Einzeldatei bleibt noindex",
+  !/<meta[^>]+noindex/i.test(downloadSeite)
+  && !headerBlock("/download/*").includes("X-Robots-Tag:")
+  && headerBlock("/download/Kinodreieck.html").includes("X-Robots-Tag: noindex, nofollow"));
+check("Demo- und Clean-Einstieg geben keinen fresh-Resetauftrag aus",
+  downloadSeite.includes('href="../?start=demo"')
+  && downloadSeite.includes('href="../?start=clean"')
+  && !/[?&]fresh=/.test(downloadSeite));
+check("Distributionsseite erklärt Konto- und Live-KI-Grenze ehrlich",
+  /eingeladenes Konto schaltet[\s\S]*?Live-KI frei/.test(downloadSeite)
+  && /Einstellungen → Konto &amp; Geräte-Sync/.test(downloadSeite)
+  && /unabhängig davon, ob du mit Demo oder leer startest/.test(downloadSeite)
+  && !/registrier|konto erstellen|kostenlos anmelden/i.test(downloadSeite));
+check("PWA-Installation nutzt Manifest und ein externes, CSP-taugliches Skript",
+  downloadSeite.includes('rel="manifest" href="../manifest.webmanifest"')
+  && downloadSeite.includes('src="./install.js"')
+  && Boolean(downloadInstall)
+  && downloadInstall.includes('"beforeinstallprompt"')
+  && downloadInstall.includes('navigator.serviceWorker.register("../sw.js", { scope: "../" })'));
+check("Distributionsseite eröffnet keinen KI- oder Fremdtransport",
+  !/\bfetch\s*\(/.test(downloadInstall)
+  && !/(?:src|href)=["']https?:\/\//i.test(downloadSeite)
+  && !/ai-task|functions\/v1|anbieter/i.test(downloadSeite + "\n" + downloadInstall));
 
 /* 6) Keine hochsicheren Secret-Signaturen im ausgelieferten HTML/JS.
    Der Scan umfasst auch die Download-Einzeldatei — sie wird mit ausgeliefert. */
 const downloadHtmlPfad = join(DIST, "download", "Kinodreieck.html");
 const downloadHtml = existsSync(downloadHtmlPfad) ? readFileSync(downloadHtmlPfad, "utf8") : "";
-const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml;
+const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml
+  + "\n" + downloadSeite + "\n" + downloadInstall;
 const secretMuster = [
   /sb_secret_[a-z0-9_-]+/i,
   /sk-ant-[a-z0-9_-]{16,}/i,

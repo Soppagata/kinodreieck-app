@@ -2,26 +2,484 @@
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#171519" />
-    <title>Kinodreieck herunterladen</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Kinodreieck im Browser ausprobieren, als App installieren oder als einzelne HTML-Datei herunterladen." />
+    <meta name="theme-color" content="#17151a" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="../icon-180.png" />
+    <title>Kinodreieck ausprobieren und installieren</title>
     <style>
-      :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #171519; color: #f5efe4; }
-      body { min-height: 100vh; margin: 0; display: grid; place-items: center; }
-      main { width: min(38rem, calc(100% - 2rem)); padding: 2rem; border: 1px solid #6fa8dc; border-radius: 1rem; background: #211e24; }
-      h1 { margin-top: 0; }
-      p { line-height: 1.6; color: #d8d0c5; }
-      a { color: #171519; background: #e3a63b; display: inline-block; padding: .8rem 1rem; border-radius: .5rem; font-weight: 700; text-decoration: none; }
-      a + a { margin-left: .5rem; color: #f5efe4; background: transparent; border: 1px solid #6fa8dc; }
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #17151a;
+        color: #ece8df;
+        --saal: #17151a;
+        --saal-hoch: #211e26;
+        --leinwand: #ece8df;
+        --leinwand-tief: #dfdacd;
+        --rauch: #aaa4b1;
+        --wolfram: #e3a63b;
+        --wie: #6fa8dc;
+        --was: #b08bd9;
+        --linie: rgba(236, 232, 223, 0.14);
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        margin: 0;
+        background:
+          radial-gradient(circle at 82% 7%, rgba(176, 139, 217, 0.16), transparent 25rem),
+          radial-gradient(circle at 10% 26%, rgba(111, 168, 220, 0.13), transparent 24rem),
+          var(--saal);
+      }
+
+      a, button { -webkit-tap-highlight-color: transparent; }
+
+      a:focus-visible, button:focus-visible, summary:focus-visible {
+        outline: 3px solid var(--wolfram);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: min(70rem, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: max(1rem, env(safe-area-inset-top)) 0 max(3rem, env(safe-area-inset-bottom));
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.6rem 0 2.4rem;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: var(--leinwand);
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .mark {
+        position: relative;
+        width: 2.2rem;
+        height: 2.2rem;
+        flex: none;
+      }
+
+      .mark span {
+        position: absolute;
+        inset: 0;
+        clip-path: polygon(50% 47%, 8% 92%, 50% 8%);
+        background: var(--wie);
+      }
+
+      .mark span:nth-child(2) {
+        clip-path: polygon(50% 47%, 50% 8%, 92% 92%);
+        background: var(--wolfram);
+      }
+
+      .mark span:nth-child(3) {
+        clip-path: polygon(50% 47%, 92% 92%, 8% 92%);
+        background: var(--was);
+      }
+
+      .status {
+        border: 1px solid rgba(111, 206, 143, 0.42);
+        border-radius: 999px;
+        color: #8fe0a9;
+        font-size: 0.78rem;
+        padding: 0.45rem 0.7rem;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.8fr);
+        align-items: center;
+        gap: clamp(2rem, 6vw, 6rem);
+        min-height: 30rem;
+        padding: 2rem 0 5rem;
+      }
+
+      .kicker {
+        color: var(--wolfram);
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        margin: 0 0 1rem;
+        text-transform: uppercase;
+      }
+
+      h1, h2, h3 { text-wrap: balance; }
+
+      h1 {
+        max-width: 13ch;
+        margin: 0;
+        font-size: clamp(3.2rem, 8vw, 6.8rem);
+        letter-spacing: -0.055em;
+        line-height: 0.9;
+      }
+
+      .intro {
+        max-width: 41rem;
+        margin: 1.5rem 0 0;
+        color: var(--leinwand-tief);
+        font-size: clamp(1.05rem, 2vw, 1.28rem);
+        line-height: 1.65;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 2rem;
+      }
+
+      .button {
+        min-height: 3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--rauch);
+        border-radius: 0.5rem;
+        background: transparent;
+        color: var(--leinwand);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        padding: 0.8rem 1.1rem;
+        text-decoration: none;
+      }
+
+      .button.primary {
+        border-color: var(--wolfram);
+        background: var(--wolfram);
+        color: #1c1a1e;
+      }
+
+      .button:hover { filter: brightness(1.1); }
+
+      .smallprint {
+        margin: 1rem 0 0;
+        color: var(--rauch);
+        font-size: 0.86rem;
+        line-height: 1.5;
+      }
+
+      .triangle-card {
+        position: relative;
+        min-height: 22rem;
+        display: grid;
+        place-items: center;
+      }
+
+      .triangle {
+        position: relative;
+        width: min(21rem, 78vw);
+        aspect-ratio: 1;
+        filter: drop-shadow(0 1.5rem 2.5rem rgba(0, 0, 0, 0.34));
+      }
+
+      .triangle > div {
+        position: absolute;
+        inset: 0;
+        clip-path: polygon(50% 48%, 8% 88%, 50% 10%);
+        background: linear-gradient(135deg, #82b7e5, var(--wie));
+      }
+
+      .triangle > div:nth-child(2) {
+        clip-path: polygon(50% 48%, 50% 10%, 92% 88%);
+        background: linear-gradient(215deg, #efbd61, var(--wolfram));
+      }
+
+      .triangle > div:nth-child(3) {
+        clip-path: polygon(50% 48%, 92% 88%, 8% 88%);
+        background: linear-gradient(0deg, #c19be4, var(--was));
+      }
+
+      .axis {
+        position: absolute;
+        z-index: 2;
+        color: #17151a;
+        font-size: 0.8rem;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .axis.wie { left: 18%; top: 49%; transform: rotate(-38deg); }
+      .axis.was { bottom: 22%; left: 50%; transform: translateX(-50%); }
+      .axis.warum { right: 14%; top: 49%; transform: rotate(38deg); }
+
+      section { padding: 4.5rem 0; }
+
+      .section-head {
+        max-width: 48rem;
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 3.5rem);
+        letter-spacing: -0.035em;
+        line-height: 1;
+      }
+
+      .section-head p {
+        color: var(--rauch);
+        font-size: 1.03rem;
+        line-height: 1.65;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .card {
+        border: 1px solid var(--linie);
+        border-radius: 0.9rem;
+        background: rgba(33, 30, 38, 0.86);
+        padding: 1.4rem;
+      }
+
+      .card h3 {
+        margin: 0 0 0.55rem;
+        font-size: 1.18rem;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--rauch);
+        line-height: 1.6;
+      }
+
+      .number {
+        display: inline-grid;
+        width: 2rem;
+        height: 2rem;
+        place-items: center;
+        margin-bottom: 1.1rem;
+        border-radius: 50%;
+        background: rgba(227, 166, 59, 0.13);
+        color: var(--wolfram);
+        font-size: 0.78rem;
+        font-weight: 900;
+      }
+
+      .account-note {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+        border-left: 3px solid var(--wie);
+      }
+
+      .account-note .number { margin: 0; }
+
+      .install-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .install-card { padding: clamp(1.35rem, 3vw, 2rem); }
+      .install-card .button { margin-top: 1.3rem; }
+
+      .steps {
+        margin: 1.1rem 0 0;
+        padding-left: 1.2rem;
+        color: var(--leinwand-tief);
+        line-height: 1.75;
+      }
+
+      .install-note {
+        min-height: 1.5rem;
+        margin: 0.8rem 0 0;
+        color: var(--rauch);
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+
+      .download-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        border-top: 1px solid var(--linie);
+        border-bottom: 1px solid var(--linie);
+        padding: 2rem 0;
+      }
+
+      .download-row h2 { font-size: clamp(1.65rem, 4vw, 2.4rem); }
+      .download-row p { max-width: 42rem; margin: 0.6rem 0 0; color: var(--rauch); line-height: 1.6; }
+
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-top: 3rem;
+        color: var(--rauch);
+        font-size: 0.82rem;
+      }
+
+      footer a { color: var(--leinwand-tief); }
+
+      @media (max-width: 760px) {
+        .shell { width: min(100% - 1.25rem, 42rem); }
+        header { padding-bottom: 0.5rem; }
+        .hero { grid-template-columns: 1fr; min-height: auto; padding: 3rem 0 3.5rem; }
+        .triangle-card { min-height: 16rem; order: -1; }
+        .triangle { width: min(16rem, 72vw); }
+        .grid, .install-grid { grid-template-columns: 1fr; }
+        section { padding: 3.5rem 0; }
+        .download-row { align-items: flex-start; flex-direction: column; }
+        footer { flex-direction: column; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+      }
     </style>
   </head>
   <body>
-    <main>
-      <h1>Kinodreieck als Einzeldatei</h1>
-      <p>Diese bewusst getrennte Ausgabe lässt sich lokal speichern. Die Browser-App auf der Domain bleibt die empfohlene, automatisch aktualisierte Version.</p>
-      <a href="Kinodreieck.html" download>Einzeldatei herunterladen</a>
-      <a href="../">Zur Browser-App</a>
-    </main>
+    <div class="shell">
+      <header>
+        <a class="brand" href="../" aria-label="Kinodreieck öffnen">
+          <span class="mark" aria-hidden="true"><span></span><span></span><span></span></span>
+          Kinodreieck
+        </a>
+        <span class="status">Ohne Konto testbar</span>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div>
+            <p class="kicker">Kino · Mediathek · Streaming</p>
+            <h1>Filme finden, die zu dir passen.</h1>
+            <p class="intro">
+              Kinodreieck bündelt dein Kinoprogramm, deine Streamingdienste und
+              deine persönliche Mediathek. Bewertet wird nicht mit einem Stern,
+              sondern danach, wie ein Film gemacht ist, was er erzählt und warum
+              er filmhistorisch oder popkulturell wichtig ist.
+            </p>
+            <div class="actions">
+              <a class="button primary" href="../?start=demo">Demo ansehen</a>
+              <a class="button" href="../?start=clean">Leer starten</a>
+            </div>
+            <p class="smallprint">
+              Diese Seite löst keinen frischen, löschenden Neustart aus. Den
+              Startmodus kannst du später bewusst in den Einstellungen wechseln.
+            </p>
+          </div>
+
+          <div class="triangle-card" aria-label="Das Kinodreieck bewertet Wie, Was und Warum">
+            <div class="triangle" aria-hidden="true">
+              <div></div><div></div><div></div>
+              <span class="axis wie">Wie</span>
+              <span class="axis was">Was</span>
+              <span class="axis warum">Warum</span>
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="ausprobieren">
+          <div class="section-head">
+            <p class="kicker">Zwei Startarten</p>
+            <h2 id="ausprobieren">Erst ansehen oder gleich selbst anfangen.</h2>
+            <p>
+              Für die Demo brauchst du weder Anmeldung noch Einrichtung. Wenn du
+              lieber bei null beginnst, bleibt deine persönliche Sammlung leer.
+            </p>
+          </div>
+          <div class="grid">
+            <article class="card">
+              <span class="number">01</span>
+              <h3>Demo ansehen</h3>
+              <p>Ein vorbereiteter Rundgang zeigt Bewertungen, Listen, Kino und Streaming mit freigegebenen Beispielen.</p>
+            </article>
+            <article class="card">
+              <span class="number">02</span>
+              <h3>Leer starten</h3>
+              <p>Du baust deine Mediathek selbst auf. Ohne Konto bleiben deine Daten auf diesem Gerät, nutzbar, exportierbar und offline.</p>
+            </article>
+          </div>
+          <aside class="card account-note">
+            <span class="number">K</span>
+            <div>
+              <h3>Konto ist eine getrennte Entscheidung</h3>
+              <p>
+                Ein eingeladenes Konto schaltet Geräteabgleich, den aktuellen
+                Live-Katalog und freiwillige Live-KI frei. Die Anmeldung liegt
+                in der App unter „Einstellungen → Konto &amp; Geräte-Sync“ und
+                ist unabhängig davon, ob du mit Demo oder leer startest.
+              </p>
+            </div>
+          </aside>
+        </section>
+
+        <section id="installieren" aria-labelledby="installieren-titel">
+          <div class="section-head">
+            <p class="kicker">Als App installieren</p>
+            <h2 id="installieren-titel">Kein App-Store nötig.</h2>
+            <p>Kinodreieck ist eine Web-App. Sie lässt sich vom Browser auf den Homescreen legen und später wieder wie eine normale App öffnen.</p>
+          </div>
+          <div class="install-grid">
+            <article class="card install-card">
+              <span class="number">A</span>
+              <h3>Android · Chrome</h3>
+              <p>Tippe auf den Knopf. Falls Chrome noch keinen direkten Dialog anbietet, öffne das Browsermenü und wähle „App installieren“.</p>
+              <button class="button primary" type="button" data-install-app aria-describedby="install-hinweis">
+                Auf Android installieren
+              </button>
+              <p class="install-note" id="install-hinweis" aria-live="polite"></p>
+            </article>
+            <article class="card install-card">
+              <span class="number">i</span>
+              <h3>iPhone oder iPad · Safari</h3>
+              <ol class="steps">
+                <li>Kinodreieck in Safari öffnen.</li>
+                <li>Auf „Teilen“ tippen.</li>
+                <li>„Zum Home-Bildschirm“ wählen.</li>
+                <li>„Als Web-App öffnen“ aktivieren und bestätigen.</li>
+              </ol>
+              <a class="button" href="../?start=clean">App in Safari öffnen</a>
+            </article>
+          </div>
+        </section>
+
+        <section aria-labelledby="einzeldatei">
+          <div class="download-row">
+            <div>
+              <p class="kicker">Desktop und Offline-Archiv</p>
+              <h2 id="einzeldatei">Lieber eine einzelne Datei?</h2>
+              <p>
+                Die HTML-Einzeldatei lässt sich lokal speichern und ohne Installation öffnen.
+                Für automatische Aktualisierungen bleibt die Browser-App die empfohlene Version.
+              </p>
+            </div>
+            <a class="button" href="Kinodreieck.html" download>Einzeldatei herunterladen</a>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>Kinodreieck · persönliche Filmorientierung</span>
+        <a href="../">App öffnen</a>
+      </footer>
+    </div>
+    <script src="./install.js"></script>
   </body>
 </html>

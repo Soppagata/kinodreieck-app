@@ -1,5 +1,6 @@
 import {
   buildMetaFehler,
+  demoKatalogFehler,
   serviceWorkerRevalidiert,
 } from "./deployment_contract.mjs";
 
@@ -67,8 +68,7 @@ if (metaFehler) throw new Error(`/build-meta.json: ${metaFehler}.`);
 
    Erwartung seit Etappe 4 (Migration 20260725220000, 25.07.2026):
      manifest                      → muss da sein (sonst ist der Katalog tot)
-     programm_demo, streaming_demo → öffentlicher Auftritt; fehlen sie noch,
-                                     ist das ein Hinweis, kein Fehlschlag
+     programm_demo, streaming_demo → müssen für den öffentlichen Auftritt da sein
      programm, streaming           → dürfen für anon NIE sichtbar sein
 
    Konfiguration über Umgebungsvariablen (keine Werte im Code):
@@ -118,14 +118,12 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(sbUrl) || !sbKey) {
       `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht die Zeile manifest nicht (sichtbar: ${sichtbar.join(", ") || "nichts"}).`);
   }
 
-  // Weicher Hinweis: die Demo-Zeilen entstehen erst in einer späteren Phase.
-  const fehlendeDemo = ["programm_demo", "streaming_demo"].filter((name) => !sichtbar.includes(name));
-  if (fehlendeDemo.length) {
-    console.warn("");
-    console.warn(`!! HINWEIS: Demo-Zeilen fehlen noch für anon: ${fehlendeDemo.join(", ")}.`);
-    console.warn("   Der öffentliche Auftritt zeigt bis dahin keine Programm-/Streaming-Inhalte.");
-    console.warn("   Das ist bis zur Demo-Befüllung erwartet und macht den Smoke-Test nicht rot.");
-    console.warn("");
+  // Etappe 9a: Ohne beide Demo-Zeilen wäre der öffentliche Einstieg funktional leer.
+  const demoFehler = demoKatalogFehler(sichtbar);
+  if (demoFehler) {
+    throw new Error(
+      `Katalog-Sichtprüfung FEHLGESCHLAGEN: ${demoFehler}. `
+      + "Der öffentliche Einstieg darf nicht ohne Programm- und Streaming-Demo ausgeliefert werden.");
   }
 
   console.log(`Katalog-Sichtprüfung als anon bestanden (sichtbar: ${sichtbar.join(", ")}).`);
