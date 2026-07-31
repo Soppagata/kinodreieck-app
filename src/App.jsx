@@ -1715,7 +1715,7 @@ export default function App() {
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "20px 22px 0" }}>
         {(ungesichertMaster || ungesichertArtikel) && (
-          <aside className="kd-backup-hinweis" role="status">
+          <aside className="kd-backup-hinweis kd-nur-desktop" role="status">
             <span><strong>Noch nicht gesichert.</strong> Browser-Speicher ist kein Backup.</span>
             <button onClick={() => navigiere("daten")}>Sicherung öffnen</button>
           </aside>
@@ -1905,8 +1905,7 @@ export default function App() {
         )}
       </main>
       <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
-        onNavigate={navigiere} onHilfe={() => { setMehrOffen(false); setHilfeOffen(true); }}
-        ungesichert={ungesichertMaster || ungesichertArtikel} />
+        onNavigate={navigiere} />
       </div>{/* .kd-app */}
       {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">

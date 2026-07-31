@@ -279,7 +279,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-help-lead { color:#bdb7c5; font-size:13px; }.kd-help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
 .kd-help-grid article { padding:13px; border-radius:8px; background:#17151a; border:1px solid #3c3742; }.kd-help-grid strong { color:#e3a63b; }
 .kd-help-grid p { margin:5px 0 0; color:#d2ccd8; font-size:13px; line-height:1.45; }
-.kd-nav-punkt { position:absolute; width:8px; height:8px; border-radius:50%; background:#d96a5a; top:5px; right:5px; }
 .kd-backup-hinweis { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 16px; padding:10px 12px;
   border:1px solid #d96a5a; border-radius:7px; background:rgba(217,106,90,.1); color:inherit; font-size:13px; }
 .kd-backup-hinweis button { flex:0 0 auto; border:1px solid var(--wolfram,#e3a63b); border-radius:5px; background:transparent; color:inherit; padding:7px 10px; }
@@ -305,7 +304,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-schrift-gross .kd-app main { font-size:1.1em; }.kd-schrift-klein .kd-app main { font-size:.94em; }
   .kd-help-grid,.kd-entry-choicegrid { grid-template-columns:1fr; }
   .kd-entry-panel { padding:20px 17px; }.kd-entry-choicegrid { gap:9px; }.kd-choice { min-height:88px !important; }
-  .kd-backup-hinweis { align-items:flex-start; flex-direction:column; }.kd-backup-hinweis button { width:100%; }
   .kd-start-service { justify-content:stretch; }.kd-start-service button,.kd-start-service a { flex:1 1 100%; justify-content:center; text-align:center; }
   .kd-nachoben { display:none !important; }
   .kd-table-scroll { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
@@ -313,8 +311,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Schwebendes Mobile-Menü: schlichte, gut treffbare Schaltflächen statt Banner oder Seitenlasche. */
 .kd-mobile-menu-layer { position:fixed; inset:0; z-index:13000; }
-.kd-mobile-menu { position:absolute; right:max(20px,env(safe-area-inset-right)); bottom:calc(88px + env(safe-area-inset-bottom));
-  width:min(286px,calc(100vw - 40px)); max-height:calc(100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+.kd-mobile-menu { position:absolute; left:50%; bottom:calc(88px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:12px; border:1px solid #49444f; border-radius:14px;
   background:#242127; color:#ece8df; box-shadow:0 14px 42px rgba(0,0,0,.58); }
 .kd-mobile-menu-kopf { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 2px 10px; }
@@ -322,17 +320,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-mobile-menu-schliessen { flex:0 0 36px; width:36px; min-height:36px !important; padding:0; border:0; border-radius:8px;
   background:transparent; color:#bdb7c5; font:400 25px/1 'Space Grotesk',sans-serif; }
 .kd-mobile-menu-liste { display:grid; gap:6px; }
-.kd-mobile-menu-liste button,.kd-mobile-nachoben { position:relative; width:100%; min-width:0; min-height:46px; display:flex; align-items:center; gap:10px;
+.kd-mobile-menu-liste button { position:relative; width:100%; min-width:0; min-height:46px; display:flex; align-items:center; gap:10px;
   box-sizing:border-box; padding:9px 12px; border:1px solid #49444f; border-radius:9px; background:#1a181c; color:#ece8df; text-align:left; }
-.kd-mobile-menu-icon,.kd-mobile-nachoben>span { flex:0 0 24px; color:#e3a63b; font:700 18px 'Barlow Condensed',sans-serif; text-align:center; }
-.kd-mobile-menu-liste button>strong,.kd-mobile-nachoben>strong { min-width:0; font:600 14px/1.2 'Space Grotesk',sans-serif; overflow-wrap:anywhere; }
+.kd-mobile-menu-icon { flex:0 0 24px; color:#e3a63b; font:700 18px 'Barlow Condensed',sans-serif; text-align:center; }
+.kd-mobile-menu-liste button>strong { min-width:0; font:600 14px/1.2 'Space Grotesk',sans-serif; overflow-wrap:anywhere; }
 .kd-mobile-menu-liste button.aktiv { border-color:#e3a63b; background:rgba(227,166,59,.11); }
-.kd-mobile-nachoben { margin-top:9px; border-color:rgba(227,166,59,.6); background:rgba(227,166,59,.07); }
-.kd-mobile-menu-meta { display:grid; gap:5px; margin-top:9px; padding-top:9px; border-top:1px solid #49444f; }
-.kd-mobile-menu-meta button,.kd-mobile-menu-meta a { min-height:42px; display:flex; align-items:center; gap:9px; box-sizing:border-box; padding:8px 10px;
-  border:1px solid transparent; border-radius:8px; background:transparent; color:#cbc5d0; font:600 12px 'Space Grotesk',sans-serif; text-align:left; text-decoration:none; }
-.kd-mobile-menu-meta button>span,.kd-mobile-menu-meta a>span { flex:0 0 20px; color:#e3a63b; font-size:16px; text-align:center; }
-.kd-mobile-menu-meta a { color:#e3a63b; }
 
 @media (max-width:760px) {
   .kd-menuknopf { position:fixed; display:flex; align-items:center; justify-content:center; right:max(20px,env(safe-area-inset-right));
@@ -665,7 +657,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
    die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/nerv;
    setzeTheme kennt keine :root-Vars). Mobil-first; kein filter/transform auf .kd-app. */
-.kd-dash { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.kd-dash { display: flex; flex-direction: column; gap: 16px; width:100%; min-width:0; max-width:900px; box-sizing:border-box; }
 
 /* Marquee-Kopf */
 .kd-dash-hero { padding: 14px 2px 2px; }
@@ -692,13 +684,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background-size: 12px 3px, 12px 3px; background-position: 0 3px, 0 7px; background-repeat: repeat-x, repeat-x; }
 
 /* Grid */
-.kd-dash-grid { display: grid; grid-template-columns: 1fr; gap: 22px 18px; }
+.kd-dash-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:22px 18px; width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
 /* Desktop bewusst EINE Lesespalte (max-width an .kd-dash) statt ragged 2-Spalten-Grid. */
 
 /* Modul-Kopf (editorial: Mono-Kicker mit Filmstrip-Marker + →-Link) */
-.kd-dash-modul { display: flex; flex-direction: column; }
+.kd-dash-modul { display:flex; flex-direction:column; width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
 .kd-dash-kopf { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding-bottom: 6px; margin-bottom: 10px; border-bottom: 1px solid var(--kd-saalHoch); }
+  width:100%; min-width:0; max-width:100%; box-sizing:border-box; padding-bottom:6px; margin-bottom:10px; border-bottom:1px solid var(--kd-saalHoch); }
 .kd-dash-kopfname { position: relative; padding-left: 14px; font-family: 'Space Mono', monospace;
   font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--kd-leinwand); }
 .kd-dash-kopfname::before { content: ""; position: absolute; left: 0; top: 50%; width: 8px; height: 8px;
@@ -709,7 +701,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Ticket-Stub-Karte (Flagship: Kino für dich) */
 .kd-dash-ticket { display: flex; align-items: stretch; margin-bottom: 10px; overflow: hidden;
-  background: var(--kd-leinwand); color: var(--kd-tinte); border-radius: 8px; cursor: pointer;
+  width:100%; min-width:0; max-width:100%; box-sizing:border-box; background:var(--kd-leinwand); color:var(--kd-tinte); border-radius:8px; cursor:pointer;
   box-shadow: 0 3px 14px rgba(0,0,0,.4); }
 .kd-dash-ticket:last-child { margin-bottom: 0; }
 .kd-dash-stub { flex: 0 0 60px; display: flex; flex-direction: column; align-items: center;
@@ -730,8 +722,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Listen-Karte (Must-Watch / streambar / Pinboard / zuletzt) */
 .kd-dash-karte { padding: 6px 14px; background: var(--kd-leinwand); color: var(--kd-tinte);
-  border-radius: 8px; box-shadow: 0 3px 14px rgba(0,0,0,.4); cursor: pointer; }
-.kd-dash-zeile { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+  width:100%; min-width:0; max-width:100%; box-sizing:border-box; border-radius:8px; box-shadow:0 3px 14px rgba(0,0,0,.4); cursor:pointer; }
+.kd-dash-zeile { display:flex; align-items:center; gap:10px; min-width:0; max-width:100%; padding:9px 0; }
 .kd-dash-karte .kd-dash-zeile, .kd-dash-ticket { cursor: pointer; }
 .kd-dash-zeile + .kd-dash-zeile { border-top: 1px solid var(--kd-leinwandTief); }
 .kd-dash-rang { flex: 0 0 auto; width: 24px; text-align: center; font-family: 'Fraunces', Georgia, serif;

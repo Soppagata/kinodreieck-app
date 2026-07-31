@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useInstallationsStatus } from "../lib/installation.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 export const NAVIGATION = Object.freeze([
@@ -12,23 +11,25 @@ export const NAVIGATION = Object.freeze([
   { id: "start", label: "Start", mobil: true, icon: "⌂" },
   { id: "daten", label: "Einstellungen", mehr: true, icon: "⚙" },
 ]);
+const MOBILE_NAVIGATION = Object.freeze([
+  NAVIGATION.find((eintrag) => eintrag.id === "start"),
+  ...NAVIGATION.filter((eintrag) => eintrag.id !== "start"),
+]);
 
-export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate, onHilfe, ungesichert }) {
+export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate }) {
   return (
     <>
       <button className={"kd-menuknopf" + (mehrOffen ? " offen" : "")} aria-label={mehrOffen ? "Menü schließen" : "Menü öffnen"}
         aria-expanded={mehrOffen} aria-controls="kd-mobile-menu" onClick={onMehr}>
         <span className="kd-menulinien" aria-hidden="true"><i /><i /><i /></span>
-        {ungesichert && <i className="kd-nav-punkt" aria-label="Ungesicherte Änderungen" />}
       </button>
-      {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} onHilfe={onHilfe} ungesichert={ungesichert} />}
+      {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} />}
     </>
   );
 }
 
-function MenuPopup({ aktiv, onClose, onNavigate, onHilfe, ungesichert }) {
+function MenuPopup({ aktiv, onClose, onNavigate }) {
   const sheetRef = useRef(null);
-  const installation = useInstallationsStatus();
   useEffect(() => {
     const vorher = document.activeElement;
     const entsperren = sperreDokumentScroll();
@@ -42,17 +43,6 @@ function MenuPopup({ aktiv, onClose, onNavigate, onHilfe, ungesichert }) {
     };
   }, [onClose]);
 
-  const nachOben = () => {
-    onClose();
-    const reduziert = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    /* Erst nach dem Overlay-Cleanup scrollen: die iOS-Sperre stellt beim
-       Entsperren bewusst den vorherigen Stand wieder her. */
-    window.setTimeout(() => {
-      try { window.scrollTo({ top: 0, behavior: reduziert ? "auto" : "smooth" }); }
-      catch { window.scrollTo(0, 0); }
-    }, 0);
-  };
-
   return createPortal(
     <div className="kd-mobile-menu-layer">
       <button className="kd-sheet-scrim" aria-label="Menü schließen" onClick={onClose} />
@@ -62,19 +52,13 @@ function MenuPopup({ aktiv, onClose, onNavigate, onHilfe, ungesichert }) {
           <button className="kd-mobile-menu-schliessen" aria-label="Menü schließen" onClick={onClose}>×</button>
         </div>
         <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
-          {NAVIGATION.map((eintrag) => (
+          {MOBILE_NAVIGATION.map((eintrag) => (
             <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
               onClick={() => onNavigate(eintrag.id)}>
               <span className="kd-mobile-menu-icon" aria-hidden="true">{eintrag.icon}</span><strong>{eintrag.label}</strong>
-              {eintrag.id === "daten" && ungesichert && <i className="kd-nav-punkt" />}
             </button>
           ))}
         </nav>
-        <button className="kd-mobile-nachoben" onClick={nachOben}><span aria-hidden="true">↑</span><strong>Nach oben</strong></button>
-        <div className="kd-mobile-menu-meta">
-          <button onClick={onHilfe}><span aria-hidden="true">?</span>Anleitung &amp; Hilfe</button>
-          {!installation.datei && <a href={import.meta.env.BASE_URL + "download/"}><span aria-hidden="true">↓</span>Installation &amp; Download</a>}
-        </div>
       </section>
     </div>,
     document.body,

@@ -240,6 +240,7 @@ export function DatenTab({
       </Klappe>
 
       {/* 3 — Masterliste */}
+      <div className="kd-nur-desktop">
       <Klappe titel="Masterliste" tour="daten-export">
         <div style={kasten}>
           <h2 style={h2}>Deine Mediathek als Rohdaten</h2>
@@ -263,8 +264,10 @@ export function DatenTab({
           )}
         </div>
       </Klappe>
+      </div>
 
       {/* 4 — Backup */}
+      <div className="kd-nur-desktop">
       <Klappe titel="Gesamt-Backup">
         <div style={kasten}>
           {(ungesichertMaster || ungesichertArtikel) && (
@@ -275,9 +278,10 @@ export function DatenTab({
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den vollständigen persönlichen App-Stand als Datei herunter. Der gemeinsame Kino- und Streamingkatalog wird nicht dupliziert.</p>
           {backupGesamt && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>}
           <FeldHinweis feld="backup" />
-          <div className="kd-nur-desktop" style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
+          <div style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
         </div>
       </Klappe>
+      </div>
 
       {/* 5 — Streaming-Quellen */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
@@ -291,11 +295,13 @@ export function DatenTab({
       )}
 
       {/* 7 — Katalog-Status */}
+      <div className="kd-nur-desktop">
       <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
         auswahl={auswahl} toggleQuelle={toggleQuelle} teil="status" datenGesperrt={datenGesperrt} />
+      </div>
 
       {/* 8 — Erweitert, direkt nach dem Katalog-Status; Refresh gehört hinein. */}
-      <div data-tour="erweitert">
+      <div className="kd-nur-desktop" data-tour="erweitert">
         <Klappe titel="Erweitert — manuelle Aktualisierung & Wartung">
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={kasten}>
@@ -347,7 +353,7 @@ export function DatenTab({
           <div style={{ marginTop: 14 }}>
             <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setUeberOffen((v) => !v)}>{ueberOffen ? "Anleitung zuklappen" : "Über Kinodreieck & Anleitung"}</button>
             {typeof location !== "undefined" && location.protocol !== "file:" && (
-              <a href={import.meta.env.BASE_URL + "download/"} style={{ ...btnStyle(false), display: "inline-block", marginLeft: 8, fontSize: 13, textDecoration: "none" }}>
+              <a className="kd-nur-desktop" href={import.meta.env.BASE_URL + "download/"} style={{ ...btnStyle(false), display: "inline-block", marginLeft: 8, fontSize: 13, textDecoration: "none" }}>
                 Einzeldatei herunterladen
               </a>
             )}

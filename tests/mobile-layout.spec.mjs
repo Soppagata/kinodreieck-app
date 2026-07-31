@@ -76,13 +76,32 @@ for (const viewport of VIEWPORTS) {
         const popup = page.getByRole("dialog", { name: "Menü" });
         await expect(popup).toBeVisible();
         const popupBox = await popup.boundingBox();
-        expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(18);
+        expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(360, viewport.width - 32) - 1);
+        expect(Math.abs(popupBox.x - (viewport.width - popupBox.width) / 2)).toBeLessThanOrEqual(1);
+        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(80);
+        await expect(popup.locator(".kd-mobile-menu-liste button").first()).toHaveText("⌂Start");
+        await expect(popup.getByRole("button", { name: "Nach oben" })).toHaveCount(0);
+        await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
+        await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
         await expect(popup).toBeHidden();
         await keineDokumentUeberbreite(page);
       }
 
+      await expect(page.locator("summary", { hasText: /^Masterliste$/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Gesamt-Backup$/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Katalog-Status$/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Erweitert/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^Konto & Geräte-Sync$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^Suche-Vokabular$/ })).toBeVisible();
+
       await page.getByRole("button", { name: "Menü öffnen" }).click();
+      await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Start", exact: true }).click();
+      const dashboard = page.locator(".kd-dash");
+      const dashboardBox = await dashboard.boundingBox();
+      expect(dashboardBox.x).toBeGreaterThanOrEqual(18);
+      expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(viewport.width - 18);
       await page.getByRole("button", { name: "Anleitung & Hilfe" }).click();
       await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
       await keineDokumentUeberbreite(page);
@@ -92,15 +111,6 @@ for (const viewport of VIEWPORTS) {
         position: document.body.style.position,
         locked: document.body.classList.contains("kd-scroll-gesperrt"),
       }))).toEqual({ overflow: "", position: "", locked: false });
-
-      await page.evaluate(() => {
-        document.documentElement.style.minHeight = "2200px";
-        document.body.style.minHeight = "2200px";
-        window.scrollTo(0, 1200);
-      });
-      await page.getByRole("button", { name: "Menü öffnen" }).click();
-      await page.getByRole("button", { name: "Nach oben" }).click();
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(8);
 
       await page.evaluate(() => window.scrollTo(0, 900));
       await page.waitForTimeout(180);

@@ -58,8 +58,13 @@ check("Abmelden räumt zuerst den Kontokontext und öffnet danach den Einstieg",
 check("Abmelden lädt den wiederhergestellten Gaststand unmittelbar neu", () => /async function abmelden[\s\S]+onDatenGeaendert\?\.\(\)/.test(konto));
 check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
   /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
-check("Mobile Navigation ist ein schwebendes Menü mit integriertem Nach-oben-Pfeil", () =>
-  /kd-menuknopf/.test(nav) && /Nach oben/.test(nav) && /Installation &amp; Download/.test(nav) && !/kd-tabbar/.test(nav));
+check("Mobile Navigation ist ein schlichtes, startzentriertes Menü ohne Service-Aktionen", () =>
+  /kd-menuknopf/.test(nav) && /MOBILE_NAVIGATION[\s\S]+id === "start"[\s\S]+MOBILE_NAVIGATION\.map/.test(nav)
+  && !/Nach oben|Anleitung &amp; Hilfe|Installation &amp; Download/.test(nav) && !/kd-tabbar/.test(nav));
+check("Datei- und Wartungswerkzeuge bleiben in den mobilen Einstellungen verborgen", () =>
+  /className="kd-nur-desktop">\s*<Klappe titel="Masterliste"/.test(daten)
+  && /className="kd-nur-desktop">\s*<Klappe titel="Gesamt-Backup"/.test(daten)
+  && /className="kd-nur-desktop" data-tour="erweitert"/.test(daten));
 check("Bedienhand, Wrapper-Spiegelung und alter Griff sind aus Oberfläche und CSS entfernt", () =>
   !/Bedienhand|linkshaender/.test(daten) && !/kd-links|kd-navband|kd-scrim/.test(css) && !/NavBand/.test(app));
 check("App registriert keine automatischen Tour-, Scroll- oder IntersectionObserver-Dialoge", () =>
