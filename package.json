@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@supabase/supabase-js": "2.110.8",
     "@vitejs/plugin-react": "^4.3.4",
     "deno": "2.9.4",
     "jsdom": "^25.0.1",
