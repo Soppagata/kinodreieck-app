@@ -43,7 +43,7 @@
     "test:budget": "node budget_agent_test.mjs",
     "test:keychain": "node keychain_runner_test.mjs",
     "test:kischalter": "node kischalter_test.mjs",
-    "test:function": "deno test --allow-env --allow-net --allow-read --node-modules-dir=manual ai_task_test.ts",
+    "test:function": "deno test --allow-env --allow-net --allow-read --node-modules-dir=manual --no-lock ai_task_test.ts",
     "test:ai:live": "node tools/keychain_runner.mjs ai-live",
     "test:ai:contract": "node tools/keychain_runner.mjs profile-contract",
     "test:ai:profile-live": "node tools/keychain_runner.mjs profile-live --confirm-paid",
