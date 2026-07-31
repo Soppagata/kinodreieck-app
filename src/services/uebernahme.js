@@ -77,3 +77,38 @@ export async function kontoUebernehmen(lokaleWerte) {
   const r = await accountSync.pull();
   return { ok: r?.ok !== false, ergebnis: r };
 }
+
+/* Nach einem Login ist keine zusätzliche Handarbeit nötig, wenn die Richtung
+   eindeutig und verlustfrei ist: leeres Gerät -> Konto, beide leer oder bereits
+   bitgleich. Sobald lokale und entfernte Daten voneinander abweichen, bleibt
+   der bestehende Übernahme-Assistent die einzige entscheidende Stelle. */
+export async function kontoSicherAutomatischLaden(accountId, deps = {}) {
+  const inventur = deps.inventur || inventurLaden;
+  const kontoLaden = deps.kontoLaden || kontoUebernehmen;
+  const bestaetigen = deps.bestaetigen || uebernahmeBestaetigen;
+  const pull = deps.pull || accountSync.pull;
+  const inv = await inventur(accountId);
+  if (inv?.ok === false || inv?.erreichbar === false) {
+    throw new Error("Kontostand ist gerade nicht erreichbar.");
+  }
+  const belegt = inv.vorschau.filter((zeile) => zeile.status !== "beide-leer");
+  const identisch = belegt.length > 0 && belegt.every((zeile) => zeile.status === "identisch");
+
+  if (inv.fall === "nur-konto") {
+    const geladen = await kontoLaden(inv.lokaleWerte);
+    if (geladen?.ok === false) throw new Error("Kontostand konnte nicht geladen werden.");
+    bestaetigen(accountId);
+    return { automatisch: true, grund: "konto-geladen" };
+  }
+  if (inv.fall === "beide-leer") {
+    bestaetigen(accountId);
+    return { automatisch: true, grund: "beide-leer" };
+  }
+  if (identisch) {
+    const geladen = await pull();
+    if (geladen?.ok === false) throw new Error("Kontostand konnte nicht aktualisiert werden.");
+    bestaetigen(accountId);
+    return { automatisch: true, grund: "identisch" };
+  }
+  return { automatisch: false, grund: "entscheidung-noetig", inventur: inv };
+}

@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import {
   accountSync, istKontoTreiberAktiv, istKontoTreiberVorbereitet,
 } from "../services/storage.js";
-import { istUebernommen } from "../services/uebernahme.js";
+import { istUebernommen, kontoSicherAutomatischLaden } from "../services/uebernahme.js";
 import { topfLabel } from "../services/uebernahme.js";
 import { KontoUebernahme } from "./KontoUebernahme.jsx";
 import { errorText } from "../services/errors.js";
@@ -56,6 +56,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
   const [pwMeldung, setPwMeldung] = useState(null);
   const [meldung, setMeldung] = useState(null);
   const [kiMeldung, setKiMeldung] = useState(null);
+  const loginPruefung = useRef(false);
 
   useEffect(() => sessionCoordinator.subscribe(setSession), []);
 
@@ -73,7 +74,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
   /* Nach dem Anmelden einmalig prüfen, ob ein Bestand zu übernehmen ist. */
   useEffect(() => {
-    if (angemeldet && !demoAktiv && session.account?.id && !istUebernommen(session.account.id)) setZeigeUebernahme(true);
+    if (angemeldet && !demoAktiv && session.account?.id && !istUebernommen(session.account.id) && !loginPruefung.current) setZeigeUebernahme(true);
   }, [angemeldet, demoAktiv, session.account?.id]);
 
   async function ladeDemoKonto(accountId) {
@@ -86,16 +87,36 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
   async function anmelden(e) {
     e?.preventDefault?.();
+    loginPruefung.current = true;
     setFehler(null); setLaeuft(true);
     try {
       const neu = await sessionCoordinator.signIn(benutzer, passwort);
       setPasswort("");
       if (neu.account?.id) {
         if (demoAktiv) await ladeDemoKonto(neu.account.id);
+        else if (sessionCoordinator.getStorageState() === "account-ready") {
+          const geladen = await accountSync.pull();
+          if (geladen?.ok === false) throw new Error("Der Kontostand konnte nicht geladen werden.");
+          setStatus(accountSync.status());
+          setMeldung("Angemeldet. Dein aktueller Kontostand wurde geladen.");
+          onDatenGeaendert?.();
+        } else {
+          const automatisch = await kontoSicherAutomatischLaden(neu.account.id);
+          if (automatisch.automatisch) {
+            setZeigeUebernahme(false);
+            setStatus(accountSync.status());
+            setMeldung("Angemeldet. Dein aktueller Kontostand wurde automatisch geladen.");
+            onDatenGeaendert?.();
+          } else {
+            setZeigeUebernahme(true);
+            setMeldung("Lokaler Bestand und Kontostand unterscheiden sich. Bitte entscheide einmal, welcher Stand gelten soll.");
+          }
+        }
       }
     } catch (err) {
       setFehler(err?.message || errorText(err));
-    } finally { setLaeuft(false); }
+      if (sessionCoordinator.getSnapshot()?.mode === "account") setZeigeUebernahme(true);
+    } finally { loginPruefung.current = false; setLaeuft(false); }
   }
 
   async function abmelden() {

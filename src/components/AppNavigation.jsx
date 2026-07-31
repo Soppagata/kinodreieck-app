@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useInstallationsStatus } from "../lib/installation.js";
+import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 export const NAVIGATION = Object.freeze([
   { id: "kino", label: "Kino", mobil: true, icon: "K" },
@@ -30,13 +31,12 @@ function MenuPopup({ aktiv, onClose, onNavigate, onHilfe, ungesichert }) {
   const installation = useInstallationsStatus();
   useEffect(() => {
     const vorher = document.activeElement;
-    const altesOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const entsperren = sperreDokumentScroll();
     sheetRef.current?.querySelector("button, a")?.focus();
     const taste = (event) => { if (event.key === "Escape") onClose(); };
     document.addEventListener("keydown", taste);
     return () => {
-      document.body.style.overflow = altesOverflow;
+      entsperren();
       document.removeEventListener("keydown", taste);
       vorher?.focus?.();
     };
@@ -45,8 +45,12 @@ function MenuPopup({ aktiv, onClose, onNavigate, onHilfe, ungesichert }) {
   const nachOben = () => {
     onClose();
     const reduziert = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    try { window.scrollTo({ top: 0, behavior: reduziert ? "auto" : "smooth" }); }
-    catch { window.scrollTo(0, 0); }
+    /* Erst nach dem Overlay-Cleanup scrollen: die iOS-Sperre stellt beim
+       Entsperren bewusst den vorherigen Stand wieder her. */
+    window.setTimeout(() => {
+      try { window.scrollTo({ top: 0, behavior: reduziert ? "auto" : "smooth" }); }
+      catch { window.scrollTo(0, 0); }
+    }, 0);
   };
 
   return createPortal(

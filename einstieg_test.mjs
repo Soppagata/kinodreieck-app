@@ -49,8 +49,14 @@ check("Erste Seite vereint Login, Gastweg, Installation und Einzeldatei", () =>
   /Anmelden/.test(gate) && /Ohne Konto fortfahren/.test(gate) && /InstallationCard/.test(gate) && /Einzeldatei/.test(readFileSync(new URL("./src/components/InstallationCard.jsx", import.meta.url), "utf8")));
 check("Startwahl und zwei kurze Erklärschritte liegen im neuen Gate", () =>
   /Demo ansehen/.test(gate) && /Leer starten/.test(gate) && /Drei Wege zu deinem Film/.test(gate) && /Du entscheidest über KI/.test(gate));
+check("Die KI-Wahl enthält kein zweites Loginformular", () => {
+  const kiSeite = gate.slice(gate.indexOf('titel="Du entscheidest über KI"'), gate.indexOf("function EntryPage"));
+  return kiSeite.length > 0 && !/kd-entry-login|Benutzername|Passwort/.test(kiSeite);
+});
 check("Loginfehler bleiben im Einstieg sichtbar und schließen ihn nicht", () => /catch \(err\)[\s\S]+setFehler\(errorText\(err\)\)/.test(gate) && /role="alert"/.test(gate));
 check("Abmelden markiert den Einstieg vor dem zentralen Sign-out", () => /fordereEinstiegNachAbmeldung\(\)[\s\S]+sessionCoordinator\.signOut/.test(konto));
+check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
+  /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
 check("Mobile Navigation ist ein schwebendes Menü mit integriertem Nach-oben-Pfeil", () =>
   /kd-menuknopf/.test(nav) && /Nach oben/.test(nav) && /Installation &amp; Download/.test(nav) && !/kd-tabbar/.test(nav));
 check("Bedienhand, Wrapper-Spiegelung und alter Griff sind aus Oberfläche und CSS entfernt", () =>

@@ -40,6 +40,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole("heading", { name: "Drei Wege zu deinem Film" })).toBeVisible();
     await page.getByRole("button", { name: "Weiter" }).click();
     await expect(page.getByRole("heading", { name: "Du entscheidest über KI" })).toBeVisible();
+    await expect(page.locator(".kd-entry-login")).toHaveCount(0);
     await page.getByRole("button", { name: "Ohne KI" }).click();
     await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeVisible();
     await keineDokumentUeberbreite(page);
@@ -66,6 +67,7 @@ for (const viewport of VIEWPORTS) {
       const menuBox = await menu.boundingBox();
       expect(menuBox.width).toBeGreaterThanOrEqual(48);
       expect(menuBox.height).toBeGreaterThanOrEqual(48);
+      expect(viewport.width - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(18);
       await expect(page.locator(".kd-tabbar")).toHaveCount(0);
       await keineDokumentUeberbreite(page);
 
@@ -73,6 +75,8 @@ for (const viewport of VIEWPORTS) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         await expect(popup).toBeVisible();
+        const popupBox = await popup.boundingBox();
+        expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(18);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
         await expect(popup).toBeHidden();
         await keineDokumentUeberbreite(page);
@@ -83,6 +87,11 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
       await keineDokumentUeberbreite(page);
       await page.getByRole("button", { name: "Schließen", exact: true }).click();
+      await expect.poll(() => page.evaluate(() => ({
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        locked: document.body.classList.contains("kd-scroll-gesperrt"),
+      }))).toEqual({ overflow: "", position: "", locked: false });
 
       await page.evaluate(() => {
         document.documentElement.style.minHeight = "2200px";
@@ -96,6 +105,8 @@ for (const viewport of VIEWPORTS) {
       await page.evaluate(() => window.scrollTo(0, 900));
       await page.waitForTimeout(180);
       await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeEnabled();
+      await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("");
       await keineDokumentUeberbreite(page);
     });
   }

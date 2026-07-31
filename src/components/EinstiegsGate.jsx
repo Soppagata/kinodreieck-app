@@ -14,6 +14,7 @@ import {
 } from "../controllers/onboardingController.js";
 import { getTutorial, setWillkommen, setupUeberspringen } from "../lib/tutorial.js";
 import { setzeGlobal as setzeKiGlobal } from "../lib/kiSchalter.js";
+import { kontoSicherAutomatischLaden } from "../services/uebernahme.js";
 
 function Fortschritt({ schritt }) {
   return (
@@ -141,6 +142,15 @@ export function EinstiegsGate({ children }) {
     setFehler(""); setLaeuft(true);
     try {
       await sessionCoordinator.signIn(benutzer, passwort);
+      const angemeldet = sessionCoordinator.getSnapshot();
+      if (angemeldet?.account?.id && sessionCoordinator.getStorageState() !== "account-ready") {
+        /* Die Anmeldung selbst bleibt erfolgreich, auch wenn der Datenabgleich
+           kurz nicht erreichbar ist. In diesem Fall bleibt der Kontotreiber
+           sicher im Übernahme-Zustand und die Einstellungen bieten den
+           bestehenden Vergleich an. */
+        try { await kontoSicherAutomatischLaden(angemeldet.account.id); }
+        catch { /* später in den Einstellungen erneut möglich */ }
+      }
       setPasswort("");
       setWeg("konto");
       if (getTutorial().willkommen) {

@@ -1,17 +1,17 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { InstallationCard } from "./InstallationCard.jsx";
+import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 export function HilfeSheet({ onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     const vorher = document.activeElement;
-    const alt = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const entsperren = sperreDokumentScroll();
     ref.current?.querySelector("button")?.focus();
     const taste = (event) => { if (event.key === "Escape") onClose(); };
     document.addEventListener("keydown", taste);
-    return () => { document.body.style.overflow = alt; document.removeEventListener("keydown", taste); vorher?.focus?.(); };
+    return () => { entsperren(); document.removeEventListener("keydown", taste); vorher?.focus?.(); };
   }, [onClose]);
 
   return createPortal(
