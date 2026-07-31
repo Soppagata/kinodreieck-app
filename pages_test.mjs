@@ -70,6 +70,9 @@ for (const wert of [
 ]) check(`_headers enthält ${wert}`, headers.includes(wert));
 check("_headers: gehashte Assets immutable", /\/assets\/\*[\s\S]*?max-age=31536000, immutable/.test(headers));
 check("_headers: Service Worker muss revalidieren", /\/sw\.js[\s\S]*?max-age=0, must-revalidate/.test(headers));
+check("_headers: aktiver Client darf nur zur eigenen Supabase-Instanz verbinden",
+  /connect-src 'self' https:\/\/\*\.supabase\.co/.test(headers)
+  && !/api\.github\.com/.test(headers));
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
 const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
@@ -95,7 +98,10 @@ check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
 check("Remote-Smoke stoppt ein Release ohne beide öffentlichen Demo-Zeilen",
   demoKatalogFehler(["manifest"])?.includes("programm_demo, streaming_demo")
   && demoKatalogFehler(["manifest", "programm_demo"])?.includes("streaming_demo")
-  && demoKatalogFehler(["manifest", "programm_demo", "streaming_demo"]) === null
+  && demoKatalogFehler([
+    "manifest", "programm_demo", "streaming_demo",
+    "streaming_bekannt_demo", "streaming_entdecken_demo",
+  ]) === null
   && remoteSmoke.includes("const demoFehler = demoKatalogFehler(sichtbar);")
   && remoteSmoke.includes("if (demoFehler) {"));
 
@@ -153,6 +159,8 @@ const secretMuster = [
 ];
 check("Browser-Bundle enthält keine bekannte Secret-Signatur",
   !secretMuster.some((muster) => muster.test(auslieferung)));
+check("Browser-Bundle enthält keine aktiven Legacy-Sync-Schlüssel",
+  !/kd:git:token|kd:sb:key|api\.github\.com/.test(js + "\n" + downloadHtml));
 check("Der öffentliche Publishable-Key bleibt erlaubt (er MUSS im Bundle stehen)",
   !secretMuster.some((muster) => muster.test("sb_publishable_abcdefghijklmnop")));
 check("Ein eingebautes Sitzungstoken würde erkannt",

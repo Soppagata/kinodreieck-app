@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { authService } from "../services/auth.js";
+import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import {
-  aktiviereKontoTreiber, deaktiviereKontoTreiber, accountSync, istKontoTreiberAktiv,
+  accountSync, istKontoTreiberAktiv, istKontoTreiberVorbereitet,
 } from "../services/storage.js";
 import { istUebernommen } from "../services/uebernahme.js";
 import { topfLabel } from "../services/uebernahme.js";
@@ -11,6 +11,7 @@ import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { ladeKontostandNachDemo } from "../services/demoAccountWechsel.js";
+import { fordereEinstiegNachAbmeldung } from "../controllers/onboardingController.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -43,7 +44,7 @@ function Statuszeile({ status }) {
 }
 
 export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = false }) {
-  const [session, setSession] = useState(() => authService.getSnapshot());
+  const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   const [benutzer, setBenutzer] = useState("");
   const [passwort, setPasswort] = useState("");
   const [fehler, setFehler] = useState(null);
@@ -56,10 +57,11 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
   const [meldung, setMeldung] = useState(null);
   const [kiMeldung, setKiMeldung] = useState(null);
 
-  useEffect(() => authService.subscribe(setSession), []);
+  useEffect(() => sessionCoordinator.subscribe(setSession), []);
 
   const angemeldet = session.mode === "account";
   const degradiert = angemeldet && session.state === "degraded";
+  const kontoSpeicherAktiv = angemeldet && istKontoTreiberAktiv();
 
   useEffect(() => {
     if (!angemeldet) { setStatus(null); return undefined; }
@@ -86,10 +88,9 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
     e?.preventDefault?.();
     setFehler(null); setLaeuft(true);
     try {
-      const neu = await authService.signIn(benutzer, passwort);
+      const neu = await sessionCoordinator.signIn(benutzer, passwort);
       setPasswort("");
       if (neu.account?.id) {
-        aktiviereKontoTreiber(neu.account.id);
         if (demoAktiv) await ladeDemoKonto(neu.account.id);
       }
     } catch (err) {
@@ -99,7 +100,12 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
   async function abmelden() {
     setLaeuft(true);
-    try { await authService.signOut(); deaktiviereKontoTreiber(); setZeigeUebernahme(false); setMeldung("Abgemeldet. Deine Daten auf diesem Gerät sind unverändert vorhanden."); }
+    try {
+      fordereEinstiegNachAbmeldung();
+      await sessionCoordinator.signOut();
+      setZeigeUebernahme(false);
+      setMeldung("Abgemeldet. Deine Daten auf diesem Gerät sind unverändert vorhanden.");
+    }
     finally { setLaeuft(false); }
   }
 
@@ -159,10 +165,24 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       <p style={{ color: T.leinwand, fontSize: 14, margin: "0 0 4px" }}>
         Angemeldet als <strong>{session.account?.displayName || session.account?.id}</strong>
       </p>
-      <Statuszeile status={status} />
+      <Statuszeile status={kontoSpeicherAktiv ? status : null} />
       {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
 
-      {status?.zuGross?.length > 0 && (
+      {!kontoSpeicherAktiv && !demoAktiv && (
+        <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
+          <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 13 }}>
+            Dein Konto ist angemeldet, aber der Datenbestand dieses Geräts ist noch nicht zugeordnet.
+            Bis zu deiner Entscheidung bleibt jede Änderung ausschließlich lokal und wird nicht ins Konto gesendet.
+          </p>
+          {!zeigeUebernahme && (
+            <button style={{ ...btnStyle(false), fontSize: 12 }} onClick={() => setZeigeUebernahme(true)}>
+              Bestand jetzt vergleichen
+            </button>
+          )}
+        </div>
+      )}
+
+      {kontoSpeicherAktiv && status?.zuGross?.length > 0 && (
         <div style={{ border: "1px solid " + T.gefahr, background: "rgba(217,106,90,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
           <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
             Zu groß für die Datenbank: {status.zuGross.map(topfLabel).join(", ")}.
@@ -172,7 +192,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
         </div>
       )}
 
-      {status?.conflict?.length > 0 && (
+      {kontoSpeicherAktiv && status?.conflict?.length > 0 && (
         <div style={{ border: "1px solid " + T.gefahr, borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
           <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 13 }}>
             Auf zwei Geräten gleichzeitig geändert. Entscheide je Bereich, welcher Stand gilt:
@@ -195,7 +215,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
         </div>
       )}
 
-      {zeigeUebernahme && !demoAktiv && istKontoTreiberAktiv() && (
+      {zeigeUebernahme && !demoAktiv && istKontoTreiberVorbereitet() && (
         <div style={{ border: "1px solid " + T.rauch, borderRadius: 8, padding: "12px", marginBottom: 12 }}>
           <h4 style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 14 }}>Bestand übernehmen</h4>
           <KontoUebernahme
@@ -207,7 +227,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
+        <button style={btnStyle(false)} disabled={laeuft || (!demoAktiv && !kontoSpeicherAktiv)} onClick={async () => {
           setLaeuft(true); setMeldung(null); setFehler(null);
           try {
             if (demoAktiv) await ladeDemoKonto(session.account?.id);
@@ -222,7 +242,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           }
           finally { setLaeuft(false); }
         }}>{demoAktiv ? "Aktuellen Kontostand laden" : "Jetzt abgleichen"}</button>
-        <button style={btnStyle(false)} disabled={laeuft || !status?.pending?.length} onClick={async () => {
+        <button style={btnStyle(false)} disabled={laeuft || !kontoSpeicherAktiv || !status?.pending?.length} onClick={async () => {
           setLaeuft(true);
           try { await accountSync.flush(); setStatus(accountSync.status()); }
           finally { setLaeuft(false); }
@@ -241,7 +261,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           <div>
             <button style={btnStyle(true)} disabled={laeuft || pwNeu.length < 8} onClick={async () => {
               setLaeuft(true); setPwMeldung(null);
-              try { await authService.changePassword(pwNeu); setPwNeu(""); setPwMeldung({ ok: true, text: "Passwort geändert." }); }
+              try { await sessionCoordinator.changePassword(pwNeu); setPwNeu(""); setPwMeldung({ ok: true, text: "Passwort geändert." }); }
               catch (e) { setPwMeldung({ ok: false, text: e?.message || errorText(e) }); }
               finally { setLaeuft(false); }
             }}>Passwort setzen</button>

@@ -238,11 +238,11 @@ if (maxLink) {
     check("Modus wieder aus (Toggle)", !/kd-(showa|nerv)/.test(wrapper().className || ""));
   }
 }
-// Schriftgröße -> zoom am Wrapper
+// Schriftgröße: Zustandsklasse statt mobilem Layout-Zoom
 const gross = knopf(/^Groß$/);
 if (gross) {
   gross.click(); await warte(300);
-  check("Schriftgröße Groß setzt zoom", String(wrapper().style.zoom) === "1.12");
+  check("Schriftgröße Groß setzt Zustand ohne Inline-Zoom", wrapper().classList.contains("kd-schrift-gross") && !wrapper().style.zoom);
   const normal = knopf(/^Normal$/); if (normal) { normal.click(); await warte(200); }
 } else check("Schriftgröße-Knöpfe", false);
 // Startbereich-Select persistiert

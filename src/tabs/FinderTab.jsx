@@ -6,7 +6,6 @@ import {
 } from "../lib/finder.js";
 import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
-import { istKlaatu } from "../lib/momentEggs.js"; // B4-Egg
 import { schlagseiten } from "../lib/match.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { sichtbareDienste } from "../lib/dienste.js";
@@ -317,7 +316,7 @@ export function FinderTab({
   master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds,
   auswahl = [], onSpringeZuFilm, addFilm, addFilmMitPrognose,
   vorbewertungAktiv = false, prognoseSperrgrund = null,
-  verlauf, setVerlauf, eingabe, setEingabe, onKlaatu,
+  verlauf, setVerlauf, eingabe, setEingabe,
   vokabular = [], saveVokabular,
 }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
@@ -363,10 +362,6 @@ export function FinderTab({
   const frage = () => {
     const text = eingabe.trim();
     if (!text) return;
-    // B4-Egg: „klaatu barada nikto" (tippfehler-tolerant) → Necronomicon melden.
-    // Personal-Modus-Gate + Optik/Tab-Wechsel liegen in App (onKlaatu); die normale
-    // Suche läuft danach unverändert weiter.
-    if (onKlaatu && istKlaatu(text)) onKlaatu();
     const sig = parseAnfrage(text, master || [], kinoGenres());
     setVerlauf((v) => [...v, { id: neueEintragId(), frage: text, ...suche(sig) }]);
     setEingabe("");

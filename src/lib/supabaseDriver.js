@@ -18,7 +18,7 @@
 
 import { localDriver } from "./storage.js";
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
-export { ladeDemoBlobs, ladeSharedBlogs } from "./catalogPublic.js";
+export { ladeDemoBlobs } from "./catalogPublic.js";
 
 /* Die 11 datentragenden Schlüssel — identisch zur Git-SYNC_MAP (Testfall hält sie
    deckungsgleich). Beim Supabase-Treiber ist der Schlüssel zugleich der Zeilen-

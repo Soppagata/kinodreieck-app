@@ -2,8 +2,9 @@
 /* ============================================================================
    Kinodreieck · Etappe 4 · Demo-Mediathek aus einem Backup bauen
    ----------------------------------------------------------------------------
-   Erzeugt aus einem App-Backup die oeffentliche Demo-Beilage: die Zeilen mit
-   `scope=demo` in `kd_store`, aus denen der Demo-Start seine Mediathek zieht.
+   Erzeugt aus einem App-Backup den öffentlichen `demo_seed`-Katalogvertrag,
+   aus dem die Online-PWA ihre Demo-Basis lädt. Derselbe Vertrag kann als
+   lokale Beilage im Downloadpaket liegen.
 
    WICHTIG ZUM VERSTAENDNIS
    Der Demo-Bestand lebt NICHT nur im Browser. Er liegt in der Datenbank und ist
@@ -140,52 +141,44 @@ const master = {
   filme,
 };
 
-/* Die Bloecke, die der Demo-Start aus kd_store liest (siehe demoLadung in
-   src/App.jsx): kd:master, kd:mustwatch, kd:streaming-dienste, kd:kino-pins,
-   kd:artikel. Was hier fehlt, bleibt in der Demo einfach leer. */
-const bloecke = {
-  "kd:master": master,
-  "kd:mustwatch": { eintraege: mustwatch },
-  "kd:streaming-dienste": DIENSTE_DEMO,
-  "kd:kino-pins": [],
+/* Kanonischer Vertrag für Datenbank und lokale Datei. Was hier fehlt, bleibt
+   in der Demo leer; private Backup-Bereiche werden nie durchgereicht. */
+const demoSeed = {
+  format: 1,
+  master,
+  mustwatch: { eintraege: mustwatch },
+  streaming_dienste: DIENSTE_DEMO,
+  artikel: { artikel: [] },
+  kino_pins: [],
+  merkliste: [],
 };
 
-writeFileSync(join(out, "demo_bloecke.json"), JSON.stringify(bloecke, null, 1));
+writeFileSync(join(out, "demo_seed.json"), JSON.stringify(demoSeed, null, 1));
 
-/* kd_store hat den Primaerschluessel (owner, key) — NICHT (scope, key). Spalten
-   sind owner, key, value, scope, rev, author; belegt durch den Legacy-Treiber
-   src/lib/supabaseDriver.js, der als einziger dorthin schreibt („Upsert auf PK
-   owner,key"). Ein Schema-Dump liegt nicht im Repo — deshalb die Fundstelle
-   hier vermerkt.
-   Statt eines Upserts wird der Demo-Bereich vollstaendig ersetzt: erst
-   loeschen, dann einfuegen. Das ist unabhaengig davon richtig, unter welchem
-   `owner` frueher Demo-Zeilen angelegt wurden; sonst blieben Altzeilen mit
-   demselben `key` unter anderem `owner` liegen und es waere Zufall, welcher
-   Wert die App erreicht. Alles in einer Transaktion. */
-const OWNER = "demo";
+/* Ein Upsert ersetzt genau das eine Katalogdokument. Die Datenbankmigration
+   erzwingt Quelle, Stand, Format 1, master.filme[] und die Größenobergrenze. */
 const marke = "kddemo";
-const zeilen = Object.entries(bloecke).map(([key, wertObj]) => {
-  const json = JSON.stringify(wertObj);
-  if (json.includes("$" + marke + "$")) fehler("Inhalt enthaelt die SQL-Trennmarke — bitte melden.");
-  return "  ('" + OWNER + "', '" + key + "', $" + marke + "$" + json + "$" + marke + "$, 'demo')";
-});
+const demoJson = JSON.stringify(demoSeed);
+if (demoJson.includes("$" + marke + "$")) fehler("Inhalt enthaelt die SQL-Trennmarke — bitte melden.");
 
 const sql = [
-  "-- Demo-Mediathek veroeffentlichen (kd_store, scope=demo).",
+  "-- Demo-Mediathek veroeffentlichen (kd_catalog, name=demo_seed).",
   "-- ACHTUNG: alles hier ist danach OHNE Anmeldung oeffentlich lesbar.",
-  "-- Ersetzt den gesamten Demo-Bereich; laeuft als eine Transaktion.",
+  "-- Ersetzt genau das eine versionierte Demo-Dokument.",
   "begin;",
   "",
-  "delete from public.kd_store where scope = 'demo';",
-  "",
-  "insert into public.kd_store (owner, key, value, scope) values",
-  zeilen.join(",\n") + ";",
+  "insert into public.kd_catalog (name, payload, quelle, stand, gueltig_bis)",
+  "values ('demo_seed', $" + marke + "$" + demoJson + "$" + marke + "$::jsonb,",
+  "        'kinodreieck_demo', now(), null)",
+  "on conflict (name) do update",
+  "set payload = excluded.payload, quelle = excluded.quelle,",
+  "    stand = excluded.stand, gueltig_bis = null, updated_at = now();",
   "",
   "commit;",
   "",
   "-- Gegenprobe (als Gast):",
   "--   begin; set local role anon;",
-  "--   select key, length(value) from public.kd_store where scope = 'demo' order by key;",
+  "--   select name, stand, octet_length(payload::text) from public.kd_catalog where name = 'demo_seed';",
   "--   rollback;",
 ].join("\n");
 

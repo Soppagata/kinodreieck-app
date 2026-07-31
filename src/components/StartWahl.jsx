@@ -45,7 +45,7 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
   const box = {
     background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8,
     maxWidth: 560, width: "100%", padding: "26px 28px", boxShadow: "0 10px 48px rgba(0,0,0,0.6)",
-    maxHeight: "90dvh", overflowY: "auto", overscrollBehavior: "contain",
+    maxHeight: "90dvh", overflowY: "auto", overscrollBehavior: "contain", boxSizing: "border-box",
   };
   const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "0.04em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 6px" };
   const karte = {
@@ -67,7 +67,7 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
           <h3 style={kTitel}>Leer starten <span style={{ color: T.wolfram, fontSize: 13 }}>· empfohlen</span></h3>
           <p style={kText}>
             Deine Mediathek, Listen und Streamingdienste sind leer. Du baust alles
-            selbst auf — eine kurze Tour zeigt dir die wichtigsten Stellen.
+            selbst auf. Die Hilfe erklärt dir die wichtigsten Stellen, wenn du sie öffnest.
           </p>
           <div>
             <button style={btnStyle(true)} onClick={() => onWaehle("clean")}>Leer starten</button>

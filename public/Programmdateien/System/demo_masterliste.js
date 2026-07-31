@@ -1,6 +1,8 @@
 /* Kinodreieck Demo-Beilage (synthetisch, KEINE echten Daten). Klassisches Script:
    setzt ein globales Objekt, das die App bei Demo-Wahl dynamisch nachlaedt. */
-window.__KD_DEMO_MASTER__ = {
+window.__KD_DEMO_SEED__ = {
+ "format": 1,
+ "master": {
  "meta": {
   "name": "Kinodreieck Demo-Schaufenster",
   "version": "demo-1",
@@ -157,4 +159,11 @@ window.__KD_DEMO_MASTER__ = {
    "notiz": ""
   }
  ]
+ },
+ "mustwatch": { "eintraege": [] },
+ "streaming_dienste": { "quellen": ["Netflix", "Disney+", "Prime Video"], "heuristik": true },
+ "artikel": { "artikel": [] },
+ "kino_pins": [],
+ "merkliste": []
 };
+window.__KD_DEMO_MASTER__ = window.__KD_DEMO_SEED__.master;

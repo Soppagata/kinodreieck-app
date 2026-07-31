@@ -43,8 +43,26 @@ const KATALOG_ZEILEN = {
   programm_demo: { payload: { stand: STAND, demo: true, filme: [{ id: "demo_1", titel: "Demo-Testfilm", vorstellungen: [] }] }, quelle: "demo-schnappschuss" },
   streaming: { payload: { bekannt: { titel: [] }, entdecken: { titel: [] } }, quelle: "watchmode" },
   streaming_demo: { payload: { bekannt: { titel: [], demo: true }, entdecken: { titel: [], demo: true } }, quelle: "demo-schnappschuss" },
+  streaming_bekannt: { payload: { titel: [{ watchmode_id: 10, titel: "Bekannt live", dienste: ["MUBI"] }] }, quelle: "watchmode" },
+  streaming_entdecken: { payload: { titel: [{ watchmode_id: 11, titel: "Entdecken live", dienste: ["MUBI"] }] }, quelle: "watchmode" },
+  streaming_bekannt_demo: { payload: { titel: [{ watchmode_id: 20, titel: "Bekannt Demo", dienste: ["MUBI"] }], demo: true }, quelle: "demo-schnappschuss" },
+  streaming_entdecken_demo: { payload: { titel: [{ watchmode_id: 21, titel: "Entdecken Demo", dienste: ["MUBI"] }], demo: true }, quelle: "demo-schnappschuss" },
+  demo_seed: {
+    payload: {
+      format: 1,
+      master: { meta: { erstellt_am: STAND }, filme: [{ id: "demo_basis", titel: "Demo-Basis" }] },
+      mustwatch: { eintraege: [] },
+      streaming_dienste: { quellen: ["MUBI"], heuristik: true },
+      artikel: { artikel: [] },
+      kino_pins: [],
+      merkliste: [],
+    },
+    quelle: "kinodreieck_demo",
+  },
 };
-const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+const NUR_ANGEMELDET = new Set([
+  "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
+]);
 
 /* Steuerpult der Attrappe — jeder Block stellt nur ein, was er wirklich braucht. */
 const netz = {
@@ -247,6 +265,20 @@ check("Angemeldet lädt die Live-Zeile programm",
   liveBereich.asset === "programm" && liveBereich.variante === "live" && !liveBereich.payload.demo);
 check("Live-Request trägt das Sitzungstoken als Bearer",
   fetchCalls.at(-1)?.headers?.Authorization === "Bearer " + SITZUNGSTOKEN);
+
+await verwerfeKatalogCache();
+fetchCalls = [];
+const bekanntBereich = await catalogService.loadArea("streamingBekannt");
+check("Leichter Streaming-Read lädt ausschließlich die getrennte Bekannt-Zeile",
+  bekanntBereich.asset === "streaming_bekannt"
+  && bekanntBereich.payload.titel[0]?.titel === "Bekannt live"
+  && fetchCalls.length === 1
+  && !fetchCalls[0].url.includes("streaming_entdecken"));
+const entdeckenBereich = await catalogService.loadArea("streamingEntdecken");
+check("Entdecken-Read lädt erst auf eigenen Aufruf die große getrennte Zeile",
+  entdeckenBereich.asset === "streaming_entdecken"
+  && entdeckenBereich.payload.titel[0]?.titel === "Entdecken live"
+  && fetchCalls.length === 2);
 
 /* --- B1: leere Live-Zeile OHNE Token ist „Anmeldung nötig", kein Datenfehler --- */
 abmelden();
@@ -488,24 +520,20 @@ await catalogService.activeVariant();
 check("P5-Scharfprobe: bei genau dieser Sitzung geht activeVariant() in die Erneuerung (Zustand wechselt)",
   authDriver.getZustand() !== zustandVorher);
 
-/* --- Leitplanke: das Sitzungstoken darf nie auf kd_store-Pfaden landen --- */
-anmelden();
-check("Leitplanken-Vorbedingung: es liegt wirklich ein Sitzungstoken an", (await catalogService.activeVariant()) === "live");
+/* --- Demo-Seed ist ein normaler öffentlicher Katalogvertrag ---------------- */
+abmelden();
 const oeffentlicherKopf = publicSupabaseHeaders(publishable);
 check("Leitplanke: publicSupabaseHeaders bleibt bei gesetztem Token-Provider unverändert (nur apikey)",
   oeffentlicherKopf.apikey === publishable && !oeffentlicherKopf.Authorization && Object.keys(oeffentlicherKopf).join() === "apikey");
 fetchCalls = [];
-await catalogService.loadDemo();
-const demoRuf = fetchCalls.find((c) => c.url.includes("/rest/v1/kd_store") && c.url.includes("scope=eq.demo"));
-check("Leitplanke: kd_store-Demo-Read sendet nur apikey, nie das Sitzungstoken",
-  !!demoRuf && !demoRuf.headers.Authorization && demoRuf.headers.apikey === publishable);
-fetchCalls = [];
-await catalogService.listSharedBlogs();
-const sharedRuf = fetchCalls.find((c) => c.url.includes("/rest/v1/kd_store") && c.url.includes("scope=eq.shared"));
-check("Leitplanke: kd_store-Shared-Read sendet nur apikey, nie das Sitzungstoken",
-  !!sharedRuf && !sharedRuf.headers.Authorization && sharedRuf.headers.apikey === publishable);
-check("Leitplanke: kein einziger kd_store-Ruf trug jemals ein Authorization",
-  !fetchCalls.concat([demoRuf]).some((c) => c && c.url.includes("/rest/v1/kd_store") && c.headers.Authorization));
+const demoSeed = await catalogService.loadDemo();
+const demoRuf = fetchCalls.find((c) => c.url.includes("/rest/v1/kd_catalog") && c.url.includes("name=eq.demo_seed"));
+check("Demo-Seed kommt aus kd_catalog und besteht den gemeinsamen Vertrag",
+  demoSeed.format === 1 && demoSeed.master.filme[0].titel === "Demo-Basis" && !!demoRuf);
+check("Gast liest demo_seed nur mit Publishable-Key",
+  !demoRuf.headers.Authorization && demoRuf.headers.apikey === publishable);
+check("Aktiver Katalogpfad ruft für den Demo-Seed kd_store nicht mehr auf",
+  !fetchCalls.some((c) => c.url.includes("/rest/v1/kd_store")));
 
 /* ================= F6: das Sitzungstoken gilt nur fürs eigene Projekt =================
    Die Regel selbst ist eine reine Funktion (ohne Netz prüfbar) … */

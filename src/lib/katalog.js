@@ -7,9 +7,12 @@
    Tabelle/Assets:
      manifest        -> kleiner Verbindungs- und Versionsnachweis (anon lesbar)
      programm        -> normalisiertes film.at-/Nonstop-Programm  (nur angemeldet)
-     streaming       -> { bekannt, entdecken } aus dem Pipeline-Lauf (nur angemeldet)
+     streaming       -> Legacy-Kombination für bereits ausgelieferte Clients
+     streaming_bekannt / streaming_entdecken -> getrennte Live-Ansichten
      programm_demo   -> ehrlicher Demo-Schnappschuss des Programms (anon lesbar)
-     streaming_demo  -> ehrlicher Demo-Schnappschuss des Katalogs  (anon lesbar)
+     streaming_demo  -> Legacy-Kombination für bereits ausgelieferte Clients
+     streaming_bekannt_demo / streaming_entdecken_demo -> getrennte Demo-Ansichten
+     demo_seed       -> kuratierte lokale Demo-Basis (anon lesbar)
 
    Zugriffstrennung (Migration 20260725220000): `anon` sieht nur manifest und
    die beiden *_demo-Zeilen. PostgREST filtert per RLS OHNE 403 — die Antwort
@@ -25,9 +28,7 @@
 
    Token-Naht: das Sitzungstoken wird per setKatalogTokenProvider() injiziert
    (services/catalog.js reicht den Auth-Treiber durch). Ohne Provider verhält
-   sich dieses Modul exakt wie vorher — nur apikey. publicSupabaseHeaders()
-   bleibt unangetastet und sieht NIE ein Sitzungstoken; kd_store-Reads in
-   catalogPublic.js laufen weiter ausschließlich über den Publishable-Key.
+   sich dieses Modul exakt wie vorher — nur apikey.
 
    Rückgabekontrakt von ladeKatalogAsset() (klein und bewusst stabil):
      {
@@ -57,10 +58,16 @@ import { istSupabaseProjektUrl } from "./supabasePublic.js";
 
 const TABLE = "kd_catalog";
 const CACHE = "kinodreieck-katalog-v1";
-const ERLAUBT = new Set(["manifest", "programm", "streaming", "programm_demo", "streaming_demo"]);
+const ERLAUBT = new Set([
+  "manifest", "programm", "streaming", "programm_demo", "streaming_demo", "demo_seed",
+  "streaming_bekannt", "streaming_entdecken",
+  "streaming_bekannt_demo", "streaming_entdecken_demo",
+]);
 /* Zeilen, die `anon` per RLS NICHT sieht. Nur hier ist ein leeres Ergebnis ein
    Anmeldungs- und kein Datenproblem. */
-const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+const NUR_ANGEMELDET = new Set([
+  "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
+]);
 const CACHE_MARKE = "kd-katalog-1";
 
 /* Gründe, die dieses Modul an einen Fehler heftet. Die Grenzschicht liest sie
@@ -102,7 +109,10 @@ function katalogKopf(key, token, extra = {}) {
   return headers;
 }
 
-export function varianteVon(name) { return String(name || "").endsWith("_demo") ? "demo" : "live"; }
+export function varianteVon(name) {
+  const n = String(name || "");
+  return n === "demo_seed" || n.endsWith("_demo") ? "demo" : "live";
+}
 
 function istAbgelaufen(gueltigBis) {
   if (!gueltigBis) return false;
@@ -194,6 +204,24 @@ export async function verwerfeKatalogCache(namen) {
 
 /* Demo-Payloads durchlaufen dieselbe Strukturprüfung wie ihr Live-Pendant —
    ein kaputter Demo-Schnappschuss darf nicht ungeprüft in die Oberfläche. */
+export function pruefeDemoSeed(p) {
+  if (!p || typeof p !== "object" || p.format !== 1) throw new Error("Demo-Seed ohne unterstütztes Format");
+  if (!p.master || typeof p.master !== "object" || !Array.isArray(p.master.filme)) {
+    throw new Error("Demo-Seed ohne master.filme[]");
+  }
+  const optional = [
+    ["mustwatch", p.mustwatch, (v) => v && typeof v === "object" && Array.isArray(v.eintraege)],
+    ["streaming_dienste", p.streaming_dienste, (v) => v && typeof v === "object" && Array.isArray(v.quellen)],
+    ["artikel", p.artikel, (v) => v && typeof v === "object" && Array.isArray(v.artikel)],
+    ["kino_pins", p.kino_pins, Array.isArray],
+    ["merkliste", p.merkliste, Array.isArray],
+  ];
+  for (const [name, wert, gueltig] of optional) {
+    if (wert != null && !gueltig(wert)) throw new Error("Demo-Seed: " + name + " hat die falsche Form");
+  }
+  return p;
+}
+
 function pruefePayload(name, p) {
   if (!p || typeof p !== "object") throw new Error(name + ": leere oder ungültige Payload");
   if (name === "manifest" && !p.updated_at && !p.stand) throw new Error("Manifest ohne Stand");
@@ -201,6 +229,10 @@ function pruefePayload(name, p) {
     && !Array.isArray(p.filme) && !(p.data && Array.isArray(p.data.filme))) throw new Error("Programm ohne filme[]");
   if ((name === "streaming" || name === "streaming_demo")
     && !(p.bekannt && p.entdecken)) throw new Error("Streaming ohne bekannt/entdecken");
+  if ((name.startsWith("streaming_bekannt")
+    || name.startsWith("streaming_entdecken"))
+    && !Array.isArray(p.titel)) throw new Error(name + " ohne titel[]");
+  if (name === "demo_seed") return pruefeDemoSeed(p);
   return p;
 }
 

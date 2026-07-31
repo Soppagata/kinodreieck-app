@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
@@ -78,41 +78,55 @@ export function StreamingTab({
   const [entdeckenStatus, setEntdeckenStatus] = useState(() => {
     try { return JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}"); } catch { return {}; }
   });
+  const entdeckenStatusRef = useRef(entdeckenStatus);
+  entdeckenStatusRef.current = entdeckenStatus;
+  const schreibeEntdeckenStatus = useCallback((berechne) => {
+    const vorher = entdeckenStatusRef.current;
+    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+    if (next === vorher) return vorher;
+    entdeckenStatusRef.current = next;
+    setEntdeckenStatus(next);
+    store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
+    return next;
+  }, []);
   const [zeigeErledigte, setZeigeErledigte] = useState(false); // KD-021: gesehene/erledigte Titel standardmaessig ausgeblendet (Tooltip/Copy sagen genau das)
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const markiereAlsErstellt = useCallback((watchmodeId, id) => {
     if (!id) return id;
-    setEntdeckenStatus((prev) => {
-      const next = { ...prev, [watchmodeId]: "erstellt" };
-      store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    schreibeEntdeckenStatus((prev) => ({ ...prev, [watchmodeId]: "erstellt" }));
     return id;
-  }, []);
+  }, [schreibeEntdeckenStatus]);
   /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
      mutiert die Master-Auswahl (auswahl / Einstellungen) NICHT. */
   const [schnellDienst, setSchnellDienst] = useState(null);
   /* Filterleiste auf/zu — Default ZUGEKLAPPT (gilt für Programm & Entdecken).
      Seit Etappe 3 dauerhafte Sicht-Präferenz im Datentopf statt sessionStorage. */
   const [streamFilterOffen, setStreamFilterOffen] = useState(false);
+  const streamFilterOffenRef = useRef(streamFilterOffen);
+  streamFilterOffenRef.current = streamFilterOffen;
   useEffect(() => {
     let aktiv = true;
-    store.get(K.filterStreaming).then((r) => { if (aktiv && r?.value === "1") setStreamFilterOffen(true); }).catch(() => {});
+    store.get(K.filterStreaming).then((r) => {
+      if (aktiv && r?.value === "1") {
+        streamFilterOffenRef.current = true;
+        setStreamFilterOffen(true);
+      }
+    }).catch(() => {});
     return () => { aktiv = false; };
   }, []);
-  const toggleStreamFilter = () => setStreamFilterOffen((v) => {
-    const nv = !v;
+  const toggleStreamFilter = () => {
+    const nv = !streamFilterOffenRef.current;
+    streamFilterOffenRef.current = nv;
+    setStreamFilterOffen(nv);
     store.set(K.filterStreaming, nv ? "1" : "0").catch(() => {});
-    return nv;
-  });
+  };
   const setzeStatus = (t, wert) => {
-    setEntdeckenStatus((prev) => {
+    schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
       if (statusVon(next[t.watchmode_id]) === wert) delete next[t.watchmode_id]; // Toggle
       else next[t.watchmode_id] = wert === "gesehen" && t.typ === "tv_series" ? neuerGesehenEintrag(t) : wert;
-      store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
       return next;
     });
   };
@@ -175,12 +189,11 @@ export function StreamingTab({
      einen Ausgangsstand. Dadurch entsteht kein rückwirkender „neu“-Alarm. */
   useEffect(() => {
     if (!entdeckenDa) return;
-    setEntdeckenStatus((prev) => {
+    schreibeEntdeckenStatus((prev) => {
       const next = initialisiereStaffelstaende(prev, entdecken.titel);
-      if (next !== prev) store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [entdecken, entdeckenDa]);
+  }, [entdecken, entdeckenDa, schreibeEntdeckenStatus]);
 
   const staffelHinweise = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -190,11 +203,10 @@ export function StreamingTab({
   const bestaetigeHinweis = (hinweis) => {
     const t = entdecken && entdecken.titel.find((x) => x.watchmode_id === hinweis.watchmode_id);
     if (!t) return;
-    setEntdeckenStatus((prev) => {
-      const next = { ...prev, [t.watchmode_id]: bestaetigeStaffel(prev[t.watchmode_id], t) };
-      store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    schreibeEntdeckenStatus((prev) => ({
+      ...prev,
+      [t.watchmode_id]: bestaetigeStaffel(prev[t.watchmode_id], t),
+    }));
   };
 
   const entdeckenListe = useMemo(() => {

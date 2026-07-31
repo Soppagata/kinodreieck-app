@@ -3,6 +3,8 @@ node_modules
 dist
 dist-single
 dist-ssr
+test-results/
+playwright-report/
 *.local
 
 # Editor / OS

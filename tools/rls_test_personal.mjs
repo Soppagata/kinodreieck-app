@@ -109,7 +109,15 @@ for (const kandidat of TESTKEY_KANDIDATEN) {
   if (aLeer && bLeer) { TESTKEY = kandidat; break; }
   if (standA.status !== 200 || !Array.isArray(standA.data)
     || standB.status !== 200 || !Array.isArray(standB.data)) {
-    console.error("RLS-Testtopf konnte nicht sicher als frei belegt werden. Kein Schreibtest gestartet.");
+    const fehlerInfo = (antwort) => ({
+      status: antwort.status,
+      code: antwort.data?.code || null,
+      message: antwort.data?.message || null,
+    });
+    console.error(
+      "RLS-Testtopf konnte nicht sicher als frei belegt werden. Kein Schreibtest gestartet.",
+      JSON.stringify({ accountA: fehlerInfo(standA), accountB: fehlerInfo(standB) }),
+    );
     process.exit(2);
   }
 }
@@ -289,7 +297,9 @@ pruefe("T10d anon sieht das Profil nicht",
 const t11a = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1");
 pruefe("T11a anon liest weiterhin kd_store scope=demo (Demo-Start intakt)", t11a.status === 200, "HTTP " + t11a.status);
 const t11b = await rest("GET", "/kd_store?scope=eq.shared&select=key&limit=1");
-pruefe("T11b anon liest weiterhin kd_store scope=shared (geteilte Blogs intakt)", t11b.status === 200, "HTTP " + t11b.status);
+pruefe("T11b Legacy-Shared ist öffentlich leer (aktive Beiträge liegen nicht mehr in kd_store)",
+  t11b.status === 200 && Array.isArray(t11b.data) && t11b.data.length === 0,
+  "HTTP " + t11b.status + " rows=" + (Array.isArray(t11b.data) ? t11b.data.length : "?"));
 /* --- T11c-T11i: getrennter Katalogzugriff (Etappe 4, 25.07.2026) ---------
    ACHTUNG, zentral für alle Prüfungen hier unten: PostgREST antwortet bei
    RLS-Filterung mit HTTP 200 und LEEREM Array, nicht mit 403. Ein Statuscode
@@ -310,15 +320,59 @@ pruefe("T11d anon sieht die kd_catalog-Zeile programm NICHT",
   t11cat.status === 200 && !anonNamen.includes("programm"),
   anonNamen.includes("programm") ? "LECK: Live-Programmdaten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
 pruefe("T11e anon sieht die kd_catalog-Zeile streaming NICHT",
-  t11cat.status === 200 && !anonNamen.includes("streaming"),
-  anonNamen.includes("streaming") ? "LECK: Streaming-Daten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
+  t11cat.status === 200
+  && !anonNamen.includes("streaming")
+  && !anonNamen.includes("streaming_bekannt")
+  && !anonNamen.includes("streaming_entdecken"),
+  anonNamen.some((name) => ["streaming", "streaming_bekannt", "streaming_entdecken"].includes(name))
+    ? "LECK: Live-Streamingdaten sind öffentlich lesbar!" : "HTTP " + t11cat.status);
 
 const t11f = await rest("GET", "/kd_catalog?select=name&order=name", { token: A.token });
 const kontoNamen = namen(t11f);
-pruefe("T11f angemeldete Sitzung sieht programm UND streaming",
-  t11f.status === 200 && kontoNamen.includes("programm") && kontoNamen.includes("streaming"),
+pruefe("T11f angemeldete Sitzung sieht Programm sowie beide getrennten Streamingteile",
+  t11f.status === 200
+  && kontoNamen.includes("programm")
+  && kontoNamen.includes("streaming_bekannt")
+  && kontoNamen.includes("streaming_entdecken"),
   "HTTP " + t11f.status + " sichtbar=[" + kontoNamen.join(",") + "]"
   + " (fehlt eine Zeile ganz, ist nicht die Policy schuld, sondern die Pipeline)");
+pruefe("T11f2 anon sieht beide getrennten Demo-Streamingteile",
+  t11cat.status === 200
+  && anonNamen.includes("streaming_bekannt_demo")
+  && anonNamen.includes("streaming_entdecken_demo"),
+  "HTTP " + t11cat.status + " sichtbar=[" + anonNamen.join(",") + "]");
+
+const t11seed = await rest(
+  "GET",
+  "/kd_catalog?name=eq.demo_seed&select=name,payload,quelle,stand,gueltig_bis",
+);
+const demoSeedZeilen = Array.isArray(t11seed.data) ? t11seed.data : [];
+const demoSeed = demoSeedZeilen[0];
+pruefe("T11j anon sieht genau einen validierten demo_seed im Katalog",
+  t11seed.status === 200
+  && demoSeedZeilen.length === 1
+  && demoSeed?.name === "demo_seed"
+  && demoSeed?.payload?.format === 1
+  && Array.isArray(demoSeed?.payload?.master?.filme)
+  && demoSeed.payload.master.filme.length > 0,
+  "HTTP " + t11seed.status + " rows=" + demoSeedZeilen.length);
+pruefe("T11k demo_seed trägt Herkunft und Stand, aber bewusst kein künstliches Ablaufdatum",
+  demoSeed?.quelle === "kinodreieck_demo" && !!demoSeed?.stand && demoSeed?.gueltig_bis === null,
+  demoSeed ? "quelle=" + demoSeed.quelle + " stand=" + !!demoSeed.stand
+    + " gueltig_bis=" + String(demoSeed.gueltig_bis) : "keine Zeile");
+
+const t11seedKonto = await rest(
+  "GET",
+  "/kd_catalog?name=eq.demo_seed&select=name",
+  { token: A.token },
+);
+pruefe("T11l angemeldete Sitzung sieht denselben öffentlichen demo_seed",
+  t11seedKonto.status === 200
+  && Array.isArray(t11seedKonto.data)
+  && t11seedKonto.data.length === 1
+  && t11seedKonto.data[0]?.name === "demo_seed",
+  "HTTP " + t11seedKonto.status
+  + " rows=" + (Array.isArray(t11seedKonto.data) ? t11seedKonto.data.length : "?"));
 
 /* kd_quellen: anon hat GAR KEINE Rechte (revoke all) → PostgREST antwortet
    401 oder 403 mit Code 42501. Entscheidend bleibt: keine Zeilen. */
@@ -499,6 +553,70 @@ pruefe("T14r Konto darf Quellenregister-RPC NICHT ausführen",
   "HTTP " + t14r.status + (t14r.ok || /quelle_ungueltig/.test(t14rText)
     ? " — LECK: service_role-RPC wurde als Konto ausgeführt!" : ""));
 
+/* --- T15: accountgebundene öffentliche Blog-Projektionen -----------------
+   Tabellenzugriff bleibt privat; Öffentlichkeit sieht ausschließlich die
+   schmale RPC ohne account_id. Schreiben und Löschen sind an auth.uid()
+   gebunden. Die Probe wird im Cleanup nur anhand ihrer zufälligen Artikel-ID
+   und öffentlichen ID wieder entfernt. */
+const sharedArticleId = "rls-probe-" + crypto.randomUUID();
+const sharedPayload = {
+  id: sharedArticleId,
+  titel: "RLS Shared Probe",
+  autor: "RLS Test",
+  text: "Temporäre, automatisch entfernte Testprojektion.",
+  geordnet: false,
+  erstellt_am: new Date().toISOString(),
+  liste: [],
+};
+
+const t15a = await rest("GET", "/kd_shared_articles?select=publication_id&limit=1");
+pruefe("T15a anon darf die Shared-Tabelle NICHT direkt lesen",
+  t15a.status === 401 || t15a.status === 403,
+  "HTTP " + t15a.status + (t15a.status === 200 ? " — LECK: account_id waere direkt abfragbar!" : ""));
+
+const t15b = await rest("POST", "/kd_shared_articles", {
+  token: A.token,
+  body: { article_id: sharedArticleId, author: "RLS Test", payload: sharedPayload },
+  prefer: "return=representation",
+});
+const sharedRow = Array.isArray(t15b.data) ? t15b.data[0] : null;
+const sharedAngelegt = (t15b.status === 200 || t15b.status === 201)
+  && sharedRow?.account_id === A.id
+  && sharedRow?.article_id === sharedArticleId
+  && !!sharedRow?.publication_id;
+pruefe("T15b A veröffentlicht OHNE account_id; der Server setzt auth.uid()",
+  sharedAngelegt,
+  "HTTP " + t15b.status + " account_id=" + (sharedRow?.account_id || "?"));
+
+const t15c = await rest(
+  "GET",
+  `/kd_shared_articles?publication_id=eq.${encodeURIComponent(sharedRow?.publication_id || crypto.randomUUID())}&select=publication_id,account_id`,
+  { token: B.token },
+);
+pruefe("T15c B sieht As Projektion in der Tabelle NICHT",
+  sharedAngelegt && t15c.status === 200 && Array.isArray(t15c.data) && t15c.data.length === 0,
+  "HTTP " + t15c.status + " rows=" + (Array.isArray(t15c.data) ? t15c.data.length : "?"));
+
+const t15d = await rest("POST", "/rpc/kd_list_shared_articles", { body: {} });
+const publicShared = Array.isArray(t15d.data)
+  ? t15d.data.find((row) => row?.publication_id === sharedRow?.publication_id)
+  : null;
+pruefe("T15d anon liest die Projektion über die schmale öffentliche RPC",
+  sharedAngelegt && t15d.status === 200 && publicShared?.payload?.id === sharedArticleId,
+  "HTTP " + t15d.status);
+pruefe("T15e die öffentliche RPC gibt keine Account-ID zurück",
+  !!publicShared && !Object.prototype.hasOwnProperty.call(publicShared, "account_id"),
+  publicShared ? "Felder=[" + Object.keys(publicShared).join(",") + "]" : "Probe fehlt");
+
+const t15f = await rest(
+  "DELETE",
+  `/kd_shared_articles?publication_id=eq.${encodeURIComponent(sharedRow?.publication_id || crypto.randomUUID())}`,
+  { token: B.token, prefer: "return=representation" },
+);
+pruefe("T15f B kann As öffentliche Projektion NICHT löschen",
+  sharedAngelegt && t15f.status === 200 && Array.isArray(t15f.data) && t15f.data.length === 0,
+  "HTTP " + t15f.status + " rows=" + (Array.isArray(t15f.data) ? t15f.data.length : "?"));
+
 /* --- Cleanup ------------------------------------------------------------- */
 async function raeumeEigeneProbe(token, accountId, key, erlaubteWerte, angelegt) {
   if (!angelegt) return true;
@@ -537,8 +655,20 @@ const profilCleanupOk = !profilAnlageVersucht
     && Array.isArray(cProfil.data)
     && (profilVomTestAngelegt ? cProfil.data.length === 1 : cProfil.data.length === 0)
     && cProfil.data.every((zeile) => zeile?.value === profilProbeWert));
+const cShared = sharedAngelegt
+  ? await rest(
+    "DELETE",
+    `/kd_shared_articles?publication_id=eq.${encodeURIComponent(sharedRow.publication_id)}&article_id=eq.${encodeURIComponent(sharedArticleId)}`,
+    { token: A.token, prefer: "return=representation" },
+  )
+  : { status: 204, data: [] };
+const sharedCleanupOk = !sharedAngelegt
+  || (cShared.status === 200
+    && Array.isArray(cShared.data)
+    && cShared.data.length === 1
+    && cShared.data[0]?.publication_id === sharedRow.publication_id);
 pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt",
-  cA && cB && profilCleanupOk);
+  cA && cB && profilCleanupOk && sharedCleanupOk);
 
 console.log("");
 if (fehler.length) {

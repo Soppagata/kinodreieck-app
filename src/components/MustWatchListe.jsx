@@ -150,9 +150,9 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
               )}
               {offen && (
                 <div onClick={(ev) => ev.stopPropagation()} style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {/* Bewusst unkontrolliert + onBlur: jeder onUpdate persistiert (und
-                      erzeugt am Git-Sync einen Commit) — pro Tastendruck wäre das
-                      Commit-Spam. Speichern beim Verlassen des Felds reicht. */}
+                  {/* Bewusst unkontrolliert + onBlur: jeder onUpdate persistiert
+                      und kann einen Konto-Sync auslösen. Speichern beim Verlassen
+                      des Felds vermeidet unnötige Schreibvorgänge pro Tastendruck. */}
                   <textarea defaultValue={e.beschreibung || ""} rows={2} placeholder="Beschreibung"
                     onBlur={(ev) => { if (ev.target.value !== (e.beschreibung || "")) onUpdate(e.id, { beschreibung: ev.target.value }); }}
                     style={{ ...inputStyle, boxSizing: "border-box", background: T.leinwandTief, color: T.tinte }} />

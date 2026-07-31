@@ -1113,19 +1113,27 @@ check("N", "1. storage.js führt den Topf in der zentralen Schlüsselliste",
   () => ST.K.geschmacksprofil === KEY);
 check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 16 Einträge",
   () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 16);
-check("N", "3. backup.js schreibt ihn ins Gesamt-Backup",
-  () => /geschmacksprofil:\s*await\s+obj\(K\.geschmacksprofil\)/.test(lies("src/lib/backup.js")));
-check("N", "4. restore.js hat ihn im Rollback-Snapshot (sonst kein Rückholpunkt)",
-  () => /K\.geschmacksprofil/.test(lies("src/lib/restore.js").split("const vorher")[0]));
-check("N", "5. restore.js spielt ihn auch ein (Snapshot allein genügt nicht)",
-  () => /store\.set\(K\.geschmacksprofil/.test(lies("src/lib/restore.js")));
+const register = lies("src/lib/personalDataRegistry.js");
+check("N", "3. das Datenregister gibt dem Profil sein Gesamt-Backup-Feld",
+  () => /key:\s*K\.geschmacksprofil[\s\S]*?backupField:\s*"geschmacksprofil"/.test(register)
+    && /PERSONAL_DATA_ENTRIES/.test(lies("src/lib/backup.js"))
+    && /backup\[entry\.backupField\]\s*=\s*entry\.backupAusRoh/.test(lies("src/lib/backup.js")));
+check("N", "4. Restore-Snapshot und Konto-Sync stammen aus derselben Registerliste",
+  () => /PERSONAL_DATA_KEYS/.test(lies("src/lib/restore.js"))
+    && /for\s*\(const key of PERSONAL_DATA_KEYS\)/.test(lies("src/lib/restore.js"))
+    && /PERSONAL_DATA_KEYS/.test(lies("src/lib/accountDriver.js")));
+check("N", "5. Restore spielt den vollständig vorbereiteten Registerplan ein",
+  () => /baueRestorePlan\(backup/.test(lies("src/lib/restore.js"))
+    && /store\.set\(schritt\.key,\s*schritt\.wert\)/.test(lies("src/lib/restore.js")));
 /* Der else-Zweig ist der Kern: ein Alt-Backup ohne das Feld darf den Topf
    nicht LEEREN, sondern muss ihn überspringen — sonst löscht das Einspielen
    eines älteren Backups das Profil still. */
-check("N", "6. restore.js leert den Topf NICHT, wenn ein Alt-Backup ihn nicht kennt",
-  () => /else\s+add\("Geschmacksprofil",\s*"übersprungen \(fehlte\)",\s*0\)/.test(lies("src/lib/restore.js")));
-check("N", "7. uebernahme.js kennt Label und Zählweise für die Vorschau",
-  () => /\[K\.geschmacksprofil\]:\s*\{\s*label:\s*"Geschmacksprofil"/.test(lies("src/lib/uebernahme.js")));
+check("N", "6. das Register plant fehlende Alt-Backup-Felder NICHT als Löschung",
+  () => /Object\.prototype\.hasOwnProperty\.call\(backup,\s*entry\.backupField\)/.test(register)
+    && /hatFeld\s*\?\s*entry\.restorePlan/.test(register));
+check("N", "7. das Register kennt Label und Zählweise für die Übernahme-Vorschau",
+  () => /key:\s*K\.geschmacksprofil[\s\S]*?label:\s*"Geschmacksprofil"[\s\S]*?zaehle:\s*\(v\)\s*=>\s*Array\.isArray\(v\.signale\)/.test(register)
+    && /personalDataEntry\(key\)/.test(lies("src/lib/uebernahme.js")));
 const mig = lies("supabase/migrations/20260727210000_etappe7_profil_topf.sql");
 check("N", "8. die Migration setzt den CHECK-Constraint neu und listet den Topf",
   () => /drop constraint if exists kd_personal_key_erlaubt/.test(mig)

@@ -34,7 +34,10 @@ export function buildMetaFehler(meta, erwarteteVersion = "") {
 
 export function demoKatalogFehler(sichtbar) {
   if (!Array.isArray(sichtbar)) return "unerwartete Katalog-Sicht";
-  const fehlend = ["programm_demo", "streaming_demo"]
+  const fehlend = [
+    "programm_demo", "streaming_demo",
+    "streaming_bekannt_demo", "streaming_entdecken_demo",
+  ]
     .filter((name) => !sichtbar.includes(name));
   return fehlend.length
     ? `Demo-Zeilen fehlen für anon: ${fehlend.join(", ")}`

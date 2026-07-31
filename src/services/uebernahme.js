@@ -8,7 +8,9 @@ import {
   merkeUebernommen, istUebernommen, vergissUebernahme, nimmUebernahmeZurueck,
   topfLabel, zaehleTopf, pruefsumme, byteLaenge,
 } from "../lib/uebernahme.js";
-import { accountSync, cacheGehoertZuFremdemKonto } from "./storage.js";
+import {
+  accountSync, bestaetigeKontoTreiber, cacheGehoertZuFremdemKonto,
+} from "./storage.js";
 import { normalizeBoundaryError } from "./errors.js";
 
 export {
@@ -51,8 +53,12 @@ export async function uebernahmeStarten({ lokaleWerte, nurSchluessel = null }) {
   return { ...lauf, verifikation, vollstaendig: lauf.ok && verifikation.allesGleich };
 }
 
-/* Schritt 6: Bestätigen. Nur nach vollständiger Prüfung aufrufen. */
-export function uebernahmeBestaetigen(accountId) { merkeUebernommen(accountId); }
+/* Schritt 6: Bestätigen. Nur nach vollständiger Prüfung aufrufen. Erst hier
+   bekommt der Cache seinen Besitzer und der normale Account-Sync wird aktiv. */
+export function uebernahmeBestaetigen(accountId) {
+  bestaetigeKontoTreiber(accountId);
+  merkeUebernommen(accountId);
+}
 
 /* Rücknahme inklusive Entfernen der in diesem Lauf angelegten Kontozeilen. */
 export async function uebernahmeZuruecknehmen(gepusht = []) {

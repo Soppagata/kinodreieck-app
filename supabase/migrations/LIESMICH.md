@@ -6,10 +6,14 @@ Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
 
 `supabase db query --linked --file <genau-eine-migration.sql>`
 
-Die alte Remote-Migrationshistorie wurde dabei nicht nachträglich erfunden und
-ist deshalb leer. **Kein `db push --include-all`**: Das würde alle historischen
-Dateien erneut als ausstehend behandeln. Neue Läufe bleiben dateiweise,
-kontrolliert und werden unten protokolliert.
+Am 31. Juli 2026 wurde die zuvor leere Remote-Migrationshistorie mit dem live
+verifizierten Bestand abgeglichen. Alle lokalen Versionen bis einschließlich
+`20260731170000` sind seither auch remote als angewandt markiert. Vor künftigen
+Läufen zuerst `npx supabase migration list --linked` prüfen; eine Migration
+darf nur angewandt werden, wenn ausschließlich die erwartete neue Datei offen
+ist. Bei Problemen bleibt der kontrollierte Weg über
+`supabase db query --linked --file <genau-eine-migration.sql>` plus
+anschließendes `migration repair --status applied` erhalten.
 
 **Regel:** Was hier liegt, ist gelaufen oder läuft als Nächstes. Kein „noch nicht
 ausführen"-SQL im Ordner. Jede Datei ist idempotent formuliert, mehrfaches
@@ -44,6 +48,10 @@ ausfüllen.
 | `20260730210000_etappe8_filmwissen_adapter_betrieb.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; ausschließlich Wikidata und LOC freigegeben, atomare Adaptervorbereitung, service-only LOC-Snapshot, `filmwissen-synthese` auf Sonnet/2048 Tokens; echte Rauchprobe P1–P21 grün |
 | `20260730230000_etappe9_beta_tageslimit.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; Bauphasenlimit von 200 auf 10 Aufträge pro Konto und Tag gesenkt; Wert und Bereitschaft des `ai_aktiv`-Not-Aus danach remote verifiziert |
 | `20260730231000_etappe9_beta_antwortlimit.sql` | `bscjgwcntapobyxsiyce` | 2026-07-30 | Codex über Management-API | erfolgreich; `intelligent-search` für die geschlossene Beta von 8192 auf 4096 Ausgabetokens begrenzt und remote verifiziert |
+| `20260731120000_shared_articles.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; accountgebundene öffentliche Blog-Projektionen, direkte Tabelle privat, schmale anon-RPC; `npm run test:rls` danach 60/60 grün |
+| `20260731121000_archive_legacy_shared.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; vor Lauf 0 Legacy-Shared-Zeilen, Archiv 0, aktive Legacy-Zeilen 0, Schreibblock aktiv und live verifiziert |
+| `20260731140000_demo_seed_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; 120 Filme als validierter Format-1-Seed in `kd_catalog`, anonyme und angemeldete Sichtbarkeit sowie unveränderte Zugriffstrennung mit `npm run test:rls` 63/63 belegt; vier Legacy-Demozeilen für ausgelieferte Clients bewusst noch erhalten |
+| `20260731170000_split_streaming_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; bekannte und vollständige Streamingtitel in vier getrennte Live-/Demo-Zeilen aufgeteilt, Trigger hält alte Pipeline-Writes kompatibel; 42 Funktionen, 13 Trigger und 21 Policies live verifiziert, `npm run test:rls` 64/64 grün |
 
 ## Nach Migration 1
 
@@ -74,8 +82,11 @@ Zwei neue Handgriffe im SQL-Editor:
 
 ## Was NICHT hier liegt
 
-- `../katalog_schema.sql` — der öffentliche Katalog (`kd_catalog`), historisch vor
-  Einführung dieses Ordners angelegt. Bleibt, wo es ist.
-- `kd_store` (Legacy-Schlüssel-Sync) — eingefroren. Der Rückbau seiner
-  `scope=user`-Policies ist ein eigener, späterer Cleanup-Schritt und bekommt dann
-  eine eigene Migrationsdatei.
+- `../katalog_schema.sql` — das historische Basisschema von `kd_catalog`.
+- `../current_schema.sql` — der datenfreie Ist-Stand aller Anwendungstabellen,
+  Funktionen, Trigger, Policies und Grants, einschließlich des alten
+  `kd_store`-Basisschemas.
+
+`kd_store` (Legacy-Schlüssel-Sync) ist eingefroren. Der Rückbau seiner
+`scope=user`-Policies ist ein eigener, späterer Cleanup-Schritt und bekommt
+dann eine additive Migrationsdatei.

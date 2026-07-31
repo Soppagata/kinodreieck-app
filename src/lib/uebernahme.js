@@ -17,41 +17,22 @@
    opake JSON-Dokumente wäre stille Datenkorruption mit freundlicher Oberfläche. */
 
 import { store, K } from "./storage.js";
-import { ACCOUNT_SYNC_KEYS } from "./accountDriver.js";
+import {
+  PERSONAL_DATA_KEYS, personalDataEntry,
+} from "./personalDataRegistry.js";
 
 export const UEBERNAHME_SNAP = "kd:acct:uebernahme:vorher";
 export const UEBERNOMMEN_KEY = "kd:acct:uebernommen";
 
-/* Anzeigenamen und Zählweise je Topf — dieselben Formen wie im Restore-Bericht. */
-const TOPF_INFO = {
-  [K.master]: { label: "Masterliste", zaehle: (o) => (Array.isArray(o?.filme) ? o.filme.length : 0), einheit: "Filme" },
-  [K.artikel]: { label: "Blog-Artikel", zaehle: (o) => (Array.isArray(o?.artikel) ? o.artikel.length : 0), einheit: "Artikel" },
-  [K.kinoPins]: { label: "Kino-Pins", zaehle: (o) => (Array.isArray(o) ? o.length : 0), einheit: "Pins" },
-  [K.merkliste]: { label: "Merkliste", zaehle: (o) => (Array.isArray(o) ? o.length : 0), einheit: "Einträge" },
-  [K.vokabular]: { label: "Suche-Vokabular", zaehle: (o) => (Array.isArray(o) ? o.length : 0), einheit: "Wörter" },
-  [K.einstellungen]: { label: "Einstellungen", zaehle: (o) => (o && typeof o === "object" ? 1 : 0), einheit: "" },
-  [K.entdeckenStatus]: { label: "Entdecken-Status", zaehle: (o) => (o && typeof o === "object" ? Object.keys(o).length : 0), einheit: "Markierungen" },
-  [K.autorName]: { label: "Autor-Name", zaehle: null, einheit: "" },
-  [K.streamingDienste]: { label: "Streaming-Dienste", zaehle: (o) => (o && typeof o === "object" ? 1 : 0), einheit: "" },
-  [K.mustwatch]: { label: "Must-Watch-Liste", zaehle: (o) => (Array.isArray(o?.eintraege) ? o.eintraege.length : 0), einheit: "Einträge" },
-  [K.achievements]: { label: "Achievements", zaehle: (o) => (Array.isArray(o?.eggs) ? o.eggs.length : 0), einheit: "freigeschaltet" },
-  [K.zeitgrenze]: { label: "Kino-Zeitfilter", zaehle: null, einheit: "" },
-  [K.filterMediathek]: { label: "Filtermenü Mediathek", zaehle: null, einheit: "" },
-  [K.filterKino]: { label: "Filtermenü Kino", zaehle: null, einheit: "" },
-  "kd:filter-streaming": { label: "Filtermenü Streaming", zaehle: null, einheit: "" },
-  [K.geschmacksprofil]: { label: "Geschmacksprofil", zaehle: (o) => (Array.isArray(o?.signale) ? o.signale.length : 0), einheit: "Signale" },
-};
-
-export function topfLabel(key) { return TOPF_INFO[key]?.label || key; }
-export function topfEinheit(key) { return TOPF_INFO[key]?.einheit || ""; }
+export function topfLabel(key) { return personalDataEntry(key)?.label || key; }
+export function topfEinheit(key) { return personalDataEntry(key)?.einheit || ""; }
 
 /* Zählstand eines rohen Topf-Werts. Nicht parsebare Werte gelten als 1 (vorhanden),
    damit ein beschädigter Topf nicht als "leer" durchrutscht und still verschwindet. */
 export function zaehleTopf(key, rohWert) {
-  if (rohWert == null) return 0;
-  const info = TOPF_INFO[key];
-  if (!info || !info.zaehle) return rohWert.length ? 1 : 0;
-  try { return info.zaehle(JSON.parse(rohWert)); } catch { return 1; }
+  const entry = personalDataEntry(key);
+  if (!entry) return rohWert == null || !String(rohWert).length ? 0 : 1;
+  return entry.zaehleRoh(rohWert);
 }
 
 export function byteLaenge(wert) {
@@ -75,7 +56,7 @@ export function pruefsumme(wert) {
 /* ---------- Inventur ---------- */
 export async function leseLokaleToepfe() {
   const werte = {};
-  for (const key of ACCOUNT_SYNC_KEYS) {
+  for (const key of PERSONAL_DATA_KEYS) {
     try { const r = await store.get(key); werte[key] = r ? r.value : null; }
     catch { werte[key] = null; }
   }
@@ -84,7 +65,7 @@ export async function leseLokaleToepfe() {
 
 /* Vergleichstabelle lokal ↔ Konto. `remoteZeilen` stammt aus der read-only Inventur. */
 export function baueVorschau(lokaleWerte, remoteZeilen = {}) {
-  return ACCOUNT_SYNC_KEYS.map((key) => {
+  return PERSONAL_DATA_KEYS.map((key) => {
     const lokal = lokaleWerte[key] ?? null;
     const remoteRow = remoteZeilen[key] || null;
     const remote = remoteRow ? String(remoteRow.value ?? "") : null;
@@ -152,7 +133,7 @@ export function hatRueckholpunkt() {
 export async function fuehreUebernahmeAus({ lokaleWerte, uebernehmeKey, nurSchluessel = null }) {
   const bericht = [];
   const gepusht = [];
-  for (const key of ACCOUNT_SYNC_KEYS) {
+  for (const key of PERSONAL_DATA_KEYS) {
     if (nurSchluessel && !nurSchluessel.includes(key)) continue;
     const wert = lokaleWerte[key] ?? null;
     if (wert == null) {
@@ -186,7 +167,7 @@ export async function fuehreUebernahmeAus({ lokaleWerte, uebernehmeKey, nurSchlu
 export function baueVerifikation(lokaleWerte, remoteZeilenNachher) {
   const zeilen = [];
   let allesGleich = true;
-  for (const key of ACCOUNT_SYNC_KEYS) {
+  for (const key of PERSONAL_DATA_KEYS) {
     const lokal = lokaleWerte[key] ?? null;
     if (lokal == null) continue;
     const row = remoteZeilenNachher[key] || null;

@@ -1,6 +1,6 @@
 /* Blog-Shared-Test (Node, reine Logik aus src/lib/artikel.js).
-   Prüft das Ziehen eines geteilten Blogs (Herkunft, Referenz-Neuauflösung/Rotlinks)
-   und die Start-Reconciliation (verwaiste gezogene raus, eigene geschützt).
+   Prüft das Ziehen eines geteilten Blogs als stabilen Snapshot
+   (Herkunft, Referenz-Neuauflösung/Rotlinks).
    Aufruf: node blog_test.mjs */
 
 const A = await import("./src/lib/artikel.js");
@@ -13,6 +13,7 @@ const master = [
   { id: "blade_runner_1982", titel: "Blade Runner", originaltitel: null, jahr: 1982, typ: "film" },
 ];
 const shared = {
+  publication_id: "11111111-1111-4111-8111-111111111111",
   db_owner: "eva", db_key: "kd:blog:top-noir", author: "Eva",
   artikel: {
     id: "top-noir", titel: "Noir-Klassiker", autor: "Eva",
@@ -28,6 +29,10 @@ const shared = {
 const art = A.blogZuArtikel(shared, [], master, "2026-01-01T00:00:00Z");
 check("Herkunft = gezogen", art.herkunft === "gezogen");
 check("DB-Referenz übernommen", art.db_owner === "eva" && art.db_key === "kd:blog:top-noir");
+check("öffentliche Projektions-ID als Snapshot-Herkunft übernommen",
+  art.source_publication_id === shared.publication_id);
+check("Ladezeit des Snapshots ist stabil gespeichert",
+  art.source_loaded_at === "2026-01-01T00:00:00Z");
 check("status = freigegeben (sofort lesbar)", art.status === "freigegeben");
 check("geteilt = false (lokale Kopie, nicht republiziert)", art.geteilt === false);
 check("Autor vom Original übernommen", art.autor === "Eva");
@@ -42,25 +47,11 @@ const a1 = A.blogZuArtikel(shared, [], master, "2026-01-01T00:00:00Z");
 const a2 = A.blogZuArtikel(shared, [a1], master, "2026-01-01T00:00:00Z");
 check("gezogene IDs kollisionsfrei", a1.id !== a2.id);
 
-/* ---------- 2) reconcileGezogene: Start-Abgleich ---------- */
-const liste = [
-  { id: "eigen1", herkunft: "eigen" },
-  { id: "importiert" },                                                   // kein herkunft => geschützt
-  { id: "gez_da", herkunft: "gezogen", db_owner: "eva", db_key: "kd:blog:a" },
-  { id: "gez_weg", herkunft: "gezogen", db_owner: "tom", db_key: "kd:blog:b" },
-];
-const [next, entfernt] = A.reconcileGezogene(liste, new Set(["eva|kd:blog:a"]));
-check("genau 1 verwaister gezogener entfernt", entfernt === 1);
-check("verwaister gezogener ist raus", !next.find((a) => a.id === "gez_weg"));
-check("lebender gezogener bleibt", !!next.find((a) => a.id === "gez_da"));
-check("eigener bleibt (geschützt)", !!next.find((a) => a.id === "eigen1"));
-check("importierter ohne Herkunft bleibt (geschützt)", !!next.find((a) => a.id === "importiert"));
-
-const [n2, e2] = A.reconcileGezogene(liste, new Set(["eva|kd:blog:a", "tom|kd:blog:b"]));
-check("nichts entfernt, wenn alle Originale da (Referenz-Identität)", e2 === 0 && n2 === liste);
-
-const [n3, e3] = A.reconcileGezogene([{ id: "e", herkunft: "eigen" }], new Set());
-check("leere shared-Menge fasst eigene NICHT an", e3 === 0 && n3.length === 1);
+/* Es gibt absichtlich keine Start-Reconciliation mehr: eine einmal geladene
+   Kopie ist eigener lokaler Bestand und wird nie durch fremdes Unpublish
+   automatisch entfernt. */
+check("Snapshot-Modul exportiert keine löschende Reconciliation mehr",
+  typeof A.reconcileGezogene === "undefined");
 
 /* ---------- Ergebnis ---------- */
 const fails = checks.filter(([, p]) => !p);

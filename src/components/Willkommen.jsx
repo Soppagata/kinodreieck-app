@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { DreieckRegler } from "./DreieckRegler.jsx";
 import { setzeGlobal } from "../lib/kiSchalter.js";
-import { authService } from "../services/auth.js";
+import { sessionCoordinator } from "../services/sessionCoordinator.js";
 import { errorText } from "../services/errors.js";
 
 /* ---------- Willkommen (Tutorial Teil A) ----------
@@ -36,7 +36,7 @@ export const SCHRITTE = ["was", "dreieck", "ki"];
 
 export function Willkommen({
   onClose,
-  onAnmelden = (benutzer, passwort) => authService.signIn(benutzer, passwort),
+  onAnmelden = (benutzer, passwort) => sessionCoordinator.signIn(benutzer, passwort),
   jetzt = null,
 }) {
   const [karte, setKarte] = useState(1);          // 1-basiert, wie gehabt
@@ -62,7 +62,7 @@ export function Willkommen({
      Nutzer wortlos wieder das Formular hin, das er gerade erfolgreich
      ausgefuellt hatte. Ein Snapshot beantwortet beide Fragen aus einer
      Quelle — auf dem Init-Weg wie nach `signIn`. */
-  const [sitzung, setSitzung] = useState(() => authService.getSnapshot());
+  const [sitzung, setSitzung] = useState(() => sessionCoordinator.getSnapshot());
   const angemeldet = kiFaehig(sitzung);
   /* Angemeldet, aber der KI-Pfad bleibt zu. Weder Nutzerfehler noch
      gescheiterte Anmeldung — deshalb ein Hinweis, keine Fehlerzeile. */
@@ -112,7 +112,7 @@ export function Willkommen({
   };
   const box = {
     background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8,
-    maxWidth: 560, width: "100%", padding: "26px 28px", boxShadow: "0 10px 48px rgba(0,0,0,0.6)",
+    maxWidth: 560, width: "100%", padding: "26px 28px", boxSizing: "border-box", boxShadow: "0 10px 48px rgba(0,0,0,0.6)",
     maxHeight: "90dvh", overflowY: "auto", overscrollBehavior: "contain",
   };
   const h = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "0.04em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 14px" };
@@ -203,7 +203,7 @@ export function Willkommen({
                       setAnmeldeLaeuft(true); setAnmeldeFehler(null);
                       try {
                         const s = await onAnmelden(benutzer, passwort);
-                        setSitzung(s || authService.getSnapshot()); setPasswort("");
+                        setSitzung(s || sessionCoordinator.getSnapshot()); setPasswort("");
                       } catch (f) { setAnmeldeFehler(errorText(f)); }
                       finally { setAnmeldeLaeuft(false); }
                     }}>{anmeldeLaeuft ? "…" : "Anmelden"}</button>

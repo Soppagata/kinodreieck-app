@@ -201,13 +201,21 @@ lokal weiter und tragen nach, sobald es wieder läuft.
 | Backup und Wiederherstellung funktionieren auch mit Kontodaten | erfüllt, alle 15 Bereiche (`restore_test.mjs`, Phase 5) |
 | Der alte Sync-Schlüssel ist für neue Konten nicht mehr nötig | erfüllt — mit einer offen benannten Ausnahme (siehe unten) |
 
-### Offene Ausnahme: Blogs veröffentlichen
+### Nachtrag 31. Juli 2026: Blog-Ausnahme geschlossen
 
-Das Veröffentlichen geteilter Blogs läuft weiterhin über den eingefrorenen
-Legacy-Weg und verlangt dessen Schlüssel. Für neue Konten ist die Funktion damit
-praktisch nicht verfügbar; die Oberfläche meldet das verständlich statt technisch.
-Der Weg über die Sitzung braucht eine Autorenbindung in `kd_store` — das ist ein
-eigener Folgeschritt, weil diese Etappe die alte Tabelle bewusst nicht anfasst.
+Geteilte Blogs laufen nicht mehr über den Legacy-Sync-Schlüssel. Der private
+Quellartikel bleibt im persönlichen `kd:artikel`-Topf; eine ausdrücklich
+veröffentlichte Projektion liegt zusätzlich in `kd_shared_articles`.
+`auth.uid()` bindet Schreiben und Löschen serverseitig an das Konto. Anon liest
+nur die schmale RPC ohne Account-ID. Fehler und ausstehende Löschungen bleiben
+am lokalen Artikel sichtbar und wiederholbar; eine lokale Löschung erfolgt erst
+nach bestätigtem Unpublish.
+
+Der Live-Negativtest mit zwei Konten ist nach der Migration **60/60 grün**:
+Konto B kann As Projektion weder direkt lesen noch löschen, die öffentliche RPC
+gibt keine Account-ID zurück, und die temporäre Testprojektion wurde entfernt.
+`kd_store scope=shared` ist leer; alte Schreibclients werden durch einen
+separaten, reversibel vorbereiteten Archiv-/Sperrschritt blockiert.
 
 ## Erledigt
 

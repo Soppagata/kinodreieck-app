@@ -23,19 +23,14 @@
 
 import { localDriver } from "./storage.js";
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
+import { PERSONAL_DATA_KEYS } from "./personalDataRegistry.js";
 
 const TABLE = "kd_personal";
 
-/* Die 15 accountgebundenen Töpfe: die 11 Sync-Töpfe des Legacy-Treibers plus die
-   vier Sicht-/Zeit-Präferenzen, die bisher nur auf dem Gerät lagen und beim
-   Gerätewechsel still verloren gingen. */
-export const ACCOUNT_SYNC_KEYS = [
-  "kd:master", "kd:artikel", "kd:kino-pins", "kd:merkliste", "kd:vokabular",
-  "kd:einstellungen", "kd:entdecken-status", "kd:autor-name", "kd:streaming-dienste",
-  "kd:mustwatch", "kd:achievements",
-  "kd:zeitgrenze", "kd:filter-mediathek", "kd:filter-kino", "kd:filter-streaming",
-  "kd:geschmacksprofil",
-];
+/* Rückwärtskompatibler Exportname für bestehende Services und Tests. Die
+   Wahrheit liegt im PersonalDataRegistry, das auch Backup, Restore und
+   Übernahme speist. */
+export const ACCOUNT_SYNC_KEYS = PERSONAL_DATA_KEYS;
 const SYNC_SET = new Set(ACCOUNT_SYNC_KEYS);
 
 /* Gerätezustand des Treibers — nie gesynct, nie im Backup, NIE Tokens.
@@ -109,13 +104,22 @@ export function verwerfeTreiberZustand() {
 }
 
 /* ---------- Treiber-Fabrik ---------- */
-export function createAccountDriver({ config = {}, getAccessToken = async () => null, fetchImpl = null } = {}) {
+export function createAccountDriver({
+  config = {},
+  getAccessToken = async () => null,
+  fetchImpl = null,
+  isActive = () => true,
+} = {}) {
   const basis = String(config.supabaseUrl || "").trim().replace(/\/+$/, "");
   const anon = String(config.supabasePublishableKey || "").trim();
 
   function konfiguriert() { return istSupabaseProjektUrl(basis) && anon.length > 0; }
   function netz() { return fetchImpl || (typeof fetch === "function" ? fetch : null); }
   function q(v) { return encodeURIComponent(v); }
+  function aktiv() {
+    try { return isActive() !== false; } catch { return false; }
+  }
+  function inaktiv() { return { ok: false, status: 0, inactive: true, cancelled: true }; }
 
   function kopf(token, { body = false, prefer = null } = {}) {
     const h = { apikey: anon, Authorization: "Bearer " + token };
@@ -126,8 +130,10 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
 
   /* Ein Request. Bei 401 GENAU EIN erzwungener Erneuerungsversuch + Wiederholung. */
   async function rest(method, pfad, { body = null, prefer = null, schonErneuert = false } = {}) {
+    if (!aktiv()) return inaktiv();
     if (!konfiguriert()) return { ok: false, status: 0, unconfigured: true };
     const token = await getAccessToken({ erzwingeErneuerung: schonErneuert });
+    if (!aktiv()) return inaktiv();
     if (!token) return { ok: false, status: 401, keinToken: true };
     const f = netz();
     if (!f) return { ok: false, status: 0, offline: true };
@@ -142,8 +148,10 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
         signal: ctrl ? ctrl.signal : undefined,
       });
     } finally { if (timer) clearTimeout(timer); }
+    if (!aktiv()) return inaktiv();
     let data = null;
     try { data = await res.json(); } catch { /* 204 */ }
+    if (!aktiv()) return inaktiv();
     if (res.status === 401 && !schonErneuert) {
       return await rest(method, pfad, { body, prefer, schonErneuert: true });
     }
@@ -165,6 +173,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
     if (!konfiguriert()) return { ok: false, status: 0, message: "Anmeldung in dieser Umgebung nicht eingerichtet." };
     try {
       const r = await rest("GET", `/${TABLE}?select=key&limit=1`);
+      if (r.inactive) return r;
       if (r.ok) return { ok: true, status: r.status };
       if (r.keinToken) return { ok: false, status: 401, message: "Nicht angemeldet." };
       return { ok: false, status: r.status, message: "HTTP " + r.status };
@@ -177,6 +186,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
   async function inventur() {
     try {
       const r = await rest("GET", `/${TABLE}?select=key,value,revision`);
+      if (r.inactive) return { ...r, zeilen: {} };
       if (!r.ok || !Array.isArray(r.data)) {
         return { ok: false, status: r.status, zeilen: {} };
       }
@@ -193,6 +203,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
     let rows;
     try {
       const r = await rest("GET", `/${TABLE}?select=key,value,revision`);
+      if (r.inactive) return { ...r, geladen: [], angelegt: [], konflikt: [], fehler: [] };
       if (!r.ok || !Array.isArray(r.data)) {
         for (const key of ACCOUNT_SYNC_KEYS) { markStale(key, true); ergebnis.fehler.push({ key, status: r.status }); }
         setStatus({ lastPull: nowIso() });
@@ -243,9 +254,15 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
 
   /* ---------- Commit (pro Schlüssel serialisiert) ---------- */
   const queues = {};
-  function enqueueCommit(key) {
+  function enqueueCommit(key, capturedValue = localStorage.getItem(key)) {
+    if (!aktiv()) return Promise.resolve(inaktiv());
     const prev = queues[key] || Promise.resolve();
-    const next = prev.then(() => commitKeyNow(key)).catch((e) => ({ ok: false, error: String(e) }));
+    /* Der Wert gehört zu dem Auftrag, der ihn erzeugt hat. Würde er erst beim
+       späteren Abarbeiten aus localStorage gelesen, könnte nach einem
+       Kontowechsel bereits der Bestand des nächsten Kontos darin stehen. */
+    const next = prev
+      .then(() => (aktiv() ? commitKeyNow(key, capturedValue) : inaktiv()))
+      .catch((e) => ({ ok: false, error: String(e) }));
     queues[key] = next;
     return next;
   }
@@ -253,6 +270,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
   async function insertRow(key, value) {
     /* KEIN account_id im Body: die setzt der Server aus der Sitzung. */
     const r = await rest("POST", `/${TABLE}`, { body: { key, value }, prefer: "return=representation" });
+    if (r.inactive) return r;
     if ((r.status === 201 || r.status === 200) && Array.isArray(r.data) && r.data[0]) {
       setVer(key, r.data[0].revision);
       markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false);
@@ -272,8 +290,9 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
     return { ok: false, status: r.status };
   }
 
-  async function commitKeyNow(key) {
-    const value = localStorage.getItem(key);
+  async function commitKeyNow(key, capturedValue = localStorage.getItem(key)) {
+    if (!aktiv()) return inaktiv();
+    const value = capturedValue;
     if (value == null) { markPending(key, false); return { ok: true, skipped: true }; }
     if (!konfiguriert()) { markPending(key, true); return { ok: false, reason: "unconfigured" }; }
     const seen = getVer(key);
@@ -282,6 +301,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
       const r = await rest("PATCH", `/${TABLE}?key=eq.${q(key)}&revision=eq.${seen}`, {
         body: { value }, prefer: "return=representation",
       });
+      if (r.inactive) return r;
       if (r.ok && Array.isArray(r.data) && r.data.length === 1) {
         setVer(key, r.data[0].revision);
         markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false);
@@ -291,6 +311,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
       if (r.ok && Array.isArray(r.data) && r.data.length === 0) {
         // revision passte nicht ODER Zeile ist weg — unterscheiden.
         const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=key,value,revision`);
+        if (g.inactive) return g;
         if (g.ok && Array.isArray(g.data) && g.data.length === 1) {
           snapshot(key, value);
           markConflict(key, true); markPending(key, true);
@@ -316,6 +337,12 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
   }
 
   async function syncFlush() {
+    if (!aktiv()) return [inaktiv()];
+    /* Erst bereits laufende, von set() angestoßene Aufträge abwarten. Ohne
+       diese Barriere konnte ein Restore „fertig“ melden, während seine ersten
+       Konto-Commits noch unterwegs waren. */
+    const laufend = Object.values(queues);
+    if (laufend.length) await Promise.allSettled(laufend);
     const st = getStatus();
     const versuche = [];
     for (const key of Object.keys(st.pending || {})) {
@@ -324,13 +351,16 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
       if (!SYNC_SET.has(key)) { markPending(key, false); continue; }
       versuche.push(await enqueueCommit(key));
     }
+    const nachlauf = Object.values(queues);
+    if (nachlauf.length) await Promise.allSettled(nachlauf);
     return versuche;
   }
 
   async function resolveConflictPushLocal(key) {
-    if (!SYNC_SET.has(key)) return { ok: false };
+    if (!SYNC_SET.has(key) || !aktiv()) return inaktiv();
     try {
       const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=revision`);
+      if (g.inactive) return g;
       if (g.ok && Array.isArray(g.data) && g.data[0]) setVer(key, g.data[0].revision);
       else if (g.ok && Array.isArray(g.data) && g.data.length === 0) setVer(key, null);
       markConflict(key, false);
@@ -339,9 +369,10 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
   }
 
   async function resolveConflictUseRemote(key) {
-    if (!SYNC_SET.has(key)) return { ok: false };
+    if (!SYNC_SET.has(key) || !aktiv()) return inaktiv();
     try {
       const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=key,value,revision`);
+      if (g.inactive) return g;
       if (g.ok && Array.isArray(g.data) && g.data[0]) {
         const remote = (g.data[0].value == null) ? null : String(g.data[0].value);
         const lokal = localStorage.getItem(key);
@@ -372,8 +403,10 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
      Serverwert lesen und bei Gleichheit die revision einfach übernehmen. */
   async function uebernehmeKey(key, value) {
     if (!SYNC_SET.has(key)) return { ok: false, uebersprungen: true };
+    if (!aktiv()) return inaktiv();
     if (value == null) return { ok: true, uebersprungen: true };
     const r = await rest("POST", `/${TABLE}`, { body: { key, value }, prefer: "return=representation" });
+    if (r.inactive) return r;
     if ((r.status === 201 || r.status === 200) && Array.isArray(r.data) && r.data[0]) {
       setVer(key, r.data[0].revision);
       markPending(key, false); markConflict(key, false); markZuGross(key, false);
@@ -382,6 +415,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
     if (istZuGross(r) || istKeyAbgelehnt(r)) { markZuGross(key, true); return { ok: false, zuGross: true }; }
     if (r.status === 409) {
       const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=value,revision`);
+      if (g.inactive) return g;
       if (g.ok && Array.isArray(g.data) && g.data[0]) {
         if (String(g.data[0].value) === String(value)) {
           setVer(key, g.data[0].revision);
@@ -391,6 +425,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
         const p = await rest("PATCH", `/${TABLE}?key=eq.${q(key)}&revision=eq.${g.data[0].revision}`, {
           body: { value }, prefer: "return=representation",
         });
+        if (p.inactive) return p;
         if (p.ok && Array.isArray(p.data) && p.data.length === 1) {
           setVer(key, p.data[0].revision);
           markPending(key, false); markConflict(key, false);
@@ -406,8 +441,9 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
   /* Rücknahme einer Übernahme: die in diesem Lauf angelegten Zeilen wieder
      entfernen. Nur hier wird remote gelöscht — nie im Alltagsbetrieb. */
   async function loescheRemote(key) {
-    if (!SYNC_SET.has(key)) return { ok: false };
+    if (!SYNC_SET.has(key) || !aktiv()) return inaktiv();
     const r = await rest("DELETE", `/${TABLE}?key=eq.${q(key)}`);
+    if (r.inactive) return r;
     if (r.ok || r.status === 204) { setVer(key, null); return { ok: true }; }
     return { ok: false, status: r.status };
   }
@@ -431,7 +467,7 @@ export function createAccountDriver({ config = {}, getAccessToken = async () => 
     async get(k) { return localDriver.get(k); },
     async set(k, v) {
       const r = await localDriver.set(k, v);        // 1) sofort lokal sichern
-      if (SYNC_SET.has(k)) { markPending(k, true); enqueueCommit(k); }
+      if (SYNC_SET.has(k)) { markPending(k, true); enqueueCommit(k, String(v)); }
       return r;
     },
     async delete(k) { return localDriver.delete(k); },   // remote bleibt unberührt

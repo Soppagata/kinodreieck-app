@@ -68,8 +68,10 @@ if (metaFehler) throw new Error(`/build-meta.json: ${metaFehler}.`);
 
    Erwartung seit Etappe 4 (Migration 20260725220000, 25.07.2026):
      manifest                      → muss da sein (sonst ist der Katalog tot)
-     programm_demo, streaming_demo → müssen für den öffentlichen Auftritt da sein
-     programm, streaming           → dürfen für anon NIE sichtbar sein
+     programm_demo, streaming_demo sowie die zwei getrennten Demo-Streamingteile
+       → müssen für den öffentlichen Auftritt da sein
+     programm, streaming und die getrennten Live-Streamingteile
+       → dürfen für anon NIE sichtbar sein
 
    Konfiguration über Umgebungsvariablen (keine Werte im Code):
      VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY  (so heißen sie im
@@ -105,7 +107,8 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(sbUrl) || !sbKey) {
   const sichtbar = daten.map((zeile) => zeile?.name).filter(Boolean);
 
   // Harter Fehlschlag: die Rechte-Regression, gegen die Etappe 4 gebaut wurde.
-  const geleakt = ["programm", "streaming"].filter((name) => sichtbar.includes(name));
+  const geleakt = ["programm", "streaming", "streaming_bekannt", "streaming_entdecken"]
+    .filter((name) => sichtbar.includes(name));
   if (geleakt.length) {
     throw new Error(
       `Katalog-Sichtprüfung FEHLGESCHLAGEN: anon sieht Live-Zeilen ${geleakt.join(", ")}. `

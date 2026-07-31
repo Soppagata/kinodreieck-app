@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 const lies = (pfad) => readFileSync(new URL(pfad, import.meta.url), "utf8");
 const app = lies("./src/App.jsx");
-const willkommen = lies("./src/components/Willkommen.jsx");
+const einstieg = lies("./src/components/EinstiegsGate.jsx");
 const eintrag = lies("./src/components/EintragForm.jsx");
 const filmkarte = lies("./src/components/FilmCard.jsx");
 const filmwissen = lies("./src/components/FilmwissenBereich.jsx");
@@ -10,6 +10,9 @@ const finder = lies("./src/tabs/FinderTab.jsx");
 const kino = lies("./src/tabs/KinoTab.jsx");
 const mediathek = lies("./src/tabs/MediathekTab.jsx");
 const streaming = lies("./src/tabs/StreamingTab.jsx");
+const sessionCoordinator = lies("./src/services/sessionCoordinator.js");
+const demoAccountWechsel = lies("./src/services/demoAccountWechsel.js");
+const intelligenceController = lies("./src/controllers/useIntelligenceController.js");
 
 let ok = 0;
 const fehler = [];
@@ -24,25 +27,25 @@ function check(name, fn) {
   }
 }
 
-check("E1 Willkommen delegiert die Anmeldung an den zentralen Kontowechsel", () =>
-  /export function Willkommen\(\{[\s\S]+?onAnmelden = \(benutzer, passwort\) => authService\.signIn/.test(willkommen)
-  && /await onAnmelden\(benutzer, passwort\)/.test(willkommen)
-  && /onAnmelden=\{anmeldenAusWillkommen\}/.test(app));
+check("E1 Ersteinstieg delegiert die Anmeldung an den zentralen Kontowechsel", () =>
+  /export function EinstiegsGate/.test(einstieg)
+  && /await sessionCoordinator\.signIn\(benutzer, passwort\)/.test(einstieg)
+  && /<EinstiegsGate><App \/><\/EinstiegsGate>/.test(lies("./src/main.jsx")));
 
-check("E2 Demo-Anmeldung aktiviert den Kontotreiber und ersetzt Demo durch den aktuellen DB-Stand", () => {
-  const handler = app.match(/const anmeldenAusWillkommen = useCallback\(async[\s\S]+?\n  \}, \[demoAktiv\]\);/)?.[0] ?? "";
-  return /authService\.signIn/.test(handler)
-    && /aktiviereKontoTreiber\(kontoId\)/.test(handler)
-    && /if \(demoAktiv\)[\s\S]+ladeKontostandNachDemo/.test(handler)
-    && /location\.reload\(\)/.test(handler);
+check("E2 Anmeldung bereitet die Kontogrenze vor und bestätigt sie nicht im Einstieg", () => {
+  return /sessionCoordinator\.signIn/.test(einstieg)
+    && !/aktiviereKontoTreiber|bestaetigeKontoTreiber/.test(einstieg)
+    && /storage\.prepare\(id\)/.test(sessionCoordinator)
+    && /deps\.bestaetigen\(accountId\)/.test(demoAccountWechsel);
 });
 
 check("E3 laufende Prognosen werden beim Kontowechsel abgebrochen und vor dem Speichern neu geprüft", () =>
-  /prognoseAbortRef\.current\?\.abort\(\)/.test(app)
-  && /const lauf = \{ accountId: startKonto, filmId: String\(film\.id\), controller \}/.test(app)
-  && /prognoseLaufRef\.current !== lauf/.test(app)
-  && /kontoIstAktuell\(startKonto\)/.test(app)
-  && /signal: controller\.signal/.test(app));
+  /prognoseAbortRef\.current\?\.abort\(\)/.test(intelligenceController)
+  && /const lauf = \{ accountId: startKonto, filmId: String\(film\.id\), controller \}/.test(intelligenceController)
+  && /prognoseLaufRef\.current !== lauf/.test(intelligenceController)
+  && /kontoIstAktuell\(startKonto\)/.test(intelligenceController)
+  && /signal: controller\.signal/.test(intelligenceController)
+  && /useIntelligenceController/.test(app));
 
 check("E4 neue Einträge bewahren starke Kennungen und normalisieren sie vor dem Speichern", () =>
   /normalisiereFilmkennung/.test(eintrag)
@@ -69,8 +72,8 @@ check("E7 Filmwissen ist nur am geöffneten unbewerteten Eintrag sichtbar", () =
   && /onFilmwissenLaden/.test(streaming));
 
 check("E8 Recherche bleibt eine einzelne bestätigte Sonnet-Ausgabe ohne Auto-Retry", () =>
-  /höchstens 5 US-Cent/.test(app)
-  && /genau einen Sonnet-Aufruf/.test(app)
+  /höchstens 5 US-Cent/.test(intelligenceController)
+  && /genau einen Sonnet-Aufruf/.test(intelligenceController)
   && /keine automatische Wiederholung/.test(filmwissen));
 
 console.log(`\n${ok}/${ok + fehler.length} Etappe-8-Produktintegrations-Checks bestanden.`);

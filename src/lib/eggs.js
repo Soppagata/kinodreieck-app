@@ -1,7 +1,7 @@
 /* ---------- Eastereggs: Eligibility & Achievement-Modell (Block 3) ----------
    Deterministisch: kein Netz, kein LLM, kein Fuzzy. Match = normalisierter
    `titel` ODER `originaltitel` + `jahr` gegen die kuratierten Referenzlisten
-   (eastereggs_config.json, gebündelt, nur PERSONAL_MODE).
+   (eastereggs_config.json, gebündelt).
 
    Achievement = Unlock (Einbahn): ist die Schwelle qualifizierter Mediathek-
    Einträge einmal erreicht, bleibt das Egg freigeschaltet. WAS beim Feuern

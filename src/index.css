@@ -172,7 +172,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 @media (prefers-reduced-motion:reduce) {
   .kd-fx *, .kd-glitch .kd-app, .kd-toast { animation:none !important; }
-  .kd-menu, .kd-scrim { transition:none !important; }
+  .kd-menu, .kd-mobile-menu, .kd-menuknopf { transition:none !important; }
 }
 /* ================= ENDE EGG-MODI: SHOWA & NERV (v3) ================= */
 
@@ -184,30 +184,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @keyframes kd-toast-ein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
 /* ---- Zurück-nach-oben-Knopf (Block 3 Polish): Position/Größe hier, Farben inline (Theme). ---- */
-.kd-nachoben { position: fixed; right: calc(12px + env(safe-area-inset-right)); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 55; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(0,0,0,0.45); cursor: pointer; }
+.kd-nachoben { position: fixed; right: calc(12px + env(safe-area-inset-right)); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 1250; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 20px rgba(0,0,0,0.55); cursor: pointer; }
 /* „Nur Desktop"-Blöcke (z. B. Backup wiederherstellen) am Handy ausblenden. */
 @media (max-width: 760px) { .kd-nur-desktop { display: none !important; } }
 
-/* ================= MOBILE-NAV: GRIFF + POPUP =================
-   Etappe 3 (Entscheidungen Max 18.07.2026, Schablone drawer_schablone.html):
-   Desktop (>760px) behält die horizontale Sticky-Leiste UNVERÄNDERT. Am Handy:
-   kompakter Griff LINKS (25×78, drei Striche, ohne Text) öffnet ein Popup
-   RECHTS UNTEN mit intrinsischer Höhe; column-reverse stapelt von unten nach
-   oben (1. DOM-Kind = Kino = daumennah). Die Linkshänder-Option (.kd-links am
-   Wrapper, persistiert als linkshaender in kd:einstellungen) invertiert Griff
-   UND Popup. Buttons bleiben immer im DOM (nur opacity/pointer-events),
-   damit Verdrahtung/Tests unberührt bleiben. */
-.kd-navband { display: none; }
-.kd-scrim { display: none; }
-/* Z-Ebene der Nav: Desktop 40 (unter der Showa-Letterbox 50), am Handy
-   Scrim 58 < Popup 60 < Griff 62. WICHTIG: bewusst NICHT inline im JSX setzen —
-   Inline-Styles schlagen CSS ohne !important; genau das hat den Scrim-Tap-Bug
-   erzeugt (Panel effektiv 40 < Scrim 58 → Scrim schluckte jeden Menü-Tap). */
+/* ================= NAVIGATION =================
+   Desktop behält die bestehende Sticky-Leiste. Bis 760 px übernimmt eine
+   feste Fünfer-Tabbar; weitere Ziele liegen in einem sicheren Bottom Sheet. */
 .kd-menu { z-index: 40; }
-/* Desktop-Leiste behält die gewohnte visuelle Reihenfolge (Start zuerst),
-   obwohl die DOM-Reihenfolge fürs Mobile-Bottom-up (column-reverse, Kino
-   zuunterst) umgestellt wurde — Nicht-Ziel: Desktop unverändert.
-   DOM: 1 Kino · 2 Streaming · 3 Mediathek · 4 Suche · 5 Blog · 6 Start · 7 Einstellungen */
 @media (min-width: 761px) {
   .kd-menu > div > button:nth-child(1) { order: 2; }  /* Kino */
   .kd-menu > div > button:nth-child(2) { order: 4; }  /* Streaming */
@@ -218,75 +202,146 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-menu > div > button:nth-child(7) { order: 7; }  /* Einstellungen */
 }
 @media (max-width: 760px) {
-  /* Popup rechts unten, bottom-anchored, intrinsische Höhe. position/top
-     stehen INLINE am <nav> (Desktop-Sticky-Leiste) -> !important nötig;
-     border ebenso (inline borderBottom). Hintergrund bleibt inline (Theme). */
-  .kd-menu {
-    position: fixed !important; top: auto !important; left: auto; right: 10px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    width: min(76vw, 260px); z-index: 60;
-    border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 14px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.55);
-    max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain;
-    opacity: 0; transform: translateY(14px) scale(0.98); transform-origin: 100% 100%;
-    pointer-events: none; transition: opacity .22s ease, transform .22s ease;
-  }
-  .kd-menu.offen { opacity: 1; transform: none; pointer-events: auto; }
-  /* Stapel von unten nach oben: wichtigster Punkt (Kino) landet unten. */
-  .kd-menu > div {
-    flex-direction: column-reverse !important; flex-wrap: nowrap !important; align-items: stretch !important;
-    max-width: none !important; gap: 4px !important;
-    padding: 10px !important;
-  }
-  .kd-menu > div > button { width: 100%; text-align: left; border-radius: 8px !important; font-size: 19px !important; padding: 12px 16px !important; min-height: 44px; }
-  /* Mobile-Menü-Reihenfolge (Max 2026-07-19). column-reverse: order 1 = unten.
-     Sichtbar oben→unten: Einstellungen · Start · Mediathek · Kino · Streaming · Blog · Suche.
-     Nur hier (≤760px) — der Desktop behält die Reihenfolge aus den globalen order-Regeln. */
-  .kd-menu > div > button:nth-child(1) { order: 4; }  /* Kino */
-  .kd-menu > div > button:nth-child(2) { order: 3; }  /* Streaming */
-  .kd-menu > div > button:nth-child(3) { order: 5; }  /* Mediathek */
-  .kd-menu > div > button:nth-child(4) { order: 1; }  /* Suche */
-  .kd-menu > div > button:nth-child(5) { order: 2; }  /* Blog */
-  .kd-menu > div > button:nth-child(6) { order: 6; }  /* Start */
-  .kd-menu > div > button:nth-child(7) { order: 7; }  /* Einstellungen */
-
-  /* Griff (ersetzt das MENÜ/ZU-Band): kompakt, ohne Text, drei Striche. */
-  .kd-navband {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-    position: fixed; top: 50%; left: 0; right: auto; transform: translateY(-50%);
-    z-index: 62; width: 25px; height: 78px; min-height: 78px; padding: 0;
-    margin-left: env(safe-area-inset-left);
-    background: var(--wolfram, #E3A63B); color: #141414; border: none; border-radius: 0 10px 10px 0; /* C3: folgt dem aktiven Theme */
-    box-shadow: 2px 0 12px rgba(0,0,0,0.4); cursor: pointer;
-  }
-  .kd-navband i { display: block; width: 9px; height: 2px; border-radius: 1px; background: rgba(20,20,20,0.55); }
-  /* Sync-Status: seit Etappe 4 NICHT mehr am Griff, sondern in der
-     Vertrauens-Zeile des Start-Dashboards (StartTab, .kd-vertrauen). */
-
-  /* Scrim: Dim 35% + Blur 14px; Fallback ohne backdrop-filter: nur Dim 50%. */
-  .kd-scrim.offen { display: block; position: fixed; inset: 0; z-index: 58;
-    background: rgba(0,0,0,0.35);
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .kd-scrim.offen { background: rgba(0,0,0,0.5); }
-  }
-
-  /* Linkshänder-Option: Griff rechts, Popup links. */
-  .kd-links .kd-navband { left: auto; right: 0; margin-left: 0; margin-right: env(safe-area-inset-right);
-    border-radius: 10px 0 0 10px; box-shadow: -2px 0 12px rgba(0,0,0,0.4); }
-  .kd-links .kd-menu { right: auto; left: 10px; transform-origin: 0% 100%; }
-
-  /* Sync-Chip im Header am Handy ausblenden — der Punkt am Griff trägt den Status. */
+  .kd-menu { display: none !important; }
   .kd-syncchip-head { display: none; }
-
-  /* filter/transform auf .kd-app machen es zum Containing-Block für ALLE
-     position:fixed-Nachfahren — Drawer, Scrim und Band würden in den Modi dann
-     im Dokument statt am Viewport ankern (Band scrollt weg, Menü unerreichbar).
-     Der Showa/NERV-Look kommt ohnehin aus dem Token-Swap; der NERV-Glitch
-     (transform) wird hier am Handy neutralisiert. Overlays liegen außerhalb. */
   .kd-showa .kd-app, .kd-nerv .kd-app, .kd-glitch .kd-app {
     filter: none !important; animation: none !important; transform: none !important;
   }
+}
+
+/* ---- Versionierter Ersteinstieg ---- */
+.kd-entry { min-height:100vh; min-height:100dvh; width:100%; overflow-x:hidden; box-sizing:border-box;
+  padding:calc(18px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+  background:radial-gradient(circle at 50% 0%,#2b2730 0,#17151a 48%); color:#ece8df; font-family:'Space Grotesk',sans-serif; }
+.kd-entry-shell { width:min(100%,720px); margin:0 auto; }
+.kd-entry-head { display:flex; align-items:center; gap:11px; padding:4px 2px 18px; font-family:'Barlow Condensed',sans-serif;
+  font-size:23px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.kd-entry-fortschritt { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:0 0 12px; }
+.kd-entry-fortschritt span { height:3px; border-radius:3px; background:#49444f; }
+.kd-entry-fortschritt span.aktiv { background:#e3a63b; }
+.kd-entry-panel { width:100%; box-sizing:border-box; background:#211e26; border:1px solid #3c3742; border-radius:14px;
+  padding:clamp(20px,5vw,38px); box-shadow:0 18px 58px rgba(0,0,0,.38); overflow-wrap:anywhere; }
+.kd-entry-panel h1 { margin:0 0 10px; color:#e3a63b; font-family:'Barlow Condensed',sans-serif; font-size:clamp(29px,7vw,42px);
+  line-height:1.02; letter-spacing:.035em; text-transform:uppercase; }
+.kd-entry-panel p { line-height:1.55; }
+.kd-entry-lead { color:#dfdacd; font-size:17px; margin:0 0 16px; }
+.kd-entry-actions { display:flex; justify-content:flex-end; margin-top:22px; }
+.kd-entry button, .kd-linkbutton { min-height:46px; box-sizing:border-box; border-radius:7px; padding:11px 17px;
+  font:600 16px 'Barlow Condensed',sans-serif; letter-spacing:.055em; text-transform:uppercase; text-decoration:none; }
+.kd-primary { border:1px solid #e3a63b; background:#e3a63b; color:#1c1a1e; }
+.kd-secondary { border:1px solid #948fa0; background:transparent; color:#ece8df; }
+.kd-textbutton { border:0; background:transparent; color:#bdb7c5; padding-inline:0 !important; text-decoration:underline; }
+.kd-entry-login { display:grid; gap:11px; margin:22px 0 10px; }
+.kd-entry-login label { display:grid; gap:5px; color:#bdb7c5; font-size:13px; }
+.kd-entry-login input { width:100%; min-width:0; box-sizing:border-box; border:1px solid #6f6878; border-radius:7px; background:#17151a;
+  color:#ece8df; padding:11px 12px; font:16px 'Space Grotesk',sans-serif; }
+.kd-entry-login .kd-primary { justify-self:start; }
+.kd-entry-skip { width:100%; margin:4px 0 22px; }
+.kd-entry-error { color:#ff9a8c !important; font-size:13px; margin:0; }
+.kd-entry-choicegrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:22px 0 8px; }
+.kd-choice { display:flex; flex-direction:column; align-items:flex-start; gap:5px; min-height:112px !important; text-align:left;
+  border:1px solid #6f6878; background:#17151a; color:#ece8df; }
+.kd-choice strong { color:#e3a63b; font-size:20px; }
+.kd-choice span { color:#bdb7c5; font:400 13px/1.45 'Space Grotesk',sans-serif; letter-spacing:0; text-transform:none; }
+.kd-dreieck { width:min(100%,360px); margin:25px auto; display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.kd-dreieck span { display:flex; align-items:center; justify-content:center; min-height:70px; border:1px solid #e3a63b; border-radius:8px; color:#ece8df; }
+.kd-dreieck span:last-child { grid-column:1/-1; width:60%; justify-self:center; }
+
+/* ---- Installation, Bottom Sheet und bewusste Hilfe ---- */
+.kd-installkarte { box-sizing:border-box; width:100%; margin-top:20px; padding:18px; border-radius:11px; border:1px solid #6f6878;
+  background:linear-gradient(145deg,rgba(227,166,59,.12),rgba(227,166,59,.03)); color:#ece8df; overflow-wrap:anywhere; }
+.kd-installkarte .kd-kicker { margin:0 0 4px; color:#e3a63b; font:700 11px 'Space Mono',monospace; letter-spacing:.09em; text-transform:uppercase; }
+.kd-installkarte h2 { margin:0 0 9px; color:#ece8df; font:700 25px 'Barlow Condensed',sans-serif; letter-spacing:.035em; text-transform:uppercase; }
+.kd-install-status,.kd-install-anleitung { color:#d2ccd8; font-size:14px; line-height:1.5; }
+.kd-install-anleitung p { margin-bottom:5px; }.kd-install-anleitung ol { margin:0 0 12px; padding-left:22px; }.kd-install-anleitung li+li { margin-top:4px; }
+.kd-linkbutton { display:inline-flex; align-items:center; border:1px solid #e3a63b; color:#1c1a1e; background:#e3a63b; }
+.kd-einzeldatei { margin:14px 0 0; color:#bdb7c5; font-size:13px; }.kd-einzeldatei a,.kd-sheet-download { color:#e3a63b; }
+.kd-inline-meldung { color:#bdb7c5; font-size:12px; line-height:1.45; }
+.kd-installkarte-kompakt { margin:14px 0 0; padding:14px; }.kd-installkarte-kompakt h2 { font-size:20px; }
+
+.kd-menuknopf { display:none; }
+.kd-sheet-layer,.kd-help-layer { position:fixed; inset:0; z-index:13000; display:flex; align-items:flex-end; justify-content:center; }
+.kd-sheet-scrim { position:absolute; inset:0; width:100%; height:100%; min-height:0; padding:0; border:0; border-radius:0;
+  background:rgba(0,0,0,.58); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
+.kd-bottom-sheet,.kd-help-panel { position:relative; width:min(100%,760px); max-height:calc(100dvh - max(12px,env(safe-area-inset-top)));
+  overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; border:1px solid #514b58; border-bottom:0; border-radius:18px 18px 0 0;
+  padding:10px 18px calc(18px + env(safe-area-inset-bottom)); background:#211e26; color:#ece8df; box-shadow:0 -18px 60px rgba(0,0,0,.5); }
+.kd-sheet-griff { width:42px; height:4px; margin:0 auto 7px; border-radius:4px; background:#6f6878; }
+.kd-sheet-kopf { display:flex; align-items:center; gap:12px; }.kd-sheet-kopf h2 { margin:0; font:700 27px 'Barlow Condensed',sans-serif; letter-spacing:.05em; text-transform:uppercase; }
+.kd-sheet-close { margin-left:auto; width:48px; height:48px; padding:0; border:1px solid #6f6878; border-radius:50%; background:transparent; color:#ece8df; font-size:28px; }
+.kd-mehr-links { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.kd-mehr-links button { position:relative; min-width:0; min-height:52px; display:flex; align-items:center; gap:10px; padding:10px 12px; text-align:left;
+  border:1px solid #514b58; border-radius:8px; background:#17151a; color:#ece8df; font:600 16px 'Space Grotesk',sans-serif; }
+.kd-mehr-links button>span { width:24px; color:#e3a63b; text-align:center; }.kd-mehr-links button.aktiv { border-color:#e3a63b; }
+.kd-sheet-download { display:inline-block; margin-top:13px; padding:8px 0; font-weight:600; }
+.kd-help-layer { align-items:center; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
+.kd-help-panel { width:min(100%,680px); max-height:calc(100dvh - 24px); border-bottom:1px solid #514b58; border-radius:15px; padding:18px; }
+.kd-help-lead { color:#bdb7c5; font-size:13px; }.kd-help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.kd-help-grid article { padding:13px; border-radius:8px; background:#17151a; border:1px solid #3c3742; }.kd-help-grid strong { color:#e3a63b; }
+.kd-help-grid p { margin:5px 0 0; color:#d2ccd8; font-size:13px; line-height:1.45; }
+.kd-nav-punkt { position:absolute; width:8px; height:8px; border-radius:50%; background:#d96a5a; top:5px; right:5px; }
+.kd-backup-hinweis { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 16px; padding:10px 12px;
+  border:1px solid #d96a5a; border-radius:7px; background:rgba(217,106,90,.1); color:inherit; font-size:13px; }
+.kd-backup-hinweis button { flex:0 0 auto; border:1px solid var(--wolfram,#e3a63b); border-radius:5px; background:transparent; color:inherit; padding:7px 10px; }
+.kd-start-service { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:18px; padding-top:12px; border-top:1px solid rgba(148,143,160,.28); }
+.kd-start-service button,.kd-start-service a { min-height:44px; display:inline-flex; align-items:center; box-sizing:border-box; padding:8px 11px; border:1px solid rgba(148,143,160,.55);
+  border-radius:6px; background:transparent; color:inherit; font:600 12px 'Space Grotesk',sans-serif; text-decoration:none; }
+.kd-start-service a { color:var(--wolfram,#e3a63b); border-color:var(--wolfram,#e3a63b); }
+
+@media (min-width:761px) {
+  .kd-schrift-gross { zoom:1.12; }
+  .kd-schrift-klein { zoom:.9; }
+}
+
+@media (max-width:760px) {
+  html,body,#root { width:100%; max-width:100%; overflow-x:hidden; }
+  @supports (overflow:clip) { html,body,#root { overflow-x:clip; } }
+  .kd-wrap,.kd-app,.kd-app>header,.kd-app>main,.kd-app main { width:100%; max-width:100%; box-sizing:border-box; }
+  .kd-wrap { padding-bottom:calc(72px + env(safe-area-inset-bottom)) !important; }
+  .kd-app>header { padding:18px 16px 10px !important; }.kd-app>header h1 { font-size:clamp(25px,8vw,34px) !important; min-width:0; }
+  .kd-app main { padding:16px 14px 0 !important; overflow-wrap:anywhere; }
+  .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
+  .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
+  .kd-schrift-gross .kd-app main { font-size:1.1em; }.kd-schrift-klein .kd-app main { font-size:.94em; }
+  .kd-help-grid,.kd-entry-choicegrid { grid-template-columns:1fr; }
+  .kd-entry-panel { padding:20px 17px; }.kd-entry-choicegrid { gap:9px; }.kd-choice { min-height:88px !important; }
+  .kd-backup-hinweis { align-items:flex-start; flex-direction:column; }.kd-backup-hinweis button { width:100%; }
+  .kd-start-service { justify-content:stretch; }.kd-start-service button,.kd-start-service a { flex:1 1 100%; justify-content:center; text-align:center; }
+  .kd-nachoben { display:none !important; }
+  .kd-table-scroll { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+}
+
+/* Schwebendes Mobile-Menü: schlichte, gut treffbare Schaltflächen statt Banner oder Seitenlasche. */
+.kd-mobile-menu-layer { position:fixed; inset:0; z-index:13000; }
+.kd-mobile-menu { position:absolute; right:max(12px,env(safe-area-inset-right)); bottom:calc(84px + env(safe-area-inset-bottom));
+  width:min(286px,calc(100vw - 24px)); max-height:calc(100dvh - 112px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:12px; border:1px solid #49444f; border-radius:14px;
+  background:#242127; color:#ece8df; box-shadow:0 14px 42px rgba(0,0,0,.58); }
+.kd-mobile-menu-kopf { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 2px 10px; }
+.kd-mobile-menu-kopf h2 { margin:0; font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.025em; }
+.kd-mobile-menu-schliessen { flex:0 0 36px; width:36px; min-height:36px !important; padding:0; border:0; border-radius:8px;
+  background:transparent; color:#bdb7c5; font:400 25px/1 'Space Grotesk',sans-serif; }
+.kd-mobile-menu-liste { display:grid; gap:6px; }
+.kd-mobile-menu-liste button,.kd-mobile-nachoben { position:relative; width:100%; min-width:0; min-height:46px; display:flex; align-items:center; gap:10px;
+  box-sizing:border-box; padding:9px 12px; border:1px solid #49444f; border-radius:9px; background:#1a181c; color:#ece8df; text-align:left; }
+.kd-mobile-menu-icon,.kd-mobile-nachoben>span { flex:0 0 24px; color:#e3a63b; font:700 18px 'Barlow Condensed',sans-serif; text-align:center; }
+.kd-mobile-menu-liste button>strong,.kd-mobile-nachoben>strong { min-width:0; font:600 14px/1.2 'Space Grotesk',sans-serif; overflow-wrap:anywhere; }
+.kd-mobile-menu-liste button.aktiv { border-color:#e3a63b; background:rgba(227,166,59,.11); }
+.kd-mobile-nachoben { margin-top:9px; border-color:rgba(227,166,59,.6); background:rgba(227,166,59,.07); }
+.kd-mobile-menu-meta { display:grid; gap:5px; margin-top:9px; padding-top:9px; border-top:1px solid #49444f; }
+.kd-mobile-menu-meta button,.kd-mobile-menu-meta a { min-height:42px; display:flex; align-items:center; gap:9px; box-sizing:border-box; padding:8px 10px;
+  border:1px solid transparent; border-radius:8px; background:transparent; color:#cbc5d0; font:600 12px 'Space Grotesk',sans-serif; text-align:left; text-decoration:none; }
+.kd-mobile-menu-meta button>span,.kd-mobile-menu-meta a>span { flex:0 0 20px; color:#e3a63b; font-size:16px; text-align:center; }
+.kd-mobile-menu-meta a { color:#e3a63b; }
+
+@media (max-width:760px) {
+  .kd-menuknopf { position:fixed; display:flex; align-items:center; justify-content:center; right:max(12px,env(safe-area-inset-right));
+    bottom:calc(14px + env(safe-area-inset-bottom)); z-index:13010; width:58px; height:58px; min-height:58px; padding:0;
+    border:2px solid #ece8df; border-radius:50%; background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e);
+    box-shadow:0 6px 22px rgba(0,0,0,.58); }
+  .kd-menulinien { width:25px; display:grid; gap:4px; transition:transform .18s ease; }
+  .kd-menulinien i { display:block; width:25px; height:3px; border-radius:3px; background:currentColor; transition:transform .18s ease,opacity .18s ease; }
+  .kd-menuknopf.offen .kd-menulinien { transform:rotate(90deg); }.kd-menuknopf.offen .kd-menulinien i:nth-child(2) { width:17px; }
 }
 
 /* ================= ETAPPE 2: MOBILE-BAUSTEINE =================
@@ -297,16 +352,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-chiprow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 @media (max-width: 760px) {
-  /* EINE wischbare Zeile statt Button-Stapel. Kein JS: allein diese Query
-     entscheidet — oberhalb 760px wrappen die Reihen weiter wie bisher. */
   .kd-chiprow, .kd-seg {
-    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;               /* Firefox: Scrollbar aus */
+    flex-wrap: wrap; overflow: visible; scroll-snap-type: none;
   }
-  .kd-chiprow::-webkit-scrollbar, .kd-seg::-webkit-scrollbar { display: none; } /* WebKit: Scrollbar aus */
-  .kd-chiprow > *, .kd-seg > * { flex: 0 0 auto; scroll-snap-align: start; }
-  .kd-chiprow button, .kd-seg button { white-space: nowrap; }
+  .kd-chiprow > *, .kd-seg > * { flex: 1 1 auto; min-width: 0; }
+  .kd-chiprow button, .kd-seg button { white-space: normal; }
   /* !important nötig: fontSize/padding stehen INLINE an den Umschalter-Knöpfen
      (SegmentedControl behält die Knopf-Fabrik-Optik inline) — ohne !important
      gewinnt der Inline-Style (Scrim-Bug-Lehre, s. Kommentar oben Z.181-184).
@@ -315,14 +365,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   /* Such-/Sortier-Zeilen verdichten: gap und min-width stehen inline am
      Container bzw. Input (inputStyle-Spread) -> !important; max-width am
      Select kollidiert nicht mit inline width:auto und braucht keins. */
-  .kd-kompakt { gap: 6px !important; }
-  .kd-kompakt input { min-width: 100px !important; }
+  .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
+  .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
   /* Einstellungs-Zeilen am Handy stapeln: Label ÜBER den Umschalter, damit die
      SegmentedControls (Erscheinung/Schriftgröße) die volle Breite bekommen und
      „Foyer (hell)"/„Groß" nicht mehr am Rand abschneiden (Max 2026-07-19, P2). */
   .kd-einstellzeile { flex-direction: column !important; align-items: stretch !important; gap: 4px !important; }
   .kd-einstellzeile > span { width: auto !important; }
-  .kd-kompakt select { max-width: 44vw; }
 }
 
 /* ================= EGG: CAGE-ALPHABET =================
@@ -330,6 +379,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Animation ist JS-getaktet (Stakkato eskaliert) — reduced-motion springt im
    Component direkt zum Ergebnis. */
 .kd-cage-karte {
+  box-sizing: border-box; max-width: calc(100vw - 24px) !important;
   background: radial-gradient(122% 104% at 50% 0%, #F6D67A 0%, #E7B740 44%, #C8912A 100%);
   border: 7px solid #7A5A16;
   box-shadow: 0 0 0 2px #F3D072 inset, 0 18px 60px rgba(0,0,0,0.62);
@@ -806,11 +856,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-may4 input:focus-visible,
 .kd-may4 select:focus-visible,
 .kd-may4 textarea:focus-visible { outline-color: var(--may4-blue) !important; }
-.kd-may4 .kd-navband {
-  border-color: var(--may4-gold) !important; background: rgba(3,6,17,.94) !important;
-  box-shadow: 0 0 18px rgba(104,185,255,.42) !important;
-}
-.kd-may4 .kd-navband i { background: var(--may4-gold) !important; }
 @media (max-width: 760px) {
   .kd-may4 .kd-app > header { padding-top: 58px !important; }
   .kd-may4 .kd-app > header::before { font-size: 8px; letter-spacing: .13em; }

@@ -306,13 +306,20 @@ Anthropic-Console den alten Schlüssel löschen.
 
 ```bash
 cd ~/Documents/GitHub/kinodreieck-app
+npm run check:function-release
+KD_FUNCTION_COMMIT="$(git rev-parse HEAD)"
+npx supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT"
+unset KD_FUNCTION_COMMIT
 npx supabase functions deploy ai-task
 ```
 
-Die Function ist **eine einzige Datei** (`supabase/functions/ai-task/index.ts`).
-Der Deploy lädt ausweislich seiner Ausgabe genau diese Datei als Asset hoch;
-Nachbarmodule wären ein unnötiges Risiko. Die Warnung „Docker is not running"
-ist folgenlos — ohne Docker nimmt die CLI den API-Weg.
+Die Function bleibt **ein einziger Endpunkt** (`ai-task`). Der Einstieg
+`index.ts` importiert pure Request- und Filmwissen-Verträge; die Supabase-CLI
+bündelt diese Nachbarmodule mit. `check:function-release` verweigert einen
+nicht committierten Function-Stand und meldet Git-Commit sowie gemeinsamen
+Quellhash. `health.buildVersion` macht nach dem Deploy denselben Commit
+sichtbar. Die Warnung „Docker is not running" ist beim Function-Deploy
+folgenlos — ohne Docker nimmt die CLI den API-Weg.
 
 **Niemals `supabase config push` oder `supabase db push`.** Die `config.toml`
 ist absichtlich unvollständig; beides würde Live-Einstellungen oder die

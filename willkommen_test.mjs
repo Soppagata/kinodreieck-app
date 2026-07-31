@@ -172,6 +172,7 @@ const GETAUSCHT = Object.entries(QUELLEN)
    diese Hälfte eine Mutationsprobe hat. */
 const APP_DATEI = process.env.APP_QUELLE || path.join(WURZEL, "src/App.jsx");
 const APP_TEXT = fs.readFileSync(APP_DATEI, "utf8");
+const EINSTIEG_TEXT = fs.readFileSync(path.join(WURZEL, "src/components/EinstiegsGate.jsx"), "utf8");
 if (process.env.APP_QUELLE) GETAUSCHT.push("app=" + APP_DATEI);
 
 /* Der Eintritt ist ein virtuelles Modul: es holt beide Komponenten aus den
@@ -213,6 +214,11 @@ export const authService = {
   signIn: (b, p) => globalThis.__WK_AUTH__.signIn(b, p),
   subscribe: () => () => {},
 };
+export const sessionCoordinator = {
+  getSnapshot: () => globalThis.__WK_AUTH__.snapshot(),
+  signIn: (b, p) => globalThis.__WK_AUTH__.signIn(b, p),
+  subscribe: () => () => {},
+};
 `;
 
 const AUSGABE_DIR = path.join(WURZEL, "node_modules/.cache/willkommen-test");
@@ -244,6 +250,7 @@ await esbuild.build({
          der Netzpfad ist nicht bloss ungenutzt, er ist nicht im Buendel.
          Das Anmelde-Angebot auf Karte 3 ist seit Phase 2b Teil der Box. */
       bau.onResolve({ filter: /services[/\\\\]auth\.js$/ }, () => ({ path: "auth-stub", namespace: "wk-stub" }));
+      bau.onResolve({ filter: /services[/\\\\]sessionCoordinator\.js$/ }, () => ({ path: "auth-stub", namespace: "wk-stub" }));
       bau.onLoad({ filter: /.*/, namespace: "wk-stub" }, () => ({ contents: AUTH_STUB, loader: "js" }));
       bau.onLoad({ filter: /.*/, namespace: "wk" }, (args) => {
         if (args.path === "eintritt") {
@@ -844,27 +851,16 @@ await taste("Escape");
 check("W5", "nach dem Abbau ist der Escape-Horcher abgemeldet — kein weiterer Aufruf",
   () => schliessRufe.length === standNachTasten);
 
-/* --- Die andere Hälfte des Vertrags, als Quelltext-Zusicherung an App.jsx.
-   Ohne sie wäre Befund B nur halb behoben: Willkommen könnte sauber
-   „durchgeklickt: false" melden und der Aufrufer die Erklärung trotzdem als
-   gesehen markieren. Beobachtet wird die eine Zeile, an der es hängt. */
-const wkAufruf = /<Willkommen\s+onClose=\{([\s\S]*?)\}\s*\/>/.exec(APP_TEXT);
-check("W5", "App.jsx montiert Willkommen mit einem onClose-Handler", () => !!wkAufruf);
-check("W5", "App.jsx verzweigt im onClose auf `durchgeklickt` (Escape markiert nicht mehr als gesehen)",
-  () => !!wkAufruf && /durchgeklickt/.test(wkAufruf[1]));
-check("W5", "in App.jsx steht setWillkommen(true) INNERHALB der durchgeklickt-Verzweigung",
-  () => {
-    if (!wkAufruf) return false;
-    const koerper = wkAufruf[1];
-    const i = koerper.indexOf("durchgeklickt");
-    const j = koerper.indexOf("setWillkommen(true)");
-    /* setWillkommen darf nur NACH der Prüfung vorkommen und genau einmal —
-       ein zweites, ungeschütztes Vorkommen würde die Sperre aushebeln. */
-    return i >= 0 && j > i && koerper.split("setWillkommen(true)").length === 2;
-  });
-check("W5", "App.jsx schließt die Box in BEIDEN Fällen (setWillkommenOffen(false) ungeschützt)",
-  () => !!wkAufruf && /setWillkommenOffen\(false\)/.test(wkAufruf[1])
-    && wkAufruf[1].indexOf("setWillkommenOffen(false)") > wkAufruf[1].indexOf("setWillkommen(true)"));
+/* Der alte Dialog bleibt als isoliert getestetes Erklärstück erhalten, wird im
+   Produkt aber nicht mehr automatisch montiert. Der neue Vollseiten-Einstieg
+   markiert die Erklärung erst nach erfolgreich gespeicherter KI-Wahl. */
+check("W5", "App.jsx montiert den alten Willkommen-Dialog nicht mehr automatisch", () => !/<Willkommen\b/.test(APP_TEXT));
+check("W5", "der neue Einstieg stoppt bei einer nicht gespeicherten KI-Wahl",
+  () => /gespeichert === false\)[\s\S]+setFehler[\s\S]+return;/.test(EINSTIEG_TEXT));
+check("W5", "setWillkommen(true) liegt im erfolgreichen Abschluss des Vollseiten-Einstiegs",
+  () => /const abschliessen = \(kiAn\)[\s\S]+setWillkommen\(true\)/.test(EINSTIEG_TEXT));
+check("W5", "erst nach dem Markieren wird der Einstieg geschlossen",
+  () => /setWillkommen\(true\)[\s\S]+schliesseEinstieg\(weg\)[\s\S]+onFertig\(\)/.test(EINSTIEG_TEXT));
 });
 
 /* =========================================================================

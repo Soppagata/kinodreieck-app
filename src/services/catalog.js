@@ -18,10 +18,9 @@ import {
   testeKatalogZugang, ladeKatalogAsset, baueStreamingAnsichten,
   setKatalogTokenProvider, verwerfeKatalogCache, KATALOG_GRUENDE,
 } from "../lib/katalog.js";
-import { ladeDemoBlobs, ladeSharedBlogs } from "../lib/catalogPublic.js";
 import { authDriver } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
-import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
+import { BoundaryError, ERROR_CODES, normalizeBoundaryError } from "./errors.js";
 
 /* Projekt-URLs vergleichen: Groß-/Kleinschreibung und ein Schrägstrich am Ende
    dürfen den Vergleich nicht entscheiden. */
@@ -43,7 +42,7 @@ export function katalogTokenErlaubt(katalogUrl, projektUrl = runtimeConfig.supab
 
 /* Token-Naht wie in services/storage.js: der Katalogpfad holt sein Token bei
    jedem Request frisch beim Auth-Treiber. Tokens erreichen weder diese Fassade
-   noch die Oberfläche, und der Publishable-Key-Pfad (kd_store) sieht sie nie.
+   noch die Oberfläche.
 
    Zusätzlich die Bindung an das eigene Projekt: das Sitzungstoken gilt genau
    für die Supabase-Instanz, bei der die Anmeldung stattfand. Zeigt der
@@ -83,6 +82,16 @@ function katalogFehler(error, ctx) {
 
 const BEREICHE = Object.freeze({
   programm: Object.freeze({ live: "programm", demo: "programm_demo" }),
+  streamingBekannt: Object.freeze({
+    live: "streaming_bekannt",
+    demo: "streaming_bekannt_demo",
+  }),
+  streamingEntdecken: Object.freeze({
+    live: "streaming_entdecken",
+    demo: "streaming_entdecken_demo",
+  }),
+  /* Übergangsvertrag für ausgelieferte Clients und gezielte Diagnose. Neue
+     Oberflächen lesen die beiden getrennten Bereiche darüber. */
   streaming: Object.freeze({ live: "streaming", demo: "streaming_demo" }),
 });
 
@@ -157,7 +166,9 @@ export const catalogService = Object.freeze({
     }
   },
   buildStreamingViews: baueStreamingAnsichten,
-  /* Bereich laden ("programm" | "streaming"). Die Zeile wählt die Betriebsart.
+  /* Bereich laden ("programm" | "streamingBekannt" |
+     "streamingEntdecken"; "streaming" bleibt Übergangskompatibilität).
+     Die Zeile wählt die Betriebsart.
      Bleibt die LIVE-Zeile für eine angemeldete Sitzung leer, ist das ein echter
      Fehler (Asset fehlt) — kein stiller Rückfall auf die Demo-Zeile. Fehlt die
      DEMO-Zeile, ist das dagegen NO_DEMO_DATA: noch nichts veröffentlicht. */
@@ -185,22 +196,19 @@ export const catalogService = Object.freeze({
      bliebe „neu laden" wirkungslos, sobald der Direkt-Read scheitert. */
   async discardCache(bereich) {
     try {
+      if (bereich === "streaming") {
+        return await verwerfeKatalogCache([
+          "streaming", "streaming_demo",
+          "streaming_bekannt", "streaming_bekannt_demo",
+          "streaming_entdecken", "streaming_entdecken_demo",
+        ]);
+      }
       const b = bereichOder(bereich);
       return await verwerfeKatalogCache([b.live, b.demo]);
     } catch (error) { throw normalizeBoundaryError(error, { source: "catalog", operation: "cache.discard" }); }
   },
   async loadDemo() {
-    try { return await ladeDemoBlobs(); }
-    catch (error) { throw normalizeBoundaryError(error, { source: "catalog", operation: "demo.load" }); }
-  },
-  async listSharedBlogs() {
-    try {
-      const result = await ladeSharedBlogs();
-      if (!result?.ok && Number.isFinite(result?.status)) {
-        throw errorFromStatus(result.status, { source: "catalog", operation: "shared-blogs.list" });
-      }
-      return result;
-    }
-    catch (error) { throw normalizeBoundaryError(error, { source: "catalog", operation: "shared-blogs.list" }); }
+    try { return (await ladeKatalogAsset("demo_seed")).payload; }
+    catch (error) { throw katalogFehler(error, { source: "catalog", operation: "demo.load" }); }
   },
 });

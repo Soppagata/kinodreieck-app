@@ -40,6 +40,7 @@ export function CageAlphabet({ filme = [], onClose, reduced = false, herkunftVon
   const buchstaben = useMemo(() => [...proBuchstabe.keys()].sort(), [proBuchstabe]);
 
   const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  const gestartet = useRef(false);
   useEffect(() => () => clear(), []);
 
   const waehleTreffer = useCallback(() => {
@@ -55,28 +56,34 @@ export function CageAlphabet({ filme = [], onClose, reduced = false, herkunftVon
   }, []);
 
   const start = useCallback(() => {
-    setPhase((p) => {
-      if (p !== "karte") return p;
-      const ziel = waehleTreffer();
-      if (!ziel) { if (onClose) onClose(); return p; }
-      if (reduced) { landung(ziel); return "ergebnis"; }
-      const N = 15;
-      let i = 0;
-      setzeHook({ stakkato: 0 });
-      const step = () => {
-        const last = i >= N - 1;
-        const b = last ? ziel.b : buchstaben[Math.floor(Math.random() * buchstaben.length)];
-        setFlash({ b, i });
-        setzeHook({ stakkato: i + 1 });
-        i++;
-        if (last) { timers.current.push(setTimeout(() => landung(ziel), 420)); return; }
-        const t = 150 - (150 - 55) * (i / N);   // 150 → 55 ms, beschleunigend
-        timers.current.push(setTimeout(step, t));
-      };
-      step();
-      return "stakkato";
-    });
-  }, [waehleTreffer, reduced, landung, buchstaben, onClose]);
+    if (phase !== "karte" || gestartet.current) return;
+    gestartet.current = true;
+    const ziel = waehleTreffer();
+    if (!ziel) {
+      gestartet.current = false;
+      if (onClose) onClose();
+      return;
+    }
+    if (reduced) {
+      landung(ziel);
+      return;
+    }
+    setPhase("stakkato");
+    const N = 15;
+    let i = 0;
+    setzeHook({ stakkato: 0 });
+    const step = () => {
+      const last = i >= N - 1;
+      const b = last ? ziel.b : buchstaben[Math.floor(Math.random() * buchstaben.length)];
+      setFlash({ b, i });
+      setzeHook({ stakkato: i + 1 });
+      i++;
+      if (last) { timers.current.push(setTimeout(() => landung(ziel), 420)); return; }
+      const t = 150 - (150 - 55) * (i / N);   // 150 → 55 ms, beschleunigend
+      timers.current.push(setTimeout(step, t));
+    };
+    step();
+  }, [phase, waehleTreffer, reduced, landung, buchstaben, onClose]);
 
   const schliessen = () => { clear(); if (onClose) onClose(); };
 

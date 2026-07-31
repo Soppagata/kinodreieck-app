@@ -47,22 +47,20 @@ check(
   "200 darf höchstens als dokumentierter Rückweg in einem SQL-Kommentar stehen",
 );
 
-const functionCode = lies(join("supabase", "functions", "ai-task", "index.ts"));
-const hauptStart = functionCode.indexOf('"kd_ai_auftrag_starten"', functionCode.indexOf("const reservierung"));
-const hauptAnbieter = functionCode.indexOf("ergebnis = await rufeAnbieter", hauptStart);
-const diagnoseBeginn = functionCode.indexOf('task === "anbieter-modelle"');
-const diagnoseStart = functionCode.indexOf('"kd_ai_auftrag_starten"', diagnoseBeginn);
-const diagnoseAnbieter = functionCode.indexOf("fetch(ANBIETER_MODELLE_URL", diagnoseBeginn);
-
-check(
-  "Der normale Anbieterpfad liegt weiterhin hinter der serverseitigen Startschleuse",
-  hauptStart >= 0 && hauptAnbieter > hauptStart,
-  "kd_ai_auftrag_starten muss vor rufeAnbieter stehen",
+const requestContract = await import(
+  "./supabase/functions/ai-task/requestContract.ts"
 );
 check(
-  "Auch die Modelldiagnose liegt weiterhin hinter der serverseitigen Startschleuse",
-  diagnoseBeginn >= 0 && diagnoseStart > diagnoseBeginn && diagnoseAnbieter > diagnoseStart,
-  "auch der kostenfreie Diagnosepfad darf den Not-Aus nicht umgehen",
+  "Diagnose-, Fach- und geplante Aufgaben besitzen einen direkt prüfbaren Routingvertrag",
+  requestContract.klassifiziereAufgabe("health", true) === "health"
+    && requestContract.klassifiziereAufgabe("anbieter-modelle", true)
+      === "anbieter-modelle"
+    && requestContract.klassifiziereAufgabe("film-forecast", true) === "gebaut"
+    && requestContract.klassifiziereAufgabe(
+      "masterlist-enrichment",
+      false,
+    ) === "geplant",
+  "der Betrieb darf nicht von Textpositionen in index.ts abhängen",
 );
 
 const alleMigrationen = migrationsnamen

@@ -11,7 +11,15 @@ const entdecken = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecke
 const masterDatei = JSON.parse(readFileSync(new URL("./src/data/masterliste.json", import.meta.url), "utf8"));
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
 const checks = [];
-const check = (name, ok) => { checks.push([name, !!ok]); console.log((ok ? "✓ " : "✗ ") + name); };
+const check = (name, ok) => {
+  checks.push([name, !!ok]);
+  console.log((ok ? "✓ " : "✗ ") + name);
+  if (!ok && katalogRufe.length) {
+    console.log("  Katalogrufe:", JSON.stringify(Object.fromEntries(
+      [...new Set(katalogRufe.map((r) => r.name))].map((n) => [n, zaehle(n)]),
+    )));
+  }
+};
 
 /* Katalog-Mock mit echtem Datenbankverhalten (Etappe 4): `anon` sieht nur
    manifest + die *_demo-Zeilen, programm/streaming verlangen eine angemeldete
@@ -48,8 +56,26 @@ const KATALOG_ZEILEN = {
   programm_demo: { payload: programmDemo, quelle: "demo-schnappschuss" },
   streaming: { payload: { bekannt: { ...bekannt, demo: false }, entdecken: { ...entdecken, demo: false } }, quelle: "watchmode", stand: KATALOG_STAND_LIVE },
   streaming_demo: { payload: { bekannt, entdecken }, quelle: "demo-schnappschuss" },
+  streaming_bekannt: { payload: { ...bekannt, demo: false }, quelle: "watchmode", stand: KATALOG_STAND_LIVE },
+  streaming_entdecken: { payload: { ...entdecken, demo: false }, quelle: "watchmode", stand: KATALOG_STAND_LIVE },
+  streaming_bekannt_demo: { payload: bekannt, quelle: "demo-schnappschuss" },
+  streaming_entdecken_demo: { payload: entdecken, quelle: "demo-schnappschuss" },
+  demo_seed: {
+    payload: {
+      format: 1,
+      master: masterDatei,
+      mustwatch: { eintraege: [] },
+      streaming_dienste: { quellen: [], heuristik: true },
+      artikel: { artikel: [] },
+      kino_pins: [],
+      merkliste: [],
+    },
+    quelle: "kinodreieck_demo",
+  },
 };
-const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+const NUR_ANGEMELDET = new Set([
+  "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
+]);
 /* Mitschrift der Katalog-Requests. Nur damit lässt sich zeigen, dass ein Boot
    NICHT nachlädt (Gegenproben zu F1/F2) bzw. ein Betriebsart-Wechsel genau
    einmal nachlädt und danach Ruhe gibt (F3). */
@@ -167,6 +193,24 @@ function seedCacheStorage(w, speicher, loeschungen) {
 const cacheSchluessel = (name) => "http://localhost/__kd_katalog_cache__/" + name;
 
 function baueDom(seed = () => {}, demoRows = null) {
+  if (Array.isArray(demoRows)) {
+    const blobs = {};
+    for (const row of demoRows) {
+      try { blobs[row.key] = JSON.parse(row.value); } catch { /* ungültig bleibt fehlend */ }
+    }
+    KATALOG_ZEILEN.demo_seed = {
+      payload: {
+        format: 1,
+        master: blobs["kd:master"] || { meta: {}, filme: [] },
+        mustwatch: blobs["kd:mustwatch"] || { eintraege: [] },
+        streaming_dienste: blobs["kd:streaming-dienste"] || { quellen: [], heuristik: true },
+        artikel: blobs["kd:artikel"] || { artikel: [] },
+        kino_pins: blobs["kd:kino-pins"] || [],
+        merkliste: blobs["kd:merkliste"] || [],
+      },
+      quelle: "kinodreieck_demo",
+    };
+  }
   return new JSDOM(html, {
     url: "http://localhost/Kinodreieck.html", runScripts: "dangerously", pretendToBeVisual: true,
     beforeParse(w) {
@@ -178,7 +222,6 @@ function baueDom(seed = () => {}, demoRows = null) {
       w.fetch = async (url, opts = {}) => {
         const s = String(url);
         if (s.includes("/rest/v1/kd_catalog")) return katalogAntwort(s, opts);
-        if (s.includes("/rest/v1/kd_store") && demoRows) return { ok: true, status: 200, json: async () => demoRows, text: async () => "" };
         throw new Error("offline (Test)");
       };
       seed(w);
@@ -221,7 +264,8 @@ function seedKatalog(w, start = "clean") {
   w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino", "pinboard", "mediathek", "eintrag", "streaming", "entdecken", "blog", "vokabular", "streaming-quellen", "erweitert", "waechter"] }));
 }
 
-/* A — die produktive PWA enthält beide zwingenden Erststart-Dialoge. Der alte
+/* A — die produktive PWA beginnt mit dem gemeinsamen Einstieg. Erst nach der
+   bewussten Gastwahl folgt für frische Gäste die Demo-/Leer-Entscheidung. Der
    Single-File-Kompatibilitätspfad selbst startet absichtlich ohne Netzdialog;
    der Web-Build wird zusätzlich im Browsertest geprüft. */
 {
@@ -236,13 +280,19 @@ function seedKatalog(w, start = "clean") {
   });
   await warte(1200);
   const a = hilfen(alt);
-  check("A: alter stiller Clean-Wert überspringt die neue Startwahl nicht", !!a.knopf(/^Leer starten$/) && !!a.knopf(/^Demo ansehen$/));
+  check("A: alter stiller Clean-Wert überspringt den neuen Ersteinstieg nicht",
+    !!a.knopf(/^Ohne Konto fortfahren$/) && !a.knopf(/^Leer starten$/) && !a.knopf(/^Demo ansehen$/));
+  a.knopf(/^Ohne Konto fortfahren$/)?.click(); await warte(1000);
+  const startwahlDa = !!a.knopf(/^Leer starten/) && !!a.knopf(/^Demo ansehen/);
+  check("A: nach der bewussten Gastwahl folgt die Startwahl", startwahlDa);
   alt.window.close();
 
   const leer = baueDom();
   await warte(1200);
   const l = hilfen(leer);
-  check("A: vollständig leerer Browser zeigt zuerst die Startwahl", !!l.knopf(/^Leer starten$/) && !!l.knopf(/^Demo ansehen$/));
+  check("A: vollständig leerer Browser zeigt zuerst Login, Gastweg und Installation",
+    !!l.knopf(/^Ohne Konto fortfahren$/) && /Kinodreieck installieren/.test(l.text())
+    && !l.knopf(/^Leer starten$/) && !l.knopf(/^Demo ansehen$/));
   leer.window.close();
 }
 
@@ -404,6 +454,8 @@ function seedKatalog(w, start = "clean") {
 /* F — Kann ein alter Boolean-Seed ohne Demo-Read nicht auf exakte Einträge
    aufgelöst werden, bleibt alles samt Seed für einen späteren Versuch erhalten. */
 {
+  netzReset();
+  netz.fehlend.add("demo_seed");
   const dom = baueDom((w) => {
     seedKatalog(w, "clean");
     w.localStorage.setItem("kd:demo-seed", JSON.stringify({ masterIds: [], artikelIds: [], pins: true, merkliste: true, streaming: true }));
@@ -423,6 +475,7 @@ function seedKatalog(w, start = "clean") {
     JSON.stringify(JSON.parse(dom.window.localStorage.getItem("kd:streaming-dienste") || "{}").quellen) === JSON.stringify(["MUBI"]));
   check("F: Offline-Legacy-Bereinigung erklärt den sicheren Abbruch", /nichts gelöscht/i.test(text()));
   dom.window.close();
+  netzReset();
 }
 
 /* G — Ein abgebrochener Wechsel mit persönlichen Daten verändert weder Modus
@@ -675,8 +728,8 @@ function seedKatalog(w, start = "clean") {
   const { text, knopf } = hilfen(dom);
   await warte(2600);
   check("M/F3: der Startzustand ist kein Wechsel — je Bereich genau ein Request",
-    zaehle("programm_demo") === 1 && zaehle("streaming_demo") === 1
-    && zaehle("programm") === 0 && zaehle("streaming") === 0);
+    zaehle("programm_demo") === 1 && zaehle("streaming_bekannt_demo") === 1
+    && zaehle("programm") === 0 && zaehle("streaming_bekannt") === 0);
   knopf(/^Kino$/i)?.click(); await warte(500);
   /* Wie in L/F2: der Marker des Stand-Etiketts, nicht das blanke Wort — sonst
      antwortet der Fehlerkasten für den Stand mit. */
@@ -687,7 +740,7 @@ function seedKatalog(w, start = "clean") {
   sichtbarWerden(dom);
   await warte(1800);
   check("M/F3: Gast → Konto lädt Programm und Streaming der Live-Zeile nach",
-    zaehle("programm") >= 1 && zaehle("streaming") >= 1);
+    zaehle("programm") >= 1 && zaehle("streaming_bekannt") >= 1);
   check("M/F3: der Nachlade-Request trägt das Sitzungstoken — sonst bliebe die Live-Zeile leer",
     katalogRufe.some((r) => r.name === "programm" && r.mitToken));
   let topfLive = null;
@@ -703,17 +756,17 @@ function seedKatalog(w, start = "clean") {
     topfLive?.variante === "live" && topfLive?.stand === Date.parse(KATALOG_STAND_LIVE));
   check("M/F3: nach dem Wechsel ist der Demo-Schnappschuss-Hinweis weg", !/Demo-Schnappschuss/.test(text()));
 
-  const nachWechsel = ["programm", "streaming", "programm_demo", "streaming_demo"].map(zaehle);
+  const nachWechsel = ["programm", "streaming_bekannt", "programm_demo", "streaming_bekannt_demo"].map(zaehle);
   await warte(1600);
   check("M/F3: nach dem Wechsel entsteht keine Ladeschleife (kein weiterer Request)",
-    ["programm", "streaming", "programm_demo", "streaming_demo"].every((n, i) => zaehle(n) === nachWechsel[i]));
+    ["programm", "streaming_bekannt", "programm_demo", "streaming_bekannt_demo"].every((n, i) => zaehle(n) === nachWechsel[i]));
 
-  const vorRueckwechsel = [zaehle("programm_demo"), zaehle("streaming_demo")];
+  const vorRueckwechsel = [zaehle("programm_demo"), zaehle("streaming_bekannt_demo")];
   dom.window.localStorage.removeItem("kd:auth:session");
   sichtbarWerden(dom);
   await warte(1800);
   check("M/F3: Konto → Gast lädt ebenso nach und fällt auf die Demo-Zeile zurück",
-    zaehle("programm_demo") > vorRueckwechsel[0] && zaehle("streaming_demo") > vorRueckwechsel[1]);
+    zaehle("programm_demo") > vorRueckwechsel[0] && zaehle("streaming_bekannt_demo") > vorRueckwechsel[1]);
   let topfDemo = null;
   try { topfDemo = JSON.parse(dom.window.localStorage.getItem("kd:programm-cache") || "null"); } catch { /* */ }
   check("M/F3: nach dem Rückwechsel steht wieder der Demo-Stand im Topf",
@@ -730,7 +783,7 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   netz.fehlend.add("programm");      // Live-Zeile fehlt -> das Nachladen scheitert
-  netz.fehlend.add("streaming");
+  netz.fehlend.add("streaming_bekannt");
   katalogRufe = [];
   const topfVorher = programmTopf({ art: "manuell", gueltigBis: KATALOG_GUELTIG_BIS });
   const dom = baueDom((w) => {
@@ -751,8 +804,11 @@ function seedKatalog(w, start = "clean") {
   check("N/P1: der manuell eingespielte Topf überlebt den Betriebsart-Wechsel Byte für Byte",
     dom.window.localStorage.getItem("kd:programm-cache") === topfVorher);
   knopf(/^Kino$/i)?.click(); await warte(500);
+  const nText = text();
+  const nEhrlich = /Für das aktuelle Kinoprogramm ist eine Anmeldung nötig|Kinoprogramm (?:nicht ladbar|konnte nicht geladen werden)/.test(nText)
+    && !/Stand \d/.test(nText);
   check("N/P1: trotz erhaltenem Topf zeigt der Kino-Tab den ehrlichen Fehlzustand, nicht den alten Stand",
-    /Kinoprogramm konnte nicht geladen werden/.test(text()) && !/Stand \d/.test(text()));
+    nEhrlich);
   dom.window.close();
   netzReset();
 }
@@ -779,14 +835,14 @@ function seedKatalog(w, start = "clean") {
   /* Ohne diese Vorbedingung wäre „nichts gelöscht" trivial wahr — ein leerer
      Speicher bleibt immer leer. */
   check("O/P2-Vorbedingung: der Live-Start hat Topf und Cache-Storage wirklich gefüllt",
-    cacheInhalt.has(cacheSchluessel("programm")) && cacheInhalt.has(cacheSchluessel("streaming"))
+    cacheInhalt.has(cacheSchluessel("programm")) && cacheInhalt.has(cacheSchluessel("streaming_bekannt"))
     && JSON.parse(dom.window.localStorage.getItem("kd:programm-cache") || "null")?.variante === "live");
   knopf(/^Kino$/i)?.click(); await warte(400);
   check("O/P2-Vorbedingung: der Live-Stand steht sichtbar im Kino-Tab",
     standMuster(KATALOG_STAND_LIVE).test(text()));
 
   netz.fehlend.add("programm_demo");    // heutiger Produktionsfall: Demo-Zeilen fehlen
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   dom.window.localStorage.removeItem("kd:auth:session");
   sichtbarWerden(dom);
   await warte(2000);
@@ -797,7 +853,7 @@ function seedKatalog(w, start = "clean") {
     topfNachher?.variante === "live" && topfNachher?.stand === Date.parse(KATALOG_STAND_LIVE));
   check("O/P2: die Cache-Storage-Einträge werden nicht verworfen (kein einziger Verwurf)",
     cacheLoeschungen.length === 0
-    && cacheInhalt.has(cacheSchluessel("programm")) && cacheInhalt.has(cacheSchluessel("streaming")));
+    && cacheInhalt.has(cacheSchluessel("programm")) && cacheInhalt.has(cacheSchluessel("streaming_bekannt")));
   await warte(400);
   check("O/P2: die Oberfläche zeigt den ehrlichen Fehlzustand …",
     /Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht/.test(text()));
@@ -823,7 +879,7 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   netz.verzoegerung.set("programm", 2600);
-  netz.verzoegerung.set("streaming", 2600);
+  netz.verzoegerung.set("streaming_bekannt", 2600);
   katalogRufe = [];
   const dom = baueDom((w) => seedKatalog(w, "clean"));
   const { text, knopf } = hilfen(dom);
@@ -873,9 +929,9 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   netz.verzoegerung.set("programm", 2600);
-  netz.verzoegerung.set("streaming", 2600);
+  netz.verzoegerung.set("streaming_bekannt", 2600);
   netz.fehlend.add("programm");            // die späte Antwort ist ein Fehler
-  netz.fehlend.add("streaming");
+  netz.fehlend.add("streaming_bekannt");
   katalogRufe = [];
   const dom = baueDom((w) => seedKatalog(w, "clean"));
   const { text, knopf } = hilfen(dom);
@@ -922,53 +978,53 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   netz.fehlend.add("programm_demo");       // dauerhaft scheiterndes Nachladen
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   netz.verzoegerung.set("programm_demo", 120);   // realistische Antwortzeit
-  netz.verzoegerung.set("streaming_demo", 120);
+  netz.verzoegerung.set("streaming_bekannt_demo", 120);
   katalogRufe = [];
   const dom = baueDom((w) => {
     seedKatalog(w, "clean");
     w.localStorage.setItem("kd:auth:session", sitzungsTopf());
   });
   await warte(2600);
-  check("R1/P6-Vorbedingung: der Live-Start ist durch", zaehle("programm") === 1 && zaehle("streaming") === 1);
+  check("R1/P6-Vorbedingung: der Live-Start ist durch", zaehle("programm") === 1 && zaehle("streaming_bekannt") === 1);
 
   dom.window.localStorage.removeItem("kd:auth:session");
   sichtbarWerden(dom);
   await warte(2000);
   check("R1/P6: bei antwortender Datenbank bleibt es bei genau einem Versuch je Bereich",
-    zaehle("programm_demo") === 1 && zaehle("streaming_demo") === 1);
+    zaehle("programm_demo") === 1 && zaehle("streaming_bekannt_demo") === 1);
   const r1Alle = katalogRufe.length;
   await warte(3000);                       // Ruhefenster
   check("R1/P6: über ein Ruhefenster von 3 s kommt kein einziger Request dazu",
-    katalogRufe.length === r1Alle && zaehle("programm_demo") === 1 && zaehle("streaming_demo") === 1);
+    katalogRufe.length === r1Alle && zaehle("programm_demo") === 1 && zaehle("streaming_bekannt_demo") === 1);
   dom.window.close();
   netzReset();
 }
 {
   netzReset();
   netz.fehlend.add("programm_demo");
-  netz.fehlend.add("streaming_demo");      // ohne Verzögerung: Worst Case fürs Wettrennen
+  netz.fehlend.add("streaming_bekannt_demo"); // ohne Verzögerung: Worst Case fürs Wettrennen
   katalogRufe = [];
   const dom = baueDom((w) => {
     seedKatalog(w, "clean");
     w.localStorage.setItem("kd:auth:session", sitzungsTopf());
   });
   await warte(2600);
-  check("R2/P6-Vorbedingung: der Live-Start ist durch", zaehle("programm") === 1 && zaehle("streaming") === 1);
+  check("R2/P6-Vorbedingung: der Live-Start ist durch", zaehle("programm") === 1 && zaehle("streaming_bekannt") === 1);
 
   dom.window.localStorage.removeItem("kd:auth:session");
   sichtbarWerden(dom);
   await warte(2000);
   const r2Programm = zaehle("programm_demo");
-  const r2Streaming = zaehle("streaming_demo");
+  const r2Streaming = zaehle("streaming_bekannt_demo");
   check("R2/P6: auch bei sofortiger Absage bleibt es bei höchstens zwei Versuchen je Bereich",
     r2Programm >= 1 && r2Programm <= 2 && r2Streaming >= 1 && r2Streaming <= 2);
   const r2Alle = katalogRufe.length;
   await warte(3000);                       // Ruhefenster
   check("R2/P6: danach ist Ruhe — über 3 s kommt kein weiterer Request dazu",
     katalogRufe.length === r2Alle
-    && zaehle("programm_demo") === r2Programm && zaehle("streaming_demo") === r2Streaming);
+    && zaehle("programm_demo") === r2Programm && zaehle("streaming_bekannt_demo") === r2Streaming);
   dom.window.close();
   netzReset();
 }
@@ -996,7 +1052,7 @@ function seedKatalog(w, start = "clean") {
     standMuster(KATALOG_STAND).test(text()) && /· Demo-Schnappschuss/.test(text()) && /· abgelaufen/.test(text()));
 
   netz.fehlend.add("programm_demo");     // der nächste Versuch geht ins Leere
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   knopf(/^Einstellungen$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("S/C1-Vorbedingung: der Nachladeversuch ist wirklich gelaufen und gescheitert",
@@ -1028,12 +1084,12 @@ function seedKatalog(w, start = "clean") {
   check("T/C1-Vorbedingung: der Streaming-Tab weist den abgelaufenen Schnappschuss aus",
     /Abgelaufener Schnappschuss/.test(text()));
 
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   netz.fehlend.add("programm_demo");
   knopf(/^Einstellungen$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("T/C1-Vorbedingung: der Streaming-Nachladeversuch ist gelaufen und gescheitert",
-    zaehle("streaming_demo") >= 2);
+    zaehle("streaming_bekannt_demo") >= 2);
 
   knopf(/^Streaming$/i)?.click(); await warte(900);
   check("T/C1: die Katalogdaten bleiben sichtbar (der Tab ist nicht leer)",
@@ -1058,7 +1114,7 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   netz.fehlend.add("programm_demo");     // der Boot-Versuch scheitert
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   katalogRufe = [];
   const dom = baueDom((w) => seedKatalog(w, "clean"));
   const { doc, text, knopf } = hilfen(dom);
@@ -1099,7 +1155,7 @@ function seedKatalog(w, start = "clean") {
    demo: false. */
 {
   netzReset();
-  netz.verzoegerung.set("streaming", 2600);
+  netz.verzoegerung.set("streaming_bekannt", 2600);
   katalogRufe = [];
   const dom = baueDom((w) => seedKatalog(w, "clean"));
   const { text, knopf } = hilfen(dom);
@@ -1112,7 +1168,7 @@ function seedKatalog(w, start = "clean") {
   sichtbarWerden(dom);
   await warte(800);
   check("V/P3-Vorbedingung: der langsame Live-Read des Katalogs ist unterwegs",
-    zaehle("streaming") === 1);
+    zaehle("streaming_bekannt") === 1);
 
   dom.window.localStorage.removeItem("kd:auth:session");
   sichtbarWerden(dom);
@@ -1236,11 +1292,11 @@ function seedKatalog(w, start = "clean") {
 
   await warte(2200);                     // die Gültigkeit läuft ab
   netz.fehlend.add("programm_demo");     // und der nächste Versuch scheitert
-  netz.fehlend.add("streaming_demo");
+  netz.fehlend.add("streaming_bekannt_demo");
   knopf(/^Einstellungen$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("Y/N3-Vorbedingung: beide Nachladeversuche sind gelaufen und gescheitert",
-    zaehle("programm_demo") >= 2 && zaehle("streaming_demo") >= 2);
+    zaehle("programm_demo") >= 2 && zaehle("streaming_bekannt_demo") >= 2);
 
   knopf(/^Kino$/i)?.click(); await warte(500);
   check("Y/N3 (Programm): der inzwischen abgelaufene Stand wird beim Ergänzen als abgelaufen erkannt",

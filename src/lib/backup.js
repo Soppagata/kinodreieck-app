@@ -2,11 +2,13 @@
    Baut das `kinodreieck-backup`-Objekt (Format v1, unverändert). Reihenfolge:
    1) erzwungener frischer Pull des AKTIVEN Treibers (bei localDriver No-op) — so
       trägt das Backup den DB-Stand, nicht veralteten React-State (die v2-Falle);
-   2) ALLE 11 Owner-Schlüssel über `store` lesen (nicht aus React-State).
+   2) alle registrierten persönlichen Töpfe über `store` lesen (nicht aus
+      React-State).
    Enthält nur Owner-Daten, nie Demo/Tester. Der lokale Datei-Export bleibt der
    robusteste Notweg (funktioniert ohne Netz/Schlüssel — der Pull ist dann best effort). */
 
-import { store, K, activePull } from "./storage.js";
+import { store, activePull } from "./storage.js";
+import { PERSONAL_DATA_ENTRIES } from "./personalDataRegistry.js";
 
 export async function baueBackup({ pull = true } = {}) {
   // 1) Frischer Pull des aktiven Treibers. Offline/ohne Schlüssel: Export aus lokalem Cache.
@@ -22,45 +24,28 @@ export async function baueBackup({ pull = true } = {}) {
     } catch (e) { warnungen.push({ bereich: "pull", grund: "Pull-Fehler: " + String((e && e.message) || e) }); }
   }
 
-  // 2) Alles über store lesen (verbatim-String -> gezielt entpacken).
-  // KD-011: Lese-/Parse-Fehler nicht mehr still zu null machen — als Diagnose vermerken.
-  // (Ein legitim leerer/nie gesetzter Topf liefert r==null OHNE Warnung — nur echte Fehler.)
-  const roh = async (key) => { try { const r = await store.get(key); return r ? r.value : null; } catch { warnungen.push({ bereich: key, grund: "Lesefehler — als leer gesichert." }); return null; } };
-  const obj = async (key) => { const v = await roh(key); if (v == null) return null; try { return JSON.parse(v); } catch { warnungen.push({ bereich: key, grund: "nicht parsebar (JSON beschädigt) — als leer gesichert." }); return null; } };
-
-  const master = await obj(K.master);         // {meta, filme, herkunft, gespeichertAm}
-  const artikel = await obj(K.artikel);       // {artikel, gespeichertAm}
-  const mustwatch = await obj(K.mustwatch);   // {eintraege, gespeichertAm}
-
-  return {
+  // 2) Alles über das gemeinsame Register lesen und ins stabile Backup-v1-Feld
+  // projizieren. Ein legitim leerer Topf bleibt ohne Warnung leer; echte Lese-,
+  // JSON- oder Formfehler werden im Backup sichtbar protokolliert.
+  const backup = {
     format: "kinodreieck-backup", version: 1, erstellt: new Date().toISOString(),
     hinweis: "Wiederherstellen: über Einstellungen → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
-    masterliste: { meta: (master && master.meta) || null, filme: (master && Array.isArray(master.filme)) ? master.filme : [] },
-    artikel: (artikel && Array.isArray(artikel.artikel)) ? artikel.artikel : [],
-    kino_pins: (await obj(K.kinoPins)) || [],
-    merkliste: await obj(K.merkliste),
-    entdecken_status: await obj(K.entdeckenStatus),
-    /* streaming_dienste seit 18.07.2026 im Backup (sonst ginge die Abo-Auswahl beim Restore verloren). */
-    streaming_dienste: await obj(K.streamingDienste),
-    must_watch_liste: (mustwatch && Array.isArray(mustwatch.eintraege)) ? mustwatch.eintraege : [],
-    vokabular: await obj(K.vokabular),
-    einstellungen: await obj(K.einstellungen),
-    autor: await roh(K.autorName),   // roher String (kein JSON)
-    achievements: await obj(K.achievements),  // {eggs:[...]} — 11. Artefakt (Block 3); null wenn nie freigeschaltet
-    /* Etappe 3: die vier Sicht-/Zeit-Präferenzen. Additive Felder, Format bleibt v1 —
-       ältere Wiederherstellungen ignorieren sie, ältere Backups überspringen sie.
-       Ohne sie gingen sie bei einer Kontoübernahme oder einem Gerätewechsel still verloren. */
-    zeitgrenze: await roh(K.zeitgrenze),            // roher String (z.B. "14:00")
-    filter_mediathek: await roh(K.filterMediathek), // "0"/"1"
-    filter_kino: await roh(K.filterKino),           // "0"/"1"
-    filter_streaming: await roh(K.filterStreaming), // "0"/"1"
-    /* Etappe 7: Geschmacksprofil. Additives Feld, Format bleibt v1.
-       Ohne diesen Eintrag waere das Profil im Gesamt-Backup UNSICHTBAR --
-       backup.js listet jeden Topf einzeln und hart auf. */
-    geschmacksprofil: await obj(K.geschmacksprofil),
-    // KD-011: optionales Diagnosefeld, MUSS letzte Eigenschaft sein (die obj()-Aufrufe oben füllen
-    // `warnungen` erst während der Objekt-Konstruktion). Nur bei Problemen gesetzt → rückwärtskompatibel,
-    // Kernstruktur/-schlüssel unverändert. Restore ignoriert unbekannte Felder wie dieses.
-    ...(warnungen.length ? { _warnungen: warnungen } : {}),
   };
+  for (const entry of PERSONAL_DATA_ENTRIES) {
+    let roh = null;
+    try {
+      const r = await store.get(entry.key);
+      roh = r ? r.value : null;
+    } catch {
+      warnungen.push({ bereich: entry.key, grund: "Lesefehler — als leer gesichert." });
+    }
+    backup[entry.backupField] = entry.backupAusRoh(
+      roh,
+      (bereich, grund) => warnungen.push({ bereich, grund }),
+    );
+  }
+  /* Optionales Diagnosefeld bewusst zuletzt: ältere Wiederherstellungen
+     ignorieren es, Menschen sehen Probleme aber direkt im Export. */
+  if (warnungen.length) backup._warnungen = warnungen;
+  return backup;
 }

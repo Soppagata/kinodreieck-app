@@ -261,6 +261,30 @@ check("Kontowechsel wird erkannt", D.getCacheOwner() === "konto-A");
 D.verwerfeTreiberZustand();
 check("Beim Kontowechsel wird der Treiberzustand verworfen", _ls.get("kd:acct:ver") == null);
 
+/* ---------- Auftrag bleibt an seine Treibergeneration gebunden ---------- */
+_ls.clear(); tabelle = new Map(); calls = [];
+let generationAktiv = true;
+let aktuellesToken = "at-gueltig";
+d = D.createAccountDriver({
+  config: CONFIG,
+  getAccessToken: async () => aktuellesToken,
+  fetchImpl: mockFetch,
+  isActive: () => generationAktiv,
+});
+const alterAuftrag = d.set("kd:master", "DATEN-A");
+/* Noch bevor die Queue startet, wechselt die App zu Konto B und dessen
+   lokaler Wert liegt im selben Cache-Schlüssel. Der alte Auftrag darf weder
+   das neue Token noch den neuen Wert verwenden. */
+generationAktiv = false;
+aktuellesToken = "at-B";
+_ls.set("kd:master", "DATEN-B");
+await alterAuftrag;
+await sleep(30);
+check("Ein Auftrag einer alten Treibergeneration sendet nach Kontowechsel nichts",
+  calls.length === 0 && db("konto-A", "kd:master") === null && db("konto-B", "kd:master") === null);
+check("Der lokale Wert des neuen Kontos bleibt vom alten Auftrag unberührt",
+  _ls.get("kd:master") === "DATEN-B");
+
 /* ---------- Wiederholbare Übernahme ---------- */
 _ls.clear(); tabelle = new Map(); d = neuerTreiber(async () => "at-gueltig");
 const u1 = await d.uebernehmeKey("kd:master", "BESTAND");

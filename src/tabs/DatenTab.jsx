@@ -130,14 +130,6 @@ export function DatenTab({
                   onChange={(id) => setzeEinstellung("schrift", id)}
                   options={[{ id: "klein", label: "Klein" }, { id: "normal", label: "Normal" }, { id: "gross", label: "Groß" }]} />
               </div>
-              <div className="kd-einstellzeile" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Bedienhand</span>
-                <SegmentedControl style={{ marginBottom: 0, flex: 1, minWidth: 160 }}
-                  value={einstellungen.linkshaender ? "links" : "rechts"}
-                  onChange={(id) => setzeEinstellung("linkshaender", id === "links")}
-                  options={[{ id: "rechts", label: "Rechts" }, { id: "links", label: "Links" }]} />
-                <span style={mono}>spiegelt Griff & Menü am Handy</span>
-              </div>
               <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Startbereich</span>
                 <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "auto" }}>

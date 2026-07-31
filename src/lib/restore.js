@@ -1,176 +1,189 @@
-/* ---------- Restore-Import (Datenmigration alt → neu) ----------
-   Spielt ein `kinodreieck-backup`-JSON (Gesamt-Backup) in die 11 Sync-Töpfe der
-   App ein, damit der Git-Treiber sie beim ersten Commit als 11 Dateien schreibt.
-   Rein lokal, deterministisch, kein Netz, kein LLM, kein Merge (Restore =
-   ERSETZEN). Snapshot vor dem Überschreiben (rückgängig machbar).
-   Läuft VOR dem Git-Verbinden (Storage-Treiber ist dann lokal → keine Commits). */
+/* Gesamt-Backup wiederherstellen.
 
-import { store, K, storageDriverName, activeSyncStatus } from "./storage.js";
-import { ensureIds } from "./match.js";
+   Sicherheitsreihenfolge:
+   1. das vollständige Backup gegen das PersonalDataRegistry dekodieren,
+   2. alle bisherigen registrierten Töpfe lesen,
+   3. einen rücklesbaren Rollback-Snapshot sichern,
+   4. den vorbereiteten Plan schreiben,
+   5. bei jedem Teilfehler den lokalen Vorherstand automatisch zurückspielen,
+   6. im Kontobetrieb alle Commits abwarten und bitgleich verifizieren.
 
-const RESTORE_SNAP = "kd:restore:vorher"; // Rollback-Snapshot (nicht in SYNC_MAP)
+   Restore ersetzt nur Felder, die im Backup vorhanden sind. Ältere Backups
+   löschen daher keine später hinzugekommenen persönlichen Töpfe. */
 
-function nowIso() { try { return new Date().toISOString(); } catch { return "" + Date.now(); } }
+import {
+  store, storageDriverName, activeSyncStatus, activeSyncFlush, activeSyncInventur,
+} from "./storage.js";
+import {
+  PERSONAL_DATA_ENTRIES, PERSONAL_DATA_KEYS, baueRestorePlan,
+} from "./personalDataRegistry.js";
 
-/* Alle Zieltöpfe + wie das Backup-Feld heißt. Storage-Wrapper exakt wie die App
-   liest (verifiziert an persistMaster/persistArtikel/persistPins/… im Bestand). */
-export async function restoreBackup(backup) {
-  if (!backup || typeof backup !== "object") throw new Error("Kein gültiges Backup-Objekt.");
-  if (backup.format !== "kinodreieck-backup") throw new Error('Falsches Format — erwartet format: "kinodreieck-backup".');
-  const warnung = (backup.version !== undefined && backup.version !== 1)
-    ? `Backup-Version ${backup.version} (erwartet 1) — wird tolerant eingelesen.` : null;
+const RESTORE_SNAP = "kd:restore:vorher";
 
-  // 1) Snapshot des bisherigen Standes ALLER Zieltöpfe VOR dem Überschreiben.
-  const keys = [K.master, K.artikel, K.kinoPins, K.merkliste, K.vokabular, K.einstellungen, K.entdeckenStatus, K.autorName, K.streamingDienste, K.mustwatch, K.achievements,
-    K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming,
-    K.geschmacksprofil];   // Etappe 7 -- diese Liste ist ZUGLEICH der Rollback-Snapshot
+function nowIso() {
+  try { return new Date().toISOString(); } catch { return String(Date.now()); }
+}
+
+async function leseVorherstand() {
   const vorher = {};
-  for (const k of keys) { try { const r = await store.get(k); vorher[k] = r ? r.value : null; } catch { vorher[k] = null; } }
-  // KD-008 (fail-closed): Ohne gesicherten Rollback-Snapshot NICHT überschreiben.
-  // Schlägt oder verschluckt der Snapshot-Write (localStorage voll/blockiert/privat),
-  // den Restore ABBRECHEN, BEVOR ein Zieltopf angefasst wird — sonst verspräche die UI
-  // fälschlich „als Snapshot gesichert, rückgängig machbar".
-  let snapshotOk = false;
+  for (const key of PERSONAL_DATA_KEYS) {
+    try {
+      const r = await store.get(key);
+      vorher[key] = r ? r.value : null;
+    } catch (error) {
+      throw new Error(`Vorherstand von ${key} konnte nicht gelesen werden — Restore abgebrochen, es wurde nichts überschrieben.`, { cause: error });
+    }
+  }
+  return vorher;
+}
+
+function sichereSnapshot(vorher) {
   try {
-    localStorage.setItem(RESTORE_SNAP, JSON.stringify({ t: nowIso(), werte: vorher }));
-    snapshotOk = localStorage.getItem(RESTORE_SNAP) != null; // Rücklese: fängt auch stille No-op-Writes
-  } catch { snapshotOk = false; }
-  if (!snapshotOk) throw new Error("Rollback-Snapshot konnte nicht gesichert werden (Speicher voll oder blockiert) — Restore abgebrochen, es wurde nichts überschrieben.");
+    const paket = JSON.stringify({ t: nowIso(), werte: vorher });
+    localStorage.setItem(RESTORE_SNAP, paket);
+    return localStorage.getItem(RESTORE_SNAP) === paket;
+  } catch { return false; }
+}
 
-  const bericht = [];
-  const now = Date.now();
-  const add = (topf, status, count) => bericht.push({ topf, status, count });
+async function spieleWerte(wertMap, keys = PERSONAL_DATA_KEYS) {
+  const fehler = [];
+  for (const key of [...keys].reverse()) {
+    try {
+      const wert = wertMap[key] ?? null;
+      if (wert === null) await store.delete(key);
+      else await store.set(key, wert);
+    } catch (error) {
+      fehler.push({ key, error });
+    }
+  }
+  return fehler;
+}
 
-  // 2) Masterliste — ensureIds + App-Ablageformat {meta, filme, herkunft, gespeichertAm}
-  if (backup.masterliste && Array.isArray(backup.masterliste.filme)) {
-    const filme = ensureIds(backup.masterliste.filme);
-    const meta = backup.masterliste.meta || null;
-    await store.set(K.master, JSON.stringify({ meta, filme, herkunft: { typ: "storage", zeit: now, basis: "Restore-Import" }, gespeichertAm: now }));
-    add("Masterliste", "übernommen", filme.length);
-  } else add("Masterliste", "übersprungen (fehlte)", 0);
+async function verifiziereKonto(plan) {
+  const flush = await activeSyncFlush();
+  if (!flush.ok) return { ok: false, grund: "Konto-Übertragung konnte nicht abgeschlossen werden." };
 
-  // 3) Blog-Artikel — Wrapper {artikel, gespeichertAm}
-  if (Array.isArray(backup.artikel)) {
-    await store.set(K.artikel, JSON.stringify({ artikel: backup.artikel, gespeichertAm: now }));
-    add("Blog-Artikel", "übernommen", backup.artikel.length);
-  } else add("Blog-Artikel", "übersprungen (fehlte)", 0);
+  const inventur = await activeSyncInventur();
+  if (!inventur?.ok || inventur.noop) {
+    return { ok: false, grund: "Konto-Stand konnte nach der Wiederherstellung nicht geprüft werden." };
+  }
+  const abweichend = [];
+  for (const schritt of plan) {
+    const remote = inventur.zeilen?.[schritt.key];
+    if (!remote || String(remote.value ?? "") !== schritt.wert) abweichend.push(schritt.key);
+  }
+  return abweichend.length
+    ? { ok: false, grund: `Nicht bitgleich im Konto angekommen: ${abweichend.join(", ")}`, abweichend }
+    : { ok: true };
+}
 
-  // 4) Kino-Pins — Array
-  if (Array.isArray(backup.kino_pins)) {
-    await store.set(K.kinoPins, JSON.stringify(backup.kino_pins));
-    add("Kino-Pins", "übernommen", backup.kino_pins.length);
-  } else add("Kino-Pins", "übersprungen (fehlte)", 0);
+export async function restoreBackup(backup) {
+  if (!backup || typeof backup !== "object" || Array.isArray(backup)) {
+    throw new Error("Kein gültiges Backup-Objekt.");
+  }
+  if (backup.format !== "kinodreieck-backup") {
+    throw new Error('Falsches Format — erwartet format: "kinodreieck-backup".');
+  }
+  const warnung = (backup.version !== undefined && backup.version !== 1)
+    ? `Backup-Version ${backup.version} (erwartet 1) — wird tolerant eingelesen.`
+    : null;
 
-  // 5) Merkliste — Array
-  if (Array.isArray(backup.merkliste)) {
-    await store.set(K.merkliste, JSON.stringify(backup.merkliste));
-    add("Merkliste", "übernommen", backup.merkliste.length);
-  } else add("Merkliste", "übersprungen (fehlte)", 0);
-
-  // 6) Vokabular — Array
-  if (Array.isArray(backup.vokabular)) {
-    await store.set(K.vokabular, JSON.stringify(backup.vokabular));
-    add("Vokabular", "übernommen", backup.vokabular.length);
-  } else add("Vokabular", "übersprungen (fehlte)", 0);
-
-  // 7) Einstellungen — Objekt
-  if (backup.einstellungen && typeof backup.einstellungen === "object") {
-    await store.set(K.einstellungen, JSON.stringify(backup.einstellungen));
-    add("Einstellungen", "übernommen", 1);
-  } else add("Einstellungen", "übersprungen (fehlte)", 0);
-
-  // 8) Entdecken-Status — Objekt {watchmode_id: status}
-  if (backup.entdecken_status && typeof backup.entdecken_status === "object") {
-    await store.set(K.entdeckenStatus, JSON.stringify(backup.entdecken_status));
-    add("Entdecken-Status", "übernommen", Object.keys(backup.entdecken_status).length);
-  } else add("Entdecken-Status", "übersprungen (fehlte)", 0);
-
-  // 9) Autor-Name — roher String
-  if (typeof backup.autor === "string" && backup.autor.length) {
-    await store.set(K.autorName, backup.autor);
-    add("Autor-Name", "übernommen", 1);
-  } else add("Autor-Name", "übersprungen (fehlte)", 0);
-
-  // 10) Streaming-Dienste — optional; im Alt-Backup meist NICHT enthalten (Export-Lücke)
-  if (backup.streaming_dienste && typeof backup.streaming_dienste === "object") {
-    await store.set(K.streamingDienste, JSON.stringify(backup.streaming_dienste));
-    add("Streaming-Dienste", "übernommen", 1);
-  } else add("Streaming-Dienste", "ÜBERSPRUNGEN — nicht im Backup: Abos bitte manuell setzen", 0);
-
-  // 11) Must-Watch-Liste — Wrapper {eintraege, gespeichertAm} (10. Topf, seit 18.07.2026)
-  if (Array.isArray(backup.must_watch_liste)) {
-    await store.set(K.mustwatch, JSON.stringify({ eintraege: backup.must_watch_liste, gespeichertAm: now }));
-    add("Must-Watch-Liste", "übernommen", backup.must_watch_liste.length);
-  } else add("Must-Watch-Liste", "übersprungen (fehlte)", 0);
-
-  // 12) Egg-Achievements — {eggs:[...]} (11. Artefakt, Block 3); Alt-Backups ohne Feld werden übersprungen.
-  if (backup.achievements && typeof backup.achievements === "object") {
-    await store.set(K.achievements, JSON.stringify(backup.achievements));
-    add("Achievements", "übernommen", Array.isArray(backup.achievements.eggs) ? backup.achievements.eggs.length : 0);
-  } else add("Achievements", "übersprungen (fehlte)", 0);
-
-  // 13) Sicht-/Zeit-Präferenzen (Etappe 3) — rohe Strings. Alt-Backups haben sie nicht.
-  const prefs = [
-    [K.zeitgrenze, backup.zeitgrenze, "Kino-Zeitfilter"],
-    [K.filterMediathek, backup.filter_mediathek, "Filtermenü Mediathek"],
-    [K.filterKino, backup.filter_kino, "Filtermenü Kino"],
-    [K.filterStreaming, backup.filter_streaming, "Filtermenü Streaming"],
-  ];
-  for (const [topfKey, wert, label] of prefs) {
-    if (typeof wert === "string" && wert.length) {
-      await store.set(topfKey, wert);
-      add(label, "übernommen", 1);
-    } else add(label, "übersprungen (fehlte)", 0);
+  /* Vollständiges Decode/Validate VOR dem ersten Storage-Zugriff. Ein kaputtes
+     späteres Feld kann dadurch nicht mehr einen halbfertigen Restore auslösen. */
+  const { plan, bericht } = baueRestorePlan(backup, Date.now());
+  const vorher = await leseVorherstand();
+  if (!sichereSnapshot(vorher)) {
+    throw new Error("Rollback-Snapshot konnte nicht gesichert werden (Speicher voll oder blockiert) — Restore abgebrochen, es wurde nichts überschrieben.");
   }
 
-  /* 14) Geschmacksprofil (Etappe 7) -- Objekt-Topf. Alt-Backups haben ihn nicht;
-     dann wird uebersprungen, NICHT geleert (sonst loeschte ein aelteres Backup
-     das Profil still). */
-  if (backup.geschmacksprofil && typeof backup.geschmacksprofil === "object") {
-    await store.set(K.geschmacksprofil, JSON.stringify(backup.geschmacksprofil));
-    add("Geschmacksprofil", "übernommen",
-      Array.isArray(backup.geschmacksprofil.signale) ? backup.geschmacksprofil.signale.length : 0);
-  } else add("Geschmacksprofil", "übersprungen (fehlte)", 0);
+  const geschrieben = [];
+  try {
+    for (const schritt of plan) {
+      await store.set(schritt.key, schritt.wert);
+      geschrieben.push(schritt.key);
+    }
+  } catch (error) {
+    const rollbackFehler = await spieleWerte(vorher, geschrieben);
+    await activeSyncFlush();
+    if (rollbackFehler.length) {
+      const e = new Error(
+        `Restore und automatische Rücknahme sind fehlgeschlagen (${rollbackFehler.map((f) => f.key).join(", ")}). Der gesicherte Rückholpunkt bleibt erhalten.`,
+        { cause: error },
+      );
+      e.code = "restore-rollback-failed";
+      throw e;
+    }
+    const e = new Error("Restore ist beim Schreiben fehlgeschlagen und wurde vollständig auf den vorherigen lokalen Stand zurückgesetzt.", { cause: error });
+    e.code = "restore-rolled-back";
+    throw e;
+  }
 
-  // Treiber-agnostischer Hinweis: Restore schreibt über `store`. Ist ein Sync-Treiber
-  // aktiv, pusht er die Schlüssel in die Owner-Zeilen (Hintergrund-Commit). Ohne gültige
-  // Konfiguration (z.B. fehlender Sync-Schlüssel) landet der Import nur im lokalen Cache —
-  // das wird sauber gemeldet, kein stiller „Erfolg".
-  let dbHinweis = null, dbWarnung = false;
+  let dbHinweis = null;
+  let dbWarnung = false;
+  let remoteVerifiziert = null;
   try {
     const drv = storageDriverName();
     if (drv === "konto") {
-      /* Etappe 3: im Kontobetrieb gibt es keinen Schlüssel mehr, den man vergessen
-         könnte — die Sitzung entscheidet. Entsprechend ehrlicher Hinweis. */
       const st = activeSyncStatus();
-      dbHinweis = st.configured
-        ? "Konto aktiv: die wiederhergestellten Bereiche werden im Hintergrund in dein Konto übertragen."
-        : "Konto-Verbindung nicht eingerichtet: die Daten liegen nur LOKAL, NICHT in der Datenbank.";
-      dbWarnung = !st.configured;
+      if (!st.configured) {
+        dbWarnung = true;
+        remoteVerifiziert = false;
+        dbHinweis = "Konto-Verbindung nicht eingerichtet: Die Wiederherstellung ist lokal vollständig, aber noch nicht im Konto gespeichert.";
+      } else {
+        const pruefung = await verifiziereKonto(plan);
+        remoteVerifiziert = pruefung.ok;
+        dbWarnung = !pruefung.ok;
+        dbHinweis = pruefung.ok
+          ? "Konto aktiv: Alle wiederhergestellten Bereiche wurden übertragen und bitgleich geprüft."
+          : `${pruefung.grund} Die lokale Wiederherstellung bleibt vollständig erhalten; bitte „Ausstehende senden“ erneut versuchen.`;
+      }
     } else if (drv && drv !== "lokal") {
       const st = activeSyncStatus();
       if (st.configured) {
-        dbHinweis = `Treiber „${drv}" aktiv: die Schlüssel werden im Hintergrund in deine Owner-Zeilen geschrieben.`;
+        await activeSyncFlush();
+        dbHinweis = `Treiber „${drv}" aktiv: Die registrierten Bereiche wurden lokal wiederhergestellt und die Übertragung angestoßen.`;
       } else {
         dbWarnung = true;
-        dbHinweis = `Treiber „${drv}" ist nicht vollständig konfiguriert (Sync-Schlüssel fehlt): die Daten liegen nur LOKAL, NICHT in der Datenbank. Schlüssel eintragen und „Ausstehende senden".`;
+        dbHinweis = `Treiber „${drv}" ist nicht vollständig konfiguriert: Die Daten liegen nur LOKAL, NICHT in der Datenbank.`;
       }
     }
-  } catch { /* Hinweis best effort */ }
+  } catch (error) {
+    dbWarnung = true;
+    remoteVerifiziert = false;
+    dbHinweis = `Die lokale Wiederherstellung ist vollständig; die Konto-Verifikation ist fehlgeschlagen (${String(error?.message || error)}).`;
+  }
 
-  return { ok: true, warnung, bericht, dbHinweis, dbWarnung };
+  return {
+    ok: true,
+    warnung,
+    bericht,
+    dbHinweis,
+    dbWarnung,
+    remoteVerifiziert,
+  };
 }
 
-/* Rückgängig: den vor dem letzten Restore gesicherten Stand zurückschreiben. */
+/* Rückgängig verwendet dieselbe geschlossene Registry-Liste; fremde Schlüssel
+   aus einer manipulierten Snapshot-Datei werden niemals geschrieben. */
 export async function restoreRueckgaengig() {
-  let snap; try { snap = JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null"); } catch { snap = null; }
-  if (!snap || !snap.werte) throw new Error("Kein Restore-Snapshot vorhanden.");
-  for (const [k, v] of Object.entries(snap.werte)) {
-    try { if (v === null) await store.delete(k); else await store.set(k, v); } catch { /* einzelner Topf */ }
+  let snap;
+  try { snap = JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null"); }
+  catch { snap = null; }
+  if (!snap || !snap.werte || typeof snap.werte !== "object") {
+    throw new Error("Kein Restore-Snapshot vorhanden.");
+  }
+  const fehler = await spieleWerte(snap.werte);
+  await activeSyncFlush();
+  if (fehler.length) {
+    throw new Error(`Restore-Rücknahme unvollständig: ${fehler.map((f) => f.key).join(", ")}.`);
   }
   return { ok: true, t: snap.t };
 }
 
 export function hatRestoreSnapshot() {
-  try { return !!JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null"); } catch { return false; }
+  try { return !!JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null"); }
+  catch { return false; }
 }
+
+/* Benannter Export für Architekturtests und Diagnose, ohne eine zweite Liste. */
+export const RESTORE_KEYS = PERSONAL_DATA_ENTRIES.map((e) => e.key);

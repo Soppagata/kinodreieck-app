@@ -62,8 +62,14 @@ const KATALOG_ZEILEN = {
   programm_demo: { payload: snapDemo, quelle: "demo-schnappschuss" },
   streaming: { payload: { bekannt: { ...bekanntSnapshot, demo: false }, entdecken: { ...entdeckenSnapshot, demo: false } }, quelle: "watchmode" },
   streaming_demo: { payload: { bekannt: bekanntSnapshot, entdecken: entdeckenSnapshot }, quelle: "demo-schnappschuss" },
+  streaming_bekannt: { payload: { ...bekanntSnapshot, demo: false }, quelle: "watchmode" },
+  streaming_entdecken: { payload: { ...entdeckenSnapshot, demo: false }, quelle: "watchmode" },
+  streaming_bekannt_demo: { payload: bekanntSnapshot, quelle: "demo-schnappschuss" },
+  streaming_entdecken_demo: { payload: entdeckenSnapshot, quelle: "demo-schnappschuss" },
 };
-const NUR_ANGEMELDET = new Set(["programm", "streaming"]);
+const NUR_ANGEMELDET = new Set([
+  "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
+]);
 function katalogAntwort(url, opts = {}) {
   const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");
   const zeile = KATALOG_ZEILEN[name];

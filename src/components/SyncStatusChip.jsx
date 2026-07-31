@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { T } from "../lib/tokens.js";
 import { activeSyncStatus } from "../services/storage.js";
 
-/* Leitet aus dem Git-Sync-Status die drei Vertrauens-Zustände ab:
-   synchron / ausstehend / Konflikt. Ohne Git-Konfig: neutral (null). */
+/* Leitet aus dem aktiven Kontospeicher die drei Vertrauens-Zustände ab:
+   synchron / ausstehend / Konflikt. Im lokalen Gastmodus: neutral (null). */
 function ableiten(s) {
   if (!s || !s.configured) return null;
   if (s.conflict && s.conflict.length) return { farbe: T.gefahr, bg: "rgba(217,106,90,0.14)", text: "Konflikt" };

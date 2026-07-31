@@ -331,22 +331,6 @@ check("Demo-Read verwendet ersatzweise den eingegebenen Katalogzugang", !!demoPe
 check("Demo-Read sendet den Katalog-Publishable-Key nur als apikey",
   fetchCalls.at(-1)?.apikey === "sb_publishable_katalogtest" && fetchCalls.at(-1)?.authorization == null && fetchCalls.at(-1)?.keyHdr == null);
 
-/* 20) Geteilte Blogs verwenden dieselbe reine Public-Read-Grenze. */
-seed("andere", "blog:alien", JSON.stringify({ id: "alien", titel: "Alien", liste: [] }), "shared");
-fetchCalls = [];
-const shared = await S.ladeSharedBlogs();
-check("Shared-Blog-Read liefert öffentliche Beiträge", shared.ok && shared.blogs[0]?.artikel?.titel === "Alien");
-check("Shared-Blog-Read sendet Publishable-Key ohne Bearer und ohne Sync-Key",
-  fetchCalls.at(-1)?.apikey === "sb_publishable_katalogtest"
-  && fetchCalls.at(-1)?.authorization == null
-  && fetchCalls.at(-1)?.keyHdr == null);
-localStorage.setItem("kd:katalog:key", "eyJ" + "z".repeat(40));
-fetchCalls = [];
-await S.ladeSharedBlogs();
-check("Shared-Blog-Read unterstützt Legacy-JWT weiterhin",
-  fetchCalls.at(-1)?.authorization === "Bearer " + fetchCalls.at(-1)?.apikey
-  && fetchCalls.at(-1)?.keyHdr == null);
-
 /* ---------- Auswertung ---------- */
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }

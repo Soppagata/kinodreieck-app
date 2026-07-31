@@ -17,33 +17,62 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
    ============================================================ */
 
 import { T, btnStyle, setzeTheme } from "./lib/tokens.js";
-import { initSetup, getSetup, getTutorial, setWillkommen, resetTutorial, istGesehen, markGesehen, setupUeberspringen } from "./lib/tutorial.js";
-import { Willkommen } from "./components/Willkommen.jsx";
-import { kiAn, ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
-import { baueHinweis, onTour, SICHTBAR_TRIGGER, setTourOffen } from "./lib/tour.js";
-import { TourOverlay } from "./components/TourOverlay.jsx";
+import { initSetup, setupUeberspringen } from "./lib/tutorial.js";
+import { ladeStand as ladeKiStand, setzeGlobal as setzeKiGlobalRoh, setzeFunktion as setzeKiFunktionRoh } from "./lib/kiSchalter.js";
 import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
-  store, K, PROGRAMM_TTL_MS, storageService, aktiviereKontoTreiber,
+  store, K, PROGRAMM_TTL_MS, storageService,
 } from "./services/storage.js";
-import { ladeKontostandNachDemo } from "./services/demoAccountWechsel.js";
 import { baueBackup } from "./lib/backup.js";
 import { catalogService } from "./services/catalog.js";
-import { authService } from "./services/auth.js";
+import { sessionCoordinator } from "./services/sessionCoordinator.js";
+import { sharedArticlesService } from "./services/sharedArticles.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
-import { erstelleVorbewertung } from "./services/vorbewertung.js";
-import { filmwissenService } from "./services/filmwissen.js";
-import { ladeProfil } from "./lib/profil.js";
-import { setzePrognoseStatus } from "./lib/prognose.js";
-import { matchFilm, ensureIds, slugId, score, norm } from "./lib/match.js";
-import { hatPhysischeQuelle } from "./lib/quellen.js"; // B4: kanonisches Besitz-Modell (physische Quelle)
+import {
+  liesStartWahl,
+  startWahlBestaetigt,
+  verbraucheFrischenStart,
+  snapshotsFrei,
+  START_WAHL_VERSION,
+} from "./controllers/onboardingController.js";
+import {
+  zeitpunkt,
+  IMPORT_INFO,
+  demoLadung,
+  ladeEntdeckenBeilage,
+  streamingBekanntSnapshot,
+  streamingEntdeckenSnapshot,
+  programmSnapshot,
+} from "./controllers/catalogController.js";
+import { useIntelligenceController } from "./controllers/useIntelligenceController.js";
+import {
+  schreibeImportSnapshot,
+  gueltigerArtikel,
+  baueRefUniversum,
+  baueKinoMatches,
+  reicheFinderMasterAn,
+  sichtbarerNachtrag,
+} from "./controllers/libraryController.js";
+import { useEggController } from "./controllers/useEggController.js";
+import { ensureIds, slugId } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
-import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, reconcileGezogene } from "./lib/artikel.js";
+import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel } from "./lib/artikel.js";
+import {
+  SHARED_PUBLICATION_ACTION,
+  beginPublication,
+  completePublication,
+  failPublication,
+  needsRemoteRemoval,
+  publicationOperationId,
+  recoverInterruptedPublication,
+  publicationRetryAction,
+  publicationState,
+} from "./lib/sharedPublication.js";
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
-import { setzeEigeneStimmungen, filmHerkunft } from "./lib/finder.js";
+import { setzeEigeneStimmungen } from "./lib/finder.js";
 import { sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -53,273 +82,31 @@ import { BlogTab } from "./tabs/BlogTab.jsx";
 import { FinderTab } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 
-import nachtragDatei from "./data/nachtrag.json";
-import { PERSONAL_MODE, EGGS_ENABLED, EGG_AKTIV } from "./lib/modus.js";
+import { EGGS_ENABLED } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
-import { NavBand } from "./components/NavBand.jsx";
+import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
+import { HilfeSheet } from "./components/HilfeSheet.jsx";
 import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
-import { berechneUnlocks, ladeAchievements, speichereAchievements, liveVertreter, SCHWELLEN_EGGS } from "./lib/eggs.js";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
-import { Teppich } from "./components/Teppich.jsx";
-import { Crawl } from "./components/Crawl.jsx";                       // B4-Egg
-import { NecronomiconRand } from "./components/NecronomiconRand.jsx"; // B4-Egg
-import { wuerfleTag, schonGefeuertHeute, markiereGefeuert, istVorbeiGescrollt, tagesSchluessel } from "./lib/eggFrequenz.js";
-import { crawlHeute, istVierterMai } from "./lib/momentEggs.js";       // B4-Egg
-
-/* ---- Beta-Startwahl: Clean (leer, KEINE Daten in der Datei) vs. Demo ----
-   Die ausgelieferte Kinodreieck.html enthält bewusst KEINE Masterdaten. Die
-   Demo lädt eine Beilage `Programmdateien/System/demo_masterliste.js` (klassisches
-   Script, setzt globales __KD_DEMO_MASTER__). So bleibt die Clean-Datei spurenfrei;
-   die Beilage liegt zwei Ebenen tiefer im Paket. file://-Grund: klassische
-   <script src>-Ladung aus Unterordnern funktioniert, fetch() würde blockiert. */
-function liesStartWahl() {
-  try {
-    const url = (typeof location !== "undefined") ? (location.search + location.hash) : "";
-    const m = /[?&#]start=(demo|clean)/.exec(url);
-    if (m) return m[1];
-  } catch { /* */ }
-  try {
-    const v = localStorage.getItem("kd:start");
-    if (v === "demo" || v === "clean") return v;
-  } catch { /* */ }
-  return null;
-}
-
-/* Ein alter Test-/Beta-Build konnte `kd:start=clean` still setzen. Dieser Wert
-   darf die neue, ausdrücklich verlangte Clean-/Demo-Entscheidung nicht für immer
-   überspringen. Die Versionsmarke entsteht nur durch eine bewusste Wahl im
-   aktuellen Dialog; URL-Parameter bleiben eine ebenso bewusste Ausnahme. */
-const START_WAHL_VERSION = "demo-v1";
-function startWahlBestaetigt() {
-  try {
-    const url = (typeof location !== "undefined") ? (location.search + location.hash) : "";
-    if (/[?&#]start=(demo|clean)(?:[&#]|$)/.test(url)) return true;
-    return localStorage.getItem(K.startVersion) === START_WAHL_VERSION;
-  } catch { return false; }
-}
-
-/* Ein Installer-Auftrag ist absichtlich destruktiv, aber nur genau einmal. Der
-   Token wird VOR dem Löschen als verbraucht markiert. Bei einem Reload derselben
-   URL bleibt ein danach neu aufgebauter Browser-Stand deshalb erhalten. */
-let frischerStartMemo;
-function verbraucheFrischenStart() {
-  /* Personal-Modus: Der destruktive Installer-Pfad (?start=…&fresh=…) gehört zur
-     Tester-Kulisse. Ohne diesen Guard würde jeder alte Installer-/Bookmark-Link
-     8 persönliche Datentöpfe löschen — auf einem Gerät ohne Git-Sync unwiderruflich. */
-  if (PERSONAL_MODE) { frischerStartMemo = null; return null; }
-  if (frischerStartMemo !== undefined) return frischerStartMemo;
-  frischerStartMemo = null;
-  try {
-    const url = (typeof location !== "undefined") ? (location.search + location.hash) : "";
-    const startMatch = /[?&#]start=(demo|clean)(?:[&#]|$)/.exec(url);
-    const tokenMatch = /[?&#]fresh=([^&#]+)/.exec(url);
-    if (!startMatch || !tokenMatch) return null;
-    const token = decodeURIComponent(tokenMatch[1]);
-    if (!/^[A-Za-z0-9._~-]{8,160}$/.test(token)) return null;
-    if (localStorage.getItem(K.startAuftrag) === token) return null;
-
-    localStorage.setItem(K.startAuftrag, token);
-    localStorage.setItem(K.start, startMatch[1]);
-    /* Alles, was einen frischen Start persönlich machen würde. Die Liste ist
-       der Link, der an Beta-Tester geht — was hier fehlt, überlebt einen
-       „frischen Start" still. Etappe 7 ergänzt das Geschmacksprofil: es ist
-       die persönlichste Ablage der App und trug den Einwilligungsvermerk
-       samt allen Signalen über den Reset hinweg. Die vier Präferenz-Töpfe,
-       Must-Watch und Achievements kommen aus demselben Grund dazu — bei
-       ihnen ist es Kosmetik, beim Profil war es ein Datenschutzloch. */
-    const persoenlich = [K.master, K.artikel, K.merkliste, K.kinoPins,
-      K.entdeckenStatus, K.vokabular, K.exportStand, K.autorName,
-      K.geschmacksprofil, K.mustwatch, K.achievements,
-      K.zeitgrenze, K.filterMediathek, K.filterKino, K.filterStreaming,
-      K.einstellungen, K.streamingDienste];   // damit sind alle 16 Konto-Toepfe gedeckt
-    persoenlich.forEach((key) => localStorage.removeItem(key));
-    frischerStartMemo = startMatch[1];
-  } catch { /* Storage blockiert: normaler, nicht-destruktiver Boot */ }
-  return frischerStartMemo;
-}
-
-/* Willkommen und Tour werden erst nach einer bestätigten Einrichtung oder dem
-   bewussten Überspringen des Installers freigeschaltet. */
-function tutorialFrei() {
-  try { return !!liesStartWahl() && startWahlBestaetigt(); } catch { return false; }
-}
-
-function snapshotsFrei() {
-  return catalogService.hasConnection();
-}
-
-/* ISO-Zeitstempel des Katalogs -> ms. Liefert null statt „jetzt", damit ein
-   fehlender Stand nirgends als frischer Stand durchgeht. */
-function zeitpunkt(wert) {
-  if (wert == null || wert === "") return null;
-  const t = typeof wert === "number" ? wert : Date.parse(wert);
-  return Number.isFinite(t) ? t : null;
-}
-
-/* Beschreibung eines manuell eingespielten Programms (Notfallweg über
-   Einstellungen → Erweitert). Die Daten kommen aus der Hand des Nutzers, nicht
-   aus dem Katalog: kein Ablaufurteil, keine Betriebsart — `variante` bleibt
-   bewusst leer, damit der Varianten-Abgleich beim Boot den Import nicht als
-   fremden Stand verwirft — und selbstverständlich kein geerbter Fehler.
-   Ohne dieses eigene Etikett behielte der Import die Beschreibung des zuvor
-   gescheiterten oder abgelaufenen Versuchs. */
-const IMPORT_INFO = (stand) => ({
-  art: "manuell", variante: null, stand, gueltigBis: null,
-  abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null,
-});
-
-/* Demo-Beilage bei Bedarf laden (einmalig, idempotent). Tests setzen
-   window.__KD_DEMO_MASTER__ direkt -> kein Script-Load nötig. */
-let demoLadePromise = null;
-function ladeDemoGlobal() {
-  if (typeof window !== "undefined" && window.__KD_DEMO_MASTER__) return Promise.resolve(window.__KD_DEMO_MASTER__);
-  if (demoLadePromise) return demoLadePromise;
-  demoLadePromise = new Promise((resolve, reject) => {
-    try {
-      const s = document.createElement("script");
-      s.src = "Programmdateien/System/demo_masterliste.js"; // relativ zur HTML (Unterordner; file://-tauglich)
-      s.onload = () => (window.__KD_DEMO_MASTER__ ? resolve(window.__KD_DEMO_MASTER__) : reject(new Error("demo_masterliste.js geladen, aber leer.")));
-      s.onerror = () => { demoLadePromise = null; reject(new Error("demo_masterliste.js nicht ladbar — fehlt Programmdateien/System/demo_masterliste.js im Paket?")); };
-      document.head.appendChild(s);
-    } catch (e) { demoLadePromise = null; reject(e); }
-  });
-  return demoLadePromise;
-}
-async function demoLadung() {
-  /* Phase 5: Demo-Masterliste per anon-Read aus Supabase (scope=demo) statt der
-     synthetischen Beilage. Fallback auf die Beilage/__KD_DEMO_MASTER__ (Tests bzw.
-     wenn keine Demo-Quelle konfiguriert ist). Wie zuvor: NICHT persistiert bis zur
-     Bearbeitung — die Demo lebt in React-State, nicht im Storage. */
-  try {
-    const blobs = await catalogService.loadDemo();
-    const roh = blobs && blobs["kd:master"];
-    if (roh) {
-      const d = JSON.parse(roh);
-      const parse = (key, fallback = null) => {
-        try { return blobs[key] ? JSON.parse(blobs[key]) : fallback; } catch { return fallback; }
-      };
-      return {
-        filme: ensureIds(d.filme || []), meta: d.meta || null,
-        herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null },
-        streaming: parse("kd:streaming-dienste"),
-        artikel: parse("kd:artikel"),
-        pins: parse("kd:kino-pins", []),
-        mustwatch: parse("kd:mustwatch"),
-        merkliste: parse("kd:merkliste", []),
-      };
-    }
-  } catch (e) {
-    /* Tests und die alte file://-Ausgabe besitzen weiterhin die Beilage. In der
-       gehosteten PWA darf ein DB-Fehler nicht unbemerkt synthetische Daten laden. */
-    const file = typeof location !== "undefined" && location.protocol === "file:";
-    const test = typeof window !== "undefined" && !!window.__KD_DEMO_MASTER__;
-    if (!file && !test) throw e;
-  }
-  const d = await ladeDemoGlobal();
-  return {
-    filme: ensureIds(d.filme || []),
-    meta: d.meta || null,
-    herkunft: { typ: "demo", zeit: (d.meta && d.meta.erstellt_am) || null },
-  };
-}
-/* Legacy-Beilage für die alte Single-File-/file://-Ausgabe laden, optional.
-   Die gehostete PWA lädt zuerst public/streaming_entdecken.json; dieser Sidecar-Pfad
-   bleibt nur für alte Kinodreieck.html-Pakete bestehen und wird dort von
-   build_streaming_ansicht.js erzeugt. Fehlt er, greift der eingebettete Snapshot.
-   Tests setzen window.__KD_STREAMING_ENTDECKEN__ direkt. */
-let entdeckenBeilagePromise = null;
-function ladeEntdeckenBeilage() {
-  if (typeof window !== "undefined" && window.__KD_STREAMING_ENTDECKEN__) return Promise.resolve(window.__KD_STREAMING_ENTDECKEN__);
-  if (entdeckenBeilagePromise) return entdeckenBeilagePromise;
-  entdeckenBeilagePromise = new Promise((resolve) => {
-    try {
-      const s = document.createElement("script");
-      s.src = "Programmdateien/System/streaming_entdecken.js"; // relativ zur HTML
-      s.onload = () => resolve(window.__KD_STREAMING_ENTDECKEN__ || null);
-      s.onerror = () => { entdeckenBeilagePromise = null; resolve(null); }; // fehlt -> Fallback Top 500
-      document.head.appendChild(s);
-    } catch { entdeckenBeilagePromise = null; resolve(null); }
-  });
-  return entdeckenBeilagePromise;
-}
-/* Streaming-Snapshots: beim Bauen eingebettet (Single-File/file://-Fallback);
-   im Serve-Betrieb gewinnen die frischen public/-Dateien. */
-import streamingBekanntSnapshot from "./data/streaming_bekannt_snapshot.json";
-import streamingEntdeckenSnapshot from "./data/streaming_entdecken_snapshot.json";
-/* Beim Bauen eingebetteter Programm-Snapshot: Fallback, wenn public/programm.json
-   nicht erreichbar ist (z.B. Doppelklick-Nutzung der Single-File-Version, file://). */
-import programmSnapshot from "./data/programm-snapshot.json";
-import masterWikidata from "./data/master_wikidata.json"; // Sidecar (Phase 4b): id -> {reihe,franchise,regie} Namen
-
-/* Nachtrag flach: [{titel, jahr, quellen[], edition}] */
-const NACHTRAG_FLACH = [].concat(nachtragDatei.beide || [], nachtragDatei.nur_dvd || [], nachtragDatei.nur_prime || [], nachtragDatei.nur_apple || []);
-
-/* KD-004: Fail-closed Rollback-Snapshot vor einem destruktiven Import (analog
-   restore.js KD-008). Schreibt den aktuellen Stand nach kd:import:vorher:* und
-   liest zurück (fängt stille No-op-Writes/vollen Speicher). Ohne gesicherten
-   Snapshot wird der Import NICHT ausgeführt — sonst ginge ein Fehlimport
-   unwiederbringlich verloren. */
-function schreibeImportSnapshot(key, wert) {
-  try {
-    localStorage.setItem(key, JSON.stringify({ t: new Date().toISOString(), wert }));
-    return localStorage.getItem(key) != null;
-  } catch { return false; }
-}
-
-/* KD-006: struktursicherer Blog-Artikel (Schema artikel.js: {id,titel,text,liste[]}).
-   Der Blog rendert a.liste.map(...) und a.text — ein Array-loses `liste` oder ein
-   Nicht-String-`text` crasht die Ansicht. Nur diese harten Felder werden geprüft;
-   der Rest bleibt tolerant. */
-function gueltigerArtikel(a) {
-  return !!a && typeof a === "object"
-    && typeof a.id === "string" && a.id.length > 0
-    && typeof a.titel === "string"
-    && Array.isArray(a.liste)
-    && a.liste.every((le) => !!le && typeof le === "object")
-    && (a.text === undefined || a.text === null || typeof a.text === "string");
-}
 
 export default function App() {
-  const [session, setSession] = useState(() => authService.getSnapshot());
-  useEffect(() => authService.subscribe(setSession), []);
+  const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
+  useEffect(() => sessionCoordinator.subscribe(setSession), []);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [tab, setTab] = useState("start");
   /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
      sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
   const tabRef = useRef(tab);
   tabRef.current = tab;
-  const [navOffen, setNavOffen] = useState(false); // Mobile-Nav-Drawer offen?
-  const navRef = useRef(null);
-  const griffRef = useRef(null);
-  const drawerWarOffen = useRef(false);
-  // Drawer-a11y gilt nur am Handy: dort ist .kd-menu das Popup; am Desktop (>760px)
-  // ist dasselbe Element die Sticky-Leiste und muss bedienbar bleiben (kein inert).
-  // jsdom-Tests laufen mit innerWidth 1024 = Desktop -> keine Verhaltensänderung dort.
-  const [istMobil, setIstMobil] = useState(() => typeof window !== "undefined" && window.innerWidth <= 760);
-  useEffect(() => {
-    if (!navOffen) return;
-    const onKey = (e) => { if (e.key === "Escape") setNavOffen(false); };
-    window.addEventListener("keydown", onKey);
-    // Hintergrund-Scroll sperren, solange der Drawer offen ist (Wisch auf dem Scrim).
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
-  }, [navOffen]);
-  // Viewport beobachten (Drawer-a11y gilt nur am Handy).
-  useEffect(() => {
-    const onResize = () => setIstMobil(window.innerWidth <= 760);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+  const [mehrOffen, setMehrOffen] = useState(false);
+  const [hilfeOffen, setHilfeOffen] = useState(false);
+  const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
+  const navigiere = useCallback((id) => {
+    setTab(id);
+    setMehrOffen(false);
+    try { window.scrollTo(0, 0); } catch { /* */ }
   }, []);
-  // Fokus-Management (nur Handy): beim Öffnen auf den ersten Menüpunkt, beim Schließen
-  // zurück auf den Griff — kein Tastatur-/SR-Fokus im inerten, verborgenen Popup.
-  useEffect(() => {
-    if (!istMobil) { drawerWarOffen.current = navOffen; return; }
-    if (navOffen && !drawerWarOffen.current) navRef.current?.querySelector("button")?.focus();
-    else if (!navOffen && drawerWarOffen.current) griffRef.current?.focus();
-    drawerWarOffen.current = navOffen;
-  }, [navOffen, istMobil]);
   const [master, setMaster] = useState(null);
   const masterRef = useRef(master);
   masterRef.current = master;
@@ -338,12 +125,36 @@ export default function App() {
   const [streamingInfo, setStreamingInfo] = useState(null);
   const [streamingBekannt, setStreamingBekannt] = useState(null);
   const [streamingEntdecken, setStreamingEntdecken] = useState(null);
+  /* Dieser Zustand wird bereits vom Boot und von der gezielten
+     Demo-Bereinigung gebraucht; seine Grenze muss deshalb vor diesen
+     Callbacks liegen. */
+  const ALTE_SLUGS = { netflix: "Netflix", disney_plus: "Disney+", prime_video: "Prime Video" };
+  const [auswahl, setAuswahlRoh] = useState([]);
+  const [heuristikAn, setHeuristikAn] = useState(true);
+  const streamingCfgJson = (quellen, heuristik) => JSON.stringify({ quellen, heuristik });
+  useEffect(() => {
+    store.get(K.streamingDienste).then((r) => {
+      if (r && r.value) {
+        try {
+          const v = JSON.parse(r.value);
+          if (Array.isArray(v.quellen)) setAuswahlRoh(v.quellen);
+          else if (Array.isArray(v.dienste)) setAuswahlRoh(v.dienste.map((d) => ALTE_SLUGS[d] || d));
+          if (typeof v.heuristik === "boolean") setHeuristikAn(v.heuristik);
+        } catch { /* Default */ }
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState("");
   const [err, setErr] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
+  /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
+     Wechsel werden weiter unten gezielt behandelt; ein erneutes Einlesen hier
+     würde dabei einen gerade verworfenen, alten Anzeigestand zurückholen. */
+  const storageBootGestartet = useRef(false);
   const autoFetched = useRef(false);
   /* Der Boot hat einen Anzeigestand übernommen, der trotzdem nachgeladen gehört
      (abgelaufener Schnappschuss). Der Autoload feuert sonst nur bei leerem
@@ -364,6 +175,8 @@ export default function App() {
   const streamingGeladen = useRef(false);
   const entdeckenGeladen = useRef(false); // KD-031: Voll-Katalog getrennt vom leichten Boot-Nachladen
   const streamingRohRef = useRef(null);
+  const streamingBekanntLaufRef = useRef(null);
+  const streamingEntdeckenLaufRef = useRef(null);
 
   const saveZeitgrenze = useCallback(async (v) => {
     setZeitgrenze(v);
@@ -374,31 +187,53 @@ export default function App() {
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
   const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
-  const setzeEinstellung = useCallback((k, v) => {
-    setEinstellungenState((prev) => {
-      const next = { ...prev, [k]: v };
-      if (k === "theme") setzeTheme(v);
-      store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+  const bereinigteEinstellungen = useCallback((wert) => {
+    const next = { ...wert };
+    delete next.linkshaender;
+    return next;
   }, []);
+  const setzeEinstellung = useCallback((k, v) => {
+    const next = bereinigteEinstellungen({ ...einstellungen, [k]: v });
+    setEinstellungenState(next);
+    if (k === "theme") setzeTheme(v);
+    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
+  }, [einstellungen, bereinigteEinstellungen]);
   /* ---- Darstellungs-Modi: Saal/Foyer/Showa/NERV in EINER Gruppe.
      Die Spezialmodi erzwingen jeweils ihr dunkles Theme;
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
   const modusWrapRef = useRef(null);
   const waehleModus = useCallback((wahl) => {
-    setEinstellungenState((prev) => {
-      let next;
-      if (wahl === "showa" || wahl === "nerv") {
-        const basisTheme = prev.modus ? (prev.basisTheme || "dunkel") : prev.theme;
-        next = { ...prev, modus: wahl, basisTheme, theme: "dunkel" };
-      } else if (wahl === "foyer") next = { ...prev, modus: "", basisTheme: undefined, theme: "hell" };
-      else next = { ...prev, modus: "", basisTheme: undefined, theme: "dunkel" };
-      setzeTheme(next.modus || next.theme);
-      store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-  }, []);
+    let next;
+    if (wahl === "showa" || wahl === "nerv") {
+      const basisTheme = einstellungen.modus
+        ? (einstellungen.basisTheme || "dunkel")
+        : einstellungen.theme;
+      next = {
+        ...einstellungen,
+        modus: wahl,
+        basisTheme,
+        theme: "dunkel",
+      };
+    } else if (wahl === "foyer") {
+      next = {
+        ...einstellungen,
+        modus: "",
+        basisTheme: undefined,
+        theme: "hell",
+      };
+    } else {
+      next = {
+        ...einstellungen,
+        modus: "",
+        basisTheme: undefined,
+        theme: "dunkel",
+      };
+    }
+    next = bereinigteEinstellungen(next);
+    setEinstellungenState(next);
+    setzeTheme(next.modus || next.theme);
+    store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
+  }, [einstellungen, bereinigteEinstellungen]);
   /* NERV-Glitch-Takt: seltener, kurzer Klassensprung am Wrapper (der Rest ist
      reines CSS). Showa braucht keinen JS-Takt — Korn/Vignette/Skyline/Kaiju laufen
      als CSS-Overlays. prefers-reduced-motion => gar kein Takt. */
@@ -417,69 +252,6 @@ export default function App() {
     timers.push(setTimeout(puls, rnd(2600, 6000)));
     return () => { timers.forEach(clearTimeout); if (modusWrapRef.current) modusWrapRef.current.classList.remove("kd-glitch"); };
   }, [einstellungen.modus]);
-
-  /* ---- Eastereggs (Block 3, nur PERSONAL_MODE): Achievement-Topf + Toast ----
-     kd:achievements = Set freigeschalteter Egg-IDs (Einbahn). Der Check läuft als
-     Effekt über `master`: der erste volle Durchlauf ist der stille Backfill (setzt
-     den Anfangs-Unlock-Stand OHNE Toast), danach feuert jeder NEUE Unlock einen
-     4-s-Toast. Verfügbarkeit gatet erst das Feuern (B3), nicht den Unlock. */
-  const [achievements, setAchievements] = useState(null);
-  const backfillRef = useRef(false);
-  const toastSeq = useRef(0);
-  const [toasts, setToasts] = useState([]);
-  const zeigeToast = useCallback((text, sub) => {
-    const id = ++toastSeq.current;
-    setToasts((t) => [...t, { id, text, sub }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  }, []);
-  useEffect(() => {
-    if (!EGGS_ENABLED) return;
-    ladeAchievements().then((s) => setAchievements(s)).catch(() => setAchievements(new Set()));
-  }, []);
-  useEffect(() => {
-    if (!EGGS_ENABLED) return;
-    if (achievements == null || master == null) return;
-    const neu = [...berechneUnlocks(master)].filter((id) => !achievements.has(id));
-    if (neu.length === 0) { backfillRef.current = true; return; }
-    const naechste = new Set([...achievements, ...neu]);
-    setAchievements(naechste);
-    speichereAchievements(naechste);
-    if (backfillRef.current) zeigeToast("Easteregg freigeschalten");
-    backfillRef.current = true;
-  }, [master, achievements, zeigeToast]);
-
-  /* ---- Cage-Alphabet-Egg (B3): goldene Karte → Buchstaben-Stakkato → verfügbarer
-     Cage-Film. v1-Auslöser: Vorführmodus (zeigeCage). Verfügbarkeit vorerst über
-     physischen Besitz (leerer ctx); Abo/Kino-ctx ist ein Nachzug. Auto-Trigger
-     „selten beim App-Start" kommt mit einer test-sicheren Frequenz-Naht später. */
-  const [cageEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "cage-alphabet"));
-  const cageFilmeRef = useRef([]);
-  const [cageOffen, setCageOffen] = useState(false);
-  const [reducedMotion] = useState(() => {
-    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch { return false; }
-  });
-  const [teppichEgg] = useState(() => SCHWELLEN_EGGS.find((e) => e.id === "teppich"));
-  const teppichFilmeRef = useRef([]);
-  const [teppichOffen, setTeppichOffen] = useState(false);
-  const [teppichVorschau, setTeppichVorschau] = useState(false);
-  // zeigeCage/zeigeTeppich/eggCtx: weiter unten definiert (brauchen kinoMatches/
-  // streamingBekannt/auswahl für echte Verfügbarkeit + Sprung-Link).
-  // B4-Egg: Moment-Eggs (Star-Wars-Crawl am 4. Mai, Klaatu→Necronomicon). Wie
-  // Cage/Teppich ausschließlich im Personal-Modus gemountet (Mount + Vorführknopf
-  // + Trigger hinter PERSONAL_MODE) — der Beta-Build bleibt egg-frei.
-  const crawlMatchesRef = useRef([]);
-  const [crawlOffen, setCrawlOffen] = useState(false);
-  const [necroAktiv, setNecroAktiv] = useState(false);
-  // EGG-PAUSE: 4.-Mai-Thema hängt am Crawl-Flag (gleiches Egg-Paar).
-  const [may4Aktiv, setMay4Aktiv] = useState(() => EGGS_ENABLED && EGG_AKTIV.crawl && istVierterMai(new Date()));
-  const may4Vorschau = false;
-  useEffect(() => {
-    if (!EGGS_ENABLED || !EGG_AKTIV.crawl) return; // EGG-PAUSE
-    const aktualisieren = () => setMay4Aktiv(istVierterMai(new Date()));
-    aktualisieren();
-    const timer = setInterval(aktualisieren, 60_000);
-    return () => clearInterval(timer);
-  }, []);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -505,12 +277,6 @@ export default function App() {
     try { initSetup(); } catch { /* Tutorial-Speicher optional */ }
     return false;
   });
-  /* Willkommen (Tutorial): einmalig nach abgeschlossener Einrichtung. Sichtbarkeit
-     aus kd:setup/kd:tutorial; initSetup() (oben) hat beide bereits angelegt. */
-  const [willkommenOffen, setWillkommenOffen] = useState(() => {
-    try { return tutorialFrei() && !getTutorial().willkommen; } catch { return false; }
-  });
-  const syncOnboardingOffen = false; // Login-/Geräte-Sync ist nicht Teil der Demo-PWA.
   const [snapshotFreigabe, setSnapshotFreigabe] = useState(() => snapshotsFrei());
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
@@ -530,7 +296,10 @@ export default function App() {
     setKiStand(stand); setStartTick((x) => x + 1);
     if (!gespeichert) setErr("Die KI-Wahl konnte auf diesem Gerät nicht gespeichert werden. KI bleibt vorsichtshalber aus.");
   }, []);
-  const [katalogZugangOffen, setKatalogZugangOffen] = useState(() => !!liesStartWahl() && !catalogService.hasConnection());
+  /* Fehlende Katalogverbindung blockiert den Einstieg nicht mehr automatisch.
+     Der Zustand bleibt inline sichtbar und kann bewusst in Einstellungen
+     verbunden werden; nur ein ausdrücklich geöffneter Dialog wird modal. */
+  const [katalogZugangOffen, setKatalogZugangOffen] = useState(false);
   const pinAbgelaufen = (pin, jetzt = new Date()) => {
     const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(pin.z));
     if (!m) return false; // unparsebar -> nie automatisch wegwerfen
@@ -543,13 +312,13 @@ export default function App() {
     try { await store.set(K.kinoPins, JSON.stringify(pins)); } catch { /* nicht fatal */ }
   }, []);
   const toggleKinoPin = useCallback((t, j, z) => {
-    setKinoPins((prev) => {
-      const ohne = prev.filter((p) => !(p.t === t && p.z === z));
-      const next = ohne.length < prev.length ? ohne : [...prev, { t, j: j ?? null, z, seit: Date.now() }];
-      persistPins(next);
-      return next;
-    });
-  }, [persistPins]);
+    const ohne = kinoPins.filter((p) => !(p.t === t && p.z === z));
+    const next = ohne.length < kinoPins.length
+      ? ohne
+      : [...kinoPins, { t, j: j ?? null, z, seit: Date.now() }];
+    setKinoPins(next);
+    void persistPins(next);
+  }, [kinoPins, persistPins]);
 
   /* ---- Entdecken-Merkliste (in den App-State geliftet, damit Streaming und
      Dashboard live synchron sind — vorher zwei getrennte localStorage-Leser).
@@ -561,14 +330,21 @@ export default function App() {
     try { await store.set(K.merkliste, JSON.stringify(l)); } catch { /* nicht fatal */ }
   }, []);
   const toggleMerk = useCallback((t) => {
-    setMerkliste((prev) => {
-      const drin = prev.some((m) => m.watchmode_id === t.watchmode_id);
-      const next = drin ? prev.filter((m) => m.watchmode_id !== t.watchmode_id)
-        : [...prev, { watchmode_id: t.watchmode_id, titel: t.titel, jahr: t.jahr ?? null, hinzugefuegt_am: new Date().toISOString().slice(0, 10) }];
-      persistMerk(next);
-      return next;
-    });
-  }, [persistMerk]);
+    const drin = merkliste.some((m) => m.watchmode_id === t.watchmode_id);
+    const next = drin
+      ? merkliste.filter((m) => m.watchmode_id !== t.watchmode_id)
+      : [
+        ...merkliste,
+        {
+          watchmode_id: t.watchmode_id,
+          titel: t.titel,
+          jahr: t.jahr ?? null,
+          hinzugefuegt_am: new Date().toISOString().slice(0, 10),
+        },
+      ];
+    setMerkliste(next);
+    void persistMerk(next);
+  }, [merkliste, persistMerk]);
 
   /* ---- Herkunft der geladenen Liste ----
      typ: "storage" | "demo" | "manuell" · zeit: ms oder Datums-String · basis: optionaler Vermerk */
@@ -577,17 +353,6 @@ export default function App() {
     if (masterHerkunft?.typ === "demo") return true;
     try { return !!localStorage.getItem(K.demoSeed); } catch { return false; }
   }, [masterHerkunft, startTick]);
-  const anmeldenAusWillkommen = useCallback(async (benutzer, passwort) => {
-    const neu = await authService.signIn(benutzer, passwort);
-    const kontoId = neu?.account?.id;
-    if (!kontoId) throw new Error("Die Anmeldung hat keine Konto-ID geliefert.");
-    aktiviereKontoTreiber(kontoId);
-    if (demoAktiv) {
-      await ladeKontostandNachDemo({ accountId: kontoId });
-      try { location.reload(); } catch { setStartTick((t) => t + 1); }
-    }
-    return neu;
-  }, [demoAktiv]);
   /* Startwahl-Modal (Beta): sichtbar, wenn beim Erststart weder Storage-Stand
      noch frühere Wahl noch ?start-Parameter vorliegt. Boot entscheidet. */
   const [startModalOffen, setStartModalOffen] = useState(false);
@@ -732,6 +497,8 @@ export default function App() {
 
   /* ---- Boot: Storage → gebündelte Projektdatei → leer (manueller Import) ---- */
   useEffect(() => {
+    if (storageBootGestartet.current) return undefined;
+    storageBootGestartet.current = true;
     (async () => {
       let m = null, meta = null, herkunft = null, cachedProg = null, startModalNoetig = false;
       try {
@@ -763,6 +530,7 @@ export default function App() {
               }
               if (d.artikel) {
                 const al = Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || [];
+                artikelListeRef.current = al;
                 setArtikelListe(al);
                 localStorage.setItem(K.artikel, JSON.stringify({ artikel: al, gespeichertAm: Date.now() }));
                 seed.artikelIds = al.map((a) => a.id);
@@ -788,11 +556,7 @@ export default function App() {
           }
         } else if (wahl === "clean") {
           try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
-        } else if (PERSONAL_MODE) {
-          // Personal-Modus: keine Demo/Clean-Wahl — leerer Start, echte Daten
-          // kommen per Restore-Import bzw. Git-Sync.
-          try { localStorage.setItem("kd:start", "clean"); } catch { /* */ }
-        } else {
+        } else if (session.mode !== "account") {
           startModalNoetig = true;
         }
       }
@@ -829,12 +593,16 @@ export default function App() {
       try {
         const r = await store.get(K.einstellungen);
         if (r && r.value) {
-          const e = { theme: "dunkel", startTab: "start", schrift: "normal", modus: "", ...JSON.parse(r.value) };
+          const roh = JSON.parse(r.value);
+          const hatteVeralteteMenuepraeferenz = Object.prototype.hasOwnProperty.call(roh, "linkshaender");
+          const e = { theme: "dunkel", startTab: "start", schrift: "normal", modus: "", ...roh };
+          delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
           if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen (Showa/NERV lösen sie ab)
           setEinstellungenState(e);
           setzeTheme(e.modus || e.theme);                        // Modus (showa/nerv) überschreibt die Basis-Palette
           if (e.startTab && e.startTab !== "start") setTab(e.startTab);
+          if (hatteVeralteteMenuepraeferenz) await store.set(K.einstellungen, JSON.stringify(e));
         }
       } catch { /* Defaults */ }
       try {
@@ -886,7 +654,8 @@ export default function App() {
       setStartModalOffen(startModalNoetig);
       setBootDone(true);
     })();
-  }, [frischerStart]);
+    return undefined;
+  }, [frischerStart, session.mode]);
 
   /* ---- Autoload: ohne frischen Cache einmalig programm.json probieren ----
      Zusätzlicher Anlass: der Boot hat zwar etwas angezeigt, es aber als
@@ -1000,13 +769,8 @@ export default function App() {
     store.set(K.mustwatch, JSON.stringify({ eintraege: liste, gespeichertAm: Date.now() })).catch(() => setErr("Must-Watch-Speichern fehlgeschlagen."));
   }, []);
 
-  /* Blog-Referenz-Universum = Master ∪ Must-Watch. Ohne diese Erweiterung würde
-     gleicheArtikelAb eine mw_-ref beim nächsten Artikel-Edit still löschen
-     (masterIds-Check). Must-Watch-Pseudoeinträge: {id, titel, jahr: null, typ film}. */
-  const mitMustwatch = useCallback((masterArr, mwArr) => ([
-    ...(masterArr || []),
-    ...(mwArr || []).map((e) => ({ id: e.id, titel: e.titel, jahr: null, typ: "film" })),
-  ]), []);
+  /* Blog-Referenz-Universum = Master ∪ Must-Watch. */
+  const mitMustwatch = baueRefUniversum;
   const refUniversum = useMemo(() => mitMustwatch(master, mustwatch), [master, mustwatch, mitMustwatch]);
   /* Master-IDs, die auf der Must-Watch-Liste stehen (FinderTab-Chip + Streaming-Filter
      lesen die LISTE, nicht mehr das Flag). */
@@ -1020,7 +784,22 @@ export default function App() {
   const [artikelListe, setArtikelListe] = useState([]);
   useEffect(() => {
     store.get(K.artikel).then((r) => {
-      if (r && r.value) { try { const p = JSON.parse(r.value); setArtikelListe(Array.isArray(p) ? p : p.artikel || []); if (p.gespeichertAm) setArtikelGespeichertAm(p.gespeichertAm); } catch { /* leer */ } }
+      if (r && r.value) {
+        try {
+          const p = JSON.parse(r.value);
+          const geladen = Array.isArray(p) ? p : p.artikel || [];
+          const artikel = geladen.map((a) => recoverInterruptedPublication(a));
+          artikelListeRef.current = artikel;
+          setArtikelListe(artikel);
+          if (p.gespeichertAm) setArtikelGespeichertAm(p.gespeichertAm);
+          if (artikel.some((a, i) => a !== geladen[i])) {
+            const gespeichertAm = Date.now();
+            setArtikelGespeichertAm(gespeichertAm);
+            store.set(K.artikel, JSON.stringify({ artikel, gespeichertAm }))
+              .catch(() => setErr("Artikel-Speichern fehlgeschlagen."));
+          }
+        } catch { /* leer */ }
+      }
     }).catch(() => {});
   }, []);
   const persistArtikel = useCallback((liste) => {
@@ -1028,68 +807,73 @@ export default function App() {
     setArtikelGespeichertAm(jetzt);
     store.set(K.artikel, JSON.stringify({ artikel: liste, gespeichertAm: jetzt })).catch(() => setErr("Artikel-Speichern fehlgeschlagen."));
   }, []);
+  const artikelListeRef = useRef(artikelListe);
+  artikelListeRef.current = artikelListe;
+  const schreibeArtikel = useCallback((berechne) => {
+    const vorher = artikelListeRef.current;
+    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+    if (next === vorher) return vorher;
+    artikelListeRef.current = next;
+    setArtikelListe(next);
+    persistArtikel(next);
+    return next;
+  }, [persistArtikel]);
   const ohneAbgleichFelder = (a) => ({ ...a, liste: a.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined });
 
   const erstelleArtikel = useCallback((daten) => {
     const id = neueArtikelId(daten.titel, artikelListe);
     const abg = gleicheArtikelAb({ ...daten, id, status: "wartet", erstellt_am: new Date().toISOString() }, refUniversum);
     const art = ohneAbgleichFelder(abg);
-    setArtikelListe((prev) => { const next = [...prev, art]; persistArtikel(next); return next; });
+    schreibeArtikel((prev) => [...prev, art]);
     return id;
-  }, [artikelListe, refUniversum, persistArtikel]);
+  }, [artikelListe, refUniversum, schreibeArtikel]);
 
   const aktualisiereArtikel = useCallback((id, daten) => {
-    setArtikelListe((prev) => {
+    schreibeArtikel((prev) => {
       const alt = prev.find((a) => a.id === id);
       if (!alt) return prev;
       // Unveränderte Referenzen behalten ihre stabile ref; nur Neues wird abgeglichen.
       const liste = uebernehmeRefs(daten.liste, alt.liste);
-      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet" }, refUniversum);
-      const next = prev.map((a) => (a.id === id ? ohneAbgleichFelder(abg) : a));
-      persistArtikel(next);
-      return next;
+      /* Ein vor dem neuen Zustandsmodell geteilter Artikel darf seine öffentliche
+         Existenz beim Abschalten des Schalters nicht vergessen. */
+      const publikation = alt.publikation || (alt.geteilt ? publicationState(alt) : undefined);
+      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet", publikation }, refUniversum);
+      return prev.map((a) => (a.id === id ? ohneAbgleichFelder(abg) : a));
     });
     return id;
-  }, [refUniversum, persistArtikel]);
+  }, [refUniversum, schreibeArtikel]);
 
   /* ---- Must-Watch CRUD (Liste ist die einzige Wahrheit) ---- */
   const addMustwatch = useCallback((daten) => {
-    setMustwatch((prev) => {
-      const eintrag = {
-        id: neueMustwatchId(daten.titel, prev),
-        titel: daten.titel,
-        im_besitz: !!daten.im_besitz,
-        beschreibung: daten.beschreibung || "",
-        notiz: daten.notiz || "",
-        verknuepfung: daten.verknuepfung || null,
-        erstellt_am: new Date().toISOString(),
-      };
-      const next = [...prev, eintrag];
-      persistMustwatch(next);
-      // Rotlink-Heilung: ein neuer Must-Watch-Eintrag kann offene Blog-Refs
-      // schließen — nur eindeutige Exakt-Treffer, nichts wird geraten.
-      setArtikelListe((alist) => {
-        const [geheilt, n] = heileRotlinks(alist, mitMustwatch(master, next));
-        if (n > 0) { persistArtikel(geheilt); return geheilt; }
-        return alist;
-      });
-      return next;
+    const eintrag = {
+      id: neueMustwatchId(daten.titel, mustwatch),
+      titel: daten.titel,
+      im_besitz: !!daten.im_besitz,
+      beschreibung: daten.beschreibung || "",
+      notiz: daten.notiz || "",
+      verknuepfung: daten.verknuepfung || null,
+      erstellt_am: new Date().toISOString(),
+    };
+    const next = [...mustwatch, eintrag];
+    setMustwatch(next);
+    void persistMustwatch(next);
+    // Rotlink-Heilung: ein neuer Must-Watch-Eintrag kann offene Blog-Refs
+    // schließen — nur eindeutige Exakt-Treffer, nichts wird geraten.
+    schreibeArtikel((alist) => {
+      const [geheilt, n] = heileRotlinks(alist, mitMustwatch(master, next));
+      return n > 0 ? geheilt : alist;
     });
-  }, [persistMustwatch, master, mitMustwatch, persistArtikel]);
+  }, [mustwatch, persistMustwatch, master, mitMustwatch, schreibeArtikel]);
   const updateMustwatch = useCallback((id, changes) => {
-    setMustwatch((prev) => {
-      const next = prev.map((e) => (e.id === id ? { ...e, ...changes } : e));
-      persistMustwatch(next);
-      return next;
-    });
-  }, [persistMustwatch]);
+    const next = mustwatch.map((e) => (e.id === id ? { ...e, ...changes } : e));
+    setMustwatch(next);
+    void persistMustwatch(next);
+  }, [mustwatch, persistMustwatch]);
   const deleteMustwatch = useCallback((id) => {
-    setMustwatch((prev) => {
-      const next = prev.filter((e) => e.id !== id);
-      persistMustwatch(next);
-      return next;
-    });
-  }, [persistMustwatch]);
+    const next = mustwatch.filter((e) => e.id !== id);
+    setMustwatch(next);
+    void persistMustwatch(next);
+  }, [mustwatch, persistMustwatch]);
 
   /* ---- Migration must_watch-Flag -> Liste (einmalig, idempotent, mit Bericht) ---- */
   const [migrationsBericht, setMigrationsBericht] = useState(null);
@@ -1118,10 +902,9 @@ export default function App() {
         setMasterHerkunft(h);
         setMaster(next);
         await persistMaster(next, masterMeta, h);
-        setArtikelListe((prev) => {
+        schreibeArtikel((prev) => {
           const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
-          if (n > 0) { persistArtikel(geheilt); return geheilt; }
-          return prev;
+          return n > 0 ? geheilt : prev;
         });
       }
       setBesitzImportBericht({
@@ -1130,234 +913,129 @@ export default function App() {
         zeilen: bericht,
       });
     } catch (e) { setErr("Besitz-Import fehlgeschlagen: " + e.message); }
-  }, [master, masterMeta, mustwatch, naechsteHerkunft, persistMaster, persistArtikel, mitMustwatch]);
+  }, [master, masterMeta, mustwatch, naechsteHerkunft, persistMaster, schreibeArtikel, mitMustwatch]);
 
   const setzeArtikelRef = useCallback((id, index, ref, rotlinkOk) => {
-    setArtikelListe((prev) => {
-      const next = prev.map((a) => a.id !== id ? a : {
+    schreibeArtikel((prev) => (
+      prev.map((a) => a.id !== id ? a : {
         ...a, liste: a.liste.map((le, i) => (i === index ? { ...le, ref: ref || null, rotlink_ok: !!rotlinkOk } : le)),
+      })
+    ));
+  }, [schreibeArtikel]);
+
+  /* Publish, Unpublish und „öffentlich entfernen, dann lokal löschen“ teilen
+     genau einen beständigen Vorgang. Lokales Löschen geschieht erst nach
+     bestätigtem Unpublish; Fehler bleiben am Artikel sichtbar und wiederholbar. */
+  const fuehrePublikationsAktion = useCallback(async (artikel, aktion) => {
+    if (!artikel || artikel.herkunft === "gezogen") return;
+    const vorgangId = publicationOperationId();
+    schreibeArtikel((prev) => (
+      prev.map((a) => a.id === artikel.id
+        ? beginPublication(a, aktion, vorgangId)
+        : a)
+    ));
+    try {
+      const result = aktion === SHARED_PUBLICATION_ACTION.PUBLISH
+        ? await sharedArticlesService.publish(artikel)
+        : await sharedArticlesService.unpublish(artikel.id);
+      schreibeArtikel((prev) => {
+        const aktuell = prev.find((a) => a.id === artikel.id);
+        /* Eine neuere Nutzeraktion besitzt eine andere Vorgangs-ID. Dann ist
+           diese verspätete Antwort fachlich überholt und bleibt wirkungslos. */
+        if (!aktuell || publicationState(aktuell).operationId !== vorgangId) return prev;
+        return aktion === SHARED_PUBLICATION_ACTION.DELETE
+          ? prev.filter((a) => a.id !== artikel.id)
+          : prev.map((a) => a.id === artikel.id ? completePublication(a, vorgangId, result) : a);
       });
-      persistArtikel(next);
-      return next;
-    });
-  }, [persistArtikel]);
+    } catch (error) {
+      schreibeArtikel((prev) => {
+        const next = prev.map((a) => a.id === artikel.id
+          ? failPublication(a, vorgangId, error?.code)
+          : a);
+        return next.some((a, i) => a !== prev[i]) ? next : prev;
+      });
+      setErr(
+        aktion === SHARED_PUBLICATION_ACTION.PUBLISH
+          ? "Veröffentlichen fehlgeschlagen: " + errorText(error)
+          : "Öffentliches Entfernen fehlgeschlagen: " + errorText(error),
+      );
+    }
+  }, [schreibeArtikel]);
 
   const freigebeArtikel = useCallback((id) => {
-    setArtikelListe((prev) => {
-      const next = prev.map((a) => (a.id === id ? { ...a, status: "freigegeben" } : a));
-      persistArtikel(next);
-      // Bei Freigabe den DB-Ordner mit dem "geteilt"-Schalter synchronisieren.
-      // Gezogene Fremd-Blogs werden nie (re-)publiziert.
-      const art = next.find((a) => a.id === id);
-      if (art && art.herkunft !== "gezogen") {
-        if (art.geteilt) storageService.publishSharedArticle(art).catch((error) => { setErr("Veröffentlichen fehlgeschlagen: " + errorText(error)); });
-        else storageService.unpublishSharedArticle(art.id).catch(() => {});   // war evtl. geteilt -> idempotent aus DB nehmen
-      }
-      return next;
-    });
-  }, [persistArtikel]);
+    const artikel = artikelListe.find((a) => a.id === id);
+    if (!artikel) return;
+    const freigegeben = { ...artikel, status: "freigegeben" };
+    schreibeArtikel((prev) => (
+      prev.map((a) => (a.id === id ? { ...a, status: "freigegeben" } : a))
+    ));
+    if (freigegeben.herkunft === "gezogen") return;
+    if (freigegeben.geteilt) {
+      void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.PUBLISH);
+    } else if (needsRemoteRemoval(freigegeben)) {
+      void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.UNPUBLISH);
+    }
+  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion]);
 
-  const loescheArtikel = useCallback((id) => {
-    setArtikelListe((prev) => {
-      const art = prev.find((a) => a.id === id);
-      // Eigener geteilter Blog: auch aus dem DB-Ordner (Autor-Delete). Gezogener: nur lokal.
-      if (art && art.geteilt && art.herkunft !== "gezogen") storageService.unpublishSharedArticle(art.id).catch(() => {});
-      const next = prev.filter((a) => a.id !== id);
-      persistArtikel(next);
-      return next;
-    });
-  }, [persistArtikel]);
+  const loescheArtikel = useCallback(async (id) => {
+    const artikel = artikelListe.find((a) => a.id === id);
+    if (!artikel) return;
+    if (needsRemoteRemoval(artikel)) {
+      await fuehrePublikationsAktion(artikel, SHARED_PUBLICATION_ACTION.DELETE);
+      return;
+    }
+    schreibeArtikel((prev) => prev.filter((a) => a.id !== id));
+  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion]);
+
+  const wiederholePublikation = useCallback((id) => {
+    const artikel = artikelListe.find((a) => a.id === id);
+    const aktion = publicationRetryAction(artikel);
+    if (artikel && aktion) void fuehrePublikationsAktion(artikel, aktion);
+  }, [artikelListe, fuehrePublikationsAktion]);
 
   /* Einen geteilten Blog in die eigene Mediathek ziehen: lokale Kopie mit Herkunft,
      Referenzen gegen die eigene Master neu aufgelöst (fehlende = Rotlink). */
   const zieheSharedBlog = useCallback((sharedBlog) => {
-    let neueId = null;
-    setArtikelListe((prev) => {
-      const art = blogZuArtikel(sharedBlog, prev, refUniversum);
-      neueId = art.id;
-      const next = [...prev, art];
-      persistArtikel(next);
-      return next;
-    });
-    return neueId;
-  }, [refUniversum, persistArtikel]);
-
-  /* Start-Reconciliation: gezogene Blogs gegen den DB-Ordner abgleichen. Läuft nach
-     dem Boot; verschwundene Originale (der Autor hat gelöscht) fliegen still raus.
-     Selbst geschriebene und importierte Artikel bleiben unberührt. */
-  useEffect(() => {
-    if (!bootDone) return;
-    let abbruch = false;
-    catalogService.listSharedBlogs().then((r) => {
-      if (abbruch || !r.ok) return;
-      const keys = new Set((r.blogs || []).map((b) => b.db_owner + "|" + b.db_key));
-      setArtikelListe((prev) => {
-        const [next, entfernt] = reconcileGezogene(prev, keys);
-        if (entfernt > 0) persistArtikel(next);
-        return next;
-      });
-    }).catch(() => {});
-    return () => { abbruch = true; };
-  }, [bootDone, persistArtikel]);
+    const art = blogZuArtikel(
+      sharedBlog,
+      artikelListeRef.current,
+      refUniversum,
+    );
+    schreibeArtikel((prev) => [...prev, art]);
+    return art.id;
+  }, [refUniversum, schreibeArtikel]);
 
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
      als der letzte Export, erscheint ein roter Punkt am Einstellungen-Tab + Banner. */
   const [exportStand, setExportStand] = useState({ master: 0, artikel: 0 });
+  const exportStandRef = useRef(exportStand);
+  exportStandRef.current = exportStand;
   const [artikelGespeichertAm, setArtikelGespeichertAm] = useState(0);
   useEffect(() => {
     store.get(K.exportStand).then((r) => {
-      if (r && r.value) { try { setExportStand({ master: 0, artikel: 0, ...JSON.parse(r.value) }); } catch { /* Default */ } }
+      if (r && r.value) {
+        try {
+          const next = { master: 0, artikel: 0, ...JSON.parse(r.value) };
+          exportStandRef.current = next;
+          setExportStand(next);
+        } catch { /* Default */ }
+      }
     }).catch(() => {});
   }, []);
   const markiereExport = useCallback((feld) => {
-    setExportStand((prev) => {
-      const next = { ...prev, [feld]: Date.now() };
-      store.set(K.exportStand, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
+    const next = { ...exportStandRef.current, [feld]: Date.now() };
+    exportStandRef.current = next;
+    setExportStand(next);
+    store.set(K.exportStand, JSON.stringify(next)).catch(() => {});
   }, []);
   const ungesichertMaster = masterHerkunft && masterHerkunft.typ === "storage"
     && typeof masterHerkunft.zeit === "number" && masterHerkunft.zeit > exportStand.master;
   const ungesichertArtikel = artikelListe.length > 0 && artikelGespeichertAm > exportStand.artikel;
 
-  /* ---- Tour (Tutorial Teil A, Phase 3): Just-in-Time-Hinweise ----
-     Ein Overlay + Spotlight zeigt genau dann einen Hinweis, wenn der Nutzer das
-     erste Mal an der passenden Stelle steht. Modus wird währenddessen aus-
-     geschaltet (Filter bricht die Rect-Koordinaten). */
-  const [aktiverHinweis, setAktiverHinweis] = useState(null);
+  /* Hilfe ist nun ausschließlich nutzerinitiiert. Die frühere automatische
+     Tour bei Tabwechseln und Scrollereignissen ist aus dem Laufzeitpfad entfernt. */
   const [klaerung, setKlaerung] = useState(null); // Quellen-Klärung nach KI-Import
-  const aktiverHinweisRef = useRef(null);
-  const modusVorHinweis = useRef(null);
-  const overflowVorHinweis = useRef("");
-  const tourBesuche = useRef({});
-  const waechterGefeuert = useRef(false);
-
-  const zeigeHinweis = useCallback((id) => {
-    try {
-      if (!tutorialFrei()) return;               // Tour ab abgeschlossener Einrichtung ODER getroffener Startwahl
-      if (aktiverHinweisRef.current) return;     // nicht stapeln — feuert beim nächsten Mal erneut
-      if (istGesehen(id)) return;
-      const h = baueHinweis(id, getSetup().skip || []);
-      if (!h) return false;                       // nichts zu zeigen (z.B. Einstellungen ohne skip)
-      /* Ein Hinweis zählt erst, wenn alle seine Ziele wirklich im DOM stehen.
-         Zugeklappte/noch nicht gerenderte Bereiche werden beim nächsten passenden
-         Besuch erneut geprüft und nicht versehentlich für immer übersprungen. */
-      if (h.absaetze.some((a) => !document.querySelector('[data-tour="' + a.ziel + '"]'))) return false;
-      markGesehen(id);                            // jeder tatsächlich sichtbare Hinweis feuert genau einmal
-      if (einstellungen.modus) {                  // A7.1: Modus aus, sonst sitzt das Spotlight daneben
-        modusVorHinweis.current = einstellungen.modus;
-        waehleModus(einstellungen.basisTheme === "hell" ? "foyer" : "saal");
-      }
-      // Scroll SOFORT einfrieren (synchron beim Auslösen) — sonst trägt schnelles
-      // Scrollen das Element weiter, bevor der Overlay misst, und der Rahmen sitzt daneben.
-      try { overflowVorHinweis.current = document.body.style.overflow; document.body.style.overflow = "hidden"; } catch { /* */ }
-      setTourOffen(true); // Feld-Tooltips (Teil B) währenddessen aus
-      aktiverHinweisRef.current = h;
-      setAktiverHinweis(h);
-      return true;
-    } catch { return false; }
-  }, [einstellungen.modus, einstellungen.basisTheme, waehleModus]);
-
-  const zeigeHinweisRef = useRef(zeigeHinweis);
-  zeigeHinweisRef.current = zeigeHinweis;
-
-  const schliesseHinweis = useCallback(() => {
-    aktiverHinweisRef.current = null;
-    setAktiverHinweis(null);
-    setTourOffen(false);
-    try { document.body.style.overflow = overflowVorHinweis.current || ""; } catch { /* */ }
-    if (modusVorHinweis.current) { waehleModus(modusVorHinweis.current); modusVorHinweis.current = null; }
-  }, [waehleModus]);
-
-  useEffect(() => onTour((id) => zeigeHinweisRef.current && zeigeHinweisRef.current(id)), []);
-
-  // Tab-Besuche: Kino/Streaming/Einstellungen 1×; Mediathek 1. Besuch vs. ab dem 2.
-  useEffect(() => {
-    tourBesuche.current[tab] = (tourBesuche.current[tab] || 0) + 1;
-    if (tab === "kino") zeigeHinweisRef.current("kino");
-    else if (tab === "mediathek") zeigeHinweisRef.current("mediathek");
-    else if (tab === "streaming") zeigeHinweisRef.current("streaming");
-    else if (tab === "blog") zeigeHinweisRef.current("blog");
-    // Einstellungen: keine Sammel-Erklärung mehr — die Bereiche feuern per
-    // Sichtbar-Anker (Vokabular / Streaming-Quellen / Erweitert).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, bootDone, startTick]);
-
-  // Sichtbar-Anker (Pinboard, Vokabular, Streaming-Quellen, Erweitert): der Rahmen
-  // triggert, wenn der MITTELPUNKT des Elements zwischen 35% und 55% der Höhe
-  // steht (kurz vor/über der oberen Bildschirmhälfte) UND der Scroll langsam ist
-  // (< ~35% eines schnellen Flicks). IntersectionObserver liefert Sichtbarkeit +
-  // Rect (auch im Test), ein Scroll-Listener die Geschwindigkeit.
-  useEffect(() => {
-    if (typeof document === "undefined" || typeof IntersectionObserver === "undefined") return;
-    if (!tutorialFrei()) return;
-    const anker = Object.keys(SICHTBAR_TRIGGER)
-      .map((k) => document.querySelector('[data-tour="' + k + '"]'))
-      .filter((el) => el && !istGesehen(SICHTBAR_TRIGGER[el.getAttribute("data-tour")]));
-    if (!anker.length) return;
-
-    const perfNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
-    const vh = () => (typeof window !== "undefined" && window.innerHeight) || 800;
-    // "Mittelpunkt kurz vor der oberen Hälfte": Elementmitte in [35%, 55%] der Höhe.
-    // Hohes Element (höher als der Schirm): sobald sein oberer Teil die Mitte deckt.
-    const imBand = (r, id) => {
-      const h = vh(), mitte = r.top + r.height / 2;
-      // Große Einstellungsblöcke feuern später (Oberkante nähert sich dem oberen Rand).
-      // — die Box ist groß und triggerte sonst zu früh.
-      const spaet = id === "streaming-quellen" || id === "erweitert";
-      if (r.height > h) return r.top <= (spaet ? 0 : h * 0.15) && r.bottom >= h * 0.5;
-      const oben = spaet ? h * 0.2 : h * 0.35, unten = spaet ? h * 0.4 : h * 0.55;
-      return mitte >= oben && mitte <= unten;
-    };
-    const rects = new Map();                 // target -> zuletzt bekannte Rect (IO oder live)
-    let vLetzte = 0, tScroll = 0, lastY = (typeof window !== "undefined" ? window.scrollY : 0), lastT = perfNow(), stopT = null;
-    // langsam = kein kürzlicher Scroll (gestoppt) ODER Geschwindigkeit unter Schwelle.
-    // ~1.0 px/ms ≈ 35% eines schnellen Flicks (grob 3 px/ms).
-    const langsam = () => (perfNow() - tScroll > 130) || vLetzte <= 1.0;
-    const rectVon = (el) => {
-      const live = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-      return (live && live.height) ? live : rects.get(el); // jsdom: keine Layout-Größe -> Rect aus IO-Eintrag
-    };
-    const io = new IntersectionObserver((eintraege) => {
-      for (const e of eintraege) {
-        if (e.isIntersecting) rects.set(e.target, e.boundingClientRect);
-        else rects.delete(e.target);
-      }
-      pruefe();
-    }, { threshold: Array.from({ length: 21 }, (_, i) => i / 20) });
-    const feuer = (el) => {
-      const id = SICHTBAR_TRIGGER[el.getAttribute("data-tour")];
-      io.unobserve(el); rects.delete(el);
-      if (zeigeHinweisRef.current) zeigeHinweisRef.current(id);
-    };
-    const pruefe = () => {
-      if (aktiverHinweisRef.current || !langsam()) return;
-      for (const [el] of rects) {
-        if (!el.isConnected || istGesehen(SICHTBAR_TRIGGER[el.getAttribute("data-tour")])) continue;
-        const r = rectVon(el);
-        if (r && imBand(r, el.getAttribute("data-tour"))) { feuer(el); break; }
-      }
-    };
-    const onScroll = () => {
-      const now = perfNow(), y = window.scrollY, dt = now - lastT, dy = Math.abs(y - lastY);
-      vLetzte = dt > 0 ? dy / dt : 0; lastY = y; lastT = now; tScroll = now;
-      pruefe();
-      clearTimeout(stopT); stopT = setTimeout(pruefe, 130); // nach dem Stoppen nochmal (v -> 0)
-    };
-    anker.forEach((a) => io.observe(a));
-    window.addEventListener("scroll", onScroll, { passive: true });
-    const initId = setTimeout(pruefe, 80); // beim Öffnen: evtl. schon im Band + Scroll ruht
-    return () => { io.disconnect(); window.removeEventListener("scroll", onScroll); clearTimeout(stopT); clearTimeout(initId); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, bootDone, startTick]);
-
-  // Wächter (A8): sobald die erste ungesicherte Änderung entsteht
-  useEffect(() => {
-    if ((ungesichertMaster || ungesichertArtikel) && !waechterGefeuert.current) {
-      waechterGefeuert.current = !!zeigeHinweisRef.current("waechter");
-    }
-  }, [ungesichertMaster, ungesichertArtikel, tab, bootDone]);
 
   /* ---- Artikel-Export/-Import (Sicherung, analog Master) ---- */
   const exportArtikel = useCallback(() => {
@@ -1379,10 +1057,9 @@ export default function App() {
       // KD-004: bestehende Artikel werden ersetzt -> Rollback-Snapshot ZUERST (fail-closed).
       if (artikelListe.length && !schreibeImportSnapshot("kd:import:vorher:artikel", artikelListe))
         throw new Error("Sicherungs-Snapshot vor dem Ersetzen fehlgeschlagen (Speicher voll/blockiert) — nichts überschrieben.");
-      setArtikelListe(liste);
-      persistArtikel(liste);
+      schreibeArtikel(liste);
     } catch (e) { setErr("Artikel-Import fehlgeschlagen: " + e.message); }
-  }, [persistArtikel, artikelListe]);
+  }, [artikelListe, schreibeArtikel]);
 
   /* ---- Teilen & Tauschen (Phase A): Autorname + Bulk-Übernahme ---- */
   const [autorName, setAutorName] = useState("");
@@ -1410,14 +1087,13 @@ export default function App() {
         setKlaerung(neuerMaster.filter((f) => f.quelle_unklar).map((f) => ({ id: f.id, titel: f.titel, jahr: f.jahr })));
       }
     }
-    setArtikelListe((prev) => {
+    schreibeArtikel((prev) => {
       let next = neueArtikel.length ? [...prev, ...neueArtikel] : prev;
       const [geheilt, n] = heileRotlinks(next, mitMustwatch(neuerMaster, mustwatch));
       if (n > 0) next = geheilt;
-      if (next !== prev) persistArtikel(next);
       return next;
     });
-  }, [master, masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, persistArtikel]);
+  }, [master, masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, schreibeArtikel]);
 
   /* ---- Gesamt-Backup als Download (treiber-agnostisch: frischer Pull + Lesen über store) ----
      Liest NICHT mehr aus React-State (v2-Falle), sondern nach einem erzwungenen frischen
@@ -1449,14 +1125,25 @@ export default function App() {
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
   const updateFilm = useCallback((id, changes) => {
-    setMaster((prev) => {
-      const next = prev.map((f) => (f.id === id ? { ...f, ...changes } : f));
-      const h = naechsteHerkunft();
-      setMasterHerkunft(h);
-      persistMaster(next, masterMeta, h);
-      return next;
-    });
-  }, [persistMaster, masterMeta, naechsteHerkunft]);
+    const next = (master || []).map((f) => (f.id === id ? { ...f, ...changes } : f));
+    const h = naechsteHerkunft();
+    setMasterHerkunft(h);
+    setMaster(next);
+    persistMaster(next, masterMeta, h);
+  }, [master, persistMaster, masterMeta, naechsteHerkunft]);
+
+  const uebernehmeQuellenKlaerung = useCallback((map) => {
+    const next = (master || []).map((f) => (
+      map[f.id] !== undefined
+        ? { ...f, quelle: map[f.id], quelle_unklar: undefined }
+        : f
+    ));
+    const h = naechsteHerkunft();
+    setMasterHerkunft(h);
+    setMaster(next);
+    persistMaster(next, masterMeta, h);
+    setKlaerung(null);
+  }, [master, masterMeta, naechsteHerkunft, persistMaster]);
 
   /* Gibt die neue ID zurück (Blog-Rotlink-Anlage setzt damit sofort die ref).
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
@@ -1472,301 +1159,45 @@ export default function App() {
     setMasterHerkunft(h);
     setMaster(next);
     persistMaster(next, masterMeta, h);
-    setArtikelListe((prev) => {
+    schreibeArtikel((prev) => {
       const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
-      if (n > 0) { persistArtikel(geheilt); return geheilt; }
+      if (n > 0) return geheilt;
       return prev;
     });
     return id;
-  }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, persistArtikel]);
+  }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, schreibeArtikel]);
 
-  /* ---- Etappe 8: zentraler Vorbewertungs-Auftrag -------------------------
-     Der Lauf lebt in App, nicht in einer Karte oder einem Formular. Dadurch
-     kann ein Tabwechsel keinen zweiten bezahlten Auftrag starten und die
-     Antwort landet weiterhin am Film mit derselben stabilen ID. */
-  const prognoseLaufRef = useRef(null);
-  const prognoseAbortRef = useRef(null);
-  const [prognoseLaufId, setPrognoseLaufId] = useState(null);
-  const [prognoseFehler, setPrognoseFehler] = useState({});
-  const [aktuellesProfil, setAktuellesProfil] = useState(undefined);
-  const [aktuelleProfilVersion, setAktuelleProfilVersion] = useState(null);
-
-  useEffect(() => {
-    if (!["mediathek", "kino", "streaming"].includes(tab)) return;
-    let aktiv = true;
-    ladeProfil().then((profil) => {
-      if (!aktiv) return;
-      setAktuellesProfil(profil);
-      setAktuelleProfilVersion(profil && !profil.beschaedigt ? profil.version : null);
-    }).catch(() => {
-      if (!aktiv) return;
-      setAktuellesProfil({ beschaedigt: true });
-      setAktuelleProfilVersion(null);
-    });
-    return () => { aktiv = false; };
-  }, [tab, master]);
-
-  const vorbewertungAktiv = session.mode === "account"
-    && session.state === "ready"
-    && session.capabilities?.personalAi === true
-    && kiAn("vorbewertung");
-  const vorbewertungSperrgrund = aktuellesProfil === undefined
-    ? "Geschmacksprofil wird geladen …"
-    : !aktuellesProfil
-      ? "Richte zuerst unter Einstellungen dein Geschmacksprofil ein."
-      : aktuellesProfil.beschaedigt
-        ? "Das Geschmacksprofil ist beschädigt und muss zuerst repariert werden."
-        : aktuellesProfil.einwilligung?.erteilt !== true
-          ? "Gib zuerst dein Geschmacksprofil für persönliche KI-Aufgaben frei."
-          : !Array.isArray(aktuellesProfil.signale) || aktuellesProfil.signale.length === 0
-            ? "Bestätige zuerst mindestens ein Signal in deinem Geschmacksprofil."
-            : null;
-  const accountId = session.mode === "account" && session.state === "ready"
-    ? session.account?.id || null
-    : null;
-
-  /* Ein Konto- oder Sitzungswechsel entwertet jede persönliche Prognose, die
-     noch unterwegs ist. Ohne diese Wache könnte eine Antwort aus Konto A bei
-     gleicher Film-ID nach dem Wechsel in Konto B gespeichert werden. */
-  useEffect(() => {
-    prognoseAbortRef.current?.abort();
-    prognoseAbortRef.current = null;
-    prognoseLaufRef.current = null;
-    setPrognoseLaufId(null);
-  }, [accountId]);
-
-  const kontoIstAktuell = useCallback((erwarteteKontoId) => {
-    const jetzt = authService.getSnapshot();
-    return jetzt.mode === "account"
-      && jetzt.state === "ready"
-      && jetzt.account?.id === erwarteteKontoId;
-  }, []);
-
-  const speichereFilmAenderungStrikt = useCallback(async (id, changes, erwarteteKontoId = accountId) => {
-    if (!erwarteteKontoId || !kontoIstAktuell(erwarteteKontoId)) return false;
-    const aktuell = masterRef.current || [];
-    if (!aktuell.some((film) => film.id === id)) return false;
-    const next = aktuell.map((film) => (film.id === id ? { ...film, ...changes } : film));
-    const h = naechsteHerkunft();
-    /* Kein await zwischen Kontoprüfung und Aufruf: store.set bindet dadurch
-       den zu diesem Zeitpunkt aktiven Kontotreiber. Nach dem await darf nur
-       noch derselbe Kontostand die React-Anzeige verändern. */
-    if (!kontoIstAktuell(erwarteteKontoId)) return false;
-    if (!await persistMaster(next, masterMeta, h)) return false;
-    if (!kontoIstAktuell(erwarteteKontoId)) return false;
-    masterRef.current = next;
-    setMasterHerkunft(h);
-    setMaster(next);
-    return true;
-  }, [accountId, kontoIstAktuell, masterMeta, naechsteHerkunft, persistMaster]);
-
-  const starteVorbewertung = useCallback(async (film) => {
-    if (!film?.id || !vorbewertungAktiv) return false;
-    if (prognoseLaufRef.current) return false;
-    if (film.prognose && !window.confirm(
-      "Die bestehende KI-Prognose durch eine neue kostenpflichtige Prognose ersetzen?",
-    )) return false;
-
-    const startKonto = accountId;
-    const controller = new AbortController();
-    const lauf = { accountId: startKonto, filmId: String(film.id), controller };
-    prognoseLaufRef.current = lauf;
-    prognoseAbortRef.current = controller;
-    setPrognoseLaufId(film.id);
-    setPrognoseFehler((alt) => ({ ...alt, [film.id]: null }));
-    try {
-      const prognose = await erstelleVorbewertung(film, { signal: controller.signal });
-      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
-      if (!await speichereFilmAenderungStrikt(film.id, { prognose }, startKonto)) {
-        throw new Error("Die KI-Prognose konnte nicht im Eintrag gespeichert werden.");
-      }
-      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
-      setAktuelleProfilVersion(prognose.profilVersion);
-      return true;
-    } catch (error) {
-      if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
-      const lokal = error?.source === "forecast" && error?.operation === "forecast.validate";
-      const basis = lokal ? error.message : errorText(error);
-      const hinweis = lokal
-        ? basis
-        : `${basis} Der Eintrag bleibt erhalten. Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`;
-      setPrognoseFehler((alt) => ({ ...alt, [film.id]: hinweis }));
-      return false;
-    } finally {
-      if (prognoseLaufRef.current === lauf) {
-        prognoseLaufRef.current = null;
-        if (prognoseAbortRef.current === controller) prognoseAbortRef.current = null;
-        setPrognoseLaufId(null);
-      }
-    }
-  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt, vorbewertungAktiv]);
-
-  const setzeFilmPrognoseStatus = useCallback(async (film, status) => {
-    const startKonto = accountId;
-    const wechsel = setzePrognoseStatus(film?.prognose, status);
-    if (!wechsel.ok) {
-      if (kontoIstAktuell(startKonto)) {
-        setPrognoseFehler((alt) => ({ ...alt, [film?.id]: wechsel.fehler.join("; ") }));
-      }
-      return false;
-    }
-    const gespeichert = await speichereFilmAenderungStrikt(
-      film.id,
-      { prognose: wechsel.prognose },
-      startKonto,
-    );
-    if (!gespeichert && kontoIstAktuell(startKonto)) {
-      setPrognoseFehler((alt) => ({ ...alt, [film.id]: "Der Prognosestatus konnte nicht gespeichert werden." }));
-    }
-    return gespeichert;
-  }, [accountId, kontoIstAktuell, speichereFilmAenderungStrikt]);
-
-  const addFilmMitPrognose = useCallback(async (film) => {
-    if (!vorbewertungAktiv) return null;
-    const startKonto = accountId;
-    if (!startKonto || !kontoIstAktuell(startKonto)) return null;
-    const kandidat = {
-      ...film,
-      bewertung: null,
-      kategorie: null,
-      bewertet_von: null,
-      begruendung: "",
-    };
-    const id = kandidat.id || slugId(kandidat.titel, kandidat.jahr);
-    const aktuell = masterRef.current || [];
-    if (aktuell.some((eintrag) => eintrag.id === id)) {
-      setErr("Eintrag existiert bereits: " + kandidat.titel + (kandidat.jahr ? " (" + kandidat.jahr + ")" : ""));
-      return null;
-    }
-    const neu = { id, ...kandidat };
-    const next = [...aktuell, neu];
-    const h = naechsteHerkunft();
-    /* Harte Reihenfolge: erst lokal nachweisbar speichern, dann bezahlen. */
-    if (!kontoIstAktuell(startKonto)) return null;
-    if (!await persistMaster(next, masterMeta, h)) return null;
-    if (!kontoIstAktuell(startKonto)) return null;
-    masterRef.current = next;
-    setMasterHerkunft(h);
-    setMaster(next);
-    setArtikelListe((prev) => {
-      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
-      if (n > 0) { persistArtikel(geheilt); return geheilt; }
-      return prev;
-    });
-    await starteVorbewertung(neu);
-    return id;
-  }, [
-    accountId, kontoIstAktuell, masterMeta, mitMustwatch, mustwatch,
-    naechsteHerkunft, persistArtikel, persistMaster, starteVorbewertung,
+  const {
+    accountId,
     vorbewertungAktiv,
-  ]);
-
-  /* ---- Gemeinsames Filmwissen -------------------------------------------
-     Der Bericht bleibt ausschließlich im gemeinsamen Servercache. In der
-     persönlichen Masterliste speichern wir weder Quellen noch WARUM-Wert. */
-  const [filmwissenProFilm, setFilmwissenProFilm] = useState({});
-  const filmwissenReadsRef = useRef(new Map());
-  const filmwissenRechercheRef = useRef(null);
-  const filmwissenLesenAktiv = !!accountId;
-  const filmwissenRechercheAktiv = vorbewertungAktiv;
-
-  useEffect(() => {
-    filmwissenReadsRef.current.clear();
-    filmwissenRechercheRef.current = null;
-    setFilmwissenProFilm({});
-    filmwissenService.invalidate();
-  }, [accountId]);
-
-  const ladeFilmwissen = useCallback(async (film) => {
-    if (!film?.id || !filmwissenLesenAktiv) return null;
-    const key = String(film.id);
-    if (filmwissenReadsRef.current.has(key)) return null;
-    const startKonto = accountId;
-    const lauf = { accountId: startKonto, filmId: key };
-    filmwissenReadsRef.current.set(key, lauf);
-    setFilmwissenProFilm((alt) => ({
-      ...alt,
-      [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
-    }));
-    try {
-      const daten = await filmwissenService.read(film);
-      if (filmwissenReadsRef.current.get(key) !== lauf || !kontoIstAktuell(startKonto)) return null;
-      setFilmwissenProFilm((alt) => ({
-        ...alt,
-        [key]: { phase: "fertig", daten, fehler: null },
-      }));
-      return daten;
-    } catch (error) {
-      if (filmwissenReadsRef.current.get(key) !== lauf || !kontoIstAktuell(startKonto)) return null;
-      setFilmwissenProFilm((alt) => ({
-        ...alt,
-        [key]: { phase: "fehler", daten: null, fehler: errorText(error) },
-      }));
-      return null;
-    } finally {
-      if (filmwissenReadsRef.current.get(key) === lauf) {
-        filmwissenReadsRef.current.delete(key);
-      }
-    }
-  }, [accountId, filmwissenLesenAktiv, kontoIstAktuell]);
-
-  const recherchiereFilmwissen = useCallback(async (film) => {
-    if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
-    if (!window.confirm(
-      "Jetzt einen belegten Recherchebericht erstellen? Das startet genau einen Sonnet-Aufruf und kostet höchstens 5 US-Cent. Es gibt keine automatische Wiederholung.",
-    )) return false;
-    const key = String(film.id);
-    const startKonto = accountId;
-    const lauf = { accountId: startKonto, filmId: key };
-    filmwissenRechercheRef.current = lauf;
-    setFilmwissenProFilm((alt) => ({
-      ...alt,
-      [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
-    }));
-    try {
-      const daten = await filmwissenService.recherchiere(film);
-      if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
-      setFilmwissenProFilm((alt) => ({
-        ...alt,
-        [key]: { phase: "fertig", daten, fehler: null },
-      }));
-      return true;
-    } catch (error) {
-      if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
-      setFilmwissenProFilm((alt) => ({
-        ...alt,
-        [key]: {
-          ...(alt[key] || {}),
-          phase: "fehler",
-          fehler: `${errorText(error)} Bitte nicht automatisch wiederholen — ein neuer Versuch kann erneut Kosten verursachen.`,
-        },
-      }));
-      return false;
-    } finally {
-      if (filmwissenRechercheRef.current === lauf) filmwissenRechercheRef.current = null;
-    }
-  }, [accountId, filmwissenRechercheAktiv, kontoIstAktuell]);
-
-  /* ---- Browser-Stand verwerfen: zurück zum zuletzt gewählten Start ----
-     Rettungsanker gegen file://-localStorage-Geister (alle lokalen HTMLs
-     teilen sich denselben Speicher-Schlüssel). Reset lädt den gewählten
-     Start neu: demo -> Demo-Liste, clean -> leer (§7.4 Umkehrbarkeit). */
-  const resetMaster = useCallback(async () => {
-    try { await store.delete(K.master); } catch { /* war leer */ }
-    let wahl = "clean";
-    try { wahl = localStorage.getItem("kd:start") || "clean"; } catch { /* */ }
-    if (wahl === "demo") {
-      try {
-        const d = await demoLadung();
-        setMaster(d.filme); setMasterMeta(d.meta); setMasterHerkunft(d.herkunft); setErr("");
-      } catch (e) {
-        setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
-        setErr("Demo-Daten nicht ladbar: " + e.message);
-      }
-    } else {
-      setMaster(null); setMasterMeta(null); setMasterHerkunft(null); setErr("");
-    }
-  }, []);
+    vorbewertungSperrgrund,
+    prognoseLaufId,
+    prognoseFehler,
+    aktuelleProfilVersion,
+    starteVorbewertung,
+    setzeFilmPrognoseStatus,
+    addFilmMitPrognose,
+    filmwissenLesenAktiv,
+    filmwissenRechercheAktiv,
+    filmwissenProFilm,
+    filmwissenRechercheLaufId,
+    ladeFilmwissen,
+    recherchiereFilmwissen,
+  } = useIntelligenceController({
+    tab,
+    session,
+    master,
+    masterRef,
+    masterMeta,
+    mustwatch,
+    mitMustwatch,
+    naechsteHerkunft,
+    persistMaster,
+    setMaster,
+    setMasterHerkunft,
+    schreibeArtikel,
+    setErr,
+  });
 
   /* ---- Startwahl treffen/ändern (Modal & Einstellungen-Tab) ----
      Schreibt kd:start und lädt entsprechend. "Startart wechseln" (Einstellungen-Tab)
@@ -1807,7 +1238,7 @@ export default function App() {
        Storage-Effekten geladen, Clean startet garantiert ohne Alt-Master. */
     try { location.reload(); } catch {
       setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
-      setSnapshotFreigabe(true); setWillkommenOffen(true); setStartTick((t) => t + 1);
+      setSnapshotFreigabe(true); setStartTick((t) => t + 1);
     }
   }, [master, artikelListe, mustwatch, merkliste, kinoPins, session.mode]);
   const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
@@ -1860,30 +1291,28 @@ export default function App() {
       setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
     }
     const artIds = new Set(seed.artikelIds || []);
-    setArtikelListe((prev) => { const next = prev.filter((a) => !artIds.has(a.id)); persistArtikel(next); return next; });
+    schreibeArtikel((prev) => prev.filter((a) => !artIds.has(a.id)));
     const mwIds = new Set(seed.mustwatchIds || []);
-    setMustwatch((prev) => { const next = prev.filter((e) => !mwIds.has(e.id)); persistMustwatch(next); return next; });
+    const nextMustwatch = mustwatch.filter((e) => !mwIds.has(e.id));
+    setMustwatch(nextMustwatch);
+    persistMustwatch(nextMustwatch);
     if (Array.isArray(seed.pinKeys)) {
       const demoPins = new Set(seed.pinKeys.map(String));
-      setKinoPins((prev) => {
-        const next = prev.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
-        persistPins(next); return next;
-      });
+      const nextPins = kinoPins.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
+      setKinoPins(nextPins);
+      persistPins(nextPins);
     }
     if (Array.isArray(seed.merklisteIds)) {
       const demoMerker = new Set(seed.merklisteIds.map(String));
-      setMerkliste((prev) => {
-        const next = prev.filter((m) => !demoMerker.has(String(m.watchmode_id)));
-        persistMerk(next); return next;
-      });
+      const nextMerkliste = merkliste.filter((m) => !demoMerker.has(String(m.watchmode_id)));
+      setMerkliste(nextMerkliste);
+      persistMerk(nextMerkliste);
     }
     if (Array.isArray(seed.streamingQuellen)) {
       const demoQuellen = new Set(seed.streamingQuellen.map(String));
-      setAuswahlRoh((prev) => {
-        const next = prev.filter((q) => !demoQuellen.has(String(q)));
-        store.set(K.streamingDienste, JSON.stringify({ quellen: next, heuristik: true })).catch(() => {});
-        return next;
-      });
+      const nextAuswahl = auswahl.filter((q) => !demoQuellen.has(String(q)));
+      setAuswahlRoh(nextAuswahl);
+      store.set(K.streamingDienste, JSON.stringify({ quellen: nextAuswahl, heuristik: true })).catch(() => {});
       setHeuristikAn(true);
     }
     try {
@@ -1892,7 +1321,10 @@ export default function App() {
       localStorage.removeItem(K.demoSeed);
     } catch { /* */ }
     setErr(""); setStartTick((t) => t + 1);
-  }, [master, masterMeta, persistMaster, persistArtikel, persistMustwatch, persistPins, persistMerk]);
+  }, [
+    session.mode, master, masterMeta, artikelListe, mustwatch, kinoPins, merkliste, auswahl,
+    persistMaster, persistMustwatch, persistPins, persistMerk, schreibeArtikel,
+  ]);
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
   const exportMaster = useCallback(() => {
@@ -1907,42 +1339,15 @@ export default function App() {
     markiereExport("master");
   }, [master, masterMeta, markiereExport]);
 
-  /* ---- Kino-Matching: film_at_id zuerst (exakt), dann Titel+Jahr, dann
-     Originaltitel+Jahr (Phase 3). matchFilm nutzt das Jahr als harten Guard —
-     seit der film.at-Anreicherung ist pf.j/pf.ot befüllt, der Abgleich also scharf. ---- */
-  const kinoMatches = useMemo(() => {
-    if (!programm?.filme || !master) return { matched: [], rest: programm?.filme || [] };
-    const proFilmAtId = new Map(master.filter((f) => f.film_at_id).map((f) => [f.film_at_id, f]));
-    const matched = [], rest = [];
-    for (const pf of programm.filme) {
-      const m = (pf.film_at_id && proFilmAtId.get(pf.film_at_id))
-        || matchFilm(pf.t, pf.j, master)
-        || (pf.ot && pf.ot !== pf.t ? matchFilm(pf.ot, pf.j, master) : null);
-      if (m) matched.push({ prog: pf, film: m });
-      else rest.push(pf);
-    }
-    // Besitz vor must_watch, innerhalb dessen Dreieck-Score.
-    // Master-Treffer werden IMMER angezeigt — kein Zeitfilter auf matched.
-    // B4: kanonisches Besitz-Modell (physische Quelle) statt Substring /(dvd|prime)/
-    // — digitale Käufe (prime) zählen nicht als Besitz (Entscheidung 18.07.2026).
-    const besitzRang = (f) => (hatPhysischeQuelle(f.quelle) ? 0 : 1);
-    matched.sort((a, b) =>
-      besitzRang(a.film) - besitzRang(b.film) || score(b.film) - score(a.film)
-    );
-    return { matched, rest };
-  }, [programm, master]);
+  const kinoMatches = useMemo(
+    () => baueKinoMatches(programm, master),
+    [programm, master],
+  );
 
   /* ---- Finder-Master: Master + Wikidata-Sidecar (Reihe/Franchise/Regie als Namen).
      Additiv, read-only respektiert — nur für die Suche/Detailkarte angereichert.
      Bei fehlendem Sidecar (leer) oder fremden IDs (Tester) bleibt f unverändert. ---- */
-  const finderMaster = useMemo(() => {
-    const ein = (masterWikidata && masterWikidata.eintraege) || {};
-    if (!master || !Object.keys(ein).length) return master;
-    return master.map((f) => {
-      const w = ein[f.id];
-      return w ? { ...f, reihe: w.reihe || [], franchise: w.franchise || [], regie: w.regie || [] } : f;
-    });
-  }, [master]);
+  const finderMaster = useMemo(() => reicheFinderMasterAn(master), [master]);
 
   /* ---- "Läuft auch": nur Filme mit Vorstellung ab Zeitgrenze ---- */
   const restSichtbar = useMemo(() => {
@@ -1954,23 +1359,10 @@ export default function App() {
   /* ---- Nachtrag: nur Titel zeigen, die (noch) nicht in der Master sind ----
      Laufzeit-Abgleich statt Datenpflege — heilt sich selbst, wenn Titel
      aus dem Nachtrag in die Master übernommen werden. */
-  const nachtragSichtbar = useMemo(() => {
-    if (!master) return NACHTRAG_FLACH;
-    const masterNorms = [...new Set(master.flatMap((f) => [norm(f.titel), norm(f.originaltitel)]).filter(Boolean))];
-    const vorhanden = new Set(masterNorms);
-    // Editions-/Box-Titel ("… The Complete Murder Sessions", "… Vol. 04") gelten
-    // als derselbe Eintrag — Sequels ("… 2", "… Rise") NICHT: eigene Filme.
-    const EDITION_RE = /^(the\s+)?(complete|collection|collector|edition|box|vol(ume)?\b)/;
-    return NACHTRAG_FLACH.filter((n) => {
-      const nt = norm(n.titel);
-      if (vorhanden.has(nt)) return false;
-      return !masterNorms.some((t) =>
-        t.length >= 8 && nt.startsWith(t + " ") && EDITION_RE.test(nt.slice(t.length + 1)));
-    });
-  }, [master]);
+  const nachtragSichtbar = useMemo(() => sichtbarerNachtrag(master), [master]);
 
-  /* ---- Streaming-Daten direkt aus Supabase. Die DB liefert beide bisherigen
-     Ansichten; „Mein Programm" wird lokal gegen die aktive Masterliste gebaut. */
+  /* ---- Streaming-Daten direkt aus dem Katalog. „Mein Programm" wird lokal
+     gegen die aktive Masterliste gebaut. ---- */
   /* Finder-Suchverlauf im App-State halten -> überlebt Tab-Wechsel (App bleibt
      montiert; FinderTab wird beim Tab-Wechsel ab-/wieder-montiert). */
   const [finderVerlauf, setFinderVerlauf] = useState([]);
@@ -1985,19 +1377,14 @@ export default function App() {
        Betriebsart gehört, darf die Anzeige nicht mehr anfassen. */
     const gen = betriebsartGen.current;
     const veraltet = () => betriebsartGen.current !== gen;
-    if (streamingGeladen.current && streamingRohRef.current) {
-      const a = catalogService.buildStreamingViews(streamingRohRef.current, master || []);
-      setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken); return;
-    }
-    streamingGeladen.current = true;
-    try {
-      const r = await catalogService.loadArea("streaming", { timeout: vollKatalog ? 20000 : 15000 });
-      if (veraltet()) return;
-      if (!snapshotFreigabeRef.current) return;
-      streamingRohRef.current = r.payload;
-      const a = catalogService.buildStreamingViews(r.payload, master || []);
-      setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
-      entdeckenGeladen.current = true;
+    const holeEinmal = async (ref, bereich, timeout) => {
+      if (ref.current) return ref.current;
+      const lauf = catalogService.loadArea(bereich, { timeout });
+      ref.current = lauf;
+      try { return await lauf; }
+      finally { if (ref.current === lauf) ref.current = null; }
+    };
+    const uebernehmeInfo = (r) => {
       const ausCache = r.quelle === "cache";
       setStreamingInfo({
         art: ausCache ? "cache" : "datenbank", variante: r.variante,
@@ -2009,77 +1396,88 @@ export default function App() {
       if (ausCache && r.code === ERROR_CODES.INVALID_KEY) setErr("Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Einstellungen → Datenmodus & Verbindung).");
       else if (ausCache && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
       else if (r.abgelaufen) setErr("Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
-    } catch (e) {
-      /* C4: erst die Generation prüfen, DANN das Ref anfassen. `streamingGeladen`
-         gehört dem laufenden — womöglich längst erfolgreichen — Lauf der neuen
-         Betriebsart; ein überholter Lauf, der es zurücksetzt, entwertet dessen
-         Memo-Zweig und lässt den mehrere MB großen Entdecken-Katalog beim
-         nächsten Öffnen des Streaming-Tabs neu über die Leitung. Der
-         Betriebsart-Effekt setzt das Ref beim Wechsel ohnehin selbst zurück. */
-      if (veraltet()) return;   // Fehler der alten Betriebsart, siehe oben
-      streamingGeladen.current = false;
-      const file = typeof location !== "undefined" && location.protocol === "file:";
-      if (file) {
-        const roh = { bekannt: streamingBekanntSnapshot, entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot };
+    };
+    const meldeFehler = (e, entdeckenTeil = false) => {
+      const code = e?.code || null;
+      const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
+      const text = anmeldungNoetig
+        ? "Für den aktuellen Streamingkatalog ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
+        : code === ERROR_CODES.NO_DEMO_DATA
+          ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du den laufenden Streamingkatalog."
+          : code === ERROR_CODES.INVALID_KEY
+            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
+            : (entdeckenTeil ? "Entdecken-Katalog" : "Streamingkatalog") + " nicht ladbar: " + errorText(e);
+      setErr(text);
+      setStreamingInfo((vorher) => (vorher && vorher.art
+        ? {
+          ...vorher,
+          abgelaufen: Number.isFinite(vorher.gueltigBis) ? vorher.gueltigBis < Date.now() : vorher.abgelaufen,
+          anmeldungNoetig, fehler: text, code,
+        }
+        : { art: null, variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig, fehler: text, code }));
+    };
+
+    let roh = streamingRohRef.current || { bekannt: null, entdecken: null };
+    if (!streamingGeladen.current || !roh.bekannt) {
+      try {
+        const r = await holeEinmal(streamingBekanntLaufRef, "streamingBekannt", 15000);
+        if (veraltet() || !snapshotFreigabeRef.current) return;
+        roh = { ...roh, bekannt: r.payload };
         streamingRohRef.current = roh;
-        const a = catalogService.buildStreamingViews(roh, master || []);
+        streamingGeladen.current = true;
+        uebernehmeInfo(r);
+      } catch (e) {
+        if (veraltet()) return;
+        streamingGeladen.current = false;
+        const file = typeof location !== "undefined" && location.protocol === "file:";
+        if (!file) { meldeFehler(e); return; }
+        const dateiRoh = {
+          bekannt: streamingBekanntSnapshot,
+          entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot,
+        };
+        if (veraltet()) return;
+        streamingRohRef.current = dateiRoh;
+        streamingGeladen.current = true;
+        entdeckenGeladen.current = true;
+        const a = catalogService.buildStreamingViews(dateiRoh, master || []);
         setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
         setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
-      } else {
-        const code = e?.code || null;
-        const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
-        const text = anmeldungNoetig
-          ? "Für den aktuellen Streamingkatalog ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
-          : code === ERROR_CODES.NO_DEMO_DATA
-            ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du den laufenden Streamingkatalog."
-            : code === ERROR_CODES.INVALID_KEY
-              ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
-              : "Streamingkatalog nicht ladbar: " + errorText(e);
-        setErr(text);
-        /* Wie beim Programm (C1): `streamingBekannt`/`streamingEntdecken` bleiben
-           hier stehen, also bleibt auch ihre Beschreibung stehen. Sonst
-           verschwänden die Hinweisbänder „abgelaufener Schnappschuss" und „aus
-           dem Browser-Speicher" im Streaming-Tab, während genau diese Daten
-           weiter angezeigt werden. */
-        /* N1/N2/N3 wie beim Programm: jüngste Diagnose gilt, Ablauf neu bewertet. */
-        setStreamingInfo((vorher) => (vorher && vorher.art
-          ? {
-            ...vorher,
-            abgelaufen: Number.isFinite(vorher.gueltigBis) ? vorher.gueltigBis < Date.now() : vorher.abgelaufen,
-            anmeldungNoetig, fehler: text, code,
-          }
-          : { art: null, variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig, fehler: text, code }));
+        return;
       }
     }
+
+    if (vollKatalog && (!entdeckenGeladen.current || !roh.entdecken)) {
+      try {
+        const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
+        if (veraltet() || !snapshotFreigabeRef.current) return;
+        roh = { ...roh, entdecken: r.payload };
+        streamingRohRef.current = roh;
+        entdeckenGeladen.current = true;
+        uebernehmeInfo(r);
+      } catch (e) {
+        if (veraltet()) return;
+        entdeckenGeladen.current = false;
+        meldeFehler(e, true);
+      }
+    }
+
+    const anzeigeRoh = {
+      bekannt: roh.bekannt,
+      entdecken: (vollKatalog && roh.entdecken) ? roh.entdecken : streamingEntdeckenSnapshot,
+    };
+    const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
+    setStreamingBekannt(a.bekannt);
+    setStreamingEntdecken(a.entdecken);
   }, [snapshotFreigabe, master]);
   useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
-  const ALTE_SLUGS = { netflix: "Netflix", disney_plus: "Disney+", prime_video: "Prime Video" };
-  const [auswahl, setAuswahlRoh] = useState([]);
-  const [heuristikAn, setHeuristikAn] = useState(true);
-  const streamingCfgJson = (quellen, heuristik) => JSON.stringify({ quellen, heuristik });
-  useEffect(() => {
-    store.get(K.streamingDienste).then((r) => {
-      if (r && r.value) {
-        try {
-          const v = JSON.parse(r.value);
-          if (Array.isArray(v.quellen)) setAuswahlRoh(v.quellen);
-          else if (Array.isArray(v.dienste)) setAuswahlRoh(v.dienste.map((d) => ALTE_SLUGS[d] || d)); // Migration Altformat
-          if (typeof v.heuristik === "boolean") setHeuristikAn(v.heuristik);
-        } catch { /* Default */ }
-      }
-    }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const toggleQuelle = useCallback((name) => {
-    setAuswahlRoh((prev) => {
-      const next = prev.includes(name) ? prev.filter((d) => d !== name) : [...prev, name];
-      store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {});
-      return next;
-    });
-  }, [heuristikAn]);
+    const next = auswahl.includes(name) ? auswahl.filter((d) => d !== name) : [...auswahl, name];
+    setAuswahlRoh(next);
+    store.set(K.streamingDienste, streamingCfgJson(next, heuristikAn)).catch(() => {});
+  }, [auswahl, heuristikAn]);
 
   /* ---- Streaming-Badges für Mediathek & Kino (aus streaming_bekannt) ---- */
   const streamingMap = useMemo(() => {
@@ -2160,6 +1558,8 @@ export default function App() {
     streamingGeladen.current = false;
     entdeckenGeladen.current = false;
     streamingRohRef.current = null;
+    streamingBekanntLaufRef.current = null;
+    streamingEntdeckenLaufRef.current = null;
     /* Der bisherige ANZEIGESTAND gehört der anderen Betriebsart — verwerfen
        statt umetikettieren. Persönliche Daten und der gespeicherte Topf bleiben
        unberührt. Synchron, damit zwischen Wechsel und Reset nichts Altes mehr
@@ -2195,156 +1595,28 @@ export default function App() {
     return undefined;
   }, [session.mode, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
 
-  /* ---- Egg-Verfügbarkeit + Sprung-Link (B3, für Cage & Teppich) ----
-     „Verfügbar" = physischer Besitz ∨ aktives Abo (streamingBekannt ∩ auswahl) ∨
-     aktuelles Kinoprogramm (kinoMatches). Damit spielen die Eggs NUR Filme aus, die
-     Max wirklich sehen kann. eggHerkunft = Wo-schaue-ich-das; eggZeigeEintrag springt
-     zum (immer vorhandenen) Mediathek-Eintrag, wo Kino-/Streaming-Badges hängen. */
-  const eggCtx = useMemo(() => ({
+  const {
+    achievements,
+    toasts,
+    cageFilmeRef,
+    cageOffen,
+    setCageOffen,
+    reducedMotion,
+    zeigeCage,
+    eggHerkunft,
+    eggZeigeEintrag,
+  } = useEggController({
+    master,
+    kinoMatches,
+    streamingBekannt,
     auswahl,
-    kinoIds: new Set((kinoMatches?.matched || []).map((m) => m.film.id)),
-    dienstePro: new Map(((streamingBekannt && streamingBekannt.titel) || []).map((t) => [t.id, t.dienste || []])),
-  }), [auswahl, kinoMatches, streamingBekannt]);
-  const zeigeCage = useCallback(() => {
-    cageFilmeRef.current = cageEgg ? liveVertreter(master || [], cageEgg, eggCtx) : [];
-    setCageOffen(true);
-  }, [cageEgg, master, eggCtx]);
-  const zeigeTeppich = useCallback(() => {
-    teppichFilmeRef.current = teppichEgg ? liveVertreter(master || [], teppichEgg, eggCtx) : [];
-    setTeppichVorschau(false);
-    setTeppichOffen(true);
-  }, [teppichEgg, master, eggCtx]);
-  /* B4-Egg: Star-Wars-Crawl — die realen Kino-Treffer (kinoMatches, dieselbe Quelle
-     wie „Läuft auch") in die von Crawl.jsx gelesene Form {titel,jahr,kinos[],zeiten[]}
-     bringen: film liefert Titel/Jahr, das Programm (m.prog) die Kinos (k) und Zeiten (z). */
-  const crawlMatchesBauen = useCallback(() => (
-    (kinoMatches?.matched || []).map((m) => ({
-      titel: (m.film && m.film.titel) || (m.prog && m.prog.t) || "Unbekannter Film",
-      jahr: (m.film && m.film.jahr) || (m.prog && m.prog.j) || null,
-      kinos: Array.isArray(m.prog && m.prog.k) ? m.prog.k : [],
-      zeiten: Array.isArray(m.prog && m.prog.z) ? m.prog.z : [],
-    }))
-  ), [kinoMatches]);
-  const zeigeCrawl = useCallback(() => {
-    crawlMatchesRef.current = crawlMatchesBauen();
-    setCrawlOffen(true);
-  }, [crawlMatchesBauen]);
-  /* B4-Egg: Klaatu→Necronomicon — dekorativen Buchrand über dem AKTUELLEN Tab
-     einblenden. Bleibt tabübergreifend bis zum sichtbaren X oder globalem Escape;
-     nur In-Memory-State, nach Reload sicher weg. Zusätzlich zur Mount-Gatterung
-     hier hart auf PERSONAL_MODE. */
-  const zeigeKlaatu = useCallback(() => {
-    if (!EGGS_ENABLED || !EGG_AKTIV.klaatu) return; // EGG-PAUSE
-    setNecroAktiv(true);
-  }, []);
-  const eggHerkunft = useCallback((film) => {
-    const h = filmHerkunft(film, { kinoMatches, streamingBekannt });
-    if (h.kino) return { text: "Läuft gerade im Kino", tab: "kino" };
-    const d = h.streaming ? sichtbareDienste(h.streaming.dienste, auswahl) : [];
-    if (d.length) return { text: "Streamst du auf " + d.slice(0, 2).join(" / "), tab: "streaming" };
-    if (h.dvd) return { text: "In deinem Besitz", tab: "mediathek" };
-    return { text: "In deiner Mediathek", tab: "mediathek" };
-  }, [kinoMatches, streamingBekannt, auswahl]);
-  const eggZeigeEintrag = useCallback((film, tab) => {
-    setCageOffen(false); setTeppichOffen(false);
-    if (tab === "kino") setTab("kino");
-    else if (tab === "streaming") setTab("streaming");
-    else if (film) springeZuFilm(film.id);
-  }, [springeZuFilm]);
-
-  /* ---- Egg-Auto-Trigger: in jedem Tester-Modus, sobald freigeschaltet. ----
-     Test-sicher: gewürfelt wird NUR wenn das Egg freigeschaltet ist (Tests schalten
-     nichts frei) — plus injizierbare Uhr/RNG in eggFrequenz.js. Cage: 1:30/Tag beim
-     Start. Teppich: 1:10/Tag beim Vorbeiscrollen an einem passenden Live-Film.
-     Der Teppich braucht zusätzlich die echte Scroll-Situation und einen passenden
-     verfügbaren Film. */
-  const cageAutoRef = useRef(false);
-  useEffect(() => {
-    if (!EGGS_ENABLED || !bootDone || achievements == null || master == null) return;
-    if (!achievements.has("cage-alphabet") || cageAutoRef.current) return;
-    if (cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
-    cageAutoRef.current = true;
-    if (!schonGefeuertHeute("cage") && wuerfleTag("cage", 1 / 30)) { markiereGefeuert("cage"); zeigeCage(); }
-  }, [bootDone, achievements, master, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCage]);
-
-  /* ---- B4-Egg: Star-Wars-Crawl Auto-Trigger (nur PERSONAL_MODE) ----
-     Deterministisch statt Würfel: crawlHeute() ist den gesamten 4. Mai wahr —
-     ohne Film-/Kino-Bedingung. Feuert genau EINMAL pro Tag
-     (schonGefeuertHeute/markiereGefeuert wie Cage) und nur, wenn kein anderes
-     Overlay/Modal offen ist. An allen anderen Tagen liefert crawlHeute false. */
-  const crawlAutoRef = useRef(false);
-  useEffect(() => {
-    if (!EGGS_ENABLED || !EGG_AKTIV.crawl || !bootDone || master == null) return; // EGG-PAUSE
-    if (crawlAutoRef.current) return;
-    if (crawlOffen || cageOffen || teppichOffen || setupWarnung || startModalOffen || willkommenOffen || syncOnboardingOffen) return;
-    if (!crawlHeute({ jetzt: new Date() })) return;
-    crawlAutoRef.current = true;
-    if (!schonGefeuertHeute("crawl")) { markiereGefeuert("crawl"); zeigeCrawl(); }
-  }, [bootDone, master, kinoMatches, crawlOffen, cageOffen, teppichOffen, setupWarnung, startModalOffen, willkommenOffen, syncOnboardingOffen, zeigeCrawl]);
-
-  /* Nachfreigabe: dauerhaft, aber nie gefangen. Escape bleibt global erreichbar,
-     weil der rein dekorative Rand selbst weder fokussierbar noch interaktiv ist. */
-  useEffect(() => {
-    if (!EGGS_ENABLED || !necroAktiv) return;
-    const schliessenMitEsc = (e) => { if (e.key === "Escape") setNecroAktiv(false); };
-    window.addEventListener("keydown", schliessenMitEsc);
-    return () => window.removeEventListener("keydown", schliessenMitEsc);
-  }, [necroAktiv]);
-
-  const teppichPassiertRef = useRef(new Set());
-  const teppichLetztesYRef = useRef(0);
-  const teppichTagRef = useRef(tagesSchluessel());
-  useEffect(() => {
-    if (!EGGS_ENABLED || !EGG_AKTIV.teppich || !bootDone || tab !== "mediathek" || achievements == null || master == null) return; // EGG-PAUSE
-    if (!achievements.has("teppich") || schonGefeuertHeute("teppich") || !teppichEgg) return;
-    const zielIds = new Set(liveVertreter(master, teppichEgg, eggCtx).map((f) => String(f.id)));
-    if (!zielIds.size) return;
-    teppichLetztesYRef.current = window.scrollY || 0;
-
-    /* Karten, die beim Betreten bereits oberhalb der Lesezone liegen, gelten nicht
-       nachträglich als „vorbeigescrollt". Erst eine neue Abwärtsbewegung zählt. */
-    for (const el of document.querySelectorAll("[data-film-id]")) {
-      const id = el.dataset.filmId;
-      if (zielIds.has(id) && istVorbeiGescrollt(el.getBoundingClientRect(), {
-        viewportHoehe: window.innerHeight, scrolltAbwaerts: true,
-      })) teppichPassiertRef.current.add(id);
-    }
-
-    const onScroll = () => {
-      const tag = tagesSchluessel();
-      if (teppichTagRef.current !== tag) {
-        teppichTagRef.current = tag;
-        teppichPassiertRef.current.clear();
-      }
-      const jetztY = window.scrollY || 0;
-      const scrolltAbwaerts = jetztY > teppichLetztesYRef.current;
-      teppichLetztesYRef.current = jetztY;
-      if (!scrolltAbwaerts || schonGefeuertHeute("teppich")) return;
-      for (const el of document.querySelectorAll("[data-film-id]")) {
-        const id = el.dataset.filmId;
-        if (!zielIds.has(id) || teppichPassiertRef.current.has(id)) continue;
-        if (!istVorbeiGescrollt(el.getBoundingClientRect(), { viewportHoehe: window.innerHeight, scrolltAbwaerts })) continue;
-        teppichPassiertRef.current.add(id);
-        if (wuerfleTag("teppich", 1 / 10)) {
-          markiereGefeuert("teppich");
-          zeigeTeppich();
-        }
-        break; // wuerfleTag garantiert genau eine gespeicherte Tageschance.
-      }
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [bootDone, tab, achievements, master, teppichEgg, eggCtx, zeigeTeppich]);
-
-  /* Scroll-Sperre, solange ein Egg-Overlay offen ist → die Liste bleibt an ihrer
-     Position stehen; Schließen bringt genau dorthin zurück (Antwort auf „was passiert
-     beim Weiterscrollen"). */
-  useEffect(() => {
-    if (!EGGS_ENABLED || !(cageOffen || teppichOffen || crawlOffen)) return;
-    let vorher = "";
-    try { vorher = document.body.style.overflow; document.body.style.overflow = "hidden"; } catch { /* */ }
-    return () => { try { document.body.style.overflow = vorher; } catch { /* */ } };
-  }, [cageOffen, teppichOffen, crawlOffen]);
+    bootDone,
+    setupWarnung,
+    startModalOffen,
+    willkommenOffen: false,
+    setTab,
+    springeZuFilm,
+  });
 
   const clearProgrammCache = useCallback(async () => {
     try { await store.delete(K.programm); } catch { /* war leer */ }
@@ -2357,9 +1629,13 @@ export default function App() {
   }, []);
 
   const refreshKatalog = useCallback(async () => {
+    /* Laufende Antworten gehören ab hier zum alten manuellen Ladeversuch. */
+    betriebsartGen.current++;
     streamingGeladen.current = false;
     entdeckenGeladen.current = false;
     streamingRohRef.current = null;
+    streamingBekanntLaufRef.current = null;
+    streamingEntdeckenLaufRef.current = null;
     const [programmOk] = await Promise.all([ladeProgrammDatei(true), ladeStreamingDateien(true)]);
     if (programmOk) setErr("");
   }, [ladeProgrammDatei, ladeStreamingDateien]);
@@ -2370,11 +1646,10 @@ export default function App() {
     color: T.leinwand,
     fontFamily: "'Space Grotesk', sans-serif",
     padding: "0 0 60px",
-    zoom: einstellungen.schrift === "gross" ? 1.12 : einstellungen.schrift === "klein" ? 0.9 : 1,
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap" + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "") + (einstellungen.linkshaender ? " kd-links" : "") + ((may4Aktiv || may4Vorschau) && !einstellungen.modus ? " kd-may4" : "")}>
+    <div ref={modusWrapRef} style={wrap} className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal") + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "")}>
       <ModusFx modus={einstellungen.modus} />
       <div className="kd-app" data-session-mode={session.mode}>
       {startModalOffen && (
@@ -2389,43 +1664,22 @@ export default function App() {
             setKatalogZugangOffen(false);
             setSnapshotFreigabe(true); snapshotFreigabeRef.current = true;
             try { setupUeberspringen(); location.reload(); }
-            catch { autoFetched.current = false; streamingGeladen.current = false; setStartTick((t) => t + 1); }
+            catch {
+              autoFetched.current = false;
+              streamingGeladen.current = false;
+              entdeckenGeladen.current = false;
+              streamingRohRef.current = null;
+              streamingBekanntLaufRef.current = null;
+              streamingEntdeckenLaufRef.current = null;
+              setStartTick((t) => t + 1);
+            }
           }} />
       )}
-      {willkommenOffen && !startModalOffen && !katalogZugangOffen && (
-        /* Nur „Los geht's" markiert die Erklärung dauerhaft als gesehen.
-           Escape schließt bloß — die Box kommt beim nächsten Start wieder.
-           Vorher verbrannte ein versehentliches Escape auf Karte 1 die
-           einmalige Erklärung ohne jede Rückfrage. */
-        <Willkommen onClose={(art) => {
-          /* Nur als gesehen markieren, wenn die KI-Wahl auch WIRKLICH
-             gespeichert wurde. Bei blockiertem Storage (Privatmodus, volle
-             Quote) faellt der Schalter fail-closed aus -- die Box muss dann
-             beim naechsten Start erneut fragen, statt eine Entscheidung zu
-             behaupten, die nirgends steht. */
-          if (art && art.durchgeklickt && art.gespeichert !== false) { try { setWillkommen(true); } catch { /* */ } }
-          setWillkommenOffen(false);
-          /* Etappe 7: Die KI-Wahl ist beim Durchklicken bereits geschrieben
-             (kd:ki, geraetelokal). Der Neuaufbau hier holt die Gates ab --
-             `kiAn()` wird beim Render gelesen, nicht abonniert, und der
-             Finder-Knopf soll ohne Reload erscheinen bzw. verschwinden. */
-          if (art && art.durchgeklickt) { setKiStand(ladeKiStand()); setStartTick((x) => x + 1); }
-        }} onAnmelden={anmeldenAusWillkommen} />
-      )}
-      {aktiverHinweis && (
-        <TourOverlay hinweis={aktiverHinweis} onClose={schliesseHinweis}
-          onExport={aktiverHinweis.export ? () => { try { exportMaster(); } catch { /* */ } setTab("daten"); } : undefined} />
-      )}
+      {hilfeOffen && <HilfeSheet onClose={() => setHilfeOffen(false)} />}
       {klaerung && klaerung.length > 0 && (
         <QuelleKlaerung eintraege={klaerung}
           onSpaeter={() => setKlaerung(null)}
-          onFertig={(map) => {
-            setMaster((prev) => {
-              const next = prev.map((f) => (map[f.id] !== undefined ? { ...f, quelle: map[f.id], quelle_unklar: undefined } : f));
-              const hh = naechsteHerkunft(); setMasterHerkunft(hh); persistMaster(next, masterMeta, hh); return next;
-            });
-            setKlaerung(null);
-          }} />
+          onFertig={uebernehmeQuellenKlaerung} />
       )}
       <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -2437,23 +1691,10 @@ export default function App() {
         </div>
         <div style={{ height: 1, background: "linear-gradient(90deg, " + T.wolfram + ", transparent 70%)", marginTop: 14 }} />
       </header>
-      {/* Menü angepinnt: bleibt beim Scrollen oben (sticky). Bewusst NICHT im
-          <header> — ein sticky-Element klebt nur, solange sein Eltern-Element
-          sichtbar ist; als direktes Kind von .kd-app (volle Seitenhöhe) hält es
-          über die ganze Seite. */}
-      <NavBand ref={griffRef} offen={navOffen} onToggle={() => setNavOffen((o) => !o)} />
-      <div className={"kd-scrim" + (navOffen ? " offen" : "")} onClick={() => setNavOffen(false)} aria-hidden="true" />
-      {/* z-index bewusst NICHT inline: Inline-Styles schlagen CSS ohne !important —
-          ein inline zIndex hier hat den Drawer unter den Scrim (58) gedrückt.
-          Ebenen liegen in index.css: Desktop 40, Handy 60 (.kd-menu). */}
-      <nav ref={navRef} className={"kd-menu" + (navOffen ? " offen" : "")} inert={istMobil && !navOffen} style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }}>
+      <nav className="kd-menu" style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }} aria-label="Hauptnavigation">
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {/* DOM-Reihenfolge = bottom-up-Wichtigkeit (Etappe 3, Max 18.07.):
-              das Mobile-Popup stapelt per column-reverse von unten — Kino als
-              1. DOM-Kind landet daumennah. Labels/Handler bleiben unverändert
-              (Tests klicken per Text). */}
-          {[["kino", "Kino"], ["streaming", "Streaming"], ["mediathek", "Mediathek"], ["finder", "Suche"], ["blog", "Blog"], ["start", "Start"], ["daten", "Einstellungen"]].map(([id, label]) => (
-            <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined} onClick={() => { setTab(id); setNavOffen(false); try { window.scrollTo(0, 0); } catch { /* */ } }}
+          {NAVIGATION.map(({ id, label }) => (
+            <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined} onClick={() => navigiere(id)}
               style={{
                 fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
                 letterSpacing: "0.08em", textTransform: "uppercase",
@@ -2473,6 +1714,12 @@ export default function App() {
       </nav>
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "20px 22px 0" }}>
+        {(ungesichertMaster || ungesichertArtikel) && (
+          <aside className="kd-backup-hinweis" role="status">
+            <span><strong>Noch nicht gesichert.</strong> Browser-Speicher ist kein Backup.</span>
+            <button onClick={() => navigiere("daten")}>Sicherung öffnen</button>
+          </aside>
+        )}
         {err && (
           <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 14 }}>
             {err}
@@ -2499,7 +1746,7 @@ export default function App() {
         ) : null}
 
         {tab === "start" && bootDone && (
-          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={setTab} zeigeEintrag={springeZuFilm} onTutorialNeu={() => { try { resetTutorial(); } catch { /* */ } setWillkommenOffen(true); }}
+          <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={() => setHilfeOffen(true)}
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
@@ -2527,7 +1774,7 @@ export default function App() {
             filmwissenAktiv={filmwissenLesenAktiv}
             filmwissenRechercheAktiv={filmwissenRechercheAktiv}
             filmwissenProFilm={filmwissenProFilm}
-            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            filmwissenRechercheLaufId={filmwissenRechercheLaufId}
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             loading={loading} ladeProgrammDatei={ladeProgrammDatei}
@@ -2554,7 +1801,7 @@ export default function App() {
             filmwissenAktiv={filmwissenLesenAktiv}
             filmwissenRechercheAktiv={filmwissenRechercheAktiv}
             filmwissenProFilm={filmwissenProFilm}
-            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            filmwissenRechercheLaufId={filmwissenRechercheLaufId}
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             artikel={artikelListe} onArtikelKlick={springeZuArtikel}
@@ -2571,6 +1818,7 @@ export default function App() {
             fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
             onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
+            onRetryPublication={wiederholePublikation}
             onAddFilm={addFilm} onSpringeZuFilm={springeZuFilm}
             exportArtikel={exportArtikel} importArtikel={importArtikel}
             onZiehe={zieheSharedBlog}
@@ -2592,7 +1840,7 @@ export default function App() {
             filmwissenAktiv={filmwissenLesenAktiv}
             filmwissenRechercheAktiv={filmwissenRechercheAktiv}
             filmwissenProFilm={filmwissenProFilm}
-            filmwissenRechercheLaufId={filmwissenRechercheRef.current?.filmId || null}
+            filmwissenRechercheLaufId={filmwissenRechercheLaufId}
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             mustwatchIds={mustwatchMasterIds}
@@ -2617,7 +1865,6 @@ export default function App() {
             prognoseSperrgrund={vorbewertungSperrgrund}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
-            onKlaatu={EGGS_ENABLED && EGG_AKTIV.klaatu ? zeigeKlaatu : undefined}
           />
         )}
 
@@ -2632,7 +1879,6 @@ export default function App() {
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
             kiProfilFaehig={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true}
-            resetMaster={resetMaster}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
             demoAktiv={demoAktiv}
             onStartWahl={oeffneStartWahl}
@@ -2658,6 +1904,9 @@ export default function App() {
           />
         )}
       </main>
+      <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
+        onNavigate={navigiere} onHilfe={() => { setMehrOffen(false); setHilfeOffen(true); }}
+        ungesichert={ungesichertMaster || ungesichertArtikel} />
       </div>{/* .kd-app */}
       {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">
@@ -2673,17 +1922,7 @@ export default function App() {
         <CageAlphabet filme={cageFilmeRef.current} reduced={reducedMotion} herkunftVon={eggHerkunft}
           onZeigeEintrag={eggZeigeEintrag} onClose={() => setCageOffen(false)} />
       )}
-      {EGGS_ENABLED && EGG_AKTIV.teppich && teppichOffen && (
-        <Teppich filme={teppichFilmeRef.current} vorschau={teppichVorschau} reduced={reducedMotion} herkunftVon={eggHerkunft}
-          onZeigeEintrag={eggZeigeEintrag} onClose={() => { setTeppichOffen(false); setTeppichVorschau(false); }} />
-      )}
-      {/* EGG-PAUSE: Teppich/Crawl/Necronomicon sind zusätzlich zu EGGS_ENABLED
-          über EGG_AKTIV (modus.js) stillgelegt, bis Max sie überarbeitet hat. */}
-      {EGGS_ENABLED && EGG_AKTIV.crawl && crawlOffen && (
-        <Crawl matches={crawlMatchesRef.current} onSkip={() => setCrawlOffen(false)} reduced={reducedMotion} />
-      )}
-      {EGGS_ENABLED && EGG_AKTIV.klaatu && necroAktiv && <NecronomiconRand onClose={() => setNecroAktiv(false)} />}
-      <ZurueckObenKnopf />
+      <ZurueckObenKnopf verdeckt={mehrOffen || hilfeOffen} />
     </div>
   );
 }

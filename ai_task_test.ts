@@ -2125,6 +2125,8 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(r.status, 200, "Status");
   gleich(r.daten.ok, true, "ok");
   gleich(r.daten.task, "health", "task");
+  gleich(r.daten.contractVersion, "ai-task-v3", "Vertragsversion");
+  gleich(r.daten.buildVersion, "unversioned", "ohne Deploy-Metadatum fail-closed");
   gleich(starten().length, 0, "keine Reservierung — health kostet nichts");
   gleich(beenden().length, 0, "keine Protokollzeile");
   gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");

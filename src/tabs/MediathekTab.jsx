@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
@@ -76,16 +76,24 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
      dauerhafte Sicht-Präferenz im Datentopf (vorher nur sessionStorage): sie
      überlebt den App-Neustart und wandert bei angemeldetem Konto mit. */
   const [filterMenueOffen, setFilterMenueOffen] = useState(false);
+  const filterMenueOffenRef = useRef(filterMenueOffen);
+  filterMenueOffenRef.current = filterMenueOffen;
   useEffect(() => {
     let aktiv = true;
-    store.get(K.filterMediathek).then((r) => { if (aktiv && r?.value === "1") setFilterMenueOffen(true); }).catch(() => {});
+    store.get(K.filterMediathek).then((r) => {
+      if (aktiv && r?.value === "1") {
+        filterMenueOffenRef.current = true;
+        setFilterMenueOffen(true);
+      }
+    }).catch(() => {});
     return () => { aktiv = false; };
   }, []);
-  const toggleFilterMenue = () => setFilterMenueOffen((v) => {
-    const nv = !v;
+  const toggleFilterMenue = () => {
+    const nv = !filterMenueOffenRef.current;
+    filterMenueOffenRef.current = nv;
+    setFilterMenueOffen(nv);
     store.set(K.filterMediathek, nv ? "1" : "0").catch(() => {});
-    return nv;
-  });
+  };
 
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };

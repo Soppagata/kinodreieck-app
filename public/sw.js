@@ -42,7 +42,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   let url;
   try { url = new URL(req.url); } catch { return; }
-  if (url.origin !== self.location.origin) return; // nie fremde Origins (v. a. api.github.com)
+  if (url.origin !== self.location.origin) return; // nie fremde Origins (z. B. Datenbank- und Auth-Endpunkte)
 
   const istHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
   const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien

@@ -54,6 +54,29 @@ export async function activePull() {
   return { ok: true, noop: true };
 }
 
+/* Explizite Dauerhaftigkeitsbarriere für Mehrtopf-Operationen wie Restore.
+   Normale UI-Schreibvorgänge bleiben weiterhin sofort lokal und übertragen im
+   Hintergrund. */
+export async function activeSyncFlush() {
+  try {
+    if (activeDriver && typeof activeDriver.syncFlush === "function") {
+      return { ok: true, ergebnisse: await activeDriver.syncFlush() };
+    }
+  } catch (e) { return { ok: false, error: String(e), ergebnisse: [] }; }
+  return { ok: true, noop: true, ergebnisse: [] };
+}
+
+/* Read-only Inventur der aktiven Kontoablage. Treiber ohne Konto-Inventur
+   melden einen ehrlichen No-op statt eine scheinbar verifizierte Übertragung. */
+export async function activeSyncInventur() {
+  try {
+    if (activeDriver && typeof activeDriver.inventur === "function") {
+      return await activeDriver.inventur();
+    }
+  } catch (e) { return { ok: false, error: String(e), zeilen: {} }; }
+  return { ok: true, noop: true, zeilen: {} };
+}
+
 /* Treiber-Wahl (Block 2): "git" | "supabase" | null(=bisheriges Verhalten). */
 export function getTreiber() { try { return localStorage.getItem("kd:treiber"); } catch { return null; } }
 export function setTreiber(name) {
@@ -92,6 +115,7 @@ export const K = {
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
   startVersion: "kd:start-version",   // bestätigt, dass die Wahl im aktuellen Demo-Onboarding bewusst getroffen wurde
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
+  einstieg: "kd:einstieg",            // versionierter Ersteinstieg {version, abgeschlossen, weg}
   treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
   achievements: "kd:achievements",    // Egg-Achievements (11. Sync-/Backup-Artefakt, Block 3): Set freigeschalteter Egg-IDs
   katalogKey: "kd:katalog:key",       // vom Tester eingegebener Supabase-Publishable-Key (nur Lesen)

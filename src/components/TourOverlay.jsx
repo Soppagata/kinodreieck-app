@@ -59,7 +59,7 @@ export function TourOverlay({ hinweis, onClose, onExport }) {
       const basis = {
         position: "fixed", width: Math.min(400, vw - 24), maxWidth: "calc(100vw - 24px)", maxHeight: "70dvh", overflowY: "auto", overscrollBehavior: "contain",
         background: "#ECE8DF", color: "#1C1A1E", border: "2px solid " + ring, borderRadius: 6,
-        padding: "18px 20px", boxShadow: "0 12px 48px rgba(0,0,0,0.55)", zIndex: Z_BOX,
+        padding: "18px 20px", boxSizing: "border-box", boxShadow: "0 12px 48px rgba(0,0,0,0.55)", zIndex: Z_BOX,
         visibility: sichtbar ? "visible" : "hidden",
       };
       const boxH = (boxRef.current && boxRef.current.offsetHeight) || (150 + hinweis.absaetze.length * 74); // gemessen, sonst geschätzt

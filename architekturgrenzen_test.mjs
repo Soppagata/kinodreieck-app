@@ -223,13 +223,14 @@ check("Persönliche lokale Ablage bleibt im Gastmodus unverändert nutzbar",
   (await storageService.get("kd:architekturtest"))?.value === "lokal"
   && storageService.mode === "guest-local");
 await storageService.delete("kd:architekturtest");
-let publishError = null;
-try { await storageService.publishSharedArticle({ id: "test", titel: "Test" }); }
-catch (error) { publishError = error; }
-check("Storage-Service normalisiert auch alte Result-Envelopes ohne Rohmeldung",
-  publishError instanceof BoundaryError
-  && !publishError.message.includes("Sync-Schlüssel")
-  && publishError.source === "storage");
+const storageSource = fs.readFileSync("src/services/storage.js", "utf8");
+const sharedSource = fs.readFileSync("src/services/sharedArticles.js", "utf8");
+check("Persönlicher Storage kennt den Legacy-Shared-Treiber nicht mehr",
+  !/supabaseDriver|publishSharedArticle|unpublishSharedArticle/.test(storageSource));
+check("Shared Blogs besitzen eine eigene kleine Service-Grenze",
+  /createSharedArticlesService/.test(sharedSource)
+  && /kd_shared_articles/.test(sharedSource)
+  && !/kd_store|x-kd-key/.test(sharedSource));
 
 const uiRoots = ["src/App.jsx", "src/components", "src/tabs"];
 const jsFiles = [];
@@ -254,6 +255,10 @@ check("UI führt keine direkten Netzwerkaufrufe aus",
   !/\bfetch\s*\(/.test(uiSource.replace(/fetch\(\) würde blockiert/g, "")));
 check("App macht Gast- und Accountmodus technisch unterscheidbar",
   /data-session-mode=\{session\.mode\}/.test(fs.readFileSync("src/App.jsx", "utf8")));
+const sessionEintritte = uiSource + "\n" + fs.readFileSync("src/main.jsx", "utf8");
+check("Alle verändernden Sitzungswege laufen über den SessionCoordinator",
+  !/authService\.(?:initialize|signIn|signOut|refresh|changePassword)\s*\(/.test(sessionEintritte)
+  && /sessionCoordinator\.(?:initialize|signIn|signOut|refresh)/.test(sessionEintritte));
 check("Katalogzugang spiegelt keine Credentials in persönlichen Sync",
   !/setSupabaseConfig/.test(fs.readFileSync("src/components/KatalogZugang.jsx", "utf8")));
 

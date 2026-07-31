@@ -4,10 +4,9 @@ import { restoreBackup, restoreRueckgaengig } from "../lib/restore.js";
 import { storageService } from "../services/storage.js";
 
 /* ================= Backup wiederherstellen (Datenmigration) =================
-   Spielt ein Gesamt-Backup der alten App in die neue ein — einmaliger Schritt,
-   BEVOR Git verbunden wird. Ersetzt die lokalen Daten (kein Merge), sichert den
-   vorherigen Stand als Snapshot (rückgängig machbar) und zeigt einen Zählbericht
-   (der Abgleich gegen die alte App = Checkpoint B der Migration). */
+   Spielt ein Gesamt-Backup der alten App in die neue ein. Ersetzt die im Backup
+   vorhandenen Bereiche (kein Merge), sichert den vorherigen Stand als Snapshot
+   (rückgängig machbar) und zeigt einen Zählbericht. */
 /* ohneKopf: Kopfzeile weglassen, wenn der Titel außen an einer Klappe
    (Einstellungs-Accordion, Etappe 2) steht. */
 export function RestoreImport({ ohneKopf = false } = {}) {
@@ -24,11 +23,11 @@ export function RestoreImport({ ohneKopf = false } = {}) {
     let backup;
     try { backup = JSON.parse(text); }
     catch { setBusy(false); setMeldung({ art: "err", text: "Keine gültige JSON-Datei." }); return; }
-    const gitHinweis = storageService.hasLegacyGitConnection()
-      ? "\n\nACHTUNG: Git-Sync ist bereits verbunden — der wiederhergestellte Stand wird beim nächsten Sync als neue Version ins Daten-Repo committet. Für die Erst-Migration gilt: Backup einspielen, DANN Git verbinden."
+    const kontoHinweis = storageService.mode === "account"
+      ? "\n\nDu bist angemeldet: Der bestätigte Stand wird auch in deinen Kontospeicher geschrieben."
       : "";
     // KD-008: fail-closed Snapshot-Zusage · KD-009: Wortlaut (vorhandene Felder ersetzen, im Backup fehlende bleiben)
-    const ok = window.confirm("Backup wiederherstellen?\n\nVorhandene Felder des Backups ERSETZEN die entsprechenden lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste); im Backup fehlende Bereiche bleiben unverändert. Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar — lässt sich der Snapshot nicht sichern, wird abgebrochen und nichts überschrieben." + gitHinweis);
+    const ok = window.confirm("Backup wiederherstellen?\n\nVorhandene Felder des Backups ERSETZEN die entsprechenden lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste); im Backup fehlende Bereiche bleiben unverändert. Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar — lässt sich der Snapshot nicht sichern, wird abgebrochen und nichts überschrieben." + kontoHinweis);
     if (!ok) { setBusy(false); return; }
     try {
       const r = await restoreBackup(backup);
@@ -66,7 +65,7 @@ export function RestoreImport({ ohneKopf = false } = {}) {
         {/* KD-009: Wortlaut — Restore ist preserve-missing (fehlende Backup-Bereiche bleiben), nicht „alles ersetzen". Verhalten in restore.js unverändert. */}
         Autor-Name in einem Schritt. <strong>Vorhandene Felder des Backups ersetzen die lokalen; im Backup fehlende
         Bereiche bleiben unverändert.</strong> Der vorherige Stand wird gesichert. Danach neu laden und die Zählstände
-        prüfen, <em>bevor</em> du Git verbindest.
+        prüfen.
         Deine Abo-Auswahl (Streaming-Dienste) ist im alten Backup nicht enthalten — die setzt du einmal manuell.
       </p>
       <input type="file" accept=".json,application/json" onChange={aufDatei} disabled={busy}

@@ -3,12 +3,11 @@ import { T, btnStyle } from "../lib/tokens.js";
 import { Logo } from "./ui.jsx";
 import { DreieckRegler } from "./DreieckRegler.jsx";
 
-/* ================= Erklärstücke (Etappe 4, ausgelagert aus StartTab) =================
+/* ================= Erklärstücke =================
    Hero („LOKALE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
-   und die eingebaute Anleitung (DokuAnsicht). Zwei Orte rendern sie:
-   · Beta-Landing (StartTab, PERSONAL_MODE=false) — wie bisher.
-   · „Über"-Einstieg in den Einstellungen (PERSONAL_MODE=true), weil das
-     Start-Dashboard die Erklärinhalte nicht mehr trägt.
+   und die eingebaute Anleitung (DokuAnsicht). Sie liegen hinter dem
+   „Über"-Einstieg in den Einstellungen, weil das Start-Dashboard die
+   Erklärinhalte nicht selbst trägt.
    Styles werden pro Render berechnet (T ist theme-reaktiv). */
 
 const h2Of = () => ({ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" });
@@ -89,8 +88,7 @@ export function DreieckErklaerung() {
   );
 }
 
-/* ---- „Über"-Einstieg für die Einstellungen (PERSONAL_MODE): Hero + Dreieck +
-   Anleitung, hinter demselben Knopf-Wortlaut wie auf der Landing. ---- */
+/* ---- „Über"-Einstieg für die Einstellungen: Hero, Dreieck, Anleitung. ---- */
 export function UeberKinodreieck({ onTutorialNeu }) {
   const [dokuOffen, setDokuOffen] = useState(false);
   const h2 = h2Of(); const mono = monoOf();
@@ -167,7 +165,7 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       </div>
       {offen && (
         <div onClick={() => setPopup(null)} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 540, maxHeight: "82dvh", overflowY: "auto", overscrollBehavior: "contain", padding: "20px 24px" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 540, boxSizing: "border-box", maxHeight: "82dvh", overflowY: "auto", overscrollBehavior: "contain", padding: "20px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
               <h2 style={{ ...h2, margin: 0 }}>{offen.titel}</h2>
               <button onClick={() => setPopup(null)} style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>Schließen</button>

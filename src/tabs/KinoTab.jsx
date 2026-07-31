@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
@@ -51,16 +51,24 @@ export function KinoTab({
      sessionStorage): so überlebt sie den App-Neustart und wandert bei
      angemeldetem Konto auf die anderen Geräte mit. */
   const [filterMenueOffen, setFilterMenueOffen] = useState(false);
+  const filterMenueOffenRef = useRef(filterMenueOffen);
+  filterMenueOffenRef.current = filterMenueOffen;
   useEffect(() => {
     let aktiv = true;
-    store.get(K.filterKino).then((r) => { if (aktiv && r?.value === "1") setFilterMenueOffen(true); }).catch(() => {});
+    store.get(K.filterKino).then((r) => {
+      if (aktiv && r?.value === "1") {
+        filterMenueOffenRef.current = true;
+        setFilterMenueOffen(true);
+      }
+    }).catch(() => {});
     return () => { aktiv = false; };
   }, []);
-  const toggleFilterMenue = () => setFilterMenueOffen((v) => {
-    const nv = !v;
+  const toggleFilterMenue = () => {
+    const nv = !filterMenueOffenRef.current;
+    filterMenueOffenRef.current = nv;
+    setFilterMenueOffen(nv);
     store.set(K.filterKino, nv ? "1" : "0").catch(() => {});
-    return nv;
-  });
+  };
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);

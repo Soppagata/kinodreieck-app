@@ -151,15 +151,18 @@ export function kommtVorIn(artikelListe) {
 }
 
 /* ============================================================
-   Shared-Blogs: Ziehen & Reconciliation (deterministisch)
+   Shared-Blogs: als stabilen Snapshot in die Mediathek ziehen
    ============================================================ */
 
-/* Einen geteilten Blog (aus ladeSharedBlogs: { db_owner, db_key, author, artikel })
+/* Einen geteilten Blog ({ publication_id, db_owner, db_key, author, artikel })
    in einen lokalen, "gezogenen" Artikel umwandeln:
    - neue lokale ID (kollisionsfrei gegen die vorhandenen)
-   - Herkunft markiert (db_owner/db_key) — Basis für die Start-Reconciliation
+   - öffentliche Herkunft markiert, aber keine Live-Verknüpfung angelegt
    - refs bewusst zurückgesetzt und gegen DIE EIGENE Masterliste neu aufgelöst;
      was der ziehende Nutzer nicht hat, wird automatisch zum Rotlink.
+   Die Kopie bleibt erhalten, wenn der Autor die öffentliche Projektion später
+   ändert oder zurücknimmt. „In meine Mediathek ziehen“ ist damit ein verständ-
+   licher Snapshot und kein fremdgesteuerter Live-Datensatz.
    nowIso: injizierbar (Tests deterministisch). */
 export function blogZuArtikel(sharedBlog, vorhandene, master, nowIso) {
   const q = (sharedBlog && sharedBlog.artikel) || {};
@@ -176,6 +179,8 @@ export function blogZuArtikel(sharedBlog, vorhandene, master, nowIso) {
     herkunft: "gezogen",
     db_owner: sharedBlog ? sharedBlog.db_owner : null,
     db_key: sharedBlog ? sharedBlog.db_key : null,
+    source_publication_id: sharedBlog?.publication_id || sharedBlog?.db_key || null,
+    source_loaded_at: nowIso || new Date().toISOString(),
     liste: (q.liste || []).slice(0, MAX_LISTE).map((le) => ({
       eingabe: le.eingabe, jahr: le.jahr == null ? null : le.jahr, typ: le.typ || null, ref: null,
     })),
@@ -183,21 +188,4 @@ export function blogZuArtikel(sharedBlog, vorhandene, master, nowIso) {
   const abg = gleicheArtikelAb(roh, master || []);
   // Abgleich-Felder abstreifen (wie beim Erstellen): nur stabile refs bleiben.
   return { ...abg, liste: abg.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined };
-}
-
-/* Reconciliation beim Start: NUR gezogene Artikel, deren DB-Original nicht mehr in
-   der aktuellen shared-Menge liegt, werden still entfernt (der Autor hat gelöscht).
-   Selbst geschriebene und manuell importierte Artikel sind geschützt.
-   sharedKeys = Set der Strings "<db_owner>|<db_key>".
-   Rückgabe: [neueListe, entferntAnzahl]. */
-export function reconcileGezogene(artikelListe, sharedKeys) {
-  let entfernt = 0;
-  const next = (artikelListe || []).filter((a) => {
-    if (!a || a.herkunft !== "gezogen") return true;          // geschützt
-    const k = (a.db_owner || "") + "|" + (a.db_key || "");
-    const vorhanden = sharedKeys.has(k);
-    if (!vorhanden) entfernt++;
-    return vorhanden;
-  });
-  return [entfernt > 0 ? next : artikelListe, entfernt];
 }

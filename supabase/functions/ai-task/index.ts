@@ -35,13 +35,31 @@
                nachweislich eine Vorhut und kein Beweis — diese Funktion darf
                sich niemals allein auf sie verlassen.
 
-   Alles bleibt in EINER Datei: der Deploy lädt ausweislich seiner Ausgabe
-   `index.ts` als Asset hoch; Nachbarmodule wären ein unnötiges Risiko.
+   `index.ts` bleibt der einzige Endpunkt. Kleine Nachbarmodule tragen pure
+   Verträge und Filmwissen-Adapter; die Supabase-CLI bündelt deren Importe
+   gemeinsam mit dem Einstieg.
    =========================================================================== */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { baueSyntheseAuftrag, FILMWISSEN_PROMPT_VERSION, FILMWISSEN_SYNTHESE_FORMAT, type Fundstelle, pruefeSyntheseAusgabe, type Werk } from "../filmwissen-task/vertrag.ts";
 import { type AdapterFundstelle, fundstelleAusLocNfrSnapshot, fundstellenFuerSynthese, holeLocNfrSnapshot, holeWikidataFundstelle, LOC_NFR_ADAPTER_VERSION, type LocNfrSnapshot, pruefeLocNfrSnapshot, QuellenFehler, type StarkeFilmkennung } from "../filmwissen-task/quellen.ts";
+import {
+  AufrufFehler,
+  CODES,
+  FUNCTION_CONTRACT_VERSION,
+  functionBuildVersion,
+  klassifiziereAufgabe,
+  STATUS,
+} from "./requestContract.ts";
+import {
+  baueAnbieterKoerper,
+  schaetzeAnbieterEingabeTokens,
+} from "./providerContract.ts";
+
+export {
+  baueAnbieterKoerper,
+  schaetzeAnbieterEingabeTokens,
+} from "./providerContract.ts";
 
 const ANBIETER_URL = "https://api.anthropic.com/v1/messages";
 const ANBIETER_MODELLE_URL = "https://api.anthropic.com/v1/models";
@@ -73,36 +91,6 @@ function corsKopf(origin: string | null): Record<string, string> {
 /* ---------- Fehlerklassen ---------------------------------------------------
    Dieselben stabilen Codes wie in src/services/errors.js. Der Client übersetzt
    nach `code`, nicht nach Status (Lehre aus Etappe 4: Grund vor Status). */
-const CODES = {
-  UNAUTHENTICATED: "unauthenticated",
-  FORBIDDEN: "forbidden",
-  LIMIT: "limit",
-  SERVER: "server",
-  INVALID_RESPONSE: "invalid-response",
-  AI_DISABLED: "ai-disabled",
-  AI_REFUSED: "ai-refused",
-  NOT_IMPLEMENTED: "not-implemented",
-  AI_DUPLICATE: "ai-duplicate",
-} as const;
-
-const STATUS: Record<string, number> = {
-  [CODES.UNAUTHENTICATED]: 401,
-  [CODES.FORBIDDEN]: 403,
-  [CODES.LIMIT]: 429,
-  [CODES.AI_DISABLED]: 503,
-  [CODES.AI_REFUSED]: 422,
-  [CODES.INVALID_RESPONSE]: 502,
-  [CODES.NOT_IMPLEMENTED]: 501,
-  [CODES.AI_DUPLICATE]: 409,
-  [CODES.SERVER]: 500,
-};
-
-/* Registriert, aber noch nicht gebaut: meldet `not-implemented` statt eines
-   Serverfehlers. Sobald eine dieser Aufgaben in AUFGABEN steht, greift der
-   Nachschlag dort zuerst — der Eintrag hier wird dann wirkungslos und gehört
-   entfernt (`intelligent-search` ist in Etappe 6 genau diesen Weg gegangen). */
-const FACHAUFGABEN = new Set(["masterlist-enrichment"]);
-
 function jsonAntwort(koerper: unknown, status: number, origin: string | null) {
   return new Response(JSON.stringify(koerper), {
     status,
@@ -179,27 +167,6 @@ function nutzerClient(req: Request) {
 }
 
 /* ---------- Aufruferprüfung -------------------------------------------------- */
-class AufrufFehler extends Error {
-  code: string;
-  grund: string;
-  /* Ein Fehlschlag kann Geld gekostet haben: eine Verweigerung kommt mit
-     abgerechneten Tokens, eine Zeitgrenze ebenfalls. Der Verbrauch reist
-     deshalb am Fehler mit, statt verloren zu gehen. */
-  verbrauch:
-    | { modell?: string; inputTokens?: number; outputTokens?: number }
-    | null;
-  constructor(
-    code: string,
-    grund: string,
-    verbrauch: AufrufFehler["verbrauch"] = null,
-  ) {
-    super(grund);
-    this.code = code;
-    this.grund = grund;
-    this.verbrauch = verbrauch;
-  }
-}
-
 type Aufrufer = {
   accountId: string;
   rolle: string;
@@ -308,53 +275,6 @@ type AnbieterErgebnis = {
   outputTokens: number;
   stopReason: string;
 };
-
-/* EIN gemeinsamer Anbieterkoerper fuer Reservierung und echten Aufruf.
-   Vor Etappe 8, Block 2 wurde die Eingabe aus dem rohen Browser-Request
-   geschaetzt. Das unterschlug den gesamten Systemprompt und das Antwortschema
-   und zaehlte umgekehrt fremde, vom Auftrag verworfene Zusatzfelder mit.
-   Bei spaeter serverseitig geladenen Fundstellen waere die Reservierung damit
-   praktisch blind gewesen. Diese reine Funktion ist deshalb die verbindliche
-   Kosten- und Sendenaht. */
-export function baueAnbieterKoerper(
-  modell: string,
-  system: string,
-  nutzertext: string,
-  maxTokens: number,
-  schema: Record<string, unknown> | null,
-): Record<string, unknown> {
-  const koerper: Record<string, unknown> = {
-    model: modell,
-    max_tokens: maxTokens,
-    system,
-    messages: [{ role: "user", content: nutzertext }],
-  };
-  if (schema) {
-    koerper.output_config = { format: { type: "json_schema", schema } };
-  }
-  return koerper;
-}
-
-export function schaetzeAnbieterEingabeTokens(
-  modell: string,
-  system: string,
-  nutzertext: string,
-  maxTokens: number,
-  schema: Record<string, unknown> | null,
-): number {
-  const koerper = baueAnbieterKoerper(
-    modell,
-    system,
-    nutzertext,
-    maxTokens,
-    schema,
-  );
-  const bytes = new TextEncoder().encode(JSON.stringify(koerper)).length;
-  /* Drei UTF-8-Bytes je Token plus 300 Token Sicherheitsaufschlag ist bewusst
-     konservativ. Entscheidend ist jetzt, dass die Schaetzung ALLE wirklich
-     gesendeten Anweisungen und das Schema umfasst. */
-  return Math.ceil(bytes / 3) + 300;
-}
 
 async function rufeAnbieter(
   modell: string,
@@ -2626,7 +2546,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   /* ---- health: kostet nichts, legt keine Zeile an, zählt auf kein Limit ---- */
-  if (task === "health") {
+  if (klassifiziereAufgabe(task, false) === "health") {
     const { herkunft: pubHerkunft } = oeffentlich();
     const { herkunft: secHerkunft } = geheim();
     let stand: unknown = null;
@@ -2640,6 +2560,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         task: "health",
         vorgangId,
         phase: "etappe-5",
+        contractVersion: FUNCTION_CONTRACT_VERSION,
+        buildVersion: functionBuildVersion(
+          Deno.env.get("KD_FUNCTION_BUILD_VERSION"),
+        ),
         laufzeit: {
           deno: (Deno as unknown as { version?: { deno?: string } }).version
             ?.deno ?? null,
@@ -2669,7 +2593,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   /* ---- anbieter-modelle: Diagnose. Belegt die gültigen Modell-IDs am echten
           Anbieter, statt sie aus der Doku zu glauben. Verbraucht keine Tokens. */
-  if (task === "anbieter-modelle") {
+  if (klassifiziereAufgabe(task, false) === "anbieter-modelle") {
     /* W1: auch eine tokenfreie Diagnose ruft den Anbieter mit dem echten
        Schlüssel und verbraucht dessen Ratenkontingent. Der Not-Aus muss sie
        deshalb genauso stoppen — sonst schaltet er eben nicht alles ab. */
@@ -3157,9 +3081,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     protokollPromptVersion = FILMWISSEN_PROMPT_VERSION;
   }
 
-  /* ---- Aufgabe auflösen. Eine Aufgabe in AUFGABEN ist gebaut; eine in
-          FACHAUFGABEN ist registriert, aber noch nicht gebaut; alles andere
-          kennt der Endpunkt nicht. ---- */
+  /* ---- Aufgabe auflösen. Der pure Request-Vertrag unterscheidet gebaute,
+          geplante und unbekannte Aufgaben; Diagnosepfade wurden oben bereits
+          behandelt. ---- */
   /* `AUFGABEN[task]` mit einem geerbten Schlüssel — "constructor", "__proto__",
      "toString" — liefert etwas von Object.prototype statt undefined. Der Wert
      ist dann wahrheitsgemäss, `aufgabe.bauAuftrag` aber keine Funktion, und der
@@ -3167,7 +3091,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      eigene Schlüssel zählen. */
   const aufgabe = Object.prototype.hasOwnProperty.call(AUFGABEN, task) ? AUFGABEN[task] : undefined;
   if (!aufgabe || typeof aufgabe.bauAuftrag !== "function") {
-    const grund = FACHAUFGABEN.has(task) ? "kommt-in-etappe-6" : (task ? "unbekannte-aufgabe" : "kein-task");
+    const route = klassifiziereAufgabe(task, false);
+    const grund = route === "geplant"
+      ? "kommt-in-etappe-6"
+      : (task ? "unbekannte-aufgabe" : "kein-task");
     return fehlerAntwort(CODES.NOT_IMPLEMENTED, origin, { grund, vorgangId });
   }
 

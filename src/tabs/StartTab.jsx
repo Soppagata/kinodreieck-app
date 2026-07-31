@@ -1,128 +1,28 @@
-import { useMemo, useState } from "react";
-import { T, btnStyle } from "../lib/tokens.js";
-import { IconDelete } from "../components/ui.jsx";
+import { useMemo } from "react";
+import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
-import { ErklaerHero, DreieckErklaerung, DokuAnsicht } from "../components/Erklaerstuecke.jsx";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { score } from "../lib/match.js";
 import { formatiereTermin } from "../lib/programm.js";
+import { useInstallationsStatus } from "../lib/installation.js";
 
 /* ================= START =================
-   Etappe 4 (Verzweigung, Max 18.07.2026):
-   · PERSONAL_MODE=true  -> Start-Dashboard (Schablone start_dashboard_schablone.html):
-     Vertrauens-Zeile · Kino für dich · Must-Watch · Jetzt streambar · Pinboard ·
-     Zuletzt hinzugefügt. Alle Module deterministisch aus vorhandenem App-State,
-     leere Module verschwinden, jede Karte verlinkt in ihren Bereich.
-     Erklärinhalte (Hero, Dreieck, Anleitung) leben jetzt hinter dem „Über"-
-     Einstieg in den Einstellungen (Erklaerstuecke.jsx).
-   · PERSONAL_MODE=false -> die HEUTIGE Landing, unverändert (Beta-Kulisse).
-   Reine Anzeige-Schicht — alle Daten kommen als Props aus dem App-State. */
+   Das Dashboard ist die einzige Startansicht. Alle Module entstehen
+   deterministisch aus dem vorhandenen App-State; leere Module verschwinden
+   und jede Karte verlinkt in ihren Fachbereich. */
 
 export function StartTab(props) {
   return <StartDashboard {...props} />;
 }
 
-/* Pin-Sortierung (nächster Termin zuerst) — unverändert aus der Landing,
-   gehoisted, damit Landing UND Dashboard sie teilen. */
+/* Pin-Sortierung (nächster Termin zuerst). */
 const pinSortWert = (p) => {
   const d = /(\d{1,2})\.(\d{1,2})\./.exec(String(p.z));
   const u = /(\d{1,2}):(\d{2})/.exec(String(p.z));
   return (d ? Number(d[2]) * 1000000 + Number(d[1]) * 10000 : 99999999) + (u ? Number(u[1]) * 100 + Number(u[2]) : 0);
 };
 
-/* ==================== LANDING (Beta, PERSONAL_MODE=false) ====================
-   Rendert zu 100 % die bisherige Startseite: Hero + Dreieck-Erklärung
-   (ausgelagert nach Erklaerstuecke.jsx, Inhalt identisch), Pinboard,
-   Quicklinks, Anleitung. */
-function StartLanding({ kinoPins = [], toggleKinoPin, merkliste = [], toggleMerk, onNavigiere, onTutorialNeu }) {
-  const [dokuOffen, setDokuOffen] = useState(false);
-  /* Merkliste kommt jetzt als Prop (in App-State geliftet) — live synchron mit dem Streaming-Tab. */
-  const pins = [...kinoPins].sort((a, b) => pinSortWert(a) - pinSortWert(b));
-
-  const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
-  const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
-
-  return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      {/* ---- Hero + Dreieck-Erklärstück (Erklaerstuecke.jsx, Inhalt unverändert) ---- */}
-      <ErklaerHero />
-      <DreieckErklaerung />
-
-      {/* ---- Pinboard ---- */}
-      <div data-tour="pinboard">
-        <h2 style={h2}>Pinboard</h2>
-        {pins.length === 0 && merkliste.length === 0 && (
-          <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-            Noch leer. Termine pinnst du im Kino-Tab (◇ vor der Uhrzeit),
-            Filme und Serien merkst du dir im Entdecken-Bereich (★).
-          </p>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-          {pins.length > 0 && (
-            <div style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", borderLeft: "3px solid " + T.wolfram }}>
-              <div style={{ ...mono, textTransform: "uppercase", letterSpacing: "0.06em", color: T.wolfram, marginBottom: 6 }}>Kinotermine ({pins.length})</div>
-              {pins.map((p) => (
-                <div key={p.t + "|" + p.z} style={{ display: "flex", gap: 8, alignItems: "baseline", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, padding: "3px 0" }}>
-                  <span onClick={() => onNavigiere && onNavigiere("kino")} title="Zum Kino-Programm"
-                    style={{ color: T.leinwand, fontWeight: 700, cursor: "pointer" }}>{p.t}</span>
-                  <span style={{ flex: 1 }}>{p.z}</span>
-                  {toggleKinoPin && (
-                    <button onClick={() => toggleKinoPin(p.t, p.j, p.z)} title="Pin lösen" className="kd-del"
-                      style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", fontSize: 13 }}><IconDelete size={13} /></button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {merkliste.length > 0 && (
-            <div style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px", borderLeft: "3px solid " + T.rauch }}>
-              <div style={{ ...mono, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Gemerkt im Entdecken ({merkliste.length})</div>
-              {merkliste.map((m) => (
-                <div key={m.watchmode_id} style={{ display: "flex", gap: 8, alignItems: "baseline", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, padding: "3px 0" }}>
-                  <span onClick={() => onNavigiere && onNavigiere("streaming")} title="Zum Entdecken-Bereich"
-                    style={{ color: T.leinwand, flex: 1, cursor: "pointer" }}>★ {m.titel}{m.jahr ? " (" + m.jahr + ")" : ""}</span>
-                  <button onClick={() => toggleMerk(m)} title="Von der Merkliste nehmen" className="kd-del"
-                    style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", fontSize: 13 }}><IconDelete size={13} /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ---- Quicklinks ---- */}
-      <div>
-        <h2 style={h2}>Direkt hinein</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-          {[
-            ["kino", "Kino", "Wiener Programm mit Abo-Wahrheit, Pins und deinen Treffern"],
-            ["mediathek", "Mediathek", "Bestand, Bewertungen, Besitz und Must-Watch"],
-            ["streaming", "Streaming", "Was läuft auf deinen Diensten? Plus Entdecken"],
-            ["blog", "Blog", "Artikel schreiben, Filme verlinken, freigeben"],
-            ["finder", "Suche", "»Traurige Komödie auf Netflix« — frag einfach"],
-            ["daten", "Einstellungen", "Darstellung, Import/Export, Backup, Vokabular"],
-          ].map(([id, label, be]) => (
-            <button key={id} onClick={() => onNavigiere && onNavigiere(id)}
-              style={{ background: T.saalHoch, border: "1px solid transparent", borderRadius: 6, padding: "12px 14px", cursor: "pointer", textAlign: "left", color: T.leinwand }}>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram }}>{label}</div>
-              <div style={{ fontSize: 12, color: T.rauch, marginTop: 3, lineHeight: 1.5 }}>{be}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ---- Doku ---- */}
-      <div>
-        <button style={btnStyle(false)} onClick={() => setDokuOffen(!dokuOffen)}>
-          {dokuOffen ? "Anleitung zuklappen" : "Anleitung & Hilfe öffnen"}
-        </button>
-        {dokuOffen && <DokuAnsicht h2={h2} mono={mono} onTutorialNeu={onTutorialNeu} />}
-      </div>
-    </section>
-  );
-}
-
-/* ==================== DASHBOARD (PERSONAL_MODE=true) ====================
+/* ==================== DASHBOARD ====================
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
    Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
@@ -207,8 +107,9 @@ function StartDashboard({
   kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
   kinoMatches = { matched: [] }, mustwatch = [], auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
-  programmInfo = null, streamingInfo = null,
+  programmInfo = null, streamingInfo = null, onHilfe,
 }) {
+  const installation = useInstallationsStatus();
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
@@ -364,6 +265,10 @@ function StartDashboard({
           </Modul>
         )}
       </div>
+      <footer className="kd-start-service">
+        <button onClick={onHilfe}>? Anleitung &amp; Hilfe</button>
+        {!installation.datei && <a href={import.meta.env.BASE_URL + "download/"}>App installieren &amp; Einzeldatei</a>}
+      </footer>
     </section>
   );
 }

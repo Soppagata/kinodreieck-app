@@ -2,7 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
-import { catalogService } from "../services/catalog.js";
+import { sharedArticlesService } from "../services/sharedArticles.js";
+import { errorText } from "../services/errors.js";
+import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
@@ -247,11 +249,11 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
 
   useEffect(() => {
     let ab = false;
-    catalogService.listSharedBlogs().then((r) => {
+    sharedArticlesService.list().then((r) => {
       if (ab) return;
-      if (!r.ok) setZustand({ lade: false, fehler: r.message || "Konnte den geteilten Ordner nicht laden — ist der Sync eingerichtet?", blogs: [] });
+      if (!r.ok) setZustand({ lade: false, fehler: "Der geteilte Bereich ist in dieser Ausgabe nicht eingerichtet.", blogs: [] });
       else setZustand({ lade: false, fehler: "", blogs: r.blogs || [] });
-    }).catch((e) => { if (!ab) setZustand({ lade: false, fehler: String(e), blogs: [] }); });
+    }).catch((e) => { if (!ab) setZustand({ lade: false, fehler: errorText(e), blogs: [] }); });
     return () => { ab = true; };
   }, []);
 
@@ -323,7 +325,7 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
 /* ---------- Haupt-Tab ---------- */
 export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm,
-  exportArtikel, importArtikel, onZiehe }) {
+  exportArtikel, importArtikel, onZiehe, onRetryPublication }) {
   const [ansicht, setAnsicht] = useState({ typ: "liste" });
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
   const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
@@ -400,6 +402,11 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
           const rot = a.liste.filter((le) => !le.ref).length;
           const offen = offenId === a.id;
           const auszug = a.text.length > 280 ? a.text.slice(0, 280).replace(/\s+\S*$/, "") + " …" : a.text;
+          const publikation = publicationState(a);
+          const publiziert = publikation.status === SHARED_PUBLICATION_STATUS.PUBLISHED;
+          const publiziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.PUBLISHING;
+          const unpubliziertLaufend = publikation.status === SHARED_PUBLICATION_STATUS.UNPUBLISHING;
+          const publikationsFehler = publikation.status === SHARED_PUBLICATION_STATUS.ERROR;
           return (
             <div key={a.id} onClick={() => setOffenId(offen ? null : a.id)}
               // KD-027: Tastatur-Zugang für die klickbare Karte (Enter/Space wie onClick), nur der Karten-Root
@@ -414,6 +421,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
               </div>
               <div style={{ ...mono, marginTop: 3 }}>
                 {a.autor}{a.erstellt_am ? " · " + a.erstellt_am.slice(0, 10) : ""} · {a.liste.length} Referenzen{rot > 0 ? " · " + rot + " offen" : ""}{a.geordnet ? " · Reihenfolge" : ""}
+                {publiziert ? " · öffentlich" : publiziertLaufend ? " · wird veröffentlicht …" : unpubliziertLaufend ? " · wird öffentlich entfernt …" : publikationsFehler ? " · Veröffentlichung fehlerhaft" : ""}
               </div>
               {offen && (
                 <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 10 }}>
@@ -434,14 +442,33 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                       : <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
                     <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
                     <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 14px", borderColor: T.gefahr, color: T.gefahr }}
+                      disabled={publiziertLaufend || unpubliziertLaufend}
                       onClick={() => { setLoeschFuer(loeschFuer === a.id ? null : a.id); setLoeschName(""); }}>
                       Löschen …
                     </button>
                   </div>
+                  {publikationsFehler && (
+                    <div style={{ marginTop: 10, padding: "9px 11px", background: T.saal, borderRadius: 4, border: "1px solid " + T.gefahr }}>
+                      <div style={{ color: T.gefahr, fontSize: 12, lineHeight: 1.5 }}>
+                        {publikation.action === "publish"
+                          ? "Die öffentliche Kopie konnte nicht bestätigt werden."
+                          : "Die öffentliche Kopie konnte nicht entfernt werden. Der lokale Artikel bleibt deshalb erhalten."}
+                      </div>
+                      {onRetryPublication && (
+                        <button style={{ ...btnStyle(false), marginTop: 7, fontSize: 12, padding: "5px 10px", borderColor: T.gefahr, color: T.gefahr }}
+                          onClick={() => onRetryPublication(a.id)}>
+                          Erneut versuchen
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {loeschFuer === a.id && (
                     <div style={{ marginTop: 10, padding: "10px 12px", background: T.saal, borderRadius: 4, border: "1px solid " + T.gefahr }}>
                       <div style={{ fontSize: 12, color: T.rauch, marginBottom: 6, lineHeight: 1.5 }}>
-                        Löscht den Artikel restlos — inklusive seiner Rotlinks (offene Referenzen verschwinden mit).
+                        {needsPublicRemoval(a, publikation)
+                          ? "Entfernt zuerst die öffentliche Kopie und löscht den Artikel erst nach der Bestätigung. "
+                          : "Löscht den Artikel restlos — "}
+                        inklusive seiner Rotlinks (offene Referenzen verschwinden mit).
                         Bereits angelegte Mediathek-Einträge bleiben unberührt.
                         Zur Bestätigung den Autorennamen (<strong>{a.autor}</strong>) eintippen:
                       </div>
@@ -482,4 +509,9 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       )}
     </section>
   );
+}
+
+function needsPublicRemoval(article, publikation = publicationState(article)) {
+  return article?.herkunft !== "gezogen"
+    && (!!article?.geteilt || publikation.status !== SHARED_PUBLICATION_STATUS.LOCAL);
 }
