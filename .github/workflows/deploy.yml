@@ -34,12 +34,12 @@ jobs:
           cache: npm
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.9.4
       - run: npm ci
       - run: npm test
+      - run: npm run test:function
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:mobile
-      - run: npm run test:function
 
   deploy-staging:
     if: >-
