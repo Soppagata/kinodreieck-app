@@ -55,7 +55,13 @@ export function createSessionCoordinator({
   async function align(session, { pullWhenReady = false } = {}) {
     const id = accountId(session);
     if (!id) {
+      /* Migration fuer Installationen, die sich vor der Logout-Trennung
+         abgemeldet haben: Der alte Ablauf liess Besitzer-Marke und
+         heruntergeladenen Kontocache im Browser liegen. Ohne aktive Sitzung
+         darf so ein eindeutig kontogebundener Cache nie als Gast erscheinen. */
+      const verwaisterCache = String(storage.cacheOwner?.() || "");
       storage.deactivate();
+      if (verwaisterCache) adoption.restoreGuest?.(verwaisterCache);
       return STORAGE_SESSION_STATES.GUEST;
     }
 

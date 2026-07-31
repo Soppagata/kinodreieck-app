@@ -135,6 +135,16 @@ function aufbau({
 }
 
 {
+  const a = aufbau({ initializeTo: session(), owner: "altes-konto" });
+  await a.coordinator.initialize();
+  check("Gaststart bereinigt einen vom alten Logout verwaisten Kontocache",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["deactivate"], ["restore", "altes-konto"],
+    ])
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.GUEST);
+}
+
+{
   const a = aufbau({ initializeTo: session("konto-A"), owner: null, confirmed: [] });
   await a.coordinator.initialize();
   check("Unbestätigtes Konto wird nur für die Inventur vorbereitet",
@@ -164,8 +174,10 @@ function aufbau({
     confirmed: ["konto-A"],
   });
   await a.coordinator.refresh();
-  check("Abgelaufene Sitzung deaktiviert den Kontospeicher",
-    a.calls.some(([name]) => name === "deactivate")
+  check("Abgelaufene Sitzung deaktiviert den Kontospeicher und trennt den Kontocache",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["deactivate"], ["restore", "konto-A"],
+    ])
     && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.GUEST);
 }
 
