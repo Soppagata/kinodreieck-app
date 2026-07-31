@@ -137,7 +137,9 @@ beschädigen — mit freundlicher Oberfläche.
 
 Startart wechseln und Demo-Daten entfernen. Beides leert lokale Bereiche, die der
 nächste Abgleich sofort aus dem Konto zurückholen würde. Statt dieses verwirrenden
-Hin und Her: klare Sperre mit Hinweis „erst abmelden". Abmelden löscht nie Daten.
+Hin und Her: klare Sperre mit Hinweis „erst abmelden". Der aktuelle Logout
+sendet Kontoänderungen, entfernt danach den Kontocache aus dem Gastkontext und
+stellt einen vorhandenen Gaststand von vor der Anmeldung wieder her.
 
 ## Runbook für Max
 
@@ -197,7 +199,7 @@ lokal weiter und tragen nach, sobald es wieder läuft.
 |---|---|
 | Zwei Testkonten vollständig voneinander isoliert | **erfüllt und belegt** — 18/18 Negativtests gegen die echte Datenbank am 25.07.2026 (`npm run test:rls`): anon wird abgewiesen, A sieht von B nichts, gefälschte Konto-Kennung wird abgelehnt, Bestandspfade (Demo, geteilte Blogs, Katalog) unversehrt |
 | Lokale Daten verlustfrei in ein Konto übernehmbar | erfüllt, über Prüfsummen belegt (`uebernahme_test.mjs`) |
-| Abmelden entfernt keine lokalen Daten ungefragt | erfüllt und geprüft (`authservice_test.mjs`) |
+| Abmelden trennt Kontocache und Gaststand ohne Datenvermischung | erfüllt und geprüft (`konto_logout_test.mjs`, `sessioncoordinator_test.mjs`) |
 | Backup und Wiederherstellung funktionieren auch mit Kontodaten | erfüllt, alle 15 Bereiche (`restore_test.mjs`, Phase 5) |
 | Der alte Sync-Schlüssel ist für neue Konten nicht mehr nötig | erfüllt — mit einer offen benannten Ausnahme (siehe unten) |
 

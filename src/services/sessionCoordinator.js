@@ -19,7 +19,7 @@ import {
   istKontoTreiberAktiv,
   vorbereitetesKontoId,
 } from "./storage.js";
-import { istUebernommen } from "./uebernahme.js";
+import { gaststandNachKontoAbmeldung, istUebernommen } from "./uebernahme.js";
 
 export const STORAGE_SESSION_STATES = Object.freeze({
   GUEST: "guest",
@@ -37,8 +37,10 @@ export function createSessionCoordinator({
     preparedAccountId: vorbereitetesKontoId,
     cacheOwner,
     pull: accountSync.pull,
+    flush: accountSync.flush,
+    status: accountSync.status,
   },
-  adoption = { isConfirmed: istUebernommen },
+  adoption = { isConfirmed: istUebernommen, restoreGuest: gaststandNachKontoAbmeldung },
 } = {}) {
   function accountId(session = auth.getSnapshot()) {
     return session?.mode === "account" ? String(session.account?.id || "") : "";
@@ -94,8 +96,32 @@ export function createSessionCoordinator({
     },
 
     async signOut() {
-      try { return await auth.signOut(); }
-      finally { storage.deactivate(); }
+      const id = accountId();
+      const cacheId = String(storage.cacheOwner?.() || "");
+
+      /* Ein bewusster Logout darf keine noch ungesicherten Kontoänderungen
+         vernichten. Solange der Treiber aktiv ist, erst die Queue leeren und
+         bei Konflikten/Fehlern angemeldet bleiben. */
+      if (id && storage.active?.()) {
+        await storage.flush?.();
+        const status = storage.status?.() || {};
+        const offen = [status.pending, status.conflict, status.zuGross]
+          .some((liste) => Array.isArray(liste) && liste.length > 0);
+        if (offen) {
+          throw new Error("Vor dem Abmelden konnten nicht alle Kontoänderungen gesichert werden. Bitte löse offene Konflikte oder erstelle zuerst ein Backup.");
+        }
+      }
+
+      let ergebnis;
+      let authFehler = null;
+      try { ergebnis = await auth.signOut(); }
+      catch (error) { authFehler = error; }
+      finally {
+        storage.deactivate();
+        if (cacheId) adoption.restoreGuest?.(cacheId);
+      }
+      if (authFehler) throw authFehler;
+      return ergebnis;
     },
 
     async refresh() {

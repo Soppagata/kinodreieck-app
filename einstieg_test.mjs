@@ -54,7 +54,8 @@ check("Die KI-Wahl enthält kein zweites Loginformular", () => {
   return kiSeite.length > 0 && !/kd-entry-login|Benutzername|Passwort/.test(kiSeite);
 });
 check("Loginfehler bleiben im Einstieg sichtbar und schließen ihn nicht", () => /catch \(err\)[\s\S]+setFehler\(errorText\(err\)\)/.test(gate) && /role="alert"/.test(gate));
-check("Abmelden markiert den Einstieg vor dem zentralen Sign-out", () => /fordereEinstiegNachAbmeldung\(\)[\s\S]+sessionCoordinator\.signOut/.test(konto));
+check("Abmelden räumt zuerst den Kontokontext und öffnet danach den Einstieg", () => /sessionCoordinator\.signOut\(\)[\s\S]+fordereEinstiegNachAbmeldung\(\)/.test(konto));
+check("Abmelden lädt den wiederhergestellten Gaststand unmittelbar neu", () => /async function abmelden[\s\S]+onDatenGeaendert\?\.\(\)/.test(konto));
 check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
   /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
 check("Mobile Navigation ist ein schwebendes Menü mit integriertem Nach-oben-Pfeil", () =>

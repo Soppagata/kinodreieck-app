@@ -103,14 +103,19 @@ export function bestaetigeKontoTreiber(accountId) {
   return driver;
 }
 
-/* Nach dem Abmelden: zurück auf lokal. Lokale Daten bleiben vollständig liegen
-   (harte Zusage: Abmelden löscht nie persönliche Daten). */
+/* Nach dem Abmelden: Treiber stoppen. Die getrennte Übernahme-Fassade stellt
+   anschließend den Gaststand her und entfernt erst dann die Cache-Bindung. */
 export function deaktiviereKontoTreiber() {
   setStorageDriver(null);
   kontoAktiv = false;
   vorbereitetesKonto = null;
   accountDriver = null;
   treiberGeneration++;
+}
+
+export function verwerfeLokaleKontoBindung() {
+  setCacheOwner(null);
+  verwerfeTreiberZustand();
 }
 
 export function istKontoTreiberAktiv() { return kontoAktiv && storageDriverName() === "konto"; }

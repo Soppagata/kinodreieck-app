@@ -18,7 +18,7 @@ import { fordereEinstiegNachAbmeldung } from "../controllers/onboardingControlle
 
    Bewusste Zusagen, die hier sichtbar werden:
    - Ohne Konto funktioniert alles weiter. Anmelden ist ein Angebot, kein Tor.
-   - Abmelden löscht nichts auf dem Gerät.
+   - Abmelden entfernt den Kontocache und stellt einen früheren Gaststand wieder her.
    - Offline ist kein Abmeldegrund; nicht Gesendetes bleibt in der Warteschlange. */
 
 function Statuszeile({ status }) {
@@ -120,13 +120,16 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
   }
 
   async function abmelden() {
+    setFehler(null);
     setLaeuft(true);
     try {
-      fordereEinstiegNachAbmeldung();
       await sessionCoordinator.signOut();
+      fordereEinstiegNachAbmeldung();
       setZeigeUebernahme(false);
-      setMeldung("Abgemeldet. Deine Daten auf diesem Gerät sind unverändert vorhanden.");
+      setMeldung("Abgemeldet. Kontodaten wurden von diesem Gerät entfernt; ein früherer Gaststand wurde wiederhergestellt.");
+      onDatenGeaendert?.();
     }
+    catch (error) { setFehler(error?.message || errorText(error)); }
     finally { setLaeuft(false); }
   }
 
@@ -326,8 +329,8 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       )}
 
       <p style={{ color: T.rauch, fontSize: 12, opacity: 0.75, marginTop: 12 }}>
-        Abmelden entfernt keine Daten von diesem Gerät. Der Bestand bleibt lokal nutzbar,
-        auch ohne Verbindung.
+        Beim Abmelden werden die geladenen Kontodaten von diesem Gerät entfernt.
+        Ein lokaler Gaststand von vor der Anmeldung wird wiederhergestellt; dein Kontostand in der Datenbank bleibt erhalten.
       </p>
     </div>
   );

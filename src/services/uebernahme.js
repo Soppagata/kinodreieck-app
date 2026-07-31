@@ -6,10 +6,12 @@ import {
   leseLokaleToepfe, baueVorschau, ermittleFall, enthaeltDemoInhalte,
   sichereRueckholpunkt, hatRueckholpunkt, fuehreUebernahmeAus, baueVerifikation,
   merkeUebernommen, istUebernommen, vergissUebernahme, nimmUebernahmeZurueck,
-  topfLabel, zaehleTopf, pruefsumme, byteLaenge,
+  topfLabel, zaehleTopf, pruefsumme, byteLaenge, bindeRueckholpunktAnKonto,
+  stelleGaststandNachAbmeldungWiederHer,
 } from "../lib/uebernahme.js";
 import {
   accountSync, bestaetigeKontoTreiber, cacheGehoertZuFremdemKonto,
+  verwerfeLokaleKontoBindung,
 } from "./storage.js";
 import { normalizeBoundaryError } from "./errors.js";
 
@@ -56,8 +58,18 @@ export async function uebernahmeStarten({ lokaleWerte, nurSchluessel = null }) {
 /* Schritt 6: Bestätigen. Nur nach vollständiger Prüfung aufrufen. Erst hier
    bekommt der Cache seinen Besitzer und der normale Account-Sync wird aktiv. */
 export function uebernahmeBestaetigen(accountId) {
+  if (!bindeRueckholpunktAnKonto(accountId)) {
+    throw new Error("Der lokale Stand vor der Anmeldung konnte nicht gesichert werden.");
+  }
   bestaetigeKontoTreiber(accountId);
   merkeUebernommen(accountId);
+}
+
+export function gaststandNachKontoAbmeldung(accountId) {
+  const ergebnis = stelleGaststandNachAbmeldungWiederHer(accountId);
+  if (!ergebnis.ok) throw new Error("Der lokale Gaststand konnte nach der Abmeldung nicht wiederhergestellt werden.");
+  verwerfeLokaleKontoBindung();
+  return ergebnis;
 }
 
 /* Rücknahme inklusive Entfernen der in diesem Lauf angelegten Kontozeilen. */

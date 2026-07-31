@@ -62,7 +62,9 @@ kontogebunden zwischen Geräten abgeglichen werden.
 - Lokale Änderungen werden weiterhin sofort im Browser gespeichert. Ist der
   Server vorübergehend nicht erreichbar, bleiben sie lokal und werden später
   übertragen.
-- Abmelden löscht den lokalen Bestand nicht.
+- Vor dem Abmelden werden ausstehende Änderungen gesendet. Anschließend wird
+  der lokale Kontocache entfernt; ein Gaststand von vor der Anmeldung wird
+  wiederhergestellt. Der Datenbankstand des Kontos bleibt erhalten.
 
 Es gibt derzeit keine Selbstregistrierung. Konten werden von Max angelegt.
 Passwortänderungen sind in der App möglich; Passwort-Reset und serverseitige
@@ -854,8 +856,11 @@ Versucht ausschließlich wartende lokale Schreibvorgänge erneut zu übertragen.
 
 #### Abmelden
 
-Beendet die Kontositzung. Die lokale Kopie bleibt auf dem Gerät erhalten und
-weiter benutzbar.
+Sendet zuerst ausstehende Kontoänderungen und beendet danach die Kontositzung.
+Die geladenen Kontodaten werden aus dem Gastbetrieb entfernt. Existierte vor
+der Anmeldung ein lokaler Gaststand, wird er wiederhergestellt. Bei offenen
+Konflikten oder nicht sicherbaren Änderungen wird der Logout blockiert und ein
+Backup beziehungsweise eine Konfliktentscheidung verlangt.
 
 #### Passwort ändern
 

@@ -127,6 +127,65 @@ export function hatRueckholpunkt() {
   try { return !!localStorage.getItem(UEBERNAHME_SNAP); } catch { return false; }
 }
 
+/* Jede aktivierte Kontoablage braucht einen gebundenen Gast-Rückholpunkt.
+   Ältere Wege haben ihn bereits vor dem Pull/Push angelegt; bei einem komplett
+   leeren Bestand erzeugen wir ihn hier. So kann ein Logout später den Zustand
+   vor der Anmeldung wiederherstellen, statt Kontodaten als Gast zu zeigen. */
+export function bindeRueckholpunktAnKonto(accountId, storage = globalThis.localStorage) {
+  const id = String(accountId || "");
+  if (!id || !storage?.getItem || !storage?.setItem) return false;
+  try {
+    let snap;
+    try { snap = JSON.parse(storage.getItem(UEBERNAHME_SNAP) || "null"); }
+    catch { snap = null; }
+    if (!snap || !snap.werte || typeof snap.werte !== "object" || Array.isArray(snap.werte)) {
+      const werte = {};
+      for (const key of PERSONAL_DATA_KEYS) werte[key] = storage.getItem(key);
+      snap = { t: new Date().toISOString(), werte };
+    }
+    const gebunden = { ...snap, accountId: id };
+    storage.setItem(UEBERNAHME_SNAP, JSON.stringify(gebunden));
+    const probe = JSON.parse(storage.getItem(UEBERNAHME_SNAP) || "null");
+    return probe?.accountId === id && !!probe.werte;
+  } catch { return false; }
+}
+
+/* Kontodaten sind nach dem Logout nicht länger der Gastbestand. Wenn ein
+   Zustand von vor der Kontoaktivierung vorliegt, wird genau dieser restauriert;
+   bei alten Installationen ohne Rückholpunkt werden alle accountgebundenen
+   Töpfe entfernt. Gerätezustände wie KI-Grundwahl, Einstieg und Katalogcache
+   bleiben davon ausdrücklich unberührt. */
+export function stelleGaststandNachAbmeldungWiederHer(accountId, storage = globalThis.localStorage) {
+  const id = String(accountId || "");
+  if (!storage?.getItem || !storage?.setItem || !storage?.removeItem) return { ok: false, grund: "speicher-fehlt" };
+  try {
+    let snap;
+    try { snap = JSON.parse(storage.getItem(UEBERNAHME_SNAP) || "null"); }
+    catch { snap = null; }
+    const hatPassendenStand = !!snap?.werte
+      && typeof snap.werte === "object"
+      && !Array.isArray(snap.werte)
+      && (!snap.accountId || snap.accountId === id);
+    const werte = hatPassendenStand ? snap.werte : {};
+
+    /* Erst alle wiederherzustellenden Werte schreiben. Scheitert die Quote,
+       wurden noch keine übrigen Töpfe entfernt und der Rückholpunkt bleibt da. */
+    for (const key of PERSONAL_DATA_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(werte, key) && werte[key] != null) {
+        storage.setItem(key, String(werte[key]));
+      }
+    }
+    for (const key of PERSONAL_DATA_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(werte, key) || werte[key] == null) storage.removeItem(key);
+    }
+    storage.removeItem(UEBERNAHME_SNAP);
+    storage.removeItem(UEBERNOMMEN_KEY);
+    return { ok: true, quelle: hatPassendenStand ? "gast-rueckholpunkt" : "konto-cache-entfernt" };
+  } catch (error) {
+    return { ok: false, grund: "wiederherstellung-fehlgeschlagen", error };
+  }
+}
+
 /* ---------- Übernahme ausführen ----------
    `uebernehmeKey` kommt von aussen (accountSync) — so bleibt diese Datei ohne
    Netzwerkwissen und ist mit geseedeten Daten prüfbar. */

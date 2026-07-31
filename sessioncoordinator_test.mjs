@@ -27,6 +27,7 @@ function aufbau({
   owner = null,
   confirmed = [],
   signOutThrows = false,
+  syncStatus = { pending: [], conflict: [], zuGross: [] },
 } = {}) {
   let snapshot = start;
   const listeners = new Set();
@@ -48,6 +49,7 @@ function aufbau({
       return snapshot;
     },
     async signOut() {
+      calls.push(["auth-signout"]);
       snapshot = session();
       listeners.forEach((fn) => fn(snapshot));
       if (signOutThrows) throw new Error("logout-netz");
@@ -68,13 +70,60 @@ function aufbau({
     preparedAccountId: () => prepared,
     cacheOwner: () => owner,
     async pull() { calls.push(["pull"]); return { ok: true }; },
+    async flush() { calls.push(["flush"]); return []; },
+    status: () => syncStatus,
   };
   const coordinator = createSessionCoordinator({
     auth,
     storage,
-    adoption: { isConfirmed: (id) => confirmed.includes(id) },
+    adoption: {
+      isConfirmed: (id) => confirmed.includes(id),
+      restoreGuest: (id) => calls.push(["restore", id]),
+    },
   });
   return { coordinator, calls, storage, auth };
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A"),
+    owner: "konto-A",
+    confirmed: ["konto-A"],
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  await a.coordinator.signOut();
+  check("Logout sendet ausstehende Kontoänderungen und stellt danach den Gastcache her",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["flush"], ["auth-signout"], ["deactivate"], ["restore", "konto-A"],
+    ]));
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A"),
+    owner: "konto-A",
+    confirmed: ["konto-A"],
+    syncStatus: { pending: ["kd:master"], conflict: [], zuGross: [] },
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  let geworfen = false;
+  try { await a.coordinator.signOut(); } catch { geworfen = true; }
+  check("Ungesicherte Kontoänderungen blockieren den Logout ohne Cacheverlust",
+    geworfen
+      && JSON.stringify(a.calls) === JSON.stringify([["flush"]])
+      && a.coordinator.getSnapshot().mode === "account");
+}
+
+{
+  const a = aufbau({ start: session("konto-A"), owner: null, confirmed: [] });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  await a.coordinator.signOut();
+  check("Ein noch nicht übernommener lokaler Gaststand wird beim Logout nicht gelöscht",
+    !a.calls.some(([name]) => name === "restore")
+      && a.calls.some(([name]) => name === "deactivate"));
 }
 
 {

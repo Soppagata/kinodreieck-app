@@ -390,7 +390,8 @@ Der Gastmodus kann bestehen bleiben, aber mit ehrlichen Grenzen:
 
 - zwei Testaccounts sind vollständig voneinander isoliert,
 - lokale Daten können verlustfrei in einen Account übernommen werden,
-- Abmeldung entfernt keine lokalen Daten ungefragt,
+- Abmeldung entfernt Kontodaten aus dem Gastkontext und stellt vorhandene
+  lokale Gastdaten verlustfrei wieder her,
 - Backup und Wiederherstellung funktionieren auch mit Accountdaten,
 - der alte Sync-Schlüssel ist für neue Accounts nicht mehr notwendig.
 
