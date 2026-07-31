@@ -1193,6 +1193,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@playwright/test@^1.62.1",
         "npm:@vitejs/plugin-react@^4.3.4",
         "npm:deno@2.9.4",
         "npm:jsdom@^25.0.1",
