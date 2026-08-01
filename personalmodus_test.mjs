@@ -325,25 +325,28 @@ function seedKatalog(w, start = "clean") {
   knopf(/^Startmodus wählen$/)?.click(); await warte(100);
   knopf(/^Leer starten$/)?.click(); await warte(100);
   check("B: erneute Wahl desselben Modus ist nicht destruktiv", !knopf(/^Demo ansehen$/) && dom.window.localStorage.getItem("kd:start") === "clean");
-  const ki = knopf(/^KI-Prompt öffnen$/);
-  check("B: KI-Masterlistenwerkzeug ist sichtbar", !!ki);
-  ki?.click(); await warte(100);
-  check("B: KI-Prompt öffnet sich", !!doc.getElementById("kd-ingestion-prompt") && !!knopf(/^Prompt kopieren$/));
-  const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON aus der KI-Antwort/.test(t.placeholder || ""));
+  const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
+  check("B: Foto-/Screenshot-Stapelimport ist sichtbar", !!stapelKlappe);
+  if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(100); }
+  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+  if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(100); }
+  check("B: externer Stapelimport-Prompt öffnet sich",
+    [...doc.querySelectorAll("textarea")].some((t) => /Stapelimport in Kinodreieck/.test(t.value || "")) && !!knopf(/^Prompt kopieren$/));
+  const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || ""));
   if (paste) {
     setWert(dom, paste, JSON.stringify({
-      format: "kinodreieck-paket", version: 1, autor: "Tester", quelle: "ki-ingestion",
-      bereiche: { filme: [{ titel: "KI-Testfilm", jahr: 2020, typ: "film", quelle: "dvd", kategorie: "sehenswert", bewertung: { wie: 3, was: 3, warum: 3 }, genre: ["Drama"], tags: [], begruendung: "Test." }] },
+      kandidaten: [{ titel: "KI-Testfilm", jahr: 2020, typ: "film", ereignisart: "liste", hinweis: "Test.", sicherheit: "hoch" }],
+      warnungen: [],
     }));
-    knopf(/^Eingefügtes importieren$/)?.click(); await warte(120);
-    check("B: KI-Antwort erzeugt eine Import-Vorschau", /Masterlisten-Vorschau/.test(text()) && /KI-Testfilm/.test(text()));
+    knopf(/^Antwort prüfen$/)?.click(); await warte(120);
+    check("B: KI-Antwort erzeugt eine Stapel-Vorschau", /Vorschau – noch ist nichts gespeichert/.test(text()) && /KI-Testfilm/.test(text()));
     knopf(/^Auswahl übernehmen$/)?.click(); await warte(180);
     let gespeichert = null;
     try { gespeichert = JSON.parse(dom.window.localStorage.getItem("kd:master") || "null"); } catch { /* */ }
-    check("B: KI-Masterlistenimport übernimmt den neuen Eintrag", !!gespeichert?.filme?.some((f) => f.titel === "KI-Testfilm"));
+    check("B: Stapelimport übernimmt den neuen Mediathek-Eintrag", !!gespeichert?.filme?.some((f) => f.titel === "KI-Testfilm"));
   } else {
-    check("B: KI-Antwort erzeugt eine Import-Vorschau", false);
-    check("B: KI-Masterlistenimport übernimmt den neuen Eintrag", false);
+    check("B: KI-Antwort erzeugt eine Stapel-Vorschau", false);
+    check("B: Stapelimport übernimmt den neuen Mediathek-Eintrag", false);
   }
   const max = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style.cursor === "pointer");
   max?.click(); await warte(100);
@@ -529,8 +532,8 @@ function seedKatalog(w, start = "clean") {
   dom.window.close();
 }
 
-/* I — KI-Übernahme ergänzt einen bestehenden Master, ohne vorhandene Einträge
-   zu ersetzen. */
+/* I — Der externe Stapelimport ergänzt einen bestehenden Master, ohne vorhandene
+   Einträge zu ersetzen. */
 {
   const dom = baueDom((w) => {
     seedKatalog(w, "clean");
@@ -544,21 +547,24 @@ function seedKatalog(w, start = "clean") {
   const { doc, knopf } = hilfen(dom);
   await warte(1800);
   knopf(/^Settings$/i)?.click(); await warte(300);
-  knopf(/^KI-Prompt öffnen$/)?.click(); await warte(100);
-  const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON aus der KI-Antwort/.test(t.placeholder || ""));
+  const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
+  if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(100); }
+  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+  if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(100); }
+  const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || ""));
   if (paste) {
     setWert(dom, paste, JSON.stringify({
-      format: "kinodreieck-paket", version: 1, autor: "Tester", quelle: "ki-ingestion",
-      bereiche: { filme: [{ titel: "Ergänzung", jahr: 2025, typ: "film", quelle: "dvd", kategorie: "sehenswert", bewertung: { wie: 3, was: 3, warum: 3 }, genre: [], tags: [], begruendung: "Test." }] },
+      kandidaten: [{ titel: "Ergänzung", jahr: 2025, typ: "film", ereignisart: "liste", hinweis: "Test.", sicherheit: "hoch" }],
+      warnungen: [],
     }));
-    knopf(/^Eingefügtes importieren$/)?.click(); await warte(120);
+    knopf(/^Antwort prüfen$/)?.click(); await warte(120);
     knopf(/^Auswahl übernehmen$/)?.click(); await warte(180);
   }
   let master = null;
   try { master = JSON.parse(dom.window.localStorage.getItem("kd:master") || "null"); } catch { /* */ }
-  check("I: KI-Übernahme erhält bestehenden Mastereintrag",
+  check("I: Stapelimport erhält bestehenden Mastereintrag",
     master?.filme?.some((f) => f.id === "bestand_2020" && f.notiz === "unverändert"));
-  check("I: KI-Übernahme ergänzt den neuen Eintrag",
+  check("I: Stapelimport ergänzt den neuen Eintrag",
     master?.filme?.some((f) => f.titel === "Ergänzung"));
   dom.window.close();
 }

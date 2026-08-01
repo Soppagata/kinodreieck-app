@@ -320,13 +320,18 @@ if (foyer) {
   if (saal) { saal.click(); await warte(400); }
 }
 
-/* Offline-First-Paketaustausch bleibt entfernt; der eigenständige KI-Prompt
-   gehört wieder direkt in den Masterlisten-Bereich. */
+/* Offline-First-Paketaustausch bleibt entfernt. Der externe Prompt gehört jetzt
+   zum Foto-/Screenshot-Stapelimport und verwendet denselben vorsichtigen
+   Vorschauweg wie die interne Bild-KI. */
 check("Teilen & Tauschen aus Einstellungen entfernt", !/Teilen & Tauschen/.test(text()));
-const kiPrompt = knopf(/^KI-Prompt öffnen$/i);
-check("KI-Prompt im Masterlisten-Bereich vorhanden", !!kiPrompt);
-if (kiPrompt) { kiPrompt.click(); await warte(200); }
-check("KI-Prompt öffnet den kopierbaren Masterlisten-Prompt", !!doc.getElementById("kd-ingestion-prompt") && !!knopf(/^Prompt kopieren$/));
+const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
+if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(200); }
+const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(200); }
+const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Stapelimport in Kinodreieck/.test(t.value || ""));
+check("Externer Foto-/Screenshot-Prompt im Stapelimport vorhanden", !!stapelPrompt);
+check("Stapelimport-Prompt ist kopierbar und nimmt KI-JSON entgegen",
+  !!knopf(/^Prompt kopieren$/) && [...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
 
 /* ---- Mediathek: Apple-Besitz ---- */
 const mediathekTab = knopf(/mediathek/i);
