@@ -143,6 +143,9 @@ check("Annehmen erzeugt weiterhin keine echte Bewertung", () => {
   const r = setzePrognoseStatus(prognose, "angenommen", ZEIT);
   return !("bewertung" in r.prognose) && !("kategorie" in r.prognose);
 });
+check("Oberfläche bietet eine ausdrücklich zu prüfende Bewertungsübernahme an", () =>
+  PROGNOSE_UI.includes("Als Bewertung übernehmen")
+  && PROGNOSE_UI.includes("Nur Prognose bestätigen"));
 check("Oberfläche zeigt WARUM aus der Prognose statt eines festen Leerwerts", () =>
   PROGNOSE_UI.includes('<Achse name="WARUM" wert={e.achsen.warum}'));
 check("Oberfläche unterscheidet geschätztes und belegtes WARUM und nennt beides nie Bewertung", () =>

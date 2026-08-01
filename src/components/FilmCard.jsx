@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
-import { schlagseiten, score } from "../lib/match.js";
 import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
@@ -28,22 +27,19 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
 }
 
 /* ---------- Karte für Mediathek-Einträge ----------
-   Dreieck-Typen: volle Karte (Glyph, Achsen, Kategorie, Score, EditPanel).
+   Dreieck-Typen: volle Karte (Glyph, Achsen, Kategorie, EditPanel).
    musik/sonstiges: reduzierte Karte (kein Dreieck — Modell ist auf
    Filmwirkung kalibriert), Beschreibung statt Begründung.
    kommtVorIn: Artikel-Referenzen aus dem Blog (Phase 2), Laufzeit-berechnet. */
 export function FilmCard({
-  film, kinoInfo, streamBadge, expanded, onToggle, onSave, kommtVorIn, onArtikelKlick,
+  film, kinoInfo, streamBadge, expanded, onToggle, onSave, onDelete, kommtVorIn, onArtikelKlick,
   vorbewertung = null, filmwissen = null,
 }) {
   const [editing, setEditing] = useState(false);
+  const [prognoseEntwurf, setPrognoseEntwurf] = useState(false);
   const dreieck = hatDreieck(film.typ);
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
   const unbewertet = dreieck && film.bewertung == null;
-  /* Anzeige über schlagseiten(): teilen sich zwei Achsen die Spitze, werden
-     beide genannt (4/2/4 → „WIE/WARUM"). Filter und Ranking bleiben einwertig. */
-  const ssListe = dreieck && !unbewertet ? schlagseiten(film.bewertung) : [];
-  const ss = ssListe.length ? ssListe.map((a) => a.toUpperCase()).join("/") : null;
   /* Schneller Bewerten-Einstieg: Karte aufklappen + direkt ins EditPanel. */
   const jetztBewerten = (e) => {
     e.stopPropagation();
@@ -74,6 +70,7 @@ export function FilmCard({
               {film.jahr}{film.jahr_bis ? "–" + film.jahr_bis : ""}{film.typ !== "film" ? (film.jahr ? " · " : "") + film.typ : ""}
               {film.art || film.kategorie_frei ? " · " + (film.art || film.kategorie_frei) : ""}
               {film.bewertet_von === "max" ? " · ✓ von dir"
+                : String(film.bewertet_von || "").startsWith("KI-Prognose") ? " · KI-Vorschlag übernommen"
                 : film.import_von ? " · bewertet von " + (film.bewertet_von || film.import_von)
                 : ""}
             </span>
@@ -91,7 +88,6 @@ export function FilmCard({
               ) : (
                 <>
                   <AxisChips bw={film.bewertung} />
-                  {ss && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>▸ Schlagseite: {ss}-lastig</span>}
                   <KategorieTag k={film.kategorie} />
                 </>
               )}
@@ -127,12 +123,20 @@ export function FilmCard({
                   ))}
                 </div>
               )}
-              {onSave && (
-                <div style={{ marginTop: 10 }}>
+              {(onSave || onDelete) && (
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {onSave && (
                   <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
-                    onClick={(e) => { e.stopPropagation(); setEditing(true); }}>
+                    onClick={(e) => { e.stopPropagation(); setPrognoseEntwurf(false); setEditing(true); }}>
                     ✎ {dreieck ? "Bewertung bearbeiten" : "Beschreibung bearbeiten"}
                   </button>
+                  )}
+                  {onDelete && (
+                    <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.gefahr, borderColor: T.gefahr }}
+                      onClick={(e) => { e.stopPropagation(); onDelete(); }}>
+                      Eintrag löschen
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -150,7 +154,8 @@ export function FilmCard({
                 onErstellen={vorbewertung.onErstellen}
                 onAnnehmen={vorbewertung.onAnnehmen}
                 onVerwerfen={vorbewertung.onVerwerfen}
-                onKorrigieren={() => setEditing(true)}
+                onKorrigieren={() => { setPrognoseEntwurf(false); setEditing(true); }}
+                onUebernehmen={onSave ? () => { setPrognoseEntwurf(true); setEditing(true); } : null}
               />
             </div>
           )}
@@ -168,23 +173,30 @@ export function FilmCard({
             </div>
           )}
         </div>
-        {dreieck && (
-          <div className="kd-film-score" style={{ textAlign: "right", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, whiteSpace: "nowrap" }}>
-            {unbewertet ? "—" : score(film).toFixed(1)}
-            <div style={{ fontSize: 10 }}>SCORE</div>
-          </div>
-        )}
       </div>
       {expanded && editing && (
         <div className="kd-film-editor-shell">
           {dreieck ? (
-            <EditPanel film={film} onCancel={() => setEditing(false)}
+            <EditPanel key={prognoseEntwurf ? "prognose" : "manuell"}
+              film={prognoseEntwurf ? {
+                ...film,
+                bewertung: film.prognose?.ergebnis?.achsen || null,
+                kategorie: film.prognose?.ergebnis?.kategorie_vorschlag || null,
+                begruendung: film.prognose?.ergebnis?.begruendung || "",
+              } : film}
+              autorName={prognoseEntwurf ? "KI-Prognose (übernommen)" : undefined}
+              herkunftHinweis={prognoseEntwurf ? "KI-Prognose vorausgefüllt – prüfe alle Werte. Erst Speichern macht daraus eine Bewertung." : null}
+              onCancel={() => { setPrognoseEntwurf(false); setEditing(false); }}
               onSave={(changes) => {
                 let next = changes;
-                if (changes?.bewertung != null && ["offen", "angenommen"].includes(film.prognose?.status)) {
+                if (changes?.bewertung != null && film.prognose?.status === "offen") {
+                  const wechsel = setzePrognoseStatus(film.prognose, prognoseEntwurf ? "angenommen" : "korrigiert");
+                  if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
+                } else if (changes?.bewertung != null && film.prognose?.status === "angenommen" && !prognoseEntwurf) {
                   const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
                   if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
                 }
+                setPrognoseEntwurf(false);
                 setEditing(false);
                 onSave(next);
               }} />

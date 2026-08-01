@@ -20,7 +20,7 @@ const tagKey = (s) => { const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(s)); retu
 export function KinoTab({
   programm, progStand, master, kinoMatches, restSichtbar,
   zeitgrenze, saveZeitgrenze, zeigeAlles, setZeigeAlles,
-  expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, loading, ladeProgrammDatei,
+  expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, loading,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -69,6 +69,13 @@ export function KinoTab({
     setFilterMenueOffen(nv);
     store.set(K.filterKino, nv ? "1" : "0").catch(() => {});
   };
+  useEffect(() => {
+    const vonGlobalerLeiste = (event) => {
+      if (event.detail?.bereich === "kino") toggleFilterMenue();
+    };
+    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+  });
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);
@@ -143,20 +150,7 @@ export function KinoTab({
 
   return (
     <section>
-      <ChipReihe style={{ gap: 10, marginBottom: 12 }}>
-        {/* Der tägliche Job schreibt den Katalog in die DB; dieser Knopf liest
-            den dort zuletzt erfolgreich gelieferten Stand erneut ein. */}
-        {(typeof location === "undefined" || location.protocol !== "file:") && (
-          <button style={btnStyle(false)} disabled={loading === "programm"} onClick={() => ladeProgrammDatei(true)}
-            title="Lädt den letzten Kinoprogramm-Stand erneut aus der Datenbank.">
-            {loading === "programm" ? "Lade Datenbank …" : "Kinoprogramm neu laden"}
-          </button>
-        )}
-        <a href="https://www.nonstopkino.at/programm" target="_blank" rel="noopener noreferrer"
-          style={{ ...btnStyle(false), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}
-          title="Verlässlicher Fallback: Seite öffnen → Strg+S („nur HTML“) → Datei im Einstellungen-Tab einspielen.">
-          Nonstop-Seite ↗
-        </a>
+      <ChipReihe className="kd-kino-stand" style={{ gap: 10, marginBottom: 12 }}>
         {progStand ? (
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: programmInfo?.abgelaufen ? T.gefahr : T.rauch }}>
             Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -192,22 +186,22 @@ export function KinoTab({
       {!programm && loading !== "programm" && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.6 }}>
           {datenGesperrt ? (
-            <><strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Einstellungen → Datenmodus &amp; Verbindung ein.</>
+            <><strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings → Datenmodus &amp; Verbindung ein.</>
           ) : programmInfo?.code === ERROR_CODES.NO_DEMO_DATA ? (
             /* Kein Fehler, sondern ein ehrlicher Zwischenstand: die Demo-Zeile
                ist in der Datenbank noch nicht veröffentlicht. */
-            <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Das laufende Kinoprogramm siehst du nach der Anmeldung unter Einstellungen → Konto.</>
+            <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Das laufende Kinoprogramm siehst du nach der Anmeldung unter Settings → Konto.</>
           ) : programmInfo?.code === ERROR_CODES.INVALID_KEY ? (
-            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den hinterlegten Leseschlüssel ab — prüfe ihn unter Einstellungen → Datenmodus &amp; Verbindung. Eine Anmeldung hilft hier nicht.</>
+            <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den hinterlegten Leseschlüssel ab — prüfe ihn unter Settings → Datenmodus &amp; Verbindung. Eine Anmeldung hilft hier nicht.</>
           ) : programmInfo?.anmeldungNoetig ? (
-            <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Einstellungen → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
+            <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
           ) : programmInfo?.fehler ? (
             <>
-              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Versuch es oben erneut. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.
+              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Den Verbindungsstatus und den manuellen Notfallimport findest du unter Settings.
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme das laufende Programm."}
             </>
           ) : (
-            <>Noch kein Kinoprogramm geladen. Hol es oben mit „Kinoprogramm neu laden“. Als Notfallweg kannst du die Nonstop-Seite speichern und unter Einstellungen → Erweitert manuell einspielen.</>
+            <>Noch kein Kinoprogramm geladen. Prüfe unter Settings → Datenmodus &amp; Verbindung, ob der gemeinsame Katalog verbunden ist.</>
           )}
         </div>
       )}
@@ -215,7 +209,7 @@ export function KinoTab({
       {programm && (
         <>
           {/* ---- Suche (immer sichtbar) & Filter (einklappbar, P1.4) ---- */}
-          <div data-tour="kino-filter" className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div data-tour="kino-filter" className="kd-kompakt kd-seitensuche" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
             <input value={sucheK} onChange={(e) => setSucheK(e.target.value)} placeholder="Programm durchsuchen …"
               style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
             {sucheK && <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSucheK("")}>×</button>}

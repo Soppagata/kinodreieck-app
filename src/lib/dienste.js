@@ -12,3 +12,17 @@ export function sichtbareDienste(dienste, auswahl) {
   if (!auswahl || auswahl.length === 0) return liste;
   return liste.filter((d) => auswahl.includes(d));
 }
+
+const AMAZON_CHANNEL = /\s*\(Via (?:Amazon )?Prime\)\s*$/i;
+
+/* Nur die kompakte Anzeige wird zusammengefasst. Filter, Links und geöffnete
+   Details arbeiten weiterhin mit den unveränderten Katalognamen. */
+export function gruppiereDienstBadges(dienste, { kompakt = false } = {}) {
+  const gruppen = new Map();
+  for (const roh of dienste || []) {
+    const label = kompakt && AMAZON_CHANNEL.test(roh) ? "Amazon Channel" : roh;
+    if (!gruppen.has(label)) gruppen.set(label, []);
+    gruppen.get(label).push(roh);
+  }
+  return [...gruppen].map(([label, rohnamen]) => ({ label, rohnamen }));
+}

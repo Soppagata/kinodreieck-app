@@ -4,13 +4,14 @@ import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
-import { sichtbareDienste } from "../lib/dienste.js";
+import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
-  statusVon, neuerGesehenEintrag, initialisiereStaffelstaende,
+  statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
+  neuerGesehenEintrag, initialisiereStaffelstaende,
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
@@ -31,21 +32,22 @@ function download(dateiname, obj) {
   URL.revokeObjectURL(url);
 }
 
-function DienstBadges({ dienste, webUrls, auswahl }) {
+function DienstBadges({ dienste, webUrls, auswahl, kompakt = false }) {
   /* Joyn-Fix: Badges UND web_urls-Links nur für Dienste der Abo-Auswahl
      (leere Auswahl = alle) — der Link hängt am Dienst, fliegt also mit. */
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-      {sichtbareDienste(dienste, auswahl).map((d) => {
-        const url = webUrls && webUrls[d];
+      {gruppiereDienstBadges(sichtbareDienste(dienste, auswahl), { kompakt }).map(({ label, rohnamen }) => {
+        const d = rohnamen[0];
+        const url = rohnamen.map((name) => webUrls && webUrls[name]).find(Boolean);
         const stil = {
           fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.05em",
           color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 7px",
           textDecoration: "none", display: "inline-block", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         };
         return url
-          ? <a key={d} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + d + " öffnen"}>{d}&thinsp;↗</a>
-          : <span key={d} style={{ ...stil, background: "transparent", color: T.wolfram, border: "1px solid " + T.wolfram }}>{d}</span>;
+          ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}&thinsp;↗</a>
+          : <span key={label} title={rohnamen.join(", ")} style={{ ...stil, background: "transparent", color: T.wolfram, border: "1px solid " + T.wolfram }}>{label}</span>;
       })}
     </span>
   );
@@ -89,13 +91,17 @@ export function StreamingTab({
     store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
     return next;
   }, []);
-  const [zeigeErledigte, setZeigeErledigte] = useState(false); // KD-021: gesehene/erledigte Titel standardmaessig ausgeblendet (Tooltip/Copy sagen genau das)
+  const [zeigeErledigte, setZeigeErledigte] = useState(true); // Erledigte bleiben standardmäßig sichtbar; der Chip kann sie bewusst ausblenden.
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
-  const markiereAlsErstellt = useCallback((watchmodeId, id) => {
+  const [gesehenFrage, setGesehenFrage] = useState(null);
+  const markiereAlsErstellt = useCallback((t, id) => {
     if (!id) return id;
-    schreibeEntdeckenStatus((prev) => ({ ...prev, [watchmodeId]: "erstellt" }));
+    schreibeEntdeckenStatus((prev) => ({
+      ...prev,
+      [t.watchmode_id]: mitMediathekEintrag(prev[t.watchmode_id], t, id),
+    }));
     return id;
   }, [schreibeEntdeckenStatus]);
   /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
@@ -122,6 +128,13 @@ export function StreamingTab({
     setStreamFilterOffen(nv);
     store.set(K.filterStreaming, nv ? "1" : "0").catch(() => {});
   };
+  useEffect(() => {
+    const vonGlobalerLeiste = (event) => {
+      if (event.detail?.bereich === "streaming") toggleStreamFilter();
+    };
+    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+  });
   const setzeStatus = (t, wert) => {
     schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
@@ -129,6 +142,56 @@ export function StreamingTab({
       else next[t.watchmode_id] = wert === "gesehen" && t.typ === "tv_series" ? neuerGesehenEintrag(t) : wert;
       return next;
     });
+  };
+  const toggleGesehen = (t) => {
+    const roh = entdeckenStatusRef.current[t.watchmode_id];
+    if (statusVon(roh) === "gesehen") {
+      schreibeEntdeckenStatus((prev) => {
+        const next = { ...prev };
+        const verknuepft = mediathekIdVon(next[t.watchmode_id]);
+        if (verknuepft) next[t.watchmode_id] = { status: "erstellt", mediathek_id: verknuepft };
+        else delete next[t.watchmode_id];
+        return next;
+      });
+      return;
+    }
+    if (mediathekIdVon(roh)) {
+      schreibeEntdeckenStatus((prev) => ({
+        ...prev,
+        [t.watchmode_id]: mitMediathekEintrag(neuerGesehenEintrag(t), t, mediathekIdVon(roh)),
+      }));
+      return;
+    }
+    setExpandedId("e" + t.watchmode_id);
+    setGesehenFrage(t.watchmode_id);
+  };
+
+  const uebernehmeGesehen = (t) => {
+    const id = addFilm?.({
+      titel: t.titel,
+      originaltitel: t.titel,
+      jahr: t.jahr ?? null,
+      jahr_bis: null,
+      typ: t.typ === "tv_series" ? "serie" : "film",
+      quelle: "must_watch",
+      kategorie: null,
+      bewertet_von: null,
+      bewertung: null,
+      genre: t.genres || [],
+      tags: [],
+      begruendung: "",
+      notiz: "",
+      status: "gesetzt",
+      watchmode_id: t.watchmode_id,
+      ...(t.imdb_id ? { imdb_id: t.imdb_id } : {}),
+      ...(t.tmdb_id ? { tmdb_id: t.tmdb_id } : {}),
+    });
+    if (!id) return;
+    schreibeEntdeckenStatus((prev) => ({
+      ...prev,
+      [t.watchmode_id]: mitMediathekEintrag(neuerGesehenEintrag(t), t, id),
+    }));
+    setGesehenFrage(null);
   };
 
   const datenDa = !!(bekannt && bekannt.stand);
@@ -174,12 +237,19 @@ export function StreamingTab({
 
   /* "Könnte dir gefallen": dynamische Schwelle — 55% des Relevanz-Maximums.
      Skaliert mit, wenn die Heuristik reicher wird (Namen-Liste, Tags). */
-  const relevanzSchwelle = useMemo(() => {
+  const relevanzMaximum = useMemo(() => {
     if (!entdeckenDa) return 0;
     let max = 0;
     for (const t of entdecken.titel) if (t.relevanz != null && t.relevanz > max) max = t.relevanz;
-    return max * 0.55;
+    return max;
   }, [entdecken, entdeckenDa]);
+  const relevanzSchwelle = relevanzMaximum * 0.55;
+  const relevanzStufe = (wert) => {
+    if (!Number.isFinite(wert) || relevanzMaximum <= 0) return null;
+    if (wert >= relevanzMaximum * 0.8) return "hoch";
+    if (wert >= relevanzMaximum * 0.55) return "mittel";
+    return "gering";
+  };
   const erledigtAnzahl = useMemo(() => {
     if (!entdeckenDa) return 0;
     return entdecken.titel.filter((t) => entdeckenStatus[t.watchmode_id]).length;
@@ -194,6 +264,14 @@ export function StreamingTab({
       return next;
     });
   }, [entdecken, entdeckenDa, schreibeEntdeckenStatus]);
+
+  /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
+     ab. Vorhanden bedeutet ausdrücklich NICHT automatisch gesehen: Eine
+     Mediathek kann auch ungesehene und Must-Watch-Einträge enthalten. */
+  useEffect(() => {
+    if (!Array.isArray(master)) return;
+    schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
+  }, [master, entdecken, schreibeEntdeckenStatus]);
 
   const staffelHinweise = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -244,7 +322,7 @@ export function StreamingTab({
   if (datenGesperrt) return (
     <section>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Einstellungen ein. Die App selbst ruft Watchmode nie live auf.
+        <strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
       </div>
     </section>
   );
@@ -264,31 +342,31 @@ export function StreamingTab({
             /* Noch nichts veröffentlicht ist weder ein Server- noch ein
                Anmeldungsproblem — und schon gar keine „ungültige Antwort". */
             <><strong style={{ color: T.wolfram }}>Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht.</strong> Der
-              laufende Streamingkatalog steht nach der Anmeldung unter Einstellungen → Konto bereit.</>
+              laufende Streamingkatalog steht nach der Anmeldung unter Settings → Konto bereit.</>
           ) : katalogInfo?.code === ERROR_CODES.INVALID_KEY ? (
             <><strong style={{ color: T.wolfram }}>Der Zugangsschlüssel wird nicht akzeptiert.</strong> Die Datenbank weist den
-              hinterlegten Leseschlüssel ab — prüfe ihn unter Einstellungen → Datenmodus &amp; Verbindung.
+              hinterlegten Leseschlüssel ab — prüfe ihn unter Settings → Datenmodus &amp; Verbindung.
               Eine Anmeldung hilft hier nicht.</>
           ) : katalogInfo?.anmeldungNoetig ? (
             <><strong style={{ color: T.wolfram }}>Für den aktuellen Streamingkatalog ist eine Anmeldung nötig.</strong> Melde
-              dich unter Einstellungen → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss —
+              dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss —
               der steht für diesen Zugang gerade nicht bereit.</>
           ) : katalogInfo?.fehler ? (
             <><strong style={{ color: T.wolfram }}>Streamingkatalog konnte nicht geladen werden.</strong> {katalogInfo.fehler}
               {" "}Der Katalog wird nicht live abgefragt, sondern vorbereitet ausgeliefert; du kannst ihn unter
-              Einstellungen → Datenmodus &amp; Verbindung erneut anfordern.
+              Settings → Datenmodus &amp; Verbindung erneut anfordern.
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme der laufende Katalog."}</>
           ) : (
             <><strong style={{ color: T.wolfram }}>Streaming-Tab leer.</strong> Die App liest ausschließlich den
               vorbereiteten Datenbank-Katalog und ruft Watchmode nie live auf. Für diesen Zugang ist noch
-              kein Katalog hinterlegt. Prüfe unter Einstellungen → Datenmodus &amp; Verbindung den Status.</>
+              kein Katalog hinterlegt. Prüfe unter Settings → Datenmodus &amp; Verbindung den Status.</>
           )}
         </div>
       )}
 
       {datenDa && alterTage > 35 && (
         <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
-          Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig (Einstellungen).
+          Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig (Settings).
         </div>
       )}
 
@@ -318,7 +396,7 @@ export function StreamingTab({
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             <span style={mono}>Stand {stand.toLocaleDateString("de-AT")}</span>
-            <button onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {streamFilterOffen ? "▾ Filter" : "▸ Filter"}
             </button>
@@ -430,7 +508,7 @@ export function StreamingTab({
             </button>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <button onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {streamFilterOffen ? "▾ Filter" : "▸ Filter"}
             </button>
@@ -446,7 +524,7 @@ export function StreamingTab({
                 <Chip active={nurRelevant} color={T.wolfram} onClick={() => setNurRelevant(!nurRelevant)}>Könnte dir gefallen</Chip>
                 {erledigtAnzahl > 0 && (
                   <Chip active={zeigeErledigte} onClick={() => setZeigeErledigte(!zeigeErledigte)}>
-                    Erledigte zeigen ({erledigtAnzahl})
+                    Erledigte {zeigeErledigte ? "ausblenden" : "zeigen"} ({erledigtAnzahl})
                   </Chip>
                 )}
               </ChipReihe>
@@ -460,34 +538,58 @@ export function StreamingTab({
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {entdeckenListe.slice(0, sichtbarE).map((t) => (
-              <div key={t.watchmode_id} onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
+              <div key={t.watchmode_id} className="kd-entdecken-karte" onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
                 style={{ background: T.saalHoch, borderRadius: 6, padding: "10px 12px", cursor: "pointer" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                <div className="kd-entdecken-kopf">
+                  <div className="kd-entdecken-aktionen">
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); setzeStatus(t, "gesehen"); }}
+                  <button onClick={(e) => { e.stopPropagation(); toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren (fliegt aus der Liste)"}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     ✓
                   </button>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17, flex: 1, minWidth: 160 }}>
+                  </div>
+                  <div className="kd-entdecken-inhalt">
+                  <div className="kd-entdecken-titel" style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17 }}>
                     {t.titel}{t.jahr ? " (" + t.jahr + ")" : ""}{t.typ === "tv_series" ? " · Serie" : ""}
                     {entdeckenStatus[t.watchmode_id] && (
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
-                        {statusVon(entdeckenStatus[t.watchmode_id]) === "erstellt" ? "in deiner Mediathek" : "gesehen"}
+                        {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
+                        {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
                       </span>
                     )}
-                  </span>
-                  <DienstBadges dienste={t.dienste} auswahl={auswahl} />
-                  {t.relevanz != null && <span style={{ ...mono, color: T.wolfram }} title="Heuristik-Vorsortierung, keine Bewertung">Relevanz {t.relevanz}</span>}
-                  {typeof t.user_score === "number" && <span style={mono}>Score {t.user_score}</span>}
+                  </div>
+                  <div className="kd-entdecken-meta">
+                    <DienstBadges dienste={t.dienste} auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
+                    {t.relevanz != null && <span className="kd-entdecken-relevanz" style={{ ...mono, color: T.wolfram }} title="Relative Heuristik im aktuellen Katalog, keine Bewertung">Relevanz: {relevanzStufe(t.relevanz)}</span>}
+                  </div>
+                  </div>
                 </div>
+                {gesehenFrage === t.watchmode_id && (
+                  <div className="kd-entdecken-frage" onClick={(e) => e.stopPropagation()}>
+                    <strong>Auch als unbewerteten Eintrag in die Mediathek übernehmen?</strong>
+                    <div>
+                      <button style={btnStyle(true)} onClick={() => uebernehmeGesehen(t)}>Ja, in die Mediathek</button>
+                      <button style={btnStyle(false)} onClick={() => { setzeStatus(t, "gesehen"); setGesehenFrage(null); }}>Nur als gesehen markieren</button>
+                      <button style={btnStyle(false)} onClick={() => setGesehenFrage(null)}>Abbrechen</button>
+                    </div>
+                  </div>
+                )}
                 {expandedId === "e" + t.watchmode_id && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.rauch }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
+                    {(t.relevanz_signale || []).length > 0 && (
+                      <div className="kd-entdecken-signale">
+                        Relevanz beruht auf: {(t.relevanz_signale || []).map((signal) => String(signal)
+                          .replace(/\([^)]*\)$/, "")
+                          .replace(/^jahrzehnt:/, "Jahrzehnt ")
+                          .replace(/^neu$/, "neu im Katalog")).join(" · ")}. Keine Bewertung.
+                      </div>
+                    )}
                     {addFilm && formFuer !== t.watchmode_id && !entdeckenStatus[t.watchmode_id] && (
                       <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>
@@ -497,15 +599,16 @@ export function StreamingTab({
                     {formFuer === t.watchmode_id && (
                       <div style={{ marginTop: 8 }}>
                         <FilmForm startOffen
+                          kennungenBearbeitbar={false}
                           typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
                           initial={{
                             titel: t.titel, jahr: t.jahr, quelle: "must_watch",
                             genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
                             imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
                           }}
-                          onAdd={(f) => markiereAlsErstellt(t.watchmode_id, addFilm(f))}
+                          onAdd={(f) => markiereAlsErstellt(t, addFilm(f))}
                           onAddMitPrognose={async (f) => markiereAlsErstellt(
-                            t.watchmode_id,
+                            t,
                             await addFilmMitPrognose?.(f),
                           )}
                           prognoseAktiv={vorbewertungAktiv}

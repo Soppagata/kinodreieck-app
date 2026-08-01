@@ -10,6 +10,7 @@ export {
   baueRefUniversum,
   baueKinoMatches,
   gueltigerArtikel,
+  planeFilmLoeschung,
 } from "../lib/libraryProjection.js";
 
 export const NACHTRAG_FLACH = Object.freeze([].concat(

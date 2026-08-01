@@ -83,7 +83,7 @@ Onboarding, Profileintrag, Prompt und Signalzähler diese Grenze einhalten.
 | --- | --- |
 | `0a6ebd9` | Phase 1: Profilmodell und Speicher-Naht |
 | `43bf773` | Phase 2a: KI-Schalter |
-| `4d5062f` | Phase 2b: KI-Wahl im Onboarding und in den Einstellungen |
+| `4d5062f` | Phase 2b: KI-Wahl im Onboarding und in den Settings |
 | `5766fff` | Phase 2c: deterministisches Schlagwort-Onboarding; letzter vollständig grüner Stand |
 | `ccb6fc7` | Phase 3, Teilstand: `profile-extract`, Client-Umwandlung, drei Fragen und Vorschau |
 

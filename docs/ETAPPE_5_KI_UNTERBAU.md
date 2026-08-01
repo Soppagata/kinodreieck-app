@@ -322,7 +322,7 @@ sichtbar. Die Warnung „Docker is not running" ist beim Function-Deploy
 folgenlos — ohne Docker nimmt die CLI den API-Weg.
 
 **Niemals `supabase config push` oder `supabase db push`.** Die `config.toml`
-ist absichtlich unvollständig; beides würde Live-Einstellungen oder die
+ist absichtlich unvollständig; beides würde Live-Settings oder die
 Migrationshistorie überschreiben.
 
 ### Nach jedem Deploy: Rauchprobe

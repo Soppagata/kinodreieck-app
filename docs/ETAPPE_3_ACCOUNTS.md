@@ -149,7 +149,7 @@ Dashboard → Authentication → Users → **Add user → Create new user**.
 Adresse `<benutzername>@login.kinodreieck.at`, Startpasswort setzen,
 **„Auto Confirm User" anhaken**. Benutzername kleinschreiben, ohne Leerzeichen.
 Startpasswort weitergeben; die Person ändert es in der App unter
-Einstellungen → Konto & Geräte-Sync → Passwort ändern.
+Settings → Konto & Geräte-Sync → Passwort ändern.
 
 ### Voraussetzungen im Dashboard (einmalig)
 
@@ -238,7 +238,7 @@ separaten, reversibel vorbereiteten Archiv-/Sperrschritt blockiert.
   Browserspeicher der alten Adresse; Browser reichen Daten nicht über
   Adressgrenzen, deshalb per Backup-Datei. Gegen die Datenbank verifiziert:
   sieben Zeilen, `kd:master` mit 402 Filmen (206 KB), `kd:mustwatch` mit 90
-  Einträgen, dazu Blog, Einstellungen, Streaming-Dienste und Achievements —
+  Einträgen, dazu Blog, Settings, Streaming-Dienste und Achievements —
   alle auf Revision 1. Leere Bereiche wurden gar nicht erst angelegt.
   Gegenprobe auf dem iPhone bestanden: derselbe Bestand nach der Anmeldung.
 - **Sicherheitsprobe Wiederherstellungs-Endpunkt** (25.07.2026). Ergebnis:

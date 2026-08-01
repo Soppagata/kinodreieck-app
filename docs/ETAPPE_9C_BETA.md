@@ -75,9 +75,9 @@ ausgefüllt.
 > Zeitraum **[START–ENDE]**. Deine Teilnahme ist freiwillig und du kannst sie
 > jederzeit beenden.
 >
-> Ohne Konto bleiben deine Mediathek, Listen und Einstellungen auf deinem Gerät.
+> Ohne Konto bleiben deine Mediathek, Listen und Settings auf deinem Gerät.
 > Mit dem eingeladenen Konto werden persönliche Bereiche wie Mediathek,
-> Bewertungen, Listen, Blogartikel, Einstellungen und Geschmacksprofil in
+> Bewertungen, Listen, Blogartikel, Settings und Geschmacksprofil in
 > Supabase gespeichert und zwischen deinen Geräten abgeglichen. Eine lokale
 > Kopie kann nach Abmeldung oder serverseitiger Kontolöschung auf deinen Geräten
 > bestehen bleiben.

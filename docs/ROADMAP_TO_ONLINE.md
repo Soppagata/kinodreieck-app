@@ -619,7 +619,7 @@ Wird in dieser Etappe gebaut, gilt für alle Funktionen:
 1. Beim ersten Start wird gefragt, ob mit oder ohne KI gestartet wird.
 2. Ohne KI läuft die App vollständig deterministisch und bleibt vollwertig.
 3. KI-Funktionen sind später einzeln zuschaltbar; der Schalter bleibt in den
-   Einstellungen änderbar.
+   Settings änderbar.
 4. Doktrin: KI schärft und erweitert die Deterministik. Kern-KI-Tasks
    (Einlesen, Vorbewertung, Bloganalyse) entfallen bei KI=aus ehrlich —
    sie werden ausgeblendet, nicht vorgetäuscht.
@@ -642,7 +642,7 @@ Wird in dieser Etappe gebaut, gilt für alle Funktionen:
    volle Transparenz-Unterbau folgt in Etappe 10.
 5. Profil einsehbar, korrigierbar und löschbar machen; größere
    KI-Änderungsvorschläge nur mit Vorschau und Bestätigung.
-6. Vertiefung als längerer Fragenkatalog in den Einstellungen.
+6. Vertiefung als längerer Fragenkatalog in den Settings.
 7. Das bewegliche Element im zweiten Willkommens-Popup bekommt mit dem
    Onboarding eine echte Funktion.
 8. Demo-Beispiel: eingefrorener Onboarding-Durchlauf plus Beispiel-Profil
@@ -828,7 +828,7 @@ Backlog (Kalender gegebenenfalls billig als .ics-Download).
 9. Accountlöschung,
 10. Zugriffstest zwischen zwei Accounts,
 11. Start ohne KI, späteres einzelnes Zuschalten von KI-Funktionen und
-    Widerruf über die Einstellungen.
+    Widerruf über die Settings.
 
 ### Beobachtete Kennzahlen
 

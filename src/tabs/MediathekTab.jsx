@@ -22,7 +22,7 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
      Unbewertete Einträge sind hier erstklassige Bürger (Filter + Badge).
    - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
-export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
+export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] },
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
@@ -94,6 +94,13 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setFilterMenueOffen(nv);
     store.set(K.filterMediathek, nv ? "1" : "0").catch(() => {});
   };
+  useEffect(() => {
+    const vonGlobalerLeiste = (event) => {
+      if (event.detail?.bereich === "mediathek") toggleFilterMenue();
+    };
+    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
+  });
 
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };
@@ -206,11 +213,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
 
       <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
+        <input className="kd-lokalsuche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
           style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
-        {suche && <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}>×</button>}
+        {suche && <button className="kd-lokalsuche-loeschen" style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}>×</button>}
         <select value={sortier} onChange={(e) => setSortier(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-          {dreieckTab && <option value="score">Sortierung: Dreieck-Score</option>}
+          {dreieckTab && <option value="score">Bewertung: WIE · WAS · WARUM</option>}
           <option value="titel">Titel A–Z</option>
           <option value="jahr_neu">Jahr: neueste zuerst</option>
           <option value="jahr_alt">Jahr: älteste zuerst</option>
@@ -232,7 +239,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {dreieckTab && (
         <>
-          <button onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
+          <button className="kd-seitenfilter" onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
             style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginBottom: 8 }}>
             {filterMenueOffen ? "▾ Filter" : "▸ Filter"}
           </button>
@@ -273,7 +280,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           <strong style={{ color: T.gefahr }}>Bevor du loslegst:</strong> Deine Einträge werden im
           Browser gespeichert und können optional über den Geräte-Sync abgeglichen werden.
           Sichere den vollständigen Stand trotzdem regelmäßig über
-          <strong> Einstellungen → Gesamt-Backup herunterladen</strong>.
+          <strong> Settings → Gesamt-Backup herunterladen</strong>.
         </div>
       )}
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
@@ -301,6 +308,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                 if (oeffnen) onFilmwissenLaden?.(f);
               }}
               onSave={(changes) => updateFilm(f.id, changes)}
+              onDelete={() => deleteFilm?.(f.id)}
               kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
               kommtVorIn={kommtVorInMap[f.id]}
               onArtikelKlick={onArtikelKlick}

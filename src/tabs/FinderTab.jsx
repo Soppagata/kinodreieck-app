@@ -11,6 +11,7 @@ import { kiAn } from "../lib/kiSchalter.js";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
+import { appHilfeAntwort } from "../lib/appHilfe.js";
 
 /* Sperre gegen zwei gleichzeitige, bezahlte KI-Deutungen. Bewusst im
    Modul-Scope: der Finder-Tab wird beim Wechseln auf einen anderen Tab
@@ -318,6 +319,8 @@ export function FinderTab({
   vorbewertungAktiv = false, prognoseSperrgrund = null,
   verlauf, setVerlauf, eingabe, setEingabe,
   vokabular = [], saveVokabular,
+  suchauftrag = null, onSuchauftragVerbraucht,
+  scopeArtikel = [], onArtikelKlick, onNavigiere,
 }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* Index des Verlaufseintrags, der gerade gedeutet wird. Der Wahrheitswert
@@ -352,21 +355,64 @@ export function FinderTab({
     for (const m of (kinoMatches && kinoMatches.matched) || []) for (const g of (m.prog.g || [])) s.add(g);
     return [...s];
   };
-  const suche = (sig) => ({
-    sig,
-    treffer: sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt }),
-    entdecken: sucheEntdecken(sig, streamingEntdecken),   // findbar über Genre/Titel/Jahrzehnt (self-gated)
-    kino: sucheKino(sig, (kinoMatches && kinoMatches.rest) || []),   // unbewertete Kinofilme (Phase 4c)
-  });
+  const suche = (sig, scope = "alles", text = "") => {
+    const alleTreffer = sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt });
+    const alleEntdecken = sucheEntdecken(sig, streamingEntdecken);
+    const alleKino = sucheKino(sig, (kinoMatches && kinoMatches.rest) || []);
+    const nq = String(text || "").trim().toLocaleLowerCase("de-AT");
+    const artikelTreffer = nq && (scope === "alles" || scope === "blog")
+      ? (scopeArtikel || []).filter((artikel) => [
+        artikel.titel, artikel.text,
+        ...(artikel.liste || []).flatMap((eintrag) => [eintrag.eingabe, eintrag.notiz]),
+      ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))).slice(0, 10)
+      : [];
+    return {
+      sig,
+      scope,
+      hilfe: appHilfeAntwort(text),
+      treffer: scope === "kino" ? alleTreffer.filter((t) => t.herkunft?.kino)
+        : scope === "streaming" ? alleTreffer.filter((t) => t.herkunft?.streaming)
+          : scope === "blog" || scope === "daten" ? [] : alleTreffer,
+      entdecken: scope === "alles" || scope === "streaming" ? alleEntdecken : [],
+      kino: scope === "alles" || scope === "kino" ? alleKino : [],
+      artikel: artikelTreffer,
+    };
+  };
+
+  const fuehreFrageAus = (text, scope = "alles", suchauftragId = null) => {
+    const frageText = String(text || "").trim();
+    if (!frageText) return;
+    const sig = parseAnfrage(frageText, master || [], kinoGenres());
+    setVerlauf((v) => {
+      if (suchauftragId && v.some((eintrag) => eintrag.suchauftragId === suchauftragId)) return v;
+      return [...v, {
+        id: neueEintragId(), frage: frageText,
+        ...(suchauftragId ? { suchauftragId } : {}),
+        ...suche(sig, scope, frageText),
+      }];
+    });
+    setEingabe("");
+    setLoeschenGefragt(false);
+  };
 
   const frage = () => {
-    const text = eingabe.trim();
-    if (!text) return;
-    const sig = parseAnfrage(text, master || [], kinoGenres());
-    setVerlauf((v) => [...v, { id: neueEintragId(), frage: text, ...suche(sig) }]);
-    setEingabe("");
-    setLoeschenGefragt(false);   // eine neue Suche ist keine Bestätigung des Löschens
+    fuehreFrageAus(eingabe, "alles");
   };
+
+  useEffect(() => {
+    if (!suchauftrag?.id) return;
+    if (verlauf.some((eintrag) => eintrag.suchauftragId === suchauftrag.id)) return;
+    fuehreFrageAus(suchauftrag.text, suchauftrag.scope || "alles", suchauftrag.id);
+    // Der Auftrag bleibt erhalten, bis sein Verlaufseintrag wirklich gerendert
+    // wurde. So kann React das Einfügen und das Leeren nicht in einem Batch
+    // verschlucken.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suchauftrag?.id, verlauf]);
+
+  useEffect(() => {
+    if (!suchauftrag?.id || !verlauf.some((eintrag) => eintrag.suchauftragId === suchauftrag.id)) return;
+    onSuchauftragVerbraucht?.();
+  }, [suchauftrag?.id, verlauf, onSuchauftragVerbraucht]);
 
   /* Disambiguierungs-Klick: exakt diesen Film als Titel-Frage absenden.
      sig.titel wird auf genau diese ID gepinnt (robust auch bei gleichnamigen
@@ -374,7 +420,7 @@ export function FinderTab({
   const waehleTitel = (film) => {
     const sig = parseAnfrage(film.titel, master || [], kinoGenres());
     sig.titel = [{ id: film.id, label: film.titel }];
-    setVerlauf((v) => [...v, { id: neueEintragId(), frage: film.titel, ...suche(sig) }]);
+    setVerlauf((v) => [...v, { id: neueEintragId(), frage: film.titel, ...suche(sig, "alles", film.titel) }]);
     setEingabe(film.titel);
   };
 
@@ -401,7 +447,7 @@ export function FinderTab({
       sig = { ...sig, ...jahrGrenzen(sig) };
       /* `...e` statt nur `frage`: sonst verliert der Eintrag beim ersten
          Chip-Klick die KI-Deutung samt der nicht umsetzbaren Wünsche. */
-      return { ...e, ...suche(sig) };
+      return { ...e, ...suche(sig, e.scope || "alles", e.frage) };
     }));
   };
 
@@ -449,7 +495,7 @@ export function FinderTab({
       const antwort = await aiService.runTask("intelligent-search", { suchsatz: e.frage, listen });
       const gedeutet = sigAusSchema(antwort && antwort.data, master || [], kinoGenres());
       setVerlauf((v) => v.map((x) => (x.id === id
-        ? { ...x, ...suche(gedeutet.sig), ki: { ...gedeutet, offeneWoerter }, kiFehler: null }
+        ? { ...x, ...suche(gedeutet.sig, x.scope || "alles", x.frage), ki: { ...gedeutet, offeneWoerter }, kiFehler: null }
         : x)));
     } catch (fehler) {
       /* Die deterministische Antwort bleibt unangetastet. Bei Fehler, Zeitgrenze
@@ -504,7 +550,7 @@ export function FinderTab({
         Beispiele: „Wo spielt es Crank?“ · „Star Wars“ · „was Stylisches aus den 80ern im Kino“ · „was Neues, das ich nicht kenne“
       </div>
       {/* Eingabe OBEN, neueste Antwort direkt darunter — kein Scroll-Springen. */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div className="kd-finder-eingabe" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input value={eingabe} onChange={(e) => setEingabe(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") frage(); }}
           placeholder="Titel, Genre, Stimmung, Jahrzehnt, Quelle …"
@@ -533,13 +579,14 @@ export function FinderTab({
       <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
         {verlauf.map((e, idx) => ({ e, i: idx })).reverse().map(({ e, i }) => {
           const titelSig = e.sig.titel || [];
-          const hatErgebnisse = e.treffer.length > 0 || (e.entdecken && e.entdecken.length > 0) || (e.kino && e.kino.length > 0);
+          const hatErgebnisse = !!e.hilfe || e.treffer.length > 0 || (e.entdecken && e.entdecken.length > 0)
+            || (e.kino && e.kino.length > 0) || (e.artikel && e.artikel.length > 0);
           return (
             <div key={i}>
               <div style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "8px 12px", fontSize: 14, marginBottom: 8, maxWidth: 560 }}>
                 {e.frage}
               </div>
-              <div style={{ marginBottom: 8 }}>
+              {!e.hilfe && <div style={{ marginBottom: 8 }}>
                 <SignalChips sig={e.sig} versteckeTitel={titelSig.length > 1} stumm={hatErgebnisse} onToggle={(feld, wert) => toggleSignal(i, feld, wert)} />
                 {/* Angebot statt Automatik: erscheint nur bei unklarer Anfrage und
                     nur, solange noch keine Deutung vorliegt.
@@ -568,8 +615,19 @@ export function FinderTab({
                   </div>
                 )}
                 <KiDeutung ki={e.ki} merkbar={merkbareWoerter(e)} onMerken={(w) => merken(e, w)} />
-              </div>
-              {titelSig.length === 1 ? (
+              </div>}
+              {e.hilfe && (
+                <div className="kd-apphilfe-antwort">
+                  <strong>{e.hilfe.titel}</strong>
+                  <p>{e.hilfe.text}</p>
+                  {e.hilfe.ziel && onNavigiere && (
+                    <button style={btnStyle(true)} onClick={() => onNavigiere(e.hilfe.ziel)}>
+                      {e.hilfe.ziel === "daten" ? "Settings öffnen" : "Bereich öffnen"}
+                    </button>
+                  )}
+                </div>
+              )}
+              {!e.hilfe && (titelSig.length === 1 ? (
                 /* Genau ein Titel gemeint -> volle Meta-Karte */
                 detailFuer(e, titelSig[0].id)
               ) : titelSig.length > 1 ? (
@@ -584,9 +642,22 @@ export function FinderTab({
                     {e.treffer.map((t) => <TrefferZeile key={t.film.id} t={t} onSpringeZuFilm={onSpringeZuFilm} auswahl={auswahl} />)}
                   </div>
                 </>
+              ))}
+              {!e.hilfe && e.artikel && e.artikel.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ ...mono, color: T.leinwandTief, marginBottom: 6 }}>Treffer im Blog:</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {e.artikel.map((artikel) => (
+                      <button key={artikel.id} onClick={() => onArtikelKlick?.(artikel.id)}
+                        style={{ ...btnStyle(false), textAlign: "left", justifyContent: "flex-start" }}>
+                        {artikel.titel}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
               {/* Phase 4c: aktuelle Kinofilme (film.at), Kino zuerst — mit Eintrag-erstellen */}
-              {titelSig.length <= 1 && e.kino && e.kino.length > 0 && (
+              {!e.hilfe && titelSig.length <= 1 && e.kino && e.kino.length > 0 && (
                 <>
                   <div style={{ ...mono, color: T.leinwandTief, margin: "12px 0 6px" }}>Läuft im Kino — noch nicht in deiner Liste:</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -622,7 +693,7 @@ export function FinderTab({
                   </div>
                 </>
               )}
-              {titelSig.length <= 1 && e.entdecken.length > 0 && (
+              {!e.hilfe && titelSig.length <= 1 && e.entdecken.length > 0 && (
                 <>
                   <div style={{ ...mono, color: T.leinwandTief, margin: "12px 0 6px" }}>Zum Streamen — noch nicht in deiner Liste:</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -641,6 +712,7 @@ export function FinderTab({
                           {formFuer === sid && (
                             <div style={{ marginTop: 8 }} onClick={(ev) => ev.stopPropagation()}>
                               <FilmForm startOffen typOptionen={t.typ === "tv_series" ? ["serie"] : ["film"]}
+                                kennungenBearbeitbar={false}
                                 initial={{
                                   titel: t.titel, jahr: t.jahr, quelle: "must_watch",
                                   genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,

@@ -29,7 +29,7 @@ const DEF = {
   /* --- Mediathek --- */
   mediathek: {
     titel: "Deine Mediathek",
-    absaetze: [{ ziel: "eintrag-neu", text: "Dein Bestand: Filme, Serien, Musik, Sonstiges. Eine Karte antippen öffnet Details und Bewertung; der Filter grenzt nach Besitz, Schlagseite, Kategorie und Genre ein. Neu anlegen über „+ Eintrag hinzufügen“ — oder eine ganze Titelliste unter Einstellungen → Masterliste über „KI-Prompt öffnen“." }],
+    absaetze: [{ ziel: "eintrag-neu", text: "Dein Bestand: Filme, Serien, Musik, Sonstiges. Eine Karte antippen öffnet Details und Bewertung; der Filter grenzt nach Besitz, Schlagseite, Kategorie und Genre ein. Neu anlegen über „+ Eintrag hinzufügen“ — oder eine ganze Titelliste unter Settings → Masterliste über „KI-Prompt öffnen“." }],
   },
   eintrag: {
     titel: "Wie ein Eintrag aussieht",
@@ -39,7 +39,7 @@ const DEF = {
   /* --- Streaming --- */
   streaming: {
     titel: "Streaming",
-    absaetze: [{ ziel: "streaming-views", text: "„Mein Programm“ zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken“ liefert Vorschläge aus den Katalogen. Welche Dienste du hast, stellst du in den Einstellungen ein." }],
+    absaetze: [{ ziel: "streaming-views", text: "„Mein Programm“ zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken“ liefert Vorschläge aus den Katalogen. Welche Dienste du hast, stellst du in den Settings ein." }],
   },
   entdecken: {
     titel: "Entdecken",

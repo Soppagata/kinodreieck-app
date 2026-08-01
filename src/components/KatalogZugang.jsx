@@ -46,10 +46,10 @@ export function KatalogZugang({ onFertig, onAbbrechen, zwingend = false }) {
       }
       if (a && !a.ok && a.code === ERROR_CODES.NO_DEMO_DATA) {
         setArt("warnung");
-        setMeldung("Verbindung steht ✓ — für den öffentlichen Zugang sind allerdings noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung (Einstellungen → Konto) siehst du das laufende Programm.");
+        setMeldung("Verbindung steht ✓ — für den öffentlichen Zugang sind allerdings noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung (Settings → Konto) siehst du das laufende Programm.");
       } else if (a && !a.ok && a.anmeldungNoetig) {
         setArt("warnung");
-        setMeldung("Verbindung steht ✓ — für das laufende Kinoprogramm ist zusätzlich eine Anmeldung nötig (Einstellungen → Konto).");
+        setMeldung("Verbindung steht ✓ — für das laufende Kinoprogramm ist zusätzlich eine Anmeldung nötig (Settings → Konto).");
       } else if (a && !a.ok) {
         setArt("warnung");
         setMeldung("Verbindung steht ✓ — das Kinoprogramm ist gerade nicht abrufbar: " + errorText(a.fehler));

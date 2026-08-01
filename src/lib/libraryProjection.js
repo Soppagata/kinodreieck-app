@@ -51,3 +51,32 @@ export function baueKinoMatches(programm, master) {
   ));
   return { matched, rest };
 }
+
+/* Entfernt einen Mediathek-Eintrag, ohne abhängige persönliche Listen zu
+   beschädigen: Blog-Verweise werden wieder zu Rotlinks, Must-Watch-Einträge
+   bleiben erhalten und verlieren nur ihre Master-Verknüpfung. */
+export function planeFilmLoeschung(master, artikel, mustwatch, id) {
+  const filme = Array.isArray(master) ? master : [];
+  const artikelListe = Array.isArray(artikel) ? artikel : [];
+  const mustwatchListe = Array.isArray(mustwatch) ? mustwatch : [];
+  let artikelRefs = 0;
+  let mustwatchRefs = 0;
+  const plan = {
+    master: filme.filter((film) => film.id !== id),
+    artikel: artikelListe.map((eintrag) => ({
+      ...eintrag,
+      liste: (eintrag.liste || []).map((zeile) => {
+        if (zeile.ref !== id) return zeile;
+        artikelRefs++;
+        return { ...zeile, ref: null, abgleich: undefined };
+      }),
+      abgleichStat: undefined,
+    })),
+    mustwatch: mustwatchListe.map((eintrag) => {
+      if (eintrag.verknuepfung?.ziel !== "master" || eintrag.verknuepfung.id !== id) return eintrag;
+      mustwatchRefs++;
+      return { ...eintrag, verknuepfung: null };
+    }),
+  };
+  return { ...plan, folgen: { artikelRefs, mustwatchRefs } };
+}

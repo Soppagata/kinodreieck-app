@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  statusVon, neuerGesehenEintrag, initialisiereStaffelstaende,
+  statusVon, mediathekIdVon, mitMediathekEintrag, ohneMediathekEintrag,
+  gleicheMediathekStatusAb,
+  neuerGesehenEintrag, initialisiereStaffelstaende,
   staffelHinweis, neueStaffeln, bestaetigeStaffel, serienBeobachten,
 } from "./src/lib/staffeln.js";
 
@@ -12,6 +14,32 @@ ok("Status: alter String gesehen", () => assert.equal(statusVon("gesehen"), "ges
 ok("Status: alter String erstellt", () => assert.equal(statusVon("erstellt"), "erstellt"));
 ok("Status: neues Objekt", () => assert.equal(statusVon({ status: "gesehen" }), "gesehen"));
 ok("Status: kaputter Wert fail-safe", () => assert.equal(statusVon({ foo: 1 }), null));
+ok("Mediathek-Verknüpfung bleibt orthogonal zum Gesehen-Status", () => {
+  const gesehen = neuerGesehenEintrag(serie({ staffeln_verfuegbar: 3 }), new Date("2026-07-21T10:00:00Z"));
+  const verknuepft = mitMediathekEintrag(gesehen, serie(), "testserie_2026");
+  assert.equal(statusVon(verknuepft), "gesehen");
+  assert.equal(mediathekIdVon(verknuepft), "testserie_2026");
+  assert.equal(ohneMediathekEintrag(verknuepft).staffel_bestaetigt, 3);
+  assert.equal(mediathekIdVon(ohneMediathekEintrag(verknuepft)), null);
+});
+ok("Legacy-Erstellt lässt sich nach einer Filmlöschung vollständig lösen", () => {
+  assert.equal(mediathekIdVon("erstellt"), true);
+  assert.equal(ohneMediathekEintrag("erstellt"), null);
+});
+ok("Mediathek-Abgleich verknüpft starke IDs, ohne gesehen zu erfinden", () => {
+  const r = gleicheMediathekStatusAb({}, [
+    { watchmode_id: 42, titel: "Testfilm", typ: "movie" },
+  ], [{ id: "testfilm_2026", watchmode_id: 42 }]);
+  assert.equal(mediathekIdVon(r[42]), "testfilm_2026");
+  assert.equal(statusVon(r[42]), "erstellt");
+});
+ok("Mediathek-Abgleich erhält einen echten Gesehen-Status", () => {
+  const r = gleicheMediathekStatusAb({ 42: neuerGesehenEintrag(serie()) }, [serie()], [
+    { id: "testserie_2026", watchmode_id: 42 },
+  ]);
+  assert.equal(statusVon(r[42]), "gesehen");
+  assert.equal(mediathekIdVon(r[42]), "testserie_2026");
+});
 
 ok("Neues Serien-Häkchen übernimmt belegten Staffelstand", () => {
   const e = neuerGesehenEintrag(serie({ staffeln_verfuegbar: 3 }), new Date("2026-07-21T10:00:00Z"));

@@ -146,7 +146,7 @@ export function DatenTab({
         <div style={kasten}>
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
-            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Einstellungen bleiben nur in diesem Browser. Datenbankzugang: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{katalogVerbunden ? "verbunden" : "nicht verbunden"}</strong>.
+            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Settings bleiben nur in diesem Browser. Datenbankzugang: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{katalogVerbunden ? "verbunden" : "nicht verbunden"}</strong>.
             {" "}Kinoprogramm: <strong style={{ color: programmStatus.ok ? T.wolfram : T.gefahr }}>{programmStatus.text}</strong>.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -272,7 +272,7 @@ export function DatenTab({
         <div style={kasten}>
           {(ungesichertMaster || ungesichertArtikel) && (
             <p data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
-              Es gibt ungesicherte Änderungen im Browser. Ein Gesamt-Backup schützt Mediathek, Blog, Listen und Einstellungen gemeinsam.
+              Es gibt ungesicherte Änderungen im Browser. Ein Gesamt-Backup schützt Mediathek, Blog, Listen und Settings gemeinsam.
             </p>
           )}
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den vollständigen persönlichen App-Stand als Datei herunter. Der gemeinsame Kino- und Streamingkatalog wird nicht dupliziert.</p>

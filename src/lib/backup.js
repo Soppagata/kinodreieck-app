@@ -29,7 +29,7 @@ export async function baueBackup({ pull = true } = {}) {
   // JSON- oder Formfehler werden im Backup sichtbar protokolliert.
   const backup = {
     format: "kinodreieck-backup", version: 1, erstellt: new Date().toISOString(),
-    hinweis: "Wiederherstellen: über Einstellungen → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
+    hinweis: "Wiederherstellen: über Settings → Backup wiederherstellen (oder masterliste/artikel einzeln über die Import-Felder).",
   };
   for (const entry of PERSONAL_DATA_ENTRIES) {
     let roh = null;

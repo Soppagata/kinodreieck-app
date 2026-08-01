@@ -65,26 +65,36 @@ for (const viewport of VIEWPORTS) {
       const menu = page.getByRole("button", { name: "Menü öffnen" });
       await expect(menu).toBeVisible();
       const menuBox = await menu.boundingBox();
-      expect(menuBox.width).toBeGreaterThanOrEqual(48);
-      expect(menuBox.height).toBeGreaterThanOrEqual(48);
-      expect(viewport.width - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(10);
+      expect(menuBox.width).toBeGreaterThanOrEqual(24);
+      expect(menuBox.height).toBeGreaterThanOrEqual(76);
+      expect(menuBox.x).toBeLessThanOrEqual(1);
       await expect(page.locator(".kd-tabbar")).toHaveCount(0);
       await keineDokumentUeberbreite(page);
+      await expect(page.locator(".kd-app main")).toHaveCSS("zoom", schrift === "gross" ? "1.1" : "1");
+      const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
+      await expect(globaleSuche).toBeVisible();
+      await expect(globaleSuche).toHaveCSS("position", "fixed");
+      const suchBox = await globaleSuche.boundingBox();
+      expect(suchBox.x).toBeGreaterThanOrEqual(9);
+      expect(suchBox.x + suchBox.width).toBeLessThanOrEqual(viewport.width - 9);
+      expect(viewport.height - suchBox.y - suchBox.height).toBeLessThanOrEqual(11);
 
-      for (const ziel of ["Kino", "Streaming", "Mediathek", "Suche", "Blog", "Start", "Einstellungen"]) {
+      for (const ziel of ["Kino", "Streaming", "Mediathek", "Suche", "Blog", "Start", "Settings"]) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         await expect(popup).toBeVisible();
+        await expect(popup).toHaveCSS("transform", "none");
         const popupBox = await popup.boundingBox();
-        expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(360, viewport.width - 32) - 1);
-        expect(Math.abs(popupBox.x - (viewport.width - popupBox.width) / 2)).toBeLessThanOrEqual(1);
-        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(80);
-        await expect(popup.locator(".kd-mobile-menu-liste button").first()).toHaveText("⌂Start");
+        expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
+        expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
+        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(13);
         await expect(popup.getByRole("button", { name: "Nach oben" })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
         await expect(popup).toBeHidden();
+        if (ziel === "Start") await expect(page.locator(".kd-bereichshero")).toHaveCount(0);
+        else await expect(page.locator(".kd-bereichshero h1")).toHaveText(ziel);
         await keineDokumentUeberbreite(page);
       }
 
@@ -95,6 +105,14 @@ for (const viewport of VIEWPORTS) {
       await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Konto & Geräte-Sync$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Suche-Vokabular$/ })).toBeVisible();
+
+      await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Wo finde ich die Schriftgröße?");
+      await globaleSuche.getByRole("button", { name: "Suchen" }).click();
+      await expect(page.locator(".kd-bereichshero h1")).toHaveText("Suche");
+      await expect(page.getByText("Schriftgröße ändern", { exact: true })).toBeVisible();
+      await expect(page.getByText("Öffne Settings → Darstellung & Verhalten → Schriftgröße.", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Settings öffnen" }).click();
+      await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
       await page.getByRole("button", { name: "Menü öffnen" }).click();
       await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Start", exact: true }).click();
@@ -202,7 +220,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await keineDokumentUeberbreite(page);
 
   await page.getByRole("button", { name: "Menü öffnen" }).click();
-  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Einstellungen", exact: true }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator("summary", { hasText: /^Geschmacksprofil$/ }).click();
   const signal = page.locator(".kd-profil-signal").first();
   await expect(signal).toBeVisible();
@@ -229,6 +247,6 @@ test("Desktop behält oberhalb 760 px die bestehende Leiste", async ({ page }) =
   });
   await page.goto("/");
   await expect(page.locator(".kd-menu")).toBeVisible();
-  await expect(page.locator(".kd-menuknopf")).toBeHidden();
+  await expect(page.locator(".kd-navband")).toBeHidden();
   await keineDokumentUeberbreite(page);
 });

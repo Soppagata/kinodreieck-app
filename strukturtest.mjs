@@ -207,7 +207,7 @@ check("Streaming: Ansicht Mein Programm/Entdecken", !!knopf(/^Mein Programm/) ||
    data-tour="streaming-views" muss am neuen .kd-seg-Container hängen. */
 check("Etappe 2: SegmentedControl trägt Tour-Anker streaming-views (kd-seg)", !!doc.querySelector('.kd-seg[data-tour="streaming-views"]'));
 // Streaming-Quellen sind jetzt im Einstellungen-Tab (verschoben)
-const einstNav5 = [...doc.querySelectorAll("nav button")].find((b) => /^einstellungen$/i.test((b.textContent || "").trim()));
+const einstNav5 = [...doc.querySelectorAll("nav button")].find((b) => /^settings$/i.test((b.textContent || "").trim()));
 if (einstNav5) { einstNav5.click(); await warte(500); }
 check("Streaming-Quellen im Einstellungen-Tab", /Streaming-Quellen/.test(text()));
 check("Kein überholter Config-Export", !knopf(/Config exportieren/i));
@@ -215,7 +215,7 @@ check("Quellen-Suchfeld vorhanden", [...doc.querySelectorAll("input")].some((i) 
 
 /* ---- 6. Einstellungen: alle Schalter wirken ---- */
 const tabs = [...doc.querySelectorAll("nav button")];
-const einstellungenTab = tabs.find((b) => /^einstellungen$/i.test((b.textContent || "").trim()));
+const einstellungenTab = tabs.find((b) => /^settings$/i.test((b.textContent || "").trim()));
 check("Einstellungen-Tab in der Nav", !!einstellungenTab);
 if (einstellungenTab) { einstellungenTab.click(); await warte(500); }
 /* Etappe 2: Hauptblöcke als <details>-Accordions (Klappe); nur

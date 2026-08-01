@@ -65,8 +65,12 @@ den Cache aufgenommen.
   Signalen ist höchstens `sehr_niedrig`, bei drei bis vier höchstens
   `niedrig` zulässig. Ab fünf Signalen aus mindestens zwei Arten darf die
   Sicherheit höher liegen.
-- Annehmen macht aus der Prognose keine Bewertung. Korrigieren öffnet den
-  echten Bewertungsweg; Verwerfen erhält die Prognose mit Status.
+- `Nur Prognose bestätigen` ändert ausschließlich den Prognosestatus.
+  `Als Bewertung übernehmen` öffnet dagegen eine vorausgefüllte Vorschau:
+  Alle drei Achsen und die Kategorie müssen geprüft und ausdrücklich
+  gespeichert werden. Erst dann wird eine echte Bewertung mit sichtbarer
+  KI-Herkunft angelegt. Korrigieren bleibt der freie Bewertungsweg;
+  Verwerfen erhält die Prognose mit Status.
 - Reaktionen fließen im MVP nicht automatisch ins Geschmacksprofil zurück.
 - Profiländerungen lösen keine automatische Neuberechnung aus.
 - Die anzuzeigende Passung wird gerundet beziehungsweise als Band formuliert,

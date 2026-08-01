@@ -195,7 +195,7 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
         })}
         {sichtbar.length === 0 && (
           <p style={{ color: T.rauch, fontSize: 14 }}>
-            {suche.trim() ? "Keine Treffer." : "Noch leer. „+ Eintrag“ — oder in den Einstellungen die Must-Watch-Migration ausführen (übernimmt die alten Wunschlisten-Flags)."}
+            {suche.trim() ? "Keine Treffer." : "Noch leer. „+ Eintrag“ — oder in den Settings die Must-Watch-Migration ausführen (übernimmt die alten Wunschlisten-Flags)."}
           </p>
         )}
       </div>

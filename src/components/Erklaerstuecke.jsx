@@ -121,11 +121,11 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
     { id: "mediathek", titel: "Mediathek", text: [
       "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
       "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Schlagseite (WIE/WAS/WARUM-lastig), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
-      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Einstellungen. Blog-Artikel besitzen ihre eigenen Werkzeuge direkt im Blog.",
+      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Settings. Blog-Artikel besitzen ihre eigenen Werkzeuge direkt im Blog.",
     ] },
     { id: "streaming", titel: "Streaming", text: [
       "„Mein Programm” zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken” liefert Vorschläge aus den Watchmode-Katalogen, nach Relevanz sortiert. Einträge in Mein Programm sind editierbar.",
-      "Der Schnellfilter grenzt temporär auf einen deiner Dienste ein — welche Dienste du hast, stellst du in den Einstellungen ein. Im Entdecken merkst du dir Titel mit ★ (erscheinen im Dashboard).",
+      "Der Schnellfilter grenzt temporär auf einen deiner Dienste ein — welche Dienste du hast, stellst du in den Settings ein. Im Entdecken merkst du dir Titel mit ★ (erscheinen im Dashboard).",
       "Kein Live-API-Call in der App — es werden nur vorberechnete Kataloge gelesen. Credits kostet ausschließlich der geplante Fetch-Job.",
     ] },
     { id: "blog", titel: "Blog", text: [
@@ -135,9 +135,9 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
     ] },
     { id: "finder", titel: "Suche", text: [
       "Natürlichsprachige Suche über deinen Bestand: „traurige Komödie auf Netflix”, „Kult aus den 80ern”. Deterministisch — kein LLM, keine geratenen Treffer.",
-      "Eigene Stimmungswörter hinterlegst du in den Einstellungen (Vokabular), damit die Suche deinen Wortschatz kennt.",
+      "Eigene Stimmungswörter hinterlegst du in den Settings (Vokabular), damit die Suche deinen Wortschatz kennt.",
     ] },
-    { id: "daten", titel: "Einstellungen", text: [
+    { id: "daten", titel: "Settings", text: [
       "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Datenmodus, Masterliste, Gesamt-Backup, Such-Vokabular, Streaming-Quellen und Katalog-Status.",
       "Unter „Erweitert” kannst du den Datenbank-Katalog manuell neu laden, Notfall-Importe ausführen und den Programm-Cache leeren.",
       "Ein unbeschriftetes Detail liegt hinter dem „Max”-Link unter „Über & Rechtliches”.",
@@ -179,10 +179,10 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       <div style={block}>
         <h2 style={h2}>Alltag</h2>
         <p style={p}>Kinodreieck läuft als PWA im Browser und kann auf dem Startbildschirm
-          installiert werden. Bewertungen, Artikel und Einstellungen liegen zunächst im
+          installiert werden. Bewertungen, Artikel und Settings liegen zunächst im
           Browser. Der gemeinsame Programm-Katalog enthält keine persönlichen Änderungen.</p>
         <p style={{ ...p, margin: 0 }}>Der Browser ist kein vollständiges Backup. Lade deshalb
-          regelmäßig unter Einstellungen ein Gesamt-Backup herunter.
+          regelmäßig unter Settings ein Gesamt-Backup herunter.
           Programm- und Katalog-Stand zeigen, wie frisch die separat gelieferten Daten sind.</p>
       </div>
       <div style={block}>
@@ -198,7 +198,7 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       <div style={block}>
         <h2 style={h2}>Teilen & Sichern</h2>
         <p style={p}>Blog-Artikel importierst, exportierst oder veröffentlichst du direkt im Blog.
-          Die Masterliste besitzt ihren eigenen Import und Export in den Einstellungen.</p>
+          Die Masterliste besitzt ihren eigenen Import und Export in den Settings.</p>
         <p style={{ ...p, margin: 0 }}>Das Gesamt-Backup ist dagegen deine vollständige private
           Sicherung und nicht zum Weitergeben gedacht. Teile keine Sync-Zugangsdaten,
           Leseschlüssel oder persönlichen Backup-Dateien.</p>

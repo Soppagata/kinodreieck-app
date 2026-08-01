@@ -160,7 +160,7 @@ export function Willkommen({
               Möchtest du Kinodreieck mit KI-Funktionen nutzen? Ohne KI funktioniert alles —
               Suche, Sammlung, Bewertungen — vollständig und kostenlos auf deinem Gerät.
               Mit KI kommen Deutungs- und Profil-Funktionen dazu; jede einzelne kannst du
-              in den Einstellungen an- und abschalten.
+              in den Settings an- und abschalten.
             </p>
 
             <div style={{ display: "flex", gap: 10, margin: "16px 0 8px", flexWrap: "wrap" }}>
@@ -172,7 +172,7 @@ export function Willkommen({
 
             {kiWahl === false && (
               <p style={{ ...p, color: T.rauch, fontSize: 14 }}>
-                Gut. Du kannst KI jederzeit in den Einstellungen einschalten — dort ist auch
+                Gut. Du kannst KI jederzeit in den Settings einschalten — dort ist auch
                 jede Funktion einzeln schaltbar.
               </p>
             )}
@@ -181,7 +181,7 @@ export function Willkommen({
                 KI-Funktionen brauchen ein Konto — `aiService` verlangt hart
                 `requireAccount("personalAi")`, und beim ersten Start ist die
                 Sitzung immer ein Gast. Ohne dieses Angebot müsste selbst ein
-                Beta-Freund die Anmeldung erst in den Einstellungen suchen.
+                Beta-Freund die Anmeldung erst in den Settings suchen.
                 Das sichtbare „Später" wahrt die Zusage aus KontoBereich.jsx:
                 „Anmelden ist ein Angebot, kein Tor." Es gibt keine
                 Selbstregistrierung — ein Pflicht-Login würde ab Etappe 9a
@@ -191,7 +191,7 @@ export function Willkommen({
                 <p style={{ ...p, margin: "0 0 10px", fontSize: 14 }}>
                   KI-Funktionen laufen über dein Konto — so bleiben deine Daten deinem Konto
                   zugeordnet und die Kosten im Rahmen. Du kannst dich gleich hier anmelden
-                  oder später in den Einstellungen.
+                  oder später in den Settings.
                 </p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <input style={{ ...inputStyle, flex: "1 1 140px" }} value={benutzer} autoComplete="username"

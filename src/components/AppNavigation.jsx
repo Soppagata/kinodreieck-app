@@ -9,19 +9,15 @@ export const NAVIGATION = Object.freeze([
   { id: "finder", label: "Suche", mehr: true, icon: "⌕" },
   { id: "blog", label: "Blog", mehr: true, icon: "B" },
   { id: "start", label: "Start", mobil: true, icon: "⌂" },
-  { id: "daten", label: "Einstellungen", mehr: true, icon: "⚙" },
-]);
-const MOBILE_NAVIGATION = Object.freeze([
-  NAVIGATION.find((eintrag) => eintrag.id === "start"),
-  ...NAVIGATION.filter((eintrag) => eintrag.id !== "start"),
+  { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
 
 export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate }) {
   return (
     <>
-      <button className={"kd-menuknopf" + (mehrOffen ? " offen" : "")} aria-label={mehrOffen ? "Menü schließen" : "Menü öffnen"}
+      <button className={"kd-navband" + (mehrOffen ? " offen" : "")} aria-label={mehrOffen ? "Menü schließen" : "Menü öffnen"}
         aria-expanded={mehrOffen} aria-controls="kd-mobile-menu" onClick={onMehr}>
-        <span className="kd-menulinien" aria-hidden="true"><i /><i /><i /></span>
+        <i /><i /><i />
       </button>
       {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} />}
     </>
@@ -46,16 +42,12 @@ function MenuPopup({ aktiv, onClose, onNavigate }) {
   return createPortal(
     <div className="kd-mobile-menu-layer">
       <button className="kd-sheet-scrim" aria-label="Menü schließen" onClick={onClose} />
-      <section ref={sheetRef} id="kd-mobile-menu" className="kd-mobile-menu" role="dialog" aria-modal="true" aria-labelledby="kd-mobile-menu-titel">
-        <div className="kd-mobile-menu-kopf">
-          <h2 id="kd-mobile-menu-titel">Menü</h2>
-          <button className="kd-mobile-menu-schliessen" aria-label="Menü schließen" onClick={onClose}>×</button>
-        </div>
+      <section ref={sheetRef} id="kd-mobile-menu" className="kd-mobile-menu" role="dialog" aria-modal="true" aria-label="Menü">
         <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
-          {MOBILE_NAVIGATION.map((eintrag) => (
+          {NAVIGATION.map((eintrag) => (
             <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
               onClick={() => onNavigate(eintrag.id)}>
-              <span className="kd-mobile-menu-icon" aria-hidden="true">{eintrag.icon}</span><strong>{eintrag.label}</strong>
+              {eintrag.label}
             </button>
           ))}
         </nav>

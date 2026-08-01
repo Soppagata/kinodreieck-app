@@ -31,7 +31,7 @@ nicht eindeutig feststehen.
 | Daten verändert oder gelöscht | App auf weiteren Geräten schließen; dort nicht synchronisieren | Gerätestand und App-Backup mit Prüfsumme | App-Restore, notfalls Rückgängig-Snapshot |
 | KI-Kosten auffällig oder unbekannt | `ai_aktiv=false` | Health zeigt Not-Aus und Kostenstand | alten Wert erst nach Kostenklärung zurücksetzen |
 | Anbieter ausgefallen | keine Wiederholschleife; bei Unsicherheit KI aus | deterministische Kernfunktionen laufen | ohne Migration wieder einschalten |
-| Supabase ausgefallen | nicht abmelden; keine Migration oder Löschung | lokale Änderung bleibt als ausstehend erhalten | nach Erholung „Ausstehende senden“ |
+| Supabase ausgefallen | nicht abmelden; keine Migration oder Löschung | lokale Änderung bleibt als ausstehend erhalten | nach Erholung „Ausstehende Änderungen erneut senden“ |
 | Frontend-/Pages-Deployment fehlerhaft | letztes gutes Produktions-Deployment wählen | Domain-Smoke meldet erwarteten Commit | korrigierten Commit normal deployen |
 | Edge Function-/Function-Deployment fehlerhaft | KI aus; letzte gute Function aus Git deployen | Function-Vertrag und kostenfreies Health grün | korrigierte Function normal deployen |
 | Schlüssel kompromittiert | betroffenen Datenpfad sperren; Schlüssel widerrufen | alter Schlüssel wird abgewiesen | neuen Schlüssel nur im zuständigen Secret-Store setzen |
@@ -65,7 +65,7 @@ Konto-Payloads.
 
 1. Mit einem Wegwerfkonto anmelden und warten, bis kein Sync-Konflikt oder
    ausstehender Bereich mehr angezeigt wird.
-2. Unter **Einstellungen → Gesamt-Backup** auf
+2. Unter **Settings → Gesamt-Backup** auf
    **Gesamt-Backup herunterladen** klicken.
 3. Enthält die JSON-Datei `_warnungen`, ist sie kein bestätigtes Vollbackup:
    Ursache beheben und erneut exportieren.
@@ -84,11 +84,11 @@ Konto-Payloads.
 
 1. Vorher ein zweites Backup des aktuellen Zielstands erzeugen.
 2. Nur im Wegwerfkonto kontrolliert einen Datensatz ändern.
-3. Unter **Einstellungen → Gesamt-Backup → Backup wiederherstellen** die erste
+3. Unter **Settings → Gesamt-Backup → Backup wiederherstellen** die erste
    Datei wählen und die Ersetzen-Warnung bestätigen.
 4. Den Zählbericht prüfen, neu laden und auf einem zweiten Gerät kontrollieren.
 5. **Rückgängig** ausführen, neu laden und den Zustand vor dem Restore prüfen.
-6. Den Restore erneut ausführen und sicherstellen, dass **Ausstehende senden**
+6. Den Restore erneut ausführen und sicherstellen, dass **Ausstehende Änderungen erneut senden**
    den Kontostand erreicht.
 7. Je eine beschädigte JSON-Datei und eine Datei mit falschem `format` müssen
    sichtbar abgelehnt werden; ein Restore ohne gesicherten lokalen Snapshot
@@ -153,7 +153,7 @@ Größen und Prüfsummen kommen ins Nachweisblatt; die Dateien selbst nicht.
 
 1. Ein separates, wegwerfbares Supabase-Projekt anlegen. Niemals dieselbe
    Verbindungs-URL wie Produktion verwenden.
-2. Benötigte Erweiterungen aktivieren. Projektweite Auth-Einstellungen und
+2. Benötigte Erweiterungen aktivieren. Projektweite Auth-Settings und
    Function-Secrets sind kein Bestandteil des SQL-Dumps und werden getrennt
    anhand ihrer Namen geprüft.
 3. Die Ziel-URL verdeckt eingeben und den Restore in einer Transaktion starten:
@@ -290,7 +290,7 @@ eine Limitzeile löschen, denn fehlende Grenzen sperren den Endpunkt.
    erhalten bleiben.
 4. Cloudflare-App-Hülle und lokale Exporte getrennt prüfen. Ein grüner
    Pages-Smoke beweist nicht, dass Auth, RLS oder Sync gesund sind.
-5. Nach Erholung Sitzung erneuern lassen, **Ausstehende senden** wählen,
+5. Nach Erholung Sitzung erneuern lassen, **Ausstehende Änderungen erneut senden** wählen,
    Sync-Konflikte prüfen und ein Gesamt-Backup erzeugen.
 6. Auf einem zweiten Gerät vergleichen. Bei Abweichung beide Stände sichern,
    keinen automatischen Merge erzwingen.

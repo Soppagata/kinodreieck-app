@@ -124,7 +124,7 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
   jsonEintrag({
     key: K.einstellungen,
     backupField: "einstellungen",
-    label: "Einstellungen",
+    label: "Settings",
     pruefe: istObjekt,
   }),
   jsonEintrag({

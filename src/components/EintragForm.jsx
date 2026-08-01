@@ -24,6 +24,7 @@ export function FilmForm({
   startOffen = false,
   onDone,
   autorName,
+  kennungenBearbeitbar = true,
 }) { // KD-030: optionaler autorName
   const [open, setOpen] = useState(startOffen);
   const leer = {
@@ -76,10 +77,10 @@ export function FilmForm({
       tmdb: f.tmdbId ? normalisiereFilmkennung("tmdb", f.tmdbId) : null,
       wikidata: f.wikidataId ? normalisiereFilmkennung("wikidata", f.wikidataId) : null,
     };
-    if ((f.imdbId && !externeKennungen.imdb)
+    if (kennungenBearbeitbar && ((f.imdbId && !externeKennungen.imdb)
         || (f.tmdbId && !externeKennungen.tmdb)
-        || (f.wikidataId && !externeKennungen.wikidata)) {
-      setFehler("Die Filmkennung ist nicht gültig. Beispiele: tt0078748, 348 oder Q24962.");
+        || (f.wikidataId && !externeKennungen.wikidata))) {
+      setFehler("Eine optionale Film-ID hat nicht das erwartete Format. Leere das betreffende Feld oder prüfe die ID bei IMDb, TMDB beziehungsweise Wikidata.");
       return;
     }
     setFehler("");
@@ -192,7 +193,7 @@ export function FilmForm({
       </div>
 
       {/* Unbewertet-Schalter: Besitz jetzt erfassen, Dreieck später vergeben. */}
-      {bewertbar && (
+      {bewertbar && kennungenBearbeitbar && (
         <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
           <input type="checkbox" checked={ohneBewertung} onChange={() => setOhneBewertung(!ohneBewertung)} />
           Ohne Bewertung speichern (Eintrag bleibt „unbewertet“ — Dreieck kommt später)

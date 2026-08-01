@@ -910,7 +910,7 @@ check("W6", "Karte 3 nennt ausdrücklich, dass ohne KI alles funktioniert",
   () => /Ohne KI funktioniert alles/.test(dialogText())
     && /vollständig und kostenlos auf deinem Gerät/.test(dialogText()));
 check("W6", "Karte 3 sagt zu, dass jede Funktion einzeln schaltbar bleibt",
-  () => /in den Einstellungen an- und abschalten/.test(dialogText()));
+  () => /in den Settings an- und abschalten/.test(dialogText()));
 check("W6", "Karte 3 hat die vier Knöpfe: Mit KI, Ohne KI, Zurück, Los geht's",
   () => knoepfe().map((b) => b.textContent.trim()).join("|") === "Mit KI|Ohne KI|Zurück|Los geht's");
 check("W6", "der Fokus-Eintritt greift auch auf Karte 3 — er landet auf „Mit KI“",
@@ -955,7 +955,7 @@ check("W6", "die Wahl ist über aria-pressed ablesbar",
   () => knopf("Ohne KI").getAttribute("aria-pressed") === "true"
     && knopf("Mit KI").getAttribute("aria-pressed") === "false");
 check("W6", "„Ohne KI“ bekommt eine Bestätigung, die auf die Einstellungen zeigt",
-  () => /jederzeit in den Einstellungen einschalten/.test(dialogText()));
+  () => /jederzeit in den Settings einschalten/.test(dialogText()));
 /* ---- Zusage 2: NICHTS ist geschrieben, bevor „Los geht's" geklickt wurde. */
 check("W6", "das ANTIPPEN der Wahl schreibt noch nichts in den KI-Topf"
   + "  [gemessen: " + JSON.stringify(kiTopf().roh) + "]",

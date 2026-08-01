@@ -54,6 +54,7 @@ import {
   baueKinoMatches,
   reicheFinderMasterAn,
   sichtbarerNachtrag,
+  planeFilmLoeschung,
 } from "./controllers/libraryController.js";
 import { useEggController } from "./controllers/useEggController.js";
 import { ensureIds, slugId } from "./lib/match.js";
@@ -89,6 +90,8 @@ import { HilfeSheet } from "./components/HilfeSheet.jsx";
 import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
+import { BereichsHero } from "./components/BereichsHero.jsx";
+import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 
 export default function App() {
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
@@ -404,7 +407,7 @@ export default function App() {
         setErr(r.anmeldungNoetig
           ? "Kinoprogramm aus dem letzten Browser-Stand — für das aktuelle Programm ist eine Anmeldung nötig."
           : r.code === ERROR_CODES.INVALID_KEY
-            ? "Kinoprogramm aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Einstellungen → Datenmodus & Verbindung)."
+            ? "Kinoprogramm aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung)."
             : "Kinoprogramm aus dem letzten Browser-Stand geladen (Datenbank derzeit nicht erreichbar).");
       } else if (r.abgelaufen) {
         setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
@@ -444,11 +447,11 @@ export default function App() {
       const code = e?.code || null;
       const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
       const text = anmeldungNoetig
-        ? "Für das aktuelle Kinoprogramm ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
+        ? "Für das aktuelle Kinoprogramm ist eine Anmeldung nötig — melde dich unter Settings → Konto an."
         : code === ERROR_CODES.NO_DEMO_DATA
           ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du das laufende Kinoprogramm."
           : code === ERROR_CODES.INVALID_KEY
-            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
+            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
             : (manuell ? "Programmdaten nicht aktualisierbar: " : "Kinoprogramm nicht ladbar: ") + errorText(e);
       setErr(text);
       /* Dieser Zweig räumt `programm`, `programmArt` und `progStand` NICHT weg —
@@ -1132,6 +1135,36 @@ export default function App() {
     persistMaster(next, masterMeta, h);
   }, [master, persistMaster, masterMeta, naechsteHerkunft]);
 
+  const deleteFilm = useCallback(async (id) => {
+    const aktuell = masterRef.current || [];
+    const film = aktuell.find((eintrag) => eintrag.id === id);
+    if (!film) return false;
+    const plan = planeFilmLoeschung(aktuell, artikelListeRef.current, mustwatch, id);
+    const teile = [];
+    if (plan.folgen.artikelRefs) teile.push(`${plan.folgen.artikelRefs} Blog-Verweis${plan.folgen.artikelRefs === 1 ? " wird" : "e werden"} wieder zum Rotlink`);
+    if (plan.folgen.mustwatchRefs) teile.push(`${plan.folgen.mustwatchRefs} Must-Watch-Verknüpfung${plan.folgen.mustwatchRefs === 1 ? " wird" : "en werden"} gelöst`);
+    const folgeText = teile.length ? `\n\n${teile.join("; ")}.` : "";
+    if (!window.confirm(`„${film.titel}“ wirklich aus der Mediathek löschen?${folgeText}`)) return false;
+
+    const herkunft = naechsteHerkunft();
+    /* Laufende KI-Antworten sehen den Film ab jetzt nicht mehr und können ihn
+       nicht nach der Bestätigung wieder in die Liste schreiben. */
+    masterRef.current = plan.master;
+    if (!await persistMaster(plan.master, masterMeta, herkunft)) {
+      masterRef.current = aktuell;
+      return false;
+    }
+    setMasterHerkunft(herkunft);
+    setMaster(plan.master);
+    if (plan.folgen.artikelRefs) schreibeArtikel(plan.artikel);
+    if (plan.folgen.mustwatchRefs) {
+      setMustwatch(plan.mustwatch);
+      persistMustwatch(plan.mustwatch);
+    }
+    setExpandedId(null);
+    return true;
+  }, [masterMeta, mustwatch, naechsteHerkunft, persistMaster, persistMustwatch, schreibeArtikel]);
+
   const uebernehmeQuellenKlaerung = useCallback((map) => {
     const next = (master || []).map((f) => (
       map[f.id] !== undefined
@@ -1208,7 +1241,7 @@ export default function App() {
        leeren — der nächste Abgleich holte ihn aber sofort aus dem Konto zurück.
        Statt dieses verwirrende Hin und Her: sauber sperren und erklären. */
     if (session.mode === "account") {
-      setErr("Startart wechseln geht nur ohne Konto. Melde dich unter Einstellungen → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
+      setErr("Startart wechseln geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
       setStartModalOffen(false);
       return;
     }
@@ -1249,7 +1282,7 @@ export default function App() {
     /* Wie beim Startart-Wechsel: lokales Entfernen käme beim nächsten Abgleich
        aus dem Konto zurück. Erst abmelden, dann aufräumen. */
     if (session.mode === "account") {
-      setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Einstellungen → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
+      setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
       return;
     }
     let seed = {};
@@ -1367,6 +1400,12 @@ export default function App() {
      montiert; FinderTab wird beim Tab-Wechsel ab-/wieder-montiert). */
   const [finderVerlauf, setFinderVerlauf] = useState([]);
   const [finderEingabe, setFinderEingabe] = useState("");
+  const [finderSuchauftrag, setFinderSuchauftrag] = useState(null);
+  const starteGlobaleSuche = useCallback(({ text, scope }) => {
+    setFinderEingabe(text);
+    setFinderSuchauftrag({ id: Date.now() + ":" + Math.random(), text, scope });
+    navigiere("finder");
+  }, [navigiere]);
   /* KD-031: `vollKatalog` trennt das leichte Boot-Nachladen vom teuren
      Entdecken-Katalog. Ohne Flag (Boot/Badges): nur die leichte streaming_bekannt
      + der schon gebündelte Top-500-Snapshot als Ersatz fürs Dashboard. Mit Flag
@@ -1393,7 +1432,7 @@ export default function App() {
         ausCache, anmeldungNoetig: !!r.anmeldungNoetig, fehler: null,
         code: ausCache ? (r.code || null) : null,
       });
-      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) setErr("Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Einstellungen → Datenmodus & Verbindung).");
+      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) setErr("Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung).");
       else if (ausCache && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
       else if (r.abgelaufen) setErr("Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
     };
@@ -1401,11 +1440,11 @@ export default function App() {
       const code = e?.code || null;
       const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
       const text = anmeldungNoetig
-        ? "Für den aktuellen Streamingkatalog ist eine Anmeldung nötig — melde dich unter Einstellungen → Konto an."
+        ? "Für den aktuellen Streamingkatalog ist eine Anmeldung nötig — melde dich unter Settings → Konto an."
         : code === ERROR_CODES.NO_DEMO_DATA
           ? "Für den öffentlichen Zugang sind noch keine Beispieldaten veröffentlicht. Mit einer Anmeldung siehst du den laufenden Streamingkatalog."
           : code === ERROR_CODES.INVALID_KEY
-            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Einstellungen → Datenmodus & Verbindung."
+            ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
             : (entdeckenTeil ? "Entdecken-Katalog" : "Streamingkatalog") + " nicht ladbar: " + errorText(e);
       setErr(text);
       setStreamingInfo((vorher) => (vorher && vorher.art
@@ -1714,6 +1753,7 @@ export default function App() {
       </nav>
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "20px 22px 0" }}>
+        {tab !== "start" && <BereichsHero bereich={tab} />}
         {(ungesichertMaster || ungesichertArtikel) && (
           <aside className="kd-backup-hinweis kd-nur-desktop" role="status">
             <span><strong>Noch nicht gesichert.</strong> Browser-Speicher ist kein Backup.</span>
@@ -1777,7 +1817,7 @@ export default function App() {
             filmwissenRechercheLaufId={filmwissenRechercheLaufId}
             onFilmwissenLaden={ladeFilmwissen}
             onFilmwissenRecherchieren={recherchiereFilmwissen}
-            loading={loading} ladeProgrammDatei={ladeProgrammDatei}
+            loading={loading}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             datenGesperrt={!snapshotFreigabe}
             programmInfo={programmInfo} angemeldet={session.mode === "account"}
@@ -1789,7 +1829,7 @@ export default function App() {
           <MediathekTab
             master={master || []} nachtragFlach={master ? nachtragSichtbar : []}
             expandedId={expandedId} setExpandedId={setExpandedId}
-            updateFilm={updateFilm} addFilm={addFilm} badgeFuer={badgeFuer}
+            updateFilm={updateFilm} deleteFilm={deleteFilm} addFilm={addFilm} badgeFuer={badgeFuer}
             addFilmMitPrognose={addFilmMitPrognose}
             vorbewertungAktiv={vorbewertungAktiv}
             prognoseSperrgrund={vorbewertungSperrgrund}
@@ -1852,10 +1892,10 @@ export default function App() {
           />
         )}
 
-        {tab === "finder" && master && (
+        {tab === "finder" && (
           <FinderTab
             vokabular={vokabular} saveVokabular={saveVokabular}
-            master={finderMaster} kinoMatches={kinoMatches}
+            master={finderMaster || []} kinoMatches={kinoMatches}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl}
@@ -1865,6 +1905,11 @@ export default function App() {
             prognoseSperrgrund={vorbewertungSperrgrund}
             verlauf={finderVerlauf} setVerlauf={setFinderVerlauf}
             eingabe={finderEingabe} setEingabe={setFinderEingabe}
+            suchauftrag={finderSuchauftrag}
+            onSuchauftragVerbraucht={() => setFinderSuchauftrag(null)}
+            scopeArtikel={artikelListe}
+            onArtikelKlick={springeZuArtikel}
+            onNavigiere={navigiere}
           />
         )}
 
@@ -1906,6 +1951,7 @@ export default function App() {
       </main>
       <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
         onNavigate={navigiere} />
+      <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche} />
       </div>{/* .kd-app */}
       {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">

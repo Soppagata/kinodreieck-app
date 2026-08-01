@@ -120,7 +120,7 @@ check("Demo- und Clean-Einstieg geben keinen fresh-Resetauftrag aus",
   && !/[?&]fresh=/.test(downloadSeite));
 check("Distributionsseite erklärt Konto- und Live-KI-Grenze ehrlich",
   /eingeladenes Konto schaltet[\s\S]*?Live-KI frei/.test(downloadSeite)
-  && /Einstellungen → Konto &amp; Geräte-Sync/.test(downloadSeite)
+  && /Settings → Konto &amp; Geräte-Sync/.test(downloadSeite)
   && /unabhängig davon, ob du mit Demo oder leer startest/.test(downloadSeite)
   && !/registrier|konto erstellen|kostenlos anmelden/i.test(downloadSeite));
 check("PWA-Installation nutzt Manifest und ein externes, CSP-taugliches Skript",

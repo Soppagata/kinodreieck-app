@@ -22,6 +22,7 @@ const echteMaster = JSON.parse(readFileSync(new URL("./src/data/masterliste.json
 const snap = JSON.parse(readFileSync(new URL("./src/data/programm-snapshot.json", import.meta.url), "utf8"));
 const bekanntSnapshot = JSON.parse(readFileSync(new URL("./src/data/streaming_bekannt_snapshot.json", import.meta.url), "utf8"));
 const entdeckenSnapshot = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecken_snapshot.json", import.meta.url), "utf8"));
+const streamingTabQuelle = readFileSync(new URL("./src/tabs/StreamingTab.jsx", import.meta.url), "utf8");
 const VON = (snap.zeitraum && snap.zeitraum.von) || new Date().toISOString().slice(0, 10);
 // 4-Tage-Anzeigefenster der App (ANZEIGE_TAGE=4) ab VON — der Film muss darin eine Vorstellung haben.
 const FENSTER = [0, 1, 2, 3].map((i) => { const d = new Date(VON + "T12:00:00"); d.setDate(d.getDate() + i); return d.toISOString().slice(0, 10); });
@@ -157,7 +158,7 @@ for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG", "SUCHE"]) 
 /* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */
 const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(MATCH_TITEL).toLowerCase());
 check("Dashboard: Vertrauens-Zeile (Programm- + Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(startText) && /Katalog: \d+ Titel/.test(startText));
-check("Dashboard: Kino-für-dich-Modul mit Match + Termin", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && /MATCH/.test(startText));
+check("Dashboard: Kino-für-dich-Modul ohne künstlichen Match-Wert", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && !/MATCH/.test(startText));
 check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
 check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /▶ NETFLIX/.test(startText));
 check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
@@ -234,15 +235,24 @@ if (entdeckenKnopf) {
   check("Gesehen-Knopf pro Titel", !!gesehenKnopf);
   if (gesehenKnopf) {
     gesehenKnopf.click(); await warte(400);
-    check("Erledigte-Chip erscheint nach Markieren", /Erledigte zeigen \(1\)/.test(text()));
+    const nurGesehen = knopf(/^Nur als gesehen markieren$/i);
+    const sofortErledigt = /Erledigte ausblenden \(1\)/.test(text());
+    check("Gesehen fragt nach Übernahme oder erkennt den vorhandenen Mediathek-Eintrag",
+      (!!nurGesehen && !!knopf(/^Ja, in die Mediathek$/i)) || sofortErledigt);
+    if (nurGesehen) { nurGesehen.click(); await warte(400); }
+    check("Erledigte sind nativ sichtbar und lassen sich ausblenden", /Erledigte ausblenden \(1\)/.test(text()));
   }
+  check("Entdecken enthält den expliziten Übernahmeweg in die Mediathek",
+    streamingTabQuelle.includes("Ja, in die Mediathek")
+    && streamingTabQuelle.includes("Nur als gesehen markieren")
+    && streamingTabQuelle.includes("uebernehmeGesehen"));
   /* Der kompakte Snapshot kann nur einen passenden Titel enthalten; nach dem
      Markieren darf die Liste daher auch ehrlich leer sein. */
 }
 
 /* ---- Einstellungen: Darstellung, Theme-Wechsel, Vokabular, Backup, Rechtliches ---- */
-const datenTab = knopf(/^einstellungen$/i);
-check("Tab heißt Einstellungen", !!datenTab);
+const datenTab = knopf(/^settings$/i);
+check("Tab heißt Settings", !!datenTab);
 if (datenTab) { datenTab.click(); await warte(600); }
 check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()));
 /* Easter-Egg-Modi: versteckt unter dem „Max"-Link in Über & Rechtliches */
@@ -320,7 +330,7 @@ if (mFilter && /▸/.test(mFilter.textContent)) { mFilter.click(); await warte(3
 check("Mediathek klickbar + Apple-Besitz sichtbar", /apple/i.test(text()));
 
 /* ---- Block A: Notiz-Feld editierbar (Karte aufklappen -> Bearbeiten) ---- */
-const karte = [...doc.querySelectorAll("div")].find((d) => d.style && d.style.cursor === "pointer" && /SCORE/.test(d.textContent || ""));
+const karte = doc.querySelector(".kd-karte");
 if (karte) {
   karte.click(); await warte(400);
   const bearb = knopf(/Bewertung bearbeiten|Beschreibung bearbeiten/);

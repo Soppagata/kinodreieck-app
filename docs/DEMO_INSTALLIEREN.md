@@ -45,7 +45,7 @@ Verbindung.
 Doppelklick öffnen. Dafür sind weder Installation noch Webserver nötig. Die
 Datei enthält eine echte lokale Demo-Basis für Mediathek und Kernfunktionen;
 persönliche Änderungen bleiben im Browserprofil des Geräts und können über
-„Einstellungen → Gesamt-Backup“ exportiert werden.
+„Settings → Gesamt-Backup“ exportiert werden.
 
 Für automatische App-Updates ist die PWA die passendere Form. Für ein
 transportables, archiviertes Datenpaket ist die Einzeldatei gedacht.

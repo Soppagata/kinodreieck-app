@@ -259,7 +259,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-inline-meldung { color:#bdb7c5; font-size:12px; line-height:1.45; }
 .kd-installkarte-kompakt { margin:14px 0 0; padding:14px; }.kd-installkarte-kompakt h2 { font-size:20px; }
 
-.kd-menuknopf { display:none; }
+.kd-navband { display:none; }
 .kd-sheet-layer,.kd-help-layer { position:fixed; inset:0; z-index:13000; display:flex; align-items:flex-end; justify-content:center; }
 .kd-sheet-scrim { position:absolute; inset:0; width:100%; height:100%; min-height:0; padding:0; border:0; border-radius:0;
   background:rgba(0,0,0,.58); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
@@ -301,7 +301,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main { padding:16px max(20px,env(safe-area-inset-right)) 0 max(20px,env(safe-area-inset-left)) !important; overflow-wrap:anywhere; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
-  .kd-schrift-gross .kd-app main { font-size:1.1em; }.kd-schrift-klein .kd-app main { font-size:.94em; }
+  /* Viele Komponenten verwenden bewusst feste Pixelgrößen. Darum skaliert die
+     mobile Schriftwahl den Inhaltsbereich selbst und kompensiert seine Breite;
+     ein bloß geerbtes font-size wäre dort praktisch unsichtbar. */
+  .kd-schrift-gross .kd-app main { zoom:1.1; width:90.909% !important; max-width:90.909% !important; }
+  .kd-schrift-klein .kd-app main { zoom:.92; width:108.696% !important; max-width:108.696% !important; }
   .kd-help-grid,.kd-entry-choicegrid { grid-template-columns:1fr; }
   .kd-entry-panel { padding:20px 17px; }.kd-entry-choicegrid { gap:9px; }.kd-choice { min-height:88px !important; }
   .kd-start-service { justify-content:stretch; }.kd-start-service button,.kd-start-service a { flex:1 1 100%; justify-content:center; text-align:center; }
@@ -309,31 +313,54 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-table-scroll { width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; }
 }
 
-/* Schwebendes Mobile-Menü: schlichte, gut treffbare Schaltflächen statt Banner oder Seitenlasche. */
+/* Ursprüngliches Mobile-Menü: goldener Seitengriff und peppiger Popup-Stapel.
+   Portal, Fokusfalle und iOS-Scrollsperre bleiben aus dem neuen Unterbau. */
 .kd-mobile-menu-layer { position:fixed; inset:0; z-index:13000; }
-.kd-mobile-menu { position:absolute; left:50%; bottom:calc(88px + env(safe-area-inset-bottom)); transform:translateX(-50%);
-  width:min(360px,calc(100vw - 32px)); max-height:calc(100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:12px; border:1px solid #49444f; border-radius:14px;
-  background:#242127; color:#ece8df; box-shadow:0 14px 42px rgba(0,0,0,.58); }
-.kd-mobile-menu-kopf { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:1px 2px 10px; }
-.kd-mobile-menu-kopf h2 { margin:0; font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.025em; }
-.kd-mobile-menu-schliessen { flex:0 0 36px; width:36px; min-height:36px !important; padding:0; border:0; border-radius:8px;
-  background:transparent; color:#bdb7c5; font:400 25px/1 'Space Grotesk',sans-serif; }
-.kd-mobile-menu-liste { display:grid; gap:6px; }
-.kd-mobile-menu-liste button { position:relative; width:100%; min-width:0; min-height:46px; display:flex; align-items:center; gap:10px;
-  box-sizing:border-box; padding:9px 12px; border:1px solid #49444f; border-radius:9px; background:#1a181c; color:#ece8df; text-align:left; }
-.kd-mobile-menu-icon { flex:0 0 24px; color:#e3a63b; font:700 18px 'Barlow Condensed',sans-serif; text-align:center; }
-.kd-mobile-menu-liste button>strong { min-width:0; font:600 14px/1.2 'Space Grotesk',sans-serif; overflow-wrap:anywhere; }
-.kd-mobile-menu-liste button.aktiv { border-color:#e3a63b; background:rgba(227,166,59,.11); }
+.kd-mobile-menu-layer .kd-sheet-scrim { background:rgba(0,0,0,.35); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+.kd-mobile-menu { position:absolute; right:max(10px,env(safe-area-inset-right)); bottom:calc(14px + env(safe-area-inset-bottom));
+  width:min(76vw,260px); max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:10px; border:1px solid rgba(255,255,255,.12);
+  border-radius:14px; background:#211e26; color:#ece8df; box-shadow:0 12px 40px rgba(0,0,0,.55);
+  transform-origin:100% 100%; animation:kd-mobile-menu-ein .22s cubic-bezier(.2,.8,.2,1); }
+@keyframes kd-mobile-menu-ein { from { opacity:0; transform:translateY(14px) scale(.98); } to { opacity:1; transform:none; } }
+.kd-mobile-menu-liste { display:flex; flex-direction:column-reverse; gap:4px; }
+.kd-mobile-menu-liste button { width:100%; min-width:0; min-height:44px; box-sizing:border-box; padding:12px 16px;
+  border:0; border-radius:8px; background:transparent; color:#bdb7c5; text-align:left;
+  font:600 19px/1.05 'Barlow Condensed',sans-serif; letter-spacing:.08em; text-transform:uppercase; }
+.kd-mobile-menu-liste button:hover,.kd-mobile-menu-liste button:focus-visible { background:rgba(227,166,59,.12); color:#ece8df; }
+.kd-mobile-menu-liste button.aktiv { background:#ece8df; color:#1c1a1e; }
+.kd-mobile-menu-liste button:nth-child(1) { order:4; }
+.kd-mobile-menu-liste button:nth-child(2) { order:3; }
+.kd-mobile-menu-liste button:nth-child(3) { order:5; }
+.kd-mobile-menu-liste button:nth-child(4) { order:1; }
+.kd-mobile-menu-liste button:nth-child(5) { order:2; }
+.kd-mobile-menu-liste button:nth-child(6) { order:6; }
+.kd-mobile-menu-liste button:nth-child(7) { order:7; }
+.kd-globalsuche { display:none; }
 
 @media (max-width:760px) {
-  .kd-menuknopf { position:fixed; display:flex; align-items:center; justify-content:center; right:max(12px,env(safe-area-inset-right));
-    bottom:calc(12px + env(safe-area-inset-bottom)); z-index:13010; width:50px; height:50px; min-height:50px; padding:0;
-    border:1.5px solid #ece8df; border-radius:50%; background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e);
-    box-shadow:0 4px 14px rgba(0,0,0,.48); }
-  .kd-menulinien { width:22px; display:grid; gap:4px; transition:transform .18s ease; }
-  .kd-menulinien i { display:block; width:22px; height:2.5px; border-radius:3px; background:currentColor; transition:transform .18s ease,opacity .18s ease; }
-  .kd-menuknopf.offen .kd-menulinien { transform:rotate(90deg); }.kd-menuknopf.offen .kd-menulinien i:nth-child(2) { width:17px; }
+  .kd-navband { position:fixed; top:50%; left:0; z-index:13010; width:25px; height:78px; min-height:78px; padding:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; transform:translateY(-50%);
+    margin-left:env(safe-area-inset-left); border:0; border-radius:0 10px 10px 0; background:var(--wolfram,#e3a63b);
+    color:#141414; box-shadow:2px 0 12px rgba(0,0,0,.4); transition:width .18s ease,filter .18s ease; }
+  .kd-navband.offen { width:30px; filter:brightness(1.08); }
+  .kd-navband i { display:block; width:9px; height:2px; border-radius:1px; background:rgba(20,20,20,.58); }
+  .kd-app main { padding-bottom:calc(94px + env(safe-area-inset-bottom)) !important; }
+  .kd-bereichshero { padding-top:8px; margin-bottom:13px; }
+  .kd-bereichshero h1 { font-size:clamp(34px,11vw,42px); }
+  .kd-seitensuche,.kd-seitenfilter,.kd-finder-eingabe,
+  .kd-kompakt .kd-lokalsuche,.kd-kompakt .kd-lokalsuche-loeschen { display:none !important; }
+  .kd-globalsuche { position:fixed; left:max(10px,env(safe-area-inset-left)); right:max(10px,env(safe-area-inset-right));
+    bottom:calc(9px + env(safe-area-inset-bottom)); z-index:1260; display:flex; gap:6px; align-items:stretch;
+    min-width:0; box-sizing:border-box; padding:7px; border:1px solid rgba(227,166,59,.55); border-radius:17px;
+    background:rgba(28,26,30,.94); box-shadow:0 9px 30px rgba(0,0,0,.62); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
+  .kd-globalsuche select,.kd-globalsuche input,.kd-globalsuche button { min-height:44px; box-sizing:border-box; border-radius:11px; }
+  .kd-globalsuche select { width:74px; min-width:58px; padding:0 6px; border:1px solid #514b58; background:#211e26; color:#bdb7c5; font:600 13px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche input { flex:1 1 90px; min-width:0; width:100%; padding:0 11px; border:1px solid #6f6878; background:#17151a; color:#ece8df; font:16px 'Space Grotesk',sans-serif; }
+  .kd-globalsuche input:focus { outline:2px solid #e3a63b; outline-offset:-1px; }
+  .kd-globalsuche button { flex:0 0 auto; padding:0 10px; border:1px solid #6f6878; background:#211e26; color:#ece8df; font:600 14px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche .kd-globalsuche-los { width:44px; padding:0; border-color:#e3a63b; background:#e3a63b; color:#1c1a1e; font-size:23px; }
+  .kd-globalsuche .kd-globalsuche-filter { padding-inline:8px; }
 }
 
 /* ================= ETAPPE 2: MOBILE-BAUSTEINE =================
@@ -345,6 +372,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .kd-film-editor-shell { margin-left: 74px; margin-right: 48px; }
 .kd-editpanel, .kd-beschreibung-editor { width: 100%; min-width: 0; box-sizing: border-box; }
+.kd-entdecken-kopf { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; align-items:start; min-width:0; }
+.kd-entdecken-aktionen { display:flex; gap:4px; align-items:center; }
+.kd-entdecken-inhalt,.kd-entdecken-titel { min-width:0; }
+.kd-entdecken-meta { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-top:6px; min-width:0; }
+.kd-entdecken-meta>span:first-child { min-width:0; }
+.kd-entdecken-relevanz { flex:0 0 auto; align-self:flex-end; text-align:right; }
+.kd-entdecken-frage { margin:10px 0 2px 40px; padding:10px; border:1px solid var(--wolfram,#e3a63b); border-radius:6px; color:var(--leinwand,#ece8df); font-size:13px; }
+.kd-entdecken-frage>div { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
+.kd-entdecken-signale { margin-top:7px; padding:7px 9px; border-left:3px solid var(--wolfram,#e3a63b); line-height:1.5; }
 @media (max-width: 760px) {
   .kd-chiprow, .kd-seg {
     flex-wrap: wrap; overflow: visible; scroll-snap-type: none;
@@ -389,6 +425,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-edit-aktionen { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .kd-edit-aktionen button { width:100%; min-width:0; padding:7px 8px !important; }
   .kd-edit-hinweis { line-height:1.5; overflow-wrap:anywhere; }
+
+  .kd-entdecken-meta { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; }
+  .kd-entdecken-meta>span:first-child { grid-column:1; justify-self:start; }
+  .kd-entdecken-relevanz { grid-column:2; justify-self:end; }
+  .kd-entdecken-frage { margin-left:0; }
+  .kd-entdecken-frage button { flex:1 1 100%; }
 
   /* Bestätigte Geschmacksangaben werden zu ruhigen, dreizeiligen Einträgen:
      Aussage, nachvollziehbare Herkunft, dann die beiden Aktionen. */
@@ -703,6 +745,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   text-transform: uppercase; color: var(--kd-rauch); }
 .kd-dash-headline { font-family: 'Fraunces', Georgia, serif; font-weight: 900; font-size: 40px;
   line-height: .96; letter-spacing: -.01em; color: var(--kd-leinwand); margin: 3px 0 10px; }
+
+/* Einheitlicher Orientierungskopf für alle Fachbereiche. */
+.kd-bereichshero { padding:14px 2px 18px; margin-bottom:16px; border-bottom:1px dashed var(--rauch,#6f6878); }
+.kd-bereichshero-kicker { color:var(--rauch,#948fa0); font:400 11px 'Space Mono',monospace; letter-spacing:.16em; text-transform:uppercase; }
+.kd-bereichshero h1 { margin:3px 0 5px; color:var(--leinwand,#ece8df); font:900 40px/.96 'Fraunces',Georgia,serif; letter-spacing:-.01em; }
+.kd-bereichshero p { max-width:620px; margin:0; color:var(--rauch,#bdb7c5); font-size:13px; line-height:1.5; }
+.kd-apphilfe-antwort { padding:14px 16px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:5px; background:var(--saalHoch,#211e26); }
+.kd-apphilfe-antwort strong { color:var(--leinwand,#ece8df); font:700 20px 'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.04em; }
+.kd-apphilfe-antwort p { margin:5px 0 10px; color:var(--leinwandTief,#d2ccd8); line-height:1.5; }
 
 /* Vertrauens-Zeile (Sync-Ort; .kd-vertrauen ist Test-Kanarie personalmodus_test B/G) */
 .kd-vertrauen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;

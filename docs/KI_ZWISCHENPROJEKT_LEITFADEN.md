@@ -171,7 +171,7 @@ Beispiele:
 - Geschmacks- und Stilprofil,
 - KI-Prognosen und deren Annahme oder Ablehnung,
 - persönliche Empfehlungen,
-- individuelle Nutzungslimits und KI-Einstellungen.
+- individuelle Nutzungslimits und KI-Settings.
 
 Der Server leitet den Account aus der gültigen Sitzung ab. Eine vom Client frei
 mitgeschickte Account-ID darf nicht als Zugriffsberechtigung genügen.

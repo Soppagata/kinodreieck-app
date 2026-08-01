@@ -27,7 +27,7 @@ Kinodreieck verbindet sieben Bereiche:
    Mediathek, Kino und Streaming.
 6. **Blog** – eigene Artikel mit Verweisen auf Mediathek-Einträge sowie ein
    gemeinsamer öffentlicher Blogbereich.
-7. **Einstellungen** – Darstellung, Konto, KI, Profil, Import, Export, Backup,
+7. **Settings** – Darstellung, Konto, KI, Profil, Import, Export, Backup,
    Katalog und Wartung.
 
 Die App ist kein automatisches Empfehlungsnetzwerk. Sie verbindet den eigenen
@@ -43,7 +43,7 @@ kontogebunden zwischen Geräten abgeglichen werden.
 
 **Wirkung:**
 
-- Mediathek, Blog, Listen, Profil und Einstellungen werden lokal im
+- Mediathek, Blog, Listen, Profil und Settings werden lokal im
   Browserprofil gespeichert.
 - Die Kernfunktionen funktionieren ohne Konto und ohne KI.
 - Eine bestehende lokale Datenbasis bleibt auch offline verwendbar.
@@ -52,7 +52,7 @@ kontogebunden zwischen Geräten abgeglichen werden.
 
 ### 2.2 Kontobetrieb
 
-**Auslösen:** `Einstellungen → Konto & Geräte-Sync → Anmelden`.
+**Auslösen:** `Settings → Konto & Geräte-Sync → Anmelden`.
 
 **Wirkung:**
 
@@ -125,7 +125,7 @@ Kino und Streaming ohne eigene Daten ausprobieren.
 
 ### 3.3 Demo-Daten entfernen
 
-**Auslösen:** `Einstellungen → Datenmodus & Verbindung → Demo-Daten entfernen`.
+**Auslösen:** `Settings → Datenmodus & Verbindung → Demo-Daten entfernen`.
 
 **Wirkung:** Es werden nur die beim Demo-Start protokollierten persönlichen
 Beispiele entfernt. Eigene spätere Einträge sowie der gemeinsame Kino- und
@@ -135,7 +135,7 @@ verfügbar.
 ### 3.4 Startmodus wechseln
 
 **Auslösen:** Bei leerem lokalen Bestand unter
-`Einstellungen → Datenmodus & Verbindung → Startmodus wählen`.
+`Settings → Datenmodus & Verbindung → Startmodus wählen`.
 
 **Wirkung:** Wechselt zwischen leerer und Demo-Basis. Liegen bereits
 persönliche Daten vor, warnt die App vor deren Verwerfen. Vorher sollte ein
@@ -145,7 +145,7 @@ Gesamt-Backup erstellt werden. Im Kontobetrieb ist der Wechsel gesperrt.
 
 **Auslösen:** Beim ersten Start automatisch. Die dauerhafte Bereichsanleitung
 bleibt später über
-`Einstellungen → Über & Rechtliches → Über Kinodreieck & Anleitung`
+`Settings → Über & Rechtliches → Über Kinodreieck & Anleitung`
 erreichbar.
 
 **Wirkung:**
@@ -167,7 +167,7 @@ keinem sichtbaren Knopf verbunden.
 **Desktop:** Die sieben Bereiche stehen in der oberen Navigationsleiste.
 
 **Mobil:** Der schmale Griff öffnet das Menü. Unter
-`Einstellungen → Darstellung & Verhalten → Bedienhand` kann der Griff für
+`Settings → Darstellung & Verhalten → Bedienhand` kann der Griff für
 Links- oder Rechtshänder gespiegelt werden.
 
 Weitere allgemeine Regeln:
@@ -176,7 +176,7 @@ Weitere allgemeine Regeln:
 - Goldene oder farbige Chips zeigen aktive Filter beziehungsweise Zustände.
 - Ein erneuter Klick auf einen aktiven Chip hebt ihn meistens wieder auf.
 - Der Pfeil unten rechts springt bei langen Seiten zurück nach oben.
-- Ein roter Punkt bei `Einstellungen` meldet Änderungen, die seit dem letzten
+- Ein roter Punkt bei `Settings` meldet Änderungen, die seit dem letzten
   passenden Export noch nicht als Datei gesichert wurden.
 
 ## 5. Das Bewertungsdreieck
@@ -278,13 +278,13 @@ Der Bereich liest einen vorbereiteten Programmsnapshot aus dem gemeinsamen
 Katalog. Die App ruft film.at oder Nonstop nicht während der Bedienung live
 ab.
 
-### 7.1 Programm neu laden
+### 7.1 Programm laden
 
-**Auslösen:** `Kinoprogramm neu laden`.
-
-**Wirkung:** Holt den zuletzt erfolgreich bereitgestellten Datenbankstand.
-Dabei wird keine externe Kinoquelle neu ausgelesen. In der lokalen Einzeldatei
-ist der Knopf ausgeblendet.
+Der zuletzt erfolgreich bereitgestellte Datenbankstand wird beim Start
+automatisch geladen. Im Kino-Bereich gibt es dafür keinen eigenen Knopf und
+keinen externen Nonstop-Link. Der Notfallweg liegt unter
+`Settings → Erweitert → Katalog jetzt neu laden`; auch dort wird keine externe
+Kinoquelle live ausgelesen.
 
 ### 7.2 Programm durchsuchen
 
@@ -360,7 +360,7 @@ Originaltitel erhalten bleibt. Künftige Abgleiche sind dadurch eindeutig.
 
 Der Link `Nonstop-Seite` öffnet die externe Programmseite. Eine dort lokal
 gespeicherte HTML-Datei kann unter
-`Einstellungen → Erweitert → Programm manuell importieren` eingespielt werden.
+`Settings → Erweitert → Programm manuell importieren` eingespielt werden.
 
 ## 8. Streaming
 
@@ -547,12 +547,15 @@ die noch nicht in der Masterliste stehen.
 **Wirkung:** Legt einen vorbefüllten regulären Eintrag an. Nach der Aufnahme
 verschwindet der Titel automatisch aus dem Nachtrag.
 
-### 9.9 Derzeitige Löschgrenze
+### 9.9 Mediathek-Eintrag löschen
 
-Reguläre Mediathek-Einträge können derzeit über die Oberfläche bearbeitet,
-aber nicht einzeln gelöscht werden. Must-Watch-Einträge und Blogartikel besitzen
-bereits eine Löschfunktion. Für reguläre Einträge ist das ein offener
-Produktpunkt vor dem öffentlichen Start.
+**Auslösen:** Regulären Mediathek-Eintrag öffnen → `Eintrag löschen` →
+Sicherheitsfrage bestätigen.
+
+**Wirkung:** Entfernt den gewählten Eintrag aus der Masterliste. Verweise aus
+Blogartikeln und Must-Watch bleiben als Inhalte erhalten, werden aber von dem
+gelöschten Eintrag gelöst. Ein eventuell zugehöriger `Gesehen`-Status in
+Entdecken bleibt erhalten; nur seine Mediathek-Verknüpfung wird entfernt.
 
 ## 10. Suche
 
@@ -610,7 +613,7 @@ Entdecken-Ergebnisse werden nur bei einer entsprechenden Anfrage wie
 ### 10.5 Eigene Suchwörter
 
 **Auslösen:** Nach einer KI-Deutung einen angebotenen Wort-Chip `merken`
-anklicken oder manuell unter `Einstellungen → Suche-Vokabular` eintragen.
+anklicken oder manuell unter `Settings → Suche-Vokabular` eintragen.
 
 **Wirkung:** Verknüpft ein eigenes Wort mit Genres oder Tags. Künftige normale
 Suchen verstehen es ohne erneuten KI-Aufruf.
@@ -719,9 +722,9 @@ nicht ohne Weiteres als eigener Shared-Artikel neu veröffentlicht werden.
   eingelesene, validierte Datei.
 
 Für den Austausch ausgewählter Bereiche ist das Paketformat unter
-`Einstellungen → Masterliste` die sicherere Funktion.
+`Settings → Masterliste` die sicherere Funktion.
 
-## 12. Einstellungen
+## 12. Settings
 
 ### 12.1 Darstellung & Verhalten
 
@@ -768,7 +771,7 @@ ist.
 
 ### 12.4 Geschmacksprofil ohne KI
 
-**Auslösen:** `Einstellungen → Geschmacksprofil → Profil anlegen`.
+**Auslösen:** `Settings → Geschmacksprofil → Profil anlegen`.
 
 Der Ablauf besteht aus:
 
@@ -835,11 +838,12 @@ Vor einer Überschreibung muss der Benutzer eine Richtung wählen. Die Übernahm
 wird über Prüfsummen verifiziert; ein bloßer Vergleich von Stückzahlen genügt
 nicht. Ein Backup wird vorher angeboten.
 
-#### Jetzt abgleichen
+#### Automatischer Abgleich
 
-Holt den aktuellen Kontostand und verarbeitet ausstehende Änderungen. Der
-Status zeigt `synchron`, `ausstehend`, `nicht aktuell`, `zu groß` oder echte
-Konflikte.
+Änderungen werden lokal gespeichert und unmittelbar für das Konto übertragen.
+Der Status zeigt `synchron`, `ausstehend`, `nicht aktuell`, `zu groß` oder echte
+Konflikte. `Kontostand erneut laden` erscheint nur als Wiederherstellungsweg,
+wenn der lokale Stand nachweislich nicht aktuell ist.
 
 #### Konflikte
 
@@ -850,9 +854,10 @@ Bei gleichzeitigen Änderungen auf zwei Geräten wird pro Datenbereich gefragt:
 
 Es findet keine stille inhaltliche Zusammenführung zweier JSON-Stände statt.
 
-#### Ausstehende senden
+#### Ausstehende Änderungen erneut senden
 
-Versucht ausschließlich wartende lokale Schreibvorgänge erneut zu übertragen.
+Der Knopf erscheint nur, wenn tatsächlich wartende lokale Schreibvorgänge
+vorhanden sind, und versucht ausschließlich diese erneut zu übertragen.
 
 #### Abmelden
 
@@ -911,7 +916,7 @@ Shared Blogs, Masterlisten-Import/-Export und Gesamt-Backup.
   Konflikt nicht garantiert werden konnte.
 
 Enthalten sind unter anderem Masterliste, Artikel, Pins, Merkliste,
-Suchvokabular, Einstellungen, Entdecken-Status, Autorname,
+Suchvokabular, Settings, Entdecken-Status, Autorname,
 Streamingdienste, Must-Watch, Profil und persönliche Filterzustände.
 
 Nicht enthalten sind Passwort, Sitzungstoken, gemeinsamer Kino-/Streaming-
@@ -1052,10 +1057,13 @@ genau einen kostenpflichtigen KI-Aufruf ohne Websuche. Das Ergebnis enthält
 persönliche Passung, vorgeschlagene Achsen, Begründung, Kategorie,
 Sicherheit, verwendete Profilsignale, Modell, Profilversion und Kosten.
 
-`Annehmen` bestätigt den Status des KI-Vorschlags, macht daraus aber keine
-eigene echte Bewertung. `Echt bewerten / korrigieren` öffnet die reguläre
-Bewertung. `Verwerfen` verwirft den Vorschlag. `Prognose neu berechnen`
-erfordert eine Bestätigung und kann erneut Kosten erzeugen.
+`Nur Prognose bestätigen` bestätigt ausschließlich den Status des
+KI-Vorschlags. `Als Bewertung übernehmen` öffnet eine vorausgefüllte Vorschau;
+erst nach Prüfung aller Achsen, Wahl der Kategorie und ausdrücklichem Speichern
+entsteht eine echte Bewertung mit sichtbarer KI-Herkunft. `Echt bewerten /
+korrigieren` öffnet die reguläre Bewertung. `Verwerfen` verwirft den Vorschlag.
+`Prognose neu berechnen` erfordert eine Bestätigung und kann erneut Kosten
+erzeugen.
 
 ### 13.4 Belegtes Filmwissen
 
@@ -1090,7 +1098,7 @@ Persönlich sind insbesondere:
 - Pins und Merklisten,
 - Must-Watch,
 - Streamingdienste,
-- Einstellungen und Filterzustände,
+- Settings und Filterzustände,
 - Suchvokabular,
 - Geschmacksprofil.
 
@@ -1173,7 +1181,7 @@ mit Herkunftswarnung statt ihn als frisch auszugeben.
 
 ### Einen vollständigen Stand sichern
 
-1. `Einstellungen → Gesamt-Backup`.
+1. `Settings → Gesamt-Backup`.
 2. Syncstatus beziehungsweise mögliche Warnungen prüfen.
 3. `Gesamt-Backup herunterladen`.
 4. Datei außerhalb des Browserprofils sicher aufbewahren.

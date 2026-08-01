@@ -135,7 +135,7 @@ export async function restoreBackup(backup) {
         dbWarnung = !pruefung.ok;
         dbHinweis = pruefung.ok
           ? "Konto aktiv: Alle wiederhergestellten Bereiche wurden übertragen und bitgleich geprüft."
-          : `${pruefung.grund} Die lokale Wiederherstellung bleibt vollständig erhalten; bitte „Ausstehende senden“ erneut versuchen.`;
+          : `${pruefung.grund} Die lokale Wiederherstellung bleibt vollständig erhalten; bitte „Ausstehende Änderungen erneut senden“ versuchen.`;
       }
     } else if (drv && drv !== "lokal") {
       const st = activeSyncStatus();

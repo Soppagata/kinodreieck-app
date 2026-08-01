@@ -183,7 +183,7 @@ und einfache Aufteilung und sollte beibehalten werden.
 | Mediathek | Filme, Reihen, Serien, Musik und Sonstiges; Bewertungen, Quellen, Must-Watch und Artikelreferenzen |
 | Suche | deterministischer Finder plus optionale intelligente Suche; Kino-, Bestand- und Streamingquellen |
 | Blog | lokale Artikel, Referenzabgleich, Paketexport/-import und accountgebundene öffentliche Projektionen |
-| Einstellungen | Darstellung, Startmodus, KI-Schalter, Profil, Konto, Import/Export, Restore, Katalog und Wartung |
+| Settings | Darstellung, Startmodus, KI-Schalter, Profil, Konto, Import/Export, Restore, Katalog und Wartung |
 
 ### Modulkarte
 
@@ -193,7 +193,7 @@ und einfache Aufteilung und sollte beibehalten werden.
 | Sammlung | `match.js`, `typen.js`, `kategorien.js`, `quellen.js`, `staffeln.js`, `mustwatch.js` | IDs, Bewertungen, Typen, Besitzquellen, Serienstand und Must-Watch |
 | Artikel und Austausch | `artikel.js`, `paket.js`, `BlogTab.jsx`, `TeilenBlock.jsx` | Artikelworkflow, Rotlinks, Referenzen und Datei-Pakete |
 | Kino | `programm.js`, `kinos.js`, `KinoTab.jsx` | Programmschema, Zeitfilter, Kinoverweise und Matchingdarstellung |
-| Streaming | `katalog.js`, `dienste.js`, `StreamingTab.jsx`, `StreamingEinstellungen.jsx` | Katalogread, Dienste, eigene Treffer, Entdecken und Merkliste |
+| Streaming | `katalog.js`, `dienste.js`, `StreamingTab.jsx`, `StreamingSettings.jsx` | Katalogread, Dienste, eigene Treffer, Entdecken und Merkliste |
 | Suche | `finder.js`, `FinderTab.jsx` | deterministische Sprachzerlegung, Filter, Ranking und optionale KI-Suche |
 | Profil | `geschmack.js`, `profil.js`, `extraktion.js`, Profilkomponenten | Onboarding, Einwilligung, Signale, Vorschläge und Promptfassung |
 | Prognose | `prognoseAuftrag.js`, `prognose.js`, `vorbewertung.js`, Prognosekomponenten | minimierter Auftrag, Ergebnisvertrag, Speicherung und Annahme/Korrektur |
@@ -221,7 +221,7 @@ String-Töpfen:
 - Kino-Pins,
 - Merkliste,
 - Suchvokabular,
-- Einstellungen,
+- Settings,
 - Entdecken-Status,
 - Autorname,
 - Streaming-Dienste,
@@ -290,7 +290,7 @@ verschoben oder pauschal „vereinfacht“ werden.
 1. `main.jsx` initialisiert den Auth-Treiber.
 2. Bei gespeicherter Accountsitzung aktiviert es den Accounttreiber und versucht
    vor dem Render einen Pull.
-3. `App.jsx` liest Masterliste, Programmcache, Einstellungen, Pins,
+3. `App.jsx` liest Masterliste, Programmcache, Settings, Pins,
    Vokabular und weitere Töpfe.
 4. Fehlt eine Masterliste, entscheidet die bestätigte Clean-/Demo-Wahl.
 5. Demo lädt online die Demo-Töpfe aus `kd_store`, in Datei-/Testumgebungen
@@ -980,7 +980,7 @@ flowchart TD
     MAIN["main.jsx"]
     COORD["SessionCoordinator<br/>eine Zustandsmaschine"]
     SHELL["AppShell<br/>Navigation, Modale, Fehlergrenze"]
-    LIB["LibraryController<br/>Mediathek, Artikel, Listen, Einstellungen"]
+    LIB["LibraryController<br/>Mediathek, Artikel, Listen, Settings"]
     CAT["CatalogController<br/>Programm, Streaming, Demo, Cache"]
     INTEL["IntelligenceController<br/>Profil, Suche, Prognose, Filmwissen"]
     ONB["OnboardingController<br/>Startwahl, Tour, optionale Eggs"]
@@ -1067,7 +1067,7 @@ Empfohlene erste Extraktionen:
    - Must-Watch,
    - Pins,
    - Merkliste,
-   - persönliche Einstellungen,
+   - persönliche Settings,
    - Import/Export.
 2. `useCatalogController`
    - Programm,

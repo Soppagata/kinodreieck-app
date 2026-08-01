@@ -24,7 +24,7 @@ export function HilfeSheet({ onClose }) {
           <article><strong>Start</strong><p>Dein Überblick mit Kinopins, Merkliste und Empfehlungen.</p></article>
           <article><strong>Kino &amp; Streaming</strong><p>Aktuelle Angebote filtern und Filme in die eigene Mediathek übernehmen.</p></article>
           <article><strong>Mediathek</strong><p>Filme bewerten, Listen pflegen und den persönlichen Bestand sichern.</p></article>
-          <article><strong>Einstellungen</strong><p>Konto, Backup, Datenquellen, Darstellung und KI-Wahl verwalten.</p></article>
+          <article><strong>Settings</strong><p>Konto, Backup, Datenquellen, Darstellung und KI-Wahl verwalten.</p></article>
         </div>
         <InstallationCard kompakt />
       </section>

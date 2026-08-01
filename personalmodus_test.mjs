@@ -250,6 +250,14 @@ function programmStatusText(doc) {
   return strongs.length ? (strongs.at(-1).textContent || "").trim() : null;
 }
 
+async function katalogNeuLaden(doc, knopf) {
+  knopf(/^Settings$/i)?.click(); await warte(300);
+  const erweitert = [...doc.querySelectorAll("summary")].find((s) => /^Erweitert/.test((s.textContent || "").trim()));
+  if (erweitert && !erweitert.parentElement?.open) { erweitert.click(); await warte(150); }
+  knopf(/^Katalog jetzt neu laden$/)?.click();
+  await warte(1200);
+}
+
 function setWert(dom, el, wert) {
   const proto = el.tagName === "TEXTAREA" ? dom.window.HTMLTextAreaElement : dom.window.HTMLInputElement;
   Object.getOwnPropertyDescriptor(proto.prototype, "value").set.call(el, wert);
@@ -302,7 +310,7 @@ function seedKatalog(w, start = "clean") {
   const { doc, text, knopf } = hilfen(dom);
   await warte(2200);
   check("B: Clean bootet ins leere Dashboard mit DB-Katalog", /Dein Abend/.test(text()) && !/Programmdaten verbinden/.test(text()));
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   const summaries = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
   const ids = ["Darstellung & Verhalten", "Datenmodus & Verbindung", "Masterliste", "Gesamt-Backup", "Streaming-Quellen", "Suche-Vokabular", "Katalog-Status", "Erweitert — manuelle Aktualisierung & Wartung"]
     .map((x) => summaries.findIndex((s) => s.startsWith(x)));
@@ -368,7 +376,7 @@ function seedKatalog(w, start = "clean") {
   }, demoRows);
   const { doc, text, knopf } = hilfen(dom);
   await warte(2600);
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   check("C: Demo übernimmt Max' Streamingdienste", /Netflix/.test(text()) && /Disney\+/.test(text()) && /Crunchyroll \(Prime\)/.test(text()));
   const quellenSuche = doc.querySelector('input[placeholder^="Quelle suchen"]');
   if (quellenSuche) {
@@ -395,7 +403,7 @@ function seedKatalog(w, start = "clean") {
   check("C: Demo-Löschung entfernt nur Demo-Quellen und erhält spätere Auswahl", cfg?.quellen?.includes("MUBI") && !cfg.quellen.includes("Netflix"));
   check("C: Demo-Pins und Demo-Merker werden gezielt entfernt", Array.isArray(pins) && pins.length === 0 && Array.isArray(merker) && merker.length === 0);
   knopf(/^Kino$/i)?.click(); await warte(350);
-  check("C: gemeinsames Kinoprogramm bleibt erhalten", /Kinoprogramm neu laden/.test(text()) && !/Datenbank noch nicht verbunden/.test(text()));
+  check("C: gemeinsames Kinoprogramm bleibt erhalten", /Stand \d{2}\.\d{2}\./.test(text()) && !/Datenbank noch nicht verbunden/.test(text()));
   dom.window.close();
 }
 
@@ -408,7 +416,7 @@ function seedKatalog(w, start = "clean") {
   });
   const { text, knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   check("D: vorhandener Demo-Seed zeigt trotz Clean-Wert den Demo-Modus", /Demo-Modus/.test(text()));
   check("D: vorhandener Demo-Seed bietet Demo-Daten entfernen an", !!knopf(/^Demo-Daten entfernen$/));
   dom.window.close();
@@ -436,7 +444,7 @@ function seedKatalog(w, start = "clean") {
   }, demoRows);
   const { knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   knopf(/^Demo-Daten entfernen$/)?.click(); await warte(450);
   const pins = JSON.parse(dom.window.localStorage.getItem("kd:kino-pins") || "[]");
   const merker = JSON.parse(dom.window.localStorage.getItem("kd:merkliste") || "[]");
@@ -465,7 +473,7 @@ function seedKatalog(w, start = "clean") {
   });
   const { text, knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   knopf(/^Demo-Daten entfernen$/)?.click(); await warte(450);
   check("F: Offline-Legacy-Seed bleibt für einen späteren Versuch erhalten", !!dom.window.localStorage.getItem("kd:demo-seed"));
   check("F: Offline-Legacy-Bereinigung löscht keine Pins oder Merker",
@@ -489,7 +497,7 @@ function seedKatalog(w, start = "clean") {
   });
   const { knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   knopf(/^Startmodus wählen$/)?.click(); await warte(100);
   knopf(/^Demo ansehen$/)?.click(); await warte(150);
   check("G: abgebrochener Wechsel bleibt im Clean-Modus", dom.window.localStorage.getItem("kd:start") === "clean");
@@ -505,7 +513,7 @@ function seedKatalog(w, start = "clean") {
   const dom = baueDom((w) => seedKatalog(w, "clean"));
   const { doc, knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   const importKnopf = knopf(/^Masterliste importieren$/);
   const dateiInput = importKnopf?.parentElement?.querySelector('input[type="file"]');
   let dateiDialog = false;
@@ -535,7 +543,7 @@ function seedKatalog(w, start = "clean") {
   });
   const { doc, knopf } = hilfen(dom);
   await warte(1800);
-  knopf(/^Einstellungen$/i)?.click(); await warte(300);
+  knopf(/^Settings$/i)?.click(); await warte(300);
   knopf(/^KI-Prompt öffnen$/)?.click(); await warte(100);
   const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON aus der KI-Antwort/.test(t.placeholder || ""));
   if (paste) {
@@ -571,7 +579,7 @@ function seedKatalog(w, start = "clean") {
   knopf(/^Kino$/i)?.click(); await warte(300);
   check("J: Der Kinobereich ist ohne jede Anmeldung erreichbar", !/Anmelden/i.test(text()));
 
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   const summaries = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
   check("J: Konto & Geräte-Sync ist als eigener Bereich vorhanden",
     summaries.some((s) => /Konto & Geräte-Sync/.test(s)));
@@ -1053,7 +1061,7 @@ function seedKatalog(w, start = "clean") {
 
   netz.fehlend.add("programm_demo");     // der nächste Versuch geht ins Leere
   netz.fehlend.add("streaming_bekannt_demo");
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("S/C1-Vorbedingung: der Nachladeversuch ist wirklich gelaufen und gescheitert",
     zaehle("programm_demo") >= 2 && /noch keine Beispieldaten veröffentlicht/.test(text()));
@@ -1086,7 +1094,7 @@ function seedKatalog(w, start = "clean") {
 
   netz.fehlend.add("streaming_bekannt_demo");
   netz.fehlend.add("programm_demo");
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("T/C1-Vorbedingung: der Streaming-Nachladeversuch ist gelaufen und gescheitert",
     zaehle("streaming_bekannt_demo") >= 2);
@@ -1120,7 +1128,7 @@ function seedKatalog(w, start = "clean") {
   const { doc, text, knopf } = hilfen(dom);
   const status = () => programmStatusText(doc);
   await warte(2600);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  knopf(/^Settings$/i)?.click(); await warte(500);
   check("U-Vorbedingung: der Einstellungen-Tab meldet den gescheiterten Versuch",
     status() === "noch keine Beispieldaten veröffentlicht");
 
@@ -1138,7 +1146,7 @@ function seedKatalog(w, start = "clean") {
   check("U: er erbt weder Betriebsart noch Ablaufurteil noch Cache-Vermerk",
     !/· Demo-Schnappschuss/.test(text()) && !/· abgelaufen/.test(text())
     && !/· aus dem Browser-Speicher/.test(text()));
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  knopf(/^Settings$/i)?.click(); await warte(500);
   check("U: der Einstellungen-Tab meldet dafür nicht mehr den alten Fehlertext, sondern den Import",
     status() === "manuell eingespielt");
   dom.window.close();
@@ -1210,9 +1218,7 @@ function seedKatalog(w, start = "clean") {
   /* Der JWT wird abgewiesen; der anon-Rückfall sieht die Live-Zeile leer.
      Genau daraus entsteht „Anmeldung nötig" — und der Cache trägt die Anzeige. */
   netz.tokenAbgelehnt.add("programm");
-  knopf(/^Kino$/i)?.click(); await warte(400);
-  knopf(/^Kinoprogramm neu laden$/)?.click(); await warte(1200);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  await katalogNeuLaden(doc, knopf);
   check("W/N1-Vorbedingung: der Einstellungen-Tab meldet jetzt „Anmeldung nötig“",
     status() === "Anmeldung nötig");
 
@@ -1220,9 +1226,7 @@ function seedKatalog(w, start = "clean") {
   netz.tokenAbgelehnt.delete("programm");
   netz.serverFehler.add("programm");
   cacheInhalt.clear();
-  knopf(/^Kino$/i)?.click(); await warte(400);
-  knopf(/^Kinoprogramm neu laden$/)?.click(); await warte(1200);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  await katalogNeuLaden(doc, knopf);
   check("W/N1: nach einem 503 meldet der Einstellungen-Tab nicht länger „Anmeldung nötig“",
     status() === "nicht geladen");
   dom.window.close();
@@ -1243,25 +1247,21 @@ function seedKatalog(w, start = "clean") {
   const { doc, knopf } = hilfen(dom);
   const status = () => programmStatusText(doc);
   await warte(2600);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  knopf(/^Settings$/i)?.click(); await warte(500);
   check("X/N2-Vorbedingung: zunächst steht ein sauber geladener Demo-Stand",
     status() === "Demo-Schnappschuss");
 
   /* Erster Fehlversuch: der apikey wird durchgehend abgewiesen (auch im
      anon-Rückfall) — das ist INVALID_KEY, nicht „melde dich an". */
   netz.schluesselAbgelehnt.add("programm_demo");
-  knopf(/^Kino$/i)?.click(); await warte(400);
-  knopf(/^Kinoprogramm neu laden$/)?.click(); await warte(1200);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  await katalogNeuLaden(doc, knopf);
   check("X/N2-Vorbedingung: der Einstellungen-Tab meldet den abgelehnten Schlüssel",
     status() === "Zugangsschlüssel wird abgelehnt");
 
   /* Zweiter Fehlversuch, ganz andere Ursache und ohne eigenen Fehlercode. */
   netz.schluesselAbgelehnt.delete("programm_demo");
   netz.kaputtePayload.add("programm_demo");
-  knopf(/^Kino$/i)?.click(); await warte(400);
-  knopf(/^Kinoprogramm neu laden$/)?.click(); await warte(1200);
-  knopf(/^Einstellungen$/i)?.click(); await warte(500);
+  await katalogNeuLaden(doc, knopf);
   check("X/N2: ein Folgefehler ohne eigenen Code konserviert den alten Code nicht",
     status() === "nicht geladen");
   dom.window.close();
@@ -1293,7 +1293,7 @@ function seedKatalog(w, start = "clean") {
   await warte(2200);                     // die Gültigkeit läuft ab
   netz.fehlend.add("programm_demo");     // und der nächste Versuch scheitert
   netz.fehlend.add("streaming_bekannt_demo");
-  knopf(/^Einstellungen$/i)?.click(); await warte(400);
+  knopf(/^Settings$/i)?.click(); await warte(400);
   knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
   check("Y/N3-Vorbedingung: beide Nachladeversuche sind gelaufen und gescheitert",
     zaehle("programm_demo") >= 2 && zaehle("streaming_bekannt_demo") >= 2);

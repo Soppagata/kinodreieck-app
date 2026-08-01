@@ -22,6 +22,10 @@ check("Landingpage hat genau die zwei Startarten Demo und leer",
   startLinks.filter((href) => href === "../?start=demo").length === 1
   && startLinks.filter((href) => href === "../?start=clean").length === 2
   && startLinks.every((href) => !href.includes("fresh=")));
+check("Hero-Logo bleibt als dreifarbiges Dreieck ohne verrutschende dunkle Achsentexte",
+  dokument.querySelectorAll(".triangle > div").length === 3
+  && dokument.querySelectorAll(".triangle .axis").length === 0
+  && /Wie, Was und Warum/.test(dokument.querySelector(".triangle-card")?.getAttribute("aria-label") || ""));
 check("Landingpage verspricht keinen allgemeinen Datenverlustschutz",
   !/löschen keine|keine Daten (?:löschen|überschreiben)|verlustfrei/i.test(dokument.body.textContent));
 check("Der echte Resetpfad verlangt Startart, fresh-Token und strenge Tokenform",

@@ -58,7 +58,7 @@ export function useIntelligenceController({
   const vorbewertungSperrgrund = aktuellesProfil === undefined
     ? "Geschmacksprofil wird geladen …"
     : !aktuellesProfil
-      ? "Richte zuerst unter Einstellungen dein Geschmacksprofil ein."
+      ? "Richte zuerst unter Settings dein Geschmacksprofil ein."
       : aktuellesProfil.beschaedigt
         ? "Das Geschmacksprofil ist beschädigt und muss zuerst repariert werden."
         : aktuellesProfil.einwilligung?.erteilt !== true

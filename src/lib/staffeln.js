@@ -7,6 +7,66 @@ export function statusVon(wert) {
   return wert && typeof wert === "object" && typeof wert.status === "string" ? wert.status : null;
 }
 
+export function mediathekIdVon(wert) {
+  if (wert === "erstellt") return true;
+  return wert && typeof wert === "object" && wert.mediathek_id ? wert.mediathek_id : null;
+}
+
+export function mitMediathekEintrag(rohStatus, t, mediathekId, jetzt = new Date()) {
+  const basis = statusVon(rohStatus) === "gesehen"
+    ? (rohStatus && typeof rohStatus === "object" ? rohStatus : neuerGesehenEintrag(t, jetzt))
+    : {};
+  return {
+    ...basis,
+    status: statusVon(rohStatus) === "gesehen" ? "gesehen" : "erstellt",
+    mediathek_id: mediathekId,
+  };
+}
+
+export function ohneMediathekEintrag(rohStatus) {
+  if (rohStatus === "erstellt" || statusVon(rohStatus) === "erstellt") return null;
+  if (!rohStatus || typeof rohStatus !== "object" || !rohStatus.mediathek_id) return rohStatus;
+  const { mediathek_id: _entfernt, ...rest } = rohStatus;
+  return rest;
+}
+
+/* Eindeutige Anbieterkennungen verbinden Entdecken und Mediathek. Die
+   Verbindung ist orthogonal zu „gesehen“: Ein Bibliothekseintrag allein ist
+   kein Beleg dafür, dass der Film bereits angesehen wurde. */
+export function gleicheMediathekStatusAb(statusMap, titel, master) {
+  const filme = Array.isArray(master) ? master : [];
+  let next = statusMap || {};
+  const findeFilm = (t) => filme.find((film) => (
+    t.watchmode_id != null && film.watchmode_id != null
+    && String(film.watchmode_id) === String(t.watchmode_id)
+  ) || (
+    t.imdb_id && film.imdb_id && String(film.imdb_id) === String(t.imdb_id)
+  ) || (
+    t.tmdb_id && film.tmdb_id && String(film.tmdb_id) === String(t.tmdb_id)
+  ));
+
+  for (const t of Array.isArray(titel) ? titel : []) {
+    const film = findeFilm(t);
+    if (!film || mediathekIdVon(next[t.watchmode_id]) === film.id) continue;
+    if (next === statusMap) next = { ...(statusMap || {}) };
+    next[t.watchmode_id] = mitMediathekEintrag(next[t.watchmode_id], t, film.id);
+  }
+
+  for (const [watchmodeId, roh] of Object.entries(next)) {
+    const mediathekId = mediathekIdVon(roh);
+    if (!mediathekId) continue;
+    const vorhanden = filme.some((film) => (
+      mediathekId !== true && film.id === mediathekId
+    ) || String(film.watchmode_id) === String(watchmodeId));
+    if (vorhanden) continue;
+    if (next === statusMap) next = { ...(statusMap || {}) };
+    const bereinigt = ohneMediathekEintrag(roh);
+    if (bereinigt) next[watchmodeId] = bereinigt;
+    else delete next[watchmodeId];
+  }
+  return next;
+}
+
 export function staffelzahl(wert) {
   const n = Number(wert);
   return Number.isInteger(n) && n >= 1 ? n : null;

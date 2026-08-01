@@ -48,6 +48,7 @@ export function PrognoseBereich({
   aktuelleProfilVersion = null,
   onErstellen,
   onAnnehmen,
+  onUebernehmen,
   onKorrigieren,
   onVerwerfen,
 }) {
@@ -131,7 +132,8 @@ export function PrognoseBereich({
 
       {(prognose.status === "offen" || prognose.status === "angenommen") && (
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-          {prognose.status === "offen" && <button style={btnStyle(true)} onClick={onAnnehmen}>Annehmen</button>}
+          {onUebernehmen && <button style={btnStyle(true)} onClick={onUebernehmen}>Als Bewertung übernehmen</button>}
+          {prognose.status === "offen" && <button style={btnStyle(false)} onClick={onAnnehmen}>Nur Prognose bestätigen</button>}
           <button style={btnStyle(false)} onClick={onKorrigieren}>Echt bewerten / korrigieren</button>
           <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={onVerwerfen}>Verwerfen</button>
         </div>

@@ -251,7 +251,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <button style={btnStyle(false)} disabled={laeuft || (!demoAktiv && !kontoSpeicherAktiv)} onClick={async () => {
+        {(demoAktiv || status?.stale?.length > 0) && <button style={btnStyle(false)} disabled={laeuft || (!demoAktiv && !kontoSpeicherAktiv)} onClick={async () => {
           setLaeuft(true); setMeldung(null); setFehler(null);
           try {
             if (demoAktiv) await ladeDemoKonto(session.account?.id);
@@ -265,12 +265,12 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
             setFehler(err?.message || errorText(err));
           }
           finally { setLaeuft(false); }
-        }}>{demoAktiv ? "Aktuellen Kontostand laden" : "Jetzt abgleichen"}</button>
-        <button style={btnStyle(false)} disabled={laeuft || !kontoSpeicherAktiv || !status?.pending?.length} onClick={async () => {
+        }}>{demoAktiv ? "Aktuellen Kontostand laden" : "Kontostand erneut laden"}</button>}
+        {status?.pending?.length > 0 && <button style={btnStyle(false)} disabled={laeuft || !kontoSpeicherAktiv} onClick={async () => {
           setLaeuft(true);
           try { await accountSync.flush(); setStatus(accountSync.status()); }
           finally { setLaeuft(false); }
-        }}>Ausstehende senden</button>
+        }}>Ausstehende Änderungen erneut senden</button>}
         <button style={btnStyle(false)} disabled={laeuft} onClick={abmelden}>Abmelden</button>
       </div>
       {meldung && <p style={{ color: T.ok, fontSize: 13 }}>{meldung}</p>}

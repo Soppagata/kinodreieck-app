@@ -27,7 +27,7 @@ export function RestoreImport({ ohneKopf = false } = {}) {
       ? "\n\nDu bist angemeldet: Der bestätigte Stand wird auch in deinen Kontospeicher geschrieben."
       : "";
     // KD-008: fail-closed Snapshot-Zusage · KD-009: Wortlaut (vorhandene Felder ersetzen, im Backup fehlende bleiben)
-    const ok = window.confirm("Backup wiederherstellen?\n\nVorhandene Felder des Backups ERSETZEN die entsprechenden lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status, Autor-Name, Must-Watch-Liste); im Backup fehlende Bereiche bleiben unverändert. Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar — lässt sich der Snapshot nicht sichern, wird abgebrochen und nichts überschrieben." + kontoHinweis);
+    const ok = window.confirm("Backup wiederherstellen?\n\nVorhandene Felder des Backups ERSETZEN die entsprechenden lokalen Daten dieser App (Filmliste, Blogs, Pins, Merkliste, Vokabular, Settings, Entdecken-Status, Autor-Name, Must-Watch-Liste); im Backup fehlende Bereiche bleiben unverändert. Der vorherige Stand wird als Snapshot gesichert und ist rückgängig machbar — lässt sich der Snapshot nicht sichern, wird abgebrochen und nichts überschrieben." + kontoHinweis);
     if (!ok) { setBusy(false); return; }
     try {
       const r = await restoreBackup(backup);
@@ -61,7 +61,7 @@ export function RestoreImport({ ohneKopf = false } = {}) {
       {!ohneKopf && <h2 style={h2Style}>Backup wiederherstellen</h2>}
       <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
         Einmaliger Umzug: das <strong style={{ color: T.leinwand }}>Gesamt-Backup der alten App</strong> hier
-        einspielen — Filmliste, Blogs, Pins, Merkliste, Vokabular, Einstellungen, Entdecken-Status und
+        einspielen — Filmliste, Blogs, Pins, Merkliste, Vokabular, Settings, Entdecken-Status und
         {/* KD-009: Wortlaut — Restore ist preserve-missing (fehlende Backup-Bereiche bleiben), nicht „alles ersetzen". Verhalten in restore.js unverändert. */}
         Autor-Name in einem Schritt. <strong>Vorhandene Felder des Backups ersetzen die lokalen; im Backup fehlende
         Bereiche bleiben unverändert.</strong> Der vorherige Stand wird gesichert. Danach neu laden und die Zählstände
