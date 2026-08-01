@@ -15,12 +15,26 @@ export function sichtbareDienste(dienste, auswahl) {
 
 const AMAZON_CHANNEL = /\s*\(Via (?:Amazon )?Prime\)\s*$/i;
 
+/* Kurze Anzeigeform, der Rohname bleibt für Filter, URL-Zuordnung und Tooltip
+   erhalten. „Premium“ ist hier kein eigener Dienst und „Via Amazon Prime“
+   beschreibt nur den Bezugsweg – beides muss nicht zwei Handyzeilen belegen. */
+export function kurzerDienstname(name) {
+  const roh = String(name || "").trim();
+  return roh
+    .replace(/^Crunchyroll\s+Premium\b/i, "Crunchyroll")
+    .replace(/^Paramount\s+Plus\b/i, "Paramount+")
+    .replace(/\s*\(Via (?:Amazon )?Prime\)\s*$/i, " (Prime)")
+    .trim();
+}
+
 /* Nur die kompakte Anzeige wird zusammengefasst. Filter, Links und geöffnete
    Details arbeiten weiterhin mit den unveränderten Katalognamen. */
 export function gruppiereDienstBadges(dienste, { kompakt = false } = {}) {
   const gruppen = new Map();
   for (const roh of dienste || []) {
-    const label = kompakt && AMAZON_CHANNEL.test(roh) ? "Amazon Channel" : roh;
+    const label = AMAZON_CHANNEL.test(roh)
+      ? kurzerDienstname(roh)
+      : kompakt ? kurzerDienstname(roh) : roh;
     if (!gruppen.has(label)) gruppen.set(label, []);
     gruppen.get(label).push(roh);
   }

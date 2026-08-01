@@ -259,7 +259,7 @@ function StartDashboard({
       </div>
       <footer className="kd-start-service">
         <button onClick={onHilfe}>? Anleitung &amp; Hilfe</button>
-        {!installation.datei && <a href={import.meta.env.BASE_URL + "download/"}>App installieren &amp; Einzeldatei</a>}
+        {!installation.datei && !installation.standalone && <a href={import.meta.env.BASE_URL + "download/"}>App installieren &amp; Einzeldatei</a>}
       </footer>
     </section>
   );

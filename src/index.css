@@ -316,11 +316,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Portal, Fokusfalle und iOS-Scrollsperre bleiben aus dem neuen Unterbau. */
 .kd-mobile-menu-layer { position:fixed; inset:0; z-index:13000; }
 .kd-mobile-menu-layer .kd-sheet-scrim { background:rgba(0,0,0,.35); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
-.kd-mobile-menu { position:absolute; right:max(10px,env(safe-area-inset-right)); bottom:calc(76px + env(safe-area-inset-bottom));
+.kd-mobile-menu-dialog { position:absolute; inset:0; pointer-events:none; }
+.kd-mobile-menu { position:absolute; right:max(10px,env(safe-area-inset-right)); bottom:calc(132px + env(safe-area-inset-bottom));
   width:min(76vw,260px); max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:10px; border:1px solid rgba(255,255,255,.12);
   border-radius:14px; background:#211e26; color:#ece8df; box-shadow:0 12px 40px rgba(0,0,0,.55);
-  transform-origin:100% 100%; animation:kd-mobile-menu-ein .22s cubic-bezier(.2,.8,.2,1); }
+  transform-origin:100% 100%; animation:kd-mobile-menu-ein .22s cubic-bezier(.2,.8,.2,1); pointer-events:auto; }
 @keyframes kd-mobile-menu-ein { from { opacity:0; transform:translateY(14px) scale(.98); } to { opacity:1; transform:none; } }
 .kd-mobile-menu-liste { display:flex; flex-direction:column; gap:4px; }
 .kd-mobile-menu-liste button { width:100%; min-width:0; min-height:44px; box-sizing:border-box; padding:12px 16px;
@@ -328,9 +329,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font:600 19px/1.05 'Barlow Condensed',sans-serif; letter-spacing:.08em; text-transform:uppercase; }
 .kd-mobile-menu-liste button:hover,.kd-mobile-menu-liste button:focus-visible { background:rgba(227,166,59,.12); color:#ece8df; }
 .kd-mobile-menu-liste button.aktiv { background:#ece8df; color:#1c1a1e; }
-.kd-mobile-menu-nachoben { display:flex; align-items:center; justify-content:center; width:38px; height:32px; margin:7px auto 0;
-  border:0; border-top:1px solid rgba(148,143,160,.32); border-radius:0; background:transparent; color:#948fa0;
-  font:500 18px/1 'Space Grotesk',sans-serif; opacity:.78; }
+.kd-mobile-menu-nachoben { position:absolute; left:50%; bottom:calc(84px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  display:flex; align-items:center; justify-content:center; width:42px; height:36px; padding:0;
+  border:1px solid rgba(148,143,160,.4); border-radius:18px; background:#211e26; color:#948fa0;
+  box-shadow:0 5px 18px rgba(0,0,0,.42); font:500 18px/1 'Space Grotesk',sans-serif; opacity:.9; pointer-events:auto; }
 .kd-mobile-menu-nachoben:hover,.kd-mobile-menu-nachoben:focus-visible { color:#e3a63b; opacity:1; }
 .kd-globalsuche { display:none; }
 
@@ -375,13 +377,45 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Verdichtung passiert NUR hier per Klasse + Media-Query — tokens.js/btnStyle
    bleiben unangetastet, damit der Desktop (>760px) unverändert aussieht. */
 .kd-chiprow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.kd-statusliste { display:grid; gap:0; margin:0; color:var(--leinwandTief,#dfdacd); font-size:13px; }
+.kd-statusliste>div { display:grid; grid-template-columns:minmax(105px,.42fr) minmax(0,1fr); gap:12px; padding:9px 0; border-bottom:1px solid color-mix(in srgb,var(--rauch,#948fa0) 24%,transparent); }
+.kd-statusliste>div:last-child { border-bottom:0; }
+.kd-statusliste dt { color:var(--rauch,#948fa0); font:11px 'Space Mono',monospace; letter-spacing:.05em; text-transform:uppercase; }
+.kd-statusliste dd { min-width:0; margin:0; color:var(--leinwand,#ece8df); line-height:1.5; overflow-wrap:anywhere; }
+.kd-status-quellen { font-size:12px; }
+.kd-profil-eindruck { margin:0 0 12px; padding:13px 14px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:5px; background:var(--saal,#17151a); }
+.kd-profil-eindruck>span { color:var(--wolfram,#e3a63b); font:700 11px 'Space Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
+.kd-profil-eindruck p { margin:6px 0 0; color:var(--leinwand,#ece8df); font-size:14px; line-height:1.55; }
+.kd-profil-hauptaktionen,.kd-profil-wege { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.kd-profil-dialog-layer { position:fixed; inset:0; z-index:14000; display:grid; place-items:center; padding:max(16px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left)); }
+.kd-profil-dialog-scrim { position:absolute; inset:0; width:100%; height:100%; border:0; border-radius:0; background:rgba(0,0,0,.56); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+.kd-profil-dialog { position:relative; width:min(620px,100%); max-height:min(780px,calc(100dvh - 32px)); overflow:auto; box-sizing:border-box; padding:18px; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 45%,transparent); border-radius:14px; background:var(--saalHoch,#211e26); color:var(--leinwand,#ece8df); box-shadow:0 20px 60px rgba(0,0,0,.6); }
+.kd-profil-dialog>header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.kd-profil-dialog>header span { color:var(--wolfram,#e3a63b); font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.kd-profil-dialog>header h3 { margin:2px 0 0; font:700 28px 'Barlow Condensed',sans-serif; letter-spacing:.05em; text-transform:uppercase; }
+.kd-profil-dialog-schliessen { width:38px; min-width:38px; height:38px; padding:0; display:grid; place-items:center; border:1px solid var(--rauch,#948fa0); border-radius:19px; background:transparent; color:var(--leinwand,#ece8df); }
+.kd-profil-infos { display:grid; gap:7px; margin-top:14px; }
+.kd-profil-infogruppe { border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 30%,transparent); border-radius:7px; background:var(--saal,#17151a); }
+.kd-profil-infogruppe>summary { padding:10px 12px; cursor:pointer; color:var(--wolfram,#e3a63b); font:700 15px 'Barlow Condensed',sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+.kd-profil-infogruppe>div { padding:0 12px 10px; }
+.kd-profil-leer,.kd-profil-tendenz { margin:4px 0; color:var(--rauch,#948fa0); font-size:12px; }
+.kd-profil-signal { display:grid; grid-template-columns:90px minmax(0,1fr) auto auto; gap:5px 9px; align-items:center; }
+.kd-profil-herkunft { grid-column:2; }
+.kd-profil-richtungwahl { grid-column:3; grid-row:1 / span 2; }
+.kd-profil-entfernen { grid-column:4; grid-row:1 / span 2; align-self:center; }
+.kd-profil-unklar { display:grid; gap:7px; margin-top:10px; color:var(--rauch,#948fa0); font-size:12px; }
+.kd-profil-unklar>div { display:flex; align-items:center; gap:8px; }
+.kd-profil-unklar>div span { flex:1; }
+.kd-profil-unklar button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:1px solid var(--gefahr,#d96a5a); border-radius:4px; background:transparent; color:var(--gefahr,#d96a5a); }
+.kd-profil-infogruppe ul { margin:4px 0; padding-left:20px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .kd-film-editor-shell { margin-left: 74px; margin-right: 48px; }
 .kd-editpanel, .kd-beschreibung-editor { width: 100%; min-width: 0; box-sizing: border-box; }
 .kd-entdecken-kopf { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; align-items:center; min-width:0; }
 .kd-entdecken-aktionen { display:flex; gap:4px; align-items:center; }
 .kd-entdecken-inhalt,.kd-entdecken-titel { min-width:0; }
-.kd-entdecken-meta { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; margin:8px 0 0 41px; min-width:0; }
+.kd-entdecken-karte { display:flex; flex-direction:column; }
+.kd-entdecken-meta { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; margin:auto 0 0 41px; padding-top:8px; min-width:0; }
 .kd-entdecken-dienste { min-width:0; max-width:100%; overflow:hidden; justify-self:start; }
 .kd-entdecken-dienste>* { box-sizing:border-box; max-width:100% !important; }
 .kd-entdecken-relevanz { flex:0 0 auto; align-self:flex-end; text-align:right; }
@@ -441,13 +475,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
   /* Bestätigte Geschmacksangaben werden zu ruhigen, dreizeiligen Einträgen:
      Aussage, nachvollziehbare Herkunft, dann die beiden Aktionen. */
-  .kd-profil-signal { display:grid !important; grid-template-columns:minmax(0,1fr) auto; gap:7px 10px !important;
-    align-items:center !important; padding:12px 0 !important; }
-  .kd-profil-richtung { min-width:0 !important; }
-  .kd-profil-wert { min-width:0; text-align:right; overflow-wrap:anywhere; }
-  .kd-profil-herkunft { grid-column:1 / -1; min-width:0; }
-  .kd-profil-richtungwahl { grid-column:1; width:100% !important; min-width:0 !important; }
-  .kd-profil-entfernen { grid-column:2; width:auto; min-width:0; padding:5px 9px !important; }
+  .kd-profil-dialog { padding:15px; max-height:calc(100dvh - 24px); }
+  .kd-profil-wege { display:grid; grid-template-columns:1fr; }
+  .kd-profil-wege button { width:100%; min-height:44px; }
+  .kd-profil-signal { grid-template-columns:minmax(0,1fr) auto; gap:6px 9px; padding:11px 0 !important; }
+  .kd-profil-richtung { grid-column:1; }
+  .kd-profil-wert { grid-column:2; grid-row:1; text-align:right; overflow-wrap:anywhere; }
+  .kd-profil-herkunft { grid-column:1 / -1; }
+  .kd-profil-richtungwahl { grid-column:1; grid-row:3; width:100% !important; min-width:0 !important; }
+  .kd-profil-entfernen { grid-column:2; grid-row:3; width:36px !important; min-width:36px; height:34px; }
 }
 
 /* ================= EGG: CAGE-ALPHABET =================

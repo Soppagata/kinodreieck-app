@@ -8,7 +8,7 @@ import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublic
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
-import { IconClose } from "../components/ui.jsx";
+import { IconClose, IconDelete } from "../components/ui.jsx";
 
 /* ================= BLOG =================
    Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
@@ -439,15 +439,16 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                       ))}
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  <div className="kd-blog-aktionen" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
                     {wartend
                       ? <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "popup", id: a.id })}>Abgleich öffnen</button>
-                      : <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
-                    <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
-                    <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 14px", borderColor: T.gefahr, color: T.gefahr }}
+                      : <button style={{ ...btnStyle(true), minWidth: 118, fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "lese", id: a.id })}>Lesen</button>}
+                    <button style={{ ...btnStyle(false), minWidth: 118, fontSize: 13, padding: "7px 14px" }} onClick={() => setAnsicht({ typ: "maske", id: a.id })}>✎ Bearbeiten</button>
+                    <button style={{ ...btnStyle(false), width: 36, minWidth: 36, padding: 0, borderColor: T.gefahr, color: T.gefahr, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                       disabled={publiziertLaufend || unpubliziertLaufend}
+                      aria-label="Artikel löschen" title="Artikel löschen"
                       onClick={() => { setLoeschFuer(loeschFuer === a.id ? null : a.id); setLoeschName(""); }}>
-                      Löschen …
+                      <IconDelete size={16} />
                     </button>
                   </div>
                   {publikationsFehler && (

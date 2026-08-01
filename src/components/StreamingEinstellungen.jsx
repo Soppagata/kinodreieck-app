@@ -4,6 +4,7 @@ import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { K } from "../services/storage.js";
 import { serienBeobachten } from "../lib/staffeln.js";
+import { kurzerDienstname } from "../lib/dienste.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
@@ -16,13 +17,10 @@ const TYP_KURZ = { sub: "Abo", free: "Gratis", purchase: "Kauf/Leihe", tve: "TV"
 /* Lange Quellen-Namen fürs Handy kürzen — NUR das Chip-Label. Der volle Name bleibt
    im title (Tooltip) und als Toggle-/Speicher-Wert unverändert. */
 function kurzQuelle(n) {
-  return String(n || "")
-    .replace(/\s*\((?:via|über)\s+amazon\s+prime\)/i, " (Prime)")
-    .replace(/^Crunchyroll\s+Premium\b/i, "Crunchyroll")
-    .trim();
+  return kurzerDienstname(n);
 }
 
-export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggleQuelle, teil = "alle", onRefresh, datenGesperrt = false }) {
+export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], toggleQuelle, teil = "alle", onRefresh, datenGesperrt = false }) {
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
@@ -49,7 +47,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     /* Demo-Snapshots (eingebettete Beispieldaten) dürfen die echte AT-Quellenliste
        NICHT verdrängen — sonst schrumpft die Abo-Auswahl auf die 4 Testquellen. */
     const abgedeckt = new Set((datenDa && bekannt.dienste) || []);
-    const vq = ((datenDa && !bekannt.demo && bekannt.verfuegbare_quellen) || []).filter((q) => abgedeckt.has(q.name));
+    const vq = ((datenDa && katalogInfo?.variante !== "demo" && bekannt.verfuegbare_quellen) || []).filter((q) => abgedeckt.has(q.name));
     let basis;
     if (vq.length) {
       const g = {};
@@ -67,7 +65,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
     const bekannteNamen = new Set(basis.flatMap((g) => g.quellen));
     const fehlend = auswahl.filter((q) => !bekannteNamen.has(q));
     return fehlend.length ? [...basis, { name: "Deine Auswahl (nicht in der Liste)", typ: "auswahl", quellen: fehlend }] : basis;
-  }, [bekannt, datenDa, auswahl]);
+  }, [bekannt, datenDa, katalogInfo?.variante, auswahl]);
 
   /* Mobil-taugliche Quellen-Auswahl (Etappe 1): statt ~40 Checkbox-Zeilen
      ein Suchfeld + kompakte Angehakt-Liste. Nicht angehakte Quellen erscheinen
@@ -159,17 +157,20 @@ export function StreamingEinstellungen({ bekannt, entdecken, auswahl = [], toggl
       {(teil === "alle" || teil === "status") && <Klappe titel="Katalog-Status" tour="streaming-status">
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
         {datenDa ? (
-          <p style={{ fontSize: 14, color: T.leinwandTief, lineHeight: 1.8, margin: 0 }}>
-            {bekannt.demo && <><strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — der echte Katalog kommt mit dem ersten Watchmode-Lauf.<br /></>}
-            Stand: <strong>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong>
-            {" · "}Quellen im Katalog: {(bekannt.dienste || []).join(", ")}
-            {" · "}Titel: {bekannt.titel.length} bekannt / {entdeckenDa ? entdecken.titel.length : 0} entdecken
-            <br />Credits verbraucht (Stand letzter Lauf): <strong>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""}</strong> (Watchmode-Credits pro Monat)
-            {" · "}{resetDatum
-              ? <>Credits-Reset: <strong>{resetDatum.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })}</strong> (in {resetInTagen} {resetInTagen === 1 ? "Tag" : "Tagen"})</>
-              : <span style={{ color: T.wolfram }}>Credits-Reset: vom letzten Lauf nicht gemeldet</span>}
-            {alterTage > 35 && <><br /><strong style={{ color: T.gefahr }}>Katalog ist {Math.floor(alterTage)} Tage alt — Refresh fällig.</strong></>}
-          </p>
+          <>
+            {katalogInfo?.variante === "demo" && <p style={{ color: T.wolfram, fontSize: 13, margin: "0 0 12px", lineHeight: 1.55 }}><strong>Öffentliche Beispieldaten.</strong> Angemeldete Konten erhalten den laufenden Watchmode-Katalog.</p>}
+            <dl className="kd-statusliste">
+              <div><dt>Betriebsart</dt><dd>{katalogInfo?.variante === "demo" ? "Demo" : katalogInfo?.variante === "live" ? "Konto · live" : "nicht gemeldet"}</dd></div>
+              <div><dt>Stand</dt><dd>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</dd></div>
+              <div><dt>Titel</dt><dd>{bekannt.titel.length} bekannt · {entdeckenDa ? entdecken.titel.length : 0} entdecken</dd></div>
+              <div><dt>Credits</dt><dd>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""} im letzten Lauf</dd></div>
+              <div><dt>Nächster Reset</dt><dd>{resetDatum
+                ? `${resetDatum.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" })} · in ${resetInTagen} ${resetInTagen === 1 ? "Tag" : "Tagen"}`
+                : "nicht gemeldet"}</dd></div>
+              <div><dt>Quellen</dt><dd className="kd-status-quellen">{(bekannt.dienste || []).map(kurzQuelle).join(" · ") || "keine gemeldet"}</dd></div>
+              {alterTage > 35 && <div><dt>Zustand</dt><dd style={{ color: T.gefahr }}>Seit {Math.floor(alterTage)} Tagen nicht aktualisiert</dd></div>}
+            </dl>
+          </>
         ) : (
           <p style={{ fontSize: 14, color: T.rauch, margin: 0 }}>Noch kein Katalog geladen.</p>
         )}

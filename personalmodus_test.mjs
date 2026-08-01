@@ -631,8 +631,9 @@ function seedKatalog(w, start = "clean") {
   katalogGueltigBis = KATALOG_GUELTIG_BIS;
 }
 
-/* K2 — Gegenprobe zu F1: ein Topf mit gueltigBis in der ZUKUNFT ist ein gültiger
-   Anzeigestand und darf gerade KEIN Nachladen auslösen. */
+/* K2 — Ein Topf mit gueltigBis in der ZUKUNFT ist ein gültiger sofortiger
+   Anzeigestand. Datenbankstände werden trotzdem einmal im Hintergrund
+   revalidiert, damit ein neuer Publisher-Lauf nicht tagelang unsichtbar bleibt. */
 {
   katalogRufe = [];
   const dom = baueDom((w) => {
@@ -641,8 +642,8 @@ function seedKatalog(w, start = "clean") {
   });
   const { text, knopf } = hilfen(dom);
   await warte(2400);
-  check("K2/F1-Gegenprobe: gueltigBis in der Zukunft löst kein Nachladen aus",
-    zaehle("programm_demo") === 0 && zaehle("programm") === 0);
+  check("K2/F1-Gegenprobe: gültiger Cache wird einmal im Hintergrund revalidiert",
+    zaehle("programm_demo") >= 1);
   knopf(/^Kino$/i)?.click(); await warte(500);
   check("K2/F1-Gegenprobe: der gültige Stand wird angezeigt und nicht als abgelaufen markiert",
     /Stand \d/.test(text()) && !/· abgelaufen/.test(text()));
@@ -650,8 +651,8 @@ function seedKatalog(w, start = "clean") {
 }
 
 /* K3 — dritte Probe zu F1: ein Topf aus der Zeit VOR dem Feld. Ohne gueltigBis
-   gibt es kein Urteil über den Ablauf — er bleibt lesbar und verhält sich wie
-   bisher (kein Nachladen, kein Ablaufhinweis). */
+   gibt es kein Urteil über den Ablauf — er bleibt lesbar, wird als DB-Cache
+   aber ebenfalls im Hintergrund revalidiert. */
 {
   katalogRufe = [];
   const dom = baueDom((w) => {
@@ -660,8 +661,8 @@ function seedKatalog(w, start = "clean") {
   });
   const { text, knopf } = hilfen(dom);
   await warte(2400);
-  check("K3/F1: alter Topf ohne gueltigBis bleibt lesbar und löst kein Nachladen aus",
-    zaehle("programm_demo") === 0 && zaehle("programm") === 0);
+  check("K3/F1: alter Topf ohne gueltigBis bleibt lesbar und wird revalidiert",
+    zaehle("programm_demo") >= 1);
   knopf(/^Kino$/i)?.click(); await warte(500);
   check("K3/F1: ohne gueltigBis fällt kein Ablaufurteil",
     /Stand \d/.test(text()) && !/· abgelaufen/.test(text()));
@@ -696,8 +697,8 @@ function seedKatalog(w, start = "clean") {
   dom.window.close();
 }
 
-/* L2 — Gegenprobe zu F2: passende Betriebsart wird übernommen, ohne unnötigen
-   Nachladevorgang. L3 — manuelle Importe tragen KEIN variante-Feld und bleiben
+/* L2 — Gegenprobe zu F2: passende Betriebsart wird sofort übernommen und dann
+   im Hintergrund revalidiert. L3 — manuelle Importe tragen KEIN variante-Feld und bleiben
    ausdrücklich unangetastet; das ist gewolltes Verhalten, kein Schlupfloch. */
 {
   katalogRufe = [];
@@ -706,8 +707,8 @@ function seedKatalog(w, start = "clean") {
     w.localStorage.setItem("kd:programm-cache", programmTopf({ gueltigBis: KATALOG_GUELTIG_BIS, variante: "demo" }));
   });
   await warte(2400);
-  check("L2/F2-Gegenprobe: passende Betriebsart wird übernommen, ohne nachzuladen",
-    zaehle("programm_demo") === 0 && zaehle("programm") === 0);
+  check("L2/F2-Gegenprobe: passende Betriebsart wird übernommen und revalidiert",
+    zaehle("programm_demo") >= 1);
   dom.window.close();
 }
 {

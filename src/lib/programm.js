@@ -171,6 +171,14 @@ export function normalisiereProgramm(parsed) {
   return {
     stand: (data.erstellt || parsed.erstellt || "").slice(0, 10) || null,
     quelle_hinweis: hinweis,
+    status: {
+      quelle: "film.at API",
+      zeitraum: data.zeitraum ? [data.zeitraum.von, data.zeitraum.bis].filter(Boolean).join("–") : null,
+      angezeigt: filme.length,
+      gesamt,
+      warnungen: Array.isArray(data.warnungen) ? data.warnungen.length : 0,
+      fensterTage: ANZEIGE_TAGE,
+    },
     filme,
     events: [],
     demnaechst: [],

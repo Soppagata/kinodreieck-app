@@ -499,7 +499,7 @@ function KompaktEintrag({
                 title={istGepinnt(pf.t, z) ? "Pin lösen" : "Termin anpinnen"}
                 style={{
                   ...btnStyle(false), fontSize: 11, padding: "4px 9px", fontFamily: "'Space Mono', monospace", textTransform: "none", letterSpacing: 0,
-                  borderColor: istGepinnt(pf.t, z) ? T.wolfram : T.saal, color: istGepinnt(pf.t, z) ? T.wolfram : T.tinte,
+                  borderColor: istGepinnt(pf.t, z) ? T.wolfram : T.saal, color: istGepinnt(pf.t, z) ? T.wolfram : T.leinwand,
                 }}>
                 {istGepinnt(pf.t, z) ? "◆" : "◇"} {z}
               </button>

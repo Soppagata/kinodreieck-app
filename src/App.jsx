@@ -664,6 +664,14 @@ export default function App() {
               art, variante: cachedProg.variante || null, stand, gueltigBis,
               abgelaufen, ausCache: art === "cache", anmeldungNoetig: false, fehler: null, code: null,
             });
+            /* Cache macht den ersten Bildaufbau schnell, ersetzt aber keine
+               Revalidierung. Die Mac-Pipeline kann zwischen zwei App-Starts
+               einen neuen Stand veröffentlicht haben; bisher blieb ein einmal
+               geladener DB-Stand bis zu sieben Tage stehen, ohne die DB noch
+               einmal zu fragen. */
+            if (["datenbank", "db-refresh", "cache"].includes(art)) {
+              nachladenNoetig.current = true;
+            }
             if (abgelaufen) {
               setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
               /* Anzeigen UND nachladen: ohne das bliebe der abgelaufene Stand
@@ -1981,6 +1989,7 @@ export default function App() {
             vokabular={vokabular} saveVokabular={saveVokabular}
             master={finderMaster || []} kinoMatches={kinoMatches}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
+            streamingInfo={streamingInfo}
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl}
             onSpringeZuFilm={springeZuFilm} addFilm={addFilm}
@@ -2023,6 +2032,7 @@ export default function App() {
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
+            streamingInfo={streamingInfo}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
             setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}

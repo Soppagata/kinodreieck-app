@@ -92,13 +92,16 @@ export function setzeTheme(name) {
       document.body.style.background = T.saal;
       document.body.style.colorScheme = name === "hell" || name === "showa" ? "light" : "dark"; // native Controls (Scrollbar, Select)
     }
-    // C3: Akzent-/Tinte-Werte als CSS-Variablen an :root spiegeln, damit reine
-    // CSS-Regeln (Fokusring, Nav-Griff) dem aktiven Theme/Modus folgen statt auf
-    // einem Dunkel-Literal (#E3A63B) einzufrieren.
+    // Die vollständige Palette spiegeln: Bereichs-Heros, Dashboard-Tickets und
+    // reine CSS-Komponenten müssen im Foyer dieselben Kontrastpaare sehen wie
+    // inline gestylte React-Komponenten. Nur Wolfram/Tinte zu setzen ließ z. B.
+    // Hero-Überschriften am hellen Hintergrund weiß stehen.
     const root = document.documentElement;
     if (root && root.style) {
-      root.style.setProperty("--wolfram", T.wolfram);
-      root.style.setProperty("--tinte", T.tinte);
+      for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum"]) {
+        root.style.setProperty("--" + name, T[name]);
+        root.style.setProperty("--kd-" + name, T[name]);
+      }
     }
   }
 }

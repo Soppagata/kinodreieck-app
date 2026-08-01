@@ -211,6 +211,7 @@ const dom = new JSDOM(
   "<!doctype html><html><body>"
   + "<div id=\"wurzel\"></div><div id=\"dfwurzel\"></div>"
   + "</body></html>", { url: "http://localhost/" });
+dom.window.scrollTo = () => {};
 for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement",
   "HTMLTextAreaElement", "HTMLSelectElement", "HTMLOptionElement", "SVGElement", "Element", "Event",
   "MouseEvent", "KeyboardEvent", "CustomEvent", "Node", "NodeList", "getComputedStyle", "localStorage"]) {
@@ -243,14 +244,22 @@ let feld = () => document.getElementById("wurzel");
 const alles = (sel) => { const f = feld(); return f ? [...f.querySelectorAll(sel)] : []; };
 const knoepfe = () => alles("button");
 const knopf = (t) => knoepfe().find((b) => b.textContent.trim() === t);
-const knopfTeil = (t) => knoepfe().find((b) => b.textContent.includes(t));
+const knopfTeil = (t) => knoepfe().find((b) => b.textContent.includes(t) || b.getAttribute("aria-label")?.includes(t));
 const text = () => { const f = feld(); return f ? f.textContent.replace(/\s+/g, " ").trim() : ""; };
 const klick = async (b, wer) => {
   if (!b) throw new Error("Knopf nicht gefunden: " + (wer || "?"));
   await act(async () => { b.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
   await ruhe();
 };
-const klickT = async (t) => klick(knopfTeil(t), t);
+const klickT = async (t) => {
+  let ziel = knopfTeil(t);
+  if (!ziel && ["Drei Fragen beantworten", "Weitere Angaben machen", "entfernen"].includes(t) && knopfTeil("Ändern")) {
+    await klick(knopfTeil("Ändern"), "Ändern");
+    if (t === "entfernen") await klick(knopfTeil("Aktuelle Infos"), "Aktuelle Infos");
+    ziel = knopfTeil(t);
+  }
+  return klick(ziel, t);
+};
 
 const taSetzer = Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype, "value").set;
 const textfeld = (id) => alles("textarea").find((t) => t.id === "frage-" + id);
@@ -1540,6 +1549,7 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
   const s = neuerSpeicher(bestand);
   const ki = neueKi();
   await neuMontieren({ ai: ki.api, speicher: s.api, kiAktiv });
+  await klickT("Ändern");
   check("L", "bestehendes Profil, kiAktiv=" + was + ": „Drei Fragen beantworten\" "
     + (sollKnopf ? "da" : "weg") + "  [gemessen: "
     + JSON.stringify(knoepfe().map((b) => b.textContent.trim())) + "]",
@@ -1567,7 +1577,7 @@ for (const [was, kiAktiv, sollKnopf] of [["true", true, true], ["false", false, 
    eine Erklärung nach dem Klick. */
 check("L", "ProfilAnsicht blendet den KI-Einstieg aus statt ihn zu sperren  [gemessen: "
   + JSON.stringify((QUELLEN.ansicht.text.match(/kiWegOffen[^\n]*/g) || []).map((z) => z.trim().slice(0, 30))) + "]",
-  () => /\{kiWegOffen && \(/.test(QUELLEN.ansicht.text)
+  () => /\{kiWegOffen &&\s*(?:\(|<)/.test(QUELLEN.ansicht.text)
     && !/disabled=\{!kiWegOffen\}/.test(QUELLEN.ansicht.text));
 check("L", "…und `kiWegOffen` hat den Vorgabewert false (fail-closed)",
   () => /kiWegOffen = false/.test(QUELLEN.ansicht.text));
@@ -1620,7 +1630,7 @@ check("L", "DER ANKER: im ganzen KI-losen Durchlauf NULL Rufe an ai.runTask  [ge
 
 /* Korrigieren und Entfernen funktionieren bei KI=aus unverändert. */
 const vorZahl = s.letzteNutzlast().signale.length;
-await klick(knopfTeil("entfernen"), "entfernen");
+await klickT("entfernen");
 check("L", "…entfernen wirkt  [gemessen: " + s.letzteNutzlast().signale.length + " statt " + vorZahl + "]",
   () => s.letzteNutzlast().signale.length === vorZahl - 1);
 check("L", "…und ai.runTask blieb ungerufen  [gemessen: " + ki.rufe.length + "]", () => ki.rufe.length === 0);

@@ -40,7 +40,7 @@ export function InstallationCard({ kompakt = false, zeigeEinzeldatei = true }) {
         <a className="kd-linkbutton" href={downloadUrl()}>Installationsanleitung öffnen</a>
       )}
       {meldung && <p role="status" className="kd-inline-meldung">{meldung}</p>}
-      {zeigeEinzeldatei && !status.datei && (
+      {zeigeEinzeldatei && !status.datei && !status.standalone && (
         <p className="kd-einzeldatei">
           Lieber ohne Installation? <a href={downloadUrl("Kinodreieck.html")} download>Einzeldatei herunterladen</a>
         </p>

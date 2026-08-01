@@ -66,10 +66,10 @@ check("Filmlöschung löst Blog- und Must-Watch-Verweise ohne die Einträge zu l
 const dienstGruppen = gruppiereDienstBadges([
   "Prime Video", "MUBI (Via Amazon Prime)", "MUBI (Via Prime)", "Netflix",
 ], { kompakt: true });
-check("Amazon-Prime-Channels werden nur im kompakten Badge zusammengefasst",
+check("Amazon-Prime-Channels behalten kompakt ihren erkennbaren Dienstnamen",
   JSON.stringify(dienstGruppen) === JSON.stringify([
     { label: "Prime Video", rohnamen: ["Prime Video"] },
-    { label: "Amazon Channel", rohnamen: ["MUBI (Via Amazon Prime)", "MUBI (Via Prime)"] },
+    { label: "MUBI (Prime)", rohnamen: ["MUBI (Via Amazon Prime)", "MUBI (Via Prime)"] },
     { label: "Netflix", rohnamen: ["Netflix"] },
   ]));
 check("App-Hilfe beantwortet Settings-Fragen ohne einen KI-Aufruf",

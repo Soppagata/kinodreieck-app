@@ -286,6 +286,7 @@ const dom = new JSDOM(
   "<button id=\"aussen\">außen</button>" +
   "<div id=\"wurzel\"></div><div id=\"altbauwurzel\"></div><div id=\"tabwurzel\"></div>" +
   "</body></html>", { url: "http://localhost/" });
+dom.window.scrollTo = () => {};
 for (const name of ["window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLButtonElement",
   "HTMLSelectElement", "HTMLOptionElement", "SVGElement", "Element", "Event", "MouseEvent", "KeyboardEvent",
   "CustomEvent", "Node", "NodeList", "getComputedStyle", "localStorage"]) {
@@ -330,7 +331,17 @@ const klick = async (b, wer) => {
   await act(async () => { b.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
   await ruhe();
 };
-const klickT = async (t) => klick(knopfTeil(t), t);
+const klickT = async (t) => {
+  let ziel = knopfTeil(t);
+  /* Die kompakte Profilansicht zeigt Erhebungswege erst hinter „Ändern“.
+     Fachtests dürfen den neuen Navigationsschritt bedienen, ohne die
+     Datenfluss-Prüfungen an jeder Stelle mit UI-Boilerplate zu überladen. */
+  if (!ziel && /Weitere Angaben|Erhebung starten/.test(t) && knopf("Ändern")) {
+    await klick(knopf("Ändern"), "Ändern");
+    ziel = knopfTeil("Weitere Angaben");
+  }
+  return klick(ziel, t);
+};
 const wertSetzer = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
 const ziehe = async (achse, wert) => {
   const el = alles("input[type=\"range\"][aria-label=\"" + achse + "\"]")[0];
@@ -505,7 +516,12 @@ const abraeumen = async () => { await act(async () => { wurzel.render(null); });
 
 /* Ein vollständiger Onboarding-Durchlauf. `bis` erlaubt, unterwegs anzuhalten. */
 async function durchlauf({ schlagwort = null, film = null, achse = null, achsen = null, bis = "fertig" } = {}) {
-  await klick(knopfTeil("Profil anlegen") || knopfTeil("Weitere Angaben"), "Erhebung starten");
+  let start = knopfTeil("Profil anlegen") || knopfTeil("Weitere Angaben");
+  if (!start && knopf("Ändern")) {
+    await klick(knopf("Ändern"), "Ändern");
+    start = knopfTeil("Weitere Angaben");
+  }
+  await klick(start, "Erhebung starten");
   if (bis === "einwilligung") return;
   /* Seit dem F4-Fix (28.07.2026) überspringt ein bereits zustimmender Nutzer
      den Einwilligungsschritt. Der Helfer klickt den Knopf deshalb nur, wenn es
@@ -1231,9 +1247,11 @@ const p2 = sp.ops.filter((o) => o.op === "schreibe").pop().p;
 check("H", "genau EINE bewegte Achse → genau EINE geschriebene  [gemessen: "
   + JSON.stringify(p2.achsen) + "]",
   () => p2.achsen.wie === 5 && p2.achsen.was === null && p2.achsen.warum === null);
+await klickT("Ändern");
+await klickT("Aktuelle Infos");
 check("H", "…die Ansicht weist nur diese aus  [gemessen: "
   + JSON.stringify(ausschnitt("Achsen-Tendenz:")) + "]",
-  () => ausschnitt("Achsen-Tendenz:") === "Achsen-Tendenz: WIE 5 (von 5)");
+  () => ausschnitt("Achsen-Tendenz:").startsWith("Achsen-Tendenz: WIE 5 (von 5)"));
 
 /* ---------------------------------------------------------------- H/3
    Wer zwei bewegt, schreibt zwei — die dritte bleibt, was sie war. */
@@ -1527,6 +1545,9 @@ check("K", "…die Fehlermeldung ist durch die Erfolgsmeldung ersetzt  [gemessen
 /* Derselbe Fall beim Korrigieren und beim Widerruf — dort sitzt der Fang an
    anderen Stellen. */
 sp.wirftBeimSchreiben = "Netz weg";
+await klickT("Ändern");
+await klickT("Aktuelle Infos");
+/* „Mag“ startet offen und enthält den Richtungswähler. */
 const wahl = alles("select")[0];
 await waehleAus(wahl, "stoesst_ab");
 check("K", "eine fehlgeschlagene Korrektur meldet sich ebenfalls  [gemessen: "
@@ -1562,6 +1583,8 @@ console.log("\n--- L: Ansehen, korrigieren, entfernen, KI=aus ---");
 const sp = neuerSpeicher(null);
 await neuMontieren({ speicher: sp.api });
 await durchlauf({ schlagwort: { text: "Drama", mal: 1 }, film: { text: "Alien", mal: 1 }, achse: { achse: "WIE", wert: 5 } });
+await klickT("Ändern");
+await klickT("Aktuelle Infos");
 
 check("L", "die Ansicht nennt Fassung, Änderungsdatum und die Zahl der Angaben  [gemessen: "
   + JSON.stringify((text().match(/Fassung [^m]*/) || [])[0]) + "]",
@@ -1580,8 +1603,8 @@ check("L", "…in Worten statt in Kennungen  [gemessen: "
   () => JSON.stringify([...alles("select")[0].options].map((o) => o.textContent))
     === JSON.stringify(["mag", "meidet", "zwiespältig zu"]));
 check("L", "der Entfernen-Knopf sagt im aria-label, WAS er entfernt  [gemessen: "
-  + JSON.stringify(knopfTeil("entfernen")?.getAttribute("aria-label")) + "]",
-  () => knopfTeil("entfernen").getAttribute("aria-label") === "„mag drama“ entfernen");
+  + JSON.stringify(alles("button").find((b) => b.getAttribute("aria-label") === "„mag drama“ entfernen")?.getAttribute("aria-label")) + "]",
+  () => Boolean(alles("button").find((b) => b.getAttribute("aria-label") === "„mag drama“ entfernen")));
 
 sp.leeren();
 await waehleAus(alles("select")[0], "stoesst_ab");
@@ -1614,7 +1637,7 @@ check("L", "…die Anzeige folgt  [gemessen: " + JSON.stringify(text().slice(0, 
 check("L", "…und das Ergebnis bleibt ein gültiges Profil", () => P.pruefeProfil(sp.topf).length === 0);
 
 sp.leeren();
-await klickT("entfernen");
+await klick(alles("button").find((b) => b.getAttribute("aria-label") === "„meidet drama“ entfernen"));
 check("L", "das Entfernen schreibt genau einmal und wirkt sofort  [gemessen: "
   + JSON.stringify(sp.folge()) + ", signale=" + sp.topf.signale.length + "]",
   () => sp.folge().filter((o) => o === "schreibe").length === 1 && sp.topf.signale.length === 0);
@@ -1632,6 +1655,8 @@ check("L", "…die Ansicht sagt danach ehrlich, dass nichts Bestätigtes mehr da
    sein wie ein Signal — Gesamtwiderruf allein ist keine Korrekturfunktion. */
 sp.topf = { ...sp.topf, version: "p4", nichtDeutbar: ["das Ende blieb unklar"] };
 await neuMontieren({ speicher: sp.api });
+await klickT("Ändern");
+await klickT("Aktuelle Infos");
 check("L", "nicht gedeutete Modellangaben sind im gespeicherten Profil sichtbar",
   () => text().includes("Nicht gedeutet:") && text().includes("das Ende blieb unklar"));
 const unklarEntfernen = alles("button").find((b) =>

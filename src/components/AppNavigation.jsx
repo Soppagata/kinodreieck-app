@@ -20,21 +20,21 @@ export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate, onNachO
 }
 
 function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
-  const sheetRef = useRef(null);
+  const dialogRef = useRef(null);
   useEffect(() => {
     const vorher = document.activeElement;
     const entsperren = sperreDokumentScroll();
-    sheetRef.current?.querySelector("button, a")?.focus();
+    dialogRef.current?.querySelector(".kd-mobile-menu button, .kd-mobile-menu a")?.focus();
     const taste = (event) => {
       if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
       if (event.key !== "Tab") return;
-      const fokusziele = [...(sheetRef.current?.querySelectorAll(
+      const fokusziele = [...(dialogRef.current?.querySelectorAll(
         'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
       ) || [])].filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
-      if (!fokusziele.length) { event.preventDefault(); sheetRef.current?.focus?.(); return; }
+      if (!fokusziele.length) { event.preventDefault(); dialogRef.current?.focus?.(); return; }
       const erstes = fokusziele[0];
       const letztes = fokusziele[fokusziele.length - 1];
-      if (event.shiftKey && (document.activeElement === erstes || !sheetRef.current?.contains(document.activeElement))) {
+      if (event.shiftKey && (document.activeElement === erstes || !dialogRef.current?.contains(document.activeElement))) {
         event.preventDefault(); letztes.focus();
       } else if (!event.shiftKey && document.activeElement === letztes) {
         event.preventDefault(); erstes.focus();
@@ -51,18 +51,20 @@ function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
   return createPortal(
     <div className="kd-mobile-menu-layer">
       <button className="kd-sheet-scrim" aria-label="Menü schließen" onClick={onClose} />
-      <section ref={sheetRef} id="kd-mobile-menu" className="kd-mobile-menu" role="dialog" aria-modal="true" aria-label="Menü">
-        <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
-          {NAVIGATION.map((eintrag) => (
-            <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
-              onClick={() => onNavigate(eintrag.id)}>
-              {eintrag.label}
-            </button>
-          ))}
-        </nav>
+      <div ref={dialogRef} className="kd-mobile-menu-dialog" role="dialog" aria-modal="true" aria-label="Menü">
+        <section id="kd-mobile-menu" className="kd-mobile-menu">
+          <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
+            {NAVIGATION.map((eintrag) => (
+              <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
+                onClick={() => onNavigate(eintrag.id)}>
+                {eintrag.label}
+              </button>
+            ))}
+          </nav>
+        </section>
         <button className="kd-mobile-menu-nachoben" type="button" onClick={onNachOben}
           aria-label="In diesem Bereich nach oben" title="Nach oben">↑</button>
-      </section>
+      </div>
     </div>,
     document.body,
   );

@@ -44,13 +44,13 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
         const stil = {
           fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.05em",
           color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 7px",
-          textDecoration: "none", display: "inline-block", maxWidth: kompakt ? 180 : "100%",
-          overflow: kompakt ? "hidden" : "visible", textOverflow: kompakt ? "ellipsis" : "clip",
-          whiteSpace: kompakt ? "nowrap" : "normal", overflowWrap: kompakt ? "normal" : "anywhere",
+          border: "1px solid " + T.wolfram, textDecoration: "none", display: "inline-block",
+          maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         };
         return url
           ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}&thinsp;↗</a>
-          : <span key={label} title={rohnamen.join(", ")} style={{ ...stil, background: "transparent", color: T.wolfram, border: "1px solid " + T.wolfram }}>{label}</span>;
+          : <span key={label} title={rohnamen.join(", ")} style={stil}>{label}</span>;
       })}
     </span>
   );
@@ -408,7 +408,7 @@ export function StreamingTab({
         </div>
       )}
 
-      {datenDa && bekannt.demo && (
+      {datenDa && bekannt.demo && katalogInfo?.variante !== "live" && (
         <div style={{ background: "rgba(227,166,59,0.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 13, color: T.leinwandTief }}>
           <strong style={{ color: T.wolfram }}>Demo-Beispieldaten</strong> — die Titel hier sind Platzhalter. Der echte Katalog kommt mit dem ersten Watchmode-Lauf.
         </div>

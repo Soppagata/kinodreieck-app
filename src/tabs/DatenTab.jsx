@@ -42,7 +42,7 @@ export function DatenTab({
      nachbauen noch erst nach dem Ausfüllen des Freitextformulars scheitern. */
   kiProfilFaehig = false,
   vokabular = [], saveVokabular,
-  streamingBekannt, streamingEntdecken, auswahl, toggleQuelle,
+  streamingBekannt, streamingEntdecken, streamingInfo = null, auswahl, toggleQuelle,
   datenGesperrt = false,
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
@@ -288,7 +288,7 @@ export function DatenTab({
 
       {/* 5 — Streaming-Quellen */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
-        auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
+        katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
 
       {/* 6 — Such-Vokabular */}
       {saveVokabular && (
@@ -309,23 +309,41 @@ export function DatenTab({
       {/* 7 — Technische Stände nur in Settings, nicht in den Inhaltsbereichen. */}
       <Klappe titel="Kinoprogramm-Status">
         <div style={kasten}>
-          <p style={{ ...mono, margin: 0, lineHeight: 1.7 }}>
-            {programm ? (
+          {programm ? (() => {
+            const rohStand = programmInfo?.stand || programm.stand || null;
+            const stand = rohStand ? new Date(rohStand) : null;
+            const demoStand = programmInfo?.variante === "demo" || programmInfo?.art === "snapshot" || demoAktiv || startWahl === "demo";
+            const s = programm.status || {};
+            const details = String(programm.quelle_hinweis || "").split(" · ").filter(Boolean);
+            return (
               <>
-                Stand: <strong style={{ color: programmInfo?.abgelaufen ? T.gefahr : T.leinwand }}>
-                  {new Date(programmInfo?.stand || programm.stand || Date.now()).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </strong>
-                {programmInfo?.variante === "demo" ? " · Demo-Schnappschuss" : ""}
-                {programmInfo?.ausCache ? " · Browser-Cache" : ""}
-                {programmInfo?.abgelaufen ? " · abgelaufen" : ""}
-                {programm.quelle_hinweis ? <><br />{programm.quelle_hinweis}</> : null}
+                {demoStand && (
+                  <p style={{ margin: "0 0 12px", color: T.wolfram, fontSize: 13, lineHeight: 1.55 }}>
+                    <strong>Öffentliche Beispieldaten.</strong> Der Stand vom 22.07. ist der bewusst eingefrorene Demo-Schnappschuss. Das laufende Programm vom Konto-Katalog wird nach der Anmeldung geladen.
+                  </p>
+                )}
+                <dl className="kd-statusliste">
+                  <div><dt>Betriebsart</dt><dd>{demoStand ? "Demo" : "Aktuelles Konto-Programm"}</dd></div>
+                  <div><dt>Stand</dt><dd style={{ color: programmInfo?.abgelaufen ? T.gefahr : undefined }}>{stand && !Number.isNaN(stand.getTime())
+                    ? stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    : "unbekannt"}</dd></div>
+                  <div><dt>Quelle</dt><dd>{s.quelle || details[0] || "unbekannt"}</dd></div>
+                  <div><dt>Zeitraum</dt><dd>{s.zeitraum || details.find((x) => x.startsWith("Zeitraum "))?.replace(/^Zeitraum /, "") || "nicht gemeldet"}</dd></div>
+                  <div><dt>Anzeige</dt><dd>{Number.isFinite(s.angezeigt) && Number.isFinite(s.gesamt)
+                    ? `${s.angezeigt} von ${s.gesamt} Filmen · ${s.fensterTage || 4} Tage`
+                    : details.find((x) => x.startsWith("Anzeige:"))?.replace(/^Anzeige:\s*/, "") || `${programm.filme?.length || 0} Filme`}</dd></div>
+                  <div><dt>Datenhinweise</dt><dd>{Number.isFinite(s.warnungen)
+                    ? `${s.warnungen} Hinweise im Quell-JSON`
+                    : details.find((x) => /Warnung\(en\)/.test(x)) || "keine gemeldet"}</dd></div>
+                  <div><dt>Speicher</dt><dd>{programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
+                </dl>
               </>
-            ) : "Noch kein Kinoprogramm geladen."}
-          </p>
+            );
+          })() : <p style={{ ...mono, margin: 0 }}>Noch kein Kinoprogramm geladen.</p>}
         </div>
       </Klappe>
       <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
-        auswahl={auswahl} toggleQuelle={toggleQuelle} teil="status" datenGesperrt={datenGesperrt} />
+        katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="status" datenGesperrt={datenGesperrt} />
 
       {/* 8 — Erweitert, direkt nach dem Katalog-Status; Refresh gehört hinein. */}
       <div className="kd-nur-desktop" data-tour="erweitert">

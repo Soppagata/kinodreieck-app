@@ -87,6 +87,7 @@ for (const viewport of VIEWPORTS) {
       for (const ziel of ["Kino", "Streaming", "Mediathek", "Blog", "Start", "Settings"]) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
+        const panel = popup.locator(".kd-mobile-menu");
         await expect(popup).toBeVisible();
         await expect(popup.locator(":focus")).toHaveCount(1);
         if (ziel === "Kino") {
@@ -96,12 +97,13 @@ for (const viewport of VIEWPORTS) {
           await page.keyboard.press("Tab");
           await expect(fokusziele.first()).toBeFocused();
         }
-        await expect(popup).toHaveCSS("transform", "none");
-        const popupBox = await popup.boundingBox();
+        await expect(panel).toHaveCSS("transform", "none");
+        const popupBox = await panel.boundingBox();
         expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
         expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
         expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(75);
         await expect(popup.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
+        await expect(panel.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
@@ -290,6 +292,8 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await page.getByRole("button", { name: "Menü öffnen" }).click();
   await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
   await page.locator("summary", { hasText: /^Geschmacksprofil$/ }).click();
+  await page.getByRole("button", { name: "Ändern", exact: true }).click();
+  await page.getByRole("button", { name: "Aktuelle Infos", exact: true }).click();
   const signal = page.locator(".kd-profil-signal").first();
   await expect(signal).toBeVisible();
   const profilGeometrie = await signal.evaluate((zeile) => {
