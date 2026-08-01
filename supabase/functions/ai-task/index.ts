@@ -54,6 +54,7 @@ import {
 import {
   baueAnbieterKoerper,
   schaetzeAnbieterEingabeTokens,
+  type AnbieterBild,
 } from "./providerContract.ts";
 
 export {
@@ -283,6 +284,7 @@ async function rufeAnbieter(
   maxTokens: number,
   timeoutMs: number,
   schema: Record<string, unknown> | null,
+  bilder: AnbieterBild[] = [],
 ): Promise<AnbieterErgebnis> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new AufrufFehler(CODES.SERVER, "anbieterschluessel-fehlt");
@@ -295,6 +297,7 @@ async function rufeAnbieter(
     nutzertext,
     maxTokens,
     schema,
+    bilder,
   );
 
   const uhr = new AbortController();
@@ -586,6 +589,7 @@ type Auftrag = {
   system: string;
   nutzertext: string;
   schema: Record<string, unknown> | null;
+  bilder?: AnbieterBild[];
 };
 
 /* Die Prüfung liefert entweder eine Fehlerkennung oder die Daten, die der
@@ -617,6 +621,80 @@ const ECHO_SCHEMA = {
   required: ["echo", "zeichen"],
   additionalProperties: false,
 };
+
+const MEDIA_TYPEN = ["film", "serie", "musik", "sonstiges"];
+const MEDIA_EREIGNISARTEN = ["poster", "ticket", "termin", "cover", "liste", "sonstiges"];
+const MEDIA_SICHERHEIT = ["hoch", "mittel", "niedrig"];
+const MEDIA_SCHEMA = {
+  type: "object",
+  properties: {
+    kandidaten: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          titel: { type: "string" },
+          typ: { type: "string", enum: MEDIA_TYPEN },
+          jahr: { type: ["integer", "null"] },
+          ereignisart: { type: "string", enum: MEDIA_EREIGNISARTEN },
+          datum: { type: ["string", "null"] },
+          uhrzeit: { type: ["string", "null"] },
+          ort: { type: ["string", "null"] },
+          hinweis: { type: "string" },
+          sicherheit: { type: "string", enum: MEDIA_SICHERHEIT },
+        },
+        required: ["titel", "typ", "jahr", "ereignisart", "datum", "uhrzeit", "ort", "hinweis", "sicherheit"],
+        additionalProperties: false,
+      },
+    },
+    warnungen: { type: "array", items: { type: "string" } },
+  },
+  required: ["kandidaten", "warnungen"],
+  additionalProperties: false,
+};
+
+function leseMedienBilder(payload: Record<string, unknown>): AnbieterBild[] {
+  if (Object.keys(payload).sort().join(",") !== "bilder" || !Array.isArray(payload.bilder)) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-payload-form");
+  }
+  if (payload.bilder.length < 1 || payload.bilder.length > 4) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bildanzahl");
+  }
+  let base64Zeichen = 0;
+  return payload.bilder.map((roh) => {
+    if (!roh || typeof roh !== "object" || Array.isArray(roh)) {
+      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-form");
+    }
+    const bild = roh as Record<string, unknown>;
+    if (Object.keys(bild).sort().join(",") !== "data,height,media_type,width") {
+      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-felder");
+    }
+    const mediaType = eigenerWert(bild, "media_type");
+    const data = eigenerWert(bild, "data");
+    const width = eigenerWert(bild, "width");
+    const height = eigenerWert(bild, "height");
+    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(String(mediaType)) ||
+        typeof data !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(data) ||
+        !Number.isInteger(width) || !Number.isInteger(height) ||
+        Number(width) < 200 || Number(height) < 200 || Number(width) > 1568 || Number(height) > 1568) {
+      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-ungueltig");
+    }
+    let kopf = "";
+    try { kopf = atob(data.slice(0, 64)); } catch { /* gemeinsame Wache unten */ }
+    const byte = (i: number) => kopf.charCodeAt(i);
+    const magieOk = mediaType === "image/jpeg"
+      ? byte(0) === 0xff && byte(1) === 0xd8 && byte(2) === 0xff
+      : mediaType === "image/png"
+        ? byte(0) === 0x89 && kopf.slice(1, 4) === "PNG"
+        : mediaType === "image/gif"
+          ? kopf.startsWith("GIF87a") || kopf.startsWith("GIF89a")
+          : kopf.slice(0, 4) === "RIFF" && kopf.slice(8, 12) === "WEBP";
+    if (!magieOk) throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-signatur");
+    base64Zeichen += data.length;
+    if (base64Zeichen > 850_000) throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bilder-zu-gross");
+    return { media_type: mediaType as AnbieterBild["media_type"], data };
+  });
+}
 
 /* ---------- intelligente Suche (Etappe 6) --------------------------------------
    Claude übersetzt einen freien Suchsatz in genau die Signale, die der
@@ -721,6 +799,7 @@ export const MAX_TOKENS_STANDARD: Record<string, number> = {
      und ist zugleich der explizite Betriebswert der Etappe-8-Migration. */
   "film-forecast": 2048,
   "filmwissen-synthese": 2048,
+  "media-batch-extract": 4096,
 };
 
 /* Nur eine brauchbare Zahl zählt. Eine Null, ein negativer Wert, eine
@@ -1717,6 +1796,55 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
   },
 
+  "media-batch-extract": {
+    modellAliasPflicht: "klein",
+    bauAuftrag(payload) {
+      const bilder = leseMedienBilder(payload);
+      return {
+        bilder,
+        system: [
+          "Du extrahierst sichtbare Kulturwerke und Termine aus privaten Fotos oder Screenshots fuer einen sicheren Stapelimport.",
+          "Erkenne Filme, Serien, Musik (Album, Song oder Konzert) und sonstige kulturelle Werke.",
+          "Fasse Dubletten ueber alle Bilder zusammen. Hoechstens 30 Kandidaten und 8 Warnungen.",
+          "Erfinde nichts und recherchiere nicht. Unsichtbare Jahre, Orte oder Termine bleiben null.",
+          "Ein Poster beweist weder Besitz noch gesehen. Ein Ticket beweist keine Bewertung.",
+          "Ignoriere Namen, Sitzplaetze, Preise, Bestellnummern, QR- und Barcodes sowie Zahlungsdaten.",
+          "Genre, Bewertung, Kategorie, Streamingquelle und externe Kennungen sind nicht Teil deiner Antwort.",
+          "hinweis ist eine kurze sachliche Zusatzinformation, nie eine Empfehlung.",
+          "Antworte ausschliesslich nach dem vorgegebenen JSON-Schema.",
+        ].join("\n"),
+        nutzertext: "Lies die angehaengten Bilder gemeinsam und gib die sichtbaren Kandidaten zur manuellen Vorschau zurueck.",
+        schema: MEDIA_SCHEMA,
+      };
+    },
+    pruefeErgebnis(inhalt) {
+      const o = inhalt as Record<string, unknown> | null;
+      if (!o || typeof o !== "object" || !Array.isArray(o.kandidaten) || !Array.isArray(o.warnungen) || o.kandidaten.length > 30 || o.warnungen.length > 8) {
+        return { fehler: "media-schema" };
+      }
+      const kandidaten = [];
+      for (const roh of o.kandidaten) {
+        if (!roh || typeof roh !== "object" || Array.isArray(roh)) return { fehler: "media-kandidat-form" };
+        const k = roh as Record<string, unknown>;
+        const titel = kurzText(k.titel, 160);
+        const hinweis = kurzText(k.hinweis, 300);
+        const ort = k.ort === null ? null : kurzText(k.ort, 160);
+        const jahr = k.jahr === null ? null : k.jahr;
+        const datum = k.datum === null ? null : String(k.datum);
+        const uhrzeit = k.uhrzeit === null ? null : String(k.uhrzeit);
+        if (!titel || !MEDIA_TYPEN.includes(String(k.typ)) || !MEDIA_EREIGNISARTEN.includes(String(k.ereignisart)) ||
+            !MEDIA_SICHERHEIT.includes(String(k.sicherheit)) ||
+            (jahr !== null && (!Number.isInteger(jahr) || Number(jahr) < 1888 || Number(jahr) > 2100)) ||
+            (datum !== null && !/^\d{4}-\d{2}-\d{2}$/.test(datum)) ||
+            (uhrzeit !== null && !/^\d{2}:\d{2}$/.test(uhrzeit)) ||
+            (k.ort !== null && !ort)) return { fehler: "media-kandidat-ungueltig" };
+        kandidaten.push({ titel, typ: k.typ, jahr, ereignisart: k.ereignisart, datum, uhrzeit, ort, hinweis, sicherheit: k.sicherheit });
+      }
+      const warnungen = o.warnungen.map((w) => kurzText(w, 180)).filter(Boolean);
+      return { daten: { kandidaten, warnungen } };
+    },
+  },
+
   "intelligent-search": {
     bauAuftrag(payload) {
       const roh = typeof payload.suchsatz === "string" ? payload.suchsatz : "";
@@ -2536,7 +2664,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   /* 3) Größe nach Konfiguration — die eigentliche, enge Grenze. */
-  const maxBytes = zahl(konfig, "request_max_bytes", 32768);
+  const maxBytes = task === "media-batch-extract"
+    ? zahl(konfig, "request_max_media_bytes", 950000)
+    : zahl(konfig, "request_max_bytes", 32768);
   if (new TextEncoder().encode(rohtext).length > maxBytes) {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "auftrag-zu-gross",
@@ -3173,8 +3303,20 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     auftrag.nutzertext,
     maxTokens,
     auftrag.schema,
+    auftrag.bilder ?? [],
   );
   const reservierung = kostenAus(preis, geschaetzteEingabe, maxTokens);
+  if (task === "media-batch-extract") {
+    const caps = (konfig["task_max_reservierung_usd_cent"] ?? {}) as Record<string, unknown>;
+    const cap = eigenerWert(caps, task);
+    if (typeof cap !== "number" || !Number.isFinite(cap) || cap <= 0 || reservierung > cap) {
+      await schliesseFilmwissenVorAi("server:task-kostenzaun");
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "task-kostenzaun-fehlt-oder-ueberschritten:" + task,
+        vorgangId,
+      });
+    }
+  }
 
   const { data: startRoh, error: startFehler } = await admin.rpc(
     "kd_ai_auftrag_starten",
@@ -3288,6 +3430,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       maxTokens,
       timeoutMs,
       auftrag.schema,
+      auftrag.bilder ?? [],
     );
   } catch (e) {
     const f = e as AufrufFehler;

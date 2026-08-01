@@ -43,7 +43,7 @@ check("Unbekannte und leere Aufgaben erreichen keinen gebauten Pfad",
   klassifiziereAufgabe("frei-erfunden", false) === "unbekannt"
   && klassifiziereAufgabe("", false) === "unbekannt");
 check("Function-Vertrag und Build-Version sind stabil und fail-closed",
-  FUNCTION_CONTRACT_VERSION === "ai-task-v3"
+  FUNCTION_CONTRACT_VERSION === "ai-task-v4"
   && functionBuildVersion("3898152") === "3898152"
   && functionBuildVersion("  341d76b  ") === "341d76b"
   && functionBuildVersion("mit leerzeichen") === "unversioned"
@@ -81,6 +81,16 @@ check("Pure Anbietergrenze baut den verbindlichen Structured-Output-Request",
 check("Kostenschätzung wird aus genau demselben Anbieterkoerper abgeleitet",
   schaetzeAnbieterEingabeTokens("modell", "system", "nutzerdaten", 512, schema)
   === Math.ceil(new TextEncoder().encode(JSON.stringify(anbieterKoerper)).length / 3) + 300);
+
+const bild = { media_type: "image/jpeg", data: "QUJDRA==" };
+const medienKoerper = baueAnbieterKoerper("modell", "system", "lesen", 512, schema, [bild]);
+check("Medienauftrag stellt Bilder vor den Text und sendet Base64 nicht als Text",
+  Array.isArray(medienKoerper.messages[0].content)
+  && medienKoerper.messages[0].content[0].type === "image"
+  && medienKoerper.messages[0].content[0].source.data === bild.data
+  && medienKoerper.messages[0].content[1].text === "lesen");
+check("Base64-Laenge wird nicht als Texteingabe reserviert",
+  schaetzeAnbieterEingabeTokens("modell", "system", "lesen", 512, schema, [bild]) < 3000);
 
 const index = fs.readFileSync("supabase/functions/ai-task/index.ts", "utf8");
 check("Der Endpunkt importiert den Vertrag statt Fehlercodes zu duplizieren",

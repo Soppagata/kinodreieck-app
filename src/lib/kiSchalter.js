@@ -81,6 +81,11 @@ export const KI_FUNKTIONEN = {
        eine falsch etikettierte Heuristik. */
     beiAus: "ausblenden",
   },
+  stapelimport: {
+    label: "Fotos & Screenshots deuten",
+    beschreibung: "Poster, Tickets, Termine und Listen auf ausdrücklichen Wunsch als Stapel erkennen.",
+    beiAus: "ausblenden",
+  },
   diagnose: {
     label: "KI-Verbindung prüfen",
     beschreibung: "Diagnose der Kette Anmeldung → Endpunkt → Limits. Kostet nichts.",

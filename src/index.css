@@ -1037,3 +1037,29 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   .kd-may4::before { animation: none !important; }
 }
+/* ---- Foto-/Screenshot-Stapelimport ---- */
+.kd-stapelimport { min-width:0; }
+.kd-stapel-lead,.kd-stapel-hinweis,.kd-stapel-extern p { color:var(--kd-rauch, #9d97a8); font-size:13px; line-height:1.6; }
+.kd-stapel-aktionen { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.kd-stapel-bilder { display:grid; grid-template-columns:repeat(auto-fill,minmax(82px,1fr)); gap:8px; margin:12px 0; }
+.kd-stapel-bilder figure { position:relative; aspect-ratio:1; margin:0; overflow:hidden; border-radius:8px; border:1px solid rgba(227,166,59,.55); }
+.kd-stapel-bilder img { width:100%; height:100%; object-fit:cover; display:block; }
+.kd-stapel-bilder button { position:absolute; right:4px; top:4px; width:30px; height:30px; border-radius:50%; border:1px solid currentColor; background:#17151a; color:#f4eee2; font-size:20px; line-height:1; }
+.kd-stapel-kosten { font-family:'Space Mono',monospace; font-size:11px; line-height:1.55; opacity:.78; }
+.kd-stapel-extern { margin-top:16px; border-top:1px solid rgba(157,151,168,.3); padding-top:12px; }
+.kd-stapel-extern summary { cursor:pointer; color:#e3a63b; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.kd-stapel-vorschau { margin-top:16px; border:1px solid #e3a63b; border-radius:8px; padding:12px; }
+.kd-stapel-vorschau h3 { margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.05em; }
+.kd-stapel-warnung,.kd-stapel-dublette { color:#e3a63b; font-size:11px; }
+.kd-stapel-kandidat { padding:10px 0; border-top:1px solid rgba(157,151,168,.25); }
+.kd-stapel-titel { display:flex; align-items:flex-start; gap:9px; }
+.kd-stapel-titel input { margin-top:4px; }
+.kd-stapel-titel span { min-width:0; }
+.kd-stapel-titel small { display:block; margin-top:3px; font-family:'Space Mono',monospace; font-size:10px; opacity:.74; line-height:1.45; }
+.kd-stapel-felder { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0 0 25px; }
+.kd-stapel-felder select { min-width:0; width:100%; min-height:42px; border-radius:8px; padding:7px; }
+.kd-stapel-bericht { border:1px solid #e3a63b; border-radius:8px; padding:10px; }
+@media (max-width:480px) {
+  .kd-stapel-aktionen > button { flex:1 1 140px; min-height:46px; }
+  .kd-stapel-felder { grid-template-columns:1fr; }
+}

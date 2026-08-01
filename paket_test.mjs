@@ -39,6 +39,11 @@ const paket = parsePaket(JSON.stringify({
   },
 }));
 
+const fenced = parsePaket("Hier ist die Datei:\n```json\n" + JSON.stringify({
+  format: "kinodreieck-paket", version: 1, autor: "Max", bereiche: { filme: [] },
+}) + "\n```");
+check("KI-Antwort mit JSON-Codeblock wird tolerant gelesen", fenced.format === "kinodreieck-paket");
+
 const analyse = analysierePaket(paket, [], []);
 const { neueFilme, report } = bauePaketUebernahme(analyse, ["serien"], [], []);
 const alt = neueFilme.find((f) => f.titel === "Prime Altserie");

@@ -6,7 +6,7 @@ import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { RestoreImport } from "../components/RestoreImport.jsx";
 import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
-import { TeilenBlock } from "../components/TeilenBlock.jsx";
+import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
 import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
@@ -47,6 +47,7 @@ export function DatenTab({
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
+  mustwatch = [], addFilm, addMustwatch,
   onKontoDatenGeaendert,
 }) {
   /* Ein verbundener Zugang heißt seit der Zugriffstrennung NICHT mehr, dass
@@ -242,6 +243,16 @@ export function DatenTab({
         </div>
       </Klappe>
 
+      <Klappe titel="Stapelimport" tour="ki-ingestion">
+        <div style={kasten}>
+          <h2 style={h2}>Fotos, Screenshots & Listen</h2>
+          <StapelImport master={master || []} mustwatch={mustwatch}
+            addFilm={addFilm} addMustwatch={addMustwatch} autorName={autorName}
+            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}
+            setErr={setErr} />
+        </div>
+      </Klappe>
+
       {/* 3 — Masterliste */}
       <div className="kd-nur-desktop">
       <Klappe titel="Masterliste" tour="daten-export">
@@ -260,11 +271,6 @@ export function DatenTab({
           )}
           <MasterImport onImport={importMaster} hasMaster={!!master}
             labelNeu="Masterliste importieren" labelErsetzen="Masterliste ersetzen" />
-          {uebernehmePaket && saveAutorName && (
-            <TeilenBlock nurKi ohneKopf master={master || []} artikel={artikelListe}
-              autorName={autorName} saveAutorName={saveAutorName}
-              uebernehmePaket={uebernehmePaket} setErr={setErr} />
-          )}
         </div>
       </Klappe>
       </div>

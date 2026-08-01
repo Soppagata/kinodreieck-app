@@ -68,6 +68,7 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
   parallel_max: 2,
   timeout_ms: 30000,
   request_max_bytes: 32768,
+  request_max_media_bytes: 950000,
   antwort_max_bytes: 262144,
   modell_alias: {
     klein: "claude-haiku-4-5-20251001",
@@ -78,12 +79,18 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "intelligent-search": "gross",
     "film-forecast": "gross",
     "filmwissen-synthese": "gross",
+    "media-batch-extract": "klein",
   },
   task_max_tokens: {
     "echo-struct": 256,
     "intelligent-search": 1024,
     "film-forecast": 2048,
     "filmwissen-synthese": 2048,
+    "media-batch-extract": 4096,
+  },
+  task_max_reservierung_usd_cent: {
+    "filmwissen-synthese": 5,
+    "media-batch-extract": 4,
   },
   preise_usd_cent_pro_mtok: {
     "claude-haiku-4-5-20251001": { in: 100, out: 500 },
@@ -2125,7 +2132,7 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(r.status, 200, "Status");
   gleich(r.daten.ok, true, "ok");
   gleich(r.daten.task, "health", "task");
-  gleich(r.daten.contractVersion, "ai-task-v3", "Vertragsversion");
+  gleich(r.daten.contractVersion, "ai-task-v4", "Vertragsversion");
   gleich(r.daten.buildVersion, "unversioned", "ohne Deploy-Metadatum fail-closed");
   gleich(starten().length, 0, "keine Reservierung — health kostet nichts");
   gleich(beenden().length, 0, "keine Protokollzeile");
@@ -4276,6 +4283,18 @@ const BUDGET_SONDEN: Record<
         });
     },
   },
+  "media-batch-extract": {
+    payload: () => ({ bilder: [{ media_type: "image/jpeg", data: "/9j/2Q==", width: 200, height: 200 }] }),
+    vorbereiten: () => {
+      z.anbieter = () => anbieterErfolg({
+        kandidaten: [{
+          titel: "Alien", typ: "film", jahr: 1979, ereignisart: "poster",
+          datum: null, uhrzeit: null, ort: null, hinweis: "", sicherheit: "hoch",
+        }],
+        warnungen: [],
+      });
+    },
+  },
 };
 
 /* Steht für „die Konfiguration sagt zu dieser Aufgabe NICHTS" — der Zustand,
@@ -4349,6 +4368,7 @@ const AUSGABEPREIS: Record<string, number> = {
   "profile-extract": 500,
   "film-forecast": 1000, // Alias gross -> claude-sonnet-5
   "filmwissen-synthese": 1000, // Alias gross -> claude-sonnet-5
+  "media-batch-extract": 500, // Alias klein -> claude-haiku-4-5
 };
 const EINGABEPREIS: Record<string, number> = {
   "echo-struct": 100,
@@ -4356,6 +4376,7 @@ const EINGABEPREIS: Record<string, number> = {
   "profile-extract": 100,
   "film-forecast": 200,
   "filmwissen-synthese": 200,
+  "media-batch-extract": 100,
 };
 
 test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln", async () => {

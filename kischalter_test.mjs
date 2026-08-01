@@ -129,8 +129,8 @@ check("A", "leererStand() ist der fail-closed Zustand: global null, keine Funkti
   () => { const s = K.leererStand();
     return s.global === null && JSON.stringify(s.funktionen) === "{}" && s.gefragtAm === null
       && Object.keys(s).sort().join(",") === "funktionen,gefragtAm,global"; });
-check("A", "KI_FUNKTIONEN führt genau die vier Kern-KI-Funktionen",
-  () => NAMEN().join(",") === "suche,profil,vorbewertung,diagnose");
+check("A", "KI_FUNKTIONEN führt die fünf Kern-KI-Funktionen",
+  () => NAMEN().join(",") === "suche,profil,vorbewertung,stapelimport,diagnose");
 check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
   () => NAMEN().every((n) => { const f = K.KI_FUNKTIONEN[n];
     return typeof f.label === "string" && f.label.length > 0
@@ -139,7 +139,7 @@ check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
 /* „ausblenden" ist die Doktrin: Bei KI=aus existiert der Knopf nicht. Ein
    Erklärtext wäre die falsche Auskunft — `ai-disabled` heißt „der Betreiber
    hat abgeschaltet", nicht „du hast abgeschaltet". */
-check("A", "alle vier blenden bei Aus AUS — keine erklärt sich nach dem Klick",
+check("A", "alle fünf blenden bei Aus AUS — keine erklärt sich nach dem Klick",
   () => NAMEN().every((n) => K.KI_FUNKTIONEN[n].beiAus === "ausblenden"));
 check("A", "KI_WAHL_VERSION ist eine nicht-leere Marke",
   () => typeof K.KI_WAHL_VERSION === "string" && K.KI_WAHL_VERSION.length > 0);
@@ -207,11 +207,11 @@ check("B", "FAIL-CLOSED: ladeStand liefert dabei nie ein `global: true`",
 /* Der interessanteste Fall: alle Einzelfunktionen ausdrücklich AN, aber die
    Grundfrage nie beantwortet. Das darf nichts öffnen. */
 const nurFunktionen = speicher({ "kd:ki": JSON.stringify({ funktionen: { suche: true, profil: true, vorbewertung: true, diagnose: true } }), "kd:ki-version": K.KI_WAHL_VERSION });
-check("B", "FAIL-CLOSED: vier ausdrücklich eingeschaltete Funktionen ohne Grundentscheidung bleiben AUS",
+check("B", "FAIL-CLOSED: ausdrücklich eingeschaltete Funktionen ohne Grundentscheidung bleiben AUS",
   () => NAMEN().every((n) => K.kiAn(n, nurFunktionen) === false));
 /* Und der Normalfall zur Eichung — ohne ihn wäre „alles aus" trivial grün. */
 const an = speicher(AN());
-check("B", "EICHUNG: mit beantworteter Frage und global an sind alle vier AN",
+check("B", "EICHUNG: mit beantworteter Frage und global an sind alle fünf AN",
   () => NAMEN().every((n) => K.kiAn(n, an) === true));
 check("B", "ein fehlender Storage (undefined/null) ist ebenfalls AUS, ohne zu werfen",
   () => K.kiAn("suche", undefined) === false && K.kiAn("suche", null) === false

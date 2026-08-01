@@ -71,7 +71,15 @@ export function bauePaket({ master, artikel, bereiche, autor }) {
 /* ---------- Import Schritt 1: Parsen & Validieren ---------- */
 export function parsePaket(text) {
   let p;
-  try { p = JSON.parse(text); } catch { throw new Error("Keine gültige JSON-Datei."); }
+  let roh = String(text ?? "").trim();
+  /* KI-Chats liefern trotz Aufforderung gelegentlich Markdown-Fences. Der
+     Import akzeptiert deshalb entweder reines JSON oder genau den Codeblock,
+     der das Kinodreieck-Format enthält. */
+  if (!roh.startsWith("{")) {
+    const bloecke = [...roh.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)].map((m) => m[1].trim());
+    roh = bloecke.find((b) => b.includes('"format"') && b.includes("kinodreieck-paket")) || (bloecke.length === 1 ? bloecke[0] : roh);
+  }
+  try { p = JSON.parse(roh); } catch { throw new Error("Keine gültige JSON-Datei oder eindeutige JSON-Antwort."); }
   if (p.format !== PAKET_FORMAT) throw new Error("Kein Kinodreieck-Paket (format-Feld fehlt oder fremd). Für Masterlisten/artikel.json die normalen Import-Felder nutzen.");
   if (Number(p.version) > PAKET_VERSION) throw new Error("Paket-Version " + p.version + " ist neuer als diese App versteht (" + PAKET_VERSION + ").");
   if (!p.bereiche || typeof p.bereiche !== "object") throw new Error("Paket ohne 'bereiche'.");

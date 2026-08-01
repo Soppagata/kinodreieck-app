@@ -2029,6 +2029,7 @@ export default function App() {
             ungesichertMaster={ungesichertMaster} ungesichertArtikel={ungesichertArtikel}
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
+            mustwatch={mustwatch} addFilm={addFilm} addMustwatch={addMustwatch}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}

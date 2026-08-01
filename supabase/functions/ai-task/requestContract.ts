@@ -36,7 +36,7 @@ export const NOCH_NICHT_GEBAUTE_AUFGABEN = Object.freeze([
   "masterlist-enrichment",
 ] as const);
 
-export const FUNCTION_CONTRACT_VERSION = "ai-task-v3";
+export const FUNCTION_CONTRACT_VERSION = "ai-task-v4";
 const BUILD_VERSION_FORM = /^[A-Za-z0-9][A-Za-z0-9._-]{6,63}$/;
 
 export function functionBuildVersion(wert: unknown): string {
