@@ -280,6 +280,8 @@ function seedKatalog(w, start = "clean") {
   check("A: Build enthält Clean- und Demo-Entscheidung", html.includes("Leer starten") && html.includes("Demo ansehen"));
   check("A: Build enthält den DB-Leseschlüssel-Dialog", html.includes("Programmdaten verbinden") && html.includes("Mitgeschickter Leseschlüssel"));
   check("A: kein Terminal-Installer mehr erwähnt", !/Installation-(Mac|Windows)|Terminal-Installation/.test(html));
+  check("A: Build enthält keine sichtbaren NERV-Texte, -Klassen oder Referenzassets",
+    !/(?:\bNERV\b|kd-(?:fx-)?nerv|nerv-logo-reference|ABSOLUTE TERROR FIELD|警報)/.test(html));
 
   const alt = baueDom((w) => {
     w.localStorage.setItem("kd:start", "clean"); // Wert eines alten Builds, noch nicht bewusst bestätigt
@@ -351,14 +353,49 @@ function seedKatalog(w, start = "clean") {
   const max = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style.cursor === "pointer");
   max?.click(); await warte(100);
   const dunkelEgg = knopf(/^Dauerburner$/);
-  check("B: dunkler Max-Knopf nennt NERV nicht", !!dunkelEgg && !/NERV|Showa/.test(dunkelEgg.textContent || ""));
+  check("B: dunkler Max-Knopf verrät den Spezialmodus nicht", !!dunkelEgg && !/Neon Noir|NERV|Showa/.test(dunkelEgg.textContent || ""));
   dunkelEgg?.click(); await warte(120);
-  check("B: dunkler Knopf aktiviert genau NERV", !!doc.querySelector(".kd-wrap.kd-nerv") && !doc.querySelector(".kd-wrap.kd-showa"));
+  let gespeicherteDarstellung = null;
+  try { gespeicherteDarstellung = JSON.parse(dom.window.localStorage.getItem("kd:einstellungen") || "null"); } catch { /* */ }
+  const neonOverlay = doc.querySelector('.kd-fx-neon-noir[aria-hidden="true"]');
+  check("B: dunkler Knopf aktiviert genau Neon Noir",
+    !!doc.querySelector(".kd-wrap.kd-neon-noir") && !doc.querySelector(".kd-wrap.kd-showa, .kd-wrap.kd-nerv"));
+  check("B: Neon Noir wird beim Gast gerätelokal gespeichert", gespeicherteDarstellung?.modus === "neon-noir");
+  check("B: Theme-Attribut erreicht die globale Dokumentwurzel",
+    !!doc.querySelector('[data-kd-theme="neon-noir"]'));
+  check("B: Neon-Noir-Kulisse ist rein dekorativ",
+    !!neonOverlay && dom.window.getComputedStyle(neonOverlay).pointerEvents === "none"
+    && !neonOverlay.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'));
   knopf(/^Dauerburner$/)?.click(); await warte(120);
+  try { gespeicherteDarstellung = JSON.parse(dom.window.localStorage.getItem("kd:einstellungen") || "null"); } catch { /* */ }
+  check("B: erneuter Toggle entfernt den Spezialmodus dauerhaft", gespeicherteDarstellung?.modus === ""
+    && !doc.querySelector(".kd-wrap.kd-neon-noir"));
   knopf(/^Foyer \(hell\)$/)?.click(); await warte(120);
   const hellEgg = knopf(/^Back to the Roots$/);
   hellEgg?.click(); await warte(120);
-  check("B: heller Knopf aktiviert genau Showa", !!doc.querySelector(".kd-wrap.kd-showa") && !doc.querySelector(".kd-wrap.kd-nerv"));
+  check("B: heller Knopf aktiviert genau Showa", !!doc.querySelector(".kd-wrap.kd-showa") && !doc.querySelector(".kd-wrap.kd-neon-noir, .kd-wrap.kd-nerv"));
+  dom.window.close();
+}
+
+/* B2 — der interne Altwert bleibt ausschließlich als Lese-Migration erhalten.
+   Bestehende Geräte sollen Neon Noir erhalten; nach dem ersten Boot darf der
+   alte Wert aber weder weitergeschrieben noch als alte Klasse gerendert werden. */
+{
+  const dom = baueDom((w) => {
+    seedKatalog(w, "clean");
+    w.localStorage.setItem("kd:einstellungen", JSON.stringify({
+      theme: "dunkel", startTab: "start", schrift: "normal", modus: "nerv", basisTheme: "dunkel",
+    }));
+  });
+  const { doc } = hilfen(dom);
+  await warte(2200);
+  let migriert = null;
+  try { migriert = JSON.parse(dom.window.localStorage.getItem("kd:einstellungen") || "null"); } catch { /* */ }
+  check("B2: gespeichertes NERV migriert einmalig zu Neon Noir", migriert?.modus === "neon-noir");
+  check("B2: Migration rendert ausschließlich die neue Theme-Identität",
+    !!doc.querySelector('.kd-wrap.kd-neon-noir[data-kd-theme="neon-noir"], .kd-wrap.kd-neon-noir')
+    && !!doc.querySelector('.kd-fx-neon-noir[aria-hidden="true"]')
+    && !doc.querySelector('.kd-nerv, .kd-fx-nerv, [aria-label="NERV"]'));
   dom.window.close();
 }
 

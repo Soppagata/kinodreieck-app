@@ -62,24 +62,24 @@ export const THEMES = {
     ok: "#5E7D63", // C4: gedämpftes S/W-Grün (Showa)
     kartenFeld: "#34322F",
   },
-  /* ---- Egg-Modus NERV — Evangelion-Terminal, Schwarz/Rot-Orange ----
-     Nahezu schwarzer Grund, warmes Bein für Fließtext (wie die weißen MAGI-Label),
-     Signal-Rot als Akzent/Buttons. Bewertungstrio = Konsolen-Tricolor Cyan/Rot/Amber. */
-  nerv: {
-    saal: "#050506",
-    saalHoch: "#150507",
-    leinwand: "#E9E4DC",
-    leinwandTief: "#CDC7BE",
-    tinte: "#140C0E",
-    tinteWeich: "#4A4046",
-    rauch: "#AA969C",
-    wolfram: "#D86B2D",
-    wie: "#55C8D3",
-    was: "#D86B2D",
-    warum: "#FFAE18",
-    gefahr: "#D86B2D",
-    ok: "#49B06E", // C4: gedämpftes Terminal-Grün (NERV)
-    kartenFeld: "#F4EFE8",
+  /* ---- Egg-Modus NEON NOIR — regennasse Stadt bei Nacht ----
+     Kühles Schwarzblau hält die App ruhig; das Kinogelb bleibt der primäre
+     Interface-Akzent, während die Stadt fast farblos in der Tiefe liegt. */
+  "neon-noir": {
+    saal: "#070913",
+    saalHoch: "#111827",
+    leinwand: "#E6F0F1",
+    leinwandTief: "#CBDADB",
+    tinte: "#0C1720",
+    tinteWeich: "#465964",
+    rauch: "#9BAAB5",
+    wolfram: "#D8A33F",
+    wie: "#36BBD8",
+    was: "#A968D4",
+    warum: "#D89524",
+    gefahr: "#E75E67",
+    ok: "#3EAD7D",
+    kartenFeld: "#F7FBFB",
   },
 };
 
@@ -98,6 +98,7 @@ export function setzeTheme(name) {
     // Hero-Überschriften am hellen Hintergrund weiß stehen.
     const root = document.documentElement;
     if (root && root.style) {
+      root.dataset.kdTheme = THEMES[name] ? name : "dunkel";
       for (const name of ["saal", "saalHoch", "leinwand", "leinwandTief", "tinte", "tinteWeich", "rauch", "wolfram", "gefahr", "ok", "wie", "was", "warum"]) {
         root.style.setProperty("--" + name, T[name]);
         root.style.setProperty("--kd-" + name, T[name]);

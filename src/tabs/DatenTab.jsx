@@ -101,10 +101,10 @@ export function DatenTab({
     return bekannteWerte(Array.isArray(master) ? master : [], zusaetzlich).genres;
   }, [master, programm, streamingBekannt, streamingEntdecken]);
 
-  /* Im hellen Grundmodus öffnet der unklare Knopf Showa, im dunklen NERV.
+  /* Im hellen Grundmodus öffnet der unklare Knopf Showa, im dunklen Neon Noir.
      Bei aktivem Spezialmodus bleibt sein Ziel stabil, damit derselbe Knopf ihn
      wieder beendet. Namen und Bedingungen werden in der UI nicht verraten. */
-  const eggZiel = einstellungen.modus || ((einstellungen.basisTheme || einstellungen.theme) === "hell" ? "showa" : "nerv");
+  const eggZiel = einstellungen.modus || ((einstellungen.basisTheme || einstellungen.theme) === "hell" ? "showa" : "neon-noir");
   const eggAktiv = einstellungen.modus === eggZiel;
   const eggLabel = eggZiel === "showa" ? "Back to the Roots" : "Dauerburner";
   const eggToggle = () => {

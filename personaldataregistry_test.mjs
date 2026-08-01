@@ -32,6 +32,8 @@ check("Jeder Eintrag hat Label, Backup-Projektion, Restore-Plan und Zählweise",
     && typeof e.zaehleRoh === "function"));
 check("Account-Sync leitet exakt dieselbe Registerliste ab",
   JSON.stringify(A.ACCOUNT_SYNC_KEYS) === JSON.stringify(P.PERSONAL_DATA_KEYS));
+check("Darstellungsmodus reist als Teil der Settings mit dem Profil",
+  A.ACCOUNT_SYNC_KEYS.includes(ST.K.einstellungen));
 check("Restore leitet exakt dieselbe Registerliste ab",
   JSON.stringify(R.RESTORE_KEYS) === JSON.stringify(P.PERSONAL_DATA_KEYS));
 check("Auth, Katalogcache und Demo-Markierung stehen nicht im Register",

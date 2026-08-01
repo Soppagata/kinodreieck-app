@@ -16,7 +16,7 @@
 @font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin-ext.woff2') format('woff2'); unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
 @font-face { font-family: 'Space Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('./assets/fonts/space-mono-700-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 /* Fraunces (OFL) — Serifen-Display nur für die Egg-Modi: Showa-Plakattitel (900),
-   Teppich-Kicker/NERV-Tagline (400 italic). Latin-Subset (deckt Deutsch inkl. Umlaute ab).
+   Teppich-Kicker und Egg-Taglines (400 italic). Latin-Subset (deckt Deutsch inkl. Umlaute ab).
    Normal-600 entfernt (Block 4 Cleanup): kein Selektor forderte es an. */
 @font-face { font-family: 'Fraunces'; font-style: normal; font-weight: 900; font-display: swap; src: url('./assets/fonts/fraunces-900-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
 @font-face { font-family: 'Fraunces'; font-style: italic; font-weight: 400; font-display: swap; src: url('./assets/fonts/fraunces-400-italic-latin.woff2') format('woff2'); unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
@@ -40,7 +40,7 @@ button, summary, [role="button"], .kd-menu { -webkit-tap-highlight-color: transp
 }
 /* ---- Safe-Area (Standalone/Notch/Home-Indikator) ----
    Inhalt einrücken, Hintergründe/Overlays bleiben full-bleed. Die Spezialmodi
-   Showa/NERV setzen eigenes Padding und überschreiben das hier bewusst. */
+   Showa/Neon Noir setzen eigenes Padding und überschreiben das hier bewusst. */
 .kd-app { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 .kd-wrap { padding-bottom: calc(60px + env(safe-area-inset-bottom)) !important; }
 
@@ -63,7 +63,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 :root { --perfoTempo: 1.4s; }
 
-/* ================= EGG-MODI: SHOWA & NERV (v3 · CODEX-TUNING) =================
+/* ================= EGG-MODI: SHOWA & NEON NOIR =================
    Abgestimmter Block: Claude legt seine separaten Egg-Regeln außerhalb dieses
    Abschnitts darüber. Farbwelt = tokens.js, Motive/HUD = ModusOverlay.jsx.
    Kein dauerhafter filter/transform auf .kd-app (mobile Containing-Block-Falle). */
@@ -101,84 +101,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-showa header h1 { font-family: 'Fraunces', Georgia, serif !important; font-weight: 900 !important;
   letter-spacing: .015em !important; }
 
-/* ---------- NERV — vollständiges Schwarz/Rot-Orange-Terminal ---------- */
-.kd-fx-nerv { z-index: 0; --nerv-red:#D86B2D; --nerv-black:#050506; --nerv-cyan:#55C8D3; --nerv-amber:#E99A23; --nerv-lime:#D7FF28;
-  font-family:'Space Mono', monospace; color:var(--nerv-red); }
-.kd-fx-nerv .kd-scan { position:absolute; inset:0; opacity:.075; mix-blend-mode:multiply;
-  background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.62) 3px 4px); }
-.kd-fx-nerv .kd-hazard { position:absolute; left:0; right:0; height:8px; opacity:.88;
-  background:repeating-linear-gradient(45deg, var(--nerv-lime) 0 10px, var(--nerv-black) 10px 20px); }
-.kd-fx-nerv .kd-hazard.t { top:0; } .kd-fx-nerv .kd-hazard.b { bottom:0; }
-.kd-nerv-grid { position:absolute; inset:50px 24px 36px; width:calc(100% - 48px); height:calc(100% - 86px); opacity:.16; }
-.kd-nerv-grid g { stroke:var(--nerv-red); stroke-width:2; }
-
-.kd-nerv-battle, .kd-nerv-episode, .kd-nerv-alert, .kd-nerv-micro {
-  position:absolute; box-sizing:border-box; background:rgba(5,5,6,.88); text-transform:uppercase; }
-.kd-nerv-battle { top:18px; left:16px; width:250px; min-height:50px; padding:7px 22px 7px 18px;
-  border:1px solid rgba(216,107,45,.72); opacity:.64;
-  clip-path:polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%); }
-.kd-nerv-battle::after { content:""; position:absolute; inset:5px 9px; border:1px solid rgba(216,107,45,.62);
-  clip-path:inherit; pointer-events:none; }
-.kd-nerv-battle b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:16px; line-height:1.05; letter-spacing:.08em; }
-.kd-nerv-battle span { display:block; margin-top:4px; color:#E9E4DC; font-size:9px; letter-spacing:.12em; }
-
-.kd-nerv-alert { width:58px; padding:10px 6px 12px; text-align:center; border:2px solid var(--nerv-red);
-  transform:translateY(-50%); clip-path:polygon(50% 0,100% 16px,100% calc(100% - 16px),50% 100%,0 calc(100% - 16px),0 16px); }
-.kd-nerv-alert.l { left:10px; top:34%; } .kd-nerv-alert.r { right:10px; top:64%; }
-.kd-nerv-alert::before, .kd-nerv-alert::after { content:""; display:block; height:6px; margin:0 1px 8px;
-  background:repeating-linear-gradient(45deg,var(--nerv-lime) 0 5px,var(--nerv-black) 5px 10px); }
-.kd-nerv-alert::after { margin:8px 1px 0; }
-.kd-nerv-alert b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:24px; line-height:1; writing-mode:vertical-rl; margin:auto; }
-.kd-nerv-alert span { display:block; color:#E9E4DC; font-size:8px; margin-top:5px; letter-spacing:.1em; }
-
-.kd-nerv-episode { top:94px; right:18px; width:156px; min-height:112px; padding:9px 12px; border:1px solid rgba(216,107,45,.72); opacity:.58;
-  clip-path:polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); }
-.kd-nerv-episode b { display:block; color:var(--nerv-red); font-family:'Hiragino Mincho ProN','Yu Mincho',serif; font-size:42px; line-height:1; }
-.kd-nerv-episode span { display:block; color:#E9E4DC; font-size:8px; margin-top:6px; letter-spacing:.08em; }
-.kd-nerv-episode em { display:block; color:var(--nerv-amber); font-size:10px; font-style:normal; font-weight:700; margin-top:8px; }
-
-.kd-nerv-micro { padding:5px 8px; border-left:3px solid var(--nerv-red); }
-.kd-nerv-micro b { display:block; font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-size:13px; line-height:1; }
-.kd-nerv-micro span { color:#E9E4DC; font-size:7px; letter-spacing:.08em; }
-.kd-nerv-micro.m1 { left:80px; top:112px; }
-.kd-nerv-micro.m2 { left:92px; bottom:118px; }
-.kd-nerv-micro.m3 { right:86px; bottom:118px; }
-
-/* Original-Screenshot: Wrapper blendet ausschließlich den 14px-Browserstreifen aus. */
-.kd-nerv-logo { display:block; flex:0 0 auto; width:clamp(52px,4.2vw,56px); aspect-ratio:932/900;
-  overflow:hidden; background:#000; }
-.kd-nerv-logo img { display:block; width:100%; height:auto; }
-.kd-nerv header h1 { color:#D86B2D !important; letter-spacing:.075em !important; }
-.kd-nerv .kd-menu { border-bottom-color:rgba(216,107,45,.62) !important; }
-.kd-nerv .kd-karte { border-radius:0 !important; border:1px solid rgba(216,107,45,.62);
-  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
-  box-shadow:0 0 0 1px rgba(216,107,45,.12),0 5px 18px rgba(0,0,0,.5) !important; }
-.kd-nerv button, .kd-nerv input, .kd-nerv select, .kd-nerv textarea { border-radius:0 !important; }
-
-/* Glitch (JS-getaktet, mobil weiterhin durch die bestehende Query neutralisiert). */
-.kd-glitch .kd-app { animation:kd-nerv-glitch .16s steps(2) 1; }
-@keyframes kd-nerv-glitch { 0%{transform:translate(0,0)} 30%{transform:translate(-2px,1px)} 60%{transform:translate(2px,-1px)} 100%{transform:translate(0,0)} }
-
 @media (max-width:760px) {
   .kd-showa-scene { width:820px; height:205px; }
   .kd-city-back { opacity:.36; }
   .kd-utility { display:none; }
-  .kd-nerv-logo { width:46px; }
-  .kd-nerv-grid { inset:112px 8px 42px; width:calc(100% - 16px); height:calc(100% - 154px); opacity:.075; }
-  .kd-nerv-battle { display:none; }
-  .kd-nerv-alert { width:42px; padding:7px 4px; opacity:.64; }
-  .kd-nerv-alert.l { left:3px; top:32%; } .kd-nerv-alert.r { right:3px; top:66%; }
-  .kd-nerv-alert b { font-size:18px; }
-  .kd-nerv-episode { top:142px; right:5px; width:104px; min-height:80px; padding:6px 8px; opacity:.42; background:rgba(5,5,6,.58); }
-  .kd-nerv-episode b { font-size:28px; } .kd-nerv-episode span { font-size:6px; } .kd-nerv-episode em { font-size:7px; margin-top:5px; }
-  .kd-nerv-micro { display:none; }
 }
 
 @media (prefers-reduced-motion:reduce) {
-  .kd-fx *, .kd-glitch .kd-app, .kd-toast { animation:none !important; }
+  .kd-fx *, .kd-toast { animation:none !important; }
   .kd-menu, .kd-mobile-menu, .kd-menuknopf { transition:none !important; }
 }
-/* ================= ENDE EGG-MODI: SHOWA & NERV (v3) ================= */
+/* ================= ENDE EGG-MODI: SHOWA & NEON NOIR ================= */
 
 /* ---- Easteregg-Toast (Block 3): 4 s, oben rechts, wiederverwendbares Primitiv.
    Overlay ohne filter/fixed-Falle; über allem, pointer-events aus (blockiert nichts).
@@ -202,7 +135,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 760px) {
   .kd-menu { display: none !important; }
   .kd-syncchip-head { display: none; }
-  .kd-showa .kd-app, .kd-nerv .kd-app, .kd-glitch .kd-app {
+  .kd-showa .kd-app, .kd-neon-noir .kd-app {
     filter: none !important; animation: none !important; transform: none !important;
   }
 }
@@ -775,7 +708,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 /* ================= START-DASHBOARD (Marquee-Rework, 2026-07-19) =================
    Optik des Personal-Dashboards (StartTab.StartDashboard). Farben über CSS-Variablen,
-   die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/nerv;
+   die StartTab inline aus den T-Tokens setzt (theme-reaktiv: dunkel/hell/showa/neon-noir;
    setzeTheme kennt keine :root-Vars). Mobil-first; kein filter/transform auf .kd-app. */
 .kd-dash { display: flex; flex-direction: column; gap: 16px; width:100%; min-width:0; max-width:900px; box-sizing:border-box; }
 

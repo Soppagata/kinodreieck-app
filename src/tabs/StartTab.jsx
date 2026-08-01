@@ -155,7 +155,7 @@ function StartDashboard({
   const fmtTag = (ms) => { const d = new Date(ms); const z = (n) => String(n).padStart(2, "0"); return z(d.getDate()) + "." + z(d.getMonth() + 1) + "."; };
 
   /* Theme-Tokens als CSS-Variablen an die Dashboard-Wurzel (setzeTheme kennt keine
-     :root-Vars) — pro Render aus T, damit dunkel/hell/showa/nerv korrekt durchschlagen. */
+     :root-Vars) — pro Render aus T, damit dunkel/hell/showa/neon-noir korrekt durchschlagen. */
   const themeVars = {
     "--kd-saal": T.saal, "--kd-saalHoch": T.saalHoch, "--kd-leinwand": T.leinwand,
     "--kd-leinwandTief": T.leinwandTief, "--kd-tinte": T.tinte, "--kd-tinteWeich": T.tinteWeich,

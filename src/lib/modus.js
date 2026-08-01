@@ -4,7 +4,7 @@
 export const PERSONAL_MODE = false;
 export const EGGS_ENABLED = true;
 
-/* EGG-PAUSE (2026-07-25): Die Eggs werden von Max überarbeitet. Showa/NERV-Modi
+/* EGG-PAUSE (2026-07-25): Die Eggs werden von Max überarbeitet. Showa/Neon-Noir-Modi
    und das Cage-Alphabet bleiben aktiv; Teppich, Star-Wars-Crawl (inkl.
    4.-Mai-Thema) und Klaatu→Necronomicon sind bis zur Neuabnahme stillgelegt.
    Reaktivierung = Flag auf true drehen UND die Pause-Checks in eggs_test.mjs

@@ -1,8 +1,8 @@
 import React from "react";
-import nervLogoReference from "../assets/nerv-logo-reference.png";
+import { NeonNoirOverlay } from "./NeonNoirOverlay.jsx";
 
 /* ---- Egg-Modus-Overlays (rein dekorativ) ----
-   Farbwelt = tokens.js; hier liegen nur Textur, Kulisse und Terminal-HUD.
+   Farbwelt = tokens.js; hier liegen nur Textur und Kulisse.
    Die Ebenen bleiben pointer-events:none und verändern .kd-app nie dauerhaft. */
 
 function Kaiju() {
@@ -79,16 +79,6 @@ function ShowaScene() {
   );
 }
 
-/* Privates Easteregg: Max' Referenzbild wird unverändert verwendet. Der Wrapper
-   schneidet ausschließlich den grauen Screenshot-Streifen am unteren Rand ab. */
-export function NervLogo() {
-  return (
-    <span className="kd-nerv-logo" role="img" aria-label="NERV">
-      <img src={nervLogoReference} alt="" />
-    </span>
-  );
-}
-
 function ShowaFx() {
   return (
     <div className="kd-fx kd-fx-showa" aria-hidden="true">
@@ -100,46 +90,8 @@ function ShowaFx() {
   );
 }
 
-function NervFx() {
-  return (
-    <div className="kd-fx kd-fx-nerv" aria-hidden="true">
-      <div className="kd-scan" />
-      <div className="kd-hazard t" /><div className="kd-hazard b" />
-      <svg className="kd-nerv-grid" viewBox="0 0 1000 700" preserveAspectRatio="none">
-        <g fill="none" vectorEffect="non-scaling-stroke">
-          <path d="M26 120 H156 L202 74 H386 M614 74 H798 L844 120 H974" />
-          <path d="M26 580 H180 L224 626 H410 M590 626 H776 L820 580 H974" />
-          <path d="M74 156 L138 92 H292 L330 130 H670 L708 92 H862 L926 156" />
-          <polygon points="72,250 126,202 238,202 292,250 238,298 126,298" />
-          <polygon points="708,404 762,356 874,356 928,404 874,452 762,452" />
-          <path d="M292 250 H414 L454 290 H546 L586 250 H708 M292 404 H414 L454 364 H546 L586 404 H708" />
-        </g>
-      </svg>
-
-      <div className="kd-nerv-battle">
-        <b lang="ja">第一種戦闘配置</b>
-        <span>BATTLE STATIONS · CONDITION ONE</span>
-      </div>
-
-      <div className="kd-nerv-alert l"><b lang="ja">警報</b><span>ALERT</span></div>
-      <div className="kd-nerv-alert r"><b lang="ja">警報</b><span>ALERT</span></div>
-
-      <div className="kd-nerv-episode">
-        <b lang="ja">第3話</b>
-        <span>THE THIRD EPISODE</span>
-        <em>KINODREIECK</em>
-      </div>
-
-      <div className="kd-nerv-micro m1"><b lang="ja">作戦</b><span>OPERATION</span></div>
-      <div className="kd-nerv-micro m2"><b lang="ja">外部</b><span>EXTERNAL</span></div>
-      <div className="kd-nerv-micro m3"><b lang="ja">内部</b><span>INTERNAL</span></div>
-
-    </div>
-  );
-}
-
 export function ModusFx({ modus }) {
   if (modus === "showa") return <ShowaFx />;
-  if (modus === "nerv") return <NervFx />;
+  if (modus === "neon-noir") return <NeonNoirOverlay />;
   return null;
 }

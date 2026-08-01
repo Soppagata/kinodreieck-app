@@ -992,9 +992,9 @@ Im Web führt `Einzeldatei herunterladen` zur Downloadseite. In einer bereits
 lokal geöffneten Einzeldatei wird dieser Link nicht gezeigt.
 
 Hinter dem Namen `Max` liegen zwei bewusst versteckte Präsentationsmodi: Im
-dunklen Grundthema schaltet der erscheinende Knopf NERV ein, im hellen Grundthema
-Showa. Derselbe Knopf schaltet den Sondermodus wieder aus. Beide Funktionen
-sind rein optisch und verändern keine Fachdaten.
+dunklen Grundthema schaltet der erscheinende Knopf Neon Noir ein, im hellen
+Grundthema Showa. Derselbe Knopf schaltet den Sondermodus wieder aus. Beide
+Funktionen sind rein optisch und verändern keine Fachdaten.
 
 ### 12.17 Achievements und Cage-Alphabet
 

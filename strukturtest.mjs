@@ -227,13 +227,20 @@ check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
 if (maxLink) {
   maxLink.click(); await warte(200);
   const egg = [...doc.querySelectorAll("button")].find((b) => /^(Back to the Roots|Dauerburner)$/.test((b.textContent || "").trim()));
-  check("Unklar beschrifteter Easter-Egg-Knopf erscheint", !!egg && !/(Showa|NERV)/.test(egg.textContent || ""));
+  check("Unklar beschrifteter Easter-Egg-Knopf erscheint", !!egg && !/(Showa|Neon Noir|NERV)/.test(egg.textContent || ""));
   if (egg) {
     egg.click(); await warte(300);
-    check("Modus-Klasse am Wrapper aktiv", /kd-(showa|nerv)/.test(wrapper().className || ""));
+    check("Modus-Klasse am Wrapper aktiv", /kd-(showa|neon-noir)/.test(wrapper().className || ""));
+    if (wrapper().classList.contains("kd-neon-noir")) {
+      const neonOverlay = doc.querySelector('.kd-fx-neon-noir[aria-hidden="true"]');
+      check("Neon Noir setzt das globale Theme-Attribut", !!doc.querySelector('[data-kd-theme="neon-noir"]'));
+      check("Neon-Noir-Overlay blockiert und fokussiert nichts", !!neonOverlay
+        && dom.window.getComputedStyle(neonOverlay).pointerEvents === "none"
+        && !neonOverlay.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+    }
     const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Back to the Roots|Dauerburner)$/.test((b.textContent || "").trim()));
     if (egg2) { egg2.click(); await warte(200); }
-    check("Modus wieder aus (Toggle)", !/kd-(showa|nerv)/.test(wrapper().className || ""));
+    check("Modus wieder aus (Toggle)", !/kd-(showa|neon-noir|nerv)/.test(wrapper().className || ""));
   }
 }
 // Schriftgröße: Zustandsklasse statt mobilem Layout-Zoom

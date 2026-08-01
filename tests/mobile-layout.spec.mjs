@@ -23,6 +23,30 @@ async function blockiereFremdnetz(page) {
   });
 }
 
+async function seedAppMitDarstellung(page, { modus = "", schrift = "normal" } = {}) {
+  await page.addInitScript(({ modus, schrift }) => {
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-07-31", version: "beta-2026-07-datenfreigabe-2" }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-07-31T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({
+      theme: "dunkel", startTab: "start", schrift, modus,
+      ...(modus ? { basisTheme: "dunkel" } : {}),
+    }));
+  }, { modus, schrift });
+}
+
+async function animierteNeonEbenen(overlay) {
+  return overlay.evaluate((el) => [el, ...el.querySelectorAll("*")].flatMap((knoten) => {
+    const stil = getComputedStyle(knoten);
+    if (stil.animationName === "none" || Number.parseFloat(stil.animationDuration) <= 0) return [];
+    return [{ klasse: knoten.className?.baseVal || knoten.className || "", animation: stil.animationName }];
+  }));
+}
+
 for (const viewport of VIEWPORTS) {
   test(`Ersteinstieg bleibt vollständig im Viewport ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
@@ -158,6 +182,122 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+for (const viewport of VIEWPORTS) {
+  test(`Neon Noir bleibt dekorativ und im iPhone-Viewport ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page, { modus: "neon-noir" });
+    await page.goto("/");
+
+    const overlay = page.locator('.kd-fx-neon-noir[aria-hidden="true"]');
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toHaveCSS("pointer-events", "none");
+    await expect(page.locator('.kd-wrap.kd-neon-noir')).toHaveCount(1);
+    await expect(page.locator('[data-kd-theme="neon-noir"]')).toHaveCount(1);
+    await expect(overlay.locator('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
+    await expect(overlay.locator(".kd-neon-noir__city--mobile")).toBeVisible();
+    await expect(overlay.locator(".kd-neon-noir__city--desktop")).toBeHidden();
+
+    const geometrie = await overlay.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const animiert = [el, ...el.querySelectorAll("*")].filter((knoten) => {
+        const stil = getComputedStyle(knoten);
+        return stil.animationName !== "none" && Number.parseFloat(stil.animationDuration) > 0;
+      });
+      return { links: r.left, rechts: r.right, oben: r.top, unten: r.bottom, animiert: animiert.length };
+    });
+    expect(geometrie.links).toBeGreaterThanOrEqual(-0.5);
+    expect(geometrie.rechts).toBeLessThanOrEqual(viewport.width + 0.5);
+    expect(geometrie.oben).toBeGreaterThanOrEqual(-0.5);
+    expect(geometrie.unten).toBeLessThanOrEqual(viewport.height + 0.5);
+    expect(geometrie.animiert).toBeLessThanOrEqual(2);
+    await keineDokumentUeberbreite(page);
+
+    if (viewport.name === "393x852") {
+      /* Der alte Markenmodus darf nur noch als interner Migrationswert im
+         JavaScript existieren, nie als sichtbare Klasse, Grafik oder Kopie. */
+      await expect(page.locator('.kd-nerv, .kd-fx-nerv, [aria-label="NERV"], img[src*="nerv"]')).toHaveCount(0);
+      await expect(page.locator("body")).not.toContainText(/\bNERV\b/);
+      await page.reload();
+      await expect(page.locator('.kd-wrap.kd-neon-noir .kd-fx-neon-noir[aria-hidden="true"]')).toHaveCount(1);
+      const gespeichert = await page.evaluate(() => JSON.parse(localStorage.getItem("kd:einstellungen") || "null"));
+      expect(gespeichert?.modus).toBe("neon-noir");
+    }
+  });
+}
+
+test("Neon Noir respektiert Reduced Motion als gestaltetes Standbild", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => { Math.random = () => 0; });
+  await page.clock.install({ time: new Date("2026-08-01T20:00:00Z") });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page, { modus: "neon-noir" });
+  await page.goto("/");
+
+  const overlay = page.locator('.kd-fx-neon-noir[aria-hidden="true"]');
+  await expect(overlay).toBeVisible();
+  await expect(overlay.locator(".kd-neon-noir__city--mobile")).toBeVisible();
+  for (const effekt of [".kd-neon-noir__rain", ".kd-neon-noir__mist"]) {
+    await expect(overlay.locator(effekt)).toHaveCSS("animation-name", "none");
+  }
+  const bewegt = await overlay.evaluate((el) => [el, ...el.querySelectorAll("*")].some((knoten) => {
+    const stil = getComputedStyle(knoten);
+    return stil.animationName !== "none" && Number.parseFloat(stil.animationDuration) > 0;
+  }));
+  expect(bewegt).toBe(false);
+  await page.clock.fastForward(400_000);
+  await expect(overlay).not.toHaveClass(/kd-neon-noir--flyby/);
+  await expect(overlay.locator(".kd-neon-noir__flyby")).toBeHidden();
+  expect(await animierteNeonEbenen(overlay)).toEqual([]);
+  await keineDokumentUeberbreite(page);
+});
+
+test("Neon Noir hält den seltenen Rücklichtflug dekorativ und räumt seinen Timer auf", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await page.addInitScript(() => { Math.random = () => 0; });
+  await page.clock.install({ time: new Date("2026-08-01T20:00:00Z") });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page, { modus: "neon-noir" });
+  const seitenfehler = [];
+  page.on("pageerror", (fehler) => seitenfehler.push(String(fehler)));
+  await page.goto("/");
+
+  const overlay = page.locator('.kd-fx-neon-noir[aria-hidden="true"]');
+  const flyby = overlay.locator(".kd-neon-noir__flyby");
+  await expect(overlay).toBeVisible();
+  await expect(overlay).toHaveCSS("pointer-events", "none");
+  await expect(flyby).toHaveCSS("pointer-events", "none");
+  await expect(flyby.locator("span")).toHaveCount(2);
+  await expect(overlay.locator('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
+  expect(await animierteNeonEbenen(overlay)).toHaveLength(2);
+
+  await page.clock.fastForward(90_000);
+  await expect(overlay).toHaveClass(/kd-neon-noir--flyby/);
+  await expect(flyby).toHaveCSS("animation-name", "kd-neon-noir-flyby");
+  await expect(overlay.locator(".kd-neon-noir__mist")).toHaveCSS("animation-name", "none");
+
+  for (const schritt of [0, 250, 250, 250]) {
+    if (schritt) await page.clock.fastForward(schritt);
+    await expect(overlay).toHaveClass(/kd-neon-noir--flyby/);
+    const ebenen = await animierteNeonEbenen(overlay);
+    expect(ebenen, JSON.stringify(ebenen)).toHaveLength(2);
+    expect(ebenen.map((e) => e.animation).sort()).toEqual(["kd-neon-noir-flyby", "kd-neon-noir-rain"]);
+    await keineDokumentUeberbreite(page);
+  }
+
+  /* Ausschalten während des laufenden Flugs unmountet das Overlay. Der noch
+     offene End-Timer und der geplante Folgeflug dürfen es nicht zurückholen. */
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: /Saal \(Dunkel\)/i }).click();
+  await expect(page.locator(".kd-fx-neon-noir")).toHaveCount(0);
+  await page.clock.fastForward(400_000);
+  await expect(page.locator(".kd-fx-neon-noir")).toHaveCount(0);
+  expect(seitenfehler).toEqual([]);
+  await keineDokumentUeberbreite(page);
+});
 
 test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Streaming-Tab", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });

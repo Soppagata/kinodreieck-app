@@ -1,0 +1,269 @@
+/* Neon Noir wird in einer eigenen Datei gehalten, damit das dekorative
+   Stadtbild unabhängig von den übrigen Theme-Regeln weiterentwickelt werden kann.
+   Baseline: Dunst + Regen. Beim seltenen Vorbeiflug stoppt Dunst, sodass auch
+   dann höchstens zwei Ebenen gleichzeitig animieren. */
+
+.kd-neon-noir-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  isolation: isolate;
+  contain: strict;
+  pointer-events: none;
+  user-select: none;
+  background: #070913;
+}
+
+.kd-neon-noir__city {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.kd-neon-noir__city--mobile {
+  display: none;
+}
+
+.kd-neon-noir__mist {
+  position: absolute;
+  z-index: 2;
+  inset: -12%;
+  opacity: 0.42;
+  background:
+    radial-gradient(ellipse 31% 26% at 12% 48%, rgba(69, 202, 218, 0.2), transparent 72%),
+    radial-gradient(ellipse 28% 24% at 88% 56%, rgba(40, 151, 181, 0.17), transparent 74%),
+    linear-gradient(90deg, rgba(42, 148, 170, 0.06), transparent 28% 72%, rgba(42, 148, 170, 0.05));
+  filter: blur(14px);
+  transform: translate3d(-1.5%, 0, 0) scale(1.025);
+  animation: kd-neon-noir-mist 18s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+.kd-neon-noir__rain {
+  position: absolute;
+  z-index: 4;
+  inset: -24%;
+  opacity: 0.2;
+  background-image:
+    repeating-linear-gradient(
+      103deg,
+      transparent 0 11px,
+      rgba(190, 238, 244, 0.2) 12px,
+      transparent 13px 27px
+    ),
+    repeating-linear-gradient(
+      103deg,
+      transparent 0 38px,
+      rgba(103, 200, 218, 0.14) 39px,
+      transparent 41px 73px
+    );
+  background-size: 180px 260px, 270px 390px;
+  mix-blend-mode: screen;
+  transform: translate3d(-3%, -14%, 0);
+  animation: kd-neon-noir-rain 1.15s linear infinite;
+  will-change: transform, opacity;
+}
+
+.kd-neon-noir__flyby {
+  position: absolute;
+  z-index: 3;
+  left: 46%;
+  top: 61%;
+  display: flex;
+  gap: 5px;
+  opacity: 0;
+  transform: translate3d(-12vw, 3vh, 0) scale(0.7);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.kd-neon-noir__flyby span {
+  display: block;
+  width: 3px;
+  height: 2px;
+  border-radius: 50%;
+  background: #D82D24;
+  box-shadow: 0 0 4px rgba(216, 45, 36, 0.76);
+}
+
+.kd-neon-noir--flyby .kd-neon-noir__mist {
+  animation: none;
+}
+
+.kd-neon-noir--flyby .kd-neon-noir__flyby {
+  animation: kd-neon-noir-flyby 1.05s cubic-bezier(0.22, 0.68, 0.2, 1) both;
+}
+
+@keyframes kd-neon-noir-flyby {
+  0% {
+    opacity: 0;
+    transform: translate3d(-12vw, 3vh, 0) scale(0.7);
+  }
+
+  14% {
+    opacity: 0.1;
+  }
+
+  24% {
+    opacity: 0.58;
+  }
+
+  68% {
+    opacity: 0.38;
+    transform: translate3d(6vw, -1vh, 0) scale(0.34);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(22vw, -7vh, 0) scale(0.12);
+  }
+}
+
+/* Ruhige UI-Einbindung: Die Stadt darf Cyan/Pink tragen; alle interaktiven
+   Oberflächen bleiben dagegen im gelb-ambernen Kinodreieck-Akzent. */
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) header svg[aria-label="Kinodreieck"] {
+  filter:
+    drop-shadow(0 1px 5px rgba(216, 163, 63, 0.2))
+    drop-shadow(0 0 8px rgba(216, 163, 63, 0.14));
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) header h1 {
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.56);
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-karte {
+  border-color: rgba(216, 163, 63, 0.34) !important;
+  box-shadow:
+    0 1px 0 rgba(230, 240, 241, 0.06) inset,
+    0 12px 34px rgba(1, 4, 10, 0.48),
+    0 0 0 1px rgba(216, 163, 63, 0.05) !important;
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-menu {
+  box-shadow:
+    0 1px 0 rgba(216, 163, 63, 0.24),
+    0 10px 28px rgba(2, 5, 13, 0.32);
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
+  .kd-nav-aktiv,
+  .kd-mobile-menu button[aria-current="page"]
+) {
+  box-shadow:
+    0 -2px 0 rgba(216, 163, 63, 0.62) inset,
+    0 0 13px rgba(216, 163, 63, 0.1);
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
+  .kd-mobile-menu,
+  .kd-mobile-menu-dialog
+) {
+  border-color: rgba(216, 163, 63, 0.34);
+  box-shadow:
+    0 0 0 1px rgba(216, 163, 63, 0.05),
+    0 18px 50px rgba(1, 3, 10, 0.62);
+}
+
+:where(.kd-neon-noir, [data-kd-theme="neon-noir"]) :is(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  summary,
+  [tabindex]
+):focus-visible {
+  outline-color: #D8A33F;
+}
+
+@keyframes kd-neon-noir-mist {
+  0% {
+    opacity: 0.32;
+    transform: translate3d(-1.5%, 0, 0) scale(1.025);
+  }
+
+  100% {
+    opacity: 0.48;
+    transform: translate3d(1.5%, -1%, 0) scale(1.04);
+  }
+}
+
+@keyframes kd-neon-noir-rain {
+  0% {
+    opacity: 0.16;
+    transform: translate3d(-3%, -14%, 0);
+  }
+
+  100% {
+    opacity: 0.22;
+    transform: translate3d(3%, 14%, 0);
+  }
+}
+
+@media (max-width: 760px) {
+  .kd-neon-noir__city--desktop {
+    display: none;
+  }
+
+  .kd-neon-noir__city--mobile {
+    display: block;
+  }
+
+  .kd-neon-noir__mist {
+    inset: -8% -20%;
+    opacity: 0.28;
+    background:
+      radial-gradient(ellipse 34% 28% at 8% 52%, rgba(69, 202, 218, 0.12), transparent 74%),
+      radial-gradient(ellipse 28% 25% at 92% 62%, rgba(255, 91, 167, 0.07), transparent 76%);
+    filter: blur(11px);
+  }
+
+  .kd-neon-noir__rain {
+    opacity: 0.16;
+    background-size: 150px 230px, 230px 350px;
+  }
+
+  .kd-neon-noir__flyby {
+    left: 44%;
+    top: 58%;
+    gap: 4px;
+  }
+
+  :where(.kd-neon-noir, [data-kd-theme="neon-noir"]) .kd-app {
+    background: linear-gradient(
+      90deg,
+      rgba(7, 9, 19, 0.06),
+      rgba(7, 9, 19, 0.46) 24%,
+      rgba(7, 9, 19, 0.56) 50%,
+      rgba(7, 9, 19, 0.46) 76%,
+      rgba(7, 9, 19, 0.06)
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-neon-noir__mist,
+  .kd-neon-noir__rain,
+  .kd-neon-noir__flyby {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .kd-neon-noir__mist {
+    opacity: 0.37;
+    transform: none;
+  }
+
+  .kd-neon-noir__rain {
+    opacity: 0.14;
+    transform: none;
+  }
+
+  .kd-neon-noir__flyby {
+    display: none !important;
+  }
+}

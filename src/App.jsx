@@ -88,7 +88,7 @@ import { EGGS_ENABLED } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
 import { HilfeSheet } from "./components/HilfeSheet.jsx";
-import { ModusFx, NervLogo } from "./components/ModusOverlay.jsx";
+import { ModusFx } from "./components/ModusOverlay.jsx";
 import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { BereichsHero } from "./components/BereichsHero.jsx";
@@ -227,13 +227,12 @@ export default function App() {
     if (k === "theme") setzeTheme(v);
     store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
   }, [einstellungen, bereinigteEinstellungen]);
-  /* ---- Darstellungs-Modi: Saal/Foyer/Showa/NERV in EINER Gruppe.
+  /* ---- Darstellungs-Modi: Saal/Foyer/Showa/Neon Noir in EINER Gruppe.
      Die Spezialmodi erzwingen jeweils ihr dunkles Theme;
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
-  const modusWrapRef = useRef(null);
   const waehleModus = useCallback((wahl) => {
     let next;
-    if (wahl === "showa" || wahl === "nerv") {
+    if (wahl === "showa" || wahl === "neon-noir") {
       const basisTheme = einstellungen.modus
         ? (einstellungen.basisTheme || "dunkel")
         : einstellungen.theme;
@@ -263,24 +262,6 @@ export default function App() {
     setzeTheme(next.modus || next.theme);
     store.set(K.einstellungen, JSON.stringify(next)).catch(() => {});
   }, [einstellungen, bereinigteEinstellungen]);
-  /* NERV-Glitch-Takt: seltener, kurzer Klassensprung am Wrapper (der Rest ist
-     reines CSS). Showa braucht keinen JS-Takt — Korn/Vignette/Skyline/Kaiju laufen
-     als CSS-Overlays. prefers-reduced-motion => gar kein Takt. */
-  useEffect(() => {
-    if (einstellungen.modus !== "nerv") return;
-    let reduziert = false;
-    try { reduziert = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch { /* */ }
-    if (reduziert) return;
-    const timers = [];
-    const rnd = (a, b) => a + Math.random() * (b - a);
-    const puls = () => {
-      const w = modusWrapRef.current;
-      if (w) { w.classList.add("kd-glitch"); timers.push(setTimeout(() => w.classList.remove("kd-glitch"), rnd(90, 220))); }
-      timers.push(setTimeout(puls, rnd(4200, 11000)));
-    };
-    timers.push(setTimeout(puls, rnd(2600, 6000)));
-    return () => { timers.forEach(clearTimeout); if (modusWrapRef.current) modusWrapRef.current.classList.remove("kd-glitch"); };
-  }, [einstellungen.modus]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
@@ -618,15 +599,18 @@ export default function App() {
         const r = await store.get(K.einstellungen);
         if (r && r.value) {
           const roh = JSON.parse(r.value);
-          const hatteVeralteteMenuepraeferenz = Object.prototype.hasOwnProperty.call(roh, "linkshaender");
+          const hatteVeralteteEinstellung = Object.prototype.hasOwnProperty.call(roh, "linkshaender")
+            || Object.prototype.hasOwnProperty.call(roh, "kurosawa")
+            || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus);
           const e = { theme: "dunkel", startTab: "start", schrift: "normal", modus: "", ...roh };
           delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
-          if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen (Showa/NERV lösen sie ab)
+          if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen
+          if (e.modus === "nerv") e.modus = "neon-noir";        // veröffentlichbarer Ersatz bewahrt die dunkle Egg-Wahl
           setEinstellungenState(e);
-          setzeTheme(e.modus || e.theme);                        // Modus (showa/nerv) überschreibt die Basis-Palette
+          setzeTheme(e.modus || e.theme);                        // Spezialmodus überschreibt die Basis-Palette
           if (e.startTab && e.startTab !== "start") setTab(e.startTab);
-          if (hatteVeralteteMenuepraeferenz) await store.set(K.einstellungen, JSON.stringify(e));
+          if (hatteVeralteteEinstellung) await store.set(K.einstellungen, JSON.stringify(e));
         }
       } catch { /* Defaults */ }
       try {
@@ -1778,7 +1762,7 @@ export default function App() {
   };
 
   return (
-    <div ref={modusWrapRef} style={wrap} className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal") + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "nerv" ? " kd-nerv" : "")}>
+    <div style={wrap} className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal") + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "neon-noir" ? " kd-neon-noir" : "")}>
       <ModusFx modus={einstellungen.modus} />
       <div className="kd-app" data-session-mode={session.mode}>
       {startModalOffen && (
@@ -1812,7 +1796,7 @@ export default function App() {
       )}
       <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {einstellungen.modus === "nerv" ? <NervLogo size={38} /> : <Logo size={34} />}
+          <Logo size={34} />
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 34, letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
