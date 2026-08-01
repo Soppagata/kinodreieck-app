@@ -24,18 +24,18 @@ export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: op
      der frühere stille 0/0/0-Default aus leeren Feldern ist damit weg. */
   const alleLeer = wie === "" && was === "" && warum === "";
   const axisInput = (label, val, set, col) => (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: col }}>
+    <label className="kd-edit-achse" style={{ display: "flex", flexDirection: "column", gap: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: col }}>
       {label}
       <input type="number" min="0" max="5" value={val} onChange={onAxis(set)} style={{ ...lightInput, width: 56 }} />
     </label>
   );
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px 12px", background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div data-tour="bewertung-slider" style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+    <div className="kd-editpanel" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: "12px 12px", background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="kd-edit-werte" data-tour="bewertung-slider" style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
         {axisInput("WIE", wie, setWie, T.wie)}
         {axisInput("WAS", was, setWas, T.was)}
         {axisInput("WARUM", warum, setWarum, T.warum)}
-        <label style={{ display: "flex", flexDirection: "column", gap: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>
+        <label className="kd-edit-kategorie" style={{ display: "flex", flexDirection: "column", gap: 3, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>
           KATEGORIE
           <select value={kat} onChange={(e) => setKat(e.target.value)} style={{ ...lightInput, padding: "7px 6px" }}>
             {BEWERTUNGSKATEGORIEN.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
@@ -48,7 +48,7 @@ export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: op
       <textarea value={notiz} onChange={(e) => setNotiz(e.target.value)} rows={2}
         placeholder="Notiz (Edition, Fassung, Reihen-Abdeckung, Sehstand … — frei)"
         style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className="kd-edit-aktionen" style={{ display: "flex", gap: 8 }}>
         <button style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }}
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
@@ -59,10 +59,10 @@ export function EditPanel({ film, onSave, onCancel, autorName }) { // KD-030: op
           Abbrechen
         </button>
       </div>
-      <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinteWeich }}>
+      <div className="kd-edit-hinweis" style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinteWeich }}>
         {alleLeer
           ? "Alle drei Achsen leer = Eintrag bleibt unbewertet (Kategorie wird ignoriert)."
-          : 'Speichern setzt bewertet_von = "max". Export im Einstellungen-Tab hält deine JSON-Datei synchron.'}
+          : "Speichern übernimmt deine Änderungen sofort."}
       </div>
     </div>
   );

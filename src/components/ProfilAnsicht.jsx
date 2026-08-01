@@ -123,21 +123,22 @@ export function ProfilAnsicht({
       )}
 
       {signale.map((s, i) => (
-        <div key={(s.beleg || "") + i}
+        <div className="kd-profil-signal" key={(s.beleg || "") + i}
           style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap",
             padding: "8px 0", borderBottom: "1px solid " + T.saal }}>
-          <span style={{ color: T[RICHTUNG_FARBE[s.richtung]] || T.rauch, fontFamily: "'Space Mono', monospace", fontSize: 13, minWidth: 92 }}>
+          <span className="kd-profil-richtung" style={{ color: T[RICHTUNG_FARBE[s.richtung]] || T.rauch, fontFamily: "'Space Mono', monospace", fontSize: 13, minWidth: 92 }}>
             {RICHTUNG_WORT[s.richtung] || s.richtung}
           </span>
-          <span style={{ color: T.leinwand, fontSize: 14, flex: "1 1 120px" }}>
+          <span className="kd-profil-wert" style={{ color: T.leinwand, fontSize: 14, flex: "1 1 120px" }}>
             {s.wert} <span style={{ color: T.rauch, fontSize: 12 }}>({s.art})</span>
           </span>
-          <span style={{ color: T.rauch, fontSize: 12, flex: "0 1 auto" }}>{herkunft(s)}</span>
+          <span className="kd-profil-herkunft" style={{ color: T.rauch, fontSize: 12, flex: "0 1 auto" }}>{herkunft(s)}</span>
           {/* Korrigieren heißt hier: die Richtung umkehren. Das ist der Fall,
               der praktisch vorkommt („das habe ich falsch verstanden") —
               Wert und Art zu ändern hieße, einen anderen Zug zu erzeugen,
               und dafür ist das Entfernen plus Neuanlegen der ehrlichere Weg. */}
           <select
+            className="kd-profil-richtungwahl"
             aria-label={"Richtung für " + s.wert}
             value={s.richtung}
             onChange={(e) => onRichtungAendern?.(i, e.target.value)}
@@ -146,7 +147,7 @@ export function ProfilAnsicht({
           >
             {RICHTUNGEN.map((r) => <option key={r} value={r}>{RICHTUNG_WORT[r]}</option>)}
           </select>
-          <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 9px" }}
+          <button className="kd-profil-entfernen" style={{ ...btnStyle(false), fontSize: 12, padding: "4px 9px" }}
             onClick={() => onEntfernen?.(i)}
             aria-label={"„" + RICHTUNG_WORT[s.richtung] + " " + s.wert + "“ entfernen"}>
             entfernen

@@ -177,7 +177,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     <section>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
           Interner Key bleibt "bestand" — nur das Label heißt Einträge (Max, 18.07.). */}
-      <SegmentedControl value={ansicht} onChange={(id) => { setAnsicht(id); setExpandedId(null); }}
+      <SegmentedControl className="kd-mediathek-ansichten" value={ansicht} onChange={(id) => { setAnsicht(id); setExpandedId(null); }}
         options={[
           { id: "bestand", label: "Einträge" },
           { id: "besitz", label: "Im Besitz", badge: besitzAnzahl },
@@ -202,7 +202,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {ansicht !== "mustwatch" && (<>
       {/* Typ-Tabs (Filter auf typ) */}
-      <SegmentedControl value={typTab} onChange={(t) => { setTypTab(t); setExpandedId(null); }}
+      <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={(t) => { setTypTab(t); setExpandedId(null); }}
         options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
 
       <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>

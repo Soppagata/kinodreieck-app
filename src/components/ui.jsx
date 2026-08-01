@@ -91,11 +91,11 @@ export function ChipReihe({ children, style }) {
    /^Im Besitz \(/). Optik = die bisherigen Inline-Knopf-Fabriken (Barlow 15px);
    die Mobile-Verdichtung übernimmt .kd-seg (index.css). dataTour landet am
    Container — Tour-Anker wie data-tour="streaming-views" bleiben erhalten. */
-export function SegmentedControl({ options, value, onChange, dataTour, style }) {
+export function SegmentedControl({ options, value, onChange, dataTour, style, className = "" }) {
   /* style nur für Layout im Umfeld (marginBottom/flex) — flexWrap/overflow
      NIE inline setzen, das steuert .kd-seg per Media-Query. */
   return (
-    <div className="kd-seg" role="group" data-tour={dataTour} style={style}>
+    <div className={("kd-seg " + className).trim()} role="group" data-tour={dataTour} style={style}>
       {options.map((o) => (
         <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={value === o.id}
           style={{

@@ -23,7 +23,7 @@
 
 html, body { margin: 0; padding: 0; background: #17151A; font-weight: 400;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior: none; }
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%; overscroll-behavior: none; }
 #root { min-height: 100vh; min-height: 100dvh; }
 
 /* ---- Touch-Härtung (Handy) ---- */
@@ -327,12 +327,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-mobile-menu-liste button.aktiv { border-color:#e3a63b; background:rgba(227,166,59,.11); }
 
 @media (max-width:760px) {
-  .kd-menuknopf { position:fixed; display:flex; align-items:center; justify-content:center; right:max(20px,env(safe-area-inset-right));
-    bottom:calc(18px + env(safe-area-inset-bottom)); z-index:13010; width:58px; height:58px; min-height:58px; padding:0;
-    border:2px solid #ece8df; border-radius:50%; background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e);
-    box-shadow:0 6px 22px rgba(0,0,0,.58); }
-  .kd-menulinien { width:25px; display:grid; gap:4px; transition:transform .18s ease; }
-  .kd-menulinien i { display:block; width:25px; height:3px; border-radius:3px; background:currentColor; transition:transform .18s ease,opacity .18s ease; }
+  .kd-menuknopf { position:fixed; display:flex; align-items:center; justify-content:center; right:max(12px,env(safe-area-inset-right));
+    bottom:calc(12px + env(safe-area-inset-bottom)); z-index:13010; width:50px; height:50px; min-height:50px; padding:0;
+    border:1.5px solid #ece8df; border-radius:50%; background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e);
+    box-shadow:0 4px 14px rgba(0,0,0,.48); }
+  .kd-menulinien { width:22px; display:grid; gap:4px; transition:transform .18s ease; }
+  .kd-menulinien i { display:block; width:22px; height:2.5px; border-radius:3px; background:currentColor; transition:transform .18s ease,opacity .18s ease; }
   .kd-menuknopf.offen .kd-menulinien { transform:rotate(90deg); }.kd-menuknopf.offen .kd-menulinien i:nth-child(2) { width:17px; }
 }
 
@@ -343,6 +343,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    bleiben unangetastet, damit der Desktop (>760px) unverändert aussieht. */
 .kd-chiprow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.kd-film-editor-shell { margin-left: 74px; margin-right: 48px; }
+.kd-editpanel, .kd-beschreibung-editor { width: 100%; min-width: 0; box-sizing: border-box; }
 @media (max-width: 760px) {
   .kd-chiprow, .kd-seg {
     flex-wrap: wrap; overflow: visible; scroll-snap-type: none;
@@ -354,6 +356,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      gewinnt der Inline-Style (Scrim-Bug-Lehre, s. Kommentar oben Z.181-184).
      Tap-Ziel bleibt >=44px über die pointer:coarse-Regel (min-height unberührt). */
   .kd-seg > button { font-size: 14px !important; padding: 7px 11px !important; }
+  .kd-mediathek-ansichten, .kd-mediathek-typen { display:grid; gap:6px; }
+  .kd-mediathek-ansichten { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .kd-mediathek-typen { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .kd-mediathek-ansichten>button, .kd-mediathek-typen>button {
+    width:100%; min-width:0; padding:6px 5px !important; font-size:13px !important; line-height:1.15;
+  }
   /* Such-/Sortier-Zeilen verdichten: gap und min-width stehen inline am
      Container bzw. Input (inputStyle-Spread) -> !important; max-width am
      Select kollidiert nicht mit inline width:auto und braucht keins. */
@@ -364,6 +372,33 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      „Foyer (hell)"/„Groß" nicht mehr am Rand abschneiden (Max 2026-07-19, P2). */
   .kd-einstellzeile { flex-direction: column !important; align-items: stretch !important; gap: 4px !important; }
   .kd-einstellzeile > span { width: auto !important; }
+
+  /* Filmkarten: Der Editor nutzt unter dem Kartenkopf die ganze Breite. Das
+     verhindert auf kleinen iPhones, dass Selects und Textfelder aus der
+     schmalen Spalte zwischen Dreieck und Score herausragen. */
+  .kd-karte { width:100%; min-width:0; max-width:100%; box-sizing:border-box; padding:12px !important; }
+  .kd-filmkopf { gap:10px !important; min-width:0; }
+  .kd-filmhaupt { min-width:0; }
+  .kd-film-editor-shell { width:100%; min-width:0; margin:0; }
+  .kd-editpanel { padding:11px 10px !important; }
+  .kd-edit-werte { display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px !important; align-items:end !important; }
+  .kd-edit-achse { min-width:0; }
+  .kd-edit-achse input { width:100% !important; min-width:0 !important; }
+  .kd-edit-kategorie { grid-column:1 / -1; min-width:0; }
+  .kd-edit-kategorie select { width:100% !important; min-width:0 !important; }
+  .kd-edit-aktionen { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .kd-edit-aktionen button { width:100%; min-width:0; padding:7px 8px !important; }
+  .kd-edit-hinweis { line-height:1.5; overflow-wrap:anywhere; }
+
+  /* Bestätigte Geschmacksangaben werden zu ruhigen, dreizeiligen Einträgen:
+     Aussage, nachvollziehbare Herkunft, dann die beiden Aktionen. */
+  .kd-profil-signal { display:grid !important; grid-template-columns:minmax(0,1fr) auto; gap:7px 10px !important;
+    align-items:center !important; padding:12px 0 !important; }
+  .kd-profil-richtung { min-width:0 !important; }
+  .kd-profil-wert { min-width:0; text-align:right; overflow-wrap:anywhere; }
+  .kd-profil-herkunft { grid-column:1 / -1; min-width:0; }
+  .kd-profil-richtungwahl { grid-column:1; width:100% !important; min-width:0 !important; }
+  .kd-profil-entfernen { grid-column:2; width:auto; min-width:0; padding:5px 9px !important; }
 }
 
 /* ================= EGG: CAGE-ALPHABET =================
@@ -717,6 +752,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .kd-dash-meta { margin-top: 4px; font-family: 'Space Mono', monospace; font-size: 12px; color: var(--kd-rauch); }
 .kd-dash-showtime { display: inline-block; margin-top: 8px; padding: 3px 8px; white-space: nowrap;
+  max-width:100%; min-width:0; box-sizing:border-box;
   font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-tinte);
   background: var(--kd-leinwandTief); border: 1px solid var(--kd-wolfram); border-radius: 3px; }
 
@@ -742,6 +778,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   letter-spacing: 0; text-transform: none; }
 
 .kd-dash-leer { margin: 0; font-size: 13px; line-height: 1.6; color: var(--kd-rauch); }
+
+@media (max-width:760px) {
+  .kd-dash-stub { flex-basis:54px; }
+  .kd-dash-tbody { padding:10px; }
+  .kd-dash-showtime { display:block; width:fit-content; white-space:normal; overflow-wrap:anywhere; line-height:1.35; }
+  .kd-dash-karte { padding-inline:10px; }
+  .kd-dash-zeile { gap:7px; }
+  .kd-dash-zeile>.kd-dash-showtime { flex:0 1 auto; margin-top:0; text-align:right; }
+  .kd-dash-badge, .kd-dash-jetzt, .kd-dash-tag { max-width:45%; white-space:normal; overflow-wrap:anywhere; text-align:right; }
+}
 
 /* ================= 4. MAI: GANZTÄGIGER GALAXIS-MODUS =================
    Datumsabhängig am Wrapper aktiviert, unabhängig vom Kinoprogramm. Keine externen

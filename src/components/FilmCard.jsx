@@ -14,7 +14,7 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
   const [besch, setBesch] = useState(eintrag.beschreibung || "");
   const [notiz, setNotiz] = useState(eintrag.notiz || "");
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: 12, background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-beschreibung-editor" onClick={(e) => e.stopPropagation()} style={{ marginTop: 12, padding: 12, background: T.leinwandTief, borderRadius: 4, display: "flex", flexDirection: "column", gap: 10 }}>
       <textarea value={besch} onChange={(e) => setBesch(e.target.value)} rows={3}
         placeholder="Beschreibung" style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
       <textarea value={notiz} onChange={(e) => setNotiz(e.target.value)} rows={2}
@@ -63,9 +63,9 @@ export function FilmCard({
       className="kd-karte"
       style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
     >
-      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+      <div className="kd-filmkopf" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
         {dreieck && <Dreieck bw={unbewertet ? null : film.bewertung} />}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="kd-filmhaupt" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "baseline" }}>
             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 22, lineHeight: 1.1, textTransform: "uppercase", letterSpacing: "0.02em" }}>
               {film.titel}
@@ -167,31 +167,33 @@ export function FilmCard({
               />
             </div>
           )}
-          {expanded && editing && (
-            dreieck ? (
-              <EditPanel film={film} onCancel={() => setEditing(false)}
-                onSave={(changes) => {
-                  let next = changes;
-                  if (changes?.bewertung != null && ["offen", "angenommen"].includes(film.prognose?.status)) {
-                    const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
-                    if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
-                  }
-                  setEditing(false);
-                  onSave(next);
-                }} />
-            ) : (
-              <BeschreibungEditor eintrag={film} onCancel={() => setEditing(false)}
-                onSave={(changes) => { setEditing(false); onSave(changes); }} />
-            )
-          )}
         </div>
         {dreieck && (
-          <div style={{ textAlign: "right", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, whiteSpace: "nowrap" }}>
+          <div className="kd-film-score" style={{ textAlign: "right", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.tinteWeich, whiteSpace: "nowrap" }}>
             {unbewertet ? "—" : score(film).toFixed(1)}
             <div style={{ fontSize: 10 }}>SCORE</div>
           </div>
         )}
       </div>
+      {expanded && editing && (
+        <div className="kd-film-editor-shell">
+          {dreieck ? (
+            <EditPanel film={film} onCancel={() => setEditing(false)}
+              onSave={(changes) => {
+                let next = changes;
+                if (changes?.bewertung != null && ["offen", "angenommen"].includes(film.prognose?.status)) {
+                  const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
+                  if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
+                }
+                setEditing(false);
+                onSave(next);
+              }} />
+          ) : (
+            <BeschreibungEditor eintrag={film} onCancel={() => setEditing(false)}
+              onSave={(changes) => { setEditing(false); onSave(changes); }} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

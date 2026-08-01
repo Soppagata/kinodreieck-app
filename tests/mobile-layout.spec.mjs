@@ -67,7 +67,7 @@ for (const viewport of VIEWPORTS) {
       const menuBox = await menu.boundingBox();
       expect(menuBox.width).toBeGreaterThanOrEqual(48);
       expect(menuBox.height).toBeGreaterThanOrEqual(48);
-      expect(viewport.width - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(18);
+      expect(viewport.width - menuBox.x - menuBox.width).toBeGreaterThanOrEqual(10);
       await expect(page.locator(".kd-tabbar")).toHaveCount(0);
       await keineDokumentUeberbreite(page);
 
@@ -121,6 +121,103 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await page.addInitScript(() => {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const wt = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
+    const termin = `${wt} ${d.getDate()}.${d.getMonth() + 1}. 20:00 · English Cinema Haydn`;
+    const filme = [
+      {
+        id: "totoro", film_at_id: "totoro", titel: "Mein Nachbar Totoro", originaltitel: "My Neighbor Totoro",
+        jahr: 1988, typ: "film", quelle: "dvd", kategorie: "immer_gut", bewertet_von: "max",
+        bewertung: { wie: 4, was: 3, warum: 5 }, genre: ["animation"], tags: [], begruendung: "Ein Testeintrag.", notiz: "",
+      },
+      {
+        id: "blade-runner-2049", titel: "Blade Runner 2049", originaltitel: "Blade Runner 2049",
+        jahr: 2017, typ: "film", quelle: "dvd+prime", kategorie: "immer_gut", bewertet_von: "max",
+        bewertung: { wie: 5, was: 4, warum: 5 }, genre: ["scifi"], tags: [], begruendung: "Atmosphärisch und präzise.", notiz: "",
+      },
+    ];
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:master", JSON.stringify({ filme, meta: { version: "test" }, gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:programm-cache", JSON.stringify({
+      fetchedAt: Date.now(), art: "manuell", stand: Date.now(),
+      data: { stand: new Date().toISOString(), filme: [{ t: "Mein Nachbar Totoro", j: 1988, k: ["English Cinema Haydn"], z: [termin], film_at_id: "totoro" }] },
+    }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [{
+      id: "mw-1", titel: "Das siebente Siegel", jahr: 1957, typ: "film", im_besitz: true,
+      erstellt_am: new Date().toISOString(), verknuepfung: { ziel: "master", id: "blade-runner-2049" },
+    }] }));
+    localStorage.setItem("kd:geschmacksprofil", JSON.stringify({
+      format: 1, version: "p2", erstellt: "2026-07-01T00:00:00.000Z", geaendert: "2026-08-01T00:00:00.000Z",
+      einwilligung: { erteilt: true, am: "2026-07-01T00:00:00.000Z", textVersion: "v1" },
+      signale: ["animation", "scifi", "satire", "horror", "action", "thriller"].map((wert) => ({
+        art: "genre", wert, richtung: "zieht_an", staerke: 4, sicherheit: "hoch", quelle: "schlagwort", beleg: `schlagwort:${wert}`,
+      })),
+      offen: [], achsen: { wie: null, was: null, warum: null }, filme: [], nichtDeutbar: [],
+    }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-08-01T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+  });
+  await page.goto("/");
+
+  const ticket = page.locator(".kd-dash-ticket").first();
+  await expect(ticket).toBeVisible();
+  const dashboardGeometrie = await ticket.evaluate((karte) => {
+    const chip = karte.querySelector(".kd-dash-showtime");
+    const kr = karte.getBoundingClientRect();
+    const cr = chip.getBoundingClientRect();
+    return { karteRechts: kr.right, chipRechts: cr.right, chipScroll: chip.scrollWidth, chipBreite: chip.clientWidth };
+  });
+  expect(dashboardGeometrie.chipRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
+  expect(dashboardGeometrie.chipScroll).toBeLessThanOrEqual(dashboardGeometrie.chipBreite + 1);
+  await keineDokumentUeberbreite(page);
+
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Mediathek", exact: true }).click();
+  await expect(page.locator(".kd-mediathek-ansichten")).toBeVisible();
+  await expect(page.locator(".kd-mediathek-typen")).toHaveCSS("grid-template-columns", /.+ .+/);
+  await page.getByText("Blade Runner 2049", { exact: true }).click();
+  await page.getByRole("button", { name: "✎ Bewertung bearbeiten", exact: true }).click();
+  const editor = page.locator(".kd-editpanel");
+  await expect(editor).toBeVisible();
+  const editorGeometrie = await editor.evaluate((panel) => {
+    const pr = panel.getBoundingClientRect();
+    const felder = [...panel.querySelectorAll("input, select, textarea, button")].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { links: r.left, rechts: r.right };
+    });
+    return { panel: { links: pr.left, rechts: pr.right }, felder };
+  });
+  for (const feld of editorGeometrie.felder) {
+    expect(feld.links).toBeGreaterThanOrEqual(editorGeometrie.panel.links - 0.5);
+    expect(feld.rechts).toBeLessThanOrEqual(editorGeometrie.panel.rechts + 0.5);
+  }
+  await keineDokumentUeberbreite(page);
+
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Einstellungen", exact: true }).click();
+  await page.locator("summary", { hasText: /^Geschmacksprofil$/ }).click();
+  const signal = page.locator(".kd-profil-signal").first();
+  await expect(signal).toBeVisible();
+  const profilGeometrie = await signal.evaluate((zeile) => {
+    const zr = zeile.getBoundingClientRect();
+    const herkunft = zeile.querySelector(".kd-profil-herkunft").getBoundingClientRect();
+    const auswahl = zeile.querySelector("select").getBoundingClientRect();
+    const entfernen = zeile.querySelector("button").getBoundingClientRect();
+    return { rechts: zr.right, herkunftUnten: herkunft.bottom, aktionOben: Math.min(auswahl.top, entfernen.top), auswahlRechts: auswahl.right, entfernenRechts: entfernen.right };
+  });
+  expect(profilGeometrie.aktionOben).toBeGreaterThanOrEqual(profilGeometrie.herkunftUnten - 0.5);
+  expect(profilGeometrie.auswahlRechts).toBeLessThanOrEqual(profilGeometrie.rechts + 0.5);
+  expect(profilGeometrie.entfernenRechts).toBeLessThanOrEqual(profilGeometrie.rechts + 0.5);
+  await keineDokumentUeberbreite(page);
+});
 
 test("Desktop behält oberhalb 760 px die bestehende Leiste", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
