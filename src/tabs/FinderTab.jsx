@@ -8,7 +8,7 @@ import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import { schlagseiten } from "../lib/match.js";
 import { kiAn } from "../lib/kiSchalter.js";
-import { sichtbareDienste } from "../lib/dienste.js";
+import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { appHilfeAntwort } from "../lib/appHilfe.js";
@@ -286,8 +286,8 @@ function TrefferZeile({ t, onSpringeZuFilm, auswahl }) {
           </span>
         )}
         {h.dvd && <span style={{ ...mono, color: T.leinwandTief }}>DVD</span>}
-        {h.streaming && sichtbareDienste(h.streaming.dienste, auswahl).map((d) => (
-          <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>
+        {h.streaming && gruppiereDienstBadges(sichtbareDienste(h.streaming.dienste, auswahl), { kompakt: true }).map(({ label }) => (
+          <span key={label} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{label}</span>
         ))}
         {t.gruende.length > 0 && <span style={mono}>({t.gruende.join(" · ")})</span>}
       </div>
@@ -302,7 +302,9 @@ function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswa
   const ss = ssListe[0] || null;
   /* Joyn-Fix: nur Dienste der Abo-Auswahl zeigen; ist danach nichts übrig,
      entfällt der ganze STREAMING-Block (kein leeres Label). */
-  const streamingDienste = h && h.streaming ? sichtbareDienste(h.streaming.dienste, auswahl) : [];
+  const streamingDienste = h && h.streaming
+    ? gruppiereDienstBadges(sichtbareDienste(h.streaming.dienste, auswahl)).map((d) => d.label)
+    : [];
   /* Farbe nur bei EINDEUTIGER Spitze. T.wie/was/warum sind in dieser App
      Achsensprache (AxisChips, Glyph, Regler-accentColor) — ein blauer Chip
      SAGT WIE. Bei geteilter Spitze haette die Bevorzugung, die aus dem Text
@@ -774,7 +776,7 @@ export function FinderTab({
                           <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 18, textTransform: "uppercase", letterSpacing: "0.02em" }}>{t.titel}</span>
                           <span style={{ ...mono, marginLeft: 8 }}>{t.jahr || ""}</span>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                            {sichtbareDienste(t.dienste, auswahl).map((d) => <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{d}</span>)}
+                            {gruppiereDienstBadges(sichtbareDienste(t.dienste, auswahl), { kompakt: true }).map(({ label }) => <span key={label} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "1px 6px" }}>{label}</span>)}
                           </div>
                           {addFilm && formFuer !== sid && (
                             <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px", marginTop: 8 }} onClick={() => setFormFuer(sid)}>Eintrag erstellen</button>

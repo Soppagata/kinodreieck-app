@@ -83,7 +83,10 @@ function parseAltDatum(s, refJahr, ref = new Date()) {
   const monat = Number(m[2]) - 1, tag = Number(m[1]);
   const TAG = 86400000;
   const bezug = (ref instanceof Date ? ref : new Date()).getTime();
-  let d = new Date(refJahr, monat, tag);
+  const uhr = /(\d{1,2}):(\d{2})/.exec(String(s));
+  const stunde = uhr ? Number(uhr[1]) : 23;
+  const minute = uhr ? Number(uhr[2]) : 59;
+  let d = new Date(refJahr, monat, tag, stunde, minute);
   if (bezug - d.getTime() > 300 * TAG) d = new Date(refJahr + 1, monat, tag);       // weit vor Referenz -> Folgejahr
   else if (d.getTime() - bezug > 300 * TAG) d = new Date(refJahr - 1, monat, tag);  // weit nach Referenz -> Vorjahr
   return d;
@@ -93,15 +96,13 @@ function parseAltDatum(s, refJahr, ref = new Date()) {
    eine ganze Woche ab, auch rückwärts), Rest chronologisch sortieren, Kino-
    Liste aus den verbleibenden Zeiten neu ableiten. Filme ohne verbleibende
    Vorstellung fliegen raus. */
-export function bereinigeAltFormat(data) {
-  const jetzt = new Date();
-  const h0 = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+export function bereinigeAltFormat(data, jetzt = new Date()) {
   let entfernteZeiten = 0, entfernteFilme = 0;
   const filme = [];
   for (const f of data.filme) {
     const z = f.z || [];
     const bewertet = z.map((s) => ({ s, d: parseAltDatum(s, jetzt.getFullYear(), jetzt) })); // KD-020: jetzt als Rollover-Referenz
-    const rest = bewertet.filter((x) => !x.d || x.d >= h0);
+    const rest = bewertet.filter((x) => !x.d || x.d >= jetzt);
     entfernteZeiten += z.length - rest.length;
     if (!rest.length && z.length) { entfernteFilme++; continue; }
     rest.sort((a, b) => (a.d ? a.d.getTime() : Infinity) - (b.d ? b.d.getTime() : Infinity));
@@ -116,13 +117,13 @@ export function bereinigeAltFormat(data) {
   return { ...data, filme, quelle_hinweis: hinweis };
 }
 
-export function normalisiereProgramm(parsed) {
+export function normalisiereProgramm(parsed, jetzt = new Date()) {
   const data = parsed && parsed.data && Array.isArray(parsed.data.filme) ? parsed.data : parsed;
   if (!data || !Array.isArray(data.filme)) throw new Error("Kein 'filme'-Array gefunden.");
-  if (!data.filme.length || !data.filme[0].vorstellungen) return bereinigeAltFormat(data); // Format 1/2
+  if (!data.filme.length || !data.filme[0].vorstellungen) return bereinigeAltFormat(data, jetzt); // Format 1/2
 
   // Format 3: film.at — Anzeige-Fenster bestimmen (lokale Zeit, String-basiert, keine TZ-Fallen)
-  const heute = new Date();
+  const heute = jetzt;
   const tagStr = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   const fenster = new Set();
   for (let i = 0; i < ANZEIGE_TAGE; i++) fenster.add(tagStr(new Date(heute.getFullYear(), heute.getMonth(), heute.getDate() + i)));
@@ -132,6 +133,8 @@ export function normalisiereProgramm(parsed) {
     const vs = (f.vorstellungen || []).filter((v) => {
       const tag = String(v.zeit).slice(0, 10);
       if (tag < heuteStr) return false;            // Vergangenes IMMER raus — Abgleich mit Systemzeit bei jedem Öffnen
+      const zeitpunkt = Date.parse(String(v.zeit));
+      if (Number.isFinite(zeitpunkt) && zeitpunkt < heute.getTime()) return false;
       return !nurFenster || fenster.has(tag);      // im Primärlauf zusätzlich aufs Anzeige-Fenster begrenzen
     });
     if (!vs.length) return null;
@@ -167,7 +170,6 @@ export function normalisiereProgramm(parsed) {
   } else {
     hinweis += " · Anzeige: heute + " + (ANZEIGE_TAGE - 1) + " Tage (" + filme.length + " von " + gesamt + " Filmen)";
   }
-  if (Array.isArray(data.warnungen) && data.warnungen.length) hinweis += " · " + data.warnungen.length + " Warnung(en) im JSON";
   return {
     stand: (data.erstellt || parsed.erstellt || "").slice(0, 10) || null,
     quelle_hinweis: hinweis,

@@ -24,7 +24,7 @@ export function FilmForm({
   startOffen = false,
   onDone,
   autorName,
-  kennungenBearbeitbar = true,
+  kennungenBearbeitbar = false,
 }) { // KD-030: optionaler autorName
   const [open, setOpen] = useState(startOffen);
   const leer = {
@@ -193,7 +193,7 @@ export function FilmForm({
       </div>
 
       {/* Unbewertet-Schalter: Besitz jetzt erfassen, Dreieck später vergeben. */}
-      {bewertbar && kennungenBearbeitbar && (
+      {bewertbar && (
         <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer" }}>
           <input type="checkbox" checked={ohneBewertung} onChange={() => setOhneBewertung(!ohneBewertung)} />
           Ohne Bewertung speichern (Eintrag bleibt „unbewertet“ — Dreieck kommt später)
@@ -208,7 +208,7 @@ export function FilmForm({
         </div>
       )}
 
-      {bewertbar && (
+      {bewertbar && kennungenBearbeitbar && (
         <details>
           <summary style={{ cursor: "pointer", color: T.tinteWeich, fontSize: 12 }}>
             Filmkennung verknüpfen (optional, für belegtes Filmwissen)

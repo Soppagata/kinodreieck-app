@@ -101,7 +101,9 @@ for (const viewport of VIEWPORTS) {
         const popupBox = await panel.boundingBox();
         expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
         expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
-        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(75);
+        /* Das Menü sitzt seit dem Blur-Streifen-Fix näher an der unteren
+           Bedienzone; die globale Suchleiste wird währenddessen ausgeblendet. */
+        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(60);
         await expect(popup.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
         await expect(panel.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);

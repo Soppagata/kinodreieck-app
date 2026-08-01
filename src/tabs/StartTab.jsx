@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
-import { sichtbareDienste } from "../lib/dienste.js";
+import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { useInstallationsStatus } from "../lib/installation.js";
 import { KinoTicket } from "../components/ui.jsx";
@@ -128,8 +128,8 @@ function StartDashboard({
     const map = new Map((((streamingEntdecken || {}).titel) || []).map((t) => [t.watchmode_id, t]));
     return (merkliste || []).map((m) => {
       const t = map.get(m.watchmode_id);
-      const dienste = t ? sichtbareDienste(t.dienste, auswahl) : [];
-      return dienste.length ? { ...m, dienst: dienste[0] } : null;
+      const dienste = t ? gruppiereDienstBadges(sichtbareDienste(t.dienste, auswahl), { kompakt: true }) : [];
+      return dienste.length ? { ...m, dienst: dienste[0].label } : null;
     }).filter(Boolean).slice(0, 5);
   }, [merkliste, streamingEntdecken, auswahl]);
 

@@ -622,8 +622,8 @@ const ECHO_SCHEMA = {
   additionalProperties: false,
 };
 
-const MEDIA_TYPEN = ["film", "serie", "musik", "sonstiges"];
-const MEDIA_EREIGNISARTEN = ["poster", "ticket", "termin", "cover", "liste", "sonstiges"];
+const MEDIA_TYPEN = ["film", "serie"];
+const MEDIA_QUELLEN = ["dvd", "bluray", "vhs", "filmrolle", "festplatte", "phys_sonst", "apple", "google", "amazon", "sony", "microsoft", "youtube", "virt_sonst", "unklar"];
 const MEDIA_SICHERHEIT = ["hoch", "mittel", "niedrig"];
 const MEDIA_SCHEMA = {
   type: "object",
@@ -636,14 +636,13 @@ const MEDIA_SCHEMA = {
           titel: { type: "string" },
           typ: { type: "string", enum: MEDIA_TYPEN },
           jahr: { type: ["integer", "null"] },
-          ereignisart: { type: "string", enum: MEDIA_EREIGNISARTEN },
-          datum: { type: ["string", "null"] },
-          uhrzeit: { type: ["string", "null"] },
-          ort: { type: ["string", "null"] },
-          hinweis: { type: "string" },
+          quelle: { type: "string", enum: MEDIA_QUELLEN },
+          staffeln: { type: ["string", "null"] },
+          vorbeurteilung: { type: "string", enum: ["offen"] },
+          begruendung: { type: "string" },
           sicherheit: { type: "string", enum: MEDIA_SICHERHEIT },
         },
-        required: ["titel", "typ", "jahr", "ereignisart", "datum", "uhrzeit", "ort", "hinweis", "sicherheit"],
+        required: ["titel", "typ", "jahr", "quelle", "staffeln", "vorbeurteilung", "begruendung", "sicherheit"],
         additionalProperties: false,
       },
     },
@@ -1803,14 +1802,14 @@ export const AUFGABEN: Record<string, Aufgabe> = {
       return {
         bilder,
         system: [
-          "Du extrahierst sichtbare Kulturwerke und Termine aus privaten Fotos oder Screenshots fuer einen sicheren Stapelimport.",
-          "Erkenne Filme, Serien, Musik (Album, Song oder Konzert) und sonstige kulturelle Werke.",
+          "Du extrahierst die eigene Film- und Seriensammlung aus privaten Regal-Fotos oder Screenshots digital gekaufter Medien.",
+          "Erkenne ausschliesslich Filme und Serien, die als physisch vorhanden oder digital gekauft erkennbar sind.",
           "Fasse Dubletten ueber alle Bilder zusammen. Hoechstens 30 Kandidaten und 8 Warnungen.",
-          "Erfinde nichts und recherchiere nicht. Unsichtbare Jahre, Orte oder Termine bleiben null.",
-          "Ein Poster beweist weder Besitz noch gesehen. Ein Ticket beweist keine Bewertung.",
-          "Ignoriere Namen, Sitzplaetze, Preise, Bestellnummern, QR- und Barcodes sowie Zahlungsdaten.",
-          "Genre, Bewertung, Kategorie, Streamingquelle und externe Kennungen sind nicht Teil deiner Antwort.",
-          "hinweis ist eine kurze sachliche Zusatzinformation, nie eine Empfehlung.",
+          "Erfinde nichts und recherchiere nicht. Streaming-Abos, Wunschlisten, Poster, Tickets, Termine, Musik und andere Medien werden ignoriert.",
+          "Quelle ist das sichtbare physische Format oder der sichtbare digitale Kaufladen; ein Abo ist kein Kauf. Ist sie unklar, verwende unklar.",
+          "Bei Serien bleiben nicht sicher erkennbare Staffeln null. Der Nutzer kann sie spaeter freiwillig ergaenzen.",
+          "Diese Aufgabe kennt das Geschmacksprofil nicht: vorbeurteilung ist immer offen und begruendung leer.",
+          "Genre, Bewertung, Kategorie und externe Kennungen sind nicht Teil deiner Antwort.",
           "Antworte ausschliesslich nach dem vorgegebenen JSON-Schema.",
         ].join("\n"),
         nutzertext: "Lies die angehaengten Bilder gemeinsam und gib die sichtbaren Kandidaten zur manuellen Vorschau zurueck.",
@@ -1827,18 +1826,14 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         if (!roh || typeof roh !== "object" || Array.isArray(roh)) return { fehler: "media-kandidat-form" };
         const k = roh as Record<string, unknown>;
         const titel = kurzText(k.titel, 160);
-        const hinweis = kurzText(k.hinweis, 300);
-        const ort = k.ort === null ? null : kurzText(k.ort, 160);
+        const begruendung = kurzText(k.begruendung, 300);
+        const staffeln = k.staffeln === null ? null : kurzText(k.staffeln, 80);
         const jahr = k.jahr === null ? null : k.jahr;
-        const datum = k.datum === null ? null : String(k.datum);
-        const uhrzeit = k.uhrzeit === null ? null : String(k.uhrzeit);
-        if (!titel || !MEDIA_TYPEN.includes(String(k.typ)) || !MEDIA_EREIGNISARTEN.includes(String(k.ereignisart)) ||
+        if (!titel || !MEDIA_TYPEN.includes(String(k.typ)) || !MEDIA_QUELLEN.includes(String(k.quelle)) ||
             !MEDIA_SICHERHEIT.includes(String(k.sicherheit)) ||
             (jahr !== null && (!Number.isInteger(jahr) || Number(jahr) < 1888 || Number(jahr) > 2100)) ||
-            (datum !== null && !/^\d{4}-\d{2}-\d{2}$/.test(datum)) ||
-            (uhrzeit !== null && !/^\d{2}:\d{2}$/.test(uhrzeit)) ||
-            (k.ort !== null && !ort)) return { fehler: "media-kandidat-ungueltig" };
-        kandidaten.push({ titel, typ: k.typ, jahr, ereignisart: k.ereignisart, datum, uhrzeit, ort, hinweis, sicherheit: k.sicherheit });
+            (k.staffeln !== null && !staffeln) || k.vorbeurteilung !== "offen" || begruendung) return { fehler: "media-kandidat-ungueltig" };
+        kandidaten.push({ titel, typ: k.typ, jahr, quelle: k.quelle, staffeln, vorbeurteilung: "offen", begruendung: "", sicherheit: k.sicherheit });
       }
       const warnungen = o.warnungen.map((w) => kurzText(w, 180)).filter(Boolean);
       return { daten: { kandidaten, warnungen } };

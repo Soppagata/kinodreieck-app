@@ -4,7 +4,7 @@ import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import {
   STAPEL_BILDTYPEN, STAPEL_MAX_BILDER, STAPEL_MAX_REQUEST_BYTES,
-  STAPEL_TYPEN, baueStapelUebernahme, externerStapelPrompt,
+  STAPEL_QUELLEN, STAPEL_TYPEN, baueStapelUebernahme, externerStapelPrompt,
   normalisiereStapelAntwort, schaetzeBildTokens,
 } from "../lib/stapelimport.js";
 
@@ -48,7 +48,7 @@ function parseExterneAntwort(text) {
   try { return JSON.parse(roh); } catch { throw new Error("Keine gültige JSON-Antwort gefunden."); }
 }
 
-export function StapelImport({ master = [], mustwatch = [], addFilm, addMustwatch, autorName = "", kiAktiv = false, setErr = () => {} }) {
+export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {} }) {
   const [bilder, setBilder] = useState([]);
   const [laeuft, setLaeuft] = useState(false);
   const [vorschau, setVorschau] = useState(null);
@@ -83,13 +83,13 @@ export function StapelImport({ master = [], mustwatch = [], addFilm, addMustwatc
     try {
       const payload = { bilder: bilder.map(({ preview, name, ...b }) => b) };
       const antwort = await aiService.runTask("media-batch-extract", payload, { promptVersion: "media-batch-v1" });
-      setVorschau({ ...normalisiereStapelAntwort(antwort, master, mustwatch), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null });
+      setVorschau({ ...normalisiereStapelAntwort(antwort, master), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null });
     } catch (e) { setErr("Stapelimport: " + errorText(e)); }
     finally { setLaeuft(false); }
   };
 
   const ladeExtern = (text) => {
-    try { setVorschau(normalisiereStapelAntwort(parseExterneAntwort(text), master, mustwatch)); setExternText(""); setErr(""); }
+    try { setVorschau(normalisiereStapelAntwort(parseExterneAntwort(text), master)); setExternText(""); setErr(""); }
     catch (e) { setErr("Stapelimport: " + e.message); }
   };
 
@@ -101,15 +101,13 @@ export function StapelImport({ master = [], mustwatch = [], addFilm, addMustwatc
   const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id ? { ...k, [feld]: wert } : k) }));
   const uebernehmen = () => {
     if (!vorschau) return;
-    const { mediathek, mustwatch: mw } = baueStapelUebernahme(vorschau.kandidaten);
-    let filme = 0, wuensche = 0;
-    for (const f of mediathek) if (addFilm?.(f)) filme++;
-    for (const e of mw) { addMustwatch?.(e); wuensche++; }
-    setBericht({ filme, wuensche }); setVorschau(null);
+    const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
+    const filme = addFilme ? (addFilme(mediathek)?.length || 0) : mediathek.reduce((n, f) => n + (addFilm?.(f) ? 1 : 0), 0);
+    setBericht({ filme }); setVorschau(null);
   };
 
   return <div className="kd-stapelimport">
-    <p className="kd-stapel-lead">Fotografiere Poster, Tickets oder Termine – oder wähle Screenshots mit Film-, Serien- oder Musiklisten. Erst die Vorschau entscheidet, was in deiner Mediathek oder Must-Watch-Liste landet.</p>
+    <p className="kd-stapel-lead">Fotografiere deine Film- und Serienregale oder wähle Screenshots deiner digital gekauften Sammlung. Die KI erkennt Titel, Kaufquelle und – wenn sichtbar – Staffeln. Erst deine Vorschau entscheidet, was unbewertet in der Mediathek landet.</p>
     <input ref={kameraRef} hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" capture="environment" onChange={(e) => { waehleBilder(e.target.files); e.target.value = ""; }} />
     <input ref={bilderRef} hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={(e) => { waehleBilder(e.target.files); e.target.value = ""; }} />
     <input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(ladeExtern); e.target.value = ""; }} />
@@ -129,7 +127,7 @@ export function StapelImport({ master = [], mustwatch = [], addFilm, addMustwatc
 
     <details open={externOffen} onToggle={(e) => setExternOffen(e.currentTarget.open)} className="kd-stapel-extern">
       <summary>Extern mit GPT, Claude oder einer anderen KI</summary>
-      <p>Dieser Weg verursacht in Kinodreieck keine KI-Kosten. Hänge die Bilder im KI-Chat selbst an, kopiere den Prompt und bringe das JSON hierher zurück.</p>
+      <p>Dieser Weg verursacht in Kinodreieck keine KI-Kosten. Ein Modell mit gutem Reasoning wird empfohlen: Es fragt dich nach 5–10 kurzen Bewertungen, ordnet Dubletten und erstellt daraus vorsichtige Voreindrücke. Hänge die Bilder im KI-Chat an, kopiere den Prompt und bringe danach das fertige JSON hierher zurück.</p>
       <textarea readOnly value={externerStapelPrompt(autorName)} rows={8} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
       <div className="kd-stapel-aktionen"><button style={btnStyle(false)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Prompt kopieren"}</button><button style={btnStyle(false)} onClick={() => jsonRef.current?.click()}>JSON-Datei wählen</button></div>
       <textarea value={externText} onChange={(e) => setExternText(e.target.value)} rows={4} placeholder="JSON-Antwort hier einfügen …" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
@@ -141,12 +139,12 @@ export function StapelImport({ master = [], mustwatch = [], addFilm, addMustwatc
       {Number.isFinite(vorschau.kostenUsdCent) && <p className="kd-stapel-kosten">Dieser Lauf hat {Number(vorschau.kostenUsdCent).toLocaleString("de-AT", { maximumFractionDigits: 4 })} US-Cent verbraucht.</p>}
       {vorschau.warnungen.map((w, i) => <p className="kd-stapel-warnung" key={i}>{w}</p>)}
       {vorschau.kandidaten.map((k) => <div className="kd-stapel-kandidat" key={k.id}>
-        <label className="kd-stapel-titel"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.ereignisart} · Sicherheit {k.sicherheit}{k.hinweis ? ` · ${k.hinweis}` : ""}</small></span></label>
-        <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Ziel für ${k.titel}`} value={k.ziel} onChange={(e) => aktualisiere(k.id, "ziel", e.target.value)}><option value="mediathek">Mediathek</option><option value="mustwatch">Must-Watch</option></select></div>
-        {(k.ziel === "mediathek" ? k.vorhandenMediathek : k.vorhandenMustwatch) && <small className="kd-stapel-dublette">Schon am gewählten Ziel vorhanden – wird übersprungen.</small>}
+        <label className="kd-stapel-titel"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
+        <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
+        {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
       <div className="kd-stapel-aktionen"><button style={btnStyle(true)} onClick={uebernehmen}>Auswahl übernehmen</button><button style={btnStyle(false)} onClick={() => setVorschau(null)}>Verwerfen</button></div>
     </section>}
-    {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.filme} in die Mediathek · {bericht.wuensche} in Must-Watch.</p>}
+    {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.filme} neue Einträge in die Mediathek.</p>}
   </div>;
 }

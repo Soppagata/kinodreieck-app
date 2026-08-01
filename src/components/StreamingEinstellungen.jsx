@@ -4,7 +4,6 @@ import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { K } from "../services/storage.js";
 import { serienBeobachten } from "../lib/staffeln.js";
-import { kurzerDienstname } from "../lib/dienste.js";
 
 /* ================= Streaming: Quellen, Katalog-Status, Refresh =================
    Aus dem Streaming-Tab in die Einstellungen verschoben — ein Ort für alle
@@ -14,10 +13,10 @@ const GRUPPEN_LABEL = { sub: "Abos (Subscription)", free: "Gratis (Free)", purch
 /* Kurzform des Gruppen-Typs für die Suchtreffer-Zeilen (390px-tauglich). */
 const TYP_KURZ = { sub: "Abo", free: "Gratis", purchase: "Kauf/Leihe", tve: "TV", sonst: "Weitere", auswahl: "Deine Auswahl" };
 
-/* Lange Quellen-Namen fürs Handy kürzen — NUR das Chip-Label. Der volle Name bleibt
-   im title (Tooltip) und als Toggle-/Speicher-Wert unverändert. */
+/* Settings bleiben der einzige Ort mit den unveränderten Katalognamen, damit
+   Auswahl und gespeicherter Wert hier vollständig nachvollziehbar bleiben. */
 function kurzQuelle(n) {
-  return kurzerDienstname(n);
+  return n;
 }
 
 export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], toggleQuelle, teil = "alle", onRefresh, datenGesperrt = false }) {

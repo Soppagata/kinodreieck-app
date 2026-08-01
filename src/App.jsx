@@ -75,7 +75,7 @@ import {
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen } from "./lib/finder.js";
 import { vokabularZuMap } from "./lib/vokabular.js";
-import { sichtbareDienste } from "./lib/dienste.js";
+import { gruppiereDienstBadges, sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
 import { MediathekTab } from "./tabs/MediathekTab.jsx";
@@ -1231,6 +1231,30 @@ export default function App() {
     return id;
   }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, schreibeArtikel]);
 
+  const addFilme = useCallback((filme) => {
+    const aktuell = masterRef.current || [];
+    const ids = new Set(aktuell.map((f) => f.id));
+    const neue = [];
+    for (const film of filme || []) {
+      const id = film.id || slugId(film.titel, film.jahr);
+      if (!id || ids.has(id)) continue;
+      ids.add(id);
+      neue.push({ id, ...film });
+    }
+    if (!neue.length) return [];
+    const next = [...aktuell, ...neue];
+    const h = naechsteHerkunft();
+    masterRef.current = next;
+    setMasterHerkunft(h);
+    setMaster(next);
+    persistMaster(next, masterMeta, h);
+    schreibeArtikel((prev) => {
+      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
+      return n > 0 ? geheilt : prev;
+    });
+    return neue.map((f) => f.id);
+  }, [masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, schreibeArtikel]);
+
   const {
     accountId,
     vorbewertungAktiv,
@@ -1621,13 +1645,13 @@ export default function App() {
     if (!t) return null; // keine Daten oder nicht verfügbar -> kein Badge (Besitz-Feld quelle bleibt unberührt)
     /* Joyn-Fix: nur Dienste der Abo-Auswahl taggen (leere Auswahl = alle);
        bleibt nichts übrig -> gar kein Badge. */
-    const dienste = sichtbareDienste(t.dienste, auswahl);
+    const dienste = gruppiereDienstBadges(sichtbareDienste(t.dienste, auswahl), { kompakt: true });
     if (!dienste.length) return null;
     return (
       <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
-        {dienste.slice(0, 3).map((d) => (
-          <span key={d} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 6px", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {d}
+        {dienste.slice(0, 3).map(({ label }) => (
+          <span key={label} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 6px", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label}
           </span>
         ))}
         {dienste.length > 3 && <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>+{dienste.length - 3}</span>}
@@ -2029,7 +2053,7 @@ export default function App() {
             ungesichertMaster={ungesichertMaster} ungesichertArtikel={ungesichertArtikel}
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
             uebernehmePaket={uebernehmePaket}
-            mustwatch={mustwatch} addFilm={addFilm} addMustwatch={addMustwatch}
+            addFilm={addFilm} addFilme={addFilme}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
             achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}

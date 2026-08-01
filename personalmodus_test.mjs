@@ -380,7 +380,7 @@ function seedKatalog(w, start = "clean") {
   const { doc, text, knopf } = hilfen(dom);
   await warte(2600);
   knopf(/^Settings$/i)?.click(); await warte(400);
-  check("C: Demo übernimmt Max' Streamingdienste", /Netflix/.test(text()) && /Disney\+/.test(text()) && /Crunchyroll \(Prime\)/.test(text()));
+  check("C: Demo übernimmt Max' Streamingdienste in Settings mit ihren Rohbezeichnungen", /Netflix/.test(text()) && /Disney\+/.test(text()) && /Crunchyroll Premium \(Via Amazon Prime\)/.test(text()));
   const quellenSuche = doc.querySelector('input[placeholder^="Quelle suchen"]');
   if (quellenSuche) {
     setWert(dom, quellenSuche, "MUBI"); await warte(100);

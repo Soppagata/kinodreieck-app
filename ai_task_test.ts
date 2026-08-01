@@ -4288,8 +4288,8 @@ const BUDGET_SONDEN: Record<
     vorbereiten: () => {
       z.anbieter = () => anbieterErfolg({
         kandidaten: [{
-          titel: "Alien", typ: "film", jahr: 1979, ereignisart: "poster",
-          datum: null, uhrzeit: null, ort: null, hinweis: "", sicherheit: "hoch",
+          titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray",
+          staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
         }],
         warnungen: [],
       });

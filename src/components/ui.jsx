@@ -170,7 +170,7 @@ export function QuellenBadges({ quelle }) {
     <span className="kd-quellenbadges" aria-label="Gespeicherte Quellen">
       {badges.map(({ key, label, klasse }) => (
         <span key={key} className={`kd-quellenbadge kd-quellenbadge-${klasse}`}
-          style={{ color: farben[klasse], borderColor: farben[klasse] }}>
+          style={{ "--kd-quellenfarbe": farben[klasse], borderColor: farben[klasse] }}>
           {label}
         </span>
       ))}

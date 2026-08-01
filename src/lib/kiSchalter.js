@@ -83,7 +83,7 @@ export const KI_FUNKTIONEN = {
   },
   stapelimport: {
     label: "Fotos & Screenshots deuten",
-    beschreibung: "Poster, Tickets, Termine und Listen auf ausdrücklichen Wunsch als Stapel erkennen.",
+    beschreibung: "Eigene Film- und Seriensammlung aus Regal-Fotos oder Kauflisten auf ausdrücklichen Wunsch erkennen.",
     beiAus: "ausblenden",
   },
   diagnose: {
