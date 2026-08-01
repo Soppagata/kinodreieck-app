@@ -15,10 +15,6 @@ export const NAVIGATION = Object.freeze([
 export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate }) {
   return (
     <>
-      <button className={"kd-navband" + (mehrOffen ? " offen" : "")} aria-label={mehrOffen ? "Menü schließen" : "Menü öffnen"}
-        aria-expanded={mehrOffen} aria-controls="kd-mobile-menu" onClick={onMehr}>
-        <i /><i /><i />
-      </button>
       {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} />}
     </>
   );
@@ -30,7 +26,21 @@ function MenuPopup({ aktiv, onClose, onNavigate }) {
     const vorher = document.activeElement;
     const entsperren = sperreDokumentScroll();
     sheetRef.current?.querySelector("button, a")?.focus();
-    const taste = (event) => { if (event.key === "Escape") onClose(); };
+    const taste = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); return; }
+      if (event.key !== "Tab") return;
+      const fokusziele = [...(sheetRef.current?.querySelectorAll(
+        'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
+      ) || [])].filter((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true");
+      if (!fokusziele.length) { event.preventDefault(); sheetRef.current?.focus?.(); return; }
+      const erstes = fokusziele[0];
+      const letztes = fokusziele[fokusziele.length - 1];
+      if (event.shiftKey && (document.activeElement === erstes || !sheetRef.current?.contains(document.activeElement))) {
+        event.preventDefault(); letztes.focus();
+      } else if (!event.shiftKey && document.activeElement === letztes) {
+        event.preventDefault(); erstes.focus();
+      }
+    };
     document.addEventListener("keydown", taste);
     return () => {
       entsperren();

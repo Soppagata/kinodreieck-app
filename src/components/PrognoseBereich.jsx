@@ -63,7 +63,7 @@ export function PrognoseBereich({
   const prognose = gelesen.prognose;
   if (!prognose) {
     return (
-      <div style={{ display: "grid", gap: 7, justifyItems: "start" }}>
+      <div className="kd-prognose-start">
         <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
           title={!erstellenMoeglich ? (sperrgrund || "Prognose derzeit nicht möglich") : "Startet genau einen kostenpflichtigen KI-Aufruf"}>
           {laeuft ? "KI-Prognose wird erstellt …" : "KI-Prognose erstellen"}
@@ -82,8 +82,8 @@ export function PrognoseBereich({
   const veraltet = prognoseIstVeraltet(prognose, aktuelleProfilVersion);
   const kosten = kostenText(prognose.verbrauch.kostenUsdCent);
   return (
-    <section aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
-      style={{ border: `1px solid ${T.saal}`, borderRadius: 6, padding: "12px 14px", display: "grid", gap: 10 }}>
+    <section className="kd-prognose" aria-label={`KI-Prognose für ${film?.titel || "Eintrag"}`}
+      style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${T.saal}`, borderRadius: 6, padding: "12px 14px", display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <strong style={{ color: T.wolfram, letterSpacing: "0.05em" }}>KI-PROGNOSE</strong>
         <span style={{ ...mono }}>{STATUS_LABEL[prognose.status]}</span>
@@ -131,7 +131,7 @@ export function PrognoseBereich({
       {fehler && <span role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</span>}
 
       {(prognose.status === "offen" || prognose.status === "angenommen") && (
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div className="kd-prognose-aktionen">
           {onUebernehmen && <button style={btnStyle(true)} onClick={onUebernehmen}>Als Bewertung übernehmen</button>}
           {prognose.status === "offen" && <button style={btnStyle(false)} onClick={onAnnehmen}>Nur Prognose bestätigen</button>}
           <button style={btnStyle(false)} onClick={onKorrigieren}>Echt bewerten / korrigieren</button>
@@ -139,7 +139,7 @@ export function PrognoseBereich({
         </div>
       )}
       {onErstellen && (
-        <div style={{ display: "grid", gap: 5, justifyItems: "start" }}>
+        <div className="kd-prognose-neuberechnen">
           <button style={btnStyle(false)} disabled={laeuft || !erstellenMoeglich} onClick={onErstellen}
             title="Fragt vor dem Ersetzen noch einmal nach und startet dann genau einen kostenpflichtigen KI-Aufruf">
             {laeuft ? "KI-Prognose wird neu erstellt …" : "Prognose neu berechnen"}

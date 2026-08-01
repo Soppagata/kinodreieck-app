@@ -56,7 +56,7 @@ export function gleicheMediathekStatusAb(statusMap, titel, master) {
     const mediathekId = mediathekIdVon(roh);
     if (!mediathekId) continue;
     const vorhanden = filme.some((film) => (
-      mediathekId !== true && film.id === mediathekId
+      mediathekId !== true && film.id != null && String(film.id) === String(mediathekId)
     ) || String(film.watchmode_id) === String(watchmodeId));
     if (vorhanden) continue;
     if (next === statusMap) next = { ...(statusMap || {}) };
@@ -80,7 +80,7 @@ export function neuerGesehenEintrag(t, jetzt = new Date()) {
   const aktuell = staffelzahl(t && t.staffeln_verfuegbar);
   return {
     status: "gesehen",
-    typ: "tv_series",
+    typ: istSerie(t) ? "tv_series" : "movie",
     titel: t && t.titel ? t.titel : "",
     gesehen_am: jetzt.toISOString(),
     ...(aktuell != null ? { staffel_bestaetigt: aktuell } : {}),

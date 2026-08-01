@@ -4,11 +4,11 @@ import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
 import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
-import { quelleText, hatPhysischeQuelle } from "../lib/quellen.js";
+import { hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
-import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
+import { Chip, ChipReihe, IconClose, QuellenBadges, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
@@ -215,7 +215,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input className="kd-lokalsuche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel oder Originaltitel suchen …"
           style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
-        {suche && <button className="kd-lokalsuche-loeschen" style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}>×</button>}
+        {suche && <button type="button" className="kd-lokalsuche-loeschen" aria-label="Mediatheksuche leeren" title="Mediatheksuche leeren"
+          style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSuche("")}><IconClose /></button>}
         <select value={sortier} onChange={(e) => setSortier(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
           {dreieckTab && <option value="score">Bewertung: WIE · WAS · WARUM</option>}
           <option value="titel">Titel A–Z</option>
@@ -309,7 +310,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               }}
               onSave={(changes) => updateFilm(f.id, changes)}
               onDelete={() => deleteFilm?.(f.id)}
-              kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <span style={{ color: T.tinteWeich }}>{quelleText(f.quelle)}</span> : null}
+              kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <QuellenBadges quelle={f.quelle} /> : null}
               kommtVorIn={kommtVorInMap[f.id]}
               onArtikelKlick={onArtikelKlick}
               vorbewertung={vorbewertungAktiv && hatDreieck(f.typ) ? {

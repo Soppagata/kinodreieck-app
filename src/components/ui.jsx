@@ -1,5 +1,6 @@
 import { T } from "../lib/tokens.js";
 import { bewertungskategorieLabel } from "../lib/kategorien.js";
+import { quelleBadges, QUELLEN_KLASSEN } from "../lib/quellen.js";
 
 /* ---------- Dreieck-Glyph (Signatur) ----------
    bw == null (unbewertet): NUR der Umriss, gestrichelt — ein leeres Dreieck ist
@@ -156,6 +157,50 @@ export function KategorieTag({ k }) {
   );
 }
 
+export function QuellenBadges({ quelle }) {
+  const farben = {
+    [QUELLEN_KLASSEN.PHYSISCH]: T.wie,
+    [QUELLEN_KLASSEN.DIGITAL_GEKAUFT]: T.was,
+    [QUELLEN_KLASSEN.ABO]: T.wolfram,
+    [QUELLEN_KLASSEN.SONSTIG]: T.rauch,
+  };
+  const badges = quelleBadges(quelle);
+  if (!badges.length) return null;
+  return (
+    <span className="kd-quellenbadges" aria-label="Gespeicherte Quellen">
+      {badges.map(({ key, label, klasse }) => (
+        <span key={key} className={`kd-quellenbadge kd-quellenbadge-${klasse}`}
+          style={{ color: farben[klasse], borderColor: farben[klasse] }}>
+          {label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+export function KinoTicket({ titel, jahr, kino, termin, expanded, onToggle, children }) {
+  const vars = {
+    "--kd-leinwand": T.leinwand, "--kd-leinwandTief": T.leinwandTief,
+    "--kd-tinte": T.tinte, "--kd-rauch": T.rauch, "--kd-wolfram": T.wolfram,
+  };
+  const bedienbar = typeof onToggle === "function";
+  const klappbar = typeof expanded === "boolean";
+  return (
+    <article className={`kd-dash-ticket kd-kino-ticket${expanded ? " offen" : ""}`} style={vars}>
+      <button type="button" className="kd-kino-ticket-trigger" onClick={onToggle}
+        disabled={!bedienbar} aria-expanded={klappbar ? expanded : undefined}>
+        <span className="kd-dash-tbody">
+          <span className="kd-dash-film">{titel}</span>
+          <span className="kd-dash-meta">{[jahr, kino].filter(Boolean).join(" · ")}</span>
+          {termin && <span className="kd-dash-showtime">◷ {termin}</span>}
+        </span>
+        {klappbar && <span className="kd-kino-ticket-pfeil" aria-hidden="true">⌄</span>}
+      </button>
+      {expanded && children && <div className="kd-kino-ticket-details">{children}</div>}
+    </article>
+  );
+}
+
 /* ---------- UI-Icons (Inline-SVG, fill=currentColor) ----------
    Als Komponenten, NICHT als Bilddateien: so folgen sie automatisch der
    Button-Farbe (inkl. gefahr), Hover und Disabled. Assets: ui/*.svg. */
@@ -171,6 +216,9 @@ export function IconExport({ size = 16 }) {
 }
 export function IconDelete({ size = 16 }) {
   return <svg {...svgProps(size)}><path fill="currentColor" d="M9 2h6v2h5v2H4V4h5V2Z" /><path fill="currentColor" d="M5 7h14l-1 15H6L5 7Zm4.2 2 .4 11h1.6l-.3-11H9.2Zm3.9 0-.3 11h1.6l.4-11h-1.7Z" /></svg>;
+}
+export function IconClose({ size = 16 }) {
+  return <svg {...svgProps(size)}><path fill="currentColor" d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z" /></svg>;
 }
 
 /* ---------- Logo / Bildmarke (dreigeteiltes Dreieck) ----------

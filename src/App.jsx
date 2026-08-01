@@ -80,7 +80,7 @@ import { KinoTab } from "./tabs/KinoTab.jsx";
 import { MediathekTab } from "./tabs/MediathekTab.jsx";
 import { StreamingTab } from "./tabs/StreamingTab.jsx";
 import { BlogTab } from "./tabs/BlogTab.jsx";
-import { FinderTab } from "./tabs/FinderTab.jsx";
+import { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
 
 import { EGGS_ENABLED } from "./lib/modus.js";
@@ -1124,6 +1124,8 @@ export default function App() {
   /* ---- Navigation zwischen Blog und Mediathek ---- */
   const [blogFokus, setBlogFokus] = useState(null);
   const [mediathekFokus, setMediathekFokus] = useState(null);
+  const [kinoFokus, setKinoFokus] = useState(null);
+  const [streamingFokus, setStreamingFokus] = useState(null);
   const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); setTab("mediathek"); }, []);
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
@@ -1401,10 +1403,67 @@ export default function App() {
   const [finderVerlauf, setFinderVerlauf] = useState([]);
   const [finderEingabe, setFinderEingabe] = useState("");
   const [finderSuchauftrag, setFinderSuchauftrag] = useState(null);
-  const starteGlobaleSuche = useCallback(({ text, scope }) => {
+  const [globaleSuchantwort, setGlobaleSuchantwort] = useState(null);
+  const ladeStreamingDateienRef = useRef(null);
+  const globaleSucheLaufRef = useRef(0);
+  const starteGlobaleSuche = useCallback(async ({ text, scope }) => {
+    const lauf = ++globaleSucheLaufRef.current;
+    const bevorzugterBereich = scope || tabRef.current || "alles";
+    /* Eine globale Suche verspricht alle Bereiche. Deshalb vor der Antwort den
+       Entdecken-Vollkatalog laden und den Rückgabewert direkt benutzen: auf den
+       asynchronen React-State des nächsten Renders zu warten wäre ein Race und
+       würde außerhalb des Streaming-Tabs weiter nur den Top-Snapshot suchen. */
+    const geladeneAnsichten = await ladeStreamingDateienRef.current?.(true);
+    if (lauf !== globaleSucheLaufRef.current) return;
+    const antwort = erstelleFinderAntwort({
+      text, bevorzugterBereich, master: finderMaster || [], kinoMatches,
+      streamingBekannt: geladeneAnsichten?.bekannt || streamingBekannt,
+      streamingEntdecken: geladeneAnsichten?.entdecken || streamingEntdecken,
+      artikel: artikelListe,
+    });
+    setGlobaleSuchantwort({
+      frage: text, bevorzugterBereich,
+      ...kompakteFinderTreffer(antwort, bevorzugterBereich),
+    });
+  }, [finderMaster, kinoMatches, streamingBekannt, streamingEntdecken, artikelListe]);
+  const oeffneAusfuehrlicheSuche = useCallback(() => {
+    if (!globaleSuchantwort?.frage) return;
+    const { frage: text, bevorzugterBereich: scope } = globaleSuchantwort;
     setFinderEingabe(text);
     setFinderSuchauftrag({ id: Date.now() + ":" + Math.random(), text, scope });
+    setGlobaleSuchantwort(null);
     navigiere("finder");
+  }, [globaleSuchantwort, navigiere]);
+  const oeffneGlobalenTreffer = useCallback((treffer) => {
+    setGlobaleSuchantwort(null);
+    if (treffer.typ === "film" && treffer.bereich === "kino") {
+      setZeigeAlles(true);
+      setExpandedId("k" + treffer.ref);
+      setKinoFokus({ art: "film", ref: treffer.ref, titel: treffer.titel });
+      navigiere("kino");
+    } else if (treffer.typ === "film" && treffer.bereich === "streaming") {
+      setExpandedId("s" + treffer.ref);
+      setStreamingFokus({ art: "programm", ref: treffer.ref, titel: treffer.titel });
+      navigiere("streaming");
+    } else if (treffer.typ === "film") springeZuFilm(treffer.ref);
+    else if (treffer.typ === "blog") springeZuArtikel(treffer.ref);
+    else if (treffer.typ === "hilfe" && treffer.ziel) navigiere(treffer.ziel);
+    else if (treffer.typ === "kino") {
+      setZeigeAlles(true);
+      setKinoFokus({ art: "programm", ref: treffer.ref, titel: treffer.titel });
+      navigiere("kino");
+    } else if (treffer.typ === "streaming") {
+      setStreamingFokus({ art: "entdecken", ref: treffer.ref, titel: treffer.titel });
+      navigiere("streaming");
+    }
+  }, [navigiere, springeZuArtikel, springeZuFilm]);
+  const toggleGlobalesMenu = useCallback(() => {
+    setGlobaleSuchantwort(null);
+    toggleMehr();
+  }, [toggleMehr]);
+  const navigiereAusGlobalemMenu = useCallback((ziel) => {
+    setGlobaleSuchantwort(null);
+    navigiere(ziel);
   }, [navigiere]);
   /* KD-031: `vollKatalog` trennt das leichte Boot-Nachladen vom teuren
      Entdecken-Katalog. Ohne Flag (Boot/Badges): nur die leichte streaming_bekannt
@@ -1481,7 +1540,7 @@ export default function App() {
         const a = catalogService.buildStreamingViews(dateiRoh, master || []);
         setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
         setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
-        return;
+        return a;
       }
     }
 
@@ -1507,7 +1566,9 @@ export default function App() {
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
+    return a;
   }, [snapshotFreigabe, master]);
+  ladeStreamingDateienRef.current = ladeStreamingDateien;
   useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
@@ -1819,6 +1880,7 @@ export default function App() {
             onFilmwissenRecherchieren={recherchiereFilmwissen}
             loading={loading}
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
+            fokusTreffer={kinoFokus} onFokusVerbraucht={() => setKinoFokus(null)}
             datenGesperrt={!snapshotFreigabe}
             programmInfo={programmInfo} angemeldet={session.mode === "account"}
             autorName={autorName} /* KD-030: echter Autor für neue Bewertungen (EintragForm/EditPanel) */
@@ -1889,6 +1951,7 @@ export default function App() {
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
             katalogInfo={streamingInfo} angemeldet={session.mode === "account"}
+            fokusTreffer={streamingFokus} onFokusVerbraucht={() => setStreamingFokus(null)}
           />
         )}
 
@@ -1950,8 +2013,13 @@ export default function App() {
         )}
       </main>
       <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
-        onNavigate={navigiere} />
-      <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche} />
+        onNavigate={navigiereAusGlobalemMenu} />
+      <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
+        antwort={globaleSuchantwort}
+        onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
+        onTreffer={oeffneGlobalenTreffer}
+        onAlleErgebnisse={oeffneAusfuehrlicheSuche}
+        menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />
       </div>{/* .kd-app */}
       {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">

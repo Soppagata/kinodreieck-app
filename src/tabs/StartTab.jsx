@@ -4,6 +4,7 @@ import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { sichtbareDienste } from "../lib/dienste.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { useInstallationsStatus } from "../lib/installation.js";
+import { KinoTicket } from "../components/ui.jsx";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -187,13 +188,9 @@ function StartDashboard({
         {kinoTop.length > 0 && (
           <Modul name="Kino für dich" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere}>
             {kinoTop.map(({ prog, film, termin }, i) => (
-              <div key={(prog.film_at_id || prog.t) + "|" + i} className="kd-dash-ticket" onClick={() => zuEintrag(film.id, "kino")}>
-                <div className="kd-dash-tbody">
-                  <div className="kd-dash-film">{film.titel}</div>
-                  <div className="kd-dash-meta">{[film.jahr, (prog.k || [])[0]].filter(Boolean).join(" · ")}</div>
-                  <div className="kd-dash-showtime">◷ {termin.label}</div>
-                </div>
-              </div>
+              <KinoTicket key={(prog.film_at_id || prog.t) + "|" + i}
+                titel={film.titel} jahr={film.jahr} kino={(prog.k || [])[0]}
+                termin={termin.label} onToggle={() => zuEintrag(film.id, "kino")} />
             ))}
           </Modul>
         )}

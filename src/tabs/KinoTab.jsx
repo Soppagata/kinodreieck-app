@@ -4,7 +4,7 @@ import { matchFilm, norm } from "../lib/match.js";
 import { istImAbo } from "../lib/kinos.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
-import { Chip, ChipReihe, IconDelete } from "../components/ui.jsx";
+import { Chip, ChipReihe, IconClose, IconDelete, KinoTicket } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -29,7 +29,9 @@ export function KinoTab({
   onFilmwissenLaden, onFilmwissenRecherchieren,
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
   programmInfo = null, angemeldet = false, autorName,
+  fokusTreffer = null, onFokusVerbraucht,
 }) {
+  const bereichRef = useRef(null);
   const istGepinnt = (t, z) => kinoPins.some((p) => p.t === t && p.z === z);
   /* Pins chronologisch: Monat/Tag/Uhrzeit aus dem Terminstring */
   const pinSort = (p) => {
@@ -76,6 +78,29 @@ export function KinoTab({
     window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
     return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
   });
+
+  useEffect(() => {
+    if (!fokusTreffer) return undefined;
+    setSucheK(fokusTreffer.titel || "");
+    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);
+    setZeigeMehr(true);
+    if (fokusTreffer.art === "film") setExpandedId("k" + fokusTreffer.ref);
+    let zweiterFrame = 0;
+    const ersterFrame = requestAnimationFrame(() => {
+      zweiterFrame = requestAnimationFrame(() => {
+        const schluessel = `${fokusTreffer.art}:${fokusTreffer.ref}`;
+        const ziel = [...(bereichRef.current?.querySelectorAll("[data-kino-suchtreffer]") || [])]
+          .find((element) => element.dataset.kinoSuchtreffer === schluessel);
+        ziel?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+        ziel?.focus?.({ preventScroll: true });
+        onFokusVerbraucht?.();
+      });
+    });
+    return () => { cancelAnimationFrame(ersterFrame); cancelAnimationFrame(zweiterFrame); };
+    // Der Fokusauftrag selbst ist die Ereigniskennung; der Inline-Callback aus
+    // App darf den Effekt nicht bei jedem Eltern-Render erneut auslösen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusTreffer]);
 
   /* Verfügbare Kinos / Tage / Fassungen aus den Daten ableiten */
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);
@@ -149,7 +174,7 @@ export function KinoTab({
   const filterAktiv = sucheK || kinoF || tagF || aboFilter !== "alle" || fassungF;
 
   return (
-    <section>
+    <section ref={bereichRef}>
       <ChipReihe className="kd-kino-stand" style={{ gap: 10, marginBottom: 12 }}>
         {progStand ? (
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: programmInfo?.abgelaufen ? T.gefahr : T.rauch }}>
@@ -176,7 +201,7 @@ export function KinoTab({
                 style={{ color: T.leinwand, fontWeight: 700, cursor: "pointer" }}>{p.t}</span>
               {p.j ? <span style={{ color: T.rauch }}>({p.j})</span> : null}
               <span style={{ flex: 1 }}>{p.z}</span>
-              <button onClick={() => toggleKinoPin(p.t, p.j, p.z)} title="Pin lösen" className="kd-del"
+              <button onClick={() => toggleKinoPin(p.t, p.j, p.z)} title="Pin lösen" aria-label={`Pin für ${p.t} lösen`} className="kd-del"
                 style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", fontSize: 13, padding: "0 2px" }}><IconDelete size={13} /></button>
             </div>
           ))}
@@ -212,7 +237,8 @@ export function KinoTab({
           <div data-tour="kino-filter" className="kd-kompakt kd-seitensuche" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
             <input value={sucheK} onChange={(e) => setSucheK(e.target.value)} placeholder="Programm durchsuchen …"
               style={{ ...inputStyle, flex: 1, minWidth: 170 }} />
-            {sucheK && <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSucheK("")}>×</button>}
+            {sucheK && <button type="button" aria-label="Kinosuche leeren" title="Kinosuche leeren"
+              style={{ ...btnStyle(false), fontSize: 13, padding: "6px 11px" }} onClick={() => setSucheK("")}><IconClose /></button>}
             <button onClick={toggleFilterMenue} title={filterMenueOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {filterMenueOffen ? "▾ Filter" : "▸ Filter"}
@@ -273,56 +299,60 @@ export function KinoTab({
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {matchedGefiltert.map(({ prog, film }) => {
                   const z = zeitenGefiltert(prog);
+                  const streamingBadge = badgeFuer?.(film);
                   return (
-                    <FilmCard
-                      key={film.id}
-                      film={film}
-                      streamBadge={badgeFuer ? badgeFuer(film) : null}
-                      expanded={expandedId === "k" + film.id}
-                      onToggle={() => {
-                        const key = "k" + film.id;
-                        const oeffnen = expandedId !== key;
-                        setExpandedId(oeffnen ? key : null);
-                        if (oeffnen) onFilmwissenLaden?.(film);
-                      }}
-                      onSave={(changes) => updateFilm(film.id, changes)}
-                      vorbewertung={vorbewertungAktiv ? {
-                        laeuft: prognoseLaufId === film.id,
-                        fehler: prognoseFehler[film.id] || null,
-                        sperrgrund: prognoseSperrgrund,
-                        aktuelleProfilVersion,
-                        onErstellen: () => onPrognoseErstellen?.(film),
-                        onAnnehmen: () => onPrognoseStatus?.(film, "angenommen"),
-                        onVerwerfen: () => onPrognoseStatus?.(film, "verworfen"),
-                      } : null}
-                      filmwissen={filmwissenAktiv ? {
-                        ...(filmwissenProFilm[film.id] || { phase: "idle", daten: null, fehler: null }),
-                        rechercheLaeuft: filmwissenRechercheLaufId === String(film.id),
-                        rechercheMoeglich: filmwissenRechercheAktiv
-                          && !!filmwissenRechercheKennung(film),
-                        onRecherchieren: () => onFilmwissenRecherchieren?.(film),
-                      } : null}
-                      kinoInfo={
-                        <>
-                          <span style={{ fontWeight: 700 }}><KinoLinks kinos={kinoF ? [kinoF] : prog.k} /></span>
-                          {"  "}
-                          {z.slice(0, 5).map((zi, zIdx) => (
-                            <span key={zi}>
-                              {zIdx > 0 && " / "}
-                              <span data-tour="pin"
-                                onClick={(e) => { e.stopPropagation(); toggleKinoPin && toggleKinoPin(prog.t, prog.j ?? film.jahr, zi); }}
-                                title={istGepinnt(prog.t, zi) ? "Pin lösen" : "Termin anpinnen"}
-                                style={{ cursor: "pointer", color: istGepinnt(prog.t, zi) ? T.wolfram : undefined, fontWeight: istGepinnt(prog.t, zi) ? 700 : undefined }}>
-                                {istGepinnt(prog.t, zi) ? "◆ " : "◇ "}{zi}
-                              </span>
-                            </span>
-                          ))}
-                          {z.length > 5 ? <span style={{ color: T.rauch }}> · +{z.length - 5} weitere Termine</span> : ""}
-                          {prog.f ? "  · " + prog.f : ""}
-                          {prog.s ? <span style={{ color: T.gefahr }}> · {prog.s}</span> : ""}
-                        </>
-                      }
-                    />
+                    <div key={film.id} className="kd-suchfokus" tabIndex={-1}
+                      data-kino-suchtreffer={`film:${film.id}`}>
+                    <KinoTicket titel={film.titel} jahr={film.jahr}
+                        kino={(kinoF ? [kinoF] : prog.k || [])[0]} termin={z[0] || null}
+                        expanded={expandedId === "k" + film.id}
+                        onToggle={() => {
+                          const key = "k" + film.id;
+                          const oeffnen = expandedId !== key;
+                          setExpandedId(oeffnen ? key : null);
+                          if (oeffnen) onFilmwissenLaden?.(film);
+                        }}>
+                      <div className="kd-kino-ticket-kinos"><KinoLinks kinos={kinoF ? [kinoF] : prog.k} /></div>
+                      <div className="kd-kino-ticket-termine">
+                        {z.map((zi) => (
+                          <button key={zi} type="button" data-tour="pin"
+                            aria-pressed={istGepinnt(prog.t, zi)}
+                            onClick={() => toggleKinoPin?.(prog.t, prog.j ?? film.jahr, zi)}
+                            title={istGepinnt(prog.t, zi) ? "Pin lösen" : "Termin anpinnen"}
+                            style={{ ...btnStyle(false), fontSize: 11, padding: "4px 9px", color: istGepinnt(prog.t, zi) ? T.wolfram : T.leinwandTief }}>
+                            {istGepinnt(prog.t, zi) ? "◆" : "◇"} {zi}
+                          </button>
+                        ))}
+                      </div>
+                      {prog.b && <p className="kd-kino-ticket-beschreibung">{prog.b}</p>}
+                      {(prog.f || prog.s || streamingBadge) && (
+                        <div className="kd-kino-ticket-meta">
+                          {prog.f && <span>{prog.f}</span>}
+                          {prog.s && <span style={{ color: T.gefahr }}>{prog.s}</span>}
+                          {streamingBadge}
+                        </div>
+                      )}
+                      <details className="kd-kino-mediathekdetails">
+                        <summary>Mediathek-Details &amp; KI</summary>
+                        <FilmCard film={film} expanded onSave={(changes) => updateFilm(film.id, changes)}
+                          vorbewertung={vorbewertungAktiv ? {
+                            laeuft: prognoseLaufId === film.id,
+                            fehler: prognoseFehler[film.id] || null,
+                            sperrgrund: prognoseSperrgrund,
+                            aktuelleProfilVersion,
+                            onErstellen: () => onPrognoseErstellen?.(film),
+                            onAnnehmen: () => onPrognoseStatus?.(film, "angenommen"),
+                            onVerwerfen: () => onPrognoseStatus?.(film, "verworfen"),
+                          } : null}
+                          filmwissen={filmwissenAktiv ? {
+                            ...(filmwissenProFilm[film.id] || { phase: "idle", daten: null, fehler: null }),
+                            rechercheLaeuft: filmwissenRechercheLaufId === String(film.id),
+                            rechercheMoeglich: filmwissenRechercheAktiv && !!filmwissenRechercheKennung(film),
+                            onRecherchieren: () => onFilmwissenRecherchieren?.(film),
+                          } : null} />
+                      </details>
+                      </KinoTicket>
+                    </div>
                   );
                 })}
               </div>
@@ -382,14 +412,18 @@ export function KinoTab({
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {(zeigeMehr ? restGefiltert : restGefiltert.slice(0, 40)).map((pf) => (
-                  <KompaktEintrag key={pf.film_at_id || pf.t}
+                  <div key={pf.film_at_id || pf.t} className="kd-suchfokus" tabIndex={-1}
+                    data-kino-suchtreffer={`programm:${pf.film_at_id || pf.t}`}>
+                  <KompaktEintrag
                     pf={pf} zeiten={zeitenGefiltert(pf)} kinos={kinoF ? [kinoF] : pf.k}
                     addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
                     vorbewertungAktiv={vorbewertungAktiv}
                     prognoseSperrgrund={prognoseSperrgrund}
                     autorName={autorName}
                     istGepinnt={istGepinnt} togglePin={toggleKinoPin}
+                    fokusAktiv={fokusTreffer?.art === "programm" && String(fokusTreffer.ref) === String(pf.film_at_id || pf.t)}
                     master={master} updateFilm={updateFilm} />
+                  </div>
                 ))}
               </div>
               {restGefiltert.length > 40 && (
@@ -415,11 +449,14 @@ export function KinoTab({
    in "Läuft & passt zu dir". */
 function KompaktEintrag({
   pf, zeiten, kinos, addFilm, addFilmMitPrognose, vorbewertungAktiv, prognoseSperrgrund,
-  autorName, istGepinnt, togglePin, master, updateFilm,
+  autorName, istGepinnt, togglePin, master, updateFilm, fokusAktiv = false,
 }) {
   const [offen, setOffen] = useState(false);
   const [formAn, setFormAn] = useState(false);
   const [zeigeAlle, setZeigeAlle] = useState(false);
+  useEffect(() => {
+    if (fokusAktiv) setOffen(true);
+  }, [fokusAktiv]);
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}

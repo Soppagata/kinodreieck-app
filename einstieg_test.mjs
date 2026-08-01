@@ -41,6 +41,7 @@ check("Ein vorhandenes Konto überspringt auch einen unterbrochenen Abmelde-Eins
 const gate = readFileSync(new URL("./src/components/EinstiegsGate.jsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("./src/App.jsx", import.meta.url), "utf8");
 const nav = readFileSync(new URL("./src/components/AppNavigation.jsx", import.meta.url), "utf8");
+const globalSuche = readFileSync(new URL("./src/components/GlobalSearchBar.jsx", import.meta.url), "utf8");
 const daten = readFileSync(new URL("./src/tabs/DatenTab.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("./src/index.css", import.meta.url), "utf8");
 const konto = readFileSync(new URL("./src/components/KontoBereich.jsx", import.meta.url), "utf8");
@@ -58,15 +59,16 @@ check("Abmelden räumt zuerst den Kontokontext und öffnet danach den Einstieg",
 check("Abmelden lädt den wiederhergestellten Gaststand unmittelbar neu", () => /async function abmelden[\s\S]+onDatenGeaendert\?\.\(\)/.test(konto));
 check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
   /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
-check("Mobile Navigation nutzt wieder den ursprünglichen Seitengriff mit peppigem Popup", () =>
-  /kd-navband/.test(nav) && /NAVIGATION\.map/.test(nav)
-  && /role="dialog"/.test(nav) && !/kd-menuknopf|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
+check("Mobile Navigation nutzt den Menüknopf der globalen Leiste mit peppigem Popup", () =>
+  /kd-globalsuche-menu/.test(globalSuche) && /NAVIGATION\.map/.test(nav)
+  && /role="dialog"/.test(nav) && !/kd-navband|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
 check("Datei- und Wartungswerkzeuge bleiben in den mobilen Einstellungen verborgen", () =>
   /className="kd-nur-desktop">\s*<Klappe titel="Masterliste"/.test(daten)
   && /className="kd-nur-desktop">\s*<Klappe titel="Gesamt-Backup"/.test(daten)
   && /className="kd-nur-desktop" data-tour="erweitert"/.test(daten));
-check("Der ursprüngliche Griff ist ohne alte Bedienhand-Spiegelung zurück", () =>
-  !/Bedienhand|linkshaender/.test(daten) && !/kd-links/.test(css) && /kd-navband/.test(css) && !/NavBand/.test(app));
+check("Der alte Seitengriff und die Bedienhand-Spiegelung bleiben entfernt", () =>
+  !/Bedienhand|linkshaender/.test(daten) && !/kd-links/.test(css)
+  && !/kd-navband/.test(css) && /kd-globalsuche-menu/.test(css) && !/NavBand/.test(app));
 check("App registriert keine automatischen Tour-, Scroll- oder IntersectionObserver-Dialoge", () =>
   !/onTour|SICHTBAR_TRIGGER|IntersectionObserver|TourOverlay/.test(app));
 

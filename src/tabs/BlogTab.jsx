@@ -8,6 +8,7 @@ import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublic
 import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
+import { IconClose } from "../components/ui.jsx";
 
 /* ================= BLOG =================
    Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
@@ -59,7 +60,9 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
             {ALLE_TYPEN.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <input placeholder="Jahr" value={z.jahr} onChange={(e) => setzeZeile(i, "jahr", e.target.value)} style={{ ...inputStyle, width: 70 }} />
-          <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 9px" }} onClick={() => setListe(liste.filter((_, j) => j !== i))}>×</button>
+          <button type="button" aria-label={`Referenz ${i + 1} entfernen`} title="Referenz entfernen"
+            style={{ ...btnStyle(false), fontSize: 12, padding: "5px 9px" }}
+            onClick={() => setListe(liste.filter((_, j) => j !== i))}><IconClose /></button>
         </div>
       ))}
       {liste.length < MAX_LISTE && (
@@ -495,7 +498,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       {/* ---- Daten-Leiste im Bereich: Artikel sichern/ersetzen (Punkt 6).
            Pakete (Teilen/Tauschen) liegen in Mediathek & Einstellungen. ---- */}
       {exportArtikel && (
-        <details style={{ marginTop: 26 }}>
+        <details className="kd-blog-daten kd-nur-desktop" style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
             Daten (Artikel exportieren · importieren)
           </summary>

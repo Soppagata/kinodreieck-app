@@ -43,7 +43,7 @@ const DEF = {
   },
   entdecken: {
     titel: "Entdecken",
-    absaetze: [{ ziel: "entdecken-relevanz", text: "Vorschläge nach Relevanz sortiert — kein Live-API-Call, nur vorberechnete Kataloge. Mit ★ merkst du dir Titel; sie erscheinen im Dashboard." }],
+    absaetze: [{ ziel: "entdecken-relevanz", text: "Vorschläge nach nachvollziehbarer Passung sortiert — kein Live-API-Call, nur vorberechnete Kataloge. Mit ★ merkst du dir Titel; sie erscheinen im Dashboard." }],
   },
 
   /* --- Blog --- */

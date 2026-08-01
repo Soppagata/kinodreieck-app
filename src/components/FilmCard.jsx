@@ -141,24 +141,6 @@ export function FilmCard({
               )}
             </div>
           )}
-          {expanded && !editing && vorbewertung && (unbewertet || film.prognose) && (
-            <div onClick={(e) => e.stopPropagation()}
-              style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
-              <PrognoseBereich
-                film={film}
-                laeuft={vorbewertung.laeuft}
-                fehler={vorbewertung.fehler}
-                erstellenMoeglich={!vorbewertung.sperrgrund}
-                sperrgrund={vorbewertung.sperrgrund}
-                aktuelleProfilVersion={vorbewertung.aktuelleProfilVersion}
-                onErstellen={vorbewertung.onErstellen}
-                onAnnehmen={vorbewertung.onAnnehmen}
-                onVerwerfen={vorbewertung.onVerwerfen}
-                onKorrigieren={() => { setPrognoseEntwurf(false); setEditing(true); }}
-                onUebernehmen={onSave ? () => { setPrognoseEntwurf(true); setEditing(true); } : null}
-              />
-            </div>
-          )}
           {expanded && !editing && unbewertet && filmwissen && (
             <div onClick={(e) => e.stopPropagation()}
               style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
@@ -174,6 +156,24 @@ export function FilmCard({
           )}
         </div>
       </div>
+      {expanded && !editing && vorbewertung && (unbewertet || film.prognose) && (
+        <div className="kd-film-prognose-breit" onClick={(e) => e.stopPropagation()}
+          style={{ width: "100%", boxSizing: "border-box", marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
+          <PrognoseBereich
+            film={film}
+            laeuft={vorbewertung.laeuft}
+            fehler={vorbewertung.fehler}
+            erstellenMoeglich={!vorbewertung.sperrgrund}
+            sperrgrund={vorbewertung.sperrgrund}
+            aktuelleProfilVersion={vorbewertung.aktuelleProfilVersion}
+            onErstellen={vorbewertung.onErstellen}
+            onAnnehmen={vorbewertung.onAnnehmen}
+            onVerwerfen={vorbewertung.onVerwerfen}
+            onKorrigieren={() => { setPrognoseEntwurf(false); setEditing(true); }}
+            onUebernehmen={onSave ? () => { setPrognoseEntwurf(true); setEditing(true); } : null}
+          />
+        </div>
+      )}
       {expanded && editing && (
         <div className="kd-film-editor-shell">
           {dreieck ? (

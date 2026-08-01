@@ -56,6 +56,10 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid var(--wolfram, #E3A63B); outline-offset: 2px; /* C3: folgt dem aktiven Theme */
 }
 button:disabled { opacity: .45; cursor: not-allowed; }
+.kd-visually-hidden { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important;
+  overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+.kd-suchfokus { min-width:0; border-radius:8px; outline:0 solid transparent; transition:outline-color .15s,box-shadow .15s; }
+.kd-suchfokus:focus { outline:2px solid var(--wolfram,#e3a63b); outline-offset:3px; box-shadow:0 0 0 5px rgba(227,166,59,.12); }
 
 :root { --perfoTempo: 1.4s; }
 
@@ -259,7 +263,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-inline-meldung { color:#bdb7c5; font-size:12px; line-height:1.45; }
 .kd-installkarte-kompakt { margin:14px 0 0; padding:14px; }.kd-installkarte-kompakt h2 { font-size:20px; }
 
-.kd-navband { display:none; }
 .kd-sheet-layer,.kd-help-layer { position:fixed; inset:0; z-index:13000; display:flex; align-items:flex-end; justify-content:center; }
 .kd-sheet-scrim { position:absolute; inset:0; width:100%; height:100%; min-height:0; padding:0; border:0; border-radius:0;
   background:rgba(0,0,0,.58); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
@@ -302,10 +305,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   /* Viele Komponenten verwenden bewusst feste Pixelgrößen. Darum skaliert die
-     mobile Schriftwahl den Inhaltsbereich selbst und kompensiert seine Breite;
-     ein bloß geerbtes font-size wäre dort praktisch unsichtbar. */
+     mobile Schriftwahl den Inhaltsbereich selbst. Bei "Klein" darf die Breite
+     jedoch nicht invers vergrößert werden: Das zog Karten und Formulare über
+     den rechten sicheren Rand hinaus. Der frei werdende Platz ist hier die
+     beabsichtigte, ruhigere Innenluft. */
   .kd-schrift-gross .kd-app main { zoom:1.1; width:90.909% !important; max-width:90.909% !important; }
-  .kd-schrift-klein .kd-app main { zoom:.92; width:108.696% !important; max-width:108.696% !important; }
+  .kd-schrift-klein .kd-app main { zoom:.92; width:100% !important; max-width:100% !important; }
   .kd-help-grid,.kd-entry-choicegrid { grid-template-columns:1fr; }
   .kd-entry-panel { padding:20px 17px; }.kd-entry-choicegrid { gap:9px; }.kd-choice { min-height:88px !important; }
   .kd-start-service { justify-content:stretch; }.kd-start-service button,.kd-start-service a { flex:1 1 100%; justify-content:center; text-align:center; }
@@ -317,7 +322,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Portal, Fokusfalle und iOS-Scrollsperre bleiben aus dem neuen Unterbau. */
 .kd-mobile-menu-layer { position:fixed; inset:0; z-index:13000; }
 .kd-mobile-menu-layer .kd-sheet-scrim { background:rgba(0,0,0,.35); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
-.kd-mobile-menu { position:absolute; right:max(10px,env(safe-area-inset-right)); bottom:calc(14px + env(safe-area-inset-bottom));
+.kd-mobile-menu { position:absolute; right:max(10px,env(safe-area-inset-right)); bottom:calc(76px + env(safe-area-inset-bottom));
   width:min(76vw,260px); max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:10px; border:1px solid rgba(255,255,255,.12);
   border-radius:14px; background:#211e26; color:#ece8df; box-shadow:0 12px 40px rgba(0,0,0,.55);
@@ -339,12 +344,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-globalsuche { display:none; }
 
 @media (max-width:760px) {
-  .kd-navband { position:fixed; top:50%; left:0; z-index:13010; width:25px; height:78px; min-height:78px; padding:0;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; transform:translateY(-50%);
-    margin-left:env(safe-area-inset-left); border:0; border-radius:0 10px 10px 0; background:var(--wolfram,#e3a63b);
-    color:#141414; box-shadow:2px 0 12px rgba(0,0,0,.4); transition:width .18s ease,filter .18s ease; }
-  .kd-navband.offen { width:30px; filter:brightness(1.08); }
-  .kd-navband i { display:block; width:9px; height:2px; border-radius:1px; background:rgba(20,20,20,.58); }
   .kd-app main { padding-bottom:calc(94px + env(safe-area-inset-bottom)) !important; }
   .kd-bereichshero { padding-top:8px; margin-bottom:13px; }
   .kd-bereichshero h1 { font-size:clamp(34px,11vw,42px); }
@@ -354,13 +353,29 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     bottom:calc(9px + env(safe-area-inset-bottom)); z-index:1260; display:flex; gap:6px; align-items:stretch;
     min-width:0; box-sizing:border-box; padding:7px; border:1px solid rgba(227,166,59,.55); border-radius:17px;
     background:rgba(28,26,30,.94); box-shadow:0 9px 30px rgba(0,0,0,.62); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
-  .kd-globalsuche select,.kd-globalsuche input,.kd-globalsuche button { min-height:44px; box-sizing:border-box; border-radius:11px; }
-  .kd-globalsuche select { width:74px; min-width:58px; padding:0 6px; border:1px solid #514b58; background:#211e26; color:#bdb7c5; font:600 13px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche input,.kd-globalsuche button { min-height:44px; box-sizing:border-box; border-radius:11px; }
   .kd-globalsuche input { flex:1 1 90px; min-width:0; width:100%; padding:0 11px; border:1px solid #6f6878; background:#17151a; color:#ece8df; font:16px 'Space Grotesk',sans-serif; }
   .kd-globalsuche input:focus { outline:2px solid #e3a63b; outline-offset:-1px; }
   .kd-globalsuche button { flex:0 0 auto; padding:0 10px; border:1px solid #6f6878; background:#211e26; color:#ece8df; font:600 14px 'Barlow Condensed',sans-serif; }
   .kd-globalsuche .kd-globalsuche-los { width:44px; padding:0; border-color:#e3a63b; background:#e3a63b; color:#1c1a1e; font-size:23px; }
-  .kd-globalsuche .kd-globalsuche-filter { padding-inline:8px; }
+  .kd-globalsuche .kd-globalsuche-menu { width:44px; padding:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+  .kd-globalsuche-menu i { display:block; width:16px; height:2px; border-radius:2px; background:currentColor; }
+  .kd-globalsuche-antwort { position:absolute; left:0; right:0; bottom:calc(100% + 8px); max-height:min(58dvh,440px); overflow-y:auto;
+    box-sizing:border-box; padding:12px; border:1px solid rgba(227,166,59,.55); border-radius:15px; background:#211e26; color:#ece8df;
+    box-shadow:0 12px 38px rgba(0,0,0,.68); }
+  .kd-globalsuche-antwortkopf { display:flex; align-items:flex-start; gap:10px; margin-bottom:9px; }
+  .kd-globalsuche-antwortkopf>div { min-width:0; display:flex; flex-direction:column; }
+  .kd-globalsuche-antwortkopf span { color:#e3a63b; font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+  .kd-globalsuche-antwortkopf strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 20px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche .kd-globalsuche-schliessen { width:36px; min-height:36px; margin-left:auto; padding:0; font-size:24px; }
+  .kd-globalsuche-treffer { display:flex; flex-direction:column; gap:5px; }
+  .kd-globalsuche-treffer>button { width:100%; min-height:48px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:1px 8px; padding:8px 10px;
+    text-align:left; border-color:#3c3742; border-radius:8px; background:#17151a; }
+  .kd-globalsuche-treffer>button span { grid-row:1 / span 2; align-self:center; color:#e3a63b; font:700 9px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
+  .kd-globalsuche-treffer>button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 16px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche-treffer>button small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#bdb7c5; font:10px 'Space Mono',monospace; }
+  .kd-globalsuche-treffer p { margin:5px 2px 10px; color:#bdb7c5; font-size:13px; }
+  .kd-globalsuche .kd-globalsuche-alle { width:100%; margin-top:9px; border-color:#e3a63b; color:#e3a63b; }
 }
 
 /* ================= ETAPPE 2: MOBILE-BAUSTEINE =================
@@ -375,8 +390,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-kopf { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; align-items:start; min-width:0; }
 .kd-entdecken-aktionen { display:flex; gap:4px; align-items:center; }
 .kd-entdecken-inhalt,.kd-entdecken-titel { min-width:0; }
-.kd-entdecken-meta { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-top:6px; min-width:0; }
-.kd-entdecken-meta>span:first-child { min-width:0; }
+.kd-entdecken-meta { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:10px; margin:8px 0 0 41px; min-width:0; }
+.kd-entdecken-dienste { min-width:0; max-width:100%; overflow:hidden; justify-self:start; }
+.kd-entdecken-dienste>* { box-sizing:border-box; max-width:100% !important; }
 .kd-entdecken-relevanz { flex:0 0 auto; align-self:flex-end; text-align:right; }
 .kd-entdecken-frage { margin:10px 0 2px 40px; padding:10px; border:1px solid var(--wolfram,#e3a63b); border-radius:6px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-entdecken-frage>div { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
@@ -426,8 +442,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-edit-aktionen button { width:100%; min-width:0; padding:7px 8px !important; }
   .kd-edit-hinweis { line-height:1.5; overflow-wrap:anywhere; }
 
-  .kd-entdecken-meta { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; }
-  .kd-entdecken-meta>span:first-child { grid-column:1; justify-self:start; }
+  .kd-entdecken-meta { grid-template-columns:minmax(0,1fr) auto; }
+  .kd-entdecken-dienste { grid-column:1; }
   .kd-entdecken-relevanz { grid-column:2; justify-self:end; }
   .kd-entdecken-frage { margin-left:0; }
   .kd-entdecken-frage button { flex:1 1 100%; }
@@ -806,6 +822,46 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   max-width:100%; min-width:0; box-sizing:border-box;
   font-family: 'Space Mono', monospace; font-size: 11px; color: var(--kd-tinte);
   background: var(--kd-leinwandTief); border: 1px solid var(--kd-wolfram); border-radius: 3px; }
+
+/* Derselbe Kinoticket-Kopf im Dashboard und unter „Läuft & passt zu dir".
+   Bewertung und Dreieck gehören bewusst nicht auf das Programmticket. */
+.kd-kino-ticket { flex-direction:column; }
+.kd-kino-ticket-trigger { display:flex; align-items:center; width:100%; min-width:0; margin:0; padding:0;
+  border:0; border-radius:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.kd-kino-ticket-trigger:focus-visible { outline:3px solid var(--kd-wolfram); outline-offset:-3px; }
+.kd-kino-ticket-trigger:disabled { cursor:default; opacity:1; }
+.kd-kino-ticket-trigger .kd-dash-tbody { display:block; }
+.kd-kino-ticket-pfeil { flex:0 0 auto; margin-right:14px; color:var(--kd-rauch); font-size:22px;
+  transition:transform .16s ease; }
+.kd-kino-ticket.offen .kd-kino-ticket-pfeil { transform:rotate(180deg); }
+.kd-kino-ticket-details { padding:0 13px 13px; border-top:1px dashed var(--kd-rauch); }
+.kd-kino-ticket-kinos { padding-top:10px; font:700 13px/1.5 'Space Mono',monospace; }
+.kd-kino-ticket-termine,.kd-kino-ticket-meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px; }
+.kd-kino-ticket-beschreibung { margin:9px 0 0; color:var(--kd-tinte); font-size:13px; line-height:1.5; }
+.kd-kino-mediathekdetails { margin-top:10px; }
+.kd-kino-mediathekdetails > summary { cursor:pointer; color:var(--kd-tinte); font:600 13px 'Barlow Condensed',sans-serif;
+  letter-spacing:.05em; text-transform:uppercase; }
+.kd-kino-mediathekdetails .kd-karte { margin-top:8px; box-shadow:none !important; border:1px solid var(--kd-leinwandTief); }
+
+/* Quellen sind Bestandsdaten, Streaming-Badges daneben aktuelle Verfügbarkeit. */
+.kd-quellenbadges { display:inline-flex; flex-wrap:wrap; gap:5px; align-items:center; }
+.kd-quellenbadge { display:inline-block; padding:2px 7px; border:1px solid; border-radius:3px;
+  font:10px 'Space Mono',monospace; letter-spacing:.035em; background:transparent; }
+
+.kd-prognose-start,
+.kd-prognose-neuberechnen { display:grid; gap:7px; justify-items:start; }
+.kd-prognose-aktionen { display:grid; grid-template-columns:repeat(2,minmax(0,max-content));
+  gap:7px; justify-content:start; }
+.kd-prognose-aktionen button { min-height:40px; }
+
+@media (max-width:760px) {
+  .kd-prognose-aktionen { grid-template-columns:minmax(0,1fr); }
+  .kd-prognose-aktionen button,
+  .kd-prognose-start button,
+  .kd-prognose-neuberechnen button { width:100%; min-height:44px; white-space:normal; }
+  .kd-prognose-start,
+  .kd-prognose-neuberechnen { justify-items:stretch; }
+}
 
 /* Listen-Karte (Must-Watch / streambar / Pinboard / zuletzt) */
 .kd-dash-karte { padding: 6px 14px; background: var(--kd-leinwand); color: var(--kd-tinte);

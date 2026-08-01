@@ -40,11 +40,23 @@ ok("Mediathek-Abgleich erhält einen echten Gesehen-Status", () => {
   assert.equal(statusVon(r[42]), "gesehen");
   assert.equal(mediathekIdVon(r[42]), "testserie_2026");
 });
+ok("Mediathek-Abgleich toleriert ID-Typen und erhält gesehen-only nach Löschung", () => {
+  const film = { watchmode_id: 7, typ: "movie", titel: "Film" };
+  const gesehen = mitMediathekEintrag(neuerGesehenEintrag(film), film, 123);
+  const vorhanden = gleicheMediathekStatusAb({ 7: gesehen }, [film], [{ id: "123", watchmode_id: 7 }]);
+  assert.equal(mediathekIdVon(vorhanden[7]), "123");
+  const geloescht = gleicheMediathekStatusAb(vorhanden, [film], []);
+  assert.equal(statusVon(geloescht[7]), "gesehen");
+  assert.equal(mediathekIdVon(geloescht[7]), null);
+});
 
 ok("Neues Serien-Häkchen übernimmt belegten Staffelstand", () => {
   const e = neuerGesehenEintrag(serie({ staffeln_verfuegbar: 3 }), new Date("2026-07-21T10:00:00Z"));
   assert.equal(e.staffel_bestaetigt, 3);
   assert.equal(e.status, "gesehen");
+});
+ok("Neues Film-Häkchen wird nicht als Serienbeobachtung gespeichert", () => {
+  assert.equal(neuerGesehenEintrag({ titel: "Testfilm", typ: "movie" }).typ, "movie");
 });
 ok("Neues Serien-Häkchen erfindet keinen Staffelstand", () => {
   assert.equal("staffel_bestaetigt" in neuerGesehenEintrag(serie()), false);

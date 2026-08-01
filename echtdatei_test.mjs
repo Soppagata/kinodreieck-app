@@ -241,6 +241,14 @@ if (entdeckenKnopf) {
       (!!nurGesehen && !!knopf(/^Ja, in die Mediathek$/i)) || sofortErledigt);
     if (nurGesehen) { nurGesehen.click(); await warte(400); }
     check("Erledigte sind nativ sichtbar und lassen sich ausblenden", /Erledigte ausblenden \(1\)/.test(text()));
+    if (nurGesehen) {
+      const spaetereUebernahme = knopf(/^In Mediathek übernehmen$/i);
+      check("Gesehen-only kann später weiterhin in die Mediathek übernommen werden", !!spaetereUebernahme);
+      if (spaetereUebernahme) {
+        spaetereUebernahme.click(); await warte(250);
+        check("Spätere Mediathek-Übernahme öffnet die vorausgefüllte Eingabemaske", !!knopf(/^Hinzufügen$/i));
+      }
+    }
   }
   check("Entdecken enthält den expliziten Übernahmeweg in die Mediathek",
     streamingTabQuelle.includes("Ja, in die Mediathek")

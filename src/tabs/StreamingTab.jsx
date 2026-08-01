@@ -15,6 +15,7 @@ import {
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
+import { istPassend, lesbaresPassungsSignal, passungStufe } from "../lib/passung.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -32,18 +33,20 @@ function download(dateiname, obj) {
   URL.revokeObjectURL(url);
 }
 
-function DienstBadges({ dienste, webUrls, auswahl, kompakt = false }) {
+function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className }) {
   /* Joyn-Fix: Badges UND web_urls-Links nur für Dienste der Abo-Auswahl
      (leere Auswahl = alle) — der Link hängt am Dienst, fliegt also mit. */
   return (
-    <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
+    <span className={className} style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
       {gruppiereDienstBadges(sichtbareDienste(dienste, auswahl), { kompakt }).map(({ label, rohnamen }) => {
         const d = rohnamen[0];
         const url = rohnamen.map((name) => webUrls && webUrls[name]).find(Boolean);
         const stil = {
           fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: "0.05em",
           color: T.tinte, background: T.wolfram, borderRadius: 3, padding: "2px 7px",
-          textDecoration: "none", display: "inline-block", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          textDecoration: "none", display: "inline-block", maxWidth: kompakt ? 180 : "100%",
+          overflow: kompakt ? "hidden" : "visible", textOverflow: kompakt ? "ellipsis" : "clip",
+          whiteSpace: kompakt ? "nowrap" : "normal", overflowWrap: kompakt ? "normal" : "anywhere",
         };
         return url
           ? <a key={label} href={url} target="_blank" rel="noopener noreferrer" style={stil} onClick={(e) => e.stopPropagation()} title={"Bei " + rohnamen.join(", ") + " öffnen"}>{label}&thinsp;↗</a>
@@ -62,7 +65,9 @@ export function StreamingTab({
   filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
   onFilmwissenLaden, onFilmwissenRecherchieren,
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
+  fokusTreffer = null, onFokusVerbraucht,
 }) {
+  const bereichRef = useRef(null);
   const [ansicht, setAnsicht] = useState("programm");
   useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
@@ -96,6 +101,7 @@ export function StreamingTab({
   const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
+  const [fokusOverride, setFokusOverride] = useState(null);
   const markiereAlsErstellt = useCallback((t, id) => {
     if (!id) return id;
     schreibeEntdeckenStatus((prev) => ({
@@ -104,6 +110,46 @@ export function StreamingTab({
     }));
     return id;
   }, [schreibeEntdeckenStatus]);
+  useEffect(() => {
+    if (!fokusTreffer) return undefined;
+    setFokusOverride({ art: fokusTreffer.art, ref: String(fokusTreffer.ref) });
+    setAnsicht(fokusTreffer.art === "entdecken" ? "entdecken" : "programm");
+    setSuche(fokusTreffer.titel || "");
+    setSchnellDienst(null); setAxis(null); setKatF(null); setNurWunsch(false);
+    setGenreE(null); setDekadeE(null); setTypE(null); setNurRelevant(false);
+    setZeigeErledigte(true); setSichtbarE(200);
+    setExpandedId((fokusTreffer.art === "entdecken" ? "e" : "s") + fokusTreffer.ref);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusTreffer]);
+  /* Erst NACH dem durch den Auftrag ausgelösten Ansichts-/Filter-Render
+     fokussieren. Der Auftrag wird nur verbraucht, wenn sein DOM-Ziel wirklich
+     existiert; ein langsamer Katalog-Render kann ihn daher nicht verlieren. */
+  useEffect(() => {
+    if (!fokusTreffer) return undefined;
+    const erwarteteAnsicht = fokusTreffer.art === "entdecken" ? "entdecken" : "programm";
+    if (ansicht !== erwarteteAnsicht) return undefined;
+    let bestaetigung = 0;
+    const frame = requestAnimationFrame(() => {
+      const schluessel = `${fokusTreffer.art}:${fokusTreffer.ref}`;
+      const ziel = [...(bereichRef.current?.querySelectorAll("[data-streaming-suchtreffer]") || [])]
+        .find((element) => element.dataset.streamingSuchtreffer === schluessel);
+      if (!ziel) return;
+      ziel.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      ziel.focus?.({ preventScroll: true });
+      /* Der Tab-Effekt kann unmittelbar danach noch die Vollkatalog-Ansicht
+         einsetzen. Nach diesem letzten Render den Fokus einmal bestätigen und
+         erst dann den Auftrag verbrauchen. */
+      bestaetigung = window.setTimeout(() => {
+        const aktuell = [...(bereichRef.current?.querySelectorAll("[data-streaming-suchtreffer]") || [])]
+          .find((element) => element.dataset.streamingSuchtreffer === schluessel);
+        if (!aktuell) return;
+        aktuell.focus?.({ preventScroll: true });
+        onFokusVerbraucht?.();
+      }, 120);
+    });
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(bestaetigung); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fokusTreffer, ansicht, expandedId, suche, fokusOverride, bekannt, entdecken]);
   /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
      mutiert die Master-Auswahl (auswahl / Einstellungen) NICHT. */
   const [schnellDienst, setSchnellDienst] = useState(null);
@@ -212,7 +258,9 @@ export function StreamingTab({
 
   const programm = useMemo(() => {
     if (!datenDa) return [];
-    let l = bekannt.titel.filter((t) => dienstOk(t) && schnellOk(t));
+    let l = bekannt.titel.filter((t) => (
+      fokusOverride?.art === "programm" && String(t.id) === fokusOverride.ref
+    ) || (dienstOk(t) && schnellOk(t)));
     /* schlagseiten(), nicht schlagseite(): Die Karte darunter nennt bei
        geteilter Spitze BEIDE Achsen ("WIE/WARUM"). Einwertig gefiltert
        verschwand Sin City (4/2/4) beim Klick auf "WARUM-lastig", obwohl die
@@ -226,7 +274,7 @@ export function StreamingTab({
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return [...l].sort((a, b) => score(b) - score(a));
-  }, [bekannt, datenDa, dienstOk, schnellOk, axis, katF, nurWunsch, mustwatchIds, suche]);
+  }, [bekannt, datenDa, dienstOk, schnellOk, axis, katF, nurWunsch, mustwatchIds, suche, fokusOverride]);
 
   const genresE = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -235,21 +283,9 @@ export function StreamingTab({
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([g]) => g);
   }, [entdecken, entdeckenDa]);
 
-  /* "Könnte dir gefallen": dynamische Schwelle — 55% des Relevanz-Maximums.
-     Skaliert mit, wenn die Heuristik reicher wird (Namen-Liste, Tags). */
-  const relevanzMaximum = useMemo(() => {
-    if (!entdeckenDa) return 0;
-    let max = 0;
-    for (const t of entdecken.titel) if (t.relevanz != null && t.relevanz > max) max = t.relevanz;
-    return max;
-  }, [entdecken, entdeckenDa]);
-  const relevanzSchwelle = relevanzMaximum * 0.55;
-  const relevanzStufe = (wert) => {
-    if (!Number.isFinite(wert) || relevanzMaximum <= 0) return null;
-    if (wert >= relevanzMaximum * 0.8) return "hoch";
-    if (wert >= relevanzMaximum * 0.55) return "mittel";
-    return "gering";
-  };
+  /* Die sichtbare Passung ist bewusst katalogunabhängig: Ein Jahrzehntsignal
+     wird nicht plötzlich „hoch", nur weil im aktuellen Katalog kein stärkerer
+     Treffer liegt. Die Rohzahl bleibt ausschließlich Sortierhilfe. */
   const erledigtAnzahl = useMemo(() => {
     if (!entdeckenDa) return 0;
     return entdecken.titel.filter((t) => entdeckenStatus[t.watchmode_id]).length;
@@ -289,9 +325,11 @@ export function StreamingTab({
 
   const entdeckenListe = useMemo(() => {
     if (!entdeckenDa) return [];
-    let l = entdecken.titel.filter((t) => dienstOk(t) && schnellOk(t));
+    let l = entdecken.titel.filter((t) => (
+      fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
+    ) || (dienstOk(t) && schnellOk(t)));
     if (!zeigeErledigte) l = l.filter((t) => !entdeckenStatus[t.watchmode_id]);
-    if (nurRelevant) l = l.filter((t) => (t.relevanz ?? -1) >= relevanzSchwelle);
+    if (nurRelevant) l = l.filter(istPassend);
     if (genreE) l = l.filter((t) => (t.genres || []).includes(genreE));
     if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
@@ -303,7 +341,7 @@ export function StreamingTab({
       titel: (a, b) => (a.titel || "").localeCompare(b.titel || "", "de"),
     };
     return [...l].sort(s[sortE] || s.relevanz);
-  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, suche, sortE, entdeckenStatus, zeigeErledigte, nurRelevant, relevanzSchwelle]);
+  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, suche, sortE, entdeckenStatus, zeigeErledigte, nurRelevant, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
   useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
 
@@ -320,7 +358,7 @@ export function StreamingTab({
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
 
   if (datenGesperrt) return (
-    <section>
+    <section ref={bereichRef}>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
         <strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
       </div>
@@ -328,7 +366,7 @@ export function StreamingTab({
   );
 
   return (
-    <section>
+    <section ref={bereichRef}>
       {/* dataTour="streaming-views" bleibt am SegmentedControl-Container — Tour-Anker. */}
       <SegmentedControl dataTour="streaming-views" value={ansicht} onChange={setAnsicht}
         options={[
@@ -430,7 +468,9 @@ export function StreamingTab({
                 ? { ...f, ...mf, dienste: f.dienste, web_urls: f.web_urls }
                 : f;
               return (
-                <FilmCard key={f.id} film={kartenFilm}
+                <div key={f.id} className="kd-suchfokus" tabIndex={-1}
+                  data-streaming-suchtreffer={`programm:${f.id}`}>
+                <FilmCard film={kartenFilm}
                   expanded={expandedId === "s" + f.id}
                   onToggle={() => {
                     const key = "s" + f.id;
@@ -456,7 +496,8 @@ export function StreamingTab({
                     onRecherchieren: () => onFilmwissenRecherchieren?.(kartenFilm),
                   } : null}
                   kinoInfo={<DienstBadges dienste={f.dienste} webUrls={f.web_urls} auswahl={auswahl} />}
-                />
+                  />
+                </div>
               );
             })}
           </div>
@@ -495,7 +536,7 @@ export function StreamingTab({
                 schlucken den box-shadow-Rahmen, dann käme der Hinweis ohne Rahmen. */}
             <span data-tour="entdecken-relevanz" style={{ display: "inline-flex" }}>
               <select value={sortE} onChange={(e) => setSortE(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                <option value="relevanz">Sortierung: Relevanz</option>
+                <option value="relevanz">Sortierung: Passung</option>
                 <option value="jahr">Jahr</option>
                 <option value="score">User-Score</option>
                 <option value="titel">Titel A–Z</option>
@@ -538,7 +579,9 @@ export function StreamingTab({
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {entdeckenListe.slice(0, sichtbarE).map((t) => (
-              <div key={t.watchmode_id} className="kd-entdecken-karte" onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
+              <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}
+                data-streaming-suchtreffer={`entdecken:${t.watchmode_id}`}
+                onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}
                 style={{ background: T.saalHoch, borderRadius: 6, padding: "10px 12px", cursor: "pointer" }}>
                 <div className="kd-entdecken-kopf">
                   <div className="kd-entdecken-aktionen">
@@ -548,7 +591,7 @@ export function StreamingTab({
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); toggleGesehen(t); }}
-                    title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren (fliegt aus der Liste)"}
+                    title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     ✓
                   </button>
@@ -562,10 +605,6 @@ export function StreamingTab({
                         {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
                       </span>
                     )}
-                  </div>
-                  <div className="kd-entdecken-meta">
-                    <DienstBadges dienste={t.dienste} auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
-                    {t.relevanz != null && <span className="kd-entdecken-relevanz" style={{ ...mono, color: T.wolfram }} title="Relative Heuristik im aktuellen Katalog, keine Bewertung">Relevanz: {relevanzStufe(t.relevanz)}</span>}
                   </div>
                   </div>
                 </div>
@@ -584,16 +623,13 @@ export function StreamingTab({
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
                     {(t.relevanz_signale || []).length > 0 && (
                       <div className="kd-entdecken-signale">
-                        Relevanz beruht auf: {(t.relevanz_signale || []).map((signal) => String(signal)
-                          .replace(/\([^)]*\)$/, "")
-                          .replace(/^jahrzehnt:/, "Jahrzehnt ")
-                          .replace(/^neu$/, "neu im Katalog")).join(" · ")}. Keine Bewertung.
+                        Passung beruht auf: {(t.relevanz_signale || []).map(lesbaresPassungsSignal).join(" · ")}. Keine Bewertung.
                       </div>
                     )}
-                    {addFilm && formFuer !== t.watchmode_id && !entdeckenStatus[t.watchmode_id] && (
+                    {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
                       <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>
-                        Eintrag erstellen
+                        {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "In Mediathek übernehmen" : "Eintrag erstellen"}
                       </button>
                     )}
                     {formFuer === t.watchmode_id && (
@@ -618,6 +654,15 @@ export function StreamingTab({
                     )}
                   </div>
                 )}
+                <div className="kd-entdecken-meta">
+                  <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
+                  {t.relevanz != null && (
+                    <span className="kd-entdecken-relevanz" style={{ ...mono, color: T.wolfram }}
+                      title="Nachvollziehbare Passung aus deinen Profilsignalen, keine Bewertung">
+                      Passung: {passungStufe(t)}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
             {entdeckenListe.length > sichtbarE && (

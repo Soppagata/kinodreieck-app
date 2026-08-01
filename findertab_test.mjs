@@ -201,7 +201,7 @@ const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act, useState, createElement: h } = React;
 const { T } = await import("./src/lib/tokens.js");
-const { FinderTab } = await import(AUSGABE);
+const { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } = await import(AUSGABE);
 
 /* ---------------------------------------------------- Stub des KI-Aufrufs */
 /* Ein Zähler und drei Betriebsarten. „haengen" ist die wichtigste: sie hält
@@ -256,6 +256,49 @@ const MASTER = [
 const KINO_MATCHES = { matched: [], rest: [] };
 const STREAMING_BEKANNT = { titel: [] };
 const STREAMING_ENTDECKEN = { titel: [] };
+
+/* G0 — Regression der globalen Suche: Der konkrete Fehler trat auf, obwohl
+   der Titel sichtbar im Entdecken-Katalog lag. Ein fremder Seitenkontext darf
+   ihn nur nach hinten sortieren, niemals aus dem Ergebnis entfernen. */
+const VALHALLA_ENTDECKEN = { titel: [{
+  watchmode_id: 90125, titel: "Valhalla Rising", originaltitel: "Valhalla Rising",
+  jahr: 2009, genres: ["drama"], dienste: ["Paramount+ (via Amazon Prime)"], relevanz: 4,
+}] };
+const valhallaAntwort = erstelleFinderAntwort({
+  text: "Valhalla Rising", bevorzugterBereich: "kino", master: MASTER,
+  kinoMatches: KINO_MATCHES, streamingBekannt: STREAMING_BEKANNT,
+  streamingEntdecken: VALHALLA_ENTDECKEN, artikel: [],
+});
+const valhallaKompakt = kompakteFinderTreffer(valhallaAntwort, "kino");
+check("G0", "globale Suche findet Valhalla Rising trotz fremdem Seitenkontext", () =>
+  valhallaAntwort.entdecken.length === 1
+  && valhallaKompakt.items.some((item) => item.titel === "Valhalla Rising" && item.bereich === "streaming"));
+const streamingPriorisiert = kompakteFinderTreffer({
+  ...valhallaAntwort,
+  treffer: [{ film: MASTER[0], herkunft: { streaming: null, kino: null } }],
+}, "streaming");
+check("G0", "aktuelle Seite priorisiert nur die Reihenfolge und behält Fallback-Treffer", () =>
+  streamingPriorisiert.items[0]?.titel === "Valhalla Rising"
+  && streamingPriorisiert.items.some((item) => item.titel === "Nacht der Glut"));
+const kinoAusStreamingKontext = kompakteFinderTreffer({
+  ...valhallaAntwort,
+  entdecken: [],
+  treffer: [{ film: MASTER[0], herkunft: { streaming: null, kino: { kinos: ["Filmcasino"] } } }],
+}, "streaming");
+check("G0", "tatsächliche Kino-Herkunft schlägt einen fremden Streaming-Kontext", () =>
+  kinoAusStreamingKontext.items[0]?.bereich === "kino"
+  && kinoAusStreamingKontext.items[0]?.ref === MASTER[0].id);
+const globalLeisteQuelle = fs.readFileSync(path.join(WURZEL, "src/components/GlobalSearchBar.jsx"), "utf8");
+const appQuelle = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
+check("G0", "globale Leiste hat weder Bereichsauswahl noch Filterknopf", () =>
+  !/<select/.test(globalLeisteQuelle) && !/globalsuche-filter|toggle-bereichsfilter/.test(globalLeisteQuelle));
+check("G0", "globale Suche rendert ein eigenes Dialog-Ergebnis und öffnet Finder erst ausführlich", () =>
+  /kd-globalsuche-antwort/.test(globalLeisteQuelle)
+  && /oeffneAusfuehrlicheSuche/.test(appQuelle)
+  && /setGlobaleSuchantwort/.test(appQuelle));
+check("G0", "globale Suche wartet auf den Vollkatalog und nutzt dessen direkte Antwort", () =>
+  /await ladeStreamingDateienRef\.current\?\.\(true\)/.test(appQuelle)
+  && /streamingEntdecken:\s*geladeneAnsichten\?\.entdecken/.test(appQuelle));
 
 /* Zwei Sätze, die der deterministische Parser NICHT deuten kann — nur dann
    bietet die Oberfläche „Mit KI deuten" überhaupt an (E1). */
@@ -937,6 +980,7 @@ for (const [name, lauf] of ABSCHNITTE) {
    BILANZ
    ========================================================================= */
 const TITEL = {
+  G0: "Globale Mehrbereichssuche und Popup-Übergabe",
   G1: "Sperre gegen zwei bezahlte Deutungen (S6)",
   G2: "Fehlermeldung am Verlaufseintrag (S6/S8)",
   G3: "Neue Suche zweistufig (S7)",

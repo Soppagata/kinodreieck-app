@@ -39,6 +39,99 @@ function setzeLaufendeDeutung(wert) {
 let verlaufZaehler = 0;
 const neueEintragId = () => "vl" + (++verlaufZaehler);
 
+export function kinoGenresAusMatches(kinoMatches) {
+  const genres = new Set();
+  for (const pf of (kinoMatches && kinoMatches.rest) || []) for (const genre of pf.g || []) genres.add(genre);
+  for (const match of (kinoMatches && kinoMatches.matched) || []) for (const genre of (match.prog.g || [])) genres.add(genre);
+  return [...genres];
+}
+
+/* Eine globale Anfrage durchsucht immer alle lokalen Datenquellen. Der
+   bevorzugte Bereich ist nur Anzeige-Priorität; er darf Treffer aus einem
+   anderen Bereich nie wieder abschneiden. Damit bleibt die Suche auch bei
+   ausgeschalteter KI vollständig deterministisch. */
+export function erstelleFinderAntwort({
+  text, sig: vorhandeneSignale = null, bevorzugterBereich = "alles",
+  master = [], kinoMatches, streamingBekannt, streamingEntdecken,
+  artikel = [],
+}) {
+  const frage = String(text || "").trim();
+  const sig = vorhandeneSignale || parseAnfrage(frage, master, kinoGenresAusMatches(kinoMatches));
+  const nq = frage.toLocaleLowerCase("de-AT");
+  const artikelTreffer = nq
+    ? (artikel || []).filter((eintrag) => [
+      eintrag.titel, eintrag.text,
+      ...(eintrag.liste || []).flatMap((zeile) => [zeile.eingabe, zeile.notiz]),
+    ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))).slice(0, 10)
+    : [];
+  return {
+    sig,
+    scope: bevorzugterBereich || "alles",
+    hilfe: appHilfeAntwort(frage),
+    treffer: sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt }),
+    entdecken: sucheEntdecken(sig, streamingEntdecken),
+    kino: sucheKino(sig, (kinoMatches && kinoMatches.rest) || []),
+    artikel: artikelTreffer,
+  };
+}
+
+const BEREICH_LABEL = Object.freeze({
+  mediathek: "Mediathek", kino: "Kino", streaming: "Streaming", blog: "Blog", daten: "App-Hilfe",
+});
+
+export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", limit = 5) {
+  const gruppen = { mediathek: [], kino: [], streaming: [], blog: [], daten: [] };
+  if (antwort?.hilfe) {
+    gruppen.daten.push({
+      key: "hilfe:" + (antwort.hilfe.ziel || antwort.hilfe.titel), typ: "hilfe",
+      ziel: antwort.hilfe.ziel, titel: antwort.hilfe.titel, meta: antwort.hilfe.text,
+    });
+  }
+  for (const treffer of antwort?.treffer || []) {
+    const film = treffer.film;
+    const quellen = new Set(antwort?.sig?.quellen || []);
+    const hatKino = !!treffer.herkunft?.kino;
+    const hatStreaming = !!treffer.herkunft?.streaming;
+    /* Ein Seitenkontext ist nur Priorität. Gibt es dort keine Herkunft, folgt
+       das Ziel der tatsächlichen Verfügbarkeit beziehungsweise einer explizit
+       genannten Quelle. So öffnet ein Kinofilm aus einer Streaming-Anfrage nicht
+       fälschlich seine Mediathek-Karte. */
+    const bereich = quellen.has("kino") && hatKino ? "kino"
+      : quellen.has("streaming") && hatStreaming ? "streaming"
+        : bevorzugterBereich === "kino" && hatKino ? "kino"
+          : bevorzugterBereich === "streaming" && hatStreaming ? "streaming"
+            : hatKino ? "kino"
+              : hatStreaming ? "streaming"
+                : "mediathek";
+    gruppen[bereich].push({
+      key: `film:${bereich}:${film.id}`, typ: "film", ref: film.id, titel: film.titel,
+      meta: [film.jahr, film.typ && film.typ !== "film" ? film.typ : null].filter(Boolean).join(" · "),
+    });
+  }
+  for (const treffer of antwort?.kino || []) gruppen.kino.push({
+    key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t), typ: "kino",
+    ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
+    meta: [treffer.pf.j, ...(treffer.pf.k || []).slice(0, 2)].filter(Boolean).join(" · "),
+  });
+  for (const titel of antwort?.entdecken || []) gruppen.streaming.push({
+    key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`), typ: "streaming",
+    ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
+    meta: [titel.jahr, ...(titel.dienste || []).slice(0, 2)].filter(Boolean).join(" · "),
+  });
+  for (const artikel of antwort?.artikel || []) gruppen.blog.push({
+    key: "blog:" + artikel.id, typ: "blog", ref: artikel.id, titel: artikel.titel, meta: "Blogbeitrag",
+  });
+
+  const standard = ["mediathek", "kino", "streaming", "blog", "daten"];
+  const reihenfolge = standard.includes(bevorzugterBereich)
+    ? [bevorzugterBereich, ...standard.filter((bereich) => bereich !== bevorzugterBereich)]
+    : standard;
+  const alle = reihenfolge.flatMap((bereich) => gruppen[bereich].map((item) => ({
+    ...item, bereich, bereichLabel: BEREICH_LABEL[bereich],
+  })));
+  return { items: alle.slice(0, limit), gesamt: alle.length };
+}
+
 /* ================= FINDER =================
    Deterministischer Film-Chat: kein LLM, keine API. Der Parser liest
    Signale aus dem Text (Vokabular-Datenmodul), das Ranking ist
@@ -349,40 +442,17 @@ export function FinderTab({
      wurde, und ein Tab-Wechsel loeschte sie ersatzlos. */
   /* film.at-Genres aus dem Kinoprogramm -> Vokabular (parseAnfrage erkennt sie),
      damit z.B. "Sci-Fi im Kino" auch ohne passenden Master-Eintrag greift. */
-  const kinoGenres = () => {
-    const s = new Set();
-    for (const pf of (kinoMatches && kinoMatches.rest) || []) for (const g of pf.g || []) s.add(g);
-    for (const m of (kinoMatches && kinoMatches.matched) || []) for (const g of (m.prog.g || [])) s.add(g);
-    return [...s];
-  };
   const suche = (sig, scope = "alles", text = "") => {
-    const alleTreffer = sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt });
-    const alleEntdecken = sucheEntdecken(sig, streamingEntdecken);
-    const alleKino = sucheKino(sig, (kinoMatches && kinoMatches.rest) || []);
-    const nq = String(text || "").trim().toLocaleLowerCase("de-AT");
-    const artikelTreffer = nq && (scope === "alles" || scope === "blog")
-      ? (scopeArtikel || []).filter((artikel) => [
-        artikel.titel, artikel.text,
-        ...(artikel.liste || []).flatMap((eintrag) => [eintrag.eingabe, eintrag.notiz]),
-      ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))).slice(0, 10)
-      : [];
-    return {
-      sig,
-      scope,
-      hilfe: appHilfeAntwort(text),
-      treffer: scope === "kino" ? alleTreffer.filter((t) => t.herkunft?.kino)
-        : scope === "streaming" ? alleTreffer.filter((t) => t.herkunft?.streaming)
-          : scope === "blog" || scope === "daten" ? [] : alleTreffer,
-      entdecken: scope === "alles" || scope === "streaming" ? alleEntdecken : [],
-      kino: scope === "alles" || scope === "kino" ? alleKino : [],
-      artikel: artikelTreffer,
-    };
+    return erstelleFinderAntwort({
+      text, sig, bevorzugterBereich: scope, master, kinoMatches,
+      streamingBekannt, streamingEntdecken, artikel: scopeArtikel,
+    });
   };
 
   const fuehreFrageAus = (text, scope = "alles", suchauftragId = null) => {
     const frageText = String(text || "").trim();
     if (!frageText) return;
-    const sig = parseAnfrage(frageText, master || [], kinoGenres());
+    const sig = parseAnfrage(frageText, master || [], kinoGenresAusMatches(kinoMatches));
     setVerlauf((v) => {
       if (suchauftragId && v.some((eintrag) => eintrag.suchauftragId === suchauftragId)) return v;
       return [...v, {
@@ -418,7 +488,7 @@ export function FinderTab({
      sig.titel wird auf genau diese ID gepinnt (robust auch bei gleichnamigen
      Filmen), der Titel erscheint in der Eingabe. */
   const waehleTitel = (film) => {
-    const sig = parseAnfrage(film.titel, master || [], kinoGenres());
+    const sig = parseAnfrage(film.titel, master || [], kinoGenresAusMatches(kinoMatches));
     sig.titel = [{ id: film.id, label: film.titel }];
     setVerlauf((v) => [...v, { id: neueEintragId(), frage: film.titel, ...suche(sig, "alles", film.titel) }]);
     setEingabe(film.titel);
@@ -491,9 +561,9 @@ export function FinderTab({
        Lern-Kreislauf. */
     const offeneWoerter = e.sig.nichtZugeordnet || [];
     try {
-      const listen = bekannteWerte(master || [], kinoGenres());
+      const listen = bekannteWerte(master || [], kinoGenresAusMatches(kinoMatches));
       const antwort = await aiService.runTask("intelligent-search", { suchsatz: e.frage, listen });
-      const gedeutet = sigAusSchema(antwort && antwort.data, master || [], kinoGenres());
+      const gedeutet = sigAusSchema(antwort && antwort.data, master || [], kinoGenresAusMatches(kinoMatches));
       setVerlauf((v) => v.map((x) => (x.id === id
         ? { ...x, ...suche(gedeutet.sig, x.scope || "alles", x.frage), ki: { ...gedeutet, offeneWoerter }, kiFehler: null }
         : x)));

@@ -46,7 +46,7 @@ for (const viewport of VIEWPORTS) {
     await keineDokumentUeberbreite(page);
   });
 
-  for (const schrift of ["normal", "gross"]) {
+  for (const schrift of ["normal", "gross", "klein"]) {
     test(`Mobile App ${viewport.name}, Schrift ${schrift}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await blockiereFremdnetz(page);
@@ -65,12 +65,17 @@ for (const viewport of VIEWPORTS) {
       const menu = page.getByRole("button", { name: "Menü öffnen" });
       await expect(menu).toBeVisible();
       const menuBox = await menu.boundingBox();
-      expect(menuBox.width).toBeGreaterThanOrEqual(24);
-      expect(menuBox.height).toBeGreaterThanOrEqual(76);
-      expect(menuBox.x).toBeLessThanOrEqual(1);
+      expect(menuBox.width).toBeGreaterThanOrEqual(44);
+      expect(menuBox.height).toBeGreaterThanOrEqual(44);
+      expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width - 16);
       await expect(page.locator(".kd-tabbar")).toHaveCount(0);
       await keineDokumentUeberbreite(page);
-      await expect(page.locator(".kd-app main")).toHaveCSS("zoom", schrift === "gross" ? "1.1" : "1");
+      await expect(page.locator(".kd-app main")).toHaveCSS("zoom",
+        schrift === "gross" ? "1.1" : schrift === "klein" ? "0.92" : "1");
+      if (schrift === "klein") {
+        const mainBox = await page.locator(".kd-app main").boundingBox();
+        expect(mainBox.x + mainBox.width).toBeLessThanOrEqual(viewport.width + 0.5);
+      }
       const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
       await expect(globaleSuche).toBeVisible();
       await expect(globaleSuche).toHaveCSS("position", "fixed");
@@ -83,11 +88,19 @@ for (const viewport of VIEWPORTS) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         await expect(popup).toBeVisible();
+        await expect(popup.locator(":focus")).toHaveCount(1);
+        if (ziel === "Kino") {
+          const fokusziele = popup.getByRole("button");
+          await page.keyboard.press("Shift+Tab");
+          await expect(fokusziele.last()).toBeFocused();
+          await page.keyboard.press("Tab");
+          await expect(fokusziele.first()).toBeFocused();
+        }
         await expect(popup).toHaveCSS("transform", "none");
         const popupBox = await popup.boundingBox();
         expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
         expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
-        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(13);
+        expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(75);
         await expect(popup.getByRole("button", { name: "Nach oben" })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
@@ -108,10 +121,12 @@ for (const viewport of VIEWPORTS) {
 
       await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Wo finde ich die Schriftgröße?");
       await globaleSuche.getByRole("button", { name: "Suchen" }).click();
-      await expect(page.locator(".kd-bereichshero h1")).toHaveText("Suche");
-      await expect(page.getByText("Schriftgröße ändern", { exact: true })).toBeVisible();
-      await expect(page.getByText("Öffne Settings → Darstellung & Verhalten → Schriftgröße.", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Settings öffnen" }).click();
+      const suchdialog = page.getByRole("dialog", { name: /Suchergebnisse für Wo finde ich die Schriftgröße/ });
+      await expect(suchdialog).toBeVisible();
+      await expect(suchdialog.getByRole("button", { name: /Schriftgröße ändern/ })).toBeFocused();
+      await expect(suchdialog.getByText("Schriftgröße ändern", { exact: true })).toBeVisible();
+      await expect(suchdialog.getByText("Öffne Settings → Darstellung & Verhalten → Schriftgröße.", { exact: true })).toBeVisible();
+      await suchdialog.getByRole("button", { name: /Schriftgröße ändern/ }).click();
       await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
       await page.getByRole("button", { name: "Menü öffnen" }).click();
@@ -139,6 +154,57 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Streaming-Tab", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await page.addInitScript(async () => {
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-07-31", version: "beta-2026-07-datenfreigabe-2" }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-07-31T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+    /* Der Test blockiert Fremdnetz bewusst. Ein echter Cache-Stand bildet den
+       Offline-Fallback des Katalogdienstes nach und beweist zugleich, dass die
+       globale Suche die volle Entdecken-Zeile statt nur UI-Navigation benutzt. */
+    localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
+    localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
+    const katalogCache = await caches.open("kinodreieck-katalog-v1");
+    const cacheEintrag = (payload) => new Response(JSON.stringify({
+      __kd: "kd-katalog-1", gecachtAm: Date.now(),
+      meta: { stand: "2026-08-01T10:00:00Z", gueltig_bis: "2099-01-01T00:00:00Z" }, payload,
+    }), { headers: { "Content-Type": "application/json" } });
+    const basis = location.origin + "/__kd_katalog_cache__/";
+    await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
+      demo: true, stand: "2026-08-01T10:00:00Z", region: "AT", dienste: ["Netflix"], titel: [],
+    }));
+    await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
+      demo: true, stand: "2026-08-01T10:00:00Z", region: "AT", dienste: ["Netflix"], gekuerzt: false,
+      titel: [{
+        watchmode_id: 900200001, titel: "Regenbogen über Kreuzberg", jahr: 2016, typ: "movie",
+        genres: [], dienste: ["Netflix"], relevanz: 1.5, relevanz_signale: ["jahrzehnt:2010er(+1.5)"],
+      }],
+    }));
+  });
+  await page.goto("/");
+
+  const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
+  await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Regenbogen über Kreuzberg");
+  await globaleSuche.getByRole("button", { name: "Suchen" }).click();
+  const suchdialog = page.getByRole("dialog", { name: /Suchergebnisse für Regenbogen über Kreuzberg/ });
+  const treffer = suchdialog.getByRole("button", { name: /Streaming Regenbogen über Kreuzberg/ });
+  await expect(treffer).toBeVisible();
+  await treffer.click();
+
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Streaming");
+  const ziel = page.locator('[data-streaming-suchtreffer="entdecken:900200001"]');
+  await expect(ziel).toBeVisible();
+  await expect(ziel).toBeFocused();
+  await expect(ziel.getByText(/Passung beruht auf:/)).toBeVisible();
+});
 
 test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
