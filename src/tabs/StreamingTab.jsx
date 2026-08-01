@@ -433,7 +433,6 @@ export function StreamingTab({
         <>
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-            <span style={mono}>Stand {stand.toLocaleDateString("de-AT")}</span>
             <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {streamFilterOffen ? "▾ Filter" : "▸ Filter"}

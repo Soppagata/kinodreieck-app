@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
 import { hatDreieck } from "../lib/typen.js";
-import { Dreieck, AxisChips, KategorieTag, UnbewertetTag } from "./ui.jsx";
+import { Dreieck, AxisChips, KategorieTag, UnbewertetTag, IconDelete } from "./ui.jsx";
 import { EditPanel } from "./EditPanel.jsx";
 import { PrognoseBereich } from "./PrognoseBereich.jsx";
 import { FilmwissenBereich } from "./FilmwissenBereich.jsx";
@@ -132,9 +132,10 @@ export function FilmCard({
                   </button>
                   )}
                   {onDelete && (
-                    <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.gefahr, borderColor: T.gefahr }}
+                    <button className="kd-film-loeschen" style={{ ...btnStyle(false), width: 36, minWidth: 36, padding: 0, color: T.gefahr, borderColor: T.gefahr, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      aria-label="Eintrag löschen" title="Eintrag löschen"
                       onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-                      Eintrag löschen
+                      <IconDelete size={16} />
                     </button>
                   )}
                 </div>

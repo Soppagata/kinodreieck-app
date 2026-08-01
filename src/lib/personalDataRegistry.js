@@ -116,7 +116,7 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
   jsonEintrag({
     key: K.vokabular,
     backupField: "vokabular",
-    label: "Suche-Vokabular",
+    label: "KI-Vokabular",
     einheit: "Wörter",
     pruefe: Array.isArray,
     zaehle: (v) => v.length,

@@ -175,19 +175,21 @@ export function KinoTab({
 
   return (
     <section ref={bereichRef}>
-      <ChipReihe className="kd-kino-stand" style={{ gap: 10, marginBottom: 12 }}>
+      {/* Maschinenlesbarer Diagnoseanker: hält Datenzustands-Regressionen und
+          Support-Ausgaben möglich, ohne den technischen Stand wieder in den
+          Kino-Inhalt zu setzen. Sichtbar ist dieselbe Information nur unter
+          Settings → Kinoprogramm-Status. */}
+      <div className="kd-kino-status-anker kd-visually-hidden" aria-hidden="true">
         {progStand ? (
-          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: programmInfo?.abgelaufen ? T.gefahr : T.rauch }}>
+          <span>
             Stand {new Date(progStand).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
             {programmInfo?.variante === "demo" ? " · Demo-Schnappschuss" : ""}
             {programmInfo?.abgelaufen ? " · abgelaufen" : ""}
             {programmInfo?.ausCache ? " · aus dem Browser-Speicher, nicht neu geladen" : ""}
             {programm?.quelle_hinweis ? " · " + programm.quelle_hinweis : ""}
           </span>
-        ) : programm ? (
-          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.gefahr }}>Stand unbekannt</span>
-        ) : null}
-      </ChipReihe>
+        ) : programm ? <span>Stand unbekannt</span> : null}
+      </div>
 
       {/* ---- Angepinnte Termine (überleben Programm-Refreshs, Boot räumt Vergangenes auf) ---- */}
       {pinsSortiert.length > 0 && (
@@ -319,7 +321,7 @@ export function KinoTab({
                             aria-pressed={istGepinnt(prog.t, zi)}
                             onClick={() => toggleKinoPin?.(prog.t, prog.j ?? film.jahr, zi)}
                             title={istGepinnt(prog.t, zi) ? "Pin lösen" : "Termin anpinnen"}
-                            style={{ ...btnStyle(false), fontSize: 11, padding: "4px 9px", color: istGepinnt(prog.t, zi) ? T.wolfram : T.leinwandTief }}>
+                            style={{ ...btnStyle(false), fontSize: 11, padding: "4px 9px", color: istGepinnt(prog.t, zi) ? T.wolfram : T.tinte }}>
                             {istGepinnt(prog.t, zi) ? "◆" : "◇"} {zi}
                           </button>
                         ))}
@@ -497,7 +499,7 @@ function KompaktEintrag({
                 title={istGepinnt(pf.t, z) ? "Pin lösen" : "Termin anpinnen"}
                 style={{
                   ...btnStyle(false), fontSize: 11, padding: "4px 9px", fontFamily: "'Space Mono', monospace", textTransform: "none", letterSpacing: 0,
-                  borderColor: istGepinnt(pf.t, z) ? T.wolfram : T.saal, color: istGepinnt(pf.t, z) ? T.wolfram : T.leinwandTief,
+                  borderColor: istGepinnt(pf.t, z) ? T.wolfram : T.saal, color: istGepinnt(pf.t, z) ? T.wolfram : T.tinte,
                 }}>
                 {istGepinnt(pf.t, z) ? "◆" : "◇"} {z}
               </button>

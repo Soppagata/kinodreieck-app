@@ -84,7 +84,7 @@ for (const viewport of VIEWPORTS) {
       expect(suchBox.x + suchBox.width).toBeLessThanOrEqual(viewport.width - 9);
       expect(viewport.height - suchBox.y - suchBox.height).toBeLessThanOrEqual(11);
 
-      for (const ziel of ["Kino", "Streaming", "Mediathek", "Suche", "Blog", "Start", "Settings"]) {
+      for (const ziel of ["Kino", "Streaming", "Mediathek", "Blog", "Start", "Settings"]) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         await expect(popup).toBeVisible();
@@ -101,7 +101,7 @@ for (const viewport of VIEWPORTS) {
         expect(popupBox.width).toBeGreaterThanOrEqual(Math.min(viewport.width * 0.76, 260) - 1);
         expect(viewport.width - popupBox.x - popupBox.width).toBeGreaterThanOrEqual(9);
         expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(75);
-        await expect(popup.getByRole("button", { name: "Nach oben" })).toHaveCount(0);
+        await expect(popup.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
@@ -113,11 +113,13 @@ for (const viewport of VIEWPORTS) {
 
       await expect(page.locator("summary", { hasText: /^Masterliste$/ })).toBeHidden();
       await expect(page.locator("summary", { hasText: /^Gesamt-Backup$/ })).toBeHidden();
-      await expect(page.locator("summary", { hasText: /^Katalog-Status$/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Kinoprogramm-Status$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^Katalog-Status$/ })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Streaming gesperrt", exact: true })).toHaveCount(2);
       await expect(page.locator("summary", { hasText: /^Erweitert/ })).toBeHidden();
       await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Konto & Geräte-Sync$/ })).toBeVisible();
-      await expect(page.locator("summary", { hasText: /^Suche-Vokabular$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^KI-Vokabular$/ })).toBeVisible();
 
       await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Wo finde ich die Schriftgröße?");
       await globaleSuche.getByRole("button", { name: "Suchen" }).click();

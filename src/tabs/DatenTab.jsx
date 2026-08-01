@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
-import { IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
+import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
 import { FeldHinweis } from "../components/FeldHinweis.jsx";
 import { StreamingEinstellungen } from "../components/StreamingEinstellungen.jsx";
 import { RestoreImport } from "../components/RestoreImport.jsx";
@@ -9,13 +9,16 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { TeilenBlock } from "../components/TeilenBlock.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
-import { bekannteWerte } from "../lib/finder.js";
+import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
+import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabular.js";
 /* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
    ReferenceError. Die App hat keine Fehlergrenze — React raeumt den Baum ab,
    der Nutzer sieht eine weisse Seite. Durch alle Gates gerutscht, weil kein
    Test `DatenTab` je gerendert hat; `geschmackui_test.mjs` tut es jetzt. */
 import { KI_FUNKTIONEN } from "../lib/kiSchalter.js";
 import { ERROR_CODES } from "../services/errors.js";
+import { errorText } from "../services/errors.js";
+import { aiService } from "../services/ai.js";
 
 /* ================= EINSTELLUNGEN =================
    Tester-Oberfläche in stabiler Reihenfolge. Persönliche Daten, der gemeinsame
@@ -133,7 +136,7 @@ export function DatenTab({
               <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Startbereich</span>
                 <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                  {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"], ["finder", "Suche"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                  {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
             </div>
@@ -289,16 +292,40 @@ export function DatenTab({
 
       {/* 6 — Such-Vokabular */}
       {saveVokabular && (
-        <Klappe titel="Suche-Vokabular" tour="daten-vokabular">
-          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono} />
+        <Klappe titel="KI-Vokabular" tour="daten-vokabular">
+          <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono}
+            master={master || []} bekannteGenres={bekannteGenres}
+            kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.suche !== false}
+            kiSperrgrund={kiStand.global !== true
+              ? "Aktiviere zuerst KI-Funktionen. Bereits gespeicherte Wörter funktionieren trotzdem offline."
+              : kiStand.funktionen?.suche === false
+                ? "Aktiviere die KI-Suche. Bereits gespeicherte Wörter funktionieren trotzdem offline."
+                : !kiProfilFaehig
+                  ? "Zum Deuten neuer Wörter brauchst du ein angemeldetes KI-fähiges Konto. Gespeicherte Wörter bleiben offline verfügbar."
+                  : null} />
         </Klappe>
       )}
 
-      {/* 7 — Katalog-Status */}
-      <div className="kd-nur-desktop">
+      {/* 7 — Technische Stände nur in Settings, nicht in den Inhaltsbereichen. */}
+      <Klappe titel="Kinoprogramm-Status">
+        <div style={kasten}>
+          <p style={{ ...mono, margin: 0, lineHeight: 1.7 }}>
+            {programm ? (
+              <>
+                Stand: <strong style={{ color: programmInfo?.abgelaufen ? T.gefahr : T.leinwand }}>
+                  {new Date(programmInfo?.stand || programm.stand || Date.now()).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </strong>
+                {programmInfo?.variante === "demo" ? " · Demo-Schnappschuss" : ""}
+                {programmInfo?.ausCache ? " · Browser-Cache" : ""}
+                {programmInfo?.abgelaufen ? " · abgelaufen" : ""}
+                {programm.quelle_hinweis ? <><br />{programm.quelle_hinweis}</> : null}
+              </>
+            ) : "Noch kein Kinoprogramm geladen."}
+          </p>
+        </div>
+      </Klappe>
       <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
         auswahl={auswahl} toggleQuelle={toggleQuelle} teil="status" datenGesperrt={datenGesperrt} />
-      </div>
 
       {/* 8 — Erweitert, direkt nach dem Katalog-Status; Refresh gehört hinein. */}
       <div className="kd-nur-desktop" data-tour="erweitert">
@@ -365,33 +392,87 @@ export function DatenTab({
   );
 }
 
-function VokabularEditor({ vokabular, saveVokabular, mono }) {
+function VokabularEditor({
+  vokabular, saveVokabular, mono, master, bekannteGenres, kiAktiv, kiSperrgrund,
+}) {
   const [wort, setWort] = useState("");
-  const [genres, setGenres] = useState("");
-  const [tags, setTags] = useState("");
-  const teile = (s) => s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
-  const hinzufuegen = () => {
+  const [beschreibung, setBeschreibung] = useState("");
+  const [vorschlag, setVorschlag] = useState(null);
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState("");
+
+  const deuten = async () => {
     const w = wort.trim().toLowerCase();
-    if (!w) return;
-    const g = teile(genres), t = teile(tags);
-    if (!g.length && !t.length) return;
-    saveVokabular([...vokabular.filter((v) => v.wort !== w), { wort: w, genres: g, tags: t }]);
-    setWort(""); setGenres(""); setTags("");
+    const bedeutung = beschreibung.trim();
+    if (!kiAktiv || !w || !bedeutung || laeuft) return;
+    if (bedeutung.length > 300) {
+      setFehler(`Die Beschreibung ist mit ${bedeutung.length} Zeichen zu lang (höchstens 300).`);
+      return;
+    }
+    setLaeuft(true); setFehler(""); setVorschlag(null);
+    try {
+      const listen = bekannteWerte(master || [], bekannteGenres || []);
+      const antwort = await aiService.runTask("intelligent-search", { suchsatz: bedeutung, listen });
+      const deutung = sigAusSchema(antwort?.data, master || [], bekannteGenres || []);
+      const eintrag = vokabularEintragAusDeutung({
+        wort: w,
+        beschreibung: bedeutung,
+        deutung,
+        master,
+        stimmungen: alleStimmungen(),
+      });
+      if (!hatOfflineDefinition(eintrag)) {
+        setFehler("Die KI konnte daraus noch keine verlässliche Offline-Regel bilden. Beschreibe Genres, Stimmung oder konkrete Beispiele etwas genauer.");
+      } else setVorschlag(eintrag);
+    } catch (error) {
+      setFehler(errorText(error) + " Es wurde nichts gespeichert und es gibt keinen automatischen Wiederholungsversuch.");
+    } finally {
+      setLaeuft(false);
+    }
+  };
+  const speichern = () => {
+    if (!hatOfflineDefinition(vorschlag)) return;
+    saveVokabular([...vokabular.filter((v) => v.wort !== vorschlag.wort), vorschlag]);
+    setWort(""); setBeschreibung(""); setVorschlag(null); setFehler("");
   };
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>Bring der Suche eigene Wörter bei: ein Stichwort und passende Genres oder Tags, jeweils kommagetrennt.</p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <input value={wort} onChange={(e) => setWort(e.target.value)} placeholder="Wort (z. B. gemütlich)" style={{ ...inputStyle, width: 160 }} />
-        <input value={genres} onChange={(e) => setGenres(e.target.value)} placeholder="Genres, kommagetrennt" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-        <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Tags, kommagetrennt" style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
-        <button style={btnStyle(true)} onClick={hinzufuegen} disabled={!wort.trim() || (!genres.trim() && !tags.trim())}>Merken</button>
+      <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
+        Gib der KI deinen eigenen Ausdruck und erkläre frei, was er für dich bedeutet. Die KI deutet ihn genau einmal. Gespeichert wird danach nur eine kleine lokale Genre-/Tag-Regel — die Suche verwendet sie deterministisch und offline.
+      </p>
+      <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+        <input value={wort} onChange={(e) => { setWort(e.target.value); setVorschlag(null); }}
+          placeholder="Begriff (z. B. kuhl)" maxLength={40} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+        <textarea value={beschreibung} onChange={(e) => { setBeschreibung(e.target.value); setVorschlag(null); }}
+          placeholder="Was bedeutet der Begriff für dich? Beispiele, Stimmung, Genres …"
+          maxLength={300} rows={4} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button style={btnStyle(true)} onClick={deuten}
+            disabled={!kiAktiv || laeuft || !wort.trim() || !beschreibung.trim()}>
+            {laeuft ? "KI deutet …" : "Mit KI deuten"}
+          </button>
+          <span style={mono}>ein bewusster KI-Aufruf · keine automatische Wiederholung</span>
+        </div>
       </div>
+      {kiSperrgrund && <p style={{ ...mono, color: T.warum, lineHeight: 1.6 }}>{kiSperrgrund}</p>}
+      {fehler && <p role="alert" style={{ ...mono, color: T.gefahr, lineHeight: 1.6 }}>{fehler}</p>}
+      {vorschlag && (
+        <div style={{ border: "1px solid " + T.wolfram, borderRadius: 6, padding: 12, margin: "12px 0" }}>
+          <strong style={{ color: T.wolfram }}>{vorschlag.wort}</strong>
+          {vorschlag.interpretation && <p style={{ fontSize: 13, margin: "5px 0 8px", lineHeight: 1.5 }}>{vorschlag.interpretation}</p>}
+          <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
+            Offline-Regel: {[...vorschlag.genres, ...vorschlag.tags].join(" · ")}
+          </p>
+          <button style={btnStyle(true)} onClick={speichern}>Definition speichern</button>
+        </div>
+      )}
       {vokabular.length === 0 ? <p style={mono}>Noch keine eigenen Wörter.</p> : vokabular.map((v) => (
-        <div key={v.wort} style={{ display: "flex", gap: 10, alignItems: "baseline", fontFamily: "'Space Mono', monospace", fontSize: 12, padding: "3px 0", color: T.leinwandTief }}>
+        <div key={v.wort} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontFamily: "'Space Mono', monospace", fontSize: 12, padding: "7px 0", color: T.leinwandTief }}>
           <strong style={{ color: T.wolfram }}>{v.wort}</strong>
-          <span style={{ flex: 1 }}>{v.genres.length ? "Genres: " + v.genres.join(", ") : ""}{v.genres.length && v.tags.length ? " · " : ""}{v.tags.length ? "Tags: " + v.tags.join(", ") : ""}</span>
-          <button onClick={() => saveVokabular(vokabular.filter((x) => x.wort !== v.wort))} title="Wort entfernen" style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", fontSize: 13 }}>✕</button>
+          <span style={{ flex: 1 }}>{v.beschreibung ? v.beschreibung + " · " : ""}{v.genres?.length ? "Genres: " + v.genres.join(", ") : ""}{v.genres?.length && v.tags?.length ? " · " : ""}{v.tags?.length ? "Tags: " + v.tags.join(", ") : ""}</span>
+          <button onClick={() => saveVokabular(vokabular.filter((x) => x.wort !== v.wort))}
+            aria-label={`Vokabel ${v.wort} entfernen`} title="Wort entfernen"
+            style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", padding: 3 }}><IconDelete size={14} /></button>
         </div>
       ))}
     </div>

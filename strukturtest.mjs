@@ -174,19 +174,17 @@ if (plusForm) {
   if (abbr) { abbr.click(); await warte(150); }
 } else check("FilmForm: 'Ohne Bewertung speichern'-Schalter", false);
 
-/* ---- 3. Suche: Anfrage absenden -> Verlauf reagiert ---- */
-const sucheTab = knopf(/^suche$/i);
-if (sucheTab) { sucheTab.click(); await warte(400); }
-const sucheFeld = [...doc.querySelectorAll("main input, main textarea")][0];
-check("Suche: Eingabefeld vorhanden", !!sucheFeld);
+/* ---- 3. Globale Suche: eigener Menübereich ist bewusst entfallen ---- */
+const sucheFeld = doc.querySelector('input[aria-label="Sucheingabe"]');
+check("Globale Suche: Eingabefeld vorhanden", !!sucheFeld && !knopf(/^suche$/i));
 if (sucheFeld) {
   setValue(sucheFeld, "kult aus den 80ern");
   await warte(150);
-  const senden = knopf(/^(Suchen|Fragen|Los|→)$/i) || [...doc.querySelectorAll("button")].find((b) => b.type === "submit");
+  const senden = doc.querySelector('.kd-globalsuche-los') || [...doc.querySelectorAll("button")].find((b) => b.type === "submit");
   if (senden) senden.click();
   else sucheFeld.form && sucheFeld.form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
   await warte(500);
-  check("Suche: Anfrage erzeugt Antwort im Verlauf", /kult aus den 80ern/i.test(text()));
+  check("Globale Suche: Anfrage erzeugt Antwort im Popup", /Suchergebnisse/.test(text()) && /kult aus den 80ern/i.test(text()));
 }
 
 /* ---- 4. Blog: Erstellen-Maske öffnet ---- */
@@ -257,18 +255,13 @@ if (startSelect) {
   setValue(startSelect, "start");
   startSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 }
-// Vokabular: Merken-Flow
-const wortFeld = [...doc.querySelectorAll("input")].find((i) => /Wort \(z\.\s*B\./.test(i.placeholder || ""));
-check("Vokabular-Editor: Felder da", !!wortFeld);
-if (wortFeld) {
-  setValue(wortFeld, "testwort");
-  const genresFeld = [...doc.querySelectorAll("input")].find((i) => /Genres, kommagetrennt/.test(i.placeholder || ""));
-  if (genresFeld) setValue(genresFeld, "action");
-  await warte(150);
-  const merken = knopf(/^Merken$/);
-  if (merken) { merken.click(); await warte(300); }
-  check("Vokabular: Wort gespeichert + gelistet", /testwort/.test(text()) && /"wort":"testwort"/.test(dom.window.localStorage.getItem("kd:vokabular") || ""));
-}
+// KI-Vokabular: Semantik wird frei beschrieben; ohne Konto gibt es bewusst
+// keinen manuellen Genre-/Tag-Hintereingang.
+const wortFeld = [...doc.querySelectorAll("input")].find((i) => /Begriff \(z\.\s*B\./.test(i.placeholder || ""));
+const bedeutungsFeld = [...doc.querySelectorAll("textarea")].find((i) => /Was bedeutet der Begriff/.test(i.placeholder || ""));
+check("KI-Vokabular: Begriff und freie Bedeutung vorhanden", !!wortFeld && !!bedeutungsFeld);
+check("KI-Vokabular: keine manuelle Genre-/Tag-Zuordnung mehr",
+  ![...doc.querySelectorAll("input")].some((i) => /Genres, kommagetrennt|Tags, kommagetrennt/.test(i.placeholder || "")));
 // Demo-Reihenfolge: Streaming-Quellen exakt an Position 5, Erweitert nach Status.
 const einstellTexte = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
 const darstellungIndex = einstellTexte.findIndex((s) => /^Darstellung & Verhalten/.test(s));
@@ -276,7 +269,7 @@ const modusIndex = einstellTexte.findIndex((s) => /^Datenmodus & Verbindung/.tes
 const masterIndex = einstellTexte.findIndex((s) => /^Masterliste/.test(s));
 const backupIndex = einstellTexte.findIndex((s) => /^Gesamt-Backup/.test(s));
 const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(s));
-const vokIndex = einstellTexte.findIndex((s) => /^Suche-Vokabular/.test(s));
+const vokIndex = einstellTexte.findIndex((s) => /^KI-Vokabular/.test(s));
 const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
 const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
 check("Demo: feste Reihenfolge inkl. Streaming-Quellen auf Platz 5",
@@ -319,7 +312,8 @@ check("Gastbetrieb: die Demo-Payload landet wirklich im Kino-Tab (Marker-Titel s
 /* Der Marker des STAND-Etiketts („· Demo-Schnappschuss"). Ein blankes
    /Demo-Schnappschuss/ über das ganze #root träfe auch den Fehlerkasten des
    Kino-Tabs, der genau dann erscheint, wenn gar kein Stand angezeigt wird. */
-check("Gastbetrieb: der Programm-Stand ist als Demo-Schnappschuss ausgewiesen", /· Demo-Schnappschuss/.test(text()));
+check("Gastbetrieb: technischer Programm-Stand ist nur ein unsichtbarer Diagnoseanker",
+  doc.querySelector('.kd-kino-status-anker[aria-hidden="true"]')?.classList.contains("kd-visually-hidden"));
 
 /* ---- Ergebnis ---- */
 let ok = true;

@@ -3,24 +3,23 @@ import { createPortal } from "react-dom";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 export const NAVIGATION = Object.freeze([
-  { id: "kino", label: "Kino", mobil: true, icon: "K" },
-  { id: "streaming", label: "Streaming", mobil: true, icon: "S" },
-  { id: "mediathek", label: "Mediathek", mobil: true, icon: "M" },
-  { id: "finder", label: "Suche", mehr: true, icon: "⌕" },
-  { id: "blog", label: "Blog", mehr: true, icon: "B" },
   { id: "start", label: "Start", mobil: true, icon: "⌂" },
+  { id: "kino", label: "Kino", mobil: true, icon: "K" },
+  { id: "mediathek", label: "Mediathek", mobil: true, icon: "M" },
+  { id: "streaming", label: "Streaming", mobil: true, icon: "S" },
+  { id: "blog", label: "Blog", mehr: true, icon: "B" },
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
 
-export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate }) {
+export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate, onNachOben }) {
   return (
     <>
-      {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} />}
+      {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} onNachOben={onNachOben} />}
     </>
   );
 }
 
-function MenuPopup({ aktiv, onClose, onNavigate }) {
+function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
   const sheetRef = useRef(null);
   useEffect(() => {
     const vorher = document.activeElement;
@@ -61,6 +60,8 @@ function MenuPopup({ aktiv, onClose, onNavigate }) {
             </button>
           ))}
         </nav>
+        <button className="kd-mobile-menu-nachoben" type="button" onClick={onNachOben}
+          aria-label="In diesem Bereich nach oben" title="Nach oben">↑</button>
       </section>
     </div>,
     document.body,

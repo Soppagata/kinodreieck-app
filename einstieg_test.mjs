@@ -61,7 +61,12 @@ check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", ()
   /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
 check("Mobile Navigation nutzt den Menüknopf der globalen Leiste mit peppigem Popup", () =>
   /kd-globalsuche-menu/.test(globalSuche) && /NAVIGATION\.map/.test(nav)
-  && /role="dialog"/.test(nav) && !/kd-navband|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
+  && /role="dialog"/.test(nav) && /In diesem Bereich nach oben/.test(nav)
+  && !/id: "finder"/.test(nav) && !/kd-navband|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
+check("Bereiche merken ihre eigene Scrolltiefe und starten beim ersten Besuch oben", () =>
+  /scrollProBereichRef/.test(app) && /aktuelleScrolltiefe/.test(app)
+  && /scrollProBereichRef\.current\.get\(id\) \?\? 0/.test(app)
+  && /onNachOben=\{nachObenAusMenu\}/.test(app));
 check("Datei- und Wartungswerkzeuge bleiben in den mobilen Einstellungen verborgen", () =>
   /className="kd-nur-desktop">\s*<Klappe titel="Masterliste"/.test(daten)
   && /className="kd-nur-desktop">\s*<Klappe titel="Gesamt-Backup"/.test(daten)

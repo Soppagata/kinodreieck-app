@@ -74,6 +74,7 @@ import {
 } from "./lib/sharedPublication.js";
 import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen } from "./lib/finder.js";
+import { vokabularZuMap } from "./lib/vokabular.js";
 import { sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -105,11 +106,36 @@ export default function App() {
   const [mehrOffen, setMehrOffen] = useState(false);
   const [hilfeOffen, setHilfeOffen] = useState(false);
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
+  const scrollProBereichRef = useRef(new Map([["start", 0]]));
+  const aktuelleScrolltiefe = useCallback(() => {
+    if (typeof window === "undefined" || typeof document === "undefined") return 0;
+    /* Das Popup sperrt iOS-Scroll über einen fixierten Body. In diesem Zustand
+       ist scrollY nicht zuverlässig; body.top enthält aber die echte Tiefe. */
+    if (document.body.style.position === "fixed") {
+      const bodyTop = Number.parseFloat(document.body.style.top || "0");
+      if (Number.isFinite(bodyTop)) return Math.max(0, -bodyTop);
+    }
+    return Math.max(0, window.scrollY || document.documentElement.scrollTop || 0);
+  }, []);
+  const stelleScrolltiefeHer = useCallback((id, ueberschreiben = null) => {
+    const ziel = ueberschreiben ?? scrollProBereichRef.current.get(id) ?? 0;
+    /* Zwei Frames: erst darf die Scrollsperre des ausgebauten Popup-Menüs ihren
+       alten Stand freigeben, danach gewinnt die bereichseigene Position. */
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { window.scrollTo({ top: ziel, left: 0, behavior: "auto" }); } catch { window.scrollTo(0, ziel); }
+    }));
+  }, []);
   const navigiere = useCallback((id) => {
+    scrollProBereichRef.current.set(tabRef.current, aktuelleScrolltiefe());
     setTab(id);
     setMehrOffen(false);
-    try { window.scrollTo(0, 0); } catch { /* */ }
-  }, []);
+    stelleScrolltiefeHer(id);
+  }, [aktuelleScrolltiefe, stelleScrolltiefeHer]);
+  const nachObenAusMenu = useCallback(() => {
+    scrollProBereichRef.current.set(tabRef.current, 0);
+    setMehrOffen(false);
+    stelleScrolltiefeHer(tabRef.current, 0);
+  }, [stelleScrolltiefeHer]);
   const [master, setMaster] = useState(null);
   const masterRef = useRef(master);
   masterRef.current = master;
@@ -258,11 +284,6 @@ export default function App() {
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const [vokabular, setVokabular] = useState([]);
-  const vokabularZuMap = (liste) => {
-    const map = {};
-    for (const v of liste || []) if (v.wort) map[v.wort.trim().toLowerCase()] = { genres: v.genres || [], tags: v.tags || [] };
-    return map;
-  };
   const saveVokabular = useCallback((liste) => {
     setVokabular(liste);
     setzeEigeneStimmungen(vokabularZuMap(liste));
@@ -2013,7 +2034,7 @@ export default function App() {
         )}
       </main>
       <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
-        onNavigate={navigiereAusGlobalemMenu} />
+        onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />
       <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}

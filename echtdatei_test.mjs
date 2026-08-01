@@ -151,9 +151,11 @@ const startText = text();
 check("App gerendert (#root gefüllt)", startText.length > 300);
 const icon = doc.querySelector('link[rel="icon"]');
 check("Favicon eingebettet (data:-URI, kein file://-Bruch)", !!icon && (icon.getAttribute("href") || "").startsWith("data:image/svg"));
-for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG", "SUCHE"]) {
+for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG"]) {
   check("Tab " + tab, new RegExp(tab, "i").test(startText));
 }
+check("Suche ist global statt eigener Menübereich", !/Suche/.test((doc.querySelector(".kd-menu")?.textContent || ""))
+  && !!doc.querySelector('.kd-globalsuche input[aria-label="Sucheingabe"]'));
 
 /* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */
 const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(MATCH_TITEL).toLowerCase());
@@ -176,11 +178,8 @@ const kinoText = text();
    steckt in der Demo-Payload, die Live-Payload hat ihn nicht. */
 check("Gastbetrieb: die Demo-Payload landet wirklich in der Oberfläche (Marker-Titel sichtbar)",
   kinoText.includes(DEMO_MARKER_TITEL));
-/* Der Marker des STAND-Etiketts („· Demo-Schnappschuss"). Ein blankes
-   /Demo-Schnappschuss/ über das ganze #root träfe auch den Fehlerkasten des
-   Kino-Tabs — der erscheint aber genau dann, wenn GAR KEIN Stand da ist. */
-check("Gastbetrieb: der angezeigte Programm-Stand ist als Demo-Schnappschuss ausgewiesen",
-  /· Demo-Schnappschuss/.test(kinoText));
+check("Gastbetrieb: der technische Programm-Stand ist im Kino nur maschinenlesbar",
+  doc.querySelector('.kd-kino-status-anker[aria-hidden="true"]')?.classList.contains("kd-visually-hidden"));
 const kopf = [...doc.querySelectorAll("[title]")].find((e) => e.getAttribute("title") === "Details & Eintrag erstellen");
 check("Kompakte Einträge vorhanden (Läuft auch)", !!kopf);
 if (kopf) {
@@ -268,7 +267,7 @@ const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || 
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
 check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Back to the Roots|Dauerburner)$/));
-check("Suche-Vokabular vorhanden", /Suche-Vokabular/.test(text()));
+check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
 
