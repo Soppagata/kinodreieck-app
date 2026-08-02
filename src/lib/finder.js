@@ -435,9 +435,17 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
       film: f, wert: Number(wert.toFixed(1)), rel: Number((wert - basis).toFixed(1)), gruende,
       herkunft: {
         // zeitenAlle/beschreibung/ot zusätzlich für die Detailansicht (Phase 4a)
-        kino: kino ? { kinos: kino.k, zeiten: kinoZeiten.slice(0, 3), zeitenAlle: kinoZeiten, beschreibung: kino.b || null, ot: kino.ot || null } : null,
+        kino: kino ? {
+          ref: kino.film_at_id ?? kino.id ?? f.id,
+          kinos: kino.k, zeiten: kinoZeiten.slice(0, 3), zeitenAlle: kinoZeiten,
+          beschreibung: kino.b || null, ot: kino.ot || null,
+        } : null,
         dvd,
-        streaming: stream ? { dienste: stream.dienste, web_urls: stream.web_urls } : null,
+        streaming: stream ? {
+          ref: stream.id ?? f.id,
+          watchmode_id: stream.watchmode_id ?? null,
+          dienste: stream.dienste, web_urls: stream.web_urls,
+        } : null,
       },
     });
   }
@@ -453,9 +461,17 @@ export function filmHerkunft(f, { kinoMatches, streamingBekannt }) {
   const kino = new Map((kinoMatches?.matched || []).map((m) => [m.film.id, m.prog])).get(f.id) || null;
   const stream = new Map(((streamingBekannt && streamingBekannt.titel) || []).map((t) => [t.id, t])).get(f.id) || null;
   return {
-    kino: kino ? { kinos: kino.k, zeiten: (kino.z || []).slice(0, 3), zeitenAlle: kino.z || [], beschreibung: kino.b || null, ot: kino.ot || null } : null,
+    kino: kino ? {
+      ref: kino.film_at_id ?? kino.id ?? f.id,
+      kinos: kino.k, zeiten: (kino.z || []).slice(0, 3), zeitenAlle: kino.z || [],
+      beschreibung: kino.b || null, ot: kino.ot || null,
+    } : null,
     dvd: /dvd/.test(f.quelle || ""),
-    streaming: stream ? { dienste: stream.dienste, web_urls: stream.web_urls } : null,
+    streaming: stream ? {
+      ref: stream.id ?? f.id,
+      watchmode_id: stream.watchmode_id ?? null,
+      dienste: stream.dienste, web_urls: stream.web_urls,
+    } : null,
   };
 }
 

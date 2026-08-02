@@ -288,6 +288,18 @@ const kinoAusStreamingKontext = kompakteFinderTreffer({
 check("G0", "tatsächliche Kino-Herkunft schlägt einen fremden Streaming-Kontext", () =>
   kinoAusStreamingKontext.items[0]?.bereich === "kino"
   && kinoAusStreamingKontext.items[0]?.ref === MASTER[0].id);
+const programmZiel = kompakteFinderTreffer({
+  ...valhallaAntwort,
+  entdecken: [],
+  treffer: [{
+    film: MASTER[0],
+    herkunft: { kino: null, streaming: { ref: "stream-programm-42", watchmode_id: 42 } },
+  }],
+}, "streaming");
+check("G0", "direkter Streaming-Suchtreffer trägt die konkrete Programm-ID", () =>
+  programmZiel.items[0]?.bereich === "streaming"
+  && programmZiel.items[0]?.zielArt === "programm"
+  && programmZiel.items[0]?.ref === "stream-programm-42");
 const globalLeisteQuelle = fs.readFileSync(path.join(WURZEL, "src/components/GlobalSearchBar.jsx"), "utf8");
 const appQuelle = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
 check("G0", "globale Leiste hat weder Bereichsauswahl noch Filterknopf", () =>

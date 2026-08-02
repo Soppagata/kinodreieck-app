@@ -103,19 +103,23 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
             : hatKino ? "kino"
               : hatStreaming ? "streaming"
                 : "mediathek";
+    const ref = bereich === "streaming"
+      ? (treffer.herkunft?.streaming?.ref ?? film.id)
+      : film.id;
     gruppen[bereich].push({
-      key: `film:${bereich}:${film.id}`, typ: "film", ref: film.id, titel: film.titel,
+      key: `film:${bereich}:${ref}`, typ: "film", ref,
+      zielArt: bereich === "streaming" ? "programm" : "film", titel: film.titel,
       meta: [film.jahr, film.typ && film.typ !== "film" ? film.typ : null].filter(Boolean).join(" · "),
     });
   }
   for (const treffer of antwort?.kino || []) gruppen.kino.push({
     key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t), typ: "kino",
-    ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
+    zielArt: "programm", ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
     meta: [treffer.pf.j, ...(treffer.pf.k || []).slice(0, 2)].filter(Boolean).join(" · "),
   });
   for (const titel of antwort?.entdecken || []) gruppen.streaming.push({
     key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`), typ: "streaming",
-    ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
+    zielArt: "entdecken", ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
     meta: [titel.jahr, ...(titel.dienste || []).slice(0, 2)].filter(Boolean).join(" · "),
   });
   for (const artikel of antwort?.artikel || []) gruppen.blog.push({

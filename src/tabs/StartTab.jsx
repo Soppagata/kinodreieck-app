@@ -121,6 +121,7 @@ function StartDashboard({
   programmInfo = null, streamingInfo = null, onHilfe,
   wochenplan, onWochenplanAendern, entdeckenStatus = {}, onEntdeckenStatusAendern,
   master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
+  onStreamingKatalogLaden,
 }) {
   const installation = useInstallationsStatus();
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
@@ -270,6 +271,7 @@ function StartDashboard({
           kinoPins={aktiveKinoPins} kinoVorschlaege={kinoVorschlaege} kinoKatalog={kinoKatalog}
           onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
           katalog={serienKatalog} master={master}
+          onStreamingKatalogLaden={onStreamingKatalogLaden}
           onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
           onKinoVorschlagAnsehen={(eintrag) => {
             if (onSpringeZuKino) onSpringeZuKino(eintrag);

@@ -221,49 +221,99 @@ export function findeReminderVerknuepfung(reminder, katalog = [], master = []) {
     return !reminder.jahr || !t.jahr || Number(reminder.jahr) === Number(t.jahr);
   });
   const anbieter = titelNormiert(reminder && reminder.plattform);
-  if (anbieter && exakt.some((t) => anbieterWerte(t).length)) {
-    exakt = exakt.filter((t) => anbieterWerte(t).includes(anbieter));
+  if (anbieter) {
+    const beimAnbieter = exakt.filter((t) => anbieterWerte(t).includes(anbieter));
+    if (beimAnbieter.length) exakt = beimAnbieter;
   }
   if (exakt.length === 1) return { status: "eindeutig", treffer: exakt[0], grund: "exakter-titel" };
   if (exakt.length > 1) return { status: "mehrdeutig", treffer: null, kandidaten: exakt };
   return { status: "kein-treffer", treffer: null };
 }
 
+function streamingTitelFuerReminder(reminder, katalog = []) {
+  if (reminder?.art !== "folge" && reminder?.art !== "staffel") return katalog;
+  return (Array.isArray(katalog) ? katalog : []).filter((titel) => {
+    const typ = titelNormiert(titel?.typ);
+    return !typ || ["tv series", "serie", "staffel", "folge"].includes(typ);
+  });
+}
+
+function streamingZiel(treffer, fallbackBereich = "entdecken") {
+  const bereich = treffer?.wochen_bereich || fallbackBereich || "entdecken";
+  const ref = bereich === "programm"
+    ? (treffer?.id ?? treffer?.watchmode_id)
+    : (treffer?.watchmode_id ?? treffer?.id);
+  return ref == null ? null : { art: "streaming", bereich, ref };
+}
+
 function kinoProgrammRef(treffer) {
   return treffer?.programm_ref ?? treffer?.prog_ref ?? treffer?.id ?? null;
 }
 
-function kinoReminderTreffer(reminder, kinoKatalog = [], jetzt = new Date()) {
-  const ergebnis = findeReminderVerknuepfung(reminder, kinoKatalog, []);
-  const kandidaten = ergebnis.treffer ? [ergebnis.treffer] : (ergebnis.kandidaten || []);
-  if (!reminder?.startdatum || !reminder?.uhrzeit || !kandidaten.length) return ergebnis.treffer || null;
-  const passend = kandidaten.filter((titel) => (titel.termine || []).some((wert) => {
-    const termin = kinoPinTermin({ z: wert, kino: (titel.kinos || titel.k || [])[0] }, lokalesDatum(reminder.startdatum) || jetzt);
-    return termin && datumLokal(termin) === reminder.startdatum
-      && `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}` === reminder.uhrzeit;
-  }));
-  return passend.length === 1 ? passend[0] : null;
-}
-
 /* Beim Speichern wird nur innerhalb des fachlich gewählten Pools verknüpft.
-   Das Auto-Merkmal trennt einen Katalog-Pin von einem freien persönlichen
-   Termin: Nur Katalog-Pins dürfen später ablaufen, wenn ihr Ziel verschwindet. */
+   `auto` unterscheidet den eindeutigen Titelabgleich von einer bewussten Wahl;
+   jede tatsächlich gespeicherte Katalog-Referenz läuft mit ihrem Ziel ab. */
 export function automatischeReminderRef(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}, jetzt = new Date()) {
   if (!reminder || typeof reminder !== "object") return null;
   const probe = { ...reminder, ref: null };
   if (probe.art === "kino") {
-    const treffer = kinoReminderTreffer(probe, kinoKatalog, jetzt);
+    const treffer = findeReminderVerknuepfung(probe, kinoKatalog, []).treffer;
     const ref = kinoProgrammRef(treffer);
     return ref != null ? { kino_programm_id: ref, auto: true } : null;
   }
   if (probe.art === "folge" || probe.art === "staffel") {
-    const treffer = findeReminderVerknuepfung(probe, katalog, []).treffer;
+    const treffer = findeReminderVerknuepfung(probe, streamingTitelFuerReminder(probe, katalog), []).treffer;
     return treffer?.watchmode_id != null
       ? { watchmode_id: treffer.watchmode_id, streaming_art: treffer.wochen_bereich || "entdecken", auto: true }
       : null;
   }
   const treffer = findeReminderVerknuepfung(probe, [], master).treffer;
   return treffer?.id != null ? { master_id: treffer.id, auto: true } : null;
+}
+
+/* Der Editor zeigt nur bei echten Mehrfachtreffern eine Auswahl. Die Art legt
+   dabei den fachlichen Pool fest; innerhalb dieses Pools gilt ausschließlich
+   der normalisierte, vollständige Titel (Ort/Anbieter darf weiter eindeutig
+   eingrenzen). Eine Auswahl ist bewusst manuell und kann abgewählt werden. */
+export function reminderVerknuepfungsOptionen(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}) {
+  if (!reminder || typeof reminder !== "object") return [];
+  const probe = { ...reminder, ref: null };
+  let ergebnis;
+  let refFuer;
+  let metaFuer;
+  if (probe.art === "kino") {
+    ergebnis = findeReminderVerknuepfung(probe, kinoKatalog, []);
+    refFuer = (treffer) => {
+      const id = kinoProgrammRef(treffer);
+      return id == null ? null : { kino_programm_id: id, auto: false };
+    };
+    metaFuer = (treffer) => [treffer.jahr, ...(treffer.kinos || treffer.k || []).slice(0, 2)];
+  } else if (probe.art === "folge" || probe.art === "staffel") {
+    ergebnis = findeReminderVerknuepfung(probe, streamingTitelFuerReminder(probe, katalog), []);
+    refFuer = (treffer) => treffer.watchmode_id == null ? null : {
+      watchmode_id: treffer.watchmode_id,
+      streaming_art: treffer.wochen_bereich || "entdecken",
+      auto: false,
+    };
+    metaFuer = (treffer) => [treffer.jahr, ...(treffer.dienste || []).slice(0, 2)];
+  } else {
+    ergebnis = findeReminderVerknuepfung(probe, [], master);
+    refFuer = (treffer) => treffer.id == null ? null : { master_id: treffer.id, auto: false };
+    metaFuer = (treffer) => [treffer.jahr, treffer.typ];
+  }
+  const treffer = ergebnis?.treffer ? [ergebnis.treffer] : (ergebnis?.kandidaten || []);
+  return treffer.map((eintrag, index) => {
+    const ref = refFuer(eintrag);
+    if (!ref) return null;
+    const meta = metaFuer(eintrag).filter(Boolean).join(" · ");
+    const id = ref.kino_programm_id ?? ref.watchmode_id ?? ref.master_id;
+    return {
+      key: `${probe.art}:${id}:${index}`,
+      titel: eintrag.titel || eintrag.originaltitel || probe.titel,
+      meta,
+      ref,
+    };
+  }).filter(Boolean);
 }
 
 export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}, jetzt = new Date()) {
@@ -275,15 +325,13 @@ export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [],
       : { quelle: null, ziel: null, abgelaufen: true };
   }
   if (ref.watchmode_id != null) {
-    const quelle = findeReminderVerknuepfung(reminder, katalog, []).treffer;
+    const quelle = findeReminderVerknuepfung(reminder, streamingTitelFuerReminder(reminder, katalog), []).treffer;
     return quelle
-      ? { quelle, ziel: { art: "streaming", bereich: quelle.wochen_bereich || ref.streaming_art || "entdecken", ref: quelle.watchmode_id } }
+      ? { quelle, ziel: streamingZiel(quelle, ref.streaming_art) }
       : { quelle: null, ziel: null, abgelaufen: true };
   }
   if (ref.kino_programm_id != null) {
-    /* Nicht nur die Film-ID prüfen: Ein Film kann weiter im Programm stehen,
-       obwohl genau der gepinnte Termin verschwunden ist. */
-    const quelle = kinoReminderTreffer(reminder, kinoKatalog, jetzt);
+    const quelle = kinoKatalog.find((treffer) => String(kinoProgrammRef(treffer)) === String(ref.kino_programm_id)) || null;
     return quelle
       ? { quelle, ziel: { art: "kino", ref: kinoProgrammRef(quelle) } }
       : { quelle: null, ziel: null, abgelaufen: true };
@@ -292,11 +340,11 @@ export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [],
   let quelle = null;
   let ziel = null;
   if (reminder?.art === "kino") {
-    quelle = kinoReminderTreffer(reminder, kinoKatalog, jetzt);
+    quelle = findeReminderVerknuepfung(reminder, kinoKatalog, []).treffer;
     if (quelle) ziel = { art: "kino", ref: kinoProgrammRef(quelle) };
   } else if (reminder?.art === "folge" || reminder?.art === "staffel") {
-    quelle = findeReminderVerknuepfung(reminder, katalog, []).treffer;
-    if (quelle?.watchmode_id != null) ziel = { art: "streaming", bereich: quelle.wochen_bereich || "entdecken", ref: quelle.watchmode_id };
+    quelle = findeReminderVerknuepfung(reminder, streamingTitelFuerReminder(reminder, katalog), []).treffer;
+    if (quelle) ziel = streamingZiel(quelle);
   }
   return { quelle, ziel, abgelaufen: false };
 }

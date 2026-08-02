@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   WOCHENTAGE, automatischeReminderRef, datumLokal,
   neuerFolgenReminder, normalisiereWochenplan,
-  wochentagFuerDatum, wochenansicht,
+  reminderVerknuepfungsOptionen, wochentagFuerDatum, wochenansicht,
 } from "../lib/wochenplan.js";
 import {
   dateinameIcs, erstelleIcs, kalenderEventAusWochenEintrag, ladeIcsHerunter,
@@ -73,11 +73,40 @@ function ohneVorschlaege(tage) {
   return tage.map((tag) => ({ ...tag, eintraege: tag.eintraege.filter((eintrag) => !eintrag.vorschlag) }));
 }
 
-function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
-  const [entwurf, setEntwurf] = useState(() => ({ ...leererEntwurf(), ...initial, ende: { typ: "nie", ...(initial?.ende || {}) } }));
-  const zeigtUhrzeit = ARTEN_MIT_UHRZEIT.has(entwurf.art);
+function refKennung(ref) {
+  if (!ref || typeof ref !== "object") return "";
+  if (ref.kino_programm_id != null) return `kino:${ref.kino_programm_id}`;
+  if (ref.watchmode_id != null) return `streaming:${ref.watchmode_id}`;
+  if (ref.master_id != null) return `master:${ref.master_id}`;
+  return "";
+}
 
-  const setze = (key, value) => setEntwurf((e) => ({ ...e, [key]: value }));
+function ReminderEditor({
+  initial, onSpeichern, onAbbrechen, kinoKatalog, katalog, master,
+  onStreamingKatalogLaden,
+}) {
+  const [entwurf, setEntwurf] = useState(() => ({ ...leererEntwurf(), ...initial, ende: { typ: "nie", ...(initial?.ende || {}) } }));
+  const [katalogSucheLaeuft, setKatalogSucheLaeuft] = useState(false);
+  const zeigtUhrzeit = ARTEN_MIT_UHRZEIT.has(entwurf.art);
+  const verknuepfungsOptionen = useMemo(() => reminderVerknuepfungsOptionen(
+    entwurf, { kinoKatalog, katalog, master },
+  ), [entwurf, kinoKatalog, katalog, master]);
+  const ausgewaehlteKennung = refKennung(entwurf.ref);
+  useEffect(() => {
+    if (entwurf.art !== "folge" && entwurf.art !== "staffel") return undefined;
+    let aktiv = true;
+    setKatalogSucheLaeuft(true);
+    Promise.resolve(onStreamingKatalogLaden?.(true))
+      .catch(() => {})
+      .finally(() => { if (aktiv) setKatalogSucheLaeuft(false); });
+    return () => { aktiv = false; };
+  }, [entwurf.art, onStreamingKatalogLaden]);
+
+  const setze = (key, value) => setEntwurf((e) => ({
+    ...e,
+    [key]: value,
+    ...(["titel", "plattform", "art"].includes(key) ? { ref: null, link_modus: "keiner" } : {}),
+  }));
   const setzeStartdatum = (startdatum) => setEntwurf((e) => {
     const wochentag = wochentagFuerDatum(startdatum);
     return { ...e, startdatum, ...(wochentag ? { wochentage: [wochentag] } : {}) };
@@ -109,6 +138,25 @@ function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
         <label className="kd-wochen-datumfeld">Datum<input type="date" required value={entwurf.startdatum} onChange={(e) => setzeStartdatum(e.target.value)} /></label>
         {zeigtUhrzeit && <label className="kd-wochen-zeitfeld">Uhrzeit (optional)<input type="time" value={entwurf.uhrzeit} onChange={(e) => setze("uhrzeit", e.target.value)} /></label>}
       </div>
+      {verknuepfungsOptionen.length > 1 && (
+        <fieldset className="kd-wochen-verknuepfung">
+          <legend>Passenden Eintrag wählen (optional)</legend>
+          <label>
+            <input type="radio" name="wochen-verknuepfung" checked={!ausgewaehlteKennung}
+              onChange={() => setEntwurf((e) => ({ ...e, ref: null, link_modus: "keiner" }))} />
+            <span><strong>Nicht verknüpfen</strong><small>Der Kalendereintrag bleibt trotzdem erhalten.</small></span>
+          </label>
+          {verknuepfungsOptionen.map((option) => (
+            <label key={option.key}>
+              <input type="radio" name="wochen-verknuepfung"
+                checked={ausgewaehlteKennung === refKennung(option.ref)}
+                onChange={() => setEntwurf((e) => ({ ...e, ref: option.ref, link_modus: "manuell" }))} />
+              <span><strong>{option.titel}</strong>{option.meta && <small>{option.meta}</small>}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {katalogSucheLaeuft && <div className="kd-wochen-verknuepfungsstatus" role="status">Streaming-Titel werden abgeglichen …</div>}
       <fieldset className="kd-wochen-tage"><legend>Wochentage</legend>{WOCHENTAGE.map((tag) => (
         <label key={tag.nr}><input type="checkbox" checked={entwurf.wochentage.includes(tag.nr)} onChange={() => tagToggle(tag.nr)} /><span>{tag.kurz}</span></label>
       ))}</fieldset>
@@ -120,7 +168,7 @@ function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
         {entwurf.ende.typ === "anzahl" && <label>Anzahl Termine<input type="number" min="1" max="999" required value={entwurf.ende.anzahl || 12} onChange={(e) => setze("ende", { typ: "anzahl", anzahl: Number(e.target.value) })} /></label>}
       </div>
       <label>Notiz<textarea rows="2" value={entwurf.notiz} onChange={(e) => setze("notiz", e.target.value)} placeholder="Optional" /></label>
-      <div className="kd-wochen-editoraktionen"><button type="submit" className="kd-wochen-primary">Speichern</button><button type="button" onClick={onAbbrechen}>Abbrechen</button></div>
+      <div className="kd-wochen-editoraktionen"><button type="submit" className="kd-wochen-primary" disabled={katalogSucheLaeuft}>{katalogSucheLaeuft ? "Suche …" : "Speichern"}</button><button type="button" onClick={onAbbrechen}>Abbrechen</button></div>
     </form>
   );
 }
@@ -158,7 +206,7 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
 export function Wochenplan({
   plan, onPlanAendern, kinoPins = [], kinoVorschlaege = [], onKinoPinLoeschen, onKinoVorschlagAnsehen,
   kinoKatalog = [], katalog = [], master = [],
-  onSpringeZuFilm, onSpringeZuStreaming, onFilmAnlegen,
+  onSpringeZuFilm, onSpringeZuStreaming, onFilmAnlegen, onStreamingKatalogLaden,
 }) {
   const [jetzt, setJetzt] = useState(() => new Date());
   const [editor, setEditor] = useState(null);
@@ -172,13 +220,11 @@ export function Wochenplan({
   const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt }), [plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt]);
 
   const speichere = (roh) => {
-    const ref = roh.ref && !roh.ref.auto
-      ? roh.ref
-      : automatischeReminderRef({ ...roh, ref: null }, { kinoKatalog, katalog, master }, jetzt);
+    const ref = roh.ref || automatischeReminderRef({ ...roh, ref: null }, { kinoKatalog, katalog, master }, jetzt);
     const e = neuerFolgenReminder({
       ...roh,
       ref,
-      link_modus: ref?.auto ? "auto" : roh.link_modus,
+      link_modus: ref ? (ref.auto ? "auto" : "manuell") : "keiner",
       id: roh.id || undefined,
       erstellt_am: roh.erstellt_am,
     }, jetzt);
@@ -216,7 +262,10 @@ export function Wochenplan({
       </header>
       <div className="kd-wochen-zeitraum">Heute bis {datumKurz(tage[6].iso)}</div>
 
-      {editor && <ReminderEditor key={editor.id || `neu-${editor.startdatum}`} initial={editor} onSpeichern={speichere} onAbbrechen={() => setEditor(null)} />}
+      {editor && <ReminderEditor key={editor.id || `neu-${editor.startdatum}`} initial={editor}
+        kinoKatalog={kinoKatalog} katalog={katalog} master={master}
+        onStreamingKatalogLaden={onStreamingKatalogLaden}
+        onSpeichern={speichere} onAbbrechen={() => setEditor(null)} />}
 
       <div className="kd-wochen-tagesliste">
         {tage.map((tag) => (

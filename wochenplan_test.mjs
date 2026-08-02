@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import {
   automatischeReminderRef, datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
-  naechsteSiebenTage, kinoPinTermin, reminderVerknuepfung, wochentagFuerDatum,
+  naechsteSiebenTage, kinoPinTermin, reminderVerknuepfung, reminderVerknuepfungsOptionen,
+  wochentagFuerDatum,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
 
@@ -118,15 +119,41 @@ ok("Automatische Pins gleichen nur im Art-Pool und bei bekanntem Anbieter ab", (
   }, { kinoKatalog: kino }, new Date(2026, 7, 2)), {
     kino_programm_id: "programm-1", auto: true,
   });
-  assert.equal(automatischeReminderRef({
+  assert.deepEqual(automatischeReminderRef({
     art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
     startdatum: "2026-08-05", uhrzeit: "21:15",
-  }, { kinoKatalog: kino }, new Date(2026, 7, 2)), null);
+  }, { kinoKatalog: kino }, new Date(2026, 7, 2)), {
+    kino_programm_id: "programm-1", auto: true,
+  });
   assert.deepEqual(automatischeReminderRef({
     art: "konzert", titel: "Stop Making Sense", plattform: "Arena",
   }, { master: [{ id: "master-1", titel: "Stop Making Sense", typ: "film" }] }), {
     master_id: "master-1", auto: true,
   });
+});
+
+ok("Mehrfachtreffer bleiben eine freiwillige Auswahl im richtigen Art-Pool", () => {
+  const katalog = [
+    { id: "programm-one-piece", watchmode_id: 42, titel: "One Piece", typ: "tv_series", dienste: ["Crunchyroll"], wochen_bereich: "programm" },
+    { watchmode_id: 77, titel: "One Piece", typ: "tv_series", dienste: ["Netflix"], wochen_bereich: "entdecken" },
+    { watchmode_id: 88, titel: "One Piece", typ: "movie", dienste: ["Prime Video"], wochen_bereich: "entdecken" },
+  ];
+  const optionen = reminderVerknuepfungsOptionen({ art: "folge", titel: "One Piece" }, { katalog });
+  assert.deepEqual(optionen.map((option) => option.ref.watchmode_id), [42, 77]);
+  assert.equal(optionen.every((option) => option.ref.auto === false), true);
+  assert.equal(automatischeReminderRef({ art: "folge", titel: "One Piece" }, { katalog }), null);
+});
+
+ok("Streaming-Wochenpins zielen mit Watchmode-Identität auf die konkrete Programmkarte", () => {
+  const reminder = neuerFolgenReminder({
+    art: "folge", titel: "One Piece", startdatum: "2026-08-05", wochentage: [3],
+    ref: { watchmode_id: 42, streaming_art: "programm", auto: true },
+  }, new Date(2026, 7, 2));
+  const verknuepfung = reminderVerknuepfung(reminder, { katalog: [{
+    id: "programm-one-piece", watchmode_id: 42, titel: "One Piece",
+    typ: "tv_series", wochen_bereich: "programm",
+  }] });
+  assert.deepEqual(verknuepfung.ziel, { art: "streaming", bereich: "programm", ref: "programm-one-piece" });
 });
 
 ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
@@ -154,7 +181,8 @@ ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
     id: "kino-1", programm_ref: "programm-1", titel: "Event Horizon",
     kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 21:15 · Gartenbaukino"],
   }];
-  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: andererTermin }, new Date(2026, 7, 2)).abgelaufen, true);
+  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: andererTermin }, new Date(2026, 7, 2)).abgelaufen, undefined);
+  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: [] }, new Date(2026, 7, 2)).abgelaufen, true);
 });
 
 ok("Nicht mehr im Programm gefundene Kinopins verschwinden aus der Woche", () => {

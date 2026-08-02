@@ -1169,6 +1169,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-tage span { display:flex; align-items:center; justify-content:center; min-height:30px; border:1px solid var(--wp-border); border-radius:999px; background:var(--kd-saal); color:var(--kd-rauch); font:700 9px 'Space Mono',monospace; transition:border-color .15s ease,background .15s ease,color .15s ease; }
 .kd-wochen-tage input:checked+span { border-color:var(--kd-wolfram); background:var(--kd-wolfram); color:var(--kd-saal); }
 .kd-wochen-tage input:focus-visible+span { outline:2px solid var(--kd-leinwandTief); outline-offset:2px; }
+.kd-wochen-verknuepfung { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:0; padding:8px; border:1px solid var(--wp-border); border-radius:5px; }
+.kd-wochen-verknuepfung legend { padding:0 3px; color:var(--kd-rauch); font:8px 'Space Mono',monospace; }
+.kd-wochen-verknuepfung label { display:flex; align-items:flex-start; gap:7px; min-width:0; padding:7px 8px; border:1px solid var(--wp-border); border-radius:5px; background:var(--kd-saal); cursor:pointer; }
+.kd-wochen-verknuepfung input { flex:0 0 auto; width:15px; min-width:15px; min-height:15px; margin:2px 0 0; accent-color:var(--kd-wolfram); }
+.kd-wochen-verknuepfung span { display:flex; flex-direction:column; min-width:0; }
+.kd-wochen-verknuepfung strong { overflow:hidden; color:var(--kd-leinwandTief); font:600 12px 'Barlow Condensed',sans-serif; text-overflow:ellipsis; white-space:nowrap; }
+.kd-wochen-verknuepfung small { color:var(--kd-rauch); font:8px/1.45 'Space Mono',monospace; }
+.kd-wochen-verknuepfungsstatus { color:var(--kd-wolfram); font:8px 'Space Mono',monospace; }
 .kd-wochen-match { margin:0; color:var(--kd-rauch); font-size:10px; line-height:1.4; }
 .kd-wochen-match--eindeutig { color:var(--kd-ok,var(--kd-wolfram)); }
 .kd-wochen-editoraktionen { justify-content:flex-end; padding-top:1px; }
@@ -1200,6 +1208,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-wochen-editor { padding:11px; }
   .kd-wochen-datumfeld,.kd-wochen-zeitfeld { grid-column:1/-1; }
   .kd-wochen-datumfeld input,.kd-wochen-zeitfeld input { max-width:100%; }
+  .kd-wochen-verknuepfung { grid-template-columns:1fr; }
   .kd-wochen-tage { gap:3px; padding-inline:5px; }
   .kd-wochen-tage span { min-height:28px; font-size:8px; }
   .kd-wochen-aktionen button { flex-basis:calc(50% - 4px); }

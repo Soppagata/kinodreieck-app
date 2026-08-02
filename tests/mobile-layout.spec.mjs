@@ -957,6 +957,71 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
   await expect(page.getByRole("combobox", { name: "Entdecken sortieren" })).toBeVisible();
 });
 
+test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await page.addInitScript(async () => {
+    const film = {
+      id: "twin-signal-programm", titel: "Twin Signal", originaltitel: "Twin Signal",
+      jahr: 2026, typ: "serie", quelle: "streaming", kategorie: "sehenswert",
+      bewertet_von: "max", bewertung: { wie: 3, was: 3, warum: 3 },
+      genre: [], tags: [], begruendung: "", notiz: "",
+    };
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:master", JSON.stringify({ filme: [film], meta: { version: "test" }, gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-08-02", version: "beta-2026-07-datenfreigabe-2" }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-08-02T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
+    localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
+    const katalogCache = await caches.open("kinodreieck-katalog-v1");
+    const cacheEintrag = (payload) => new Response(JSON.stringify({
+      __kd: "kd-katalog-1", gecachtAm: Date.now(),
+      meta: { stand: "2026-08-02T10:00:00Z", gueltig_bis: "2099-01-01T00:00:00Z" }, payload,
+    }), { headers: { "Content-Type": "application/json" } });
+    const basis = location.origin + "/__kd_katalog_cache__/";
+    await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
+      demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix"],
+      titel: [{ ...film, typ: "tv_series", watchmode_id: 42001, dienste: ["Netflix"], web_urls: {} }],
+    }));
+    await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
+      demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"], gekuerzt: false,
+      titel: [
+        { watchmode_id: 43001, titel: "Mirror Signal", jahr: 2024, typ: "tv_series", genres: [], dienste: ["Netflix"] },
+        { watchmode_id: 43002, titel: "Mirror Signal", jahr: 2025, typ: "tv_series", genres: [], dienste: ["Crunchyroll"] },
+      ],
+    }));
+  });
+  await page.goto("/");
+
+  const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
+  await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Twin Signal");
+  await globaleSuche.getByRole("button", { name: "Suchen" }).click();
+  const dialog = page.getByRole("dialog", { name: /Suchergebnisse für Twin Signal/ });
+  await dialog.getByRole("button", { name: /Streaming Twin Signal 2026/ }).click();
+  await expect(page.locator('[data-streaming-suchtreffer="programm:twin-signal-programm"]').first()).toBeFocused();
+
+  await page.reload();
+  await page.locator(".kd-wochen-tagplus").first().click();
+  const editor = page.locator("#kd-wochen-editor");
+  await editor.getByLabel("Art").selectOption("folge");
+  await editor.getByLabel("Titel").fill("Mirror Signal");
+  const auswahl = editor.getByRole("group", { name: "Passenden Eintrag wählen (optional)" });
+  await expect(auswahl).toBeVisible();
+  await expect(auswahl.getByRole("radio", { name: /Nicht verknüpfen/ })).toBeChecked();
+  await auswahl.getByRole("radio", { name: /Mirror Signal.*2025.*Crunchyroll/ }).check();
+  await editor.getByRole("button", { name: "Speichern", exact: true }).click();
+
+  const pin = page.locator(".kd-wochen-eintrag").filter({ hasText: "Mirror Signal" }).first();
+  await pin.locator("summary").click();
+  await pin.getByRole("button", { name: "Eintrag ansehen" }).click();
+  await expect(page.locator('[data-streaming-suchtreffer="entdecken:43002"]')).toBeFocused();
+});
+
 test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);

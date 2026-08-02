@@ -1560,21 +1560,21 @@ export default function App() {
     if (treffer.typ === "film" && treffer.bereich === "kino") {
       setZeigeAlles(true);
       setExpandedId("k" + treffer.ref);
-      setKinoFokus({ art: "film", ref: treffer.ref, titel: treffer.titel });
+      setKinoFokus({ art: treffer.zielArt || "film", ref: treffer.ref, titel: treffer.titel });
       navigiere("kino");
     } else if (treffer.typ === "film" && treffer.bereich === "streaming") {
       setExpandedId("s" + treffer.ref);
-      setStreamingFokus({ art: "programm", ref: treffer.ref, titel: treffer.titel });
+      setStreamingFokus({ art: treffer.zielArt || "programm", ref: treffer.ref, titel: treffer.titel });
       navigiere("streaming");
     } else if (treffer.typ === "film") springeZuFilm(treffer.ref);
     else if (treffer.typ === "blog") springeZuArtikel(treffer.ref);
     else if (treffer.typ === "hilfe" && treffer.ziel) navigiere(treffer.ziel);
     else if (treffer.typ === "kino") {
       setZeigeAlles(true);
-      setKinoFokus({ art: "programm", ref: treffer.ref, titel: treffer.titel });
+      setKinoFokus({ art: treffer.zielArt || "programm", ref: treffer.ref, titel: treffer.titel });
       navigiere("kino");
     } else if (treffer.typ === "streaming") {
-      setStreamingFokus({ art: "entdecken", ref: treffer.ref, titel: treffer.titel });
+      setStreamingFokus({ art: treffer.zielArt || "entdecken", ref: treffer.ref, titel: treffer.titel });
       navigiere("streaming");
     }
   }, [navigiere, springeZuArtikel, springeZuFilm]);
@@ -1989,6 +1989,7 @@ export default function App() {
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}
+            onStreamingKatalogLaden={ladeStreamingDateien}
             onSpringeZuKino={(eintrag) => {
               setZeigeAlles(true);
               setKinoFokus({ art: "programm", ref: eintrag?.programm_ref ?? eintrag?.ref ?? null, titel: eintrag?.titel || "" });
