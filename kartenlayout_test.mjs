@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { quelleBadges, QUELLEN_KLASSEN } from "./src/lib/quellen.js";
-import { sortiereStreamingTitel } from "./src/lib/streamingSort.js";
+import { sortiereStreamingTitel, streamingAnfangsbuchstabe } from "./src/lib/streamingSort.js";
 
 let ok = 0;
 const check = (name, fn) => {
@@ -76,7 +76,7 @@ check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag"
   assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
 });
 
-check("Streaming sortiert ohne Relevanz- oder Bewertungswerte", () => {
+check("Streaming sortiert ohne Relevanzwerte und filtert nach Anfangsbuchstaben", () => {
   const titel = [
     { titel: "Zulu", jahr: 2001, typ: "movie", dienste: [] },
     { titel: "Alien", jahr: 1979, typ: "movie", dienste: ["Netflix"] },
@@ -84,11 +84,19 @@ check("Streaming sortiert ohne Relevanz- oder Bewertungswerte", () => {
   ];
   assert.deepEqual(sortiereStreamingTitel(titel, "titel", "auf").map((t) => t.titel), ["Alien", "Ohne Jahr", "Zulu"]);
   assert.deepEqual(sortiereStreamingTitel(titel, "jahr", "ab").map((t) => t.titel), ["Zulu", "Alien", "Ohne Jahr"]);
+  assert.equal(streamingAnfangsbuchstabe("Äon Flux"), "A");
+  assert.equal(streamingAnfangsbuchstabe("  Zulu"), "Z");
+  assert.equal(streamingAnfangsbuchstabe("2001"), null);
 
   const streaming = lies("./src/tabs/StreamingTab.jsx");
   assert.doesNotMatch(streaming, /Sortierung: Passung|User-Score|Könnte dir gefallen|passungStufe|lesbaresPassungsSignal/);
   assert.match(streaming, /data-tour="entdecken-sortierung"/);
   assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
+  assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
+  assert.match(streaming, /Gesehen \(\{statusAnzahlenE\.gesehen\}\)/);
+  assert.match(streaming, /Beobachtet \(\{statusAnzahlenE\.beobachtet\}\)/);
+  assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
+  assert.match(streaming, /className="kd-streamfilter-knopf"/);
 });
 
 check("Kinoticket zeigt keine Bewertung im Programmkopf", () => {

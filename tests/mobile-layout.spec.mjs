@@ -1109,6 +1109,108 @@ test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", 
   await expect(page.locator('[data-streaming-suchtreffer="entdecken:43002"]')).toBeFocused();
 });
 
+test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten eindeutig ein", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await page.addInitScript(async () => {
+    const filme = [
+      {
+        id: "alpha-rated", titel: "Alpha Story", originaltitel: "Alpha Story", jahr: 2021,
+        typ: "film", quelle: "streaming", kategorie: "sehenswert", bewertet_von: "max",
+        bewertung: { wie: 4, was: 3, warum: 4 }, genre: [], tags: [], begruendung: "", notiz: "",
+      },
+      {
+        id: "bravo-unrated", titel: "Bravo Story", originaltitel: "Bravo Story", jahr: 2022,
+        typ: "film", quelle: "must_watch", kategorie: null, bewertet_von: null,
+        bewertung: null, genre: [], tags: [], begruendung: "", notiz: "",
+      },
+      {
+        id: "zebra-rated", titel: "Zebra Zone", originaltitel: "Zebra Zone", jahr: 2023,
+        typ: "serie", quelle: "streaming", kategorie: "immer_gut", bewertet_von: "max",
+        bewertung: { wie: 5, was: 4, warum: 5 }, genre: [], tags: [], begruendung: "", notiz: "",
+      },
+    ];
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:master", JSON.stringify({ filme, meta: { version: "test" }, gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-08-02", version: "beta-2026-07-datenfreigabe-2" }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-08-02T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix", "Crunchyroll"], heuristik: true }));
+    localStorage.setItem("kd:entdecken-status", JSON.stringify({
+      51001: { status: "gesehen", gesehen_am: "2026-08-01T20:00:00.000Z" },
+      51002: { beobachtet: true, typ: "tv_series", titel: "Berlin Nights" },
+    }));
+    localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
+    localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
+    const katalogCache = await caches.open("kinodreieck-katalog-v1");
+    const cacheEintrag = (payload) => new Response(JSON.stringify({
+      __kd: "kd-katalog-1", gecachtAm: Date.now(),
+      meta: { stand: "2026-08-02T10:00:00Z", gueltig_bis: "2099-01-01T00:00:00Z" }, payload,
+    }), { headers: { "Content-Type": "application/json" } });
+    const basis = location.origin + "/__kd_katalog_cache__/";
+    await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
+      demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"],
+      titel: [
+        { watchmode_id: 50001, titel: "Alpha Story", jahr: 2021, typ: "movie", genres: [], dienste: ["Netflix"] },
+        { watchmode_id: 50002, titel: "Bravo Story", jahr: 2022, typ: "movie", genres: [], dienste: ["Crunchyroll"] },
+        { watchmode_id: 50003, titel: "Zebra Zone", jahr: 2023, typ: "tv_series", genres: [], dienste: ["Crunchyroll"] },
+      ],
+    }));
+    await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
+      demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"], gekuerzt: false,
+      titel: [
+        { watchmode_id: 51001, titel: "Apollo Road", jahr: 2019, typ: "movie", genres: ["Drama"], dienste: ["Netflix"] },
+        { watchmode_id: 51002, titel: "Berlin Nights", jahr: 2024, typ: "tv_series", genres: ["Drama"], dienste: ["Crunchyroll"] },
+        { watchmode_id: 51003, titel: "Charlie Cloud", jahr: 2020, typ: "movie", genres: ["Komödie"], dienste: ["Netflix"] },
+      ],
+    }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Streaming");
+
+  const programmKarten = page.locator('[data-streaming-suchtreffer^="programm:"]');
+  await expect(programmKarten).toHaveCount(3);
+  const filterKnopf = page.locator(".kd-streamfilter-knopf");
+  await expect(filterKnopf).toBeVisible();
+  await filterKnopf.click();
+  const plattformP = page.getByRole("combobox", { name: "Mein Programm: Plattform filtern" });
+  await plattformP.selectOption("Crunchyroll");
+  await expect(programmKarten).toHaveCount(2);
+  await plattformP.selectOption("");
+  await page.getByRole("button", { name: "Bewertet", exact: true }).click();
+  await expect(programmKarten).toHaveCount(2);
+  const abcP = page.getByRole("slider", { name: "Mein Programm: Anfangsbuchstaben filtern" });
+  await abcP.fill("26");
+  await expect(programmKarten).toHaveCount(1);
+  await expect(page.locator('[data-streaming-suchtreffer="programm:zebra-rated"]')).toBeVisible();
+
+  await page.getByRole("button", { name: /^Entdecken/ }).click();
+  const entdeckenKarten = page.locator(".kd-entdecken-karte");
+  await expect(entdeckenKarten).toHaveCount(3);
+  const plattformE = page.getByRole("combobox", { name: "Entdecken: Plattform filtern" });
+  await plattformE.selectOption("Crunchyroll");
+  await expect(entdeckenKarten).toHaveCount(1);
+  await expect(entdeckenKarten).toContainText("Berlin Nights");
+  await plattformE.selectOption("");
+  await page.getByRole("button", { name: /Beobachtet \(1\)/ }).click();
+  await expect(entdeckenKarten).toHaveCount(1);
+  await expect(entdeckenKarten).toContainText("Berlin Nights");
+  await page.getByRole("button", { name: /Beobachtet \(1\)/ }).click();
+  await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
+  await expect(entdeckenKarten).toHaveCount(1);
+  await expect(entdeckenKarten).toContainText("Apollo Road");
+  await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
+  const abcE = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
+  await abcE.fill("3");
+  await expect(entdeckenKarten).toHaveCount(1);
+  await expect(entdeckenKarten).toContainText("Charlie Cloud");
+  await keineDokumentUeberbreite(page);
+});
+
 test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);

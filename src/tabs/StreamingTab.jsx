@@ -14,7 +14,9 @@ import {
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
-import { sortiereStreamingTitel } from "../lib/streamingSort.js";
+import {
+  sortiereStreamingTitel, STREAMING_ALPHABET, streamingAnfangsbuchstabe,
+} from "../lib/streamingSort.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -55,6 +57,45 @@ function DienstBadges({ dienste, webUrls, auswahl, kompakt = false, className })
   );
 }
 
+function PlattformFilter({ wert, optionen, onChange, name }) {
+  return (
+    <label className="kd-streamfilter-plattform">
+      <span>Plattform</span>
+      <select value={wert || ""} onChange={(event) => onChange(event.target.value || null)}
+        aria-label={`${name}: Plattform filtern`}>
+        <option value="">Alle Plattformen</option>
+        {optionen.map((dienst) => <option key={dienst} value={dienst}>{dienst}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function AlphabetFilter({ wert, onChange, name }) {
+  const index = wert ? STREAMING_ALPHABET.indexOf(wert) + 1 : 0;
+  return (
+    <div className="kd-streamfilter-abc" data-aktiv={wert ? "1" : "0"}>
+      <div className="kd-streamfilter-abc-kopf">
+        <span>Anfangsbuchstabe</span>
+        <strong aria-live="polite">{wert || "Alle"}</strong>
+        <button type="button" onClick={() => onChange(null)} disabled={!wert}>Alle</button>
+      </div>
+      <input type="range" min="0" max={STREAMING_ALPHABET.length} step="1" value={index}
+        onChange={(event) => {
+          const naechsterIndex = Number(event.target.value);
+          onChange(naechsterIndex === 0 ? null : STREAMING_ALPHABET[naechsterIndex - 1]);
+        }}
+        aria-label={`${name}: Anfangsbuchstaben filtern`}
+        aria-valuetext={wert ? `Buchstabe ${wert}` : "Alle Anfangsbuchstaben"} />
+      <div className="kd-streamfilter-abc-skala" aria-hidden="true">
+        <span className={!wert ? "aktiv alle" : "alle"}>•</span>
+        {STREAMING_ALPHABET.map((buchstabe) => (
+          <span key={buchstabe} className={wert === buchstabe ? "aktiv" : ""}>{buchstabe}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function StreamingTab({
   bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
@@ -80,12 +121,15 @@ export function StreamingTab({
   const [genreE, setGenreE] = useState(null);
   const [dekadeE, setDekadeE] = useState(null);
   const [typE, setTypE] = useState(null);
+  const [plattformP, setPlattformP] = useState(null);
+  const [nurBewertet, setNurBewertet] = useState(false);
+  const [buchstabeP, setBuchstabeP] = useState(null);
+  const [plattformE, setPlattformE] = useState(null);
+  const [statusFilterE, setStatusFilterE] = useState(null);
+  const [buchstabeE, setBuchstabeE] = useState(null);
   /* Merkliste kommt jetzt als Prop (in App-State geliftet) — Streaming und Dashboard live synchron. */
-  /* Erledigtes im Entdecken: gesehen (kennst du schon) / erstellt (jetzt in
-     der Mediathek) — beides fliegt aus der Liste, bis man es einblendet. */
   const entdeckenStatusRef = useRef(entdeckenStatus);
   entdeckenStatusRef.current = entdeckenStatus;
-  const [zeigeErledigte, setZeigeErledigte] = useState(true); // Erledigte bleiben standardmäßig sichtbar; der Chip kann sie bewusst ausblenden.
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
@@ -103,9 +147,10 @@ export function StreamingTab({
     setFokusOverride({ art: fokusTreffer.art, ref: String(fokusTreffer.ref) });
     setAnsicht(fokusTreffer.art === "entdecken" ? "entdecken" : "programm");
     setSuche(fokusTreffer.art === "programm" ? (fokusTreffer.titel || "") : "");
-    setSchnellDienst(null); setNurWunsch(false);
+    setPlattformP(null); setNurBewertet(false); setBuchstabeP(null); setNurWunsch(false);
+    setPlattformE(null); setStatusFilterE(null); setBuchstabeE(null);
     setGenreE(null); setDekadeE(null); setTypE(null);
-    setZeigeErledigte(true); setSichtbarE(200);
+    setSichtbarE(200);
     setExpandedId((fokusTreffer.art === "entdecken" ? "e" : "s") + fokusTreffer.ref);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusTreffer]);
@@ -139,9 +184,6 @@ export function StreamingTab({
     return () => { cancelAnimationFrame(frame); window.clearTimeout(bestaetigung); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokusTreffer, ansicht, expandedId, suche, fokusOverride, bekannt, entdecken]);
-  /* View-Schnellfilter: temporär auf EINEN gewählten Dienst einschränken —
-     mutiert die Master-Auswahl (auswahl / Einstellungen) NICHT. */
-  const [schnellDienst, setSchnellDienst] = useState(null);
   /* Filterleiste auf/zu — Default ZUGEKLAPPT (gilt für Programm & Entdecken).
      Seit Etappe 3 dauerhafte Sicht-Präferenz im Datentopf statt sessionStorage. */
   const [streamFilterOffen, setStreamFilterOffen] = useState(false);
@@ -257,26 +299,38 @@ export function StreamingTab({
 
   /* Anzeige-Filter: leere Auswahl = alles zeigen */
   const dienstOk = useCallback((t) => !auswahl.length || (t.dienste || []).some((d) => auswahl.includes(d)), [auswahl]);
-  /* Chips in den Listen: nur Quellen, die im Katalog tatsächlich vorkommen */
-  const katalogQuellen = useMemo(() => (datenDa && bekannt.dienste) || [], [bekannt, datenDa]);
-  /* Schnellfilter-Optionen = ALLE angehakten Dienste — auch ohne Katalog-Titel (Max, 19.07.):
+  /* Plattform-Optionen = ALLE angehakten Dienste — auch ohne Katalog-Titel (Max, 19.07.):
      die Abo-Auswahl soll im Filter sichtbar sein, ein leerer Treffer ist ok. Früher auf
      bekannt.dienste gegatet; das ist aber unzuverlässig (führt z. B. Joyn NICHT, obwohl Titel
      Joyn getaggt sind, und listet umgekehrt titel-lose Dienste). Ohne Auswahl: die Katalog-Dienste. */
-  const schnellOptionen = useMemo(() => (auswahl && auswahl.length ? auswahl : katalogQuellen), [auswahl, katalogQuellen]);
-  const schnellOk = useCallback((t) => !schnellDienst || (t.dienste || []).includes(schnellDienst), [schnellDienst]);
+  const plattformOptionenP = useMemo(() => {
+    if (auswahl && auswahl.length) return [...auswahl].sort((a, b) => a.localeCompare(b, "de"));
+    const dienste = new Set([...(bekannt?.dienste || [])]);
+    for (const titel of bekannt?.titel || []) for (const dienst of titel.dienste || []) dienste.add(dienst);
+    return [...dienste].sort((a, b) => a.localeCompare(b, "de"));
+  }, [auswahl, bekannt]);
+  const plattformOptionenE = useMemo(() => {
+    if (auswahl && auswahl.length) return [...auswahl].sort((a, b) => a.localeCompare(b, "de"));
+    const dienste = new Set([...(entdecken?.dienste || [])]);
+    for (const titel of entdecken?.titel || []) for (const dienst of titel.dienste || []) dienste.add(dienst);
+    return [...dienste].sort((a, b) => a.localeCompare(b, "de"));
+  }, [auswahl, entdecken]);
+  const plattformOkP = useCallback((t) => !plattformP || (t.dienste || []).includes(plattformP), [plattformP]);
+  const plattformOkE = useCallback((t) => !plattformE || (t.dienste || []).includes(plattformE), [plattformE]);
 
   const programm = useMemo(() => {
     if (!datenDa) return [];
     let l = bekannt.titel.filter((t) => (
       fokusOverride?.art === "programm" && String(t.id) === fokusOverride.ref
-    ) || (dienstOk(t) && schnellOk(t)));
+    ) || (dienstOk(t) && plattformOkP(t)));
     /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
        das eingebackene must_watch-Flag aus dem Katalog-Job (kann veraltet sein). */
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
+    if (nurBewertet) l = l.filter((f) => f.bewertung != null);
+    if (buchstabeP) l = l.filter((f) => streamingAnfangsbuchstabe(f.titel) === buchstabeP);
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
-  }, [bekannt, datenDa, dienstOk, schnellOk, nurWunsch, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
+  }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
 
   const genresE = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -285,9 +339,14 @@ export function StreamingTab({
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([g]) => g);
   }, [entdecken, entdeckenDa]);
 
-  const erledigtAnzahl = useMemo(() => {
-    if (!entdeckenDa) return 0;
-    return entdecken.titel.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) || mediathekIdVon(entdeckenStatus[t.watchmode_id])).length;
+  const statusAnzahlenE = useMemo(() => {
+    if (!entdeckenDa) return { gesehen: 0, beobachtet: 0 };
+    return entdecken.titel.reduce((anzahlen, titel) => {
+      const status = entdeckenStatus[titel.watchmode_id];
+      if (statusVon(status) === "gesehen") anzahlen.gesehen += 1;
+      if (istBeobachtet(status)) anzahlen.beobachtet += 1;
+      return anzahlen;
+    }, { gesehen: 0, beobachtet: 0 });
   }, [entdecken, entdeckenDa, entdeckenStatus]);
 
   /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
@@ -317,13 +376,15 @@ export function StreamingTab({
     if (!entdeckenDa) return [];
     let l = entdecken.titel.filter((t) => (
       fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
-    ) || (dienstOk(t) && schnellOk(t)));
-    if (!zeigeErledigte) l = l.filter((t) => !statusVon(entdeckenStatus[t.watchmode_id]) && !mediathekIdVon(entdeckenStatus[t.watchmode_id]));
+    ) || (dienstOk(t) && plattformOkE(t)));
+    if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
+    if (statusFilterE === "beobachtet") l = l.filter((t) => istBeobachtet(entdeckenStatus[t.watchmode_id]));
+    if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
     if (genreE) l = l.filter((t) => (t.genres || []).includes(genreE));
     if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
     return sortiereStreamingTitel(l, sortE, sortRichtungE);
-  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, zeigeErledigte, fokusOverride]);
+  }, [entdecken, entdeckenDa, dienstOk, plattformOkE, statusFilterE, buchstabeE, genreE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
   useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
   const sichtbareEntdeckenTitel = useMemo(() => {
@@ -345,6 +406,13 @@ export function StreamingTab({
   }, [entdecken, entdeckenDa]);
 
   const gemerkt = (t) => merkliste.some((m) => m.watchmode_id === t.watchmode_id);
+  const aendereFilter = (setter, wert) => {
+    setFokusOverride(null);
+    setter(wert);
+  };
+  const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch);
+  const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
+    + Number(!!genreE) + Number(dekadeE != null);
 
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -424,7 +492,7 @@ export function StreamingTab({
       {ansicht === "programm" && datenDa && (
         <>
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+            <input value={suche} onChange={(e) => { setFokusOverride(null); setSuche(e.target.value); }} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             <span style={{ display: "inline-flex" }}>
               <select value={sortP} onChange={(e) => setSortP(e.target.value)} aria-label="Mein Programm sortieren"
                 style={{ ...inputStyle, width: "auto" }}>
@@ -439,22 +507,26 @@ export function StreamingTab({
                 {sortRichtungP === "ab" ? "↓" : "↑"}
               </button>
             </span>
-            <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {streamFilterOffen ? "▾ Filter" : "▸ Filter"}
+              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterP ? ` (${aktiveFilterP})` : ""}
             </button>
           </div>
           {streamFilterOffen && (
-            <>
-              <ChipReihe>
-                {schnellOptionen.map((d) => (
-                  <Chip key={d} active={schnellDienst === d} onClick={() => setSchnellDienst(schnellDienst === d ? null : d)}>{d}</Chip>
-                ))}
-                {schnellOptionen.length > 0 && <span style={{ width: 12 }} />}
-                <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Must-Watch</Chip>
-              </ChipReihe>
-            </>
+            <div className="kd-streamfilter-panel">
+              <PlattformFilter name="Mein Programm" wert={plattformP} optionen={plattformOptionenP}
+                onChange={(wert) => aendereFilter(setPlattformP, wert)} />
+              <div className="kd-streamfilter-gruppe">
+                <span>Liste</span>
+                <ChipReihe style={{ marginBottom: 0 }}>
+                  <Chip active={nurBewertet} onClick={() => aendereFilter(setNurBewertet, !nurBewertet)}>Bewertet</Chip>
+                  <Chip active={nurWunsch} onClick={() => aendereFilter(setNurWunsch, !nurWunsch)}>Nur Must-Watch</Chip>
+                </ChipReihe>
+              </div>
+            </div>
           )}
+          <AlphabetFilter name="Mein Programm" wert={buchstabeP}
+            onChange={(wert) => aendereFilter(setBuchstabeP, wert)} />
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {programm.map((f) => {
@@ -555,32 +627,51 @@ export function StreamingTab({
             </button>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {streamFilterOffen ? "▾ Filter" : "▸ Filter"}
+              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
             </button>
           </div>
           {streamFilterOffen && (
-            <>
-              <ChipReihe style={{ gap: 6 }}>
-                {schnellOptionen.map((d) => <Chip key={d} active={schnellDienst === d} onClick={() => setSchnellDienst(schnellDienst === d ? null : d)}>{d}</Chip>)}
-                {schnellOptionen.length > 0 && <span style={{ width: 12 }} />}
-                <Chip active={typE === "movie"} onClick={() => setTypE(typE === "movie" ? null : "movie")}>Filme</Chip>
-                <Chip active={typE === "tv_series"} onClick={() => setTypE(typE === "tv_series" ? null : "tv_series")}>Serien</Chip>
-                {erledigtAnzahl > 0 && (
-                  <Chip active={zeigeErledigte} onClick={() => setZeigeErledigte(!zeigeErledigte)}>
-                    Erledigte {zeigeErledigte ? "ausblenden" : "zeigen"} ({erledigtAnzahl})
+            <div className="kd-streamfilter-panel">
+              <PlattformFilter name="Entdecken" wert={plattformE} optionen={plattformOptionenE}
+                onChange={(wert) => aendereFilter(setPlattformE, wert)} />
+              <div className="kd-streamfilter-gruppe">
+                <span>Status</span>
+                <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
+                  <Chip active={statusFilterE === "gesehen"}
+                    onClick={() => aendereFilter(setStatusFilterE, statusFilterE === "gesehen" ? null : "gesehen")}>
+                    Gesehen ({statusAnzahlenE.gesehen})
                   </Chip>
-                )}
-              </ChipReihe>
-              <ChipReihe style={{ gap: 6 }}>
-                {genresE.map((g) => <Chip key={g} active={genreE === g} onClick={() => setGenreE(genreE === g ? null : g)}>{g}</Chip>)}
-              </ChipReihe>
-              <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
-                {dekaden.map((d) => <Chip key={d} active={dekadeE === d} onClick={() => setDekadeE(dekadeE === d ? null : d)}>{d}er</Chip>)}
-              </ChipReihe>
-            </>
+                  <Chip active={statusFilterE === "beobachtet"}
+                    onClick={() => aendereFilter(setStatusFilterE, statusFilterE === "beobachtet" ? null : "beobachtet")}>
+                    Beobachtet ({statusAnzahlenE.beobachtet})
+                  </Chip>
+                </ChipReihe>
+              </div>
+              <div className="kd-streamfilter-gruppe">
+                <span>Art</span>
+                <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
+                  <Chip active={typE === "movie"} onClick={() => aendereFilter(setTypE, typE === "movie" ? null : "movie")}>Filme</Chip>
+                  <Chip active={typE === "tv_series"} onClick={() => aendereFilter(setTypE, typE === "tv_series" ? null : "tv_series")}>Serien</Chip>
+                </ChipReihe>
+              </div>
+              <div className="kd-streamfilter-gruppe">
+                <span>Genre</span>
+                <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
+                  {genresE.map((g) => <Chip key={g} active={genreE === g} onClick={() => aendereFilter(setGenreE, genreE === g ? null : g)}>{g}</Chip>)}
+                </ChipReihe>
+              </div>
+              <div className="kd-streamfilter-gruppe">
+                <span>Jahrzehnt</span>
+                <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
+                  {dekaden.map((d) => <Chip key={d} active={dekadeE === d} onClick={() => aendereFilter(setDekadeE, dekadeE === d ? null : d)}>{d}er</Chip>)}
+                </ChipReihe>
+              </div>
+            </div>
           )}
+          <AlphabetFilter name="Entdecken" wert={buchstabeE}
+            onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareEntdeckenTitel.map((t) => (
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}

@@ -242,11 +242,11 @@ if (entdeckenKnopf) {
   if (gesehenKnopf) {
     gesehenKnopf.click(); await warte(400);
     const nurGesehen = knopf(/^Nur als gesehen markieren$/i);
-    const sofortErledigt = /Erledigte ausblenden \(1\)/.test(text());
+    const sofortErledigt = /Gesehen \(1\)/.test(text());
     check("Gesehen fragt nach Übernahme oder erkennt den vorhandenen Mediathek-Eintrag",
       (!!nurGesehen && !!knopf(/^Ja, in die Mediathek$/i)) || sofortErledigt);
     if (nurGesehen) { nurGesehen.click(); await warte(400); }
-    check("Erledigte sind nativ sichtbar und lassen sich ausblenden", /Erledigte ausblenden \(1\)/.test(text()));
+    check("Gesehene Titel sind nativ sichtbar und gezielt filterbar", /Gesehen \(1\)/.test(text()));
     if (nurGesehen) {
       const spaetereUebernahme = knopf(/^In Mediathek übernehmen$/i);
       check("Gesehen-only kann später weiterhin in die Mediathek übernommen werden", !!spaetereUebernahme);

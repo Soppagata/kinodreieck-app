@@ -5,6 +5,17 @@ const wertLeser = Object.freeze({
   anbieter: (titel) => [...(titel.dienste || [])].sort((a, b) => a.localeCompare(b, "de"))[0] || null,
 });
 
+export const STREAMING_ALPHABET = Object.freeze("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""));
+
+export function streamingAnfangsbuchstabe(titel) {
+  const ohneAkzente = String(titel || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  return STREAMING_ALPHABET.find((buchstabe) => ohneAkzente.startsWith(buchstabe)) || null;
+}
+
 export function sortiereStreamingTitel(liste, feld = "titel", richtung = "auf") {
   const wertVon = wertLeser[feld] || wertLeser.titel;
   const faktor = richtung === "ab" ? -1 : 1;
