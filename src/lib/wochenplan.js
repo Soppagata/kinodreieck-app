@@ -231,6 +231,19 @@ export function folgenstandText(t) {
 
 export function kinoPinTermin(pin, jetzt = new Date()) {
   if (pin?.termin_iso) {
+    /* Kinoprogramme liefern die Uhrzeit am Veranstaltungsort. Für den
+       Wochenplan ist deshalb die ausgeschriebene Kalenderzeit maßgeblich,
+       nicht die Zeitzone des Browsers oder CI-Runners. Ein Offset bleibt
+       für Transporte erlaubt, darf 20:30 in Wien aber nicht zu 18:30 in
+       einem UTC-Prozess verschieben. */
+    const lokal = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(pin.termin_iso));
+    if (lokal) {
+      const d = new Date(
+        Number(lokal[1]), Number(lokal[2]) - 1, Number(lokal[3]),
+        Number(lokal[4]), Number(lokal[5]), Number(lokal[6] || 0),
+      );
+      if (Number.isFinite(d.getTime())) return d;
+    }
     const d = new Date(pin.termin_iso);
     if (Number.isFinite(d.getTime())) return d;
   }

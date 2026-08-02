@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {
   datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
-  naechsteSiebenTage,
+  naechsteSiebenTage, kinoPinTermin,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
 
@@ -111,6 +111,12 @@ ok("Ältere ISO-Kinopins werden weiterhin dem richtigen Tag zugeordnet", () => {
   const tage = wochenansicht({ wochenstart: new Date(2026, 7, 3), jetzt: new Date(2026, 7, 3), kinoPins: [{ t: "Jaws", z: "2026-08-04T20:30:00+02:00" }] });
   assert.equal(tage[1].eintraege[0].titel, "Jaws");
   assert.equal(tage[1].eintraege[0].uhrzeit, "20:30");
+});
+
+ok("ISO-Kinotermine behalten die lokale Veranstaltungszeit unabhängig vom Runner", () => {
+  const termin = kinoPinTermin({ termin_iso: "2026-08-04T20:30:00+02:00" });
+  assert.equal(datumLokal(termin), "2026-08-04");
+  assert.equal(`${String(termin.getHours()).padStart(2, "0")}:${String(termin.getMinutes()).padStart(2, "0")}`, "20:30");
 });
 
 ok("Kinovorschläge erscheinen am Termintag und echte Pins haben bei Dubletten Vorrang", () => {

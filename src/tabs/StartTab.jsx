@@ -52,6 +52,16 @@ function naechsterTermin(zeiten) {
   return Number.isFinite(min) ? { wert: min, label } : null;
 }
 
+/* Der Wochenplan speichert Kinotermine als lokale Kalenderzeit. `toISOString`
+   würde daraus UTC machen und die sichtbare Beginnzeit je nach Laufzeitumgebung
+   verschieben. */
+function lokaleIsoMinute(zeitwert) {
+  const d = new Date(zeitwert);
+  if (!Number.isFinite(d.getTime())) return "";
+  const zwei = (wert) => String(wert).padStart(2, "0");
+  return `${d.getFullYear()}-${zwei(d.getMonth() + 1)}-${zwei(d.getDate())}T${zwei(d.getHours())}:${zwei(d.getMinutes())}:00`;
+}
+
 /* Modul-Rahmen: editorialer Kopf (Mono-Kicker + →-Link zum Bereich), Optik in index.css. */
 function Modul({ name, ziel, linkLabel, onNavigiere, tour, children }) {
   return (
@@ -128,7 +138,7 @@ function StartDashboard({
       j: film.jahr ?? prog.j ?? null,
       kino: (prog.k || [])[0] || "",
       z: termin.label,
-      termin_iso: new Date(termin.wert).toISOString(),
+      termin_iso: lokaleIsoMinute(termin.wert),
       film_ref: film.id ?? null,
       prog_ref: prog.film_at_id ?? prog.id ?? null,
     })), [kinoMatches]);
