@@ -265,13 +265,8 @@ function kinoName(pin) {
   return pin?.kino || pin?.k || String(pin?.z || "").split("·").slice(1).join("·").trim() || "Kino";
 }
 
-function kinoTerminSchluessel(pin, termin) {
-  return [
-    titelNormiert(pin?.t),
-    datumLokal(termin),
-    `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}`,
-    titelNormiert(kinoName(pin)),
-  ].join("|");
+function kinoTitelTagSchluessel(pin, termin) {
+  return `${datumLokal(termin)}|${titelNormiert(pin?.t)}`;
 }
 
 function kinoWochenEintrag(pin, termin, { vorschlag = false } = {}) {
@@ -301,14 +296,13 @@ export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [],
     const quelle = findeReminderVerknuepfung(e, katalogAlle, []).treffer;
     for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({ ...e, quelle, folgenstand: folgenstandText(quelle) });
   }
-  const kinoTermine = new Set();
+  const kinoTitelProTag = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {
     const termin = kinoPinTermin(pin, jetzt);
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
     if (!tag) continue;
-    const schluessel = kinoTerminSchluessel(pin, termin);
-    kinoTermine.add(schluessel);
+    kinoTitelProTag.add(kinoTitelTagSchluessel(pin, termin));
     tag.eintraege.push(kinoWochenEintrag(pin, termin));
   }
   for (const vorschlag of Array.isArray(kinoVorschlaege) ? kinoVorschlaege : []) {
@@ -317,9 +311,9 @@ export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [],
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
     if (!tag) continue;
-    const schluessel = kinoTerminSchluessel(vorschlag, termin);
-    if (kinoTermine.has(schluessel)) continue;
-    kinoTermine.add(schluessel);
+    const schluessel = kinoTitelTagSchluessel(vorschlag, termin);
+    if (kinoTitelProTag.has(schluessel)) continue;
+    kinoTitelProTag.add(schluessel);
     tag.eintraege.push(kinoWochenEintrag(vorschlag, termin, { vorschlag: true }));
   }
   for (const tag of tage) tag.eintraege.sort((a, b) => String(a.uhrzeit || "99:99").localeCompare(String(b.uhrzeit || "99:99")) || a.titel.localeCompare(b.titel, "de"));

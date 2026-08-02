@@ -1023,16 +1023,25 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await page.locator(".kd-wochen-tagplus").first().click();
   const wochenEditor = page.locator("#kd-wochen-editor");
   await expect(wochenEditor).toBeVisible();
-  await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toBeVisible();
-  await expect(wochenEditor.getByLabel("Externer Link (optional)")).toBeVisible();
+  await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toHaveCount(0);
+  await expect(wochenEditor.getByLabel("Externer Link (optional)")).toHaveCount(0);
   await wochenEditor.getByLabel("Art").selectOption("folge");
   await expect(wochenEditor.getByLabel("Uhrzeit (optional)")).toHaveCount(0);
-  await expect(wochenEditor.getByLabel("Externer Link (optional)")).toHaveCount(0);
   await wochenEditor.getByLabel("Art").selectOption("termin");
   await expect(wochenEditor.getByLabel("Uhrzeit (optional)")).toBeVisible();
   await wochenEditor.getByLabel("Ort / Anbieter").fill("Gartenbaukino");
   await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toHaveCount(0);
+  const datumZeitGeometrie = await wochenEditor.evaluate((editorElement) => {
+    const datum = editorElement.querySelector('input[type="date"]').getBoundingClientRect();
+    const zeit = editorElement.querySelector('input[type="time"]').getBoundingClientRect();
+    const editor = editorElement.getBoundingClientRect();
+    return { datumRechts: datum.right, zeitLinks: zeit.left, zeitRechts: zeit.right, editorRechts: editor.right, datumUnten: datum.bottom, zeitOben: zeit.top };
+  });
+  expect(datumZeitGeometrie.datumRechts).toBeLessThanOrEqual(datumZeitGeometrie.editorRechts + 0.5);
+  expect(datumZeitGeometrie.zeitRechts).toBeLessThanOrEqual(datumZeitGeometrie.editorRechts + 0.5);
+  expect(datumZeitGeometrie.datumUnten).toBeLessThanOrEqual(datumZeitGeometrie.zeitOben + 0.5);
   await wochenEditor.getByRole("button", { name: "Abbrechen" }).click();
+  await expect(page.locator(".kd-wochen-eintrag-download").first()).toBeVisible();
   await keineDokumentUeberbreite(page);
 
   await page.getByRole("button", { name: "Menü öffnen" }).click();

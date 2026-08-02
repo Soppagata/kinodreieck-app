@@ -119,14 +119,14 @@ ok("ISO-Kinotermine behalten die lokale Veranstaltungszeit unabhängig vom Runne
   assert.equal(`${String(termin.getHours()).padStart(2, "0")}:${String(termin.getMinutes()).padStart(2, "0")}`, "20:30");
 });
 
-ok("Kinovorschläge erscheinen am Termintag und echte Pins haben bei Dubletten Vorrang", () => {
+ok("Kinovorschläge erscheinen am Termintag und ein Pin blendet denselben Titel an diesem Tag aus", () => {
   const pin = { t: "Event Horizon", j: 1997, kino: "Gartenbaukino", termin_iso: "2026-08-02T20:15:00+02:00", film_ref: "film-1" };
   const tage = wochenansicht({
     startdatum: new Date(2026, 7, 2),
     jetzt: new Date(2026, 7, 2),
     kinoPins: [pin],
     kinoVorschlaege: [
-      { ...pin, prog_ref: "programm-1" },
+      { ...pin, kino: "Anderes Kino", termin_iso: "2026-08-02T22:45:00+02:00", prog_ref: "programm-1" },
       { t: "Terminator", kino: "Apollo", termin_iso: "2026-08-04T20:30:00+02:00", film_ref: "film-2", prog_ref: "programm-2" },
       { t: "Zu spät", kino: "Apollo", termin_iso: "2026-08-12T20:30:00+02:00" },
     ],

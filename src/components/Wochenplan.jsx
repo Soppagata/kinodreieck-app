@@ -1,23 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  WOCHENTAGE, datumLokal, findeReminderVerknuepfung,
-  neuerFolgenReminder, normalisiereWochenplan, refAusTreffer,
+  WOCHENTAGE, datumLokal,
+  neuerFolgenReminder, normalisiereWochenplan,
   wochenansicht,
 } from "../lib/wochenplan.js";
 import {
   dateinameIcs, erstelleIcs, kalenderEventAusWochenEintrag, ladeIcsHerunter,
-  reminderIcsEvent, tagAlsIcs, wocheAlsIcs,
+  reminderIcsEvent, wocheAlsIcs,
 } from "../lib/kalenderExport.js";
-
-function titelKatalog(katalog, master) {
-  const map = new Map();
-  for (const t of [...(Array.isArray(katalog) ? katalog : []), ...(Array.isArray(master) ? master : [])]) {
-    if (!t || !String(t.titel || "").trim()) continue;
-    const key = t.watchmode_id != null ? `w:${t.watchmode_id}` : t.id != null ? `m:${t.id}` : `t:${t.titel}:${t.jahr || ""}:${t.typ || ""}`;
-    map.set(key, { ...(map.get(key) || {}), ...t });
-  }
-  return [...map.values()].sort((a, b) => String(a.titel).localeCompare(String(b.titel), "de"));
-}
 
 function datumKurz(wert) {
   return new Date(`${wert}T12:00:00`).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
@@ -36,14 +26,6 @@ function KalenderIcon({ className = "" }) {
     <svg className={`kd-wochen-icon ${className}`.trim()} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M6.25 3.75h11.5A2.25 2.25 0 0 1 20 6v12.25a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2.25 2.25 0 0 1 2.25-2.25Z" />
       <path d="M8 2.5v3M16 2.5v3M4 8.25h16M8 12h2.25M13.75 12H16M8 16h2.25M13.75 16H16" />
-    </svg>
-  );
-}
-
-function ExportIcon() {
-  return (
-    <svg className="kd-wochen-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 14.5v4.25A2.25 2.25 0 0 0 7.25 21h9.5A2.25 2.25 0 0 0 19 18.75V14.5" />
     </svg>
   );
 }
@@ -91,19 +73,9 @@ function ohneVorschlaege(tage) {
   return tage.map((tag) => ({ ...tag, eintraege: tag.eintraege.filter((eintrag) => !eintrag.vorschlag) }));
 }
 
-function ReminderEditor({ initial, titel, onSpeichern, onAbbrechen }) {
+function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
   const [entwurf, setEntwurf] = useState(() => ({ ...leererEntwurf(), ...initial, ende: { typ: "nie", ...(initial?.ende || {}) } }));
-  const [manuelleRef, setManuelleRef] = useState(() => {
-    if (initial?.link_modus === "keiner") return "none";
-    if (initial?.link_modus === "auto") return "auto";
-    if (initial?.ref?.watchmode_id != null) return `w:${initial.ref.watchmode_id}`;
-    if (initial?.ref?.master_id != null) return `m:${initial.ref.master_id}`;
-    return "auto";
-  });
-  const match = useMemo(() => findeReminderVerknuepfung(entwurf, titel), [entwurf, titel]);
-  const ortBekannt = !!String(entwurf.plattform || "").trim();
   const zeigtUhrzeit = ARTEN_MIT_UHRZEIT.has(entwurf.art);
-  const zeigtExternenLink = entwurf.art === "termin";
 
   const setze = (key, value) => setEntwurf((e) => ({ ...e, [key]: value }));
   const tagToggle = (nr) => setEntwurf((e) => {
@@ -114,25 +86,10 @@ function ReminderEditor({ initial, titel, onSpeichern, onAbbrechen }) {
 
   const speichern = (event) => {
     event.preventDefault();
-    const externeUrl = zeigtExternenLink ? (entwurf.ref?.url || "") : "";
-    let ref = initial?.ref && typeof initial.ref === "object" ? { ...initial.ref } : null;
-    if (zeigtExternenLink) {
-      ref = { ...(ref || {}) };
-      if (externeUrl) ref.url = externeUrl;
-      else delete ref.url;
-    }
-    if (!ortBekannt && manuelleRef === "none") {
-      ref = externeUrl ? { url: externeUrl } : null;
-    } else if (!ortBekannt && manuelleRef !== "auto") {
-      const [art, id] = manuelleRef.split(":");
-      const t = titel.find((x) => art === "w" ? String(x.watchmode_id) === id : String(x.id) === id);
-      ref = { ...(refAusTreffer(t) || {}), ...(externeUrl ? { url: externeUrl } : {}) };
-    } else if (!ortBekannt && manuelleRef === "auto" && match.status === "eindeutig") {
-      ref = { ...(refAusTreffer(match.treffer) || {}), ...(externeUrl ? { url: externeUrl } : {}) };
-    }
+    let ref = entwurf.ref && typeof entwurf.ref === "object" ? { ...entwurf.ref } : null;
+    if (ref) delete ref.url;
     if (ref && !Object.keys(ref).length) ref = null;
-    const linkModus = ortBekannt ? (initial?.link_modus || "keiner") : manuelleRef === "none" ? "keiner" : manuelleRef === "auto" ? "auto" : "manuell";
-    onSpeichern({ ...entwurf, uhrzeit: zeigtUhrzeit ? entwurf.uhrzeit : "", ref, link_modus: linkModus });
+    onSpeichern({ ...entwurf, uhrzeit: zeigtUhrzeit ? entwurf.uhrzeit : "", ref, link_modus: "keiner" });
   };
 
   return (
@@ -145,8 +102,8 @@ function ReminderEditor({ initial, titel, onSpeichern, onAbbrechen }) {
         <label>Rhythmus<select value={entwurf.intervall_wochen} onChange={(e) => setze("intervall_wochen", Number(e.target.value))}>
           <option value="1">jede Woche</option><option value="2">alle 2 Wochen</option><option value="3">alle 3 Wochen</option><option value="4">alle 4 Wochen</option>
         </select></label>
-        <label>Datum<input type="date" required value={entwurf.startdatum} onChange={(e) => setze("startdatum", e.target.value)} /></label>
-        {zeigtUhrzeit && <label>Uhrzeit (optional)<input type="time" value={entwurf.uhrzeit} onChange={(e) => setze("uhrzeit", e.target.value)} /></label>}
+        <label className="kd-wochen-datumfeld">Datum<input type="date" required value={entwurf.startdatum} onChange={(e) => setze("startdatum", e.target.value)} /></label>
+        {zeigtUhrzeit && <label className="kd-wochen-zeitfeld">Uhrzeit (optional)<input type="time" value={entwurf.uhrzeit} onChange={(e) => setze("uhrzeit", e.target.value)} /></label>}
       </div>
       <fieldset className="kd-wochen-tage"><legend>Wochentage</legend>{WOCHENTAGE.map((tag) => (
         <label key={tag.nr}><input type="checkbox" checked={entwurf.wochentage.includes(tag.nr)} onChange={() => tagToggle(tag.nr)} /><span>{tag.kurz}</span></label>
@@ -157,19 +114,8 @@ function ReminderEditor({ initial, titel, onSpeichern, onAbbrechen }) {
         </select></label>
         {entwurf.ende.typ === "datum" && <label>Enddatum<input type="date" required value={entwurf.ende.datum || ""} onChange={(e) => setze("ende", { typ: "datum", datum: e.target.value })} /></label>}
         {entwurf.ende.typ === "anzahl" && <label>Anzahl Termine<input type="number" min="1" max="999" required value={entwurf.ende.anzahl || 12} onChange={(e) => setze("ende", { typ: "anzahl", anzahl: Number(e.target.value) })} /></label>}
-        {!ortBekannt && <label className="kd-wochen-field--wide">App-Verknüpfung (optional)<select value={manuelleRef} onChange={(e) => setManuelleRef(e.target.value)}>
-          <option value="auto">{match.status === "eindeutig" ? `Automatisch: ${match.treffer.titel}` : "Automatisch suchen"}</option>
-          <option value="none">Keine App-Verknüpfung</option>
-          {titel.filter((t) => t.watchmode_id != null || t.id != null).map((t) => <option key={t.watchmode_id != null ? `w:${t.watchmode_id}` : `m:${t.id}`} value={t.watchmode_id != null ? `w:${t.watchmode_id}` : `m:${t.id}`}>{t.titel}{t.jahr ? ` (${t.jahr})` : ""}</option>)}
-        </select></label>}
-        {zeigtExternenLink && <label className="kd-wochen-field--wide">Externer Link (optional)<input type="url" value={entwurf.ref?.url || ""} onChange={(e) => setEntwurf((alt) => ({ ...alt, ref: { ...(alt.ref || {}), url: e.target.value } }))} placeholder="https://…" /></label>}
       </div>
       <label>Notiz<textarea rows="2" value={entwurf.notiz} onChange={(e) => setze("notiz", e.target.value)} placeholder="Optional" /></label>
-      {!ortBekannt && manuelleRef === "auto" && <p className={`kd-wochen-match kd-wochen-match--${match.status}`}>
-        {match.status === "eindeutig" ? `Passender Titel gefunden: ${match.treffer.titel}.`
-          : match.status === "mehrdeutig" ? "Mehrere gleichnamige Titel gefunden – bitte den Eintrag selbst wählen."
-            : "Keine eindeutige Verknüpfung gefunden. Der Termin funktioniert trotzdem."}
-      </p>}
       <div className="kd-wochen-editoraktionen"><button type="submit" className="kd-wochen-primary">Speichern</button><button type="button" onClick={onAbbrechen}>Abbrechen</button></div>
     </form>
   );
@@ -181,9 +127,14 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
   const istVorschlag = !!eintrag.vorschlag;
   const istFolgeOderStaffel = eintrag.art === "folge" || eintrag.art === "staffel";
   const meta = [ART_LABEL[eintrag.art] || "Termin", eintrag.plattform, eintrag.uhrzeit].filter(Boolean).join(" · ");
+  const terminSpeichern = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    kalenderDownload(erstelleIcs([kalenderEventAusWochenEintrag(eintrag, datum)]), `${eintrag.titel}-${datum}`);
+  };
   return (
     <details className={`kd-wochen-eintrag kd-wochen-eintrag--${eintrag.art}${istVorschlag ? " kd-wochen-eintrag--vorschlag" : ""}`}>
-      <summary><span className="kd-wochen-eintragtitel">{eintrag.titel}</span><span className="kd-wochen-eintragmeta">{istVorschlag && <em>Empfehlung</em>}{meta}</span><span className="kd-wochen-expandicon"><ChevronIcon /></span></summary>
+      <summary><span className="kd-wochen-eintragtitel">{eintrag.titel}</span><span className="kd-wochen-eintragmeta">{istVorschlag && <em>Empfehlung</em>}{meta}</span><button type="button" className="kd-wochen-eintrag-download" title="Diesen Termin im Kalender speichern" aria-label={`${eintrag.titel} am ${datumKurz(datum)} im Kalender speichern`} onClick={terminSpeichern}><KalenderIcon /></button><span className="kd-wochen-expandicon"><ChevronIcon /></span></summary>
       <div className="kd-wochen-details">
         {eintrag.folgenstand && <div className="kd-wochen-folgenstand">{eintrag.folgenstand}</div>}
         {eintrag.notiz && <div>{eintrag.notiz}</div>}
@@ -192,7 +143,6 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
           {!istKinoPin && !istVorschlag && zielVorhanden && <button type="button" onClick={() => onAnsehen(eintrag)}>Eintrag ansehen</button>}
           {!istKinoPin && !istVorschlag && !zielVorhanden && istFolgeOderStaffel && <button type="button" onClick={() => onAnlegen(eintrag)}>Titel anlegen</button>}
           {!istKinoPin && !istVorschlag && <button type="button" onClick={() => onBearbeiten(eintrag)}>Bearbeiten</button>}
-          <button type="button" title="Diesen Termin exportieren" onClick={() => kalenderDownload(erstelleIcs([kalenderEventAusWochenEintrag(eintrag, datum)]), `${eintrag.titel}-${datum}`)}><ExportIcon /> Termin</button>
           {!istKinoPin && !istVorschlag && <button type="button" title="Alle Wiederholungen exportieren" onClick={() => kalenderDownload(erstelleIcs([reminderIcsEvent(eintrag)]), `${eintrag.titel}-termine`)}><KalenderIcon /> Alle</button>}
           {!istVorschlag && <button type="button" className="kd-wochen-trash" title="Löschen" aria-label={`${eintrag.titel} löschen`} onClick={() => onLoeschen(eintrag)}><PapierkorbIcon /></button>}
         </div>
@@ -215,7 +165,6 @@ export function Wochenplan({
     return () => { clearInterval(timer); window.removeEventListener("focus", aktualisieren); };
   }, []);
 
-  const titel = useMemo(() => titelKatalog(katalog, master), [katalog, master]);
   const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, kinoVorschlaege, katalog, master, jetzt }), [plan, kinoPins, kinoVorschlaege, katalog, master, jetzt]);
 
   const speichere = (roh) => {
@@ -251,7 +200,7 @@ export function Wochenplan({
       </header>
       <div className="kd-wochen-zeitraum">Heute bis {datumKurz(tage[6].iso)}</div>
 
-      {editor && <ReminderEditor key={editor.id || `neu-${editor.startdatum}`} initial={editor} titel={titel} onSpeichern={speichere} onAbbrechen={() => setEditor(null)} />}
+      {editor && <ReminderEditor key={editor.id || `neu-${editor.startdatum}`} initial={editor} onSpeichern={speichere} onAbbrechen={() => setEditor(null)} />}
 
       <div className="kd-wochen-tagesliste">
         {tage.map((tag) => (
@@ -261,7 +210,6 @@ export function Wochenplan({
               <div className="kd-wochen-ticketname"><b>{tag.iso === datumLokal(jetzt) ? "Heute" : tag.name}</b><span>{datumKurz(tag.iso)}</span></div>
               <div className="kd-wochen-tagaktionen">
                 <button type="button" className="kd-wochen-tagplus" aria-label={`Eintrag am ${tag.name}, ${datumKurz(tag.iso)} erstellen`} title={`Eintrag am ${datumKurz(tag.iso)} erstellen`} onClick={() => oeffneEditor(entwurfFuerDatum(tag.iso))}><PlusIcon /></button>
-                {tag.eintraege.some((eintrag) => !eintrag.vorschlag) && <button type="button" aria-label={`${tag.name} exportieren`} title={`${tag.name} exportieren`} onClick={() => kalenderDownload(tagAlsIcs({ ...tag, eintraege: tag.eintraege.filter((eintrag) => !eintrag.vorschlag) }), `kinodreieck-${tag.iso}`)}><ExportIcon /></button>}
               </div>
             </header>
             <div className="kd-wochen-taginhalt">
