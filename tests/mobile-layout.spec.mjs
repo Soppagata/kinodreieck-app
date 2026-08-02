@@ -1019,6 +1019,8 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   expect(dashboardGeometrie.titelRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
   expect(dashboardGeometrie.metaRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
   expect(dashboardGeometrie.hoehe).toBeLessThan(90);
+  await expect(page.locator(".kd-wochen-eintrag--vorschlag")).toHaveCount(0);
+  await expect(page.locator(".kd-wochen-eintrag--kino").getByText("Event Horizon – Am Rande des Universums", { exact: true })).toBeVisible();
   await expect(page.locator(".kd-wochen-tagplus")).toHaveCount(7);
   await page.locator(".kd-wochen-tagplus").first().click();
   const wochenEditor = page.locator("#kd-wochen-editor");

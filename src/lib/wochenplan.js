@@ -265,8 +265,20 @@ function kinoName(pin) {
   return pin?.kino || pin?.k || String(pin?.z || "").split("·").slice(1).join("·").trim() || "Kino";
 }
 
-function kinoTitelTagSchluessel(pin, termin) {
-  return `${datumLokal(termin)}|${titelNormiert(pin?.t)}`;
+function kinoSlotSchluessel(pin, termin) {
+  /* Ein Pin speichert ältere Programmtermine als vollständigen Anzeigestring,
+     z. B. „Di 4.8. 18:45 · Lugner Kino City (DF)“. Die Klammer ist die
+     Fassung, nicht Teil des Kinos. Vorschläge tragen das Kino dagegen separat.
+     Für denselben realen Termin müssen deshalb Datum, Uhrzeit und der von
+     Fassungs-/Abo-Suffixen bereinigte Kinoname verglichen werden. */
+  const kino = kinoName(pin)
+    .replace(/\s*✓\s*abo\s*$/i, "")
+    .replace(/\s*\([^()]*(?:df|ov|omu|omeu|o\.m\.u\.|original|deutsch|englisch|fassung)[^()]*\)\s*$/i, "");
+  return [
+    datumLokal(termin),
+    `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}`,
+    titelNormiert(kino),
+  ].join("|");
 }
 
 function kinoWochenEintrag(pin, termin, { vorschlag = false } = {}) {
@@ -296,13 +308,13 @@ export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [],
     const quelle = findeReminderVerknuepfung(e, katalogAlle, []).treffer;
     for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({ ...e, quelle, folgenstand: folgenstandText(quelle) });
   }
-  const kinoTitelProTag = new Set();
+  const gepinnteKinoSlots = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {
     const termin = kinoPinTermin(pin, jetzt);
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
     if (!tag) continue;
-    kinoTitelProTag.add(kinoTitelTagSchluessel(pin, termin));
+    gepinnteKinoSlots.add(kinoSlotSchluessel(pin, termin));
     tag.eintraege.push(kinoWochenEintrag(pin, termin));
   }
   for (const vorschlag of Array.isArray(kinoVorschlaege) ? kinoVorschlaege : []) {
@@ -311,9 +323,7 @@ export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [],
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
     if (!tag) continue;
-    const schluessel = kinoTitelTagSchluessel(vorschlag, termin);
-    if (kinoTitelProTag.has(schluessel)) continue;
-    kinoTitelProTag.add(schluessel);
+    if (gepinnteKinoSlots.has(kinoSlotSchluessel(vorschlag, termin))) continue;
     tag.eintraege.push(kinoWochenEintrag(vorschlag, termin, { vorschlag: true }));
   }
   for (const tag of tage) tag.eintraege.sort((a, b) => String(a.uhrzeit || "99:99").localeCompare(String(b.uhrzeit || "99:99")) || a.titel.localeCompare(b.titel, "de"));
