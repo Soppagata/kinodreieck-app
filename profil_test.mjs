@@ -1111,8 +1111,8 @@ const KEY = "kd:geschmacksprofil";
 
 check("N", "1. storage.js führt den Topf in der zentralen Schlüsselliste",
   () => ST.K.geschmacksprofil === KEY);
-check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 16 Einträge",
-  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 16);
+check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 17 Einträge",
+  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 17);
 const register = lies("src/lib/personalDataRegistry.js");
 check("N", "3. das Datenregister gibt dem Profil sein Gesamt-Backup-Feld",
   () => /key:\s*K\.geschmacksprofil[\s\S]*?backupField:\s*"geschmacksprofil"/.test(register)
@@ -1134,22 +1134,23 @@ check("N", "6. das Register plant fehlende Alt-Backup-Felder NICHT als Löschung
 check("N", "7. das Register kennt Label und Zählweise für die Übernahme-Vorschau",
   () => /key:\s*K\.geschmacksprofil[\s\S]*?label:\s*"Geschmacksprofil"[\s\S]*?zaehle:\s*\(v\)\s*=>\s*Array\.isArray\(v\.signale\)/.test(register)
     && /personalDataEntry\(key\)/.test(lies("src/lib/uebernahme.js")));
-const mig = lies("supabase/migrations/20260727210000_etappe7_profil_topf.sql");
+const migProfil = lies("supabase/migrations/20260727210000_etappe7_profil_topf.sql");
 check("N", "8. die Migration setzt den CHECK-Constraint neu und listet den Topf",
-  () => /drop constraint if exists kd_personal_key_erlaubt/.test(mig)
-    && /add constraint kd_personal_key_erlaubt/.test(mig) && mig.includes("'" + KEY + "'"));
+  () => /drop constraint if exists kd_personal_key_erlaubt/.test(migProfil)
+    && /add constraint kd_personal_key_erlaubt/.test(migProfil) && migProfil.includes("'" + KEY + "'"));
 /* Der CHECK ist nicht erweiterbar; er muss fallen und neu gesetzt werden.
    Ein vergessener Bestandskey bräche den Sync ALLER Konten für diesen Topf
    sofort und terminal (Postgres 23514 → im Treiber TERMINAL, ohne Retry). */
 /* Nur der Constraint-Rumpf zählt: weiter unten steht in einem Kommentar eine
    Gegenprobe mit 'kd:boeser-topf', die NICHT mitgezählt werden darf. */
-const rumpf = (/add constraint kd_personal_key_erlaubt check \(key in \(([\s\S]*?)\)\);/.exec(mig) || [, ""])[1];
+const mig = lies("supabase/migrations/20260802120000_wochenplan_serienbeobachtung.sql");
+const rumpf = (/add constraint kd_personal_key_erlaubt\s+check \(key in \(([\s\S]*?)\)\);/.exec(mig) || [, ""])[1];
 const inMigration = [...rumpf.matchAll(/'(kd:[a-z:-]+)'/g)].map((m) => m[1]);
 const fehlend = AD.ACCOUNT_SYNC_KEYS.filter((k) => !inMigration.includes(k));
 const zuviel = inMigration.filter((k) => !AD.ACCOUNT_SYNC_KEYS.includes(k));
-check("N", "8a. die Migration listet GENAU die 16 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
+check("N", "8a. die neueste Migration listet GENAU die 17 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
   + "  [gelistet: " + inMigration.length + ", fehlend: " + JSON.stringify(fehlend) + ", zu viel: " + JSON.stringify(zuviel) + "]",
-  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 16);
+  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 17);
 /* Der CHECK ist nicht erweiterbar; deshalb ist die Gegenprobe im Kommentar
    Teil der Zusage: ein nicht gelisteter Key MUSS mit 23514 scheitern. */
 check("N", "8b. die Migration dokumentiert die Gegenprobe (nicht gelisteter Key → 23514)",

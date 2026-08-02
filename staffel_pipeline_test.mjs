@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   cacheGueltig, staffelstandAusQuellen, pruefeBeobachteteSerien,
-  reichereBeobachteteSerienAn,
+  reichereBeobachteteSerienAn, verbindeBeobachteteIds,
 } from "./tools/staffel_pipeline_entwurf.mjs";
 
 let checks = 0;
@@ -19,6 +19,20 @@ await ok("Quellen: nur AT + ausgewählte Dienste", () => {
 });
 await ok("Quellen: null/fehlende Staffelwerte sind folgenlos", () => {
   assert.equal(staffelstandAusQuellen([{ source_id: 1, region: "AT", seasons: null }], ["Netflix"], setup), null);
+});
+await ok("Quellen: Folgenzahl und exakte API-Folgennummer bleiben unterscheidbar", () => {
+  const r = staffelstandAusQuellen([
+    { source_id: 1, region: "AT", seasons: 20, episodes: 1122, latest_episode: { episode_number: 1266 } },
+  ], ["Netflix"], setup);
+  assert.equal(r.staffeln_verfuegbar, 20);
+  assert.equal(r.folgen_verfuegbar, 1122);
+  assert.equal(r.folge_aktuell, 1266);
+});
+await ok("Server-Beobachtungen werden aktiv gefiltert und dedupliziert", () => {
+  const r = verbindeBeobachteteIds({ serien_beobachten: [{ watchmode_id: 42 }] }, [
+    { watchmode_id: 77, active: true }, { watchmode_id: 42, active: true }, { watchmode_id: 88, active: false },
+  ]);
+  assert.deepEqual(r.serien_beobachten, [{ watchmode_id: 42 }, { watchmode_id: 77 }]);
 });
 await ok("Cache: innerhalb TTL gültig", () => assert.equal(cacheGueltig({ geprueft_am: "2026-07-20T12:00:00Z" }, new Date("2026-07-21T12:00:00Z").getTime(), 2), true));
 await ok("Cache: nach TTL ungültig", () => assert.equal(cacheGueltig({ geprueft_am: "2026-07-18T12:00:00Z" }, new Date("2026-07-21T12:00:00Z").getTime(), 2), false));

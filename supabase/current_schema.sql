@@ -2,9 +2,9 @@
 -- Kinodreieck: bereinigter Current-Schema-Snapshot
 -- Erzeugt am 31.07.2026 aus dem verknüpften Produktionsprojekt mit
 -- `supabase db dump --linked --schema public` und PostgreSQL 17; anschließend
--- auf den angewandten Stand 20260731170000 gebracht und live gegen die
--- Metadatenzahlen 18 Tabellen / 42 Funktionen / 13 Trigger / 21 Policies
--- verifiziert.
+-- auf den angewandten Stand 20260731170000 gebracht und um die als Nächstes
+-- laufende additive Migration 20260802120000 ergänzt. Erwarteter Stand danach:
+-- 19 Tabellen / 43 Funktionen / 13 Trigger / 25 Policies.
 --
 -- Enthält ausschließlich Schema: Tabellen, Constraints, Funktionen, Trigger,
 -- RLS-Policies und Grants. Keine Tabellenzeilen, Konten oder Secrets.
@@ -2252,6 +2252,36 @@ $$;
 ALTER FUNCTION "public"."kd_personal_touch"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) RETURNS "void"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_account uuid := auth.uid();
+  v_ids bigint[] := coalesce(p_watchmode_ids, array[]::bigint[]);
+begin
+  if v_account is null then
+    raise exception 'Anmeldung erforderlich';
+  end if;
+  if cardinality(v_ids) > 200 or exists (
+    select 1 from unnest(v_ids) as id where id is null or id <= 0
+  ) then
+    raise exception 'Ungültige Serien-Beobachtungsliste';
+  end if;
+
+  delete from public.kd_series_watch where account_id = v_account;
+  insert into public.kd_series_watch (account_id, watchmode_id, active, updated_at)
+  select v_account, id, true, now()
+    from (select distinct unnest(v_ids) as id) ids
+   on conflict (account_id, watchmode_id) do update
+     set active = true, updated_at = excluded.updated_at;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."kd_quelle_status_setzen"("p_slug" "text", "p_status" "text") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2713,7 +2743,7 @@ CREATE TABLE IF NOT EXISTS "public"."kd_personal" (
     "value" "text" NOT NULL,
     "revision" bigint DEFAULT 1 NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "kd_personal_key_erlaubt" CHECK (("key" = ANY (ARRAY['kd:master'::"text", 'kd:artikel'::"text", 'kd:kino-pins'::"text", 'kd:merkliste'::"text", 'kd:vokabular'::"text", 'kd:einstellungen'::"text", 'kd:entdecken-status'::"text", 'kd:autor-name'::"text", 'kd:streaming-dienste'::"text", 'kd:mustwatch'::"text", 'kd:achievements'::"text", 'kd:zeitgrenze'::"text", 'kd:filter-mediathek'::"text", 'kd:filter-kino'::"text", 'kd:filter-streaming'::"text", 'kd:geschmacksprofil'::"text"]))),
+    CONSTRAINT "kd_personal_key_erlaubt" CHECK (("key" = ANY (ARRAY['kd:master'::"text", 'kd:artikel'::"text", 'kd:kino-pins'::"text", 'kd:wochenplan'::"text", 'kd:merkliste'::"text", 'kd:vokabular'::"text", 'kd:einstellungen'::"text", 'kd:entdecken-status'::"text", 'kd:autor-name'::"text", 'kd:streaming-dienste'::"text", 'kd:mustwatch'::"text", 'kd:achievements'::"text", 'kd:zeitgrenze'::"text", 'kd:filter-mediathek'::"text", 'kd:filter-kino'::"text", 'kd:filter-streaming'::"text", 'kd:geschmacksprofil'::"text"]))),
     CONSTRAINT "kd_personal_value_max" CHECK (("octet_length"("value") <= 1048576))
 );
 
@@ -2721,7 +2751,25 @@ CREATE TABLE IF NOT EXISTS "public"."kd_personal" (
 ALTER TABLE "public"."kd_personal" OWNER TO "postgres";
 
 
-COMMENT ON CONSTRAINT "kd_personal_key_erlaubt" ON "public"."kd_personal" IS 'Erlaubte Toepfe (16, Stand Etappe 7). Neuer Topf = neue Ein-Zeilen-Migration, die ALLE Werte neu setzt.';
+COMMENT ON CONSTRAINT "kd_personal_key_erlaubt" ON "public"."kd_personal" IS 'Erlaubte Toepfe (17, Stand Deine Woche). Neuer Topf = additive Migration, die ALLE Werte neu setzt.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."kd_series_watch" (
+    "account_id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
+    "watchmode_id" bigint NOT NULL,
+    "active" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "kd_series_watch_pkey" PRIMARY KEY ("account_id", "watchmode_id"),
+    CONSTRAINT "kd_series_watch_id_positive" CHECK (("watchmode_id" > 0))
+);
+
+
+ALTER TABLE "public"."kd_series_watch" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."kd_series_watch" IS 'Private accountgebundene Watchmode-IDs fuer den bestehenden planmaessigen Kataloglauf.';
 
 
 
@@ -3160,6 +3208,9 @@ ALTER TABLE "public"."kd_owner" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."kd_personal" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."kd_series_watch" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."kd_quellen" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3190,6 +3241,19 @@ CREATE POLICY "kdp_sel" ON "public"."kd_personal" FOR SELECT TO "authenticated" 
 
 
 CREATE POLICY "kdp_upd" ON "public"."kd_personal" FOR UPDATE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+
+CREATE POLICY "kdsw_del" ON "public"."kd_series_watch" FOR DELETE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+CREATE POLICY "kdsw_ins" ON "public"."kd_series_watch" FOR INSERT TO "authenticated" WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+CREATE POLICY "kdsw_sel" ON "public"."kd_series_watch" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+CREATE POLICY "kdsw_upd" ON "public"."kd_series_watch" FOR UPDATE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
 
 
 
@@ -3428,6 +3492,12 @@ GRANT ALL ON FUNCTION "public"."kd_personal_touch"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."kd_quelle_status_setzen"("p_slug" "text", "p_status" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."kd_quelle_status_setzen"("p_slug" "text", "p_status" "text") TO "service_role";
 
@@ -3492,6 +3562,11 @@ GRANT ALL ON TABLE "public"."kd_owner" TO "service_role";
 
 GRANT ALL ON TABLE "public"."kd_personal" TO "authenticated";
 GRANT ALL ON TABLE "public"."kd_personal" TO "service_role";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."kd_series_watch" TO "authenticated";
+GRANT ALL ON TABLE "public"."kd_series_watch" TO "service_role";
 
 
 

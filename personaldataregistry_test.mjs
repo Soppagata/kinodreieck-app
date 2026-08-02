@@ -22,7 +22,10 @@ function check(name, wert) {
 }
 
 const eintraege = P.PERSONAL_DATA_ENTRIES;
-check("Register enthält genau die 16 persönlichen Töpfe", eintraege.length === 16);
+check("Register enthält genau die 17 persönlichen Töpfe", eintraege.length === 17);
+check("Wochenplan ist in Sync, Backup und Restore registriert",
+  P.PERSONAL_DATA_KEYS.includes("kd:wochenplan")
+  && P.personalDataEntry("kd:wochenplan")?.backupField === "wochenplan");
 check("Schlüssel sind eindeutig", new Set(eintraege.map((e) => e.key)).size === eintraege.length);
 check("Backup-Felder sind eindeutig", new Set(eintraege.map((e) => e.backupField)).size === eintraege.length);
 check("Jeder Eintrag hat Label, Backup-Projektion, Restore-Plan und Zählweise",

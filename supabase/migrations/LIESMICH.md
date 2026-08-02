@@ -52,6 +52,7 @@ ausfüllen.
 | `20260731121000_archive_legacy_shared.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; vor Lauf 0 Legacy-Shared-Zeilen, Archiv 0, aktive Legacy-Zeilen 0, Schreibblock aktiv und live verifiziert |
 | `20260731140000_demo_seed_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; 120 Filme als validierter Format-1-Seed in `kd_catalog`, anonyme und angemeldete Sichtbarkeit sowie unveränderte Zugriffstrennung mit `npm run test:rls` 63/63 belegt; vier Legacy-Demozeilen für ausgelieferte Clients bewusst noch erhalten |
 | `20260731170000_split_streaming_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; bekannte und vollständige Streamingtitel in vier getrennte Live-/Demo-Zeilen aufgeteilt, Trigger hält alte Pipeline-Writes kompatibel; 42 Funktionen, 13 Trigger und 21 Policies live verifiziert, `npm run test:rls` 64/64 grün |
+| `20260802120000_wochenplan_serienbeobachtung.sql` | | | | läuft als Nächstes; noch nicht remote angewandt |
 
 ## Nach Migration 1
 

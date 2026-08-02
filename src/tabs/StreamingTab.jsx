@@ -11,7 +11,7 @@ import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
-  neuerGesehenEintrag, initialisiereStaffelstaende,
+  neuerGesehenEintrag,
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
@@ -66,6 +66,7 @@ export function StreamingTab({
   onFilmwissenLaden, onFilmwissenRecherchieren,
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
   fokusTreffer = null, onFokusVerbraucht,
+  entdeckenStatus = {}, schreibeEntdeckenStatus = () => {},
 }) {
   const bereichRef = useRef(null);
   const [ansicht, setAnsicht] = useState("programm");
@@ -83,20 +84,8 @@ export function StreamingTab({
   /* Merkliste kommt jetzt als Prop (in App-State geliftet) — Streaming und Dashboard live synchron. */
   /* Erledigtes im Entdecken: gesehen (kennst du schon) / erstellt (jetzt in
      der Mediathek) — beides fliegt aus der Liste, bis man es einblendet. */
-  const [entdeckenStatus, setEntdeckenStatus] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}"); } catch { return {}; }
-  });
   const entdeckenStatusRef = useRef(entdeckenStatus);
   entdeckenStatusRef.current = entdeckenStatus;
-  const schreibeEntdeckenStatus = useCallback((berechne) => {
-    const vorher = entdeckenStatusRef.current;
-    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
-    if (next === vorher) return vorher;
-    entdeckenStatusRef.current = next;
-    setEntdeckenStatus(next);
-    store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
-    return next;
-  }, []);
   const [zeigeErledigte, setZeigeErledigte] = useState(true); // Erledigte bleiben standardmäßig sichtbar; der Chip kann sie bewusst ausblenden.
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [nurRelevant, setNurRelevant] = useState(false);
@@ -292,16 +281,6 @@ export function StreamingTab({
     return entdecken.titel.filter((t) => entdeckenStatus[t.watchmode_id]).length;
   }, [entdecken, entdeckenDa, entdeckenStatus]);
 
-  /* Alte String-Häkchen bekommen beim ersten real gelieferten Staffelwert nur
-     einen Ausgangsstand. Dadurch entsteht kein rückwirkender „neu“-Alarm. */
-  useEffect(() => {
-    if (!entdeckenDa) return;
-    schreibeEntdeckenStatus((prev) => {
-      const next = initialisiereStaffelstaende(prev, entdecken.titel);
-      return next;
-    });
-  }, [entdecken, entdeckenDa, schreibeEntdeckenStatus]);
-
   /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
      ab. Vorhanden bedeutet ausdrücklich NICHT automatisch gesehen: Eine
      Mediathek kann auch ungesehene und Must-Watch-Einträge enthalten. */
@@ -311,12 +290,13 @@ export function StreamingTab({
   }, [master, entdecken, schreibeEntdeckenStatus]);
 
   const staffelHinweise = useMemo(() => {
-    if (!entdeckenDa) return [];
-    return neueStaffeln(entdecken.titel, entdeckenStatus);
-  }, [entdecken, entdeckenDa, entdeckenStatus]);
+    const titel = [...((bekannt && bekannt.titel) || []), ...((entdecken && entdecken.titel) || [])];
+    return neueStaffeln(titel, entdeckenStatus);
+  }, [bekannt, entdecken, entdeckenStatus]);
 
   const bestaetigeHinweis = (hinweis) => {
-    const t = entdecken && entdecken.titel.find((x) => x.watchmode_id === hinweis.watchmode_id);
+    const t = [...((bekannt && bekannt.titel) || []), ...((entdecken && entdecken.titel) || [])]
+      .find((x) => x.watchmode_id === hinweis.watchmode_id);
     if (!t) return;
     schreibeEntdeckenStatus((prev) => ({
       ...prev,
@@ -527,14 +507,17 @@ export function StreamingTab({
           </div>
           {staffelHinweise.length > 0 && (
             <div className="kd-staffelhinweise" style={{ marginBottom: 14 }}>
-              <div style={{ ...h2, marginBottom: 8 }}>Neue Staffeln</div>
+              <div style={{ ...h2, marginBottom: 8 }}>Serien-Updates</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {staffelHinweise.map((h) => (
                   <div key={h.watchmode_id} className="kd-staffelhinweis" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "rgba(216,160,61,.12)", border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 12px" }}>
                     <span aria-hidden="true" style={{ color: T.wolfram, fontSize: 18 }}>★</span>
                     <span style={{ flex: 1, minWidth: 180 }}>
                       <strong style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17 }}>{h.titel}</strong>
-                      <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>Staffel {h.staffel_verfuegbar} verfügbar</span>
+                      <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
+                        {h.staffel_neu ? `Staffel ${h.staffel_verfuegbar} verfügbar` : "Neue Folge erkannt"}
+                        {h.folge_aktuell ? ` · Folge ${h.folge_aktuell}` : ""}
+                      </span>
                       {h.dienste.length > 0 && <span style={{ ...mono, display: "block", marginTop: 2 }}>{gruppiereDienstBadges(h.dienste).map((d) => d.label).join(", ")}</span>}
                     </span>
                     <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 10px" }} onClick={() => bestaetigeHinweis(h)}>

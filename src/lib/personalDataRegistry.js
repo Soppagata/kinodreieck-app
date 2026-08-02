@@ -106,6 +106,15 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     zaehle: (v) => v.length,
   }),
   jsonEintrag({
+    key: K.wochenplan,
+    backupField: "wochenplan",
+    label: "Wochenplan",
+    einheit: "Reminder",
+    backupFallback: { version: 1, eintraege: [] },
+    pruefe: (v) => istObjekt(v) && Array.isArray(v.eintraege),
+    zaehle: (v) => v.eintraege.length,
+  }),
+  jsonEintrag({
     key: K.merkliste,
     backupField: "merkliste",
     label: "Merkliste",

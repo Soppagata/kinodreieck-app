@@ -104,6 +104,7 @@ export const K = {
   exportStand: "kd:export-stand",    // Export-Wächter: wann zuletzt Master/Artikel exportiert
   zeitgrenze: "kd:zeitgrenze",       // Kino-Tab: Zeitfilter für "Läuft auch" (Default 14:00)
   kinoPins: "kd:kino-pins",          // Angepinnte Kinotermine [{t,j,z,seit}] — Basis fürs Dashboard-Pinboard
+  wochenplan: "kd:wochenplan",        // Persönlicher Folgen-/Staffelkalender {version,eintraege[]}
   autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt
   entdeckenStatus: "kd:entdecken-status", // {watchmode_id: "gesehen"|"erstellt"} — Erledigtes im Entdecken ausblenden
   einstellungen: "kd:einstellungen",  // {theme, startTab, schrift, kurosawa}

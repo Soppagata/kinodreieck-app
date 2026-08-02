@@ -3,7 +3,7 @@ import {
   statusVon, mediathekIdVon, mitMediathekEintrag, ohneMediathekEintrag,
   gleicheMediathekStatusAb,
   neuerGesehenEintrag, initialisiereStaffelstaende,
-  staffelHinweis, neueStaffeln, bestaetigeStaffel, serienBeobachten,
+  staffelHinweis, neueStaffeln, bestaetigeStaffel, serienBeobachten, beobachteteSerien,
 } from "./src/lib/staffeln.js";
 
 let checks = 0;
@@ -55,6 +55,12 @@ ok("Neues Serien-Häkchen übernimmt belegten Staffelstand", () => {
   assert.equal(e.staffel_bestaetigt, 3);
   assert.equal(e.status, "gesehen");
 });
+ok("Neues Serien-Häkchen übernimmt den Folgenstand als stille Basis", () => {
+  const e = neuerGesehenEintrag(serie({ staffeln_verfuegbar: 3, folgen_verfuegbar: 24 }));
+  assert.equal(e.staffel_alarm_basis, 3);
+  assert.equal(e.folgen_alarm_basis, 24);
+  assert.equal(staffelHinweis(serie({ staffeln_verfuegbar: 3, folgen_verfuegbar: 24 }), e), null);
+});
 ok("Neues Film-Häkchen wird nicht als Serienbeobachtung gespeichert", () => {
   assert.equal(neuerGesehenEintrag({ titel: "Testfilm", typ: "movie" }).typ, "movie");
 });
@@ -85,6 +91,14 @@ ok("Hinweise werden stabil nach Titel sortiert", () => {
   const status = { 1: { status: "gesehen", staffel_bestaetigt: 3 }, 2: { status: "gesehen", staffel_bestaetigt: 1 } };
   assert.deepEqual(neueStaffeln(titel, status).map((x) => x.titel), ["Alpha", "Zulu"]);
 });
+ok("Neue Folgen lösen unabhängig von einer neuen Staffel einen Hinweis aus", () => {
+  const hinweis = staffelHinweis(serie({ staffeln_verfuegbar: 3, folgen_verfuegbar: 26, folge_aktuell: 1266 }), {
+    status: "gesehen", staffel_bestaetigt: 3, staffel_alarm_basis: 3, folgen_alarm_basis: 24,
+  });
+  assert.equal(hinweis.staffel_neu, false);
+  assert.equal(hinweis.folgen_neu, true);
+  assert.equal(hinweis.folge_aktuell, 1266);
+});
 ok("Bestätigen erhöht, aber senkt den Stand nie", () => {
   const alt = { status: "gesehen", typ: "tv_series", staffel_bestaetigt: 5 };
   assert.equal(bestaetigeStaffel(alt, serie({ staffeln_verfuegbar: 4 })).staffel_bestaetigt, 5);
@@ -103,6 +117,12 @@ ok("Config: nur explizit gesehene Serien mit stabiler ID", () => {
     { watchmode_id: 42, staffel_bestaetigt: 3 },
     { watchmode_id: 43 },
   ]);
+});
+ok("Beobachtete Serien enthalten Katalogstand und fehlertoleranten Titel", () => {
+  const status = { 42: { status: "gesehen", typ: "tv_series", titel: "Testserie" } };
+  const liste = beobachteteSerien(status, [serie({ staffeln_verfuegbar: 4, folge_aktuell: 12 })]);
+  assert.equal(liste[0].titel, "Testserie");
+  assert.equal(liste[0].folge_aktuell, 12);
 });
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);

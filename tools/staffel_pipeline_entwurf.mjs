@@ -24,15 +24,37 @@ export function staffelstandAusQuellen(quellen, ausgewaehlt, setup = {}) {
     const name = q && (namenById.get(Number(q.source_id)) || q.name);
     if (!name || !erlaubte.has(name)) continue;
     const staffeln = positiveGanzzahl(q.seasons);
-    if (staffeln == null) continue;
-    treffer.push({ name, staffeln });
+    const folgen = positiveGanzzahl(q.episodes);
+    const folgeAktuell = positiveGanzzahl(q.episode_number ?? q.last_episode_number ?? q.latest_episode?.episode_number);
+    if (staffeln == null && folgen == null && folgeAktuell == null) continue;
+    treffer.push({ name, staffeln, folgen, folgeAktuell });
   }
   if (!treffer.length) return null;
-  const max = Math.max(...treffer.map((q) => q.staffeln));
+  const staffeln = treffer.map((q) => q.staffeln).filter(Boolean);
+  const folgen = treffer.map((q) => q.folgen).filter(Boolean);
+  const exakteFolgen = treffer.map((q) => q.folgeAktuell).filter(Boolean);
+  const max = staffeln.length ? Math.max(...staffeln) : null;
+  const maxFolgen = folgen.length ? Math.max(...folgen) : null;
+  const folgeAktuell = exakteFolgen.length ? Math.max(...exakteFolgen) : null;
   return {
-    staffeln_verfuegbar: max,
-    staffel_dienste: [...new Set(treffer.filter((q) => q.staffeln === max).map((q) => q.name))].sort((a, b) => a.localeCompare(b, "de")),
+    ...(max != null ? { staffeln_verfuegbar: max } : {}),
+    ...(maxFolgen != null ? { folgen_verfuegbar: maxFolgen } : {}),
+    ...(folgeAktuell != null ? { folge_aktuell: folgeAktuell } : {}),
+    staffel_dienste: [...new Set(treffer.filter((q) => (
+      max != null ? q.staffeln === max : maxFolgen != null ? q.folgen === maxFolgen : q.folgeAktuell === folgeAktuell
+    )).map((q) => q.name))].sort((a, b) => a.localeCompare(b, "de")),
   };
+}
+
+/* Der planmäßige Job liest die aktiven Kontobeobachtungen einmal aus der DB
+   und führt sie mit einer optionalen statischen Config zusammen. Die Anzahl
+   der Zeitpunkte bleibt gleich; nur die deduplizierte ID-Menge kann wachsen. */
+export function verbindeBeobachteteIds(config = {}, serverRows = []) {
+  const statisch = Array.isArray(config.serien_beobachten) ? config.serien_beobachten : [];
+  const server = (Array.isArray(serverRows) ? serverRows : [])
+    .filter((r) => r?.active !== false).map((r) => ({ watchmode_id: r?.watchmode_id }));
+  const ids = [...new Set([...statisch, ...server].map((e) => positiveGanzzahl(e?.watchmode_id)).filter(Boolean))];
+  return { ...config, serien_beobachten: ids.sort((a, b) => a - b).map((watchmode_id) => ({ watchmode_id })) };
 }
 
 export async function pruefeBeobachteteSerien({

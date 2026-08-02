@@ -5,6 +5,7 @@ import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { useInstallationsStatus } from "../lib/installation.js";
 import { KinoTicket } from "../components/ui.jsx";
+import { Wochenplan } from "../components/Wochenplan.jsx";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -108,6 +109,8 @@ function StartDashboard({
   kinoMatches = { matched: [] }, mustwatch = [], auswahl = [],
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null, onHilfe,
+  wochenplan, onWochenplanAendern, entdeckenStatus = {}, onEntdeckenStatusAendern,
+  master = [], onSpringeZuStreaming, onFilmAnlegen, toggleKinoPin,
 }) {
   const installation = useInstallationsStatus();
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
@@ -174,6 +177,16 @@ function StartDashboard({
       </header>
 
       <span className="kd-dash-strip" aria-hidden="true" />
+
+      <Wochenplan
+        plan={wochenplan} onPlanAendern={onWochenplanAendern}
+        kinoPins={kinoPins} onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
+        katalog={[...((streamingBekannt || {}).titel || []), ...((streamingEntdecken || {}).titel || [])]}
+        master={master} entdeckenStatus={entdeckenStatus}
+        onStatusAendern={onEntdeckenStatusAendern}
+        onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
+        onFilmAnlegen={onFilmAnlegen}
+      />
 
       {leer && (
         <p className="kd-dash-leer">

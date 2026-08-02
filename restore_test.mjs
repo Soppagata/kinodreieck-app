@@ -256,7 +256,7 @@ const kontoDriver = AD.createAccountDriver({
 });
 ST.setStorageDriver(kontoDriver);
 
-/* Backup mit allen 16 Konto-Töpfen — inklusive der vier Präferenzen, die vorher
+/* Backup mit allen 17 Konto-Töpfen — inklusive Wochenplan und der vier Präferenzen, die vorher
    nur auf dem Gerät lagen und beim Gerätewechsel still verloren gingen, und
    seit Etappe 7 des Geschmacksprofils. Das Profil muss hier stehen, weil der
    Check darunter fordert, dass JEDER Konto-Topf den Roundtrip übersteht —
@@ -271,15 +271,16 @@ const PROFIL_TESTWERT = JSON.stringify({
               erfasst: "2026-07-27T20:00:00.000Z" }],
   offen: [], achsen: { wie: 4, was: 2, warum: 5 }, filme: [], nichtDeutbar: [],
 });
-const SECHZEHN = {
+const SIEBZEHN = {
   ...ZEHN,
+  "kd:wochenplan": JSON.stringify({ version: 1, eintraege: [{ id: "op", titel: "One Piece", wochentage: [2] }] }),
   "kd:zeitgrenze": "16:30",
   "kd:filter-mediathek": "1",
   "kd:filter-kino": "0",
   "kd:filter-streaming": "1",
   "kd:geschmacksprofil": PROFIL_TESTWERT,
 };
-for (const [k, v] of Object.entries(SECHZEHN)) kontoTabelle.set(k, { key: k, value: v, revision: 1 });
+for (const [k, v] of Object.entries(SIEBZEHN)) kontoTabelle.set(k, { key: k, value: v, revision: 1 });
 await kontoDriver.pull();
 const bk5 = await B.baueBackup();
 check("P5 Export enthält die vier Sicht-/Zeit-Präferenzen",
@@ -294,8 +295,12 @@ const rr5 = await R.restoreBackup(bk5);
 await sleep(120);
 check("P5 Wiederherstellung meldet den Kontobetrieb verständlich",
   rr5.ok === true && rr5.dbWarnung === false && /Konto aktiv/.test(rr5.dbHinweis || ""));
-check("P5 Wiederherstellung schreibt alle 16 Töpfe ins Konto",
+check("P5 Wiederherstellung schreibt alle 17 Töpfe ins Konto",
   AD.ACCOUNT_SYNC_KEYS.every((k) => kontoTabelle.get(k) != null));
+check("P5 Der Wochenplan übersteht den Roundtrip inhaltlich", (() => {
+  try { return JSON.parse(kontoTabelle.get("kd:wochenplan").value).eintraege[0].titel === "One Piece"; }
+  catch { return false; }
+})());
 check("P5 Die Präferenzen kommen im Konto an",
   kontoTabelle.get("kd:zeitgrenze").value === "16:30" && kontoTabelle.get("kd:filter-streaming").value === "1");
 check("P5 Der Rückholpunkt wurde vor dem Überschreiben gesichert", R.hatRestoreSnapshot() === true);

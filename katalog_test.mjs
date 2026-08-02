@@ -150,6 +150,20 @@ check("exakte Watchmode-ID schlägt bei gleichem Titel die Titel-/Jahr-Heuristik
   doppelt.bekannt.titel[0]?.id === "exakt"
   && doppelt.bekannt.titel[0]?.imdb_id === "tt1234567"
   && doppelt.bekannt.titel[0]?.tmdb_id === 123);
+const serienstand = baueStreamingAnsichten({
+  bekannt: { titel: [{
+    watchmode_id: 88, titel: "Serienstand", typ: "tv_series", staffeln_verfuegbar: 4,
+    folgen_verfuegbar: 26, folge_aktuell: 1266, letzte_folge: { episode_number: 1266 },
+    naechste_staffel_am: "2026-09-01", staffelstand_geprueft_am: "2026-08-02T10:00:00Z",
+  }] },
+  entdecken: { titel: [] },
+}, [{ id: "serienstand", titel: "Serienstand", typ: "serie", watchmode_id: 88 }]);
+check("Staffel- und Folgenfelder überleben die lokale Mein-Programm-Projektion",
+  serienstand.bekannt.titel[0]?.staffeln_verfuegbar === 4
+  && serienstand.bekannt.titel[0]?.folgen_verfuegbar === 26
+  && serienstand.bekannt.titel[0]?.folge_aktuell === 1266
+  && serienstand.bekannt.titel[0]?.letzte_folge?.episode_number === 1266
+  && serienstand.bekannt.titel[0]?.naechste_staffel_am === "2026-09-01");
 
 /* ================= Etappe 4: Token-Naht (src/lib/katalog.js) =================
    Bis hierher lief das Modul OHNE Token-Provider — die beiden Header-Checks oben

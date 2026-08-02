@@ -94,6 +94,9 @@ import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
+import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
+import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
+import { seriesWatchService } from "./services/seriesWatch.js";
 
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
@@ -287,6 +290,30 @@ export default function App() {
      Vergangene Termine werden beim Boot aufgeräumt (Jahres-Wrap beachtet:
      ein im Dezember gepinnter Januar-Termin gehört ins Folgejahr). */
   const [kinoPins, setKinoPins] = useState([]);
+  const [wochenplan, setWochenplan] = useState(() => {
+    try { return normalisiereWochenplan(JSON.parse(localStorage.getItem(K.wochenplan) || "null")); }
+    catch { return LEERER_WOCHENPLAN; }
+  });
+  const persistWochenplan = useCallback((roh) => {
+    const next = normalisiereWochenplan(roh);
+    setWochenplan(next);
+    store.set(K.wochenplan, JSON.stringify(next)).catch(() => {});
+    return next;
+  }, []);
+  const [entdeckenStatus, setEntdeckenStatus] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}"); } catch { return {}; }
+  });
+  const entdeckenStatusRef = useRef(entdeckenStatus);
+  entdeckenStatusRef.current = entdeckenStatus;
+  const schreibeEntdeckenStatus = useCallback((berechne) => {
+    const vorher = entdeckenStatusRef.current;
+    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+    if (!next || next === vorher) return vorher;
+    entdeckenStatusRef.current = next;
+    setEntdeckenStatus(next);
+    store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
+    return next;
+  }, []);
   /* Initialisiert ausschließlich den Tutorial-Speicher. Ein Terminal-Installer
      ist für die DB-basierte Tester-PWA nicht mehr Teil des Starts. */
   const [setupWarnung] = useState(() => {
@@ -606,6 +633,18 @@ export default function App() {
           if (frisch.length < alle.length) persistPins(frisch); // Abgelaufene still aufräumen
         }
       } catch { /* keine Pins */ }
+      try {
+        const r = await store.get(K.wochenplan);
+        setWochenplan(normalisiereWochenplan(r?.value ? JSON.parse(r.value) : null));
+      } catch { setWochenplan({ version: 1, eintraege: [] }); }
+      try {
+        const r = await store.get(K.entdeckenStatus);
+        if (r?.value) {
+          const status = JSON.parse(r.value);
+          entdeckenStatusRef.current = status;
+          setEntdeckenStatus(status);
+        }
+      } catch { /* keine Entdecken-Markierungen */ }
       try {
         const r = await store.get(K.einstellungen);
         if (r && r.value) {
@@ -1151,6 +1190,7 @@ export default function App() {
   const [kinoFokus, setKinoFokus] = useState(null);
   const [streamingFokus, setStreamingFokus] = useState(null);
   const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); setTab("mediathek"); }, []);
+  const springeZuStreaming = useCallback((fokus) => { setStreamingFokus(fokus); setTab("streaming"); }, []);
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
   const updateFilm = useCallback((id, changes) => {
@@ -1249,6 +1289,40 @@ export default function App() {
     });
     return neue.map((f) => f.id);
   }, [masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, schreibeArtikel]);
+
+  const serienKatalog = useMemo(() => [
+    ...((streamingBekannt && streamingBekannt.titel) || []),
+    ...((streamingEntdecken && streamingEntdecken.titel) || []),
+  ], [streamingBekannt, streamingEntdecken]);
+
+  /* Beobachtete Legacy-Serien erhalten den ersten verfügbaren Staffel-/Folgenstand
+     still als Basis. Erst spätere Katalogänderungen lösen den Radar aus. */
+  useEffect(() => {
+    if (!serienKatalog.length) return;
+    schreibeEntdeckenStatus((prev) => initialisiereStaffelstaende(prev, serienKatalog));
+  }, [serienKatalog, schreibeEntdeckenStatus]);
+
+  /* Nur im Konto: deduplizierte Watchmode-IDs für den bestehenden planmäßigen
+     Kataloglauf bereitstellen. Dies ist kein Watchmode-Aufruf. */
+  const letzterSerienWatchSync = useRef("");
+  useEffect(() => {
+    if (session.mode !== "account" || !bootDone) return undefined;
+    const ids = serienBeobachten(entdeckenStatus, serienKatalog).map((e) => e.watchmode_id);
+    const signatur = JSON.stringify(ids);
+    if (signatur === letzterSerienWatchSync.current) return undefined;
+    const timer = setTimeout(() => {
+      seriesWatchService.setObserved(ids).then((r) => {
+        if (r?.ok) letzterSerienWatchSync.current = signatur;
+      }).catch(() => { /* lokaler Status bleibt; späterer Zustandswechsel versucht erneut */ });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [session.mode, bootDone, entdeckenStatus, serienKatalog]);
+
+  const bestaetigeSerienHinweis = useCallback((watchmodeId) => {
+    const t = serienKatalog.find((x) => String(x.watchmode_id) === String(watchmodeId));
+    if (!t) return;
+    schreibeEntdeckenStatus((prev) => ({ ...prev, [watchmodeId]: bestaetigeStaffel(prev[watchmodeId], t) }));
+  }, [serienKatalog, schreibeEntdeckenStatus]);
 
   const {
     accountId,
@@ -1913,6 +1987,9 @@ export default function App() {
 
         {tab === "start" && bootDone && (
           <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={() => setHilfeOffen(true)}
+            wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
+            entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
+            master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
@@ -2013,6 +2090,7 @@ export default function App() {
             mustwatchIds={mustwatchMasterIds}
             auswahl={auswahl} toggleQuelle={toggleQuelle}
             merkliste={merkliste} toggleMerk={toggleMerk}
+            entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
             katalogInfo={streamingInfo} angemeldet={session.mode === "account"}

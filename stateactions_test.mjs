@@ -65,7 +65,7 @@ for (const [name, quelle, muster] of [
   ["Kino-Pins", app, /setKinoPins\(\s*\(prev\)/],
   ["Merkliste", app, /setMerkliste\(\s*\(prev\)/],
   ["Streaming-Auswahl", app, /setAuswahlRoh\(\s*\(prev\)/],
-  ["Entdecken-Status", streamingTab, /setEntdeckenStatus\(\s*\(prev\)/],
+  ["Entdecken-Status", app, /setEntdeckenStatus\(\s*\(prev\)/],
 ]) {
   check(`${name}-Persistenz läuft nicht mehr in einem React-State-Updater`,
     !muster.test(quelle));
@@ -77,7 +77,9 @@ check("Cage-Start führt Animation und Hooks nicht in einem State-Updater aus",
   !/setPhase\(\s*\(/.test(cage) && /gestartet\.current/.test(cage));
 check("Artikel- und Entdecken-Aktionen besitzen je einen serialisierten Schreibweg",
   /const schreibeArtikel = useCallback/.test(app)
-  && /const schreibeEntdeckenStatus = useCallback/.test(streamingTab));
+  && /const schreibeEntdeckenStatus = useCallback/.test(app)
+  && /schreibeEntdeckenStatus=\{schreibeEntdeckenStatus\}/.test(app)
+  && !/const schreibeEntdeckenStatus = useCallback/.test(streamingTab));
 check("Leichter Streaming-Boot liest nie mehr die kombinierte Katalogzeile",
   /holeEinmal\(streamingBekanntLaufRef,\s*"streamingBekannt"/.test(app)
   && /holeEinmal\(streamingEntdeckenLaufRef,\s*"streamingEntdecken"/.test(app)

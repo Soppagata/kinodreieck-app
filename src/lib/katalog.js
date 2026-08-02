@@ -425,6 +425,16 @@ export function baueStreamingAnsichten(streaming, master = []) {
       user_score: t.user_score ?? null, tmdb_id: t.tmdb_id ?? null, imdb_id: t.imdb_id ?? null,
       dienste: t.dienste || [], web_urls: t.web_urls || null,
       relevanz: t.relevanz ?? 0, relevanz_signale: t.relevanz_signale || [],
+      staffeln_verfuegbar: t.staffeln_verfuegbar ?? null,
+      folgen_verfuegbar: t.folgen_verfuegbar ?? null,
+      folge_aktuell: t.folge_aktuell ?? null,
+      letzte_folge: t.letzte_folge ?? null,
+      naechste_folge: t.naechste_folge ?? null,
+      naechste_folge_am: t.naechste_folge_am ?? null,
+      naechste_staffel: t.naechste_staffel ?? null,
+      naechste_staffel_am: t.naechste_staffel_am ?? null,
+      staffel_dienste: t.staffel_dienste || [],
+      staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? null,
     };
     map.set(key, { ...(map.get(key) || {}), ...neutral });
   }
@@ -451,6 +461,16 @@ export function baueStreamingAnsichten(streaming, master = []) {
         } : {}),
         dienste: t.dienste || [],
         web_urls: t.web_urls || null,
+        staffeln_verfuegbar: t.staffeln_verfuegbar ?? film.staffeln_verfuegbar ?? null,
+        folgen_verfuegbar: t.folgen_verfuegbar ?? film.folgen_verfuegbar ?? null,
+        folge_aktuell: t.folge_aktuell ?? film.folge_aktuell ?? null,
+        letzte_folge: t.letzte_folge ?? film.letzte_folge ?? null,
+        naechste_folge: t.naechste_folge ?? film.naechste_folge ?? null,
+        naechste_folge_am: t.naechste_folge_am ?? film.naechste_folge_am ?? null,
+        naechste_staffel: t.naechste_staffel ?? film.naechste_staffel ?? null,
+        naechste_staffel_am: t.naechste_staffel_am ?? film.naechste_staffel_am ?? null,
+        staffel_dienste: t.staffel_dienste || film.staffel_dienste || [],
+        staffelstand_geprueft_am: t.staffelstand_geprueft_am ?? film.staffelstand_geprueft_am ?? null,
       });
     }
     else entdecken.push(t);

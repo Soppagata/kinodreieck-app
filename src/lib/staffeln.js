@@ -72,18 +72,29 @@ export function staffelzahl(wert) {
   return Number.isInteger(n) && n >= 1 ? n : null;
 }
 
+export function folgenzahl(wert) {
+  const n = Number(wert);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+function katalogFolgenstand(t) {
+  return folgenzahl(t && (t.folgen_verfuegbar ?? t.letzte_folge?.gesamtfolge));
+}
+
 function istSerie(t) {
   return t && (t.typ === "tv_series" || t.typ === "serie");
 }
 
 export function neuerGesehenEintrag(t, jetzt = new Date()) {
   const aktuell = staffelzahl(t && t.staffeln_verfuegbar);
+  const folgen = katalogFolgenstand(t);
   return {
     status: "gesehen",
     typ: istSerie(t) ? "tv_series" : "movie",
     titel: t && t.titel ? t.titel : "",
     gesehen_am: jetzt.toISOString(),
-    ...(aktuell != null ? { staffel_bestaetigt: aktuell } : {}),
+    ...(aktuell != null ? { staffel_bestaetigt: aktuell, staffel_alarm_basis: aktuell } : {}),
+    ...(folgen != null ? { folgen_alarm_basis: folgen } : {}),
   };
 }
 
@@ -98,8 +109,10 @@ export function initialisiereStaffelstaende(statusMap, titel, jetzt = new Date()
     const t = katalog.get(String(id));
     if (!istSerie(t)) continue;
     const aktuell = staffelzahl(t.staffeln_verfuegbar);
-    const bestaetigt = staffelzahl(roh && typeof roh === "object" ? roh.staffel_bestaetigt : null);
-    if (aktuell == null || bestaetigt != null) continue;
+    const folgen = katalogFolgenstand(t);
+    const bestaetigt = staffelzahl(roh && typeof roh === "object" ? (roh.staffel_alarm_basis ?? roh.staffel_bestaetigt) : null);
+    const folgenBasis = folgenzahl(roh && typeof roh === "object" ? roh.folgen_alarm_basis : null);
+    if ((aktuell == null || bestaetigt != null) && (folgen == null || folgenBasis != null)) continue;
     if (!geaendert) { next = { ...(statusMap || {}) }; geaendert = true; }
     const basis = roh && typeof roh === "object" ? roh : { status: "gesehen" };
     next[id] = {
@@ -108,7 +121,8 @@ export function initialisiereStaffelstaende(statusMap, titel, jetzt = new Date()
       typ: basis.typ || "tv_series",
       titel: basis.titel || t.titel || "",
       gesehen_am: basis.gesehen_am || jetzt.toISOString(),
-      staffel_bestaetigt: aktuell,
+      ...(aktuell != null ? { staffel_bestaetigt: aktuell, staffel_alarm_basis: aktuell } : {}),
+      ...(folgen != null ? { folgen_alarm_basis: folgen } : {}),
     };
   }
   return next;
@@ -117,13 +131,23 @@ export function initialisiereStaffelstaende(statusMap, titel, jetzt = new Date()
 export function staffelHinweis(t, rohStatus) {
   if (!istSerie(t) || statusVon(rohStatus) !== "gesehen") return null;
   const aktuell = staffelzahl(t.staffeln_verfuegbar);
-  const bestaetigt = staffelzahl(rohStatus && typeof rohStatus === "object" ? rohStatus.staffel_bestaetigt : null);
-  if (aktuell == null || bestaetigt == null || aktuell <= bestaetigt) return null;
+  const folgen = katalogFolgenstand(t);
+  const bestaetigt = staffelzahl(rohStatus && typeof rohStatus === "object" ? (rohStatus.staffel_alarm_basis ?? rohStatus.staffel_bestaetigt) : null);
+  const folgenBasis = folgenzahl(rohStatus && typeof rohStatus === "object" ? rohStatus.folgen_alarm_basis : null);
+  const staffelNeu = aktuell != null && bestaetigt != null && aktuell > bestaetigt;
+  const folgenNeu = folgen != null && folgenBasis != null && folgen > folgenBasis;
+  if (!staffelNeu && !folgenNeu) return null;
   return {
     watchmode_id: t.watchmode_id,
     titel: t.titel,
     staffel_verfuegbar: aktuell,
     staffel_bestaetigt: bestaetigt,
+    staffel_neu: staffelNeu,
+    folgen_verfuegbar: folgen,
+    folgen_bestaetigt: folgenBasis,
+    folgen_neu: folgenNeu,
+    folge_aktuell: folgenzahl(t.folge_aktuell ?? t.letzte_folge?.episode_number ?? t.letzte_folge?.nummer),
+    letzte_folge: t.letzte_folge || null,
     dienste: Array.isArray(t.staffel_dienste) ? t.staffel_dienste.filter(Boolean) : [],
     geprueft_am: t.staffelstand_geprueft_am || null,
   };
@@ -138,16 +162,26 @@ export function neueStaffeln(titel, statusMap) {
 
 export function bestaetigeStaffel(rohStatus, t, jetzt = new Date()) {
   const aktuell = staffelzahl(t && t.staffeln_verfuegbar);
-  if (aktuell == null || statusVon(rohStatus) !== "gesehen") return rohStatus;
+  const folgen = katalogFolgenstand(t);
+  if ((aktuell == null && folgen == null) || statusVon(rohStatus) !== "gesehen") return rohStatus;
   const basis = rohStatus && typeof rohStatus === "object" ? rohStatus : neuerGesehenEintrag(t, jetzt);
-  const alt = staffelzahl(basis.staffel_bestaetigt);
+  const alt = staffelzahl(basis.staffel_alarm_basis ?? basis.staffel_bestaetigt);
+  const altFolgen = folgenzahl(basis.folgen_alarm_basis);
+  const neueStaffel = aktuell == null ? alt : (alt == null ? aktuell : Math.max(alt, aktuell));
+  const neueFolgen = folgen == null ? altFolgen : (altFolgen == null ? folgen : Math.max(altFolgen, folgen));
   return {
     ...basis,
     status: "gesehen",
     typ: basis.typ || "tv_series",
     titel: basis.titel || (t && t.titel) || "",
-    staffel_bestaetigt: alt == null ? aktuell : Math.max(alt, aktuell),
+    ...(neueStaffel != null ? { staffel_bestaetigt: neueStaffel, staffel_alarm_basis: neueStaffel } : {}),
+    ...(neueFolgen != null ? { folgen_alarm_basis: neueFolgen } : {}),
     staffel_bestaetigt_am: jetzt.toISOString(),
+    letzter_staffelsprung: {
+      von_staffel: alt, zu_staffel: neueStaffel,
+      von_folgen: altFolgen, zu_folgen: neueFolgen,
+      bestaetigt_am: jetzt.toISOString(),
+    },
   };
 }
 
@@ -161,8 +195,26 @@ export function serienBeobachten(statusMap, titel) {
     if (typ !== "tv_series" && typ !== "serie") continue;
     const watchmodeId = Number(id);
     if (!Number.isInteger(watchmodeId) || watchmodeId <= 0) continue;
-    const bestaetigt = staffelzahl(roh && typeof roh === "object" ? roh.staffel_bestaetigt : null);
-    aus.push({ watchmode_id: watchmodeId, ...(bestaetigt != null ? { staffel_bestaetigt: bestaetigt } : {}) });
+    const bestaetigt = staffelzahl(roh && typeof roh === "object" ? (roh.staffel_alarm_basis ?? roh.staffel_bestaetigt) : null);
+    const folgen = folgenzahl(roh && typeof roh === "object" ? roh.folgen_alarm_basis : null);
+    aus.push({ watchmode_id: watchmodeId,
+      ...(bestaetigt != null ? { staffel_bestaetigt: bestaetigt } : {}),
+      ...(folgen != null ? { folgen_bestaetigt: folgen } : {}),
+    });
   }
   return aus.sort((a, b) => a.watchmode_id - b.watchmode_id);
+}
+
+export function beobachteteSerien(statusMap, titel) {
+  const katalog = new Map((Array.isArray(titel) ? titel : []).map((t) => [String(t.watchmode_id), t]));
+  return serienBeobachten(statusMap, titel).map((beobachtung) => {
+    const t = katalog.get(String(beobachtung.watchmode_id)) || {};
+    const roh = statusMap && statusMap[beobachtung.watchmode_id];
+    return {
+      ...t,
+      ...beobachtung,
+      titel: t.titel || (roh && typeof roh === "object" ? roh.titel : "") || `Serie ${beobachtung.watchmode_id}`,
+      status: roh,
+    };
+  }).sort((a, b) => String(a.titel).localeCompare(String(b.titel), "de"));
 }

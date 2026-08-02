@@ -19,15 +19,16 @@ check("Snapshot enthält keine Tabelleninhalte",
 check("Snapshot enthält keine erkennbaren Zugangsdaten",
   !/sb_secret_|sk-ant-|BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|PASSWORD\s*=/i.test(sql)
   && !/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/.test(sql));
-check("Produktionsstand enthält alle 18 Anwendungstabellen",
-  treffer(/^CREATE TABLE IF NOT EXISTS "public"\./gm) === 18);
+check("Erwarteter Stand enthält alle 19 Anwendungstabellen",
+  treffer(/^CREATE TABLE IF NOT EXISTS "public"\./gm) === 19);
 check("Produktionsstand enthält Funktionen, Trigger und Policies",
-  treffer(/^CREATE OR REPLACE FUNCTION "public"\./gm) === 42
+  treffer(/^CREATE OR REPLACE FUNCTION "public"\./gm) === 43
   && treffer(/^CREATE OR REPLACE TRIGGER /gm) === 13
-  && treffer(/^CREATE POLICY /gm) === 21);
+  && treffer(/^CREATE POLICY /gm) === 25);
 for (const tabelle of [
   "kd_catalog",
   "kd_personal",
+  "kd_series_watch",
   "kd_shared_articles",
   "kd_ai_log",
   "kd_filmwerke",
@@ -43,7 +44,12 @@ check("Legacy-kd_store ist vollständig statt nur als Tabellenname dokumentiert"
   && /POLICY "sel_user" ON "public"\."kd_store"/.test(sql));
 check("Accountdaten bleiben über auth.uid kontogebunden",
   /POLICY "kdp_sel"[\s\S]+?"account_id" = \( SELECT "auth"\."uid"\(\)/.test(sql)
-  && /POLICY "kdsa_owner_select"[\s\S]+?"account_id" = \( SELECT "auth"\."uid"\(\)/.test(sql));
+  && /POLICY "kdsa_owner_select"[\s\S]+?"account_id" = \( SELECT "auth"\."uid"\(\)/.test(sql)
+  && /POLICY "kdsw_sel"[\s\S]+?"account_id" = \( SELECT "auth"\."uid"\(\)/.test(sql));
+check("Wochenplan und atomare Serienbeobachtung sind im Schemavertrag",
+  /'kd:wochenplan'::"text"/.test(sql)
+  && /FUNCTION "public"\."kd_set_series_watch"/.test(sql)
+  && /REVOKE ALL ON FUNCTION "public"\."kd_set_series_watch"[^\n]+FROM PUBLIC/.test(sql));
 check("Öffentlicher Katalogvertrag enthält den gemeinsamen Demo-Seed",
   /POLICY "kd_catalog_read_public"[\s\S]+?'demo_seed'::"text"/.test(sql));
 check("Streaming-Katalog ist getrennt und bleibt für alte Publisher kompatibel",
