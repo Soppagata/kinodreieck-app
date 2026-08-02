@@ -258,6 +258,48 @@ function MobileCity() {
   );
 }
 
+function RainLayer() {
+  return (
+    <svg
+      className="kd-neon-noir__rain"
+      viewBox="0 0 1600 1000"
+      preserveAspectRatio="xMidYMid slice"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient id="kd-nn-rain-far" x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#D8F3F5" stopOpacity="0" />
+          <stop offset="0.38" stopColor="#C6EDF1" stopOpacity="0.42" />
+          <stop offset="1" stopColor="#8BC8D1" stopOpacity="0.04" />
+        </linearGradient>
+        <linearGradient id="kd-nn-rain-near" x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#EFFBFC" stopOpacity="0" />
+          <stop offset="0.28" stopColor="#E2F7F8" stopOpacity="0.72" />
+          <stop offset="0.82" stopColor="#A5D7DE" stopOpacity="0.28" />
+          <stop offset="1" stopColor="#7EB6C1" stopOpacity="0" />
+        </linearGradient>
+        <pattern id="kd-nn-rain-field-far" width="347" height="389" patternUnits="userSpaceOnUse">
+          <g fill="none" stroke="url(#kd-nn-rain-far)" strokeLinecap="round" vectorEffect="non-scaling-stroke">
+            <path d="M21 18l-4 17M102 53l-5 22M188 12l-3 13M278 86l-6 25M332 31l-4 18" strokeWidth="0.72" opacity="0.62" />
+            <path d="M58 143l-7 27M151 201l-5 19M237 159l-8 31M316 236l-4 16" strokeWidth="0.58" opacity="0.42" />
+            <path d="M14 306l-5 21M86 275l-3 12M203 334l-7 26M294 302l-5 18" strokeWidth="0.82" opacity="0.54" />
+          </g>
+        </pattern>
+        <pattern id="kd-nn-rain-field-near" width="529" height="577" patternUnits="userSpaceOnUse">
+          <g fill="none" stroke="url(#kd-nn-rain-near)" strokeLinecap="round" vectorEffect="non-scaling-stroke">
+            <path d="M46 39l-15 58M212 17l-11 43M413 82l-18 70" strokeWidth="1.18" opacity="0.5" />
+            <path d="M126 213l-8 35M305 187l-21 82M494 256l-12 47" strokeWidth="0.9" opacity="0.44" />
+            <path d="M35 418l-18 65M191 361l-10 39M362 432l-24 91M470 382l-7 29" strokeWidth="1.32" opacity="0.56" />
+            <path d="M272 521l-9 35M515 516l-14 49" strokeWidth="0.72" opacity="0.36" />
+          </g>
+        </pattern>
+      </defs>
+      <rect width="1600" height="1000" fill="url(#kd-nn-rain-field-far)" />
+      <rect width="1600" height="1000" fill="url(#kd-nn-rain-field-near)" />
+    </svg>
+  );
+}
+
 function RareFlyby() {
   return (
     <div className="kd-neon-noir__flyby" aria-hidden="true">
@@ -328,7 +370,7 @@ export function NeonNoirOverlay() {
       <MobileCity />
       <div className="kd-neon-noir__mist" />
       <RareFlyby />
-      <div className="kd-neon-noir__rain" />
+      <RainLayer />
     </div>
   );
 }

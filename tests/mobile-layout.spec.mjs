@@ -383,6 +383,10 @@ for (const viewport of VIEWPORTS) {
     await expect(overlay.locator('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
     await expect(overlay.locator(".kd-neon-noir__city--mobile")).toBeVisible();
     await expect(overlay.locator(".kd-neon-noir__city--desktop")).toBeHidden();
+    const regen = overlay.locator("svg.kd-neon-noir__rain");
+    await expect(regen).toBeVisible();
+    await expect(regen.locator("pattern")).toHaveCount(2);
+    await expect(regen.locator("pattern path")).toHaveCount(7);
 
     const geometrie = await overlay.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -400,6 +404,18 @@ for (const viewport of VIEWPORTS) {
     await keineDokumentUeberbreite(page);
 
     if (viewport.name === "393x852") {
+      const tropfenVariation = await regen.evaluate((svg) => {
+        const strecken = [...svg.querySelectorAll("pattern path")]
+          .flatMap((pfad) => [...(pfad.getAttribute("d") || "").matchAll(/l(-?\d+)\s+(\d+)/g)])
+          .map((treffer) => ({ x: Number(treffer[1]), y: Number(treffer[2]) }));
+        return {
+          laengen: new Set(strecken.map(({ x, y }) => Math.round(Math.hypot(x, y)))).size,
+          richtungen: new Set(strecken.map(({ x, y }) => Math.round((x / y) * 100))).size,
+        };
+      });
+      expect(tropfenVariation.laengen).toBeGreaterThan(10);
+      expect(tropfenVariation.richtungen).toBeGreaterThan(5);
+
       /* Der alte Markenmodus darf nur noch als interner Migrationswert im
          JavaScript existieren, nie als sichtbare Klasse, Grafik oder Kopie. */
       await expect(page.locator('.kd-nerv, .kd-fx-nerv, [aria-label="NERV"], img[src*="nerv"]')).toHaveCount(0);

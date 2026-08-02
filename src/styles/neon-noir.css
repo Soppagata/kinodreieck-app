@@ -47,24 +47,13 @@
   position: absolute;
   z-index: 4;
   inset: -24%;
-  opacity: 0.2;
-  background-image:
-    repeating-linear-gradient(
-      103deg,
-      transparent 0 11px,
-      rgba(190, 238, 244, 0.2) 12px,
-      transparent 13px 27px
-    ),
-    repeating-linear-gradient(
-      103deg,
-      transparent 0 38px,
-      rgba(103, 200, 218, 0.14) 39px,
-      transparent 41px 73px
-    );
-  background-size: 180px 260px, 270px 390px;
+  width: 148%;
+  height: 148%;
+  opacity: 0.3;
+  filter: blur(0.18px);
   mix-blend-mode: screen;
-  transform: translate3d(-3%, -14%, 0);
-  animation: kd-neon-noir-rain 1.15s linear infinite;
+  transform: translate3d(-2%, -20%, 0);
+  animation: kd-neon-noir-rain 1.38s linear infinite;
   will-change: transform, opacity;
 }
 
@@ -194,13 +183,13 @@
 
 @keyframes kd-neon-noir-rain {
   0% {
-    opacity: 0.16;
-    transform: translate3d(-3%, -14%, 0);
+    opacity: 0.24;
+    transform: translate3d(-2%, -20%, 0);
   }
 
   100% {
-    opacity: 0.22;
-    transform: translate3d(3%, 14%, 0);
+    opacity: 0.32;
+    transform: translate3d(3.4%, 19%, 0);
   }
 }
 
@@ -223,8 +212,11 @@
   }
 
   .kd-neon-noir__rain {
-    opacity: 0.16;
-    background-size: 150px 230px, 230px 350px;
+    inset: -28%;
+    width: 156%;
+    height: 156%;
+    opacity: 0.25;
+    filter: blur(0.12px);
   }
 
   .kd-neon-noir__flyby {
