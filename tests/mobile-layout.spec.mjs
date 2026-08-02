@@ -848,13 +848,16 @@ test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Ein
   await panel.getByRole("button", { name: "Pause", exact: true }).click();
   await expect(overlay).toHaveClass(/kd-deep-space--test-paused/);
   await expect(actor).toHaveCSS("animation-play-state", "paused");
-  /* WebKit übernimmt einen CSS-Pausezustand erst am nächsten Compositor-Tick;
-     nach dem kurzen Settle müssen zwei Messungen stabil bleiben. */
-  await page.waitForTimeout(90);
-  const pauseStand = await actor.evaluate((el) => el.getAnimations()[0]?.currentTime || 0);
-  await page.waitForTimeout(140);
-  const pauseDanach = await actor.evaluate((el) => el.getAnimations()[0]?.currentTime || 0);
-  expect(Math.abs(pauseDanach - pauseStand)).toBeLessThan(4);
+  /* WebKit übernimmt den CSS-Pausezustand asynchron im Compositor. Auf einem
+     ausgelasteten CI-Runner ist ein festes Settle-Fenster nicht belastbar;
+     gepollt wird trotzdem die echte Invariante: zwei zeitlich getrennte
+     Messungen dürfen nicht weiterlaufen. */
+  await expect.poll(async () => {
+    const pauseStand = await actor.evaluate((el) => el.getAnimations()[0]?.currentTime || 0);
+    await page.waitForTimeout(100);
+    const pauseDanach = await actor.evaluate((el) => el.getAnimations()[0]?.currentTime || 0);
+    return Math.abs(pauseDanach - pauseStand);
+  }, { timeout: 4_000 }).toBeLessThan(4);
   await panel.getByRole("button", { name: "Weiter", exact: true }).click();
   await expect(actor).toHaveCSS("animation-play-state", "running");
 
