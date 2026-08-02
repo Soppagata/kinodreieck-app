@@ -26,7 +26,8 @@ Fallback im Datenordner und wird von den automatischen Jobs nicht mehr aufgerufe
 ## Migrationen (seit Etappe 3)
 
 Schemaänderungen liegen als versionierte Dateien in `supabase/migrations/`;
-lokale und Remote-Historie sind bis `20260731170000` abgeglichen. Das
+die angewandten Stände sind bis `20260802220000` abgeglichen; einzig die ältere
+Stapelimport-Datei `20260801194500` bleibt laut Laufprotokoll bewusst offen. Das
 kontrollierte Laufverfahren und Protokoll stehen in
 `supabase/migrations/LIESMICH.md`. Die erste Migration
 legt `kd_personal` an — den persönlichen Speicher je Konto, geschützt allein
@@ -48,7 +49,7 @@ Isolationstest nach jeder RLS-berührenden Migration: `npm run test:rls`
 `tools/rls_test_personal.mjs`).
 
 `current_schema.sql` ist zusätzlich der bereinigte, daten- und geheimnisfreie
-Ist-Stand des Produktionsschemas vom 31. Juli 2026. Er enthält auch das zuvor
+Ist-Stand des Produktionsschemas vom 2. August 2026. Er enthält auch das zuvor
 nicht versionierte Basisschema von `kd_store`, samt Constraints, Funktionen,
 Triggern, RLS-Policies und Grants. Historische Migrationen bleiben unverändert
 die Änderungshistorie; der Snapshot ist die vollständige Prüf- und

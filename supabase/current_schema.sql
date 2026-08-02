@@ -2,9 +2,8 @@
 -- Kinodreieck: bereinigter Current-Schema-Snapshot
 -- Erzeugt am 31.07.2026 aus dem verknüpften Produktionsprojekt mit
 -- `supabase db dump --linked --schema public` und PostgreSQL 17; anschließend
--- auf den angewandten Stand 20260731170000 gebracht und um die als Nächstes
--- laufende additive Migration 20260802120000 ergänzt. Erwarteter Stand danach:
--- 19 Tabellen / 43 Funktionen / 13 Trigger / 25 Policies.
+-- auf den angewandten Stand 20260802220000 gebracht. Erwarteter Stand danach:
+-- 20 Tabellen / 45 Funktionen / 14 Trigger / 25 Policies.
 --
 -- Enthält ausschließlich Schema: Tabellen, Constraints, Funktionen, Trigger,
 -- RLS-Policies und Grants. Keine Tabellenzeilen, Konten oder Secrets.
@@ -2198,6 +2197,46 @@ $$;
 ALTER FUNCTION "public"."kd_filmwissen_werk_sicherstellen"("p_typ" "text", "p_titel" "text", "p_originaltitel" "text", "p_jahr" integer, "p_kennungen" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") RETURNS TABLE("publication_id" "uuid", "share_token" "uuid", "article_id" "text", "author" "text", "payload" "jsonb", "updated_at" timestamp with time zone, "claimed" boolean)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+declare
+  v_account_id uuid := auth.uid();
+  v_claimed boolean := false;
+begin
+  if v_account_id is null then
+    raise exception 'authenticated account required' using errcode = '42501';
+  end if;
+  if p_share_token is null then
+    raise exception 'share token required' using errcode = '22023';
+  end if;
+
+  insert into public.kd_shared_article_claims (account_id, share_token)
+  select v_account_id, s.share_token
+  from public.kd_shared_articles as s
+  where s.share_token = p_share_token
+  on conflict on constraint kd_shared_article_claims_pkey do nothing
+  returning true into v_claimed;
+
+  return query
+  select
+    s.publication_id,
+    s.share_token,
+    s.article_id,
+    s.author,
+    s.payload,
+    s.updated_at,
+    coalesce(v_claimed, false)
+  from public.kd_shared_articles as s
+  where s.share_token = p_share_token;
+end
+$$;
+
+
+ALTER FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."kd_key_ok"("the_owner" "text") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -2215,12 +2254,13 @@ $$;
 ALTER FUNCTION "public"."kd_key_ok"("the_owner" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."kd_list_shared_articles"() RETURNS TABLE("publication_id" "uuid", "article_id" "text", "author" "text", "payload" "jsonb", "updated_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."kd_list_shared_articles"() RETURNS TABLE("publication_id" "uuid", "share_token" "uuid", "article_id" "text", "author" "text", "payload" "jsonb", "updated_at" timestamp with time zone)
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'pg_catalog', 'public'
     AS $$
   select
     s.publication_id,
+    s.share_token,
     s.article_id,
     s.author,
     s.payload,
@@ -2325,6 +2365,22 @@ $$;
 ALTER FUNCTION "public"."kd_quellen_touch"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."kd_seed_shared_article_owner_claim"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+begin
+  insert into public.kd_shared_article_claims (account_id, share_token)
+  values (new.account_id, new.share_token)
+  on conflict (account_id, share_token) do nothing;
+  return new;
+end
+$$;
+
+
+ALTER FUNCTION "public"."kd_seed_shared_article_owner_claim"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."kd_shared_article_touch"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'pg_catalog', 'public'
@@ -2336,10 +2392,12 @@ begin
     end if;
     new.account_id := auth.uid();
     new.publication_id := coalesce(new.publication_id, gen_random_uuid());
+    new.share_token := gen_random_uuid();
     new.published_at := now();
   else
     new.account_id := old.account_id;
     new.publication_id := old.publication_id;
+    new.share_token := old.share_token;
     new.article_id := old.article_id;
     new.published_at := old.published_at;
   end if;
@@ -2805,8 +2863,23 @@ COMMENT ON TABLE "public"."kd_quellen" IS 'Quellenregister Etappe 4: Freigabesta
 
 
 
+CREATE TABLE IF NOT EXISTS "public"."kd_shared_article_claims" (
+    "account_id" "uuid" NOT NULL,
+    "share_token" "uuid" NOT NULL,
+    "claimed_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+
+ALTER TABLE "public"."kd_shared_article_claims" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."kd_shared_article_claims" IS 'Serverseitige Einmal-Sperre: ein Account kann jeden Blog-Upload-Token nur einmal uebernehmen.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."kd_shared_articles" (
     "publication_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "share_token" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "account_id" "uuid" DEFAULT "auth"."uid"() NOT NULL,
     "article_id" "text" NOT NULL,
     "author" "text" NOT NULL,
@@ -2823,6 +2896,9 @@ ALTER TABLE "public"."kd_shared_articles" OWNER TO "postgres";
 
 
 COMMENT ON TABLE "public"."kd_shared_articles" IS 'Explizit veroeffentlichte Blog-Projektionen. Private Quelle bleibt in kd_personal; oeffentliche RPC verbirgt account_id.';
+
+
+COMMENT ON COLUMN "public"."kd_shared_articles"."share_token" IS 'Unveraenderlicher, oeffentlicher Upload-Token einer Blog-Projektion.';
 
 
 
@@ -2951,6 +3027,11 @@ ALTER TABLE ONLY "public"."kd_quellen"
 
 
 
+ALTER TABLE ONLY "public"."kd_shared_article_claims"
+    ADD CONSTRAINT "kd_shared_article_claims_pkey" PRIMARY KEY ("account_id", "share_token");
+
+
+
 ALTER TABLE ONLY "public"."kd_shared_articles"
     ADD CONSTRAINT "kd_shared_articles_account_id_article_id_key" UNIQUE ("account_id", "article_id");
 
@@ -2958,6 +3039,11 @@ ALTER TABLE ONLY "public"."kd_shared_articles"
 
 ALTER TABLE ONLY "public"."kd_shared_articles"
     ADD CONSTRAINT "kd_shared_articles_pkey" PRIMARY KEY ("publication_id");
+
+
+
+ALTER TABLE ONLY "public"."kd_shared_articles"
+    ADD CONSTRAINT "kd_shared_articles_share_token_key" UNIQUE ("share_token");
 
 
 
@@ -3046,6 +3132,10 @@ CREATE OR REPLACE TRIGGER "kd_personal_touch_trg" BEFORE INSERT OR UPDATE ON "pu
 
 
 CREATE OR REPLACE TRIGGER "kd_quellen_touch" BEFORE UPDATE ON "public"."kd_quellen" FOR EACH ROW EXECUTE FUNCTION "public"."kd_quellen_touch"();
+
+
+
+CREATE OR REPLACE TRIGGER "kd_shared_article_owner_claim_trg" AFTER INSERT ON "public"."kd_shared_articles" FOR EACH ROW EXECUTE FUNCTION "public"."kd_seed_shared_article_owner_claim"();
 
 
 
@@ -3142,6 +3232,16 @@ ALTER TABLE ONLY "public"."kd_shared_articles"
 
 
 
+ALTER TABLE ONLY "public"."kd_shared_article_claims"
+    ADD CONSTRAINT "kd_shared_article_claims_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."kd_shared_article_claims"
+    ADD CONSTRAINT "kd_shared_article_claims_share_token_fkey" FOREIGN KEY ("share_token") REFERENCES "public"."kd_shared_articles"("share_token") ON DELETE CASCADE;
+
+
+
 CREATE POLICY "del_shared" ON "public"."kd_store" FOR DELETE TO "anon" USING ((("scope" = 'shared'::"text") AND "public"."kd_key_ok"("owner")));
 
 
@@ -3219,6 +3319,9 @@ CREATE POLICY "kd_quellen_read_konto" ON "public"."kd_quellen" FOR SELECT TO "au
 
 
 ALTER TABLE "public"."kd_shared_articles" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."kd_shared_article_claims" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."kd_store" ENABLE ROW LEVEL SECURITY;
@@ -3473,6 +3576,13 @@ GRANT ALL ON FUNCTION "public"."kd_filmwissen_werk_sicherstellen"("p_typ" "text"
 
 
 
+REVOKE ALL ON FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") FROM "anon";
+GRANT ALL ON FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "service_role";
@@ -3506,6 +3616,13 @@ GRANT ALL ON FUNCTION "public"."kd_quelle_status_setzen"("p_slug" "text", "p_sta
 GRANT ALL ON FUNCTION "public"."kd_quellen_touch"() TO "anon";
 GRANT ALL ON FUNCTION "public"."kd_quellen_touch"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."kd_quellen_touch"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."kd_seed_shared_article_owner_claim"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "public"."kd_seed_shared_article_owner_claim"() FROM "anon";
+REVOKE ALL ON FUNCTION "public"."kd_seed_shared_article_owner_claim"() FROM "authenticated";
+GRANT ALL ON FUNCTION "public"."kd_seed_shared_article_owner_claim"() TO "service_role";
 
 
 
@@ -3572,6 +3689,10 @@ GRANT ALL ON TABLE "public"."kd_series_watch" TO "service_role";
 
 GRANT ALL ON TABLE "public"."kd_quellen" TO "service_role";
 GRANT SELECT ON TABLE "public"."kd_quellen" TO "authenticated";
+
+
+
+GRANT ALL ON TABLE "public"."kd_shared_article_claims" TO "service_role";
 
 
 

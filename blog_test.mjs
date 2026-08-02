@@ -14,7 +14,8 @@ const master = [
 ];
 const shared = {
   publication_id: "11111111-1111-4111-8111-111111111111",
-  db_owner: "eva", db_key: "kd:blog:top-noir", author: "Eva",
+  share_token: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  db_owner: "public", db_key: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", author: "Eva",
   artikel: {
     id: "top-noir", titel: "Noir-Klassiker", autor: "Eva",
     text: "Absatz eins.\n\nAbsatz zwei.", geordnet: true,
@@ -28,7 +29,8 @@ const shared = {
 /* ---------- 1) blogZuArtikel: Ziehen ---------- */
 const art = A.blogZuArtikel(shared, [], master, "2026-01-01T00:00:00Z");
 check("Herkunft = gezogen", art.herkunft === "gezogen");
-check("DB-Referenz übernommen", art.db_owner === "eva" && art.db_key === "kd:blog:top-noir");
+check("Upload-Token als DB-Referenz übernommen",
+  art.db_owner === "public" && art.db_key === shared.share_token);
 check("öffentliche Projektions-ID als Snapshot-Herkunft übernommen",
   art.source_publication_id === shared.publication_id);
 check("Ladezeit des Snapshots ist stabil gespeichert",

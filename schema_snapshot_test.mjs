@@ -19,16 +19,17 @@ check("Snapshot enthält keine Tabelleninhalte",
 check("Snapshot enthält keine erkennbaren Zugangsdaten",
   !/sb_secret_|sk-ant-|BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|PASSWORD\s*=/i.test(sql)
   && !/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/.test(sql));
-check("Erwarteter Stand enthält alle 19 Anwendungstabellen",
-  treffer(/^CREATE TABLE IF NOT EXISTS "public"\./gm) === 19);
+check("Erwarteter Stand enthält alle 20 Anwendungstabellen",
+  treffer(/^CREATE TABLE IF NOT EXISTS "public"\./gm) === 20);
 check("Produktionsstand enthält Funktionen, Trigger und Policies",
-  treffer(/^CREATE OR REPLACE FUNCTION "public"\./gm) === 43
-  && treffer(/^CREATE OR REPLACE TRIGGER /gm) === 13
+  treffer(/^CREATE OR REPLACE FUNCTION "public"\./gm) === 45
+  && treffer(/^CREATE OR REPLACE TRIGGER /gm) === 14
   && treffer(/^CREATE POLICY /gm) === 25);
 for (const tabelle of [
   "kd_catalog",
   "kd_personal",
   "kd_series_watch",
+  "kd_shared_article_claims",
   "kd_shared_articles",
   "kd_ai_log",
   "kd_filmwerke",
@@ -50,6 +51,11 @@ check("Wochenplan und atomare Serienbeobachtung sind im Schemavertrag",
   /'kd:wochenplan'::"text"/.test(sql)
   && /FUNCTION "public"\."kd_set_series_watch"/.test(sql)
   && /REVOKE ALL ON FUNCTION "public"\."kd_set_series_watch"[^\n]+FROM PUBLIC/.test(sql));
+check("Blog-Uploads haben atomare, kontogebundene Einmal-Tokens",
+  /"kd_shared_articles_share_token_key" UNIQUE \("share_token"\)/.test(sql)
+  && /"kd_shared_article_claims_pkey" PRIMARY KEY \("account_id", "share_token"\)/.test(sql)
+  && /FUNCTION "public"\."kd_claim_shared_article"/.test(sql)
+  && /REVOKE ALL ON FUNCTION "public"\."kd_claim_shared_article"[^\n]+FROM "anon"/.test(sql));
 check("Öffentlicher Katalogvertrag enthält den gemeinsamen Demo-Seed",
   /POLICY "kd_catalog_read_public"[\s\S]+?'demo_seed'::"text"/.test(sql));
 check("Streaming-Katalog ist getrennt und bleibt für alte Publisher kompatibel",

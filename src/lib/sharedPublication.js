@@ -69,6 +69,7 @@ export function completePublication(article, operationId, result = {}, nowIso = 
       operationId: null,
       errorCode: null,
       publicationId: published ? (result.publicationId || current.publicationId || null) : null,
+      shareToken: published ? (result.shareToken || current.shareToken || null) : null,
       updatedAt: result.updatedAt || nowIso,
     },
   };

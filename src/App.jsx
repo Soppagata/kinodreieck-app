@@ -2063,6 +2063,7 @@ export default function App() {
         {tab === "blog" && (
           <BlogTab
             artikel={artikelListe} master={refUniversum}
+            angemeldet={session.mode === "account"}
             fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
             onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}

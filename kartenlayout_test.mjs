@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { quelleBadges, QUELLEN_KLASSEN } from "./src/lib/quellen.js";
+import { sortiereStreamingTitel } from "./src/lib/streamingSort.js";
 
 let ok = 0;
 const check = (name, fn) => {
@@ -73,6 +74,21 @@ check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag"
   assert.match(streaming, /className="kd-entdecken-beobachten"/);
   assert.match(streaming, /setzeSerienBeobachtung/);
   assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
+});
+
+check("Streaming sortiert ohne Relevanz- oder Bewertungswerte", () => {
+  const titel = [
+    { titel: "Zulu", jahr: 2001, typ: "movie", dienste: [] },
+    { titel: "Alien", jahr: 1979, typ: "movie", dienste: ["Netflix"] },
+    { titel: "Ohne Jahr", jahr: null, typ: "tv_series", dienste: ["Prime Video"] },
+  ];
+  assert.deepEqual(sortiereStreamingTitel(titel, "titel", "auf").map((t) => t.titel), ["Alien", "Ohne Jahr", "Zulu"]);
+  assert.deepEqual(sortiereStreamingTitel(titel, "jahr", "ab").map((t) => t.titel), ["Zulu", "Alien", "Ohne Jahr"]);
+
+  const streaming = lies("./src/tabs/StreamingTab.jsx");
+  assert.doesNotMatch(streaming, /Sortierung: Passung|User-Score|Könnte dir gefallen|passungStufe|lesbaresPassungsSignal/);
+  assert.match(streaming, /data-tour="entdecken-sortierung"/);
+  assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
 });
 
 check("Kinoticket zeigt keine Bewertung im Programmkopf", () => {

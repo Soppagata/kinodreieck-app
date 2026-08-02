@@ -4,7 +4,7 @@
    `kd:artikel`-Topf. Dieser Dienst verwaltet nur seine veröffentlichte Kopie:
 
    - list(): öffentlich und immer OHNE Sitzungstoken
-   - publish()/unpublish(): mit der normalen Account-Sitzung
+   - publish()/unpublish()/claim(): mit der normalen Account-Sitzung
    - die Account-ID wird nie gesendet; die Datenbank setzt sie aus auth.uid()
 
    Shared Blogs sind damit weder persönlicher Storage noch Filmkatalog. Die
@@ -17,6 +17,7 @@ import { istSupabaseProjektUrl, publicSupabaseHeaders } from "../lib/supabasePub
 
 const TABLE = "kd_shared_articles";
 const LIST_RPC = "kd_list_shared_articles";
+const CLAIM_RPC = "kd_claim_shared_article";
 const MAX_REFERENZEN = 15;
 
 function text(wert) { return String(wert == null ? "" : wert).trim(); }
@@ -70,14 +71,16 @@ function parsePublicRows(data) {
     }
     if (!artikel || typeof artikel !== "object" || !text(artikel.titel)) continue;
     const publicationId = text(row.publication_id);
-    if (!publicationId) continue;
+    const shareToken = text(row.share_token);
+    if (!publicationId || !shareToken) continue;
     blogs.push({
       publication_id: publicationId,
+      share_token: shareToken,
       /* Kompatibilitätsfelder für bereits exportierte lokale Snapshots. Sie
-         enthalten keine Account-ID; `publication_id` ist die öffentliche,
-         zufällige Identität der Projektion. */
+         enthalten keine Account-ID; der Upload-Token ist die öffentliche,
+         zufällige Identität für die einmalige Übernahme. */
       db_owner: "public",
-      db_key: publicationId,
+      db_key: shareToken,
       author: text(row.author) || text(artikel.autor) || "?",
       updated_at: row.updated_at || null,
       artikel,
@@ -223,7 +226,7 @@ export function createSharedArticlesService({
       const payload = sharedArticlePayload(article);
       const result = await accountRequest(
         "POST",
-        `${TABLE}?on_conflict=account_id,article_id&select=publication_id,updated_at`,
+        `${TABLE}?on_conflict=account_id,article_id&select=publication_id,share_token,updated_at`,
         {
           operation: "article.publish",
           prefer: "resolution=merge-duplicates,return=representation",
@@ -237,7 +240,42 @@ export function createSharedArticlesService({
         ok: true,
         status: result.status,
         publicationId: text(row?.publication_id) || null,
+        shareToken: text(row?.share_token) || null,
         updatedAt: row?.updated_at || null,
+      };
+    },
+    async claim(shareToken) {
+      const token = text(shareToken);
+      if (!token) {
+        throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+          source: "shared-articles", operation: "article.claim", reason: "missing-share-token",
+        });
+      }
+      const result = await accountRequest(
+        "POST",
+        `rpc/${CLAIM_RPC}`,
+        {
+          operation: "article.claim",
+          body: { p_share_token: token },
+        },
+      );
+      const row = Array.isArray(result.data) ? result.data[0] : null;
+      if (!row) {
+        throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+          source: "shared-articles", operation: "article.claim", reason: "unknown-share-token",
+        });
+      }
+      const [blog] = parsePublicRows([row]);
+      if (!blog) {
+        throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+          source: "shared-articles", operation: "article.claim", reason: "invalid-claimed-row",
+        });
+      }
+      return {
+        ok: true,
+        status: result.status,
+        claimed: row.claimed === true,
+        blog,
       };
     },
     async unpublish(articleId) {

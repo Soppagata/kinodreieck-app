@@ -83,6 +83,7 @@ check("Projektion enthält keine lokalen Referenzen oder Publikationsmetadaten",
 
 nextResponses = [response(200, [{
   publication_id: "11111111-1111-4111-8111-111111111111",
+  share_token: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   article_id: article.id,
   author: "Max",
   payload,
@@ -98,11 +99,13 @@ check("Öffentlicher Read sendet niemals ein Sitzungstoken",
   listCall.options.headers.apikey === config.supabasePublishableKey
   && !listCall.options.headers.Authorization);
 check("Öffentliche Herkunft enthält keine Account-ID",
-  listed.blogs[0].db_key === "11111111-1111-4111-8111-111111111111"
+  listed.blogs[0].db_key === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  && listed.blogs[0].share_token === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
   && listed.blogs[0].db_owner === "public");
 
 nextResponses = [response(201, [{
   publication_id: "22222222-2222-4222-8222-222222222222",
+  share_token: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   updated_at: "2026-07-31T12:00:00Z",
 }])];
 calls = []; tokenCalls = [];
@@ -114,9 +117,43 @@ check("Publish ist ein accountgebundener, idempotenter Upsert",
   && publishCall.options.headers.Authorization === "Bearer token-alt"
   && /resolution=merge-duplicates/.test(publishCall.options.headers.Prefer));
 check("Der Client sendet niemals account_id",
-  !("account_id" in publishBody) && publishBody.article_id === article.id);
-check("Publish liefert die öffentliche Projektions-ID zurück",
-  published.ok && published.publicationId === "22222222-2222-4222-8222-222222222222");
+  !("account_id" in publishBody) && !("share_token" in publishBody) && publishBody.article_id === article.id);
+check("Publish liefert Projektions-ID und unveränderlichen Upload-Token zurück",
+  published.ok
+  && published.publicationId === "22222222-2222-4222-8222-222222222222"
+  && published.shareToken === "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+  && publishCall.url.includes("select=publication_id,share_token,updated_at"));
+
+nextResponses = [response(200, [{
+  publication_id: "11111111-1111-4111-8111-111111111111",
+  share_token: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  article_id: article.id,
+  author: "Max",
+  payload,
+  updated_at: "2026-07-31T11:00:00Z",
+  claimed: true,
+}])];
+calls = [];
+const claimed = await service.claim("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+const claimCall = calls[0];
+check("Blog-Übernahme claimt den Upload-Token accountgebunden über die RPC",
+  claimed.ok && claimed.claimed && claimed.blog.db_key === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  && claimCall.url.endsWith("/rest/v1/rpc/kd_claim_shared_article")
+  && claimCall.options.headers.Authorization === "Bearer token-alt"
+  && JSON.parse(claimCall.options.body).p_share_token === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+nextResponses = [response(200, [{
+  publication_id: "11111111-1111-4111-8111-111111111111",
+  share_token: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  article_id: article.id,
+  author: "Max",
+  payload,
+  updated_at: "2026-07-31T11:00:00Z",
+  claimed: false,
+}])];
+const claimedAgain = await service.claim("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+check("Ein bereits verbrauchter Upload-Token erzeugt keine zweite lokale Übernahme",
+  claimedAgain.ok && claimedAgain.claimed === false);
 
 nextResponses = [response(200, [])];
 calls = [];
@@ -169,10 +206,12 @@ const stale = completePublication(started, "fremde-op", {});
 check("Eine alte Antwort kann keinen neueren Vorgang abschließen", stale === started);
 const done = completePublication(started, "op-1", {
   publicationId: "33333333-3333-4333-8333-333333333333",
+  shareToken: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
 }, "2026-07-31T12:01:00Z");
 check("Bestätigtes Publish endet dauerhaft als published",
   publicationState(done).status === SHARED_PUBLICATION_STATUS.PUBLISHED
-  && publicationState(done).publicationId === "33333333-3333-4333-8333-333333333333");
+  && publicationState(done).publicationId === "33333333-3333-4333-8333-333333333333"
+  && publicationState(done).shareToken === "cccccccc-cccc-4ccc-8ccc-cccccccccccc");
 const deleting = beginPublication(done, SHARED_PUBLICATION_ACTION.DELETE, "op-2");
 const failed = failPublication(deleting, "op-2", "offline");
 check("Fehler bewahrt die wiederholbare Löschabsicht",
@@ -193,6 +232,24 @@ check("Öffentliche RPC gibt account_id nicht zurück",
 check("anon besitzt kein Tabellenrecht, nur RPC-Ausführung",
   /revoke all on table public\.kd_shared_articles from public, anon/.test(schema)
   && /grant execute on function public\.kd_list_shared_articles\(\) to anon, authenticated/.test(schema));
+
+const claimSchema = fs.readFileSync("supabase/migrations/20260802220000_shared_article_claim_tokens.sql", "utf8");
+check("Jeder veröffentlichte Blog besitzt einen eindeutigen, unveränderlichen Upload-Token",
+  /add column if not exists share_token uuid/.test(claimSchema)
+  && /unique \(share_token\)/.test(claimSchema)
+  && /new\.share_token := gen_random_uuid\(\)/.test(claimSchema)
+  && /new\.share_token := old\.share_token/.test(claimSchema));
+check("Die Datenbank erzwingt genau einen Claim je Konto und Token",
+  /primary key \(account_id, share_token\)/.test(claimSchema)
+  && /on conflict \(account_id, share_token\) do nothing/.test(claimSchema));
+check("Der Autor kann den eigenen Upload nicht erneut übernehmen",
+  /kd_seed_shared_article_owner_claim/.test(claimSchema)
+  && /after insert on public\.kd_shared_articles/.test(claimSchema)
+  && /revoke all on function public\.kd_seed_shared_article_owner_claim\(\) from public, anon, authenticated/.test(claimSchema));
+check("Nur angemeldete Konten dürfen die atomare Claim-RPC ausführen",
+  /auth\.uid\(\)/.test(claimSchema)
+  && /revoke all on function public\.kd_claim_shared_article\(uuid\) from public, anon/.test(claimSchema)
+  && /grant execute on function public\.kd_claim_shared_article\(uuid\) to authenticated/.test(claimSchema));
 
 const archive = fs.readFileSync("supabase/migrations/20260731121000_archive_legacy_shared.sql", "utf8");
 check("Legacy-Shared wird vor dem Löschen reversibel archiviert",

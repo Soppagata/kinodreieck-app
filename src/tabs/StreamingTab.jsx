@@ -3,9 +3,8 @@ import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
-import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
+import { norm } from "../lib/match.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
-import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { Chip, ChipReihe, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -15,7 +14,7 @@ import {
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
-import { istPassend, lesbaresPassungsSignal, passungStufe } from "../lib/passung.js";
+import { sortiereStreamingTitel } from "../lib/streamingSort.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -72,12 +71,12 @@ export function StreamingTab({
   const [ansicht, setAnsicht] = useState("programm");
   useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
-  const [axis, setAxis] = useState(null);
-  const [katF, setKatF] = useState(null);
   const [nurWunsch, setNurWunsch] = useState(false);
   const [suche, setSuche] = useState("");
-  const [sortE, setSortE] = useState("relevanz");
-  const [sortRichtungE, setSortRichtungE] = useState("ab");
+  const [sortP, setSortP] = useState("titel");
+  const [sortRichtungP, setSortRichtungP] = useState("auf");
+  const [sortE, setSortE] = useState("titel");
+  const [sortRichtungE, setSortRichtungE] = useState("auf");
   const [genreE, setGenreE] = useState(null);
   const [dekadeE, setDekadeE] = useState(null);
   const [typE, setTypE] = useState(null);
@@ -88,7 +87,6 @@ export function StreamingTab({
   entdeckenStatusRef.current = entdeckenStatus;
   const [zeigeErledigte, setZeigeErledigte] = useState(true); // Erledigte bleiben standardmäßig sichtbar; der Chip kann sie bewusst ausblenden.
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
-  const [nurRelevant, setNurRelevant] = useState(false);
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
   const [fokusOverride, setFokusOverride] = useState(null);
@@ -104,9 +102,9 @@ export function StreamingTab({
     if (!fokusTreffer) return undefined;
     setFokusOverride({ art: fokusTreffer.art, ref: String(fokusTreffer.ref) });
     setAnsicht(fokusTreffer.art === "entdecken" ? "entdecken" : "programm");
-    setSuche(fokusTreffer.titel || "");
-    setSchnellDienst(null); setAxis(null); setKatF(null); setNurWunsch(false);
-    setGenreE(null); setDekadeE(null); setTypE(null); setNurRelevant(false);
+    setSuche(fokusTreffer.art === "programm" ? (fokusTreffer.titel || "") : "");
+    setSchnellDienst(null); setNurWunsch(false);
+    setGenreE(null); setDekadeE(null); setTypE(null);
     setZeigeErledigte(true); setSichtbarE(200);
     setExpandedId((fokusTreffer.art === "entdecken" ? "e" : "s") + fokusTreffer.ref);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -272,20 +270,12 @@ export function StreamingTab({
     let l = bekannt.titel.filter((t) => (
       fokusOverride?.art === "programm" && String(t.id) === fokusOverride.ref
     ) || (dienstOk(t) && schnellOk(t)));
-    /* schlagseiten(), nicht schlagseite(): Die Karte darunter nennt bei
-       geteilter Spitze BEIDE Achsen ("WIE/WARUM"). Einwertig gefiltert
-       verschwand Sin City (4/2/4) beim Klick auf "WARUM-lastig", obwohl die
-       Karte eine Zeile hoeher WARUM behauptet. Der Filterchip ist eine
-       explizite Nutzerabfrage, keine Rangfrage — Ranking (score, finder.js)
-       bleibt bewusst einwertig. */
-    if (axis) l = l.filter((f) => schlagseiten(f.bewertung).includes(axis));
-    if (katF) l = l.filter((f) => f.kategorie === katF);
     /* Must-Watch-Filter liest die LISTE (Verknüpfung auf Master-ID) — nicht mehr
        das eingebackene must_watch-Flag aus dem Katalog-Job (kann veraltet sein). */
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
-    return [...l].sort((a, b) => score(b) - score(a));
-  }, [bekannt, datenDa, dienstOk, schnellOk, axis, katF, nurWunsch, mustwatchIds, suche, fokusOverride]);
+    return sortiereStreamingTitel(l, sortP, sortRichtungP);
+  }, [bekannt, datenDa, dienstOk, schnellOk, nurWunsch, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
 
   const genresE = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -294,9 +284,6 @@ export function StreamingTab({
     return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([g]) => g);
   }, [entdecken, entdeckenDa]);
 
-  /* Die sichtbare Passung ist bewusst katalogunabhängig: Ein Jahrzehntsignal
-     wird nicht plötzlich „hoch", nur weil im aktuellen Katalog kein stärkerer
-     Treffer liegt. Die Rohzahl bleibt ausschließlich Sortierhilfe. */
   const erledigtAnzahl = useMemo(() => {
     if (!entdeckenDa) return 0;
     return entdecken.titel.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) || mediathekIdVon(entdeckenStatus[t.watchmode_id])).length;
@@ -331,34 +318,11 @@ export function StreamingTab({
       fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
     ) || (dienstOk(t) && schnellOk(t)));
     if (!zeigeErledigte) l = l.filter((t) => !statusVon(entdeckenStatus[t.watchmode_id]) && !mediathekIdVon(entdeckenStatus[t.watchmode_id]));
-    if (nurRelevant) l = l.filter(istPassend);
     if (genreE) l = l.filter((t) => (t.genres || []).includes(genreE));
     if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
-    if (suche.trim()) { const nq = norm(suche); l = l.filter((t) => norm(t.titel || "").includes(nq)); }
-    const passungRang = (t) => ({ hoch: 3, mittel: 2, gering: 1 }[passungStufe(t)] || 0);
-    const werte = {
-      relevanz: (t) => [passungRang(t), Number.isFinite(t.relevanz) ? t.relevanz : null],
-      jahr: (t) => [Number.isFinite(t.jahr) ? t.jahr : null],
-      score: (t) => [Number.isFinite(t.user_score) ? t.user_score : null],
-      titel: (t) => [t.titel || ""],
-    };
-    const richtung = sortRichtungE === "auf" ? 1 : -1;
-    const vergleich = (a, b) => {
-      const av = (werte[sortE] || werte.relevanz)(a);
-      const bv = (werte[sortE] || werte.relevanz)(b);
-      for (let i = 0; i < Math.max(av.length, bv.length); i++) {
-        const x = av[i] ?? null; const y = bv[i] ?? null;
-        if (x == null && y != null) return 1;
-        if (x != null && y == null) return -1;
-        if (x === y) continue;
-        if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y), "de") * richtung;
-        return (x - y) * richtung;
-      }
-      return (a.titel || "").localeCompare(b.titel || "", "de");
-    };
-    return [...l].sort(vergleich);
-  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, suche, sortE, sortRichtungE, entdeckenStatus, zeigeErledigte, nurRelevant, fokusOverride]);
+    return sortiereStreamingTitel(l, sortE, sortRichtungE);
+  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, zeigeErledigte, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
   useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
 
@@ -450,6 +414,20 @@ export function StreamingTab({
         <>
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+            <span style={{ display: "inline-flex" }}>
+              <select value={sortP} onChange={(e) => setSortP(e.target.value)} aria-label="Mein Programm sortieren"
+                style={{ ...inputStyle, width: "auto" }}>
+                <option value="titel">Titel</option>
+                <option value="jahr">Jahr</option>
+                <option value="anbieter">Anbieter</option>
+              </select>
+              <button type="button" style={{ ...btnStyle(false), minWidth: 42, padding: "7px 10px" }}
+                onClick={() => setSortRichtungP((r) => r === "ab" ? "auf" : "ab")}
+                aria-label={sortRichtungP === "ab" ? "Absteigend sortiert; aufsteigend wechseln" : "Aufsteigend sortiert; absteigend wechseln"}
+                title={sortRichtungP === "ab" ? "Absteigend" : "Aufsteigend"}>
+                {sortRichtungP === "ab" ? "↓" : "↑"}
+              </button>
+            </span>
             <button className="kd-seitenfilter" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
               {streamFilterOffen ? "▾ Filter" : "▸ Filter"}
@@ -462,15 +440,7 @@ export function StreamingTab({
                   <Chip key={d} active={schnellDienst === d} onClick={() => setSchnellDienst(schnellDienst === d ? null : d)}>{d}</Chip>
                 ))}
                 {schnellOptionen.length > 0 && <span style={{ width: 12 }} />}
-                <Chip active={axis === "wie"} color={T.wie} onClick={() => setAxis(axis === "wie" ? null : "wie")}>WIE-lastig</Chip>
-                <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
-                <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
                 <Chip active={nurWunsch} onClick={() => setNurWunsch(!nurWunsch)}>Nur Must-Watch</Chip>
-              </ChipReihe>
-              <ChipReihe style={{ gap: 6, marginBottom: 14 }}>
-                {BEWERTUNGSKATEGORIEN.map((k) => (
-                  <Chip key={k.id} active={katF === k.id} onClick={() => setKatF(katF === k.id ? null : k.id)}>{k.label}</Chip>
-                ))}
               </ChipReihe>
             </>
           )}
@@ -524,7 +494,7 @@ export function StreamingTab({
       {ansicht === "entdecken" && datenDa && (
         <>
           <div style={{ background: T.saalHoch, borderRadius: 6, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: T.rauch }}>
-            Ungeprüft — Heuristik-Sortierung{entdecken && entdecken.heuristik === false ? " (abgeschaltet)" : ""}. Kein Dreieck, keine Bewertung. Merkliste = Übergabe an die Bewertung.
+            Ungeprüfte Katalogtitel — kein Dreieck und keine Bewertung. Sortiert wird nur nach den sichtbaren Metadaten.
           </div>
           {staffelHinweise.length > 0 && (
             <div className="kd-staffelhinweise" style={{ marginBottom: 14 }}>
@@ -550,15 +520,15 @@ export function StreamingTab({
             </div>
           )}
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <input value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
             {/* data-tour auf dem Wrapper, NICHT dem <select>: native Form-Controls
                 schlucken den box-shadow-Rahmen, dann käme der Hinweis ohne Rahmen. */}
-            <span data-tour="entdecken-relevanz" style={{ display: "inline-flex" }}>
-              <select value={sortE} onChange={(e) => setSortE(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                <option value="relevanz">Sortierung: Passung</option>
-                <option value="jahr">Jahr</option>
-                <option value="score">User-Score</option>
+            <span data-tour="entdecken-sortierung" style={{ display: "inline-flex" }}>
+              <select value={sortE} onChange={(e) => setSortE(e.target.value)} aria-label="Entdecken sortieren"
+                style={{ ...inputStyle, width: "auto" }}>
                 <option value="titel">Titel</option>
+                <option value="jahr">Jahr</option>
+                <option value="art">Art</option>
+                <option value="anbieter">Anbieter</option>
               </select>
               <button type="button" style={{ ...btnStyle(false), minWidth: 42, padding: "7px 10px" }}
                 onClick={() => setSortRichtungE((r) => r === "ab" ? "auf" : "ab")}
@@ -567,9 +537,9 @@ export function StreamingTab({
                 {sortRichtungE === "ab" ? "↓" : "↑"}
               </button>
             </span>
-            <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
+            <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}
-              title="Übergabepunkt an den Daten-Chat — die Plattform bewertet nichts selbst.">
+              title="Merkliste als JSON-Datei exportieren">
               Merkliste ({merkliste.length}) exportieren
             </button>
           </div>
@@ -586,8 +556,6 @@ export function StreamingTab({
                 {schnellOptionen.length > 0 && <span style={{ width: 12 }} />}
                 <Chip active={typE === "movie"} onClick={() => setTypE(typE === "movie" ? null : "movie")}>Filme</Chip>
                 <Chip active={typE === "tv_series"} onClick={() => setTypE(typE === "tv_series" ? null : "tv_series")}>Serien</Chip>
-                <span style={{ width: 12 }} />
-                <Chip active={nurRelevant} color={T.wolfram} onClick={() => setNurRelevant(!nurRelevant)}>Könnte dir gefallen</Chip>
                 {erledigtAnzahl > 0 && (
                   <Chip active={zeigeErledigte} onClick={() => setZeigeErledigte(!zeigeErledigte)}>
                     Erledigte {zeigeErledigte ? "ausblenden" : "zeigen"} ({erledigtAnzahl})
@@ -658,11 +626,6 @@ export function StreamingTab({
                         <span>Unabhängig davon, ob du die Serie schon gesehen hast.</span>
                       </div>
                     )}
-                    {(t.relevanz_signale || []).length > 0 && (
-                      <div className="kd-entdecken-signale">
-                        Passung beruht auf: {(t.relevanz_signale || []).map(lesbaresPassungsSignal).join(" · ")}. Keine Bewertung.
-                      </div>
-                    )}
                     {addFilm && formFuer !== t.watchmode_id && !mediathekIdVon(entdeckenStatus[t.watchmode_id]) && (
                       <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 11px", marginTop: 8 }}
                         onClick={() => setFormFuer(t.watchmode_id)}>
@@ -693,12 +656,6 @@ export function StreamingTab({
                 )}
                 <div className="kd-entdecken-meta">
                   <DienstBadges className="kd-entdecken-dienste" dienste={t.dienste} auswahl={auswahl} kompakt={expandedId !== "e" + t.watchmode_id} />
-                  {t.relevanz != null && (
-                    <span className="kd-entdecken-relevanz" style={{ ...mono, color: T.wolfram }}
-                      title="Nachvollziehbare Passung aus deinen Profilsignalen, keine Bewertung">
-                      Passung: {passungStufe(t)}
-                    </span>
-                  )}
                 </div>
               </div>
             ))}

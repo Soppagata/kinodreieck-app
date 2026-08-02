@@ -245,10 +245,12 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
 }
 
 /* ---------- "Blogs entdecken": geteilte Blogs aus dem DB-Ordner ---------- */
-function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
+function EntdeckenAnsicht({ vorhandene, angemeldet, onZiehe, onZurueck }) {
   const [zustand, setZustand] = useState({ lade: true, fehler: "", blogs: [] });
   const [offen, setOffen] = useState(null);            // aufgeklappter Blog-Key
   const [gezogenLokal, setGezogenLokal] = useState({}); // frisch gezogene (key -> true)
+  const [ziehend, setZiehend] = useState({});
+  const [aktionsFehler, setAktionsFehler] = useState({});
 
   useEffect(() => {
     let ab = false;
@@ -261,10 +263,46 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
   }, []);
 
   const schonLokal = useMemo(() => {
-    const s = new Set();
-    for (const a of vorhandene || []) if (a.herkunft === "gezogen" && a.db_key) s.add((a.db_owner || "") + "|" + a.db_key);
-    return s;
+    const schluessel = new Set();
+    const tokens = new Set();
+    const publikationen = new Set();
+    for (const a of vorhandene || []) {
+      if (a.herkunft === "gezogen" && a.db_key) {
+        schluessel.add((a.db_owner || "") + "|" + a.db_key);
+        tokens.add(a.db_key);
+      }
+      if (a.herkunft === "gezogen" && a.source_publication_id) {
+        publikationen.add(a.source_publication_id);
+      }
+      const publikation = publicationState(a);
+      if (publikation.shareToken) tokens.add(publikation.shareToken);
+      if (publikation.publicationId) publikationen.add(publikation.publicationId);
+    }
+    return { schluessel, tokens, publikationen };
   }, [vorhandene]);
+
+  const zieheBlog = async (blog, key) => {
+    if (ziehend[key] || gezogenLokal[key]) return;
+    setZiehend((alt) => ({ ...alt, [key]: true }));
+    setAktionsFehler((alt) => ({ ...alt, [key]: "" }));
+    try {
+      let quelle = blog;
+      if (angemeldet) {
+        const result = await sharedArticlesService.claim(blog.share_token);
+        if (!result.claimed) {
+          setGezogenLokal((alt) => ({ ...alt, [key]: true }));
+          return;
+        }
+        quelle = result.blog;
+      }
+      onZiehe(quelle);
+      setGezogenLokal((alt) => ({ ...alt, [key]: true }));
+    } catch (error) {
+      setAktionsFehler((alt) => ({ ...alt, [key]: errorText(error) }));
+    } finally {
+      setZiehend((alt) => ({ ...alt, [key]: false }));
+    }
+  };
 
   return (
     <section>
@@ -282,7 +320,11 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
           const key = (b.db_owner || "") + "|" + b.db_key;
           const q = b.artikel || {};
           const auf = offen === key;
-          const drin = schonLokal.has(key) || !!gezogenLokal[key];
+          const drin = schonLokal.schluessel.has(key)
+            || schonLokal.tokens.has(b.share_token)
+            || schonLokal.publikationen.has(b.publication_id)
+            || !!gezogenLokal[key];
+          const laeuft = !!ziehend[key];
           return (
             <div key={key} style={{ background: T.saalHoch, borderRadius: 6, padding: "12px 14px" }}>
               <div onClick={() => setOffen(auf ? null : key)} style={{ cursor: "pointer" }}>
@@ -290,7 +332,7 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
                   {q.titel || "(ohne Titel)"}
                 </div>
                 <div style={{ ...mono, marginTop: 3 }}>
-                  {b.author}{b.updated_at ? " · " + String(b.updated_at).slice(0, 10) : ""} · {(q.liste || []).length} Referenzen{drin ? " · in deiner Mediathek" : ""}
+                  {b.author}{b.updated_at ? " · " + String(b.updated_at).slice(0, 10) : ""} · {(q.liste || []).length} Referenzen{drin ? " · bereits übernommen" : ""}
                 </div>
               </div>
               {auf && (
@@ -308,13 +350,14 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", opacity: drin ? 0.5 : 1, cursor: drin ? "default" : "pointer" }}
-                      disabled={drin}
-                      onClick={() => { onZiehe(b); setGezogenLokal((g) => ({ ...g, [key]: true })); }}>
-                      {drin ? "✓ In deiner Mediathek" : "In meine Mediathek ziehen"}
+                    <button style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", opacity: drin || laeuft ? 0.5 : 1, cursor: drin || laeuft ? "default" : "pointer" }}
+                      disabled={drin || laeuft}
+                      onClick={() => void zieheBlog(b, key)}>
+                      {laeuft ? "Wird übernommen …" : drin ? "✓ Bereits übernommen" : "In meine Mediathek ziehen"}
                     </button>
                     <span style={mono}>Referenzen, die du nicht hast, werden zu Rotlinks.</span>
                   </div>
+                  {aktionsFehler[key] && <div style={{ color: T.gefahr, fontSize: 12, marginTop: 8 }}>{aktionsFehler[key]}</div>}
                 </div>
               )}
             </div>
@@ -328,7 +371,7 @@ function EntdeckenAnsicht({ vorhandene, onZiehe, onZurueck }) {
 /* ---------- Haupt-Tab ---------- */
 export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   onErstellen, onAktualisieren, onSetzeRef, onFreigeben, onLoeschen, onAddFilm, onSpringeZuFilm,
-  exportArtikel, importArtikel, onZiehe, onRetryPublication }) {
+  exportArtikel, importArtikel, onZiehe, onRetryPublication, angemeldet = false }) {
   const [ansicht, setAnsicht] = useState({ typ: "liste" });
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
   const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
@@ -381,7 +424,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
       onSpringeZuFilm={onSpringeZuFilm} onAddFilm={onAddFilm} onSetzeRef={onSetzeRef} />;
   }
   if (ansicht.typ === "entdecken") {
-    return <EntdeckenAnsicht vorhandene={artikel} onZiehe={onZiehe} onZurueck={() => setAnsicht({ typ: "liste" })} />;
+    return <EntdeckenAnsicht vorhandene={artikel} angemeldet={angemeldet} onZiehe={onZiehe} onZurueck={() => setAnsicht({ typ: "liste" })} />;
   }
 
   /* Liste — der Hub: Karten klappen auf (Auszug + Referenz-Chips), erst der

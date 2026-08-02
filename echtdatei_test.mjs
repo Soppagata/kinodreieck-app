@@ -230,8 +230,13 @@ if (entdeckenKnopf) {
   /* Filterleiste ist default zugeklappt -> vor den Chip-Checks aufklappen */
   const sFilter = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((b.textContent || "").trim()) && /[▸▾]/.test(b.textContent || ""));
   if (sFilter && /▸/.test(sFilter.textContent)) { sFilter.click(); await warte(300); }
-  const relevantChip = knopf(/^Könnte dir gefallen$/i);
-  check("Chip: Könnte dir gefallen", !!relevantChip);
+  const entdeckenSortierung = doc.querySelector('select[aria-label="Entdecken sortieren"]');
+  check("Entdecken sortiert nur nach sichtbaren Metadaten",
+    !!entdeckenSortierung
+    && [...entdeckenSortierung.options].map((o) => o.value).join(",") === "titel,jahr,art,anbieter");
+  check("Entdecken enthält weder zweite Titelsuche noch Relevanzfilter",
+    !entdeckenSortierung?.closest(".kd-kompakt")?.querySelector('input[placeholder="Titel suchen …"]')
+    && !knopf(/^Könnte dir gefallen$/i));
   const gesehenKnopf = [...doc.querySelectorAll("button")].find((b) => /Als gesehen markieren/.test(b.getAttribute("title") || ""));
   check("Gesehen-Knopf pro Titel", !!gesehenKnopf);
   if (gesehenKnopf) {

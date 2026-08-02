@@ -953,7 +953,8 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
   const ziel = page.locator('[data-streaming-suchtreffer="entdecken:900200001"]');
   await expect(ziel).toBeVisible();
   await expect(ziel).toBeFocused();
-  await expect(ziel.getByText(/Passung beruht auf:/)).toBeVisible();
+  await expect(ziel.getByText(/Passung beruht auf:/)).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Entdecken sortieren" })).toBeVisible();
 });
 
 test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", async ({ page }) => {

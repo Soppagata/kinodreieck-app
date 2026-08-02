@@ -583,7 +583,8 @@ const sharedRow = Array.isArray(t15b.data) ? t15b.data[0] : null;
 const sharedAngelegt = (t15b.status === 200 || t15b.status === 201)
   && sharedRow?.account_id === A.id
   && sharedRow?.article_id === sharedArticleId
-  && !!sharedRow?.publication_id;
+  && !!sharedRow?.publication_id
+  && !!sharedRow?.share_token;
 pruefe("T15b A veröffentlicht OHNE account_id; der Server setzt auth.uid()",
   sharedAngelegt,
   "HTTP " + t15b.status + " account_id=" + (sharedRow?.account_id || "?"));
@@ -605,17 +606,48 @@ pruefe("T15d anon liest die Projektion über die schmale öffentliche RPC",
   sharedAngelegt && t15d.status === 200 && publicShared?.payload?.id === sharedArticleId,
   "HTTP " + t15d.status);
 pruefe("T15e die öffentliche RPC gibt keine Account-ID zurück",
-  !!publicShared && !Object.prototype.hasOwnProperty.call(publicShared, "account_id"),
+  !!publicShared
+  && publicShared.share_token === sharedRow?.share_token
+  && !Object.prototype.hasOwnProperty.call(publicShared, "account_id"),
   publicShared ? "Felder=[" + Object.keys(publicShared).join(",") + "]" : "Probe fehlt");
 
-const t15f = await rest(
+const t15f = await rest("POST", "/rpc/kd_claim_shared_article", {
+  body: { p_share_token: sharedRow?.share_token || crypto.randomUUID() },
+});
+pruefe("T15f anon darf keinen Blog-Token claimen",
+  t15f.status === 401 || t15f.status === 403,
+  "HTTP " + t15f.status);
+
+const t15g = await rest("POST", "/rpc/kd_claim_shared_article", {
+  token: A.token,
+  body: { p_share_token: sharedRow?.share_token || crypto.randomUUID() },
+});
+pruefe("T15g Autor kann den eigenen Upload nicht erneut übernehmen",
+  t15g.status === 200 && Array.isArray(t15g.data) && t15g.data[0]?.claimed === false,
+  "HTTP " + t15g.status + " claimed=" + String(t15g.data?.[0]?.claimed) + " data=" + JSON.stringify(t15g.data));
+
+const t15h = await rest("POST", "/rpc/kd_claim_shared_article", {
+  token: B.token,
+  body: { p_share_token: sharedRow?.share_token || crypto.randomUUID() },
+});
+const t15i = await rest("POST", "/rpc/kd_claim_shared_article", {
+  token: B.token,
+  body: { p_share_token: sharedRow?.share_token || crypto.randomUUID() },
+});
+pruefe("T15h–i B kann denselben Upload-Token exakt einmal übernehmen",
+  t15h.status === 200 && t15h.data?.[0]?.claimed === true
+  && t15i.status === 200 && t15i.data?.[0]?.claimed === false,
+  "erst=" + String(t15h.data?.[0]?.claimed) + " zweit=" + String(t15i.data?.[0]?.claimed)
+  + " data=" + JSON.stringify(t15h.data));
+
+const t15j = await rest(
   "DELETE",
   `/kd_shared_articles?publication_id=eq.${encodeURIComponent(sharedRow?.publication_id || crypto.randomUUID())}`,
   { token: B.token, prefer: "return=representation" },
 );
-pruefe("T15f B kann As öffentliche Projektion NICHT löschen",
-  sharedAngelegt && t15f.status === 200 && Array.isArray(t15f.data) && t15f.data.length === 0,
-  "HTTP " + t15f.status + " rows=" + (Array.isArray(t15f.data) ? t15f.data.length : "?"));
+pruefe("T15j B kann As öffentliche Projektion NICHT löschen",
+  sharedAngelegt && t15j.status === 200 && Array.isArray(t15j.data) && t15j.data.length === 0,
+  "HTTP " + t15j.status + " rows=" + (Array.isArray(t15j.data) ? t15j.data.length : "?"));
 
 /* --- Cleanup ------------------------------------------------------------- */
 async function raeumeEigeneProbe(token, accountId, key, erlaubteWerte, angelegt) {
