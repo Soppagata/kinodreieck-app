@@ -77,7 +77,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
             eingabe: z.eingabe.trim(), jahr: z.jahr ? Number(z.jahr) : null, typ: z.typ || null, ref: null,
           }));
           onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
-        }}>{vorlage ? "Speichern & neu abgleichen" : "Erstellen"}</button>
+        }}>{vorlage ? "Speichern" : "Erstellen"}</button>
         <button className="kd-blog-zurueck" style={btnStyle(false)} onClick={onAbbrechen} aria-label="Bearbeitung abbrechen und zurück">← Zurück</button>
       </div>
     </div>

@@ -444,6 +444,21 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test("Showa-Kulisse reicht mobil deutlich über die Bedienleiste", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page, { modus: "showa" });
+  await page.goto("/");
+
+  const szene = page.locator(".kd-showa-scene");
+  await expect(szene).toBeVisible();
+  const box = await szene.boundingBox();
+  expect(box.height).toBeGreaterThanOrEqual(270);
+  expect(box.y).toBeLessThanOrEqual(852 - 270);
+  expect(box.y + box.height).toBeCloseTo(852, 0);
+  await keineDokumentUeberbreite(page);
+});
+
 test("Neon Noir respektiert Reduced Motion als gestaltetes Standbild", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -801,7 +816,7 @@ test("Der vierte Film zeigt genau vier Sekunden nur den unsichtbaren Achievement
   await page.getByRole("button", { name: /Saal \(Dunkel\)/i }).click();
   await page.locator("summary", { hasText: /^Über & Rechtliches$/ }).click();
   await page.locator('span[title="…"]', { hasText: /^Max$/ }).evaluate((el) => el.click());
-  await page.getByRole("button", { name: /Dauerburner/i }).click();
+  await page.getByRole("button", { name: /Schon kuhl/i }).click();
   await expect(page.locator('.kd-wrap.kd-deep-space-horror[data-kd-effect="deep-space-horror"]')).toHaveCount(1);
   daten = await lokaleDeepDaten(page);
   expect(daten.einstellungen?.modus).toBe("neon-noir");
@@ -903,6 +918,44 @@ test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Ein
   await page.goto("/");
   await expect(page.locator(".kd-deep-space-testpanel, [data-kd-deep-space-test]")).toHaveCount(0);
   await expect(page.locator(".kd-fx-deep-space")).toHaveCount(0);
+});
+
+test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    const listener = { resize: new Set(), scroll: new Set() };
+    const viewport = {
+      width: 393, height: 852, offsetTop: 0, offsetLeft: 0,
+      pageTop: 0, pageLeft: 0, scale: 1,
+      addEventListener(typ, fn) { listener[typ]?.add(fn); },
+      removeEventListener(typ, fn) { listener[typ]?.delete(fn); },
+    };
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
+    window.__kdSetVisualViewport = ({ height, offsetTop, typ = "resize" }) => {
+      viewport.height = height;
+      viewport.offsetTop = offsetTop;
+      viewport.pageTop = offsetTop;
+      for (const fn of listener[typ] || []) fn(new Event(typ));
+    };
+  });
+  await page.goto("/");
+
+  const suche = page.getByRole("search", { name: "Globale Suche" });
+  await suche.getByRole("textbox", { name: "Sucheingabe" }).focus();
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
+  await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(() => suche.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
+  })).toBe(-8);
+
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
+  await expect.poll(() => suche.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
+  })).toBe(-8);
 });
 
 test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Streaming-Tab", async ({ page }) => {

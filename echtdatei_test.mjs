@@ -273,7 +273,7 @@ check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
-check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Back to the Roots|Dauerburner)$/));
+check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Classix|Schon kuhl)$/));
 check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
 check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));

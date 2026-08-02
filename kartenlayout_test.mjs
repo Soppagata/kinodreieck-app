@@ -119,6 +119,15 @@ check("Blog-Datenwerkzeuge bleiben mobil verborgen", () => {
   assert.match(lies("./src/index.css"), /@media \(max-width: 760px\) \{ \.kd-nur-desktop \{ display: none !important; \} \}/);
 });
 
+check("Blog-Bearbeitung und versteckte Modi tragen die kurzen neuen Namen", () => {
+  const blog = lies("./src/tabs/BlogTab.jsx");
+  const daten = lies("./src/tabs/DatenTab.jsx");
+  assert.match(blog, /vorlage \? "Speichern" : "Erstellen"/);
+  assert.doesNotMatch(blog, /Speichern & neu abgleichen/i);
+  assert.match(daten, /eggZiel === "showa" \? "Classix" : "Schon kuhl"/);
+  assert.doesNotMatch(daten, /Back to the Roots|Dauerburner/);
+});
+
 check("Icon-only Lösch- und Schließen-Aktionen sind zugänglich beschriftet", () => {
   assert.match(lies("./src/tabs/KinoTab.jsx"), /aria-label="Kinosuche leeren"/);
   assert.match(lies("./src/tabs/MediathekTab.jsx"), /aria-label="Mediatheksuche leeren"/);

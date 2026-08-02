@@ -362,7 +362,7 @@ function seedKatalog(w, start = "clean") {
   }
   const max = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style.cursor === "pointer");
   max?.click(); await warte(100);
-  const dunkelEgg = knopf(/^Dauerburner$/);
+  const dunkelEgg = knopf(/^Schon kuhl$/);
   check("B: dunkler Max-Knopf verrät den Spezialmodus nicht", !!dunkelEgg && !/Neon Noir|NERV|Showa/.test(dunkelEgg.textContent || ""));
   dunkelEgg?.click(); await warte(120);
   let gespeicherteDarstellung = null;
@@ -376,12 +376,12 @@ function seedKatalog(w, start = "clean") {
   check("B: Neon-Noir-Kulisse ist rein dekorativ",
     !!neonOverlay && dom.window.getComputedStyle(neonOverlay).pointerEvents === "none"
     && !neonOverlay.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'));
-  knopf(/^Dauerburner$/)?.click(); await warte(120);
+  knopf(/^Schon kuhl$/)?.click(); await warte(120);
   try { gespeicherteDarstellung = JSON.parse(dom.window.localStorage.getItem("kd:einstellungen") || "null"); } catch { /* */ }
   check("B: erneuter Toggle entfernt den Spezialmodus dauerhaft", gespeicherteDarstellung?.modus === ""
     && !doc.querySelector(".kd-wrap.kd-neon-noir"));
   knopf(/^Foyer \(hell\)$/)?.click(); await warte(120);
-  const hellEgg = knopf(/^Back to the Roots$/);
+  const hellEgg = knopf(/^Classix$/);
   hellEgg?.click(); await warte(120);
   check("B: heller Knopf aktiviert genau Showa", !!doc.querySelector(".kd-wrap.kd-showa") && !doc.querySelector(".kd-wrap.kd-neon-noir, .kd-wrap.kd-nerv"));
   dom.window.close();

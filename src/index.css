@@ -102,7 +102,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   letter-spacing: .015em !important; }
 
 @media (max-width:760px) {
-  .kd-showa-scene { width:820px; height:205px; }
+  .kd-showa-scene { width:900px; height:clamp(270px,34vh,320px); }
   .kd-city-back { opacity:.36; }
   .kd-utility { display:none; }
 }
@@ -314,7 +314,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     min-width:0; box-sizing:border-box; padding:7px; border:1px solid rgba(227,166,59,.55); border-radius:17px;
     background:rgba(28,26,30,.94); box-shadow:0 9px 30px rgba(0,0,0,.62); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
   .kd-globalsuche.menue-offen { opacity:0; visibility:hidden; pointer-events:none; }
-  .kd-globalsuche.tastatur-offen { top:var(--kd-suche-viewport-top); bottom:auto; transition:none; }
+  .kd-globalsuche.tastatur-offen { transition:none; transform:translate3d(0,var(--kd-suche-viewport-shift,0px),0); will-change:transform; }
   .kd-globalsuche input,.kd-globalsuche button { min-height:44px; box-sizing:border-box; border-radius:11px; }
   .kd-globalsuche input { flex:1 1 90px; min-width:0; width:100%; padding:0 11px; border:1px solid #6f6878; background:#17151a; color:#ece8df; font:16px 'Space Grotesk',sans-serif; }
   .kd-globalsuche input:focus { outline:2px solid #e3a63b; outline-offset:-1px; }

@@ -226,7 +226,7 @@ const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || 
 check("Easter-Egg 'Max'-Link vorhanden", !!maxLink);
 if (maxLink) {
   maxLink.click(); await warte(200);
-  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Back to the Roots|Dauerburner)$/.test((b.textContent || "").trim()));
+  const egg = [...doc.querySelectorAll("button")].find((b) => /^(Classix|Schon kuhl)$/.test((b.textContent || "").trim()));
   check("Unklar beschrifteter Easter-Egg-Knopf erscheint", !!egg && !/(Showa|Neon Noir|NERV)/.test(egg.textContent || ""));
   if (egg) {
     egg.click(); await warte(300);
@@ -238,7 +238,7 @@ if (maxLink) {
         && dom.window.getComputedStyle(neonOverlay).pointerEvents === "none"
         && !neonOverlay.querySelector('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'));
     }
-    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Back to the Roots|Dauerburner)$/.test((b.textContent || "").trim()));
+    const egg2 = [...doc.querySelectorAll("button")].find((b) => /^(Classix|Schon kuhl)$/.test((b.textContent || "").trim()));
     if (egg2) { egg2.click(); await warte(200); }
     check("Modus wieder aus (Toggle)", !/kd-(showa|neon-noir|nerv)/.test(wrapper().className || ""));
   }

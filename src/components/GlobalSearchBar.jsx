@@ -51,23 +51,32 @@ export function GlobalSearchBar({
     const eingabe = eingabeRef.current;
     if (!viewport || !form || !eingabe) return undefined;
     let frame = 0;
-    let basisHoehe = Math.max(window.innerHeight, viewport.height);
+    let basisHoehe = Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height);
     const aktualisiere = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const fokus = document.activeElement === eingabe;
-        if (!fokus) basisHoehe = Math.max(basisHoehe, window.innerHeight, viewport.height);
+        if (!fokus) basisHoehe = Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height);
         const tastaturOffen = fokus && basisHoehe - viewport.height > 120;
         form.classList.toggle("tastatur-offen", tastaturOffen);
         if (tastaturOffen) {
-          const hoehe = form.getBoundingClientRect().height;
-          form.style.setProperty("--kd-suche-viewport-top", `${Math.max(8, viewport.offsetTop + viewport.height - hoehe - 8)}px`);
-        } else form.style.removeProperty("--kd-suche-viewport-top");
+          /* iOS lässt `position:fixed; bottom:…` bei offener Tastatur teils am
+             Layout-Viewport hängen. Die Verschiebung wird deshalb aus der
+             tatsächlich gerenderten Unterkante berechnet und an die absolute
+             Unterkante des Visual Viewports gebunden. Das bleibt auch beim
+             Panning/Scrollen stabil und funktioniert ebenso in Browsern, die
+             Fixed-Elemente bereits selbst über der Tastatur halten. */
+          form.style.setProperty("--kd-suche-viewport-shift", "0px");
+          const basisUnterkante = form.getBoundingClientRect().bottom;
+          const zielUnterkante = viewport.offsetTop + viewport.height - 8;
+          form.style.setProperty("--kd-suche-viewport-shift", `${zielUnterkante - basisUnterkante}px`);
+        } else form.style.removeProperty("--kd-suche-viewport-shift");
       });
     };
     viewport.addEventListener("resize", aktualisiere);
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
+    window.addEventListener("scroll", aktualisiere, { passive: true });
     eingabe.addEventListener("focus", aktualisiere);
     eingabe.addEventListener("blur", aktualisiere);
     aktualisiere();
@@ -76,6 +85,7 @@ export function GlobalSearchBar({
       viewport.removeEventListener("resize", aktualisiere);
       viewport.removeEventListener("scroll", aktualisiere);
       window.removeEventListener("resize", aktualisiere);
+      window.removeEventListener("scroll", aktualisiere);
       eingabe.removeEventListener("focus", aktualisiere);
       eingabe.removeEventListener("blur", aktualisiere);
     };
