@@ -9,6 +9,7 @@ import { FilmCard } from "../components/FilmCard.jsx";
 import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
+import { formatiereTermin } from "../lib/programm.js";
 
 /* ================= KINO (Dashboard) =================
    Programmquellen: public/programm.json (Job) · Nonstop-HTML-Import ·
@@ -193,18 +194,22 @@ export function KinoTab({
 
       {/* ---- Angepinnte Termine (überleben Programm-Refreshs, Boot räumt Vergangenes auf) ---- */}
       {pinsSortiert.length > 0 && (
-        <div style={{ background: T.saalHoch, borderRadius: 6, padding: "10px 14px", marginBottom: 14, borderLeft: "3px solid " + T.wolfram }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 16, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, marginBottom: 4 }}>
+        <div className="kd-kino-pins">
+          <div className="kd-kino-pins-kopf">
             Angepinnt ({pinsSortiert.length})
           </div>
           {pinsSortiert.map((p) => (
-            <div key={p.t + "|" + p.z} style={{ display: "flex", gap: 10, alignItems: "baseline", fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.leinwandTief, padding: "3px 0" }}>
-              <span onClick={() => setSucheK(p.t)} title="Im Programm zu diesem Film springen"
-                style={{ color: T.leinwand, fontWeight: 700, cursor: "pointer" }}>{p.t}</span>
-              {p.j ? <span style={{ color: T.rauch }}>({p.j})</span> : null}
-              <span style={{ flex: 1 }}>{p.z}</span>
-              <button onClick={() => toggleKinoPin(p.t, p.j, p.z)} title="Pin lösen" aria-label={`Pin für ${p.t} lösen`} className="kd-del"
-                style={{ background: "none", border: "none", color: T.gefahr, cursor: "pointer", fontSize: 13, padding: "0 2px" }}><IconDelete size={13} /></button>
+            <div key={p.t + "|" + p.z} className="kd-kino-pin">
+              <button type="button" className="kd-kino-pin-ziel" onClick={() => setSucheK(p.t)} title="Im Programm zu diesem Film springen">
+                <span className="kd-kino-pin-titel">
+                  {p.t}
+                  {p.j && !String(p.t).includes(String(p.j)) ? <span className="kd-kino-pin-jahr"> ({p.j})</span> : null}
+                </span>
+                <span className="kd-kino-pin-meta">{formatiereTermin(p.z)}</span>
+              </button>
+              <button type="button" onClick={() => toggleKinoPin(p.t, p.j, p.z)} title="Pin lösen" aria-label={`Pin für ${p.t} lösen`} className="kd-kino-pin-loeschen kd-del">
+                <IconDelete size={15} />
+              </button>
             </div>
           ))}
         </div>

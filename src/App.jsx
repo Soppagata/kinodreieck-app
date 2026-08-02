@@ -1990,6 +1990,11 @@ export default function App() {
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}
+            onSpringeZuKino={(eintrag) => {
+              setZeigeAlles(true);
+              setKinoFokus({ art: "programm", ref: eintrag?.programm_ref ?? eintrag?.ref ?? null, titel: eintrag?.titel || "" });
+              navigiere("kino");
+            }}
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */

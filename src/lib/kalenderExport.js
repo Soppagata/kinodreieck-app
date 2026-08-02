@@ -1,4 +1,4 @@
-import { datumLokal, datumPlusTage, reminderFaellig, WOCHENTAGE } from "./wochenplan.js";
+import { artHatUhrzeit, datumLokal, datumPlusTage, reminderFaellig, WOCHENTAGE } from "./wochenplan.js";
 
 const WOCHENTAG_ICS = Object.freeze({ 1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU" });
 
@@ -73,18 +73,28 @@ function ersteFaelligkeit(reminder) {
   return reminder.startdatum;
 }
 
+function terminZusammenfassung(eintrag) {
+  const titel = String(eintrag?.titel || "Kinodreieck");
+  if (eintrag?.art === "staffel") return `Neue Staffel: ${titel}`;
+  if (eintrag?.art === "kino") return `Kino: ${titel}`;
+  if (eintrag?.art === "termin") return `Termin: ${titel}`;
+  if (eintrag?.art === "konzert") return `Konzert: ${titel}`;
+  return `Neue Folge: ${titel}`;
+}
+
 export function reminderIcsEvent(reminder, { url = "" } = {}) {
+  const uhrzeit = artHatUhrzeit(reminder.art) ? reminder.uhrzeit || "" : "";
   const tage = (reminder.wochentage || [1]).map((n) => WOCHENTAG_ICS[n]).filter(Boolean);
   const teile = ["FREQ=WEEKLY", `INTERVAL=${Number(reminder.intervall_wochen) || 1}`];
   if (tage.length) teile.push(`BYDAY=${tage.join(",")}`);
-  if (reminder.ende?.typ === "datum") teile.push(`UNTIL=${String(reminder.ende.datum).replaceAll("-", "")}${reminder.uhrzeit ? `T${reminder.uhrzeit.replace(":", "")}00` : ""}`);
+  if (reminder.ende?.typ === "datum") teile.push(`UNTIL=${String(reminder.ende.datum).replaceAll("-", "")}${uhrzeit ? `T${uhrzeit.replace(":", "")}00` : ""}`);
   if (reminder.ende?.typ === "anzahl") teile.push(`COUNT=${Number(reminder.ende.anzahl)}`);
   const stand = reminder.folgenstand || "";
   return {
     id: reminder.id,
     datum: ersteFaelligkeit(reminder),
-    uhrzeit: reminder.uhrzeit || "",
-    summary: `${reminder.art === "staffel" ? "Neue Staffel" : "Neue Folge"}: ${reminder.titel}`,
+    uhrzeit,
+    summary: terminZusammenfassung(reminder),
     description: [reminder.plattform, stand, reminder.notiz].filter(Boolean).join(" · "),
     location: reminder.plattform || "",
     url: reminder.ref?.url || url,
@@ -93,16 +103,16 @@ export function reminderIcsEvent(reminder, { url = "" } = {}) {
 }
 
 export function kalenderEventAusWochenEintrag(eintrag, datum) {
-  if (eintrag.art === "kino") return {
-    id: eintrag.id, start: eintrag.termin, summary: `Kino: ${eintrag.titel}`,
+  if (eintrag.art === "kino" && eintrag.termin instanceof Date) return {
+    id: eintrag.id, start: eintrag.termin, summary: terminZusammenfassung(eintrag),
     location: eintrag.plattform || "Kino", description: eintrag.pin?.notiz || "",
     url: eintrag.pin?.url || "",
   };
   return {
     id: `${eintrag.id}_${datum}`,
     datum,
-    uhrzeit: eintrag.uhrzeit || "",
-    summary: `${eintrag.art === "staffel" ? "Neue Staffel" : "Neue Folge"}: ${eintrag.titel}`,
+    uhrzeit: artHatUhrzeit(eintrag.art) ? eintrag.uhrzeit || "" : "",
+    summary: terminZusammenfassung(eintrag),
     description: [eintrag.plattform, eintrag.folgenstand, eintrag.notiz].filter(Boolean).join(" · "),
     location: eintrag.plattform || "",
     url: eintrag.ref?.url || "",

@@ -12,6 +12,12 @@ export const WOCHENTAGE = Object.freeze([
 
 export const LEERER_WOCHENPLAN = Object.freeze({ version: 1, eintraege: [] });
 
+export const WOCHENPLAN_ARTEN = Object.freeze(["folge", "staffel", "kino", "termin", "konzert"]);
+
+export function artHatUhrzeit(art) {
+  return ["kino", "termin", "konzert"].includes(art);
+}
+
 const TAG_MS = 86400000;
 
 function zwei(n) { return String(n).padStart(2, "0"); }
@@ -71,14 +77,17 @@ export function normalisiereWochenplan(roh, jetzt = new Date()) {
     let id = String(e.id || `folge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     while (ids.has(id)) id += "x";
     ids.add(id);
+    const art = WOCHENPLAN_ARTEN.includes(e.art) ? e.art : "folge";
     const startdatum = lokalesDatum(e.startdatum) ? e.startdatum : heute;
-    const uhrzeit = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(e.uhrzeit || "")) ? String(e.uhrzeit) : "";
+    const uhrzeit = artHatUhrzeit(art) && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(e.uhrzeit || ""))
+      ? String(e.uhrzeit)
+      : "";
     const ref = e.ref && typeof e.ref === "object"
       ? Object.fromEntries(Object.entries(e.ref).filter(([, v]) => v !== "" && v != null))
       : null;
     eintraege.push({
       id,
-      art: e.art === "staffel" ? "staffel" : "folge",
+      art,
       titel: String(e.titel).trim(),
       plattform: String(e.plattform || "").trim(),
       wochentage: eindeutigeWochentage(e.wochentage ?? e.wochentag),
@@ -172,15 +181,15 @@ function titelNormiert(wert) {
     .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function istSerie(t) { return t && (t.typ === "serie" || t.typ === "tv_series"); }
-
 export function findeReminderVerknuepfung(reminder, katalog = [], master = []) {
   const alle = [...(Array.isArray(katalog) ? katalog : []), ...(Array.isArray(master) ? master : [])];
   const dedupe = new Map();
   for (const t of alle) {
-    if (!t || !istSerie(t)) continue;
+    if (!t || typeof t !== "object") continue;
+    const titel = titelNormiert(t.titel || t.originaltitel);
+    if (t.watchmode_id == null && t.id == null && !titel) continue;
     const key = t.watchmode_id != null ? `w:${t.watchmode_id}`
-      : t.id != null ? `m:${t.id}` : `t:${titelNormiert(t.titel)}:${t.jahr || ""}`;
+      : t.id != null ? `m:${t.id}` : `t:${t.typ || ""}:${titel}:${t.jahr || ""}`;
     dedupe.set(key, { ...(dedupe.get(key) || {}), ...t });
   }
   const liste = [...dedupe.values()];
@@ -239,7 +248,37 @@ export function kinoPinTermin(pin, jetzt = new Date()) {
   return d;
 }
 
-export function wochenansicht({ wochenplan, kinoPins = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
+function kinoName(pin) {
+  return pin?.kino || pin?.k || String(pin?.z || "").split("·").slice(1).join("·").trim() || "Kino";
+}
+
+function kinoTerminSchluessel(pin, termin) {
+  return [
+    titelNormiert(pin?.t),
+    datumLokal(termin),
+    `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}`,
+    titelNormiert(kinoName(pin)),
+  ].join("|");
+}
+
+function kinoWochenEintrag(pin, termin, { vorschlag = false } = {}) {
+  const programmRef = pin.prog_ref ?? pin.programm_ref ?? pin.ref?.prog_ref ?? pin.ref?.programm_ref;
+  const filmRef = pin.film_ref ?? pin.ref?.film_ref;
+  return {
+    id: `${vorschlag ? "kino_vorschlag" : "kino"}_${pin.t || "film"}_${termin.getTime()}`,
+    art: "kino",
+    titel: pin.t || "Kinotermin",
+    plattform: kinoName(pin),
+    termin,
+    uhrzeit: `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}`,
+    ...(vorschlag ? { vorschlag: true } : {}),
+    ...(filmRef != null ? { film_ref: filmRef } : {}),
+    ...(programmRef != null ? { programm_ref: programmRef } : {}),
+    pin,
+  };
+}
+
+export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
   /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
      Einzeldateien/Tests nicht brechen. Die App selbst übergibt nur noch jetzt. */
@@ -249,16 +288,26 @@ export function wochenansicht({ wochenplan, kinoPins = [], katalog = [], master 
     const quelle = findeReminderVerknuepfung(e, katalogAlle, []).treffer;
     for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({ ...e, quelle, folgenstand: folgenstandText(quelle) });
   }
+  const kinoTermine = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {
     const termin = kinoPinTermin(pin, jetzt);
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
-    const kinoName = pin.kino || pin.k || String(pin.z || "").split("·").slice(1).join("·").trim() || "Kino";
-    if (tag) tag.eintraege.push({
-      id: `kino_${pin.t || "film"}_${termin.getTime()}`,
-      art: "kino", titel: pin.t || "Kinotermin", plattform: kinoName,
-      termin, uhrzeit: `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}`, pin,
-    });
+    if (!tag) continue;
+    const schluessel = kinoTerminSchluessel(pin, termin);
+    kinoTermine.add(schluessel);
+    tag.eintraege.push(kinoWochenEintrag(pin, termin));
+  }
+  for (const vorschlag of Array.isArray(kinoVorschlaege) ? kinoVorschlaege : []) {
+    if (!vorschlag || typeof vorschlag !== "object" || !String(vorschlag.t || "").trim()) continue;
+    const termin = kinoPinTermin(vorschlag, jetzt);
+    if (!termin) continue;
+    const tag = tage.find((t) => t.iso === datumLokal(termin));
+    if (!tag) continue;
+    const schluessel = kinoTerminSchluessel(vorschlag, termin);
+    if (kinoTermine.has(schluessel)) continue;
+    kinoTermine.add(schluessel);
+    tag.eintraege.push(kinoWochenEintrag(vorschlag, termin, { vorschlag: true }));
   }
   for (const tag of tage) tag.eintraege.sort((a, b) => String(a.uhrzeit || "99:99").localeCompare(String(b.uhrzeit || "99:99")) || a.titel.localeCompare(b.titel, "de"));
   return tage;

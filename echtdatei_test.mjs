@@ -160,7 +160,8 @@ check("Suche ist global statt eigener Menübereich", !/Suche/.test((doc.querySel
 /* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */
 const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(MATCH_TITEL).toLowerCase());
 check("Dashboard: Vertrauens-Zeile (Programm- + Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(startText) && /Katalog: \d+ Titel/.test(startText));
-check("Dashboard: Kino-für-dich-Modul ohne künstlichen Match-Wert", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && !/MATCH/.test(startText));
+check("Dashboard: Kinoempfehlung sitzt ohne künstlichen Match-Wert in Deine Woche",
+  /Deine Woche/.test(startText) && /Empfehlung/.test(startText) && enthaeltMatchText(startText) && !/MATCH/.test(startText));
 check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
 check("Dashboard: überholtes Jetzt-streambar-Modul entfernt", !/Jetzt streambar/.test(startText));
 check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
@@ -214,7 +215,8 @@ if (enthaeltMatch(kinoText)) {
 /* ---- Zurück zum Start: der eben gesetzte Pin füllt jetzt das Pinboard-Modul ---- */
 const startTabKnopf = knopf(/^start$/i);
 if (startTabKnopf) { startTabKnopf.click(); await warte(500); }
-check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Karte + Termin-Chip)", /Pinboard/.test(text()) && /Kino →/.test(text()));
+check("Dashboard: Pinboard-Modul erscheint nach dem Pinnen (Titel + Termin/Kino-Meta)",
+  /Pinboard/.test(text()) && !!doc.querySelector(".kd-pinboard-kino") && !!doc.querySelector(".kd-pinboard-kino-meta"));
 
 /* ---- Streaming/Entdecken: Filter + gesehen + Eintrag erstellen ---- */
 const streamingTab = knopf(/^streaming$/i);

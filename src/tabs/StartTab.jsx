@@ -3,7 +3,6 @@ import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
 import { useInstallationsStatus } from "../lib/installation.js";
-import { KinoTicket } from "../components/ui.jsx";
 import { Wochenplan } from "../components/Wochenplan.jsx";
 import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
 import { folgenstandText } from "../lib/wochenplan.js";
@@ -28,9 +27,9 @@ const pinSortWert = (p) => {
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
    Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
-   · Kino für dich:    kinoMatches.matched (bereits Besitz-Rang -> Dreieck-Score sortiert)
-   · Deine Woche:      persönliche Reminder + Kinopins, rollierende sieben Tage
    · Pinboard & Radar: kinoPins + ausdrücklich beobachtete Serien; Updates zuerst
+   · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge,
+                       rollierende sieben Tage
    · Must-Watch:       mustwatch (oberste 5 = Listenreihenfolge)
    · Zuletzt hinzugefügt: NUR belegbare Zeitstempel — Must-Watch erstellt_am +
      Merkliste hinzugefuegt_am. Master-Einträge bewusst NICHT dabei: die Liste
@@ -111,18 +110,28 @@ function StartDashboard({
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null, onHilfe,
   wochenplan, onWochenplanAendern, entdeckenStatus = {}, onEntdeckenStatusAendern,
-  master = [], onSpringeZuStreaming, onFilmAnlegen, toggleKinoPin,
+  master = [], onSpringeZuStreaming, onSpringeZuKino, onFilmAnlegen, toggleKinoPin,
 }) {
   const installation = useInstallationsStatus();
   /* Klick auf einen Titel springt zum konkreten Eintrag (springeZuFilm fokussiert den
      Mediathek-/Must-Watch-Eintrag), nicht bloß in den Bereich. Fallback: Tab wechseln. */
   const zuEintrag = (id, fallbackTab) => { if (id && zeigeEintrag) zeigeEintrag(id); else if (onNavigiere) onNavigiere(fallbackTab); };
 
-  /* Kino für dich: Top 3 der (vor-)sortierten Treffer, nur mit nächstem Termin. */
-  const kinoTop = useMemo(() => (kinoMatches.matched || [])
+  /* Die drei stärksten passenden Filme sitzen nicht mehr in einem eigenen
+     Dashboard-Modul, sondern als Vorschläge direkt an ihrem Kalendertag. */
+  const kinoVorschlaege = useMemo(() => (kinoMatches.matched || [])
     .map((m) => ({ ...m, termin: naechsterTermin((m.prog.z || []).map(formatiereTermin)) }))
     .filter((m) => m.termin)
-    .slice(0, 3), [kinoMatches]);
+    .slice(0, 3)
+    .map(({ prog, film, termin }) => ({
+      t: film.titel || prog.t,
+      j: film.jahr ?? prog.j ?? null,
+      kino: (prog.k || [])[0] || "",
+      z: termin.label,
+      termin_iso: new Date(termin.wert).toISOString(),
+      film_ref: film.id ?? null,
+      prog_ref: prog.film_at_id ?? prog.id ?? null,
+    })), [kinoMatches]);
 
   /* Must-Watch: oberste 5 in Listenreihenfolge. */
   const mwTop = (mustwatch || []).slice(0, 5);
@@ -180,27 +189,7 @@ function StartDashboard({
       <span className="kd-dash-strip" aria-hidden="true" />
 
       <div className="kd-dash-grid">
-        {/* ---- 1 · Kino für dich (Ticket-Stub, Klick -> Film-Eintrag) ---- */}
-        <Modul name="Kino für dich" ziel="kino" linkLabel="Kino" onNavigiere={onNavigiere}>
-          {kinoTop.length > 0 ? (
-            kinoTop.map(({ prog, film, termin }, i) => (
-              <KinoTicket key={(prog.film_at_id || prog.t) + "|" + i}
-                titel={film.titel} jahr={film.jahr} kino={(prog.k || [])[0]}
-                termin={termin.label} onToggle={() => zuEintrag(film.id, "kino")} />
-            ))
-          ) : <p className="kd-dash-leer">Sobald ein passender Film mit kommendem Termin gefunden wird, liegt sein Kinoticket hier.</p>}
-        </Modul>
-
-        {/* ---- 2 · Deine Woche: immer heute plus sechs Folgetage ---- */}
-        <Wochenplan
-          plan={wochenplan} onPlanAendern={onWochenplanAendern}
-          kinoPins={kinoPins} onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
-          katalog={serienKatalog} master={master}
-          onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
-          onFilmAnlegen={onFilmAnlegen}
-        />
-
-        {/* ---- 3 · Gemeinsames Pinboard: Serien-Updates vor Kinoterminen ---- */}
+        {/* ---- 1 · Gemeinsames Pinboard: Serien-Updates vor Kinoterminen ---- */}
         <Modul name="Pinboard & Serienradar" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere} tour="pinboard">
           {serienPins.length > 0 || pins.length > 0 ? (
             <div className="kd-dash-karte kd-pinboard-radar">
@@ -224,8 +213,14 @@ function StartDashboard({
               })}
               {pins.map((p) => (
                 <button key={`kino-${p.t}|${p.z}`} className="kd-dash-zeile kd-pinboard-kino" onClick={() => onNavigiere?.("kino")}>
-                  <span className="kd-dash-ztitel">◇ {p.t}</span>
-                  <span className="kd-dash-showtime">{p.zAnzeige}</span>
+                  <span className="kd-pinboard-kino-titel">
+                    <span className="kd-pinboard-kino-marker" aria-hidden="true">◇</span>
+                    <span className="kd-pinboard-kino-name">
+                      {p.t}
+                      {p.j && !String(p.t).includes(String(p.j)) ? <span className="kd-pinboard-kino-jahr"> ({p.j})</span> : null}
+                    </span>
+                  </span>
+                  <span className="kd-pinboard-kino-meta">{p.zAnzeige}</span>
                 </button>
               ))}
             </div>
@@ -234,7 +229,21 @@ function StartDashboard({
           )}
         </Modul>
 
-        {/* ---- 4 · Must-Watch (Klick pro Zeile -> Must-Watch-Eintrag) ---- */}
+        {/* ---- 2 · Deine Woche: heute plus sechs Folgetage und Kinovorschläge ---- */}
+        <Wochenplan
+          plan={wochenplan} onPlanAendern={onWochenplanAendern}
+          kinoPins={kinoPins} kinoVorschlaege={kinoVorschlaege}
+          onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
+          katalog={serienKatalog} master={master}
+          onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}
+          onKinoVorschlagAnsehen={(eintrag) => {
+            if (onSpringeZuKino) onSpringeZuKino(eintrag);
+            else onNavigiere?.("kino");
+          }}
+          onFilmAnlegen={onFilmAnlegen}
+        />
+
+        {/* ---- 3 · Must-Watch (Klick pro Zeile -> Must-Watch-Eintrag) ---- */}
         <Modul name="Must-Watch" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
           {mwTop.length > 0 ? (
             <div className="kd-dash-karte">
@@ -249,7 +258,7 @@ function StartDashboard({
           ) : <p className="kd-dash-leer">Noch kein Titel auf deiner Must-Watch-Liste.</p>}
         </Modul>
 
-        {/* ---- 5 · Zuletzt hinzugefügt (Must-Watch-Zeilen -> Eintrag, Merkliste -> Bereich) ---- */}
+        {/* ---- 4 · Zuletzt hinzugefügt (Must-Watch-Zeilen -> Eintrag, Merkliste -> Bereich) ---- */}
         <Modul name="Zuletzt hinzugefügt" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
           {zuletzt.length > 0 ? (
             <div className="kd-dash-karte">

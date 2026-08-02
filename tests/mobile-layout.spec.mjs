@@ -978,6 +978,9 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
       fetchedAt: Date.now(), art: "manuell", stand: Date.now(),
       data: { stand: new Date().toISOString(), filme: [{ t: "Mein Nachbar Totoro", j: 1988, k: ["English Cinema Haydn"], z: [termin], film_at_id: "totoro" }] },
     }));
+    localStorage.setItem("kd:kino-pins", JSON.stringify([{
+      t: "Event Horizon – Am Rande des Universums", j: 1997, z: termin, seit: Date.now(),
+    }]));
     localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [{
       id: "mw-1", titel: "Das siebente Siegel", jahr: 1957, typ: "film", im_besitz: true,
       erstellt_am: new Date().toISOString(), verknuepfung: { ziel: "master", id: "blade-runner-2049" },
@@ -996,16 +999,50 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   });
   await page.goto("/");
 
-  const ticket = page.locator(".kd-dash-ticket").first();
-  await expect(ticket).toBeVisible();
-  const dashboardGeometrie = await ticket.evaluate((karte) => {
-    const chip = karte.querySelector(".kd-dash-showtime");
+  const module = await page.locator(".kd-dash-kopfname").allTextContents();
+  expect(module.slice(0, 4)).toEqual(["Pinboard & Serienradar", "Must-Watch", "Zuletzt hinzugefügt"]);
+  const pinboardPin = page.locator(".kd-pinboard-kino").first();
+  await expect(pinboardPin).toBeVisible();
+  const dashboardGeometrie = await pinboardPin.evaluate((karte) => {
+    const titel = karte.querySelector(".kd-pinboard-kino-name");
+    const meta = karte.querySelector(".kd-pinboard-kino-meta");
     const kr = karte.getBoundingClientRect();
-    const cr = chip.getBoundingClientRect();
-    return { karteRechts: kr.right, chipRechts: cr.right, chipScroll: chip.scrollWidth, chipBreite: chip.clientWidth };
+    const tr = titel.getBoundingClientRect();
+    const mr = meta.getBoundingClientRect();
+    return { karteRechts: kr.right, titelRechts: tr.right, metaRechts: mr.right, hoehe: kr.height };
   });
-  expect(dashboardGeometrie.chipRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
-  expect(dashboardGeometrie.chipScroll).toBeLessThanOrEqual(dashboardGeometrie.chipBreite + 1);
+  expect(dashboardGeometrie.titelRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
+  expect(dashboardGeometrie.metaRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
+  expect(dashboardGeometrie.hoehe).toBeLessThan(90);
+  await expect(page.locator(".kd-wochen-tagplus")).toHaveCount(7);
+  await page.locator(".kd-wochen-tagplus").first().click();
+  const wochenEditor = page.locator("#kd-wochen-editor");
+  await expect(wochenEditor).toBeVisible();
+  await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toBeVisible();
+  await expect(wochenEditor.getByLabel("Externer Link (optional)")).toBeVisible();
+  await wochenEditor.getByLabel("Art").selectOption("folge");
+  await expect(wochenEditor.getByLabel("Uhrzeit (optional)")).toHaveCount(0);
+  await expect(wochenEditor.getByLabel("Externer Link (optional)")).toHaveCount(0);
+  await wochenEditor.getByLabel("Art").selectOption("termin");
+  await expect(wochenEditor.getByLabel("Uhrzeit (optional)")).toBeVisible();
+  await wochenEditor.getByLabel("Ort / Anbieter").fill("Gartenbaukino");
+  await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toHaveCount(0);
+  await wochenEditor.getByRole("button", { name: "Abbrechen" }).click();
+  await keineDokumentUeberbreite(page);
+
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Kino", exact: true }).click();
+  const kinoPin = page.locator(".kd-kino-pin").first();
+  await expect(kinoPin).toBeVisible();
+  const kinoPinGeometrie = await kinoPin.evaluate((zeile) => {
+    const zr = zeile.getBoundingClientRect();
+    const titel = zeile.querySelector(".kd-kino-pin-titel").getBoundingClientRect();
+    const meta = zeile.querySelector(".kd-kino-pin-meta").getBoundingClientRect();
+    return { rechts: zr.right, titelRechts: titel.right, metaRechts: meta.right, hoehe: zr.height };
+  });
+  expect(kinoPinGeometrie.titelRechts).toBeLessThanOrEqual(kinoPinGeometrie.rechts + 0.5);
+  expect(kinoPinGeometrie.metaRechts).toBeLessThanOrEqual(kinoPinGeometrie.rechts + 0.5);
+  expect(kinoPinGeometrie.hoehe).toBeLessThan(96);
   await keineDokumentUeberbreite(page);
 
   await page.getByRole("button", { name: "Menü öffnen" }).click();

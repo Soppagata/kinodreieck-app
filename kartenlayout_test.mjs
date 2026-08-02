@@ -22,8 +22,8 @@ check("Quellen unterscheiden physisch, Digitalkauf und Abo", () => {
   assert.equal(badges.prime.klasse, QUELLEN_KLASSEN.ABO);
 });
 
-check("Dashboard und Kino verwenden dasselbe Kinoticket", () => {
-  assert.match(lies("./src/tabs/StartTab.jsx"), /<KinoTicket/);
+check("Kinotickets bleiben dem Kinoprogramm vorbehalten", () => {
+  assert.doesNotMatch(lies("./src/tabs/StartTab.jsx"), /<KinoTicket/);
   assert.match(lies("./src/tabs/KinoTab.jsx"), /<KinoTicket/);
   assert.match(lies("./src/components/ui.jsx"), /export function KinoTicket/);
 });
@@ -32,14 +32,15 @@ check("Dashboard folgt der festen Startseiten-Reihenfolge", () => {
   const start = lies("./src/tabs/StartTab.jsx");
   const dashboard = start.slice(start.indexOf('<div className="kd-dash-grid">'));
   const positionen = [
-    dashboard.indexOf('name="Kino für dich"'),
-    dashboard.indexOf("<Wochenplan"),
     dashboard.indexOf('name="Pinboard & Serienradar"'),
+    dashboard.indexOf("<Wochenplan"),
     dashboard.indexOf('name="Must-Watch"'),
     dashboard.indexOf('name="Zuletzt hinzugefügt"'),
   ];
   assert.ok(positionen.every((position) => position >= 0));
   assert.deepEqual([...positionen].sort((a, b) => a - b), positionen);
+  assert.doesNotMatch(dashboard, /name="Kino für dich"/);
+  assert.match(dashboard, /kinoVorschlaege=\{kinoVorschlaege\}/);
   assert.doesNotMatch(dashboard, /name="Jetzt streambar"/);
 });
 
@@ -49,8 +50,12 @@ check("Deine Woche rendert rollierende Kinotickets und verständliche Kalenderak
   assert.match(woche, /Heute bis/);
   assert.doesNotMatch(woche, /Vorige Woche|Nächste Woche|Woche \.ics/);
   assert.match(woche, /Die nächsten 7 Tage in den Kalender setzen/);
+  assert.doesNotMatch(woche, /🗓|\.ics-Dateien/);
+  assert.match(woche, /Eintrag am \$\{tag\.name\}.*erstellen/);
+  assert.match(woche, /Ort \/ Anbieter/);
   assert.match(css, /\.kd-wochen-tag \{[\s\S]*background-color:var\(--kd-leinwand\)/);
   assert.match(css, /\.kd-wochen-ticketstub/);
+  assert.match(css, /\.kd-wochen-tage input:checked\+span/);
 });
 
 check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag", () => {
