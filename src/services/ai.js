@@ -45,8 +45,8 @@ export const AI_TASKS = Object.freeze([
      starke Kennung senden; Quellenwahl, Abruf und Synthese bleiben auf dem
      Server. */
   "filmwissen-synthese",
-  /* Foto-/Screenshot-Stapelimport. Bilder werden im Browser verkleinert und
-     erst nach einem ausdrücklichen Klick kostenpflichtig übertragen. */
+  /* Text-Stapelimport. Die Liste wird vor dem ausdrücklichen, kostenpflichtigen
+     Aufruf lokal bereinigt; Bilder gehen nur über den externen Prompt-Weg. */
   "media-batch-extract",
 ]);
 

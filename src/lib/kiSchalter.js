@@ -82,8 +82,8 @@ export const KI_FUNKTIONEN = {
     beiAus: "ausblenden",
   },
   stapelimport: {
-    label: "Fotos & Screenshots deuten",
-    beschreibung: "Eigene Film- und Seriensammlung aus Regal-Fotos oder Kauflisten auf ausdrücklichen Wunsch erkennen.",
+    label: "Titellisten ordnen",
+    beschreibung: "Eigene Filme, Serien und CDs aus einer eingefügten Titelliste strukturieren und auf Wunsch vorsichtig vorbeurteilen.",
     beiAus: "ausblenden",
   },
   diagnose: {

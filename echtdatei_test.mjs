@@ -320,16 +320,15 @@ if (foyer) {
   if (saal) { saal.click(); await warte(400); }
 }
 
-/* Offline-First-Paketaustausch bleibt entfernt. Der externe Prompt gehört jetzt
-   zum Foto-/Screenshot-Stapelimport und verwendet denselben vorsichtigen
-   Vorschauweg wie die interne Bild-KI. */
+/* Offline-First-Paketaustausch bleibt entfernt. Der externe Fotoprompt und der
+   interne Textimport verwenden denselben vorsichtigen Vorschauweg. */
 check("Teilen & Tauschen aus Einstellungen entfernt", !/Teilen & Tauschen/.test(text()));
 const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
 if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(200); }
-const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
 if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(200); }
-const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Stapelimport in Kinodreieck/.test(t.value || ""));
-check("Externer Foto-/Screenshot-Prompt im Stapelimport vorhanden", !!stapelPrompt);
+const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Mediathek.*im Kinodreieck/.test(t.value || ""));
+check("Externer Fotoprompt im Text-Stapelimport vorhanden", !!stapelPrompt);
 check("Stapelimport-Prompt ist kopierbar und nimmt KI-JSON entgegen",
   !!knopf(/^Prompt kopieren$/) && [...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
 

@@ -4201,6 +4201,51 @@ test("H5d BEFUND: im Diagnosepfad fehlt die Wache, die der zahlende Pfad hat", a
 });
 
 /* ===========================================================================
+   MB. Text-Stapelimport — derselbe Ergebnisvertrag, ohne Bildtransport
+   =========================================================================== */
+
+const medienPayload = (vorbeurteilen = false) => ({
+  liste: ["Alien | 1979 | Blu-ray", "Kind of Blue | CD", "The Expanse | Staffel 1-3 | DVD"],
+  standardQuelle: "unklar",
+  vorbeurteilen,
+  bewertungen: vorbeurteilen
+    ? ["Alien", "Blade Runner", "Heat", "Arrival", "Stalker"].map((titel) => ({ titel, wie: 4, was: 3, warum: 4 }))
+    : [],
+});
+
+test("MB1 der Stapelimport sendet nur Text und hält Einträge ohne Prognose offen", async () => {
+  z.anbieter = () => anbieterErfolg({
+    kandidaten: [{ titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" }],
+    warnungen: [],
+  });
+  const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(false) });
+  gleich(r.status, 200, "Status");
+  gleich(daten(r).kandidaten[0].typ, "musik", "Musiktyp");
+  gleich(daten(r).kandidaten[0].quelle, "cd", "CD-Quelle");
+  falsch("bilder" in JSON.parse(nutzertext()), "kein Bildfeld im Anbietertext");
+  falsch(systemtext().includes("Kind of Blue"), "Nutzerliste steht nicht im Systemprompt");
+});
+
+test("MB2 fünf Kurzbewertungen erlauben einen begründeten KI-Voreindruck, keine echte Bewertung", async () => {
+  z.anbieter = () => anbieterErfolg({
+    kandidaten: [{ titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "passt", begruendung: "Die Kurzbewertungen bevorzugen ähnlich konzentrierte Genreklassiker.", sicherheit: "mittel" }],
+    warnungen: [],
+  });
+  const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(true) });
+  gleich(r.status, 200, "Status");
+  gleich(daten(r).kandidaten[0].vorbeurteilung, "passt", "Voreindruck");
+  falsch("bewertung" in daten(r).kandidaten[0], "keine erfundene Bewertung");
+});
+
+test("MB3 Vorbeurteilung mit weniger als fünf Bewertungen endet vor dem Anbieter", async () => {
+  const payload = medienPayload(true);
+  payload.bewertungen = payload.bewertungen.slice(0, 4);
+  const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload });
+  gleich(r.status, 400, "Status");
+  gleich(anbieterAufrufe().length, 0, "kein kostenpflichtiger Aufruf");
+});
+
+/* ===========================================================================
    MT. Ausgabebudget je Aufgabe (`max_tokens`) — der Vorfall vom 26.07.
    ===========================================================================
    `intelligent-search` stand nicht in der Konfiguration `task_max_tokens` und
@@ -4284,7 +4329,7 @@ const BUDGET_SONDEN: Record<
     },
   },
   "media-batch-extract": {
-    payload: () => ({ bilder: [{ media_type: "image/jpeg", data: "/9j/2Q==", width: 200, height: 200 }] }),
+    payload: () => ({ liste: ["Alien | 1979 | Blu-ray"], standardQuelle: "unklar", vorbeurteilen: false, bewertungen: [] }),
     vorbereiten: () => {
       z.anbieter = () => anbieterErfolg({
         kandidaten: [{

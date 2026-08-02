@@ -245,7 +245,7 @@ export function DatenTab({
 
       <Klappe titel="Stapelimport" tour="ki-ingestion">
         <div style={kasten}>
-          <h2 style={h2}>Eigene Film- & Seriensammlung erfassen</h2>
+          <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
           <StapelImport master={master || []}
             addFilm={addFilm} addFilme={addFilme} autorName={autorName}
             kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}

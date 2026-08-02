@@ -1,12 +1,17 @@
 import { norm } from "./match.js";
 
-export const STAPEL_MAX_BILDER = 4;
-export const STAPEL_MAX_REQUEST_BYTES = 900_000;
-export const STAPEL_BILDTYPEN = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-export const STAPEL_TYPEN = ["film", "serie"];
+export const STAPEL_MAX_ZEILEN = 60;
+export const STAPEL_MAX_ZEICHEN = 12_000;
+export const STAPEL_TYPEN = ["film", "serie", "musik"];
+export const STAPEL_STANDARD_QUELLEN = [
+  { key: "unklar", label: "Gemischt / pro Zeile angegeben" },
+  { key: "dvd", label: "DVD" },
+  { key: "bluray", label: "Blu-ray" },
+  { key: "cd", label: "CD" },
+];
 export const STAPEL_QUELLEN = [
   { key: "unklar", label: "Quelle später ergänzen" },
-  { key: "dvd", label: "DVD" }, { key: "bluray", label: "Blu-ray" },
+  { key: "dvd", label: "DVD" }, { key: "bluray", label: "Blu-ray" }, { key: "cd", label: "CD" },
   { key: "vhs", label: "VHS" }, { key: "filmrolle", label: "Filmrolle" },
   { key: "festplatte", label: "Festplatte" }, { key: "phys_sonst", label: "Sonstiges (physisch)" },
   { key: "apple", label: "Apple TV / iTunes (Kauf)" }, { key: "google", label: "Google Play (Kauf)" },
@@ -20,12 +25,36 @@ const kurz = (wert, max) => String(wert ?? "")
   .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
   .replace(/\s+/g, " ").trim().slice(0, max);
 
-export function schaetzeBildTokens(bilder) {
-  return (bilder || []).reduce((summe, bild) => {
-    const breite = Number(bild?.width) || 0;
-    const hoehe = Number(bild?.height) || 0;
-    return summe + Math.ceil((breite * hoehe) / 750);
-  }, 0);
+export function vorbereiteTitelliste(text) {
+  const roh = String(text || "").replace(/\r/g, "");
+  if (roh.length > STAPEL_MAX_ZEICHEN) {
+    throw new Error(`Die Liste ist länger als ${STAPEL_MAX_ZEICHEN.toLocaleString("de-AT")} Zeichen. Bitte teile sie auf mehrere Durchgänge auf.`);
+  }
+  const gesehen = new Set();
+  const zeilen = [];
+  for (const rohzeile of roh.split("\n")) {
+    const zeile = kurz(rohzeile.replace(/^\s*(?:[-*•]+|\d+[.)])\s*/, ""), 240);
+    if (!zeile) continue;
+    const key = norm(zeile);
+    if (gesehen.has(key)) continue;
+    gesehen.add(key);
+    zeilen.push(zeile);
+  }
+  if (!zeilen.length) throw new Error("Schreibe oder kopiere zuerst mindestens einen Titel in die Liste.");
+  if (zeilen.length > STAPEL_MAX_ZEILEN) {
+    throw new Error(`Pro Durchgang sind höchstens ${STAPEL_MAX_ZEILEN} Titel möglich. Bitte teile die Sammlung auf.`);
+  }
+  return zeilen;
+}
+
+export function baueStapelPayload(text, standardQuelle = "unklar", vorbeurteilen = false, bewertungen = []) {
+  const zeilen = vorbereiteTitelliste(text);
+  const quelle = STAPEL_STANDARD_QUELLEN.some((q) => q.key === standardQuelle) ? standardQuelle : "unklar";
+  const komplett = (bewertungen || []).filter((b) =>
+    b && typeof b.titel === "string" && [b.wie, b.was, b.warum].every((v) => v !== "" && v !== null && v !== undefined && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 5)
+  ).slice(0, 10).map((b) => ({ titel: kurz(b.titel, 160), wie: Number(b.wie), was: Number(b.was), warum: Number(b.warum) }));
+  if (vorbeurteilen && komplett.length < 5) throw new Error("Für die Vorbeurteilung brauche ich mindestens fünf vollständige Kurzbewertungen.");
+  return { liste: zeilen, standardQuelle: quelle, vorbeurteilen: vorbeurteilen === true, bewertungen: vorbeurteilen ? komplett : [] };
 }
 
 export function normalisiereStapelAntwort(antwort, master = []) {
@@ -34,7 +63,7 @@ export function normalisiereStapelAntwort(antwort, master = []) {
   const masterKeys = new Set((master || []).map((e) => `${norm(e.titel)}|${e.jahr ?? ""}`));
   const gesehen = new Set();
   const kandidaten = [];
-  for (const [index, kandidat] of roh.slice(0, 30).entries()) {
+  for (const [index, kandidat] of roh.slice(0, STAPEL_MAX_ZEILEN).entries()) {
     const titel = kurz(kandidat?.titel, 160);
     if (!titel || !STAPEL_TYPEN.includes(kandidat?.typ)) continue;
     const typ = kandidat.typ;
@@ -56,7 +85,7 @@ export function normalisiereStapelAntwort(antwort, master = []) {
       vorhandenMediathek: masterKeys.has(`${norm(titel)}|${jahr ?? ""}`),
     });
   }
-  if (!kandidaten.length) throw new Error("Auf den Bildern wurde kein eindeutiger Film- oder Serientitel erkannt.");
+  if (!kandidaten.length) throw new Error("Es wurde kein eindeutiger Film-, Serien- oder Musiktitel erkannt.");
   return {
     kandidaten,
     warnungen: Array.isArray(antwort?.data?.warnungen ?? antwort?.warnungen)
@@ -91,27 +120,13 @@ export function baueStapelUebernahme(kandidaten) {
 
 export function externerStapelPrompt(autor = "") {
   return [
-    "Du hilfst mir beim Stapelimport in Kinodreieck, um meine eigene Film- und Seriensammlung zu erfassen. Analysiere alle angehängten Fotos oder Screenshots gemeinsam.",
-    "Berücksichtige ausschließlich Filme und Serien, die auf den Bildern als physisch vorhanden oder digital gekauft erkennbar sind. Streaming-Abos, Wunschlisten, Poster, Kinotickets, Termine, Musik und andere Medien gehören nicht in diesen Import.",
-    "Erfinde nichts und fasse Dubletten zusammen. Wenn bei einer Serie zwar der Titel, aber keine Staffel sicher erkennbar ist, setze staffeln auf null; ich kann sie später freiwillig ergänzen.",
-    "",
-    "Bevor du das Ergebnis ausgibst, frage mich in EINER Nachricht nach 5 bis 10 sehr kurzen eigenen Bewertungen zu erkannten Titeln: jeweils WIE, WAS und WARUM von 0 bis 5 plus höchstens einen Begründungssatz. Empfehle passende erkannte Titel für diese Stichprobe.",
-    "Nutze meine Antworten nur, um für die übrigen Titel einen vorsichtigen Voreindruck passt, offen oder eher_nicht abzuleiten. Meine echten Bewertungen dürfen ausschließlich bei den ausdrücklich bewerteten Titeln liegen; der Import selbst legt alle Einträge unbewertet an.",
-    "",
-    "Nachdem ich geantwortet habe, liefere ausschließlich rohes JSON, keinen Markdown-Codeblock, in dieser Form:",
-    "{",
-    '  "kandidaten": [{',
-    '    "titel": "…",',
-    '    "typ": "film|serie",',
-    '    "jahr": 2026 oder null,',
-    '    "quelle": "dvd|bluray|vhs|filmrolle|festplatte|phys_sonst|apple|google|amazon|sony|microsoft|youtube|virt_sonst|unklar",',
-    '    "staffeln": "1, 2–4" oder null,',
-    '    "vorbeurteilung": "passt|offen|eher_nicht",',
-    '    "begruendung": "kurze, nachvollziehbare Begründung oder leer",',
-    '    "sicherheit": "hoch|mittel|niedrig"',
-    "  }],",
-    '  "warnungen": ["…"]',
-    "}",
-    `Autorname für den späteren Import: ${kurz(autor, 80) || "unbekannt"}. Nutze gutes Reasoning für Zuordnung und Dubletten, aber gib keine internen Gedankengänge aus.`,
+    "Aufgabe: Erfasse meine Mediathek aus allen angehängten Fotos für den Import im Kinodreieck.",
+    "Lies ausschließlich eindeutig erkennbare Filme/Serien auf DVD oder Blu-ray sowie Musikalben auf CD. Ignoriere Poster, Tickets, Termine, Streaming, Spiele und unlesbare Medien. Keine Webrecherche, keine Ergänzungen aus Vermutungen; Dubletten zusammenführen.",
+    "Frage mich danach in einer Nachricht nach 5–10 kurzen Bewertungen erkannter Titel: WIE, WAS und WARUM jeweils 0–5. Nutze sie nur für vorsichtige Vorbeurteilungen der übrigen Titel. Der Import selbst bleibt unbewertet.",
+    "Gib nach meiner Antwort ausschließlich rohes JSON ohne Markdown mit exakt diesen Schlüsseln aus:",
+    '{"kandidaten":[{"titel":"","typ":"film","jahr":null,"quelle":"dvd","staffeln":null,"vorbeurteilung":"offen","begruendung":"","sicherheit":"hoch"}],"warnungen":[]}',
+    "Enums: typ=film|serie|musik; quelle=dvd|bluray|cd; vorbeurteilung=passt|offen|eher_nicht; sicherheit=hoch|mittel|niedrig.",
+    "Regeln: jahr=Ganzzahl|null und nur sichtbar/zweifelsfrei; staffeln=String|null nur bei Serien; ohne tragfähige Bewertungsbasis vorbeurteilung=offen und begruendung leer; max. 60 Kandidaten, 8 kurze Warnungen.",
+    `Autor: ${kurz(autor, 80) || "unbekannt"}. Keine internen Gedankengänge ausgeben.`,
   ].join("\n");
 }

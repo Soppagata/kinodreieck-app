@@ -622,8 +622,8 @@ const ECHO_SCHEMA = {
   additionalProperties: false,
 };
 
-const MEDIA_TYPEN = ["film", "serie"];
-const MEDIA_QUELLEN = ["dvd", "bluray", "vhs", "filmrolle", "festplatte", "phys_sonst", "apple", "google", "amazon", "sony", "microsoft", "youtube", "virt_sonst", "unklar"];
+const MEDIA_TYPEN = ["film", "serie", "musik"];
+const MEDIA_QUELLEN = ["dvd", "bluray", "cd", "vhs", "filmrolle", "festplatte", "phys_sonst", "apple", "google", "amazon", "sony", "microsoft", "youtube", "virt_sonst", "unklar"];
 const MEDIA_SICHERHEIT = ["hoch", "mittel", "niedrig"];
 const MEDIA_SCHEMA = {
   type: "object",
@@ -638,7 +638,7 @@ const MEDIA_SCHEMA = {
           jahr: { type: ["integer", "null"] },
           quelle: { type: "string", enum: MEDIA_QUELLEN },
           staffeln: { type: ["string", "null"] },
-          vorbeurteilung: { type: "string", enum: ["offen"] },
+          vorbeurteilung: { type: "string", enum: ["passt", "offen", "eher_nicht"] },
           begruendung: { type: "string" },
           sicherheit: { type: "string", enum: MEDIA_SICHERHEIT },
         },
@@ -652,47 +652,45 @@ const MEDIA_SCHEMA = {
   additionalProperties: false,
 };
 
-function leseMedienBilder(payload: Record<string, unknown>): AnbieterBild[] {
-  if (Object.keys(payload).sort().join(",") !== "bilder" || !Array.isArray(payload.bilder)) {
+type MedienKurzbewertung = { titel: string; wie: number; was: number; warum: number };
+type MedienListePayload = {
+  liste: string[];
+  standardQuelle: "unklar" | "dvd" | "bluray" | "cd";
+  vorbeurteilen: boolean;
+  bewertungen: MedienKurzbewertung[];
+};
+
+function leseMedienListe(payload: Record<string, unknown>): MedienListePayload {
+  if (Object.keys(payload).sort().join(",") !== "bewertungen,liste,standardQuelle,vorbeurteilen" ||
+      !Array.isArray(payload.liste) || !Array.isArray(payload.bewertungen) || typeof payload.vorbeurteilen !== "boolean") {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-payload-form");
   }
-  if (payload.bilder.length < 1 || payload.bilder.length > 4) {
-    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bildanzahl");
+  if (payload.liste.length < 1 || payload.liste.length > 60) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-listenlaenge");
   }
-  let base64Zeichen = 0;
-  return payload.bilder.map((roh) => {
-    if (!roh || typeof roh !== "object" || Array.isArray(roh)) {
-      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-form");
+  const liste = payload.liste.map((zeile) => kurzText(zeile, 240));
+  if (liste.some((zeile) => !zeile) || liste.join("\n").length > 12_000) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-liste-ungueltig");
+  }
+  const standardQuelle = String(payload.standardQuelle);
+  if (!["unklar", "dvd", "bluray", "cd"].includes(standardQuelle)) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-standardquelle");
+  }
+  const bewertungen: MedienKurzbewertung[] = payload.bewertungen.map((roh) => {
+    if (!roh || typeof roh !== "object" || Array.isArray(roh) || Object.keys(roh).sort().join(",") !== "titel,warum,was,wie") {
+      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bewertung-form");
     }
-    const bild = roh as Record<string, unknown>;
-    if (Object.keys(bild).sort().join(",") !== "data,height,media_type,width") {
-      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-felder");
+    const b = roh as Record<string, unknown>;
+    const titel = kurzText(b.titel, 160);
+    if (!titel || ![b.wie, b.was, b.warum].every((v) => Number.isInteger(v) && Number(v) >= 0 && Number(v) <= 5)) {
+      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bewertung-ungueltig");
     }
-    const mediaType = eigenerWert(bild, "media_type");
-    const data = eigenerWert(bild, "data");
-    const width = eigenerWert(bild, "width");
-    const height = eigenerWert(bild, "height");
-    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(String(mediaType)) ||
-        typeof data !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(data) ||
-        !Number.isInteger(width) || !Number.isInteger(height) ||
-        Number(width) < 200 || Number(height) < 200 || Number(width) > 1568 || Number(height) > 1568) {
-      throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-ungueltig");
-    }
-    let kopf = "";
-    try { kopf = atob(data.slice(0, 64)); } catch { /* gemeinsame Wache unten */ }
-    const byte = (i: number) => kopf.charCodeAt(i);
-    const magieOk = mediaType === "image/jpeg"
-      ? byte(0) === 0xff && byte(1) === 0xd8 && byte(2) === 0xff
-      : mediaType === "image/png"
-        ? byte(0) === 0x89 && kopf.slice(1, 4) === "PNG"
-        : mediaType === "image/gif"
-          ? kopf.startsWith("GIF87a") || kopf.startsWith("GIF89a")
-          : kopf.slice(0, 4) === "RIFF" && kopf.slice(8, 12) === "WEBP";
-    if (!magieOk) throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bild-signatur");
-    base64Zeichen += data.length;
-    if (base64Zeichen > 850_000) throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bilder-zu-gross");
-    return { media_type: mediaType as AnbieterBild["media_type"], data };
+    return { titel, wie: Number(b.wie), was: Number(b.was), warum: Number(b.warum) };
   });
+  if (payload.vorbeurteilen ? (bewertungen.length < 5 || bewertungen.length > 10) : bewertungen.length !== 0) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "media-bewertung-anzahl");
+  }
+  return { liste, standardQuelle: standardQuelle as MedienListePayload["standardQuelle"], vorbeurteilen: payload.vorbeurteilen, bewertungen };
 }
 
 /* ---------- intelligente Suche (Etappe 6) --------------------------------------
@@ -1798,27 +1796,27 @@ export const AUFGABEN: Record<string, Aufgabe> = {
   "media-batch-extract": {
     modellAliasPflicht: "klein",
     bauAuftrag(payload) {
-      const bilder = leseMedienBilder(payload);
+      const eingabe = leseMedienListe(payload);
       return {
-        bilder,
         system: [
-          "Du extrahierst die eigene Film- und Seriensammlung aus privaten Regal-Fotos oder Screenshots digital gekaufter Medien.",
-          "Erkenne ausschliesslich Filme und Serien, die als physisch vorhanden oder digital gekauft erkennbar sind.",
-          "Fasse Dubletten ueber alle Bilder zusammen. Hoechstens 30 Kandidaten und 8 Warnungen.",
-          "Erfinde nichts und recherchiere nicht. Streaming-Abos, Wunschlisten, Poster, Tickets, Termine, Musik und andere Medien werden ignoriert.",
-          "Quelle ist das sichtbare physische Format oder der sichtbare digitale Kaufladen; ein Abo ist kein Kauf. Ist sie unklar, verwende unklar.",
-          "Bei Serien bleiben nicht sicher erkennbare Staffeln null. Der Nutzer kann sie spaeter freiwillig ergaenzen.",
-          "Diese Aufgabe kennt das Geschmacksprofil nicht: vorbeurteilung ist immer offen und begruendung leer.",
-          "Genre, Bewertung, Kategorie und externe Kennungen sind nicht Teil deiner Antwort.",
+          "Du strukturierst eine vom Nutzer geschriebene Liste seiner eigenen Mediathek fuer den Import im Kinodreieck.",
+          "Ordne nur Film, Serie oder Musik zu. Physische Quellen sind DVD, Blu-ray und CD; uebernimm ausdrueckliche andere Kaufquellen aus der Zeile nur als erlaubten Schemawert.",
+          "Bereinige Schreibweisen und fasse Dubletten zusammen. Hoechstens 60 Kandidaten und 8 Warnungen.",
+          "Erfinde nichts und recherchiere nicht. Jahr und Staffel nur bei sicherer Zuordnung; sonst null. Die Standardquelle gilt nur, wenn die Zeile keine Quelle nennt.",
+          eingabe.vorbeurteilen
+            ? "Leite aus den mitgesendeten echten Kurzbewertungen vorsichtige Voreindruecke ab. passt oder eher_nicht braucht eine kurze konkrete Begruendung; bei zu schwacher Basis offen und leer."
+            : "Keine Vorbeurteilung: vorbeurteilung ist fuer jeden Kandidaten offen und begruendung leer.",
+          "Bewertung, Kategorie, Genre, Tags und externe Kennungen sind nicht Teil der Antwort. Alle importierten Eintraege bleiben unbewertet.",
           "Antworte ausschliesslich nach dem vorgegebenen JSON-Schema.",
         ].join("\n"),
-        nutzertext: "Lies die angehaengten Bilder gemeinsam und gib die sichtbaren Kandidaten zur manuellen Vorschau zurueck.",
+        nutzertext: JSON.stringify(eingabe),
         schema: MEDIA_SCHEMA,
       };
     },
-    pruefeErgebnis(inhalt) {
+    pruefeErgebnis(inhalt, payload) {
+      const eingabe = leseMedienListe(payload);
       const o = inhalt as Record<string, unknown> | null;
-      if (!o || typeof o !== "object" || !Array.isArray(o.kandidaten) || !Array.isArray(o.warnungen) || o.kandidaten.length > 30 || o.warnungen.length > 8) {
+      if (!o || typeof o !== "object" || !Array.isArray(o.kandidaten) || !Array.isArray(o.warnungen) || o.kandidaten.length > 60 || o.warnungen.length > 8) {
         return { fehler: "media-schema" };
       }
       const kandidaten = [];
@@ -1829,11 +1827,16 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         const begruendung = kurzText(k.begruendung, 300);
         const staffeln = k.staffeln === null ? null : kurzText(k.staffeln, 80);
         const jahr = k.jahr === null ? null : k.jahr;
+        const vorbeurteilung = String(k.vorbeurteilung);
         if (!titel || !MEDIA_TYPEN.includes(String(k.typ)) || !MEDIA_QUELLEN.includes(String(k.quelle)) ||
             !MEDIA_SICHERHEIT.includes(String(k.sicherheit)) ||
             (jahr !== null && (!Number.isInteger(jahr) || Number(jahr) < 1888 || Number(jahr) > 2100)) ||
-            (k.staffeln !== null && !staffeln) || k.vorbeurteilung !== "offen" || begruendung) return { fehler: "media-kandidat-ungueltig" };
-        kandidaten.push({ titel, typ: k.typ, jahr, quelle: k.quelle, staffeln, vorbeurteilung: "offen", begruendung: "", sicherheit: k.sicherheit });
+            (k.staffeln !== null && !staffeln) || (k.typ !== "serie" && staffeln !== null) ||
+            !["passt", "offen", "eher_nicht"].includes(vorbeurteilung) ||
+            (!eingabe.vorbeurteilen && (vorbeurteilung !== "offen" || begruendung)) ||
+            (eingabe.vorbeurteilen && vorbeurteilung !== "offen" && !begruendung) ||
+            (vorbeurteilung === "offen" && begruendung)) return { fehler: "media-kandidat-ungueltig" };
+        kandidaten.push({ titel, typ: k.typ, jahr, quelle: k.quelle, staffeln, vorbeurteilung, begruendung, sicherheit: k.sicherheit });
       }
       const warnungen = o.warnungen.map((w) => kurzText(w, 180)).filter(Boolean);
       return { daten: { kandidaten, warnungen } };
@@ -2659,9 +2662,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   /* 3) Größe nach Konfiguration — die eigentliche, enge Grenze. */
-  const maxBytes = task === "media-batch-extract"
-    ? zahl(konfig, "request_max_media_bytes", 950000)
-    : zahl(konfig, "request_max_bytes", 32768);
+  const maxBytes = zahl(konfig, "request_max_bytes", 32768);
   if (new TextEncoder().encode(rohtext).length > maxBytes) {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "auftrag-zu-gross",
