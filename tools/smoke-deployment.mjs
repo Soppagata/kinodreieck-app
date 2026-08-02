@@ -1,6 +1,7 @@
 import {
   buildMetaFehler,
   demoKatalogFehler,
+  serviceWorkerBuildFehler,
   serviceWorkerRevalidiert,
 } from "./deployment_contract.mjs";
 
@@ -38,6 +39,7 @@ if (!serviceWorkerRevalidiert(swCache, swSharedCache)) {
     `/sw.js: Browsercache ist nicht kurzlebig (${swCache || "Header fehlt"}). `
     + "Cloudflare muss die _headers-Regel respektieren; sonst bleiben PWA-Updates bis zum TTL-Ablauf liegen.");
 }
+const ersterSwText = await sw.text();
 await hole("/download/", "text/html");
 
 const metaVersuche = domainRetry ? 6 : 1;
@@ -50,13 +52,19 @@ for (let versuch = 1; versuch <= metaVersuche; versuch++) {
     const metaAntwort = await hole(`/build-meta.json?${parameter}`, "application/json");
     const meta = await metaAntwort.json().catch(() => null);
     metaFehler = buildMetaFehler(meta, erwarteteVersion);
+    if (!metaFehler) {
+      const swText = versuch === 1
+        ? ersterSwText
+        : await (await hole(`/sw.js?${parameter}`, "javascript")).text();
+      metaFehler = serviceWorkerBuildFehler(swText, erwarteteVersion || meta?.buildVersion);
+    }
   } catch (fehler) {
     metaFehler = fehler instanceof Error ? fehler.message : String(fehler);
   }
   if (!metaFehler) break;
   if (versuch < metaVersuche) await new Promise((resolve) => setTimeout(resolve, 5000));
 }
-if (metaFehler) throw new Error(`/build-meta.json: ${metaFehler}.`);
+if (metaFehler) throw new Error(`Build-Auslieferung: ${metaFehler}.`);
 
 /* --- Katalog-Sichtprüfung als anon ---------------------------------------
    Die Prüfungen oben belegen nur, dass Dateien und Header ausgeliefert werden —

@@ -16,6 +16,8 @@ await copyFile(quelle, ziel);
 const indexPfad = join("dist", "index.html");
 const swPfad = join("dist", "sw.js");
 const metaPfad = join("dist", "build-meta.json");
+const buildVersion = String(process.env.VITE_BUILD_VERSION || "local").trim();
+const appEnvironment = String(process.env.VITE_APP_ENV || "local").trim();
 const [indexHtml, sw] = await Promise.all([
   readFile(indexPfad, "utf8"),
   readFile(swPfad, "utf8"),
@@ -23,21 +25,25 @@ const [indexHtml, sw] = await Promise.all([
 const assets = [...indexHtml.matchAll(/(?:src|href)="\.\/(assets\/[^"]+)"/g)]
   .map((treffer) => treffer[1]);
 const precache = [...new Set(["./", "index.html", "manifest.webmanifest", ...assets])];
-const swMitAssets = sw.replace(
+const swMitVersion = sw.replace(
+  'const BUILD_VERSION = "__KD_BUILD_VERSION__";',
+  `const BUILD_VERSION = ${JSON.stringify(buildVersion)};`,
+);
+const swMitAssets = swMitVersion.replace(
   /const PRECACHE = \[[^\n]+\];/,
   `const PRECACHE = ${JSON.stringify(precache)};`,
 );
-if (swMitAssets === sw || !assets.some((pfad) => pfad.endsWith(".js"))
+if (swMitVersion === sw || swMitAssets === swMitVersion
+  || swMitAssets.includes("__KD_BUILD_VERSION__")
+  || !assets.some((pfad) => pfad.endsWith(".js"))
   || !assets.some((pfad) => pfad.endsWith(".css"))) {
-  throw new Error("Service-Worker-Precache konnte nicht aus dem Web-Build erzeugt werden.");
+  throw new Error("Service-Worker-Version oder Precache konnte nicht aus dem Web-Build erzeugt werden.");
 }
 await writeFile(swPfad, swMitAssets);
 
 /* Der feste Domain-Smoke braucht einen vom HTML unabhängigen Beleg, welcher
    Commit dort wirklich liegt. Ein Query-Parameter im Abruf umgeht dabei
    alte Browser-/Edge-Einträge, ohne den Dateinamen pro Build zu verändern. */
-const buildVersion = String(process.env.VITE_BUILD_VERSION || "local").trim();
-const appEnvironment = String(process.env.VITE_APP_ENV || "local").trim();
 await writeFile(metaPfad, JSON.stringify({
   format: 1,
   buildVersion,

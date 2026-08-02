@@ -8,9 +8,11 @@
    - Statische Assets (content-hashed, immutable): cache-first, sonst holen+cachen.
    Kein API-, Auth- oder Download-Cache. Fremde App-Caches (zum Beispiel der
    getrennte Katalog-Fallback) werden beim Update nicht gelöscht.
-   Cache-Name versioniert: Bump räumt nur alte App-Shell-Bestände weg. */
+   Cache-Name wird beim Online-Build an den Commit gebunden: jeder Deploy hat
+   genau eine App-Shell, alte Shells werden beim Aktivieren entfernt. */
 const CACHE_PREFIX = "kd-shell-";
-const CACHE = "kd-shell-v3";
+const BUILD_VERSION = "__KD_BUILD_VERSION__";
+const CACHE = `kd-shell-v3-${BUILD_VERSION}`;
 /* Der Online-Build ergänzt hier die gehashten CSS-/JS-Dateien aus index.html. */
 const PRECACHE = ["./", "index.html", "manifest.webmanifest"];
 
@@ -25,6 +27,8 @@ self.addEventListener("install", (e) => {
         if (res && res.ok) await c.put(url, res.clone());
       } catch { /* Erstinstallation bleibt auch bei kurzem Offline-Zustand möglich. */ }
     }));
+    /* Der neue Worker darf übernehmen; die bereits geladene Seite navigiert
+       jedoch erst nach dem sichtbaren Aktualisieren-Hinweis neu. */
     await self.skipWaiting();
   })());
 });
@@ -34,6 +38,11 @@ self.addEventListener("activate", (e) => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
+    const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    fenster.forEach((client) => client.postMessage({
+      type: "KD_BUILD_ACTIVATED",
+      buildVersion: BUILD_VERSION,
+    }));
   })());
 });
 
@@ -46,7 +55,9 @@ self.addEventListener("fetch", (e) => {
 
   const istHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
   const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien
-  const istNetzwerkNur = /\/(?:api|auth|download)\//.test(url.pathname)
+  const istBuildMeta = url.pathname.endsWith("/build-meta.json");
+  const istNetzwerkNur = istBuildMeta
+    || /\/(?:api|auth|download)\//.test(url.pathname)
     || req.headers.has("authorization")
     || req.headers.has("apikey")
     || (req.headers.get("cache-control") || "").includes("no-store");

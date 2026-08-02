@@ -187,6 +187,40 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-toast { animation: kd-toast-ein 240ms cubic-bezier(.2,.8,.2,1); }
 @keyframes kd-toast-ein { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
+.kd-app-update {
+  position: fixed;
+  z-index: 12500;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 14px 13px 18px;
+  border: 1px solid #e3a63b;
+  border-radius: 12px;
+  background: #211e26;
+  color: #ece8df;
+  box-shadow: 0 10px 36px rgba(0,0,0,.42);
+  font-family: "Space Mono", monospace;
+}
+.kd-app-update div { display: grid; gap: 3px; }
+.kd-app-update strong {
+  color: #e3a63b;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 18px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.kd-app-update span { color: #c8c2ce; font-size: 12px; line-height: 1.45; }
+.kd-app-update button { flex: 0 0 auto; }
+@media (max-width: 600px) {
+  .kd-app-update { align-items: stretch; flex-direction: column; gap: 10px; }
+  .kd-app-update button { width: 100%; }
+}
+
 /* ---- Zurück-nach-oben-Knopf (Block 3 Polish): Position/Größe hier, Farben inline (Theme). ---- */
 .kd-nachoben { position: fixed; right: calc(12px + env(safe-area-inset-right)); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 1250; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 20px rgba(0,0,0,0.55); cursor: pointer; }
 /* „Nur Desktop"-Blöcke (z. B. Backup wiederherstellen) am Handy ausblenden. */

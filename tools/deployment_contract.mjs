@@ -32,6 +32,24 @@ export function buildMetaFehler(meta, erwarteteVersion = "") {
   return null;
 }
 
+export function serviceWorkerBuildFehler(quelltext, erwarteteVersion = "") {
+  const text = String(quelltext || "");
+  const treffer = text.match(/const BUILD_VERSION = ("(?:[^"\\]|\\.)*");/);
+  if (!treffer) return "Build-Version fehlt im Service Worker";
+  let version = "";
+  try { version = JSON.parse(treffer[1]); } catch { return "ungültige Build-Version im Service Worker"; }
+  if (!version || version === "__KD_BUILD_VERSION__") {
+    return "Build-Platzhalter wurde im Service Worker nicht ersetzt";
+  }
+  if (!text.includes("`kd-shell-v3-${BUILD_VERSION}`")) {
+    return "Shell-Cache ist nicht an die Build-Version gebunden";
+  }
+  if (erwarteteVersion && version !== erwarteteVersion) {
+    return `Service Worker ${version}, erwartet war ${erwarteteVersion}`;
+  }
+  return null;
+}
+
 export function demoKatalogFehler(sichtbar) {
   if (!Array.isArray(sichtbar)) return "unerwartete Katalog-Sicht";
   const fehlend = [
