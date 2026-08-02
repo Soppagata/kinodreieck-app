@@ -446,7 +446,13 @@ export function findeKinoPinImKatalog(pin, kinoKatalog = [], jetzt = new Date())
     if (titelNormiert(eintrag?.titel) !== titel && titelNormiert(eintrag?.originaltitel) !== titel) return false;
     if (pin?.j && eintrag?.jahr && Number(pin.j) !== Number(eintrag.jahr)) return false;
     return (eintrag.termine || []).some((wert) => {
-      const probe = { z: wert, kino: (eintrag.kinos || eintrag.k || [])[0] };
+      /* Normalisierte film.at-Termine tragen ihr konkretes Kino bereits im
+         Terminstring. Bei Filmen in mehreren Häusern darf deshalb nicht das
+         erste Kino des gesamten Filmeintrags auf jeden Termin gelegt werden.
+         Nur alte Formate ohne „· Kino“ brauchen diesen Fallback. */
+      const hatKinoImTermin = String(wert).includes("·");
+      const fallbackKino = (eintrag.kinos || eintrag.k || [])[0];
+      const probe = { z: wert, ...(!hatKinoImTermin && fallbackKino ? { kino: fallbackKino } : {}) };
       const termin = kinoPinTermin(probe, jetzt);
       return termin && kinoSlotSchluessel(probe, termin) === slot;
     });

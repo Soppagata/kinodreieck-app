@@ -444,7 +444,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test("Showa-Kulisse reicht mobil deutlich über die Bedienleiste", async ({ page }) => {
+test("Showa-Kulisse wird mobil unvergrößert nach oben verschoben", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page, { modus: "showa" });
@@ -453,9 +453,10 @@ test("Showa-Kulisse reicht mobil deutlich über die Bedienleiste", async ({ page
   const szene = page.locator(".kd-showa-scene");
   await expect(szene).toBeVisible();
   const box = await szene.boundingBox();
-  expect(box.height).toBeGreaterThanOrEqual(270);
-  expect(box.y).toBeLessThanOrEqual(852 - 270);
-  expect(box.y + box.height).toBeCloseTo(852, 0);
+  expect(box.width).toBeCloseTo(820, 0);
+  expect(box.height).toBeCloseTo(205, 0);
+  expect(box.y).toBeCloseTo(852 - 205 - 70, 0);
+  expect(box.y + box.height).toBeCloseTo(852 - 70, 0);
   await keineDokumentUeberbreite(page);
 });
 
@@ -962,6 +963,10 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await page.addInitScript(async () => {
+    const heute = new Date();
+    const zwei = (wert) => String(wert).padStart(2, "0");
+    const heuteIso = `${heute.getFullYear()}-${zwei(heute.getMonth() + 1)}-${zwei(heute.getDate())}`;
+    const wochentag = heute.getDay() || 7;
     localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
     localStorage.setItem("kd:start", "clean");
     localStorage.setItem("kd:start-version", "demo-v1");
@@ -970,6 +975,12 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
     localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-07-31T00:00:00.000Z" }));
     localStorage.setItem("kd:ki-version", "e8-v1");
     localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:wochenplan", JSON.stringify({ version: 1, eintraege: [{
+      id: "regenbogen-heute", titel: "Regenbogen über Kreuzberg", art: "termin",
+      plattform: "Netflix", startdatum: heuteIso, wochentage: [wochentag],
+      intervall_wochen: 1, ende: { typ: "nie" }, aktiv: true,
+      ref: { watchmode_id: 900200001, streaming_art: "entdecken", auto: true },
+    }] }));
     /* Der Test blockiert Fremdnetz bewusst. Ein echter Cache-Stand bildet den
        Offline-Fallback des Katalogdienstes nach und beweist zugleich, dass die
        globale Suche die volle Entdecken-Zeile statt nur UI-Navigation benutzt. */
@@ -984,9 +995,13 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
     await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
       demo: true, stand: "2026-08-01T10:00:00Z", region: "AT", dienste: ["Netflix"], titel: [],
     }));
+    const fueller = Array.from({ length: 300 }, (_, index) => ({
+      watchmode_id: 910000000 + index, titel: `A Füller ${String(index).padStart(3, "0")}`,
+      jahr: 2000 + (index % 25), typ: "movie", genres: [], dienste: ["Netflix"],
+    }));
     await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
       demo: true, stand: "2026-08-01T10:00:00Z", region: "AT", dienste: ["Netflix"], gekuerzt: false,
-      titel: [{
+      titel: [...fueller, {
         watchmode_id: 900200001, titel: "Regenbogen über Kreuzberg", jahr: 2016, typ: "movie",
         genres: [], dienste: ["Netflix"], relevanz: 1.5, relevanz_signale: ["jahrzehnt:2010er(+1.5)"],
       }],
@@ -1006,8 +1021,27 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
   const ziel = page.locator('[data-streaming-suchtreffer="entdecken:900200001"]');
   await expect(ziel).toBeVisible();
   await expect(ziel).toBeFocused();
+  await expect.poll(async () => ziel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.top >= 0 && box.bottom <= window.innerHeight;
+  })).toBe(true);
   await expect(ziel.getByText(/Passung beruht auf:/)).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Entdecken sortieren" })).toBeVisible();
+
+  /* Derselbe Sprung muss ohne vorgeschaltete globale Suche funktionieren:
+     Beim Reload ist zunächst nur der kleine Bundle-Snapshot da. Erst der Klick
+     auf den Wochenpin lädt die 301 Karten und darf den Fokus danach setzen. */
+  await page.reload();
+  const wochenPin = page.locator(".kd-wochen-eintrag").filter({ hasText: "Regenbogen über Kreuzberg" }).first();
+  await wochenPin.locator("summary").click();
+  await wochenPin.getByRole("button", { name: "Eintrag ansehen" }).click();
+  /* 200 regulär paginierte Karten plus genau der eine gewählte Treffer. */
+  await expect(page.locator(".kd-entdecken-karte")).toHaveCount(201);
+  await expect(ziel).toBeFocused();
+  await expect.poll(async () => ziel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return box.top >= 0 && box.bottom <= window.innerHeight;
+  })).toBe(true);
 });
 
 test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", async ({ page }) => {
@@ -1082,6 +1116,8 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
     const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const wt = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()];
     const termin = `${wt} ${d.getDate()}.${d.getMonth() + 1}. 20:00 · English Cinema Haydn`;
+    const obsessionGartenbau = `${wt} ${d.getDate()}.${d.getMonth() + 1}. 18:30 · Gartenbaukino (OmU)`;
+    const obsessionApollo = `${wt} ${d.getDate()}.${d.getMonth() + 1}. 21:00 · Apollo (OV)`;
     const filme = [
       {
         id: "totoro", film_at_id: "totoro", titel: "Mein Nachbar Totoro", originaltitel: "My Neighbor Totoro",
@@ -1100,11 +1136,15 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
     localStorage.setItem("kd:master", JSON.stringify({ filme, meta: { version: "test" }, gespeichertAm: Date.now() }));
     localStorage.setItem("kd:programm-cache", JSON.stringify({
       fetchedAt: Date.now(), art: "manuell", stand: Date.now(),
-      data: { stand: new Date().toISOString(), filme: [{ t: "Event Horizon – Am Rande des Universums", j: 1997, k: ["English Cinema Haydn"], z: [termin] }] },
+      data: { stand: new Date().toISOString(), filme: [
+        { t: "Event Horizon – Am Rande des Universums", j: 1997, k: ["English Cinema Haydn"], z: [termin] },
+        { t: "Obsession - Du sollst mich lieben", j: 2026, k: ["Gartenbaukino", "Apollo"], z: [obsessionGartenbau, obsessionApollo] },
+      ] },
     }));
-    localStorage.setItem("kd:kino-pins", JSON.stringify([{
-      t: "Event Horizon – Am Rande des Universums", j: 1997, z: termin, seit: Date.now(),
-    }]));
+    localStorage.setItem("kd:kino-pins", JSON.stringify([
+      { t: "Event Horizon – Am Rande des Universums", j: 1997, z: termin, seit: Date.now() },
+      { t: "Obsession - Du sollst mich lieben", j: 2026, z: obsessionApollo, seit: Date.now() },
+    ]));
     localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [{
       id: "mw-1", titel: "Das siebente Siegel", jahr: 1957, typ: "film", im_besitz: true,
       erstellt_am: new Date().toISOString(), verknuepfung: { ziel: "master", id: "blade-runner-2049" },
@@ -1127,6 +1167,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   expect(module.slice(0, 4)).toEqual(["Pinboard & Serienradar", "Must-Watch", "Zuletzt hinzugefügt"]);
   const pinboardPin = page.locator(".kd-pinboard-kino").first();
   await expect(pinboardPin).toBeVisible();
+  await expect(page.locator(".kd-pinboard-kino").filter({ hasText: "Obsession - Du sollst mich lieben" })).toBeVisible();
   const dashboardGeometrie = await pinboardPin.evaluate((karte) => {
     const titel = karte.querySelector(".kd-pinboard-kino-name");
     const meta = karte.querySelector(".kd-pinboard-kino-meta");
@@ -1138,8 +1179,13 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   expect(dashboardGeometrie.titelRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
   expect(dashboardGeometrie.metaRechts).toBeLessThanOrEqual(dashboardGeometrie.karteRechts + 0.5);
   expect(dashboardGeometrie.hoehe).toBeLessThan(90);
+  await page.locator(".kd-pinboard-kino").filter({ hasText: "Obsession - Du sollst mich lieben" }).click();
+  await expect(page.locator('[data-kino-suchtreffer="programm:Obsession - Du sollst mich lieben"]')).toBeFocused();
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.locator(".kd-wochen-eintrag--vorschlag")).toHaveCount(0);
   await expect(page.locator(".kd-wochen-eintrag--kino").getByText("Event Horizon – Am Rande des Universums", { exact: true })).toBeVisible();
+  await expect(page.locator(".kd-wochen-eintrag--kino").getByText("Obsession - Du sollst mich lieben", { exact: true })).toBeVisible();
   await expect(page.locator(".kd-wochen-tagplus")).toHaveCount(7);
   await page.locator(".kd-wochen-tagplus").first().click();
   const wochenEditor = page.locator("#kd-wochen-editor");

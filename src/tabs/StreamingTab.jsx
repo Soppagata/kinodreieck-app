@@ -122,16 +122,17 @@ export function StreamingTab({
       const ziel = [...(bereichRef.current?.querySelectorAll("[data-streaming-suchtreffer]") || [])]
         .find((element) => element.dataset.streamingSuchtreffer === schluessel);
       if (!ziel) return;
-      ziel.scrollIntoView?.({ behavior: "smooth", block: "center" });
       ziel.focus?.({ preventScroll: true });
-      /* Der Tab-Effekt kann unmittelbar danach noch die Vollkatalog-Ansicht
-         einsetzen. Nach diesem letzten Render den Fokus einmal bestätigen und
-         erst dann den Auftrag verbrauchen. */
+      ziel.scrollIntoView?.({ behavior: "auto", block: "center" });
+      /* Nach dem Ansichts-/Filter-Render die endgültige Geometrie bestätigen.
+         Ein unmittelbarer Sprung ist hier absichtlich verlässlicher als eine
+         Smooth-Scroll-Animation, die iOS bei Layoutänderungen abbrechen kann. */
       bestaetigung = window.setTimeout(() => {
         const aktuell = [...(bereichRef.current?.querySelectorAll("[data-streaming-suchtreffer]") || [])]
           .find((element) => element.dataset.streamingSuchtreffer === schluessel);
         if (!aktuell) return;
         aktuell.focus?.({ preventScroll: true });
+        aktuell.scrollIntoView?.({ behavior: "auto", block: "center" });
         onFokusVerbraucht?.();
       }, 120);
     });
@@ -325,6 +326,16 @@ export function StreamingTab({
   }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, zeigeErledigte, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
   useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
+  const sichtbareEntdeckenTitel = useMemo(() => {
+    const basis = entdeckenListe.slice(0, sichtbarE);
+    if (fokusOverride?.art !== "entdecken") return basis;
+    const ziel = entdeckenListe.find((titel) => String(titel.watchmode_id) === fokusOverride.ref);
+    if (!ziel || basis.some((titel) => String(titel.watchmode_id) === fokusOverride.ref)) return basis;
+    /* Der konkrete Navigationsauftrag muss auch dann ein DOM-Ziel erhalten,
+       wenn seine sortierte Position hinter der 200er-Paginierungsgrenze liegt.
+       Nur diese eine Karte wird ergänzt; der übrige Vollkatalog bleibt billig. */
+    return [...basis, ziel];
+  }, [entdeckenListe, sichtbarE, fokusOverride]);
 
   const dekaden = useMemo(() => {
     if (!entdeckenDa) return [];
@@ -571,7 +582,7 @@ export function StreamingTab({
             </>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {entdeckenListe.slice(0, sichtbarE).map((t) => (
+            {sichtbareEntdeckenTitel.map((t) => (
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}
                 data-streaming-suchtreffer={`entdecken:${t.watchmode_id}`}
                 onClick={() => setExpandedId(expandedId === "e" + t.watchmode_id ? null : "e" + t.watchmode_id)}

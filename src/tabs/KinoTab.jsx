@@ -93,8 +93,8 @@ export function KinoTab({
         const schluessel = `${fokusTreffer.art}:${fokusTreffer.ref}`;
         const ziel = [...(bereichRef.current?.querySelectorAll("[data-kino-suchtreffer]") || [])]
           .find((element) => element.dataset.kinoSuchtreffer === schluessel);
-        ziel?.scrollIntoView?.({ behavior: "smooth", block: "center" });
         ziel?.focus?.({ preventScroll: true });
+        ziel?.scrollIntoView?.({ behavior: "auto", block: "center" });
         onFokusVerbraucht?.();
       });
     });

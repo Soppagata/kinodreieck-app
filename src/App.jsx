@@ -1189,8 +1189,15 @@ export default function App() {
   const [mediathekFokus, setMediathekFokus] = useState(null);
   const [kinoFokus, setKinoFokus] = useState(null);
   const [streamingFokus, setStreamingFokus] = useState(null);
+  const ladeStreamingDateienRef = useRef(null), streamingSprungLaufRef = useRef(0);
   const springeZuFilm = useCallback((ref) => { setMediathekFokus(ref); setExpandedId("b" + ref); setTab("mediathek"); }, []);
-  const springeZuStreaming = useCallback((fokus) => { setStreamingFokus(fokus); setTab("streaming"); }, []);
+  const springeZuStreaming = useCallback(async (fokus) => {
+    const lauf = ++streamingSprungLaufRef.current; setTab("streaming");
+    /* Erst den Vollkatalog übernehmen; sonst verschiebt sein Render die bereits fokussierte Snapshot-Karte. */
+    try { await ladeStreamingDateienRef.current?.(true); } catch { /* Tab bleibt nutzbar */ }
+    if (streamingSprungLaufRef.current !== lauf) return;
+    setStreamingFokus({ ...fokus, auftrag: lauf });
+  }, []);
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
   const updateFilm = useCallback((id, changes) => {
@@ -1525,7 +1532,6 @@ export default function App() {
   const [finderEingabe, setFinderEingabe] = useState("");
   const [finderSuchauftrag, setFinderSuchauftrag] = useState(null);
   const [globaleSuchantwort, setGlobaleSuchantwort] = useState(null);
-  const ladeStreamingDateienRef = useRef(null);
   const globaleSucheLaufRef = useRef(0);
   const starteGlobaleSuche = useCallback(async ({ text, scope }) => {
     const lauf = ++globaleSucheLaufRef.current;
@@ -1563,9 +1569,7 @@ export default function App() {
       setKinoFokus({ art: treffer.zielArt || "film", ref: treffer.ref, titel: treffer.titel });
       navigiere("kino");
     } else if (treffer.typ === "film" && treffer.bereich === "streaming") {
-      setExpandedId("s" + treffer.ref);
-      setStreamingFokus({ art: treffer.zielArt || "programm", ref: treffer.ref, titel: treffer.titel });
-      navigiere("streaming");
+      void springeZuStreaming({ art: treffer.zielArt || "programm", ref: treffer.ref, titel: treffer.titel });
     } else if (treffer.typ === "film") springeZuFilm(treffer.ref);
     else if (treffer.typ === "blog") springeZuArtikel(treffer.ref);
     else if (treffer.typ === "hilfe" && treffer.ziel) navigiere(treffer.ziel);
@@ -1574,10 +1578,9 @@ export default function App() {
       setKinoFokus({ art: treffer.zielArt || "programm", ref: treffer.ref, titel: treffer.titel });
       navigiere("kino");
     } else if (treffer.typ === "streaming") {
-      setStreamingFokus({ art: treffer.zielArt || "entdecken", ref: treffer.ref, titel: treffer.titel });
-      navigiere("streaming");
+      void springeZuStreaming({ art: treffer.zielArt || "entdecken", ref: treffer.ref, titel: treffer.titel });
     }
-  }, [navigiere, springeZuArtikel, springeZuFilm]);
+  }, [navigiere, springeZuArtikel, springeZuFilm, springeZuStreaming]);
   const toggleGlobalesMenu = useCallback(() => {
     setGlobaleSuchantwort(null);
     toggleMehr();
@@ -1992,7 +1995,9 @@ export default function App() {
             onStreamingKatalogLaden={ladeStreamingDateien}
             onSpringeZuKino={(eintrag) => {
               setZeigeAlles(true);
-              setKinoFokus({ art: "programm", ref: eintrag?.programm_ref ?? eintrag?.ref ?? null, titel: eintrag?.titel || "" });
+              setKinoFokus(eintrag?.film_ref != null
+                ? { art: "film", ref: eintrag.film_ref, titel: eintrag?.titel || "" }
+                : { art: "programm", ref: eintrag?.programm_ref ?? eintrag?.ref ?? null, titel: eintrag?.titel || "" });
               navigiere("kino");
             }}
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,

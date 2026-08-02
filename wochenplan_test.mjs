@@ -3,7 +3,7 @@ import {
   automatischeReminderRef, datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
   naechsteSiebenTage, kinoPinTermin, reminderVerknuepfung, reminderVerknuepfungsOptionen,
-  wochentagFuerDatum,
+  wochentagFuerDatum, findeKinoPinImKatalog,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
 
@@ -199,6 +199,30 @@ ok("Nicht mehr im Programm gefundene Kinopins verschwinden aus der Woche", () =>
   });
   assert.deepEqual(tage[3].eintraege.map((e) => e.titel), ["Event Horizon"]);
   assert.equal(tage[3].eintraege[0].programm_ref, "programm-1");
+});
+
+ok("Ein Kinopin wird beim konkreten zweiten Kino eines Films nicht verworfen", () => {
+  const kinoKatalog = [{
+    id: "kino-obsession", programm_ref: "programm-obsession",
+    titel: "Obsession - Du sollst mich lieben", jahr: 2026,
+    kinos: ["Gartenbaukino", "Apollo"],
+    termine: [
+      "Mi 5.8. 18:30 · Gartenbaukino (OmU)",
+      "Mi 5.8. 21:00 · Apollo (OV)",
+    ],
+  }];
+  const pin = {
+    t: "Obsession - Du sollst mich lieben", j: 2026,
+    z: "Mi 5.8. 21:00 · Apollo (OV)",
+  };
+  assert.equal(
+    findeKinoPinImKatalog(pin, kinoKatalog, new Date(2026, 7, 3))?.programm_ref,
+    "programm-obsession",
+  );
+  const tage = wochenansicht({
+    jetzt: new Date(2026, 7, 3), kinoKatalog, kinoPins: [pin],
+  });
+  assert.deepEqual(tage[2].eintraege.map((eintrag) => eintrag.titel), ["Obsession - Du sollst mich lieben"]);
 });
 
 ok("Exakte API-Folgennummer erscheint bevorzugt", () => {

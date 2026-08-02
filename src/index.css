@@ -102,7 +102,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   letter-spacing: .015em !important; }
 
 @media (max-width:760px) {
-  .kd-showa-scene { width:900px; height:clamp(270px,34vh,320px); }
+  /* Die Kulisse behält ihren Bildausschnitt und ihre ursprüngliche Größe.
+     `bottom` verschiebt nur die komplette Miniatur nach oben; eine größere
+     SVG würde Godzilla und die Häuser stattdessen ungewollt heranzoomen. */
+  .kd-showa-scene { width:820px; height:205px; bottom:70px; }
   .kd-city-back { opacity:.36; }
   .kd-utility { display:none; }
 }

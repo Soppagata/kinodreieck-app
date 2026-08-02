@@ -165,9 +165,18 @@ function StartDashboard({
       programm_ref: prog.film_at_id ?? prog.id ?? prog.t,
     })),
   ], [kinoMatches]);
-  const aktiveKinoPins = useMemo(() => progStand
-    ? kinoPins.filter((pin) => findeKinoPinImKatalog(pin, kinoKatalog))
-    : kinoPins, [kinoPins, kinoKatalog, progStand]);
+  const aktiveKinoPins = useMemo(() => {
+    if (!progStand) return kinoPins;
+    return kinoPins.flatMap((pin) => {
+      const treffer = findeKinoPinImKatalog(pin, kinoKatalog);
+      if (!treffer) return [];
+      return [{
+        ...pin,
+        programm_ref: treffer.programm_ref ?? treffer.id ?? null,
+        ...(treffer.film_ref != null ? { film_ref: treffer.film_ref } : {}),
+      }];
+    });
+  }, [kinoPins, kinoKatalog, progStand]);
 
   /* Must-Watch: oberste 5 in Listenreihenfolge. */
   const mwTop = (mustwatch || []).slice(0, 5);
@@ -248,7 +257,10 @@ function StartDashboard({
                 );
               })}
               {pins.map((p) => (
-                <button key={`kino-${p.t}|${p.z}`} className="kd-dash-zeile kd-pinboard-kino" onClick={() => onNavigiere?.("kino")}>
+                <button key={`kino-${p.t}|${p.z}`} className="kd-dash-zeile kd-pinboard-kino" onClick={() => {
+                  if (p.programm_ref != null) onSpringeZuKino?.({ ...p, titel: p.t });
+                  else onNavigiere?.("kino");
+                }}>
                   <span className="kd-pinboard-kino-titel">
                     <span className="kd-pinboard-kino-marker" aria-hidden="true">◇</span>
                     <span className="kd-pinboard-kino-name">
