@@ -28,6 +28,38 @@ check("Dashboard und Kino verwenden dasselbe Kinoticket", () => {
   assert.match(lies("./src/components/ui.jsx"), /export function KinoTicket/);
 });
 
+check("Dashboard folgt der festen Startseiten-Reihenfolge", () => {
+  const start = lies("./src/tabs/StartTab.jsx");
+  const dashboard = start.slice(start.indexOf('<div className="kd-dash-grid">'));
+  const positionen = [
+    dashboard.indexOf('name="Kino für dich"'),
+    dashboard.indexOf("<Wochenplan"),
+    dashboard.indexOf('name="Pinboard & Serienradar"'),
+    dashboard.indexOf('name="Must-Watch"'),
+    dashboard.indexOf('name="Zuletzt hinzugefügt"'),
+  ];
+  assert.ok(positionen.every((position) => position >= 0));
+  assert.deepEqual([...positionen].sort((a, b) => a - b), positionen);
+  assert.doesNotMatch(dashboard, /name="Jetzt streambar"/);
+});
+
+check("Deine Woche rendert rollierende Kinotickets und verständliche Kalenderaktionen", () => {
+  const woche = lies("./src/components/Wochenplan.jsx");
+  const css = lies("./src/index.css");
+  assert.match(woche, /Heute bis/);
+  assert.doesNotMatch(woche, /Vorige Woche|Nächste Woche|Woche \.ics/);
+  assert.match(woche, /Die nächsten 7 Tage in den Kalender setzen/);
+  assert.match(css, /\.kd-wochen-tag \{[\s\S]*background-color:var\(--kd-leinwand\)/);
+  assert.match(css, /\.kd-wochen-ticketstub/);
+});
+
+check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag", () => {
+  const streaming = lies("./src/tabs/StreamingTab.jsx");
+  assert.match(streaming, /className="kd-entdecken-beobachten"/);
+  assert.match(streaming, /setzeSerienBeobachtung/);
+  assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
+});
+
 check("Kinoticket zeigt keine Bewertung im Programmkopf", () => {
   const ui = lies("./src/components/ui.jsx");
   const ticket = ui.slice(ui.indexOf("export function KinoTicket"), ui.indexOf("/* ---------- UI-Icons"));

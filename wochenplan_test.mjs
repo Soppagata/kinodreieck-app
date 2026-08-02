@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
+  naechsteSiebenTage,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
 
@@ -10,6 +11,16 @@ const ok = (name, fn) => { fn(); checks++; console.log("✓ " + name); };
 
 ok("Woche beginnt lokal am Montag", () => {
   assert.equal(datumLokal(montagDerWoche(new Date(2026, 7, 2, 23, 30))), "2026-07-27");
+});
+
+ok("Sieben-Tage-Ausblick beginnt heute statt zwingend am Montag", () => {
+  const tage = naechsteSiebenTage(new Date(2026, 7, 2, 23, 30));
+  assert.deepEqual(tage.map((tag) => tag.iso), [
+    "2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05",
+    "2026-08-06", "2026-08-07", "2026-08-08",
+  ]);
+  assert.equal(tage[0].name, "Sonntag");
+  assert.equal(tage[6].name, "Samstag");
 });
 
 ok("Normalisierung erhält mehrere Wochentage und repariert ungültige Werte", () => {
@@ -61,13 +72,13 @@ ok("Exakte API-Folgennummer erscheint bevorzugt", () => {
   assert.equal(folgenstandText({ folgen_verfuegbar: 1266 }), "1266 Folgen verfügbar");
 });
 
-ok("Wochenansicht enthält sieben Tage, Reminder und Kinopin", () => {
+ok("Rollierender Ausblick enthält sieben Tage, Reminder und Kinopin", () => {
   const plan = { version: 1, eintraege: [{ id: "a", titel: "One Piece", art: "folge", plattform: "Netflix", wochentage: [2], intervall_wochen: 1, startdatum: "2026-07-28", ende: { typ: "nie" }, aktiv: true, ref: { watchmode_id: 42 } }] };
   const tage = wochenansicht({ wochenplan: plan, wochenstart: new Date(2026, 7, 2), jetzt: new Date(2026, 7, 2), katalog: [{ watchmode_id: 42, titel: "One Piece", typ: "tv_series", folge_aktuell: 1266 }], kinoPins: [{ t: "Jaws", z: "So 02.08. 20:30", kino: "Gartenbaukino" }] });
   assert.equal(tage.length, 7);
-  assert.equal(tage[1].eintraege[0].folgenstand, "Folge 1266");
-  assert.equal(tage[6].eintraege[0].art, "kino");
-  assert.equal(tage[6].eintraege[0].plattform, "Gartenbaukino");
+  assert.equal(tage[2].eintraege[0].folgenstand, "Folge 1266");
+  assert.equal(tage[0].eintraege[0].art, "kino");
+  assert.equal(tage[0].eintraege[0].plattform, "Gartenbaukino");
 });
 
 ok("Ältere ISO-Kinopins werden weiterhin dem richtigen Tag zugeordnet", () => {

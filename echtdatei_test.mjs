@@ -162,9 +162,9 @@ const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(M
 check("Dashboard: Vertrauens-Zeile (Programm- + Katalog-Stand)", !!doc.querySelector(".kd-vertrauen") && /Programm: \d{2}\.\d{2}\./.test(startText) && /Katalog: \d+ Titel/.test(startText));
 check("Dashboard: Kino-für-dich-Modul ohne künstlichen Match-Wert", /Kino für dich/.test(startText) && enthaeltMatchText(startText) && !/MATCH/.test(startText));
 check("Dashboard: Must-Watch-Modul (geseedete Einträge, Besitz-Badge)", /Must-Watch/.test(startText) && /Stalker/.test(startText) && /IM BESITZ/.test(startText));
-check("Dashboard: Jetzt-streambar-Modul (Merkliste ∩ Abos)", /Jetzt streambar/.test(startText) && /▶ NETFLIX/.test(startText));
+check("Dashboard: überholtes Jetzt-streambar-Modul entfernt", !/Jetzt streambar/.test(startText));
 check("Dashboard: Zuletzt hinzugefügt (Zeitstempel-Quellen, neueste zuerst)", /Zuletzt hinzugefügt/.test(startText) && /MERKLISTE/.test(startText) && /MUST-WATCH/.test(startText));
-check("Dashboard: Pinboard-Modul immer sichtbar (leer -> Hinweis)", /Pinboard/.test(startText) && /Noch nichts gepinnt/.test(startText));
+check("Dashboard: Pinboard und Serienradar sind gemeinsam immer sichtbar", /Pinboard & Serienradar/.test(startText) && /Noch leer/.test(startText));
 check("Dashboard: Erklärinhalte raus aus Start (kein Hero, keine Quicklinks)",
   !/LOKALE FILM-PLATTFORM/.test(startText) && !/Deine Filme, dein Kino, dein Urteil/.test(startText) && !/Direkt hinein/.test(startText) && !knopf(/Anleitung & Hilfe öffnen/i));
 

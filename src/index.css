@@ -890,6 +890,24 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-dash-log .kd-dash-ztitel { font-family: 'Space Mono', monospace; font-weight: 400; font-size: 12px;
   letter-spacing: 0; text-transform: none; }
 
+/* Gemeinsames Pinboard: beobachtete Serien sind echte Pins; neue Staffel-/
+   Folgenstände bekommen die stärkste visuelle Priorität. */
+.kd-pinboard-radar { cursor:default; }
+.kd-pinboard-serie.ist-neu { margin-inline:-14px; padding-inline:14px; background:color-mix(in srgb,var(--kd-wolfram) 16%,transparent); }
+.kd-pinboard-ziel,.kd-pinboard-kino { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
+.kd-pinboard-ziel { display:flex; flex:1 1 auto; min-width:0; flex-direction:column; gap:2px; padding:0; }
+.kd-pinboard-ziel:hover .kd-dash-ztitel,.kd-pinboard-kino:hover .kd-dash-ztitel { color:var(--kd-wolfram); }
+.kd-pinboard-meta { color:var(--kd-rauch); font:10px 'Space Mono',monospace; }
+.kd-dash-badge--neu { color:var(--kd-tinte); border-color:var(--kd-wolfram); background:var(--kd-wolfram); }
+.kd-pinboard-bestaetigen { flex:0 0 auto; padding:5px 7px; border:1px solid var(--kd-rauch); border-radius:4px; background:transparent; color:var(--kd-tinte); cursor:pointer; font:600 9px 'Space Mono',monospace; }
+.kd-pinboard-kino { display:flex; width:100%; align-items:center; gap:10px; padding:9px 0; }
+.kd-pinboard-kino .kd-dash-showtime { flex:0 1 auto; margin-top:0; }
+
+.kd-entdecken-beobachten { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-top:9px; padding:8px 10px; border:1px dashed color-mix(in srgb,var(--rauch,#948fa0) 70%,transparent); border-radius:5px; }
+.kd-entdecken-beobachten button { border:1px solid var(--rauch,#948fa0); border-radius:999px; background:transparent; color:var(--rauch,#948fa0); padding:5px 10px; cursor:pointer; font:700 10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
+.kd-entdecken-beobachten button.aktiv { border-color:var(--wolfram,#e3a63b); background:var(--wolfram,#e3a63b); color:var(--tinte,#17151a); }
+.kd-entdecken-beobachten span { flex:1 1 220px; font-size:11px; line-height:1.45; }
+
 .kd-dash-leer { margin: 0; font-size: 13px; line-height: 1.6; color: var(--kd-rauch); }
 
 @media (max-width:760px) {
@@ -1063,26 +1081,35 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochenplan button { border:1px solid var(--wp-border); border-radius:4px; background:var(--kd-saalHoch); color:var(--kd-leinwandTief); padding:6px 9px; cursor:pointer; font:600 10px/1.2 'Space Mono',monospace; }
 .kd-wochenplan button:hover { border-color:var(--kd-wolfram); color:var(--kd-wolfram); }
 .kd-wochenplan .kd-wochen-primary { background:var(--kd-wolfram); color:var(--kd-saal); border-color:var(--kd-wolfram); }
-.kd-wochen-nav { display:flex; align-items:center; justify-content:center; gap:8px; color:var(--kd-rauch); font:10px 'Space Mono',monospace; }
-.kd-wochen-nav span { min-width:88px; text-align:center; }
-.kd-wochen-tagesliste { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border:1px solid var(--wp-border); border-radius:7px; overflow:hidden; }
-.kd-wochen-tag { min-width:0; background:color-mix(in srgb,var(--kd-saalHoch) 78%,transparent); }
-.kd-wochen-tag + .kd-wochen-tag { border-left:1px solid var(--wp-border); }
-.kd-wochen-tag>header { display:flex; align-items:center; justify-content:space-between; gap:4px; padding:8px; border-bottom:1px solid var(--wp-border); }
-.kd-wochen-tag>header div { display:flex; flex-direction:column; min-width:0; }
-.kd-wochen-tag>header b { font:700 11px 'Space Mono',monospace; color:var(--kd-leinwandTief); }
-.kd-wochen-tag>header span { font:9px 'Space Mono',monospace; color:var(--kd-rauch); }
-.kd-wochen-tag>header button { border:0; padding:2px; background:none; font-size:8px; }
-.kd-wochen-tag.ist-heute>header { background:color-mix(in srgb,var(--kd-wolfram) 15%,transparent); box-shadow:inset 0 3px 0 var(--kd-wolfram); }
-.kd-wochen-taginhalt { display:flex; flex-direction:column; gap:6px; min-height:82px; padding:6px; }
-.kd-wochen-frei { padding:7px 2px; color:var(--kd-rauch); font:italic 10px 'Space Mono',monospace; opacity:.7; }
+.kd-wochen-kalenderknopf { min-width:34px; font-size:15px !important; }
+.kd-wochen-zeitraum { color:var(--kd-rauch); font:10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.kd-wochen-tagesliste { display:flex; flex-direction:column; gap:10px; overflow:visible; }
+.kd-wochen-tag { position:relative; min-width:0; overflow:hidden; border:1px solid color-mix(in srgb,var(--kd-rauch) 62%,transparent); border-radius:9px;
+  background-color:var(--kd-leinwand); color:var(--kd-tinte); box-shadow:0 4px 17px rgba(0,0,0,.34);
+  background-image:radial-gradient(circle at 12px 12px,color-mix(in srgb,var(--kd-rauch) 12%,transparent) 0 1px,transparent 1.3px); background-size:24px 24px; }
+.kd-wochen-tag::before,.kd-wochen-tag::after { content:""; position:absolute; z-index:2; top:49px; width:16px; height:16px; border-radius:50%; background:var(--kd-saal); }
+.kd-wochen-tag::before { left:-9px; }
+.kd-wochen-tag::after { right:-9px; }
+.kd-wochen-tag>header { display:grid; grid-template-columns:66px minmax(0,1fr) auto; align-items:stretch; min-height:58px; border-bottom:2px dashed color-mix(in srgb,var(--kd-rauch) 72%,transparent); }
+.kd-wochen-ticketstub { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; background:var(--kd-leinwandTief); border-right:2px dashed color-mix(in srgb,var(--kd-rauch) 72%,transparent); }
+.kd-wochen-ticketstub b { color:var(--kd-wolfram); font:900 25px/1 'Fraunces',Georgia,serif; }
+.kd-wochen-ticketstub span { margin-top:3px; color:var(--kd-rauch); font:700 8px 'Space Mono',monospace; letter-spacing:.16em; text-transform:uppercase; }
+.kd-wochen-ticketname { display:flex; flex-direction:column; justify-content:center; min-width:0; padding:9px 14px; }
+.kd-wochen-ticketname b { color:var(--kd-tinte); font:900 20px/1 'Fraunces',Georgia,serif; }
+.kd-wochen-ticketname span { margin-top:4px; color:var(--kd-rauch); font:9px 'Space Mono',monospace; }
+.kd-wochen-tag>header>button { align-self:center; margin-right:13px; border-color:color-mix(in srgb,var(--kd-rauch) 55%,transparent); background:var(--kd-leinwandTief); color:var(--kd-tinte); font-size:14px; }
+.kd-wochen-tag.ist-heute { border-color:var(--kd-wolfram); box-shadow:0 5px 22px color-mix(in srgb,var(--kd-wolfram) 25%,rgba(0,0,0,.38)); }
+.kd-wochen-tag.ist-heute .kd-wochen-ticketstub { background:var(--kd-wolfram); }
+.kd-wochen-tag.ist-heute .kd-wochen-ticketstub b { color:var(--kd-tinte); }
+.kd-wochen-tag.ist-heute .kd-wochen-ticketstub span { color:color-mix(in srgb,var(--kd-tinte) 72%,transparent); }
+.kd-wochen-taginhalt { display:flex; flex-direction:column; gap:7px; min-height:34px; padding:9px 14px 11px; }
+.kd-wochen-frei { padding:4px 0; color:var(--kd-rauch); font:italic 10px 'Space Mono',monospace; opacity:.82; }
 .kd-wochen-eintrag { border:1px solid var(--wp-border); border-left:3px solid var(--kd-wolfram); border-radius:4px; background:var(--kd-saal); color:var(--kd-leinwandTief); }
 .kd-wochen-eintrag--kino { border-left-color:var(--kd-gefahr); }
-.kd-wochen-eintrag summary,.kd-wochen-beobachtet summary { list-style:none; cursor:pointer; }
-.kd-wochen-eintrag summary::-webkit-details-marker,.kd-wochen-beobachtet summary::-webkit-details-marker { display:none; }
-.kd-wochen-eintrag summary { display:flex; flex-direction:column; gap:3px; padding:7px; min-width:0; }
-.kd-wochen-eintrag summary span { overflow:hidden; text-overflow:ellipsis; font:700 11px/1.25 'Barlow Condensed',sans-serif; }
-.kd-wochen-eintrag summary b { overflow:hidden; text-overflow:ellipsis; color:var(--kd-rauch); font:8px 'Space Mono',monospace; text-transform:uppercase; }
+.kd-wochen-eintrag summary { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; padding:8px 10px; list-style:none; cursor:pointer; }
+.kd-wochen-eintrag summary::-webkit-details-marker { display:none; }
+.kd-wochen-eintrag summary span { overflow:hidden; text-overflow:ellipsis; font:700 14px/1.25 'Barlow Condensed',sans-serif; }
+.kd-wochen-eintrag summary b { flex:0 0 auto; max-width:42%; overflow:hidden; text-overflow:ellipsis; color:var(--kd-rauch); font:8px 'Space Mono',monospace; text-transform:uppercase; }
 .kd-wochen-details { display:flex; flex-direction:column; gap:5px; padding:0 7px 8px; color:var(--kd-rauch); font-size:11px; line-height:1.4; }
 .kd-wochen-details strong { color:var(--kd-leinwandTief); }
 .kd-wochen-folgenstand { color:var(--kd-wolfram); font:700 11px 'Space Mono',monospace; }
@@ -1099,30 +1126,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-tage input { width:auto; }
 .kd-wochen-match,.kd-wochen-exporthinweis { margin:0; color:var(--kd-rauch); font-size:11px; line-height:1.45; }
 .kd-wochen-match--eindeutig { color:var(--kd-ok,var(--kd-wolfram)); }
-.kd-wochen-radargrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.kd-wochen-radar { min-width:0; padding:12px; border:1px solid var(--wp-border); border-radius:7px; background:color-mix(in srgb,var(--kd-saalHoch) 72%,transparent); }
-.kd-wochen-radar h3 { margin:0 0 9px; color:var(--kd-leinwand); font:800 17px 'Fraunces',Georgia,serif; }
-.kd-wochen-radar>p,.kd-wochen-beobachtet p { margin:5px 0; color:var(--kd-rauch); font-size:11px; line-height:1.45; }
-.kd-wochen-radarzeile { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 0; border-top:1px solid var(--wp-border); }
-.kd-wochen-radarzeile>div:first-child { display:flex; flex-direction:column; gap:2px; min-width:0; }
-.kd-wochen-radarzeile b,.kd-wochen-beobachtet summary span { color:var(--kd-leinwandTief); font:700 13px 'Barlow Condensed',sans-serif; }
-.kd-wochen-radarzeile span { color:var(--kd-wolfram); font:9px 'Space Mono',monospace; }
-.kd-wochen-beobachtet { padding:8px 0; border-top:1px solid var(--wp-border); }
-.kd-wochen-beobachtet summary { display:flex; justify-content:space-between; gap:8px; }
-.kd-wochen-beobachtet summary b { color:var(--kd-rauch); font:8px 'Space Mono',monospace; text-transform:uppercase; }
-.kd-wochen-beobachtet>div { padding:4px 0; }
-
 @media (max-width:760px) {
   .kd-wochenplan-kopf { align-items:flex-start; }
   .kd-wochen-kopfaktionen { justify-content:flex-end; }
-  .kd-wochen-tagesliste { display:flex; flex-direction:column; border:0; gap:8px; overflow:visible; }
-  .kd-wochen-tag { border:1px solid var(--wp-border); border-radius:6px; }
-  .kd-wochen-tag + .kd-wochen-tag { border-left:1px solid var(--wp-border); }
-  .kd-wochen-tag>header { padding:9px 10px; }
-  .kd-wochen-tag>header div { flex-direction:row; align-items:baseline; gap:8px; }
-  .kd-wochen-taginhalt { min-height:40px; padding:8px; }
-  .kd-wochen-eintrag summary { flex-direction:row; align-items:center; justify-content:space-between; }
-  .kd-wochen-eintrag summary span { font-size:14px; }
-  .kd-wochen-eintrag summary b { flex:0 0 auto; max-width:42%; }
-  .kd-wochen-formgrid,.kd-wochen-radargrid { grid-template-columns:1fr; }
+  .kd-wochen-tag>header { grid-template-columns:58px minmax(0,1fr) auto; }
+  .kd-wochen-ticketname { padding-inline:10px; }
+  .kd-wochen-ticketname b { font-size:18px; }
+  .kd-wochen-taginhalt { padding-inline:10px; }
+  .kd-wochen-formgrid { grid-template-columns:1fr; }
+  .kd-pinboard-serie { align-items:flex-start; flex-wrap:wrap; }
+  .kd-pinboard-ziel { flex-basis:calc(100% - 120px); }
+  .kd-pinboard-bestaetigen { margin-left:auto; }
 }

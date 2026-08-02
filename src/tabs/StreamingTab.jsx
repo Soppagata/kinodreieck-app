@@ -11,7 +11,7 @@ import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
-  neuerGesehenEintrag,
+  istBeobachtet, neuerGesehenEintrag, setzeSerienBeobachtung,
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
@@ -174,8 +174,15 @@ export function StreamingTab({
   const setzeStatus = (t, wert) => {
     schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
-      if (statusVon(next[t.watchmode_id]) === wert) delete next[t.watchmode_id]; // Toggle
-      else next[t.watchmode_id] = wert === "gesehen" && t.typ === "tv_series" ? neuerGesehenEintrag(t) : wert;
+      const roh = next[t.watchmode_id];
+      const basis = roh && typeof roh === "object" ? roh : {};
+      if (statusVon(roh) === wert) {
+        const { status: _status, gesehen_am: _gesehenAm, ...rest } = basis;
+        if (rest.beobachtet || rest.mediathek_id) next[t.watchmode_id] = rest;
+        else delete next[t.watchmode_id];
+      } else next[t.watchmode_id] = wert === "gesehen"
+        ? { ...basis, ...neuerGesehenEintrag(t) }
+        : { ...basis, status: wert };
       return next;
     });
   };
@@ -184,8 +191,12 @@ export function StreamingTab({
     if (statusVon(roh) === "gesehen") {
       schreibeEntdeckenStatus((prev) => {
         const next = { ...prev };
-        const verknuepft = mediathekIdVon(next[t.watchmode_id]);
-        if (verknuepft) next[t.watchmode_id] = { status: "erstellt", mediathek_id: verknuepft };
+        const basis = next[t.watchmode_id] && typeof next[t.watchmode_id] === "object" ? { ...next[t.watchmode_id] } : {};
+        const verknuepft = mediathekIdVon(basis);
+        delete basis.gesehen_am;
+        if (verknuepft) basis.status = "erstellt";
+        else delete basis.status;
+        if (basis.beobachtet || basis.mediathek_id) next[t.watchmode_id] = basis;
         else delete next[t.watchmode_id];
         return next;
       });
@@ -194,12 +205,22 @@ export function StreamingTab({
     if (mediathekIdVon(roh)) {
       schreibeEntdeckenStatus((prev) => ({
         ...prev,
-        [t.watchmode_id]: mitMediathekEintrag(neuerGesehenEintrag(t), t, mediathekIdVon(roh)),
+        [t.watchmode_id]: mitMediathekEintrag({ ...(roh && typeof roh === "object" ? roh : {}), ...neuerGesehenEintrag(t) }, t, mediathekIdVon(roh)),
       }));
       return;
     }
     setExpandedId("e" + t.watchmode_id);
     setGesehenFrage(t.watchmode_id);
+  };
+
+  const toggleBeobachten = (t) => {
+    schreibeEntdeckenStatus((prev) => {
+      const next = { ...prev };
+      const wert = setzeSerienBeobachtung(prev[t.watchmode_id], t, !istBeobachtet(prev[t.watchmode_id]));
+      if (wert) next[t.watchmode_id] = wert;
+      else delete next[t.watchmode_id];
+      return next;
+    });
   };
 
   const uebernehmeGesehen = (t) => {
@@ -225,7 +246,7 @@ export function StreamingTab({
     if (!id) return;
     schreibeEntdeckenStatus((prev) => ({
       ...prev,
-      [t.watchmode_id]: mitMediathekEintrag(neuerGesehenEintrag(t), t, id),
+      [t.watchmode_id]: mitMediathekEintrag({ ...(prev[t.watchmode_id] && typeof prev[t.watchmode_id] === "object" ? prev[t.watchmode_id] : {}), ...neuerGesehenEintrag(t) }, t, id),
     }));
     setGesehenFrage(null);
   };
@@ -278,7 +299,7 @@ export function StreamingTab({
      Treffer liegt. Die Rohzahl bleibt ausschließlich Sortierhilfe. */
   const erledigtAnzahl = useMemo(() => {
     if (!entdeckenDa) return 0;
-    return entdecken.titel.filter((t) => entdeckenStatus[t.watchmode_id]).length;
+    return entdecken.titel.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) || mediathekIdVon(entdeckenStatus[t.watchmode_id])).length;
   }, [entdecken, entdeckenDa, entdeckenStatus]);
 
   /* Starke Katalogkennungen gleichen Entdecken bidirektional mit der Mediathek
@@ -309,7 +330,7 @@ export function StreamingTab({
     let l = entdecken.titel.filter((t) => (
       fokusOverride?.art === "entdecken" && String(t.watchmode_id) === fokusOverride.ref
     ) || (dienstOk(t) && schnellOk(t)));
-    if (!zeigeErledigte) l = l.filter((t) => !entdeckenStatus[t.watchmode_id]);
+    if (!zeigeErledigte) l = l.filter((t) => !statusVon(entdeckenStatus[t.watchmode_id]) && !mediathekIdVon(entdeckenStatus[t.watchmode_id]));
     if (nurRelevant) l = l.filter(istPassend);
     if (genreE) l = l.filter((t) => (t.genres || []).includes(genreE));
     if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
@@ -607,6 +628,7 @@ export function StreamingTab({
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>
                         {statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "gesehen" : ""}
                         {mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? " · " : ""}in deiner Mediathek` : ""}
+                        {istBeobachtet(entdeckenStatus[t.watchmode_id]) ? `${statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" || mediathekIdVon(entdeckenStatus[t.watchmode_id]) ? " · " : ""}⚑ beobachtet` : ""}
                       </span>
                     )}
                   </div>
@@ -625,6 +647,17 @@ export function StreamingTab({
                 {expandedId === "e" + t.watchmode_id && (
                   <div style={{ marginTop: 6, fontSize: 12, color: T.rauch }} onClick={(e) => e.stopPropagation()}>
                     {(t.genres || []).length > 0 && <span>{t.genres.join(", ")}</span>}
+                    {t.typ === "tv_series" && (
+                      <div className="kd-entdecken-beobachten">
+                        <button type="button" className={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "aktiv" : ""}
+                          aria-pressed={istBeobachtet(entdeckenStatus[t.watchmode_id])}
+                          title={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Serie nicht mehr beobachten" : "Serie beobachten und im Pinboard verfolgen"}
+                          onClick={() => toggleBeobachten(t)}>
+                          ⚑ {istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Beobachtet" : "Beobachten"}
+                        </button>
+                        <span>Unabhängig davon, ob du die Serie schon gesehen hast.</span>
+                      </div>
+                    )}
                     {(t.relevanz_signale || []).length > 0 && (
                       <div className="kd-entdecken-signale">
                         Passung beruht auf: {(t.relevanz_signale || []).map(lesbaresPassungsSignal).join(" · ")}. Keine Bewertung.

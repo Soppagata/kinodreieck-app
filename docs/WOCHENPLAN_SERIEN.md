@@ -4,9 +4,11 @@ Stand: 2. August 2026
 
 ## Produktverhalten
 
-„Deine Woche“ steht auf der Startseite direkt unter dem Kopfbereich. Die
-Desktopansicht zeigt Montag bis Sonntag als sieben Spalten; auf kleinen
-Bildschirmen werden dieselben Tage vollständig untereinander dargestellt.
+Die Startseite folgt der festen Reihenfolge „Kino für dich“, „Deine Woche“,
+„Pinboard & Serienradar“, „Must-Watch“ und „Zuletzt hinzugefügt“.
+„Deine Woche“ zeigt stets heute und die sechs tatsächlich folgenden
+Kalendertage als Kinotickets untereinander. Eine Auswahl oder Navigation durch
+Kalenderwochen ist nicht nötig; beim Datumswechsel rückt der Ausblick weiter.
 
 Ein Folgen- oder Staffelreminder enthält:
 
@@ -22,20 +24,24 @@ einen exakt und eindeutig passenden Serientitel. Bei mehreren gleichnamigen
 Serien wird nichts geraten. Der Nutzer kann den Treffer selbst wählen, nur
 einen externen Link setzen oder den Reminder ganz ohne Link speichern.
 
-Angepinnte Kinotermine werden in die passende Woche projiziert. Sie bleiben
+Angepinnte Kinotermine werden in den passenden Sieben-Tage-Ausblick projiziert. Sie bleiben
 die vorhandenen Kino-Pins; Löschen im Wochenplan entfernt deshalb denselben Pin
-und keine Kopie. Als gesehen markierte Serien stehen getrennt im Bereich
-„Beobachtete Serien“ und gelangen nur nach einer ausdrücklichen Nutzeraktion in
-den Kalender.
+und keine Kopie. Kinopins und ausdrücklich beobachtete Serien erscheinen
+gemeinsam im „Pinboard & Serienradar“. Neue Staffel- oder Folgenstände werden
+dort zuerst und hervorgehoben angezeigt. Kalender und Pinboard bleiben getrennt:
+Eine beobachtete Serie gelangt nicht automatisch in den Wochenplan.
+
+„Beobachten“ ist ein eigener Pin-Status im ausgeklappten Streaming-Eintrag und
+vollständig unabhängig von „gesehen“ oder „in deiner Mediathek“. Erst das
+ausdrückliche Beobachten aktiviert Radar und serverseitige ID-Synchronisation.
 
 ## Zeit- und Datenlogik
 
-Die Berechnung arbeitet mit der lokalen Systemzeit und einer Montag-basierten
-Woche. Datumsrechnung findet mittags beziehungsweise kalenderbasiert statt,
-damit Sommerzeitwechsel keine Tage verschieben. Die Ansicht prüft die Uhr jede
-Minute und beim erneuten Fokussieren des Fensters. Beim Wochenwechsel folgt sie
-automatisch der neuen aktuellen Woche, solange der Nutzer nicht bewusst eine
-andere Woche betrachtet.
+Die Berechnung arbeitet mit der lokalen Systemzeit. Der Erinnerungsrhythmus
+bleibt Montag-basiert verankert; der sichtbare Ausblick beginnt dagegen immer
+am aktuellen lokalen Datum. Datumsrechnung findet mittags beziehungsweise
+kalenderbasiert statt, damit Sommerzeitwechsel keine Tage verschieben. Die
+Ansicht prüft die Uhr jede Minute und beim erneuten Fokussieren des Fensters.
 
 `folge_aktuell` bedeutet eine vom Lieferanten ausdrücklich gelieferte
 Folgennummer und wird als „Folge N“ angezeigt. `folgen_verfuegbar` ist dagegen
@@ -43,7 +49,7 @@ nur eine Gesamtzahl und wird nicht als aktuelle Folgennummer ausgegeben.
 
 ## Kalenderexport
 
-Ein einzelner Termin, ein ganzer Tag, die sichtbare Woche oder die komplette
+Ein einzelner Termin, ein ganzer Tag, die sichtbaren sieben Tage oder die komplette
 wiederkehrende Reminder-Serie kann als `.ics` exportiert werden. Die Dateien
 sind für den Import in Apple Kalender und Outlook ausgelegt. Es handelt sich
 bewusst um einen Schnappschuss: Spätere Änderungen im Kinodreieck ändern einen
@@ -57,7 +63,7 @@ Gast-, Konto-, Backup- und Restore-Verhalten teil. Remindertexte und Notizen
 werden nicht an die Streaming-Pipeline weitergegeben.
 
 Für angemeldete Nutzer synchronisiert die App ausschließlich die deduplizierten
-Watchmode-IDs der als gesehen markierten Serien über `kd_set_series_watch` in
+Watchmode-IDs der ausdrücklich beobachteten Serien über `kd_set_series_watch` in
 `kd_series_watch`. RLS bindet jede Zeile an `auth.uid()`. Der Browseraufruf
 fragt keinen Streaminganbieter ab und verändert den bestehenden Abrufplan
 nicht.
@@ -97,7 +103,8 @@ oder einen zusätzlichen API-Timer vorgetäuscht.
 
 - `wochenplan_test.mjs`: Rhythmus, Dienstag/Sonntag, Endbedingungen,
   Folgenstand, Kinoprojektion und `.ics`.
-- `staffeln_test.mjs`: getrennte Staffel-/Folgenbaselines und Bestätigung.
+- `staffeln_test.mjs`: unabhängige Beobachten-/Gesehen-Zustände, getrennte
+  Staffel-/Folgenbaselines und Bestätigung.
 - `staffel_pipeline_test.mjs`: Deduplizierung, Cache, Quota-Guard und
   Folgenfelder ohne echte Anbieteraufrufe.
 - `serieswatch_test.mjs`: Gast-Sperre und ID-only-RPC-Vertrag.

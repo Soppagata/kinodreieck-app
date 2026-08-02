@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  WOCHENTAGE, datumLokal, findeReminderVerknuepfung, folgenstandText,
-  montagDerWoche, neuerFolgenReminder, normalisiereWochenplan, refAusTreffer,
+  WOCHENTAGE, datumLokal, findeReminderVerknuepfung,
+  neuerFolgenReminder, normalisiereWochenplan, refAusTreffer,
   wochenansicht,
 } from "../lib/wochenplan.js";
 import {
   dateinameIcs, erstelleIcs, kalenderEventAusWochenEintrag, ladeIcsHerunter,
   reminderIcsEvent, tagAlsIcs, wocheAlsIcs,
 } from "../lib/kalenderExport.js";
-import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
 
 function serienKatalog(katalog, master) {
   const map = new Map();
@@ -22,6 +21,10 @@ function serienKatalog(katalog, master) {
 
 function datumKurz(wert) {
   return new Date(`${wert}T12:00:00`).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
+}
+
+function tageszahl(wert) {
+  return new Date(`${wert}T12:00:00`).toLocaleDateString("de-AT", { day: "2-digit" });
 }
 
 function kalenderDownload(inhalt, name) {
@@ -123,8 +126,8 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
             ? <button onClick={() => onAnsehen(eintrag)}>Eintrag ansehen</button>
             : <button onClick={() => onAnlegen(eintrag)}>Eintrag anlegen</button>)}
           {eintrag.art !== "kino" && <button onClick={() => onBearbeiten(eintrag)}>Reminder bearbeiten</button>}
-          <button onClick={() => kalenderDownload(erstelleIcs([kalenderEventAusWochenEintrag(eintrag, datum)]), `${eintrag.titel}-${datum}`)}>↗ Termin</button>
-          {eintrag.art !== "kino" && <button onClick={() => kalenderDownload(erstelleIcs([reminderIcsEvent(eintrag)]), `${eintrag.titel}-serie`)}>↗ Serie</button>}
+          <button title="Diesen Termin in den Kalender setzen" onClick={() => kalenderDownload(erstelleIcs([kalenderEventAusWochenEintrag(eintrag, datum)]), `${eintrag.titel}-${datum}`)}>🗓 Termin</button>
+          {eintrag.art !== "kino" && <button title="Die ganze Serie in den Kalender setzen" onClick={() => kalenderDownload(erstelleIcs([reminderIcsEvent(eintrag)]), `${eintrag.titel}-serie`)}>🗓 Serie</button>}
           <button className="kd-wochen-trash" title="Löschen" aria-label={`${eintrag.titel} löschen`} onClick={() => onLoeschen(eintrag)}>🗑</button>
         </div>
       </div>
@@ -134,34 +137,20 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
 
 export function Wochenplan({
   plan, onPlanAendern, kinoPins = [], onKinoPinLoeschen,
-  katalog = [], master = [], entdeckenStatus = {}, onStatusAendern,
+  katalog = [], master = [],
   onSpringeZuFilm, onSpringeZuStreaming, onFilmAnlegen,
 }) {
   const [jetzt, setJetzt] = useState(() => new Date());
-  const [wochenstart, setWochenstart] = useState(() => montagDerWoche(new Date()));
   const [editor, setEditor] = useState(null);
-  const jetztRef = useRef(jetzt);
   useEffect(() => {
-    const aktualisieren = () => {
-      const neu = new Date();
-      const bisherigeGegenwartswoche = datumLokal(montagDerWoche(jetztRef.current));
-      setWochenstart((sichtbar) => (
-        datumLokal(montagDerWoche(sichtbar)) === bisherigeGegenwartswoche
-          ? montagDerWoche(neu) : sichtbar
-      ));
-      jetztRef.current = neu;
-      setJetzt(neu);
-    };
+    const aktualisieren = () => setJetzt(new Date());
     const timer = setInterval(aktualisieren, 60000);
     window.addEventListener("focus", aktualisieren);
     return () => { clearInterval(timer); window.removeEventListener("focus", aktualisieren); };
   }, []);
 
   const serien = useMemo(() => serienKatalog(katalog, master), [katalog, master]);
-  const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, katalog, master, wochenstart, jetzt }), [plan, kinoPins, katalog, master, wochenstart, jetzt]);
-  const beobachtet = useMemo(() => beobachteteSerien(entdeckenStatus, serien), [entdeckenStatus, serien]);
-  const radar = useMemo(() => neueStaffeln(serien, entdeckenStatus), [serien, entdeckenStatus]);
-  const kommendeStaffeln = useMemo(() => beobachtet.filter((t) => t.naechste_staffel_am && new Date(t.naechste_staffel_am) >= jetzt), [beobachtet, jetzt]);
+  const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, katalog, master, jetzt }), [plan, kinoPins, katalog, master, jetzt]);
 
   const speichere = (roh) => {
     const e = neuerFolgenReminder({ ...roh, id: roh.id || undefined, erstellt_am: roh.erstellt_am }, jetzt);
@@ -184,26 +173,24 @@ export function Wochenplan({
     if (!id) return;
     speichere({ ...e, ref: { ...(e.ref || {}), master_id: id } });
   };
-  const reminderFuer = (t) => setEditor({
-    titel: t.titel, plattform: t.staffel_dienste?.[0] || t.dienste?.[0]?.name || "",
-    art: "folge", ref: refAusTreffer(t), startdatum: datumLokal(jetzt), wochentage: [jetzt.getDay() || 7],
-  });
-  const verschiebeWoche = (delta) => setWochenstart((d) => { const n = new Date(d); n.setDate(n.getDate() + delta * 7); return n; });
-
   return (
     <section className="kd-wochenplan" aria-labelledby="deine-woche-titel">
       <header className="kd-wochenplan-kopf">
         <div><span className="kd-wochen-kicker">FOLGEN · STAFFELN · KINO</span><h2 id="deine-woche-titel">Deine Woche</h2></div>
-        <div className="kd-wochen-kopfaktionen"><button onClick={() => setEditor(leererEntwurf(jetzt))}>+ Reminder</button><button onClick={() => kalenderDownload(wocheAlsIcs(tage), `kinodreieck-woche-${tage[0].iso}`)}>↗ Woche .ics</button></div>
+        <div className="kd-wochen-kopfaktionen"><button onClick={() => setEditor(leererEntwurf(jetzt))}>+ Reminder</button><button className="kd-wochen-kalenderknopf" title="Die nächsten 7 Tage in den Kalender setzen" aria-label="Die nächsten 7 Tage in den Kalender setzen" onClick={() => kalenderDownload(wocheAlsIcs(tage), `kinodreieck-7-tage-${tage[0].iso}`)}>🗓</button></div>
       </header>
-      <div className="kd-wochen-nav"><button aria-label="Vorige Woche" onClick={() => verschiebeWoche(-1)}>‹</button><button onClick={() => setWochenstart(montagDerWoche(jetzt))}>Diese Woche</button><span>{datumKurz(tage[0].iso)}–{datumKurz(tage[6].iso)}</span><button aria-label="Nächste Woche" onClick={() => verschiebeWoche(1)}>›</button></div>
+      <div className="kd-wochen-zeitraum">Heute bis {datumKurz(tage[6].iso)}</div>
 
       {editor && <ReminderEditor key={editor.id || "neu"} initial={editor} serien={serien} onSpeichern={speichere} onAbbrechen={() => setEditor(null)} />}
 
       <div className="kd-wochen-tagesliste">
         {tage.map((tag) => (
           <section key={tag.iso} className={`kd-wochen-tag ${tag.iso === datumLokal(jetzt) ? "ist-heute" : ""}`}>
-            <header><div><b>{tag.name}</b><span>{datumKurz(tag.iso)}</span></div>{tag.eintraege.length > 0 && <button title={`${tag.name} exportieren`} onClick={() => kalenderDownload(tagAlsIcs(tag), `kinodreieck-${tag.iso}`)}>↗ .ics</button>}</header>
+            <header>
+              <div className="kd-wochen-ticketstub"><b>{tageszahl(tag.iso)}</b><span>{tag.kurz}</span></div>
+              <div className="kd-wochen-ticketname"><b>{tag.iso === datumLokal(jetzt) ? "Heute" : tag.name}</b><span>{datumKurz(tag.iso)}</span></div>
+              {tag.eintraege.length > 0 && <button aria-label={`${tag.name} in den Kalender setzen`} title={`${tag.name} in den Kalender setzen`} onClick={() => kalenderDownload(tagAlsIcs(tag), `kinodreieck-${tag.iso}`)}>🗓</button>}
+            </header>
             <div className="kd-wochen-taginhalt">
               {tag.eintraege.length ? tag.eintraege.map((e) => <ReminderZeile key={e.id} eintrag={e} datum={tag.iso} onBearbeiten={setEditor} onLoeschen={loesche} onAnsehen={ansehen} onAnlegen={anlegen} />) : <span className="kd-wochen-frei">Noch frei</span>}
             </div>
@@ -211,18 +198,6 @@ export function Wochenplan({
         ))}
       </div>
       <p className="kd-wochen-exporthinweis">Die .ics-Dateien lassen sich in Apple Kalender und Outlook importieren. Ein Import ist ein Schnappschuss; Änderungen im Kinodreieck aktualisieren bereits importierte Termine nicht automatisch.</p>
-
-      <div className="kd-wochen-radargrid">
-        <section className="kd-wochen-radar"><h3>Serienradar</h3>
-          {!radar.length && !kommendeStaffeln.length && <p>Noch keine neue oder angekündigte Staffel im letzten Katalogabruf.</p>}
-          {kommendeStaffeln.map((t) => <div key={`kommend-${t.watchmode_id}`} className="kd-wochen-radarzeile"><div><b>{t.titel}</b><span>Neue Staffel am {new Date(t.naechste_staffel_am).toLocaleDateString("de-AT")}</span></div><button onClick={() => reminderFuer({ ...t, titel: `${t.titel} – Staffelstart` })}>Einplanen</button></div>)}
-          {radar.map((h) => <div key={h.watchmode_id} className="kd-wochen-radarzeile"><div><b>{h.titel}</b><span>{h.staffel_neu ? `Staffel ${h.staffel_verfuegbar} ist da` : "Neue Folge erkannt"}{h.folge_aktuell ? ` · Folge ${h.folge_aktuell}` : ""}</span></div><div><button onClick={() => reminderFuer(h)}>Einplanen</button><button onClick={() => onStatusAendern?.(h.watchmode_id, h)}>Gesehen</button></div></div>)}
-        </section>
-        <section className="kd-wochen-radar"><h3>Beobachtete Serien</h3>
-          {!beobachtet.length && <p>Als gesehen markierte Serien erscheinen hier – ohne automatisch im Kalender zu landen.</p>}
-          {beobachtet.map((t) => <details key={t.watchmode_id} className="kd-wochen-beobachtet"><summary><span>{t.titel}</span><b>{t.staffeln_verfuegbar ? `${t.staffeln_verfuegbar} Staffeln` : "beobachtet"}</b></summary><div>{folgenstandText(t) && <p>{folgenstandText(t)}</p>}<p>Letzter Abgleich: {t.staffelstand_geprueft_am ? new Date(t.staffelstand_geprueft_am).toLocaleString("de-AT") : "beim nächsten planmäßigen Kataloglauf"}</p><button onClick={() => reminderFuer(t)}>Zum Folgenplan hinzufügen</button></div></details>)}
-        </section>
-      </div>
     </section>
   );
 }

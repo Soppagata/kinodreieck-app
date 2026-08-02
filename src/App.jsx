@@ -1295,8 +1295,8 @@ export default function App() {
     ...((streamingEntdecken && streamingEntdecken.titel) || []),
   ], [streamingBekannt, streamingEntdecken]);
 
-  /* Beobachtete Legacy-Serien erhalten den ersten verfügbaren Staffel-/Folgenstand
-     still als Basis. Erst spätere Katalogänderungen lösen den Radar aus. */
+  /* Ausdrücklich beobachtete Serien erhalten den ersten verfügbaren Staffel-/
+     Folgenstand still als Basis. „Gesehen“ allein aktiviert den Radar nicht. */
   useEffect(() => {
     if (!serienKatalog.length) return;
     schreibeEntdeckenStatus((prev) => initialisiereStaffelstaende(prev, serienKatalog));

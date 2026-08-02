@@ -153,6 +153,20 @@ export function tageDerWoche(wochenstart = new Date()) {
   return WOCHENTAGE.map((tag, index) => ({ ...tag, datum: datumPlusTage(montag, index), iso: datumLokal(datumPlusTage(montag, index)) }));
 }
 
+/* Das Dashboard ist kein Wochenkalender mit blätterbaren Kalenderwochen,
+   sondern ein stets aktueller Sieben-Tage-Ausblick: heute zuerst, danach die
+   sechs tatsächlich folgenden Kalendertage (auch über Monats-/Jahresgrenzen). */
+export function naechsteSiebenTage(ab = new Date()) {
+  const start = new Date(ab);
+  start.setHours(12, 0, 0, 0);
+  return Array.from({ length: 7 }, (_, index) => {
+    const datum = datumPlusTage(start, index);
+    const nr = datum.getDay() || 7;
+    const tag = WOCHENTAGE.find((eintrag) => eintrag.nr === nr);
+    return { ...tag, datum, iso: datumLokal(datum) };
+  });
+}
+
 function titelNormiert(wert) {
   return String(wert || "").toLocaleLowerCase("de").normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -225,9 +239,11 @@ export function kinoPinTermin(pin, jetzt = new Date()) {
   return d;
 }
 
-export function wochenansicht({ wochenplan, kinoPins = [], katalog = [], master = [], wochenstart = new Date(), jetzt = new Date() } = {}) {
+export function wochenansicht({ wochenplan, kinoPins = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
-  const tage = tageDerWoche(wochenstart).map((tag) => ({ ...tag, eintraege: [] }));
+  /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
+     Einzeldateien/Tests nicht brechen. Die App selbst übergibt nur noch jetzt. */
+  const tage = naechsteSiebenTage(startdatum || wochenstart || jetzt).map((tag) => ({ ...tag, eintraege: [] }));
   const katalogAlle = [...(Array.isArray(katalog) ? katalog : []), ...(Array.isArray(master) ? master : [])];
   for (const e of plan.eintraege) {
     const quelle = findeReminderVerknuepfung(e, katalogAlle, []).treffer;

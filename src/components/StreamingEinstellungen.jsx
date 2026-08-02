@@ -148,7 +148,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
           ))}
         </div>
         <p style={{ fontSize: 12, color: T.rauch, margin: "8px 0 0", lineHeight: 1.5 }}>
-          {beobachteteSerien().length} ausdrücklich gesehene {beobachteteSerien().length === 1 ? "Serie wird" : "Serien werden"} für neue Staffelstände beobachtet.
+          {beobachteteSerien().length} ausdrücklich {beobachteteSerien().length === 1 ? "beobachtete Serie wird" : "beobachtete Serien werden"} beim planmäßigen Kataloglauf auf neue Staffel- und Folgenstände geprüft.
         </p>
       </div>
       </Klappe>}
