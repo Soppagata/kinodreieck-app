@@ -1,7 +1,7 @@
 /* Neon Noir wird in einer eigenen Datei gehalten, damit das dekorative
    Stadtbild unabhängig von den übrigen Theme-Regeln weiterentwickelt werden kann.
-   Baseline: Dunst + Regen. Beim seltenen Vorbeiflug stoppt Dunst, sodass auch
-   dann höchstens zwei Ebenen gleichzeitig animieren. */
+   Baseline: Regen + seltenes Hologrammflackern. Dunst und Bodenschleier bleiben
+   statisch; beim Vorbeiflug pausiert das Hologramm. */
 
 .kd-neon-noir-overlay {
   position: fixed;
@@ -13,6 +13,21 @@
   pointer-events: none;
   user-select: none;
   background: #070913;
+}
+
+/* Flacher Bodenschleier: horizontale Licht- und Dunstschichten verschlucken
+   die Straße, ohne wolkige Einzelinseln zu bilden. */
+.kd-neon-noir-overlay::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 48% -8% -12%;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 31px, rgba(172, 209, 213, 0.035) 34px, transparent 38px 68px),
+    linear-gradient(96deg, transparent 1%, rgba(139, 187, 194, 0.085) 23%, transparent 43%, rgba(117, 171, 180, 0.07) 67%, transparent 94%),
+    linear-gradient(180deg, transparent 0 12%, rgba(128, 174, 183, 0.09) 31%, rgba(31, 48, 59, 0.42) 60%, rgba(4, 7, 14, 0.94) 100%);
+  filter: blur(8px);
 }
 
 .kd-neon-noir__city {
@@ -39,8 +54,13 @@
     linear-gradient(90deg, rgba(42, 148, 170, 0.06), transparent 28% 72%, rgba(42, 148, 170, 0.05));
   filter: blur(14px);
   transform: translate3d(-1.5%, 0, 0) scale(1.025);
-  animation: kd-neon-noir-mist 18s ease-in-out infinite alternate;
-  will-change: transform, opacity;
+}
+
+.kd-neon-noir__city--desktop .kd-neon-noir__kino-hologram {
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+  animation: kd-neon-noir-hologram 14.8s linear infinite;
+  will-change: opacity, filter;
 }
 
 .kd-neon-noir__rain {
@@ -49,11 +69,11 @@
   inset: -24%;
   width: 148%;
   height: 148%;
-  opacity: 0.3;
-  filter: blur(0.18px);
+  opacity: 0.39;
+  filter: blur(0.12px);
   mix-blend-mode: screen;
   transform: translate3d(-2%, -20%, 0);
-  animation: kd-neon-noir-rain 1.38s linear infinite;
+  animation: kd-neon-noir-rain 0.66s linear infinite;
   will-change: transform, opacity;
 }
 
@@ -81,6 +101,11 @@
 
 .kd-neon-noir--flyby .kd-neon-noir__mist {
   animation: none;
+}
+
+.kd-neon-noir--flyby .kd-neon-noir__kino-hologram {
+  animation: none !important;
+  will-change: auto;
 }
 
 .kd-neon-noir--flyby .kd-neon-noir__flyby {
@@ -169,27 +194,48 @@
   outline-color: #D8A33F;
 }
 
-@keyframes kd-neon-noir-mist {
+@keyframes kd-neon-noir-rain {
   0% {
-    opacity: 0.32;
-    transform: translate3d(-1.5%, 0, 0) scale(1.025);
+    opacity: 0.34;
+    transform: translate3d(-2%, -17%, 0);
   }
 
   100% {
-    opacity: 0.48;
-    transform: translate3d(1.5%, -1%, 0) scale(1.04);
+    opacity: 0.44;
+    transform: translate3d(3%, 18%, 0);
   }
 }
 
-@keyframes kd-neon-noir-rain {
-  0% {
-    opacity: 0.24;
-    transform: translate3d(-2%, -20%, 0);
+@keyframes kd-neon-noir-hologram {
+  0%,
+  71.8%,
+  73.1%,
+  88.4%,
+  89.7%,
+  100% {
+    opacity: 1;
+    filter: brightness(1);
   }
 
-  100% {
-    opacity: 0.32;
-    transform: translate3d(3.4%, 19%, 0);
+  72.1% {
+    opacity: 0.46;
+    filter: brightness(0.72);
+  }
+
+  72.45% {
+    opacity: 0.88;
+    filter: brightness(1.22);
+  }
+
+  72.72%,
+  88.9% {
+    opacity: 0.3;
+    filter: brightness(0.62);
+  }
+
+  89.18% {
+    opacity: 0.76;
+    filter: brightness(1.14);
   }
 }
 
@@ -202,6 +248,18 @@
     display: block;
   }
 
+  .kd-neon-noir__city--desktop .kd-neon-noir__kino-hologram {
+    animation: none;
+    will-change: auto;
+  }
+
+  .kd-neon-noir__city--mobile .kd-neon-noir__kino-hologram {
+    transform-box: fill-box;
+    transform-origin: 50% 0;
+    animation: kd-neon-noir-hologram 14.8s linear infinite;
+    will-change: opacity, filter;
+  }
+
   .kd-neon-noir__mist {
     inset: -8% -20%;
     opacity: 0.28;
@@ -211,12 +269,21 @@
     filter: blur(11px);
   }
 
+  .kd-neon-noir-overlay::after {
+    inset: 47% -18% -10%;
+    background:
+      repeating-linear-gradient(180deg, transparent 0 24px, rgba(172, 209, 213, 0.035) 27px, transparent 31px 54px),
+      linear-gradient(94deg, transparent 0, rgba(139, 187, 194, 0.07) 24%, transparent 47%, rgba(117, 171, 180, 0.06) 72%, transparent 100%),
+      linear-gradient(180deg, transparent 0 10%, rgba(128, 174, 183, 0.085) 28%, rgba(26, 43, 53, 0.48) 59%, rgba(4, 7, 14, 0.96) 100%);
+    filter: blur(7px);
+  }
+
   .kd-neon-noir__rain {
     inset: -28%;
     width: 156%;
     height: 156%;
-    opacity: 0.25;
-    filter: blur(0.12px);
+    opacity: 0.37;
+    filter: blur(0.08px);
   }
 
   .kd-neon-noir__flyby {
@@ -240,7 +307,8 @@
 @media (prefers-reduced-motion: reduce) {
   .kd-neon-noir__mist,
   .kd-neon-noir__rain,
-  .kd-neon-noir__flyby {
+  .kd-neon-noir__flyby,
+  .kd-neon-noir__kino-hologram {
     animation: none !important;
     will-change: auto;
   }

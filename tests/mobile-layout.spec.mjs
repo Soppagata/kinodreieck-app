@@ -386,7 +386,13 @@ for (const viewport of VIEWPORTS) {
     const regen = overlay.locator("svg.kd-neon-noir__rain");
     await expect(regen).toBeVisible();
     await expect(regen.locator("pattern")).toHaveCount(2);
-    await expect(regen.locator("pattern path")).toHaveCount(7);
+    await expect(regen.locator("pattern path")).toHaveCount(9);
+    await expect(overlay).not.toContainText("00:01");
+    await expect(overlay.locator(".kd-neon-noir__kino-hologram")).toHaveCount(2);
+    const kinoHologramm = overlay.locator(".kd-neon-noir__kino-hologram:visible");
+    await expect(kinoHologramm.locator(".kd-neon-noir__kino-face")).toHaveCount(1);
+    await expect(kinoHologramm).toHaveCSS("animation-name", "kd-neon-noir-hologram");
+    await expect(kinoHologramm).toHaveCSS("animation-duration", "14.8s");
 
     const geometrie = await overlay.evaluate((el) => {
       const r = el.getBoundingClientRect();
@@ -409,12 +415,17 @@ for (const viewport of VIEWPORTS) {
           .flatMap((pfad) => [...(pfad.getAttribute("d") || "").matchAll(/l(-?\d+)\s+(\d+)/g)])
           .map((treffer) => ({ x: Number(treffer[1]), y: Number(treffer[2]) }));
         return {
+          anzahl: strecken.length,
+          maxLaenge: Math.max(...strecken.map(({ x, y }) => Math.hypot(x, y))),
           laengen: new Set(strecken.map(({ x, y }) => Math.round(Math.hypot(x, y)))).size,
           richtungen: new Set(strecken.map(({ x, y }) => Math.round((x / y) * 100))).size,
         };
       });
+      expect(tropfenVariation.anzahl).toBeGreaterThan(35);
+      expect(tropfenVariation.maxLaenge).toBeLessThan(24);
       expect(tropfenVariation.laengen).toBeGreaterThan(10);
       expect(tropfenVariation.richtungen).toBeGreaterThan(5);
+      await expect(regen).toHaveCSS("animation-duration", "0.66s");
 
       /* Der alte Markenmodus darf nur noch als interner Migrationswert im
          JavaScript existieren, nie als sichtbare Klasse, Grafik oder Kopie. */

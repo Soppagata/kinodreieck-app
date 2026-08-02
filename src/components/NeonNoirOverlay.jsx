@@ -45,6 +45,11 @@ function DesktopCity() {
           <feGaussianBlur stdDeviation="4" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
+        <linearGradient id="kd-nn-hologram-column" x1="0" y1="0" x2="0.25" y2="1">
+          <stop stopColor="#8DF7F6" stopOpacity="0.22" />
+          <stop offset="0.48" stopColor="#38CEDB" stopOpacity="0.075" />
+          <stop offset="1" stopColor="#1B768F" stopOpacity="0" />
+        </linearGradient>
       </defs>
 
       <rect width="1600" height="1000" fill="url(#kd-nn-sky)" />
@@ -80,15 +85,19 @@ function DesktopCity() {
       </g>
 
       <g fontFamily="'Barlow Condensed', Arial, sans-serif" fontWeight="600" letterSpacing="4">
-        <g filter="url(#kd-nn-sign-glow)" transform="translate(51 424) rotate(-3)">
-          <rect width="66" height="186" rx="3" fill="#06131C" stroke="#4FE4EE" strokeWidth="3" />
-          <text x="33" y="34" fill="#B9F8FA" fontSize="25" textAnchor="middle">
-            <tspan x="33">K</tspan><tspan x="33" dy="38">I</tspan><tspan x="33" dy="38">N</tspan><tspan x="33" dy="38">O</tspan>
+        <g className="kd-neon-noir__kino-hologram" transform="translate(28 350) rotate(-4)">
+          <path d="M25 0h78l30 266H5z" fill="url(#kd-nn-hologram-column)" />
+          <path d="M29 4h70M19 65h91M14 126h104M10 188h114M6 250h124" fill="none" stroke="#72EAF0" strokeWidth="1" opacity="0.12" />
+          <path d="M23 -5h82l-8 13H31z" fill="#102B35" stroke="#64E5EA" strokeWidth="2" opacity="0.82" />
+          <text className="kd-neon-noir__kino-depth" x="69" y="50" fill="#15768D" stroke="#15768D" strokeWidth="4" fontSize="39" textAnchor="middle" opacity="0.3">
+            <tspan x="69">K</tspan><tspan x="69" dy="53">I</tspan><tspan x="69" dy="53">N</tspan><tspan x="69" dy="53">O</tspan>
           </text>
-        </g>
-        <g transform="translate(192 348) rotate(2)">
-          <rect width="104" height="42" rx="3" fill="#110B1B" stroke="#FF5BA7" strokeWidth="2" opacity="0.92" />
-          <text x="52" y="28" fill="#FFC0DD" fontSize="17" textAnchor="middle">00:01</text>
+          <text className="kd-neon-noir__kino-depth" x="64" y="45" fill="#2AAAB9" stroke="#2AAAB9" strokeWidth="2.4" fontSize="39" textAnchor="middle" opacity="0.48">
+            <tspan x="64">K</tspan><tspan x="64" dy="53">I</tspan><tspan x="64" dy="53">N</tspan><tspan x="64" dy="53">O</tspan>
+          </text>
+          <text className="kd-neon-noir__kino-face" filter="url(#kd-nn-sign-glow)" x="59" y="40" fill="#C9FCFC" stroke="#65E8EC" strokeWidth="1.2" paintOrder="stroke" fontSize="39" textAnchor="middle">
+            <tspan x="59">K</tspan><tspan x="59" dy="53">I</tspan><tspan x="59" dy="53">N</tspan><tspan x="59" dy="53">O</tspan>
+          </text>
         </g>
         <g filter="url(#kd-nn-sign-glow)" transform="translate(1460 382) rotate(3)">
           <rect width="90" height="48" rx="3" fill="#071923" stroke="#4FE4EE" strokeWidth="3" />
@@ -141,6 +150,11 @@ function MobileCity() {
           <feGaussianBlur stdDeviation="3" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
+        <linearGradient id="kd-nn-mobile-hologram-column" x1="0" y1="0" x2="0.3" y2="1">
+          <stop stopColor="#8DF7F6" stopOpacity="0.22" />
+          <stop offset="0.48" stopColor="#38CEDB" stopOpacity="0.075" />
+          <stop offset="1" stopColor="#1B768F" stopOpacity="0" />
+        </linearGradient>
       </defs>
 
       <rect width="430" height="932" fill="url(#kd-nn-mobile-sky)" />
@@ -221,15 +235,19 @@ function MobileCity() {
       </g>
 
       <g fontFamily="'Barlow Condensed', Arial, sans-serif" fontWeight="600" letterSpacing="2.5">
-        <g filter="url(#kd-nn-mobile-sign-glow)" transform="translate(12 330) rotate(-3)">
-          <rect width="38" height="118" rx="3" fill="#07151E" stroke="#4FE4EE" strokeWidth="2" />
-          <text x="19" y="23" fill="#C4F9FA" fontSize="14" textAnchor="middle">
-            <tspan x="19">K</tspan><tspan x="19" dy="25">I</tspan><tspan x="19" dy="25">N</tspan><tspan x="19" dy="25">O</tspan>
+        <g className="kd-neon-noir__kino-hologram" transform="translate(-4 286) rotate(-4)">
+          <path d="M8 0h34l16 171H0z" fill="url(#kd-nn-mobile-hologram-column)" />
+          <path d="M10 3h30M6 44h41M3 85h48M1 127h54M1 166h57" fill="none" stroke="#72EAF0" strokeWidth="0.8" opacity="0.15" />
+          <path d="M7 -3h37l-4 8H10z" fill="#102B35" stroke="#64E5EA" strokeWidth="1.4" opacity="0.88" />
+          <text className="kd-neon-noir__kino-depth" x="26" y="31" fill="#15768D" stroke="#15768D" strokeWidth="2.5" fontSize="24" textAnchor="middle" opacity="0.36">
+            <tspan x="26">K</tspan><tspan x="26" dy="35">I</tspan><tspan x="26" dy="35">N</tspan><tspan x="26" dy="35">O</tspan>
           </text>
-        </g>
-        <g transform="translate(74 282) rotate(2)">
-          <rect width="59" height="27" rx="2" fill="#130A17" stroke="#FF5BA7" strokeWidth="1.5" />
-          <text x="29.5" y="18" fill="#FFD0E4" fontSize="10" textAnchor="middle">00:01</text>
+          <text className="kd-neon-noir__kino-depth" x="23" y="28" fill="#2AAAB9" stroke="#2AAAB9" strokeWidth="1.5" fontSize="24" textAnchor="middle" opacity="0.54">
+            <tspan x="23">K</tspan><tspan x="23" dy="35">I</tspan><tspan x="23" dy="35">N</tspan><tspan x="23" dy="35">O</tspan>
+          </text>
+          <text className="kd-neon-noir__kino-face" filter="url(#kd-nn-mobile-sign-glow)" x="20" y="25" fill="#D7FFFF" stroke="#65E8EC" strokeWidth="0.9" paintOrder="stroke" fontSize="24" textAnchor="middle">
+            <tspan x="20">K</tspan><tspan x="20" dy="35">I</tspan><tspan x="20" dy="35">N</tspan><tspan x="20" dy="35">O</tspan>
+          </text>
         </g>
         <g filter="url(#kd-nn-mobile-sign-glow)" transform="translate(366 360) rotate(3)">
           <rect width="56" height="31" rx="2" fill="#071821" stroke="#4FE4EE" strokeWidth="2" />
@@ -278,19 +296,21 @@ function RainLayer() {
           <stop offset="0.82" stopColor="#A5D7DE" stopOpacity="0.28" />
           <stop offset="1" stopColor="#7EB6C1" stopOpacity="0" />
         </linearGradient>
-        <pattern id="kd-nn-rain-field-far" width="347" height="389" patternUnits="userSpaceOnUse">
+        <pattern id="kd-nn-rain-field-far" width="113" height="137" patternUnits="userSpaceOnUse">
           <g fill="none" stroke="url(#kd-nn-rain-far)" strokeLinecap="round" vectorEffect="non-scaling-stroke">
-            <path d="M21 18l-4 17M102 53l-5 22M188 12l-3 13M278 86l-6 25M332 31l-4 18" strokeWidth="0.72" opacity="0.62" />
-            <path d="M58 143l-7 27M151 201l-5 19M237 159l-8 31M316 236l-4 16" strokeWidth="0.58" opacity="0.42" />
-            <path d="M14 306l-5 21M86 275l-3 12M203 334l-7 26M294 302l-5 18" strokeWidth="0.82" opacity="0.54" />
+            <path d="M8 7l-2 7M31 16l-3 9M55 5l-1 6M79 23l-4 11M105 10l-2 8" strokeWidth="1.15" opacity="0.7" />
+            <path d="M17 41l-4 11M42 52l-2 7M66 36l-3 10M94 57l-3 9M110 43l-1 6" strokeWidth="1" opacity="0.56" />
+            <path d="M5 75l-3 9M26 88l-1 7M51 71l-4 12M75 95l-2 8M103 80l-4 13" strokeWidth="1.24" opacity="0.66" />
+            <path d="M13 116l-2 8M38 106l-3 10M61 123l-1 6M87 112l-3 9M110 126l-2 7" strokeWidth="1.06" opacity="0.6" />
           </g>
         </pattern>
-        <pattern id="kd-nn-rain-field-near" width="529" height="577" patternUnits="userSpaceOnUse">
+        <pattern id="kd-nn-rain-field-near" width="181" height="211" patternUnits="userSpaceOnUse">
           <g fill="none" stroke="url(#kd-nn-rain-near)" strokeLinecap="round" vectorEffect="non-scaling-stroke">
-            <path d="M46 39l-15 58M212 17l-11 43M413 82l-18 70" strokeWidth="1.18" opacity="0.5" />
-            <path d="M126 213l-8 35M305 187l-21 82M494 256l-12 47" strokeWidth="0.9" opacity="0.44" />
-            <path d="M35 418l-18 65M191 361l-10 39M362 432l-24 91M470 382l-7 29" strokeWidth="1.32" opacity="0.56" />
-            <path d="M272 521l-9 35M515 516l-14 49" strokeWidth="0.72" opacity="0.36" />
+            <path d="M14 12l-5 15M58 5l-4 12M105 23l-6 18M165 10l-4 14" strokeWidth="1.85" opacity="0.66" />
+            <path d="M34 51l-6 19M83 41l-4 15M137 63l-7 20M177 47l-3 12" strokeWidth="1.56" opacity="0.56" />
+            <path d="M9 98l-4 14M48 85l-7 21M101 109l-5 17M153 94l-6 19" strokeWidth="2" opacity="0.7" />
+            <path d="M25 146l-5 18M74 133l-3 13M121 159l-7 21M173 140l-4 16" strokeWidth="1.68" opacity="0.62" />
+            <path d="M6 195l-3 12M46 183l-6 19M96 199l-4 14M146 185l-7 22M179 201l-3 10" strokeWidth="1.9" opacity="0.66" />
           </g>
         </pattern>
       </defs>
