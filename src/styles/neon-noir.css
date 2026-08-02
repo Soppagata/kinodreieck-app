@@ -24,10 +24,10 @@
   inset: 48% -8% -12%;
   pointer-events: none;
   background:
-    repeating-linear-gradient(180deg, transparent 0 31px, rgba(172, 209, 213, 0.035) 34px, transparent 38px 68px),
-    linear-gradient(96deg, transparent 1%, rgba(139, 187, 194, 0.085) 23%, transparent 43%, rgba(117, 171, 180, 0.07) 67%, transparent 94%),
-    linear-gradient(180deg, transparent 0 12%, rgba(128, 174, 183, 0.09) 31%, rgba(31, 48, 59, 0.42) 60%, rgba(4, 7, 14, 0.94) 100%);
-  filter: blur(8px);
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(183, 218, 220, 0.055) 31px, transparent 36px 62px),
+    linear-gradient(96deg, transparent 1%, rgba(150, 199, 204, 0.14) 23%, rgba(91, 147, 157, 0.055) 44%, rgba(128, 184, 192, 0.12) 69%, transparent 96%),
+    linear-gradient(180deg, transparent 0 8%, rgba(139, 184, 191, 0.15) 28%, rgba(36, 56, 66, 0.58) 59%, rgba(4, 7, 14, 0.97) 100%);
+  filter: blur(9px);
 }
 
 .kd-neon-noir__city {
@@ -270,12 +270,12 @@
   }
 
   .kd-neon-noir-overlay::after {
-    inset: 47% -18% -10%;
+    inset: 44% -18% -10%;
     background:
-      repeating-linear-gradient(180deg, transparent 0 24px, rgba(172, 209, 213, 0.035) 27px, transparent 31px 54px),
-      linear-gradient(94deg, transparent 0, rgba(139, 187, 194, 0.07) 24%, transparent 47%, rgba(117, 171, 180, 0.06) 72%, transparent 100%),
-      linear-gradient(180deg, transparent 0 10%, rgba(128, 174, 183, 0.085) 28%, rgba(26, 43, 53, 0.48) 59%, rgba(4, 7, 14, 0.96) 100%);
-    filter: blur(7px);
+      repeating-linear-gradient(180deg, transparent 0 21px, rgba(183, 218, 220, 0.052) 25px, transparent 30px 49px),
+      linear-gradient(94deg, transparent 0, rgba(150, 199, 204, 0.12) 24%, rgba(87, 143, 154, 0.045) 48%, rgba(128, 184, 192, 0.1) 73%, transparent 100%),
+      linear-gradient(180deg, transparent 0 7%, rgba(139, 184, 191, 0.14) 26%, rgba(31, 51, 61, 0.62) 58%, rgba(4, 7, 14, 0.98) 100%);
+    filter: blur(8px);
   }
 
   .kd-neon-noir__rain {

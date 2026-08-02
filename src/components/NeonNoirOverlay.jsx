@@ -99,13 +99,39 @@ function DesktopCity() {
             <tspan x="59">K</tspan><tspan x="59" dy="53">I</tspan><tspan x="59" dy="53">N</tspan><tspan x="59" dy="53">O</tspan>
           </text>
         </g>
-        <g filter="url(#kd-nn-sign-glow)" transform="translate(1460 382) rotate(3)">
-          <rect width="90" height="48" rx="3" fill="#071923" stroke="#4FE4EE" strokeWidth="3" />
-          <text x="45" y="32" fill="#CAF9FA" fontSize="20" textAnchor="middle">WIEN</text>
+        <g className="kd-neon-noir__wien-sign" filter="url(#kd-nn-sign-glow)" transform="translate(1430 350) rotate(5)">
+          <path d="M0 12L19 0h103l18 13-7 52H10L0 50z" fill="#180817" stroke="#FF5BA7" strokeWidth="3" />
+          <path d="M12 17L27 8h86l15 10-5 35H19l-7-10z" fill="none" stroke="#FF9ACA" strokeWidth="1.5" opacity="0.68" />
+          <circle cx="17" cy="31" r="3.5" fill="#FFD0E5" />
+          <path d="M114 21l9 9-12 12" fill="none" stroke="#FF78B8" strokeWidth="3" strokeLinecap="round" />
+          <text x="70" y="41" fill="#FFE4F0" fontSize="24" fontStyle="italic" textAnchor="middle">WIEN</text>
         </g>
-        <g transform="translate(1308 548) rotate(-2)">
-          <rect width="238" height="48" rx="3" fill="#180B1A" stroke="#FF5BA7" strokeWidth="2" opacity="0.9" />
-          <text x="119" y="31" fill="#FFD1E6" fontSize="15" textAnchor="middle">SPÄTVORSTELLUNG</text>
+      </g>
+
+      <g className="kd-neon-noir__road-ads" filter="url(#kd-nn-sign-glow)" aria-hidden="true">
+        <g className="kd-neon-noir__road-ad" transform="translate(92 548) rotate(-5)">
+          <path d="M0 8L12 0h66l10 9-7 37H7z" fill="#19090E" stroke="#FF503F" strokeWidth="2.5" />
+          <path d="M17 13h48M13 24h31M49 24h18M10 35h55" stroke="#FF8A63" strokeWidth="3" opacity="0.86" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(150 603) rotate(3)">
+          <rect width="68" height="30" rx="3" fill="#07171A" stroke="#49E5DD" strokeWidth="2" />
+          <path d="M11 20l10-10 10 10 10-10 15 10" fill="none" stroke="#B8FFEC" strokeWidth="2" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(218 635) rotate(-2)">
+          <path d="M0 6l8-6h45l7 7-6 24H5z" fill="#1A1208" stroke="#FFBD4A" strokeWidth="1.8" />
+          <circle cx="18" cy="15" r="5" fill="none" stroke="#FFE18A" strokeWidth="2" /><path d="M30 10h18M30 17h14M30 24h10" stroke="#FFBD4A" strokeWidth="2" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(1490 515) rotate(4)">
+          <rect width="54" height="132" rx="2" fill="#130914" stroke="#FF4F9A" strokeWidth="2.5" />
+          <path d="M16 17h22l-8 19 10 16-20 20 15 18-18 25" fill="none" stroke="#FF98C8" strokeWidth="4" strokeLinejoin="round" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(1372 617) rotate(-3)">
+          <path d="M0 5l8-5h67l7 7-5 31H5z" fill="#07161B" stroke="#50DDE8" strokeWidth="2" />
+          <path d="M12 11h19v16H12zM38 11h27M38 19h20M38 27h14" fill="none" stroke="#A8F7F8" strokeWidth="2" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(1263 655) rotate(2)">
+          <rect width="59" height="27" rx="2" fill="#1A0B08" stroke="#FF694E" strokeWidth="1.8" />
+          <path d="M9 18l8-10 8 10 8-10 8 10 8-10" fill="none" stroke="#FFD078" strokeWidth="2" />
         </g>
       </g>
 
@@ -249,13 +275,39 @@ function MobileCity() {
             <tspan x="20">K</tspan><tspan x="20" dy="35">I</tspan><tspan x="20" dy="35">N</tspan><tspan x="20" dy="35">O</tspan>
           </text>
         </g>
-        <g filter="url(#kd-nn-mobile-sign-glow)" transform="translate(366 360) rotate(3)">
-          <rect width="56" height="31" rx="2" fill="#071821" stroke="#4FE4EE" strokeWidth="2" />
-          <text x="28" y="21" fill="#C7F9FA" fontSize="11" textAnchor="middle">WIEN</text>
+        <g className="kd-neon-noir__wien-sign" filter="url(#kd-nn-mobile-sign-glow)" transform="translate(337 338) rotate(5) scale(.66)">
+          <path d="M0 10L15 0h81l15 11-6 43H8L0 42z" fill="#180817" stroke="#FF5BA7" strokeWidth="3" />
+          <path d="M10 14L22 7h66l12 8-4 28H16l-6-8z" fill="none" stroke="#FF9ACA" strokeWidth="1.5" opacity="0.72" />
+          <circle cx="14" cy="27" r="3" fill="#FFD0E5" />
+          <path d="M88 18l8 8-10 10" fill="none" stroke="#FF78B8" strokeWidth="3" strokeLinecap="round" />
+          <text x="55" y="35" fill="#FFE4F0" fontSize="21" fontStyle="italic" textAnchor="middle">WIEN</text>
         </g>
-        <g transform="translate(326 516) rotate(-3)">
-          <rect width="98" height="27" rx="2" fill="#180B1A" stroke="#FF5BA7" strokeWidth="1.5" />
-          <text x="49" y="18" fill="#FFD4E7" fontSize="7" textAnchor="middle">SPÄTVORSTELLUNG</text>
+      </g>
+
+      <g className="kd-neon-noir__road-ads" filter="url(#kd-nn-mobile-sign-glow)" opacity="0.74" aria-hidden="true">
+        <g className="kd-neon-noir__road-ad" transform="translate(-32 470) rotate(-4)">
+          <path d="M0 5l7-5h39l6 6-5 27H4z" fill="#19090E" stroke="#FF5547" strokeWidth="1.6" />
+          <path d="M10 10h27M8 17h18M29 17h10M7 25h31" stroke="#FF9A68" strokeWidth="1.7" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(-27 548) rotate(3)">
+          <rect width="43" height="20" rx="2" fill="#07171A" stroke="#49E5DD" strokeWidth="1.4" />
+          <path d="M7 14l7-7 7 7 7-7 9 7" fill="none" stroke="#B8FFEC" strokeWidth="1.3" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(-25 597) rotate(-2)">
+          <path d="M0 4l5-4h31l5 5-4 17H3z" fill="#1A1208" stroke="#FFBD4A" strokeWidth="1.3" />
+          <circle cx="12" cy="11" r="3.5" fill="none" stroke="#FFE18A" strokeWidth="1.3" /><path d="M20 7h13M20 12h10M20 17h7" stroke="#FFBD4A" strokeWidth="1.2" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(407 452) rotate(4)">
+          <rect width="31" height="83" rx="2" fill="#130914" stroke="#FF4F9A" strokeWidth="1.7" />
+          <path d="M10 10h13l-5 12 7 10-13 12 9 11-11 16" fill="none" stroke="#FF98C8" strokeWidth="2.5" strokeLinejoin="round" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(409 543) rotate(-3)">
+          <path d="M0 4l5-4h42l5 5-4 23H3z" fill="#07161B" stroke="#50DDE8" strokeWidth="1.5" />
+          <path d="M8 8h12v12H8zM25 8h16M25 14h13M25 20h9" fill="none" stroke="#A8F7F8" strokeWidth="1.3" />
+        </g>
+        <g className="kd-neon-noir__road-ad" transform="translate(408 603) rotate(2)">
+          <rect width="39" height="19" rx="2" fill="#1A0B08" stroke="#FF694E" strokeWidth="1.3" />
+          <path d="M6 13l5-7 6 7 5-7 6 7 5-7" fill="none" stroke="#FFD078" strokeWidth="1.3" />
         </g>
       </g>
 

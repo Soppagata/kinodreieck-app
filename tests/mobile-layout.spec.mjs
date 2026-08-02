@@ -388,11 +388,16 @@ for (const viewport of VIEWPORTS) {
     await expect(regen.locator("pattern")).toHaveCount(2);
     await expect(regen.locator("pattern path")).toHaveCount(9);
     await expect(overlay).not.toContainText("00:01");
+    await expect(overlay).not.toContainText("SPÄTVORSTELLUNG");
     await expect(overlay.locator(".kd-neon-noir__kino-hologram")).toHaveCount(2);
     const kinoHologramm = overlay.locator(".kd-neon-noir__kino-hologram:visible");
     await expect(kinoHologramm.locator(".kd-neon-noir__kino-face")).toHaveCount(1);
     await expect(kinoHologramm).toHaveCSS("animation-name", "kd-neon-noir-hologram");
     await expect(kinoHologramm).toHaveCSS("animation-duration", "14.8s");
+    const wienSchild = overlay.locator(".kd-neon-noir__wien-sign:visible");
+    await expect(wienSchild).toHaveCount(1);
+    await expect(wienSchild).toContainText("WIEN");
+    await expect(overlay.locator(".kd-neon-noir__road-ads:visible .kd-neon-noir__road-ad")).toHaveCount(6);
 
     const geometrie = await overlay.evaluate((el) => {
       const r = el.getBoundingClientRect();
