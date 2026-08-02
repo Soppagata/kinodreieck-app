@@ -1,0 +1,605 @@
+/* Flüchtige Deep-Space-Kulisse. Sie besitzt keine Theme- oder Persistenzregeln
+   und bleibt technisch vollständig von Neon Noir getrennt. */
+
+.kd-deep-space-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  isolation: isolate;
+  contain: strict;
+  pointer-events: none;
+  user-select: none;
+  background: #050a0d;
+}
+
+.kd-deep-space-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 72% 58% at 48% 38%, rgba(112, 168, 185, 0.13), transparent 72%),
+    linear-gradient(180deg, rgba(98, 147, 164, 0.09), rgba(29, 62, 72, 0.025) 52%, transparent 78%);
+  mix-blend-mode: screen;
+}
+
+.kd-deep-space__scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: brightness(1.68) contrast(1.04) saturate(0.54);
+}
+
+.kd-deep-space__scene--mobile {
+  display: none;
+}
+
+.kd-deep-space__scene--mobile .kd-deep-space__lights {
+  animation: none;
+}
+
+.kd-deep-space__lights {
+  opacity: 0.9;
+  animation: none;
+}
+
+.kd-deep-space__steam {
+  position: absolute;
+  z-index: 3;
+  inset: 8% -14% -6%;
+  opacity: 0.1;
+  background:
+    radial-gradient(ellipse 19% 16% at 10% 63%, rgba(177, 196, 184, 0.24), transparent 73%),
+    radial-gradient(ellipse 15% 13% at 90% 48%, rgba(139, 163, 149, 0.2), transparent 74%),
+    radial-gradient(ellipse 12% 8% at 61% 70%, rgba(155, 176, 163, 0.1), transparent 76%);
+  filter: blur(15px);
+  transform: translate3d(0, 0, 0) scale(1.025);
+}
+
+.kd-deep-space__beacon {
+  position: absolute;
+  z-index: 3;
+  left: 77%;
+  top: 30%;
+  width: min(34vw, 430px);
+  aspect-ratio: 1;
+  margin: min(-17vw, -215px) 0 0 min(-17vw, -215px);
+  border-radius: 50%;
+  opacity: 0.3;
+  background:
+    radial-gradient(circle, rgba(255, 177, 61, 0.92) 0 1.2%, rgba(225, 111, 28, 0.46) 2.3%, transparent 7%),
+    conic-gradient(from 12deg, transparent 0 77%, rgba(255, 150, 43, 0.025) 80%, rgba(255, 151, 43, 0.33) 87%, rgba(255, 201, 104, 0.12) 92%, transparent 97%);
+  filter: blur(4px);
+  mix-blend-mode: screen;
+  transform: rotate(0deg);
+  transform-origin: center;
+  animation: kd-deep-space-beacon 4.8s linear infinite;
+  will-change: transform, opacity;
+}
+
+.kd-deep-space__beacon::before,
+.kd-deep-space__beacon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.kd-deep-space__beacon::before {
+  width: max(8px, 4.8%);
+  height: max(6px, 3.6%);
+  border: 1px solid rgba(255, 203, 124, 0.5);
+  border-radius: 55% 55% 22% 22%;
+  background: linear-gradient(90deg, #7a3109, #ffad38 45% 58%, #6c2907);
+  box-shadow: 0 0 10px rgba(255, 137, 27, 0.72), 0 0 26px rgba(255, 116, 18, 0.38);
+}
+
+.kd-deep-space__beacon::after {
+  width: max(13px, 7.4%);
+  height: max(3px, 1.9%);
+  margin-top: max(4px, 2.8%);
+  border-radius: 1px;
+  background: #101412;
+  box-shadow: inset 0 1px 0 rgba(190, 205, 199, 0.22), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.kd-deep-space--event-active:not(.kd-deep-space--event-beacon-sweep) .kd-deep-space__beacon {
+  animation-play-state: paused;
+  opacity: 0.16;
+}
+
+.kd-deep-space--event-beacon-sweep .kd-deep-space__beacon {
+  opacity: 0.62;
+  animation-duration: 2.1s;
+}
+
+/* Ein Sondermoment pausiert die übrigen bewegten Lichter. */
+.kd-deep-space--event-active .kd-deep-space__steam,
+.kd-deep-space--event-active .kd-deep-space__lights {
+  animation: none;
+}
+
+.kd-deep-space--event-active .kd-deep-space__steam {
+  opacity: 0;
+}
+
+.kd-deep-space--event-light-flicker .kd-deep-space__flicker-light {
+  animation: kd-deep-space-event-flicker 0.68s linear both;
+}
+
+.kd-deep-space__steam-burst {
+  position: absolute;
+  z-index: 3;
+  left: 34.097vw;
+  top: 39.906vh;
+  width: 13.995vw;
+  height: 2.817vh;
+  opacity: 0;
+  transform-origin: left center;
+  clip-path: polygon(0 38%, 100% 0, 82% 100%, 0 63%);
+  background:
+    radial-gradient(ellipse 52% 78% at 13% 52%, rgba(195, 210, 201, 0.72), transparent 74%),
+    radial-gradient(ellipse 46% 68% at 46% 35%, rgba(170, 191, 178, 0.48), transparent 76%),
+    radial-gradient(ellipse 42% 73% at 77% 61%, rgba(143, 169, 153, 0.36), transparent 79%);
+  filter: blur(2px);
+  animation: kd-deep-space-steam-burst 0.8s ease-out both;
+  will-change: transform, opacity;
+}
+
+.kd-deep-space__sparks {
+  position: absolute;
+  z-index: 3;
+  left: 18%;
+  top: 22%;
+  width: 118px;
+  height: 220px;
+  opacity: 0;
+  overflow: visible;
+  transform-origin: center top;
+  background: linear-gradient(90deg, transparent, rgba(255, 222, 146, 0.76) 42% 58%, transparent) 46% 0 / 26px 3px no-repeat;
+  filter: drop-shadow(0 0 5px rgba(255, 186, 77, 0.72));
+  animation: kd-deep-space-sparks 0.9s ease-in both;
+  will-change: transform, opacity;
+}
+
+.kd-deep-space__sparks svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.kd-deep-space__sparks path {
+  stroke: #ffe6a3;
+  stroke-width: 1.6;
+  opacity: 0.94;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------------- Deep-Space-Interface ----------------
+   Nicht nur die Kulisse wechselt: Typografie, Platten, Navigation und
+   Formfelder werden zu einem ruhigen industriellen Bordinterface. */
+.kd-deep-space-horror {
+  --kd-dsh-ui: #d7e3dd;
+  --kd-dsh-ui-muted: #8fa199;
+  --kd-dsh-line: rgba(143, 166, 156, 0.38);
+  --kd-dsh-panel: rgba(7, 12, 10, 0.9);
+  animation: kd-deep-space-ambient-flicker 7.6s linear infinite;
+}
+
+.kd-deep-space-horror::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 24% 34%, rgba(255, 242, 196, 0.78), rgba(236, 178, 78, 0.32) 8%, transparent 25%),
+    linear-gradient(rgba(190, 119, 28, 0.12), rgba(117, 74, 19, 0.05));
+  mix-blend-mode: screen;
+}
+
+.kd-deep-space-horror[data-kd-deep-event] { animation-play-state: paused; }
+.kd-deep-space-horror[data-kd-deep-event="light-flicker"] {
+  animation: kd-deep-space-interface-flicker 0.68s linear both;
+}
+.kd-deep-space-horror[data-kd-deep-event="sparks"]::after {
+  animation: kd-deep-space-interface-spark 0.9s ease-out both;
+}
+.kd-deep-space-horror[data-kd-deep-event="beacon-sweep"]::after {
+  background: radial-gradient(ellipse 34% 58% at 77% 31%, rgba(255, 156, 46, 0.3), transparent 72%);
+  animation: kd-deep-space-interface-beacon 2.8s ease-in-out both;
+}
+
+.kd-deep-space-horror .kd-app {
+  color: var(--kd-dsh-ui);
+  font-family: "Space Mono", monospace !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+.kd-deep-space-horror .kd-app :is(h1, h2, h3, h4, legend, summary) {
+  font-family: "Barlow Condensed", sans-serif !important;
+  font-weight: 600;
+  letter-spacing: 0.095em;
+  text-transform: uppercase;
+}
+
+.kd-deep-space-horror > .kd-app > header {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(7, 12, 10, 0.97), rgba(17, 25, 21, 0.88) 62%, rgba(7, 12, 10, 0.72));
+  border-bottom: 1px solid var(--kd-dsh-line);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.42), 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.kd-deep-space-horror > .kd-app > header::after {
+  content: "DECK 04  ·  AUXILIARY SYSTEMS";
+  position: absolute;
+  right: 23px;
+  bottom: 4px;
+  color: rgba(166, 190, 179, 0.48);
+  font: 400 8px "Space Mono", monospace;
+  letter-spacing: 0.18em;
+}
+
+.kd-deep-space-horror > .kd-app > header h1 {
+  color: #e1ebe6;
+  text-shadow: 0 0 12px rgba(164, 204, 190, 0.22), 2px 2px 0 #020403;
+}
+
+.kd-deep-space-horror .kd-menu {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 19, 0.97), rgba(5, 9, 7, 0.97)) !important;
+  border-top: 1px solid rgba(151, 171, 162, 0.14);
+  border-bottom: 1px solid var(--kd-dsh-line) !important;
+  box-shadow: 0 9px 30px rgba(0, 0, 0, 0.38);
+}
+
+.kd-deep-space-horror .kd-menu button,
+.kd-deep-space-horror .kd-app main button,
+.kd-deep-space-horror .kd-mobile-menu button,
+.kd-deep-space-horror .kd-menuknopf,
+.kd-deep-space-horror .kd-globalsuche button {
+  border: 1px solid rgba(139, 163, 151, 0.42) !important;
+  border-radius: 2px !important;
+  color: var(--kd-dsh-ui) !important;
+  background: linear-gradient(180deg, rgba(24, 34, 29, 0.92), rgba(8, 13, 10, 0.94)) !important;
+  font-family: "Barlow Condensed", sans-serif !important;
+  letter-spacing: 0.085em !important;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  box-shadow: inset 0 1px 0 rgba(214, 229, 222, 0.08), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.kd-deep-space-horror .kd-menu button.kd-nav-aktiv,
+.kd-deep-space-horror .kd-app main button:hover,
+.kd-deep-space-horror .kd-app main button:focus-visible {
+  border-color: rgba(216, 163, 63, 0.84) !important;
+  color: #f3d17e !important;
+  background: linear-gradient(180deg, rgba(55, 49, 28, 0.96), rgba(20, 18, 11, 0.96)) !important;
+  box-shadow: inset 3px 0 0 #d8a33f, 0 0 14px rgba(216, 163, 63, 0.12);
+}
+
+.kd-deep-space-horror main > div,
+.kd-deep-space-horror :is(.kd-karte, .kd-dash-ticket, .kd-editpanel, .kd-klappe, .kd-panel) {
+  border: 1px solid var(--kd-dsh-line) !important;
+  border-radius: 2px !important;
+  background:
+    linear-gradient(135deg, rgba(20, 29, 24, 0.94), var(--kd-dsh-panel) 42%, rgba(5, 9, 7, 0.95)) !important;
+  box-shadow:
+    inset 3px 0 0 rgba(139, 164, 152, 0.16),
+    inset 0 1px 0 rgba(220, 232, 226, 0.06),
+    0 14px 32px rgba(0, 0, 0, 0.32) !important;
+}
+
+.kd-deep-space-horror .kd-dash-hero {
+  position: relative;
+  border-top: 1px solid rgba(146, 172, 159, 0.35);
+  border-bottom: 1px solid rgba(146, 172, 159, 0.35);
+  padding: 18px 0 16px;
+  background: linear-gradient(90deg, rgba(8, 14, 11, 0.82), rgba(8, 14, 11, 0.18));
+}
+
+.kd-deep-space-horror .kd-dash-hero::before {
+  content: "NIGHT CYCLE / INTERNAL";
+  position: absolute;
+  right: 8px;
+  top: 7px;
+  color: rgba(155, 177, 167, 0.4);
+  font: 400 8px "Space Mono", monospace;
+  letter-spacing: 0.16em;
+}
+
+.kd-deep-space-horror .kd-dash-hero h1 {
+  color: #e2ebe6;
+  text-shadow: 0 0 18px rgba(160, 205, 187, 0.16);
+}
+
+.kd-deep-space-horror .kd-app :is(input, textarea, select) {
+  border: 1px solid rgba(137, 162, 150, 0.48) !important;
+  border-radius: 2px !important;
+  color: var(--kd-dsh-ui) !important;
+  background: rgba(3, 7, 5, 0.9) !important;
+  font-family: "Space Mono", monospace !important;
+  box-shadow: inset 3px 0 0 rgba(216, 163, 63, 0.26);
+}
+
+.kd-deep-space-horror .kd-globalsuche {
+  border: 1px solid rgba(137, 162, 150, 0.5) !important;
+  border-radius: 2px !important;
+  background: linear-gradient(180deg, rgba(18, 27, 22, 0.98), rgba(4, 8, 6, 0.98)) !important;
+  box-shadow: inset 3px 0 0 rgba(216, 163, 63, 0.34), 0 8px 24px rgba(0, 0, 0, 0.48) !important;
+}
+
+.kd-deep-space-horror .kd-globalsuche input {
+  border-color: rgba(137, 162, 150, 0.38) !important;
+  border-radius: 2px !important;
+  color: var(--kd-dsh-ui) !important;
+  background: rgba(2, 6, 4, 0.92) !important;
+  font-family: "Space Mono", monospace !important;
+}
+
+.kd-deep-space-horror .kd-globalsuche .kd-globalsuche-los {
+  border-color: #d8a33f !important;
+  color: #0a0d0b !important;
+  background: #d8a33f !important;
+  box-shadow: 0 0 13px rgba(216, 163, 63, 0.2);
+}
+
+.kd-deep-space-horror .kd-app :is(p, li, label, input, textarea, select) {
+  letter-spacing: 0.018em;
+}
+
+@keyframes kd-deep-space-ambient-flicker {
+  0%, 83.6%, 86.4%, 90.6%, 100% { opacity: 1; }
+  84.2% { opacity: 0.28; }
+  88.6% { opacity: 0.58; }
+}
+
+@keyframes kd-deep-space-interface-flicker {
+  0%, 12%, 37%, 69%, 100% { opacity: 1; }
+  16% { opacity: 0.16; }
+  50% { opacity: 0.38; }
+}
+
+@keyframes kd-deep-space-interface-spark {
+  0%, 100% { opacity: 0; }
+  12% { opacity: 0.82; }
+  28% { opacity: 0.18; }
+  42% { opacity: 0.68; }
+  72% { opacity: 0.12; }
+}
+
+@keyframes kd-deep-space-interface-beacon {
+  0%, 100% { opacity: 0; transform: translate3d(8%, 0, 0); }
+  28% { opacity: 0.24; }
+  52% { opacity: 0.62; transform: translate3d(-6%, 0, 0); }
+  76% { opacity: 0.18; }
+}
+
+@keyframes kd-deep-space-beacon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Nur die lokale Vite-Animationswerkstatt setzt dieses Bedienfenster ein.
+   Es liegt bewusst außerhalb des aria-hidden/pointer-events-freien Overlays. */
+.kd-deep-space-testpanel {
+  position: fixed;
+  z-index: 14000;
+  top: calc(10px + env(safe-area-inset-top));
+  right: calc(10px + env(safe-area-inset-right));
+  width: min(310px, calc(100vw - 20px));
+  box-sizing: border-box;
+  border: 1px solid rgba(216, 163, 63, 0.72);
+  border-radius: 10px;
+  padding: 10px;
+  color: #e6f0f1;
+  background: rgba(7, 9, 19, 0.96);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.56);
+  font-family: "Space Grotesk", sans-serif;
+  pointer-events: auto;
+}
+
+.kd-deep-space-testpanel--min { width: auto; min-width: 178px; }
+
+.kd-deep-space-testpanel__head,
+.kd-deep-space-testpanel__controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.kd-deep-space-testpanel__head { justify-content: space-between; }
+.kd-deep-space-testpanel__head > div { display: grid; gap: 1px; }
+.kd-deep-space-testpanel__head strong {
+  color: #d8a33f;
+  font-family: "Barlow Condensed", sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.kd-deep-space-testpanel__head span { color: #9baab5; font-size: 11px; }
+
+.kd-deep-space-testpanel button {
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid rgba(155, 170, 181, 0.5);
+  border-radius: 5px;
+  padding: 7px 9px;
+  color: #e6f0f1;
+  background: rgba(17, 24, 39, 0.92);
+  font: 600 13px "Barlow Condensed", sans-serif;
+  letter-spacing: 0.045em;
+  cursor: pointer;
+}
+.kd-deep-space-testpanel button:hover,
+.kd-deep-space-testpanel button:focus-visible,
+.kd-deep-space-testpanel button[aria-pressed="true"],
+.kd-deep-space-testpanel button.is-active {
+  border-color: #d8a33f;
+  outline: none;
+  color: #070913;
+  background: #d8a33f;
+}
+.kd-deep-space-testpanel button:disabled { cursor: default; opacity: 0.38; }
+.kd-deep-space-testpanel__head button { min-width: 38px; padding: 4px; font-size: 20px; line-height: 1; }
+.kd-deep-space-testpanel__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+.kd-deep-space-testpanel__controls { margin-top: 8px; }
+.kd-deep-space-testpanel__controls button { flex: 1; }
+.kd-deep-space-testpanel p { margin: 8px 1px 0; color: #9baab5; font-size: 10px; line-height: 1.35; }
+
+.kd-deep-space--test-paused,
+.kd-deep-space--test-paused * {
+  animation-play-state: paused !important;
+}
+
+@keyframes kd-deep-space-steam-burst {
+  0% { opacity: 0; transform: translate3d(-1.018vw, 0, 0) scale(0.15, 0.5); }
+  30% { opacity: 0.21; transform: translate3d(0, 0, 0) scale(0.78, 0.9); }
+  100% { opacity: 0; transform: translate3d(2.036vw, -0.117vh, 0) scale(1, 1.05); }
+}
+
+@keyframes kd-deep-space-event-flicker {
+  0%, 12%, 37%, 69%, 100% { opacity: 0.92; }
+  16% { opacity: 0.18; }
+  50% { opacity: 0.42; }
+}
+
+@keyframes kd-deep-space-sparks {
+  0% { opacity: 0; transform: translate3d(-4px, -28px, 0) scaleY(0.42); }
+  10% { opacity: 1; }
+  38% { opacity: 0.86; transform: translate3d(3px, 4px, 0) scaleY(0.8); }
+  72% { opacity: 0.58; transform: translate3d(-3px, 48px, 0) scaleY(1); }
+  100% { opacity: 0; transform: translate3d(5px, 88px, 0) scaleY(1.08); }
+}
+
+@media (max-width: 760px) {
+  .kd-deep-space__scene--desktop {
+    display: none;
+  }
+
+  .kd-deep-space__scene--desktop .kd-deep-space__lights {
+    animation: none;
+  }
+
+  .kd-deep-space__scene--mobile {
+    display: block;
+    filter: brightness(1.78) contrast(1.03) saturate(0.5);
+  }
+
+  .kd-deep-space__scene--mobile .kd-deep-space__lights {
+    animation: none;
+  }
+
+  .kd-deep-space--event-active .kd-deep-space__scene--mobile .kd-deep-space__lights {
+    animation: none;
+  }
+
+  .kd-deep-space--event-light-flicker .kd-deep-space__scene--mobile .kd-deep-space__flicker-light {
+    animation: kd-deep-space-event-flicker 0.68s linear both;
+  }
+
+  .kd-deep-space__steam {
+    inset: 11% -32% 9%;
+    opacity: 0.09;
+    background:
+      radial-gradient(ellipse 24% 14% at 6% 61%, rgba(177, 196, 184, 0.19), transparent 74%),
+      radial-gradient(ellipse 21% 13% at 94% 46%, rgba(139, 163, 149, 0.17), transparent 76%);
+    filter: blur(11px);
+  }
+
+  .kd-deep-space__beacon {
+    left: 81%;
+    top: 30%;
+    width: 62vw;
+    margin: -31vw 0 0 -31vw;
+  }
+}
+
+@media (max-width: 383px) {
+  .kd-deep-space__steam-burst {
+    left: 34.133vw;
+    top: 40.03vh;
+    width: 13.333vw;
+    height: 3.148vh;
+    animation-name: kd-deep-space-steam-burst-compact;
+  }
+
+  .kd-deep-space__sparks {
+    left: 13%;
+    top: 20%;
+    width: 96px;
+    height: 196px;
+  }
+
+  @keyframes kd-deep-space-steam-burst-compact {
+    0% { opacity: 0; transform: translate3d(-1.067vw, 0, 0) scale(0.15, 0.5); }
+    30% { opacity: 0.21; transform: translate3d(0, 0, 0) scale(0.78, 0.9); }
+    100% { opacity: 0; transform: translate3d(2.133vw, -0.15vh, 0) scale(1, 1.05); }
+  }
+
+}
+
+@media (min-width: 761px) {
+  .kd-deep-space__steam-burst {
+    left: 584px;
+    top: 428px;
+    width: 150px;
+    height: 58px;
+    animation-name: kd-deep-space-steam-burst-desktop;
+  }
+  .kd-deep-space__sparks {
+    left: 29%;
+    top: 27%;
+    width: 142px;
+    height: 260px;
+  }
+  .kd-deep-space__sparks path { stroke-width: 2px; }
+
+  @keyframes kd-deep-space-steam-burst-desktop {
+    0% { opacity: 0; transform: translate3d(-4px, 0, 0) scale(0.15, 0.5); }
+    30% { opacity: 0.21; transform: translate3d(0, 0, 0) scale(0.78, 0.9); }
+    100% { opacity: 0; transform: translate3d(8px, -1px, 0) scale(1, 1.05); }
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kd-deep-space-horror,
+  .kd-deep-space-horror::after {
+    animation: none !important;
+  }
+
+  .kd-deep-space-horror { opacity: 1 !important; }
+  .kd-deep-space-horror::after { display: none !important; }
+
+  .kd-deep-space__lights,
+  .kd-deep-space__flicker-light,
+  .kd-deep-space__steam,
+  .kd-deep-space__beacon,
+  .kd-deep-space__steam-burst,
+  .kd-deep-space__sparks {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .kd-deep-space__lights { opacity: 0.9; }
+
+  .kd-deep-space__steam,
+  .kd-deep-space__steam-burst,
+  .kd-deep-space__sparks {
+    display: none !important;
+  }
+}

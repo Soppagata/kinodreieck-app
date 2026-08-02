@@ -17,6 +17,10 @@ import {
 } from "../lib/eggFrequenz.js";
 import { filmHerkunft } from "../lib/finder.js";
 import { sichtbareDienste } from "../lib/dienste.js";
+import {
+  DEEP_SPACE_HORROR_ID,
+  istDeepSpaceFreigeschaltet,
+} from "../lib/deepSpaceHorror.js";
 
 export function useEggController({
   master,
@@ -32,12 +36,22 @@ export function useEggController({
 }) {
   const [achievements, setAchievements] = useState(null);
   const backfillRef = useRef(false);
+  const unlockPendingRef = useRef(new Set());
   const toastSeq = useRef(0);
+  const toastTimerRef = useRef(new Set());
   const [toasts, setToasts] = useState([]);
   const zeigeToast = useCallback((text, sub) => {
     const id = ++toastSeq.current;
     setToasts((alt) => [...alt, { id, text, sub }]);
-    setTimeout(() => setToasts((alt) => alt.filter((toast) => toast.id !== id)), 4000);
+    const timer = setTimeout(() => {
+      toastTimerRef.current.delete(timer);
+      setToasts((alt) => alt.filter((toast) => toast.id !== id));
+    }, 4000);
+    toastTimerRef.current.add(timer);
+  }, []);
+  useEffect(() => () => {
+    for (const timer of toastTimerRef.current) clearTimeout(timer);
+    toastTimerRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -46,15 +60,20 @@ export function useEggController({
   }, []);
   useEffect(() => {
     if (!EGGS_ENABLED || achievements == null || master == null) return;
-    const neu = [...berechneUnlocks(master)].filter((id) => !achievements.has(id));
+    for (const id of achievements) unlockPendingRef.current.delete(id);
+    const kandidaten = berechneUnlocks(master);
+    if (istDeepSpaceFreigeschaltet(master)) kandidaten.add(DEEP_SPACE_HORROR_ID);
+    const neu = [...kandidaten].filter((id) =>
+      !achievements.has(id) && !unlockPendingRef.current.has(id));
     if (!neu.length) {
       backfillRef.current = true;
       return;
     }
+    for (const id of neu) unlockPendingRef.current.add(id);
     const naechste = new Set([...achievements, ...neu]);
     setAchievements(naechste);
     speichereAchievements(naechste);
-    if (backfillRef.current) zeigeToast("Easteregg freigeschalten");
+    if (backfillRef.current) zeigeToast("Easteregg freigeschalten!");
     backfillRef.current = true;
   }, [master, achievements, zeigeToast]);
 

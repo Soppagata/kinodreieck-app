@@ -57,6 +57,7 @@ import {
   planeFilmLoeschung,
 } from "./controllers/libraryController.js";
 import { useEggController } from "./controllers/useEggController.js";
+import { deepSpaceOwnerKey, useDeepSpaceHorror } from "./controllers/useDeepSpaceHorror.js";
 import { ensureIds, slugId } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
@@ -95,6 +96,12 @@ import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 
 export default function App() {
+  /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
+     Query-Parameter aus. Der Modus schreibt weder Settings noch Rhythmus und
+     kann deshalb keinen echten Deep-Space-Eintritt verbrauchen. */
+  const deepSpaceTestmodusAktiv = import.meta.env.DEV
+    && typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("deep-space-test") === "1";
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   useEffect(() => sessionCoordinator.subscribe(setSession), []);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
@@ -216,6 +223,7 @@ export default function App() {
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
   const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
+  const [neonEintrittSerial, setNeonEintrittSerial] = useState(0);
   const bereinigteEinstellungen = useCallback((wert) => {
     const next = { ...wert };
     delete next.linkshaender;
@@ -231,6 +239,9 @@ export default function App() {
      Die Spezialmodi erzwingen jeweils ihr dunkles Theme;
      Saal/Foyer schalten den Modus ab und setzen das Theme direkt. ---- */
   const waehleModus = useCallback((wahl) => {
+    if (wahl === "neon-noir" && einstellungen.modus !== "neon-noir") {
+      setNeonEintrittSerial((stand) => stand + 1);
+    }
     let next;
     if (wahl === "showa" || wahl === "neon-noir") {
       const basisTheme = einstellungen.modus
@@ -1731,6 +1742,18 @@ export default function App() {
     springeZuFilm,
   });
 
+  const deepSpaceOwner = deepSpaceOwnerKey(session);
+  const { deepSpaceAktiv } = useDeepSpaceHorror({
+    achievements,
+    bootDone,
+    neonNoirAktiv: !deepSpaceTestmodusAktiv && einstellungen.modus === "neon-noir",
+    manuellerEintritt: neonEintrittSerial,
+    ownerKey: deepSpaceOwner,
+  });
+  const deepSpaceSichtbar = deepSpaceTestmodusAktiv
+    || (deepSpaceAktiv && einstellungen.modus === "neon-noir");
+  const effektiverModus = deepSpaceSichtbar ? "deep-space-horror" : einstellungen.modus;
+
   const clearProgrammCache = useCallback(async () => {
     try { await store.delete(K.programm); } catch { /* war leer */ }
     /* Der Programm-Topf war nur die halbe Miete: ohne den Cache-Storage-Eintrag
@@ -1762,8 +1785,13 @@ export default function App() {
   };
 
   return (
-    <div style={wrap} className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal") + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "neon-noir" ? " kd-neon-noir" : "")}>
-      <ModusFx modus={einstellungen.modus} />
+    <div style={wrap}
+      data-kd-effect={deepSpaceSichtbar ? "deep-space-horror" : undefined}
+      data-kd-deep-space-test={deepSpaceTestmodusAktiv ? "aktiv" : undefined}
+      className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal")
+        + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "neon-noir" || deepSpaceTestmodusAktiv ? " kd-neon-noir" : "")
+        + (deepSpaceSichtbar ? " kd-deep-space-horror" : "")}>
+      <ModusFx modus={effektiverModus} deepSpaceTest={deepSpaceTestmodusAktiv} />
       <div className="kd-app" data-session-mode={session.mode}>
       {startModalOffen && (
         <StartWahl onWaehle={waehleStart}

@@ -1,5 +1,6 @@
 import React from "react";
 import { NeonNoirOverlay } from "./NeonNoirOverlay.jsx";
+import { DeepSpaceHorrorOverlay } from "./DeepSpaceHorrorOverlay.jsx";
 
 /* ---- Egg-Modus-Overlays (rein dekorativ) ----
    Farbwelt = tokens.js; hier liegen nur Textur und Kulisse.
@@ -90,8 +91,9 @@ function ShowaFx() {
   );
 }
 
-export function ModusFx({ modus }) {
+export function ModusFx({ modus, deepSpaceTest = false }) {
   if (modus === "showa") return <ShowaFx />;
   if (modus === "neon-noir") return <NeonNoirOverlay />;
+  if (modus === "deep-space-horror") return <DeepSpaceHorrorOverlay testPanel={deepSpaceTest} />;
   return null;
 }

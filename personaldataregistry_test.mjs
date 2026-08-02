@@ -39,6 +39,8 @@ check("Restore leitet exakt dieselbe Registerliste ab",
 check("Auth, Katalogcache und Demo-Markierung stehen nicht im Register",
   ["kd:auth:session", ST.K.programm, ST.K.demoSeed, ST.K.katalogKey]
     .every((key) => !P.PERSONAL_DATA_KEYS.includes(key)));
+check("Deep-Space-Rhythmus bleibt außerhalb von Profil-Sync und Backup",
+  P.PERSONAL_DATA_KEYS.every((key) => !String(key).startsWith("kd:deep-space-horror:rhythmus:")));
 
 /* Vollständiges Decode/Validate muss fertig sein, bevor irgendein Topf
    geschrieben wird. Ein spätes kaputtes Feld darf den frühen Master nicht

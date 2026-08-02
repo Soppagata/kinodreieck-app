@@ -154,6 +154,7 @@ check("Klaatu: deterministisch + robust (null/leer -> false, kein Throw)",
    die Engines sind weiterhin korrekt und getestet, nur nicht verdrahtet. */
 check("Pause: EGG_AKTIV ist eingefroren (kein stilles Umschalten)", Object.isFrozen(EGG_AKTIV));
 check("Pause: Cage-Alphabet bleibt aktiv", EGG_AKTIV.cage === true);
+check("Deep Space Horror ist nach Neon-Abnahme aktiv", EGG_AKTIV.deepSpace === true);
 check("Pause: Teppich ist stillgelegt", EGG_AKTIV.teppich === false);
 check("Pause: Star-Wars-Crawl/4.-Mai ist stillgelegt", EGG_AKTIV.crawl === false);
 check("Pause: Klaatu→Necronomicon ist stillgelegt", EGG_AKTIV.klaatu === false);

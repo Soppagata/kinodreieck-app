@@ -12,6 +12,7 @@ export const EGGS_ENABLED = true;
    bleiben unverändert und getestet — pausiert ist nur die App-Verdrahtung. */
 export const EGG_AKTIV = Object.freeze({
   cage: true,      // Cage-Alphabet: bleibt aktiv
+  deepSpace: true, // flüchtiger Horror-Effekt innerhalb von Neon Noir
   teppich: false,  // Teppich-Szene: pausiert (Überarbeitung)
   crawl: false,    // Star-Wars-Crawl + 4.-Mai-Thema: pausiert (Überarbeitung)
   klaatu: false,   // Klaatu→Necronomicon: pausiert (Überarbeitung)

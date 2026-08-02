@@ -1,7 +1,7 @@
 # Kinodreieck – Funktionsbericht und Bedienungsanleitung
 
-Stand: 31. Juli 2026
-Geltungsbereich: aktueller Quellstand auf `codex/etappe-9a-distribution`
+Stand: 2. August 2026
+Geltungsbereich: aktueller Quellstand auf `codex/deep-space-horror`
 
 Dieser Bericht beschreibt die Funktionen, die in der aktuellen Anwendung
 tatsächlich erreichbar sind. Er ist zugleich Bedienungsanleitung und grobe
@@ -996,6 +996,31 @@ dunklen Grundthema schaltet der erscheinende Knopf Neon Noir ein, im hellen
 Grundthema Showa. Derselbe Knopf schaltet den Sondermodus wieder aus. Beide
 Funktionen sind rein optisch und verändern keine Fachdaten.
 
+Ist das unsichtbare Achievement `deep-space-horror` bereits freigeschaltet,
+kann beim Eintritt in Neon Noir mit einer Chance von 1:10 stattdessen für die
+laufende App-Sitzung ein industrieller Raumschiffkorridor erscheinen. Das
+gesamte Interface wechselt dabei auf eine kantige Bordcomputer-Gestaltung mit
+technischer Monospace-Schrift, kalten Metallplatten und bernsteinfarbenen
+Kontrolllichtern. Kurze, deutlich wahrnehmbare Lichtaussetzer erfassen in
+unregelmäßig wirkenden Abständen Kulisse, Schrift und Bedienelemente gemeinsam.
+Ein fallender Funkenregen aus einem beschädigten Kabel wirft zusätzlich einen
+kurzen warmen Lichtstoß über das Interface. Kalter Dampf und eine langsam
+rotierende orange Warnleuchte beleben die räumliche Tiefe, ohne ein sichtbares
+Wesen zu zeigen. Die Bedrohung bleibt dadurch rein atmosphärisch; Kreaturen- und
+Bluteffekte sind bewusst nicht Bestandteil der Kulisse.
+
+Auf kleinen Viewports wird der Korridor zu einem engen Wartungsschacht mit
+eigenständiger Perspektive. Reduzierte Bewegung zeigt ein vollständig statisches
+Bild. Reload, Schließen der App oder Ausschalten des versteckten Modus beendet
+den Effekt. In den Einstellungen bleibt ausschließlich Neon Noir gespeichert.
+
+Für die lokale visuelle Prüfung öffnet der Vite-Entwicklungsserver unter
+`?deep-space-test=1` eine kleine Animationswerkstatt. Sie kann Dampf,
+Lichtflackern, Funkenregen und Warnleuchte einzeln wiederholen, pausieren oder in
+der normalen Zufallsfolge zeigen. Dieser Testmodus ist an
+`import.meta.env.DEV` gebunden, verändert weder Einstellungen noch Rhythmus und
+ist im Produktionsbuild nicht aktivierbar.
+
 ### 12.17 Achievements und Cage-Alphabet
 
 Achievements werden lokal aus eindeutigen Titel-/Jahr-Treffern der Mediathek
@@ -1008,6 +1033,23 @@ Zufallschance eine goldene Karte erscheinen. Sie wählt aus den qualifizierten
 Filmen nur solche, die gerade im Kino, im physischen Besitz oder auf einem
 ausgewählten Streamingdienst verfügbar sind, und kann zum betreffenden
 Eintrag springen. Bei reduzierter Bewegung wird die Animation übersprungen.
+
+Das ebenfalls unsichtbare Achievement `deep-space-horror` wird ab vier
+verschiedenen Filmen aus der hinterlegten Liste von Alien-Filmen, *Prometheus*,
+*Event Horizon* und *2001: A Space Odyssey* freigeschaltet. Deutsche und
+originale Titel werden nur mit dem jeweils korrekten Erscheinungsjahr erkannt;
+doppelte Mediathekseinträge zählen einmal. Eine neue Freischaltung meldet vier
+Sekunden lang ausschließlich `Easteregg freigeschalten!`; bereits passende
+Altbestände werden beim ersten Lauf still übernommen.
+
+Nach der Freischaltung wird nur beim Start mit gespeichertem Neon Noir oder
+beim bewussten Einschalten gewürfelt. Der erste Versuch ist sofort möglich,
+ein Fehlwurf setzt den nächsten Termin drei lokale Kalendertage später, ein
+Treffer fünf Tage später; anschließend gilt wieder der Dreitagesrhythmus. Am
+31. Oktober ist trotz laufender Sperre ein einzelner zusätzlicher Versuch
+möglich. Pro Tag und Profil beziehungsweise Gast gibt es höchstens einen Wurf.
+Dieser Rhythmus bleibt gerätelokal und wird weder synchronisiert noch
+exportiert; dauerhaft synchronisiert wird nur das Achievement.
 
 Weitere vorbereitete Inszenierungen wie Teppich, Star-Wars-Crawl und
 Necronomicon sind im aktuellen Produkt pausiert und daher keine erreichbaren
