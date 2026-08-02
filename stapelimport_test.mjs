@@ -36,8 +36,10 @@ check("Digitale Käufe bleiben von Streaming-Abos unterscheidbar", uebernahme.me
 check("Importierte Titel bleiben trotz KI-Voreindruck unbewertet", uebernahme.mediathek.every((e) => e.bewertung === null && e.kategorie === null));
 const prompt = externerStapelPrompt("Max");
 check("Externer Workflow ist eine versionierte Markdown-Datei", EXTERNER_STAPEL_WORKFLOW_DATEINAME === `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md` && prompt.startsWith("# Kinodreieck") && prompt.includes(`\`${EXTERNER_STAPEL_WORKFLOW_VERSION}\``) && prompt.endsWith("\n"));
-check("Externer Workflow sammelt vor dem Abschluss stapelweise", /Stapel N erfasst/.test(prompt) && /SAMMLUNG ABSCHLIESSEN/.test(prompt) && /vorher keine Gesamtliste und kein JSON/.test(prompt));
+check("Externer Workflow sammelt vor dem Abschluss stapelweise", /Foto N: X Titel erkannt/.test(prompt) && /SAMMLUNG ABSCHLIESSEN/.test(prompt) && /noch kein JSON und keine Gesamtliste/.test(prompt));
 check("Externer Workflow bleibt auf verwertbare Medienfelder begrenzt", /film.*serie.*musik/.test(prompt) && /dvd.*bluray.*cd.*unklar/.test(prompt) && /Keine Bewertungen, Genres, Originaltitel/.test(prompt));
 check("Externer Workflow erhält den bestehenden Importvertrag", /\"kandidaten\"/.test(prompt) && /\"vorbeurteilung\":\"offen\"/.test(prompt) && /\"begruendung\":\"\"/.test(prompt) && /höchstens 50 Kandidaten/.test(prompt));
+check("Free-tauglicher Fotoweg nutzt drei lesbare Abschnitte mit Überlappung", /bis zu drei Fotos/.test(prompt) && /40–50 Rücken/.test(prompt) && /3–5 bereits fotografierte Rücken überlappen/.test(prompt));
+check("Fotoweg belegt Bearbeitungsende und fordert fehlende Titel als Text an", /Abgedeckter Bereich/.test(prompt) && /Auswertung gestoppt nach/.test(prompt) && /offenen Stellen und mögliche Lücken/.test(prompt) && /zeilenweise als Text/.test(prompt));
 
 console.log(`stapelimport_test: ${ok} Checks bestanden.`);

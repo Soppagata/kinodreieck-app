@@ -126,7 +126,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
 
     <details className="kd-stapel-extern">
       <summary>Regalfotos extern mit GPT, Claude oder einer anderen KI lesen</summary>
-      <p>Dieser Weg verursacht im Kinodreieck keine KI-Kosten. Kopiere den kompakten Markdown-Workflow in einen frischen KI-Chat oder lade ihn als Datei herunter. Das externe Modell führt dich durch die Fotos und erstellt danach das JSON für den Import.</p>
+      <p>Dieser Weg verursacht im Kinodreieck keine KI-Kosten. Der Workflow ist für bis zu drei hochauflösende Regalfotos mit je etwa 40–50 lesbaren Rücken gedacht. Die KI meldet bearbeitete Bereiche und Lücken; Fehlendes ergänzt du vor dem JSON-Export kurz als Text. Bei kostenlosen KI-Zugängen den Workflow besser kopieren statt als Datei hochladen, damit die Datei-Uploads für deine Fotos frei bleiben.</p>
       <textarea ref={promptRef} readOnly value={externerWorkflow} rows={9} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
       <div className="kd-stapel-aktionen">
         <button style={btnStyle(true)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Workflow kopieren"}</button>

@@ -2,7 +2,7 @@ import { norm } from "./match.js";
 
 export const STAPEL_MAX_ZEILEN = 60;
 export const STAPEL_MAX_ZEICHEN = 12_000;
-export const EXTERNER_STAPEL_WORKFLOW_VERSION = "mediathek-v1";
+export const EXTERNER_STAPEL_WORKFLOW_VERSION = "mediathek-v2";
 export const EXTERNER_STAPEL_WORKFLOW_DATEINAME = `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md`;
 export const STAPEL_TYPEN = ["film", "serie", "musik"];
 export const STAPEL_STANDARD_QUELLEN = [
@@ -126,13 +126,24 @@ export function externerStapelPrompt() {
 **Protokoll:** \`${EXTERNER_STAPEL_WORKFLOW_VERSION}\`
 
 ## Ziel
-Erfasse meine Filme, Serien und Musikalben aus Fotos von DVDs, Blu-rays und CDs oder aus eingefügten Titellisten. Erzeuge daraus importierbare JSON-Dateien für das Kinodreieck. Arbeite knapp und erfinde nichts.
+Erfasse meine Filme, Serien und Musikalben aus höchstens drei hochauflösenden Regalfotos sowie aus meinen Textkorrekturen. Erzeuge daraus importierbare JSON-Dateien für das Kinodreieck. Arbeite gründlich, aber antworte knapp und erfinde nichts.
+
+## Aufnahme-Anleitung für deine erste Antwort
+Fordere mich auf, bis zu drei Fotos nacheinander zu senden. Richtwert: 40–50 Rücken pro Foto, aber nur wenn die Schrift beim Hineinzoomen lesbar bleibt. Die Fotos sollen frontal, scharf, gut beleuchtet, nicht als Collage und möglichst ohne Spiegelung aufgenommen sein. Benachbarte Fotos sollen 3–5 bereits fotografierte Rücken überlappen. Diese Überlappung dient nur der Vollständigkeitskontrolle und wird später dedupliziert.
 
 ## Ablauf
-1. Antworte auf diese erste Nachricht nur mit einer kurzen Anleitung: Ich soll gut lesbare Fotos oder Titellisten in mehreren Nachrichten senden. Du sammelst alles, bis ich **SAMMLUNG ABSCHLIESSEN** schreibe.
-2. Bestätige jeden Stapel nur mit: \`Stapel N erfasst: X sicher, Y unklar.\` Fordere danach den nächsten Stapel oder das Abschlusswort an. Gib vorher keine Gesamtliste und kein JSON aus.
-3. Beim Abschluss: Dubletten desselben Werks zusammenführen, Titel bereinigen und das Ergebnis prüfen. Keine Bewertungen, Genres, Originaltitel, Inhaltsangaben oder Filmkennungen ergänzen.
-4. Stelle das Ergebnis als herunterladbare \`.json\`-Datei bereit. Falls das nicht möglich ist, gib ausschließlich einen JSON-Codeblock aus. Bei mehr als 50 Kandidaten: mehrere nummerierte Dateien mit je höchstens 50 Kandidaten.
+1. Antworte auf diese erste Nachricht ausschließlich mit der kurzen Aufnahme-Anleitung. Beginne erst nach meinem ersten Foto oder einer Titelliste.
+2. Vergib je Foto die ID \`Foto 1\`, \`Foto 2\` oder \`Foto 3\`. Prüfe jede sichtbare Regalreihe von links nach rechts und die Reihen von oben nach unten. Nutze die höchste verfügbare Bildgenauigkeit.
+3. Bestätige jedes Foto knapp in diesem Format:
+   - \`Foto N: X Titel erkannt; Y Stellen unklar.\`
+   - \`Abgedeckter Bereich: [erster sicherer Titel] → [letzter sicherer Titel].\`
+   - \`Offene Stellen: [Reihe/ungefähre Position + sichtbare Textreste oder Beschreibung].\`
+   - Falls du nicht bis zum Bildende gekommen bist: \`Auswertung gestoppt nach [Titel/Position]; ab dort bitte per Text ergänzen.\`
+   Zähle nur zur Orientierung und behaupte nie Vollständigkeit, wenn Bildteile nicht geprüft oder lesbar sind. Gib noch kein JSON und keine Gesamtliste aus.
+4. Erkenne die Überlappung zum vorigen Foto anhand gemeinsamer Titel. Melde kurz, ob der Anschluss plausibel ist oder zwischen welchen Ankertiteln wahrscheinlich eine Lücke besteht.
+5. Nach dem letzten Foto: Fasse ausschließlich die offenen Stellen und mögliche Lücken zusammen. Bitte mich, fehlende oder falsch gelesene Titel zeilenweise als Text zu korrigieren. Übernimm diese Korrekturen mit Vorrang.
+6. Sammle alles, bis ich **SAMMLUNG ABSCHLIESSEN** schreibe. Dann Dubletten desselben Werks zusammenführen, Titel bereinigen und das Ergebnis prüfen. Keine Bewertungen, Genres, Originaltitel, Inhaltsangaben oder Filmkennungen ergänzen.
+7. Stelle das Ergebnis als herunterladbare \`.json\`-Datei bereit. Falls das nicht möglich ist, gib ausschließlich einen JSON-Codeblock aus. Bei mehr als 50 Kandidaten: mehrere nummerierte Dateien mit je höchstens 50 Kandidaten.
 
 ## Erkennungsregeln
 - Erfasse nur lesbare DVD-, Blu-ray- und CD-Titel. Ignoriere Poster, Tickets, Kinotermine, Spiele und andere Gegenstände.
@@ -142,7 +153,7 @@ Erfasse meine Filme, Serien und Musikalben aus Fotos von DVDs, Blu-rays und CDs 
 - \`quelle\`: \`dvd\`, \`bluray\`, \`cd\` oder \`unklar\`.
 - \`staffeln\`: bei Serien sichtbare Staffelnummern als kurzer String, sonst \`null\`.
 - \`sicherheit\`: \`hoch\`, \`mittel\` oder \`niedrig\`.
-- Unsichere Lesungen nicht erraten: bestmöglichen Kandidaten mit niedriger Sicherheit erfassen und die Stelle kurz in \`warnungen\` nennen. Maximal 8 Warnungen je Datei.
+- Unsichere Lesungen nicht erraten: nur einen plausibel lesbaren Kandidaten mit niedriger Sicherheit erfassen. Völlig unlesbare Rücken bleiben aus \`kandidaten\` und werden positionsbezogen in \`warnungen\` zusammengefasst. Maximal 8 Warnungen je Datei.
 - \`vorbeurteilung\` ist immer \`offen\`; \`begruendung\` ist immer leer.
 
 ## Exaktes Ausgabeformat
