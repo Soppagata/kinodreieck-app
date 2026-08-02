@@ -76,6 +76,7 @@ export function StreamingTab({
   const [nurWunsch, setNurWunsch] = useState(false);
   const [suche, setSuche] = useState("");
   const [sortE, setSortE] = useState("relevanz");
+  const [sortRichtungE, setSortRichtungE] = useState("ab");
   const [genreE, setGenreE] = useState(null);
   const [dekadeE, setDekadeE] = useState(null);
   const [typE, setTypE] = useState(null);
@@ -334,14 +335,29 @@ export function StreamingTab({
     if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
     if (suche.trim()) { const nq = norm(suche); l = l.filter((t) => norm(t.titel || "").includes(nq)); }
-    const s = {
-      relevanz: (a, b) => (b.relevanz ?? -1) - (a.relevanz ?? -1),
-      jahr: (a, b) => (b.jahr || 0) - (a.jahr || 0),
-      score: (a, b) => (b.user_score || 0) - (a.user_score || 0),
-      titel: (a, b) => (a.titel || "").localeCompare(b.titel || "", "de"),
+    const passungRang = (t) => ({ hoch: 3, mittel: 2, gering: 1 }[passungStufe(t)] || 0);
+    const werte = {
+      relevanz: (t) => [passungRang(t), Number.isFinite(t.relevanz) ? t.relevanz : null],
+      jahr: (t) => [Number.isFinite(t.jahr) ? t.jahr : null],
+      score: (t) => [Number.isFinite(t.user_score) ? t.user_score : null],
+      titel: (t) => [t.titel || ""],
     };
-    return [...l].sort(s[sortE] || s.relevanz);
-  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, suche, sortE, entdeckenStatus, zeigeErledigte, nurRelevant, fokusOverride]);
+    const richtung = sortRichtungE === "auf" ? 1 : -1;
+    const vergleich = (a, b) => {
+      const av = (werte[sortE] || werte.relevanz)(a);
+      const bv = (werte[sortE] || werte.relevanz)(b);
+      for (let i = 0; i < Math.max(av.length, bv.length); i++) {
+        const x = av[i] ?? null; const y = bv[i] ?? null;
+        if (x == null && y != null) return 1;
+        if (x != null && y == null) return -1;
+        if (x === y) continue;
+        if (typeof x === "string" || typeof y === "string") return String(x).localeCompare(String(y), "de") * richtung;
+        return (x - y) * richtung;
+      }
+      return (a.titel || "").localeCompare(b.titel || "", "de");
+    };
+    return [...l].sort(vergleich);
+  }, [entdecken, entdeckenDa, dienstOk, schnellOk, genreE, dekadeE, typE, suche, sortE, sortRichtungE, entdeckenStatus, zeigeErledigte, nurRelevant, fokusOverride]);
   // Bei Filterwechsel wieder bei 200 anfangen (sonst würden Tausende gerendert).
   useEffect(() => { setSichtbarE(200); }, [entdeckenListe]);
 
@@ -519,7 +535,7 @@ export function StreamingTab({
                     <span style={{ flex: 1, minWidth: 180 }}>
                       <strong style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17 }}>{h.titel}</strong>
                       <span style={{ ...mono, color: T.wolfram, marginLeft: 8 }}>Staffel {h.staffel_verfuegbar} verfügbar</span>
-                      {h.dienste.length > 0 && <span style={{ ...mono, display: "block", marginTop: 2 }}>{h.dienste.join(", ")}</span>}
+                      {h.dienste.length > 0 && <span style={{ ...mono, display: "block", marginTop: 2 }}>{gruppiereDienstBadges(h.dienste).map((d) => d.label).join(", ")}</span>}
                     </span>
                     <button style={{ ...btnStyle(true), fontSize: 12, padding: "6px 10px" }} onClick={() => bestaetigeHinweis(h)}>
                       Als neuen Stand bestätigen
@@ -538,8 +554,14 @@ export function StreamingTab({
                 <option value="relevanz">Sortierung: Passung</option>
                 <option value="jahr">Jahr</option>
                 <option value="score">User-Score</option>
-                <option value="titel">Titel A–Z</option>
+                <option value="titel">Titel</option>
               </select>
+              <button type="button" style={{ ...btnStyle(false), minWidth: 42, padding: "7px 10px" }}
+                onClick={() => setSortRichtungE((r) => r === "ab" ? "auf" : "ab")}
+                aria-label={sortRichtungE === "ab" ? "Absteigend sortiert; aufsteigend wechseln" : "Aufsteigend sortiert; absteigend wechseln"}
+                title={sortRichtungE === "ab" ? "Absteigend" : "Aufsteigend"}>
+                {sortRichtungE === "ab" ? "↓" : "↑"}
+              </button>
             </span>
             <button style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}

@@ -33,8 +33,8 @@ export function gruppiereDienstBadges(dienste, { kompakt = false } = {}) {
   const gruppen = new Map();
   for (const roh of dienste || []) {
     const label = AMAZON_CHANNEL.test(roh)
-      ? kurzerDienstname(roh)
-      : kompakt ? kurzerDienstname(roh) : roh;
+      ? (kompakt ? "Amazon Channel" : kurzerDienstname(roh))
+      : kurzerDienstname(roh);
     if (!gruppen.has(label)) gruppen.set(label, []);
     gruppen.get(label).push(roh);
   }

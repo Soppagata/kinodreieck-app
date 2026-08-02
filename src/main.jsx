@@ -5,6 +5,7 @@ import App from "./App.jsx";
 import { AppErrorBoundary } from "./components/AppErrorBoundary.jsx";
 import { sessionCoordinator } from "./services/sessionCoordinator.js";
 import { EinstiegsGate } from "./components/EinstiegsGate.jsx";
+import { AppUpdateHinweis } from "./components/AppUpdateHinweis.jsx";
 
 /* Startreihenfolge (Etappe 3):
    1. Sitzung laden/erneuern — ohne gespeicherte Anmeldung bleibt es beim Gast.
@@ -23,6 +24,7 @@ async function boot() {
   root.render(
     <StrictMode>
       <AppErrorBoundary>
+        <AppUpdateHinweis />
         <EinstiegsGate><App /></EinstiegsGate>
       </AppErrorBoundary>
     </StrictMode>,
@@ -45,6 +47,8 @@ if (typeof document !== "undefined" && typeof document.addEventListener === "fun
    und jsdom fehlt navigator.serviceWorker → übersprungen, kein Testbruch). */
 if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => { /* PWA optional */ });
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js", {
+      updateViaCache: "none",
+    }).catch(() => { /* PWA optional */ });
   });
 }

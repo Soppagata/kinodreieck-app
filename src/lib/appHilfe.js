@@ -8,6 +8,7 @@ const EINTRAEGE = Object.freeze([
   { woerter: ["vokabular", "stimmung", "suchwort"], titel: "Eigenes Suchvokabular", text: "Öffne Settings → Suche & Vokabular.", ziel: "daten" },
   { woerter: ["startbereich", "startseite", "dashboard"], titel: "Startbereich wählen", text: "Öffne Settings → Darstellung & Verhalten → Startbereich.", ziel: "daten" },
   { woerter: ["import", "masterliste", "programmdatei"], titel: "Daten importieren", text: "Masterliste und Notfall-Importe findest du in Settings → Masterliste beziehungsweise Erweitert.", ziel: "daten" },
+  { woerter: ["neuen eintrag", "eintrag erstellen", "eintrag anlegen", "hinzufügen", "hinzufuegen"], titel: "Neuen Eintrag erstellen", text: "Öffne die Mediathek und tippe auf „+ Eintrag hinzufügen“. Dort kannst du Film oder Serie samt Quelle erfassen; technische Filmkennungen brauchst du dafür nicht.", ziel: "mediathek" },
   { woerter: ["löschen", "loeschen", "eintrag entfernen"], titel: "Mediathek-Eintrag löschen", text: "Öffne den Eintrag in der Mediathek und wähle „Eintrag löschen“.", ziel: "mediathek" },
   { woerter: ["gesehen", "erledigt"], titel: "Gesehen markieren", text: "Im Bereich Streaming → Entdecken setzt das Häkchen den Gesehen-Status. Dabei kannst du den Titel auch in die Mediathek übernehmen.", ziel: "streaming" },
 ]);

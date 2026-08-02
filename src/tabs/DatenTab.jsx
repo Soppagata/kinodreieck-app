@@ -47,7 +47,7 @@ export function DatenTab({
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
   importiereBesitz, besitzImportBericht = null,
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
-  mustwatch = [], addFilm, addMustwatch,
+  addFilm, addFilme,
   onKontoDatenGeaendert,
 }) {
   /* Ein verbundener Zugang heißt seit der Zugriffstrennung NICHT mehr, dass
@@ -245,9 +245,9 @@ export function DatenTab({
 
       <Klappe titel="Stapelimport" tour="ki-ingestion">
         <div style={kasten}>
-          <h2 style={h2}>Fotos, Screenshots & Listen</h2>
-          <StapelImport master={master || []} mustwatch={mustwatch}
-            addFilm={addFilm} addMustwatch={addMustwatch} autorName={autorName}
+          <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
+          <StapelImport master={master || []}
+            addFilm={addFilm} addFilme={addFilme} autorName={autorName}
             kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.stapelimport !== false}
             setErr={setErr} />
         </div>
@@ -338,9 +338,6 @@ export function DatenTab({
                   <div><dt>Anzeige</dt><dd>{Number.isFinite(s.angezeigt) && Number.isFinite(s.gesamt)
                     ? `${s.angezeigt} von ${s.gesamt} Filmen · ${s.fensterTage || 4} Tage`
                     : details.find((x) => x.startsWith("Anzeige:"))?.replace(/^Anzeige:\s*/, "") || `${programm.filme?.length || 0} Filme`}</dd></div>
-                  <div><dt>Datenhinweise</dt><dd>{Number.isFinite(s.warnungen)
-                    ? `${s.warnungen} Hinweise im Quell-JSON`
-                    : details.find((x) => /Warnung\(en\)/.test(x)) || "keine gemeldet"}</dd></div>
                   <div><dt>Speicher</dt><dd>{programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
                 </dl>
               </>

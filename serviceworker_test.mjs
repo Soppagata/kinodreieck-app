@@ -21,12 +21,18 @@ const caches = {
 };
 
 let fetchImpl = async () => { throw new Error("fetch nicht gesetzt"); };
+let skipWaitingAufrufe = 0;
+let claimAufrufe = 0;
+const clientNachrichten = [];
 const self = {
   location: { origin: "https://kino.example" },
   registration: { scope: "https://kino.example/" },
   addEventListener(name, fn) { listeners[name] = fn; },
-  async skipWaiting() {},
-  clients: { async claim() {} },
+  async skipWaiting() { skipWaitingAufrufe++; },
+  clients: {
+    async claim() { claimAufrufe++; },
+    async matchAll() { return [{ postMessage(nachricht) { clientNachrichten.push(nachricht); } }]; },
+  },
 };
 
 vm.runInNewContext(readFileSync("public/sw.js", "utf8"), {
@@ -61,18 +67,29 @@ async function fetchEvent(req) {
   return response;
 }
 
-speicher.set("kd-shell-v2", new FakeCache());
-speicher.set("kd-shell-v3", new FakeCache());
+const AKTUELLER_CACHE = "kd-shell-v3-__KD_BUILD_VERSION__";
+fetchImpl = async () => new Response("shell", { status: 200 });
+let installation;
+listeners.install({ waitUntil(p) { installation = Promise.resolve(p); } });
+await installation;
+check("Install legt die aktuelle Shell an und übernimmt den Worker ohne Seitennavigation",
+  speicher.has(AKTUELLER_CACHE) && skipWaitingAufrufe === 1);
+
+speicher.set("kd-shell-v2-alt", new FakeCache());
 speicher.set("kinodreieck-katalog-v1", new FakeCache());
 let aktivierung;
 listeners.activate({ waitUntil(p) { aktivierung = Promise.resolve(p); } });
 await aktivierung;
 check("Activate löscht nur alte App-Shell-Caches",
-  !speicher.has("kd-shell-v2") && speicher.has("kd-shell-v3"));
+  !speicher.has("kd-shell-v2-alt") && speicher.has(AKTUELLER_CACHE));
 check("Activate bewahrt den getrennten Katalog-Fallback",
   speicher.has("kinodreieck-katalog-v1"));
+check("Activate übernimmt Clients und meldet die aktive Build-Version",
+  claimAufrufe === 1 && clientNachrichten.length === 1
+  && clientNachrichten[0].type === "KD_BUILD_ACTIVATED"
+  && clientNachrichten[0].buildVersion === "__KD_BUILD_VERSION__");
 
-const shell = await caches.open("kd-shell-v3");
+const shell = await caches.open(AKTUELLER_CACHE);
 const jsonReq = anfrage("https://kino.example/programm.json");
 await shell.put(jsonReq, new Response('{"stand":"alt"}'));
 fetchImpl = async () => new Response('{"stand":"neu"}', { status: 200 });
@@ -82,6 +99,14 @@ check("Aktuelle JSON-Daten sind network-first", (await res.json()).stand === "ne
 fetchImpl = async () => { throw new Error("offline"); };
 res = await fetchEvent(jsonReq);
 check("JSON fällt offline auf den letzten gültigen Stand zurück", (await res.json()).stand === "neu");
+
+const metaReq = anfrage("https://kino.example/build-meta.json?kd-check=1");
+await shell.put(metaReq, new Response('{"buildVersion":"alt"}'));
+fetchImpl = async () => new Response('{"buildVersion":"neu"}', { status: 200 });
+res = await fetchEvent(metaReq);
+check("Build-Metadaten sind immer network-only", (await res.json()).buildVersion === "neu");
+check("Build-Metadaten werden nie in der alten Shell festgehalten",
+  (await (await shell.match(metaReq)).json()).buildVersion === "alt");
 
 const apiReq = anfrage("https://kino.example/api/session", {
   headers: { Authorization: "Bearer browser-session" },

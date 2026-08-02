@@ -5,6 +5,10 @@ export default defineConfig({
   testMatch: "mobile-layout.spec.mjs",
   fullyParallel: false,
   workers: 1,
+  // GitHub-Runner verlieren WebKit gelegentlich komplett ("Target crashed").
+  // Ein einzelner Wiederholungsversuch fängt nur diesen Infrastruktur-Flake ab;
+  // reproduzierbare Layout- oder Funktionsfehler bleiben weiterhin rot.
+  retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: { timeout: 8_000 },
   use: {

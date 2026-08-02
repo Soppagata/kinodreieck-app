@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   buildMetaFehler,
   demoKatalogFehler,
+  serviceWorkerBuildFehler,
   serviceWorkerRevalidiert,
 } from "./tools/deployment_contract.mjs";
 
@@ -41,7 +42,10 @@ check("assets/: .woff2-Dateien vorhanden", assets.some((f) => f.endsWith(".woff2
 /* 3) PWA-Dateien im Deploy vorhanden + SW-Regeln aktuell. */
 check("dist/sw.js vorhanden", existsSync(join(DIST, "sw.js")));
 const sw = existsSync(join(DIST, "sw.js")) ? readFileSync(join(DIST, "sw.js"), "utf8") : "";
-check("sw.js: versionierter Cache-Name (v2+)", /kd-shell-v(?!1\b)\d+/.test(sw));
+const erwarteteBuildVersion = String(process.env.VITE_BUILD_VERSION || "local").trim();
+check("sw.js: Shell-Cache ist an denselben Build wie die App gebunden",
+  serviceWorkerBuildFehler(sw, erwarteteBuildVersion) === null
+  && !sw.includes("__KD_BUILD_VERSION__"));
 check("sw.js: .json-Datendateien network-first (kein Einfrieren)", sw.includes('endsWith(".json")'));
 check("sw.js: gehashte JS-/CSS-App-Shell wird vorab gecacht",
   /PRECACHE[^\n]+assets\/[^"]+\.js/.test(sw) && /PRECACHE[^\n]+assets\/[^"]+\.css/.test(sw));
@@ -94,7 +98,9 @@ check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
   && serviceWorkerRevalidiert("no-store"));
 check("Remote-Smoke erkennt eine feste Domain mit falschem Commit",
   buildMetaFehler({ format: 1, buildVersion: "alt" }, "neu") !== null
-  && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null);
+  && buildMetaFehler({ format: 1, buildVersion: "neu" }, "neu") === null
+  && serviceWorkerBuildFehler('const BUILD_VERSION = "alt";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") !== null
+  && serviceWorkerBuildFehler('const BUILD_VERSION = "neu";\nconst CACHE = `kd-shell-v3-${BUILD_VERSION}`;', "neu") === null);
 check("Remote-Smoke stoppt ein Release ohne beide öffentlichen Demo-Zeilen",
   demoKatalogFehler(["manifest"])?.includes("programm_demo, streaming_demo")
   && demoKatalogFehler(["manifest", "programm_demo"])?.includes("streaming_demo")

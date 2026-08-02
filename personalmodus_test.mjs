@@ -328,12 +328,22 @@ function seedKatalog(w, start = "clean") {
   knopf(/^Leer starten$/)?.click(); await warte(100);
   check("B: erneute Wahl desselben Modus ist nicht destruktiv", !knopf(/^Demo ansehen$/) && dom.window.localStorage.getItem("kd:start") === "clean");
   const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
-  check("B: Foto-/Screenshot-Stapelimport ist sichtbar", !!stapelKlappe);
+  check("B: Text-Stapelimport ist sichtbar", !!stapelKlappe);
   if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(100); }
-  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+  const titelliste = [...doc.querySelectorAll("textarea")].find((t) => /Je Zeile ein Titel/.test(t.placeholder || ""));
+  check("B: Textimport nimmt eine einfache Titelliste an", !!titelliste && !!knopf(/^Nur Sammlung erfassen$/));
+  check("B: interne Kamera- und Bildupload-Aktionen sind entfernt", !knopf(/^Foto aufnehmen$/) && !knopf(/^Bilder wählen$/));
+  setWert(dom, titelliste, "Alien\nBlade Runner\nHeat\nArrival\nStalker");
+  knopf(/^Erfassen & vorbeurteilen$/)?.click(); await warte(100);
+  check("B: Vorbeurteilung fordert WIE, WAS und WARUM für fünf Beispiele",
+    doc.querySelectorAll('select[aria-label^="WIE für"]').length === 5
+      && doc.querySelectorAll('select[aria-label^="WAS für"]').length === 5
+      && doc.querySelectorAll('select[aria-label^="WARUM für"]').length === 5);
+  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
   if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(100); }
-  check("B: externer Stapelimport-Prompt öffnet sich",
-    [...doc.querySelectorAll("textarea")].some((t) => /Stapelimport in Kinodreieck/.test(t.value || "")) && !!knopf(/^Prompt kopieren$/));
+  check("B: externer Foto-Prompt öffnet sich",
+    [...doc.querySelectorAll("textarea")].some((t) => /Kinodreieck – Mediathek-Erfassung/.test(t.value || ""))
+      && !!knopf(/^Workflow kopieren$/) && !!knopf(/^Workflow \(\.md\) herunterladen$/));
   const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || ""));
   if (paste) {
     setWert(dom, paste, JSON.stringify({
@@ -417,7 +427,7 @@ function seedKatalog(w, start = "clean") {
   const { doc, text, knopf } = hilfen(dom);
   await warte(2600);
   knopf(/^Settings$/i)?.click(); await warte(400);
-  check("C: Demo übernimmt Max' Streamingdienste", /Netflix/.test(text()) && /Disney\+/.test(text()) && /Crunchyroll \(Prime\)/.test(text()));
+  check("C: Demo übernimmt Max' Streamingdienste in Settings mit ihren Rohbezeichnungen", /Netflix/.test(text()) && /Disney\+/.test(text()) && /Crunchyroll Premium \(Via Amazon Prime\)/.test(text()));
   const quellenSuche = doc.querySelector('input[placeholder^="Quelle suchen"]');
   if (quellenSuche) {
     setWert(dom, quellenSuche, "MUBI"); await warte(100);
@@ -586,7 +596,7 @@ function seedKatalog(w, start = "clean") {
   knopf(/^Settings$/i)?.click(); await warte(300);
   const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
   if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(100); }
-  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /Extern mit GPT, Claude/.test(s.textContent || ""));
+  const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
   if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(100); }
   const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || ""));
   if (paste) {

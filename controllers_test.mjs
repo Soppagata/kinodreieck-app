@@ -66,15 +66,16 @@ check("Filmlöschung löst Blog- und Must-Watch-Verweise ohne die Einträge zu l
 const dienstGruppen = gruppiereDienstBadges([
   "Prime Video", "MUBI (Via Amazon Prime)", "MUBI (Via Prime)", "Netflix",
 ], { kompakt: true });
-check("Amazon-Prime-Channels behalten kompakt ihren erkennbaren Dienstnamen",
+check("Amazon-Prime-Channels werden kompakt zu einem gemeinsamen Tag",
   JSON.stringify(dienstGruppen) === JSON.stringify([
     { label: "Prime Video", rohnamen: ["Prime Video"] },
-    { label: "MUBI (Prime)", rohnamen: ["MUBI (Via Amazon Prime)", "MUBI (Via Prime)"] },
+    { label: "Amazon Channel", rohnamen: ["MUBI (Via Amazon Prime)", "MUBI (Via Prime)"] },
     { label: "Netflix", rohnamen: ["Netflix"] },
   ]));
 check("App-Hilfe beantwortet Settings-Fragen ohne einen KI-Aufruf",
   appHilfeAntwort("Wo finde ich die Schriftgröße?")?.text.includes("Settings")
   && appHilfeAntwort("Wo kann ich einen Eintrag löschen?")?.ziel === "mediathek"
+  && appHilfeAntwort("Wo kann ich einen neuen Eintrag erstellen?")?.titel === "Neuen Eintrag erstellen"
   && appHilfeAntwort("Zeig mir Kino") === null);
 
 check("Katalogcontroller normalisiert ISO-Zeit und lehnt Müll ab",

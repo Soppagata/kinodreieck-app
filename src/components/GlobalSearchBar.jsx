@@ -11,6 +11,7 @@ export function GlobalSearchBar({
 }) {
   const [text, setText] = useState("");
   const [laeuft, setLaeuft] = useState(false);
+  const formRef = useRef(null);
   const eingabeRef = useRef(null);
   const dialogRef = useRef(null);
   const absenden = async (event) => {
@@ -28,6 +29,7 @@ export function GlobalSearchBar({
   useEffect(() => {
     if (!antwort) return undefined;
     const frame = requestAnimationFrame(() => {
+      if (document.activeElement === eingabeRef.current) return;
       const ersterTreffer = dialogRef.current?.querySelector("[data-globaler-suchtreffer], .kd-globalsuche-alle");
       ersterTreffer?.focus?.();
     });
@@ -43,8 +45,44 @@ export function GlobalSearchBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [antwort]);
 
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const form = formRef.current;
+    const eingabe = eingabeRef.current;
+    if (!viewport || !form || !eingabe) return undefined;
+    let frame = 0;
+    let basisHoehe = Math.max(window.innerHeight, viewport.height);
+    const aktualisiere = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const fokus = document.activeElement === eingabe;
+        if (!fokus) basisHoehe = Math.max(basisHoehe, window.innerHeight, viewport.height);
+        const tastaturOffen = fokus && basisHoehe - viewport.height > 120;
+        form.classList.toggle("tastatur-offen", tastaturOffen);
+        if (tastaturOffen) {
+          const hoehe = form.getBoundingClientRect().height;
+          form.style.setProperty("--kd-suche-viewport-top", `${Math.max(8, viewport.offsetTop + viewport.height - hoehe - 8)}px`);
+        } else form.style.removeProperty("--kd-suche-viewport-top");
+      });
+    };
+    viewport.addEventListener("resize", aktualisiere);
+    viewport.addEventListener("scroll", aktualisiere);
+    window.addEventListener("resize", aktualisiere);
+    eingabe.addEventListener("focus", aktualisiere);
+    eingabe.addEventListener("blur", aktualisiere);
+    aktualisiere();
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener("resize", aktualisiere);
+      viewport.removeEventListener("scroll", aktualisiere);
+      window.removeEventListener("resize", aktualisiere);
+      eingabe.removeEventListener("focus", aktualisiere);
+      eingabe.removeEventListener("blur", aktualisiere);
+    };
+  }, []);
+
   return (
-    <form className="kd-globalsuche" onSubmit={absenden} role="search" aria-label="Globale Suche in allen Bereichen" aria-busy={laeuft}>
+    <form ref={formRef} className={`kd-globalsuche${menuOffen ? " menue-offen" : ""}`} onSubmit={absenden} role="search" aria-label="Globale Suche in allen Bereichen" aria-busy={laeuft}>
       <span className="kd-visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {laeuft ? "Alle Bereiche werden durchsucht."
           : antwort ? `${antwort.gesamt} Suchergebnisse für ${antwort.frage}.` : ""}

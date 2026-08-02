@@ -154,7 +154,8 @@ export function ProfilAnsicht({
       {offen.length > 0 && <p style={{ ...klein, color: T.wolfram }}>{offen.length} {offen.length === 1 ? "Vorschlag wartet" : "Vorschläge warten"} auf deine Bestätigung.</p>}
       <div className="kd-profil-hauptaktionen">
         <button style={btnStyle(true)} onClick={() => setAendernOffen(true)}>Ändern</button>
-        <button style={{ ...btnStyle(false), fontSize: 13 }} onClick={() => setWiderrufOffen((v) => !v)}>Einwilligung widerrufen</button>
+        <button className="kd-profil-widerrufen" type="button" aria-label="Einwilligung widerrufen und Geschmacksprofil löschen"
+          title="Einwilligung widerrufen" onClick={() => setWiderrufOffen((v) => !v)}><IconDelete size={18} /><span className="kd-visually-hidden">Einwilligung widerrufen</span></button>
       </div>
       {widerrufOffen && <div style={{ background: T.saal, borderRadius: 6, padding: "12px 14px", marginTop: 12 }}>
         <p style={{ ...p, margin: "0 0 10px" }}>Das löscht dein Geschmacksprofil vollständig — alle {signale.length} bestätigten Angaben, offene Vorschläge, Filme, Achsen und nicht gedeuteten Angaben. Deine Bewertungen, deine Sammlung und alles andere bleiben unberührt.</p>

@@ -70,7 +70,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
           onClick={() => setListe([...liste, { eingabe: "", jahr: "", typ: "" }])}>+ Referenz</button>
       )}
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className="kd-blog-form-actions">
         <button style={btnStyle(true)} onClick={() => {
           if (!titel.trim() || !autor.trim() || !text.trim()) { setFehler("Titel, Autor und Text sind Pflicht."); return; }
           const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
@@ -78,7 +78,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
           }));
           onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
         }}>{vorlage ? "Speichern & neu abgleichen" : "Erstellen"}</button>
-        <button style={btnStyle(false)} onClick={onAbbrechen}>Abbrechen</button>
+        <button className="kd-blog-zurueck" style={btnStyle(false)} onClick={onAbbrechen} aria-label="Bearbeitung abbrechen und zurück">← Zurück</button>
       </div>
     </div>
   );
