@@ -340,7 +340,8 @@ function seedKatalog(w, start = "clean") {
   const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
   if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(100); }
   check("B: externer Foto-Prompt öffnet sich",
-    [...doc.querySelectorAll("textarea")].some((t) => /Mediathek.*im Kinodreieck/.test(t.value || "")) && !!knopf(/^Prompt kopieren$/));
+    [...doc.querySelectorAll("textarea")].some((t) => /Kinodreieck – Mediathek-Erfassung/.test(t.value || ""))
+      && !!knopf(/^Workflow kopieren$/) && !!knopf(/^Workflow \(\.md\) herunterladen$/));
   const paste = [...doc.querySelectorAll("textarea")].find((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || ""));
   if (paste) {
     setWert(dom, paste, JSON.stringify({

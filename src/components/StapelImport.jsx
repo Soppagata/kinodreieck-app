@@ -3,7 +3,7 @@ import { btnStyle, inputStyle } from "../lib/tokens.js";
 import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import {
-  STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
+  EXTERNER_STAPEL_WORKFLOW_DATEINAME, STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
   baueStapelPayload, baueStapelUebernahme, externerStapelPrompt,
   normalisiereStapelAntwort, vorbereiteTitelliste,
 } from "../lib/stapelimport.js";
@@ -30,6 +30,8 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const [kopiert, setKopiert] = useState(false);
   const [bericht, setBericht] = useState(null);
   const jsonRef = useRef(null);
+  const promptRef = useRef(null);
+  const externerWorkflow = useMemo(() => externerStapelPrompt(autorName), [autorName]);
 
   const listenStand = useMemo(() => {
     try { return { zeilen: vorbereiteTitelliste(liste), fehler: "" }; }
@@ -57,8 +59,22 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   };
 
   const kopierePrompt = async () => {
-    try { await navigator.clipboard.writeText(externerStapelPrompt(autorName)); setKopiert(true); setTimeout(() => setKopiert(false), 2000); }
-    catch { setErr("Kopieren ist blockiert. Markiere den Prompt bitte manuell."); }
+    try { await navigator.clipboard.writeText(externerWorkflow); setKopiert(true); }
+    catch {
+      promptRef.current?.select();
+      try { document.execCommand("copy"); setKopiert(true); }
+      catch { setErr("Kopieren ist blockiert. Markiere den Workflow bitte manuell."); }
+    }
+    setTimeout(() => setKopiert(false), 2000);
+  };
+
+  const ladePromptHerunter = () => {
+    const blob = new Blob([externerWorkflow], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = EXTERNER_STAPEL_WORKFLOW_DATEINAME;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const setzeBewertung = (titel, achse, wert) => setBewertungen((alt) => ({
@@ -110,9 +126,14 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
 
     <details className="kd-stapel-extern">
       <summary>Regalfotos extern mit GPT, Claude oder einer anderen KI lesen</summary>
-      <p>Dieser Weg verursacht im Kinodreieck keine KI-Kosten. Hänge Fotos deiner DVDs, Blu-rays und CDs beim externen Modell an, kopiere den Prompt und füge danach das JSON hier ein.</p>
-      <textarea readOnly value={externerStapelPrompt(autorName)} rows={8} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-      <div className="kd-stapel-aktionen"><button style={btnStyle(false)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Prompt kopieren"}</button><button style={btnStyle(false)} onClick={() => jsonRef.current?.click()}>JSON-Datei wählen</button></div>
+      <p>Dieser Weg verursacht im Kinodreieck keine KI-Kosten. Kopiere den kompakten Markdown-Workflow in einen frischen KI-Chat oder lade ihn als Datei herunter. Das externe Modell führt dich durch die Fotos und erstellt danach das JSON für den Import.</p>
+      <textarea ref={promptRef} readOnly value={externerWorkflow} rows={9} onFocus={(e) => e.target.select()} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+      <div className="kd-stapel-aktionen">
+        <button style={btnStyle(true)} onClick={kopierePrompt}>{kopiert ? "✓ Kopiert" : "Workflow kopieren"}</button>
+        <button style={btnStyle(false)} onClick={ladePromptHerunter}>Workflow (.md) herunterladen</button>
+      </div>
+      <p className="kd-stapel-importtitel">Fertiges Ergebnis aus dem KI-Chat</p>
+      <div className="kd-stapel-aktionen"><button style={btnStyle(false)} onClick={() => jsonRef.current?.click()}>JSON-Datei wählen</button></div>
       <input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(ladeExtern); e.target.value = ""; }} />
       <textarea value={externText} onChange={(e) => setExternText(e.target.value)} rows={4} placeholder="JSON-Antwort hier einfügen …" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
       <button style={btnStyle(false)} disabled={!externText.trim()} onClick={() => ladeExtern(externText)}>Antwort prüfen</button>

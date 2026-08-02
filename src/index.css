@@ -1102,6 +1102,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-stapel-kosten { font-family:'Space Mono',monospace; font-size:11px; line-height:1.55; opacity:.78; }
 .kd-stapel-extern { margin-top:16px; border-top:1px solid rgba(157,151,168,.3); padding-top:12px; }
 .kd-stapel-extern summary { cursor:pointer; color:#e3a63b; font-family:'Barlow Condensed',sans-serif; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.kd-stapel-importtitel { margin:16px 0 4px; padding-top:12px; border-top:1px solid rgba(157,151,168,.25); font-family:'Space Mono',monospace; font-size:11px !important; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .kd-stapel-vorschau { margin-top:16px; border:1px solid #e3a63b; border-radius:8px; padding:12px; }
 .kd-stapel-vorschau h3 { margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.05em; }
 .kd-stapel-warnung,.kd-stapel-dublette { color:#e3a63b; font-size:11px; }

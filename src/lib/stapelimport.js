@@ -2,6 +2,8 @@ import { norm } from "./match.js";
 
 export const STAPEL_MAX_ZEILEN = 60;
 export const STAPEL_MAX_ZEICHEN = 12_000;
+export const EXTERNER_STAPEL_WORKFLOW_VERSION = "mediathek-v1";
+export const EXTERNER_STAPEL_WORKFLOW_DATEINAME = `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md`;
 export const STAPEL_TYPEN = ["film", "serie", "musik"];
 export const STAPEL_STANDARD_QUELLEN = [
   { key: "unklar", label: "Gemischt / pro Zeile angegeben" },
@@ -118,15 +120,36 @@ export function baueStapelUebernahme(kandidaten) {
   return { mediathek, mustwatch: [] };
 }
 
-export function externerStapelPrompt(autor = "") {
-  return [
-    "Aufgabe: Erfasse meine Mediathek aus allen angehängten Fotos für den Import im Kinodreieck.",
-    "Lies ausschließlich eindeutig erkennbare Filme/Serien auf DVD oder Blu-ray sowie Musikalben auf CD. Ignoriere Poster, Tickets, Termine, Streaming, Spiele und unlesbare Medien. Keine Webrecherche, keine Ergänzungen aus Vermutungen; Dubletten zusammenführen.",
-    "Frage mich danach in einer Nachricht nach 5–10 kurzen Bewertungen erkannter Titel: WIE, WAS und WARUM jeweils 0–5. Nutze sie nur für vorsichtige Vorbeurteilungen der übrigen Titel. Der Import selbst bleibt unbewertet.",
-    "Gib nach meiner Antwort ausschließlich rohes JSON ohne Markdown mit exakt diesen Schlüsseln aus:",
-    '{"kandidaten":[{"titel":"","typ":"film","jahr":null,"quelle":"dvd","staffeln":null,"vorbeurteilung":"offen","begruendung":"","sicherheit":"hoch"}],"warnungen":[]}',
-    "Enums: typ=film|serie|musik; quelle=dvd|bluray|cd; vorbeurteilung=passt|offen|eher_nicht; sicherheit=hoch|mittel|niedrig.",
-    "Regeln: jahr=Ganzzahl|null und nur sichtbar/zweifelsfrei; staffeln=String|null nur bei Serien; ohne tragfähige Bewertungsbasis vorbeurteilung=offen und begruendung leer; max. 60 Kandidaten, 8 kurze Warnungen.",
-    `Autor: ${kurz(autor, 80) || "unbekannt"}. Keine internen Gedankengänge ausgeben.`,
-  ].join("\n");
+export function externerStapelPrompt() {
+  return `# Kinodreieck – Mediathek-Erfassung
+
+**Protokoll:** \`${EXTERNER_STAPEL_WORKFLOW_VERSION}\`
+
+## Ziel
+Erfasse meine Filme, Serien und Musikalben aus Fotos von DVDs, Blu-rays und CDs oder aus eingefügten Titellisten. Erzeuge daraus importierbare JSON-Dateien für das Kinodreieck. Arbeite knapp und erfinde nichts.
+
+## Ablauf
+1. Antworte auf diese erste Nachricht nur mit einer kurzen Anleitung: Ich soll gut lesbare Fotos oder Titellisten in mehreren Nachrichten senden. Du sammelst alles, bis ich **SAMMLUNG ABSCHLIESSEN** schreibe.
+2. Bestätige jeden Stapel nur mit: \`Stapel N erfasst: X sicher, Y unklar.\` Fordere danach den nächsten Stapel oder das Abschlusswort an. Gib vorher keine Gesamtliste und kein JSON aus.
+3. Beim Abschluss: Dubletten desselben Werks zusammenführen, Titel bereinigen und das Ergebnis prüfen. Keine Bewertungen, Genres, Originaltitel, Inhaltsangaben oder Filmkennungen ergänzen.
+4. Stelle das Ergebnis als herunterladbare \`.json\`-Datei bereit. Falls das nicht möglich ist, gib ausschließlich einen JSON-Codeblock aus. Bei mehr als 50 Kandidaten: mehrere nummerierte Dateien mit je höchstens 50 Kandidaten.
+
+## Erkennungsregeln
+- Erfasse nur lesbare DVD-, Blu-ray- und CD-Titel. Ignoriere Poster, Tickets, Kinotermine, Spiele und andere Gegenstände.
+- \`titel\`: erkannter Werktitel, ohne Editions- oder Verpackungswerbung.
+- \`typ\`: \`film\`, \`serie\` oder \`musik\`.
+- \`jahr\`: Erscheinungsjahr des Werks als Ganzzahl; nur eintragen, wenn sichtbar oder eindeutig bekannt, sonst \`null\`. Keine ausführliche Recherche.
+- \`quelle\`: \`dvd\`, \`bluray\`, \`cd\` oder \`unklar\`.
+- \`staffeln\`: bei Serien sichtbare Staffelnummern als kurzer String, sonst \`null\`.
+- \`sicherheit\`: \`hoch\`, \`mittel\` oder \`niedrig\`.
+- Unsichere Lesungen nicht erraten: bestmöglichen Kandidaten mit niedriger Sicherheit erfassen und die Stelle kurz in \`warnungen\` nennen. Maximal 8 Warnungen je Datei.
+- \`vorbeurteilung\` ist immer \`offen\`; \`begruendung\` ist immer leer.
+
+## Exaktes Ausgabeformat
+\`\`\`json
+{"kandidaten":[{"titel":"Alien","typ":"film","jahr":1979,"quelle":"bluray","staffeln":null,"vorbeurteilung":"offen","begruendung":"","sicherheit":"hoch"}],"warnungen":[]}
+\`\`\`
+
+Nur gültiges JSON: keine Kommentare, keine zusätzlichen Schlüssel und keine Erklärung nach dem Abschluss.
+`;
 }

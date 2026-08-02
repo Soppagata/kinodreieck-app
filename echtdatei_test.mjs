@@ -327,10 +327,11 @@ const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelim
 if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(200); }
 const externKlappe = [...doc.querySelectorAll("summary")].find((s) => /extern mit GPT, Claude/i.test(s.textContent || ""));
 if (externKlappe && !externKlappe.parentElement.open) { externKlappe.click(); await warte(200); }
-const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Mediathek.*im Kinodreieck/.test(t.value || ""));
-check("Externer Fotoprompt im Text-Stapelimport vorhanden", !!stapelPrompt);
-check("Stapelimport-Prompt ist kopierbar und nimmt KI-JSON entgegen",
-  !!knopf(/^Prompt kopieren$/) && [...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
+const stapelPrompt = [...doc.querySelectorAll("textarea")].find((t) => /Kinodreieck – Mediathek-Erfassung/.test(t.value || ""));
+check("Externer Markdown-Workflow im Text-Stapelimport vorhanden", !!stapelPrompt);
+check("Stapelimport-Workflow ist kopier- und downloadbar und nimmt KI-JSON entgegen",
+  !!knopf(/^Workflow kopieren$/) && !!knopf(/^Workflow \(\.md\) herunterladen$/)
+    && [...doc.querySelectorAll("textarea")].some((t) => /JSON-Antwort hier einfügen/.test(t.placeholder || "")));
 
 /* ---- Mediathek: Apple-Besitz ---- */
 const mediathekTab = knopf(/mediathek/i);

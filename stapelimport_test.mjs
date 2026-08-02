@@ -1,5 +1,6 @@
 import {
-  STAPEL_MAX_ZEILEN, baueStapelPayload, baueStapelUebernahme, externerStapelPrompt,
+  EXTERNER_STAPEL_WORKFLOW_DATEINAME, EXTERNER_STAPEL_WORKFLOW_VERSION, STAPEL_MAX_ZEILEN,
+  baueStapelPayload, baueStapelUebernahme, externerStapelPrompt,
   normalisiereStapelAntwort, vorbereiteTitelliste,
 } from "./src/lib/stapelimport.js";
 
@@ -34,6 +35,9 @@ check("Vorhandenes wird nicht nochmals in die Mediathek geschrieben", uebernahme
 check("Digitale Käufe bleiben von Streaming-Abos unterscheidbar", uebernahme.mediathek[0].quelle === "amazon");
 check("Importierte Titel bleiben trotz KI-Voreindruck unbewertet", uebernahme.mediathek.every((e) => e.bewertung === null && e.kategorie === null));
 const prompt = externerStapelPrompt("Max");
-check("Externer Prompt behält Form und Vorbeurteilung, ist aber auf physische Medien begrenzt", /im Kinodreieck/.test(prompt) && /5–10/.test(prompt) && /vorbeurteilung/.test(prompt) && /film\|serie\|musik/.test(prompt) && /dvd\|bluray\|cd/.test(prompt));
+check("Externer Workflow ist eine versionierte Markdown-Datei", EXTERNER_STAPEL_WORKFLOW_DATEINAME === `kinodreieck-${EXTERNER_STAPEL_WORKFLOW_VERSION}.md` && prompt.startsWith("# Kinodreieck") && prompt.includes(`\`${EXTERNER_STAPEL_WORKFLOW_VERSION}\``) && prompt.endsWith("\n"));
+check("Externer Workflow sammelt vor dem Abschluss stapelweise", /Stapel N erfasst/.test(prompt) && /SAMMLUNG ABSCHLIESSEN/.test(prompt) && /vorher keine Gesamtliste und kein JSON/.test(prompt));
+check("Externer Workflow bleibt auf verwertbare Medienfelder begrenzt", /film.*serie.*musik/.test(prompt) && /dvd.*bluray.*cd.*unklar/.test(prompt) && /Keine Bewertungen, Genres, Originaltitel/.test(prompt));
+check("Externer Workflow erhält den bestehenden Importvertrag", /\"kandidaten\"/.test(prompt) && /\"vorbeurteilung\":\"offen\"/.test(prompt) && /\"begruendung\":\"\"/.test(prompt) && /höchstens 50 Kandidaten/.test(prompt));
 
 console.log(`stapelimport_test: ${ok} Checks bestanden.`);
