@@ -62,22 +62,23 @@ Watchmode-IDs der als gesehen markierten Serien über `kd_set_series_watch` in
 fragt keinen Streaminganbieter ab und verändert den bestehenden Abrufplan
 nicht.
 
-## Noch auszurollender Produktionsschritt
+## Produktionsstand und betrieblicher Folgeschritt
 
-Die Anwendung und der Datenbankvertrag sind vorbereitet, aber die Migration
-`supabase/migrations/20260802120000_wochenplan_serienbeobachtung.sql` ist noch
-nicht remote angewandt. Beim kontrollierten Rollout sind folgende Schritte
-seriell auszuführen:
+Die Migration
+`supabase/migrations/20260802120000_wochenplan_serienbeobachtung.sql` wurde am
+2. August 2026 einzeln auf das verknüpfte Projekt angewandt. Tabelle, RLS, vier
+Owner-Policies, authentifizierte RPC-Ausführung und die erweiterte
+`kd:wochenplan`-Allowlist wurden danach remote belegt. Die gleichzeitig offene,
+ältere Stapelimport-Migration wurde dabei nicht ausgeführt.
 
-1. Remote-Migrationsstand prüfen und ausschließlich die offene Migration
-   anwenden.
-2. RLS sowie die geschlossene `kd:wochenplan`-Allowlist mit den vorhandenen
-   Accounttests prüfen.
-3. Im extern betriebenen, planmäßigen Streamingjob einmal
+Für die individuelle Serienbeobachtung verbleibt die Verdrahtung des extern
+betriebenen Streamingjobs:
+
+1. Im planmäßigen Streamingjob einmal
    `select distinct watchmode_id from kd_series_watch where active` lesen.
-4. Diese IDs mit der statischen Konfiguration über
+2. Diese IDs mit der statischen Konfiguration über
    `verbindeBeobachteteIds(config, serverRows)` zusammenführen.
-5. Beim ohnehin stattfindenden Anbieterabruf die vorhandene Antwort über
+3. Beim ohnehin stattfindenden Anbieterabruf die vorhandene Antwort über
    `staffelstandAusQuellen` auswerten und Staffel-/Folgenfelder mit
    `reichereBeobachteteSerienAn` in den Katalog übernehmen.
 

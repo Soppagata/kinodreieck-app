@@ -1,6 +1,6 @@
 -- Kinodreieck · Deine Woche + serverlesbare Serienbeobachtungen
 -- ============================================================================
--- Läuft als nächste additive Migration. Sie
+-- Remote angewandt am 2. August 2026 auf Produktion (EU-West). Sie
 --   1) erlaubt den persönlichen Wochenplan im bestehenden Kontosync und
 --   2) hält nur deduplizierte Watchmode-IDs für den planmäßigen Katalogjob.
 -- Keine Anbieterabfragen, keine Terminfrequenz und keine privaten Remindertexte
