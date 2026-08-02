@@ -4,6 +4,7 @@ import fs from "node:fs";
 import {
   baueRefUniversum,
   baueKinoMatches,
+  filtereAktiveKinoPins,
   gueltigerArtikel,
   planeFilmLoeschung,
 } from "./src/lib/libraryProjection.js";
@@ -42,6 +43,11 @@ check("film_at-ID gewinnt im Bibliothekscontroller vor dem Titelmatch",
   matches.matched.length === 1 && matches.matched[0].film.id === "id-exakt");
 check("Nicht gematchtes Kinoprogramm bleibt im Rest",
   matches.rest.length === 1 && matches.rest[0].t === "Ohne Treffer");
+
+const pins = [{ t: "Gleicher Titel", z: "Mi 5.8. 20:15" }, { t: "Abgelaufen", z: "Mi 5.8. 22:15" }];
+check("Kinopins laufen erst an einem autoritativen Programmstand ab",
+  filtereAktiveKinoPins(pins, null).length === 2
+  && filtereAktiveKinoPins(pins, { filme: [{ t: "Gleicher Titel", z: ["Mi 5.8. 20:15"] }] }).length === 1);
 
 check("Artikelprüfung akzeptiert die echte Minimalform",
   gueltigerArtikel({ id: "a", titel: "A", text: "", liste: [] }));

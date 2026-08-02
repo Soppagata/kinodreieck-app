@@ -981,7 +981,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
     localStorage.setItem("kd:master", JSON.stringify({ filme, meta: { version: "test" }, gespeichertAm: Date.now() }));
     localStorage.setItem("kd:programm-cache", JSON.stringify({
       fetchedAt: Date.now(), art: "manuell", stand: Date.now(),
-      data: { stand: new Date().toISOString(), filme: [{ t: "Mein Nachbar Totoro", j: 1988, k: ["English Cinema Haydn"], z: [termin], film_at_id: "totoro" }] },
+      data: { stand: new Date().toISOString(), filme: [{ t: "Event Horizon – Am Rande des Universums", j: 1997, k: ["English Cinema Haydn"], z: [termin] }] },
     }));
     localStorage.setItem("kd:kino-pins", JSON.stringify([{
       t: "Event Horizon – Am Rande des Universums", j: 1997, z: termin, seit: Date.now(),
@@ -1032,13 +1032,18 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await wochenEditor.getByLabel("Art").selectOption("termin");
   await expect(wochenEditor.getByLabel("Uhrzeit (optional)")).toBeVisible();
   await wochenEditor.getByLabel("Ort / Anbieter").fill("Gartenbaukino");
+  await wochenEditor.getByLabel("Datum", { exact: true }).fill("2026-08-05");
+  await expect(wochenEditor.getByRole("checkbox", { name: "Mi" })).toBeChecked();
+  await expect(wochenEditor.getByRole("checkbox", { name: "So" })).not.toBeChecked();
   await expect(wochenEditor.getByLabel("App-Verknüpfung (optional)")).toHaveCount(0);
   const datumZeitGeometrie = await wochenEditor.evaluate((editorElement) => {
     const datum = editorElement.querySelector('input[type="date"]').getBoundingClientRect();
     const zeit = editorElement.querySelector('input[type="time"]').getBoundingClientRect();
     const editor = editorElement.getBoundingClientRect();
-    return { datumRechts: datum.right, zeitLinks: zeit.left, zeitRechts: zeit.right, editorRechts: editor.right, datumUnten: datum.bottom, zeitOben: zeit.top };
+    return { datumBreite: datum.width, zeitBreite: zeit.width, datumRechts: datum.right, zeitLinks: zeit.left, zeitRechts: zeit.right, editorRechts: editor.right, datumUnten: datum.bottom, zeitOben: zeit.top };
   });
+  expect(datumZeitGeometrie.datumBreite).toBeLessThanOrEqual(150);
+  expect(datumZeitGeometrie.zeitBreite).toBeLessThanOrEqual(110);
   expect(datumZeitGeometrie.datumRechts).toBeLessThanOrEqual(datumZeitGeometrie.editorRechts + 0.5);
   expect(datumZeitGeometrie.zeitRechts).toBeLessThanOrEqual(datumZeitGeometrie.editorRechts + 0.5);
   expect(datumZeitGeometrie.datumUnten).toBeLessThanOrEqual(datumZeitGeometrie.zeitOben + 0.5);
@@ -1046,8 +1051,10 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await expect(page.locator(".kd-wochen-eintrag-download").first()).toBeVisible();
   await keineDokumentUeberbreite(page);
 
-  await page.getByRole("button", { name: "Menü öffnen" }).click();
-  await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Kino", exact: true }).click();
+  const wochenPin = page.locator(".kd-wochen-eintrag--kino").filter({ hasText: "Event Horizon – Am Rande des Universums" }).first();
+  await wochenPin.locator("summary").click();
+  await wochenPin.getByRole("button", { name: "Termin ansehen" }).click();
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Kino");
   const kinoPin = page.locator(".kd-kino-pin").first();
   await expect(kinoPin).toBeVisible();
   const kinoPinGeometrie = await kinoPin.evaluate((zeile) => {

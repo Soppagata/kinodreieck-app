@@ -10,6 +10,7 @@ import { KinoLinks } from "../components/KinoLinks.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import { formatiereTermin } from "../lib/programm.js";
+import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
 
 /* ================= KINO (Dashboard) =================
    Programmquellen: public/programm.json (Job) · Nonstop-HTML-Import ·
@@ -40,7 +41,7 @@ export function KinoTab({
     const u = /(\d{1,2}):(\d{2})/.exec(String(p.z));
     return (d ? Number(d[2]) * 1000000 + Number(d[1]) * 10000 : 99999999) + (u ? Number(u[1]) * 100 + Number(u[2]) : 0);
   };
-  const pinsSortiert = [...kinoPins].sort((a, b) => pinSort(a) - pinSort(b));
+  const pinsSortiert = filtereAktiveKinoPins(kinoPins, programm).sort((a, b) => pinSort(a) - pinSort(b));
   const [sucheK, setSucheK] = useState("");
   const [kinoF, setKinoF] = useState("");
   const [tagF, setTagF] = useState(null);

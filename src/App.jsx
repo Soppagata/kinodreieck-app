@@ -1500,7 +1500,6 @@ export default function App() {
     () => baueKinoMatches(programm, master),
     [programm, master],
   );
-
   /* ---- Finder-Master: Master + Wikidata-Sidecar (Reihe/Franchise/Regie als Namen).
      Additiv, read-only respektiert — nur für die Suche/Detailkarte angereichert.
      Bei fehlendem Sidecar (leer) oder fremden IDs (Tester) bleibt f unverändert. ---- */

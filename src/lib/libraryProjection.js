@@ -52,6 +52,13 @@ export function baueKinoMatches(programm, master) {
   return { matched, rest };
 }
 
+export function filtereAktiveKinoPins(pins, programm) {
+  const liste = Array.isArray(pins) ? [...pins] : [];
+  if (!Array.isArray(programm?.filme)) return liste;
+  const slots = new Set(programm.filme.flatMap((film) => (film.z || []).map((termin) => `${film.t}\n${termin}`)));
+  return liste.filter((pin) => slots.has(`${pin.t}\n${pin.z}`));
+}
+
 /* Entfernt einen Mediathek-Eintrag, ohne abhängige persönliche Listen zu
    beschädigen: Blog-Verweise werden wieder zu Rotlinks, Must-Watch-Einträge
    bleiben erhalten und verlieren nur ihre Master-Verknüpfung. */

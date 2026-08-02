@@ -1161,6 +1161,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-field--wide { grid-column:span 2; }
 .kd-wochen-editor>label,.kd-wochen-formgrid>label { display:flex; flex-direction:column; gap:4px; min-width:0; color:var(--kd-rauch); font:9px 'Space Mono',monospace; }
 .kd-wochen-editor input,.kd-wochen-editor select,.kd-wochen-editor textarea { box-sizing:border-box; width:100%; min-width:0; min-height:36px; border:1px solid var(--wp-border); border-radius:5px; background:var(--kd-saal); color:var(--kd-leinwandTief); padding:6px 8px; font:13px 'Barlow Condensed',sans-serif; }
+.kd-wochen-editor .kd-wochen-datumfeld input { align-self:flex-start; width:148px; max-width:100%; }
+.kd-wochen-editor .kd-wochen-zeitfeld input { align-self:flex-start; width:108px; max-width:100%; }
 .kd-wochen-editor textarea { min-height:50px; resize:vertical; }
 .kd-wochen-editor input:focus,.kd-wochen-editor select:focus,.kd-wochen-editor textarea:focus { outline:1px solid var(--kd-wolfram); border-color:var(--kd-wolfram); }
 .kd-wochen-tage { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; margin:0; padding:7px 8px 8px; border:1px solid var(--wp-border); border-radius:5px; }

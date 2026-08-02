@@ -56,10 +56,15 @@ check("Deine Woche rendert rollierende Kinotickets und verständliche Kalenderak
   assert.doesNotMatch(woche, /App-Verknüpfung|Externer Link|Automatisch suchen/);
   assert.match(woche, /kd-wochen-eintrag-download/);
   assert.match(woche, /Diesen Termin im Kalender speichern/);
+  assert.match(woche, /istVorschlag \|\| istKinoPin/);
+  assert.match(woche, /Termin ansehen/);
+  assert.match(woche, /wochentagFuerDatum\(startdatum\)/);
   assert.doesNotMatch(woche, /ExportIcon/);
   assert.match(css, /\.kd-wochen-tag \{[\s\S]*background-color:var\(--kd-leinwand\)/);
   assert.match(css, /\.kd-wochen-ticketstub/);
   assert.match(css, /\.kd-wochen-tage input:checked\+span/);
+  assert.match(css, /\.kd-wochen-editor \.kd-wochen-datumfeld input \{[^}]*width:148px/);
+  assert.match(css, /\.kd-wochen-editor \.kd-wochen-zeitfeld input \{[^}]*width:108px/);
   assert.match(css, /@media \(max-width:430px\)[\s\S]*\.kd-wochen-datumfeld.*grid-column:1\/-1/);
 });
 

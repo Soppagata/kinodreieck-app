@@ -9,6 +9,7 @@ import { norm } from "../lib/match.js";
 export {
   baueRefUniversum,
   baueKinoMatches,
+  filtereAktiveKinoPins,
   gueltigerArtikel,
   planeFilmLoeschung,
 } from "../lib/libraryProjection.js";

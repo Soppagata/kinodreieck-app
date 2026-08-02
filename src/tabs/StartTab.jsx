@@ -5,7 +5,7 @@ import { formatiereTermin } from "../lib/programm.js";
 import { useInstallationsStatus } from "../lib/installation.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
 import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
-import { folgenstandText } from "../lib/wochenplan.js";
+import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -143,18 +143,43 @@ function StartDashboard({
       prog_ref: prog.film_at_id ?? prog.id ?? null,
     })), [kinoMatches]);
 
+  const kinoKatalog = useMemo(() => [
+    ...(kinoMatches.matched || []).map(({ prog, film }, index) => ({
+      id: `kino:treffer:${prog.film_at_id ?? prog.id ?? prog.t}:${(prog.k || []).join("|")}:${index}`,
+      titel: prog.t,
+      originaltitel: prog.ot,
+      jahr: prog.j ?? film.jahr,
+      kinos: prog.k || [],
+      termine: prog.z || [],
+      programm_ref: prog.film_at_id ?? prog.id ?? prog.t,
+      film_ref: film.id,
+    })),
+    ...(kinoMatches.rest || []).map((prog, index) => ({
+      id: `kino:programm:${prog.film_at_id ?? prog.id ?? prog.t}:${(prog.k || []).join("|")}:${index}`,
+      titel: prog.t,
+      originaltitel: prog.ot,
+      jahr: prog.j,
+      kinos: prog.k || [],
+      termine: prog.z || [],
+      programm_ref: prog.film_at_id ?? prog.id ?? prog.t,
+    })),
+  ], [kinoMatches]);
+  const aktiveKinoPins = useMemo(() => progStand
+    ? kinoPins.filter((pin) => findeKinoPinImKatalog(pin, kinoKatalog))
+    : kinoPins, [kinoPins, kinoKatalog, progStand]);
+
   /* Must-Watch: oberste 5 in Listenreihenfolge. */
   const mwTop = (mustwatch || []).slice(0, 5);
 
   /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
-  const pins = useMemo(() => kinoPins
+  const pins = useMemo(() => aktiveKinoPins
     .map((p) => ({ ...p, zAnzeige: formatiereTermin(p.z) }))
     .sort((a, b) => pinSortWert({ z: a.zAnzeige }) - pinSortWert({ z: b.zAnzeige }))
-    .slice(0, 5), [kinoPins]);
+    .slice(0, 5), [aktiveKinoPins]);
 
   const serienKatalog = useMemo(() => [
-    ...(((streamingBekannt || {}).titel) || []),
-    ...(((streamingEntdecken || {}).titel) || []),
+    ...((((streamingEntdecken || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "entdecken" }))),
+    ...((((streamingBekannt || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "programm" }))),
   ], [streamingBekannt, streamingEntdecken]);
   const serienRadar = useMemo(() => neueStaffeln(serienKatalog, entdeckenStatus), [serienKatalog, entdeckenStatus]);
   const serienRadarMap = useMemo(() => new Map(serienRadar.map((hinweis) => [String(hinweis.watchmode_id), hinweis])), [serienRadar]);
@@ -242,7 +267,7 @@ function StartDashboard({
         {/* ---- 2 · Deine Woche: heute plus sechs Folgetage und Kinovorschläge ---- */}
         <Wochenplan
           plan={wochenplan} onPlanAendern={onWochenplanAendern}
-          kinoPins={kinoPins} kinoVorschlaege={kinoVorschlaege}
+          kinoPins={aktiveKinoPins} kinoVorschlaege={kinoVorschlaege} kinoKatalog={kinoKatalog}
           onKinoPinLoeschen={(pin) => toggleKinoPin?.(pin.t, pin.j, pin.z)}
           katalog={serienKatalog} master={master}
           onSpringeZuFilm={zeigeEintrag} onSpringeZuStreaming={onSpringeZuStreaming}

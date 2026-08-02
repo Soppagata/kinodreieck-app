@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import {
-  datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
+  automatischeReminderRef, datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
-  naechsteSiebenTage, kinoPinTermin,
+  naechsteSiebenTage, kinoPinTermin, reminderVerknuepfung, wochentagFuerDatum,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
 
@@ -21,6 +21,12 @@ ok("Sieben-Tage-Ausblick beginnt heute statt zwingend am Montag", () => {
   ]);
   assert.equal(tage[0].name, "Sonntag");
   assert.equal(tage[6].name, "Samstag");
+});
+
+ok("Lokales Kalenderdatum liefert den zugehörigen Wochentag", () => {
+  assert.equal(wochentagFuerDatum("2026-08-02"), 7);
+  assert.equal(wochentagFuerDatum("2026-08-05"), 3);
+  assert.equal(wochentagFuerDatum("2026-02-30"), null);
 });
 
 ok("Normalisierung erhält mehrere Wochentage und repariert ungültige Werte", () => {
@@ -90,6 +96,81 @@ ok("Auto-Verknüpfung verlangt starke ID oder exakt eindeutigen Katalogtitel", (
   assert.equal(findeReminderVerknuepfung({ titel: "Event Horizon" }, [
     { id: "film-1", titel: "Event Horizon", typ: "film" },
   ]).treffer.id, "film-1");
+});
+
+ok("Automatische Pins gleichen nur im Art-Pool und bei bekanntem Anbieter ab", () => {
+  const streaming = [
+    { watchmode_id: 42, titel: "One Piece", dienste: ["Crunchyroll"], wochen_bereich: "programm" },
+    { watchmode_id: 77, titel: "One Piece", dienste: ["Netflix"], wochen_bereich: "entdecken" },
+  ];
+  const kino = [{
+    id: "kino-1", programm_ref: "programm-1", titel: "Event Horizon", jahr: 1997,
+    kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 20:15 · Gartenbaukino"],
+  }];
+  assert.deepEqual(automatischeReminderRef({
+    art: "folge", titel: "One Piece", plattform: "Crunchyroll",
+  }, { katalog: streaming }), {
+    watchmode_id: 42, streaming_art: "programm", auto: true,
+  });
+  assert.deepEqual(automatischeReminderRef({
+    art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
+    startdatum: "2026-08-05", uhrzeit: "20:15",
+  }, { kinoKatalog: kino }, new Date(2026, 7, 2)), {
+    kino_programm_id: "programm-1", auto: true,
+  });
+  assert.equal(automatischeReminderRef({
+    art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
+    startdatum: "2026-08-05", uhrzeit: "21:15",
+  }, { kinoKatalog: kino }, new Date(2026, 7, 2)), null);
+  assert.deepEqual(automatischeReminderRef({
+    art: "konzert", titel: "Stop Making Sense", plattform: "Arena",
+  }, { master: [{ id: "master-1", titel: "Stop Making Sense", typ: "film" }] }), {
+    master_id: "master-1", auto: true,
+  });
+});
+
+ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
+  const streamingPin = neuerFolgenReminder({
+    id: "stream", art: "folge", titel: "One Piece", startdatum: "2026-08-05",
+    wochentage: [3], ref: { watchmode_id: 42, streaming_art: "programm", auto: true },
+  }, new Date(2026, 7, 2));
+  assert.equal(reminderVerknuepfung(streamingPin, { katalog: [] }).abgelaufen, true);
+  const tage = wochenansicht({
+    jetzt: new Date(2026, 7, 2),
+    wochenplan: { eintraege: [
+      streamingPin,
+      { id: "frei", art: "termin", titel: "Zahnarzt", startdatum: "2026-08-05", wochentage: [3] },
+    ] },
+    katalog: [],
+  });
+  assert.deepEqual(tage[3].eintraege.map((e) => e.titel), ["Zahnarzt"]);
+
+  const kinoPin = neuerFolgenReminder({
+    id: "kino", art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
+    startdatum: "2026-08-05", uhrzeit: "20:15", wochentage: [3],
+    ref: { kino_programm_id: "programm-1", auto: true },
+  }, new Date(2026, 7, 2));
+  const andererTermin = [{
+    id: "kino-1", programm_ref: "programm-1", titel: "Event Horizon",
+    kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 21:15 · Gartenbaukino"],
+  }];
+  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: andererTermin }, new Date(2026, 7, 2)).abgelaufen, true);
+});
+
+ok("Nicht mehr im Programm gefundene Kinopins verschwinden aus der Woche", () => {
+  const kinoKatalog = [{
+    id: "kino-1", programm_ref: "programm-1", titel: "Event Horizon", jahr: 1997,
+    kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 20:15 · Gartenbaukino"],
+  }];
+  const tage = wochenansicht({
+    jetzt: new Date(2026, 7, 2), kinoKatalog,
+    kinoPins: [
+      { t: "Event Horizon", j: 1997, z: "Mi 5.8. 20:15 · Gartenbaukino" },
+      { t: "Verschwunden", j: 1999, z: "Mi 5.8. 22:15 · Gartenbaukino" },
+    ],
+  });
+  assert.deepEqual(tage[3].eintraege.map((e) => e.titel), ["Event Horizon"]);
+  assert.equal(tage[3].eintraege[0].programm_ref, "programm-1");
 });
 
 ok("Exakte API-Folgennummer erscheint bevorzugt", () => {

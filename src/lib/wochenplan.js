@@ -34,6 +34,11 @@ export function lokalesDatum(wert) {
   return datumLokal(d) === wert ? d : null;
 }
 
+export function wochentagFuerDatum(wert) {
+  const datum = lokalesDatum(wert);
+  return datum ? (datum.getDay() || 7) : null;
+}
+
 export function montagDerWoche(datum = new Date()) {
   const d = new Date(datum);
   d.setHours(12, 0, 0, 0);
@@ -181,6 +186,16 @@ function titelNormiert(wert) {
     .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function anbieterWerte(titel) {
+  const werte = [
+    titel?.plattform, titel?.anbieter, titel?.kino,
+    ...(Array.isArray(titel?.kinos) ? titel.kinos : []),
+    ...(Array.isArray(titel?.k) ? titel.k : []),
+    ...(Array.isArray(titel?.dienste) ? titel.dienste : []),
+  ];
+  return [...new Set(werte.map(titelNormiert).filter(Boolean))];
+}
+
 export function findeReminderVerknuepfung(reminder, katalog = [], master = []) {
   const alle = [...(Array.isArray(katalog) ? katalog : []), ...(Array.isArray(master) ? master : [])];
   const dedupe = new Map();
@@ -201,13 +216,89 @@ export function findeReminderVerknuepfung(reminder, katalog = [], master = []) {
 
   const titel = titelNormiert(reminder && reminder.titel);
   if (!titel) return { status: "kein-treffer", treffer: null };
-  const exakt = liste.filter((t) => {
+  let exakt = liste.filter((t) => {
     if (titelNormiert(t.titel) !== titel && titelNormiert(t.originaltitel) !== titel) return false;
     return !reminder.jahr || !t.jahr || Number(reminder.jahr) === Number(t.jahr);
   });
+  const anbieter = titelNormiert(reminder && reminder.plattform);
+  if (anbieter && exakt.some((t) => anbieterWerte(t).length)) {
+    exakt = exakt.filter((t) => anbieterWerte(t).includes(anbieter));
+  }
   if (exakt.length === 1) return { status: "eindeutig", treffer: exakt[0], grund: "exakter-titel" };
   if (exakt.length > 1) return { status: "mehrdeutig", treffer: null, kandidaten: exakt };
   return { status: "kein-treffer", treffer: null };
+}
+
+function kinoProgrammRef(treffer) {
+  return treffer?.programm_ref ?? treffer?.prog_ref ?? treffer?.id ?? null;
+}
+
+function kinoReminderTreffer(reminder, kinoKatalog = [], jetzt = new Date()) {
+  const ergebnis = findeReminderVerknuepfung(reminder, kinoKatalog, []);
+  const kandidaten = ergebnis.treffer ? [ergebnis.treffer] : (ergebnis.kandidaten || []);
+  if (!reminder?.startdatum || !reminder?.uhrzeit || !kandidaten.length) return ergebnis.treffer || null;
+  const passend = kandidaten.filter((titel) => (titel.termine || []).some((wert) => {
+    const termin = kinoPinTermin({ z: wert, kino: (titel.kinos || titel.k || [])[0] }, lokalesDatum(reminder.startdatum) || jetzt);
+    return termin && datumLokal(termin) === reminder.startdatum
+      && `${zwei(termin.getHours())}:${zwei(termin.getMinutes())}` === reminder.uhrzeit;
+  }));
+  return passend.length === 1 ? passend[0] : null;
+}
+
+/* Beim Speichern wird nur innerhalb des fachlich gewählten Pools verknüpft.
+   Das Auto-Merkmal trennt einen Katalog-Pin von einem freien persönlichen
+   Termin: Nur Katalog-Pins dürfen später ablaufen, wenn ihr Ziel verschwindet. */
+export function automatischeReminderRef(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}, jetzt = new Date()) {
+  if (!reminder || typeof reminder !== "object") return null;
+  const probe = { ...reminder, ref: null };
+  if (probe.art === "kino") {
+    const treffer = kinoReminderTreffer(probe, kinoKatalog, jetzt);
+    const ref = kinoProgrammRef(treffer);
+    return ref != null ? { kino_programm_id: ref, auto: true } : null;
+  }
+  if (probe.art === "folge" || probe.art === "staffel") {
+    const treffer = findeReminderVerknuepfung(probe, katalog, []).treffer;
+    return treffer?.watchmode_id != null
+      ? { watchmode_id: treffer.watchmode_id, streaming_art: treffer.wochen_bereich || "entdecken", auto: true }
+      : null;
+  }
+  const treffer = findeReminderVerknuepfung(probe, [], master).treffer;
+  return treffer?.id != null ? { master_id: treffer.id, auto: true } : null;
+}
+
+export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}, jetzt = new Date()) {
+  const ref = reminder?.ref && typeof reminder.ref === "object" ? reminder.ref : {};
+  if (ref.master_id != null) {
+    const quelle = findeReminderVerknuepfung(reminder, [], master).treffer;
+    return quelle
+      ? { quelle, ziel: { art: "mediathek", ref: quelle.id } }
+      : { quelle: null, ziel: null, abgelaufen: true };
+  }
+  if (ref.watchmode_id != null) {
+    const quelle = findeReminderVerknuepfung(reminder, katalog, []).treffer;
+    return quelle
+      ? { quelle, ziel: { art: "streaming", bereich: quelle.wochen_bereich || ref.streaming_art || "entdecken", ref: quelle.watchmode_id } }
+      : { quelle: null, ziel: null, abgelaufen: true };
+  }
+  if (ref.kino_programm_id != null) {
+    /* Nicht nur die Film-ID prüfen: Ein Film kann weiter im Programm stehen,
+       obwohl genau der gepinnte Termin verschwunden ist. */
+    const quelle = kinoReminderTreffer(reminder, kinoKatalog, jetzt);
+    return quelle
+      ? { quelle, ziel: { art: "kino", ref: kinoProgrammRef(quelle) } }
+      : { quelle: null, ziel: null, abgelaufen: true };
+  }
+
+  let quelle = null;
+  let ziel = null;
+  if (reminder?.art === "kino") {
+    quelle = kinoReminderTreffer(reminder, kinoKatalog, jetzt);
+    if (quelle) ziel = { art: "kino", ref: kinoProgrammRef(quelle) };
+  } else if (reminder?.art === "folge" || reminder?.art === "staffel") {
+    quelle = findeReminderVerknuepfung(reminder, katalog, []).treffer;
+    if (quelle?.watchmode_id != null) ziel = { art: "streaming", bereich: quelle.wochen_bereich || "entdecken", ref: quelle.watchmode_id };
+  }
+  return { quelle, ziel, abgelaufen: false };
 }
 
 export function refAusTreffer(t) {
@@ -298,15 +389,37 @@ function kinoWochenEintrag(pin, termin, { vorschlag = false } = {}) {
   };
 }
 
-export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
+export function findeKinoPinImKatalog(pin, kinoKatalog = [], jetzt = new Date()) {
+  const pinTermin = kinoPinTermin(pin, jetzt);
+  if (!pinTermin) return null;
+  const slot = kinoSlotSchluessel(pin, pinTermin);
+  const titel = titelNormiert(pin?.t);
+  const passend = kinoKatalog.filter((eintrag) => {
+    if (titelNormiert(eintrag?.titel) !== titel && titelNormiert(eintrag?.originaltitel) !== titel) return false;
+    if (pin?.j && eintrag?.jahr && Number(pin.j) !== Number(eintrag.jahr)) return false;
+    return (eintrag.termine || []).some((wert) => {
+      const probe = { z: wert, kino: (eintrag.kinos || eintrag.k || [])[0] };
+      const termin = kinoPinTermin(probe, jetzt);
+      return termin && kinoSlotSchluessel(probe, termin) === slot;
+    });
+  });
+  return passend.length === 1 ? passend[0] : null;
+}
+
+export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [], kinoKatalog = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
   /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
      Einzeldateien/Tests nicht brechen. Die App selbst übergibt nur noch jetzt. */
   const tage = naechsteSiebenTage(startdatum || wochenstart || jetzt).map((tag) => ({ ...tag, eintraege: [] }));
-  const katalogAlle = [...(Array.isArray(katalog) ? katalog : []), ...(Array.isArray(master) ? master : [])];
   for (const e of plan.eintraege) {
-    const quelle = findeReminderVerknuepfung(e, katalogAlle, []).treffer;
-    for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({ ...e, quelle, folgenstand: folgenstandText(quelle) });
+    const verknuepfung = reminderVerknuepfung(e, { kinoKatalog, katalog, master }, jetzt);
+    if (verknuepfung.abgelaufen) continue;
+    for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({
+      ...e,
+      quelle: verknuepfung.quelle,
+      ziel: verknuepfung.ziel,
+      folgenstand: folgenstandText(verknuepfung.quelle),
+    });
   }
   const gepinnteKinoSlots = new Set();
   for (const pin of Array.isArray(kinoPins) ? kinoPins : []) {
@@ -314,8 +427,14 @@ export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [],
     if (!termin) continue;
     const tag = tage.find((t) => t.iso === datumLokal(termin));
     if (!tag) continue;
+    const katalogTreffer = kinoKatalog.length ? findeKinoPinImKatalog(pin, kinoKatalog, jetzt) : null;
+    if (kinoKatalog.length && !katalogTreffer) continue;
     gepinnteKinoSlots.add(kinoSlotSchluessel(pin, termin));
-    tag.eintraege.push(kinoWochenEintrag(pin, termin));
+    tag.eintraege.push(kinoWochenEintrag(katalogTreffer ? {
+      ...pin,
+      programm_ref: kinoProgrammRef(katalogTreffer),
+      film_ref: katalogTreffer.film_ref,
+    } : pin, termin));
   }
   for (const vorschlag of Array.isArray(kinoVorschlaege) ? kinoVorschlaege : []) {
     if (!vorschlag || typeof vorschlag !== "object" || !String(vorschlag.t || "").trim()) continue;

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  WOCHENTAGE, datumLokal,
+  WOCHENTAGE, automatischeReminderRef, datumLokal,
   neuerFolgenReminder, normalisiereWochenplan,
-  wochenansicht,
+  wochentagFuerDatum, wochenansicht,
 } from "../lib/wochenplan.js";
 import {
   dateinameIcs, erstelleIcs, kalenderEventAusWochenEintrag, ladeIcsHerunter,
@@ -78,6 +78,10 @@ function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
   const zeigtUhrzeit = ARTEN_MIT_UHRZEIT.has(entwurf.art);
 
   const setze = (key, value) => setEntwurf((e) => ({ ...e, [key]: value }));
+  const setzeStartdatum = (startdatum) => setEntwurf((e) => {
+    const wochentag = wochentagFuerDatum(startdatum);
+    return { ...e, startdatum, ...(wochentag ? { wochentage: [wochentag] } : {}) };
+  });
   const tagToggle = (nr) => setEntwurf((e) => {
     const drin = e.wochentage.includes(nr);
     const next = drin ? e.wochentage.filter((x) => x !== nr) : [...e.wochentage, nr];
@@ -102,7 +106,7 @@ function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
         <label>Rhythmus<select value={entwurf.intervall_wochen} onChange={(e) => setze("intervall_wochen", Number(e.target.value))}>
           <option value="1">jede Woche</option><option value="2">alle 2 Wochen</option><option value="3">alle 3 Wochen</option><option value="4">alle 4 Wochen</option>
         </select></label>
-        <label className="kd-wochen-datumfeld">Datum<input type="date" required value={entwurf.startdatum} onChange={(e) => setze("startdatum", e.target.value)} /></label>
+        <label className="kd-wochen-datumfeld">Datum<input type="date" required value={entwurf.startdatum} onChange={(e) => setzeStartdatum(e.target.value)} /></label>
         {zeigtUhrzeit && <label className="kd-wochen-zeitfeld">Uhrzeit (optional)<input type="time" value={entwurf.uhrzeit} onChange={(e) => setze("uhrzeit", e.target.value)} /></label>}
       </div>
       <fieldset className="kd-wochen-tage"><legend>Wochentage</legend>{WOCHENTAGE.map((tag) => (
@@ -122,7 +126,7 @@ function ReminderEditor({ initial, onSpeichern, onAbbrechen }) {
 }
 
 function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, onAnlegen, onVorschlagAnsehen }) {
-  const zielVorhanden = !!(eintrag.ref?.master_id || eintrag.ref?.watchmode_id || eintrag.ref?.url);
+  const zielVorhanden = !!(eintrag.ziel || eintrag.ref?.master_id || eintrag.ref?.watchmode_id || eintrag.ref?.url);
   const istKinoPin = eintrag.art === "kino" && !!eintrag.pin;
   const istVorschlag = !!eintrag.vorschlag;
   const istFolgeOderStaffel = eintrag.art === "folge" || eintrag.art === "staffel";
@@ -139,7 +143,7 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
         {eintrag.folgenstand && <div className="kd-wochen-folgenstand">{eintrag.folgenstand}</div>}
         {eintrag.notiz && <div>{eintrag.notiz}</div>}
         <div className="kd-wochen-aktionen">
-          {istVorschlag && onVorschlagAnsehen && <button type="button" className="kd-wochen-vorschlagaktion" onClick={() => onVorschlagAnsehen(eintrag)}>Termine ansehen</button>}
+          {(istVorschlag || istKinoPin) && onVorschlagAnsehen && <button type="button" className="kd-wochen-vorschlagaktion" onClick={() => onVorschlagAnsehen(eintrag)}>{istVorschlag ? "Termine ansehen" : "Termin ansehen"}</button>}
           {!istKinoPin && !istVorschlag && zielVorhanden && <button type="button" onClick={() => onAnsehen(eintrag)}>Eintrag ansehen</button>}
           {!istKinoPin && !istVorschlag && !zielVorhanden && istFolgeOderStaffel && <button type="button" onClick={() => onAnlegen(eintrag)}>Titel anlegen</button>}
           {!istKinoPin && !istVorschlag && <button type="button" onClick={() => onBearbeiten(eintrag)}>Bearbeiten</button>}
@@ -153,7 +157,7 @@ function ReminderZeile({ eintrag, datum, onBearbeiten, onLoeschen, onAnsehen, on
 
 export function Wochenplan({
   plan, onPlanAendern, kinoPins = [], kinoVorschlaege = [], onKinoPinLoeschen, onKinoVorschlagAnsehen,
-  katalog = [], master = [],
+  kinoKatalog = [], katalog = [], master = [],
   onSpringeZuFilm, onSpringeZuStreaming, onFilmAnlegen,
 }) {
   const [jetzt, setJetzt] = useState(() => new Date());
@@ -165,10 +169,19 @@ export function Wochenplan({
     return () => { clearInterval(timer); window.removeEventListener("focus", aktualisieren); };
   }, []);
 
-  const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, kinoVorschlaege, katalog, master, jetzt }), [plan, kinoPins, kinoVorschlaege, katalog, master, jetzt]);
+  const tage = useMemo(() => wochenansicht({ wochenplan: plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt }), [plan, kinoPins, kinoVorschlaege, kinoKatalog, katalog, master, jetzt]);
 
   const speichere = (roh) => {
-    const e = neuerFolgenReminder({ ...roh, id: roh.id || undefined, erstellt_am: roh.erstellt_am }, jetzt);
+    const ref = roh.ref && !roh.ref.auto
+      ? roh.ref
+      : automatischeReminderRef({ ...roh, ref: null }, { kinoKatalog, katalog, master }, jetzt);
+    const e = neuerFolgenReminder({
+      ...roh,
+      ref,
+      link_modus: ref?.auto ? "auto" : roh.link_modus,
+      id: roh.id || undefined,
+      erstellt_am: roh.erstellt_am,
+    }, jetzt);
     const aktuell = normalisiereWochenplan(plan, jetzt).eintraege;
     const next = aktuell.some((x) => x.id === e.id) ? aktuell.map((x) => x.id === e.id ? e : x) : [...aktuell, e];
     onPlanAendern({ version: 1, eintraege: next }); setEditor(null);
@@ -179,8 +192,11 @@ export function Wochenplan({
     onPlanAendern({ version: 1, eintraege: normalisiereWochenplan(plan).eintraege.filter((e) => e.id !== eintrag.id) });
   };
   const ansehen = (e) => {
-    if (e.ref?.master_id) onSpringeZuFilm?.(e.ref.master_id);
-    else if (e.ref?.watchmode_id) onSpringeZuStreaming?.({ art: "entdecken", ref: e.ref.watchmode_id, titel: e.titel });
+    if (e.ziel?.art === "mediathek") onSpringeZuFilm?.(e.ziel.ref);
+    else if (e.ziel?.art === "streaming") onSpringeZuStreaming?.({ art: e.ziel.bereich || "entdecken", ref: e.ziel.ref, titel: e.titel });
+    else if (e.ziel?.art === "kino") onKinoVorschlagAnsehen?.({ ...e, programm_ref: e.ziel.ref });
+    else if (e.ref?.master_id) onSpringeZuFilm?.(e.ref.master_id);
+    else if (e.ref?.watchmode_id) onSpringeZuStreaming?.({ art: e.ref.streaming_art || "entdecken", ref: e.ref.watchmode_id, titel: e.titel });
     else if (e.ref?.url) window.open(e.ref.url, "_blank", "noopener,noreferrer");
   };
   const anlegen = (e) => {
