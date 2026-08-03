@@ -1145,7 +1145,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 
 /* ==================== DEINE WOCHE ==================== */
-.kd-wochenplan { --wp-border:color-mix(in srgb,var(--kd-rauch) 38%,transparent); display:flex; flex-direction:column; gap:12px; min-width:0; }
+.kd-wochenplan { --wp-border:color-mix(in srgb,var(--kd-rauch) 38%,transparent); --wp-ticket-accent:var(--kd-wolfram); --wp-ticket-muted:var(--kd-rauch); display:flex; flex-direction:column; gap:12px; min-width:0; }
+.kd-showa .kd-wochenplan { --wp-ticket-accent:var(--kd-tinteWeich); --wp-ticket-muted:var(--kd-tinteWeich); }
 .kd-wochenplan-kopf { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; }
 .kd-wochenplan-kopf h2 { margin:2px 0 0; color:var(--kd-leinwand); font:900 30px/1 'Fraunces',Georgia,serif; }
 .kd-wochen-kicker { color:var(--kd-wolfram); font:9px 'Space Mono',monospace; letter-spacing:.17em; }
@@ -1165,20 +1166,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-wochen-tag::after { right:-9px; }
 .kd-wochen-tag>header { display:grid; grid-template-columns:66px minmax(0,1fr) auto; align-items:stretch; min-height:58px; border-bottom:2px dashed color-mix(in srgb,var(--kd-rauch) 72%,transparent); }
 .kd-wochen-ticketstub { display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:0; background:var(--kd-leinwandTief); border-right:2px dashed color-mix(in srgb,var(--kd-rauch) 72%,transparent); }
-.kd-wochen-ticketstub b { color:var(--kd-wolfram); font:900 25px/1 'Fraunces',Georgia,serif; }
-.kd-wochen-ticketstub span { margin-top:3px; color:var(--kd-rauch); font:700 8px 'Space Mono',monospace; letter-spacing:.16em; text-transform:uppercase; }
+.kd-wochen-ticketstub b { color:var(--wp-ticket-accent); font:900 25px/1 'Fraunces',Georgia,serif; }
+.kd-wochen-ticketstub span { margin-top:3px; color:var(--wp-ticket-muted); font:700 8px 'Space Mono',monospace; letter-spacing:.16em; text-transform:uppercase; }
 .kd-wochen-ticketname { display:flex; flex-direction:column; justify-content:center; min-width:0; padding:9px 14px; }
 .kd-wochen-ticketname b { overflow:hidden; color:var(--kd-tinte); font:900 20px/1 'Fraunces',Georgia,serif; text-overflow:ellipsis; white-space:nowrap; }
-.kd-wochen-ticketname span { margin-top:4px; color:var(--kd-rauch); font:9px 'Space Mono',monospace; }
+.kd-wochen-ticketname span { margin-top:4px; color:var(--wp-ticket-muted); font:9px 'Space Mono',monospace; }
 .kd-wochen-tagaktionen { display:flex; align-items:center; gap:5px; padding:0 13px 0 5px; }
 .kd-wochen-tagaktionen button { width:32px; height:32px; padding:0; border-color:color-mix(in srgb,var(--kd-rauch) 55%,transparent); background:var(--kd-leinwandTief); color:var(--kd-tinte); }
-.kd-wochen-tagaktionen .kd-wochen-tagplus { border-color:color-mix(in srgb,var(--kd-wolfram) 72%,transparent); color:var(--kd-wolfram); }
+.kd-wochen-tagaktionen .kd-wochen-tagplus { border-color:color-mix(in srgb,var(--wp-ticket-accent) 72%,transparent); color:var(--wp-ticket-accent); }
 .kd-wochen-tag.ist-heute { border-color:var(--kd-wolfram); box-shadow:0 5px 22px color-mix(in srgb,var(--kd-wolfram) 25%,rgba(0,0,0,.38)); }
 .kd-wochen-tag.ist-heute .kd-wochen-ticketstub { background:var(--kd-wolfram); }
 .kd-wochen-tag.ist-heute .kd-wochen-ticketstub b { color:var(--kd-tinte); }
 .kd-wochen-tag.ist-heute .kd-wochen-ticketstub span { color:color-mix(in srgb,var(--kd-tinte) 72%,transparent); }
 .kd-wochen-taginhalt { display:flex; flex-direction:column; gap:7px; min-height:34px; padding:9px 14px 11px; }
-.kd-wochen-frei { padding:4px 0; color:var(--kd-rauch); font:italic 10px 'Space Mono',monospace; opacity:.82; }
+.kd-wochen-frei { padding:4px 0; color:var(--wp-ticket-muted); font:italic 10px 'Space Mono',monospace; opacity:.82; }
 .kd-wochen-eintrag { min-width:0; overflow:hidden; border:1px solid var(--wp-border); border-left:3px solid var(--kd-wolfram); border-radius:5px; background:var(--kd-saal); color:var(--kd-leinwandTief); }
 .kd-wochen-eintrag--kino { border-left-color:var(--kd-gefahr); }
 .kd-wochen-eintrag--konzert { border-left-color:#52c7c9; }

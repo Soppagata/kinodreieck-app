@@ -460,6 +460,47 @@ test("Showa-Kulisse wird mobil unvergrößert nach oben verschoben", async ({ pa
   await keineDokumentUeberbreite(page);
 });
 
+test("Showa-Wochenplan hält Schrift auf den dunklen Tickets lesbar", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page, { modus: "showa" });
+  await page.goto("/");
+
+  const tag = page.locator(".kd-wochen-tag:not(.ist-heute)").first();
+  await expect(tag).toBeVisible();
+  const kontraste = await tag.evaluate((karte) => {
+    const rgb = (wert) => (wert.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const luminanz = (wert) => {
+      const [rot, gruen, blau] = rgb(wert).map((kanal) => {
+        const normiert = kanal / 255;
+        return normiert <= 0.04045 ? normiert / 12.92 : ((normiert + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * rot + 0.7152 * gruen + 0.0722 * blau;
+    };
+    const kontrast = (vordergrund, hintergrund) => {
+      const hell = Math.max(luminanz(vordergrund), luminanz(hintergrund));
+      const dunkel = Math.min(luminanz(vordergrund), luminanz(hintergrund));
+      return (hell + 0.05) / (dunkel + 0.05);
+    };
+    const farbe = (selektor) => getComputedStyle(karte.querySelector(selektor)).color;
+    const tagHintergrund = getComputedStyle(karte).backgroundColor;
+    const stub = karte.querySelector(".kd-wochen-ticketstub");
+    const stubHintergrund = getComputedStyle(stub).backgroundColor;
+    return {
+      tageszahl: kontrast(farbe(".kd-wochen-ticketstub b"), stubHintergrund),
+      kuerzel: kontrast(farbe(".kd-wochen-ticketstub span"), stubHintergrund),
+      wochentag: kontrast(farbe(".kd-wochen-ticketname b"), tagHintergrund),
+      datum: kontrast(farbe(".kd-wochen-ticketname span"), tagHintergrund),
+      frei: kontrast(farbe(".kd-wochen-frei"), tagHintergrund),
+      plus: kontrast(farbe(".kd-wochen-tagplus"), getComputedStyle(karte.querySelector(".kd-wochen-tagplus")).backgroundColor),
+    };
+  });
+  for (const [element, kontrast] of Object.entries(kontraste)) {
+    expect(kontrast, `${element}: ${kontrast}`).toBeGreaterThanOrEqual(4.5);
+  }
+  await keineDokumentUeberbreite(page);
+});
+
 test("Neon Noir respektiert Reduced Motion als gestaltetes Standbild", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await page.emulateMedia({ reducedMotion: "reduce" });

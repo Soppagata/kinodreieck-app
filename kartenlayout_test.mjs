@@ -66,6 +66,9 @@ check("Deine Woche rendert rollierende Kinotickets und verständliche Kalenderak
   assert.doesNotMatch(woche, /ExportIcon/);
   assert.match(css, /\.kd-wochen-tag \{[\s\S]*background-color:var\(--kd-leinwand\)/);
   assert.match(css, /\.kd-wochen-ticketstub/);
+  assert.match(css, /\.kd-showa \.kd-wochenplan \{[^}]*--wp-ticket-accent:var\(--kd-tinteWeich\);[^}]*--wp-ticket-muted:var\(--kd-tinteWeich\)/);
+  assert.match(css, /\.kd-wochen-ticketstub b \{[^}]*color:var\(--wp-ticket-accent\)/);
+  assert.match(css, /\.kd-wochen-frei \{[^}]*color:var\(--wp-ticket-muted\)/);
   assert.match(css, /\.kd-wochen-tage input:checked\+span/);
   assert.match(css, /\.kd-wochen-editor \.kd-wochen-datumfeld input \{[^}]*width:148px/);
   assert.match(css, /\.kd-wochen-editor \.kd-wochen-zeitfeld input \{[^}]*width:108px/);
