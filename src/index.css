@@ -418,10 +418,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-streamfilter-abc { box-sizing:border-box; width:100%; min-width:0; margin:0; padding:8px 12px 7px;
   border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
   background:color-mix(in srgb,var(--saal-hoch,#211e26) 76%,transparent); }
-.kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:9px; margin-bottom:3px; }
-.kd-streamfilter-abc-kopf strong { display:grid; place-items:center; min-width:30px; height:24px; border-radius:4px;
+.kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) 64px 48px; align-items:center; gap:9px; margin-bottom:3px; }
+.kd-streamfilter-abc-kopf strong { display:grid; place-items:center; box-sizing:border-box; width:64px; min-width:0; height:24px; padding:0 5px; border-radius:4px;
   background:var(--wolfram,#e3a63b); color:var(--tinte,#17151a); font:800 13px/1 'Space Mono',monospace; }
-.kd-streamfilter-abc-kopf button { min-height:24px; padding:2px 7px; border:1px solid var(--rauch,#948fa0); border-radius:4px;
+.kd-streamfilter-abc-kopf button { box-sizing:border-box; width:48px; min-height:24px; padding:2px 5px; border:1px solid var(--rauch,#948fa0); border-radius:4px;
   background:transparent; color:var(--leinwand,#ece8df); cursor:pointer; font:700 10px/1 'Space Mono',monospace; text-transform:uppercase; }
 .kd-streamfilter-abc-kopf button:disabled { opacity:.35; cursor:default; }
 .kd-streamfilter-abc input[type="range"] { display:block; width:100%; height:22px; margin:0; padding:0; accent-color:var(--wolfram,#e3a63b); cursor:ew-resize; }
@@ -431,7 +431,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font:600 clamp(6px,1.05vw,8px)/1 'Space Mono',monospace; }
 .kd-streamfilter-abc-skala span.aktiv { color:var(--wolfram,#e3a63b); font-weight:900; }
 .kd-streamfilter-abc-skala span.alle { font-size:10px; }
-.kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong { min-width:66px; padding:0 5px; box-sizing:border-box; }
 .kd-streamfilter-dekade-skala { display:grid; align-items:center; width:100%; }
 .kd-streamfilter-dekade-skala span { min-width:0; overflow:visible; color:var(--rauch,#948fa0); text-align:center;
   font:600 clamp(5px,.8vw,7px)/1 'Space Mono',monospace; }

@@ -1204,9 +1204,9 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
     await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
       demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"], gekuerzt: false,
       titel: [
-        { watchmode_id: 51001, titel: "Apollo Road", jahr: 1990, typ: "movie", genres: ["Drama", "Thriller", "Mystery"], dienste: ["Netflix"] },
-        { watchmode_id: 51002, titel: "Berlin Nights", jahr: 2024, typ: "tv_series", genres: ["Drama", "Crime", "Action"], dienste: ["Crunchyroll"] },
-        { watchmode_id: 51003, titel: "Charlie Cloud", jahr: 2020, typ: "movie", genres: ["Komödie", "Animation", "Familie"], dienste: ["Netflix"] },
+        { watchmode_id: 51001, titel: "Apollo Road", jahr: 1990, typ: "movie", genres: ["Drama"], dienste: ["Netflix"] },
+        { watchmode_id: 51002, titel: "Berlin Nights", jahr: 2024, typ: "tv_series", genres: ["Crime"], dienste: ["Crunchyroll"] },
+        { watchmode_id: 51003, titel: "Charlie Cloud", jahr: 2020, typ: "movie", genres: [], dienste: ["Netflix"] },
       ],
     }));
   });
@@ -1245,7 +1245,7 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
     const filter = element.querySelector(".kd-streamfilter-knopf")?.getBoundingClientRect();
     return !!sortierung && !!filter && Math.abs(sortierung.top - filter.top) <= 2 && filter.left >= sortierung.right;
   })).toBe(true);
-  await expect(page.locator(".kd-streamfilter-genre button")).toHaveCount(8);
+  await expect(page.locator(".kd-streamfilter-genre")).toHaveCount(0);
   const plattformE = page.getByRole("combobox", { name: "Entdecken: Plattform filtern" });
   await plattformE.selectOption("Crunchyroll");
   await expect(entdeckenKarten).toHaveCount(1);
@@ -1261,7 +1261,18 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
   const dekadeE = page.getByRole("slider", { name: "Entdecken: Jahrzehnt filtern" });
   await expect(dekadeE).toBeVisible();
+  await expect(page.locator(".kd-streamfilter-dekade-skala").last()).toContainText("90er");
+  const reglerKopfGeometrie = await page.locator(".kd-streamfilter-regler").evaluate((regler) => (
+    [...regler.querySelectorAll(".kd-streamfilter-abc-kopf")].map((kopf) => ({
+      anzeige: kopf.querySelector("strong").getBoundingClientRect().width,
+      alle: kopf.querySelector("button").getBoundingClientRect().width,
+    }))
+  ));
+  expect(reglerKopfGeometrie).toHaveLength(2);
+  expect(Math.abs(reglerKopfGeometrie[0].anzeige - reglerKopfGeometrie[1].anzeige)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(reglerKopfGeometrie[0].alle - reglerKopfGeometrie[1].alle)).toBeLessThanOrEqual(0.5);
   await dekadeE.fill("2");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("00er");
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
   await dekadeE.fill("0");

@@ -27,6 +27,21 @@ export function streamingJahrzehnte(titel = []) {
   return jahrzehnte;
 }
 
+export function streamingJahrzehntLabel(jahrzehnt) {
+  const nummer = Number(jahrzehnt);
+  if (!Number.isFinite(nummer)) return "";
+  return `${String(Math.abs(nummer) % 100).padStart(2, "0")}er`;
+}
+
+export function streamingGenreFilterSichtbar(titel = []) {
+  const genreTitel = titel.filter((eintrag) => Array.isArray(eintrag?.genres)
+    && eintrag.genres.some((genre) => String(genre || "").trim()));
+  const genres = new Set(genreTitel.flatMap((eintrag) => eintrag.genres)
+    .map((genre) => String(genre || "").trim().toLocaleLowerCase("de"))
+    .filter(Boolean));
+  return genreTitel.length > 2 && genres.size > 1;
+}
+
 export function passtInJahrzehntMitKulanz(jahr, jahrzehnt, kulanz = 10) {
   if (jahrzehnt == null) return true;
   const nummer = Number(jahr);

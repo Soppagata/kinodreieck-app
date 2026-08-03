@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { quelleBadges, QUELLEN_KLASSEN } from "./src/lib/quellen.js";
 import {
   sortiereStreamingTitel, streamingAnfangsbuchstabe,
-  streamingJahrzehnte, passtInJahrzehntMitKulanz,
+  streamingJahrzehnte, streamingJahrzehntLabel, streamingGenreFilterSichtbar,
+  passtInJahrzehntMitKulanz,
 } from "./src/lib/streamingSort.js";
 
 let ok = 0;
@@ -94,6 +95,14 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt tolerante Schnellregler",
   assert.equal(streamingAnfangsbuchstabe("  Zulu"), "Z");
   assert.equal(streamingAnfangsbuchstabe("2001"), null);
   assert.deepEqual(streamingJahrzehnte([{ jahr: 1987 }, { jahr: 2012 }]), [1980, 1990, 2000, 2010]);
+  assert.equal(streamingJahrzehntLabel(1920), "20er");
+  assert.equal(streamingJahrzehntLabel(2000), "00er");
+  assert.equal(streamingGenreFilterSichtbar([
+    { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: [] },
+  ]), false);
+  assert.equal(streamingGenreFilterSichtbar([
+    { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: ["Drama"] },
+  ]), true);
   assert.equal(passtInJahrzehntMitKulanz(1980, 1990), true);
   assert.equal(passtInJahrzehntMitKulanz(2000, 1990), true);
   assert.equal(passtInJahrzehntMitKulanz(1979, 1990), false);
@@ -110,7 +119,9 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt tolerante Schnellregler",
   assert.match(streaming, /Jahrzehnt · ±10 Jahre/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);
   assert.match(streaming, /kd-kompakt kd-streaming-werkzeuge[\s\S]*kd-streamfilter-knopf/);
-  assert.match(streaming, /kd-streamfilter-gruppe kd-streamfilter-genre/);
+  assert.match(streaming, /genreFilterSichtbarE && <div className="kd-streamfilter-gruppe kd-streamfilter-genre"/);
+  const css = lies("./src/index.css");
+  assert.match(css, /\.kd-streamfilter-abc-kopf \{[^}]*grid-template-columns:minmax\(0,1fr\) 64px 48px/);
   assert.match(streaming, /className="kd-streamfilter-knopf"/);
 });
 
