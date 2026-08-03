@@ -1115,12 +1115,12 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await page.addInitScript(async () => {
     const filme = [
       {
-        id: "alpha-rated", titel: "Alpha Story", originaltitel: "Alpha Story", jahr: 2021,
+        id: "alpha-rated", titel: "Alpha Story", originaltitel: "Alpha Story", jahr: 1980,
         typ: "film", quelle: "streaming", kategorie: "sehenswert", bewertet_von: "max",
         bewertung: { wie: 4, was: 3, warum: 4 }, genre: [], tags: [], begruendung: "", notiz: "",
       },
       {
-        id: "bravo-unrated", titel: "Bravo Story", originaltitel: "Bravo Story", jahr: 2022,
+        id: "bravo-unrated", titel: "Bravo Story", originaltitel: "Bravo Story", jahr: 1990,
         typ: "film", quelle: "must_watch", kategorie: null, bewertet_von: null,
         bewertung: null, genre: [], tags: [], begruendung: "", notiz: "",
       },
@@ -1155,17 +1155,17 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
     await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
       demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"],
       titel: [
-        { watchmode_id: 50001, titel: "Alpha Story", jahr: 2021, typ: "movie", genres: [], dienste: ["Netflix"] },
-        { watchmode_id: 50002, titel: "Bravo Story", jahr: 2022, typ: "movie", genres: [], dienste: ["Crunchyroll"] },
+        { watchmode_id: 50001, titel: "Alpha Story", jahr: 1980, typ: "movie", genres: [], dienste: ["Netflix"] },
+        { watchmode_id: 50002, titel: "Bravo Story", jahr: 1990, typ: "movie", genres: [], dienste: ["Crunchyroll"] },
         { watchmode_id: 50003, titel: "Zebra Zone", jahr: 2023, typ: "tv_series", genres: [], dienste: ["Crunchyroll"] },
       ],
     }));
     await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
       demo: true, stand: "2026-08-02T10:00:00Z", region: "AT", dienste: ["Netflix", "Crunchyroll"], gekuerzt: false,
       titel: [
-        { watchmode_id: 51001, titel: "Apollo Road", jahr: 2019, typ: "movie", genres: ["Drama"], dienste: ["Netflix"] },
-        { watchmode_id: 51002, titel: "Berlin Nights", jahr: 2024, typ: "tv_series", genres: ["Drama"], dienste: ["Crunchyroll"] },
-        { watchmode_id: 51003, titel: "Charlie Cloud", jahr: 2020, typ: "movie", genres: ["Komödie"], dienste: ["Netflix"] },
+        { watchmode_id: 51001, titel: "Apollo Road", jahr: 1990, typ: "movie", genres: ["Drama", "Thriller", "Mystery"], dienste: ["Netflix"] },
+        { watchmode_id: 51002, titel: "Berlin Nights", jahr: 2024, typ: "tv_series", genres: ["Drama", "Crime", "Action"], dienste: ["Crunchyroll"] },
+        { watchmode_id: 51003, titel: "Charlie Cloud", jahr: 2020, typ: "movie", genres: ["Komödie", "Animation", "Familie"], dienste: ["Netflix"] },
       ],
     }));
   });
@@ -1181,6 +1181,12 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await plattformP.selectOption("Crunchyroll");
   await expect(programmKarten).toHaveCount(2);
   await plattformP.selectOption("");
+  const dekadeP = page.getByRole("slider", { name: "Mein Programm: Jahrzehnt filtern" });
+  await expect(dekadeP).toBeVisible();
+  await dekadeP.fill("2");
+  await expect(programmKarten).toHaveCount(2);
+  await expect(page.locator('[data-streaming-suchtreffer="programm:alpha-rated"]')).toBeVisible();
+  await dekadeP.fill("0");
   await page.getByRole("button", { name: "Bewertet", exact: true }).click();
   await expect(programmKarten).toHaveCount(2);
   const abcP = page.getByRole("slider", { name: "Mein Programm: Anfangsbuchstaben filtern" });
@@ -1191,6 +1197,14 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await page.getByRole("button", { name: /^Entdecken/ }).click();
   const entdeckenKarten = page.locator(".kd-entdecken-karte");
   await expect(entdeckenKarten).toHaveCount(3);
+  const werkzeuge = page.locator(".kd-streaming-werkzeuge");
+  await expect(werkzeuge.locator(".kd-streamfilter-knopf")).toBeVisible();
+  await expect.poll(() => werkzeuge.evaluate((element) => {
+    const sortierung = element.querySelector('[data-tour="entdecken-sortierung"]')?.getBoundingClientRect();
+    const filter = element.querySelector(".kd-streamfilter-knopf")?.getBoundingClientRect();
+    return !!sortierung && !!filter && Math.abs(sortierung.top - filter.top) <= 2 && filter.left >= sortierung.right;
+  })).toBe(true);
+  await expect(page.locator(".kd-streamfilter-genre button")).toHaveCount(8);
   const plattformE = page.getByRole("combobox", { name: "Entdecken: Plattform filtern" });
   await plattformE.selectOption("Crunchyroll");
   await expect(entdeckenKarten).toHaveCount(1);
@@ -1204,6 +1218,12 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
   await page.getByRole("button", { name: /Gesehen \(1\)/ }).click();
+  const dekadeE = page.getByRole("slider", { name: "Entdecken: Jahrzehnt filtern" });
+  await expect(dekadeE).toBeVisible();
+  await dekadeE.fill("2");
+  await expect(entdeckenKarten).toHaveCount(1);
+  await expect(entdeckenKarten).toContainText("Apollo Road");
+  await dekadeE.fill("0");
   const abcE = page.getByRole("slider", { name: "Entdecken: Anfangsbuchstaben filtern" });
   await abcE.fill("3");
   await expect(entdeckenKarten).toHaveCount(1);

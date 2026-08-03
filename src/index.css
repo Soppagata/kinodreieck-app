@@ -403,16 +403,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-frage { margin:10px 0 2px 40px; padding:10px; border:1px solid var(--wolfram,#e3a63b); border-radius:6px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-entdecken-frage>div { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
 .kd-streamfilter-knopf { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
+.kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { min-width:0; }
 .kd-streamfilter-panel { display:grid; grid-template-columns:minmax(190px,280px) minmax(0,1fr); gap:10px 14px;
   align-items:end; box-sizing:border-box; margin:0 0 10px; padding:11px 12px; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 52%,transparent);
   border-radius:7px; background:color-mix(in srgb,var(--saal-hoch,#211e26) 88%,transparent); }
 .kd-streamfilter-plattform,.kd-streamfilter-gruppe { display:grid; gap:5px; min-width:0; }
+.kd-streamfilter-genre { grid-column:1 / -1; }
 .kd-streamfilter-plattform>span,.kd-streamfilter-gruppe>span,.kd-streamfilter-abc-kopf>span { color:var(--rauch,#948fa0);
   font:700 10px/1.2 'Space Mono',monospace; letter-spacing:.07em; text-transform:uppercase; }
 .kd-streamfilter-plattform select { width:100%; min-width:0; box-sizing:border-box; padding:8px 32px 8px 10px;
   border:1px solid var(--rauch,#948fa0); border-radius:5px; background:var(--saal,#17151a); color:var(--leinwand,#ece8df);
   font:600 15px/1.2 'Barlow Condensed',sans-serif; }
-.kd-streamfilter-abc { box-sizing:border-box; width:100%; margin:0 0 12px; padding:8px 12px 7px;
+.kd-streamfilter-regler { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
+.kd-streamfilter-abc { box-sizing:border-box; width:100%; min-width:0; margin:0; padding:8px 12px 7px;
   border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
   background:color-mix(in srgb,var(--saal-hoch,#211e26) 76%,transparent); }
 .kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:9px; margin-bottom:3px; }
@@ -428,6 +431,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   font:600 clamp(6px,1.05vw,8px)/1 'Space Mono',monospace; }
 .kd-streamfilter-abc-skala span.aktiv { color:var(--wolfram,#e3a63b); font-weight:900; }
 .kd-streamfilter-abc-skala span.alle { font-size:10px; }
+.kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong { min-width:66px; padding:0 5px; box-sizing:border-box; }
+.kd-streamfilter-dekade-skala { display:grid; align-items:center; width:100%; }
+.kd-streamfilter-dekade-skala span { min-width:0; overflow:visible; color:var(--rauch,#948fa0); text-align:center;
+  font:600 clamp(5px,.8vw,7px)/1 'Space Mono',monospace; }
+.kd-streamfilter-dekade-skala span.aktiv { color:var(--wolfram,#e3a63b); font-weight:900; }
+.kd-streamfilter-dekade-skala span.alle { font-size:10px; }
 @media (max-width: 760px) {
   .kd-chiprow, .kd-seg {
     flex-wrap: wrap; overflow: visible; scroll-snap-type: none;
@@ -450,13 +459,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
   .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+  .kd-streaming-werkzeuge { display:grid !important; grid-template-columns:minmax(0,1fr) auto; align-items:stretch !important; }
+  .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { display:flex !important; width:100%; min-width:0; }
+  .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] select { flex:1 1 auto; }
+  .kd-streaming-werkzeuge>.kd-streamfilter-knopf { margin-left:0; white-space:nowrap; }
   .kd-streamfilter-knopf { min-height:44px; margin-left:auto; padding:7px 12px !important; }
   .kd-streamfilter-panel { grid-template-columns:minmax(0,1fr); gap:11px; padding:10px; }
   .kd-streamfilter-panel .kd-chiprow { display:flex; }
   .kd-streamfilter-plattform select { min-height:44px; }
+  .kd-streamfilter-regler { grid-template-columns:minmax(0,1fr); gap:8px; }
   .kd-streamfilter-abc { padding:8px 9px 7px; }
   .kd-streamfilter-abc input[type="range"] { min-height:30px; }
   .kd-streamfilter-abc-skala span { font-size:clamp(5px,1.7vw,7px); }
+  .kd-streamfilter-dekade-skala span { font-size:clamp(5px,1.65vw,7px); }
   /* Einstellungs-Zeilen am Handy stapeln: Label ÜBER den Umschalter, damit die
      SegmentedControls (Erscheinung/Schriftgröße) die volle Breite bekommen und
      „Foyer (hell)"/„Groß" nicht mehr am Rand abschneiden (Max 2026-07-19, P2). */

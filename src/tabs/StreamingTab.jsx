@@ -16,6 +16,7 @@ import {
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
   sortiereStreamingTitel, STREAMING_ALPHABET, streamingAnfangsbuchstabe,
+  streamingJahrzehnte, passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
 
 /* ================= STREAMING =================
@@ -96,6 +97,34 @@ function AlphabetFilter({ wert, onChange, name }) {
   );
 }
 
+function JahrzehntFilter({ wert, optionen, onChange, name }) {
+  if (!optionen.length) return null;
+  const index = wert == null ? 0 : Math.max(0, optionen.indexOf(wert) + 1);
+  return (
+    <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={wert != null ? "1" : "0"}>
+      <div className="kd-streamfilter-abc-kopf">
+        <span>Jahrzehnt · ±10 Jahre</span>
+        <strong aria-live="polite">{wert == null ? "Alle" : `${wert}er`}</strong>
+        <button type="button" onClick={() => onChange(null)} disabled={wert == null}>Alle</button>
+      </div>
+      <input type="range" min="0" max={optionen.length} step="1" value={index}
+        onChange={(event) => {
+          const naechsterIndex = Number(event.target.value);
+          onChange(naechsterIndex === 0 ? null : optionen[naechsterIndex - 1]);
+        }}
+        aria-label={`${name}: Jahrzehnt filtern`}
+        aria-valuetext={wert == null ? "Alle Jahrzehnte" : `${wert}er, mit zehn Jahren Kulanz davor und danach`} />
+      <div className="kd-streamfilter-dekade-skala" aria-hidden="true"
+        style={{ gridTemplateColumns: `repeat(${optionen.length + 1}, minmax(0, 1fr))` }}>
+        <span className={wert == null ? "aktiv alle" : "alle"}>•</span>
+        {optionen.map((jahrzehnt) => (
+          <span key={jahrzehnt} className={wert === jahrzehnt ? "aktiv" : ""}>{jahrzehnt}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function StreamingTab({
   bekannt, entdecken, auswahl, merkliste = [], toggleMerk, addFilm, master, updateFilm,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
@@ -124,6 +153,7 @@ export function StreamingTab({
   const [plattformP, setPlattformP] = useState(null);
   const [nurBewertet, setNurBewertet] = useState(false);
   const [buchstabeP, setBuchstabeP] = useState(null);
+  const [dekadeP, setDekadeP] = useState(null);
   const [plattformE, setPlattformE] = useState(null);
   const [statusFilterE, setStatusFilterE] = useState(null);
   const [buchstabeE, setBuchstabeE] = useState(null);
@@ -147,7 +177,7 @@ export function StreamingTab({
     setFokusOverride({ art: fokusTreffer.art, ref: String(fokusTreffer.ref) });
     setAnsicht(fokusTreffer.art === "entdecken" ? "entdecken" : "programm");
     setSuche(fokusTreffer.art === "programm" ? (fokusTreffer.titel || "") : "");
-    setPlattformP(null); setNurBewertet(false); setBuchstabeP(null); setNurWunsch(false);
+    setPlattformP(null); setNurBewertet(false); setBuchstabeP(null); setDekadeP(null); setNurWunsch(false);
     setPlattformE(null); setStatusFilterE(null); setBuchstabeE(null);
     setGenreE(null); setDekadeE(null); setTypE(null);
     setSichtbarE(200);
@@ -328,15 +358,23 @@ export function StreamingTab({
     if (nurWunsch) l = l.filter((f) => mustwatchIds && mustwatchIds.has(f.id));
     if (nurBewertet) l = l.filter((f) => f.bewertung != null);
     if (buchstabeP) l = l.filter((f) => streamingAnfangsbuchstabe(f.titel) === buchstabeP);
+    if (dekadeP != null) l = l.filter((f) => passtInJahrzehntMitKulanz(f.jahr, dekadeP));
     if (suche.trim()) { const nq = norm(suche); l = l.filter((f) => norm(f.titel || "").includes(nq)); }
     return sortiereStreamingTitel(l, sortP, sortRichtungP);
-  }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
+  }, [bekannt, datenDa, dienstOk, plattformOkP, nurWunsch, nurBewertet, buchstabeP, dekadeP, mustwatchIds, suche, sortP, sortRichtungP, fokusOverride]);
 
   const genresE = useMemo(() => {
     if (!entdeckenDa) return [];
-    const c = {};
-    entdecken.titel.forEach((t) => (t.genres || []).forEach((g) => (c[g] = (c[g] || 0) + 1)));
-    return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([g]) => g);
+    const gruppen = new Map();
+    entdecken.titel.forEach((titel) => (titel.genres || []).forEach((genre) => {
+      const label = String(genre || "").trim();
+      const key = norm(label);
+      if (!key) return;
+      const bisher = gruppen.get(key) || { key, label, anzahl: 0 };
+      bisher.anzahl += 1;
+      gruppen.set(key, bisher);
+    }));
+    return [...gruppen.values()].sort((a, b) => b.anzahl - a.anzahl || a.label.localeCompare(b.label, "de"));
   }, [entdecken, entdeckenDa]);
 
   const statusAnzahlenE = useMemo(() => {
@@ -380,8 +418,8 @@ export function StreamingTab({
     if (statusFilterE === "gesehen") l = l.filter((t) => statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen");
     if (statusFilterE === "beobachtet") l = l.filter((t) => istBeobachtet(entdeckenStatus[t.watchmode_id]));
     if (buchstabeE) l = l.filter((t) => streamingAnfangsbuchstabe(t.titel) === buchstabeE);
-    if (genreE) l = l.filter((t) => (t.genres || []).includes(genreE));
-    if (dekadeE != null) l = l.filter((t) => t.jahr && Math.floor(t.jahr / 10) * 10 === dekadeE);
+    if (genreE) l = l.filter((t) => (t.genres || []).some((genre) => norm(genre) === genreE));
+    if (dekadeE != null) l = l.filter((t) => passtInJahrzehntMitKulanz(t.jahr, dekadeE));
     if (typE) l = l.filter((t) => (t.typ || "") === typE);
     return sortiereStreamingTitel(l, sortE, sortRichtungE);
   }, [entdecken, entdeckenDa, dienstOk, plattformOkE, statusFilterE, buchstabeE, genreE, dekadeE, typE, sortE, sortRichtungE, entdeckenStatus, fokusOverride]);
@@ -398,21 +436,18 @@ export function StreamingTab({
     return [...basis, ziel];
   }, [entdeckenListe, sichtbarE, fokusOverride]);
 
-  const dekaden = useMemo(() => {
-    if (!entdeckenDa) return [];
-    const s = new Set();
-    entdecken.titel.forEach((t) => t.jahr && s.add(Math.floor(t.jahr / 10) * 10));
-    return [...s].sort((a, b) => b - a);
-  }, [entdecken, entdeckenDa]);
+  const dekadenP = useMemo(() => streamingJahrzehnte(bekannt?.titel || []), [bekannt]);
+  const dekadenE = useMemo(() => streamingJahrzehnte(entdecken?.titel || []), [entdecken]);
 
   const gemerkt = (t) => merkliste.some((m) => m.watchmode_id === t.watchmode_id);
   const aendereFilter = (setter, wert) => {
     setFokusOverride(null);
     setter(wert);
   };
-  const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch);
+  const aktiveFilterP = Number(!!plattformP) + Number(nurBewertet) + Number(nurWunsch)
+    + Number(!!buchstabeP) + Number(dekadeP != null);
   const aktiveFilterE = Number(!!plattformE) + Number(!!statusFilterE) + Number(!!typE)
-    + Number(!!genreE) + Number(dekadeE != null);
+    + Number(!!genreE) + Number(dekadeE != null) + Number(!!buchstabeE);
 
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 10px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
@@ -525,8 +560,12 @@ export function StreamingTab({
               </div>
             </div>
           )}
-          <AlphabetFilter name="Mein Programm" wert={buchstabeP}
-            onChange={(wert) => aendereFilter(setBuchstabeP, wert)} />
+          <div className="kd-streamfilter-regler">
+            <AlphabetFilter name="Mein Programm" wert={buchstabeP}
+              onChange={(wert) => aendereFilter(setBuchstabeP, wert)} />
+            <JahrzehntFilter name="Mein Programm" wert={dekadeP} optionen={dekadenP}
+              onChange={(wert) => aendereFilter(setDekadeP, wert)} />
+          </div>
           {programm.length === 0 && <p style={{ color: T.rauch, fontSize: 14 }}>Kein Titel deiner Liste auf den gewählten Diensten.</p>}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {programm.map((f) => {
@@ -602,7 +641,7 @@ export function StreamingTab({
               </div>
             </div>
           )}
-          <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             {/* data-tour auf dem Wrapper, NICHT dem <select>: native Form-Controls
                 schlucken den box-shadow-Rahmen, dann käme der Hinweis ohne Rahmen. */}
             <span data-tour="entdecken-sortierung" style={{ display: "inline-flex" }}>
@@ -620,16 +659,14 @@ export function StreamingTab({
                 {sortRichtungE === "ab" ? "↓" : "↑"}
               </button>
             </span>
+            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
+              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
+            </button>
             <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}
               title="Merkliste als JSON-Datei exportieren">
               Merkliste ({merkliste.length}) exportieren
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
-              style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
             </button>
           </div>
           {streamFilterOffen && (
@@ -656,22 +693,25 @@ export function StreamingTab({
                   <Chip active={typE === "tv_series"} onClick={() => aendereFilter(setTypE, typE === "tv_series" ? null : "tv_series")}>Serien</Chip>
                 </ChipReihe>
               </div>
-              <div className="kd-streamfilter-gruppe">
+              <div className="kd-streamfilter-gruppe kd-streamfilter-genre">
                 <span>Genre</span>
                 <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
-                  {genresE.map((g) => <Chip key={g} active={genreE === g} onClick={() => aendereFilter(setGenreE, genreE === g ? null : g)}>{g}</Chip>)}
-                </ChipReihe>
-              </div>
-              <div className="kd-streamfilter-gruppe">
-                <span>Jahrzehnt</span>
-                <ChipReihe style={{ gap: 6, marginBottom: 0 }}>
-                  {dekaden.map((d) => <Chip key={d} active={dekadeE === d} onClick={() => aendereFilter(setDekadeE, dekadeE === d ? null : d)}>{d}er</Chip>)}
+                  {genresE.map((genre) => (
+                    <Chip key={genre.key} active={genreE === genre.key}
+                      onClick={() => aendereFilter(setGenreE, genreE === genre.key ? null : genre.key)}>
+                      {genre.label} ({genre.anzahl})
+                    </Chip>
+                  ))}
                 </ChipReihe>
               </div>
             </div>
           )}
-          <AlphabetFilter name="Entdecken" wert={buchstabeE}
-            onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
+          <div className="kd-streamfilter-regler">
+            <AlphabetFilter name="Entdecken" wert={buchstabeE}
+              onChange={(wert) => aendereFilter(setBuchstabeE, wert)} />
+            <JahrzehntFilter name="Entdecken" wert={dekadeE} optionen={dekadenE}
+              onChange={(wert) => aendereFilter(setDekadeE, wert)} />
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sichtbareEntdeckenTitel.map((t) => (
               <div key={t.watchmode_id} className="kd-entdecken-karte kd-suchfokus" tabIndex={-1}

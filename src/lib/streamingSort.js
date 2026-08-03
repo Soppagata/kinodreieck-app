@@ -16,6 +16,23 @@ export function streamingAnfangsbuchstabe(titel) {
   return STREAMING_ALPHABET.find((buchstabe) => ohneAkzente.startsWith(buchstabe)) || null;
 }
 
+export function streamingJahrzehnte(titel = []) {
+  const jahre = titel.map((eintrag) => Number(eintrag?.jahr))
+    .filter((jahr) => Number.isInteger(jahr) && jahr >= 1880 && jahr <= 2200);
+  if (!jahre.length) return [];
+  const erste = Math.floor(Math.min(...jahre) / 10) * 10;
+  const letzte = Math.floor(Math.max(...jahre) / 10) * 10;
+  const jahrzehnte = [];
+  for (let jahrzehnt = erste; jahrzehnt <= letzte; jahrzehnt += 10) jahrzehnte.push(jahrzehnt);
+  return jahrzehnte;
+}
+
+export function passtInJahrzehntMitKulanz(jahr, jahrzehnt, kulanz = 10) {
+  if (jahrzehnt == null) return true;
+  const nummer = Number(jahr);
+  return Number.isFinite(nummer) && Math.abs(nummer - Number(jahrzehnt)) <= kulanz;
+}
+
 export function sortiereStreamingTitel(liste, feld = "titel", richtung = "auf") {
   const wertVon = wertLeser[feld] || wertLeser.titel;
   const faktor = richtung === "ab" ? -1 : 1;

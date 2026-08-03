@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 import { quelleBadges, QUELLEN_KLASSEN } from "./src/lib/quellen.js";
-import { sortiereStreamingTitel, streamingAnfangsbuchstabe } from "./src/lib/streamingSort.js";
+import {
+  sortiereStreamingTitel, streamingAnfangsbuchstabe,
+  streamingJahrzehnte, passtInJahrzehntMitKulanz,
+} from "./src/lib/streamingSort.js";
 
 let ok = 0;
 const check = (name, fn) => {
@@ -76,7 +79,7 @@ check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag"
   assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
 });
 
-check("Streaming sortiert ohne Relevanzwerte und filtert nach Anfangsbuchstaben", () => {
+check("Streaming sortiert ohne Relevanzwerte und nutzt tolerante Schnellregler", () => {
   const titel = [
     { titel: "Zulu", jahr: 2001, typ: "movie", dienste: [] },
     { titel: "Alien", jahr: 1979, typ: "movie", dienste: ["Netflix"] },
@@ -87,6 +90,11 @@ check("Streaming sortiert ohne Relevanzwerte und filtert nach Anfangsbuchstaben"
   assert.equal(streamingAnfangsbuchstabe("Äon Flux"), "A");
   assert.equal(streamingAnfangsbuchstabe("  Zulu"), "Z");
   assert.equal(streamingAnfangsbuchstabe("2001"), null);
+  assert.deepEqual(streamingJahrzehnte([{ jahr: 1987 }, { jahr: 2012 }]), [1980, 1990, 2000, 2010]);
+  assert.equal(passtInJahrzehntMitKulanz(1980, 1990), true);
+  assert.equal(passtInJahrzehntMitKulanz(2000, 1990), true);
+  assert.equal(passtInJahrzehntMitKulanz(1979, 1990), false);
+  assert.equal(passtInJahrzehntMitKulanz(null, 1990), false);
 
   const streaming = lies("./src/tabs/StreamingTab.jsx");
   assert.doesNotMatch(streaming, /Sortierung: Passung|User-Score|Könnte dir gefallen|passungStufe|lesbaresPassungsSignal/);
@@ -96,6 +104,10 @@ check("Streaming sortiert ohne Relevanzwerte und filtert nach Anfangsbuchstaben"
   assert.match(streaming, /Gesehen \(\{statusAnzahlenE\.gesehen\}\)/);
   assert.match(streaming, /Beobachtet \(\{statusAnzahlenE\.beobachtet\}\)/);
   assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
+  assert.match(streaming, /Jahrzehnt · ±10 Jahre/);
+  assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);
+  assert.match(streaming, /kd-kompakt kd-streaming-werkzeuge[\s\S]*kd-streamfilter-knopf/);
+  assert.match(streaming, /kd-streamfilter-gruppe kd-streamfilter-genre/);
   assert.match(streaming, /className="kd-streamfilter-knopf"/);
 });
 
