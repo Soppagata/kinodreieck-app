@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { T } from "../lib/tokens.js";
 import { FELD } from "../lib/hinweise.js";
-import { istTourOffen } from "../lib/tour.js";
 
 /* ---------- Feld-Tooltip (Teil B) ----------
    Kleines „?“ neben einem Label. Öffnet bei mouseenter | focus | Klick,
@@ -9,7 +8,7 @@ import { istTourOffen } from "../lib/tour.js";
    Tooltip: saalHoch, Rahmen tinteWeich, Text rauch, max 240px, über oder unter
    dem Auslöser je nach Platz, nie aus dem Viewport. Eigene, sehr kleine
    Komponente statt native title (die erscheinen spät, nicht per Tastatur, un-
-   stylebar). Aus, solange ein Tutorial-Overlay offen ist (Kollision Teil A). */
+   stylebar). */
 export function FeldHinweis({ feld, text }) {
   const inhalt = text || FELD[feld];
   const [offen, setOffen] = useState(false);
@@ -17,7 +16,7 @@ export function FeldHinweis({ feld, text }) {
   const wrapRef = useRef(null);
   if (!inhalt) return null;
 
-  const oeffnen = () => { if (!istTourOffen()) setOffen(true); };
+  const oeffnen = () => setOffen(true);
   const schliessen = () => setOffen(false);
 
   useEffect(() => {

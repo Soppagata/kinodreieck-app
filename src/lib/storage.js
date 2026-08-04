@@ -122,7 +122,7 @@ export const K = {
   katalogKey: "kd:katalog:key",       // vom Tester eingegebener Supabase-Publishable-Key (nur Lesen)
   katalogUrl: "kd:katalog:url",       // lokaler URL-Fallback; im Pages-Build vorbelegt
   demoSeed: "kd:demo-seed",           // IDs/Schlüssel der geladenen Demo-Beilage für gezieltes Entfernen
-  geschmacksprofil: "kd:geschmacksprofil", // Etappe 7: strukturiertes, versioniertes Geschmacksprofil (16. Sync-Topf)
+  geschmacksprofil: "kd:geschmacksprofil", // Etappe 7: strukturiertes, versioniertes Geschmacksprofil (Sync-Topf; Register: personalDataRegistry)
 };
 
 export const PROGRAMM_TTL_MS = 24 * 60 * 60 * 1000; // 24h

@@ -323,7 +323,7 @@ export default function App() {
   const [snapshotFreigabe, setSnapshotFreigabe] = useState(() => snapshotsFrei());
   const snapshotFreigabeRef = useRef(snapshotFreigabe);
   snapshotFreigabeRef.current = snapshotFreigabe;
-  const [startTick, setStartTick] = useState(0); // bump nach Startwahl -> Tour-Effekte neu binden
+  const [startTick, setStartTick] = useState(0); // bump nach Startwahl -> abgeleitete Gates/Zustände neu lesen
   /* Etappe 7: KI-Schalter. Geraetelokal (kd:ki), deshalb eigener State statt
      `einstellungen` -- und ein Tick, damit die Gates (kiAn) nach einer
      Aenderung neu gelesen werden; sie werden beim Render abgefragt, nicht
@@ -659,7 +659,7 @@ export default function App() {
           if (e.modus === "nerv") e.modus = "neon-noir";        // veröffentlichbarer Ersatz bewahrt die dunkle Egg-Wahl
           setEinstellungenState(e);
           setzeTheme(e.modus || e.theme);                        // Spezialmodus überschreibt die Basis-Palette
-          if (e.startTab && e.startTab !== "start") setTab(e.startTab);
+          if (e.startTab && e.startTab !== "start" && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab); // Restwerte (z.B. "finder") nicht in navigationslose Tabs booten
           if (hatteVeralteteEinstellung) await store.set(K.einstellungen, JSON.stringify(e));
         }
       } catch { /* Defaults */ }
@@ -1837,7 +1837,6 @@ export default function App() {
     bootDone,
     setupWarnung,
     startModalOffen,
-    willkommenOffen: false,
     setTab,
     springeZuFilm,
   });

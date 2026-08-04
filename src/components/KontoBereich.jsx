@@ -26,6 +26,7 @@ function Statuszeile({ status }) {
   const teile = [];
   if (status.conflict?.length) teile.push({ text: status.conflict.length + " Konflikt(e)", farbe: T.gefahr });
   if (status.zuGross?.length) teile.push({ text: status.zuGross.length + " zu groß", farbe: T.gefahr });
+  if (status.schemaVeraltet?.length) teile.push({ text: status.schemaVeraltet.length + " wartet auf Migration", farbe: T.gefahr });
   if (status.pending?.length) teile.push({ text: status.pending.length + " ausstehend", farbe: T.wolfram });
   if (status.stale?.length) teile.push({ text: "nicht aktuell", farbe: T.wolfram });
   if (!teile.length) teile.push({ text: "synchron", farbe: T.ok });
@@ -212,6 +213,18 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
             Zu groß für die Datenbank: {status.zuGross.map(topfLabel).join(", ")}.
             Dieser Bereich wird nicht mehr abgeglichen, bis er kleiner ist. Der lokale Stand bleibt vollständig
             erhalten — sichere ihn über das Gesamt-Backup und räume dann auf.
+          </p>
+        </div>
+      )}
+
+      {/* Eigener Text für den 23514-Key-Fall — vorher lief er fälschlich als
+          „zu groß" und schickte auf die Aufräum-Fährte (Audit Probe f). */}
+      {kontoSpeicherAktiv && status?.schemaVeraltet?.length > 0 && (
+        <div style={{ border: "1px solid " + T.gefahr, background: "rgba(217,106,90,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
+          <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
+            Der Server kennt einen Datentopf noch nicht: {status.schemaVeraltet.map(topfLabel).join(", ")}.
+            Vermutlich fehlt eine Datenbank-Migration. Deine Daten bleiben lokal vollständig erhalten;
+            sobald die Migration eingespielt ist, überträgt die nächste Änderung den Bereich von selbst.
           </p>
         </div>
       )}

@@ -34,7 +34,7 @@ let kontoAktiv = false;
 function leeresKontoStatus() {
   return {
     lastPull: null, lastCommit: null,
-    pending: [], conflict: [], stale: [], zuGross: [],
+    pending: [], conflict: [], stale: [], zuGross: [], schemaVeraltet: [],
     configured: false, prepared: false,
   };
 }

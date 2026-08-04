@@ -21,7 +21,7 @@ export function HilfeSheet({ onClose }) {
         <div className="kd-sheet-kopf"><h2 id="kd-help-titel">Anleitung &amp; Hilfe</h2><button className="kd-sheet-close" onClick={onClose} aria-label="Schließen">×</button></div>
         <p className="kd-help-lead">Diese Hilfe öffnet sich nur, wenn du sie bewusst aufrufst.</p>
         <div className="kd-help-grid">
-          <article><strong>Start</strong><p>Dein Überblick mit Kinopins, Merkliste und Empfehlungen.</p></article>
+          <article><strong>Start</strong><p>Dein Überblick: Pinboard &amp; Serienradar, Deine Woche, Must-Watch und Zuletzt hinzugefügt.</p></article>
           <article><strong>Kino &amp; Streaming</strong><p>Aktuelle Angebote filtern und Filme in die eigene Mediathek übernehmen.</p></article>
           <article><strong>Mediathek</strong><p>Filme bewerten, Listen pflegen und den persönlichen Bestand sichern.</p></article>
           <article><strong>Settings</strong><p>Konto, Backup, Datenquellen, Darstellung und KI-Wahl verwalten.</p></article>

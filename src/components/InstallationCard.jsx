@@ -13,7 +13,9 @@ export function InstallationCard({ kompakt = false, zeigeEinzeldatei = true }) {
   return (
     <section className={"kd-installkarte" + (kompakt ? " kd-installkarte-kompakt" : "")} aria-labelledby="kd-install-titel">
       <p className="kd-kicker">Auf diesem Gerät behalten</p>
-      <h2 id="kd-install-titel">Kinodreieck installieren</h2>
+      {/* Titel folgt dem Zustand — „installieren" wäre falsch, wenn die App
+          bereits installiert ist oder als Einzeldatei läuft (Befund B5). */}
+      <h2 id="kd-install-titel">{status.datei ? "Kinodreieck als Einzeldatei" : status.standalone ? "Kinodreieck ist installiert" : "Kinodreieck installieren"}</h2>
       {status.datei ? (
         <p className="kd-install-status"><strong>Du nutzt bereits die Einzeldatei.</strong> Sie läuft ohne PWA-Installation direkt aus dieser Datei.</p>
       ) : status.standalone ? (

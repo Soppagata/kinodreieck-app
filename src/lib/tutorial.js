@@ -91,5 +91,6 @@ export function markGesehen(id) {
 export function setWillkommen(v = true) {
   const t = getTutorial(); t.willkommen = !!v; writeJSON(K_TUT, t); return t;
 }
-/* "Tutorial neu starten" (Anleitung & Hilfe): Willkommen + alle Hinweise zurück. */
-export function resetTutorial() { writeJSON(K_TUT, { willkommen: false, gesehen: [] }); }
+/* resetTutorial entfernt (Entscheid Max 03.08.2026: Tour entfernt, Hilfe
+   gestärkt) — der einzige gedachte Aufrufer war der nie erreichbare
+   „Tutorial neu starten"-Knopf in Erklaerstuecke. */

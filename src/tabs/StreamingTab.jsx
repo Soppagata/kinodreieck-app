@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { feuere } from "../lib/tour.js";
 import { store, K } from "../services/storage.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { norm } from "../lib/match.js";
@@ -140,7 +139,6 @@ export function StreamingTab({
 }) {
   const bereichRef = useRef(null);
   const [ansicht, setAnsicht] = useState("programm");
-  useEffect(() => { if (ansicht === "entdecken") feuere("entdecken"); }, [ansicht]); // Entdecken -> Just-in-Time-Hinweis
   const [expandedId, setExpandedId] = useState(null);
   const [nurWunsch, setNurWunsch] = useState(false);
   const [suche, setSuche] = useState("");

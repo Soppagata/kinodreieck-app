@@ -29,6 +29,7 @@ let tokenGeber = async () => "at-gueltig";
 let tokenZuKonto = { "at-gueltig": "konto-A", "at-frisch": "konto-A", "at-B": "konto-B" };
 let erzwinge401Einmal = false;
 let maxBytes = 1048576;
+let erlaubteKeys = null;          // null = alle Keys erlaubt; Array = DB-Whitelist (kd_personal_key_erlaubt)
 
 function res(status, data) { return { ok: status >= 200 && status < 300, status, json: async () => data }; }
 
@@ -60,6 +61,9 @@ function mockFetch(url, opt = {}) {
     /* Die Zeilenzugehörigkeit setzt der Server. Ein mitgeschicktes fremdes
        account_id verletzt die WITH-CHECK-Regel. */
     if (body.account_id && body.account_id !== konto) return Promise.resolve(res(403, { code: "42501", message: "row-level security" }));
+    /* Beide CHECKs liefern denselben SQL-Code 23514 — unterscheidbar nur am
+       Constraint-Namen, exakt wie beim echten PostgREST. */
+    if (erlaubteKeys && !erlaubteKeys.includes(body.key)) return Promise.resolve(res(400, { code: "23514", message: "new row for relation \"kd_personal\" violates check constraint \"kd_personal_key_erlaubt\"" }));
     if (String(body.value).length > maxBytes) return Promise.resolve(res(400, { code: "23514", message: "kd_personal_value_max" }));
     const id = konto + "|" + body.key;
     if (tabelle.has(id)) return Promise.resolve(res(409, { code: "23505", message: "duplicate key" }));
@@ -68,6 +72,7 @@ function mockFetch(url, opt = {}) {
     return Promise.resolve(res(201, [{ ...zeile }]));
   }
   if (method === "PATCH") {
+    if (erlaubteKeys && !erlaubteKeys.includes(keyFilter)) return Promise.resolve(res(400, { code: "23514", message: "new row for relation \"kd_personal\" violates check constraint \"kd_personal_key_erlaubt\"" }));
     if (String(body.value).length > maxBytes) return Promise.resolve(res(400, { code: "23514", message: "kd_personal_value_max" }));
     const id = konto + "|" + keyFilter;
     const zeile = tabelle.get(id);
@@ -247,6 +252,34 @@ await sleep(30);
 check("Ein zu großer Topf wird beim Nachsenden übersprungen (kein Dauerfeuer)", calls.length === nachErstem);
 check("Der lokale Stand bleibt vollständig erhalten", _ls.get("kd:master").length === 80);
 maxBytes = 1048576;
+
+/* ---------- Unbekannter Datentopf (23514, kd_personal_key_erlaubt): eigener Status ----------
+   Entscheid Max 03.08.2026 (Audit Probe f): Der Fall „DB kennt den Key noch
+   nicht" (fehlende Migration) lief bisher auf demselben zuGross-Flag und
+   wurde in der Oberfläche als „zu groß" fehldiagnostiziert. Jetzt eigener
+   terminaler Status `schemaVeraltet`; der echte Größenfall oben bleibt
+   unverändert gepinnt. */
+_ls.clear(); tabelle = new Map(); calls = [];
+erlaubteKeys = ["kd:artikel"];    // kd:master fehlt in der DB-Whitelist -> Migration fehlt
+d = neuerTreiber(async () => "at-gueltig");
+await d.set("kd:master", "M-NEU");
+await sleep(30);
+const nachKeyAblehnung = calls.length;
+check("Unbekannter Topf wird als schemaVeraltet geführt — nicht als zu groß, nicht als ausstehend",
+  d.status().schemaVeraltet.includes("kd:master")
+  && !d.status().zuGross.includes("kd:master")
+  && !d.status().pending.includes("kd:master"));
+await d.syncFlush();
+await sleep(30);
+check("Ein unbekannter Topf wird beim Nachsenden übersprungen (kein Dauerfeuer)", calls.length === nachKeyAblehnung);
+check("Der lokale Stand bleibt beim unbekannten Topf vollständig erhalten", _ls.get("kd:master") === "M-NEU");
+/* Nach eingespielter Migration heilt der nächste Edit den Topf von selbst —
+   dieselbe Selbstheilung, die der zu-groß-Weg über set() besitzt. */
+erlaubteKeys = null;
+await d.set("kd:master", "M-NACH-MIGRATION");
+await sleep(30);
+check("Nach der Migration heilt der nächste Schreibzugriff den Topf von selbst",
+  db("konto-A", "kd:master") === "M-NACH-MIGRATION" && d.status().schemaVeraltet.length === 0);
 
 /* ---------- B11: Statusform bleibt kompatibel ---------- */
 const st = d.status();

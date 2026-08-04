@@ -108,7 +108,14 @@ export function verbraucheFrischenStart() {
        keinen danach neu aufgebauten Stand erneut vernichten. */
     localStorage.setItem(K.startAuftrag, token);
     localStorage.setItem(K.start, startMatch[1]);
-    for (const key of [...PERSONAL_DATA_KEYS, K.exportStand]) {
+    /* Beta-Total-Reset: neben den persönlichen Töpfen auch die Gerätemarken
+       räumen, die sonst als Restzustand weiterwirkten (Demo-Seed, Programm-
+       Cache, Einstiegs-/Tutorial-/Setup-Marken). Effekt: beim nächsten Boot
+       ohne ?start= kommt das EinstiegsGate wieder — gewünscht. kd:ki bleibt
+       BEWUSST stehen: die KI-Wahl ist eine Grundsatzentscheidung über einen
+       bezahlten Pfad, kein Testrest. */
+    const geraetemarken = [K.demoSeed, K.programm, K.einstieg, "kd:tutorial", "kd:setup", "kd:setup-done"];
+    for (const key of [...PERSONAL_DATA_KEYS, K.exportStand, ...geraetemarken]) {
       localStorage.removeItem(key);
     }
     frischerStartMemo = startMatch[1];

@@ -12,8 +12,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-/* KD_OUT: alternativer Zielordner (betamodus_test.mjs baut mit KD_BETA=1 nach
-   dist-single-beta, ohne den Personal-Build in dist-single zu überschreiben). */
+/* KD_OUT: optionaler alternativer Zielordner für Sonder-Builds. Derzeit setzt
+   ihn niemand (die frühere KD_BETA-Doppelbau-Mechanik existiert nicht mehr);
+   Default bleibt dist-single. */
 const OUT = join(ROOT, process.env.KD_OUT || "dist-single");
 mkdirSync(OUT, { recursive: true });
 

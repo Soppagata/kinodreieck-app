@@ -111,7 +111,7 @@ export function createSessionCoordinator({
       if (id && storage.active?.()) {
         await storage.flush?.();
         const status = storage.status?.() || {};
-        const offen = [status.pending, status.conflict, status.zuGross]
+        const offen = [status.pending, status.conflict, status.zuGross, status.schemaVeraltet]
           .some((liste) => Array.isArray(liste) && liste.length > 0);
         if (offen) {
           throw new Error("Vor dem Abmelden konnten nicht alle Kontoänderungen gesichert werden. Bitte löse offene Konflikte oder erstelle zuerst ein Backup.");

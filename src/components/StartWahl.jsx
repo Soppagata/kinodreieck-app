@@ -7,7 +7,7 @@ import { T, btnStyle } from "../lib/tokens.js";
    frühere Wahl (kd:start) noch ein ?start=-Parameter vorliegt. Zwei Wege,
    eindeutig benannt und erklärt — NICHT im Tutorial versteckt (§7.4):
 
-     clean  = leerer Start, eigene Mediathek über die Tour aufbauen (Default)
+     clean  = leerer Start, eigene Mediathek selbst aufbauen (Default)
      demo   = Schaufenster mit Max' Mediathek, Blog, Listen und Diensten
 
    onWaehle("clean"|"demo") schreibt die Wahl weg und lädt entsprechend.
@@ -15,7 +15,7 @@ import { T, btnStyle } from "../lib/tokens.js";
    werden; der gemeinsame Programm-Katalog bleibt dabei erhalten. */
 export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optionaler onClose (Escape)
   const dialogRef = useRef(null); // KD-028
-  // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe (Muster aus TourOverlay)
+  // KD-028: Fokus-Eintritt + Fokus-Falle + Escape + Fokus-Rückgabe
   useEffect(() => {
     const el = dialogRef.current; if (!el) return;
     const vorherFokus = document.activeElement;
@@ -40,7 +40,11 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
   }, []);
   const overlay = {
     position: "fixed", inset: 0, zIndex: 10002, background: "rgba(23,21,26,0.92)",
-    display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto",
+    display: "flex", alignItems: "center", justifyContent: "center", overflowY: "auto",
+    /* Safe-Area (Notch/Home-Indicator): dasselbe max()-Muster wie die
+       CSS-Overlays (index.css, z.B. .kd-help-layer) — JS-Portale bekamen
+       es bisher nicht (Befund B5 #4). */
+    padding: "max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))",
   };
   const box = {
     background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8,
@@ -63,7 +67,7 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
           Beide Wege laden dasselbe Kino- und Streamingprogramm aus der Datenbank.
         </p>
 
-        <div style={karte} data-tour="startwahl-clean">
+        <div style={karte}>
           <h3 style={kTitel}>Leer starten <span style={{ color: T.wolfram, fontSize: 13 }}>· empfohlen</span></h3>
           <p style={kText}>
             Deine Mediathek, Listen und Streamingdienste sind leer. Du baust alles
@@ -74,7 +78,7 @@ export function StartWahl({ onWaehle, aktuelle, onClose }) { // KD-028: optional
           </div>
         </div>
 
-        <div style={karte} data-tour="startwahl-demo">
+        <div style={karte}>
           <h3 style={kTitel}>Demo ansehen</h3>
           <p style={kText}>
             Lädt Max' Mediathek, Bewertungen, Blog-Beispiele, Listen und ausgewählte

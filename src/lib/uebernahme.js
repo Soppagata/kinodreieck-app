@@ -212,7 +212,9 @@ export async function fuehreUebernahmeAus({ lokaleWerte, uebernehmeKey, nurSchlu
     } else {
       bericht.push({
         key, label: topfLabel(key),
-        status: r?.zuGross ? "FEHLER — zu groß für die Datenbank" : "FEHLER — nicht übernommen",
+        status: r?.zuGross ? "FEHLER — zu groß für die Datenbank"
+          : r?.schemaVeraltet ? "FEHLER — der Server kennt diesen Datentopf noch nicht (Migration fehlt?)"
+            : "FEHLER — nicht übernommen",
         anzahl: zaehleTopf(key, wert), pruefsumme: pruefsumme(wert), fehler: true,
       });
     }

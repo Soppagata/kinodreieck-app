@@ -30,7 +30,6 @@ export function useEggController({
   bootDone,
   setupWarnung,
   startModalOffen,
-  willkommenOffen,
   setTab,
   springeZuFilm,
 }) {
@@ -120,7 +119,7 @@ export function useEggController({
     else if (film) springeZuFilm(film.id);
   }, [setTab, springeZuFilm]);
 
-  const modalOffen = setupWarnung || startModalOffen || willkommenOffen;
+  const modalOffen = setupWarnung || startModalOffen;
   const cageAutoRef = useRef(false);
   useEffect(() => {
     if (!EGGS_ENABLED || !bootDone || achievements == null || master == null) return;

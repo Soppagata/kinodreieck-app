@@ -89,7 +89,7 @@ export function DreieckErklaerung() {
 }
 
 /* ---- „Über"-Einstieg für die Einstellungen: Hero, Dreieck, Anleitung. ---- */
-export function UeberKinodreieck({ onTutorialNeu }) {
+export function UeberKinodreieck() {
   const [dokuOffen, setDokuOffen] = useState(false);
   const h2 = h2Of(); const mono = monoOf();
   return (
@@ -100,14 +100,14 @@ export function UeberKinodreieck({ onTutorialNeu }) {
         <button style={btnStyle(false)} onClick={() => setDokuOffen(!dokuOffen)}>
           {dokuOffen ? "Anleitung zuklappen" : "Anleitung & Hilfe öffnen"}
         </button>
-        {dokuOffen && <DokuAnsicht h2={h2} mono={mono} onTutorialNeu={onTutorialNeu} />}
+        {dokuOffen && <DokuAnsicht h2={h2} mono={mono} />}
       </div>
     </div>
   );
 }
 
 /* ---------- Eingebaute Anleitung ---------- */
-export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
+export function DokuAnsicht({ h2, mono }) {
   const block = { background: T.saalHoch, borderRadius: 6, padding: "14px 16px" };
   const p = { fontSize: 13, color: T.leinwandTief, lineHeight: 1.65, margin: "0 0 8px" };
   const code = { fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.wolfram };
@@ -134,8 +134,9 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
       "Freigegebene Artikel tauchen als „Kommt vor in” bei den referenzierten Einträgen in der Mediathek auf.",
     ] },
     { id: "finder", titel: "Suche", text: [
-      "Natürlichsprachige Suche über deinen Bestand: „traurige Komödie auf Netflix”, „Kult aus den 80ern”. Deterministisch — kein LLM, keine geratenen Treffer.",
-      "Eigene Stimmungswörter hinterlegst du in den Settings (Vokabular), damit die Suche deinen Wortschatz kennt.",
+      "Natürlichsprachige Suche über deinen Bestand: „traurige Komödie auf Netflix”, „Kult aus den 80ern”. Die Treffer entstehen deterministisch aus deinen eigenen Daten; bei unklaren Anfragen kann zusätzlich die KI-Deutung helfen, wenn du KI aktiviert hast.",
+      "Du findest die Suche als globale Suchleiste am unteren Rand der mobilen Ansicht; am Desktop gibt es sie derzeit nicht.",
+      "Eigene Stimmungswörter hinterlegst du in den Settings (KI-Vokabular), damit die Suche deinen Wortschatz kennt.",
     ] },
     { id: "daten", titel: "Settings", text: [
       "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Datenmodus, Masterliste, Gesamt-Backup, Such-Vokabular, Streaming-Quellen und Katalog-Status.",
@@ -146,13 +147,6 @@ export function DokuAnsicht({ h2, mono, onTutorialNeu }) {
   const offen = BEREICHE.find((b) => b.id === popup);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
-      {onTutorialNeu && (
-        <div style={block}>
-          <h2 style={h2}>Tutorial</h2>
-          <p style={{ ...p, margin: "0 0 10px" }}>Die Willkommens-Erklärung und die Just-in-Time-Hinweise noch einmal von vorn — im echten Betrieb, ohne Screenshots.</p>
-          <button style={btnStyle(false)} onClick={onTutorialNeu}>Tutorial neu starten</button>
-        </div>
-      )}
       <div style={block}>
         <h2 style={h2}>Verzeichnis der Bereiche</h2>
         <p style={{ ...p, margin: "0 0 10px" }}>Klick auf einen Bereich für die ausführliche Beschreibung.</p>

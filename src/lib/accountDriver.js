@@ -36,7 +36,7 @@ const SYNC_SET = new Set(ACCOUNT_SYNC_KEYS);
 /* Gerätezustand des Treibers — nie gesynct, nie im Backup, NIE Tokens.
    Eigener Namespace kd:acct:* (die Sitzung selbst liegt getrennt in kd:auth:session). */
 const VER_KEY = "kd:acct:ver";        // { key: revision } — zuletzt gesehene Server-Version
-const STATUS_KEY = "kd:acct:status";  // { lastPull, lastCommit, pending, conflict, stale, zuGross }
+const STATUS_KEY = "kd:acct:status";  // { lastPull, lastCommit, pending, conflict, stale, zuGross, schemaVeraltet }
 const SNAP_KEY = "kd:acct:snap";      // { key: [{t, value}] } — rollierend
 const OWNER_KEY = "kd:acct:owner";    // Account-ID, zu der der lokale Cache gehört
 const SNAP_MAX = 5;
@@ -52,7 +52,7 @@ function writeJSON(key, obj) {
 function nowIso() { try { return new Date().toISOString(); } catch { return String(Date.now()); } }
 
 /* ---------- Status ---------- */
-function leerStatus() { return { lastPull: null, lastCommit: null, pending: {}, conflict: {}, stale: {}, zuGross: {} }; }
+function leerStatus() { return { lastPull: null, lastCommit: null, pending: {}, conflict: {}, stale: {}, zuGross: {}, schemaVeraltet: {} }; }
 function getStatus() { return { ...leerStatus(), ...readJSON(STATUS_KEY, {}) }; }
 function setStatus(patch) { writeJSON(STATUS_KEY, { ...getStatus(), ...patch }); }
 function mark(feld, key, an) {
@@ -65,6 +65,7 @@ const markPending = (k, an) => mark("pending", k, an);
 const markConflict = (k, an) => mark("conflict", k, an);
 const markStale = (k, an) => mark("stale", k, an);
 const markZuGross = (k, an) => mark("zuGross", k, an);
+const markSchemaVeraltet = (k, an) => mark("schemaVeraltet", k, an);
 
 function getVer(key) { const v = readJSON(VER_KEY, {})[key]; return (typeof v === "number") ? v : null; }
 function setVer(key, revision) {
@@ -159,11 +160,17 @@ export function createAccountDriver({
   }
 
   /* Der Server lehnt zu große Werte per CHECK ab (23514). Das ist dauerhaft:
-     erneutes Senden desselben Werts kann nie gelingen. */
+     erneutes Senden desselben Werts kann nie gelingen. Beide CHECKs melden
+     denselben SQL-Code — deshalb wird an den Aufrufstellen ZUERST auf den
+     Key-Constraint geprüft, sonst würde ein unbekannter Datentopf fälschlich
+     als „zu groß" diagnostiziert (Audit Probe f). */
   function istZuGross(r) {
     if (r.status !== 400) return false;
     return /23514|kd_personal_value_max/.test(JSON.stringify(r.data || {}));
   }
+  /* Unbekannter Datentopf (kd_personal_key_erlaubt): die DB kennt den Key
+     noch nicht — typisch eine fehlende Migration. Ebenfalls terminal, aber
+     eine ANDERE Diagnose als „zu groß": aufräumen hilft hier nicht. */
   function istKeyAbgelehnt(r) {
     if (r.status !== 400) return false;
     return /kd_personal_key_erlaubt/.test(JSON.stringify(r.data || {}));
@@ -273,7 +280,7 @@ export function createAccountDriver({
     if (r.inactive) return r;
     if ((r.status === 201 || r.status === 200) && Array.isArray(r.data) && r.data[0]) {
       setVer(key, r.data[0].revision);
-      markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false);
+      markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
       setStatus({ lastCommit: nowIso() });
       return { ok: true, status: r.status };
     }
@@ -282,7 +289,11 @@ export function createAccountDriver({
       markConflict(key, true); markPending(key, true);
       return { ok: false, conflict: true, status: r.status };
     }
-    if (istZuGross(r) || istKeyAbgelehnt(r)) {
+    if (istKeyAbgelehnt(r)) {
+      markSchemaVeraltet(key, true); markPending(key, false);
+      return { ok: false, schemaVeraltet: true, status: r.status };
+    }
+    if (istZuGross(r)) {
       markZuGross(key, true); markPending(key, false);
       return { ok: false, zuGross: true, status: r.status };
     }
@@ -304,7 +315,7 @@ export function createAccountDriver({
       if (r.inactive) return r;
       if (r.ok && Array.isArray(r.data) && r.data.length === 1) {
         setVer(key, r.data[0].revision);
-        markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false);
+        markPending(key, false); markConflict(key, false); markStale(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
         setStatus({ lastCommit: nowIso() });
         return { ok: true, status: r.status };
       }
@@ -324,7 +335,11 @@ export function createAccountDriver({
         markPending(key, true);
         return { ok: false, status: g.status };
       }
-      if (istZuGross(r) || istKeyAbgelehnt(r)) {
+      if (istKeyAbgelehnt(r)) {
+        markSchemaVeraltet(key, true); markPending(key, false);
+        return { ok: false, schemaVeraltet: true, status: r.status };
+      }
+      if (istZuGross(r)) {
         markZuGross(key, true); markPending(key, false);
         return { ok: false, zuGross: true, status: r.status };
       }
@@ -348,6 +363,7 @@ export function createAccountDriver({
     for (const key of Object.keys(st.pending || {})) {
       if (st.conflict && st.conflict[key]) continue;
       if (st.zuGross && st.zuGross[key]) continue;   // terminal, kein Wiederholen
+      if (st.schemaVeraltet && st.schemaVeraltet[key]) continue; // terminal bis zur Migration
       if (!SYNC_SET.has(key)) { markPending(key, false); continue; }
       versuche.push(await enqueueCommit(key));
     }
@@ -409,10 +425,11 @@ export function createAccountDriver({
     if (r.inactive) return r;
     if ((r.status === 201 || r.status === 200) && Array.isArray(r.data) && r.data[0]) {
       setVer(key, r.data[0].revision);
-      markPending(key, false); markConflict(key, false); markZuGross(key, false);
+      markPending(key, false); markConflict(key, false); markZuGross(key, false); markSchemaVeraltet(key, false);
       return { ok: true, angelegt: true };
     }
-    if (istZuGross(r) || istKeyAbgelehnt(r)) { markZuGross(key, true); return { ok: false, zuGross: true }; }
+    if (istKeyAbgelehnt(r)) { markSchemaVeraltet(key, true); return { ok: false, schemaVeraltet: true }; }
+    if (istZuGross(r)) { markZuGross(key, true); return { ok: false, zuGross: true }; }
     if (r.status === 409) {
       const g = await rest("GET", `/${TABLE}?key=eq.${q(key)}&select=value,revision`);
       if (g.inactive) return g;
@@ -456,6 +473,7 @@ export function createAccountDriver({
       conflict: Object.keys(s.conflict || {}),
       stale: Object.keys(s.stale || {}),
       zuGross: Object.keys(s.zuGross || {}),
+      schemaVeraltet: Object.keys(s.schemaVeraltet || {}),
       configured: konfiguriert(),
     };
   }
