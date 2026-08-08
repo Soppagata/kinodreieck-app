@@ -42,7 +42,10 @@ if (!serviceWorkerRevalidiert(swCache, swSharedCache)) {
 const ersterSwText = await sw.text();
 await hole("/download/", "text/html");
 
-const metaVersuche = domainRetry ? 6 : 1;
+// Eine feste Cloudflare-Custom-Domain kann dem bereits grünen atomaren
+// Deployment deutlich später folgen. Elf Pausen à fünf Sekunden halten den
+// Smoke streng, vermeiden aber einen Fehlalarm während dieser Propagation.
+const metaVersuche = domainRetry ? 12 : 1;
 let metaFehler = "nicht geprüft";
 for (let versuch = 1; versuch <= metaVersuche; versuch++) {
   try {

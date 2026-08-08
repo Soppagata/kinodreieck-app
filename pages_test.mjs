@@ -109,6 +109,9 @@ check("Feste Domains werden gegen den erwarteten Commit geprüft",
   (workflow.match(/EXPECTED_BUILD_VERSION:\s*\$\{\{\s*github\.sha\s*\}\}/g) || []).length === 2
   && (workflow.match(/SMOKE_RETRY_BUILD_META:\s*"1"/g) || []).length === 2
   && remoteSmoke.includes("buildMetaFehler(meta, erwarteteVersion)"));
+check("Feste Domains erhalten ein ausreichendes Propagationsfenster",
+  remoteSmoke.includes("const metaVersuche = domainRetry ? 12 : 1;")
+  && remoteSmoke.includes("setTimeout(resolve, 5000)"));
 check("Remote-Smoke weist den gemessenen Vier-Stunden-Cache von sw.js zurück",
   !serviceWorkerRevalidiert("public, max-age=14400, must-revalidate")
   && !serviceWorkerRevalidiert("")
