@@ -22,8 +22,10 @@ import {
   normalizeBoundaryError,
 } from "./errors.js";
 import {
-  ACCT_KEYS, beginneAccountCacheTransition, beendeAccountCacheTransition,
-  leseAccountCacheTransition,
+  ACCOUNT_CACHE_BINDING_SCHEMA_VERSION, ACCT_KEYS,
+  beginneAccountCacheTransition, beendeAccountCacheTransition,
+  leseAccountCacheBindingSchemaZustand, leseAccountCacheEpochZustand,
+  leseAccountCacheTransition, leseAccountCacheTransitionZustand,
 } from "../lib/accountStorageKeys.js";
 
 export { ACCOUNT_SYNC_KEYS };
@@ -63,6 +65,44 @@ function schreibeEpoch(accountId, token = neueEpoch()) {
   } catch { return null; }
 }
 
+function leseRoh(key) {
+  try { return { ok: true, value: localStorage.getItem(key) }; }
+  catch { return { ok: false, value: null }; }
+}
+
+function leseBindung(accountId) {
+  const id = String(accountId || "");
+  const zustand = leseAccountCacheBindingSchemaZustand();
+  if (zustand.status !== "valid") return zustand;
+  return zustand.value?.accountId === id ? zustand : { status: "invalid" };
+}
+
+function schreibeBindung(accountId) {
+  const wert = {
+    v: ACCOUNT_CACHE_BINDING_SCHEMA_VERSION,
+    accountId: String(accountId || ""),
+  };
+  if (!wert.accountId) return false;
+  try {
+    const raw = JSON.stringify(wert);
+    localStorage.setItem(ACCT_KEYS.bindingSchema, raw);
+    return localStorage.getItem(ACCT_KEYS.bindingSchema) === raw;
+  } catch { return false; }
+}
+
+function leseEpochStand(accountId) {
+  const id = String(accountId || "");
+  const zustand = leseAccountCacheEpochZustand();
+  if (zustand.status !== "valid") return zustand;
+  return zustand.value?.accountId === id
+    ? { ...zustand, token: String(zustand.value.token) }
+    : { status: "invalid" };
+}
+
+function bindungPasst(accountId) {
+  return leseBindung(accountId).status === "valid";
+}
+
 export function istGebundenerAccountCacheAktiv({
   accountId, epoch, lokalerToken = null, driverErlaubt = false, aktiv = true,
 } = {}) {
@@ -87,7 +127,8 @@ export function bindePersistentenAccountCache(accountId, { epoch = null } = {}) 
   const id = String(accountId || "");
   if (!id || !setCacheOwner(id)) return null;
   const gebunden = epoch ? schreibeEpoch(id, epoch) : (leseEpoch(id) || schreibeEpoch(id));
-  if (!gebunden || getCacheOwner() !== id || leseEpoch(id) !== gebunden) return null;
+  if (!gebunden || getCacheOwner() !== id || leseEpoch(id) !== gebunden
+      || !schreibeBindung(id) || !bindungPasst(id)) return null;
   accountEpoch = gebunden;
   return Object.freeze({ accountId: id, epoch: gebunden });
 }
@@ -255,13 +296,14 @@ export function bestaetigeKontoTreiber(accountId) {
   if (vorbereitetesKonto !== id) throw new Error("Falscher Konto-Treiber vorbereitet.");
   if (!lokalerTransitionToken) {
     const persistierteEpoch = leseEpoch(id);
-    if (getCacheOwner() !== id || !persistierteEpoch) {
+    if (getCacheOwner() !== id || !persistierteEpoch || !bindungPasst(id)) {
       maskierePersoenlichenSpeicher();
       throw privacyError();
     }
     accountEpoch = persistierteEpoch;
   }
-  if (!accountEpoch || getCacheOwner() !== id || leseEpoch(id) !== accountEpoch) {
+  if (!accountEpoch || getCacheOwner() !== id || leseEpoch(id) !== accountEpoch
+      || !bindungPasst(id)) {
     maskierePersoenlichenSpeicher();
     throw privacyError();
   }
@@ -306,11 +348,121 @@ export function entsperrePersoenlichenSpeicherNachTrennung() {
 }
 
 export function istPersoenlicherSpeicherMaskiert() { return privacyGesperrt; }
+
+function authentifizierungPasst(accountId) {
+  const id = String(accountId || "");
+  try {
+    const sichtbar = authService.getSnapshot();
+    const persistent = authDriver.konto();
+    return sichtbar?.mode === "account"
+      && String(sichtbar.account?.id || "") === id
+      && String(persistent?.id || "") === id;
+  } catch { return false; }
+}
+
+function bestaetigungPasst(istBestaetigt, accountId) {
+  try { return istBestaetigt?.(accountId) === true; }
+  catch { return false; }
+}
+
+function legacyBindungsstand(accountId, istBestaetigt, eigenerTransitionToken = null) {
+  const id = String(accountId || "");
+  if (!id || !authentifizierungPasst(id)) return { status: "unsafe" };
+  const owner = leseRoh(ACCT_KEYS.owner);
+  if (!owner.ok || owner.value !== id) return { status: "unsafe" };
+  if (!bestaetigungPasst(istBestaetigt, id)) return { status: "not-applicable" };
+
+  const transitionStand = leseAccountCacheTransitionZustand();
+  let wiederaufnahmeToken = null;
+  if (eigenerTransitionToken) {
+    const transition = transitionStand.value;
+    if (transitionStand.status !== "valid" || transition.accountId !== id
+        || transition.zweck !== "legacy-epoch-migration"
+        || transition.token !== String(eigenerTransitionToken)) return { status: "unsafe" };
+  } else if (transitionStand.status === "valid") {
+    const transition = transitionStand.value;
+    if (transition.accountId === id && transition.zweck === "legacy-epoch-migration") {
+      wiederaufnahmeToken = transition.token;
+    } else {
+      return { status: "not-applicable" };
+    }
+  } else if (transitionStand.status !== "missing") {
+    return { status: "unsafe" };
+  }
+
+  const epoch = leseEpochStand(id);
+  const bindung = leseBindung(id);
+  if (epoch.status === "error" || epoch.status === "invalid"
+      || bindung.status === "error" || bindung.status === "invalid") {
+    return { status: "unsafe" };
+  }
+  if (epoch.status === "valid" && bindung.status === "valid") {
+    return { status: "current", epoch: epoch.token, transitionToken: wiederaufnahmeToken };
+  }
+  /* Ein vorhandenes Bindungsschema beweist, dass diese Installation bereits
+     migriert war. Fehlt danach nur die Epoch, ist das Korruption und niemals
+     erneut ein Legacy-Kandidat. */
+  if (bindung.status === "valid" && epoch.status === "missing") {
+    return { status: "unsafe" };
+  }
+  return {
+    status: "legacy",
+    epoch: epoch.status === "valid" ? epoch.token : null,
+    transitionToken: wiederaufnahmeToken,
+  };
+}
+
+/* Einmalige Upgrade-Grenze für bestätigte Kontocaches aus Builds vor der
+   Aktivierungs-Epoch. Sie verändert ausschließlich Epoch/Bindungsschema und
+   lässt den eigenen Transitionmarker bis zum normalen Confirm stehen. */
+export async function migriereBestaetigtenLegacyKontocache(accountId, istBestaetigt) {
+  const id = String(accountId || "");
+  const vorher = legacyBindungsstand(id, istBestaetigt);
+  if (vorher.status === "current" && !vorher.transitionToken) {
+    return Object.freeze({ status: "already-current", epoch: vorher.epoch, transitionToken: null });
+  }
+  if (vorher.status === "not-applicable") return Object.freeze({ status: "not-applicable" });
+  if (vorher.status !== "legacy" && vorher.status !== "current") {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+
+  const transition = beginneGebundeneAccountTransition(id, "legacy-epoch-migration", {
+    uebernehmeBestehend: !!vorher.transitionToken,
+  });
+  if (!transition) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  try {
+    await warteAccountTransitionZaun();
+    const stabil = legacyBindungsstand(id, istBestaetigt, transition.token);
+    if (stabil.status !== "legacy" && stabil.status !== "current") throw privacyError();
+    const epoch = stabil.epoch || schreibeEpoch(id);
+    if (!epoch || leseEpoch(id) !== epoch) throw privacyError();
+    if (stabil.status !== "current" && (!schreibeBindung(id) || !bindungPasst(id))) {
+      throw privacyError();
+    }
+    const nachher = legacyBindungsstand(id, istBestaetigt, transition.token);
+    if (nachher.status !== "current" || nachher.epoch !== epoch) throw privacyError();
+    accountEpoch = epoch;
+    /* Der dynamische Store bleibt durch den Transition-Treiber gesperrt. Nur
+       der direkt anschließende Confirm darf den Marker entfernen und aktivieren. */
+    privacyGesperrt = false;
+    return Object.freeze({ status: "migrated", epoch, transitionToken: transition.token });
+  } catch (cause) {
+    maskierePersoenlichenSpeicher();
+    const error = privacyError();
+    error.cause = cause;
+    throw error;
+  }
+}
+
 export function entsperrePersoenlichenSpeicherFuerGebundenesKonto(accountId) {
   const id = String(accountId || "");
   if (!privacyGesperrt) return true;
   if (!id || getCacheOwner() !== id || leseAccountCacheTransition()
-      || !leseEpoch(id)) return false;
+      || !leseEpoch(id) || !bindungPasst(id)) return false;
   privacyGesperrt = false;
   setStorageDriver(null);
   return true;

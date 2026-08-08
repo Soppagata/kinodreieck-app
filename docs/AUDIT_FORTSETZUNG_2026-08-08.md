@@ -6,9 +6,12 @@ Arbeitszweig: `audit/fixbatch1`
 
 Ausgangs-HEAD: `3ae13001ff5a06d326d5802bf87b37263c6434bf`
 
-Vergleichsbasis: `staging` / lokal bekannter `origin/staging` bei `3e7a954`
+Erster Audit-Release: `941283649f20c032febb0fa9d2d005e2c5d827a7`
 
-Aktueller Auditstand: konsolidierter, noch nicht veröffentlichter Arbeitsbaum
+Aktueller Dokumentstand: Der sichere Upgrade-Hotfix für den nach diesem
+Release entdeckten Konto-Cache-Fehler ist Bestandteil dieses Stands. Welcher
+Commit tatsächlich auf Staging läuft, wird weiterhin über Build-Metadaten und
+CI belegt, nicht durch eine vorweggenommene Aussage in diesem Dokument.
 
 Dieses Dokument ist die korrigierte Wahrheitsbasis für die Fortsetzung des
 Vor-Merge-Audits. Die historische Rohübergabe unter `_audit_handover/` bleibt
@@ -67,6 +70,8 @@ stehen in
 | `npm test` | Exit 0, vollständige Mock-/Build-/Pages-Kette |
 | `npm run test:function` | 285/285 |
 | `npm run test:mobile` | 106/106, Chromium und WebKit |
+| `account_epoch_upgrade_test.mjs` | 14/14, echter frischer Modulgraph |
+| Konto-/Privacy-Targeteds | 261/261, zusätzlich unabhängig geprüft |
 | `profil_test.mjs` | 286/286 |
 | `geschmack_test.mjs` | 124/124; E und M mangels privater externer Beta-Datei übersprungen |
 | Finder | 84/84 + 155/155; Forderungen 11/11 |
@@ -163,10 +168,34 @@ aktuellen Arbeitsbaum nicht mehr fire-and-forget:
 - Kontoübernahme und Logout verwenden einen persistenten Transitionmarker,
   verifizierten Owner und Aktivierungs-Epoch. Veraltete Tabs dürfen nach einem
   Übergang weder lesen noch schreiben oder fremde Tokens verwenden.
+- Bestätigte Kontocaches aus früheren Builds, die bereits einen passenden
+  Owner, aber noch keine Aktivierungs-Epoch besitzen, erhalten nach erfolgreicher
+  Anmeldung desselben Kontos einmalig eine rückgelesene Epoch und ein
+  Bindungsschema. Fremde Konten, beschädigte Metadaten, offene fremde Marker
+  und Schreibfehler bleiben fail-closed gesperrt.
 - Kann ein Kontocache nicht sicher vom Gast getrennt werden, maskiert die App
   persönliche Töpfe und zeigt nur die Wiederherstellung mit demselben Konto.
 - Tote Import-Snapshots und Geheimnisreste stillgelegter Git-/Supabase-Treiber
   werden beim Upgrade entfernt.
+
+### Auf Staging entdeckte Upgrade-Regression und Hotfix
+
+Der erste Audit-Release `9412836` bestand CI und wurde auf Staging ausgeliefert.
+Der reale Login mit einem bestehenden iPhone-Cache deckte danach eine
+Upgrade-Lücke auf: Der Cache besaß bereits den korrekten `kd:acct:owner` und
+die passende Übernahmemarke, aber noch nicht die neu eingeführte
+`kd:acct:epoch`. Die Anmeldung selbst war erfolgreich; erst die lokale
+Privacy-Grenze sperrte den Cache unmittelbar danach.
+
+Der Hotfix migriert ausschließlich diesen eindeutig bestätigten
+Same-Owner-Altzustand. Er unterscheidet fehlende von beschädigten oder fremden
+Werten, setzt vor jeder Änderung einen persistenten Marker, wartet einen
+Mehrtab-Zaun ab und prüft Auth, Owner, Übernahmestatus und Marker erneut. Nach
+einem Browserabbruch wird derselbe Marker in drei getesteten Zwischenständen
+idempotent fortgesetzt; eine bereits vorhandene Epoch wird nie rotiert. Owner,
+Übernahmemarke, persönliche Töpfe, Syncstatus und Rückholpunkt bleiben
+bytegleich. Browserdaten dürfen für diesen Reparaturweg ausdrücklich nicht
+gelöscht werden.
 
 ## 6. Noch offene, gemeinsam zu entscheidende Vorhaben
 
@@ -194,11 +223,18 @@ Keine dieser Positionen wird still als „Fehlerbehebung“ eingebaut:
   vergleichen.
 - Der private Beta-Datensatz für zwei Messgruppen von `geschmack_test.mjs` ist
   lokal nicht vorhanden. Das ist ein Fixture-/Messbeleg, kein verdeckter
-  Produktfehler; vor Staging sollen die Belege gegen den aktuellen Korpus neu
-  erzeugt werden.
-- Echte Actions-Laufzeit, Staging-SHA, Konto-/Gast-/Multi-Tab-Journey,
-  Backup/Restore/Undo, Ausfall/Rollback, echtes iPhone und reale KI bleiben
-  ausdrücklich ungeprüft, bis der Commit veröffentlicht und ausgerollt ist.
+  Produktfehler; vor einer Produktionsfreigabe sollen die Belege gegen den
+  aktuellen Korpus neu erzeugt werden.
+- Der erste Audit-Release `9412836` lief in GitHub Actions einschließlich
+  Mock-, Function-, Chromium-, WebKit- und Staging-Deploy-Gate vollständig
+  grün; Staging lieferte exakt diese SHA aus. Gerade der anschließende echte
+  iPhone-Login hat die oben dokumentierte Upgrade-Regression sichtbar gemacht.
+- Der Hotfix verlangt zusätzlich einen erneuten CI-/Deploy-Beleg und danach
+  denselben betroffenen iPhone-Cache als entscheidenden Gegencheck. Diese
+  externen Ergebnisse stehen im Lieferbericht; Browserdaten werden davor
+  nicht gelöscht.
+- Backup/Restore/Undo, Ausfall/Rollback und echte KI sind trotz vollständiger
+  lokaler Mockgates weiterhin eigene praktische Abnahmeblöcke.
 
 ## 8. Definition of Done
 

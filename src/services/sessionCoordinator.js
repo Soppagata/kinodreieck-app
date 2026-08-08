@@ -26,6 +26,7 @@ import {
   istPersoenlicherSpeicherMaskiert,
   istKontoTreiberAktiv,
   maskierePersoenlichenSpeicher,
+  migriereBestaetigtenLegacyKontocache,
   vorbereitetesKontoId,
   warteAccountTransitionZaun,
 } from "./storage.js";
@@ -52,6 +53,7 @@ export function createSessionCoordinator({
     unlockForSameOwnerAccount: entsperrePersoenlichenSpeicherFuerGebundenesKonto,
     mask: maskierePersoenlichenSpeicher,
     masked: istPersoenlicherSpeicherMaskiert,
+    migrateLegacyBinding: migriereBestaetigtenLegacyKontocache,
     cleanupOrphanMetadata: bereinigeVerwaisteAccountMetadaten,
     beginTransition: beginneGebundeneAccountTransition,
     endTransition: beendeGebundeneAccountTransition,
@@ -181,8 +183,16 @@ export function createSessionCoordinator({
        Konto B darf niemals auf den noch sichtbaren Haupttöpfen von A
        vorbereitet werden. Eine abgebrochene same-account Transition wird über
        denselben Restore-/Quarantänepfad sicher fertiggestellt. */
+    const ownerVorMigration = String(storage.cacheOwner?.() || "");
+    let legacyMigration = null;
+    if (ownerVorMigration === id && isConfirmed(id) && storage.migrateLegacyBinding) {
+      legacyMigration = await storage.migrateLegacyBinding(id, () => isConfirmed(id));
+    }
     const transition = storage.currentTransition?.() || null;
     const owner = String(storage.cacheOwner?.() || "");
+    const migrationAktiv = legacyMigration?.status === "migrated"
+      && transition?.token === legacyMigration.transitionToken
+      && transition?.accountId === id;
     if (verifiedTransitionEnd && storage.masked?.() && !owner && !transition) {
       if (storage.cleanupOrphanMetadata?.() === false) {
         const error = new Error("Die abgeschlossene Konto-Transition hinterließ unklare lokale Metadaten.");
@@ -197,7 +207,9 @@ export function createSessionCoordinator({
       error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
       throw error;
     }
-    if (storage.masked?.() && owner === id && !transition) {
+    if (migrationAktiv) {
+      nurDieserOwnerDarfEntsperren = null;
+    } else if (storage.masked?.() && owner === id && !transition) {
       if (storage.unlockForSameOwnerAccount?.(id) === false) {
         const error = new Error("Der geschützte Kontocache gehört nicht sicher zu dieser Anmeldung.");
         error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
@@ -205,7 +217,7 @@ export function createSessionCoordinator({
       }
       nurDieserOwnerDarfEntsperren = null;
     }
-    if (transition && !owner) {
+    if (!migrationAktiv && transition && !owner) {
       if (storage.cleanupOrphanMetadata?.() === false) {
         storage.mask?.(); emit();
         const error = new Error("Eine abgebrochene Konto-Transition konnte nicht sicher zurückgesetzt werden.");
@@ -213,7 +225,7 @@ export function createSessionCoordinator({
         throw error;
       }
       storage.unlockAfterPrivacyCleanup?.();
-    } else if (owner && (owner !== id || transition)) {
+    } else if (!migrationAktiv && owner && (owner !== id || transition)) {
       if (storage.hasOpenChanges?.()) {
         nurDieserOwnerDarfEntsperren = owner;
         storage.mask?.(); emit();
