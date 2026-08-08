@@ -80,10 +80,31 @@ check("_headers: aktiver Client darf nur zur eigenen Supabase-Instanz verbinden"
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
 const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
+check("CI trennt Suiten und beide Mobile-Browser, behält aber den stabilen Test-Gate-Namen",
+  /test-suiten:[\s\S]*?npm test[\s\S]*?npm run test:function/.test(workflow)
+  && /test-mobile:[\s\S]*?browser: \[chromium, webkit\]/.test(workflow)
+  && /\n  test:\n\s+name: test\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs: \[test-suiten, test-mobile\]/.test(workflow));
+check("PR-Tests bleiben erhalten und prüfen weiterhin den Merge-Commit",
+  !workflow.includes("github.event.pull_request.head.repo.full_name")
+  && !workflow.includes("github.head_ref != 'staging'"));
+check("Nur automatische Testläufe verdrängen überholte Läufe",
+  (workflow.match(/cancel-in-progress: \$\{\{ github\.event_name != 'workflow_dispatch' \}\}/g) || []).length === 2
+  && (workflow.match(/github\.event_name == 'workflow_dispatch' && github\.run_id \|\| github\.ref/g) || []).length === 2);
+check("Playwright-Cache ist Lockfile- und Architektur-gebunden und wird immer repariert",
+  workflow.includes("runner.arch")
+  && workflow.includes("hashFiles('package-lock.json')")
+  && /npx playwright install --with-deps \$\{\{ matrix\.browser \}\}/.test(workflow));
+check("Der stabile Test-Gate blockiert beide Deploys",
+  (workflow.match(/needs: test/g) || []).length === 2
+  && workflow.includes('SUITEN_RESULT: ${{ needs.test-suiten.result }}')
+  && workflow.includes('MOBILE_RESULT: ${{ needs.test-mobile.result }}'));
+check("Deployment-Schreibrecht gilt nur in den beiden Deploy-Jobs",
+  !workflow.slice(0, workflow.indexOf("jobs:")).includes("deployments: write")
+  && (workflow.match(/deployments: write/g) || []).length === 2);
 check("Staging-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
-  /deploy-staging:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-staging/.test(workflow));
+  /deploy-staging:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-staging\n\s+cancel-in-progress: false/.test(workflow));
 check("Production-Deploys teilen über Push und manuellen Lauf dieselbe Concurrency-Gruppe",
-  /deploy-production:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-production/.test(workflow));
+  /deploy-production:[\s\S]*?concurrency:\s*\n\s+group: kinodreieck-cloudflare-pages-production\n\s+cancel-in-progress: false/.test(workflow));
 check("Feste Domains werden gegen den erwarteten Commit geprüft",
   (workflow.match(/EXPECTED_BUILD_VERSION:\s*\$\{\{\s*github\.sha\s*\}\}/g) || []).length === 2
   && (workflow.match(/SMOKE_RETRY_BUILD_META:\s*"1"/g) || []).length === 2

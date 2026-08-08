@@ -897,8 +897,9 @@ check("G7", "der wiederhergestellte Pfad funktioniert vollständig", stub.rufe.l
 
 /* =========================================================================
    F — FORDERUNGEN AN DIE IMPLEMENTIERUNG
-   Diese Checks sind heute rot. Sie stehen hier, damit die Befunde nicht in
-   einem Bericht verschwinden, und zählen NICHT in den Exit-Code.
+   Diese Diagnosechecks bewahren frühere Befunde. Bereits behobene Forderungen
+   sind grün; offene Forderungen bleiben sichtbar, zählen aber nicht in den
+   Exit-Code.
    ========================================================================= */
 abschnitt("F", async () => {
 console.log("\n--- F: Forderungen (heute offen, nicht exit-relevant) ---");
@@ -920,12 +921,12 @@ check("F", "F1a: der harte Chip nennt seine Wirkung im Tooltip",
 check("F", "F2: die drei Chip-Klassen haben drei verschiedene Farben (T.wolfram ≠ T.warum)",
   () => T.wolfram !== T.warum);
 
-/* F3 — Die vierte Klasse „info" aus dem Kommentarkopf von SignalChips gibt es
-   nicht: kein Chip benutzt sie, `farbe.info` ist undefiniert und der
-   Tooltip-Ternär bildet alles, was nicht hart/weich ist, auf „Ausschluss" ab.
-   Ein künftiger info-Chip wäre damit still als Ausschluss beschriftet. */
-check("F", "F3: eine Signalart „info" + '"' + " existiert und ist von „ausschluss" + '"' + " unterscheidbar",
-  () => false);
+/* F3 — Behoben in af606904: Noch kein Signal emittiert einen Info-Chip, aber
+   die defensive vierte Klasse besitzt bereits eine eigene Farbe und Wirkung.
+   Der frühere hartkodierte `false`-Befund blieb versehentlich stehen. */
+check("F", "F3: die defensive Signalart info ist von ausschluss unterscheidbar",
+  () => /info:\s*T\.rauch/.test(QUELLTEXT)
+    && /:\s*"Hinweis — wirkt nicht auf die Treffer"/.test(QUELLTEXT));
 
 /* F4 — Der Erfolgspfad der Deutung heftet sich weiter an einen INDEX. Fix 2
    hat die Fehlermeldung vom Index gelöst, `setVerlauf(v => v.map((x,i) =>

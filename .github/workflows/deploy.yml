@@ -17,15 +17,14 @@ on:
 
 permissions:
   contents: read
-  deployments: write
-
-concurrency:
-  group: cloudflare-pages-${{ github.ref }}-${{ inputs.target || 'test' }}
-  cancel-in-progress: false
 
 jobs:
-  test:
+  test-suiten:
+    name: test-suiten
     runs-on: ubuntu-latest
+    concurrency:
+      group: kd-test-suiten-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -38,8 +37,50 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:function
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npm run test:mobile
+
+  test-mobile:
+    name: test-mobile (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    concurrency:
+      group: kd-test-mobile-${{ matrix.browser }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Playwright-Browser cachen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
+      - name: Browser und Systembibliotheken sicherstellen
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:mobile -- --project=${{ matrix.browser }}
+
+  # Stabiler Required Check: behält den bisherigen Namen `test` und schlägt
+  # auch dann fehl, wenn ein vorgeschalteter Job abgebrochen oder übersprungen wurde.
+  test:
+    name: test
+    if: ${{ always() }}
+    needs: [test-suiten, test-mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alle Testzweige müssen grün sein
+        env:
+          SUITEN_RESULT: ${{ needs.test-suiten.result }}
+          MOBILE_RESULT: ${{ needs.test-mobile.result }}
+        run: |
+          if [ "$SUITEN_RESULT" != "success" ] || [ "$MOBILE_RESULT" != "success" ]; then
+            echo "Testzweige: Suiten=$SUITEN_RESULT, Mobile=$MOBILE_RESULT"
+            exit 1
+          fi
 
   deploy-staging:
     if: >-
@@ -47,6 +88,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
     concurrency:
       group: kinodreieck-cloudflare-pages-staging
       cancel-in-progress: false
@@ -100,6 +144,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.target == 'production'))
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
     concurrency:
       group: kinodreieck-cloudflare-pages-production
       cancel-in-progress: false
