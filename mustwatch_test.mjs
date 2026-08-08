@@ -77,6 +77,122 @@ const r2 = M.wendeBesitzImportAn(importDatei, [...bestand, ...r1.neue], "2026-07
 check("Import Doppellauf: nichts übernommen", r2.neue.length === 0);
 check("Import Doppellauf: alles übersprungen + berichtet", r2.bericht.every((b) => b.status !== "übernommen"));
 
+/* ---------- 7) Noch-sehen-Projektionen: Typ, Jahr, Suche ---------- */
+check("Typ: eindeutige Werte werden erkannt",
+  M.mustwatchTyp("film") === "film" && M.mustwatchTyp("Serie") === "serie"
+  && M.mustwatchTyp("tv_series") === "serie" && M.mustwatchTyp("movie") === "film");
+check("Typ: unbekannter Typ bleibt unbekannt (kein Umdeuten auf film)",
+  M.mustwatchTyp(undefined) === null && M.mustwatchTyp("") === null
+  && M.mustwatchTyp("filmreihe") === null && M.mustwatchTyp("trilogie") === null
+  && M.mustwatchTyp(1972) === null);
+check("Jahr: gültige Zahl und Ziffernstring werden übernommen",
+  M.mustwatchJahr(1972) === 1972 && M.mustwatchJahr(" 2024 ") === 2024);
+check("Jahr: fehlendes oder unsinniges Jahr bleibt null",
+  M.mustwatchJahr(null) === null && M.mustwatchJahr("") === null
+  && M.mustwatchJahr("bald") === null && M.mustwatchJahr(1972.5) === null
+  && M.mustwatchJahr(1200) === null);
+
+const suchEintrag = {
+  id: "mw_stalker", titel: "Stalker", jahr: 1979,
+  beschreibung: "Sowjetischer Science-Fiction", notiz: "Auf großer Leinwand",
+};
+check("Suche: Titel trifft", M.passtZuMustwatchSuche(suchEintrag, "stalker"));
+check("Suche: bestehende Beschreibung bleibt durchsuchbar", M.passtZuMustwatchSuche(suchEintrag, "sowjetischer"));
+check("Suche: Notiz bleibt durchsuchbar", M.passtZuMustwatchSuche(suchEintrag, "leinwand"));
+check("Suche: Jahr ist mitdurchsuchbar", M.passtZuMustwatchSuche(suchEintrag, "1979"));
+check("Suche: leere Suche filtert nichts weg", M.passtZuMustwatchSuche(suchEintrag, "   "));
+check("Suche: Nichttreffer bleibt Nichttreffer", M.passtZuMustwatchSuche(suchEintrag, "solaris") === false);
+
+/* ---------- 8) Verfügbarkeit: nur aus expliziter stabiler Verknüpfung ---------- */
+const kandidaten = {
+  master: [{ id: "solaris_1972", titel: "Solaris", jahr: 1972 }],
+  programm: [{ id: 4711, titel: "Stalker", jahr: 1979 }],
+  streaming: [{ id: 88123, titel: "The Substance", jahr: 2024 }],
+};
+const imKino = { id: "mw_a", titel: "Stalker", verknuepfung: { ziel: "programm", id: "4711" }, erstellt_am: "2026-08-01T10:00:00Z" };
+const imStream = { id: "mw_b", titel: "The Substance", verknuepfung: { ziel: "streaming", id: 88123 }, erstellt_am: "2026-07-29T10:00:00Z" };
+const inMediathek = { id: "mw_c", titel: "Solaris", verknuepfung: { ziel: "master", id: "solaris_1972" }, erstellt_am: "2026-08-05T10:00:00Z" };
+const ohneRef = { id: "mw_d", titel: "Andrej Rubljow", verknuepfung: null, erstellt_am: "2026-08-04T10:00:00Z" };
+const toteRef = { id: "mw_e", titel: "Verschwunden", verknuepfung: { ziel: "streaming", id: 99999 }, erstellt_am: "2026-08-03T10:00:00Z" };
+
+check("Verfügbarkeit: Zahl-/String-ID wird bei stabilen IDs tolerant verglichen",
+  M.mustwatchVerfuegbarkeit(imKino, kandidaten)?.label === "IM KINO"
+  && M.mustwatchVerfuegbarkeit(imStream, kandidaten)?.label === "STREAMING");
+check("Verfügbarkeit: Kino und Streaming gelten als jetzt verfügbar",
+  M.mustwatchVerfuegbarkeit(imKino, kandidaten).aktuell === true
+  && M.mustwatchVerfuegbarkeit(imStream, kandidaten).aktuell === true);
+check("Verfügbarkeit: Mediathek ist Besitz, nicht 'jetzt verfügbar'",
+  M.mustwatchVerfuegbarkeit(inMediathek, kandidaten)?.label === "MEDIATHEK"
+  && M.mustwatchVerfuegbarkeit(inMediathek, kandidaten).aktuell === false);
+check("Verfügbarkeit: ohne Verknüpfung keine Aussage",
+  M.mustwatchVerfuegbarkeit(ohneRef, kandidaten) === null);
+check("Verfügbarkeit: nicht mehr vorhandene Verknüpfung erfindet keine Verfügbarkeit",
+  M.mustwatchVerfuegbarkeit(toteRef, kandidaten) === null);
+check("Verfügbarkeit: leerer Kandidatenbestand behauptet nichts",
+  M.mustwatchVerfuegbarkeit(imKino, {}) === null
+  && M.mustwatchVerfuegbarkeit(imKino, { programm: [] }) === null);
+check("Verfügbarkeit: KEIN Titel-Fuzzy — gleicher Titel ohne passende ID zählt nicht",
+  M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: { ziel: "programm", id: "stalker" } }, kandidaten) === null
+  && M.mustwatchVerfuegbarkeit({ titel: "Stalker", verknuepfung: null }, kandidaten) === null);
+
+/* ---------- 9) Sortierung: identisch für Dashboard und Vollansicht ---------- */
+const mwBestand = [ohneRef, inMediathek, imStream, toteRef, imKino];
+const sortiert = M.sortiereMustwatch(mwBestand, kandidaten);
+check("Sortierung: aktuell verfügbare zuerst",
+  sortiert.slice(0, 2).map((e) => e.id).sort().join(",") === "mw_a,mw_b");
+check("Sortierung: innerhalb der Gruppe zuletzt gemerkt zuerst",
+  sortiert[0].id === "mw_a" && sortiert[1].id === "mw_b"
+  && sortiert.slice(2).map((e) => e.id).join(",") === "mw_c,mw_d,mw_e");
+check("Sortierung: Eingabeliste wird nicht mutiert",
+  mwBestand.map((e) => e.id).join(",") === "mw_d,mw_c,mw_b,mw_e,mw_a");
+const gleichstand = M.sortiereMustwatch([
+  { id: "mw_z", titel: "Zabriskie Point", erstellt_am: "2026-08-01T10:00:00Z" },
+  { id: "mw_ae", titel: "Ätherwelle", erstellt_am: "2026-08-01T10:00:00Z" },
+], kandidaten);
+check("Sortierung: bei gleichem Zeitstempel entscheidet der Titel (de)", gleichstand[0].id === "mw_ae");
+/* Dashboard = Vollansicht: dieselbe reine Projektion, das Dashboard schneidet
+   danach lediglich auf fünf Einträge zu. */
+const vollansicht = M.projiziereMustwatch(mwBestand, { filter: "alle", suche: "" }, kandidaten);
+const dashboard = M.sortiereMustwatch(mwBestand, kandidaten).slice(0, 5);
+check("Sortierung: Dashboard und Vollansicht liefern dieselbe Reihenfolge",
+  vollansicht.map((e) => e.id).join(",") === dashboard.map((e) => e.id).join(","));
+
+/* ---------- 10) Filterprojektion ---------- */
+const mitTypen = [
+  { id: "mw_f", titel: "Ein Film", typ: "film", erstellt_am: "2026-08-02T10:00:00Z" },
+  { id: "mw_s", titel: "Eine Serie", typ: "serie", erstellt_am: "2026-08-02T11:00:00Z" },
+  { id: "mw_u", titel: "Ohne Typ", erstellt_am: "2026-08-02T12:00:00Z" },
+  imKino,
+];
+check("Filter: 'alle' zeigt auch Einträge ohne Typ",
+  M.projiziereMustwatch(mitTypen, { filter: "alle" }, kandidaten).length === 4);
+check("Filter: 'film' zeigt nur belegte Filme",
+  M.projiziereMustwatch(mitTypen, { filter: "film" }, kandidaten).map((e) => e.id).join(",") === "mw_f");
+check("Filter: 'serie' zeigt nur belegte Serien",
+  M.projiziereMustwatch(mitTypen, { filter: "serie" }, kandidaten).map((e) => e.id).join(",") === "mw_s");
+check("Filter: unbekannter Typ erscheint weder unter Filme noch unter Serien",
+  M.projiziereMustwatch(mitTypen, { filter: "film" }, kandidaten).every((e) => e.id !== "mw_u")
+  && M.projiziereMustwatch(mitTypen, { filter: "serie" }, kandidaten).every((e) => e.id !== "mw_u"));
+check("Filter: 'jetzt' zeigt nur belegbar aktuell Verfügbares",
+  M.projiziereMustwatch(mitTypen, { filter: "jetzt" }, kandidaten).map((e) => e.id).join(",") === "mw_a");
+check("Filter: 'jetzt' ohne geladenen Katalog zeigt nichts statt alles",
+  M.projiziereMustwatch(mitTypen, { filter: "jetzt" }, {}).length === 0);
+check("Filter und Suche greifen gemeinsam",
+  M.projiziereMustwatch(mitTypen, { filter: "film", suche: "serie" }, kandidaten).length === 0);
+check("MUSTWATCH_FILTER benennt genau die vier Ansichten",
+  M.MUSTWATCH_FILTER.join(",") === "alle,jetzt,film,serie");
+
+/* ---------- 11) Bestandsfelder überleben die Projektionen ---------- */
+const altbestand = [{
+  id: "mw_alt", titel: "Alter Eintrag", im_besitz: true, beschreibung: "Text",
+  notiz: "Notiz", verknuepfung: null, erstellt_am: "2026-01-01T00:00:00Z", fremdfeld: 42,
+}];
+const durchgereicht = M.projiziereMustwatch(altbestand, {}, kandidaten)[0];
+check("Projektion: Bestandsfelder inkl. unbekannter Zusatzfelder bleiben unverändert",
+  durchgereicht.im_besitz === true && durchgereicht.beschreibung === "Text"
+  && durchgereicht.notiz === "Notiz" && durchgereicht.fremdfeld === 42
+  && durchgereicht === altbestand[0]);
+
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }
 console.log(`${checks.filter(([, p]) => p).length}/${checks.length} Checks bestanden.`);

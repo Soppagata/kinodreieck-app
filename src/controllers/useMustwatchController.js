@@ -5,7 +5,20 @@ import {
   storageContextGenerationSnapshot,
   subscribeStorageContext,
 } from "../services/storage.js";
-import { migriereFlags, neueMustwatchId, offeneFlagAnzahl } from "../lib/mustwatch.js";
+import {
+  migriereFlags, mustwatchJahr, mustwatchTyp, neueMustwatchId, offeneFlagAnzahl,
+} from "../lib/mustwatch.js";
+
+/* Optionale Metadaten werden an der Schreibgrenze normalisiert, damit ein
+   Freitextfeld weder ein erfundenes Jahr noch einen erfundenen Typ in den Topf
+   bringt. Nur ausdrücklich mitgeschickte Schlüssel werden angefasst — alles
+   andere am Bestandseintrag bleibt unberührt. */
+function normalisiereMetadaten(changes) {
+  const next = { ...changes };
+  if (Object.prototype.hasOwnProperty.call(next, "jahr")) next.jahr = mustwatchJahr(next.jahr);
+  if (Object.prototype.hasOwnProperty.call(next, "typ")) next.typ = mustwatchTyp(next.typ);
+  return next;
+}
 
 /* Serialisiert Schreibvorgänge auch dann weiter, wenn ein einzelner Auftrag
    scheitert. Das ist separat exportiert, damit Reihenfolge und Fehlerpfad ohne
@@ -276,6 +289,7 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
 
   const addMustwatch = useCallback((daten, nachSpeichern) => schreibeMustwatch((vorher) => [...vorher, {
     id: neueMustwatchId(daten.titel, vorher), titel: daten.titel,
+    jahr: mustwatchJahr(daten.jahr), typ: mustwatchTyp(daten.typ),
     im_besitz: !!daten.im_besitz, beschreibung: daten.beschreibung || "",
     notiz: daten.notiz || "", verknuepfung: sichereVerknuepfung(daten.verknuepfung),
     erstellt_am: new Date().toISOString(),
@@ -287,9 +301,10 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
       if (!aktuell) return vorher;
       const berechnet = typeof changes === "function" ? changes(aktuell) : changes;
       if (!berechnet || typeof berechnet !== "object") return vorher;
-      const sichereChanges = Object.prototype.hasOwnProperty.call(berechnet, "verknuepfung")
-        ? { ...berechnet, verknuepfung: sichereVerknuepfung(berechnet.verknuepfung) }
-        : berechnet;
+      const normalisiert = normalisiereMetadaten(berechnet);
+      const sichereChanges = Object.prototype.hasOwnProperty.call(normalisiert, "verknuepfung")
+        ? { ...normalisiert, verknuepfung: sichereVerknuepfung(normalisiert.verknuepfung) }
+        : normalisiert;
       return vorher.map((e) => (e.id === id ? { ...e, ...sichereChanges } : e));
     },
   ), [schreibeMustwatch, sichereVerknuepfung]);

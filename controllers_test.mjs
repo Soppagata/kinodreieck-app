@@ -531,10 +531,13 @@ check("Must-Watch-Flagmigration berechnet neue Einträge erst innerhalb der Schr
 check("Must-Watch prüft gequeue-te Master-Verknüpfungen erst beim tatsächlichen Schreiben erneut",
   /sichereVerknuepfung\(daten\.verknuepfung\)/.test(mustwatchController)
   && /typeof changes === "function" \? changes\(aktuell\)/.test(mustwatchController)
-  && /sichereVerknuepfung\(berechnet\.verknuepfung\)/.test(mustwatchController)
+  && /sichereVerknuepfung\(normalisiert\.verknuepfung\)/.test(mustwatchController)
   && /masterRef\.current/.test(app));
 check("Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue",
   /onUpdate\(e\.id, \(aktuell\) => \(\{ im_besitz: !aktuell\.im_besitz \}\)\)/.test(mustwatchListe));
+check("Must-Watch normalisiert optionales Jahr und Typ an der Schreibgrenze",
+  /jahr: mustwatchJahr\(daten\.jahr\), typ: mustwatchTyp\(daten\.typ\)/.test(mustwatchController)
+  && /normalisiereMetadaten\(berechnet\)/.test(mustwatchController));
 check("Demo-Boot bestätigt Must-Watch erst nach erfolgreichem lokalem Schreiben",
   /localStorage\.setItem\(K\.mustwatch,[^\n]+\); setMustwatch\(mw\)/.test(app));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",

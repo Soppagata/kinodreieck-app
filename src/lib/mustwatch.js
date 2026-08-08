@@ -5,15 +5,18 @@
    (Kompatibilität), wird aber im UI nirgends mehr angeboten — die Liste ist die
    einzige Wahrheit.
 
-   Eintrag: { id, titel, im_besitz, beschreibung, notiz,
+   Eintrag: { id, titel, jahr?, typ?, im_besitz, beschreibung, notiz,
               verknuepfung: null | {ziel: "master"|"programm"|"streaming", id},
               erstellt_am }
+   `jahr` und `typ` sind seit dem Noch-sehen-Redesign optional ergänzbar. Alte
+   Einträge ohne diese Felder bleiben gültig: fehlendes Jahr bleibt null,
+   unbekannter Typ bleibt unbekannt — nichts wird zu "film" umgedeutet.
    IDs tragen den Prefix "mw_" — eigener Namensraum, kollidiert nie mit den
    slug_jahr-IDs der Master (wichtig fürs gemeinsame Blog-Referenz-Universum).
 
    Alles hier ist deterministisch, idempotent und ohne LLM. */
 
-import { slugId } from "./match.js";
+import { norm, slugId } from "./match.js";
 import { hatPhysischeQuelle } from "./quellen.js";
 
 export const MW_PREFIX = "mw_";
@@ -35,6 +38,100 @@ export function parseMustwatch(rohText) {
     if (Array.isArray(p)) return p; // tolerant: nackte Liste
     return Array.isArray(p.eintraege) ? p.eintraege : [];
   } catch { return []; }
+}
+
+/* ================= Noch-sehen-Projektionen (rein, ohne Persistenz) =================
+   Diese Funktionen berechnen ausschließlich ANSICHTEN über den vorhandenen
+   Bestand. Sie schreiben nichts, migrieren nichts und speichern insbesondere
+   keinen Verfügbarkeitsstatus: Verfügbarkeit ist immer eine Ableitung aus einer
+   ausdrücklich gesetzten stabilen Verknüpfung plus dem gerade geladenen
+   Kandidatenbestand. Fehlt der Bestand, gibt es keine Aussage — und nicht die
+   Behauptung "nicht verfügbar". */
+
+/* Optionaler Typ. Nur eindeutig belegte Werte ergeben film/serie; alles andere
+   (fehlend, leer, unbekannt, "filmreihe", Zahl) bleibt bewusst null. */
+export function mustwatchTyp(typ) {
+  const wert = String(typ ?? "").trim().toLowerCase();
+  if (["serie", "series", "tv_series", "tv series", "show"].includes(wert)) return "serie";
+  if (["film", "movie"].includes(wert)) return "film";
+  return null;
+}
+
+/* Optionales Jahr. Freitext aus dem Formular darf nie ein erfundenes Jahr
+   erzeugen; nur eine plausible ganze Jahreszahl wird übernommen. */
+export function mustwatchJahr(jahr) {
+  const roh = typeof jahr === "string" ? jahr.trim() : jahr;
+  if (roh === "" || roh === null || roh === undefined) return null;
+  const zahl = Number(roh);
+  return Number.isInteger(zahl) && zahl >= 1870 && zahl <= 2999 ? zahl : null;
+}
+
+/* Durchsuchbar sind Titel, Jahr, Notiz UND die bestehende Beschreibung — das
+   Beschreibungsfeld bleibt damit auffindbar, obwohl die Karte beide Texte
+   getrennt hält. */
+export function mustwatchSuchtext(eintrag) {
+  return [eintrag?.titel, eintrag?.jahr, eintrag?.notiz, eintrag?.beschreibung]
+    .map((wert) => norm(String(wert ?? "")))
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function passtZuMustwatchSuche(eintrag, suche) {
+  const nq = norm(String(suche ?? ""));
+  if (!nq) return true;
+  return mustwatchSuchtext(eintrag).includes(nq);
+}
+
+const STATUS_LABEL = { master: "MEDIATHEK", programm: "IM KINO", streaming: "STREAMING" };
+
+/* Verfügbarkeit ausschließlich aus expliziter stabiler Verknüpfung + aktuell
+   geladenem Kandidatenbestand. Kein Titelvergleich, kein Fuzzy, kein Rateweg.
+   IDs werden tolerant als String verglichen (watchmode_id ist eine Zahl,
+   film_at_id kommt je nach Quelle als Zahl oder String). */
+export function mustwatchVerfuegbarkeit(eintrag, kandidaten = {}) {
+  const ref = eintrag?.verknuepfung;
+  if (!ref || !STATUS_LABEL[ref.ziel] || ref.id == null || String(ref.id).trim() === "") return null;
+  const liste = Array.isArray(kandidaten?.[ref.ziel]) ? kandidaten[ref.ziel] : [];
+  const kandidat = liste.find((k) => k && k.id != null && String(k.id) === String(ref.id));
+  if (!kandidat) return null;
+  return {
+    ziel: ref.ziel,
+    label: STATUS_LABEL[ref.ziel],
+    /* "Jetzt verfügbar" meint eine laufende externe Abspielgelegenheit. Ein
+       Mediathek-Treffer ist Besitz, keine aktuelle Vorstellung. */
+    aktuell: ref.ziel === "programm" || ref.ziel === "streaming",
+    titel: kandidat.titel ?? null,
+    jahr: kandidat.jahr ?? null,
+    kandidat,
+  };
+}
+
+/* Eine einzige Sortierung für Dashboard UND Vollansicht: aktuell verfügbar,
+   dann zuletzt gemerkt, dann Titel. Rein und ohne Mutation der Eingabe. */
+export function sortiereMustwatch(eintraege, kandidaten = {}) {
+  return [...(Array.isArray(eintraege) ? eintraege : [])].sort((a, b) => {
+    const ra = mustwatchVerfuegbarkeit(a, kandidaten)?.aktuell ? 0 : 1;
+    const rb = mustwatchVerfuegbarkeit(b, kandidaten)?.aktuell ? 0 : 1;
+    const za = Date.parse(a?.erstellt_am || "") || 0;
+    const zb = Date.parse(b?.erstellt_am || "") || 0;
+    return ra - rb || zb - za
+      || String(a?.titel || "").localeCompare(String(b?.titel || ""), "de");
+  });
+}
+
+export const MUSTWATCH_FILTER = ["alle", "jetzt", "film", "serie"];
+
+export function passtZuMustwatchFilter(eintrag, filter, kandidaten = {}) {
+  if (filter === "jetzt") return mustwatchVerfuegbarkeit(eintrag, kandidaten)?.aktuell === true;
+  if (filter === "film" || filter === "serie") return mustwatchTyp(eintrag?.typ) === filter;
+  return true;
+}
+
+/* Gemeinsame Projektion für beide Ansichten: filtern, suchen, sortieren. */
+export function projiziereMustwatch(eintraege, { filter = "alle", suche = "" } = {}, kandidaten = {}) {
+  const gefiltert = (Array.isArray(eintraege) ? eintraege : []).filter((e) =>
+    passtZuMustwatchFilter(e, filter, kandidaten) && passtZuMustwatchSuche(e, suche));
+  return sortiereMustwatch(gefiltert, kandidaten);
 }
 
 /* ---------- Migration: must_watch-Flag -> Liste (einmalig, idempotent) ----------
