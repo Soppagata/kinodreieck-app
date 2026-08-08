@@ -27,15 +27,16 @@ reproduzierbaren Quellstand als Nachweis genügt.
    Noch keinen bezahlten Test starten. Ohne den neuen DB-Wert verweigert diese
    Function jeden zahlenden Request absichtlich fail-closed.
 
-3. Jetzt die beiden noch ausstehenden Migrationen **in dieser Reihenfolge**
-   anwenden: zuerst `20260801194500_stapelimport_medien.sql`, danach
+3. Releasegebundene Migrationen **in dieser Reihenfolge** anwenden: zuerst
+   `20260801194500_stapelimport_medien.sql`, danach
    `20260808120000_ai_anbieter_request_kostenzaun.sql`. Die erste liefert den
    Modell-, Token- und Task-Cap-Vertrag für P23; die zweite liefert den
    universellen Request-Zaun und den Sonnet-Preisboden. Danach prüfen, dass
    `anbieter_request_max_usd_cent` numerisch, positiv und höchstens 500 ist.
    Function-first ist die sichere Reihenfolge: Migration-first ließe die alte,
    weniger konservative Reservierung vorübergehend gegen den neuen SQL-Deckel
-   laufen.
+   laufen. Für Function-Version 26 wurden beide Migrationen am 08.08.2026 in
+   genau dieser Reihenfolge angewandt und remote verifiziert.
 
 4. Zuerst den kostenfreien Health-/Budgetcheck, danach die budgetgeschützte
    Rauchprobe ausführen. `health.buildVersion` muss den
@@ -50,9 +51,24 @@ reproduzierbaren Quellstand als Nachweis genügt.
 | Datum | Git-Commit | Source-SHA-256 | Supabase-Version | Nachweis |
 |---|---|---|---|---|
 | 30.07.2026 | `c91c2b0` | historisch nicht erfasst | bestehende Produktion | 276/276 kostenfreie Function-Checks; Etappe-9-Abnahme |
-| nächster Deploy | nach Commit einzutragen | `npm run check:function-release` | nach Deploy einzutragen | `health.buildVersion` plus budgetgeschützter Smoke |
+| 08.08.2026 | `53aff4981dcb1a999a4ac92c6226a9fde1d482d6` | `16c6172e22f982324e4687ec4ef668d68d922b463e4b83babd58bd5fb567ec7b` | 26 | Health meldet exakten Build und 500-US-Cent-Request-Cap; 285/285 kostenfreie Function-Checks; 23/23 budgetgeschützte Rauchproben |
 
-Der aktuelle Architektur-Cleanup ist bewusst noch nicht deployt. Bis zum
-nächsten Function-Deploy kann der Produktions-Healthbericht daher
-`buildVersion: "unversioned"` liefern; das ist sichtbar und kein stiller
-Versionsrückfall.
+Der Architektur-Cleanup ist seit 08.08.2026 als Version 26 deployt. Der
+Produktions-Healthbericht meldet den vollständigen Commit statt
+`buildVersion: "unversioned"`.
+
+## Nachgelagerter Tageslimit- und Eval-Nachweis
+
+Die additive Migration `20260808225500_etappe9_beta_tageslimit_30.sql` änderte
+keine Function-Quelle; Version 26 und ihr Source-Hash blieben daher
+unverändert. Remote sind Tageslimit 30, Monatsdeckel 1000 US-Cent,
+Anbieterrequest-Cap 500 US-Cent, Task-Caps `filmwissen-synthese=6` und
+`media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500,
+Not-Aus-Bereitschaft und Parallelität 2 belegt.
+
+Der finale Audit startete keinen weiteren Smoke. Nach einem kostenfreien
+Budgetstand von 9,4544 US-Cent lief genau ein serieller 20-Fall-Eval ohne
+Retry. Alle 20 Anbieterantworten kamen erfolgreich zurück; der serverseitig
+gemessene Monatsstand lag danach bei 38,4209 US-Cent, die Laufdifferenz bei
+28,9665 US-Cent. Die anschließende kostenfreie Offline-Auswertung war mit
+20/20 bewertbaren Fällen ohne objektiven Befund grün.

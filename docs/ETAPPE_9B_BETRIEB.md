@@ -1,6 +1,6 @@
 # Etappe 9b: Betriebs- und Notfallhandbuch
 
-Stand: 30. Juli 2026
+Stand: 8. August 2026
 
 Dieses Handbuch ist der kurze, ausführbare Rückweg für die geschlossene Beta.
 Verantwortlich ist Max. Eine zweite Person darf lesen und kontrollieren, aber
@@ -237,7 +237,7 @@ update public.kd_ai_limits
 
 Vor Einladung der Kohorte:
 
-- `tageslimit_auftraege = 10` je Konto,
+- `tageslimit_auftraege = 30` je Konto (Owner-Entscheid 08.08.2026),
 - `monatsbudget_usd_cent = 1000` global,
 - autonomer Testwächter weiterhin höchstens 500 US-Cent,
 - `parallel_max` unverändert,
@@ -252,6 +252,25 @@ Dashboard-Klick:
 
 1. `supabase/migrations/20260730230000_etappe9_beta_tageslimit.sql`
 2. `supabase/migrations/20260730231000_etappe9_beta_antwortlimit.sql`
+3. `supabase/migrations/20260808225500_etappe9_beta_tageslimit_30.sql`
+
+### Empirischer 30er-Rollout und finaler KI-Eval (08.08.2026)
+
+Die additive Migration `20260808225500` wurde einzeln über die verknüpfte
+Management-API angewandt und erst nach der Inhaltskontrolle als `applied`
+markiert. Alle 27 lokalen und remote Migrationsversionen sind deckungsgleich.
+Die Kontrollabfrage belegte numerisch Tageslimit 30, aktiven Betriebsschalter,
+Monatsdeckel 1000 US-Cent, Anbieterrequest-Cap 500 US-Cent, Task-Caps
+`filmwissen-synthese = 6` und `media-batch-extract = 4` US-Cent,
+Sonnet-Preisboden 300/1500 und `parallel_max = 2`.
+
+Der kostenfreie Budgetcheck meldete vor dem Eval 9,4544 US-Cent. Danach lief
+genau ein serieller Eval mit 20/20 Anbieterantworten, ohne Smoke und ohne
+Retry. Der serverseitig gemessene Monatsstand stieg auf 38,4209 US-Cent; die
+Laufdifferenz betrug 28,9665 US-Cent. Die kostenfreie Offline-Auswertung fand
+bei 20/20 bewertbaren Fällen keinen objektiven Befund; ein Sichtungshinweis
+zählte vertragsgemäß nicht als Fehler. Einzelrequest-Cap 500 US-Cent,
+Laufdeckel 1500 US-Cent und Serverdeckel 1000 US-Cent blieben aktiv.
 
 Danach:
 
@@ -459,7 +478,7 @@ App-Backup einspielen.
 - [x] logischer Dump außerhalb des Repos, Prüfsummen vorhanden
 - [x] Restore im Wegwerfziel, direkte RLS-Kontentrennung und produktiver RLS-Vertrag grün
 - [x] KI-Notaus ohne Anbieteraufruf belegt
-- [x] Beta-Limits abgefragt und Tageslimit 10
+- [x] Beta-Limits abgefragt und Tageslimit 30
 - [ ] Supabase-/Anbieterausfall als Trockenlauf nachvollziehbar
 - [x] Pages-Rollback samt Domain-Smoke geprobt
 - [ ] Function-Rollback aus bekanntem Commit geprobt

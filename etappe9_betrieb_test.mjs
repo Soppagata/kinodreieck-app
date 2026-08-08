@@ -35,16 +35,16 @@ check(
   limitName ? `gefunden: ${limitName}` : "erwartet: *etappe9*tageslimit*.sql",
 );
 check(
-  "Die Beta-Migration setzt tageslimit_auftraege gezielt auf 10",
-  /update\s+public\.kd_ai_limits[\s\S]*?set\s+wert\s*=\s*'10'::jsonb[\s\S]*?where\s+schluessel\s*=\s*'tageslimit_auftraege'/i
+  "Die aktuelle Beta-Migration setzt tageslimit_auftraege gezielt auf 30",
+  /update\s+public\.kd_ai_limits[\s\S]*?set\s+wert\s*=\s*'30'::jsonb[\s\S]*?where\s+schluessel\s*=\s*'tageslimit_auftraege'/i
     .test(limitCode),
-  "UPDATE auf kd_ai_limits mit wert 10 und eindeutigem Schlüssel fehlt",
+  "UPDATE auf kd_ai_limits mit wert 30 und eindeutigem Schlüssel fehlt",
 );
 check(
-  "Der Bauwert 200 bleibt in der Etappe-9-Migration nicht ausführbar",
-  !/set\s+wert\s*=\s*'200'::jsonb[\s\S]*?where\s+schluessel\s*=\s*'tageslimit_auftraege'/i
+  "Die verworfenen Werte 10 und 200 bleiben in der aktuellen Migration nicht ausführbar",
+  !/set\s+wert\s*=\s*'(?:10|200)'::jsonb[\s\S]*?where\s+schluessel\s*=\s*'tageslimit_auftraege'/i
     .test(limitCode),
-  "200 darf höchstens als dokumentierter Rückweg in einem SQL-Kommentar stehen",
+  "10 und 200 dürfen höchstens im begründenden SQL-Kommentar stehen",
 );
 
 const requestContract = await import(

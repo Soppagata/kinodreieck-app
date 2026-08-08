@@ -52,10 +52,25 @@ ausfüllen.
 | `20260731121000_archive_legacy_shared.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; vor Lauf 0 Legacy-Shared-Zeilen, Archiv 0, aktive Legacy-Zeilen 0, Schreibblock aktiv und live verifiziert |
 | `20260731140000_demo_seed_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; 120 Filme als validierter Format-1-Seed in `kd_catalog`, anonyme und angemeldete Sichtbarkeit sowie unveränderte Zugriffstrennung mit `npm run test:rls` 63/63 belegt; vier Legacy-Demozeilen für ausgelieferte Clients bewusst noch erhalten |
 | `20260731170000_split_streaming_catalog.sql` | `bscjgwcntapobyxsiyce` | 2026-07-31 | Codex über Management-API | erfolgreich; bekannte und vollständige Streamingtitel in vier getrennte Live-/Demo-Zeilen aufgeteilt, Trigger hält alte Pipeline-Writes kompatibel; 42 Funktionen, 13 Trigger und 21 Policies live verifiziert, `npm run test:rls` 64/64 grün |
-| `20260801194500_stapelimport_medien.sql` | | | | ausstehend; beim nächsten Release nach der fail-closed Function und vor `20260808120000` anwenden; liefert Modell-, Token- und 4-US-Cent-Task-Cap für den P23-Stapelimport |
+| `20260801194500_stapelimport_medien.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; nach fail-closed Function und vor Kostenzaun angewandt; Medienlimit 950000, Modell klein, 4096 Token und 4-US-Cent-Task-Cap remote verifiziert |
 | `20260802120000_wochenplan_serienbeobachtung.sql` | `bscjgwcntapobyxsiyce` | 2026-08-02 | Codex über Management-API | erfolgreich; 17er-Personaltopf-Whitelist, private Serienbeobachtung mit vier Owner-Policies und authentifizierter atomarer RPC remote verifiziert; `npm run test:rls` danach 64/64 grün; die ältere offene Stapelimport-Migration blieb unangetastet |
 | `20260802220000_shared_article_claim_tokens.sql` | `bscjgwcntapobyxsiyce` | 2026-08-02 | Codex über verknüpfte Management-API | erfolgreich; eindeutige unveränderliche Upload-Tokens, Autor-Claim beim Publish und atomare Einmal-Übernahme je Konto; `npm run test:rls` danach 67/67 grün; die ältere offene Stapelimport-Migration blieb unangetastet |
-| `20260808120000_ai_anbieter_request_kostenzaun.sql` | | | | als nächstes **nach** der zugehörigen fail-closed Function-Fassung ausrollen; bis dahin keine Paid-AI; danach Health und Smoke; universeller maximaler 500-US-Cent-Vorabzaun je zahlendem Providerrequest |
+| `20260808120000_ai_anbieter_request_kostenzaun.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; universeller 500-US-Cent-Vorabzaun, Sonnet-Preisboden 300/1500, Task-Caps 6/4 und service-only RPC remote verifiziert; Health grün, Rauchprobe 23/23 |
+| `20260808225500_etappe9_beta_tageslimit_30.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; Tageslimit numerisch auf 30 gesetzt; Betriebsschalter `ai_aktiv=true` und Not-Aus-Bereitschaft, Monatsdeckel 1000, Request-Cap 500, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 sowie Parallelität 2 unverändert verifiziert; alle 27 Migrationsversionen lokal/remote deckungsgleich |
+
+## Entscheidung zum Beta-Tageslimit (08.08.2026)
+
+**Verworfen — nicht wieder aufmachen:**
+
+| Ansatz | Grund | Datum |
+|---|---|---|
+| Dauerhaft 10 KI-Aufträge je Konto und Tag | Für realistische Nutzung zu knapp; bereits Rauchprobe plus beginnendes Eval liefen am selben Tag exakt in diese Grenze. | 2026-08-08 |
+
+**Entschieden:**
+
+| Entscheidung | Begründung | Randbedingung / offene Option |
+|---|---|---|
+| Dauerhaft 30 KI-Aufträge je Konto und Kalendertag (Europe/Vienna) | Nutzer können realistisch mehr als zehn KI-Funktionen pro Tag verwenden; Monatsbudget, 500-US-Cent-Request-Cap und Not-Aus bleiben die eigentlichen Kostenzäune. | Erst durch eine neue Owner-Entscheidung senken, wenn die realen Kosten nicht mehr tragbar sind. |
 
 ## Nach Migration 1
 

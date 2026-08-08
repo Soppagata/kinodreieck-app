@@ -1,12 +1,18 @@
 # Etappe 9: Abnahmeprotokoll
 
-Stand: 31. Juli 2026
+Stand: 8. August 2026
 
 Dieses Protokoll trennt fertige Belege von den Schritten, die reale Geräte,
 Personen, Material oder eine ausdrückliche externe Freigabe brauchen. Ein
 vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 
-## Versionierter Stand
+**Nachtrag 08.08.2026:** Das unten historisch belegte Beta-Tageslimit 10 wurde
+durch Owner-Entscheid dauerhaft auf 30 erhöht. Die additive Migration
+`20260808225500_etappe9_beta_tageslimit_30.sql` ist remote angewandt,
+verifiziert und in der vollständig deckungsgleichen Migrationshistorie
+markiert; die historischen 31.-Juli-Belege bleiben unverändert dokumentiert.
+
+## Historischer versionierter Stand (31.07.2026)
 
 - Arbeitszweig: `codex/etappe-9a-distribution`
 - 9a Distribution: Commit `1fb608f`
@@ -40,7 +46,19 @@ vorbereiteter Schritt gilt nicht als praktisch abgenommen.
 | Beta-Paket | fertig vorbereitet | Rollen, 11 Szenarien, Testerhinweis, Ergebnisbogen, Stopkriterien und Abschlussauswertung |
 | Gesamtprüfung | grün | vollständiges `npm test`; 23/23 Etappe-9-Betriebschecks |
 
-Für keinen dieser Belege wurde ein kostenpflichtiger KI-Aufruf ausgeführt.
+Für keinen dieser historischen Belege vom 31. Juli wurde ein kostenpflichtiger
+KI-Aufruf ausgeführt.
+
+## Finaler KI-Audit vom 8. August 2026
+
+| Bereich | Ergebnis | Beleg |
+|---|---|---|
+| 30er-Tageslimit | grün gegen Produktion | Migration `20260808225500` einzeln angewandt; `tageslimit_auftraege` numerisch exakt 30; alle 27 lokalen/remote Migrationsversionen deckungsgleich |
+| Unveränderte Sicherheitszäune | grün gegen Produktion | `ai_aktiv=true`, Monatsdeckel 1000 US-Cent, Anbieterrequest-Cap 500 US-Cent, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 und Parallelität 2 |
+| Kostenfreier Budgetcheck | messbar grün | vor Eval 9,4544 US-Cent; kein Anbieteraufruf |
+| Einmaliger KI-Eval | grün | exakt 20/20 serielle Anbieterantworten, kein Smoke, kein Retry; serverseitiger Monatsstand danach 38,4209 US-Cent, Laufdifferenz 28,9665 US-Cent |
+| Offline-Auswertung | grün | 20/20 bewertbare Fälle ohne objektiven Befund; ein nicht fehlerzählender Sichtungshinweis |
+| Kostenfreie Regression | grün | Etappe-9-Betriebstest 22/22, Function-Vertrag 285/285, vollständiges `npm test` einschließlich Build und Pages-Gate Exit 0, Mobile Chromium/WebKit 106/106, `git diff --check` sauber |
 
 ## Weitere praktische Belege
 
