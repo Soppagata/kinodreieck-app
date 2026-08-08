@@ -515,6 +515,7 @@ check("Master- und Artikelimport persistieren keine ungenutzten Rohdaten-Snapsho
   && !/schreibeImportSnapshot/.test(app)
   && !/schreibeImportSnapshot/.test(libraryController));
 const mustwatchListe = fs.readFileSync("src/components/MustWatchListe.jsx", "utf8");
+const startTab = fs.readFileSync("src/tabs/StartTab.jsx", "utf8");
 const mustwatchController = fs.readFileSync("src/controllers/useMustwatchController.js", "utf8");
 const articleController = fs.readFileSync("src/controllers/useArticleController.js", "utf8");
 const personalDataController = fs.readFileSync("src/controllers/personalDataTransactionController.js", "utf8");
@@ -538,6 +539,16 @@ check("Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue",
 check("Must-Watch normalisiert optionales Jahr und Typ an der Schreibgrenze",
   /jahr: mustwatchJahr\(daten\.jahr\), typ: mustwatchTyp\(daten\.typ\)/.test(mustwatchController)
   && /normalisiereMetadaten\(berechnet\)/.test(mustwatchController));
+check("Must-Watch-Oberfläche und Dashboard verwenden dieselbe reine Projektion",
+  /projiziereMustwatch/.test(mustwatchListe)
+  && /mustwatchVerfuegbarkeit/.test(mustwatchListe)
+  && /sortiereMustwatch\(mustwatch, mwKandidatenSicher\)\.slice\(0, 5\)/.test(startTab)
+  && /mustwatchVerfuegbarkeit\(e, mwKandidatenSicher\)/.test(startTab)
+  && /mwKandidaten=\{mwKandidaten\}/.test(app));
+check("Must-Watch speichert keinen Verfügbarkeitsstatus und rät keine Titel",
+  !/verfuegbar(?:keit)?:/.test(mustwatchController)
+  && !/mustwatchVerfuegbarkeit/.test(mustwatchController)
+  && !/norm\(k\.titel\)[\s\S]{0,80}verknuepfung/.test(mustwatchListe));
 check("Demo-Boot bestätigt Must-Watch erst nach erfolgreichem lokalem Schreiben",
   /localStorage\.setItem\(K\.mustwatch,[^\n]+\); setMustwatch\(mw\)/.test(app));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",

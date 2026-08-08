@@ -150,19 +150,30 @@ const mwBtn = knopf(/^Must-Watch \(/);
 check("Mediathek: Ansicht 'Must-Watch' vorhanden", !!mwBtn);
 if (mwBtn) {
   mwBtn.click(); await warte(300);
-  const mwNeu = knopf(/^\+ Eintrag$/);
-  check("Must-Watch: eigene Liste rendert (+ Eintrag)", !!mwNeu);
+  const mwNeu = knopf(/^\+ Für später merken$/);
+  check("Must-Watch: eigene Liste rendert (+ Für später merken)", !!mwNeu);
+  check("Must-Watch: Einleitung als persönliche Noch-sehen-Liste",
+    /Deine persönliche Noch-sehen-Liste/.test(text()));
+  check("Must-Watch: alle vier Filter vorhanden",
+    !!knopf(/^Alle$/) && !!knopf(/^Jetzt verfügbar$/) && !!knopf(/^Filme$/) && !!knopf(/^Serien$/));
   if (mwNeu) {
     mwNeu.click(); await warte(200);
     const titelFeld = [...doc.querySelectorAll("input")].find((i) => i.placeholder === "Titel *");
     check("Must-Watch: Formular öffnet", !!titelFeld);
+    const jahrFeld = [...doc.querySelectorAll("input")].find((i) => i.placeholder === "Jahr (optional)");
+    const artFeld = [...doc.querySelectorAll("select")].find((s) => /Art offen lassen/.test(s.textContent || ""));
+    check("Must-Watch: Formular bietet optionales Jahr und Film/Serie", !!jahrFeld && !!artFeld);
     if (titelFeld) {
       setValue(titelFeld, "Struktur-Testeintrag");
+      if (jahrFeld) setValue(jahrFeld, "1979");
       await warte(100);
-      const hinzu = knopf(/^Hinzufügen$/);
+      const hinzu = knopf(/^Für später merken$/);
       if (hinzu) { hinzu.click(); await warte(300); }
       check("Must-Watch: Eintrag angelegt + im Topf persistiert",
         /Struktur-Testeintrag/.test(text()) && /Struktur-Testeintrag/.test(dom.window.localStorage.getItem("kd:mustwatch") || ""));
+      const topf = dom.window.localStorage.getItem("kd:mustwatch") || "";
+      check("Must-Watch: optionales Jahr landet im Topf, unbekannter Typ bleibt null",
+        /"jahr":1979/.test(topf) && /"typ":null/.test(topf));
     }
   }
 }

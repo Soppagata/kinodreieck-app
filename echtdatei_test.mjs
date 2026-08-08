@@ -406,8 +406,11 @@ check("Mediathek: Ansicht-Umschalter 'Must-Watch'", !!mwKnopf);
 if (mwKnopf) {
   mwKnopf.click(); await warte(500);
   check("Must-Watch: migrierter Eintrag gelistet", /Flag-Testfilm/.test(text()));
-  check("Must-Watch: eigener '+ Eintrag'-Knopf", !!knopf(/^\+ Eintrag$/));
+  check("Must-Watch: eigener '+ Für später merken'-Knopf", !!knopf(/^\+ Für später merken$/));
   check("Must-Watch: im-Besitz-Häkchen pro Eintrag", [...doc.querySelectorAll('input[type="checkbox"]')].length > 0);
+  check("Must-Watch: Einleitung und die vier Filter sind erreichbar",
+    /Deine persönliche Noch-sehen-Liste/.test(text())
+    && !!knopf(/^Jetzt verfügbar$/) && !!knopf(/^Filme$/) && !!knopf(/^Serien$/) && !!knopf(/^Alle$/));
 }
 
 /* ---- No-Config-file://-Vertrag -----------------------------------------

@@ -1968,7 +1968,7 @@ export default function App() {
             /* Dashboard-Datenquellen (Etappe 4) — alles vorhandener App-State,
                keine neuen Fetches: Matches, Must-Watch, Abo-Auswahl, Kataloge,
                Programm-Stand. Der Beta-Pfad (Landing) ignoriert diese Props. */
-            kinoMatches={kinoMatches} mustwatch={mustwatch} auswahl={auswahl}
+            kinoMatches={kinoMatches} mustwatch={mustwatch} mwKandidaten={mwKandidaten} auswahl={auswahl}
             streamingEntdecken={streamingEntdecken} streamingBekannt={streamingBekannt}
             progStand={progStand} programmInfo={programmInfo} streamingInfo={streamingInfo} />
         )}

@@ -6,6 +6,7 @@ import { useInstallationsStatus } from "../lib/installation.js";
 import { Wochenplan } from "../components/Wochenplan.jsx";
 import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
 import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
+import { mustwatchVerfuegbarkeit, sortiereMustwatch } from "../lib/mustwatch.js";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -116,7 +117,7 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
 
 function StartDashboard({
   kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
-  kinoMatches = { matched: [] }, mustwatch = [],
+  kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null,
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null, onHilfe,
   wochenplan, onWochenplanAendern, entdeckenStatus = {}, onEntdeckenStatusAendern,
@@ -178,8 +179,13 @@ function StartDashboard({
     });
   }, [kinoPins, kinoKatalog, progStand]);
 
-  /* Must-Watch: oberste 5 in Listenreihenfolge. */
-  const mwTop = (mustwatch || []).slice(0, 5);
+  /* Must-Watch: dieselbe reine Projektion wie die Vollansicht (aktuell
+     verfügbar, dann zuletzt gemerkt, dann Titel), danach auf fünf gekürzt. */
+  const mwKandidatenSicher = useMemo(() => mwKandidaten || {}, [mwKandidaten]);
+  const mwTop = useMemo(
+    () => sortiereMustwatch(mustwatch, mwKandidatenSicher).slice(0, 5),
+    [mustwatch, mwKandidatenSicher],
+  );
 
   /* Pinboard: nächster Termin zuerst (Sortierung auf dem formatierten String). */
   const pins = useMemo(() => aktiveKinoPins
@@ -296,13 +302,19 @@ function StartDashboard({
         <Modul name="Must-Watch" ziel="mediathek" linkLabel="Mediathek" onNavigiere={onNavigiere}>
           {mwTop.length > 0 ? (
             <div className="kd-dash-karte">
-              {mwTop.map((e, i) => (
-                <div key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
-                  <span className="kd-dash-rang">{i + 1}</span>
-                  <span className="kd-dash-ztitel">{e.titel}</span>
-                  {e.im_besitz && <span className="kd-dash-badge">IM BESITZ</span>}
-                </div>
-              ))}
+              {mwTop.map((e, i) => {
+                /* Derselbe abgeleitete Status wie in der Vollansicht — ohne
+                   geladenen Katalog bleibt die Zeile bewusst ohne Aussage. */
+                const status = mustwatchVerfuegbarkeit(e, mwKandidatenSicher);
+                return (
+                  <div key={e.id} className="kd-dash-zeile" onClick={() => zuEintrag(e.id, "mediathek")}>
+                    <span className="kd-dash-rang">{i + 1}</span>
+                    <span className="kd-dash-ztitel">{e.titel}{e.jahr ? " (" + e.jahr + ")" : ""}</span>
+                    {status && <span className={"kd-dash-badge" + (status.aktuell ? " kd-dash-badge--neu" : "")}>{status.label}</span>}
+                    {e.im_besitz && <span className="kd-dash-badge">IM BESITZ</span>}
+                  </div>
+                );
+              })}
             </div>
           ) : <p className="kd-dash-leer">Noch kein Titel auf deiner Must-Watch-Liste.</p>}
         </Modul>
