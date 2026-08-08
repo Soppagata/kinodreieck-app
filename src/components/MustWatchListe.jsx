@@ -62,6 +62,18 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
   const [verknTitel, setVerknTitel] = useState("");
   const [pickerOffen, setPickerOffen] = useState(false);
   const [fehler, setFehler] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+  const speichern = async () => {
+    if (!titel.trim()) { setFehler("Titel ist Pflicht."); return; }
+    setFehler(""); setSpeichert(true);
+    try {
+      const ok = await onAdd({ titel: titel.trim(), im_besitz: imBesitz, beschreibung: beschreibung.trim(), notiz: notiz.trim(), verknuepfung: verkn });
+      if (ok !== false && onDone) onDone();
+      else setFehler("Der Eintrag wurde nicht gespeichert. Bitte erneut versuchen.");
+    } catch {
+      setFehler("Der Eintrag wurde nicht gespeichert. Bitte erneut versuchen.");
+    } finally { setSpeichert(false); }
+  };
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -85,11 +97,7 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
       )}
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button style={btnStyle(true)} onClick={() => {
-          if (!titel.trim()) { setFehler("Titel ist Pflicht."); return; }
-          onAdd({ titel: titel.trim(), im_besitz: imBesitz, beschreibung: beschreibung.trim(), notiz: notiz.trim(), verknuepfung: verkn });
-          if (onDone) onDone();
-        }}>Hinzufügen</button>
+        <button style={btnStyle(true)} disabled={speichert} onClick={speichern}>{speichert ? "Speichert …" : "Hinzufügen"}</button>
         <button style={btnStyle(false)} onClick={onDone}>Abbrechen</button>
       </div>
     </div>
@@ -105,7 +113,7 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
   const titelZu = (v) => {
     if (!v) return "";
     const liste = kandidaten[v.ziel] || [];
-    const k = liste.find((x) => x.id === v.id);
+    const k = liste.find((x) => String(x.id) === String(v.id));
     return k ? k.titel : v.id;
   };
   const sichtbar = useMemo(() => {
@@ -136,14 +144,14 @@ export function MustWatchListe({ eintraege, onAdd, onUpdate, onDelete, kandidate
                   {e.titel}
                 </span>
                 <label onClick={(ev) => ev.stopPropagation()} style={{ display: "flex", gap: 5, alignItems: "center", fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  <input type="checkbox" checked={!!e.im_besitz} onChange={() => onUpdate(e.id, { im_besitz: !e.im_besitz })} /> im Besitz
+                  <input type="checkbox" checked={!!e.im_besitz} onChange={() => onUpdate(e.id, (aktuell) => ({ im_besitz: !aktuell.im_besitz }))} /> im Besitz
                 </label>
               </div>
               {e.verknuepfung && (
                 <div style={{ marginTop: 4, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.tinteWeich }}>
                   ↪ {ZIEL_LABEL[e.verknuepfung.ziel] || e.verknuepfung.ziel}:{" "}
-                  {e.verknuepfung.ziel === "master" && onSpringeZuRef
-                    ? <a href="#" onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onSpringeZuRef(e.verknuepfung.id); }}
+                  {["master", "programm", "streaming"].includes(e.verknuepfung.ziel) && onSpringeZuRef
+                    ? <a href="#" onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); onSpringeZuRef(e.verknuepfung, e); }}
                         style={{ color: T.tinte, textDecorationColor: T.wolfram, textUnderlineOffset: 3 }}>{titelZu(e.verknuepfung)}</a>
                     : titelZu(e.verknuepfung)}
                 </div>

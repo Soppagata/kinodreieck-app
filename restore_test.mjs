@@ -66,10 +66,10 @@ const parse = (k) => { const v = get(k); return v == null ? null : JSON.parse(v)
 const backup = {
   format: "kinodreieck-backup", version: 1, erstellt: "2026-07-17T00:00:00Z",
   masterliste: { meta: { name: "Max", version: "3.0" }, filme: [
-    { titel: "Größe · 🎬", jahr: 2001, bewertung: { wie: 3, was: 4, warum: 2 } }, // ohne id → ensureIds vergibt eine
+    { titel: "Größe · 🎬", jahr: 2001, typ: "filmreihe", bewertung: { wie: 3, was: 4, warum: 2 } }, // Legacy-Typ + ohne id
     { id: "fest_1999", titel: "Fester Eintrag", jahr: 1999 },
   ] },
-  artikel: [{ id: "a1", titel: "Blog 1" }],
+  artikel: [{ id: "a1", titel: "Blog 1", liste: [{ eingabe: "Legacy-Reihe", typ: "filmreihe" }] }],
   kino_pins: [{ t: "Film", j: 2020, z: "12.08. Kino", seit: 1 }],
   merkliste: [{ watchmode_id: 1, titel: "M1", jahr: 2010 }, { watchmode_id: 2, titel: "M2", jahr: 2011 }],
   vokabular: [{ wort: "gemütlich", genres: ["komödie"], tags: [] }],
@@ -93,12 +93,14 @@ const m = parse("kd:master");
 check("Master: Wrapper {meta,filme,herkunft,gespeichertAm}", m && Array.isArray(m.filme) && m.herkunft && m.herkunft.typ === "storage" && typeof m.gespeichertAm === "number");
 check("Master: meta übernommen", m.meta && m.meta.version === "3.0");
 check("Master: ensureIds vergibt fehlende id", m.filme[0].id && typeof m.filme[0].id === "string" && m.filme[0].id.length > 0);
+check("Master: alter Filmreihe-Typ wird beim Restore zu Film normalisiert", m.filme[0].typ === "film");
 check("Master: bestehende id bleibt", m.filme[1].id === "fest_1999");
 check("Master: Unicode/Emoji unversehrt", m.filme[0].titel === "Größe · 🎬");
 
 /* 3) Artikel: Wrapper {artikel,gespeichertAm} */
 const art = parse("kd:artikel");
 check("Artikel: Wrapper {artikel:[...],gespeichertAm}", art && Array.isArray(art.artikel) && art.artikel.length === 1 && typeof art.gespeichertAm === "number");
+check("Artikel: alter Filmreihe-Typ wird beim Restore zu Film normalisiert", art.artikel[0].liste[0].typ === "film");
 
 /* 4) Arrays direkt */
 check("Kino-Pins: Array direkt", Array.isArray(parse("kd:kino-pins")) && parse("kd:kino-pins").length === 1);
@@ -156,7 +158,7 @@ check("Teil-Backup: Must-Watch übersprungen, Topf unangetastet", get("kd:mustwa
 /* ===== Phase 4: Backup/Restore über den Supabase-Treiber ===== */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ZEHN = {
-  "kd:master": JSON.stringify({ meta: { name: "Max" }, filme: [{ id: "f1", titel: "DB-Film" }], herkunft: { typ: "storage" }, gespeichertAm: 1 }),
+  "kd:master": JSON.stringify({ meta: { name: "Max" }, filme: [{ id: "f1", titel: "DB-Film", typ: "filmreihe" }], herkunft: { typ: "storage" }, gespeichertAm: 1 }),
   "kd:artikel": JSON.stringify({ artikel: [{ id: "a1", titel: "DB-Blog" }], gespeichertAm: 1 }),
   "kd:kino-pins": JSON.stringify([{ t: "P", j: 2020 }]),
   "kd:merkliste": JSON.stringify([{ watchmode_id: 1 }]),
@@ -179,6 +181,7 @@ for (const [k, v] of Object.entries(ZEHN)) sbSeed("max", k, v);
 await S.syncPull();
 const bk = await B.baueBackup();
 check("P4 Export: master aus DB (Pull, nicht State)", bk.masterliste.filme[0].titel === "DB-Film" && bk.masterliste.meta.name === "Max");
+check("P4 Export: Legacy-Filmreihe aus frischem DB-Stand wird kanonisch als Film gesichert", bk.masterliste.filme[0].typ === "film");
 check("P4 Export: artikel entpackt {artikel:[...]}", Array.isArray(bk.artikel) && bk.artikel[0].titel === "DB-Blog");
 check("P4 Export: must_watch_liste entpackt {eintraege:[...]}", Array.isArray(bk.must_watch_liste) && bk.must_watch_liste[0].id === "mw1");
 check("P4 Export: autor roher String", bk.autor === "DB-Autor");

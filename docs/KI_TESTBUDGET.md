@@ -1,6 +1,6 @@
 # Budgetwächter für echte KI-Tests
 
-Stand: 28.07.2026
+Stand: 08.08.2026
 
 ## Zweck
 
@@ -12,7 +12,6 @@ Autonome Agenten dürfen solche Läufe nur noch über den Budgetwächter starten
 
 ```bash
 npm run test:ai:live
-npm run test:ai:profile-live
 npm run test:ai:eval
 ```
 
@@ -27,11 +26,64 @@ Die autonome Standardgrenze liegt deshalb bei **500 US-Cent**. Sie ist eine
 bewusst konservative technische Ersatzgrenze für Max' gewünschtes
 5-Euro-Limit, aber keine Wechselkurs- oder Rechnungsgarantie.
 
+Für den finalen Audit hat Max am 08.08.2026 ausdrücklich freigegeben, diese
+lokale Ersatzgrenze zu ignorieren und reale Kosten zur späteren Wahl der
+Standard-Tokenbudgets zu messen. Der eng begrenzte Schalter dafür lautet:
+
+```bash
+npm run test:ai:live -- --owner-approved-server-budget
+npm run test:ai:eval -- --owner-approved-server-budget
+```
+
+Er entfernt weder die Messung noch den serverseitigen Monatsdeckel. Der Loader
+setzt ausschließlich für diesen Kindprozess die Anweisung, den aus `health`
+gelesenen Serverdeckel als wirksames Limit zu verwenden. Ambient-Werte und
+`.env.live.local` können diese Freigabe weiterhin nicht einschleusen.
+
+Die Freigabe hebt außerdem ausdrücklich **nicht** die beiden neuen
+Sicherheitszäune auf:
+
+- Jeder einzelne zahlende Providerrequest wird vor dem Netzwerkaufruf aus dem
+  exakten Anbieterrequest konservativ reserviert und darf höchstens **500
+  US-Cent** kosten. Der Betriebswert darf enger, aber nie höher sein.
+- Ein kompletter `test:ai:live`- oder `test:ai:eval`-Lauf darf höchstens **1500
+  serverseitig gemessene US-Cent** verbrauchen. Das ist die technische
+  Näherung für Max' 15-Euro-Laufgrenze, keine Wechselkurszusage.
+
+Vor jedem zahlenden Request liest der Runner erneut den serverseitigen Stand.
+Sobald mehr als 1000 US-Cent des Laufs verbraucht sind, beginnt er keinen
+weiteren Request: Die verbleibenden 500 US-Cent sind der Vorabpuffer für den
+unverrückbaren Einzelrequest-Deckel. Nach jedem Request wird erneut gemessen.
+Damit ist die Laufgrenze nicht bloß eine nachträgliche Warnung.
+
+Für Text wird dabei nicht mehr mit dem Durchschnitt `UTF-8-Bytes / 3`
+gerechnet: Jedes UTF-8-Byte zählt konservativ als mögliches Token, dazu kommen
+4096 Tokens interne Anbieterreserve und das vollständige Ausgabebudget. Für
+höchstens drei Bilder wird je Bild der volle offizielle Provider-Resize-Deckel
+der bekannten Modellfamilie reserviert: 1568 Tokens bei Haiku 4.5, 4784 bei
+Sonnet 5. Unbekannte Modelle, ungültiges Base64, mehr als drei Bilder oder
+insgesamt mehr als 900.000 Base64-Zeichen stoppen vor dem Provider.
+
+Auch die Datenbank-Preistabelle ist keine Vertrauensgrenze mehr: Haiku und
+Sonnet besitzen im Function-Code einen nicht absenkbaren Owner-Preisboden.
+Höhere DB-Preise bleiben möglich und werden verwendet; kleinere positive
+Werte sowie unbekannte Modellfamilien fallen vor der Anbieter-RPC geschlossen
+aus. Für Sonnet 5 gilt bereits ab diesem Release konservativ 300/1500 US-Cent
+je Million Tokens, also der angekündigte Regelpreis ab 01.09.2026 statt des
+bis 31.08.2026 befristeten Einführungspreises 200/1000. Die Release-Migration
+hebt den DB-Eintrag auf mindestens denselben Wert an und bewahrt höhere Werte.
+Der bisherige 5-US-Cent-Filmwissen-Cap würde dadurch selbst den realen
+synthetischen Referenzauftrag blockieren. Die gleiche Migration hebt ihn daher
+minimal auf 6 US-Cent an und bewahrt höhere Werte. Der Referenzauftrag passt
+einschließlich 2048 Ausgabetokens unter diesen Deckel; größere Eingaben werden
+weiter konservativ vor dem Provider abgewiesen.
+
 Der Stand ist genauer als eine Schätzung „Anzahl der Anfragen × Sollkosten“:
 Abgeschlossene Aufträge tragen die aus den tatsächlichen Provider-Tokens
 berechneten Kosten. Laufende oder ohne Abschluss abgebrochene Aufträge zählen
-vorsichtshalber mit ihrer reservierten Höchstschätzung. Maßgeblich ist die
-serverseitige Preistabelle; Rabatte, Steuern, Wechselkurs und die spätere
+vorsichtshalber mit ihrer reservierten Höchstschätzung. Maßgeblich ist der
+höhere Wert aus serverseitiger Preistabelle und unterschreitungsfestem
+Owner-Preisboden; Rabatte, Steuern, Wechselkurs und die spätere
 Anbieterrechnung sind nicht darin enthalten.
 
 Zusätzlich existiert weiterhin der atomare globale Monatsdeckel des Servers.
@@ -41,9 +93,10 @@ gemeinsam. Der lokale Wächter ersetzt dieses harte Datenbanktor nicht.
 ## Stoppsignale
 
 - `AUTONOMIE_STOPP`, Exit-Code 75: Die 500-US-Cent-Grenze oder der globale
-  Serverdeckel ist erreicht.
+  Serverdeckel, die Einzelrequest-Grenze, die Laufgrenze oder die feste
+  Requestanzahl ist erreicht.
 - `BUDGET_UNBEKANNT`, Exit-Code 74: Anmeldung, Function oder Kostenstand sind
-  nicht verlässlich erreichbar.
+  nicht verlässlich erreichbar oder ein Request/Prozess läuft in ein Timeout.
 
 In beiden Fällen gilt fail-closed:
 
@@ -66,15 +119,6 @@ davor und danach:
 
 ```bash
 npm run test:ai:contract
-```
-
-Die kostenpflichtige Etappe-7-Abnahme sendet genau einen Satz ausdrücklich
-synthetischer Antworten an `profile-extract`. Sie speichert weder Antworten
-noch Profilvorschlag und darf wie alle bezahlten Läufe nur hinter dem
-Budgetwächter starten:
-
-```bash
-npm run test:ai:profile-live
 ```
 
 Ob beide begrenzten Testkonten im Schlüsselbund vorhanden sind, prüft ohne
@@ -128,20 +172,72 @@ KD_AI_FUNKTION=ai-task
 KD_ORIGIN=https://staging.kinodreieck.at
 ```
 
-Passwörter, `KD_AI_AUTONOM_LIMIT_USD_CENT` und `KD_EVAL_JA` werden in dieser
-Datei ausdrücklich abgelehnt. Die Eval-Freigabe entsteht ausschließlich für
+Passwörter, `KD_AI_AUTONOM_LIMIT_USD_CENT`,
+`KD_AI_OWNER_APPROVED_SERVER_BUDGET` und `KD_EVAL_JA` werden in dieser Datei
+ausdrücklich abgelehnt. Owner- und Eval-Freigabe entstehen ausschließlich für
 den einen ausdrücklich gestarteten, budgetüberwachten Lauf.
 
 Für `npm run test:rls` kommt ein zweites begrenztes Testkonto mit
 `KD_TESTB_USER` und dem geheimen `KD_TESTB_PASS` hinzu. Dieser Test macht
 keinen Anbieteraufruf und kostet kein KI-Budget.
 
-## Technische Grenze
+## Endlosschleifen- und Timeout-Schutz
 
-Der Wächter setzt serielle Agentenläufe voraus; `AGENTS.md` verbietet deshalb
-parallele oder direkte Live-Tests. Eine auch über mehrere Rechner hinweg
-atomare eigene 5-Euro-Testsession würde eine zusätzliche Datenbankmigration
-mit Testlauf-ID, eingefrorenem Wechselkurs und eigener Reservierungsgrenze
-benötigen. Für den jetzigen einzelnen Codex-Arbeitsfluss wäre das erheblich
-mehr Infrastruktur, ohne die Genauigkeit der späteren Anbieterrechnung
-garantieren zu können.
+Die beiden erlaubten Läufe sind vollständig endlich:
+
+| Grenze | Rauchprobe | Eval |
+| --- | ---: | ---: |
+| maximale zahlende/potenziell zahlende Requests | 9 | 20 |
+| Ausführung | strikt seriell | strikt seriell |
+| Request-Zeitgrenze | 135 Sekunden | 135 Sekunden |
+| Prozess-Zeitgrenze | 15 Minuten | 15 Minuten |
+| automatische Retries | keine | keine |
+
+Die Rauchprobe besitzt zusätzlich genau **einen tokenfreien Providerkontakt**
+P8 (`GET /v1/models`). Er zählt nicht zu den neun zahlenden/potenziell
+zahlenden Requests, läuft aber im selben Exklusiv-Lock, mit Request-Timeout und
+durch das serverseitige Not-Aus-/Tages-/Parallelitätstor. Insgesamt sind damit
+höchstens zehn Providerkontakte möglich. P22 prüft `profile-extract`
+synthetisch einschließlich WIE/WAS/WARUM; P23 prüft den text-only
+`media-batch-extract`-Pfad. Beide gehören zu den neun bewachten Requests.
+
+Ein Timeout, ein nicht lesbarer Kostenstand oder HTTP 429 stoppt sofort. Der
+Filmwissen-Cachecheck ist ein bewusst einmaliger Vertragstest, keine
+Fehlerwiederholung. Der äußere Wächter liest auch nach einem abgebrochenen
+Kindprozess noch genau einmal den Stand; er startet dabei keinen Providercall.
+Ein atomarer Lock im lokalen Temp-Verzeichnis verhindert außerdem, dass
+`test:ai:live` und `test:ai:eval` aus zwei Prozessen desselben Macs parallel
+laufen. Ein vorhandener Lock wird **nie autonom als stale gelöscht**: Auch bei
+mutmaßlich toter PID stoppt der Start fail-closed. Erst nach manueller Prüfung,
+dass wirklich kein Live-/Eval-Prozess mehr läuft, darf die Lockdatei entfernt
+werden. So kann kein zweiter Starter bei einer Stale-Bereinigung den gerade
+neu erworbenen Lock eines anderen Laufs löschen.
+
+Die 15 Minuten begrenzen den bezahlten Kindprozess. Anmeldung sowie Vor- und
+Nachmessung besitzen jeweils eine eigene feste 20-Sekunden-Grenze; damit gibt
+es auch außerhalb des Kindprozesses keinen unbeschränkten Wartepfad. Nach
+SIGTERM folgt nach höchstens zwei Sekunden SIGKILL und danach ein garantierter
+lokaler Abschluss, selbst wenn ein fehlerhaftes Kind kein `exit`-Event liefert.
+
+## Release-Reihenfolge des Einzelrequest-Zauns
+
+Der universelle Datenbankzaun liegt in
+`20260808120000_ai_anbieter_request_kostenzaun.sql`. Die sichere Reihenfolge
+ist absichtlich **Function zuerst, Migration danach**:
+
+1. neue `ai-task`-Function deployen und noch keinen bezahlten Test starten;
+2. die neue Function verweigert ohne den DB-Wert jeden zahlenden Request
+   fail-closed (`anbieter-request-kostenzaun-ungueltig`);
+3. alle ausstehenden Migrationen kontrolliert in Reihenfolge anwenden: zuerst
+   `20260801194500_stapelimport_medien.sql`, danach
+   `20260808120000_ai_anbieter_request_kostenzaun.sql`; die erste stellt den
+   Modell-/Token-/Task-Cap-Vertrag für P23 her, die zweite den Kostenzaun;
+4. `health` muss effektiven und Owner-Deckel 500 sowie die Timeout-Deckel
+   melden; erst danach Budgetcheck und Smoke starten.
+
+Nur die Kostenzaun-Migration zu spielen genügt für P23 ausdrücklich nicht, weil
+die Stapelimport-Migration auf Staging noch unbelegt ist. Migration-first wäre
+unsicherer, weil die alte Function noch mit ihrer weniger
+konservativen Reservierung gegen den neuen SQL-Deckel laufen könnte. Der
+datenfreie `current_schema.sql`-Snapshot wird erst nach dem tatsächlichen
+Staging-Lauf neu erzeugt, nicht vorab erfunden.

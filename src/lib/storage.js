@@ -27,10 +27,54 @@ export const localDriver = {
 };
 
 let activeDriver = localDriver;
+let storageContextGeneration = 0;
+const storageContextListeners = new Set();
+
+function storageContextError() {
+  const error = new Error("Der Speicherkontext hat sich während des Auftrags geändert.");
+  error.code = "STORAGE_CONTEXT_CHANGED";
+  return error;
+}
+
+/* Ein asynchroner Mehrschritt-Auftrag darf nicht erst beim späteren Abarbeiten
+   neu entscheiden, welcher Treiber gemeint ist. Der Kontext bindet ihn an den
+   beim Start aktiven Treiber UND dessen Aktivierungsgeneration. Die Prüfung
+   nach dem await verhindert außerdem, dass ein bestätigter Stand aus Konto A
+   nach einem Wechsel noch in die Anzeige von Konto B übernommen wird. */
+export function captureStorageContext() {
+  const driver = activeDriver;
+  const generation = storageContextGeneration;
+  const isCurrent = () => activeDriver === driver && storageContextGeneration === generation;
+  const run = async (method, args) => {
+    if (!isCurrent() || typeof driver?.[method] !== "function") throw storageContextError();
+    const result = await driver[method](...args);
+    if (!isCurrent()) throw storageContextError();
+    return result;
+  };
+  return Object.freeze({
+    generation,
+    name: driver?.name || "unbekannt",
+    isCurrent,
+    get: (key) => run("get", [key]),
+    set: (key, value) => run("set", [key, value]),
+    delete: (key) => run("delete", [key]),
+    list: (prefix = "") => run("list", [prefix]),
+  });
+}
+
+export function storageContextGenerationSnapshot() { return storageContextGeneration; }
+export function subscribeStorageContext(listener) {
+  storageContextListeners.add(listener);
+  return () => storageContextListeners.delete(listener);
+}
 
 /* Treiber wechseln (Phase 3b). null/undefined => zurück auf lokal. */
 export function setStorageDriver(driver) {
   activeDriver = driver || localDriver;
+  storageContextGeneration++;
+  for (const listener of [...storageContextListeners]) {
+    try { listener(); } catch { /* Ein Beobachter darf den Treiberwechsel nie blockieren. */ }
+  }
 }
 export function storageDriverName() {
   return activeDriver.name;

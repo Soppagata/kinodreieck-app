@@ -1,15 +1,20 @@
 import { EventEmitter } from "node:events";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import {
   EXIT_KEYCHAIN,
   EXIT_KONFIG,
   KEYCHAIN_ACCOUNTS,
   KEYCHAIN_SERVICE,
+  LIVE_LOCK_PATH,
   MODI,
+  OWNER_SERVER_BUDGET_ENV,
+  OWNER_SERVER_BUDGET_FLAG,
   REPO_ROOT,
   baueKindUmgebung,
   liesKeychainEintrag,
   main,
   parseLokaleKonfig,
+  reserviereLiveLauf,
   starteModus,
 } from "./tools/keychain_runner.mjs";
 
@@ -28,6 +33,29 @@ const PUBLIC = {
   KD_ORIGIN: "https://staging.kinodreieck.at",
 };
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
+
+{
+  const lockPath = `${LIVE_LOCK_PATH}.${process.pid}.test`;
+  const gibFrei = reserviereLiveLauf({ lockPath, pid: 111 });
+  let parallelGesperrt = false;
+  try {
+    reserviereLiveLauf({ lockPath, pid: 222 });
+  } catch { parallelGesperrt = true; }
+  gibFrei();
+  pruefe("prozessuebergreifender Live-Lock sperrt einen parallelen zweiten Lauf",
+    parallelGesperrt);
+}
+
+{
+  const lockPath = `${LIVE_LOCK_PATH}.${process.pid}.stale-test`;
+  writeFileSync(lockPath, "999999", { encoding: "utf8", mode: 0o600 });
+  let staleGesperrt = false;
+  try { reserviereLiveLauf({ lockPath, pid: 333 }); } catch { staleGesperrt = true; }
+  const unveraendert = readFileSync(lockPath, "utf8") === "999999";
+  unlinkSync(lockPath);
+  pruefe("auch ein mutmasslich alter Lock stoppt fail-closed und wird nie autonom geloescht",
+    staleGesperrt && unveraendert);
+}
 
 {
   const rufe = [];
@@ -76,7 +104,7 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     config.KD_SB_URL === PUBLIC.KD_SB_URL
       && config.KD_SB_ANON === PUBLIC.KD_SB_ANON
       && config.KD_ORIGIN === PUBLIC.KD_ORIGIN);
-  for (const name of ["KD_TESTA_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", "KD_EVAL_JA"]) {
+  for (const name of ["KD_TESTA_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV, "KD_EVAL_JA"]) {
     let abgelehnt = false;
     try { parseLokaleKonfig(`${name}=verboten`); } catch { abgelehnt = true; }
     pruefe(`${name} ist in der lokalen Datei verboten`, abgelehnt);
@@ -110,7 +138,39 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       && !("SUPABASE_SERVICE_ROLE_KEY" in env)
       && !("CLOUDFLARE_API_TOKEN" in env));
   pruefe("Budgetoverride und Eval-Freigabe werden nicht ambient vererbt",
-    !("KD_AI_AUTONOM_LIMIT_USD_CENT" in env) && !("KD_EVAL_JA" in env));
+    !("KD_AI_AUTONOM_LIMIT_USD_CENT" in env)
+      && !(OWNER_SERVER_BUDGET_ENV in env) && !("KD_EVAL_JA" in env));
+}
+
+{
+  const env = baueKindUmgebung({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    ownerApprovedServerBudget: true,
+  });
+  pruefe("exakte Owner-Freigabe reicht nur den Serverbudget-Schalter an den Wächter",
+    env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && !("KD_AI_AUTONOM_LIMIT_USD_CENT" in env));
+  let falscherModus = false;
+  try {
+    baueKindUmgebung({
+      modus: "rls", ambientEnv: {}, lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS, ownerApprovedServerBudget: true,
+    });
+  } catch { falscherModus = true; }
+  pruefe("Owner-Budgetfreigabe ist für nicht bezahlende Fremdmodi gesperrt", falscherModus);
+
+  let budgetcheckGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "budget-check", ambientEnv: {}, lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS, ownerApprovedServerBudget: true,
+    });
+  } catch { budgetcheckGesperrt = true; }
+  pruefe("Owner-Budgetfreigabe kann auch nicht an einen reinen Budgetcheck gehaengt werden",
+    budgetcheckGesperrt);
 }
 
 {
@@ -151,28 +211,6 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     confirmPaid: true,
   });
   pruefe("exakte Eval-Freigabe wird nur für diesen Kindprozess gesetzt", env.KD_EVAL_JA === "1");
-}
-
-{
-  let ohneFreigabe = false;
-  try {
-    baueKindUmgebung({
-      modus: "profile-live",
-      ambientEnv: {},
-      lokaleKonfig: PUBLIC,
-      keychainLeser: () => SONDERGEHEIMNIS,
-    });
-  } catch { ohneFreigabe = true; }
-  pruefe("bezahlte Profil-Abnahme startet ohne exakte Freigabe nicht", ohneFreigabe);
-
-  const env = baueKindUmgebung({
-    modus: "profile-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
-    confirmPaid: true,
-  });
-  pruefe("Profil-Abnahme erhält die Freigabe nur im Kindprozess", env.KD_EVAL_JA === "1");
 }
 
 {
@@ -226,30 +264,6 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 }
 
 {
-  const starts = [];
-  const spawnImpl = (programm, argv, optionen) => {
-    starts.push({ programm, argv, optionen });
-    const kind = new EventEmitter();
-    queueMicrotask(() => kind.emit("exit", 0, null));
-    return kind;
-  };
-  const code = await starteModus({
-    modus: "profile-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
-    spawnImpl,
-    confirmPaid: true,
-  });
-  pruefe("Bezahlte Profil-Abnahme ist fest hinter dem Budgetwächter verdrahtet",
-    code === 0
-      && starts.length === 1
-      && starts[0].argv.join("|") === MODI["profile-live"].argv.join("|")
-      && starts[0].argv.some((arg) => arg.endsWith("/ai_budget_guard.mjs"))
-      && starts[0].argv.some((arg) => arg.endsWith("/profile_extract_live.mjs")));
-}
-
-{
   const aus = [];
   const err = [];
   const code = await main(["keychain-check"], {
@@ -281,6 +295,23 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     fehlerAusgabe: (x) => err.push(String(x)),
   });
   pruefe("freie oder zusätzliche Argumente werden abgelehnt", code === EXIT_KONFIG);
+}
+
+{
+  const err = [];
+  const code = await main(["profile-live", "--confirm-paid", OWNER_SERVER_BUDGET_FLAG], {
+    fehlerAusgabe: (x) => err.push(String(x)),
+    keychainLeser: () => SONDERGEHEIMNIS,
+  });
+  pruefe("alter bezahlter Profil-Sonderweg ist vollstaendig stillgelegt",
+    code === EXIT_KONFIG && err.length > 0);
+}
+
+{
+  const altSkript = readFileSync(new URL("./tools/profile_extract_live.mjs", import.meta.url), "utf8");
+  pruefe("historisches Profil-Live-Skript kann keinen Netzaufruf mehr ausloesen",
+    altSkript.includes("LIVE_PROFIL_STILLGELEGT")
+      && !/\bfetch\s*\(/.test(altSkript));
 }
 
 console.log(`KEYCHAIN-RUNNER-TEST: ${bestanden}/${gesamt}`);

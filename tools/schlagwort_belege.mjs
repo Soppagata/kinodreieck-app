@@ -46,7 +46,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
 import { genreKey } from "../src/lib/finder.js";
-import { norm, schlagseite } from "../src/lib/match.js";
+import { norm } from "../src/lib/match.js";
 import { SIGNAL_ARTEN, RICHTUNGEN, QUELLEN, pruefeSignal } from "../src/lib/profil.js";
 
 const HIER = dirname(fileURLToPath(import.meta.url));
@@ -95,7 +95,6 @@ const kino = (progRoh.filme || []).map((f) => ({
   tkeys: (f.tags || []).map(genreKey),          // gibt es in diesen Daten NICHT — bleibt leer, absichtlich
   text: norm(f.beschreibung || ""),
   kategorie: null,
-  achse: null,
 }));
 const bekannt = (bekRoh.titel || []).map((t) => ({
   titel: String(t.titel || ""),
@@ -104,11 +103,10 @@ const bekannt = (bekRoh.titel || []).map((t) => ({
   tkeys: (t.tags || []).map(genreKey),          // dito: streaming_bekannt.json fuehrt kein tags-Feld
   text: norm(t.begruendung || ""),
   kategorie: t.kategorie || null,
-  achse: schlagseite(t.bewertung),
 }));
 const entdecken = entRoh ? (entRoh.titel || []).map((t) => ({
   titel: String(t.titel || ""), jahr: t.jahr || null,
-  gkeys: (t.genres || []).map(genreKey), tkeys: [], text: "", kategorie: null, achse: null,
+  gkeys: (t.genres || []).map(genreKey), tkeys: [], text: "", kategorie: null,
 })) : null;
 /* Fuehrt dieser Korpus ueberhaupt Genres? Im Beta-Bestand trugen ALLE 12.540
    Eintraege `genres: null` -- und damit stand bei jedem Genre-Schlagwort eine
@@ -144,7 +142,6 @@ function trifft(film, ziele) {
   const tz = (ziele.tags || []).map(genreKey);
   if (tz.length && film.tkeys.some((k) => tz.includes(k))) return true;
   if ((ziele.kategorien || []).length && film.kategorie && ziele.kategorien.includes(film.kategorie)) return true;
-  if (ziele.achse && film.achse === ziele.achse) return true;
   /* Freitext: Beschreibung (Kino) bzw. Begründung (bewertet). KEIN Suchpfad
      der App liest diese Felder — die Zahl belegt hier nur, OB der Begriff im
      Bestand überhaupt vorkommt, nicht dass er wirkt. Genau deshalb stehen

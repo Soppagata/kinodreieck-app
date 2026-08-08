@@ -6,7 +6,6 @@ import {
 } from "../lib/finder.js";
 import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
-import { schlagseiten } from "../lib/match.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
@@ -179,7 +178,6 @@ function SignalChips({ sig, onToggle, versteckeTitel, stumm }) {
     ...(sig.jahrMax ? [[explizitMax ? "jahrExplizitMax" : "jahrStimmungMax", null, "bis " + sig.jahrMax, "hart"]] : []),
     ...(sig.jahrMin ? [[explizitMin ? "jahrExplizitMin" : "jahrStimmungMin", null, "ab " + sig.jahrMin, "hart"]] : []),
     ...sig.stimmungen.map((s) => ["stimmungen", s, "Stimmung: " + s, "weich"]),
-    ...sig.achsen.map((a) => ["achsen", a, a.toUpperCase() + "-lastig", "weich"]),
     /* "hart", nicht "weich": ein Reihen-Signal schränkt die Treffer ein
        (`sucheFinder`: `if (!istTitelTreffer && !treff.length) continue`). Der
        Chip hat "sortiert nur um" behauptet und damit das Gegenteil von dem
@@ -190,7 +188,6 @@ function SignalChips({ sig, onToggle, versteckeTitel, stumm }) {
     ...(sig.dekadenAusschluss || []).map((d) => ["dekadenAusschluss", d, "ohne " + d + "er", "ausschluss"]),
     ...(sig.kategorienAusschluss || []).map((k) => ["kategorienAusschluss", k, "ohne " + k.replace(/_/g, " "), "ausschluss"]),
     ...(sig.stimmungenAbschlag || []).map((s) => ["stimmungenAbschlag", s, "nicht " + s, "ausschluss"]),
-    ...(sig.achsenAbschlag || []).map((a) => ["achsenAbschlag", a, "nicht " + a.toUpperCase() + "-lastig", "ausschluss"]),
     ...(sig.entdecken ? [["entdecken", true, "Entdecken (ungeprüft)", "hart"]] : []),
   ];
   /* `info` war im Kommentarkopf als vierte Klasse beschrieben, kam hier aber
@@ -301,19 +298,11 @@ function TrefferZeile({ t, onSpringeZuFilm, auswahl }) {
 
 /* Volle Meta-Karte für EINEN Film (Phase 4a) — "gesamte Metainfos samt Bewertung". */
 function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswahl }) {
-  /* Anzeige über schlagseiten(): geteilte Spitze nennt beide Achsen. */
-  const ssListe = schlagseiten(f.bewertung);
-  const ss = ssListe[0] || null;
   /* Joyn-Fix: nur Dienste der Abo-Auswahl zeigen; ist danach nichts übrig,
      entfällt der ganze STREAMING-Block (kein leeres Label). */
   const streamingDienste = h && h.streaming
     ? gruppiereDienstBadges(sichtbareDienste(h.streaming.dienste, auswahl)).map((d) => d.label)
     : [];
-  /* Farbe nur bei EINDEUTIGER Spitze. T.wie/was/warum sind in dieser App
-     Achsensprache (AxisChips, Glyph, Regler-accentColor) — ein blauer Chip
-     SAGT WIE. Bei geteilter Spitze haette die Bevorzugung, die aus dem Text
-     entfernt wurde, still in der Farbe weitergelebt. */
-  const ssCol = ssListe.length === 1 ? { wie: T.wie, was: T.was, warum: T.warum }[ssListe[0]] : T.wolfram;
   const ot = (f.originaltitel && f.originaltitel !== f.titel)
     ? f.originaltitel
     : (h && h.kino && h.kino.ot && h.kino.ot !== f.titel ? h.kino.ot : null);
@@ -333,11 +322,10 @@ function FilmDetail({ film: f, herkunft: h, onSpringeZuFilm, mustwatchIds, auswa
           </div>
         </div>
       </div>
-      {/* Bewertung: Achsen + Kategorie + Schlagseite + Wunschliste */}
+      {/* Bewertung: Achsen + Kategorie + Wunschliste */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
         <AxisChips bw={f.bewertung} />
         <KategorieTag k={f.kategorie} />
-        {ss && <MetaChip color={ssCol}>{ssListe.map((a) => a.toUpperCase()).join("/")}-lastig</MetaChip>}
         {/* Must-Watch kommt aus der LISTE (kd:mustwatch), nicht mehr aus dem Flag. */}
         {mustwatchIds && mustwatchIds.has(f.id) && <MetaChip color={T.warum}>★ Must-Watch</MetaChip>}
       </div>
@@ -533,11 +521,11 @@ export function FinderTab({
      kein automatischer Aufruf, kein stiller Wiederholversuch — jeder Aufruf
      kostet Geld, und das soll eine bewusste Entscheidung bleiben. */
   const hatSignale = (sig) => !!((sig.titel || []).length || sig.genres.length || sig.stimmungen.length
-    || sig.achsen.length || sig.kategorien.length || sig.dekaden.length || sig.quellen.length
+    || sig.kategorien.length || sig.dekaden.length || sig.quellen.length
     || sig.zeit.length || sig.jahrMin || sig.jahrMax || (sig.reihen || []).length
     || (sig.genresAusschluss || []).length || (sig.dekadenAusschluss || []).length
     || (sig.kategorienAusschluss || []).length || (sig.stimmungenAbschlag || []).length
-    || (sig.achsenAbschlag || []).length || sig.entdecken);
+    || sig.entdecken);
   const istUnklar = (sig) => (sig.nichtZugeordnet || []).length > 0 || !hatSignale(sig);
 
   /* Fehlermeldung am Verlaufseintrag statt an einem Index im Tab-State. */
@@ -623,7 +611,7 @@ export function FinderTab({
     <section>
       <div style={{ ...mono, marginBottom: 10 }}>
         Deterministische Suche — keine KI: Titel werden direkt gefunden, erkannte Signale steuern Filter & Ranking (abwählbar per Klick).
-        Beispiele: „Wo spielt es Crank?“ · „Star Wars“ · „was Stylisches aus den 80ern im Kino“ · „was Neues, das ich nicht kenne“
+        Beispiele: „Wo spielt es Crank?“ · „Star Wars“ · „was Melancholisches aus den 80ern im Kino“ · „was Neues, das ich nicht kenne“
       </div>
       {/* Eingabe OBEN, neueste Antwort direkt darunter — kein Scroll-Springen. */}
       <div className="kd-finder-eingabe" style={{ display: "flex", gap: 8, marginBottom: 16 }}>

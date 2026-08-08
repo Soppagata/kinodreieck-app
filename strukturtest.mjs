@@ -174,9 +174,12 @@ if (plusForm) {
   if (abbr) { abbr.click(); await warte(150); }
 } else check("FilmForm: 'Ohne Bewertung speichern'-Schalter", false);
 
-/* ---- 3. Globale Suche: eigener Menübereich ist bewusst entfallen ---- */
+/* ---- 3. Globale Suche: Desktop/iPad haben wieder einen eigenen Zugang ---- */
+const sucheTab = knopf(/^suche$/i);
+check("Globale Suche: eigener Desktop-Menübereich vorhanden", !!sucheTab);
+if (sucheTab) { sucheTab.click(); await warte(200); }
 const sucheFeld = doc.querySelector('input[aria-label="Sucheingabe"]');
-check("Globale Suche: Eingabefeld vorhanden", !!sucheFeld && !knopf(/^suche$/i));
+check("Globale Suche: Eingabefeld im Suche-Bereich vorhanden", !!sucheFeld);
 if (sucheFeld) {
   setValue(sucheFeld, "kult aus den 80ern");
   await warte(150);

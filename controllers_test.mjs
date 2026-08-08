@@ -1,16 +1,25 @@
 /* Controller-Schnitt- und Bibliotheksprojektionstest. Rein lokal. */
 
 import fs from "node:fs";
+import React, { act } from "react";
+import { JSDOM } from "jsdom";
 import {
   baueRefUniversum,
   baueKinoMatches,
   filtereAktiveKinoPins,
   gueltigerArtikel,
   planeFilmLoeschung,
+  planeMustwatchSprung,
 } from "./src/lib/libraryProjection.js";
 import { zeitpunkt, IMPORT_INFO } from "./src/lib/catalogProjection.js";
 import { gruppiereDienstBadges } from "./src/lib/dienste.js";
 import { appHilfeAntwort } from "./src/lib/appHilfe.js";
+import { localDriver, setStorageDriver } from "./src/lib/storage.js";
+import {
+  erstelleMustwatchSchreibkette,
+  parseMustwatchSicher,
+  useMustwatchController,
+} from "./src/controllers/useMustwatchController.js";
 
 let ok = 0;
 function check(name, wert) {
@@ -69,6 +78,35 @@ check("Filmlöschung löst Blog- und Must-Watch-Verweise ohne die Einträge zu l
   && loeschPlan.mustwatch[1].verknuepfung.ziel === "streaming"
   && loeschPlan.folgen.artikelRefs === 1 && loeschPlan.folgen.mustwatchRefs === 1);
 
+const masterSprung = planeMustwatchSprung(
+  { ziel: "master", id: "film_1" }, { titel: "Mastertitel" }, [],
+);
+const kinoFilmSprung = planeMustwatchSprung(
+  { ziel: "programm", id: "77" }, { titel: "Wunschtitel" },
+  [{ id: "film_77", titel: "Katalogtitel", film_at_id: 77 }],
+);
+const kinoProgrammSprung = planeMustwatchSprung(
+  { ziel: "programm", id: 88 }, { titel: "Nur Programm" }, [],
+);
+const streamingSprung = planeMustwatchSprung(
+  { ziel: "streaming", id: 99 }, { titel: "Streamtitel" }, [],
+);
+check("Must-Watch-Sprungplan fokussiert Master, gematchtes Kino, reines Programm und Streaming eindeutig",
+  JSON.stringify(masterSprung) === JSON.stringify({ bereich: "mediathek", fokus: "film_1" })
+  && JSON.stringify(kinoFilmSprung) === JSON.stringify({
+    bereich: "kino", zeigeAlles: true,
+    fokus: { art: "film", ref: "film_77", titel: "Wunschtitel" },
+  })
+  && JSON.stringify(kinoProgrammSprung) === JSON.stringify({
+    bereich: "kino", zeigeAlles: true,
+    fokus: { art: "programm", ref: 88, titel: "Nur Programm" },
+  })
+  && JSON.stringify(streamingSprung) === JSON.stringify({
+    bereich: "streaming",
+    fokus: { art: "entdecken", ref: 99, titel: "Streamtitel" },
+  })
+  && planeMustwatchSprung({ ziel: "fremd", id: 1 }, null, []) === null);
+
 const dienstGruppen = gruppiereDienstBadges([
   "Prime Video", "MUBI (Via Amazon Prime)", "MUBI (Via Prime)", "Netflix",
 ], { kompakt: true });
@@ -83,6 +121,336 @@ check("App-Hilfe beantwortet Settings-Fragen ohne einen KI-Aufruf",
   && appHilfeAntwort("Wo kann ich einen Eintrag löschen?")?.ziel === "mediathek"
   && appHilfeAntwort("Wo kann ich einen neuen Eintrag erstellen?")?.titel === "Neuen Eintrag erstellen"
   && appHilfeAntwort("Zeig mir Kino") === null);
+
+let loeseErsten;
+const starts = [], fehler = [];
+const schreibeMustwatch = erstelleMustwatchSchreibkette(async (payload) => {
+  starts.push(payload);
+  if (payload === "eins") await new Promise((resolve) => { loeseErsten = resolve; });
+  if (payload === "zwei") throw new Error("Testfehler");
+}, (e) => fehler.push(e.message));
+const erster = schreibeMustwatch("eins");
+const zweiter = schreibeMustwatch("zwei");
+await Promise.resolve();
+check("Must-Watch-Schreibkette startet Aufträge strikt seriell", starts.join(",") === "eins");
+loeseErsten();
+check("Must-Watch-Schreibkette meldet Fehler und bleibt danach verwendbar",
+  await erster === true && await zweiter === false && fehler[0] === "Testfehler"
+  && await schreibeMustwatch("drei") === true && starts.join(",") === "eins,zwei,drei");
+check("Must-Watch-Leser akzeptiert beide Bestandsformate, aber keinen beschädigten Topf",
+  parseMustwatchSicher('[{"id":"mw_1"}]')[0].id === "mw_1"
+  && parseMustwatchSicher('{"eintraege":[]}').length === 0
+  && (() => { try { parseMustwatchSicher("{}"); return false; } catch { return true; } })()
+  && (() => { try { parseMustwatchSicher(""); return false; } catch { return true; } })());
+
+/* Echte Hook-Proben: Die folgenden Fälle rendern den Controller mit React und
+   einem kontrollierten Storage-Treiber. Damit prüfen sie nicht nur Quelltext,
+   sondern die Reihenfolge der asynchronen State- und Persistenzübergänge. */
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
+globalThis.window = dom.window;
+globalThis.document = dom.window.document;
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const { createRoot } = await import("react-dom/client");
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+async function mounteMustwatch({ master = [], get, set } = {}) {
+  const writes = [], errors = [];
+  const treiber = {
+    name: "mustwatch-test",
+    get: get || (async () => null),
+    set: async (key, value) => {
+      writes.push({ key, value });
+      if (set) return set(key, value, writes.length);
+      return { key, value };
+    },
+    async delete(key) { return { key, deleted: true }; },
+    async list() { return { keys: [] }; },
+  };
+  setStorageDriver(treiber);
+  const masterRef = { current: master };
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  let api = null;
+  function Harness() {
+    api = useMustwatchController({ master, masterRef, setErr: (meldung) => errors.push(meldung) });
+    return null;
+  }
+  await act(async () => { root.render(React.createElement(Harness)); await tick(); });
+  return {
+    api: () => api,
+    writes,
+    errors,
+    masterRef,
+    async cleanup() {
+      await act(async () => { root.unmount(); });
+      container.remove();
+      setStorageDriver(localDriver);
+    },
+  };
+}
+
+let fixture = await mounteMustwatch();
+await act(async () => {
+  const add = fixture.api().addMustwatch({ titel: "Neu" });
+  const del = fixture.api().deleteMustwatch("mw_neu");
+  check("Must-Watch Add→Delete wird gegen den jeweils aktuellen Queue-Stand berechnet",
+    await add === true && await del === true);
+  await tick();
+});
+check("Must-Watch Add→Delete hinterlässt weder Eintrag noch verlorene Schreibreihenfolge",
+  fixture.api().mustwatch.length === 0
+  && JSON.parse(fixture.writes[0].value).eintraege[0].id === "mw_neu"
+  && JSON.parse(fixture.writes[1].value).eintraege.length === 0);
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({
+  get: async () => ({ value: JSON.stringify({ eintraege: [{ id: "mw_toggle", titel: "Toggle", im_besitz: false }] }) }),
+});
+await act(async () => {
+  const toggle = (aktuell) => ({ im_besitz: !aktuell.im_besitz });
+  await Promise.all([
+    fixture.api().updateMustwatch("mw_toggle", toggle),
+    fixture.api().updateMustwatch("mw_toggle", toggle),
+  ]);
+  await tick();
+});
+check("Zwei schnelle funktionale Besitz-Toggles ergeben false→true→false",
+  fixture.api().mustwatch[0].im_besitz === false
+  && JSON.parse(fixture.writes[0].value).eintraege[0].im_besitz === true
+  && JSON.parse(fixture.writes[1].value).eintraege[0].im_besitz === false);
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({ master: [{ id: "film_1", titel: "Film", quelle: "dvd", must_watch: true }] });
+await act(async () => {
+  const [ersterLauf, zweiterLauf] = await Promise.all([
+    fixture.api().migriereMustwatch(),
+    fixture.api().migriereMustwatch(),
+  ]);
+  check("Must-Watch-Migrationsdoppelklick bleibt erfolgreich und idempotent", ersterLauf && zweiterLauf);
+  await tick();
+});
+check("Must-Watch-Migrationsdoppelklick erzeugt genau einen Eintrag und einen Write",
+  fixture.api().mustwatch.length === 1 && fixture.writes.length === 1
+  && fixture.api().migrationsBericht.angelegt === 0
+  && fixture.api().migrationsBericht.uebersprungen === 1);
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({
+  master: [{ id: "film_weg", titel: "Weg" }],
+  get: async () => ({ value: JSON.stringify({ eintraege: [{ id: "mw_alt", titel: "Alt" }] }) }),
+});
+await act(async () => {
+  const barriere = fixture.api().transaktionMustwatch(
+    (vorher) => vorher.filter((e) => e.id !== "mw_alt"),
+    async () => { fixture.masterRef.current = []; return true; },
+  );
+  const add = fixture.api().addMustwatch({
+    titel: "Danach",
+    verknuepfung: { ziel: "master", id: "film_weg" },
+  });
+  check("Späteres Add wartet auf die Mehrtopf-Barriere", await barriere && await add);
+  await tick();
+});
+check("Queue-Validator entfernt eine während der Barriere veraltete Master-Verknüpfung",
+  fixture.api().mustwatch.length === 1
+  && fixture.api().mustwatch[0].verknuepfung === null
+  && fixture.errors.some((meldung) => /existiert nicht mehr/.test(meldung)));
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({ master: [{ id: "film_flag", titel: "Flag", must_watch: true }] });
+await act(async () => {
+  const barriere = fixture.api().transaktionMustwatch((vorher) => vorher, async () => {
+    fixture.masterRef.current = [];
+    return true;
+  });
+  const migration = fixture.api().migriereMustwatch();
+  check("Flagmigration wartet auf die Master-Barriere", await barriere && await migration);
+  await tick();
+});
+check("Gequeue-te Flagmigration liest den Master erst nach der Barriere neu",
+  fixture.api().mustwatch.length === 0 && fixture.writes.length === 0
+  && fixture.api().migrationsBericht.angelegt === 0);
+await fixture.cleanup();
+
+const rollbackStart = [{ id: "mw_bleibt", titel: "Bleibt" }];
+fixture = await mounteMustwatch({
+  get: async () => ({ value: JSON.stringify({ eintraege: rollbackStart }) }),
+});
+let transaktionOk;
+await act(async () => {
+  transaktionOk = await fixture.api().transaktionMustwatch(() => [], async () => false);
+  await tick();
+});
+check("Externer Fehler sichert den vorherigen Must-Watch-Stand zurück",
+  transaktionOk === false && fixture.api().mustwatch[0].id === "mw_bleibt"
+  && JSON.parse(fixture.writes[0].value).eintraege.length === 0
+  && JSON.parse(fixture.writes[1].value).eintraege[0].id === "mw_bleibt");
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({
+  get: async () => ({ value: JSON.stringify({ eintraege: rollbackStart }) }),
+  set: async (_key, value, nummer) => {
+    if (nummer === 2) throw new Error("Rollback absichtlich fehlgeschlagen");
+    return { value };
+  },
+});
+await act(async () => {
+  transaktionOk = await fixture.api().transaktionMustwatch(() => [], async () => false);
+  await tick();
+});
+check("Fehlgeschlagene Rücksicherung zeigt den tatsächlich persistierten Folgestand",
+  transaktionOk === false && fixture.api().mustwatch.length === 0
+  && fixture.errors.some((meldung) => /nicht zurückgesichert/.test(meldung)));
+await fixture.cleanup();
+
+fixture = await mounteMustwatch({ get: async () => ({ value: "" }) });
+check("Vorhandener leerer Must-Watch-Topf sperrt Änderungen fail-closed",
+  fixture.api().mustwatchGeladen === false
+  && fixture.errors.some((meldung) => /nicht sicher geladen/.test(meldung))
+  && await fixture.api().addMustwatch({ titel: "Darf nicht hinein" }) === false
+  && fixture.writes.length === 0);
+await fixture.cleanup();
+
+let verwerfeAltesLesen;
+fixture = await mounteMustwatch({
+  get: () => new Promise((_resolve, reject) => { verwerfeAltesLesen = reject; }),
+});
+await act(async () => {
+  fixture.api().setMustwatch([{ id: "mw_demo", titel: "Gesicherte Demo" }]);
+  verwerfeAltesLesen(new Error("veralteter Lesefehler"));
+  await tick();
+});
+check("Veralteter Load-Fehler sperrt keinen inzwischen bestätigten Demo-Stand",
+  fixture.api().mustwatchGeladen === true && fixture.api().mustwatch[0].id === "mw_demo"
+  && fixture.errors.length === 0);
+await fixture.cleanup();
+
+/* Schon WÄHREND B noch lädt, darf kein A-Eintrag mehr in der sichtbaren Liste
+   oder in abgeleiteten Finder-/Referenzsignalen stehen. */
+fixture = await mounteMustwatch({
+  get: async () => ({ value: JSON.stringify({
+    eintraege: [{ id: "mw_a_sichtbar", titel: "Nur A", verknuepfung: { ziel: "master", id: "film_a" } }],
+  }) }),
+});
+check("Ausgangsstand A ist vor dem Treiberwechsel bestätigt sichtbar",
+  fixture.api().mustwatchGeladen === true
+  && fixture.api().mustwatch[0].id === "mw_a_sichtbar"
+  && fixture.api().mustwatchMasterIds.has("film_a"));
+let loeseBlockiertesBGet, meldeBGetGestartet;
+const bGetGestartet = new Promise((resolve) => { meldeBGetGestartet = resolve; });
+const langsamerTreiberB = {
+  name: "konto-b-langsam",
+  get: () => {
+    meldeBGetGestartet();
+    return new Promise((resolve) => { loeseBlockiertesBGet = resolve; });
+  },
+  async set(key, value) { return { key, value }; },
+  async delete(key) { return { key, deleted: true }; },
+  async list() { return { keys: [] }; },
+};
+await act(async () => {
+  setStorageDriver(langsamerTreiberB);
+  await bGetGestartet;
+  await tick();
+});
+check("Während des blockierten B-Loads sind A-Liste und A-Referenzsignale sofort isoliert",
+  fixture.api().mustwatchGeladen === false
+  && fixture.api().mustwatch.length === 0
+  && fixture.api().mustwatchMasterIds.size === 0);
+await act(async () => {
+  loeseBlockiertesBGet({ value: JSON.stringify({ eintraege: [{ id: "mw_b_neu", titel: "B" }] }) });
+  await tick();
+});
+check("Nach dem B-Load wird ausschließlich der bestätigte B-Stand sichtbar",
+  fixture.api().mustwatchGeladen === true
+  && fixture.api().mustwatch.length === 1
+  && fixture.api().mustwatch[0].id === "mw_b_neu");
+await fixture.cleanup();
+
+/* Konto-/Treiberwechsel mitten in einer belegten Queue: Der erste A-Write ist
+   bereits an Treiber A gebunden. Alle dahinter wartenden A-Aufträge müssen
+   verworfen werden, statt beim späteren Start die dynamische B-Fassade zu
+   treffen. Der Controller lädt anschließend den bestätigten B-Stand neu. */
+let loeseLangsamenAWrite;
+fixture = await mounteMustwatch({
+  set: async (_key, value, nummer) => {
+    if (nummer === 1) await new Promise((resolve) => { loeseLangsamenAWrite = resolve; });
+    return { value };
+  },
+});
+const bWrites = [];
+const treiberB = {
+  name: "konto-b",
+  async get() {
+    return { value: JSON.stringify({ eintraege: [{ id: "mw_b", titel: "Nur B" }] }) };
+  },
+  async set(key, value) { bWrites.push({ key, value }); return { key, value }; },
+  async delete(key) { bWrites.push({ key, deleted: true }); return { key, deleted: true }; },
+  async list() { return { keys: [] }; },
+};
+let raceErgebnisse, staleFolgeschritte = 0;
+await act(async () => {
+  const ersterAWrite = fixture.api().addMustwatch({ titel: "A läuft" });
+  await tick();
+  const gequeueTerAWrite = fixture.api().addMustwatch({ titel: "A wartet" });
+  const gequeueTeATransaktion = fixture.api().transaktionMustwatch(
+    (vorher) => vorher.slice(0, 0),
+    async () => { staleFolgeschritte++; return true; },
+  );
+  setStorageDriver(treiberB);
+  await tick();
+  loeseLangsamenAWrite();
+  raceErgebnisse = await Promise.all([ersterAWrite, gequeueTerAWrite, gequeueTeATransaktion]);
+  await tick();
+});
+check("Treiberwechsel verwirft laufende und gequeue-te A-Aufträge vor jedem B-Write",
+  raceErgebnisse.every((wert) => wert === false)
+  && fixture.writes.length === 1 && bWrites.length === 0);
+check("Eine veraltete MW-Transaktion führt ihren Folgeschritt nicht im neuen Kontext aus",
+  staleFolgeschritte === 0
+  && fixture.api().mustwatchGeladen === true
+  && fixture.api().mustwatch[0].id === "mw_b");
+await fixture.cleanup();
+
+/* Wechselt der Kontext erst WÄHREND des Folgeschritts, darf weder dessen
+   gebundener Speicherzugriff noch die MW-Rücksicherung in B landen. */
+let folgeschrittFreigeben, folgeschrittGestartet;
+const folgeschrittStart = new Promise((resolve) => { folgeschrittGestartet = resolve; });
+fixture = await mounteMustwatch({
+  get: async () => ({ value: JSON.stringify({ eintraege: rollbackStart }) }),
+});
+const bRollbackWrites = [];
+const rollbackTreiberB = {
+  name: "konto-b-rollback",
+  async get() {
+    return { value: JSON.stringify({ eintraege: [{ id: "mw_b2", titel: "B bleibt" }] }) };
+  },
+  async set(key, value) { bRollbackWrites.push({ key, value }); return { key, value }; },
+  async delete(key) { bRollbackWrites.push({ key, deleted: true }); return { key, deleted: true }; },
+  async list() { return { keys: [] }; },
+};
+let gebundenerFolgeWriteGesperrt = false;
+await act(async () => {
+  const lauf = fixture.api().transaktionMustwatch(() => [], async ({ storageContext }) => {
+    folgeschrittGestartet();
+    await new Promise((resolve) => { folgeschrittFreigeben = resolve; });
+    try { await storageContext.set("kd:master", "DARF-NICHT-NACH-B"); }
+    catch { gebundenerFolgeWriteGesperrt = true; }
+    return false;
+  });
+  await folgeschrittStart;
+  setStorageDriver(rollbackTreiberB);
+  await tick();
+  folgeschrittFreigeben();
+  transaktionOk = await lauf;
+  await tick();
+});
+check("Kontextwechsel im Folgeschritt sperrt Folge-Write und MW-Rollback gegen B",
+  transaktionOk === false && gebundenerFolgeWriteGesperrt
+  && fixture.writes.length === 1 && bRollbackWrites.length === 0
+  && fixture.api().mustwatch[0].id === "mw_b2");
+await fixture.cleanup();
 
 check("Katalogcontroller normalisiert ISO-Zeit und lehnt Müll ab",
   Number.isFinite(zeitpunkt("2026-07-31T12:00:00Z")) && zeitpunkt("kein Datum") === null);
@@ -100,6 +468,7 @@ for (const name of [
   "catalogController",
   "libraryController",
   "useIntelligenceController",
+  "useMustwatchController",
   "useEggController",
 ]) {
   check(`App verdrahtet ${name}`, app.includes(name));
@@ -116,5 +485,34 @@ check("Datenhaltende Controller verwenden die isolierten Projektionen",
   && /lib\/catalogProjection\.js/.test(catalogController));
 check("App.jsx ist durch die Controller sichtbar schmaler als der Audit-Ausgang",
   app.split("\n").length < 2200);
+const mustwatchListe = fs.readFileSync("src/components/MustWatchListe.jsx", "utf8");
+const mustwatchController = fs.readFileSync("src/controllers/useMustwatchController.js", "utf8");
+const intelligenceController = fs.readFileSync("src/controllers/useIntelligenceController.js", "utf8");
+check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
+  /\["master", "programm", "streaming"\]/.test(mustwatchListe)
+  && /onSpringeZuMustwatchRef=\{springeZuMustwatchRef\}/.test(app));
+check("Must-Watch-Controller migriert keine Merkliste und erhält Bestandsfelder",
+  !/K\.merkliste|migriereMerkliste/.test(mustwatchController)
+  && /im_besitz/.test(mustwatchController) && /beschreibung/.test(mustwatchController)
+  && /kommtVorInMap/.test(mustwatchListe) && /Rotlinks heilen/.test(app));
+check("Must-Watch-Flagmigration berechnet neue Einträge erst innerhalb der Schreibkette",
+  /schreibeMustwatch\(\(vorher\) => \{[\s\S]*migriereFlags\([\s\S]*externerMasterRef\?\.current \|\| master \|\| \[\], vorher/.test(mustwatchController));
+check("Must-Watch prüft gequeue-te Master-Verknüpfungen erst beim tatsächlichen Schreiben erneut",
+  /sichereVerknuepfung\(daten\.verknuepfung\)/.test(mustwatchController)
+  && /typeof changes === "function" \? changes\(aktuell\)/.test(mustwatchController)
+  && /sichereVerknuepfung\(berechnet\.verknuepfung\)/.test(mustwatchController)
+  && /masterRef\.current/.test(app));
+check("Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue",
+  /onUpdate\(e\.id, \(aktuell\) => \(\{ im_besitz: !aktuell\.im_besitz \}\)\)/.test(mustwatchListe));
+check("Demo-Boot bestätigt Must-Watch erst nach erfolgreichem lokalem Schreiben",
+  /localStorage\.setItem\(K\.mustwatch,[^\n]+\); setMustwatch\(mw\)/.test(app));
+check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
+  /const next = ensureIds\(\(master \|\| \[\]\)\.map/.test(app)
+  && (app.match(/ensureIds\(\[\{ \.\.\.film, id \}\]\)\[0\]/g) || []).length === 2
+  && /const neu = ensureIds\(\[\{ \.\.\.kandidat, id \}\]\)\[0\]/.test(intelligenceController));
+check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand",
+  /mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch/.test(app)
+  && (app.match(/if \(!mustwatchGeladen\)/g) || []).length >= 2
+  && /Es wurde nichts verändert/.test(app));
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);

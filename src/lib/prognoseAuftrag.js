@@ -3,7 +3,7 @@ import {
 } from "./profil.js";
 import { filmwissenRechercheKennung } from "./filmwissen.js";
 
-export const PROGNOSE_TYPEN = Object.freeze(["film", "filmreihe", "serie"]);
+export const PROGNOSE_TYPEN = Object.freeze(["film", "serie"]);
 export const MAX_PROGNOSE_SIGNALE = 20;
 
 const VERBOTEN = /[\r\n\u0000-\u001f\u007f-\u009f\u2028\u2029]/;

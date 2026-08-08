@@ -313,6 +313,7 @@ for (const viewport of VIEWPORTS) {
         expect(viewport.height - popupBox.y - popupBox.height).toBeGreaterThanOrEqual(60);
         await expect(popup.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(1);
         await expect(panel.getByRole("button", { name: "In diesem Bereich nach oben", exact: true })).toHaveCount(0);
+        await expect(panel.getByRole("button", { name: "Suche", exact: true })).toHaveCount(0);
         await expect(popup.getByRole("button", { name: "Anleitung & Hilfe" })).toHaveCount(0);
         await expect(popup.getByRole("link", { name: /Installation/ })).toHaveCount(0);
         await popup.getByRole("button", { name: ziel, exact: true }).click();
@@ -1449,8 +1450,10 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await keineDokumentUeberbreite(page);
 });
 
-test("Desktop behält oberhalb 760 px die bestehende Leiste", async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 768 });
+test("Desktop behält oberhalb 760 px die Hauptnavigation samt Suche", async ({ page }) => {
+  /* Exakt die erste Desktopbreite belegt die zuvor ungetestete 760/761-Naht;
+     breitere Desktop-Layouts werden in den übrigen Browserfällen abgedeckt. */
+  await page.setViewportSize({ width: 761, height: 768 });
   await blockiereFremdnetz(page);
   await page.addInitScript(() => {
     localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
@@ -1460,5 +1463,10 @@ test("Desktop behält oberhalb 760 px die bestehende Leiste", async ({ page }) =
   await page.goto("/");
   await expect(page.locator(".kd-menu")).toBeVisible();
   await expect(page.locator(".kd-navband")).toBeHidden();
+  const suche = page.getByRole("navigation", { name: "Hauptnavigation" }).getByRole("button", { name: "Suche", exact: true });
+  await expect(suche).toBeVisible();
+  await expect(page.getByRole("search", { name: "Globale Suche" })).toBeHidden();
+  await suche.click();
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Suche");
   await keineDokumentUeberbreite(page);
 });

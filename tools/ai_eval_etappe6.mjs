@@ -53,13 +53,35 @@
    ========================================================================== */
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import {
+  BUDGET_UNBEKANNT_EXIT,
+  EVAL_MAX_ANBIETER_REQUESTS,
+  LiveLaufWache,
+  LiveSicherheitsStopp,
+  fetchMitZeitgrenze,
+  holeBudgetStand,
+  liesJsonOderNull,
+} from "./ai_budget_guard.mjs";
+import {
+  fremdeEvalWerte,
+  hatWirkendeEvalDeutung,
+} from "./ai_eval_contract.mjs";
+
+const FINDER_VOKABULAR = JSON.parse(readFileSync(
+  new URL("../src/data/finder_vokabular.json", import.meta.url),
+  "utf8",
+));
 
 const MODUS = process.argv.includes("--pruefen") ? "pruefen"
   : process.argv.includes("--holen") ? "holen"
     : "beides";
 
-/* Wertelisten wie der Client sie aus dem eigenen Bestand baut. Der Endpunkt
-   bekommt NUR diese Listen — nie den Katalog, nie einen Film. */
+/* Kanonische Wertelisten wie `bekannteWerte()` im Client. Kategorien,
+   Stimmungen, Quellen und Zeitangaben werden absichtlich aus derselben
+   Vokabeldatei gelesen, damit ein Eval nie gegen eine erfundene oder
+   ueberholte Finder-Taxonomie optimiert. Nur Genres stammen im echten Client
+   aus dem jeweiligen Bestand; hier verwenden wir dafuer den dokumentierten
+   Masterlisten-Stand. Der Endpunkt bekommt nie den Katalog oder einen Film. */
 const LISTEN = {
   genres: [
     "sci-fi", "romance", "komödie", "crime", "film-noir", "neo-noir", "horror", "drama",
@@ -68,15 +90,10 @@ const LISTEN = {
     "superheldenfilm", "monsterfilm", "martial-arts", "kriegsfilm", "historienfilm",
     "tragikomödie", "biopic", "stunt",
   ],
-  kategorien: ["sicher_gut", "wahrscheinlich_passend", "referenz", "zu_pruefen"],
-  stimmungen: [
-    "traurig", "melancholisch", "duster", "gemutlich", "spannend", "oldschool", "modern",
-    "kult", "klassiker", "trash", "damlich", "bloed", "stylisch", "wohlfuhl", "nett",
-    "cool", "sinnlos", "brutal", "leicht", "anspruchsvoll",
-  ],
-  achsen: ["wie", "was", "warum"],
-  quellen: ["kino", "streaming", "dvd"],
-  zeit: ["heute", "morgen"],
+  kategorien: Object.keys(FINDER_VOKABULAR.kategorien || {}),
+  stimmungen: Object.keys(FINDER_VOKABULAR.stimmungen || {}),
+  quellen: Object.keys(FINDER_VOKABULAR.quellen || {}),
+  zeit: Object.keys(FINDER_VOKABULAR.zeit || {}),
 };
 
 /* Max' goldene Anfragen. Originalschreibweise ABSICHTLICH erhalten — Tippfehler
@@ -85,19 +102,19 @@ const LISTEN = {
    Antwort ist dort eine ehrliche Meldung, NIE ein Filter und NIE eine Titelliste. */
 const ANFRAGEN = [
   { id: "A1", text: "Ich bin heut echt nicht gut drauf", soll: "weich: wohlfühl/gemütlich, keine harten Filter" },
-  { id: "A2", text: "Huet möcht ich was kuhles schaun", soll: "weich: cool/stylisch → WIE-Achse; Tippfehler-Toleranz" },
-  { id: "A3", text: "Irgendwas nettes, nicht so spannend, kein powpow, aber nett", soll: "weich: nett/wohlfühl; Ausschluss action; Abschlag spannend" },
-  { id: "A4", text: "ich will den geilsten scheiß sehn", soll: "hart: Kategorie sicher_gut (Top-Bewertung)" },
+  { id: "A2", text: "Huet möcht ich was kuhles schaun", soll: "ehrlich nicht unterstützt oder minimale Deutung; cool/stylisch sind keine Finder-Werte" },
+  { id: "A3", text: "Irgendwas nettes, nicht so spannend, kein powpow, aber nett", soll: "weich: wohlfühl; Ausschluss action; 'nicht spannend' ehrlich nicht unterstützt (kein Stimmungs-Abschlag im Edge-Schema)" },
+  { id: "A4", text: "ich will den geilsten scheiß sehn", soll: "hart: Kategorie immer_gut (Top-Bewertung)" },
   { id: "A5", text: "Ich brauch was sinnloses", soll: "hart/weich: trash oder dämlich" },
-  { id: "A6", text: "Stumpfe Gewalt, aber ur kuhl", soll: "hart: action; weich: WIE-Achse/stylisch. 'ur' darf nicht stören" },
-  { id: "A7", text: "Einen der besten Filme aller Zeiten", soll: "hart: Kategorie referenz/kult; weich: WARUM-Achse" },
+  { id: "A6", text: "Stumpfe Gewalt, aber ur kuhl", soll: "hart: action; 'kuhl/cool' ggf. ehrlich offen, weil keine passende Stimmung existiert" },
+  { id: "A7", text: "Einen der besten Filme aller Zeiten", soll: "hart: Kategorie immer_gut oder kult_klassiker" },
 
   { id: "B1", text: "Welchen Nightmare hab ich noch nicht gesehen?", soll: "hart: Reihe 'Nightmare'; ehrlich: Vollständigkeitsabgleich nicht möglich" },
 
   { id: "C1", text: "Welceh Filme von Nic Cage hab ich schon und welche fehlen mir noch?", aussen: true, soll: "nicht unterstützt: Schauspieler ist kein Datenfeld. KEINE Filmliste" },
   { id: "C2", text: "Welche FIlme werden so in Scary Movie 1 refereiert? Was muss ich gesehen haben?", aussen: true, soll: "nicht unterstützt: Filmwissen. KEINE Titelliste aus Weltwissen" },
 
-  { id: "D1", text: "was läuft morgen im kino das stylisch ist", soll: "hart: Quelle kino + Zeit morgen; weich: WIE-Achse" },
+  { id: "D1", text: "was läuft morgen im kino das stylisch ist", soll: "hart: Quelle kino + Zeit morgen; 'stylisch' ehrlich nicht unterstützt" },
   { id: "D2", text: "irgendwas düsteres aus den 80ern, aber kein horror", soll: "hart: Jahrzehnt 1980; Ausschluss horror; weich: düster" },
   { id: "D3", text: "was zwischen 1970 und 1985", soll: "hart: jahrMin 1970, jahrMax 1985" },
   { id: "D4", text: "was hab ich auf netflix das lustig ist", soll: "hart: Quelle streaming, Genre komödie" },
@@ -108,7 +125,7 @@ const ANFRAGEN = [
      nicht aus Max' Liste, sondern aus den Faellen, die beim Bau schwierig waren. */
   { id: "E1", text: "nichts nach 1985", soll: "hart: jahrMax 1985 (negierte offene Grenze kehrt sich um)" },
   { id: "E2", text: "kein alter Film, aber auch nichts von heute", soll: "beide Grenzen oder ehrliche Meldung — nur nichts Widersprüchliches" },
-  { id: "E3", text: "was Stylisches aus den 80ern im Kino, aber keine Komödie", soll: "hart: 1980 + kino; Ausschluss komödie; weich: stylisch" },
+  { id: "E3", text: "was Stylisches aus den 80ern im Kino, aber keine Komödie", soll: "hart: 1980 + kino; Ausschluss komödie; 'stylisch' ehrlich nicht unterstützt" },
   { id: "E4", text: "ich will was schauen", soll: "leere oder minimale Deutung — aber gemeldet, nicht still" },
 ];
 
@@ -135,19 +152,65 @@ async function holen() {
     process.exit(2);
   }
 
+  function stoppeLiveLauf(error) {
+    const stopp = error instanceof LiveSicherheitsStopp
+      ? error
+      : new LiveSicherheitsStopp(
+        "unbekannt",
+        error?.message || "Eval-Request oder Kostenmessung ist fehlgeschlagen.",
+      );
+    const kennung = stopp.exitCode === BUDGET_UNBEKANNT_EXIT
+      ? "BUDGET_UNBEKANNT"
+      : "AUTONOMIE_STOPP";
+    console.error(`${kennung}: ${stopp.message}`);
+    console.error("Keine automatische Wiederholung; Eval stoppt sofort.");
+    process.exit(stopp.exitCode);
+  }
+
   const ENDPUNKT = `${URL_BASIS}/functions/v1/${FUNKTION}`;
-  const anmeldung = await fetch(`${URL_BASIS}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { apikey: ANON, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: `${USER}@${MAIL_DOMAIN}`, password: PASS }),
-  });
-  const anmeldeDaten = await anmeldung.json().catch(() => null);
+  let anmeldung;
+  let anmeldeDaten;
+  try {
+    anmeldung = await fetchMitZeitgrenze(`${URL_BASIS}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: `${USER}@${MAIL_DOMAIN}`, password: PASS }),
+    });
+    anmeldeDaten = await liesJsonOderNull(anmeldung);
+  } catch (error) {
+    stoppeLiveLauf(error);
+  }
   if (!anmeldung.ok || !anmeldeDaten?.access_token) {
     console.error(`\nAnmeldung als ${USER}@${MAIL_DOMAIN} fehlgeschlagen (HTTP ${anmeldung.status}).`);
     console.error(`Grund laut Server: ${anmeldeDaten?.error_description || anmeldeDaten?.msg || anmeldeDaten?.error || "unbekannt"}`);
     process.exit(2);
   }
   const token = anmeldeDaten.access_token;
+
+  if (ANFRAGEN.length !== EVAL_MAX_ANBIETER_REQUESTS) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      `Eval-Vertrag erwartet exakt ${EVAL_MAX_ANBIETER_REQUESTS} Requests, gefunden ${ANFRAGEN.length}.`,
+    ));
+  }
+
+  const laufWache = new LiveLaufWache({
+    maxAnbieterRequests: EVAL_MAX_ANBIETER_REQUESTS,
+    standLeser: () => holeBudgetStand({
+      verbindung: {
+        urlBasis: URL_BASIS,
+        anon: ANON,
+        funktion: FUNKTION,
+        origin: ORIGIN,
+      },
+      token,
+    }),
+  });
+  try {
+    await laufWache.initialisiere();
+  } catch (error) {
+    stoppeLiveLauf(error);
+  }
 
   /* Bestaetigung vor dem Geld. */
   if (process.env.KD_EVAL_JA !== "1") {
@@ -172,17 +235,36 @@ async function holen() {
   console.log(`\nHole ${ANFRAGEN.length} Deutungen von ${ENDPUNKT}\n`);
   const roh = [];
   for (const anfrage of ANFRAGEN) {
-    const antwort = await fetch(ENDPUNKT, {
-      method: "POST",
-      headers: { Origin: ORIGIN, "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: ANON },
-      body: JSON.stringify({
-        task: "intelligent-search",
-        vorgangId: crypto.randomUUID(),
-        promptVersion: "eval1",
-        payload: { suchsatz: anfrage.text, listen: LISTEN },
-      }),
-    });
-    const koerper = await antwort.json().catch(() => null);
+    let antwort;
+    let koerper;
+    try {
+      const markierung = await laufWache.vorAnbieterRequest(`Eval ${anfrage.id}`);
+      antwort = await fetchMitZeitgrenze(ENDPUNKT, {
+        method: "POST",
+        headers: { Origin: ORIGIN, "Content-Type": "application/json", Authorization: `Bearer ${token}`, apikey: ANON },
+        body: JSON.stringify({
+          task: "intelligent-search",
+          vorgangId: crypto.randomUUID(),
+          promptVersion: "eval1",
+          payload: { suchsatz: anfrage.text, listen: LISTEN },
+        }),
+      });
+      koerper = await liesJsonOderNull(antwort);
+      if (!koerper || typeof koerper !== "object") {
+        throw new LiveSicherheitsStopp("unbekannt", `Eval ${anfrage.id} lieferte kein JSON.`);
+      }
+      const kostenRoh = koerper?.verbrauch?.kostenUsdCent;
+      const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
+      await laufWache.nachAnbieterRequest(markierung, kosten);
+      if (antwort.status !== 200) {
+        throw new LiveSicherheitsStopp(
+          antwort.status === 429 ? "limit" : "unbekannt",
+          `Eval ${anfrage.id} endete mit HTTP ${antwort.status}.`,
+        );
+      }
+    } catch (error) {
+      stoppeLiveLauf(error);
+    }
     roh.push({ id: anfrage.id, status: antwort.status, antwort: koerper });
     console.log(`  ${antwort.status === 200 ? "·" : "✗"} ${anfrage.id}  ${anfrage.text.slice(0, 56)}`);
   }
@@ -252,32 +334,16 @@ function fasse(d) {
   if (h.jahrMax != null) teile.push(`bis ${h.jahrMax}`);
   if (Array.isArray(h.titel) && h.titel.length) teile.push(`titel=${h.titel.join("/")}`);
   if (Array.isArray(h.reihen) && h.reihen.length) teile.push(`reihe=${h.reihen.map((r) => r.name).join("/")}`);
-  if (Array.isArray(w.reihen) && w.reihen.length) teile.push(`reihe=${w.reihen.map((r) => r.name).join("/")}`);
   liste("stimmung", w.stimmungen);
-  liste("achse", w.achsen);
   liste("ohne-genre", a.genres);
   liste("ohne-dek", a.dekaden);
   if (d.entdecken === true) teile.push("entdecken");
   return teile.length ? teile.join(", ") : "— nichts —";
 }
 
-function genannteWerte(d) {
-  const h = d.harte_filter || {};
-  const w = d.weiche_wuensche || {};
-  const a = d.ausschluesse || {};
-  return [
-    ...(h.genres || []), ...(h.kategorien || []), ...(h.quellen || []), ...(h.zeit || []),
-    ...(w.stimmungen || []), ...(w.achsen || []), ...(a.genres || []),
-  ].filter((x) => typeof x === "string");
-}
-
 function pruefen(datei) {
   const inhalt = JSON.parse(readFileSync(datei, "utf8"));
   const listen = inhalt.listen || LISTEN;
-  const erlaubt = new Set([
-    ...listen.genres, ...listen.kategorien, ...listen.stimmungen,
-    ...listen.achsen, ...listen.quellen, ...listen.zeit,
-  ]);
   const nachId = new Map(inhalt.roh.map((r) => [r.id, r]));
 
   console.log(`\nAusgewertet: ${datei}   (erstellt ${inhalt.erstellt})\n`);
@@ -315,7 +381,7 @@ function pruefen(datei) {
     if (offen.length) console.log(`     offen: ${offen.join(" · ")}`);
 
     /* 1. Wert ausserhalb der Weissliste — das waere ein Riss im Endpunkt. */
-    const fremd = genannteWerte(d).filter((x) => !erlaubt.has(x));
+    const fremd = fremdeEvalWerte(d, listen);
     if (fremd.length) zeilen.push(`Wert ausserhalb der Weissliste: ${fremd.join(", ")}`);
 
     /* 2. Erfundener TITEL. Nur `harte_filter.titel` zaehlt — das ist die
@@ -332,6 +398,9 @@ function pruefen(datei) {
     /* 3. Ausserhalb der Etappe, aber nicht gemeldet. */
     if (anfrage.aussen && !offen.length) {
       zeilen.push("ausserhalb der Etappe, aber NICHT als nicht unterstuetzt gemeldet");
+    }
+    if (anfrage.aussen && hatWirkendeEvalDeutung(d)) {
+      zeilen.push("ausserhalb der Etappe, aber dennoch als wirkender Filter/Wunsch ausgegeben");
     }
 
     /* 4. Nichts verstanden und nichts gesagt. */

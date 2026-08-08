@@ -57,7 +57,8 @@ den Cache aufgenommen.
 
 ## Ergänzende Entscheidungen vom 29.07.2026
 
-- Gültige Typen im MVP: Film, Filmreihe und Serie.
+- Gültige Typen im MVP: Film und Serie. Alte `filmreihe`-Werte aus Backups
+  werden beim Laden kompatibel als `film` normalisiert.
 - Es gelten die sieben tatsächlichen persönlichen Kategorien:
   `immer_gut`, `kult`, `kult_klassiker`, `daemlich_aber_herrlich`, `trash`,
   `sehenswert`, `echter_schrott`.

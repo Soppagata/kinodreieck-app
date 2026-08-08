@@ -166,9 +166,9 @@ keinem sichtbaren Knopf verbunden.
 
 **Desktop:** Die sieben Bereiche stehen in der oberen Navigationsleiste.
 
-**Mobil:** Der schmale Griff öffnet das Menü. Unter
-`Settings → Darstellung & Verhalten → Bedienhand` kann der Griff für
-Links- oder Rechtshänder gespiegelt werden.
+**Mobil:** Der Menüknopf rechts in der globalen Suchleiste öffnet das
+Bereichsmenü. Eine gesonderte Links-/Rechtshänder-Spiegelung wird im aktuellen
+UI nicht angeboten.
 
 Weitere allgemeine Regeln:
 
@@ -181,29 +181,24 @@ Weitere allgemeine Regeln:
 
 ## 5. Das Bewertungsdreieck
 
-Filme, Filmreihen und Serien können auf drei Achsen von 0 bis 5 bewertet
+Filme und Serien können auf drei Achsen von 0 bis 5 bewertet
 werden:
 
 - **WIE:** Inszenierung, Regie, Kamera, Schnitt, Schauspiel und Ton.
 - **WAS:** Stoff, Handlung, Themen und inhaltliche Substanz.
 - **WARUM:** filmhistorische oder popkulturelle Bedeutung und Wirkung.
 
-Die drei Werte bilden gemeinsam das sichtbare Dreieck. Ein einzelner
-Durchschnitt ist nur ein Sortierwert; die Form ist die eigentliche Aussage.
+Die drei Werte bilden gemeinsam das sichtbare Dreieck. Für die Standardsortierung
+werden sie summiert und um den Wert der separaten Bewertungskategorie ergänzt;
+eine weitere Kategorie wird nicht aus dem Verhältnis der Achsen abgeleitet.
 
-### 5.1 Schlagseite
-
-Eine Achse gilt als Schlagseite, wenn sie mindestens 3 erreicht und wenigstens
-2 Punkte über der schwächsten Achse liegt. Teilen sich zwei Achsen die Spitze,
-werden beide genannt, zum Beispiel `WIE/WARUM-lastig`.
-
-### 5.2 Kategorie
+### 5.1 Kategorie
 
 Zusätzlich zum Dreieck besitzt ein bewerteter Film eine Kategorie aus der
 vorgegebenen Kategorienliste. Sie dient als eigener Filter und ist nicht mit
 dem rechnerischen Score identisch.
 
-### 5.3 Unbewertet
+### 5.2 Unbewertet
 
 Ein Film kann ausdrücklich ohne Dreieck gespeichert werden. `0/0/0` ist
 dagegen eine echte Bewertung. Im Bearbeitungsformular bedeuten nur drei
@@ -379,7 +374,6 @@ Streamingkatalog vorkommen.
 
 - Titel suchen,
 - vorübergehend auf einen Dienst filtern,
-- nach WIE-, WAS- oder WARUM-Schlagseite filtern,
 - auf Must-Watch begrenzen,
 - nach Bewertungskategorie filtern,
 - Karten aufklappen und die eigene Bewertung bearbeiten,
@@ -451,13 +445,15 @@ Der Bereich besitzt drei Hauptansichten: `Einträge`, `Im Besitz` und
 ### 9.1 Einträge
 
 Zeigt die vollständige eigene Masterliste. Untergruppen sind Filme, Serien,
-Musik und Sonstiges. Filmreihen gehören zur Filmgruppe.
+Musik und Sonstiges. Alte Importe mit dem früheren Typ `filmreihe` bleiben
+lesbar und werden beim Laden als Film normalisiert; neue Einträge erzeugen
+diesen abgeschafften Typ nicht mehr.
 
 **Bedienung:**
 
 - Titel oder Originaltitel suchen,
 - nach Dreieck-Score, Titel, Jahr oder einzelner Achse sortieren,
-- Besitzquelle, Schlagseite, Kategorie und Genre filtern,
+- Besitzquelle, Kategorie und Genre filtern,
 - Karte aufklappen und bearbeiten,
 - Streamingverfügbarkeit und Blog-Backlinks sehen.
 
@@ -492,7 +488,7 @@ Blogartikel, die auf den Must-Watch-Eintrag verweisen, erscheinen unter
 
 **Auslösen:** In der passenden Untergruppe `+ Eintrag hinzufügen`.
 
-Für Filme, Filmreihen und Serien stehen zur Verfügung:
+Für Filme und Serien stehen zur Verfügung:
 
 - Titel und Originaltitel,
 - Pflichtjahr,
@@ -568,7 +564,7 @@ Es wird nicht automatisch eine KI befragt.
 Beispiele:
 
 - `Star Wars`
-- `was Stylisches aus den 80ern im Kino`
+- `was Melancholisches aus den 80ern im Kino`
 - `traurige Komödie auf Netflix`
 - `was Neues, das ich nicht kenne`
 
@@ -577,7 +573,7 @@ Beispiele:
 Nach `Suchen` zeigt die App, was sie verstanden hat:
 
 - harte Filter wie Titel, Genre, Kategorie, Jahrzehnt, Quelle oder Zeitraum,
-- weiche Wünsche wie Stimmung oder Dreieck-Schlagseite,
+- weiche Wünsche wie Stimmung,
 - Ausschlüsse,
 - Reihe, Franchise oder Regie,
 - einen ausdrücklichen Entdecken-Wunsch.
@@ -590,7 +586,7 @@ Nicht zuordenbare Wörter werden sichtbar genannt.
 ### 10.2 Einzelner Titel
 
 Wird genau ein Titel erkannt, zeigt die Suche eine ausführliche Metakarte mit
-Bewertung, Schlagseite, Genres, Tags, Reihe/Franchise/Regie, Kinozeiten,
+Bewertung, Genres, Tags, Reihe/Franchise/Regie, Kinozeiten,
 Besitz und Streamingdiensten.
 
 `Zum Eintrag` springt in die Mediathek.
@@ -721,8 +717,9 @@ nicht ohne Weiteres als eigener Shared-Artikel neu veröffentlicht werden.
 - Import ersetzt nach Bestätigung den lokalen Artikelbestand durch die
   eingelesene, validierte Datei.
 
-Für den Austausch ausgewählter Bereiche ist das Paketformat unter
-`Settings → Masterliste` die sicherere Funktion.
+Für mehrere neue Medien auf einmal ist der getrennte `Stapelimport` unter
+`Settings` vorgesehen. Er ergänzt nach einer kontrollierbaren Vorschau; der
+Artikelimport hier bleibt dagegen ein vollständiger Ersatz des Artikelbestands.
 
 ## 12. Settings
 
@@ -732,8 +729,6 @@ Für den Austausch ausgewählter Bereiche ist das Paketformat unter
 
 **Schriftgröße:** klein, normal oder groß. Die Einstellung skaliert die ganze
 App.
-
-**Bedienhand:** spiegelt den mobilen Menügriff und die Handbedienung.
 
 **Startbereich:** bestimmt, welcher Bereich nach einem normalen Start geöffnet
 wird.
@@ -887,20 +882,23 @@ zugehörigen Sicherungswächter zurück.
 oder eingefügtes JSON. Der Import ist ein vollständiger Ersatz, keine
 automatische Zusammenführung.
 
-### 12.9 Masterliste mit externer KI vorbereiten
+### 12.9 Stapelimport mit interner oder externer KI
 
-**Auslösen:** Unter `Masterliste` den KI-Prompt öffnen.
+**Auslösen:** Unter `Stapelimport` eine Titelliste eingeben oder den Abschnitt
+`Regalfotos extern mit GPT, Claude oder einer anderen KI lesen` öffnen.
 
-**Wirkung:** Die App erzeugt nur einen Prompt für einen frei gewählten externen
-KI-Chat. Sie führt dort selbst keinen Anbieteraufruf aus. Die zurückgelieferte
-JSON-Datei beziehungsweise eingefügtes JSON wird zunächst als Vorschau
-analysiert. Erst `Auswahl übernehmen` legt neue Einträge an. Vorhandene
-Einträge werden nicht überschrieben.
+**Wirkung:** Bei freigeschalteter App-KI kann Kinodreieck eine eingegebene
+Titelliste intern strukturieren. Der alternative Fotoweg erzeugt einen Workflow
+für einen frei gewählten externen KI-Chat und verursacht im Kinodreieck keinen
+Anbieteraufruf. Die zurückgelieferte JSON-Datei beziehungsweise eingefügtes
+JSON wird zunächst als Vorschau analysiert. Erst `Auswahl übernehmen` legt neue
+Einträge an; vorhandene Einträge werden nicht überschrieben.
 
-Der dabei intern verwendete Datei-Vertrag heißt `kinodreieck-paket`. Eine
-allgemeine Oberfläche `Teilen & Tauschen` für beliebige Benutzerpakete ist im
-aktuellen Produkt bewusst nicht aktiv. Der Austausch läuft derzeit über
-Shared Blogs, Masterlisten-Import/-Export und Gesamt-Backup.
+Der aktive externe Stapelvertrag heißt `mediathek-v2`. Der ebenfalls im Code
+vorhandene Vertrag `kinodreieck-paket` besitzt derzeit keine gemountete
+Oberfläche `Teilen & Tauschen` und wird deshalb hier nicht als erreichbare
+Produktfunktion ausgewiesen. Der sonstige Austausch läuft über Shared Blogs,
+Masterlisten-Import/-Export und Gesamt-Backup.
 
 ### 12.10 Gesamt-Backup
 

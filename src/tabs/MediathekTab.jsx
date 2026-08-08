@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
-import { norm, schlagseite, schlagseiten, score } from "../lib/match.js";
+import { norm, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
 import { offeneReferenzen } from "../lib/artikel.js";
-import { TYP_GRUPPEN, TAB_LABELS, tabVonTyp, hatDreieck } from "../lib/typen.js";
+import { TYP_GRUPPEN, TAB_LABELS, ALLE_TYPEN, tabVonTyp, hatDreieck } from "../lib/typen.js";
 import { hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
@@ -23,7 +23,7 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
    - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
-  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] },
+  mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
   onPrognoseErstellen, onPrognoseStatus,
@@ -67,7 +67,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const offeneRefsTab = useMemo(() => offeneRefs.filter((o) => TYP_GRUPPEN[typTab].includes(o.typ || "film")), [offeneRefs, typTab]);
   const [refAnlegen, setRefAnlegen] = useState(null); // Index der offenen Referenz mit geöffneter Maske
   const [besitz, setBesitz] = useState("alle");
-  const [axis, setAxis] = useState(null);
   const [genreF, setGenreF] = useState(null);
   const [katF, setKatF] = useState(null);
   const [suche, setSuche] = useState("");
@@ -104,7 +103,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };
-  const typReihe = [HAUPTTYP[typTab]].concat(["film", "filmreihe", "serie", "musik", "sonstiges"].filter((t) => t !== HAUPTTYP[typTab]));
+  const typReihe = [HAUPTTYP[typTab]].concat(ALLE_TYPEN.filter((t) => t !== HAUPTTYP[typTab]));
 
   /* "Kommt vor in:" — Laufzeit-berechnet, ein Durchlauf über alle Artikel.
      Wird nicht gepflegt, sonst existiert die Verbindung zweimal. */
@@ -156,9 +155,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           return true; // "alle" = wirklich alle (Besitz UND Wunschliste)
         });
       }
-      /* schlagseiten(): siehe StreamingTab — Chip und Karte muessen dasselbe
-         sagen. Ranking bleibt einwertig. */
-      if (axis) list = list.filter((f) => schlagseiten(f.bewertung).includes(axis));
       if (genreF) list = list.filter((f) => (f.genre || []).includes(genreF));
       if (katF) list = list.filter((f) => f.kategorie === katF);
     }
@@ -178,7 +174,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     const aktiv = dreieckTab ? (sortierer[sortier] || sortierer.score)
       : (["titel", "jahr_neu", "jahr_alt"].includes(sortier) ? sortierer[sortier] : sortierer.titel);
     return list.sort(aktiv);
-  }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, axis, genreF, katF, suche, sortier]);
+  }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier]);
 
   return (
     <section>
@@ -196,15 +192,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         <MustWatchListe eintraege={mustwatch}
           onAdd={addMustwatch} onUpdate={updateMustwatch} onDelete={deleteMustwatch}
           kandidaten={mwKandidaten} kommtVorInMap={kommtVorInMap} onArtikelKlick={onArtikelKlick}
-          onSpringeZuRef={(id) => {
-            setAnsicht("bestand");
-            const f = (master || []).find((x) => x.id === id);
-            if (f) setTypTab(tabVonTyp(f.typ));
-            setTimeout(() => {
-              const el = document.getElementById("film-" + id);
-              if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 150);
-          }} />
+          onSpringeZuRef={onSpringeZuMustwatchRef} />
       )}
 
       {ansicht !== "mustwatch" && (<>
@@ -257,9 +245,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                 <span style={{ width: 12 }} />
               </>
             )}
-            <Chip active={axis === "wie"} color={T.wie} onClick={() => setAxis(axis === "wie" ? null : "wie")}>WIE-lastig</Chip>
-            <Chip active={axis === "was"} color={T.was} onClick={() => setAxis(axis === "was" ? null : "was")}>WAS-lastig</Chip>
-            <Chip active={axis === "warum"} color={T.warum} onClick={() => setAxis(axis === "warum" ? null : "warum")}>WARUM-lastig</Chip>
           </ChipReihe>
           <ChipReihe style={{ gap: 6 }}>
             {BEWERTUNGSKATEGORIEN.map((k) => (

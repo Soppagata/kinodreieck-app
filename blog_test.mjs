@@ -44,6 +44,24 @@ check("fehlende Referenz -> Rotlink (ref null)", art.liste[1].ref === null);
 check("Eingabe für Rotlink-Anzeige erhalten", art.liste[1].eingabe === "Gibt es nicht");
 check("keine internen Abgleich-Felder am Eintrag", art.liste[0].abgleich === undefined);
 
+const legacyShared = { ...shared, artikel: { ...shared.artikel, liste: [
+  { eingabe: "Blade Runner", jahr: 1982, typ: "filmreihe" },
+] } };
+const legacyArt = A.blogZuArtikel(legacyShared, [], master, "2026-01-01T00:00:00Z");
+check("gezogene Filmreihe-Referenz wird als Film bewahrt und verlinkt",
+  legacyArt.liste[0].typ === "film" && legacyArt.liste[0].ref === "blade_runner_1982");
+const [legacyRef] = A.uebernehmeRefs(
+  [{ eingabe: "Blade Runner", jahr: 1982, typ: "film" }],
+  [{ eingabe: "Blade Runner", jahr: 1982, typ: "filmreihe", ref: "blade_runner_1982" }],
+);
+check("Bearbeiten eines Legacy-Typs bewahrt dessen bestehende Referenz",
+  legacyRef.ref === "blade_runner_1982");
+const legacyArtikelListe = [{ id: "legacy", liste: [{ eingabe: "Blade Runner", typ: "filmreihe" }] }];
+const kanonischeArtikelListe = A.normalisiereArtikelTypen(legacyArtikelListe);
+check("Artikel-Schreibgrenze normalisiert Legacy-Filmreihen und lässt kanonische Listen referenzstabil",
+  kanonischeArtikelListe[0].liste[0].typ === "film"
+  && A.normalisiereArtikelTypen(kanonischeArtikelListe) === kanonischeArtikelListe);
+
 /* ID-Kollision: zweimal dasselbe ziehen -> verschiedene lokale IDs */
 const a1 = A.blogZuArtikel(shared, [], master, "2026-01-01T00:00:00Z");
 const a2 = A.blogZuArtikel(shared, [a1], master, "2026-01-01T00:00:00Z");

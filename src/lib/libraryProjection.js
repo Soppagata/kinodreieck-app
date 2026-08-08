@@ -59,6 +59,34 @@ export function filtereAktiveKinoPins(pins, programm) {
   return liste.filter((pin) => slots.has(`${pin.t}\n${pin.z}`));
 }
 
+/* Reiner Sprungplan fuer explizite Must-Watch-Verknuepfungen. Die App setzt
+   danach nur noch den passenden Tab/Fokus. So bleiben insbesondere die zwei
+   Kino-Faelle (bekannter Masterfilm vs. reiner Programmeintrag) ausserhalb
+   von React regressionspruefbar. */
+export function planeMustwatchSprung(verknuepfung, eintrag, master) {
+  const ziel = verknuepfung?.ziel;
+  const ref = verknuepfung?.id;
+  if (ziel === "master") return { bereich: "mediathek", fokus: ref };
+  if (ziel === "programm") {
+    const film = (master || []).find((f) =>
+      f.film_at_id != null && String(f.film_at_id) === String(ref));
+    return {
+      bereich: "kino",
+      zeigeAlles: true,
+      fokus: film
+        ? { art: "film", ref: film.id, titel: eintrag?.titel || film.titel || "" }
+        : { art: "programm", ref, titel: eintrag?.titel || "" },
+    };
+  }
+  if (ziel === "streaming") {
+    return {
+      bereich: "streaming",
+      fokus: { art: "entdecken", ref, titel: eintrag?.titel || "" },
+    };
+  }
+  return null;
+}
+
 /* Entfernt einen Mediathek-Eintrag, ohne abhängige persönliche Listen zu
    beschädigen: Blog-Verweise werden wieder zu Rotlinks, Must-Watch-Einträge
    bleiben erhalten und verlieren nur ihre Master-Verknüpfung. */

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
-import { hatDreieck } from "../lib/typen.js";
+import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { normalisiereFilmkennung } from "../lib/filmwissen.js";
@@ -14,7 +14,7 @@ import { QuellenWahl } from "./QuellenWahl.jsx";
    typOptionen kommt vom Aufrufer; der erste Eintrag ist der Default-Typ.
    Rückwärtskompatibel: nur bewertbare Typen -> reines Film-Formular wie zuvor. */
 export function FilmForm({
-  typOptionen = ["film", "filmreihe", "serie", "musik", "sonstiges"],
+  typOptionen: roheTypOptionen = ALLE_TYPEN,
   onAdd,
   onAddMitPrognose,
   prognoseAktiv = false,
@@ -25,6 +25,9 @@ export function FilmForm({
   autorName,
   kennungenBearbeitbar = false,
 }) { // KD-030: optionaler autorName
+  /* Auch ein alter Blog-Rotlink darf beim Neuanlegen keinen abgeschafften
+     Typ erneut speichern. Reihenfolge erhalten, normalisierte Dubletten raus. */
+  const typOptionen = [...new Set(roheTypOptionen.map(normalisiereTyp))];
   const [open, setOpen] = useState(startOffen);
   const leer = {
     titel: (initial && initial.titel) || "",

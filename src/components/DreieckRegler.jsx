@@ -1,34 +1,11 @@
 import { useState } from "react";
 import { T } from "../lib/tokens.js";
 import { Dreieck } from "./ui.jsx";
-import { schlagseiten, ohneSchlagseiteGrund } from "../lib/match.js";
 
 /* ---------- DreieckRegler ----------
-   Interaktives Dreieck mit drei Reglern (WIE/WAS/WARUM) + abgeleiteter Kategorie.
+   Interaktives Dreieck mit drei Reglern (WIE/WAS/WARUM) und live gezeichneter Form.
    Rendert nur den Inhalt (kein eigener Rahmen) — der Aufrufer umschließt.
-   Verwendet in der Willkommen-Box (Karte 2) und in Erklaerstuecke. */
-
-/* Anzeige über `schlagseiten()` (Mehrzahl): Teilen sich zwei Achsen die
-   Spitze, werden BEIDE genannt. Vorher gewann still die zuerst genannte —
-   4/2/4 las sich als „WIE-lastig", obwohl WARUM gleich stark ist. */
-function kategorieLabel(bw) {
-  const s = schlagseiten(bw);
-  if (!s.length) return ohneSchlagseiteGrund(bw) === "gleichgewicht" ? "Ausgewogen" : "Ohne Schlagseite";
-  return s.map((a) => a.toUpperCase()).join("/") + "-lastig";
-}
-/* Kurzformel je Schlagseite — die alte, greifbare Erklärung, jetzt live.
-   Bei geteilter Spitze gibt es keine Vorrang-Aussage, weil es keinen
-   Vorrang gibt. */
-function kategorieFormel(bw) {
-  const s = schlagseiten(bw);
-  if (!s.length) {
-    return ohneSchlagseiteGrund(bw) === "gleichgewicht"
-      ? "alle drei im Gleichgewicht"
-      : "alle drei kaum ausgeprägt"; // Sprache der Willkommens-Karte: „kaum ausgeprägt", nicht „schlecht"
-  }
-  if (s.length > 1) return "gleichauf vorn";
-  return { wie: "Handwerk vor Stoff", was: "Stoff vor Handwerk", warum: "Relevanz vor Form und Stoff" }[s[0]];
-}
+   Verwendet in Erklaerstuecke und im Geschmacks-Onboarding. */
 
 /* GESTEUERT ODER UNGESTEUERT — beides, aus Rücksicht auf die Bestandsnutzer.
    In der Willkommens-Box und in `Erklaerstuecke` ist der Regler ein
@@ -36,11 +13,6 @@ function kategorieFormel(bw) {
    hält er seinen Zustand selbst. Im Geschmacks-Onboarding (Etappe 7, 2c)
    erhebt er dagegen eine Angabe, die ins Profil wandert — dort muss der
    Aufrufer den Wert besitzen.
-
-   Beides in einer Komponente statt in zweien, weil die Alternative eine
-   Kopie gewesen wäre: `kategorieLabel`/`kategorieFormel` tragen die
-   Erklärung der Schlagseiten-Regel, und zwei Fassungen davon laufen
-   garantiert irgendwann auseinander.
 
    Gesteuert ist er nur, wenn BEIDES da ist: `wert` UND `onChange`. Hinge es
    allein an `wert`, ergäbe ein vergessener `onChange` einen Regler, der sich
@@ -87,13 +59,6 @@ export function DreieckRegler({ start = { wie: 4, was: 2, warum: 5 }, scale = 2.
         {slider("WIE", "wie", T.wie)}
         {slider("WAS", "was", T.was)}
         {slider("WARUM", "warum", T.warum)}
-        {/* aria-live: Die Karte fordert „Zieh die Regler und sieh zu" — ohne
-            Ansage bekommt ein Screenreader-Nutzer die einzige Lehre der Karte
-            nie mit. */}
-        <div aria-live="polite" style={{ marginTop: 12, fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.rauch, lineHeight: 1.5 }}>
-          Kategorie: <span style={{ color: T.wolfram }}>{kategorieLabel(bw)}</span>
-          <span style={{ color: T.leinwandTief }}> — {kategorieFormel(bw)}</span>
-        </div>
       </div>
     </div>
   );

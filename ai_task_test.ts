@@ -70,6 +70,7 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
   request_max_bytes: 32768,
   request_max_media_bytes: 950000,
   antwort_max_bytes: 262144,
+  anbieter_request_max_usd_cent: 500,
   modell_alias: {
     klein: "claude-haiku-4-5-20251001",
     gross: "claude-sonnet-5",
@@ -89,12 +90,12 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "media-batch-extract": 4096,
   },
   task_max_reservierung_usd_cent: {
-    "filmwissen-synthese": 5,
+    "filmwissen-synthese": 6,
     "media-batch-extract": 4,
   },
   preise_usd_cent_pro_mtok: {
     "claude-haiku-4-5-20251001": { in: 100, out: 500 },
-    "claude-sonnet-5": { in: 200, out: 1000 },
+    "claude-sonnet-5": { in: 300, out: 1500 },
   },
 });
 
@@ -571,7 +572,6 @@ const SUCH_LISTEN = {
   genres: ["sci-fi", "komödie", "horror"],
   kategorien: ["film", "serie"],
   stimmungen: ["düster", "leicht"],
-  achsen: ["tempo", "anspruch"],
   quellen: ["netflix", "dvd"],
   zeit: ["abend", "wochenende"],
 };
@@ -603,7 +603,7 @@ const LEERE_SUCHANTWORT = () => ({
     titel: [],
     reihen: [] as Array<Record<string, unknown>>,
   },
-  weiche_wuensche: { stimmungen: [], achsen: [] },
+  weiche_wuensche: { stimmungen: [] },
   ausschluesse: { genres: [], dekaden: [] },
   entdecken: false,
   nicht_unterstuetzt: [] as Array<Record<string, unknown>>,
@@ -1121,7 +1121,7 @@ test("B2 Erfolgsfall bucht Istverbrauch und Kosten über null", async () => {
   gleich(k.p_fehlerklasse, null, "Erfolg trägt keine Fehlerklasse");
 });
 
-test("B3 unbekannter Modellpreis wird geschätzt, nie still auf null gesetzt", async () => {
+test("B3 eine unerwartete Provider-Modellfamilie nutzt nur den vorab geprueften Anforderungspreis", async () => {
   z.anbieter = () =>
     antwort({
       model: "fremdmodell-9",
@@ -1134,13 +1134,11 @@ test("B3 unbekannter Modellpreis wird geschätzt, nie still auf null gesetzt", a
     });
   const r = await echoRuf();
   gleich(r.status, 200, "Status");
+  gleich(anbieterAufrufe().length, 1, "genau ein vorab reservierter Request");
   const k = genauEinAbschluss();
-  wahr((k.p_kosten as number) > 0, `geschätzte Kosten > 0 (war ${k.p_kosten})`);
-  wahr(
-    typeof k.p_fehlerklasse === "string" &&
-      (k.p_fehlerklasse as string).startsWith("kosten-geschaetzt"),
-    `Schätzung ist vermerkt (war ${JSON.stringify(k.p_fehlerklasse)})`,
-  );
+  gleich(k.p_status, "fertig", "fachlich gueltige Antwort bleibt nutzbar");
+  wahr((k.p_kosten as number) > 0, "Kosten folgen dem bekannten Anforderungsmodell");
+  gleich(k.p_fehlerklasse, "kosten-geschaetzt", "kein fremder Modellname im Vermerk");
   pruefeFehlerklasseSauber(k);
 });
 
@@ -1154,6 +1152,112 @@ test("B4 die Reservierung geht mit einer Kostenschätzung über null raus", asyn
     typeof k.p_reservierung === "number" && (k.p_reservierung as number) > 0,
     `Reservierung > 0 (war ${k.p_reservierung})`,
   );
+});
+
+test("B4a fehlender, formfremder oder erhoehter Einzelrequest-Zaun stoppt vor RPC und Anbieter", async () => {
+  for (const [name, wert] of [
+    ["fehlend", undefined],
+    ["Zeichenkette", "500"],
+    ["ueber Owner-Grenze", 500.000001],
+    ["null", null],
+  ] as Array<[string, unknown]>) {
+    stelleZurueck();
+    if (wert === undefined) delete z.konfig.anbieter_request_max_usd_cent;
+    else z.konfig.anbieter_request_max_usd_cent = wert;
+    const r = await echoRuf();
+    gleich(r.status, 500, `${name}: Status`);
+    gleich(
+      r.daten.grund,
+      "anbieter-request-kostenzaun-ungueltig:echo-struct",
+      `${name}: fail-closed Diagnose`,
+    );
+    gleich(starten().length, 0, `${name}: keine Reservierungs-RPC`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Anbieteraufruf`);
+  }
+});
+
+test("B4b eine Reservierung ueber dem engeren Request-Zaun endet als Limit vor dem Anbieter", async () => {
+  z.konfig.anbieter_request_max_usd_cent = 0.000001;
+  const r = await echoRuf();
+  gleich(r.status, 429, "Status");
+  gleich(
+    r.daten.grund,
+    "anbieter-request-kostenlimit-ueberschritten:echo-struct",
+    "eindeutige Limit-Diagnose",
+  );
+  gleich(starten().length, 0, "keine Reservierungs-RPC");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
+});
+
+test("B4c fehlender, formfremder oder zu langer Provider-Timeout stoppt vor Reservierung", async () => {
+  for (const [name, wert] of [
+    ["fehlend", undefined],
+    ["Zeichenkette", "120000"],
+    ["zu lang", 135001],
+    ["null", null],
+  ] as Array<[string, unknown]>) {
+    stelleZurueck();
+    if (wert === undefined) delete z.konfig.timeout_ms;
+    else z.konfig.timeout_ms = wert;
+    const r = await echoRuf();
+    gleich(r.status, 500, `${name}: Status`);
+    gleich(r.daten.grund, "anbieter-zeitgrenze-ungueltig", `${name}: Diagnose`);
+    gleich(starten().length, 0, `${name}: keine Reservierung`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Anbieteraufruf`);
+  }
+});
+
+test("B4d gemeldete Istkosten ueber 500 Cent werden gebucht, aber nie als Erfolg fortgesetzt", async () => {
+  z.anbieter = () => antwort({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "end_turn",
+    content: [{
+      type: "text",
+      text: JSON.stringify({ echo: "Kinodreieck", zeichen: 11 }),
+    }],
+    usage: { input_tokens: 100, output_tokens: 1_000_001 },
+  });
+  const r = await echoRuf();
+  gleich(r.status, 429, "Status");
+  gleich(
+    r.daten.grund,
+    "anbieter-request-istkostenlimit-ueberschritten",
+    "Istkosten-Ausreisser ist ein Limit, kein Erfolg",
+  );
+  gleich(anbieterAufrufe().length, 1, "genau der eine bereits gestartete Request");
+  const abschluss = genauEinAbschluss();
+  gleich(abschluss.p_status, "fehler", "Ausreisser wird als Fehler abgeschlossen");
+  wahr((abschluss.p_kosten as number) > 500, "tatsaechliche Kosten bleiben sichtbar gebucht");
+});
+
+test("B4e unbrauchbare oder worst-case teure Preiskonfiguration stoppt vor dem Anbieter", async () => {
+  for (const [name, preis, status] of [
+    ["Preis als Text", { in: "100", out: 500 }, 500],
+    ["Nullpreis", { in: 0, out: 0 }, 500],
+    ["positiv aber unter Owner-Preisboden", { in: 99, out: 499 }, 500],
+    ["Worst-Case ueber 500 Cent", { in: 100_000_000, out: 100_000_000 }, 429],
+  ] as Array<[string, Record<string, unknown>, number]>) {
+    stelleZurueck();
+    (z.konfig.preise_usd_cent_pro_mtok as Record<string, unknown>)[
+      "claude-haiku-4-5-20251001"
+    ] = preis;
+    const r = await echoRuf();
+    gleich(r.status, status, `${name}: Status`);
+    gleich(starten().length, 0, `${name}: keine Reservierungs-RPC`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Anbieteraufruf`);
+  }
+});
+
+test("B4f eine unbekannte konfigurierte Modellfamilie stoppt vor Reservierung und Provider", async () => {
+  (z.konfig.modell_alias as Record<string, unknown>).klein = "claude-frei-erfunden-1";
+  (z.konfig.preise_usd_cent_pro_mtok as Record<string, unknown>)[
+    "claude-frei-erfunden-1"
+  ] = { in: 1_000_000, out: 1_000_000 };
+  const r = await echoRuf();
+  gleich(r.status, 500, "Status");
+  gleich(r.daten.grund, "anbieter-request-kostenzaun-ungueltig:echo-struct", "Diagnose");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
 });
 
 test("B5 eine im Körper mitgeschickte Konto-ID wird nie gelesen", async () => {
@@ -1621,8 +1725,8 @@ test("D10 Angriff: Modell-ID im Klartext (Preisvermerk)", async () => {
   pruefeFehlerklasseSauber(k);
   gleich(
     k.p_fehlerklasse,
-    "unklassifiziert",
-    "Vermerk mit Freitext wird verworfen",
+    "kosten-geschaetzt",
+    "Vermerk bleibt konstant und übernimmt keinen fremden Modelltext",
   );
 });
 
@@ -2139,6 +2243,22 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
   const betrieb = r.daten.betrieb as Record<string, unknown>;
   gleich(betrieb.aiAktiv, true, "betrieb.aiAktiv");
+  gleich(
+    betrieb.anbieterRequestMaxUsdCent,
+    500,
+    "health belegt den wirksamen Einzelrequest-Zaun fuer Live-Runner",
+  );
+  gleich(
+    betrieb.anbieterRequestOwnerMaxUsdCent,
+    500,
+    "health belegt die unverrueckbare Owner-Obergrenze",
+  );
+  gleich(betrieb.anbieterRequestTimeoutMs, 30000, "health belegt wirksamen Provider-Timeout");
+  gleich(
+    betrieb.anbieterRequestTimeoutOwnerMaxMs,
+    135000,
+    "health belegt die unverrueckbare Timeout-Obergrenze",
+  );
 });
 
 test("H2 health braucht trotzdem ein gültiges Token", async () => {
@@ -2369,7 +2489,6 @@ test("S4 ohne Wertelisten: 400 wertelisten-fehlen", async () => {
     {
       listen: {
         kategorien: ["film"],
-        achsen: ["tempo"],
         quellen: ["dvd"],
         zeit: ["abend"],
       },
@@ -2572,11 +2691,6 @@ test("P4 der Systemprompt trägt die Policy und die Wertelisten", async () => {
     listeAusSystem("Stimmungen").join("|"),
     SUCH_LISTEN.stimmungen.join("|"),
     "Stimmungen",
-  );
-  gleich(
-    listeAusSystem("Achsen").join("|"),
-    SUCH_LISTEN.achsen.join("|"),
-    "Achsen",
   );
   gleich(
     listeAusSystem("Quellen").join("|"),
@@ -2789,12 +2903,6 @@ const WEISSLISTE_FELDER: Array<{
     fremd: "nostalgisch",
     bau: (w) => ({ weiche_wuensche: { stimmungen: [w] } }),
     lies: (d) => d.weiche_wuensche.stimmungen,
-  },
-  {
-    name: "Achsen",
-    fremd: "budget",
-    bau: (w) => ({ weiche_wuensche: { achsen: [w] } }),
-    lies: (d) => d.weiche_wuensche.achsen,
   },
 ];
 
@@ -4405,22 +4513,22 @@ function standardBudget(task: string): number {
 /* Der Ausgabepreis je Modell-Alias aus STANDARD_KONFIG — gebraucht für MT8. */
 const AUSGABEPREIS: Record<string, number> = {
   "echo-struct": 500, // Alias klein  -> claude-haiku-4-5
-  "intelligent-search": 1000, // Alias gross -> claude-sonnet-5
+  "intelligent-search": 1500, // Alias gross -> claude-sonnet-5
   /* `task_modell` nennt profile-extract NICHT — die Aufgabe fällt damit auf
      den Alias `klein` zurück. Das ist der IST-Zustand der Testkonfiguration,
      keine Aussage darüber, welches Modell die Extraktion in der Datenbank
      bekommen soll; MT-PE1 unten hält den Rückfall ausdrücklich fest. */
   "profile-extract": 500,
-  "film-forecast": 1000, // Alias gross -> claude-sonnet-5
-  "filmwissen-synthese": 1000, // Alias gross -> claude-sonnet-5
+  "film-forecast": 1500, // Alias gross -> claude-sonnet-5
+  "filmwissen-synthese": 1500, // Alias gross -> claude-sonnet-5
   "media-batch-extract": 500, // Alias klein -> claude-haiku-4-5
 };
 const EINGABEPREIS: Record<string, number> = {
   "echo-struct": 100,
-  "intelligent-search": 200,
+  "intelligent-search": 300,
   "profile-extract": 100,
-  "film-forecast": 200,
-  "filmwissen-synthese": 200,
+  "film-forecast": 300,
+  "filmwissen-synthese": 300,
   "media-batch-extract": 100,
 };
 
@@ -4430,9 +4538,16 @@ test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln"
     /* Zwei Werte, die BEIDE vom Standardwert dieser Aufgabe abweichen — sonst
        prüfte der Fall mit `gesetzt === soll` nichts. Gewählt wird deshalb
        relativ zum Tabellenwert, nicht absolut. */
-    for (
-      const gesetzt of [soll === 512 ? 1024 : 512, soll === 2048 ? 4096 : 2048]
-    ) {
+    /* Der harte Kostenzaun darf den Test selbst bei absichtlich veränderter
+       Konfiguration nicht aushebeln: 4096 Ausgabetokens überschreiten beim
+       grossen Filmwissen-Modell dessen engeren 5-Cent-Taskdeckel bereits in
+       der konservativen Vorabreservierung. Für diesen Task genügen zwei
+       andere, gültige Werte, um weiterhin die Auflösungsreihenfolge zu
+       prüfen. */
+    const gesetzteWerte = task === "filmwissen-synthese"
+      ? [512, 1024]
+      : [soll === 512 ? 1024 : 512, soll === 2048 ? 4096 : 2048];
+    for (const gesetzt of gesetzteWerte) {
       wahr(
         zuTokens(gesetzt) === gesetzt,
         `${gesetzt} muss eine gültige Angabe sein, sonst misst MT1 nichts`,
@@ -4807,7 +4922,7 @@ function groessteGueltigeAntwort() {
         name: fuellung(T_LISTE_MAX_ZEICHEN, "r"),
       })),
     },
-    weiche_wuensche: { stimmungen: werte("s"), achsen: werte("a") },
+    weiche_wuensche: { stimmungen: werte("s") },
     ausschluesse: {
       genres: werte("x"),
       dekaden: Array.from({ length: T_SUCHE_MAX_WERTE }, () => 1990),
@@ -4887,7 +5002,7 @@ test("MT8 das Budget deckt die größtmögliche gültige Antwort", async () => {
       reihen: [],
       dekaden: [1980],
     },
-    weiche_wuensche: { stimmungen: ["duester"], achsen: [] },
+    weiche_wuensche: { stimmungen: ["duester"] },
     ausschluesse: { genres: [], dekaden: [] },
     nicht_unterstuetzt: Array.from({ length: 3 }, () => ({
       wunsch: "w".repeat(T_WUNSCH_MAX_ZEICHEN),
@@ -7355,6 +7470,22 @@ test("FF12 film-forecast fällt bei fehlender oder falscher Modellzuordnung fail
   }
 });
 
+test("FF12b der befristete Sonnet-Einfuehrungspreis unterlaeuft den Owner-Boden nicht", async () => {
+  (z.konfig.preise_usd_cent_pro_mtok as Record<string, unknown>)[
+    "claude-sonnet-5"
+  ] = { in: 200, out: 1000 };
+  forecastMit(FF_ANTWORT());
+  const r = await forecastRuf();
+  gleich(r.status, 500, "veralteter Unterpreis stoppt fail-closed");
+  gleich(
+    r.daten.grund,
+    "anbieter-request-kostenzaun-ungueltig:film-forecast",
+    "sichtbare Kostenzaun-Diagnose",
+  );
+  gleich(starten().length, 0, "keine Reservierungs-RPC mit Unterpreis");
+  gleich(anbieterAufrufe().length, 0, "kein Provideraufruf mit Unterpreis");
+});
+
 test("FF13 tatsächliche Modell-ID reist sicher zum Client; formfremde Provider-ID fällt auf Konfiguration zurück", async () => {
   forecastMit(FF_ANTWORT(), "claude-sonnet-5-20260715");
   let r = await forecastRuf();
@@ -7631,6 +7762,11 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   );
   gleich(beenden().length, 0, "kein zweiter generischer Abschluss");
   const start = startKoerper();
+  wahr(
+    typeof start.p_reservierung === "number" && start.p_reservierung > 0 &&
+      start.p_reservierung <= 6,
+    `der reale Referenzauftrag bleibt im engen 6-Cent-Task-Cap (war ${start.p_reservierung})`,
+  );
   gleich(
     start.p_prompt_version,
     "filmwissen-war-v1",

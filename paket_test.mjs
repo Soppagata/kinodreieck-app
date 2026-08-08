@@ -2,6 +2,7 @@ import {
   parsePaket, analysierePaket, bauePaketUebernahme, ingestionPrompt,
 } from "./src/lib/paket.js";
 import { BEWERTUNGSKATEGORIE_IDS } from "./src/lib/kategorien.js";
+import { ALLE_TYPEN, normalisiereTyp } from "./src/lib/typen.js";
 
 let gesamt = 0;
 let gruen = 0;
@@ -43,6 +44,22 @@ const fenced = parsePaket("Hier ist die Datei:\n```json\n" + JSON.stringify({
   format: "kinodreieck-paket", version: 1, autor: "Max", bereiche: { filme: [] },
 }) + "\n```");
 check("KI-Antwort mit JSON-Codeblock wird tolerant gelesen", fenced.format === "kinodreieck-paket");
+
+const legacyPaket = parsePaket(JSON.stringify({
+  format: "kinodreieck-paket", version: 1, autor: "Alte App", bereiche: {
+    filme: [{ titel: "Alte Reihe", jahr: 1984, typ: "filmreihe" }],
+    artikel: [{ titel: "Alter Artikel", liste: [{ eingabe: "Alte Reihe", jahr: 1984, typ: "filmreihe" }] }],
+  },
+}));
+const legacyAnalyse = analysierePaket(legacyPaket, [], []);
+const legacyUebernahme = bauePaketUebernahme(legacyAnalyse, ["filme", "artikel"], [], []);
+check("Filmreihe wird nicht mehr als neuer Typ angeboten",
+  !ALLE_TYPEN.includes("filmreihe") && normalisiereTyp("filmreihe") === "film");
+check("altes Filmreihe-Paket bleibt importierbar und wird zu Film normalisiert",
+  legacyUebernahme.neueFilme[0]?.typ === "film");
+check("alte Filmreihe-Blogreferenz wird normalisiert und neu verknüpft",
+  legacyUebernahme.neueArtikel[0]?.liste[0]?.typ === "film"
+  && legacyUebernahme.neueArtikel[0]?.liste[0]?.ref === legacyUebernahme.neueFilme[0]?.id);
 
 const analyse = analysierePaket(paket, [], []);
 const { neueFilme, report } = bauePaketUebernahme(analyse, ["serien"], [], []);

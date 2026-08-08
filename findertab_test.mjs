@@ -606,16 +606,14 @@ check("G4", "hart: genannte Untergrenze", () => chipArt("ab 1990") === "hart");
 check("G4", "hart: genannte Obergrenze", () => chipArt("bis 2020") === "hart");
 
 await leere();
-await suche("stylisch spannend");
-check("G4", "weich: Achse (sortiert nur um)", () => chipArt("WIE-lastig") === "weich");
+await suche("spannend");
 check("G4", "weich: Stimmung (sortiert nur um)", () => chipArt("Stimmung: spannend") === "weich");
 
 await leere();
-await suche("kein drama ohne 70er nicht spannend nicht stylisch kein sehenswert");
+await suche("kein drama ohne 70er nicht spannend kein sehenswert");
 check("G4", "ausschluss: Genre", () => chipArt("ohne drama") === "ausschluss");
 check("G4", "ausschluss: Jahrzehnt", () => chipArt("ohne 1970er") === "ausschluss");
 check("G4", "ausschluss: Stimmungsabschlag", () => chipArt("nicht spannend") === "ausschluss");
-check("G4", "ausschluss: Achsenabschlag", () => chipArt("nicht WIE-lastig") === "ausschluss");
 check("G4", "ausschluss: Kategorie", () => chipArt("ohne sehenswert") === "ausschluss");
 check("G4", "Ausschluss-Chips tragen das Minuszeichen als Vorzeichen",
   () => chips().filter((c) => c.art === "ausschluss").every((c) => /^−/.test(c.knopf.textContent.trim())));
@@ -675,11 +673,11 @@ check("G4", "genannte Grenzen sind je Seite einzeln abwählbar",
 
 /* Jeder Chip ist abwählbar — reihum, nicht nur an Einzelbeispielen. */
 await leere();
-const MISCH = "horror solide 80er dvd heute ab 1990 stylisch spannend kein drama ohne 70er";
+const MISCH = "horror solide 80er dvd heute ab 1990 spannend kein drama ohne 70er";
 await suche(MISCH);
 const mischLabels = chips().map((c) => c.label);
 check("G4", "Mischanfrage erzeugt Chips aller drei Klassen",
-  () => new Set(chips().map((c) => c.art)).size === 3 && mischLabels.length >= 10);
+  () => new Set(chips().map((c) => c.art)).size === 3 && mischLabels.length >= 9);
 let alleAbwaehlbar = true;
 const nichtAbwaehlbar = [];
 for (const label of mischLabels) {
@@ -762,7 +760,7 @@ const FORMEN = [
   ["Reihen am alten Ort (weiche_wuensche)", { ok: true, data: { weiche_wuensche: { reihen: [{ typ: "franchise", name: "Kosmoswacht Saga" }] } } }],
   ["Dekaden als Text, krumme Zahl, null, Objekt", { ok: true, data: { harte_filter: { dekaden: ["1980", 1985, null, {}] } } }],
   ["Jahre als Text und widersprüchlich (ab 2010, bis 1995)", { ok: true, data: { harte_filter: { jahrMin: "2010", jahrMax: "1995" } } }],
-  ["Stimmungen/Achsen mit Objekten und Zahlen", { ok: true, data: { weiche_wuensche: { stimmungen: [{}, 7, "kult"], achsen: [null, "wie"] } } }],
+  ["Stimmungen mit Objekten und Zahlen", { ok: true, data: { weiche_wuensche: { stimmungen: [{}, 7, "kult"] } } }],
   ["Kategorien/Quellen/Zeit mit Zahlen und Objekten", { ok: true, data: { harte_filter: { kategorien: [3], quellen: [{}], zeit: [null, "heute"] } } }],
   ["nicht_unterstuetzt ist eine Zeichenkette statt einer Liste", { ok: true, data: { nicht_unterstuetzt: "gar keine Liste" } }],
   ["nicht_unterstuetzt: Zeichenketten, null, Zahlen, halbe Objekte", { ok: true, data: { nicht_unterstuetzt: ["nach Laufzeit", null, 5, { grund: "x" }, { wunsch: "nach Sprache", grund: 7 }] } }],
@@ -773,7 +771,7 @@ const FORMEN = [
   ["das Modell liefert Treffer statt Filter (Fremdfelder)", { ok: true, data: { treffer: [{ titel: "erfunden" }], foo: 1 } }],
   ["alle Abschnitte auf einmal, alle vermüllt", { ok: true, data: {
     harte_filter: { genres: [1, null], kategorien: "immer_gut", dekaden: {}, titel: 5, reihen: 9, jahrMin: "ja", jahrMax: [] },
-    weiche_wuensche: { stimmungen: null, achsen: 3, reihen: "x" },
+    weiche_wuensche: { stimmungen: null, reihen: "x" },
     ausschluesse: 7, nicht_unterstuetzt: 1, interpretation_klartext: {}, entdecken: 1,
   } }],
 ];
@@ -909,7 +907,7 @@ console.log("\n--- F: Forderungen (heute offen, nicht exit-relevant) ---");
    an den <button> durch. SignalChips übergibt für jede Klasse einen eigenen
    Tooltip; keiner erreicht das DOM. Betroffen ist auch der „merken"-Chip. */
 await leere();
-await suche("horror stylisch kein drama");
+await suche("horror melancholisch kein drama");
 check("F", "F1: jeder Signal-Chip trägt seinen Tooltip im DOM (Chip reicht `title` durch)",
   () => chips().length > 0 && chips().every((c) => c.titel.length > 0));
 check("F", "F1a: der harte Chip nennt seine Wirkung im Tooltip",

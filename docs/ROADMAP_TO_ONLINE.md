@@ -570,7 +570,7 @@ Claude erhält:
 - heute oder morgen,
 - Kategorien,
 - weiche Stimmungen,
-- WIE-, WAS- oder WARUM-Schlagseite.
+- direkte Titel-, Reihen-, Franchise- und Regiesignale.
 
 ### Zunächst nicht unterstützt
 

@@ -57,8 +57,10 @@ check("bestätigte Signale tragen genau die fünf neutralen Fachfelder", () =>
 check("Profilachsen dürfen mit, aber keine Filmrichtungen", () =>
   JSON.stringify(gebaut.payload.profil.achsen) === JSON.stringify({ wie: 4, was: null, warum: 2 })
   && !JSON.stringify(gebaut.payload).includes("Stalker"));
-check("Film, Filmreihe und Serie werden unterstützt", () =>
-  ["film", "filmreihe", "serie"].every((typ) => bauePrognoseAuftrag({ ...film, typ }, profil).ok));
+check("Film und Serie werden unterstützt", () =>
+  ["film", "serie"].every((typ) => bauePrognoseAuftrag({ ...film, typ }, profil).ok));
+check("Filmreihe wird clientseitig nicht mehr als neuer Typ akzeptiert", () =>
+  !bauePrognoseAuftrag({ ...film, typ: "filmreihe" }, profil).ok);
 check("Musik und Sonstiges werden vor einem Aufruf abgewiesen", () =>
   ["musik", "sonstiges"].every((typ) => !bauePrognoseAuftrag({ ...film, typ }, profil).ok));
 check("bereits bewertete Einträge werden vor einem Aufruf abgewiesen", () =>

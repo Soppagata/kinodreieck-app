@@ -11,7 +11,7 @@ import { errorText } from "../services/errors.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { ladeProfil } from "../lib/profil.js";
 import { setzePrognoseStatus } from "../lib/prognose.js";
-import { slugId } from "../lib/match.js";
+import { ensureIds, slugId } from "../lib/match.js";
 import { heileRotlinks } from "../lib/artikel.js";
 
 export function useIntelligenceController({
@@ -189,7 +189,7 @@ export function useIntelligenceController({
         + (kandidat.jahr ? ` (${kandidat.jahr})` : ""));
       return null;
     }
-    const neu = { id, ...kandidat };
+    const neu = ensureIds([{ ...kandidat, id }])[0];
     const next = [...aktuell, neu];
     const herkunft = naechsteHerkunft();
     if (!kontoIstAktuell(startKonto)) return null;

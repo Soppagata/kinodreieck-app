@@ -5,7 +5,7 @@ import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
 import { sharedArticlesService } from "../services/sharedArticles.js";
 import { errorText } from "../services/errors.js";
 import { SHARED_PUBLICATION_STATUS, publicationState } from "../lib/sharedPublication.js";
-import { hatDreieck, ALLE_TYPEN } from "../lib/typen.js";
+import { hatDreieck, ALLE_TYPEN, normalisiereTyp } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { IconClose, IconDelete } from "../components/ui.jsx";
@@ -27,7 +27,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [geordnet, setGeordnet] = useState(vorlage ? !!vorlage.geordnet : false);
   const gezogen = !!(vorlage && vorlage.herkunft === "gezogen");
   const [geteilt, setGeteilt] = useState(vorlage ? !!vorlage.geteilt : false);
-  const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ || "" })) : []);
+  const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ ? normalisiereTyp(l.typ) : "" })) : []);
   const [fehler, setFehler] = useState("");
 
   const setzeZeile = (i, k, v) => setListe(liste.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
@@ -128,7 +128,7 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
                   </select>
                 )}
                 <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}
-                  onClick={() => { setNeuFuer(neuFuer === i ? null : i); setNeuTyp(le.typ || "film"); }}>
+                  onClick={() => { setNeuFuer(neuFuer === i ? null : i); setNeuTyp(normalisiereTyp(le.typ)); }}>
                   {neuFuer === i ? "Schließen" : "+ Neu anlegen"}
                 </button>
               </div>
@@ -208,7 +208,7 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
                     </a>
                   ) : (
                     <>
-                      <a href="#" onClick={(e) => { e.preventDefault(); setRotFuer(rotFuer === i ? null : i); setRotTyp(le.typ || "film"); }}
+                      <a href="#" onClick={(e) => { e.preventDefault(); setRotFuer(rotFuer === i ? null : i); setRotTyp(normalisiereTyp(le.typ)); }}
                         style={{ color: ROTLINK, textDecorationColor: ROTLINK, textUnderlineOffset: 3, fontWeight: 600 }}
                         title="Eintrag existiert noch nicht in der Mediathek — klicken zum Ergänzen">
                         {le.eingabe}{le.jahr ? " (" + le.jahr + ")" : ""}

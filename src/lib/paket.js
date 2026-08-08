@@ -13,7 +13,7 @@
      (fremde IDs gelten hier nicht); Unauflösbares wird Rotlink.
    ============================================================ */
 import { norm, slugId, matchFilm } from "./match.js";
-import { TYP_GRUPPEN, tabVonTyp, hatDreieck } from "./typen.js";
+import { TYP_GRUPPEN, tabVonTyp, hatDreieck, normalisiereTyp } from "./typen.js";
 import { neueArtikelId, gleicheArtikelAb } from "./artikel.js";
 import { QUELLEN, quelleZuArray } from "./quellen.js";
 import { BEWERTUNGSKATEGORIE_IDS, istBewertungskategorie } from "./kategorien.js";
@@ -46,14 +46,14 @@ export function bauePaket({ master, artikel, bereiche, autor }) {
           geordnet: !!a.geordnet, erstellt_am: a.erstellt_am || null,
           // refs bewusst NICHT mitgeben — IDs sind instanzlokal. Der Empfänger
           // gleicht eingabe/jahr/typ gegen die eigene Mediathek ab.
-          liste: (a.liste || []).map(({ eingabe, jahr, typ }) => ({ eingabe, jahr: jahr ?? null, typ: typ || "film" })),
+          liste: (a.liste || []).map(({ eingabe, jahr, typ }) => ({ eingabe, jahr: jahr ?? null, typ: normalisiereTyp(typ) })),
         }));
     } else {
       paket.bereiche[b] = (master || [])
-        .filter((f) => TYP_GRUPPEN[b].includes(f.typ || "film"))
+        .filter((f) => TYP_GRUPPEN[b].includes(normalisiereTyp(f.typ)))
         .map((f) => ({
           titel: f.titel, originaltitel: f.originaltitel || f.titel,
-          jahr: f.jahr ?? null, jahr_bis: f.jahr_bis ?? null, typ: f.typ || "film",
+          jahr: f.jahr ?? null, jahr_bis: f.jahr_bis ?? null, typ: normalisiereTyp(f.typ),
           kategorie: f.kategorie || null,
           bewertung: hatDreieck(f.typ) ? (f.bewertung || null) : null,
           genre: f.genre || [], tags: f.tags || [],
@@ -94,9 +94,12 @@ export function parsePaket(text) {
     if (b === "artikel") {
       bereiche.artikel = roh
         .filter((a) => a && typeof a === "object")
-        .map((a) => (Array.isArray(a.liste) ? a : { ...a, liste: [] }));
+        .map((a) => ({ ...a, liste: Array.isArray(a.liste)
+          ? a.liste.map((le) => ({ ...le, typ: le?.typ ? normalisiereTyp(le.typ) : null }))
+          : [] }));
     } else {
-      bereiche[b] = roh.filter((f) => f && typeof f === "object" && f.titel);
+      bereiche[b] = roh.filter((f) => f && typeof f === "object" && f.titel)
+        .map((f) => ({ ...f, typ: normalisiereTyp(f.typ) }));
     }
   }
   return { ...p, autor, bereiche };
@@ -121,7 +124,7 @@ export function analysierePaket(paket, master, artikelListe) {
       analyse.bereiche.push({ name: b, eintraege, neu: eintraege.filter((e) => e.status === "neu").length, vorhanden: eintraege.filter((e) => e.status === "vorhanden").length });
     } else {
       const eintraege = roh
-        .filter((f) => f && f.titel && TYP_GRUPPEN[b].includes(f.typ || "film"))
+        .filter((f) => f && f.titel && TYP_GRUPPEN[b].includes(normalisiereTyp(f.typ)))
         .map((f) => {
           const treffer = matchFilm(f.titel, f.jahr ?? null, master || []);
           return {
@@ -161,7 +164,7 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
           autor: eintrag.autor || analyse.autor,
           text: eintrag.text || "",
           geordnet: !!eintrag.geordnet,
-          liste: (eintrag.liste || []).slice(0, 15).map((le) => ({ eingabe: le.eingabe || "", jahr: le.jahr ?? null, typ: le.typ || "film", ref: null })),
+          liste: (eintrag.liste || []).slice(0, 15).map((le) => ({ eingabe: le.eingabe || "", jahr: le.jahr ?? null, typ: normalisiereTyp(le.typ), ref: null })),
           status: "wartet", // Importiertes durchläuft denselben Freigabe-Flow wie Eigenes
           erstellt_am: eintrag.erstellt_am || new Date().toISOString(),
           importiert_am: new Date().toISOString(),
@@ -215,7 +218,7 @@ export function bauePaketUebernahme(analyse, gewaehlteBereiche, master, artikelL
           titel: eintrag.titel,
           originaltitel: eintrag.originaltitel || eintrag.titel,
           jahr: eintrag.jahr ?? null, jahr_bis: eintrag.jahr_bis ?? null,
-          typ: eintrag.typ || "film",
+          typ: normalisiereTyp(eintrag.typ),
           quelle: quelleWert,
           quelle_unklar: quelleUnklar || undefined,
           /* Fehlende Bewertung bei Dreieck-Typen bleibt null (= unbewertet) —

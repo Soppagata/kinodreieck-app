@@ -59,10 +59,11 @@ check("Abmelden räumt zuerst den Kontokontext und öffnet danach den Einstieg",
 check("Abmelden lädt den wiederhergestellten Gaststand unmittelbar neu", () => /async function abmelden[\s\S]+onDatenGeaendert\?\.\(\)/.test(konto));
 check("Einstieg und Einstellungen laden eindeutige Kontostände automatisch", () =>
   /kontoSicherAutomatischLaden/.test(gate) && /kontoSicherAutomatischLaden/.test(konto) && /onDatenGeaendert/.test(konto));
-check("Mobile Navigation nutzt den Menüknopf der globalen Leiste mit peppigem Popup", () =>
-  /kd-globalsuche-menu/.test(globalSuche) && /NAVIGATION\.map/.test(nav)
+check("Desktop-Suche ist ein eigener Bereich, mobil bleibt die globale Leiste ohne redundanten Menüpunkt", () =>
+  /kd-globalsuche-menu/.test(globalSuche) && /id: "finder"[\s\S]*desktopOnly: true/.test(nav)
+  && /NAVIGATION\.filter\(\(eintrag\) => !eintrag\.desktopOnly\)\.map/.test(nav)
   && /role="dialog"/.test(nav) && /In diesem Bereich nach oben/.test(nav)
-  && !/id: "finder"/.test(nav) && !/kd-navband|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
+  && !/kd-navband|MOBILE_NAVIGATION|kd-tabbar/.test(nav));
 check("Bereiche merken ihre eigene Scrolltiefe und starten beim ersten Besuch oben", () =>
   /scrollProBereichRef/.test(app) && /aktuelleScrolltiefe/.test(app)
   && /scrollProBereichRef\.current\.get\(id\) \?\? 0/.test(app)

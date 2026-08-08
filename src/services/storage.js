@@ -7,6 +7,7 @@
 export {
   store, K, PROGRAMM_TTL_MS,
   activeSyncStatus, activePull,
+  captureStorageContext, storageContextGenerationSnapshot, subscribeStorageContext,
   getTreiber, setTreiber,
 } from "../lib/storage.js";
 

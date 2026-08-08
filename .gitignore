@@ -25,6 +25,9 @@ Archiv/
 # Transfer-/Aufräum-Reste (nicht committen)
 _to_delete/
 _kd_tree.tgz
+# Claudes rohe Audit-Übergabe bleibt lokal bis zum Abschluss; die verifizierte
+# Fortsetzung und Planungsarchäologie liegen versioniert unter docs/.
+_audit_handover/
 
 # Lose Debug-/Screenshot-PNGs im Root (echte Icons liegen in public/, Logo in logo/)
 /*.png

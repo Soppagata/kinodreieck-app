@@ -75,14 +75,14 @@ export function DreieckErklaerung() {
             </div>
           ))}
         </div>
-        {/* Rechts: interaktives Dreieck — Regler ziehen, Schlagseite in der Form sehen */}
+        {/* Rechts: interaktives Dreieck — Regler ziehen und die Form vergleichen */}
         <div style={{ flex: "1 1 320px", minWidth: 280, alignSelf: "stretch", background: T.saalHoch, borderRadius: 6, padding: "18px 16px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 10 }}>
           <DreieckRegler start={{ wie: 5, was: 2, warum: 4 }} scale={1.7} size={44} />
-          <div style={{ ...mono, textAlign: "center", lineHeight: 1.6 }}>Zieh die Regler — die Schlagseite steckt in der Form.</div>
+          <div style={{ ...mono, textAlign: "center", lineHeight: 1.6 }}>Zieh die Regler — jede Achse verändert die Form des Dreiecks.</div>
         </div>
       </div>
       <p style={{ ...mono, marginTop: 8 }}>
-        Schlagseite = eine Achse liegt mindestens 2 Punkte vor der schwächsten und erreicht selbst mindestens 3 — die Karte sagt dir dann, WOFÜR du den Film schaust. Liegen zwei Achsen gleichauf vorn, nennt sie beide. Bleibt die stärkste Achse unter 3, heißt die Kategorie „Ohne Schlagseite“; bei weniger als 2 Punkten Abstand ist sie „Ausgewogen“.
+        Die drei Werte stehen unabhängig nebeneinander: WIE für die Machart, WAS für den Stoff und WARUM für die Wirkung. Das Dreieck macht ihr Verhältnis sichtbar, ohne daraus eine zusätzliche Kategorie abzuleiten.
       </p>
     </div>
   );
@@ -120,7 +120,7 @@ export function DokuAnsicht({ h2, mono }) {
     ] },
     { id: "mediathek", titel: "Mediathek", text: [
       "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
-      "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Schlagseite (WIE/WAS/WARUM-lastig), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
+      "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
       "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Settings. Blog-Artikel besitzen ihre eigenen Werkzeuge direkt im Blog.",
     ] },
     { id: "streaming", titel: "Streaming", text: [
@@ -135,7 +135,7 @@ export function DokuAnsicht({ h2, mono }) {
     ] },
     { id: "finder", titel: "Suche", text: [
       "Natürlichsprachige Suche über deinen Bestand: „traurige Komödie auf Netflix”, „Kult aus den 80ern”. Die Treffer entstehen deterministisch aus deinen eigenen Daten; bei unklaren Anfragen kann zusätzlich die KI-Deutung helfen, wenn du KI aktiviert hast.",
-      "Du findest die Suche als globale Suchleiste am unteren Rand der mobilen Ansicht; am Desktop gibt es sie derzeit nicht.",
+      "Mobil findest du die Suche als globale Leiste am unteren Rand; am Desktop öffnest du den eigenen Bereich „Suche” in der Hauptnavigation.",
       "Eigene Stimmungswörter hinterlegst du in den Settings (KI-Vokabular), damit die Suche deinen Wortschatz kennt.",
     ] },
     { id: "daten", titel: "Settings", text: [

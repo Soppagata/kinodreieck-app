@@ -9,9 +9,10 @@
    Kostenfreigaben sind dort ausdrücklich verboten.
    ========================================================================== */
 
-import { readFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const KEYCHAIN_SERVICE = "at.kinodreieck.codex.live-tests.shared";
@@ -23,10 +24,13 @@ export const KEYCHAIN_ACCOUNTS = Object.freeze({
 export const EXIT_KONFIG = 64;
 export const EXIT_KEYCHAIN = 73;
 export const EXIT_START = 70;
+export const OWNER_SERVER_BUDGET_FLAG = "--owner-approved-server-budget";
+export const OWNER_SERVER_BUDGET_ENV = "KD_AI_OWNER_APPROVED_SERVER_BUDGET";
 
 const DATEI = fileURLToPath(import.meta.url);
 export const REPO_ROOT = resolve(dirname(DATEI), "..");
 export const LOKALE_KONFIG = resolve(REPO_ROOT, ".env.live.local");
+export const LIVE_LOCK_PATH = resolve(tmpdir(), "kinodreieck-ai-provider-tests.lock");
 
 const OEFFENTLICHE_NAMEN = new Set([
   "KD_SB_URL",
@@ -42,6 +46,7 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   "KD_TESTA_PASS",
   "KD_TESTB_PASS",
   "KD_AI_AUTONOM_LIMIT_USD_CENT",
+  OWNER_SERVER_BUDGET_ENV,
   "KD_EVAL_JA",
 ]);
 
@@ -83,16 +88,6 @@ export const MODI = Object.freeze({
       SKRIPT("profile_extract_contract.mjs"),
     ],
   },
-  "profile-live": {
-    accounts: [KEYCHAIN_ACCOUNTS.testa],
-    argv: [
-      SKRIPT("ai_budget_guard.mjs"),
-      "--",
-      process.execPath,
-      SKRIPT("profile_extract_live.mjs"),
-    ],
-    bezahlt: true,
-  },
   "ai-eval": {
     accounts: [KEYCHAIN_ACCOUNTS.testa],
     argv: [
@@ -115,6 +110,44 @@ export class KeychainFehler extends Error {
     super(message);
     this.name = "KeychainFehler";
   }
+}
+
+export function reserviereLiveLauf({
+  lockPath = LIVE_LOCK_PATH,
+  pid = process.pid,
+} = {}) {
+  let fd;
+  try {
+    fd = openSync(lockPath, "wx", 0o600);
+    writeFileSync(fd, String(pid), "utf8");
+  } catch (error) {
+    if (fd !== undefined) {
+      try { closeSync(fd); } catch { /* bestmoegliche Aufraeumung */ }
+      try { unlinkSync(lockPath); } catch { /* bestmoegliche Aufraeumung */ }
+    }
+    if (error?.code === "EEXIST") {
+      /* Keine autonome Stale-Bereinigung: Zwei Starter koennten denselben
+         alten Lock lesen, einer ersetzt ihn, der andere loescht danach den
+         gerade neu erworbenen Lock. Ein vorhandener Lock ist deshalb immer
+         ein fail-closed Stopp und muss nach manueller Prozesspruefung entfernt
+         werden. */
+      throw new Error(
+        `Ein echter KI-Test laeuft oder der Lock ${lockPath} muss manuell geprueft werden; Start gesperrt.`,
+      );
+    }
+    throw error;
+  }
+  closeSync(fd);
+  let frei = false;
+  return () => {
+    if (frei) return;
+    frei = true;
+    try {
+      if (String(readFileSync(lockPath, "utf8")).trim() === String(pid)) {
+        unlinkSync(lockPath);
+      }
+    } catch { /* Lock ist bereits fort. */ }
+  };
 }
 
 function entferneGenauEinenZeilenabschluss(wert) {
@@ -242,9 +275,13 @@ export function baueKindUmgebung({
   lokaleKonfig = liesLokaleKonfig(),
   keychainLeser = liesKeychainEintrag,
   confirmPaid = false,
+  ownerApprovedServerBudget = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
+  if (ownerApprovedServerBudget && !["ai-live", "ai-eval"].includes(modus)) {
+    throw new Error("Die Owner-Budgetfreigabe gilt nur für Rauchprobe und Eval.");
+  }
 
   const env = harmloseBasis(ambientEnv);
   for (const name of OEFFENTLICHE_NAMEN) {
@@ -264,6 +301,7 @@ export function baueKindUmgebung({
     if (!confirmPaid) throw new Error("KI-Eval braucht die ausdrückliche Lauf-Freigabe --confirm-paid.");
     env.KD_EVAL_JA = "1";
   }
+  if (ownerApprovedServerBudget) env[OWNER_SERVER_BUDGET_ENV] = "1";
   return env;
 }
 
@@ -274,6 +312,7 @@ export async function starteModus({
   keychainLeser = liesKeychainEintrag,
   spawnImpl = spawn,
   confirmPaid = false,
+  ownerApprovedServerBudget = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
@@ -283,20 +322,27 @@ export async function starteModus({
     lokaleKonfig,
     keychainLeser,
     confirmPaid,
+    ownerApprovedServerBudget,
   });
-
-  return await new Promise((resolveCode) => {
-    const kind = spawnImpl(process.execPath, definition.argv, {
-      cwd: REPO_ROOT,
-      env,
-      stdio: "inherit",
-      shell: false,
+  const gibLiveLaufFrei = ["ai-live", "ai-eval"].includes(modus)
+    ? reserviereLiveLauf()
+    : () => {};
+  try {
+    return await new Promise((resolveCode) => {
+      const kind = spawnImpl(process.execPath, definition.argv, {
+        cwd: REPO_ROOT,
+        env,
+        stdio: "inherit",
+        shell: false,
+      });
+      kind.once("error", () => resolveCode(EXIT_START));
+      kind.once("exit", (code, signal) => {
+        resolveCode(signal ? EXIT_START : (Number.isInteger(code) ? code : EXIT_START));
+      });
     });
-    kind.once("error", () => resolveCode(EXIT_START));
-    kind.once("exit", (code, signal) => {
-      resolveCode(signal ? EXIT_START : (Number.isInteger(code) ? code : EXIT_START));
-    });
-  });
+  } finally {
+    gibLiveLaufFrei();
+  }
 }
 
 export async function main(
@@ -322,20 +368,28 @@ export async function main(
   const modus = argv[0];
   const rest = argv.slice(1);
   const bezahlt = MODI[modus]?.bezahlt === true;
+  const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
+  const ohneOwnerFlag = rest.filter((arg) => arg !== OWNER_SERVER_BUDGET_FLAG);
   const confirmPaid = bezahlt
-    && rest.length === 1
-    && rest[0] === "--confirm-paid";
-  if (!MODI[modus] || (bezahlt && !confirmPaid) || (!bezahlt && rest.length > 0)) {
+    && ohneOwnerFlag.length === 1
+    && ohneOwnerFlag[0] === "--confirm-paid";
+  const flagErlaubt = !ownerApprovedServerBudget
+    || ["ai-live", "ai-eval"].includes(modus);
+  const argumenteGueltig = bezahlt
+    ? confirmPaid && ohneOwnerFlag.length === 1
+    : ohneOwnerFlag.length === 0;
+  if (!MODI[modus] || !flagErlaubt || !argumenteGueltig
+    || rest.filter((arg) => arg === OWNER_SERVER_BUDGET_FLAG).length > 1) {
     fehlerAusgabe(
-      "Erlaubt: keychain-check | budget-check | ai-live | "
-      + "profile-contract | profile-live --confirm-paid | "
-      + "ai-eval --confirm-paid | rls",
+      `Erlaubt: keychain-check | budget-check | ai-live [${OWNER_SERVER_BUDGET_FLAG}] | `
+      + "profile-contract | "
+      + `ai-eval --confirm-paid [${OWNER_SERVER_BUDGET_FLAG}] | rls`,
     );
     return EXIT_KONFIG;
   }
 
   try {
-    return await starteModus({ modus, keychainLeser, confirmPaid });
+    return await starteModus({ modus, keychainLeser, confirmPaid, ownerApprovedServerBudget });
   } catch (error) {
     const keychain = error instanceof KeychainFehler;
     fehlerAusgabe(

@@ -13,6 +13,7 @@
 
 import { K } from "./storage.js";
 import { ensureIds } from "./match.js";
+import { normalisiereArtikelTypen } from "./artikel.js";
 
 const istObjekt = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 const vorhanden = (v) => v !== undefined && v !== null;
@@ -76,7 +77,7 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     einheit: "Filme",
     backupFallback: { meta: null, filme: [] },
     pruefe: (v) => istObjekt(v) && Array.isArray(v.filme),
-    zuBackup: (v) => ({ meta: v.meta || null, filme: v.filme }),
+    zuBackup: (v) => ({ meta: v.meta || null, filme: ensureIds(v.filme) }),
     zuTopf: (v, now) => ({
       meta: v.meta || null,
       filme: ensureIds(v.filme),
@@ -92,8 +93,8 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     einheit: "Artikel",
     backupFallback: [],
     pruefe: (v) => Array.isArray(v) || (istObjekt(v) && Array.isArray(v.artikel)),
-    zuBackup: (v) => Array.isArray(v) ? v : v.artikel,
-    zuTopf: (v, now) => ({ artikel: Array.isArray(v) ? v : v.artikel, gespeichertAm: now }),
+    zuBackup: (v) => normalisiereArtikelTypen(Array.isArray(v) ? v : v.artikel),
+    zuTopf: (v, now) => ({ artikel: normalisiereArtikelTypen(Array.isArray(v) ? v : v.artikel), gespeichertAm: now }),
     zaehle: (v) => (Array.isArray(v) ? v : v.artikel).length,
   }),
   jsonEintrag({

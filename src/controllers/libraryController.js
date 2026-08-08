@@ -12,6 +12,7 @@ export {
   filtereAktiveKinoPins,
   gueltigerArtikel,
   planeFilmLoeschung,
+  planeMustwatchSprung,
 } from "../lib/libraryProjection.js";
 
 export const NACHTRAG_FLACH = Object.freeze([].concat(

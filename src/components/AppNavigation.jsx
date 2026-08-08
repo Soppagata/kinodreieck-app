@@ -7,6 +7,7 @@ export const NAVIGATION = Object.freeze([
   { id: "kino", label: "Kino", mobil: true, icon: "K" },
   { id: "mediathek", label: "Mediathek", mobil: true, icon: "M" },
   { id: "streaming", label: "Streaming", mobil: true, icon: "S" },
+  { id: "finder", label: "Suche", desktopOnly: true, icon: "⌕" },
   { id: "blog", label: "Blog", mehr: true, icon: "B" },
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
@@ -54,7 +55,7 @@ function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
       <div ref={dialogRef} className="kd-mobile-menu-dialog" role="dialog" aria-modal="true" aria-label="Menü">
         <section id="kd-mobile-menu" className="kd-mobile-menu">
           <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
-            {NAVIGATION.map((eintrag) => (
+            {NAVIGATION.filter((eintrag) => !eintrag.desktopOnly).map((eintrag) => (
               <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
                 onClick={() => onNavigate(eintrag.id)}>
                 {eintrag.label}

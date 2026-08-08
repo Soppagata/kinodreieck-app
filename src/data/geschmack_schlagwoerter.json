@@ -8,7 +8,7 @@
  "erzeugt": "2026-07-28",
  "quelle_messung": {
   "skript": "tools/schlagwort_belege.mjs",
-  "normalisierung": "genreKey() aus src/lib/finder.js und norm()/schlagseite() aus src/lib/match.js — importiert, nicht nachgebaut",
+  "normalisierung": "genreKey() aus src/lib/finder.js und norm() aus src/lib/match.js — importiert, nicht nachgebaut",
   "vergleich": "exakter genreKey-Vergleich (die STRENGERE der beiden Regeln der App; sucheKino/sucheEntdecken vergleichen toleranter, finden also mindestens diese Treffer)",
   "korpora": {
    "kino": "programm.json / filme[] — 221 Wiener Kinofilme, Fenster 2026-07-22 bis 2026-08-04",
@@ -722,51 +722,6 @@
     "entdecken": 0
    },
    "grund": "Zahl traegt, Bedeutung nicht: `immer_gut` ist Max' URTEIL ueber einen Film, keine Geschmacksrichtung. Als Onboarding-Chip wuerde es Bewertung und Profil vermischen — genau das Nicht-Ziel aus profil.js."
-  },
-  {
-   "id": "achse_wie",
-   "anzeige": "Mir ist die Optik am wichtigsten",
-   "ziele": {
-    "achse": "wie"
-   },
-   "treffer": {
-    "kino": 0,
-    "bekannt": 5,
-    "gesamt": 5,
-    "konzentration": 0.2,
-    "entdecken": 0
-   },
-   "grund": "Gehoert nicht in die Signalliste, sondern in profil.achsen (Tendenz 1..5). Ausserdem duenn: nur 5 Titel haben eine WIE-Schlagseite."
-  },
-  {
-   "id": "achse_was",
-   "anzeige": "Mir ist die Story am wichtigsten",
-   "ziele": {
-    "achse": "was"
-   },
-   "treffer": {
-    "kino": 0,
-    "bekannt": 3,
-    "gesamt": 3,
-    "konzentration": 0.67,
-    "entdecken": 0
-   },
-   "grund": "Wie achse_wie — und mit 3 Titeln der duennste Fall im ganzen Bestand. Eine WAS-Vorliebe haette derzeit fast nichts zum Greifen."
-  },
-  {
-   "id": "achse_warum",
-   "anzeige": "Mir ist die Bedeutung am wichtigsten",
-   "ziele": {
-    "achse": "warum"
-   },
-   "treffer": {
-    "kino": 0,
-    "bekannt": 35,
-    "gesamt": 35,
-    "konzentration": 0.14,
-    "entdecken": 0
-   },
-   "grund": "Zahl traegt deutlich, gehoert aber trotzdem nach profil.achsen. Als einziger Achsen-Chip von dreien waere er zudem irrefuehrend."
   },
   {
    "id": "stimmung_tags",

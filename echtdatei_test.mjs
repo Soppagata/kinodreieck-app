@@ -154,7 +154,7 @@ check("Favicon eingebettet (data:-URI, kein file://-Bruch)", !!icon && (icon.get
 for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG"]) {
   check("Tab " + tab, new RegExp(tab, "i").test(startText));
 }
-check("Suche ist global statt eigener Menübereich", !/Suche/.test((doc.querySelector(".kd-menu")?.textContent || ""))
+check("Suche ist am Desktop als Bereich und mobil weiterhin global erreichbar", /Suche/.test((doc.querySelector(".kd-menu")?.textContent || ""))
   && !!doc.querySelector('.kd-globalsuche input[aria-label="Sucheingabe"]'));
 
 /* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */

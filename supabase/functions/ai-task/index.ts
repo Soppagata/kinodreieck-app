@@ -52,7 +52,12 @@ import {
   STATUS,
 } from "./requestContract.ts";
 import {
+  ANBIETER_REQUEST_MAX_USD_CENT,
+  ANBIETER_REQUEST_TIMEOUT_MAX_MS,
+  anbieterOwnerPreisboden,
   baueAnbieterKoerper,
+  liesAnbieterRequestTimeoutMs,
+  pruefeAnbieterKostenzaun,
   schaetzeAnbieterEingabeTokens,
   type AnbieterBild,
 } from "./providerContract.ts";
@@ -303,6 +308,7 @@ async function rufeAnbieter(
   const uhr = new AbortController();
   const stopp = setTimeout(() => uhr.abort(), timeoutMs);
   let antwort: Response;
+  let daten: unknown = null;
   try {
     antwort = await fetch(ANBIETER_URL, {
       method: "POST",
@@ -314,16 +320,29 @@ async function rufeAnbieter(
       body: JSON.stringify(koerper),
       signal: uhr.signal,
     });
+    /* Der Timeout umfasst bewusst auch den Antwortkoerper. `fetch()` ist schon
+       nach den Headern erfuellt; den Timer davor zu loeschen liess ein
+       haengendes `json()` unbegrenzt weiterlaufen. */
+    try {
+      daten = await antwort.json();
+    } catch (e) {
+      /* Ein normal unlesbarer Body wird unten als `antwort-kein-json`
+         behandelt. Ein Abort ist dagegen die harte Zeitgrenze und darf nicht
+         durch ein bequemes `.catch(() => null)` in diese mildere Diagnose
+         umgedeutet werden. */
+      if (uhr.signal.aborted || (e as Error)?.name === "AbortError") throw e;
+      daten = null;
+    }
   } catch (e) {
     throw new AufrufFehler(
       CODES.SERVER,
-      (e as Error)?.name === "AbortError" ? "anbieter-zeitgrenze" : "anbieter-nicht-erreichbar",
+      uhr.signal.aborted || (e as Error)?.name === "AbortError"
+        ? "anbieter-zeitgrenze"
+        : "anbieter-nicht-erreichbar",
     );
   } finally {
     clearTimeout(stopp);
   }
-
-  const daten = await antwort.json().catch(() => null);
 
   if (!antwort.ok) {
     const typ = (daten as { error?: { type?: string } } | null)?.error?.type ??
@@ -443,9 +462,9 @@ async function rufeAnbieter(
    Modell-ID (`claude-haiku-4-5-20251001`), konfiguriert ist aber der Alias
    (`claude-haiku-4-5`). Ein exakter Nachschlag ging deshalb ins Leere und die
    alte Fassung buchte stillschweigend 0 — das Monatsbudget wäre nie
-   hochgezählt und die Grenze nie wirksam geworden. Deshalb: exakt, sonst über
-   das Präfix, sonst der teuerste bekannte Preis als konservative Schätzung
-   PLUS ein Vermerk in der Fehlerklasse. Lieber zu viel buchen als blind. */
+   hochgezählt und die Grenze nie wirksam geworden. Deshalb: exakt oder ueber
+   das bekannte Familienpraefix, immer mindestens zum unverrueckbaren
+   Owner-Preisboden. Unbekannte Modellfamilien fallen geschlossen aus. */
 function preisFuer(
   k: Konfig,
   modell: string,
@@ -460,26 +479,30 @@ function preisFuer(
      anderes als eine Zeichenkette hereingibt. */
   const name0 = typeof modell === "string" ? modell : String(modell ?? "");
   modell = name0;
+  const ownerBoden = anbieterOwnerPreisboden(modell);
+  const brauchbar = (p: { in?: number; out?: number } | undefined) =>
+    !!ownerBoden && !!p && typeof p.in === "number" && Number.isFinite(p.in) &&
+    p.in >= ownerBoden.in && typeof p.out === "number" &&
+    Number.isFinite(p.out) && p.out >= ownerBoden.out;
   const genau = preise[modell];
   if (genau) {
+    if (!brauchbar(genau)) return { in: Number.NaN, out: Number.NaN, sicher: false };
     return {
-      in: Number(genau.in ?? 0),
-      out: Number(genau.out ?? 0),
+      in: genau.in as number,
+      out: genau.out as number,
       sicher: true,
     };
   }
   for (const [name, p] of Object.entries(preise)) {
     if (name && modell.startsWith(name)) {
-      return { in: Number(p.in ?? 0), out: Number(p.out ?? 0), sicher: true };
+      if (!brauchbar(p)) return { in: Number.NaN, out: Number.NaN, sicher: false };
+      return { in: p.in as number, out: p.out as number, sicher: true };
     }
   }
-  let teuerstesIn = 0;
-  let teuerstesOut = 0;
-  for (const p of Object.values(preise)) {
-    teuerstesIn = Math.max(teuerstesIn, Number(p.in ?? 0));
-    teuerstesOut = Math.max(teuerstesOut, Number(p.out ?? 0));
-  }
-  return { in: teuerstesIn, out: teuerstesOut, sicher: false };
+  /* Kein generischer Fallback: Eine unbekannte Modellfamilie koennte teurer
+     sein als alle konfigurierten Modelle. Sie mit deren Maximum zu schaetzen
+     waere fuer einen harten Vorab-Zaun nicht beweisbar. */
+  return { in: Number.NaN, out: Number.NaN, sicher: false };
 }
 
 function kostenAus(
@@ -868,7 +891,6 @@ function leseListen(payload: Record<string, unknown>) {
     genres: leseWerteliste(l.genres),
     kategorien: leseWerteliste(l.kategorien),
     stimmungen: leseWerteliste(l.stimmungen),
-    achsen: leseWerteliste(l.achsen),
     quellen: leseWerteliste(l.quellen),
     zeit: leseWerteliste(l.zeit),
   };
@@ -931,10 +953,9 @@ const SUCHE_SCHEMA = {
     weiche_wuensche: {
       type: "object",
       additionalProperties: false,
-      required: ["stimmungen", "achsen"],
+      required: ["stimmungen"],
       properties: {
         stimmungen: { type: "array", items: { type: "string" } },
-        achsen: { type: "array", items: { type: "string" } },
       },
     },
     ausschluesse: {
@@ -1919,7 +1940,6 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         liste("Genres", listen.genres),
         liste("Kategorien", listen.kategorien),
         liste("Stimmungen", listen.stimmungen),
-        liste("Achsen", listen.achsen),
         liste("Quellen", listen.quellen),
         liste("Zeit", listen.zeit),
         `Reihen-Typen: ${REIHEN_TYPEN.join(", ")}`,
@@ -2104,7 +2124,6 @@ export const AUFGABEN: Record<string, Aufgabe> = {
             listen.stimmungen,
             "Stimmung",
           ),
-          achsen: nurBekannte(weich.achsen, listen.achsen, "Achse"),
         },
         ausschluesse: {
           genres: nurBekannte(aus.genres, listen.genres, "Genre"),
@@ -2705,6 +2724,13 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         betrieb: {
           aiAktiv: konfig["ai_aktiv"] === true,
           monatsbudgetUsdCent: zahl(konfig, "monatsbudget_usd_cent", 0),
+          anbieterRequestMaxUsdCent: eigenerWert(
+            konfig,
+            "anbieter_request_max_usd_cent",
+          ) ?? null,
+          anbieterRequestOwnerMaxUsdCent: ANBIETER_REQUEST_MAX_USD_CENT,
+          anbieterRequestTimeoutMs: eigenerWert(konfig, "timeout_ms") ?? null,
+          anbieterRequestTimeoutOwnerMaxMs: ANBIETER_REQUEST_TIMEOUT_MAX_MS,
           tageslimit: zahl(konfig, "tageslimit_auftraege", 0),
           parallelMax: zahl(konfig, "parallel_max", 0),
           modellAlias: konfig["modell_alias"] ?? null,
@@ -2733,6 +2759,15 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     if (!key) {
       return fehlerAntwort(CODES.SERVER, origin, {
         grund: "anbieterschluessel-fehlt",
+        vorgangId,
+      });
+    }
+    const diagTimeoutMs = liesAnbieterRequestTimeoutMs(
+      eigenerWert(konfig, "timeout_ms"),
+    );
+    if (diagTimeoutMs === null) {
+      return fehlerAntwort(CODES.SERVER, origin, {
+        grund: "anbieter-zeitgrenze-ungueltig",
         vorgangId,
       });
     }
@@ -2805,17 +2840,37 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       } catch { /* Protokollieren darf den Aufruf nie zum Absturz bringen. */ }
     };
 
-    const antwort = await fetch(ANBIETER_MODELLE_URL, {
-      headers: { "x-api-key": key, "anthropic-version": ANBIETER_VERSION },
-    }).catch(() => null);
+    const diagUhr = new AbortController();
+    const diagStopp = setTimeout(() => diagUhr.abort(), diagTimeoutMs);
+    let antwort: Response | null = null;
+    let daten: unknown = null;
+    let diagZeitUeberschritten = false;
+    try {
+      antwort = await fetch(ANBIETER_MODELLE_URL, {
+        headers: { "x-api-key": key, "anthropic-version": ANBIETER_VERSION },
+        signal: diagUhr.signal,
+      });
+      try {
+        daten = await antwort.json();
+      } catch (e) {
+        if (diagUhr.signal.aborted || (e as Error)?.name === "AbortError") throw e;
+        daten = null;
+      }
+    } catch (e) {
+      diagZeitUeberschritten = diagUhr.signal.aborted ||
+        (e as Error)?.name === "AbortError";
+    }
+    finally { clearTimeout(diagStopp); }
     if (!antwort) {
-      await diagBeende("fehler", "anbieter-nicht-erreichbar");
+      const grund = diagZeitUeberschritten
+        ? "anbieter-zeitgrenze"
+        : "anbieter-nicht-erreichbar";
+      await diagBeende("fehler", grund);
       return fehlerAntwort(CODES.SERVER, origin, {
-        grund: "anbieter-nicht-erreichbar",
+        grund,
         vorgangId,
       });
     }
-    const daten = await antwort.json().catch(() => null);
     if (!antwort.ok) {
       const typ = (daten as { error?: { type?: string } } | null)?.error?.type ?? null;
       await diagBeende("fehler", "anbieterfehler:" + antwort.status);
@@ -3278,7 +3333,16 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   const maxTokens = zuTokens(eigenerWert(maxTokensJeTask, task)) ??
     zuTokens(eigenerWert(MAX_TOKENS_STANDARD, task)) ??
     256;
-  const timeoutMs = zahl(konfig, "timeout_ms", 30000);
+  const timeoutMs = liesAnbieterRequestTimeoutMs(
+    eigenerWert(konfig, "timeout_ms"),
+  );
+  if (timeoutMs === null) {
+    await schliesseFilmwissenVorAi("server:anbieter-timeout");
+    return fehlerAntwort(CODES.SERVER, origin, {
+      grund: "anbieter-zeitgrenze-ungueltig",
+      vorgangId,
+    });
+  }
 
   /* 4) Not-Aus, Budget, Tageslimit, Parallelität — geprüft UND protokolliert in
         einer Transaktion. Zwei gleichzeitige Aufrufe können die Grenze damit
@@ -3302,16 +3366,26 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     auftrag.bilder ?? [],
   );
   const reservierung = kostenAus(preis, geschaetzteEingabe, maxTokens);
-  if (task === "media-batch-extract") {
-    const caps = (konfig["task_max_reservierung_usd_cent"] ?? {}) as Record<string, unknown>;
-    const cap = eigenerWert(caps, task);
-    if (typeof cap !== "number" || !Number.isFinite(cap) || cap <= 0 || reservierung > cap) {
-      await schliesseFilmwissenVorAi("server:task-kostenzaun");
-      return fehlerAntwort(CODES.SERVER, origin, {
-        grund: "task-kostenzaun-fehlt-oder-ueberschritten:" + task,
-        vorgangId,
-      });
-    }
+  const caps = (konfig["task_max_reservierung_usd_cent"] ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const taskCap = eigenerWert(caps, task);
+  const kostenzaun = pruefeAnbieterKostenzaun(
+    reservierung,
+    eigenerWert(konfig, "anbieter_request_max_usd_cent"),
+    taskCap,
+    task === "filmwissen-synthese" || task === "media-batch-extract",
+  );
+  if (!kostenzaun.erlaubt) {
+    await schliesseFilmwissenVorAi("server:task-kostenzaun");
+    const code = kostenzaun.konfigurationGueltig ? CODES.LIMIT : CODES.SERVER;
+    return fehlerAntwort(code, origin, {
+      grund: kostenzaun.konfigurationGueltig
+        ? "anbieter-request-kostenlimit-ueberschritten:" + task
+        : "anbieter-request-kostenzaun-ungueltig:" + task,
+      vorgangId,
+    });
   }
 
   const { data: startRoh, error: startFehler } = await admin.rpc(
@@ -3434,26 +3508,68 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     /* Auch ein Fehlschlag kann abgerechnet sein. Liegt ein Verbrauch vor, wird
        er gebucht; sonst bleibt die Reservierung stehen — nie 0. */
     const v = f.verbrauch;
-    const istPreis = v?.modell ? preisFuer(konfig, v.modell) : preis;
+    const gemeldeterPreis = v?.modell ? preisFuer(konfig, v.modell) : preis;
+    /* Der Request wurde fuer `modell` reserviert und gesendet. Meldet der
+       Provider danach eine unerwartete/unsaubere Modell-ID, rechnen wir nicht
+       mit einer frei erfundenen Familie, sondern hoechstens mit dem bereits
+       vorab geprueften Preis des angeforderten Modells. */
+    const istPreis = Number.isFinite(gemeldeterPreis.in) &&
+        Number.isFinite(gemeldeterPreis.out)
+      ? gemeldeterPreis
+      : preis;
+    const fehlerKosten = v
+      ? kostenAus(istPreis, v.inputTokens ?? 0, v.outputTokens ?? 0)
+      : null;
     await beende("fehler", {
       fehlerklasse: klasse + ":" + (f.grund ?? ""),
       modell: v?.modell ?? null,
       inputTokens: v?.inputTokens ?? null,
       outputTokens: v?.outputTokens ?? null,
-      kosten: v ? kostenAus(istPreis, v.inputTokens ?? 0, v.outputTokens ?? 0) : null,
+      /* Unbekannte Provider-Modell-ID: Reservierung stehen lassen, nie NaN
+         als vermeintlichen Istwert an Postgres schicken. */
+      kosten: Number.isFinite(fehlerKosten) ? fehlerKosten : null,
     });
     return fehlerAntwort(klasse, origin, { grund: f.grund, vorgangId });
   }
 
-  const istPreis = preisFuer(konfig, ergebnis.modell);
+  const gemeldeterPreis = preisFuer(konfig, ergebnis.modell);
+  const istPreis = Number.isFinite(gemeldeterPreis.in) &&
+      Number.isFinite(gemeldeterPreis.out)
+    ? gemeldeterPreis
+    : preis;
   const kosten = kostenAus(
     istPreis,
     ergebnis.inputTokens,
     ergebnis.outputTokens,
   );
-  /* B1: Ein unbekannter Modellpreis darf nicht still zu 0 werden. Er wird
-     konservativ geschätzt UND in der Fehlerklasse vermerkt, damit es auffällt. */
-  const preisVermerk = istPreis.sicher ? null : "kosten-geschaetzt:" + ergebnis.modell;
+  const istKostenzaun = pruefeAnbieterKostenzaun(
+    kosten,
+    eigenerWert(konfig, "anbieter_request_max_usd_cent"),
+    taskCap,
+    task === "filmwissen-synthese" || task === "media-batch-extract",
+  );
+  if (!istKostenzaun.erlaubt) {
+    await beende("fehler", {
+      modell: ergebnis.modell,
+      inputTokens: ergebnis.inputTokens,
+      outputTokens: ergebnis.outputTokens,
+      kosten: Number.isFinite(kosten) ? kosten : null,
+      fehlerklasse: istKostenzaun.konfigurationGueltig
+        ? "limit:anbieter-request-istkosten"
+        : "server:anbieter-request-istkosten",
+    });
+    return fehlerAntwort(
+      istKostenzaun.konfigurationGueltig ? CODES.LIMIT : CODES.SERVER,
+      origin,
+      {
+        grund: istKostenzaun.konfigurationGueltig
+          ? "anbieter-request-istkostenlimit-ueberschritten"
+          : "anbieter-request-istkosten-unbekannt",
+        vorgangId,
+      },
+    );
+  }
+  const preisVermerk = gemeldeterPreis.sicher ? null : "kosten-geschaetzt";
 
   /* 4) Fachliche Prüfung NACH der strukturellen. Ein technisch gültiges JSON
         ist noch kein brauchbares Ergebnis. */
@@ -3463,7 +3579,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       modell: ergebnis.modell,
       inputTokens: ergebnis.inputTokens,
       outputTokens: ergebnis.outputTokens,
-      kosten,
+      kosten: Number.isFinite(kosten) ? kosten : null,
       fehlerklasse: CODES.INVALID_RESPONSE + ":zu-gross",
     });
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {

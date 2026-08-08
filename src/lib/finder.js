@@ -1,13 +1,13 @@
 /* ============================================================
    Finder — deterministischer Film-Chat (KEIN LLM)
    ------------------------------------------------------------
-   parseAnfrage: Freitext -> Signale (Genres, Achsen, Kategorien,
+   parseAnfrage: Freitext -> Signale (Genres, Kategorien,
    Jahrzehnte, Quellen, Zeit, Entdecken) über das Vokabular-Datenmodul.
    sucheFinder: Signale -> gerankte Treffer aus Mediathek + Kino +
    Streaming. Ranking = Dreieck-Score + transparente Boosts.
    Entdecken-Titel (ungeprüft) NUR bei explizitem Entdecken-Signal.
    ============================================================ */
-import { norm, schlagseite, score } from "./match.js";
+import { norm, score } from "./match.js";
 /* Import-Attribut ist unter Node ab 22 Pflicht (ERR_IMPORT_ATTRIBUTE_MISSING).
    Ohne es lässt sich dieses Modul nur über den Vite-Bundler laden — genau der
    Grund, warum der Finder bis Etappe 6 ohne einen einzigen Modultest lief.
@@ -27,7 +27,7 @@ export function alleStimmungen() {
 }
 
 /* Wort-Match mit Flexions-Toleranz: exaktes Wort immer; ab 5 Zeichen reicht
-   der Wortanfang ("stylisch" -> "stylischer"). Kurze Wörter ("kult") bleiben
+   der Wortanfang ("melancholisch" -> "melancholischer"). Kurze Wörter ("kult") bleiben
    exakt — sonst matcht "kultur". Mehrwort-Phrasen als Substring. */
 const hatWort = (text, phrase) => {
   if (phrase.includes(" ")) return text.includes(phrase);
@@ -126,16 +126,16 @@ export function jahrGrenzen(sig) {
 export function parseAnfrage(text, master, zusatzGenres = []) {
   const nt = norm(text);
   const sig = {
-    genres: [], achsen: [], kategorien: [], dekaden: [], quellen: [], zeit: [],
+    genres: [], kategorien: [], dekaden: [], quellen: [], zeit: [],
     stimmungen: [], reihen: [], jahrMin: null, jahrMax: null, entdecken: false,
     /* Etappe 6 — Ausschlüsse. jahrMin/jahrMax bleiben die WIRKSAMEN Werte, die
        alle Sucher lesen; jahrExplizit* hält nur fest, was ausdrücklich genannt
        wurde, damit das Abwählen einer Stimmung eine genannte Grenze nicht
-       mitlöscht. Negierte Stimmungen/Achsen werden nicht hart ausgeschlossen,
+       mitlöscht. Negierte Stimmungen werden nicht hart ausgeschlossen,
        sondern abgewertet: eine Stimmung ist ein Bündel aus Genres und Tags —
        "nicht traurig" würde sonst gleich alle Dramen wegwerfen. */
     genresAusschluss: [], dekadenAusschluss: [], kategorienAusschluss: [],
-    stimmungenAbschlag: [], achsenAbschlag: [],
+    stimmungenAbschlag: [],
     jahrExplizitMin: null, jahrExplizitMax: null,
     /* E-2: Eine aus einer Stimmung abgeleitete Jahresgrenze („oldschool" → bis
        1989) wird als eigener Chip angezeigt und muss EINZELN abwählbar sein —
@@ -177,9 +177,6 @@ export function parseAnfrage(text, master, zusatzGenres = []) {
   for (const g of masterGenres) if (g && hatWort(nt, g)) einsortieren(sig.genres, sig.genresAusschluss, g, g);
   for (const [syn, ziel] of Object.entries(vokabular.genre_synonyme)) {
     if (hatWort(nt, norm(syn))) einsortieren(sig.genres, sig.genresAusschluss, norm(ziel), syn);
-  }
-  for (const [achse, woerter] of Object.entries(vokabular.achsen)) {
-    for (const w of woerter) if (hatWort(nt, norm(w))) einsortieren(sig.achsen, sig.achsenAbschlag, achse, w);
   }
   for (const [kat, woerter] of Object.entries(vokabular.kategorien)) {
     for (const w of woerter) if (hatWort(nt, norm(w))) einsortieren(sig.kategorien, sig.kategorienAusschluss, kat, w);
@@ -303,7 +300,6 @@ export function parseAnfrage(text, master, zusatzGenres = []) {
   sig.kategorienAusschluss = sig.kategorienAusschluss.filter((k) => !sig.kategorien.includes(k));
   sig.dekadenAusschluss = sig.dekadenAusschluss.filter((d) => !sig.dekaden.includes(d));
   sig.stimmungenAbschlag = sig.stimmungenAbschlag.filter((s) => !sig.stimmungen.includes(s));
-  sig.achsenAbschlag = sig.achsenAbschlag.filter((a) => !sig.achsen.includes(a));
   sig.negiertIgnoriert = sig.negiertIgnoriert.filter((x) => !sig.quellen.includes(x) && !sig.zeit.includes(x));
   Object.assign(sig, jahrGrenzen(sig));
 
@@ -334,13 +330,12 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
      einfachsten Ausschluss wirkungslos. Alle Zugriffe optional, weil die KI
      später ein Signalobjekt zusammensetzt, dem Felder fehlen können. */
   const hatSignal = titelIds.size > 0 || sig.genres.length || (sig.reihen && sig.reihen.length) ||
-    sig.stimmungen.length || sig.achsen.length || sig.kategorien.length || sig.dekaden.length ||
+    sig.stimmungen.length || sig.kategorien.length || sig.dekaden.length ||
     sig.quellen.length || sig.zeit.length || sig.jahrMin || sig.jahrMax ||
     (sig.genresAusschluss && sig.genresAusschluss.length) ||
     (sig.dekadenAusschluss && sig.dekadenAusschluss.length) ||
     (sig.kategorienAusschluss && sig.kategorienAusschluss.length) ||
-    (sig.stimmungenAbschlag && sig.stimmungenAbschlag.length) ||
-    (sig.achsenAbschlag && sig.achsenAbschlag.length);
+    (sig.stimmungenAbschlag && sig.stimmungenAbschlag.length);
   if (!hatSignal) return [];
   const treffer = [];
   for (const f of master || []) {
@@ -414,9 +409,6 @@ export function sucheFinder(sig, { master, kinoMatches, streamingBekannt }) {
     }
     if (sig.jahrMax) gruende.push("bis:" + sig.jahrMax);
     if (sig.jahrMin) gruende.push("ab:" + sig.jahrMin);
-    const ss = schlagseite(f.bewertung);
-    for (const a of sig.achsen) if (ss === a) { wert += 2.5; gruende.push("schlagseite:" + a.toUpperCase()); }
-    for (const a of sig.achsenAbschlag || []) if (ss === a) { wert -= 2.5; gruende.push("nicht-schlagseite:" + a.toUpperCase()); }
     for (const k of sig.kategorien) if (f.kategorie === k) { wert += 3; gruende.push("kategorie:" + k); }
     if (!istTitelTreffer && sig.kategorien.length && !sig.kategorien.includes(f.kategorie)) continue; // Kategorie verlangt = Filter
     /* Reihe/Franchise/Regie-Signal (Sidecar): Treffer boostet; verlangt = harter Filter */
@@ -553,7 +545,6 @@ export function bekannteWerte(master, zusatzGenres = []) {
     genres,
     kategorien: Object.keys(vokabular.kategorien || {}),
     stimmungen: Object.keys(alleStimmungen()),
-    achsen: Object.keys(vokabular.achsen || {}),
     quellen: Object.keys(vokabular.quellen || {}),
     zeit: Object.keys(vokabular.zeit || {}),
   };
@@ -606,7 +597,7 @@ export function sigAusSchema(antwort, master, zusatzGenres = []) {
      soll „komödie" zeigen, auch wenn das Modell „Komoedie" geliefert hat.
 
      Und zwar UNVERÄNDERT. Hier stand `norm(treffer)`, und das war ein stiller
-     Totalausfall: `sucheFinder` vergleicht Kategorien, Achsen, Quellen und Zeit
+     Totalausfall: `sucheFinder` vergleicht Kategorien, Quellen und Zeit
      buchstabengetreu (`f.kategorie === k`) und schlägt Stimmungen unter ihrem
      Schlüssel nach. `norm("sicher_gut")` ergibt "sicher gut" — ein Filter, der
      nie greifen kann. Nur Genres werden über `genreKey` verglichen und hätten
@@ -669,7 +660,6 @@ export function sigAusSchema(antwort, master, zusatzGenres = []) {
 
   const sig = {
     genres: nurBekannte(hart.genres, werte.genres, "genre"),
-    achsen: nurBekannte(weich.achsen, werte.achsen, "achse"),
     kategorien: nurBekannte(hart.kategorien, werte.kategorien, "kategorie"),
     dekaden: dekaden(hart.dekaden),
     quellen: nurBekannte(hart.quellen, werte.quellen, "quelle"),
@@ -683,7 +673,6 @@ export function sigAusSchema(antwort, master, zusatzGenres = []) {
     dekadenAusschluss: dekaden(aus.dekaden),
     kategorienAusschluss: [],
     stimmungenAbschlag: [],
-    achsenAbschlag: [],
     jahrExplizitMin: zahl(hart.jahrMin),
     jahrExplizitMax: zahl(hart.jahrMax),
     jahrUnterdrueckt: { min: false, max: false },

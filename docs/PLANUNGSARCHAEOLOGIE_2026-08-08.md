@@ -33,11 +33,13 @@ Gefundene Datei:
 - laut Manifest exakt für Branch `audit/fixbatch1`, Commit `3ae1300`
 - laut Manifest wurde das Repository bei der Erstellung nicht verändert
 
-Die beiden vorgesehenen Commitobjekte `9714dfe…` und `2f4f7e4…` existieren
-weder im Repository noch auf einem bekannten Branch. Die aktuellen Blob-Hashes
-entsprechen bei allen betroffenen Kern-Dateien noch den Patch-Preimages; der
-neue `useMustwatchController.js` fehlt. Damit ist bewiesen, dass kein Teil der
-ZIP-Implementierung übernommen wurde.
+Die beiden vorgesehenen Commitobjekte `9714dfe…` und `2f4f7e4…` existierten bei
+der Bestandsaufnahme weder im Repository noch auf einem bekannten Branch. Die
+damaligen Blob-Hashes entsprachen bei allen betroffenen Kern-Dateien den
+Patch-Preimages; `useMustwatchController.js` fehlte. Damit ist bewiesen, dass
+der Planungschat selbst nichts in das Repository übernommen hatte. Im
+anschließenden Audit wurden die sicheren Teilideen unabhängig und
+funktionsschonend neu implementiert; der riskante Gesamtpatch blieb verworfen.
 
 Beide Patches wurden ausschließlich in einer temporären Kopie angewandt und
 mit der vorhandenen Mock- und Mobile-Suite geprüft. Der technische Patchstand
@@ -48,21 +50,21 @@ ist testbar, aber nicht funktionsneutral.
 | Vorhaben | Ist- und Historienbefund | Einordnung / nächster Schritt |
 |---|---|---|
 | Eintrag-löschen-Button | Bereits aktiv in `FilmCard.jsx`; die Löschplanung erhält Blogtexte als Rotlinks und Must-Watch-Zeilen ohne Masterlink. Historisch durch `5455eec` und `f79dbc2` aufgebaut. | **Umgesetzt und zu erhalten.** Regressionsschutz ausbauen, nicht neu bauen. |
-| Keine neuen Einträge vom Typ `filmreihe` | Heute bieten mehrere Schreibflächen den Typ an, während `ensureIds` ihn beim späteren Laden ohnehin zu `film` normalisiert. ZIP-Patch 1 schließt die Schreibgrenzen und bewahrt Legacy-Importe. | **Sicher portierbar**, aber kompakt oder zusammen mit einer App-Extraktion, weil der unveränderte Patch `App.jsx` über das Zeilenlimit hebt. |
+| Keine neuen Einträge vom Typ `filmreihe` | Die Schreibgrenzen sind inzwischen geschlossen; alte Master-, Paket- und Blogwerte werden weiterhin als `film` gelesen und verknüpft. | **Umgesetzt und regressionsgetestet.** Kein Legacy-Datenverlust, kein eigener neuer Typ. |
 | Must-Watch-Grundsystem | Seit `afe48d6` aktiv: eigener Topf `kd:mustwatch`, Flag-Migration, explizite Master-/Kino-/Streamingbezüge, Suche und Einzellöschung. | **Umgesetzt.** Keine zweite Komponente, kein zweiter Topf und kein neuer Tab. |
-| Must-Watch-Schreibserialisierung | CRUD und Persistenz liegen heute verteilt in `App.jsx`; schnelle Aktionen können auf veraltetem Zustand rechnen. ZIP-Patch 2 bringt eine Schreibkette und entlastet `App.jsx`. | **Technische Härtung**, separat und ohne automatische Legacy-Migration portieren. Bei Fehlern UI-Zustand zurückrollen oder eindeutig neu laden. |
-| Direkte Must-Watch-Sprünge | Der Masterbezug ist klickbar; Kino- und Streamingbezüge erscheinen nur als Text. Die Anschlussplanung nutzt vorhandene stabile IDs und Fokuspfade. | **Additiv portierbar**, mit Navigationstests für Master, Kino und Streaming. |
+| Must-Watch-Schreibserialisierung | Ein eigener Controller berechnet und speichert Änderungen seriell; ein beschädigter oder noch nicht sicher geladener Topf sperrt Mutationen. Besitz, Beschreibung, Notiz und Blogbezüge bleiben erhalten. | **Umgesetzt und regressionsgetestet**, ohne automatische Merkliste-Migration. Mehrtopf-Löschungen warten fail-closed auf den Ladestand. |
+| Direkte Must-Watch-Sprünge | Master-, Kino- und Streamingbezüge nutzen inzwischen die vorhandenen stabilen Fokuspfade. | **Additiv umgesetzt und regressionsgetestet.** Der reine Sprungplan deckt Master, gematchtes Kino, reines Programm und Streaming ab; die Komponentenverdrahtung bleibt zusätzlich strukturell gesichert. |
 | Streaming-Merkliste in Must-Watch überführen | Heute existieren zwei aktive Wahrheiten: `kd:merkliste` mit Stern, Dashboardanzeige und eigenem Export sowie `kd:mustwatch`. | **Produkt- und Migrationsentscheidung.** Nur mit Übergangszeit, Ersatzexport und dauerhaft bestätigtem Ziel-Write. Quelle nie nach einem bloß lokalen Erfolg löschen. |
 | Automatische Blogreferenz-Migration | Der ZIP-Effekt wandelt alle `mw_`-Referenzen in Masterlinks oder Rotlinks um. Schon ein Must-Watch-Lesefehler wird im Entwurf wie eine leere Liste behandelt. | **In der vorliegenden Form ablehnen.** Read-Fehler und „wirklich leer“ unterscheiden; Bloginhalt und Rückheilung erhalten. |
 | Besitz und Beschreibung | Der aktuelle Must-Watch-Weg besitzt `im_besitz`, Besitz-Badge und ein separates Beschreibungsfeld. Patch 2 entfernt diese Funktionen. | Unter der Erhaltungsregel **behalten**. Neue Jahr-/Typfelder nur additiv einführen. |
 | Blog ↔ Must-Watch | Neue Blogreferenzen, Rücklinks und Rotlink-Heilung sind heute aktiv. Patch 2 baut sie zurück. | **Behalten** und in Controller-/Migrationstests festschreiben. |
 | Separater Merkliste-Export | Heute erreichbar; Patch 2 entfernt ihn während der Konsolidierung. | Bis zu einem mindestens gleichwertigen Must-Watch-/Übergangsexport **behalten**. |
 | Jahr, Typ, Filter und Sortierung | Patch 2 ergänzt sinnvolle Metadaten- und Ansichtsoptionen. | Additiv nach Controller-Härtung; bestehende Felder und Verweise dürfen nicht entfallen. |
-| Schlagseite entfernen | Voll aktiv in Regler, Mediathekfilter, Ranking, Finder, Anzeige, Hilfe und Tests; die Roadmap verspricht sie ausdrücklich. Der ZIP-Text lässt sie aufgrund einer älteren Absicht weg. | Standardentscheidung unter Funktionsschutz: **behalten**. Entfernung nur als eigener, ausdrücklicher Produktentscheid. |
+| Schlagseite entfernen | War in Regler, Mediathekfilter, Grundscore, Finder-Ranking, Anzeige, Hilfe und Tests aktiv. | **Owner-Entscheid 08.08.2026: vollständig entfernen.** Dreieck und seine drei Einzelwerte bleiben; entfernt werden nur Ableitung, Filter, Bonus, Finder-Signal, Anzeige und zugehörige Texte. |
 | Echte Textgröße | Die heutige Option skaliert Container über CSS-`zoom` und verändert damit Geometrie und mobil teils die Breite. Kein Umsetzungscommit vorhanden. | Sinnvoll offen, aber breitflächiger UI-Eingriff. Nach Auditblockern mit Design-Tokens, Overflow- und Großschrifttests. |
 | Visual-Viewport-Basis | Tastaturverschiebung und Zoom-Erlaubnis wurden bereits in `ff65a34`/`cd8ca10` aufgebaut. | **Vorhanden und zu erhalten.** |
 | Visual-Viewport-Härtung | `scale`, `width`, `offsetLeft` und reale Trefferlistenhöhe fehlen; Pinch-Zoom kann noch als Tastatur fehlgedeutet werden. | Nach Textgrößenarbeit, anschließend echtes iOS-/Android-Gerät. |
-| Interne Mediathek-Verweise | Kein `verweise`-Feld und kein entsprechender Commit existieren. Blog-Rotlinks liefern nur eine Grundlage. | Neuer Funktionsblock. Erst nach realer B2-Größenmessung und mit Import-, Backup-, Demo-, Privacy- und Löschtests. |
+| Interne Mediathek-Verweise | Kein `verweise`-Feld und kein entsprechender Commit existieren. Blog-Rotlinks liefern nur eine Grundlage. Die reale B2-Messung liegt mit 400 Filmen und rekonstruierter Storage-Hülle bei 212.448 von 1.048.576 Bytes. | Neuer Funktionsblock mit ausreichendem aktuellem Größenpuffer, aber weiterhin nur mit Import-, Backup-, Demo-, Privacy-, Lösch- und erneuten Größentests. |
 | Mehrfachauswahl und Titellisten | Keine Auswahl-IDs, Checkboxen oder Titellistenfunktion im Verlauf. | Read-only-Variante später separat: temporäres `Set`, Kopieren und schlankes JSON ohne private Felder. |
 | Mehrfachlöschen | Nur ein reiner Einzellöschplaner existiert. Mehrere persönliche Töpfe lassen sich heute nicht atomar gemeinsam schreiben. | Zuletzt und nur mit belastbarer Transaktions-/Kompensationsstrategie; niemals als Schleife über `deleteFilm`. |
 | Hilfe vereinheitlichen | Fix-Batch 1 korrigierte tote Zielnamen, aber HilfeSheet, Langhilfe und `appHilfe` sind weiter getrennte Wahrheiten; manche Texte erklären interne Technik statt Nutzung. | Ganz am Ende aus einer gemeinsamen Inhaltsquelle und am endgültigen Verhalten ausrichten. |
@@ -141,7 +143,7 @@ Pflicht-Regressionen für eine spätere Migration sind mindestens:
 | P0 | Interner Stapelimport | UI, Client und Edge-Task wurden in `0a8826f`, später als Textweg in `2e32e96`, gebaut. Migration `20260801194500` ist laut Supabase-Dokumenten bewusst nie remote angewandt; `current_schema.sql` enthält den Task nicht. Ohne `task_max_reservierung_usd_cent` beendet die Function den Auftrag vor dem Anbieter. Der letzte dokumentierte Function-Deploy `c91c2b0` ist älter. | **Gebaut, aber kein Betriebsbeleg.** Migration, Function-Deploy, Budgetgate und gezielte Liveprobe als ein Releasepaket; vorher UI ehrlich sperren oder kennzeichnen. |
 | P0 | Teilen & Tauschen / Paketaustausch | Paketlogik, `TeilenBlock`, Autorname, Übernahmehandler und Quellenklärung existieren. Die Oberfläche wurde in `7d94909`/`7213742` gemountet, in `76c78e3` entfernt, in `3d09e9e` teilweise zurückgebracht und in `0a8826f` erneut unmountet. | **Stärkster still verlorener Funktionskandidat.** Gemeinsam zwischen vollständiger Wiedereinbindung und sauberer Entfernung aller Ruinen entscheiden. |
 | P0/P1 | Filmscan und Bloganalyse | Roadmap und Etappe-8-Unterlagen nennen beide ausdrücklich als Beta-Gates; es gibt keinen Task, Datenfluss, Opt-in oder UI-Commit. `ETAPPE_9C_BETA` behauptet widersprüchlich, Etappe 8 sei vollständig. | Entscheiden, ob echte Beta-Gates oder Zukunftsbacklog. Vorher keine „Etappe 8 vollständig“-Aussage. |
-| P1 | Desktop-/iPad-Suche | Finder-Navigation in `f79dbc2` entfernt, Ersatzleiste per CSS nur bis 760 px sichtbar. | Kernfunktion wieder erreichbar machen: Nav-Eintrag oder sichtbare Leiste. |
+| P1 | Desktop-/iPad-Suche | Finder-Navigation war in `f79dbc2` entfernt worden, die Ersatzleiste per CSS nur bis 760 px sichtbar. | **Behoben:** eigener Desktop-/iPad-Navigationseintrag; mobile Leiste und mobiles Menü bleiben ohne Dublette. |
 | P1 | Individueller Serienradar | Browser, Tabelle, RPC und Tests sind gebaut. Laut `WOCHENPLAN_SERIEN.md` konsumiert der externe Streamingjob die synchronisierten Watchmode-IDs noch nicht; im Repo liegen nur Entwurf und Mocktests. | Externe Pipeline anschließen oder Oberfläche und Doku ehrlich auf die vorhandene Reichweite begrenzen. |
 | P1 | Praktische Etappe-9-Abnahme | App-Backup über ein zweites Gerät, Ausfalltrockenlauf, Function-Rollback, echte iOS-/Android-Installation, Testkonten, Feedbackkanal und Beta-Kohorte sind weiter offen. | Bestandteil der finalen Livephase, nicht durch Mocktests als erledigt markieren. |
 | P1 | Programmdaten-Lizenzierung | Keine Programmquelle ist als lizenziert dokumentiert; mehrere Anbieteranfragen und ein freigegebener Pilotadapter sind geplant. | Externer Blocker vor öffentlichem Start, nicht als Codeversäumnis behandeln. |
@@ -160,8 +162,7 @@ Pflicht-Regressionen für eine spätere Migration sind mindestens:
   integriert, nicht ersatzlos gelöscht.
 - „Jetzt streambar“ verschwand in `59cc2fe` beim Umbau zum Ticket-Dashboard.
 - Alte Streaming-Relevanz-/User-Scores und „Könnte dir gefallen“ wurden in
-  `66b6f42` zugunsten belegbarer Katalogdaten vereinfacht. Das betrifft nicht
-  automatisch die heute weiterhin aktive Schlagseite in Mediathek und Finder.
+  `66b6f42` zugunsten belegbarer Katalogdaten vereinfacht.
 - Das manuelle Vokabularformular wurde in `f79dbc2` durch KI-Deutung mit
   speicherbarer Offline-Regel ersetzt.
 - NERV wurde ausdrücklich durch Neon Noir ersetzt (`62af34a`).
@@ -183,20 +184,22 @@ Funktion zu verlieren.
 1. Teilen & Tauschen: **vollständig wieder erreichbar machen** oder alle
    verbliebenen Pfade bewusst entfernen?
 2. Filmscan und Bloganalyse: echte Beta-Gates oder klarer Zukunftsbacklog?
-3. Desktop-Suche: **Navigationseintrag** oder permanent sichtbare Suchleiste?
+3. Desktop-Suche: **entschieden und umgesetzt — Navigationseintrag**;
+   mobil bleibt die vorhandene globale Suchleiste.
 4. In-App-Foto: **externer Fotoweg bleibt endgültig** oder spätere Rückkehr?
 5. Serienradar: externe Pipeline jetzt anschließen oder Reichweite sichtbar
    begrenzen?
 6. Teppich/Crawl/Klaatu: überarbeiten oder verbliebene Ruinen entfernen?
 7. Streaming-Merkliste: in Must-Watch konsolidieren oder beide Funktionen
    behalten? Bei Konsolidierung sind Übergang und Export Pflicht.
-8. Must-Watch-Besitz, Beschreibung und Blogbezüge: **behalten** oder bewusst
-   vereinfachen?
-9. Schlagseite: **behalten** oder als eigener Produktpatch vollständig aus UI,
-   Ranking, Finder, Hilfe, Roadmap und Tests entfernen?
+8. Must-Watch-Besitz, Beschreibung und Blogbezüge: **entschieden — behalten**
+   und durch Controller-/Regressionstests absichern.
+9. Schlagseite: **entschieden am 08.08.2026 — vollständig entfernen**, bei
+   unverändertem Dreieck und unveränderten Einzelwerten WIE/WAS/WARUM.
 10. Filmscan-/Stapelimport-Migrationen: sofort als Betriebsrelease ausrollen
     oder UI bis zum späteren Rollout ehrlich sperren?
-11. Interne Verweise und Titellisten: nach B2 als neuer Funktionsblock oder
+11. Interne Verweise und Titellisten: B2 ist mit 20,3 % Belegung unkritisch;
+    als neuer Funktionsblock oder
     post-merge verschieben?
 12. Mehrfachlöschen: erst nach atomarem Fehlerkonzept; ist dieser Umfang den
     zusätzlichen Daten- und Bedienrisiken überhaupt wert?
@@ -204,13 +207,14 @@ Funktion zu verlieren.
 ## 5. Empfohlene Umsetzungsreihenfolge
 
 1. Audit-Wahrheitsbasis und sichere CI-Gates abschließen.
-2. Reale `kd:master`-Größe messen und B2 entscheiden.
+2. Reale `kd:master`-Größe messen und B2 entscheiden (**erledigt: 212.448 von
+   1.048.576 Bytes bei 400 Filmen; keine Grenzmigration nötig**).
 3. Bestätigte Sicherungs-/Datenfehler B5, C1, C4 und C6 beheben.
-4. Desktop-Suche und mobile Sicherung als sichtbare Produktentscheidungen
-   lösen.
-5. Den kleinen `filmreihe`-Patch kompakt portieren.
+4. Desktop-Suche lösen (**Navigationseintrag umgesetzt**); mobile Sicherung
+   bleibt als eigener sichtbarer Fix offen.
+5. Den kleinen `filmreihe`-Patch kompakt portieren (**umgesetzt**).
 6. Must-Watch-Controller und direkte Sprünge additiv portieren; Besitz,
-   Beschreibung, Blogbezüge und Exporte mit Regressionstests erhalten.
+   Beschreibung, Blogbezüge und Exporte erhalten (**umgesetzt und getestet**).
 7. Erst dann über Merkliste-Migration, Filter und Metadaten entscheiden.
 8. Stapelimport nur als gemeinsames Migration-/Function-/Budget-/Livepaket
    betriebsfähig machen.

@@ -30,10 +30,11 @@ Funktionen mindestens so stabil bleiben wie am geprüften Ausgangsstand.
   `AUTONOMIE_STOPP` oder `BUDGET_UNBEKANNT`.
 - Zugangsdaten und Anbieter-, Supabase- oder Cloudflare-Schlüssel gehören weder
   in Git noch in Berichte oder Chatprotokolle.
-- `src/App.jsx` hat am geprüften HEAD 2.197 Zeilen. Der Test verlangt streng
-  weniger als 2.200 Zeilen. Damit können nur zwei zusätzliche Zeilen sicher
-  hinzukommen; die dritte zusätzliche Zeile bricht den Test. Formatierungen in
-  den durch Quelltexttests gepinnten Bereichen bleiben tabu.
+- `src/App.jsx` hatte am geprüften HEAD 2.197 Zeilen und liegt nach den
+  Controllerarbeiten im aktuellen Arbeitsstand bei 2.184. Der Test verlangt
+  streng weniger als 2.200 Zeilen; damit bleiben weiterhin nur fünfzehn zulässige
+  Zusatzzeilen. Weitere fachliche Härtungen gehören in Controller/Libs statt
+  in den Monolithen; Formatierungen in gepinnten Bereichen bleiben tabu.
 
 ## 2. Was tatsächlich übernommen wurde
 
@@ -83,8 +84,8 @@ liegen; der Patch darf nicht erneut angewandt werden.
 
 | ID | Status am aktuellen HEAD | Konsequenz |
 |---|---|---|
-| B1 Desktop-/iPad-Suche | **Bestätigt.** Die globale Suchleiste ist nur bis 760 px sichtbar und der frühere Finder-Navigationseintrag wurde entfernt. | Vor der finalen Hilfe und Geräteabnahme zwischen sichtbarer Desktop-Leiste und Navigationseintrag entscheiden. |
-| B2 1-MiB-Mastergrenze | **Grenze bestätigt, konkrete Überschreitung ungemessen.** Im Repository liegt nur eine kleine Demo, nicht Max' reale Masterliste. | Keine Migration auf Basis einer Schätzung. Echten Export als UTF-8-Bytes messen; erst dann Grenze und Warnschwelle festlegen. |
+| B1 Desktop-/iPad-Suche | **Behoben im aktuellen Arbeitsstand.** Ein eigener Desktop-/iPad-Navigationseintrag öffnet die Suche; mobil bleibt die globale Leiste erhalten und das Popup enthält keine Dublette. | Vollständige Mock-/Mobile-Gates und Staging-Geräteprüfung ausführen. |
+| B2 1-MiB-Mastergrenze | **Gemessen und aktuell nicht erreicht.** Das jüngste reale Gesamt-Backup vom 07.08.2026 enthält 400 Filme. Seine kompakte `masterliste` belegt 212.343 UTF-8-Bytes; mit der beim Restore ergänzten Storage-Hülle und realistischen 13-stelligen Zeitwerten sind es 212.448 Bytes. Das sind 20,3 % der serverseitigen Grenze von 1.048.576 Bytes; 836.128 Bytes bleiben frei. Alle 400 Einträge besitzen bereits eine ID. | Kein Anlass für eine Grenz- oder Schemamigration in diesem Audit. Größe bei neuen umfangreichen Feldern erneut messen und eine Warnschwelle deutlich unter 1 MiB vorsehen. |
 | B3 Filmwissen-Aufträge bleiben dauerhaft `laufend` | **Widerlegt.** Migration `20260730140000_etappe8_filmwissen_adapter_sperren.sql` und `current_schema.sql` enthalten `kd_filmwissen_verwaiste_schliessen()`. Der Produktionspfad ruft die Bereinigung mit einem Altersfenster vor der Synthese auf. | Keine weitere „Reaper“-Migration bauen. Falschen Altbefund aus Abschlussdokumenten entfernen. |
 | B4 mobile Backupwarnung | **Im Kern bestätigt, präzisiert.** Backup-Flächen und die proaktive Warnung sind mobil ausgeblendet; ein Mobilnutzer erhält keinen direkt ausführbaren Sicherungsweg, obwohl Hilfe und Settings Sicherungen erwähnen. | Mobile, ausführbare Backupfläche oder ehrliche, direkt führende Warnung gestalten. |
 | B5 Offline-Einzeldatei | **Bestätigt.** Der Download lädt die Demo-Masterliste dynamisch aus `Programmdateien/System/demo_masterliste.js`, liefert diese Datei aber nicht mit. Der eingebaute Programmsnapshot ist abgelaufen; zugleich nennt die Oberfläche ein davon abweichendes hartkodiertes Datum. | Paket vollständig einbetten oder Offline-Versprechen und Status ehrlich begrenzen; danach echten `file://`-Test fahren. |
@@ -131,14 +132,27 @@ Ideen steht in
 
 | Phase | Inhalt | Stand / Abschlusskriterium |
 |---|---|---|
-| P0 — Wahrheitsbasis | Git-Stand, Rohübergabe und ZIP inventarisieren; sämtliche Befunde unabhängig prüfen; reale Mastergröße messen. | Inventar und Codeprüfung erledigt. Reale Mastergröße offen, weil die private Echtdatei nicht im Repository liegt. |
-| P1 — sichere Gates | Alle drei lokalen Tests als Pflichtgates führen; CI-Suiten parallelisieren, Required-Check `test` stabil halten und Cloudflare-Deploypfade unverändert lassen. | Lokal implementiert und statisch validiert; vollständiger Testlauf und echter Actions-Zeitvergleich noch offen. |
+| P0 — Wahrheitsbasis | Git-Stand, Rohübergabe und ZIP inventarisieren; sämtliche Befunde unabhängig prüfen; reale Mastergröße messen. | Erledigt. Das reale Backup mit 400 Filmen liegt einschließlich rekonstruierter Storage-Hülle bei 212.448 von 1.048.576 Bytes. |
+| P1 — sichere Gates | Alle drei lokalen Tests als Pflichtgates führen; CI-Suiten parallelisieren, Required-Check `test` stabil halten und Cloudflare-Deploypfade unverändert lassen. | Lokal vollständig grün: `npm test`, `npm run test:function` und die 94 Fälle der Mobile-Matrix in Chromium und WebKit. Nur der echte Actions-Zeitvergleich bleibt offen. |
 | P2 — Fix-Batch 2 | Erst Daten-/Sicherungsfehler, dann Erreichbarkeit und Bedienung: B5, B1/B4, C1/C4/C6, danach übrige bestätigte C- und D-Befunde. | Noch nicht begonnen. Jeder Produktentscheid bleibt eigener Block. |
-| P3 — ZIP-Härtungen | Sichere Teile der Anschlussplanung portieren: keine neuen `filmreihe`-Werte, Must-Watch-Schreibvorgänge serialisieren, bestehende Sprungziele additiv klickbar machen. | Vorbereitet, aber bewusst noch nicht ins Repository übernommen. Muss Besitz, Beschreibung, Blogbezüge und Exporte erhalten. |
-| P4 — Produktentscheidungen | Merkliste/Must-Watch, Desktop-Suche, Teilen & Tauschen, Filmscan/Bloganalyse, Serienpipeline, Fotoablauf, Easter Eggs und weitere ZIP-Ideen entscheiden. | Entscheidungsliste vollständig erhoben; Umsetzung offen. |
+| P3 — ZIP-Härtungen | Sichere Teile der Anschlussplanung portieren: keine neuen `filmreihe`-Werte, Must-Watch-Schreibvorgänge serialisieren, bestehende Sprungziele additiv klickbar machen. | **Implementiert und lokal vollständig grün.** Besitz, Beschreibung, Notiz, Blogbezüge, Rotlink-Heilung und Exporte bleiben erhalten; keine automatische Merkliste-Migration. Staging und der unten getrennt ausgewiesene Mehrtopf-Altfehler bleiben offen. |
+| P4 — Produktentscheidungen | Merkliste/Must-Watch, Desktop-Suche, Teilen & Tauschen, Filmscan/Bloganalyse, Serienpipeline, Fotoablauf, Easter Eggs und weitere ZIP-Ideen entscheiden. | Register vollständig. Desktop-Suche = Navigation, Must-Watch-Bestandsfelder = behalten, Schlagseite = entfernen sind entschieden und umgesetzt; übrige Entscheidungen offen. |
 | P5 — Live-Abnahme | Staging-Build-SHA, Konto-/Gast-Journey, Sync, echte Katalogwege, Backup/Restore, iPhone-Gegencheck und Ausfall-/Rollbackproben. | Offen. Keine Live-Behauptung wird aus Mocktests abgeleitet. |
 | P6 — KI-Proben | Nur regelkonforme, budgetbewachte Anbieterproben für tatsächlich erlaubte Entry-Points. | Offen. Die aktuelle Sammelsuite deckt nicht alle im alten Plan genannten Tasks gezielt ab; vor dem Lauf Entry-Points klären. |
 | P7 — Dokumentation und Merge | `FUNKTIONSBERICHT`, Roadmap, Betriebs-/Beta-Checklisten und Befundregister an den echten Endstand angleichen; Restrisiken und Merge-Empfehlung. | Offen. Merge ausschließlich durch Max beziehungsweise nach seiner Freigabe. |
+
+Verbleibender Mehrtopf-Blocker in P3: Wird ein Must-Watch-Eintrag gelöscht,
+bleibt eine darauf zeigende Blog-`ref` derzeit als nicht mehr auflösbarer,
+aber weiterhin wahrer Schlüssel gespeichert. Dadurch erkennen
+`offeneReferenzen` und `heileRotlinks` sie nicht als offenen Rotlink. Ein
+sachlich gleicher Altpfad besteht beim vollständigen Master-Import und beim
+Startmoduswechsel: Entfernte Master-IDs können in Blog und Must-Watch als
+truthy, aber tote Ziele zurückbleiben. Ein
+sicherer Fix muss den Artikel-Topf zuerst awaitbar und serialisiert schreiben
+und bei Fehlern gemeinsam mit dem bereits serialisierten Must-Watch-Topf
+zurücksichern. Der heutige Artikelpfad schreibt optimistisch und
+fire-and-forget; ein Lösch-Callback dort könnte einen parallelen Blog-Edit
+überschreiben und wird deshalb nicht als vermeintliche Transaktion eingebaut.
 
 Die Reihenfolge ist absichtlich datenorientiert: neue Verweisfelder oder
 Mehrfachlisten vergrößern `kd:master` und dürfen deshalb nicht vor der realen
@@ -156,7 +170,8 @@ Der Vor-Merge-Audit ist erst abgeschlossen, wenn:
    geprüft wurden;
 3. ein echter Actions-Lauf den stabilen Required-Check und die Zeitwirkung der
    neuen Aufteilung belegt;
-4. die reale Masterliste bytegenau gegen das Serverlimit geprüft wurde;
+4. die reale Masterliste bytegenau gegen das Serverlimit geprüft wurde
+   (**erledigt: 212.448 / 1.048.576 Bytes**);
 5. Staging exakt den geprüften Commit ausliefert und die Konto-/Gast-/Sync-
    Journey protokolliert ist;
 6. Backup, Restore, Ausfall und Function-Rollback praktisch geprüft sind;

@@ -47,6 +47,7 @@ import {
   programmSnapshot,
 } from "./controllers/catalogController.js";
 import { useIntelligenceController } from "./controllers/useIntelligenceController.js";
+import { useMustwatchController } from "./controllers/useMustwatchController.js";
 import {
   schreibeImportSnapshot,
   gueltigerArtikel,
@@ -55,13 +56,14 @@ import {
   reicheFinderMasterAn,
   sichtbarerNachtrag,
   planeFilmLoeschung,
+  planeMustwatchSprung,
 } from "./controllers/libraryController.js";
 import { useEggController } from "./controllers/useEggController.js";
 import { deepSpaceOwnerKey, useDeepSpaceHorror } from "./controllers/useDeepSpaceHorror.js";
 import { ensureIds, slugId } from "./lib/match.js";
 import { parseNonstopHtml, grenzeInMinuten, hatVorstellungAb, normalisiereProgramm } from "./lib/programm.js";
 import { Logo } from "./components/ui.jsx";
-import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel } from "./lib/artikel.js";
+import { neueArtikelId, gleicheArtikelAb, uebernehmeRefs, heileRotlinks, blogZuArtikel, normalisiereArtikelTypen } from "./lib/artikel.js";
 import {
   SHARED_PUBLICATION_ACTION,
   beginPublication,
@@ -73,7 +75,7 @@ import {
   publicationRetryAction,
   publicationState,
 } from "./lib/sharedPublication.js";
-import { neueMustwatchId, parseMustwatch, migriereFlags, offeneFlagAnzahl, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
+import { parseMustwatch, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
 import { setzeEigeneStimmungen } from "./lib/finder.js";
 import { vokabularZuMap } from "./lib/vokabular.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "./lib/dienste.js";
@@ -401,10 +403,10 @@ export default function App() {
   const [startModalOffen, setStartModalOffen] = useState(false);
 
   /* ---- Master persistieren ---- */
-  const persistMaster = useCallback(async (filme, meta, herkunft) => {
+  const persistMaster = useCallback(async (filme, meta, herkunft, speicher = store) => {
     try {
       const h = herkunft || { typ: "storage", zeit: Date.now() };
-      await store.set(K.master, JSON.stringify({ meta, filme, herkunft: h, gespeichertAm: Date.now() }));
+      await speicher.set(K.master, JSON.stringify({ meta, filme, herkunft: h, gespeichertAm: Date.now() }));
       return true;
     } catch {
       setErr("Speichern der Masterliste fehlgeschlagen.");
@@ -572,7 +574,7 @@ export default function App() {
                 seed.streamingQuellen = [...d.streaming.quellen];
               }
               if (d.artikel) {
-                const al = Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || [];
+                const al = normalisiereArtikelTypen(Array.isArray(d.artikel) ? d.artikel : d.artikel.artikel || []);
                 artikelListeRef.current = al;
                 setArtikelListe(al);
                 localStorage.setItem(K.artikel, JSON.stringify({ artikel: al, gespeichertAm: Date.now() }));
@@ -584,7 +586,7 @@ export default function App() {
               }
               if (d.mustwatch) {
                 const mw = parseMustwatch(JSON.stringify(d.mustwatch));
-                setMustwatch(mw); localStorage.setItem(K.mustwatch, JSON.stringify({ eintraege: mw, gespeichertAm: Date.now() }));
+                localStorage.setItem(K.mustwatch, JSON.stringify({ eintraege: mw, gespeichertAm: Date.now() })); setMustwatch(mw);
                 seed.mustwatchIds = mw.map((e) => e.id);
               }
               if (Array.isArray(d.merkliste)) {
@@ -659,7 +661,7 @@ export default function App() {
           if (e.modus === "nerv") e.modus = "neon-noir";        // veröffentlichbarer Ersatz bewahrt die dunkle Egg-Wahl
           setEinstellungenState(e);
           setzeTheme(e.modus || e.theme);                        // Spezialmodus überschreibt die Basis-Palette
-          if (e.startTab && e.startTab !== "start" && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab); // Restwerte (z.B. "finder") nicht in navigationslose Tabs booten
+          if (e.startTab && e.startTab !== "start" && NAVIGATION.some((n) => n.id === e.startTab)) setTab(e.startTab); // Nur weiterhin angebotene Navigationsziele als Startbereich übernehmen
           if (hatteVeralteteEinstellung) await store.set(K.einstellungen, JSON.stringify(e));
         }
       } catch { /* Defaults */ }
@@ -823,27 +825,17 @@ export default function App() {
       : { typ: (masterHerkunft && masterHerkunft.typ) || "storage", zeit: Date.now(), basis: masterHerkunft && masterHerkunft.basis }
   ), [masterHerkunft]);
 
-  /* ================= MUST-WATCH-LISTE (eigener Topf, 10. Sync-Datei) =================
-     Ersetzt das must_watch-Flag (Entscheidung 18.07.2026): die Liste ist die
-     einzige Wahrheit; das Flag-Feld bleibt in den Daten (Kompatibilität), wird
-     aber im UI nirgends mehr angeboten. Ablageform: {eintraege, gespeichertAm}. */
-  const [mustwatch, setMustwatch] = useState([]);
-  useEffect(() => {
-    store.get(K.mustwatch).then((r) => { if (r && r.value) setMustwatch(parseMustwatch(r.value)); }).catch(() => {});
-  }, []);
-  const persistMustwatch = useCallback((liste) => {
-    store.set(K.mustwatch, JSON.stringify({ eintraege: liste, gespeichertAm: Date.now() })).catch(() => setErr("Must-Watch-Speichern fehlgeschlagen."));
-  }, []);
+  /* ================= MUST-WATCH-LISTE (eigener Topf, 10. Sync-Datei) ================= */
+  const {
+    mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch,
+    transaktionMustwatch,
+    addMustwatch: persistiereNeuesMustwatch, updateMustwatch, deleteMustwatch,
+    mustwatchMasterIds, offeneFlags, migriereMustwatch, migrationsBericht,
+  } = useMustwatchController({ master, masterRef, setErr });
 
   /* Blog-Referenz-Universum = Master ∪ Must-Watch. */
   const mitMustwatch = baueRefUniversum;
   const refUniversum = useMemo(() => mitMustwatch(master, mustwatch), [master, mustwatch, mitMustwatch]);
-  /* Master-IDs, die auf der Must-Watch-Liste stehen (FinderTab-Chip + Streaming-Filter
-     lesen die LISTE, nicht mehr das Flag). */
-  const mustwatchMasterIds = useMemo(() => new Set(
-    mustwatch.filter((e) => e.verknuepfung && e.verknuepfung.ziel === "master").map((e) => e.verknuepfung.id)
-  ), [mustwatch]);
-
   /* ================= BLOG: Artikel-Status & CRUD =================
      Artikel leben im Browser-Storage (kd:artikel) + Export im Einstellungen-Tab.
      "Erstellen" speichert sofort mit status "wartet" — nichts geht verloren. */
@@ -854,7 +846,7 @@ export default function App() {
         try {
           const p = JSON.parse(r.value);
           const geladen = Array.isArray(p) ? p : p.artikel || [];
-          const artikel = geladen.map((a) => recoverInterruptedPublication(a));
+          const artikel = normalisiereArtikelTypen(geladen.map((a) => recoverInterruptedPublication(a)));
           artikelListeRef.current = artikel;
           setArtikelListe(artikel);
           if (p.gespeichertAm) setArtikelGespeichertAm(p.gespeichertAm);
@@ -877,7 +869,7 @@ export default function App() {
   artikelListeRef.current = artikelListe;
   const schreibeArtikel = useCallback((berechne) => {
     const vorher = artikelListeRef.current;
-    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+    const next = normalisiereArtikelTypen(typeof berechne === "function" ? berechne(vorher) : berechne);
     if (next === vorher) return vorher;
     artikelListeRef.current = next;
     setArtikelListe(next);
@@ -910,49 +902,14 @@ export default function App() {
   }, [refUniversum, schreibeArtikel]);
 
   /* ---- Must-Watch CRUD (Liste ist die einzige Wahrheit) ---- */
-  const addMustwatch = useCallback((daten) => {
-    const eintrag = {
-      id: neueMustwatchId(daten.titel, mustwatch),
-      titel: daten.titel,
-      im_besitz: !!daten.im_besitz,
-      beschreibung: daten.beschreibung || "",
-      notiz: daten.notiz || "",
-      verknuepfung: daten.verknuepfung || null,
-      erstellt_am: new Date().toISOString(),
-    };
-    const next = [...mustwatch, eintrag];
-    setMustwatch(next);
-    void persistMustwatch(next);
-    // Rotlink-Heilung: ein neuer Must-Watch-Eintrag kann offene Blog-Refs
-    // schließen — nur eindeutige Exakt-Treffer, nichts wird geraten.
+  const addMustwatch = useCallback((daten) => persistiereNeuesMustwatch(daten, (next) => {
+    /* Erst nach bestätigtem lokalem Speichern darf der neue Eintrag Blog-
+       Rotlinks heilen; bei einem Rollback bliebe sonst eine Phantom-Referenz. */
     schreibeArtikel((alist) => {
       const [geheilt, n] = heileRotlinks(alist, mitMustwatch(master, next));
       return n > 0 ? geheilt : alist;
     });
-  }, [mustwatch, persistMustwatch, master, mitMustwatch, schreibeArtikel]);
-  const updateMustwatch = useCallback((id, changes) => {
-    const next = mustwatch.map((e) => (e.id === id ? { ...e, ...changes } : e));
-    setMustwatch(next);
-    void persistMustwatch(next);
-  }, [mustwatch, persistMustwatch]);
-  const deleteMustwatch = useCallback((id) => {
-    const next = mustwatch.filter((e) => e.id !== id);
-    setMustwatch(next);
-    void persistMustwatch(next);
-  }, [mustwatch, persistMustwatch]);
-
-  /* ---- Migration must_watch-Flag -> Liste (einmalig, idempotent, mit Bericht) ---- */
-  const [migrationsBericht, setMigrationsBericht] = useState(null);
-  const offeneFlags = useMemo(() => offeneFlagAnzahl(master, mustwatch), [master, mustwatch]);
-  const migriereMustwatch = useCallback(() => {
-    const { neue, uebersprungen } = migriereFlags(master || [], mustwatch, new Date().toISOString());
-    if (neue.length) {
-      const next = [...mustwatch, ...neue];
-      setMustwatch(next);
-      persistMustwatch(next);
-    }
-    setMigrationsBericht({ angelegt: neue.length, uebersprungen });
-  }, [master, mustwatch, persistMustwatch]);
+  }), [master, mitMustwatch, persistiereNeuesMustwatch, schreibeArtikel]);
 
   /* ---- Besitz-Nachtrag-Import (deterministisch, idempotent; NUR über die
      App-eigenen Pfade ensureIds + persistMaster — nie roh) ---- */
@@ -1198,10 +1155,18 @@ export default function App() {
     if (streamingSprungLaufRef.current !== lauf) return;
     setStreamingFokus({ ...fokus, auftrag: lauf });
   }, []);
+  const springeZuMustwatchRef = useCallback((verknuepfung, eintrag) => {
+    const plan = planeMustwatchSprung(verknuepfung, eintrag, master);
+    if (plan?.bereich === "mediathek") return springeZuFilm(plan.fokus);
+    if (plan?.bereich === "kino") {
+      setZeigeAlles(plan.zeigeAlles); setKinoFokus(plan.fokus);
+      navigiere("kino");
+    } else if (plan?.bereich === "streaming") void springeZuStreaming(plan.fokus);
+  }, [master, navigiere, springeZuFilm, springeZuStreaming]);
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
   const updateFilm = useCallback((id, changes) => {
-    const next = (master || []).map((f) => (f.id === id ? { ...f, ...changes } : f));
+    const next = ensureIds((master || []).map((f) => (f.id === id ? { ...f, ...changes } : f)));
     const h = naechsteHerkunft();
     setMasterHerkunft(h);
     setMaster(next);
@@ -1209,34 +1174,42 @@ export default function App() {
   }, [master, persistMaster, masterMeta, naechsteHerkunft]);
 
   const deleteFilm = useCallback(async (id) => {
-    const aktuell = masterRef.current || [];
-    const film = aktuell.find((eintrag) => eintrag.id === id);
-    if (!film) return false;
-    const plan = planeFilmLoeschung(aktuell, artikelListeRef.current, mustwatch, id);
-    const teile = [];
-    if (plan.folgen.artikelRefs) teile.push(`${plan.folgen.artikelRefs} Blog-Verweis${plan.folgen.artikelRefs === 1 ? " wird" : "e werden"} wieder zum Rotlink`);
-    if (plan.folgen.mustwatchRefs) teile.push(`${plan.folgen.mustwatchRefs} Must-Watch-Verknüpfung${plan.folgen.mustwatchRefs === 1 ? " wird" : "en werden"} gelöst`);
-    const folgeText = teile.length ? `\n\n${teile.join("; ")}.` : "";
-    if (!window.confirm(`„${film.titel}“ wirklich aus der Mediathek löschen?${folgeText}`)) return false;
-
-    const herkunft = naechsteHerkunft();
-    /* Laufende KI-Antworten sehen den Film ab jetzt nicht mehr und können ihn
-       nicht nach der Bestätigung wieder in die Liste schreiben. */
-    masterRef.current = plan.master;
-    if (!await persistMaster(plan.master, masterMeta, herkunft)) {
-      masterRef.current = aktuell;
+    if (!mustwatchGeladen) {
+      setErr("Eintrag kann erst gelöscht werden, wenn Must-Watch sicher geladen ist. Es wurde nichts verändert.");
       return false;
     }
+    let aktuell = null, plan = null, herkunft = null, abgebrochen = false;
+    const ok = await transaktionMustwatch((aktuellesMustwatch) => {
+      aktuell = masterRef.current || [];
+      const film = aktuell.find((eintrag) => eintrag.id === id);
+      if (!film) { abgebrochen = true; return aktuellesMustwatch; }
+      plan = planeFilmLoeschung(aktuell, artikelListeRef.current, aktuellesMustwatch, id);
+      const teile = [];
+      if (plan.folgen.artikelRefs) teile.push(`${plan.folgen.artikelRefs} Blog-Verweis${plan.folgen.artikelRefs === 1 ? " wird" : "e werden"} wieder zum Rotlink`);
+      if (plan.folgen.mustwatchRefs) teile.push(`${plan.folgen.mustwatchRefs} Must-Watch-Verknüpfung${plan.folgen.mustwatchRefs === 1 ? " wird" : "en werden"} gelöst`);
+      const folgeText = teile.length ? `\n\n${teile.join("; ")}.` : "";
+      if (!window.confirm(`„${film.titel}“ wirklich aus der Mediathek löschen?${folgeText}`)) {
+        abgebrochen = true;
+        return aktuellesMustwatch;
+      }
+      return plan.mustwatch;
+    }, async ({ storageContext }) => {
+      if (abgebrochen || !plan) return false;
+      herkunft = naechsteHerkunft();
+      /* Die MW-Barriere bleibt bis zum bestätigten lokalen Master-Write zu.
+         So kann kein wartender MW-Auftrag den gelöschten Link zurückbringen. */
+      masterRef.current = plan.master;
+      if (await persistMaster(plan.master, masterMeta, herkunft, storageContext)) return true;
+      masterRef.current = aktuell;
+      return false;
+    });
+    if (!ok || abgebrochen || !plan) return false;
     setMasterHerkunft(herkunft);
     setMaster(plan.master);
     if (plan.folgen.artikelRefs) schreibeArtikel(plan.artikel);
-    if (plan.folgen.mustwatchRefs) {
-      setMustwatch(plan.mustwatch);
-      persistMustwatch(plan.mustwatch);
-    }
     setExpandedId(null);
     return true;
-  }, [masterMeta, mustwatch, naechsteHerkunft, persistMaster, persistMustwatch, schreibeArtikel]);
+  }, [masterMeta, mustwatchGeladen, naechsteHerkunft, persistMaster, schreibeArtikel, transaktionMustwatch]);
 
   const uebernehmeQuellenKlaerung = useCallback((map) => {
     const next = (master || []).map((f) => (
@@ -1260,7 +1233,7 @@ export default function App() {
       setErr("Eintrag existiert bereits: " + film.titel + (film.jahr ? " (" + film.jahr + ")" : ""));
       return null;
     }
-    const next = [...(master || []), { id, ...film }];
+    const next = [...(master || []), ensureIds([{ ...film, id }])[0]];
     const h = naechsteHerkunft();
     setMasterHerkunft(h);
     setMaster(next);
@@ -1281,7 +1254,7 @@ export default function App() {
       const id = film.id || slugId(film.titel, film.jahr);
       if (!id || ids.has(id)) continue;
       ids.add(id);
-      neue.push({ id, ...film });
+      neue.push(ensureIds([{ ...film, id }])[0]);
     }
     if (!neue.length) return [];
     const next = [...aktuell, ...neue];
@@ -1416,6 +1389,10 @@ export default function App() {
       setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
       return;
     }
+    if (!mustwatchGeladen) {
+      setErr("Demo-Daten können erst entfernt werden, wenn Must-Watch sicher geladen ist. Es wurde nichts verändert.");
+      return;
+    }
     let seed = {};
     try { seed = JSON.parse(localStorage.getItem(K.demoSeed) || "{}"); } catch { /* */ }
     /* Kompatibilität mit einem kurz ausgelieferten Seed-Format, das diese drei
@@ -1446,20 +1423,30 @@ export default function App() {
       }
     }
     const masterIds = new Set(seed.masterIds || []);
-    const nextMaster = (master || []).filter((f) => !masterIds.has(f.id));
-    if (nextMaster.length) {
-      const h = { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" };
-      setMaster(nextMaster); setMasterHerkunft(h); await persistMaster(nextMaster, masterMeta, h);
-    } else {
-      try { await store.delete(K.master); } catch { /* */ }
-      setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
-    }
+    const mwIds = new Set(seed.mustwatchIds || []);
+    let demoMasterVorher = null, nextMaster = null, masterHerkunftNeu = null;
+    const grunddatenOk = await transaktionMustwatch(
+      (aktuellesMustwatch) => aktuellesMustwatch.filter((e) => !mwIds.has(e.id)),
+      async ({ storageContext }) => {
+        demoMasterVorher = masterRef.current || [];
+        nextMaster = demoMasterVorher.filter((f) => !masterIds.has(f.id));
+        masterRef.current = nextMaster;
+        if (nextMaster.length) {
+          masterHerkunftNeu = { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" };
+          if (await persistMaster(nextMaster, masterMeta, masterHerkunftNeu, storageContext)) return true;
+        } else {
+          try { await storageContext.delete(K.master); return true; }
+          catch { setErr("Demo-Masterliste konnte nicht entfernt werden. Es wurde nichts weiter verändert."); }
+        }
+        masterRef.current = demoMasterVorher;
+        return false;
+      },
+    );
+    if (!grunddatenOk) return;
+    if (nextMaster.length) { setMaster(nextMaster); setMasterHerkunft(masterHerkunftNeu); }
+    else { setMaster(null); setMasterMeta(null); setMasterHerkunft(null); }
     const artIds = new Set(seed.artikelIds || []);
     schreibeArtikel((prev) => prev.filter((a) => !artIds.has(a.id)));
-    const mwIds = new Set(seed.mustwatchIds || []);
-    const nextMustwatch = mustwatch.filter((e) => !mwIds.has(e.id));
-    setMustwatch(nextMustwatch);
-    persistMustwatch(nextMustwatch);
     if (Array.isArray(seed.pinKeys)) {
       const demoPins = new Set(seed.pinKeys.map(String));
       const nextPins = kinoPins.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
@@ -1486,8 +1473,8 @@ export default function App() {
     } catch { /* */ }
     setErr(""); setStartTick((t) => t + 1);
   }, [
-    session.mode, master, masterMeta, artikelListe, mustwatch, kinoPins, merkliste, auswahl,
-    persistMaster, persistMustwatch, persistPins, persistMerk, schreibeArtikel,
+    session.mode, masterMeta, artikelListe, mustwatchGeladen, kinoPins, merkliste, auswahl,
+    persistMaster, persistPins, persistMerk, schreibeArtikel, transaktionMustwatch,
   ]);
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
@@ -2061,7 +2048,7 @@ export default function App() {
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
-            mwKandidaten={mwKandidaten}
+            mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef}
           />
         )}
 

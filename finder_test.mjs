@@ -49,7 +49,7 @@
 import fs from "node:fs";
 
 const F = await import("./src/lib/finder.js");
-const { score, schlagseite, norm } = await import("./src/lib/match.js");
+const { score, norm } = await import("./src/lib/match.js");
 const { BEWERTUNGSKATEGORIE_IDS } = await import("./src/lib/kategorien.js");
 const VOK = JSON.parse(fs.readFileSync(new URL("./src/data/finder_vokabular.json", import.meta.url), "utf8"));
 
@@ -96,15 +96,15 @@ const relFallend = (treffer) => treffer.every((t, i) => i === 0 || treffer[i - 1
    Titel enthalten bewusst KEINES der Abfragewörter der Tests — sonst würde
    die Titel-Erkennung (umgeht alle Filter) die Filtertests verfälschen.
    bewertung: { wie, was, warum } 0-5 (Form aus src/data/masterliste.json,
-   ausgewertet von match.js score()/schlagseite()).
+   ausgewertet von match.js score()).
   ========================================================================= */
 const MASTER = [
   { id: "nacht_der_glut_1984", titel: "Nacht der Glut", originaltitel: "Night of Embers", jahr: 1984, typ: "film",
     quelle: "dvd", kategorie: "kult", genre: ["horror"], tags: ["duester", "boese", "kult"],
-    bewertung: { wie: 4, was: 2, warum: 4 }, reihe: ["Glutnacht Zyklus"], regie: ["Orla Vendt"] },            // score 12.5, schlagseite wie
+    bewertung: { wie: 4, was: 2, warum: 4 }, reihe: ["Glutnacht Zyklus"], regie: ["Orla Vendt"] },            // score 11
   { id: "stiller_hafen_1972", titel: "Stiller Hafen", originaltitel: "Quiet Harbour", jahr: 1972, typ: "film",
     quelle: "dvd", kategorie: "kult_klassiker", genre: ["drama"], tags: ["melancholisch", "klassiker"],
-    bewertung: { wie: 3, was: 5, warum: 2 } },                                                                // score 12.5, schlagseite was
+    bewertung: { wie: 3, was: 5, warum: 2 } },                                                                // score 11
   { id: "zwei_linke_pfoten_2015", titel: "Zwei linke Pfoten", originaltitel: "Two Left Paws", jahr: 2015, typ: "film",
     quelle: "netflix", kategorie: "immer_gut", genre: ["komödie"], tags: ["feelgood"],
     bewertung: { wie: 2, was: 3, warum: 2 } },                                                                // score 9
@@ -113,10 +113,10 @@ const MASTER = [
     bewertung: { wie: 3, was: 3, warum: 3 } },                                                                // score 9
   { id: "gebrochene_bahn_1994", titel: "Gebrochene Bahn", originaltitel: "Broken Track", jahr: 1994, typ: "film",
     quelle: "prime", kategorie: "echter_schrott", genre: ["thriller"], tags: ["spannung"],
-    bewertung: { wie: 2, was: 4, warum: 2 } },                                                                // score 9.5
+    bewertung: { wie: 2, was: 4, warum: 2 } },                                                                // score 8
   { id: "sternenpfad_2019", titel: "Sternenpfad", originaltitel: "Starpath", jahr: 2019, typ: "film",
     quelle: "kino", kategorie: "daemlich_aber_herrlich", genre: ["sci-fi"], tags: ["weltenbau"],
-    bewertung: { wie: 5, was: 3, warum: 3 }, franchise: ["Kosmoswacht Saga"] },                               // score 12.5, schlagseite wie
+    bewertung: { wie: 5, was: 3, warum: 3 }, franchise: ["Kosmoswacht Saga"] },                               // score 11
   { id: "lange_funke_2021", titel: "Der lange Funke", originaltitel: "The Long Spark", jahr: 2021, typ: "film",
     quelle: "disney", kategorie: "sehenswert", genre: ["sci-fi"], tags: [],
     bewertung: { wie: 3, was: 3, warum: 4 }, franchise: ["Kosmoswacht Saga"] },                               // score 10
@@ -197,10 +197,10 @@ console.log("\n--- TEIL A: Ist-Verhalten gepinnt ---");
    nachgetragen (vorher hat der Check die Erweiterung korrekt angezeigt). */
 checkA("parseAnfrage liefert das vollständige Signal-Gerüst mit den bekannten Feldern", () => {
   const s = P("");
-  return gleichMenge(Object.keys(s), ["genres", "achsen", "kategorien", "dekaden", "quellen", "zeit",
+  return gleichMenge(Object.keys(s), ["genres", "kategorien", "dekaden", "quellen", "zeit",
     "stimmungen", "reihen", "jahrMin", "jahrMax", "entdecken", "frage", "titel", "nichtZugeordnet",
     "genresAusschluss", "dekadenAusschluss", "kategorienAusschluss", "stimmungenAbschlag",
-    "achsenAbschlag", "jahrExplizitMin", "jahrExplizitMax", "jahrUnterdrueckt", "negiertIgnoriert"]);
+    "jahrExplizitMin", "jahrExplizitMax", "jahrUnterdrueckt", "negiertIgnoriert"]);
 });
 checkA("parseAnfrage trägt den Originaltext unverändert in sig.frage", () => P("Was läuft HEUTE?").frage === "Was läuft HEUTE?");
 checkA("Genres kommen dynamisch aus der Masterliste (normalisiert)", () => gleich(P("Horror").genres, ["horror"]));
@@ -219,15 +219,11 @@ checkA("genreKey() zieht Trennzeichen und oe/ue/ae ein — 'lustig' findet die '
   F.genreKey("komödie") === F.genreKey("komoedie") && F.genreKey("sci-fi") === F.genreKey("sci fi")
   && F.genreKey("film-noir") === F.genreKey("film noir")
   && gleichMenge(ids(F.sucheFinder(P("lustig"), KTX)), ["zwei_linke_pfoten_2015"]));
-checkA("Achse 'wie' über Vokabular-Wort 'stylisch'", () => gleich(P("stylisch").achsen, ["wie"]));
-checkA("Achse 'was' über 'tiefgang', Achse 'warum' über 'ikonisch'", () =>
-  gleich(P("tiefgang").achsen, ["was"]) && gleich(P("ikonisch").achsen, ["warum"]));
-/* Ein Wort kann weiterhin zwei Signale setzen — seit v3 nur andere: "klassiker"
-   ist keine Kategorie mehr (die gibt es in den echten Daten nicht), sondern ein
-   TAG, und damit eine Stimmung. Die Achse bleibt. */
-checkA("Ein Wort kann zwei Signale setzen: 'klassiker' -> Achse warum + Stimmung klassiker", () => {
+/* "klassiker" ist keine Kategorie mehr (die gibt es in den echten Daten nicht),
+   sondern ein TAG und damit eine Stimmung. */
+checkA("'klassiker' wird als Stimmung, nicht als Kategorie erkannt", () => {
   const s = P("klassiker");
-  return gleich(s.achsen, ["warum"]) && gleich(s.stimmungen, ["klassiker"]) && gleich(s.kategorien, []);
+  return gleich(s.stimmungen, ["klassiker"]) && gleich(s.kategorien, []);
 });
 /* "kult" und "trash" sind sowohl persönliche Kategorien als auch Stimmungen.
    Beide Signale müssen sichtbar bleiben und denselben Film erreichen. */
@@ -353,12 +349,6 @@ checkA("WEICH: Stimmung greift über Genres UND Tags der Masterliste", () => {
   const ueberGenre = r.find((t) => t.film.id === "billiger_schund_1988");  // genre: Horror
   return ueberTag.rel === 2 && ueberGenre.rel === 2 && gleichMenge(ids(r), ALLE_IDS);
 });
-checkA("WEICH: Achse boostet nur die passende Schlagseite (+2.5), schließt aber nichts aus", () => {
-  const r = F.sucheFinder(P("stylisch"), KTX);
-  const mitWie = r.filter((t) => t.rel === 2.5).map((t) => t.film.id);
-  return gleichMenge(ids(r), ALLE_IDS) && gleichMenge(mitWie, ["nacht_der_glut_1984", "sternenpfad_2019"])
-    && r[0].gruende.includes("schlagseite:WIE");
-});
 checkA("Titeltreffer umgeht ALLE harten Filter und bekommt +100", () => {
   const r = F.sucheFinder(P("Sternenpfad aus den 80ern"), KTX);
   const t = r.find((x) => x.film.id === "sternenpfad_2019");
@@ -373,7 +363,7 @@ checkA("Titeltreffer umgeht auch den Quellen-Filter", () => {
 checkA("Sortierung: rel (Query-Relevanz) vor wert (Dreieck-Score)", () => {
   const r = F.sucheFinder(P("verstörend"), KTX);
   const iBillig = ids(r).indexOf("billiger_schund_1988");   // wert 6, rel 2
-  const iStern = ids(r).indexOf("sternenpfad_2019");         // wert 12.5, rel 0
+  const iStern = ids(r).indexOf("sternenpfad_2019");         // wert 11, rel 0
   return relFallend(r) && iBillig < iStern;
 });
 checkA("Bei gleichem rel entscheidet der Dreieck-Score", () => {
@@ -703,7 +693,7 @@ checkB("B5: die erhaltene Grenze wirkt auch in der Suche weiter", () => {
 });
 
 /* --- B6 Robustheit gegen fremd gebaute Signalobjekte -------------------- */
-const MINIMAL = () => ({ genres: ["horror"], achsen: [], kategorien: [], dekaden: [], quellen: [], zeit: [],
+const MINIMAL = () => ({ genres: ["horror"], kategorien: [], dekaden: [], quellen: [], zeit: [],
   stimmungen: [], reihen: [], jahrMin: null, jahrMax: null, entdecken: false, frage: "" });
 checkB("B6: sucheFinder verkraftet ein sig ohne die neuen Felder", () =>
   gleichMenge(ids(F.sucheFinder(MINIMAL(), KTX)), ["nacht_der_glut_1984", "billiger_schund_1988"]));
@@ -736,7 +726,7 @@ checkB("B6: ein sig ganz ohne Ausschluss-Felder verhält sich wie eines mit leer
    ========================================================================= */
 console.log("\n--- TEIL B: Nachträge aus den Entscheidungen ---");
 
-/* E16 — verneinte Stimmung/Achse = Abschlag, kein Ausschluss */
+/* E16 — verneinte Stimmung = Abschlag, kein Ausschluss */
 checkB("E16: verneinte Stimmung landet in stimmungenAbschlag, nicht in einer Ausschlussliste", () => {
   const s = P("nicht traurig");
   return gleich(feld(s.stimmungenAbschlag), ["traurig"]) && gleich(s.stimmungen, []);
@@ -745,13 +735,6 @@ checkB("E16: Abschlag ist -2 mit Grund 'nicht-stimmung:<name>' — der Film blei
   const r = F.sucheFinder(P("nicht traurig"), KTX);
   const t = r.find((x) => x.film.id === "stiller_hafen_1972");   // genre Drama = Stimmungs-Genre
   return gleichMenge(ids(r), ALLE_IDS) && t.rel === -2 && t.gruende.includes("nicht-stimmung:traurig");
-});
-checkB("E16: verneinte Achse gibt -2.5 mit Grund 'nicht-schlagseite:<ACHSE>'", () => {
-  const s = P("nicht stylisch");
-  const r = F.sucheFinder(s, KTX);
-  const t = r.find((x) => x.film.id === "sternenpfad_2019");     // Schlagseite wie
-  return gleich(feld(s.achsenAbschlag), ["wie"]) && gleich(s.achsen, [])
-    && t.rel === -2.5 && t.gruende.includes("nicht-schlagseite:WIE");
 });
 checkB("E16: abgewertete Filme rutschen nach unten, statt zu verschwinden", () => {
   const r = F.sucheFinder(P("nicht traurig"), KTX);
@@ -783,9 +766,8 @@ checkB("Antwort 6: reiner Kategorie-Ausschluss öffnet das hatSignal-Gate", () =
   return gleich(feld(s.kategorienAusschluss), ["kult_klassiker"]) && gleich(s.kategorien, [])
     && gleichMenge(ids(F.sucheFinder(s, KTX)), OHNE("stiller_hafen_1972"));
 });
-checkB("Antwort 6: reiner Stimmungs-/Achsen-Abschlag öffnet das hatSignal-Gate", () =>
-  F.sucheFinder(P("nicht traurig"), KTX).length === ALLE_IDS.length
-  && F.sucheFinder(P("nicht stylisch"), KTX).length === ALLE_IDS.length);
+checkB("Antwort 6: reiner Stimmungs-Abschlag öffnet das hatSignal-Gate", () =>
+  F.sucheFinder(P("nicht traurig"), KTX).length === ALLE_IDS.length);
 checkB("Antwort 7: Titeltreffer umgeht auch den Kategorie-Ausschluss", () =>
   ids(F.sucheFinder(P("Billiger Schund, aber ohne Trash"), KTX)).includes("billiger_schund_1988"));
 
@@ -976,7 +958,7 @@ const FIXTURE_FAELLE = [
   { id: "gs-14", eingabe: "Was Modernes, nicht so alt",
     soll: { genres: [], dekaden: [], stimmungen: ["modern"], jahrMin: 2010, jahrMax: null,
       genresAusschluss: [], dekadenAusschluss: [], kategorienAusschluss: [],
-      stimmungenAbschlag: [], achsenAbschlag: [] },
+      stimmungenAbschlag: [] },
     nichtIn: ["nicht"] },
   { id: "gs-22", eingabe: "Ein Sci-Fi aus den 70ern",
     soll: { genres: ["sci fi"], dekaden: [1970], dekadenAusschluss: [], jahrMin: null,
@@ -1017,7 +999,7 @@ console.log("\n--- TEIL B: Phase 3 — KI-Antwort gegen den Bestand ---");
 const ANTWORT = (teil = {}) => ({
   harte_filter: { genres: [], kategorien: [], quellen: [], zeit: [], jahrMin: null, jahrMax: null,
     dekaden: [], titel: [], ...(teil.harte_filter || {}) },
-  weiche_wuensche: { stimmungen: [], achsen: [], reihen: [], ...(teil.weiche_wuensche || {}) },
+  weiche_wuensche: { stimmungen: [], reihen: [], ...(teil.weiche_wuensche || {}) },
   ausschluesse: { genres: [], dekaden: [], ...(teil.ausschluesse || {}) },
   entdecken: teil.entdecken ?? false,
   nicht_unterstuetzt: teil.nicht_unterstuetzt || [],
@@ -1047,10 +1029,9 @@ checkB("P3: bekannteWerte entdoppelt über genreKey — die zuerst gesehene Schr
   const g = F.bekannteWerte(m, []).genres;
   return g.length === 1 && g[0] === "Sci-Fi";
 });
-checkB("P3: bekannteWerte liefert Kategorien, Achsen, Quellen und Zeit aus dem Vokabular", () => {
+checkB("P3: bekannteWerte liefert Kategorien, Quellen und Zeit aus dem Vokabular", () => {
   const w = F.bekannteWerte(MASTER, []);
   return gleichMenge(w.kategorien, Object.keys(VOK.kategorien))
-    && gleichMenge(w.achsen, Object.keys(VOK.achsen))
     && gleichMenge(w.quellen, Object.keys(VOK.quellen))
     && gleichMenge(w.zeit, Object.keys(VOK.zeit));
 });
@@ -1094,7 +1075,7 @@ checkB("P3: Weißliste Genres — andere Schreibweise kommt durch (Abgleich übe
 
    KORRIGIERT 26.07.2026: Der Check verlangte vorher `["komodie"]` — die Form von
    norm(), NICHT die der Masterliste. Titel und Zusicherung widersprachen sich,
-   und die Zusicherung pinnte genau die Umformung, die auf der Kategorie-, Achsen-,
+   und die Zusicherung pinnte genau die Umformung, die auf der Kategorie-,
    Quellen-, Zeit- und Stimmungsseite ein stiller Totalausfall war (`norm("sicher_gut")`
    = "sicher gut" trifft nie `f.kategorie === "sicher_gut"`).
    Nachgemessen: alle vier Leser von sig.genres/sig.genresAusschluss vergleichen
@@ -1129,9 +1110,9 @@ checkB("P3: Weißliste Kategorien, Quellen und Zeit", () => {
     zeit: ["heute", "uebermorgen"] } });
   return gleich(sig.kategorien, ["kult_klassiker"]) && gleich(sig.quellen, ["dvd"]) && gleich(sig.zeit, ["heute"]);
 });
-checkB("P3: Weißliste Stimmungen und Achsen", () => {
-  const { sig } = AUS({ weiche_wuensche: { stimmungen: ["melancholisch", "frohlich"], achsen: ["wie", "wieso"] } });
-  return gleich(sig.stimmungen, ["melancholisch"]) && gleich(sig.achsen, ["wie"]);
+checkB("P3: Weißliste Stimmungen", () => {
+  const { sig } = AUS({ weiche_wuensche: { stimmungen: ["melancholisch", "frohlich"] } });
+  return gleich(sig.stimmungen, ["melancholisch"]);
 });
 checkB("P3: die Weißliste gilt auch für die Ausschlüsse", () => {
   const { sig } = AUS({ ausschluesse: { genres: ["romance", "westernoper"] } });
@@ -1256,78 +1237,6 @@ checkB("P3 Rundlauf: JEDER Zeitwert kommt schreibgleich zurück und kürzt die T
         fehler.push('      "' + genannt + '" -> Termine ' + JSON.stringify(t.herkunft.kino.zeitenAlle)
           + ", erwartet " + JSON.stringify(erwartet));
       }
-    }
-  }
-  for (const z of fehler) console.log(z);
-  return fehler.length === 0;
-});
-
-checkB("P3 Rundlauf: JEDE Achse kommt schreibgleich zurück und boostet wirklich", () => {
-  const fehler = [];
-  for (const a of F.bekannteWerte(MASTER, []).achsen) {
-    /* Probefilm aus der Achse selbst abgeleitet, statt sich auf die Fixtures zu
-       verlassen: "warum" hat in MASTER keinen Film mit dieser Schlagseite
-       (lange_funke_2021 liegt bei 3/3/4, Spanne < 2 -> null). Ohne den Probefilm
-       wäre der Wirkungsnachweis für "warum" leer und damit wertlos. */
-    const bw = { wie: 1, was: 1, warum: 1 };
-    bw[a] = 5;
-    const probe = [{ id: "achsenprobe", titel: "Achsenprobe", originaltitel: "Axis Probe", jahr: 1995, typ: "film",
-      quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: bw }];
-    if (schlagseite(bw) !== a) { fehler.push("      Probefilm für " + a + " hat Schlagseite " + schlagseite(bw)); continue; }
-    for (const genannt of VARIANTEN(a)) {
-      const { sig } = AUS({ weiche_wuensche: { achsen: [genannt] } }, probe);
-      if (!gleich(sig.achsen, [a])) {
-        fehler.push('      Modell nennt "' + genannt + '" -> sig.achsen ' + JSON.stringify(sig.achsen)
-          + ", erwartet " + JSON.stringify([a]));
-        continue;
-      }
-      const t = F.sucheFinder(sig, { ...KTX, master: probe })[0];
-      if (!t || !t.gruende.includes("schlagseite:" + a.toUpperCase()) || t.rel < 2.5) {
-        fehler.push('      "' + genannt + '" -> kein Boost: ' + JSON.stringify(t ? { gruende: t.gruende, rel: t.rel } : null));
-      }
-    }
-    /* Etappe 7, Mindesthoehe: `schlagseite()` verlangt seit 27.07.2026 eine
-       Spitze von mindestens 3 -- 0/0/2 galt vorher als "WARUM-lastig", also
-       als Relevanz-Aussage auf einem Wert, der das Gegenteil von Relevanz
-       ist. Die Regel sitzt in `schlagseite()` selbst und wirkt damit AUCH
-       auf dieses Ranking (+-2.5) und auf `score()` (+1.5), nicht nur auf die
-       Anzeige. Genau 12 der 216 Kombinationen aendern sich, und alle zwoelf
-       enthalten eine 0 (mx<3 zusammen mit mx-mn>=2 erzwingt mx=2, mn=0) --
-       fuer jede Bewertung ohne 0 ist die Regel beweisbar folgenlos.
-       Diese Probe deckt sie ab: Der Scope-Waechter hat zu Recht angemerkt,
-       dass die bestehenden Fixtures keine 0 enthalten und "gruen" hier
-       "ungetestet" bedeutete, nicht "unveraendert". */
-    const schwach = { wie: 0, was: 0, warum: 0 };
-    schwach[a] = 2;
-    const schwachProbe = [{ id: "schwachprobe", titel: "Schwachprobe", originaltitel: "Weak Probe", jahr: 1996, typ: "film",
-      quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: [], bewertung: schwach }];
-    if (schlagseite(schwach) !== null) {
-      fehler.push("      Mindesthoehe: " + JSON.stringify(schwach) + " gilt noch als Schlagseite " + schlagseite(schwach));
-    }
-    {
-      const { sig: sigS } = AUS({ weiche_wuensche: { achsen: [a] } }, schwachProbe);
-      const tS = F.sucheFinder(sigS, { ...KTX, master: schwachProbe })[0];
-      if (tS && tS.gruende.includes("schlagseite:" + a.toUpperCase())) {
-        fehler.push("      Mindesthoehe: " + JSON.stringify(schwach) + " bekommt trotzdem den Achsen-Boost");
-      }
-      /* Gegenkante: eine Stufe hoeher MUSS wieder boosten -- sonst wuerde die
-         Regel mehr wegnehmen als beabsichtigt. */
-      const stark = { ...schwach }; stark[a] = 3;
-      const starkProbe = [{ ...schwachProbe[0], id: "starkprobe", bewertung: stark }];
-      const { sig: sigK } = AUS({ weiche_wuensche: { achsen: [a] } }, starkProbe);
-      const tK = F.sucheFinder(sigK, { ...KTX, master: starkProbe })[0];
-      if (!tK || !tK.gruende.includes("schlagseite:" + a.toUpperCase())) {
-        fehler.push("      Mindesthoehe: " + JSON.stringify(stark) + " bekommt den Boost NICHT, obwohl die Spitze reicht");
-      }
-    }
-
-    /* Zusätzlich gegen die echten Fixtures: genau die Filme mit dieser
-       Schlagseite bekommen den Boost, kein anderer. */
-    const { sig } = AUS({ weiche_wuensche: { achsen: [a] } });
-    const geboostet = ids(F.sucheFinder(sig, KTX).filter((t) => t.gruende.includes("schlagseite:" + a.toUpperCase())));
-    const erwartet = MASTER.filter((f) => schlagseite(f.bewertung) === a).map((f) => f.id);
-    if (!gleichMenge(geboostet, erwartet)) {
-      fehler.push("      Achse " + a + " boostet " + JSON.stringify(geboostet) + ", erwartet " + JSON.stringify(erwartet));
     }
   }
   for (const z of fehler) console.log(z);
@@ -1498,7 +1407,6 @@ const ARTEN = [
   ["quelle", "harte_filter", "quellen", "vhs"],
   ["zeit", "harte_filter", "zeit", "uebermorgen"],
   ["stimmung", "weiche_wuensche", "stimmungen", "frohlich"],
-  ["achse", "weiche_wuensche", "achsen", "wieso"],
 ];
 checkB("P3: wohlgeformte, aber unbekannte Werte werden mit ihrer art in nichtInDaten gemeldet", () => {
   const fehler = [];
@@ -1515,9 +1423,9 @@ checkB("P3: wohlgeformte, aber unbekannte Werte werden mit ihrer art in nichtInD
 checkB("P3: der unbekannte Wert wird gemeldet UND bleibt aus dem sig heraus", () => {
   const { sig } = AUS({ harte_filter: { genres: ["westernoper"], kategorien: ["grandios"],
     quellen: ["vhs"], zeit: ["uebermorgen"] },
-    weiche_wuensche: { stimmungen: ["frohlich"], achsen: ["wieso"] } });
+    weiche_wuensche: { stimmungen: ["frohlich"] } });
   return gleich(sig.genres, []) && gleich(sig.kategorien, []) && gleich(sig.quellen, [])
-    && gleich(sig.zeit, []) && gleich(sig.stimmungen, []) && gleich(sig.achsen, []);
+    && gleich(sig.zeit, []) && gleich(sig.stimmungen, []);
 });
 checkB("P3: formfremde Werte (Zahl, Objekt) werden STUMM verworfen — keine Meldung", () => {
   const fehler = [];
@@ -1708,7 +1616,7 @@ checkB("P3: das sig läuft durch alle Sucher und durch ohneStimmung", () => {
 const ECHTE_ANTWORT = {
   harte_filter: { genres: [], kategorien: [], quellen: [], zeit: [], jahrMin: null, jahrMax: 1985,
     dekaden: [], titel: [] },
-  weiche_wuensche: { stimmungen: ["melancholisch", "oldschool"], achsen: [], reihen: [] },
+  weiche_wuensche: { stimmungen: ["melancholisch", "oldschool"], reihen: [] },
   ausschluesse: { genres: ["romance"], dekaden: [] },
   entdecken: false, nicht_unterstuetzt: [],
   interpretation_klartext: "Gesucht werden melancholische, ältere Filme bis einschließlich 1985, ohne Liebesfilme.",
@@ -1786,7 +1694,7 @@ checkB("P3 Robustheit: aus reinem Müll entsteht kein Treffer (leeres sig = kein
 const LISTENFELDER = [
   ["harte_filter", "genres"], ["harte_filter", "kategorien"], ["harte_filter", "quellen"],
   ["harte_filter", "zeit"], ["harte_filter", "titel"], ["harte_filter", "dekaden"],
-  ["weiche_wuensche", "stimmungen"], ["weiche_wuensche", "achsen"], ["weiche_wuensche", "reihen"],
+  ["weiche_wuensche", "stimmungen"], ["weiche_wuensche", "reihen"],
   ["ausschluesse", "genres"], ["ausschluesse", "dekaden"],
 ];
 const UNWERTE = [["Objekt", { tief: [1, 2] }], ["Liste", [1]], ["Zahl", 42], ["Wahrheitswert", true]];

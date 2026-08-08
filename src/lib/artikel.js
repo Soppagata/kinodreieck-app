@@ -14,8 +14,31 @@
    - gar nichts -> rotlink (frei)
    ============================================================ */
 import { norm, slugId, jahrPasst, wortPrefix, substanz } from "./match.js";
+import { normalisiereTyp } from "./typen.js";
 
 export const MAX_LISTE = 15;
+
+/* Kanonische Schreibgrenze für importierte, wiederhergestellte und bereits
+   gespeicherte Artikel. Unveränderte Listen behalten ihre Referenz, damit
+   reine Lesevorgänge keinen unnötigen Storage-Write auslösen. */
+export function normalisiereArtikelTypen(artikelListe) {
+  let allesGleich = true;
+  const normalisiert = (artikelListe || []).map((artikel) => {
+    if (!artikel || typeof artikel !== "object" || !Array.isArray(artikel.liste)) return artikel;
+    let artikelGleich = true;
+    const liste = artikel.liste.map((zeile) => {
+      if (!zeile?.typ) return zeile;
+      const typ = normalisiereTyp(zeile.typ);
+      if (typ === zeile.typ) return zeile;
+      artikelGleich = false;
+      return { ...zeile, typ };
+    });
+    if (artikelGleich) return artikel;
+    allesGleich = false;
+    return { ...artikel, liste };
+  });
+  return allesGleich ? artikelListe : normalisiert;
+}
 
 export function neueArtikelId(titel, vorhandene) {
   const basis = slugId(titel, null) || "artikel";
@@ -29,7 +52,7 @@ export function neueArtikelId(titel, vorhandene) {
 export function gleicheEintragAb(le, master) {
   const ne = norm(le.eingabe);
   if (!ne) return { status: "rotlink", ref: null, kandidaten: [] };
-  const passtTyp = (f) => !le.typ || (f.typ || "film") === le.typ;
+  const passtTyp = (f) => !le.typ || normalisiereTyp(f.typ) === normalisiereTyp(le.typ);
   const passtJahr = (f) => jahrPasst(f, le.jahr || null);
 
   // 1) Exakt (norm-Gleichheit auf Titel/Originaltitel)
@@ -103,7 +126,7 @@ export function gleicheArtikelAb(artikel, master) {
 /* Beim Bearbeiten: refs unveränderter Einträge in die neue Liste übernehmen.
    "Unverändert" = gleiche eingabe + jahr + typ. */
 export function uebernehmeRefs(neueListe, alteListe) {
-  const key = (le) => norm(le.eingabe) + "|" + (le.jahr || "") + "|" + (le.typ || "");
+  const key = (le) => norm(le.eingabe) + "|" + (le.jahr || "") + "|" + (le.typ ? normalisiereTyp(le.typ) : "");
   const alt = new Map((alteListe || []).map((le) => [key(le), le.ref]));
   return neueListe.map((le) => (le.ref ? le : { ...le, ref: alt.get(key(le)) || null }));
 }
@@ -132,7 +155,7 @@ export function offeneReferenzen(artikelListe) {
   const offen = [];
   for (const a of artikelListe || []) {
     for (const le of a.liste || []) {
-      if (!le.ref) offen.push({ artikelId: a.id, artikelTitel: a.titel, eingabe: le.eingabe, jahr: le.jahr, typ: le.typ });
+      if (!le.ref) offen.push({ artikelId: a.id, artikelTitel: a.titel, eingabe: le.eingabe, jahr: le.jahr, typ: le.typ ? normalisiereTyp(le.typ) : null });
     }
   }
   return offen;
@@ -182,7 +205,7 @@ export function blogZuArtikel(sharedBlog, vorhandene, master, nowIso) {
     source_publication_id: sharedBlog?.publication_id || sharedBlog?.db_key || null,
     source_loaded_at: nowIso || new Date().toISOString(),
     liste: (q.liste || []).slice(0, MAX_LISTE).map((le) => ({
-      eingabe: le.eingabe, jahr: le.jahr == null ? null : le.jahr, typ: le.typ || null, ref: null,
+      eingabe: le.eingabe, jahr: le.jahr == null ? null : le.jahr, typ: le.typ ? normalisiereTyp(le.typ) : null, ref: null,
     })),
   };
   const abg = gleicheArtikelAb(roh, master || []);

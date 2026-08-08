@@ -1,11 +1,6 @@
 {
  "hinweis": "Vokabular des Finders — reine Daten, kein Code. Erweitern nach Bedarf: neue Wörter einfach in die Listen (klein, ohne Umlaut-Sonderformen — der Abgleich normalisiert). Max' echte Anfragen schärfen diese Listen über die Zeit.",
  "hinweis_genre_ziele": "WICHTIG: Ein Synonym-Ziel muss auf die Schreibweise zeigen, die WIRKLICH in der Masterliste steht — sonst wirkt es im positiven Fall wie 'keine Treffer' und im Ausschlussfall STILL GAR NICHT (der Nutzer bekommt genau das, was er ausgeschlossen hat). genreKey() zieht beim Vergleich Bindestriche/Leerzeichen ein und faltet oe/ue/ae zu o/u/a; 'komoedie' trifft damit 'komödie'. Es überbrückt aber KEINE echten Wortunterschiede: 'scifi' trifft 'sciencefiction' nicht. Stand der echten Masterliste (177 Einträge, geprüft 26.07.2026): sci-fi, romance, komödie, crime, film-noir, neo-noir, horror, drama, thriller, action, abenteuer, fantasy, anime, animation, western, satire, parodie, mystery, familie, musical, musikfilm, arthouse, exploitation, superheldenfilm, monsterfilm, martial-arts, kriegsfilm, historienfilm, tragikomödie, biopic, stunt. Achtung: 'anime' und 'animation' sind dort ZWEI verschiedene Genres — das Synonym zeichentrick/animation->anime verbreitert also bewusst.",
- "achsen": {
-  "wie": ["stylisch", "asthetisch", "asthetik", "optik", "optisch", "visuell", "atmosphare", "atmospharisch", "bildgewaltig", "look", "inszenierung", "schone bilder"],
-  "was": ["tiefgang", "anspruchsvoll", "story", "handlung", "thema", "gehalt", "philosophisch", "gesellschaftskritisch", "komplex", "clever", "zum nachdenken"],
-  "warum": ["einfluss", "einflussreich", "wegweisend", "referenz", "referenziert", "zitiert", "ikonisch", "klassiker", "kanon", "kanonisch", "schluesselwerk", "meilenstein", "genrepraegend", "vorlaeufer", "popkulturell", "filmhistorisch", "praegend"]
- },
  "hinweis_kategorien": "Etappe 8 hat den widerspruechlichen v3-Zwischenstand aufgeloest: Massgeblich sind die sieben im Bewertungseditor und im veroeffentlichten Demo-Bestand tatsaechlich verwendeten Kategorien. Kult/Trash duerfen zugleich als Stimmung auf gleichnamige Tags wirken.",
  "kategorien": {
   "immer_gut": ["immer gut", "verlasslich", "sichere bank", "safe", "sicher gut"],
