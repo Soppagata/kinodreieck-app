@@ -1,11 +1,13 @@
 # Etappe 9c: Paket für die geschlossene Beta
 
-Stand: 30.07.2026
+Stand: 09.08.2026
 
-Status: Vorlage; vor der ersten Einladung ausfüllen und freigeben
+Status: Paket für die formale Etappe 9c vorbereitet, aber pausiert. Der nächste
+Liefergegenstand ist eine private Demo nach Rollen-v1; sie ist keine
+9c-Kohorte und wird nicht als Beta-Abnahme ausgegeben.
 
-Geltungsbereich: genau eine Kohorte mit vier bis fünf persönlich eingeladenen
-Testern
+Geltungsbereich dieses Dokuments: genau eine spätere Kohorte mit vier bis fünf
+persönlich eingeladenen Testern
 
 ## Zweck und Grenze
 
@@ -27,18 +29,20 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
 
 ### Produkt und Release
 
-- [ ] Etappe 8 ist nicht vollständig: Vorbewertung und Filmwissen besitzen
-  Abnahmebelege; Filmscan und Bloganalyse wurden nie umgesetzt und müssen vor
-  einer Vollständigkeitsaussage entweder echte Beta-Gates werden oder klar in
-  den Zukunftsbacklog wechseln.
-- [ ] Etappe 9a ist abgenommen; Demo, PWA-Installation und Download funktionieren.
-- [ ] Etappe 9b ist abgenommen; Nutzerbackup, Datenbank-Restore, Not-Aus,
-      Accountlöschung und Pages-Rollback wurden praktisch geprüft.
-- [x] Der einzuladende Build ist auf Staging und Produktion per Domain-Smoke
-      belegt; Build- und Function-Version stehen im Releaseprotokoll.
-- [x] `npm test`, `npm run test:function` und `npm run test:rls` sind für diesen
-      Stand grün.
-- [x] Bundle-, Secret-, CSP- und RLS-Prüfung sind grün.
+- [ ] Etappe 8 ist für die formale Beta nicht vollständig: Vorbewertung und
+      Filmwissen besitzen Abnahmebelege; Filmscan und Bloganalyse sind nur für
+      die private Demo geparkt. Vor 9c braucht es eine neue ausdrückliche
+      Scope-Entscheidung.
+- [ ] Etappe 9a ist einschließlich realer PWA-Installation auf Android und iOS
+      abgenommen.
+- [ ] Etappe 9b ist vollständig abgenommen; aktuell stehen 10/13 Gates.
+- [ ] Der einzuladende Rollen-Build ist auf Staging und Produktion per
+      Domain-Smoke belegt. `289abff` ist nur der Staging-Ausgangspunkt; der
+      Produktionsstand ist absichtlich älter.
+- [ ] `npm test`, `npm run test:function` und `npm run test:rls` sind nach
+      Rollen-v1 für den finalen Einladungsstand grün.
+- [ ] Bundle-, Secret-, CSP- und RLS-Prüfung sind nach Rollen-v1 für den finalen
+      Einladungsstand grün.
 - [x] `programm_demo` und `streaming_demo` sind öffentlich verfügbar und enthalten
       nur freigegebene Daten.
 
@@ -48,8 +52,9 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
 - [ ] Für jede Rolle A bis D und optional E ist ein Konto vorbereitet.
 - [ ] Startpasswörter und Zugangsdaten werden nur einzeln über einen vertraulichen
       Weg weitergegeben und stehen weder im Ergebnisbogen noch im Feedbackkanal.
-- [x] Tageslimit, Monatsbudget und Parallelgrenze entsprechen der abgenommenen
-      Etappe-9b-Konfiguration.
+- [x] Tageslimit 30, Monatsbudget 1000 US-Cent und Parallelgrenze entsprechen
+      der abgenommenen Konfiguration; der finale Eval lief 20/20 seriell und
+      ohne Retry. Eine routinemäßige Wiederholung ist nicht vorgesehen.
 - [x] KI-Not-Aus und verantwortliche Bedienung sind geklärt.
 - [ ] Jeder Tester weiß vor der ersten Datenübernahme, wie ein Gesamt-Backup
       heruntergeladen wird.
@@ -115,6 +120,11 @@ keine vollständige Datenschutzerklärung für einen öffentlichen Start.
 ## 3. Rollen und Verteilung
 
 Die Rollen ersetzen Namen in allen gemeinsamen Ergebnissen.
+
+Die Rollen A bis E sind ausschließlich anonyme Testeraufgaben. Sie erteilen
+keine technischen Rechte und sind nicht mit der neuen Konto-/Berechtigungslogik
+zu verwechseln. Der finale Einladungsstand muss die separat abgenommene
+Rollen-v1 verwenden.
 
 | Rolle | Schwerpunkt | Szenarien |
 |---|---|---|

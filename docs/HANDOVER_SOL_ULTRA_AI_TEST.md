@@ -1,5 +1,14 @@
 # Handover an Sol Ultra: KI-Eval abschließen
 
+Status 09.08.2026: **abgeschlossen** auf `staging` (`289abff`), einschließlich
+Remote-Tageslimit 30, seriellem Eval 20/20 ohne Retry und grüner
+Offline-Auswertung. Dieses Dokument bleibt als idempotente historische
+Übergabe erhalten und ist kein Auftrag, die bezahlten Läufe zu wiederholen.
+
+Die folgenden Angaben sind ein Referenzstand zum Übergabezeitpunkt. Ein späterer
+Task muss Vorwärtsfortschritt erkennen: bereits sauber erledigte Schritte
+verifizieren und überspringen, nicht als Abweichung stoppen oder wiederholen.
+
 ## Ziel
 
 Das allgemeine KI-Tageslimit dauerhaft von 10 auf 30 setzen, die vorbereitete
@@ -37,26 +46,32 @@ untracked Dokument: nicht verändern und nicht mitcommitten.
 ## Ausführung
 
 1. `AGENTS.md`, `git status`, Diff und neue Migration prüfen. Keine fremden
-   Änderungen überschreiben. Bei Abweichung vom obigen Stand STOP.
+   Änderungen überschreiben. Den Stand klassifizieren:
+   - gleich oder kompatibel teilweise erledigt → nur offene Schritte fortsetzen;
+   - Definition of Done bereits erfüllt → ohne Writes oder Kosten bestätigen;
+   - echter Konflikt, Rückschritt oder gebrochener Sicherheitszaun → STOP.
 2. Kostenfrei mindestens `node etappe9_betrieb_test.mjs`, `npm test`,
    `npm run test:function` und `git diff --check` grün machen.
 3. Remote-Migrationsliste read-only prüfen. Wenn nur `20260808225500` offen ist,
    exakt diese Datei mit
    `supabase db query --linked --file supabase/migrations/20260808225500_etappe9_beta_tageslimit_30.sql`
    anwenden, Wert 30/Not-Aus/Kostenzäune read-only verifizieren und anschließend
-   nur Version `20260808225500` als `applied` markieren. Kein `db push` und kein
-   `config push`.
-4. `npm run check:ai-budget`. Nur bei messbarem grünem Stand fortfahren.
-5. Kein weiterer Smoke: Das Konto steht heute bei 10 Aufträgen und die 20
+   nur Version `20260808225500` als `applied` markieren. Ist sie bereits
+   angewandt und der Wert 30 belegt, nichts erneut ausführen oder reparieren.
+   Kein `db push` und kein `config push`.
+4. Wenn der finale 20/20-Eval noch nicht dokumentiert ist:
+   `npm run check:ai-budget`. Nur bei messbarem grünem Stand fortfahren. Ist er
+   bereits vollständig belegt, keine KI-Läufe wiederholen.
+5. Kein weiterer Smoke am Referenztag: Das Konto stand bei 10 Aufträgen und die 20
    Eval-Fälle füllen das neue 30er-Limit exakt. Eval ausschließlich seriell mit
    `npm run test:ai:eval -- --owner-approved-server-budget`. Keine Retries.
 6. Bei Erfolg die erzeugte Rohdatei kostenfrei mit
    `node tools/ai_eval_etappe6.mjs --pruefen` bewerten.
-7. Migrationskopf und `supabase/migrations/LIESMICH.md` von „ausstehend“ auf den
-   empirischen Erfolg ändern, final nochmals komplette kostenfreie Suite und
-   Remote-Stand prüfen.
-8. Nur die zu diesem Auftrag gehörenden Dateien committen und auf `staging`
-   pushen. `main` nicht mergen.
+7. Nur fehlende Nachweise ergänzen. Bereits korrekte Migrations-, Eval- und
+   Kostenbelege nicht erneut erzeugen.
+8. Nur wenn auftragsspezifische Änderungen existieren, testen, committen und
+   auf `staging` pushen. Bei bereits sauber geliefertem Ziel keinen
+   Wiederholungscommit erzeugen. `main` nicht mergen.
 
 ## Definition of Done
 

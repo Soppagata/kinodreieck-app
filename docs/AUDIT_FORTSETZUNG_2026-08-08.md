@@ -1,17 +1,18 @@
 # Vor-Merge-Audit: belastbarer Fortsetzungsstand
 
-Stand: 08.08.2026
+Stand: 09.08.2026 (Audit-/Cleanup-Abschluss)
 
-Arbeitszweig: `audit/fixbatch1`
+Aktueller Arbeitszweig: `staging`
 
-Ausgangs-HEAD: `3ae13001ff5a06d326d5802bf87b37263c6434bf`
+Historischer Ausgangs-HEAD: `3ae13001ff5a06d326d5802bf87b37263c6434bf`
 
 Erster Audit-Release: `941283649f20c032febb0fa9d2d005e2c5d827a7`
 
-Aktueller Dokumentstand: Der sichere Upgrade-Hotfix für den nach diesem
-Release entdeckten Konto-Cache-Fehler ist Bestandteil dieses Stands. Welcher
-Commit tatsächlich auf Staging läuft, wird weiterhin über Build-Metadaten und
-CI belegt, nicht durch eine vorweggenommene Aussage in diesem Dokument.
+Abgenommene Staging-Basis vor diesem reinen Dokumentabschluss:
+`289abfffa08ecb7009359a88d6471639d3208f61`. Build-Metadaten und GitHub
+Actions #115 belegten genau diesen Stand; `main` blieb auf `3898152`. Der
+Abschlusscommit dieses Dokuments ist ein Nachfolger und muss nach dem Push
+erneut über CI und Build-Metadaten belegt werden.
 
 Dieses Dokument ist die korrigierte Wahrheitsbasis für die Fortsetzung des
 Vor-Merge-Audits. Die historische Rohübergabe unter `_audit_handover/` bleibt
@@ -63,7 +64,7 @@ Die vollständige Archäologie und die gemeinsam zu entscheidenden Altpläne
 stehen in
 [`PLANUNGSARCHAEOLOGIE_2026-08-08.md`](./PLANUNGSARCHAEOLOGIE_2026-08-08.md).
 
-## 3. Lokale Abnahme des konsolidierten Arbeitsbaums
+## 3. Historische lokale Abnahme des konsolidierten Arbeitsbaums
 
 | Gate | Ergebnis |
 |---|---:|
@@ -86,8 +87,11 @@ produktnahe Geschmacks-UI-Suite ist vollständig gelaufen. Das Mobile-Gate
 enthält reale Browserfälle für Musikquelle, Wochenplan, Offlinezustände,
 Backupzugang, Suche und beide Browserengines.
 
-Kein echter, kostenpflichtiger oder sonstiger Anbieter-KI-Aufruf wurde für
-diese Abnahme gestartet.
+Für diese damalige lokale Abnahme wurde kein echter Anbieter-KI-Aufruf
+gestartet. Der spätere finale KI-Audit vom 08.08.2026 ist abgeschlossen:
+Tageslimit 30, exakt 20/20 serielle Eval-Antworten ohne Retry und grüne
+Offline-Auswertung. Die vollständigen Belege stehen in
+[`ETAPPE_9_ABNAHME.md`](./ETAPPE_9_ABNAHME.md).
 
 ## 4. Korrigierte Befundmatrix
 
@@ -144,11 +148,11 @@ und Safe Areas. Claudes Patch darf nicht erneut angewandt werden.
 | D15 | **Behoben** | Service-Worker-Kommentar stimmt mit dem Guard überein. |
 | D16 | **Produktentscheidung** | `masterlist-enrichment` bleibt ein registrierter `NOT_IMPLEMENTED`-Platzhalter. |
 | D17 | **Produktentscheidung** | `TeilenBlock` und Paketaustausch sind gebaut, aber nicht gemountet. |
-| D18 | **Cleanup offen** | Totes Bereichsfilter-Event beziehungsweise ungenutzte Props erst nach Senderentscheidung entfernen. |
-| D19 | **Cleanup offen** | Unerreichbaren `onRefresh`-Zweig entfernen oder bewusst verdrahten. |
+| D18 | **Behoben** | Bestätigte tote Bereichsfilter-Events und ungenutzte Props wurden in `53aff49` entfernt. |
+| D19 | **Behoben** | Der bestätigte unerreichbare `onRefresh`-Zweig wurde in `53aff49` entfernt. |
 | D20 | **Produktentscheidung** | Bild-Infrastruktur besitzt keinen Runtime-Verbraucher. |
 | D21 | **Behoben** | Historischer Pfad im Architekturaudit auf `StreamingEinstellungen.jsx` korrigiert. |
-| D22 | **Cleanup offen** | Alte nummerierte Topfkommentare aktualisieren. |
+| D22 | **Behoben** | Veraltete nummerierte Topfkommentare wurden in `53aff49` bereinigt. |
 | D23 | **Produktentscheidung** | Beendete Reminder sind manuell löschbar; keine stille Auto-Löschung ohne Archivregel. |
 
 ## 5. Zusätzliche Daten- und Kontohärtung
@@ -202,8 +206,9 @@ gelöscht werden.
 Keine dieser Positionen wird still als „Fehlerbehebung“ eingebaut:
 
 1. `Teilen & Tauschen` wieder vollständig mounten oder die Ruinen entfernen.
-2. Filmscan und Bloganalyse als echte Beta-Gates bauen oder als Zukunftsbacklog
-   kennzeichnen.
+2. Filmscan und Bloganalyse bleiben für die nächste private Demo geparkt. Ob
+   sie später wieder formale 9c-Beta-Gates werden, wird erst vor einer echten
+   9c-Kohorte entschieden.
 3. Die externe Serienradar-Pipeline an die synchronisierten Watchmode-IDs
    anschließen oder ihre Reichweite begrenzen.
 4. Merkliste und Must-Watch langfristig zusammenführen oder getrennt behalten.
@@ -214,6 +219,12 @@ Keine dieser Positionen wird still als „Fehlerbehebung“ eingebaut:
    größen- und transaktionsgeprüfte Funktionsblöcke planen.
 
 ## 7. Restrisiken und nächster Arbeitsblock
+
+Der technische Vor-Merge-Audit und der bestätigte Code-Cleanup sind auf
+`staging` abgeschlossen. Der nächste eigene Arbeitsblock ist die minimale,
+serverseitig erzwungene Rollen-/Zugangslogik für die private Demo. Danach
+werden Konto-, Betriebs- und Gerätereisen einmal gegen den dann endgültigen
+Vertrag geprüft; ein Vorab-Durchlauf würde dieselben Belege unnötig doppeln.
 
 - Ein bereits zuvor vorhandenes Multi-Tab-Auth-Rennen bleibt als
   Verfügbarkeitsrisiko: Ein alter Refresh/Logout kann ohne Compare-and-set eine
@@ -229,28 +240,34 @@ Keine dieser Positionen wird still als „Fehlerbehebung“ eingebaut:
   Mock-, Function-, Chromium-, WebKit- und Staging-Deploy-Gate vollständig
   grün; Staging lieferte exakt diese SHA aus. Gerade der anschließende echte
   iPhone-Login hat die oben dokumentierte Upgrade-Regression sichtbar gemacht.
-- Der Hotfix verlangt zusätzlich einen erneuten CI-/Deploy-Beleg und danach
-  denselben betroffenen iPhone-Cache als entscheidenden Gegencheck. Diese
-  externen Ergebnisse stehen im Lieferbericht; Browserdaten werden davor
-  nicht gelöscht.
-- Backup/Restore/Undo, Ausfall/Rollback und echte KI sind trotz vollständiger
-  lokaler Mockgates weiterhin eigene praktische Abnahmeblöcke.
+- Der Upgrade-Hotfix und der nachfolgende Must-Watch-/Cleanup-Stand besitzen
+  grüne CI-, Staging- und Browserbelege. Der vollständige echte
+  iPhone-/iPad-Gegencheck bleibt Teil der gemeinsamen Schlussabnahme nach der
+  Rollenlogik; Browserdaten werden davor nicht gelöscht.
+- App-Backup auf einem zweiten Gerät, Undo, Anbieter-/Supabase-Ausfall und
+  Function-Rollback bleiben trotz vollständiger lokaler Gates eigene
+  praktische Abnahmeblöcke.
+- Der finale KI-Block ist abgeschlossen: Function-Smoke 23/23, serieller Eval
+  20/20 ohne Retry, Offline-Auswertung 20/20 und Tageslimit 30 sind belegt.
+  Diese kostenpflichtigen Läufe werden nicht wiederholt. Ändert die Rollenlogik
+  den Function-Autorisierungspfad, braucht nur dieser neue Pfad später eine
+  gesondert freigegebene, budgetgeschützte Rauchprobe; kein neues Eval.
 
 ## 8. Definition of Done
 
-Der lokale Implementierungsblock ist abgeschlossen. Der gesamte Vor-Merge-
-Audit ist erst abgeschlossen, wenn zusätzlich:
+Der technische Audit-/Cleanup-Block ist abgeschlossen. Die weiterreichende
+Vor-Produktions-Abnahme bleibt bewusst ein eigenes Gate:
 
-1. der konsolidierte Arbeitsbaum versioniert und der exakte Commit auf den
-   freigegebenen Remote-Zweig gepusht ist;
-2. CI dieselben Mock-, Function- und Browsergates grün ausführt;
-3. Staging exakt diesen Commit ausliefert;
-4. Konto-/Gast-/Sync-/Multi-Tab- und Privacy-Recovery-Journeys protokolliert
-   sind;
-5. Backup, Restore, Undo, Ausfall und Function-Rollback praktisch geprüft sind;
-6. der echte iPhone-Gegencheck einschließlich Safe Area, Tastatur,
-   Installation, Download und lokalem Speicher erfolgt ist;
-7. ausschließlich die erlaubten KI-Entry-Points seriell unter funktionierendem
-   Budgetwächter gelaufen sind; und
-8. Max die Restentscheidungen und die Merge-Empfehlung erhalten und den Merge
-   ausdrücklich freigegeben hat.
+| Gate | Stand 09.08.2026 |
+|---|---|
+| 1. Audit-/Cleanup-Code versioniert und auf `staging` gepusht | **erfüllt** (`53aff49` und Nachfolger) |
+| 2. Mock-, Function- und Browser-CI grün | **erfüllt** für die Codebasis `289abff`; der reine Dokumentnachfolger wird im Lieferbericht belegt |
+| 3. Staging liefert den exakten freigegebenen Commit | **erfüllt** für `289abff`; der reine Dokumentnachfolger wird im Lieferbericht belegt |
+| 4. Konto-/Gast-/Sync-/Multi-Tab-/Privacy-Journeys | **offen**, nach Rollenlogik einmal vollständig prüfen |
+| 5. Backup, Restore, Undo, Ausfall und Function-Rollback praktisch | **teilweise**; Rest steht in Etappe 9b |
+| 6. Echter iPhone-/iPad-/Android-Gegencheck | **offen**, mit finalem Demo-Kandidaten |
+| 7. Erlaubte KI-Gates unter Budgetwächter | **erfüllt**, Smoke 23/23 und Eval 20/20; keine Wiederholung |
+| 8. Merge-Empfehlung und ausdrückliche Freigabe für `main` | **offen**; `main` bleibt unberührt |
+
+Damit ist „Audit/Cleanup fertig“ eine technische Aussage über den Code auf
+`staging`, keine vorweggenommene Beta-, Geräte- oder Produktionsfreigabe.

@@ -139,9 +139,9 @@ Pflicht-Regressionen für eine spätere Migration sind mindestens:
 
 | Priorität | Vorhaben | Was Historie und Code belegen | Entscheidungsvorschlag |
 |---|---|---|---|
-| P0 | Interner Stapelimport | UI, Client und Edge-Task wurden in `0a8826f`, später als Textweg in `2e32e96`, gebaut. Migration `20260801194500` ist laut Supabase-Dokumenten bewusst nie remote angewandt; `current_schema.sql` enthält den Task nicht. Ohne `task_max_reservierung_usd_cent` beendet die Function den Auftrag vor dem Anbieter. Der letzte dokumentierte Function-Deploy `c91c2b0` ist älter. | **Gebaut, aber kein Betriebsbeleg.** Migration, Function-Deploy, Budgetgate und gezielte Liveprobe als ein Releasepaket; vorher UI ehrlich sperren oder kennzeichnen. |
+| erledigt | Interner Stapelimport | UI, Client und Edge-Task wurden in `0a8826f`, später als Textweg in `2e32e96`, gebaut. Am 08.08.2026 wurden Function v26 sowie die Migrationen `20260801194500` und `20260808120000` in sicherer Reihenfolge ausgerollt. Remote sind Modell-, Token-, Task- und 500-US-Cent-Request-Cap belegt; die budgetgeschützte Rauchprobe lief 23/23. | **Betriebsfähig belegt.** Nicht aus dem alten offenen Befund erneut aufmachen; der größere Datei-/Wiederanlauf-Import bleibt ein getrenntes P2-Vorhaben. |
 | P0 | Teilen & Tauschen / Paketaustausch | Paketlogik, `TeilenBlock`, Autorname, Übernahmehandler und Quellenklärung existieren. Die Oberfläche wurde in `7d94909`/`7213742` gemountet, in `76c78e3` entfernt, in `3d09e9e` teilweise zurückgebracht und in `0a8826f` erneut unmountet. | **Stärkster still verlorener Funktionskandidat.** Gemeinsam zwischen vollständiger Wiedereinbindung und sauberer Entfernung aller Ruinen entscheiden. |
-| P0/P1 | Filmscan und Bloganalyse | Roadmap und Etappe-8-Unterlagen nennen beide ausdrücklich als Beta-Gates; es gibt keinen Task, Datenfluss, Opt-in oder UI-Commit. Die widersprüchliche Vollständig-Markierung in `ETAPPE_9C_BETA` ist im Audit wieder geöffnet. | Entscheiden, ob echte Beta-Gates oder Zukunftsbacklog. Vorher keine „Etappe 8 vollständig“-Aussage. |
+| P0/P1 | Filmscan und Bloganalyse | Roadmap und Etappe-8-Unterlagen nennen beide ausdrücklich als Beta-Gates; es gibt keinen Task, Datenfluss, Opt-in oder UI-Commit. Die widersprüchliche Vollständig-Markierung in `ETAPPE_9C_BETA` ist im Audit wieder geöffnet. | **Für die private Demo geparkt.** Vor einer formalen 9c-Kohorte erneut zwischen Bau und ausdrücklicher Änderung des Beta-Tors entscheiden; Etappe 8 bleibt bis dahin unvollständig. |
 | P1 | Desktop-/iPad-Suche | Finder-Navigation war in `f79dbc2` entfernt worden, die Ersatzleiste per CSS nur bis 760 px sichtbar. | **Behoben:** eigener Desktop-/iPad-Navigationseintrag; mobile Leiste und mobiles Menü bleiben ohne Dublette. |
 | P1 | Individueller Serienradar | Browser, Tabelle, RPC und Tests sind gebaut. Laut `WOCHENPLAN_SERIEN.md` konsumiert der externe Streamingjob die synchronisierten Watchmode-IDs noch nicht; im Repo liegen nur Entwurf und Mocktests. | Externe Pipeline anschließen oder Oberfläche und Doku ehrlich auf die vorhandene Reichweite begrenzen. |
 | P1 | Praktische Etappe-9-Abnahme | App-Backup über ein zweites Gerät, Ausfalltrockenlauf, Function-Rollback, echte iOS-/Android-Installation, Testkonten, Feedbackkanal und Beta-Kohorte sind weiter offen. | Bestandteil der finalen Livephase, nicht durch Mocktests als erledigt markieren. |
@@ -182,7 +182,8 @@ Funktion zu verlieren.
 
 1. Teilen & Tauschen: **vollständig wieder erreichbar machen** oder alle
    verbliebenen Pfade bewusst entfernen?
-2. Filmscan und Bloganalyse: echte Beta-Gates oder klarer Zukunftsbacklog?
+2. Filmscan und Bloganalyse: **für die private Demo geparkt**; vor der formalen
+   9c-Kohorte Bau oder Änderung des Beta-Tors neu entscheiden.
 3. Desktop-Suche: **entschieden und umgesetzt — Navigationseintrag**;
    mobil bleibt die vorhandene globale Suchleiste.
 4. In-App-Foto: **externer Fotoweg bleibt endgültig** oder spätere Rückkehr?
@@ -195,12 +196,47 @@ Funktion zu verlieren.
    und durch Controller-/Regressionstests absichern.
 9. Schlagseite: **entschieden am 08.08.2026 — vollständig entfernen**, bei
    unverändertem Dreieck und unveränderten Einzelwerten WIE/WAS/WARUM.
-10. Filmscan-/Stapelimport-Migrationen: sofort als Betriebsrelease ausrollen
-    oder UI bis zum späteren Rollout ehrlich sperren?
+10. Stapelimport-Betriebsrelease: **entschieden und am 08.08.2026 ausgerollt**;
+    Filmscan bleibt davon getrennt und ist für die private Demo geparkt.
 11. Interne Verweise und Titellisten: B2 ist mit 20,3 % Belegung unkritisch;
     als neuer Funktionsblock beginnen oder post-merge verschieben?
 12. Mehrfachlöschen: erst nach atomarem Fehlerkonzept; ist dieser Umfang den
     zusätzlichen Daten- und Bedienrisiken überhaupt wert?
+
+### Ausführungsentscheid 09.08.2026: Weg zur nächsten privaten Demo
+
+**Entschieden**
+
+- Der nächste Liefergegenstand ist eine einzelne private Demo, nicht die
+  formale Etappe 9c mit vier bis fünf Testern.
+- Der technische Audit-/Cleanup-Block wird zuerst als sauberer
+  Staging-Checkpoint abgeschlossen. Danach folgt Rollen-v1 als eigener
+  Sicherheitsblock.
+- Die noch offenen Konto-, 9b-, Ausfall-, Rollback- und echten Geräteprüfungen
+  werden erst nach Rollen-v1 einmal gemeinsam gegen den tatsächlichen
+  Demo-Kandidaten ausgeführt.
+
+**Geparkt**
+
+- Filmscan und Bloganalyse sind für diese private Demo geparkt. Das nimmt
+  Etappe 8 nicht vollständig ab und entfernt beide Funktionen nicht automatisch
+  aus dem formalen 9c-Tor.
+- Vor einer späteren 9c-Kohorte wird ausdrücklich neu entschieden: bauen oder
+  das formale Beta-Tor samt Roadmap ändern.
+
+**Verworfen — nicht ohne neue Fakten wieder öffnen**
+
+- Zuerst alle praktischen 9b-/Gerätejourneys abzunehmen und danach Rollen-v1
+  einzubauen. Die neue Autorisierungsgrenze würde gerade die Konto-, Sync-,
+  Privacy- und KI-Belege berühren und eine zweite vollständige Abnahme nötig
+  machen.
+- Die private Demo still als Etappe 9c oder als vollständige Etappe 8 zu
+  verbuchen. Das würde die ungebaute Scan-/Blogfunktion und die noch offene
+  Kohortenabnahme verdecken.
+
+Neu zu bewerten ist diese Reihenfolge nur, wenn Rollen-v1 aus dem Demo-Scope
+entfällt, ein Sicherheitsbefund den Rollenbau blockiert oder Max ausdrücklich
+die formale 9c-Kohorte statt der privaten Demo startet.
 
 ## 5. Empfohlene Umsetzungsreihenfolge
 
@@ -216,8 +252,9 @@ Funktion zu verlieren.
 6. Must-Watch-Controller und direkte Sprünge additiv portieren; Besitz,
    Beschreibung, Blogbezüge und Exporte erhalten (**umgesetzt und getestet**).
 7. Erst dann über Merkliste-Migration, Filter und Metadaten entscheiden.
-8. Stapelimport nur als gemeinsames Migration-/Function-/Budget-/Livepaket
-   betriebsfähig machen (**Code und Budgetzaun lokal grün, Live-Rollout offen**).
+8. Stapelimport als gemeinsames Migration-/Function-/Budget-/Livepaket
+   betriebsfähig machen (**erledigt: Function v26, Remote-Migrationen,
+   Kostenzaun und Rauchprobe 23/23**).
 9. Textgröße und anschließend Visual Viewport auf echten Geräten härten.
 10. Optionale neue Funktionen in der Reihenfolge interne Verweise, read-only
     Mehrfachauswahl/Titellisten und zuletzt Mehrfachlöschen behandeln.

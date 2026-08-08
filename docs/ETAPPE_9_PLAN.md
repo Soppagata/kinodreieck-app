@@ -1,11 +1,14 @@
 # Etappe 9: Distribution, Betriebsminimum und geschlossene Beta
 
-Stand: 30.07.2026
+Stand: 09.08.2026
 
-Status: Technischer Release von 9a und die ausführbaren 9b-Gates sind
-produktiv grün; 9c ist vorbereitet und wartet auf reale Geräte und Kohorte
+Status: 9a ist technisch produktiv grün, 9b steht bei 10/13 Betriebsgates und
+9c ist eine noch nicht gestartete Vorlage. Vor der nächsten privaten Demo
+folgen Rollen-v1 und danach ein gemeinsamer Betriebs-/Gerätegegencheck.
 
-Ausgangspunkt: Etappe 8 vollständig abgenommen, Commit `d4876f2`
+Ausgangspunkt: Etappe 8 ist teilweise abgenommen: Vorbewertung und Filmwissen
+sind fertig; Filmscan und Bloganalyse wurden nicht gebaut und sind für die
+nächste private Demo geparkt.
 
 Modellentscheidung Max, 30.07.2026: Sämtliche Bau-, Prüf- und
 Koordinationsaufgaben der Etappe 9 laufen mit **GPT-5.6 Sol**. Es gibt keine
@@ -41,12 +44,13 @@ Der vollständige normale Testlauf ist grün; der neue Distributionstest enthäl
 11/11 und der Hosting-Build 48/48 grüne Prüfungen. Dabei lief kein echter oder
 kostenpflichtiger KI-Aufruf.
 
-Noch nicht als 9a abgenommen sind:
+Die technischen Domain-Smokes und der damalige Produktionsrelease wurden
+inzwischen belegt. Für die vollständige praktische 9a-Abnahme bleiben:
 
 - eine praktische Installation auf Android und iPhone/iPad,
 - die endgültige Freigabe der verwendeten Demo-Inhalte,
-- Staging- und Produktions-Domain-Smokes,
-- der Produktionsdeploy.
+- ein erneuter Domain-Smoke des späteren finalen Demo-Kandidaten. Der aktuelle
+  Staging-Kandidat `289abff` ist bewusst nicht auf `main`/Produktion.
 
 Die bestehende Architektur bleibt:
 
@@ -79,10 +83,11 @@ App-Store-Projekt werden für Etappe 9 benötigt.
 3. **9c — geschlossene Beta:** Eine einzige kleine Freundeskreis-Kohorte prüft
    den vollständigen Produktpfad.
 
-9a darf vorbereitet werden, während Etappe 8 fertig wird. 9c beginnt jedoch
-erst nach dem vollständigen Etappe-8-Beta-Tor.
+Die nächste private Demo ist ausdrücklich keine formale 9c-Kohorte. 9c beginnt
+erst nach einer eigenen erneuten Torentscheidung; bis dahin dürfen die für die
+private Demo geparkten Filmscan-/Bloganalyse-Punkte nicht als fertig gelten.
 
-## Bestandsaufnahme am 30.07.2026
+## Historische Bestandsaufnahme am 30.07.2026
 
 ### Repository
 
@@ -152,6 +157,12 @@ erfordern. Die statische App bleibt öffentlich, persönliche Daten und Live-KI
 bleiben weiterhin hinter Supabase-Sitzung und RLS.
 
 ## Vorbedingungen aus Etappe 8
+
+Die folgende Liste beschreibt das ursprüngliche formale 9c-Tor. Für die
+nächste private Demo gilt seit 09.08.2026 die engere Entscheidung:
+Vorbewertung und Filmwissen sind enthalten; Filmscan und Bloganalyse bleiben
+geparkt. Das ändert ihren technischen Status nicht und nimmt Etappe 8 nicht
+vollständig ab.
 
 Vor 9c müssen laut Roadmap sauber funktionieren:
 
@@ -236,11 +247,13 @@ Für vier bis fünf bekannte Tester reichen:
 Kein Analytics-SDK, Session Replay, In-App-Feedbackbackend oder zusätzliche
 Trackingtabelle.
 
-### 6. Keine neue Schema-Migration nur für Etappe 9
+### 6. Keine neue Produktmigration nur für Etappe 9
 
 Landingpage, Betriebsgriffe, Konten und Beta-Protokoll brauchen kein neues
-Datenmodell. Änderungen an Limits sind reversible Konfiguration, keine neue
-Produktarchitektur.
+Datenmodell. Das Tageslimit 30 wurde als additive, remote verifizierte
+Konfigurationsmigration
+`20260808225500_etappe9_beta_tageslimit_30.sql` ausgeliefert. Rollen-v1 ist
+ein eigener nachfolgender Sicherheitsblock.
 
 ## Etappe 9a — Distribution und Landingpage
 
@@ -261,7 +274,9 @@ Ergebnisse:
 
 - kurzer Seiteninhalt und Reihenfolge festgelegt,
 - verwendete Demo-Daten und Rechte dokumentiert,
-- Demo-Scanfoto und Demo-Blogtext von Max benannt,
+- für die private Demo kein Scanbild und kein Blog-Beispiel erforderlich;
+  solches Material wird erst bei einer späteren Rückkehr der Funktionen
+  gewählt,
 - keine echte persönliche Bewertung, kein Rohprogramm und kein Secret in
   statischen Artefakten,
 - keine Funktion verspricht offene Registrierung.
@@ -405,23 +420,22 @@ Rücknahme. Schlüsselwerte, Tokens und Dumps stehen nie im Runbook.
 
 Vor der Beta:
 
-- Bau-Tageslimit `200` zurückdrehen.
-- Vorläufiger einfacher Startwert: **10 Aufträge je Konto und Tag**.
+- Abgenommener Wert: **30 Aufträge je Konto und Tag**.
 - Globales Monatsbudget bleibt **1000 US-Cent**.
 - Parallelgrenze bleibt unverändert, solange Etappe-8-Messungen keinen Grund
   liefern.
-- `intelligent-search` wird von 8192 auf **4096 Ausgabetokens** gedrosselt,
-  sofern die Etappe-8-Verträge damit weiterhin sicher passen.
+- `intelligent-search` ist per abgenommener Konfiguration auf **4096
+  Ausgabetokens** begrenzt.
 - Alle Etappe-8-Aufgaben werden mit gemessenen Worst-Case-Reservierungen gegen
   den Monatsdeckel gerechnet.
 - Die Sonnet-5-Preistabelle wird spätestens zum 01.09.2026 von
   200/1000 auf 300/1500 US-Cent je Million Ein-/Ausgabetokens aktualisiert,
   falls das Modell dann noch verwendet wird.
 
-Der Wert 10 ist bewusst konservativ: Das Tageslimit schützt vor einem
-Ausreißer eines einzelnen Kontos; das Monatsbudget bleibt der globale harte
-Kostenschutz. Nach der ersten Kohorte darf nur anhand gemessener Kosten
-erhöht werden.
+Der Wert 30 wurde am 08.08.2026 kontrolliert ausgerollt und durch einen
+seriellen 20/20-Eval ohne Retry belegt. Das Monatsbudget und die atomaren
+Request-/Laufzäune bleiben der globale harte Kostenschutz. Die
+kostenpflichtigen Abschlussläufe werden nicht wiederholt.
 
 Protokollprüfung:
 
@@ -450,17 +464,26 @@ Monitoring für Auth, RLS, Katalog oder Edge Function ausgegeben.
 
 ### Abnahme 9b
 
-- App-Backup und Wiederherstellung wurden praktisch mit Rückweg geprüft,
-- Datenbankdump und Restore in ein Wegwerfziel wurden praktisch geprüft,
-- KI-Notaus wurde ohne echten Anbieteraufruf belegt,
-- ein fehlerhaftes Pages-Deployment besitzt einen getesteten Rollbackweg,
-- Accountlöschung wurde an einem Wegwerfkonto vollständig geprüft,
-- Sign-ups sind geschlossen,
-- Produktionsdeploy braucht Freigabe,
-- Staging/Previews sind nicht offen indexierbar,
-- CSP, Bundle und Secret-Ablagen sind geprüft,
-- alle Runbooks sind von einer zweiten Person beziehungsweise einem
-  unabhängigen Prüfer ausführbar gelesen worden.
+Aktueller Stand: 10/13 Gates. Nach Rollen-v1 noch offen:
+
+- App-Backup, zweites Gerät, Restore und Rückgängig praktisch,
+- Supabase-/Anbieterausfall als Trockenlauf,
+- Function-Rollback aus einem bekannten guten Commit.
+
+Die folgenden Punkte sind die **Soll-Abnahmekriterien**, nicht der aktuelle
+Erledigt-Stand:
+
+- App-Backup und Wiederherstellung praktisch mit Rückweg prüfen,
+- Datenbankdump und Restore in ein Wegwerfziel praktisch prüfen,
+- KI-Notaus ohne echten Anbieteraufruf belegen,
+- einen getesteten Rollbackweg für ein fehlerhaftes Pages-Deployment halten,
+- Accountlöschung an einem Wegwerfkonto vollständig prüfen,
+- Sign-ups geschlossen halten,
+- Produktionsdeploy nur nach Freigabe,
+- Staging/Previews nicht offen indexierbar,
+- CSP, Bundle und Secret-Ablagen geprüft,
+- alle Runbooks von einer zweiten Person beziehungsweise einem unabhängigen
+  Prüfer ausführbar gelesen.
 
 ## Etappe 9c — Geschlossene Beta
 
@@ -606,36 +629,33 @@ KI-Tests sofort gemäß `AGENTS.md`.
 - keine Kalenderintegration,
 - keine vollständige Etappe-10-Datenschutz- und Supportarchitektur.
 
-## Noch von Max zu entscheiden
+## Noch vor einer formalen 9c-Kohorte zu entscheiden
 
-Diese vier Entscheidungen verändern keine Architektur, müssen aber vor dem
-jeweiligen Gate fallen:
+Free mit diszipliniertem externem Dumpverfahren ist entschieden und in 9b
+belegt. Vor einer formalen 9c-Kohorte darf diese Betriebsentscheidung bewusst
+neu bewertet werden, sie ist aber kein offener Punkt der privaten Demo.
 
-1. **Supabase vor 9c:** Pro für tägliche Backups und Nicht-Pausieren
-   (Empfehlung) oder Free plus diszipliniertem externem Dump-Verfahren.
-2. **Demo-Material:** das eine freigegebene Scanfoto und der eine freigegebene
+Für die formale 9c bleiben:
+
+1. **Demo-Material, nur falls Filmscan und Bloganalyse im neu bestätigten
+   9c-Tor bleiben:** das eine freigegebene Scanfoto und der eine freigegebene
    Blogtext.
-3. **Feedbackkanal:** ein bereits genutzter privater Kanal; kein Neubau.
-4. **Kohorte:** vier bis fünf konkrete Personen und grobe Verteilung der
+2. **Feedbackkanal:** ein bereits genutzter privater Kanal; kein Neubau.
+3. **Kohorte:** vier bis fünf konkrete Personen und grobe Verteilung der
    Testszenarien.
 
 ## Empfohlene Reihenfolge
 
 ```text
-Etappe 8 vollständig abnehmen
-    -> 9a Inhalte einfrieren
-    -> kleine /download/-Distribution bauen
-    -> Demo-/PWA-/Bundle-Gates
-    -> 9a Produktion
-    -> 9b Nutzerbackup praktisch
-    -> Datenbank-Dump/Restore praktisch
-    -> Notaus, Rollback, Löschung, Secrets und Zugänge prüfen
-    -> Limits auf Beta-Werte drosseln
-    -> 9b abnehmen
-    -> interner vollständiger Trockenlauf
-    -> Sign-ups geschlossen verifizieren
-    -> 4–5 Konten manuell einladen
-    -> 9c beobachten und auswerten
+Audit-/Cleanup-Dokumente sauber abschließen
+    -> neuer Task: minimale serverseitige Rollen-/Zugangslogik
+    -> STOP vor Migration und Remote-Rollout
+    -> Rollen-v1 auf Staging belegen
+    -> offene 9b-Konto-/Backup-/Ausfall-/Rollbackproben
+    -> echter iPhone-/iPad-/Android-Gegencheck
+    -> finalen Demo-Kandidaten auf Staging abnehmen
+    -> private Demo verschicken
+    -> erst später eigenes Tor für formale 9c und Etappe 10
 ```
 
 ## Quellen für veränderliche Plattformpunkte

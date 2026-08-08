@@ -1,12 +1,12 @@
 # Kinodreieck: Roadmap zum sicheren Online-Produkt
 
-Stand: 27. Juli 2026 — Etappen 7–10 umgebaut gemäß Entscheidungs-Log vom
-26.07.2026 (`claude/roadmap_umbau_2026-07-26.md` im Claude-Projekt). Kern des
-Umbaus: Datenschutz-Formalien und KI-Transparenz wandern ans Ende (Etappe 10);
-ein Betriebsminimum bleibt als Eintrittstor vor der Beta (Etappe 9b). Die
-geschlossene Beta startet erst, wenn alle geplanten Produktfunktionen sauber
-funktionieren — nicht mehr mit der intelligenten Suche als einziger
-KI-Funktion.
+Stand: 09. August 2026 — technischer Audit/Cleanup und finaler KI-Testblock
+sind auf `staging` abgeschlossen. Der nächste Liefergegenstand ist eine
+**private Demo**, nicht die formale Etappe 9c. Dafür folgen zuerst eine minimale
+serverseitige Rollen-/Zugangslogik und danach eine gemeinsame Betriebs-, Konto-
+und Geräteabnahme. Filmscan und Bloganalyse bleiben für diese private Demo
+geparkt; vor einer späteren echten 9c-Kohorte wird ihr Gate-Status neu
+entschieden.
 
 **Begriffe (verbindlich, 27.07.2026):** Eine **Etappe** ist ein Block dieser
 Roadmap (0 bis 10; auch 9a, 9b und 9c sind drei eigenständige Etappen, keine
@@ -147,19 +147,13 @@ bauen.
 
 | Etappe | Ergebnis | Voraussetzung für |
 | --- | --- | --- |
-| 0. Stabilisieren | reproduzierbar grüner Stand | jede weitere Änderung |
-| 1. Grenzen schärfen | klare Module und Konfiguration | Hosting, Auth und KI |
-| 2. Öffentliche Hülle | eigene Domain und Staging | frühe Online-Stufe 1 |
-| 3. Accounts und Speicher ✅ | echte Sitzung und RLS | persönliche Online-Daten |
-| 4. Katalog und Rechte | erlaubte gemeinsame Daten | vollständiges Programm |
-| 5. KI-Unterbau ✅ | geschützter, limitierter Endpunkt | alle KI-Funktionen |
-| 6. Intelligente Suche ✅ | erster echter KI-Produktpfad | alle weiteren KI-Funktionen |
-| 7. Geschmacksprofil und KI-Schalter | strukturiertes Profil, KI-Wahl beim Start | Vorbewertung und Empfehlungen |
-| 8. KI-Funktionsausbau | Vorbewertung, Filmscan, Bloganalyse, Restpunkte | vollständiges Beta-Tor |
-| 9a. Distribution und Landingpage | öffentlicher Einstieg mit App-Downloads | Beta-Einladung |
-| 9b. Betriebsminimum | getesteter Restore, Runbooks, Notaus-Check | geschlossene Beta |
-| 9c. Geschlossene Beta | reale Nutzung mit wenigen Testern | Freigabeentscheidung |
-| 10. Datenschutz, KI-Transparenz, öffentlicher Start | Formalien, Selbstbedienung, kontrollierter Betrieb | Online-Stufe 3 |
+| 0–7 ✅ | Baseline, Hülle, Accounts, Katalog, KI-Unterbau, Suche und Profil abgenommen | heutige App-Basis |
+| 8. KI-Funktionsausbau ◐ | Vorbewertung und Filmwissen abgenommen; Filmscan und Bloganalyse ungebaut und für die private Demo geparkt | spätere formale 9c-Entscheidung |
+| 9a. Distribution und Landingpage ◐ | technisch produktiv; echte Android-/iOS-Installation offen | finaler Demo-Kandidat |
+| 9b. Betriebsminimum ◐ | 10/13 Betriebsgates belegt; praktische Restproben offen | gemeinsame Schlussabnahme |
+| Rollen-v1 → private Demo | minimale serverseitige Freigabe und danach ein vollständiger Demo-Gegencheck | nächste Demo |
+| 9c. Geschlossene Beta ○ | Vorlage vorhanden; Kohorte nicht gestartet | spätere Freigabeentscheidung |
+| 10. Datenschutz, KI-Transparenz, öffentlicher Start ○ | nicht begonnen | Online-Stufe 3 |
 
 Verbindlich ab Etappe 7: Jeder Etappen-Auftrag erhält den
 Prüfagenten-Gate-Block (`docs/pruefagenten/LIESMICH.md`) und legt die
@@ -528,10 +522,10 @@ als die Implementierung — `src/lib/finder.js` und die Finder-Oberfläche hatte
 davor keinen einzigen Test. Einzelheiten, gemessene Kosten, bewusste Grenzen und
 bekannte Lücken in `ETAPPE_6_INTELLIGENTE_SUCHE.md`.
 
-**Offen und in Etappe 9b (Betriebsminimum) zu entscheiden:** Tageslimit 50
-Aufrufe und Monatsbudget 10 USD widersprechen sich bei gemessenen 0,82
-US-Cent je Deutung (50 × 30 × 0,82 = 12,32 USD). Bis zur Entscheidung greift
-das Monatsbudget als die härtere Grenze.
+**Entschieden und ausgerollt am 08.08.2026:** 30 Aufträge je Konto und Tag,
+globales Monatsbudget 1000 US-Cent sowie die unveränderten atomaren
+Request-/Laufzäune. Der finale serielle Eval lief 20/20 ohne Retry; die
+kostenpflichtigen Abschlussläufe werden nicht wiederholt.
 
 ### Ziel
 
@@ -691,9 +685,11 @@ Pre-Etappe-7-Rollback-Punkt.
 Reihenfolge innerhalb der Etappe: zuerst die Vorbewertung (sie braucht das
 Profil aus Etappe 7), danach der gemeinsame Filmwissens-Cache und anschließend
 Filmscan und Bloganalyse. Vorbewertung und Filmwissen sind am 30.07.2026
-technisch abgenommen; siehe `docs/ETAPPE_8_ABNAHME.md`. Die Steckbriefe für
-Filmscan und Bloganalyse liegen weiterhin im Claude-Projekt und werden vor
-ihrem jeweiligen Bau ins Repository übernommen.
+technisch abgenommen; siehe `docs/ETAPPE_8_ABNAHME.md`. Filmscan und
+Bloganalyse wurden nicht gebaut. Sie sind für die nächste private Demo
+ausdrücklich geparkt, ohne Etappe 8 dadurch fälschlich als vollständig
+abzunehmen. Vor einer formalen Etappe 9c wird entschieden, ob sie wieder Gates
+werden oder dauerhaft in den Zukunftsbacklog wechseln.
 
 ### Ziel
 
@@ -771,9 +767,8 @@ Entscheidungs-Log festgehalten).
 3. KI-Notaus-Check: Notabschaltung und Kostenlimits existieren seit
    Etappe 5 — hier praktisch belegen.
 4. Secrets- und CSP-Kontrolle.
-5. Offene Limit-Entscheidung aus Etappe 6 treffen: Tageslimit 50 und
-   Monatsbudget 10 USD widersprechen sich bei 0,82 US-Cent je Deutung;
-   bis dahin greift das Monatsbudget als härtere Grenze.
+5. Abgenommene Limitkonfiguration halten: Tageslimit 30 je Konto,
+   Monatsbudget 1000 US-Cent und unveränderte atomare Kosten-/Parallelzäune.
 6. Protokollfelder sichten: steht wirklich nur Diagnose darin?
 
 ### Abnahmekriterium
@@ -786,6 +781,11 @@ Entscheidungs-Log festgehalten).
 ---
 
 ## Etappe 9c: Geschlossene Beta
+
+**Abgrenzung 09.08.2026:** Die nächste verschickte private Demo ist keine
+formale 9c-Kohorte und erfüllt dieses Beta-Tor nicht vorweg. 9c bleibt eine
+eigene spätere Abnahme mit vollständiger Einladungsvorlage, Betriebs- und
+Gerätebelegen sowie einer dann erneut bestätigten Funktionsliste.
 
 ### Ziel
 
@@ -923,7 +923,7 @@ ohne sofort unbegrenzte Kosten oder Nutzerzahlen zuzulassen.
 
 ## Kritischer Pfad
 
-Der kürzeste verantwortbare Weg zur geschlossenen KI-Beta lautet:
+Der kürzeste verantwortbare Weg zur nächsten privaten Demo lautet:
 
 ```text
 grüne Baseline
@@ -934,11 +934,17 @@ grüne Baseline
     -> geschützte KI-Edge-Function
     -> intelligente Suche
     -> Geschmacksprofil + KI-Schalter
-    -> Vorbewertung, Filmscan, Bloganalyse
+    -> Vorbewertung + Filmwissen
     -> Distribution/Landingpage
-    -> Betriebsminimum (Restore, Runbooks, Notaus)
-    -> geschlossene Beta
+    -> technischer Audit/Cleanup
+    -> minimale serverseitige Rollen-/Zugangslogik
+    -> gemeinsamer Konto-, Betriebs- und Gerätegegencheck
+    -> private Demo
 ```
+
+Filmscan, Bloganalyse, die formale Etappe 9c und Etappe 10 folgen außerhalb
+dieses privaten Demo-Pfads. Damit wird kein unerledigtes Beta-Gate als erledigt
+ausgegeben.
 
 Die vollständige Umstrukturierung der UI liegt nicht auf diesem kritischen
 Pfad. Die Lizenzierung des gesamten Wiener Kinoprogramms liegt auf dem Weg zum
@@ -983,8 +989,8 @@ Suchprototyp mit erlaubten beziehungsweise persönlichen Daten.
 ## Was bewusst später kommt
 
 Diese Arbeiten dürfen wichtig sein, sind aber keine Voraussetzung für die
-geschlossene Beta (Filmscan, Vorbewertung und Bloganalyse gehören seit dem
-Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
+nächste private Demo. Für eine formale geschlossene Beta gilt weiterhin deren
+eigenes, vor Einladung neu zu bestätigendes Tor:
 
 - vollständiger visueller Relaunch,
 - allgemeiner Filmassistent,
@@ -994,17 +1000,18 @@ Umbau vom 26.07.2026 dagegen ins Beta-Tor, Etappe 8):
 - Android-APK und Store-Apps (geparkt bis Etappe 10),
 - normalisiertes Datenmodell für jeden heutigen Storage-Topf,
 - öffentliche Registrierung ohne Begrenzung.
+- Filmscan und Bloganalyse; ihr dauerhafter Roadmap-Status wird vor 9c neu
+  entschieden.
 
-## Sofort nächste Arbeitspakete (Stand 30.07.2026)
+## Sofort nächste Arbeitspakete (Stand 09.08.2026)
 
-1. Die abgenommene Vorbewertung und den gemeinsamen Filmwissens-Cache auf
-   Staging mit einem angemeldeten Konto kurz bedienen und danach den Branch
-   zur Produktionsfreigabe zusammenführen.
-2. Den bereits im Claude-Projekt geplanten Filmscan-Steckbrief als nächsten
-   Etappe-8-Block ins Repository übernehmen und gegen den bestehenden
-   Account-, Kosten- und KI-Unterbau bauen.
-3. Danach Bloganalyse und die verbliebenen Kino-/Streaming-Demo-Restpunkte
-   abarbeiten. Landingpage und Distribution bleiben parallel planbar.
+1. Audit-/Cleanup-Wahrheitsbasis als sauberen Staging-Checkpoint abschließen;
+   `main` und Produktion unverändert lassen.
+2. In einem neuen Task die minimale serverseitige Rollen-/Zugangslogik mit
+   getrennten STOPs vor Migration, Remote-Rollout und bezahlter KI-Probe bauen.
+3. Danach die noch offenen 9b-, Konto-, iPhone-/iPad-/Android- und
+   Release-Journeys einmal gegen den finalen Vertrag prüfen und erst dann die
+   private Demo verschicken.
 
 ## Definition of Done für „online“
 
