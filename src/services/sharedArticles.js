@@ -93,6 +93,7 @@ export function createSharedArticlesService({
   config = runtimeConfig,
   auth = authService,
   getAccessToken = (options) => authDriver.getAccessToken(options),
+  getStoredAccountId = () => authDriver.konto()?.id || null,
   fetchImpl = null,
 } = {}) {
   const basis = text(config.supabaseUrl).replace(/\/+$/, "");
@@ -174,8 +175,12 @@ export function createSharedArticlesService({
       });
     }
     const f = konfigurationVerlangen(operation);
-    const token = await getAccessToken({ erzwingeErneuerung: erneuert });
-    if (!token || kontoId() !== accountId) {
+    const token = await getAccessToken({
+      erzwingeErneuerung: erneuert,
+      erwarteteKontoId: accountId,
+    });
+    if (!token || kontoId() !== accountId
+        || (getStoredAccountId?.() && text(getStoredAccountId()) !== accountId)) {
       throw new BoundaryError(ERROR_CODES.UNAUTHENTICATED, {
         source: "shared-articles", operation, reason: "missing-or-changed-session",
       });

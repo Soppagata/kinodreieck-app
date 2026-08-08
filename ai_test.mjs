@@ -131,9 +131,11 @@ console.log("\n--- Treiber: der gesendete Request ---");
 
 const rufe1 = [];
 let tokenGriffe1 = 0;
+let tokenOptionen1 = null;
 const transport1 = createAiTransport({
   config: KONFIG,
-  getAccessToken: async () => { tokenGriffe1++; return TOKEN; },
+  getAccessToken: async (optionen) => { tokenGriffe1++; tokenOptionen1 = optionen; return TOKEN; },
+  getAccountId: () => KONTO_ID,
   fetchImpl: antwortendesFetch(rufe1, jsonAntwort(200, { ok: true, daten: { treffer: [] } })),
 });
 const erg1 = await transport1({ ...STANDARD_RUF });
@@ -176,6 +178,8 @@ check("T4-Gegenprobe: der Endpunktname kommt aus dem Aufruf, nicht aus einer Kon
 
 check("T5: der Authorization-Kopf trägt genau „Bearer <token>“",
   ruf1.headers.Authorization === "Bearer " + TOKEN);
+check("T5: zahlender KI-Request bindet die Tokenbeschaffung an die ursprüngliche Konto-ID",
+  tokenOptionen1?.erwarteteKontoId === KONTO_ID);
 check("T5: das Token taucht sonst nirgends auf — apikey bleibt der Publishable-Key",
   ruf1.headers.apikey === PUBKEY
   && !ruf1.url.includes(TOKEN)

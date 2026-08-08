@@ -9,7 +9,7 @@ import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import {
   statusVon, mediathekIdVon, mitMediathekEintrag, gleicheMediathekStatusAb,
-  istBeobachtet, neuerGesehenEintrag, setzeSerienBeobachtung,
+  istBeobachtet, neuerGesehenEintrag, setzeSerienBeobachtung, toggleGesehenInStatus,
   neueStaffeln, bestaetigeStaffel,
 } from "../lib/staffeln.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
@@ -18,6 +18,7 @@ import {
   streamingJahrzehnte, streamingJahrzehntLabel, streamingGenreFilterSichtbar,
   passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
+import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 
 /* ================= STREAMING =================
    Liest NUR Dateien (streaming_bekannt/entdecken.json) — kein API-Call
@@ -135,7 +136,7 @@ export function StreamingTab({
   onFilmwissenLaden, onFilmwissenRecherchieren,
   mustwatchIds, datenGesperrt = false, katalogInfo = null, angemeldet = false,
   fokusTreffer = null, onFokusVerbraucht,
-  entdeckenStatus = {}, schreibeEntdeckenStatus = () => {},
+  entdeckenStatus = {}, schreibeEntdeckenStatus = async () => false,
 }) {
   const bereichRef = useRef(null);
   const [ansicht, setAnsicht] = useState("programm");
@@ -162,14 +163,16 @@ export function StreamingTab({
   const [sichtbarE, setSichtbarE] = useState(200); // Entdecken: wie viele Einträge gerendert (Paginierung)
   const [formFuer, setFormFuer] = useState(null); // watchmode_id mit offener Eingabemaske
   const [gesehenFrage, setGesehenFrage] = useState(null);
+  const [gesehenSpeichert, setGesehenSpeichert] = useState(null);
+  const gesehenSpeichertRef = useRef(false);
   const [fokusOverride, setFokusOverride] = useState(null);
-  const markiereAlsErstellt = useCallback((t, id) => {
-    if (!id) return id;
-    schreibeEntdeckenStatus((prev) => ({
+  const markiereAlsErstellt = useCallback(async (t, id) => {
+    if (typeof id !== "string" || !id) return null;
+    const gespeichert = await schreibeEntdeckenStatus((prev) => ({
       ...prev,
       [t.watchmode_id]: mitMediathekEintrag(prev[t.watchmode_id], t, id),
     }));
-    return id;
+    return gespeichert === false || gespeichert == null ? null : id;
   }, [schreibeEntdeckenStatus]);
   useEffect(() => {
     if (!fokusTreffer) return undefined;
@@ -241,8 +244,8 @@ export function StreamingTab({
     window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
     return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
   });
-  const setzeStatus = (t, wert) => {
-    schreibeEntdeckenStatus((prev) => {
+  const setzeStatus = async (t, wert) => {
+    const gespeichert = await schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
       const roh = next[t.watchmode_id];
       const basis = roh && typeof roh === "object" ? roh : {};
@@ -255,36 +258,19 @@ export function StreamingTab({
         : { ...basis, status: wert };
       return next;
     });
+    return gespeichert !== false && gespeichert != null;
   };
-  const toggleGesehen = (t) => {
+  const toggleGesehen = async (t) => {
     const roh = entdeckenStatusRef.current[t.watchmode_id];
-    if (statusVon(roh) === "gesehen") {
-      schreibeEntdeckenStatus((prev) => {
-        const next = { ...prev };
-        const basis = next[t.watchmode_id] && typeof next[t.watchmode_id] === "object" ? { ...next[t.watchmode_id] } : {};
-        const verknuepft = mediathekIdVon(basis);
-        delete basis.gesehen_am;
-        if (verknuepft) basis.status = "erstellt";
-        else delete basis.status;
-        if (basis.beobachtet || basis.mediathek_id) next[t.watchmode_id] = basis;
-        else delete next[t.watchmode_id];
-        return next;
-      });
-      return;
-    }
-    if (mediathekIdVon(roh)) {
-      schreibeEntdeckenStatus((prev) => ({
-        ...prev,
-        [t.watchmode_id]: mitMediathekEintrag({ ...(roh && typeof roh === "object" ? roh : {}), ...neuerGesehenEintrag(t) }, t, mediathekIdVon(roh)),
-      }));
-      return;
+    if (statusVon(roh) === "gesehen" || mediathekIdVon(roh)) {
+      return await schreibeEntdeckenStatus((prev) => toggleGesehenInStatus(prev, t));
     }
     setExpandedId("e" + t.watchmode_id);
     setGesehenFrage(t.watchmode_id);
   };
 
-  const toggleBeobachten = (t) => {
-    schreibeEntdeckenStatus((prev) => {
+  const toggleBeobachten = async (t) => {
+    return await schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };
       const wert = setzeSerienBeobachtung(prev[t.watchmode_id], t, !istBeobachtet(prev[t.watchmode_id]));
       if (wert) next[t.watchmode_id] = wert;
@@ -293,32 +279,40 @@ export function StreamingTab({
     });
   };
 
-  const uebernehmeGesehen = (t) => {
-    const id = addFilm?.({
-      titel: t.titel,
-      originaltitel: t.titel,
-      jahr: t.jahr ?? null,
-      jahr_bis: null,
-      typ: t.typ === "tv_series" ? "serie" : "film",
-      quelle: "must_watch",
-      kategorie: null,
-      bewertet_von: null,
-      bewertung: null,
-      genre: t.genres || [],
-      tags: [],
-      begruendung: "",
-      notiz: "",
-      status: "gesetzt",
-      watchmode_id: t.watchmode_id,
-      ...(t.imdb_id ? { imdb_id: t.imdb_id } : {}),
-      ...(t.tmdb_id ? { tmdb_id: t.tmdb_id } : {}),
-    });
-    if (!id) return;
-    schreibeEntdeckenStatus((prev) => ({
-      ...prev,
-      [t.watchmode_id]: mitMediathekEintrag({ ...(prev[t.watchmode_id] && typeof prev[t.watchmode_id] === "object" ? prev[t.watchmode_id] : {}), ...neuerGesehenEintrag(t) }, t, id),
-    }));
-    setGesehenFrage(null);
+  const uebernehmeGesehen = async (t) => {
+    if (gesehenSpeichertRef.current) return false;
+    gesehenSpeichertRef.current = true;
+    setGesehenSpeichert(t.watchmode_id);
+    try {
+      const id = await mitBestaetigterStringId(() => addFilm?.({
+        titel: t.titel, originaltitel: t.titel, jahr: t.jahr ?? null, jahr_bis: null,
+        typ: t.typ === "tv_series" ? "serie" : "film", quelle: "must_watch",
+        kategorie: null, bewertet_von: null, bewertung: null, genre: t.genres || [], tags: [],
+        begruendung: "", notiz: "", status: "gesetzt", watchmode_id: t.watchmode_id,
+        ...(t.imdb_id ? { imdb_id: t.imdb_id } : {}),
+        ...(t.tmdb_id ? { tmdb_id: t.tmdb_id } : {}),
+      }), async (bestaetigteId) => {
+        const gespeichert = await schreibeEntdeckenStatus((prev) => ({
+          ...prev,
+          [t.watchmode_id]: mitMediathekEintrag({ ...(prev[t.watchmode_id] && typeof prev[t.watchmode_id] === "object" ? prev[t.watchmode_id] : {}), ...neuerGesehenEintrag(t) }, t, bestaetigteId),
+        }));
+        return gespeichert !== false && gespeichert != null;
+      });
+      if (!id) return false;
+      setGesehenFrage(null);
+      return true;
+    } finally { gesehenSpeichertRef.current = false; setGesehenSpeichert(null); }
+  };
+
+  const markiereNurGesehen = async (t) => {
+    if (gesehenSpeichertRef.current) return false;
+    gesehenSpeichertRef.current = true;
+    setGesehenSpeichert(t.watchmode_id);
+    try {
+      const ok = await setzeStatus(t, "gesehen");
+      if (ok) setGesehenFrage(null);
+      return ok;
+    } finally { gesehenSpeichertRef.current = false; setGesehenSpeichert(null); }
   };
 
   const datenDa = !!(bekannt && bekannt.stand);
@@ -395,7 +389,7 @@ export function StreamingTab({
      Mediathek kann auch ungesehene und Must-Watch-Einträge enthalten. */
   useEffect(() => {
     if (!Array.isArray(master)) return;
-    schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
+    void schreibeEntdeckenStatus((prev) => gleicheMediathekStatusAb(prev, entdecken?.titel, master));
   }, [master, entdecken, schreibeEntdeckenStatus]);
 
   const staffelHinweise = useMemo(() => {
@@ -407,7 +401,7 @@ export function StreamingTab({
     const t = [...((bekannt && bekannt.titel) || []), ...((entdecken && entdecken.titel) || [])]
       .find((x) => x.watchmode_id === hinweis.watchmode_id);
     if (!t) return;
-    schreibeEntdeckenStatus((prev) => ({
+    void schreibeEntdeckenStatus((prev) => ({
       ...prev,
       [t.watchmode_id]: bestaetigeStaffel(prev[t.watchmode_id], t),
     }));
@@ -458,7 +452,7 @@ export function StreamingTab({
   if (datenGesperrt) return (
     <section ref={bereichRef}>
       <div style={{ background: T.saalHoch, borderRadius: 6, padding: "18px 20px", fontSize: 14, color: T.rauch, lineHeight: 1.7 }}>
-        <strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
+        <strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings ein. Die App selbst ruft Watchmode nie live auf.
       </div>
     </section>
   );
@@ -725,11 +719,13 @@ export function StreamingTab({
                   <div className="kd-entdecken-aktionen">
                   <button onClick={(e) => { e.stopPropagation(); toggleMerk(t); }}
                     title={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
+                    aria-label={gemerkt(t) ? "Von der Merkliste nehmen" : "Auf die Merkliste"}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: gemerkt(t) ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     {gemerkt(t) ? "★" : "☆"}
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); toggleGesehen(t); }}
+                  <button onClick={(e) => { e.stopPropagation(); void toggleGesehen(t); }}
                     title={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
+                    aria-label={statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? "Gesehen-Markierung entfernen" : "Als gesehen markieren"}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: statusVon(entdeckenStatus[t.watchmode_id]) === "gesehen" ? T.wolfram : T.rauch, padding: "0 2px" }}>
                     ✓
                   </button>
@@ -751,9 +747,11 @@ export function StreamingTab({
                   <div className="kd-entdecken-frage" onClick={(e) => e.stopPropagation()}>
                     <strong>Auch als unbewerteten Eintrag in die Mediathek übernehmen?</strong>
                     <div>
-                      <button style={btnStyle(true)} onClick={() => uebernehmeGesehen(t)}>Ja, in die Mediathek</button>
-                      <button style={btnStyle(false)} onClick={() => { setzeStatus(t, "gesehen"); setGesehenFrage(null); }}>Nur als gesehen markieren</button>
-                      <button style={btnStyle(false)} onClick={() => setGesehenFrage(null)}>Abbrechen</button>
+                      <button style={btnStyle(true)} disabled={gesehenSpeichert != null} onClick={() => void uebernehmeGesehen(t)}>
+                        {gesehenSpeichert === t.watchmode_id ? "Speichert …" : "Ja, in die Mediathek"}
+                      </button>
+                      <button style={btnStyle(false)} disabled={gesehenSpeichert != null} onClick={() => void markiereNurGesehen(t)}>Nur als gesehen markieren</button>
+                      <button style={btnStyle(false)} disabled={gesehenSpeichert != null} onClick={() => setGesehenFrage(null)}>Abbrechen</button>
                     </div>
                   </div>
                 )}
@@ -765,7 +763,7 @@ export function StreamingTab({
                         <button type="button" className={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "aktiv" : ""}
                           aria-pressed={istBeobachtet(entdeckenStatus[t.watchmode_id])}
                           title={istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Serie nicht mehr beobachten" : "Serie beobachten und im Pinboard verfolgen"}
-                          onClick={() => toggleBeobachten(t)}>
+                          onClick={() => void toggleBeobachten(t)}>
                           ⚑ {istBeobachtet(entdeckenStatus[t.watchmode_id]) ? "Beobachtet" : "Beobachten"}
                         </button>
                         <span>Unabhängig davon, ob du die Serie schon gesehen hast.</span>
@@ -787,7 +785,7 @@ export function StreamingTab({
                             genre: (t.genres || []).join(", "), watchmode_id: t.watchmode_id,
                             imdb_id: t.imdb_id, tmdb_id: t.tmdb_id,
                           }}
-                          onAdd={(f) => markiereAlsErstellt(t, addFilm(f))}
+                          onAdd={async (f) => markiereAlsErstellt(t, await addFilm(f))}
                           onAddMitPrognose={async (f) => markiereAlsErstellt(
                             t,
                             await addFilmMitPrognose?.(f),

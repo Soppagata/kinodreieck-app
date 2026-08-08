@@ -26,6 +26,8 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const [bewertungen, setBewertungen] = useState({});
   const [laeuft, setLaeuft] = useState(false);
   const [vorschau, setVorschau] = useState(null);
+  const [uebernahmeLaeuft, setUebernahmeLaeuft] = useState(false);
+  const uebernahmeRef = useRef(false);
   const [externText, setExternText] = useState("");
   const [kopiert, setKopiert] = useState(false);
   const [bericht, setBericht] = useState(null);
@@ -81,11 +83,19 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
     ...alt, [titel]: { ...(alt[titel] || LEER), [achse]: wert },
   }));
   const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id ? { ...k, [feld]: wert } : k) }));
-  const uebernehmen = () => {
-    if (!vorschau) return;
-    const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
-    const eintraege = addFilme ? (addFilme(mediathek)?.length || 0) : mediathek.reduce((n, f) => n + (addFilm?.(f) ? 1 : 0), 0);
-    setBericht({ eintraege }); setVorschau(null);
+  const uebernehmen = async () => {
+    if (!vorschau || uebernahmeRef.current) return;
+    uebernahmeRef.current = true; setUebernahmeLaeuft(true);
+    try {
+      const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
+      let eintraege = 0;
+      if (addFilme) {
+        const ids = await addFilme(mediathek);
+        if (ids == null) return;
+        eintraege = ids.length;
+      } else for (const film of mediathek) if (await addFilm?.(film)) eintraege++;
+      setBericht({ eintraege }); setVorschau(null);
+    } finally { uebernahmeRef.current = false; setUebernahmeLaeuft(false); }
   };
 
   return <div className="kd-stapelimport">
@@ -148,7 +158,7 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
         <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
         {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
-      <div className="kd-stapel-aktionen"><button style={btnStyle(true)} onClick={uebernehmen}>Auswahl übernehmen</button><button style={btnStyle(false)} onClick={() => setVorschau(null)}>Verwerfen</button></div>
+      <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>
     </section>}
     {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.eintraege} neue Einträge in die Mediathek.</p>}
   </div>;

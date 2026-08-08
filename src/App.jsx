@@ -23,9 +23,8 @@ import { QuelleKlaerung } from "./components/QuelleKlaerung.jsx";
 import { StartWahl } from "./components/StartWahl.jsx";
 import { KatalogZugang } from "./components/KatalogZugang.jsx";
 import {
-  store, K, PROGRAMM_TTL_MS, storageService,
+  store, K, PROGRAMM_TTL_MS, storageService, storageOwnerKennung,
 } from "./services/storage.js";
-import { baueBackup } from "./lib/backup.js";
 import { catalogService } from "./services/catalog.js";
 import { sessionCoordinator } from "./services/sessionCoordinator.js";
 import { sharedArticlesService } from "./services/sharedArticles.js";
@@ -34,6 +33,7 @@ import {
   liesStartWahl,
   startWahlBestaetigt,
   verbraucheFrischenStart,
+  liesFrischenStartWarnung,
   snapshotsFrei,
   START_WAHL_VERSION,
 } from "./controllers/onboardingController.js";
@@ -48,8 +48,16 @@ import {
 } from "./controllers/catalogController.js";
 import { useIntelligenceController } from "./controllers/useIntelligenceController.js";
 import { useMustwatchController } from "./controllers/useMustwatchController.js";
+import { useArticleController, useMasterPersistenceController } from "./controllers/useArticleController.js";
+import { useErrorQueue } from "./controllers/useErrorQueue.js";
+import { useMasterStateController } from "./controllers/useMasterStateController.js";
+import { useBackupExportController } from "./controllers/useBackupExportController.js";
+import { starteEinzelExportDownload } from "./controllers/backupExportController.js";
+import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
+import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
+import { ERROR_SCOPE } from "./controllers/appErrorScopes.js";
+import { bereiteStartwahlVor, erstellePersonalDataTransactionController } from "./controllers/personalDataTransactionController.js";
 import {
-  schreibeImportSnapshot,
   gueltigerArtikel,
   baueRefUniversum,
   baueKinoMatches,
@@ -71,7 +79,6 @@ import {
   failPublication,
   needsRemoteRemoval,
   publicationOperationId,
-  recoverInterruptedPublication,
   publicationRetryAction,
   publicationState,
 } from "./lib/sharedPublication.js";
@@ -96,9 +103,14 @@ import { ZurueckObenKnopf } from "./components/ZurueckObenKnopf.jsx";
 import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
+import { GlobalErrorQueue } from "./components/GlobalErrorQueue.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
+
+const normalisiereEntdeckenStatus = (wert) => (
+  wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
+);
 
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
@@ -110,6 +122,10 @@ export default function App() {
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   useEffect(() => sessionCoordinator.subscribe(setSession), []);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
+  const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
+  const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
+    frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : [],
+  );
   const [tab, setTab] = useState("start");
   /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
      sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
@@ -148,10 +164,10 @@ export default function App() {
     setMehrOffen(false);
     stelleScrolltiefeHer(tabRef.current, 0);
   }, [stelleScrolltiefeHer]);
-  const [master, setMaster] = useState(null);
-  const masterRef = useRef(master);
-  masterRef.current = master;
-  const [masterMeta, setMasterMeta] = useState(null);
+  const {
+    master, setMaster, masterRef, masterMeta, setMasterMeta, masterMetaRef,
+    masterHerkunft, setMasterHerkunft, masterHerkunftRef, commitMaster,
+  } = useMasterStateController();
   const [programm, setProgramm] = useState(null);
   const [programmArt, setProgrammArt] = useState(null);
   const [progStand, setProgStand] = useState(null);
@@ -187,7 +203,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [loading, setLoading] = useState("");
-  const [err, setErr] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
@@ -292,30 +307,36 @@ export default function App() {
      Vergangene Termine werden beim Boot aufgeräumt (Jahres-Wrap beachtet:
      ein im Dezember gepinnter Januar-Termin gehört ins Folgejahr). */
   const [kinoPins, setKinoPins] = useState([]);
-  const [wochenplan, setWochenplan] = useState(() => {
+  const wochenplanInitial = useMemo(() => {
     try { return normalisiereWochenplan(JSON.parse(localStorage.getItem(K.wochenplan) || "null")); }
     catch { return LEERER_WOCHENPLAN; }
-  });
-  const persistWochenplan = useCallback((roh) => {
-    const next = normalisiereWochenplan(roh);
-    setWochenplan(next);
-    store.set(K.wochenplan, JSON.stringify(next)).catch(() => {});
-    return next;
   }, []);
-  const [entdeckenStatus, setEntdeckenStatus] = useState(() => {
+  const {
+    wert: wochenplan,
+    uebernehmeBestaetigt: setWochenplan,
+    schreibe: persistWochenplan,
+  } = useConfirmedStorageState({
+    key: K.wochenplan,
+    initial: wochenplanInitial,
+    normalisiere: normalisiereWochenplan,
+    setErr,
+    fehlermeldung: "Wochenplan konnte nicht gespeichert werden. Die Änderung wurde nicht übernommen.",
+  });
+  const entdeckenStatusInitial = useMemo(() => {
     try { return JSON.parse(localStorage.getItem(K.entdeckenStatus) || "{}"); } catch { return {}; }
-  });
-  const entdeckenStatusRef = useRef(entdeckenStatus);
-  entdeckenStatusRef.current = entdeckenStatus;
-  const schreibeEntdeckenStatus = useCallback((berechne) => {
-    const vorher = entdeckenStatusRef.current;
-    const next = typeof berechne === "function" ? berechne(vorher) : berechne;
-    if (!next || next === vorher) return vorher;
-    entdeckenStatusRef.current = next;
-    setEntdeckenStatus(next);
-    store.set(K.entdeckenStatus, JSON.stringify(next)).catch(() => {});
-    return next;
   }, []);
+  const {
+    wert: entdeckenStatus,
+    wertRef: entdeckenStatusRef,
+    uebernehmeBestaetigt: setEntdeckenStatus,
+    schreibe: schreibeEntdeckenStatus,
+  } = useConfirmedStorageState({
+    key: K.entdeckenStatus,
+    initial: entdeckenStatusInitial,
+    normalisiere: normalisiereEntdeckenStatus,
+    setErr,
+    fehlermeldung: "Streaming-Status konnte nicht gespeichert werden. Die Änderung wurde nicht übernommen.",
+  });
   /* Initialisiert ausschließlich den Tutorial-Speicher. Ein Terminal-Installer
      ist für die DB-basierte Tester-PWA nicht mehr Teil des Starts. */
   const [setupWarnung] = useState(() => {
@@ -393,7 +414,6 @@ export default function App() {
 
   /* ---- Herkunft der geladenen Liste ----
      typ: "storage" | "demo" | "manuell" · zeit: ms oder Datums-String · basis: optionaler Vermerk */
-  const [masterHerkunft, setMasterHerkunft] = useState(null);
   const demoAktiv = useMemo(() => {
     if (masterHerkunft?.typ === "demo") return true;
     try { return !!localStorage.getItem(K.demoSeed); } catch { return false; }
@@ -402,17 +422,10 @@ export default function App() {
      noch frühere Wahl noch ?start-Parameter vorliegt. Boot entscheidet. */
   const [startModalOffen, setStartModalOffen] = useState(false);
 
-  /* ---- Master persistieren ---- */
-  const persistMaster = useCallback(async (filme, meta, herkunft, speicher = store) => {
-    try {
-      const h = herkunft || { typ: "storage", zeit: Date.now() };
-      await speicher.set(K.master, JSON.stringify({ meta, filme, herkunft: h, gespeichertAm: Date.now() }));
-      return true;
-    } catch {
-      setErr("Speichern der Masterliste fehlgeschlagen.");
-      return false;
-    }
-  }, []);
+  /* ---- Master persistieren: innerster Lock der Mehrtopf-Reihenfolge ---- */
+  const { mutiereMaster, transaktionMaster, loescheMaster } = useMasterPersistenceController({
+    setErr, masterRef, commitMaster,
+  });
 
   /* ---- Kinoprogramm direkt aus dem zentralen Supabase-Katalog laden ---- */
   const ladeProgrammDatei = useCallback(async (manuell) => {
@@ -421,7 +434,6 @@ export default function App() {
        und darf weder Anzeige noch Topf berühren (siehe betriebsartGen). */
     const gen = betriebsartGen.current;
     const veraltet = () => betriebsartGen.current !== gen;
-    setErr("");
     setLoading("programm");
     try {
       /* Der manuelle Knopf bleibt ein DB-Refresh; Dateiimporte besitzen ihre
@@ -446,14 +458,14 @@ export default function App() {
         code: ausCache ? (r.code || null) : null,
       });
       if (ausCache) {
-        setErr(r.anmeldungNoetig
+        reportError(ERROR_SCOPE.PROGRAMM, r.anmeldungNoetig
           ? "Kinoprogramm aus dem letzten Browser-Stand — für das aktuelle Programm ist eine Anmeldung nötig."
           : r.code === ERROR_CODES.INVALID_KEY
             ? "Kinoprogramm aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung)."
             : "Kinoprogramm aus dem letzten Browser-Stand geladen (Datenbank derzeit nicht erreichbar).");
       } else if (r.abgelaufen) {
-        setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
-      }
+        reportError(ERROR_SCOPE.PROGRAMM, "Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
+      } else resolveError(ERROR_SCOPE.PROGRAMM);
       try {
         /* `gueltigBis` und `variante` MÜSSEN mit in den Topf: ohne sie hielte der
            nächste Start einen abgelaufenen Schnappschuss für frisches Programm
@@ -479,6 +491,7 @@ export default function App() {
           setProgrammArt("snapshot");
           setProgStand(stand);
           setProgrammInfo({ art: "snapshot", variante: null, stand, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
+          resolveError(ERROR_SCOPE.PROGRAMM);
           return false;
         } catch { /* Snapshot unbrauchbar — dann eben der ehrliche Fehler unten */ }
       }
@@ -495,7 +508,7 @@ export default function App() {
           : code === ERROR_CODES.INVALID_KEY
             ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
             : (manuell ? "Programmdaten nicht aktualisierbar: " : "Kinoprogramm nicht ladbar: ") + errorText(e);
-      setErr(text);
+      reportError(ERROR_SCOPE.PROGRAMM, text);
       /* Dieser Zweig räumt `programm`, `programmArt` und `progStand` NICHT weg —
          der bisherige Stand bleibt also sichtbar. Dann muss auch seine
          BESCHREIBUNG stehen bleiben: `programmInfo` ist seit Etappe 4 die
@@ -538,7 +551,7 @@ export default function App() {
          frühen Ausstieg selbst ab. */
       if (!veraltet()) setLoading("");
     }
-  }, []);
+  }, [reportError, resolveError]);
 
   /* ---- Boot: Storage → gebündelte Projektdatei → leer (manueller Import) ---- */
   useEffect(() => {
@@ -643,7 +656,6 @@ export default function App() {
         const r = await store.get(K.entdeckenStatus);
         if (r?.value) {
           const status = JSON.parse(r.value);
-          entdeckenStatusRef.current = status;
           setEntdeckenStatus(status);
         }
       } catch { /* keine Entdecken-Markierungen */ }
@@ -709,7 +721,7 @@ export default function App() {
               nachladenNoetig.current = true;
             }
             if (abgelaufen) {
-              setErr("Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
+              reportError(ERROR_SCOPE.PROGRAMM, "Dieser Programm-Schnappschuss ist abgelaufen und zeigt nicht mehr das laufende Kinoprogramm.");
               /* Anzeigen UND nachladen: ohne das bliebe der abgelaufene Stand
                  bis zum nächsten Klick stehen (der Autoload feuert nur bei
                  leerem `programm`). */
@@ -746,32 +758,8 @@ export default function App() {
     }
   }, [bootDone, programm, snapshotFreigabe, ladeProgrammDatei]);
 
-  /* ---- Master-Import ---- */
-  const importMaster = useCallback(async (text) => {
-    setErr("");
-    try {
-      const parsed = JSON.parse(text);
-      const filme = Array.isArray(parsed) ? parsed : parsed.filme;
-      if (!Array.isArray(filme) || filme.length === 0) throw new Error("Kein 'filme'-Array gefunden.");
-      // KD-004: bestehende Masterliste wird ersetzt -> Rollback-Snapshot ZUERST (fail-closed).
-      if (master && master.length && !schreibeImportSnapshot("kd:import:vorher:master", { meta: masterMeta, filme: master, herkunft: masterHerkunft }))
-        throw new Error("Sicherungs-Snapshot vor dem Ersetzen fehlgeschlagen (Speicher voll/blockiert) — nichts überschrieben.");
-      const mitIds = ensureIds(filme);
-      const meta = Array.isArray(parsed) ? null : parsed.meta || null;
-      const h = { typ: "manuell", zeit: Date.now() };
-      setMaster(mitIds);
-      setMasterMeta(meta);
-      setMasterHerkunft(h);
-      await persistMaster(mitIds, meta, h);
-      setTab("kino");
-    } catch (e) {
-      setErr("Master-Import fehlgeschlagen: " + e.message);
-    }
-  }, [persistMaster, master, masterMeta, masterHerkunft]);
-
   /* ---- Programm-Snapshot-Import ---- */
   const importProgramm = useCallback(async (text) => {
-    setErr("");
     try {
       const parsed = JSON.parse(text);
       const data = normalisiereProgramm(parsed); // Alt- und film.at-Format
@@ -783,15 +771,15 @@ export default function App() {
       try {
         await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
       } catch { /* Cache-Fehler nicht fatal */ }
+      resolveError(ERROR_SCOPE.IMPORT_PROGRAMM);
       setTab("kino");
     } catch (e) {
-      setErr("Programm-Import fehlgeschlagen: " + e.message);
+      reportError(ERROR_SCOPE.IMPORT_PROGRAMM, "Programm-Import fehlgeschlagen: " + e.message);
     }
-  }, []);
+  }, [reportError, resolveError]);
 
   /* ---- Nonstop-HTML-Import: deterministisch geparst, kein KI-Call ---- */
   const importNonstop = useCallback(async (html) => {
-    setErr("");
     try {
       const p = parseNonstopHtml(html);
       if (!p.filme.length) throw new Error("Geparst, aber keine Wiener Vorstellungen enthalten.");
@@ -810,28 +798,70 @@ export default function App() {
       try {
         await store.set(K.programm, JSON.stringify({ fetchedAt: jetzt, art: "manuell", data }));
       } catch { /* Cache-Fehler nicht fatal */ }
+      resolveError(ERROR_SCOPE.IMPORT_NONSTOP);
       setTab("kino");
     } catch (e) {
-      setErr("Nonstop-Import fehlgeschlagen: " + e.message);
+      reportError(ERROR_SCOPE.IMPORT_NONSTOP, "Nonstop-Import fehlgeschlagen: " + e.message);
     }
-  }, [programm]);
+  }, [programm, reportError, resolveError]);
 
   /* ---- Film aktualisieren / hinzufügen ----
      Schlüssel ist film.id (stabil, aus der Masterliste). Erste Bearbeitung
      einer gebündelten Liste überführt sie in den Storage (mit Basis-Vermerk). */
-  const naechsteHerkunft = useCallback(() => (
-    masterHerkunft && (masterHerkunft.typ === "demo" || masterHerkunft.typ === "bundled")
-      ? { typ: "storage", zeit: Date.now(), basis: "Demo-Liste" }
-      : { typ: (masterHerkunft && masterHerkunft.typ) || "storage", zeit: Date.now(), basis: masterHerkunft && masterHerkunft.basis }
-  ), [masterHerkunft]);
+  const naechsteHerkunft = useCallback(() => {
+    return naechsteLokaleMasterHerkunft(masterHerkunftRef.current);
+  }, []);
 
   /* ================= MUST-WATCH-LISTE (eigener Topf, 10. Sync-Datei) ================= */
   const {
     mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch,
-    transaktionMustwatch,
-    addMustwatch: persistiereNeuesMustwatch, updateMustwatch, deleteMustwatch,
+    mustwatchRef, transaktionMustwatchVorbereitet,
+    addMustwatch: persistiereNeuesMustwatch, updateMustwatch,
     mustwatchMasterIds, offeneFlags, migriereMustwatch, migrationsBericht,
   } = useMustwatchController({ master, masterRef, setErr });
+
+  const {
+    artikelListe, artikelListeRef, artikelGeladen, artikelGespeichertAm,
+    setArtikelListe, schreibeArtikel, transaktionArtikel,
+  } = useArticleController({ setErr });
+
+  const personalDataTransaktionen = useMemo(() => erstellePersonalDataTransactionController({
+    transaktionMustwatchVorbereitet,
+    transaktionArtikel,
+    transaktionMaster,
+    masterRef,
+  }), [
+    transaktionMustwatchVorbereitet, transaktionArtikel, transaktionMaster,
+  ]);
+  const deleteMustwatch = personalDataTransaktionen.loescheMustwatch;
+
+  /* Vollständiger Masterimport über alle drei Referenztöpfe. Die gekoppelte
+     Transaktion rollt Teilfehler zurück; State und Navigation wechseln erst
+     nach bestätigtem Artikel-, MW- und Masterstand. */
+  const importMaster = useCallback(async (text) => {
+    try {
+      if (!mustwatchGeladen || !artikelGeladen) {
+        throw new Error("Must-Watch und Artikel sind noch nicht sicher geladen — nichts überschrieben.");
+      }
+      const parsed = JSON.parse(text);
+      const filme = Array.isArray(parsed) ? parsed : parsed.filme;
+      if (!Array.isArray(filme) || filme.length === 0) throw new Error("Kein 'filme'-Array gefunden.");
+      const mitIds = ensureIds(filme);
+      const meta = Array.isArray(parsed) ? null : parsed.meta || null;
+      const herkunft = { typ: "manuell", zeit: Date.now() };
+      if (!await personalDataTransaktionen.ersetzeMaster(mitIds, { meta, herkunft })) {
+        throw new Error("gekoppelte Speicherung fehlgeschlagen; der vorherige Stand wurde soweit möglich wiederhergestellt.");
+      }
+      resolveError(ERROR_SCOPE.IMPORT_MASTER);
+      setTab("kino");
+      return true;
+    } catch (e) {
+      reportError(ERROR_SCOPE.IMPORT_MASTER, "Master-Import fehlgeschlagen: " + e.message);
+      return false;
+    }
+  }, [
+    artikelGeladen, mustwatchGeladen, personalDataTransaktionen, reportError, resolveError,
+  ]);
 
   /* Blog-Referenz-Universum = Master ∪ Must-Watch. */
   const mitMustwatch = baueRefUniversum;
@@ -839,55 +869,23 @@ export default function App() {
   /* ================= BLOG: Artikel-Status & CRUD =================
      Artikel leben im Browser-Storage (kd:artikel) + Export im Einstellungen-Tab.
      "Erstellen" speichert sofort mit status "wartet" — nichts geht verloren. */
-  const [artikelListe, setArtikelListe] = useState([]);
-  useEffect(() => {
-    store.get(K.artikel).then((r) => {
-      if (r && r.value) {
-        try {
-          const p = JSON.parse(r.value);
-          const geladen = Array.isArray(p) ? p : p.artikel || [];
-          const artikel = normalisiereArtikelTypen(geladen.map((a) => recoverInterruptedPublication(a)));
-          artikelListeRef.current = artikel;
-          setArtikelListe(artikel);
-          if (p.gespeichertAm) setArtikelGespeichertAm(p.gespeichertAm);
-          if (artikel.some((a, i) => a !== geladen[i])) {
-            const gespeichertAm = Date.now();
-            setArtikelGespeichertAm(gespeichertAm);
-            store.set(K.artikel, JSON.stringify({ artikel, gespeichertAm }))
-              .catch(() => setErr("Artikel-Speichern fehlgeschlagen."));
-          }
-        } catch { /* leer */ }
-      }
-    }).catch(() => {});
-  }, []);
-  const persistArtikel = useCallback((liste) => {
-    const jetzt = Date.now();
-    setArtikelGespeichertAm(jetzt);
-    store.set(K.artikel, JSON.stringify({ artikel: liste, gespeichertAm: jetzt })).catch(() => setErr("Artikel-Speichern fehlgeschlagen."));
-  }, []);
-  const artikelListeRef = useRef(artikelListe);
-  artikelListeRef.current = artikelListe;
-  const schreibeArtikel = useCallback((berechne) => {
-    const vorher = artikelListeRef.current;
-    const next = normalisiereArtikelTypen(typeof berechne === "function" ? berechne(vorher) : berechne);
-    if (next === vorher) return vorher;
-    artikelListeRef.current = next;
-    setArtikelListe(next);
-    persistArtikel(next);
-    return next;
-  }, [persistArtikel]);
   const ohneAbgleichFelder = (a) => ({ ...a, liste: a.liste.map(({ abgleich, ...rest }) => rest), abgleichStat: undefined });
 
-  const erstelleArtikel = useCallback((daten) => {
-    const id = neueArtikelId(daten.titel, artikelListe);
-    const abg = gleicheArtikelAb({ ...daten, id, status: "wartet", erstellt_am: new Date().toISOString() }, refUniversum);
-    const art = ohneAbgleichFelder(abg);
-    schreibeArtikel((prev) => [...prev, art]);
-    return id;
-  }, [artikelListe, refUniversum, schreibeArtikel]);
+  const erstelleArtikel = useCallback(async (daten) => {
+    let id = null;
+    const ok = await schreibeArtikel((prev) => {
+      id = neueArtikelId(daten.titel, prev);
+      const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
+      const abg = gleicheArtikelAb({
+        ...daten, id, status: "wartet", erstellt_am: new Date().toISOString(),
+      }, universum);
+      return [...prev, ohneAbgleichFelder(abg)];
+    });
+    return ok ? id : null;
+  }, [mitMustwatch, mustwatchRef, schreibeArtikel]);
 
-  const aktualisiereArtikel = useCallback((id, daten) => {
-    schreibeArtikel((prev) => {
+  const aktualisiereArtikel = useCallback(async (id, daten) => {
+    const ok = await schreibeArtikel((prev) => {
       const alt = prev.find((a) => a.id === id);
       if (!alt) return prev;
       // Unveränderte Referenzen behalten ihre stabile ref; nur Neues wird abgeglichen.
@@ -895,73 +893,74 @@ export default function App() {
       /* Ein vor dem neuen Zustandsmodell geteilter Artikel darf seine öffentliche
          Existenz beim Abschalten des Schalters nicht vergessen. */
       const publikation = alt.publikation || (alt.geteilt ? publicationState(alt) : undefined);
-      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet", publikation }, refUniversum);
+      const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
+      const abg = gleicheArtikelAb({ ...alt, ...daten, liste, status: "wartet", publikation }, universum);
       return prev.map((a) => (a.id === id ? ohneAbgleichFelder(abg) : a));
     });
-    return id;
-  }, [refUniversum, schreibeArtikel]);
+    return ok ? id : null;
+  }, [mitMustwatch, mustwatchRef, schreibeArtikel]);
 
   /* ---- Must-Watch CRUD (Liste ist die einzige Wahrheit) ---- */
   const addMustwatch = useCallback((daten) => persistiereNeuesMustwatch(daten, (next) => {
     /* Erst nach bestätigtem lokalem Speichern darf der neue Eintrag Blog-
        Rotlinks heilen; bei einem Rollback bliebe sonst eine Phantom-Referenz. */
-    schreibeArtikel((alist) => {
+    void schreibeArtikel((alist) => {
       const [geheilt, n] = heileRotlinks(alist, mitMustwatch(master, next));
       return n > 0 ? geheilt : alist;
     });
   }), [master, mitMustwatch, persistiereNeuesMustwatch, schreibeArtikel]);
 
-  /* ---- Besitz-Nachtrag-Import (deterministisch, idempotent; NUR über die
-     App-eigenen Pfade ensureIds + persistMaster — nie roh) ---- */
+  /* ---- Besitz-Nachtrag-Import (deterministisch, idempotent; queue-zeitig) ---- */
   const [besitzImportBericht, setBesitzImportBericht] = useState(null);
   const importiereBesitz = useCallback(async (text) => {
-    setErr("");
     try {
       const datei = parseBesitzImport(text);
-      const { neue, bericht } = wendeBesitzImportAn(datei, master || [], new Date().toISOString());
-      if (neue.length) {
-        const next = ensureIds([...(master || []), ...neue]);
-        const h = naechsteHerkunft();
-        setMasterHerkunft(h);
-        setMaster(next);
-        await persistMaster(next, masterMeta, h);
-        schreibeArtikel((prev) => {
-          const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
-          return n > 0 ? geheilt : prev;
-        });
-      }
+      let auswertung = null, bestaetigterMaster = null;
+      const gespeichert = await mutiereMaster((aktuell) => {
+        auswertung = wendeBesitzImportAn(datei, aktuell, new Date().toISOString());
+        if (!auswertung.neue.length) return { master: aktuell, unveraendert: true };
+        bestaetigterMaster = ensureIds([...aktuell, ...auswertung.neue]);
+        return { master: bestaetigterMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
+      });
+      if (!gespeichert || !auswertung) throw new Error("bestätigtes Speichern fehlgeschlagen.");
+      if (bestaetigterMaster && !await schreibeArtikel((prev) => {
+        const [geheilt, n] = heileRotlinks(prev, mitMustwatch(bestaetigterMaster, mustwatchRef.current));
+        return n > 0 ? geheilt : prev;
+      })) throw new Error("Mediathek wurde gespeichert, aber Blog-Rotlinks konnten nicht geheilt werden.");
+      const { bericht } = auswertung;
       setBesitzImportBericht({
         uebernommen: bericht.filter((b) => b.status === "übernommen").length,
         uebersprungen: bericht.filter((b) => b.status !== "übernommen").length,
         zeilen: bericht,
       });
-    } catch (e) { setErr("Besitz-Import fehlgeschlagen: " + e.message); }
-  }, [master, masterMeta, mustwatch, naechsteHerkunft, persistMaster, schreibeArtikel, mitMustwatch]);
+      resolveError(ERROR_SCOPE.IMPORT_BESITZ);
+    } catch (e) { reportError(ERROR_SCOPE.IMPORT_BESITZ, "Besitz-Import fehlgeschlagen: " + e.message); }
+  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, reportError, resolveError, schreibeArtikel]);
 
-  const setzeArtikelRef = useCallback((id, index, ref, rotlinkOk) => {
+  const setzeArtikelRef = useCallback((id, index, ref, rotlinkOk) => (
     schreibeArtikel((prev) => (
       prev.map((a) => a.id !== id ? a : {
         ...a, liste: a.liste.map((le, i) => (i === index ? { ...le, ref: ref || null, rotlink_ok: !!rotlinkOk } : le)),
       })
-    ));
-  }, [schreibeArtikel]);
+    ))
+  ), [schreibeArtikel]);
 
   /* Publish, Unpublish und „öffentlich entfernen, dann lokal löschen“ teilen
      genau einen beständigen Vorgang. Lokales Löschen geschieht erst nach
      bestätigtem Unpublish; Fehler bleiben am Artikel sichtbar und wiederholbar. */
   const fuehrePublikationsAktion = useCallback(async (artikel, aktion) => {
-    if (!artikel || artikel.herkunft === "gezogen") return;
+    if (!artikel || artikel.herkunft === "gezogen") return false;
     const vorgangId = publicationOperationId();
-    schreibeArtikel((prev) => (
+    if (!await schreibeArtikel((prev) => (
       prev.map((a) => a.id === artikel.id
         ? beginPublication(a, aktion, vorgangId)
         : a)
-    ));
+    ))) return false;
     try {
       const result = aktion === SHARED_PUBLICATION_ACTION.PUBLISH
         ? await sharedArticlesService.publish(artikel)
         : await sharedArticlesService.unpublish(artikel.id);
-      schreibeArtikel((prev) => {
+      return await schreibeArtikel((prev) => {
         const aktuell = prev.find((a) => a.id === artikel.id);
         /* Eine neuere Nutzeraktion besitzt eine andere Vorgangs-ID. Dann ist
            diese verspätete Antwort fachlich überholt und bleibt wirkungslos. */
@@ -971,7 +970,7 @@ export default function App() {
           : prev.map((a) => a.id === artikel.id ? completePublication(a, vorgangId, result) : a);
       });
     } catch (error) {
-      schreibeArtikel((prev) => {
+      await schreibeArtikel((prev) => {
         const next = prev.map((a) => a.id === artikel.id
           ? failPublication(a, vorgangId, error?.code)
           : a);
@@ -982,79 +981,71 @@ export default function App() {
           ? "Veröffentlichen fehlgeschlagen: " + errorText(error)
           : "Öffentliches Entfernen fehlgeschlagen: " + errorText(error),
       );
+      return false;
     }
   }, [schreibeArtikel]);
 
-  const freigebeArtikel = useCallback((id) => {
-    const artikel = artikelListe.find((a) => a.id === id);
-    if (!artikel) return;
-    const freigegeben = { ...artikel, status: "freigegeben" };
-    schreibeArtikel((prev) => (
-      prev.map((a) => (a.id === id ? { ...a, status: "freigegeben" } : a))
-    ));
-    if (freigegeben.herkunft === "gezogen") return;
-    if (freigegeben.geteilt) {
+  const freigebeArtikel = useCallback(async (id) => {
+    let freigegeben = null;
+    const ok = await schreibeArtikel((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      freigegeben = { ...a, status: "freigegeben" };
+      return freigegeben;
+    }));
+    if (!ok || !freigegeben) return false;
+    if (freigegeben.herkunft === "gezogen") return true;
+    const darfPublizieren = session.mode === "account" && session.state === "ready";
+    if (freigegeben.geteilt && darfPublizieren) {
       void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.PUBLISH);
-    } else if (needsRemoteRemoval(freigegeben)) {
+    } else if (needsRemoteRemoval(freigegeben) && darfPublizieren) {
       void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.UNPUBLISH);
     }
-  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion]);
+    return true;
+  }, [schreibeArtikel, fuehrePublikationsAktion, session.mode, session.state]);
 
   const loescheArtikel = useCallback(async (id) => {
     const artikel = artikelListe.find((a) => a.id === id);
-    if (!artikel) return;
+    if (!artikel) return false;
     if (needsRemoteRemoval(artikel)) {
-      await fuehrePublikationsAktion(artikel, SHARED_PUBLICATION_ACTION.DELETE);
-      return;
+      if (session.mode !== "account" || session.state !== "ready") {
+        setErr("Der Artikel besitzt noch eine öffentliche Kopie. Melde dich an, damit sie vor dem lokalen Löschen sicher entfernt werden kann.");
+        return false;
+      }
+      return fuehrePublikationsAktion(artikel, SHARED_PUBLICATION_ACTION.DELETE);
     }
-    schreibeArtikel((prev) => prev.filter((a) => a.id !== id));
-  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion]);
+    return schreibeArtikel((prev) => prev.filter((a) => a.id !== id));
+  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion, session.mode, session.state, setErr]);
 
   const wiederholePublikation = useCallback((id) => {
     const artikel = artikelListe.find((a) => a.id === id);
     const aktion = publicationRetryAction(artikel);
-    if (artikel && aktion) void fuehrePublikationsAktion(artikel, aktion);
-  }, [artikelListe, fuehrePublikationsAktion]);
+    if (artikel && aktion && session.mode === "account" && session.state === "ready") {
+      void fuehrePublikationsAktion(artikel, aktion);
+    }
+  }, [artikelListe, fuehrePublikationsAktion, session.mode, session.state]);
 
   /* Einen geteilten Blog in die eigene Mediathek ziehen: lokale Kopie mit Herkunft,
      Referenzen gegen die eigene Master neu aufgelöst (fehlende = Rotlink). */
-  const zieheSharedBlog = useCallback((sharedBlog) => {
-    const art = blogZuArtikel(
-      sharedBlog,
-      artikelListeRef.current,
-      refUniversum,
-    );
-    schreibeArtikel((prev) => [...prev, art]);
-    return art.id;
-  }, [refUniversum, schreibeArtikel]);
+  const zieheSharedBlog = useCallback(async (sharedBlog) => {
+    let art = null;
+    const ok = await schreibeArtikel((prev) => {
+      const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
+      art = blogZuArtikel(sharedBlog, prev, universum);
+      return [...prev, art];
+    });
+    return ok ? art.id : null;
+  }, [mitMustwatch, mustwatchRef, schreibeArtikel]);
 
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
      als der letzte Export, erscheint ein roter Punkt am Einstellungen-Tab + Banner. */
-  const [exportStand, setExportStand] = useState({ master: 0, artikel: 0 });
-  const exportStandRef = useRef(exportStand);
-  exportStandRef.current = exportStand;
-  const [artikelGespeichertAm, setArtikelGespeichertAm] = useState(0);
-  useEffect(() => {
-    store.get(K.exportStand).then((r) => {
-      if (r && r.value) {
-        try {
-          const next = { master: 0, artikel: 0, ...JSON.parse(r.value) };
-          exportStandRef.current = next;
-          setExportStand(next);
-        } catch { /* Default */ }
-      }
-    }).catch(() => {});
-  }, []);
-  const markiereExport = useCallback((feld) => {
-    const next = { ...exportStandRef.current, [feld]: Date.now() };
-    exportStandRef.current = next;
-    setExportStand(next);
-    store.set(K.exportStand, JSON.stringify(next)).catch(() => {});
-  }, []);
-  const ungesichertMaster = masterHerkunft && masterHerkunft.typ === "storage"
-    && typeof masterHerkunft.zeit === "number" && masterHerkunft.zeit > exportStand.master;
-  const ungesichertArtikel = artikelListe.length > 0 && artikelGespeichertAm > exportStand.artikel;
+  const { markiereExport, backupGesamt, ungesichertMaster, ungesichertArtikel } = useBackupExportController({
+    masterHerkunft,
+    artikelListe,
+    artikelGespeichertAm,
+    owner: storageOwnerKennung(),
+    onFehler: setErr,
+  });
 
   /* Hilfe ist nun ausschließlich nutzerinitiiert. Die frühere automatische
      Tour bei Tabwechseln und Scrollereignissen ist aus dem Laufzeitpfad entfernt. */
@@ -1065,24 +1056,26 @@ export default function App() {
     const blob = new Blob([JSON.stringify({ exportiert_am: new Date().toISOString(), artikel: artikelListe }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "artikel.json"; a.click();
-    URL.revokeObjectURL(url);
-    markiereExport("artikel");
-  }, [artikelListe, markiereExport]);
-  const importArtikel = useCallback((text) => {
-    setErr("");
+    a.href = url; a.download = "artikel.json";
+    try { starteEinzelExportDownload(a, markiereExport, "artikel", artikelGespeichertAm); }
+    finally { URL.revokeObjectURL(url); }
+  }, [artikelGespeichertAm, artikelListe, markiereExport]);
+  const importArtikel = useCallback(async (text) => {
     try {
       const p = JSON.parse(text);
       const liste = Array.isArray(p) ? p : p.artikel;
       if (!Array.isArray(liste)) throw new Error("Kein 'artikel'-Array gefunden.");
       // KD-006: Schema-Müll ablehnen statt zu persistieren (sonst Blog-Crash an a.liste.map/a.text).
       if (!liste.every(gueltigerArtikel)) throw new Error("Datei enthält ungültige Artikel (id/titel/text/liste) — nicht importiert.");
-      // KD-004: bestehende Artikel werden ersetzt -> Rollback-Snapshot ZUERST (fail-closed).
-      if (artikelListe.length && !schreibeImportSnapshot("kd:import:vorher:artikel", artikelListe))
-        throw new Error("Sicherungs-Snapshot vor dem Ersetzen fehlgeschlagen (Speicher voll/blockiert) — nichts überschrieben.");
-      schreibeArtikel(liste);
-    } catch (e) { setErr("Artikel-Import fehlgeschlagen: " + e.message); }
-  }, [artikelListe, schreibeArtikel]);
+      if (!await schreibeArtikel(() => {
+        const universum = mitMustwatch(masterRef.current || [], mustwatchRef.current || []);
+        return liste.map((artikel) => ohneAbgleichFelder(gleicheArtikelAb(artikel, universum)));
+      })) throw new Error("bestätigtes Speichern fehlgeschlagen.");
+      resolveError(ERROR_SCOPE.IMPORT_ARTIKEL);
+      return true;
+    } catch (e) { reportError(ERROR_SCOPE.IMPORT_ARTIKEL, "Artikel-Import fehlgeschlagen: " + e.message); }
+    return false;
+  }, [mitMustwatch, mustwatchRef, reportError, resolveError, schreibeArtikel]);
 
   /* ---- Teilen & Tauschen (Phase A): Autorname + Bulk-Übernahme ---- */
   const [autorName, setAutorName] = useState("");
@@ -1097,40 +1090,28 @@ export default function App() {
   /* Paket-Übernahme als EIN Commit: Master einmal persistieren, Artikel
      anhängen, danach Rotlink-Heilung über ALLE Artikel (neue Filme können
      auch alte Rotlinks schließen). */
-  const uebernehmePaket = useCallback(({ neueFilme, neueArtikel }) => {
-    let neuerMaster = master || [];
+  const uebernehmePaket = useCallback(async ({ neueFilme, neueArtikel }) => {
+    let neuerMaster = masterRef.current || [];
     if (neueFilme.length) {
-      neuerMaster = [...neuerMaster, ...neueFilme];
-      const h = naechsteHerkunft();
-      setMasterHerkunft(h);
-      setMaster(neuerMaster);
-      persistMaster(neuerMaster, masterMeta, h);
-      // KI-Import mit unklaren Quellen -> gesammelt klären (alle offenen, auch früher vertagte)
+      const gespeichert = await mutiereMaster((aktuell) => {
+        const ids = new Set(aktuell.map((film) => film.id));
+        const wirklichNeu = neueFilme.filter((film) => film?.id && !ids.has(film.id) && ids.add(film.id));
+        if (!wirklichNeu.length) { neuerMaster = aktuell; return { master: aktuell, unveraendert: true }; }
+        neuerMaster = ensureIds([...aktuell, ...wirklichNeu]);
+        return { master: neuerMaster, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
+      });
+      if (!gespeichert) return false;
       if (neueFilme.some((f) => f.quelle_unklar)) {
         setKlaerung(neuerMaster.filter((f) => f.quelle_unklar).map((f) => ({ id: f.id, titel: f.titel, jahr: f.jahr })));
       }
     }
-    schreibeArtikel((prev) => {
+    return schreibeArtikel((prev) => {
       let next = neueArtikel.length ? [...prev, ...neueArtikel] : prev;
-      const [geheilt, n] = heileRotlinks(next, mitMustwatch(neuerMaster, mustwatch));
+      const [geheilt, n] = heileRotlinks(next, mitMustwatch(neuerMaster, mustwatchRef.current));
       if (n > 0) next = geheilt;
       return next;
     });
-  }, [master, masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, schreibeArtikel]);
-
-  /* ---- Gesamt-Backup als Download (treiber-agnostisch: frischer Pull + Lesen über store) ----
-     Liest NICHT mehr aus React-State (v2-Falle), sondern nach einem erzwungenen frischen
-     Pull des aktiven Treibers alle 10 Schlüssel über `store` (backup.js). */
-  const backupGesamt = useCallback(async () => {
-    const b = await baueBackup();
-    const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "kinodreieck_backup_" + new Date().toISOString().slice(0, 10) + ".json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, []);
+  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel]);
 
   /* Kandidaten für den Must-Watch-Verknüpfungs-Picker (explizit, kein Auto-Match):
      Master (id) · Kinoprogramm (film_at_id — nur Einträge MIT stabiler ID) ·
@@ -1165,110 +1146,101 @@ export default function App() {
   }, [master, navigiere, springeZuFilm, springeZuStreaming]);
   const springeZuArtikel = useCallback((id) => { setBlogFokus(id); setTab("blog"); }, []);
 
-  const updateFilm = useCallback((id, changes) => {
-    const next = ensureIds((master || []).map((f) => (f.id === id ? { ...f, ...changes } : f)));
-    const h = naechsteHerkunft();
-    setMasterHerkunft(h);
-    setMaster(next);
-    persistMaster(next, masterMeta, h);
-  }, [master, persistMaster, masterMeta, naechsteHerkunft]);
+  const updateFilm = useCallback((id, changes) => mutiereMaster((aktuell) => {
+    if (!aktuell.some((film) => film.id === id)) return { abgebrochen: true };
+    return {
+      master: ensureIds(aktuell.map((film) => film.id === id ? { ...film, ...changes } : film)),
+      meta: masterMetaRef.current, herkunft: naechsteHerkunft(),
+    };
+  }), [mutiereMaster, naechsteHerkunft]);
 
   const deleteFilm = useCallback(async (id) => {
-    if (!mustwatchGeladen) {
-      setErr("Eintrag kann erst gelöscht werden, wenn Must-Watch sicher geladen ist. Es wurde nichts verändert.");
+    if (!mustwatchGeladen || !artikelGeladen) {
+      setErr("Eintrag kann erst gelöscht werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
       return false;
     }
-    let aktuell = null, plan = null, herkunft = null, abgebrochen = false;
-    const ok = await transaktionMustwatch((aktuellesMustwatch) => {
-      aktuell = masterRef.current || [];
-      const film = aktuell.find((eintrag) => eintrag.id === id);
-      if (!film) { abgebrochen = true; return aktuellesMustwatch; }
-      plan = planeFilmLoeschung(aktuell, artikelListeRef.current, aktuellesMustwatch, id);
-      const teile = [];
-      if (plan.folgen.artikelRefs) teile.push(`${plan.folgen.artikelRefs} Blog-Verweis${plan.folgen.artikelRefs === 1 ? " wird" : "e werden"} wieder zum Rotlink`);
-      if (plan.folgen.mustwatchRefs) teile.push(`${plan.folgen.mustwatchRefs} Must-Watch-Verknüpfung${plan.folgen.mustwatchRefs === 1 ? " wird" : "en werden"} gelöst`);
-      const folgeText = teile.length ? `\n\n${teile.join("; ")}.` : "";
-      if (!window.confirm(`„${film.titel}“ wirklich aus der Mediathek löschen?${folgeText}`)) {
-        abgebrochen = true;
-        return aktuellesMustwatch;
-      }
-      return plan.mustwatch;
-    }, async ({ storageContext }) => {
-      if (abgebrochen || !plan) return false;
-      herkunft = naechsteHerkunft();
-      /* Die MW-Barriere bleibt bis zum bestätigten lokalen Master-Write zu.
-         So kann kein wartender MW-Auftrag den gelöschten Link zurückbringen. */
-      masterRef.current = plan.master;
-      if (await persistMaster(plan.master, masterMeta, herkunft, storageContext)) return true;
-      masterRef.current = aktuell;
-      return false;
+    const aktuell = masterRef.current || [];
+    const film = aktuell.find((eintrag) => eintrag.id === id);
+    if (!film) return false;
+    const vorschau = planeFilmLoeschung(aktuell, artikelListeRef.current, mustwatchRef.current, id);
+    const teile = [];
+    if (vorschau.folgen.artikelRefs) teile.push(`${vorschau.folgen.artikelRefs} Blog-Verweis${vorschau.folgen.artikelRefs === 1 ? " wird" : "e werden"} wieder zum Rotlink`);
+    if (vorschau.folgen.mustwatchRefs) teile.push(`${vorschau.folgen.mustwatchRefs} Must-Watch-Verknüpfung${vorschau.folgen.mustwatchRefs === 1 ? " wird" : "en werden"} gelöst`);
+    const folgeText = teile.length ? `\n\n${teile.join("; ")}.` : "";
+    if (!window.confirm(`„${film.titel}“ wirklich aus der Mediathek löschen?${folgeText}`)) return false;
+    const ok = await personalDataTransaktionen.loescheFilm(id, {
+      meta: masterMeta,
+      herkunft: naechsteHerkunft(),
     });
-    if (!ok || abgebrochen || !plan) return false;
-    setMasterHerkunft(herkunft);
-    setMaster(plan.master);
-    if (plan.folgen.artikelRefs) schreibeArtikel(plan.artikel);
+    if (!ok) return false;
     setExpandedId(null);
     return true;
-  }, [masterMeta, mustwatchGeladen, naechsteHerkunft, persistMaster, schreibeArtikel, transaktionMustwatch]);
+  }, [
+    artikelGeladen, masterMeta, mustwatchGeladen, mustwatchRef, naechsteHerkunft,
+    personalDataTransaktionen,
+  ]);
 
-  const uebernehmeQuellenKlaerung = useCallback((map) => {
-    const next = (master || []).map((f) => (
-      map[f.id] !== undefined
-        ? { ...f, quelle: map[f.id], quelle_unklar: undefined }
-        : f
-    ));
-    const h = naechsteHerkunft();
-    setMasterHerkunft(h);
-    setMaster(next);
-    persistMaster(next, masterMeta, h);
-    setKlaerung(null);
-  }, [master, masterMeta, naechsteHerkunft, persistMaster]);
+  const uebernehmeQuellenKlaerung = useCallback(async (map) => {
+    const ok = await mutiereMaster((aktuell) => ({
+      master: aktuell.map((film) => map[film.id] !== undefined
+        ? { ...film, quelle: map[film.id], quelle_unklar: undefined }
+        : film),
+      meta: masterMetaRef.current, herkunft: naechsteHerkunft(),
+    }));
+    if (ok) setKlaerung(null);
+  }, [mutiereMaster, naechsteHerkunft]);
 
   /* Gibt die neue ID zurück (Blog-Rotlink-Anlage setzt damit sofort die ref).
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
-  const addFilm = useCallback((film) => {
+  const addFilm = useCallback(async (film) => {
     const id = film.id || slugId(film.titel, film.jahr);
-    if ((master || []).some((f) => f.id === id)) {
+    let next = null, doppelt = false;
+    const ok = await mutiereMaster((aktuell) => {
+      if (aktuell.some((eintrag) => eintrag.id === id)) {
+        doppelt = true;
+        return { abgebrochen: true };
+      }
+      next = [...aktuell, ensureIds([{ ...film, id }])[0]];
+      return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
+    });
+    if (!ok) {
+      if (doppelt) {
       setErr("Eintrag existiert bereits: " + film.titel + (film.jahr ? " (" + film.jahr + ")" : ""));
+      }
       return null;
     }
-    const next = [...(master || []), ensureIds([{ ...film, id }])[0]];
-    const h = naechsteHerkunft();
-    setMasterHerkunft(h);
-    setMaster(next);
-    persistMaster(next, masterMeta, h);
-    schreibeArtikel((prev) => {
-      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
+    await schreibeArtikel((prev) => {
+      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatchRef.current));
       if (n > 0) return geheilt;
       return prev;
     });
     return id;
-  }, [master, mustwatch, mitMustwatch, persistMaster, masterMeta, naechsteHerkunft, schreibeArtikel]);
+  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel, setErr]);
 
-  const addFilme = useCallback((filme) => {
-    const aktuell = masterRef.current || [];
-    const ids = new Set(aktuell.map((f) => f.id));
-    const neue = [];
-    for (const film of filme || []) {
-      const id = film.id || slugId(film.titel, film.jahr);
-      if (!id || ids.has(id)) continue;
-      ids.add(id);
-      neue.push(ensureIds([{ ...film, id }])[0]);
-    }
+  const addFilme = useCallback(async (filme) => {
+    let next = null, neue = [];
+    const ok = await mutiereMaster((aktuell) => {
+      const ids = new Set(aktuell.map((film) => film.id));
+      neue = [];
+      for (const film of filme || []) {
+        const id = film.id || slugId(film.titel, film.jahr);
+        if (!id || ids.has(id)) continue;
+        ids.add(id);
+        neue.push(ensureIds([{ ...film, id }])[0]);
+      }
+      if (!neue.length) return { master: aktuell, unveraendert: true };
+      next = [...aktuell, ...neue];
+      return { master: next, meta: masterMetaRef.current, herkunft: naechsteHerkunft() };
+    });
+    if (!ok) return null;
     if (!neue.length) return [];
-    const next = [...aktuell, ...neue];
-    const h = naechsteHerkunft();
-    masterRef.current = next;
-    setMasterHerkunft(h);
-    setMaster(next);
-    persistMaster(next, masterMeta, h);
-    schreibeArtikel((prev) => {
-      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
+    await schreibeArtikel((prev) => {
+      const [geheilt, n] = heileRotlinks(prev, mitMustwatch(next, mustwatchRef.current));
       return n > 0 ? geheilt : prev;
     });
     return neue.map((f) => f.id);
-  }, [masterMeta, mustwatch, mitMustwatch, naechsteHerkunft, persistMaster, schreibeArtikel]);
+  }, [mitMustwatch, mustwatchRef, mutiereMaster, naechsteHerkunft, schreibeArtikel]);
 
   const serienKatalog = useMemo(() => [
     ...((streamingBekannt && streamingBekannt.titel) || []),
@@ -1287,16 +1259,18 @@ export default function App() {
   const letzterSerienWatchSync = useRef("");
   useEffect(() => {
     if (session.mode !== "account" || !bootDone) return undefined;
+    const expectedAccountId = String(session.account?.id || "");
+    if (!expectedAccountId) return undefined;
     const ids = serienBeobachten(entdeckenStatus, serienKatalog).map((e) => e.watchmode_id);
     const signatur = JSON.stringify(ids);
     if (signatur === letzterSerienWatchSync.current) return undefined;
     const timer = setTimeout(() => {
-      seriesWatchService.setObserved(ids).then((r) => {
+      seriesWatchService.setObserved(ids, expectedAccountId).then((r) => {
         if (r?.ok) letzterSerienWatchSync.current = signatur;
       }).catch(() => { /* lokaler Status bleibt; späterer Zustandswechsel versucht erneut */ });
     }, 800);
     return () => clearTimeout(timer);
-  }, [session.mode, bootDone, entdeckenStatus, serienKatalog]);
+  }, [session.mode, session.account?.id, bootDone, entdeckenStatus, serienKatalog]);
 
   const bestaetigeSerienHinweis = useCallback((watchmodeId) => {
     const t = serienKatalog.find((x) => String(x.watchmode_id) === String(watchmodeId));
@@ -1324,14 +1298,11 @@ export default function App() {
     tab,
     session,
     master,
-    masterRef,
     masterMeta,
     mustwatch,
     mitMustwatch,
     naechsteHerkunft,
-    persistMaster,
-    setMaster,
-    setMasterHerkunft,
+    mutiereMaster,
     schreibeArtikel,
     setErr,
   });
@@ -1339,7 +1310,7 @@ export default function App() {
   /* ---- Startwahl treffen/ändern (Modal & Einstellungen-Tab) ----
      Schreibt kd:start und lädt entsprechend. "Startart wechseln" (Einstellungen-Tab)
      verwirft dabei den Browser-Stand — beide Wege ohne Datei-Gefummel. */
-  const waehleStart = useCallback((wahl) => {
+  const waehleStart = useCallback(async (wahl) => {
     if (wahl !== "clean" && wahl !== "demo") return;
     /* Etappe 3: Im Kontobetrieb würde ein Startart-Wechsel den lokalen Bestand
        leeren — der nächste Abgleich holte ihn aber sofort aus dem Konto zurück.
@@ -1353,31 +1324,54 @@ export default function App() {
     try { aktuelle = localStorage.getItem(K.start); } catch { /* */ }
     if (startWahlBestaetigt() && aktuelle === wahl) {
       setStartModalOffen(false);
-      if (!catalogService.hasConnection()) setKatalogZugangOffen(true);
+      if (!snapshotsFrei()) setKatalogZugangOffen(true);
       return;
     }
     const hatPersoenlicheDaten = !!((master && master.length) || artikelListe.length || mustwatch.length || merkliste.length || kinoPins.length);
-    if (startWahlBestaetigt() && aktuelle && aktuelle !== wahl && hatPersoenlicheDaten
+    const istWechsel = startWahlBestaetigt() && aktuelle && aktuelle !== wahl;
+    const brauchtGekoppelteLeerung = istWechsel || hatPersoenlicheDaten;
+    if (brauchtGekoppelteLeerung && hatPersoenlicheDaten
       && !window.confirm("Startmodus wechseln?\n\nDabei wird die aktuelle Mediathek im Browser verworfen. Lade vorher ein Gesamt-Backup herunter, wenn du sie behalten möchtest.")) return;
-    store.delete(K.master).catch(() => {});
-    try {
-      localStorage.setItem(K.start, wahl);
-      localStorage.setItem(K.startVersion, START_WAHL_VERSION);
-      localStorage.removeItem(K.demoSeed);
-      setupUeberspringen();
-    } catch { /* */ }
+    if (brauchtGekoppelteLeerung) {
+      if (!mustwatchGeladen || !artikelGeladen) {
+        setErr("Startmodus kann erst gewechselt werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
+        return;
+      }
+    }
+    const startwahl = bereiteStartwahlVor({
+      storage: localStorage, wahl,
+      startKey: K.start, versionKey: K.startVersion, seedKey: K.demoSeed,
+      version: START_WAHL_VERSION,
+    });
+    if (!startwahl.ok) {
+      setErr("Startmodus konnte auf diesem Gerät nicht gespeichert werden. Es wurde nichts verändert.");
+      return;
+    }
+    const grunddatenOk = brauchtGekoppelteLeerung
+      ? await personalDataTransaktionen.ersetzeMaster([], {
+        meta: null, herkunft: null, loeschen: true,
+      })
+      : await loescheMaster();
+    if (!grunddatenOk) {
+      startwahl.rollback();
+      setErr(brauchtGekoppelteLeerung
+        ? "Startmodus konnte nicht sicher gewechselt werden. Der bisherige Stand bleibt soweit möglich erhalten."
+        : "Startmodus konnte nicht sicher vorbereitet werden.");
+      return;
+    }
+    try { setupUeberspringen(); } catch { /* Einstieg bleibt im Zweifel sichtbar. */ }
     setStartModalOffen(false);
-    if (!catalogService.hasConnection()) {
+    if (!snapshotsFrei()) {
       setKatalogZugangOffen(true);
       return;
     }
     /* Ein Reload hält den Start atomar: Demo-Seeds werden vor allen übrigen
        Storage-Effekten geladen, Clean startet garantiert ohne Alt-Master. */
-    try { location.reload(); } catch {
-      setMaster(null); setMasterMeta(null); setMasterHerkunft(null);
-      setSnapshotFreigabe(true); setStartTick((t) => t + 1);
-    }
-  }, [master, artikelListe, mustwatch, merkliste, kinoPins, session.mode]);
+    try { location.reload(); } catch { setSnapshotFreigabe(true); setStartTick((t) => t + 1); }
+  }, [
+    artikelGeladen, artikelListe, kinoPins, loescheMaster, master, merkliste,
+    mustwatch, mustwatchGeladen, personalDataTransaktionen, session.mode,
+  ]);
   const oeffneStartWahl = useCallback(() => setStartModalOffen(true), []);
 
   /* Entfernt ausschließlich die beim Demo-Start protokollierten Beilagen.
@@ -1389,8 +1383,8 @@ export default function App() {
       setErr("Demo-Daten entfernen geht nur ohne Konto. Melde dich unter Settings → Konto ab; deine Daten auf diesem Gerät bleiben dabei erhalten.");
       return;
     }
-    if (!mustwatchGeladen) {
-      setErr("Demo-Daten können erst entfernt werden, wenn Must-Watch sicher geladen ist. Es wurde nichts verändert.");
+    if (!mustwatchGeladen || !artikelGeladen) {
+      setErr("Demo-Daten können erst entfernt werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
       return;
     }
     let seed = {};
@@ -1424,29 +1418,17 @@ export default function App() {
     }
     const masterIds = new Set(seed.masterIds || []);
     const mwIds = new Set(seed.mustwatchIds || []);
-    let demoMasterVorher = null, nextMaster = null, masterHerkunftNeu = null;
-    const grunddatenOk = await transaktionMustwatch(
-      (aktuellesMustwatch) => aktuellesMustwatch.filter((e) => !mwIds.has(e.id)),
-      async ({ storageContext }) => {
-        demoMasterVorher = masterRef.current || [];
-        nextMaster = demoMasterVorher.filter((f) => !masterIds.has(f.id));
-        masterRef.current = nextMaster;
-        if (nextMaster.length) {
-          masterHerkunftNeu = { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" };
-          if (await persistMaster(nextMaster, masterMeta, masterHerkunftNeu, storageContext)) return true;
-        } else {
-          try { await storageContext.delete(K.master); return true; }
-          catch { setErr("Demo-Masterliste konnte nicht entfernt werden. Es wurde nichts weiter verändert."); }
-        }
-        masterRef.current = demoMasterVorher;
-        return false;
-      },
-    );
-    if (!grunddatenOk) return;
-    if (nextMaster.length) { setMaster(nextMaster); setMasterHerkunft(masterHerkunftNeu); }
-    else { setMaster(null); setMasterMeta(null); setMasterHerkunft(null); }
     const artIds = new Set(seed.artikelIds || []);
-    schreibeArtikel((prev) => prev.filter((a) => !artIds.has(a.id)));
+    const grunddatenOk = await personalDataTransaktionen.transformiereGrunddaten({
+      berechneMaster: (liste) => liste.filter((film) => !masterIds.has(film.id)),
+      berechneMustwatch: (liste) => liste.filter((eintrag) => !mwIds.has(eintrag.id)),
+      berechneArtikel: (liste) => liste.filter((artikel) => !artIds.has(artikel.id)),
+      meta: masterMeta,
+      herkunft: (next) => next.length
+        ? { typ: "storage", zeit: Date.now(), basis: "Clean nach Demo" }
+        : null,
+    });
+    if (!grunddatenOk) return;
     if (Array.isArray(seed.pinKeys)) {
       const demoPins = new Set(seed.pinKeys.map(String));
       const nextPins = kinoPins.filter((p) => !demoPins.has(String(p.t || "") + "|" + String(p.z || "")));
@@ -1473,8 +1455,8 @@ export default function App() {
     } catch { /* */ }
     setErr(""); setStartTick((t) => t + 1);
   }, [
-    session.mode, masterMeta, artikelListe, mustwatchGeladen, kinoPins, merkliste, auswahl,
-    persistMaster, persistPins, persistMerk, schreibeArtikel, transaktionMustwatch,
+    session.mode, masterMeta, artikelListe, artikelGeladen, mustwatchGeladen, kinoPins, merkliste, auswahl,
+    persistPins, persistMerk, personalDataTransaktionen,
   ]);
 
   /* ---- Master-Export (hält Max' Datei synchron) ---- */
@@ -1485,10 +1467,9 @@ export default function App() {
     const a = document.createElement("a");
     a.href = url;
     a.download = "max_filmguide_masterliste_export.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    markiereExport("master");
-  }, [master, masterMeta, markiereExport]);
+    try { starteEinzelExportDownload(a, markiereExport, "master", masterHerkunft?.zeit); }
+    finally { URL.revokeObjectURL(url); }
+  }, [master, masterHerkunft?.zeit, masterMeta, markiereExport]);
 
   const kinoMatches = useMemo(
     () => baueKinoMatches(programm, master),
@@ -1593,7 +1574,7 @@ export default function App() {
       try { return await lauf; }
       finally { if (ref.current === lauf) ref.current = null; }
     };
-    const uebernehmeInfo = (r) => {
+    const uebernehmeInfo = (r, scope) => {
       const ausCache = r.quelle === "cache";
       setStreamingInfo({
         art: ausCache ? "cache" : "datenbank", variante: r.variante,
@@ -1602,11 +1583,12 @@ export default function App() {
         ausCache, anmeldungNoetig: !!r.anmeldungNoetig, fehler: null,
         code: ausCache ? (r.code || null) : null,
       });
-      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) setErr("Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung).");
-      else if (ausCache && r.warnung) setErr("Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
-      else if (r.abgelaufen) setErr("Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
+      if (ausCache && r.code === ERROR_CODES.INVALID_KEY) reportError(scope, "Streamingkatalog aus dem letzten Browser-Stand — der hinterlegte Zugangsschlüssel wird gerade abgelehnt (Settings → Datenmodus & Verbindung).");
+      else if (ausCache && r.warnung) reportError(scope, "Streamingkatalog aus dem letzten Browser-Stand geladen (DB derzeit nicht erreichbar).");
+      else if (r.abgelaufen) reportError(scope, "Dieser Streaming-Schnappschuss ist abgelaufen und zeigt nicht mehr die aktuelle Verfügbarkeit.");
+      else resolveError(scope);
     };
-    const meldeFehler = (e, entdeckenTeil = false) => {
+    const meldeFehler = (e, scope, entdeckenTeil = false) => {
       const code = e?.code || null;
       const anmeldungNoetig = code === ERROR_CODES.UNAUTHENTICATED;
       const text = anmeldungNoetig
@@ -1616,7 +1598,7 @@ export default function App() {
           : code === ERROR_CODES.INVALID_KEY
             ? "Der hinterlegte Zugangsschlüssel wird von der Datenbank nicht akzeptiert — prüfe ihn unter Settings → Datenmodus & Verbindung."
             : (entdeckenTeil ? "Entdecken-Katalog" : "Streamingkatalog") + " nicht ladbar: " + errorText(e);
-      setErr(text);
+      reportError(scope, text);
       setStreamingInfo((vorher) => (vorher && vorher.art
         ? {
           ...vorher,
@@ -1634,12 +1616,12 @@ export default function App() {
         roh = { ...roh, bekannt: r.payload };
         streamingRohRef.current = roh;
         streamingGeladen.current = true;
-        uebernehmeInfo(r);
+        uebernehmeInfo(r, ERROR_SCOPE.STREAMING_KNOWN);
       } catch (e) {
         if (veraltet()) return;
         streamingGeladen.current = false;
         const file = typeof location !== "undefined" && location.protocol === "file:";
-        if (!file) { meldeFehler(e); return; }
+        if (!file) { meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN); return; }
         const dateiRoh = {
           bekannt: streamingBekanntSnapshot,
           entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot,
@@ -1651,6 +1633,8 @@ export default function App() {
         const a = catalogService.buildStreamingViews(dateiRoh, master || []);
         setStreamingBekannt(a.bekannt); setStreamingEntdecken(a.entdecken);
         setStreamingInfo({ art: "snapshot", variante: null, stand: null, gueltigBis: null, abgelaufen: false, ausCache: false, anmeldungNoetig: false, fehler: null, code: null });
+        resolveError(ERROR_SCOPE.STREAMING_KNOWN);
+        resolveError(ERROR_SCOPE.STREAMING_DISCOVER);
         return a;
       }
     }
@@ -1662,11 +1646,11 @@ export default function App() {
         roh = { ...roh, entdecken: r.payload };
         streamingRohRef.current = roh;
         entdeckenGeladen.current = true;
-        uebernehmeInfo(r);
+        uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
       } catch (e) {
         if (veraltet()) return;
         entdeckenGeladen.current = false;
-        meldeFehler(e, true);
+        meldeFehler(e, ERROR_SCOPE.STREAMING_DISCOVER, true);
       }
     }
 
@@ -1678,7 +1662,7 @@ export default function App() {
     setStreamingBekannt(a.bekannt);
     setStreamingEntdecken(a.entdecken);
     return a;
-  }, [snapshotFreigabe, master]);
+  }, [snapshotFreigabe, master, reportError, resolveError]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
   useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
 
@@ -1858,8 +1842,7 @@ export default function App() {
     streamingRohRef.current = null;
     streamingBekanntLaufRef.current = null;
     streamingEntdeckenLaufRef.current = null;
-    const [programmOk] = await Promise.all([ladeProgrammDatei(true), ladeStreamingDateien(true)]);
-    if (programmOk) setErr("");
+    await Promise.all([ladeProgrammDatei(true), ladeStreamingDateien(true)]);
   }, [ladeProgrammDatei, ladeStreamingDateien]);
 
   const wrap = {
@@ -1943,16 +1926,12 @@ export default function App() {
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "20px 22px 0" }}>
         {tab !== "start" && <BereichsHero bereich={tab} />}
         {(ungesichertMaster || ungesichertArtikel) && (
-          <aside className="kd-backup-hinweis kd-nur-desktop" role="status">
+          <aside className="kd-backup-hinweis" role="status">
             <span><strong>Noch nicht gesichert.</strong> Browser-Speicher ist kein Backup.</span>
             <button onClick={() => navigiere("daten")}>Sicherung öffnen</button>
           </aside>
         )}
-        {err && (
-          <div style={{ background: "rgba(217,106,90,0.12)", border: "1px solid " + T.gefahr, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 14 }}>
-            {err}
-          </div>
-        )}
+        <GlobalErrorQueue errors={errors} onDismiss={dismissError} />
 
         {bootDone && loading === "programm" && !progStand && (
           <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 14, color: T.leinwandTief, lineHeight: 1.6 }}>
@@ -2055,7 +2034,7 @@ export default function App() {
         {tab === "blog" && (
           <BlogTab
             artikel={artikelListe} master={refUniversum}
-            angemeldet={session.mode === "account"}
+            angemeldet={session.mode === "account" && session.state === "ready"}
             fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
             onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
@@ -2114,6 +2093,8 @@ export default function App() {
             scopeArtikel={artikelListe}
             onArtikelKlick={springeZuArtikel}
             onNavigiere={navigiere}
+            kiVerfuegbar={session.mode === "account" && session.state === "ready"
+              && session.capabilities?.personalAi === true}
           />
         )}
 

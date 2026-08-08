@@ -9,7 +9,8 @@ export function statusVon(wert) {
 
 export function mediathekIdVon(wert) {
   if (wert === "erstellt") return true;
-  return wert && typeof wert === "object" && wert.mediathek_id ? wert.mediathek_id : null;
+  const id = wert && typeof wert === "object" ? wert.mediathek_id : null;
+  return typeof id === "string" || typeof id === "number" || id === true ? id : null;
 }
 
 export function istBeobachtet(wert) {
@@ -23,10 +24,13 @@ function statusObjekt(wert) {
 
 export function mitMediathekEintrag(rohStatus, t, mediathekId, jetzt = new Date()) {
   const basis = statusObjekt(rohStatus);
+  const id = typeof mediathekId === "string" || typeof mediathekId === "number" || mediathekId === true
+    ? mediathekId
+    : null;
   return {
     ...basis,
     status: statusVon(rohStatus) === "gesehen" ? "gesehen" : "erstellt",
-    mediathek_id: mediathekId,
+    mediathek_id: id,
   };
 }
 
@@ -100,6 +104,27 @@ export function neuerGesehenEintrag(t, jetzt = new Date()) {
     titel: t && t.titel ? t.titel : "",
     gesehen_am: jetzt.toISOString(),
   };
+}
+
+/* Persistierter Gesehen-Toggle vollständig aus dem Queue-Stand. Ein äußerer
+   Render-Snapshot darf nur entscheiden, ob statt des Toggles zuerst das Modal
+   gezeigt wird; bereits bestätigte Beobachten-/Staffelfelder bleiben erhalten. */
+export function toggleGesehenInStatus(statusMap, t, jetzt = new Date()) {
+  const id = t?.watchmode_id;
+  if (id == null) return statusMap;
+  const roh = statusMap?.[id];
+  const next = { ...(statusMap || {}) };
+  const basis = statusObjekt(roh);
+  if (statusVon(roh) === "gesehen") {
+    const { status: _status, gesehen_am: _gesehenAm, ...rest } = basis;
+    if (rest.beobachtet || rest.mediathek_id) next[id] = rest;
+    else delete next[id];
+    return next;
+  }
+  const mediathekId = mediathekIdVon(roh);
+  if (!mediathekId) return statusMap;
+  next[id] = mitMediathekEintrag({ ...basis, ...neuerGesehenEintrag(t, jetzt) }, t, mediathekId);
+  return next;
 }
 
 /* „Beobachten“ ist ein eigener Pin und ausdrücklich unabhängig von „gesehen“.

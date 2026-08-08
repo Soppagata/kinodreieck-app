@@ -124,10 +124,16 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
     setFehler(null);
     setLaeuft(true);
     try {
-      await sessionCoordinator.signOut();
+      const logout = await sessionCoordinator.signOut();
       fordereEinstiegNachAbmeldung();
       setZeigeUebernahme(false);
-      setMeldung("Abgemeldet. Kontodaten wurden von diesem Gerät entfernt; ein früherer Gaststand wurde wiederhergestellt.");
+      if (logout?.gaststand?.quelle === "konto-cache-quarantaene") {
+        setMeldung(null);
+        setFehler(logout.gaststand.warnung
+          || "Abgemeldet. Der frühere Gaststand konnte nicht wiederhergestellt werden; der lokale Kontocache wurde zum Schutz entfernt.");
+      } else {
+        setMeldung("Abgemeldet. Kontodaten wurden von diesem Gerät entfernt; ein früherer Gaststand wurde wiederhergestellt.");
+      }
       onDatenGeaendert?.();
     }
     catch (error) { setFehler(error?.message || errorText(error)); }

@@ -18,6 +18,39 @@ export function artHatUhrzeit(art) {
   return ["kino", "termin", "konzert"].includes(art);
 }
 
+export function normalisiereReminderJahr(wert, jetzt = new Date()) {
+  if (wert === "" || wert == null) return null;
+  const jahr = Number(wert);
+  const maxJahr = new Date(jetzt).getFullYear() + 5;
+  return Number.isInteger(jahr) && jahr >= 1870 && jahr <= maxJahr ? jahr : null;
+}
+
+/* Derselbe vollständige, unbewertete Serien-Datensatz wie bei einer regulären
+   Mediathek-Anlage. Ohne belastbares Jahr gibt es bewusst keinen Kandidaten:
+   die stabile Master-ID besteht aus Titel und Jahr. */
+export function mediathekEintragAusReminder(reminder, jetzt = new Date()) {
+  const titel = String(reminder?.titel || "").trim();
+  const jahr = normalisiereReminderJahr(reminder?.jahr, jetzt);
+  if (!titel || !jahr || !["folge", "staffel"].includes(reminder?.art)) return null;
+  return {
+    titel,
+    originaltitel: titel,
+    jahr,
+    jahr_bis: null,
+    typ: "serie",
+    quelle: "must_watch",
+    kategorie: null,
+    bewertet_von: null,
+    bewertung: null,
+    genre: [],
+    tags: [],
+    begruendung: "",
+    notiz: "",
+    status: "gesetzt",
+    ...(reminder?.ref?.watchmode_id != null ? { watchmode_id: reminder.ref.watchmode_id } : {}),
+  };
+}
+
 const TAG_MS = 86400000;
 
 function zwei(n) { return String(n).padStart(2, "0"); }
@@ -84,6 +117,7 @@ export function normalisiereWochenplan(roh, jetzt = new Date()) {
     ids.add(id);
     const art = WOCHENPLAN_ARTEN.includes(e.art) ? e.art : "folge";
     const startdatum = lokalesDatum(e.startdatum) ? e.startdatum : heute;
+    const jahr = normalisiereReminderJahr(e.jahr, jetzt);
     const uhrzeit = artHatUhrzeit(art) && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(e.uhrzeit || ""))
       ? String(e.uhrzeit)
       : "";
@@ -94,6 +128,7 @@ export function normalisiereWochenplan(roh, jetzt = new Date()) {
       id,
       art,
       titel: String(e.titel).trim(),
+      ...(jahr ? { jahr } : {}),
       plattform: String(e.plattform || "").trim(),
       wochentage: eindeutigeWochentage(e.wochentage ?? e.wochentag),
       intervall_wochen: rhythmus(e.intervall_wochen ?? e.rhythmus),
@@ -231,8 +266,9 @@ export function findeReminderVerknuepfung(reminder, katalog = [], master = []) {
 }
 
 function streamingTitelFuerReminder(reminder, katalog = []) {
-  if (reminder?.art !== "folge" && reminder?.art !== "staffel") return katalog;
-  return (Array.isArray(katalog) ? katalog : []).filter((titel) => {
+  const liste = Array.isArray(katalog) ? katalog : [];
+  if (reminder?.art !== "folge" && reminder?.art !== "staffel") return liste;
+  return liste.filter((titel) => {
     const typ = titelNormiert(titel?.typ);
     return !typ || ["tv series", "serie", "staffel", "folge"].includes(typ);
   });
@@ -248,6 +284,30 @@ function streamingZiel(treffer, fallbackBereich = "entdecken") {
 
 function kinoProgrammRef(treffer) {
   return treffer?.programm_ref ?? treffer?.prog_ref ?? treffer?.id ?? null;
+}
+
+function externeReminderUrl(ref) {
+  if (!ref?.url) return null;
+  try {
+    const url = new URL(String(ref.url));
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/* Ein persönlicher Reminder gehört dem Nutzer, nicht dem Katalog. Fehlt sein
+   verknüpftes Ziel vorübergehend oder dauerhaft, bleibt der Termin deshalb
+   sichtbar; nur die Zielaktion fällt weg. Echte Kinoprogramm-Pins werden
+   getrennt verarbeitet und dürfen nach Ablauf weiterhin verschwinden. */
+function fehlendeReminderQuelle(ref) {
+  const url = externeReminderUrl(ref);
+  return {
+    quelle: null,
+    ziel: url ? { art: "extern", url } : null,
+    abgelaufen: false,
+    verknuepfungFehlt: true,
+  };
 }
 
 /* Beim Speichern wird nur innerhalb des fachlich gewählten Pools verknüpft.
@@ -316,25 +376,33 @@ export function reminderVerknuepfungsOptionen(reminder, { kinoKatalog = [], kata
   }).filter(Boolean);
 }
 
-export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [], master = [] } = {}, jetzt = new Date()) {
+export function reminderVerknuepfung(reminder, {
+  kinoKatalog = [], katalog = [], master = [],
+} = {}, jetzt = new Date()) {
+  if (reminder?.link_modus === "keiner") {
+    return { quelle: null, ziel: null, abgelaufen: false };
+  }
   const ref = reminder?.ref && typeof reminder.ref === "object" ? reminder.ref : {};
   if (ref.master_id != null) {
-    const quelle = findeReminderVerknuepfung(reminder, [], master).treffer;
+    const quelle = (Array.isArray(master) ? master : [])
+      .find((treffer) => String(treffer?.id) === String(ref.master_id)) || null;
     return quelle
       ? { quelle, ziel: { art: "mediathek", ref: quelle.id } }
-      : { quelle: null, ziel: null, abgelaufen: true };
+      : fehlendeReminderQuelle(ref);
   }
   if (ref.watchmode_id != null) {
-    const quelle = findeReminderVerknuepfung(reminder, streamingTitelFuerReminder(reminder, katalog), []).treffer;
+    const quelle = streamingTitelFuerReminder(reminder, katalog)
+      .find((treffer) => String(treffer?.watchmode_id) === String(ref.watchmode_id)) || null;
     return quelle
       ? { quelle, ziel: streamingZiel(quelle, ref.streaming_art) }
-      : { quelle: null, ziel: null, abgelaufen: true };
+      : fehlendeReminderQuelle(ref);
   }
   if (ref.kino_programm_id != null) {
-    const quelle = kinoKatalog.find((treffer) => String(kinoProgrammRef(treffer)) === String(ref.kino_programm_id)) || null;
+    const quelle = (Array.isArray(kinoKatalog) ? kinoKatalog : [])
+      .find((treffer) => String(kinoProgrammRef(treffer)) === String(ref.kino_programm_id)) || null;
     return quelle
       ? { quelle, ziel: { art: "kino", ref: kinoProgrammRef(quelle) } }
-      : { quelle: null, ziel: null, abgelaufen: true };
+      : fehlendeReminderQuelle(ref);
   }
 
   let quelle = null;
@@ -345,6 +413,10 @@ export function reminderVerknuepfung(reminder, { kinoKatalog = [], katalog = [],
   } else if (reminder?.art === "folge" || reminder?.art === "staffel") {
     quelle = findeReminderVerknuepfung(reminder, streamingTitelFuerReminder(reminder, katalog), []).treffer;
     if (quelle) ziel = streamingZiel(quelle);
+  }
+  if (!ziel) {
+    const url = externeReminderUrl(ref);
+    if (url) ziel = { art: "extern", url };
   }
   return { quelle, ziel, abgelaufen: false };
 }
@@ -460,18 +532,21 @@ export function findeKinoPinImKatalog(pin, kinoKatalog = [], jetzt = new Date())
   return passend.length === 1 ? passend[0] : null;
 }
 
-export function wochenansicht({ wochenplan, kinoPins = [], kinoVorschlaege = [], kinoKatalog = [], katalog = [], master = [], startdatum = null, wochenstart = null, jetzt = new Date() } = {}) {
+export function wochenansicht({
+  wochenplan, kinoPins = [], kinoVorschlaege = [], kinoKatalog = [], katalog = [], master = [],
+  startdatum = null, wochenstart = null, jetzt = new Date(),
+} = {}) {
   const plan = normalisiereWochenplan(wochenplan, jetzt);
   /* `wochenstart` bleibt als lesbarer Alt-Parameter erhalten, damit ältere
      Einzeldateien/Tests nicht brechen. Die App selbst übergibt nur noch jetzt. */
   const tage = naechsteSiebenTage(startdatum || wochenstart || jetzt).map((tag) => ({ ...tag, eintraege: [] }));
   for (const e of plan.eintraege) {
     const verknuepfung = reminderVerknuepfung(e, { kinoKatalog, katalog, master }, jetzt);
-    if (verknuepfung.abgelaufen) continue;
     for (const tag of tage) if (reminderFaellig(e, tag.iso)) tag.eintraege.push({
       ...e,
       quelle: verknuepfung.quelle,
       ziel: verknuepfung.ziel,
+      ...(verknuepfung.verknuepfungFehlt ? { verknuepfungFehlt: true } : {}),
       folgenstand: folgenstandText(verknuepfung.quelle),
     });
   }

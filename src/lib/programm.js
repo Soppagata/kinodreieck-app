@@ -121,6 +121,7 @@ export function normalisiereProgramm(parsed, jetzt = new Date()) {
   const data = parsed && parsed.data && Array.isArray(parsed.data.filme) ? parsed.data : parsed;
   if (!data || !Array.isArray(data.filme)) throw new Error("Kein 'filme'-Array gefunden.");
   if (!data.filme.length || !data.filme[0].vorstellungen) return bereinigeAltFormat(data, jetzt); // Format 1/2
+  const archiviert = data.archiviert === true;
 
   // Format 3: film.at — Anzeige-Fenster bestimmen (lokale Zeit, String-basiert, keine TZ-Fallen)
   const heute = jetzt;
@@ -132,9 +133,12 @@ export function normalisiereProgramm(parsed, jetzt = new Date()) {
   const baueFilm = (f, nurFenster) => {
     const vs = (f.vorstellungen || []).filter((v) => {
       const tag = String(v.zeit).slice(0, 10);
-      if (tag < heuteStr) return false;            // Vergangenes IMMER raus — Abgleich mit Systemzeit bei jedem Öffnen
+      /* Nur das ausdrücklich markierte, synthetische Offline-Beispiel darf alte
+         Termine als Anschauungsmaterial behalten. Live-/Importdaten filtern
+         Vergangenes weiterhin strikt. */
+      if (!archiviert && tag < heuteStr) return false;
       const zeitpunkt = Date.parse(String(v.zeit));
-      if (Number.isFinite(zeitpunkt) && zeitpunkt < heute.getTime()) return false;
+      if (!archiviert && Number.isFinite(zeitpunkt) && zeitpunkt < heute.getTime()) return false;
       return !nurFenster || fenster.has(tag);      // im Primärlauf zusätzlich aufs Anzeige-Fenster begrenzen
     });
     if (!vs.length) return null;
@@ -162,7 +166,8 @@ export function normalisiereProgramm(parsed, jetzt = new Date()) {
 
   let filme = data.filme.map((f) => baueFilm(f, true)).filter(Boolean);
   const gesamt = data.filme.length;
-  let hinweis = "film.at API" + (data.zeitraum ? " · Zeitraum " + data.zeitraum.von + "–" + data.zeitraum.bis : "");
+  let hinweis = (data.quelle_hinweis || "film.at API")
+    + (data.zeitraum ? " · Zeitraum " + data.zeitraum.von + "–" + data.zeitraum.bis : "");
   if (!filme.length) {
     // Fenster leer (z.B. Snapshot nur für spätere Tage) — ungefiltert zeigen statt leerem Dashboard
     filme = data.filme.map((f) => baueFilm(f, false)).filter(Boolean);
@@ -174,12 +179,13 @@ export function normalisiereProgramm(parsed, jetzt = new Date()) {
     stand: (data.erstellt || parsed.erstellt || "").slice(0, 10) || null,
     quelle_hinweis: hinweis,
     status: {
-      quelle: "film.at API",
+      quelle: data.quelle || "film.at API",
       zeitraum: data.zeitraum ? [data.zeitraum.von, data.zeitraum.bis].filter(Boolean).join("–") : null,
       angezeigt: filme.length,
       gesamt,
       warnungen: Array.isArray(data.warnungen) ? data.warnungen.length : 0,
       fensterTage: ANZEIGE_TAGE,
+      archiviert,
     },
     filme,
     events: [],

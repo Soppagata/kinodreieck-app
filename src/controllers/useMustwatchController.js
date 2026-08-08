@@ -204,6 +204,67 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
     return auftrag;
   }, [persistMustwatch, uebernehmeState]);
 
+  /* Vorbereitete Mehrtopf-Barriere für die feste Sperrreihenfolge
+     Must-Watch → Artikel → Master. Anders als transaktionMustwatch schreibt
+     sie den MW-Stand nicht schon vor dem Folgeschritt. Der innere Koordinator
+     kann dadurch zuerst Blogrefs sicher zu Rotlinks machen, dann MW bestätigen
+     und zuletzt Master schreiben. Bei einem Masterfehler wird MW noch bei
+     gehaltenem Lock vor dem möglichen Artikel-Rollback kompensiert. */
+  const transaktionMustwatchVorbereitet = useCallback((berechne, folgeschritt) => {
+    const auftragKontext = captureStorageContext();
+    if (!geladenRef.current || !geladenerKontextRef.current?.isCurrent()) {
+      setErrRef.current("Must-Watch ist noch nicht sicher geladen. Es wurde nichts verändert.");
+      return Promise.resolve(false);
+    }
+    const auftrag = mutationsketteRef.current.then(async () => {
+      if (!auftragKontext.isCurrent() || typeof folgeschritt !== "function") return false;
+      const vorher = mustwatchRef.current;
+      const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+      if (!Array.isArray(next)) return false;
+      const geaendert = next !== vorher;
+      let vorwaertsBestaetigt = !geaendert;
+      let rollbackVersucht = false;
+      let rollbackOk = !geaendert;
+
+      const persistiere = async () => {
+        if (vorwaertsBestaetigt) return true;
+        if (!auftragKontext.isCurrent()) return false;
+        vorwaertsBestaetigt = await persistMustwatch(next, auftragKontext);
+        return vorwaertsBestaetigt && auftragKontext.isCurrent();
+      };
+      const rolleZurueck = async () => {
+        rollbackVersucht = true;
+        if (!geaendert || !vorwaertsBestaetigt) { rollbackOk = true; return true; }
+        rollbackOk = await persistMustwatch(vorher, auftragKontext);
+        if (!rollbackOk && auftragKontext.isCurrent()) {
+          uebernehmeState(next);
+          setErrRef.current("Die gekoppelte Änderung wurde abgebrochen, aber Must-Watch konnte nicht zurückgesichert werden. Abhängige Blogrefs bleiben vorsichtshalber als Rotlinks sichtbar; bitte Sync-Status und Backup prüfen.");
+        }
+        return rollbackOk && auftragKontext.isCurrent();
+      };
+
+      let folgeOk = false;
+      try {
+        folgeOk = await folgeschritt({
+          vorher, next, storageContext: auftragKontext, persistiere, rolleZurueck,
+        }) !== false;
+      } catch { folgeOk = false; }
+      if (!auftragKontext.isCurrent()) return false;
+      if (folgeOk && vorwaertsBestaetigt) {
+        if (geaendert) uebernehmeState(next);
+        return true;
+      }
+      /* Defensive Kompensation für Aufrufer, die nach einem bestätigten
+         Vorwärtswrite abbrechen, ohne selbst zurückzurollen. Der eigentliche
+         Mehrtopf-Koordinator rollt vor dem Artikel-Rollback explizit zurück. */
+      if (vorwaertsBestaetigt && geaendert && !rollbackVersucht) await rolleZurueck();
+      if (rollbackVersucht && !rollbackOk && auftragKontext.isCurrent()) uebernehmeState(next);
+      return false;
+    });
+    mutationsketteRef.current = auftrag.catch(() => false);
+    return auftrag;
+  }, [persistMustwatch, uebernehmeState]);
+
   const sichereVerknuepfung = useCallback((verknuepfung) => {
     if (!verknuepfung) return null;
     const aktuellerMaster = externerMasterRef?.current || master || [];
@@ -274,8 +335,9 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
 
   return {
     mustwatch: sichtbareMustwatch, setMustwatch,
+    mustwatchRef,
     mustwatchGeladen: mustwatchGeladen && sichtbarerKontextAktuell,
-    schreibeMustwatch, transaktionMustwatch,
+    schreibeMustwatch, transaktionMustwatch, transaktionMustwatchVorbereitet,
     addMustwatch, updateMustwatch, deleteMustwatch, ersetzeMustwatch,
     mustwatchMasterIds: sichtbareMustwatchMasterIds, offeneFlags: sichtbareOffeneFlags,
     migriereMustwatch, migrationsBericht,

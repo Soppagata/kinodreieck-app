@@ -196,19 +196,19 @@ function SignalChips({ sig, onToggle, versteckeTitel, stumm }) {
      künftiger info-Chip wäre also farblos und falsch beschriftet gewesen.
      Heute emittiert die Liste keinen; die Klasse ist trotzdem vollständig
      definiert, damit die Falle nicht auf den Nächsten wartet. */
-  const farbe = { hart: T.leinwandTief, weich: T.wolfram, ausschluss: T.warum, info: T.rauch };
+  const farbe = { hart: T.leinwandTief, weich: T.wolfram, ausschluss: T.gefahr, info: T.rauch };
   const wirkungslos = sig.jahrMax != null && explizitMax && sig.stimmungen.some((s) => (alleStimmungen()[s] || {}).jahr_max);
   return (
     <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       {chips.length > 0 && <span style={mono}>Verstanden:</span>}
       {chips.map(([feld, wert, label, art], i) => (
-        <Chip key={i} active onClick={() => onToggle(feld, wert)} title={
+        <Chip key={i} active color={farbe[art]} onClick={() => onToggle(feld, wert)} title={
           art === "hart" ? "Harter Filter — schränkt die Treffer ein"
             : art === "weich" ? "Weicher Wunsch — sortiert nur um"
               : art === "ausschluss" ? "Ausschluss — wirft heraus oder wertet ab"
                 : "Hinweis — wirkt nicht auf die Treffer"
         }>
-          <span style={{ color: farbe[art] }}>{art === "ausschluss" ? "− " : ""}</span>{label} ×
+          <span>{art === "hart" ? "Filter · " : art === "weich" ? "Wunsch · " : art === "ausschluss" ? "− Ausschluss · " : "Hinweis · "}</span>{label} ×
         </Chip>
       ))}
       {(sig.negiertIgnoriert || []).length > 0 && (
@@ -404,6 +404,7 @@ export function FinderTab({
   master, kinoMatches, streamingBekannt, streamingEntdecken, mustwatchIds,
   auswahl = [], onSpringeZuFilm, addFilm, addFilmMitPrognose,
   vorbewertungAktiv = false, prognoseSperrgrund = null,
+  kiVerfuegbar = false,
   verlauf, setVerlauf, eingabe, setEingabe,
   vokabular = [], saveVokabular,
   suchauftrag = null, onSuchauftragVerbraucht,
@@ -661,7 +662,7 @@ export function FinderTab({
                     Nebenwirkung, die eine echte Luecke schliesst: Der Knopf
                     wurde bisher auch Gaesten angeboten, obwohl `aiService` ein
                     Konto verlangt -- der Fehlschlag kam erst NACH dem Klick. */}
-                {kiAn("suche") && !e.ki && istUnklar(e.sig) && (
+                {kiVerfuegbar && kiAn("suche") && !e.ki && istUnklar(e.sig) && (
                   <div style={{ marginTop: 6 }}>
                     <button style={btnStyle(false)} disabled={kiLaeuft !== null}
                       onClick={() => deuteMitKi(i)}

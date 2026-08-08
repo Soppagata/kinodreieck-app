@@ -180,7 +180,7 @@ und einfache Aufteilung und sollte beibehalten werden.
 | Start | persönliches Dashboard, Datenfrische, Kino-, Must-Watch-, Streaming- und Pinboard-Ausschnitte |
 | Kino | Wiener Programm, Matching gegen die Mediathek, Zeitfilter, Pins, neue Einträge, Prognose und Filmwissen |
 | Streaming | eigenes Programm, Entdecken-Katalog, Diensteauswahl, Merkliste, Prognose und Filmwissen |
-| Mediathek | Filme, Reihen, Serien, Musik und Sonstiges; Bewertungen, Quellen, Must-Watch und Artikelreferenzen |
+| Mediathek | Filme, Serien, Musik und Sonstiges; Bewertungen, Quellen, Must-Watch und Artikelreferenzen |
 | Suche | deterministischer Finder plus optionale intelligente Suche; Kino-, Bestand- und Streamingquellen |
 | Blog | lokale Artikel, Referenzabgleich, Paketexport/-import und accountgebundene öffentliche Projektionen |
 | Settings | Darstellung, Startmodus, KI-Schalter, Profil, Konto, Import/Export, Restore, Katalog und Wartung |
@@ -193,7 +193,7 @@ und einfache Aufteilung und sollte beibehalten werden.
 | Sammlung | `match.js`, `typen.js`, `kategorien.js`, `quellen.js`, `staffeln.js`, `mustwatch.js` | IDs, Bewertungen, Typen, Besitzquellen, Serienstand und Must-Watch |
 | Artikel und Austausch | `artikel.js`, `paket.js`, `BlogTab.jsx`, `TeilenBlock.jsx` | Artikelworkflow, Rotlinks, Referenzen und Datei-Pakete |
 | Kino | `programm.js`, `kinos.js`, `KinoTab.jsx` | Programmschema, Zeitfilter, Kinoverweise und Matchingdarstellung |
-| Streaming | `katalog.js`, `dienste.js`, `StreamingTab.jsx`, `StreamingSettings.jsx` | Katalogread, Dienste, eigene Treffer, Entdecken und Merkliste |
+| Streaming | `katalog.js`, `dienste.js`, `StreamingTab.jsx`, `StreamingEinstellungen.jsx` | Katalogread, Dienste, eigene Treffer, Entdecken und Merkliste |
 | Suche | `finder.js`, `FinderTab.jsx` | deterministische Sprachzerlegung, Filter, Ranking und optionale KI-Suche |
 | Profil | `geschmack.js`, `profil.js`, `extraktion.js`, Profilkomponenten | Onboarding, Einwilligung, Signale, Vorschläge und Promptfassung |
 | Prognose | `prognoseAuftrag.js`, `prognose.js`, `vorbewertung.js`, Prognosekomponenten | minimierter Auftrag, Ergebnisvertrag, Speicherung und Annahme/Korrektur |

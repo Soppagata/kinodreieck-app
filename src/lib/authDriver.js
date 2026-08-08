@@ -64,11 +64,18 @@ function leseSitzung() {
   } catch { return null; }
 }
 function schreibeSitzung(s) {
-  try { localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(s)); return true; }
+  try {
+    const raw = JSON.stringify(s);
+    localStorage.setItem(AUTH_SESSION_KEY, raw);
+    return localStorage.getItem(AUTH_SESSION_KEY) === raw;
+  }
   catch { return false; }
 }
 function loescheSitzung() {
-  try { localStorage.removeItem(AUTH_SESSION_KEY); } catch { /* best effort */ }
+  try {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    return localStorage.getItem(AUTH_SESSION_KEY) == null;
+  } catch { return false; }
 }
 export function hatGespeicherteSitzung() { return !!leseSitzung(); }
 
@@ -221,14 +228,23 @@ export function createAuthDriver({
     }
     if (antwort.ok && antwort.data?.access_token) {
       const neu = sitzungAus(antwort.data, frisch, jetzt());
-      schreibeSitzung(neu);
+      if (!schreibeSitzung(neu)) {
+        zustand = AUTH_ZUSTAND.DEGRADIERT;
+        return frisch;
+      }
       zustand = AUTH_ZUSTAND.ANGEMELDET;
       return neu;
     }
     if (istEndgueltigUngueltig(antwort.status, antwort.data)) {
-      loescheSitzung();
-      zustand = AUTH_ZUSTAND.ABGELAUFEN;
-      return null;
+      if (loescheSitzung()) {
+        zustand = AUTH_ZUSTAND.ABGELAUFEN;
+        return null;
+      }
+      /* Ein nicht entfernbares Credential darf nie als Guest behauptet
+         werden. Die bestehende Sitzung bleibt lokal gebunden und die
+         Privacy-Grenze kann beim nächsten Versuch erneut greifen. */
+      zustand = AUTH_ZUSTAND.DEGRADIERT;
+      return frisch;
     }
     zustand = AUTH_ZUSTAND.DEGRADIERT;   // 5xx / 429 / unklar: Sitzung behalten
     return frisch;
@@ -248,14 +264,17 @@ export function createAuthDriver({
   }
 
   /* ---------- Zugriffstoken für den Datentreiber ---------- */
-  async function getAccessToken({ erzwingeErneuerung = false } = {}) {
+  async function getAccessToken({ erzwingeErneuerung = false, erwarteteKontoId = null } = {}) {
+    const erwartet = erwarteteKontoId == null ? null : String(erwarteteKontoId);
     const s = leseSitzung();
     if (!s) { zustand = AUTH_ZUSTAND.GAST; return null; }
+    if (erwartet && String(s.kontoId || "") !== erwartet) return null;
     if (!erzwingeErneuerung && s.gueltigBis - jetzt() > REFRESH_PUFFER_MS) {
       zustand = AUTH_ZUSTAND.ANGEMELDET;
       return s.access_token;
     }
     const neu = await refresh();
+    if (erwartet && String(neu?.kontoId || "") !== erwartet) return null;
     return neu ? neu.access_token : null;
   }
 
@@ -278,16 +297,26 @@ export function createAuthDriver({
   }
 
   /* ---------- Abmelden ----------
-     Lokal ist der Logout IMMER erfolgreich: ein fehlgeschlagener Serverruf darf
-     den Nutzer nicht in einer Sitzung festhalten, die er beenden wollte.
-     Persönliche Daten (die kd:*-Töpfe) werden dabei NIE angefasst. */
-  async function signOut() {
+     Ein fehlgeschlagener Serverruf blockiert den lokalen Logout nicht. Die
+     lokale Credential-Löschung erfolgt aber erst, nachdem der Coordinator den
+     persönlichen Kontocache sicher getrennt hat. Scheitert diese Privacy-
+     Grenze oder die Credential-Persistenz, bleibt die lokale Sitzung bewusst
+     erhalten beziehungsweise gesperrt statt einen unsicheren Gast zu melden. */
+  async function signOut({ beforeLocalCommit = null } = {}) {
     const s = leseSitzung();
-    loescheSitzung();
-    zustand = AUTH_ZUSTAND.GAST;
     if (s?.access_token) {
       try { await ruf("/logout", { token: s.access_token }); } catch { /* lokaler Logout gilt */ }
     }
+    /* Der Session-Koordinator darf den persönlichen Cache genau zwischen
+       abgeschlossenem Serverversuch und lokaler Credential-Löschung trennen.
+       Wirft diese Privacy-Grenze, bleiben die lokalen Zugangsdaten erhalten. */
+    if (typeof beforeLocalCommit === "function") await beforeLocalCommit();
+    if (!loescheSitzung()) {
+      const error = new Error("Die lokale Anmeldung konnte nicht sicher entfernt werden.");
+      error.code = "AUTH_CREDENTIAL_PERSISTENCE_FAILED";
+      throw error;
+    }
+    zustand = AUTH_ZUSTAND.GAST;
     return { ok: true };
   }
 

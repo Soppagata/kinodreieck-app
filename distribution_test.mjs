@@ -12,6 +12,7 @@ function check(name, wert) {
 const html = readFileSync("public/download/index.html", "utf8");
 const installCode = readFileSync("public/download/install.js", "utf8");
 const appCode = readFileSync("src/App.jsx", "utf8");
+const mainCode = readFileSync("src/main.jsx", "utf8");
 const onboardingCode = readFileSync("src/controllers/onboardingController.js", "utf8");
 const dom = new JSDOM(html);
 const dokument = dom.window.document;
@@ -30,8 +31,11 @@ check("Landingpage verspricht keinen allgemeinen Datenverlustschutz",
   !/löschen keine|keine Daten (?:löschen|überschreiben)|verlustfrei/i.test(dokument.body.textContent));
 check("Der echte Resetpfad verlangt Startart, fresh-Token und strenge Tokenform",
   appCode.includes("verbraucheFrischenStart")
-  && onboardingCode.includes("if (!startMatch || !tokenMatch) return null;")
-  && onboardingCode.includes('if (!/^[A-Za-z0-9._~-]{8,160}$/.test(token)) return null;'));
+  && onboardingCode.includes('if (!/^[A-Za-z0-9._~-]{8,160}$/.test(token))')
+  && onboardingCode.includes('return { art: "ungueltig"'));
+check("Der App-Start versucht unter file:// keine Service-Worker-Registrierung",
+  /location\?\.protocol[\s\S]*?!==\s*"file:"/.test(mainCode)
+  && /kann die API zwar vorhanden sein/.test(mainCode));
 
 function ladeInstallSkript({ registrierung = () => Promise.resolve({}) } = {}) {
   const fensterListener = {};

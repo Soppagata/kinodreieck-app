@@ -47,5 +47,9 @@ Datei enthält eine echte lokale Demo-Basis für Mediathek und Kernfunktionen;
 persönliche Änderungen bleiben im Browserprofil des Geräts und können über
 „Settings → Gesamt-Backup“ exportiert werden.
 
+Die mitgelieferten Kino- und Streamingdaten sind synthetische, archivierte
+Beispiele und werden mit ihrem tatsächlichen Stand ausgewiesen. Sie sind kein
+aktuelles Programm; dafür braucht die App eine Verbindung zum Konto-Katalog.
+
 Für automatische App-Updates ist die PWA die passendere Form. Für ein
 transportables, archiviertes Datenpaket ist die Einzeldatei gedacht.

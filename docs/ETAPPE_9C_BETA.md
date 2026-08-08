@@ -27,7 +27,10 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
 
 ### Produkt und Release
 
-- [x] Etappe 8 ist vollständig abgenommen und in Produktion.
+- [ ] Etappe 8 ist nicht vollständig: Vorbewertung und Filmwissen besitzen
+  Abnahmebelege; Filmscan und Bloganalyse wurden nie umgesetzt und müssen vor
+  einer Vollständigkeitsaussage entweder echte Beta-Gates werden oder klar in
+  den Zukunftsbacklog wechseln.
 - [ ] Etappe 9a ist abgenommen; Demo, PWA-Installation und Download funktionieren.
 - [ ] Etappe 9b ist abgenommen; Nutzerbackup, Datenbank-Restore, Not-Aus,
       Accountlöschung und Pages-Rollback wurden praktisch geprüft.

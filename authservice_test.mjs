@@ -153,12 +153,25 @@ _ls.set("kd:master", JSON.stringify({ filme: [{ id: "f1" }] }));
 _ls.set("kd:artikel", JSON.stringify({ artikel: [] }));
 const svcAb = S.createAuthService({ driver: d });
 await svcAb.initialize();
-await svcAb.signOut();
+let modusInPrivacyGrenze = null;
+await svcAb.signOut({ beforeGuest: () => { modusInPrivacyGrenze = svcAb.getSnapshot().mode; } });
 check("A7 Abmelden räumt die Sitzung", !_ls.has(A.AUTH_SESSION_KEY));
 check("A7 Abmelden lässt persönliche Daten unangetastet",
   JSON.parse(_ls.get("kd:master")).filme[0].id === "f1" && _ls.has("kd:artikel"));
 check("A7 Abmelden führt zurück in den Gastmodus ohne Fehlerzustand",
   svcAb.getSnapshot().mode === "guest" && svcAb.getSnapshot().error === null);
+check("A7 Privacy-Grenze läuft vor der Veröffentlichung des Gastmodus",
+  modusInPrivacyGrenze === "account");
+
+const svcGrenze = S.createAuthService({
+  loadSession: async () => ({ mode: "account", account: { id: "konto-grenze" } }),
+});
+await svcGrenze.initialize();
+let grenzeGeworfen = false;
+try { await svcGrenze.signOut({ beforeGuest: () => { throw new Error("cache-unsicher"); } }); }
+catch { grenzeGeworfen = true; }
+check("A7 Fehlgeschlagene Privacy-Grenze veröffentlicht keine Gast-Sitzung",
+  grenzeGeworfen && svcGrenze.getSnapshot().mode === "account");
 
 /* Abmelden gilt auch, wenn der Serverruf scheitert. */
 _ls.clear(); szenario = "ok"; d = neuerTreiber();
@@ -166,6 +179,45 @@ await d.signIn("max", "geheim1234");
 szenario = "netz";
 await d.signOut();
 check("A7b Abmelden gilt lokal auch bei Serverfehler", !_ls.has(A.AUTH_SESSION_KEY));
+
+_ls.clear(); szenario = "ok"; d = neuerTreiber();
+await d.signIn("max", "geheim1234");
+let treiberGrenzeGeworfen = false;
+try { await d.signOut({ beforeLocalCommit: () => { throw new Error("cache-unsicher"); } }); }
+catch { treiberGrenzeGeworfen = true; }
+check("A7c Fehlgeschlagene Cache-Grenze entfernt die dauerhafte Auth-Sitzung noch nicht",
+  treiberGrenzeGeworfen && _ls.has(A.AUTH_SESSION_KEY));
+
+/* Storage kann ohne Wurf still nichts tun. Auch dann darf weder Sign-out noch
+   ein Accountwechsel einen nicht persistierten Zustand behaupten. */
+_ls.clear(); szenario = "ok"; d = neuerTreiber();
+await d.signIn("max", "geheim1234");
+const removeNormal = globalThis.localStorage.removeItem;
+globalThis.localStorage.removeItem = (key) => {
+  if (key !== A.AUTH_SESSION_KEY) removeNormal(key);
+};
+let credentialNoop = null;
+try { await d.signOut(); } catch (error) { credentialNoop = error; }
+globalThis.localStorage.removeItem = removeNormal;
+check("A7d Stilles Credential-remove-No-op veröffentlicht keinen erfolgreichen Logout",
+  credentialNoop?.code === "AUTH_CREDENTIAL_PERSISTENCE_FAILED"
+  && _ls.has(A.AUTH_SESSION_KEY) && d.konto()?.id === "konto-abc");
+
+_ls.clear(); szenario = "ok"; d = neuerTreiber();
+const setNormal = globalThis.localStorage.setItem;
+globalThis.localStorage.setItem = (key, value) => {
+  if (key !== A.AUTH_SESSION_KEY) setNormal(key, value);
+};
+let signInNoop = null;
+try { await d.signIn("max", "geheim1234"); } catch (error) { signInNoop = error; }
+globalThis.localStorage.setItem = setNormal;
+check("A7e Stilles Session-set-No-op kann keine Anmeldung vortäuschen",
+  !!signInNoop && !_ls.has(A.AUTH_SESSION_KEY) && d.konto() === null);
+
+_ls.clear(); szenario = "ok"; d = neuerTreiber();
+await d.signIn("max", "geheim1234");
+check("A7f Erwartete Konto-ID verhindert Tokenmix schon an der zentralen Tokennaht",
+  await d.getAccessToken({ erwarteteKontoId: "anderes-konto" }) === null);
 
 /* ---------- A8: Fehlerabbildung ---------- */
 _ls.clear(); szenario = "ok"; d = neuerTreiber();

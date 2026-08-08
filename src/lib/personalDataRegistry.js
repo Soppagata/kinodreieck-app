@@ -208,6 +208,38 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
 
 export const PERSONAL_DATA_KEYS = Object.freeze(PERSONAL_DATA_ENTRIES.map((e) => e.key));
 
+/* Frühere Importwege legten vollständige Altbestände unter diesen Schlüsseln
+   ab, boten dafür aber nie eine Rücknahme an. Sie sind keine aktiven Töpfe und
+   werden nur noch als Migrationsreste bei Logout/Totalreset entfernt. */
+export const VERALTETE_IMPORT_SNAPSHOT_KEYS = Object.freeze([
+  "kd:import:vorher:master",
+  "kd:import:vorher:artikel",
+]);
+
+/* Die abgelösten Git-/Shared-Supabase-Treiber liegen außerhalb des aktiven
+   Importgraphen. Nur ihre inhalts- oder geheimnistragenden Reste werden beim
+   Boot entfernt; harmlose Konfiguration bleibt für eine bewusste Migration. */
+export const VERALTETE_PRIVACY_KEYS = Object.freeze([
+  ...VERALTETE_IMPORT_SNAPSHOT_KEYS,
+  "kd:git:snap",
+  "kd:git:token",
+  "kd:sb:snap",
+  "kd:sb:key",
+]);
+
+export function bereinigeVeralteteImportSnapshots(storage = null) {
+  let ziel = storage;
+  if (!ziel) {
+    try { ziel = globalThis.localStorage; } catch { return false; }
+  }
+  if (!ziel?.removeItem) return false;
+  let ok = true;
+  for (const key of VERALTETE_PRIVACY_KEYS) {
+    try { ziel.removeItem(key); } catch { ok = false; }
+  }
+  return ok;
+}
+
 const NACH_KEY = new Map(PERSONAL_DATA_ENTRIES.map((e) => [e.key, e]));
 const NACH_BACKUP = new Map(PERSONAL_DATA_ENTRIES.map((e) => [e.backupField, e]));
 

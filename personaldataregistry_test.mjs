@@ -44,6 +44,16 @@ check("Auth, Katalogcache und Demo-Markierung stehen nicht im Register",
     .every((key) => !P.PERSONAL_DATA_KEYS.includes(key)));
 check("Deep-Space-Rhythmus bleibt außerhalb von Profil-Sync und Backup",
   P.PERSONAL_DATA_KEYS.every((key) => !String(key).startsWith("kd:deep-space-horror:rhythmus:")));
+check("Veraltete Import-Rohsnapshots sind nur Migrationsreste, keine Sync-Töpfe",
+  P.VERALTETE_IMPORT_SNAPSHOT_KEYS.length === 2
+  && P.VERALTETE_IMPORT_SNAPSHOT_KEYS.every((key) => !P.PERSONAL_DATA_KEYS.includes(key)));
+speicher.set(ST.K.master, "AKTIVER-PERSOENLICHER-STAND");
+for (const key of P.VERALTETE_PRIVACY_KEYS) speicher.set(key, "PERSOENLICHER-ALTBESTAND");
+check("Zentrale Datenschutzmigration entfernt sechs tote Privacy-/Secret-Keys, aber keine aktiven Daten",
+  P.bereinigeVeralteteImportSnapshots(globalThis.localStorage)
+  && P.VERALTETE_PRIVACY_KEYS.length === 6
+  && P.VERALTETE_PRIVACY_KEYS.every((key) => !speicher.has(key))
+  && speicher.get(ST.K.master) === "AKTIVER-PERSOENLICHER-STAND");
 
 /* Vollständiges Decode/Validate muss fertig sein, bevor irgendein Topf
    geschrieben wird. Ein spätes kaputtes Feld darf den frühen Master nicht

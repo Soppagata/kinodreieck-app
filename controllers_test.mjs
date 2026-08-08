@@ -9,6 +9,8 @@ import {
   filtereAktiveKinoPins,
   gueltigerArtikel,
   planeFilmLoeschung,
+  planeMasterErsetzung,
+  planeMustwatchLoeschung,
   planeMustwatchSprung,
 } from "./src/lib/libraryProjection.js";
 import { zeitpunkt, IMPORT_INFO } from "./src/lib/catalogProjection.js";
@@ -77,6 +79,27 @@ check("Filmlöschung löst Blog- und Must-Watch-Verweise ohne die Einträge zu l
   && loeschPlan.mustwatch[0].verknuepfung === null
   && loeschPlan.mustwatch[1].verknuepfung.ziel === "streaming"
   && loeschPlan.folgen.artikelRefs === 1 && loeschPlan.folgen.mustwatchRefs === 1);
+
+const mwLoeschPlan = planeMustwatchLoeschung(
+  [{ id: "artikel", liste: [{ eingabe: "Später", ref: "mw_1" }] }],
+  [{ id: "mw_1", titel: "Später", im_besitz: true, beschreibung: "bleibt bis zur Löschung" }],
+  "mw_1",
+);
+check("Must-Watch-Löschung macht Blogrefs zu Rotlinks statt truthy Leichen",
+  mwLoeschPlan.mustwatch.length === 0
+  && mwLoeschPlan.artikel[0].liste[0].ref === null
+  && mwLoeschPlan.folgen.artikelRefs === 1);
+
+const ersetzPlan = planeMasterErsetzung(
+  [{ id: "neu", titel: "Neuer Film" }],
+  [{ id: "artikel", liste: [{ eingabe: "Alter Film", ref: "alt" }, { eingabe: "Wunsch", ref: "mw_bleibt" }] }],
+  [{ id: "mw_bleibt", titel: "Wunsch", beschreibung: "privat", verknuepfung: { ziel: "master", id: "alt" } }],
+);
+check("Master-Ersatz löst tote Masterrefs und bewahrt gültige MW-Refs samt persönlichen Feldern",
+  ersetzPlan.artikel[0].liste[0].ref === null
+  && ersetzPlan.artikel[0].liste[1].ref === "mw_bleibt"
+  && ersetzPlan.mustwatch[0].verknuepfung === null
+  && ersetzPlan.mustwatch[0].beschreibung === "privat");
 
 const masterSprung = planeMustwatchSprung(
   { ziel: "master", id: "film_1" }, { titel: "Mastertitel" }, [],
@@ -469,6 +492,8 @@ for (const name of [
   "libraryController",
   "useIntelligenceController",
   "useMustwatchController",
+  "useArticleController",
+  "personalDataTransactionController",
   "useEggController",
 ]) {
   check(`App verdrahtet ${name}`, app.includes(name));
@@ -485,8 +510,14 @@ check("Datenhaltende Controller verwenden die isolierten Projektionen",
   && /lib\/catalogProjection\.js/.test(catalogController));
 check("App.jsx ist durch die Controller sichtbar schmaler als der Audit-Ausgang",
   app.split("\n").length < 2200);
+check("Master- und Artikelimport persistieren keine ungenutzten Rohdaten-Snapshots",
+  !/kd:import:vorher/.test(app)
+  && !/schreibeImportSnapshot/.test(app)
+  && !/schreibeImportSnapshot/.test(libraryController));
 const mustwatchListe = fs.readFileSync("src/components/MustWatchListe.jsx", "utf8");
 const mustwatchController = fs.readFileSync("src/controllers/useMustwatchController.js", "utf8");
+const articleController = fs.readFileSync("src/controllers/useArticleController.js", "utf8");
+const personalDataController = fs.readFileSync("src/controllers/personalDataTransactionController.js", "utf8");
 const intelligenceController = fs.readFileSync("src/controllers/useIntelligenceController.js", "utf8");
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
   /\["master", "programm", "streaming"\]/.test(mustwatchListe)
@@ -507,12 +538,15 @@ check("Must-Watch-Besitzcheckbox toggelt funktional innerhalb der Schreibqueue",
 check("Demo-Boot bestätigt Must-Watch erst nach erfolgreichem lokalem Schreiben",
   /localStorage\.setItem\(K\.mustwatch,[^\n]+\); setMustwatch\(mw\)/.test(app));
 check("Master-Add und -Update kanonisieren Typen an der gemeinsamen Schreibgrenze",
-  /const next = ensureIds\(\(master \|\| \[\]\)\.map/.test(app)
+  /master: ensureIds\(aktuell\.map/.test(app)
   && (app.match(/ensureIds\(\[\{ \.\.\.film, id \}\]\)\[0\]/g) || []).length === 2
-  && /const neu = ensureIds\(\[\{ \.\.\.kandidat, id \}\]\)\[0\]/.test(intelligenceController));
+  && /neu = ensureIds\(\[\{ \.\.\.kandidat, id \}\]\)\[0\]/.test(intelligenceController));
 check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Ladestand",
   /mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch/.test(app)
-  && (app.match(/if \(!mustwatchGeladen\)/g) || []).length >= 2
+  && (app.match(/if \(!mustwatchGeladen \|\| !artikelGeladen\)/g) || []).length >= 2
+  && /transaktionMustwatchVorbereitet/.test(mustwatchController)
+  && /transaktionArtikel/.test(articleController)
+  && /Artikel → Must-Watch → Master/.test(personalDataController)
   && /Es wurde nichts verändert/.test(app));
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);

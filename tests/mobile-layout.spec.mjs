@@ -324,7 +324,7 @@ for (const viewport of VIEWPORTS) {
       }
 
       await expect(page.locator("summary", { hasText: /^Masterliste$/ })).toBeHidden();
-      await expect(page.locator("summary", { hasText: /^Gesamt-Backup$/ })).toBeHidden();
+      await expect(page.locator("summary", { hasText: /^Gesamt-Backup$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Kinoprogramm-Status$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Katalog-Status$/ })).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Streaming gesperrt", exact: true })).toHaveCount(2);
@@ -867,6 +867,30 @@ test("Der vierte Film zeigt genau vier Sekunden nur den unsichtbaren Achievement
   expect(daten.rngCalls).toBe(1);
 });
 
+test("Das Musik-Hauptformular speichert eine CD als physische Besitzquelle", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+
+  await waehleMobileTab(page, "Mediathek");
+  await page.getByRole("button", { name: /^Musik(?:\s|\()/ }).click();
+  await page.getByRole("button", { name: "+ Musik hinzufügen", exact: true }).click();
+  await expect(page.getByText("Quelle (optional — z.B. CD für Besitz)", { exact: true })).toBeVisible();
+  await page.getByPlaceholder("Titel *").fill("Audit-CD");
+  await page.getByPlaceholder("Jahr").fill("2024");
+  await page.getByRole("button", { name: "Physisch", exact: true }).click();
+  await page.getByPlaceholder("Format wählen/suchen …").fill("CD");
+  await expect(page.getByRole("button", { name: "CD ✕", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const master = JSON.parse(localStorage.getItem("kd:master") || "{}");
+    const musik = (master.filme || []).find((eintrag) => eintrag.titel === "Audit-CD");
+    return musik ? `${musik.typ}:${musik.quelle}:${musik.jahr}` : "fehlt";
+  })).toBe("musik:cd:2024");
+});
+
 test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Eintritt", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
@@ -1086,6 +1110,184 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
   })).toBe(true);
 });
 
+test("Ein verknüpfter Wochenreminder bleibt bei fehlendem Katalog ohne tote Zielaktion sichtbar", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    const heute = new Date();
+    const zwei = (wert) => String(wert).padStart(2, "0");
+    const heuteIso = `${heute.getFullYear()}-${zwei(heute.getMonth() + 1)}-${zwei(heute.getDate())}`;
+    localStorage.setItem("kd:wochenplan", JSON.stringify({ version: 1, eintraege: [{
+      id: "offline-reminder", titel: "Offline erhaltene Serie", art: "folge",
+      plattform: "Streamingdienst", startdatum: heuteIso, wochentage: [heute.getDay() || 7],
+      intervall_wochen: 1, ende: { typ: "nie" }, aktiv: true,
+      notiz: "Diese Notiz bleibt auch offline sichtbar.",
+      ref: { watchmode_id: 987654321, streaming_art: "entdecken", auto: true },
+    }] }));
+  });
+  await page.goto("/");
+
+  const reminder = page.locator(".kd-wochen-eintrag").filter({ hasText: "Offline erhaltene Serie" }).first();
+  await expect(reminder).toBeVisible();
+  await reminder.locator("summary").click();
+  await expect(reminder.getByText("Diese Notiz bleibt auch offline sichtbar.")).toBeVisible();
+  await expect(reminder.getByRole("status")).toHaveText("Verknüpfung derzeit nicht verfügbar.");
+  await expect(reminder.getByRole("button", { name: "Eintrag ansehen" })).toHaveCount(0);
+  await expect(reminder.getByRole("button", { name: "Titel anlegen" })).toHaveCount(0);
+  await expect(reminder.getByRole("button", { name: "Verknüpfung lösen" })).toBeVisible();
+  await expect(reminder.getByRole("button", { name: "Bearbeiten" })).toBeVisible();
+});
+
+test("Wochenplan verlangt vor der Titelanlage ein Jahr und erzeugt danach die kanonische ID", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    const heute = new Date();
+    const zwei = (wert) => String(wert).padStart(2, "0");
+    const heuteIso = `${heute.getFullYear()}-${zwei(heute.getMonth() + 1)}-${zwei(heute.getDate())}`;
+    localStorage.setItem("kd:wochenplan", JSON.stringify({ version: 1, eintraege: [{
+      id: "jahr-pflicht-reminder", titel: "D4 Jahresprobe Serie", art: "folge",
+      plattform: "Testdienst", startdatum: heuteIso, wochentage: [heute.getDay() || 7],
+      intervall_wochen: 1, ende: { typ: "nie" }, aktiv: true,
+      notiz: "Reminder bleibt erhalten.", ref: null, link_modus: "keiner",
+    }] }));
+  });
+  await page.goto("/");
+
+  let reminder = page.locator(".kd-wochen-eintrag").filter({ hasText: "D4 Jahresprobe Serie" }).first();
+  await reminder.locator("summary").click();
+  await expect(reminder.getByRole("button", { name: "Titel anlegen" })).toHaveCount(0);
+  await expect(reminder.getByRole("button", { name: "Jahr ergänzen" })).toBeVisible();
+  await reminder.getByRole("button", { name: "Jahr ergänzen" }).click();
+
+  const editor = page.locator("#kd-wochen-editor");
+  await expect(editor.getByLabel("Jahr (für Titelanlage)")).toBeVisible();
+  await editor.getByLabel("Jahr (für Titelanlage)").fill("2024");
+  await editor.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const plan = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}");
+    const eintrag = plan.eintraege?.find((wert) => wert.id === "jahr-pflicht-reminder");
+    return `${eintrag?.jahr}:${eintrag?.notiz}:${eintrag?.ref == null}`;
+  })).toBe("2024:Reminder bleibt erhalten.:true");
+  await expect.poll(() => page.evaluate(() => {
+    const master = JSON.parse(localStorage.getItem("kd:master") || "{}");
+    return (master.filme || []).some((film) => film.titel === "D4 Jahresprobe Serie");
+  })).toBe(false);
+
+  reminder = page.locator(".kd-wochen-eintrag").filter({ hasText: "D4 Jahresprobe Serie" }).first();
+  if (!(await reminder.evaluate((element) => element.open))) await reminder.locator("summary").click();
+  await expect(reminder.getByRole("button", { name: "Titel anlegen" })).toBeVisible();
+  await reminder.getByRole("button", { name: "Titel anlegen" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const master = JSON.parse(localStorage.getItem("kd:master") || "{}");
+    const film = (master.filme || []).find((wert) => wert.id === "d4_jahresprobe_serie_2024");
+    return film ? `${film.jahr}:${film.typ}:${film.bewertung === null}` : "fehlt";
+  })).toBe("2024:serie:true");
+  await expect.poll(() => page.evaluate(() => {
+    const plan = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}");
+    const eintrag = plan.eintraege?.find((wert) => wert.id === "jahr-pflicht-reminder");
+    return `${eintrag?.jahr}:${eintrag?.notiz}:${eintrag?.ref?.master_id}`;
+  })).toBe("2024:Reminder bleibt erhalten.:d4_jahresprobe_serie_2024");
+});
+
+test("Ein eindeutiger Auto-Link ist vor dem ersten Speichern sichtbar und abwählbar", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "auto-link-vorschau" }, gespeichertAm: Date.now(),
+      filme: [{
+        id: "auto-link-film", titel: "Auto Link Film", originaltitel: "Auto Link Film",
+        jahr: 2026, typ: "film", quelle: "dvd", kategorie: "sehenswert",
+        bewertet_von: "max", bewertung: { wie: 3, was: 3, warum: 3 },
+        genre: [], tags: [], begruendung: "", notiz: "",
+      }],
+    }));
+  });
+  await page.goto("/");
+
+  await page.locator(".kd-wochen-tagplus").first().click();
+  let editor = page.locator("#kd-wochen-editor");
+  await editor.getByLabel("Titel", { exact: true }).fill("Auto Link Film");
+  await expect(editor.getByText("Wird automatisch verknüpft: Auto Link Film · Mediathek")).toBeVisible();
+  await editor.getByRole("button", { name: "Nicht verknüpfen" }).click();
+  await expect(editor.getByRole("radio", { name: /Nicht verknüpfen/ })).toBeChecked();
+  await editor.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const eintrag = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}").eintraege?.[0];
+    return `${eintrag?.link_modus}:${eintrag?.ref == null}`;
+  })).toBe("keiner:true");
+
+  await page.locator(".kd-wochen-tagplus").first().click();
+  editor = page.locator("#kd-wochen-editor");
+  await editor.getByLabel("Titel", { exact: true }).fill("Auto Link Film");
+  await expect(editor.getByText("Wird automatisch verknüpft: Auto Link Film · Mediathek")).toBeVisible();
+  await editor.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const eintrag = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}").eintraege?.[1];
+    return `${eintrag?.link_modus}:${eintrag?.ref?.master_id}`;
+  })).toBe("auto:auto-link-film");
+  const verknuepft = page.locator(".kd-wochen-eintrag").filter({ hasText: "Auto Link Film" }).last();
+  await verknuepft.locator("summary").click();
+  await expect(verknuepft.getByText("Automatisch verknüpft: Auto Link Film · Mediathek")).toBeVisible();
+  await expect(verknuepft.getByRole("button", { name: "Verknüpfung lösen" })).toBeVisible();
+});
+
+test("Eine sichtbare automatische Reminder-Verknüpfung lässt sich dauerhaft lösen", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    const heute = new Date();
+    const zwei = (wert) => String(wert).padStart(2, "0");
+    const heuteIso = `${heute.getFullYear()}-${zwei(heute.getMonth() + 1)}-${zwei(heute.getDate())}`;
+    const film = {
+      id: "stop-making-sense", titel: "Stop Making Sense", originaltitel: "Stop Making Sense",
+      jahr: 1984, typ: "film", quelle: "bluray", kategorie: "immer_gut",
+      bewertet_von: "max", bewertung: { wie: 5, was: 4, warum: 5 },
+      genre: [], tags: [], begruendung: "", notiz: "",
+    };
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "wochenplan-link-test" }, filme: [film], gespeichertAm: Date.now(),
+    }));
+    localStorage.setItem("kd:wochenplan", JSON.stringify({ version: 1, eintraege: [{
+      id: "auto-link", titel: film.titel, art: "termin", startdatum: heuteIso,
+      wochentage: [heute.getDay() || 7], intervall_wochen: 1,
+      ende: { typ: "nie" }, aktiv: true, link_modus: "auto",
+      ref: { master_id: film.id, auto: true },
+    }] }));
+  });
+  await page.goto("/");
+
+  let reminder = page.locator(".kd-wochen-eintrag").filter({ hasText: "Stop Making Sense" }).first();
+  await reminder.locator("summary").click();
+  await expect(reminder.getByText("Automatisch verknüpft: Stop Making Sense · Mediathek")).toBeVisible();
+  await expect(reminder.getByRole("button", { name: "Eintrag ansehen" })).toBeVisible();
+  await expect(reminder.getByRole("button", { name: "Verknüpfung lösen" })).toBeVisible();
+  await reminder.getByRole("button", { name: "Bearbeiten" }).click();
+
+  const editor = page.locator("#kd-wochen-editor");
+  await expect(editor.getByText("Automatisch verknüpft: Stop Making Sense · Mediathek")).toBeVisible();
+  await editor.getByRole("button", { name: "Verknüpfung lösen" }).click();
+  await expect(editor.getByRole("radio", { name: /Nicht verknüpfen/ })).toBeChecked();
+  await editor.getByRole("button", { name: "Speichern", exact: true }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const eintrag = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}").eintraege?.[0];
+    return `${eintrag?.link_modus}:${eintrag?.ref == null}`;
+  })).toBe("keiner:true");
+  reminder = page.locator(".kd-wochen-eintrag").filter({ hasText: "Stop Making Sense" }).first();
+  await expect(reminder).toBeVisible();
+  await reminder.locator("summary").click();
+  await expect(reminder.getByRole("button", { name: "Eintrag ansehen" })).toHaveCount(0);
+  await expect(reminder.getByRole("button", { name: "Verknüpfung lösen" })).toHaveCount(0);
+  await expect(reminder.getByText(/Automatisch verknüpft:/)).toHaveCount(0);
+});
+
 test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
@@ -1138,7 +1340,7 @@ test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", 
   await page.locator(".kd-wochen-tagplus").first().click();
   const editor = page.locator("#kd-wochen-editor");
   await editor.getByLabel("Art").selectOption("folge");
-  await editor.getByLabel("Titel").fill("Mirror Signal");
+  await editor.getByLabel("Titel", { exact: true }).fill("Mirror Signal");
   const auswahl = editor.getByRole("group", { name: "Passenden Eintrag wählen (optional)" });
   await expect(auswahl).toBeVisible();
   await expect(auswahl.getByRole("radio", { name: /Nicht verknüpfen/ })).toBeChecked();
@@ -1147,8 +1349,18 @@ test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", 
 
   const pin = page.locator(".kd-wochen-eintrag").filter({ hasText: "Mirror Signal" }).first();
   await pin.locator("summary").click();
+  await pin.getByRole("button", { name: "Bearbeiten" }).click();
+  const jahrEditor = page.locator("#kd-wochen-editor");
+  await jahrEditor.getByLabel("Jahr (für Titelanlage)").fill("2024");
+  await expect(jahrEditor.getByText("Wird automatisch verknüpft: Mirror Signal · Streaming")).toBeVisible();
+  await jahrEditor.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const eintrag = JSON.parse(localStorage.getItem("kd:wochenplan") || "{}").eintraege?.find((wert) => wert.titel === "Mirror Signal");
+    return `${eintrag?.jahr}:${eintrag?.link_modus}:${eintrag?.ref?.watchmode_id}`;
+  })).toBe("2024:auto:43001");
+  if (!(await pin.evaluate((element) => element.open))) await pin.locator("summary").click();
   await pin.getByRole("button", { name: "Eintrag ansehen" }).click();
-  await expect(page.locator('[data-streaming-suchtreffer="entdecken:43002"]')).toBeFocused();
+  await expect(page.locator('[data-streaming-suchtreffer="entdecken:43001"]')).toBeFocused();
 });
 
 test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten eindeutig ein", async ({ page }) => {
@@ -1239,6 +1451,18 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await page.getByRole("button", { name: /^Entdecken/ }).click();
   const entdeckenKarten = page.locator(".kd-entdecken-karte");
   await expect(entdeckenKarten).toHaveCount(3);
+  const entdeckenAktionen = entdeckenKarten.first().locator(".kd-entdecken-aktionen button");
+  await expect(entdeckenAktionen).toHaveCount(2);
+  await expect(entdeckenKarten.first().getByRole("button", { name: "Auf die Merkliste" })).toBeVisible();
+  await expect(entdeckenKarten.first().getByRole("button", { name: "Gesehen-Markierung entfernen" })).toBeVisible();
+  const aktionsGroessen = await entdeckenAktionen.evaluateAll((knoepfe) => knoepfe.map((knopf) => {
+    const rect = knopf.getBoundingClientRect();
+    return { breite: rect.width, hoehe: rect.height };
+  }));
+  for (const groesse of aktionsGroessen) {
+    expect(groesse.breite).toBeGreaterThanOrEqual(24);
+    expect(groesse.hoehe).toBeGreaterThanOrEqual(24);
+  }
   const werkzeuge = page.locator(".kd-streaming-werkzeuge");
   await expect(werkzeuge.locator(".kd-streamfilter-knopf")).toBeVisible();
   await expect.poll(() => werkzeuge.evaluate((element) => {
@@ -1447,6 +1671,38 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   expect(profilGeometrie.aktionOben).toBeGreaterThanOrEqual(profilGeometrie.herkunftUnten - 0.5);
   expect(profilGeometrie.auswahlRechts).toBeLessThanOrEqual(profilGeometrie.rechts + 0.5);
   expect(profilGeometrie.entfernenRechts).toBeLessThanOrEqual(profilGeometrie.rechts + 0.5);
+  await keineDokumentUeberbreite(page);
+});
+
+test("Mobile Warnung führt zum erreichbaren Gesamt-Backup, Restore bleibt Wartung", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "mobile-backup-test" },
+      gespeichertAm: Date.now(),
+      filme: [{
+        id: "backup-film", titel: "Backup Film", originaltitel: "Backup Film",
+        jahr: 2026, typ: "film", quelle: "dvd", kategorie: "sehenswert",
+        bewertet_von: "max", bewertung: { wie: 3, was: 3, warum: 3 },
+        genre: [], tags: [], begruendung: "", notiz: "",
+      }],
+    }));
+  });
+  await page.goto("/");
+
+  const warnung = page.locator(".kd-backup-hinweis");
+  await expect(warnung).toBeVisible();
+  await expect(warnung.getByRole("button", { name: "Sicherung öffnen" })).toHaveCSS("min-height", "44px");
+  await warnung.getByRole("button", { name: "Sicherung öffnen" }).click();
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
+
+  const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup$/ }) });
+  await expect(backup.locator("summary")).toBeVisible();
+  await backup.locator("summary").click();
+  await expect(backup.getByRole("button", { name: "Gesamt-Backup herunterladen" })).toBeVisible();
+  await expect(backup.locator(".kd-nur-desktop")).toBeHidden();
   await keineDokumentUeberbreite(page);
 });
 

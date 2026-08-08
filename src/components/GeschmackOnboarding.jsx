@@ -142,9 +142,10 @@ export function GeschmackOnboarding({
             woraus er stammt.
           </p>
           <p style={p}>
-            Das Profil gehört zu deinem Konto. Du kannst es jederzeit ansehen, einzelne
-            Züge korrigieren oder löschen und die Einwilligung widerrufen — dann wird es
-            gelöscht. Ohne deine Zustimmung entsteht kein Profil.
+            Im Gastmodus bleibt das Profil auf diesem Gerät; mit einem Konto gehört es zu
+            deinem Konto. Du kannst es jederzeit ansehen, einzelne Züge korrigieren oder
+            löschen und die Einwilligung widerrufen — dann wird es gelöscht. Ohne deine
+            Zustimmung entsteht kein Profil.
           </p>
           {optInText && <p style={{ ...p, color: T.rauch, fontSize: 13 }}>{optInText}</p>}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
@@ -171,11 +172,10 @@ export function GeschmackOnboarding({
               <div style={{ display: "flex", flexWrap: "wrap" }}>
                 {g.eintraege.map((e) => (
                   <WahlChip key={e.id} beschriftung={e.anzeige} richtung={wahl[e.id]}
-                    /* Die gemessene Trefferzahl als Tooltip: Das ist die
-                       Belegpflicht aus der Kuration, für den Nutzer sichtbar
-                       gemacht. Er soll sehen können, dass ein Schlagwort
-                       tatsächlich etwas im Bestand trifft. */
-                    titel={e.treffer ? "trifft " + (e.treffer.gesamt || 0) + " Filme im aktuellen Bestand" : undefined}
+                    /* Die datierte Trefferzahl als Tooltip: Sie belegt die
+                       Kuration, ist aber kein Live-Zähler des täglich
+                       wechselnden Kino-/Streamingbestands. */
+                    titel={e.treffer ? "traf bei der letzten Belegmessung " + (e.treffer.gesamt || 0) + " Filme" : undefined}
                     onWechsel={() => setWahl((v) => ({ ...v, [e.id]: NAECHSTE_RICHTUNG[String(v[e.id])] }))} />
                 ))}
               </div>

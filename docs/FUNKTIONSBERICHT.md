@@ -1,16 +1,18 @@
 # Kinodreieck – Funktionsbericht und Bedienungsanleitung
 
-Stand: 2. August 2026
-Geltungsbereich: aktueller Quellstand auf `codex/deep-space-horror`
+Stand: 8. August 2026
+Geltungsbereich: konsolidierter, noch nicht veröffentlichter Arbeitsstand auf
+`audit/fixbatch1`
 
 Dieser Bericht beschreibt die Funktionen, die in der aktuellen Anwendung
 tatsächlich erreichbar sind. Er ist zugleich Bedienungsanleitung und grobe
 technische Erklärung: Wo wird eine Funktion ausgelöst, was tut sie und welche
 Daten verwendet oder verändert sie?
 
-Wichtig: Der Bericht beschreibt den neuen lokalen Arbeitsstand. Die zugehörige
-Datenbankmigration ist bereits eingespielt; das überarbeitete Frontend ist noch
-nicht veröffentlicht.
+Wichtig: Der Bericht beschreibt den lokalen Auditstand. Er behauptet weder den
+Frontend-Deploy noch die noch ausstehende Betriebsabnahme von Stapelimport- und
+Budgetmigrationen. Erreichbare Funktionen werden von bloß gebautem, aber noch
+nicht live belegtem Servercode getrennt.
 
 ## 1. Was Kinodreieck ist
 
@@ -21,7 +23,7 @@ Kinodreieck verbindet sieben Bereiche:
    Mediathek.
 3. **Streaming** – bereits bewertete eigene Titel, die gerade verfügbar sind,
    und ein großer Entdecken-Katalog.
-4. **Mediathek** – Filme, Reihen, Serien, Musik, Personen und andere Medien,
+4. **Mediathek** – Filme, Serien, Musik, Personen und andere Medien,
    ergänzt um Besitz und Must-Watch.
 5. **Suche** – nachvollziehbare, normalerweise vollständig lokale Suche über
    Mediathek, Kino und Streaming.
@@ -59,12 +61,16 @@ kontogebunden zwischen Geräten abgeglichen werden.
 - Die persönlichen Datenbereiche werden einem Konto zugeordnet und mit
   Supabase abgeglichen.
 - Row Level Security trennt die Konten voneinander.
-- Lokale Änderungen werden weiterhin sofort im Browser gespeichert. Ist der
-  Server vorübergehend nicht erreichbar, bleiben sie lokal und werden später
-  übertragen.
+- Persönliche Schreibvorgänge werden pro Datenbereich serialisiert und erst
+  nach bestätigtem lokalem Speichern sichtbar abgeschlossen. Ist der Server
+  vorübergehend nicht erreichbar, bleiben bestätigte Änderungen lokal und
+  werden später übertragen.
 - Vor dem Abmelden werden ausstehende Änderungen gesendet. Anschließend wird
   der lokale Kontocache entfernt; ein Gaststand von vor der Anmeldung wird
   wiederhergestellt. Der Datenbankstand des Kontos bleibt erhalten.
+- Kann der Kontocache nicht sicher getrennt werden, zeigt die App keine
+  persönlichen Töpfe als Gast. Sie maskiert den Stand und verlangt eine
+  erneute Anmeldung mit demselben Konto.
 
 Es gibt derzeit keine Selbstregistrierung. Konten werden von Max angelegt.
 Passwortänderungen sind in der App möglich; Passwort-Reset und serverseitige
@@ -95,6 +101,9 @@ Eine PWA-Installation funktioniert aus Sicherheitsgründen nur über HTTPS oder
 
 - Die App läuft ohne Webserver als einzelne lokale Datei.
 - Eine geprüfte Demo-Basis ist in der Datei eingebettet.
+- Die eingebauten Kino- und Streamingdaten sind ausdrücklich synthetische,
+  archivierte Beispiele. Aktuelles Programm braucht eine Online-Verbindung zum
+  getrennt konfigurierten Katalogdienst.
 - Eigene Änderungen liegen weiterhin im Browserprofil und nicht in der
   HTML-Datei selbst.
 - Die Datei ist transportabel; die persönlichen Änderungen werden über das
@@ -155,12 +164,9 @@ erreichbar.
 - bietet bei einer KI-Wahl die Anmeldung an, macht sie aber nicht verpflichtend,
 - zeigt später kontextbezogene Hinweise direkt an den betreffenden Funktionen.
 
-`Escape` schließt die Erklärung nur vorübergehend. Erst ein vollständig
-durchgeklickter Ablauf gilt als gesehen.
-
-Der vollständige Willkommens- und Hinweislauf lässt sich im aktuellen UI nicht
-erneut starten. Die dafür vorbereitete interne Funktion ist momentan mit
-keinem sichtbaren Knopf verbunden.
+Die frühere automatisch durchlaufende Tour wurde bewusst entfernt. Die
+dauerhafte Anleitung und die kontextbezogenen Hinweise bleiben erreichbar; es
+gibt deshalb keinen Knopf zum Neustart einer Tour.
 
 ## 4. Navigation und Bedienprinzipien
 
@@ -502,7 +508,8 @@ Für Filme und Serien stehen zur Verfügung:
 - ausdrücklich `Ohne Bewertung speichern`.
 
 Für Musik und Sonstiges verwendet die App eine reduzierte Maske ohne
-Bewertungsdreieck, dafür mit Kategorie beziehungsweise Rolle und Beschreibung.
+Bewertungsdreieck, dafür mit Kategorie beziehungsweise Rolle, physischer
+Quelle und Beschreibung.
 
 Titel und Jahr bilden den Dublettenschutz. Ein ungültiges Jahr oder eine
 ungültige externe Kennung wird vor dem Speichern abgewiesen.
@@ -757,12 +764,15 @@ sich auf diesem Gerät einzeln schalten:
 - Suche deuten,
 - Profil aus Antworten lesen,
 - KI-Prognosen,
+- belegtes Filmwissen recherchieren,
+- Titellisten ordnen,
 - KI-Verbindung prüfen.
 
 Die Wahl ist bewusst gerätelokal, reist nicht mit dem Konto und gehört nicht
 zum Gesamt-Backup. Der serverseitige Not-Aus und die Kontofreischaltung wirken
 zusätzlich. `Mit KI` ist daher keine Garantie, dass ein Aufruf gerade möglich
-ist.
+ist. Filmwissen-Recherche ist für bestehende und neue Geräte standardmäßig aus
+und muss ausdrücklich separat eingeschaltet werden.
 
 ### 12.4 Geschmacksprofil ohne KI
 
@@ -831,14 +841,17 @@ anderen Konto zugeordnete Bestände.
 
 Vor einer Überschreibung muss der Benutzer eine Richtung wählen. Die Übernahme
 wird über Prüfsummen verifiziert; ein bloßer Vergleich von Stückzahlen genügt
-nicht. Ein Backup wird vorher angeboten.
+nicht. Ein Backup wird vorher angeboten. Konto, Cache-Owner und Übergang werden
+vor dem ersten Pull persistent gebunden; ein abgebrochener oder paralleler
+Tab-Übergang darf deshalb keinen fremden Kontostand als Gast veröffentlichen.
 
 #### Automatischer Abgleich
 
 Änderungen werden lokal gespeichert und unmittelbar für das Konto übertragen.
 Der Status zeigt `synchron`, `ausstehend`, `nicht aktuell`, `zu groß` oder echte
 Konflikte. `Kontostand erneut laden` erscheint nur als Wiederherstellungsweg,
-wenn der lokale Stand nachweislich nicht aktuell ist.
+wenn der lokale Stand nachweislich nicht aktuell ist. Ein Konto- oder
+Treiberwechsel entwertet laufende Schreib-, Pull- und Tokenvorgänge.
 
 #### Konflikte
 
@@ -860,7 +873,9 @@ Sendet zuerst ausstehende Kontoänderungen und beendet danach die Kontositzung.
 Die geladenen Kontodaten werden aus dem Gastbetrieb entfernt. Existierte vor
 der Anmeldung ein lokaler Gaststand, wird er wiederhergestellt. Bei offenen
 Konflikten oder nicht sicherbaren Änderungen wird der Logout blockiert und ein
-Backup beziehungsweise eine Konfliktentscheidung verlangt.
+Backup beziehungsweise eine Konfliktentscheidung verlangt. Scheitert die
+sichere Trennung technisch, bleiben Zugang und Kontocache gesperrt statt unter
+einer Gastoberfläche sichtbar zu werden.
 
 #### Passwort ändern
 
@@ -876,7 +891,9 @@ und Budgetzustand, ohne ein Modell aufzurufen und ohne KI-Kosten zu erzeugen.
 Zeigt Zahl, Version und Herkunft der eigenen Mediathek.
 
 **Masterliste exportieren:** lädt die Mediathek als JSON herunter und setzt den
-zugehörigen Sicherungswächter zurück.
+zugehörigen Sicherungswächter genau bis zur tatsächlich exportierten Revision
+zurück. Eine während des Exports bestätigte spätere Änderung bleibt daher als
+ungesichert sichtbar.
 
 **Masterliste importieren/ersetzen:** liest eine validierte Masterlisten-Datei
 oder eingefügtes JSON. Der Import ist ein vollständiger Ersatz, keine
@@ -911,7 +928,11 @@ Masterlisten-Import/-Export und Gesamt-Backup.
   Speicher,
 - erzeugt eine lokale JSON-Datei,
 - meldet im Backup, wenn ein frischer Kontostand wegen Verbindung oder
-  Konflikt nicht garantiert werden konnte.
+  Konflikt nicht garantiert werden konnte,
+- bindet Pull und alle Reads an denselben Konto-/Gastkontext und bricht bei
+  einem Kontextwechsel ab, statt eine gemischte Datei zu erzeugen,
+- markiert Master und Artikel nur bis zu den Revisionen, die wirklich in der
+  heruntergeladenen Datei enthalten sind.
 
 Enthalten sind unter anderem Masterliste, Artikel, Pins, Merkliste,
 Suchvokabular, Settings, Entdecken-Status, Autorname,
@@ -934,6 +955,8 @@ Katalog, Katalog-Leseschlüssel und die gerätelokale KI-Grundentscheidung.
 
 Nach Erfolg muss die App über `Neu laden & anwenden` neu aufgebaut werden.
 `Rückgängig` stellt den vor dem letzten Restore gesicherten Zustand wieder her.
+Der Rückholpunkt ist an den aktiven Konto-/Gast-Owner gebunden und wird nach
+einem Kontextwechsel weder angeboten noch in einen anderen Datentopf gespielt.
 
 Ältere Backups löschen keine neueren Datenbereiche, die in der alten Datei gar
 nicht vorhanden waren.
@@ -1114,11 +1137,13 @@ Fundstellen enthalten.
 
 Fehlt ein Bericht, kann `Recherchebericht erstellen` angeboten werden. Dafür
 braucht der Eintrag eine eindeutige IMDb-, TMDB- oder Wikidata-Kennung sowie
-dieselben KI-Voraussetzungen wie die Prognose.
+ein bereites Personal-AI-Konto, den globalen KI-Schalter und den ausdrücklich
+aktivierten Filmwissen-Schalter. Ein Geschmacksprofil oder eingeschaltete
+KI-Prognosen sind dafür nicht erforderlich.
 
 **Wirkung:** Nach einer ausdrücklichen Kostenbestätigung startet genau ein
 Sonnet-Aufruf mit festem Quellenweg. Die Oberfläche nennt eine Obergrenze von
-5 US-Cent und wiederholt den Aufruf nicht automatisch. Ein nicht belegter
+6 US-Cent und wiederholt den Aufruf nicht automatisch. Ein nicht belegter
 Bericht bedeutet nur, dass der feste Quellenweg keine ausreichenden Belege
 gefunden hat – nicht, dass der Film bedeutungslos sei.
 
@@ -1167,8 +1192,18 @@ mit Herkunftswarnung statt ihn als frisch auszugeben.
 ## 15. Fehler- und Sicherheitsverhalten
 
 - Ungültige Importdateien werden vor der Übernahme abgewiesen.
-- Konto- und Restore-Übergänge prüfen Besitz, Revisionen und Prüfsummen.
+- Konto-, Backup- und Restore-Übergänge prüfen Owner, Generation, Revisionen
+  und Prüfsummen.
 - Ein Kontowechsel entwertet noch laufende persönliche KI- und Speicherläufe.
+- Mehrtopf-Aktionen für Master, Must-Watch und Blogartikel werden serialisiert;
+  ein Teilfehler wird kompensiert oder sichtbar fail-closed beendet.
+- Wochenplan- und Streamingstatus erscheinen erst nach bestätigtem
+  Storage-Write als erfolgreich.
+- Unabhängige Fehler stehen in einer auf fünf Einträge begrenzten Queue. Ein
+  neuer Fehler überschreibt keinen anderen und jeder Eintrag ist einzeln
+  schließbar.
+- Kann die App persönliche Kontodaten nicht sicher vom Gast trennen, hängt sie
+  den normalen App-Baum aus und zeigt nur die geschützte Konto-Wiederherstellung.
 - Öffentliches Löschen eines Shared-Artikels wird bestätigt, bevor die lokale
   Kopie verschwindet.
 - Bezahlte KI-Aktionen werden nicht automatisch wiederholt.
@@ -1243,15 +1278,12 @@ aber noch nicht vollständig öffentlich abgabefertig. Offen sind:
    Drittlandtransfers und Kontaktweg dokumentieren.
 5. **Selbstbedienung:** vollständige serverseitige Accountlöschung und ein
    tragfähiger Passwort-Reset vor einer offenen Registrierung.
-6. **Einzellöschung in der Mediathek:** reguläre Masterlisten-Einträge müssen
-   sicher über die Oberfläche löschbar werden.
-7. **Tutorial-Verknüpfung:** Der bereits vorhandene Neustart-Handler muss
-   wieder mit einem sichtbaren Knopf verbunden oder vollständig entfernt
-   werden; derzeit ist die eingebaute Anleitung erreichbar, der Tutoriallauf
-   aber nicht erneut auslösbar.
-8. **Betrieb:** Monitoring, Alarmgrenzen, Releasehinweise, Supportweg und
+6. **Noch nicht live belegte Funktionsblöcke:** internen Stapelimport samt
+   Migration/Function/Budget als Paket ausrollen; Filmscan, Bloganalyse,
+   Serienradar und den ungemounteten Paketaustausch bewusst entscheiden.
+7. **Betrieb:** Monitoring, Alarmgrenzen, Releasehinweise, Supportweg und
    regelmäßige RLS-/Abhängigkeitsprüfungen festziehen.
-9. **Lokaler Cleanup:** die im Architektur-Audit als KD-A15 markierten
+8. **Lokaler Cleanup:** die im Architektur-Audit als KD-A15 markierten
    ignorierten persönlichen Arbeitsartefakte erst nach ausdrücklicher Freigabe
    verschieben oder löschen.
 

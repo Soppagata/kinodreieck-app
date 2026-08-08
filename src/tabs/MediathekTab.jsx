@@ -272,9 +272,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
           schlichte MedienForm. key=typTab: Tab-Wechsel klappt das Formular zu. */}
       <div data-tour="eintrag-neu" style={{ marginBottom: 16 }}>
-        <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
-          onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
-          prognoseSperrgrund={prognoseSperrgrund} />
+        {hatDreieck(HAUPTTYP[typTab])
+          ? <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
+              onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
+              prognoseSperrgrund={prognoseSperrgrund} />
+          : <MedienForm key={typTab} typ={HAUPTTYP[typTab]} onAdd={addFilm} />}
       </div>
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>

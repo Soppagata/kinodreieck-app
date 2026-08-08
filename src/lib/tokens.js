@@ -85,6 +85,24 @@ export const THEMES = {
 
 export const T = { ...THEMES.dunkel };
 
+/* Schwarz oder Weiß nach dem tatsächlich höheren WCAG-Kontrast. Für jede
+   gültige sRGB-Hintergrundfarbe erreicht mindestens eine der beiden Varianten
+   4,5:1; aktive Chips dürfen deshalb nicht blind den Theme-Token `tinte`
+   verwenden (im hellen Theme war Gold auf heller Tinte kaum lesbar). */
+export function kontrastFarbe(hintergrund) {
+  const roh = String(hintergrund || "").trim();
+  const kurz = /^#([0-9a-f]{3})$/i.exec(roh);
+  const lang = /^#([0-9a-f]{6})$/i.exec(roh);
+  const hex = lang?.[1] || (kurz ? [...kurz[1]].map((x) => x + x).join("") : null);
+  if (!hex) return "#000000";
+  const kanaele = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  const luminanz = 0.2126 * kanaele[0] + 0.7152 * kanaele[1] + 0.0722 * kanaele[2];
+  const zuSchwarz = (luminanz + 0.05) / 0.05;
+  const zuWeiss = 1.05 / (luminanz + 0.05);
+  return zuSchwarz >= zuWeiss ? "#000000" : "#FFFFFF";
+}
+
 export function setzeTheme(name) {
   Object.assign(T, THEMES[name] || THEMES.dunkel);
   if (typeof document !== "undefined") {
@@ -121,7 +139,7 @@ export const btnStyle = (primary) => ({
   borderRadius: 4,
   border: primary ? "none" : "1px solid " + T.rauch,
   background: primary ? T.wolfram : "transparent",
-  color: primary ? T.tinte : T.leinwand,
+  color: primary ? kontrastFarbe(T.wolfram) : T.leinwand,
   cursor: "pointer",
 });
 

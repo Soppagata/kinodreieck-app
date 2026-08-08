@@ -15,7 +15,7 @@ import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabul
    ReferenceError. Die App hat keine Fehlergrenze — React raeumt den Baum ab,
    der Nutzer sieht eine weisse Seite. Durch alle Gates gerutscht, weil kein
    Test `DatenTab` je gerendert hat; `geschmackui_test.mjs` tut es jetzt. */
-import { KI_FUNKTIONEN } from "../lib/kiSchalter.js";
+import { KI_FUNKTIONEN, istEinzelfunktionAn } from "../lib/kiSchalter.js";
 import { ERROR_CODES } from "../services/errors.js";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
@@ -50,7 +50,8 @@ export function DatenTab({
   addFilm, addFilme,
   onKontoDatenGeaendert,
 }) {
-  /* Ein verbundener Zugang heißt seit der Zugriffstrennung NICHT mehr, dass
+  const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
+  /* Hinterlegte Zugangsdaten heißen seit der Zugriffstrennung NICHT, dass
      das Programm auch da ist (anon sieht die Live-Zeilen nicht). Beides wird
      deshalb getrennt gemeldet. */
   const programmStatus = !programmInfo
@@ -61,6 +62,7 @@ export function DatenTab({
     : programmInfo.fehler ? { ok: false, text: "nicht geladen" }
     : programmInfo.abgelaufen ? { ok: false, text: "abgelaufener Schnappschuss" }
     : programmInfo.ausCache ? { ok: false, text: "aus dem Browser-Speicher" }
+    : programm?.status?.archiviert ? { ok: false, text: "archiviertes Offline-Beispiel" }
     : programmInfo.variante === "demo" ? { ok: true, text: "Demo-Schnappschuss" }
     /* Der Notfallweg beschreibt sich selbst: ein eingespieltes Programm ist da,
        stammt aber nicht aus der Datenbank — „aktuell geladen" wäre die Aussage
@@ -150,11 +152,11 @@ export function DatenTab({
         <div style={kasten}>
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
-            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Settings bleiben nur in diesem Browser. Datenbankzugang: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{katalogVerbunden ? "verbunden" : "nicht verbunden"}</strong>.
+            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Settings bleiben nur in diesem Browser. {einzeldatei ? "Datenquelle" : "Datenbankzugang"}: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{einzeldatei ? "eingebettete Offline-Beispiele" : katalogVerbunden ? "Zugangsdaten hinterlegt" : "nicht eingerichtet"}</strong>.
             {" "}Kinoprogramm: <strong style={{ color: programmStatus.ok ? T.wolfram : T.gefahr }}>{programmStatus.text}</strong>.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{katalogVerbunden ? "Datenbankzugang prüfen/ändern" : "Datenbank verbinden"}</button>}
+            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{einzeldatei ? "Online-Katalog verbinden" : katalogVerbunden ? "Datenbankzugang prüfen/ändern" : "Datenbank verbinden"}</button>}
             {onStartWahl && !demoAktiv && !(master && master.length) && <button style={btnStyle(false)} onClick={onStartWahl}>Startmodus wählen</button>}
             {(demoAktiv || startWahl === "demo") && onDemoEntfernen && (
               <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={() => {
@@ -193,7 +195,7 @@ export function DatenTab({
               {Object.entries(KI_FUNKTIONEN).map(([id, f]) => (
                 <div key={id} style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <SegmentedControl style={{ marginBottom: 0, minWidth: 120 }}
-                    value={kiStand.funktionen?.[id] === false ? "aus" : "an"}
+                    value={istEinzelfunktionAn(id, kiStand) ? "an" : "aus"}
                     onChange={(w) => onKiFunktion?.(id, w === "an")}
                     options={[{ id: "an", label: "An" }, { id: "aus", label: "Aus" }]} />
                   <div style={{ flex: "1 1 220px" }}>
@@ -276,7 +278,6 @@ export function DatenTab({
       </div>
 
       {/* 4 — Backup */}
-      <div className="kd-nur-desktop">
       <Klappe titel="Gesamt-Backup">
         <div style={kasten}>
           {(ungesichertMaster || ungesichertArtikel) && (
@@ -287,10 +288,11 @@ export function DatenTab({
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>Lädt den vollständigen persönlichen App-Stand als Datei herunter. Der gemeinsame Kino- und Streamingkatalog wird nicht dupliziert.</p>
           {backupGesamt && <button style={{ ...btnStyle(true), display: "inline-flex", alignItems: "center", gap: 8 }} onClick={backupGesamt}><IconExport size={16} />Gesamt-Backup herunterladen</button>}
           <FeldHinweis feld="backup" />
-          <div style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
+          {/* Der Download ist gerade am Handy wichtig; nur das riskantere
+              vollständige Einspielen einer Datei bleibt Desktop-Wartung. */}
+          <div className="kd-nur-desktop" style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
         </div>
       </Klappe>
-      </div>
 
       {/* 5 — Streaming-Quellen */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
@@ -325,7 +327,7 @@ export function DatenTab({
               <>
                 {demoStand && (
                   <p style={{ margin: "0 0 12px", color: T.wolfram, fontSize: 13, lineHeight: 1.55 }}>
-                    <strong>Öffentliche Beispieldaten.</strong> Der Stand vom 22.07. ist der bewusst eingefrorene Demo-Schnappschuss. Das laufende Programm vom Konto-Katalog wird nach der Anmeldung geladen.
+                    <strong>Öffentliche Beispieldaten.</strong> Der unten ausgewiesene Stand ist bewusst eingefroren. Ein archiviertes Offline-Beispiel zeigt synthetische alte Termine und ausdrücklich kein laufendes Kinoprogramm; das aktuelle Konto-Programm wird nach der Anmeldung geladen.
                   </p>
                 )}
                 <dl className="kd-statusliste">
@@ -338,7 +340,7 @@ export function DatenTab({
                   <div><dt>Anzeige</dt><dd>{Number.isFinite(s.angezeigt) && Number.isFinite(s.gesamt)
                     ? `${s.angezeigt} von ${s.gesamt} Filmen · ${s.fensterTage || 4} Tage`
                     : details.find((x) => x.startsWith("Anzeige:"))?.replace(/^Anzeige:\s*/, "") || `${programm.filme?.length || 0} Filme`}</dd></div>
-                  <div><dt>Speicher</dt><dd>{programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
+                  <div><dt>Speicher</dt><dd>{s.archiviert ? "eingebettetes Archivbeispiel" : programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
                 </dl>
               </>
             );
@@ -458,23 +460,27 @@ function VokabularEditor({
   };
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-      <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
-        Gib der KI deinen eigenen Ausdruck und erkläre frei, was er für dich bedeutet. Die KI deutet ihn genau einmal. Gespeichert wird danach nur eine kleine lokale Genre-/Tag-Regel — die Suche verwendet sie deterministisch und offline.
-      </p>
-      <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
-        <input value={wort} onChange={(e) => { setWort(e.target.value); setVorschlag(null); }}
-          placeholder="Begriff (z. B. kuhl)" maxLength={40} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-        <textarea value={beschreibung} onChange={(e) => { setBeschreibung(e.target.value); setVorschlag(null); }}
-          placeholder="Was bedeutet der Begriff für dich? Beispiele, Stimmung, Genres …"
-          maxLength={300} rows={4} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }} />
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <button style={btnStyle(true)} onClick={deuten}
-            disabled={!kiAktiv || laeuft || !wort.trim() || !beschreibung.trim()}>
-            {laeuft ? "KI deutet …" : "Mit KI deuten"}
-          </button>
-          <span style={mono}>ein bewusster KI-Aufruf · keine automatische Wiederholung</span>
-        </div>
-      </div>
+      {kiAktiv && (
+        <>
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
+            Gib der KI deinen eigenen Ausdruck und erkläre frei, was er für dich bedeutet. Die KI deutet ihn genau einmal. Gespeichert wird danach nur eine kleine lokale Genre-/Tag-Regel — die Suche verwendet sie deterministisch und offline.
+          </p>
+          <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+            <input value={wort} onChange={(e) => { setWort(e.target.value); setVorschlag(null); }}
+              placeholder="Begriff (z. B. kuhl)" maxLength={40} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+            <textarea value={beschreibung} onChange={(e) => { setBeschreibung(e.target.value); setVorschlag(null); }}
+              placeholder="Was bedeutet der Begriff für dich? Beispiele, Stimmung, Genres …"
+              maxLength={300} rows={4} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button style={btnStyle(true)} onClick={deuten}
+                disabled={laeuft || !wort.trim() || !beschreibung.trim()}>
+                {laeuft ? "KI deutet …" : "Mit KI deuten"}
+              </button>
+              <span style={mono}>ein bewusster KI-Aufruf · keine automatische Wiederholung</span>
+            </div>
+          </div>
+        </>
+      )}
       {kiSperrgrund && <p style={{ ...mono, color: T.warum, lineHeight: 1.6 }}>{kiSperrgrund}</p>}
       {fehler && <p role="alert" style={{ ...mono, color: T.gefahr, lineHeight: 1.6 }}>{fehler}</p>}
       {vorschlag && (

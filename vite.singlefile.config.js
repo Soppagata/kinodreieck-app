@@ -11,6 +11,13 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
    Auch die Doppelklick-Datei verwendet denselben Tester-Modus wie die PWA. */
 export default defineConfig({
   base: './',
+  /* Die Einzeldatei bettet ihre kleine Demo-Beilage in build-single.mjs ein.
+     public/ darf deshalb nicht zusätzlich als scheinbar nötiger Nebenordner in
+     dist-single landen. Der normale Web-Build kopiert public/ weiterhin. */
+  publicDir: false,
+  define: {
+    __KD_SINGLE_FILE__: 'true',
+  },
   plugins: [
     react(),
     viteSingleFile(),

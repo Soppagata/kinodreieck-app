@@ -1,6 +1,13 @@
 const ONLINE_UMGEBUNGEN = new Set(["staging", "production"]);
 
-export function pruefbareUmgebung(appEnvironment) {
+export function pruefbareUmgebung(
+  appEnvironment,
+  protokoll = globalThis.location?.protocol,
+) {
+  /* Die heruntergeladene Datei kann mit einer staging-/production-Konfiguration
+     gebaut worden sein. Unter file:// gibt es dennoch weder build-meta.json
+     noch einen Service Worker — dort nie Timer-/Fokus-Abrufe starten. */
+  if (String(protokoll || "").toLowerCase() === "file:") return false;
   return ONLINE_UMGEBUNGEN.has(String(appEnvironment || "").trim());
 }
 
@@ -16,11 +23,24 @@ export function neuerBuild(meta, lokaleVersion) {
   return remote === lokal ? null : remote;
 }
 
+/* Ein geschlossener Hinweis gilt nur für genau diesen Build und nur solange
+   die Komponente lebt. Erscheint später ein anderer Build, darf der Nutzer
+   wieder darauf hingewiesen werden. */
+export function sichtbarerUpdateBuild(version, geschlossenerBuild = "") {
+  const kandidat = String(version || "").trim();
+  const geschlossen = String(geschlossenerBuild || "").trim();
+  return kandidat && kandidat !== geschlossen ? kandidat : "";
+}
+
 export async function ladeBuildMeta({
   baseUrl = "./",
   fetchFn = globalThis.fetch,
   zeit = Date.now(),
+  protokoll = globalThis.location?.protocol,
 } = {}) {
+  /* Zweite, fail-safe Grenze: auch ein künftiger direkter Aufrufer darf unter
+     file:// keinen scheinbaren Versionsabruf erzeugen. */
+  if (String(protokoll || "").toLowerCase() === "file:") return null;
   if (typeof fetchFn !== "function") return null;
   const antwort = await fetchFn(buildMetaUrl(baseUrl, zeit), {
     cache: "no-store",

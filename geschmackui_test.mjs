@@ -643,6 +643,9 @@ check("B", "auf Schritt 1 gibt es KEINEN einzigen Auswahl-Chip  [gemessen: " + c
 check("B", "auf Schritt 1 gibt es keinen Achsen-Regler", () => alles("input[type=\"range\"]").length === 0);
 check("B", "Schritt 1 sagt zu, dass ohne Zustimmung kein Profil entsteht",
   () => text().includes("Ohne deine Zustimmung entsteht kein Profil."));
+check("B", "Schritt 1 beschreibt die Speicherung wahr für Gast und Konto",
+  () => text().includes("Im Gastmodus bleibt das Profil auf diesem Gerät")
+    && text().includes("mit einem Konto gehört es zu deinem Konto"));
 check("B", "Schritt 1 nennt Widerruf und Löschung",
   () => text().includes("die Einwilligung widerrufen") && text().includes("dann wird es gelöscht"));
 check("B", "Schritt 1 hat genau zwei Knöpfe: zustimmen und ablehnen  [gemessen: "
@@ -864,7 +867,7 @@ check("C", "jeder Chip mit gemessenen Treffern trägt die Zahl im title  [gemess
     const mitTreffer = G.schlagwoerter().filter((s) => s.treffer);
     return mitTreffer.every((s) => {
       const c = chips().find((x) => x.textContent.replace(/^[+−]\s*/, "").trim() === s.anzeige);
-      return c && c.getAttribute("title") === "trifft " + (s.treffer.gesamt || 0) + " Filme im aktuellen Bestand";
+      return c && c.getAttribute("title") === "traf bei der letzten Belegmessung " + (s.treffer.gesamt || 0) + " Filme";
     });
   });
 check("C", "die Auswahl im Schlagwortschritt schreibt weiterhin nichts  [gemessen: "

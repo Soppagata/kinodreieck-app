@@ -24,6 +24,9 @@
 import { localDriver } from "./storage.js";
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
 import { PERSONAL_DATA_KEYS } from "./personalDataRegistry.js";
+import {
+  ACCT_KEYS, ACCOUNT_CACHE_METADATA_WITHOUT_OWNER,
+} from "./accountStorageKeys.js";
 
 const TABLE = "kd_personal";
 
@@ -35,12 +38,12 @@ const SYNC_SET = new Set(ACCOUNT_SYNC_KEYS);
 
 /* Gerätezustand des Treibers — nie gesynct, nie im Backup, NIE Tokens.
    Eigener Namespace kd:acct:* (die Sitzung selbst liegt getrennt in kd:auth:session). */
-const VER_KEY = "kd:acct:ver";        // { key: revision } — zuletzt gesehene Server-Version
-const STATUS_KEY = "kd:acct:status";  // { lastPull, lastCommit, pending, conflict, stale, zuGross, schemaVeraltet }
-const SNAP_KEY = "kd:acct:snap";      // { key: [{t, value}] } — rollierend
-const OWNER_KEY = "kd:acct:owner";    // Account-ID, zu der der lokale Cache gehört
+const VER_KEY = ACCT_KEYS.ver;        // { key: revision } — zuletzt gesehene Server-Version
+const STATUS_KEY = ACCT_KEYS.status;  // { lastPull, lastCommit, pending, conflict, stale, zuGross, schemaVeraltet }
+const SNAP_KEY = ACCT_KEYS.snap;      // { key: [{t, value}] } — rollierend
+const OWNER_KEY = ACCT_KEYS.owner;    // Account-ID, zu der der lokale Cache gehört
 const SNAP_MAX = 5;
-export const ACCT_KEYS = Object.freeze({ ver: VER_KEY, status: STATUS_KEY, snap: SNAP_KEY, owner: OWNER_KEY });
+export { ACCT_KEYS };
 
 function readJSON(key, fallback) {
   try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); }
@@ -91,17 +94,36 @@ export function getSnapshots(key) { return readJSON(SNAP_KEY, {})[key] || []; }
    Prüfung könnte eine Übernahme fremde Daten in den falschen Account schieben. */
 export function getCacheOwner() { try { return localStorage.getItem(OWNER_KEY); } catch { return null; } }
 export function setCacheOwner(accountId) {
-  try { if (accountId) localStorage.setItem(OWNER_KEY, String(accountId)); else localStorage.removeItem(OWNER_KEY); }
-  catch { /* best effort */ }
+  const erwartet = accountId ? String(accountId) : null;
+  try {
+    if (erwartet) localStorage.setItem(OWNER_KEY, erwartet); else localStorage.removeItem(OWNER_KEY);
+    return localStorage.getItem(OWNER_KEY) === erwartet;
+  }
+  catch { return false; }
 }
 /* Treiberzustand verwerfen (bei Account-Wechsel). Persönliche Töpfe bleiben
    unangetastet — über sie entscheidet ausschließlich der Übernahme-Weg. */
-export function verwerfeTreiberZustand() {
-  try {
-    localStorage.removeItem(VER_KEY);
-    localStorage.removeItem(STATUS_KEY);
-    localStorage.removeItem(SNAP_KEY);
-  } catch { /* best effort */ }
+export function verwerfeTreiberZustand({ behalteTransition = false } = {}) {
+  const keys = behalteTransition
+    ? ACCOUNT_CACHE_METADATA_WITHOUT_OWNER.filter((key) => key !== ACCT_KEYS.transition)
+    : ACCOUNT_CACHE_METADATA_WITHOUT_OWNER;
+  let ok = true;
+  for (const key of keys) {
+    try { localStorage.removeItem(key); }
+    catch { ok = false; }
+  }
+  for (const key of keys) {
+    try { if (localStorage.getItem(key) != null) ok = false; }
+    catch { ok = false; }
+  }
+  return ok;
+}
+
+/* Upgrade-Aufräumung für den früher möglichen Zustand „Snapshot ohne Owner“.
+   Persönliche Haupttöpfe werden dabei ausdrücklich nicht angefasst. */
+export function bereinigeVerwaisteTreiberMetadaten() {
+  if (getCacheOwner()) return true;
+  return verwerfeTreiberZustand();
 }
 
 /* ---------- Treiber-Fabrik ---------- */
@@ -110,6 +132,7 @@ export function createAccountDriver({
   getAccessToken = async () => null,
   fetchImpl = null,
   isActive = () => true,
+  owner = "account:unknown",
 } = {}) {
   const basis = String(config.supabaseUrl || "").trim().replace(/\/+$/, "");
   const anon = String(config.supabasePublishableKey || "").trim();
@@ -121,6 +144,12 @@ export function createAccountDriver({
     try { return isActive() !== false; } catch { return false; }
   }
   function inaktiv() { return { ok: false, status: 0, inactive: true, cancelled: true }; }
+  function fordereAktiv() {
+    if (aktiv()) return;
+    const error = new Error("Der gebundene Kontokontext ist nicht mehr aktiv.");
+    error.code = "ACCOUNT_CONTEXT_CHANGED";
+    throw error;
+  }
 
   function kopf(token, { body = false, prefer = null } = {}) {
     const h = { apikey: anon, Authorization: "Bearer " + token };
@@ -205,6 +234,7 @@ export function createAccountDriver({
 
   /* ---------- Pull ---------- */
   async function syncPull() {
+    if (!aktiv()) return { ...inaktiv(), geladen: [], angelegt: [], konflikt: [], fehler: [] };
     if (!konfiguriert()) return { ok: false, message: "nicht konfiguriert" };
     const ergebnis = { geladen: [], angelegt: [], konflikt: [], fehler: [] };
     let rows;
@@ -212,12 +242,14 @@ export function createAccountDriver({
       const r = await rest("GET", `/${TABLE}?select=key,value,revision`);
       if (r.inactive) return { ...r, geladen: [], angelegt: [], konflikt: [], fehler: [] };
       if (!r.ok || !Array.isArray(r.data)) {
+        if (!aktiv()) return { ...inaktiv(), geladen: [], angelegt: [], konflikt: [], fehler: [] };
         for (const key of ACCOUNT_SYNC_KEYS) { markStale(key, true); ergebnis.fehler.push({ key, status: r.status }); }
         setStatus({ lastPull: nowIso() });
         return { ok: false, ...ergebnis };
       }
       rows = r.data;
     } catch (e) {
+      if (!aktiv()) return { ...inaktiv(), geladen: [], angelegt: [], konflikt: [], fehler: [] };
       for (const key of ACCOUNT_SYNC_KEYS) markStale(key, true);
       setStatus({ lastPull: nowIso() });
       return { ok: false, geladen: [], angelegt: [], konflikt: [], fehler: ACCOUNT_SYNC_KEYS.map((key) => ({ key, error: String(e) })) };
@@ -227,6 +259,7 @@ export function createAccountDriver({
     for (const row of rows) { if (row && SYNC_SET.has(row.key)) remote[row.key] = row; }
 
     for (const key of ACCOUNT_SYNC_KEYS) {
+      if (!aktiv()) return { ...inaktiv(), ...ergebnis };
       const row = remote[key];
       if (!row) { markStale(key, false); ergebnis.angelegt.push(key); continue; }
       const remoteVal = (row.value == null) ? null : String(row.value);
@@ -248,13 +281,16 @@ export function createAccountDriver({
           ergebnis.fehler.push({ key, grund: "snapshot-fehlgeschlagen" });
           continue;
         }
+        if (!aktiv()) return { ...inaktiv(), ...ergebnis };
         if (remoteVal == null) localStorage.removeItem(key);
         else localStorage.setItem(key, remoteVal);
       }
+      if (!aktiv()) return { ...inaktiv(), ...ergebnis };
       setVer(key, row.revision);
       markPending(key, false); markConflict(key, false); markStale(key, false);
       ergebnis.geladen.push(key);
     }
+    if (!aktiv()) return { ...inaktiv(), ...ergebnis };
     setStatus({ lastPull: nowIso() });
     return { ok: ergebnis.fehler.length === 0, ...ergebnis };
   }
@@ -346,6 +382,7 @@ export function createAccountDriver({
       markPending(key, true);
       return { ok: false, status: r.status };
     } catch (e) {
+      if (!aktiv()) return inaktiv();
       markPending(key, true);
       return { ok: false, offline: true, error: String(e) };
     }
@@ -358,6 +395,7 @@ export function createAccountDriver({
        Konto-Commits noch unterwegs waren. */
     const laufend = Object.values(queues);
     if (laufend.length) await Promise.allSettled(laufend);
+    if (!aktiv()) return [inaktiv()];
     const st = getStatus();
     const versuche = [];
     for (const key of Object.keys(st.pending || {})) {
@@ -369,6 +407,7 @@ export function createAccountDriver({
     }
     const nachlauf = Object.values(queues);
     if (nachlauf.length) await Promise.allSettled(nachlauf);
+    if (!aktiv()) return [inaktiv()];
     return versuche;
   }
 
@@ -480,16 +519,34 @@ export function createAccountDriver({
 
   return Object.freeze({
     name: "konto",
+    owner,
     status: syncStatus,
     pull: syncPull,
-    async get(k) { return localDriver.get(k); },
+    async get(k) {
+      fordereAktiv();
+      const r = await localDriver.get(k);
+      fordereAktiv();
+      return r;
+    },
     async set(k, v) {
+      fordereAktiv();
       const r = await localDriver.set(k, v);        // 1) sofort lokal sichern
+      fordereAktiv();
       if (SYNC_SET.has(k)) { markPending(k, true); enqueueCommit(k, String(v)); }
       return r;
     },
-    async delete(k) { return localDriver.delete(k); },   // remote bleibt unberührt
-    async list(prefix = "") { return localDriver.list(prefix); },
+    async delete(k) {
+      fordereAktiv();
+      const r = await localDriver.delete(k);        // remote bleibt unberührt
+      fordereAktiv();
+      return r;
+    },
+    async list(prefix = "") {
+      fordereAktiv();
+      const r = await localDriver.list(prefix);
+      fordereAktiv();
+      return r;
+    },
     // erweiterte Fläche für Konto-UI und Übernahme
     connectionTest, inventur, syncFlush, uebernehmeKey, loescheRemote,
     resolveConflictPushLocal, resolveConflictUseRemote, getSnapshots,

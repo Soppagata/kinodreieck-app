@@ -53,6 +53,7 @@ export function aiTokenErlaubt(projektUrl) {
 export function createAiTransport({
   config,
   getAccessToken,
+  getAccountId = null,
   fetchImpl = (typeof fetch === "function" ? fetch : null),
   timeoutMs = AI_TIMEOUT_MS,
 } = {}) {
@@ -67,11 +68,17 @@ export function createAiTransport({
     }
 
     let token = null;
-    try { token = await getAccessToken?.(); } catch { token = null; }
+    try {
+      token = await getAccessToken?.({ erwarteteKontoId: request?.accountId || null });
+    } catch { token = null; }
     /* Kein Token trotz angemeldeter Sitzung heißt: die Sitzung ist gerade nicht
        erneuerbar. Das ist ehrlich ein Anmeldeproblem, kein Serverfehler — und
        es meldet niemanden ab (Zusage aus Etappe 3). */
     if (!token) return { ok: false, status: 401, code: "unauthenticated", grund: "kein-sitzungstoken" };
+    if (request?.accountId && typeof getAccountId === "function"
+        && String(getAccountId() || "") !== String(request.accountId)) {
+      return { ok: false, status: 401, code: "unauthenticated", grund: "konto-gewechselt" };
+    }
 
     /* Bewusst NUR diese Felder. `accountId` aus dem Aufrufvertrag bleibt hier
        liegen und wird nicht gesendet. */

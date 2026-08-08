@@ -6,10 +6,33 @@ import { catalogService } from "../services/catalog.js";
 import { demoSeedZuLadung } from "../lib/catalogProjection.js";
 import streamingBekanntSnapshot from "../data/streaming_bekannt_snapshot.json";
 import streamingEntdeckenSnapshot from "../data/streaming_entdecken_snapshot.json";
-import programmSnapshot from "../data/programm-snapshot.json";
+import programmSnapshotRoh from "../data/programm-snapshot.json";
+
+/* Nur der Single-File-Build ersetzt diese Konstante. Modul-/Node-Tests und der
+   normale Web-Build bleiben ohne globalen Schalter lauffähig. */
+const EINZELDATEI_BUILD = typeof __KD_SINGLE_FILE__ !== "undefined"
+  && __KD_SINGLE_FILE__ === true;
+const programmSnapshot = EINZELDATEI_BUILD ? Object.freeze({
+  ...programmSnapshotRoh,
+  archiviert: true,
+  quelle_hinweis: "Archiviertes synthetisches Offline-Beispiel – kein aktuelles Kinoprogramm",
+}) : programmSnapshotRoh;
 
 export { streamingBekanntSnapshot, streamingEntdeckenSnapshot, programmSnapshot };
 export { zeitpunkt, IMPORT_INFO, demoSeedZuLadung } from "../lib/catalogProjection.js";
+
+function hatUnsicherenLegacyDemoSeed() {
+  try {
+    const seed = JSON.parse(globalThis.localStorage?.getItem("kd:demo-seed") || "null");
+    return !!seed && (
+      (seed.pins && !Array.isArray(seed.pinKeys))
+      || (seed.merkliste && !Array.isArray(seed.merklisteIds))
+      || (seed.streaming && !Array.isArray(seed.streamingQuellen))
+    );
+  } catch {
+    return false;
+  }
+}
 
 let demoLadePromise = null;
 function ladeDemoGlobal() {
@@ -18,6 +41,11 @@ function ladeDemoGlobal() {
   }
   if (typeof window !== "undefined" && window.__KD_DEMO_MASTER__) {
     return Promise.resolve({ format: 1, master: window.__KD_DEMO_MASTER__ });
+  }
+  /* Im Einzeldatei-Build ist der Seed ein harter Buildvertrag. Fehlt er trotz
+     Validierung, darf die App keine nicht mitgelieferte Nachbardatei suchen. */
+  if (EINZELDATEI_BUILD) {
+    return Promise.reject(new Error("Eingebetteter Demo-Seed der Einzeldatei fehlt."));
   }
   if (demoLadePromise) return demoLadePromise;
   demoLadePromise = new Promise((resolve, reject) => {
@@ -52,6 +80,10 @@ export async function demoLadung() {
     const beilageVorhanden = typeof window !== "undefined"
       && (!!window.__KD_DEMO_SEED__ || !!window.__KD_DEMO_MASTER__);
     if (!file && !beilageVorhanden) throw error;
+    /* Ein alter Boolean-Seed verrät nicht, aus welcher früheren Demo-Version
+       Pins/Merker/Quellen stammen. Der aktuelle Inline-Seed wäre dafür kein
+       belastbarer Löschbeleg; hier bleibt der bisherige fail-closed Vertrag. */
+    if (hatUnsicherenLegacyDemoSeed()) throw error;
   }
   return demoSeedZuLadung(await ladeDemoGlobal());
 }
@@ -61,6 +93,9 @@ export function ladeEntdeckenBeilage() {
   if (typeof window !== "undefined" && window.__KD_STREAMING_ENTDECKEN__) {
     return Promise.resolve(window.__KD_STREAMING_ENTDECKEN__);
   }
+  /* Der Snapshot ist ohnehin Teil des Bundles. Damit führt file:// weder einen
+     nutzlosen Dateiaufruf aus noch hängt seine Funktion an einem Nebenordner. */
+  if (EINZELDATEI_BUILD) return Promise.resolve(streamingEntdeckenSnapshot);
   if (entdeckenBeilagePromise) return entdeckenBeilagePromise;
   entdeckenBeilagePromise = new Promise((resolve) => {
     try {

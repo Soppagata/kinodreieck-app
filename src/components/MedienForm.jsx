@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { arrayZuQuelle, WUNSCH } from "../lib/quellen.js";
 import { QuellenWahl } from "./QuellenWahl.jsx";
@@ -16,6 +16,8 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
   };
   const [f, setF] = useState(leer);
   const [fehler, setFehler] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+  const speichertRef = useRef(false);
   const [sub, setSub] = useState((initial && initial.sub) || ""); // Unterkategorie (nur Persönlichkeit)
   const [quellen, setQuellen] = useState([]); // optional: Besitz/Verfügbarkeit (z.B. CD)
   const kategorien = typ === "musik"
@@ -23,6 +25,33 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
     : ["Persönlichkeit", "Studio", "Videospiel", "Theaterstück", "Interview", "Buch", "Podcast", "Sonstiges"];
   const rollen = ["Regisseur:In", "Schauspieler:In", "Komponist:In", "Drehbuch:In", "Sonstige"];
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const speichern = async () => {
+    if (speichertRef.current) return;
+    if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
+    speichertRef.current = true; setSpeichert(true);
+    try {
+      const q = arrayZuQuelle(quellen);
+      const id = await onAdd({
+        titel: f.titel.trim(),
+        jahr: f.jahr ? Number(f.jahr) : null,
+        typ,
+        art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (sub ? " · " + sub : "")) : (f.art || null),
+        kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
+        beschreibung: f.beschreibung.trim(),
+        ...(q !== WUNSCH ? { quelle: q } : {}),
+        bewertung: { wie: null, was: null, warum: null },
+        bewertet_von: null,
+      });
+      if (id === null || id === false || id === undefined) {
+        setFehler("Eintrag konnte nicht bestätigt gespeichert werden; die Eingabe bleibt erhalten.");
+        return;
+      }
+      setF(leer); setSub(""); setQuellen([]); setOpen(false); setFehler("");
+      if (onDone) onDone();
+    } catch (error) {
+      setFehler(error?.message || "Eintrag konnte nicht gespeichert werden.");
+    } finally { speichertRef.current = false; setSpeichert(false); }
+  };
 
   if (!open) {
     return <button style={btnStyle(false)} onClick={() => setOpen(true)}>+ {typ === "musik" ? "Musik" : "Eintrag"} hinzufügen</button>;
@@ -51,24 +80,8 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
         style={{ ...inputStyle, boxSizing: "border-box" }} />
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={btnStyle(true)} onClick={() => {
-          if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
-          const q = arrayZuQuelle(quellen);
-          onAdd({
-            titel: f.titel.trim(),
-            jahr: f.jahr ? Number(f.jahr) : null,
-            typ,
-            art: f.art === "Persönlichkeit" ? ("Persönlichkeit" + (sub ? " · " + sub : "")) : (f.art || null),
-            kategorie: f.art === "Persönlichkeit" ? "person" : (f.art === "Studio" ? "studio" : null),
-            beschreibung: f.beschreibung.trim(),
-            ...(q !== WUNSCH ? { quelle: q } : {}), // ohne Wahl KEIN quelle-Feld (wie bisher)
-            bewertung: { wie: null, was: null, warum: null }, // hart null — kein Dreieck
-            bewertet_von: null,
-          });
-          setF(leer); setSub(""); setQuellen([]); setOpen(false); setFehler("");
-          if (onDone) onDone();
-        }}>Hinzufügen</button>
-        <button style={btnStyle(false)} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
+        <button style={btnStyle(true)} disabled={speichert} onClick={() => void speichern()}>{speichert ? "Speichert …" : "Hinzufügen"}</button>
+        <button style={btnStyle(false)} disabled={speichert} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
       </div>
     </div>
   );

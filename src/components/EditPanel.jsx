@@ -3,7 +3,7 @@ import { T, btnStyle, lightInput } from "../lib/tokens.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 
 /* ---------- Inline-Editor für Bewertungen ---------- */
-export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis = null }) { // KD-030: optionaler autorName
+export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis = null, speichert = false, fehler = "" }) { // KD-030: optionaler autorName
   // Rohstring im State: leeres Feld bleibt leer, kein erzwungenes 0
   const [wie, setWie] = useState(String(film.bewertung?.wie ?? ""));
   const [was, setWas] = useState(String(film.bewertung?.was ?? ""));
@@ -55,15 +55,16 @@ export function EditPanel({ film, onSave, onCancel, autorName, herkunftHinweis =
       <textarea value={notiz} onChange={(e) => setNotiz(e.target.value)} rows={2}
         placeholder="Notiz (Edition, Fassung, Reihen-Abdeckung, Sehstand … — frei)"
         style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
+      {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div className="kd-edit-aktionen" style={{ display: "flex", gap: 8 }}>
-        <button disabled={prognoseUnvollstaendig}
-          style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px", opacity: prognoseUnvollstaendig ? 0.5 : 1 }}
+        <button disabled={prognoseUnvollstaendig || speichert}
+          style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px", opacity: prognoseUnvollstaendig || speichert ? 0.5 : 1 }}
           onClick={() => onSave(alleLeer
             ? { bewertung: null, kategorie: null, begruendung: beg, notiz, bewertet_von: null }
             : { bewertung: { wie: toNum(wie), was: toNum(was), warum: toNum(warum) }, kategorie: kat, begruendung: beg, notiz, bewertet_von: autorName || "max" /* KD-030 */ })}>
-          {alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Vorschlag übernehmen" : "Speichern"}
+          {speichert ? "Speichert …" : alleLeer ? "Als unbewertet speichern" : herkunftHinweis ? "Vorschlag übernehmen" : "Speichern"}
         </button>
-        <button style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>
+        <button disabled={speichert} style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>
           Abbrechen
         </button>
       </div>

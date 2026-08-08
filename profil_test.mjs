@@ -1122,9 +1122,10 @@ check("N", "4. Restore-Snapshot und Konto-Sync stammen aus derselben Registerlis
   () => /PERSONAL_DATA_KEYS/.test(lies("src/lib/restore.js"))
     && /for\s*\(const key of PERSONAL_DATA_KEYS\)/.test(lies("src/lib/restore.js"))
     && /PERSONAL_DATA_KEYS/.test(lies("src/lib/accountDriver.js")));
-check("N", "5. Restore spielt den vollständig vorbereiteten Registerplan ein",
+check("N", "5. Restore spielt den vollständig vorbereiteten Registerplan im gebundenen Kontext ein",
   () => /baueRestorePlan\(backup/.test(lies("src/lib/restore.js"))
-    && /store\.set\(schritt\.key,\s*schritt\.wert\)/.test(lies("src/lib/restore.js")));
+    && /const lauf\s*=\s*starteRestoreLauf\(\)/.test(lies("src/lib/restore.js"))
+    && /lauf\.kontext\.set\(schritt\.key,\s*schritt\.wert\)/.test(lies("src/lib/restore.js")));
 /* Der else-Zweig ist der Kern: ein Alt-Backup ohne das Feld darf den Topf
    nicht LEEREN, sondern muss ihn überspringen — sonst löscht das Einspielen
    eines älteren Backups das Profil still. */

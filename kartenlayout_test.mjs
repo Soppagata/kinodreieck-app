@@ -33,6 +33,19 @@ check("Kinotickets bleiben dem Kinoprogramm vorbehalten", () => {
   assert.match(lies("./src/components/ui.jsx"), /export function KinoTicket/);
 });
 
+check("Mobiler Kino-Fehler verweist nicht auf einen dort unsichtbaren Notfallimport", () => {
+  const kino = lies("./src/tabs/KinoTab.jsx");
+  assert.match(kino, /manuelle Notfallimport ist dort in der Desktopansicht verfügbar/);
+});
+
+check("Katalogoberflächen unterscheiden hinterlegte Zugangsdaten von bestätigter Verbindung", () => {
+  const daten = lies("./src/tabs/DatenTab.jsx");
+  const kino = lies("./src/tabs/KinoTab.jsx");
+  const streaming = lies("./src/tabs/StreamingTab.jsx");
+  assert.match(daten, /Zugangsdaten hinterlegt/);
+  assert.doesNotMatch(daten + kino + streaming, /Datenbank noch nicht verbunden/);
+});
+
 check("Dashboard folgt der festen Startseiten-Reihenfolge", () => {
   const start = lies("./src/tabs/StartTab.jsx");
   const dashboard = start.slice(start.indexOf('<div className="kd-dash-grid">'));

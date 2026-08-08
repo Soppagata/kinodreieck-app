@@ -200,7 +200,7 @@ kiAnSetzen();
 const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act, useState, createElement: h } = React;
-const { T } = await import("./src/lib/tokens.js");
+const { T, THEMES, kontrastFarbe } = await import("./src/lib/tokens.js");
 const { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } = await import(AUSGABE);
 
 /* ---------------------------------------------------- Stub des KI-Aufrufs */
@@ -328,16 +328,19 @@ function Harnisch() {
   const [tab, setTab] = useState("finder");
   const [verlauf, setVerlauf] = useState([]);
   const [eingabe, setEingabe] = useState("");
+  const [kiVerfuegbar, setKiVerfuegbar] = useState(true);
   steuer.setTab = setTab;
   steuer.verlauf = verlauf;
   steuer.setVerlauf = setVerlauf;
   steuer.setEingabe = setEingabe;
+  steuer.setKiVerfuegbar = setKiVerfuegbar;
   if (tab !== "finder") return h("div", null, "ANDERER TAB");
   return h(FinderTab, {
     master: MASTER, kinoMatches: KINO_MATCHES,
     streamingBekannt: STREAMING_BEKANNT, streamingEntdecken: STREAMING_ENTDECKEN,
     mustwatchIds: new Set(), auswahl: [],
     verlauf, setVerlauf, eingabe, setEingabe,
+    kiVerfuegbar,
     vokabular: [], saveVokabular: null,
   });
 }
@@ -378,27 +381,26 @@ const abUndAuf = async () => { await tabWeg(); await tabHin(); };
 const deutenKnopf = () => knoepfe().find((b) => /Mit KI deuten|deutet …/.test(b.textContent));
 const loeschKnopf = () => knoepfe().find((b) => /Neue Suche|KI-Deutung mitlöschen\?/.test(b.textContent));
 
-/* Chip-Klasse aus dem DOM lesen. Der Tooltip (`title`) kommt nicht an — die
-   Chip-Komponente in ui.jsx reicht ihn nicht an den Knopf durch (siehe
-   Abschnitt F). Beobachtbar bleibt die Farbe des Klassen-Markers:
+/* Chip-Klasse aus dem DOM lesen. Beobachtbar bleibt die tatsächliche
+   Hintergrundfarbe des ganzen Chips:
      hart       T.leinwandTief
      weich      T.wolfram
-     ausschluss T.warum, zusätzlich das „− " im Marker
-   T.wolfram und T.warum sind in BEIDEN Themes derselbe Wert, deshalb
-   entscheidet über „ausschluss" das Minuszeichen, nicht die Farbe. */
+     ausschluss T.gefahr, zusätzlich das „− " im Text
+   Das Minuszeichen bleibt als zweite, farbunabhängige Unterscheidung. */
 const messFarbe = dom.window.document.createElement("i");
 const alsRgb = (hex) => { messFarbe.style.color = hex; return messFarbe.style.color; };
-const F_HART = alsRgb(T.leinwandTief), F_WEICH = alsRgb(T.wolfram);
+const F_HART = alsRgb(T.leinwandTief), F_WEICH = alsRgb(T.wolfram), F_AUSSCHLUSS = alsRgb(T.gefahr);
 const chips = () => knoepfe()
   .filter((b) => b.firstElementChild && b.firstElementChild.tagName === "SPAN" && /×$/.test(b.textContent.trim()))
   .map((b) => {
     const marker = b.firstElementChild;
     const label = b.textContent.replace(/^−\s*/, "").replace(/\s*×$/, "");
-    const art = marker.textContent.includes("−") ? "ausschluss"
-      : marker.style.color === F_HART ? "hart"
-        : marker.style.color === F_WEICH ? "weich"
-          : "unbekannt(" + marker.style.color + ")";
-    return { label, art, knopf: b, titel: b.getAttribute("title") || "" };
+    const farbe = b.style.backgroundColor;
+    const art = farbe === F_HART ? "hart"
+      : farbe === F_WEICH ? "weich"
+        : farbe === F_AUSSCHLUSS && marker.textContent.includes("−") ? "ausschluss"
+          : "unbekannt(" + farbe + ")";
+    return { label, art, farbe, knopf: b, titel: b.getAttribute("title") || "" };
   });
 const chip = (teilLabel) => chips().find((c) => c.label.includes(teilLabel));
 const chipArt = (teilLabel) => (chip(teilLabel) || {}).art;
@@ -874,6 +876,19 @@ for (const [name, stand, marke] of AUS_FAELLE) {
     () => !/ai-disabled|KI ist ausgeschaltet|nicht verfügbar|abgeschaltet/i.test(text()));
 }
 
+/* Die lokale Zustimmung allein darf einem Gast keinen bezahlten Knopf
+   anbieten. Die App setzt diese Fähigkeit erst für ein bereites Konto mit
+   `personalAi`; der unklare Satz bleibt deterministisch sichtbar. */
+await leere();
+zaehlerAuf();
+kiAnSetzen();
+await act(async () => { steuer.setKiVerfuegbar(false); });
+await suche(UNKLAR);
+check("G7", "Gast ohne persönliche KI-Fähigkeit sieht keinen bezahlten Deuten-Knopf",
+  () => !knopf("Mit KI deuten"));
+check("G7", "Gast-Finder bleibt deterministisch nutzbar und ruft keine KI",
+  () => steuer.verlauf.length === 1 && stub.rufe.length === 0);
+
 /* Die Versionsmarke: eine Wahl aus einem früheren Dialog darf nicht
    weitergelten. Dieser Fall ist HEUTE ROT — siehe Abschnitt F (F6). Er steht
    deshalb dort und nicht hier, damit die Kette grün bleibt und der Befund
@@ -883,6 +898,7 @@ for (const [name, stand, marke] of AUS_FAELLE) {
 await leere();
 zaehlerAuf();
 kiAnSetzen();
+await act(async () => { steuer.setKiVerfuegbar(true); });
 await abUndAuf();
 await suche(UNKLAR);
 check("G7", "nach dem Zurückschalten auf KI=an ist der Knopf wieder da",
@@ -913,11 +929,30 @@ check("F", "F1: jeder Signal-Chip trägt seinen Tooltip im DOM (Chip reicht `tit
 check("F", "F1a: der harte Chip nennt seine Wirkung im Tooltip",
   () => (chip("Genre: horror") || {}).titel === "Harter Filter — schränkt die Treffer ein");
 
-/* F2 — Die Klassen weich und ausschluss sind farblich nicht unterscheidbar:
-   T.wolfram und T.warum sind in beiden Themes derselbe Wert (#E3A63B dunkel,
-   #B07E1F hell). Unterscheidbar bleibt allein das Minuszeichen. */
-check("F", "F2: die drei Chip-Klassen haben drei verschiedene Farben (T.wolfram ≠ T.warum)",
-  () => T.wolfram !== T.warum);
+/* F2 — Jede aktive Gestaltung braucht drei verschiedene Klassenfarben. Der
+   Ausschluss nutzt den Gefahren-Ton und behält zusätzlich sein Minuszeichen. */
+check("F", "F2: die drei Chip-Klassen haben in jedem Theme drei verschiedene Farben",
+  () => Object.values(THEMES).every((theme) =>
+    new Set([theme.leinwandTief, theme.wolfram, theme.gefahr]).size === 3)
+    && new Set([chip("Genre: horror")?.farbe, chip("Stimmung: melancholisch")?.farbe,
+      chip("ohne drama")?.farbe]).size === 3);
+const luminanz = (hex) => {
+  const kanaele = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * kanaele[0] + 0.7152 * kanaele[1] + 0.0722 * kanaele[2];
+};
+const kontrast = (a, b) => {
+  const [hell, dunkel] = [luminanz(a), luminanz(b)].sort((x, y) => y - x);
+  return (hell + 0.05) / (dunkel + 0.05);
+};
+check("F", "F2a: jede Chip-Klassenfarbe erreicht in jedem Theme mindestens 4,5:1 Textkontrast",
+  () => Object.values(THEMES).every((theme) =>
+    [theme.leinwandTief, theme.wolfram, theme.gefahr]
+      .every((hintergrund) => kontrast(hintergrund, kontrastFarbe(hintergrund)) >= 4.5)));
+check("F", "F2b: Filter, Wunsch und Ausschluss sind auch ohne Farbe im sichtbaren Text benannt",
+  () => /^Filter ·/.test(chip("Genre: horror")?.knopf.textContent || "")
+    && /^Wunsch ·/.test(chip("Stimmung: melancholisch")?.knopf.textContent || "")
+    && /^− Ausschluss ·/.test(chip("ohne drama")?.knopf.textContent || ""));
 
 /* F3 — Behoben in af606904: Noch kein Signal emittiert einen Info-Chip, aber
    die defensive vierte Klasse besitzt bereits eine eigene Farbe und Wirkung.

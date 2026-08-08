@@ -132,6 +132,7 @@ check("Bericht: Masterliste-Zählstand = 2", mb && mb.count === 2 && mb.status =
 const snap = parse("kd:restore:vorher");
 check("Snapshot: vorheriger Master gesichert", snap && snap.werte && /"id":"alt"/.test(snap.werte["kd:master"] || ""));
 check("Snapshot: vorheriger Autor gesichert", snap && snap.werte["kd:autor-name"] === "AlterName");
+check("Snapshot: an Format und Daten-Owner gebunden", snap && snap.version === 2 && snap.owner === "guest-local");
 
 /* 10) Rückgängig stellt den vorherigen Stand her */
 await R.restoreRueckgaengig();
@@ -362,6 +363,106 @@ check("P6 Ein Alt-Backup LÖSCHT das vorhandene Profil nicht", (() => {
     return p.signale?.length === 1 && p.signale[0].wert === "neo-noir" && p.einwilligung?.erteilt === true;
   } catch { return false; }
 })());
+
+/* ---------- P7: Restore-Snapshot und Lauf sind konto-/kontextgebunden -----
+   Der Snapshot liegt absichtlich gerätelokal. Ohne Ownerkennung könnte aber
+   ein Rückgängig aus Konto A nach dem Wechsel alle Töpfe in Konto B schreiben.
+   Die eingefrorene Treibergeneration verhindert zusätzlich, dass ein bereits
+   laufender Restore nach einem Wechsel mit dem neuen Treiber fortfährt. */
+function isolationsTreiber(owner, start = {}, hooks = {}) {
+  const werte = new Map(Object.entries(start));
+  const aufrufe = { get: 0, set: 0, delete: 0 };
+  return {
+    driver: {
+      name: "konto",
+      owner,
+      async get(key) {
+        aufrufe.get++;
+        if (hooks.get) return hooks.get(key, werte);
+        return werte.has(key) ? { key, value: werte.get(key) } : null;
+      },
+      async set(key, value) {
+        aufrufe.set++;
+        if (hooks.set) return hooks.set(key, value, werte);
+        werte.set(key, String(value));
+        return { key, value: String(value) };
+      },
+      async delete(key) {
+        aufrufe.delete++;
+        werte.delete(key);
+        return { key, deleted: true };
+      },
+      async list() { return { keys: [...werte.keys()] }; },
+    },
+    werte,
+    aufrufe,
+  };
+}
+
+_ls.clear();
+const isoA = isolationsTreiber("account:a", { "kd:autor-name": "A vorher" });
+const isoB = isolationsTreiber("account:b", { "kd:autor-name": "B bleibt" });
+ST.setStorageDriver(isoA.driver);
+await R.restoreBackup({ format: "kinodreieck-backup", version: 1, autor: "A neu" });
+check("P7 Snapshot A ist im Datenbestand A rückspielbar", R.hatRestoreSnapshot() === true);
+ST.setStorageDriver(isoB.driver);
+check("P7 Snapshot A wird im Datenbestand B nicht angeboten", R.hatRestoreSnapshot() === false);
+const bVorUndoWrites = isoB.aufrufe.set + isoB.aufrufe.delete;
+let fremdAbgelehnt = false;
+try { await R.restoreRueckgaengig(); }
+catch (error) { fremdAbgelehnt = /diesen Datenbestand/.test(error.message); }
+check("P7 Fremdes Undo wird vor dem ersten B-Write abgelehnt",
+  fremdAbgelehnt && isoB.aufrufe.set + isoB.aufrufe.delete === bVorUndoWrites
+  && isoB.werte.get("kd:autor-name") === "B bleibt");
+ST.setStorageDriver(isoA.driver);
+await R.restoreRueckgaengig();
+check("P7 Derselbe Owner kann seinen Snapshot weiterhin rückgängig machen",
+  isoA.werte.get("kd:autor-name") === "A vorher");
+
+/* Historische Snapshots hatten keine Ownerkennung. Sie dürfen nicht durch die
+   bloße Abwesenheit eines Feldes versehentlich als Gast- oder Kontostand gelten. */
+ST.setStorageDriver(isoB.driver);
+localStorage.setItem("kd:restore:vorher", JSON.stringify({
+  t: "2026-08-08T00:00:00.000Z",
+  werte: { "kd:autor-name": "Legacy A" },
+}));
+const bVorLegacyWrites = isoB.aufrufe.set + isoB.aufrufe.delete;
+let legacyAbgelehnt = false;
+try { await R.restoreRueckgaengig(); }
+catch (error) { legacyAbgelehnt = /diesen Datenbestand/.test(error.message); }
+check("P7 Ungebundener Legacy-Snapshot ist nie rückspielbar",
+  !R.hatRestoreSnapshot() && legacyAbgelehnt
+  && isoB.aufrufe.set + isoB.aufrufe.delete === bVorLegacyWrites
+  && isoB.werte.get("kd:autor-name") === "B bleibt");
+
+/* Der Write von A wartet, während der aktive Treiber auf B wechselt. Nach der
+   Freigabe darf der Auftrag weder Erfolg melden noch den B-Treiber berühren. */
+let writeGestartet;
+let writeFreigeben;
+const writeStart = new Promise((resolve) => { writeGestartet = resolve; });
+const writeBlockade = new Promise((resolve) => { writeFreigeben = resolve; });
+const isoBlockA = isolationsTreiber("account:block-a", { "kd:autor-name": "Block A vorher" }, {
+  async set(key, value, werte) {
+    writeGestartet();
+    await writeBlockade;
+    werte.set(key, String(value));
+    return { key, value: String(value) };
+  },
+});
+const isoBlockB = isolationsTreiber("account:block-b", { "kd:autor-name": "Block B bleibt" });
+ST.setStorageDriver(isoBlockA.driver);
+const blockierterRestore = R.restoreBackup({ format: "kinodreieck-backup", version: 1, autor: "Block A neu" });
+await writeStart;
+const bVorWechselWrites = isoBlockB.aufrufe.set + isoBlockB.aufrufe.delete;
+ST.setStorageDriver(isoBlockB.driver);
+writeFreigeben();
+let wechselAbgebrochen = false;
+try { await blockierterRestore; }
+catch (error) { wechselAbgebrochen = error?.code === "STORAGE_CONTEXT_CHANGED"; }
+check("P7 Kontextwechsel während blockiertem Write bricht fail-closed ab",
+  wechselAbgebrochen
+  && isoBlockB.aufrufe.set + isoBlockB.aufrufe.delete === bVorWechselWrites
+  && isoBlockB.werte.get("kd:autor-name") === "Block B bleibt");
 
 ST.setStorageDriver(null); // Hygiene: zurück auf lokal
 

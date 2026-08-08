@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { ALLE_TYPEN, hatDreieck, normalisiereTyp } from "../lib/typen.js";
 import { quelleZuArray, arrayZuQuelle } from "../lib/quellen.js";
@@ -45,6 +45,8 @@ export function FilmForm({
   };
   const [f, setF] = useState(leer);
   const [fehler, setFehler] = useState("");
+  const [speicherLauf, setSpeicherLauf] = useState(false);
+  const speicherLaufRef = useRef(false);
   const [prognoseLauf, setPrognoseLauf] = useState(false);
   /* Unbewertet speichern (Besitz erfassen, Dreieck kommt später): blendet
      Kategorie + Achsen aus; gespeichert wird bewertung: null. */
@@ -62,6 +64,7 @@ export function FilmForm({
   }
 
   const speichern = async (mitPrognose = false) => {
+    if (speicherLaufRef.current) return;
     if (!f.titel.trim()) { setFehler("Titel ist Pflicht."); return; }
     if (bewertbar && !f.jahr) { setFehler("Jahr ist Pflicht (Schlüssel & Abgleich)."); return; }
     // KD-018: nicht-leeres Jahr muss eine ganze Zahl im sinnvollen Bereich sein,
@@ -86,6 +89,8 @@ export function FilmForm({
       return;
     }
     setFehler("");
+    speicherLaufRef.current = true;
+    setSpeicherLauf(true);
     if (mitPrognose) setPrognoseLauf(true);
     // KD-019: Rückgabewert von onAdd/addFilm auswerten (null/false = Dublette).
     let ergebnis;
@@ -116,10 +121,10 @@ export function FilmForm({
         };
         ergebnis = mitPrognose
           ? await onAddMitPrognose?.(eintrag)
-          : onAdd(eintrag);
+          : await onAdd(eintrag);
       } else {
         // Musik/Sonstiges — schlichte Struktur, hart kein Dreieck.
-        ergebnis = onAdd({
+        ergebnis = await onAdd({
           titel: f.titel.trim(),
           jahr: f.jahr ? Number(f.jahr) : null,
           typ: f.typ,
@@ -135,6 +140,8 @@ export function FilmForm({
       return;
     } finally {
       if (mitPrognose) setPrognoseLauf(false);
+      speicherLaufRef.current = false;
+      setSpeicherLauf(false);
     }
     // KD-019: nur bei Erfolg zurücksetzen/schließen; Dublette (null/false) lässt
     // das Formular offen und bewahrt die Eingabe.
@@ -142,7 +149,7 @@ export function FilmForm({
       setFehler("Eintrag existiert bereits (Titel + Jahr) — nichts gespeichert, Eingabe bleibt erhalten.");
       return;
     }
-    setF(leer); setOpen(false); setFehler("");
+    setF(leer); setOhneBewertung(false); setOpen(false); setFehler("");
     if (onDone) onDone();
   };
 
@@ -240,15 +247,15 @@ export function FilmForm({
 
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={btnStyle(true)} disabled={prognoseLauf} onClick={() => speichern(false)}>Hinzufügen</button>
+        <button style={btnStyle(true)} disabled={speicherLauf} onClick={() => speichern(false)}>{speicherLauf && !prognoseLauf ? "Speichert …" : "Hinzufügen"}</button>
         {bewertbar && prognoseAktiv && onAddMitPrognose && (
-          <button style={btnStyle(false)} disabled={prognoseLauf || !!prognoseSperrgrund}
+          <button style={btnStyle(false)} disabled={speicherLauf || !!prognoseSperrgrund}
             title="Speichert zuerst einen unbewerteten Eintrag und startet danach genau einen kostenpflichtigen KI-Aufruf"
             onClick={() => speichern(true)}>
             {prognoseLauf ? "Speichert & prognostiziert …" : "Anlegen & KI-Prognose erstellen"}
           </button>
         )}
-        <button style={btnStyle(false)} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
+        <button style={btnStyle(false)} disabled={speicherLauf} onClick={() => { setOpen(false); setFehler(""); if (onDone) onDone(); }}>Abbrechen</button>
       </div>
       {bewertbar && prognoseAktiv && onAddMitPrognose && (
         <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: T.rauch }}>

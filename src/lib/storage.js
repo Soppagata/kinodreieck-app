@@ -9,6 +9,7 @@
 /* Lokaler Treiber: exakt das bisherige localStorage-Verhalten. */
 export const localDriver = {
   name: "lokal",
+  owner: "guest-local",
   async get(k) {
     const v = localStorage.getItem(k);
     return v === null ? null : { key: k, value: v };
@@ -54,15 +55,27 @@ export function captureStorageContext() {
   return Object.freeze({
     generation,
     name: driver?.name || "unbekannt",
+    owner: String(driver?.owner || `driver:${driver?.name || "unbekannt"}`),
     isCurrent,
     get: (key) => run("get", [key]),
     set: (key, value) => run("set", [key, value]),
     delete: (key) => run("delete", [key]),
     list: (prefix = "") => run("list", [prefix]),
+    /* Auch ein frischer Pull gehört zu demselben gebundenen Auftrag. Ohne
+       diese Grenze könnte ein Konto-/Treiberwechsel zwischen Pull und Reads
+       zwei persönliche Datenräume in ein Backup mischen. */
+    pull: () => {
+      if (typeof driver?.pull === "function") return run("pull", []);
+      if (!isCurrent()) return Promise.reject(storageContextError());
+      return Promise.resolve({ ok: true, noop: true });
+    },
   });
 }
 
 export function storageContextGenerationSnapshot() { return storageContextGeneration; }
+export function storageOwnerKennung() {
+  return String(activeDriver?.owner || `driver:${activeDriver?.name || "unbekannt"}`);
+}
 export function subscribeStorageContext(listener) {
   storageContextListeners.add(listener);
   return () => storageContextListeners.delete(listener);

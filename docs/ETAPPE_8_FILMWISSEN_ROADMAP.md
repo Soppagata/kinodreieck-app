@@ -167,8 +167,9 @@ Abnahmestand 30.07.2026:
   Quelle noch freie URL oder Fundstelle vorgeben.
 - Der Datenbank-Unterbau besitzt nun einen Reaper für verwaiste Aufträge,
   ein quellenweites Minutenlimit, unveränderliche Herkunftsgruppen und einen
-  harten Task-Deckel von 5 US-Cent. Modellalias `gross` und 2048 Ausgabetokens
-  sind fail-closed hinterlegt.
+  harten Task-Deckel. Seit der konservativen Preisvorziehung vom 08.08.2026
+  beträgt er 6 US-Cent; Modellalias `gross` und 2048 Ausgabetokens sind
+  fail-closed hinterlegt.
 - Erfolgreiche Publikation und Abschluss des exakt zugeordneten KI-Protokolls
   erfolgen über eine gemeinsame Transaktion. Auch der Fehlerabschluss nach
   einem Anbieteraufruf schließt beide Aufträge zusammen und erhält unbekannte

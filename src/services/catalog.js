@@ -138,7 +138,11 @@ export const catalogService = Object.freeze({
       const variante = options.variante || await aktiveVariante();
       const b = bereichOder(options.bereich || "programm");
       const ctx = { source: "catalog", operation: "connection.test" };
-      const result = await testeKatalogZugang({ asset: variante === "live" ? b.live : b.demo });
+      const erwarteteKontoId = variante === "live" ? authDriver.konto()?.id || null : null;
+      const result = await testeKatalogZugang({
+        asset: variante === "live" ? b.live : b.demo,
+        erwarteteKontoId,
+      });
       if (result?.ok) {
         const a = result.asset;
         if (!a || a.ok) return { ...result, variante };
@@ -178,7 +182,8 @@ export const catalogService = Object.freeze({
     const name = variante === "live" ? b.live : b.demo;
     const ctx = { source: "catalog", operation: "area.load" };
     try {
-      const r = await ladeKatalogAsset(name, options);
+      const erwarteteKontoId = variante === "live" ? authDriver.konto()?.id || null : null;
+      const r = await ladeKatalogAsset(name, { ...options, erwarteteKontoId });
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit
          abgelehntem Schlüssel nur „Datenbank nicht erreichbar". */
@@ -189,7 +194,8 @@ export const catalogService = Object.freeze({
   },
   /* Roher Zeilenzugriff (Name statt Bereich) — für Sonderfälle wie das Manifest. */
   async loadAsset(name, options) {
-    try { return await ladeKatalogAsset(name, options); }
+    const erwarteteKontoId = authDriver.konto()?.id || null;
+    try { return await ladeKatalogAsset(name, { ...(options || {}), erwarteteKontoId }); }
     catch (error) { throw katalogFehler(error, { source: "catalog", operation: "asset.load" }); }
   },
   /* Cache-Storage-Eintrag eines Bereichs (live UND demo) verwerfen. Ohne das

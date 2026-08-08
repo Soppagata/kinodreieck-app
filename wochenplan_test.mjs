@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   automatischeReminderRef, datumLokal, montagDerWoche, normalisiereWochenplan, neuerFolgenReminder,
+  mediathekEintragAusReminder, normalisiereReminderJahr,
   reminderFaellig, wochenansicht, findeReminderVerknuepfung, folgenstandText,
   naechsteSiebenTage, kinoPinTermin, reminderVerknuepfung, reminderVerknuepfungsOptionen,
   wochentagFuerDatum, findeKinoPinImKatalog,
 } from "./src/lib/wochenplan.js";
 import { erstelleIcs, reminderIcsEvent, tagAlsIcs, wocheAlsIcs } from "./src/lib/kalenderExport.js";
+import { slugId } from "./src/lib/match.js";
 
 let checks = 0;
 const ok = (name, fn) => { fn(); checks++; console.log("✓ " + name); };
@@ -49,6 +52,35 @@ ok("Normalisierung unterstützt allgemeine Terminarten und begrenzt Uhrzeiten fa
   assert.deepEqual(plan.eintraege.map((e) => e.uhrzeit), ["", "", "20:15", "08:30", "21:00"]);
   assert.deepEqual(plan.eintraege[0].ref, { watchmode_id: 42, url: "https://example.test/altbestand" });
   assert.deepEqual(plan.eintraege[3].ref, { master_id: 7, url: "https://example.test/termin" });
+});
+
+ok("Reminder-Jahre folgen derselben Pflichtgrenze wie die Mediathek", () => {
+  const jetzt = new Date("2026-08-08T12:00:00Z");
+  assert.equal(normalisiereReminderJahr("2024", jetzt), 2024);
+  assert.equal(normalisiereReminderJahr("", jetzt), null);
+  assert.equal(normalisiereReminderJahr("2024.5", jetzt), null);
+  assert.equal(normalisiereReminderJahr("1869", jetzt), null);
+  assert.equal(normalisiereReminderJahr("2032", jetzt), null);
+  const plan = normalisiereWochenplan({ eintraege: [
+    { id: "mit-jahr", titel: "Severance", art: "folge", jahr: "2022", startdatum: "2026-08-08" },
+    { id: "ohne-jahr", titel: "Unbekannt", art: "staffel", jahr: "neulich", startdatum: "2026-08-08" },
+  ] }, jetzt);
+  assert.equal(plan.eintraege[0].jahr, 2022);
+  assert.equal("jahr" in plan.eintraege[1], false);
+});
+
+ok("Titelanlage aus einem Reminder ist ohne Jahr blockiert und mit Jahr kanonisch", () => {
+  const jetzt = new Date("2026-08-08T12:00:00Z");
+  const basis = { titel: "Severance", art: "folge", ref: { watchmode_id: 1234 } };
+  assert.equal(mediathekEintragAusReminder(basis, jetzt), null);
+  const kandidat = mediathekEintragAusReminder({ ...basis, jahr: "2022" }, jetzt);
+  assert.deepEqual(kandidat, {
+    titel: "Severance", originaltitel: "Severance", jahr: 2022, jahr_bis: null,
+    typ: "serie", quelle: "must_watch", kategorie: null, bewertet_von: null,
+    bewertung: null, genre: [], tags: [], begruendung: "", notiz: "",
+    status: "gesetzt", watchmode_id: 1234,
+  });
+  assert.equal(slugId(kandidat.titel, kandidat.jahr), "severance_2022");
 });
 
 ok("Alte und unbekannte Arten bleiben als Folge rückwärtskompatibel", () => {
@@ -156,12 +188,98 @@ ok("Streaming-Wochenpins zielen mit Watchmode-Identität auf die konkrete Progra
   assert.deepEqual(verknuepfung.ziel, { art: "streaming", bereich: "programm", ref: "programm-one-piece" });
 });
 
-ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
+ok("Explizit gelöste Folge- und Kinoverknüpfungen bleiben trotz exaktem Katalogtreffer gelöst", () => {
+  const katalog = [{
+    id: "programm-one-piece", watchmode_id: 42, titel: "One Piece",
+    typ: "tv_series", wochen_bereich: "programm",
+  }];
+  const kinoKatalog = [{
+    id: "kino-1", programm_ref: "programm-1", titel: "Event Horizon",
+    kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 20:15 · Gartenbaukino"],
+  }];
+  const folge = reminderVerknuepfung({
+    art: "folge", titel: "One Piece", link_modus: "keiner",
+    ref: { watchmode_id: 42, streaming_art: "programm" },
+  }, { katalog });
+  const kino = reminderVerknuepfung({
+    art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
+    startdatum: "2026-08-05", uhrzeit: "20:15", link_modus: "keiner",
+    ref: { kino_programm_id: "programm-1" },
+  }, { kinoKatalog }, new Date(2026, 7, 2));
+  assert.deepEqual(folge, { quelle: null, ziel: null, abgelaufen: false });
+  assert.deepEqual(kino, { quelle: null, ziel: null, abgelaufen: false });
+});
+
+ok("Fehlende Katalogziele erhalten persönliche Reminder ohne Scheinziel", () => {
+  const streamingPin = neuerFolgenReminder({
+    id: "stream-offline", art: "folge", titel: "One Piece", startdatum: "2026-08-05",
+    wochentage: [3], ref: { watchmode_id: 42, streaming_art: "entdecken", auto: true },
+  }, new Date(2026, 7, 2));
+  const streaming = reminderVerknuepfung(streamingPin, { katalog: [] });
+  assert.equal(streaming.abgelaufen, false);
+  assert.equal(streaming.verknuepfungFehlt, true);
+  assert.equal(streaming.ziel, null);
+
+  const masterPin = neuerFolgenReminder({
+    id: "master-offline", art: "termin", titel: "Stop Making Sense", startdatum: "2026-08-05",
+    wochentage: [3], ref: { master_id: "film-1" },
+  }, new Date(2026, 7, 2));
+  assert.equal(reminderVerknuepfung(masterPin, { master: [] }).verknuepfungFehlt, true);
+
+  const kinoPin = neuerFolgenReminder({
+    id: "kino-offline", art: "kino", titel: "Event Horizon", startdatum: "2026-08-05",
+    wochentage: [3], ref: { kino_programm_id: "programm-1" },
+  }, new Date(2026, 7, 2));
+  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: [] }).verknuepfungFehlt, true);
+
+  const tage = wochenansicht({
+    jetzt: new Date(2026, 7, 2),
+    wochenplan: { eintraege: [streamingPin, masterPin, kinoPin] },
+  });
+  assert.deepEqual(tage[3].eintraege.map((e) => e.id), ["kino-offline", "stream-offline", "master-offline"]);
+  assert.equal(tage[3].eintraege.every((e) => e.verknuepfungFehlt && !e.ziel), true);
+});
+
+ok("Nur die exakte starke ID löst ein Ziel auf; ein anderer gleichnamiger Titel ersetzt sie nicht", () => {
+  const pin = neuerFolgenReminder({
+    id: "starke-id", art: "folge", titel: "One Piece", startdatum: "2026-08-05",
+    wochentage: [3], ref: { watchmode_id: 42, streaming_art: "entdecken" },
+  }, new Date(2026, 7, 2));
+  const falschGleichnamig = reminderVerknuepfung(pin, {
+    katalog: [{ watchmode_id: 77, titel: "One Piece", typ: "tv_series" }],
+  });
+  assert.equal(falschGleichnamig.ziel, null);
+  assert.equal(falschGleichnamig.abgelaufen, false);
+  assert.equal(falschGleichnamig.verknuepfungFehlt, true);
+
+  const tage = wochenansicht({
+    jetzt: new Date(2026, 7, 2), wochenplan: { eintraege: [pin] },
+    katalog: [{ watchmode_id: 77, titel: "One Piece", typ: "tv_series" }],
+  });
+  assert.equal(tage.flatMap((tag) => tag.eintraege).length, 1);
+  assert.equal(tage[3].eintraege[0].verknuepfungFehlt, true);
+});
+
+ok("Eine Zielaktion entsteht nur aus aufgelöstem Datensatz oder sicherer Web-URL", () => {
+  const basis = {
+    id: "url", art: "folge", titel: "One Piece", startdatum: "2026-08-05",
+    wochentage: [3], ref: { watchmode_id: 42, streaming_art: "entdecken" },
+  };
+  const offline = { katalog: [] };
+  assert.deepEqual(reminderVerknuepfung({
+    ...basis, ref: { ...basis.ref, url: "https://example.test/one-piece" },
+  }, offline).ziel, { art: "extern", url: "https://example.test/one-piece" });
+  assert.equal(reminderVerknuepfung({
+    ...basis, ref: { ...basis.ref, url: "javascript:alert(1)" },
+  }, offline).ziel, null);
+});
+
+ok("Persönliche verknüpfte Reminder bleiben; nur echte Programm-Pins laufen separat ab", () => {
   const streamingPin = neuerFolgenReminder({
     id: "stream", art: "folge", titel: "One Piece", startdatum: "2026-08-05",
     wochentage: [3], ref: { watchmode_id: 42, streaming_art: "programm", auto: true },
   }, new Date(2026, 7, 2));
-  assert.equal(reminderVerknuepfung(streamingPin, { katalog: [] }).abgelaufen, true);
+  assert.equal(reminderVerknuepfung(streamingPin, { katalog: [] }).verknuepfungFehlt, true);
   const tage = wochenansicht({
     jetzt: new Date(2026, 7, 2),
     wochenplan: { eintraege: [
@@ -170,7 +288,7 @@ ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
     ] },
     katalog: [],
   });
-  assert.deepEqual(tage[3].eintraege.map((e) => e.titel), ["Zahnarzt"]);
+  assert.deepEqual(tage[3].eintraege.map((e) => e.titel), ["One Piece", "Zahnarzt"]);
 
   const kinoPin = neuerFolgenReminder({
     id: "kino", art: "kino", titel: "Event Horizon", plattform: "Gartenbaukino",
@@ -182,7 +300,7 @@ ok("Verknüpfte Pins laufen ab, freie persönliche Termine bleiben", () => {
     kinos: ["Gartenbaukino"], termine: ["Mi 5.8. 21:15 · Gartenbaukino"],
   }];
   assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: andererTermin }, new Date(2026, 7, 2)).abgelaufen, undefined);
-  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: [] }, new Date(2026, 7, 2)).abgelaufen, true);
+  assert.equal(reminderVerknuepfung(kinoPin, { kinoKatalog: [] }, new Date(2026, 7, 2)).verknuepfungFehlt, true);
 });
 
 ok("Nicht mehr im Programm gefundene Kinopins verschwinden aus der Woche", () => {
@@ -301,11 +419,65 @@ ok("ICS benennt alle Terminarten passend und ignoriert Serien-Uhrzeiten", () => 
 
 ok("Tag- und Wochenexport erzeugen konkrete Ereignisse ohne RRULE", () => {
   const tag = { nr: 2, iso: "2026-08-04", eintraege: [{ id: "a", art: "konzert", titel: "Band", plattform: "Arena", uhrzeit: "20:15" }] };
-  assert.doesNotMatch(tagAlsIcs(tag), /RRULE/);
-  assert.match(wocheAlsIcs([tag]), /DTSTART:20260804T201500/);
+  const tagIcs = tagAlsIcs(tag);
+  const event = tagIcs.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/)?.[0] || "";
+  assert.doesNotMatch(event, /RRULE/);
+  assert.match(wocheAlsIcs([tag]), /DTSTART;TZID=Europe\/Vienna:20260804T201500/);
   assert.match(wocheAlsIcs([tag]), /SUMMARY:Konzert: Band/);
   assert.match(wocheAlsIcs([{ ...tag, eintraege: [{ ...tag.eintraege[0], art: "folge" }] }]), /DTSTART;VALUE=DATE:20260804/);
   assert.match(wocheAlsIcs([{ ...tag, eintraege: [{ ...tag.eintraege[0], art: "kino" }] }]), /SUMMARY:Kino: Band/);
+});
+
+ok("Zeit-Termine deklarieren Wien samt RFC-Zeitzone, Ganztage bleiben DATE", () => {
+  const zeit = erstelleIcs([{ id: "zeit", datum: "2026-08-04", uhrzeit: "20:15", summary: "Termin" }], {
+    jetzt: new Date("2026-08-01T10:00:00Z"),
+  });
+  assert.match(zeit, /X-WR-TIMEZONE:Europe\/Vienna\r\n/);
+  assert.match(zeit, /BEGIN:VTIMEZONE\r\nTZID:Europe\/Vienna\r\n/);
+  assert.match(zeit, /BEGIN:DAYLIGHT[\s\S]*TZOFFSETFROM:\+0100[\s\S]*TZOFFSETTO:\+0200/);
+  assert.match(zeit, /BEGIN:STANDARD[\s\S]*TZOFFSETFROM:\+0200[\s\S]*TZOFFSETTO:\+0100/);
+  assert.match(zeit, /DTSTART;TZID=Europe\/Vienna:20260804T201500/);
+  assert.doesNotMatch(zeit, /\r\nDTSTART:20260804T201500/);
+
+  const ganztag = erstelleIcs([{ id: "tag", datum: "2026-08-04", summary: "Folge" }], {
+    jetzt: new Date("2026-08-01T10:00:00Z"),
+  });
+  assert.match(ganztag, /DTSTART;VALUE=DATE:20260804/);
+  assert.doesNotMatch(ganztag, /VTIMEZONE|TZID=|X-WR-TIMEZONE/);
+});
+
+ok("Zeitgebundene Wiederholungen haben ein UTC-UNTIL, Ganztage weiter ein DATE-UNTIL", () => {
+  const basis = {
+    id: "ende", titel: "Ende", wochentage: [1], intervall_wochen: 1,
+    startdatum: "2026-08-03", ende: { typ: "datum", datum: "2026-08-31" },
+  };
+  const mitZeit = reminderIcsEvent({ ...basis, art: "termin", uhrzeit: "20:15" });
+  assert.match(mitZeit.rrule, /UNTIL=20260831T181500Z/);
+  const ohneZeit = reminderIcsEvent({ ...basis, art: "folge", uhrzeit: "20:15" });
+  assert.match(ohneZeit.rrule, /UNTIL=20260831(?:;|$)/);
+  assert.doesNotMatch(ohneZeit.rrule, /UNTIL=\d{8}T/);
+});
+
+ok("ICS bleibt in einer Prozess-Zeitzone außerhalb Wiens auf Wiener Datum und Uhrzeit", () => {
+  const exportUrl = new URL("./src/lib/kalenderExport.js", import.meta.url).href;
+  const wochenplanUrl = new URL("./src/lib/wochenplan.js", import.meta.url).href;
+  const programm = `
+    import { erstelleIcs, kalenderEventAusWochenEintrag } from ${JSON.stringify(exportUrl)};
+    import { kinoPinTermin } from ${JSON.stringify(wochenplanUrl)};
+    const termin = kinoPinTermin({ termin_iso: "2026-08-04T20:15:00+02:00" }, new Date(2026, 7, 1, 12));
+    const kino = kalenderEventAusWochenEintrag({ id: "kino", art: "kino", titel: "Film", termin, uhrzeit: "20:15" }, "2026-08-04");
+    const zeit = erstelleIcs([kino], { jetzt: new Date("2026-08-01T10:00:00Z") });
+    const tag = erstelleIcs([{ id: "tag", datum: "2026-08-04", summary: "Folge" }], { jetzt: new Date("2026-08-01T10:00:00Z") });
+    process.stdout.write(JSON.stringify({ zeit, tag }));
+  `;
+  const kind = spawnSync(process.execPath, ["--input-type=module", "-e", programm], {
+    cwd: process.cwd(), encoding: "utf8", env: { ...process.env, TZ: "America/New_York" },
+  });
+  assert.equal(kind.status, 0, kind.stderr);
+  const { zeit, tag } = JSON.parse(kind.stdout);
+  assert.match(zeit, /DTSTART;TZID=Europe\/Vienna:20260804T201500/);
+  assert.match(tag, /DTSTART;VALUE=DATE:20260804/);
+  assert.doesNotMatch(tag, /20260803/);
 });
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);

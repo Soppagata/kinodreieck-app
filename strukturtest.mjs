@@ -86,7 +86,6 @@ const dom = new JSDOM(readFileSync(pfad, "utf8"), {
     w.localStorage.setItem("kd:katalog:url", "https://test.supabase.co");
     w.localStorage.setItem("kd:katalog:key", "x".repeat(30));
     w.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: ["kino","pinboard","mediathek","eintrag","streaming","entdecken","blog","vokabular","streaming-quellen","erweitert","waechter"] })); // Tour aus: dieser Test prüft die App, nicht das Tutorial
-    w.__KD_DEMO_MASTER__ = JSON.parse(readFileSync(new URL("./src/data/masterliste.json", import.meta.url), "utf8")); // Demo-Beilage (in prod: demo_masterliste.js)
   },
 });
 const warte = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -104,6 +103,10 @@ const setValue = (el, v) => {
 await warte(3000);
 const checks = [];
 const check = (n, p) => checks.push([n, p]);
+check("Demo-Start nutzt den im fertigen HTML ausgeführten Format-1-Seed",
+  dom.window.__KD_DEMO_SEED__?.format === 1
+  && dom.window.__KD_DEMO_SEED__?.master?.filme?.length > 0
+  && dom.window.__KD_DEMO_MASTER__ === dom.window.__KD_DEMO_SEED__.master);
 
 /* ---- 1. Start: Dashboard (Etappe 4, Personal-Build) — Vertrauens-Zeile +
    Modul-Link-Mapping (→-Link wechselt wirklich den Tab). Die Quicklinks der
@@ -265,11 +268,12 @@ if (startSelect) {
   setValue(startSelect, "start");
   startSelect.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
 }
-// KI-Vokabular: Semantik wird frei beschrieben; ohne Konto gibt es bewusst
-// keinen manuellen Genre-/Tag-Hintereingang.
+// KI-Vokabular: Der Gast behält seine gespeicherten Offline-Regeln, bekommt
+// aber keinen unerreichbaren/deaktivierten Bezahl-Aufruf angeboten.
 const wortFeld = [...doc.querySelectorAll("input")].find((i) => /Begriff \(z\.\s*B\./.test(i.placeholder || ""));
 const bedeutungsFeld = [...doc.querySelectorAll("textarea")].find((i) => /Was bedeutet der Begriff/.test(i.placeholder || ""));
-check("KI-Vokabular: Begriff und freie Bedeutung vorhanden", !!wortFeld && !!bedeutungsFeld);
+check("KI-Vokabular: Gast sieht keine unerreichbare KI-Eingabe",
+  !wortFeld && !bedeutungsFeld && !knopf(/^Mit KI deuten$/));
 check("KI-Vokabular: keine manuelle Genre-/Tag-Zuordnung mehr",
   ![...doc.querySelectorAll("input")].some((i) => /Genres, kommagetrennt|Tags, kommagetrennt/.test(i.placeholder || "")));
 // Demo-Reihenfolge: Streaming-Quellen exakt an Position 5, Erweitert nach Status.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { T, btnStyle, lightInput } from "../lib/tokens.js";
 import { hatDreieck } from "../lib/typen.js";
 import { Dreieck, AxisChips, KategorieTag, UnbewertetTag, IconDelete } from "./ui.jsx";
@@ -9,7 +9,7 @@ import { setzePrognoseStatus } from "../lib/prognose.js";
 
 /* Einfacher Editor für Einträge ohne Dreieck (musik/sonstiges):
    Beschreibung + Notiz — die Notiz ist bei JEDEM Eintrag editierbar. */
-function BeschreibungEditor({ eintrag, onSave, onCancel }) {
+function BeschreibungEditor({ eintrag, onSave, onCancel, speichert, fehler }) {
   const [besch, setBesch] = useState(eintrag.beschreibung || "");
   const [notiz, setNotiz] = useState(eintrag.notiz || "");
   return (
@@ -18,9 +18,10 @@ function BeschreibungEditor({ eintrag, onSave, onCancel }) {
         placeholder="Beschreibung" style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
       <textarea value={notiz} onChange={(e) => setNotiz(e.target.value)} rows={2}
         placeholder="Notiz (Edition, Fassung, Sehstand … — frei)" style={{ ...lightInput, width: "100%", boxSizing: "border-box", fontFamily: "'Space Grotesk', sans-serif" }} />
+      {fehler && <div role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div style={{ display: "flex", gap: 8 }}>
-        <button style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>Speichern</button>
-        <button style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
+        <button disabled={speichert} style={{ ...btnStyle(true), fontSize: 14, padding: "7px 14px" }} onClick={() => onSave({ beschreibung: besch, notiz })}>{speichert ? "Speichert …" : "Speichern"}</button>
+        <button disabled={speichert} style={{ ...btnStyle(false), fontSize: 14, padding: "7px 14px", color: T.tinte, borderColor: T.tinteWeich }} onClick={onCancel}>Abbrechen</button>
       </div>
     </div>
   );
@@ -37,6 +38,9 @@ export function FilmCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [prognoseEntwurf, setPrognoseEntwurf] = useState(false);
+  const [speichert, setSpeichert] = useState(false);
+  const speichertRef = useRef(false);
+  const [speicherFehler, setSpeicherFehler] = useState("");
   const dreieck = hatDreieck(film.typ);
   /* unbewertet = bewertung fehlt komplett (null). 0/0/0 ist eine ECHTE Bewertung. */
   const unbewertet = dreieck && film.bewertung == null;
@@ -44,7 +48,22 @@ export function FilmCard({
   const jetztBewerten = (e) => {
     e.stopPropagation();
     if (!expanded && onToggle) onToggle();
+    setSpeicherFehler("");
     setEditing(true);
+  };
+  const speichereAenderungen = async (changes) => {
+    if (speichertRef.current) return false;
+    speichertRef.current = true;
+    setSpeichert(true); setSpeicherFehler("");
+    try {
+      const ok = await onSave(changes);
+      if (!ok) { setSpeicherFehler("Änderung konnte nicht bestätigt gespeichert werden; deine Eingabe bleibt erhalten."); return false; }
+      setPrognoseEntwurf(false); setEditing(false);
+      return true;
+    } catch (error) {
+      setSpeicherFehler(error?.message || "Änderung konnte nicht gespeichert werden.");
+      return false;
+    } finally { speichertRef.current = false; setSpeichert(false); }
   };
   return (
     <div
@@ -127,7 +146,7 @@ export function FilmCard({
                 <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {onSave && (
                   <button style={{ ...btnStyle(false), fontSize: 13, padding: "6px 12px", color: T.tinte, borderColor: T.tinteWeich }}
-                    onClick={(e) => { e.stopPropagation(); setPrognoseEntwurf(false); setEditing(true); }}>
+                    onClick={(e) => { e.stopPropagation(); setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}>
                     ✎ {dreieck ? "Bewertung bearbeiten" : "Beschreibung bearbeiten"}
                   </button>
                   )}
@@ -170,8 +189,8 @@ export function FilmCard({
             onErstellen={vorbewertung.onErstellen}
             onAnnehmen={vorbewertung.onAnnehmen}
             onVerwerfen={vorbewertung.onVerwerfen}
-            onKorrigieren={() => { setPrognoseEntwurf(false); setEditing(true); }}
-            onUebernehmen={onSave ? () => { setPrognoseEntwurf(true); setEditing(true); } : null}
+            onKorrigieren={() => { setSpeicherFehler(""); setPrognoseEntwurf(false); setEditing(true); }}
+            onUebernehmen={onSave ? () => { setSpeicherFehler(""); setPrognoseEntwurf(true); setEditing(true); } : null}
           />
         </div>
       )}
@@ -187,8 +206,9 @@ export function FilmCard({
               } : film}
               autorName={prognoseEntwurf ? "KI-Prognose (übernommen)" : undefined}
               herkunftHinweis={prognoseEntwurf ? "KI-Prognose vorausgefüllt – prüfe alle Werte. Erst Speichern macht daraus eine Bewertung." : null}
-              onCancel={() => { setPrognoseEntwurf(false); setEditing(false); }}
-              onSave={(changes) => {
+              speichert={speichert} fehler={speicherFehler}
+              onCancel={() => { if (!speichert) { setPrognoseEntwurf(false); setEditing(false); } }}
+              onSave={async (changes) => {
                 let next = changes;
                 if (changes?.bewertung != null && film.prognose?.status === "offen") {
                   const wechsel = setzePrognoseStatus(film.prognose, prognoseEntwurf ? "angenommen" : "korrigiert");
@@ -197,13 +217,11 @@ export function FilmCard({
                   const wechsel = setzePrognoseStatus(film.prognose, "korrigiert");
                   if (wechsel.ok) next = { ...changes, prognose: wechsel.prognose };
                 }
-                setPrognoseEntwurf(false);
-                setEditing(false);
-                onSave(next);
+                return speichereAenderungen(next);
               }} />
           ) : (
-            <BeschreibungEditor eintrag={film} onCancel={() => setEditing(false)}
-              onSave={(changes) => { setEditing(false); onSave(changes); }} />
+            <BeschreibungEditor eintrag={film} speichert={speichert} fehler={speicherFehler}
+              onCancel={() => { if (!speichert) setEditing(false); }} onSave={speichereAenderungen} />
           )}
         </div>
       )}

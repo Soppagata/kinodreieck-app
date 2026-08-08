@@ -14,20 +14,27 @@ import { setzePrognoseStatus } from "../lib/prognose.js";
 import { ensureIds, slugId } from "../lib/match.js";
 import { heileRotlinks } from "../lib/artikel.js";
 
+export function istFilmwissenRechercheFreigegeben(session, filmwissenAn) {
+  return session?.mode === "account"
+    && session?.state === "ready"
+    && typeof session?.account?.id === "string"
+    && session.account.id.trim().length > 0
+    && session?.capabilities?.personalAi === true
+    && filmwissenAn === true;
+}
+
 export function useIntelligenceController({
   tab,
   session,
   master,
-  masterRef,
   masterMeta,
   mustwatch,
   mitMustwatch,
   naechsteHerkunft,
-  persistMaster,
-  setMaster,
-  setMasterHerkunft,
+  mutiereMaster,
   schreibeArtikel,
   setErr,
+  filmwissenDienst = filmwissenService,
 }) {
   const prognoseLaufRef = useRef(null);
   const prognoseAbortRef = useRef(null);
@@ -90,20 +97,18 @@ export function useIntelligenceController({
     erwarteteKontoId = accountId,
   ) => {
     if (!erwarteteKontoId || !kontoIstAktuell(erwarteteKontoId)) return false;
-    const aktuell = masterRef.current || [];
-    if (!aktuell.some((film) => film.id === id)) return false;
-    const next = aktuell.map((film) => (film.id === id ? { ...film, ...changes } : film));
-    const herkunft = naechsteHerkunft();
-    if (!kontoIstAktuell(erwarteteKontoId)) return false;
-    if (!await persistMaster(next, masterMeta, herkunft)) return false;
-    if (!kontoIstAktuell(erwarteteKontoId)) return false;
-    masterRef.current = next;
-    setMasterHerkunft(herkunft);
-    setMaster(next);
-    return true;
+    const gespeichert = await mutiereMaster((aktuell) => {
+      if (!kontoIstAktuell(erwarteteKontoId) || !aktuell.some((film) => film.id === id)) {
+        return { abgebrochen: true };
+      }
+      return {
+        master: aktuell.map((film) => film.id === id ? { ...film, ...changes } : film),
+        meta: masterMeta, herkunft: naechsteHerkunft(),
+      };
+    });
+    return gespeichert && kontoIstAktuell(erwarteteKontoId);
   }, [
-    accountId, kontoIstAktuell, masterMeta, masterRef, naechsteHerkunft,
-    persistMaster, setMaster, setMasterHerkunft,
+    accountId, kontoIstAktuell, masterMeta, mutiereMaster, naechsteHerkunft,
   ]);
 
   const starteVorbewertung = useCallback(async (film) => {
@@ -183,22 +188,23 @@ export function useIntelligenceController({
       begruendung: "",
     };
     const id = kandidat.id || slugId(kandidat.titel, kandidat.jahr);
-    const aktuell = masterRef.current || [];
-    if (aktuell.some((eintrag) => eintrag.id === id)) {
-      setErr("Eintrag existiert bereits: " + kandidat.titel
+    let neu = null, next = null, doppelt = false;
+    const gespeichert = await mutiereMaster((aktuell) => {
+      if (!kontoIstAktuell(startKonto)) return { abgebrochen: true };
+      if (aktuell.some((eintrag) => eintrag.id === id)) {
+        doppelt = true;
+        return { abgebrochen: true };
+      }
+      neu = ensureIds([{ ...kandidat, id }])[0];
+      next = [...aktuell, neu];
+      return { master: next, meta: masterMeta, herkunft: naechsteHerkunft() };
+    });
+    if (!gespeichert || !kontoIstAktuell(startKonto)) {
+      if (doppelt) setErr("Eintrag existiert bereits: " + kandidat.titel
         + (kandidat.jahr ? ` (${kandidat.jahr})` : ""));
       return null;
     }
-    const neu = ensureIds([{ ...kandidat, id }])[0];
-    const next = [...aktuell, neu];
-    const herkunft = naechsteHerkunft();
-    if (!kontoIstAktuell(startKonto)) return null;
-    if (!await persistMaster(next, masterMeta, herkunft)) return null;
-    if (!kontoIstAktuell(startKonto)) return null;
-    masterRef.current = next;
-    setMasterHerkunft(herkunft);
-    setMaster(next);
-    schreibeArtikel((prev) => {
+    await schreibeArtikel((prev) => {
       const [geheilt, anzahl] = heileRotlinks(prev, mitMustwatch(next, mustwatch));
       if (anzahl > 0) return geheilt;
       return prev;
@@ -206,23 +212,26 @@ export function useIntelligenceController({
     await starteVorbewertung(neu);
     return id;
   }, [
-    accountId, kontoIstAktuell, masterMeta, masterRef, mitMustwatch, mustwatch,
-    naechsteHerkunft, persistMaster, schreibeArtikel, setErr, setMaster,
-    setMasterHerkunft, starteVorbewertung, vorbewertungAktiv,
+    accountId, kontoIstAktuell, masterMeta, mitMustwatch, mustwatch,
+    mutiereMaster, naechsteHerkunft, schreibeArtikel, setErr,
+    starteVorbewertung, vorbewertungAktiv,
   ]);
 
   const [filmwissenProFilm, setFilmwissenProFilm] = useState({});
   const filmwissenReadsRef = useRef(new Map());
   const filmwissenRechercheRef = useRef(null);
   const filmwissenLesenAktiv = !!accountId;
-  const filmwissenRechercheAktiv = vorbewertungAktiv;
+  const filmwissenRechercheAktiv = istFilmwissenRechercheFreigegeben(
+    session,
+    kiAn("filmwissen"),
+  );
 
   useEffect(() => {
     filmwissenReadsRef.current.clear();
     filmwissenRechercheRef.current = null;
     setFilmwissenProFilm({});
-    filmwissenService.invalidate();
-  }, [accountId]);
+    filmwissenDienst.invalidate();
+  }, [accountId, filmwissenDienst]);
 
   const ladeFilmwissen = useCallback(async (film) => {
     if (!film?.id || !filmwissenLesenAktiv) return null;
@@ -236,7 +245,7 @@ export function useIntelligenceController({
       [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
     }));
     try {
-      const daten = await filmwissenService.read(film);
+      const daten = await filmwissenDienst.read(film);
       if (filmwissenReadsRef.current.get(key) !== lauf || !kontoIstAktuell(startKonto)) return null;
       setFilmwissenProFilm((alt) => ({
         ...alt,
@@ -253,12 +262,12 @@ export function useIntelligenceController({
     } finally {
       if (filmwissenReadsRef.current.get(key) === lauf) filmwissenReadsRef.current.delete(key);
     }
-  }, [accountId, filmwissenLesenAktiv, kontoIstAktuell]);
+  }, [accountId, filmwissenDienst, filmwissenLesenAktiv, kontoIstAktuell]);
 
   const recherchiereFilmwissen = useCallback(async (film) => {
     if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
     if (!window.confirm(
-      "Jetzt einen belegten Recherchebericht erstellen? Das startet genau einen Sonnet-Aufruf und kostet höchstens 5 US-Cent. Es gibt keine automatische Wiederholung.",
+      "Jetzt einen belegten Recherchebericht erstellen? Das startet genau einen Sonnet-Aufruf und kostet höchstens 6 US-Cent. Es gibt keine automatische Wiederholung.",
     )) return false;
     const key = String(film.id);
     const startKonto = accountId;
@@ -269,7 +278,7 @@ export function useIntelligenceController({
       [key]: { ...(alt[key] || {}), phase: "laedt", fehler: null },
     }));
     try {
-      const daten = await filmwissenService.recherchiere(film);
+      const daten = await filmwissenDienst.recherchiere(film);
       if (filmwissenRechercheRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       setFilmwissenProFilm((alt) => ({
         ...alt,
@@ -290,7 +299,7 @@ export function useIntelligenceController({
     } finally {
       if (filmwissenRechercheRef.current === lauf) filmwissenRechercheRef.current = null;
     }
-  }, [accountId, filmwissenRechercheAktiv, kontoIstAktuell]);
+  }, [accountId, filmwissenDienst, filmwissenRechercheAktiv, kontoIstAktuell]);
 
   return {
     accountId,

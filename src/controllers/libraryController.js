@@ -1,4 +1,4 @@
-/* Reine Bibliotheksprojektionen und Import-Sicherungen.
+/* Reine Bibliotheksprojektionen.
    React-State bleibt in App, die fachlichen Ableitungen von Master, Must-Watch,
    Kinoprogramm und Nachtrag haben hier eine testbare Heimat. */
 
@@ -21,13 +21,6 @@ export const NACHTRAG_FLACH = Object.freeze([].concat(
   nachtragDatei.nur_prime || [],
   nachtragDatei.nur_apple || [],
 ));
-
-export function schreibeImportSnapshot(key, wert) {
-  try {
-    localStorage.setItem(key, JSON.stringify({ t: new Date().toISOString(), wert }));
-    return localStorage.getItem(key) != null;
-  } catch { return false; }
-}
 
 export function reicheFinderMasterAn(master) {
   const eintraege = masterWikidata?.eintraege || {};

@@ -4,6 +4,7 @@ const lies = (pfad) => readFileSync(new URL(pfad, import.meta.url), "utf8");
 const app = lies("./src/App.jsx");
 const einstieg = lies("./src/components/EinstiegsGate.jsx");
 const eintrag = lies("./src/components/EintragForm.jsx");
+const bereichsHero = lies("./src/components/BereichsHero.jsx");
 const filmkarte = lies("./src/components/FilmCard.jsx");
 const filmwissen = lies("./src/components/FilmwissenBereich.jsx");
 const finder = lies("./src/tabs/FinderTab.jsx");
@@ -72,9 +73,20 @@ check("E7 Filmwissen ist nur am geöffneten unbewerteten Eintrag sichtbar", () =
   && /onFilmwissenLaden/.test(streaming));
 
 check("E8 Recherche bleibt eine einzelne bestätigte Sonnet-Ausgabe ohne Auto-Retry", () =>
-  /höchstens 5 US-Cent/.test(intelligenceController)
+  /höchstens 6 US-Cent/.test(intelligenceController)
   && /genau einen Sonnet-Aufruf/.test(intelligenceController)
   && /keine automatische Wiederholung/.test(filmwissen));
+
+check("E9 Ohne-Bewertung-Schalter wird nur nach erfolgreichem Speichern zurückgesetzt", () => {
+  const erfolgsGate = eintrag.indexOf("if (ergebnis === null || ergebnis === false)");
+  const ruecksetzen = eintrag.indexOf("setOhneBewertung(false)", erfolgsGate);
+  const fertig = eintrag.indexOf("if (onDone) onDone()", erfolgsGate);
+  return erfolgsGate >= 0 && ruecksetzen > erfolgsGate && fertig > ruecksetzen;
+});
+
+check("E10 Suche-Bereich verspricht im Kicker keine KI-Deutung", () =>
+  /finder:\s*\{[\s\S]*?kicker:\s*"Filme · App-Hilfe · Orientierung"/.test(bereichsHero)
+  && !/finder:\s*\{[\s\S]*?kicker:[^\n]*KI-Deutung/.test(bereichsHero));
 
 console.log(`\n${ok}/${ok + fehler.length} Etappe-8-Produktintegrations-Checks bestanden.`);
 if (fehler.length) process.exit(1);

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useId } from "react";
 import { T } from "../lib/tokens.js";
 import { FELD } from "../lib/hinweise.js";
 
@@ -14,10 +14,12 @@ export function FeldHinweis({ feld, text }) {
   const [offen, setOffen] = useState(false);
   const [pos, setPos] = useState({ oben: false, rechts: false });
   const wrapRef = useRef(null);
-  if (!inhalt) return null;
+  const festRef = useRef(false);
+  const tooltipId = useId();
 
   const oeffnen = () => setOffen(true);
-  const schliessen = () => setOffen(false);
+  const schliessen = () => { festRef.current = false; setOffen(false); };
+  const schliesseVorschau = () => { if (!festRef.current) setOffen(false); };
 
   useEffect(() => {
     if (!offen) return;
@@ -26,25 +28,39 @@ export function FeldHinweis({ feld, text }) {
       const vh = window.innerHeight || 800, vw = window.innerWidth || 1000;
       setPos({ oben: r.bottom + 130 > vh, rechts: r.left + 248 > vw });
     }
-    const onEsc = (e) => { if (e.key === "Escape") setOffen(false); };
+    const onEsc = (e) => { if (e.key === "Escape") schliessen(); };
+    const onAussen = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) schliessen(); };
     document.addEventListener("keydown", onEsc, true);
-    return () => document.removeEventListener("keydown", onEsc, true);
+    document.addEventListener("pointerdown", onAussen, true);
+    return () => {
+      document.removeEventListener("keydown", onEsc, true);
+      document.removeEventListener("pointerdown", onAussen, true);
+    };
   }, [offen]);
+
+  if (!inhalt) return null;
 
   return (
     <span ref={wrapRef} style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
-      onMouseEnter={oeffnen} onMouseLeave={schliessen}>
+      onMouseEnter={oeffnen} onMouseLeave={schliesseVorschau}>
       <button type="button" aria-label={"Was bedeutet dieses Feld? " + feld}
-        onFocus={oeffnen} onBlur={schliessen} onClick={(e) => { e.stopPropagation(); e.preventDefault(); offen ? schliessen() : oeffnen(); }}
+        aria-expanded={offen} aria-describedby={offen ? tooltipId : undefined}
+        onFocus={oeffnen} onBlur={schliessen} onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (e.detail === 0) { oeffnen(); return; }
+          festRef.current = !festRef.current;
+          setOffen(festRef.current);
+        }}
         style={{
-          width: 16, height: 16, borderRadius: 8, border: "1px solid " + T.rauch, background: "transparent",
-          color: T.rauch, fontSize: 11, lineHeight: "14px", cursor: "help", padding: 0, marginLeft: 5,
+          width: 32, height: 32, borderRadius: 16, border: "1px solid " + T.rauch, background: "transparent",
+          color: T.rauch, fontSize: 13, lineHeight: "30px", cursor: "help", padding: 0, marginLeft: 5,
           fontFamily: "'Space Grotesk', sans-serif", display: "inline-flex", alignItems: "center", justifyContent: "center",
         }}>?</button>
       {offen && (
-        <span role="tooltip" style={{
+        <span id={tooltipId} role="tooltip" style={{
           position: "absolute", zIndex: 9999,
-          [pos.oben ? "bottom" : "top"]: 22,
+          [pos.oben ? "bottom" : "top"]: 38,
           [pos.rechts ? "right" : "left"]: 0,
           width: 240, maxWidth: "70vw",
           background: T.saalHoch, border: "1px solid " + T.tinteWeich, borderRadius: 4,

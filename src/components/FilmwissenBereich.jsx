@@ -93,7 +93,7 @@ export function FilmwissenBereich({
                 {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
               </button>
               <div style={{ ...mono, color: T.rauch, marginTop: 7, textTransform: "none", letterSpacing: 0 }}>
-                Ein ausdrücklicher Sonnet-Aufruf · höchstens 5 US-Cent · keine automatische Wiederholung
+                Ein ausdrücklicher Sonnet-Aufruf · höchstens 6 US-Cent · keine automatische Wiederholung
               </div>
             </>
           )}
@@ -120,7 +120,7 @@ export function FilmwissenBereich({
                 {rechercheLaeuft ? "Bericht wird erstellt …" : "Recherchebericht erstellen"}
               </button>
               <div style={{ ...mono, color: T.rauch, marginTop: 7, textTransform: "none", letterSpacing: 0 }}>
-                Ein ausdrücklicher Sonnet-Aufruf · höchstens 5 US-Cent · keine automatische Wiederholung
+                Ein ausdrücklicher Sonnet-Aufruf · höchstens 6 US-Cent · keine automatische Wiederholung
               </div>
             </>
           )}

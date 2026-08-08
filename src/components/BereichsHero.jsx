@@ -1,6 +1,6 @@
 const BEREICHE = Object.freeze({
   kino: {
-    kicker: "Wien · aktuelles Programm",
+    kicker: "Wien · Programm & Termine",
     titel: "Kino",
     text: "Was läuft, was passt zu dir und welche Termine willst du dir merken?",
   },
@@ -20,7 +20,7 @@ const BEREICHE = Object.freeze({
     text: "Filme festhalten, einordnen und mit deiner Mediathek verbinden.",
   },
   finder: {
-    kicker: "Filme · App-Hilfe · KI-Deutung",
+    kicker: "Filme · App-Hilfe · Orientierung",
     titel: "Suche",
     text: "Durchsuche deine Inhalte oder frag, wo du eine Funktion findest.",
   },

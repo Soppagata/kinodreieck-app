@@ -129,8 +129,8 @@ check("A", "leererStand() ist der fail-closed Zustand: global null, keine Funkti
   () => { const s = K.leererStand();
     return s.global === null && JSON.stringify(s.funktionen) === "{}" && s.gefragtAm === null
       && Object.keys(s).sort().join(",") === "funktionen,gefragtAm,global"; });
-check("A", "KI_FUNKTIONEN führt die fünf Kern-KI-Funktionen",
-  () => NAMEN().join(",") === "suche,profil,vorbewertung,stapelimport,diagnose");
+check("A", "KI_FUNKTIONEN führt die sechs Kern-KI-Funktionen einschließlich Filmwissen",
+  () => NAMEN().join(",") === "suche,profil,vorbewertung,filmwissen,stapelimport,diagnose");
 check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
   () => NAMEN().every((n) => { const f = K.KI_FUNKTIONEN[n];
     return typeof f.label === "string" && f.label.length > 0
@@ -139,10 +139,12 @@ check("A", "jede Funktion hat Label, Beschreibung und ein Verhalten bei Aus",
 /* „ausblenden" ist die Doktrin: Bei KI=aus existiert der Knopf nicht. Ein
    Erklärtext wäre die falsche Auskunft — `ai-disabled` heißt „der Betreiber
    hat abgeschaltet", nicht „du hast abgeschaltet". */
-check("A", "alle fünf blenden bei Aus AUS — keine erklärt sich nach dem Klick",
+check("A", "alle sechs blenden bei Aus AUS — keine erklärt sich nach dem Klick",
   () => NAMEN().every((n) => K.KI_FUNKTIONEN[n].beiAus === "ausblenden"));
-check("A", "KI_WAHL_VERSION ist eine nicht-leere Marke",
-  () => typeof K.KI_WAHL_VERSION === "string" && K.KI_WAHL_VERSION.length > 0);
+check("A", "KI_WAHL_VERSION erhält den bestehenden Einstiegsvertrag",
+  () => K.KI_WAHL_VERSION === "e8-v1");
+check("A", "Filmwissen ist als eigenständiger kostenpflichtiger Pfad ausdrücklich opt-in",
+  () => K.KI_FUNKTIONEN.filmwissen.standardAn === false);
 /* Der Topf ist gerätelokal und darf NICHT in den Sync- oder Backup-Weg.
    `kd:einstellungen` wird von Anmeldung, Restore und Übernahme überschrieben —
    ein Zweitgerät könnte den Schalter sonst still umlegen. */
@@ -211,8 +213,10 @@ check("B", "FAIL-CLOSED: ausdrücklich eingeschaltete Funktionen ohne Grundentsc
   () => NAMEN().every((n) => K.kiAn(n, nurFunktionen) === false));
 /* Und der Normalfall zur Eichung — ohne ihn wäre „alles aus" trivial grün. */
 const an = speicher(AN());
-check("B", "EICHUNG: mit beantworteter Frage und global an sind alle fünf AN",
-  () => NAMEN().every((n) => K.kiAn(n, an) === true));
+check("B", "EICHUNG: die bisherigen Funktionen bleiben unter offenem Dach standardmäßig AN",
+  () => NAMEN().filter((n) => n !== "filmwissen").every((n) => K.kiAn(n, an) === true));
+check("B", "Filmwissen bleibt ohne ausdrücklichen Einzelwert auch unter offenem Dach AUS",
+  () => K.kiAn("filmwissen", an) === false);
 check("B", "ein fehlender Storage (undefined/null) ist ebenfalls AUS, ohne zu werfen",
   () => K.kiAn("suche", undefined) === false && K.kiAn("suche", null) === false
     && K.ladeStand(null).global === null && K.wahlBestaetigt(null) === false);
@@ -250,6 +254,9 @@ check("C", "unter offenem Dach schaltet der Einzelwert die Funktion ab — und n
     && K.kiAn("profil", offenesDach) === true && K.kiAn("diagnose", offenesDach) === true);
 check("C", "eine nicht erwähnte Funktion ist unter offenem Dach AN (Voreinstellung: mitgemeint)",
   () => K.kiAn("diagnose", speicher(AN())) === true);
+check("C", "der neue bezahlte Filmwissen-Pfad ist von dieser Voreinstellung ausgenommen",
+  () => K.kiAn("filmwissen", speicher(AN())) === false
+    && K.kiAn("filmwissen", speicher(AN({ funktionen: { filmwissen: true } }))) === true);
 check("C", "nur ausdrückliches `false` schaltet ab — 0, \"\", null tun es nicht",
   () => [0, "", null, "false"].every((v) => {
     const s = speicher({ "kd:ki": JSON.stringify({ global: true, funktionen: { suche: v }, gefragtAm: T0 }), "kd:ki-version": K.KI_WAHL_VERSION });
@@ -285,6 +292,16 @@ check("D", "setzeGlobal setzt die Marke mit, sonst zählte die frische Wahl selb
 check("D", "auch eine Wahl gegen die KI setzt die Marke — „nein“ ist eine Antwort",
   () => { const s = speicher(); K.setzeGlobal(false, T0, s);
     return K.wahlBestaetigt(s) === true && K.kiAn("suche", s) === false; });
+const e8v1OhneFilmwissen = speicher({
+  "kd:ki": JSON.stringify({ global: true, funktionen: {}, gefragtAm: T0 }),
+  "kd:ki-version": "e8-v1",
+});
+check("D", "eine gültige e8-v1-Bestandswahl behält alte Funktionen, aber öffnet Filmwissen nicht",
+  () => K.wahlBestaetigt(e8v1OhneFilmwissen) === true
+    && K.ladeStand(e8v1OhneFilmwissen).global === true
+    && NAMEN().filter((n) => n !== "filmwissen")
+      .every((n) => K.kiAn(n, e8v1OhneFilmwissen) === true)
+    && K.kiAn("filmwissen", e8v1OhneFilmwissen) === false);
 });
 
 /* =========================================================================
@@ -321,6 +338,11 @@ check("E", "setzeFunktion schaltet genau eine Funktion und lässt die anderen un
     return K.kiAn("suche", f) === false && K.kiAn("profil", f) === true && K.kiAn("diagnose", f) === true; });
 check("E", "und lässt sich wieder einschalten",
   () => { K.setzeFunktion("suche", true, f); return K.kiAn("suche", f) === true; });
+check("E", "Filmwissen öffnet erst ein ausdrücklich gespeichertes true",
+  () => { const t = speicher(AN());
+    if (K.kiAn("filmwissen", t) !== false) return false;
+    K.setzeFunktion("filmwissen", true, t);
+    return K.kiAn("filmwissen", t) === true; });
 check("E", "setzeFunktion fasst die Versionsmarke NICHT an — sie gehört zur Grundfrage",
   () => { const t = speicher(AN()); t._zugriffe.length = 0; K.setzeFunktion("suche", false, t);
     return !t._zugriffe.some(([art, k]) => art === "set" && k === "kd:ki-version"); });
@@ -463,8 +485,9 @@ check("G", "und ein solcher Topf öffnet auch keine Funktion, die es nicht gibt"
     return K.kiAn("blog", s) === false; });
 /* Jeder bekannte Name muss dagegen funktionieren — sonst wäre „alles aus"
    trivial richtig. */
-check("G", "jeder bekannte Name ist unter offenem Dach an und einzeln abschaltbar",
+check("G", "jeder bekannte Name ist ausdrücklich einschaltbar und danach einzeln abschaltbar",
   () => NAMEN().every((n) => { const s = speicher(AN());
+    K.setzeFunktion(n, true, s);
     if (K.kiAn(n, s) !== true) return false;
     K.setzeFunktion(n, false, s);
     return K.kiAn(n, s) === false; }));
@@ -518,12 +541,11 @@ check("U", "der KI-Block bekommt Stand und Setter als PROPS — nicht über `ein
    anzubieten hätte suggeriert, sie bewirkten etwas. */
 check("U", "die Einzelschalter hängen sichtbar an `kiStand.global === true` (Dach-Regel gespiegelt)",
   () => /kiStand\.global === true &&/.test(block));
-/* Die Voreinstellung: „nicht ausdrücklich abgewählt" heißt AN — dieselbe
-   Regel wie `kiAn` (`funktionen[name] !== false`). Prüfte die Oberfläche auf
-   `=== true`, stünde bei einer nie berührten Funktion „aus", während sie
-   tatsächlich an ist. */
-check("U", "der Einzelschalter leitet seinen Wert aus `=== false` ab, wie kiAn — nicht aus `=== true`",
-  () => /kiStand\.funktionen\?\.\[id\] === false \? "aus" : "an"/.test(block));
+/* Die gemeinsame Funktion erhält sowohl die bisherigen Default-an-Schalter
+   als auch den expliziten Filmwissen-Opt-in ohne UI/Laufzeit-Widerspruch. */
+check("U", "die Einzelschalter verwenden dieselbe Defaultregel wie das Laufzeitgate",
+  () => /istEinzelfunktionAn\(id, kiStand\) \? "an" : "aus"/.test(block)
+    && /import \{ KI_FUNKTIONEN, istEinzelfunktionAn \}/.test(dt));
 /* Die Liste wird aus KI_FUNKTIONEN aufgebaut, nicht abgeschrieben: eine neue
    Funktion taucht sonst im Modul auf, aber nie in den Einstellungen. */
 /* Die Labels dürfen NICHT im Tab stehen: sonst hat eine neue Funktion im

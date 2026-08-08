@@ -7,19 +7,24 @@
 export {
   store, K, PROGRAMM_TTL_MS,
   activeSyncStatus, activePull,
-  captureStorageContext, storageContextGenerationSnapshot, subscribeStorageContext,
+  captureStorageContext, storageContextGenerationSnapshot, storageOwnerKennung, subscribeStorageContext,
   getTreiber, setTreiber,
 } from "../lib/storage.js";
 
 import { store as personalStore, setStorageDriver, storageDriverName } from "../lib/storage.js";
 import {
-  createAccountDriver, ACCOUNT_SYNC_KEYS, getCacheOwner, setCacheOwner, verwerfeTreiberZustand,
+  createAccountDriver, ACCOUNT_SYNC_KEYS, bereinigeVerwaisteTreiberMetadaten,
+  getCacheOwner, setCacheOwner, verwerfeTreiberZustand,
 } from "../lib/accountDriver.js";
 import { authDriver, authService } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
 import {
   normalizeBoundaryError,
 } from "./errors.js";
+import {
+  ACCT_KEYS, beginneAccountCacheTransition, beendeAccountCacheTransition,
+  leseAccountCacheTransition,
+} from "../lib/accountStorageKeys.js";
 
 export { ACCOUNT_SYNC_KEYS };
 
@@ -31,6 +36,132 @@ let accountDriver = null;
 let vorbereitetesKonto = null;
 let treiberGeneration = 0;
 let kontoAktiv = false;
+let privacyGesperrt = false;
+let accountEpoch = null;
+let lokalerTransitionToken = null;
+let transitionErlaubtDriver = false;
+
+function neueEpoch() {
+  try { return crypto.randomUUID(); }
+  catch { return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+}
+
+function leseEpoch(accountId) {
+  try {
+    const wert = JSON.parse(localStorage.getItem(ACCT_KEYS.epoch) || "null");
+    return wert?.accountId === String(accountId || "") && wert?.token ? wert.token : null;
+  } catch { return null; }
+}
+
+function schreibeEpoch(accountId, token = neueEpoch()) {
+  const wert = { accountId: String(accountId || ""), token: String(token || "") };
+  if (!wert.accountId || !wert.token) return null;
+  try {
+    const raw = JSON.stringify(wert);
+    localStorage.setItem(ACCT_KEYS.epoch, raw);
+    return localStorage.getItem(ACCT_KEYS.epoch) === raw ? wert.token : null;
+  } catch { return null; }
+}
+
+export function istGebundenerAccountCacheAktiv({
+  accountId, epoch, lokalerToken = null, driverErlaubt = false, aktiv = true,
+} = {}) {
+  if (!aktiv) return false;
+  const id = String(accountId || "");
+  const transition = leseAccountCacheTransition();
+  const lokalerMarker = String(lokalerToken || "");
+  /* Ein lokal autorisierter Adoption-Pull bleibt nur solange autorisiert, wie
+     GENAU sein rückgelesener Marker persistent vorhanden ist. Fremdes
+     Entfernen ist kein erfolgreicher Abschluss, sondern Kontextverlust. */
+  if (lokalerMarker) {
+    if (!driverErlaubt || transition?.token !== lokalerMarker || transition?.accountId !== id) return false;
+  } else if (transition) return false;
+  /* Vor der Adoption darf der vorbereitete Treiber Inventur/gebundenen Pull
+     ausführen. Sobald eine Aktivierungsepoche existiert, sind Owner+Epoch die
+     tabübergreifende Identität und niemals nur die In-Memory-Instanz. */
+  if (!epoch) return true;
+  return !!id && getCacheOwner() === id && leseEpoch(id) === epoch;
+}
+
+export function bindePersistentenAccountCache(accountId, { epoch = null } = {}) {
+  const id = String(accountId || "");
+  if (!id || !setCacheOwner(id)) return null;
+  const gebunden = epoch ? schreibeEpoch(id, epoch) : (leseEpoch(id) || schreibeEpoch(id));
+  if (!gebunden || getCacheOwner() !== id || leseEpoch(id) !== gebunden) return null;
+  accountEpoch = gebunden;
+  return Object.freeze({ accountId: id, epoch: gebunden });
+}
+
+function privacyError() {
+  const error = new Error("Persönliche Daten sind gesperrt, weil ein Kontocache nicht sicher getrennt werden konnte.");
+  error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
+  return error;
+}
+
+/* Wenn weder Gast-Restore noch lokales Entfernen möglich sind, darf die
+   dynamische Store-Fassade keinesfalls auf den darunterliegenden Accountcache
+   zurückfallen. Dieser Treiber liefert keine persönlichen Werte und bestätigt
+   auch keine Writes. Die UI wird zusätzlich vom Boot-Gate ausgehängt. */
+const privacyMaskDriver = Object.freeze({
+  name: "privacy-mask",
+  owner: "privacy-locked",
+  async get() { return null; },
+  async set() { throw privacyError(); },
+  async delete() { throw privacyError(); },
+  async list() { return { keys: [] }; },
+});
+
+function accountContextError() {
+  const error = new Error("Der vorbereitete Kontokontext hat sich während des Auftrags geändert.");
+  error.code = "ACCOUNT_CONTEXT_CHANGED";
+  return error;
+}
+
+/* Gebundene Fassade für mehrschrittige Übernahme-Abläufe. `accountSync`
+   delegiert absichtlich dynamisch an den jeweils aktuellen Treiber; ein
+   bereits gestarteter A-Auftrag darf nach einem Kontowechsel aber niemals
+   seine Folgeschritte gegen B ausführen. */
+export function erstelleGebundenenAccountContext({ driver, accountId, generation, isCurrent }) {
+  const id = String(accountId || "");
+  const aktuell = () => !!driver && !!id && isCurrent?.() === true;
+  const run = async (method, args = []) => {
+    if (!aktuell() || typeof driver?.[method] !== "function") throw accountContextError();
+    const result = await driver[method](...args);
+    if (!aktuell()) throw accountContextError();
+    return result;
+  };
+  return Object.freeze({
+    accountId: id,
+    generation,
+    bindung: Object.freeze({ accountId: id, generation }),
+    isCurrent: aktuell,
+    inventur: () => run("inventur"),
+    pull: () => run("pull"),
+    uebernehmeKey: (key, value) => run("uebernehmeKey", [key, value]),
+    loescheRemote: (key) => run("loescheRemote", [key]),
+    resolveKeepRemote: (key) => run("resolveConflictUseRemote", [key]),
+  });
+}
+
+export function capturePreparedAccountContext(erwarteteBindung = null) {
+  const driver = accountDriver;
+  const accountId = vorbereitetesKonto;
+  const generation = treiberGeneration;
+  const context = erstelleGebundenenAccountContext({
+    driver,
+    accountId,
+    generation,
+    isCurrent: () => accountDriver === driver
+      && vorbereitetesKonto === accountId
+      && treiberGeneration === generation,
+  });
+  if (!context.isCurrent()
+      || (erwarteteBindung && (String(erwarteteBindung.accountId || "") !== context.accountId
+        || erwarteteBindung.generation !== context.generation))) {
+    throw accountContextError();
+  }
+  return context;
+}
 
 function leeresKontoStatus() {
   return {
@@ -44,18 +175,28 @@ function baueAccountDriver(accountId) {
   const id = String(accountId || "");
   const generation = ++treiberGeneration;
   const driver = createAccountDriver({
+    owner: `account:${id}`,
     config: runtimeConfig,
     isActive: () => vorbereitetesKonto === id
       && treiberGeneration === generation
-      && accountDriver === driver,
+      && accountDriver === driver
+      && String(authDriver.konto()?.id || "") === id
+      && istGebundenerAccountCacheAktiv({
+        accountId: id,
+        epoch: accountEpoch,
+        lokalerToken: lokalerTransitionToken,
+        driverErlaubt: transitionErlaubtDriver,
+      }),
     getAccessToken: async (opts) => {
       /* Vor UND nach dem potenziell asynchronen Tokenzugriff prüfen. Ein
          Auftrag von Konto A darf nie nach einem Wechsel das Token von B sehen. */
       const vorher = authService.getSnapshot();
       if (vorher?.mode !== "account" || String(vorher.account?.id || "") !== id) return null;
-      const token = await authDriver.getAccessToken(opts || {});
+      if (String(authDriver.konto()?.id || "") !== id) return null;
+      const token = await authDriver.getAccessToken({ ...(opts || {}), erwarteteKontoId: id });
       const nachher = authService.getSnapshot();
-      if (nachher?.mode !== "account" || String(nachher.account?.id || "") !== id) return null;
+      if (nachher?.mode !== "account" || String(nachher.account?.id || "") !== id
+          || String(authDriver.konto()?.id || "") !== id) return null;
       return token;
     },
   });
@@ -78,11 +219,25 @@ export function cacheOwner() { return getCacheOwner(); }
 export function bereiteKontoTreiberVor(accountId) {
   const id = String(accountId || "");
   if (!id) throw new Error("Konto-Treiber benötigt eine Konto-ID.");
-  setStorageDriver(null);
-  kontoAktiv = false;
+  if (privacyGesperrt) throw privacyError();
+  const transition = leseAccountCacheTransition();
+  if (transition && transition.token !== lokalerTransitionToken) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
   if (accountDriver && vorbereitetesKonto === id) return accountDriver;
 
-  if (cacheGehoertZuFremdemKonto(id)) verwerfeTreiberZustand();
+  const owner = getCacheOwner();
+  const metadatenSauber = owner
+    ? (owner === id || verwerfeTreiberZustand())
+    : bereinigeVerwaisteTreiberMetadaten();
+  if (!metadatenSauber) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  setStorageDriver(null);
+  kontoAktiv = false;
+  accountEpoch = owner === id ? leseEpoch(id) : null;
   vorbereitetesKonto = id;
   accountDriver = baueAccountDriver(id);
   return accountDriver;
@@ -98,7 +253,22 @@ export function bestaetigeKontoTreiber(accountId) {
   }
   const driver = bereiteKontoTreiberVor(id);
   if (vorbereitetesKonto !== id) throw new Error("Falscher Konto-Treiber vorbereitet.");
-  setCacheOwner(id);
+  if (!lokalerTransitionToken) {
+    const persistierteEpoch = leseEpoch(id);
+    if (getCacheOwner() !== id || !persistierteEpoch) {
+      maskierePersoenlichenSpeicher();
+      throw privacyError();
+    }
+    accountEpoch = persistierteEpoch;
+  }
+  if (!accountEpoch || getCacheOwner() !== id || leseEpoch(id) !== accountEpoch) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  if (lokalerTransitionToken) {
+    const beendet = beendeGebundeneAccountTransition(lokalerTransitionToken);
+    if (!beendet) throw privacyError();
+  }
   setStorageDriver(driver);
   kontoAktiv = true;
   return driver;
@@ -107,16 +277,137 @@ export function bestaetigeKontoTreiber(accountId) {
 /* Nach dem Abmelden: Treiber stoppen. Die getrennte Übernahme-Fassade stellt
    anschließend den Gaststand her und entfernt erst dann die Cache-Bindung. */
 export function deaktiviereKontoTreiber() {
-  setStorageDriver(null);
+  setStorageDriver(privacyGesperrt ? privacyMaskDriver : null);
   kontoAktiv = false;
   vorbereitetesKonto = null;
   accountDriver = null;
+  accountEpoch = null;
+  lokalerTransitionToken = null;
+  transitionErlaubtDriver = false;
   treiberGeneration++;
 }
 
-export function verwerfeLokaleKontoBindung() {
-  setCacheOwner(null);
-  verwerfeTreiberZustand();
+export function maskierePersoenlichenSpeicher() {
+  privacyGesperrt = true;
+  kontoAktiv = false;
+  vorbereitetesKonto = null;
+  accountDriver = null;
+  accountEpoch = null;
+  lokalerTransitionToken = null;
+  transitionErlaubtDriver = false;
+  treiberGeneration++;
+  setStorageDriver(privacyMaskDriver);
+}
+
+/* Nur nach bestätigtem Restore beziehungsweise bestätigter Quarantäne. */
+export function entsperrePersoenlichenSpeicherNachTrennung() {
+  privacyGesperrt = false;
+  deaktiviereKontoTreiber();
+}
+
+export function istPersoenlicherSpeicherMaskiert() { return privacyGesperrt; }
+export function entsperrePersoenlichenSpeicherFuerGebundenesKonto(accountId) {
+  const id = String(accountId || "");
+  if (!privacyGesperrt) return true;
+  if (!id || getCacheOwner() !== id || leseAccountCacheTransition()
+      || !leseEpoch(id)) return false;
+  privacyGesperrt = false;
+  setStorageDriver(null);
+  return true;
+}
+export function bereinigeVerwaisteAccountMetadaten() {
+  return bereinigeVerwaisteTreiberMetadaten();
+}
+
+export function beginneGebundeneAccountTransition(accountId, zweck, {
+  driverErlaubt = false, uebernehmeBestehend = false,
+} = {}) {
+  const vorhanden = leseAccountCacheTransition();
+  const transition = vorhanden
+    ? (uebernehmeBestehend && vorhanden.accountId === String(accountId || "") ? vorhanden : null)
+    : beginneAccountCacheTransition(accountId, zweck);
+  if (!transition) return null;
+  lokalerTransitionToken = transition.token;
+  transitionErlaubtDriver = !!driverErlaubt;
+  /* Normale UI-Writes des dynamischen Stores werden während jeder Transition
+     gesperrt; nur der explizit gebundene Adoption-Pull darf seinen Driver direkt nutzen. */
+  setStorageDriver(privacyMaskDriver);
+  return transition;
+}
+
+export function beginneKontoAdoptionCache(accountId) {
+  const id = String(accountId || "");
+  const session = authService.getSnapshot();
+  if (!id || session?.mode !== "account" || String(session.account?.id || "") !== id) {
+    throw new Error("Der Kontocache kann nur für die aktuell angemeldete Konto-ID vorbereitet werden.");
+  }
+  const transition = beginneGebundeneAccountTransition(id, "konto-adoption", { driverErlaubt: true });
+  if (!transition) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  return transition;
+}
+
+/* Owner und Epoch werden erst NACH Marker, Tab-Zaun und gebundenem
+   Gast-Rückholpunkt gesetzt. Damit kann weder ein Crash noch ein zweiter Tab
+   Accountwerte als ownerlosen Gastbestand hinterlassen. */
+export function bindeKontoAdoptionCache(accountId, transitionToken = lokalerTransitionToken) {
+  const id = String(accountId || "");
+  const transition = leseAccountCacheTransition();
+  if (!id || !transition || transition.accountId !== id
+      || transition.token !== String(transitionToken || "")
+      || transition.token !== String(lokalerTransitionToken || "")) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  if (!bindePersistentenAccountCache(id, { epoch: neueEpoch() })) {
+    maskierePersoenlichenSpeicher();
+    throw privacyError();
+  }
+  return Object.freeze({ ...transition, epoch: accountEpoch });
+}
+
+/* Alle synchron bereits gestarteten Schreib-Turns anderer Tabs dürfen nach dem
+   rückgelesenen Marker noch auslaufen. Neue Turns sehen anschließend Marker/
+   Epoch und fallen geschlossen aus, bevor gemeinsame Haupttöpfe mutieren. */
+export function warteAccountTransitionZaun() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export function beendeGebundeneAccountTransition(token) {
+  const erwartet = String(token || "");
+  const aktuell = leseAccountCacheTransition();
+  const ok = !!aktuell
+    && aktuell.token === erwartet
+    && erwartet === String(lokalerTransitionToken || "")
+    && beendeAccountCacheTransition(erwartet);
+  if (!ok) return false;
+  lokalerTransitionToken = null;
+  transitionErlaubtDriver = false;
+  return true;
+}
+
+export function verwerfeLokaleKontoBindung({ behalteTransition = false } = {}) {
+  if (!verwerfeTreiberZustand({ behalteTransition })) return false;
+  return setCacheOwner(null);
+}
+
+export function aktuelleAccountTransition() { return leseAccountCacheTransition(); }
+export function istLokaleAccountTransition(token, accountId = null) {
+  const aktuell = leseAccountCacheTransition();
+  return !!aktuell
+    && aktuell.token === String(token || "")
+    && aktuell.token === String(lokalerTransitionToken || "")
+    && (!accountId || aktuell.accountId === String(accountId));
+}
+export function hatOffeneKontoCacheAenderungen() {
+  try {
+    const status = JSON.parse(localStorage.getItem(ACCT_KEYS.status) || "null");
+    if (!status || typeof status !== "object") return false;
+    return [status.pending, status.conflict, status.zuGross, status.schemaVeraltet]
+      .some((feld) => feld && typeof feld === "object" && Object.keys(feld).length > 0);
+  } catch { return true; }
 }
 
 export function istKontoTreiberAktiv() { return kontoAktiv && storageDriverName() === "konto"; }

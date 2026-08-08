@@ -1,6 +1,27 @@
 import { artHatUhrzeit, datumLokal, datumPlusTage, reminderFaellig, WOCHENTAGE } from "./wochenplan.js";
 
 const WOCHENTAG_ICS = Object.freeze({ 1: "MO", 2: "TU", 3: "WE", 4: "TH", 5: "FR", 6: "SA", 7: "SU" });
+const KALENDER_ZEITZONE = "Europe/Vienna";
+const WIEN_VTIMEZONE = Object.freeze([
+  "BEGIN:VTIMEZONE",
+  `TZID:${KALENDER_ZEITZONE}`,
+  `X-LIC-LOCATION:${KALENDER_ZEITZONE}`,
+  "BEGIN:DAYLIGHT",
+  "DTSTART:19960331T020000",
+  "TZOFFSETFROM:+0100",
+  "TZOFFSETTO:+0200",
+  "TZNAME:CEST",
+  "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+  "END:DAYLIGHT",
+  "BEGIN:STANDARD",
+  "DTSTART:19961027T030000",
+  "TZOFFSETFROM:+0200",
+  "TZOFFSETTO:+0100",
+  "TZNAME:CET",
+  "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+  "END:STANDARD",
+  "END:VTIMEZONE",
+]);
 
 function esc(wert) {
   return String(wert ?? "").replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
@@ -19,7 +40,13 @@ function fold(line) {
   return teile.join("\r\n");
 }
 
-function icsDatum(wert) { return datumLokal(wert).replaceAll("-", ""); }
+function icsDatum(wert) {
+  /* Ein YYYY-MM-DD ist ein Kalendertag, kein UTC-Zeitpunkt. `new Date(wert)`
+     würde ihn z. B. in America/New_York auf den Vortag verschieben. */
+  const kalenderdatum = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(wert || ""));
+  if (kalenderdatum) return `${kalenderdatum[1]}${kalenderdatum[2]}${kalenderdatum[3]}`;
+  return datumLokal(wert).replaceAll("-", "");
+}
 function icsZeit(datum) {
   const d = new Date(datum);
   const z = (n) => String(n).padStart(2, "0");
@@ -39,10 +66,40 @@ function uidFuer(event) {
   return `${hash(`${event.id || "termin"}|${event.start || event.datum || ""}|${event.summary || ""}`)}@kinodreieck.app`;
 }
 
+function gueltigeUhrzeit(wert) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(wert || ""));
+}
+
+function hatUhrzeit(event) {
+  return event?.start instanceof Date || gueltigeUhrzeit(event?.uhrzeit);
+}
+
+function wienerLokalzeitAlsUtc(datum, uhrzeit) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(datum || ""));
+  const t = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(uhrzeit || ""));
+  if (!d || !t) return "";
+  const ziel = Date.UTC(Number(d[1]), Number(d[2]) - 1, Number(d[3]), Number(t[1]), Number(t[2]));
+  const teileFuer = (zeitpunkt) => Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: KALENDER_ZEITZONE,
+    hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(new Date(zeitpunkt)).filter((teil) => teil.type !== "literal").map((teil) => [teil.type, Number(teil.value)]));
+  let utc = ziel;
+  /* Zweimaliges Nachführen deckt beide Wiener UTC-Offsets ab, ohne von der
+     Zeitzone des Browsers beziehungsweise Testprozesses abzuhängen. */
+  for (let i = 0; i < 2; i++) {
+    const p = teileFuer(utc);
+    const offset = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - utc;
+    utc = ziel - offset;
+  }
+  return utcZeit(new Date(utc));
+}
+
 function eventZeilen(event, dtstamp) {
   const zeilen = ["BEGIN:VEVENT", `UID:${esc(event.uid || uidFuer(event))}`, `DTSTAMP:${dtstamp}`];
-  if (event.start instanceof Date) zeilen.push(`DTSTART:${icsZeit(event.start)}`);
-  else if (event.uhrzeit) zeilen.push(`DTSTART:${icsDatum(event.datum)}T${String(event.uhrzeit).replace(":", "")}00`);
+  if (event.start instanceof Date) zeilen.push(`DTSTART;TZID=${KALENDER_ZEITZONE}:${icsZeit(event.start)}`);
+  else if (gueltigeUhrzeit(event.uhrzeit)) zeilen.push(`DTSTART;TZID=${KALENDER_ZEITZONE}:${icsDatum(event.datum)}T${String(event.uhrzeit).replace(":", "")}00`);
   else zeilen.push(`DTSTART;VALUE=DATE:${icsDatum(event.datum)}`);
   if (event.rrule) zeilen.push(`RRULE:${event.rrule}`);
   zeilen.push(`SUMMARY:${esc(event.summary || "Kinodreieck")}`);
@@ -55,11 +112,14 @@ function eventZeilen(event, dtstamp) {
 
 export function erstelleIcs(events, { name = "Kinodreieck", jetzt = new Date() } = {}) {
   const dtstamp = utcZeit(jetzt);
+  const liste = Array.isArray(events) ? events : [];
+  const enthaeltUhrzeit = liste.some(hatUhrzeit);
   const zeilen = [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Kinodreieck//Deine Woche//DE",
     "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${esc(name)}`,
   ];
-  for (const event of Array.isArray(events) ? events : []) zeilen.push(...eventZeilen(event, dtstamp));
+  if (enthaeltUhrzeit) zeilen.push(`X-WR-TIMEZONE:${KALENDER_ZEITZONE}`, ...WIEN_VTIMEZONE);
+  for (const event of liste) zeilen.push(...eventZeilen(event, dtstamp));
   zeilen.push("END:VCALENDAR", "");
   return zeilen.map(fold).join("\r\n");
 }
@@ -87,7 +147,14 @@ export function reminderIcsEvent(reminder, { url = "" } = {}) {
   const tage = (reminder.wochentage || [1]).map((n) => WOCHENTAG_ICS[n]).filter(Boolean);
   const teile = ["FREQ=WEEKLY", `INTERVAL=${Number(reminder.intervall_wochen) || 1}`];
   if (tage.length) teile.push(`BYDAY=${tage.join(",")}`);
-  if (reminder.ende?.typ === "datum") teile.push(`UNTIL=${String(reminder.ende.datum).replaceAll("-", "")}${uhrzeit ? `T${uhrzeit.replace(":", "")}00` : ""}`);
+  if (reminder.ende?.typ === "datum") {
+    /* RFC 5545 verlangt bei einem DTSTART mit TZID ein UTC-UNTIL. Ganztägige
+       Serien behalten dagegen ihren bisherigen DATE-Vertrag. */
+    const until = uhrzeit
+      ? wienerLokalzeitAlsUtc(reminder.ende.datum, uhrzeit)
+      : String(reminder.ende.datum).replaceAll("-", "");
+    teile.push(`UNTIL=${until}`);
+  }
   if (reminder.ende?.typ === "anzahl") teile.push(`COUNT=${Number(reminder.ende.anzahl)}`);
   const stand = reminder.folgenstand || "";
   return {

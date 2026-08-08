@@ -5,6 +5,7 @@ import {
   ladeBuildMeta,
   neuerBuild,
   pruefbareUmgebung,
+  sichtbarerUpdateBuild,
 } from "../lib/appUpdate.js";
 
 const PRUEF_INTERVALL_MS = 5 * 60 * 1000;
@@ -16,7 +17,15 @@ export function AppUpdateHinweis() {
   const aktivRef = useRef(true);
   const prueftRef = useRef(false);
   const letztePruefungRef = useRef(0);
+  const geschlossenerBuildRef = useRef("");
   const baseUrl = import.meta.env.BASE_URL || "./";
+
+  const zeigeBuild = useCallback((version) => {
+    const sichtbar = sichtbarerUpdateBuild(version, geschlossenerBuildRef.current);
+    if (!aktivRef.current || !sichtbar) return false;
+    setNeueVersion(sichtbar);
+    return true;
+  }, []);
 
   const pruefe = useCallback(async () => {
     const jetzt = Date.now();
@@ -28,8 +37,7 @@ export function AppUpdateHinweis() {
     try {
       const meta = await ladeBuildMeta({ baseUrl });
       const version = neuerBuild(meta, runtimeConfig.buildVersion);
-      if (aktivRef.current && version) {
-        setNeueVersion(version);
+      if (zeigeBuild(version)) {
         /* Den neuen Worker bereits laden. Aktiv neu navigiert wird bewusst erst
            nach Nutzerbestätigung, damit kein offenes Formular verloren geht. */
         aktualisiereServiceWorker({ baseUrl }).catch(() => {});
@@ -39,7 +47,7 @@ export function AppUpdateHinweis() {
     } finally {
       prueftRef.current = false;
     }
-  }, [baseUrl]);
+  }, [baseUrl, zeigeBuild]);
 
   useEffect(() => {
     aktivRef.current = true;
@@ -54,7 +62,7 @@ export function AppUpdateHinweis() {
         { format: 1, buildVersion: event.data.buildVersion },
         runtimeConfig.buildVersion,
       );
-      if (version) setNeueVersion(version);
+      zeigeBuild(version);
     };
 
     pruefe();
@@ -84,6 +92,11 @@ export function AppUpdateHinweis() {
     window.location.reload();
   };
 
+  const schliessen = () => {
+    geschlossenerBuildRef.current = neueVersion;
+    setNeueVersion("");
+  };
+
   if (!neueVersion) return null;
   return (
     <aside className="kd-app-update" role="status" aria-live="polite">
@@ -93,6 +106,10 @@ export function AppUpdateHinweis() {
       </div>
       <button type="button" onClick={aktualisieren} disabled={laedt}>
         {laedt ? "Wird geladen …" : "Jetzt aktualisieren"}
+      </button>
+      <button type="button" onClick={schliessen} disabled={laedt}
+        aria-label="Update-Hinweis für diese Sitzung schließen">
+        Schließen
       </button>
     </aside>
   );

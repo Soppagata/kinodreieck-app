@@ -32,7 +32,7 @@ export function abgelaufeneSession() {
     ...basis,
     error: new BoundaryError(ERROR_CODES.UNAUTHENTICATED, {
       source: "auth", operation: "session.expired", reason: "session-expired",
-      message: "Deine Anmeldung ist abgelaufen. Du arbeitest als Gast weiter — deine Daten auf diesem Gerät bleiben erhalten.",
+      message: "Deine Anmeldung ist abgelaufen. Kontodaten werden vor dem Gastbetrieb geschützt; bei ungesicherten Änderungen ist eine erneute Anmeldung nötig.",
     }),
   });
 }
@@ -120,9 +120,31 @@ export function createAuthService({ loadSession, driver = null } = {}) {
         throw normalizeBoundaryError(error, { source: "auth", operation: "session.sign-in" });
       }
     },
-    /* Abmelden. Löst NIE lokale Daten — das ist eine harte Zusage der Etappe. */
-    async signOut() {
-      if (driver) { try { await driver.signOut(); } catch { /* lokaler Logout gilt immer */ } }
+    /* Abmelden. Löst selbst NIE lokale Daten — das ist eine harte Zusage der
+       Etappe. Der optionale `beforeGuest`-Schritt gehört dem Session-Koordinator.
+       Der echte Treiber führt ihn nach dem Serverversuch, aber unmittelbar vor
+       der lokalen Credential-Löschung aus. Ältere/Test-Treiber, die den Hook
+       ignorieren, bekommen denselben Schritt hier als Fallback. */
+    async signOut({ beforeGuest = null } = {}) {
+      let grenzeGelaufen = false;
+      let grenzFehler = null;
+      const privacyGrenze = async () => {
+        grenzeGelaufen = true;
+        try { if (typeof beforeGuest === "function") await beforeGuest(); }
+        catch (error) { grenzFehler = error; throw error; }
+      };
+      if (driver) {
+        try { await driver.signOut({ beforeLocalCommit: privacyGrenze }); }
+        catch (error) {
+          if (grenzFehler) throw grenzFehler;
+          /* Nach gelaufener Privacy-Grenze ist jeder Treiberfehler ein lokaler
+             Credential-Commitfehler. Ihn als Guest zu verschlucken würde beim
+             Reload die noch persistierte Kontositzung wiederbeleben. */
+          if (grenzeGelaufen) throw error;
+          /* Ein reiner Server-/Treiberfehler hält den lokalen Logout nicht auf. */
+        }
+      }
+      if (!grenzeGelaufen) await privacyGrenze();
       return setze(guestSession());
     },
     async changePassword(neuesPasswort) {

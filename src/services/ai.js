@@ -140,5 +140,6 @@ export const aiService = createAiService({
   transport: createAiTransport({
     config: runtimeConfig,
     getAccessToken: (opts) => authDriver.getAccessToken(opts),
+    getAccountId: () => authDriver.konto()?.id || null,
   }),
 });

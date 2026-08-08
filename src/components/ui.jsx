@@ -1,4 +1,4 @@
-import { T } from "../lib/tokens.js";
+import { T, kontrastFarbe } from "../lib/tokens.js";
 import { bewertungskategorieLabel } from "../lib/kategorien.js";
 import { quelleBadges, QUELLEN_KLASSEN } from "../lib/quellen.js";
 
@@ -57,6 +57,7 @@ export function AxisChips({ bw }) {
    um") und der Merken-Chip mit seiner Erklärung des Lern-Kreislaufs. Die
    Unterscheidung der Chip-Klassen hing danach allein an der Farbe. */
 export function Chip({ active, onClick, children, color, title }) {
+  const aktiveFarbe = color || T.wolfram;
   return (
     <button
       onClick={onClick}
@@ -66,9 +67,9 @@ export function Chip({ active, onClick, children, color, title }) {
         fontSize: 12,
         padding: "5px 10px",
         borderRadius: 999,
-        border: "1px solid " + (active ? (color || T.wolfram) : T.rauch),
-        background: active ? (color || T.wolfram) : "transparent",
-        color: active ? T.tinte : T.rauch,
+        border: "1px solid " + (active ? aktiveFarbe : T.rauch),
+        background: active ? aktiveFarbe : "transparent",
+        color: active ? kontrastFarbe(aktiveFarbe) : T.rauch,
         cursor: "pointer",
       }}
     >

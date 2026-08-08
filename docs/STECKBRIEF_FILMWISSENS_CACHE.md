@@ -232,7 +232,7 @@ Wikidata-Objekt erneut.
 - **Cache-Miss bei normaler Vorbewertung:** keine Recherche; eine persönliche
   Sonnet-Schätzung von WARUM bleibt erlaubt und getrennt gekennzeichnet.
 - **Ausdrücklich ausgelöster Filmwissensbericht:** Die Oberfläche nennt genau
-  einen Sonnet-Aufruf, höchstens 5 US-Cent und keine automatische
+  einen Sonnet-Aufruf, höchstens 6 US-Cent und keine automatische
   Wiederholung; danach startet die feste Quellenkette.
 - **Gleichzeitige identische Aufträge:** auf einen laufenden Auftrag
   zusammenführen.
@@ -263,7 +263,7 @@ Zusätzlich braucht der Bericht nur:
 - keine automatische bezahlte Wiederholung außerhalb derselben Reservierung,
 - Wiederverwendung jedes erfolgreichen Cache-Treffers.
 
-Der feste zusätzliche Task-Deckel beträgt 5 US-Cent pro
+Der feste zusätzliche Task-Deckel beträgt 6 US-Cent pro
 `filmwissen-synthese`-Auftrag. Unbekannter Preis oder nicht messbarer
 Verbrauch stoppt den bezahlten Auftrag.
 

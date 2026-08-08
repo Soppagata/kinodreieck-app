@@ -91,7 +91,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
       <h2 style={h2}>Streaming gesperrt</h2>
       <p style={{ fontSize: 13, color: T.rauch, margin: 0, lineHeight: 1.6 }}>
-        Der zentrale Katalog ist noch nicht verbunden. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
+        Für den zentralen Katalog sind noch keine Zugangsdaten eingerichtet. Gib den mitgeschickten Leseschlüssel unter „Datenmodus & Verbindung“ ein. Die PWA selbst lädt nie live von Watchmode.
       </p>
     </div>
   );
@@ -159,7 +159,7 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
           <>
             {katalogInfo?.variante === "demo" && <p style={{ color: T.wolfram, fontSize: 13, margin: "0 0 12px", lineHeight: 1.55 }}><strong>Öffentliche Beispieldaten.</strong> Angemeldete Konten erhalten den laufenden Watchmode-Katalog.</p>}
             <dl className="kd-statusliste">
-              <div><dt>Betriebsart</dt><dd>{katalogInfo?.variante === "demo" ? "Demo" : katalogInfo?.variante === "live" ? "Konto · live" : "nicht gemeldet"}</dd></div>
+              <div><dt>Betriebsart</dt><dd>{katalogInfo?.art === "snapshot" ? "Eingebettete Offline-Beispiele" : katalogInfo?.variante === "demo" ? "Demo" : katalogInfo?.variante === "live" ? "Konto · live" : "nicht gemeldet"}</dd></div>
               <div><dt>Stand</dt><dd>{stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</dd></div>
               <div><dt>Titel</dt><dd>{bekannt.titel.length} bekannt · {entdeckenDa ? entdecken.titel.length : 0} entdecken</dd></div>
               <div><dt>Credits</dt><dd>{bekannt.quota_nach_lauf ?? "?"}{bekannt.quota_limit ? ` / ${bekannt.quota_limit}` : ""} im letzten Lauf</dd></div>

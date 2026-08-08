@@ -240,7 +240,7 @@ function pruefePayload(name, p) {
    accountDriver.rest). Bleibt es dabei, fällt der Katalogpfad auf den anon-Weg
    zurück — ein totes Token meldet hier NIEMALS ab, darüber entscheidet allein
    der Auth-Treiber. */
-async function direktLesen(name, signal) {
+async function direktLesen(name, signal, erwarteteKontoId = null) {
   if (!ERLAUBT.has(name)) throw new Error("Unbekanntes Katalog-Asset: " + name);
   const c = getKatalogZugang();
   if (!hatKatalogZugang()) throw new Error("Datenbank-Zugang noch nicht eingerichtet");
@@ -250,12 +250,12 @@ async function direktLesen(name, signal) {
   /* Die Katalog-URL geht an den Token-Provider mit: nur er weiß, zu welcher
      Projekt-URL die Sitzung gehört, und hält das Token bei Abweichung zurück
      (Zugang bleibt lesbar, dann eben anon). */
-  let token = await holeToken({ katalogUrl: c.url });
+  let token = await holeToken({ katalogUrl: c.url, erwarteteKontoId });
   let mitToken = !!token;
   const hole = (t) => fetch(url, { cache: "no-store", signal, headers: katalogKopf(c.key, t, { Accept: "application/json" }) });
   let res = await hole(token);
   if (res.status === 401 && mitToken) {
-    token = await holeToken({ erzwingeErneuerung: true, katalogUrl: c.url });
+    token = await holeToken({ erzwingeErneuerung: true, katalogUrl: c.url, erwarteteKontoId });
     if (token) res = await hole(token);
     if (res.status === 401) { mitToken = false; res = await hole(null); }   // anon-Rückfall
   }
@@ -312,18 +312,20 @@ async function direktLesen(name, signal) {
   };
 }
 
-async function direktMitZeitgrenze(name, timeout) {
+async function direktMitZeitgrenze(name, timeout, erwarteteKontoId = null) {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
-  try { return await direktLesen(name, ctrl ? ctrl.signal : undefined); }
+  try { return await direktLesen(name, ctrl ? ctrl.signal : undefined, erwarteteKontoId); }
   finally { if (timer) clearTimeout(timer); }
 }
 
-export async function ladeKatalogAsset(name, { nurCache = false, timeout = 12000 } = {}) {
+export async function ladeKatalogAsset(name, {
+  nurCache = false, timeout = 12000, erwarteteKontoId = null,
+} = {}) {
   if (!ERLAUBT.has(name)) throw new Error("Unbekanntes Katalog-Asset: " + name);
   if (!nurCache) {
     try {
-      const r = await direktMitZeitgrenze(name, timeout);
+      const r = await direktMitZeitgrenze(name, timeout, erwarteteKontoId);
       await cacheSchreiben(name, r.payload, r.meta);
       return { payload: r.payload, quelle: "datenbank", ...meldung(name, r.meta) };
     } catch (e) {
@@ -361,10 +363,12 @@ function fehlerText(e) {
    Zeile), wird sie zusätzlich direkt geprüft, bewusst ohne Cache-Rückfall:
    die Frage lautet „geht es JETZT?", nicht „lag mal etwas im Browser".
    `ok` meint die Verbindung; ob das Asset da ist, steht getrennt in `asset`. */
-export async function testeKatalogZugang({ asset = null, timeout = 10000 } = {}) {
+export async function testeKatalogZugang({
+  asset = null, timeout = 10000, erwarteteKontoId = null,
+} = {}) {
   let manifest = null, quelle = null;
   try {
-    const r = await ladeKatalogAsset("manifest", { timeout });
+    const r = await ladeKatalogAsset("manifest", { timeout, erwarteteKontoId });
     manifest = r.payload; quelle = r.quelle;
   } catch (e) {
     return {
@@ -377,7 +381,7 @@ export async function testeKatalogZugang({ asset = null, timeout = 10000 } = {})
   const basis = { ok: true, verbindung: true, manifest, quelle };
   if (!asset) return { ...basis, asset: null };
   try {
-    const r = await direktMitZeitgrenze(asset, timeout);
+    const r = await direktMitZeitgrenze(asset, timeout, erwarteteKontoId);
     const m = meldung(asset, r.meta);
     return {
       ...basis,

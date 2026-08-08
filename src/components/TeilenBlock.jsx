@@ -68,14 +68,16 @@ export function TeilenBlock({ master, artikel, autorName, saveAutorName, ueberne
   };
 
   /* ---------- Import: Übernahme ---------- */
-  const uebernehme = () => {
+  const uebernehme = async () => {
     if (!analyse) return;
     // KD-007: Übernahme kann bei kaputten Fremd-Strukturen werfen — abfangen und
     // dem Nutzer zeigen statt uncaught in die Konsole laufen zu lassen.
     try {
       const { neueFilme, neueArtikel, report: rep } = bauePaketUebernahme(analyse, importWahl, master || [], artikel || []);
       if (!neueFilme.length && !neueArtikel.length) { setErr("Nichts übernommen — die gewählten Bereiche enthalten nur bereits Vorhandenes."); return; }
-      uebernehmePaket({ neueFilme, neueArtikel });
+      if (!await uebernehmePaket({ neueFilme, neueArtikel })) {
+        throw new Error("bestätigtes Speichern fehlgeschlagen; die Vorschau bleibt erhalten.");
+      }
       setReport({ ...rep, autor: analyse.autor, artikelDabei: neueArtikel.length > 0 });
       setAnalyse(null);
     } catch (e) {

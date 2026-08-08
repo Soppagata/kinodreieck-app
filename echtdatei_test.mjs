@@ -6,7 +6,9 @@
    "Eintrag erstellen" mit Vorbefüllung.
    Aufruf: node echtdatei_test.mjs [pfad-zur-html] */
 import { readFileSync } from "node:fs";
-import { JSDOM } from "jsdom";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { JSDOM, VirtualConsole } from "jsdom";
 
 const pfad = process.argv[2] || "/tmp/kd-single/Kinodreieck.html";
 const html = readFileSync(pfad, "utf8");
@@ -113,7 +115,6 @@ const dom = new JSDOM(html, {
       throw new Error("offline (Test)");
     };
     window.scrollTo = () => {};
-    window.__KD_STREAMING_ENTDECKEN__ = entdeckenSnapshot;
     if (!window.URL.createObjectURL) window.URL.createObjectURL = () => "blob:test";
     if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
     window.localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: true, skip: [], am: "2026-07-15", version: "beta-2026-07-datenfreigabe-2" }));
@@ -145,6 +146,24 @@ const knopf = (re) => [...doc.querySelectorAll("button")].find((b) => re.test((b
 await warte(3000);
 const checks = [];
 const check = (name, pass) => checks.push([name, pass]);
+
+/* ---- Erzeugnisvertrag: diese Checks lesen genau die gebaute HTML-Datei. ---- */
+check("Einzeldatei enthält den vollständigen Demo-Seed genau einmal inline",
+  (html.match(/data-kd-einzeldatei-seed/g) || []).length === 1
+  && html.includes("window.__KD_DEMO_SEED__")
+  && html.includes("Der letzte Vorführer"));
+check("Einzeldatei enthält Kino- und Streaming-Beispieldaten im Bundle",
+  html.includes("Sommer der Kometen") && html.includes("Der stille Zeuge"));
+check("Einzeldatei kennt keine versteckte Programmdateien-Nachbarabhängigkeit",
+  !html.includes("Programmdateien/System/demo_masterliste.js")
+  && !html.includes("Programmdateien/System/streaming_entdecken.js")
+  && ![...doc.querySelectorAll("script[src], link[href]")].some((el) => {
+    const wert = el.getAttribute("src") || el.getAttribute("href") || "";
+    return wert && !wert.startsWith("data:");
+  }));
+check("Archivprogramm ist im Erzeugnis als Beispiel statt als live gekennzeichnet",
+  html.includes("Archiviertes synthetisches Offline-Beispiel")
+  && html.includes("kein aktuelles Kinoprogramm"));
 
 /* ---- Grundgerüst (Personal-Dashboard ist der Start-Tab, Etappe 4) ---- */
 const startText = text();
@@ -390,6 +409,96 @@ if (mwKnopf) {
   check("Must-Watch: eigener '+ Eintrag'-Knopf", !!knopf(/^\+ Eintrag$/));
   check("Must-Watch: im-Besitz-Häkchen pro Eintrag", [...doc.querySelectorAll('input[type="checkbox"]')].length > 0);
 }
+
+/* ---- No-Config-file://-Vertrag -----------------------------------------
+   Der große Flow oben bildet absichtlich auch den Online-Demo-Katalog nach.
+   Dieser zweite, kleine Boot besitzt dagegen KEINEN Katalogschlüssel und einen
+   echten file://-Ort. Ein eigener Storage ist nur nötig, weil jsdom opaque
+   file-Origins sonst pauschal mit SecurityError blockiert; Chromiums
+   tatsächlicher file://-Storage wird zusätzlich manuell abgenommen. */
+class DateiStorage {
+  constructor() {
+    Object.defineProperty(this, "werte", { value: new Map(), enumerable: false });
+  }
+  get length() { return this.werte.size; }
+  key(index) { return [...this.werte.keys()][index] ?? null; }
+  getItem(key) { return this.werte.has(String(key)) ? this.werte.get(String(key)) : null; }
+  setItem(key, value) {
+    const k = String(key); const v = String(value);
+    this.werte.set(k, v);
+    if (!Object.prototype.hasOwnProperty.call(this, k)) {
+      Object.defineProperty(this, k, {
+        configurable: true, enumerable: true,
+        get: () => this.werte.get(k),
+        set: (neu) => this.werte.set(k, String(neu)),
+      });
+    }
+  }
+  removeItem(key) { const k = String(key); this.werte.delete(k); delete this[k]; }
+  clear() { for (const key of [...this.werte.keys()]) this.removeItem(key); }
+}
+
+const dateiFetches = [];
+const dateiFehler = [];
+const dateiKonsole = new VirtualConsole();
+dateiKonsole.on("error", (...args) => dateiFehler.push(args.map(String).join(" ")));
+dateiKonsole.on("jsdomError", (error) => dateiFehler.push(String(error?.message || error)));
+const dateiDom = new JSDOM(html, {
+  url: pathToFileURL(resolve(pfad)).href,
+  runScripts: "dangerously",
+  pretendToBeVisual: true,
+  virtualConsole: dateiKonsole,
+  beforeParse(window) {
+    Object.defineProperty(window, "localStorage", { value: new DateiStorage() });
+    window.fetch = async (...args) => {
+      dateiFetches.push(String(args[0]));
+      throw new Error("No-Config-file:// darf kein Netz brauchen");
+    };
+    window.scrollTo = () => {};
+    if (!window.URL.createObjectURL) window.URL.createObjectURL = () => "blob:test";
+    if (!window.URL.revokeObjectURL) window.URL.revokeObjectURL = () => {};
+    if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+    window.localStorage.setItem("kd:start", "demo");
+    window.localStorage.setItem("kd:start-version", "demo-v1");
+    window.localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+  },
+});
+await warte(3500);
+const dateiDoc = dateiDom.window.document;
+const dateiText = () => dateiDoc.getElementById("root")?.textContent || "";
+const dateiKnopf = (re) => [...dateiDoc.querySelectorAll("button")]
+  .find((button) => re.test((button.textContent || "").trim()));
+check("No-Config-file:// startet die Demo aus dem eingebetteten Seed",
+  dateiDom.window.location.protocol === "file:"
+  && !dateiDom.window.localStorage.getItem("kd:katalog:url")
+  && !dateiDom.window.localStorage.getItem("kd:katalog:key")
+  && dateiDom.window.__KD_DEMO_SEED__?.master?.filme
+    ?.some((film) => film.titel === "Der letzte Vorführer"));
+dateiKnopf(/^Mediathek$/i)?.click(); await warte(700);
+check("No-Config-file:// übernimmt den Inline-Seed in die sichtbare Mediathek",
+  /Der letzte Vorführer/.test(dateiText()));
+dateiKnopf(/^Kino$/i)?.click(); await warte(700);
+check("No-Config-file:// zeigt das ehrliche Archivprogramm funktionsfähig",
+  /Archiviertes Offline-Beispiel/.test(dateiText())
+  && /Sommer der Kometen/.test(dateiText()));
+dateiKnopf(/^Streaming$/i)?.click(); await warte(900);
+const streamingBekanntDatei = /Regenbogen über Kreuzberg/.test(dateiText());
+dateiKnopf(/^Entdecken/i)?.click(); await warte(500);
+check("No-Config-file:// enthält beide Streaming-Snapshots",
+  streamingBekanntDatei && /Der stille Zeuge/.test(dateiText()));
+dateiKnopf(/^settings$/i)?.click(); await warte(500);
+const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
+  .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
+if (katalogStatusDatei && !katalogStatusDatei.parentElement.open) {
+  katalogStatusDatei.click(); await warte(250);
+}
+check("No-Config-file:// benennt den eingebetteten Streamingbetrieb ehrlich",
+  /BetriebsartEingebettete Offline-Beispiele/.test(dateiText()));
+check("No-Config-file:// pollt weder Katalog noch Build-Metadaten",
+  dateiFetches.length === 0
+  && ![...dateiDoc.querySelectorAll("script[src]")].some((script) => /Programmdateien/.test(script.src))
+  && dateiFehler.length === 0);
+dateiDom.window.close();
 
 let ok = true;
 for (const [name, pass] of checks) { console.log((pass ? "✓ " : "✗ ") + name); if (!pass) ok = false; }

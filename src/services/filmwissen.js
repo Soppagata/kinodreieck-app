@@ -27,7 +27,7 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
       try {
         let miss = null;
         for (const id of ids) {
-          const result = await transport({ ...id, signal: options.signal });
+          const result = await transport({ ...id, signal: options.signal, accountId });
           if (!result?.ok) {
             if (result?.grund === "abgebrochen") throw new BoundaryError(ERROR_CODES.OFFLINE, { source: "filmwissen", operation: "read", reason: "abgebrochen" });
             if (!result?.status) throw new BoundaryError(ERROR_CODES.OFFLINE, { source: "filmwissen", operation: "read", reason: result?.grund || "netzwerk" });
@@ -106,4 +106,5 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
 }
 export const filmwissenService = createFilmwissenService({ transport: createFilmwissenTransport({
   config: runtimeConfig, getAccessToken: (opts) => authDriver.getAccessToken(opts),
+  getAccountId: () => authDriver.konto()?.id || null,
 }) });

@@ -17,7 +17,9 @@ export function InstallationCard({ kompakt = false, zeigeEinzeldatei = true }) {
           bereits installiert ist oder als Einzeldatei läuft (Befund B5). */}
       <h2 id="kd-install-titel">{status.datei ? "Kinodreieck als Einzeldatei" : status.standalone ? "Kinodreieck ist installiert" : "Kinodreieck installieren"}</h2>
       {status.datei ? (
-        <p className="kd-install-status"><strong>Du nutzt bereits die Einzeldatei.</strong> Sie läuft ohne PWA-Installation direkt aus dieser Datei.</p>
+        <p className="kd-install-status">
+          <strong>Du nutzt bereits die Einzeldatei.</strong> Sie läuft ohne PWA-Installation direkt aus dieser Datei. Die eingebauten Kino- und Streamingdaten sind synthetische Archivbeispiele, kein aktuelles Programm.
+        </p>
       ) : status.standalone ? (
         <p className="kd-install-status"><strong>Bereits installiert.</strong> Kinodreieck läuft hier als App.</p>
       ) : status.ios ? (

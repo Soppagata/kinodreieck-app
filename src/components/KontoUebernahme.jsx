@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import {
   inventurLaden, uebernahmeStarten, uebernahmeBestaetigen, uebernahmeZuruecknehmen,
@@ -38,24 +38,30 @@ function Zeile({ z }) {
   );
 }
 
-export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
+export function KontoUebernahme({ accountId, onFertig, onBackupWunsch, services = null }) {
+  const inventur = services?.inventurLaden || inventurLaden;
+  const starten = services?.uebernahmeStarten || uebernahmeStarten;
+  const bestaetigen = services?.uebernahmeBestaetigen || uebernahmeBestaetigen;
+  const zuruecknehmen = services?.uebernahmeZuruecknehmen || uebernahmeZuruecknehmen;
+  const kontoLaden = services?.kontoUebernehmen || kontoUebernehmen;
   const [laden, setLaden] = useState(true);
   const [inv, setInv] = useState(null);
   const [fehler, setFehler] = useState(null);
   const [laeuft, setLaeuft] = useState(false);
   const [ergebnis, setErgebnis] = useState(null);
   const [warnungBestaetigt, setWarnungBestaetigt] = useState(false);
+  const laeuftRef = useRef(false);
 
   useEffect(() => {
     let aktiv = true;
-    inventurLaden(accountId)
+    inventur(accountId)
       .then((r) => { if (aktiv) { setInv(r); setLaden(false); } })
       .catch((e) => { if (aktiv) { setFehler(e?.message || "Bestandsaufnahme fehlgeschlagen."); setLaden(false); } });
     return () => { aktiv = false; };
-  }, [accountId]);
+  }, [accountId, inventur]);
 
   if (laden) return <p style={{ color: T.rauch, fontSize: 13 }}>Bestand wird verglichen …</p>;
-  if (fehler) return <p style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>;
+  if (fehler && !inv) return <p style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>;
   if (!inv) return null;
 
   /* Nichts zu tun: weder hier noch im Konto liegt etwas. */
@@ -66,7 +72,15 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
           Auf diesem Gerät und im Konto liegen noch keine Daten. Alles, was du ab jetzt einträgst,
           landet automatisch in deinem Konto.
         </p>
-        <button style={btnStyle(true)} onClick={() => { uebernahmeBestaetigen(accountId); onFertig?.(); }}>Alles klar</button>
+        {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
+        <button style={btnStyle(true)} disabled={laeuft} onClick={async () => {
+          if (laeuftRef.current) return;
+          laeuftRef.current = true;
+          setLaeuft(true); setFehler(null);
+          try { await bestaetigen(accountId, inv.accountBindung); onFertig?.(); }
+          catch (e) { setFehler(e?.message || "Kontoaktivierung fehlgeschlagen."); }
+          finally { laeuftRef.current = false; setLaeuft(false); }
+        }}>{laeuft ? "Aktiviert …" : "Alles klar"}</button>
       </div>
     );
   }
@@ -78,11 +92,14 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
         <p style={{ color: T.rauch, fontSize: 13 }}>
           Dein Konto enthält bereits Daten, dieses Gerät noch nicht. Sie werden jetzt geladen.
         </p>
+        {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
         <button style={btnStyle(true)} disabled={laeuft} onClick={async () => {
+          if (laeuftRef.current) return;
+          laeuftRef.current = true;
           setLaeuft(true);
-          try { await kontoUebernehmen(inv.lokaleWerte); uebernahmeBestaetigen(accountId); onFertig?.(); }
+          try { await kontoLaden(inv.lokaleWerte, { accountBindung: inv.accountBindung }); await bestaetigen(accountId, inv.accountBindung); onFertig?.(); }
           catch (e) { setFehler(e?.message || "Laden fehlgeschlagen."); }
-          finally { setLaeuft(false); }
+          finally { laeuftRef.current = false; setLaeuft(false); }
         }}>{laeuft ? "Lädt …" : "Daten aus dem Konto laden"}</button>
       </div>
     );
@@ -102,6 +119,7 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
             ? "Alle übernommenen Bereiche wurden im Konto bitgenau wiedergefunden."
             : "Achtung: mindestens ein Bereich stimmt nicht überein. Der lokale Stand ist unverändert erhalten."}
         </p>
+        {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 12 }}>
           <thead>
             <tr style={{ color: T.rauch, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -123,14 +141,21 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
           </tbody>
         </table>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={btnStyle(true)} disabled={!v.allesGleich} onClick={() => {
-            uebernahmeBestaetigen(accountId); onFertig?.();
-          }}>Übernahme bestätigen</button>
+          <button style={btnStyle(true)} disabled={!v.allesGleich || laeuft} onClick={async () => {
+            if (laeuftRef.current) return;
+            laeuftRef.current = true;
+            setLaeuft(true); setFehler(null);
+            try { await bestaetigen(accountId, ergebnis.accountBindung); onFertig?.(); }
+            catch (e) { setFehler(e?.message || "Kontoaktivierung fehlgeschlagen."); }
+            finally { laeuftRef.current = false; setLaeuft(false); }
+          }}>{laeuft ? "Aktiviert …" : "Übernahme bestätigen"}</button>
           <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
+            if (laeuftRef.current) return;
+            laeuftRef.current = true;
             setLaeuft(true);
-            try { await uebernahmeZuruecknehmen(ergebnis.gepusht); setErgebnis(null); onFertig?.({ zurueckgenommen: true }); }
+            try { await zuruecknehmen(ergebnis.gepusht, ergebnis.accountBindung); setErgebnis(null); onFertig?.({ zurueckgenommen: true }); }
             catch (e) { setFehler(e?.message || "Rücknahme fehlgeschlagen."); }
-            finally { setLaeuft(false); }
+            finally { laeuftRef.current = false; setLaeuft(false); }
           }}>Rückgängig machen</button>
         </div>
       </div>
@@ -192,19 +217,23 @@ export function KontoUebernahme({ accountId, onFertig, onBackupWunsch }) {
           style={btnStyle(!fremd || warnungBestaetigt)}
           disabled={laeuft || (fremd && !warnungBestaetigt)}
           onClick={async () => {
+            if (laeuftRef.current) return;
+            laeuftRef.current = true;
             setLaeuft(true); setFehler(null);
-            try { setErgebnis(await uebernahmeStarten({ lokaleWerte: inv.lokaleWerte })); }
+            try { setErgebnis(await starten({ lokaleWerte: inv.lokaleWerte, accountBindung: inv.accountBindung })); }
             catch (e) { setFehler(e?.message || "Übernahme fehlgeschlagen."); }
-            finally { setLaeuft(false); }
+            finally { laeuftRef.current = false; setLaeuft(false); }
           }}
         >{laeuft ? "Überträgt …" : beideBelegt ? "Lokalen Stand übernehmen" : "In mein Konto übernehmen"}</button>
 
         {(beideBelegt || fremd) && (
           <button style={btnStyle(false)} disabled={laeuft} onClick={async () => {
+            if (laeuftRef.current) return;
+            laeuftRef.current = true;
             setLaeuft(true); setFehler(null);
-            try { await kontoUebernehmen(inv.lokaleWerte); uebernahmeBestaetigen(accountId); onFertig?.(); }
+            try { await kontoLaden(inv.lokaleWerte, { accountBindung: inv.accountBindung }); await bestaetigen(accountId, inv.accountBindung); onFertig?.(); }
             catch (e) { setFehler(e?.message || "Laden fehlgeschlagen."); }
-            finally { setLaeuft(false); }
+            finally { laeuftRef.current = false; setLaeuft(false); }
           }}>Daten aus dem Konto laden</button>
         )}
 

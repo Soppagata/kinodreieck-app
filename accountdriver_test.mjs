@@ -312,10 +312,14 @@ const alterAuftrag = d.set("kd:master", "DATEN-A");
 generationAktiv = false;
 aktuellesToken = "at-B";
 _ls.set("kd:master", "DATEN-B");
-await alterAuftrag;
+let alterAuftragVerworfen = false;
+try { await alterAuftrag; } catch (error) {
+  alterAuftragVerworfen = error?.code === "ACCOUNT_CONTEXT_CHANGED";
+}
 await sleep(30);
 check("Ein Auftrag einer alten Treibergeneration sendet nach Kontowechsel nichts",
-  calls.length === 0 && db("konto-A", "kd:master") === null && db("konto-B", "kd:master") === null);
+  alterAuftragVerworfen
+  && calls.length === 0 && db("konto-A", "kd:master") === null && db("konto-B", "kd:master") === null);
 check("Der lokale Wert des neuen Kontos bleibt vom alten Auftrag unberührt",
   _ls.get("kd:master") === "DATEN-B");
 

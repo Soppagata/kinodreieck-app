@@ -14,16 +14,24 @@ export function normalisiereBeobachteteIds(ids) {
 export function createSeriesWatchService({
   config = runtimeConfig,
   getAccessToken = (opts) => authDriver.getAccessToken(opts),
+  getAccountId = () => authDriver.konto()?.id || null,
   fetchImpl = (...args) => fetch(...args),
 } = {}) {
   return Object.freeze({
-    async setObserved(ids) {
+    async setObserved(ids, expectedAccountId = null) {
       const watchmodeIds = normalisiereBeobachteteIds(ids);
       if (!istSupabaseProjektUrl(config.supabaseUrl) || !config.supabasePublishableKey) {
         return { ok: false, reason: "not-configured", ids: watchmodeIds };
       }
-      const token = await getAccessToken({ minValiditySeconds: 30 });
+      const gebunden = expectedAccountId == null ? null : String(expectedAccountId);
+      const token = await getAccessToken({
+        minValiditySeconds: 30,
+        erwarteteKontoId: gebunden,
+      });
       if (!token) return { ok: false, reason: "unauthenticated", ids: watchmodeIds };
+      if (gebunden && String(getAccountId?.() || "") !== gebunden) {
+        return { ok: false, reason: "account-changed", ids: watchmodeIds };
+      }
       try {
         const res = await fetchImpl(`${config.supabaseUrl}/rest/v1/rpc/kd_set_series_watch`, {
           method: "POST",
@@ -34,6 +42,9 @@ export function createSeriesWatchService({
           },
           body: JSON.stringify({ p_watchmode_ids: watchmodeIds }),
         });
+        if (gebunden && String(getAccountId?.() || "") !== gebunden) {
+          return { ok: false, reason: "account-changed", ids: watchmodeIds };
+        }
         if (!res.ok) throw Object.assign(new Error("Beobachtungsliste konnte nicht synchronisiert werden."), { status: res.status });
         return { ok: true, ids: watchmodeIds };
       } catch (error) {

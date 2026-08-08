@@ -16,10 +16,13 @@
    je Gesamtbestand (Konto behalten oder lokal übernehmen). Ein Feld-Merge über
    opake JSON-Dokumente wäre stille Datenkorruption mit freundlicher Oberfläche. */
 
-import { store, K } from "./storage.js";
+import { K, captureStorageContext } from "./storage.js";
 import {
-  PERSONAL_DATA_KEYS, personalDataEntry,
+  PERSONAL_DATA_KEYS, VERALTETE_IMPORT_SNAPSHOT_KEYS, personalDataEntry,
 } from "./personalDataRegistry.js";
+import {
+  ACCT_KEYS, ACCOUNT_CACHE_METADATA_KEYS, ACCOUNT_CACHE_STATE_KEYS,
+} from "./accountStorageKeys.js";
 
 export const UEBERNAHME_SNAP = "kd:acct:uebernahme:vorher";
 export const UEBERNOMMEN_KEY = "kd:acct:uebernommen";
@@ -54,11 +57,14 @@ export function pruefsumme(wert) {
 }
 
 /* ---------- Inventur ---------- */
-export async function leseLokaleToepfe() {
+export async function leseLokaleToepfe(storageContext = captureStorageContext()) {
   const werte = {};
   for (const key of PERSONAL_DATA_KEYS) {
-    try { const r = await store.get(key); werte[key] = r ? r.value : null; }
-    catch { werte[key] = null; }
+    try { const r = await storageContext.get(key); werte[key] = r ? r.value : null; }
+    catch (error) {
+      if (!storageContext.isCurrent() || error?.code === "STORAGE_CONTEXT_CHANGED") throw error;
+      werte[key] = null;
+    }
   }
   return werte;
 }
@@ -102,15 +108,18 @@ export function ermittleFall(vorschau, { fremdesKonto = false } = {}) {
 
 /* Demo-Inhalte kenntlich machen: eine übernommene Demo-Beilage im eigenen Konto
    ist selten gewollt. */
-export async function enthaeltDemoInhalte() {
+export async function enthaeltDemoInhalte(storageContext = captureStorageContext()) {
   try {
-    const seed = await store.get(K.demoSeed);
+    const seed = await storageContext.get(K.demoSeed);
     if (seed && seed.value) return true;
-    const master = await store.get(K.master);
+    const master = await storageContext.get(K.master);
     if (!master?.value) return false;
     const o = JSON.parse(master.value);
     return o?.herkunft?.typ === "demo";
-  } catch { return false; }
+  } catch (error) {
+    if (!storageContext.isCurrent() || error?.code === "STORAGE_CONTEXT_CHANGED") throw error;
+    return false;
+  }
 }
 
 /* ---------- Rückholpunkt ---------- */
@@ -150,12 +159,82 @@ export function bindeRueckholpunktAnKonto(accountId, storage = globalThis.localS
   } catch { return false; }
 }
 
+/* Unter bereits gesetztem geräteweiten Adoptionmarker wird der JETZT stabile
+   Gastbestand neu erfasst. Ein früherer Inventurwert oder Rückholpunkt darf
+   hier nicht wiederverwendet werden: ein Edit aus einem zweiten Tab könnte
+   sonst zwischen Bestandsaufnahme und Marker verloren gehen. */
+export function sichereGebundenenGastRueckholpunkt(accountId, storage = globalThis.localStorage) {
+  const id = String(accountId || "");
+  if (!id || !storage?.getItem || !storage?.setItem) return null;
+  try {
+    const werte = {};
+    for (const key of PERSONAL_DATA_KEYS) werte[key] = storage.getItem(key);
+    const snap = { t: new Date().toISOString(), accountId: id, werte };
+    const raw = JSON.stringify(snap);
+    storage.setItem(UEBERNAHME_SNAP, raw);
+    const probeRaw = storage.getItem(UEBERNAHME_SNAP);
+    if (probeRaw !== raw) return null;
+    const probe = JSON.parse(probeRaw || "null");
+    if (probe?.accountId !== id || !probe?.werte) return null;
+    return Object.freeze({ accountId: id, werte: Object.freeze({ ...werte }) });
+  } catch { return null; }
+}
+
+const KONTO_CACHE_QUARANTAENE_KEYS = Object.freeze([
+  ...PERSONAL_DATA_KEYS,
+  ...VERALTETE_IMPORT_SNAPSHOT_KEYS,
+  ...ACCOUNT_CACHE_METADATA_KEYS,
+  UEBERNAHME_SNAP,
+  UEBERNOMMEN_KEY,
+]);
+const KONTO_CACHE_INHALT_KEYS = Object.freeze(
+  KONTO_CACHE_QUARANTAENE_KEYS.filter((key) => key !== ACCT_KEYS.owner && key !== ACCT_KEYS.transition),
+);
+
+/* Letzter lokaler Privacy-Zaun. Er wird absichtlich unabhängig vom Gast-
+   Rückholpunkt angeboten: Wenn dessen Schreiben (z.B. wegen Quota) scheitert,
+   ist ein leerer Gastcache sicherer als Kontodaten unter einer Gast-Sitzung. */
+export function quarantaeneKontoCache(storage = globalThis.localStorage, { behalteTransition = false } = {}) {
+  if (!storage?.getItem || !storage?.removeItem) return { ok: false, grund: "speicher-fehlt" };
+  let ersterFehler = null;
+  for (const key of KONTO_CACHE_INHALT_KEYS) {
+    try { storage.removeItem(key); }
+    catch (error) { ersterFehler ||= error; }
+  }
+  let rest = false;
+  for (const key of KONTO_CACHE_INHALT_KEYS) {
+    try { if (storage.getItem(key) != null) rest = true; }
+    catch (error) { ersterFehler ||= error; rest = true; }
+  }
+  if (rest) return { ok: false, grund: "quarantaene-unvollstaendig", error: ersterFehler };
+  /* Owner ist der persistente Restverdacht und wird deshalb wirklich zuletzt
+     entfernt — erst nachdem alle potenziell persönlichen Inhalte weg sind. */
+  try { storage.removeItem(ACCT_KEYS.owner); }
+  catch (error) { ersterFehler ||= error; }
+  try { if (storage.getItem(ACCT_KEYS.owner) != null) rest = true; }
+  catch (error) { ersterFehler ||= error; rest = true; }
+  if (rest) return { ok: false, grund: "owner-nicht-entfernt", error: ersterFehler };
+  if (!behalteTransition) {
+    try { storage.removeItem(ACCT_KEYS.transition); }
+    catch (error) { ersterFehler ||= error; }
+    try { if (storage.getItem(ACCT_KEYS.transition) != null) rest = true; }
+    catch (error) { ersterFehler ||= error; rest = true; }
+  }
+  return rest
+    ? { ok: false, grund: "transition-nicht-entfernt", error: ersterFehler }
+    : { ok: true, quelle: "konto-cache-quarantaene" };
+}
+
 /* Kontodaten sind nach dem Logout nicht länger der Gastbestand. Wenn ein
    Zustand von vor der Kontoaktivierung vorliegt, wird genau dieser restauriert;
    bei alten Installationen ohne Rückholpunkt werden alle accountgebundenen
    Töpfe entfernt. Gerätezustände wie KI-Grundwahl, Einstieg und Katalogcache
    bleiben davon ausdrücklich unberührt. */
-export function stelleGaststandNachAbmeldungWiederHer(accountId, storage = globalThis.localStorage) {
+export function stelleGaststandNachAbmeldungWiederHer(
+  accountId,
+  storage = globalThis.localStorage,
+  { behalteTransition = false } = {},
+) {
   const id = String(accountId || "");
   if (!storage?.getItem || !storage?.setItem || !storage?.removeItem) return { ok: false, grund: "speicher-fehlt" };
   try {
@@ -178,10 +257,44 @@ export function stelleGaststandNachAbmeldungWiederHer(accountId, storage = globa
     for (const key of PERSONAL_DATA_KEYS) {
       if (!Object.prototype.hasOwnProperty.call(werte, key) || werte[key] == null) storage.removeItem(key);
     }
+    for (const key of VERALTETE_IMPORT_SNAPSHOT_KEYS) storage.removeItem(key);
+    for (const key of ACCOUNT_CACHE_STATE_KEYS) storage.removeItem(key);
     storage.removeItem(UEBERNAHME_SNAP);
     storage.removeItem(UEBERNOMMEN_KEY);
+
+    /* Stille Storage-No-ops sind genauso gefährlich wie Würfe: Owner und
+       Transition dürfen erst verschwinden, wenn Gastwerte UND Vollwert-
+       Metadaten rückgelesen genau dem geplanten Stand entsprechen. */
+    for (const key of PERSONAL_DATA_KEYS) {
+      const erwartet = Object.prototype.hasOwnProperty.call(werte, key) && werte[key] != null
+        ? String(werte[key]) : null;
+      if (storage.getItem(key) !== erwartet) throw new Error(`Gaststand von ${key} wurde nicht bestätigt.`);
+    }
+    for (const key of [
+      ...VERALTETE_IMPORT_SNAPSHOT_KEYS,
+      ...ACCOUNT_CACHE_STATE_KEYS,
+      UEBERNAHME_SNAP,
+      UEBERNOMMEN_KEY,
+    ]) {
+      if (storage.getItem(key) != null) throw new Error(`Kontometadatum ${key} wurde nicht entfernt.`);
+    }
+    storage.removeItem(ACCT_KEYS.owner);
+    if (storage.getItem(ACCT_KEYS.owner) != null) throw new Error("Konto-Owner wurde nicht entfernt.");
+    if (!behalteTransition) {
+      storage.removeItem(ACCT_KEYS.transition);
+      if (storage.getItem(ACCT_KEYS.transition) != null) throw new Error("Konto-Transition wurde nicht entfernt.");
+    }
     return { ok: true, quelle: hatPassendenStand ? "gast-rueckholpunkt" : "konto-cache-entfernt" };
   } catch (error) {
+    /* Privacy vor Komfort: Kann der Gaststand etwa wegen Quota nicht
+       geschrieben werden, dürfen die Konto-Töpfe trotzdem niemals nach dem
+       Logout als Gast sichtbar bleiben. Entfernen ist bei voller Quote in der
+       Regel weiterhin möglich; Konto-Remote-Daten bleiben unangetastet. */
+    const quarantined = quarantaeneKontoCache(storage, { behalteTransition });
+    if (quarantined.ok) return {
+      ...quarantined,
+      warnung: "Der frühere Gaststand konnte nicht geschrieben werden; der lokale Kontocache wurde zum Schutz entfernt.",
+    };
     return { ok: false, grund: "wiederherstellung-fehlgeschlagen", error };
   }
 }
@@ -201,7 +314,10 @@ export async function fuehreUebernahmeAus({ lokaleWerte, uebernehmeKey, nurSchlu
     }
     let r;
     try { r = await uebernehmeKey(key, wert); }
-    catch (e) { r = { ok: false, error: String(e) }; }
+    catch (e) {
+      if (e?.code === "ACCOUNT_CONTEXT_CHANGED") throw e;
+      r = { ok: false, error: String(e) };
+    }
     if (r?.ok) {
       if (r.angelegt) gepusht.push(key);
       bericht.push({
@@ -247,8 +363,14 @@ export function baueVerifikation(lokaleWerte, remoteZeilenNachher) {
 }
 
 export function merkeUebernommen(accountId) {
-  try { localStorage.setItem(UEBERNOMMEN_KEY, JSON.stringify({ accountId: String(accountId || ""), t: new Date().toISOString() })); }
-  catch { /* best effort */ }
+  const id = String(accountId || "");
+  if (!id) return false;
+  try {
+    const raw = JSON.stringify({ accountId: id, t: new Date().toISOString() });
+    localStorage.setItem(UEBERNOMMEN_KEY, raw);
+    const probe = JSON.parse(localStorage.getItem(UEBERNOMMEN_KEY) || "null");
+    return probe?.accountId === id;
+  } catch { return false; }
 }
 export function istUebernommen(accountId) {
   try {
@@ -264,17 +386,32 @@ export function vergissUebernahme() {
    Lokalen Stand zurückschreiben UND die in diesem Lauf angelegten Kontozeilen
    wieder entfernen. Ohne den zweiten Teil bliebe das Konto belegt und der Nutzer
    käme nie wieder in den einfachen Erstübernahme-Fall zurück. */
-export async function nimmUebernahmeZurueck({ loescheRemote, gepusht = [] }) {
+export async function nimmUebernahmeZurueck({
+  loescheRemote, gepusht = [], storageContext = captureStorageContext(),
+}) {
   let snap;
   try { snap = JSON.parse(localStorage.getItem(UEBERNAHME_SNAP) || "null"); } catch { snap = null; }
   if (!snap || !snap.werte) throw new Error("Kein Rückholpunkt vorhanden.");
 
+  const fehler = [];
   for (const key of gepusht) {
-    try { await loescheRemote(key); } catch { /* einzelner Topf */ }
+    try {
+      const ergebnis = await loescheRemote(key);
+      if (ergebnis?.ok === false) fehler.push(key);
+    } catch { fehler.push(key); }
   }
-  for (const [key, wert] of Object.entries(snap.werte)) {
-    try { if (wert == null) await store.delete(key); else await store.set(key, wert); }
-    catch { /* einzelner Topf */ }
+  for (const key of PERSONAL_DATA_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(snap.werte, key)) continue;
+    const wert = snap.werte[key];
+    try {
+      if (wert == null) await storageContext.delete(key);
+      else await storageContext.set(key, wert);
+    } catch { fehler.push(key); }
+  }
+  if (fehler.length) {
+    const error = new Error(`Übernahme-Rücknahme unvollständig: ${[...new Set(fehler)].join(", ")}. Der Rückholpunkt bleibt erhalten.`);
+    error.code = "UEBERNAHME_ROLLBACK_UNVOLLSTAENDIG";
+    throw error;
   }
   vergissUebernahme();
   return { ok: true, t: snap.t };

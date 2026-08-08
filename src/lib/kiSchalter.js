@@ -32,6 +32,11 @@
 
 const KEY = "kd:ki";
 const KEY_VERSION = "kd:ki-version";
+/* Filmwissen kam innerhalb dieser Wahlfassung als eigenständig
+   kostenpflichtiger Opt-in hinzu. Die bestehende Marke bleibt absichtlich
+   gültig: Der Einstieg wird durch einen Versionssprung nicht erneut geöffnet.
+   Bestandsnutzer behalten daher ihre bisherigen KI-Funktionen, während der
+   fehlende Filmwissen-Einzelwert über `standardAn: false` sicher AUS bleibt. */
 export const KI_WAHL_VERSION = "e8-v1";
 
 /* Ein fehlgeschlagenes Schreiben darf besonders beim AUSSCHALTEN nicht den
@@ -79,6 +84,12 @@ export const KI_FUNKTIONEN = {
     beschreibung: "Für unbewertete Filme auf Wunsch eine persönliche Vorbewertung erstellen.",
     /* Kern-KI-Task: Ein deterministischer Ersatz wäre keine Prognose, sondern
        eine falsch etikettierte Heuristik. */
+    beiAus: "ausblenden",
+  },
+  filmwissen: {
+    label: "Belegtes Filmwissen recherchieren",
+    beschreibung: "Separat aktivieren und für einen Film auf ausdrücklichen Klick einen belegten Recherchebericht erstellen.",
+    standardAn: false,
     beiAus: "ausblenden",
   },
   stapelimport: {
@@ -200,7 +211,16 @@ export function kiAn(name, storage = globalThis.localStorage) {
   if (typeof name !== "string" || !name) return false;
   if (!kiGrundsaetzlichAn(storage)) return false;
   if (!Object.prototype.hasOwnProperty.call(KI_FUNKTIONEN, name)) return false;
-  return ladeStand(storage).funktionen[name] !== false;
+  return istEinzelfunktionAn(name, ladeStand(storage));
+}
+
+/* Gemeinsame Darstellungs- und Laufzeitregel. Bisher duplizierte die
+   Oberfläche `!== false`; das wäre für einen neuen kostenpflichtigen Opt-in
+   gefährlich, weil sie „an" zeigen könnte, während der Laufzeitpfad sperrt. */
+export function istEinzelfunktionAn(name, stand) {
+  if (!Object.prototype.hasOwnProperty.call(KI_FUNKTIONEN, name)) return false;
+  const wert = stand?.funktionen?.[name];
+  return KI_FUNKTIONEN[name].standardAn === false ? wert === true : wert !== false;
 }
 
 /* Für die Oberfläche: Was tut die App bei KI=aus mit dieser Funktion?

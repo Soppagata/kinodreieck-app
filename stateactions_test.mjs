@@ -56,6 +56,8 @@ const kinoTab = fs.readFileSync("src/tabs/KinoTab.jsx", "utf8");
 const mediathekTab = fs.readFileSync("src/tabs/MediathekTab.jsx", "utf8");
 const cage = fs.readFileSync("src/components/CageAlphabet.jsx", "utf8");
 const controller = fs.readFileSync("src/controllers/useIntelligenceController.js", "utf8");
+const articleController = fs.readFileSync("src/controllers/useArticleController.js", "utf8");
+const confirmedStateController = fs.readFileSync("src/controllers/useConfirmedStorageState.js", "utf8");
 
 for (const [name, quelle, muster] of [
   ["Artikel", app + controller, /setArtikelListe\(\s*\(prev\)/],
@@ -76,8 +78,10 @@ check("Filter-Persistenz läuft außerhalb der React-State-Updater",
 check("Cage-Start führt Animation und Hooks nicht in einem State-Updater aus",
   !/setPhase\(\s*\(/.test(cage) && /gestartet\.current/.test(cage));
 check("Artikel- und Entdecken-Aktionen besitzen je einen serialisierten Schreibweg",
-  /const schreibeArtikel = useCallback/.test(app)
-  && /const schreibeEntdeckenStatus = useCallback/.test(app)
+  /const schreibeArtikel = useCallback/.test(articleController)
+  && /setArtikelListe, schreibeArtikel, transaktionArtikel/.test(app)
+  && /schreibe:\s*schreibeEntdeckenStatus/.test(app)
+  && /erstelleBestaetigtenStateWriter/.test(confirmedStateController)
   && /schreibeEntdeckenStatus=\{schreibeEntdeckenStatus\}/.test(app)
   && !/const schreibeEntdeckenStatus = useCallback/.test(streamingTab));
 check("Leichter Streaming-Boot liest nie mehr die kombinierte Katalogzeile",

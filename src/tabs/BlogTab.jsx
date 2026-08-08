@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { gleicheArtikelAb, MAX_LISTE } from "../lib/artikel.js";
@@ -9,6 +9,7 @@ import { hatDreieck, ALLE_TYPEN, normalisiereTyp } from "../lib/typen.js";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { IconClose, IconDelete } from "../components/ui.jsx";
+import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
 
 /* ================= BLOG =================
    Flow (Spec): "Erstellen" speichert sofort mit status "wartet" -> Abgleich
@@ -20,7 +21,7 @@ import { IconClose, IconDelete } from "../components/ui.jsx";
 const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", get color() { return T.wolfram; }, margin: "0 0 10px" };
 const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, get color() { return T.rauch; } };
 /* ---------- Eingabemaske ---------- */
-function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
+export function ArtikelMaske({ vorlage, onErstellen, onAbbrechen, angemeldet }) {
   const [titel, setTitel] = useState(vorlage ? vorlage.titel : "");
   const [autor, setAutor] = useState(vorlage ? vorlage.autor : "Max");
   const [text, setText] = useState(vorlage ? vorlage.text : "");
@@ -29,8 +30,23 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
   const [geteilt, setGeteilt] = useState(vorlage ? !!vorlage.geteilt : false);
   const [liste, setListe] = useState(vorlage ? vorlage.liste.map((l) => ({ eingabe: l.eingabe, jahr: l.jahr ? String(l.jahr) : "", typ: l.typ ? normalisiereTyp(l.typ) : "" })) : []);
   const [fehler, setFehler] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+  const speichertRef = useRef(false);
 
   const setzeZeile = (i, k, v) => setListe(liste.map((z, j) => (j === i ? { ...z, [k]: v } : z)));
+  const speichern = async () => {
+    if (speichertRef.current) return;
+    if (!titel.trim() || !autor.trim() || !text.trim()) { setFehler("Titel, Autor und Text sind Pflicht."); return; }
+    const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
+      eingabe: z.eingabe.trim(), jahr: z.jahr ? Number(z.jahr) : null, typ: z.typ || null, ref: null,
+    }));
+    speichertRef.current = true; setSpeichert(true); setFehler("");
+    try {
+      const id = await onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
+      if (!id) setFehler("Artikel konnte nicht bestätigt gespeichert werden; deine Eingabe bleibt erhalten.");
+    } catch (error) { setFehler(error?.message || "Artikel konnte nicht gespeichert werden."); }
+    finally { speichertRef.current = false; setSpeichert(false); }
+  };
 
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -45,7 +61,7 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
         <input type="checkbox" checked={geordnet} onChange={() => setGeordnet(!geordnet)} />
         Liste ist eine Reihenfolge (nummeriert — z.B. Watch-Order) statt einer Sammlung
       </label>
-      {!gezogen && (
+      {!gezogen && angemeldet && (
         <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: T.wolfram, cursor: "pointer" }}>
           <input type="checkbox" checked={geteilt} onChange={() => setGeteilt(!geteilt)} />
           Shared — bei Freigabe im geteilten Ordner „Blogs für alle“ veröffentlichen
@@ -71,14 +87,8 @@ function ArtikelMaske({ vorlage, onErstellen, onAbbrechen }) {
       )}
       {fehler && <div style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</div>}
       <div className="kd-blog-form-actions">
-        <button style={btnStyle(true)} onClick={() => {
-          if (!titel.trim() || !autor.trim() || !text.trim()) { setFehler("Titel, Autor und Text sind Pflicht."); return; }
-          const l = liste.filter((z) => z.eingabe.trim()).map((z) => ({
-            eingabe: z.eingabe.trim(), jahr: z.jahr ? Number(z.jahr) : null, typ: z.typ || null, ref: null,
-          }));
-          onErstellen({ titel: titel.trim(), autor: autor.trim(), text, geordnet, geteilt, liste: l });
-        }}>{vorlage ? "Speichern" : "Erstellen"}</button>
-        <button className="kd-blog-zurueck" style={btnStyle(false)} onClick={onAbbrechen} aria-label="Bearbeitung abbrechen und zurück">← Zurück</button>
+        <button style={btnStyle(true)} disabled={speichert} onClick={() => void speichern()}>{speichert ? "Speichert …" : vorlage ? "Speichern" : "Erstellen"}</button>
+        <button className="kd-blog-zurueck" style={btnStyle(false)} disabled={speichert} onClick={onAbbrechen} aria-label="Bearbeitung abbrechen und zurück">← Zurück</button>
       </div>
     </div>
   );
@@ -143,11 +153,15 @@ function AbgleichPopup({ artikel, master, onSetzeRef, onFreigeben, onLoeschen, o
                 </div>
                 {hatDreieck(neuTyp) ? (
                   <FilmForm startOffen typOptionen={[neuTyp]} initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                    onAdd={(film) => { const id = onAddFilm(film); if (id) onSetzeRef(artikel.id, i, id, false); }}
+                    onAdd={(film) => mitBestaetigterStringId(
+                      () => onAddFilm(film), (id) => onSetzeRef(artikel.id, i, id, false),
+                    )}
                     onDone={() => setNeuFuer(null)} />
                 ) : (
                   <MedienForm typ={neuTyp} startOffen initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                    onAdd={(m) => { const id = onAddFilm(m); if (id) onSetzeRef(artikel.id, i, id, false); }}
+                    onAdd={(m) => mitBestaetigterStringId(
+                      () => onAddFilm(m), (id) => onSetzeRef(artikel.id, i, id, false),
+                    )}
                     onDone={() => setNeuFuer(null)} />
                 )}
               </div>
@@ -223,11 +237,15 @@ function LeseAnsicht({ artikel, master, onZurueck, onBearbeiten, onSpringeZuFilm
                           </div>
                           {hatDreieck(rotTyp) ? (
                             <FilmForm startOffen typOptionen={[rotTyp]} initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                              onAdd={(film) => { const id = onAddFilm(film); if (id) onSetzeRef(artikel.id, i, id, false); }}
+                              onAdd={(film) => mitBestaetigterStringId(
+                                () => onAddFilm(film), (id) => onSetzeRef(artikel.id, i, id, false),
+                              )}
                               onDone={() => setRotFuer(null)} />
                           ) : (
                             <MedienForm typ={rotTyp} startOffen initial={{ titel: le.eingabe, jahr: le.jahr || "" }}
-                              onAdd={(m) => { const id = onAddFilm(m); if (id) onSetzeRef(artikel.id, i, id, false); }}
+                              onAdd={(m) => mitBestaetigterStringId(
+                                () => onAddFilm(m), (id) => onSetzeRef(artikel.id, i, id, false),
+                              )}
                               onDone={() => setRotFuer(null)} />
                           )}
                         </div>
@@ -295,7 +313,8 @@ function EntdeckenAnsicht({ vorhandene, angemeldet, onZiehe, onZurueck }) {
         }
         quelle = result.blog;
       }
-      onZiehe(quelle);
+      const id = await onZiehe(quelle);
+      if (!id) throw new Error("Der Artikel konnte nicht bestätigt gespeichert werden.");
       setGezogenLokal((alt) => ({ ...alt, [key]: true }));
     } catch (error) {
       setAktionsFehler((alt) => ({ ...alt, [key]: errorText(error) }));
@@ -376,6 +395,7 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
   const [offenId, setOffenId] = useState(null); // aufgeklappte Karte in der Hub-Liste
   const [loeschFuer, setLoeschFuer] = useState(null); // Artikel-ID mit offener Lösch-Bestätigung
   const [loeschName, setLoeschName] = useState("");
+  const [loeschLaeuft, setLoeschLaeuft] = useState(false);
   /* Sprung von außen ("Kommt vor in", offene Referenzen): wartend -> Popup,
      freigegeben -> Lese-Ansicht. Als Effekt — nie während des Renderns. */
   useEffect(() => {
@@ -399,9 +419,11 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
 
   if (ansicht.typ === "maske") {
     return <ArtikelMaske vorlage={ansicht.id ? aktiv(ansicht.id) : null}
-      onErstellen={(daten) => {
-        const id = ansicht.id ? onAktualisieren(ansicht.id, daten) : onErstellen(daten);
-        setAnsicht({ typ: "popup", id });
+      angemeldet={angemeldet}
+      onErstellen={async (daten) => {
+        const id = await (ansicht.id ? onAktualisieren(ansicht.id, daten) : onErstellen(daten));
+        if (id) setAnsicht({ typ: "popup", id });
+        return id;
       }}
       onAbbrechen={() => setAnsicht(ansicht.id ? { typ: "lese", id: ansicht.id } : { typ: "liste" })} />;
   }
@@ -410,8 +432,8 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
     if (!a) return null; // KD-029: Reset läuft im Effekt, hier nur nichts rendern
     return <AbgleichPopup artikel={a} master={master}
       onSetzeRef={onSetzeRef}
-      onFreigeben={(id) => { onFreigeben(id); setAnsicht({ typ: "lese", id }); }}
-      onLoeschen={(id) => { onLoeschen(id); setAnsicht({ typ: "liste" }); }}
+      onFreigeben={async (id) => { if (await onFreigeben(id)) setAnsicht({ typ: "lese", id }); }}
+      onLoeschen={async (id) => { if (await onLoeschen(id)) setAnsicht({ typ: "liste" }); }}
       onSchliessen={() => setAnsicht({ typ: "liste" })}
       onAddFilm={onAddFilm} />;
   }
@@ -523,11 +545,17 @@ export function BlogTab({ artikel, master, fokusId, onFokusVerbraucht,
                         <input value={loeschName} onChange={(e) => setLoeschName(e.target.value)} placeholder="Autor"
                           style={{ ...inputStyle, width: 140, padding: "6px 9px", fontSize: 13 }} />
                         <button
-                          disabled={loeschName.trim().toLowerCase() !== a.autor.trim().toLowerCase()}
+                          disabled={loeschLaeuft || loeschName.trim().toLowerCase() !== a.autor.trim().toLowerCase()}
                           style={{ ...btnStyle(true), fontSize: 13, padding: "7px 14px", background: T.gefahr,
                             opacity: loeschName.trim().toLowerCase() === a.autor.trim().toLowerCase() ? 1 : 0.35 }}
-                          onClick={() => { onLoeschen(a.id); setLoeschFuer(null); setOffenId(null); }}>
-                          Endgültig löschen
+                          onClick={async () => {
+                            if (loeschLaeuft) return;
+                            setLoeschLaeuft(true);
+                            try {
+                              if (await onLoeschen(a.id)) { setLoeschFuer(null); setOffenId(null); }
+                            } finally { setLoeschLaeuft(false); }
+                          }}>
+                          {loeschLaeuft ? "Löscht …" : "Endgültig löschen"}
                         </button>
                       </div>
                     </div>

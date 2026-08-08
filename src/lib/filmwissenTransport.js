@@ -1,12 +1,18 @@
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
 export const FILMWISSEN_TIMEOUT_MS = 12000;
 export function createFilmwissenTransport({ config, getAccessToken,
-  fetchImpl = typeof fetch === "function" ? fetch : null, timeoutMs = FILMWISSEN_TIMEOUT_MS } = {}) {
-  return async ({ namespace, kennung, signal } = {}) => {
+  getAccountId = null, fetchImpl = typeof fetch === "function" ? fetch : null,
+  timeoutMs = FILMWISSEN_TIMEOUT_MS } = {}) {
+  return async ({ namespace, kennung, signal, accountId = null } = {}) => {
     const basis = String(config?.supabaseUrl || "").trim().replace(/\/+$/, "");
     if (!istSupabaseProjektUrl(basis) || typeof fetchImpl !== "function") return { ok: false, status: 500, grund: "nicht-konfiguriert" };
-    let token = null; try { token = await getAccessToken?.(); } catch { /* leer */ }
+    let token = null;
+    try { token = await getAccessToken?.({ erwarteteKontoId: accountId }); } catch { /* leer */ }
     if (!token) return { ok: false, status: 401, grund: "kein-sitzungstoken" };
+    if (accountId && typeof getAccountId === "function"
+        && String(getAccountId() || "") !== String(accountId)) {
+      return { ok: false, status: 401, grund: "konto-gewechselt" };
+    }
     const ctrl = new AbortController(); let timeout = false;
     const timer = setTimeout(() => { timeout = true; ctrl.abort(); }, timeoutMs);
     const stop = () => ctrl.abort();

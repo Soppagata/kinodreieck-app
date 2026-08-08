@@ -165,6 +165,22 @@ check("Distributionsseite eröffnet keinen KI- oder Fremdtransport",
    Der Scan umfasst auch die Download-Einzeldatei — sie wird mit ausgeliefert. */
 const downloadHtmlPfad = join(DIST, "download", "Kinodreieck.html");
 const downloadHtml = existsSync(downloadHtmlPfad) ? readFileSync(downloadHtmlPfad, "utf8") : "";
+check("Ausgelieferte Einzeldatei enthält Demo-, Kino- und Streaming-Seeds selbst",
+  (downloadHtml.match(/data-kd-einzeldatei-seed/g) || []).length === 1
+  && downloadHtml.includes("window.__KD_DEMO_SEED__")
+  && downloadHtml.includes("Der letzte Vorführer")
+  && downloadHtml.includes("Sommer der Kometen")
+  && downloadHtml.includes("Der stille Zeuge"));
+check("Ausgelieferte Einzeldatei hat keine versteckte Programmdateien-Abhängigkeit",
+  !downloadHtml.includes("Programmdateien/System/demo_masterliste.js")
+  && !downloadHtml.includes("Programmdateien/System/streaming_entdecken.js"));
+check("Einzeldatei bezeichnet den alten Programmstand als Archiv statt als live",
+  downloadHtml.includes("Archiviertes synthetisches Offline-Beispiel")
+  && downloadHtml.includes("kein aktuelles Kinoprogramm"));
+check("Web-Build behält seine bisherigen Sidecar-Kompatibilitätswege getrennt vom Download",
+  js.includes("Programmdateien/System/demo_masterliste.js")
+  && js.includes("Programmdateien/System/streaming_entdecken.js")
+  && existsSync(join(DIST, "Programmdateien", "System", "demo_masterliste.js")));
 const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml
   + "\n" + downloadSeite + "\n" + downloadInstall;
 const secretMuster = [
@@ -186,8 +202,16 @@ const secretMuster = [
 ];
 check("Browser-Bundle enthält keine bekannte Secret-Signatur",
   !secretMuster.some((muster) => muster.test(auslieferung)));
-check("Browser-Bundle enthält keine aktiven Legacy-Sync-Schlüssel",
-  !/kd:git:token|kd:sb:key|api\.github\.com/.test(js + "\n" + downloadHtml));
+/* Die beiden ehemaligen Secret-Schlüsselnamen müssen als reine
+   Upgrade-Löschliste im Bundle bleiben: Nur so entfernt ein normaler Boot
+   Altinstallationen zuverlässig. Aktiver Legacy-Sync verrät sich dagegen an
+   seinen Transport-/Konfigurationsmarkern, die die Cleanup-Liste nicht braucht. */
+check("Browser-Bundle enthält keine aktiven Legacy-Sync-Transporte",
+  !/api\.github\.com|kd:git:(?:repo|branch|sha|status)|kd:sb:(?:url|anon|owner|ver|status)/
+    .test(js + "\n" + downloadHtml));
+check("Browser-Bundle liefert die gezielte Legacy-Secret-Bereinigung aus",
+  [js, downloadHtml].every((artefakt) => artefakt.includes("kd:git:token")
+    && artefakt.includes("kd:sb:key")));
 check("Der öffentliche Publishable-Key bleibt erlaubt (er MUSS im Bundle stehen)",
   !secretMuster.some((muster) => muster.test("sb_publishable_abcdefghijklmnop")));
 check("Ein eingebautes Sitzungstoken würde erkannt",

@@ -177,6 +177,11 @@ export function KinoTab({
 
   return (
     <section ref={bereichRef}>
+      {programm?.status?.archiviert && (
+        <p className="kd-inline-meldung" role="status">
+          <strong>Archiviertes Offline-Beispiel.</strong> Die Termine sind synthetisch und zeigen kein aktuelles Kinoprogramm. Den dokumentierten Stand findest du unter Settings → Kinoprogramm-Status.
+        </p>
+      )}
       {/* Maschinenlesbarer Diagnoseanker: hält Datenzustands-Regressionen und
           Support-Ausgaben möglich, ohne den technischen Stand wieder in den
           Kino-Inhalt zu setzen. Sichtbar ist dieselbe Information nur unter
@@ -219,7 +224,7 @@ export function KinoTab({
       {!programm && loading !== "programm" && (
         <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px", fontSize: 14, color: T.rauch, lineHeight: 1.6 }}>
           {datenGesperrt ? (
-            <><strong style={{ color: T.wolfram }}>Datenbank noch nicht verbunden.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings → Datenmodus &amp; Verbindung ein.</>
+            <><strong style={{ color: T.wolfram }}>Datenbankzugang nicht eingerichtet.</strong> Gib den mitgeschickten Leseschlüssel im Verbindungsfenster oder unter Settings → Datenmodus &amp; Verbindung ein.</>
           ) : programmInfo?.code === ERROR_CODES.NO_DEMO_DATA ? (
             /* Kein Fehler, sondern ein ehrlicher Zwischenstand: die Demo-Zeile
                ist in der Datenbank noch nicht veröffentlicht. */
@@ -230,11 +235,11 @@ export function KinoTab({
             <><strong style={{ color: T.wolfram }}>Für das laufende Kinoprogramm ist eine Anmeldung nötig.</strong> Melde dich unter Settings → Konto an. Ohne Anmeldung zeigt die App den Demo-Schnappschuss — der steht für diesen Zugang gerade nicht bereit.</>
           ) : programmInfo?.fehler ? (
             <>
-              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Den Verbindungsstatus und den manuellen Notfallimport findest du unter Settings.
+              <strong style={{ color: T.wolfram }}>Kinoprogramm konnte nicht geladen werden.</strong> {programmInfo.fehler} Den Verbindungsstatus findest du unter Settings; der manuelle Notfallimport ist dort in der Desktopansicht verfügbar.
               {!angemeldet && " Als Gast siehst du ohnehin nur den Demo-Schnappschuss; angemeldet käme das laufende Programm."}
             </>
           ) : (
-            <>Noch kein Kinoprogramm geladen. Prüfe unter Settings → Datenmodus &amp; Verbindung, ob der gemeinsame Katalog verbunden ist.</>
+            <>Noch kein Kinoprogramm geladen. Prüfe unter Settings → Datenmodus &amp; Verbindung, ob Zugangsdaten für den gemeinsamen Katalog hinterlegt sind.</>
           )}
         </div>
       )}
@@ -561,12 +566,15 @@ function KompaktEintrag({
 function VerknuepfenSuche({ pf, master, updateFilm }) {
   const [q, setQ] = useState("");
   const [titelUebernehmen, setTitelUebernehmen] = useState(true);
+  const [speichert, setSpeichert] = useState(false);
+  const speichertRef = useRef(false);
   const nq = norm(q);
   const kandidaten = nq.length >= 2
     ? master.filter((f) => !["musik", "sonstiges"].includes(f.typ || "film")
         && (norm(f.titel).includes(nq) || norm(f.originaltitel || "").includes(nq))).slice(0, 6)
     : [];
-  const verknuepfe = (f) => {
+  const verknuepfe = async (f) => {
+    if (speichertRef.current) return;
     const changes = {};
     if (pf.film_at_id) changes.film_at_id = pf.film_at_id;
     if (titelUebernehmen && norm(pf.t) !== norm(f.titel)) {
@@ -576,7 +584,9 @@ function VerknuepfenSuche({ pf, master, updateFilm }) {
       if (!f.originaltitel || norm(f.originaltitel) === norm(f.titel)) changes.originaltitel = f.titel;
     }
     if (!Object.keys(changes).length) return;
-    updateFilm(f.id, changes); // Film wandert sofort hoch zu "Läuft & passt zu dir"
+    speichertRef.current = true; setSpeichert(true);
+    try { await updateFilm(f.id, changes); }
+    finally { speichertRef.current = false; setSpeichert(false); }
   };
   return (
     <div style={{ padding: "8px 0 2px", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -589,7 +599,7 @@ function VerknuepfenSuche({ pf, master, updateFilm }) {
         </label>
       )}
       {kandidaten.map((f) => (
-        <button key={f.id} onClick={() => verknuepfe(f)}
+        <button key={f.id} disabled={speichert} onClick={() => void verknuepfe(f)}
           title="Verknüpfen — setzt die film.at-ID in diesen Eintrag"
           style={{ ...btnStyle(false), textAlign: "left", textTransform: "none", letterSpacing: 0, fontSize: 13, padding: "6px 10px" }}>
           {f.titel}{f.jahr ? " (" + f.jahr + ")" : ""}
