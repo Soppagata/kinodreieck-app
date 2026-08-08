@@ -237,13 +237,6 @@ export function StreamingTab({
     setStreamFilterOffen(nv);
     store.set(K.filterStreaming, nv ? "1" : "0").catch(() => {});
   };
-  useEffect(() => {
-    const vonGlobalerLeiste = (event) => {
-      if (event.detail?.bereich === "streaming") toggleStreamFilter();
-    };
-    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-  });
   const setzeStatus = async (t, wert) => {
     const gespeichert = await schreibeEntdeckenStatus((prev) => {
       const next = { ...prev };

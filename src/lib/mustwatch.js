@@ -1,5 +1,5 @@
 /* ---------- Must-Watch-Liste + Besitz-Nachtrag (reine Logik, testbar) ----------
-   Die Must-Watch-Liste ist ein EIGENER Datentopf (kd:mustwatch, 10. Sync-Datei) —
+   Die Must-Watch-Liste ist ein EIGENER Datentopf (kd:mustwatch) —
    KEIN Filter über die Mediathek. Sie ERSETZT das frühere must_watch-Flag der
    Master (Entscheidung 18.07.2026): das Flag-Feld bleibt in den Daten erhalten
    (Kompatibilität), wird aber im UI nirgends mehr angeboten — die Liste ist die

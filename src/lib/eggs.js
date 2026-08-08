@@ -6,7 +6,7 @@
    Achievement = Unlock (Einbahn): ist die Schwelle qualifizierter Mediathek-
    Einträge einmal erreicht, bleibt das Egg freigeschaltet. WAS beim Feuern
    gezeigt wird, ist eine Live-Auswahl (qualifiziert ∩ aktuell verfügbar) —
-   Unlock ≠ Inhalt (Spec §2). Persistenz: kd:achievements (11. Sync-/Backup-
+   Unlock ≠ Inhalt (Spec §2). Persistenz: kd:achievements (eigener Sync-/Backup-
    Artefakt, additiv; Blob pro Schlüssel → kein Schema-Eingriff). */
 
 import config from "../data/eastereggs_config.json" with { type: "json" };

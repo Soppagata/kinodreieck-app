@@ -74,14 +74,6 @@ export function KinoTab({
     store.set(K.filterKino, nv ? "1" : "0").catch(() => {});
   };
   useEffect(() => {
-    const vonGlobalerLeiste = (event) => {
-      if (event.detail?.bereich === "kino") toggleFilterMenue();
-    };
-    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-  });
-
-  useEffect(() => {
     if (!fokusTreffer) return undefined;
     setSucheK(fokusTreffer.titel || "");
     setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);

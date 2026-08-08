@@ -169,13 +169,13 @@ export const K = {
   filterKino: "kd:filter-kino",       // Kino-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
   filterStreaming: "kd:filter-streaming", // Streaming-Filterleiste auf/zu (Sicht-Präferenz, "0"=zu)
   vokabular: "kd:vokabular",          // eigene Stimmungswörter für die Suche [{wort, genres[], tags[]}]
-  mustwatch: "kd:mustwatch",          // Must-Watch-Liste (eigener Topf, 10. Sync-Datei) — ersetzt das must_watch-Flag
+  mustwatch: "kd:mustwatch",          // Must-Watch-Liste (eigener persönlicher Topf) — ersetzt das must_watch-Flag
   start: "kd:start",                  // Beta-Startwahl: "demo" (Schaufenster) | "clean" (leer) — steuert Boot-Fallback & Reset
   startVersion: "kd:start-version",   // bestätigt, dass die Wahl im aktuellen Demo-Onboarding bewusst getroffen wurde
   startAuftrag: "kd:start-auftrag",   // zuletzt verbrauchter Installer-Token — verhindert erneutes Löschen beim Reload
   einstieg: "kd:einstieg",            // versionierter Ersteinstieg {version, abgeschlossen, weg}
   treiber: "kd:treiber",              // Storage-Treiber-Wahl: "git" | "supabase" (fehlt => bisheriges Verhalten)
-  achievements: "kd:achievements",    // Egg-Achievements (11. Sync-/Backup-Artefakt, Block 3): Set freigeschalteter Egg-IDs
+  achievements: "kd:achievements",    // Egg-Achievements (eigener Sync-/Backup-Topf, Block 3): Set freigeschalteter Egg-IDs
   katalogKey: "kd:katalog:key",       // vom Tester eingegebener Supabase-Publishable-Key (nur Lesen)
   katalogUrl: "kd:katalog:url",       // lokaler URL-Fallback; im Pages-Build vorbelegt
   demoSeed: "kd:demo-seed",           // IDs/Schlüssel der geladenen Demo-Beilage für gezieltes Entfernen

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { T, btnStyle } from "../lib/tokens.js";
+import { T } from "../lib/tokens.js";
 import { Klappe } from "./ui.jsx";
 import quellenDefault from "../data/quellen_default.json";
 import { K } from "../services/storage.js";
@@ -19,7 +19,7 @@ function kurzQuelle(n) {
   return n;
 }
 
-export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], toggleQuelle, teil = "alle", onRefresh, datenGesperrt = false }) {
+export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null, auswahl = [], toggleQuelle, teil = "alle", datenGesperrt = false }) {
   const datenDa = !!(bekannt && bekannt.stand);
   const entdeckenDa = !!(entdecken && entdecken.stand);
   const stand = datenDa ? new Date(bekannt.stand) : null;
@@ -176,14 +176,6 @@ export function StreamingEinstellungen({ bekannt, entdecken, katalogInfo = null,
       </div>
       </Klappe>}
 
-      {(teil === "alle" || teil === "refresh") && <Klappe titel="Programmdaten aktualisieren">
-      <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
-        <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>
-          Lädt den letzten von der Pipeline bereitgestellten Kino- und Streamingstand erneut aus der Datenbank. Dabei entstehen keine Watchmode-Requests.
-        </p>
-        {onRefresh && <button style={btnStyle(false)} onClick={onRefresh}>Jetzt aus der Datenbank neu laden</button>}
-      </div>
-      </Klappe>}
     </div>
   );
 }

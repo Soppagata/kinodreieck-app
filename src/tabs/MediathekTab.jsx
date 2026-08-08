@@ -20,7 +20,7 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
    - Im Besitz: NUR Einträge mit mindestens einer physischen Quelle
      (quellen.js-Art — Prime/Apple-Käufe zählen NICHT als Besitz).
      Unbewertete Einträge sind hier erstklassige Bürger (Filter + Badge).
-   - Must-Watch: eigener Datentopf (10. Sync-Datei), KEIN Master-Filter.
+   - Must-Watch: eigener persönlicher Datentopf, KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
@@ -93,14 +93,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setFilterMenueOffen(nv);
     store.set(K.filterMediathek, nv ? "1" : "0").catch(() => {});
   };
-  useEffect(() => {
-    const vonGlobalerLeiste = (event) => {
-      if (event.detail?.bereich === "mediathek") toggleFilterMenue();
-    };
-    window.addEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-    return () => window.removeEventListener("kd:toggle-bereichsfilter", vonGlobalerLeiste);
-  });
-
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };
   const typReihe = [HAUPTTYP[typTab]].concat(ALLE_TYPEN.filter((t) => t !== HAUPTTYP[typTab]));

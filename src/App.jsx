@@ -812,7 +812,7 @@ export default function App() {
     return naechsteLokaleMasterHerkunft(masterHerkunftRef.current);
   }, []);
 
-  /* ================= MUST-WATCH-LISTE (eigener Topf, 10. Sync-Datei) ================= */
+  /* ================= MUST-WATCH-LISTE (eigener persönlicher Topf) ================= */
   const {
     mustwatch, setMustwatch, mustwatchGeladen, ersetzeMustwatch,
     mustwatchRef, transaktionMustwatchVorbereitet,
@@ -2123,7 +2123,6 @@ export default function App() {
             uebernehmePaket={uebernehmePaket}
             addFilm={addFilm} addFilme={addFilme}
             einstellungen={einstellungen} setzeEinstellung={setzeEinstellung} waehleModus={waehleModus}
-            achievements={achievements ? [...achievements] : []}
             streamingBekannt={streamingBekannt} streamingEntdecken={streamingEntdecken}
             streamingInfo={streamingInfo}
             auswahl={auswahl} toggleQuelle={toggleQuelle} heuristikAn={heuristikAn}
