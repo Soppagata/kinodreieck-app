@@ -22,6 +22,25 @@ export const IMPORT_INFO = (stand) => ({
   code: null,
 });
 
+/* Getrennte Streaming-Zeilen tragen Stand/Ablauf als kd_catalog-Metadaten.
+   Historische Payloads enthalten den Stand zusätzlich selbst; Demo-Zeilen
+   müssen das nicht. Die Oberfläche erhält trotzdem genau eine stabile Form,
+   damit vorhandene Titel nicht bloß wegen des fehlenden Duplikatfelds als
+   „noch kein Katalog" verschwinden. Payload-Werte gewinnen, wenn sie bereits
+   gesetzt sind. */
+export function streamingPayloadMitMetadaten(ergebnis) {
+  const payload = ergebnis?.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  return {
+    ...payload,
+    stand: payload.stand ?? ergebnis?.stand ?? null,
+    gueltigBis: payload.gueltigBis ?? ergebnis?.gueltigBis ?? null,
+    demo: typeof payload.demo === "boolean"
+      ? payload.demo
+      : ergebnis?.variante === "demo",
+  };
+}
+
 export function demoSeedZuLadung(seed) {
   const master = seed?.master || {};
   return {

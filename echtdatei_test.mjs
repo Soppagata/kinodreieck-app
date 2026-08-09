@@ -59,6 +59,14 @@ const snapDemo = {
     vorstellungen: [{ ...((snap.filme || [])[0].vorstellungen || [])[0], zeit: SPAETESTE_ZEIT }],
   }],
 };
+/* Reale getrennte Demo-Zeilen tragen `stand` als kd_catalog-Spalte, nicht
+   zwingend nochmals in der Payload. Genau diese Form muss die fertige App
+   projizieren; Snapshot-Fixtures mit eigenem `stand` würden den Fehler
+   verdecken. */
+function ohneStreamingZeilenmetadaten(payload) {
+  const { stand, gueltigBis, gueltig_bis, demo, ...inhalt } = payload;
+  return inhalt;
+}
 const KATALOG_ZEILEN = {
   manifest: { payload: { stand: FIXED_ISO }, quelle: "manifest" },
   programm: { payload: snap, quelle: "film-at" },
@@ -67,8 +75,8 @@ const KATALOG_ZEILEN = {
   streaming_demo: { payload: { bekannt: bekanntSnapshot, entdecken: entdeckenSnapshot }, quelle: "demo-schnappschuss" },
   streaming_bekannt: { payload: { ...bekanntSnapshot, demo: false }, quelle: "watchmode" },
   streaming_entdecken: { payload: { ...entdeckenSnapshot, demo: false }, quelle: "watchmode" },
-  streaming_bekannt_demo: { payload: bekanntSnapshot, quelle: "demo-schnappschuss" },
-  streaming_entdecken_demo: { payload: entdeckenSnapshot, quelle: "demo-schnappschuss" },
+  streaming_bekannt_demo: { payload: ohneStreamingZeilenmetadaten(bekanntSnapshot), quelle: "demo-schnappschuss" },
+  streaming_entdecken_demo: { payload: ohneStreamingZeilenmetadaten(entdeckenSnapshot), quelle: "demo-schnappschuss" },
 };
 const NUR_ANGEMELDET = new Set([
   "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
@@ -288,6 +296,15 @@ const datenTab = knopf(/^settings$/i);
 check("Tab heißt Settings", !!datenTab);
 if (datenTab) { datenTab.click(); await warte(600); }
 check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()));
+const katalogStatus = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
+if (katalogStatus && !katalogStatus.parentElement.open) {
+  katalogStatus.click(); await warte(250);
+}
+check("Streaming-Demo mit Stand nur auf der Katalogzeile bleibt auch in Settings geladen",
+  !!katalogStatus
+  && !/Noch kein Katalog geladen/.test(text())
+  && /Öffentliche Beispieldaten/.test(text()));
 /* Easter-Egg-Modi: versteckt unter dem „Max"-Link in Über & Rechtliches */
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);

@@ -19,7 +19,12 @@ const programmSnapshot = EINZELDATEI_BUILD ? Object.freeze({
 }) : programmSnapshotRoh;
 
 export { streamingBekanntSnapshot, streamingEntdeckenSnapshot, programmSnapshot };
-export { zeitpunkt, IMPORT_INFO, demoSeedZuLadung } from "../lib/catalogProjection.js";
+export {
+  zeitpunkt,
+  IMPORT_INFO,
+  demoSeedZuLadung,
+  streamingPayloadMitMetadaten,
+} from "../lib/catalogProjection.js";
 
 function hatUnsicherenLegacyDemoSeed() {
   try {

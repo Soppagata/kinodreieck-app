@@ -41,6 +41,7 @@ import {
   zeitpunkt,
   IMPORT_INFO,
   demoLadung,
+  streamingPayloadMitMetadaten,
   ladeEntdeckenBeilage,
   streamingBekanntSnapshot,
   streamingEntdeckenSnapshot,
@@ -1621,7 +1622,7 @@ export default function App() {
       try {
         const r = await holeEinmal(streamingBekanntLaufRef, "streamingBekannt", 15000);
         if (veraltet() || !snapshotFreigabeRef.current) return;
-        roh = { ...roh, bekannt: r.payload };
+        roh = { ...roh, bekannt: streamingPayloadMitMetadaten(r) };
         streamingRohRef.current = roh;
         streamingGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_KNOWN);
@@ -1651,7 +1652,7 @@ export default function App() {
       try {
         const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
         if (veraltet() || !snapshotFreigabeRef.current) return;
-        roh = { ...roh, entdecken: r.payload };
+        roh = { ...roh, entdecken: streamingPayloadMitMetadaten(r) };
         streamingRohRef.current = roh;
         entdeckenGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);

@@ -13,7 +13,11 @@ import {
   planeMustwatchLoeschung,
   planeMustwatchSprung,
 } from "./src/lib/libraryProjection.js";
-import { zeitpunkt, IMPORT_INFO } from "./src/lib/catalogProjection.js";
+import {
+  zeitpunkt,
+  IMPORT_INFO,
+  streamingPayloadMitMetadaten,
+} from "./src/lib/catalogProjection.js";
 import { gruppiereDienstBadges } from "./src/lib/dienste.js";
 import { appHilfeAntwort } from "./src/lib/appHilfe.js";
 import { localDriver, setStorageDriver } from "./src/lib/storage.js";
@@ -481,6 +485,26 @@ const importInfo = IMPORT_INFO(123);
 check("Manueller Import erbt weder Variante noch Fehler- oder Ablaufetikett",
   importInfo.stand === 123 && importInfo.variante === null
   && importInfo.code === null && importInfo.abgelaufen === false);
+
+const streamingDemo = streamingPayloadMitMetadaten({
+  payload: { titel: [{ watchmode_id: 1 }], region: "AT" },
+  stand: "2026-07-15T11:00:00Z",
+  gueltigBis: "2026-08-29T22:13:00Z",
+  variante: "demo",
+});
+check("Getrennte Streaming-Demo übernimmt Katalogmetadaten in die Anzeigepayload",
+  streamingDemo.stand === "2026-07-15T11:00:00Z"
+  && streamingDemo.gueltigBis === "2026-08-29T22:13:00Z"
+  && streamingDemo.demo === true
+  && streamingDemo.titel.length === 1);
+const streamingEigen = streamingPayloadMitMetadaten({
+  payload: { titel: [], stand: "payload-stand", gueltigBis: "payload-ablauf", demo: false },
+  stand: "zeilen-stand", gueltigBis: "zeilen-ablauf", variante: "demo",
+});
+check("Vorhandene Streaming-Payloadmetadaten werden nicht überschrieben",
+  streamingEigen.stand === "payload-stand"
+  && streamingEigen.gueltigBis === "payload-ablauf"
+  && streamingEigen.demo === false);
 
 const app = fs.readFileSync("src/App.jsx", "utf8");
 const onboarding = fs.readFileSync("src/controllers/onboardingController.js", "utf8");
