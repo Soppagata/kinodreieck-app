@@ -169,7 +169,7 @@ create index kd_radar_subscriptions_active_target
 create table public.kd_radar_target_shares (
   account_id        uuid        not null references auth.users(id) on delete cascade,
   target_id         uuid        not null references public.kd_radar_targets(target_id) on delete cascade,
-  share_status      text        not null default 'active' check (share_status in ('active','revoked')),
+  share_status      text        not null default 'active' check (share_status = 'active'),
   last_operation_id uuid        not null,
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
@@ -728,9 +728,16 @@ begin
   end if;
 
   if p_status <> 'active' then
-    update public.kd_radar_target_shares
-       set share_status = 'revoked', last_operation_id = p_operation_id, updated_at = now()
-     where account_id = v_account_id and target_id = p_target_id and share_status = 'active';
+    delete from public.kd_radar_target_shares
+     where account_id = v_account_id and target_id = p_target_id;
+  end if;
+  if p_status = 'removed' then
+    delete from public.kd_radar_receipts r
+     using public.kd_radar_event_versions v, public.kd_radar_events e
+     where r.account_id = v_account_id
+       and r.event_version_id = v.event_version_id
+       and v.event_id = e.event_id
+       and e.target_id = p_target_id;
   end if;
 
   v_checksum := public.kd_radar_account_checksum(v_account_id);
@@ -834,15 +841,20 @@ begin
   v_revision := v_revision + 1;
   v_status := case when p_share_enabled then 'active' else 'revoked' end;
 
-  insert into public.kd_radar_target_shares (
-    account_id, target_id, share_status, last_operation_id, created_at, updated_at
-  ) values (
-    v_account_id, p_target_id, v_status, p_operation_id, now(), now()
-  )
-  on conflict (account_id, target_id) do update
-    set share_status = excluded.share_status,
-        last_operation_id = excluded.last_operation_id,
-        updated_at = now();
+  if p_share_enabled then
+    insert into public.kd_radar_target_shares (
+      account_id, target_id, share_status, last_operation_id, created_at, updated_at
+    ) values (
+      v_account_id, p_target_id, 'active', p_operation_id, now(), now()
+    )
+    on conflict (account_id, target_id) do update
+      set share_status = 'active',
+          last_operation_id = excluded.last_operation_id,
+          updated_at = now();
+  else
+    delete from public.kd_radar_target_shares
+     where account_id = v_account_id and target_id = p_target_id;
+  end if;
 
   v_checksum := public.kd_radar_account_checksum(v_account_id);
   update public.kd_radar_account_state

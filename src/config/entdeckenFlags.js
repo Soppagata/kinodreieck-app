@@ -13,7 +13,7 @@ export const RADAR_SERVER_FLAG_NAMES = Object.freeze([
   "radar_aktiv",
   "radar_scheduler_aktiv",
   "radar_provider_aktiv",
-  "radar_discovery_aktiv",
+  "radar_proposal_import_aktiv",
   "radar_shares_aktiv",
 ]);
 

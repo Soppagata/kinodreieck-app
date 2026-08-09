@@ -220,7 +220,7 @@ check("Browserflags sind vollständig fail-closed und Serverflags getrennt benan
   assert.deepEqual(ENTDECKEN_PARKED_FLAGS, ["radarPeople"]);
   assert.equal(createEntdeckenFlags({ VITE_RADAR_PEOPLE_ENABLED: "true" }).radarPeople, false);
   assert.deepEqual(RADAR_SERVER_FLAG_NAMES, [
-    "radar_aktiv", "radar_scheduler_aktiv", "radar_provider_aktiv", "radar_discovery_aktiv", "radar_shares_aktiv",
+    "radar_aktiv", "radar_scheduler_aktiv", "radar_provider_aktiv", "radar_proposal_import_aktiv", "radar_shares_aktiv",
   ]);
 });
 

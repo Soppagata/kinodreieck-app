@@ -48,13 +48,14 @@ check("Event-Radar-Tabellen sind additiv und Personen-Automatik bleibt absent", 
   assert.doesNotMatch(sql, /radar_discovery_aktiv/i);
 });
 
-check("Kreisfreigaben sind vom Abo und von Personen-Discovery getrennt", () => {
+check("Kreisfreigaben sind vom Abo getrennt und werden bei Widerruf zweckgebunden entfernt", () => {
   const shares = sql.match(/create table public\.kd_radar_target_shares \(([\s\S]*?)\n\);/)?.[1] || "";
   assert.match(shares, /primary key \(account_id, target_id\)/);
-  assert.match(shares, /share_status\s+text[\s\S]*?'active','revoked'/);
+  assert.match(shares, /share_status\s+text[\s\S]*?check \(share_status = 'active'\)/);
   assert.doesNotMatch(shares, /person|discovery|receipt|subscription_status/i);
   assert.match(sql, /create table public\.kd_radar_share_operations/);
-  assert.match(sql, /update public\.kd_radar_target_shares[\s\S]*?share_status = 'revoked'/);
+  assert.match(sql, /if p_share_enabled then[\s\S]*?else\s+delete from public\.kd_radar_target_shares/);
+  assert.match(sql, /if p_status <> 'active' then\s+delete from public\.kd_radar_target_shares/);
 });
 
 check("Globaler Targetstatus bleibt vom persönlichen Subscriptionstatus getrennt", () => {
