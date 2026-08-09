@@ -14,18 +14,24 @@ reproduzierbaren Quellstand als Nachweis genügt.
    npm run check:function-release
    ```
 
-2. Den vollständigen Commit als nicht geheime Laufzeitversion setzen und genau
-   diesen Stand **vor der Migration** deployen:
+2. Genau diesen Stand zuerst deployen. Den vollständigen Commit erst nach
+   erfolgreichem Deploy als nicht geheime Laufzeitversion setzen:
 
    ```bash
    KD_FUNCTION_COMMIT="$(git rev-parse HEAD)"
-   npx supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT"
+   npx supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce \
+     && npx supabase secrets set \
+     KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT" \
+     --project-ref bscjgwcntapobyxsiyce
    unset KD_FUNCTION_COMMIT
-   npx supabase functions deploy ai-task
    ```
 
-   Noch keinen bezahlten Test starten. Ohne den neuen DB-Wert verweigert diese
-   Function jeden zahlenden Request absichtlich fail-closed.
+   Supabase stellt geänderte Function-Secrets ohne erneutes Deployment sofort
+   bereit. Das Secret darf deshalb nicht vor dem Code-Deploy geändert werden:
+   Sonst könnte die alte Function vorübergehend den neuen Commit melden. Wenn
+   Deploy oder Secret-Set scheitern, bleibt KI aus und kein Health-Ergebnis gilt
+   als Releasebeleg. Noch keinen bezahlten Test starten. Ohne den neuen DB-Wert
+   verweigert diese Function jeden zahlenden Request absichtlich fail-closed.
 
 3. Releasegebundene Migrationen **in dieser Reihenfolge** anwenden: zuerst
    `20260801194500_stapelimport_medien.sql`, danach

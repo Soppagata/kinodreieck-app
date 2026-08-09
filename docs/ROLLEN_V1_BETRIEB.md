@@ -179,7 +179,7 @@ einen weiteren ausdrücklichen STOP und darf nur nach `AGENTS.md` erfolgen.
 | Neue Function, altes Frontend | Function erzwingt Personal-AI serverseitig; nicht freigegebene Aufrufe enden vor Diagnose, Log und Anbieter |
 | Neues Staging-Frontend | Client projiziert dieselbe serverseitige Freigabe und maskiert bei Widerruf oder Access-Fehler sicher |
 
-**STOP-Einschränkung:** Das unveränderte Produktionsfrontend `bf82304` kennt
+**STOP-Einschränkung:** Das unveränderte Produktionsfrontend `3898152` kennt
 noch keine Access-Maske für lokale persönliche Caches. Ein dediziertes
 inaktives Testkonto kann dort trotz korrekt gesperrter Serverdaten und
 Serverwrites bereits vorhandene lokale Altdaten sehen. Dieser Zwischenzustand

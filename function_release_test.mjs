@@ -1,5 +1,6 @@
 /* Rein lokaler Vertrag für die Zuordnung eines Function-Artefakts zu Git. */
 
+import { readFileSync } from "node:fs";
 import { releaseInfo } from "./tools/function-release-info.mjs";
 
 let ok = 0;
@@ -39,5 +40,22 @@ try {
   gesperrt = true;
 }
 check("Nicht committierte Function-Quellen sind nicht deployfähig", gesperrt);
+
+const runbook = readFileSync(
+  new URL("./docs/FUNCTION_RELEASES.md", import.meta.url),
+  "utf8",
+);
+const deployPosition = runbook.indexOf("npx supabase functions deploy ai-task");
+const secretPosition = runbook.indexOf("&& npx supabase secrets set");
+const versionPosition = runbook.indexOf(
+  "KD_FUNCTION_BUILD_VERSION=\"$KD_FUNCTION_COMMIT\"",
+  secretPosition,
+);
+check(
+  "Release-Runbook deployt Code vor dem sofort wirksamen Build-Version-Secret",
+  deployPosition >= 0
+    && secretPosition > deployPosition
+    && versionPosition > secretPosition,
+);
 
 console.log(`function_release_test: ${ok} Checks bestanden.`);

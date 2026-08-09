@@ -360,8 +360,15 @@ check("Migration erzwingt den 500-Cent-Zaun atomar vor der Anbieter-RPC",
   && /p_reservierung > v_wirksam/.test(kostenMigration)
   && /p_task = 'filmwissen-synthese'[\s\S]{0,100}p_modell_alias is distinct from 'gross'/.test(kostenMigration)
   && /kd_ai_auftrag_starten_ohne_task_cap/.test(kostenMigration));
-check("Release-Reihenfolge deployt fail-closed und spielt beide offenen Migrationen geordnet",
-  releaseDoku.indexOf("genau\n   diesen Stand **vor der Migration** deployen") >= 0
+const functionDeployPosition = releaseDoku.indexOf(
+  "npx supabase functions deploy ai-task",
+);
+const buildSecretPosition = releaseDoku.indexOf(
+  "&& npx supabase secrets set",
+);
+check("Release-Reihenfolge deployt Code vor Secret und hält die Migrationen geordnet",
+  functionDeployPosition >= 0
+  && buildSecretPosition > functionDeployPosition
   && releaseDoku.indexOf("20260801194500_stapelimport_medien.sql")
     < releaseDoku.indexOf("20260808120000_ai_anbieter_request_kostenzaun.sql"));
 check("Function prueft denselben Kostenzaun vor kd_ai_auftrag_starten und meldet ihn in health",
