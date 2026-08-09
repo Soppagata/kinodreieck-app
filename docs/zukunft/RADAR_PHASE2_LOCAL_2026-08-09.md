@@ -3,6 +3,7 @@
 Stand: 09.08.2026
 Branch: `codex/entdecken-radar-local-phase2`
 Phase-1-Basis: lokaler Commit `a52a6c4` (`feat(radar): establish phase one contracts`)
+Phase-2-Commit: `66640d3` (`feat(radar): add local phase two foundation`)
 Liefergrenze: `LOCAL_ONLY_NOT_ACTIVATED`
 
 ## Ergebnis
@@ -14,8 +15,9 @@ kein Provider, keine KI, kein Scheduler und keine Routine aufgerufen oder
 aktiviert. Die Personen-Automatik bleibt nach dem `NO_GO` aus §6.1 vollständig
 geparkt.
 
-Phase 2 liegt absichtlich uncommitted am nächsten STOP. Der selektive
-Phase-1-Commit bleibt davon getrennt.
+Phase 2 wurde nach erneut grünen Verträgen selektiv als `66640d3` committed.
+Der Commit bleibt von Phase 1 und der späteren Entdecken-Oberfläche getrennt.
+Er wurde nicht gepusht.
 
 ## Lokaler Event-Radar
 
@@ -131,5 +133,7 @@ erst, einzeln und ohne `db push`:
 5. Grants/RLS/RPCs mit Wegwerfkonten positiv und negativ testen und Testreste
    vollständig entfernen.
 
-Migration, Deploy, UI-/Routine-Aktivierung, Provider-/KI-Aufruf und Push bleiben
-bis dahin außerhalb der Freigabe.
+Migration, Deploy, Routine-Aktivierung, Provider-/KI-Aufruf und Push bleiben
+bis dahin außerhalb der Freigabe. Die lokale Oberfläche aus Phase 3 wird
+getrennt in `RADAR_PHASE3_LOCAL_2026-08-09.md` belegt; sie aktiviert keine
+dieser Remote-Wirkungen.

@@ -362,6 +362,31 @@ export function upsertGuestRadarSubscription(state, {
   });
 }
 
+export function removeGuestRadarSubscription(state, targetId) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "guest") {
+    return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
+  }
+  const normalizedTargetId = text(targetId);
+  if (!isStableContractId(normalizedTargetId)) {
+    return Object.freeze({ ok: false, reason: "subscription-target-invalid", state, changed: false });
+  }
+  if (!state.subscriptions.some((entry) => entry.targetId === normalizedTargetId)) {
+    return Object.freeze({ ok: true, reason: "already-missing", state, changed: false, createsProviderJob: false });
+  }
+  const next = clone(state);
+  next.subscriptions = next.subscriptions.filter((entry) => entry.targetId !== normalizedTargetId);
+  /* Receipts gehören zu Eventversionen und dürfen bei einem Aboende nicht
+     blind gelöscht werden. Ein späteres erneutes Abo behält damit die eigene
+     bereits getroffene Anzeigeentscheidung. */
+  return Object.freeze({
+    ok: true,
+    reason: "removed",
+    state: freezeDeep(next),
+    changed: true,
+    createsProviderJob: false,
+  });
+}
+
 export function queueAccountRadarChange(state, {
   operationId, action, target, scope = "all", now = new Date().toISOString(),
 } = {}) {

@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from "react";
 
 const LABELS = Object.freeze({
   start: "Alles", kino: "Kino", mediathek: "Mediathek", streaming: "Streaming",
-  blog: "Blog", finder: "Alles", daten: "Settings",
+  blog: "Entdecken", finder: "Alles", daten: "Settings",
 });
 
 export function GlobalSearchBar({
   bereich, onSuchen, antwort, onAntwortSchliessen, onTreffer, onAlleErgebnisse,
-  menuOffen = false, onMenu,
+  menuOffen = false, onMenu, onSuchaktion, beobachteteIds = [], radarTargetIds = [],
 }) {
   const [text, setText] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const formRef = useRef(null);
   const eingabeRef = useRef(null);
   const dialogRef = useRef(null);
+  const beobachtet = new Set((beobachteteIds || []).map(String));
+  const imRadar = new Set((radarTargetIds || []).map(String));
   const absenden = async (event) => {
     event.preventDefault();
     const frage = text.trim();
@@ -108,11 +110,22 @@ export function GlobalSearchBar({
           </div>
           <div className="kd-globalsuche-treffer" aria-live="polite">
             {antwort.items.length > 0 ? antwort.items.map((item) => (
-              <button type="button" key={item.key} data-globaler-suchtreffer onClick={() => onTreffer?.(item)}>
-                <span>{item.bereichLabel}</span>
-                <strong>{item.titel}</strong>
-                {item.meta ? <small>{item.meta}</small> : null}
-              </button>
+              <div className="kd-globalsuche-trefferzeile" key={item.key}>
+                <button type="button" className="kd-globalsuche-ziel" data-globaler-suchtreffer onClick={() => onTreffer?.(item)}>
+                  <span>{item.bereichLabel}</span>
+                  <strong>{item.titel}</strong>
+                  {item.meta ? <small>{item.meta}</small> : null}
+                </button>
+                {item.searchActions?.watch || item.searchActions?.radar ? <div className="kd-globalsuche-aktionen" aria-label={`Aktionen für ${item.titel}`}>
+                  {item.searchActions.watch ? <button type="button"
+                    aria-pressed={beobachtet.has(String(item.searchActions.watch.watchmodeId))}
+                    onClick={(event) => { event.currentTarget.focus(); onSuchaktion?.(item, "watch"); }}>{beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}</button> : null}
+                  {item.searchActions.radar ? <button type="button"
+                    aria-pressed={imRadar.has(item.searchActions.radar.targetId)}
+                    disabled={imRadar.has(item.searchActions.radar.targetId)}
+                    onClick={(event) => { event.currentTarget.focus(); onSuchaktion?.(item, "radar"); }}>{imRadar.has(item.searchActions.radar.targetId) ? "Im Radar" : "Ins Radar"}</button> : null}
+                </div> : null}
+              </div>
             )) : <p>Kein direkter Treffer. Probiere einen Titel, ein Genre oder eine Frage zur App.</p>}
           </div>
           <button type="button" className="kd-globalsuche-alle" onClick={onAlleErgebnisse}>Ausführliche Ergebnisse öffnen</button>

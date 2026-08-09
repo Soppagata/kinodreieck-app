@@ -291,7 +291,7 @@ for (const viewport of VIEWPORTS) {
       expect(suchBox.x + suchBox.width).toBeLessThanOrEqual(viewport.width - 9);
       expect(viewport.height - suchBox.y - suchBox.height).toBeLessThanOrEqual(11);
 
-      for (const ziel of ["Kino", "Streaming", "Mediathek", "Blog", "Start", "Settings"]) {
+      for (const ziel of ["Kino", "Streaming", "Mediathek", "Entdecken", "Start", "Settings"]) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         const panel = popup.locator(".kd-mobile-menu");
@@ -368,6 +368,105 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+for (const viewport of VIEWPORTS) {
+  test(`Entdecken-Verwaltung ist Full-Sheet, fokussicher und überlauffrei ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("kd:radar", JSON.stringify({
+        format: "kinodreieck-radar-local", version: 1, authority: "guest",
+        subscriptions: [{
+          targetId: "fixture:target:radar-work-01", targetType: "work", region: "AT", scope: "all",
+          status: "active", authority: "local", serverRevision: null, serverChecksum: null,
+          updatedAt: "2026-08-09T12:00:00.000Z",
+        }],
+        outbox: [], shares: [], shareOutbox: [], receipts: [],
+        display: { showDismissed: false },
+        server: { revision: 0, checksum: null, reconciledAt: null },
+      }));
+    });
+    await page.goto("/");
+    await waehleMobileTab(page, "Entdecken");
+    await expect(page.locator(".kd-bereichshero h1")).toHaveText("Entdecken");
+    await expect(page.getByRole("tab", { name: "Empfehlungen" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Radar" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Meinungen" })).toBeVisible();
+
+    const ausloeser = page.getByRole("button", { name: /Entdecken verwalten/ });
+    await ausloeser.focus();
+    await ausloeser.click();
+    const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box.x).toBeLessThanOrEqual(1);
+    expect(box.y).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
+    expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    await expect(dialog.getByText("Noch keine Serie beobachtet.", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Synthetischer Kinofilm", { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => ({
+      position: document.body.style.position,
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+    }))).toEqual({ position: "fixed", locked: true });
+    await keineDokumentUeberbreite(page);
+
+    const focusables = dialog.locator('button:not(:disabled),input:not(:disabled)');
+    await expect(focusables.first()).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(focusables.last()).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(focusables.first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(ausloeser).toBeFocused();
+    await expect.poll(() => page.evaluate(() => ({
+      position: document.body.style.position,
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+    }))).toEqual({ position: "", locked: false });
+
+    await ausloeser.click();
+    await page.getByRole("button", { name: "Entdecken verwalten schließen und zurück" }).click();
+    await expect(page.getByRole("dialog", { name: "Entdecken verwalten" })).toBeHidden();
+    await keineDokumentUeberbreite(page);
+  });
+}
+
+test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussicher", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+  await page.locator("nav").getByRole("button", { name: "Entdecken", exact: true }).click();
+  const verwalten = page.getByRole("button", { name: /Entdecken verwalten/ });
+  await verwalten.focus();
+  await verwalten.click();
+  const manageDialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
+  const dialogBox = await manageDialog.boundingBox();
+  expect(dialogBox.width).toBeLessThan(900);
+  expect(dialogBox.height).toBeLessThan(860);
+  expect(dialogBox.x).toBeGreaterThan(150);
+  await page.keyboard.press("Escape");
+  await expect(manageDialog).toBeHidden();
+  await expect(verwalten).toBeFocused();
+
+  await page.getByRole("tab", { name: "Radar" }).click();
+  await page.getByRole("button", { name: "In mein Radar", exact: true }).click();
+  const preview = page.getByRole("dialog", { name: "Ins Radar" });
+  await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
+  await expect(preview.getByRole("checkbox")).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await page.keyboard.press("Escape");
+  await expect(preview).toBeHidden();
+
+  await page.locator(".kd-entdecken-proposal summary").click();
+  await page.getByRole("button", { name: "Synthetisches Beispiel einsetzen" }).click();
+  await page.getByRole("button", { name: "Nur Vorschau prüfen" }).click();
+  await expect(page.getByText("Writes: false · Routine: false · Auto-Retry: false", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await keineDokumentUeberbreite(page);
+});
 
 for (const viewport of VIEWPORTS) {
   test(`Neon Noir bleibt dekorativ und im iPhone-Viewport ${viewport.name}`, async ({ page }) => {

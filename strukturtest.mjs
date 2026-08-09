@@ -204,14 +204,16 @@ if (sucheFeld) {
   check("Globale Suche: Anfrage erzeugt Antwort im Popup", /Suchergebnisse/.test(text()) && /kult aus den 80ern/i.test(text()));
 }
 
-/* ---- 4. Blog: Erstellen-Maske öffnet ---- */
-const blogTab = knopf(/^blog$/i);
-if (blogTab) { blogTab.click(); await warte(400); }
+/* ---- 4. Entdecken/Meinungen: bestehende Blog-Maske bleibt erreichbar ---- */
+const entdeckenTab = knopf(/^entdecken$/i);
+if (entdeckenTab) { entdeckenTab.click(); await warte(400); }
+const meinungenTab = knopf(/^meinungen$/i);
+if (meinungenTab) { meinungenTab.click(); await warte(200); }
 const neuKnopf = [...doc.querySelectorAll("button")].find((b) => /neuer artikel|artikel schreiben|erstellen/i.test(b.textContent || ""));
-check("Blog: Erstellen-Knopf vorhanden", !!neuKnopf);
+check("Entdecken → Meinungen: Erstellen-Knopf vorhanden", !!neuKnopf);
 if (neuKnopf) {
   neuKnopf.click(); await warte(300);
-  check("Blog: Maske öffnet (Titel-Feld)", [...doc.querySelectorAll("input")].some((i) => /titel/i.test(i.placeholder || "")));
+  check("Entdecken → Meinungen: Blog-Maske öffnet (Titel-Feld)", [...doc.querySelectorAll("input")].some((i) => /titel/i.test(i.placeholder || "")));
 }
 
 /* ---- 5. Streaming: Ansichts-Schalter + Quellen-Auswahl ---- */

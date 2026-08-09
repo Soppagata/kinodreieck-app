@@ -53,6 +53,7 @@ import { useArticleController, useMasterPersistenceController } from "./controll
 import { useErrorQueue } from "./controllers/useErrorQueue.js";
 import { useMasterStateController } from "./controllers/useMasterStateController.js";
 import { useBackupExportController } from "./controllers/useBackupExportController.js";
+import { useEntdeckenRadarController } from "./controllers/useEntdeckenRadarController.js";
 import { starteEinzelExportDownload } from "./controllers/backupExportController.js";
 import { naechsteLokaleMasterHerkunft } from "./controllers/masterOriginController.js";
 import { useConfirmedStorageState } from "./controllers/useConfirmedStorageState.js";
@@ -91,10 +92,9 @@ import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
 import { MediathekTab } from "./tabs/MediathekTab.jsx";
 import { StreamingTab } from "./tabs/StreamingTab.jsx";
-import { BlogTab } from "./tabs/BlogTab.jsx";
+import { EntdeckenTab } from "./tabs/EntdeckenTab.jsx";
 import { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } from "./tabs/FinderTab.jsx";
 import { DatenTab } from "./tabs/DatenTab.jsx";
-
 import { EGGS_ENABLED } from "./lib/modus.js";
 import { SyncStatusChip } from "./components/SyncStatusChip.jsx";
 import { MobileNavigation, NAVIGATION } from "./components/AppNavigation.jsx";
@@ -105,6 +105,7 @@ import { CageAlphabet } from "./components/CageAlphabet.jsx";
 import { BereichsHero } from "./components/BereichsHero.jsx";
 import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 import { GlobalErrorQueue } from "./components/GlobalErrorQueue.jsx";
+import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
@@ -1301,6 +1302,14 @@ export default function App() {
   }, [serienKatalog, schreibeEntdeckenStatus]);
 
   const {
+    radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
+    aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
+    beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
+  } = useEntdeckenRadarController({
+    session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
+    entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
+  });
+  const {
     accountId,
     vorbewertungAktiv,
     vorbewertungSperrgrund,
@@ -2049,16 +2058,20 @@ export default function App() {
         )}
 
         {tab === "blog" && (
-          <BlogTab
-            artikel={artikelListe} master={refUniversum}
-            angemeldet={remoteKontoAktiv}
-            fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
-            onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
-            onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
-            onRetryPublication={wiederholePublikation}
-            onAddFilm={addFilm} onSpringeZuFilm={springeZuFilm}
-            exportArtikel={exportArtikel} importArtikel={importArtikel}
-            onZiehe={zieheSharedBlog}
+          <EntdeckenTab
+            fokusId={blogFokus} radarState={sichtbarerRadarState}
+            seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus} master={master || []}
+            streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} accountMode={radarAuthority === "account-cache"}
+            onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
+            onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
+            blogProps={{
+              artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,
+              onFokusVerbraucht: () => setBlogFokus(null),
+              onErstellen: erstelleArtikel, onAktualisieren: aktualisiereArtikel,
+              onSetzeRef: setzeArtikelRef, onFreigeben: freigebeArtikel, onLoeschen: loescheArtikel,
+              onRetryPublication: wiederholePublikation, onAddFilm: addFilm, onSpringeZuFilm: springeZuFilm,
+              exportArtikel, importArtikel, onZiehe: zieheSharedBlog,
+            }}
           />
         )}
 
@@ -2158,9 +2171,13 @@ export default function App() {
         antwort={globaleSuchantwort}
         onAntwortSchliessen={() => setGlobaleSuchantwort(null)}
         onTreffer={oeffneGlobalenTreffer}
+        onSuchaktion={fuehreGlobaleSuchaktionAus} beobachteteIds={beobachteteWatchmodeIds} radarTargetIds={radarTargetIds}
         onAlleErgebnisse={oeffneAusfuehrlicheSuche}
         menuOffen={mehrOffen} onMenu={toggleGlobalesMenu} />
       </div>{/* .kd-app */}
+      {radarPreviewTarget && (<RadarSubscriptionPreview target={radarPreviewTarget} radarState={sichtbarerRadarState}
+          accountMode={radarAuthority === "account-cache"} accountActive={remoteKontoAktiv} onConfirm={bestaetigeRadarVorschau} onClose={schliesseRadarPreview} />
+      )}
       {EGGS_ENABLED && toasts.length > 0 && (
         <div className="kd-toast-wrap" aria-live="polite" role="status">
           {toasts.map((t) => (

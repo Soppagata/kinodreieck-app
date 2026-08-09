@@ -516,6 +516,7 @@ for (const name of [
   "libraryController",
   "useIntelligenceController",
   "useMustwatchController",
+  "useEntdeckenRadarController",
   "useArticleController",
   "personalDataTransactionController",
   "useEggController",

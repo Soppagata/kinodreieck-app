@@ -101,6 +101,21 @@ await check("Scope-Änderung desselben Gastziels verbraucht keinen zweiten Slot"
   assert.equal(second.state.subscriptions[0].scope, "cinema");
 });
 
+await check("Gast kann ein Ziel lokal entfernen, ohne Receipts oder Providerarbeit zu erzeugen", () => {
+  let state = R.upsertGuestRadarSubscription(R.createEmptyLocalRadar(), { target: target("remove"), now: instant }).state;
+  state = R.setLocalRadarReceipt(state, {
+    eventId: "fixture:event:remove", versionId: "fixture:event-version:remove", status: "seen", now: instant,
+  }).state;
+  const removed = R.removeGuestRadarSubscription(state, "fixture:target:local-remove");
+  assert.equal(removed.ok, true);
+  assert.equal(removed.state.subscriptions.length, 0);
+  assert.equal(removed.state.receipts.length, 1);
+  assert.equal(removed.createsProviderJob, false);
+  const again = R.removeGuestRadarSubscription(removed.state, "fixture:target:local-remove");
+  assert.equal(again.ok, true);
+  assert.equal(again.reason, "already-missing");
+});
+
 await check("Accountänderung landet nur in der Outbox und aktiviert kein Abo", () => {
   const queued = R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
     operationId: "fixture:operation:account-01", action: "upsert", target: target(), now: instant,

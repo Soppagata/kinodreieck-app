@@ -5,11 +5,11 @@ Erstellungsreferenz: `7a51ce7` auf `codex/rollenlogik-private-demo`
 Planungsfortschreibung: `staging`/`origin/staging` `65a92df`, Produktion `3898152`
 Audit-Scope der Planungsdateien: `FUTURE_PLAN_METADATA_ONLY`
 
-> **Status: Planung plus lokaler, nicht aktivierter Phase-2-Beleg.**
+> **Status: Planung plus lokale, nicht aktivierte Phase-2- und Phase-3-Belege.**
 > Die Planungsdateien bleiben aus Rollen-v1 und der privaten
-> Demo-Schlussabnahme ausgeschlossen. Der gesonderte Phase-2-Lieferbeleg
-> dokumentiert ausschließlich lokalen Code; er ist weder remote migriert noch
-> deployed oder aktiviert.
+> Demo-Schlussabnahme ausgeschlossen. Die gesonderten Lieferbelege
+> dokumentieren ausschließlich lokale Commits; sie sind weder gepusht, remote
+> migriert, deployed noch aktiviert.
 
 ## Zweck
 
@@ -29,8 +29,9 @@ und höchstens zehn weiteren kuratierten Logins geplant. Eine Veröffentlichung,
 
 Die Planungsdateien wurden am 09.08.2026 zunächst bewusst ungetrackt geschützt
 und danach getrennt von Rollen-v1 im lokalen Radar-Phase-1-Commit `a52a6c4`
-versioniert. Dieser Commit ist nicht gepusht oder deployed. Der Phase-2-Beleg
-und der zugehörige lokale Code stehen am nächsten STOP weiterhin uncommitted.
+versioniert. Phase 2 folgte separat als lokaler Commit `66640d3`; Phase 3 folgt
+als eigener lokaler Liefercommit mit dem unten verlinkten Beleg. Keiner dieser
+Commits wurde gepusht, deployed oder aktiviert.
 
 ## Geltungsgrenze für Audit und Cleanup
 
@@ -65,11 +66,12 @@ filtern; der Marker allein ist keine technische Ausschlussautomatik.
 |---|---|---|
 | `ENTDECKEN_RADAR_EMPFEHLUNGEN_PLAN.md` | verbindlicher Produktvertrag für Entdecken, getrennte globale Suchaktionen, Statusgrenzen, Personen im Radar, kuratierte Radar-Freigaben, deterministische Empfehlungen und getrennte Österreich-Charts | ausformuliert; echte Chart-Ingestion ist bis zu Quellenrechten blockiert |
 | `RADAR_BEOBACHTUNGEN_PLAN.md` | technischer Daten-, Evidenz-, Kosten-, Datenschutz- und Rolloutplan für den global deduplizierten aktiven Webradar | ausformuliert; sichtbare UI und Begriffswahl werden vom Entdecken-Plan überstimmt |
-| `AUFTRAG_ENTDECKEN_RADAR.md` | aktueller Standalone-Bauauftrag für eine neue Session mit Phase-0-, Remote-, Rechte-, Provider-, Kosten- und Staging-STOPs | für die nächste Bauphase; Phase 0 bleibt read-only und endet im Freigabe-STOP |
+| `AUFTRAG_ENTDECKEN_RADAR.md` | Standalone-Bauauftrag mit Phase-0-, Remote-, Rechte-, Provider-, Kosten- und Staging-STOPs | Phasen 1–3 lokal umgesetzt; Phasen 4–6 bleiben an ihren Remote-STOPs blockiert |
 | `AUFTRAG_RADAR_NACH_DEMO.md` | älterer ausführlicher Radar-Auftrag | technische Referenz; nicht mehr als primären Handoff verwenden |
 | `DISCOVERY_TARGETS_SKIZZE.md` | Ergänzungsvertrag für Schauspiel-/Regiepersonen direkt in `Mein Radar`, intern als eigene Discovery-Schicht; Bücher, Spiele und weitere Rollen bleiben geparkt | erste Personenstufe entschieden; Umsetzung bleibt bis Pflichtspike und Baufreigabe blockiert |
 | `ENTSCHEIDUNGSLOG.md` | Entschiedenes, Geparktes und in der besprochenen Form Verworfenes | bei neuen Fakten fortschreiben |
-| `RADAR_PHASE2_LOCAL_2026-08-09.md` | lokaler Liefer-, Test- und STOP-Beleg für Event-Radar, getrennte Shares, Proposal-Validator und vorbereitete SQL-Basis | gebaut, nicht committed, nicht remote angewandt, nicht aktiviert |
+| `RADAR_PHASE2_LOCAL_2026-08-09.md` | lokaler Liefer-, Test- und STOP-Beleg für Event-Radar, getrennte Shares, Proposal-Validator und vorbereitete SQL-Basis | lokal committed als `66640d3`, nicht gepusht, nicht remote angewandt, nicht aktiviert |
+| `RADAR_PHASE3_LOCAL_2026-08-09.md` | lokaler Liefer-, Test- und STOP-Beleg für die sichtbare Entdecken-Oberfläche, Suchaktionen, Radar-/Proposal-Vorschauen und Mobile-Abnahme | gebaut, vollständig lokal getestet und separat committed; nicht gepusht, deployed oder aktiviert |
 
 ## Beförderungsvertrag
 

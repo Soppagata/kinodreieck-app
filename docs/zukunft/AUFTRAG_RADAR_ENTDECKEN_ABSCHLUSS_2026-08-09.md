@@ -3,7 +3,10 @@
 Stand: 09.08.2026
 Repository: `/Users/max/Documents/GitHub/kinodreieck-app`
 Branch: `codex/entdecken-radar-local-phase2`
-HEAD: `a52a6c4` (`feat(radar): establish phase one contracts`)
+Ausgangs-HEAD: `a52a6c4` (`feat(radar): establish phase one contracts`)
+Phase-2-Commit: `66640d3` (`feat(radar): add local phase two foundation`)
+Abschlussstatus: Phasen 1–3 lokal getrennt gebaut, getestet und committed;
+Push, Remote-Migration, Deploy und Aktivierung offen
 
 ## Ziel
 
@@ -18,18 +21,19 @@ Aktivierung, Featureflag-Öffnung sowie echte oder potenziell zahlende Aufrufe.
 ## Gesicherter Ist-Stand
 
 - Phase 1 ist lokal als `a52a6c4` committed, aber nicht gepusht oder deployed.
-- Phase 2 liegt lokal uncommitted vor; der Lieferbeleg steht in
+- Phase 2 ist lokal als `66640d3` committed; der Lieferbeleg steht in
   `docs/zukunft/RADAR_PHASE2_LOCAL_2026-08-09.md`.
-- `npm test` war vollständig grün; Phase 2 darin 94/94, die SQL-Migration aber
-  mangels lokaler PostgreSQL-Laufzeit nur statisch geprüft.
-- `src/lib/localEventRadar.js` und `src/lib/radarProposalValidator.js` sind noch
-  nicht in die Oberfläche eingebunden. Navigation und globale Suche zeigen
-  weiterhin `Blog`.
+- Phase 3 bindet den lokalen Radar und Proposal-Validator in den sichtbaren
+  Bereich `Entdecken` ein. Der technische Key `blog` sowie bestehende Blogdaten
+  und Deep-Links bleiben kompatibel.
+- Vollständiges `npm test`, die Mobile-Suite in Chromium und WebKit sowie die
+  Privacy-Regression sind grün. Die SQL-Migration bleibt mangels lokaler
+  PostgreSQL-Laufzeit nur statisch geprüft und wurde remote nicht angewandt.
 - Die Personen-Automatik bleibt nach dem `NO_GO` aus §6.1 geparkt. §8 ist hier
   enger auszulegen: keine aktive Personen-Discovery, keine Personen-Migration,
   kein RPC, kein Env-Schalter und kein Control, das Automatik verspricht.
 - `docs/zukunft/AUFTRAG_SOL_PRIVATPILOT_ABSCHLUSS_2026-08-09.md` gehört einem
-  anderen Task: nicht ändern, nicht stagen, nicht committen.
+  anderen Task und blieb unverändert, ungestagt und uncommitted.
 
 ## Phase A – Audit, dann STOP
 
@@ -70,6 +74,16 @@ Bis hier ausschließlich read-only arbeiten und auf Max' ausdrückliches
    hinterlassen.
 
 Danach STOP. Weder pushen noch eine Migration anwenden oder deployen.
+
+## Erreichter lokaler STOP
+
+- Phase 1: `a52a6c4`.
+- Phase 2: `66640d3`.
+- Phase 3: eigener lokaler Commit dieser Lieferung; Detailbeleg in
+  `RADAR_PHASE3_LOCAL_2026-08-09.md`.
+- Automatische lokale Abnahme: vollständig grün.
+- Praktische Owner-Abnahme, Push, CI, Remote-Migration, Deploy und Aktivierung:
+  nicht ausgeführt.
 
 ## Harte Grenzen
 

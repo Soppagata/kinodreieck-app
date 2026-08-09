@@ -15,9 +15,9 @@ const BEREICHE = Object.freeze({
     text: "Dein Programm und Entdeckungen aus den verbundenen Katalogen.",
   },
   blog: {
-    kicker: "Texte · Listen · Verknüpfungen",
-    titel: "Blog",
-    text: "Filme festhalten, einordnen und mit deiner Mediathek verbinden.",
+    kicker: "Empfehlungen · Ereignisse · Meinungen",
+    titel: "Entdecken",
+    text: "Persönliche Empfehlungen, dein lokaler Radar und alle bisherigen Artikel an einem Ort.",
   },
   finder: {
     kicker: "Filme · App-Hilfe · Orientierung",
