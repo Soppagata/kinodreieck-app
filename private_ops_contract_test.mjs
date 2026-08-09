@@ -116,6 +116,10 @@ const migrationSql = fs.readFileSync(
   "supabase/migrations/20260809220000_private_pilot_ops.sql",
   "utf8",
 );
+const radarMigrationSql = fs.readFileSync(
+  "supabase/migrations/20260809180000_event_radar_local_basis.sql",
+  "utf8",
+);
 const accountSelfServiceSql = fs.readFileSync(
   "src/services/accountSelfService.js",
   "utf8",
@@ -126,6 +130,21 @@ const edgeFunctionSql = fs.readFileSync(
 );
 const privateOpsUiSql = fs.readFileSync("src/components/PrivatePilotOps.jsx", "utf8");
 const authDriverSql = fs.readFileSync("src/lib/authDriver.js", "utf8");
+
+const constraintDrops = [...`${radarMigrationSql}\n${migrationSql}`.matchAll(
+  /drop constraint(?: if exists)?\s+([a-z0-9_]+)/gi,
+)].map((match) => match[1]);
+expect(
+  "Pre-Write-Migrationen enthalten nur den ausdrücklich erlaubten kd_personal-Constraint-DROP",
+  constraintDrops.length === 1 && constraintDrops[0] === "kd_personal_key_erlaubt",
+);
+expect(
+  "Private-Ops benötigt auf dem nachweislich leeren Erstradar keine Datenbackfills",
+  !/update public\.kd_radar_operations\s+set terminal_at/i.test(migrationSql)
+    && !/update public\.kd_radar_share_operations\s+set terminal_at/i.test(migrationSql)
+    && !/update public\.kd_radar_checks\s+set terminal_at/i.test(migrationSql)
+    && !/drop constraint/i.test(migrationSql),
+);
 
 expect(
   "Self-Service prüft Rollen-v1 vor jedem Service-Role-Datenpfad",
@@ -474,8 +493,8 @@ expect(
 );
 expect(
   "Self-Delete löscht Auth zuerst und stützt alle Projektionen auf Cascade",
-  /foreign key \(account_id\) references auth\.users\(id\) on delete cascade/i.test(migrationSql)
-    && /foreign key \(actor_id\) references auth\.users\(id\) on delete cascade/i.test(migrationSql)
+  /foreign key \(account_id\) references auth\.users\(id\) on delete cascade/i.test(`${radarMigrationSql}\n${migrationSql}`)
+    && /foreign key \(actor_id\) references auth\.users\(id\) on delete cascade/i.test(`${radarMigrationSql}\n${migrationSql}`)
     && !/delete from public\.kd_personal/i.test(extractFunction(migrationSql, "kd_private_delete_begin"))
     && edgeFunctionSql.indexOf("admin.auth.admin.deleteUser") < edgeFunctionSql.indexOf('rpc("kd_private_delete_finish"'),
 );
@@ -484,8 +503,8 @@ expect(
   /create trigger kd_radar_operations_private_ttl/i.test(migrationSql)
     && /create trigger kd_radar_checks_private_ttl/i.test(migrationSql)
     && /create trigger kd_radar_subscriptions_private_orphan/i.test(migrationSql)
-    && /delete from public\.kd_radar_target_shares[\s\S]+p_share_enabled/i.test(fs.readFileSync("supabase/migrations/20260809180000_event_radar_local_basis.sql", "utf8"))
-    && /delete from public\.kd_radar_receipts/i.test(fs.readFileSync("supabase/migrations/20260809180000_event_radar_local_basis.sql", "utf8")),
+    && /delete from public\.kd_radar_target_shares[\s\S]+p_share_enabled/i.test(radarMigrationSql)
+    && /delete from public\.kd_radar_receipts/i.test(radarMigrationSql),
 );
 
 const providerAllowedSql = extractFunction(migrationSql, "kd_private_provider_allowed");

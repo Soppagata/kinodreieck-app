@@ -99,6 +99,7 @@ create table public.kd_radar_targets (
                               check (jsonb_typeof(external_ids) = 'object'),
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
+  orphaned_at     timestamptz,
   constraint kd_radar_target_key_form check (char_length(target_key) between 3 and 160),
   constraint kd_radar_target_title_form check (char_length(canonical_title) between 1 and 200)
 );
@@ -127,6 +128,8 @@ create table public.kd_radar_checks (
   lease_until            timestamptz,
   fencing_token          uuid,
   superseded_by          uuid        references public.kd_radar_checks(check_id),
+  terminal_at            timestamptz,
+  expires_at             timestamptz,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
   constraint kd_radar_check_key_form check (char_length(check_key) between 3 and 500),
@@ -188,6 +191,8 @@ create table public.kd_radar_operations (
   operation_id  uuid        not null,
   request_hash  text        not null check (request_hash ~ '^[a-f0-9]{32}$'),
   result        jsonb       not null check (jsonb_typeof(result) = 'object'),
+  terminal_at   timestamptz,
+  expires_at    timestamptz,
   created_at    timestamptz not null default now(),
   constraint kd_radar_operations_pkey primary key (account_id, operation_id)
 );
@@ -197,6 +202,8 @@ create table public.kd_radar_share_operations (
   operation_id  uuid        not null,
   request_hash  text        not null check (request_hash ~ '^[a-f0-9]{32}$'),
   result        jsonb       not null check (jsonb_typeof(result) = 'object'),
+  terminal_at   timestamptz,
+  expires_at    timestamptz,
   created_at    timestamptz not null default now(),
   constraint kd_radar_share_operations_pkey primary key (account_id, operation_id)
 );
@@ -509,11 +516,13 @@ grant execute on function public.kd_check_radar_confirmed_version_pointer() to s
 create table public.kd_radar_reviews (
   review_id         uuid        primary key default gen_random_uuid(),
   event_version_id  uuid        not null references public.kd_radar_event_versions(event_version_id) on delete restrict,
-  actor_id          uuid        not null references auth.users(id) on delete restrict,
+  actor_id          uuid        not null,
   decision          text        not null check (decision in ('confirm','reject','ambiguous')),
   reason            text        not null check (char_length(reason) between 3 and 500),
   source_id         text        references public.kd_radar_sources(source_id),
-  created_at        timestamptz not null default now()
+  created_at        timestamptz not null default now(),
+  constraint kd_radar_reviews_actor_id_fkey
+    foreign key (actor_id) references auth.users(id) on delete cascade
 );
 
 create table public.kd_radar_receipts (

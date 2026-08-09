@@ -90,10 +90,10 @@ insert into public.kd_private_retention_registry values
   ('content_free_run_cost_review_capability', 90, false, 'manual_service_purge'),
   ('active_personal_subscription_receipt_preference_share', null, true, 'revoke_subscription_end_account_delete');
 
-alter table public.kd_radar_operations add column terminal_at timestamptz, add column expires_at timestamptz;
-alter table public.kd_radar_share_operations add column terminal_at timestamptz, add column expires_at timestamptz;
-alter table public.kd_radar_targets add column orphaned_at timestamptz;
-alter table public.kd_radar_checks add column terminal_at timestamptz, add column expires_at timestamptz;
+-- Die Retention-Spalten entstehen bereits in der unmittelbar vorhergehenden,
+-- auf diesem Ziel noch nicht angewandten Radar-Erstmigration. Dadurch braucht
+-- dieser Pre-Write-Lauf weder Daten-Backfills noch nachträgliche Constraint-
+-- DROP-Schritte.
 create index kd_radar_operations_expires on public.kd_radar_operations (expires_at) where expires_at is not null;
 create index kd_radar_share_operations_expires on public.kd_radar_share_operations (expires_at) where expires_at is not null;
 create index kd_radar_targets_orphaned on public.kd_radar_targets (orphaned_at) where orphaned_at is not null;
@@ -154,25 +154,6 @@ create trigger kd_radar_target_shares_private_orphan
   after insert or update or delete on public.kd_radar_target_shares
   for each row execute function public.kd_private_refresh_target_orphan();
 
-update public.kd_radar_operations
-   set terminal_at = coalesce(terminal_at, created_at),
-       expires_at = coalesce(expires_at, created_at + interval '30 days');
-update public.kd_radar_share_operations
-   set terminal_at = coalesce(terminal_at, created_at),
-       expires_at = coalesce(expires_at, created_at + interval '30 days');
-update public.kd_radar_checks
-   set terminal_at = coalesce(terminal_at, updated_at),
-       expires_at = coalesce(expires_at, updated_at + interval '30 days'),
-       active = false
- where check_status in ('ok','no_change','failed','ambiguous','deferred_budget');
-update public.kd_radar_targets t
-   set orphaned_at = coalesce(t.orphaned_at, now())
- where not exists (select 1 from public.kd_radar_subscriptions s where s.target_id = t.target_id)
-   and not exists (select 1 from public.kd_radar_target_shares sh where sh.target_id = t.target_id);
-alter table public.kd_radar_reviews
-  drop constraint kd_radar_reviews_actor_id_fkey,
-  add constraint kd_radar_reviews_actor_id_fkey
-    foreign key (actor_id) references auth.users(id) on delete cascade;
 alter table public.kd_series_watch
   add constraint kd_series_watch_account_id_fkey
     foreign key (account_id) references auth.users(id) on delete cascade;
