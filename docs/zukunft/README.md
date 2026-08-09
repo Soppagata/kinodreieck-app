@@ -3,13 +3,13 @@
 Stand: 09.08.2026
 Erstellungsreferenz: `7a51ce7` auf `codex/rollenlogik-private-demo`
 Planungsfortschreibung: `staging`/`origin/staging` `65a92df`, Produktion `3898152`
-Audit-Scope: `FUTURE_PLAN_METADATA_ONLY`
+Audit-Scope der Planungsdateien: `FUTURE_PLAN_METADATA_ONLY`
 
-> **Status: Zukunftsplanung – nicht implementiert.**
-> Dieser Ordner ist ausdrücklich aus Rollen-v1, der aktuellen privaten
-> Demo-Schlussabnahme und dem abgeschlossenen Audit-/Cleanup-Scope
-> ausgeschlossen. Sein Inhalt erzeugt keine offene Lieferpflicht und darf
-> weder als Produktfunktion noch als Roadmap-Erfüllung gewertet werden.
+> **Status: Planung plus lokaler, nicht aktivierter Phase-2-Beleg.**
+> Die Planungsdateien bleiben aus Rollen-v1 und der privaten
+> Demo-Schlussabnahme ausgeschlossen. Der gesonderte Phase-2-Lieferbeleg
+> dokumentiert ausschließlich lokalen Code; er ist weder remote migriert noch
+> deployed oder aktiviert.
 
 ## Zweck
 
@@ -27,13 +27,10 @@ und höchstens zehn weiteren kuratierten Logins geplant. Eine Veröffentlichung,
 
 ### Ablagestatus bei Erstellung
 
-Die Planungsdateien wurden am 09.08.2026 bewusst **ungetrackt** im
-laufenden Rollen-Worktree angelegt. Sie dürfen weder per `git add -A` noch in
-einen Rollen-v1-Commit geraten. Nach Abschluss der parallelen Rollenarbeit
-werden sie in einem eigenen Dokumentationsbranch beziehungsweise einem
-separaten Dokumentationscommit übernommen und dieser Absatz mit dem echten
-Lieferbeleg aktualisiert. Bis dahin bedeutet „versioniert gedacht“ ausdrücklich
-nicht „bereits committed“.
+Die Planungsdateien wurden am 09.08.2026 zunächst bewusst ungetrackt geschützt
+und danach getrennt von Rollen-v1 im lokalen Radar-Phase-1-Commit `a52a6c4`
+versioniert. Dieser Commit ist nicht gepusht oder deployed. Der Phase-2-Beleg
+und der zugehörige lokale Code stehen am nächsten STOP weiterhin uncommitted.
 
 ## Geltungsgrenze für Audit und Cleanup
 
@@ -72,6 +69,7 @@ filtern; der Marker allein ist keine technische Ausschlussautomatik.
 | `AUFTRAG_RADAR_NACH_DEMO.md` | älterer ausführlicher Radar-Auftrag | technische Referenz; nicht mehr als primären Handoff verwenden |
 | `DISCOVERY_TARGETS_SKIZZE.md` | Ergänzungsvertrag für Schauspiel-/Regiepersonen direkt in `Mein Radar`, intern als eigene Discovery-Schicht; Bücher, Spiele und weitere Rollen bleiben geparkt | erste Personenstufe entschieden; Umsetzung bleibt bis Pflichtspike und Baufreigabe blockiert |
 | `ENTSCHEIDUNGSLOG.md` | Entschiedenes, Geparktes und in der besprochenen Form Verworfenes | bei neuen Fakten fortschreiben |
+| `RADAR_PHASE2_LOCAL_2026-08-09.md` | lokaler Liefer-, Test- und STOP-Beleg für Event-Radar, getrennte Shares, Proposal-Validator und vorbereitete SQL-Basis | gebaut, nicht committed, nicht remote angewandt, nicht aktiviert |
 
 ## Beförderungsvertrag
 

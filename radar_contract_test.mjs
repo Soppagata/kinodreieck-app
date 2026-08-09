@@ -17,6 +17,7 @@ import {
   evaluateRadarQuota,
   createRadarCheckKey,
   createRadarEventIdentity,
+  isRadarEventIdentity,
   validateRadarEventVersion,
   createRadarShareDraft,
   projectCuratedRadarShare,
@@ -164,10 +165,16 @@ check("Der globale Check-Key dedupliziert exakt und versioniert Query/Provider",
 
 check("Eventidentität enthält niemals das Datum", () => {
   const base = { canonicalWorkId: "fixture:target:event-work", eventType: "kinostart_at", region: "AT", platform: "kino" };
-  assert.equal(
-    createRadarEventIdentity({ ...base, date: "2026-09-01" }),
-    createRadarEventIdentity({ ...base, date: "2027-01-10" }),
-  );
+  const first = createRadarEventIdentity({ ...base, date: "2026-09-01" });
+  assert.equal(first, createRadarEventIdentity({ ...base, date: "2027-01-10" }));
+  assert.equal(isRadarEventIdentity(first), true);
+  assert.equal(validateRadarEventVersion({
+    eventId: first,
+    versionId: "fixture:event-version:identity",
+    verificationStatus: "candidate",
+    lifecycleStatus: "scheduled",
+    date: "2026-09-01",
+  }).ok, true);
 });
 
 check("Synthetische Eventversionen beginnen als Kandidat und sind unveränderlich identifizierbar", () => {

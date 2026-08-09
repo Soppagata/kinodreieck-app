@@ -211,12 +211,33 @@ export function createRadarEventIdentity({ canonicalWorkId, eventType, region, p
     : null;
 }
 
+function isEncodedKeyPart(value) {
+  try {
+    const decoded = decodeURIComponent(text(value));
+    return keyPart(decoded) === value;
+  } catch { return false; }
+}
+
+/* Eventidentitäten sind deterministische Verbundschlüssel und dürfen deshalb
+   die vier intern gesetzten Trenner enthalten. Persistente UUIDs und Fixture-
+   IDs bleiben über isStableContractId weiterhin zulässig. */
+export function isRadarEventIdentity(value) {
+  const parts = text(value).split("|");
+  return parts.length === 4
+    && isEncodedKeyPart(parts[0])
+    && RADAR_EVENT_TYPES.includes(parts[1])
+    && parts[2] === RADAR_DEFAULT_REGION
+    && (parts[3] === "-" || isEncodedKeyPart(parts[3]));
+}
+
 export function validateRadarEventVersion(version, { allowFixture = true } = {}) {
   const errors = [];
   if (!version || typeof version !== "object" || Array.isArray(version)) {
     return validation(["event-version-invalid"]);
   }
-  if (!isStableContractId(version.eventId, { allowFixture })) errors.push("event-id-invalid");
+  if (!isStableContractId(version.eventId, { allowFixture }) && !isRadarEventIdentity(version.eventId)) {
+    errors.push("event-id-invalid");
+  }
   if (!isStableContractId(version.versionId, { allowFixture })) errors.push("event-version-id-invalid");
   if (!inList(version.verificationStatus, RADAR_VERIFICATION_STATUSES)) errors.push("verification-status-invalid");
   if (!inList(version.lifecycleStatus, RADAR_LIFECYCLE_STATUSES)) errors.push("lifecycle-status-invalid");

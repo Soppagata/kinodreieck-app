@@ -14,6 +14,7 @@
 import { K } from "./storage.js";
 import { ensureIds } from "./match.js";
 import { normalisiereArtikelTypen } from "./artikel.js";
+import { isLocalRadarBackupState } from "./localEventRadar.js";
 
 const istObjekt = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 const vorhanden = (v) => v !== undefined && v !== null;
@@ -114,6 +115,16 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     backupFallback: { version: 1, eintraege: [] },
     pruefe: (v) => istObjekt(v) && Array.isArray(v.eintraege),
     zaehle: (v) => v.eintraege.length,
+  }),
+  jsonEintrag({
+    key: K.radar,
+    backupField: "radar",
+    label: "Event-Radar",
+    einheit: "Einträge",
+    backupFallback: null,
+    pruefe: isLocalRadarBackupState,
+    zaehle: (v) => v.subscriptions.length + v.outbox.length + v.shares.length
+      + v.shareOutbox.length + v.receipts.length,
   }),
   jsonEintrag({
     key: K.merkliste,

@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "format": 1,
+    "fixtureOnly": true,
+    "providerPayload": false,
+    "hinweis": "Rein synthetische Phase-2-Proposals mit reservierten .example-Domains."
+  },
+  "sourceRegistry": [
+    {
+      "sourceId": "fixture:source:official",
+      "domain": "official.example",
+      "publisherFamily": "publisher:official",
+      "sourceClass": "official",
+      "rightsStatus": "approved",
+      "active": true,
+      "attributionApproved": true,
+      "subdomainsAllowed": true,
+      "allowedProposalKinds": ["radar_events"]
+    },
+    {
+      "sourceId": "fixture:source:editorial",
+      "domain": "editorial.example",
+      "publisherFamily": "publisher:editorial",
+      "sourceClass": "editorial",
+      "rightsStatus": "approved",
+      "active": true,
+      "attributionApproved": true,
+      "subdomainsAllowed": false,
+      "allowedProposalKinds": ["radar_events"]
+    },
+    {
+      "sourceId": "fixture:source:syndicated",
+      "domain": "syndicated.example",
+      "publisherFamily": "publisher:editorial",
+      "sourceClass": "editorial",
+      "rightsStatus": "approved",
+      "active": true,
+      "attributionApproved": true,
+      "subdomainsAllowed": false,
+      "allowedProposalKinds": ["radar_events"]
+    },
+    {
+      "sourceId": "fixture:source:unknown",
+      "domain": "unknown.example",
+      "publisherFamily": "publisher:unknown",
+      "sourceClass": "unknown",
+      "rightsStatus": "approved",
+      "active": true,
+      "attributionApproved": true,
+      "subdomainsAllowed": false,
+      "allowedProposalKinds": ["radar_events"]
+    },
+    {
+      "sourceId": "fixture:source:charts",
+      "domain": "charts.example",
+      "publisherFamily": "publisher:charts",
+      "sourceClass": "official",
+      "rightsStatus": "approved",
+      "active": true,
+      "attributionApproved": true,
+      "subdomainsAllowed": false,
+      "allowedProposalKinds": ["popularity_items"]
+    },
+    {
+      "sourceId": "fixture:source:blocked",
+      "domain": "blocked.example",
+      "publisherFamily": "publisher:blocked",
+      "sourceClass": "editorial",
+      "rightsStatus": "blocked",
+      "active": false,
+      "attributionApproved": false,
+      "subdomainsAllowed": false,
+      "allowedProposalKinds": ["radar_events", "popularity_items"]
+    }
+  ],
+  "catalog": [
+    {
+      "targetId": "fixture:target:radar-work-01",
+      "targetType": "work",
+      "targetStatus": "active",
+      "title": "Synthetischer Kinofilm",
+      "canonical": true,
+      "year": 2026,
+      "type": "movie",
+      "externalIds": {
+        "watchmode": "fixture-watchmode-radar-01",
+        "imdb": "fixture-imdb-radar-01"
+      }
+    },
+    {
+      "targetId": "fixture:target:popularity-work-01",
+      "targetType": "work",
+      "targetStatus": "active",
+      "title": "Synthetischer Chartfilm",
+      "canonical": true,
+      "year": 2026,
+      "type": "movie",
+      "externalIds": {
+        "watchmode": "fixture-watchmode-popularity-01"
+      }
+    }
+  ],
+  "radarProposal": {
+    "format": "kinodreieck-proposal",
+    "version": 1,
+    "proposalId": "fixture:proposal:radar-01",
+    "kind": "radar_events",
+    "inputHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "generatedAt": "2026-08-09T12:00:00.000Z",
+    "region": "AT",
+    "items": [
+      {
+        "itemId": "fixture:proposal-item:radar-01",
+        "eventVersionId": "fixture:event-version:radar-01",
+        "targetId": "fixture:target:radar-work-01",
+        "targetType": "work",
+        "externalIds": {
+          "watchmode": "fixture-watchmode-radar-01"
+        },
+        "eventType": "kinostart_at",
+        "eventDate": "2026-08-12",
+        "region": "AT",
+        "platform": "-",
+        "lifecycleStatus": "scheduled",
+        "evidence": [
+          {
+            "evidenceId": "fixture:evidence:official-01",
+            "sourceId": "fixture:source:official",
+            "url": "https://news.official.example/releases/work-01?utm_source=test",
+            "claimedDate": "2026-08-12",
+            "eventType": "kinostart_at",
+            "region": "AT",
+            "platform": "-",
+            "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "evidenceId": "fixture:evidence:editorial-01",
+            "sourceId": "fixture:source:editorial",
+            "url": "https://editorial.example/kino/work-01",
+            "claimedDate": "2026-08-12",
+            "eventType": "kinostart_at",
+            "region": "AT",
+            "platform": "-",
+            "fingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "conflicts": []
+      }
+    ]
+  },
+  "popularityProposal": {
+    "format": "kinodreieck-proposal",
+    "version": 1,
+    "proposalId": "fixture:proposal:popularity-01",
+    "kind": "popularity_items",
+    "inputHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "generatedAt": "2026-08-09T12:00:00.000Z",
+    "region": "AT",
+    "items": [
+      {
+        "itemId": "fixture:proposal-item:popularity-01",
+        "sourceId": "fixture:source:charts",
+        "region": "AT",
+        "service": "Testdienst",
+        "chartKind": "fixture_top",
+        "periodStart": "2026-08-03",
+        "periodEnd": "2026-08-09",
+        "rank": 1,
+        "title": "Synthetischer Chartfilm",
+        "year": 2026,
+        "type": "movie",
+        "season": null,
+        "medium": "streaming",
+        "sourceLabel": "Synthetische Chartquelle",
+        "atAvailabilityConfirmed": true,
+        "externalIds": {
+          "watchmode": "fixture-watchmode-popularity-01"
+        },
+        "blocked": false
+      }
+    ]
+  }
+}

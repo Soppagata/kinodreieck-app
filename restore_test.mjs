@@ -299,8 +299,9 @@ const rr5 = await R.restoreBackup(bk5);
 await sleep(120);
 check("P5 Wiederherstellung meldet den Kontobetrieb verständlich",
   rr5.ok === true && rr5.dbWarnung === false && /Konto aktiv/.test(rr5.dbHinweis || ""));
-check("P5 Wiederherstellung schreibt alle 17 Töpfe ins Konto",
-  AD.ACCOUNT_SYNC_KEYS.every((k) => kontoTabelle.get(k) != null));
+check("P5 Wiederherstellung schreibt alle 17 vorhandenen Töpfe und erfindet keinen Radar-Stand",
+  AD.ACCOUNT_SYNC_KEYS.filter((key) => key !== "kd:radar").every((key) => kontoTabelle.get(key) != null)
+  && kontoTabelle.get("kd:radar") == null);
 check("P5 Der Wochenplan übersteht den Roundtrip inhaltlich", (() => {
   try { return JSON.parse(kontoTabelle.get("kd:wochenplan").value).eintraege[0].titel === "One Piece"; }
   catch { return false; }
