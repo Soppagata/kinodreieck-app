@@ -6,8 +6,10 @@
 - Arbeitsgrundlage: `src/lib/personalDataRegistry.js`, `src/lib/privatePilotOps.js`,
   `src/services/accountSelfService.js`, `src/components/PrivatePilotOps.jsx`,
   `src/lib/supportBundle.js`, `docs/ETAPPE_9B_BETRIEB.md`,
-  `docs/ETRAPPE_9C_BETA.md`, `docs/ETAPPE_9_ABNAHME.md`.
-- Ziel: schlankes Abschluss-/Runbook ohne neue Implementierung, ohne erfundene Belege.
+  `docs/ETAPPE_9C_BETA.md`, `docs/ETAPPE_9_ABNAHME.md`.
+- Ziel: technischer Privatbetrieb mit vollständigem Datenvertrag, fail-closed
+  Self-Service, Retention, Monitoring und Supportdiagnose; keine erfundenen
+  Remote- oder Rechtsbelege.
 
 ## Dateninventar (Belege)
 
@@ -34,10 +36,13 @@ Basisdaten-Töpfe aus `PERSONAL_DATA_ENTRIES`:
 Zusätzliche Private-Pilot-Klassen (`PRIVATE_DATA_INVENTORY`):
 - auth_session
 - local_rollback
+- ops_terminal
 - ops_metadata
 
 Eigener Datenexport-Endpunkt validiert exakt die Felder:
-`auth, access, aiLogs, seriesWatch, sharedClaims, radar, retention, deletion`.
+`auth, access, personal, aiLogs, seriesWatch, sharedArticles, sharedClaims,
+radar, retention, deletion`. Radar enthält seinerseits Capabilities,
+Account-State, Abos, Receipts, Shares, beide Operationsklassen und Reviews.
 
 ## Provider-Registry und Fail-Closed
 
@@ -46,11 +51,19 @@ serverseitiger Zulassungspflicht (`providerActivationDecision`).
 Ein Pfad ist nur freigegeben, wenn:
 - Feature-Flag `true`
 - Registry-Zeile `enabled=true`
-- `legal_status != LEGAL_OR_PROVIDER_REVIEW_REQUIRED`
+- Rechte bestätigt
+- DPA/Transfer bestätigt
+- `legal_status=APPROVED`
 - `retentionConfirmed=true`
+- Preis/Budget bestätigt
+- Review höchstens 90 Tage alt
 
 Aktuell vorhandene Dienste sind gelistet mit `legalStatus` je nach Stand.
 Für ungeprüfte Rechts-/Providersachen gilt automatisch `LEGAL_OR_PROVIDER_REVIEW_REQUIRED`.
+
+Die lokale Empfänger-/Quellenliste ist bewusst keine Rechtsfreigabe. Alle
+Einträge bleiben technisch geschlossen, bis Betreiber-, DPA-/Transfer-,
+Aufbewahrungs-, Rechte- und Budgetfakten einzeln bestätigt wurden.
 
 `src/components/PrivatePilotOps.jsx` trägt explizit: „**Externe Anbieter bleiben ohne abgeschlossene
 Rechts- und Aufbewahrungsprüfung serverseitig gesperrt**“.
@@ -71,21 +84,34 @@ Zusatz:
   und nach 30 Tagen purgen
 - kontrollierte logische Dumps: max. 30 Tage, max. vier Wochenstände
 
+Die Migration setzt Terminal-/Ablaufmarker per Trigger, entfernt widerrufene
+Shares statt sie zwecklos aufzubewahren, entfernt Receipts beim Aboende und
+markiert Ziele bei der letzten Referenz atomar als verwaist. Der Purge löst
+Self-References von Checks vorab und verarbeitet nur ereignisfreie Ziele
+zeilenweise, damit bestätigte Evidenz oder Reviews nicht den gesamten Lauf
+zurückrollen.
+
 ## Own-Data und Self-Delete (global off)
 
 - Runtime-Defaults: `privateSelfServiceEnabled=false`, `accountDeleteEnabled=false`.
 - `privateOpsExportStatus` gibt `accountDeletion: server-flagged-disabled-by-default`.
-- Own-Data-Response wird serverseitig strikt gegen erlaubte Schlüssel geprüft
-  (`auth`, `access`, `aiLogs`, `seriesWatch`, `sharedClaims`, `radar`, `retention`, `deletion`).
+- Own-Data-Response wird im Client gegen die vollständige erforderliche
+  Top-Level- und Nested-Allowlist geprüft; serverseitig kommen alle
+  accountgebundenen Projektionen aus demselben Löschklassenvertrag.
 - Der Laufplan fordert: Own-Data und Self-Delete technisch fertig bauen, aber bei fehlendem
   Remote-Enablement nicht aktivieren.
 - `privatePilotOps`-Vertrag für Self-Delete verlangt: aktuelles Konto, reauth,
   idempotenter, serverseitiger Ablauf, Auth-Check, Cascade-/Residuenkontrolle,
   keine Freischaltung über breite Account-ID, ausschließlich Wegwerfkonto-Test.
+- Die UI erzwingt zuerst den Server-Eigendatenexport, dann eine frische
+  Passwortbestätigung und den exakten Löschsatz. Erst nach bestätigter
+  serverseitiger Auth-Löschung trennt der Session-Koordinator den lokalen
+  Kontocache. Beide Runtime-Schalter und der zusätzliche Edge-Schalter bleiben
+  bis zur grünen Wegwerfkonto-Probe aus.
 
 ## Monitoring und Support
 
-- Monitoring/Status ist als payloadfreie, read-only Checksumme vorgesehen.
+- Monitoring/Status ist als payloadfreier, read-only Workflow gebaut.
 - Checkliste umfasst mindestens:
   - Deployment-/Build-SHA und Function-Build
   - Auth/DB/Health erreichbar
@@ -93,6 +119,9 @@ Zusatz:
   - Budget-/Circuit-Zustand ohne bezahlte Requests
   - fällige Purge-Anzahlen
   - letzter freigeschriebener kostenfreier Smoke/CI-Lauf
+- `NOT_CONFIGURED`, eine fehlende/inaktive Rollen-v1-Zeile und unbekannte
+  Budget-/Flagzustände machen den Workflow rot; `PURGE_DUE` bleibt eine
+  sichtbare Warnung ohne Payload.
 - Support-Paket ist auf feste Felder/Enums begrenzt (keine Titel, Bewertungen,
   Account-ID, Query, Inhalte, Secrets; siehe `src/lib/supportBundle.js`).
 - 9c-Runbook fordert tägliche read-only GitHub-Checks (je Testlauf <=5 min, 20s Network-Check)
@@ -115,7 +144,8 @@ Zusatz:
   (inkl. beschädigte Datei/Format verweigern) ist definiert in 9b-Runbook.
 - DB-Disaster-Restore nur gegen logisches Dump außerhalb von Repo + separater Wegwerf-
   restore + RLS-/Dump-/Restore-Checks; Produktivrestore nur nach separater Freigabe.
-- App-seitige Recovery-Pfade: Restore/Undo, zweites Gerät, lokale Snapshot-Rückgabe,
+- App-seitige Recovery-Pfade: Restore/Undo, zwei isolierte Browserprofile,
+  lokale Snapshot-Rückgabe,
   `npm run test:rls` erst im kontrollierten Phase-6-Kontext.
 
 ## Scheduler SAFE_SKIPPED (aktuelle Betriebsentscheidung)
@@ -155,3 +185,22 @@ Zusatz:
   global off" dokumentiert.
 - `STAGING_GREEN` ist nicht belegt, solange der vollständige Remote-Write-/
   Shared-Backend-Schritt als `SAFE_SKIPPED` ausgewiesen wird.
+
+## Offizielle Primärquellen (Abruf 09.08.2026)
+
+Die URLs belegen nur den jeweiligen offiziellen Dokumentationsstand. Sie sind
+keine automatische Freigabe; offene Produkt-, Vertrags-, Regionen- und
+Aufbewahrungszuordnungen bleiben `LEGAL_OR_PROVIDER_REVIEW_REQUIRED`.
+
+- Supabase Security: https://supabase.com/docs/guides/security
+- Cloudflare DPA: https://www.cloudflare.com/cloudflare-customer-dpa/
+- GitHub Privacy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+- Anthropic Retention für Covered Models: https://privacy.claude.com/en/articles/15425996-data-retention-practices-for-covered-models
+- Watchmode API: https://api.watchmode.com/docs/
+- Wikidata Data Access: https://www.wikidata.org/wiki/Wikidata:Data_access
+- Library of Congress APIs: https://www.loc.gov/apis/
+- film.at: https://www.film.at/
+- nonstopkino Datenschutz (Weiterleitung auf offiziellen Policy-Host): https://nonstopkino.at/datenschutz/
+- Cloudflare Pages Branch-Kontrollen: https://developers.cloudflare.com/pages/configuration/branch-build-controls/
+- Supabase Reauthentication: https://supabase.com/docs/reference/javascript/auth-reauthenticate
+- Supabase serverseitige Kontolöschung: https://supabase.com/docs/reference/javascript/auth-admin-deleteuser
