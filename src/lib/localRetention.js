@@ -37,7 +37,7 @@ export function purgeExpiredLocalData(storage = globalThis.localStorage, now = D
       continue;
     }
     const created = timestamp(value?.t);
-    if (created == null || now - created >= ms(LOCAL_RETENTION_DAYS[key])) {
+    if (created == null || created > now || now - created >= ms(LOCAL_RETENTION_DAYS[key])) {
       if (remove(storage, key)) report.removed.push(key);
     }
   }
@@ -57,7 +57,7 @@ export function purgeExpiredLocalData(storage = globalThis.localStorage, now = D
         if (!Array.isArray(entries)) { report.pruned += 1; continue; }
         const kept = entries.filter((entry) => {
           const created = timestamp(entry?.t);
-          return created != null && now - created < ms(LOCAL_RETENTION_DAYS[snapKey]);
+          return created != null && created <= now && now - created < ms(LOCAL_RETENTION_DAYS[snapKey]);
         });
         report.pruned += entries.length - kept.length;
         if (kept.length) next[key] = kept;

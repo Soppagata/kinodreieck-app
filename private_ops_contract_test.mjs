@@ -19,6 +19,13 @@ import {
 import { buildSupportBundle } from "./src/lib/supportBundle.js";
 import { ERROR_CODES, BoundaryError } from "./src/services/errors.js";
 import { createAccountSelfService, validateOwnData } from "./src/services/accountSelfService.js";
+import {
+  ACCOUNT_SELF_SERVICE_ERROR,
+  exportReceiptMatchesAccount,
+  finalizeDeletedAccountLocally,
+  runCurrentAccountDeletion,
+  runExportBeforeAccountDeletion,
+} from "./src/controllers/accountSelfServiceController.js";
 
 let checks = 0;
 function pass(name) {
@@ -120,6 +127,10 @@ const radarMigrationSql = fs.readFileSync(
   "supabase/migrations/20260809180000_event_radar_local_basis.sql",
   "utf8",
 );
+const retentionFixSql = fs.readFileSync(
+  "supabase/migrations/20260810120000_private_pilot_retention_fix.sql",
+  "utf8",
+);
 const accountSelfServiceSql = fs.readFileSync(
   "src/services/accountSelfService.js",
   "utf8",
@@ -129,7 +140,9 @@ const edgeFunctionSql = fs.readFileSync(
   "utf8",
 );
 const privateOpsUiSql = fs.readFileSync("src/components/PrivatePilotOps.jsx", "utf8");
+const privateOpsControllerSql = fs.readFileSync("src/controllers/accountSelfServiceController.js", "utf8");
 const authDriverSql = fs.readFileSync("src/lib/authDriver.js", "utf8");
+const etappe9Plan = fs.readFileSync("docs/ETAPPE_9_PLAN.md", "utf8");
 
 const constraintDrops = [...`${radarMigrationSql}\n${migrationSql}`.matchAll(
   /drop constraint(?: if exists)?\s+([a-z0-9_]+)/gi,
@@ -145,12 +158,51 @@ expect(
     && !/update public\.kd_radar_checks\s+set terminal_at/i.test(migrationSql)
     && !/drop constraint/i.test(migrationSql),
 );
-
 expect(
-  "Self-Service prüft Rollen-v1 vor jedem Service-Role-Datenpfad",
-  edgeFunctionSql.includes('.from("kd_account_access")')
+  "Orphan-Retention deaktiviert Ziele und Checks sofort anhand aktiver Abos",
+  /subscription_status = 'active'/i.test(retentionFixSql)
+    && /target_status = case when v_has_active_subscription then 'active' else 'retired' end/i.test(retentionFixSql)
+    && /update public\.kd_radar_checks[\s\S]*?set active = false/i.test(retentionFixSql),
+);
+expect(
+  "30-Tage-Purge verarbeitet den gesamten Zielgraph einzeln und setzt Fehlmengen fort",
+  /for v_target_id in[\s\S]*?delete from public\.kd_radar_reviews[\s\S]*?delete from public\.kd_radar_targets/i.test(retentionFixSql)
+    && /exception when others[\s\S]*?v_failed_targets := v_failed_targets \+ 1/i.test(retentionFixSql)
+    && /current_setting\('kd\.private_retention_purge', true\) = '1'/i.test(retentionFixSql)
+    && !/not exists \(select 1 from public\.kd_radar_events/i.test(retentionFixSql),
+);
+
+const accessLookupIndex = edgeFunctionSql.indexOf('.from("kd_account_access")');
+const activeGateIndex = edgeFunctionSql.indexOf("if (access?.active !== true)");
+const ownDataIndex = edgeFunctionSql.indexOf('rpc("kd_private_own_data"');
+const deleteBeginIndex = edgeFunctionSql.indexOf('rpc("kd_private_delete_begin"');
+expect(
+  "Self-Service prüft Rollen-v1 exakt und vor Export wie Delete",
+  accessLookupIndex >= 0
     && edgeFunctionSql.includes('.select("active")')
-    && edgeFunctionSql.indexOf('.select("active")') < edgeFunctionSql.indexOf('rpc("kd_private_own_data"'),
+    && edgeFunctionSql.includes('.eq("account_id", accountId)')
+    && edgeFunctionSql.includes(".maybeSingle()")
+    && /if \(accessError\)[^\n]+ACCOUNT_ACCESS_UNAVAILABLE/.test(edgeFunctionSql)
+    && /if \(access\?\.active !== true\)[^\n]+ACCOUNT_INACTIVE/.test(edgeFunctionSql)
+    && activeGateIndex > accessLookupIndex
+    && activeGateIndex < ownDataIndex
+    && activeGateIndex < deleteBeginIndex,
+);
+
+const privateGate = etappe9Plan.match(
+  /Vor 9c müssen laut Roadmap sauber funktionieren:\s*([\s\S]*?)\n\nAktuell noch nicht als abgeschlossen anzunehmen:/,
+)?.[1] || "";
+const formalGate = etappe9Plan.match(
+  /Für die formale 9c bleiben:\s*([\s\S]*?)\n\nScan-\/Blog-Demomaterial ist kein 9c-Gate\./,
+)?.[1] || "";
+expect(
+  "Filmscan und Bloganalyse bleiben dauerhaft außerhalb des 9c-/Merge-Tors",
+  privateGate.length > 0
+    && formalGate.length > 0
+    && !/Filmscan|Bloganalyse|Scanfoto|Blogtext/i.test(privateGate)
+    && !/Filmscan|Bloganalyse|Scanfoto|Blogtext/i.test(formalGate)
+    && /Bloganalyse bleibt\s+Zukunft und ist ausdrücklich kein 9c-, Merge- oder Staging-Gate\./.test(etappe9Plan)
+    && /Der externe Foto-\/Textbatch ist der dauerhafte Scan-Ersatz/.test(etappe9Plan),
 );
 
 const retentionById = Object.values(RETENTION_CLASSES);
@@ -263,9 +315,9 @@ const ms = (days) => days * 24 * 60 * 60 * 1000;
 const isoAt = (timestampMs) => new Date(timestampMs).toISOString();
 const storage = memoryStorageFrom([
   [LOCAL_RETENTION_KEYS.restore, JSON.stringify({ t: isoAt(fixedNow - ms(7) - 1) })],
-  [LOCAL_RETENTION_KEYS.takeover, JSON.stringify({ t: isoAt(fixedNow - ms(7) + 60 * 1000) })],
+  [LOCAL_RETENTION_KEYS.takeover, JSON.stringify({ t: isoAt(fixedNow + 60 * 1000) })],
   [LOCAL_RETENTION_KEYS.accountSnapshots, JSON.stringify({
-    old: [{ t: isoAt(fixedNow - ms(7) - 10_000) }, { t: isoAt(fixedNow - 1000) }],
+    old: [{ t: isoAt(fixedNow - ms(7) - 10_000) }, { t: isoAt(fixedNow - 1000) }, { t: isoAt(fixedNow + 1000) }],
     mixedType: "kaputt",
     missing: [{ foo: "bar" }],
   })],
@@ -275,11 +327,12 @@ expect(
   "Lokale Retention entfernt abgelaufene Snapshot/Restore-Einträge",
   purgeReport.removed.includes(LOCAL_RETENTION_KEYS.restore)
     && !storage.store.has(LOCAL_RETENTION_KEYS.restore)
-    && storage.store.has(LOCAL_RETENTION_KEYS.takeover)
+    && !storage.store.has(LOCAL_RETENTION_KEYS.takeover)
     && Array.isArray(JSON.parse(storage.store.get(LOCAL_RETENTION_KEYS.accountSnapshots)).old)
     && JSON.parse(storage.store.get(LOCAL_RETENTION_KEYS.accountSnapshots)).old.length === 1
     && purgeReport.pruned >= 1,
 );
+expect("Lokale Retention verwirft Zukunftszeitstempel fail-closed", purgeReport.removed.includes(LOCAL_RETENTION_KEYS.takeover));
 const storageInvalidJson = memoryStorageFrom([
   [LOCAL_RETENTION_KEYS.restore, JSON.stringify({ t: isoAt(fixedNow - ms(7) - 1) })],
   [LOCAL_RETENTION_KEYS.accountSnapshots, "{"],
@@ -416,6 +469,72 @@ expect(
     && !Object.hasOwn(deleteRequestBody, "accountId"),
 );
 
+const deletionAccount = { accountId: "11111111-2222-4333-8444-555555555555", accountEmail: "test@example.invalid" };
+let currentDeletionKey = JSON.stringify([deletionAccount.accountId, deletionAccount.accountEmail]);
+const exportReceipt = await runExportBeforeAccountDeletion({
+  account: deletionAccount,
+  exportPersonalData: async () => true,
+  readCurrentAccountKey: () => currentDeletionKey,
+  now: () => 1_759_560_000_000,
+});
+expect("Exportbeleg ist ausschließlich an das aktuelle Konto gebunden", exportReceiptMatchesAccount(exportReceipt, deletionAccount));
+
+const deletionOrder = [];
+const deletionResult = await runCurrentAccountDeletion({
+  account: deletionAccount,
+  exportReceipt,
+  password: "synthetic-password",
+  confirmation: "DELETE test@example.invalid",
+  reauthenticate: async () => { deletionOrder.push("reauth"); },
+  deleteRemote: async () => { deletionOrder.push("remote"); },
+  finalizeLocal: async () => { deletionOrder.push("local"); },
+  createOperationId: () => deleteOperationId,
+  readCurrentAccountKey: () => currentDeletionKey,
+});
+expect(
+  "Self-Delete erzwingt Export, Reauth, Serverdelete und lokale Trennung in dieser Reihenfolge",
+  deletionResult.serverDeleted === true && deletionOrder.join(",") === "reauth,remote,local",
+);
+
+let remoteCalledWithoutExport = false;
+await assert.rejects(
+  () => runCurrentAccountDeletion({
+    account: deletionAccount,
+    exportReceipt: null,
+    password: "synthetic-password",
+    confirmation: "DELETE test@example.invalid",
+    reauthenticate: async () => {},
+    deleteRemote: async () => { remoteCalledWithoutExport = true; },
+    finalizeLocal: async () => {},
+    readCurrentAccountKey: () => currentDeletionKey,
+  }),
+  (error) => error?.code === ACCOUNT_SELF_SERVICE_ERROR.EXPORT_REQUIRED,
+);
+expect("Fehlender Exportbeleg stoppt vor dem Serverdelete", remoteCalledWithoutExport === false);
+
+let localCalledAfterAccountSwitch = false;
+currentDeletionKey = JSON.stringify([deletionAccount.accountId, deletionAccount.accountEmail]);
+await assert.rejects(
+  () => runCurrentAccountDeletion({
+    account: deletionAccount,
+    exportReceipt,
+    password: "synthetic-password",
+    confirmation: "DELETE test@example.invalid",
+    reauthenticate: async () => {},
+    deleteRemote: async () => { currentDeletionKey = JSON.stringify(["22222222-2222-4222-8222-222222222222", "other@example.invalid"]); },
+    finalizeLocal: async () => { localCalledAfterAccountSwitch = true; },
+    createOperationId: () => deleteOperationId,
+    readCurrentAccountKey: () => currentDeletionKey,
+  }),
+  (error) => error?.code === ACCOUNT_SELF_SERVICE_ERROR.LOCAL_FINALIZATION_FAILED && error?.serverDeleted === true,
+);
+expect("Kontowechsel nach Servererfolg löscht keine fremde lokale Sitzung", localCalledAfterAccountSwitch === false);
+await assert.rejects(
+  () => finalizeDeletedAccountLocally(async () => { throw new Error("synthetic-local-failure"); }),
+  (error) => error?.code === ACCOUNT_SELF_SERVICE_ERROR.LOCAL_FINALIZATION_FAILED && error?.serverDeleted === true,
+);
+currentDeletionKey = JSON.stringify([deletionAccount.accountId, deletionAccount.accountEmail]);
+
 expect(
   "Account-Selbstlöschung im Service bleibt doppelt abgeschaltet",
   /accountDeleteEnabled/.test(accountSelfServiceSql)
@@ -430,12 +549,12 @@ expect(
 );
 expect(
   "Self-Delete-UI erzwingt Export, frische Passwortbestätigung und lokale Trennung erst nach Servererfolg",
-  privateOpsUiSql.includes("selfService.getOwnData()")
-    && privateOpsUiSql.includes("await reauthenticate(password)")
-    && privateOpsUiSql.includes("await selfService.deleteCurrentAccount")
-    && privateOpsUiSql.includes("await onAccountDeleted()")
-    && privateOpsUiSql.indexOf("selfService.deleteCurrentAccount") < privateOpsUiSql.indexOf("await onAccountDeleted()")
+  privateOpsUiSql.includes("runExportBeforeAccountDeletion")
+    && privateOpsUiSql.includes("runCurrentAccountDeletion")
     && privateOpsUiSql.includes("!serverExportDone")
+    && privateOpsUiSql.includes("localFinalizationPending")
+    && privateOpsControllerSql.indexOf("await reauthenticate(password)") < privateOpsControllerSql.indexOf("await deleteRemote")
+    && privateOpsControllerSql.indexOf("await deleteRemote") < privateOpsControllerSql.indexOf("await finalizeLocal()")
     && authDriverSql.includes("async function reauthenticate(passwort)"),
 );
 

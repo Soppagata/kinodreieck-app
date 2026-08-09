@@ -119,13 +119,24 @@ const dangerousFlagsById = Object.fromEntries(dangerousFlags.reports.map((r) => 
 check("gefährlicher Flag wird erkannt", dangerousFlagsById.flags === "UNEXPECTED_DANGEROUS_FLAG");
 check("gefährlicher Flag ist kritisch", dangerousFlags.critical.includes("flags"));
 
-const dangerousRadarFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
-  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: true, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
-  return okFetch(url);
-}) });
-const dangerousRadarFlagsById = Object.fromEntries(dangerousRadarFlags.reports.map((r) => [r.id, r.code]));
-check("wirksamer Radar-Flag wird erkannt", dangerousRadarFlagsById.radar_flags === "UNEXPECTED_DANGEROUS_FLAG");
-check("wirksamer Radar-Flag ist kritisch", dangerousRadarFlags.critical.includes("radar_flags"));
+const RADAR_FLAGS = [
+  "radar_aktiv",
+  "radar_shares_aktiv",
+  "radar_provider_aktiv",
+  "radar_scheduler_aktiv",
+  "radar_proposal_import_aktiv",
+];
+for (const activeFlag of RADAR_FLAGS) {
+  const dangerousRadarFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+    if (url.includes("/rest/v1/kd_radar_settings")) {
+      return fakeAntwort(200, [Object.fromEntries(RADAR_FLAGS.map((flag) => [flag, flag === activeFlag]))]);
+    }
+    return okFetch(url);
+  }) });
+  const dangerousRadarFlagsById = Object.fromEntries(dangerousRadarFlags.reports.map((r) => [r.id, r.code]));
+  check(`${activeFlag} wird fail-closed erkannt`, dangerousRadarFlagsById.radar_flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check(`${activeFlag} macht den Lauf kritisch`, dangerousRadarFlags.critical.includes("radar_flags"));
+}
 
 const unknownBudget = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.includes("/rest/v1/kd_ai_limits")) {

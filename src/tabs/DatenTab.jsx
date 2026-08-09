@@ -51,6 +51,7 @@ export function DatenTab({
   addFilm, addFilme,
   onKontoDatenGeaendert,
   kontoAktiv = false,
+  kontoId = "",
   kontoEmail = "",
   onKontoGeloescht,
 }) {
@@ -301,7 +302,7 @@ export function DatenTab({
       </Klappe>
 
       <Klappe titel="Datenschutz & Datenübersicht">
-        <div style={kasten}><PrivatePilotOps accountActive={kontoAktiv} accountEmail={kontoEmail} onAccountDeleted={onKontoGeloescht} /></div>
+        <div style={kasten}><PrivatePilotOps accountActive={kontoAktiv} accountId={kontoId} accountEmail={kontoEmail} exportBeforeDelete={backupGesamt} onAccountDeleted={onKontoGeloescht} /></div>
       </Klappe>
 
       {/* 5 — Streaming-Quellen */}
