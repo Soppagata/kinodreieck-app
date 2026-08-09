@@ -16,6 +16,7 @@ globalThis.localStorage = {
 };
 
 const A = await import("./src/lib/authDriver.js");
+const Access = await import("./src/lib/accountAccess.js");
 const S = await import("./src/services/auth.js");
 const { ERROR_CODES } = await import("./src/services/errors.js");
 
@@ -31,6 +32,7 @@ let jetztMs = 1_700_000_000_000;
 const jetzt = () => jetztMs;
 let refreshZaehler = 0;
 let szenario = "ok";
+let accessSzenario = "owner-ai";
 
 function antwort(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
@@ -39,6 +41,30 @@ function mockFetch(url, opt = {}) {
   const body = opt.body ? JSON.parse(opt.body) : null;
   calls.push({ url: String(url), method: opt.method || "GET", headers: opt.headers || {}, body });
   const pfad = String(url).replace(URL_OK, "");
+
+  if (pfad.startsWith("/rest/v1/kd_account_access")) {
+    if (szenario === "netz" || accessSzenario === "unavailable") {
+      return Promise.reject(new TypeError("Failed to fetch"));
+    }
+    if (accessSzenario === "server") return Promise.resolve(antwort(503, { message: "paused" }));
+    if (accessSzenario === "missing") return Promise.resolve(antwort(200, []));
+    if (accessSzenario === "multiple") {
+      return Promise.resolve(antwort(200, [
+        { role: "member", active: true, personal_ai: false },
+        { role: "owner", active: true, personal_ai: true },
+      ]));
+    }
+    if (accessSzenario === "invalid") {
+      return Promise.resolve(antwort(200, [{ role: "admin", active: true, personal_ai: true }]));
+    }
+    if (accessSzenario === "inactive") {
+      return Promise.resolve(antwort(200, [{ role: "member", active: false, personal_ai: false }]));
+    }
+    if (accessSzenario === "member-no-ai") {
+      return Promise.resolve(antwort(200, [{ role: "member", active: true, personal_ai: false }]));
+    }
+    return Promise.resolve(antwort(200, [{ role: "owner", active: true, personal_ai: true }]));
+  }
 
   if (pfad.startsWith("/auth/v1/token?grant_type=password")) {
     if (szenario === "netz") return Promise.reject(new TypeError("Failed to fetch"));
@@ -105,7 +131,54 @@ const snapText = JSON.stringify(snap);
 check("A3 Session-Snapshot enthält weder Token-Felder noch Tokenwerte",
   snap.mode === "account" && !/token/i.test(snapText) && !snapText.includes("at-") && !snapText.includes("rt-"));
 check("A3 Snapshot trägt Anzeigename und Fähigkeiten",
-  snap.account.displayName === "max" && snap.capabilities.remoteStorage === true && snap.capabilities.personalAi === true);
+  snap.account.displayName === "max" && snap.account.role === "owner"
+  && snap.capabilities.remoteStorage === true && snap.capabilities.personalAi === true);
+const accessCall = calls.find((c) => /\/rest\/v1\/kd_account_access/.test(c.url));
+check("A3 Freigabe-Client liest nur die per RLS eigene Zeile ohne Konto-ID-Filter",
+  !!accessCall && /select=role%2Cactive%2Cpersonal_ai&limit=2/.test(accessCall.url)
+  && !/account_id/i.test(accessCall.url)
+  && accessCall.headers.Authorization === "Bearer at-1");
+check("A3 Widerspruch personal_ai=true bei active=false wird schon im Client geschlossen",
+  Access.normalizeAccountAccessRows([{ role: "member", active: false, personal_ai: true }]).status === "invalid");
+
+/* ---------- A3b: fachliche Freigabe ist fail-closed und refreshbar ---------- */
+let rollenEvents = 0;
+const unsubscribeRolle = service.subscribe(() => { rollenEvents++; });
+accessSzenario = "member-no-ai";
+await service.refresh();
+check("A3b Rollen-/Capability-Refresh erkennt member ohne Personal-AI",
+  service.getSnapshot().account.role === "member"
+  && service.getSnapshot().capabilities.remoteStorage === true
+  && service.getSnapshot().capabilities.personalAi === false
+  && rollenEvents === 1);
+accessSzenario = "inactive";
+await service.refresh();
+check("A3b Inaktive Freigabe lässt technische Auth bestehen und sperrt beide Capabilities",
+  service.getSnapshot().mode === "account"
+  && service.getSnapshot().access.status === "resolved"
+  && service.getSnapshot().capabilities.remoteStorage === false
+  && service.getSnapshot().capabilities.personalAi === false);
+accessSzenario = "missing";
+await service.refresh();
+check("A3b Fehlende Freigabe fällt geschlossen aus",
+  service.getSnapshot().mode === "account"
+  && service.getSnapshot().access.status === "missing"
+  && service.getSnapshot().account.role === null
+  && service.getSnapshot().capabilities.remoteStorage === false);
+accessSzenario = "multiple";
+await service.refresh();
+check("A3b Mehr als eine sichtbare Freigabezeile ist ungültig und fällt geschlossen aus",
+  service.getSnapshot().access.status === "invalid"
+  && service.getSnapshot().capabilities.remoteStorage === false);
+accessSzenario = "unavailable";
+await service.refresh();
+check("A3b Nicht erreichbare Freigabequelle bleibt Account, aber degradiert und ohne Rechte",
+  service.getSnapshot().mode === "account" && service.getSnapshot().state === "degraded"
+  && service.getSnapshot().access.status === "unavailable"
+  && service.getSnapshot().capabilities.remoteStorage === false);
+unsubscribeRolle();
+accessSzenario = "owner-ai";
+await service.refresh();
 
 /* ---------- A4: Erneuerung nur einmal, auch bei parallelen Anfragen ---------- */
 jetztMs += 3600_000;                        // Token ist jetzt abgelaufen
@@ -235,6 +308,21 @@ try { await d.signIn("max", "geheim1234"); } catch (e) { netzFehler = e; }
 check("A8 Netzwerkfehler bei der Anmeldung wird als offline gemeldet",
   netzFehler?.code === ERROR_CODES.OFFLINE && netzFehler.retryable);
 
+const signInNullService = S.createAuthService({
+  driver: {
+    async signIn() {
+      return { id: "konto-null", benutzername: "null", gueltigBis: jetztMs + 3600_000 };
+    },
+    async loadSession() { return null; },
+  },
+});
+const signInNull = await signInNullService.signIn("null", "pw");
+check("Erfolgreiche technische Anmeldung mit leerer Access-Projektion bleibt Account und fällt geschlossen aus",
+  signInNull.mode === "account" && signInNull.account.id === "konto-null"
+  && signInNull.state === "degraded" && signInNull.access.status === "unavailable"
+  && signInNull.capabilities.remoteStorage === false
+  && signInNull.capabilities.personalAi === false);
+
 /* ---------- A9: fremde Auth-URL ---------- */
 const fremd = A.createAuthDriver({
   config: { supabaseUrl: "https://boese.example", supabasePublishableKey: "sb_publishable_test" },
@@ -272,6 +360,92 @@ _ls.clear(); d = neuerTreiber(); calls = [];
 const gastLaden = await d.loadSession();
 check("Ohne gespeicherte Sitzung geht beim Start KEIN Netzwerkruf raus",
   gastLaden.mode === "guest" && calls.length === 0);
+
+let ladeFehlerNr = 0;
+const ladeFehlerService = S.createAuthService({
+  driver: {
+    async loadSession() {
+      ladeFehlerNr++;
+      if (ladeFehlerNr > 1) throw new Error("access-timeout");
+      return {
+        mode: "account", account: { id: "konto-F", displayName: "F" }, role: "owner",
+        access: { status: "resolved", role: "owner" },
+        capabilities: { remoteStorage: true, personalAi: true },
+      };
+    },
+    async refresh() {},
+  },
+});
+await ladeFehlerService.initialize();
+await ladeFehlerService.refresh();
+check("Unerwarteter Refresh-/Ladefehler behält nie einen alten account-ready Vollzugriff",
+  ladeFehlerService.getSnapshot().mode === "account"
+  && ladeFehlerService.getSnapshot().account.id === "konto-F"
+  && ladeFehlerService.getSnapshot().account.role === null
+  && ladeFehlerService.getSnapshot().state === "degraded"
+  && ladeFehlerService.getSnapshot().access.status === "unavailable"
+  && ladeFehlerService.getSnapshot().capabilities.remoteStorage === false
+  && ladeFehlerService.getSnapshot().capabilities.personalAi === false);
+
+/* ---------- Späte Freigabeantworten dürfen keinen neueren Kontext erhöhen ---------- */
+let ladeNr = 0;
+let spaetFreigeben;
+const spaeteA = new Promise((resolve) => { spaetFreigeben = resolve; });
+const sessionA = {
+  mode: "account", account: { id: "konto-A", displayName: "A" }, role: "owner",
+  access: { status: "resolved", role: "owner" },
+  capabilities: { remoteStorage: true, personalAi: true },
+};
+const sessionB = {
+  mode: "account", account: { id: "konto-B", displayName: "B" }, role: "member",
+  access: { status: "resolved", role: "member" },
+  capabilities: { remoteStorage: true, personalAi: false },
+};
+const raceDriver = {
+  async loadSession() {
+    ladeNr++;
+    if (ladeNr === 1) return sessionA;
+    if (ladeNr === 2) return spaeteA;
+    return sessionB;
+  },
+  async refresh() {},
+  async signIn() { return { id: "konto-B", benutzername: "B", gueltigBis: jetztMs + 3600_000 }; },
+  async signOut({ beforeLocalCommit } = {}) { await beforeLocalCommit?.(); },
+};
+const raceService = S.createAuthService({ driver: raceDriver });
+await raceService.initialize();
+const alterRefresh = raceService.refresh();
+await Promise.resolve();
+await raceService.signIn("b", "pw");
+spaetFreigeben(sessionA);
+await alterRefresh;
+check("Späte Freigabeantwort von A kann nach Wechsel zu B weder Rolle noch Capabilities hochstufen",
+  raceService.getSnapshot().account.id === "konto-B"
+  && raceService.getSnapshot().account.role === "member"
+  && raceService.getSnapshot().capabilities.personalAi === false);
+
+let logoutFreigeben;
+const logoutSpaet = new Promise((resolve) => { logoutFreigeben = resolve; });
+let logoutLaden = 0;
+const logoutRace = S.createAuthService({
+  driver: {
+    async loadSession() {
+      logoutLaden++;
+      return logoutLaden === 1 ? sessionA : logoutSpaet;
+    },
+    async refresh() {},
+    async signOut({ beforeLocalCommit } = {}) { await beforeLocalCommit?.(); },
+  },
+});
+await logoutRace.initialize();
+const refreshVorLogout = logoutRace.refresh();
+await Promise.resolve();
+await logoutRace.signOut();
+logoutFreigeben(sessionA);
+await refreshVorLogout;
+check("Späte Freigabeantwort von A kann einen bereits veröffentlichten Gast nicht wieder anmelden",
+  logoutRace.getSnapshot().mode === "guest"
+  && logoutRace.getSnapshot().capabilities.remoteStorage === false);
 
 let ok = true;
 for (const [n, p] of checks) { console.log((p ? "✓ " : "✗ ") + n); if (!p) ok = false; }

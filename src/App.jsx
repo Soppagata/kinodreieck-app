@@ -121,6 +121,11 @@ export default function App() {
     && new URLSearchParams(window.location.search).get("deep-space-test") === "1";
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   useEffect(() => sessionCoordinator.subscribe(setSession), []);
+  /* Rollen-v1: technische Anmeldung und fachlich aktiver Kontozugriff sind
+     getrennt. Alte, unvollständige oder degradierte Sessions sind hier
+     ausdrücklich nicht optimistisch freigeschaltet. */
+  const remoteKontoAktiv = session.mode === "account" && session.state === "ready"
+    && session.capabilities?.remoteStorage === true;
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
@@ -994,35 +999,35 @@ export default function App() {
     }));
     if (!ok || !freigegeben) return false;
     if (freigegeben.herkunft === "gezogen") return true;
-    const darfPublizieren = session.mode === "account" && session.state === "ready";
+    const darfPublizieren = remoteKontoAktiv;
     if (freigegeben.geteilt && darfPublizieren) {
       void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.PUBLISH);
     } else if (needsRemoteRemoval(freigegeben) && darfPublizieren) {
       void fuehrePublikationsAktion(freigegeben, SHARED_PUBLICATION_ACTION.UNPUBLISH);
     }
     return true;
-  }, [schreibeArtikel, fuehrePublikationsAktion, session.mode, session.state]);
+  }, [schreibeArtikel, fuehrePublikationsAktion, remoteKontoAktiv]);
 
   const loescheArtikel = useCallback(async (id) => {
     const artikel = artikelListe.find((a) => a.id === id);
     if (!artikel) return false;
     if (needsRemoteRemoval(artikel)) {
-      if (session.mode !== "account" || session.state !== "ready") {
-        setErr("Der Artikel besitzt noch eine öffentliche Kopie. Melde dich an, damit sie vor dem lokalen Löschen sicher entfernt werden kann.");
+      if (!remoteKontoAktiv) {
+        setErr("Der Artikel besitzt noch eine öffentliche Kopie. Dafür ist ein aktiver Kontozugriff nötig, damit sie vor dem lokalen Löschen sicher entfernt werden kann.");
         return false;
       }
       return fuehrePublikationsAktion(artikel, SHARED_PUBLICATION_ACTION.DELETE);
     }
     return schreibeArtikel((prev) => prev.filter((a) => a.id !== id));
-  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion, session.mode, session.state, setErr]);
+  }, [artikelListe, schreibeArtikel, fuehrePublikationsAktion, remoteKontoAktiv, setErr]);
 
   const wiederholePublikation = useCallback((id) => {
     const artikel = artikelListe.find((a) => a.id === id);
     const aktion = publicationRetryAction(artikel);
-    if (artikel && aktion && session.mode === "account" && session.state === "ready") {
+    if (artikel && aktion && remoteKontoAktiv) {
       void fuehrePublikationsAktion(artikel, aktion);
     }
-  }, [artikelListe, fuehrePublikationsAktion, session.mode, session.state]);
+  }, [artikelListe, fuehrePublikationsAktion, remoteKontoAktiv]);
 
   /* Einen geteilten Blog in die eigene Mediathek ziehen: lokale Kopie mit Herkunft,
      Referenzen gegen die eigene Master neu aufgelöst (fehlende = Rotlink). */
@@ -1254,15 +1259,18 @@ export default function App() {
     schreibeEntdeckenStatus((prev) => initialisiereStaffelstaende(prev, serienKatalog));
   }, [serienKatalog, schreibeEntdeckenStatus]);
 
-  /* Nur im Konto: deduplizierte Watchmode-IDs für den bestehenden planmäßigen
-     Kataloglauf bereitstellen. Dies ist kein Watchmode-Aufruf. */
+  /* Nur bei fachlich aktivem Kontozugriff: deduplizierte Watchmode-IDs für den
+     bestehenden planmäßigen Kataloglauf bereitstellen. Dies ist kein
+     Watchmode-Aufruf und erzeugt weder Radar-Regeln noch Präferenzen. */
   const letzterSerienWatchSync = useRef("");
   useEffect(() => {
-    if (session.mode !== "account" || !bootDone) return undefined;
+    if (!remoteKontoAktiv || !bootDone) return undefined;
     const expectedAccountId = String(session.account?.id || "");
     if (!expectedAccountId) return undefined;
     const ids = serienBeobachten(entdeckenStatus, serienKatalog).map((e) => e.watchmode_id);
-    const signatur = JSON.stringify(ids);
+    /* Die Deduplizierung ist kontogebunden: A und B dürfen selbst bei
+       identischen beobachteten IDs niemals denselben Erfolgsmarker teilen. */
+    const signatur = expectedAccountId + "|" + JSON.stringify(ids);
     if (signatur === letzterSerienWatchSync.current) return undefined;
     const timer = setTimeout(() => {
       seriesWatchService.setObserved(ids, expectedAccountId).then((r) => {
@@ -1270,7 +1278,7 @@ export default function App() {
       }).catch(() => { /* lokaler Status bleibt; späterer Zustandswechsel versucht erneut */ });
     }, 800);
     return () => clearTimeout(timer);
-  }, [session.mode, session.account?.id, bootDone, entdeckenStatus, serienKatalog]);
+  }, [remoteKontoAktiv, session.account?.id, bootDone, entdeckenStatus, serienKatalog]);
 
   const bestaetigeSerienHinweis = useCallback((watchmodeId) => {
     const t = serienKatalog.find((x) => String(x.watchmode_id) === String(watchmodeId));
@@ -1704,8 +1712,9 @@ export default function App() {
      außerhalb des Streaming-Tabs -> am Boot nachladen (KD-031: ohne Voll-Katalog). */
   useEffect(() => { if (bootDone && snapshotFreigabe) ladeStreamingDateien(); }, [bootDone, snapshotFreigabe, ladeStreamingDateien]);
 
-  /* ---- Betriebsart-Wechsel (Gast ↔ Konto): Katalog wirklich neu laden ----
-     An- und Abmelden ändert, welche Zeile der Katalogpfad überhaupt lesen darf.
+  /* ---- Betriebsart-Wechsel (Demo ↔ fachlich aktives Konto): Katalog neu laden ----
+     An-/Abmelden, Freischaltung und Widerruf ändern, welche Zeile der
+     Katalogpfad überhaupt lesen darf.
      Ohne dieses Nachladen bliebe der Stand der alten Betriebsart stehen — nach
      dem Anmelden stünde im Kino-Tab weiter „Anmeldung nötig", nach dem Abmelden
      die Live-Payload als frischer Stand. Der ERSTE beobachtete Wert ist der
@@ -1731,16 +1740,12 @@ export default function App() {
      programm_demo/streaming_demo sind noch nicht veröffentlicht), sieht er den
      ehrlichen Fehlertext — und nichts ist unwiederbringlich weg.
 
-     B7 (nur vermerkt, KEIN Umbau): „Betriebsart" hat hier zwei Definitionen.
-     Dieser Effekt entscheidet an `session.mode`, alle Leser (activeVariant,
-     loadArea, die Boot-Prüfung) am Vorhandensein einer Sitzung bzw. eines
-     Tokens. Bei einer degradierten Sitzung (mode "account", Server nicht
-     erreichbar) fallen die auseinander. Heute folgenlos, weil beide Seiten
-     dann dasselbe Ergebnis liefern — aber eine Doppel-Wahrheit, die bei der
-     nächsten Änderung an der Sitzungslogik zuerst zu prüfen ist. */
+     Rollen-v1 hält dafür nur noch eine Wahrheit: `remoteStorage === true` in
+     einer bereiten Account-Session. Degradiert, inaktiv, fehlend und unbekannt
+     sind wie im Service der öffentliche Demo-Pfad. */
   useEffect(() => {
     if (!bootDone) return undefined;
-    const jetzt = session.mode === "account" ? "live" : "demo";
+    const jetzt = remoteKontoAktiv ? "live" : "demo";
     if (letzteBetriebsart.current === null) { letzteBetriebsart.current = jetzt; return undefined; }
     if (letzteBetriebsart.current === jetzt) return undefined;
     letzteBetriebsart.current = jetzt;
@@ -1788,7 +1793,7 @@ export default function App() {
       if (!programmOk) autoFetched.current = false;
     })();
     return undefined;
-  }, [session.mode, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
+  }, [remoteKontoAktiv, bootDone, snapshotFreigabe, ladeProgrammDatei, ladeStreamingDateien]);
 
   const {
     achievements,
@@ -1999,7 +2004,7 @@ export default function App() {
             kinoPins={kinoPins} toggleKinoPin={toggleKinoPin}
             fokusTreffer={kinoFokus} onFokusVerbraucht={() => setKinoFokus(null)}
             datenGesperrt={!snapshotFreigabe}
-            programmInfo={programmInfo} angemeldet={session.mode === "account"}
+            programmInfo={programmInfo} angemeldet={remoteKontoAktiv}
             autorName={autorName} /* KD-030: echter Autor für neue Bewertungen (EintragForm/EditPanel) */
           />
         )}
@@ -2034,7 +2039,7 @@ export default function App() {
         {tab === "blog" && (
           <BlogTab
             artikel={artikelListe} master={refUniversum}
-            angemeldet={session.mode === "account" && session.state === "ready"}
+            angemeldet={remoteKontoAktiv}
             fokusId={blogFokus} onFokusVerbraucht={() => setBlogFokus(null)}
             onErstellen={erstelleArtikel} onAktualisieren={aktualisiereArtikel}
             onSetzeRef={setzeArtikelRef} onFreigeben={freigebeArtikel} onLoeschen={loescheArtikel}
@@ -2069,7 +2074,7 @@ export default function App() {
             entdeckenStatus={entdeckenStatus} schreibeEntdeckenStatus={schreibeEntdeckenStatus}
             heuristikAn={heuristikAn} setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
-            katalogInfo={streamingInfo} angemeldet={session.mode === "account"}
+            katalogInfo={streamingInfo} angemeldet={remoteKontoAktiv}
             fokusTreffer={streamingFokus} onFokusVerbraucht={() => setStreamingFokus(null)}
           />
         )}

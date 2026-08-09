@@ -530,9 +530,16 @@ export function createAccountDriver({
     },
     async set(k, v) {
       fordereAktiv();
-      const r = await localDriver.set(k, v);        // 1) sofort lokal sichern
+      /* localDriver.set() schreibt synchron in localStorage und liefert erst
+         danach sein Promise. Wert und Pending müssen deshalb noch im selben
+         Call-Stack gekoppelt werden: Ein Kontowechsel im folgenden Microtask
+         darf weder ein unmarkiertes A-Edit hinterlassen noch später A-Pending
+         in Bs bereits neu gebundenen Metadatenraum schreiben. */
+      const lokal = localDriver.set(k, v);
+      if (SYNC_SET.has(k)) markPending(k, true);
+      const r = await lokal;
       fordereAktiv();
-      if (SYNC_SET.has(k)) { markPending(k, true); enqueueCommit(k, String(v)); }
+      if (SYNC_SET.has(k)) enqueueCommit(k, String(v));
       return r;
     },
     async delete(k) {

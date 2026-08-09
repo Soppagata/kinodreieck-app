@@ -74,6 +74,7 @@ const netz = {
      CDN-Fehlerseite. Der Fall sieht auf Statusebene aus wie eine gültige
      PostgREST-Antwort und ist trotzdem keine (P4). */
   nichtJson: false,
+  vorKatalogAntwort: null,
 };
 let fetchCalls = [];
 globalThis.fetch = async (url, opts = {}) => {
@@ -89,6 +90,12 @@ globalThis.fetch = async (url, opts = {}) => {
   if (s.includes("/rest/v1/kd_store")) {
     return merke({ ok: true, status: 200, json: async () => [{ owner: "demo", key: "kd:master", value: "{}" }], text: async () => "" });
   }
+  const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
+  if (name && typeof netz.vorKatalogAntwort === "function") {
+    const hook = netz.vorKatalogAntwort;
+    netz.vorKatalogAntwort = null;
+    await hook({ name, headers });
+  }
   if (netz.offline) throw new Error("network offline (Test)");
   if (netz.status401 > 0) {
     netz.status401 -= 1;
@@ -103,7 +110,6 @@ globalThis.fetch = async (url, opts = {}) => {
       text: async () => "<!doctype html><title>Bitte im WLAN anmelden</title>",
     });
   }
-  const name = new URL(s).searchParams.get("name")?.replace(/^eq\./, "");
   const zeile = KATALOG_ZEILEN[name];
   const mitToken = !!headers.Authorization;
   const sichtbar = !!zeile && !netz.fehlend.has(name) && (mitToken || !NUR_ANGEMELDET.has(name));
@@ -251,15 +257,56 @@ check("Demo-Snapshot mit gueltig_bis in der Zukunft gilt nicht als abgelaufen",
    durch den echten Auth-Treiber. Der liest sein Token aus localStorage — eine
    gesetzte Sitzung ist damit „angemeldet", eine gelöschte „Gast". */
 setKatalogTokenProvider(null);
-const { catalogService, katalogTokenErlaubt, baueKatalogTokenProvider } = await import("./src/services/catalog.js");
+const {
+  createCatalogService, katalogTokenErlaubt, katalogVarianteAusSession,
+  baueKatalogTokenProvider,
+} = await import("./src/services/catalog.js");
 const { ERROR_CODES } = await import("./src/services/errors.js");
 const { AUTH_SESSION_KEY, AUTH_ZUSTAND } = await import("./src/lib/authDriver.js");
+const { authDriver } = await import("./src/services/auth.js");
 const SITZUNGSTOKEN = "test-zugriffstoken-platzhalter";
-const anmelden = () => localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
-  v: 1, access_token: SITZUNGSTOKEN, refresh_token: "test-erneuerungswert-platzhalter",
-  gueltigBis: Date.now() + 3600000, kontoId: "test-konto", mail: "tester@login.kinodreieck.at", benutzername: "tester",
-}));
-const abmelden = () => localStorage.removeItem(AUTH_SESSION_KEY);
+const aktiveKatalogSession = (id = "test-konto") => ({
+  mode: "account", state: "ready", account: { id },
+  capabilities: { remoteStorage: true, personalAi: false },
+});
+let katalogSession = { mode: "guest", state: "ready", account: null, capabilities: {} };
+const katalogAuth = { getSnapshot: () => katalogSession };
+const catalogService = createCatalogService({ auth: katalogAuth, driver: authDriver });
+setKatalogTokenProvider(baueKatalogTokenProvider("", katalogAuth, authDriver));
+const anmelden = () => {
+  katalogSession = aktiveKatalogSession();
+  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+    v: 1, access_token: SITZUNGSTOKEN, refresh_token: "test-erneuerungswert-platzhalter",
+    gueltigBis: Date.now() + 3600000, kontoId: "test-konto", mail: "tester@login.kinodreieck.at", benutzername: "tester",
+  }));
+};
+const abmelden = () => {
+  katalogSession = { mode: "guest", state: "ready", account: null, capabilities: {} };
+  localStorage.removeItem(AUTH_SESSION_KEY);
+};
+
+check("Rollen-v1: Nur ready + remoteStorage=true ergibt die Live-Variante",
+  katalogVarianteAusSession(aktiveKatalogSession()) === "live");
+check("Rollen-v1: fehlend, inaktiv, degradiert und alte Session ohne Capability bleiben Demo",
+  [
+    null,
+    { mode: "account", state: "ready", account: { id: "test-konto" }, capabilities: { remoteStorage: false } },
+    { mode: "account", state: "degraded", account: { id: "test-konto" }, capabilities: { remoteStorage: true } },
+    { mode: "account", state: "ready", account: { id: "test-konto" }, capabilities: {} },
+  ].every((session) => katalogVarianteAusSession(session) === "demo"));
+
+let raceSession = aktiveKatalogSession("konto-a");
+const raceService = createCatalogService({
+  auth: { getSnapshot: () => raceSession },
+  driver: {
+    async getAccessToken() {
+      raceSession = aktiveKatalogSession("konto-b");
+      return "token-a";
+    },
+  },
+});
+check("Verspäteter A-Tokengriff kann nach A→B die Live-Variante nicht freischalten",
+  (await raceService.activeVariant()) === "demo");
 
 abmelden();
 await verwerfeKatalogCache();
@@ -280,6 +327,89 @@ check("Angemeldet lädt die Live-Zeile programm",
 check("Live-Request trägt das Sitzungstoken als Bearer",
   fetchCalls.at(-1)?.headers?.Authorization === "Bearer " + SITZUNGSTOKEN);
 
+/* Eine vorhandene technische Sitzung ohne fachliche Freigabe bleibt auf dem
+   öffentlichen Pfad. Der Demo-Read ist dabei auch tokenfrei. */
+katalogSession = {
+  mode: "account", state: "ready", account: { id: "test-konto" },
+  capabilities: { remoteStorage: false, personalAi: false },
+};
+await verwerfeKatalogCache();
+fetchCalls = [];
+check("Inaktives Konto: activeVariant() meldet fail-closed „demo“",
+  (await catalogService.activeVariant()) === "demo");
+const inaktiverBereich = await catalogService.loadArea("programm");
+check("Inaktives Konto lädt nur programm_demo und sendet kein Sitzungstoken",
+  inaktiverBereich.asset === "programm_demo" && inaktiverBereich.variante === "demo"
+  && !fetchCalls.at(-1)?.headers?.Authorization);
+
+fetchCalls = [];
+let erzwungenLive = null;
+try { await catalogService.loadArea("programm", { variante: "live" }); } catch (error) { erzwungenLive = error; }
+check("Eine explizite live-Option kann die fehlende Freigabe nicht umgehen",
+  erzwungenLive?.code === ERROR_CODES.FORBIDDEN && erzwungenLive?.reason === "remoteStorage"
+  && fetchCalls.length === 0);
+
+anmelden();
+await verwerfeKatalogCache();
+netz.vorKatalogAntwort = () => {
+  katalogSession = {
+    ...aktiveKatalogSession(),
+    capabilities: { remoteStorage: false, personalAi: false },
+  };
+};
+let widerrufImRead = null;
+try { await catalogService.loadArea("programm"); } catch (error) { widerrufImRead = error; }
+check("Widerruf während des Live-Fetch verwirft die Antwort vollständig",
+  widerrufImRead?.code === ERROR_CODES.FORBIDDEN && widerrufImRead?.reason === "remoteStorage");
+
+anmelden();
+await verwerfeKatalogCache();
+netz.vorKatalogAntwort = () => { katalogSession = aktiveKatalogSession("konto-b"); };
+let wechselImRead = null;
+try { await catalogService.loadArea("programm"); } catch (error) { wechselImRead = error; }
+check("A→B während des Live-Fetch kann keinen A-Lauf als B-Erfolg liefern",
+  wechselImRead?.code === ERROR_CODES.FORBIDDEN && wechselImRead?.reason === "remoteStorage");
+
+anmelden();
+await verwerfeKatalogCache();
+await catalogService.loadArea("programm");
+netz.offline = true;
+netz.vorKatalogAntwort = () => {
+  katalogSession = {
+    ...aktiveKatalogSession(),
+    capabilities: { remoteStorage: false, personalAi: false },
+  };
+};
+let widerrufMitLiveCache = null;
+try { await catalogService.loadArea("programm"); } catch (error) { widerrufMitLiveCache = error; }
+netz.offline = false;
+check("Widerruf macht auch einen vorhandenen Live-Cache unsichtbar",
+  widerrufMitLiveCache?.code === ERROR_CODES.FORBIDDEN
+  && widerrufMitLiveCache?.reason === "remoteStorage");
+
+anmelden();
+await verwerfeKatalogCache();
+netz.vorKatalogAntwort = () => {
+  katalogSession = {
+    ...aktiveKatalogSession(),
+    capabilities: { remoteStorage: false, personalAi: false },
+  };
+};
+let rawWiderruf = null;
+try { await catalogService.loadAsset("programm"); } catch (error) { rawWiderruf = error; }
+check("Roher Live-Asset-Read verwirft einen Widerruf während des Transports",
+  rawWiderruf?.code === ERROR_CODES.FORBIDDEN);
+
+anmelden();
+netz.vorKatalogAntwort = () => { katalogSession = aktiveKatalogSession("konto-b"); };
+let verbindungsWechsel = null;
+try { await catalogService.testConnection({ bereich: "programm", variante: "live" }); }
+catch (error) { verbindungsWechsel = error; }
+check("Live-Verbindungsprüfung verwirft A→B während des Transports",
+  verbindungsWechsel?.code === ERROR_CODES.FORBIDDEN);
+
+anmelden();
+
 await verwerfeKatalogCache();
 fetchCalls = [];
 const bekanntBereich = await catalogService.loadArea("streamingBekannt");
@@ -294,19 +424,14 @@ check("Entdecken-Read lädt erst auf eigenen Aufruf die große getrennte Zeile",
   && entdeckenBereich.payload.titel[0]?.titel === "Entdecken live"
   && fetchCalls.length === 2);
 
-/* --- B1: leere Live-Zeile OHNE Token ist „Anmeldung nötig", kein Datenfehler --- */
+/* --- Rollen-v1: Ein expliziter Live-Wunsch ohne Freigabe endet VOR Netz. --- */
 abmelden();
 await verwerfeKatalogCache();
 fetchCalls = [];
 let b1 = null;
 try { await catalogService.loadArea("programm", { variante: "live" }); } catch (e) { b1 = e; }
-check("B1: leeres Ergebnis auf der Live-Zeile ohne Token => UNAUTHENTICATED",
-  b1?.code === ERROR_CODES.UNAUTHENTICATED && b1?.status === 401);
-/* Der blanke `!==`-Vergleich war durch den Check darüber bereits erzwungen und
-   konnte nie eigenständig anschlagen. Geprüft wird jetzt zusätzlich der GRUND —
-   das ist der Unterschied, an dem die Grenzschicht wirklich entscheidet. */
-check("B1: eben NICHT INVALID_RESPONSE („ungültige Antwort“) — der Grund ist vermerkt, nicht geraten",
-  b1?.code !== ERROR_CODES.INVALID_RESPONSE && b1?.reason === KATALOG_GRUENDE.ANMELDUNG);
+check("Live ohne fachliche Freigabe => FORBIDDEN ohne HTTP- oder Cache-Zugriff",
+  b1?.code === ERROR_CODES.FORBIDDEN && b1?.reason === "remoteStorage" && fetchCalls.length === 0);
 
 /* --- Gegenprobe: leer TROTZ Token ist ein echter Fehler, kein Demo-Rückfall --- */
 anmelden();
@@ -342,13 +467,13 @@ check("F4: der abgelehnte Schlüssel wird NICHT als „Anmeldung nötig“ gemel
   schluesselFehler?.code !== ERROR_CODES.UNAUTHENTICATED);
 check("F4: INVALID_KEY ist nicht wiederholbar — erneut probieren hilft nicht",
   schluesselFehler?.retryable === false);
-/* Der eigentliche Befund: beide Fälle sehen auf Statusebene identisch aus.
-   Verschmelzen sie wieder zu einem Statusvergleich, kippt genau dieser Check. */
-check("F4: echter 401 und leere Live-Zeile tragen beide Status 401 — unterschieden wird am Grund, nicht am Status",
-  schluesselFehler?.status === 401 && b1?.status === 401
-  && schluesselFehler.code !== b1.code
+/* Der fachliche Guard liegt jetzt noch vor diesem HTTP-Vertrag: Ohne Freigabe
+   entsteht gar kein Live-Request. Ein echter Server-401 bleibt trotzdem sauber
+   als Schlüsselproblem klassifiziert. */
+check("F4: echter Server-401 bleibt INVALID_KEY; fehlende Freigabe endet früher als FORBIDDEN",
+  schluesselFehler?.status === 401
   && schluesselFehler.reason === KATALOG_GRUENDE.SCHLUESSEL
-  && b1.reason === KATALOG_GRUENDE.ANMELDUNG);
+  && b1?.code === ERROR_CODES.FORBIDDEN && b1?.status == null);
 
 abmelden();
 await verwerfeKatalogCache();
@@ -376,12 +501,11 @@ anmelden();
 await verwerfeKatalogCache();
 await catalogService.loadArea("programm");            // Live-Zeile in den Cache legen
 abmelden();
-const cacheOhneAnmeldung = await catalogService.loadArea("programm", { variante: "live" });
-check("F4-Gegenprobe: derselbe Cache-Weg meldet ohne Anmeldung UNAUTHENTICATED statt INVALID_KEY",
-  cacheOhneAnmeldung.quelle === "cache"
-  && cacheOhneAnmeldung.code === ERROR_CODES.UNAUTHENTICATED
-  && cacheOhneAnmeldung.code !== ERROR_CODES.INVALID_KEY
-  && cacheOhneAnmeldung.anmeldungNoetig === true);
+fetchCalls = [];
+let cacheOhneAnmeldung = null;
+try { await catalogService.loadArea("programm", { variante: "live" }); } catch (error) { cacheOhneAnmeldung = error; }
+check("Ein früherer Live-Cache ist ohne Freigabe weder per Netz noch per Cache erreichbar",
+  cacheOhneAnmeldung?.code === ERROR_CODES.FORBIDDEN && fetchCalls.length === 0);
 
 /* ================= F5: fehlende Demo-Zeile ist ein eigener Zustand =================
    Die *_demo-Zeilen sind für alle lesbar. Fehlen sie, ist schlicht noch nichts
@@ -431,8 +555,9 @@ check("P4: eine HTML-Seite mit Status 200 wird NICHT zu „noch nichts veröffen
 check("P4: sie wird auch weder zu „Anmeldung nötig“ noch zu „Schlüssel abgelehnt“",
   htmlAntwort?.code !== ERROR_CODES.UNAUTHENTICATED && htmlAntwort?.code !== ERROR_CODES.INVALID_KEY);
 
-/* Derselbe Körper auf der LIVE-Zeile ohne Token: er darf auch dort nicht als
-   lautloser RLS-Filter (200 + leeres Array) durchgehen. */
+/* Derselbe Körper auf der fachlich erlaubten LIVE-Zeile: er darf auch dort
+   nicht als lautloser RLS-Filter durchgehen. */
+anmelden();
 await verwerfeKatalogCache();
 netz.nichtJson = true;
 let htmlLive = null;
@@ -442,6 +567,7 @@ check("P4: nicht-JSON auf der Live-Zeile ist ebenfalls INVALID_RESPONSE, kein RL
   htmlLive?.code === ERROR_CODES.INVALID_RESPONSE && htmlLive?.reason !== KATALOG_GRUENDE.ANMELDUNG);
 
 /* Gegenprobe: das ECHTE leere Array läuft weiterhin in die Unterscheidung. */
+abmelden();
 netz.fehlend.add("programm_demo");
 await verwerfeKatalogCache();
 fetchCalls = [];
@@ -454,21 +580,25 @@ check("P4-Gegenprobe: das echte leere Array bleibt auf der Demo-Zeile NO_DEMO_DA
 await verwerfeKatalogCache();
 fetchCalls = [];
 let echtLeerLive = null;
+anmelden();
+netz.fehlend.add("programm");
 try { await catalogService.loadArea("programm", { variante: "live" }); } catch (e) { echtLeerLive = e; }
 const statiLeerLive = fetchCalls.map((c) => c.status);
-check("P4-Gegenprobe: das echte leere Array bleibt auf der Live-Zeile ohne Token UNAUTHENTICATED",
-  echtLeerLive?.code === ERROR_CODES.UNAUTHENTICATED && echtLeerLive?.status === 401);
+netz.fehlend.delete("programm");
+check("P4-Gegenprobe: leere Live-Zeile trotz gültiger Freigabe bleibt INVALID_RESPONSE",
+  echtLeerLive?.code === ERROR_CODES.INVALID_RESPONSE && echtLeerLive?.reason == null);
 /* Der Kern der Aussage ist das Wort „derselbe": dass die drei Urteile
    verschieden sind, war durch die drei Checks darüber schon festgenagelt — das
    allein verglich nur Konstanten des Tests miteinander. Belegt werden muss, dass
    alle drei Läufe wirklich HTTP 200 gesehen haben; sonst unterschiede die App
    womöglich am Status statt am Körper, und niemand würde es merken. */
 const p4Stati = [...statiHtml, ...statiLeerDemo, ...statiLeerLive];
-check("P4: derselbe HTTP-Status 200 führt je nach Körper zu drei verschiedenen Urteilen",
+check("P4: HTTP 200 mit HTML bleibt ungültig; nur echtes leeres Demo-Array wird NO_DEMO_DATA",
   p4Stati.length >= 3 && p4Stati.every((s) => s === 200)
-  && htmlAntwort?.code !== echtLeerDemo?.code
-  && htmlAntwort?.code !== echtLeerLive?.code
-  && echtLeerDemo?.code !== echtLeerLive?.code);
+  && htmlAntwort?.code === ERROR_CODES.INVALID_RESPONSE
+  && htmlLive?.code === ERROR_CODES.INVALID_RESPONSE
+  && echtLeerLive?.code === ERROR_CODES.INVALID_RESPONSE
+  && echtLeerDemo?.code === ERROR_CODES.NO_DEMO_DATA);
 
 /* ============ P5: storedVariant() urteilt synchron und ohne Token ============
    Der Boot fragt nur eines: „passt der gespeicherte Programm-Topf zur
@@ -481,8 +611,6 @@ check("P4: derselbe HTTP-Status 200 führt je nach Körper zu drei verschiedenen
    Erneuerungsmaschinerie betritt, ändert dessen Zustand (AUTH_ZUSTAND).
    storedVariant() darf keine Spur hinterlassen — und da es synchron ist, kann
    es gar keine Antwort abwarten. */
-const { authDriver } = await import("./src/services/auth.js");
-
 abmelden();
 check("P5: ohne gespeicherte Sitzung meldet storedVariant() „demo“",
   catalogService.storedVariant() === "demo");
@@ -572,7 +700,7 @@ check("F6: ohne bekannte Projekt-URL gibt es nichts zu vergleichen — bisherige
    Guard und der Griff zum Auth-Treiber sind unverändert der Produktionscode.
    Der Wrapper schreibt ausschließlich mit — entschieden wird nichts in ihm. */
 const F6_PROJEKT = "https://projekt-a.supabase.co";
-const f6Provider = baueKatalogTokenProvider(F6_PROJEKT);
+const f6Provider = baueKatalogTokenProvider(F6_PROJEKT, katalogAuth, authDriver);
 let f6Aufrufe = [];
 setKatalogTokenProvider((opts = {}) => { f6Aufrufe.push(opts); return f6Provider(opts); });
 
@@ -580,7 +708,7 @@ anmelden();
 setKatalogZugang({ url: "https://fremd-projekt.supabase.co", key: publishable });
 await verwerfeKatalogCache();
 fetchCalls = []; f6Aufrufe = [];
-const fremdesProjekt = await ladeKatalogAsset("programm_demo");
+const fremdesProjekt = await ladeKatalogAsset("programm_demo", { erwarteteKontoId: "test-konto" });
 check("F6-Durchstich (produktiver Provider aus baueKatalogTokenProvider): fremde Katalog-URL ⇒ Request ohne Authorization",
   fetchCalls.length === 1 && !fetchCalls[0].headers.Authorization && fetchCalls[0].headers.apikey === publishable);
 check("F6-Durchstich: der Read läuft trotzdem durch — anon statt Abbruch",
@@ -593,7 +721,7 @@ check("F6: holeToken reicht die Katalog-URL an den produktiven Provider durch �
 setKatalogZugang({ url: F6_PROJEKT, key: publishable });
 await verwerfeKatalogCache();
 fetchCalls = [];
-const eigenesProjekt = await ladeKatalogAsset("programm");
+const eigenesProjekt = await ladeKatalogAsset("programm", { erwarteteKontoId: "test-konto" });
 check("F6-Gegenprobe: bei übereinstimmender Projekt-URL gibt derselbe Provider das Sitzungstoken frei",
   fetchCalls.at(-1)?.headers?.Authorization === "Bearer " + SITZUNGSTOKEN);
 check("F6-Gegenprobe: erst mit Token wird die Live-Zeile überhaupt sichtbar",

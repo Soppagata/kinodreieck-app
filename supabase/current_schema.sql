@@ -2,8 +2,9 @@
 -- Kinodreieck: bereinigter Current-Schema-Snapshot
 -- Erzeugt am 31.07.2026 aus dem verknüpften Produktionsprojekt mit
 -- `supabase db dump --linked --schema public` und PostgreSQL 17; anschließend
--- auf den angewandten Stand 20260802220000 gebracht. Erwarteter Stand danach:
--- 20 Tabellen / 45 Funktionen / 14 Trigger / 25 Policies.
+-- auf den lokal vorbereiteten Rollen-v1-Stand 20260809121000 gebracht.
+-- Erwarteter Stand danach:
+-- 21 Tabellen / 47 Funktionen / 15 Trigger / 26 Policies.
 --
 -- Enthält ausschließlich Schema: Tabellen, Constraints, Funktionen, Trigger,
 -- RLS-Policies und Grants. Keine Tabellenzeilen, Konten oder Secrets.
@@ -29,6 +30,45 @@ ALTER SCHEMA "public" OWNER TO "pg_database_owner";
 
 
 COMMENT ON SCHEMA "public" IS 'standard public schema';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."kd_account_access_touch"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_at := now();
+  else
+    new.account_id := old.account_id;
+    new.created_at := old.created_at;
+  end if;
+  new.updated_at := now();
+  return new;
+end
+$$;
+
+
+ALTER FUNCTION "public"."kd_account_access_touch"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."kd_account_active"() RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
+    AS $$
+  select coalesce((
+    select a.active
+      from public.kd_account_access as a
+     where a.account_id = (select auth.uid())
+  ), false)
+$$;
+
+
+ALTER FUNCTION "public"."kd_account_active"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."kd_account_active"() IS 'Fail-closed Rollen-v1-Pruefung fuer die aktuelle Sitzung; keine Account-ID als Parameter und kein Fremdlesen.';
 
 
 
@@ -64,38 +104,72 @@ COMMENT ON FUNCTION "public"."kd_ai_auftrag_beenden"("p_id" bigint, "p_status" "
 CREATE OR REPLACE FUNCTION "public"."kd_ai_auftrag_starten"("p_account" "uuid", "p_task" "text", "p_vorgang" "uuid", "p_modell_alias" "text" DEFAULT NULL::"text", "p_prompt_version" "text" DEFAULT NULL::"text", "p_profil_version" "text" DEFAULT NULL::"text", "p_reservierung" numeric DEFAULT 0) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'pg_temp'
-    AS $_$
+    AS $$
 declare
-  v_cap jsonb;
+  v_global_cap jsonb;
+  v_task_cap jsonb;
+  v_wirksam numeric;
 begin
-  if p_task = 'filmwissen-synthese' then
-    select wert->p_task into v_cap
-      from public.kd_ai_limits
-     where schluessel = 'task_max_reservierung_usd_cent';
-    if p_modell_alias is distinct from 'gross'
-       or jsonb_typeof(v_cap) is distinct from 'number'
-       or (v_cap #>> '{}') !~ '^[0-9]+(\.[0-9]+)?$'
-       or p_reservierung is null
-       or p_reservierung::text !~ '^[0-9]+(\.[0-9]+)?$' then
+  select wert into v_global_cap
+    from public.kd_ai_limits
+   where schluessel = 'anbieter_request_max_usd_cent';
+
+  if jsonb_typeof(v_global_cap) is distinct from 'number'
+     or (v_global_cap #>> '{}') !~ '^[0-9]+(\.[0-9]+)?$'
+     or (v_global_cap #>> '{}')::numeric <= 0
+     or (v_global_cap #>> '{}')::numeric > 500
+     or p_reservierung is null
+     or p_reservierung::text !~ '^[0-9]+(\.[0-9]+)?$' then
+    return jsonb_build_object(
+      'ok',false,'code','server','grund','anbieter-request-kostenzaun-ungueltig'
+    );
+  end if;
+
+  v_wirksam := (v_global_cap #>> '{}')::numeric;
+  if p_task = 'filmwissen-synthese'
+     and p_modell_alias is distinct from 'gross' then
+    return jsonb_build_object(
+      'ok',false,'code','server','grund','task-kostenkonfiguration-ungueltig'
+    );
+  end if;
+  select wert->p_task into v_task_cap
+    from public.kd_ai_limits
+   where schluessel = 'task_max_reservierung_usd_cent';
+
+  if v_task_cap is not null then
+    if jsonb_typeof(v_task_cap) is distinct from 'number'
+       or (v_task_cap #>> '{}') !~ '^[0-9]+(\.[0-9]+)?$'
+       or (v_task_cap #>> '{}')::numeric <= 0
+       or (v_task_cap #>> '{}')::numeric > v_wirksam then
       return jsonb_build_object(
         'ok',false,'code','server','grund','task-kostenkonfiguration-ungueltig'
       );
     end if;
-    if p_reservierung > (v_cap #>> '{}')::numeric then
-      return jsonb_build_object(
-        'ok',false,'code','limit','grund','task-kostenlimit-ueberschritten'
-      );
-    end if;
+    v_wirksam := least(v_wirksam, (v_task_cap #>> '{}')::numeric);
+  elsif p_task in ('filmwissen-synthese', 'media-batch-extract') then
+    return jsonb_build_object(
+      'ok',false,'code','server','grund','task-kostenkonfiguration-ungueltig'
+    );
   end if;
+
+  if p_reservierung > v_wirksam then
+    return jsonb_build_object(
+      'ok',false,'code','limit','grund','anbieter-request-kostenlimit-ueberschritten'
+    );
+  end if;
+
   return public.kd_ai_auftrag_starten_ohne_task_cap(
     p_account,p_task,p_vorgang,p_modell_alias,p_prompt_version,
     p_profil_version,p_reservierung
   );
 end
-$_$;
+$$;
 
 
 ALTER FUNCTION "public"."kd_ai_auftrag_starten"("p_account" "uuid", "p_task" "text", "p_vorgang" "uuid", "p_modell_alias" "text", "p_prompt_version" "text", "p_profil_version" "text", "p_reservierung" numeric) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."kd_ai_auftrag_starten"("p_account" "uuid", "p_task" "text", "p_vorgang" "uuid", "p_modell_alias" "text", "p_prompt_version" "text", "p_profil_version" "text", "p_reservierung" numeric) IS 'Prueft vor jedem Anbieterrequest atomar universellen Owner-Cap (maximal 500 US-Cent), optionale engere Task-Caps, Not-Aus, Monatsbudget, Tageslimit und Parallelitaet; nur service_role.';
 
 
 CREATE OR REPLACE FUNCTION "public"."kd_ai_auftrag_starten_ohne_task_cap"("p_account" "uuid", "p_task" "text", "p_vorgang" "uuid", "p_modell_alias" "text" DEFAULT NULL::"text", "p_prompt_version" "text" DEFAULT NULL::"text", "p_profil_version" "text" DEFAULT NULL::"text", "p_reservierung" numeric DEFAULT 0) RETURNS "jsonb"
@@ -600,6 +674,9 @@ declare
 begin
   if auth.uid() is null then
     raise exception 'anmeldung_noetig' using errcode = '42501';
+  end if;
+  if not public.kd_account_active() then
+    raise exception 'account_inactive' using errcode = '42501';
   end if;
   if v_kennung is null then
     raise exception 'kennung_ungueltig' using errcode = '22023';
@@ -2208,6 +2285,9 @@ begin
   if v_account_id is null then
     raise exception 'authenticated account required' using errcode = '42501';
   end if;
+  if not public.kd_account_active() then
+    raise exception 'account_inactive' using errcode = '42501';
+  end if;
   if p_share_token is null then
     raise exception 'share token required' using errcode = '22023';
   end if;
@@ -2294,19 +2374,22 @@ ALTER FUNCTION "public"."kd_personal_touch"() OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."kd_set_series_watch"("p_watchmode_ids" bigint[]) RETURNS "void"
     LANGUAGE "plpgsql"
-    SET "search_path" TO 'public', 'pg_temp'
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 declare
   v_account uuid := auth.uid();
   v_ids bigint[] := coalesce(p_watchmode_ids, array[]::bigint[]);
 begin
   if v_account is null then
-    raise exception 'Anmeldung erforderlich';
+    raise exception 'Anmeldung erforderlich' using errcode = '42501';
+  end if;
+  if not public.kd_account_active() then
+    raise exception 'account_inactive' using errcode = '42501';
   end if;
   if cardinality(v_ids) > 200 or exists (
     select 1 from unnest(v_ids) as id where id is null or id <= 0
   ) then
-    raise exception 'Ungültige Serien-Beobachtungsliste';
+    raise exception 'Ungueltige Serien-Beobachtungsliste' using errcode = '22023';
   end if;
 
   delete from public.kd_series_watch where account_id = v_account;
@@ -2425,6 +2508,33 @@ ALTER FUNCTION "public"."kd_touch"() OWNER TO "postgres";
 SET default_tablespace = '';
 
 SET default_table_access_method = "heap";
+
+
+CREATE TABLE IF NOT EXISTS "public"."kd_account_access" (
+    "account_id" "uuid" NOT NULL,
+    "role" "text" DEFAULT 'member'::"text" NOT NULL,
+    "active" boolean DEFAULT false NOT NULL,
+    "personal_ai" boolean DEFAULT false NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "kd_account_access_personal_ai_requires_active" CHECK ((NOT "personal_ai" OR "active")),
+    CONSTRAINT "kd_account_access_role_valid" CHECK (("role" = ANY (ARRAY['member'::"text", 'owner'::"text"])))
+);
+
+
+ALTER TABLE "public"."kd_account_access" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."kd_account_access" IS 'Autoritative Rollen-v1-Freigabe je Auth-Konto. Browser lesen nur die eigene Zeile; Verwaltung ausschliesslich service_role.';
+
+
+COMMENT ON COLUMN "public"."kd_account_access"."role" IS 'Fachliche Rolle member oder owner. owner hat in Rollen-v1 keine zusaetzlichen Produktrechte.';
+
+
+COMMENT ON COLUMN "public"."kd_account_access"."active" IS 'Fachliche Freigabe fuer kontogebundene Remote-Datenpfade.';
+
+
+COMMENT ON COLUMN "public"."kd_account_access"."personal_ai" IS 'Zusaetzliche Freigabe fuer persoenliche KI; darf nur bei active=true gesetzt sein.';
 
 
 CREATE TABLE IF NOT EXISTS "public"."kd_ai_limits" (
@@ -2917,6 +3027,11 @@ CREATE TABLE IF NOT EXISTS "public"."kd_store" (
 ALTER TABLE "public"."kd_store" OWNER TO "postgres";
 
 
+ALTER TABLE ONLY "public"."kd_account_access"
+    ADD CONSTRAINT "kd_account_access_pkey" PRIMARY KEY ("account_id");
+
+
+
 ALTER TABLE ONLY "public"."kd_ai_limits"
     ADD CONSTRAINT "kd_ai_limits_pkey" PRIMARY KEY ("schluessel");
 
@@ -3092,6 +3207,10 @@ CREATE INDEX "kd_fwz_werk_idx" ON "public"."kd_filmwissen_zeigerlog" USING "btre
 
 
 
+CREATE OR REPLACE TRIGGER "kd_account_access_touch_trg" BEFORE INSERT OR UPDATE ON "public"."kd_account_access" FOR EACH ROW EXECUTE FUNCTION "public"."kd_account_access_touch"();
+
+
+
 CREATE OR REPLACE TRIGGER "kd_block_legacy_shared_write_trg" BEFORE INSERT OR UPDATE ON "public"."kd_store" FOR EACH ROW EXECUTE FUNCTION "public"."kd_block_legacy_shared_write"();
 
 
@@ -3144,6 +3263,11 @@ CREATE OR REPLACE TRIGGER "kd_shared_article_touch_trg" BEFORE INSERT OR UPDATE 
 
 
 CREATE OR REPLACE TRIGGER "kd_touch_trg" BEFORE INSERT OR UPDATE ON "public"."kd_store" FOR EACH ROW EXECUTE FUNCTION "public"."kd_touch"();
+
+
+
+ALTER TABLE ONLY "public"."kd_account_access"
+    ADD CONSTRAINT "kd_account_access_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
 
 
@@ -3258,6 +3382,13 @@ CREATE POLICY "ins_user" ON "public"."kd_store" FOR INSERT TO "anon" WITH CHECK 
 
 
 
+ALTER TABLE "public"."kd_account_access" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "kdaa_own_select" ON "public"."kd_account_access" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+
+
+
 ALTER TABLE "public"."kd_ai_limits" ENABLE ROW LEVEL SECURITY;
 
 
@@ -3267,7 +3398,7 @@ ALTER TABLE "public"."kd_ai_log" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."kd_catalog" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "kd_catalog_read_konto" ON "public"."kd_catalog" FOR SELECT TO "authenticated" USING (true);
+CREATE POLICY "kd_catalog_read_konto" ON "public"."kd_catalog" FOR SELECT TO "authenticated" USING (( SELECT "public"."kd_account_active"() AS "kd_account_active"));
 
 
 
@@ -3314,7 +3445,7 @@ ALTER TABLE "public"."kd_series_watch" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."kd_quellen" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "kd_quellen_read_konto" ON "public"."kd_quellen" FOR SELECT TO "authenticated" USING (true);
+CREATE POLICY "kd_quellen_read_konto" ON "public"."kd_quellen" FOR SELECT TO "authenticated" USING (( SELECT "public"."kd_account_active"() AS "kd_account_active"));
 
 
 
@@ -3327,52 +3458,52 @@ ALTER TABLE "public"."kd_shared_article_claims" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."kd_store" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "kdai_log_sel" ON "public"."kd_ai_log" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdai_log_sel" ON "public"."kd_ai_log" FOR SELECT TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdp_del" ON "public"."kd_personal" FOR DELETE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdp_del" ON "public"."kd_personal" FOR DELETE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdp_ins" ON "public"."kd_personal" FOR INSERT TO "authenticated" WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdp_ins" ON "public"."kd_personal" FOR INSERT TO "authenticated" WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdp_sel" ON "public"."kd_personal" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdp_sel" ON "public"."kd_personal" FOR SELECT TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdp_upd" ON "public"."kd_personal" FOR UPDATE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdp_upd" ON "public"."kd_personal" FOR UPDATE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active"))) WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdsw_del" ON "public"."kd_series_watch" FOR DELETE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsw_del" ON "public"."kd_series_watch" FOR DELETE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
-CREATE POLICY "kdsw_ins" ON "public"."kd_series_watch" FOR INSERT TO "authenticated" WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsw_ins" ON "public"."kd_series_watch" FOR INSERT TO "authenticated" WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
-CREATE POLICY "kdsw_sel" ON "public"."kd_series_watch" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsw_sel" ON "public"."kd_series_watch" FOR SELECT TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
-CREATE POLICY "kdsw_upd" ON "public"."kd_series_watch" FOR UPDATE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
-
-
-
-CREATE POLICY "kdsa_owner_delete" ON "public"."kd_shared_articles" FOR DELETE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsw_upd" ON "public"."kd_series_watch" FOR UPDATE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active"))) WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdsa_owner_insert" ON "public"."kd_shared_articles" FOR INSERT TO "authenticated" WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsa_owner_delete" ON "public"."kd_shared_articles" FOR DELETE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdsa_owner_select" ON "public"."kd_shared_articles" FOR SELECT TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsa_owner_insert" ON "public"."kd_shared_articles" FOR INSERT TO "authenticated" WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
-CREATE POLICY "kdsa_owner_update" ON "public"."kd_shared_articles" FOR UPDATE TO "authenticated" USING (("account_id" = ( SELECT "auth"."uid"() AS "uid"))) WITH CHECK (("account_id" = ( SELECT "auth"."uid"() AS "uid")));
+CREATE POLICY "kdsa_owner_select" ON "public"."kd_shared_articles" FOR SELECT TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
+
+
+
+CREATE POLICY "kdsa_owner_update" ON "public"."kd_shared_articles" FOR UPDATE TO "authenticated" USING ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active"))) WITH CHECK ((("account_id" = ( SELECT "auth"."uid"() AS "uid")) AND ( SELECT "public"."kd_account_active"() AS "kd_account_active")));
 
 
 
@@ -3400,6 +3531,17 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."kd_account_access_touch"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."kd_account_access_touch"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."kd_account_active"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."kd_account_active"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."kd_account_active"() TO "service_role";
 
 
 
@@ -3583,8 +3725,8 @@ GRANT ALL ON FUNCTION "public"."kd_claim_shared_article"("p_share_token" "uuid")
 
 
 
+REVOKE ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."kd_key_ok"("the_owner" "text") TO "service_role";
 
 
@@ -3639,6 +3781,11 @@ GRANT ALL ON FUNCTION "public"."kd_touch"() TO "service_role";
 
 
 
+GRANT ALL ON TABLE "public"."kd_account_access" TO "service_role";
+GRANT SELECT ON TABLE "public"."kd_account_access" TO "authenticated";
+
+
+
 GRANT ALL ON TABLE "public"."kd_ai_limits" TO "service_role";
 
 
@@ -3648,14 +3795,12 @@ GRANT SELECT ON TABLE "public"."kd_ai_log" TO "authenticated";
 
 
 
-GRANT ALL ON SEQUENCE "public"."kd_ai_log_id_seq" TO "anon";
-GRANT ALL ON SEQUENCE "public"."kd_ai_log_id_seq" TO "authenticated";
 GRANT ALL ON SEQUENCE "public"."kd_ai_log_id_seq" TO "service_role";
 
 
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."kd_catalog" TO "anon";
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."kd_catalog" TO "authenticated";
+GRANT SELECT ON TABLE "public"."kd_catalog" TO "anon";
+GRANT SELECT ON TABLE "public"."kd_catalog" TO "authenticated";
 GRANT ALL ON TABLE "public"."kd_catalog" TO "service_role";
 
 
@@ -3672,12 +3817,11 @@ GRANT ALL ON TABLE "public"."kd_legacy_shared_archive" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."kd_owner" TO "authenticated";
 GRANT ALL ON TABLE "public"."kd_owner" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."kd_personal" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."kd_personal" TO "authenticated";
 GRANT ALL ON TABLE "public"."kd_personal" TO "service_role";
 
 
@@ -3696,13 +3840,12 @@ GRANT ALL ON TABLE "public"."kd_shared_article_claims" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."kd_shared_articles" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."kd_shared_articles" TO "authenticated";
 GRANT ALL ON TABLE "public"."kd_shared_articles" TO "service_role";
 
 
 
-GRANT ALL ON TABLE "public"."kd_store" TO "anon";
-GRANT ALL ON TABLE "public"."kd_store" TO "authenticated";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "public"."kd_store" TO "anon";
 GRANT ALL ON TABLE "public"."kd_store" TO "service_role";
 
 

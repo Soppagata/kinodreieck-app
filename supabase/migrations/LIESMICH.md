@@ -15,9 +15,12 @@ ist. Bei Problemen bleibt der kontrollierte Weg über
 `supabase db query --linked --file <genau-eine-migration.sql>` plus
 anschließendes `migration repair --status applied` erhalten.
 
-**Regel:** Was hier liegt, ist gelaufen oder läuft als Nächstes. Kein „noch nicht
-ausführen"-SQL im Ordner. Jede Datei ist idempotent formuliert, mehrfaches
-Ausführen ist gefahrlos.
+**Regel:** Was hier liegt, ist gelaufen oder läuft als Nächstes. Kein loses
+Ideen-SQL im Ordner. Historische Dateien sind idempotent formuliert. Die
+Rollen-v1-Access-Basis ist absichtlich strenger: Ein unerwartet vorhandener
+Objektname oder ein Wiederholungslauf bricht fail-closed ab, statt eine
+möglicherweise abweichende Tabelle still zu akzeptieren. Der Migrationsledger
+ist deshalb vor jedem einzelnen Lauf verbindlich zu prüfen.
 
 ## Reihenfolge
 
@@ -57,6 +60,8 @@ ausfüllen.
 | `20260802220000_shared_article_claim_tokens.sql` | `bscjgwcntapobyxsiyce` | 2026-08-02 | Codex über verknüpfte Management-API | erfolgreich; eindeutige unveränderliche Upload-Tokens, Autor-Claim beim Publish und atomare Einmal-Übernahme je Konto; `npm run test:rls` danach 67/67 grün; die ältere offene Stapelimport-Migration blieb unangetastet |
 | `20260808120000_ai_anbieter_request_kostenzaun.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; universeller 500-US-Cent-Vorabzaun, Sonnet-Preisboden 300/1500, Task-Caps 6/4 und service-only RPC remote verifiziert; Health grün, Rauchprobe 23/23 |
 | `20260808225500_etappe9_beta_tageslimit_30.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; Tageslimit numerisch auf 30 gesetzt; Betriebsschalter `ai_aktiv=true` und Not-Aus-Bereitschaft, Monatsdeckel 1000, Request-Cap 500, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 sowie Parallelität 2 unverändert verifiziert; alle 27 Migrationsversionen lokal/remote deckungsgleich |
+| `20260809120000_rollen_v1_access_basis.sql` | noch nicht remote angewandt | 2026-08-09 | Codex, Phase 1 lokal | vorbereitet und lokal geprüft; additive, noch nicht durchsetzende Access-Tabelle mit own-select-only, service-only Writes und fail-closed Helper; **STOP vor Remote-Lauf** |
+| `20260809121000_rollen_v1_access_enforcement.sql` | noch nicht remote angewandt | 2026-08-09 | Codex, Phase 1 lokal | vorbereitet und lokal geprüft; darf erst nach KI-Not-Aus, einzeln angewandter Basis, vollständigem Bootstrap und accountweiser Rückleseprüfung laufen; verengt zusätzlich Legacy-ACLs ohne active-Umdeutung (`kd_store`: nur anon-DML, `kd_owner`: kein Browser-Direktzugriff, `kd_key_ok`: anon-SECURITY-DEFINER-Pfad); **STOP vor Remote-Lauf** |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 
@@ -77,6 +82,60 @@ ausfüllen.
 `node tools/rls_test_personal.mjs` gegen dieselbe Datenbank laufen lassen (braucht
 zwei Testaccounts, Konfiguration nur über Umgebungsvariablen — siehe Kopf der Datei).
 Erst ein grüner Negativtest belegt, dass die Account-Isolation wirklich greift.
+
+## Rollen-v1: getrennte Remote-Reihenfolge
+
+Die beiden Rollen-v1-Dateien werden remote ausschließlich einzeln angewandt.
+Ein unqualifiziertes `supabase db push` über beide Dateien ist verboten, weil
+zwischen ihnen der bestätigte Bootstrap liegt. Der freizugebende Betriebsweg
+ist:
+
+1. `ai_aktiv=false` setzen und unabhängig rücklesen;
+2. ausschließlich `20260809120000_rollen_v1_access_basis.sql` anwenden;
+3. bestätigte bestehende Konten außerhalb des Repositories per `service_role`
+   bootstrappen und jede Freigabe rücklesen;
+4. erst danach `20260809121000_rollen_v1_access_enforcement.sql` anwenden;
+5. RLS-Vertrag in den drei Modi `active`, `inactive` und `missing` ausführen;
+6. KI bleibt bis zum späteren Function-/Staging-Gate ausgeschaltet.
+
+**Kompatibilitätsgrenze am STOP:** Der statische Befund für den bestehenden
+Frontend-Stand `bf82304` ist enger als „inaktiv sieht nichts“: Mit gültigem
+Sitzungstoken wählt dieser Stand weiterhin den Live-Katalogpfad. Bei
+`active=false` sperrt dessen RLS die Serverzeilen mit HTTP 200 und leerer Menge,
+der alte Katalogpfad kann aber einen bereits vorhandenen lokalen Live-Cache
+anzeigen. Derselbe Stand kennt noch keine Access-Maske für lokale persönliche
+Caches. Ein dediziertes inaktives Testkonto kann im alten Produktionsfrontend
+daher vorhandene lokale Altdaten sehen; Serverdaten und Serverwrites bleiben
+gesperrt. Für vollständig und rückgelesen aktiv gebootstrappte bestehende
+Produktionskonten entsteht dagegen kein Rollen-v1-Lockout. Diese Frontend-
+Einschränkung bleibt am Remote-STOP offen und wird nicht als serverseitiges
+RLS-Leck umgedeutet.
+
+`tools/rls_test_personal.mjs` verändert Access-Zeilen nicht selbst. Der aktive
+Modus benötigt zwei kontrolliert aktive Testkonten und beweist den bisherigen
+vollständigen Konto-Isolationsvertrag. Für die beiden fail-closed Modi wird
+Testkonto B vor dem jeweiligen Lauf über den vertrauenswürdigen Adminweg auf
+`active=false` gesetzt beziehungsweise seine Access-Zeile kontrolliert
+entfernt. Danach wird die bestätigte finale Kontomatrix wiederhergestellt und
+rückgelesen:
+
+```sh
+KD_RLS_ACCESS_MODE=active npm run test:rls
+KD_RLS_ACCESS_MODE=inactive npm run test:rls
+KD_RLS_ACCESS_MODE=missing npm run test:rls
+```
+
+Keiner dieser Testläufe enthält einen Anbieterrequest. Bei Fehlern bleibt die
+KI aus; die Durchsetzung wird nicht auf den alten auth-only-Vertrag
+zurückgerollt, sondern fail-closed vorwärts repariert.
+
+Der lokale Schema-Vertrag prüft zusätzlich die Legacy-ACLs ausdrücklich gegen
+RLS-Umgehung: anon erhält auf `kd_store` ausschließlich
+`SELECT/INSERT/UPDATE/DELETE`, authenticated dort nichts; weder `TRUNCATE` noch
+`MAINTAIN` ist damit für Browserrollen enthalten. `kd_owner` hat keinen direkten
+Browserzugriff. `kd_key_ok(text)` bleibt als SECURITY-DEFINER-Lesepfad nur für
+anon (und den service_role-Betriebsweg) ausführbar. Die bestehenden
+`kd_store`-Policies und der Header-Vertrag `x-kd-key` werden nicht verändert.
 
 ## Nach Migration 2 (Etappe 4)
 
@@ -106,6 +165,8 @@ Zwei neue Handgriffe im SQL-Editor:
   Funktionen, Trigger, Policies und Grants, einschließlich des alten
   `kd_store`-Basisschemas.
 
-`kd_store` (Legacy-Schlüssel-Sync) ist eingefroren. Der Rückbau seiner
-`scope=user`-Policies ist ein eigener, späterer Cleanup-Schritt und bekommt
-dann eine additive Migrationsdatei.
+`kd_store` (Legacy-Schlüssel-Sync) ist auf Datenmodell und Policies eingefroren.
+Rollen-v1 korrigiert ausschließlich die zu breiten Tabellenrechte auf den
+bereits bestehenden tokenfreien anon-Vertrag. Der Rückbau seiner
+`scope=user`-Policies ist weiterhin ein eigener, späterer Cleanup-Schritt und
+bekommt dann eine additive Migrationsdatei.

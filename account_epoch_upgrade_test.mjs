@@ -51,8 +51,18 @@ async function childMain() {
   };
   globalThis.fetch = async () => { throw new Error("Netz im Upgrade-Test verboten"); };
 
-  const { authService } = await import("./src/services/auth.js");
-  const { sessionCoordinator } = await import("./src/services/sessionCoordinator.js");
+  const { createSessionCoordinator } = await import("./src/services/sessionCoordinator.js");
+  const accessSession = Object.freeze({
+    mode: "account", state: "ready",
+    account: Object.freeze({ id: kontoId, displayName: kontoId, role: "member" }),
+    capabilities: Object.freeze({ remoteStorage: true, personalAi: false }),
+    access: Object.freeze({ status: "resolved", role: "member" }),
+  });
+  const auth = {
+    getSnapshot: () => accessSession,
+    initialize: async () => accessSession,
+  };
+  const sessionCoordinator = createSessionCoordinator({ auth, eventTarget: null });
   let session = null;
   let error = null;
   try { session = await sessionCoordinator.initialize(); }
@@ -61,7 +71,7 @@ async function childMain() {
   console.log("@@EPOCH_RESULT@@" + JSON.stringify({
     error,
     session,
-    auth: authService.getSnapshot(),
+    auth: auth.getSnapshot(),
     storageState: sessionCoordinator.getStorageState(),
     epochRaw: daten.get("kd:acct:epoch") ?? null,
     bindingRaw: daten.get("kd:acct:binding-schema") ?? null,

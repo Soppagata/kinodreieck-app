@@ -208,6 +208,8 @@ const z = {
   konfigLesbar: true,
   nutzer: { id: KONTO, role: "authenticated" } as Record<string, unknown>,
   nutzerStatus: 200,
+  kontofreigabe: [{ role: "owner", active: true, personal_ai: true }] as unknown,
+  kontofreigabeLesbar: true,
   start: { ok: true, log_id: LOG_ID, modell_alias: "klein" } as unknown,
   startHttpFehler: null as null | { status: number; koerper: unknown },
   stand: { heute: 0 } as unknown,
@@ -245,6 +247,8 @@ function stelleZurueck() {
   z.konfigLesbar = true;
   z.nutzer = { id: KONTO, role: "authenticated" };
   z.nutzerStatus = 200;
+  z.kontofreigabe = [{ role: "owner", active: true, personal_ai: true }];
+  z.kontofreigabeLesbar = true;
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
@@ -289,6 +293,18 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
   }
   if (url.includes("/auth/v1/")) {
     return antwort({ error: "nicht-unterstuetzt" }, 400);
+  }
+
+  if (url.includes("/rest/v1/kd_account_access")) {
+    if (!z.kontofreigabeLesbar) {
+      return antwort({
+        code: "42501",
+        message: "permission denied",
+        details: null,
+        hint: null,
+      }, 403);
+    }
+    return antwort(z.kontofreigabe);
   }
 
   if (url.includes("/rest/v1/kd_ai_limits")) {
@@ -666,6 +682,10 @@ function listeAusSystem(name: string): string[] {
 }
 
 const rpc = (name: string) => aufrufe.filter((a) => a.pfad === "/rest/v1/rpc/" + name);
+const kontofreigabeAufrufe = () =>
+  aufrufe.filter((a) => a.pfad === "/rest/v1/kd_account_access");
+const konfigAufrufe = () =>
+  aufrufe.filter((a) => a.pfad === "/rest/v1/kd_ai_limits");
 const anbieterAufrufe = () => aufrufe.filter((a) => a.url.includes("api.anthropic.com/v1/messages"));
 /* Der Diagnosepfad ruft einen ANDEREN Anbieterendpunkt. Er kostet keine Tokens,
    verbraucht aber das Ratenkontingent des echten Schlüssels — deshalb wird er
@@ -1337,6 +1357,140 @@ test("C4 nicht verifizierbares Token: 401", async () => {
   const r = await echoRuf();
   gleich(r.status, 401, "Status");
   gleich(r.daten.grund, "token-nicht-verifizierbar", "Grund");
+});
+
+test("C4a fachliche Kontofreigabe ist fail-closed vor Konfiguration, Log und Anbieter", async () => {
+  const faelle: Array<{
+    name: string;
+    daten: unknown;
+    lesbar?: boolean;
+    grund: string;
+  }> = [
+    { name: "keine Zeile", daten: [], grund: "kontofreigabe-fehlt" },
+    {
+      name: "mehrere Zeilen",
+      daten: [
+        { role: "member", active: true, personal_ai: true },
+        { role: "owner", active: true, personal_ai: true },
+      ],
+      grund: "kontofreigabe-fehlt",
+    },
+    {
+      name: "inaktiv",
+      daten: [{ role: "member", active: false, personal_ai: false }],
+      grund: "konto-inaktiv",
+    },
+    {
+      name: "ohne persoenliche KI",
+      daten: [{ role: "member", active: true, personal_ai: false }],
+      grund: "persoenliche-ki-nicht-freigegeben",
+    },
+    {
+      name: "unbekannte Rolle",
+      daten: [{ role: "admin", active: true, personal_ai: true }],
+      grund: "kontofreigabe-ungueltig",
+    },
+    {
+      name: "Nullzeile",
+      daten: [null],
+      grund: "kontofreigabe-ungueltig",
+    },
+    {
+      name: "formfremde Flags",
+      daten: [{ role: "owner", active: "true", personal_ai: true }],
+      grund: "kontofreigabe-ungueltig",
+    },
+    {
+      name: "RLS-Lesefehler",
+      daten: null,
+      lesbar: false,
+      grund: "kontofreigabe-nicht-lesbar",
+    },
+  ];
+
+  for (const fall of faelle) {
+    stelleZurueck();
+    z.kontofreigabe = fall.daten;
+    z.kontofreigabeLesbar = fall.lesbar ?? true;
+    const r = await echoRuf();
+    gleich(r.status, 403, `${fall.name}: Status`);
+    gleich(r.daten.code, "forbidden", `${fall.name}: Code`);
+    gleich(r.daten.grund, fall.grund, `${fall.name}: Grund`);
+    gleich(kontofreigabeAufrufe().length, 1, `${fall.name}: genau eine eigene RLS-Lesung`);
+    gleich(konfigAufrufe().length, 0, `${fall.name}: keine Admin-Konfiguration`);
+    gleich(starten().length, 0, `${fall.name}: keine Reservierung`);
+    gleich(anbieterAufrufe().length, 0, `${fall.name}: kein Anbieter`);
+  }
+});
+
+test("C4aa fehlend, inaktiv und Personal-AI-aus sperren Health, Diagnose und zahlende Tasks", async () => {
+  const faelle: Array<{ name: string; daten: unknown; grund: string }> = [
+    { name: "fehlend", daten: [], grund: "kontofreigabe-fehlt" },
+    {
+      name: "inaktiv",
+      daten: [{ role: "member", active: false, personal_ai: false }],
+      grund: "konto-inaktiv",
+    },
+    {
+      name: "Personal-AI-aus",
+      daten: [{ role: "member", active: true, personal_ai: false }],
+      grund: "persoenliche-ki-nicht-freigegeben",
+    },
+  ];
+  const pfade: Array<{
+    name: string;
+    rufen: () => Promise<{ status: number; daten: Record<string, unknown> }>;
+  }> = [
+    {
+      name: "health",
+      rufen: () => ruf({ task: "health", vorgangId: neueVorgangId() }),
+    },
+    {
+      name: "anbieter-modelle",
+      rufen: () => ruf({ task: "anbieter-modelle", vorgangId: neueVorgangId() }),
+    },
+    { name: "zahlender Task", rufen: () => echoRuf() },
+  ];
+
+  for (const fall of faelle) {
+    for (const pfad of pfade) {
+      stelleZurueck();
+      z.kontofreigabe = fall.daten;
+      const r = await pfad.rufen();
+      const name = `${fall.name}/${pfad.name}`;
+      gleich(r.status, 403, `${name}: Status`);
+      gleich(r.daten.code, "forbidden", `${name}: Code`);
+      gleich(r.daten.grund, fall.grund, `${name}: Grund`);
+      gleich(kontofreigabeAufrufe().length, 1, `${name}: genau eine Access-Lesung`);
+      gleich(konfigAufrufe().length, 0, `${name}: keine Admin-Konfiguration`);
+      gleich(starten().length, 0, `${name}: keine Reservierung`);
+      gleich(anbieterAufrufe().length, 0, `${name}: kein zahlender Anbieterpfad`);
+      gleich(modelleAufrufe().length, 0, `${name}: kein Anbieter-Diagnosepfad`);
+    }
+  }
+});
+
+test("C4b member und owner haben bei gleicher Freigabe dieselben Function-Rechte", async () => {
+  for (const rolle of ["member", "owner"] as const) {
+    stelleZurueck();
+    z.kontofreigabe = [{ role: rolle, active: true, personal_ai: true }];
+    const r = await echoRuf();
+    gleich(r.status, 200, `${rolle}: Status`);
+    gleich(starten().length, 1, `${rolle}: genau eine Reservierung`);
+    gleich(anbieterAufrufe().length, 1, `${rolle}: genau ein Anbieteraufruf`);
+  }
+});
+
+test("C4c Kontofreigabe greift vor koerpernaher Vorgangsvalidierung", async () => {
+  z.kontofreigabe = [{ role: "member", active: false, personal_ai: false }];
+  const r = await ruf({
+    task: "echo-struct",
+    vorgangId: "keine-uuid",
+    payload: {},
+  });
+  gleich(r.status, 403, "fachliche Sperre kommt zuerst");
+  gleich(r.daten.grund, "konto-inaktiv", "Grund");
+  gleich(konfigAufrufe().length, 0, "keine Admin-Konfiguration");
 });
 
 test("C5 Körper größer als request_max_bytes: 413", async () => {
@@ -2212,6 +2366,12 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(r.daten.task, "health", "task");
   gleich(r.daten.contractVersion, "ai-task-v4", "Vertragsversion");
   gleich(r.daten.buildVersion, "unversioned", "ohne Deploy-Metadatum fail-closed");
+  gleich(kontofreigabeAufrufe().length, 1, "eigene fachliche Freigabe wird gelesen");
+  gleich(
+    (r.daten.aufrufer as Record<string, unknown>).fachrolle,
+    "owner",
+    "Health nennt die fachliche Rolle ohne Sonderrechte",
+  );
   gleich(starten().length, 0, "keine Reservierung — health kostet nichts");
   gleich(beenden().length, 0, "keine Protokollzeile");
   gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
@@ -2239,6 +2399,17 @@ test("H2 health braucht trotzdem ein gültiges Token", async () => {
   const r = await ruf({ task: "health" }, { ohneToken: true });
   gleich(r.status, 401, "Status");
   gleich(aufrufe.length, 0, "kein Netzaufruf");
+});
+
+test("H2b health ist ohne personal_ai vor Admin-Diagnose gesperrt", async () => {
+  z.kontofreigabe = [{ role: "member", active: true, personal_ai: false }];
+  const r = await ruf({ task: "health", vorgangId: neueVorgangId() });
+  gleich(r.status, 403, "Status");
+  gleich(r.daten.grund, "persoenliche-ki-nicht-freigegeben", "Grund");
+  gleich(kontofreigabeAufrufe().length, 1, "genau eine Access-Lesung");
+  gleich(konfigAufrufe().length, 0, "keine Admin-Konfiguration");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieter");
 });
 
 test("H3 health läuft auch bei gesetztem Not-Aus (reine Diagnose ohne Anbieter)", async () => {

@@ -320,11 +320,14 @@ check("Quellcode-Pin: der Wechsel-Effekt fängt einen Wurf des Streaming-Laufs a
   /const \[programmErgebnis\] = await Promise\.allSettled\(\[/.test(appQuelle)
   && /programmErgebnis\.status === "fulfilled" && programmErgebnis\.value/.test(appQuelle));
 
+const katalogQuelle = fs.readFileSync("src/services/catalog.js", "utf8");
+const gespeicherteVarianteQuelle = katalogQuelle.slice(
+  katalogQuelle.indexOf("function gespeicherteVariante"),
+  katalogQuelle.indexOf("\n}\n", katalogQuelle.indexOf("function gespeicherteVariante")) + 2,
+);
 check("storedVariant() bleibt in der Grenzschicht ohne Token- und ohne Netzweg",
-  /function gespeicherteVariante\(\)\s*\{[^}]*authDriver\.konto\(\)[^}]*\}/
-    .test(fs.readFileSync("src/services/catalog.js", "utf8"))
-  && !/function gespeicherteVariante\(\)\s*\{[^}]*(?:await|getAccessToken|fetch)/
-    .test(fs.readFileSync("src/services/catalog.js", "utf8")));
+  /katalogVarianteAusSession\(auth\?\.getSnapshot\?\.\(\)\)/.test(gespeicherteVarianteQuelle)
+  && !/(?:await|getAccessToken|fetch|authDriver\.konto)/.test(gespeicherteVarianteQuelle));
 
 /* ---------- Etappe 3: Accountgrenzen ---------- */
 const { SESSION_STATES, abgelaufeneSession } = await import("./src/services/auth.js");

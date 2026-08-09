@@ -1,9 +1,11 @@
 /* Gemeinsames read-only Film-/Programmwissen. Diese Grenze verwendet nur die
    öffentliche Katalogkonfiguration und sendet niemals persönliche Sync-Keys.
 
-   Etappe 4: Hier — und nur hier — fällt die Entscheidung live vs. demo.
-   Angemeldete Sitzung → Live-Zeile (programm/streaming), Gast bzw. Demo-Start →
-   Demo-Zeile (programm_demo/streaming_demo). Die Oberfläche fragt nach dem
+   Etappe 4/Rollen-v1: Hier — und nur hier — fällt die Entscheidung live vs.
+   demo. Eine technisch angemeldete Sitzung genügt nicht: Nur ein bereites
+   Konto mit der fachlichen Capability `remoteStorage === true` darf die
+   Live-Zeilen lesen. Gast, inaktiv, fehlend, unbekannt oder degradiert lesen
+   ausschließlich die öffentlichen Demo-Zeilen. Die Oberfläche fragt nach dem
    Bereich, nicht nach dem Zeilennamen.
 
    Fehlerzustände dieses Pfads (stabile Codes aus services/errors.js):
@@ -18,7 +20,7 @@ import {
   testeKatalogZugang, ladeKatalogAsset, baueStreamingAnsichten,
   setKatalogTokenProvider, verwerfeKatalogCache, KATALOG_GRUENDE,
 } from "../lib/katalog.js";
-import { authDriver } from "./auth.js";
+import { authDriver, authService } from "./auth.js";
 import { runtimeConfig } from "../config/runtime.js";
 import { BoundaryError, ERROR_CODES, normalizeBoundaryError } from "./errors.js";
 
@@ -51,10 +53,40 @@ export function katalogTokenErlaubt(katalogUrl, projektUrl = runtimeConfig.supab
    Abbruch, keine Abmeldung: die App bleibt lesend funktionsfähig.
    Ist keine Projekt-URL konfiguriert (lokal, Test, file://), gibt es nichts zu
    vergleichen — dann bleibt es beim bisherigen Verhalten. */
-export function baueKatalogTokenProvider(projektUrl = runtimeConfig.supabaseUrl) {
+function remoteKonto(auth = authService) {
+  try {
+    const snapshot = auth?.getSnapshot?.();
+    const kontoId = String(snapshot?.account?.id || "").trim();
+    if (snapshot?.mode !== "account" || snapshot?.state !== "ready" || !kontoId
+        || snapshot?.capabilities?.remoteStorage !== true) return null;
+    return Object.freeze({ id: kontoId });
+  } catch { return null; }
+}
+
+/* Exportierte reine Projektion für Regressionstests: Alle alten oder
+   unvollständigen Sitzungsformen fallen auf Demo zurück. */
+export function katalogVarianteAusSession(snapshot) {
+  const kontoId = String(snapshot?.account?.id || "").trim();
+  return snapshot?.mode === "account" && snapshot?.state === "ready" && !!kontoId
+    && snapshot?.capabilities?.remoteStorage === true
+    ? "live"
+    : "demo";
+}
+
+export function baueKatalogTokenProvider(
+  projektUrl = runtimeConfig.supabaseUrl,
+  auth = authService,
+  driver = authDriver,
+) {
   return (opts = {}) => {
     if (!katalogTokenErlaubt(opts.katalogUrl, projektUrl)) return null;
-    return authDriver.getAccessToken(opts);
+    const konto = remoteKonto(auth);
+    /* Öffentliche Reads (Demo, Manifest, Demo-Seed) reichen bewusst keine
+       Konto-ID mit. So bleibt der öffentliche Pfad auch bei aktivem Konto
+       tokenfrei. Außerdem verhindert der ID-Vergleich, dass ein verspäteter
+       A-Aufruf nach dem Wechsel ein B-Token bekommt. */
+    if (!konto || String(opts.erwarteteKontoId || "") !== konto.id) return null;
+    return driver.getAccessToken({ ...opts, erwarteteKontoId: konto.id });
   };
 }
 
@@ -101,58 +133,90 @@ function bereichOder(bereich) {
   return b;
 }
 
-/* Ein vorhandenes Sitzungstoken ist das einzige belastbare Signal dafür, dass
-   die Live-Zeilen überhaupt lesbar sind. Ist die Sitzung abgelaufen und nicht
-   erneuerbar, liefert der Treiber null — dann gilt der Demo-Weg, ohne dass
-   jemand abgemeldet wird. */
-async function angemeldet() {
-  try { return !!(await authDriver.getAccessToken()); } catch { return false; }
+/* Capability zuerst, Token als zweite Grenze. Nach dem asynchronen Tokengriff
+   wird die Capability erneut geprüft: Widerruf oder A→B während des Wartens
+   darf den alten Lauf nicht live schalten. */
+async function aktiveLiveFreigabe(auth = authService, driver = authDriver) {
+  const vorher = remoteKonto(auth);
+  if (!vorher) return null;
+  try {
+    const token = await driver.getAccessToken({ erwarteteKontoId: vorher.id });
+    const nachher = remoteKonto(auth);
+    return token && nachher?.id === vorher.id ? vorher : null;
+  } catch { return null; }
 }
 
-async function aktiveVariante() { return (await angemeldet()) ? "live" : "demo"; }
+async function aktiveVariante(auth = authService, driver = authDriver) {
+  return (await aktiveLiveFreigabe(auth, driver)) ? "live" : "demo";
+}
 
 /* Tokenfreie Schwester von aktiveVariante(): fragt NUR, ob überhaupt eine
-   gespeicherte Sitzung vorliegt (authDriver.konto() liest die Ablage, holt
-   nichts). aktiveVariante() geht über getAccessToken() und löst bei einem
-   fast abgelaufenen Token eine Erneuerung mit Netzwerk-Timeout aus — für den
-   Boot ist das der falsche Preis: dort geht es nur um die Frage, ob ein
-   gespeicherter Programm-Topf zur Betriebsart passt. Ein Urteil ohne Netz ist
-   dafür genau richtig; scheitert die Erneuerung später wirklich, korrigiert der
-   Betriebsart-Wechsel-Effekt den Stand ohnehin. */
-function gespeicherteVariante() {
-  try { return authDriver.konto() ? "live" : "demo"; } catch { return "demo"; }
+   bereits bestätigte fachliche Freigabe im Snapshot vorliegt. Sie fasst weder
+   Token noch Netzwerk an. Alte technisch gespeicherte Sitzungen ohne
+   Capability sind ausdrücklich Demo. */
+function gespeicherteVariante(auth = authService) {
+  try { return katalogVarianteAusSession(auth?.getSnapshot?.()); }
+  catch { return "demo"; }
 }
 
-export const catalogService = Object.freeze({
-  getConnection: getKatalogZugang,
-  setConnection: setKatalogZugang,
-  hasConnection: hatKatalogZugang,
-  /* Betriebsart der aktuellen Sitzung: "live" (angemeldet) oder "demo". */
-  activeVariant: aktiveVariante,
-  /* Dasselbe Urteil ohne Netz und ohne Token — nur anhand der gespeicherten
-     Sitzung. Synchron. Für Pfade, die nicht auf eine Token-Erneuerung warten
-     dürfen (Boot). */
-  storedVariant: gespeicherteVariante,
+export function createCatalogService({ auth = authService, driver = authDriver } = {}) {
+  const aktuelleFreigabe = () => remoteKonto(auth);
+  const fordereGebundeneFreigabe = (accountId, operation) => {
+    const aktuell = aktuelleFreigabe();
+    if (!accountId || aktuell?.id !== accountId) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "catalog", operation, reason: "remoteStorage",
+      });
+    }
+    return accountId;
+  };
+  const variante = async (verlangt = null) => {
+    if (verlangt === "demo") return Object.freeze({ name: "demo", accountId: null });
+    const konto = await aktiveLiveFreigabe(auth, driver);
+    if (verlangt === "live" && !konto) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "catalog", operation: "variant.require-live", reason: "remoteStorage",
+      });
+    }
+    return konto
+      ? Object.freeze({ name: "live", accountId: konto.id })
+      : Object.freeze({ name: "demo", accountId: null });
+  };
+
+  return Object.freeze({
+    getConnection: getKatalogZugang,
+    setConnection: setKatalogZugang,
+    hasConnection: hatKatalogZugang,
+    /* Betriebsart der aktuellen fachlichen Freigabe: "live" oder "demo". */
+    activeVariant: () => aktiveVariante(auth, driver),
+    /* Dasselbe Urteil ohne Netz und ohne Token — nur anhand des bereits
+       geladenen Capability-Snapshots. Synchron und fail-closed. */
+    storedVariant: () => gespeicherteVariante(auth),
   async testConnection(options = {}) {
     try {
-      const variante = options.variante || await aktiveVariante();
+      const auswahl = await variante(options.variante);
       const b = bereichOder(options.bereich || "programm");
       const ctx = { source: "catalog", operation: "connection.test" };
-      const erwarteteKontoId = variante === "live" ? authDriver.konto()?.id || null : null;
+      const erwarteteKontoId = auswahl.name === "live"
+        ? fordereGebundeneFreigabe(auswahl.accountId, "connection.test.before")
+        : null;
       const result = await testeKatalogZugang({
-        asset: variante === "live" ? b.live : b.demo,
+        asset: auswahl.name === "live" ? b.live : b.demo,
         erwarteteKontoId,
       });
+      if (auswahl.name === "live") {
+        fordereGebundeneFreigabe(auswahl.accountId, "connection.test.after");
+      }
       if (result?.ok) {
         const a = result.asset;
-        if (!a || a.ok) return { ...result, variante };
+        if (!a || a.ok) return { ...result, variante: auswahl.name };
         /* Der rohe Fehler der Bibliothek wird hier durch den normalisierten
            ersetzt — die Oberfläche bekommt nie Servertext, sondern `code` und
            einen Fehler, aus dem errorText() ihren Satz bildet. */
         const fehler = katalogFehler(a.fehler || { status: a.status, reason: a.grund }, ctx);
         return {
           ...result,
-          variante,
+          variante: auswahl.name,
           asset: {
             ...a,
             fehler,
@@ -178,24 +242,42 @@ export const catalogService = Object.freeze({
      DEMO-Zeile, ist das dagegen NO_DEMO_DATA: noch nichts veröffentlicht. */
   async loadArea(bereich, options = {}) {
     const b = bereichOder(bereich);
-    const variante = options.variante || await aktiveVariante();
-    const name = variante === "live" ? b.live : b.demo;
+    const auswahl = await variante(options.variante);
+    const name = auswahl.name === "live" ? b.live : b.demo;
     const ctx = { source: "catalog", operation: "area.load" };
     try {
-      const erwarteteKontoId = variante === "live" ? authDriver.konto()?.id || null : null;
+      const erwarteteKontoId = auswahl.name === "live"
+        ? fordereGebundeneFreigabe(auswahl.accountId, "area.load.before")
+        : null;
       const r = await ladeKatalogAsset(name, { ...options, erwarteteKontoId });
+      if (auswahl.name === "live") {
+        fordereGebundeneFreigabe(auswahl.accountId, "area.load.after");
+      }
       /* Sprang der Cache ein, ist der Direkt-Read trotzdem gescheitert. Sein
          Grund reist als stabiler `code` mit — sonst hörte ein Tester mit
          abgelehntem Schlüssel nur „Datenbank nicht erreichbar". */
-      return { ...r, bereich, variante, code: r.grund ? katalogFehler({ status: r.status, reason: r.grund }, ctx).code : null };
+      return { ...r, bereich, variante: auswahl.name, code: r.grund ? katalogFehler({ status: r.status, reason: r.grund }, ctx).code : null };
     } catch (error) {
       throw katalogFehler(error, ctx);
     }
   },
   /* Roher Zeilenzugriff (Name statt Bereich) — für Sonderfälle wie das Manifest. */
   async loadAsset(name, options) {
-    const erwarteteKontoId = authDriver.konto()?.id || null;
-    try { return await ladeKatalogAsset(name, { ...(options || {}), erwarteteKontoId }); }
+    const live = Object.values(BEREICHE).some((b) => b.live === name);
+    const konto = live ? await aktiveLiveFreigabe(auth, driver) : null;
+    if (live && !konto) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "catalog", operation: "asset.load", reason: "remoteStorage",
+      });
+    }
+    const erwarteteKontoId = live
+      ? fordereGebundeneFreigabe(konto.id, "asset.load.before")
+      : null;
+    try {
+      const result = await ladeKatalogAsset(name, { ...(options || {}), erwarteteKontoId });
+      if (live) fordereGebundeneFreigabe(konto.id, "asset.load.after");
+      return result;
+    }
     catch (error) { throw katalogFehler(error, { source: "catalog", operation: "asset.load" }); }
   },
   /* Cache-Storage-Eintrag eines Bereichs (live UND demo) verwerfen. Ohne das
@@ -217,4 +299,7 @@ export const catalogService = Object.freeze({
     try { return (await ladeKatalogAsset("demo_seed")).payload; }
     catch (error) { throw katalogFehler(error, { source: "catalog", operation: "demo.load" }); }
   },
-});
+  });
+}
+
+export const catalogService = createCatalogService();

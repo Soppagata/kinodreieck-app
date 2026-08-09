@@ -25,9 +25,12 @@ import {
   hatOffeneKontoCacheAenderungen,
   istPersoenlicherSpeicherMaskiert,
   istKontoTreiberAktiv,
+  istKontoTreiberWegenFreigabeGesperrt,
   maskierePersoenlichenSpeicher,
   migriereBestaetigtenLegacyKontocache,
   vorbereitetesKontoId,
+  sperreKontoTreiberWegenFreigabe,
+  entsperreKontoTreiberNachFreigabe,
   warteAccountTransitionZaun,
 } from "./storage.js";
 import {
@@ -41,6 +44,7 @@ export const STORAGE_SESSION_STATES = Object.freeze({
   AWAITING_ADOPTION: "account-awaiting-adoption",
   READY: "account-ready",
   PRIVACY_LOCKED: "privacy-locked",
+  ACCESS_BLOCKED: "account-access-blocked",
 });
 
 export function createSessionCoordinator({
@@ -52,6 +56,9 @@ export function createSessionCoordinator({
     unlockAfterPrivacyCleanup: entsperrePersoenlichenSpeicherNachTrennung,
     unlockForSameOwnerAccount: entsperrePersoenlichenSpeicherFuerGebundenesKonto,
     mask: maskierePersoenlichenSpeicher,
+    blockAccess: sperreKontoTreiberWegenFreigabe,
+    unblockAccess: entsperreKontoTreiberNachFreigabe,
+    accessBlocked: istKontoTreiberWegenFreigabeGesperrt,
     masked: istPersoenlicherSpeicherMaskiert,
     migrateLegacyBinding: migriereBestaetigtenLegacyKontocache,
     cleanupOrphanMetadata: bereinigeVerwaisteAccountMetadaten,
@@ -100,6 +107,12 @@ export function createSessionCoordinator({
     return !!id
       && String(storage.cacheOwner() || "") === id
       && adoption.isConfirmed(id);
+  }
+
+  function remoteStorageFreigegeben(session) {
+    return session?.mode === "account"
+      && session?.state === "ready"
+      && session.capabilities?.remoteStorage === true;
   }
 
   async function trenneKontocache(cacheId, { behalteTransition = false } = {}) {
@@ -179,6 +192,24 @@ export function createSessionCoordinator({
       return STORAGE_SESSION_STATES.GUEST;
     }
 
+    /* Technische Authentifizierung darf bestehen bleiben, erteilt aber noch
+       keinen Zugriff auf den Kontocache. Widerruf/Timeout stoppt die aktuelle
+       Treibergeneration sofort und maskiert ohne Restore, Flush oder Löschen. */
+    if (!remoteStorageFreigegeben(session)) {
+      if (storage.blockAccess) storage.blockAccess(id);
+      else storage.mask?.();
+      emit();
+      return STORAGE_SESSION_STATES.ACCESS_BLOCKED;
+    }
+    if (storage.accessBlocked?.(id)) {
+      if (storage.unblockAccess?.(id) !== true) {
+        storage.mask?.(); emit();
+        const error = new Error("Der geschützte Kontocache konnte nach der Freigabe nicht sicher reaktiviert werden.");
+        error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
+        throw error;
+      }
+    }
+
     /* Auth und Cache können sich in verschiedenen Tabs unabhängig bewegen.
        Konto B darf niemals auf den noch sichtbaren Haupttöpfen von A
        vorbereitet werden. Eine abgebrochene same-account Transition wird über
@@ -186,7 +217,9 @@ export function createSessionCoordinator({
     const ownerVorMigration = String(storage.cacheOwner?.() || "");
     let legacyMigration = null;
     if (ownerVorMigration === id && isConfirmed(id) && storage.migrateLegacyBinding) {
-      legacyMigration = await storage.migrateLegacyBinding(id, () => isConfirmed(id));
+      legacyMigration = await storage.migrateLegacyBinding(
+        id, () => isConfirmed(id), { remoteStorage: true },
+      );
     }
     const transition = storage.currentTransition?.() || null;
     const owner = String(storage.cacheOwner?.() || "");
@@ -236,10 +269,12 @@ export function createSessionCoordinator({
       await trenneKontocache(owner);
     }
 
-    storage.prepare(id);
+    if (storage.prepare.length >= 2) storage.prepare(id, { remoteStorage: true });
+    else storage.prepare(id);
     if (!isConfirmed(id)) return STORAGE_SESSION_STATES.AWAITING_ADOPTION;
 
-    await storage.confirm(id);
+    if (storage.confirm.length >= 2) await storage.confirm(id, { remoteStorage: true });
+    else await storage.confirm(id);
     if (pullWhenReady) {
       try { await storage.pull(); } catch { /* lokaler Start bleibt möglich */ }
     }
@@ -247,8 +282,9 @@ export function createSessionCoordinator({
   }
 
   function storageState() {
-    if (storage.masked?.()) return STORAGE_SESSION_STATES.PRIVACY_LOCKED;
     const id = accountId();
+    if (id && !remoteStorageFreigegeben(sichtbareSession)) return STORAGE_SESSION_STATES.ACCESS_BLOCKED;
+    if (storage.masked?.()) return STORAGE_SESSION_STATES.PRIVACY_LOCKED;
     if (!id) return STORAGE_SESSION_STATES.GUEST;
     if (storage.active() && storage.preparedAccountId() === id && isConfirmed(id)) {
       return STORAGE_SESSION_STATES.READY;
@@ -333,6 +369,12 @@ export function createSessionCoordinator({
         if (offen) {
           throw new Error("Vor dem Abmelden konnten nicht alle Kontoänderungen gesichert werden. Bitte löse offene Konflikte oder erstelle zuerst ein Backup.");
         }
+      } else if (id && storage.hasOpenChanges?.()) {
+        /* Bei entzogener/unklarer Freigabe ist Flush ausdrücklich verboten.
+           Ein Logout dürfte die persistente Queue dann aber ebenso wenig über
+           den Gast-Restore beseitigen. Das Konto bleibt technisch angemeldet
+           und maskiert, bis dieselbe Freigabe wieder sicher geprüft wurde. */
+        throw new Error("Ungesicherte Kontoänderungen bleiben geschützt. Melde dich erst ab, nachdem dieses Konto wieder freigegeben und vollständig synchronisiert wurde oder ein Backup vorliegt.");
       }
 
       let trennung = { gaststand: { ok: true, quelle: "ungebundener-gaststand" }, transition: null };

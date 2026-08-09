@@ -44,6 +44,19 @@ function Statuszeile({ status }) {
   );
 }
 
+function freigabeHinweis(status) {
+  if (status === "missing") {
+    return "Für dieses Konto ist noch keine Freigabe hinterlegt. Die Anmeldung bleibt bestehen; Kontodaten auf diesem Gerät bleiben geschützt und werden nicht synchronisiert.";
+  }
+  if (status === "unavailable") {
+    return "Die Kontofreigabe konnte gerade nicht verlässlich geprüft werden. Bis zur nächsten erfolgreichen Prüfung bleiben Kontodaten geschützt und jeder Abgleich ist gestoppt.";
+  }
+  if (status === "invalid") {
+    return "Die hinterlegte Kontofreigabe ist widersprüchlich. Der Kontospeicher bleibt deshalb vorsorglich gesperrt.";
+  }
+  return "Dieses Konto ist derzeit nicht für den Kontospeicher freigeschaltet. Lokale Kontodaten und offene Änderungen bleiben geschützt; es wird nichts gesendet oder gelöscht.";
+}
+
 export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = false }) {
   const [session, setSession] = useState(() => sessionCoordinator.getSnapshot());
   const [benutzer, setBenutzer] = useState("");
@@ -63,20 +76,25 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
   const angemeldet = session.mode === "account";
   const degradiert = angemeldet && session.state === "degraded";
-  const kontoSpeicherAktiv = angemeldet && istKontoTreiberAktiv();
+  const remoteFreigegeben = angemeldet && session.state === "ready"
+    && session.capabilities?.remoteStorage === true;
+  const personalAiFreigegeben = remoteFreigegeben
+    && session.capabilities?.personalAi === true;
+  const kontoSpeicherAktiv = remoteFreigegeben && istKontoTreiberAktiv();
 
   useEffect(() => {
-    if (!angemeldet) { setStatus(null); return undefined; }
+    if (!remoteFreigegeben) { setStatus(null); return undefined; }
     const tick = () => { try { setStatus(accountSync.status()); } catch { /* best effort */ } };
     tick();
     const iv = setInterval(tick, 4000);
     return () => clearInterval(iv);
-  }, [angemeldet]);
+  }, [remoteFreigegeben]);
 
   /* Nach dem Anmelden einmalig prüfen, ob ein Bestand zu übernehmen ist. */
   useEffect(() => {
-    if (angemeldet && !demoAktiv && session.account?.id && !istUebernommen(session.account.id) && !loginPruefung.current) setZeigeUebernahme(true);
-  }, [angemeldet, demoAktiv, session.account?.id]);
+    if (remoteFreigegeben && !demoAktiv && session.account?.id
+        && !istUebernommen(session.account.id) && !loginPruefung.current) setZeigeUebernahme(true);
+  }, [remoteFreigegeben, demoAktiv, session.account?.id]);
 
   async function ladeDemoKonto(accountId) {
     await ladeKontostandNachDemo({ accountId });
@@ -94,7 +112,10 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       const neu = await sessionCoordinator.signIn(benutzer, passwort);
       setPasswort("");
       if (neu.account?.id) {
-        if (demoAktiv) await ladeDemoKonto(neu.account.id);
+        if (neu.state !== "ready" || neu.capabilities?.remoteStorage !== true) {
+          setZeigeUebernahme(false);
+          setMeldung("Angemeldet. Der Kontospeicher bleibt bis zu einer bestätigten Freigabe geschützt.");
+        } else if (demoAktiv) await ladeDemoKonto(neu.account.id);
         else if (sessionCoordinator.getStorageState() === "account-ready") {
           const geladen = await accountSync.pull();
           if (geladen?.ok === false) throw new Error("Der Kontostand konnte nicht geladen werden.");
@@ -116,7 +137,8 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       }
     } catch (err) {
       setFehler(err?.message || errorText(err));
-      if (sessionCoordinator.getSnapshot()?.mode === "account") setZeigeUebernahme(true);
+      const aktuell = sessionCoordinator.getSnapshot();
+      if (aktuell?.mode === "account" && aktuell.capabilities?.remoteStorage === true) setZeigeUebernahme(true);
     } finally { loginPruefung.current = false; setLaeuft(false); }
   }
 
@@ -184,7 +206,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
   /* ---------- Angemeldet ---------- */
   return (
     <div>
-      {degradiert && (
+      {degradiert && remoteFreigegeben && (
         <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
           <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
             Konto gerade nicht erreichbar. Du bleibst angemeldet und kannst normal weiterarbeiten —
@@ -195,11 +217,24 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
 
       <p style={{ color: T.leinwand, fontSize: 14, margin: "0 0 4px" }}>
         Angemeldet als <strong>{session.account?.displayName || session.account?.id}</strong>
+        {session.account?.role && (
+          <span style={{ color: T.rauch, fontSize: 12, marginLeft: 8 }}>
+            Rolle: {session.account.role === "owner" ? "Owner" : "Mitglied"}
+          </span>
+        )}
       </p>
       <Statuszeile status={kontoSpeicherAktiv ? status : null} />
       {fehler && <p role="alert" style={{ color: T.gefahr, fontSize: 13 }}>{fehler}</p>}
 
-      {!kontoSpeicherAktiv && !demoAktiv && (
+      {!remoteFreigegeben && (
+        <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
+          <p style={{ margin: 0, color: T.rauch, fontSize: 13 }}>
+            {freigabeHinweis(session.access?.status)}
+          </p>
+        </div>
+      )}
+
+      {remoteFreigegeben && !kontoSpeicherAktiv && !demoAktiv && (
         <div style={{ border: "1px solid " + T.wolfram, background: "rgba(227,166,59,0.12)", borderRadius: 8, padding: "9px 12px", marginBottom: 12 }}>
           <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 13 }}>
             Dein Konto ist angemeldet, aber der Datenbestand dieses Geräts ist noch nicht zugeordnet.
@@ -258,7 +293,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
         </div>
       )}
 
-      {zeigeUebernahme && !demoAktiv && istKontoTreiberVorbereitet() && (
+      {remoteFreigegeben && zeigeUebernahme && !demoAktiv && istKontoTreiberVorbereitet() && (
         <div style={{ border: "1px solid " + T.rauch, borderRadius: 8, padding: "12px", marginBottom: 12 }}>
           <h4 style={{ margin: "0 0 8px", color: T.leinwand, fontSize: 14 }}>Bestand übernehmen</h4>
           <KontoUebernahme
@@ -270,7 +305,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        {(demoAktiv || status?.stale?.length > 0) && <button style={btnStyle(false)} disabled={laeuft || (!demoAktiv && !kontoSpeicherAktiv)} onClick={async () => {
+        {remoteFreigegeben && (demoAktiv || status?.stale?.length > 0) && <button style={btnStyle(false)} disabled={laeuft || (!demoAktiv && !kontoSpeicherAktiv)} onClick={async () => {
           setLaeuft(true); setMeldung(null); setFehler(null);
           try {
             if (demoAktiv) await ladeDemoKonto(session.account?.id);
@@ -285,7 +320,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           }
           finally { setLaeuft(false); }
         }}>{demoAktiv ? "Aktuellen Kontostand laden" : "Kontostand erneut laden"}</button>}
-        {status?.pending?.length > 0 && <button style={btnStyle(false)} disabled={laeuft || !kontoSpeicherAktiv} onClick={async () => {
+        {remoteFreigegeben && status?.pending?.length > 0 && <button style={btnStyle(false)} disabled={laeuft || !kontoSpeicherAktiv} onClick={async () => {
           setLaeuft(true);
           try { await accountSync.flush(); setStatus(accountSync.status()); }
           finally { setLaeuft(false); }
@@ -318,7 +353,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           Etappe 7: hinter dem KI-Schalter. Eine reine KI-Diagnose hat bei
           KI=aus kein deterministisches Gegenstueck -- es gaebe sie nur als
           Luege. Deshalb ausblenden, nicht ersetzen. */}
-      {kiAn("diagnose") && (
+      {personalAiFreigegeben && kiAn("diagnose") && (
       <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
         <button style={{ ...btnStyle(false), fontSize: 13 }} disabled={laeuft} onClick={async () => {
           setLaeuft(true); setKiMeldung(null);

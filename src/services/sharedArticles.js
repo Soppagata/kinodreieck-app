@@ -4,7 +4,8 @@
    `kd:artikel`-Topf. Dieser Dienst verwaltet nur seine veröffentlichte Kopie:
 
    - list(): öffentlich und immer OHNE Sitzungstoken
-   - publish()/unpublish()/claim(): mit der normalen Account-Sitzung
+   - publish()/unpublish()/claim(): nur mit bereiter, fachlich aktiver
+     Account-Sitzung (`remoteStorage === true`)
    - die Account-ID wird nie gesendet; die Datenbank setzt sie aus auth.uid()
 
    Shared Blogs sind damit weder persönlicher Storage noch Filmkatalog. Die
@@ -114,6 +115,13 @@ export function createSharedArticlesService({
         operation: "session.require-account",
       });
     }
+    if (snapshot?.state !== "ready" || snapshot?.capabilities?.remoteStorage !== true) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "shared-articles",
+        operation: "session.require-capability",
+        reason: "remoteStorage",
+      });
+    }
     return id;
   }
   function konfigurationVerlangen(operation) {
@@ -158,9 +166,10 @@ export function createSharedArticlesService({
     }
   }
 
-  /* Accountwechsel-Schutz wie beim persönlichen Treiber: Vor Token, nach Token
-     und nach Request muss dieselbe Konto-ID gelten. Eine verspätete Antwort von
-     Konto A darf im Zustand von Konto B nicht als Erfolg ankommen. */
+  /* Accountwechsel-/Widerrufsschutz wie beim persönlichen Treiber: Vor Token,
+     nach Token und nach Request müssen dieselbe Konto-ID UND die aktive
+     Remote-Capability gelten. Eine verspätete Antwort von Konto A oder aus der
+     Zeit vor einem Widerruf darf nicht als Erfolg ankommen. */
   async function accountRequest(method, path, {
     body = null,
     prefer = null,

@@ -295,6 +295,41 @@ check("Kontowechsel wird erkannt", D.getCacheOwner() === "konto-A");
 D.verwerfeTreiberZustand();
 check("Beim Kontowechsel wird der Treiberzustand verworfen", _ls.get("kd:acct:ver") == null);
 
+/* ---------- Widerruf exakt nach lokalem Commit ---------- */
+_ls.clear(); tabelle = new Map(); calls = [];
+let revocationAktiv = true;
+const setVorRevocation = globalThis.localStorage.setItem;
+globalThis.localStorage.setItem = (key, value) => {
+  setVorRevocation(key, value);
+  if (key === "kd:master") revocationAktiv = false;
+};
+d = D.createAccountDriver({
+  config: CONFIG,
+  getAccessToken: async () => "at-gueltig",
+  fetchImpl: mockFetch,
+  isActive: () => revocationAktiv,
+});
+let revokeFehler = null;
+try { await d.set("kd:master", "WAEHREND-WIDERRUF"); }
+catch (error) { revokeFehler = error; }
+globalThis.localStorage.setItem = setVorRevocation;
+check("Widerruf im lokalen set-await bewahrt den neuen Wert als persistentes Pending ohne alten Request",
+  revokeFehler?.code === "ACCOUNT_CONTEXT_CHANGED"
+  && _ls.get("kd:master") === "WAEHREND-WIDERRUF"
+  && d.status().pending.includes("kd:master")
+  && calls.length === 0);
+
+const reaktiviert = D.createAccountDriver({
+  config: CONFIG,
+  getAccessToken: async () => "at-gueltig",
+  fetchImpl: mockFetch,
+  isActive: () => true,
+});
+await reaktiviert.syncFlush();
+check("Same-Owner-Reaktivierung sendet das konservierte Pending und räumt es erst nach Erfolg",
+  db("konto-A", "kd:master") === "WAEHREND-WIDERRUF"
+  && !reaktiviert.status().pending.includes("kd:master"));
+
 /* ---------- Auftrag bleibt an seine Treibergeneration gebunden ---------- */
 _ls.clear(); tabelle = new Map(); calls = [];
 let generationAktiv = true;
@@ -307,10 +342,14 @@ d = D.createAccountDriver({
 });
 const alterAuftrag = d.set("kd:master", "DATEN-A");
 /* Noch bevor die Queue startet, wechselt die App zu Konto B und dessen
-   lokaler Wert liegt im selben Cache-Schlüssel. Der alte Auftrag darf weder
-   das neue Token noch den neuen Wert verwenden. */
+   lokaler Wert liegt im selben Cache-Schlüssel. Dabei wird As Treiberstatus
+   wie im echten Session-Wechsel verworfen und der Cache an B gebunden. Der
+   alte Auftrag darf weder das neue Token noch den neuen Wert verwenden und
+   vor allem kein A-Pending in Bs neuen Metadatenraum nachtragen. */
 generationAktiv = false;
 aktuellesToken = "at-B";
+D.verwerfeTreiberZustand();
+D.setCacheOwner("konto-B");
 _ls.set("kd:master", "DATEN-B");
 let alterAuftragVerworfen = false;
 try { await alterAuftrag; } catch (error) {
@@ -322,6 +361,8 @@ check("Ein Auftrag einer alten Treibergeneration sendet nach Kontowechsel nichts
   && calls.length === 0 && db("konto-A", "kd:master") === null && db("konto-B", "kd:master") === null);
 check("Der lokale Wert des neuen Kontos bleibt vom alten Auftrag unberührt",
   _ls.get("kd:master") === "DATEN-B");
+check("Der alte Auftrag hinterlässt kein Pending im Metadatenraum des neuen Kontos",
+  !d.status().pending.includes("kd:master") && D.getCacheOwner() === "konto-B");
 
 /* ---------- Wiederholbare Übernahme ---------- */
 _ls.clear(); tabelle = new Map(); d = neuerTreiber(async () => "at-gueltig");

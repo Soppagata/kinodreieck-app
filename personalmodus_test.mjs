@@ -4,7 +4,17 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 
 const pfad = process.argv[2] || "dist-single/Kinodreieck.html";
-const html = readFileSync(pfad, "utf8");
+const htmlRoh = readFileSync(pfad, "utf8");
+/* Der Doppelklick-Build ist absichtlich ohne Online-Runtime konfiguriert. Die
+   Account-Wechsel-Regressionsfälle weiter unten brauchen seit Rollen-v1 aber
+   zusätzlich zur synthetischen Auth-Sitzung eine echte (gemockte) Own-Row-
+   Freigabeabfrage. Nur die im Test ausgeführte HTML-Kopie bekommt deshalb eine
+   öffentliche Testprojekt-Konfiguration; das ausgelieferte Artefakt bleibt
+   unverändert und enthält weiterhin weder Schlüssel noch Zugangsdaten. */
+const html = htmlRoh.replace(
+  /supabaseUrl:([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\.VITE_SUPABASE_URL\),supabasePublishableKey:([A-Za-z_$][\w$]*)\(\2\.VITE_SUPABASE_PUBLISHABLE_KEY\)/,
+  (_match, urlFn, envName, textFn) => `supabaseUrl:${urlFn}(${envName}.VITE_SUPABASE_URL)||"https://test.supabase.co",supabasePublishableKey:${textFn}(${envName}.VITE_SUPABASE_PUBLISHABLE_KEY)||"sb_publishable_test"`,
+);
 const programm = JSON.parse(readFileSync(new URL("./src/data/programm-snapshot.json", import.meta.url), "utf8"));
 const bekannt = JSON.parse(readFileSync(new URL("./src/data/streaming_bekannt_snapshot.json", import.meta.url), "utf8"));
 const entdecken = JSON.parse(readFileSync(new URL("./src/data/streaming_entdecken_snapshot.json", import.meta.url), "utf8"));
@@ -221,6 +231,13 @@ function baueDom(seed = () => {}, demoRows = null) {
       if (!w.matchMedia) w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
       w.fetch = async (url, opts = {}) => {
         const s = String(url);
+        if (s.includes("/rest/v1/kd_account_access")) {
+          return {
+            ok: true, status: 200,
+            json: async () => [{ role: "member", active: true, personal_ai: false }],
+            text: async () => "",
+          };
+        }
         if (s.includes("/rest/v1/kd_catalog")) return katalogAntwort(s, opts);
         throw new Error("offline (Test)");
       };

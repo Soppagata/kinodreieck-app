@@ -122,6 +122,16 @@ export function createAiService({
           accountId: session.account.id,
           signal: options.signal,
         });
+        /* Ein Widerruf oder A→B während des asynchronen Function-Aufrufs darf
+           das alte Ergebnis nicht mehr in den neuen Zustand übernehmen. Die
+           Function prüft vor Kostenpfaden serverseitig; diese zweite
+           Clientgrenze schützt zusätzlich die Rückrichtung. */
+        const aktuell = auth.requireAccount("personalAi");
+        if (String(aktuell.account?.id || "") !== String(session.account.id)) {
+          throw new BoundaryError(ERROR_CODES.UNAUTHENTICATED, {
+            source: "ai", operation: "task.run", reason: "account-changed",
+          });
+        }
         if (!result || typeof result !== "object" || Array.isArray(result)) {
           throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
             source: "ai", operation: "task.decode", reason: "non-object-response",

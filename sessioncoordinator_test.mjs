@@ -17,9 +17,15 @@ async function rejects(promise) {
   try { await promise; return false; } catch { return true; }
 }
 
-function session(id = null) {
+function session(id = null, {
+  remoteStorage = true, personalAi = true, role = "member", state = "ready", accessStatus = "resolved",
+} = {}) {
   return id
-    ? { mode: "account", state: "ready", account: { id } }
+    ? {
+      mode: "account", state, account: { id, role },
+      capabilities: { remoteStorage, personalAi: remoteStorage && personalAi },
+      access: { status: accessStatus, role },
+    }
     : { mode: "guest", state: "ready", account: null };
 }
 
@@ -45,6 +51,7 @@ function aufbau({
   let active = false;
   let prepared = null;
   let masked = maskedStart;
+  let accessBlocked = null;
 
   const auth = {
     getSnapshot: () => snapshot,
@@ -78,8 +85,21 @@ function aufbau({
   const storage = {
     prepare(id) { calls.push(["prepare", id]); prepared = id; active = false; },
     confirm(id) { calls.push(["confirm", id]); prepared = id; active = true; },
-    deactivate() { calls.push(["deactivate"]); prepared = null; active = false; masked = false; },
+    deactivate() {
+      calls.push(["deactivate"]); prepared = null; active = false;
+      masked = false; accessBlocked = null;
+    },
     mask() { calls.push(["mask"]); prepared = null; active = false; masked = true; },
+    blockAccess(id) {
+      calls.push(["block-access", id]); prepared = null; active = false;
+      accessBlocked = id; masked = true;
+    },
+    unblockAccess(id) {
+      calls.push(["unblock-access", id]);
+      if (accessBlocked !== id) return false;
+      accessBlocked = null; masked = false; return true;
+    },
+    accessBlocked: (id) => accessBlocked === id,
     unlockForSameOwnerAccount(id) {
       calls.push(["unlock-owner", id]);
       if (id !== owner) return false;
@@ -200,6 +220,96 @@ function aufbau({
       ["prepare", "konto-A"], ["confirm", "konto-A"], ["pull"],
     ])
     && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  const a = aufbau({
+    initializeTo: session("konto-A", { remoteStorage: false, personalAi: false }),
+    owner: "konto-A", confirmed: ["konto-A"], hasOpenChanges: true,
+  });
+  await a.coordinator.initialize();
+  check("Inaktive Freigabe maskiert den ownergebundenen Cache ohne Flush, Restore, Pull oder Löschung",
+    JSON.stringify(a.calls) === JSON.stringify([["block-access", "konto-A"]])
+    && a.coordinator.getSnapshot().mode === "account"
+    && a.coordinator.getSnapshot().capabilities.remoteStorage === false
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.ACCESS_BLOCKED);
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A", { remoteStorage: false, personalAi: false }),
+    owner: "konto-A", confirmed: ["konto-A"], hasOpenChanges: true,
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  const geworfen = await rejects(a.coordinator.signOut());
+  check("Inaktives Konto mit offener Queue bleibt beim Logout maskiert statt als Gastcache geöffnet oder gelöscht zu werden",
+    geworfen && a.calls.length === 0
+    && a.coordinator.getSnapshot().mode === "account"
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.ACCESS_BLOCKED);
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A", { remoteStorage: false, personalAi: false }),
+    owner: "konto-A", confirmed: ["konto-A"], hasOpenChanges: false,
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  const sichtbar = [];
+  a.coordinator.subscribe((snapshot) => sichtbar.push(snapshot.mode));
+  await a.coordinator.signOut();
+  check("Logout eines inaktiven Kontos veröffentlicht Guest erst nach sicherer Cache-Trennung",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["auth-signout"], ["restore", "konto-A"], ["deactivate"],
+    ])
+    && sichtbar.at(-1) === "guest"
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.GUEST);
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A", { remoteStorage: false, personalAi: false }),
+    refreshTo: session("konto-A", { remoteStorage: true, personalAi: false }),
+    owner: "konto-A", confirmed: ["konto-A"], hasOpenChanges: true,
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  await a.coordinator.refresh();
+  check("Reaktivierung desselben Owners erhält offene Änderungen und schaltet den bestehenden Cache kontrolliert wieder frei",
+    JSON.stringify(a.calls) === JSON.stringify([
+      ["unblock-access", "konto-A"], ["prepare", "konto-A"], ["confirm", "konto-A"],
+    ])
+    && a.coordinator.getSnapshot().capabilities.remoteStorage === true
+    && a.coordinator.getSnapshot().capabilities.personalAi === false
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.READY);
+}
+
+{
+  const a = aufbau({
+    start: session("konto-A"),
+    refreshTo: session("konto-A", {
+      remoteStorage: false, personalAi: false, state: "degraded", accessStatus: "unavailable",
+    }),
+    owner: "konto-A", confirmed: ["konto-A"], hasOpenChanges: true,
+  });
+  await a.coordinator.initialize();
+  a.calls.length = 0;
+  await a.coordinator.refresh();
+  check("Nicht erreichbare Freigabe stoppt eine laufende Account-Session fail-closed ohne Nachsenden",
+    JSON.stringify(a.calls) === JSON.stringify([["block-access", "konto-A"]])
+    && a.coordinator.getStorageState() === STORAGE_SESSION_STATES.ACCESS_BLOCKED
+    && a.coordinator.getSnapshot().access.status === "unavailable");
+}
+
+{
+  const member = aufbau({ initializeTo: session("konto-M", { role: "member" }), owner: null });
+  const owner = aufbau({ initializeTo: session("konto-O", { role: "owner" }), owner: null });
+  await member.coordinator.initialize();
+  await owner.coordinator.initialize();
+  check("member und owner durchlaufen in Rollen-v1 denselben Storage-Vertrag",
+    JSON.stringify(member.calls) === JSON.stringify([["prepare", "konto-M"]])
+    && JSON.stringify(owner.calls) === JSON.stringify([["prepare", "konto-O"]]));
 }
 
 {
@@ -598,7 +708,7 @@ function aufbau({
   const storage = await import("./src/services/storage.js");
   const accountDriver = await import("./src/lib/accountDriver.js");
   accountDriver.setCacheOwner("konto-A");
-  storage.bereiteKontoTreiberVor("konto-B");
+  storage.bereiteKontoTreiberVor("konto-B", { remoteStorage: true });
   await storage.storageService.set("kd:master", "LOKAL-B");
   check("Echte Storage-Fassade bleibt vor der Entscheidung lokal und bewahrt Besitzer A",
     storage.cacheOwner() === "konto-A"
@@ -616,6 +726,37 @@ function aufbau({
     maskiert === null && writeGesperrt && daten.get("kd:master") === "ACCOUNT-A");
   storage.entsperrePersoenlichenSpeicherNachTrennung();
 
+  daten.clear();
+  const queue = JSON.stringify({
+    pending: { "kd:master": true }, conflict: {}, stale: {}, zuGross: {}, schemaVeraltet: {},
+  });
+  const epoch = JSON.stringify({ accountId: "konto-A", token: "epoch-A" });
+  const bindung = JSON.stringify({ v: 1, accountId: "konto-A" });
+  daten.set(accountDriver.ACCT_KEYS.owner, "konto-A");
+  daten.set(accountDriver.ACCT_KEYS.epoch, epoch);
+  daten.set(accountDriver.ACCT_KEYS.bindingSchema, bindung);
+  daten.set(accountDriver.ACCT_KEYS.status, queue);
+  daten.set("kd:master", "OFFEN-A");
+  storage.bereiteKontoTreiberVor("konto-A", { remoteStorage: true });
+  storage.sperreKontoTreiberWegenFreigabe("konto-A");
+  const accessMaskiert = await storage.storageService.get("kd:master");
+  const accessWriteGesperrt = await rejects(storage.storageService.set("kd:master", "FALSCHER-GAST"));
+  const accessPull = await storage.accountSync.pull();
+  const unveraendertGesperrt = daten.get(accountDriver.ACCT_KEYS.owner) === "konto-A"
+    && daten.get(accountDriver.ACCT_KEYS.epoch) === epoch
+    && daten.get(accountDriver.ACCT_KEYS.bindingSchema) === bindung
+    && daten.get(accountDriver.ACCT_KEYS.status) === queue
+    && daten.get("kd:master") === "OFFEN-A";
+  const wiederFreigegeben = storage.entsperreKontoTreiberNachFreigabe("konto-A");
+  storage.bereiteKontoTreiberVor("konto-A", { remoteStorage: true });
+  check("Access-Widerruf bewahrt Owner, Epoch, Queue und Cache bytegenau und ist für denselben Owner wieder vorbereitbar",
+    accessMaskiert === null && accessWriteGesperrt
+    && accessPull.reason === "access-blocked" && unveraendertGesperrt
+    && wiederFreigegeben && storage.istKontoTreiberVorbereitet()
+    && daten.get(accountDriver.ACCT_KEYS.status) === queue);
+  storage.deaktiviereKontoTreiber();
+
+  daten.set("kd:master", "ACCOUNT-A");
   daten.set(accountDriver.ACCT_KEYS.owner, "konto-A");
   daten.set(accountDriver.ACCT_KEYS.snap, "ACCOUNT-A-SNAPSHOT");
   const removeNormal = globalThis.localStorage.removeItem;
@@ -623,7 +764,7 @@ function aufbau({
     if (key === accountDriver.ACCT_KEYS.snap) throw new Error("snap-gesperrt");
     removeNormal(key);
   };
-  const prepareGesperrt = await rejects(Promise.resolve().then(() => storage.bereiteKontoTreiberVor("konto-B")));
+  const prepareGesperrt = await rejects(Promise.resolve().then(() => storage.bereiteKontoTreiberVor("konto-B", { remoteStorage: true })));
   check("Fremdaccount-Prepare sperrt bei nicht entfernbarer alter Snapshot-Metadatei",
     prepareGesperrt
     && storage.istPersoenlicherSpeicherMaskiert()
@@ -635,11 +776,11 @@ function aufbau({
   storage.entsperrePersoenlichenSpeicherNachTrennung();
 
   daten.clear();
-  storage.bereiteKontoTreiberVor("konto-A");
+  storage.bereiteKontoTreiberVor("konto-A", { remoteStorage: true });
   daten.set(accountDriver.ACCT_KEYS.transition, JSON.stringify({
     accountId: "konto-A", zweck: "fremder-tab", token: "fremd", t: "2026-08-08T13:00:00Z",
   }));
-  const sameIdGesperrt = await rejects(Promise.resolve().then(() => storage.bereiteKontoTreiberVor("konto-A")));
+  const sameIdGesperrt = await rejects(Promise.resolve().then(() => storage.bereiteKontoTreiberVor("konto-A", { remoteStorage: true })));
   check("Bestehender Same-ID-Treiber wird bei fremdem Transitionmarker nicht erneut aktiviert",
     sameIdGesperrt && storage.istPersoenlicherSpeicherMaskiert());
   daten.delete(accountDriver.ACCT_KEYS.transition);

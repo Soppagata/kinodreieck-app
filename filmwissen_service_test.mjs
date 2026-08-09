@@ -4,10 +4,26 @@ import { createFilmwissenService } from "./src/services/filmwissen.js";
 let ok = 0; const fehler = [];
 async function check(name, fn) { try { if (!await fn()) throw new Error("falsch"); ok++; console.log("✓ " + name); } catch (e) { fehler.push(name); console.error("✗ " + name + ": " + e.message); } }
 function authDoppel(id = "konto-a") {
-  let snapshot = { mode: "account", state: "ready", account: { id } }; const listener = new Set();
-  return { getSnapshot: () => snapshot, requireAccount: () => snapshot,
+  const aktiv = (kontoId, capabilities = { remoteStorage: true, personalAi: true }) => ({
+    mode: "account", state: "ready", account: { id: kontoId }, capabilities,
+  });
+  let snapshot = aktiv(id); const listener = new Set(); const required = [];
+  const emit = () => listener.forEach((fn) => fn(snapshot));
+  return { getSnapshot: () => snapshot, required,
+    requireAccount(capability = null) {
+      required.push(capability);
+      if (snapshot.mode !== "account" || snapshot.state !== "ready") {
+        throw Object.assign(new Error("unauthenticated"), { code: "unauthenticated" });
+      }
+      if (capability && snapshot.capabilities?.[capability] !== true) {
+        throw Object.assign(new Error("forbidden"), { code: "forbidden", reason: capability });
+      }
+      return snapshot;
+    },
     subscribe(fn) { listener.add(fn); return () => listener.delete(fn); },
-    wechsel(neu) { snapshot = neu ? { mode: "account", state: "ready", account: { id: neu } } : { mode: "guest", state: "ready" }; listener.forEach((fn) => fn(snapshot)); } };
+    wechsel(neu) { snapshot = neu ? aktiv(neu) : { mode: "guest", state: "ready", capabilities: {} }; emit(); },
+    setCapabilities(capabilities) { snapshot = aktiv(snapshot.account?.id || id, capabilities); emit(); },
+  };
 }
 const bereit = { format: "filmwissen-cache-v1", status: "belegt",
   werk: { id: "11111111-1111-4111-8111-111111111111", typ: "film", titel: "Alien", originaltitel: "Alien", jahr: 1979 },
@@ -42,10 +58,11 @@ await check("Transport sendet nur Kennung an die feste RPC", async () => {
     && Object.keys(body).sort().join(",") === "p_kennung,p_namespace";
 });
 await check("Cache-Miss faellt auf die naechste starke ID zurueck", async () => {
-  const rufe = []; const s = createFilmwissenService({ auth: authDoppel(), transport: async (id) => {
+  const auth = authDoppel(); const rufe = []; const s = createFilmwissenService({ auth, transport: async (id) => {
     rufe.push(id.namespace); return { ok: true, data: id.namespace === "imdb" ? { format: "filmwissen-cache-v1", status: "cache_miss" } : bereit };
   } });
-  return (await s.read({ imdb_id: "tt0078748", watchmode_id: 42 })).status === "belegt" && rufe.join(",") === "imdb,watchmode";
+  return (await s.read({ imdb_id: "tt0078748", watchmode_id: 42 })).status === "belegt"
+    && rufe.join(",") === "imdb,watchmode" && auth.required[0] === "remoteStorage";
 });
 await check("Parallele Reads werden dedupliziert", async () => {
   let rufe = 0; let resolve; const s = createFilmwissenService({ auth: authDoppel(), transport: () => { rufe++; return new Promise((r) => { resolve = r; }); } });
@@ -57,6 +74,28 @@ await check("Kontowechsel entwertet laufende Antworten", async () => {
   const auth = authDoppel(); let resolve; const s = createFilmwissenService({ auth, transport: () => new Promise((r) => { resolve = r; }) });
   const lauf = s.read({ imdb_id: "tt0078748" }); auth.wechsel("konto-b"); resolve({ ok: true, data: bereit });
   return (await lauf).status === FILMWISSEN_STATUS.VERALTET;
+});
+await check("Inaktive oder alte Session liest kein Filmwissen und startet keinen Transport", async () => {
+  const auth = authDoppel(); let rufe = 0;
+  auth.setCapabilities({ remoteStorage: false, personalAi: false });
+  const s = createFilmwissenService({ auth, transport: async () => { rufe++; } });
+  let error = null;
+  try { await s.read({ imdb_id: "tt0078748" }); } catch (e) { error = e; }
+  return error?.code === "forbidden" && error?.reason === "remoteStorage" && rufe === 0;
+});
+await check("Widerruf bei gleicher Konto-ID entwertet eine laufende Leseantwort", async () => {
+  const auth = authDoppel(); let resolve;
+  const s = createFilmwissenService({ auth, transport: () => new Promise((r) => { resolve = r; }) });
+  const lauf = s.read({ imdb_id: "tt0078748" });
+  auth.setCapabilities({ remoteStorage: false, personalAi: false });
+  resolve({ ok: true, data: bereit });
+  return (await lauf).status === FILMWISSEN_STATUS.VERALTET;
+});
+await check("Aktives Konto ohne Personal-AI darf vorhandenes Filmwissen lesen", async () => {
+  const auth = authDoppel();
+  auth.setCapabilities({ remoteStorage: true, personalAi: false });
+  const s = createFilmwissenService({ auth, transport: async () => ({ ok: true, data: bereit }) });
+  return (await s.read({ imdb_id: "tt0078748" })).status === "belegt";
 });
 await check("Ohne starke ID gibt es keinen Netzaufruf", async () => {
   let rufe = 0; const s = createFilmwissenService({ auth: authDoppel(), transport: async () => { rufe++; } });
@@ -124,6 +163,22 @@ await check("Parallele Recherchen werden bis zum Abschluss dedupliziert", async 
   await new Promise((resolve) => setTimeout(resolve, 0));
   loese({ ok: true, data: { status: "nicht_belegt" } });
   return (await a).status === "nicht_belegt" && (await b).status === "nicht_belegt" && kiRufe === 1;
+});
+await check("Personal-AI-Widerruf während der Recherche verwirft den alten KI-Erfolg", async () => {
+  const auth = authDoppel(); let loese; let liest = 0;
+  const s = createFilmwissenService({
+    auth,
+    transport: async () => ({
+      ok: true,
+      data: liest++ === 0 ? { format: "filmwissen-cache-v1", status: "cache_miss" } : bereit,
+    }),
+    ai: { runTask: () => new Promise((resolve) => { loese = resolve; }) },
+  });
+  const lauf = s.recherchiere({ imdb_id: "tt0078748" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  auth.setCapabilities({ remoteStorage: true, personalAi: false });
+  loese({ ok: true, data: { status: "belegt", versionId: bereit.version.id } });
+  return (await lauf).status === FILMWISSEN_STATUS.VERALTET && liest === 1;
 });
 await check("Watchmode allein darf keine Quellenrecherche ausloesen", async () => {
   let kiRufe = 0; let reads = 0;

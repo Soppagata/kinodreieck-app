@@ -41,7 +41,11 @@ const config = {
   supabaseUrl: "https://shared-test.supabase.co",
   supabasePublishableKey: "sb_publishable_shared_test",
 };
-let snapshot = { mode: "account", account: { id: "konto-a" } };
+const aktiveSession = (id = "konto-a") => ({
+  mode: "account", state: "ready", account: { id },
+  capabilities: { remoteStorage: true, personalAi: false },
+});
+let snapshot = aktiveSession();
 const auth = { getSnapshot: () => snapshot };
 let calls = [];
 let tokenCalls = [];
@@ -179,13 +183,43 @@ try { await service.publish(article); } catch (error) { guestError = error; }
 check("Gast kann keine öffentliche Projektion schreiben",
   guestError?.code === "unauthenticated" && calls.length === 0);
 
-snapshot = { mode: "account", account: { id: "konto-a" } };
+snapshot = aktiveSession();
+calls = []; tokenCalls = [];
+let inactiveError = null;
+snapshot = {
+  mode: "account", state: "ready", account: { id: "konto-a" },
+  capabilities: { remoteStorage: false, personalAi: false },
+};
+try { await service.publish(article); } catch (error) { inactiveError = error; }
+check("Inaktives Konto kann keine öffentliche Projektion schreiben und holt kein Token",
+  inactiveError?.code === "forbidden" && inactiveError?.reason === "remoteStorage"
+  && calls.length === 0 && tokenCalls.length === 0);
+
+calls = []; tokenCalls = [];
+snapshot = { mode: "account", state: "ready", account: { id: "konto-a" }, capabilities: {} };
+let alteSessionError = null;
+try { await service.claim("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"); } catch (error) { alteSessionError = error; }
+check("Alte Session ohne Capability bleibt beim Claim fail-closed",
+  alteSessionError?.code === "forbidden" && calls.length === 0 && tokenCalls.length === 0);
+
+snapshot = {
+  mode: "account", state: "degraded", account: { id: "konto-a" },
+  capabilities: { remoteStorage: true, personalAi: false },
+};
+nextResponses = [response(200, [])];
+calls = []; tokenCalls = [];
+const publicWhileBlocked = await service.list();
+check("Öffentliche Shared-Liste bleibt bei unbekannter Freigabe tokenfrei lesbar",
+  publicWhileBlocked.ok && calls.length === 1 && tokenCalls.length === 0
+  && !calls[0].options.headers.Authorization);
+
+snapshot = aktiveSession();
 const wechselService = createSharedArticlesService({
   config,
   auth,
   getAccessToken: async () => "token-a",
   fetchImpl: async () => {
-    snapshot = { mode: "account", account: { id: "konto-b" } };
+    snapshot = aktiveSession("konto-b");
     return response(200, []);
   },
 });
@@ -193,7 +227,25 @@ let wechselError = null;
 try { await wechselService.unpublish(article.id); } catch (error) { wechselError = error; }
 check("Verspätete Antwort eines anderen Kontos wird verworfen",
   wechselError?.code === "unauthenticated");
-snapshot = { mode: "account", account: { id: "konto-a" } };
+snapshot = aktiveSession();
+
+const widerrufService = createSharedArticlesService({
+  config,
+  auth,
+  getAccessToken: async () => "token-a",
+  fetchImpl: async () => {
+    snapshot = {
+      ...aktiveSession(),
+      capabilities: { remoteStorage: false, personalAi: false },
+    };
+    return response(200, []);
+  },
+});
+let widerrufError = null;
+try { await widerrufService.unpublish(article.id); } catch (error) { widerrufError = error; }
+check("Widerruf während eines Shared-Writes kann keinen alten Erfolg bestätigen",
+  widerrufError?.code === "forbidden" && widerrufError?.reason === "remoteStorage");
+snapshot = aktiveSession();
 
 const started = beginPublication(article, SHARED_PUBLICATION_ACTION.PUBLISH, "op-1", "2026-07-31T12:00:00Z");
 check("Statusmaschine beginnt sichtbar mit publishing",

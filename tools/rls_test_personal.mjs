@@ -5,6 +5,12 @@
    ============================================================================
    Bewusst NICHT Teil von `npm test`: braucht ein erreichbares Supabase-Projekt
    und zwei echte Testaccounts. Vor jeder Migration ausführen, die RLS berührt.
+   Rollen-v1 hat drei explizite Modi, die der Admin zwischen den Läufen
+   vorbereitet; das Skript verändert Freigabezeilen niemals selbst:
+
+     active   = A und B aktiv; vollständiger historischer Isolationsvertrag
+     inactive = A aktiv, B mit active=false; nur fail-closed Negativpfade
+     missing  = A aktiv, B ohne Access-Zeile; nur fail-closed Negativpfade
 
    Konfiguration ausschließlich über Umgebungsvariablen — nie in Dateien, nie im
    Repo, nie im Chat:
@@ -13,6 +19,7 @@
      KD_SB_ANON=<publishable-key> \
      KD_TESTA_USER=testa KD_TESTA_PASS=... \
      KD_TESTB_USER=testb KD_TESTB_PASS=... \
+     KD_RLS_ACCESS_MODE=active \
      node tools/rls_test_personal.mjs
 
    Beide Testaccounts legt Max vorher im Dashboard an (Auto Confirm User),
@@ -29,9 +36,12 @@ const A_PASS = process.env.KD_TESTA_PASS || "";
 const B_USER = (process.env.KD_TESTB_USER || "testb").trim();
 const B_PASS = process.env.KD_TESTB_PASS || "";
 const MAIL_DOMAIN = (process.env.KD_MAIL_DOMAIN || "login.kinodreieck.at").trim();
+const ACCESS_MODE = (process.env.KD_RLS_ACCESS_MODE || "active").trim().toLowerCase();
 
-if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(URL) || !ANON || !A_PASS || !B_PASS) {
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(URL) || !ANON || !A_PASS || !B_PASS
+  || !["active", "inactive", "missing"].includes(ACCESS_MODE)) {
   console.error("Konfiguration unvollständig. Benötigt: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS, KD_TESTB_PASS.");
+  console.error("KD_RLS_ACCESS_MODE muss active, inactive oder missing sein.");
   console.error("(Optional: KD_TESTA_USER, KD_TESTB_USER, KD_MAIL_DOMAIN)");
   process.exit(2);
 }
@@ -62,6 +72,32 @@ let ok = 0; const fehler = [];
 function pruefe(name, bedingung, detail = "") {
   if (bedingung) { ok++; console.log("✓ " + name); }
   else { fehler.push(name + (detail ? " — " + detail : "")); console.log("✗ " + name + (detail ? " — " + detail : "")); }
+}
+
+function beende(vertrag) {
+  console.log("");
+  if (fehler.length) {
+    console.error(`${fehler.length} FEHLER, ${ok} Checks bestanden:`);
+    for (const f of fehler) console.error("  - " + f);
+    process.exit(1);
+  }
+  console.log(`${ok}/${ok} RLS-Negativtests bestanden. ${vertrag}`);
+  process.exit(0);
+}
+
+function leereMenge(antwort) {
+  return antwort.status === 200 && Array.isArray(antwort.data) && antwort.data.length === 0;
+}
+
+function abgewiesen(antwort) {
+  const text = JSON.stringify(antwort.data || {});
+  return !antwort.ok && (
+    antwort.status === 400
+    || antwort.status === 401
+    || antwort.status === 403
+    || antwort.status === 404
+    || /42501|PGRST202|account_inactive/.test(text)
+  );
 }
 
 function headers(token, { body = false, prefer = null } = {}) {
@@ -98,6 +134,167 @@ async function login(benutzer, passwort) {
 const A = await login(A_USER, A_PASS);
 const B = await login(B_USER, B_PASS);
 pruefe("Zwei getrennte Testaccounts eingeloggt", !!A.id && !!B.id && A.id !== B.id);
+
+/* --- R0: Rollen-v1-Freigabe ist own-select-only --------------------------
+   Der Test liest ausschließlich die Freigabe der jeweiligen Sitzung. Keine
+   Access-Zeile wird angelegt, geändert oder gelöscht. Die drei Zustände werden
+   nacheinander vom vertrauenswürdigen Adminweg vorbereitet und rückgelesen. */
+const [accessAnon, accessA, accessB, accessAFremd, accessHelperAnon, helperA, helperB] = await Promise.all([
+  rest("GET", "/kd_account_access?select=account_id,role,active,personal_ai&limit=1"),
+  rest("GET", "/kd_account_access?select=account_id,role,active,personal_ai&limit=2", { token: A.token }),
+  rest("GET", "/kd_account_access?select=account_id,role,active,personal_ai&limit=2", { token: B.token }),
+  rest("GET", `/kd_account_access?account_id=eq.${B.id}&select=account_id,role,active,personal_ai`, { token: A.token }),
+  rest("POST", "/rpc/kd_account_active", { body: {} }),
+  rest("POST", "/rpc/kd_account_active", { token: A.token, body: {} }),
+  rest("POST", "/rpc/kd_account_active", { token: B.token, body: {} }),
+]);
+const accessAZeilen = Array.isArray(accessA.data) ? accessA.data : [];
+const accessBZeilen = Array.isArray(accessB.data) ? accessB.data : [];
+const accessAZeile = accessAZeilen[0];
+const accessBZeile = accessBZeilen[0];
+
+pruefe("R0a anon liest keine Freigabezeile",
+  accessAnon.status === 401 || accessAnon.status === 403 || leereMenge(accessAnon),
+  "HTTP " + accessAnon.status);
+pruefe("R0b A sieht keine Freigabe von B",
+  leereMenge(accessAFremd),
+  "HTTP " + accessAFremd.status + " rows=" + (Array.isArray(accessAFremd.data) ? accessAFremd.data.length : "?"));
+pruefe("R0c anon darf den Access-Helper nicht ausführen",
+  abgewiesen(accessHelperAnon),
+  "HTTP " + accessHelperAnon.status);
+pruefe("R0d A liest genau die eigene aktive, gültige Freigabe",
+  accessA.status === 200
+  && accessAZeilen.length === 1
+  && accessAZeile?.account_id === A.id
+  && ["member", "owner"].includes(accessAZeile?.role)
+  && accessAZeile?.active === true
+  && (!accessAZeile?.personal_ai || accessAZeile.active)
+  && helperA.status === 200
+  && helperA.data === true,
+  "HTTP access=" + accessA.status + " helper=" + helperA.status);
+
+if (ACCESS_MODE === "active") {
+  pruefe("R0e active: B liest genau die eigene aktive, gültige Freigabe",
+    accessB.status === 200
+    && accessBZeilen.length === 1
+    && accessBZeile?.account_id === B.id
+    && ["member", "owner"].includes(accessBZeile?.role)
+    && accessBZeile?.active === true
+    && (!accessBZeile?.personal_ai || accessBZeile.active)
+    && helperB.status === 200
+    && helperB.data === true,
+    "HTTP access=" + accessB.status + " helper=" + helperB.status);
+} else if (ACCESS_MODE === "inactive") {
+  pruefe("R0e inactive: B liest genau die eigene inaktive Freigabe",
+    accessB.status === 200
+    && accessBZeilen.length === 1
+    && accessBZeile?.account_id === B.id
+    && ["member", "owner"].includes(accessBZeile?.role)
+    && accessBZeile?.active === false
+    && accessBZeile?.personal_ai === false
+    && helperB.status === 200
+    && helperB.data === false,
+    "HTTP access=" + accessB.status + " helper=" + helperB.status);
+} else {
+  pruefe("R0e missing: B hat keine Freigabe und der Helper bleibt false",
+    leereMenge(accessB)
+    && helperB.status === 200
+    && helperB.data === false,
+    "HTTP access=" + accessB.status + " helper=" + helperB.status);
+}
+
+const accessWrite = ACCESS_MODE === "missing"
+  ? await rest("POST", "/kd_account_access", {
+    token: B.token,
+    body: { account_id: B.id, role: "owner", active: true, personal_ai: true },
+    prefer: "return=representation",
+  })
+  : await rest("PATCH", `/kd_account_access?account_id=eq.${B.id}`, {
+    token: B.token,
+    body: { role: "owner", active: true, personal_ai: true },
+    prefer: "return=representation",
+  });
+const accessSelbstErhoeht = accessWrite.ok
+  && Array.isArray(accessWrite.data)
+  && accessWrite.data.length > 0;
+pruefe("R0f B kann die eigene Freigabe weder anlegen noch erhöhen",
+  !accessSelbstErhoeht && (abgewiesen(accessWrite) || leereMenge(accessWrite)),
+  "HTTP " + accessWrite.status + (accessSelbstErhoeht ? " — LECK: Selbstfreigabe möglich!" : ""));
+
+if (ACCESS_MODE !== "active") {
+  /* Fehlend und inaktiv müssen auf jeder in Phase 0 klassifizierten Oberfläche
+     gleich fail-closed enden. Die Schreibproben sind absichtlich solche, die
+     bei korrekter Durchsetzung vor jeder Mutation abgewiesen werden. */
+  const probe = crypto.randomUUID();
+  const [personalRead, personalWrite, seriesRead, seriesRpc, catalogRead,
+    quellenRead, aiLogRead, filmwissenRead, sharedRead, sharedWrite,
+    sharedClaim, publicShared] = await Promise.all([
+    rest("GET", "/kd_personal?select=key&limit=1", { token: B.token }),
+    rest("POST", "/kd_personal", {
+      token: B.token,
+      body: { key: "kd:filter-kino", value: JSON.stringify({ _rlsProbe: probe }) },
+      prefer: "return=representation",
+    }),
+    rest("GET", "/kd_series_watch?select=watchmode_id&limit=1", { token: B.token }),
+    rest("POST", "/rpc/kd_set_series_watch", {
+      token: B.token, body: { p_watchmode_ids: [] },
+    }),
+    rest("GET", "/kd_catalog?select=name&order=name", { token: B.token }),
+    rest("GET", "/kd_quellen?select=slug&limit=1", { token: B.token }),
+    rest("GET", "/kd_ai_log?select=id&limit=1", { token: B.token }),
+    rest("POST", "/rpc/kd_filmwissen_aktuell_lesen", {
+      token: B.token,
+      body: { p_namespace: "kinodreieck", p_kennung: "rls-probe-" + probe },
+    }),
+    rest("GET", "/kd_shared_articles?select=publication_id&limit=1", { token: B.token }),
+    rest("POST", "/kd_shared_articles", {
+      token: B.token,
+      body: {
+        article_id: "rls-blocked-" + probe,
+        author: "RLS Test",
+        payload: { titel: "RLS blocked", text: "Muss vor dem Write scheitern." },
+      },
+      prefer: "return=representation",
+    }),
+    rest("POST", "/rpc/kd_claim_shared_article", {
+      token: B.token, body: { p_share_token: probe },
+    }),
+    rest("POST", "/rpc/kd_list_shared_articles", { body: {} }),
+  ]);
+
+  pruefe(`R1 ${ACCESS_MODE}: kd_personal ist leer und Schreiben scheitert`,
+    leereMenge(personalRead) && abgewiesen(personalWrite),
+    "read=" + personalRead.status + " write=" + personalWrite.status);
+  pruefe(`R2 ${ACCESS_MODE}: kd_series_watch ist leer und RPC scheitert`,
+    leereMenge(seriesRead) && abgewiesen(seriesRpc),
+    "read=" + seriesRead.status + " rpc=" + seriesRpc.status);
+
+  const katalogNamen = Array.isArray(catalogRead.data)
+    ? catalogRead.data.map((zeile) => zeile?.name)
+    : [];
+  const liveKatalogNamen = [
+    "programm", "streaming", "streaming_bekannt", "streaming_entdecken",
+  ];
+  pruefe(`R3 ${ACCESS_MODE}: Katalog zeigt nur öffentliche Demo-Zeilen`,
+    catalogRead.status === 200
+    && katalogNamen.includes("manifest")
+    && liveKatalogNamen.every((name) => !katalogNamen.includes(name)),
+    "HTTP " + catalogRead.status + " sichtbar=[" + katalogNamen.join(",") + "]");
+  pruefe(`R4 ${ACCESS_MODE}: Quellen und eigenes KI-Log bleiben leer`,
+    leereMenge(quellenRead) && leereMenge(aiLogRead),
+    "quellen=" + quellenRead.status + " aiLog=" + aiLogRead.status);
+  pruefe(`R5 ${ACCESS_MODE}: Filmwissen-SECURITY-DEFINER sperrt vor dem Cache`,
+    abgewiesen(filmwissenRead),
+    "HTTP " + filmwissenRead.status);
+  pruefe(`R6 ${ACCESS_MODE}: Shared-Tabelle/Publish/Claim sind gesperrt`,
+    leereMenge(sharedRead) && abgewiesen(sharedWrite) && abgewiesen(sharedClaim),
+    "read=" + sharedRead.status + " write=" + sharedWrite.status + " claim=" + sharedClaim.status);
+  pruefe(`R7 ${ACCESS_MODE}: öffentliche Shared-Liste bleibt bewusst lesbar`,
+    publicShared.status === 200 && Array.isArray(publicShared.data),
+    "HTTP " + publicShared.status);
+
+  beende(`Rollen-v1-Modus ${ACCESS_MODE} ist fail-closed belegt.`);
+}
 
 for (const kandidat of TESTKEY_KANDIDATEN) {
   const [standA, standB] = await Promise.all([
@@ -416,11 +613,12 @@ pruefe("T11i anon darf kd_quelle_status_setzen NICHT ausführen",
    sofort erwünscht — ohne Anmeldung gibt es programm/streaming nicht mehr
    (T11d/T11e/T11f). Unverändert gilt die Regel für kd_store: der alte
    schlüsselbasierte Sync ist ein rein öffentlicher Pfad, seine Policy hängt an
-   anon; ein mitgeschicktes Sitzungstoken macht die Antwort dort leer. Wer hier
+   anon. Rollen-v1 entzieht authenticated deshalb auch das alte Tabellen-GRANT:
+   ein mitgeschicktes Sitzungstoken wird am Tabellenrecht abgewiesen. Wer hier
    ein Token anhängt, hat den Pfad verwechselt — das soll auffallen. */
 const t12 = await rest("GET", "/kd_store?scope=eq.demo&select=key&limit=1", { token: A.token });
-pruefe("T12 Sitzungstoken auf kd_store-Demo-Read liefert leer (Wächter: kd_store bleibt tokenfrei)",
-  t12.status === 200 && Array.isArray(t12.data) && t12.data.length === 0,
+pruefe("T12 Sitzungstoken auf kd_store-Demo-Read wird abgewiesen (Wächter: kd_store bleibt tokenfrei)",
+  t12.status === 401 || t12.status === 403,
   "HTTP " + t12.status + " rows=" + (Array.isArray(t12.data) ? t12.data.length : "?"));
 
 /* --- T13: KI-Protokoll und -Konfiguration (Etappe 5) ----------------------
@@ -702,10 +900,4 @@ const sharedCleanupOk = !sharedAngelegt
 pruefe("Cleanup: temporäre Testzeilen entfernt; vorhandenes Profil bewahrt",
   cA && cB && profilCleanupOk && sharedCleanupOk);
 
-console.log("");
-if (fehler.length) {
-  console.error(`${fehler.length} FEHLER, ${ok} Checks bestanden:`);
-  for (const f of fehler) console.error("  - " + f);
-  process.exit(1);
-}
-console.log(`${ok}/${ok} RLS-Negativtests bestanden. Account-Isolation belegt.`);
+beende("Account-Isolation und aktiver Rollen-v1-Vertrag sind belegt.");

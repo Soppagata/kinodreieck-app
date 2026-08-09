@@ -21,6 +21,7 @@
    Kein LLM, kein service_role, keine Analyse von Anmeldeverhalten. */
 
 import { istSupabaseProjektUrl } from "./supabasePublic.js";
+import { ACCOUNT_ACCESS_STATUS, loadOwnAccountAccess } from "./accountAccess.js";
 import { BoundaryError, ERROR_CODES, normalizeBoundaryError } from "../services/errors.js";
 
 export const AUTH_SESSION_KEY = "kd:auth:session";
@@ -340,12 +341,33 @@ export function createAuthDriver({
     if (!k) {
       return { mode: "guest", abgelaufen: zustand === AUTH_ZUSTAND.ABGELAUFEN };
     }
+    /* Die Freigabe wird bei jedem Session-Laden neu aus der Own-Row-RLS
+       gelesen. Sie wird bewusst nicht im Browser persistiert: Widerruf und
+       Rollenwechsel müssen beim nächsten Refresh sichtbar werden, während
+       fehlende/kaputte/unerreichbare Antworten immer geschlossen ausfallen. */
+    const token = await getAccessToken({ erwarteteKontoId: k.id });
+    const access = await loadOwnAccountAccess({
+      config, token, fetchImpl: netz(),
+    });
+    /* Ein langsamer Request von Konto A darf nach Logout oder Wechsel zu B
+       keine Freigabe mehr projizieren. Der Auth-Service ignoriert `stale` und
+       behält den inzwischen neueren Snapshot. */
+    const aktuell = konto();
+    if (!aktuell || String(aktuell.id || "") !== String(k.id || "")) {
+      return { mode: "stale", accountId: k.id };
+    }
     return {
       mode: "account",
       account: { id: k.id, displayName: k.benutzername },
       expiresAt: new Date(k.gueltigBis).toISOString(),
-      capabilities: { remoteStorage: true, personalAi: true },
-      degradiert: zustand === AUTH_ZUSTAND.DEGRADIERT,
+      role: access.role,
+      access,
+      capabilities: {
+        remoteStorage: access.active === true,
+        personalAi: access.active === true && access.personalAi === true,
+      },
+      degradiert: zustand === AUTH_ZUSTAND.DEGRADIERT
+        || access.status === ACCOUNT_ACCESS_STATUS.UNAVAILABLE,
     };
   }
 

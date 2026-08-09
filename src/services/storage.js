@@ -39,6 +39,7 @@ let vorbereitetesKonto = null;
 let treiberGeneration = 0;
 let kontoAktiv = false;
 let privacyGesperrt = false;
+let freigabeGesperrtFuerKonto = null;
 let accountEpoch = null;
 let lokalerTransitionToken = null;
 let transitionErlaubtDriver = false;
@@ -139,6 +140,12 @@ function privacyError() {
   return error;
 }
 
+function accessError() {
+  const error = new Error("Der Kontospeicher ist für diese Anmeldung nicht freigegeben.");
+  error.code = "ACCOUNT_ACCESS_BLOCKED";
+  return error;
+}
+
 /* Wenn weder Gast-Restore noch lokales Entfernen möglich sind, darf die
    dynamische Store-Fassade keinesfalls auf den darunterliegenden Accountcache
    zurückfallen. Dieser Treiber liefert keine persönlichen Werte und bestätigt
@@ -151,6 +158,30 @@ const privacyMaskDriver = Object.freeze({
   async delete() { throw privacyError(); },
   async list() { return { keys: [] }; },
 });
+
+/* Eine entzogene oder unklare fachliche Freigabe darf den persistenten Cache
+   nicht in Gastdaten verwandeln. Dieser Maskentreiber stoppt neue Lese- und
+   Schreibvorgänge, ohne Owner, Epoch, Queue oder persönliche Werte anzutasten. */
+const accessMaskDriver = Object.freeze({
+  name: "account-access-mask",
+  owner: "account-access-blocked",
+  async get() { return null; },
+  async set() { throw accessError(); },
+  async delete() { throw accessError(); },
+  async list() { return { keys: [] }; },
+});
+
+function remoteStoragePasst(accountId) {
+  const id = String(accountId || "");
+  try {
+    const session = authService.getSnapshot();
+    return !!id
+      && session?.mode === "account"
+      && session?.state === "ready"
+      && String(session.account?.id || "") === id
+      && session.capabilities?.remoteStorage === true;
+  } catch { return false; }
+}
 
 function accountContextError() {
   const error = new Error("Der vorbereitete Kontokontext hat sich während des Auftrags geändert.");
@@ -184,9 +215,10 @@ export function erstelleGebundenenAccountContext({ driver, accountId, generation
   });
 }
 
-export function capturePreparedAccountContext(erwarteteBindung = null) {
+export function capturePreparedAccountContext(erwarteteBindung = null, optionen = null) {
   const driver = accountDriver;
   const accountId = vorbereitetesKonto;
+  if (!freigabeFuerAufrufPasst(accountId, optionen)) throw accessError();
   const generation = treiberGeneration;
   const context = erstelleGebundenenAccountContext({
     driver,
@@ -221,6 +253,8 @@ function baueAccountDriver(accountId) {
     isActive: () => vorbereitetesKonto === id
       && treiberGeneration === generation
       && accountDriver === driver
+      && freigabeGesperrtFuerKonto == null
+      && remoteStoragePasst(id)
       && String(authDriver.konto()?.id || "") === id
       && istGebundenerAccountCacheAktiv({
         accountId: id,
@@ -232,11 +266,15 @@ function baueAccountDriver(accountId) {
       /* Vor UND nach dem potenziell asynchronen Tokenzugriff prüfen. Ein
          Auftrag von Konto A darf nie nach einem Wechsel das Token von B sehen. */
       const vorher = authService.getSnapshot();
-      if (vorher?.mode !== "account" || String(vorher.account?.id || "") !== id) return null;
+      if (vorher?.mode !== "account" || vorher?.state !== "ready"
+          || vorher.capabilities?.remoteStorage !== true
+          || String(vorher.account?.id || "") !== id) return null;
       if (String(authDriver.konto()?.id || "") !== id) return null;
       const token = await authDriver.getAccessToken({ ...(opts || {}), erwarteteKontoId: id });
       const nachher = authService.getSnapshot();
-      if (nachher?.mode !== "account" || String(nachher.account?.id || "") !== id
+      if (nachher?.mode !== "account" || nachher?.state !== "ready"
+          || nachher.capabilities?.remoteStorage !== true
+          || String(nachher.account?.id || "") !== id
           || String(authDriver.konto()?.id || "") !== id) return null;
       return token;
     },
@@ -257,9 +295,15 @@ export function cacheOwner() { return getCacheOwner(); }
    ausdrückliche Übernahme vorbereitet. Der normale `store` bleibt lokal, bis
    der Nutzer entschieden hat. So kann zwischen Login und Bestätigung kein
    lokaler Topf versehentlich ins Konto geschrieben werden. */
-export function bereiteKontoTreiberVor(accountId) {
+function freigabeFuerAufrufPasst(accountId, optionen = null) {
+  return freigabeGesperrtFuerKonto == null
+    && (optionen?.remoteStorage === true || remoteStoragePasst(accountId));
+}
+
+export function bereiteKontoTreiberVor(accountId, optionen) {
   const id = String(accountId || "");
   if (!id) throw new Error("Konto-Treiber benötigt eine Konto-ID.");
+  if (!freigabeFuerAufrufPasst(id, optionen)) throw accessError();
   if (privacyGesperrt) throw privacyError();
   const transition = leseAccountCacheTransition();
   if (transition && transition.token !== lokalerTransitionToken) {
@@ -286,13 +330,16 @@ export function bereiteKontoTreiberVor(accountId) {
 
 /* Erst nach bestätigter Übernahme beziehungsweise bestätigtem Kontostand wird
    der lokale Cache diesem Konto zugeordnet und der Alltagssync eingeschaltet. */
-export function bestaetigeKontoTreiber(accountId) {
+export function bestaetigeKontoTreiber(accountId, optionen) {
   const id = String(accountId || "");
   const session = authService.getSnapshot();
-  if (session?.mode !== "account" || String(session.account?.id || "") !== id) {
+  const explizitFreigegeben = optionen?.remoteStorage === true;
+  if ((!explizitFreigegeben && (session?.mode !== "account" || session?.state !== "ready"
+      || session.capabilities?.remoteStorage !== true
+      || String(session.account?.id || "") !== id))) {
     throw new Error("Der Kontospeicher kann nur für die aktuell angemeldete Konto-ID bestätigt werden.");
   }
-  const driver = bereiteKontoTreiberVor(id);
+  const driver = bereiteKontoTreiberVor(id, optionen);
   if (vorbereitetesKonto !== id) throw new Error("Falscher Konto-Treiber vorbereitet.");
   if (!lokalerTransitionToken) {
     const persistierteEpoch = leseEpoch(id);
@@ -326,11 +373,39 @@ export function deaktiviereKontoTreiber() {
   accountEpoch = null;
   lokalerTransitionToken = null;
   transitionErlaubtDriver = false;
+  freigabeGesperrtFuerKonto = null;
   treiberGeneration++;
+}
+
+export function sperreKontoTreiberWegenFreigabe(accountId) {
+  const id = String(accountId || "");
+  if (!id) throw accessError();
+  freigabeGesperrtFuerKonto = id;
+  kontoAktiv = false;
+  vorbereitetesKonto = null;
+  accountDriver = null;
+  accountEpoch = null;
+  transitionErlaubtDriver = false;
+  treiberGeneration++;
+  setStorageDriver(accessMaskDriver);
+}
+
+export function entsperreKontoTreiberNachFreigabe(accountId) {
+  const id = String(accountId || "");
+  if (!id || freigabeGesperrtFuerKonto !== id || privacyGesperrt) return false;
+  freigabeGesperrtFuerKonto = null;
+  setStorageDriver(null);
+  return true;
+}
+
+export function istKontoTreiberWegenFreigabeGesperrt(accountId = null) {
+  if (accountId == null) return freigabeGesperrtFuerKonto != null;
+  return freigabeGesperrtFuerKonto === String(accountId || "");
 }
 
 export function maskierePersoenlichenSpeicher() {
   privacyGesperrt = true;
+  freigabeGesperrtFuerKonto = null;
   kontoAktiv = false;
   vorbereitetesKonto = null;
   accountDriver = null;
@@ -347,14 +422,19 @@ export function entsperrePersoenlichenSpeicherNachTrennung() {
   deaktiviereKontoTreiber();
 }
 
-export function istPersoenlicherSpeicherMaskiert() { return privacyGesperrt; }
+export function istPersoenlicherSpeicherMaskiert() {
+  return privacyGesperrt || freigabeGesperrtFuerKonto != null;
+}
 
-function authentifizierungPasst(accountId) {
+function authentifizierungPasst(accountId, optionen = null) {
   const id = String(accountId || "");
+  if (optionen?.remoteStorage === true && id) return true;
   try {
     const sichtbar = authService.getSnapshot();
     const persistent = authDriver.konto();
     return sichtbar?.mode === "account"
+      && sichtbar?.state === "ready"
+      && sichtbar.capabilities?.remoteStorage === true
       && String(sichtbar.account?.id || "") === id
       && String(persistent?.id || "") === id;
   } catch { return false; }
@@ -365,9 +445,9 @@ function bestaetigungPasst(istBestaetigt, accountId) {
   catch { return false; }
 }
 
-function legacyBindungsstand(accountId, istBestaetigt, eigenerTransitionToken = null) {
+function legacyBindungsstand(accountId, istBestaetigt, eigenerTransitionToken = null, optionen = null) {
   const id = String(accountId || "");
-  if (!id || !authentifizierungPasst(id)) return { status: "unsafe" };
+  if (!id || !authentifizierungPasst(id, optionen)) return { status: "unsafe" };
   const owner = leseRoh(ACCT_KEYS.owner);
   if (!owner.ok || owner.value !== id) return { status: "unsafe" };
   if (!bestaetigungPasst(istBestaetigt, id)) return { status: "not-applicable" };
@@ -415,9 +495,9 @@ function legacyBindungsstand(accountId, istBestaetigt, eigenerTransitionToken = 
 /* Einmalige Upgrade-Grenze für bestätigte Kontocaches aus Builds vor der
    Aktivierungs-Epoch. Sie verändert ausschließlich Epoch/Bindungsschema und
    lässt den eigenen Transitionmarker bis zum normalen Confirm stehen. */
-export async function migriereBestaetigtenLegacyKontocache(accountId, istBestaetigt) {
+export async function migriereBestaetigtenLegacyKontocache(accountId, istBestaetigt, optionen = null) {
   const id = String(accountId || "");
-  const vorher = legacyBindungsstand(id, istBestaetigt);
+  const vorher = legacyBindungsstand(id, istBestaetigt, null, optionen);
   if (vorher.status === "current" && !vorher.transitionToken) {
     return Object.freeze({ status: "already-current", epoch: vorher.epoch, transitionToken: null });
   }
@@ -436,14 +516,14 @@ export async function migriereBestaetigtenLegacyKontocache(accountId, istBestaet
   }
   try {
     await warteAccountTransitionZaun();
-    const stabil = legacyBindungsstand(id, istBestaetigt, transition.token);
+    const stabil = legacyBindungsstand(id, istBestaetigt, transition.token, optionen);
     if (stabil.status !== "legacy" && stabil.status !== "current") throw privacyError();
     const epoch = stabil.epoch || schreibeEpoch(id);
     if (!epoch || leseEpoch(id) !== epoch) throw privacyError();
     if (stabil.status !== "current" && (!schreibeBindung(id) || !bindungPasst(id))) {
       throw privacyError();
     }
-    const nachher = legacyBindungsstand(id, istBestaetigt, transition.token);
+    const nachher = legacyBindungsstand(id, istBestaetigt, transition.token, optionen);
     if (nachher.status !== "current" || nachher.epoch !== epoch) throw privacyError();
     accountEpoch = epoch;
     /* Der dynamische Store bleibt durch den Transition-Treiber gesperrt. Nur
@@ -460,6 +540,7 @@ export async function migriereBestaetigtenLegacyKontocache(accountId, istBestaet
 
 export function entsperrePersoenlichenSpeicherFuerGebundenesKonto(accountId) {
   const id = String(accountId || "");
+  if (freigabeGesperrtFuerKonto != null) return false;
   if (!privacyGesperrt) return true;
   if (!id || getCacheOwner() !== id || leseAccountCacheTransition()
       || !leseEpoch(id) || !bindungPasst(id)) return false;
@@ -490,7 +571,10 @@ export function beginneGebundeneAccountTransition(accountId, zweck, {
 export function beginneKontoAdoptionCache(accountId) {
   const id = String(accountId || "");
   const session = authService.getSnapshot();
-  if (!id || session?.mode !== "account" || String(session.account?.id || "") !== id) {
+  if (!id || session?.mode !== "account" || session?.state !== "ready"
+      || session.capabilities?.remoteStorage !== true
+      || String(session.account?.id || "") !== id
+      || freigabeGesperrtFuerKonto != null) {
     throw new Error("Der Kontocache kann nur für die aktuell angemeldete Konto-ID vorbereitet werden.");
   }
   const transition = beginneGebundeneAccountTransition(id, "konto-adoption", { driverErlaubt: true });
@@ -507,7 +591,8 @@ export function beginneKontoAdoptionCache(accountId) {
 export function bindeKontoAdoptionCache(accountId, transitionToken = lokalerTransitionToken) {
   const id = String(accountId || "");
   const transition = leseAccountCacheTransition();
-  if (!id || !transition || transition.accountId !== id
+  if (!remoteStoragePasst(id) || freigabeGesperrtFuerKonto != null
+      || !id || !transition || transition.accountId !== id
       || transition.token !== String(transitionToken || "")
       || transition.token !== String(lokalerTransitionToken || "")) {
     maskierePersoenlichenSpeicher();
@@ -567,22 +652,35 @@ export function istKontoTreiberVorbereitet() { return !!accountDriver && !!vorbe
 export function vorbereitetesKontoId() { return vorbereitetesKonto; }
 
 /* Konto-Sync-Fläche für die Oberfläche — die UI kennt den Treiber nicht direkt. */
+function accountSyncFreigegeben() {
+  return !!accountDriver && remoteStoragePasst(vorbereitetesKonto)
+    && freigabeGesperrtFuerKonto == null;
+}
+
 export const accountSync = Object.freeze({
-  status: () => accountDriver
+  status: () => accountSyncFreigegeben()
     ? { ...accountDriver.status(), prepared: true, active: istKontoTreiberAktiv() }
     : leeresKontoStatus(),
-  pull: () => accountDriver?.pull() || Promise.resolve({ ok: false, reason: "not-prepared" }),
-  flush: () => accountDriver?.syncFlush() || Promise.resolve([]),
-  inventur: () => accountDriver?.inventur() || Promise.resolve({ ok: false, reason: "not-prepared", zeilen: {} }),
-  verbindungstest: () => accountDriver?.connectionTest() || Promise.resolve({ ok: false, reason: "not-prepared" }),
-  uebernehmeKey: (key, value) => accountDriver?.uebernehmeKey(key, value)
-    || Promise.resolve({ ok: false, reason: "not-prepared" }),
-  loescheRemote: (key) => accountDriver?.loescheRemote(key)
-    || Promise.resolve({ ok: false, reason: "not-prepared" }),
-  resolveKeepLocal: (key) => accountDriver?.resolveConflictPushLocal(key)
-    || Promise.resolve({ ok: false, reason: "not-prepared" }),
-  resolveKeepRemote: (key) => accountDriver?.resolveConflictUseRemote(key)
-    || Promise.resolve({ ok: false, reason: "not-prepared" }),
+  pull: () => accountSyncFreigegeben()
+    ? accountDriver.pull() : Promise.resolve({ ok: false, reason: "access-blocked" }),
+  flush: () => accountSyncFreigegeben() ? accountDriver.syncFlush() : Promise.resolve([]),
+  inventur: () => accountSyncFreigegeben()
+    ? accountDriver.inventur()
+    : Promise.resolve({ ok: false, reason: "access-blocked", zeilen: {} }),
+  verbindungstest: () => accountSyncFreigegeben()
+    ? accountDriver.connectionTest() : Promise.resolve({ ok: false, reason: "access-blocked" }),
+  uebernehmeKey: (key, value) => accountSyncFreigegeben()
+    ? accountDriver.uebernehmeKey(key, value)
+    : Promise.resolve({ ok: false, reason: "access-blocked" }),
+  loescheRemote: (key) => accountSyncFreigegeben()
+    ? accountDriver.loescheRemote(key)
+    : Promise.resolve({ ok: false, reason: "access-blocked" }),
+  resolveKeepLocal: (key) => accountSyncFreigegeben()
+    ? accountDriver.resolveConflictPushLocal(key)
+    : Promise.resolve({ ok: false, reason: "access-blocked" }),
+  resolveKeepRemote: (key) => accountSyncFreigegeben()
+    ? accountDriver.resolveConflictUseRemote(key)
+    : Promise.resolve({ ok: false, reason: "access-blocked" }),
 });
 
 export const storageService = Object.freeze({

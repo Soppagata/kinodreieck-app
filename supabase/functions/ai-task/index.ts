@@ -13,7 +13,8 @@
    Protokoll sind gemeinsamer Rumpf und stehen genau einmal da.
 
    Ablauf jedes Aufrufs, in dieser Reihenfolge:
-     Aufrufer prüfen -> Größe prüfen -> Konfiguration lesen
+     Aufrufer prüfen -> fachliche KI-Freigabe prüfen -> Größe prüfen
+     -> Konfiguration lesen
      -> Not-Aus/Limits prüfen UND Protokollzeile anlegen (atomar, in der DB)
      -> Anbieter mit Zeitgrenze rufen -> Antwort strukturell prüfen
      -> Protokollzeile abschließen -> antworten.
@@ -180,6 +181,12 @@ type Aufrufer = {
   weg: string;
 };
 
+type Fachfreigabe = {
+  rolle: "member" | "owner";
+  active: true;
+  personalAi: true;
+};
+
 async function pruefeAufrufer(req: Request): Promise<Aufrufer> {
   const treffer = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i);
   if (!treffer) {
@@ -248,6 +255,61 @@ async function pruefeAufrufer(req: Request): Promise<Aufrufer> {
   }
 
   return { accountId: sub, rolle, claimsSchluessel: Object.keys(claims), weg };
+}
+
+/* Die technische Anmeldung ist absichtlich nicht die Produktfreigabe. Der
+   Nutzerclient liest unter RLS ausschließlich die eigene Zeile; ohne Zeile,
+   bei mehr als einer Zeile, bei einem Lesefehler oder bei formfremden Werten
+   bleibt der gesamte Endpunkt fail-closed. Diese Prüfung liegt vor Adminclient,
+   Konfiguration, Health-Inhalt, Protokoll, Reservierung und Anbieter. */
+async function pruefeFachfreigabe(req: Request): Promise<Fachfreigabe> {
+  const leser = nutzerClient(req);
+  if (!leser) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-nicht-lesbar");
+  }
+
+  let daten: unknown = null;
+  try {
+    const { data, error } = await leser
+      .from("kd_account_access")
+      .select("role,active,personal_ai")
+      .limit(2);
+    if (error) {
+      throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-nicht-lesbar");
+    }
+    daten = data;
+  } catch (e) {
+    if (e instanceof AufrufFehler) throw e;
+    throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-nicht-lesbar");
+  }
+
+  if (!Array.isArray(daten) || daten.length !== 1) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-fehlt");
+  }
+  const kandidat = daten[0];
+  if (!kandidat || typeof kandidat !== "object" || Array.isArray(kandidat)) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-ungueltig");
+  }
+  const zeile = kandidat as Record<string, unknown>;
+  if (
+    (zeile.role !== "member" && zeile.role !== "owner") ||
+    typeof zeile.active !== "boolean" ||
+    typeof zeile.personal_ai !== "boolean"
+  ) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "kontofreigabe-ungueltig");
+  }
+  if (!zeile.active) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "konto-inaktiv");
+  }
+  if (!zeile.personal_ai) {
+    throw new AufrufFehler(CODES.FORBIDDEN, "persoenliche-ki-nicht-freigegeben");
+  }
+
+  return {
+    rolle: zeile.role,
+    active: true,
+    personalAi: true,
+  };
 }
 
 /* ---------- Konfiguration ----------------------------------------------------- */
@@ -2618,6 +2680,17 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
+  let fachfreigabe: Fachfreigabe;
+  try {
+    fachfreigabe = await pruefeFachfreigabe(req);
+  } catch (e) {
+    const f = e as AufrufFehler;
+    return fehlerAntwort(f.code ?? CODES.FORBIDDEN, origin, {
+      grund: f.grund ?? "kontofreigabe-nicht-lesbar",
+      vorgangId,
+    });
+  }
+
   /* N1: Ein nicht UUID-förmiges Feld ließ den uuid-Parameter in Postgres
      scheitern — der Nutzer las dann „Der Server ist vorübergehend nicht
      verfügbar", obwohl seine Eingabe schuld war. */
@@ -2718,6 +2791,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         anbieterSecretGesetzt: !!Deno.env.get("ANTHROPIC_API_KEY"),
         aufrufer: {
           rolle: aufrufer.rolle,
+          fachrolle: fachfreigabe.rolle,
           weg: aufrufer.weg,
           accountIdVorhanden: !!aufrufer.accountId,
         },

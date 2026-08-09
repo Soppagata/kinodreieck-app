@@ -7,20 +7,32 @@ import {
 } from "../lib/filmwissen.js";
 import { createFilmwissenTransport } from "../lib/filmwissenTransport.js";
 import { aiService } from "./ai.js";
-const kontoVon = (s) => s?.mode === "account" && s?.state === "ready" ? s.account?.id || null : null;
+const kontoVon = (s) => s?.mode === "account" && s?.state === "ready"
+  && s?.capabilities?.remoteStorage === true
+  ? s.account?.id || null
+  : null;
+const kiKontoVon = (s) => {
+  const accountId = kontoVon(s);
+  return accountId && s?.capabilities?.personalAi === true ? accountId : null;
+};
 export function createFilmwissenService({ auth = authService, transport, ai = aiService } = {}) {
   const offen = new Map(); const rechercheOffen = new Map();
-  let generation = 0; let konto = kontoVon(auth.getSnapshot?.());
+  let generation = 0;
+  let konto = kontoVon(auth.getSnapshot?.());
+  let kiKonto = kiKontoVon(auth.getSnapshot?.());
   const unsubscribe = auth.subscribe?.((s) => {
     const neu = kontoVon(s);
-    if (neu !== konto) {
-      konto = neu; generation++; offen.clear(); rechercheOffen.clear();
+    const neuKi = kiKontoVon(s);
+    if (neu !== konto || neuKi !== kiKonto) {
+      konto = neu; kiKonto = neuKi;
+      generation++; offen.clear(); rechercheOffen.clear();
     }
   }) || (() => {});
   async function read(film, options = {}) {
     const ids = filmwissenKennungen(film);
     if (!ids.length) return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_ZUORDENBAR);
-    const accountId = auth.requireAccount().account.id; const start = generation;
+    const accountId = auth.requireAccount("remoteStorage").account.id;
+    const start = generation;
     const key = accountId + "|" + ids.map((x) => x.namespace + ":" + x.kennung).join("|");
     if (offen.has(key)) return offen.get(key);
     const promise = (async () => {
@@ -61,6 +73,12 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
           return vorhanden;
         }
         if (vorhanden.status === FILMWISSEN_STATUS.VERALTET) return vorhanden;
+        /* `read()` und der KI-Start liegen in zwei getrennten Await-Schritten.
+           Ein Widerruf genau dazwischen darf keinen Rechercheauftrag mehr
+           starten, auch wenn die äußere Methode mit Personal-AI begann. */
+        if (generation !== start || kiKontoVon(auth.getSnapshot?.()) !== accountId) {
+          return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
+        }
         const result = await ai.runTask("filmwissen-synthese", id, {
           signal: options.signal,
           vorgangId: options.vorgangId,
@@ -68,7 +86,7 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
              Promptfassung. Die Clientmarke bleibt absichtlich generisch. */
           promptVersion: "v1",
         });
-        if (generation !== start || kontoVon(auth.getSnapshot?.()) !== accountId) {
+        if (generation !== start || kiKontoVon(auth.getSnapshot?.()) !== accountId) {
           return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
         }
         const status = result?.data?.status;

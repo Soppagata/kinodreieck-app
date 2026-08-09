@@ -449,19 +449,60 @@ const freigabeLauf = await laufe(freigabe.dienst);
 check("T13-Gegenprobe: mit personalAi läuft genau derselbe Aufruf durch",
   freigabeLauf.fehler === null && freigabeLauf.ergebnis?.ok === true && freigabe.rufe.length === 1);
 
-/* Die Freischaltung selbst (Etappe 5): der produktive Auth-Treiber projiziert
-   eine gespeicherte Sitzung jetzt MIT personalAi. */
-const { AUTH_SESSION_KEY } = await import("./src/lib/authDriver.js");
-const { authDriver } = await import("./src/services/auth.js");
+let widerrufen = false;
+const widerrufAuth = {
+  requireAccount(capability) {
+    if (capability === "personalAi" && widerrufen) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, {
+        source: "auth", operation: "session.require-capability", reason: "personalAi",
+      });
+    }
+    return { mode: "account", state: "ready", account: { id: KONTO_ID },
+      capabilities: { remoteStorage: true, personalAi: true } };
+  },
+};
+const widerruf = dienstMit(() => { widerrufen = true; return { ok: true }; }, { auth: widerrufAuth });
+const widerrufLauf = await laufe(widerruf.dienst);
+check("Widerruf während des Function-Aufrufs verwirft das alte KI-Ergebnis",
+  widerrufLauf.fehler?.code === ERROR_CODES.FORBIDDEN
+  && widerrufLauf.fehler?.reason === "personalAi" && widerruf.rufe.length === 1);
+
+let laufendesKonto = "konto-a";
+const wechselAuth = {
+  requireAccount() {
+    return { mode: "account", state: "ready", account: { id: laufendesKonto },
+      capabilities: { remoteStorage: true, personalAi: true } };
+  },
+};
+const wechsel = dienstMit(() => { laufendesKonto = "konto-b"; return { ok: true }; }, { auth: wechselAuth });
+const wechselLauf = await laufe(wechsel.dienst);
+check("A→B während des Function-Aufrufs verwirft das A-Ergebnis",
+  wechselLauf.fehler?.code === ERROR_CODES.UNAUTHENTICATED
+  && wechselLauf.fehler?.reason === "account-changed" && wechsel.rufe.length === 1);
+
+/* Rollen-v1: Der produktive Auth-Treiber projiziert ausschließlich die
+   serverseitige Own-Row-Freigabe. Der Test ersetzt den Zugriff vollständig;
+   normale Tests führen keine Remoteabfrage aus. */
+const { AUTH_SESSION_KEY, createAuthDriver } = await import("./src/lib/authDriver.js");
 localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
   v: 1, access_token: TOKEN, refresh_token: "test-erneuerungswert-platzhalter",
   gueltigBis: Date.now() + 3600000, kontoId: "konto-1",
   mail: "tester@login.kinodreieck.at", benutzername: "tester",
 }));
-const projektion = await authDriver.loadSession();
+const rollenDriver = createAuthDriver({
+  config: {
+    supabaseUrl: "https://rollen-test.supabase.co",
+    supabasePublishableKey: "sb_publishable_rollen_test",
+  },
+  fetchImpl: async () => ({
+    ok: true,
+    json: async () => [{ role: "member", active: true, personal_ai: false }],
+  }),
+});
+const projektion = await rollenDriver.loadSession();
 localStorage.removeItem(AUTH_SESSION_KEY);
-check("Etappe 5: der produktive Auth-Treiber projiziert personalAi jetzt als true",
-  projektion?.mode === "account" && projektion.capabilities?.personalAi === true
+check("Rollen-v1: Own-Row active=true/personal_ai=false wird exakt projiziert",
+  projektion?.mode === "account" && projektion.capabilities?.personalAi === false
   && projektion.capabilities?.remoteStorage === true);
 
 const authMitTreiber = createAuthService({
@@ -473,8 +514,10 @@ const authMitTreiber = createAuthService({
   },
 });
 const nachAnmeldung = await authMitTreiber.signIn("max", "geheim");
-check("Etappe 5: auch die frische Anmeldung schaltet personalAi frei",
-  nachAnmeldung.capabilities.personalAi === true);
+check("Rollen-v1: frische technische Anmeldung ohne lesbare Freigabe bleibt geschlossen",
+  nachAnmeldung.mode === "account" && nachAnmeldung.state === "degraded"
+  && nachAnmeldung.capabilities.remoteStorage === false
+  && nachAnmeldung.capabilities.personalAi === false);
 
 /* ===========================================================================
    T9/T10 — der gemeldete Grund schlägt den Status
