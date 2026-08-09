@@ -12,15 +12,16 @@ export const NAVIGATION = Object.freeze([
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
 
-export function MobileNavigation({ aktiv, mehrOffen, onMehr, onNavigate, onNachOben }) {
+export function MobileNavigation({ aktiv, mehrOffen, sicherungOffen = false, onMehr, onNavigate, onNachOben }) {
   return (
     <>
-      {mehrOffen && <MenuPopup aktiv={aktiv} onClose={onMehr} onNavigate={onNavigate} onNachOben={onNachOben} />}
+      {mehrOffen && <MenuPopup aktiv={aktiv} sicherungOffen={sicherungOffen}
+        onClose={onMehr} onNavigate={onNavigate} onNachOben={onNachOben} />}
     </>
   );
 }
 
-function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
+function MenuPopup({ aktiv, sicherungOffen, onClose, onNavigate, onNachOben }) {
   const dialogRef = useRef(null);
   useEffect(() => {
     const vorher = document.activeElement;
@@ -56,7 +57,14 @@ function MenuPopup({ aktiv, onClose, onNavigate, onNachOben }) {
         <section id="kd-mobile-menu" className="kd-mobile-menu">
           <nav className="kd-mobile-menu-liste" aria-label="App-Bereiche">
             {NAVIGATION.filter((eintrag) => !eintrag.desktopOnly).map((eintrag) => (
-              <button key={eintrag.id} className={aktiv === eintrag.id ? "aktiv" : ""} aria-current={aktiv === eintrag.id ? "page" : undefined}
+              <button key={eintrag.id}
+                className={[
+                  aktiv === eintrag.id ? "aktiv" : "",
+                  sicherungOffen && eintrag.id === "daten" ? "kd-sicherung-offen" : "",
+                ].filter(Boolean).join(" ")}
+                aria-current={aktiv === eintrag.id ? "page" : undefined}
+                aria-label={sicherungOffen && eintrag.id === "daten" ? eintrag.label : undefined}
+                aria-description={sicherungOffen && eintrag.id === "daten" ? "Sicherung offen" : undefined}
                 onClick={() => onNavigate(eintrag.id)}>
                 {eintrag.label}
               </button>

@@ -1044,7 +1044,7 @@ export default function App() {
 
   /* ---- Export-Wächter: ungesicherte Browser-Änderungen sichtbar machen ----
      Browser-Speicher ist kein Backup. Sobald der Storage-Stand jünger ist
-     als der letzte Export, erscheint ein roter Punkt am Einstellungen-Tab + Banner. */
+     als der letzte Export, markiert Settings den zuständigen Backup-Bereich. */
   const { markiereExport, backupGesamt, ungesichertMaster, ungesichertArtikel } = useBackupExportController({
     masterHerkunft,
     artikelListe,
@@ -1052,6 +1052,19 @@ export default function App() {
     owner: storageOwnerKennung(),
     onFehler: setErr,
   });
+  const sicherungOffen = ungesichertMaster || ungesichertArtikel;
+  const oeffneSicherung = useCallback(() => {
+    navigiere("daten");
+    /* Die normale Bereichsnavigation stellt ihre alte Scrollposition nach zwei
+       Frames wieder her. Derselbe Takt springt anschließend bewusst genauer
+       zum markierten Arbeitsort, statt nur oben in Settings zu landen. */
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const ziel = document.getElementById("gesamt-backup");
+      const reduzierteBewegung = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true;
+      ziel?.scrollIntoView?.({ block: "start", behavior: reduzierteBewegung ? "auto" : "smooth" });
+      ziel?.querySelector("summary")?.focus?.({ preventScroll: true });
+    }));
+  }, [navigiere]);
 
   /* Hilfe ist nun ausschließlich nutzerinitiiert. Die frühere automatische
      Tour bei Tabwechseln und Scrollereignissen ist aus dem Laufzeitpfad entfernt. */
@@ -1564,8 +1577,9 @@ export default function App() {
   }, [toggleMehr]);
   const navigiereAusGlobalemMenu = useCallback((ziel) => {
     setGlobaleSuchantwort(null);
-    navigiere(ziel);
-  }, [navigiere]);
+    if (ziel === "daten" && sicherungOffen) oeffneSicherung();
+    else navigiere(ziel);
+  }, [navigiere, oeffneSicherung, sicherungOffen]);
   /* KD-031: `vollKatalog` trennt das leichte Boot-Nachladen vom teuren
      Entdecken-Katalog. Ohne Flag (Boot/Badges): nur die leichte streaming_bekannt
      + der schon gebündelte Top-500-Snapshot als Ersatz fürs Dashboard. Mit Flag
@@ -1910,7 +1924,10 @@ export default function App() {
       <nav className="kd-menu" style={{ position: "sticky", top: 0, background: T.saal, borderBottom: "1px solid " + T.saalHoch }} aria-label="Hauptnavigation">
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "8px 22px", display: "flex", gap: 6, flexWrap: "wrap" }}>
           {NAVIGATION.map(({ id, label }) => (
-            <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined} onClick={() => navigiere(id)}
+            <button key={id} className={tab === id ? "kd-nav-aktiv" : undefined}
+              aria-label={id === "daten" && sicherungOffen ? label : undefined}
+              aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
+              onClick={() => id === "daten" && sicherungOffen ? oeffneSicherung() : navigiere(id)}
               style={{
                 fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
                 letterSpacing: "0.08em", textTransform: "uppercase",
@@ -1920,8 +1937,8 @@ export default function App() {
                 position: "relative",
               }}>
               {label}
-              {id === "daten" && (ungesichertMaster || ungesichertArtikel) && (
-                <span title="Ungesicherte Änderungen im Browser — bitte exportieren"
+              {id === "daten" && sicherungOffen && (
+                <span aria-hidden="true" title="Ungesicherte Änderungen im Browser — bitte exportieren"
                   style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8, borderRadius: 4, background: T.gefahr, display: "inline-block" }} />
               )}
             </button>
@@ -1931,12 +1948,6 @@ export default function App() {
 
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "20px 22px 0" }}>
         {tab !== "start" && <BereichsHero bereich={tab} />}
-        {(ungesichertMaster || ungesichertArtikel) && (
-          <aside className="kd-backup-hinweis" role="status">
-            <span><strong>Noch nicht gesichert.</strong> Browser-Speicher ist kein Backup.</span>
-            <button onClick={() => navigiere("daten")}>Sicherung öffnen</button>
-          </aside>
-        )}
         <GlobalErrorQueue errors={errors} onDismiss={dismissError} />
 
         {bootDone && loading === "programm" && !progStand && (
@@ -2141,7 +2152,7 @@ export default function App() {
           />
         )}
       </main>
-      <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} onMehr={toggleMehr}
+      <MobileNavigation aktiv={tab} mehrOffen={mehrOffen} sicherungOffen={sicherungOffen} onMehr={toggleMehr}
         onNavigate={navigiereAusGlobalemMenu} onNachOben={nachObenAusMenu} />
       <GlobalSearchBar bereich={tab} onSuchen={starteGlobaleSuche}
         antwort={globaleSuchantwort}

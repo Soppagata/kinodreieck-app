@@ -117,11 +117,13 @@ export function SegmentedControl({ options, value, onChange, dataTour, style, cl
    Blöcke (Etappe 2). tour setzt data-tour am <details>, damit Tour-Anker
    auch bei zugeklapptem Block ein Ziel haben. offen = Startzustand;
    danach togglet der Browser nativ (kein JS-State). */
-export function Klappe({ titel, offen = false, tour, children }) {
+export function Klappe({ titel, offen = false, tour, id, markiert = false, status = null, children }) {
   return (
-    <details className="kd-klappe" open={offen || undefined} data-tour={tour}>
+    <details id={id} className={"kd-klappe" + (markiert ? " kd-klappe-markiert" : "")}
+      open={offen || undefined} data-tour={tour}>
       <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 18, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, padding: "6px 0" }}>
         {titel}
+        {status && <span className="kd-klappe-status">{status}</span>}
       </summary>
       <div style={{ marginTop: 8 }}>{children}</div>
     </details>

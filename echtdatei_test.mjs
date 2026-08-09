@@ -117,6 +117,12 @@ const dom = new JSDOM(html, {
       static now() { return FIXED; }
     }
     window.Date = MockDate;
+    window.HTMLElement.prototype.scrollIntoView = function () {
+      window.__kdLetztesScrollziel = this.id || null;
+    };
+    window.HTMLAnchorElement.prototype.click = function () {
+      window.__kdDownloadKlicks = (window.__kdDownloadKlicks || 0) + 1;
+    };
     window.fetch = async (url, opts = {}) => {
       const s = String(url);
       if (s.includes("/rest/v1/kd_catalog")) return katalogAntwort(s, opts);
@@ -124,6 +130,7 @@ const dom = new JSDOM(html, {
     };
     window.scrollTo = () => {};
     if (!window.URL.createObjectURL) window.URL.createObjectURL = () => "blob:test";
+    if (!window.URL.revokeObjectURL) window.URL.revokeObjectURL = () => {};
     if (!window.matchMedia) window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
     window.localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: true, skip: [], am: "2026-07-15", version: "beta-2026-07-datenfreigabe-2" }));
     window.localStorage.setItem("kd:start", "clean");
@@ -183,6 +190,9 @@ for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG"]) {
 }
 check("Suche ist am Desktop als Bereich und mobil weiterhin global erreichbar", /Suche/.test((doc.querySelector(".kd-menu")?.textContent || ""))
   && !!doc.querySelector('.kd-globalsuche input[aria-label="Sucheingabe"]'));
+check("Ungesicherte Änderungen stören Inhaltsseiten nicht mehr als Dauerbanner",
+  !doc.querySelector(".kd-backup-hinweis")
+  && !/Noch nicht gesichert\.\s*Browser-Speicher ist kein Backup\./.test(startText));
 
 /* ---- Dashboard-Module (ersetzt die Landing-Checks; Landing testet betamodus_test.mjs) ---- */
 const enthaeltMatchText = (s) => String(s || "").toLowerCase().includes(String(MATCH_TITEL).toLowerCase());
@@ -296,6 +306,23 @@ const datenTab = knopf(/^settings$/i);
 check("Tab heißt Settings", !!datenTab);
 if (datenTab) { datenTab.click(); await warte(600); }
 check("Darstellung & Verhalten vorhanden", /Darstellung & Verhalten/.test(text()));
+const gesamtBackupSummary = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Gesamt-Backup/.test((summary.textContent || "").trim()));
+const gesamtBackupDetails = gesamtBackupSummary?.parentElement;
+check("Settings-Marker führt direkt zum offenen Gesamt-Backup",
+  dom.window.__kdLetztesScrollziel === "gesamt-backup"
+  && gesamtBackupDetails?.open
+  && gesamtBackupDetails.classList.contains("kd-klappe-markiert")
+  && /Sicherung offen/.test(gesamtBackupSummary.textContent || ""));
+check("Desktop-Settings kennzeichnet den offenen Sicherungsstand dezent",
+  datenTab?.getAttribute("aria-label") === "Settings"
+  && datenTab?.getAttribute("aria-description") === "Sicherung offen");
+const menuOeffnen = doc.querySelector('button[aria-label="Menü öffnen"]');
+if (menuOeffnen) { menuOeffnen.click(); await warte(250); }
+const mobileSicherung = doc.querySelector('.kd-mobile-menu-liste button[aria-description="Sicherung offen"]');
+check("Mobiles Settings-Menü trägt denselben Sicherungsmarker",
+  !!mobileSicherung && mobileSicherung.classList.contains("kd-sicherung-offen"));
+if (mobileSicherung) { mobileSicherung.click(); await warte(350); }
 const katalogStatus = [...doc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
 if (katalogStatus && !katalogStatus.parentElement.open) {
@@ -311,7 +338,16 @@ check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
 if (maxLink) { maxLink.click(); await warte(200); }
 check("Namenloser Easter-Egg-Modus-Knopf erscheint", !!knopf(/^(Classix|Schon kuhl)$/));
 check("KI-Vokabular vorhanden", /KI-Vokabular/.test(text()));
-check("Backup-Knopf vorhanden", !!knopf(/Gesamt-Backup herunterladen/i));
+const gesamtBackupKnopf = knopf(/Gesamt-Backup herunterladen/i);
+check("Backup-Knopf vorhanden", !!gesamtBackupKnopf);
+if (gesamtBackupKnopf) {
+  gesamtBackupKnopf.click(); await warte(400);
+  check("Erfolgreiches Gesamt-Backup räumt Bereichs- und Navigationsmarker weg",
+    dom.window.__kdDownloadKlicks > 0
+    && !gesamtBackupDetails.classList.contains("kd-klappe-markiert")
+    && !/Sicherung offen/.test(gesamtBackupSummary.textContent || "")
+    && datenTab?.getAttribute("aria-description") !== "Sicherung offen");
+}
 check("Rechtliches vorhanden", /Über & Rechtliches/.test(text()) && /nicht-kommerzielles/.test(text()));
 
 /* ---- „Über"-Einstieg (Etappe 4): Erklärstücke + Anleitung leben jetzt hier ---- */

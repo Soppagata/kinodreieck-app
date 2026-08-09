@@ -51,6 +51,7 @@ export function DatenTab({
   onKontoDatenGeaendert,
 }) {
   const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
+  const sicherungOffen = ungesichertMaster || ungesichertArtikel;
   /* Hinterlegte Zugangsdaten heißen seit der Zugriffstrennung NICHT, dass
      das Programm auch da ist (anon sieht die Live-Zeilen nicht). Beides wird
      deshalb getrennt gemeldet. */
@@ -278,10 +279,11 @@ export function DatenTab({
       </div>
 
       {/* 4 — Backup */}
-      <Klappe titel="Gesamt-Backup">
+      <Klappe id="gesamt-backup" titel="Gesamt-Backup" offen={sicherungOffen}
+        markiert={sicherungOffen} status={sicherungOffen ? "Sicherung offen" : null}>
         <div style={kasten}>
-          {(ungesichertMaster || ungesichertArtikel) && (
-            <p data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
+          {sicherungOffen && (
+            <p role="status" data-tour="daten-waechter" style={{ color: T.wolfram, fontSize: 13, lineHeight: 1.6, margin: "0 0 12px" }}>
               Es gibt ungesicherte Änderungen im Browser. Ein Gesamt-Backup schützt Mediathek, Blog, Listen und Settings gemeinsam.
             </p>
           )}

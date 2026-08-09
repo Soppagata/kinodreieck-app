@@ -1674,7 +1674,7 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   await keineDokumentUeberbreite(page);
 });
 
-test("Mobile Warnung führt zum erreichbaren Gesamt-Backup, Restore bleibt Wartung", async ({ page }) => {
+test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst nach Download", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
@@ -1692,18 +1692,36 @@ test("Mobile Warnung führt zum erreichbaren Gesamt-Backup, Restore bleibt Wartu
   });
   await page.goto("/");
 
-  const warnung = page.locator(".kd-backup-hinweis");
-  await expect(warnung).toBeVisible();
-  await expect(warnung.getByRole("button", { name: "Sicherung öffnen" })).toHaveCSS("min-height", "44px");
-  await warnung.getByRole("button", { name: "Sicherung öffnen" }).click();
+  await expect(page.locator(".kd-backup-hinweis")).toHaveCount(0);
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  const settings = page.getByRole("dialog", { name: "Menü" })
+    .getByRole("button", { name: "Settings", exact: true });
+  await expect(settings).toHaveClass(/kd-sicherung-offen/);
+  await expect(settings).toHaveAttribute("aria-description", "Sicherung offen");
+  await settings.click();
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
-  const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup$/ }) });
+  const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup/ }) });
+  await expect(backup).toHaveClass(/kd-klappe-markiert/);
+  await expect(backup).toHaveAttribute("open", "");
   await expect(backup.locator("summary")).toBeVisible();
-  await backup.locator("summary").click();
-  await expect(backup.getByRole("button", { name: "Gesamt-Backup herunterladen" })).toBeVisible();
+  await expect(backup.locator("summary")).toContainText("Sicherung offen");
+  const herunterladen = backup.getByRole("button", { name: "Gesamt-Backup herunterladen" });
+  await expect(herunterladen).toBeVisible();
   await expect(backup.locator(".kd-nur-desktop")).toBeHidden();
   await keineDokumentUeberbreite(page);
+
+  const download = page.waitForEvent("download");
+  await herunterladen.click();
+  await download;
+  await expect(backup).not.toHaveClass(/kd-klappe-markiert/);
+  await expect(backup.locator("summary")).not.toContainText("Sicherung offen");
+
+  await page.getByRole("button", { name: "Menü öffnen" }).click();
+  const settingsDanach = page.getByRole("dialog", { name: "Menü" })
+    .getByRole("button", { name: "Settings", exact: true });
+  await expect(settingsDanach).not.toHaveClass(/kd-sicherung-offen/);
+  await expect(settingsDanach).not.toHaveAttribute("aria-description", "Sicherung offen");
 });
 
 test("Desktop behält oberhalb 760 px die Hauptnavigation samt Suche", async ({ page }) => {
