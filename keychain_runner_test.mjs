@@ -123,6 +123,7 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       KD_TESTA_PASS: "ambient-ist-nicht-vertrauensquelle",
       KD_AI_AUTONOM_LIMIT_USD_CENT: "999999",
       KD_EVAL_JA: "1",
+      KD_RLS_ACCESS_MODE: "missing",
     },
     lokaleKonfig: PUBLIC,
     keychainLeser(account) {
@@ -140,6 +141,8 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   pruefe("Budgetoverride und Eval-Freigabe werden nicht ambient vererbt",
     !("KD_AI_AUTONOM_LIMIT_USD_CENT" in env)
       && !(OWNER_SERVER_BUDGET_ENV in env) && !("KD_EVAL_JA" in env));
+  pruefe("RLS-Modus wird nicht an KI-Läufe vererbt",
+    !("KD_RLS_ACCESS_MODE" in env));
 }
 
 {
@@ -177,7 +180,7 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   const gelesen = [];
   const env = baueKindUmgebung({
     modus: "rls",
-    ambientEnv: {},
+    ambientEnv: { KD_RLS_ACCESS_MODE: " InAcTiVe " },
     lokaleKonfig: PUBLIC,
     keychainLeser(account) {
       gelesen.push(account);
@@ -189,6 +192,20 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   pruefe("RLS erhält beide Passwörter nur im Kind-Env",
     env.KD_TESTA_PASS === "KD_TESTA_PASS-geheim"
       && env.KD_TESTB_PASS === "KD_TESTB_PASS-geheim");
+  pruefe("RLS erhält den validierten Access-Modus im Kind-Env",
+    env.KD_RLS_ACCESS_MODE === "inactive");
+
+  let ungueltigerModusGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "rls",
+      ambientEnv: { KD_RLS_ACCESS_MODE: "irgendwas" },
+      lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS,
+    });
+  } catch { ungueltigerModusGesperrt = true; }
+  pruefe("RLS-Runner sperrt einen unbekannten Access-Modus vor dem Start",
+    ungueltigerModusGesperrt);
 }
 
 {

@@ -28,8 +28,9 @@ Dateiname `YYYYMMDDHHMMSS_<name>.sql` — lexikografisch sortiert = Ausführungs
 
 ## Laufprotokoll
 
-Nach jedem Lauf hier eine Zeile ergänzen **und** den Kopfkommentar in der SQL-Datei
-ausfüllen.
+Nach jedem Lauf hier eine Zeile ergänzen. Bereits angewandte SQL-Dateien bleiben
+einschließlich ihres historischen Kopfkommentars unverändert; der Ledger ist
+die Statusautorität für den Remote-Lauf.
 
 | Datei | Projekt-Ref | Datum | Ausgeführt von | Ergebnis |
 |---|---|---|---|---|
@@ -60,8 +61,8 @@ ausfüllen.
 | `20260802220000_shared_article_claim_tokens.sql` | `bscjgwcntapobyxsiyce` | 2026-08-02 | Codex über verknüpfte Management-API | erfolgreich; eindeutige unveränderliche Upload-Tokens, Autor-Claim beim Publish und atomare Einmal-Übernahme je Konto; `npm run test:rls` danach 67/67 grün; die ältere offene Stapelimport-Migration blieb unangetastet |
 | `20260808120000_ai_anbieter_request_kostenzaun.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; universeller 500-US-Cent-Vorabzaun, Sonnet-Preisboden 300/1500, Task-Caps 6/4 und service-only RPC remote verifiziert; Health grün, Rauchprobe 23/23 |
 | `20260808225500_etappe9_beta_tageslimit_30.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; Tageslimit numerisch auf 30 gesetzt; Betriebsschalter `ai_aktiv=true` und Not-Aus-Bereitschaft, Monatsdeckel 1000, Request-Cap 500, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 sowie Parallelität 2 unverändert verifiziert; alle 27 Migrationsversionen lokal/remote deckungsgleich |
-| `20260809120000_rollen_v1_access_basis.sql` | noch nicht remote angewandt | 2026-08-09 | Codex, Phase 1 lokal | vorbereitet und lokal geprüft; additive, noch nicht durchsetzende Access-Tabelle mit own-select-only, service-only Writes und fail-closed Helper; **STOP vor Remote-Lauf** |
-| `20260809121000_rollen_v1_access_enforcement.sql` | noch nicht remote angewandt | 2026-08-09 | Codex, Phase 1 lokal | vorbereitet und lokal geprüft; darf erst nach KI-Not-Aus, einzeln angewandter Basis, vollständigem Bootstrap und accountweiser Rückleseprüfung laufen; verengt zusätzlich Legacy-ACLs ohne active-Umdeutung (`kd_store`: nur anon-DML, `kd_owner`: kein Browser-Direktzugriff, `kd_key_ok`: anon-SECURITY-DEFINER-Pfad); **STOP vor Remote-Lauf** |
+| `20260809120000_rollen_v1_access_basis.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich einzeln angewandt und rückgelesen; own-select-only, keine Browser-Writes, kein anon-Recht, Helper im Browser nur authenticated/kein anon, KI vorher und danach aus; SHA-256 `3d7281e28a059f4aff0859bf2b99ebc5d2fb1a77263be1a2fcd2312032470173` |
+| `20260809121000_rollen_v1_access_enforcement.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich nach vollständigem 3/3-Bootstrap einzeln angewandt; 15/15 Policies und 3/3 RPCs active-gated, Legacy-ACLs ohne TRUNCATE/MAINTAIN belegt; RLS `active` 73/73, `inactive` 14/14, `missing` 14/14, null Testreste, KI weiter aus; SHA-256 `d010ce9ae653b8abbcefcb6697526449427bd2772192fccc7a43f06ac1717727` |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 

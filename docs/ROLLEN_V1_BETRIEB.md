@@ -8,6 +8,36 @@ Konto-IDs oder Freigabezeilen. Das Supabase-Projekt und die `ai-task`-Function
 werden vom Staging- und Produktionsfrontend gemeinsam verwendet; jeder dortige
 Write bleibt deshalb ein eigenes Produktions-Backend-Gate.
 
+## Remote-Stand nach Phase 2
+
+Am 09.08.2026 wurde Phase 2 nach dem ausdrücklichen STOP auf dem bestätigten
+Projekt `bscjgwcntapobyxsiyce` abgeschlossen:
+
+- `ai_aktiv=false` wurde vor dem ersten Schema-Write gesetzt und unabhängig
+  rückgelesen; die KI blieb während der gesamten Phase aus.
+- Access-Basis und Enforcement wurden einzeln in der dokumentierten Reihenfolge
+  angewandt und als Migrationen `20260809120000` sowie `20260809121000`
+  rückgelesen. Lokal und remote stehen damit 29 Migrationsversionen.
+- Alle drei Auth-Konten besitzen wieder exakt ihre bestätigte Access-Zeile:
+  privates Konto `owner`/aktiv/KI, Test A `member`/aktiv/keine KI und Test B
+  `member`/inaktiv/keine KI. Es gibt keine fehlende Zeile und keine verletzte
+  `personal_ai => active`-Invariante.
+- Der echte RLS-Vertrag ist in den Modi `active` mit 73/73, `inactive` mit
+  14/14 und `missing` mit 14/14 grün. Danach blieben keine persönlichen,
+  Shared- oder KI-Testzeilen und keine verwaisten Claims zurück.
+- 15/15 geschützte Policies und 3/3 RPCs wurden mit Active-Gate rückgelesen;
+  öffentliche Demo-Lesewege und der verengte tokenfreie Legacy-Vertrag blieben
+  erhalten. Browserrollen besitzen auf den geschützten Flächen kein
+  `TRUNCATE` oder `MAINTAIN`.
+- Die bestehende Edge Function blieb unverändert auf Version 26; weder
+  Function noch Frontend wurden deployt oder gepusht. Der nächste Schritt
+  bleibt deshalb hinter dem STOP vor Function-/Staging-Auslieferung.
+
+Ein bereits vor Phase 2 vorhandener, rund 13,9 Tage alter `laufend`-Status im
+KI-Log wurde als verwaister Betriebsdatensatz erkannt und bewusst nicht im
+Rollenauftrag verändert. Vor einem späteren Wiederanschalten der KI gehört er
+in den bestehenden 9b-Betriebsweg; er war kein aktueller Anbieterrequest.
+
 ## Vertrag
 
 - Technische Authentifizierung erteilt noch keinen fachlichen Zugriff.
@@ -48,10 +78,10 @@ Zusätzlich mit `active` geschützt werden:
 - authentifizierter Live-Katalog und `kd_quellen`;
 - die Filmwissen-Lese-RPC.
 
-Die gesamte `ai-task`-Function einschließlich Health und Anbieterdiagnose
-verlangt `active=true` und `personal_ai=true`. Die Prüfung geschieht nach der
-JWT-/Accountprüfung und vor Admin-Konfiguration, Diagnoseinhalt, Protokoll,
-Reservierung oder Anbieterzugriff.
+Zielvertrag ab Phase 3: Die gesamte `ai-task`-Function einschließlich Health
+und Anbieterdiagnose verlangt `active=true` und `personal_ai=true`. Die Prüfung
+geschieht nach der JWT-/Accountprüfung und vor Admin-Konfiguration,
+Diagnoseinhalt, Protokoll, Reservierung oder Anbieterzugriff.
 
 Legacy-`kd_store`, `kd_owner`, `kd_key_ok` und die loginfreie Legacy-UI bleiben
 vom active-Rollenvertrag getrennt. Datenmodell und Policies werden nicht
@@ -64,7 +94,7 @@ auf `kd_owner`, anon-Zugriff auf `kd_key_ok` als SECURITY-DEFINER-Grenze.
 | Entscheidung | Begründung | Randbedingung |
 |---|---|---|
 | Inaktive Konten erhalten nur dieselben öffentlichen Reads wie Gäste. | Ein JWT allein darf keine Live-Katalog-, Quellen- oder Filmwissenfreigabe sein. | Öffentliche Shared-Inhalte bleiben lesbar; Schreiben und Claim sind gesperrt. |
-| Demo-Matrix: privates Konto `owner`/aktiv/KI; Testkonto A `member`/aktiv/keine KI; Testkonto B `member`/inaktiv/keine KI. | Deckt Positivfall, deterministischen Betrieb ohne KI und fachlich gesperrte Authentifizierung ohne neue Konten ab. | IDs und Passwörter stehen nie in Git oder Berichten. Bootstrap erfolgt erst am Remote-STOP. |
+| Demo-Matrix: privates Konto `owner`/aktiv/KI; Testkonto A `member`/aktiv/keine KI; Testkonto B `member`/inaktiv/keine KI. | Deckt Positivfall, deterministischen Betrieb ohne KI und fachlich gesperrte Authentifizierung ohne neue Konten ab. | IDs und Passwörter stehen nie in Git oder Berichten. Der Bootstrap erfolgte kontrolliert am Remote-STOP. |
 | Kein allgemeines Rollenframework und keine Custom-JWT-Claims. | Eine eigene, per RLS lesbare Access-Zeile deckt den v1-Vertrag direkt ab. | Neue Rollen oder Owner-Sonderrechte brauchen einen eigenen Auftrag. |
 | Nach aktivierter Durchsetzung kein Rückrollen auf auth-only. | Ein alter Function-/RLS-Stand würde die bekannte Autorisierungslücke wieder öffnen. | Im Fehlerfall KI aus, Zugriff fail-closed und Forward-Fix. |
 

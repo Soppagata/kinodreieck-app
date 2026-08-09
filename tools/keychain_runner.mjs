@@ -62,6 +62,7 @@ const HARMLOSE_PROZESSWERTE = [
   "FORCE_COLOR",
   "CI",
 ];
+const RLS_ACCESS_MODI = new Set(["active", "inactive", "missing"]);
 
 const SKRIPT = (name) => resolve(REPO_ROOT, "tools", name);
 
@@ -287,6 +288,13 @@ export function baueKindUmgebung({
   for (const name of OEFFENTLICHE_NAMEN) {
     const wert = ambientEnv?.[name] ?? lokaleKonfig?.[name];
     if (typeof wert === "string" && wert !== "") env[name] = wert;
+  }
+  if (modus === "rls" && typeof ambientEnv?.KD_RLS_ACCESS_MODE === "string") {
+    const accessModus = ambientEnv.KD_RLS_ACCESS_MODE.trim().toLowerCase();
+    if (!RLS_ACCESS_MODI.has(accessModus)) {
+      throw new Error("KD_RLS_ACCESS_MODE muss active, inactive oder missing sein.");
+    }
+    env.KD_RLS_ACCESS_MODE = accessModus;
   }
   pruefeOeffentlicheKonfig(env);
 
