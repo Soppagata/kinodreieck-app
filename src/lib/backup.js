@@ -9,8 +9,11 @@
 
 import { captureStorageContext } from "./storage.js";
 import { PERSONAL_DATA_ENTRIES } from "./personalDataRegistry.js";
+import { privateOpsExportStatus } from "./privatePilotOps.js";
 
-export async function baueBackup({ pull = true, speicher = null, storageContext = null } = {}) {
+export async function baueBackup({
+  pull = true, speicher = null, storageContext = null, remoteOwnData = null,
+} = {}) {
   /* Der Produktionspfad bindet zu Beginn Treiber + Generation. Ein explizit
      injizierter Speicher ist ein isoliertes Test-/Werkzeug-Backend und gilt
      für die Dauer dieses Aufrufs als bereits gebunden. */
@@ -87,6 +90,10 @@ export async function baueBackup({ pull = true, speicher = null, storageContext 
      ignorieren es, Menschen sehen Probleme aber direkt im Export. */
   if (warnungen.length) backup._warnungen = warnungen;
   if (Object.keys(exportStaende).length) backup._exportStaende = exportStaende;
+  if (remoteOwnData && typeof remoteOwnData === "object" && !Array.isArray(remoteOwnData)) {
+    backup.konto_serverdaten = remoteOwnData;
+  }
+  backup._privateOps = privateOpsExportStatus({ remoteIncluded: !!backup.konto_serverdaten });
   pruefeKontext();
   return backup;
 }

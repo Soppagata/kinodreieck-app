@@ -53,10 +53,16 @@ const okFetch = createFetchMock((url) => {
     return fakeAntwort(200, { access_token: "monitor-session-token" });
   }
   if (url.includes("/functions/v1/ai-task")) {
-    return fakeAntwort(200, { health: { buildVersion: "fn-v1" } });
+    return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
+  }
+  if (url.includes("/rest/v1/kd_account_access")) {
+    return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
   }
   if (url.includes("/rest/v1/kd_private_settings")) {
-    return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, delete_enabled: false }]);
+    return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+  }
+  if (url.includes("/rest/v1/kd_radar_settings")) {
+    return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
   }
   if (url.includes("/rest/v1/kd_ai_limits")) {
     return fakeAntwort(200, [
@@ -73,14 +79,14 @@ const okFetch = createFetchMock((url) => {
 
 const healthyReports = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: okFetch });
 const healthy = Object.fromEntries(healthyReports.reports.map((r) => [r.id, r.code]));
-check("grüner Build/Function/Flags/Budget/Purge", healthy.build === "OK" && healthy.function === "OK" && healthy.flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK");
+check("grüner Build/Function/Rolle/Flags/Budget/Purge", healthy.build === "OK" && healthy.function === "OK" && healthy.access === "OK" && healthy.flags === "OK" && healthy.radar_flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK");
 check("grüne Check-Läufe liefern kein kritisches Ergebnis", healthyReports.ok === true && healthyReports.critical.length === 0);
 check("Purge als Warnung darf weiterlaufen und nicht kritisch sein", healthy.purge === "OK" && healthyReports.critical.includes("purge") === false);
 
 const missing = await runPrivateOpsCheck({ env: {}, fetchImpl: createFetchMock(() => { throw new Error("should not run"); }) });
 const missingById = Object.fromEntries(missing.reports.map((r) => [r.id, r.code]));
-check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED");
-check("fehlende Secrets brechen den Ablauf nicht ab", missing.ok === true && missing.reports.map((r) => r.id).length === 5);
+check("fehlende Secrets je Check melden NOT_CONFIGURED", missingById.build === "NOT_CONFIGURED" && missingById.function === "NOT_CONFIGURED" && missingById.access === "NOT_CONFIGURED" && missingById.flags === "NOT_CONFIGURED" && missingById.radar_flags === "NOT_CONFIGURED" && missingById.budget === "NOT_CONFIGURED" && missingById.purge === "NOT_CONFIGURED");
+check("fehlende Secrets brechen den Ablauf nicht ab, aber machen ihn rot", missing.ok === false && missing.reports.map((r) => r.id).length === 7 && missing.critical.length === 7);
 
 const buildMismatch = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v2" });
@@ -92,12 +98,18 @@ check("Build-Mismatch gilt als kritisch", buildMismatch.critical.includes("build
 
 const functionMismatch = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v1" });
-  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { health: { buildVersion: "fn-v0" } });
+  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v0", health: true });
   return okFetch(url);
 }) });
 const functionMismatchById = Object.fromEntries(functionMismatch.reports.map((r) => [r.id, r.code]));
 check("Function-Mismatch wird erkannt", functionMismatchById.function === "FUNCTION_BUILD_MISMATCH");
 check("Function-Mismatch gilt als kritisch", functionMismatch.critical.includes("function") && functionMismatch.ok === false);
+
+const inactiveAccess = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: false, personal_ai: false }]);
+  return okFetch(url);
+}) });
+check("inaktive oder fehlende Rollen-v1-Freigabe macht Monitoring rot", inactiveAccess.reports.find((r) => r.id === "access")?.code === "ACCESS_DENIED" && inactiveAccess.critical.includes("access"));
 
 const dangerousFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: true, scheduler_enabled: false, delete_enabled: false }]);
@@ -106,6 +118,14 @@ const dangerousFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: cre
 const dangerousFlagsById = Object.fromEntries(dangerousFlags.reports.map((r) => [r.id, r.code]));
 check("gefährlicher Flag wird erkannt", dangerousFlagsById.flags === "UNEXPECTED_DANGEROUS_FLAG");
 check("gefährlicher Flag ist kritisch", dangerousFlags.critical.includes("flags"));
+
+const dangerousRadarFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: true, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
+  return okFetch(url);
+}) });
+const dangerousRadarFlagsById = Object.fromEntries(dangerousRadarFlags.reports.map((r) => [r.id, r.code]));
+check("wirksamer Radar-Flag wird erkannt", dangerousRadarFlagsById.radar_flags === "UNEXPECTED_DANGEROUS_FLAG");
+check("wirksamer Radar-Flag ist kritisch", dangerousRadarFlags.critical.includes("radar_flags"));
 
 const unknownBudget = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
   if (url.includes("/rest/v1/kd_ai_limits")) {
@@ -141,8 +161,10 @@ const redactedPayload = {
 const redactedRun = await runPrivateOpsCheck({ env: { ...BASIS_ENV, ...redactedPayload }, fetchImpl: createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v1" });
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
-  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { health: { buildVersion: "fn-v1" } });
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, delete_enabled: false }]);
+  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
+  if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },
     { schluessel: "monatsbudget_usd_cent", wert: 111 },
@@ -171,8 +193,10 @@ AbortSignal.timeout = (ms) => {
 const timeoutCheckFetch = createFetchMock((url) => {
   if (url.endsWith("/build-meta.json")) return fakeAntwort(200, { buildVersion: "build-v1" });
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
-  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { health: { buildVersion: "fn-v1" } });
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, delete_enabled: false }]);
+  if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
+  if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+  if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },
     { schluessel: "monatsbudget_usd_cent", wert: 123 },
@@ -183,7 +207,7 @@ const timeoutCheckFetch = createFetchMock((url) => {
 });
 await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: timeoutCheckFetch });
 AbortSignal.timeout = originalTimeout;
-check("je Netzcheck max 20s Timeout", abortCalls.length >= 5 && abortCalls.every((ms) => ms === 20000));
+check("je Netzcheck max 20s Timeout", abortCalls.length >= 7 && abortCalls.every((ms) => ms === 20000));
 
 const monitorCheckSource = readFileSync("tools/private-ops-check.mjs", "utf8");
 check("Run-Timeout für den Check ist 5 Minuten", /RUN_TIMEOUT_MS\s*=\s*5\s*\*\s*60_000/.test(monitorCheckSource));

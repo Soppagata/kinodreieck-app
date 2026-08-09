@@ -27,6 +27,7 @@ import { PERSONAL_DATA_KEYS } from "./personalDataRegistry.js";
 import {
   ACCT_KEYS, ACCOUNT_CACHE_METADATA_WITHOUT_OWNER,
 } from "./accountStorageKeys.js";
+import { purgeExpiredLocalData } from "./localRetention.js";
 
 const TABLE = "kd_personal";
 
@@ -78,6 +79,7 @@ function setVer(key, revision) {
 }
 
 function snapshot(key, value) {
+  purgeExpiredLocalData();
   if (value == null) return true;
   const all = readJSON(SNAP_KEY, {});
   const list = all[key] || [];
@@ -86,7 +88,10 @@ function snapshot(key, value) {
   all[key] = list;
   return writeJSON(SNAP_KEY, all);
 }
-export function getSnapshots(key) { return readJSON(SNAP_KEY, {})[key] || []; }
+export function getSnapshots(key) {
+  purgeExpiredLocalData();
+  return readJSON(SNAP_KEY, {})[key] || [];
+}
 
 /* ---------- Owner-Bindung ----------
    Der lokale Cache SIND die kd:*-Töpfe selbst. Meldet sich am selben Gerät ein

@@ -330,6 +330,30 @@ async function ladeKonfig(
   return k;
 }
 
+/* Externe Requests brauchen neben den bisherigen Task-/Kosten-/Rollen-Gates
+   die zentrale, serverseitige Providerfreigabe. Fehlende Migration, unbekannter
+   Anbieter, alter Review oder unbekanntes Budget schließen den Pfad vor jedem
+   Anbieter-Fetch. UI-Schalter sind ausdrücklich kein Ersatz. */
+async function pruefeProviderFreigabe(
+  admin: ReturnType<typeof adminClient>,
+  providerId: "anthropic" | "wikidata" | "loc",
+): Promise<void> {
+  if (!admin) throw new AufrufFehler(CODES.SERVER, "provider-registry-nicht-lesbar");
+  const { data, error } = await admin.rpc("kd_private_provider_allowed", {
+    p_provider_id: providerId,
+  });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw new AufrufFehler(CODES.SERVER, "provider-registry-nicht-lesbar");
+  }
+  const result = data as { ok?: unknown; code?: unknown };
+  if (result.ok !== true) {
+    const code = typeof result.code === "string" && /^[A-Z0-9_]{3,50}$/.test(result.code)
+      ? result.code.toLowerCase().replaceAll("_", "-")
+      : "provider-registry-gesperrt";
+    throw new AufrufFehler(CODES.AI_DISABLED, code);
+  }
+}
+
 function zahl(k: Konfig, name: string, ersatz: number): number {
   const w = k[name];
   return typeof w === "number" && Number.isFinite(w) ? w : ersatz;
@@ -2829,6 +2853,11 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         vorgangId,
       });
     }
+    try { await pruefeProviderFreigabe(admin, "anthropic"); }
+    catch (e) {
+      const f = e as AufrufFehler;
+      return fehlerAntwort(f.code, origin, { grund: f.grund, vorgangId });
+    }
     const key = Deno.env.get("ANTHROPIC_API_KEY");
     if (!key) {
       return fehlerAntwort(CODES.SERVER, origin, {
@@ -3183,6 +3212,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     let locSnapshot: LocNfrSnapshot;
     let loc: AdapterFundstelle | null;
     try {
+      await pruefeProviderFreigabe(admin, "wikidata");
       await reserviereQuelle("wikidata");
       wikidata = await holeWikidataFundstelle(
         eingabe as StarkeFilmkennung,
@@ -3204,6 +3234,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           etag: snapshotAntwort.etag ?? null,
         });
       } else if (snapshotAntwort?.status === "miss") {
+        await pruefeProviderFreigabe(admin, "loc");
         await reserviereQuelle("loc-nfr");
         locSnapshot = await holeLocNfrSnapshot();
         const { error: speichernFehler } = await admin.rpc(
@@ -3428,6 +3459,12 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         überschreiten. Die Schätzung wird beim Abschluss durch den Istwert
         ersetzt — und bleibt stehen, wenn der Lauf abstürzt. */
   const preis = preisFuer(konfig, modell);
+  try { await pruefeProviderFreigabe(admin, "anthropic"); }
+  catch (e) {
+    const f = e as AufrufFehler;
+    await schliesseFilmwissenVorAi("server:provider-registry");
+    return fehlerAntwort(f.code, origin, { grund: f.grund, vorgangId });
+  }
   /* Reserviert wird anhand GENAU des Anbieterkoerpers, nicht anhand des rohen
      Browser-Requests. So werden Systemprompt und Schema mitgerechnet, waehrend
      verworfene Zusatzfelder keine scheinbaren Kosten erzeugen. */

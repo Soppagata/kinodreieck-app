@@ -18,7 +18,7 @@ import {
 } from "./src/lib/localRetention.js";
 import { buildSupportBundle } from "./src/lib/supportBundle.js";
 import { ERROR_CODES, BoundaryError } from "./src/services/errors.js";
-import { validateOwnData } from "./src/services/accountSelfService.js";
+import { createAccountSelfService, validateOwnData } from "./src/services/accountSelfService.js";
 
 let checks = 0;
 function pass(name) {
@@ -124,6 +124,15 @@ const edgeFunctionSql = fs.readFileSync(
   "supabase/functions/account-self-service/index.ts",
   "utf8",
 );
+const privateOpsUiSql = fs.readFileSync("src/components/PrivatePilotOps.jsx", "utf8");
+const authDriverSql = fs.readFileSync("src/lib/authDriver.js", "utf8");
+
+expect(
+  "Self-Service prüft Rollen-v1 vor jedem Service-Role-Datenpfad",
+  edgeFunctionSql.includes('.from("kd_account_access")')
+    && edgeFunctionSql.includes('.select("active")')
+    && edgeFunctionSql.indexOf('.select("active")') < edgeFunctionSql.indexOf('rpc("kd_private_own_data"'),
+);
 
 const retentionById = Object.values(RETENTION_CLASSES);
 const retentionDays = new Set(retentionById.map((entry) => entry.days));
@@ -150,13 +159,23 @@ expect(
   "Keine personenbezogenen Registry-Einträge sind doppelt erfasst",
   privateDataIds.size === PRIVATE_DATA_INVENTORY.length,
 );
+expect(
+  "Jede Datenklasse besitzt Zweck, Ort, Empfänger, Export, Löschtrigger und Retention",
+  PRIVATE_DATA_INVENTORY.every((entry) => entry.id && entry.label && entry.purpose && entry.owner
+    && Array.isArray(entry.locations) && Array.isArray(entry.recipients) && entry.export
+    && entry.deleteTrigger && Object.values(RETENTION_CLASSES).some((item) => item.id === entry.retention)),
+);
 
 const providersById = PRIVATE_PROVIDER_REGISTRY.map((provider) => provider.id);
 expect(
   "Provider-Registernamen sind eindeutig, stabil, und fail-closed standardmäßig",
   providersById.every((providerId) => /^[a-z0-9_]{2,40}$/.test(providerId))
     && providersById.length === new Set(providersById).size
-    && PRIVATE_PROVIDER_REGISTRY.every((provider) => provider.enabledByDefault === false),
+    && PRIVATE_PROVIDER_REGISTRY.every((provider) => provider.enabledByDefault === false
+      && provider.legalStatus === LEGAL_REVIEW_REQUIRED
+      && provider.retentionConfirmed === false
+      && /^https:\/\//.test(provider.officialSource)
+      && /^\d{4}-\d{2}-\d{2}$/.test(provider.retrievedAt)),
 );
 
 expect(
@@ -164,15 +183,24 @@ expect(
   providerActivationDecision({ featureEnabled: false }).ok === false
     && providerActivationDecision({ registryRow: { enabled: false }, featureEnabled: true }).code === "PROVIDER_REGISTRY_OFF"
     && providerActivationDecision({ registryRow: { enabled: true, legal_status: LEGAL_REVIEW_REQUIRED, legalConfirmed: false }, featureEnabled: true }).code === LEGAL_REVIEW_REQUIRED
-    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, retentionConfirmed: false }, featureEnabled: true }).code === "RETENTION_UNCONFIRMED"
+    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, rightsConfirmed: false }, featureEnabled: true }).code === "RIGHTS_UNCONFIRMED"
+    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, rightsConfirmed: true, dpaTransferConfirmed: false }, featureEnabled: true }).code === "DPA_TRANSFER_UNCONFIRMED"
+    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, rightsConfirmed: true, dpaTransferConfirmed: true, retentionConfirmed: false }, featureEnabled: true }).code === "RETENTION_UNCONFIRMED"
+    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, rightsConfirmed: true, dpaTransferConfirmed: true, retentionConfirmed: true, priceBudgetConfirmed: false }, featureEnabled: true }).code === "BUDGET_UNKNOWN"
+    && providerActivationDecision({ registryRow: { enabled: true, legal_status: "APPROVED", legalConfirmed: true, rightsConfirmed: true, dpaTransferConfirmed: true, retentionConfirmed: true, priceBudgetConfirmed: true, reviewedAt: "2025-01-01" }, featureEnabled: true, now: Date.parse("2026-08-09") }).code === "PROVIDER_REVIEW_STALE"
     && providerActivationDecision({
       registryRow: {
         enabled: true,
         legal_status: "APPROVED",
         legalConfirmed: true,
+        rightsConfirmed: true,
+        dpaTransferConfirmed: true,
         retentionConfirmed: true,
+        priceBudgetConfirmed: true,
+        reviewedAt: "2026-08-09",
       },
       featureEnabled: true,
+      now: Date.parse("2026-08-09"),
     }).ok === true,
 );
 
@@ -201,8 +229,8 @@ expect(
 );
 
 expect(
-  "Keine lokale Retention definiert unerwartete TTL-Werte",
-  Object.values(LOCAL_RETENTION_DAYS).every((days) => [0, 7, 30].includes(days)),
+  "Alle lokalen Rohsnapshots besitzen exakt sieben Tage TTL",
+  Object.values(LOCAL_RETENTION_DAYS).every((days) => days === 7),
 );
 expect(
   "Lokale Retention-Schlüssel sind vollständig abgedeckt",
@@ -218,7 +246,7 @@ const storage = memoryStorageFrom([
   [LOCAL_RETENTION_KEYS.restore, JSON.stringify({ t: isoAt(fixedNow - ms(7) - 1) })],
   [LOCAL_RETENTION_KEYS.takeover, JSON.stringify({ t: isoAt(fixedNow - ms(7) + 60 * 1000) })],
   [LOCAL_RETENTION_KEYS.accountSnapshots, JSON.stringify({
-    old: [{ t: isoAt(fixedNow - ms(30) - 10_000) }, { t: isoAt(fixedNow - 1000) }],
+    old: [{ t: isoAt(fixedNow - ms(7) - 10_000) }, { t: isoAt(fixedNow - 1000) }],
     mixedType: "kaputt",
     missing: [{ foo: "bar" }],
   })],
@@ -273,13 +301,15 @@ const validOwnData = {
   schemaVersion: 1,
   data: {
     auth: { createdAt: "2026-08-09T12:00:00Z", lastSignInAt: "2026-08-09T12:00:00Z", providers: [] },
-    access: {},
+    access: { role: "member", active: true, personal_ai: false, created_at: "2026-08-09T12:00:00Z", updated_at: "2026-08-09T12:00:00Z" },
+    personal: [],
     aiLogs: [],
     seriesWatch: [],
+    sharedArticles: [],
     sharedClaims: [],
-    radar: {},
+    radar: { capabilities: null, accountState: null, subscriptions: [], receipts: [], shares: [], operations: [], shareOperations: [], reviews: [] },
     retention: [],
-    deletion: {},
+    deletion: { enabled: false, lastStatus: null },
   },
 };
 expect(
@@ -313,6 +343,59 @@ const invalidOwnDataShapes = expectBoundaryError(
   }),
 );
 expect("Falsche Feldtypen bei eigenen Daten werden strikt abgelehnt", invalidOwnDataShapes.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidNestedOwnData = expectBoundaryError(
+  "Unbekannte verschachtelte Exportfelder werfen Boundary-Fehler",
+  () => validateOwnData({ ...validOwnData, data: { ...validOwnData.data, radar: { ...validOwnData.data.radar, accountId: "leak" } } }),
+);
+expect("Verschachtelte Eigendaten-Allowlist ist exakt", invalidNestedOwnData.code === ERROR_CODES.INVALID_RESPONSE);
+
+let disabledFetchCalls = 0;
+const disabledSelfService = createAccountSelfService({
+  config: {
+    supabaseUrl: "https://private-ops-test.supabase.co",
+    supabasePublishableKey: "sb_publishable_test",
+    accountSelfServiceEndpointName: "account-self-service",
+    privateSelfServiceEnabled: false,
+    accountDeleteEnabled: false,
+  },
+  tokenLoader: async () => "synthetic-user-token",
+  fetchImpl: async () => { disabledFetchCalls += 1; throw new Error("must-not-fetch"); },
+});
+await assert.rejects(() => disabledSelfService.getOwnData(), (error) => error instanceof BoundaryError && error.code === ERROR_CODES.FORBIDDEN);
+await assert.rejects(() => disabledSelfService.deleteCurrentAccount({ operationId: "11111111-2222-4333-8444-555555555555", confirmation: "DELETE test@example.invalid" }), (error) => error instanceof BoundaryError && error.code === ERROR_CODES.FORBIDDEN);
+expect("Own-Data und Self-Delete bleiben bei Runtime-Not-Aus ohne Netzaufruf", disabledFetchCalls === 0);
+
+const requestLog = [];
+const enabledSelfService = createAccountSelfService({
+  config: {
+    supabaseUrl: "https://private-ops-test.supabase.co",
+    supabasePublishableKey: "sb_publishable_test",
+    accountSelfServiceEndpointName: "account-self-service",
+    privateSelfServiceEnabled: true,
+    accountDeleteEnabled: true,
+  },
+  tokenLoader: async () => "synthetic-user-token",
+  fetchImpl: async (url, init) => {
+    requestLog.push({ url, init });
+    if (init.method === "GET") return { ok: true, status: 200, json: async () => validOwnData };
+    const body = JSON.parse(init.body);
+    return { ok: true, status: 200, json: async () => ({ ok: true, deleted: true, operationId: body.operationId }) };
+  },
+});
+await enabledSelfService.getOwnData();
+const deleteOperationId = "11111111-2222-4333-8444-555555555555";
+await enabledSelfService.deleteCurrentAccount({ operationId: deleteOperationId, confirmation: "DELETE test@example.invalid" });
+const deleteRequestBody = JSON.parse(requestLog[1].init.body);
+expect(
+  "Self-Service sendet nur aktuelles Bearer-Token und keine Account-ID im Requestkörper",
+  requestLog.length === 2
+    && requestLog.every((entry) => entry.url.endsWith("/functions/v1/account-self-service"))
+    && requestLog[0].init.method === "GET"
+    && requestLog[0].init.body === undefined
+    && requestLog[1].init.method === "POST"
+    && JSON.stringify(deleteRequestBody) === JSON.stringify({ action: "delete", operationId: deleteOperationId, confirmation: "DELETE test@example.invalid" })
+    && !Object.hasOwn(deleteRequestBody, "accountId"),
+);
 
 expect(
   "Account-Selbstlöschung im Service bleibt doppelt abgeschaltet",
@@ -325,6 +408,16 @@ expect(
     && /DELETE_NOT_ALLOWLISTED/.test(edgeFunctionSql)
     && /REAUTH_REQUIRED/.test(edgeFunctionSql)
     && /Deno\.env\.get\("KD_ACCOUNT_DELETE_ALLOWLIST_SHA256"\)/.test(edgeFunctionSql),
+);
+expect(
+  "Self-Delete-UI erzwingt Export, frische Passwortbestätigung und lokale Trennung erst nach Servererfolg",
+  privateOpsUiSql.includes("selfService.getOwnData()")
+    && privateOpsUiSql.includes("await reauthenticate(password)")
+    && privateOpsUiSql.includes("await selfService.deleteCurrentAccount")
+    && privateOpsUiSql.includes("await onAccountDeleted()")
+    && privateOpsUiSql.indexOf("selfService.deleteCurrentAccount") < privateOpsUiSql.indexOf("await onAccountDeleted()")
+    && privateOpsUiSql.includes("!serverExportDone")
+    && authDriverSql.includes("async function reauthenticate(passwort)"),
 );
 
 const privateGrantBlock = migrationSql.match(/grant execute on function public\.kd_private_provider_allowed[\s\S]*?to service_role;/i) || [];
@@ -363,6 +456,13 @@ const accountBoundTables = new Set(
 const mappedTables = new Set(deleteMapRows.map((row) => row.storageClass));
 const missingMapping = [...accountBoundTables].filter((table) => !mappedTables.has(table));
 expect("Alle accountgebundenen Tabellen aus Own-Data + Delete-Pfad sind im Delete-Mapping erfasst", missingMapping.length === 0);
+const exportRequired = deleteMapRows
+  .filter((row) => row.accountColumn && !["auth.users", "browser_auth_session", "browser_account_cache"].includes(row.storageClass))
+  .map((row) => row.storageClass);
+expect(
+  "Eigendatenexport enthält jede serverseitige accountgebundene Löschklasse",
+  exportRequired.every((table) => ownDataTables.has(table)),
+);
 
 const invalidMappingRows = deleteMapRows.filter(
   (row) => (row.action === "explicit_delete" || row.action === "cascade") && row.accountColumn === null,
@@ -371,6 +471,21 @@ expect(
   "Explicit-delete/cascade Tabellen im Mapping haben Konto-Join-Spalte",
   invalidMappingRows.length === 0
     || invalidMappingRows.every((row) => ["browser_auth_session", "browser_account_cache"].includes(row.storageClass)),
+);
+expect(
+  "Self-Delete löscht Auth zuerst und stützt alle Projektionen auf Cascade",
+  /foreign key \(account_id\) references auth\.users\(id\) on delete cascade/i.test(migrationSql)
+    && /foreign key \(actor_id\) references auth\.users\(id\) on delete cascade/i.test(migrationSql)
+    && !/delete from public\.kd_personal/i.test(extractFunction(migrationSql, "kd_private_delete_begin"))
+    && edgeFunctionSql.indexOf("admin.auth.admin.deleteUser") < edgeFunctionSql.indexOf('rpc("kd_private_delete_finish"'),
+);
+expect(
+  "Remote-Retention markiert Terminalzustände und beendet widerrufene Zwecke",
+  /create trigger kd_radar_operations_private_ttl/i.test(migrationSql)
+    && /create trigger kd_radar_checks_private_ttl/i.test(migrationSql)
+    && /create trigger kd_radar_subscriptions_private_orphan/i.test(migrationSql)
+    && /delete from public\.kd_radar_target_shares[\s\S]+p_share_enabled/i.test(fs.readFileSync("supabase/migrations/20260809180000_event_radar_local_basis.sql", "utf8"))
+    && /delete from public\.kd_radar_receipts/i.test(fs.readFileSync("supabase/migrations/20260809180000_event_radar_local_basis.sql", "utf8")),
 );
 
 const providerAllowedSql = extractFunction(migrationSql, "kd_private_provider_allowed");

@@ -119,6 +119,16 @@ check("A1 Anmeldung sendet die synthetische Adresse, nicht den rohen Namen",
 /* ---------- A2: Passwort hinterlässt keine Spur ---------- */
 const alleWerte = [..._ls.entries()].map(([k, v]) => k + "=" + v).join("|");
 check("A2 Passwort steht in keinem gespeicherten Wert", !alleWerte.includes("geheim1234"));
+const reauth = await d.reauthenticate("geheim1234");
+const reauthCall = calls.at(-1);
+check("A2b irreversible Self-Service-Schritte erhalten eine frische Passwortanmeldung desselben Kontos",
+  reauth.ok === true
+  && reauthCall?.url.endsWith("/auth/v1/token?grant_type=password")
+  && reauthCall?.body?.email === "max@login.kinodreieck.at"
+  && d.konto()?.id === "konto-abc"
+  && d.konto()?.email === "max@login.kinodreieck.at");
+check("A2b Reauth-Passwort wird nie persistiert",
+  ![..._ls.values()].some((value) => String(value).includes("geheim1234")));
 
 /* ---------- A3: Tokens nur im eigenen Schlüssel, nie im Snapshot ---------- */
 const tokenSchluessel = [..._ls.keys()].filter((k) => /at-1|rt-1/.test(_ls.get(k) || ""));

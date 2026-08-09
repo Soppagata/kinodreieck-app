@@ -1148,13 +1148,14 @@ const migrationsOrdner = path.join(NAHT_WURZEL, "supabase/migrations");
 const neuesteMigration = fs.readdirSync(migrationsOrdner)
   .filter((datei) => /^\d{14}_.+\.sql$/.test(datei))
   .sort()
-  .at(-1);
+  .reverse()
+  .find((datei) => /add constraint kd_personal_key_erlaubt/.test(lies("supabase/migrations/" + datei)));
 const mig = lies("supabase/migrations/" + neuesteMigration);
 const rumpf = (/add constraint kd_personal_key_erlaubt\s+check \(key in \(([\s\S]*?)\)\);/.exec(mig) || [, ""])[1];
 const inMigration = [...rumpf.matchAll(/'(kd:[a-z:-]+)'/g)].map((m) => m[1]);
 const fehlend = AD.ACCOUNT_SYNC_KEYS.filter((k) => !inMigration.includes(k));
 const zuviel = inMigration.filter((k) => !AD.ACCOUNT_SYNC_KEYS.includes(k));
-check("N", "8a. die neueste Migration listet GENAU die 18 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
+check("N", "8a. die neueste Constraint-Migration listet GENAU die 18 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
   + "  [gelistet: " + inMigration.length + ", fehlend: " + JSON.stringify(fehlend) + ", zu viel: " + JSON.stringify(zuviel) + "]",
   () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 18);
 /* Der CHECK ist nicht erweiterbar; deshalb ist die Gegenprobe im Kommentar

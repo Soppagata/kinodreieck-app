@@ -2161,7 +2161,7 @@ export default function App() {
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
             offeneFlags={offeneFlags} migriereMustwatch={migriereMustwatch} migrationsBericht={migrationsBericht}
             importiereBesitz={importiereBesitz} besitzImportBericht={besitzImportBericht}
-            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
+            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoEmail={session.account?.email || ""} onKontoGeloescht={async () => { await sessionCoordinator.finalizeDeletedAccount(); try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
           />
         )}
       </main>

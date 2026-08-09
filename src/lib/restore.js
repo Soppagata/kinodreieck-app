@@ -18,6 +18,7 @@ import {
 import {
   PERSONAL_DATA_ENTRIES, PERSONAL_DATA_KEYS, baueRestorePlan,
 } from "./personalDataRegistry.js";
+import { purgeExpiredLocalData } from "./localRetention.js";
 
 const RESTORE_SNAP = "kd:restore:vorher";
 const RESTORE_SNAP_VERSION = 2;
@@ -77,6 +78,7 @@ async function leseVorherstand(lauf) {
 
 function sichereSnapshot(vorher, lauf) {
   pruefeRestoreLauf(lauf);
+  purgeExpiredLocalData();
   try {
     const paket = JSON.stringify({
       version: RESTORE_SNAP_VERSION,
@@ -129,6 +131,7 @@ async function verifiziereKonto(plan, lauf) {
 }
 
 export async function restoreBackup(backup) {
+  purgeExpiredLocalData();
   if (!backup || typeof backup !== "object" || Array.isArray(backup)) {
     throw new Error("Kein gültiges Backup-Objekt.");
   }
@@ -223,6 +226,7 @@ export async function restoreBackup(backup) {
 /* Rückgängig verwendet dieselbe geschlossene Registry-Liste; fremde Schlüssel
    aus einer manipulierten Snapshot-Datei werden niemals geschrieben. */
 export async function restoreRueckgaengig() {
+  purgeExpiredLocalData();
   const lauf = starteRestoreLauf();
   let snap;
   try { snap = JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null"); }
@@ -241,6 +245,7 @@ export async function restoreRueckgaengig() {
 }
 
 export function hatRestoreSnapshot() {
+  purgeExpiredLocalData();
   try {
     const snap = JSON.parse(localStorage.getItem(RESTORE_SNAP) || "null");
     return !!snap

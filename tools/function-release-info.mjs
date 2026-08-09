@@ -9,6 +9,7 @@ const DATEIEN = Object.freeze([
   "supabase/functions/ai-task/index.ts",
   "supabase/functions/ai-task/providerContract.ts",
   "supabase/functions/ai-task/requestContract.ts",
+  "supabase/functions/account-self-service/index.ts",
   "supabase/functions/filmwissen-task/quellen.ts",
   "supabase/functions/filmwissen-task/vertrag.ts",
 ]);

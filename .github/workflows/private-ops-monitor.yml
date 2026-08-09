@@ -1,0 +1,34 @@
+name: Private Ops Monitor
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinodreieck-private-ops-monitor
+  cancel-in-progress: false
+
+jobs:
+  read-only-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read-only operational checks
+        env:
+          KD_MONITOR_STAGING_URL: ${{ vars.STAGING_APP_URL }}
+          KD_MONITOR_EXPECTED_BUILD: ${{ vars.STAGING_EXPECTED_BUILD }}
+          KD_MONITOR_EXPECTED_FUNCTION_BUILD: ${{ vars.STAGING_EXPECTED_FUNCTION_BUILD }}
+          KD_MONITOR_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          KD_MONITOR_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          KD_MONITOR_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          KD_MONITOR_EMAIL: ${{ secrets.MONITOR_ACCOUNT_EMAIL }}
+          KD_MONITOR_PASSWORD: ${{ secrets.MONITOR_ACCOUNT_PASSWORD }}
+        run: node tools/private-ops-check.mjs

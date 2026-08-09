@@ -207,6 +207,29 @@ export function createAuthDriver({
     return konto();
   }
 
+  /* Frische Passwortbestätigung für irreversible Self-Service-Schritte. Der
+     neue Token muss zum bereits angemeldeten Konto gehören; ein Kontowechsel
+     über dieses Formular ist ausgeschlossen. */
+  async function reauthenticate(passwort) {
+    const vorher = leseSitzung();
+    if (!vorher?.kontoId || !vorher.mail || !passwort) {
+      throw new BoundaryError(ERROR_CODES.UNAUTHENTICATED, { source: "auth", operation: "auth.reauthenticate" });
+    }
+    let antwort;
+    try { antwort = await ruf("/token?grant_type=password", { body: { email: vorher.mail, password: String(passwort) } }); }
+    catch (error) { throw normalizeBoundaryError(error, { source: "auth", operation: "auth.reauthenticate" }); }
+    if (!antwort.ok || !antwort.data?.access_token) throw fehlerAus(antwort.status, antwort.data, "auth.reauthenticate");
+    const neu = sitzungAus(antwort.data, vorher, jetzt());
+    if (String(neu.kontoId || "") !== String(vorher.kontoId)) {
+      throw new BoundaryError(ERROR_CODES.FORBIDDEN, { source: "auth", operation: "auth.reauthenticate", reason: "account-mismatch" });
+    }
+    if (!schreibeSitzung(neu)) {
+      throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "auth", operation: "auth.reauthenticate", reason: "storage-blocked" });
+    }
+    zustand = AUTH_ZUSTAND.ANGEMELDET;
+    return { ok: true };
+  }
+
   /* ---------- Erneuern (single-flight, tab-übergreifend abgesichert) ---------- */
   async function refreshIntern() {
     /* Im Lock zuerst neu lesen: ein anderer Tab kann inzwischen rotiert haben —
@@ -325,7 +348,7 @@ export function createAuthDriver({
   function konto() {
     const s = leseSitzung();
     if (!s) return null;
-    return { id: s.kontoId, benutzername: s.benutzername, gueltigBis: s.gueltigBis };
+    return { id: s.kontoId, benutzername: s.benutzername, email: s.mail, gueltigBis: s.gueltigBis };
   }
   function getZustand() { return zustand; }
 
@@ -358,7 +381,7 @@ export function createAuthDriver({
     }
     return {
       mode: "account",
-      account: { id: k.id, displayName: k.benutzername },
+      account: { id: k.id, displayName: k.benutzername, email: k.email },
       expiresAt: new Date(k.gueltigBis).toISOString(),
       role: access.role,
       access,
@@ -374,7 +397,7 @@ export function createAuthDriver({
   return Object.freeze({
     name: "supabase-auth",
     istKonfiguriert: konfiguriert,
-    signIn, signOut, refresh, changePassword,
+    signIn, signOut, refresh, changePassword, reauthenticate,
     getAccessToken, konto, getZustand, loadSession,
   });
 }

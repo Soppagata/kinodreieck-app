@@ -9,6 +9,7 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+import { PrivatePilotOps } from "../components/PrivatePilotOps.jsx";
 import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
 import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabular.js";
 /* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
@@ -49,6 +50,9 @@ export function DatenTab({
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
   addFilm, addFilme,
   onKontoDatenGeaendert,
+  kontoAktiv = false,
+  kontoEmail = "",
+  onKontoGeloescht,
 }) {
   const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
   const sicherungOffen = ungesichertMaster || ungesichertArtikel;
@@ -294,6 +298,10 @@ export function DatenTab({
               vollständige Einspielen einer Datei bleibt Desktop-Wartung. */}
           <div className="kd-nur-desktop" style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
         </div>
+      </Klappe>
+
+      <Klappe titel="Datenschutz & Datenübersicht">
+        <div style={kasten}><PrivatePilotOps accountActive={kontoAktiv} accountEmail={kontoEmail} onAccountDeleted={onKontoGeloescht} /></div>
       </Klappe>
 
       {/* 5 — Streaming-Quellen */}

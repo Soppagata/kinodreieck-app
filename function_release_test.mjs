@@ -25,7 +25,9 @@ const info = releaseInfo({
 check("Release-Info verwendet den vollständigen Git-Commit als Build-Version",
   info.commit === "a1" && info.buildVersion === "a1");
 check("Release-Info bindet alle Function-Quellen in einen SHA-256",
-  info.dateien.length === 5 && /^[0-9a-f]{64}$/.test(info.sourceSha256));
+  info.dateien.length === 6
+  && info.dateien.includes("supabase/functions/account-self-service/index.ts")
+  && /^[0-9a-f]{64}$/.test(info.sourceSha256));
 
 let gesperrt = false;
 try {

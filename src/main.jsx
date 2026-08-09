@@ -8,6 +8,7 @@ import { subscribeStorageContext } from "./services/storage.js";
 import { EinstiegsGate } from "./components/EinstiegsGate.jsx";
 import { AppUpdateHinweis } from "./components/AppUpdateHinweis.jsx";
 import { bereinigeVeralteteImportSnapshots } from "./lib/personalDataRegistry.js";
+import { purgeExpiredLocalData } from "./lib/localRetention.js";
 
 /* Startreihenfolge (Etappe 3):
    1. Sitzung laden/erneuern — ohne gespeicherte Anmeldung bleibt es beim Gast.
@@ -87,6 +88,7 @@ async function boot() {
   /* Datenschutzmigration: tote Import-Rohsnapshots und Geheimnisreste der
      stillgelegten Legacy-Treiber verschwinden auch bei Upgrade-Nutzern. */
   bereinigeVeralteteImportSnapshots();
+  purgeExpiredLocalData();
   try { await sessionCoordinator.initialize(); }
   catch { /* Der Coordinator hat Gast-, Konto- oder Privacy-Lock bereits fail-closed gesetzt. */ }
 

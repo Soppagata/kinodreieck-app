@@ -23,6 +23,7 @@ import {
 import {
   ACCT_KEYS, ACCOUNT_CACHE_METADATA_KEYS, ACCOUNT_CACHE_STATE_KEYS,
 } from "./accountStorageKeys.js";
+import { purgeExpiredLocalData } from "./localRetention.js";
 
 export const UEBERNAHME_SNAP = "kd:acct:uebernahme:vorher";
 export const UEBERNOMMEN_KEY = "kd:acct:uebernommen";
@@ -124,6 +125,7 @@ export async function enthaeltDemoInhalte(storageContext = captureStorageContext
 
 /* ---------- Rückholpunkt ---------- */
 export async function sichereRueckholpunkt(lokaleWerte) {
+  purgeExpiredLocalData();
   const paket = JSON.stringify({ t: new Date().toISOString(), werte: lokaleWerte });
   try {
     localStorage.setItem(UEBERNAHME_SNAP, paket);
@@ -133,6 +135,7 @@ export async function sichereRueckholpunkt(lokaleWerte) {
   } catch { return false; }
 }
 export function hatRueckholpunkt() {
+  purgeExpiredLocalData();
   try { return !!localStorage.getItem(UEBERNAHME_SNAP); } catch { return false; }
 }
 
@@ -143,6 +146,7 @@ export function hatRueckholpunkt() {
 export function bindeRueckholpunktAnKonto(accountId, storage = globalThis.localStorage) {
   const id = String(accountId || "");
   if (!id || !storage?.getItem || !storage?.setItem) return false;
+  purgeExpiredLocalData(storage);
   try {
     let snap;
     try { snap = JSON.parse(storage.getItem(UEBERNAHME_SNAP) || "null"); }
@@ -237,6 +241,7 @@ export function stelleGaststandNachAbmeldungWiederHer(
 ) {
   const id = String(accountId || "");
   if (!storage?.getItem || !storage?.setItem || !storage?.removeItem) return { ok: false, grund: "speicher-fehlt" };
+  purgeExpiredLocalData(storage);
   try {
     let snap;
     try { snap = JSON.parse(storage.getItem(UEBERNAHME_SNAP) || "null"); }
@@ -389,6 +394,7 @@ export function vergissUebernahme() {
 export async function nimmUebernahmeZurueck({
   loescheRemote, gepusht = [], storageContext = captureStorageContext(),
 }) {
+  purgeExpiredLocalData();
   let snap;
   try { snap = JSON.parse(localStorage.getItem(UEBERNAHME_SNAP) || "null"); } catch { snap = null; }
   if (!snap || !snap.werte) throw new Error("Kein Rückholpunkt vorhanden.");
