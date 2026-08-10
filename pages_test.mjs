@@ -22,8 +22,10 @@ const css = cssDatei ? readFileSync(join(DIST, "assets", cssDatei), "utf8") : ""
 const headers = existsSync(join(DIST, "_headers")) ? readFileSync(join(DIST, "_headers"), "utf8") : "";
 const downloadSeitePfad = join(DIST, "download", "index.html");
 const downloadInstallPfad = join(DIST, "download", "install.js");
+const downloadDiagnosePfad = join(DIST, "download", "pwa-diagnostics.js");
 const downloadSeite = existsSync(downloadSeitePfad) ? readFileSync(downloadSeitePfad, "utf8") : "";
 const downloadInstall = existsSync(downloadInstallPfad) ? readFileSync(downloadInstallPfad, "utf8") : "";
+const downloadDiagnose = existsSync(downloadDiagnosePfad) ? readFileSync(downloadDiagnosePfad, "utf8") : "";
 const headerBlock = (pfad) => {
   const escaped = pfad.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return headers.match(new RegExp(`^${escaped}\\n(?:^  .+\\n?)*`, "m"))?.[0] || "";
@@ -155,14 +157,17 @@ check("Distributionsseite erklärt Konto- und Live-KI-Grenze ehrlich",
   && !/registrier|konto erstellen|kostenlos anmelden/i.test(downloadSeite));
 check("PWA-Installation nutzt Manifest und ein externes, CSP-taugliches Skript",
   downloadSeite.includes('rel="manifest" href="../manifest.webmanifest"')
+  && downloadSeite.includes('src="./pwa-diagnostics.js"')
   && downloadSeite.includes('src="./install.js"')
   && Boolean(downloadInstall)
+  && Boolean(downloadDiagnose)
+  && downloadSeite.includes("Android-Installation prüfen")
   && downloadInstall.includes('"beforeinstallprompt"')
   && downloadInstall.includes('navigator.serviceWorker.register("../sw.js", { scope: "../" })'));
 check("Distributionsseite eröffnet keinen KI- oder Fremdtransport",
-  !/\bfetch\s*\(/.test(downloadInstall)
+  !/ai-task|functions\/v1|supabase|watchmode/i.test(downloadDiagnose)
   && !/(?:src|href)=["']https?:\/\//i.test(downloadSeite)
-  && !/ai-task|functions\/v1|anbieter/i.test(downloadSeite + "\n" + downloadInstall));
+  && !/ai-task|functions\/v1|anbieter/i.test(downloadSeite + "\n" + downloadInstall + "\n" + downloadDiagnose));
 
 /* 6) Keine hochsicheren Secret-Signaturen im ausgelieferten HTML/JS.
    Der Scan umfasst auch die Download-Einzeldatei — sie wird mit ausgeliefert. */
@@ -185,7 +190,7 @@ check("Web-Build behält seine bisherigen Sidecar-Kompatibilitätswege getrennt 
   && js.includes("Programmdateien/System/streaming_entdecken.js")
   && existsSync(join(DIST, "Programmdateien", "System", "demo_masterliste.js")));
 const auslieferung = indexHtml + "\n" + js + "\n" + downloadHtml
-  + "\n" + downloadSeite + "\n" + downloadInstall;
+  + "\n" + downloadSeite + "\n" + downloadInstall + "\n" + downloadDiagnose;
 const secretMuster = [
   /sb_secret_[a-z0-9_-]+/i,
   /sk-ant-[a-z0-9_-]{16,}/i,

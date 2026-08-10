@@ -117,6 +117,7 @@ const KONTO_MASTER = JSON.stringify({ filme: [{ id: "konto" }] });
   for (const key of VERALTETE_IMPORT_SNAPSHOT_KEYS) quotaDaten.set(key, "ALTER-KONTO-SNAPSHOT");
   quotaDaten.set(U.UEBERNAHME_SNAP, JSON.stringify({
     accountId: "konto-Q",
+    t: new Date().toISOString(),
     werte: { "kd:master": GAST_MASTER },
   }));
   quotaDaten.set(U.UEBERNOMMEN_KEY, JSON.stringify({ accountId: "konto-Q" }));

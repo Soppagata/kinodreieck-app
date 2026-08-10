@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { baueBackup } from "../lib/backup.js";
+import { runtimeConfig } from "../config/runtime.js";
+import { accountSelfService } from "../services/accountSelfService.js";
 import {
   K,
   captureStorageContext,
@@ -85,7 +87,15 @@ export function useBackupExportController({
   const backupGesamt = useCallback(async () => {
     let url = null;
     try {
-      const backup = await baueBackup();
+      /* Ein als vollständig bezeichneter Kontoexport darf den Remote-Anteil
+         nicht still weglassen. Solange der Own-Data-Endpunkt nicht sicher
+         aktiviert ist, bleibt der bewährte lokale Export verfügbar und weist
+         seinen Umfang maschinenlesbar aus. Ist das Flag an, bricht jeder
+         Remote-Fehler den Download ehrlich ab. */
+      const remoteOwnData = runtimeConfig.privateSelfServiceEnabled === true
+        ? await accountSelfService.getOwnData()
+        : null;
+      const backup = await baueBackup({ remoteOwnData });
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
       url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");

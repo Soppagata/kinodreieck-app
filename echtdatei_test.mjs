@@ -185,7 +185,7 @@ const startText = text();
 check("App gerendert (#root gefüllt)", startText.length > 300);
 const icon = doc.querySelector('link[rel="icon"]');
 check("Favicon eingebettet (data:-URI, kein file://-Bruch)", !!icon && (icon.getAttribute("href") || "").startsWith("data:image/svg"));
-for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "BLOG"]) {
+for (const tab of ["START", "KINO", "MEDIATHEK", "STREAMING", "ENTDECKEN"]) {
   check("Tab " + tab, new RegExp(tab, "i").test(startText));
 }
 check("Suche ist am Desktop als Bereich und mobil weiterhin global erreichbar", /Suche/.test((doc.querySelector(".kd-menu")?.textContent || ""))
@@ -260,7 +260,11 @@ const streamingTab = knopf(/^streaming$/i);
 if (streamingTab) { streamingTab.click(); await warte(800); }
 check("Gastbetrieb: auch der Streamingkatalog kommt aus der Demo-Zeile (Demo-Hinweis sichtbar)",
   /Demo-Beispieldaten/.test(text()));
-const entdeckenKnopf = knopf(/^entdecken/i);
+/* "Entdecken" ist inzwischen auch der sichtbare Name des eigenständigen
+   Blog-/Radar-Bereichs. Hier bewusst den gleichnamigen Unterumschalter des
+   Streaming-Tabs wählen, dessen Bestandsverhalten dieser Block prüft. */
+const entdeckenKnopf = [...doc.querySelectorAll('[data-tour="streaming-views"] button')]
+  .find((b) => /^entdecken(?:\s|$)/i.test((b.textContent || "").trim()));
 check("Entdecken-Ansicht erreichbar", !!entdeckenKnopf);
 if (entdeckenKnopf) {
   entdeckenKnopf.click(); await warte(600);

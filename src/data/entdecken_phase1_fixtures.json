@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "format": 1,
+    "fixtureOnly": true,
+    "providerPayload": false,
+    "hinweis": "Synthetische Phase-1-Vertragsdaten. Keine realen Werke oder Anbieterbehauptungen."
+  },
+  "targets": [
+    {
+      "targetId": "fixture:target:work-01",
+      "targetType": "work",
+      "targetStatus": "active",
+      "title": "Synthetisches Werk Alpha",
+      "canonical": true
+    },
+    {
+      "targetId": "fixture:target:series-01",
+      "targetType": "series",
+      "targetStatus": "active",
+      "title": "Synthetische Serie Beta",
+      "canonical": true,
+      "watchmodeId": 910001
+    },
+    {
+      "targetId": "fixture:target:franchise-01",
+      "targetType": "franchise",
+      "targetStatus": "active",
+      "title": "Synthetische Reihe Gamma",
+      "canonical": true
+    }
+  ],
+  "subscriptions": [
+    {
+      "targetId": "fixture:target:work-01",
+      "targetType": "work",
+      "status": "active",
+      "region": "AT",
+      "scope": "all"
+    },
+    {
+      "targetId": "fixture:target:franchise-01",
+      "targetType": "franchise",
+      "status": "paused",
+      "region": "AT",
+      "scope": "all"
+    }
+  ],
+  "eventVersions": [
+    {
+      "eventId": "fixture:event:work-01-streaming",
+      "versionId": "fixture:event-version:work-01-a",
+      "verificationStatus": "candidate",
+      "lifecycleStatus": "announced",
+      "date": "2026-10-15"
+    }
+  ]
+}

@@ -173,6 +173,32 @@ export function createSessionCoordinator({
     return { gaststand, transition: null };
   }
 
+  async function beendeLokaleKontositzung(cacheId) {
+    let trennung = { gaststand: { ok: true, quelle: "ungebundener-gaststand" }, transition: null };
+    let session;
+    try {
+      session = await auth.signOut({
+        beforeGuest: async () => {
+          trennung = await trenneKontocache(cacheId, { behalteTransition: true });
+        },
+      });
+    } catch (error) {
+      if (trennung?.transition) { storage.mask?.(); emit(); }
+      throw error;
+    }
+    if (trennung?.transition) {
+      if (storage.endTransition?.(trennung.transition.token) === false) {
+        storage.mask?.(); emit();
+        const error = new Error("Die Kontotrennung konnte nach dem Logout nicht dauerhaft abgeschlossen werden.");
+        error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
+        throw error;
+      }
+      if (storage.unlockAfterPrivacyCleanup) storage.unlockAfterPrivacyCleanup();
+      else storage.deactivate();
+    }
+    return publish(Object.freeze({ ...session, gaststand: trennung.gaststand }));
+  }
+
   async function align(session, { pullWhenReady = false, verifiedTransitionEnd = false } = {}) {
     const id = accountId(session);
     if (!id) {
@@ -377,32 +403,15 @@ export function createSessionCoordinator({
         throw new Error("Ungesicherte Kontoänderungen bleiben geschützt. Melde dich erst ab, nachdem dieses Konto wieder freigegeben und vollständig synchronisiert wurde oder ein Backup vorliegt.");
       }
 
-      let trennung = { gaststand: { ok: true, quelle: "ungebundener-gaststand" }, transition: null };
-      let session;
-      try { session = await auth.signOut({
-        /* Der Auth-Service führt diesen Schritt vor Credential-Löschung und
-           vor dem sichtbaren Wechsel auf `guest` aus. Scheitert das
-           Wiederherstellen, ist die Quarantäne der zweite unabhängige Zaun. */
-        beforeGuest: async () => {
-          trennung = await trenneKontocache(cacheId, { behalteTransition: true });
-        },
-      }); } catch (error) {
-        /* Cache ist möglicherweise schon Gast, Credential aber noch Account.
-           Marker und Maske bleiben bis zu einer sicheren Recovery bestehen. */
-        if (trennung?.transition) { storage.mask?.(); emit(); }
-        throw error;
-      }
-      if (trennung?.transition) {
-        if (storage.endTransition?.(trennung.transition.token) === false) {
-          storage.mask?.(); emit();
-          const error = new Error("Die Kontotrennung konnte nach dem Logout nicht dauerhaft abgeschlossen werden.");
-          error.code = "PERSONAL_DATA_PRIVACY_LOCKED";
-          throw error;
-        }
-        if (storage.unlockAfterPrivacyCleanup) storage.unlockAfterPrivacyCleanup();
-        else storage.deactivate();
-      }
-      return publish(Object.freeze({ ...session, gaststand: trennung.gaststand }));
+      return beendeLokaleKontositzung(cacheId);
+      });
+    },
+
+    async finalizeDeletedAccount() {
+      return serialisiere(async () => {
+        /* Nur nach bestätigter serverseitiger Auth-Löschung: kein Flush mehr,
+           weil das Konto nicht länger Ziel einer Remote-Schreiboperation ist. */
+        return beendeLokaleKontositzung(String(storage.cacheOwner?.() || accountId() || ""));
       });
     },
 
@@ -415,6 +424,7 @@ export function createSessionCoordinator({
     },
 
     changePassword: (neuesPasswort) => auth.changePassword(neuesPasswort),
+    reauthenticate: (passwort) => auth.reauthenticate(passwort),
   });
   eventTarget?.addEventListener?.("storage", externalStorageEvent);
   return api;

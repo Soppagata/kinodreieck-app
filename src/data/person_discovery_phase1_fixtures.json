@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "format": 1,
+    "fixtureOnly": true,
+    "providerPayload": false,
+    "hinweis": "Namen sind Testlabels; IDs und Werkdaten sind ausdrücklich nicht produktiv."
+  },
+  "requiredNameCases": [
+    {
+      "testCaseId": "person-nicolas-cage-actor",
+      "identity": {
+        "personExternalId": "fixture:person:nicolas-cage",
+        "role": "actor",
+        "name": "Nicolas Cage",
+        "canonical": true
+      },
+      "expectedCandidates": [],
+      "productionExpectation": "blocked_unresolved"
+    },
+    {
+      "testCaseId": "person-robert-rodriguez-director",
+      "identity": {
+        "personExternalId": "fixture:person:robert-rodriguez",
+        "role": "director",
+        "name": "Robert Rodriguez",
+        "canonical": true
+      },
+      "expectedCandidates": [],
+      "productionExpectation": "blocked_unresolved"
+    }
+  ],
+  "syntheticPositiveCases": [
+    {
+      "identity": {
+        "personExternalId": "fixture:person:actor-01",
+        "role": "actor",
+        "name": "Testperson Schauspiel",
+        "canonical": true
+      },
+      "candidate": {
+        "candidateId": "fixture:candidate:actor-work-01",
+        "person": {
+          "personExternalId": "fixture:person:actor-01",
+          "role": "actor",
+          "name": "Testperson Schauspiel",
+          "canonical": true
+        },
+        "workTargetId": "fixture:target:actor-work-01",
+        "workTargetType": "work",
+        "status": "candidate",
+        "sourceMode": "fixture",
+        "active": false,
+        "costBearing": false,
+        "createsCheck": false
+      }
+    },
+    {
+      "identity": {
+        "personExternalId": "fixture:person:director-01",
+        "role": "director",
+        "name": "Testperson Regie",
+        "canonical": true
+      },
+      "candidate": {
+        "candidateId": "fixture:candidate:director-series-01",
+        "person": {
+          "personExternalId": "fixture:person:director-01",
+          "role": "director",
+          "name": "Testperson Regie",
+          "canonical": true
+        },
+        "workTargetId": "fixture:target:director-series-01",
+        "workTargetType": "series",
+        "status": "candidate",
+        "sourceMode": "fixture",
+        "active": false,
+        "costBearing": false,
+        "createsCheck": false
+      }
+    }
+  ]
+}

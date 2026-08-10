@@ -1,0 +1,914 @@
+/* Lokaler Event-Radar-Kern (Phase 2).
+   ---------------------------------------------------------------
+   - kein Netzwerk, kein Provider, kein Scheduler
+   - keine Personen-Automatik
+   - globale Eventwahrheit bleibt vom persönlichen kd:radar-Topf getrennt
+   - im Kontomodus ist nur ein serverbestätigter Snapshot wirksam
+   - Wochenprojektion ist read-only und schreibt nie in den Kalender */
+
+import { K, store } from "./storage.js";
+import {
+  RADAR_DEFAULT_REGION,
+  RADAR_EVENT_TYPES,
+  RADAR_LIFECYCLE_STATUSES,
+  RADAR_NORMAL_ACTIVE_LIMIT,
+  RADAR_RECEIPT_STATUSES,
+  RADAR_SCOPES,
+  RADAR_TARGET_TYPES,
+  RADAR_VERIFICATION_STATUSES,
+  createRadarEventIdentity,
+  isRadarEventIdentity,
+  isStableContractId,
+  validateRadarTarget,
+} from "./radarContracts.js";
+
+export const LOCAL_RADAR_FORMAT = "kinodreieck-radar-local";
+export const LOCAL_RADAR_VERSION = 1;
+export const LOCAL_RADAR_AUTHORITIES = Object.freeze(["guest", "account-cache"]);
+export const LOCAL_RADAR_OUTBOX_ACTIONS = Object.freeze(["upsert", "pause", "remove"]);
+export const LOCAL_RADAR_OUTBOX_STATUSES = Object.freeze(["pending", "rejected"]);
+export const LOCAL_RADAR_SHARE_STATUSES = Object.freeze(["active", "revoked"]);
+export const LOCAL_RADAR_MAX_OUTBOX = 100;
+export const LOCAL_RADAR_MAX_SHARES = 1000;
+export const LOCAL_RADAR_MAX_RECEIPTS = 1000;
+export const LOCAL_RADAR_MAX_BYTES = 1024 * 1024;
+
+export const LOCAL_EVENT_LEDGER_FORMAT = "kinodreieck-radar-ledger";
+export const LOCAL_EVENT_LEDGER_VERSION = 1;
+
+const CHECKSUM_FORM = /^[a-f0-9]{64}$/;
+const ISO_INSTANT_FORM = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const UUID_FORM = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+
+function text(value) { return String(value == null ? "" : value).trim(); }
+function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function result(errors) { return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) }); }
+function byteLength(value) { return new TextEncoder().encode(value).byteLength; }
+function validInstant(value) {
+  const normalized = text(value);
+  return ISO_INSTANT_FORM.test(normalized) && Number.isFinite(Date.parse(normalized));
+}
+function validDay(value) {
+  const normalized = text(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+  const millis = Date.parse(`${normalized}T00:00:00.000Z`);
+  return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === normalized;
+}
+function dayNumber(value) {
+  return validDay(value) ? Math.floor(Date.parse(`${value}T00:00:00.000Z`) / 86400000) : null;
+}
+function exactKeys(value, allowed) {
+  return plain(value) && Object.keys(value).every((key) => allowed.includes(key));
+}
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeDeep(child);
+  return Object.freeze(value);
+}
+function validOperationId(value) {
+  const normalized = text(value);
+  return UUID_FORM.test(normalized) || (normalized.startsWith("fixture:") && isStableContractId(normalized));
+}
+
+export function createEmptyLocalRadar({ authority = "guest" } = {}) {
+  const safeAuthority = LOCAL_RADAR_AUTHORITIES.includes(authority) ? authority : "guest";
+  return freezeDeep({
+    format: LOCAL_RADAR_FORMAT,
+    version: LOCAL_RADAR_VERSION,
+    authority: safeAuthority,
+    subscriptions: [],
+    outbox: [],
+    shares: [],
+    shareOutbox: [],
+    receipts: [],
+    display: { showDismissed: false },
+    server: { revision: 0, checksum: null, reconciledAt: null },
+  });
+}
+
+function validateSubscription(subscription, authority) {
+  const errors = [];
+  const keys = [
+    "targetId", "targetType", "region", "scope", "status", "authority",
+    "serverRevision", "serverChecksum", "updatedAt",
+  ];
+  if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
+  if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
+  if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
+  if (subscription.region !== RADAR_DEFAULT_REGION) errors.push("subscription-region-invalid");
+  if (!RADAR_SCOPES.includes(subscription.scope)) errors.push("subscription-scope-invalid");
+  if (!["active", "paused"].includes(subscription.status)) errors.push("subscription-status-invalid");
+  if (!validInstant(subscription.updatedAt)) errors.push("subscription-updated-at-invalid");
+
+  if (authority === "guest") {
+    if (subscription.authority !== "local") errors.push("guest-subscription-authority-invalid");
+    if (subscription.serverRevision !== null || subscription.serverChecksum !== null) {
+      errors.push("guest-subscription-server-state-forbidden");
+    }
+  } else {
+    if (subscription.authority !== "server") errors.push("account-subscription-authority-invalid");
+    if (!Number.isInteger(subscription.serverRevision) || subscription.serverRevision <= 0) {
+      errors.push("account-subscription-revision-invalid");
+    }
+    if (!CHECKSUM_FORM.test(text(subscription.serverChecksum))) {
+      errors.push("account-subscription-checksum-invalid");
+    }
+  }
+  return errors;
+}
+
+function validateOutboxEntry(entry) {
+  const errors = [];
+  const keys = [
+    "operationId", "action", "targetId", "targetType", "region", "scope",
+    "status", "createdAt", "reason",
+  ];
+  if (!exactKeys(entry, keys)) return ["outbox-shape-invalid"];
+  if (!validOperationId(entry.operationId)) errors.push("outbox-operation-id-invalid");
+  if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
+  if (!isStableContractId(entry.targetId)) errors.push("outbox-target-invalid");
+  if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("outbox-target-type-invalid");
+  if (entry.region !== RADAR_DEFAULT_REGION) errors.push("outbox-region-invalid");
+  if (!RADAR_SCOPES.includes(entry.scope)) errors.push("outbox-scope-invalid");
+  if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("outbox-status-invalid");
+  if (!validInstant(entry.createdAt)) errors.push("outbox-created-at-invalid");
+  if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
+    errors.push("outbox-reason-invalid");
+  }
+  return errors;
+}
+
+function validateShare(share, authority) {
+  const errors = [];
+  const keys = [
+    "targetId", "status", "authority", "serverRevision", "serverChecksum", "updatedAt",
+  ];
+  if (!exactKeys(share, keys)) return ["share-shape-invalid"];
+  if (!isStableContractId(share.targetId)) errors.push("share-target-invalid");
+  if (!LOCAL_RADAR_SHARE_STATUSES.includes(share.status)) errors.push("share-status-invalid");
+  if (!validInstant(share.updatedAt)) errors.push("share-updated-at-invalid");
+  if (authority !== "account-cache" || share.authority !== "server") {
+    errors.push("share-authority-invalid");
+  }
+  if (!Number.isInteger(share.serverRevision) || share.serverRevision <= 0) {
+    errors.push("share-revision-invalid");
+  }
+  if (!CHECKSUM_FORM.test(text(share.serverChecksum))) errors.push("share-checksum-invalid");
+  return errors;
+}
+
+function validateShareOutboxEntry(entry) {
+  const errors = [];
+  const keys = ["operationId", "targetId", "shareEnabled", "status", "createdAt", "reason"];
+  if (!exactKeys(entry, keys)) return ["share-outbox-shape-invalid"];
+  if (!validOperationId(entry.operationId)) errors.push("share-outbox-operation-id-invalid");
+  if (!isStableContractId(entry.targetId)) errors.push("share-outbox-target-invalid");
+  if (typeof entry.shareEnabled !== "boolean") errors.push("share-outbox-enabled-invalid");
+  if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("share-outbox-status-invalid");
+  if (!validInstant(entry.createdAt)) errors.push("share-outbox-created-at-invalid");
+  if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
+    errors.push("share-outbox-reason-invalid");
+  }
+  return errors;
+}
+
+function validateReceipt(receipt) {
+  const errors = [];
+  const keys = ["eventId", "versionId", "status", "updatedAt"];
+  if (!exactKeys(receipt, keys)) return ["receipt-shape-invalid"];
+  if (!isStableContractId(receipt.eventId) && !isRadarEventIdentity(receipt.eventId)) errors.push("receipt-event-id-invalid");
+  if (!isStableContractId(receipt.versionId)) errors.push("receipt-version-id-invalid");
+  if (!RADAR_RECEIPT_STATUSES.includes(receipt.status)) errors.push("receipt-status-invalid");
+  if (!validInstant(receipt.updatedAt)) errors.push("receipt-updated-at-invalid");
+  return errors;
+}
+
+export function validateLocalRadarState(state) {
+  const errors = [];
+  const keys = [
+    "format", "version", "authority", "subscriptions", "outbox", "shares",
+    "shareOutbox", "receipts", "display", "server",
+  ];
+  if (!exactKeys(state, keys)) return result(["radar-state-shape-invalid"]);
+  if (state.format !== LOCAL_RADAR_FORMAT) errors.push("radar-format-invalid");
+  if (state.version !== LOCAL_RADAR_VERSION) errors.push("radar-version-invalid");
+  if (!LOCAL_RADAR_AUTHORITIES.includes(state.authority)) errors.push("radar-authority-invalid");
+  if (!Array.isArray(state.subscriptions)) errors.push("radar-subscriptions-invalid");
+  if (!Array.isArray(state.outbox) || state.outbox.length > LOCAL_RADAR_MAX_OUTBOX) errors.push("radar-outbox-invalid");
+  if (!Array.isArray(state.shares) || state.shares.length > LOCAL_RADAR_MAX_SHARES) errors.push("radar-shares-invalid");
+  if (!Array.isArray(state.shareOutbox) || state.shareOutbox.length > LOCAL_RADAR_MAX_OUTBOX) {
+    errors.push("radar-share-outbox-invalid");
+  }
+  if (!Array.isArray(state.receipts) || state.receipts.length > LOCAL_RADAR_MAX_RECEIPTS) errors.push("radar-receipts-invalid");
+  if (!exactKeys(state.display, ["showDismissed"]) || typeof state.display.showDismissed !== "boolean") {
+    errors.push("radar-display-invalid");
+  }
+  if (!exactKeys(state.server, ["revision", "checksum", "reconciledAt"])) {
+    errors.push("radar-server-shape-invalid");
+  } else {
+    if (!Number.isInteger(state.server.revision) || state.server.revision < 0) errors.push("radar-server-revision-invalid");
+    if (state.server.checksum !== null && !CHECKSUM_FORM.test(text(state.server.checksum))) {
+      errors.push("radar-server-checksum-invalid");
+    }
+    if (state.server.reconciledAt !== null && !validInstant(state.server.reconciledAt)) {
+      errors.push("radar-server-reconciled-at-invalid");
+    }
+    if (state.authority === "guest" && (
+      state.server.revision !== 0 || state.server.checksum !== null || state.server.reconciledAt !== null
+    )) errors.push("guest-server-state-forbidden");
+  }
+
+  if (Array.isArray(state.subscriptions)) {
+    const seen = new Set();
+    for (const subscription of state.subscriptions) {
+      errors.push(...validateSubscription(subscription, state.authority));
+      const id = text(subscription?.targetId);
+      if (seen.has(id)) errors.push("subscription-duplicate-target");
+      seen.add(id);
+    }
+    if (state.authority === "guest"
+        && state.subscriptions.filter((entry) => entry?.status === "active").length > RADAR_NORMAL_ACTIVE_LIMIT) {
+      errors.push("guest-subscription-limit-exceeded");
+    }
+  }
+  if (Array.isArray(state.outbox)) {
+    const seen = new Set();
+    for (const entry of state.outbox) {
+      errors.push(...validateOutboxEntry(entry));
+      const id = text(entry?.operationId);
+      if (seen.has(id)) errors.push("outbox-operation-duplicate");
+      seen.add(id);
+    }
+    if (state.authority === "guest" && state.outbox.length) errors.push("guest-outbox-forbidden");
+  }
+  if (Array.isArray(state.shares)) {
+    const seen = new Set();
+    const activeSubscriptions = new Set((Array.isArray(state.subscriptions) ? state.subscriptions : [])
+      .filter((entry) => entry?.status === "active").map((entry) => entry.targetId));
+    for (const share of state.shares) {
+      errors.push(...validateShare(share, state.authority));
+      const id = text(share?.targetId);
+      if (seen.has(id)) errors.push("share-duplicate-target");
+      if (share?.status === "active" && !activeSubscriptions.has(id)) errors.push("active-share-without-active-subscription");
+      seen.add(id);
+    }
+    if (state.authority === "guest" && state.shares.length) errors.push("guest-shares-forbidden");
+  }
+  if (Array.isArray(state.shareOutbox)) {
+    const seen = new Set();
+    for (const entry of state.shareOutbox) {
+      errors.push(...validateShareOutboxEntry(entry));
+      const id = text(entry?.operationId);
+      if (seen.has(id)) errors.push("share-outbox-operation-duplicate");
+      seen.add(id);
+    }
+    if (state.authority === "guest" && state.shareOutbox.length) errors.push("guest-share-outbox-forbidden");
+  }
+  if (Array.isArray(state.receipts)) {
+    const seen = new Set();
+    for (const receipt of state.receipts) {
+      errors.push(...validateReceipt(receipt));
+      const id = `${text(receipt?.eventId)}|${text(receipt?.versionId)}`;
+      if (seen.has(id)) errors.push("receipt-duplicate-version");
+      seen.add(id);
+    }
+  }
+  return result([...new Set(errors)]);
+}
+
+export function isLocalRadarBackupState(value) {
+  return validateLocalRadarState(value).ok;
+}
+
+export function decodeLocalRadar(raw, { authority = "guest" } = {}) {
+  if (!LOCAL_RADAR_AUTHORITIES.includes(authority)) {
+    return Object.freeze({
+      ok: false, status: "authority-invalid", state: null,
+      errors: Object.freeze(["radar-authority-invalid"]),
+    });
+  }
+  if (raw == null) {
+    return Object.freeze({ ok: true, status: "missing", state: createEmptyLocalRadar({ authority }), errors: Object.freeze([]) });
+  }
+  if (typeof raw !== "string" || byteLength(raw) > LOCAL_RADAR_MAX_BYTES) {
+    return Object.freeze({ ok: false, status: "corrupt", state: null, errors: Object.freeze(["radar-raw-invalid"]) });
+  }
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch {
+    return Object.freeze({ ok: false, status: "corrupt", state: null, errors: Object.freeze(["radar-json-invalid"]) });
+  }
+  const checked = validateLocalRadarState(parsed);
+  if (checked.ok && LOCAL_RADAR_AUTHORITIES.includes(authority) && parsed.authority !== authority) {
+    return Object.freeze({
+      ok: false, status: "authority-mismatch", state: null,
+      errors: Object.freeze(["radar-authority-mismatch"]),
+    });
+  }
+  return checked.ok
+    ? Object.freeze({ ok: true, status: "loaded", state: freezeDeep(parsed), errors: checked.errors })
+    : Object.freeze({ ok: false, status: "corrupt", state: null, errors: checked.errors });
+}
+
+function targetDraft(target) {
+  const checked = validateRadarTarget(target, { allowFixture: true });
+  return checked.ok && target.targetStatus === "active" && target.canonical === true
+    ? { targetId: text(target.targetId), targetType: target.targetType }
+    : null;
+}
+
+export function upsertGuestRadarSubscription(state, {
+  target, scope = "all", now = new Date().toISOString(), status = "active",
+} = {}) {
+  const stateCheck = validateLocalRadarState(state);
+  if (!stateCheck.ok || state.authority !== "guest") {
+    return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
+  }
+  const draft = targetDraft(target);
+  if (!draft || !RADAR_SCOPES.includes(scope) || !["active", "paused"].includes(status) || !validInstant(now)) {
+    return Object.freeze({ ok: false, reason: "subscription-invalid", state, changed: false });
+  }
+  const existing = state.subscriptions.find((entry) => entry.targetId === draft.targetId);
+  const activeBefore = state.subscriptions.filter((entry) => entry.status === "active").length;
+  const increment = status === "active" && existing?.status !== "active" ? 1 : 0;
+  if (!existing && status === "active" && activeBefore >= RADAR_NORMAL_ACTIVE_LIMIT) {
+    return Object.freeze({ ok: false, reason: "quota-exceeded", state, changed: false });
+  }
+  if (existing && activeBefore + increment > RADAR_NORMAL_ACTIVE_LIMIT) {
+    return Object.freeze({ ok: false, reason: "quota-exceeded", state, changed: false });
+  }
+  const nextSubscription = {
+    ...draft,
+    region: RADAR_DEFAULT_REGION,
+    scope,
+    status,
+    authority: "local",
+    serverRevision: null,
+    serverChecksum: null,
+    updatedAt: now,
+  };
+  const next = clone(state);
+  next.subscriptions = existing
+    ? next.subscriptions.map((entry) => entry.targetId === draft.targetId ? nextSubscription : entry)
+    : [...next.subscriptions, nextSubscription];
+  next.subscriptions.sort((a, b) => a.targetId.localeCompare(b.targetId));
+  return Object.freeze({
+    ok: true,
+    reason: existing ? "updated" : "created",
+    state: freezeDeep(next),
+    changed: !existing || JSON.stringify(existing) !== JSON.stringify(nextSubscription),
+    createsProviderJob: false,
+  });
+}
+
+export function removeGuestRadarSubscription(state, targetId) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "guest") {
+    return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
+  }
+  const normalizedTargetId = text(targetId);
+  if (!isStableContractId(normalizedTargetId)) {
+    return Object.freeze({ ok: false, reason: "subscription-target-invalid", state, changed: false });
+  }
+  if (!state.subscriptions.some((entry) => entry.targetId === normalizedTargetId)) {
+    return Object.freeze({ ok: true, reason: "already-missing", state, changed: false, createsProviderJob: false });
+  }
+  const next = clone(state);
+  next.subscriptions = next.subscriptions.filter((entry) => entry.targetId !== normalizedTargetId);
+  /* Receipts gehören zu Eventversionen und dürfen bei einem Aboende nicht
+     blind gelöscht werden. Ein späteres erneutes Abo behält damit die eigene
+     bereits getroffene Anzeigeentscheidung. */
+  return Object.freeze({
+    ok: true,
+    reason: "removed",
+    state: freezeDeep(next),
+    changed: true,
+    createsProviderJob: false,
+  });
+}
+
+export function queueAccountRadarChange(state, {
+  operationId, action, target, scope = "all", now = new Date().toISOString(),
+} = {}) {
+  const stateCheck = validateLocalRadarState(state);
+  if (!stateCheck.ok || state.authority !== "account-cache") {
+    return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  }
+  const draft = targetDraft(target);
+  const entry = {
+    operationId: text(operationId), action, targetId: draft?.targetId || "",
+    targetType: draft?.targetType || "", region: RADAR_DEFAULT_REGION, scope,
+    status: "pending", createdAt: now, reason: null,
+  };
+  if (!draft || validateOutboxEntry(entry).length) {
+    return Object.freeze({ ok: false, reason: "outbox-entry-invalid", state, changed: false });
+  }
+  const existing = state.outbox.find((item) => item.operationId === entry.operationId);
+  if (existing) {
+    const same = JSON.stringify(existing) === JSON.stringify(entry);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "operation-id-conflict", state, changed: false });
+  }
+  if (state.outbox.length >= LOCAL_RADAR_MAX_OUTBOX) {
+    return Object.freeze({ ok: false, reason: "outbox-full", state, changed: false });
+  }
+  const next = clone(state);
+  next.outbox.push(entry);
+  return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true, createsProviderJob: false });
+}
+
+export function rejectAccountRadarChange(state, operationId, reason) {
+  const id = text(operationId);
+  const normalizedReason = text(reason);
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache"
+      || !id || !normalizedReason || normalizedReason.length > 120) {
+    return Object.freeze({ ok: false, reason: "rejection-invalid", state, changed: false });
+  }
+  if (!state.outbox.some((entry) => entry.operationId === id)) {
+    return Object.freeze({ ok: false, reason: "operation-not-found", state, changed: false });
+  }
+  const next = clone(state);
+  next.outbox = next.outbox.map((entry) => entry.operationId === id
+    ? { ...entry, status: "rejected", reason: normalizedReason }
+    : entry);
+  return Object.freeze({ ok: true, reason: "rejected", state: freezeDeep(next), changed: true });
+}
+
+export function queueAccountRadarShareChange(state, {
+  operationId, targetId, shareEnabled, now = new Date().toISOString(),
+} = {}) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache") {
+    return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  }
+  const normalizedTargetId = text(targetId);
+  const entry = {
+    operationId: text(operationId), targetId: normalizedTargetId, shareEnabled,
+    status: "pending", createdAt: now, reason: null,
+  };
+  const activeSubscription = state.subscriptions.some((subscription) => (
+    subscription.targetId === normalizedTargetId && subscription.status === "active"
+  ));
+  if (validateShareOutboxEntry(entry).length || (shareEnabled === true && !activeSubscription)) {
+    return Object.freeze({
+      ok: false,
+      reason: shareEnabled === true && !activeSubscription ? "active-subscription-required" : "share-outbox-entry-invalid",
+      state,
+      changed: false,
+    });
+  }
+  const existing = state.shareOutbox.find((item) => item.operationId === entry.operationId);
+  if (existing) {
+    const same = JSON.stringify(existing) === JSON.stringify(entry);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "operation-id-conflict", state, changed: false });
+  }
+  if (state.shareOutbox.length >= LOCAL_RADAR_MAX_OUTBOX) {
+    return Object.freeze({ ok: false, reason: "share-outbox-full", state, changed: false });
+  }
+  const next = clone(state);
+  next.shareOutbox.push(entry);
+  return Object.freeze({
+    ok: true, reason: "queued", state: freezeDeep(next), changed: true, createsProviderJob: false,
+  });
+}
+
+export function rejectAccountRadarShareChange(state, operationId, reason) {
+  const id = text(operationId);
+  const normalizedReason = text(reason);
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache"
+      || !id || !normalizedReason || normalizedReason.length > 120) {
+    return Object.freeze({ ok: false, reason: "rejection-invalid", state, changed: false });
+  }
+  if (!state.shareOutbox.some((entry) => entry.operationId === id)) {
+    return Object.freeze({ ok: false, reason: "operation-not-found", state, changed: false });
+  }
+  const next = clone(state);
+  next.shareOutbox = next.shareOutbox.map((entry) => entry.operationId === id
+    ? { ...entry, status: "rejected", reason: normalizedReason }
+    : entry);
+  return Object.freeze({ ok: true, reason: "rejected", state: freezeDeep(next), changed: true });
+}
+
+function validateServerSnapshot(snapshot) {
+  const errors = [];
+  const keys = [
+    "revision", "checksum", "reconciledAt", "subscriptions", "shares",
+    "acknowledgedOperationIds", "acknowledgedShareOperationIds",
+  ];
+  if (!exactKeys(snapshot, keys)) return result(["server-snapshot-shape-invalid"]);
+  if (!Number.isInteger(snapshot.revision) || snapshot.revision < 0) errors.push("server-snapshot-revision-invalid");
+  if (snapshot.revision === 0) {
+    if (snapshot.checksum !== null) errors.push("server-snapshot-checksum-invalid");
+  } else if (!CHECKSUM_FORM.test(text(snapshot.checksum))) errors.push("server-snapshot-checksum-invalid");
+  if (!validInstant(snapshot.reconciledAt)) errors.push("server-snapshot-time-invalid");
+  if (!Array.isArray(snapshot.subscriptions)) errors.push("server-snapshot-subscriptions-invalid");
+  if (!Array.isArray(snapshot.shares)) errors.push("server-snapshot-shares-invalid");
+  if (!Array.isArray(snapshot.acknowledgedOperationIds)) errors.push("server-snapshot-acks-invalid");
+  if (!Array.isArray(snapshot.acknowledgedShareOperationIds)) errors.push("server-snapshot-share-acks-invalid");
+  if (Array.isArray(snapshot.acknowledgedOperationIds)) {
+    const ids = snapshot.acknowledgedOperationIds.map(text);
+    if (ids.some((id) => !validOperationId(id)) || new Set(ids).size !== ids.length) {
+      errors.push("server-snapshot-acks-invalid");
+    }
+  }
+  if (Array.isArray(snapshot.acknowledgedShareOperationIds)) {
+    const ids = snapshot.acknowledgedShareOperationIds.map(text);
+    if (ids.some((id) => !validOperationId(id)) || new Set(ids).size !== ids.length) {
+      errors.push("server-snapshot-share-acks-invalid");
+    }
+  }
+  if (Array.isArray(snapshot.subscriptions)) {
+    const seen = new Set();
+    for (const entry of snapshot.subscriptions) {
+      const keys2 = ["targetId", "targetType", "region", "scope", "status", "updatedAt"];
+      if (!exactKeys(entry, keys2)) { errors.push("server-subscription-shape-invalid"); continue; }
+      if (!isStableContractId(entry.targetId)) errors.push("server-subscription-target-invalid");
+      if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("server-subscription-target-type-invalid");
+      if (entry.region !== RADAR_DEFAULT_REGION) errors.push("server-subscription-region-invalid");
+      if (!RADAR_SCOPES.includes(entry.scope)) errors.push("server-subscription-scope-invalid");
+      if (!["active", "paused"].includes(entry.status)) errors.push("server-subscription-status-invalid");
+      if (!validInstant(entry.updatedAt)) errors.push("server-subscription-time-invalid");
+      if (seen.has(entry.targetId)) errors.push("server-subscription-duplicate");
+      seen.add(entry.targetId);
+    }
+    if (snapshot.revision === 0 && snapshot.subscriptions.length) errors.push("server-zero-revision-data-forbidden");
+  }
+  if (Array.isArray(snapshot.shares)) {
+    const seen = new Set();
+    const activeSubscriptions = new Set((Array.isArray(snapshot.subscriptions) ? snapshot.subscriptions : [])
+      .filter((entry) => entry?.status === "active").map((entry) => entry.targetId));
+    for (const share of snapshot.shares) {
+      const keys2 = ["targetId", "status", "updatedAt"];
+      if (!exactKeys(share, keys2)) { errors.push("server-share-shape-invalid"); continue; }
+      if (!isStableContractId(share.targetId)) errors.push("server-share-target-invalid");
+      if (!LOCAL_RADAR_SHARE_STATUSES.includes(share.status)) errors.push("server-share-status-invalid");
+      if (!validInstant(share.updatedAt)) errors.push("server-share-time-invalid");
+      if (share.status === "active" && !activeSubscriptions.has(share.targetId)) {
+        errors.push("server-active-share-without-active-subscription");
+      }
+      if (seen.has(share.targetId)) errors.push("server-share-duplicate");
+      seen.add(share.targetId);
+    }
+    if (snapshot.revision === 0 && snapshot.shares.length) errors.push("server-zero-revision-data-forbidden");
+  }
+  return result([...new Set(errors)]);
+}
+
+export function reconcileAccountRadarSnapshot(state, snapshot) {
+  const stateCheck = validateLocalRadarState(state);
+  const snapshotCheck = validateServerSnapshot(snapshot);
+  if (!stateCheck.ok || state.authority !== "account-cache" || !snapshotCheck.ok) {
+    return Object.freeze({
+      ok: false, reason: !snapshotCheck.ok ? "snapshot-invalid" : "account-cache-required",
+      state, changed: false, errors: snapshotCheck.errors,
+    });
+  }
+  if (snapshot.revision < state.server.revision) {
+    return Object.freeze({ ok: false, reason: "snapshot-stale", state, changed: false });
+  }
+  if (snapshot.revision === state.server.revision && state.server.checksum !== snapshot.checksum) {
+    return Object.freeze({ ok: false, reason: "snapshot-revision-conflict", state, changed: false });
+  }
+  const acknowledged = new Set(snapshot.acknowledgedOperationIds);
+  const acknowledgedShares = new Set(snapshot.acknowledgedShareOperationIds);
+  const next = clone(state);
+  next.subscriptions = snapshot.subscriptions.map((entry) => ({
+    ...entry,
+    authority: "server",
+    serverRevision: snapshot.revision,
+    serverChecksum: snapshot.checksum,
+  })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
+  next.shares = snapshot.shares.map((entry) => ({
+    ...entry,
+    authority: "server",
+    serverRevision: snapshot.revision,
+    serverChecksum: snapshot.checksum,
+  })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  next.shareOutbox = next.shareOutbox.filter((entry) => !acknowledgedShares.has(entry.operationId));
+  next.server = {
+    revision: snapshot.revision,
+    checksum: snapshot.checksum,
+    reconciledAt: snapshot.reconciledAt,
+  };
+  const nextCheck = validateLocalRadarState(next);
+  if (!nextCheck.ok) {
+    return Object.freeze({ ok: false, reason: "snapshot-result-invalid", state, changed: false, errors: nextCheck.errors });
+  }
+  return Object.freeze({
+    ok: true,
+    reason: snapshot.revision === state.server.revision ? "idempotent-reconcile" : "reconciled",
+    state: freezeDeep(next),
+    changed: JSON.stringify(next) !== JSON.stringify(state),
+  });
+}
+
+export function setLocalRadarReceipt(state, {
+  eventId, versionId, status, now = new Date().toISOString(),
+} = {}) {
+  if (!validateLocalRadarState(state).ok) {
+    return Object.freeze({ ok: false, reason: "state-invalid", state, changed: false });
+  }
+  const receipt = { eventId: text(eventId), versionId: text(versionId), status, updatedAt: now };
+  if (validateReceipt(receipt).length) {
+    return Object.freeze({ ok: false, reason: "receipt-invalid", state, changed: false });
+  }
+  const key = `${receipt.eventId}|${receipt.versionId}`;
+  const existing = state.receipts.find((entry) => `${entry.eventId}|${entry.versionId}` === key);
+  if (!existing && state.receipts.length >= LOCAL_RADAR_MAX_RECEIPTS) {
+    return Object.freeze({ ok: false, reason: "receipt-limit", state, changed: false });
+  }
+  const next = clone(state);
+  next.receipts = existing
+    ? next.receipts.map((entry) => `${entry.eventId}|${entry.versionId}` === key ? receipt : entry)
+    : [...next.receipts, receipt];
+  return Object.freeze({ ok: true, reason: existing ? "updated" : "created", state: freezeDeep(next), changed: true });
+}
+
+export function createEmptyLocalEventLedger() {
+  return freezeDeep({
+    format: LOCAL_EVENT_LEDGER_FORMAT,
+    version: LOCAL_EVENT_LEDGER_VERSION,
+    targets: [],
+    events: [],
+    versions: [],
+  });
+}
+
+export function validateLocalEventLedger(ledger) {
+  const errors = [];
+  if (!exactKeys(ledger, ["format", "version", "targets", "events", "versions"])) {
+    return result(["ledger-shape-invalid"]);
+  }
+  if (ledger.format !== LOCAL_EVENT_LEDGER_FORMAT) errors.push("ledger-format-invalid");
+  if (ledger.version !== LOCAL_EVENT_LEDGER_VERSION) errors.push("ledger-version-invalid");
+  if (!Array.isArray(ledger.targets) || !Array.isArray(ledger.events) || !Array.isArray(ledger.versions)) {
+    return result([...errors, "ledger-collections-invalid"]);
+  }
+  const targets = new Map();
+  for (const target of ledger.targets) {
+    if (!exactKeys(target, ["targetId", "targetType", "title", "targetStatus", "canonical"])) {
+      errors.push("ledger-target-shape-invalid");
+      continue;
+    }
+    if (!validateRadarTarget(target, { allowFixture: true }).ok) errors.push("ledger-target-invalid");
+    if (targets.has(target.targetId)) errors.push("ledger-target-duplicate");
+    targets.set(target.targetId, target);
+  }
+  const events = new Map();
+  for (const event of ledger.events) {
+    const keys = [
+      "eventId", "targetId", "eventType", "region", "platform", "lifecycleStatus",
+      "currentCandidateVersionId", "currentConfirmedVersionId",
+    ];
+    if (!exactKeys(event, keys)) { errors.push("ledger-event-shape-invalid"); continue; }
+    if (!isRadarEventIdentity(event.eventId)) errors.push("ledger-event-id-invalid");
+    if (!targets.has(event.targetId)) errors.push("ledger-event-target-missing");
+    if (!RADAR_EVENT_TYPES.includes(event.eventType)) errors.push("ledger-event-type-invalid");
+    if (event.region !== RADAR_DEFAULT_REGION) errors.push("ledger-event-region-invalid");
+    if (!RADAR_LIFECYCLE_STATUSES.includes(event.lifecycleStatus)) errors.push("ledger-event-lifecycle-invalid");
+    if (event.eventId !== createRadarEventIdentity({
+      canonicalWorkId: event.targetId,
+      eventType: event.eventType,
+      region: event.region,
+      platform: event.platform,
+    })) errors.push("ledger-event-identity-mismatch");
+    for (const pointer of [event.currentCandidateVersionId, event.currentConfirmedVersionId]) {
+      if (pointer !== null && !isStableContractId(pointer)) errors.push("ledger-event-pointer-invalid");
+    }
+    if (events.has(event.eventId)) errors.push("ledger-event-duplicate");
+    events.set(event.eventId, event);
+  }
+  const versions = new Map();
+  for (const version of ledger.versions) {
+    const keys = [
+      "versionId", "eventId", "date", "verificationStatus", "evidenceIds",
+      "sourceFamilies", "history",
+    ];
+    if (!exactKeys(version, keys)) { errors.push("ledger-version-shape-invalid"); continue; }
+    if (!isStableContractId(version.versionId)) errors.push("ledger-version-id-invalid");
+    if (!events.has(version.eventId)) errors.push("ledger-version-event-missing");
+    if (!validDay(version.date)) errors.push("ledger-version-date-invalid");
+    if (!RADAR_VERIFICATION_STATUSES.includes(version.verificationStatus)) errors.push("ledger-version-status-invalid");
+    const evidenceIdsValid = Array.isArray(version.evidenceIds);
+    const sourceFamiliesValid = Array.isArray(version.sourceFamilies);
+    if (!evidenceIdsValid
+        || version.evidenceIds.some((id) => !isStableContractId(id))
+        || new Set(version.evidenceIds).size !== version.evidenceIds.length) {
+      errors.push("ledger-version-evidence-invalid");
+    }
+    if (!sourceFamiliesValid
+        || version.sourceFamilies.some((id) => !isStableContractId(id))
+        || new Set(version.sourceFamilies).size !== version.sourceFamilies.length) {
+      errors.push("ledger-version-source-families-invalid");
+    }
+    if (!Array.isArray(version.history) || version.history[0] !== "candidate"
+        || version.history.some((status) => !RADAR_VERIFICATION_STATUSES.includes(status))
+        || version.history.at(-1) !== version.verificationStatus
+        || version.history.slice(1).includes("candidate")
+        || version.history.some((status, index) => index > 0 && status === version.history[index - 1])
+        || (version.history.includes("confirmed") && version.verificationStatus !== "confirmed")) {
+      errors.push("ledger-version-history-invalid");
+    }
+    if (version.verificationStatus === "confirmed"
+        && (!evidenceIdsValid || !sourceFamiliesValid
+          || version.evidenceIds.length < 2 || version.sourceFamilies.length < 2)) {
+      errors.push("ledger-version-confirmation-insufficient");
+    }
+    if (version.verificationStatus === "corroborated"
+        && (!evidenceIdsValid || !sourceFamiliesValid
+          || version.evidenceIds.length < 1 || version.sourceFamilies.length < 1)) {
+      errors.push("ledger-version-corroboration-insufficient");
+    }
+    if (evidenceIdsValid && sourceFamiliesValid && version.sourceFamilies.length > version.evidenceIds.length) {
+      errors.push("ledger-version-source-family-count-invalid");
+    }
+    if (versions.has(version.versionId)) errors.push("ledger-version-duplicate");
+    versions.set(version.versionId, version);
+  }
+  for (const event of ledger.events) {
+    const candidate = event.currentCandidateVersionId == null ? null : versions.get(event.currentCandidateVersionId);
+    const confirmed = event.currentConfirmedVersionId == null ? null : versions.get(event.currentConfirmedVersionId);
+    if (event.currentCandidateVersionId != null && (!candidate || candidate.eventId !== event.eventId)) {
+      errors.push("ledger-candidate-pointer-broken");
+    }
+    if (event.currentConfirmedVersionId != null && (
+      !confirmed || confirmed.eventId !== event.eventId || confirmed.verificationStatus !== "confirmed"
+    )) errors.push("ledger-confirmed-pointer-broken");
+    if (event.currentConfirmedVersionId == null
+        && ledger.versions.some((version) => version.eventId === event.eventId && version.verificationStatus === "confirmed")) {
+      errors.push("ledger-confirmed-pointer-missing");
+    }
+  }
+  return result(errors);
+}
+
+export function stageLocalEventCandidate(ledger, {
+  target, eventType, date, region = RADAR_DEFAULT_REGION, platform = "-",
+  versionId, lifecycleStatus = "scheduled",
+} = {}) {
+  if (!validateLocalEventLedger(ledger).ok) {
+    return Object.freeze({ ok: false, reason: "ledger-invalid", ledger, changed: false });
+  }
+  const targetCheck = validateRadarTarget(target, { allowFixture: true });
+  const eventId = createRadarEventIdentity({ canonicalWorkId: target?.targetId, eventType, region, platform });
+  if (!targetCheck.ok || target.targetStatus !== "active" || target.canonical !== true
+      || !eventId || !isStableContractId(versionId) || !validDay(date)
+      || !RADAR_LIFECYCLE_STATUSES.includes(lifecycleStatus)) {
+    return Object.freeze({ ok: false, reason: "event-candidate-invalid", ledger, changed: false });
+  }
+  const existingTarget = ledger.targets.find((entry) => entry.targetId === target.targetId);
+  if (existingTarget && (existingTarget.targetType !== target.targetType || existingTarget.title !== target.title)) {
+    return Object.freeze({ ok: false, reason: "target-conflict", ledger, changed: false });
+  }
+  const existingVersion = ledger.versions.find((entry) => entry.versionId === versionId);
+  const version = {
+    versionId: text(versionId), eventId, date, verificationStatus: "candidate",
+    evidenceIds: [], sourceFamilies: [], history: ["candidate"],
+  };
+  if (existingVersion) {
+    const same = JSON.stringify(existingVersion) === JSON.stringify(version);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "version-id-conflict", ledger, changed: false, eventId });
+  }
+
+  const next = clone(ledger);
+  if (!existingTarget) {
+    next.targets.push({
+      targetId: target.targetId, targetType: target.targetType, title: target.title,
+      targetStatus: target.targetStatus, canonical: true,
+    });
+  }
+  const existingEvent = next.events.find((entry) => entry.eventId === eventId);
+  if (existingEvent) {
+    existingEvent.currentCandidateVersionId = version.versionId;
+  } else {
+    next.events.push({
+      eventId, targetId: target.targetId, eventType, region, platform,
+      lifecycleStatus, currentCandidateVersionId: version.versionId,
+      currentConfirmedVersionId: null,
+    });
+  }
+  next.versions.push(version);
+  const nextCheck = validateLocalEventLedger(next);
+  if (!nextCheck.ok) {
+    return Object.freeze({ ok: false, reason: "ledger-result-invalid", ledger, changed: false, errors: nextCheck.errors });
+  }
+  return Object.freeze({ ok: true, reason: "staged", ledger: freezeDeep(next), changed: true, eventId, versionId: version.versionId });
+}
+
+export function applyLocalEvidenceDecision(ledger, {
+  eventId, versionId, verificationStatus, evidenceIds = [], independentSourceFamilies = [],
+} = {}) {
+  if (!validateLocalEventLedger(ledger).ok
+      || !RADAR_VERIFICATION_STATUSES.includes(verificationStatus)
+      || (!isStableContractId(eventId) && !isRadarEventIdentity(eventId)) || !isStableContractId(versionId)
+      || !Array.isArray(evidenceIds) || evidenceIds.some((id) => !isStableContractId(id))
+      || new Set(evidenceIds).size !== evidenceIds.length
+      || !Array.isArray(independentSourceFamilies)
+      || independentSourceFamilies.some((id) => !isStableContractId(id))
+      || new Set(independentSourceFamilies).size !== independentSourceFamilies.length
+      || independentSourceFamilies.length > evidenceIds.length) {
+    return Object.freeze({ ok: false, reason: "evidence-decision-invalid", ledger, changed: false });
+  }
+  const event = ledger.events?.find((entry) => entry.eventId === eventId);
+  const version = ledger.versions?.find((entry) => entry.versionId === versionId && entry.eventId === eventId);
+  if (!event || !version) return Object.freeze({ ok: false, reason: "event-version-not-found", ledger, changed: false });
+  if (verificationStatus === "confirmed" && (evidenceIds.length < 2 || independentSourceFamilies.length < 2)) {
+    return Object.freeze({ ok: false, reason: "confirmation-evidence-insufficient", ledger, changed: false });
+  }
+  if (verificationStatus === "corroborated" && (evidenceIds.length < 1 || independentSourceFamilies.length < 1)) {
+    return Object.freeze({ ok: false, reason: "corroboration-evidence-insufficient", ledger, changed: false });
+  }
+  if (version.verificationStatus === "confirmed" && verificationStatus !== "confirmed") {
+    return Object.freeze({ ok: false, reason: "confirmed-version-immutable", ledger, changed: false });
+  }
+  const normalizedEvidence = [...evidenceIds].sort();
+  const normalizedFamilies = [...independentSourceFamilies].sort();
+  if (version.verificationStatus === verificationStatus
+      && JSON.stringify(version.evidenceIds) === JSON.stringify(normalizedEvidence)
+      && JSON.stringify(version.sourceFamilies) === JSON.stringify(normalizedFamilies)) {
+    return Object.freeze({ ok: true, reason: "idempotent", ledger, changed: false });
+  }
+  const next = clone(ledger);
+  const nextVersion = next.versions.find((entry) => entry.versionId === versionId);
+  nextVersion.verificationStatus = verificationStatus;
+  nextVersion.evidenceIds = normalizedEvidence;
+  nextVersion.sourceFamilies = normalizedFamilies;
+  nextVersion.history = [...nextVersion.history, verificationStatus].filter((entry, index, all) => index === 0 || entry !== all[index - 1]);
+  const nextEvent = next.events.find((entry) => entry.eventId === eventId);
+  if (verificationStatus === "confirmed") nextEvent.currentConfirmedVersionId = versionId;
+  const nextCheck = validateLocalEventLedger(next);
+  if (!nextCheck.ok) {
+    return Object.freeze({ ok: false, reason: "ledger-result-invalid", ledger, changed: false, errors: nextCheck.errors });
+  }
+  return Object.freeze({ ok: true, reason: "decision-applied", ledger: freezeDeep(next), changed: true });
+}
+
+export function projectLocalRadarWeek({ state, ledger, startDate } = {}) {
+  if (!validateLocalRadarState(state).ok || !validateLocalEventLedger(ledger).ok) return Object.freeze([]);
+  const start = dayNumber(startDate);
+  if (start == null) return Object.freeze([]);
+  const activeTargets = new Set(state.subscriptions.filter((entry) => entry.status === "active").map((entry) => entry.targetId));
+  const receipts = new Map(state.receipts.map((entry) => [`${entry.eventId}|${entry.versionId}`, entry.status]));
+  const targets = new Map(ledger.targets.map((entry) => [entry.targetId, entry]));
+  const versions = new Map(ledger.versions.map((entry) => [entry.versionId, entry]));
+  const rows = [];
+  for (const event of ledger.events) {
+    if (!activeTargets.has(event.targetId) || event.lifecycleStatus === "retracted" || !event.currentConfirmedVersionId) continue;
+    const version = versions.get(event.currentConfirmedVersionId);
+    if (!version || version.verificationStatus !== "confirmed") continue;
+    const day = dayNumber(version.date);
+    if (day == null || day < start || day > start + 6) continue;
+    const receiptStatus = receipts.get(`${event.eventId}|${version.versionId}`) || "new";
+    if (receiptStatus === "dismissed" && state.display.showDismissed !== true) continue;
+    rows.push(freezeDeep({
+      eventId: event.eventId,
+      versionId: version.versionId,
+      targetId: event.targetId,
+      targetType: targets.get(event.targetId)?.targetType || null,
+      title: targets.get(event.targetId)?.title || "",
+      eventType: event.eventType,
+      date: version.date,
+      region: event.region,
+      platform: event.platform,
+      receiptStatus,
+      readOnly: true,
+      createsReminder: false,
+      createsCalendarEntry: false,
+    }));
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title, "de"));
+  return Object.freeze(rows);
+}
+
+export function createLocalWeekAcceptanceDraft(row) {
+  if (!plain(row) || (!isStableContractId(row.eventId) && !isRadarEventIdentity(row.eventId)) || !isStableContractId(row.versionId)
+      || !validDay(row.date) || row.readOnly !== true) return null;
+  return freezeDeep({
+    eventId: row.eventId,
+    eventVersionId: row.versionId,
+    requiresConfirmation: true,
+    reminderCreated: false,
+    calendarWritten: false,
+  });
+}
+
+export function createLocalEventRadarStore({ storage = store, key = K.radar, authority = "guest" } = {}) {
+  return Object.freeze({
+    async load() {
+      const row = await storage.get(key);
+      return decodeLocalRadar(row?.value ?? null, { authority });
+    },
+    async save(state) {
+      const checked = validateLocalRadarState(state);
+      if (!checked.ok) return Object.freeze({ ok: false, reason: "state-invalid", errors: checked.errors });
+      if (state.authority !== authority) {
+        return Object.freeze({ ok: false, reason: "authority-mismatch", errors: Object.freeze(["radar-authority-mismatch"]) });
+      }
+      const serialized = JSON.stringify(state);
+      if (byteLength(serialized) > LOCAL_RADAR_MAX_BYTES) return Object.freeze({ ok: false, reason: "state-too-large", errors: Object.freeze([]) });
+      await storage.set(key, serialized);
+      const readback = await storage.get(key);
+      if (readback?.value !== serialized) return Object.freeze({ ok: false, reason: "write-not-confirmed", errors: Object.freeze([]) });
+      return Object.freeze({ ok: true, state: freezeDeep(clone(state)) });
+    },
+  });
+}

@@ -20,8 +20,9 @@ Diese Abnahme schließt die Roadmap-Phasen wortgleich ab:
 - Phase F — Abnahme und Freigabe
 
 Enthalten sind der On-demand-MVP der persönlichen KI-Prognose und der erste
-gemeinsame Filmwissens-Cache. Filmscan und Bloganalyse sind eigene spätere
-Blöcke der übergeordneten Etappe 8.
+gemeinsame Filmwissens-Cache. Spätere Scope-Entscheidung vom 09.08.2026: Der
+externe Foto-/Textbatch ersetzt den In-App-Filmscan dauerhaft; Bloganalyse
+bleibt Zukunft. Beide sind kein Privatdemo- oder 9c-Gate.
 
 ## Produktverhalten
 

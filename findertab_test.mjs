@@ -311,6 +311,21 @@ check("G0", "globale Suche rendert ein eigenes Dialog-Ergebnis und öffnet Finde
 check("G0", "globale Suche wartet auf den Vollkatalog und nutzt dessen direkte Antwort", () =>
   /await ladeStreamingDateienRef\.current\?\.\(true\)/.test(appQuelle)
   && /streamingEntdecken:\s*geladeneAnsichten\?\.entdecken/.test(appQuelle));
+const serienKompakt = kompakteFinderTreffer({
+  ...valhallaAntwort,
+  treffer: [],
+  entdecken: [{ watchmode_id: 99001, titel: "Synthetische Serie", typ: "tv_series", dienste: ["Testdienst"] }],
+}, "streaming");
+check("G0", "Seriensuchtreffer trägt Beobachten und Ins Radar als getrennte, kreuzschreibfreie Aktionen", () => {
+  const actions = serienKompakt.items[0]?.searchActions;
+  return actions?.watch?.intent === "watch" && actions?.radar?.intent === "radar"
+    && actions.watch.setsRadar === false && actions.radar.setsObserved === false;
+});
+check("G0", "globale Ergebniszeile rendert Zielöffnung und Suchaktionen als getrennte Buttons", () =>
+  /kd-globalsuche-ziel/.test(globalLeisteQuelle)
+  && /kd-globalsuche-aktionen/.test(globalLeisteQuelle)
+  && /onSuchaktion\?\.\(item, "watch"\)/.test(globalLeisteQuelle)
+  && /onSuchaktion\?\.\(item, "radar"\)/.test(globalLeisteQuelle));
 
 /* Zwei Sätze, die der deterministische Parser NICHT deuten kann — nur dann
    bietet die Oberfläche „Mit KI deuten" überhaupt an (E1). */

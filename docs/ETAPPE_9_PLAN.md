@@ -2,17 +2,21 @@
 
 Stand: 09.08.2026
 
-Status: 9a ist technisch produktiv grün, 9b steht bei 10/13 Betriebsgates und
-9c ist eine noch nicht gestartete Vorlage. Vor der nächsten privaten Demo
-folgen Rollen-v1 und danach ein gemeinsamer Betriebs-/Gerätegegencheck.
+Status: 9a ist technisch produktiv grün und lokal um die Android-Diagnose
+ergänzt. Rollen-v1 ist geliefert. Die drei früher offenen 9b-Praxisproben sind
+lokal automatisiert belegt; ihr sicherer Remote-Recovery-Gegencheck blieb am
+09.08.2026 mangels frischer Shared-Backend-Sicherung `SAFE_SKIPPED`. 9c ist
+weiterhin eine nicht gestartete Vorlage.
 
 Ausgangspunkt: Etappe 8 ist teilweise abgenommen: Vorbewertung und Filmwissen
-sind fertig; Filmscan und Bloganalyse wurden nicht gebaut und sind für die
-nächste private Demo geparkt.
+sind fertig. Filmscan wird dauerhaft durch den vorhandenen externen Foto-/
+Textbatch ersetzt; Bloganalyse bleibt bewusst im Zukunftsbacklog und ist kein
+Gate der nächsten privaten Demo.
 
-Modellentscheidung Max, 30.07.2026: Sämtliche Bau-, Prüf- und
-Koordinationsaufgaben der Etappe 9 laufen mit **GPT-5.6 Sol**. Es gibt keine
-Aufteilung auf Spark oder andere schnellere Modelle.
+Historische Modellentscheidung Max, 30.07.2026: Etappe 9 lief mit GPT-5.6 Sol.
+Für den Privatpilot-Abschluss hat Max am 09.08.2026 einfache, klar begrenzte
+Grundgerüste in parallelen Chats ausdrücklich für Spark 5.3 freigegeben; Review,
+Integration und Releaseentscheid bleiben im Hauptauftrag.
 
 ## Zweck
 
@@ -84,8 +88,10 @@ App-Store-Projekt werden für Etappe 9 benötigt.
    den vollständigen Produktpfad.
 
 Die nächste private Demo ist ausdrücklich keine formale 9c-Kohorte. 9c beginnt
-erst nach einer eigenen erneuten Torentscheidung; bis dahin dürfen die für die
-private Demo geparkten Filmscan-/Bloganalyse-Punkte nicht als fertig gelten.
+erst nach einer eigenen, vollständig belegten Einladungskontrolle. Filmscan
+und Bloganalyse gehören nach der Scope-Entscheidung nicht mehr zu diesem Tor:
+Der externe Foto-/Textbatch ist der dauerhafte Scan-Ersatz; Bloganalyse bleibt
+Zukunft.
 
 ## Historische Bestandsaufnahme am 30.07.2026
 
@@ -158,33 +164,32 @@ bleiben weiterhin hinter Supabase-Sitzung und RLS.
 
 ## Vorbedingungen aus Etappe 8
 
-Die folgende Liste beschreibt das ursprüngliche formale 9c-Tor. Für die
-nächste private Demo gilt seit 09.08.2026 die engere Entscheidung:
-Vorbewertung und Filmwissen sind enthalten; Filmscan und Bloganalyse bleiben
-geparkt. Das ändert ihren technischen Status nicht und nimmt Etappe 8 nicht
-vollständig ab.
+Die folgende Liste beschreibt das seit 09.08.2026 verbindlich verkleinerte
+private 9c-Tor. Vorbewertung und Filmwissen sind enthalten. Der externe,
+versionierte Foto-/Textbatch ersetzt Filmscan dauerhaft; Bloganalyse bleibt
+Zukunft und ist ausdrücklich kein 9c-, Merge- oder Staging-Gate. Das nimmt
+Etappe 8 insgesamt nicht formal ab.
 
 Vor 9c müssen laut Roadmap sauber funktionieren:
 
 - intelligente Suche,
 - Geschmacksprofil und KI-Schalter,
 - Vorbewertung und Empfehlungen,
-- Filmscan,
-- Bloganalyse,
 - Blog-Kontoweg,
 - `programm_demo`,
-- die festgelegten eingefrorenen Demo-Beispiele,
+- die festgelegten eingefrorenen Demo-Beispiele außerhalb Scan und Blog,
 - alle kleineren ausdrücklich im Etappe-8-Abschluss verbliebenen Beta-Punkte.
 
 Aktuell noch nicht als abgeschlossen anzunehmen:
 
 - manuelle Konto-Oberflächenabnahme der Vorbewertung,
-- Filmscan,
-- Bloganalyse,
 - Blog-Kontoweg,
-- endgültige Demo-Beispiele für Scan und Blog,
 - kontrollierte Veröffentlichung beziehungsweise Prüfung von `programm_demo`,
 - Merge, Staging- und Produktionsabnahme des vollständigen Etappe-8-Stands.
+
+Nicht mehr im Tor: In-App-Filmscan, Scan-/Blog-Demobeispiele und Bloganalyse.
+Der externe Batch-Ersatz bleibt als eigener sicherer Arbeitsweg dokumentiert;
+Bloganalyse bleibt bewusst geparkt.
 
 Der gemeinsame Filmwissens-Cache wird nicht künstlich zum Beta-Tor erweitert.
 Offene Quellenfreigaben und redaktionelle Sonderfälle bleiben geparkt, sofern
@@ -464,11 +469,21 @@ Monitoring für Auth, RLS, Katalog oder Edge Function ausgegeben.
 
 ### Abnahme 9b
 
-Aktueller Stand: 10/13 Gates. Nach Rollen-v1 noch offen:
+Aktueller Stand 09.08.2026: Alle 13 fachlichen Gates besitzen einen
+technischen Beleg. Die letzten drei wurden als sichere lokale Praxisautomation
+geschlossen:
 
-- App-Backup, zweites Gerät, Restore und Rückgängig praktisch,
-- Supabase-/Anbieterausfall als Trockenlauf,
-- Function-Rollback aus einem bekannten guten Commit.
+- App-Backup, Restore und Rückgängig: 10/10 Modulvertrag; zusätzlich echter
+  Backup-Dateitransfer zwischen je zwei getrennten Chromium- und
+  WebKit-Browserkontexten mit allen 18 Registry-Töpfen, Offline-Export,
+  Restore, Undo, Logout-Rückgabe und A/B-Isolation: 2/2,
+- synthetischer Supabase-/Anbieterausfall ohne echten Anbieterrequest: 12/12,
+- Function-Recovery: sicherer post-Rollen-v1-Stand `65a92df`, Function 32,
+  Source-SHA `175d4b113b5bf8a388f377879bfc4b8c224c9a16b816779a186f9a339005bd54`.
+
+Nicht als Remote-Praxisbeleg ausgegeben wird der Redeploy: Ohne frisches,
+restore-geprüftes Backup blieb dieser Shared-Backend-Schreibschritt
+`SAFE_SKIPPED`. `53aff498` / Function 26 ist ausdrücklich kein Rollbackziel.
 
 Die folgenden Punkte sind die **Soll-Abnahmekriterien**, nicht der aktuelle
 Erledigt-Stand:
@@ -637,12 +652,12 @@ neu bewertet werden, sie ist aber kein offener Punkt der privaten Demo.
 
 Für die formale 9c bleiben:
 
-1. **Demo-Material, nur falls Filmscan und Bloganalyse im neu bestätigten
-   9c-Tor bleiben:** das eine freigegebene Scanfoto und der eine freigegebene
-   Blogtext.
-2. **Feedbackkanal:** ein bereits genutzter privater Kanal; kein Neubau.
-3. **Kohorte:** vier bis fünf konkrete Personen und grobe Verteilung der
+1. **Feedbackkanal:** ein bereits genutzter privater Kanal; kein Neubau.
+2. **Kohorte:** vier bis fünf konkrete Personen und grobe Verteilung der
    Testszenarien.
+
+Scan-/Blog-Demomaterial ist kein 9c-Gate. Der externe Foto-/Textbatch bleibt
+der dauerhafte Scan-Ersatz; Bloganalyse bleibt Zukunft.
 
 ## Empfohlene Reihenfolge
 

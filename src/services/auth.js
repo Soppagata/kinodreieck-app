@@ -148,6 +148,7 @@ export function createAuthService({ loadSession, driver = null } = {}) {
           neu = accountSession({
             id: konto.id,
             displayName: konto.benutzername,
+            email: konto.email,
             expiresAt: konto.gueltigBis ? new Date(konto.gueltigBis).toISOString() : null,
             capabilities: { remoteStorage: false, personalAi: false },
             access: { status: ACCOUNT_ACCESS_STATUS.UNAVAILABLE },
@@ -192,6 +193,11 @@ export function createAuthService({ loadSession, driver = null } = {}) {
       const d = fordereTreiber("session.change-password");
       try { return await d.changePassword(neuesPasswort); }
       catch (error) { throw normalizeBoundaryError(error, { source: "auth", operation: "session.change-password" }); }
+    },
+    async reauthenticate(passwort) {
+      const d = fordereTreiber("session.reauthenticate");
+      try { return await d.reauthenticate(passwort); }
+      catch (error) { throw normalizeBoundaryError(error, { source: "auth", operation: "session.reauthenticate" }); }
     },
     /* Sitzung prüfen/erneuern — beim Start und beim Sichtbarwerden der App. */
     async refresh() {

@@ -29,16 +29,17 @@ Einladungen dürfen erst versendet werden, wenn alle Kästchen belegt sind.
 
 ### Produkt und Release
 
-- [ ] Etappe 8 ist für die formale Beta nicht vollständig: Vorbewertung und
-      Filmwissen besitzen Abnahmebelege; Filmscan und Bloganalyse sind nur für
-      die private Demo geparkt. Vor 9c braucht es eine neue ausdrückliche
-      Scope-Entscheidung.
+- [x] Der Etappe-8-Scope für 9c ist entschieden: Vorbewertung und Filmwissen
+      besitzen Abnahmebelege; der externe Foto-/Textbatch ersetzt Filmscan
+      dauerhaft, Bloganalyse bleibt Zukunft. Beide sind kein 9c-Gate.
 - [ ] Etappe 9a ist einschließlich realer PWA-Installation auf Android und iOS
       abgenommen.
-- [ ] Etappe 9b ist vollständig abgenommen; aktuell stehen 10/13 Gates.
-- [ ] Der einzuladende Rollen-Build ist auf Staging und Produktion per
-      Domain-Smoke belegt. `289abff` ist nur der Staging-Ausgangspunkt; der
-      Produktionsstand ist absichtlich älter.
+- [ ] Etappe 9b ist vollständig praktisch abgenommen. Alle 13 technischen
+      Verträge sind lokal belegt; Shared-Backend-Recovery und echte Geräte
+      bleiben vor Einladung offen.
+- [ ] Der einzuladende Rollen-/Privatpilot-Build ist auf Staging per
+      Domain-Smoke belegt. Der bestehende Staging- und Produktionsstand ist
+      absichtlich älter; der Branch-Kandidat ist nicht deployt.
 - [ ] `npm test`, `npm run test:function` und `npm run test:rls` sind nach
       Rollen-v1 für den finalen Einladungsstand grün.
 - [ ] Bundle-, Secret-, CSP- und RLS-Prüfung sind nach Rollen-v1 für den finalen

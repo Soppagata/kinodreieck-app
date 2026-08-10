@@ -1,12 +1,13 @@
 # Kinodreieck: Roadmap zum sicheren Online-Produkt
 
-Stand: 09. August 2026 — technischer Audit/Cleanup und finaler KI-Testblock
-sind auf `staging` abgeschlossen. Der nächste Liefergegenstand ist eine
-**private Demo**, nicht die formale Etappe 9c. Dafür folgen zuerst eine minimale
-serverseitige Rollen-/Zugangslogik und danach eine gemeinsame Betriebs-, Konto-
-und Geräteabnahme. Filmscan und Bloganalyse bleiben für diese private Demo
-geparkt; vor einer späteren echten 9c-Kohorte wird ihr Gate-Status neu
-entschieden.
+Stand: 09. August 2026 — technischer Audit/Cleanup, finaler KI-Testblock und
+Rollen-v1 sind geliefert. Der nächste Liefergegenstand ist eine **private
+Demo**, nicht die formale Etappe 9c. Der Privatpilot-Abschluss mit Konto-,
+Betriebs- und Geräteverträgen liegt als lokaler Branch-Kandidat vor; die
+Shared-Backend- und Staging-Schritte bleiben bis zu einer frischen,
+restore-geprüften Sicherung bewusst `SAFE_SKIPPED`. Der externe Foto-/Textbatch
+ersetzt den In-App-Filmscan dauerhaft. Bloganalyse bleibt Zukunft und ist weder
+Demo- noch 9c-Gate.
 
 **Begriffe (verbindlich, 27.07.2026):** Eine **Etappe** ist ein Block dieser
 Roadmap (0 bis 10; auch 9a, 9b und 9c sind drei eigenständige Etappen, keine
@@ -148,12 +149,12 @@ bauen.
 | Etappe | Ergebnis | Voraussetzung für |
 | --- | --- | --- |
 | 0–7 ✅ | Baseline, Hülle, Accounts, Katalog, KI-Unterbau, Suche und Profil abgenommen | heutige App-Basis |
-| 8. KI-Funktionsausbau ◐ | Vorbewertung und Filmwissen abgenommen; Filmscan und Bloganalyse ungebaut und für die private Demo geparkt | spätere formale 9c-Entscheidung |
-| 9a. Distribution und Landingpage ◐ | technisch produktiv; echte Android-/iOS-Installation offen | finaler Demo-Kandidat |
-| 9b. Betriebsminimum ◐ | 10/13 Betriebsgates belegt; praktische Restproben offen | gemeinsame Schlussabnahme |
-| Rollen-v1 → private Demo | minimale serverseitige Freigabe und danach ein vollständiger Demo-Gegencheck | nächste Demo |
+| 8. KI-Funktionsausbau ◐ | Vorbewertung und Filmwissen abgenommen; Filmscan dauerhaft durch externen Foto-/Textbatch ersetzt, Bloganalyse Zukunft ohne Gate | spätere Produktentscheidung |
+| 9a. Distribution und Landingpage ◐ | technisch produktiv; Android-Diagnose lokal gebaut, reale neue Geräteprobe nicht behauptet | finaler Demo-Kandidat |
+| 9b. Betriebsminimum ◐ | 13/13 technische Gates; Shared-Backend-Recovery mangels frischer Sicherung `SAFE_SKIPPED` | gemeinsame Schlussabnahme |
+| Rollen-v1 → private Demo ✅ | minimale serverseitige Freigabe geliefert und fail-closed belegt | nächster vollständiger Demo-Gegencheck |
 | 9c. Geschlossene Beta ○ | Vorlage vorhanden; Kohorte nicht gestartet | spätere Freigabeentscheidung |
-| 10. Datenschutz, KI-Transparenz, öffentlicher Start ○ | nicht begonnen | Online-Stufe 3 |
+| 10. Privater Betrieb ◐ / öffentlicher Start ○ | privater Technikteil branch-lokal gebaut; Rechts-/Providerreview und Shared-Backend-Rollout offen, öffentlicher Teil geparkt | spätere Online-Stufe 3 |
 
 Verbindlich ab Etappe 7: Jeder Etappen-Auftrag erhält den
 Prüfagenten-Gate-Block (`docs/pruefagenten/LIESMICH.md`) und legt die
@@ -682,23 +683,23 @@ Pre-Etappe-7-Rollback-Punkt.
 
 ## Etappe 8: KI-Funktionsausbau
 
-Reihenfolge innerhalb der Etappe: zuerst die Vorbewertung (sie braucht das
-Profil aus Etappe 7), danach der gemeinsame Filmwissens-Cache und anschließend
-Filmscan und Bloganalyse. Vorbewertung und Filmwissen sind am 30.07.2026
-technisch abgenommen; siehe `docs/ETAPPE_8_ABNAHME.md`. Filmscan und
-Bloganalyse wurden nicht gebaut. Sie sind für die nächste private Demo
-ausdrücklich geparkt, ohne Etappe 8 dadurch fälschlich als vollständig
-abzunehmen. Vor einer formalen Etappe 9c wird entschieden, ob sie wieder Gates
-werden oder dauerhaft in den Zukunftsbacklog wechseln.
+Historischer Planstand: Auf Vorbewertung und den gemeinsamen Filmwissens-Cache
+sollten ursprünglich Filmscan und Bloganalyse folgen. Vorbewertung und
+Filmwissen sind am 30.07.2026 technisch abgenommen; siehe
+`docs/ETAPPE_8_ABNAHME.md`. Die spätere Scope-Entscheidung ist inzwischen
+gefallen: Der externe Foto-/Textbatch ersetzt den In-App-Filmscan dauerhaft;
+Bloganalyse bleibt im Zukunftsbacklog. Beide sind weder Privatdemo- noch
+9c-Gate und verhindern keine ehrliche Teilabnahme des tatsächlich gelieferten
+Etappe-8-Umfangs.
 
-### Ziel
+### Ursprüngliches Ziel (historisch)
 
 Alle für die Beta geplanten Produktfunktionen stehen: automatische
 Vorbewertung und Empfehlungen, Filmscan und Bloganalyse — jede über
 denselben Account-, Validierungs- und Kostenunterbau, jede mit ehrlichem
 Verhalten bei KI=aus.
 
-### Schritte
+### Ursprüngliche Schritte (historisch)
 
 1. Vorbewertung: KI-Prognose sichtbar getrennt von echten Bewertungen;
    Status angenommen, korrigiert oder verworfen wird persistiert.
@@ -942,9 +943,9 @@ grüne Baseline
     -> private Demo
 ```
 
-Filmscan, Bloganalyse, die formale Etappe 9c und Etappe 10 folgen außerhalb
-dieses privaten Demo-Pfads. Damit wird kein unerledigtes Beta-Gate als erledigt
-ausgegeben.
+Die formale Etappe 9c und spätere öffentliche Etappe-10-Erweiterungen folgen
+außerhalb dieses privaten Demo-Pfads. In-App-Filmscan und Bloganalyse sind
+ausdrücklich keine unerledigten Beta-Gates.
 
 Die vollständige Umstrukturierung der UI liegt nicht auf diesem kritischen
 Pfad. Die Lizenzierung des gesamten Wiener Kinoprogramms liegt auf dem Weg zum
@@ -990,7 +991,7 @@ Suchprototyp mit erlaubten beziehungsweise persönlichen Daten.
 
 Diese Arbeiten dürfen wichtig sein, sind aber keine Voraussetzung für die
 nächste private Demo. Für eine formale geschlossene Beta gilt weiterhin deren
-eigenes, vor Einladung neu zu bestätigendes Tor:
+eigenes, vor Einladung vollständig zu belegendes Tor:
 
 - vollständiger visueller Relaunch,
 - allgemeiner Filmassistent,
@@ -1000,18 +1001,19 @@ eigenes, vor Einladung neu zu bestätigendes Tor:
 - Android-APK und Store-Apps (geparkt bis Etappe 10),
 - normalisiertes Datenmodell für jeden heutigen Storage-Topf,
 - öffentliche Registrierung ohne Begrenzung.
-- Filmscan und Bloganalyse; ihr dauerhafter Roadmap-Status wird vor 9c neu
-  entschieden.
+- In-App-Filmscan und Bloganalyse sind ausdrücklich kein 9c-Tor: Der externe
+  Foto-/Textbatch ist der dauerhafte Scan-Ersatz, Bloganalyse bleibt Zukunft.
 
 ## Sofort nächste Arbeitspakete (Stand 09.08.2026)
 
 1. Audit-/Cleanup-Wahrheitsbasis als sauberen Staging-Checkpoint abschließen;
    `main` und Produktion unverändert lassen.
-2. In einem neuen Task die minimale serverseitige Rollen-/Zugangslogik mit
-   getrennten STOPs vor Migration, Remote-Rollout und bezahlter KI-Probe bauen.
-3. Danach die noch offenen 9b-, Konto-, iPhone-/iPad-/Android- und
-   Release-Journeys einmal gegen den finalen Vertrag prüfen und erst dann die
-   private Demo verschicken.
+2. Rollen-v1 und die lokalen 9b-/Android-Verträge sind geliefert; keine
+   Rollenlogik neu bauen und keinen historischen Function-Downgrade verwenden.
+3. Vor einem Shared-Backend-/Stagingabschluss zuerst eine frische logische
+   Sicherung mit Restore-Lesetest bereitstellen; danach die verbliebenen
+   Remote-, Geräte- und Release-Journeys einmal gegen den finalen Vertrag
+   prüfen und erst dann die private Demo verschicken.
 
 ## Definition of Done für „online“
 

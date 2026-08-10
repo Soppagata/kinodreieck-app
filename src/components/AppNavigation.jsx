@@ -8,7 +8,7 @@ export const NAVIGATION = Object.freeze([
   { id: "mediathek", label: "Mediathek", mobil: true, icon: "M" },
   { id: "streaming", label: "Streaming", mobil: true, icon: "S" },
   { id: "finder", label: "Suche", desktopOnly: true, icon: "⌕" },
-  { id: "blog", label: "Blog", mehr: true, icon: "B" },
+  { id: "blog", label: "Entdecken", mehr: true, icon: "E" },
   { id: "daten", label: "Settings", mehr: true, icon: "⚙" },
 ]);
 

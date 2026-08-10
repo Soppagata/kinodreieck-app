@@ -255,6 +255,72 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   border-radius:6px; background:transparent; color:inherit; font:600 12px 'Space Grotesk',sans-serif; text-decoration:none; }
 .kd-start-service a { color:var(--wolfram,#e3a63b); border-color:var(--wolfram,#e3a63b); }
 
+/* ================= ENTDECKEN · LOKALER RADAR =================
+   Der technische Navigationsschlüssel bleibt `blog`; diese Klassen betreffen
+   nur die neue sichtbare Hülle und ihre vollständig lokalen Vorschauen. */
+.kd-entdecken { min-width:0; }
+.kd-entdecken-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 18px; }
+.kd-entdecken-tabs { min-width:0; display:flex; gap:5px; padding:4px; border:1px solid var(--saalHoch,#3c3742); border-radius:10px; background:var(--saal,#17151a); }
+.kd-entdecken-tabs button,.kd-entdecken-verwalten,.kd-entdecken-primaer,.kd-entdecken-sekundaer,
+.kd-entdecken-verwalten-liste button { min-height:42px; box-sizing:border-box; padding:8px 12px; border:1px solid transparent; border-radius:7px;
+  background:transparent; color:var(--leinwandTief,#dfdacd); font:600 13px 'Space Grotesk',sans-serif; cursor:pointer; }
+.kd-entdecken-tabs button.aktiv { border-color:var(--wolfram,#e3a63b); background:rgba(227,166,59,.12); color:var(--wolfram,#e3a63b); }
+.kd-entdecken-verwalten,.kd-entdecken-sekundaer,.kd-entdecken-verwalten-liste button { border-color:var(--rauch,#948fa0); }
+.kd-entdecken-primaer { border-color:var(--wolfram,#e3a63b); background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e); }
+.kd-entdecken-primaer:disabled,.kd-entdecken-sekundaer:disabled { cursor:not-allowed; opacity:.45; }
+.kd-entdecken-einleitung { display:grid; grid-template-columns:minmax(200px,.8fr) minmax(260px,1.2fr); gap:24px; align-items:end; margin:0 0 18px; padding:0 0 15px; border-bottom:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-einleitung span,.kd-entdecken-kicker,.kd-entdecken-dialog-kopf span,.kd-entdecken-parked>span { color:var(--wolfram,#e3a63b); font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.kd-entdecken-einleitung h2,.kd-entdecken-dialog-kopf h2 { margin:3px 0 0; color:var(--leinwand,#ece8df); font:700 29px 'Barlow Condensed',sans-serif; letter-spacing:.045em; text-transform:uppercase; }
+.kd-entdecken-einleitung p { margin:0; color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-karten { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { min-width:0; padding:16px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
+.kd-entdecken-hub-karte h3,.kd-entdecken-panel h3,.kd-entdecken-parked h3 { margin:5px 0 8px; color:var(--leinwand,#ece8df); font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.03em; text-transform:uppercase; }
+.kd-entdecken-hub-karte p,.kd-entdecken-parked p,.kd-entdecken-panel p { color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-hub-karte ul { min-height:45px; margin:8px 0 12px; padding-left:19px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
+.kd-entdecken-hub-karte small,.kd-entdecken-panel small { display:block; color:var(--rauch,#948fa0); font:10px/1.55 'Space Mono',monospace; }
+.kd-entdecken-hub-karte button { margin-top:13px; }
+.kd-entdecken-leer { margin:9px 0; color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-leer.gross { padding:20px; border:1px dashed var(--rauch,#948fa0); border-radius:8px; text-align:center; }
+.kd-entdecken-warnung,.kd-entdecken-fehler { padding:10px 12px; border:1px solid var(--kd-gefahr,#c85b51); border-radius:7px; color:var(--kd-gefahr,#c85b51); font-size:13px; }
+.kd-entdecken-quellenblock { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:14px; }
+.kd-entdecken-quellenblock article { padding:11px 13px; border:1px dashed var(--rauch,#948fa0); border-radius:7px; opacity:.72; }
+.kd-entdecken-quellenblock strong,.kd-entdecken-quellenblock span { display:block; }.kd-entdecken-quellenblock span { margin-top:3px; color:var(--rauch,#948fa0); font-size:12px; }
+.kd-entdecken-radar-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
+.kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
+.kd-entdecken-pending { margin:10px 0 0; padding:9px 10px; border-radius:6px; background:rgba(227,166,59,.09); color:var(--leinwandTief,#dfdacd); font-size:12px; line-height:1.5; }
+.kd-entdecken-fixture { margin:12px 0; border-color:rgba(227,166,59,.58); }
+.kd-entdecken-parked { margin:12px 0; opacity:.74; }.kd-entdecken-parked>span { color:var(--rauch,#948fa0); }
+.kd-entdecken-proposal { margin:12px 0 0; }.kd-entdecken-proposal summary { cursor:pointer; color:var(--wolfram,#e3a63b); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+.kd-entdecken-proposal>p { color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-proposal-aktionen { display:flex; flex-wrap:wrap; gap:10px; align-items:end; }.kd-entdecken-proposal-aktionen label { flex:1 1 280px; color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
+.kd-entdecken-proposal input,.kd-entdecken-proposal textarea { width:100%; box-sizing:border-box; border:1px solid var(--rauch,#948fa0); border-radius:7px; background:#111014; color:var(--leinwand,#ece8df); font:12px/1.5 'Space Mono',monospace; }
+.kd-entdecken-proposal input { min-height:42px; margin-top:4px; padding:8px; }.kd-entdecken-proposal textarea { margin:10px 0; padding:10px; resize:vertical; }
+.kd-entdecken-proposal-result { display:flex; flex-direction:column; gap:3px; margin-top:10px; padding:10px 12px; border:1px solid #6f9d77; border-radius:7px; color:var(--leinwandTief,#dfdacd); font:11px/1.5 'Space Mono',monospace; }
+.kd-entdecken-proposal-result.blockiert { border-color:var(--kd-gefahr,#c85b51); }
+
+.kd-entdecken-layer { position:fixed; inset:0; z-index:14000; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:24px; }
+.kd-entdecken-dialog { position:relative; width:min(760px,100%); max-height:calc(100dvh - 48px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; padding:20px;
+  border:1px solid var(--rauch,#948fa0); border-radius:14px; background:var(--saalHoch,#211e26); color:var(--leinwand,#ece8df); box-shadow:0 24px 80px rgba(0,0,0,.66); }
+.kd-entdecken-dialog-kopf { display:flex; align-items:flex-start; gap:15px; margin-bottom:16px; }.kd-entdecken-dialog-kopf>div { min-width:0; }
+.kd-entdecken-schliessen { width:46px; height:46px; flex:0 0 auto; margin-left:auto; padding:0; border:1px solid var(--rauch,#948fa0); border-radius:50%; background:transparent; color:var(--leinwand,#ece8df); font-size:27px; cursor:pointer; }
+.kd-entdecken-manage-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.kd-entdecken-manage-grid>section { min-width:0; padding:14px; border:1px solid var(--saal,#3c3742); border-radius:8px; background:var(--saal,#17151a); }
+.kd-entdecken-manage-grid h3 { margin:0 0 5px; color:var(--wolfram,#e3a63b); font:700 20px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+.kd-entdecken-manage-grid p { margin:0 0 10px; color:var(--rauch,#948fa0); font-size:12px; line-height:1.5; }
+.kd-entdecken-verwalten-liste { margin:0; padding:0; list-style:none; }.kd-entdecken-verwalten-liste li { display:flex; align-items:center; gap:8px; padding:9px 0; border-top:1px solid rgba(148,143,160,.25); }
+.kd-entdecken-verwalten-liste li>span { min-width:0; flex:1; }.kd-entdecken-verwalten-liste strong,.kd-entdecken-verwalten-liste small { display:block; overflow-wrap:anywhere; }
+.kd-entdecken-verwalten-liste small { margin-top:2px; color:var(--rauch,#948fa0); font:9px 'Space Mono',monospace; }.kd-entdecken-verwalten-liste li>div { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
+.kd-entdecken-verwalten-liste button { min-height:38px; padding:6px 8px; font-size:11px; }
+.kd-entdecken-check,.kd-entdecken-share { display:flex; align-items:flex-start; gap:10px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.4; }
+.kd-entdecken-check input,.kd-entdecken-share input { width:20px; height:20px; flex:0 0 auto; margin:1px 0 0; }.kd-entdecken-check strong,.kd-entdecken-check small,.kd-entdecken-share strong,.kd-entdecken-share small { display:block; }
+.kd-entdecken-check small,.kd-entdecken-share small { margin-top:3px; color:var(--rauch,#948fa0); font-size:11px; }.kd-entdecken-share.gesperrt { opacity:.62; }
+.kd-entdecken-preview-ziel { display:flex; flex-direction:column; gap:3px; padding:14px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:6px; background:var(--saal,#17151a); }
+.kd-entdecken-preview-ziel strong { font:700 24px 'Barlow Condensed',sans-serif; text-transform:uppercase; }.kd-entdecken-preview-ziel span { color:var(--rauch,#948fa0); font-size:12px; }
+.kd-entdecken-fakten { margin:13px 0; }.kd-entdecken-fakten>div { display:grid; grid-template-columns:100px minmax(0,1fr); gap:10px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.24); }
+.kd-entdecken-fakten dt { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; text-transform:uppercase; }.kd-entdecken-fakten dd { margin:0; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.45; }
+.kd-entdecken-dialog-aktionen { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+
 @media (min-width:761px) {
   .kd-schrift-gross { zoom:1.12; }
   .kd-schrift-klein { zoom:.9; }
@@ -269,6 +335,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main { padding:16px max(20px,env(safe-area-inset-right)) 0 max(20px,env(safe-area-inset-left)) !important; overflow-wrap:anywhere; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
+  .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
+  .kd-entdecken-verwalten { width:100%; min-height:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
+  .kd-entdecken-layer { align-items:flex-end; padding:0; }.kd-entdecken-dialog { width:100%; height:100dvh; max-height:100dvh; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border-inline:0; border-bottom:0; border-radius:0; }
+  .kd-entdecken-manage-grid { grid-template-columns:1fr; }.kd-entdecken-verwalten-liste li { align-items:flex-start; flex-direction:column; }.kd-entdecken-verwalten-liste li>div { justify-content:flex-start; }
+  .kd-entdecken-dialog-aktionen { position:sticky; bottom:calc(-20px - env(safe-area-inset-bottom)); margin:16px -16px calc(-20px - env(safe-area-inset-bottom)); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--saalHoch,#211e26); border-top:1px solid var(--saal,#3c3742); }
+  .kd-entdecken-dialog-aktionen button { flex:1; min-height:46px; }.kd-entdecken-fakten>div { grid-template-columns:82px minmax(0,1fr); }
   /* Viele Komponenten verwenden bewusst feste Pixelgrößen. Darum skaliert die
      mobile Schriftwahl den Inhaltsbereich selbst. Bei "Klein" darf die Breite
      jedoch nicht invers vergrößert werden: Das zog Karten und Formulare über
@@ -337,11 +409,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-globalsuche-antwortkopf strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 20px 'Barlow Condensed',sans-serif; }
   .kd-globalsuche .kd-globalsuche-schliessen { width:36px; min-height:36px; margin-left:auto; padding:0; font-size:24px; }
   .kd-globalsuche-treffer { display:flex; flex-direction:column; gap:5px; }
-  .kd-globalsuche-treffer>button { width:100%; min-height:48px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:1px 8px; padding:8px 10px;
+  .kd-globalsuche-trefferzeile { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px; align-items:stretch; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel { width:100%; min-height:48px; display:grid; grid-template-columns:auto minmax(0,1fr); gap:1px 8px; padding:8px 10px;
     text-align:left; border-color:#3c3742; border-radius:8px; background:#17151a; }
-  .kd-globalsuche-treffer>button span { grid-row:1 / span 2; align-self:center; color:#e3a63b; font:700 9px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
-  .kd-globalsuche-treffer>button strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 16px 'Barlow Condensed',sans-serif; }
-  .kd-globalsuche-treffer>button small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#bdb7c5; font:10px 'Space Mono',monospace; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel span { grid-row:1 / span 2; align-self:center; color:#e3a63b; font:700 9px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 16px 'Barlow Condensed',sans-serif; }
+  .kd-globalsuche-trefferzeile>.kd-globalsuche-ziel small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#bdb7c5; font:10px 'Space Mono',monospace; }
+  .kd-globalsuche-aktionen { display:flex; flex-direction:column; gap:4px; }.kd-globalsuche .kd-globalsuche-aktionen button { min-height:0; height:calc(50% - 2px); padding:3px 7px; border-color:#6f6878; border-radius:7px; color:#e3a63b; font-size:10px; }
+  .kd-globalsuche .kd-globalsuche-aktionen button[aria-pressed="true"] { color:#bdb7c5; border-color:#3c3742; }.kd-globalsuche .kd-globalsuche-aktionen button:disabled { opacity:.65; }
   .kd-globalsuche-treffer p { margin:5px 2px 10px; color:#bdb7c5; font-size:13px; }
   .kd-globalsuche .kd-globalsuche-alle { width:100%; margin-top:9px; border-color:#e3a63b; color:#e3a63b; }
 }

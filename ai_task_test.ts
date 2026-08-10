@@ -210,6 +210,11 @@ const z = {
   nutzerStatus: 200,
   kontofreigabe: [{ role: "owner", active: true, personal_ai: true }] as unknown,
   kontofreigabeLesbar: true,
+  providerFreigaben: {
+    anthropic: { ok: true, code: "PROVIDER_ALLOWED" },
+    wikidata: { ok: true, code: "PROVIDER_ALLOWED" },
+    loc: { ok: true, code: "PROVIDER_ALLOWED" },
+  } as Record<string, unknown>,
   start: { ok: true, log_id: LOG_ID, modell_alias: "klein" } as unknown,
   startHttpFehler: null as null | { status: number; koerper: unknown },
   stand: { heute: 0 } as unknown,
@@ -249,6 +254,11 @@ function stelleZurueck() {
   z.nutzerStatus = 200;
   z.kontofreigabe = [{ role: "owner", active: true, personal_ai: true }];
   z.kontofreigabeLesbar = true;
+  z.providerFreigaben = {
+    anthropic: { ok: true, code: "PROVIDER_ALLOWED" },
+    wikidata: { ok: true, code: "PROVIDER_ALLOWED" },
+    loc: { ok: true, code: "PROVIDER_ALLOWED" },
+  };
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
@@ -328,6 +338,9 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
       return antwort(z.startHttpFehler.koerper, z.startHttpFehler.status);
     }
     return antwort(z.start);
+  }
+  if (url.includes("/rest/v1/rpc/kd_private_provider_allowed")) {
+    return antwort(z.providerFreigaben[String(koerper?.p_provider_id || "")] ?? { ok: false, code: "PROVIDER_REGISTRY_OFF" });
   }
   if (url.includes("/rest/v1/rpc/kd_ai_auftrag_beenden")) {
     return antwort(null);
@@ -2439,6 +2452,26 @@ test("H4 anbieter-modelle bei gesetztem Not-Aus: 503, kein Anbieteraufruf", asyn
      Schlüssels — der Not-Aus muss sie deshalb genauso stoppen. */
   gleich(modelleGerufen, 0, "der echte Schlüssel wird nicht angefasst");
   gleich(starten().length, 0, "keine Reservierung");
+});
+
+test("H4b serverseitige Provider-Registry sperrt Diagnose und zahlenden Pfad vor jedem Anbieterfetch", async () => {
+  z.providerFreigaben.anthropic = {
+    ok: false,
+    code: "LEGAL_OR_PROVIDER_REVIEW_REQUIRED",
+  };
+  const diagnose = await ruf({ task: "anbieter-modelle", vorgangId: neueVorgangId() });
+  gleich(diagnose.status, 503, "Diagnose-Status");
+  gleich(diagnose.daten.code, "ai-disabled", "Diagnose-Code");
+  gleich(modelleAufrufe().length, 0, "kein Diagnosefetch");
+  gleich(starten().length, 0, "keine Diagnose-Reservierung");
+
+  stelleZurueck();
+  z.providerFreigaben.anthropic = { ok: false, code: "BUDGET_UNKNOWN" };
+  const bezahlt = await echoRuf();
+  gleich(bezahlt.status, 503, "zahlender Pfad Status");
+  gleich(bezahlt.daten.code, "ai-disabled", "zahlender Pfad Code");
+  gleich(anbieterAufrufe().length, 0, "kein zahlender Anbieterfetch");
+  gleich(starten().length, 0, "keine Kostenreservierung");
 });
 
 /* UMGEDREHT am 26.07. (Befund S5, HOCH). Der Test behauptete vorher das

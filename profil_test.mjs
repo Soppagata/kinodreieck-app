@@ -1111,8 +1111,8 @@ const KEY = "kd:geschmacksprofil";
 
 check("N", "1. storage.js führt den Topf in der zentralen Schlüsselliste",
   () => ST.K.geschmacksprofil === KEY);
-check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 17 Einträge",
-  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 17);
+check("N", "2. accountDriver.js hat ihn in ACCOUNT_SYNC_KEYS — und die Liste hat 18 Einträge",
+  () => AD.ACCOUNT_SYNC_KEYS.includes(KEY) && AD.ACCOUNT_SYNC_KEYS.length === 18);
 const register = lies("src/lib/personalDataRegistry.js");
 check("N", "3. das Datenregister gibt dem Profil sein Gesamt-Backup-Feld",
   () => /key:\s*K\.geschmacksprofil[\s\S]*?backupField:\s*"geschmacksprofil"/.test(register)
@@ -1144,14 +1144,20 @@ check("N", "8. die Migration setzt den CHECK-Constraint neu und listet den Topf"
    sofort und terminal (Postgres 23514 → im Treiber TERMINAL, ohne Retry). */
 /* Nur der Constraint-Rumpf zählt: weiter unten steht in einem Kommentar eine
    Gegenprobe mit 'kd:boeser-topf', die NICHT mitgezählt werden darf. */
-const mig = lies("supabase/migrations/20260802120000_wochenplan_serienbeobachtung.sql");
+const migrationsOrdner = path.join(NAHT_WURZEL, "supabase/migrations");
+const neuesteMigration = fs.readdirSync(migrationsOrdner)
+  .filter((datei) => /^\d{14}_.+\.sql$/.test(datei))
+  .sort()
+  .reverse()
+  .find((datei) => /add constraint kd_personal_key_erlaubt/.test(lies("supabase/migrations/" + datei)));
+const mig = lies("supabase/migrations/" + neuesteMigration);
 const rumpf = (/add constraint kd_personal_key_erlaubt\s+check \(key in \(([\s\S]*?)\)\);/.exec(mig) || [, ""])[1];
 const inMigration = [...rumpf.matchAll(/'(kd:[a-z:-]+)'/g)].map((m) => m[1]);
 const fehlend = AD.ACCOUNT_SYNC_KEYS.filter((k) => !inMigration.includes(k));
 const zuviel = inMigration.filter((k) => !AD.ACCOUNT_SYNC_KEYS.includes(k));
-check("N", "8a. die neueste Migration listet GENAU die 17 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
+check("N", "8a. die neueste Constraint-Migration listet GENAU die 18 Sync-Töpfe — kein Bestandskey vergessen, keiner zu viel"
   + "  [gelistet: " + inMigration.length + ", fehlend: " + JSON.stringify(fehlend) + ", zu viel: " + JSON.stringify(zuviel) + "]",
-  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 17);
+  () => fehlend.length === 0 && zuviel.length === 0 && new Set(inMigration).size === 18);
 /* Der CHECK ist nicht erweiterbar; deshalb ist die Gegenprobe im Kommentar
    Teil der Zusage: ein nicht gelisteter Key MUSS mit 23514 scheitern. */
 check("N", "8b. die Migration dokumentiert die Gegenprobe (nicht gelisteter Key → 23514)",

@@ -694,6 +694,25 @@ function aufbau({
     && coordinator.getStorageState() === STORAGE_SESSION_STATES.PRIVACY_LOCKED);
 }
 
+/* Nach bestätigter serverseitiger Kontolöschung darf keine inzwischen
+   unmögliche Remote-Synchronisierung mehr den lokalen Privacy-Abschluss
+   blockieren. Cache-Trennung und Credential-Löschung bleiben Pflicht. */
+{
+  const f = aufbau({
+    start: session("konto-delete"), owner: "konto-delete",
+    confirmed: ["konto-delete"], hasOpenChanges: true,
+    syncStatus: { pending: ["kd:master"], conflict: [], zuGross: [] },
+  });
+  await f.coordinator.initialize();
+  f.calls.splice(0);
+  const abgeschlossen = await f.coordinator.finalizeDeletedAccount();
+  check("Bestätigte Self-Delete trennt lokal ohne nachgelagerten Remote-Flush",
+    abgeschlossen.mode === "guest"
+    && f.calls.some(([name]) => name === "restore")
+    && f.calls.some(([name]) => name === "auth-signout")
+    && !f.calls.some(([name]) => name === "flush"));
+}
+
 /* Durchstich durch die echte Storage-Fassade: Vorbereiten darf den Besitzer
    nicht umschreiben und den normalen Store nicht auf Accountbetrieb schalten. */
 {

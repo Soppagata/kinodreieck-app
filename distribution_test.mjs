@@ -39,34 +39,40 @@ check("Der App-Start versucht unter file:// keine Service-Worker-Registrierung",
 
 function ladeInstallSkript({ registrierung = () => Promise.resolve({}) } = {}) {
   const fensterListener = {};
-  const knopfListener = {};
-  const hinweis = { textContent: "" };
-  const knopf = {
-    addEventListener(name, fn) { knopfListener[name] = fn; },
-  };
+  const elemente = new Map();
+  for (const selector of [
+    "[data-install-app]", "[data-diagnose-android]", "[data-copy-diagnose]",
+    "[data-download-diagnose]", "#install-hinweis", "#diagnose-ergebnis",
+  ]) elemente.set(selector, {
+    textContent: "", hidden: false, disabled: false, dataset: {},
+    listener: {}, addEventListener(name, fn) { this.listener[name] = fn; },
+  });
+  const knopf = elemente.get("[data-install-app]");
+  const hinweis = elemente.get("#install-hinweis");
   const registrierungen = [];
+  const navigator = {
+    serviceWorker: {
+      register(pfad, optionen) {
+        registrierungen.push([pfad, optionen]);
+        return registrierung(pfad, optionen);
+      },
+    },
+  };
   const kontext = {
     window: {
       addEventListener(name, fn) { fensterListener[name] = fn; },
+      matchMedia() { return { matches: false }; },
+      navigator,
+      setTimeout() {},
     },
     document: {
-      querySelector(selector) {
-        if (selector === "[data-install-app]") return knopf;
-        if (selector === "#install-hinweis") return hinweis;
-        return null;
-      },
+      querySelector(selector) { return elemente.get(selector) || null; },
     },
-    navigator: {
-      serviceWorker: {
-        register(pfad, optionen) {
-          registrierungen.push([pfad, optionen]);
-          return registrierung(pfad, optionen);
-        },
-      },
-    },
+    navigator,
+    URL, Blob, Date,
   };
   vm.runInNewContext(installCode, kontext, { filename: "public/download/install.js" });
-  return { fensterListener, knopfListener, hinweis, registrierungen };
+  return { fensterListener, knopfListener: knopf.listener, hinweis, registrierungen };
 }
 
 const direkt = ladeInstallSkript();
@@ -85,7 +91,7 @@ check("Browser-Installationsereignis wird übernommen und sichtbar bereit gemeld
   verhindert === 1 && direkt.hinweis.textContent === "Bereit zur Installation.");
 await direkt.knopfListener.click();
 check("Android-Knopf öffnet den echten Browserdialog genau einmal",
-  prompts === 1 && direkt.hinweis.textContent === "Kinodreieck wird installiert.");
+  prompts === 1 && /Installation wurde angenommen/.test(direkt.hinweis.textContent));
 
 direkt.fensterListener.appinstalled();
 check("Browserbestätigung wird als installiert gemeldet",

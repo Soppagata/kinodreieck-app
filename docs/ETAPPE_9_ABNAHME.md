@@ -1,6 +1,6 @@
 # Etappe 9: Abnahmeprotokoll
 
-Stand: 8. August 2026
+Stand: 9. August 2026
 
 Dieses Protokoll trennt fertige Belege von den Schritten, die reale Geräte,
 Personen, Material oder eine ausdrückliche externe Freigabe brauchen. Ein
@@ -11,6 +11,24 @@ durch Owner-Entscheid dauerhaft auf 30 erhöht. Die additive Migration
 `20260808225500_etappe9_beta_tageslimit_30.sql` ist remote angewandt,
 verifiziert und in der vollständig deckungsgleichen Migrationshistorie
 markiert; die historischen 31.-Juli-Belege bleiben unverändert dokumentiert.
+
+**Privatpilot-Nachtrag 09.08.2026:** Rollen-v1 ist geliefert und bleibt
+unverändert fail-closed. Die drei zuvor offenen 9b-Praxisproben besitzen jetzt
+kostenfreie lokale Automationsbelege: 10/10 Backup-/Restore-/Undo-Vertrag plus
+ein echter Datei-Roundtrip zwischen zwei vollständig isolierten Browserprofilen
+in Chromium und WebKit, 12/12 Supabase-/Provider-Ausfall-Trockenlauf sowie die eindeutige
+post-Rollen-v1-Recovery-Zuordnung Function 32 / `65a92df`. Ein echter Function-
+Redeploy blieb mangels frischer, restore-geprüfter Shared-Backend-Sicherung
+`SAFE_SKIPPED`; der sichere Live-Stand wurde nicht verändert.
+
+Die Android-PWA besitzt zusätzlich eine nutzerinitiierte, lokal bleibende
+Diagnose mit stabilen `KD-PWA-ANDROID-*`-Codes und 11/11 Vertragschecks. Sie
+belegt keine neue physische Android-Installation. Grundlage sind die
+offiziellen Installierbarkeitskriterien von web.dev und der MDN-Vertrag für
+`beforeinstallprompt` (Abruf 09.08.2026):
+
+- https://web.dev/articles/install-criteria
+- https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeinstallprompt_event
 
 ## Historischer versionierter Stand (31.07.2026)
 
@@ -121,11 +139,14 @@ verschlüsselten Speicherort außerhalb dieses Repositories.
 
 ### Reale Geräte und geschlossene Kohorte
 
-Diese Nachweise können nicht synthetisch ersetzt werden:
+Für den Privatpilot-Abschluss sind neue physische Geräteproben nach Owner-
+Entscheid nicht blockierend: Android wird durch die stabile Diagnose und iOS
+durch die bestehende WebKit-/PWA-Regression abgesichert. Das ist kein neuer
+Realgerätebeleg. Filmscan ist dauerhaft durch den externen Foto-/Textbatch
+ersetzt; Bloganalyse ist Zukunft und kein 9c-/Merge-Gate.
 
-- Android-Installation auf einem echten Gerät,
-- iOS-Installation auf einem echten Gerät,
-- ein freigegebenes Scanfoto und ein freigegebener Blogtext,
+Für eine später bewusst gestartete formale Kohorte bleiben offen:
+
 - ein bestehender privater Feedbackkanal,
 - vier bis fünf konkret benannte Personen,
 - deren ausgefüllte Szenarien und die gemeinsame Abschlussauswertung.

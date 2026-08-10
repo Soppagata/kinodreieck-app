@@ -13,6 +13,7 @@ const ST = await import("./src/lib/storage.js");
 const R = await import("./src/lib/restore.js");
 const P = await import("./src/lib/personalDataRegistry.js");
 const A = await import("./src/lib/accountDriver.js");
+const LR = await import("./src/lib/localEventRadar.js");
 
 let ok = 0;
 function check(name, wert) {
@@ -22,10 +23,24 @@ function check(name, wert) {
 }
 
 const eintraege = P.PERSONAL_DATA_ENTRIES;
-check("Register enthält genau die 17 persönlichen Töpfe", eintraege.length === 17);
+check("Register enthält genau die 18 persönlichen Töpfe", eintraege.length === 18);
 check("Wochenplan ist in Sync, Backup und Restore registriert",
   P.PERSONAL_DATA_KEYS.includes("kd:wochenplan")
   && P.personalDataEntry("kd:wochenplan")?.backupField === "wochenplan");
+check("Event-Radar ist in Sync, Backup und Restore registriert",
+  P.PERSONAL_DATA_KEYS.includes("kd:radar")
+  && P.personalDataEntry("kd:radar")?.backupField === "radar");
+const radarEintrag = P.personalDataEntry("kd:radar");
+const radarStand = LR.createEmptyLocalRadar({ authority: "account-cache" });
+const radarBackup = radarEintrag.backupAusRoh(JSON.stringify(radarStand));
+check("Event-Radar durchläuft Backup und Restore bytegetreu",
+  JSON.stringify(radarBackup) === JSON.stringify(radarStand)
+  && radarEintrag.restorePlan(radarBackup, "2026-08-09T12:00:00.000Z")?.wert === JSON.stringify(radarStand));
+let radarWarnung = null;
+check("Beschädigter Radar-Topf wird beim Backup nicht still repariert",
+  radarEintrag.backupAusRoh("{kaputt", (key, grund) => { radarWarnung = { key, grund }; }) === null
+  && radarWarnung?.key === ST.K.radar
+  && /JSON beschädigt/.test(radarWarnung?.grund || ""));
 check("Schlüssel sind eindeutig", new Set(eintraege.map((e) => e.key)).size === eintraege.length);
 check("Backup-Felder sind eindeutig", new Set(eintraege.map((e) => e.backupField)).size === eintraege.length);
 check("Jeder Eintrag hat Label, Backup-Projektion, Restore-Plan und Zählweise",

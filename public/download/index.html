@@ -427,7 +427,15 @@
               <button class="button primary" type="button" data-install-app aria-describedby="install-hinweis">
                 Auf Android installieren
               </button>
+              <button class="button" type="button" data-diagnose-android aria-describedby="diagnose-ergebnis">
+                Android-Installation prüfen
+              </button>
               <p class="install-note" id="install-hinweis" aria-live="polite"></p>
+              <p class="install-note" id="diagnose-ergebnis" aria-live="polite"></p>
+              <div class="actions" style="margin-top: 0.8rem">
+                <button class="button" type="button" data-copy-diagnose hidden>Diagnosebericht kopieren</button>
+                <button class="button" type="button" data-download-diagnose hidden>Diagnosebericht herunterladen</button>
+              </div>
             </article>
             <article class="card install-card">
               <span class="number">i</span>
@@ -463,6 +471,7 @@
         <a href="../">App öffnen</a>
       </footer>
     </div>
+    <script src="./pwa-diagnostics.js"></script>
     <script src="./install.js"></script>
   </body>
 </html>

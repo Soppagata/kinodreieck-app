@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile, writeFile } from "node:fs/promises";
 
 const VIEWPORTS = [
   { name: "320x568", width: 320, height: 568 },
@@ -291,7 +292,7 @@ for (const viewport of VIEWPORTS) {
       expect(suchBox.x + suchBox.width).toBeLessThanOrEqual(viewport.width - 9);
       expect(viewport.height - suchBox.y - suchBox.height).toBeLessThanOrEqual(11);
 
-      for (const ziel of ["Kino", "Streaming", "Mediathek", "Blog", "Start", "Settings"]) {
+      for (const ziel of ["Kino", "Streaming", "Mediathek", "Entdecken", "Start", "Settings"]) {
         await page.getByRole("button", { name: "Menü öffnen" }).click();
         const popup = page.getByRole("dialog", { name: "Menü" });
         const panel = popup.locator(".kd-mobile-menu");
@@ -368,6 +369,105 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+for (const viewport of VIEWPORTS) {
+  test(`Entdecken-Verwaltung ist Full-Sheet, fokussicher und überlauffrei ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page);
+    await page.addInitScript(() => {
+      localStorage.setItem("kd:radar", JSON.stringify({
+        format: "kinodreieck-radar-local", version: 1, authority: "guest",
+        subscriptions: [{
+          targetId: "fixture:target:radar-work-01", targetType: "work", region: "AT", scope: "all",
+          status: "active", authority: "local", serverRevision: null, serverChecksum: null,
+          updatedAt: "2026-08-09T12:00:00.000Z",
+        }],
+        outbox: [], shares: [], shareOutbox: [], receipts: [],
+        display: { showDismissed: false },
+        server: { revision: 0, checksum: null, reconciledAt: null },
+      }));
+    });
+    await page.goto("/");
+    await waehleMobileTab(page, "Entdecken");
+    await expect(page.locator(".kd-bereichshero h1")).toHaveText("Entdecken");
+    await expect(page.getByRole("tab", { name: "Empfehlungen" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Radar" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Meinungen" })).toBeVisible();
+
+    const ausloeser = page.getByRole("button", { name: /Entdecken verwalten/ });
+    await ausloeser.focus();
+    await ausloeser.click();
+    const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box.x).toBeLessThanOrEqual(1);
+    expect(box.y).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThanOrEqual(viewport.width - 1);
+    expect(box.height).toBeGreaterThanOrEqual(viewport.height - 1);
+    await expect(dialog.getByText("Noch keine Serie beobachtet.", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Synthetischer Kinofilm", { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => ({
+      position: document.body.style.position,
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+    }))).toEqual({ position: "fixed", locked: true });
+    await keineDokumentUeberbreite(page);
+
+    const focusables = dialog.locator('button:not(:disabled),input:not(:disabled)');
+    await expect(focusables.first()).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(focusables.last()).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(focusables.first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(ausloeser).toBeFocused();
+    await expect.poll(() => page.evaluate(() => ({
+      position: document.body.style.position,
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+    }))).toEqual({ position: "", locked: false });
+
+    await ausloeser.click();
+    await page.getByRole("button", { name: "Entdecken verwalten schließen und zurück" }).click();
+    await expect(page.getByRole("dialog", { name: "Entdecken verwalten" })).toBeHidden();
+    await keineDokumentUeberbreite(page);
+  });
+}
+
+test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussicher", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+  await page.locator("nav").getByRole("button", { name: "Entdecken", exact: true }).click();
+  const verwalten = page.getByRole("button", { name: /Entdecken verwalten/ });
+  await verwalten.focus();
+  await verwalten.click();
+  const manageDialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
+  const dialogBox = await manageDialog.boundingBox();
+  expect(dialogBox.width).toBeLessThan(900);
+  expect(dialogBox.height).toBeLessThan(860);
+  expect(dialogBox.x).toBeGreaterThan(150);
+  await page.keyboard.press("Escape");
+  await expect(manageDialog).toBeHidden();
+  await expect(verwalten).toBeFocused();
+
+  await page.getByRole("tab", { name: "Radar" }).click();
+  await page.getByRole("button", { name: "In mein Radar", exact: true }).click();
+  const preview = page.getByRole("dialog", { name: "Ins Radar" });
+  await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
+  await expect(preview.getByRole("checkbox")).toBeDisabled();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await page.keyboard.press("Escape");
+  await expect(preview).toBeHidden();
+
+  await page.locator(".kd-entdecken-proposal summary").click();
+  await page.getByRole("button", { name: "Synthetisches Beispiel einsetzen" }).click();
+  await page.getByRole("button", { name: "Nur Vorschau prüfen" }).click();
+  await expect(page.getByText("Writes: false · Routine: false · Auto-Retry: false", { exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await keineDokumentUeberbreite(page);
+});
 
 for (const viewport of VIEWPORTS) {
   test(`Neon Noir bleibt dekorativ und im iPhone-Viewport ${viewport.name}`, async ({ page }) => {
@@ -1722,6 +1822,128 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
     .getByRole("button", { name: "Settings", exact: true });
   await expect(settingsDanach).not.toHaveClass(/kd-sicherung-offen/);
   await expect(settingsDanach).not.toHaveAttribute("aria-description", "Sicherung offen");
+});
+
+test("Chromium-Mobile erzeugt den flüchtigen Android-PWA-Bericht ohne Überbreite", async ({ browser, browserName }) => {
+  test.skip(browserName !== "chromium", "Der Auftrag verlangt diese Praxisprobe ausdrücklich in Chromium-Mobile.");
+  const context = await browser.newContext({
+    viewport: { width: 393, height: 852 },
+    userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel Test) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36",
+  });
+  const page = await context.newPage();
+  await blockiereFremdnetz(page);
+  const baseURL = `http://127.0.0.1:${process.env.KD_TEST_PORT || "4174"}`;
+  await page.goto(`${baseURL}/download/index.html`);
+  await page.getByRole("button", { name: "Android-Installation prüfen" }).click();
+  const result = page.locator("#diagnose-ergebnis");
+  await expect(result).toHaveAttribute("data-code", /^KD-PWA-ANDROID-(?:000|040)$/i, { timeout: 15_000 });
+  const report = await page.evaluate(() => window.KdPwaDiagnostics?.runDiagnostics({
+    promptState: { available: false, standalone: false, installed: false },
+  }));
+  expect(report?.format).toBe("kinodreieck-pwa-android-diagnose");
+  expect(report?.browser?.family).toBe("chrome");
+  expect(report?.browser?.androidMajor).toBe(15);
+  expect(report?.checks?.manifest).toBe("pass");
+  expect(report?.checks?.icons).toBe("pass");
+  expect(report?.checks?.serviceWorker).toBe("pass");
+  expect(report?.checks?.scope).toBe("pass");
+  expect(report?.checks?.controller).toBe("pass");
+  expect(report?.checks?.offline).toBe("pass");
+  expect(report?.checks?.storage).toBe("pass");
+  expect(JSON.stringify(report)).not.toContain("Pixel Test");
+  await expect(page.getByRole("button", { name: "Diagnosebericht kopieren" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Diagnosebericht herunterladen" })).toBeVisible();
+  await keineDokumentUeberbreite(page);
+  await context.close();
+});
+
+test("9b überträgt ein echtes Backup zwischen zwei isolierten Browserprofilen", async ({ browser }, testInfo) => {
+  const baseURL = `http://127.0.0.1:${process.env.KD_TEST_PORT || "4174"}`;
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+  const pageA = await contextA.newPage();
+  const pageB = await contextB.newPage();
+  await Promise.all([blockiereFremdnetz(pageA), blockiereFremdnetz(pageB)]);
+  await Promise.all([pageA.goto(baseURL), pageB.goto(baseURL)]);
+
+  const seedProfile = async (page, label) => page.evaluate(async (profileLabel) => {
+    const { PERSONAL_DATA_KEYS } = await import("/src/lib/personalDataRegistry.js");
+    const { createEmptyLocalRadar, upsertGuestRadarSubscription } = await import("/src/lib/localEventRadar.js");
+    const timestamp = profileLabel === "A" ? 1_754_761_600_000 : 1_754_761_660_000;
+    const radar = upsertGuestRadarSubscription(createEmptyLocalRadar({ authority: "guest" }), {
+      target: { targetId: `fixture:browser-${profileLabel}`, targetType: "work", targetStatus: "active", title: `Browserfilm ${profileLabel}`, canonical: true },
+      now: "2026-08-09T18:00:00.000Z",
+    }).state;
+    const values = {
+      "kd:master": JSON.stringify({ meta: { version: `browser-${profileLabel}` }, filme: [{ id: `browser-film-${profileLabel}`, titel: `Browserfilm ${profileLabel}`, jahr: 2026 }], gespeichertAm: timestamp }),
+      "kd:artikel": JSON.stringify({ artikel: [], gespeichertAm: timestamp }),
+      "kd:kino-pins": "[]", "kd:wochenplan": JSON.stringify({ version: 1, eintraege: [] }),
+      "kd:radar": JSON.stringify(radar), "kd:merkliste": "[]", "kd:vokabular": "[]",
+      "kd:einstellungen": JSON.stringify({ theme: profileLabel === "A" ? "dunkel" : "hell", startTab: "start" }),
+      "kd:entdecken-status": "{}", "kd:autor-name": `Browser ${profileLabel}`,
+      "kd:streaming-dienste": JSON.stringify({ quellen: [], heuristik: false }),
+      "kd:mustwatch": JSON.stringify({ eintraege: [], gespeichertAm: timestamp }),
+      "kd:achievements": JSON.stringify({ eggs: [] }), "kd:zeitgrenze": "14:00",
+      "kd:filter-mediathek": "0", "kd:filter-kino": "0", "kd:filter-streaming": "0",
+      "kd:geschmacksprofil": JSON.stringify({ version: 1, signale: [] }),
+    };
+    for (const key of PERSONAL_DATA_KEYS) localStorage.setItem(key, values[key]);
+    return { keys: PERSONAL_DATA_KEYS, values };
+  }, label);
+
+  const [seedA, seedB] = await Promise.all([seedProfile(pageA, "A"), seedProfile(pageB, "B")]);
+  expect(seedA.keys).toHaveLength(18);
+  expect(seedB.keys).toEqual(seedA.keys);
+  await pageB.evaluate(async () => {
+    const { sichereGebundenenGastRueckholpunkt } = await import("/src/lib/uebernahme.js");
+    if (!sichereGebundenenGastRueckholpunkt("11111111-2222-4333-8444-555555555555")) throw new Error("guest-snapshot-failed");
+  });
+
+  await contextA.setOffline(true);
+  const backupA = await pageA.evaluate(async () => {
+    const { baueBackup } = await import("/src/lib/backup.js");
+    return baueBackup({ pull: false });
+  });
+  await contextA.setOffline(false);
+  const backupPath = testInfo.outputPath("profile-a-backup.json");
+  await writeFile(backupPath, JSON.stringify(backupA), "utf8");
+  const transferredBackup = JSON.parse(await readFile(backupPath, "utf8"));
+
+  const restore = await pageB.evaluate(async (backup) => {
+    const { restoreBackup } = await import("/src/lib/restore.js");
+    return restoreBackup(backup);
+  }, transferredBackup);
+  expect(restore.ok).toBe(true);
+  const backupB = await pageB.evaluate(async () => {
+    const { baueBackup } = await import("/src/lib/backup.js");
+    return baueBackup({ pull: false });
+  });
+  for (const key of Object.keys(backupA)) {
+    if (!["erstellt", "_privateOps", "_exportStaende"].includes(key)) expect(backupB[key], key).toEqual(backupA[key]);
+  }
+  expect(await pageA.evaluate(() => localStorage.getItem("kd:autor-name"))).toBe("Browser A");
+
+  const undo = await pageB.evaluate(async () => {
+    const { restoreRueckgaengig } = await import("/src/lib/restore.js");
+    return restoreRueckgaengig();
+  });
+  expect(undo.ok).toBe(true);
+  expect(await pageB.evaluate(() => localStorage.getItem("kd:autor-name"))).toBe("Browser B");
+
+  await pageB.evaluate(async (backup) => {
+    const { restoreBackup } = await import("/src/lib/restore.js");
+    await restoreBackup(backup);
+    localStorage.setItem("kd:acct:owner", "11111111-2222-4333-8444-555555555555");
+  }, transferredBackup);
+  const logoutBoundary = await pageB.evaluate(async () => {
+    const { stelleGaststandNachAbmeldungWiederHer } = await import("/src/lib/uebernahme.js");
+    return stelleGaststandNachAbmeldungWiederHer("11111111-2222-4333-8444-555555555555");
+  });
+  expect(logoutBoundary.ok).toBe(true);
+  expect(await pageB.evaluate(() => localStorage.getItem("kd:autor-name"))).toBe("Browser B");
+  expect(await pageA.evaluate(() => localStorage.getItem("kd:autor-name"))).toBe("Browser A");
+
+  await Promise.all([contextA.close(), contextB.close()]);
 });
 
 test("Desktop behält oberhalb 760 px die Hauptnavigation samt Suche", async ({ page }) => {

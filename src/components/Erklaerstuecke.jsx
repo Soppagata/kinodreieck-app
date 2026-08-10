@@ -46,7 +46,7 @@ export function ErklaerHero() {
       <div style={{ width: 120, height: 2, margin: "16px auto 0", background: "linear-gradient(90deg, transparent, " + T.wolfram + ", transparent)" }} />
       <p style={{ fontSize: 15, color: T.leinwandTief, maxWidth: 520, margin: "18px auto 0", lineHeight: 1.65 }}>
         Deine Filme, dein Kino, dein Urteil — eine persönliche Plattform für Programm,
-        Mediathek, Streaming und Blog. Deine Daten bleiben im Browser und können optional
+        Mediathek, Streaming und Entdecken. Deine Daten bleiben im Browser und können optional
         zwischen Geräten synchronisiert werden. Keine Telemetrie, kein Verkaufsalgorithmus.
       </p>
     </div>
@@ -121,14 +121,15 @@ export function DokuAnsicht({ h2, mono }) {
     { id: "mediathek", titel: "Mediathek", text: [
       "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
       "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
-      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Settings. Blog-Artikel besitzen ihre eigenen Werkzeuge direkt im Blog.",
+      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Settings. Bestehende Blog-Artikel bleiben unter Entdecken → Meinungen mit ihren eigenen Werkzeugen erhalten.",
     ] },
     { id: "streaming", titel: "Streaming", text: [
       "„Mein Programm” zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken” liefert Vorschläge aus den Watchmode-Katalogen, nach Relevanz sortiert. Einträge in Mein Programm sind editierbar.",
       "Der Schnellfilter grenzt temporär auf einen deiner Dienste ein — welche Dienste du hast, stellst du in den Settings ein. Im Entdecken merkst du dir Titel mit ★ (erscheinen im Dashboard).",
       "Kein Live-API-Call in der App — es werden nur vorberechnete Kataloge gelesen. Credits kostet ausschließlich der geplante Fetch-Job.",
     ] },
-    { id: "blog", titel: "Blog", text: [
+    { id: "blog", titel: "Entdecken", text: [
+      "Empfehlungen, lokaler Ereignis-Radar und eigene Meinungen liegen in drei getrennten Ansichten. Bestehende Blog-Artikel und ihre Deep-Links bleiben unter Meinungen erhalten.",
       "Eigene Artikel schreiben und Filme oder Personen aus deiner Mediathek referenzieren. Referenzen werden per Titel gegen deinen Bestand abgeglichen — die ID ist der stabile Schlüssel, nicht der Titel.",
       "Nicht auflösbare Referenzen bleiben „Rotlinks” (rot); sie blockieren die Freigabe nie und heilen automatisch, sobald du den passenden Eintrag anlegst.",
       "Freigegebene Artikel tauchen als „Kommt vor in” bei den referenzierten Einträgen in der Mediathek auf.",
@@ -191,7 +192,7 @@ export function DokuAnsicht({ h2, mono }) {
       </div>
       <div style={block}>
         <h2 style={h2}>Teilen & Sichern</h2>
-        <p style={p}>Blog-Artikel importierst, exportierst oder veröffentlichst du direkt im Blog.
+        <p style={p}>Blog-Artikel importierst, exportierst oder veröffentlichst du unter Entdecken → Meinungen.
           Die Masterliste besitzt ihren eigenen Import und Export in den Settings.</p>
         <p style={{ ...p, margin: 0 }}>Das Gesamt-Backup ist dagegen deine vollständige private
           Sicherung und nicht zum Weitergeben gedacht. Teile keine Sync-Zugangsdaten,

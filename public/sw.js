@@ -13,6 +13,11 @@
 const CACHE_PREFIX = "kd-shell-";
 const BUILD_VERSION = "__KD_BUILD_VERSION__";
 const CACHE = `kd-shell-v3-${BUILD_VERSION}`;
+/* Nutzerinitiierte Android-Diagnose: Diese eine markierte Anfrage darf das
+   Netzwerk absichtlich nicht berühren. So wird nach einem erfolgreichen
+   Online-Lauf geprüft, ob die aufgelöste Start-URL wirklich aus der App-Shell
+   beantwortet werden kann; eine bloße Cache-API-Verfügbarkeit genügt nicht. */
+const OFFLINE_PROBE_HEADER = "x-kd-offline-probe";
 /* Der Online-Build ergänzt hier die gehashten CSS-/JS-Dateien aus index.html. */
 const PRECACHE = ["./", "index.html", "manifest.webmanifest"];
 
@@ -54,6 +59,7 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return; // nie fremde Origins (z. B. Datenbank- und Auth-Endpunkte)
 
   const istHTML = req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html");
+  const istOfflineProbe = req.headers.get(OFFLINE_PROBE_HEADER) === "1";
   const istDaten = url.pathname.endsWith(".json"); // ungehashte Datendateien
   const istBuildMeta = url.pathname.endsWith("/build-meta.json");
   const istNetzwerkNur = istBuildMeta
@@ -61,6 +67,16 @@ self.addEventListener("fetch", (e) => {
     || req.headers.has("authorization")
     || req.headers.has("apikey")
     || (req.headers.get("cache-control") || "").includes("no-store");
+  if (istOfflineProbe) {
+    e.respondWith((async () => {
+      const c = await caches.open(CACHE);
+      const hit = await c.match(url.href);
+      if (hit) return hit;
+      if (istHTML) return (await c.match("./")) || (await c.match("index.html")) || Response.error();
+      return Response.error();
+    })());
+    return;
+  }
   if (istNetzwerkNur) {
     e.respondWith(fetch(req));
     return;

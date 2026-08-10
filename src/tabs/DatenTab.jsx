@@ -9,6 +9,7 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
+import { PrivatePilotOps } from "../components/PrivatePilotOps.jsx";
 import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
 import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabular.js";
 /* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
@@ -49,6 +50,10 @@ export function DatenTab({
   artikelListe = [], autorName = "", saveAutorName, uebernehmePaket, setErr = () => {},
   addFilm, addFilme,
   onKontoDatenGeaendert,
+  kontoAktiv = false,
+  kontoId = "",
+  kontoEmail = "",
+  onKontoGeloescht,
 }) {
   const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
   const sicherungOffen = ungesichertMaster || ungesichertArtikel;
@@ -140,7 +145,7 @@ export function DatenTab({
               <div className="kd-kompakt" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ ...mono, width: 110, textTransform: "uppercase" }}>Startbereich</span>
                 <select value={einstellungen.startTab || "start"} onChange={(e) => setzeEinstellung("startTab", e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-                  {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Blog"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                  {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
             </div>
@@ -294,6 +299,10 @@ export function DatenTab({
               vollständige Einspielen einer Datei bleibt Desktop-Wartung. */}
           <div className="kd-nur-desktop" style={{ marginTop: 14 }}><RestoreImport ohneKopf /></div>
         </div>
+      </Klappe>
+
+      <Klappe titel="Datenschutz & Datenübersicht">
+        <div style={kasten}><PrivatePilotOps accountActive={kontoAktiv} accountId={kontoId} accountEmail={kontoEmail} exportBeforeDelete={backupGesamt} onAccountDeleted={onKontoGeloescht} /></div>
       </Klappe>
 
       {/* 5 — Streaming-Quellen */}

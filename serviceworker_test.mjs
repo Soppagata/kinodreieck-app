@@ -133,6 +133,17 @@ await shell.put(apikeyReq, new Response("veraltet"));
 res = await fetchEvent(apikeyReq);
 check("Anfragen mit Datenbank-Schlüssel sind network-only", (await res.text()) === "frisch");
 
+const offlineStart = anfrage("https://kino.example/", {
+  accept: "text/html",
+  headers: { "x-kd-offline-probe": "1", "cache-control": "no-store" },
+});
+await shell.put("https://kino.example/", new Response("offline-shell", { status: 200 }));
+let offlineNetzaufrufe = 0;
+fetchImpl = async () => { offlineNetzaufrufe++; throw new Error("offline-probe-must-not-fetch"); };
+res = await fetchEvent(offlineStart);
+check("Android-Diagnose lädt die Start-URL kontrolliert nur aus der App-Shell",
+  (await res.text()) === "offline-shell" && offlineNetzaufrufe === 0);
+
 const fremd = await fetchEvent(anfrage("https://api.github.com/repos/demo"));
 check("Fremde Origins werden vom Service Worker nicht abgefangen", fremd === undefined);
 const fremdAuth = await fetchEvent(anfrage("https://projekt.supabase.co/auth/v1/token"));

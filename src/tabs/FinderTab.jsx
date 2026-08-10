@@ -11,6 +11,7 @@ import { gruppiereDienstBadges, sichtbareDienste } from "../lib/dienste.js";
 import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { appHilfeAntwort } from "../lib/appHilfe.js";
+import { createCatalogSearchActions } from "../lib/entdeckenUi.js";
 
 /* Sperre gegen zwei gleichzeitige, bezahlte KI-Deutungen. Bewusst im
    Modul-Scope: der Finder-Tab wird beim Wechseln auf einen anderen Tab
@@ -75,7 +76,7 @@ export function erstelleFinderAntwort({
 }
 
 const BEREICH_LABEL = Object.freeze({
-  mediathek: "Mediathek", kino: "Kino", streaming: "Streaming", blog: "Blog", daten: "App-Hilfe",
+  mediathek: "Mediathek", kino: "Kino", streaming: "Streaming", blog: "Entdecken · Meinung", daten: "App-Hilfe",
 });
 
 export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", limit = 5) {
@@ -105,22 +106,44 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
     const ref = bereich === "streaming"
       ? (treffer.herkunft?.streaming?.ref ?? film.id)
       : film.id;
+    const watchmodeId = treffer.herkunft?.streaming?.watchmode_id ?? film.watchmode_id ?? null;
     gruppen[bereich].push({
       key: `film:${bereich}:${ref}`, typ: "film", ref,
       zielArt: bereich === "streaming" ? "programm" : "film", titel: film.titel,
       meta: [film.jahr, film.typ && film.typ !== "film" ? film.typ : null].filter(Boolean).join(" · "),
+      searchActions: createCatalogSearchActions({
+        watchmodeId,
+        catalogId: film.id,
+        title: film.titel,
+        type: film.typ,
+      }),
     });
   }
-  for (const treffer of antwort?.kino || []) gruppen.kino.push({
-    key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t), typ: "kino",
-    zielArt: "programm", ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
-    meta: [treffer.pf.j, ...(treffer.pf.k || []).slice(0, 2)].filter(Boolean).join(" · "),
-  });
-  for (const titel of antwort?.entdecken || []) gruppen.streaming.push({
-    key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`), typ: "streaming",
-    zielArt: "entdecken", ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
-    meta: [titel.jahr, ...(titel.dienste || []).slice(0, 2)].filter(Boolean).join(" · "),
-  });
+  for (const treffer of antwort?.kino || []) {
+    gruppen.kino.push({
+      key: "kino:" + (treffer.pf.film_at_id || treffer.pf.t), typ: "kino",
+      zielArt: "programm", ref: treffer.pf.film_at_id || treffer.pf.t, titel: treffer.pf.t,
+      meta: [treffer.pf.j, ...(treffer.pf.k || []).slice(0, 2)].filter(Boolean).join(" · "),
+      searchActions: createCatalogSearchActions({
+        catalogId: treffer.pf.film_at_id,
+        catalogPrefix: "filmat",
+        title: treffer.pf.t,
+        type: "movie",
+      }),
+    });
+  }
+  for (const titel of antwort?.entdecken || []) {
+    gruppen.streaming.push({
+      key: "streaming:" + (titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`), typ: "streaming",
+      zielArt: "entdecken", ref: titel.watchmode_id || `${titel.titel}:${titel.jahr || ""}`, titel: titel.titel,
+      meta: [titel.jahr, ...(titel.dienste || []).slice(0, 2)].filter(Boolean).join(" · "),
+      searchActions: createCatalogSearchActions({
+        watchmodeId: titel.watchmode_id,
+        title: titel.titel,
+        type: titel.typ,
+      }),
+    });
+  }
   for (const artikel of antwort?.artikel || []) gruppen.blog.push({
     key: "blog:" + artikel.id, typ: "blog", ref: artikel.id, titel: artikel.titel, meta: "Blogbeitrag",
   });
