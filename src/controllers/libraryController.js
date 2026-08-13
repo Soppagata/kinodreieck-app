@@ -11,6 +11,8 @@ export {
   baueKinoMatches,
   filtereAktiveKinoPins,
   gueltigerArtikel,
+  kanonisiereFilmLoeschIds,
+  planeFilmBatchLoeschung,
   planeFilmLoeschung,
   planeMustwatchSprung,
 } from "../lib/libraryProjection.js";

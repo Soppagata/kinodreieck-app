@@ -175,17 +175,29 @@ export function useArticleController({ setErr }) {
      könnte. */
   const transaktionArtikel = useCallback((berechne, folgeschritt, optionen = {}) => {
     const auftragKontext = optionen.storageContext || captureStorageContext();
+    const hatErwarteteBasis = Object.prototype.hasOwnProperty.call(optionen, "erwarteteBasis");
+    const basisAktuell = () => !hatErwarteteBasis || artikelListeRef.current === optionen.erwarteteBasis;
+    const vorWriteAktuell = () => {
+      if (!basisAktuell()) return false;
+      if (typeof optionen.pruefeVorWrite !== "function") return true;
+      try { return optionen.pruefeVorWrite() === true; }
+      catch { return false; }
+    };
     if (!pruefeAuftrag(auftragKontext)) {
       setErrRef.current("Artikel sind noch nicht sicher geladen. Es wurde nichts verändert.");
       return Promise.resolve(false);
     }
     const auftrag = mutationsketteRef.current.then(async () => {
-      if (!pruefeAuftrag(auftragKontext) || typeof folgeschritt !== "function") return false;
+      if (!pruefeAuftrag(auftragKontext) || !basisAktuell() || typeof folgeschritt !== "function") return false;
       const vorher = artikelListeRef.current;
       const roh = typeof berechne === "function" ? berechne(vorher) : berechne;
       if (!gueltigeArtikelListe(roh)) return false;
       const next = normalisiereArtikelTypen(roh);
       const geaendert = next !== vorher;
+      /* Dieser Gate liegt unmittelbar vor dem ersten möglichen Write. Damit
+         kann ein gebundener Drei-Basis-Plan keine inzwischen geänderte Master-
+         oder MW-Basis mit einem alten Artikelstand überschreiben. */
+      if (!vorWriteAktuell()) return false;
       let vorwaerts = { ok: true, gespeichertAm: artikelGespeichertAm };
       if (geaendert) {
         vorwaerts = await persistArtikel(next, auftragKontext);
@@ -218,6 +230,7 @@ export function useArticleController({ setErr }) {
     mutationsketteRef.current = auftrag.catch(() => false);
     return auftrag;
   }, [artikelGespeichertAm, persistArtikel, pruefeAuftrag, uebernehmeState]);
+  transaktionArtikel.basisRef = artikelListeRef;
 
   const sichtbarerKontextAktuell = geladenerKontextRef.current?.isCurrent() === true;
   return {

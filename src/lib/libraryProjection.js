@@ -5,6 +5,7 @@
 import { matchFilm, score } from "./match.js";
 import { hatPhysischeQuelle } from "./quellen.js";
 import { heileRotlinks } from "./artikel.js";
+import { kanonischeStabileId } from "./mediathekSelection.js";
 
 export function gueltigerArtikel(a) {
   return !!a && typeof a === "object"
@@ -88,36 +89,119 @@ export function planeMustwatchSprung(verknuepfung, eintrag, master) {
   return null;
 }
 
-/* Entfernt einen Mediathek-Eintrag, ohne abhängige persönliche Listen zu
-   beschädigen: Blog-Verweise werden wieder zu Rotlinks, Must-Watch-Einträge
-   bleiben erhalten und verlieren nur ihre Master-Verknüpfung. */
-export function planeFilmLoeschung(master, artikel, mustwatch, id) {
-  const filme = Array.isArray(master) ? master : [];
-  const artikelListe = Array.isArray(artikel) ? artikel : [];
-  const mustwatchListe = Array.isArray(mustwatch) ? mustwatch : [];
-  let artikelRefs = 0;
+function kanonischePrimitiveId(wert) {
+  if (typeof wert !== "string" && typeof wert !== "number") return null;
+  return kanonischeStabileId(wert);
+}
+
+export function kanonisiereFilmLoeschIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, fehlercode: "ZIELE_LEER", zielIds: [] };
+  }
+  const zielIds = [];
+  const gesehen = new Set();
+  for (const rohId of ids) {
+    const id = kanonischePrimitiveId(rohId);
+    if (!id) return { ok: false, fehlercode: "ZIEL_ID_UNGUELTIG", zielIds: [] };
+    if (gesehen.has(id)) {
+      return { ok: false, fehlercode: "ZIEL_ID_KOLLISION", zielIds: [] };
+    }
+    gesehen.add(id);
+    zielIds.push(id);
+  }
+  return { ok: true, zielIds };
+}
+
+function abgebrocheneFilmLoeschung(fehlercode, zielIds = []) {
+  return {
+    ok: false,
+    abgebrochen: true,
+    fehlercode,
+    zielIds,
+    folgen: { masterEintraege: 0, artikelRefs: 0, mustwatchRefs: 0 },
+  };
+}
+
+/* Reine Mengenprojektion für die drei referenztragenden persönlichen Töpfe.
+   Jeder Topf wird genau einmal durchlaufen. Ziele werden ausschließlich über
+   ihre kanonische stabile ID gebunden; Index-, Titel- und Aliasfallbacks gibt
+   es nicht. Die Funktion schreibt nichts und liefert bei jeder Mehrdeutigkeit
+   einen fail-closed Abbruchplan. */
+export function planeFilmBatchLoeschung(master, artikel, mustwatch, ids) {
+  if (!Array.isArray(master) || !Array.isArray(artikel) || !Array.isArray(mustwatch)) {
+    return abgebrocheneFilmLoeschung("BASIS_UNGUELTIG");
+  }
+  const ziele = kanonisiereFilmLoeschIds(ids);
+  if (!ziele.ok) return abgebrocheneFilmLoeschung(ziele.fehlercode);
+  const { zielIds } = ziele;
+  const zielMenge = new Set(zielIds);
+  const vorkommen = new Map(zielIds.map((id) => [id, 0]));
+
+  const nextMaster = [];
+  for (const film of master) {
+    const id = kanonischePrimitiveId(film?.id);
+    if (!id || !zielMenge.has(id)) {
+      nextMaster.push(film);
+      continue;
+    }
+    vorkommen.set(id, vorkommen.get(id) + 1);
+  }
+  if (zielIds.some((id) => vorkommen.get(id) !== 1)) {
+    return abgebrocheneFilmLoeschung("ZIEL_NICHT_EINDEUTIG_IM_MASTER", zielIds);
+  }
+
   let mustwatchRefs = 0;
-  const artikelRoh = artikelListe.map((eintrag) => {
+  const mustwatchRoh = [];
+  for (const eintrag of mustwatch) {
+    const eigeneId = kanonischePrimitiveId(eintrag?.id);
+    if (eigeneId && zielMenge.has(eigeneId)) {
+      return abgebrocheneFilmLoeschung("MUSTWATCH_ID_KOLLISION", zielIds);
+    }
+    const link = eintrag?.verknuepfung;
+    const linkId = kanonischePrimitiveId(link?.id);
+    if (link?.ziel === "master" && linkId && zielMenge.has(linkId)) {
+      mustwatchRefs++;
+      mustwatchRoh.push({ ...eintrag, verknuepfung: null });
+    } else {
+      mustwatchRoh.push(eintrag);
+    }
+  }
+
+  let artikelRefs = 0;
+  const artikelRoh = artikel.map((eintrag) => {
     let geaendert = false;
     const liste = (eintrag.liste || []).map((zeile) => {
-      if (zeile.ref !== id) return zeile;
+      const ref = kanonischePrimitiveId(zeile?.ref);
+      if (!ref || !zielMenge.has(ref)) return zeile;
       artikelRefs++;
       geaendert = true;
-      return { ...zeile, ref: null, abgleich: undefined };
+      const { abgleich: _abgleich, ...ohneAbgleich } = zeile;
+      return { ...ohneAbgleich, ref: null };
     });
-    return geaendert ? { ...eintrag, liste, abgleichStat: undefined } : eintrag;
+    if (!geaendert) return eintrag;
+    const { abgleichStat: _abgleichStat, ...ohneAbgleichStat } = eintrag;
+    return { ...ohneAbgleichStat, liste };
   });
-  const mustwatchRoh = mustwatchListe.map((eintrag) => {
-    if (eintrag.verknuepfung?.ziel !== "master" || eintrag.verknuepfung.id !== id) return eintrag;
-    mustwatchRefs++;
-    return { ...eintrag, verknuepfung: null };
-  });
-  const plan = {
-    master: filme.filter((film) => film.id !== id),
-    artikel: artikelRefs ? artikelRoh : artikelListe,
-    mustwatch: mustwatchRefs ? mustwatchRoh : mustwatchListe,
+
+  return {
+    ok: true,
+    abgebrochen: false,
+    zielIds,
+    master: nextMaster,
+    artikel: artikelRefs ? artikelRoh : artikel,
+    mustwatch: mustwatchRefs ? mustwatchRoh : mustwatch,
+    folgen: {
+      masterEintraege: zielIds.length,
+      artikelRefs,
+      mustwatchRefs,
+    },
   };
-  return { ...plan, folgen: { artikelRefs, mustwatchRefs } };
+}
+
+/* Die bestehende Einzelprojektion bleibt bis zur UI-Umstellung kompatibel,
+   besitzt aber keine zweite Semantik: Sie delegiert auf denselben Batchplan. */
+export function planeFilmLoeschung(master, artikel, mustwatch, id) {
+  return planeFilmBatchLoeschung(master, artikel, mustwatch, [id]);
 }
 
 /* Ein Must-Watch-Eintrag ist Teil desselben Referenzuniversums wie die

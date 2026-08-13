@@ -162,10 +162,60 @@ const mwEintrag = (extra = {}) => ({
 });
 
 let fixture = await mounteMehrtopf({
+  master: [
+    { id: "film_a", titel: "A" },
+    { id: "film_b", titel: "B" },
+    { id: "film_c", titel: "C" },
+  ],
+  artikel: [{
+    ...artikelMitRef("film_a"),
+    liste: [
+      { eingabe: "A", jahr: null, typ: "film", ref: "film_a" },
+      { eingabe: "B", jahr: null, typ: "film", ref: "film_b" },
+      { eingabe: "C", jahr: null, typ: "film", ref: "film_c" },
+    ],
+  }],
+  mustwatch: [
+    mwEintrag({ id: "mw_a", verknuepfung: { ziel: "master", id: "film_a" } }),
+    mwEintrag({ id: "mw_b", verknuepfung: { ziel: "master", id: "film_b" } }),
+  ],
+});
+let ergebnis;
+let batchVorschau = fixture.api().actions.planeFilmLoeschungen(["film_a", "film_b"]);
+await act(async () => {
+  ergebnis = await fixture.api().actions.loescheFilme(["film_a", "film_b"], {
+    plan: batchVorschau, meta: null, herkunft: { typ: "storage" },
+  });
+  await tick();
+});
+check("Gebundener Mehrzielbatch schreibt Artikel, MW und Master je genau einmal",
+  ergebnis === true
+  && fixture.writes.map((w) => `${w.art}:${w.key}`).join(",")
+    === "set:kd:artikel,set:kd:mustwatch,set:kd:master"
+  && fixture.api().master.map((film) => film.id).join(",") === "film_c"
+  && fixture.api().art.artikelListe[0].liste.map((zeile) => zeile.ref).join(",") === ",,film_c"
+  && fixture.api().mw.mustwatch.every((eintrag) => eintrag.verknuepfung === null));
+await fixture.cleanup();
+
+fixture = await mounteMehrtopf({
+  master: [{ id: "film_a", titel: "A" }, { id: "film_b", titel: "B" }],
+});
+batchVorschau = fixture.api().actions.planeFilmLoeschungen(["film_a", "film_b"]);
+await act(async () => {
+  ergebnis = await fixture.api().actions.loescheFilme(["film_a", "film_b"], { vorschau: batchVorschau });
+  await tick();
+});
+check("Gebundener Mehrzielbatch leert Master mit set statt delete",
+  ergebnis === true
+  && fixture.writes.length === 1
+  && fixture.writes[0].art === "set" && fixture.writes[0].key === "kd:master"
+  && JSON.parse(fixture.writes[0].value).filme.length === 0);
+await fixture.cleanup();
+
+fixture = await mounteMehrtopf({
   artikel: [artikelMitRef("mw_ziel")],
   mustwatch: [mwEintrag()],
 });
-let ergebnis;
 await act(async () => {
   ergebnis = await fixture.api().actions.loescheMustwatch("mw_ziel");
   await tick();

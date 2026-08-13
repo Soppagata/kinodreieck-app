@@ -223,21 +223,39 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
      kann dadurch zuerst Blogrefs sicher zu Rotlinks machen, dann MW bestätigen
      und zuletzt Master schreiben. Bei einem Masterfehler wird MW noch bei
      gehaltenem Lock vor dem möglichen Artikel-Rollback kompensiert. */
-  const transaktionMustwatchVorbereitet = useCallback((berechne, folgeschritt) => {
-    const auftragKontext = captureStorageContext();
+  const transaktionMustwatchVorbereitet = useCallback((berechne, folgeschritt, optionen = {}) => {
+    const auftragKontext = optionen.storageContext || captureStorageContext();
+    const hatErwarteteBasis = Object.prototype.hasOwnProperty.call(optionen, "erwarteteBasis");
+    const basisAktuell = () => !hatErwarteteBasis || mustwatchRef.current === optionen.erwarteteBasis;
     if (!geladenRef.current || !geladenerKontextRef.current?.isCurrent()) {
       setErrRef.current("Must-Watch ist noch nicht sicher geladen. Es wurde nichts verändert.");
       return Promise.resolve(false);
     }
     const auftrag = mutationsketteRef.current.then(async () => {
-      if (!auftragKontext.isCurrent() || typeof folgeschritt !== "function") return false;
+      if (!auftragKontext.isCurrent() || !basisAktuell() || typeof folgeschritt !== "function") return false;
       const vorher = mustwatchRef.current;
-      const next = typeof berechne === "function" ? berechne(vorher) : berechne;
+      let next = typeof berechne === "function" ? berechne(vorher) : berechne;
       if (!Array.isArray(next)) return false;
-      const geaendert = next !== vorher;
+      let geaendert = next !== vorher;
       let vorwaertsBestaetigt = !geaendert;
       let rollbackVersucht = false;
       let rollbackOk = !geaendert;
+      let nextErsetzt = false;
+
+      /* Ein impliziter, weiterhin kompatibler Einzelauftrag darf seine reine
+         Drei-Topf-Projektion erst erstellen, nachdem die Artikelqueue ihren
+         wirklich aktuellen Stand erreicht hat. Bis zum ersten Write kann er
+         deshalb den vorbereiteten MW-Folgestand genau einmal einsetzen. */
+      const setzeNext = (liste) => {
+        if (!Array.isArray(liste) || nextErsetzt || rollbackVersucht
+          || (geaendert && vorwaertsBestaetigt)) return false;
+        nextErsetzt = true;
+        next = liste;
+        geaendert = next !== vorher;
+        vorwaertsBestaetigt = !geaendert;
+        rollbackOk = !geaendert;
+        return true;
+      };
 
       const persistiere = async () => {
         if (vorwaertsBestaetigt) return true;
@@ -259,7 +277,7 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
       let folgeOk = false;
       try {
         folgeOk = await folgeschritt({
-          vorher, next, storageContext: auftragKontext, persistiere, rolleZurueck,
+          vorher, next, storageContext: auftragKontext, persistiere, rolleZurueck, setzeNext,
         }) !== false;
       } catch { folgeOk = false; }
       if (!auftragKontext.isCurrent()) return false;
@@ -277,6 +295,9 @@ export function useMustwatchController({ master, masterRef: externerMasterRef, s
     mutationsketteRef.current = auftrag.catch(() => false);
     return auftrag;
   }, [persistMustwatch, uebernehmeState]);
+  /* Der Mehrtopf-Koordinator kann damit auch bei der bis Paket B unveränderten
+     App-Verdrahtung die exakt zu dieser Queue gehörende Arraybasis binden. */
+  transaktionMustwatchVorbereitet.basisRef = mustwatchRef;
 
   const sichereVerknuepfung = useCallback((verknuepfung) => {
     if (!verknuepfung) return null;
