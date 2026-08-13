@@ -9,8 +9,8 @@ import { istMustwatchId } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
-  analysiereAuswaehlbareIds, bereinigeAuswahl, erstelleTitelliste,
-  kanonischeStabileId, schalteAuswahlUm,
+  analysiereAuswaehlbareIds, ausgewaehlteSichtbareEintraege, bereinigeAuswahl,
+  erstelleTitelliste, kanonischeStabileId, schalteAuswahlUm,
 } from "../lib/mediathekSelection.js";
 import { Chip, ChipReihe, IconClose, QuellenBadges, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
@@ -45,6 +45,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const titellisteRef = useRef(null);
   const letzterMasterRef = useRef(master);
   const letzterDatenKontextRef = useRef(datenKontextKey);
+  const letzteTitellisteRef = useRef("");
   const unsichereRenderKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
 
   const beendeAuswahl = useCallback(() => {
@@ -55,17 +56,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, []);
 
   const starteAuswahl = useCallback(() => {
-    setExpandedId(null);
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
     setAuswahlmodus(true);
-  }, [setExpandedId]);
+  }, []);
 
-  /* Eine Auswahl gehört genau zum sichtbaren Datenkontext. Master-Ersetzung
+  /* Eine Auswahl gehört genau zum gesamten Datenkontext. Master-Ersetzung
      (inkl. Restore/Sync) und Account-/Sessionwechsel beenden sie vollständig.
-     Gewöhnliche Filterwechsel werden weiter unten nur auf sichtbare IDs
-     bereinigt, damit Sortieren die Auswahl nicht unnötig verwirft. */
+     Suche, Filter, Typ und Sortierung verändern dagegen nur die sichtbare
+     Schnittmenge; die global gewählten stabilen IDs bleiben erhalten. */
   useEffect(() => {
     if (letzterMasterRef.current !== master) beendeAuswahl();
     letzterMasterRef.current = master;
@@ -210,29 +210,38 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier]);
 
   const idAnalyse = useMemo(() => analysiereAuswaehlbareIds(master || []), [master]);
-  const sichtbareAuswaehlbareIds = useMemo(() => {
-    const ids = new Set();
-    for (const eintrag of mediathek) {
-      const id = kanonischeStabileId(eintrag);
-      if (id != null && idAnalyse.auswaehlbareIds.has(id)) ids.add(id);
-    }
-    return ids;
-  }, [mediathek, idAnalyse]);
-
-  /* Filter, Suche und Typwechsel entfernen nur nicht mehr sichtbare IDs.
-     Sortieren erhält dieselben IDs und ändert ausschließlich die spätere
-     Titellisten-Reihenfolge. */
+  /* Nur IDs, die aus dem gesamten aktuellen Master verschwinden oder dort
+     nicht mehr eindeutig sind, werden bereinigt. Sichtfilter sind ausdrücklich
+     keine Besitzgrenze für die Auswahl. */
   useEffect(() => {
     if (!auswahlmodus) return;
-    setAuswahlIds((aktuell) => bereinigeAuswahl(aktuell, sichtbareAuswaehlbareIds));
-    setTitellisteSichtbar(false);
-    setKopierStatus(null);
-  }, [auswahlmodus, sichtbareAuswaehlbareIds]);
+    setAuswahlIds((aktuell) => {
+      const sauber = bereinigeAuswahl(aktuell, idAnalyse.auswaehlbareIds);
+      if (sauber.size === aktuell.size && [...sauber].every((id) => aktuell.has(id))) return aktuell;
+      return sauber;
+    });
+  }, [auswahlmodus, idAnalyse.auswaehlbareIds]);
+
+  const sichtbareAuswahl = useMemo(
+    () => ausgewaehlteSichtbareEintraege(mediathek, auswahlIds, idAnalyse.auswaehlbareIds),
+    [mediathek, auswahlIds, idAnalyse],
+  );
 
   const titelliste = useMemo(
     () => erstelleTitelliste(mediathek, auswahlIds, idAnalyse.auswaehlbareIds),
     [mediathek, auswahlIds, idAnalyse],
   );
+  useEffect(() => {
+    if (!auswahlmodus) {
+      letzteTitellisteRef.current = "";
+      return;
+    }
+    if (letzteTitellisteRef.current !== titelliste) setKopierStatus(null);
+    letzteTitellisteRef.current = titelliste;
+  }, [auswahlmodus, titelliste]);
+  const auswahlZaehlerText = sichtbareAuswahl.length === auswahlIds.size
+    ? `${auswahlIds.size} ausgewählt`
+    : `${auswahlIds.size} ausgewählt · ${sichtbareAuswahl.length} sichtbar`;
   const problematischeIds = idAnalyse.ungueltigeAnzahl + idAnalyse.doppelteIds.size;
   const renderKeyFuer = useCallback((eintrag) => {
     const id = kanonischeStabileId(eintrag);
@@ -305,12 +314,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           {auswahlmodus ? "Auswahl beenden" : "Auswählen"}
         </button>
         {auswahlmodus && (<>
-          <strong className="kd-auswahl-zaehler" aria-live="polite">{auswahlIds.size} ausgewählt</strong>
+          <strong className="kd-auswahl-zaehler" aria-live="polite">{auswahlZaehlerText}</strong>
           <button type="button" style={btnStyle(false)} disabled={auswahlIds.size === 0} onClick={leereAuswahl}>
             Auswahl leeren
           </button>
           <button type="button" className="kd-auswahl-kopieren" style={btnStyle(true)}
-            disabled={auswahlIds.size === 0} onClick={kopiereTitelliste}>
+            disabled={!titelliste} onClick={kopiereTitelliste}>
             Titelliste kopieren
           </button>
         </>)}
@@ -325,9 +334,15 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
       {auswahlmodus && titellisteSichtbar && (
         <div className="kd-titelliste-ausgabe">
-          <label htmlFor="kd-titelliste-text">Titelliste</label>
-          <textarea id="kd-titelliste-text" ref={titellisteRef} readOnly value={titelliste}
-            rows={Math.min(8, Math.max(2, auswahlIds.size))} />
+          {titelliste ? (<>
+            <label htmlFor="kd-titelliste-text">Titelliste</label>
+            <textarea id="kd-titelliste-text" ref={titellisteRef} readOnly value={titelliste}
+              rows={Math.min(8, Math.max(2, sichtbareAuswahl.length))} />
+          </>) : (
+            <p className="kd-titelliste-leer" role="status">
+              Keine ausgewählten Einträge sind in der aktuellen Ansicht sichtbar.
+            </p>
+          )}
           {kopierStatus && (
             <p role={kopierStatus.art === "fehler" ? "alert" : "status"} className={`kd-kopierstatus kd-kopierstatus--${kopierStatus.art}`}>
               {kopierStatus.text}
@@ -410,13 +425,14 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
           schlichte MedienForm. key=typTab: Tab-Wechsel klappt das Formular zu. */}
-      {!auswahlmodus && <div data-tour="eintrag-neu" style={{ marginBottom: 16 }}>
+      <div data-tour="eintrag-neu" hidden={auswahlmodus} aria-hidden={auswahlmodus || undefined}
+        style={{ marginBottom: 16 }}>
         {hatDreieck(HAUPTTYP[typTab])
           ? <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
               onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
               prognoseSperrgrund={prognoseSperrgrund} />
           : <MedienForm key={typTab} typ={HAUPTTYP[typTab]} onAdd={addFilm} />}
-      </div>}
+      </div>
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>
         {mediathek.length} {mediathek.length === 1 ? "Eintrag" : "Einträge"} · {auswahlmodus ? "Karte antippen zum Auswählen" : "Karte antippen für Details & Bearbeiten"}
@@ -427,7 +443,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             <FilmCard
               film={f}
               streamBadge={dreieckTab && badgeFuer ? badgeFuer(f) : null}
-              expanded={!auswahlmodus && expandedId === "b" + f.id}
+              expanded={expandedId === "b" + f.id}
               onToggle={auswahlmodus ? null : () => {
                 const key = "b" + f.id;
                 const oeffnen = expandedId !== key;

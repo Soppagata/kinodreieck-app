@@ -1977,6 +1977,7 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
       filme: [
         { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
         { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
+        { id: "s", typ: "serie", titel: "Serie Eins", jahr: 2020, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 }, begruendung: "Serien-Details" },
       ],
     }));
     localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: 1_786_650_000_000 }));
@@ -1984,9 +1985,37 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await page.goto("/");
   await waehleMobileTab(page, "Mediathek");
 
+  const masterVorEntwuerfen = await page.evaluate(() => localStorage.getItem("kd:master"));
+  await page.getByRole("button", { name: "+ Eintrag hinzufügen", exact: true }).click();
+  const neuTitel = page.getByPlaceholder("Titel *");
+  const neuJahr = page.getByPlaceholder("Jahr *");
+  await neuTitel.fill("Ungespeicherter Neu-Entwurf");
+  await neuJahr.fill("2025");
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await expect(page.locator('[data-tour="eintrag-neu"]')).toBeHidden();
+  await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
+  await expect(neuJahr).toHaveValue("2025");
+  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await expect(neuTitel).toBeVisible();
+  await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
+  await expect(neuJahr).toHaveValue("2025");
+  await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+  expect(await page.evaluate(() => localStorage.getItem("kd:master"))).toBe(masterVorEntwuerfen);
+
   const alphaKarte = page.locator('[data-film-id="a"] .kd-karte');
   await alphaKarte.click();
   await expect(alphaKarte).toContainText("Alpha-Details");
+  await alphaKarte.getByRole("button", { name: /Bewertung bearbeiten/ }).click();
+  const editBegruendung = alphaKarte.getByPlaceholder("Begründung (in deiner Stimme, 1–3 Sätze)");
+  await editBegruendung.fill("Alpha-Edit-Entwurf bleibt erhalten");
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await expect(alphaKarte.locator(".kd-film-editor-shell")).toBeHidden();
+  await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
+  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await expect(editBegruendung).toBeVisible();
+  await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
+  await alphaKarte.getByRole("button", { name: "Abbrechen", exact: true }).click();
+  expect(await page.evaluate(() => localStorage.getItem("kd:master"))).toBe(masterVorEntwuerfen);
   await alphaKarte.click();
 
   await page.getByRole("button", { name: "Auswählen", exact: true }).click();
@@ -2023,6 +2052,30 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await expect(page.locator("#kd-titelliste-text")).toHaveValue("Alpha (2001)\nZulu (1999)");
   expect(await page.evaluate(() => window.__e11Clipboard)).toBe("Alpha (2001)\nZulu (1999)");
   expect(await page.locator("#kd-titelliste-text").inputValue()).not.toContain("PRIVAT");
+
+  const sortierung = page.locator("select").filter({ has: page.locator('option[value="titel"]') });
+  await sortierung.selectOption("jahr_alt");
+  await expect(page.locator("#kd-titelliste-text")).toHaveValue("Zulu (1999)\nAlpha (2001)");
+  await expect(page.getByRole("status").filter({ hasText: "Titelliste kopiert" })).toHaveCount(0);
+  await sortierung.selectOption("titel");
+
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await expect(page.getByText("2 ausgewählt · 0 sichtbar", { exact: true })).toBeVisible();
+  await expect(kopieren).toBeDisabled();
+  await expect(page.locator("#kd-titelliste-text")).toHaveCount(0);
+  await expect(page.locator(".kd-titelliste-leer")).toContainText(/keine ausgewählten Einträge/i);
+  await page.getByRole("checkbox", { name: "Serie Eins auswählen" }).click();
+  await expect(page.getByText("3 ausgewählt · 1 sichtbar", { exact: true })).toBeVisible();
+  await expect(kopieren).toBeEnabled();
+  await expect(page.locator("#kd-titelliste-text")).toHaveValue("Serie Eins (2020)");
+  await page.getByRole("button", { name: /^Musik/ }).click();
+  await expect(page.getByText("3 ausgewählt · 0 sichtbar", { exact: true })).toBeVisible();
+  await expect(kopieren).toBeDisabled();
+  await page.getByRole("button", { name: /^Filme/ }).click();
+  await expect(page.getByText("3 ausgewählt · 2 sichtbar", { exact: true })).toBeVisible();
+  await expect(alpha).toHaveAttribute("aria-checked", "true");
+  await expect(zulu).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#kd-titelliste-text")).toHaveValue("Alpha (2001)\nZulu (1999)");
 
   await page.getByRole("button", { name: "Auswahl leeren", exact: true }).click();
   await expect(page.getByText("0 ausgewählt", { exact: true })).toBeVisible();

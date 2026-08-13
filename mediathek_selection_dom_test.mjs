@@ -65,17 +65,31 @@ const { MediathekTab, React, act, useState, createRoot } = testModul;
 const MASTER = [
   { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
   { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
+  { id: "s", typ: "serie", titel: "Serie Eins", jahr: 2020, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 }, begruendung: "Serien-Details" },
   { typ: "film", titel: "Ohne ID", jahr: 2010, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 } },
 ];
 let mutationen = 0;
+let updateVerzoegern = false;
+let updateAufloeser = null;
+let addVerzoegern = false;
+let addAufloeser = null;
 
 function TestHarness({ master, datenKontextKey }) {
   const [expandedId, setExpandedId] = useState(null);
   return React.createElement(MediathekTab, {
     master, datenKontextKey, expandedId, setExpandedId,
     nachtragFlach: [], artikel: [], mustwatch: [],
-    updateFilm: async () => { mutationen++; return true; },
-    deleteFilm: () => { mutationen++; }, addFilm: () => { mutationen++; },
+    updateFilm: async () => {
+      mutationen++;
+      if (!updateVerzoegern) return true;
+      return new Promise((resolve) => { updateAufloeser = resolve; });
+    },
+    deleteFilm: () => { mutationen++; },
+    addFilm: async () => {
+      mutationen++;
+      if (!addVerzoegern) return true;
+      return new Promise((resolve) => { addAufloeser = resolve; });
+    },
     addMustwatch: () => { mutationen++; }, updateMustwatch: () => { mutationen++; },
     deleteMustwatch: () => { mutationen++; },
   });
@@ -119,6 +133,41 @@ check("Karten öffnen außerhalb des Modus weiterhin Details", karte("a")?.getAt
 await sende(karte("a"), "click");
 check("bestehendes Kartenverhalten zeigt den Inhalt", document.body.textContent.includes("Alpha-Details"));
 
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const editEntwurf = document.querySelector('textarea[placeholder^="Begründung"]');
+await setzeWert(editEntwurf, "Alpha-Entwurf bleibt erhalten");
+const editShell = document.querySelector(".kd-film-editor-shell");
+const mutationenVorEditEntwurf = mutationen;
+await sende(knopf("Auswählen"), "click");
+check("Karten-Edit-Draft bleibt im Auswahlmodus gemountet und verborgen", editEntwurf.isConnected && editShell.isConnected && editShell.hidden);
+await sende(knopf("Auswahl beenden"), "click");
+check("Karten-Edit-Draft wird nach Auswahlende unverändert sichtbar", () => {
+  const aktuell = document.querySelector('textarea[placeholder^="Begründung"]');
+  return aktuell === editEntwurf && !editShell.hidden && aktuell.value === "Alpha-Entwurf bleibt erhalten";
+});
+check("Karten-Edit-Draft verursacht keine Mutation", mutationen === mutationenVorEditEntwurf);
+if (!knopf("Abbrechen")) await sende(karte("a"), "click");
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+if (document.body.textContent.includes("Alpha-Details")) await sende(karte("a"), "click");
+
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const neuerTitelEntwurf = document.querySelector('input[placeholder="Titel *"]');
+const neuesJahrEntwurf = document.querySelector('input[placeholder="Jahr *"]');
+await setzeWert(neuerTitelEntwurf, "Ungespeicherter Neu-Entwurf");
+await setzeWert(neuesJahrEntwurf, "2025");
+const neuFormShell = document.querySelector('[data-tour="eintrag-neu"]');
+const mutationenVorNeuEntwurf = mutationen;
+await sende(knopf("Auswählen"), "click");
+check("Neu-Draft bleibt im Auswahlmodus gemountet und verborgen", neuerTitelEntwurf.isConnected && neuFormShell.isConnected && neuFormShell.hidden);
+await sende(knopf("Auswahl beenden"), "click");
+check("Neu-Draft wird nach Auswahlende unverändert sichtbar", () => {
+  const titel = document.querySelector('input[placeholder="Titel *"]');
+  const jahr = document.querySelector('input[placeholder="Jahr *"]');
+  return titel === neuerTitelEntwurf && titel.value === "Ungespeicherter Neu-Entwurf" && jahr.value === "2025" && !neuFormShell.hidden;
+});
+check("Neu-Draft verursacht keine Mutation", mutationen === mutationenVorNeuEntwurf);
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+
 await sende(knopf("Auswählen"), "click");
 check("Modus ist ausdrücklich aktiviert", !!knopf("Auswahl beenden"));
 check("leere Auswahl meldet null", document.querySelector(".kd-auswahl-zaehler")?.textContent === "0 ausgewählt");
@@ -148,11 +197,33 @@ check("Plaintext bleibt auch nach Erfolg sichtbar", document.querySelector("#kd-
 check("Titelliste enthält keine privaten Felder", !clipboardText.includes("PRIVAT") && !clipboardText.includes("bewertung"));
 check("Erfolg wird ausdrücklich gemeldet", document.querySelector('.kd-kopierstatus[role="status"]')?.textContent.includes("Titelliste kopiert"));
 
+await setzeWert(sortierung, "jahr_alt");
+check("Sortieren hält die sichtbare Titelliste offen und aktualisiert ihre Reihenfolge", document.querySelector("#kd-titelliste-text")?.value === "Zulu (1999)\nAlpha (2001)");
+check("Sortieren setzt den veralteten Clipboard-Status zurück", !document.querySelector(".kd-kopierstatus"));
+await setzeWert(sortierung, "titel");
+
 const suche = document.querySelector('input[placeholder^="Titel oder Originaltitel"]');
 await setzeWert(suche, "Alpha");
-check("Suchfilter bereinigt nur nicht mehr sichtbare IDs", document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt");
+check("Suchfilter behält globale IDs und meldet die sichtbare Schnittmenge", document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt · 1 sichtbar");
+check("Teilweise sichtbare Auswahl hält Kopieren aktiv und aktualisiert die Ausgabe", !knopf("Titelliste kopieren").disabled && document.querySelector("#kd-titelliste-text")?.value === "Alpha (2001)");
+await setzeWert(suche, "Nicht vorhanden");
+check("Vollständig unsichtbare Auswahl bleibt global erhalten", document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt · 0 sichtbar");
+check("Ohne sichtbare Schnittmenge ist Kopieren deaktiviert und kein alter Text bleibt stehen", knopf("Titelliste kopieren").disabled && !document.querySelector("#kd-titelliste-text") && document.querySelector(".kd-titelliste-leer"));
 await setzeWert(suche, "");
-check("gelöschte unsichtbare Auswahl kehrt beim Filterweiten nicht zurück", document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt");
+check("Filter zurück stellt beide Auswahlmarken und die Titelliste wieder her", () => {
+  const alphaZurueck = document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]');
+  const zuluZurueck = document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]');
+  return document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt"
+    && alphaZurueck?.getAttribute("aria-checked") === "true"
+    && zuluZurueck?.getAttribute("aria-checked") === "true"
+    && document.querySelector("#kd-titelliste-text")?.value === erwarteteListe;
+});
+await sende(knopfEnthaelt("Serien"), "click");
+check("Typwechsel behält globale IDs und deaktiviert leere sichtbare Ausgabe", document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt · 0 sichtbar" && knopf("Titelliste kopieren").disabled);
+await sende(knopfEnthaelt("Filme"), "click");
+check("Typ zurück stellt die ausgewählten Filmkarten wieder her", () => document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt"
+  && document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]')?.getAttribute("aria-checked") === "true"
+  && document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]')?.getAttribute("aria-checked") === "true");
 await sende(knopf("Auswahl leeren"), "click");
 check("Auswahl leeren entfernt alles und deaktiviert Folgeschritte", document.querySelector(".kd-auswahl-zaehler")?.textContent === "0 ausgewählt" && knopf("Titelliste kopieren").disabled);
 
@@ -181,6 +252,40 @@ check("Master-Ersetzung oder Restore beendet die Auswahl", !!knopf("Auswählen")
 await sende(karte("a"), "click");
 check("Karte ist nach Beenden wieder editierbar/öffnend", document.body.textContent.includes("Alpha-Details"));
 check("Auswahlmodus verursacht keinerlei Bestandsmutation", mutationen === 0);
+
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+await setzeWert(document.querySelector('textarea[placeholder^="Begründung"]'), "Speichern läuft einmalig weiter");
+updateVerzoegern = true;
+await sende(knopf("Speichern"), "click");
+check("laufender Editor-Save wurde genau einmal gestartet", mutationen === 1 && typeof updateAufloeser === "function" && !!knopf("Speichert …"));
+await sende(knopf("Auswählen"), "click");
+check("laufender Editor-Save bleibt beim Moduswechsel gemountet", document.querySelector(".kd-film-editor-shell")?.hidden && mutationen === 1);
+await act(async () => {
+  updateAufloeser(true);
+  await Promise.resolve();
+  await Promise.resolve();
+});
+updateVerzoegern = false;
+await sende(knopf("Auswahl beenden"), "click");
+check("laufender Editor-Save wird weder abgebrochen noch dupliziert", mutationen === 1 && !document.querySelector(".kd-editpanel") && document.body.textContent.includes("Alpha-Details"));
+
+await sende(karte("a"), "click");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+await setzeWert(document.querySelector('input[placeholder="Titel *"]'), "Laufender Neu-Save");
+await setzeWert(document.querySelector('input[placeholder="Jahr *"]'), "2025");
+addVerzoegern = true;
+await sende(knopf("Hinzufügen"), "click");
+check("laufender Neu-Save wurde genau einmal gestartet", mutationen === 2 && typeof addAufloeser === "function" && !!knopf("Speichert …"));
+await sende(knopf("Auswählen"), "click");
+check("laufender Neu-Save bleibt beim Moduswechsel gemountet", document.querySelector('[data-tour="eintrag-neu"]')?.hidden && mutationen === 2);
+await act(async () => {
+  addAufloeser(true);
+  await Promise.resolve();
+  await Promise.resolve();
+});
+addVerzoegern = false;
+await sende(knopf("Auswahl beenden"), "click");
+check("laufender Neu-Save wird weder abgebrochen noch dupliziert", mutationen === 2 && !!knopf("+ Eintrag hinzufügen"));
 
 await act(async () => { root.unmount(); });
 dom.window.close();

@@ -53,7 +53,7 @@ export function FilmCard({
     setEditing(true);
   };
   const speichereAenderungen = async (changes) => {
-    if (speichertRef.current) return false;
+    if (speichertRef.current || typeof onSave !== "function") return false;
     speichertRef.current = true;
     setSpeichert(true); setSpeicherFehler("");
     try {
@@ -134,7 +134,7 @@ export function FilmCard({
           {kinoInfo && (
             <div style={{ marginTop: 8, fontFamily: "'Space Mono', monospace", fontSize: 13, lineHeight: 1.6 }}>{kinoInfo}</div>
           )}
-          {expanded && !editing && (
+          {expanded && !editing && !auswahlmodus && (
             <div style={{ marginTop: 10, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 400, fontSize: 14, lineHeight: 1.55 }}>
               {dreieck
                 ? (film.begruendung || "Keine Begründung hinterlegt.")
@@ -179,7 +179,7 @@ export function FilmCard({
               )}
             </div>
           )}
-          {expanded && !editing && unbewertet && filmwissen && (
+          {expanded && !editing && unbewertet && filmwissen && !auswahlmodus && (
             <div onClick={(e) => e.stopPropagation()}
               style={{ marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
               <FilmwissenBereich
@@ -194,7 +194,7 @@ export function FilmCard({
           )}
         </div>
       </div>
-      {expanded && !editing && vorbewertung && (unbewertet || film.prognose) && (
+      {expanded && !editing && vorbewertung && !auswahlmodus && (unbewertet || film.prognose) && (
         <div className="kd-film-prognose-breit" onClick={(e) => e.stopPropagation()}
           style={{ width: "100%", boxSizing: "border-box", marginTop: 12, background: T.saalHoch, borderRadius: 6, padding: 10 }}>
           <PrognoseBereich
@@ -213,7 +213,8 @@ export function FilmCard({
         </div>
       )}
       {expanded && editing && (
-        <div className="kd-film-editor-shell">
+        <div className="kd-film-editor-shell" hidden={auswahlmodus}
+          aria-hidden={auswahlmodus || undefined}>
           {dreieck ? (
             <EditPanel key={prognoseEntwurf ? "prognose" : "manuell"}
               film={prognoseEntwurf ? {

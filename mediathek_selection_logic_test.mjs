@@ -97,6 +97,38 @@ check("ausgewaehlteSichtbareEintraege: ignoriert unsichtbare Auswahl", () => {
   assert.deepEqual(result.map((e) => e.id), ["1"]);
 });
 
+check("ausgewaehlteSichtbareEintraege: vollständig unsichtbare globale Auswahl ergibt leere Schnittmenge", () => {
+  const result = ausgewaehlteSichtbareEintraege(
+    [{ id: "1", titel: "Sichtbar", jahr: 2000 }],
+    new Set(["2", "3"]),
+    new Set(["1", "2", "3"]),
+  );
+  assert.deepEqual(result, []);
+});
+
+check("globale Bereinigung behält IDs über Filter- und Typgrenzen", () => {
+  const alleIds = new Set(["film-a", "film-b", "serie-a"]);
+  const global = bereinigeAuswahl(new Set(["film-a", "film-b"]), alleIds);
+  const nurAlpha = ausgewaehlteSichtbareEintraege(
+    [{ id: "film-a", titel: "Alpha", jahr: 2001 }], global, alleIds,
+  );
+  const keineFilme = ausgewaehlteSichtbareEintraege(
+    [{ id: "serie-a", titel: "Serie", jahr: 2020 }], global, alleIds,
+  );
+  const filmeZurueck = ausgewaehlteSichtbareEintraege(
+    [
+      { id: "film-b", titel: "Zulu", jahr: 1999 },
+      { id: "film-a", titel: "Alpha", jahr: 2001 },
+    ],
+    global,
+    alleIds,
+  );
+  assert.deepEqual([...global].sort(), ["film-a", "film-b"]);
+  assert.deepEqual(nurAlpha.map((e) => e.id), ["film-a"]);
+  assert.deepEqual(keineFilme, []);
+  assert.deepEqual(filmeZurueck.map((e) => e.id), ["film-b", "film-a"]);
+});
+
 check("erstelleTitelliste: nur sichtbare Auswahl, sortiert nach sichtbarer Reihenfolge", () => {
   const text = erstelleTitelliste(vis, sichtAuswahl, auswErlaubt);
   assert.equal(
