@@ -204,14 +204,57 @@ const basis = () => ({
 
 let fixture = baueTransaktionsHarness(basis());
 let vorschau = fixture.actions.planeFilmLoeschungen(["a", "b"]);
-check("Controllerplan bindet Zielreihenfolge, drei Arraybasen und Speicherkontext",
+check("Controllerpreview ist transitiv immutable und exponiert keine Ausführungsnutzlast",
   vorschau.ok && Object.isFrozen(vorschau) && Object.isFrozen(vorschau.zielIds)
-  && vorschau.masterBasis === fixture.masterRef.current
-  && vorschau.artikelBasis === fixture.artikelRef.current
-  && vorschau.mustwatchBasis === fixture.mustwatchRef.current
-  && vorschau.storageContext.isCurrent());
+  && Object.isFrozen(vorschau.folgen)
+  && ["master", "artikel", "mustwatch", "masterBasis", "artikelBasis", "mustwatchBasis", "storageContext"]
+    .every((feld) => !Object.hasOwn(vorschau, feld)));
+const fehlerPreview = fixture.actions.planeFilmLoeschungen([]);
+check("Auch ein Fehlerpreview bleibt klein, transitiv immutable und ohne Ausführungsnutzlast",
+  fehlerPreview.ok === false && fehlerPreview.abgebrochen === true
+  && fehlerPreview.fehlercode === "ZIELE_LEER"
+  && Object.isFrozen(fehlerPreview) && Object.isFrozen(fehlerPreview.zielIds)
+  && Object.isFrozen(fehlerPreview.folgen)
+  && ["master", "artikel", "mustwatch", "masterBasis", "artikelBasis", "mustwatchBasis", "storageContext"]
+    .every((feld) => !Object.hasOwn(fehlerPreview, feld)));
+
+const sichtbarerPreviewStand = JSON.stringify(vorschau);
+for (const mutation of [
+  () => vorschau.zielIds.push("c"),
+  () => vorschau.zielIds.splice(0, 1),
+  () => { vorschau.zielIds = ["c"]; },
+  () => { vorschau.folgen.masterEintraege = 99; },
+  () => { vorschau.folgen = { masterEintraege: 99, artikelRefs: 99, mustwatchRefs: 99 }; },
+  () => { vorschau.master = []; },
+  () => Object.defineProperty(vorschau, "storageContext", { value: {} }),
+]) {
+  try { mutation(); } catch { /* Frozen Preview muss Mutationen abweisen. */ }
+}
+check("Push, splice, Property-Replacement und Additionen verändern weder Ziele noch Folgen",
+  JSON.stringify(vorschau) === sichtbarerPreviewStand
+  && vorschau.zielIds.join(",") === "a,b"
+  && JSON.stringify(vorschau.folgen) === JSON.stringify({ masterEintraege: 2, artikelRefs: 2, mustwatchRefs: 2 })
+  && !Object.hasOwn(vorschau, "master") && !Object.hasOwn(vorschau, "storageContext"));
+
+const previewClone = {
+  ...vorschau,
+  zielIds: [...vorschau.zielIds],
+  folgen: { ...vorschau.folgen },
+};
+check("Spread-Clone mit identischen sichtbaren Feldern bleibt ohne Write fail-closed",
+  await fixture.actions.loescheFilme(["a", "b"], { plan: previewClone }) === false
+  && fixture.writes.length === 0);
+const previewLookalike = Object.freeze({
+  ok: true,
+  abgebrochen: false,
+  zielIds: Object.freeze(["a", "b"]),
+  folgen: Object.freeze({ masterEintraege: 2, artikelRefs: 2, mustwatchRefs: 2 }),
+});
+check("Gefrorenes Lookalike mit identischen sichtbaren Feldern bleibt ohne Write fail-closed",
+  await fixture.actions.loescheFilme(["a", "b"], { vorschau: previewLookalike }) === false
+  && fixture.writes.length === 0);
 let ergebnis = await fixture.actions.loescheFilme(["a", "b"], { vorschau, meta: null, herkunft: { typ: "test" } });
-check("Ein öffentlicher Batch führt je verändertem Topf genau einen Vorwärtswrite aus",
+check("Das authentische unveränderte DTO führt genau die drei erwarteten Vorwärtswrites aus",
   ergebnis
   && fixture.writes.filter((w) => w.phase === "vorwaerts").map((w) => w.topf).join(",") === "artikel,mustwatch,master"
   && fixture.masterRef.current.length === 1);

@@ -58,11 +58,10 @@ export function erstellePersonalDataTransactionController({
   artikelRef = transaktionArtikel?.basisRef,
   mustwatchRef = transaktionMustwatchVorbereitet?.basisRef,
 }) {
-  const ausgestellteFilmPlaene = new WeakSet();
+  const filmPlanNutzlasten = new WeakMap();
 
   const planBasenAktuell = (plan) => (
     !!plan
-    && ausgestellteFilmPlaene.has(plan)
     && plan.storageContext?.isCurrent?.() === true
     && masterRef?.current === plan.masterBasis
     && artikelRef?.current === plan.artikelBasis
@@ -70,25 +69,39 @@ export function erstellePersonalDataTransactionController({
   );
   const planNebenbasenAktuell = (plan) => (
     !!plan
-    && ausgestellteFilmPlaene.has(plan)
     && plan.storageContext?.isCurrent?.() === true
     && artikelRef?.current === plan.artikelBasis
     && mustwatchRef?.current === plan.mustwatchBasis
   );
 
   const stelleFilmPlanAus = ({ projektion, masterBasis, artikelBasis, mustwatchBasis, storageContext }) => {
-    if (!projektion.ok || !storageContext.isCurrent()) return projektion;
-    const plan = Object.freeze({
-      ...projektion,
-      zielIds: Object.freeze([...projektion.zielIds]),
-      folgen: Object.freeze({ ...projektion.folgen }),
+    const preview = {
+      ok: projektion.ok === true,
+      abgebrochen: projektion.abgebrochen === true,
+      zielIds: Object.freeze([...(Array.isArray(projektion.zielIds) ? projektion.zielIds : [])]),
+      folgen: Object.freeze({ ...(projektion.folgen || {}) }),
+    };
+    if (typeof projektion.fehlercode === "string") preview.fehlercode = projektion.fehlercode;
+    const previewDto = Object.freeze(preview);
+    if (!projektion.ok || !storageContext.isCurrent()) return previewDto;
+    filmPlanNutzlasten.set(previewDto, Object.freeze({
+      zielIds: projektion.zielIds,
+      master: projektion.master,
+      artikel: projektion.artikel,
+      mustwatch: projektion.mustwatch,
       masterBasis,
       artikelBasis,
       mustwatchBasis,
       storageContext,
-    });
-    ausgestellteFilmPlaene.add(plan);
-    return plan;
+    }));
+    return previewDto;
+  };
+
+  const holeFilmPlanNutzlast = (previewDto) => {
+    if (!previewDto || (typeof previewDto !== "object" && typeof previewDto !== "function")) {
+      return null;
+    }
+    return filmPlanNutzlasten.get(previewDto) || null;
   };
 
   const planeFilmLoeschungen = (ids) => {
@@ -162,13 +175,13 @@ export function erstellePersonalDataTransactionController({
     }
     const gelieferterPlan = optionen?.plan || optionen?.vorschau;
     if (gelieferterPlan) {
-      if (!gelieferterPlan.ok
-        || !Array.isArray(gelieferterPlan.zielIds)
-        || gelieferterPlan.zielIds?.length !== ziele.zielIds.length
-        || gelieferterPlan.zielIds.some((id, index) => id !== ziele.zielIds[index])) {
+      const plan = holeFilmPlanNutzlast(gelieferterPlan);
+      if (!plan
+        || plan.zielIds.length !== ziele.zielIds.length
+        || plan.zielIds.some((id, index) => id !== ziele.zielIds[index])) {
         return Promise.resolve(false);
       }
-      return fuehreFilmLoeschPlanAus(gelieferterPlan, optionen);
+      return fuehreFilmLoeschPlanAus(plan, optionen);
     }
 
     /* Kompatibilität bis Paket B: Ohne explizite Vorschau wird der gebundene
@@ -183,14 +196,15 @@ export function erstellePersonalDataTransactionController({
         const projektion = planeFilmBatchLoeschung(
           masterBasis, vorherArtikel, mwStufe.vorher, ziele.zielIds,
         );
-        plan = stelleFilmPlanAus({
+        const previewDto = stelleFilmPlanAus({
           projektion,
           masterBasis,
           artikelBasis: vorherArtikel,
           mustwatchBasis: mwStufe.vorher,
           storageContext,
         });
-        if (!plan.ok || !mwStufe.setzeNext(plan.mustwatch)) return null;
+        plan = holeFilmPlanNutzlast(previewDto);
+        if (!plan || !mwStufe.setzeNext(plan.mustwatch)) return null;
         return plan.artikel;
       }, async () => {
         if (!planNebenbasenAktuell(plan)) return false;
