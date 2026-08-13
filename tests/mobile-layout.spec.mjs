@@ -1995,6 +1995,9 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await expect(page.locator('[data-tour="eintrag-neu"]')).toBeHidden();
   await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
   await expect(neuJahr).toHaveValue("2025");
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
+  await page.getByRole("button", { name: /^Filme/ }).click();
   await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
   await expect(neuTitel).toBeVisible();
   await expect(neuTitel).toHaveValue("Ungespeicherter Neu-Entwurf");
@@ -2011,6 +2014,9 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await page.getByRole("button", { name: "Auswählen", exact: true }).click();
   await expect(alphaKarte.locator(".kd-film-editor-shell")).toBeHidden();
   await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
+  await page.getByRole("button", { name: /^Filme/ }).click();
   await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
   await expect(editBegruendung).toBeVisible();
   await expect(editBegruendung).toHaveValue("Alpha-Edit-Entwurf bleibt erhalten");
@@ -2039,11 +2045,19 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await page.evaluate(() => {
     window.__e11Clipboard = "";
     window.__e11ClipboardFehler = false;
+    window.__e11ClipboardVerzoegern = false;
+    window.__e11ClipboardPending = null;
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
-      value: { writeText: async (text) => {
-        if (window.__e11ClipboardFehler) throw new Error("denied");
+      value: { writeText: (text) => {
+        if (window.__e11ClipboardVerzoegern) {
+          return new Promise((resolve, reject) => {
+            window.__e11ClipboardPending = { text, resolve, reject };
+          });
+        }
+        if (window.__e11ClipboardFehler) return Promise.reject(new Error("denied"));
         window.__e11Clipboard = text;
+        return Promise.resolve();
       } },
     });
   });
@@ -2058,6 +2072,16 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await expect(page.locator("#kd-titelliste-text")).toHaveValue("Zulu (1999)\nAlpha (2001)");
   await expect(page.getByRole("status").filter({ hasText: "Titelliste kopiert" })).toHaveCount(0);
   await sortierung.selectOption("titel");
+
+  await page.evaluate(() => { window.__e11ClipboardVerzoegern = true; });
+  await kopieren.click();
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await page.evaluate(() => window.__e11ClipboardPending.resolve());
+  await expect(page.getByRole("status").filter({ hasText: "Titelliste kopiert" })).toHaveCount(0);
+  await expect(page.locator("#kd-titelliste-text")).toHaveCount(0);
+  await expect(page.locator(".kd-titelliste-leer")).toContainText(/keine ausgewählten Einträge/i);
+  await page.getByRole("button", { name: /^Filme/ }).click();
+  await page.evaluate(() => { window.__e11ClipboardVerzoegern = false; });
 
   await page.getByRole("button", { name: /^Serien/ }).click();
   await expect(page.getByText("2 ausgewählt · 0 sichtbar", { exact: true })).toBeVisible();

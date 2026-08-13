@@ -38,17 +38,34 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
   const [bewerteTitel, setBewerteTitel] = useState(null); // Nachtrag-Titel, der gerade bewertet wird
+  const [refAnlegen, setRefAnlegen] = useState(null); // stabiler Schlüssel der geöffneten Rotlink-Maske
   const [auswahlmodus, setAuswahlmodus] = useState(false);
   const [auswahlIds, setAuswahlIds] = useState(() => new Set());
   const [titellisteSichtbar, setTitellisteSichtbar] = useState(false);
   const [kopierStatus, setKopierStatus] = useState(null);
+  const [bewahrterFormTab, setBewahrterFormTab] = useState(null);
+  const [bewahrteExpandedId, setBewahrteExpandedId] = useState(null);
+  const [bewahrterRefKey, setBewahrterRefKey] = useState(null);
+  const [bewahrterBewerteTitel, setBewahrterBewerteTitel] = useState(null);
   const titellisteRef = useRef(null);
   const letzterMasterRef = useRef(master);
   const letzterDatenKontextRef = useRef(datenKontextKey);
   const letzteTitellisteRef = useRef("");
+  const kopierRequestRef = useRef(0);
+  const aktuellerKopierStandRef = useRef({ modus: false, text: "" });
   const unsichereRenderKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
+  const draftGrenzeRef = useRef({ master, datenKontextKey, epoch: 0 });
+  if (draftGrenzeRef.current.master !== master
+      || draftGrenzeRef.current.datenKontextKey !== datenKontextKey) {
+    kopierRequestRef.current += 1;
+    draftGrenzeRef.current = {
+      master, datenKontextKey, epoch: draftGrenzeRef.current.epoch + 1,
+    };
+  }
+  const draftEpoch = draftGrenzeRef.current.epoch;
 
   const beendeAuswahl = useCallback(() => {
+    kopierRequestRef.current += 1;
     setAuswahlmodus(false);
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
@@ -56,24 +73,39 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, []);
 
   const starteAuswahl = useCallback(() => {
+    kopierRequestRef.current += 1;
+    setBewahrterFormTab(typTab);
+    setBewahrteExpandedId(expandedId?.startsWith("b") ? expandedId : null);
+    setBewahrterRefKey(refAnlegen);
+    setBewahrterBewerteTitel(bewerteTitel);
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
     setAuswahlmodus(true);
-  }, []);
+  }, [typTab, expandedId, refAnlegen, bewerteTitel]);
+
+  const resetteLokaleMediathekUi = useCallback(() => {
+    beendeAuswahl();
+    setExpandedId(null);
+    setRefAnlegen(null);
+    setBewerteTitel(null);
+    setBewahrterFormTab(null);
+    setBewahrteExpandedId(null);
+    setBewahrterRefKey(null);
+    setBewahrterBewerteTitel(null);
+  }, [beendeAuswahl, setExpandedId]);
 
   /* Eine Auswahl gehört genau zum gesamten Datenkontext. Master-Ersetzung
      (inkl. Restore/Sync) und Account-/Sessionwechsel beenden sie vollständig.
      Suche, Filter, Typ und Sortierung verändern dagegen nur die sichtbare
      Schnittmenge; die global gewählten stabilen IDs bleiben erhalten. */
   useEffect(() => {
-    if (letzterMasterRef.current !== master) beendeAuswahl();
+    const grenzeGewechselt = letzterMasterRef.current !== master
+      || letzterDatenKontextRef.current !== datenKontextKey;
+    if (grenzeGewechselt) resetteLokaleMediathekUi();
     letzterMasterRef.current = master;
-  }, [master, beendeAuswahl]);
-  useEffect(() => {
-    if (letzterDatenKontextRef.current !== datenKontextKey) beendeAuswahl();
     letzterDatenKontextRef.current = datenKontextKey;
-  }, [datenKontextKey, beendeAuswahl]);
+  }, [master, datenKontextKey, resetteLokaleMediathekUi]);
 
   /* Sprung aus dem Blog: Must-Watch-Refs (mw_…) öffnen die Must-Watch-Ansicht,
      Master-Refs die Bestand-Ansicht (dort ist jeder Eintrag sicher sichtbar). */
@@ -103,10 +135,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [fokusFilmId, master]);
 
   const offeneRefs = useMemo(() => offeneReferenzen(artikel), [artikel]);
+  const offeneRefsMitKey = useMemo(() => offeneRefs.map((o, index) => ({
+    ...o,
+    draftKey: `${o.artikelId}:${index}`,
+  })), [offeneRefs]);
   /* Offene Referenzen typ-bewusst: Musik-Rotlinks im Musik-Tab ergänzen,
      Serien im Serien-Tab. Ohne Typ-Angabe -> Filme-Tab (Default-Annahme). */
-  const offeneRefsTab = useMemo(() => offeneRefs.filter((o) => TYP_GRUPPEN[typTab].includes(o.typ || "film")), [offeneRefs, typTab]);
-  const [refAnlegen, setRefAnlegen] = useState(null); // Index der offenen Referenz mit geöffneter Maske
+  const offeneRefsTab = useMemo(
+    () => offeneRefsMitKey.filter((o) => TYP_GRUPPEN[typTab].includes(o.typ || "film")),
+    [offeneRefsMitKey, typTab],
+  );
   const [besitz, setBesitz] = useState("alle");
   const [genreF, setGenreF] = useState(null);
   const [katF, setKatF] = useState(null);
@@ -136,7 +174,6 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   };
   const dreieckTab = typTab === "filme" || typTab === "serien";
   const HAUPTTYP = { filme: "film", serien: "serie", musik: "musik", sonstiges: "sonstiges" };
-  const typReihe = [HAUPTTYP[typTab]].concat(ALLE_TYPEN.filter((t) => t !== HAUPTTYP[typTab]));
 
   /* "Kommt vor in:" — Laufzeit-berechnet, ein Durchlauf über alle Artikel.
      Wird nicht gepflegt, sonst existiert die Verbindung zweimal. */
@@ -209,6 +246,35 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return list.sort(aktiv);
   }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier]);
 
+  const sichtbareObjekte = useMemo(() => new Set(mediathek), [mediathek]);
+  const bewahrteKarte = useMemo(() => {
+    if (!bewahrteExpandedId) return null;
+    return basis.find((f) => "b" + f.id === bewahrteExpandedId) || null;
+  }, [basis, bewahrteExpandedId]);
+  const kartenZumRendern = useMemo(() => {
+    if (auswahlmodus) {
+      return mediathek.concat(basis.filter((f) => !sichtbareObjekte.has(f)));
+    }
+    if (bewahrteKarte && !sichtbareObjekte.has(bewahrteKarte)) {
+      return mediathek.concat([bewahrteKarte]);
+    }
+    return mediathek;
+  }, [auswahlmodus, mediathek, basis, sichtbareObjekte, bewahrteKarte]);
+
+  /* Nach Auswahlende bleiben nur tatsächlich bewahrte Ursprungs-Drafts so
+     lange zusätzlich gemountet, bis ihre Ansicht wieder sichtbar ist. Danach
+     gilt außerhalb des Modus wieder das bisherige Unmount-Verhalten. */
+  useEffect(() => {
+    if (auswahlmodus) return;
+    if (bewahrterFormTab === typTab) setBewahrterFormTab(null);
+    if (bewahrteKarte && sichtbareObjekte.has(bewahrteKarte)) setBewahrteExpandedId(null);
+    if (bewahrterRefKey && offeneRefsTab.some((o) => o.draftKey === bewahrterRefKey)) setBewahrterRefKey(null);
+    if (bewahrterBewerteTitel && typTab === "filme") setBewahrterBewerteTitel(null);
+  }, [
+    auswahlmodus, bewahrterFormTab, typTab, bewahrteKarte, sichtbareObjekte,
+    bewahrterRefKey, offeneRefsTab, bewahrterBewerteTitel,
+  ]);
+
   const idAnalyse = useMemo(() => analysiereAuswaehlbareIds(master || []), [master]);
   /* Nur IDs, die aus dem gesamten aktuellen Master verschwinden oder dort
      nicht mehr eindeutig sind, werden bereinigt. Sichtfilter sind ausdrücklich
@@ -231,12 +297,16 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     () => erstelleTitelliste(mediathek, auswahlIds, idAnalyse.auswaehlbareIds),
     [mediathek, auswahlIds, idAnalyse],
   );
+  aktuellerKopierStandRef.current = { modus: auswahlmodus, text: titelliste };
   useEffect(() => {
     if (!auswahlmodus) {
       letzteTitellisteRef.current = "";
       return;
     }
-    if (letzteTitellisteRef.current !== titelliste) setKopierStatus(null);
+    if (letzteTitellisteRef.current !== titelliste) {
+      kopierRequestRef.current += 1;
+      setKopierStatus(null);
+    }
     letzteTitellisteRef.current = titelliste;
   }, [auswahlmodus, titelliste]);
   const auswahlZaehlerText = sichtbareAuswahl.length === auswahlIds.size
@@ -257,6 +327,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [idAnalyse]);
 
   const leereAuswahl = useCallback(() => {
+    kopierRequestRef.current += 1;
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
@@ -264,13 +335,21 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
   const kopiereTitelliste = useCallback(async () => {
     if (!titelliste) return;
+    const text = titelliste;
+    const requestId = ++kopierRequestRef.current;
+    const istNochAktuell = () => {
+      const stand = aktuellerKopierStandRef.current;
+      return kopierRequestRef.current === requestId && stand.modus && stand.text === text;
+    };
     setTitellisteSichtbar(true);
     setKopierStatus({ art: "laeuft", text: "Titelliste wird kopiert …" });
     try {
       if (!globalThis.navigator?.clipboard?.writeText) throw new Error("CLIPBOARD_UNAVAILABLE");
-      await globalThis.navigator.clipboard.writeText(titelliste);
+      await globalThis.navigator.clipboard.writeText(text);
+      if (!istNochAktuell()) return;
       setKopierStatus({ art: "erfolg", text: "Titelliste kopiert." });
     } catch {
+      if (!istNochAktuell()) return;
       setKopierStatus({
         art: "fehler",
         text: "Kopieren war nicht möglich. Die Titelliste bleibt unten sichtbar und kann manuell kopiert werden.",
@@ -287,6 +366,17 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setAnsicht(id);
     setExpandedId(null);
   }, [beendeAuswahl, setExpandedId]);
+
+  const wechsleTyp = useCallback((t) => {
+    setTypTab(t);
+    if (auswahlmodus) return;
+    if (!bewahrteExpandedId) setExpandedId(null);
+    if (!bewahrterRefKey) setRefAnlegen(null);
+    if (!bewahrterBewerteTitel) setBewerteTitel(null);
+  }, [
+    auswahlmodus, bewahrteExpandedId, setExpandedId,
+    bewahrterRefKey, bewahrterBewerteTitel,
+  ]);
 
   return (
     <section>
@@ -351,7 +441,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
         </div>
       )}
       {/* Typ-Tabs (Filter auf typ) */}
-      <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={(t) => { setTypTab(t); setExpandedId(null); }}
+      <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={wechsleTyp}
         options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
 
       <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -423,23 +513,40 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           <strong> Settings → Gesamt-Backup herunterladen</strong>.
         </div>
       )}
-      {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
-          schlichte MedienForm. key=typTab: Tab-Wechsel klappt das Formular zu. */}
-      <div data-tour="eintrag-neu" hidden={auswahlmodus} aria-hidden={auswahlmodus || undefined}
-        style={{ marginBottom: 16 }}>
-        {hatDreieck(HAUPTTYP[typTab])
-          ? <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
-              onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
-              prognoseSperrgrund={prognoseSperrgrund} />
-          : <MedienForm key={typTab} typ={HAUPTTYP[typTab]} onAdd={addFilm} />}
-      </div>
+      {/* Im Normalbetrieb bleibt weiterhin nur der aktive Tab gemountet. Ein
+          beim Auswahlstart vorhandener Neu-Draft behält zusätzlich exakt seine
+          Instanz, bis sein Ursprungstab nach Auswahlende wieder sichtbar war. */}
+      {Object.keys(TYP_GRUPPEN)
+        .filter((tab) => tab === typTab || tab === bewahrterFormTab)
+        .map((tab) => {
+          const hauptTyp = HAUPTTYP[tab];
+          const typOptionen = [hauptTyp].concat(ALLE_TYPEN.filter((t) => t !== hauptTyp));
+          const versteckt = auswahlmodus || tab !== typTab;
+          return (
+            <div key={`${draftEpoch}:neu:${tab}`}
+              data-tour={tab === typTab ? "eintrag-neu" : undefined}
+              data-eintrag-neu-tab={tab}
+              hidden={versteckt} aria-hidden={versteckt || undefined}
+              style={{ marginBottom: 16 }}>
+              {hatDreieck(hauptTyp)
+                ? <FilmForm typOptionen={typOptionen} onAdd={addFilm}
+                    onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
+                    prognoseSperrgrund={prognoseSperrgrund} />
+                : <MedienForm typ={hauptTyp} onAdd={addFilm} />}
+            </div>
+          );
+        })}
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>
         {mediathek.length} {mediathek.length === 1 ? "Eintrag" : "Einträge"} · {auswahlmodus ? "Karte antippen zum Auswählen" : "Karte antippen für Details & Bearbeiten"}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {mediathek.map((f) => (
-          <div key={renderKeyFuer(f)} id={"film-" + f.id} data-film-id={String(f.id)}>
+        {kartenZumRendern.map((f) => {
+          const sichtbar = sichtbareObjekte.has(f);
+          const versteckt = !sichtbar;
+          return (
+          <div key={`${draftEpoch}:${renderKeyFuer(f)}`} id={"film-" + f.id}
+            data-film-id={String(f.id)} hidden={versteckt} aria-hidden={versteckt || undefined}>
             <FilmCard
               film={f}
               streamBadge={dreieckTab && badgeFuer ? badgeFuer(f) : null}
@@ -476,26 +583,37 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               } : null}
             />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Offene Blog-Referenzen: Sammelstelle für "Später"-geklickte Rotlinks.
           Reiner Laufzeit-Filter über die Artikel — wird nicht gepflegt. */}
-      {!auswahlmodus && ansicht === "bestand" && offeneRefsTab.length > 0 && (
-        <details style={{ marginTop: 26 }} open>
+      {ansicht === "bestand" && offeneRefsMitKey.length > 0 && (
+        <details data-mediathek-drafts="rotlinks"
+          hidden={auswahlmodus || offeneRefsTab.length === 0}
+          aria-hidden={(auswahlmodus || offeneRefsTab.length === 0) || undefined}
+          style={{ marginTop: 26 }} open>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: ROTLINK }}>
             Offene Blog-Referenzen ({offeneRefsTab.length}) — {TAB_LABELS[typTab]} ohne Mediathek-Eintrag
           </summary>
           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-            {offeneRefsTab.map((o, i) => {
-              const zielTyp = o.typ || (typTab === "musik" ? "musik" : typTab === "sonstiges" ? "sonstiges" : typTab === "serien" ? "serie" : "film");
-              const aktiv = refAnlegen === i;
+            {offeneRefsMitKey.map((o) => {
+              const zielTyp = o.typ || "film";
+              const imAktuellenTab = TYP_GRUPPEN[typTab].includes(o.typ || "film");
+              const aktiv = refAnlegen === o.draftKey;
               return (
-                <div key={i} style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
+                <div key={`${draftEpoch}:rotlink:${o.draftKey}`}
+                  data-rotlink-draft-key={o.draftKey}
+                  hidden={!imAktuellenTab} aria-hidden={!imAktuellenTab || undefined}
+                  style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
                   <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ color: ROTLINK, flex: 1, minWidth: 160 }}>{o.eingabe}{o.jahr ? " (" + o.jahr + ")" : ""}{o.typ ? " · " + o.typ : ""}</span>
                     <span style={{ color: T.rauch }}>aus „{o.artikelTitel}“</span>
-                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }} onClick={() => setRefAnlegen(aktiv ? null : i)}>
+                    <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }} onClick={() => {
+                      setRefAnlegen(aktiv ? null : o.draftKey);
+                      if (aktiv) setBewahrterRefKey(null);
+                    }}>
                       {aktiv ? "Schließen" : "✎ Anlegen"}
                     </button>
                     {onArtikelKlick && (
@@ -507,8 +625,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                       {/* Nach dem Anlegen heilt die automatische Rotlink-Heilung die
                           Referenz — die Zeile verschwindet von selbst. */}
                       {hatDreieck(zielTyp)
-                        ? <FilmForm startOffen typOptionen={[zielTyp]} initial={{ titel: o.eingabe, jahr: o.jahr || "" }} onAdd={addFilm} onDone={() => setRefAnlegen(null)} />
-                        : <MedienForm typ={zielTyp} startOffen initial={{ titel: o.eingabe, jahr: o.jahr || "" }} onAdd={addFilm} onDone={() => setRefAnlegen(null)} />}
+                        ? <FilmForm startOffen typOptionen={[zielTyp]} initial={{ titel: o.eingabe, jahr: o.jahr || "" }} onAdd={addFilm} onDone={() => { setRefAnlegen(null); setBewahrterRefKey(null); }} />
+                        : <MedienForm typ={zielTyp} startOffen initial={{ titel: o.eingabe, jahr: o.jahr || "" }} onAdd={addFilm} onDone={() => { setRefAnlegen(null); setBewahrterRefKey(null); }} />}
                     </div>
                   )}
                 </div>
@@ -519,8 +637,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {/* Unbewerteter Besitz (Nachtrag) — nur im Filme-Tab relevant */}
-      {!auswahlmodus && ansicht === "bestand" && typTab === "filme" && nachtragFlach.length > 0 && (
-        <details style={{ marginTop: 26 }}>
+      {ansicht === "bestand" && nachtragFlach.length > 0 && (
+        <details data-mediathek-drafts="nachtrag"
+          hidden={auswahlmodus || typTab !== "filme"}
+          aria-hidden={(auswahlmodus || typTab !== "filme") || undefined}
+          style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
             Unbewerteter Besitz ({nachtragFlach.length}) — noch ohne Dreieck
           </summary>
@@ -534,13 +655,17 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               const quelle = teile.length ? teile.join("+") : "must_watch";
               const aktiv = bewerteTitel === n.titel;
               return (
-                <div key={i} style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
+                <div key={`${draftEpoch}:nachtrag:${n.titel}:${i}`}
+                  style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
                   <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ color: T.leinwand, flex: 1, minWidth: 180 }}>{n.titel}{n.jahr ? " (" + n.jahr + ")" : ""}</span>
                     <span style={{ color: T.wolfram }}>{q.join("+")}</span>
                     {n.edition && <span style={{ color: T.rauch }}>{n.edition}</span>}
                     <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}
-                      onClick={() => setBewerteTitel(aktiv ? null : n.titel)}>
+                      onClick={() => {
+                        setBewerteTitel(aktiv ? null : n.titel);
+                        if (aktiv) setBewahrterBewerteTitel(null);
+                      }}>
                       {aktiv ? "Schließen" : "✎ Bewerten"}
                     </button>
                   </div>
@@ -555,7 +680,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                         typOptionen={["film", "serie"]}
                         initial={{ titel: n.titel, jahr: n.jahr || "", quelle, notiz: n.edition ? "Edition: " + n.edition : "" }}
                         onAdd={addFilm}
-                        onDone={() => setBewerteTitel(null)}
+                        onDone={() => { setBewerteTitel(null); setBewahrterBewerteTitel(null); }}
                       />
                     </div>
                   )}

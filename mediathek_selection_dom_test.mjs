@@ -45,17 +45,26 @@ for (const name of [
 }
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-globalThis.requestAnimationFrame = (fn) => { fn(); return 1; };
+let rafAufrufe = 0;
+globalThis.requestAnimationFrame = (fn) => { rafAufrufe++; fn(); return rafAufrufe; };
 dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
 let clipboardText = "";
 let clipboardFehler = false;
+let clipboardVerzoegern = false;
+let clipboardAuftrag = null;
 Object.defineProperty(dom.window.navigator, "clipboard", {
   configurable: true,
   value: {
-    writeText: async (text) => {
-      if (clipboardFehler) throw new Error("clipboard-denied");
+    writeText: (text) => {
+      if (clipboardVerzoegern) {
+        return new Promise((resolve, reject) => {
+          clipboardAuftrag = { text, resolve, reject };
+        });
+      }
+      if (clipboardFehler) return Promise.reject(new Error("clipboard-denied"));
       clipboardText = text;
+      return Promise.resolve();
     },
   },
 });
@@ -63,32 +72,39 @@ Object.defineProperty(dom.window.navigator, "clipboard", {
 const testModul = await import(pathToFileURL(ausgabe).href + "?v=" + Date.now());
 const { MediathekTab, React, act, useState, createRoot } = testModul;
 const MASTER = [
-  { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
-  { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
+  { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", genre: ["Action"], bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
+  { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", genre: ["Drama"], bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
   { id: "s", typ: "serie", titel: "Serie Eins", jahr: 2020, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 }, begruendung: "Serien-Details" },
   { typ: "film", titel: "Ohne ID", jahr: 2010, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 } },
 ];
+const ARTIKEL_MIT_ROTLINK = [{
+  id: "artikel-offen", titel: "Artikel mit Rotlink", status: "entwurf",
+  liste: [{ eingabe: "Rotlink Kandidat", jahr: 2024, typ: "film", ref: null }],
+}];
+const NACHTRAG_MIT_ENTWURF = [{ titel: "Nachtrag Kandidat", jahr: 2023, quellen: ["dvd"] }];
 let mutationen = 0;
 let updateVerzoegern = false;
 let updateAufloeser = null;
+let updateAblehner = null;
 let addVerzoegern = false;
 let addAufloeser = null;
+let addAblehner = null;
 
-function TestHarness({ master, datenKontextKey }) {
+function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = [] }) {
   const [expandedId, setExpandedId] = useState(null);
   return React.createElement(MediathekTab, {
     master, datenKontextKey, expandedId, setExpandedId,
-    nachtragFlach: [], artikel: [], mustwatch: [],
+    nachtragFlach, artikel, mustwatch: [],
     updateFilm: async () => {
       mutationen++;
       if (!updateVerzoegern) return true;
-      return new Promise((resolve) => { updateAufloeser = resolve; });
+      return new Promise((resolve, reject) => { updateAufloeser = resolve; updateAblehner = reject; });
     },
     deleteFilm: () => { mutationen++; },
     addFilm: async () => {
       mutationen++;
       if (!addVerzoegern) return true;
-      return new Promise((resolve) => { addAufloeser = resolve; });
+      return new Promise((resolve, reject) => { addAufloeser = resolve; addAblehner = reject; });
     },
     addMustwatch: () => { mutationen++; }, updateMustwatch: () => { mutationen++; },
     deleteMustwatch: () => { mutationen++; },
@@ -96,9 +112,9 @@ function TestHarness({ master, datenKontextKey }) {
 }
 
 const root = createRoot(document.getElementById("app"));
-const render = async (master = MASTER, datenKontextKey = "guest:ready:") => {
+const render = async (master = MASTER, datenKontextKey = "guest:ready:", extras = {}) => {
   await act(async () => {
-    root.render(React.createElement(TestHarness, { master, datenKontextKey }));
+    root.render(React.createElement(TestHarness, { master, datenKontextKey, ...extras }));
     await Promise.resolve();
   });
 };
@@ -127,6 +143,13 @@ const setzeWert = async (ziel, wert) => {
   const setter = Object.getOwnPropertyDescriptor(ziel.constructor.prototype, "value")?.set;
   setter.call(ziel, wert);
   await sende(ziel, ziel.tagName === "SELECT" ? "change" : "input");
+};
+const klickeAlle = async (text) => {
+  for (let i = 0; i < 8; i++) {
+    const ziel = knopf(text);
+    if (!ziel) return;
+    await sende(ziel, "click");
+  }
 };
 
 check("Karten öffnen außerhalb des Modus weiterhin Details", karte("a")?.getAttribute("role") === "button");
@@ -168,6 +191,100 @@ check("Neu-Draft wird nach Auswahlende unverändert sichtbar", () => {
 check("Neu-Draft verursacht keine Mutation", mutationen === mutationenVorNeuEntwurf);
 if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
 
+/* Harte Account-/Datenkontextgrenze: Auch bei identischer Film-ID dürfen
+   weder Karten- noch Neu-Drafts aus dem alten Kontext wieder erscheinen. */
+await sende(karte("a"), "click");
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const kontextEditEntwurf = document.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await setzeWert(kontextEditEntwurf, "ENTWURF AUS KONTEXT A");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const kontextNeuEntwurf = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(kontextNeuEntwurf, "NEU AUS KONTEXT A");
+await sende(knopf("Auswählen"), "click");
+const mutationenVorKontextgrenze = mutationen;
+await render(MASTER, "account:ready:konto-b");
+check("Datenkontextwechsel remountet Karten-Edit-Draft trotz gleicher Film-ID", !kontextEditEntwurf.isConnected);
+check("Datenkontextwechsel remountet Neu-Draft", !kontextNeuEntwurf.isConnected);
+check("Datenkontextwechsel beendet Auswahl und erzeugt keine Mutation", !!knopf("Auswählen") && mutationen === mutationenVorKontextgrenze);
+await klickeAlle("Abbrechen");
+if (document.body.textContent.includes("Alpha-Details")) await sende(karte("a"), "click");
+
+/* Echte Master-Ersetzung/Restore ist dieselbe harte Draft-Grenze. */
+await sende(karte("a"), "click");
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const restoreEditEntwurf = document.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await setzeWert(restoreEditEntwurf, "EDIT VOR RESTORE");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const restoreNeuEntwurf = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(restoreNeuEntwurf, "NEU VOR RESTORE");
+await sende(knopf("Auswählen"), "click");
+const mutationenVorRestore = mutationen;
+const restoreMaster = MASTER.map((eintrag) => ({ ...eintrag }));
+await render(restoreMaster, "account:ready:konto-b");
+check("Master-Ersetzung remountet Karten-Edit-Draft trotz gleicher Film-ID", !restoreEditEntwurf.isConnected);
+check("Master-Ersetzung remountet Neu-Draft", !restoreNeuEntwurf.isConnected);
+check("Master-Ersetzung beendet Auswahl und erzeugt keine Mutation", !!knopf("Auswählen") && mutationen === mutationenVorRestore);
+await klickeAlle("Abbrechen");
+if (document.body.textContent.includes("Alpha-Details")) await sende(karte("a"), "click");
+await render(MASTER, "account:ready:konto-b");
+
+/* Sämtliche vor Auswahlstart gemounteten Draft-Arten müssen dieselbe
+   Komponenteninstanz durch Suche, Chip, Sortierung und Typ-Rückkehr tragen. */
+await render(MASTER, "account:ready:konto-b", {
+  artikel: ARTIKEL_MIT_ROTLINK,
+  nachtragFlach: NACHTRAG_MIT_ENTWURF,
+});
+await sende(karte("a"), "click");
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const projektionsEdit = document.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await setzeWert(projektionsEdit, "EDIT BLEIBT DURCH PROJEKTIONEN");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const projektionsNeu = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(projektionsNeu, "NEU BLEIBT DURCH PROJEKTIONEN");
+await sende(knopf("✎ Anlegen"), "click");
+const rotlinkEntwurf = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+  .find((el) => el.value === "Rotlink Kandidat");
+await setzeWert(rotlinkEntwurf, "ROTLINK BLEIBT DURCH PROJEKTIONEN");
+await sende(knopf("✎ Bewerten"), "click");
+const nachtragEntwurf = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+  .find((el) => el.value === "Nachtrag Kandidat");
+await setzeWert(nachtragEntwurf, "NACHTRAG BLEIBT DURCH PROJEKTIONEN");
+const mutationenVorProjektionen = mutationen;
+await sende(knopf("Auswählen"), "click");
+const projektionsSuche = document.querySelector('input[placeholder^="Titel oder Originaltitel"]');
+await setzeWert(projektionsSuche, "Zulu");
+await setzeWert([...document.querySelectorAll("select")].find((el) => [...el.options].some((o) => o.value === "jahr_alt")), "jahr_alt");
+await setzeWert(projektionsSuche, "");
+await sende(knopf("▸ Filter"), "click");
+await sende(knopf("Action"), "click");
+await sende(knopfEnthaelt("Serien"), "click");
+await sende(knopf("Auswahl beenden"), "click");
+await sende(knopfEnthaelt("Filme"), "click");
+await sende(knopf("Action"), "click");
+check("Karten-Edit-Draft behält DOM-Identität und Wert über alle Auswahlprojektionen", projektionsEdit.isConnected && projektionsEdit.value === "EDIT BLEIBT DURCH PROJEKTIONEN");
+check("Film-Neudraft behält DOM-Identität und Wert über alle Auswahlprojektionen", projektionsNeu.isConnected && projektionsNeu.value === "NEU BLEIBT DURCH PROJEKTIONEN");
+check("Rotlink-Draft behält DOM-Identität und Wert über alle Auswahlprojektionen", rotlinkEntwurf.isConnected && rotlinkEntwurf.value === "ROTLINK BLEIBT DURCH PROJEKTIONEN");
+check("Nachtrag-Draft behält DOM-Identität und Wert über alle Auswahlprojektionen", nachtragEntwurf.isConnected && nachtragEntwurf.value === "NACHTRAG BLEIBT DURCH PROJEKTIONEN");
+check("Draft-Projektionen verursachen keine Mutation", mutationen === mutationenVorProjektionen);
+await klickeAlle("Abbrechen");
+if (document.body.textContent.includes("Alpha-Details")) await sende(karte("a"), "click");
+await render(MASTER, "account:ready:konto-b");
+
+await sende(knopfEnthaelt("Musik"), "click");
+await sende(knopf("+ Musik hinzufügen"), "click");
+const medienNeuEntwurf = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(medienNeuEntwurf, "MEDIEN-DRAFT BLEIBT");
+const mutationenVorMedienDraft = mutationen;
+await sende(knopf("Auswählen"), "click");
+await sende(knopfEnthaelt("Filme"), "click");
+await setzeWert([...document.querySelectorAll("select")].find((el) => [...el.options].some((o) => o.value === "jahr_alt")), "jahr_alt");
+await sende(knopf("Auswahl beenden"), "click");
+await sende(knopfEnthaelt("Musik"), "click");
+check("Medien-Neudraft behält DOM-Identität und Wert über Typ/Sortierung", medienNeuEntwurf.isConnected && medienNeuEntwurf.value === "MEDIEN-DRAFT BLEIBT");
+check("Medien-Neudraft über Auswahlprojektionen erzeugt keine Mutation", mutationen === mutationenVorMedienDraft);
+await klickeAlle("Abbrechen");
+await sende(knopfEnthaelt("Filme"), "click");
+
 await sende(knopf("Auswählen"), "click");
 check("Modus ist ausdrücklich aktiviert", !!knopf("Auswahl beenden"));
 check("leere Auswahl meldet null", document.querySelector(".kd-auswahl-zaehler")?.textContent === "0 ausgewählt");
@@ -190,6 +307,87 @@ check("Löschaktion fehlt vollständig im Auswahlmodus", !document.querySelector
 
 const sortierung = [...document.querySelectorAll("select")].find((el) => [...el.options].some((o) => o.value === "titel"));
 await setzeWert(sortierung, "titel");
+const suche = document.querySelector('input[placeholder^="Titel oder Originaltitel"]');
+
+clipboardVerzoegern = true;
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenVorTeilfilter = clipboardAuftrag;
+await setzeWert(suche, "Alpha");
+await act(async () => {
+  kopierenVorTeilfilter.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Resolve setzt keinen Status für veraltete Teilausgabe", !document.querySelector(".kd-kopierstatus") && document.querySelector("#kd-titelliste-text")?.value === "Alpha (2001)");
+
+await setzeWert(suche, "");
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenRejectVorTeilfilter = clipboardAuftrag;
+await setzeWert(suche, "Alpha");
+await act(async () => {
+  kopierenRejectVorTeilfilter.reject(new Error("clipboard-denied-teilfilter"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Reject setzt keinen Status für veraltete Teilausgabe", !document.querySelector(".kd-kopierstatus") && document.querySelector("#kd-titelliste-text")?.value === "Alpha (2001)");
+
+await setzeWert(suche, "");
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenResolveVorLeerfilter = clipboardAuftrag;
+await setzeWert(suche, "Nicht vorhanden");
+await act(async () => {
+  kopierenResolveVorLeerfilter.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Resolve bleibt bei leerer Sichtmenge wirkungslos", !document.querySelector(".kd-kopierstatus") && !document.querySelector("#kd-titelliste-text") && !!document.querySelector(".kd-titelliste-leer"));
+
+await setzeWert(suche, "");
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenVorLeerfilter = clipboardAuftrag;
+await setzeWert(suche, "Nicht vorhanden");
+await act(async () => {
+  kopierenVorLeerfilter.reject(new Error("clipboard-denied-spaet"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Reject behauptet bei leerer Sichtmenge keinen manuellen Text", !document.querySelector(".kd-kopierstatus") && !document.querySelector("#kd-titelliste-text") && !!document.querySelector(".kd-titelliste-leer"));
+
+await setzeWert(suche, "");
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenVorBeenden = clipboardAuftrag;
+const rafVorBeenden = rafAufrufe;
+await sende(knopf("Auswahl beenden"), "click");
+await act(async () => {
+  kopierenVorBeenden.reject(new Error("clipboard-denied-nach-ende"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Ergebnis nach Beenden bleibt vollständig wirkungslos", !!knopf("Auswählen") && !document.querySelector(".kd-kopierstatus") && rafAufrufe === rafVorBeenden);
+
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]'), "click");
+clipboardAuftrag = null;
+await sende(knopf("Titelliste kopieren"), "click");
+const kopierenResolveVorBeenden = clipboardAuftrag;
+await sende(knopf("Auswahl beenden"), "click");
+await act(async () => {
+  kopierenResolveVorBeenden.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+});
+check("Verspätetes Clipboard-Resolve nach Beenden setzt keinen alten Erfolg", !!knopf("Auswählen") && !document.querySelector(".kd-kopierstatus"));
+
+clipboardVerzoegern = false;
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]'), "click");
 await sende(knopf("Titelliste kopieren"), "click");
 const erwarteteListe = "Alpha (2001)\nZulu (1999)";
 check("Clipboard-Erfolg kopiert die aktuelle sichtbare Sortierung", clipboardText === erwarteteListe);
@@ -202,7 +400,6 @@ check("Sortieren hält die sichtbare Titelliste offen und aktualisiert ihre Reih
 check("Sortieren setzt den veralteten Clipboard-Status zurück", !document.querySelector(".kd-kopierstatus"));
 await setzeWert(sortierung, "titel");
 
-const suche = document.querySelector('input[placeholder^="Titel oder Originaltitel"]');
 await setzeWert(suche, "Alpha");
 check("Suchfilter behält globale IDs und meldet die sichtbare Schnittmenge", document.querySelector(".kd-auswahl-zaehler")?.textContent === "2 ausgewählt · 1 sichtbar");
 check("Teilweise sichtbare Auswahl hält Kopieren aktiv und aktualisiert die Ausgabe", !knopf("Titelliste kopieren").disabled && document.querySelector("#kd-titelliste-text")?.value === "Alpha (2001)");
@@ -256,10 +453,11 @@ check("Auswahlmodus verursacht keinerlei Bestandsmutation", mutationen === 0);
 await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
 await setzeWert(document.querySelector('textarea[placeholder^="Begründung"]'), "Speichern läuft einmalig weiter");
 updateVerzoegern = true;
+const mutationenVorEditorSave = mutationen;
 await sende(knopf("Speichern"), "click");
-check("laufender Editor-Save wurde genau einmal gestartet", mutationen === 1 && typeof updateAufloeser === "function" && !!knopf("Speichert …"));
+check("laufender Editor-Save wurde genau einmal gestartet", mutationen === mutationenVorEditorSave + 1 && typeof updateAufloeser === "function" && !!knopf("Speichert …"));
 await sende(knopf("Auswählen"), "click");
-check("laufender Editor-Save bleibt beim Moduswechsel gemountet", document.querySelector(".kd-film-editor-shell")?.hidden && mutationen === 1);
+check("laufender Editor-Save bleibt beim Moduswechsel gemountet", document.querySelector(".kd-film-editor-shell")?.hidden && mutationen === mutationenVorEditorSave + 1);
 await act(async () => {
   updateAufloeser(true);
   await Promise.resolve();
@@ -267,17 +465,41 @@ await act(async () => {
 });
 updateVerzoegern = false;
 await sende(knopf("Auswahl beenden"), "click");
-check("laufender Editor-Save wird weder abgebrochen noch dupliziert", mutationen === 1 && !document.querySelector(".kd-editpanel") && document.body.textContent.includes("Alpha-Details"));
+check("laufender Editor-Save wird weder abgebrochen noch dupliziert", mutationen === mutationenVorEditorSave + 1 && !document.querySelector(".kd-editpanel") && document.body.textContent.includes("Alpha-Details"));
+
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const fehlerEditEntwurf = document.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await setzeWert(fehlerEditEntwurf, "FEHLER-DRAFT BLEIBT AM URSPRUNG");
+updateVerzoegern = true;
+await sende(knopf("Speichern"), "click");
+const mutationenBeimEditorFehler = mutationen;
+await sende(knopf("Auswählen"), "click");
+await setzeWert(suche, "Zulu");
+await sende(knopfEnthaelt("Serien"), "click");
+await sende(knopfEnthaelt("Filme"), "click");
+await setzeWert(suche, "");
+await act(async () => {
+  updateAblehner(new Error("Editor-Save absichtlich fehlgeschlagen"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+updateVerzoegern = false;
+await sende(knopf("Auswahl beenden"), "click");
+check("fehlgeschlagener Editor-Save bleibt genau einmal und mit Draft am Ursprung", mutationen === mutationenBeimEditorFehler
+  && fehlerEditEntwurf.isConnected && fehlerEditEntwurf.value === "FEHLER-DRAFT BLEIBT AM URSPRUNG"
+  && document.body.textContent.includes("Editor-Save absichtlich fehlgeschlagen"));
+await sende(knopf("Abbrechen"), "click");
 
 await sende(karte("a"), "click");
 await sende(knopf("+ Eintrag hinzufügen"), "click");
 await setzeWert(document.querySelector('input[placeholder="Titel *"]'), "Laufender Neu-Save");
 await setzeWert(document.querySelector('input[placeholder="Jahr *"]'), "2025");
 addVerzoegern = true;
+const mutationenVorNeuSave = mutationen;
 await sende(knopf("Hinzufügen"), "click");
-check("laufender Neu-Save wurde genau einmal gestartet", mutationen === 2 && typeof addAufloeser === "function" && !!knopf("Speichert …"));
+check("laufender Neu-Save wurde genau einmal gestartet", mutationen === mutationenVorNeuSave + 1 && typeof addAufloeser === "function" && !!knopf("Speichert …"));
 await sende(knopf("Auswählen"), "click");
-check("laufender Neu-Save bleibt beim Moduswechsel gemountet", document.querySelector('[data-tour="eintrag-neu"]')?.hidden && mutationen === 2);
+check("laufender Neu-Save bleibt beim Moduswechsel gemountet", document.querySelector('[data-tour="eintrag-neu"]')?.hidden && mutationen === mutationenVorNeuSave + 1);
 await act(async () => {
   addAufloeser(true);
   await Promise.resolve();
@@ -285,7 +507,29 @@ await act(async () => {
 });
 addVerzoegern = false;
 await sende(knopf("Auswahl beenden"), "click");
-check("laufender Neu-Save wird weder abgebrochen noch dupliziert", mutationen === 2 && !!knopf("+ Eintrag hinzufügen"));
+check("laufender Neu-Save wird weder abgebrochen noch dupliziert", mutationen === mutationenVorNeuSave + 1 && !!knopf("+ Eintrag hinzufügen"));
+
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const fehlerNeuEntwurf = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(fehlerNeuEntwurf, "NEU-FEHLER-DRAFT BLEIBT");
+await setzeWert(document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Jahr *"]'), "2025");
+addVerzoegern = true;
+await sende(knopf("Hinzufügen"), "click");
+const mutationenBeimNeuFehler = mutationen;
+await sende(knopf("Auswählen"), "click");
+await sende(knopfEnthaelt("Serien"), "click");
+await sende(knopfEnthaelt("Filme"), "click");
+await act(async () => {
+  addAblehner(new Error("Neu-Save absichtlich fehlgeschlagen"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+addVerzoegern = false;
+await sende(knopf("Auswahl beenden"), "click");
+check("fehlgeschlagener Neu-Save bleibt genau einmal und mit Draft am Ursprung", mutationen === mutationenBeimNeuFehler
+  && fehlerNeuEntwurf.isConnected && fehlerNeuEntwurf.value === "NEU-FEHLER-DRAFT BLEIBT"
+  && document.body.textContent.includes("Neu-Save absichtlich fehlgeschlagen"));
+await sende(knopf("Abbrechen"), "click");
 
 await act(async () => { root.unmount(); });
 dom.window.close();
