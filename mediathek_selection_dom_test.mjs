@@ -17,6 +17,7 @@ await esbuild.build({
   stdin: {
     contents: [
       'export { MediathekTab } from "./src/tabs/MediathekTab.jsx";',
+      'export { LEERER_MEDIATHEK_MASTER } from "./src/App.jsx";',
       'export { default as React, act, useState } from "react";',
       'export { createRoot } from "react-dom/client";',
     ].join("\n"),
@@ -70,7 +71,9 @@ Object.defineProperty(dom.window.navigator, "clipboard", {
 });
 
 const testModul = await import(pathToFileURL(ausgabe).href + "?v=" + Date.now());
-const { MediathekTab, React, act, useState, createRoot } = testModul;
+const {
+  MediathekTab, LEERER_MEDIATHEK_MASTER, React, act, useState, createRoot,
+} = testModul;
 const MASTER = [
   { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", genre: ["Action"], bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
   { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", genre: ["Drama"], bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
@@ -90,10 +93,12 @@ let addVerzoegern = false;
 let addAufloeser = null;
 let addAblehner = null;
 
-function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = [] }) {
+function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = [],
+  normalisiereWieApp = false }) {
   const [expandedId, setExpandedId] = useState(null);
   return React.createElement(MediathekTab, {
-    master, datenKontextKey, expandedId, setExpandedId,
+    master: normalisiereWieApp ? (master ?? LEERER_MEDIATHEK_MASTER) : master,
+    datenKontextKey, expandedId, setExpandedId,
     nachtragFlach, artikel, mustwatch: [],
     updateFilm: async () => {
       mutationen++;
@@ -191,6 +196,89 @@ check("Neu-Draft wird nach Auswahlende unverändert sichtbar", () => {
 check("Neu-Draft verursacht keine Mutation", mutationen === mutationenVorNeuEntwurf);
 if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
 
+/* Der Master-Controller repräsentiert einen leeren Bestand als `null`. Die
+   App-Normalisierung darf bei einem beliebigen Parent-Render deshalb keine
+   neue Master-Identität erfinden: offene Add-Drafts müssen dieselbe
+   Komponenteninstanz behalten, auch wenn ein fehlgeschlagener Save zugleich
+   einen Fehler-Render auslöst. */
+check("App-Normalisierung liefert für null dieselbe leere Master-Instanz",
+  Object.isFrozen(LEERER_MEDIATHEK_MASTER) && LEERER_MEDIATHEK_MASTER.length === 0);
+check("App-Normalisierung reicht einen echten Master unverändert durch", (MASTER ?? LEERER_MEDIATHEK_MASTER) === MASTER);
+await render(null, "guest:ready:", { normalisiereWieApp: true, parentRender: 0 });
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const leerFilmParentTitel = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(leerFilmParentTitel, "LEERER FILM-DRAFT BEI PARENT-RENDER");
+await setzeWert(document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Jahr *"]'), "2026");
+const mutationenVorLeerFilmParent = mutationen;
+await render(null, "guest:ready:", { normalisiereWieApp: true, parentRender: 1 });
+check("Leerer App-Master bewahrt Film-Neudraft bei beliebigem Parent-Render", leerFilmParentTitel.isConnected
+  && document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]') === leerFilmParentTitel
+  && leerFilmParentTitel.value === "LEERER FILM-DRAFT BEI PARENT-RENDER");
+check("Leerer Film-Parent-Render erzeugt keine Mutation", mutationen === mutationenVorLeerFilmParent);
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const leerFilmFehlerTitel = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(leerFilmFehlerTitel, "LEERER FILM-DRAFT NACH SAVE-FEHLER");
+await setzeWert(document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Jahr *"]'), "2026");
+addVerzoegern = true;
+const mutationenVorLeerFilmFehler = mutationen;
+await sende(knopf("Hinzufügen"), "click");
+await act(async () => {
+  addAblehner(new Error("Leerer Film-Save absichtlich fehlgeschlagen"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+await render(null, "guest:ready:", { normalisiereWieApp: true, parentRender: 2 });
+addVerzoegern = false;
+check("Leerer App-Master bewahrt Film-Neudraft und Fehler nach fehlgeschlagenem Add", mutationen === mutationenVorLeerFilmFehler + 1
+  && leerFilmFehlerTitel.isConnected && leerFilmFehlerTitel.value === "LEERER FILM-DRAFT NACH SAVE-FEHLER"
+  && document.body.textContent.includes("Leerer Film-Save absichtlich fehlgeschlagen"));
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+
+await sende(knopfEnthaelt("Musik"), "click");
+await sende(knopf("+ Musik hinzufügen"), "click");
+const leerMedienParentTitel = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(leerMedienParentTitel, "LEERER MEDIEN-DRAFT BEI PARENT-RENDER");
+const mutationenVorLeerMedienParent = mutationen;
+await render(null, "guest:ready:", { normalisiereWieApp: true, parentRender: 3 });
+check("Leerer App-Master bewahrt Medien-Neudraft bei beliebigem Parent-Render", leerMedienParentTitel.isConnected
+  && document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]') === leerMedienParentTitel
+  && leerMedienParentTitel.value === "LEERER MEDIEN-DRAFT BEI PARENT-RENDER");
+check("Leerer Medien-Parent-Render erzeugt keine Mutation", mutationen === mutationenVorLeerMedienParent);
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+
+await sende(knopf("+ Musik hinzufügen"), "click");
+const leerMedienFehlerTitel = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(leerMedienFehlerTitel, "LEERER MEDIEN-DRAFT NACH SAVE-FEHLER");
+addVerzoegern = true;
+const mutationenVorLeerMedienFehler = mutationen;
+await sende(knopf("Hinzufügen"), "click");
+await act(async () => {
+  addAblehner(new Error("Leerer Medien-Save absichtlich fehlgeschlagen"));
+  await Promise.resolve();
+  await Promise.resolve();
+});
+await render(null, "guest:ready:", { normalisiereWieApp: true, parentRender: 4 });
+addVerzoegern = false;
+check("Leerer App-Master bewahrt Medien-Neudraft und Fehler nach fehlgeschlagenem Add", mutationen === mutationenVorLeerMedienFehler + 1
+  && leerMedienFehlerTitel.isConnected && leerMedienFehlerTitel.value === "LEERER MEDIEN-DRAFT NACH SAVE-FEHLER"
+  && document.body.textContent.includes("Leerer Medien-Save absichtlich fehlgeschlagen"));
+if (knopf("Abbrechen")) await sende(knopf("Abbrechen"), "click");
+
+await sende(knopfEnthaelt("Filme"), "click");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const leerKontextTitel = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(leerKontextTitel, "LEERER DRAFT AUS GASTKONTEXT");
+const mutationenVorLeerKontext = mutationen;
+await render(null, "account:ready:konto-leer", { normalisiereWieApp: true, parentRender: 5 });
+check("Datenkontextwechsel resettiert Draft auch bei leerem App-Master", !leerKontextTitel.isConnected
+  && !!knopf("+ Eintrag hinzufügen") && mutationen === mutationenVorLeerKontext);
+
+/* Die bestehende echte, nichtleere Master-Ersetzungsgrenze bleibt separat
+   belegt; sie darf durch die Leer-Normalisierung nicht abgeschwächt werden. */
+await render(MASTER, "account:ready:konto-leer");
+
 /* Harte Account-/Datenkontextgrenze: Auch bei identischer Film-ID dürfen
    weder Karten- noch Neu-Drafts aus dem alten Kontext wieder erscheinen. */
 await sende(karte("a"), "click");
@@ -285,6 +373,7 @@ check("Medien-Neudraft über Auswahlprojektionen erzeugt keine Mutation", mutati
 await klickeAlle("Abbrechen");
 await sende(knopfEnthaelt("Filme"), "click");
 
+const mutationenVorAuswahlmodus = mutationen;
 await sende(knopf("Auswählen"), "click");
 check("Modus ist ausdrücklich aktiviert", !!knopf("Auswahl beenden"));
 check("leere Auswahl meldet null", document.querySelector(".kd-auswahl-zaehler")?.textContent === "0 ausgewählt");
@@ -448,7 +537,7 @@ check("Master-Ersetzung oder Restore beendet die Auswahl", !!knopf("Auswählen")
 
 await sende(karte("a"), "click");
 check("Karte ist nach Beenden wieder editierbar/öffnend", document.body.textContent.includes("Alpha-Details"));
-check("Auswahlmodus verursacht keinerlei Bestandsmutation", mutationen === 0);
+check("Auswahlmodus verursacht keinerlei Bestandsmutation", mutationen === mutationenVorAuswahlmodus);
 
 await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
 await setzeWert(document.querySelector('textarea[placeholder^="Begründung"]'), "Speichern läuft einmalig weiter");

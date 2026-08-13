@@ -113,7 +113,7 @@ import { seriesWatchService } from "./services/seriesWatch.js";
 const normalisiereEntdeckenStatus = (wert) => (
   wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
 );
-
+export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
      Query-Parameter aus. Der Modus schreibt weder Settings noch Rhythmus und
@@ -2032,7 +2032,7 @@ export default function App() {
 
         {tab === "mediathek" && bootDone && (
           <MediathekTab
-            master={master || []} nachtragFlach={master ? nachtragSichtbar : []}
+            master={master ?? LEERER_MEDIATHEK_MASTER} nachtragFlach={master ? nachtragSichtbar : []}
             expandedId={expandedId} setExpandedId={setExpandedId}
             updateFilm={updateFilm} deleteFilm={deleteFilm} addFilm={addFilm} badgeFuer={badgeFuer}
             addFilmMitPrognose={addFilmMitPrognose}
