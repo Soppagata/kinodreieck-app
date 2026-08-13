@@ -1966,3 +1966,84 @@ test("Desktop behält oberhalb 760 px die Hauptnavigation samt Suche", async ({ 
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Suche");
   await keineDokumentUeberbreite(page);
 });
+
+test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "e11-browser" }, gespeichertAm: 1_786_650_000_000,
+      filme: [
+        { id: "z", typ: "film", titel: "Zulu", jahr: 1999, quelle: "dvd", bewertung: { wie: 1, was: 1, warum: 1 }, begruendung: "Zulu-Details", notiz: "PRIVAT-Z" },
+        { id: "a", typ: "film", titel: "Alpha", jahr: 2001, quelle: "dvd", bewertung: { wie: 3, was: 3, warum: 3 }, begruendung: "Alpha-Details", notiz: "PRIVAT-A" },
+      ],
+    }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: 1_786_650_000_000 }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Mediathek");
+
+  const alphaKarte = page.locator('[data-film-id="a"] .kd-karte');
+  await alphaKarte.click();
+  await expect(alphaKarte).toContainText("Alpha-Details");
+  await alphaKarte.click();
+
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Auswahl beenden", exact: true })).toBeVisible();
+  const kopieren = page.getByRole("button", { name: "Titelliste kopieren", exact: true });
+  await expect(kopieren).toBeDisabled();
+  await expect(page.locator(".kd-film-loeschen")).toHaveCount(0);
+
+  const alpha = page.getByRole("checkbox", { name: "Alpha auswählen" });
+  const zulu = page.getByRole("checkbox", { name: "Zulu auswählen" });
+  await alpha.focus();
+  await alpha.press("Space");
+  await zulu.click();
+  await expect(page.getByText("2 ausgewählt", { exact: true })).toBeVisible();
+  await expect(alpha).toHaveAttribute("aria-checked", "true");
+  const markerBox = await alpha.locator(".kd-auswahl-marke").boundingBox();
+  expect(markerBox?.width).toBeGreaterThanOrEqual(44);
+  expect(markerBox?.height).toBeGreaterThanOrEqual(44);
+
+  await page.locator("select").filter({ has: page.locator('option[value="titel"]') }).selectOption("titel");
+  await page.evaluate(() => {
+    window.__e11Clipboard = "";
+    window.__e11ClipboardFehler = false;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text) => {
+        if (window.__e11ClipboardFehler) throw new Error("denied");
+        window.__e11Clipboard = text;
+      } },
+    });
+  });
+  await kopieren.click();
+  await expect(page.getByRole("status").filter({ hasText: "Titelliste kopiert" })).toBeVisible();
+  await expect(page.locator("#kd-titelliste-text")).toHaveValue("Alpha (2001)\nZulu (1999)");
+  expect(await page.evaluate(() => window.__e11Clipboard)).toBe("Alpha (2001)\nZulu (1999)");
+  expect(await page.locator("#kd-titelliste-text").inputValue()).not.toContain("PRIVAT");
+
+  await page.getByRole("button", { name: "Auswahl leeren", exact: true }).click();
+  await expect(page.getByText("0 ausgewählt", { exact: true })).toBeVisible();
+  await expect(kopieren).toBeDisabled();
+
+  await alpha.click();
+  await page.evaluate(() => { window.__e11ClipboardFehler = true; });
+  await kopieren.click();
+  await expect(page.getByRole("alert")).toContainText("manuell kopiert");
+  await expect(page.locator("#kd-titelliste-text")).toBeVisible();
+
+  await page.getByRole("button", { name: /^Must-Watch/ }).click();
+  await expect(page.getByRole("button", { name: "Auswählen", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Einträge/ }).click();
+  await expect(page.getByRole("button", { name: "Auswählen", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Alpha auswählen" }).click();
+  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await alphaKarte.click();
+  await expect(alphaKarte).toContainText("Alpha-Details");
+  await keineDokumentUeberbreite(page);
+});

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { T, ROTLINK, btnStyle, inputStyle } from "../lib/tokens.js";
 import { norm, score } from "../lib/match.js";
 import { store, K } from "../services/storage.js";
@@ -8,6 +8,10 @@ import { hatPhysischeQuelle } from "../lib/quellen.js";
 import { istMustwatchId } from "../lib/mustwatch.js";
 import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
+import {
+  analysiereAuswaehlbareIds, bereinigeAuswahl, erstelleTitelliste,
+  kanonischeStabileId, schalteAuswahlUm,
+} from "../lib/mediathekSelection.js";
 import { Chip, ChipReihe, IconClose, QuellenBadges, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
@@ -29,16 +33,53 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   onPrognoseErstellen, onPrognoseStatus,
   filmwissenAktiv = false, filmwissenRechercheAktiv = false,
   filmwissenProFilm = {}, filmwissenRechercheLaufId = null,
-  onFilmwissenLaden, onFilmwissenRecherchieren }) {
+  onFilmwissenLaden, onFilmwissenRecherchieren, datenKontextKey = "gast" }) {
   const [ansicht, setAnsicht] = useState("bestand"); // bestand | besitz | mustwatch
   const [typTab, setTypTab] = useState("filme");
   const [nurUnbewertet, setNurUnbewertet] = useState(false); // Besitz-Ansicht: nur unbewertete zeigen
   const [bewerteTitel, setBewerteTitel] = useState(null); // Nachtrag-Titel, der gerade bewertet wird
+  const [auswahlmodus, setAuswahlmodus] = useState(false);
+  const [auswahlIds, setAuswahlIds] = useState(() => new Set());
+  const [titellisteSichtbar, setTitellisteSichtbar] = useState(false);
+  const [kopierStatus, setKopierStatus] = useState(null);
+  const titellisteRef = useRef(null);
+  const letzterMasterRef = useRef(master);
+  const letzterDatenKontextRef = useRef(datenKontextKey);
+  const unsichereRenderKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
+
+  const beendeAuswahl = useCallback(() => {
+    setAuswahlmodus(false);
+    setAuswahlIds(new Set());
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+  }, []);
+
+  const starteAuswahl = useCallback(() => {
+    setExpandedId(null);
+    setAuswahlIds(new Set());
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+    setAuswahlmodus(true);
+  }, [setExpandedId]);
+
+  /* Eine Auswahl gehört genau zum sichtbaren Datenkontext. Master-Ersetzung
+     (inkl. Restore/Sync) und Account-/Sessionwechsel beenden sie vollständig.
+     Gewöhnliche Filterwechsel werden weiter unten nur auf sichtbare IDs
+     bereinigt, damit Sortieren die Auswahl nicht unnötig verwirft. */
+  useEffect(() => {
+    if (letzterMasterRef.current !== master) beendeAuswahl();
+    letzterMasterRef.current = master;
+  }, [master, beendeAuswahl]);
+  useEffect(() => {
+    if (letzterDatenKontextRef.current !== datenKontextKey) beendeAuswahl();
+    letzterDatenKontextRef.current = datenKontextKey;
+  }, [datenKontextKey, beendeAuswahl]);
 
   /* Sprung aus dem Blog: Must-Watch-Refs (mw_…) öffnen die Must-Watch-Ansicht,
      Master-Refs die Bestand-Ansicht (dort ist jeder Eintrag sicher sichtbar). */
   useEffect(() => {
     if (!fokusFilmId) return;
+    beendeAuswahl();
     if (istMustwatchId(fokusFilmId)) {
       setAnsicht("mustwatch");
       const t = setTimeout(() => {
@@ -168,11 +209,81 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return list.sort(aktiv);
   }, [basis, ansicht, nurUnbewertet, typTab, dreieckTab, besitz, genreF, katF, suche, sortier]);
 
+  const idAnalyse = useMemo(() => analysiereAuswaehlbareIds(master || []), [master]);
+  const sichtbareAuswaehlbareIds = useMemo(() => {
+    const ids = new Set();
+    for (const eintrag of mediathek) {
+      const id = kanonischeStabileId(eintrag);
+      if (id != null && idAnalyse.auswaehlbareIds.has(id)) ids.add(id);
+    }
+    return ids;
+  }, [mediathek, idAnalyse]);
+
+  /* Filter, Suche und Typwechsel entfernen nur nicht mehr sichtbare IDs.
+     Sortieren erhält dieselben IDs und ändert ausschließlich die spätere
+     Titellisten-Reihenfolge. */
+  useEffect(() => {
+    if (!auswahlmodus) return;
+    setAuswahlIds((aktuell) => bereinigeAuswahl(aktuell, sichtbareAuswaehlbareIds));
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+  }, [auswahlmodus, sichtbareAuswaehlbareIds]);
+
+  const titelliste = useMemo(
+    () => erstelleTitelliste(mediathek, auswahlIds, idAnalyse.auswaehlbareIds),
+    [mediathek, auswahlIds, idAnalyse],
+  );
+  const problematischeIds = idAnalyse.ungueltigeAnzahl + idAnalyse.doppelteIds.size;
+  const renderKeyFuer = useCallback((eintrag) => {
+    const id = kanonischeStabileId(eintrag);
+    if (id != null && idAnalyse.auswaehlbareIds.has(id)) return `id:${id}`;
+    /* Ausschließlich React-Reconciliation für gemeldete, nicht auswählbare
+       Problemrecords. Dieser flüchtige Key wird niemals zur Auswahl-ID. */
+    if (eintrag && typeof eintrag === "object") {
+      const stand = unsichereRenderKeysRef.current;
+      if (!stand.map.has(eintrag)) stand.map.set(eintrag, `nicht-auswaehlbar:${++stand.naechster}`);
+      return stand.map.get(eintrag);
+    }
+    return `nicht-auswaehlbar:${String(eintrag)}`;
+  }, [idAnalyse]);
+
+  const leereAuswahl = useCallback(() => {
+    setAuswahlIds(new Set());
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+  }, []);
+
+  const kopiereTitelliste = useCallback(async () => {
+    if (!titelliste) return;
+    setTitellisteSichtbar(true);
+    setKopierStatus({ art: "laeuft", text: "Titelliste wird kopiert …" });
+    try {
+      if (!globalThis.navigator?.clipboard?.writeText) throw new Error("CLIPBOARD_UNAVAILABLE");
+      await globalThis.navigator.clipboard.writeText(titelliste);
+      setKopierStatus({ art: "erfolg", text: "Titelliste kopiert." });
+    } catch {
+      setKopierStatus({
+        art: "fehler",
+        text: "Kopieren war nicht möglich. Die Titelliste bleibt unten sichtbar und kann manuell kopiert werden.",
+      });
+      requestAnimationFrame(() => {
+        titellisteRef.current?.focus();
+        titellisteRef.current?.select();
+      });
+    }
+  }, [titelliste]);
+
+  const wechsleAnsicht = useCallback((id) => {
+    beendeAuswahl();
+    setAnsicht(id);
+    setExpandedId(null);
+  }, [beendeAuswahl, setExpandedId]);
+
   return (
     <section>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
           Interner Key bleibt "bestand" — nur das Label heißt Einträge (Max, 18.07.). */}
-      <SegmentedControl className="kd-mediathek-ansichten" value={ansicht} onChange={(id) => { setAnsicht(id); setExpandedId(null); }}
+      <SegmentedControl className="kd-mediathek-ansichten" value={ansicht} onChange={wechsleAnsicht}
         options={[
           { id: "bestand", label: "Einträge" },
           { id: "besitz", label: "Im Besitz", badge: besitzAnzahl },
@@ -188,6 +299,42 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {ansicht !== "mustwatch" && (<>
+      <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
+        <button type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
+          aria-pressed={auswahlmodus} onClick={auswahlmodus ? beendeAuswahl : starteAuswahl}>
+          {auswahlmodus ? "Auswahl beenden" : "Auswählen"}
+        </button>
+        {auswahlmodus && (<>
+          <strong className="kd-auswahl-zaehler" aria-live="polite">{auswahlIds.size} ausgewählt</strong>
+          <button type="button" style={btnStyle(false)} disabled={auswahlIds.size === 0} onClick={leereAuswahl}>
+            Auswahl leeren
+          </button>
+          <button type="button" className="kd-auswahl-kopieren" style={btnStyle(true)}
+            disabled={auswahlIds.size === 0} onClick={kopiereTitelliste}>
+            Titelliste kopieren
+          </button>
+        </>)}
+      </div>
+      {auswahlmodus && problematischeIds > 0 && (
+        <p className="kd-auswahl-idwarnung" role="status">
+          {idAnalyse.ungueltigeAnzahl > 0 ? `${idAnalyse.ungueltigeAnzahl} ohne stabile ID` : ""}
+          {idAnalyse.ungueltigeAnzahl > 0 && idAnalyse.doppelteIds.size > 0 ? " · " : ""}
+          {idAnalyse.doppelteIds.size > 0 ? `${idAnalyse.doppelteIds.size} doppelte ${idAnalyse.doppelteIds.size === 1 ? "ID" : "IDs"}` : ""}
+          {" — nicht auswählbar"}
+        </p>
+      )}
+      {auswahlmodus && titellisteSichtbar && (
+        <div className="kd-titelliste-ausgabe">
+          <label htmlFor="kd-titelliste-text">Titelliste</label>
+          <textarea id="kd-titelliste-text" ref={titellisteRef} readOnly value={titelliste}
+            rows={Math.min(8, Math.max(2, auswahlIds.size))} />
+          {kopierStatus && (
+            <p role={kopierStatus.art === "fehler" ? "alert" : "status"} className={`kd-kopierstatus kd-kopierstatus--${kopierStatus.art}`}>
+              {kopierStatus.text}
+            </p>
+          )}
+        </div>
+      )}
       {/* Typ-Tabs (Filter auf typ) */}
       <SegmentedControl className="kd-mediathek-typen" value={typTab} onChange={(t) => { setTypTab(t); setExpandedId(null); }}
         options={Object.keys(TYP_GRUPPEN).map((t) => ({ id: t, label: TAB_LABELS[t], badge: counts[t] }))} />
@@ -263,36 +410,40 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
       {/* Eingabemaske pro Tab: Dreieck-Typen -> FilmForm, Musik/Sonstiges ->
           schlichte MedienForm. key=typTab: Tab-Wechsel klappt das Formular zu. */}
-      <div data-tour="eintrag-neu" style={{ marginBottom: 16 }}>
+      {!auswahlmodus && <div data-tour="eintrag-neu" style={{ marginBottom: 16 }}>
         {hatDreieck(HAUPTTYP[typTab])
           ? <FilmForm key={typTab} typOptionen={typReihe} onAdd={addFilm}
               onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
               prognoseSperrgrund={prognoseSperrgrund} />
           : <MedienForm key={typTab} typ={HAUPTTYP[typTab]} onAdd={addFilm} />}
-      </div>
+      </div>}
 
       <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch, marginBottom: 10 }}>
-        {mediathek.length} {mediathek.length === 1 ? "Eintrag" : "Einträge"} · Karte antippen für Details & Bearbeiten
+        {mediathek.length} {mediathek.length === 1 ? "Eintrag" : "Einträge"} · {auswahlmodus ? "Karte antippen zum Auswählen" : "Karte antippen für Details & Bearbeiten"}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {mediathek.map((f) => (
-          <div key={f.id} id={"film-" + f.id} data-film-id={String(f.id)}>
+          <div key={renderKeyFuer(f)} id={"film-" + f.id} data-film-id={String(f.id)}>
             <FilmCard
               film={f}
               streamBadge={dreieckTab && badgeFuer ? badgeFuer(f) : null}
-              expanded={expandedId === "b" + f.id}
-              onToggle={() => {
+              expanded={!auswahlmodus && expandedId === "b" + f.id}
+              onToggle={auswahlmodus ? null : () => {
                 const key = "b" + f.id;
                 const oeffnen = expandedId !== key;
                 setExpandedId(oeffnen ? key : null);
                 if (oeffnen) onFilmwissenLaden?.(f);
               }}
-              onSave={(changes) => updateFilm(f.id, changes)}
-              onDelete={() => deleteFilm?.(f.id)}
+              onSave={auswahlmodus ? null : (changes) => updateFilm(f.id, changes)}
+              onDelete={auswahlmodus ? null : () => deleteFilm?.(f.id)}
               kinoInfo={(dreieckTab || ansicht === "besitz") && f.quelle ? <QuellenBadges quelle={f.quelle} /> : null}
               kommtVorIn={kommtVorInMap[f.id]}
-              onArtikelKlick={onArtikelKlick}
-              vorbewertung={vorbewertungAktiv && hatDreieck(f.typ) ? {
+              onArtikelKlick={auswahlmodus ? null : onArtikelKlick}
+              auswahlmodus={auswahlmodus}
+              auswaehlbar={idAnalyse.auswaehlbareIds.has(kanonischeStabileId(f))}
+              ausgewaehlt={auswahlIds.has(kanonischeStabileId(f))}
+              onAuswahl={() => setAuswahlIds((aktuell) => schalteAuswahlUm(aktuell, f, idAnalyse.auswaehlbareIds))}
+              vorbewertung={!auswahlmodus && vorbewertungAktiv && hatDreieck(f.typ) ? {
                 laeuft: prognoseLaufId === f.id,
                 fehler: prognoseFehler[f.id] || null,
                 sperrgrund: prognoseSperrgrund,
@@ -301,7 +452,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                 onAnnehmen: () => onPrognoseStatus?.(f, "angenommen"),
                 onVerwerfen: () => onPrognoseStatus?.(f, "verworfen"),
               } : null}
-              filmwissen={filmwissenAktiv && hatDreieck(f.typ) ? {
+              filmwissen={!auswahlmodus && filmwissenAktiv && hatDreieck(f.typ) ? {
                 ...(filmwissenProFilm[f.id] || { phase: "idle", daten: null, fehler: null }),
                 rechercheLaeuft: filmwissenRechercheLaufId === String(f.id),
                 rechercheMoeglich: filmwissenRechercheAktiv && !!filmwissenRechercheKennung(f),
@@ -314,7 +465,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {/* Offene Blog-Referenzen: Sammelstelle für "Später"-geklickte Rotlinks.
           Reiner Laufzeit-Filter über die Artikel — wird nicht gepflegt. */}
-      {ansicht === "bestand" && offeneRefsTab.length > 0 && (
+      {!auswahlmodus && ansicht === "bestand" && offeneRefsTab.length > 0 && (
         <details style={{ marginTop: 26 }} open>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: ROTLINK }}>
             Offene Blog-Referenzen ({offeneRefsTab.length}) — {TAB_LABELS[typTab]} ohne Mediathek-Eintrag
@@ -352,7 +503,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {/* Unbewerteter Besitz (Nachtrag) — nur im Filme-Tab relevant */}
-      {ansicht === "bestand" && typTab === "filme" && nachtragFlach.length > 0 && (
+      {!auswahlmodus && ansicht === "bestand" && typTab === "filme" && nachtragFlach.length > 0 && (
         <details style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
             Unbewerteter Besitz ({nachtragFlach.length}) — noch ohne Dreieck

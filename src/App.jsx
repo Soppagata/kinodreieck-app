@@ -2053,7 +2053,7 @@ export default function App() {
             fokusFilmId={mediathekFokus} onFokusVerbraucht={() => setMediathekFokus(null)}
             mustwatch={mustwatch} addMustwatch={addMustwatch}
             updateMustwatch={updateMustwatch} deleteMustwatch={deleteMustwatch}
-            mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef}
+            mwKandidaten={mwKandidaten} onSpringeZuMustwatchRef={springeZuMustwatchRef} datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
           />
         )}
 

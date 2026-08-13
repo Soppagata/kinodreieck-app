@@ -35,6 +35,7 @@ function BeschreibungEditor({ eintrag, onSave, onCancel, speichert, fehler }) {
 export function FilmCard({
   film, kinoInfo, streamBadge, expanded, onToggle, onSave, onDelete, kommtVorIn, onArtikelKlick,
   vorbewertung = null, filmwissen = null,
+  auswahlmodus = false, auswaehlbar = true, ausgewaehlt = false, onAuswahl = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [prognoseEntwurf, setPrognoseEntwurf] = useState(false);
@@ -65,20 +66,37 @@ export function FilmCard({
       return false;
     } finally { speichertRef.current = false; setSpeichert(false); }
   };
+  const kartenAktion = auswahlmodus ? (auswaehlbar ? onAuswahl : null) : onToggle;
+  const kartenRolle = auswahlmodus ? "checkbox" : (kartenAktion ? "button" : undefined);
   return (
     <div
-      onClick={onToggle}
+      onClick={kartenAktion}
       // KD-027: Tastatur-Zugang für die klickbare Karte (Enter/Space wie onClick), nur der Karten-Root
-      role={onToggle ? "button" : undefined}
-      tabIndex={onToggle ? 0 : undefined}
-      onKeyDown={onToggle ? (e) => {
+      role={kartenRolle}
+      aria-checked={auswahlmodus ? ausgewaehlt : undefined}
+      aria-disabled={auswahlmodus && !auswaehlbar ? true : undefined}
+      aria-label={auswahlmodus
+        ? `${film.titel || "Eintrag"} ${auswaehlbar ? "auswählen" : "nicht auswählbar: keine eindeutige Eintrags-ID"}`
+        : undefined}
+      tabIndex={kartenAktion ? 0 : undefined}
+      onKeyDown={kartenAktion ? (e) => {
         if (e.target !== e.currentTarget) return; // innere Buttons/Felder nicht doppelt auslösen
-        if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); onToggle(); }
+        if (e.key === "Enter" || e.key === " ") { if (e.key === " ") e.preventDefault(); kartenAktion(); }
       } : undefined}
-      className="kd-karte"
-      style={{ background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.45)" }}
+      className={`kd-karte${auswahlmodus ? " kd-auswahl-karte" : ""}${ausgewaehlt ? " kd-auswahl-karte--aktiv" : ""}`}
+      style={{
+        background: T.leinwand, color: T.tinte, borderRadius: 6, padding: "14px 16px",
+        cursor: kartenAktion ? "pointer" : "default",
+        boxShadow: ausgewaehlt ? `0 0 0 3px ${T.wolfram}, 0 2px 10px rgba(0,0,0,0.45)` : "0 2px 10px rgba(0,0,0,0.45)",
+        opacity: auswahlmodus && !auswaehlbar ? 0.62 : 1,
+      }}
     >
       <div className="kd-filmkopf" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        {auswahlmodus && (
+          <span className="kd-auswahl-marke" aria-hidden="true">
+            {auswaehlbar ? (ausgewaehlt ? "✓" : "") : "–"}
+          </span>
+        )}
         {dreieck && <Dreieck bw={unbewertet ? null : film.bewertung} />}
         <div className="kd-filmhaupt" style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "baseline" }}>

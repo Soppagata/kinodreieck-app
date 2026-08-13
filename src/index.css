@@ -469,6 +469,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-profil-unklar button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:1px solid var(--gefahr,#d96a5a); border-radius:4px; background:transparent; color:var(--gefahr,#d96a5a); }
 .kd-profil-infogruppe ul { margin:4px 0; padding-left:20px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.kd-auswahl-werkzeuge { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:-4px 0 14px; }
+.kd-auswahl-werkzeuge button { min-height:44px; }
+.kd-auswahl-zaehler { min-width:105px; color:var(--wolfram,#e3a63b); font:700 12px 'Space Mono',monospace; }
+.kd-auswahl-idwarnung { margin:-5px 0 12px; color:var(--gefahr,#d96a5a); font:700 11px/1.5 'Space Mono',monospace; }
+.kd-titelliste-ausgabe { box-sizing:border-box; width:min(100%,560px); margin:0 0 14px; padding:12px; border:1px solid var(--wolfram,#e3a63b); border-radius:7px; background:var(--saalHoch,#211e26); }
+.kd-titelliste-ausgabe label { display:block; margin-bottom:6px; color:var(--wolfram,#e3a63b); font:700 11px 'Space Mono',monospace; letter-spacing:.07em; text-transform:uppercase; }
+.kd-titelliste-ausgabe textarea { box-sizing:border-box; width:100%; min-height:76px; resize:vertical; padding:9px 10px; border:1px solid var(--rauch,#948fa0); border-radius:5px; background:var(--saal,#17151a); color:var(--leinwand,#ece8df); font:13px/1.55 'Space Mono',monospace; }
+.kd-kopierstatus { margin:8px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.45; }
+.kd-kopierstatus--erfolg { color:var(--wolfram,#e3a63b); }
+.kd-kopierstatus--fehler { color:var(--gefahr,#d96a5a); }
+.kd-auswahl-marke { display:grid; place-items:center; flex:0 0 44px; box-sizing:border-box; width:44px; height:44px; border:2px solid var(--kd-tinteWeich,#6f6878); border-radius:6px; background:var(--kd-saalHoch,#211e26); color:var(--kd-wolfram,#e3a63b); font:900 24px/1 'Space Mono',monospace; }
+.kd-auswahl-karte--aktiv .kd-auswahl-marke { border-color:var(--kd-wolfram,#e3a63b); background:var(--kd-tinte,#1c1a1e); }
+.kd-auswahl-karte:focus-visible { outline:3px solid var(--kd-wolfram,#e3a63b); outline-offset:3px; }
 .kd-film-editor-shell { margin-left: 74px; margin-right: 48px; }
 .kd-editpanel, .kd-beschreibung-editor { width: 100%; min-width: 0; box-sizing: border-box; }
 .kd-entdecken-kopf { display:grid; grid-template-columns:auto minmax(0,1fr); gap:9px; align-items:center; min-width:0; }
@@ -537,6 +550,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
   .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+  .kd-auswahl-werkzeuge { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; }
+  .kd-auswahl-werkzeuge>button { width:100%; min-width:0; padding:8px !important; white-space:normal; }
+  .kd-auswahl-werkzeuge>.kd-auswahl-modus { grid-column:1 / -1; }
+  .kd-auswahl-zaehler { display:flex; align-items:center; min-height:44px; min-width:0; }
+  .kd-auswahl-werkzeuge>.kd-auswahl-kopieren { grid-column:1 / -1; }
+  .kd-titelliste-ausgabe { width:100%; }
   .kd-streaming-werkzeuge { display:grid !important; grid-template-columns:minmax(0,1fr) auto; align-items:stretch !important; }
   .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { display:flex !important; width:100%; min-width:0; }
   .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] select { flex:1 1 auto; }
@@ -561,6 +580,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      schmalen Spalte zwischen Dreieck und Score herausragen. */
   .kd-karte { width:100%; min-width:0; max-width:100%; box-sizing:border-box; padding:12px !important; }
   .kd-filmkopf { gap:10px !important; min-width:0; }
+  .kd-auswahl-marke { flex-basis:44px; }
   .kd-filmhaupt { min-width:0; }
   .kd-film-editor-shell { width:100%; min-width:0; margin:0; }
   .kd-editpanel { padding:11px 10px !important; }
