@@ -46,6 +46,11 @@ check("kanonischeStabileId: fehlende, leere und nicht unterstützte IDs werden N
   assert.equal(kanonischeStabileId([]), null);
 });
 
+check("kanonischeStabileId: Objekte nutzen exklusiv nur id, keine Aliasfelder", () => {
+  assert.equal(kanonischeStabileId({ id: "9", stabileId: "10", stabile_id: "11", stableId: "12", _id: "13" }), "9");
+  assert.equal(kanonischeStabileId({ stabileId: "10", stabile_id: "11", stableId: "12", _id: "13" }), null);
+});
+
 check("analysiereAuswaehlbareIds: Duplikate inkl. 1 vs \"1\" werden ausgeschlossen", () => {
   const { auswaehlbareIds, doppelteIds, ungueltigeAnzahl } = analysiereAuswaehlbareIds([
     { id: 1 },
@@ -110,6 +115,20 @@ check("erstelleTitelliste: bereinigt Whitespace/Zeilenumbrüche und Jahr bei feh
     new Set(["4", "5"])
   );
   assert.equal(text, "A B C (2001)\nTitel ohne Jahr");
+});
+
+check("erstelleTitelliste: leere/missing Titel erzeugen sichere Einzelzeile mit Jahr-Formatierung", () => {
+  const text = erstelleTitelliste(
+    [
+      { id: "4", titel: "   ", jahr: 2024 },
+      { id: "5", titel: "", jahr: null },
+      { id: "6", titel: null, jahr: "2010" },
+    ],
+    new Set(["4", "5", "6"]),
+    new Set(["4", "5", "6"])
+  );
+  assert.equal(text, "Ohne Titel (2024)\nOhne Titel\nOhne Titel (2010)");
+  assert.equal(text.split("\n").length, 3);
 });
 
 check("erstelleTitelliste: schließt private Zusatzfelder aus der Ausgabe aus", () => {

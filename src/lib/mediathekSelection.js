@@ -1,5 +1,3 @@
-const STABILE_ID_FELDER = ["id", "stabileId", "stabile_id", "stableId", "_id"];
-
 function roherWertStabileId(eintrag) {
   if (typeof eintrag === "number" || typeof eintrag === "string") {
     return eintrag;
@@ -7,10 +5,8 @@ function roherWertStabileId(eintrag) {
   if (!eintrag || typeof eintrag !== "object" || Array.isArray(eintrag)) {
     return null;
   }
-  for (const feld of STABILE_ID_FELDER) {
-    if (Object.prototype.hasOwnProperty.call(eintrag, feld)) {
-      return eintrag[feld];
-    }
+  if (Object.prototype.hasOwnProperty.call(eintrag, "id")) {
+    return eintrag.id;
   }
   return null;
 }
@@ -112,8 +108,7 @@ export function erstelleTitelliste(sichtbareEintraege, auswahlSet, auswaehlbareI
   const zeilen = [];
 
   for (const eintrag of sichtbareAuswahl) {
-    const titel = bereinigeWhitespace(eintrag?.titel || "");
-    if (!titel) continue;
+    const titel = bereinigeWhitespace(eintrag?.titel || "Ohne Titel") || "Ohne Titel";
 
     const hatJahr = eintrag?.jahr !== undefined && eintrag?.jahr !== null && String(eintrag.jahr).trim() !== "";
     const jahr = hatJahr ? bereinigeWhitespace(eintrag.jahr) : "";
