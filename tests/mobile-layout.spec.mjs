@@ -2110,11 +2110,11 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await mobileDokuSummary.focus();
   await page.keyboard.press("Enter");
   await expect(mobileDokuDetails.first()).toHaveAttribute("open");
-  const ueberZu = mobileDoku.getByRole("button", { name: "Anleitung zuklappen", exact: true });
-  if (await ueberZu.count()) {
-    await ueberZu.click();
-    await expect(mobileDoku).toBeHidden();
-  }
+  const ueberZu = mobileDoku.locator("xpath=..").getByRole("button", { name: "Anleitung zuklappen", exact: true });
+  await expect(ueberZu).toBeVisible();
+  await expect(ueberZu).toHaveCount(1);
+  await ueberZu.click();
+  await expect(mobileDoku).toBeHidden();
 
   const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup/ }) });
   await expect(backup).toHaveClass(/kd-klappe-markiert/);
