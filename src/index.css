@@ -484,7 +484,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   padding:max(14px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); overflow:hidden; }
 .kd-film-batch-dialog-scrim { position:absolute; inset:0; background:rgba(0,0,0,.68); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
 .kd-film-batch-dialog { position:relative; display:flex; flex-direction:column; width:min(620px,100%); max-width:100%; max-height:calc(100dvh - 28px);
-  overflow:hidden; box-sizing:border-box; padding:18px; border:1px solid color-mix(in srgb,var(--gefahr,#d96a5a) 68%,var(--rauch,#948fa0));
+  overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; box-sizing:border-box; padding:18px; border:1px solid color-mix(in srgb,var(--gefahr,#d96a5a) 68%,var(--rauch,#948fa0));
   border-radius:14px; background:var(--saalHoch,#211e26); color:var(--leinwand,#ece8df); box-shadow:0 20px 60px rgba(0,0,0,.68); }
 .kd-film-batch-dialog header { flex:0 0 auto; min-width:0; }
 .kd-film-batch-dialog header>span { color:var(--gefahr,#d96a5a); font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }

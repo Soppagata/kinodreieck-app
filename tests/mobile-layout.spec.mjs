@@ -2236,3 +2236,199 @@ test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher
   await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
 });
+
+test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokussicher", async ({ page }) => {
+  const visibleCount = 22;
+  const hiddenCount = 2;
+  const viewport = { width: 568, height: 320 };
+  const bestaetigenText = `${visibleCount} löschen`;
+  const ausloeserText = `${visibleCount} sichtbare Einträge löschen`;
+  await page.setViewportSize(viewport);
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page, { schrift: "gross" });
+  await page.addInitScript(({ visibleCount }) => {
+    const filme = Array.from({ length: visibleCount }, (_, index) => ({
+      id: `film-${index + 1}`,
+      typ: "film",
+      titel: `Film ${String(index + 1).padStart(2, "0")} - Langstreckentest mit deutlich längerer Zeile für robustes Scrollverhalten`,
+      jahr: 1998 + index,
+      quelle: "dvd",
+      bewertung: { wie: 2, was: 2, warum: 2 },
+    }));
+    const serien = [
+      { id: "serie-verborgen-01", typ: "serie", titel: "Verborgene Serie A, Auswahlprüfung", jahr: 2021, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 } },
+      { id: "serie-verborgen-02", typ: "serie", titel: "Archivierte Serie B im Hintergrund", jahr: 2023, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 } },
+    ];
+    localStorage.setItem("kd:master", JSON.stringify({ meta: { version: "e12-mobile-short" }, gespeichertAm: Date.now(), filme: [...filme, ...serien] }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:artikel", JSON.stringify({ artikel: [], gespeichertAm: Date.now() }));
+  }, { visibleCount });
+  await page.goto("/");
+  await waehleMobileTab(page, "Mediathek");
+  await page.evaluate(async () => {
+    const { setStorageDriver } = await import("/src/lib/storage.js");
+    window.__e12StoragePause = false;
+    window.__e12StorageGate = null;
+    const driver = {
+      name: "e12-mobile-short",
+      owner: "guest-local",
+      async get(key) {
+        const value = localStorage.getItem(key);
+        return value === null ? null : { key, value };
+      },
+      async set(key, value) {
+        if (window.__e12StoragePause && !window.__e12StorageGate) {
+          return new Promise((resolve, reject) => {
+            window.__e12StorageGate = {
+              resolve: () => {
+                localStorage.setItem(key, value);
+                resolve({ key, value });
+              },
+              reject,
+            };
+          });
+        }
+        localStorage.setItem(key, value);
+        return { key, value };
+      },
+      async delete(key) {
+        localStorage.removeItem(key);
+        return { key, deleted: true };
+      },
+      async list(prefix = "") {
+        return { keys: Object.keys(localStorage).filter((key) => key.startsWith(prefix)) };
+      },
+    };
+    setStorageDriver(driver);
+  });
+
+  await expect(page.getByRole("button", { name: "Auswählen", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await page.getByRole("checkbox", { name: /Verborgene Serie A, Auswahlprüfung auswählen/ }).click();
+  await page.getByRole("checkbox", { name: /Archivierte Serie B im Hintergrund auswählen/ }).click();
+  await page.getByRole("button", { name: /^Filme/ }).click();
+  const filmCheckboxen = page.getByRole("checkbox", { name: /^Film \d+/ });
+  await expect(filmCheckboxen).toHaveCount(visibleCount);
+  for (let index = 0; index < visibleCount; index += 1) await filmCheckboxen.nth(index).click();
+  await expect(page.getByText(`${visibleCount + hiddenCount} ausgewählt · ${visibleCount} sichtbar`, { exact: true })).toBeVisible();
+
+  const loeschenAusloeser = page.getByRole("button", { name: /Sichtbare Auswahl löschen/ });
+  await loeschenAusloeser.focus();
+  await loeschenAusloeser.click();
+  const dialog = page.getByRole("dialog", { name: new RegExp(`^${ausloeserText}`) });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Nur diese beim Prüfen sichtbare Auswahl wird gelöscht.");
+  await expect(dialog).toContainText("Der Vorgang ist lokal kompensierend");
+  await expect(dialog).toContainText(`${hiddenCount} weitere verborgene ausgewählte Einträge sind`);
+  await expect(dialog).toContainText("Masterlöschungen");
+  await expect(dialog.locator(".kd-film-batch-ziel-liste li")).toHaveCount(visibleCount);
+
+  const dialogGeometrie = await dialog.evaluate((element, viewportWidth, viewportHeight) => {
+    const rect = element.getBoundingClientRect();
+    const buttons = [...element.querySelectorAll("button")].map((button) => {
+      const box = button.getBoundingClientRect();
+      return { text: button.textContent?.trim(), width: box.width, height: box.height };
+    });
+    return {
+      links: rect.left,
+      rechts: rect.right,
+      oben: rect.top,
+      unten: rect.bottom,
+      viewportWidth,
+      viewportHeight,
+      hasDialogScroll: element.scrollHeight > element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      buttons,
+      listeScrollt: element.querySelector(".kd-film-batch-ziel-liste").scrollHeight > element.querySelector(".kd-film-batch-ziel-liste").clientHeight,
+      listeUeberbreite: element.querySelector(".kd-film-batch-ziel-liste").scrollWidth > element.querySelector(".kd-film-batch-ziel-liste").clientWidth + 1,
+    };
+  }, viewport.width, viewport.height);
+  expect(dialogGeometrie.links).toBeGreaterThanOrEqual(0);
+  expect(dialogGeometrie.rechts).toBeLessThanOrEqual(dialogGeometrie.viewportWidth);
+  expect(dialogGeometrie.oben).toBeGreaterThanOrEqual(0);
+  expect(dialogGeometrie.unten).toBeLessThanOrEqual(dialogGeometrie.viewportHeight);
+  expect(dialogGeometrie.scrollWidth).toBeLessThanOrEqual(dialogGeometrie.clientWidth + 1);
+  expect(dialogGeometrie.hasDialogScroll).toBe(true);
+  expect(dialogGeometrie.listeScrollt).toBe(true);
+  for (const button of dialogGeometrie.buttons) {
+    expect(button.width).toBeGreaterThanOrEqual(44);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+  }
+
+  const lock = await page.evaluate(() => ({
+    body: {
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+      position: getComputedStyle(document.body).position,
+      overflow: getComputedStyle(document.body).overflow,
+    },
+    html: {
+      locked: document.documentElement.classList.contains("kd-scroll-gesperrt"),
+    },
+    dokument: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+  }));
+  expect(lock.body.locked).toBe(true);
+  expect(lock.body.position).toBe("fixed");
+  expect(lock.body.overflow).toBe("hidden");
+  expect(lock.html.locked).toBe(true);
+  expect(lock.dokument).toBeLessThanOrEqual(viewport.width);
+  await keineDokumentUeberbreite(page);
+
+  await dialog.evaluate((element) => {
+    element.scrollTop = 0;
+    return element.scrollTop;
+  });
+  const scrollBottom = await dialog.evaluate((element) => {
+    element.scrollTop = element.scrollHeight - element.clientHeight;
+    return element.scrollTop;
+  });
+  expect(scrollBottom).toBeGreaterThan(0);
+  const grenzText = dialog.locator("#kd-film-batch-dialog-grenzen");
+  const folgen = dialog.getByRole("heading", { name: "Folgen" });
+  const abbrechen = dialog.getByRole("button", { name: "Abbrechen" });
+  const bestaetigen = dialog.getByRole("button", { name: bestaetigenText });
+  await expect(folgen).toBeVisible();
+
+  await grenzText.scrollIntoViewIfNeeded();
+  await folgen.scrollIntoViewIfNeeded();
+  await abbrechen.scrollIntoViewIfNeeded();
+  await bestaetigen.scrollIntoViewIfNeeded();
+  await expect(grenzText).toBeVisible();
+  await expect(folgen).toBeVisible();
+  await expect(abbrechen).toBeVisible();
+  await expect(bestaetigen).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(loeschenAusloeser).toBeFocused();
+
+  await loeschenAusloeser.click();
+  const dialogNachEscape = page.getByRole("dialog", { name: new RegExp(`^${ausloeserText}`) });
+  const abbrechenNachEscape = dialogNachEscape.getByRole("button", { name: "Abbrechen" });
+  const bestaetigenNachEscape = dialogNachEscape.getByRole("button", { name: bestaetigenText });
+  await expect(dialogNachEscape).toBeVisible();
+
+  await page.evaluate(() => { window.__e12StoragePause = true; });
+  await bestaetigenNachEscape.click();
+  await expect(dialogNachEscape.getByRole("status")).toContainText("Löschung läuft");
+  await expect(abbrechenNachEscape).toBeDisabled();
+  await expect(bestaetigenNachEscape).toBeDisabled();
+  await abbrechenNachEscape.scrollIntoViewIfNeeded();
+  await bestaetigenNachEscape.scrollIntoViewIfNeeded();
+  await expect(abbrechenNachEscape).toBeVisible();
+  await expect(bestaetigenNachEscape).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__e12StoragePause = false;
+    window.__e12StorageGate.reject(new Error("E12 mobile short-height write failure"));
+  });
+  await expect(dialogNachEscape.getByRole("alert")).toContainText("Datenstand, Konto oder Sitzung");
+  await expect(abbrechenNachEscape).toBeDisabled();
+  await expect(bestaetigenNachEscape).toBeDisabled();
+  await expect(page.getByText(`${visibleCount + hiddenCount} ausgewählt · ${visibleCount} sichtbar`, { exact: true })).toBeVisible();
+  await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
+  await keineDokumentUeberbreite(page);
+});
