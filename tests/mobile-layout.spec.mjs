@@ -2233,7 +2233,7 @@ test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher
   await expect(dialog.getByRole("alert")).toContainText("Datenstand, Konto oder Sitzung");
   await expect(dialog.getByRole("button", { name: "12 löschen" })).toBeDisabled();
   await expect(page.getByText("13 ausgewählt · 12 sichtbar", { exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: /^Film 01 - Langstreckentest .* auswählen$/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
 });
 
@@ -2453,6 +2453,6 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   await expect(abbrechenNachEscape).toBeInViewport();
   await expect(bestaetigenNachEscape).toBeInViewport();
   await expect(page.getByText(`${visibleCount + hiddenCount} ausgewählt · ${visibleCount} sichtbar`, { exact: true })).toBeVisible();
-  await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("checkbox", { name: /^Film 01 - Langstreckentest .* auswählen$/ })).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
 });
