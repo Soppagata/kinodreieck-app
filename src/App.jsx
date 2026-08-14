@@ -141,6 +141,7 @@ export default function App() {
   const [mehrOffen, setMehrOffen] = useState(false);
   const [hilfeOffen, setHilfeOffen] = useState(false);
   const toggleMehr = useCallback(() => setMehrOffen((offen) => !offen), []);
+  const schliesseHilfe = useCallback(() => setHilfeOffen(false), []);
   const scrollProBereichRef = useRef(new Map([["start", 0]]));
   const aktuelleScrolltiefe = useCallback(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return 0;
@@ -1913,7 +1914,7 @@ export default function App() {
             }
           }} />
       )}
-      {hilfeOffen && <HilfeSheet onClose={() => setHilfeOffen(false)} />}
+      {hilfeOffen && <HilfeSheet onClose={schliesseHilfe} />}
       {klaerung && klaerung.length > 0 && (
         <QuelleKlaerung eintraege={klaerung}
           onSpaeter={() => setKlaerung(null)}
