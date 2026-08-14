@@ -24,8 +24,8 @@ async function blockiereFremdnetz(page) {
   });
 }
 
-async function seedAppMitDarstellung(page, { modus = "", schrift = "normal" } = {}) {
-  await page.addInitScript(({ modus, schrift }) => {
+async function seedAppMitDarstellung(page, { modus = "", schrift = "normal", beibehaltenBeiReload = false } = {}) {
+  await page.addInitScript(({ modus, schrift, beibehaltenBeiReload }) => {
     localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
     localStorage.setItem("kd:start", "clean");
     localStorage.setItem("kd:start-version", "demo-v1");
@@ -33,11 +33,23 @@ async function seedAppMitDarstellung(page, { modus = "", schrift = "normal" } = 
     localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-07-31", version: "beta-2026-07-datenfreigabe-2" }));
     localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-07-31T00:00:00.000Z" }));
     localStorage.setItem("kd:ki-version", "e8-v1");
-    localStorage.setItem("kd:einstellungen", JSON.stringify({
-      theme: "dunkel", startTab: "start", schrift, modus,
-      ...(modus ? { basisTheme: "dunkel" } : {}),
-    }));
-  }, { modus, schrift });
+    if (!beibehaltenBeiReload || !localStorage.getItem("kd:einstellungen")) {
+      localStorage.setItem("kd:einstellungen", JSON.stringify({
+        theme: "dunkel", startTab: "start", schrift, modus,
+        ...(modus ? { basisTheme: "dunkel" } : {}),
+      }));
+    }
+  }, { modus, schrift, beibehaltenBeiReload });
+}
+
+async function leseFontSize(locator) {
+  const fontSize = await locator.evaluate((element) => {
+    return window.getComputedStyle(element).fontSize;
+  });
+  expect(fontSize).toMatch(/^\d+(\.\d+)?px$/);
+  const wert = Number.parseFloat(fontSize);
+  expect(Number.isFinite(wert)).toBe(true);
+  return wert;
 }
 
 async function animierteOverlayEbenen(overlay) {
@@ -46,6 +58,100 @@ async function animierteOverlayEbenen(overlay) {
     if (stil.animationName === "none" || Number.parseFloat(stil.animationDuration) <= 0) return [];
     return [{ klasse: knoten.className?.baseVal || knoten.className || "", animation: stil.animationName }];
   }));
+}
+
+async function pruefeE14TypografieProfil({ browser, schrift, viewport }) {
+  const context = await browser.newContext({ viewport });
+  const page = await context.newPage();
+  try {
+    await page.setViewportSize(viewport);
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page, { schrift });
+    await page.goto("/");
+
+    const fontGroessen = {};
+
+    const appTitel = page.getByRole("heading", { name: "Kinodreieck" });
+    await expect(page.getByRole("heading", { name: "Kinodreieck" })).toBeVisible();
+    fontGroessen.appTitel = await leseFontSize(appTitel);
+    const menueButton = page.getByRole("button", { name: "Menü öffnen" });
+    await expect(menueButton).toBeVisible();
+    await expect(page.getByRole("search", { name: "Globale Suche" })).toBeVisible();
+
+    const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
+    const sucheingabe = globaleSuche.getByRole("textbox", { name: "Sucheingabe" });
+    const sucheButton = globaleSuche.getByRole("button", { name: "Suchen" });
+    await expect(sucheingabe).toBeVisible();
+    await expect(sucheButton).toBeVisible();
+    fontGroessen.sucheingabe = await leseFontSize(sucheingabe);
+    fontGroessen.sucheButton = await leseFontSize(sucheButton);
+
+    await menueButton.click();
+    const menue = page.getByRole("dialog", { name: "Menü" });
+    await expect(menue).toBeVisible();
+    const menueEintragKino = menue.getByRole("button", { name: "Kino", exact: true });
+    const menueEintragStart = menue.getByRole("button", { name: "Start", exact: true });
+    const menueEintragSettings = menue.getByRole("button", { name: "Settings", exact: true });
+    await expect(menueEintragKino).toBeVisible();
+    fontGroessen.menueEintragKino = await leseFontSize(menueEintragKino);
+    await menueEintragKino.click();
+    await expect(menue).toBeHidden();
+
+    const heroTitel = page.locator(".kd-bereichshero h1");
+    await expect(heroTitel).toBeVisible();
+    await expect(heroTitel).toHaveText("Kino");
+    const heroText = page.locator(".kd-bereichshero p").first();
+    await expect(heroText).toBeVisible();
+    fontGroessen.heroTitel = await leseFontSize(heroTitel);
+    fontGroessen.heroText = await leseFontSize(heroText);
+
+    await menueButton.click();
+    await expect(menue).toBeVisible();
+    await expect(menueEintragSettings).toBeVisible();
+    await menueEintragSettings.click();
+    await expect(menue).toBeHidden();
+
+    const darstellungsBlock = page.locator("summary", { hasText: /^Darstellung & Verhalten$/ });
+    await expect(darstellungsBlock).toBeVisible();
+    await darstellungsBlock.click();
+    const schriftKlein = page.getByRole("button", { name: "Klein", exact: true });
+    const schriftNormal = page.getByRole("button", { name: "Normal", exact: true });
+    const schriftGross = page.getByRole("button", { name: "Groß", exact: true });
+    await expect(schriftKlein).toBeVisible();
+    await expect(schriftNormal).toBeVisible();
+    await expect(schriftGross).toBeVisible();
+    const uiPrimitive = schriftNormal;
+    const uiPrimitiveFont = await leseFontSize(uiPrimitive);
+    fontGroessen.uiPrimitive = uiPrimitiveFont;
+    fontGroessen.schriftKlein = uiPrimitiveFont;
+    fontGroessen.schriftNormal = uiPrimitiveFont;
+    fontGroessen.schriftGross = uiPrimitiveFont;
+
+    await menueButton.click();
+    await expect(menue).toBeVisible();
+    await expect(menueEintragStart).toBeVisible();
+    await menueEintragStart.click();
+    await expect(menue).toBeHidden();
+
+    const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
+    await hilfeAusloeser.click();
+    const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
+    await expect(hilfeDialog).toBeVisible();
+    const hilfeText = hilfeDialog.locator("p").first();
+    await expect(hilfeText).toBeVisible();
+    fontGroessen.hilfeText = await leseFontSize(hilfeText);
+
+    await page.keyboard.press("Escape");
+    await expect(hilfeDialog).toBeHidden();
+
+    const wrapKlasse = await page.locator(".kd-wrap").getAttribute("class");
+    const erwarteteSchrift = schrift === "BROKEN" ? "kd-schrift-normal" : `kd-schrift-${schrift}`;
+    expect(wrapKlasse).toContain(erwarteteSchrift);
+
+    return fontGroessen;
+  } finally {
+    await context.close();
+  }
 }
 
 const DEEP_ACHIEVEMENT = "deep-space-horror";
@@ -278,12 +384,7 @@ for (const viewport of VIEWPORTS) {
       expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width - 16);
       await expect(page.locator(".kd-tabbar")).toHaveCount(0);
       await keineDokumentUeberbreite(page);
-      await expect(page.locator(".kd-app main")).toHaveCSS("zoom",
-        schrift === "gross" ? "1.1" : schrift === "klein" ? "0.92" : "1");
-      if (schrift === "klein") {
-        const mainBox = await page.locator(".kd-app main").boundingBox();
-        expect(mainBox.x + mainBox.width).toBeLessThanOrEqual(viewport.width + 0.5);
-      }
+      await expect(page.locator(".kd-app main")).toHaveCSS("zoom", "1");
       const globaleSuche = page.getByRole("search", { name: "Globale Suche" });
       await expect(globaleSuche).toBeVisible();
       await expect(globaleSuche).toHaveCSS("position", "fixed");
@@ -569,6 +670,79 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test("E14 Typografie stabil, inkl. BROKEN-Fallback, Help-Portal und Settings-Persistenz", async ({ browser }) => {
+  const profils = [
+    { schrift: "klein", viewport: { width: 393, height: 852 } },
+    { schrift: "normal", viewport: { width: 393, height: 852 } },
+    { schrift: "gross", viewport: { width: 393, height: 852 } },
+    { schrift: "BROKEN", viewport: { width: 393, height: 852 } },
+  ];
+  const ergebnisse = {};
+
+  for (const profil of profils) {
+    ergebnisse[profil.schrift] = await pruefeE14TypografieProfil({ browser, schrift: profil.schrift, viewport: profil.viewport });
+  }
+
+  const keys = Object.keys(ergebnisse.klein);
+  for (const key of keys) {
+    expect(ergebnisse.klein[key]).toBeLessThan(ergebnisse.normal[key]);
+    expect(ergebnisse.normal[key]).toBeLessThan(ergebnisse.gross[key]);
+    expect(ergebnisse.BROKEN[key]).toBe(ergebnisse.normal[key]);
+  }
+
+  const overflowContext = await browser.newContext({ viewport: { width: 568, height: 320 } });
+  const overflowPage = await overflowContext.newPage();
+  try {
+    await overflowPage.setViewportSize({ width: 568, height: 320 });
+    await blockiereFremdnetz(overflowPage);
+    await seedAppMitDarstellung(overflowPage, { schrift: "gross" });
+    await overflowPage.goto("/");
+    const hilfeAusloeser = overflowPage.getByRole("button", { name: "Anleitung & Hilfe" });
+    await hilfeAusloeser.click();
+    await expect(overflowPage.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
+    await keineDokumentUeberbreite(overflowPage);
+  } finally {
+    await overflowContext.close();
+  }
+
+  const context = await browser.newContext({ viewport: { width: 393, height: 852 } });
+  const page = await context.newPage();
+  try {
+    await page.setViewportSize({ width: 393, height: 852 });
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page, { schrift: "normal", beibehaltenBeiReload: true });
+    await page.goto("/");
+
+    const menuButton = page.getByRole("button", { name: "Menü öffnen" });
+    await expect(menuButton).toBeVisible();
+    await menuButton.click();
+    const menue = page.getByRole("dialog", { name: "Menü" });
+    await expect(menue).toBeVisible();
+    await menue.getByRole("button", { name: "Settings", exact: true }).click();
+    const darstellungsBlock = page.locator("summary", { hasText: /^Darstellung & Verhalten$/ });
+    await expect(darstellungsBlock).toBeVisible();
+    await darstellungsBlock.click();
+
+    const gross = page.getByRole("button", { name: "Groß", exact: true });
+    await expect(gross).toBeVisible();
+    await gross.click();
+    await expect(gross).toHaveAttribute("aria-pressed", "true");
+    await page.reload();
+    await expect(page.locator(".kd-wrap")).toHaveClass(/kd-schrift-gross/);
+    await page.waitForLoadState("domcontentloaded");
+    await expect.poll(() => page.evaluate(() => {
+      try {
+        const einstellungen = JSON.parse(localStorage.getItem("kd:einstellungen") || "{}");
+        return einstellungen.schrift || null;
+      } catch {
+        return null;
+      }
+    })).toBe("gross");
+  } finally {
+    await context.close();
+  }
+});
 
 test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ browserName, page }) => {
   test.skip(browserName !== "chromium", "Safe-Area-Bestätigung ist als Chromium-Fokusprobe definiert.");
