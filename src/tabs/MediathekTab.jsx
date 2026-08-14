@@ -20,6 +20,8 @@ import { MedienForm } from "../components/MedienForm.jsx";
 import { MustWatchListe } from "../components/MustWatchListe.jsx";
 import { FilmBatchLoeschDialog } from "../components/FilmBatchLoeschDialog.jsx";
 
+const STALE_LOESCH_HINWEIS = "Der Datenstand hat sich geändert. Bitte Datenstand, Konto oder Sitzung neu prüfen und die Einträge erneut auswählen.";
+
 /* ================= MEDIATHEK =================
    Drei Ansichten über EINEN Umschalter (kein 8. Nav-Bereich):
    - Bestand: die klassische Mediathek (typ als Diskriminator, Tabs = Filter).
@@ -61,6 +63,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const aktuelleGrenzeRef = useRef({ master, datenKontextKey });
   const rotlinkDraftKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
   const nachtragDraftKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
+  const bewahrterNachtragRef = useRef(null);
   const letzterMasterRef = useRef(master);
   const letzterDatenKontextRef = useRef(datenKontextKey);
   const letzteTitellisteRef = useRef("");
@@ -107,14 +110,17 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setBewahrteExpandedId(expandedId?.startsWith("b") ? expandedId : null);
     setBewahrterRefKey(refAnlegen);
     setBewahrterBewerteTitel(bewerteTitel);
+    bewahrterNachtragRef.current = bewerteTitel
+      ? nachtragFlach.find((eintrag) => eintrag?.titel === bewerteTitel) || null
+      : null;
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
     setLoeschHinweis(null);
     setAuswahlmodus(true);
-  }, [typTab, expandedId, refAnlegen, bewerteTitel]);
+  }, [typTab, expandedId, refAnlegen, bewerteTitel, nachtragFlach]);
 
-  const resetteLokaleMediathekUi = useCallback(() => {
+  const resetteLokaleMediathekUi = useCallback(({ loeschDialogVeraltet = false } = {}) => {
     dialogLaufRef.current += 1;
     erwarteterMasterUebergangRef.current = null;
     kopierRequestRef.current += 1;
@@ -123,7 +129,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setTitellisteSichtbar(false);
     setKopierStatus(null);
     setLoeschDialog(null);
-    setLoeschHinweis(null);
+    setLoeschHinweis(loeschDialogVeraltet ? STALE_LOESCH_HINWEIS : null);
     setExpandedId(null);
     setRefAnlegen(null);
     setBewerteTitel(null);
@@ -131,6 +137,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setBewahrteExpandedId(null);
     setBewahrterRefKey(null);
     setBewahrterBewerteTitel(null);
+    bewahrterNachtragRef.current = null;
   }, [setExpandedId]);
 
   /* Eine Auswahl gehört genau zum gesamten Datenkontext. Master-Ersetzung
@@ -144,10 +151,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       && draftGrenzeRef.current.master === master
       && draftGrenzeRef.current.datenKontextKey === datenKontextKey
       && draftGrenzeRef.current.erwartet;
-    if (grenzeGewechselt && !erwarteteProjektion) resetteLokaleMediathekUi();
+    if (grenzeGewechselt && !erwarteteProjektion) {
+      resetteLokaleMediathekUi({ loeschDialogVeraltet: !!loeschDialog });
+    }
     letzterMasterRef.current = master;
     letzterDatenKontextRef.current = datenKontextKey;
-  }, [master, datenKontextKey, resetteLokaleMediathekUi]);
+  }, [master, datenKontextKey, loeschDialog, resetteLokaleMediathekUi]);
 
   /* Sprung aus dem Blog: Must-Watch-Refs (mw_…) öffnen die Must-Watch-Ansicht,
      Master-Refs die Bestand-Ansicht (dort ist jeder Eintrag sicher sichtbar). */
@@ -328,10 +337,14 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     if (bewahrterFormTab === typTab) setBewahrterFormTab(null);
     if (bewahrteKarte && sichtbareObjekte.has(bewahrteKarte)) setBewahrteExpandedId(null);
     if (bewahrterRefKey && offeneRefsTab.some((o) => o.draftKey === bewahrterRefKey)) setBewahrterRefKey(null);
-    if (bewahrterBewerteTitel && typTab === "filme") setBewahrterBewerteTitel(null);
+    if (bewahrterBewerteTitel && typTab === "filme"
+        && (!bewahrterNachtragRef.current || nachtragFlach.includes(bewahrterNachtragRef.current))) {
+      setBewahrterBewerteTitel(null);
+      bewahrterNachtragRef.current = null;
+    }
   }, [
     auswahlmodus, bewahrterFormTab, typTab, bewahrteKarte, sichtbareObjekte,
-    bewahrterRefKey, offeneRefsTab, bewahrterBewerteTitel,
+    bewahrterRefKey, offeneRefsTab, bewahrterBewerteTitel, nachtragFlach,
   ]);
 
   const idAnalyse = useMemo(() => analysiereAuswaehlbareIds(master || []), [master]);
@@ -435,8 +448,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     const aktuelleGrenze = aktuelleGrenzeRef.current;
     if (aktuelleGrenze.master !== auftrag.masterBasis
         || aktuelleGrenze.datenKontextKey !== auftrag.datenKontextKey) {
-      dialogLaufRef.current += 1;
-      setLoeschDialog(null);
+      resetteLokaleMediathekUi({ loeschDialogVeraltet: true });
       return;
     }
 
@@ -474,7 +486,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setLoeschHinweis(null);
     setLoeschDialog(null);
     fokussiereNachDialog();
-  }, [fokussiereNachDialog, loeschDialog, onFilmBatchLoeschen]);
+  }, [fokussiereNachDialog, loeschDialog, onFilmBatchLoeschen, resetteLokaleMediathekUi]);
 
   const renderKeyFuer = useCallback((eintrag) => {
     const id = kanonischeStabileId(eintrag);
@@ -496,6 +508,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     }
     return `nachtrag-fallback:${String(eintrag?.titel || "")}:${index}`;
   }, []);
+  const bewahrterNachtrag = bewahrterNachtragRef.current;
+  const nachtraegeZumRendern = bewahrterNachtrag && !nachtragFlach.includes(bewahrterNachtrag)
+    ? [...nachtragFlach, bewahrterNachtrag]
+    : nachtragFlach;
 
   const leereAuswahl = useCallback(() => {
     kopierRequestRef.current += 1;
@@ -593,7 +609,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           </button>
         </>)}
       </div>
-      {auswahlmodus && loeschHinweis && <p className="kd-film-batch-vorschaufehler" role="alert">{loeschHinweis}</p>}
+      {loeschHinweis && <p className="kd-film-batch-vorschaufehler" role="alert">{loeschHinweis}</p>}
       {auswahlmodus && problematischeIds > 0 && (
         <p className="kd-auswahl-idwarnung" role="status">
           {idAnalyse.ungueltigeAnzahl > 0 ? `${idAnalyse.ungueltigeAnzahl} ohne stabile ID` : ""}
@@ -817,19 +833,19 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {/* Unbewerteter Besitz (Nachtrag) — nur im Filme-Tab relevant */}
-      {ansicht === "bestand" && nachtragFlach.length > 0 && (
+      {ansicht === "bestand" && nachtraegeZumRendern.length > 0 && (
         <details data-mediathek-drafts="nachtrag"
           hidden={auswahlmodus || typTab !== "filme"}
           aria-hidden={(auswahlmodus || typTab !== "filme") || undefined}
           style={{ marginTop: 26 }}>
           <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch }}>
-            Unbewerteter Besitz ({nachtragFlach.length}) — noch ohne Dreieck
+            Unbewerteter Besitz ({nachtraegeZumRendern.length}) — noch ohne Dreieck
           </summary>
           <div style={{ marginTop: 8, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>
             Aus DVD-Sammlung & Prime-Snapshot, nicht in der Masterliste. Bewerten heißt: als Eintrag aufnehmen (Formular oben).
           </div>
           <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-            {nachtragFlach.map((n, i) => {
+            {nachtraegeZumRendern.map((n, i) => {
               const q = n.quellen || [];
               const teile = ["dvd", "prime", "apple"].filter((x) => q.includes(x));
               const quelle = teile.length ? teile.join("+") : "must_watch";
@@ -844,7 +860,10 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                     <button style={{ ...btnStyle(false), fontSize: 12, padding: "4px 10px" }}
                       onClick={() => {
                         setBewerteTitel(aktiv ? null : n.titel);
-                        if (aktiv) setBewahrterBewerteTitel(null);
+                        if (aktiv) {
+                          setBewahrterBewerteTitel(null);
+                          bewahrterNachtragRef.current = null;
+                        }
                       }}>
                       {aktiv ? "Schließen" : "✎ Bewerten"}
                     </button>
@@ -860,7 +879,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
                         typOptionen={["film", "serie"]}
                         initial={{ titel: n.titel, jahr: n.jahr || "", quelle, notiz: n.edition ? "Edition: " + n.edition : "" }}
                         onAdd={addFilm}
-                        onDone={() => { setBewerteTitel(null); setBewahrterBewerteTitel(null); }}
+                        onDone={() => {
+                          setBewerteTitel(null);
+                          setBewahrterBewerteTitel(null);
+                          bewahrterNachtragRef.current = null;
+                        }}
                       />
                     </div>
                   )}

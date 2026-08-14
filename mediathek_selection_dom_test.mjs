@@ -788,6 +788,47 @@ check("Erfolg bewahrt Nichtziel-Rotlink- und Nachtrag-Draft DOM-identisch und we
   && e12NachtragDraft.isConnected && e12NachtragDraft.value === "E12 NACHTRAG BLEIBT");
 check("Erfolgsfokus kehrt sicher zum Auswahlmodus zurück", document.activeElement === knopf("Auswählen"));
 
+/* Delete-all normalisiert den App-Master zu null und reicht dadurch vorübergehend
+   einen leeren Nachtrag weiter. Der bereits offene, fachlich nicht betroffene
+   Nachtrag-Draft muss trotzdem exakt dieselbe Komponenteninstanz behalten. */
+const e12DeleteAllMaster = MASTER.filter((eintrag) => eintrag.id === "z" || eintrag.id === "a")
+  .map((eintrag) => ({ ...eintrag }));
+await render(e12DeleteAllMaster, "account:ready:e12-delete-all", {
+  nachtragFlach: [E12_NACHTRAG_BLEIBT], normalisiereWieApp: true,
+});
+await sende(knopf("✎ Bewerten"), "click");
+const e12DeleteAllNachtragDraft = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+  .find((el) => el.value === "Nachtrag Kandidat");
+await setzeWert(e12DeleteAllNachtragDraft, "E12 DELETE ALL NACHTRAG BLEIBT");
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]'), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+batchPreviewAufrufe = [];
+batchAufrufe = [];
+batchVerzoegern = true;
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+const deleteAllPlan = letzterAuthentischerPlan;
+await sende(knopf("2 endgültig löschen"), "click");
+check("Delete-all startet einen authentischen Batch mit wirklich allen Mastereinträgen",
+  batchAufrufe.length === 1 && batchAufrufe[0].ids.join(",") === "a,z"
+  && batchAufrufe[0].plan === deleteAllPlan);
+await render(null, "account:ready:e12-delete-all", {
+  nachtragFlach: [], normalisiereWieApp: true,
+});
+check("App-normalisierter Delete-all-Übergang hält den offenen Nachtrag-Draft gemountet",
+  e12DeleteAllNachtragDraft.isConnected
+  && e12DeleteAllNachtragDraft.value === "E12 DELETE ALL NACHTRAG BLEIBT");
+await act(async () => {
+  batchAufloeser(true);
+  await Promise.resolve();
+  await Promise.resolve();
+});
+batchVerzoegern = false;
+check("Delete-all-Erfolg bewahrt Nachtrag-Draft DOM-identisch und wertgleich",
+  e12DeleteAllNachtragDraft.isConnected
+  && e12DeleteAllNachtragDraft.value === "E12 DELETE ALL NACHTRAG BLEIBT"
+  && !!knopf("Auswählen"));
+
 /* false/stale verbraucht das DTO einmalig, behält Auswahl und Drafts und darf
    keinen später zufällig passenden Masterwechsel als Erfolg behandeln. */
 const e12FehlerMaster = MASTER.map((eintrag) => ({ ...eintrag }));
@@ -818,26 +859,94 @@ check("Nach false bleibt selbst passende spätere Projektion eine harte Draftgre
   !e12FehlerDraft.isConnected && !!knopf("Auswählen"));
 batchErgebnis = true;
 
-/* Fremder Kontext während Pending invalidiert und schließt fail-closed; die
-   spätere Auflösung darf keine UI aus dem neuen Kontext übernehmen. */
-await render(MASTER, "account:ready:e12-pending-a");
-await sende(knopf("Auswählen"), "click");
-await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
-batchAufrufe = [];
-batchVerzoegern = true;
-await sende(knopf("Sichtbare Auswahl löschen"), "click");
-await sende(knopf("1 endgültig löschen"), "click");
-await render(MASTER, "account:ready:e12-pending-b");
-check("Datenkontextwechsel schließt laufenden Dialog und setzt Auswahl hart zurück",
-  !document.querySelector('[role="dialog"]') && !!knopf("Auswählen") && batchAufrufe.length === 1);
-await act(async () => {
-  batchAufloeser(true);
-  await Promise.resolve();
-  await Promise.resolve();
+const pruefeGenerischenStaleAlert = () => {
+  const alert = document.querySelector('.kd-film-batch-vorschaufehler[role="alert"]');
+  const text = alert?.textContent || "";
+  return !!alert && text.includes("Datenstand") && text.includes("Konto oder Sitzung")
+    && text.includes("erneut auswählen") && !text.includes("Alpha") && !text.includes("2001");
+};
+
+async function pruefeStaleVorBestaetigung({ name, ersterMaster, ersterKontext,
+  zweiterMaster, zweiterKontext }) {
+  await render(ersterMaster, ersterKontext);
+  await sende(knopf("+ Eintrag hinzufügen"), "click");
+  const draft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+  await setzeWert(draft, `E12 STALE VORHER ${name}`);
+  await sende(knopf("Auswählen"), "click");
+  await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+  batchAufrufe = [];
+  await sende(knopf("Sichtbare Auswahl löschen"), "click");
+  const mutationenVorWechsel = mutationen;
+  await render(zweiterMaster, zweiterKontext);
+  check(`${name} vor Bestätigung schließt fail-closed und meldet generisch stale`,
+    !document.querySelector('[role="dialog"]') && !!knopf("Auswählen")
+    && pruefeGenerischenStaleAlert() && batchAufrufe.length === 0
+    && mutationen === mutationenVorWechsel);
+  check(`${name} vor Bestätigung hält die harte E11-Draftgrenze`, !draft.isConnected);
+}
+
+const e12StaleVorMaster = MASTER.map((eintrag) => ({ ...eintrag }));
+await pruefeStaleVorBestaetigung({
+  name: "Fremder Masterwechsel",
+  ersterMaster: e12StaleVorMaster,
+  ersterKontext: "account:ready:e12-stale-before-master",
+  zweiterMaster: e12StaleVorMaster.map((eintrag) => ({ ...eintrag })),
+  zweiterKontext: "account:ready:e12-stale-before-master",
 });
-batchVerzoegern = false;
-check("Spätes Pending-Ergebnis übernimmt nicht in fremden sichtbaren Kontext",
-  !document.querySelector('[role="dialog"]') && !!knopf("Auswählen"));
+await pruefeStaleVorBestaetigung({
+  name: "Datenkontextwechsel",
+  ersterMaster: MASTER,
+  ersterKontext: "account:ready:e12-stale-before-context-a",
+  zweiterMaster: MASTER,
+  zweiterKontext: "account:ready:e12-stale-before-context-b",
+});
+
+async function pruefeStaleWaehrendPending({ name, ersterMaster, ersterKontext,
+  zweiterMaster, zweiterKontext }) {
+  await render(ersterMaster, ersterKontext);
+  await sende(knopf("+ Eintrag hinzufügen"), "click");
+  const draft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+  await setzeWert(draft, `E12 STALE PENDING ${name}`);
+  await sende(knopf("Auswählen"), "click");
+  await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+  batchAufrufe = [];
+  batchVerzoegern = true;
+  await sende(knopf("Sichtbare Auswahl löschen"), "click");
+  await sende(knopf("1 endgültig löschen"), "click");
+  const mutationenNachStart = mutationen;
+  await render(zweiterMaster, zweiterKontext);
+  check(`${name} während Pending schließt fail-closed und meldet generisch stale`,
+    !document.querySelector('[role="dialog"]') && !!knopf("Auswählen")
+    && pruefeGenerischenStaleAlert() && batchAufrufe.length === 1
+    && mutationen === mutationenNachStart);
+  check(`${name} während Pending hält die harte E11-Draftgrenze`, !draft.isConnected);
+  await act(async () => {
+    batchAufloeser(true);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  batchVerzoegern = false;
+  check(`${name}: spätes Pending-Ergebnis bleibt wirkungslos und überschreibt den Alert nicht`,
+    !document.querySelector('[role="dialog"]') && !!knopf("Auswählen")
+    && pruefeGenerischenStaleAlert() && batchAufrufe.length === 1
+    && mutationen === mutationenNachStart);
+}
+
+const e12StalePendingMaster = MASTER.map((eintrag) => ({ ...eintrag }));
+await pruefeStaleWaehrendPending({
+  name: "Fremder Masterwechsel",
+  ersterMaster: e12StalePendingMaster,
+  ersterKontext: "account:ready:e12-stale-pending-master",
+  zweiterMaster: e12StalePendingMaster.map((eintrag) => ({ ...eintrag })),
+  zweiterKontext: "account:ready:e12-stale-pending-master",
+});
+await pruefeStaleWaehrendPending({
+  name: "Datenkontextwechsel",
+  ersterMaster: MASTER,
+  ersterKontext: "account:ready:e12-stale-pending-context-a",
+  zweiterMaster: MASTER,
+  zweiterKontext: "account:ready:e12-stale-pending-context-b",
+});
 
 await act(async () => { root.unmount(); });
 dom.window.close();
