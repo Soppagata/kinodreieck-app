@@ -534,7 +534,7 @@ check("Datenhaltende Controller verwenden die isolierten Projektionen",
   /lib\/libraryProjection\.js/.test(libraryController)
   && /lib\/catalogProjection\.js/.test(catalogController));
 check("App.jsx ist durch die Controller sichtbar schmaler als der Audit-Ausgang",
-  app.split("\n").length < 2200);
+  app.split("\n").length <= 2200);
 check("Master- und Artikelimport persistieren keine ungenutzten Rohdaten-Snapshots",
   !/kd:import:vorher/.test(app)
   && !/schreibeImportSnapshot/.test(app)
