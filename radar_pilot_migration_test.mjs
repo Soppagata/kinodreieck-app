@@ -603,9 +603,21 @@ check("Operation-ACKs verwenden einen gültigen Nichtleer-/Exaktschlüssel-Guard
   });
   const exactKeyGuard = guards.find((guard) => /jsonb_object_keys\s*\(\s*(?:[a-z_][a-z0-9_]*\.)?result\s*\)/.test(guard));
   assert.ok(exactKeyGuard, "jsonb_object_keys-basierter Exaktschlüssel-Guard fehlt");
-  assert.match(exactKeyGuard, /\bnot\s+in\s*\(/);
-  for (const key of ["operationid", "targetid", "status", "revision", "checksum"]) {
-    assert.match(exactKeyGuard, new RegExp(`'${key}'`));
+  const expectedExactKeys = ["operationid", "targetid", "status", "revision", "checksum"];
+  const exactGuardMatch = /not\s+in\s*\(/i.exec(exactKeyGuard);
+  assert.ok(exactGuardMatch, "jsonb_object_keys-basierter NOT-IN-Guard fehlt");
+  const openAt = exactKeyGuard.indexOf("(", exactGuardMatch.index);
+  const closeAt = findBalancedEnd(exactKeyGuard, openAt);
+  assert.ok(closeAt > openAt, "NOT-IN-Guard ist unvollständig");
+  const exactKeys = Array.from(
+    exactKeyGuard.slice(openAt + 1, closeAt).matchAll(/'([^']+)'/g),
+    (match) => match[1]
+  );
+  assert.equal(new Set(exactKeys).size, expectedExactKeys.length, "NOT-IN-Whitelist enthält Duplikate oder abweichende Länge");
+  assert.equal(exactKeys.length, expectedExactKeys.length, "NOT-IN-Whitelist hat nicht exakt 5 Einträge");
+  const exactKeySet = new Set(exactKeys);
+  for (const key of expectedExactKeys) {
+    assert.ok(exactKeySet.has(key), `NOT-IN-Whitelist fehlt erwarteten Schlüssel: ${key}`);
   }
 });
 
