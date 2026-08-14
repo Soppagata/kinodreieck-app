@@ -85,6 +85,17 @@ const ARTIKEL_MIT_ROTLINK = [{
   liste: [{ eingabe: "Rotlink Kandidat", jahr: 2024, typ: "film", ref: null }],
 }];
 const NACHTRAG_MIT_ENTWURF = [{ titel: "Nachtrag Kandidat", jahr: 2023, quellen: ["dvd"] }];
+const E12_ROTLINK_BLEIBT = { eingabe: "Rotlink Kandidat", jahr: 2024, typ: "film", ref: null };
+const E12_ARTIKEL_VORHER = [{
+  id: "artikel-e12", titel: "Artikel E12", status: "entwurf",
+  liste: [{ eingabe: "Zulu", jahr: 1999, typ: "film", ref: "z" }, E12_ROTLINK_BLEIBT],
+}];
+const E12_ARTIKEL_NACHHER = [{
+  ...E12_ARTIKEL_VORHER[0],
+  liste: [{ ...E12_ARTIKEL_VORHER[0].liste[0], ref: null }, E12_ROTLINK_BLEIBT],
+}];
+const E12_NACHTRAG_BLEIBT = { titel: "Nachtrag Kandidat", jahr: 2023, quellen: ["dvd"] };
+const E12_NACHTRAG_NEU = { titel: "Neu vor bestehendem Nachtrag", jahr: 1998, quellen: ["dvd"] };
 let mutationen = 0;
 let updateVerzoegern = false;
 let updateAufloeser = null;
@@ -92,6 +103,16 @@ let updateAblehner = null;
 let addVerzoegern = false;
 let addAufloeser = null;
 let addAblehner = null;
+let batchPreviewModus = "ok";
+let batchPreviewAufrufe = [];
+let batchAufrufe = [];
+let letzterAuthentischerPlan = null;
+let letztePreviewIdsRef = null;
+let batchVerzoegern = false;
+let batchAufloeser = null;
+let batchErgebnis = true;
+let confirmAufrufe = 0;
+dom.window.confirm = () => { confirmAufrufe++; return true; };
 
 function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = [],
   normalisiereWieApp = false }) {
@@ -106,6 +127,26 @@ function TestHarness({ master, datenKontextKey, artikel = [], nachtragFlach = []
       return new Promise((resolve, reject) => { updateAufloeser = resolve; updateAblehner = reject; });
     },
     deleteFilm: () => { mutationen++; },
+    onFilmBatchVorschau: (ids) => {
+      letztePreviewIdsRef = ids;
+      batchPreviewAufrufe.push([...ids]);
+      if (batchPreviewModus === "exception") throw new Error("Preview absichtlich fehlgeschlagen");
+      if (batchPreviewModus === "abbruch") return Object.freeze({
+        ok: false, abgebrochen: true, fehlercode: "STALE",
+        zielIds: Object.freeze([]), folgen: Object.freeze({}),
+      });
+      letzterAuthentischerPlan = Object.freeze({
+        ok: true, abgebrochen: false, zielIds: Object.freeze([...ids]),
+        folgen: Object.freeze({ masterEintraege: ids.length, artikelRefs: 2, mustwatchRefs: 1 }),
+      });
+      return letzterAuthentischerPlan;
+    },
+    onFilmBatchLoeschen: (ids, plan) => {
+      mutationen++;
+      batchAufrufe.push({ ids, plan });
+      if (!batchVerzoegern) return Promise.resolve(batchErgebnis);
+      return new Promise((resolve) => { batchAufloeser = resolve; });
+    },
     addFilm: async () => {
       mutationen++;
       if (!addVerzoegern) return true;
@@ -135,6 +176,8 @@ const check = (name, wert) => {
 };
 const knopf = (text) => [...document.querySelectorAll("button")].find((el) => el.textContent.trim() === text);
 const knopfEnthaelt = (text) => [...document.querySelectorAll("button")].find((el) => el.textContent.includes(text));
+const dialogKnopf = (text) => [...(document.querySelector('[role="dialog"]')?.querySelectorAll("button") || [])]
+  .find((el) => el.textContent.trim() === text);
 const karte = (id) => document.querySelector(`[data-film-id="${id}"] .kd-karte`);
 const sende = async (ziel, art, optionen = {}) => {
   await act(async () => {
@@ -158,6 +201,16 @@ const klickeAlle = async (text) => {
 };
 
 check("Karten öffnen außerhalb des Modus weiterhin Details", karte("a")?.getAttribute("role") === "button");
+const appQuelltext = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
+const batchNaht = appQuelltext.slice(
+  appQuelltext.indexOf("const planeFilmBatchLoeschung"),
+  appQuelltext.indexOf("const uebernehmeQuellenKlaerung"),
+);
+check("App-Batchnaht nutzt exakt Preview und gebundene Ausführungs-API mit Lade-Gates",
+  batchNaht.includes("personalDataTransaktionen.planeFilmLoeschungen(ids)")
+  && batchNaht.includes("personalDataTransaktionen.loescheFilme(ids, { plan")
+  && (batchNaht.match(/!mustwatchGeladen \|\| !artikelGeladen/g) || []).length === 2
+  && !batchNaht.includes("window.confirm") && !batchNaht.includes("loescheFilm("));
 await sende(karte("a"), "click");
 check("bestehendes Kartenverhalten zeigt den Inhalt", document.body.textContent.includes("Alpha-Details"));
 
@@ -619,6 +672,172 @@ check("fehlgeschlagener Neu-Save bleibt genau einmal und mit Draft am Ursprung",
   && fehlerNeuEntwurf.isConnected && fehlerNeuEntwurf.value === "NEU-FEHLER-DRAFT BLEIBT"
   && document.body.textContent.includes("Neu-Save absichtlich fehlgeschlagen"));
 await sende(knopf("Abbrechen"), "click");
+
+/* E12: Preview und Transaktion erhalten ausschließlich die beim Löschwunsch
+   sichtbare Schnittmenge, einmalig in ihrer aktuellen Sortierreihenfolge. */
+await render(MASTER, "account:ready:e12-preview");
+const e12Suche = document.querySelector('input[placeholder^="Titel oder Originaltitel"]');
+await setzeWert(e12Suche, "");
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]'), "click");
+await setzeWert(e12Suche, "Alpha");
+batchPreviewAufrufe = [];
+batchAufrufe = [];
+batchPreviewModus = "abbruch";
+const mutationenVorPreviewfehler = mutationen;
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+check("Previewabbruch erhält nur sichtbare Schnittmenge und mutiert nichts",
+  batchPreviewAufrufe.length === 1 && batchPreviewAufrufe[0].join(",") === "a"
+  && batchAufrufe.length === 0 && mutationen === mutationenVorPreviewfehler);
+check("Previewabbruch ist sichtbar und öffnet keinen Dialog",
+  document.querySelector('[role="alert"]')?.textContent.includes("nicht sicher geprüft")
+  && !document.querySelector('[role="dialog"]'));
+batchPreviewModus = "exception";
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+check("Previewexception bleibt ebenfalls ohne Mutation", batchPreviewAufrufe.length === 2
+  && batchAufrufe.length === 0 && mutationen === mutationenVorPreviewfehler);
+
+batchPreviewModus = "ok";
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+const previewDialog = document.querySelector('[role="dialog"]');
+check("Batchdialog besitzt Rolle, Modalität, Name und Beschreibung", previewDialog
+  && previewDialog.getAttribute("aria-modal") === "true"
+  && previewDialog.getAttribute("aria-labelledby") === "kd-film-batch-dialog-titel"
+  && previewDialog.getAttribute("aria-describedby") === "kd-film-batch-dialog-beschreibung");
+check("Dialog bindet exakten Titel/Jahr-Snapshot und genaue Folgen",
+  previewDialog.textContent.includes("Alpha") && previewDialog.textContent.includes("2001")
+  && !previewDialog.textContent.includes("Zulu (1999)")
+  && previewDialog.textContent.includes("1 Masterlöschung")
+  && previewDialog.textContent.includes("2 Blogrefs werden zu Rotlinks")
+  && previewDialog.textContent.includes("1 Must-Watch-Masterlink wird gelöst"));
+check("Verborgene Auswahl wird ausdrücklich ausgeschlossen",
+  previewDialog.textContent.includes("1 weiterer verborgener ausgewählter Eintrag ist")
+  && previewDialog.textContent.includes("nicht Ziel und werden nicht gelöscht"));
+check("Dialog nennt die erhaltenen Datensätze und E12-Grenze",
+  previewDialog.textContent.includes("Artikel und Must-Watch-Einträge bleiben bestehen")
+  && previewDialog.textContent.includes("Master, Artikelverweise und Must-Watch-Masterlinks"));
+check("Initialfokus liegt auf Abbrechen", document.activeElement === dialogKnopf("Abbrechen"));
+await sende(document.activeElement, "keydown", { key: "Tab", shiftKey: true });
+check("Fokusfalle führt rückwärts zum letzten Dialogknopf", document.activeElement === knopf("1 endgültig löschen"));
+await sende(document.activeElement, "keydown", { key: "Tab" });
+check("Fokusfalle führt vorwärts zurück zu Abbrechen", document.activeElement === dialogKnopf("Abbrechen"));
+const batchRueckkehr = knopf("Sichtbare Auswahl löschen");
+await sende(previewDialog, "keydown", { key: "Escape" });
+check("Escape vor Pending bricht ohne Mutation ab und gibt Fokus zurück",
+  !document.querySelector('[role="dialog"]') && document.activeElement === batchRueckkehr
+  && batchAufrufe.length === 0 && mutationen === mutationenVorPreviewfehler);
+
+/* Erfolgsprojektion: alle Nichtziel-Drafts behalten exakt ihre DOM-Instanz. */
+const e12Master = MASTER.map((eintrag) => ({ ...eintrag }));
+await render(e12Master, "account:ready:e12-success", {
+  artikel: E12_ARTIKEL_VORHER, nachtragFlach: [E12_NACHTRAG_BLEIBT],
+});
+await setzeWert(document.querySelector('input[placeholder^="Titel oder Originaltitel"]'), "");
+await sende(karte("a"), "click");
+await sende(knopfEnthaelt("Bewertung bearbeiten"), "click");
+const e12EditDraft = document.querySelector('.kd-film-editor-shell textarea[placeholder^="Begründung"]');
+await setzeWert(e12EditDraft, "E12 EDIT BLEIBT");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const e12NeuDraft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(e12NeuDraft, "E12 NEU BLEIBT");
+await sende(knopf("✎ Anlegen"), "click");
+const e12RotlinkDraft = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+  .find((el) => el.value === "Rotlink Kandidat");
+await setzeWert(e12RotlinkDraft, "E12 ROTLINK BLEIBT");
+await sende(knopf("✎ Bewerten"), "click");
+const e12NachtragDraft = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+  .find((el) => el.value === "Nachtrag Kandidat");
+await setzeWert(e12NachtragDraft, "E12 NACHTRAG BLEIBT");
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Zulu auswählen"]'), "click");
+batchPreviewAufrufe = [];
+batchAufrufe = [];
+batchVerzoegern = true;
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+const erfolgsPlan = letzterAuthentischerPlan;
+const erfolgsDialog = document.querySelector('[role="dialog"]');
+await sende(knopf("1 endgültig löschen"), "click");
+check("Bestätigen startet genau einen authentischen Batch in Zielreihenfolge",
+  batchAufrufe.length === 1 && batchAufrufe[0].ids.join(",") === "z"
+  && batchAufrufe[0].ids === letztePreviewIdsRef && batchAufrufe[0].plan === erfolgsPlan
+  && confirmAufrufe === 0);
+check("Pending ist sichtbar und sperrt Doppelklick, Abbrechen, Escape und Hintergrund",
+  erfolgsDialog.textContent.includes("Löschung läuft")
+  && dialogKnopf("Abbrechen").disabled && dialogKnopf("Löscht …").disabled
+  && document.querySelector(".kd-mediathek-dialog-hintergrund")?.hasAttribute("inert"));
+await sende(erfolgsDialog, "keydown", { key: "Escape" });
+check("Escape während Pending lässt Dialog und Auftrag bestehen", !!document.querySelector('[role="dialog"]') && batchAufrufe.length === 1);
+const e12ErfolgsMaster = e12Master.filter((eintrag) => eintrag.id !== "z");
+await render(e12ErfolgsMaster, "account:ready:e12-success", {
+  artikel: E12_ARTIKEL_NACHHER, nachtragFlach: [E12_NACHTRAG_NEU, E12_NACHTRAG_BLEIBT],
+});
+await act(async () => {
+  batchAufloeser(true);
+  await Promise.resolve();
+  await Promise.resolve();
+});
+batchVerzoegern = false;
+check("Erfolg entfernt nur Zielkarte und beendet/leert die gesamte Auswahl",
+  !document.querySelector('[data-film-id="z"]') && !!knopf("Auswählen") && !document.querySelector('[role="checkbox"]'));
+check("Erfolg bewahrt Nichtziel-Edit- und Neu-Draft DOM-identisch und wertgleich",
+  e12EditDraft.isConnected && e12EditDraft.value === "E12 EDIT BLEIBT"
+  && e12NeuDraft.isConnected && e12NeuDraft.value === "E12 NEU BLEIBT");
+check("Erfolg bewahrt Nichtziel-Rotlink- und Nachtrag-Draft DOM-identisch und wertgleich",
+  e12RotlinkDraft.isConnected && e12RotlinkDraft.value === "E12 ROTLINK BLEIBT"
+  && e12NachtragDraft.isConnected && e12NachtragDraft.value === "E12 NACHTRAG BLEIBT");
+check("Erfolgsfokus kehrt sicher zum Auswahlmodus zurück", document.activeElement === knopf("Auswählen"));
+
+/* false/stale verbraucht das DTO einmalig, behält Auswahl und Drafts und darf
+   keinen später zufällig passenden Masterwechsel als Erfolg behandeln. */
+const e12FehlerMaster = MASTER.map((eintrag) => ({ ...eintrag }));
+await render(e12FehlerMaster, "account:ready:e12-error");
+await sende(knopf("+ Eintrag hinzufügen"), "click");
+const e12FehlerDraft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
+await setzeWert(e12FehlerDraft, "E12 FEHLER BLEIBT");
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+batchAufrufe = [];
+batchErgebnis = false;
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+await sende(knopf("1 endgültig löschen"), "click");
+check("false zeigt Stale-Fehler, erhält Auswahl und alle Drafts",
+  document.querySelector('[role="alert"]')?.textContent.includes("Datenstand, Konto oder Sitzung")
+  && document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt"
+  && e12FehlerDraft.isConnected && e12FehlerDraft.value === "E12 FEHLER BLEIBT");
+const batchNachFehler = batchAufrufe.length;
+await sende(knopf("1 endgültig löschen"), "click");
+check("Verbrauchtes DTO kann nicht erneut bestätigt werden", batchAufrufe.length === batchNachFehler
+  && knopf("1 endgültig löschen").disabled);
+await sende(dialogKnopf("Abbrechen"), "click");
+check("Schließen nach Fehler behält Auswahl und gibt Fokus zurück",
+  document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt"
+  && document.activeElement === knopf("Sichtbare Auswahl löschen"));
+await render(e12FehlerMaster.filter((eintrag) => eintrag.id !== "a"), "account:ready:e12-error");
+check("Nach false bleibt selbst passende spätere Projektion eine harte Draftgrenze",
+  !e12FehlerDraft.isConnected && !!knopf("Auswählen"));
+batchErgebnis = true;
+
+/* Fremder Kontext während Pending invalidiert und schließt fail-closed; die
+   spätere Auflösung darf keine UI aus dem neuen Kontext übernehmen. */
+await render(MASTER, "account:ready:e12-pending-a");
+await sende(knopf("Auswählen"), "click");
+await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswählen"]'), "click");
+batchAufrufe = [];
+batchVerzoegern = true;
+await sende(knopf("Sichtbare Auswahl löschen"), "click");
+await sende(knopf("1 endgültig löschen"), "click");
+await render(MASTER, "account:ready:e12-pending-b");
+check("Datenkontextwechsel schließt laufenden Dialog und setzt Auswahl hart zurück",
+  !document.querySelector('[role="dialog"]') && !!knopf("Auswählen") && batchAufrufe.length === 1);
+await act(async () => {
+  batchAufloeser(true);
+  await Promise.resolve();
+  await Promise.resolve();
+});
+batchVerzoegern = false;
+check("Spätes Pending-Ergebnis übernimmt nicht in fremden sichtbaren Kontext",
+  !document.querySelector('[role="dialog"]') && !!knopf("Auswählen"));
 
 await act(async () => { root.unmount(); });
 dom.window.close();

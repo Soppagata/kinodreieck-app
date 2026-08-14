@@ -2124,3 +2124,115 @@ test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ pa
   await expect(alphaKarte).toContainText("Alpha-Details");
   await keineDokumentUeberbreite(page);
 });
+
+test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    const filme = Array.from({ length: 12 }, (_, index) => ({
+      id: `film-${index + 1}`, typ: "film", titel: `Film ${String(index + 1).padStart(2, "0")}`,
+      jahr: 2000 + index, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 },
+    }));
+    filme.push({ id: "serie-verdeckt", typ: "serie", titel: "Verborgene Serie", jahr: 2024, quelle: "dvd", bewertung: { wie: 2, was: 2, warum: 2 } });
+    localStorage.setItem("kd:master", JSON.stringify({ meta: { version: "e12-mobile" }, gespeichertAm: Date.now(), filme }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:artikel", JSON.stringify({ artikel: [], gespeichertAm: Date.now() }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Mediathek");
+
+  /* Derselbe von der App importierte Storage-Modulkontext erhält einen lokalen
+     Testtreiber. Er verändert keine Produktdatei und hält exakt den nächsten
+     Write offen, damit Pending in beiden Browser-Engines prüfbar bleibt. */
+  await page.evaluate(async () => {
+    const { setStorageDriver } = await import("/src/lib/storage.js");
+    window.__e12StoragePause = false;
+    window.__e12StorageGate = null;
+    const driver = {
+      name: "e12-mobile-test", owner: "guest-local",
+      async get(key) {
+        const value = localStorage.getItem(key);
+        return value === null ? null : { key, value };
+      },
+      async set(key, value) {
+        if (window.__e12StoragePause && !window.__e12StorageGate) {
+          return new Promise((resolve, reject) => {
+            window.__e12StorageGate = {
+              resolve: () => { localStorage.setItem(key, value); resolve({ key, value }); },
+              reject,
+            };
+          });
+        }
+        localStorage.setItem(key, value);
+        return { key, value };
+      },
+      async delete(key) { localStorage.removeItem(key); return { key, deleted: true }; },
+      async list(prefix = "") { return { keys: Object.keys(localStorage).filter((key) => key.startsWith(prefix)) }; },
+    };
+    setStorageDriver(driver);
+  });
+  await expect(page.getByRole("button", { name: "Auswählen", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await page.getByRole("button", { name: /^Serien/ }).click();
+  await page.getByRole("checkbox", { name: "Verborgene Serie auswählen" }).click();
+  await page.getByRole("button", { name: /^Filme/ }).click();
+  const filmCheckboxen = page.getByRole("checkbox", { name: /^Film \d+ auswählen$/ });
+  await expect(filmCheckboxen).toHaveCount(12);
+  for (let index = 0; index < 12; index++) await filmCheckboxen.nth(index).click();
+  await expect(page.getByText("13 ausgewählt · 12 sichtbar", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Sichtbare Auswahl löschen", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: /12 sichtbare Einträge löschen/ });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("12 Masterlöschungen");
+  await expect(dialog).toContainText("1 weiterer verborgener ausgewählter Eintrag ist");
+  await expect(dialog).toContainText("nicht Ziel und werden nicht gelöscht");
+  await expect(dialog).not.toContainText("Verborgene Serie (2024)");
+  await expect(dialog.locator(".kd-film-batch-ziel-liste li")).toHaveCount(12);
+
+  const geometrie = await dialog.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const liste = element.querySelector(".kd-film-batch-ziel-liste");
+    const knoepfe = [...element.querySelectorAll("button")].map((button) => {
+      const box = button.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    });
+    return {
+      links: rect.left, rechts: rect.right, oben: rect.top, unten: rect.bottom,
+      scrollbareListe: liste.scrollHeight > liste.clientHeight,
+      listeUeberbreite: liste.scrollWidth > liste.clientWidth + 1,
+      knoepfe,
+      dokumentUeberbreite: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    };
+  });
+  expect(geometrie.links).toBeGreaterThanOrEqual(0);
+  expect(geometrie.rechts).toBeLessThanOrEqual(393);
+  expect(geometrie.oben).toBeGreaterThanOrEqual(0);
+  expect(geometrie.unten).toBeLessThanOrEqual(852);
+  expect(geometrie.scrollbareListe).toBe(true);
+  expect(geometrie.listeUeberbreite).toBe(false);
+  expect(geometrie.dokumentUeberbreite).toBe(false);
+  for (const box of geometrie.knoepfe) {
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await page.evaluate(() => { window.__e12StoragePause = true; });
+  await dialog.getByRole("button", { name: "12 endgültig löschen" }).click();
+  await expect(dialog.getByRole("status")).toContainText("Löschung läuft");
+  await expect(dialog.getByRole("button", { name: "Abbrechen" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Löscht …" })).toBeDisabled();
+  await expect(page.locator(".kd-mediathek-dialog-hintergrund")).toHaveAttribute("inert", "");
+
+  await page.evaluate(() => {
+    window.__e12StoragePause = false;
+    window.__e12StorageGate.reject(new Error("E12 mobile write failure"));
+  });
+  await expect(dialog.getByRole("alert")).toContainText("Datenstand, Konto oder Sitzung");
+  await expect(dialog.getByRole("button", { name: "12 endgültig löschen" })).toBeDisabled();
+  await expect(page.getByText("13 ausgewählt · 12 sichtbar", { exact: true })).toBeVisible();
+  await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
+  await keineDokumentUeberbreite(page);
+});

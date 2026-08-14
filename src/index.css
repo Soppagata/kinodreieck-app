@@ -479,6 +479,29 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-kopierstatus { margin:8px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.45; }
 .kd-kopierstatus--erfolg { color:var(--wolfram,#e3a63b); }
 .kd-kopierstatus--fehler { color:var(--gefahr,#d96a5a); }
+.kd-film-batch-vorschaufehler { margin:-5px 0 12px; color:var(--gefahr,#d96a5a); font:700 11px/1.5 'Space Mono',monospace; }
+.kd-film-batch-dialog-layer { position:fixed; inset:0; z-index:14500; display:grid; place-items:center; box-sizing:border-box;
+  padding:max(14px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); overflow:hidden; }
+.kd-film-batch-dialog-scrim { position:absolute; inset:0; background:rgba(0,0,0,.68); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.kd-film-batch-dialog { position:relative; display:flex; flex-direction:column; width:min(620px,100%); max-width:100%; max-height:calc(100dvh - 28px);
+  overflow:hidden; box-sizing:border-box; padding:18px; border:1px solid color-mix(in srgb,var(--gefahr,#d96a5a) 68%,var(--rauch,#948fa0));
+  border-radius:14px; background:var(--saalHoch,#211e26); color:var(--leinwand,#ece8df); box-shadow:0 20px 60px rgba(0,0,0,.68); }
+.kd-film-batch-dialog header { flex:0 0 auto; min-width:0; }
+.kd-film-batch-dialog header>span { color:var(--gefahr,#d96a5a); font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.kd-film-batch-dialog h2 { margin:3px 0 8px; overflow-wrap:anywhere; font:700 clamp(25px,6vw,34px)/1.05 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+.kd-film-batch-dialog h3 { margin:0 0 6px; color:var(--wolfram,#e3a63b); font:700 13px 'Space Mono',monospace; text-transform:uppercase; }
+.kd-film-batch-dialog p { margin:0 0 12px; overflow-wrap:anywhere; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
+.kd-film-batch-ziel-liste { flex:1 1 auto; min-height:72px; max-height:min(32dvh,260px); overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
+  box-sizing:border-box; margin:0 0 12px; padding:5px 10px 5px 28px; border:1px solid var(--tinteWeich,#6f6878); border-radius:7px; background:var(--saal,#17151a); }
+.kd-film-batch-ziel-liste li { padding:6px 2px; overflow-wrap:anywhere; color:var(--leinwandTief,#dfdacd); font:12px/1.45 'Space Mono',monospace; }
+.kd-film-batch-ziel-liste strong { color:var(--leinwand,#ece8df); }
+.kd-film-batch-folgen { flex:0 0 auto; margin:0 0 11px; padding:10px 12px; border-left:3px solid var(--wolfram,#e3a63b); background:var(--saal,#17151a); }
+.kd-film-batch-folgen ul { margin:0; padding-left:20px; color:var(--leinwandTief,#dfdacd); font-size:12px; line-height:1.55; }
+.kd-film-batch-dialog .kd-film-batch-verborgen { padding:9px 10px; border:1px solid var(--wolfram,#e3a63b); border-radius:6px; color:var(--leinwand,#ece8df); }
+.kd-film-batch-dialog .kd-film-batch-pending { color:var(--wolfram,#e3a63b); font-weight:700; }
+.kd-film-batch-dialog .kd-film-batch-fehler { color:var(--gefahr,#d96a5a); font-weight:700; }
+.kd-film-batch-aktionen { flex:0 0 auto; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.kd-film-batch-aktionen button { min-width:0; min-height:44px; white-space:normal; }
 .kd-auswahl-marke { display:grid; place-items:center; flex:0 0 44px; box-sizing:border-box; width:44px; height:44px; border:2px solid var(--kd-tinteWeich,#6f6878); border-radius:6px; background:var(--kd-saalHoch,#211e26); color:var(--kd-wolfram,#e3a63b); font:900 24px/1 'Space Mono',monospace; }
 .kd-auswahl-karte--aktiv .kd-auswahl-marke { border-color:var(--kd-wolfram,#e3a63b); background:var(--kd-tinte,#1c1a1e); }
 .kd-auswahl-karte:focus-visible { outline:3px solid var(--kd-wolfram,#e3a63b); outline-offset:3px; }
@@ -555,6 +578,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-auswahl-werkzeuge>.kd-auswahl-modus { grid-column:1 / -1; }
   .kd-auswahl-zaehler { display:flex; align-items:center; min-height:44px; min-width:0; }
   .kd-auswahl-werkzeuge>.kd-auswahl-kopieren { grid-column:1 / -1; }
+  .kd-auswahl-werkzeuge>.kd-auswahl-loeschen { grid-column:1 / -1; }
+  .kd-film-batch-dialog { padding:14px; }
+  .kd-film-batch-aktionen { grid-template-columns:1fr; }
   .kd-titelliste-ausgabe { width:100%; }
   .kd-streaming-werkzeuge { display:grid !important; grid-template-columns:minmax(0,1fr) auto; align-items:stretch !important; }
   .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { display:flex !important; width:100%; min-width:0; }

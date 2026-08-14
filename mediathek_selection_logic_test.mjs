@@ -3,7 +3,9 @@ import assert from "node:assert";
 import {
   analysiereAuswaehlbareIds,
   ausgewaehlteSichtbareEintraege,
+  erstelleLoeschSnapshot,
   erstelleTitelliste,
+  istErwarteteLoeschProjektion,
   bereinigeAuswahl,
   kanonischeStabileId,
   schalteAuswahlUm,
@@ -172,6 +174,39 @@ check("erstelleTitelliste: schließt private Zusatzfelder aus der Ausgabe aus", 
   assert.equal(text, "X (2026)");
   assert.ok(!text.includes("secret"));
   assert.ok(!text.includes("file"));
+});
+
+check("erstelleLoeschSnapshot: friert nur sichtbare Ziele in sichtbarer Reihenfolge ein", () => {
+  const sichtbar = [
+    { id: "b", titel: " Beta\nPrivat ", jahr: " 2002 ", notiz: "GEHEIM" },
+    { id: "a", titel: "Alpha", jahr: null, intern: { privat: true } },
+  ];
+  const snapshot = erstelleLoeschSnapshot(
+    sichtbar, new Set(["a", "b", "verborgen"]), new Set(["a", "b", "verborgen"]),
+  );
+  assert.deepEqual(snapshot, {
+    ids: ["b", "a"],
+    ziele: [
+      { id: "b", titel: "Beta Privat", jahr: "2002" },
+      { id: "a", titel: "Alpha", jahr: "" },
+    ],
+    verborgeneAnzahl: 1,
+  });
+  assert.ok(Object.isFrozen(snapshot) && Object.isFrozen(snapshot.ids)
+    && Object.isFrozen(snapshot.ziele) && snapshot.ziele.every(Object.isFrozen));
+  assert.ok(!JSON.stringify(snapshot).includes("GEHEIM"));
+});
+
+check("istErwarteteLoeschProjektion: akzeptiert nur exakte Zielentfernung mit identischen Überlebenden", () => {
+  const a = { id: "a" }, b = { id: "b" }, c = { id: "c" }, d = { id: "d" };
+  const alt = [a, b, c, d];
+  assert.equal(istErwarteteLoeschProjektion(alt, [a, c], ["b", "d"]), true);
+  assert.equal(istErwarteteLoeschProjektion(alt, [c, a], ["b", "d"]), false);
+  assert.equal(istErwarteteLoeschProjektion(alt, [{ ...a }, c], ["b", "d"]), false);
+  assert.equal(istErwarteteLoeschProjektion(alt, [a, c, { id: "neu" }], ["b", "d"]), false);
+  assert.equal(istErwarteteLoeschProjektion(alt, [a, b, c], ["b", "d"]), false);
+  assert.equal(istErwarteteLoeschProjektion(alt, [a, c], ["b", "b"]), false);
+  assert.equal(istErwarteteLoeschProjektion([{ id: "b" }, { id: "b" }, a], [a], ["b"]), false);
 });
 
 check("analysiereAuswaehlbareIds + bereinigeAuswahl + toggle: End-to-End", () => {

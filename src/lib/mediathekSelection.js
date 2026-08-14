@@ -103,6 +103,54 @@ export function ausgewaehlteSichtbareEintraege(sichtbareEintraege, auswahlSet, a
   return treffer;
 }
 
+export function erstelleLoeschSnapshot(sichtbareEintraege, auswahlSet, auswaehlbareIds) {
+  const globaleAuswahl = bereinigeAuswahl(auswahlSet, auswaehlbareIds);
+  const sichtbareAuswahl = ausgewaehlteSichtbareEintraege(
+    sichtbareEintraege, globaleAuswahl, auswaehlbareIds,
+  );
+  const ziele = sichtbareAuswahl.map((eintrag) => {
+    const titel = bereinigeWhitespace(eintrag?.titel || "Ohne Titel") || "Ohne Titel";
+    const hatJahr = eintrag?.jahr !== undefined && eintrag?.jahr !== null
+      && String(eintrag.jahr).trim() !== "";
+    return Object.freeze({
+      id: kanonischeStabileId(eintrag),
+      titel,
+      jahr: hatJahr ? bereinigeWhitespace(eintrag.jahr) : "",
+    });
+  });
+  return Object.freeze({
+    ids: Object.freeze(ziele.map((ziel) => ziel.id)),
+    ziele: Object.freeze(ziele),
+    verborgeneAnzahl: Math.max(0, globaleAuswahl.size - ziele.length),
+  });
+}
+
+/* Der einzige weiche Masterwechsel: exakt die bestätigten Ziele verschwinden,
+   während Reihenfolge und Objektidentität jedes Nichtziels erhalten bleiben. */
+export function istErwarteteLoeschProjektion(alterMaster, neuerMaster, zielIds) {
+  if (!Array.isArray(alterMaster) || !Array.isArray(neuerMaster) || !Array.isArray(zielIds)
+      || zielIds.length === 0) return false;
+  const ziele = new Set();
+  for (const rohId of zielIds) {
+    const id = kanonischeStabileId(rohId);
+    if (!id || ziele.has(id)) return false;
+    ziele.add(id);
+  }
+  const gesehen = new Set();
+  let neuerIndex = 0;
+  for (const eintrag of alterMaster) {
+    const id = kanonischeStabileId(eintrag);
+    if (id && ziele.has(id)) {
+      if (gesehen.has(id)) return false;
+      gesehen.add(id);
+      continue;
+    }
+    if (neuerMaster[neuerIndex] !== eintrag) return false;
+    neuerIndex += 1;
+  }
+  return gesehen.size === ziele.size && neuerIndex === neuerMaster.length;
+}
+
 export function erstelleTitelliste(sichtbareEintraege, auswahlSet, auswaehlbareIds) {
   const sichtbareAuswahl = ausgewaehlteSichtbareEintraege(sichtbareEintraege, auswahlSet, auswaehlbareIds);
   const zeilen = [];

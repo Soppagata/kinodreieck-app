@@ -1173,7 +1173,6 @@ export default function App() {
       meta: masterMetaRef.current, herkunft: naechsteHerkunft(),
     };
   }), [mutiereMaster, naechsteHerkunft]);
-
   const deleteFilm = useCallback(async (id) => {
     if (!mustwatchGeladen || !artikelGeladen) {
       setErr("Eintrag kann erst gelöscht werden, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert.");
@@ -1199,7 +1198,8 @@ export default function App() {
     artikelGeladen, masterMeta, mustwatchGeladen, mustwatchRef, naechsteHerkunft,
     personalDataTransaktionen,
   ]);
-
+  const planeFilmBatchLoeschung = useCallback((ids) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return null; } try { return personalDataTransaktionen.planeFilmLoeschungen(ids); } catch { setErr("Die Löschfolgen konnten nicht sicher geprüft werden. Es wurde nichts verändert."); return null; } }, [artikelGeladen, mustwatchGeladen, personalDataTransaktionen]);
+  const fuehreFilmBatchLoeschungAus = useCallback(async (ids, plan) => { if (!mustwatchGeladen || !artikelGeladen) { setErr("Mehrfachlöschen ist erst möglich, wenn Must-Watch und Artikel sicher geladen sind. Es wurde nichts verändert."); return false; } try { return await personalDataTransaktionen.loescheFilme(ids, { plan, meta: masterMetaRef.current, herkunft: naechsteHerkunft() }); } catch { return false; } }, [artikelGeladen, mustwatchGeladen, naechsteHerkunft, personalDataTransaktionen]);
   const uebernehmeQuellenKlaerung = useCallback(async (map) => {
     const ok = await mutiereMaster((aktuell) => ({
       master: aktuell.map((film) => map[film.id] !== undefined
@@ -1209,7 +1209,6 @@ export default function App() {
     }));
     if (ok) setKlaerung(null);
   }, [mutiereMaster, naechsteHerkunft]);
-
   /* Gibt die neue ID zurück (Blog-Rotlink-Anlage setzt damit sofort die ref).
      Nach jedem neuen Eintrag: automatische Rotlink-Heilung über alle Artikel —
      nur eindeutige Exakt-Treffer, nichts wird geraten. */
@@ -2035,6 +2034,7 @@ export default function App() {
             master={master ?? LEERER_MEDIATHEK_MASTER} nachtragFlach={master ? nachtragSichtbar : []}
             expandedId={expandedId} setExpandedId={setExpandedId}
             updateFilm={updateFilm} deleteFilm={deleteFilm} addFilm={addFilm} badgeFuer={badgeFuer}
+            onFilmBatchVorschau={planeFilmBatchLoeschung} onFilmBatchLoeschen={fuehreFilmBatchLoeschungAus}
             addFilmMitPrognose={addFilmMitPrognose}
             vorbewertungAktiv={vorbewertungAktiv}
             prognoseSperrgrund={vorbewertungSperrgrund}

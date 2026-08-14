@@ -10,13 +10,15 @@ import { BEWERTUNGSKATEGORIEN } from "../lib/kategorien.js";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
   analysiereAuswaehlbareIds, ausgewaehlteSichtbareEintraege, bereinigeAuswahl,
-  erstelleTitelliste, kanonischeStabileId, schalteAuswahlUm,
+  erstelleLoeschSnapshot, erstelleTitelliste, istErwarteteLoeschProjektion,
+  kanonischeStabileId, schalteAuswahlUm,
 } from "../lib/mediathekSelection.js";
 import { Chip, ChipReihe, IconClose, QuellenBadges, SegmentedControl } from "../components/ui.jsx";
 import { FilmCard } from "../components/FilmCard.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { MedienForm } from "../components/MedienForm.jsx";
 import { MustWatchListe } from "../components/MustWatchListe.jsx";
+import { FilmBatchLoeschDialog } from "../components/FilmBatchLoeschDialog.jsx";
 
 /* ================= MEDIATHEK =================
    Drei Ansichten über EINEN Umschalter (kein 8. Nav-Bereich):
@@ -27,6 +29,7 @@ import { MustWatchListe } from "../components/MustWatchListe.jsx";
    - Must-Watch: eigener persönlicher Datentopf, KEIN Master-Filter.
    artikel: Blog-Artikel (Phase 2) für die "Kommt vor in:"-Anzeige. */
 export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId, updateFilm, deleteFilm, addFilm, badgeFuer, artikel = [], onArtikelKlick, fokusFilmId, onFokusVerbraucht,
+  onFilmBatchVorschau, onFilmBatchLoeschen,
   mustwatch = [], addMustwatch, updateMustwatch, deleteMustwatch, mwKandidaten = { master: [], programm: [], streaming: [] }, onSpringeZuMustwatchRef,
   addFilmMitPrognose, vorbewertungAktiv = false, prognoseLaufId = null,
   prognoseSperrgrund = null, prognoseFehler = {}, aktuelleProfilVersion = null,
@@ -47,30 +50,56 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   const [bewahrteExpandedId, setBewahrteExpandedId] = useState(null);
   const [bewahrterRefKey, setBewahrterRefKey] = useState(null);
   const [bewahrterBewerteTitel, setBewahrterBewerteTitel] = useState(null);
+  const [loeschDialog, setLoeschDialog] = useState(null);
+  const [loeschHinweis, setLoeschHinweis] = useState(null);
   const titellisteRef = useRef(null);
+  const auswahlModusButtonRef = useRef(null);
+  const loeschRueckkehrRef = useRef(null);
+  const fokusRueckkehrAngefordertRef = useRef(false);
+  const dialogLaufRef = useRef(0);
+  const erwarteterMasterUebergangRef = useRef(null);
+  const aktuelleGrenzeRef = useRef({ master, datenKontextKey });
+  const rotlinkDraftKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
+  const nachtragDraftKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
   const letzterMasterRef = useRef(master);
   const letzterDatenKontextRef = useRef(datenKontextKey);
   const letzteTitellisteRef = useRef("");
   const kopierRequestRef = useRef(0);
   const aktuellerKopierStandRef = useRef({ modus: false, text: "" });
   const unsichereRenderKeysRef = useRef({ map: new WeakMap(), naechster: 0 });
-  const draftGrenzeRef = useRef({ master, datenKontextKey, epoch: 0 });
+  const draftGrenzeRef = useRef({ master, datenKontextKey, epoch: 0, erwartet: false });
   if (draftGrenzeRef.current.master !== master
       || draftGrenzeRef.current.datenKontextKey !== datenKontextKey) {
     kopierRequestRef.current += 1;
+    const erwartung = erwarteterMasterUebergangRef.current;
+    erwarteterMasterUebergangRef.current = null;
+    const erwartet = !!erwartung
+      && erwartung.alterMaster === draftGrenzeRef.current.master
+      && erwartung.datenKontextKey === draftGrenzeRef.current.datenKontextKey
+      && erwartung.datenKontextKey === datenKontextKey
+      && istErwarteteLoeschProjektion(erwartung.alterMaster, master, erwartung.zielIds);
+    if (!erwartet) dialogLaufRef.current += 1;
     draftGrenzeRef.current = {
-      master, datenKontextKey, epoch: draftGrenzeRef.current.epoch + 1,
+      master, datenKontextKey,
+      epoch: draftGrenzeRef.current.epoch + (erwartet ? 0 : 1),
+      erwartet,
     };
   }
+  aktuelleGrenzeRef.current = { master, datenKontextKey };
   const draftEpoch = draftGrenzeRef.current.epoch;
 
   const beendeAuswahl = useCallback(() => {
+    if (loeschDialog?.pending) return;
+    dialogLaufRef.current += 1;
+    erwarteterMasterUebergangRef.current = null;
     kopierRequestRef.current += 1;
     setAuswahlmodus(false);
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
-  }, []);
+    setLoeschDialog(null);
+    setLoeschHinweis(null);
+  }, [loeschDialog?.pending]);
 
   const starteAuswahl = useCallback(() => {
     kopierRequestRef.current += 1;
@@ -81,11 +110,20 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
     setKopierStatus(null);
+    setLoeschHinweis(null);
     setAuswahlmodus(true);
   }, [typTab, expandedId, refAnlegen, bewerteTitel]);
 
   const resetteLokaleMediathekUi = useCallback(() => {
-    beendeAuswahl();
+    dialogLaufRef.current += 1;
+    erwarteterMasterUebergangRef.current = null;
+    kopierRequestRef.current += 1;
+    setAuswahlmodus(false);
+    setAuswahlIds(new Set());
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+    setLoeschDialog(null);
+    setLoeschHinweis(null);
     setExpandedId(null);
     setRefAnlegen(null);
     setBewerteTitel(null);
@@ -93,7 +131,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     setBewahrteExpandedId(null);
     setBewahrterRefKey(null);
     setBewahrterBewerteTitel(null);
-  }, [beendeAuswahl, setExpandedId]);
+  }, [setExpandedId]);
 
   /* Eine Auswahl gehört genau zum gesamten Datenkontext. Master-Ersetzung
      (inkl. Restore/Sync) und Account-/Sessionwechsel beenden sie vollständig.
@@ -102,7 +140,11 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   useEffect(() => {
     const grenzeGewechselt = letzterMasterRef.current !== master
       || letzterDatenKontextRef.current !== datenKontextKey;
-    if (grenzeGewechselt) resetteLokaleMediathekUi();
+    const erwarteteProjektion = grenzeGewechselt
+      && draftGrenzeRef.current.master === master
+      && draftGrenzeRef.current.datenKontextKey === datenKontextKey
+      && draftGrenzeRef.current.erwartet;
+    if (grenzeGewechselt && !erwarteteProjektion) resetteLokaleMediathekUi();
     letzterMasterRef.current = master;
     letzterDatenKontextRef.current = datenKontextKey;
   }, [master, datenKontextKey, resetteLokaleMediathekUi]);
@@ -135,10 +177,27 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
   }, [fokusFilmId, master]);
 
   const offeneRefs = useMemo(() => offeneReferenzen(artikel), [artikel]);
-  const offeneRefsMitKey = useMemo(() => offeneRefs.map((o, index) => ({
-    ...o,
-    draftKey: `${o.artikelId}:${index}`,
-  })), [offeneRefs]);
+  const offeneRefsMitKey = useMemo(() => {
+    let offenIndex = 0;
+    const stand = rotlinkDraftKeysRef.current;
+    const keys = [];
+    for (const artikelEintrag of artikel || []) {
+      for (const listenEintrag of artikelEintrag?.liste || []) {
+        if (listenEintrag?.ref) continue;
+        let key = null;
+        if (listenEintrag && typeof listenEintrag === "object") {
+          if (!stand.map.has(listenEintrag)) stand.map.set(listenEintrag, `rotlink:${++stand.naechster}`);
+          key = stand.map.get(listenEintrag);
+        }
+        keys.push(key || `rotlink-fallback:${artikelEintrag?.id || "?"}:${offenIndex}`);
+        offenIndex += 1;
+      }
+    }
+    return offeneRefs.map((o, index) => ({
+      ...o,
+      draftKey: keys[index] || `rotlink-fallback:${o.artikelId}:${index}`,
+    }));
+  }, [artikel, offeneRefs]);
   /* Offene Referenzen typ-bewusst: Musik-Rotlinks im Musik-Tab ergänzen,
      Serien im Serien-Tab. Ohne Typ-Angabe -> Filme-Tab (Default-Annahme). */
   const offeneRefsTab = useMemo(
@@ -313,6 +372,110 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     ? `${auswahlIds.size} ausgewählt`
     : `${auswahlIds.size} ausgewählt · ${sichtbareAuswahl.length} sichtbar`;
   const problematischeIds = idAnalyse.ungueltigeAnzahl + idAnalyse.doppelteIds.size;
+
+  const fokussiereNachDialog = useCallback(() => {
+    fokusRueckkehrAngefordertRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (loeschDialog || !fokusRueckkehrAngefordertRef.current) return;
+    fokusRueckkehrAngefordertRef.current = false;
+    requestAnimationFrame(() => {
+      const rueckkehr = loeschRueckkehrRef.current;
+      if (rueckkehr?.isConnected && !rueckkehr.disabled) rueckkehr.focus();
+      else auswahlModusButtonRef.current?.focus();
+    });
+  }, [auswahlmodus, loeschDialog]);
+
+  const oeffneLoeschDialog = useCallback((rueckkehrElement) => {
+    if (!auswahlmodus || loeschDialog) return;
+    const snapshot = erstelleLoeschSnapshot(
+      mediathek, auswahlIds, idAnalyse.auswaehlbareIds,
+    );
+    if (snapshot.ids.length === 0) {
+      setLoeschHinweis("Keine ausgewählten Einträge sind in der aktuellen Ansicht sichtbar. Es wurde nichts verändert.");
+      return;
+    }
+    setLoeschHinweis(null);
+    let plan = null;
+    try {
+      plan = onFilmBatchVorschau?.(snapshot.ids) || null;
+    } catch {
+      plan = null;
+    }
+    const planIds = Array.isArray(plan?.zielIds) ? plan.zielIds : [];
+    const planPasst = plan?.ok === true && plan.abgebrochen !== true
+      && planIds.length === snapshot.ids.length
+      && planIds.every((id, index) => id === snapshot.ids[index]);
+    if (!planPasst) {
+      setLoeschHinweis("Die Löschfolgen konnten nicht sicher geprüft werden. Es wurde nichts verändert; bitte Datenstand, Konto oder Sitzung prüfen und neu auswählen.");
+      return;
+    }
+    loeschRueckkehrRef.current = rueckkehrElement || document.activeElement;
+    setLoeschDialog({
+      snapshot, plan, masterBasis: master, datenKontextKey,
+      pending: false, fehler: null, verbraucht: false,
+    });
+  }, [
+    auswahlIds, auswahlmodus, datenKontextKey, idAnalyse.auswaehlbareIds,
+    loeschDialog, master, mediathek, onFilmBatchVorschau,
+  ]);
+
+  const schliesseLoeschDialog = useCallback(() => {
+    if (loeschDialog?.pending) return;
+    dialogLaufRef.current += 1;
+    erwarteterMasterUebergangRef.current = null;
+    setLoeschDialog(null);
+    fokussiereNachDialog();
+  }, [fokussiereNachDialog, loeschDialog?.pending]);
+
+  const bestaetigeLoeschDialog = useCallback(async () => {
+    const auftrag = loeschDialog;
+    if (!auftrag || auftrag.pending || auftrag.verbraucht) return;
+    const aktuelleGrenze = aktuelleGrenzeRef.current;
+    if (aktuelleGrenze.master !== auftrag.masterBasis
+        || aktuelleGrenze.datenKontextKey !== auftrag.datenKontextKey) {
+      dialogLaufRef.current += 1;
+      setLoeschDialog(null);
+      return;
+    }
+
+    const lauf = ++dialogLaufRef.current;
+    erwarteterMasterUebergangRef.current = {
+      alterMaster: auftrag.masterBasis,
+      datenKontextKey: auftrag.datenKontextKey,
+      zielIds: auftrag.snapshot.ids,
+    };
+    setLoeschDialog({ ...auftrag, pending: true, verbraucht: true, fehler: null });
+
+    let ok = false;
+    try {
+      ok = await onFilmBatchLoeschen?.(auftrag.snapshot.ids, auftrag.plan) === true;
+    } catch {
+      ok = false;
+    }
+    if (dialogLaufRef.current !== lauf) return;
+    if (!ok) {
+      erwarteterMasterUebergangRef.current = null;
+      setLoeschDialog({
+        ...auftrag,
+        pending: false,
+        verbraucht: true,
+        fehler: "Die Löschung wurde nicht ausgeführt. Datenstand, Konto oder Sitzung kann sich geändert haben. Schließen und neu prüfen oder auswählen; diese Vorschau kann nicht erneut bestätigt werden.",
+      });
+      return;
+    }
+
+    kopierRequestRef.current += 1;
+    setAuswahlmodus(false);
+    setAuswahlIds(new Set());
+    setTitellisteSichtbar(false);
+    setKopierStatus(null);
+    setLoeschHinweis(null);
+    setLoeschDialog(null);
+    fokussiereNachDialog();
+  }, [fokussiereNachDialog, loeschDialog, onFilmBatchLoeschen]);
+
   const renderKeyFuer = useCallback((eintrag) => {
     const id = kanonischeStabileId(eintrag);
     if (id != null && idAnalyse.auswaehlbareIds.has(id)) return `id:${id}`;
@@ -325,6 +488,14 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     }
     return `nicht-auswaehlbar:${String(eintrag)}`;
   }, [idAnalyse]);
+  const nachtragKeyFuer = useCallback((eintrag, index) => {
+    if (eintrag && typeof eintrag === "object") {
+      const stand = nachtragDraftKeysRef.current;
+      if (!stand.map.has(eintrag)) stand.map.set(eintrag, `nachtrag:${++stand.naechster}`);
+      return stand.map.get(eintrag);
+    }
+    return `nachtrag-fallback:${String(eintrag?.titel || "")}:${index}`;
+  }, []);
 
   const leereAuswahl = useCallback(() => {
     kopierRequestRef.current += 1;
@@ -380,6 +551,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
   return (
     <section>
+      <div className="kd-mediathek-dialog-hintergrund" inert={loeschDialog ? true : undefined}
+        aria-hidden={loeschDialog ? "true" : undefined}>
       {/* Ansicht-Umschalter: Einträge · Im Besitz · Must-Watch (immer sichtbar).
           Interner Key bleibt "bestand" — nur das Label heißt Einträge (Max, 18.07.). */}
       <SegmentedControl className="kd-mediathek-ansichten" value={ansicht} onChange={wechsleAnsicht}
@@ -399,7 +572,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
 
       {ansicht !== "mustwatch" && (<>
       <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
-        <button type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
+        <button ref={auswahlModusButtonRef} type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
           aria-pressed={auswahlmodus} onClick={auswahlmodus ? beendeAuswahl : starteAuswahl}>
           {auswahlmodus ? "Auswahl beenden" : "Auswählen"}
         </button>
@@ -412,8 +585,15 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             disabled={!titelliste} onClick={kopiereTitelliste}>
             Titelliste kopieren
           </button>
+          <button type="button" className="kd-auswahl-loeschen"
+            style={{ ...btnStyle(false), borderColor: T.gefahr, color: T.gefahr }}
+            disabled={sichtbareAuswahl.length === 0}
+            onClick={(event) => oeffneLoeschDialog(event.currentTarget)}>
+            Sichtbare Auswahl löschen
+          </button>
         </>)}
       </div>
+      {auswahlmodus && loeschHinweis && <p className="kd-film-batch-vorschaufehler" role="alert">{loeschHinweis}</p>}
       {auswahlmodus && problematischeIds > 0 && (
         <p className="kd-auswahl-idwarnung" role="status">
           {idAnalyse.ungueltigeAnzahl > 0 ? `${idAnalyse.ungueltigeAnzahl} ohne stabile ID` : ""}
@@ -655,7 +835,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               const quelle = teile.length ? teile.join("+") : "must_watch";
               const aktiv = bewerteTitel === n.titel;
               return (
-                <div key={`${draftEpoch}:nachtrag:${n.titel}:${i}`}
+                <div key={`${draftEpoch}:${nachtragKeyFuer(n, i)}`}
                   style={{ borderBottom: "1px solid " + T.saalHoch, padding: "6px 2px" }}>
                   <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: T.leinwandTief, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ color: T.leinwand, flex: 1, minWidth: 180 }}>{n.titel}{n.jahr ? " (" + n.jahr + ")" : ""}</span>
@@ -690,8 +870,12 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
           </div>
         </details>
       )}
-
       </>)}
+      </div>
+      {loeschDialog && (
+        <FilmBatchLoeschDialog dialog={loeschDialog}
+          onAbbrechen={schliesseLoeschDialog} onBestaetigen={bestaetigeLoeschDialog} />
+      )}
     </section>
   );
 }
