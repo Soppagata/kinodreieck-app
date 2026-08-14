@@ -186,7 +186,7 @@ function harness({
         throw error;
       }
       const boundDriver = context.name;
-      if (storageSetHook) await storageSetHook();
+      if (storageSetHook) await storageSetHook({ key, value });
       storageWrites.set(boundDriver, (storageWrites.get(boundDriver) || 0) + 1);
       if (!context.isCurrent()) {
         const error = new Error("storage context changed");
@@ -388,6 +388,120 @@ await check("Busy-Sync bewahrt eine während des aktiven Laufs lokal ergänzte O
   ]);
   assert.deepEqual(rpcCalls.filter((call) => call.rpc === "kd_radar_pilot_set_subscription")
     .map((call) => call.body.p_operation_id), [operationId]);
+});
+
+await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaften JSON-State", async () => {
+  const operationId2 = "55555555-5555-4555-8555-555555555555";
+  const importOperationId = "66666666-6666-4666-8666-666666666666";
+  let releaseFirstStorage;
+  let markFirstStorageStarted;
+  const firstStorageStarted = new Promise((resolve) => { markFirstStorageStarted = resolve; });
+  const firstStorageBlocked = new Promise((resolve) => { releaseFirstStorage = resolve; });
+  const durableStates = [];
+  let firstStorage = true;
+  const rpcCalls = [];
+  const primed = R.reconcileAccountRadarPilotFeed(queuedAccountState(), feed({ radarReview: true }));
+  assert.equal(primed.ok, true);
+  const h = harness({
+    state: primed.state,
+    storageSetHook: async ({ value }) => {
+      if (firstStorage) {
+        firstStorage = false;
+        markFirstStorageStarted();
+        await firstStorageBlocked;
+      }
+      durableStates.push(JSON.parse(value));
+    },
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      rpcCalls.push({ rpc: url.split("/").at(-1), body });
+      return url.endsWith("kd_radar_pilot_feed")
+        ? response(200, feed())
+        : response(200, subscriptionAck({ operationId: body.p_operation_id }));
+    },
+  });
+
+  const firstRun = h.service.sync({ state: h.state, commit: h.commit });
+  await firstStorageStarted;
+  let concurrent = R.queueAccountRadarChange(h.state, {
+    operationId: operationId2, action: "pause",
+    target: { targetId: "series:tmdb:1396", targetType: "series", targetStatus: "active", title: "Breaking Bad", canonical: true },
+    now: later,
+  });
+  assert.equal(concurrent.ok, true);
+  concurrent = R.queueAccountRadarPilotReceipt(concurrent.state, {
+    eventId, eventVersionId, status: "seen", now: later,
+  });
+  assert.equal(concurrent.ok, true);
+  concurrent = R.queueAccountRadarPilotImport(concurrent.state, {
+    operationId: importOperationId, payload: importPayload(), now: later,
+  });
+  assert.equal(concurrent.ok, true);
+  assert.equal(h.commit(concurrent.state), true);
+  const busyResult = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(busyResult.status, "busy");
+  releaseFirstStorage();
+
+  const firstResult = await firstRun;
+  assert.equal(firstResult.status, "ready");
+  assert.equal(durableStates.length, 3);
+  const durable = durableStates.at(-1);
+  for (const state of [firstResult.state, h.state, durable]) {
+    assert.deepEqual(state.outbox.map((entry) => ({
+      operationId: entry.operationId, status: entry.status,
+    })), [{ operationId: operationId2, status: "pending" }]);
+    assert.deepEqual(state.pilot.receiptOutbox.map((entry) => ({
+      eventVersionId: entry.eventVersionId, state: entry.state,
+    })), [{ eventVersionId, state: "pending" }]);
+    assert.deepEqual(state.pilot.importOutbox.map((entry) => ({
+      operationId: entry.operationId, status: entry.status,
+    })), [{ operationId: importOperationId, status: "pending" }]);
+  }
+  assert.deepEqual(rpcCalls.map((call) => call.rpc), [
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+  ]);
+});
+
+await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten Queue-Zuwachs", async () => {
+  const operationId2 = "55555555-5555-4555-8555-555555555555";
+  let releaseFeed;
+  let markFeedStarted;
+  const feedStarted = new Promise((resolve) => { markFeedStarted = resolve; });
+  const feedBlocked = new Promise((resolve) => { releaseFeed = resolve; });
+  const rpcCalls = [];
+  const h = harness({
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      rpcCalls.push({ rpc: url.split("/").at(-1), body });
+      if (url.endsWith("kd_radar_pilot_feed")) {
+        markFeedStarted();
+        await feedBlocked;
+        return response(200, feed());
+      }
+      return response(200, subscriptionAck({ operationId: body.p_operation_id }));
+    },
+  });
+  const baseState = h.state;
+  const firstRun = h.service.sync({ state: baseState, commit: h.commit });
+  await feedStarted;
+  const queued = R.queueAccountRadarChange(baseState, {
+    operationId: operationId2, action: "pause",
+    target: { targetId: "series:tmdb:1396", targetType: "series", targetStatus: "active", title: "Breaking Bad", canonical: true },
+    now: later,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal((await h.service.sync({ state: queued.state, commit: h.commit })).status, "busy");
+  assert.equal((await h.service.sync({ state: baseState, commit: h.commit })).status, "busy");
+  releaseFeed();
+
+  const firstResult = await firstRun;
+  assert.equal(firstResult.status, "ready");
+  assert.deepEqual(firstResult.state.outbox.map((entry) => ({
+    operationId: entry.operationId, status: entry.status,
+  })), [{ operationId: operationId2, status: "pending" }]);
+  assert.deepEqual(rpcCalls.map((call) => call.rpc), [
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+  ]);
 });
 
 await check("Verlorene Antwort hält dieselbe operationId pending und Feed-Ack schließt sie später", async () => {

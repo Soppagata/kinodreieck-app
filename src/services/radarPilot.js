@@ -55,8 +55,11 @@ function preserveConcurrentPilotWork(base, latest, next) {
   const merged = {
     ...next,
     outbox: mergeConcurrentQueue(base.outbox, latest.outbox, next.outbox, (entry) => entry.operationId),
-    pilot: {
-      ...next.pilot,
+  };
+  const pilot = next.pilot || latest.pilot;
+  if (pilot) {
+    merged.pilot = {
+      ...pilot,
       receiptOutbox: mergeConcurrentQueue(
         base.pilot?.receiptOutbox || [], latest.pilot?.receiptOutbox || [], next.pilot?.receiptOutbox || [],
         (entry) => entry.eventVersionId,
@@ -65,9 +68,13 @@ function preserveConcurrentPilotWork(base, latest, next) {
         base.pilot?.importOutbox || [], latest.pilot?.importOutbox || [], next.pilot?.importOutbox || [],
         (entry) => entry.operationId,
       ),
-    },
-  };
+    };
+  }
   return validateLocalRadarState(merged).ok ? freezeDeep(merged) : null;
+}
+function accumulateConcurrentPilotWork(base, current, incoming) {
+  const withCurrent = preserveConcurrentPilotWork(base, current, incoming);
+  return withCurrent && preserveConcurrentPilotWork(base, incoming, withCurrent);
 }
 function currentStoredToken(token, expectedAccount) {
   try {
@@ -205,15 +212,25 @@ export function createRadarPilotService({
 
   async function persistState(commit, next, fence, token, run) {
     if (!fenceCurrent(fence, token) || typeof fence.storage?.set !== "function") throw contextError();
-    const persisted = preserveConcurrentPilotWork(run.baseState, run.latestState, next);
+    let observedVersion = run.latestVersion;
+    let persisted = preserveConcurrentPilotWork(run.baseState, run.latestState, next);
     if (!persisted) return null;
-    try {
-      await fence.storage.set(K.radar, JSON.stringify(persisted));
-    } catch (error) {
-      if (error?.code === "STORAGE_CONTEXT_CHANGED" || !fenceCurrent(fence, token)) throw contextError();
-      return null;
+    async function storeBound(state) {
+      try {
+        await fence.storage.set(K.radar, JSON.stringify(state));
+      } catch (error) {
+        if (error?.code === "STORAGE_CONTEXT_CHANGED" || !fenceCurrent(fence, token)) throw contextError();
+        return false;
+      }
+      if (!fenceCurrent(fence, token)) throw contextError();
+      return true;
     }
-    if (!fenceCurrent(fence, token)) throw contextError();
+    if (!await storeBound(persisted)) return null;
+    if (observedVersion !== run.latestVersion) {
+      observedVersion = run.latestVersion;
+      persisted = preserveConcurrentPilotWork(run.baseState, run.latestState, next);
+      if (!persisted || !await storeBound(persisted) || observedVersion !== run.latestVersion) return null;
+    }
     if (typeof commit === "function") {
       let confirmed;
       try { confirmed = commit(persisted); }
@@ -222,7 +239,6 @@ export function createRadarPilotService({
       if (confirmed === false) return null;
       if (!fenceCurrent(fence, token)) throw contextError();
     }
-    run.latestState = persisted;
     return persisted;
   }
 
@@ -388,12 +404,18 @@ export function createRadarPilotService({
     if (syncActive) {
       if (validateLocalRadarState(options?.state).ok
           && options.state.authority === activeRun?.baseState?.authority) {
-        activeRun.latestState = options.state;
+        const accumulated = accumulateConcurrentPilotWork(
+          activeRun.baseState, activeRun.latestState, options.state,
+        );
+        if (accumulated && JSON.stringify(accumulated) !== JSON.stringify(activeRun.latestState)) {
+          activeRun.latestState = accumulated;
+          activeRun.latestVersion += 1;
+        }
       }
       return Object.freeze({ status: "busy", state: options?.state });
     }
     syncActive = true;
-    activeRun = { baseState: options?.state, latestState: options?.state };
+    activeRun = { baseState: options?.state, latestState: options?.state, latestVersion: 0 };
     try { return await runSync(options, activeRun); }
     finally { activeRun = null; syncActive = false; }
   }
