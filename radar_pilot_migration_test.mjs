@@ -590,6 +590,25 @@ const expectedNestedKeysets = [
   ["operationId", "targetId", "status", "revision", "checksum"],
 ];
 
+check("Operation-ACKs verwenden einen gültigen Nichtleer-/Exaktschlüssel-Guard", () => {
+  assert.doesNotMatch(pilotSql, /\bjsonb_object_length\s*\(/i);
+  const operationAcks = statementsUsingTable(feedFn, "kd_radar_operations")
+    .find((statement) => /'operationid'/.test(statement) && /'targetid'/.test(statement));
+  assert.ok(operationAcks, "Operation-ACK-Projektionsquery fehlt");
+  assert.match(operationAcks, /(?:\b[a-z_][a-z0-9_]*\.)?result\s*\?&\s*array\s*\[/);
+  const guards = [...operationAcks.matchAll(/\bnot\s+exists\s*\(/g)].map((match) => {
+    const openAt = operationAcks.indexOf("(", match.index);
+    const closeAt = findBalancedEnd(operationAcks, openAt);
+    return closeAt > openAt ? operationAcks.slice(match.index, closeAt + 1) : "";
+  });
+  const exactKeyGuard = guards.find((guard) => /jsonb_object_keys\s*\(\s*(?:[a-z_][a-z0-9_]*\.)?result\s*\)/.test(guard));
+  assert.ok(exactKeyGuard, "jsonb_object_keys-basierter Exaktschlüssel-Guard fehlt");
+  assert.match(exactKeyGuard, /\bnot\s+in\s*\(/);
+  for (const key of ["operationid", "targetid", "status", "revision", "checksum"]) {
+    assert.match(exactKeyGuard, new RegExp(`'${key}'`));
+  }
+});
+
 check("Feed besitzt exakt den vereinbarten Top-Level und explizite verschachtelte Projektionen", () => {
   const topLevel = feedPairs.find((pairs) => {
     const keys = pairs.map(([key]) => key);

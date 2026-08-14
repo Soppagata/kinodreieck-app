@@ -632,8 +632,14 @@ begin
       on t.target_key = o.result ->> 'targetId'
    where o.account_id = v_actor_id
      and o.operation_id = any(p_operation_ids)
-     and jsonb_object_length(o.result) = 5
      and o.result ?& array['operationId','targetId','status','revision','checksum']
+     and not exists (
+       select 1
+         from jsonb_object_keys(o.result) as result_key(key_name)
+        where result_key.key_name not in (
+          'operationId', 'targetId', 'status', 'revision', 'checksum'
+        )
+     )
      and not (o.result ? 'format');
 
   return jsonb_build_object(
