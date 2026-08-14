@@ -2220,7 +2220,7 @@ test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher
   }
 
   await page.evaluate(() => { window.__e12StoragePause = true; });
-  await dialog.getByRole("button", { name: "12 endgültig löschen" }).click();
+  await dialog.getByRole("button", { name: "12 löschen" }).click();
   await expect(dialog.getByRole("status")).toContainText("Löschung läuft");
   await expect(dialog.getByRole("button", { name: "Abbrechen" })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Löscht …" })).toBeDisabled();
@@ -2231,7 +2231,7 @@ test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher
     window.__e12StorageGate.reject(new Error("E12 mobile write failure"));
   });
   await expect(dialog.getByRole("alert")).toContainText("Datenstand, Konto oder Sitzung");
-  await expect(dialog.getByRole("button", { name: "12 endgültig löschen" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "12 löschen" })).toBeDisabled();
   await expect(page.getByText("13 ausgewählt · 12 sichtbar", { exact: true })).toBeVisible();
   await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
