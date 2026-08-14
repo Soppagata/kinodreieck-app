@@ -430,21 +430,20 @@ for (const viewport of VIEWPORTS) {
         }));
 
         await laterFocusTarget.focus();
-        await page.evaluate(() => {
-          const menueButton = [...document.querySelectorAll("button")].find(
-            (node) => node.textContent?.trim() === "Menü öffnen"
-          );
-          if (menueButton) {
-            menueButton.dispatchEvent(new MouseEvent("click", {
-              bubbles: true,
-              cancelable: true,
-            }));
-          }
+        const menueButtonGefunden = await page.evaluate(() => {
+          const menueButton = document.querySelector('.kd-globalsuche-menu[aria-label="Menü öffnen"]');
+          if (!menueButton) return false;
+          menueButton.dispatchEvent(new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+          }));
+          return true;
         });
+        expect(menueButtonGefunden).toBe(true);
 
         const menuDialog = page.getByRole("dialog", { name: "Menü" });
         await expect(menuDialog).toBeVisible();
-        const menuScrim = menuDialog.locator('.kd-sheet-scrim');
+        const menuScrim = page.locator(".kd-mobile-menu-layer > .kd-sheet-scrim");
         await expect(menuScrim).toBeVisible();
         await menuScrim.click();
         await expect(menuDialog).toBeHidden();
@@ -537,29 +536,18 @@ test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ brow
     left: Math.max(20, SAFE_AREA.left),
   };
 
-  await page.setViewportSize({ width: 393, height: 852 });
-  await blockiereFremdnetz(page);
-  await seedAppMitDarstellung(page);
-  await page.goto("/");
-
   const cdp = await page.context().newCDPSession(page);
   try {
-    let schema;
     try {
-      schema = await cdp.send("Schema.getDomains");
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: SAFE_AREA });
     } catch (error) {
-      console.log("STOP_PRODUKTFINDING: Schema.getDomains nicht verfügbar in dieser CDP-Version");
-      return;
+      console.log("STOP_PRODUKTFINDING: Emulation.setSafeAreaInsetsOverride nicht verfügbar oder fehlgeschlagen");
+      throw error;
     }
-
-    const emulationDomain = schema?.domains?.find((domain) => domain.name === "Emulation");
-    const safeAreaSupported = !!emulationDomain?.commands?.some((command) => command.name === "setSafeAreaInsetsOverride");
-    if (!safeAreaSupported) {
-      console.log("STOP_PRODUKTFINDING: Emulation.setSafeAreaInsetsOverride nicht verfügbar in dieser CDP-Version");
-      return;
-    }
-
-    await cdp.send("Emulation.setSafeAreaInsetsOverride", SAFE_AREA);
+    await page.setViewportSize({ width: 393, height: 852 });
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page);
+    await page.goto("/");
 
     await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeVisible();
     await page.getByRole("button", { name: "Menü öffnen" }).click();
@@ -591,6 +579,7 @@ test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ brow
     const layerBox = await hilfeLayer.boundingBox();
     expect(panelBox.x).toBeGreaterThanOrEqual(layerBox.x + SAFE_PADS.left - 0.5);
     expect(panelBox.y).toBeGreaterThanOrEqual(layerBox.y + SAFE_PADS.top - 0.5);
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(layerBox.x + layerBox.width - SAFE_PADS.right + 0.5);
     expect(852 - (panelBox.y + panelBox.height)).toBeGreaterThanOrEqual(SAFE_PADS.bottom - 0.5);
 
     const panelCss = await hilfePanel.evaluate((el) => {
@@ -609,10 +598,12 @@ test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ brow
   } finally {
     try {
       await cdp.send("Emulation.setSafeAreaInsetsOverride", {
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
+        insets: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        },
       });
     } catch {
       /* best effort */

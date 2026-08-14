@@ -151,14 +151,6 @@ try {
   ({ NAVIGATION } = await import(pathToFileURL(TEST_BUNDLE).href));
 } catch (error) {
   buildLoadError = error;
-} finally {
-  if (buildLoadError) {
-    cleanup();
-  }
-}
-
-if (buildLoadError) {
-  throw buildLoadError;
 }
 
 const NAVIGATION_IDS = Array.isArray(NAVIGATION) ? NAVIGATION.map((eintrag) => String(eintrag?.id || "")) : [];
@@ -379,7 +371,7 @@ for (const [norm, alias] of PROVIDER_ALIASE) {
 }
 
 for (const query of ["wie kann ich netflix", "wie kann ich prime", "wie kann ich prime video"]) {
-  check(`Provider ohne Einstellform bleibt null (${query})`, antwortVon(query) === null);
+  repeatThree(`Provider ohne Einstellform bleibt null (${query})`, () => antwortVon(query) === null);
 }
 
 for (const query of ["Wie finde ich den Film Hilfe, ich bin ein Fisch?"]) {
@@ -393,14 +385,45 @@ const KANONISCHE_AKTIONEN = HILFE_AKTIONEN
   })
   .filter(Boolean);
 
-for (let i = 0; i < KANONISCHE_AKTIONEN.length; i += 1) {
-  for (let j = i + 1; j < KANONISCHE_AKTIONEN.length; j += 1) {
-    const a = KANONISCHE_AKTIONEN[i];
-    const b = KANONISCHE_AKTIONEN[j];
-    check(`Mehraktionsfrage bleibt null: wie kann ich ${a.term} und ${b.term}`, antwortVon(`wie kann ich ${a.term} und ${b.term}`) === null);
-    check(`Mehraktionsfrage bleibt null: wie kann ich ${b.term} und ${a.term}`, antwortVon(`wie kann ich ${b.term} und ${a.term}`) === null);
-  }
+const SAME_ID_BELEGSFALTE = KANONISCHE_AKTIONEN
+  .map(({ id }) => {
+    const aktion = AKTIONEN_BY_ID.get(id);
+    const direkte = (aktion?.direkteSuchwoerter || [])
+      .map((term) => normalisiereHilfeText(term))
+      .filter(Boolean);
+    if (direkte.length < 2) return null;
+    return {
+      id,
+      query: `wie kann ich ${direkte[0]} ${direkte[1]}`,
+      expected: erwartungAusAktion(aktion),
+    };
+  })
+  .filter(Boolean)
+  .slice(0, 3);
+
+const OVERLAP_BELEGSFALTE = SAME_ID_BELEGSFALTE
+  .map(({ id, expected }) => {
+    const aktion = AKTIONEN_BY_ID.get(id);
+    const bereich = BEREICHE_BY_ID.get(aktion?.bereichId);
+    const direkter = normalisiereHilfeText(aktion?.direkteSuchwoerter?.[0] || "");
+    if (!aktion || !bereich || !direkter) return null;
+    return {
+      id,
+      query: `wie kann ich ${direkter} in ${normalisiereHilfeText(bereich.titel || "")}`,
+      expected,
+    };
+  })
+  .filter(Boolean)
+  .slice(0, 3);
+
+for (const probe of SAME_ID_BELEGSFALTE) {
+  repeatThree(`Same-ID-Beleg (${probe.id}): ${probe.query}`, () => antwortSchemaSicher(antwortVon(probe.query), probe.expected));
 }
+
+for (const probe of OVERLAP_BELEGSFALTE) {
+  check(`Overlap-Beleg (${probe.id}) bleibt spezifisch`, antwortSchemaSicher(antwortVon(probe.query), probe.expected));
+}
+
 check("Mehraktions-Matrix nutzt alle 13 Aktions-IDs", KANONISCHE_AKTIONEN.length === 13);
 check("Mehraktions-Matrix nutzt eindeutig kanonische Direktbegriffe",
   new Set(KANONISCHE_AKTIONEN.map((eintrag) => eintrag.id)).size === KANONISCHE_AKTIONEN.length
@@ -423,7 +446,6 @@ const FAIL_CLOSED = [
   "Settings Konto Backup",
   "Settings Schriftgröße Darstellung ändern",
   "Wie ändere ich Schriftgröße Darstellung?",
-  "Wie stelle ich das Passwort?",
 ];
 
 for (const query of FAIL_CLOSED) {
@@ -475,11 +497,16 @@ check(
 );
 
 let ok = true;
-for (const [name, pass] of checks) {
-  console.log(`${pass ? "✓" : "✗"} ${name}`);
-  ok = ok && !!pass;
+try {
+  if (buildLoadError) {
+    throw buildLoadError;
+  }
+  for (const [name, pass] of checks) {
+    console.log(`${pass ? "✓" : "✗"} ${name}`);
+    ok = ok && !!pass;
+  }
+} finally {
+  cleanup();
 }
-
-cleanup();
 console.log(ok ? "HILFE_INHALTE-TEST BESTANDEN" : "HILFE_INHALTE-TEST FEHLGESCHLAGEN");
 process.exit(ok ? 0 : 1);

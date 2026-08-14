@@ -101,14 +101,6 @@ try {
   } = await import(pathToFileURL(TEST_BUNDLE).href));
 } catch (error) {
   buildLoadError = error;
-} finally {
-  if (buildLoadError) {
-    cleanupBundle();
-  }
-}
-
-if (buildLoadError) {
-  throw buildLoadError;
 }
 
 const checks = [];
@@ -357,14 +349,16 @@ async function runHilfeDomTest() {
 
   ownerRef?.();
   const afterBody = bodyStyleSnapshot();
-  check("Owner-Scrolllock kann danach korrekt wiederherstellen", afterBody.overflow === vorLock.overflow
+  const hasRestore = check("Owner-Scrolllock kann danach korrekt wiederherstellen", afterBody.overflow === vorLock.overflow
     && afterBody.position === vorLock.position
     && afterBody.top === vorLock.top
     && afterBody.left === vorLock.left
     && afterBody.right === vorLock.right
     && afterBody.width === vorLock.width
     && afterBody.className === vorLock.className);
-  step("scrollRestore");
+  if (hasRestore) {
+    step("scrollRestore");
+  }
 }
 
 async function runDokuAnsichtTest() {
@@ -417,6 +411,9 @@ async function runDokuAnsichtTest() {
 (async () => {
   let ok = true;
   try {
+    if (buildLoadError) {
+      throw buildLoadError;
+    }
     await runHilfeDomTest();
     await runDokuAnsichtTest();
   } finally {
