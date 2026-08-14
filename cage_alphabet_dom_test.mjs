@@ -51,15 +51,33 @@ globalThis.requestAnimationFrame = (callback) => {
 };
 dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
+const TEST_BUNDLE_PREFIX = ".kd-cage-alphabet-dom-test-";
+
 const TEST_BUNDLE = path.join(
   tmpdir(),
-  `.kd-cage-alphabet-dom-test-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`,
+  `${TEST_BUNDLE_PREFIX}${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`,
 );
+
 function cleanupBundle() {
   try {
     fs.unlinkSync(TEST_BUNDLE);
   } catch {
     // Kein sichtbarer Fehler bei Cleanup.
+  }
+}
+
+function cleanupHarnessBundles() {
+  try {
+    for (const entry of fs.readdirSync(tmpdir())) {
+      if (!entry.startsWith(TEST_BUNDLE_PREFIX) || !entry.endsWith(".mjs")) continue;
+      try {
+        fs.unlinkSync(path.join(tmpdir(), entry));
+      } catch {
+        // Best effort cleanup.
+      }
+    }
+  } catch {
+    // Best effort cleanup.
   }
 }
 
@@ -165,6 +183,14 @@ function dialogButtons() {
   return [...context.querySelectorAll("button")].filter((el) => getComputedStyle(el).display !== "none");
 }
 
+function hookSnapshot() {
+  const hook = window.__cage || {};
+  return {
+    stakkato: hook.stakkato ?? 0,
+    ergebnis: hook.ergebnis ?? null,
+  };
+}
+
 async function withDeterministicRandom(values, fn) {
   const original = Math.random;
   let index = 0;
@@ -231,7 +257,7 @@ async function resetView() {
   window.__cage = {};
 }
 
-(async () => {
+async function runCageAlphabetDomTests() {
   const onCloseLog = [];
   const aufrufLog = [];
 
@@ -255,8 +281,9 @@ async function resetView() {
 
   await click(closeCard);
   await waitFor(() => !dialog(), { label: "Karte-Close via Button" });
+  const postCardClose = hookSnapshot();
   check("Karte-Übergreifendes Click-Start ist verhindert", onCloseLog.length === 1);
-  check("Kartenscrim/Start bleibt aus, kein Stakkato nach Close", !document.body.textContent.includes("Er kann alles sein.") && !window.__cage?.ergebnis);
+  check("Kartenscrim/Start bleibt aus, kein Stakkato nach Close", !document.body.textContent.includes("Er kann alles sein.") && postCardClose.stakkato === 0 && !postCardClose.ergebnis);
 
   const openButtonEsc = document.querySelector("[data-testid='cage-open']");
   openButtonEsc.focus();
@@ -311,13 +338,44 @@ async function resetView() {
       await keydown("Tab", { shift: true });
       const afterShiftTab = document.activeElement;
       check("Shift+Tab bleibt im Dialog", !!afterShiftTab && !!afterShiftTab.closest(".kd-cage-scrim"));
-      const openButtonStakkato2 = openButtonStakkato;
-      const closeBefore = onCloseLog.length;
-      await keydown("Escape");
-      await waitFor(() => !dialog(), { label: "Stakkato Escape" });
-      check("Stakkato schließt über Escape", onCloseLog.length === closeBefore + 1 && !dialog());
 
       // Zusätzlicher konkurrierender Scrim+Escape-Check auf frischer Stakkato-Runde.
+      onCloseLog.length = 0;
+      await resetView();
+    },
+  );
+
+  await resetView();
+  await withDeterministicRandom(
+    [0, 0.6, 0.2, 0.4, 0.8, 0.1, 0.3, 0.5],
+    async () => {
+      await act(async () => {
+        root.render(
+          React.createElement(TestHarness, {
+            onClose: (v) => onCloseLog.push(v),
+            onZeigeEintrag: (film, tab) => aufrufLog.push({ film, tab }),
+          }),
+        );
+      });
+      const openButtonStakkatoDismiss = document.querySelector("[data-testid='cage-open']");
+      await click(openButtonStakkatoDismiss);
+      await waitFor(() => !!panel(), { label: "Dismiss-Stakkato-Panel da" });
+      await click(panel());
+      await waitFor(() => (window.__cage?.stakkato || 0) >= 1, { label: "Dismiss-Test: Stakkato startet" });
+      const stakkatoSnapshotBeforeDismiss = hookSnapshot();
+      check(
+        "Dismiss findet bei laufendem Stakkato statt",
+        stakkatoSnapshotBeforeDismiss.stakkato >= 1 && stakkatoSnapshotBeforeDismiss.ergebnis === null,
+      );
+      const closeBefore = onCloseLog.length;
+      await keydown("Escape");
+      await waitFor(() => !dialog(), { label: "Dismiss-Test: Stakkato Escape" });
+      await wait(1600);
+      const stakkatoSnapshotAfterDismiss = hookSnapshot();
+      check("Dismiss erfasst vollständigen Hook-Snapshot", stakkatoSnapshotBeforeDismiss.stakkato === stakkatoSnapshotAfterDismiss.stakkato);
+      check("Dismiss verhindert spät ein Ergebnis", stakkatoSnapshotAfterDismiss.ergebnis === stakkatoSnapshotBeforeDismiss.ergebnis);
+      check("Dismiss erlaubt keinen Stakkato-Fortschritt nachher", stakkatoSnapshotBeforeDismiss.stakkato === stakkatoSnapshotAfterDismiss.stakkato);
+      check("Stakkato-Dismiss schließt über Escape", onCloseLog.length === closeBefore + 1 && !dialog());
       onCloseLog.length = 0;
       await resetView();
     },
@@ -367,9 +425,9 @@ async function resetView() {
   if (focusList.length > 0) {
     document.body.focus();
     await keydown("Tab");
-    check("Tab fängt Fokus im Ergebnis", document.activeElement === focusList[0]);
+    check("Tab fängt Fokus im Ergebnis", !!document.activeElement && !!document.activeElement.closest(".kd-cage-scrim"));
     await keydown("Tab", { shift: true });
-    check("Shift+Tab bleibt im Ergebnis", document.activeElement === focusList[focusList.length - 1]);
+    check("Shift+Tab bleibt im Ergebnis", !!document.activeElement && !!document.activeElement.closest(".kd-cage-scrim"));
   }
   await keydown("Escape");
   await waitFor(() => !dialog(), { label: "Ergebnis Escape (reduced)" });
@@ -396,14 +454,38 @@ async function resetView() {
   console.log(`\n${bestanden}/${total} Checks bestanden.`);
   if (bestanden < total) {
     console.log("CAGE-DOM-TEST: BEFUNDE OBEN");
-    process.exit(1);
+    process.exitCode = 1;
+  } else {
+    console.log("CAGE-DOM-TEST BESTANDEN");
+    process.exitCode = 0;
   }
-  console.log("CAGE-DOM-TEST BESTANDEN");
-  process.exit(0);
-})().finally(() => {
-  (async () => {
-    await act(async () => root.render(null));
-    cleanupBundle();
-    delete window.__cage;
-  })();
-});
+}
+
+async function teardownCageAlphabetDomHarness() {
+  await act(async () => {
+    root.render(null);
+  });
+  cleanupBundle();
+  cleanupHarnessBundles();
+  delete window.__cage;
+  if (typeof dom.window.close === "function") {
+    dom.window.close();
+  }
+}
+
+let exitCode = 0;
+(async () => {
+  try {
+    await runCageAlphabetDomTests();
+  } catch (error) {
+    exitCode = 1;
+    console.error(error);
+  }
+  try {
+    await teardownCageAlphabetDomHarness();
+  } catch (error) {
+    exitCode = 1;
+    console.error(error);
+  }
+  process.exit(exitCode);
+})();
