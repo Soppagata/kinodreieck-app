@@ -35,6 +35,8 @@ esbuild.stop?.();
 const dom = new JSDOM("<!doctype html><html><body><main id='app'></main></body></html>", {
   url: "https://kinodreieck.test/",
 });
+const originalWindowScrollTo = dom.window.scrollTo;
+dom.window.scrollTo = () => {};
 for (const name of [
   "window", "document", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement",
   "HTMLSelectElement", "Element", "Node", "Event", "MouseEvent", "KeyboardEvent",
@@ -173,6 +175,12 @@ const check = (name, wert) => {
   try { ok = typeof wert === "function" ? !!wert() : !!wert; } catch {}
   if (ok) { bestanden++; console.log("✓ " + name); }
   else { fehler.push(name); console.error("✗ " + name); }
+};
+const mitWindowScrollToMock = () => {
+  const original = dom.window.scrollTo;
+  const aufrufe = [];
+  dom.window.scrollTo = (...argumente) => { aufrufe.push(argumente); };
+  return { aufrufe, restore: () => { dom.window.scrollTo = original; } };
 };
 const knopf = (text) => [...document.querySelectorAll("button")].find((el) => el.textContent.trim() === text);
 const knopfEnthaelt = (text) => [...document.querySelectorAll("button")].find((el) => el.textContent.includes(text));
@@ -703,12 +711,36 @@ check("Previewexception bleibt ebenfalls ohne Mutation", batchPreviewAufrufe.len
   && batchAufrufe.length === 0 && mutationen === mutationenVorPreviewfehler);
 
 batchPreviewModus = "ok";
+const body = document.body;
+const fruehereBodyStyles = {
+  overflow: body.style.overflow,
+  position: body.style.position,
+  top: body.style.top,
+  left: body.style.left,
+  right: body.style.right,
+  width: body.style.width,
+};
+const vorherigerScrollY = typeof window.scrollY === "number" ? window.scrollY : 0;
+const { aufrufe: scrollToAufrufe, restore: restoreWindowScrollTo } = mitWindowScrollToMock();
+const erwarteterLockTop = vorherigerScrollY === 0 ? "-0px" : `-${vorherigerScrollY}px`;
+const vorherigeScrollGesperrt = {
+  html: document.documentElement.classList.contains("kd-scroll-gesperrt"),
+  body: body.classList.contains("kd-scroll-gesperrt"),
+};
 await sende(knopf("Sichtbare Auswahl löschen"), "click");
 const previewDialog = document.querySelector('[role="dialog"]');
+
 check("Batchdialog besitzt Rolle, Modalität, Name und Beschreibung", previewDialog
   && previewDialog.getAttribute("aria-modal") === "true"
   && previewDialog.getAttribute("aria-labelledby") === "kd-film-batch-dialog-titel"
-  && previewDialog.getAttribute("aria-describedby") === "kd-film-batch-dialog-beschreibung");
+  && previewDialog.getAttribute("aria-describedby") === "kd-film-batch-dialog-beschreibung kd-film-batch-dialog-grenzen");
+check("Dialog erklärt die technische Grenze ehrlich und ohne ACID-Garantie",
+  previewDialog.textContent.includes("lokal kompensierend")
+  && previewDialog.textContent.includes("referenziell abgesichert/fail-safe")
+  && previewDialog.textContent.includes("keine")
+  && previewDialog.textContent.includes("crash-, server- oder geräteübergreifend atomare/ACID-Transaktion"));
+check("Bestätigungs-Button bleibt eindeutig und ohne 'endgültig'",
+  previewDialog.textContent.includes("1 löschen") && !previewDialog.textContent.includes("endgültig"));
 check("Dialog bindet exakten Titel/Jahr-Snapshot und genaue Folgen",
   previewDialog.textContent.includes("Alpha") && previewDialog.textContent.includes("2001")
   && !previewDialog.textContent.includes("Zulu (1999)")
@@ -723,11 +755,33 @@ check("Dialog nennt die erhaltenen Datensätze und E12-Grenze",
   && previewDialog.textContent.includes("Master, Artikelverweise und Must-Watch-Masterlinks"));
 check("Initialfokus liegt auf Abbrechen", document.activeElement === dialogKnopf("Abbrechen"));
 await sende(document.activeElement, "keydown", { key: "Tab", shiftKey: true });
-check("Fokusfalle führt rückwärts zum letzten Dialogknopf", document.activeElement === knopf("1 endgültig löschen"));
+check("Fokusfalle führt rückwärts zum letzten Dialogknopf", document.activeElement === knopf("1 löschen"));
 await sende(document.activeElement, "keydown", { key: "Tab" });
 check("Fokusfalle führt vorwärts zurück zu Abbrechen", document.activeElement === dialogKnopf("Abbrechen"));
 const batchRueckkehr = knopf("Sichtbare Auswahl löschen");
+check("Dialog-Open aktiviert die Dokument-Scrollsperre", () => (
+  body.classList.contains("kd-scroll-gesperrt")
+  && document.documentElement.classList.contains("kd-scroll-gesperrt")
+  && body.style.overflow === "hidden"
+  && body.style.position === "fixed"
+  && (body.style.top === erwarteterLockTop || body.style.top === "0px")
+  && (body.style.left === "0" || body.style.left === "0px")
+  && (body.style.right === "0" || body.style.right === "0px")
+  && body.style.width === "100%"
+));
 await sende(previewDialog, "keydown", { key: "Escape" });
+check("Escape-Fokusabbruch entfernt Scroll-Lock inkl. Scroll-Position-Restore",
+  !document.querySelector('[role="dialog"]')
+  && body.classList.contains("kd-scroll-gesperrt") === vorherigeScrollGesperrt.body
+  && document.documentElement.classList.contains("kd-scroll-gesperrt") === vorherigeScrollGesperrt.html
+  && body.style.overflow === fruehereBodyStyles.overflow
+  && body.style.position === fruehereBodyStyles.position
+  && body.style.top === fruehereBodyStyles.top
+  && body.style.left === fruehereBodyStyles.left
+  && body.style.right === fruehereBodyStyles.right
+  && body.style.width === fruehereBodyStyles.width
+  && scrollToAufrufe.some(([x, y]) => x === 0 && y === vorherigerScrollY));
+restoreWindowScrollTo();
 check("Escape vor Pending bricht ohne Mutation ab und gibt Fokus zurück",
   !document.querySelector('[role="dialog"]') && document.activeElement === batchRueckkehr
   && batchAufrufe.length === 0 && mutationen === mutationenVorPreviewfehler);
@@ -761,7 +815,7 @@ batchVerzoegern = true;
 await sende(knopf("Sichtbare Auswahl löschen"), "click");
 const erfolgsPlan = letzterAuthentischerPlan;
 const erfolgsDialog = document.querySelector('[role="dialog"]');
-await sende(knopf("1 endgültig löschen"), "click");
+await sende(knopf("1 löschen"), "click");
 check("Bestätigen startet genau einen authentischen Batch in Zielreihenfolge",
   batchAufrufe.length === 1 && batchAufrufe[0].ids.join(",") === "z"
   && batchAufrufe[0].ids === letztePreviewIdsRef && batchAufrufe[0].plan === erfolgsPlan
@@ -812,7 +866,7 @@ batchAufrufe = [];
 batchVerzoegern = true;
 await sende(knopf("Sichtbare Auswahl löschen"), "click");
 const deleteAllPlan = letzterAuthentischerPlan;
-await sende(knopf("2 endgültig löschen"), "click");
+await sende(knopf("2 löschen"), "click");
 check("Delete-all startet einen authentischen Batch mit wirklich allen Mastereinträgen",
   batchAufrufe.length === 1 && batchAufrufe[0].ids.join(",") === "a,z"
   && batchAufrufe[0].plan === deleteAllPlan);
@@ -845,15 +899,15 @@ await sende(document.querySelector('[role="checkbox"][aria-label="Alpha auswähl
 batchAufrufe = [];
 batchErgebnis = false;
 await sende(knopf("Sichtbare Auswahl löschen"), "click");
-await sende(knopf("1 endgültig löschen"), "click");
+await sende(knopf("1 löschen"), "click");
 check("false zeigt Stale-Fehler, erhält Auswahl und alle Drafts",
   document.querySelector('[role="alert"]')?.textContent.includes("Datenstand, Konto oder Sitzung")
   && document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt"
   && e12FehlerDraft.isConnected && e12FehlerDraft.value === "E12 FEHLER BLEIBT");
 const batchNachFehler = batchAufrufe.length;
-await sende(knopf("1 endgültig löschen"), "click");
+await sende(knopf("1 löschen"), "click");
 check("Verbrauchtes DTO kann nicht erneut bestätigt werden", batchAufrufe.length === batchNachFehler
-  && knopf("1 endgültig löschen").disabled);
+  && knopf("1 löschen").disabled);
 await sende(dialogKnopf("Abbrechen"), "click");
 check("Schließen nach Fehler behält Auswahl und gibt Fokus zurück",
   document.querySelector(".kd-auswahl-zaehler")?.textContent === "1 ausgewählt"
@@ -928,7 +982,7 @@ async function pruefeStaleWaehrendPending({ name, ersterMaster, ersterKontext,
   batchAufrufe = [];
   batchVerzoegern = true;
   await sende(knopf("Sichtbare Auswahl löschen"), "click");
-  await sende(knopf("1 endgültig löschen"), "click");
+  await sende(knopf("1 löschen"), "click");
   const mutationenNachStart = mutationen;
   await render(zweiterMaster, zweiterKontext);
   check(`${name} während Pending schließt fail-closed und meldet generisch stale`,
@@ -969,6 +1023,7 @@ await pruefeStaleWaehrendPending({
 });
 
 await act(async () => { root.unmount(); });
+dom.window.scrollTo = originalWindowScrollTo;
 dom.window.close();
 if (fehler.length) {
   console.error(`\n${fehler.length} Mediathek-Auswahl-DOM-Checks fehlgeschlagen.`);

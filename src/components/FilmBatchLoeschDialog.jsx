@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { btnStyle } from "../lib/tokens.js";
+import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 const FOKUSZIELE = [
   "button:not([disabled])", "[href]", "input:not([disabled])", "select:not([disabled])",
@@ -18,6 +19,10 @@ export function FilmBatchLoeschDialog({ dialog, onAbbrechen, onBestaetigen }) {
 
   useEffect(() => {
     abbrechenRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    return sperreDokumentScroll();
   }, []);
 
   useEffect(() => {
@@ -52,7 +57,8 @@ export function FilmBatchLoeschDialog({ dialog, onAbbrechen, onBestaetigen }) {
     <div className="kd-film-batch-dialog-layer">
       <div className="kd-film-batch-dialog-scrim" aria-hidden="true" />
       <div ref={dialogRef} className="kd-film-batch-dialog" role="dialog" aria-modal="true"
-        aria-labelledby="kd-film-batch-dialog-titel" aria-describedby="kd-film-batch-dialog-beschreibung"
+        aria-labelledby="kd-film-batch-dialog-titel"
+        aria-describedby="kd-film-batch-dialog-beschreibung kd-film-batch-dialog-grenzen"
         tabIndex={-1}>
         <header>
           <span>Mehrfachlöschen</span>
@@ -63,6 +69,10 @@ export function FilmBatchLoeschDialog({ dialog, onAbbrechen, onBestaetigen }) {
         <p id="kd-film-batch-dialog-beschreibung">
           Nur diese beim Prüfen sichtbare Auswahl wird gelöscht. Artikel und Must-Watch-Einträge bleiben bestehen;
           E12 bereinigt ausschließlich Master, Artikelverweise und Must-Watch-Masterlinks.
+        </p>
+        <p id="kd-film-batch-dialog-grenzen">
+          Der Vorgang ist lokal kompensierend und referenziell abgesichert/fail-safe, aber keine crash-, server-
+          oder geräteübergreifend atomare/ACID-Transaktion.
         </p>
 
         <ul className="kd-film-batch-ziel-liste" aria-label="Zu löschende Einträge">
@@ -97,7 +107,7 @@ export function FilmBatchLoeschDialog({ dialog, onAbbrechen, onBestaetigen }) {
           <button type="button" className="kd-film-batch-bestaetigen"
             style={{ ...btnStyle(false), borderColor: "var(--gefahr,#d96a5a)", color: "var(--gefahr,#d96a5a)" }}
             disabled={pending || verbraucht} onClick={onBestaetigen}>
-            {pending ? "Löscht …" : `${anzahl} endgültig löschen`}
+            {pending ? "Löscht …" : `${anzahl} löschen`}
           </button>
         </div>
       </div>
