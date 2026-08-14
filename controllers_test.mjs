@@ -555,7 +555,17 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
   && /onRadarPilotReceipt=\{fuehreRadarPilotReceipt\}/.test(app)
   && /onRadarPilotImport=\{fuehreRadarPilotImport\}/.test(app)
   && /onRadarPilotSync=\{fuehreRadarPilotSync\}/.test(app));
-check("Controller-Sync ruft radarPilotService exakt mit state und commit auf", /radarPilotService\.sync\(\{[\s\S]*state:\s*radarStateRef\.current,[\s\S]*commit:\s*\(next\) => setRadarState\(next\)/.test(radarController));
+  check("Controller liest Kd-Radar-Boot aus Store und decodiert pro Authority", /store\.get\(K\.radar\)/.test(radarController)
+    && /decodeLocalRadar\(gespeicherterRadar\?\.value/.test(radarController)
+    && /setRadarState\(decoded\.state\)/.test(radarController));
+  check("Controller-Sync ruft radarPilotService exakt mit state und commit auf", /const syncRadarPilot = useCallback\(async \(stateForSync = null\) => \{[\s\S]*radarPilotService\.sync\(\{[\s\S]*state,/.test(radarController)
+    && /commit:\s*\(next\) => \{[\s\S]*setRadarState\(next\)/.test(radarController));
+  check("Share-Pfad bleibt ohne Pilot-Sync", (() => {
+    const start = radarController.indexOf("const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {");
+    const ende = radarController.indexOf("const fuehreRadarPilotReceipt = useCallback", start);
+    if (start < 0 || ende < 0) return false;
+    return !/syncRadarPilot/.test(radarController.slice(start, ende));
+  })());
 check("Controller hat keinen Pilot-Timer/Retry für den W2-Pfad", !/setTimeout|setInterval|clearTimeout|clearInterval/.test(radarController));
 check("Pilot-Gates richten sich nur an Flag/Authority/Active-Account", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
   && /!radarPilotClientEnabled/.test(radarController)

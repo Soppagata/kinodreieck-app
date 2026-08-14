@@ -37,13 +37,8 @@ export function useEntdeckenRadarController({
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
-  const radarPilotAutoSyncRef = useRef("");
-  const radarInitial = useMemo(() => {
-    try {
-      const decoded = decodeLocalRadar(localStorage.getItem(K.radar), { authority: radarAuthority });
-      return decoded.ok ? decoded.state : createEmptyLocalRadar({ authority: radarAuthority });
-    } catch { return createEmptyLocalRadar({ authority: radarAuthority }); }
-  }, [radarAuthority]);
+  const radarPilotSyncSerialRef = useRef(0);
+  const radarInitial = useMemo(() => createEmptyLocalRadar({ authority: radarAuthority }), [radarAuthority]);
   const normalisiereRadar = useCallback((wert) => {
     if (!validateLocalRadarState(wert).ok || wert.authority !== radarAuthority) {
       throw new Error("Radarzustand passt nicht zur aktuellen Ablage");
@@ -66,29 +61,49 @@ export function useEntdeckenRadarController({
   const [radarPilotSyncStatus, setRadarPilotSyncStatus] = useState(radarPilotClientEnabled ? "idle" : "disabled");
   const schliesseRadarPreview = useCallback(() => setRadarPreviewTarget(null), []);
 
-  const syncRadarPilot = useCallback(async () => {
+  const syncRadarPilot = useCallback(async (stateForSync = null) => {
+    const state = stateForSync || radarStateRef.current;
     if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) {
       setRadarPilotSyncStatus("disabled");
-      return { status: "disabled", state: radarStateRef.current };
+      return { status: "disabled", state };
     }
+    const callSerial = ++radarPilotSyncSerialRef.current;
     const status = await radarPilotService.sync({
-      state: radarStateRef.current,
-      commit: (next) => setRadarState(next),
+      state,
+      commit: (next) => {
+        if (radarPilotSyncSerialRef.current !== callSerial) return;
+        setRadarState(next);
+      },
     });
     setRadarPilotSyncStatus(status?.status || "pending");
     return status;
   }, [radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState]);
 
   useEffect(() => {
-    if (!bootDone || radarAuthority !== "account-cache" || !remoteKontoAktiv || !radarPilotClientEnabled) {
+    if (!bootDone) {
       return undefined;
     }
-    const signature = `${session.account?.id || ""}|${radarAuthority}`;
-    if (radarPilotAutoSyncRef.current === signature) return undefined;
-    radarPilotAutoSyncRef.current = signature;
-    void syncRadarPilot();
-    return undefined;
-  }, [bootDone, remoteKontoAktiv, radarAuthority, radarPilotClientEnabled, session.account?.id, syncRadarPilot]);
+    let aktiv = true;
+    void (async () => {
+      try {
+        const gespeicherterRadar = await store.get(K.radar);
+        const decoded = decodeLocalRadar(gespeicherterRadar?.value, { authority: radarAuthority });
+        if (!aktiv || !decoded.ok) return;
+        setRadarState(decoded.state);
+        if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return;
+        await syncRadarPilot(decoded.state);
+      } catch {
+        return;
+      }
+    })();
+    return () => {
+      aktiv = false;
+    };
+  }, [bootDone, radarAuthority, radarPilotClientEnabled, remoteKontoAktiv, session.account?.id, setRadarState, syncRadarPilot, setErr]);
+
+  useEffect(() => () => {
+    radarPilotSyncSerialRef.current += 1;
+  }, [session.account?.id, radarAuthority, bootDone]);
 
   const aendereSerienBeobachtung = useCallback(async (eintrag, aktiv) => {
     const watchmodeId = eintrag?.watchmode_id ?? eintrag?.watchmodeId;
@@ -129,6 +144,7 @@ export function useEntdeckenRadarController({
     }
     const target = targetOrEntry?.targetStatus ? targetOrEntry : radarTargetAusEintrag(targetOrEntry || {});
     let grund = "radar-change-invalid";
+    let gespeicherterStand = null;
     const gespeichert = await schreibeRadarState((prev) => {
       if (prev.authority !== radarAuthority) { grund = "authority-mismatch"; return null; }
       const result = prev.authority === "guest"
@@ -139,10 +155,14 @@ export function useEntdeckenRadarController({
           operationId: neueLokaleOperationId(), action, target,
         });
       grund = result.reason;
+      gespeicherterStand = result.state;
       return result.ok ? result.state : null;
     });
-    if (radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv && gespeichert !== false) {
-      void syncRadarPilot();
+    if (
+      radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
+      && gespeichert !== false && gespeicherterStand
+    ) {
+      void syncRadarPilot(gespeicherterStand);
     }
     if (gespeichert !== false) return true;
     setErr(grund === "quota-exceeded"
@@ -174,22 +194,12 @@ export function useEntdeckenRadarController({
       grund = result.reason;
       return result.ok ? result.state : null;
     });
-    if (radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv && gespeichert !== false) {
-      void syncRadarPilot();
-    }
     if (gespeichert !== false) return true;
     setErr(grund === "active-subscription-required"
       ? "Teilen ist erst für ein serverbestätigtes aktives Radarziel möglich."
       : "Die Teilen-Wahl wurde nicht bestätigt gespeichert.");
     return false;
-  }, [
-    radarAuthority,
-    radarPilotClientEnabled,
-    remoteKontoAktiv,
-    schreibeRadarState,
-    setErr,
-    syncRadarPilot,
-  ]);
+  }, [radarAuthority, remoteKontoAktiv, schreibeRadarState, setErr]);
 
   const fuehreRadarPilotReceipt = useCallback(async ({ eventId, eventVersionId, status = "seen" }) => {
     if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return false;

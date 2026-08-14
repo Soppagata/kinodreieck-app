@@ -22,6 +22,8 @@ import {
 import { decodeAndValidateLocalProposal } from "./src/lib/radarProposalValidator.js";
 
 let checks = 0;
+let act = async (callback) => callback();
+let tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const check = (name, fn) => {
   fn(); checks++;
   console.log(`✓ ${name}`);
@@ -133,154 +135,164 @@ async function loadEsbuild() {
   catch { return createRequire(import.meta.resolve("vite"))("esbuild"); }
 }
 const cacheDir = path.join(wurzel, ".tmp");
-fs.mkdirSync(cacheDir, { recursive: true });
-const outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-phase3-test-"));
-const output = path.join(outputDir, "bundle.mjs");
-fs.mkdirSync(outputDir, { recursive: true });
-const esbuild = await loadEsbuild();
-await esbuild.build({
-  stdin: {
-    contents: [
-      'export { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
-      'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
-      'export { GlobalSearchBar } from "./src/components/GlobalSearchBar.jsx";',
-    ].join("\n"),
-    loader: "js", resolveDir: wurzel,
-  },
-  bundle: true, format: "esm", outfile: output, jsx: "automatic", target: "es2022", logLevel: "warning",
-  external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
-});
-
-const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
-for (const name of [
-  "window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement",
-  "Element", "Event", "MouseEvent", "KeyboardEvent", "Node", "NodeList", "getComputedStyle", "localStorage",
-]) {
-  Object.defineProperty(globalThis, name, {
-    value: name === "window" ? dom.window : dom.window[name], configurable: true, writable: true,
+let outputDir = null;
+let esbuildOutput;
+let dom = null;
+const heuteIso = new Date().toISOString().slice(0, 10);
+const plusSiebenTageIso = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+try {
+  fs.mkdirSync(cacheDir, { recursive: true });
+  outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-phase3-test-"));
+  const output = path.join(outputDir, "bundle.mjs");
+  fs.mkdirSync(outputDir, { recursive: true });
+  const esbuild = await loadEsbuild();
+  await esbuild.build({
+    stdin: {
+      contents: [
+        'export { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
+        'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
+        'export { GlobalSearchBar } from "./src/components/GlobalSearchBar.jsx";',
+      ].join("\n"),
+      loader: "js", resolveDir: wurzel,
+    },
+    bundle: true, format: "esm", outfile: output, jsx: "automatic", target: "es2022", logLevel: "warning",
+    external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
   });
-}
-globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
-globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
-dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
-dom.window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
-dom.window.scrollTo = () => {};
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const React = await import("react");
-const { act, createElement: h } = React;
-const { createRoot } = await import("react-dom/client");
-const { EntdeckenTab, RadarSubscriptionPreview, GlobalSearchBar } = await import(output);
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-const button = (root, label) => [...root.querySelectorAll("button")].find((entry) => entry.textContent.trim() === label);
-async function mount(Component, props) {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  const root = createRoot(container);
-  await act(async () => { root.render(h(Component, props)); await tick(); });
-  return { container, root, async cleanup() { await act(async () => { root.unmount(); await tick(); }); container.remove(); } };
-}
+  esbuildOutput = await import(output);
 
-const emptyBlogProps = {
-  artikel: [], master: [], angemeldet: false,
-  onFokusVerbraucht() {}, onErstellen: async () => null, onAktualisieren: async () => null,
-  onSetzeRef() {}, onFreigeben: async () => false, onLoeschen: async () => false,
-  onAddFilm: async () => null, onSpringeZuFilm() {},
-};
-const ui = await mount(EntdeckenTab, {
-  blogProps: emptyBlogProps,
-  radarState,
-  seriesCatalog: [], entdeckenStatus: {}, master: [],
-  streamingKnown: null, streamingDiscover: recommendationInput,
-  accountMode: false, onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
-});
-check("Entdecken rendert die drei internen Ansichten und startet bei Empfehlungen", () => {
-  const tabs = [...ui.container.querySelectorAll('[role="tab"]')];
-  assert.deepEqual(tabs.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Meinungen"]);
-  assert.equal(tabs[0].getAttribute("aria-selected"), "true");
-});
-const manageTrigger = button(ui.container, "⚙ Entdecken verwalten");
-manageTrigger.focus();
-await act(async () => { manageTrigger.click(); await tick(); });
-check("Entdecken verwalten zeigt gefüllten Radar und leeren Beobachten-Zustand", () => {
-  const dialog = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
-  assert.ok(dialog);
-  assert.match(dialog.textContent, /Synthetischer Kinofilm/);
-  assert.match(dialog.textContent, /Noch keine Serie beobachtet/);
-  assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
-});
-await act(async () => {
-  document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  await tick();
-});
-check("Escape schließt die Verwaltung, löst Scroll-Lock und gibt den Fokus zurück", () => {
-  assert.equal(document.querySelector('[aria-labelledby="kd-entdecken-manage-title"]'), null);
-  assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), false);
-  assert.equal(document.activeElement, manageTrigger);
-});
-await act(async () => { button(ui.container, "Radar").click(); await tick(); });
-await act(async () => { button(ui.container, "Synthetisches Beispiel einsetzen").click(); await tick(); });
-await act(async () => { button(ui.container, "Nur Vorschau prüfen").click(); await tick(); });
-check("Radar-Ansicht kennzeichnet Fixture, geparkte Personen und die schreibfreie Proposal-Vorschau", () => {
-  assert.match(ui.container.textContent, /Synthetische Fixture/);
-  assert.match(ui.container.textContent, /Personen-Automatik/);
-  assert.match(ui.container.textContent, /Writes: false · Routine: false · Auto-Retry: false/);
-});
-await ui.cleanup();
+  dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
+  for (const name of [
+    "window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement",
+    "Element", "Event", "MouseEvent", "KeyboardEvent", "Node", "NodeList", "getComputedStyle", "localStorage",
+  ]) {
+    Object.defineProperty(globalThis, name, {
+      value: name === "window" ? dom.window : dom.window[name], configurable: true, writable: true,
+    });
+  }
+  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+  dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
+  dom.window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
+  dom.window.scrollTo = () => {};
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = await import("react");
+  const { act: reactAct, createElement: h } = React;
+  act = reactAct;
+  const { createRoot } = await import("react-dom/client");
+  const { EntdeckenTab, RadarSubscriptionPreview, GlobalSearchBar } = esbuildOutput;
 
-const deepLinkUi = await mount(EntdeckenTab, {
-  blogProps: emptyBlogProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),
-});
-check("Ein bestehender Blog-Deep-Link öffnet automatisch Meinungen", () => {
-  const selected = deepLinkUi.container.querySelector('[role="tab"][aria-selected="true"]');
-  assert.equal(selected.textContent, "Meinungen");
-});
-await deepLinkUi.cleanup();
+  tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const button = (root, label) => [...root.querySelectorAll("button")].find((entry) => entry.textContent.trim() === label);
+  async function mount(Component, props) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(h(Component, props)); await tick(); });
+    return { container, root, async cleanup() { await act(async () => { root.unmount(); await tick(); }); container.remove(); } };
+  }
 
-let previewConfirmed = 0;
-let previewClosed = 0;
-const preview = await mount(RadarSubscriptionPreview, {
-  target: radarFixtures.catalog[0], radarState: createEmptyLocalRadar(), accountMode: false,
-  onConfirm: async () => { previewConfirmed++; return true; }, onClose: () => { previewClosed++; },
-});
-check("Radar-Vorschau schreibt vor der expliziten Bestätigung nichts und sperrt Gast-Share", () => {
-  assert.equal(previewConfirmed, 0);
-  assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
-});
-await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
-check("Radar-Vorschau ruft nach Bestätigung genau einen gekapselten Write auf", () => {
-  assert.equal(previewConfirmed, 1);
-  assert.equal(previewClosed, 1);
-});
+  const emptyBlogProps = {
+    artikel: [], master: [], angemeldet: false,
+    onFokusVerbraucht() {}, onErstellen: async () => null, onAktualisieren: async () => null,
+    onSetzeRef() {}, onFreigeben: async () => false, onLoeschen: async () => false,
+    onAddFilm: async () => null, onSpringeZuFilm() {},
+  };
+  const ui = await mount(EntdeckenTab, {
+    blogProps: emptyBlogProps,
+    radarState,
+    seriesCatalog: [], entdeckenStatus: {}, master: [],
+    streamingKnown: null, streamingDiscover: recommendationInput,
+    accountMode: false, onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
+  });
+  check("Entdecken rendert die drei internen Ansichten und startet bei Empfehlungen", () => {
+    const tabs = [...ui.container.querySelectorAll('[role="tab"]')];
+    assert.deepEqual(tabs.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Meinungen"]);
+    assert.equal(tabs[0].getAttribute("aria-selected"), "true");
+  });
+  const manageTrigger = button(ui.container, "⚙ Entdecken verwalten");
+  manageTrigger.focus();
+  await act(async () => { manageTrigger.click(); await tick(); });
+  check("Entdecken verwalten zeigt gefüllten Radar und leeren Beobachten-Zustand", () => {
+    const dialog = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
+    assert.ok(dialog);
+    assert.match(dialog.textContent, /Synthetischer Kinofilm/);
+    assert.match(dialog.textContent, /Noch keine Serie beobachtet/);
+    assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
+  });
+  await act(async () => {
+    document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await tick();
+  });
+  check("Escape schließt die Verwaltung, löst Scroll-Lock und gibt den Fokus zurück", () => {
+    assert.equal(document.querySelector('[aria-labelledby="kd-entdecken-manage-title"]'), null);
+    assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), false);
+    assert.equal(document.activeElement, manageTrigger);
+  });
+  await ui.cleanup();
+
+  const deepLinkUi = await mount(EntdeckenTab, {
+    blogProps: emptyBlogProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),
+  });
+  check("Ein bestehender Blog-Deep-Link öffnet automatisch Meinungen", () => {
+    const selected = deepLinkUi.container.querySelector('[role="tab"][aria-selected="true"]');
+    assert.equal(selected.textContent, "Meinungen");
+  });
+  await deepLinkUi.cleanup();
+
+  let previewConfirmed = 0;
+  let previewClosed = 0;
+  const preview = await mount(RadarSubscriptionPreview, {
+    target: radarFixtures.catalog[0], radarState: createEmptyLocalRadar(), accountMode: false,
+    onConfirm: async () => { previewConfirmed++; return true; }, onClose: () => { previewClosed++; },
+  });
+  check("Radar-Vorschau schreibt vor der expliziten Bestätigung nichts und sperrt Gast-Share", () => {
+    assert.equal(previewConfirmed, 0);
+    assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
+  });
+  await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
+  check("Radar-Vorschau ruft nach Bestätigung genau einen gekapselten Write auf", () => {
+    assert.equal(previewConfirmed, 1);
+    assert.equal(previewClosed, 1);
+  });
 await preview.cleanup();
 
 const pilotEvent = {
   eventId: "00000000-0000-4000-8000-000000000001",
   eventVersionId: "00000000-0000-4000-8000-000000000011",
   targetId: "tmdb:0001",
-  targetType: "movie",
   eventType: "kinostart_at",
-  date: "2026-08-09",
+  date: heuteIso,
   region: "AT",
   platform: "-",
-  lifecycleStatus: "active",
+  lifecycleStatus: "scheduled",
+  verificationStatus: "confirmed",
+};
+const pilotEventOutsideWeek = {
+  eventId: "00000000-0000-4000-8000-000000000013",
+  eventVersionId: "00000000-0000-4000-8000-000000000023",
+  targetId: "tmdb:0009",
+  eventType: "kinostart_at",
+  date: plusSiebenTageIso,
+  region: "AT",
+  platform: "-",
+  lifecycleStatus: "scheduled",
   verificationStatus: "confirmed",
 };
 const validPilotImportPayload = {
   targetKey: "tmdb:0001",
   eventType: "kinostart_at",
-  date: "2026-08-09",
+  date: heuteIso,
   region: "AT",
   platform: "-",
   evidence: [
-    { sourceId: "s1", url: "https://example.org/1", retrievedAt: "2026-08-09T10:00:00.000Z" },
-    { sourceId: "s2", url: "https://example.org/2", retrievedAt: "2026-08-09T10:00:01.000Z" },
+    { sourceId: "s1", url: "https://example.org/1", retrievedAt: `${heuteIso}T10:00:00.000Z` },
+    { sourceId: "s2", url: "https://example.org/2", retrievedAt: `${heuteIso}T10:00:01.000Z` },
   ],
 };
-const pilotState = createEmptyLocalRadar();
 
 const mountPilotUi = async (props) => mount(EntdeckenTab, {
   blogProps: emptyBlogProps,
-  radarState: pilotState,
+  radarState: createEmptyLocalRadar({ authority: "account-cache" }),
   seriesCatalog: [], entdeckenStatus: {}, master: [],
   streamingKnown: null, streamingDiscover: recommendationInput,
   accountMode: true,
@@ -302,6 +314,40 @@ check("Flag false zeigt trotz Review keine Pilot-Importfläche und behält Fixtu
   assert.equal(hasImport, null);
 });
 await pilotNoImportUi.cleanup();
+
+const RestoreDate = Date;
+Date = class extends RestoreDate {
+  constructor(value) {
+    return value == null
+      ? new RestoreDate("2026-08-09T00:00:00.000Z")
+      : new RestoreDate(value);
+  }
+  static now() {
+    return new RestoreDate("2026-08-09T00:00:00.000Z").getTime();
+  }
+};
+const pilotGuestConflictUi = await mountPilotUi({
+  accountMode: false,
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEvent, pilotEventOutsideWeek],
+  radarReview: true,
+  radarState: upsertGuestRadarSubscription(createEmptyLocalRadar({ authority: "guest" }), {
+    target: radarFixtures.catalog[0], now: `${heuteIso}T12:00:00.000Z`,
+  }).state,
+});
+await act(async () => { button(pilotGuestConflictUi.container, "Radar").click(); await tick(); });
+check("Gast mit widersprüchlichen Pilot-Flags zeigt exakt Fixture-Preview, kein Pilot-Sync und kein Pilot-DOM", () => {
+  const weekPanel = [...pilotGuestConflictUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  const listItem = weekPanel?.querySelector("li");
+  assert.equal(pilotGuestConflictUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
+  assert.equal(button(pilotGuestConflictUi.container, "Pilot-Sync starten"), undefined);
+  assert.ok(listItem && listItem.textContent.includes("nur Vorschau"));
+  assert.equal(listItem?.querySelector("button"), null);
+});
+await pilotGuestConflictUi.cleanup();
+Date = RestoreDate;
 
 const pilotReviewFalseUi = await mountPilotUi({
   radarPilotClientEnabled: true,
@@ -365,7 +411,7 @@ let receiptCalls = 0;
 const receiptUi = await mountPilotUi({
   radarPilotClientEnabled: true,
   radarPilotActive: true,
-  radarPilotEvents: [pilotEvent],
+  radarPilotEvents: [pilotEvent, pilotEventOutsideWeek],
   radarReview: true,
   onRadarPilotReceipt: async () => {
     receiptCalls += 1;
@@ -378,6 +424,11 @@ await act(async () => {
   btn.click();
   btn.click();
   await tick();
+});
+check("Pilot-Ereignisse außerhalb der 7-Tage-Woche sind nicht in der Ansicht", () => {
+  const weekPanel = [...receiptUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  assert.equal(weekPanel?.textContent.includes(pilotEventOutsideWeek.targetId), false);
 });
 check("Pilot-Ereignis-Receipt klickt genau einmal, ohne optimistischen Status", () => {
   assert.equal(receiptCalls, 1);
@@ -398,12 +449,20 @@ const searchUi = await mount(GlobalSearchBar, {
 });
 await act(async () => { button(searchUi.container, "Beobachten").click(); await tick(); });
 await act(async () => { button(searchUi.container, "Ins Radar").click(); await tick(); });
-await act(async () => { searchUi.container.querySelector("[data-globaler-suchtreffer]").click(); await tick(); });
-check("Globale Suche hält Beobachten, Ins Radar und Öffnen als getrennte Bedienelemente", () => {
-  assert.deepEqual(searchCalls, ["watch", "radar", "open"]);
-  assert.equal(searchUi.container.querySelectorAll(".kd-globalsuche-aktionen button").length, 2);
-});
-await searchUi.cleanup();
+  await act(async () => { searchUi.container.querySelector("[data-globaler-suchtreffer]").click(); await tick(); });
+  check("Globale Suche hält Beobachten, Ins Radar und Öffnen als getrennte Bedienelemente", () => {
+    assert.deepEqual(searchCalls, ["watch", "radar", "open"]);
+    assert.equal(searchUi.container.querySelectorAll(".kd-globalsuche-aktionen button").length, 2);
+  });
+  await searchUi.cleanup();
+} finally {
+  if (outputDir) {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+  if (dom) {
+    dom.window.close();
+  }
+}
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);
 console.log("ENTDECKEN-PHASE3-TEST BESTANDEN");

@@ -177,11 +177,13 @@ function RadarView({
   const [proposalResult, setProposalResult] = useState(null);
   const [pilotImportRaw, setPilotImportRaw] = useState("");
   const [pilotImportBusy, setPilotImportBusy] = useState(false);
+  const [pilotSyncBusy, setPilotSyncBusy] = useState(false);
   const [pilotImportMessage, setPilotImportMessage] = useState("");
   const [pilotReceiptBusy, setPilotReceiptBusy] = useState("");
   const pilotReceiptInFlight = useRef(new Set());
   const ledger = useMemo(() => createFixtureRadarLedger(radarFixtures), []);
   const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const fixtureWeek = useMemo(() => projectLocalRadarWeek({ state: radarState, ledger, startDate: today }), [ledger, radarState, today]);
   const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
     `${entry.eventId}|${entry.versionId}`,
@@ -197,14 +199,18 @@ function RadarView({
     platform: entry.platform,
     lifecycleStatus: entry.lifecycleStatus,
     verificationStatus: entry.verificationStatus,
-  })), [radarPilotEvents]);
-  const week = radarPilotClientEnabled && radarPilotActive ? pilotWeek : fixtureWeek;
+    title: entry.title || localRadarTargetLabel(entry.targetId, {
+      master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
+    }),
+  })).filter((entry) => entry.date >= today && entry.date <= weekEnd), [radarPilotEvents, master, streamingDiscover, streamingKnown, today, weekEnd]);
+  const canPilotControls = radarPilotClientEnabled && accountMode && radarPilotActive;
+  const canPilotReceipt = canPilotControls && typeof onRadarPilotReceipt === "function";
+  const canPilotImport = canPilotControls && radarReview === true && typeof onRadarPilotImport === "function";
+  const canPilotSync = radarPilotClientEnabled && accountMode;
+  const week = canPilotControls ? pilotWeek : fixtureWeek;
   const fixtureTarget = radarFixtures.catalog[0];
   const active = radarState?.subscriptions || [];
   const pending = radarState?.outbox || [];
-  const canPilotControls = radarPilotClientEnabled && radarPilotActive;
-  const canPilotReceipt = canPilotControls && typeof onRadarPilotReceipt === "function";
-  const canPilotImport = canPilotControls && radarReview === true && typeof onRadarPilotImport === "function";
 
   const ladeBeispiel = () => {
     setProposalRaw(JSON.stringify(radarFixtures.radarProposal, null, 2));
@@ -237,6 +243,15 @@ function RadarView({
       setPilotImportBusy(false);
     }
   };
+  const fuehrePilotSync = useCallback(async () => {
+    if (!canPilotSync || pilotSyncBusy) return;
+    setPilotSyncBusy(true);
+    try {
+      await onRadarPilotSync?.();
+    } finally {
+      setPilotSyncBusy(false);
+    }
+  }, [canPilotSync, onRadarPilotSync, pilotSyncBusy]);
   const fuehrePilotReceipt = async (entry) => {
     if (!canPilotReceipt || pilotReceiptBusy === entry.eventVersionId
       || pilotReceiptInFlight.current.has(entry.eventVersionId) || !entry.eventId || !entry.eventVersionId
@@ -272,28 +287,34 @@ function RadarView({
       </article>
       <article className="kd-entdecken-panel">
         <h3>Diese Woche</h3>
-        {week.length ? <ul>{week.map((entry) => <li key={entry.eventVersionId || entry.versionId}>
-          <strong>{entry.title || localRadarTargetLabel(entry.targetId, { master, fixtures: radarFixtures })}</strong>
-          <span>{entry.date} · {entry.eventType} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
-          {canPilotReceipt ? <div>
-            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status ? (
-              <small>Status: {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`).status}</small>
-            ) : null}
-            <button type="button" className="kd-entdecken-sekundaer" disabled={pilotReceiptBusy === entry.eventVersionId}
-              onClick={() => fuehrePilotReceipt(entry)}>
-              {pilotReceiptBusy === entry.eventVersionId ? "Wird gespeichert…" : "Gesehen"}
-            </button>
-          </div> : null}
-        </li>)}</ul>
+        {week.length ? <ul>{week.map((entry) => canPilotControls
+          ? <li key={entry.eventVersionId || entry.versionId}>
+            <strong>{entry.title || localRadarTargetLabel(entry.targetId, {
+              master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
+            })}</strong>
+            <span>{entry.date} · {entry.eventType} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
+            {canPilotReceipt ? <div>
+              {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status ? (
+                <small>Status: {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`).status}</small>
+              ) : null}
+              <button type="button" className="kd-entdecken-sekundaer" disabled={pilotReceiptBusy === entry.eventVersionId}
+                onClick={() => fuehrePilotReceipt(entry)}>
+                {pilotReceiptBusy === entry.eventVersionId ? "Wird gespeichert…" : "Gesehen"}
+              </button>
+            </div> : null}
+          </li>
+          : <li key={entry.versionId}>
+            <strong>{entry.title}</strong><span>{entry.date} · {entry.eventType} · nur Vorschau</span>
+          </li>)}</ul>
           : <p className="kd-entdecken-leer">Keine lokal bestätigten Ereignisse für deine aktiven Ziele.</p>}
         <small>Keine Kalender- oder Erinnerungsänderung.</small>
       </article>
     </div>
 
-    {canPilotControls ? <article className="kd-entdecken-panel">
+    {canPilotSync || canPilotControls ? <article className="kd-entdecken-panel">
       <h3>Pilot</h3>
-      <p className="kd-entdecken-kopfleiste">Status: {syncStatus}</p>
-      <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPilotSync?.()}>Pilot-Sync starten</button>
+      <p className="kd-entdecken-kopfleiste">Status: {pilotSyncBusy ? "syncing" : syncStatus}</p>
+      <button type="button" className="kd-entdecken-sekundaer" disabled={pilotSyncBusy} onClick={fuehrePilotSync}>Pilot-Sync starten</button>
     </article> : null}
 
     {canPilotImport ? <article className="kd-entdecken-proposal">
