@@ -65,6 +65,7 @@ let useState;
 let useRef;
 let useCallback;
 let createRoot;
+let root;
 let HilfeSheet;
 let DokuAnsicht;
 let HILFE_BEREICHE;
@@ -183,7 +184,6 @@ function bodyStyleSnapshot() {
 }
 
 const container = document.getElementById("app");
-const root = createRoot(container);
 const bindState = { current: null };
 
 function HilfeHarness({ bind }) {
@@ -414,10 +414,15 @@ async function runDokuAnsichtTest() {
     if (buildLoadError) {
       throw buildLoadError;
     }
+    root = createRoot(container);
     await runHilfeDomTest();
     await runDokuAnsichtTest();
   } finally {
-    await act(async () => { root.render(null); });
+    if (root) {
+      await act(async () => {
+        root.render(null);
+      });
+    }
     if (TEST_BUNDLE) cleanupBundle();
   }
 

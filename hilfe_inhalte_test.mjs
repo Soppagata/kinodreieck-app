@@ -374,7 +374,7 @@ for (const query of ["wie kann ich netflix", "wie kann ich prime", "wie kann ich
   repeatThree(`Provider ohne Einstellform bleibt null (${query})`, () => antwortVon(query) === null);
 }
 
-for (const query of ["Wie finde ich den Film Hilfe, ich bin ein Fisch?"]) {
+for (const query of ["Wo finde ich den Film Hilfe, ich bin ein Fisch?"]) {
   check(`Fail-closed (${query})`, antwortVon(query) === null);
 }
 
