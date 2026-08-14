@@ -30,8 +30,9 @@ const ERKLAERUNGS_INTENT = Object.freeze([
 const ORTS_INTENT = Object.freeze([
   "wo kann ich", "wo finde ich", "wo finde", "wo ist",
 ]);
+const AENDERUNGS_ENDVERBEN = Object.freeze(["ändern", "aendern"]);
 const HANDLUNGS_ENDVERBEN = Object.freeze(new Set([
-  "ändern", "aendern", "einstellen",
+  ...AENDERUNGS_ENDVERBEN, "einstellen",
 ]));
 const HILFE_GEGENSTAND_HUELLE = Object.freeze(new Set([
   "der", "die", "das", "den", "dem", "des",
@@ -126,17 +127,28 @@ function erkenneHilfeIntent(text) {
     const zusaetzlicheVarianten = [];
     const huellwoerter = [];
     if (form.stark) {
-      const endverb = form.phrase.includes("aendere") ? "aendern" : "ändern";
-      zusaetzlicheVarianten.push({
-        text: `${rest} ${endverb}`.trim(),
-        huellwoerter: [endverb],
-      });
+      for (const endverb of AENDERUNGS_ENDVERBEN) {
+        zusaetzlicheVarianten.push({
+          text: `${rest} ${endverb}`.trim(),
+          huellwoerter: [endverb],
+        });
+      }
     }
     if (!stark) {
       const endwort = rest.split(" ").at(-1);
       if (HANDLUNGS_ENDVERBEN.has(endwort)) {
         stark = true;
         huellwoerter.push(endwort);
+        const objekt = restVorEndwort(rest, endwort);
+        if (objekt !== null && AENDERUNGS_ENDVERBEN.includes(endwort)) {
+          for (const endverb of AENDERUNGS_ENDVERBEN) {
+            if (endverb === endwort) continue;
+            zusaetzlicheVarianten.push({
+              text: `${objekt} ${endverb}`.trim(),
+              huellwoerter: [endverb],
+            });
+          }
+        }
       }
     }
     return {
@@ -209,7 +221,7 @@ const AKTIONS_SIGNALPHRASEN = Object.freeze(HILFE_AKTIONEN.flatMap((aktion) =>
     tokens: Object.freeze(phrase.split(" ").filter(Boolean)),
   }))));
 
-function hatMehrereAktionssignale(text) {
+function aktionssignalIds(text) {
   const tokens = text.split(" ").filter(Boolean);
   const signale = [];
   for (const signalphrase of AKTIONS_SIGNALPHRASEN) {
@@ -229,7 +241,15 @@ function hatMehrereAktionssignale(text) {
       && anderes.start <= signal.start
       && anderes.ende >= signal.ende
       && (anderes.start < signal.start || anderes.ende > signal.ende)));
-  return new Set(verbleibend.map((signal) => signal.aktionsId)).size > 1;
+  return new Set(verbleibend.map((signal) => signal.aktionsId));
+}
+
+function hatMehrereAktionssignale(varianten) {
+  const aktionsIds = new Set();
+  for (const variante of varianten) {
+    for (const aktionsId of aktionssignalIds(variante.text)) aktionsIds.add(aktionsId);
+  }
+  return aktionsIds.size > 1;
 }
 
 function analysiereGegenstand(text, inhalt, {
@@ -337,7 +357,7 @@ export function appHilfeAntwort(frage) {
   const intent = erkenneHilfeIntent(text);
   const gegenstand = intent?.gegenstand || text;
   const varianten = intent?.gegenstandsVarianten || [{ text: gegenstand, huellwoerter: [] }];
-  if (hatMehrereAktionssignale(gegenstand)) return null;
+  if (hatMehrereAktionssignale(varianten)) return null;
   const kandidaten = [];
 
   for (const [quellIndex, aktion] of HILFE_AKTIONEN.entries()) {
