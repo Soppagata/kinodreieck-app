@@ -220,11 +220,25 @@ const AKTIONS_SIGNALPHRASEN = Object.freeze(HILFE_AKTIONEN.flatMap((aktion) =>
     aktionsId: aktion.id,
     tokens: Object.freeze(phrase.split(" ").filter(Boolean)),
   }))));
+const AKTIONS_KONTEXTSIGNALPHRASEN = Object.freeze(HILFE_BEREICHE.flatMap((bereich) =>
+  bereich.suchwoerter.flatMap((phrase) => {
+    if (AKTIONS_SUCHWOERTER.has(phrase)) return [];
+    const aktionsIds = new Set(HILFE_AKTIONEN
+      .filter((aktion) => aktion.bereichId === bereich.id
+        && aktion.suchwoerter.some((suchwort) => suchwort.startsWith(`${phrase} `)))
+      .map((aktion) => aktion.id));
+    if (aktionsIds.size !== 1) return [];
+    return [Object.freeze({
+      bereichId: bereich.id,
+      aktionsId: [...aktionsIds][0],
+      tokens: Object.freeze(phrase.split(" ").filter(Boolean)),
+    })];
+  })));
 
-function aktionssignalIds(text) {
+function aktionssignalIds(text, zusaetzlicheSignalphrasen = []) {
   const tokens = text.split(" ").filter(Boolean);
   const signale = [];
-  for (const signalphrase of AKTIONS_SIGNALPHRASEN) {
+  for (const signalphrase of [...AKTIONS_SIGNALPHRASEN, ...zusaetzlicheSignalphrasen]) {
     const laenge = signalphrase.tokens.length;
     if (!laenge || laenge > tokens.length) continue;
     for (let start = 0; start <= tokens.length - laenge; start += 1) {
@@ -244,10 +258,16 @@ function aktionssignalIds(text) {
   return new Set(verbleibend.map((signal) => signal.aktionsId));
 }
 
-function hatMehrereAktionssignale(varianten) {
+function hatMehrereAktionssignale(varianten, intent) {
   const aktionsIds = new Set();
+  const kontextSignalphrasen = intent?.art === "einstellung" && intent.zielBereichId
+    ? AKTIONS_KONTEXTSIGNALPHRASEN
+      .filter((signalphrase) => signalphrase.bereichId === intent.zielBereichId)
+    : [];
   for (const variante of varianten) {
-    for (const aktionsId of aktionssignalIds(variante.text)) aktionsIds.add(aktionsId);
+    for (const aktionsId of aktionssignalIds(variante.text, kontextSignalphrasen)) {
+      aktionsIds.add(aktionsId);
+    }
   }
   return aktionsIds.size > 1;
 }
@@ -357,7 +377,7 @@ export function appHilfeAntwort(frage) {
   const intent = erkenneHilfeIntent(text);
   const gegenstand = intent?.gegenstand || text;
   const varianten = intent?.gegenstandsVarianten || [{ text: gegenstand, huellwoerter: [] }];
-  if (hatMehrereAktionssignale(varianten)) return null;
+  if (hatMehrereAktionssignale(varianten, intent)) return null;
   const kandidaten = [];
 
   for (const [quellIndex, aktion] of HILFE_AKTIONEN.entries()) {
