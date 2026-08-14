@@ -353,10 +353,10 @@ check("Neue RPCs sind nur für authenticated und service_role ausführbar", () =
   for (const [name, signature] of rpcContracts) {
     const call = `public.${name}(${signature.split(",").map((part) => part.trim().split(/\s+/).at(-1)).join(",")})`;
     const escaped = escapeRegex(call);
-    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped} from[^;]*\\bpublic\\b`));
-    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped} from[^;]*\\banon\\b`));
-    assert.match(canonicalExecutable, new RegExp(`grant execute on function ${escaped} to[^;]*\\bauthenticated\\b`));
-    assert.match(canonicalExecutable, new RegExp(`grant execute on function ${escaped} to[^;]*\\bservice_role\\b`));
+    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped}from[^;]*\\bpublic\\b`));
+    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped}from[^;]*\\banon\\b`));
+    assert.match(canonicalExecutable, new RegExp(`grant execute on function ${escaped}to[^;]*\\bauthenticated\\b`));
+    assert.match(canonicalExecutable, new RegExp(`grant execute on function ${escaped}to[^;]*\\bservice_role\\b`));
   }
 });
 
