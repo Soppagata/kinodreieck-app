@@ -2324,7 +2324,7 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   await expect(dialog).toContainText("Masterlöschungen");
   await expect(dialog.locator(".kd-film-batch-ziel-liste li")).toHaveCount(visibleCount);
 
-  const dialogGeometrie = await dialog.evaluate((element, viewportWidth, viewportHeight) => {
+  const dialogGeometrie = await dialog.evaluate((element, { viewportWidth, viewportHeight }) => {
     const rect = element.getBoundingClientRect();
     const buttons = [...element.querySelectorAll("button")].map((button) => {
       const box = button.getBoundingClientRect();
@@ -2346,7 +2346,7 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
       listeScrollt: element.querySelector(".kd-film-batch-ziel-liste").scrollHeight > element.querySelector(".kd-film-batch-ziel-liste").clientHeight,
       listeUeberbreite: element.querySelector(".kd-film-batch-ziel-liste").scrollWidth > element.querySelector(".kd-film-batch-ziel-liste").clientWidth + 1,
     };
-  }, viewport.width, viewport.height);
+  }, { viewportWidth: viewport.width, viewportHeight: viewport.height });
   expect(dialogGeometrie.links).toBeGreaterThanOrEqual(0);
   expect(dialogGeometrie.rechts).toBeLessThanOrEqual(dialogGeometrie.viewportWidth);
   expect(dialogGeometrie.oben).toBeGreaterThanOrEqual(0);
@@ -2389,45 +2389,67 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   const grenzText = dialog.locator("#kd-film-batch-dialog-grenzen");
   const folgen = dialog.getByRole("heading", { name: "Folgen" });
   const abbrechen = dialog.getByRole("button", { name: "Abbrechen" });
-  const bestaetigen = dialog.getByRole("button", { name: bestaetigenText });
-  await expect(folgen).toBeVisible();
+  const bestaetigen = dialog.locator(".kd-film-batch-bestaetigen");
+  await expect(bestaetigen).toHaveText(bestaetigenText);
 
   await grenzText.scrollIntoViewIfNeeded();
+  await expect(grenzText).toBeInViewport();
   await folgen.scrollIntoViewIfNeeded();
+  await expect(folgen).toBeInViewport();
   await abbrechen.scrollIntoViewIfNeeded();
+  await expect(abbrechen).toBeInViewport();
   await bestaetigen.scrollIntoViewIfNeeded();
-  await expect(grenzText).toBeVisible();
-  await expect(folgen).toBeVisible();
-  await expect(abbrechen).toBeVisible();
-  await expect(bestaetigen).toBeVisible();
+  await expect(bestaetigen).toBeInViewport();
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(loeschenAusloeser).toBeFocused();
+  const lockNachEscape = await page.evaluate(() => ({
+    body: {
+      locked: document.body.classList.contains("kd-scroll-gesperrt"),
+      position: getComputedStyle(document.body).position,
+      overflow: getComputedStyle(document.body).overflow,
+    },
+    html: {
+      locked: document.documentElement.classList.contains("kd-scroll-gesperrt"),
+    },
+  }));
+  expect(lockNachEscape.body.locked).toBe(false);
+  expect(lockNachEscape.body.position).toBe("");
+  expect(lockNachEscape.body.overflow).toBe("");
+  expect(lockNachEscape.html.locked).toBe(false);
 
   await loeschenAusloeser.click();
   const dialogNachEscape = page.getByRole("dialog", { name: new RegExp(`^${ausloeserText}`) });
   const abbrechenNachEscape = dialogNachEscape.getByRole("button", { name: "Abbrechen" });
-  const bestaetigenNachEscape = dialogNachEscape.getByRole("button", { name: bestaetigenText });
+  const bestaetigenNachEscape = dialogNachEscape.locator(".kd-film-batch-bestaetigen");
   await expect(dialogNachEscape).toBeVisible();
 
   await page.evaluate(() => { window.__e12StoragePause = true; });
   await bestaetigenNachEscape.click();
   await expect(dialogNachEscape.getByRole("status")).toContainText("Löschung läuft");
+  await expect(bestaetigenNachEscape).toHaveText("Löscht …");
   await expect(abbrechenNachEscape).toBeDisabled();
   await expect(bestaetigenNachEscape).toBeDisabled();
   await abbrechenNachEscape.scrollIntoViewIfNeeded();
   await bestaetigenNachEscape.scrollIntoViewIfNeeded();
-  await expect(abbrechenNachEscape).toBeVisible();
-  await expect(bestaetigenNachEscape).toBeVisible();
+  await expect(abbrechenNachEscape).toBeInViewport();
+  await expect(bestaetigenNachEscape).toBeInViewport();
 
   await page.evaluate(() => {
     window.__e12StoragePause = false;
     window.__e12StorageGate.reject(new Error("E12 mobile short-height write failure"));
   });
-  await expect(dialogNachEscape.getByRole("alert")).toContainText("Datenstand, Konto oder Sitzung");
-  await expect(abbrechenNachEscape).toBeDisabled();
+  const fehler = dialogNachEscape.getByRole("alert");
+  await fehler.scrollIntoViewIfNeeded();
+  await expect(fehler).toBeInViewport();
+  await expect(fehler).toContainText("Datenstand, Konto oder Sitzung");
+  await expect(abbrechenNachEscape).toBeEnabled();
   await expect(bestaetigenNachEscape).toBeDisabled();
+  await abbrechenNachEscape.scrollIntoViewIfNeeded();
+  await bestaetigenNachEscape.scrollIntoViewIfNeeded();
+  await expect(abbrechenNachEscape).toBeInViewport();
+  await expect(bestaetigenNachEscape).toBeInViewport();
   await expect(page.getByText(`${visibleCount + hiddenCount} ausgewählt · ${visibleCount} sichtbar`, { exact: true })).toBeVisible();
   await expect(page.locator('[role="checkbox"][aria-label="Film 01 auswählen"]')).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
