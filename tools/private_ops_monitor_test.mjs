@@ -59,7 +59,7 @@ const okFetch = createFetchMock((url) => {
     return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
   }
   if (url.includes("/rest/v1/kd_private_settings")) {
-    return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+    return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
   }
   if (url.includes("/rest/v1/kd_radar_settings")) {
     return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
@@ -79,7 +79,7 @@ const okFetch = createFetchMock((url) => {
 
 const healthyReports = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: okFetch });
 const healthy = Object.fromEntries(healthyReports.reports.map((r) => [r.id, r.code]));
-check("grüner Build/Function/Rolle/Flags/Budget/Purge", healthy.build === "OK" && healthy.function === "OK" && healthy.access === "OK" && healthy.flags === "OK" && healthy.radar_flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK");
+check("grüner Build/Function/Rolle/Fünffeld-Flags/Budget/Purge", healthy.build === "OK" && healthy.function === "OK" && healthy.access === "OK" && healthy.flags === "OK" && healthy.radar_flags === "OK" && healthy.budget === "OK" && healthy.purge === "OK");
 check("grüne Check-Läufe liefern kein kritisches Ergebnis", healthyReports.ok === true && healthyReports.critical.length === 0);
 check("Purge als Warnung darf weiterlaufen und nicht kritisch sein", healthy.purge === "OK" && healthyReports.critical.includes("purge") === false);
 
@@ -111,13 +111,34 @@ const inactiveAccess = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: cre
 }) });
 check("inaktive oder fehlende Rollen-v1-Freigabe macht Monitoring rot", inactiveAccess.reports.find((r) => r.id === "access")?.code === "ACCESS_DENIED" && inactiveAccess.critical.includes("access"));
 
-const dangerousFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: true, scheduler_enabled: false, delete_enabled: false }]);
+const PRIVATE_FLAGS = [
+  "provider_requests_enabled",
+  "scheduler_enabled",
+  "purge_enabled",
+  "delete_enabled",
+  "export_enabled",
+];
+for (const activeFlag of PRIVATE_FLAGS) {
+  const dangerousFlags = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+    if (url.includes("/rest/v1/kd_private_settings")) {
+      const safeFlags = Object.fromEntries(PRIVATE_FLAGS.map((name) => [name, false]));
+      safeFlags[activeFlag] = true;
+      return fakeAntwort(200, [safeFlags]);
+    }
+    return okFetch(url);
+  }) });
+  const dangerousFlagsById = Object.fromEntries(dangerousFlags.reports.map((r) => [r.id, r.code]));
+  check(`gefährlicher Privat-Flag '${activeFlag}' wird erkannt`, dangerousFlagsById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check(`gefährlicher Privat-Flag '${activeFlag}' ist kritisch`, dangerousFlags.critical.includes("flags"));
+}
+
+const missingPrivateExportFlag = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
   return okFetch(url);
 }) });
-const dangerousFlagsById = Object.fromEntries(dangerousFlags.reports.map((r) => [r.id, r.code]));
-check("gefährlicher Flag wird erkannt", dangerousFlagsById.flags === "UNEXPECTED_DANGEROUS_FLAG");
-check("gefährlicher Flag ist kritisch", dangerousFlags.critical.includes("flags"));
+const missingPrivateExportFlagById = Object.fromEntries(missingPrivateExportFlag.reports.map((r) => [r.id, r.code]));
+check("fehlender export_enabled-Flag wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateExportFlagById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+check("fehlender export_enabled-Flag ist kritisch", missingPrivateExportFlag.critical.includes("flags"));
 
 const RADAR_FLAGS = [
   "radar_aktiv",
@@ -174,7 +195,7 @@ const redactedRun = await runPrivateOpsCheck({ env: { ...BASIS_ENV, ...redactedP
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
   if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
   if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
   if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },
@@ -206,7 +227,7 @@ const timeoutCheckFetch = createFetchMock((url) => {
   if (url.includes("/auth/v1/token")) return fakeAntwort(200, { access_token: "monitor-session-token" });
   if (url.includes("/functions/v1/ai-task")) return fakeAntwort(200, { buildVersion: "fn-v1", health: true });
   if (url.includes("/rest/v1/kd_account_access")) return fakeAntwort(200, [{ role: "member", active: true, personal_ai: false }]);
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false, export_enabled: false }]);
   if (url.includes("/rest/v1/kd_radar_settings")) return fakeAntwort(200, [{ radar_aktiv: false, radar_shares_aktiv: false, radar_provider_aktiv: false, radar_scheduler_aktiv: false, radar_proposal_import_aktiv: false }]);
   if (url.includes("/rest/v1/kd_ai_limits")) return fakeAntwort(200, [
     { schluessel: "ai_aktiv", wert: true },

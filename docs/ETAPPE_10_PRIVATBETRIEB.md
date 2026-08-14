@@ -1,5 +1,12 @@
 # Etappe 10: Privater Betrieb (Runbook-Stand 09.08.2026)
 
+## E15A Scope-Kontrolle
+
+- E15A ist ausschließlich ein lokaler, statischer Source-Kandidatenstand.
+- Radar-Migrationen, Private-Ops-Migrationen, Retention-Migrationen, `account-self-service`-Function und Monitor-Schedule bleiben in E15A `SAFE_SKIPPED`; sie sind nicht angewendet, nicht deployed und nicht aktiviert.
+- Pages-Staging kann in diesem Schritt nur Frontend/Quellstand zeigen; keine produktionsnahe Backend-Aktivierung ist Bestandteil.
+- Der Private-Ops-Check in diesem Stand validiert ausschließlich den lesenden Kontrollpfad auf `export_enabled` + Private-Flags als Sicherungsstatus ohne Remote-Seiteneffekte.
+
 ## Scope
 
 - Auftrag: `docs/zukunft/AUFTRAG_SOL_PRIVATPILOT_ABSCHLUSS_2026-08-09.md`
