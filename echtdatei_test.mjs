@@ -365,7 +365,11 @@ if (ueberKnopf) {
   check("Über: Doku-Knopf vorhanden", !!dokuKnopf);
   if (dokuKnopf) {
     dokuKnopf.click(); await warte(300);
-    check("Über: Doku-Ansicht öffnet (inkl. Rechtliches)", /Automatik/.test(text()) && /Datenerfassung läuft außerhalb der PWA/.test(text()));
+    check("Über: Doku zeigt kanonische Hilfe-Namen", /Start/.test(text())
+      && /Mediathek/.test(text()) && /Streaming/.test(text()) && /Suche/.test(text())
+      && /Entdecken/.test(text()) && /Einstellungen|Settings/.test(text()));
+    check("Über: Doku bleibt inline ohne nested dialog/portal", !doc.querySelector('[role="dialog"]')
+      && !doc.querySelector(".kd-help-layer") && /Die Mediathek verwaltet/.test(text()));
     const zu = knopf(/Anleitung zuklappen/i);
     if (zu) { zu.click(); await warte(200); }
   }

@@ -350,10 +350,77 @@ for (const viewport of VIEWPORTS) {
       const dashboardBox = await dashboard.boundingBox();
       expect(dashboardBox.x).toBeGreaterThanOrEqual(18);
       expect(dashboardBox.x + dashboardBox.width).toBeLessThanOrEqual(viewport.width - 18);
-      await page.getByRole("button", { name: "Anleitung & Hilfe" }).click();
+      const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
+      const hilfeZielnamen = ["Start", "Kino", "Mediathek", "Streaming", "Suche", "Entdecken", "Settings"];
+      await hilfeAusloeser.click();
       await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
+      const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
+      const hilfePanel = hilfeDialog.locator(".kd-help-panel");
+      await expect(hilfeDialog.locator("article").first()).toBeVisible();
+      await expect(hilfeDialog).toHaveAttribute("aria-modal", "true");
+      await expect(hilfeDialog).toContainText("Anleitung & Hilfe");
+      for (const name of hilfeZielnamen) {
+        await expect(hilfeDialog).toContainText(new RegExp(`\\b${name}\\b`));
+      }
+      await expect(hilfeDialog).toContainText(/Sichtbare Auswahl löschen betrifft ausschließlich die aktuell sichtbare Schnittmenge der globalen Auswahl/);
+      const panelCss = await hilfePanel.evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect().width);
+        const oneColumn = Math.max(...articleRects) <= rect.width + 0.5;
+        return {
+          width: rect.width,
+          oneColumn,
+          total: el.scrollHeight > el.clientHeight,
+          overflowX: el.scrollWidth > el.clientWidth,
+          overflowXVisible: el.scrollWidth <= el.clientWidth,
+        };
+      });
+      expect(panelCss.width).toBeLessThanOrEqual(viewport.width + 0.5);
+      expect(panelCss.oneColumn).toBe(true);
+      expect(panelCss.overflowXVisible).toBe(true);
+      expect(panelCss.total).toBe(true);
+      const hilfeFocusables = hilfeDialog.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      await expect(hilfeFocusables.first()).toBeFocused();
+      const focusCount = await hilfeFocusables.count();
+      if (focusCount > 1) {
+        await hilfeFocusables.last().focus();
+        await page.keyboard.press("Tab");
+        await expect(hilfeFocusables.first()).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(hilfeFocusables.last()).toBeFocused();
+      } else {
+        await page.keyboard.press("Tab");
+        await expect(hilfeFocusables.first()).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(hilfeFocusables.first()).toBeFocused();
+      }
       await keineDokumentUeberbreite(page);
-      await page.getByRole("button", { name: "Schließen", exact: true }).click();
+      await page.keyboard.press("Escape");
+      await expect(hilfeDialog).toBeHidden();
+      await expect(hilfeAusloeser).toBeFocused();
+      await expect.poll(() => page.evaluate(() => ({
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        locked: document.body.classList.contains("kd-scroll-gesperrt"),
+      }))).toEqual({ overflow: "", position: "", locked: false });
+
+      await hilfeAusloeser.click();
+      await expect(hilfeDialog).toBeVisible();
+      await page.evaluate(() => {
+        const appRoot = document.getElementById("root");
+        if (appRoot) appRoot.style = appRoot.style;
+      });
+      await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+      await expect(hilfeDialog).toBeVisible();
+      await expect.poll(() => page.evaluate(() => ({
+        locked: document.body.classList.contains("kd-scroll-gesperrt"),
+        position: document.body.style.position,
+        overflow: document.body.style.overflow,
+      }))).toEqual({ locked: true, position: "fixed", overflow: "hidden" });
+      const scrim = hilfeDialog.locator(".kd-sheet-scrim");
+      await scrim.click();
+      await expect(hilfeDialog).toBeHidden();
+      await expect(hilfeAusloeser).toBeFocused();
       await expect.poll(() => page.evaluate(() => ({
         overflow: document.body.style.overflow,
         position: document.body.style.position,
@@ -1800,6 +1867,31 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await expect(settings).toHaveAttribute("aria-description", "Sicherung offen");
   await settings.click();
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
+
+  const ueber = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Über & Rechtliches$/ }) });
+  const ueberSummary = ueber.locator("summary");
+  await expect(ueberSummary).toBeVisible();
+  await ueberSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(ueber).toHaveAttribute("open", "");
+  const anleitungButton = page.getByRole("button", { name: /Anleitung & Hilfe öffnen/i });
+  await expect(anleitungButton).toBeVisible();
+  await anleitungButton.click();
+  const mobileDoku = page.locator(".kd-doku-hilfe");
+  await expect(mobileDoku).toBeVisible();
+  await expect(mobileDoku.locator('[role="dialog"]')).toHaveCount(0);
+  await expect(page.locator(".kd-help-layer")).toHaveCount(0);
+  const mobileDokuDetails = mobileDoku.locator("details.kd-doku-bereich");
+  await expect(mobileDokuDetails).toHaveCount(7);
+  const mobileDokuSummary = mobileDokuDetails.first().locator("summary");
+  await mobileDokuSummary.focus();
+  await page.keyboard.press("Enter");
+  await expect(mobileDokuDetails.first()).toHaveAttribute("open");
+  const ueberZu = page.getByRole("button", { name: /Anleitung zuklappen/i });
+  if (await ueberZu.count()) {
+    await ueberZu.click();
+    await expect(mobileDoku).toBeHidden();
+  }
 
   const backup = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Gesamt-Backup/ }) });
   await expect(backup).toHaveClass(/kd-klappe-markiert/);
