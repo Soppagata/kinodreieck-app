@@ -335,7 +335,7 @@ function StartDashboard({
         </Modul>
       </div>
       <footer className="kd-start-service">
-        <button onClick={onHilfe}>? Anleitung &amp; Hilfe</button>
+        <button onClick={(event) => { event.currentTarget.focus(); onHilfe(); }}>? Anleitung &amp; Hilfe</button>
         {!installation.datei && !installation.standalone && <a href={import.meta.env.BASE_URL + "download/"}>App installieren &amp; Einzeldatei</a>}
       </footer>
     </section>
