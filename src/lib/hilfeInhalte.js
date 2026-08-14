@@ -13,6 +13,7 @@
  *   titel: string,
  *   text: string,
  *   suchwoerter: readonly string[],
+ *   direkteSuchwoerter: readonly string[],
  *   bereichId: HilfeZiel,
  *   ziel: HilfeZiel,
  * }} HilfeAktion
@@ -26,7 +27,7 @@ const BEREICH_SCHLUESSEL = Object.freeze([
   "id", "titel", "kurztext", "details", "suchwoerter", "ziel",
 ]);
 const AKTION_SCHLUESSEL = Object.freeze([
-  "id", "titel", "text", "suchwoerter", "bereichId", "ziel",
+  "id", "titel", "text", "suchwoerter", "direkteSuchwoerter", "bereichId", "ziel",
 ]);
 const FALLBACK_SCHLUESSEL = Object.freeze([
   "id", "titel", "text", "bereichId", "ziel",
@@ -144,6 +145,7 @@ const AKTIONEN = [
     titel: "Schriftgröße ändern",
     text: "Öffne Settings → Darstellung & Verhalten → Schriftgröße.",
     suchwoerter: ["schrift", "schriftgröße", "schriftgroesse", "schrift größer", "schrift groesser", "textgröße", "textgroesse"],
+    direkteSuchwoerter: ["schriftgröße", "schriftgroesse"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -152,6 +154,7 @@ const AKTIONEN = [
     titel: "Darstellung ändern",
     text: "Öffne Settings → Darstellung & Verhalten → Erscheinung.",
     suchwoerter: ["darstellung ändern", "erscheinung", "erscheinung ändern", "theme", "theme ändern", "hell dunkel", "farben ändern"],
+    direkteSuchwoerter: ["darstellung ändern", "erscheinung ändern", "theme ändern"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -160,6 +163,7 @@ const AKTIONEN = [
     titel: "Konto verwalten",
     text: "Öffne Settings → Konto & Geräte-Sync.",
     suchwoerter: ["konto verwalten", "anmelden", "abmelden", "passwort", "geräte sync", "geraete sync"],
+    direkteSuchwoerter: ["konto verwalten", "geräte sync", "geraete sync"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -168,6 +172,7 @@ const AKTIONEN = [
     titel: "Daten sichern",
     text: "Öffne Settings → Gesamt-Backup.",
     suchwoerter: ["backup", "sicherung", "daten sichern", "gesamt backup", "backup erstellen", "sicherung erstellen", "wiederherstellen"],
+    direkteSuchwoerter: ["daten sichern", "gesamt backup", "backup erstellen", "sicherung erstellen"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -176,6 +181,7 @@ const AKTIONEN = [
     titel: "Streamingdienste wählen",
     text: "Öffne Settings → Streaming-Quellen.",
     suchwoerter: ["streamingdienst", "streamingdienste", "netflix", "prime", "streamingdienste wählen", "streamingdienste waehlen", "streaming quellen", "dienst auswählen", "dienst auswaehlen", "abo einstellen"],
+    direkteSuchwoerter: ["streamingdienste wählen", "streamingdienste waehlen", "streaming quellen", "dienst auswählen", "dienst auswaehlen", "abo einstellen"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -184,6 +190,7 @@ const AKTIONEN = [
     titel: "KI-Funktionen einstellen",
     text: "Öffne Settings → KI-Funktionen. Dort steuerst du die optionalen KI-Funktionen der App.",
     suchwoerter: ["ki funktionen", "ki einstellen", "prognose", "prognose einstellen", "filmwissen", "filmwissen einstellen", "deutung", "ki deutung"],
+    direkteSuchwoerter: ["ki funktionen", "ki einstellen", "prognose einstellen", "filmwissen einstellen", "ki deutung"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -192,6 +199,7 @@ const AKTIONEN = [
     titel: "Eigenes Suchvokabular",
     text: "Öffne Settings → KI-Vokabular.",
     suchwoerter: ["eigenes suchvokabular", "suchvokabular", "vokabular", "stimmung", "stimmungswort", "suchwort", "suchwort speichern"],
+    direkteSuchwoerter: ["eigenes suchvokabular", "suchvokabular", "suchwort speichern"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -200,6 +208,7 @@ const AKTIONEN = [
     titel: "Startbereich wählen",
     text: "Öffne Settings → Darstellung & Verhalten → Startbereich.",
     suchwoerter: ["startbereich", "startseite", "dashboard", "startbereich wählen", "startbereich waehlen", "startseite einstellen", "dashboard einstellen"],
+    direkteSuchwoerter: ["startbereich", "startbereich wählen", "startbereich waehlen", "startseite einstellen", "dashboard einstellen"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -208,6 +217,7 @@ const AKTIONEN = [
     titel: "Daten importieren",
     text: "Masterliste und vorgesehene Importe findest du in den zugehörigen Abschnitten der Settings.",
     suchwoerter: ["import", "masterliste", "programmdatei", "daten importieren", "masterliste importieren", "datei einlesen"],
+    direkteSuchwoerter: ["daten importieren", "masterliste importieren", "datei einlesen"],
     bereichId: "daten",
     ziel: "daten",
   },
@@ -216,6 +226,7 @@ const AKTIONEN = [
     titel: "Neuen Eintrag erstellen",
     text: "Öffne die Mediathek und wähle im passenden Typ + Eintrag hinzufügen.",
     suchwoerter: ["hinzufügen", "hinzufuegen", "neuen eintrag", "eintrag erstellen", "eintrag anlegen", "eintrag hinzufügen", "eintrag hinzufuegen", "film hinzufügen", "film hinzufuegen"],
+    direkteSuchwoerter: ["eintrag erstellen", "eintrag anlegen", "eintrag hinzufügen", "eintrag hinzufuegen", "film hinzufügen", "film hinzufuegen"],
     bereichId: "mediathek",
     ziel: "mediathek",
   },
@@ -224,6 +235,7 @@ const AKTIONEN = [
     titel: "Mediathek-Eintrag löschen",
     text: "Öffne den Eintrag in der Mediathek und wähle Eintrag löschen.",
     suchwoerter: ["löschen", "loeschen", "eintrag löschen", "eintrag loeschen", "eintrag entfernen", "film löschen", "film loeschen"],
+    direkteSuchwoerter: ["eintrag löschen", "eintrag loeschen", "eintrag entfernen", "film löschen", "film loeschen"],
     bereichId: "mediathek",
     ziel: "mediathek",
   },
@@ -232,6 +244,7 @@ const AKTIONEN = [
     titel: "Sichtbare Auswahl löschen",
     text: "Starte in der Mediathek den Auswahlmodus und wähle Sichtbare Auswahl löschen. Nur die beim Öffnen sichtbare Schnittmenge wird nach einer Folgenvorschau bestätigt gelöscht; verborgene Auswahl bleibt bestehen.",
     suchwoerter: ["sichtbare auswahl löschen", "sichtbare auswahl loeschen", "mehrere einträge löschen", "mehrere eintraege loeschen", "mehrfach löschen", "mehrfach loeschen"],
+    direkteSuchwoerter: ["sichtbare auswahl löschen", "sichtbare auswahl loeschen", "mehrere einträge löschen", "mehrere eintraege loeschen"],
     bereichId: "mediathek",
     ziel: "mediathek",
   },
@@ -240,6 +253,7 @@ const AKTIONEN = [
     titel: "Gesehen markieren",
     text: "Öffne Streaming → Entdecken und markiere den Titel dort als gesehen.",
     suchwoerter: ["gesehen", "erledigt", "gesehen markieren", "als gesehen", "erledigt markieren"],
+    direkteSuchwoerter: ["gesehen markieren", "erledigt markieren"],
     bereichId: "streaming",
     ziel: "streaming",
   },
@@ -311,6 +325,7 @@ export function validiereHilfeInhalte() {
   }
 
   const aktionsIds = new Set();
+  const direkteSuchwoerter = new Set();
   for (const [index, aktion] of AKTIONEN.entries()) {
     if (!istEinfachesObjekt(aktion)) throw new TypeError(`Aktion ${index}: erwartetes Objekt`);
     pruefeSchluessel(aktion, AKTION_SCHLUESSEL, `Aktion ${index}`);
@@ -318,6 +333,19 @@ export function validiereHilfeInhalte() {
     pruefeText(aktion.titel, `Aktion ${index}.titel`);
     pruefeText(aktion.text, `Aktion ${index}.text`);
     pruefeTextListe(aktion.suchwoerter, `Aktion ${index}.suchwoerter`, { normalisiert: true });
+    pruefeTextListe(aktion.direkteSuchwoerter, `Aktion ${index}.direkteSuchwoerter`, { normalisiert: true });
+    if (aktion.direkteSuchwoerter.length >= aktion.suchwoerter.length) {
+      throw new TypeError(`Aktion ${index}.direkteSuchwoerter: erwartete echte Teilmenge`);
+    }
+    for (const suchwort of aktion.direkteSuchwoerter) {
+      if (!aktion.suchwoerter.includes(suchwort)) {
+        throw new TypeError(`Aktion ${index}.direkteSuchwoerter: unbekannter Suchbegriff`);
+      }
+      if (direkteSuchwoerter.has(suchwort)) {
+        throw new TypeError(`Aktion ${index}.direkteSuchwoerter: Kollision zwischen Aktionen`);
+      }
+      direkteSuchwoerter.add(suchwort);
+    }
     if (aktionsIds.has(aktion.id) || !bereichIds.has(aktion.bereichId)
         || aktion.ziel !== aktion.bereichId) {
       throw new TypeError(`Aktion ${index}: ungültige ID oder Bereichs-/Zielreferenz`);
