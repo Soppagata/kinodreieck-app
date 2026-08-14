@@ -528,7 +528,30 @@ for (const viewport of VIEWPORTS) {
         overflow: document.body.style.overflow,
       }))).toEqual({ locked: true, position: "fixed", overflow: "hidden" });
       const scrim = hilfeDialog.locator(".kd-sheet-scrim");
-      await scrim.click();
+      const hilfeScrimClosePoint = await page.evaluate(() => {
+        const panel = document.querySelector(".kd-help-panel");
+        const layerScrim = document.querySelector(".kd-sheet-scrim");
+        if (!panel || !layerScrim) return null;
+        const panelRect = panel.getBoundingClientRect();
+        const scrimRect = layerScrim.getBoundingClientRect();
+        const candidates = [
+          { x: scrimRect.left + 4, y: scrimRect.top + 4 },
+          { x: scrimRect.right - 4, y: scrimRect.top + 4 },
+          { x: scrimRect.left + 4, y: scrimRect.bottom - 4 },
+          { x: scrimRect.right - 4, y: scrimRect.bottom - 4 },
+          { x: panelRect.left - 4, y: panelRect.top + 4 },
+          { x: panelRect.right + 4, y: panelRect.top + 4 },
+          { x: panelRect.left - 4, y: panelRect.bottom - 4 },
+          { x: panelRect.right + 4, y: panelRect.bottom - 4 },
+        ];
+        const liegtImScrim = (punkt) => punkt.x >= scrimRect.left && punkt.x <= scrimRect.right
+          && punkt.y >= scrimRect.top && punkt.y <= scrimRect.bottom;
+        const außerhalbPanel = (punkt) => punkt.x <= panelRect.left || punkt.x >= panelRect.right
+          || punkt.y <= panelRect.top || punkt.y >= panelRect.bottom;
+        return candidates.find((punkt) => liegtImScrim(punkt) && außerhalbPanel(punkt)) || null;
+      });
+      expect(hilfeScrimClosePoint).toBeTruthy();
+      await page.mouse.click(hilfeScrimClosePoint.x, hilfeScrimClosePoint.y);
       await expect(hilfeDialog).toBeHidden();
       await expect(hilfeAusloeser).toBeFocused();
       await expect.poll(() => page.evaluate(() => ({
