@@ -749,7 +749,7 @@ check("Dialog bindet exakten Titel/Jahr-Snapshot und genaue Folgen",
   && previewDialog.textContent.includes("1 Must-Watch-Masterlink wird gelöst"));
 check("Verborgene Auswahl wird ausdrücklich ausgeschlossen",
   previewDialog.textContent.includes("1 weiterer verborgener ausgewählter Eintrag ist")
-  && previewDialog.textContent.includes("nicht Ziel und werden nicht gelöscht"));
+  && previewDialog.textContent.includes("nicht Ziel und wird nicht gelöscht"));
 check("Dialog nennt die erhaltenen Datensätze und E12-Grenze",
   previewDialog.textContent.includes("Artikel und Must-Watch-Einträge bleiben bestehen")
   && previewDialog.textContent.includes("Master, Artikelverweise und Must-Watch-Masterlinks"));

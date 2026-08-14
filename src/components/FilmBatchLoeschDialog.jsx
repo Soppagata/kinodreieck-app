@@ -95,7 +95,8 @@ export function FilmBatchLoeschDialog({ dialog, onAbbrechen, onBestaetigen }) {
         {snapshot.verborgeneAnzahl > 0 && (
           <p className="kd-film-batch-verborgen">
             {anzahlText(snapshot.verborgeneAnzahl, "weiterer verborgener ausgewählter Eintrag ist", "weitere verborgene ausgewählte Einträge sind")}
-            {" "}<strong>nicht Ziel und werden nicht gelöscht.</strong>
+            {" "}
+            <strong>nicht Ziel und {snapshot.verborgeneAnzahl === 1 ? "wird" : "werden"} nicht gelöscht.</strong>
           </p>
         )}
         {pending && <p className="kd-film-batch-pending" role="status">Löschung läuft … Bitte warten.</p>}
