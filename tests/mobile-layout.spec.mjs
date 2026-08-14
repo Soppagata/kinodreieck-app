@@ -2453,6 +2453,6 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   await expect(abbrechenNachEscape).toBeInViewport();
   await expect(bestaetigenNachEscape).toBeInViewport();
   await expect(page.getByText(`${visibleCount + hiddenCount} ausgewählt · ${visibleCount} sichtbar`, { exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: /^Film 01 - Langstreckentest .* auswählen$/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator('[data-film-id="film-1"] [role="checkbox"]')).toHaveAttribute("aria-checked", "true");
   await keineDokumentUeberbreite(page);
 });
