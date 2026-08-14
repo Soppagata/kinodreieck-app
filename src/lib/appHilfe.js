@@ -61,6 +61,17 @@ function restVorEndwort(text, wort) {
   return text.endsWith(` ${wort}`) ? text.slice(0, -(wort.length + 1)) : null;
 }
 
+function intentVarianten(gegenstand, zusaetzlicheVarianten = []) {
+  const varianten = [{ text: gegenstand, huellwoerter: [] }, ...zusaetzlicheVarianten];
+  const gesehen = new Set();
+  return varianten.filter((variante) => {
+    const schluessel = `${variante.text}\u0000${[...variante.huellwoerter].sort().join(" ")}`;
+    if (gesehen.has(schluessel)) return false;
+    gesehen.add(schluessel);
+    return true;
+  });
+}
+
 function entfernePhrase(text, phrase) {
   if (text === phrase) return "";
   if (text.startsWith(`${phrase} `)) return text.slice(phrase.length + 1);
@@ -96,26 +107,45 @@ function erkenneHilfeIntent(text) {
   for (const form of EINSTELLUNGS_FRAGEN) {
     const rest = restNachStartPhrase(text, form.phrase);
     if (rest === null) continue;
-    const gegenstand = restVorEndwort(rest, form.endwort);
+    const objekt = restVorEndwort(rest, form.endwort);
+    const zusaetzlicheVarianten = objekt === null ? [] : [{
+      text: `${objekt} einstellen`.trim(),
+      huellwoerter: ["einstellen"],
+    }];
     return {
       art: "einstellung", phrase: form.phrase, rest,
-      gegenstand: gegenstand === null ? rest : gegenstand,
-      stark: gegenstand !== null,
+      gegenstand: rest,
+      gegenstandsVarianten: intentVarianten(rest, zusaetzlicheVarianten),
+      stark: objekt !== null,
     };
   }
   for (const form of HANDLUNGS_INTENT) {
     const rest = restNachStartPhrase(text, form.phrase);
     if (rest === null) continue;
-    let gegenstand = rest;
     let stark = form.stark;
+    const zusaetzlicheVarianten = [];
+    const huellwoerter = [];
+    if (form.stark) {
+      const endverb = form.phrase.includes("aendere") ? "aendern" : "ändern";
+      zusaetzlicheVarianten.push({
+        text: `${rest} ${endverb}`.trim(),
+        huellwoerter: [endverb],
+      });
+    }
     if (!stark) {
       const endwort = rest.split(" ").at(-1);
       if (HANDLUNGS_ENDVERBEN.has(endwort)) {
-        gegenstand = restVorEndwort(rest, endwort);
         stark = true;
+        huellwoerter.push(endwort);
       }
     }
-    return { art: "handlung", phrase: form.phrase, rest, gegenstand, stark };
+    return {
+      art: "handlung", phrase: form.phrase, rest, gegenstand: rest, stark,
+      gegenstandsVarianten: intentVarianten(rest, [
+        { text: rest, huellwoerter },
+        ...zusaetzlicheVarianten,
+      ]),
+    };
   }
   for (const phrase of ERKLAERUNGS_INTENT) {
     const rest = restNachStartPhrase(text, phrase);
@@ -149,9 +179,10 @@ function istPossessivDeterminer(wort) {
     || /^(?:euer|eur(?:e|en|em|er|es))$/u.test(wort);
 }
 
-function istNurHuelle(text) {
+function istNurHuelle(text, zusaetzlicheHuellwoerter = []) {
+  const huellwoerter = new Set([...HILFE_GEGENSTAND_HUELLE, ...zusaetzlicheHuellwoerter]);
   return !text || text.split(" ").every((wort) => HILFE_GEGENSTAND_HUELLE.has(wort)
-    || istPossessivDeterminer(wort));
+    || huellwoerter.has(wort) || istPossessivDeterminer(wort));
 }
 
 function aktionsSuchphrasen(aktion) {
@@ -172,7 +203,39 @@ function aktionsSuchphrasen(aktion) {
   return [...phrasen.values()].sort((a, b) => b.phrase.length - a.phrase.length);
 }
 
-function analysiereGegenstand(text, inhalt, { aktion = false } = {}) {
+const AKTIONS_SIGNALPHRASEN = Object.freeze(HILFE_AKTIONEN.flatMap((aktion) =>
+  aktionsSuchphrasen(aktion).map(({ phrase }) => Object.freeze({
+    aktionsId: aktion.id,
+    tokens: Object.freeze(phrase.split(" ").filter(Boolean)),
+  }))));
+
+function hatMehrereAktionssignale(text) {
+  const tokens = text.split(" ").filter(Boolean);
+  const signale = [];
+  for (const signalphrase of AKTIONS_SIGNALPHRASEN) {
+    const laenge = signalphrase.tokens.length;
+    if (!laenge || laenge > tokens.length) continue;
+    for (let start = 0; start <= tokens.length - laenge; start += 1) {
+      if (!signalphrase.tokens.every((token, index) => token === tokens[start + index])) continue;
+      signale.push({
+        aktionsId: signalphrase.aktionsId,
+        start,
+        ende: start + laenge,
+      });
+    }
+  }
+  const verbleibend = signale.filter((signal) => !signale.some((anderes) =>
+    anderes.aktionsId !== signal.aktionsId
+      && anderes.start <= signal.start
+      && anderes.ende >= signal.ende
+      && (anderes.start < signal.start || anderes.ende > signal.ende)));
+  return new Set(verbleibend.map((signal) => signal.aktionsId)).size > 1;
+}
+
+function analysiereGegenstand(text, inhalt, {
+  aktion = false,
+  huellwoerter = [],
+} = {}) {
   const suchphrasen = aktion
     ? aktionsSuchphrasen(inhalt)
     : [...inhalt.suchwoerter]
@@ -194,7 +257,7 @@ function analysiereGegenstand(text, inhalt, { aktion = false } = {}) {
       rest = ohneZielkontext.rest;
       aktionsKontext ||= ohneZielkontext.entfernt;
     }
-    if (istNurHuelle(rest)) {
+    if (istNurHuelle(rest, huellwoerter)) {
       return {
         suchwort,
         direkt: !!inhalt.direkteSuchwoerter?.includes(suchwort),
@@ -219,13 +282,16 @@ function werteTreffer(text, suchwoerter) {
   };
 }
 
-function vergleicheKandidaten(a, b) {
+function vergleicheFachlich(a, b) {
   return b.rang - a.rang
     || b.wertung.exakt - a.wertung.exakt
     || b.wertung.spezifitaet - a.wertung.spezifitaet
     || b.wertung.signale - a.wertung.signale
-    || b.wertung.laenge - a.wertung.laenge
-    || a.quellIndex - b.quellIndex;
+    || b.wertung.laenge - a.wertung.laenge;
+}
+
+function vergleicheKandidaten(a, b) {
+  return vergleicheFachlich(a, b) || a.quellIndex - b.quellIndex;
 }
 
 function aktionsRang(intent, analyse, aktion) {
@@ -246,7 +312,8 @@ function aktionsRang(intent, analyse, aktion) {
 function istMehrdeutigeAktionsspitze(kandidaten, treffer) {
   if (treffer?.art !== "aktion") return false;
   const ids = new Set(kandidaten
-    .filter((kandidat) => kandidat.art === "aktion" && kandidat.rang === treffer.rang)
+    .filter((kandidat) => kandidat.art === "aktion"
+      && vergleicheFachlich(kandidat, treffer) === 0)
     .map((kandidat) => kandidat.inhalt.id));
   return ids.size > 1;
 }
@@ -269,30 +336,54 @@ export function appHilfeAntwort(frage) {
   if (!text) return null;
   const intent = erkenneHilfeIntent(text);
   const gegenstand = intent?.gegenstand || text;
+  const varianten = intent?.gegenstandsVarianten || [{ text: gegenstand, huellwoerter: [] }];
+  if (hatMehrereAktionssignale(gegenstand)) return null;
   const kandidaten = [];
 
   for (const [quellIndex, aktion] of HILFE_AKTIONEN.entries()) {
-    const analyse = intent
-      ? analysiereGegenstand(gegenstand, aktion, { aktion: true })
-      : (aktion.direkteSuchwoerter.includes(text) ? { direkt: true, aktionsKontext: false } : null);
-    if (!analyse) continue;
-    const rang = aktionsRang(intent, analyse, aktion);
-    if (rang === null) continue;
-    const wertung = werteTreffer(gegenstand, aktion.suchwoerter);
-    if (!wertung) continue;
-    kandidaten.push({
-      art: "aktion", inhalt: aktion, wertung, rang, quellIndex,
-    });
+    let besterKandidat = null;
+    for (const variante of varianten) {
+      const analyse = intent
+        ? analysiereGegenstand(variante.text, aktion, {
+          aktion: true,
+          huellwoerter: variante.huellwoerter,
+        })
+        : (aktion.direkteSuchwoerter.includes(text)
+          ? { direkt: true, aktionsKontext: false }
+          : null);
+      if (!analyse) continue;
+      const rang = aktionsRang(intent, analyse, aktion);
+      if (rang === null) continue;
+      const wertung = werteTreffer(variante.text, aktion.suchwoerter);
+      if (!wertung) continue;
+      const kandidat = {
+        art: "aktion", inhalt: aktion, wertung, rang, quellIndex,
+      };
+      if (!besterKandidat || vergleicheFachlich(kandidat, besterKandidat) < 0) {
+        besterKandidat = kandidat;
+      }
+    }
+    if (besterKandidat) kandidaten.push(besterKandidat);
   }
   if (intent) {
     const versatz = HILFE_AKTIONEN.length;
     for (const [index, bereich] of HILFE_BEREICHE.entries()) {
-      const analyse = analysiereGegenstand(gegenstand, bereich);
-      const wertung = analyse && werteTreffer(gegenstand, bereich.suchwoerter);
-      if (!wertung) continue;
-      kandidaten.push({
-        art: "bereich", inhalt: bereich, wertung, rang: 2, quellIndex: versatz + index,
-      });
+      let besterKandidat = null;
+      for (const variante of varianten) {
+        const analyse = analysiereGegenstand(variante.text, bereich, {
+          huellwoerter: variante.huellwoerter,
+        });
+        const wertung = analyse && werteTreffer(variante.text, bereich.suchwoerter);
+        if (!wertung) continue;
+        const kandidat = {
+          art: "bereich", inhalt: bereich, wertung, rang: 2,
+          quellIndex: versatz + index,
+        };
+        if (!besterKandidat || vergleicheFachlich(kandidat, besterKandidat) < 0) {
+          besterKandidat = kandidat;
+        }
+      }
+      if (besterKandidat) kandidaten.push(besterKandidat);
     }
   }
 
