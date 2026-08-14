@@ -18,6 +18,7 @@ const STANDARD = Object.freeze({
   accountSelfServiceEndpointName: "account-self-service",
   privateSelfServiceEnabled: false,
   accountDeleteEnabled: false,
+  radarPilotClientEnabled: false,
   buildVersion: "dev",
   schemaVersion: RUNTIME_SCHEMA_VERSION,
 });
@@ -41,6 +42,7 @@ export function createRuntimeConfig(env = {}) {
     accountSelfServiceEndpointName: selfServiceWert ? endpoint(selfServiceWert) : STANDARD.accountSelfServiceEndpointName,
     privateSelfServiceEnabled: text(env.VITE_PRIVATE_SELF_SERVICE_ENABLED) === "true",
     accountDeleteEnabled: text(env.VITE_ACCOUNT_DELETE_ENABLED) === "true",
+    radarPilotClientEnabled: text(env.VITE_RADAR_PILOT_CLIENT_ENABLED) === "true",
     buildVersion: text(env.VITE_BUILD_VERSION) || STANDARD.buildVersion,
     schemaVersion: RUNTIME_SCHEMA_VERSION,
   });

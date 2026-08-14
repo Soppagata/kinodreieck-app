@@ -44,11 +44,20 @@ check("Runtime-Konfiguration enthält den vollständigen öffentlichen Vertrag",
   && config.supabaseUrl === "https://projekt.supabase.co"
   && config.supabasePublishableKey === "sb_publishable_test"
   && config.aiEndpointName === "ai-v1"
+  && config.radarPilotClientEnabled === false
   && config.buildVersion === "abc123"
   && config.schemaVersion === RUNTIME_SCHEMA_VERSION);
 check("Runtime-Konfiguration ist unveränderlich", Object.isFrozen(config));
 check("Runtime-Konfiguration enthält keine geheimen Vertragsfelder",
   !Object.keys(config).some((key) => /secret|service.?role|provider.?key|sync.?key|token/i.test(key)));
+const radarMissing = createRuntimeConfig({});
+check("Radar-Pilot-Flag bleibt bei fehlendem Wert false", radarMissing.radarPilotClientEnabled === false);
+const radarFalse = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "false" });
+check("Radar-Pilot-Flag bleibt bei false false", radarFalse.radarPilotClientEnabled === false);
+const radarWhitespace = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "TRUE" });
+check("Radar-Pilot-Flag bleibt bei abweichendem Wert false", radarWhitespace.radarPilotClientEnabled === false);
+const radarTrue = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "true" });
+check("Radar-Pilot-Flag wird nur bei exakt 'true' true", radarTrue.radarPilotClientEnabled === true);
 check("Leere Runtime-Werte bleiben sicher und lokal funktionsfähig",
   createRuntimeConfig({}).appEnvironment === APP_ENVIRONMENTS.LOCAL
   && createRuntimeConfig({}).supabaseUrl === ""
