@@ -2094,7 +2094,10 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await ueberSummary.focus();
   await page.keyboard.press("Enter");
   await expect(ueber).toHaveAttribute("open", "");
-  const anleitungButton = page.getByRole("button", { name: /Anleitung & Hilfe öffnen/i });
+  const ueberKinodreieckButton = ueber.getByRole("button", { name: "Über Kinodreieck & Anleitung", exact: true });
+  await expect(ueberKinodreieckButton).toBeVisible();
+  await ueberKinodreieckButton.click();
+  const anleitungButton = ueber.getByRole("button", { name: /Anleitung & Hilfe öffnen/i, exact: true });
   await expect(anleitungButton).toBeVisible();
   await anleitungButton.click();
   const mobileDoku = page.locator(".kd-doku-hilfe");
@@ -2107,7 +2110,7 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await mobileDokuSummary.focus();
   await page.keyboard.press("Enter");
   await expect(mobileDokuDetails.first()).toHaveAttribute("open");
-  const ueberZu = page.getByRole("button", { name: /Anleitung zuklappen/i });
+  const ueberZu = mobileDoku.getByRole("button", { name: "Anleitung zuklappen", exact: true });
   if (await ueberZu.count()) {
     await ueberZu.click();
     await expect(mobileDoku).toBeHidden();
