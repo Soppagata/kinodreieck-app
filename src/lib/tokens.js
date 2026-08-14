@@ -132,7 +132,7 @@ export function setzeTheme(name) {
 export const btnStyle = (primary) => ({
   fontFamily: "'Barlow Condensed', sans-serif",
   fontWeight: 600,
-  fontSize: 16,
+  fontSize: "calc(16px * var(--kd-schriftfaktor, 1))",
   letterSpacing: "0.06em",
   textTransform: "uppercase",
   padding: "10px 18px",
@@ -150,7 +150,7 @@ export const inputStyle = {
   get color() { return T.leinwand; },
   padding: "9px 12px",
   fontFamily: "'Space Grotesk', sans-serif",
-  fontSize: 14,
+  fontSize: "calc(14px * var(--kd-schriftfaktor, 1))",
 };
 
 export const lightInput = {
@@ -160,5 +160,5 @@ export const lightInput = {
   get color() { return T.tinte; },
   padding: "6px 10px",
   fontFamily: "'Space Mono', monospace",
-  fontSize: 13,
+  fontSize: "calc(13px * var(--kd-schriftfaktor, 1))",
 };

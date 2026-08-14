@@ -113,6 +113,8 @@ import { seriesWatchService } from "./services/seriesWatch.js";
 const normalisiereEntdeckenStatus = (wert) => (
   wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
 );
+const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
+const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
@@ -251,9 +253,20 @@ export default function App() {
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
   const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
+  const effektiveSchrift = normalisiereSchrift(einstellungen.schrift);
+  useEffect(() => {
+    const root = document.documentElement;
+    const vorher = root.getAttribute("data-kd-schrift");
+    root.dataset.kdSchrift = effektiveSchrift;
+    return () => {
+      if (root.dataset.kdSchrift !== effektiveSchrift) return;
+      if (vorher == null) delete root.dataset.kdSchrift;
+      else root.dataset.kdSchrift = vorher;
+    };
+  }, [effektiveSchrift]);
   const [neonEintrittSerial, setNeonEintrittSerial] = useState(0);
   const bereinigteEinstellungen = useCallback((wert) => {
-    const next = { ...wert };
+    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift) };
     delete next.linkshaender;
     return next;
   }, []);
@@ -673,8 +686,10 @@ export default function App() {
           const roh = JSON.parse(r.value);
           const hatteVeralteteEinstellung = Object.prototype.hasOwnProperty.call(roh, "linkshaender")
             || Object.prototype.hasOwnProperty.call(roh, "kurosawa")
-            || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus);
-          const e = { theme: "dunkel", startTab: "start", schrift: "normal", modus: "", ...roh };
+            || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus)
+            || normalisiereSchrift(roh.schrift) !== roh.schrift;
+          const e = { theme: "dunkel", startTab: "start", modus: "", ...roh,
+            schrift: normalisiereSchrift(roh.schrift) };
           delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
           if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen
@@ -1886,7 +1901,7 @@ export default function App() {
     <div style={wrap}
       data-kd-effect={deepSpaceSichtbar ? "deep-space-horror" : undefined}
       data-kd-deep-space-test={deepSpaceTestmodusAktiv ? "aktiv" : undefined}
-      className={"kd-wrap kd-schrift-" + (einstellungen.schrift || "normal")
+      className={"kd-wrap kd-schrift-" + effektiveSchrift
         + (einstellungen.modus === "showa" ? " kd-showa" : einstellungen.modus === "neon-noir" || deepSpaceTestmodusAktiv ? " kd-neon-noir" : "")
         + (deepSpaceSichtbar ? " kd-deep-space-horror" : "")}>
       <ModusFx modus={effektiverModus} deepSpaceTest={deepSpaceTestmodusAktiv} />
@@ -1923,7 +1938,7 @@ export default function App() {
       <header style={{ padding: "26px 22px 12px", maxWidth: 860, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Logo size={34} />
-          <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 34, letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
+          <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: "calc(34px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.1em", margin: 0, textTransform: "uppercase" }}>
             Kinodreieck
           </h1>
           <div className="kd-syncchip-head" style={{ marginLeft: "auto" }}><SyncStatusChip /></div>
@@ -1938,7 +1953,7 @@ export default function App() {
               aria-description={id === "daten" && sicherungOffen ? "Sicherung offen" : undefined}
               onClick={() => id === "daten" && sicherungOffen ? oeffneSicherung() : navigiere(id)}
               style={{
-                fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 17,
+                fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(17px * var(--kd-schriftfaktor, 1))",
                 letterSpacing: "0.08em", textTransform: "uppercase",
                 padding: "8px 16px", border: "none", cursor: "pointer", borderRadius: "4px 4px 0 0",
                 background: tab === id ? T.leinwand : "transparent",
@@ -1960,7 +1975,7 @@ export default function App() {
         <GlobalErrorQueue errors={errors} onDismiss={dismissError} />
 
         {bootDone && loading === "programm" && !progStand && (
-          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: 14, color: T.leinwandTief, lineHeight: 1.6 }}>
+          <div style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 6, padding: "10px 14px", marginBottom: 16, fontSize: "calc(14px * var(--kd-schriftfaktor, 1))", color: T.leinwandTief, lineHeight: 1.6 }}>
             <strong style={{ color: T.wolfram }}>Erststart —</strong> Kinoprogramm und Streaming-Kataloge werden frisch geladen.
             Das kann einen Moment dauern; bitte nicht abbrechen. Die App füllt sich, sobald die Daten da sind.
           </div>

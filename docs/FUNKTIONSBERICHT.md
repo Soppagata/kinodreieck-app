@@ -734,8 +734,11 @@ Artikelimport hier bleibt dagegen ein vollständiger Ersatz des Artikelbestands.
 
 **Erscheinung:** `Saal` ist dunkel, `Foyer` hell.
 
-**Schriftgröße:** klein, normal oder groß. Die Einstellung skaliert die ganze
-App.
+**Schriftgröße:** klein, normal oder groß. Die Einstellung ändert echte
+Schriftgrößen auf den repräsentativen Kernflächen der App – unter anderem
+Titel, Navigation, Bereichsköpfe, gewöhnliche Eingaben und Buttons, gemeinsame
+Umschalter, mobile Suche und Hilfe. Einzelne spezialisierte oder dekorative
+Flächen behalten vorerst ihre feste Gestaltung.
 
 **Startbereich:** bestimmt, welcher Bereich nach einem normalen Start geöffnet
 wird.

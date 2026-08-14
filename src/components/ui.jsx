@@ -64,7 +64,7 @@ export function Chip({ active, onClick, children, color, title }) {
       title={title}
       style={{
         fontFamily: "'Space Mono', monospace",
-        fontSize: 12,
+        fontSize: "calc(12px * var(--kd-schriftfaktor, 1))",
         padding: "5px 10px",
         borderRadius: 999,
         border: "1px solid " + (active ? aktiveFarbe : T.rauch),
@@ -101,7 +101,7 @@ export function SegmentedControl({ options, value, onChange, dataTour, style, cl
       {options.map((o) => (
         <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={value === o.id}
           style={{
-            fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 15,
+            fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(15px * var(--kd-schriftfaktor, 1))",
             letterSpacing: "0.06em", textTransform: "uppercase", padding: "7px 14px",
             border: "1px solid " + (value === o.id ? T.wolfram : T.rauch), borderRadius: 4, cursor: "pointer",
             background: value === o.id ? T.wolfram : "transparent", color: value === o.id ? T.tinte : T.rauch,
@@ -121,7 +121,7 @@ export function Klappe({ titel, offen = false, tour, id, markiert = false, statu
   return (
     <details id={id} className={"kd-klappe" + (markiert ? " kd-klappe-markiert" : "")}
       open={offen || undefined} data-tour={tour}>
-      <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: 18, letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, padding: "6px 0" }}>
+      <summary style={{ cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 600, fontSize: "calc(18px * var(--kd-schriftfaktor, 1))", letterSpacing: "0.06em", textTransform: "uppercase", color: T.wolfram, padding: "6px 0" }}>
         {titel}
         {status && <span className="kd-klappe-status">{status}</span>}
       </summary>

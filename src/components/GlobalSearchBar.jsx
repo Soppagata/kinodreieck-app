@@ -1,9 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  berechneSuchleistenGeometrie,
+  istNeutraleViewportSkalierung,
+  klassifiziereBildschirmtastatur,
+  MIN_TASTATUR_HOEHENVERLUST,
+} from "../lib/visualViewport.js";
 
 const LABELS = Object.freeze({
   start: "Alles", kino: "Kino", mediathek: "Mediathek", streaming: "Streaming",
   blog: "Entdecken", finder: "Alles", daten: "Settings",
 });
+
+const VIEWPORT_STYLE_VARIABLEN = [
+  "--kd-suche-viewport-shift",
+  "--kd-suche-viewport-left",
+  "--kd-suche-viewport-width",
+  "--kd-suche-ergebnis-maxhoehe",
+];
+
+const raeumeViewportPosition = (form) => {
+  if (!form) return;
+  form.classList.remove("tastatur-offen");
+  for (const name of VIEWPORT_STYLE_VARIABLEN) form.style.removeProperty(name);
+};
 
 export function GlobalSearchBar({
   bereich, onSuchen, antwort, onAntwortSchliessen, onTreffer, onAlleErgebnisse,
@@ -14,6 +33,8 @@ export function GlobalSearchBar({
   const formRef = useRef(null);
   const eingabeRef = useRef(null);
   const dialogRef = useRef(null);
+  const viewportCleanupRef = useRef(() => {});
+  const viewportUpdateRef = useRef(() => {});
   const beobachtet = new Set((beobachteteIds || []).map(String));
   const imRadar = new Set((radarTargetIds || []).map(String));
   const absenden = async (event) => {
@@ -25,14 +46,19 @@ export function GlobalSearchBar({
     finally { setLaeuft(false); }
   };
   const schliesseAntwort = () => {
+    viewportCleanupRef.current();
     onAntwortSchliessen?.();
-    requestAnimationFrame(() => eingabeRef.current?.focus());
+    requestAnimationFrame(() => {
+      eingabeRef.current?.focus();
+      viewportUpdateRef.current();
+    });
   };
   useEffect(() => {
     if (!antwort) return undefined;
     const frame = requestAnimationFrame(() => {
       if (document.activeElement === eingabeRef.current) return;
       const ersterTreffer = dialogRef.current?.querySelector("[data-globaler-suchtreffer], .kd-globalsuche-alle");
+      viewportCleanupRef.current();
       ersterTreffer?.focus?.();
     });
     const taste = (event) => {
@@ -53,28 +79,75 @@ export function GlobalSearchBar({
     const eingabe = eingabeRef.current;
     if (!viewport || !form || !eingabe) return undefined;
     let frame = 0;
-    let basisHoehe = Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height);
+    let basis = {
+      height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
+      width: viewport.width,
+    };
+    const raeume = () => raeumeViewportPosition(form);
+    const raeumeGeplantePosition = () => {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      raeume();
+    };
+    viewportCleanupRef.current = raeumeGeplantePosition;
     const aktualisiere = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        const fokus = document.activeElement === eingabe;
-        if (!fokus) basisHoehe = Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height);
-        const tastaturOffen = fokus && basisHoehe - viewport.height > 120;
-        form.classList.toggle("tastatur-offen", tastaturOffen);
-        if (tastaturOffen) {
-          /* iOS lässt `position:fixed; bottom:…` bei offener Tastatur teils am
-             Layout-Viewport hängen. Die Verschiebung wird deshalb aus der
-             tatsächlich gerenderten Unterkante berechnet und an die absolute
-             Unterkante des Visual Viewports gebunden. Das bleibt auch beim
-             Panning/Scrollen stabil und funktioniert ebenso in Browsern, die
-             Fixed-Elemente bereits selbst über der Tastatur halten. */
-          form.style.setProperty("--kd-suche-viewport-shift", "0px");
-          const basisUnterkante = form.getBoundingClientRect().bottom;
-          const zielUnterkante = viewport.offsetTop + viewport.height - 8;
-          form.style.setProperty("--kd-suche-viewport-shift", `${zielUnterkante - basisUnterkante}px`);
-        } else form.style.removeProperty("--kd-suche-viewport-shift");
+        const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
+        const editierbarerFokus = document.activeElement === eingabe
+          && !eingabe.disabled && !eingabe.readOnly;
+        const neutraleSkalierung = istNeutraleViewportSkalierung(viewport.scale);
+        const breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
+        const volleGeometrie = Math.abs(layoutHeight - viewport.height) <= MIN_TASTATUR_HOEHENVERLUST;
+
+        if (neutraleSkalierung && (!editierbarerFokus || breiteGeaendert || volleGeometrie)) {
+          basis = {
+            height: Math.max(layoutHeight, viewport.height),
+            width: viewport.width,
+          };
+        }
+
+        const tastaturOffen = !breiteGeaendert && klassifiziereBildschirmtastatur({
+          editierbarerFokus,
+          scale: viewport.scale,
+          height: viewport.height,
+          width: viewport.width,
+          layoutHeight,
+          basisHeight: basis.height,
+          basisWidth: basis.width,
+        });
+        if (!tastaturOffen) {
+          raeume();
+          return;
+        }
+
+        const vorab = berechneSuchleistenGeometrie({
+          height: viewport.height,
+          width: viewport.width,
+          offsetTop: viewport.offsetTop,
+          offsetLeft: viewport.offsetLeft,
+          basisUnterkante: 0,
+          suchleistenHoehe: 0,
+        });
+        form.style.setProperty("--kd-suche-viewport-left", `${vorab.links}px`);
+        form.style.setProperty("--kd-suche-viewport-width", `${vorab.breite}px`);
+        form.style.setProperty("--kd-suche-viewport-shift", "0px");
+        form.classList.add("tastatur-offen");
+
+        const rect = form.getBoundingClientRect();
+        const geometrie = berechneSuchleistenGeometrie({
+          height: viewport.height,
+          width: viewport.width,
+          offsetTop: viewport.offsetTop,
+          offsetLeft: viewport.offsetLeft,
+          basisUnterkante: rect.bottom,
+          suchleistenHoehe: rect.height,
+        });
+        form.style.setProperty("--kd-suche-viewport-shift", `${geometrie.shiftY}px`);
+        form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
       });
     };
+    viewportUpdateRef.current = aktualisiere;
     viewport.addEventListener("resize", aktualisiere);
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
@@ -90,6 +163,9 @@ export function GlobalSearchBar({
       window.removeEventListener("scroll", aktualisiere);
       eingabe.removeEventListener("focus", aktualisiere);
       eingabe.removeEventListener("blur", aktualisiere);
+      raeume();
+      if (viewportCleanupRef.current === raeumeGeplantePosition) viewportCleanupRef.current = () => {};
+      if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};
     };
   }, []);
 
