@@ -1,32 +1,100 @@
-const EINTRAEGE = Object.freeze([
-  { woerter: ["schrift", "schriftgröße", "schriftgroesse", "größer", "groesser"], titel: "Schriftgröße ändern", text: "Öffne Settings → Darstellung & Verhalten → Schriftgröße.", ziel: "daten" },
-  { woerter: ["theme", "hell", "dunkel", "erscheinung", "farbe"], titel: "Darstellung ändern", text: "Öffne Settings → Darstellung & Verhalten → Erscheinung.", ziel: "daten" },
-  { woerter: ["konto", "anmelden", "abmelden", "passwort", "sync"], titel: "Konto verwalten", text: "Öffne Settings → Konto & Geräte-Sync.", ziel: "daten" },
-  { woerter: ["backup", "sicherung", "wiederherstellen", "export"], titel: "Daten sichern", text: "Öffne Settings → Gesamt-Backup.", ziel: "daten" },
-  { woerter: ["streamingdienst", "streamingdienste", "abo", "netflix", "prime"], titel: "Streamingdienste wählen", text: "Öffne Settings → Streaming-Quellen.", ziel: "daten" },
-  { woerter: ["ki", "prognose", "filmwissen", "deutung"], titel: "KI-Funktionen einstellen", text: "Öffne Settings → KI-Funktionen. Prognosen selbst findest du am geöffneten unbewerteten Mediathek-Eintrag.", ziel: "daten" },
-  { woerter: ["vokabular", "stimmung", "suchwort"], titel: "Eigenes Suchvokabular", text: "Öffne Settings → KI-Vokabular.", ziel: "daten" },
-  { woerter: ["startbereich", "startseite", "dashboard"], titel: "Startbereich wählen", text: "Öffne Settings → Darstellung & Verhalten → Startbereich.", ziel: "daten" },
-  { woerter: ["import", "masterliste", "programmdatei"], titel: "Daten importieren", text: "Masterliste und Notfall-Importe findest du in Settings → Masterliste beziehungsweise Erweitert.", ziel: "daten" },
-  { woerter: ["neuen eintrag", "eintrag erstellen", "eintrag anlegen", "hinzufügen", "hinzufuegen"], titel: "Neuen Eintrag erstellen", text: "Öffne die Mediathek und tippe auf „+ Eintrag hinzufügen“. Dort kannst du Film oder Serie samt Quelle erfassen; technische Filmkennungen brauchst du dafür nicht.", ziel: "mediathek" },
-  { woerter: ["löschen", "loeschen", "eintrag entfernen"], titel: "Mediathek-Eintrag löschen", text: "Öffne den Eintrag in der Mediathek und wähle „Eintrag löschen“.", ziel: "mediathek" },
-  { woerter: ["gesehen", "erledigt"], titel: "Gesehen markieren", text: "Im Bereich Streaming → Entdecken setzt das Häkchen den Gesehen-Status. Dabei kannst du den Titel auch in die Mediathek übernehmen.", ziel: "streaming" },
+import {
+  HILFE_AKTIONEN,
+  HILFE_BEREICHE,
+  HILFE_FALLBACK,
+  holeHilfeBereich,
+  normalisiereHilfeText,
+} from "./hilfeInhalte.js";
+
+const HILFE_INTENT = Object.freeze([
+  "hilfe", "anleitung", "settings", "setting", "einstellung", "einstellungen",
+  "wo finde ich", "wo finde", "wo ist", "wie kann ich", "wie ändere ich",
+  "wie aendere ich", "wie stelle ich", "wie funktioniert", "wie geht",
+]);
+const ALLGEMEINER_HILFE_INTENT = Object.freeze([
+  "hilfe", "anleitung", "settings", "setting", "einstellung", "einstellungen",
 ]);
 
-const norm = (text) => String(text || "").toLocaleLowerCase("de-AT");
+function enthaeltPhrase(text, phrase) {
+  return text === phrase || text.startsWith(`${phrase} `) || text.endsWith(` ${phrase}`)
+    || text.includes(` ${phrase} `);
+}
+
+function hatHilfeIntent(text) {
+  return HILFE_INTENT.some((phrase) => enthaeltPhrase(text, phrase));
+}
+
+function hatAllgemeinenHilfeIntent(text) {
+  return ALLGEMEINER_HILFE_INTENT.some((phrase) => enthaeltPhrase(text, phrase));
+}
+
+function werteTreffer(text, suchwoerter) {
+  const treffer = suchwoerter.filter((phrase) => enthaeltPhrase(text, phrase));
+  if (!treffer.length) return null;
+  const tokenAnzahlen = treffer.map((phrase) => phrase.split(" ").length);
+  return {
+    exakt: treffer.some((phrase) => phrase === text) ? 1 : 0,
+    spezifitaet: tokenAnzahlen.reduce((summe, anzahl) => summe + (anzahl * anzahl), 0),
+    signale: treffer.length,
+    laenge: treffer.reduce((summe, phrase) => summe + phrase.length, 0),
+    starkePhrase: tokenAnzahlen.some((anzahl) => anzahl > 1),
+  };
+}
+
+function vergleicheKandidaten(a, b) {
+  return b.wertung.exakt - a.wertung.exakt
+    || b.wertung.spezifitaet - a.wertung.spezifitaet
+    || b.wertung.signale - a.wertung.signale
+    || b.wertung.laenge - a.wertung.laenge
+    || a.quellIndex - b.quellIndex;
+}
+
+function sichereAntwort(inhalt, text) {
+  const bereich = holeHilfeBereich(inhalt.bereichId || inhalt.id);
+  if (!bereich) return null;
+  return Object.freeze({
+    id: inhalt.id,
+    titel: inhalt.titel,
+    text,
+    ziel: bereich.ziel,
+    bereichId: bereich.id,
+    bereichTitel: bereich.titel,
+  });
+}
 
 export function appHilfeAntwort(frage) {
-  const text = norm(frage);
-  const direkt = EINTRAEGE.find((eintrag) => eintrag.woerter.some((wort) => (
-    wort.length <= 2 ? new RegExp(`(^|\\s)${wort}(?=\\s|$|[?.!,])`).test(text) : text.includes(wort)
-  )));
-  if (direkt) return direkt;
-  if (/wo (finde|ist)|wie (kann|stelle|ändere|aendere)|setting|einstellung/.test(text)) {
-    return {
-      titel: "Funktion in Kinodreieck finden",
-      text: "Die meisten App- und Kontoeinstellungen findest du im Bereich Settings. Such dort nach Darstellung, Konto, KI, Sicherung oder Quellen.",
-      ziel: "daten",
-    };
+  const text = normalisiereHilfeText(frage);
+  if (!text) return null;
+  const intent = hatHilfeIntent(text);
+  const kandidaten = [];
+
+  for (const [quellIndex, aktion] of HILFE_AKTIONEN.entries()) {
+    const wertung = werteTreffer(text, aktion.suchwoerter);
+    if (wertung && (intent || wertung.starkePhrase)) {
+      kandidaten.push({ art: "aktion", inhalt: aktion, wertung, quellIndex });
+    }
   }
-  return null;
+  if (intent) {
+    const versatz = HILFE_AKTIONEN.length;
+    for (const [index, bereich] of HILFE_BEREICHE.entries()) {
+      const wertung = werteTreffer(text, bereich.suchwoerter);
+      if (wertung) {
+        kandidaten.push({
+          art: "bereich", inhalt: bereich, wertung, quellIndex: versatz + index,
+        });
+      }
+    }
+  }
+
+  kandidaten.sort(vergleicheKandidaten);
+  const treffer = kandidaten[0];
+  if (treffer?.art === "aktion") {
+    return sichereAntwort(treffer.inhalt, treffer.inhalt.text);
+  }
+  if (treffer?.art === "bereich") {
+    return sichereAntwort(treffer.inhalt, treffer.inhalt.kurztext);
+  }
+  return hatAllgemeinenHilfeIntent(text)
+    ? sichereAntwort(HILFE_FALLBACK, HILFE_FALLBACK.text)
+    : null;
 }

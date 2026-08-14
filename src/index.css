@@ -242,10 +242,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-mehr-links button>span { width:24px; color:#e3a63b; text-align:center; }.kd-mehr-links button.aktiv { border-color:#e3a63b; }
 .kd-sheet-download { display:inline-block; margin-top:13px; padding:8px 0; font-weight:600; }
 .kd-help-layer { align-items:center; padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left)); }
-.kd-help-panel { width:min(100%,680px); max-height:calc(100dvh - 24px); border-bottom:1px solid #514b58; border-radius:15px; padding:18px; }
-.kd-help-lead { color:#bdb7c5; font-size:13px; }.kd-help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
-.kd-help-grid article { padding:13px; border-radius:8px; background:#17151a; border:1px solid #3c3742; }.kd-help-grid strong { color:#e3a63b; }
+.kd-help-panel { width:min(100%,680px); min-width:0; max-height:calc(100dvh - 24px); overflow-x:hidden; border-bottom:1px solid #514b58; border-radius:15px; padding:18px; }
+.kd-help-lead { color:#bdb7c5; font-size:13px; }.kd-help-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; min-width:0; }
+.kd-help-grid article { min-width:0; padding:13px; overflow-wrap:anywhere; border-radius:8px; background:#17151a; border:1px solid #3c3742; }.kd-help-grid h3 { margin:0; color:#e3a63b; font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
 .kd-help-grid p { margin:5px 0 0; color:#d2ccd8; font-size:13px; line-height:1.45; }
+.kd-doku-hilfe { min-width:0; margin-top:14px; }.kd-doku-verzeichnis { padding:14px 16px; border-radius:6px; background:var(--saalHoch,#211e26); }
+.kd-doku-einleitung { margin:0 0 10px; line-height:1.55; }.kd-doku-bereiche { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; min-width:0; }
+.kd-doku-bereich { min-width:0; overflow:hidden; border:1px solid var(--saal,#3c3742); border-radius:8px; background:var(--saalTief,#17151a); }
+.kd-doku-bereich summary { min-width:0; padding:12px 14px; cursor:pointer; overflow-wrap:anywhere; }.kd-doku-bereich summary::marker { color:var(--wolfram,#e3a63b); }
+.kd-doku-bereich summary h3 { display:inline; margin:0; color:var(--wolfram,#e3a63b); font:700 19px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+.kd-doku-details { padding:0 14px 12px; }.kd-doku-details p { margin:0; color:var(--leinwand,#ece8df); font-size:13px; line-height:1.65; }.kd-doku-details .kd-doku-kurztext { color:var(--leinwandTief,#d2ccd8); font-weight:600; }.kd-doku-details p+p { margin-top:8px; }
 .kd-klappe-markiert { box-sizing:border-box; scroll-margin-top:82px; margin-inline:-10px; padding:4px 10px 10px;
   border:1px solid rgba(227,166,59,.72); border-left-width:3px; border-radius:8px; background:rgba(227,166,59,.07); }
 .kd-klappe-status { display:inline-block; margin-left:9px; padding:2px 6px; border:1px solid currentColor; border-radius:999px;
@@ -348,7 +354,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      beabsichtigte, ruhigere Innenluft. */
   .kd-schrift-gross .kd-app main { zoom:1.1; width:90.909% !important; max-width:90.909% !important; }
   .kd-schrift-klein .kd-app main { zoom:.92; width:100% !important; max-width:100% !important; }
-  .kd-help-grid,.kd-entry-choicegrid { grid-template-columns:1fr; }
+  .kd-help-grid,.kd-doku-bereiche,.kd-entry-choicegrid { grid-template-columns:1fr; }
   .kd-entry-panel { padding:20px 17px; }.kd-entry-choicegrid { gap:9px; }.kd-choice { min-height:88px !important; }
   .kd-start-service { justify-content:stretch; }.kd-start-service button,.kd-start-service a { flex:1 1 100%; justify-content:center; text-align:center; }
   .kd-nachoben { display:none !important; }

@@ -81,12 +81,15 @@ const BEREICH_LABEL = Object.freeze({
 
 export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", limit = 5) {
   const gruppen = { mediathek: [], kino: [], streaming: [], blog: [], daten: [] };
-  if (antwort?.hilfe) {
-    gruppen.daten.push({
-      key: "hilfe:" + (antwort.hilfe.ziel || antwort.hilfe.titel), typ: "hilfe",
-      ziel: antwort.hilfe.ziel, titel: antwort.hilfe.titel, meta: antwort.hilfe.text,
-    });
-  }
+  const hilfeTreffer = antwort?.hilfe ? {
+    key: "hilfe:" + antwort.hilfe.id,
+    typ: "hilfe",
+    ziel: antwort.hilfe.ziel,
+    titel: antwort.hilfe.titel,
+    meta: antwort.hilfe.text,
+    bereich: antwort.hilfe.bereichId,
+    bereichLabel: antwort.hilfe.bereichTitel,
+  } : null;
   for (const treffer of antwort?.treffer || []) {
     const film = treffer.film;
     const quellen = new Set(antwort?.sig?.quellen || []);
@@ -152,9 +155,12 @@ export function kompakteFinderTreffer(antwort, bevorzugterBereich = "alles", lim
   const reihenfolge = standard.includes(bevorzugterBereich)
     ? [bevorzugterBereich, ...standard.filter((bereich) => bereich !== bevorzugterBereich)]
     : standard;
-  const alle = reihenfolge.flatMap((bereich) => gruppen[bereich].map((item) => ({
-    ...item, bereich, bereichLabel: BEREICH_LABEL[bereich],
-  })));
+  const alle = [
+    ...(hilfeTreffer ? [hilfeTreffer] : []),
+    ...reihenfolge.flatMap((bereich) => gruppen[bereich].map((item) => ({
+      ...item, bereich, bereichLabel: BEREICH_LABEL[bereich],
+    }))),
+  ];
   return { items: alle.slice(0, limit), gesamt: alle.length };
 }
 
@@ -710,7 +716,7 @@ export function FinderTab({
                   <p>{e.hilfe.text}</p>
                   {e.hilfe.ziel && onNavigiere && (
                     <button style={btnStyle(true)} onClick={() => onNavigiere(e.hilfe.ziel)}>
-                      {e.hilfe.ziel === "daten" ? "Settings öffnen" : "Bereich öffnen"}
+                      {e.hilfe.bereichTitel} öffnen
                     </button>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, btnStyle } from "../lib/tokens.js";
 import { Logo } from "./ui.jsx";
 import { DreieckRegler } from "./DreieckRegler.jsx";
+import { HILFE_BEREICHE } from "../lib/hilfeInhalte.js";
 
 /* ================= Erklärstücke =================
    Hero („LOKALE FILM-PLATTFORM"), Dreieck-Erklärung (eine Karte pro Ecke)
@@ -108,113 +109,27 @@ export function UeberKinodreieck() {
 
 /* ---------- Eingebaute Anleitung ---------- */
 export function DokuAnsicht({ h2, mono }) {
-  const block = { background: T.saalHoch, borderRadius: 6, padding: "14px 16px" };
-  const p = { fontSize: 13, color: T.leinwandTief, lineHeight: 1.65, margin: "0 0 8px" };
-  const code = { fontFamily: "'Space Mono', monospace", fontSize: 12, color: T.wolfram };
-  const [popup, setPopup] = useState(null);
-  const BEREICHE = [
-    { id: "kino", titel: "Kino", text: [
-      "Das Wiener Kinoprogramm der nächsten ~2 Wochen (film.at + Abo-Abgleich mit Nonstop). „Läuft & passt zu dir” zeigt Filme aus deiner Mediathek, die gerade laufen; „Läuft auch” den Rest des Programms.",
-      "Vor jeder Uhrzeit steht ein ◇ — anklicken pinnt den Termin. Angepinntes sammelt sich oben, übersteht den täglichen Programm-Wechsel und erscheint auch im Dashboard. Ein Klick auf einen angepinnten Titel springt zum Film.",
-      "Der einklappbare Filter grenzt nach Kino, Tag, Abo und Fassung ein. „Nur Abo” zeigt, was in deinen Abo-Kinos ohne Aufpreis läuft.",
-    ] },
-    { id: "mediathek", titel: "Mediathek", text: [
-      "Dein Bestand: Filme, Serien, Musik und Sonstiges (inkl. Persönlichkeiten/Studios). Filme tragen die Dreieck-Bewertung (WIE/WAS/WARUM, je 0–5). Karte antippen öffnet Details und Bearbeiten.",
-      "Der Filter grenzt nach Besitz (DVD/Prime/Apple/Wunschliste), Kategorie und Genre ein. „Unbewerteter Besitz” listet Titel aus DVD/Prime ohne Dreieck.",
-      "Deine Masterliste importierst oder exportierst du im gleichnamigen Bereich der Settings. Bestehende Blog-Artikel bleiben unter Entdecken → Meinungen mit ihren eigenen Werkzeugen erhalten.",
-    ] },
-    { id: "streaming", titel: "Streaming", text: [
-      "„Mein Programm” zeigt, welche deiner Filme gerade auf deinen Diensten laufen; „Entdecken” liefert Vorschläge aus den Watchmode-Katalogen, nach Relevanz sortiert. Einträge in Mein Programm sind editierbar.",
-      "Der Schnellfilter grenzt temporär auf einen deiner Dienste ein — welche Dienste du hast, stellst du in den Settings ein. Im Entdecken merkst du dir Titel mit ★ (erscheinen im Dashboard).",
-      "Kein Live-API-Call in der App — es werden nur vorberechnete Kataloge gelesen. Credits kostet ausschließlich der geplante Fetch-Job.",
-    ] },
-    { id: "blog", titel: "Entdecken", text: [
-      "Empfehlungen, lokaler Ereignis-Radar und eigene Meinungen liegen in drei getrennten Ansichten. Bestehende Blog-Artikel und ihre Deep-Links bleiben unter Meinungen erhalten.",
-      "Eigene Artikel schreiben und Filme oder Personen aus deiner Mediathek referenzieren. Referenzen werden per Titel gegen deinen Bestand abgeglichen — die ID ist der stabile Schlüssel, nicht der Titel.",
-      "Nicht auflösbare Referenzen bleiben „Rotlinks” (rot); sie blockieren die Freigabe nie und heilen automatisch, sobald du den passenden Eintrag anlegst.",
-      "Freigegebene Artikel tauchen als „Kommt vor in” bei den referenzierten Einträgen in der Mediathek auf.",
-    ] },
-    { id: "finder", titel: "Suche", text: [
-      "Natürlichsprachige Suche über deinen Bestand: „traurige Komödie auf Netflix”, „Kult aus den 80ern”. Die Treffer entstehen deterministisch aus deinen eigenen Daten; bei unklaren Anfragen kann zusätzlich die KI-Deutung helfen, wenn du KI aktiviert hast.",
-      "Mobil findest du die Suche als globale Leiste am unteren Rand; am Desktop öffnest du den eigenen Bereich „Suche” in der Hauptnavigation.",
-      "Eigene Stimmungswörter hinterlegst du in den Settings (KI-Vokabular), damit die Suche deinen Wortschatz kennt.",
-    ] },
-    { id: "daten", titel: "Settings", text: [
-      "Darstellung (Saal/Foyer, Schriftgröße, Startbereich), Datenmodus, Masterliste, Gesamt-Backup, Such-Vokabular, Streaming-Quellen und Katalog-Status.",
-      "Unter „Erweitert” kannst du den Datenbank-Katalog manuell neu laden, Notfall-Importe ausführen und den Programm-Cache leeren.",
-      "Ein unbeschriftetes Detail liegt hinter dem „Max”-Link unter „Über & Rechtliches”.",
-    ] },
-  ];
-  const offen = BEREICHE.find((b) => b.id === popup);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 14 }}>
-      <div style={block}>
+    <div className="kd-doku-hilfe">
+      <section className="kd-doku-verzeichnis">
         <h2 style={h2}>Verzeichnis der Bereiche</h2>
-        <p style={{ ...p, margin: "0 0 10px" }}>Klick auf einen Bereich für die ausführliche Beschreibung.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-          {BEREICHE.map((b) => (
-            <button key={b.id} onClick={() => setPopup(b.id)}
-              style={{ ...btnStyle(false), fontSize: 13, padding: "9px 10px" }}>{b.titel}</button>
+        <p className="kd-doku-einleitung" style={mono}>
+          Öffne einen Bereich für die ausführliche Beschreibung.
+        </p>
+        <div className="kd-doku-bereiche">
+          {HILFE_BEREICHE.map((bereich) => (
+            <details key={bereich.id} className="kd-doku-bereich" data-hilfe-ziel={bereich.ziel}>
+              <summary>
+                <h3>{bereich.titel}</h3>
+              </summary>
+              <div className="kd-doku-details">
+                <p className="kd-doku-kurztext">{bereich.kurztext}</p>
+                {bereich.details.map((text) => <p key={text}>{text}</p>)}
+              </div>
+            </details>
           ))}
         </div>
-      </div>
-      {offen && (
-        <div onClick={() => setPopup(null)} style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(23,21,26,0.82)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: T.saalHoch, border: "1px solid " + T.wolfram, borderRadius: 8, maxWidth: 540, boxSizing: "border-box", maxHeight: "82dvh", overflowY: "auto", overscrollBehavior: "contain", padding: "20px 24px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-              <h2 style={{ ...h2, margin: 0 }}>{offen.titel}</h2>
-              <button onClick={() => setPopup(null)} style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>Schließen</button>
-            </div>
-            <div style={{ marginTop: 12 }}>
-              {offen.text.map((txt, i) => <p key={i} style={{ ...p, fontWeight: 400, color: T.leinwand }}>{txt}</p>)}
-            </div>
-          </div>
-        </div>
-      )}
-      <div style={block}>
-        <h2 style={h2}>Alltag</h2>
-        <p style={p}>Kinodreieck läuft als PWA im Browser und kann auf dem Startbildschirm
-          installiert werden. Bewertungen, Artikel und Settings liegen zunächst im
-          Browser. Der gemeinsame Programm-Katalog enthält keine persönlichen Änderungen.</p>
-        <p style={{ ...p, margin: 0 }}>Der Browser ist kein vollständiges Backup. Lade deshalb
-          regelmäßig unter Settings ein Gesamt-Backup herunter.
-          Programm- und Katalog-Stand zeigen, wie frisch die separat gelieferten Daten sind.</p>
-      </div>
-      <div style={block}>
-        <h2 style={h2}>Automatik</h2>
-        <p style={p}>Die Datenerfassung läuft außerhalb der PWA im separaten Datenordner:
-          <span style={code}> kino_auto.mjs</span> liest das Kinoprogramm über den inoffiziellen
-          Seitenabruf von film.at und gleicht Abo-Daten ab;
-          <span style={code}> streaming_auto.mjs</span> erstellt die Watchmode-Kataloge mit Quota-Schutz.</p>
-        <p style={{ ...p, margin: 0 }}><span style={code}>liefere_an_supabase.mjs</span> übergibt danach nur
-          geprüfte JSON-Daten an den zentralen Katalog. Kinodreieck selbst ruft weder die Kino-Seite noch
-          die Streaming-API live auf.</p>
-      </div>
-      <div style={block}>
-        <h2 style={h2}>Teilen & Sichern</h2>
-        <p style={p}>Blog-Artikel importierst, exportierst oder veröffentlichst du unter Entdecken → Meinungen.
-          Die Masterliste besitzt ihren eigenen Import und Export in den Settings.</p>
-        <p style={{ ...p, margin: 0 }}>Das Gesamt-Backup ist dagegen deine vollständige private
-          Sicherung und nicht zum Weitergeben gedacht. Teile keine Sync-Zugangsdaten,
-          Leseschlüssel oder persönlichen Backup-Dateien.</p>
-      </div>
-      <div style={block}>
-        <h2 style={h2}>Wenn etwas klemmt</h2>
-        <p style={{ ...p, margin: 0 }}>App neu laden und zuerst Programm- bzw. Katalog-Stand
-          prüfen. Sind die gelieferten Daten leer oder veraltet, läuft die Diagnose im
-          separaten Datenordner: dort <span style={code}>node kino_auto.mjs</span> oder
-          <span style={code}> node streaming_auto.mjs</span> starten und das jeweilige
-          <span style={code}> auto_log.txt</span> prüfen. Die PWA enthält keine API-Schlüssel.</p>
-      </div>
-      <div style={block}>
-        <h2 style={h2}>Rechtliches</h2>
-        <p style={{ ...p, margin: 0 }}>Privates, nicht-kommerzielles Projekt. Persönliche Daten
-          liegen im Browser und können optional über den gewählten Geräte-Sync übertragen
-          werden; Kinodreieck verwendet keine Telemetrie. Programmdaten: film.at & nonstopkino.at ·
-          Streaming: Watchmode. Alle Angaben ohne Gewähr; verbindlich sind Kino- und
-          Anbieterseiten. Marken gehören ihren Eigentümern. © {new Date().getFullYear()} Max —
-          Nutzung auf eigene Verantwortung.</p>
-      </div>
+      </section>
     </div>
   );
 }
