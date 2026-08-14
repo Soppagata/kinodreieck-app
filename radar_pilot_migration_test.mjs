@@ -285,14 +285,14 @@ check("Vier neue RPC-Signaturen sind SECURITY DEFINER mit fixem search_path", ()
   }
 });
 
-check("Alle Pilot-RPCs verlangen Pilot; nur der Import verlangt zusätzlich Review", () => {
+check("Alle Pilot-RPCs verlangen Pilot; Import verlangt zusätzlich Review, Feed kann Review nur für Projektion referenzieren", () => {
   for (const [name] of rpcContracts) {
     const fn = compact(functionSql(pilotSql, name));
     assert.match(fn, /public\.kd_radar_pilot_allowed\(\)/);
     assert.doesNotMatch(fn, /public\.kd_radar_settings|radar_aktiv/);
     if (name === "kd_radar_pilot_import_event") {
       assert.match(fn, /public\.kd_radar_review_allowed\(\)/);
-    } else {
+    } else if (["kd_radar_pilot_set_subscription", "kd_radar_pilot_set_receipt"].includes(name)) {
       assert.doesNotMatch(fn, /kd_radar_review_allowed|radar_review/);
     }
   }
