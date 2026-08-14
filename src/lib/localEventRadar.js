@@ -21,6 +21,13 @@ import {
   isStableContractId,
   validateRadarTarget,
 } from "./radarContracts.js";
+import {
+  validateRadarPilotEvent,
+  validateRadarPilotFeed,
+  validateRadarPilotImportPayload,
+  validateRadarPilotImportResult,
+  validateRadarPilotSubscriptionAck,
+} from "./radarPilotContracts.js";
 
 export const LOCAL_RADAR_FORMAT = "kinodreieck-radar-local";
 export const LOCAL_RADAR_VERSION = 1;
@@ -49,6 +56,9 @@ function validInstant(value) {
   const normalized = text(value);
   return ISO_INSTANT_FORM.test(normalized) && Number.isFinite(Date.parse(normalized));
 }
+function normalizedInstant(value) {
+  return Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : value;
+}
 function validDay(value) {
   const normalized = text(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
@@ -60,6 +70,10 @@ function dayNumber(value) {
 }
 function exactKeys(value, allowed) {
   return plain(value) && Object.keys(value).every((key) => allowed.includes(key));
+}
+function exactPilotKeys(value, allowed) {
+  return plain(value) && Object.keys(value).length === allowed.length
+    && Object.keys(value).every((key) => allowed.includes(key));
 }
 function freezeDeep(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -85,6 +99,70 @@ export function createEmptyLocalRadar({ authority = "guest" } = {}) {
     display: { showDismissed: false },
     server: { revision: 0, checksum: null, reconciledAt: null },
   });
+}
+
+export function createEmptyAccountRadarPilot() {
+  return freezeDeep({
+    status: "idle",
+    events: [],
+    serverReceipts: [],
+    receiptOutbox: [],
+    importOutbox: [],
+    radarReview: false,
+  });
+}
+
+function validatePilotReceiptOutbox(entry) {
+  const keys = ["eventId", "eventVersionId", "status", "state", "createdAt", "reason"];
+  if (!exactPilotKeys(entry, keys)) return ["pilot-receipt-outbox-shape-invalid"];
+  const errors = [];
+  if (!UUID_FORM.test(text(entry.eventId))) errors.push("pilot-receipt-event-invalid");
+  if (!UUID_FORM.test(text(entry.eventVersionId))) errors.push("pilot-receipt-version-invalid");
+  if (!RADAR_RECEIPT_STATUSES.includes(entry.status)) errors.push("pilot-receipt-status-invalid");
+  if (!["pending", "rejected"].includes(entry.state)) errors.push("pilot-receipt-state-invalid");
+  if (!validInstant(entry.createdAt)) errors.push("pilot-receipt-time-invalid");
+  if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
+    errors.push("pilot-receipt-reason-invalid");
+  }
+  return errors;
+}
+
+function validatePilotImportOutbox(entry) {
+  const keys = ["operationId", "payload", "status", "createdAt", "reason"];
+  if (!exactPilotKeys(entry, keys)) return ["pilot-import-outbox-shape-invalid"];
+  const errors = [];
+  if (!UUID_FORM.test(text(entry.operationId))) errors.push("pilot-import-operation-invalid");
+  errors.push(...validateRadarPilotImportPayload(entry.payload).errors);
+  if (!["pending", "rejected"].includes(entry.status)) errors.push("pilot-import-status-invalid");
+  if (!validInstant(entry.createdAt)) errors.push("pilot-import-time-invalid");
+  if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
+    errors.push("pilot-import-reason-invalid");
+  }
+  return errors;
+}
+
+function validateAccountRadarPilot(pilot) {
+  const errors = [];
+  const keys = ["status", "events", "serverReceipts", "receiptOutbox", "importOutbox", "radarReview"];
+  if (!exactPilotKeys(pilot, keys)) return result(["pilot-state-shape-invalid"]);
+  if (!["idle", "ready", "pilot-unavailable"].includes(pilot.status)) errors.push("pilot-status-invalid");
+  if (typeof pilot.radarReview !== "boolean") errors.push("pilot-review-invalid");
+  if (!Array.isArray(pilot.events)) errors.push("pilot-events-invalid");
+  else for (const event of pilot.events) errors.push(...validateRadarPilotEvent(event).errors);
+  if (!Array.isArray(pilot.serverReceipts)) errors.push("pilot-server-receipts-invalid");
+  else {
+    for (const receipt of pilot.serverReceipts) {
+      if (!exactPilotKeys(receipt, ["eventVersionId", "status", "updatedAt"])
+          || !UUID_FORM.test(text(receipt.eventVersionId))
+          || !RADAR_RECEIPT_STATUSES.includes(receipt.status)
+          || !validInstant(receipt.updatedAt)) errors.push("pilot-server-receipt-invalid");
+    }
+  }
+  if (!Array.isArray(pilot.receiptOutbox)) errors.push("pilot-receipt-outbox-invalid");
+  else for (const entry of pilot.receiptOutbox) errors.push(...validatePilotReceiptOutbox(entry));
+  if (!Array.isArray(pilot.importOutbox)) errors.push("pilot-import-outbox-invalid");
+  else for (const entry of pilot.importOutbox) errors.push(...validatePilotImportOutbox(entry));
+  return result([...new Set(errors)]);
 }
 
 function validateSubscription(subscription, authority) {
@@ -186,14 +264,19 @@ function validateReceipt(receipt) {
 
 export function validateLocalRadarState(state) {
   const errors = [];
-  const keys = [
+  const baseKeys = [
     "format", "version", "authority", "subscriptions", "outbox", "shares",
     "shareOutbox", "receipts", "display", "server",
   ];
-  if (!exactKeys(state, keys)) return result(["radar-state-shape-invalid"]);
+  const keys = state?.pilot === undefined ? baseKeys : [...baseKeys, "pilot"];
+  if (!exactPilotKeys(state, keys)) return result(["radar-state-shape-invalid"]);
   if (state.format !== LOCAL_RADAR_FORMAT) errors.push("radar-format-invalid");
   if (state.version !== LOCAL_RADAR_VERSION) errors.push("radar-version-invalid");
   if (!LOCAL_RADAR_AUTHORITIES.includes(state.authority)) errors.push("radar-authority-invalid");
+  if (state.pilot !== undefined) {
+    if (state.authority !== "account-cache") errors.push("guest-pilot-state-forbidden");
+    errors.push(...validateAccountRadarPilot(state.pilot).errors);
+  }
   if (!Array.isArray(state.subscriptions)) errors.push("radar-subscriptions-invalid");
   if (!Array.isArray(state.outbox) || state.outbox.length > LOCAL_RADAR_MAX_OUTBOX) errors.push("radar-outbox-invalid");
   if (!Array.isArray(state.shares) || state.shares.length > LOCAL_RADAR_MAX_SHARES) errors.push("radar-shares-invalid");
@@ -621,6 +704,238 @@ export function setLocalRadarReceipt(state, {
     ? next.receipts.map((entry) => `${entry.eventId}|${entry.versionId}` === key ? receipt : entry)
     : [...next.receipts, receipt];
   return Object.freeze({ ok: true, reason: existing ? "updated" : "created", state: freezeDeep(next), changed: true });
+}
+
+function withAccountPilot(state) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache") return null;
+  if (state.pilot) return clone(state);
+  const next = clone(state);
+  next.pilot = clone(createEmptyAccountRadarPilot());
+  return next;
+}
+
+export function queueAccountRadarPilotReceipt(state, {
+  eventId, eventVersionId, status, now = new Date().toISOString(),
+} = {}) {
+  const next = withAccountPilot(state);
+  const entry = {
+    eventId: text(eventId), eventVersionId: text(eventVersionId), status,
+    state: "pending", createdAt: now, reason: null,
+  };
+  if (!next || validatePilotReceiptOutbox(entry).length) {
+    return Object.freeze({ ok: false, reason: "pilot-receipt-invalid", state, changed: false });
+  }
+  const knownEvent = next.pilot.events.some((event) => (
+    event.eventId === entry.eventId && event.eventVersionId === entry.eventVersionId
+  ));
+  if (!knownEvent) return Object.freeze({ ok: false, reason: "pilot-event-not-found", state, changed: false });
+  const existing = next.pilot.receiptOutbox.find((item) => item.eventVersionId === entry.eventVersionId);
+  next.pilot.receiptOutbox = existing
+    ? next.pilot.receiptOutbox.map((item) => item.eventVersionId === entry.eventVersionId ? entry : item)
+    : [...next.pilot.receiptOutbox, entry];
+  const checked = validateLocalRadarState(next);
+  if (!checked.ok) return Object.freeze({ ok: false, reason: "pilot-receipt-result-invalid", state, changed: false });
+  return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true });
+}
+
+export function queueAccountRadarPilotImport(state, {
+  operationId, payload, now = new Date().toISOString(),
+} = {}) {
+  const next = withAccountPilot(state);
+  const entry = {
+    operationId: text(operationId), payload: clone(payload), status: "pending", createdAt: now, reason: null,
+  };
+  if (!next || next.pilot.radarReview !== true || validatePilotImportOutbox(entry).length) {
+    return Object.freeze({ ok: false, reason: "pilot-import-invalid", state, changed: false });
+  }
+  const existing = next.pilot.importOutbox.find((item) => item.operationId === entry.operationId);
+  if (existing) {
+    const same = JSON.stringify(existing) === JSON.stringify(entry);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "operation-id-conflict", state, changed: false });
+  }
+  next.pilot.importOutbox.push(entry);
+  const checked = validateLocalRadarState(next);
+  if (!checked.ok) return Object.freeze({ ok: false, reason: "pilot-import-result-invalid", state, changed: false });
+  return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true });
+}
+
+function rejectionReason(reason) {
+  const normalized = text(reason).slice(0, 120);
+  return normalized || "pilot-request-rejected";
+}
+
+export function rejectAccountRadarPilotReceipt(state, eventVersionId, reason) {
+  const next = withAccountPilot(state);
+  if (!next) return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  const id = text(eventVersionId);
+  if (!next.pilot.receiptOutbox.some((entry) => entry.eventVersionId === id)) {
+    return Object.freeze({ ok: false, reason: "pilot-receipt-not-found", state, changed: false });
+  }
+  next.pilot.receiptOutbox = next.pilot.receiptOutbox.map((entry) => entry.eventVersionId === id
+    ? { ...entry, state: "rejected", reason: rejectionReason(reason) }
+    : entry);
+  return Object.freeze({ ok: true, reason: "rejected", state: freezeDeep(next), changed: true });
+}
+
+export function rejectAccountRadarPilotImport(state, operationId, reason) {
+  const next = withAccountPilot(state);
+  if (!next) return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  const id = text(operationId);
+  if (!next.pilot.importOutbox.some((entry) => entry.operationId === id)) {
+    return Object.freeze({ ok: false, reason: "pilot-import-not-found", state, changed: false });
+  }
+  next.pilot.importOutbox = next.pilot.importOutbox.map((entry) => entry.operationId === id
+    ? { ...entry, status: "rejected", reason: rejectionReason(reason) }
+    : entry);
+  return Object.freeze({ ok: true, reason: "rejected", state: freezeDeep(next), changed: true });
+}
+
+export function acknowledgeAccountRadarPilotSubscription(state, operationId, ack) {
+  const next = withAccountPilot(state);
+  const checked = validateRadarPilotSubscriptionAck(ack);
+  const id = text(operationId);
+  const pending = next?.outbox.find((entry) => entry.operationId === id && entry.status === "pending");
+  const expectedStatus = pending?.action === "remove" ? "removed" : pending?.action === "pause" ? "paused" : "active";
+  if (!next || !checked.ok || !pending || ack.operationId !== id || ack.targetId !== pending.targetId
+      || ack.status !== expectedStatus || ack.revision < state.server.revision
+      || (ack.revision === state.server.revision && state.server.checksum !== ack.checksum)) {
+    return Object.freeze({ ok: false, reason: "pilot-subscription-ack-invalid", state, changed: false });
+  }
+  next.outbox = next.outbox.filter((entry) => entry.operationId !== id);
+  next.server = { revision: ack.revision, checksum: ack.checksum, reconciledAt: state.server.reconciledAt };
+  next.pilot.status = "ready";
+  const stateCheck = validateLocalRadarState(next);
+  if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-subscription-result-invalid", state, changed: false });
+  return Object.freeze({ ok: true, reason: "acknowledged", state: freezeDeep(next), changed: true });
+}
+
+export function acknowledgeAccountRadarPilotReceipt(state, eventVersionId, now = new Date().toISOString()) {
+  const next = withAccountPilot(state);
+  const id = text(eventVersionId);
+  const pending = next?.pilot.receiptOutbox.find((entry) => entry.eventVersionId === id && entry.state === "pending");
+  if (!next || !pending || !validInstant(now)) {
+    return Object.freeze({ ok: false, reason: "pilot-receipt-ack-invalid", state, changed: false });
+  }
+  next.pilot.receiptOutbox = next.pilot.receiptOutbox.filter((entry) => entry.eventVersionId !== id);
+  const visible = { eventId: pending.eventId, versionId: id, status: pending.status, updatedAt: now };
+  const existing = next.receipts.some((entry) => entry.versionId === id);
+  next.receipts = existing
+    ? next.receipts.map((entry) => entry.versionId === id ? visible : entry)
+    : [...next.receipts, visible];
+  next.pilot.serverReceipts = next.pilot.serverReceipts.filter((entry) => entry.eventVersionId !== id);
+  next.pilot.serverReceipts.push({ eventVersionId: id, status: pending.status, updatedAt: now });
+  next.pilot.status = "ready";
+  const stateCheck = validateLocalRadarState(next);
+  if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-receipt-result-invalid", state, changed: false });
+  return Object.freeze({ ok: true, reason: "acknowledged", state: freezeDeep(next), changed: true });
+}
+
+export function acknowledgeAccountRadarPilotImport(state, operationId, response) {
+  const next = withAccountPilot(state);
+  const id = text(operationId);
+  const pending = next?.pilot.importOutbox.find((entry) => entry.operationId === id && entry.status === "pending");
+  const checked = validateRadarPilotImportResult(response);
+  if (!next || !pending || !checked.ok || response.targetId !== pending.payload.targetKey
+      || response.eventType !== pending.payload.eventType || response.date !== pending.payload.date
+      || response.region !== pending.payload.region || response.platform !== pending.payload.platform) {
+    return Object.freeze({ ok: false, reason: "pilot-import-ack-invalid", state, changed: false });
+  }
+  next.pilot.importOutbox = next.pilot.importOutbox.filter((entry) => entry.operationId !== id);
+  const projected = {
+    ...response,
+    lifecycleStatus: "scheduled",
+    verificationStatus: "confirmed",
+  };
+  next.pilot.events = next.pilot.events.filter((entry) => entry.eventVersionId !== response.eventVersionId);
+  next.pilot.events.push(projected);
+  next.pilot.events.sort((a, b) => a.date.localeCompare(b.date) || a.eventId.localeCompare(b.eventId));
+  next.pilot.status = "ready";
+  const stateCheck = validateLocalRadarState(next);
+  if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-import-result-invalid", state, changed: false });
+  return Object.freeze({ ok: true, reason: "acknowledged", state: freezeDeep(next), changed: true });
+}
+
+export function markAccountRadarPilotUnavailable(state) {
+  const next = withAccountPilot(state);
+  if (!next) return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  next.pilot.status = "pilot-unavailable";
+  return Object.freeze({ ok: true, reason: "pilot-unavailable", state: freezeDeep(next), changed: true });
+}
+
+export function reconcileAccountRadarPilotFeed(state, feed) {
+  const next = withAccountPilot(state);
+  const checked = validateRadarPilotFeed(feed);
+  if (!next || !checked.ok) {
+    return Object.freeze({ ok: false, reason: next ? "pilot-feed-invalid" : "account-cache-required", state, changed: false, errors: checked.errors });
+  }
+  if (feed.revision < state.server.revision) {
+    return Object.freeze({ ok: false, reason: "pilot-feed-stale", state, changed: false });
+  }
+  if (feed.revision === state.server.revision && state.server.checksum !== feed.checksum) {
+    return Object.freeze({ ok: false, reason: "pilot-feed-revision-conflict", state, changed: false });
+  }
+  for (const ack of feed.operationAcks) {
+    const pending = state.outbox.find((entry) => entry.operationId === ack.operationId);
+    if (!pending) {
+      return Object.freeze({ ok: false, reason: "pilot-feed-ack-conflict", state, changed: false });
+    }
+    const expectedStatus = pending.action === "remove" ? "removed" : pending.action === "pause" ? "paused" : "active";
+    if (ack.targetId !== pending.targetId || ack.status !== expectedStatus || ack.revision > feed.revision) {
+      return Object.freeze({ ok: false, reason: "pilot-feed-ack-conflict", state, changed: false });
+    }
+  }
+  const acknowledged = new Set(feed.operationAcks.map((entry) => entry.operationId));
+  next.subscriptions = feed.subscriptions.map((entry) => ({
+    targetId: entry.targetId,
+    targetType: entry.targetType,
+    region: entry.region,
+    scope: entry.scope,
+    status: entry.status,
+    authority: "server",
+    serverRevision: feed.revision,
+    serverChecksum: feed.checksum,
+    updatedAt: normalizedInstant(entry.updatedAt),
+  })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
+  const priorPilotVersions = new Set(next.pilot.events.map((entry) => entry.eventVersionId));
+  const eventsByVersion = new Map(feed.events.map((entry) => [entry.eventVersionId, entry]));
+  next.receipts = next.receipts.filter((entry) => !priorPilotVersions.has(entry.versionId));
+  for (const receipt of feed.receipts) {
+    const matchingEvent = eventsByVersion.get(receipt.eventVersionId);
+    if (!matchingEvent) continue;
+    next.receipts.push({
+      eventId: matchingEvent.eventId,
+      versionId: receipt.eventVersionId,
+      status: receipt.status,
+      updatedAt: normalizedInstant(receipt.updatedAt),
+    });
+  }
+  const confirmedReceiptKeys = new Set(feed.receipts.map((entry) => `${entry.eventVersionId}|${entry.status}`));
+  next.pilot.receiptOutbox = next.pilot.receiptOutbox.filter((entry) => (
+    !confirmedReceiptKeys.has(`${entry.eventVersionId}|${entry.status}`)
+  ));
+  next.pilot.events = clone(feed.events);
+  next.pilot.serverReceipts = feed.receipts.map((entry) => ({
+    ...entry,
+    updatedAt: normalizedInstant(entry.updatedAt),
+  }));
+  next.pilot.radarReview = feed.radarReview;
+  next.pilot.status = "ready";
+  next.server = {
+    revision: feed.revision,
+    checksum: feed.checksum,
+    reconciledAt: normalizedInstant(feed.reconciledAt),
+  };
+  const stateCheck = validateLocalRadarState(next);
+  if (!stateCheck.ok) {
+    return Object.freeze({ ok: false, reason: "pilot-feed-result-invalid", state, changed: false, errors: stateCheck.errors });
+  }
+  return Object.freeze({
+    ok: true,
+    reason: feed.revision === state.server.revision ? "idempotent-reconcile" : "reconciled",
+    state: freezeDeep(next),
+    changed: JSON.stringify(next) !== JSON.stringify(state),
+  });
 }
 
 export function createEmptyLocalEventLedger() {

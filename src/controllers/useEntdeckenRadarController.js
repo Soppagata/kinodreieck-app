@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
@@ -11,7 +12,10 @@ import {
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
 import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
+import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
+
+export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
 function neueLokaleOperationId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
@@ -190,6 +194,11 @@ export function useEntdeckenRadarController({
     () => radarState?.authority === radarAuthority ? radarState : createEmptyLocalRadar({ authority: radarAuthority }),
     [radarAuthority, radarState],
   );
+  const radarPilotProjection = useMemo(() => projectEntdeckenRadarPilot({
+    clientEnabled: runtimeConfig.radarPilotClientEnabled,
+    radarAuthority,
+    radarState: sichtbarerRadarState,
+  }), [radarAuthority, sichtbarerRadarState]);
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;
@@ -205,6 +214,8 @@ export function useEntdeckenRadarController({
 
   return {
     radarAuthority, sichtbarerRadarState, radarPreviewTarget,
+    radarPilotEvents: radarPilotProjection.events,
+    radarReview: radarPilotProjection.radarReview,
     setRadarPreviewTarget, schliesseRadarPreview,
     aendereSerienBeobachtung, aendereRadar, aendereRadarShare,
     bestaetigeRadarVorschau, beobachteteWatchmodeIds, radarTargetIds,

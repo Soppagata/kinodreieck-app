@@ -430,6 +430,33 @@ await check("Wochenübernahme bleibt ein bestätigungspflichtiger Entwurf ohne W
   });
 });
 
+await check("Optionaler Kontopilot verändert den Flag-false-Leerstand nicht", () => {
+  const account = R.createEmptyLocalRadar({ authority: "account-cache" });
+  assert.equal(Object.hasOwn(account, "pilot"), false);
+  assert.equal(JSON.stringify(R.decodeLocalRadar(JSON.stringify(account), { authority: "account-cache" }).state), JSON.stringify(account));
+});
+
+await check("Pilotfeed reconciliiert atomar und erhält ungeklärte lokale Vorgänge", () => {
+  let account = R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: "11111111-1111-4111-8111-111111111111", action: "upsert", target: target("pilot"), now: instant,
+  }).state;
+  const reconciled = R.reconcileAccountRadarPilotFeed(account, {
+    format: "kd-radar-pilot-feed-v1",
+    revision: 1,
+    checksum: checksumA,
+    reconciledAt: "2026-08-09T14:00:00+02:00",
+    subscriptions: [],
+    events: [],
+    receipts: [],
+    operationAcks: [],
+    radarReview: false,
+  });
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.outbox.length, 1);
+  assert.equal(reconciled.state.server.reconciledAt, "2026-08-09T12:00:00.000Z");
+  assert.equal(reconciled.state.pilot.status, "ready");
+});
+
 await check("Persönlicher Topf enthält keine globale Target-, Event- oder Evidence-Wahrheit", () => {
   const source = fs.readFileSync(new URL("./src/lib/localEventRadar.js", import.meta.url), "utf8");
   const state = R.createEmptyLocalRadar();

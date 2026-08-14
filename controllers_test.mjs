@@ -545,6 +545,7 @@ const mustwatchController = fs.readFileSync("src/controllers/useMustwatchControl
 const articleController = fs.readFileSync("src/controllers/useArticleController.js", "utf8");
 const personalDataController = fs.readFileSync("src/controllers/personalDataTransactionController.js", "utf8");
 const intelligenceController = fs.readFileSync("src/controllers/useIntelligenceController.js", "utf8");
+const radarController = fs.readFileSync("src/controllers/useEntdeckenRadarController.js", "utf8");
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
   /\["master", "programm", "streaming"\]/.test(mustwatchListe)
   && /onSpringeZuMustwatchRef=\{springeZuMustwatchRef\}/.test(app));
@@ -587,5 +588,9 @@ check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Lades
   && /transaktionArtikel/.test(articleController)
   && /Artikel → Must-Watch → Master/.test(personalDataController)
   && /Es wurde nichts verändert/.test(app));
+check("Radarcontroller projiziert den Kontopilot getrennt und lässt Gast-Fixtures lokal",
+  /projectEntdeckenRadarPilot/.test(radarController)
+  && /radarPilotEvents: radarPilotProjection\.events/.test(radarController)
+  && /radarReview: radarPilotProjection\.radarReview/.test(radarController));
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);
