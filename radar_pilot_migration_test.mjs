@@ -342,7 +342,7 @@ check("Alte Browser-RPC-Rechte werden entzogen und service_role bleibt erhalten"
     "kd_set_radar_receipt(uuid,text)",
   ]) {
     const escaped = escapeRegex(`public.${signature}`);
-    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped} from[^;]*\\bauthenticated\\b`));
+    assert.match(canonicalExecutable, new RegExp(`revoke (?:all|execute) on function ${escaped}from[^;]*\\bauthenticated\\b`));
     const revokes = statementsFor(pilotSql, new RegExp(`revoke .*${escaped}`, "i"));
     assert.ok(revokes.every((statement) => !/\bservice_role\b/.test(statement)), `${signature}: service_role wurde entzogen`);
     assert.match(compact(baseSql), new RegExp(`grant execute on function ${escaped} to[^;]*\\bservice_role\\b`));
