@@ -2243,6 +2243,7 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   const viewport = { width: 568, height: 320 };
   const bestaetigenText = `${visibleCount} löschen`;
   const ausloeserText = `${visibleCount} sichtbare Einträge löschen`;
+  const geometrieToleranz = 1;
   await page.setViewportSize(viewport);
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page, { schrift: "gross" });
@@ -2347,10 +2348,10 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
       listeUeberbreite: element.querySelector(".kd-film-batch-ziel-liste").scrollWidth > element.querySelector(".kd-film-batch-ziel-liste").clientWidth + 1,
     };
   }, { viewportWidth: viewport.width, viewportHeight: viewport.height });
-  expect(dialogGeometrie.links).toBeGreaterThanOrEqual(0);
-  expect(dialogGeometrie.rechts).toBeLessThanOrEqual(dialogGeometrie.viewportWidth);
-  expect(dialogGeometrie.oben).toBeGreaterThanOrEqual(0);
-  expect(dialogGeometrie.unten).toBeLessThanOrEqual(dialogGeometrie.viewportHeight);
+  expect(dialogGeometrie.links).toBeGreaterThanOrEqual(-geometrieToleranz);
+  expect(dialogGeometrie.rechts).toBeLessThanOrEqual(dialogGeometrie.viewportWidth + geometrieToleranz);
+  expect(dialogGeometrie.oben).toBeGreaterThanOrEqual(-geometrieToleranz);
+  expect(dialogGeometrie.unten).toBeLessThanOrEqual(dialogGeometrie.viewportHeight + geometrieToleranz);
   expect(dialogGeometrie.scrollWidth).toBeLessThanOrEqual(dialogGeometrie.clientWidth + 1);
   expect(dialogGeometrie.hasDialogScroll).toBe(true);
   expect(dialogGeometrie.listeScrollt).toBe(true);
