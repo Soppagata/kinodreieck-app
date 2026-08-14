@@ -227,7 +227,7 @@ check("Bereiche besitzen exakt 6 Felder", HILFE_BEREICHE.length > 0 && HILFE_BER
   const keys = new Set(Object.keys(bereich));
   const erwartet = ["id", "titel", "kurztext", "details", "suchwoerter", "ziel"];
   return keys.size === 6
-    && [...keys].every((feld) => erwartet.has(feld))
+    && [...keys].every((feld) => erwartet.includes(feld))
     && erwartet.every((feld) => keys.has(feld));
 }));
 
@@ -241,7 +241,7 @@ for (const bereich of HILFE_BEREICHE) {
   const keys = new Set(Object.keys(bereich));
   const erwartet = ["id", "titel", "kurztext", "details", "suchwoerter", "ziel"];
   check(`Bereich ${bereich.id}: Pflichtfelder vollständig`, keys.size === 6
-    && [...keys].every((feld) => erwartet.has(feld))
+    && [...keys].every((feld) => erwartet.includes(feld))
     && erwartet.every((feld) => keys.has(feld))
     && BEREICHE_SET.has(bereich.id)
     && bereich.ziel === bereich.id);
@@ -251,7 +251,7 @@ check("Aktionen besitzen exakt 7 Felder", HILFE_AKTIONEN.length > 0 && HILFE_AKT
   const keys = new Set(Object.keys(aktion));
   const erwartet = ["id", "titel", "text", "suchwoerter", "direkteSuchwoerter", "bereichId", "ziel"];
   return keys.size === 7
-    && [...keys].every((feld) => erwartet.has(feld))
+    && [...keys].every((feld) => erwartet.includes(feld))
     && erwartet.every((feld) => keys.has(feld));
 }));
 
