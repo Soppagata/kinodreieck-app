@@ -447,7 +447,27 @@ for (const viewport of VIEWPORTS) {
         await expect(menuDialog).toBeVisible();
         const menuScrim = page.locator(".kd-mobile-menu-layer > .kd-sheet-scrim");
         await expect(menuScrim).toBeVisible();
-        await menuScrim.click();
+        const menuClosePoint = await page.evaluate(() => {
+          const panel = document.querySelector(".kd-mobile-menu");
+          const scrim = document.querySelector(".kd-mobile-menu-layer > .kd-sheet-scrim");
+          if (!panel || !scrim) return null;
+          const panelRect = panel.getBoundingClientRect();
+          const scrimRect = scrim.getBoundingClientRect();
+          const margin = 6;
+          const kandidaten = [
+            { x: panelRect.right + margin, y: panelRect.top + margin },
+            { x: panelRect.right + margin, y: panelRect.bottom - margin },
+            { x: panelRect.left - margin, y: panelRect.top + margin },
+            { x: panelRect.left - margin, y: panelRect.bottom - margin },
+            { x: panelRect.left + margin, y: panelRect.bottom + margin },
+            { x: scrimRect.left + 4, y: scrimRect.top + 4 },
+          ];
+          const istImScrim = (point) => point.x >= scrimRect.left && point.x <= scrimRect.right && point.y >= scrimRect.top && point.y <= scrimRect.bottom;
+          const istAußerhalbPanel = (point) => point.x <= panelRect.left || point.x >= panelRect.right || point.y <= panelRect.top || point.y >= panelRect.bottom;
+          return kandidaten.find((point) => istImScrim(point) && istAußerhalbPanel(point)) || null;
+        });
+        expect(menuClosePoint).toBeTruthy();
+        await page.mouse.click(menuClosePoint.x, menuClosePoint.y);
         await expect(menuDialog).toBeHidden();
 
         await expect(hilfeDialog).toBeVisible();
