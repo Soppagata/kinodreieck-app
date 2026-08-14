@@ -132,13 +132,30 @@ for (const activeFlag of PRIVATE_FLAGS) {
   check(`gefährlicher Privat-Flag '${activeFlag}' ist kritisch`, dangerousFlags.critical.includes("flags"));
 }
 
-const missingPrivateExportFlag = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
-  if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
-  return okFetch(url);
-}) });
-const missingPrivateExportFlagById = Object.fromEntries(missingPrivateExportFlag.reports.map((r) => [r.id, r.code]));
-check("fehlender export_enabled-Flag wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateExportFlagById.flags === "UNEXPECTED_DANGEROUS_FLAG");
-check("fehlender export_enabled-Flag ist kritisch", missingPrivateExportFlag.critical.includes("flags"));
+  const missingPrivateExportFlag = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+    if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, [{ provider_requests_enabled: false, scheduler_enabled: false, purge_enabled: false, delete_enabled: false }]);
+    return okFetch(url);
+  }) });
+  const missingPrivateExportFlagById = Object.fromEntries(missingPrivateExportFlag.reports.map((r) => [r.id, r.code]));
+  check("fehlender export_enabled-Flag wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateExportFlagById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("fehlender export_enabled-Flag ist kritisch", missingPrivateExportFlag.critical.includes("flags"));
+  check("fehlender export_enabled-Flag macht Gesamtcheck rot", missingPrivateExportFlag.ok === false);
+
+  const missingPrivateSettingsRow = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+    if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(200, []);
+    return okFetch(url);
+  }) });
+  const missingPrivateSettingsRowById = Object.fromEntries(missingPrivateSettingsRow.reports.map((r) => [r.id, r.code]));
+  check("leere Singleton-Antwort der privaten Einstellungen wird als UNEXPECTED_DANGEROUS_FLAG erkannt", missingPrivateSettingsRowById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("leere Singleton-Antwort bleibt kritisch", missingPrivateSettingsRow.critical.includes("flags") && missingPrivateSettingsRow.ok === false);
+
+  const privateSettingsQueryError = await runPrivateOpsCheck({ env: BASIS_ENV, fetchImpl: createFetchMock((url) => {
+    if (url.includes("/rest/v1/kd_private_settings")) return fakeAntwort(400, { code: "PGRST204", message: "query error" });
+    return okFetch(url);
+  }) });
+  const privateSettingsQueryErrorById = Object.fromEntries(privateSettingsQueryError.reports.map((r) => [r.id, r.code]));
+  check("schema-/queryfehlerhafte private Einstellungen werden als UNEXPECTED_DANGEROUS_FLAG erkannt", privateSettingsQueryErrorById.flags === "UNEXPECTED_DANGEROUS_FLAG");
+  check("schema-/queryfehlerhafte private Einstellungen bleiben kritisch", privateSettingsQueryError.critical.includes("flags") && privateSettingsQueryError.ok === false);
 
 const RADAR_FLAGS = [
   "radar_aktiv",

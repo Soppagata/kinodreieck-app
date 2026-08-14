@@ -78,7 +78,7 @@ export async function runPrivateOpsCheck({ env = process.env, fetchImpl = global
         && Object.prototype.hasOwnProperty.call(row, "delete_enabled")
         && Object.prototype.hasOwnProperty.call(row, "export_enabled");
       const safelyOff = hasAllFlags && row.provider_requests_enabled === false && row.scheduler_enabled === false && row.purge_enabled === false && row.delete_enabled === false && row.export_enabled === false;
-      add(result("flags", !response.ok ? "DATABASE_UNAVAILABLE" : safelyOff ? "OK" : "UNEXPECTED_DANGEROUS_FLAG"), true);
+      add(result("flags", response.ok && safelyOff ? "OK" : "UNEXPECTED_DANGEROUS_FLAG"), true);
     }
   } catch { add(result("flags", "DATABASE_UNAVAILABLE"), true); }
 
