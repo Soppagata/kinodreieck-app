@@ -93,6 +93,9 @@ try {
     format: "esm",
     jsx: "automatic",
     target: "es2022",
+    define: {
+      "import.meta.env.BASE_URL": "\"/\"",
+    },
     nodePaths: [MODULWURZEL],
     logLevel: "silent",
   });

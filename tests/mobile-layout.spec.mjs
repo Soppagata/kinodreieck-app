@@ -360,8 +360,10 @@ for (const viewport of VIEWPORTS) {
       await expect(hilfeDialog.locator("article").first()).toBeVisible();
       await expect(hilfeDialog).toHaveAttribute("aria-modal", "true");
       await expect(hilfeDialog).toContainText("Anleitung & Hilfe");
-      for (const name of hilfeZielnamen) {
-        await expect(hilfeDialog).toContainText(new RegExp(`\\b${name}\\b`));
+      const hilfeÜberschriften = await hilfePanel.locator("h3").allInnerTexts();
+      expect(hilfeÜberschriften.length).toBe(hilfeZielnamen.length);
+      for (let i = 0; i < hilfeZielnamen.length; i += 1) {
+        await expect(hilfePanel.locator("h3").nth(i)).toHaveText(hilfeZielnamen[i]);
       }
       await expect(hilfePanel.locator(".kd-help-lead")).toHaveText("Diese Hilfe öffnet sich nur, wenn du sie bewusst aufrufst.");
       await expect(hilfePanel.locator(".kd-help-lead")).toBeVisible();
