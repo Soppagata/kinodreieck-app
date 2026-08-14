@@ -124,6 +124,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     dialogLaufRef.current += 1;
     erwarteterMasterUebergangRef.current = null;
     kopierRequestRef.current += 1;
+    if (loeschDialogVeraltet) fokusRueckkehrAngefordertRef.current = true;
     setAuswahlmodus(false);
     setAuswahlIds(new Set());
     setTitellisteSichtbar(false);
@@ -509,7 +510,8 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
     return `nachtrag-fallback:${String(eintrag?.titel || "")}:${index}`;
   }, []);
   const bewahrterNachtrag = bewahrterNachtragRef.current;
-  const nachtraegeZumRendern = bewahrterNachtrag && !nachtragFlach.includes(bewahrterNachtrag)
+  const nachtraegeZumRendern = draftGrenzeRef.current.erwartet
+      && bewahrterNachtrag && !nachtragFlach.includes(bewahrterNachtrag)
     ? [...nachtragFlach, bewahrterNachtrag]
     : nachtragFlach;
 

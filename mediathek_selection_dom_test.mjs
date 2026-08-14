@@ -202,6 +202,7 @@ const klickeAlle = async (text) => {
 
 check("Karten öffnen außerhalb des Modus weiterhin Details", karte("a")?.getAttribute("role") === "button");
 const appQuelltext = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
+const mediathekQuelltext = fs.readFileSync(path.join(WURZEL, "src/tabs/MediathekTab.jsx"), "utf8");
 const batchNaht = appQuelltext.slice(
   appQuelltext.indexOf("const planeFilmBatchLoeschung"),
   appQuelltext.indexOf("const uebernehmeQuellenKlaerung"),
@@ -211,6 +212,9 @@ check("App-Batchnaht nutzt exakt Preview und gebundene Ausführungs-API mit Lade
   && batchNaht.includes("personalDataTransaktionen.loescheFilme(ids, { plan")
   && (batchNaht.match(/!mustwatchGeladen \|\| !artikelGeladen/g) || []).length === 2
   && !batchNaht.includes("window.confirm") && !batchNaht.includes("loescheFilm("));
+check("Künstlicher Nachtrag-Drafterhalt ist synchron an die authentische Löschprojektion gebunden",
+  mediathekQuelltext.includes("const nachtraegeZumRendern = draftGrenzeRef.current.erwartet")
+  && mediathekQuelltext.includes("&& bewahrterNachtrag && !nachtragFlach.includes(bewahrterNachtrag)"));
 await sende(karte("a"), "click");
 check("bestehendes Kartenverhalten zeigt den Inhalt", document.body.textContent.includes("Alpha-Details"));
 
@@ -868,7 +872,11 @@ const pruefeGenerischenStaleAlert = () => {
 
 async function pruefeStaleVorBestaetigung({ name, ersterMaster, ersterKontext,
   zweiterMaster, zweiterKontext }) {
-  await render(ersterMaster, ersterKontext);
+  await render(ersterMaster, ersterKontext, { nachtragFlach: [E12_NACHTRAG_BLEIBT] });
+  await sende(knopf("✎ Bewerten"), "click");
+  const nachtragDraft = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+    .find((el) => el.value === "Nachtrag Kandidat");
+  await setzeWert(nachtragDraft, `E12 ALTER NACHTRAG VORHER ${name}`);
   await sende(knopf("+ Eintrag hinzufügen"), "click");
   const draft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
   await setzeWert(draft, `E12 STALE VORHER ${name}`);
@@ -882,7 +890,11 @@ async function pruefeStaleVorBestaetigung({ name, ersterMaster, ersterKontext,
     !document.querySelector('[role="dialog"]') && !!knopf("Auswählen")
     && pruefeGenerischenStaleAlert() && batchAufrufe.length === 0
     && mutationen === mutationenVorWechsel);
-  check(`${name} vor Bestätigung hält die harte E11-Draftgrenze`, !draft.isConnected);
+  check(`${name} vor Bestätigung hält die harte E11-Draftgrenze synchron ohne alten Nachtrag`,
+    !draft.isConnected && !nachtragDraft.isConnected
+    && !document.body.textContent.includes("Nachtrag Kandidat"));
+  check(`${name} vor Bestätigung gibt Fokus zum aktuellen Auswahlknopf zurück`,
+    document.activeElement === knopf("Auswählen"));
 }
 
 const e12StaleVorMaster = MASTER.map((eintrag) => ({ ...eintrag }));
@@ -903,7 +915,11 @@ await pruefeStaleVorBestaetigung({
 
 async function pruefeStaleWaehrendPending({ name, ersterMaster, ersterKontext,
   zweiterMaster, zweiterKontext }) {
-  await render(ersterMaster, ersterKontext);
+  await render(ersterMaster, ersterKontext, { nachtragFlach: [E12_NACHTRAG_BLEIBT] });
+  await sende(knopf("✎ Bewerten"), "click");
+  const nachtragDraft = [...document.querySelectorAll('input[placeholder="Titel *"]')]
+    .find((el) => el.value === "Nachtrag Kandidat");
+  await setzeWert(nachtragDraft, `E12 ALTER NACHTRAG PENDING ${name}`);
   await sende(knopf("+ Eintrag hinzufügen"), "click");
   const draft = document.querySelector('[data-tour="eintrag-neu"] input[placeholder="Titel *"]');
   await setzeWert(draft, `E12 STALE PENDING ${name}`);
@@ -919,7 +935,11 @@ async function pruefeStaleWaehrendPending({ name, ersterMaster, ersterKontext,
     !document.querySelector('[role="dialog"]') && !!knopf("Auswählen")
     && pruefeGenerischenStaleAlert() && batchAufrufe.length === 1
     && mutationen === mutationenNachStart);
-  check(`${name} während Pending hält die harte E11-Draftgrenze`, !draft.isConnected);
+  check(`${name} während Pending hält die harte E11-Draftgrenze synchron ohne alten Nachtrag`,
+    !draft.isConnected && !nachtragDraft.isConnected
+    && !document.body.textContent.includes("Nachtrag Kandidat"));
+  check(`${name} während Pending gibt Fokus zum aktuellen Auswahlknopf zurück`,
+    document.activeElement === knopf("Auswählen"));
   await act(async () => {
     batchAufloeser(true);
     await Promise.resolve();
