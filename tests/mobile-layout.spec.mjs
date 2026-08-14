@@ -112,8 +112,9 @@ async function pruefeE14TypografieProfil({ browser, schrift, viewport }) {
     await expect(menue).toBeHidden();
 
     const darstellungsBlock = page.locator("summary", { hasText: /^Darstellung & Verhalten$/ });
+    const darstellungsDetails = page.locator("details.kd-klappe").filter({ has: darstellungsBlock });
     await expect(darstellungsBlock).toBeVisible();
-    await darstellungsBlock.click();
+    await expect(darstellungsDetails).toHaveJSProperty("open", true);
     const schriftKlein = page.getByRole("button", { name: "Klein", exact: true });
     const schriftNormal = page.getByRole("button", { name: "Normal", exact: true });
     const schriftGross = page.getByRole("button", { name: "Groß", exact: true });
@@ -721,8 +722,9 @@ test("E14 Typografie stabil, inkl. BROKEN-Fallback, Help-Portal und Settings-Per
     await expect(menue).toBeVisible();
     await menue.getByRole("button", { name: "Settings", exact: true }).click();
     const darstellungsBlock = page.locator("summary", { hasText: /^Darstellung & Verhalten$/ });
+    const darstellungsDetails = page.locator("details.kd-klappe").filter({ has: darstellungsBlock });
     await expect(darstellungsBlock).toBeVisible();
-    await darstellungsBlock.click();
+    await expect(darstellungsDetails).toHaveJSProperty("open", true);
 
     const gross = page.getByRole("button", { name: "Groß", exact: true });
     await expect(gross).toBeVisible();
