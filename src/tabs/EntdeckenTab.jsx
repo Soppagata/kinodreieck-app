@@ -11,6 +11,7 @@ import {
   localRadarTargetLabel,
   rankLocalEntdeckenRecommendations,
 } from "../lib/entdeckenUi.js";
+import { validateRadarPilotImportPayload } from "../lib/radarPilotContracts.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
@@ -155,16 +156,55 @@ function RecommendationsView({ streamingEntdecken, master, profile, useLibrary, 
   </section>;
 }
 
-function RadarView({ radarState, master, streamingKnown, streamingDiscover, accountMode, onRadarPreview }) {
+function RadarView({
+  radarState,
+  master,
+  streamingKnown,
+  streamingDiscover,
+  accountMode,
+  onRadarPreview,
+  radarPilotClientEnabled = false,
+  radarPilotActive = false,
+  radarPilotEvents = [],
+  radarReview = false,
+  syncStatus = "disabled",
+  onRadarPilotReceipt,
+  onRadarPilotImport,
+  onRadarPilotSync,
+}) {
   const [proposalRaw, setProposalRaw] = useState("");
   const [expectedHash, setExpectedHash] = useState("");
   const [proposalResult, setProposalResult] = useState(null);
+  const [pilotImportRaw, setPilotImportRaw] = useState("");
+  const [pilotImportBusy, setPilotImportBusy] = useState(false);
+  const [pilotImportMessage, setPilotImportMessage] = useState("");
+  const [pilotReceiptBusy, setPilotReceiptBusy] = useState("");
+  const pilotReceiptInFlight = useRef(new Set());
   const ledger = useMemo(() => createFixtureRadarLedger(radarFixtures), []);
   const today = new Date().toISOString().slice(0, 10);
-  const week = useMemo(() => projectLocalRadarWeek({ state: radarState, ledger, startDate: today }), [ledger, radarState, today]);
+  const fixtureWeek = useMemo(() => projectLocalRadarWeek({ state: radarState, ledger, startDate: today }), [ledger, radarState, today]);
+  const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
+    `${entry.eventId}|${entry.versionId}`,
+    entry,
+  ])), [radarState?.receipts]);
+  const pilotWeek = useMemo(() => (radarPilotEvents || []).map((entry) => ({
+    eventId: entry.eventId,
+    eventVersionId: entry.eventVersionId,
+    targetId: entry.targetId,
+    eventType: entry.eventType,
+    date: entry.date,
+    region: entry.region,
+    platform: entry.platform,
+    lifecycleStatus: entry.lifecycleStatus,
+    verificationStatus: entry.verificationStatus,
+  })), [radarPilotEvents]);
+  const week = radarPilotClientEnabled && radarPilotActive ? pilotWeek : fixtureWeek;
   const fixtureTarget = radarFixtures.catalog[0];
   const active = radarState?.subscriptions || [];
   const pending = radarState?.outbox || [];
+  const canPilotControls = radarPilotClientEnabled && radarPilotActive;
+  const canPilotReceipt = canPilotControls && typeof onRadarPilotReceipt === "function";
+  const canPilotImport = canPilotControls && radarReview === true && typeof onRadarPilotImport === "function";
 
   const ladeBeispiel = () => {
     setProposalRaw(JSON.stringify(radarFixtures.radarProposal, null, 2));
@@ -176,6 +216,44 @@ function RadarView({ radarState, master, streamingKnown, streamingDiscover, acco
     catalog: radarFixtures.catalog,
     expectedInputHash: expectedHash.trim(),
   }));
+  const fuehrePilotImport = async () => {
+    if (!canPilotImport || pilotImportBusy) return;
+    let payload = null;
+    try { payload = JSON.parse(pilotImportRaw); } catch {
+      setPilotImportMessage("JSON ungültig");
+      return;
+    }
+    const result = validateRadarPilotImportPayload(payload);
+    if (!result.ok) {
+      setPilotImportMessage(`Import ungültig: ${result.errors.join(", ")}`);
+      return;
+    }
+    setPilotImportBusy(true);
+    setPilotImportMessage("");
+    try {
+      const queued = await onRadarPilotImport(payload);
+      setPilotImportMessage(queued ? "Import wurde in Outbox geschrieben." : "Import nicht gespeichert.");
+    } finally {
+      setPilotImportBusy(false);
+    }
+  };
+  const fuehrePilotReceipt = async (entry) => {
+    if (!canPilotReceipt || pilotReceiptBusy === entry.eventVersionId
+      || pilotReceiptInFlight.current.has(entry.eventVersionId) || !entry.eventId || !entry.eventVersionId
+    ) return;
+    pilotReceiptInFlight.current.add(entry.eventVersionId);
+    setPilotReceiptBusy(entry.eventVersionId);
+    try {
+      await onRadarPilotReceipt({
+        eventId: entry.eventId,
+        eventVersionId: entry.eventVersionId,
+        status: "seen",
+      });
+    } finally {
+      pilotReceiptInFlight.current.delete(entry.eventVersionId);
+      setPilotReceiptBusy("");
+    }
+  };
 
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
@@ -194,11 +272,41 @@ function RadarView({ radarState, master, streamingKnown, streamingDiscover, acco
       </article>
       <article className="kd-entdecken-panel">
         <h3>Diese Woche</h3>
-        {week.length ? <ul>{week.map((entry) => <li key={entry.versionId}><strong>{entry.title}</strong><span>{entry.date} · {entry.eventType} · nur Vorschau</span></li>)}</ul>
+        {week.length ? <ul>{week.map((entry) => <li key={entry.eventVersionId || entry.versionId}>
+          <strong>{entry.title || localRadarTargetLabel(entry.targetId, { master, fixtures: radarFixtures })}</strong>
+          <span>{entry.date} · {entry.eventType} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
+          {canPilotReceipt ? <div>
+            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status ? (
+              <small>Status: {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`).status}</small>
+            ) : null}
+            <button type="button" className="kd-entdecken-sekundaer" disabled={pilotReceiptBusy === entry.eventVersionId}
+              onClick={() => fuehrePilotReceipt(entry)}>
+              {pilotReceiptBusy === entry.eventVersionId ? "Wird gespeichert…" : "Gesehen"}
+            </button>
+          </div> : null}
+        </li>)}</ul>
           : <p className="kd-entdecken-leer">Keine lokal bestätigten Ereignisse für deine aktiven Ziele.</p>}
         <small>Keine Kalender- oder Erinnerungsänderung.</small>
       </article>
     </div>
+
+    {canPilotControls ? <article className="kd-entdecken-panel">
+      <h3>Pilot</h3>
+      <p className="kd-entdecken-kopfleiste">Status: {syncStatus}</p>
+      <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPilotSync?.()}>Pilot-Sync starten</button>
+    </article> : null}
+
+    {canPilotImport ? <article className="kd-entdecken-proposal">
+      <h3>Pilot-Import</h3>
+      <textarea aria-label="Pilot-Import JSON" className="kd-entdecken-textarea" rows={8} value={pilotImportRaw}
+        onChange={(event) => setPilotImportRaw(event.target.value)} spellCheck="false" />
+      <div className="kd-entdecken-proposal-aktionen">
+        <button type="button" className="kd-entdecken-sekundaer" onClick={fuehrePilotImport} disabled={pilotImportBusy || !pilotImportRaw.trim()}>
+          {pilotImportBusy ? "Import läuft…" : "Pilot-Import bestätigen"}
+        </button>
+      </div>
+      {pilotImportMessage ? <p className="kd-entdecken-kleingedruckt">{pilotImportMessage}</p> : null}
+    </article> : null}
 
     <article className="kd-entdecken-hub-karte kd-entdecken-fixture">
       <span className="kd-entdecken-kicker">Synthetische Fixture · keine Live-Nutzerdaten</span>
@@ -237,7 +345,18 @@ function RadarView({ radarState, master, streamingKnown, streamingDiscover, acco
 export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, accountMode = false,
-  onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
+  radarPilotClientEnabled = false,
+  radarPilotActive = false,
+  radarPilotEvents = [],
+  radarReview = false,
+  syncStatus = "disabled",
+  onRadarPilotReceipt,
+  onRadarPilotImport,
+  onRadarPilotSync,
+  onObserveToggle,
+  onRadarChange,
+  onRadarPreview,
+  onShareChange,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
   const [manageOffen, setManageOffen] = useState(false);
@@ -268,7 +387,10 @@ export function EntdeckenTab({
     {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} master={master}
       profile={profile} useLibrary={useLibrary} onRadarPreview={onRadarPreview} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
-      streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview} /> : null}
+      streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
+      radarPilotClientEnabled={radarPilotClientEnabled} radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents}
+      radarReview={radarReview} syncStatus={syncStatus}
+      onRadarPilotReceipt={onRadarPilotReceipt} onRadarPilotImport={onRadarPilotImport} onRadarPilotSync={onRadarPilotSync} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Meinungen"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
 
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}

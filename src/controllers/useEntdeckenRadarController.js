@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
@@ -6,6 +6,8 @@ import {
   createEmptyLocalRadar,
   decodeLocalRadar,
   queueAccountRadarChange,
+  queueAccountRadarPilotImport,
+  queueAccountRadarPilotReceipt,
   queueAccountRadarShareChange,
   removeGuestRadarSubscription,
   upsertGuestRadarSubscription,
@@ -14,6 +16,7 @@ import {
 import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
+import { radarPilotService } from "../services/radarPilot.js";
 
 export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
@@ -33,6 +36,8 @@ export function useEntdeckenRadarController({
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
+  const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
+  const radarPilotAutoSyncRef = useRef("");
   const radarInitial = useMemo(() => {
     try {
       const decoded = decodeLocalRadar(localStorage.getItem(K.radar), { authority: radarAuthority });
@@ -58,29 +63,32 @@ export function useEntdeckenRadarController({
     fehlermeldung: "Radar konnte nicht bestätigt gespeichert werden. Die Änderung wurde nicht übernommen.",
   });
   const [radarPreviewTarget, setRadarPreviewTarget] = useState(null);
+  const [radarPilotSyncStatus, setRadarPilotSyncStatus] = useState(radarPilotClientEnabled ? "idle" : "disabled");
   const schliesseRadarPreview = useCallback(() => setRadarPreviewTarget(null), []);
 
+  const syncRadarPilot = useCallback(async () => {
+    if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) {
+      setRadarPilotSyncStatus("disabled");
+      return { status: "disabled", state: radarStateRef.current };
+    }
+    const status = await radarPilotService.sync({
+      state: radarStateRef.current,
+      commit: (next) => setRadarState(next),
+    });
+    setRadarPilotSyncStatus(status?.status || "pending");
+    return status;
+  }, [radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState]);
+
   useEffect(() => {
-    if (!bootDone) return undefined;
-    let aktiv = true;
-    (async () => {
-      try {
-        const row = await store.get(K.radar);
-        if (!aktiv) return;
-        const decoded = decodeLocalRadar(row?.value ?? null, { authority: radarAuthority });
-        if (decoded.ok) setRadarState(decoded.state);
-        else {
-          setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
-          setErr("Der lokale Radar-Stand passt nicht zur aktuellen Anmeldung oder ist beschädigt. Er wurde nicht verändert und bleibt vorsichtshalber ausgeblendet.");
-        }
-      } catch {
-        if (!aktiv) return;
-        setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
-        setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Es wurde nichts verändert.");
-      }
-    })();
-    return () => { aktiv = false; };
-  }, [bootDone, radarAuthority, session.account?.id, setRadarState, setErr]);
+    if (!bootDone || radarAuthority !== "account-cache" || !remoteKontoAktiv || !radarPilotClientEnabled) {
+      return undefined;
+    }
+    const signature = `${session.account?.id || ""}|${radarAuthority}`;
+    if (radarPilotAutoSyncRef.current === signature) return undefined;
+    radarPilotAutoSyncRef.current = signature;
+    void syncRadarPilot();
+    return undefined;
+  }, [bootDone, remoteKontoAktiv, radarAuthority, radarPilotClientEnabled, session.account?.id, syncRadarPilot]);
 
   const aendereSerienBeobachtung = useCallback(async (eintrag, aktiv) => {
     const watchmodeId = eintrag?.watchmode_id ?? eintrag?.watchmodeId;
@@ -133,6 +141,9 @@ export function useEntdeckenRadarController({
       grund = result.reason;
       return result.ok ? result.state : null;
     });
+    if (radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv && gespeichert !== false) {
+      void syncRadarPilot();
+    }
     if (gespeichert !== false) return true;
     setErr(grund === "quota-exceeded"
       ? "Dein lokaler Radar hat bereits zehn aktive Ziele. Pausiere oder entferne zuerst eines."
@@ -140,7 +151,15 @@ export function useEntdeckenRadarController({
         ? "Radar-Änderungen passen nicht zur aktuellen Ablage. Es wurde nichts verändert."
         : "Die Radar-Änderung wurde nicht bestätigt gespeichert. Es wurde kein Providerjob gestartet.");
     return false;
-  }, [radarAuthority, radarTargetAusEintrag, remoteKontoAktiv, schreibeRadarState, setErr]);
+  }, [
+    radarAuthority,
+    radarPilotClientEnabled,
+    remoteKontoAktiv,
+    radarTargetAusEintrag,
+    schreibeRadarState,
+    setErr,
+    syncRadarPilot,
+  ]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
@@ -155,12 +174,75 @@ export function useEntdeckenRadarController({
       grund = result.reason;
       return result.ok ? result.state : null;
     });
+    if (radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv && gespeichert !== false) {
+      void syncRadarPilot();
+    }
     if (gespeichert !== false) return true;
     setErr(grund === "active-subscription-required"
       ? "Teilen ist erst für ein serverbestätigtes aktives Radarziel möglich."
       : "Die Teilen-Wahl wurde nicht bestätigt gespeichert.");
     return false;
-  }, [radarAuthority, remoteKontoAktiv, schreibeRadarState, setErr]);
+  }, [
+    radarAuthority,
+    radarPilotClientEnabled,
+    remoteKontoAktiv,
+    schreibeRadarState,
+    setErr,
+    syncRadarPilot,
+  ]);
+
+  const fuehreRadarPilotReceipt = useCallback(async ({ eventId, eventVersionId, status = "seen" }) => {
+    if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return false;
+    const gespeichert = await schreibeRadarState((prev) => {
+      const result = queueAccountRadarPilotReceipt(prev, {
+        eventId,
+        eventVersionId,
+        status,
+        now: new Date().toISOString(),
+      });
+      return result.ok ? result.state : null;
+    });
+    if (gespeichert === false) return false;
+    await syncRadarPilot();
+    return true;
+  }, [
+    radarAuthority,
+    radarPilotClientEnabled,
+    remoteKontoAktiv,
+    schreibeRadarState,
+    syncRadarPilot,
+  ]);
+
+  const fuehreRadarPilotImport = useCallback(async (payload) => {
+    if (
+      !radarPilotClientEnabled || !remoteKontoAktiv || radarAuthority !== "account-cache"
+      || radarStateRef.current?.pilot?.status !== "ready"
+      || radarStateRef.current?.pilot?.radarReview !== true
+    ) return false;
+    const operationId = neueLokaleOperationId();
+    const gespeichert = await schreibeRadarState((prev) => {
+      const result = queueAccountRadarPilotImport(prev, {
+        operationId,
+        payload,
+        now: new Date().toISOString(),
+      });
+      return result.ok ? result.state : null;
+    });
+    if (gespeichert === false) return false;
+    await syncRadarPilot();
+    return true;
+  }, [
+    radarAuthority,
+    radarPilotClientEnabled,
+    remoteKontoAktiv,
+    schreibeRadarState,
+    syncRadarPilot,
+    radarStateRef,
+  ]);
+
+  const fuehreRadarPilotSync = useCallback(async () => {
+    return syncRadarPilot();
+  }, [syncRadarPilot]);
 
   const bestaetigeRadarVorschau = useCallback(async (target, { shareEnabled = false } = {}) => {
     if (radarAuthority === "account-cache" && !remoteKontoAktiv) {
@@ -214,11 +296,22 @@ export function useEntdeckenRadarController({
 
   return {
     radarAuthority, sichtbarerRadarState, radarPreviewTarget,
+    radarPilotClientEnabled,
+    radarPilotActive: radarPilotProjection.active,
     radarPilotEvents: radarPilotProjection.events,
     radarReview: radarPilotProjection.radarReview,
-    setRadarPreviewTarget, schliesseRadarPreview,
-    aendereSerienBeobachtung, aendereRadar, aendereRadarShare,
-    bestaetigeRadarVorschau, beobachteteWatchmodeIds, radarTargetIds,
+    radarPilotSyncStatus,
+    setRadarPreviewTarget,
+    schliesseRadarPreview,
+    aendereSerienBeobachtung,
+    aendereRadar,
+    aendereRadarShare,
+    bestaetigeRadarVorschau,
+    beobachteteWatchmodeIds,
+    radarTargetIds,
+    fuehreRadarPilotReceipt,
+    fuehreRadarPilotImport,
+    fuehreRadarPilotSync,
     fuehreGlobaleSuchaktionAus,
   };
 }

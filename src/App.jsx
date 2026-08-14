@@ -1315,15 +1315,13 @@ export default function App() {
     if (!t) return;
     schreibeEntdeckenStatus((prev) => ({ ...prev, [watchmodeId]: bestaetigeStaffel(prev[watchmodeId], t) }));
   }, [serienKatalog, schreibeEntdeckenStatus]);
-
-  const {
-    radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
+  const { radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
     aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
     beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
-  } = useEntdeckenRadarController({
+    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus,
+    fuehreRadarPilotReceipt, fuehreRadarPilotImport, fuehreRadarPilotSync, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
-    entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
-  });
+    entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
   const {
     accountId,
     vorbewertungAktiv,
@@ -2075,11 +2073,13 @@ export default function App() {
 
         {tab === "blog" && (
           <EntdeckenTab
-            fokusId={blogFokus} radarState={sichtbarerRadarState}
-            seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus} master={master || []}
-            streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} accountMode={radarAuthority === "account-cache"}
-            onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
+            fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
+            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken}
+            accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
+            radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
+            syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
+            onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
             blogProps={{
               artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,
               onFokusVerbraucht: () => setBlogFokus(null),

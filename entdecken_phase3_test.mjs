@@ -27,6 +27,21 @@ const check = (name, fn) => {
   console.log(`✓ ${name}`);
 };
 
+const textareas = (root, name) => [...root.querySelectorAll("textarea")].find((entry) => entry.getAttribute("aria-label") === name);
+
+async function setTextareaValue(root, name, value) {
+  const field = textareas(root, name);
+  if (!field) return;
+  await act(async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
+    if (descriptor?.set) descriptor.set.call(field, value);
+    else field.value = value;
+    field.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    field.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    await tick();
+  });
+}
+
 const seriesActions = createCatalogSearchActions({
   watchmodeId: 4711, title: "Synthetische Serie", type: "tv_series",
 });
@@ -117,7 +132,9 @@ async function loadEsbuild() {
   try { return await import("esbuild"); }
   catch { return createRequire(import.meta.resolve("vite"))("esbuild"); }
 }
-const outputDir = path.join(wurzel, "node_modules/.cache/entdecken-phase3-test");
+const cacheDir = path.join(wurzel, ".tmp");
+fs.mkdirSync(cacheDir, { recursive: true });
+const outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-phase3-test-"));
 const output = path.join(outputDir, "bundle.mjs");
 fs.mkdirSync(outputDir, { recursive: true });
 const esbuild = await loadEsbuild();
@@ -235,6 +252,138 @@ check("Radar-Vorschau ruft nach Bestätigung genau einen gekapselten Write auf",
   assert.equal(previewClosed, 1);
 });
 await preview.cleanup();
+
+const pilotEvent = {
+  eventId: "00000000-0000-4000-8000-000000000001",
+  eventVersionId: "00000000-0000-4000-8000-000000000011",
+  targetId: "tmdb:0001",
+  targetType: "movie",
+  eventType: "kinostart_at",
+  date: "2026-08-09",
+  region: "AT",
+  platform: "-",
+  lifecycleStatus: "active",
+  verificationStatus: "confirmed",
+};
+const validPilotImportPayload = {
+  targetKey: "tmdb:0001",
+  eventType: "kinostart_at",
+  date: "2026-08-09",
+  region: "AT",
+  platform: "-",
+  evidence: [
+    { sourceId: "s1", url: "https://example.org/1", retrievedAt: "2026-08-09T10:00:00.000Z" },
+    { sourceId: "s2", url: "https://example.org/2", retrievedAt: "2026-08-09T10:00:01.000Z" },
+  ],
+};
+const pilotState = createEmptyLocalRadar();
+
+const mountPilotUi = async (props) => mount(EntdeckenTab, {
+  blogProps: emptyBlogProps,
+  radarState: pilotState,
+  seriesCatalog: [], entdeckenStatus: {}, master: [],
+  streamingKnown: null, streamingDiscover: recommendationInput,
+  accountMode: true,
+  onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
+  ...props,
+});
+
+const pilotNoImportUi = await mountPilotUi({
+  radarPilotClientEnabled: false,
+  radarPilotActive: false,
+  radarPilotEvents: [pilotEvent],
+  radarReview: true,
+});
+await act(async () => { button(pilotNoImportUi.container, "Radar").click(); await tick(); });
+check("Flag false zeigt trotz Review keine Pilot-Importfläche und behält Fixture-Inhalt", () => {
+  const fixtureTitle = pilotNoImportUi.container.querySelector(".kd-entdecken-kicker")?.textContent;
+  const hasImport = pilotNoImportUi.container.querySelector("[aria-label='Pilot-Import JSON']");
+  assert.equal(!!fixtureTitle && fixtureTitle.includes("Synthetische Fixture"), true);
+  assert.equal(hasImport, null);
+});
+await pilotNoImportUi.cleanup();
+
+const pilotReviewFalseUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: false,
+  radarPilotEvents: [pilotEvent],
+  radarReview: false,
+});
+await act(async () => { button(pilotReviewFalseUi.container, "Radar").click(); await tick(); });
+check("Flag true mit radarReview false blendet Pilot-Import aus", () => {
+  assert.equal(pilotReviewFalseUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
+});
+await pilotReviewFalseUi.cleanup();
+
+let pilotImportCalls = 0;
+const pilotImportUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEvent],
+  radarReview: true,
+  onRadarPilotImport: async () => { pilotImportCalls += 1; return true; },
+});
+await act(async () => { button(pilotImportUi.container, "Radar").click(); await tick(); });
+check("Flag true + radarReview true blendet Pilot-Import ein", () => {
+  assert.ok(pilotImportUi.container.querySelector("[aria-label='Pilot-Import JSON']"));
+  assert.ok(button(pilotImportUi.container, "Pilot-Import bestätigen"));
+});
+
+await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", "{ ");
+await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify([1,2,3]));
+await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify({ ...validPilotImportPayload, extra: true }));
+await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+check("Malformed/Array/Extra-Key-Import führt zu null Callbacks", () => {
+  assert.equal(pilotImportCalls, 0);
+});
+
+await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify(validPilotImportPayload));
+await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+check("Gültiger exakter Payload führt genau zu einem Importcallback", () => {
+  assert.equal(pilotImportCalls, 1);
+});
+await pilotImportUi.cleanup();
+
+const pilotEmptyActiveUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [],
+  radarReview: true,
+});
+await act(async () => { button(pilotEmptyActiveUi.container, "Radar").click(); await tick(); });
+check("Aktiver Pilot mit leerem Feed hat keine Vorbefüllungs-Woche", () => {
+  const currentWeek = [...pilotEmptyActiveUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  assert.equal(currentWeek?.querySelector("li"), null);
+  assert.ok(currentWeek?.textContent.includes("Keine lokal bestätigten Ereignisse für deine aktiven Ziele."));
+});
+await pilotEmptyActiveUi.cleanup();
+
+let receiptCalls = 0;
+const receiptUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEvent],
+  radarReview: true,
+  onRadarPilotReceipt: async () => {
+    receiptCalls += 1;
+    return true;
+  },
+});
+await act(async () => { button(receiptUi.container, "Radar").click(); await tick(); });
+await act(async () => {
+  const btn = button(receiptUi.container, "Gesehen");
+  btn.click();
+  btn.click();
+  await tick();
+});
+check("Pilot-Ereignis-Receipt klickt genau einmal, ohne optimistischen Status", () => {
+  assert.equal(receiptCalls, 1);
+  assert.equal(receiptUi.container.textContent.includes("Status: seen"), false);
+});
+await receiptUi.cleanup();
 
 const searchCalls = [];
 const searchUi = await mount(GlobalSearchBar, {

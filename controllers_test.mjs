@@ -546,6 +546,22 @@ const articleController = fs.readFileSync("src/controllers/useArticleController.
 const personalDataController = fs.readFileSync("src/controllers/personalDataTransactionController.js", "utf8");
 const intelligenceController = fs.readFileSync("src/controllers/useIntelligenceController.js", "utf8");
 const radarController = fs.readFileSync("src/controllers/useEntdeckenRadarController.js", "utf8");
+check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<EntdeckenTab/.test(app)
+  && /radarPilotClientEnabled=\{radarPilotClientEnabled\}/.test(app)
+  && /radarPilotActive=\{radarPilotActive\}/.test(app)
+  && /radarPilotEvents=\{radarPilotEvents\}/.test(app)
+  && /radarReview=\{radarReview\}/.test(app)
+  && /syncStatus=\{radarPilotSyncStatus\}/.test(app)
+  && /onRadarPilotReceipt=\{fuehreRadarPilotReceipt\}/.test(app)
+  && /onRadarPilotImport=\{fuehreRadarPilotImport\}/.test(app)
+  && /onRadarPilotSync=\{fuehreRadarPilotSync\}/.test(app));
+check("Controller-Sync ruft radarPilotService exakt mit state und commit auf", /radarPilotService\.sync\(\{[\s\S]*state:\s*radarStateRef\.current,[\s\S]*commit:\s*\(next\) => setRadarState\(next\)/.test(radarController));
+check("Controller hat keinen Pilot-Timer/Retry für den W2-Pfad", !/setTimeout|setInterval|clearTimeout|clearInterval/.test(radarController));
+check("Pilot-Gates richten sich nur an Flag/Authority/Active-Account", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
+  && /!radarPilotClientEnabled/.test(radarController)
+  && /!remoteKontoAktiv/.test(radarController)
+  && /radarAuthority !== "account-cache"/.test(radarController)
+  && /radarStateRef\.current\?\.pilot\?\.radarReview !== true/.test(radarController));
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
   /\["master", "programm", "streaming"\]/.test(mustwatchListe)
   && /onSpringeZuMustwatchRef=\{springeZuMustwatchRef\}/.test(app));
