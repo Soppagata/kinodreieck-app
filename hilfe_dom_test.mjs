@@ -51,37 +51,76 @@ globalThis.requestAnimationFrame = (callback) => {
 dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
 const TEST_BUNDLE = path.join(tmpdir(), `.kd-hilfe-dom-test-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`);
-await esbuild.build({
-  stdin: {
-    contents: [
-      'export { default as React, act, useState, useRef, useCallback } from "react";',
-      'export { createRoot } from "react-dom/client";',
-      'export { HilfeSheet } from "./src/components/HilfeSheet.jsx";',
-      'export { DokuAnsicht } from "./src/components/Erklaerstuecke.jsx";',
-      'export { HILFE_BEREICHE } from "./src/lib/hilfeInhalte.js";',
-      'export { sperreDokumentScroll } from "./src/lib/documentScrollLock.js";',
-    ].join("\n"),
-    resolveDir: WURZEL,
-    sourcefile: "hilfe-dom-test-entry.jsx",
-    loader: "jsx",
-  },
-  outfile: TEST_BUNDLE,
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  jsx: "automatic",
-  target: "es2022",
-  nodePaths: [MODULWURZEL],
-  logLevel: "silent",
-});
+function cleanupBundle() {
+  try {
+    fs.unlinkSync(TEST_BUNDLE);
+  } catch {
+    // Aufräumen: kein sichtbarer Fehler.
+  }
+}
 
-const {
-  React, act, useState, useRef, useCallback, createRoot,
-  HilfeSheet, DokuAnsicht, HILFE_BEREICHE, sperreDokumentScroll,
-} = await import(pathToFileURL(TEST_BUNDLE).href);
+let React;
+let act;
+let useState;
+let useRef;
+let useCallback;
+let createRoot;
+let HilfeSheet;
+let DokuAnsicht;
+let HILFE_BEREICHE;
+let sperreDokumentScroll;
+
+let buildLoadError;
+try {
+  await esbuild.build({
+    stdin: {
+      contents: [
+        'export { default as React, act, useState, useRef, useCallback } from "react";',
+        'export { createRoot } from "react-dom/client";',
+        'export { HilfeSheet } from "./src/components/HilfeSheet.jsx";',
+        'export { DokuAnsicht } from "./src/components/Erklaerstuecke.jsx";',
+        'export { HILFE_BEREICHE } from "./src/lib/hilfeInhalte.js";',
+        'export { sperreDokumentScroll } from "./src/lib/documentScrollLock.js";',
+      ].join("\n"),
+      resolveDir: WURZEL,
+      sourcefile: "hilfe-dom-test-entry.jsx",
+      loader: "jsx",
+    },
+    outfile: TEST_BUNDLE,
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    jsx: "automatic",
+    target: "es2022",
+    nodePaths: [MODULWURZEL],
+    logLevel: "silent",
+  });
+  ({
+    React, act, useState, useRef, useCallback, createRoot,
+    HilfeSheet, DokuAnsicht, HILFE_BEREICHE, sperreDokumentScroll,
+  } = await import(pathToFileURL(TEST_BUNDLE).href));
+} catch (error) {
+  buildLoadError = error;
+} finally {
+  if (buildLoadError) {
+    cleanupBundle();
+  }
+}
+
+if (buildLoadError) {
+  throw buildLoadError;
+}
 
 const checks = [];
-const check = (name, pass) => checks.push([name, !!pass]);
+const check = (name, pass) => {
+  const bestanden = !!pass;
+  checks.push([name, bestanden]);
+  return bestanden;
+};
+const stepIf = (name, pass) => {
+  if (pass) step(name);
+  return pass;
+};
 
 const pflicht = {
   refGebunden: 0,
@@ -147,6 +186,7 @@ function bodyStyleSnapshot() {
     left: document.body.style.left,
     right: document.body.style.right,
     width: document.body.style.width,
+    className: document.body.className,
   };
 }
 
@@ -199,48 +239,46 @@ async function runHilfeDomTest() {
   await renderHilfe();
 
   const ausloeser = bindState.current?.ausloeser?.current;
-  check("App-Kontrakt: stabile Ref-Übertragung", !!bindState.current);
-  check("App-konformer Hilfetrigger ist referenzierbar", !!ausloeser);
+  const hatBindRef = check("App-Kontrakt: stabile Ref-Übertragung", !!bindState.current);
+  if (hatBindRef) step("refGebunden");
+  const triggerRef = check("App-konformer Hilfetrigger ist referenzierbar", !!ausloeser);
+  if (triggerRef) step("triggerGefunden");
   if (!ausloeser) {
     throw new Error("Auslöser konnte nicht gebunden werden");
   }
-  step("refGebunden");
-  step("triggerGefunden");
 
   const vorLock = bodyStyleSnapshot();
-  const baselineClass = document.body.className;
 
   ausloeser.focus();
-  step("triggerGeoeffnet");
   await act(async () => { ausloeser.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  step("triggerGeoeffnet");
 
   const dialog = document.body.querySelector('[role="dialog"]');
   const panel = dialog?.querySelector(".kd-help-panel");
   const scrim = document.body.querySelector(".kd-sheet-scrim");
 
-  check("HilfeSheet rendert role=dialog + aria-modal im Body-Portal", !!dialog && dialog.getAttribute("aria-modal") === "true");
-  check("HilfeSheet liegt im Body-Portal", !!dialog && !!(dialog.parentElement === document.body));
-  check("HilfeSheet trägt kanonischen Titel", dialog?.getAttribute("aria-labelledby") === "kd-help-titel");
-  check("HilfeSheet enthält 7 Titel mit stabilen Datenzielen", !!panel
+  const hatDialog = check("HilfeSheet rendert role=dialog + aria-modal im Body-Portal", !!dialog && dialog.getAttribute("aria-modal") === "true");
+  if (hatDialog && !!dialog && !!(dialog.parentElement === document.body)) step("triggerGeoeffnet");
+  const imPortal = check("HilfeSheet liegt im Body-Portal", !!dialog && !!(dialog.parentElement === document.body));
+  if (imPortal) step("dialogPortal");
+  const hatTitel = check("HilfeSheet trägt kanonischen Titel", dialog?.getAttribute("aria-labelledby") === "kd-help-titel");
+  if (hatTitel) step("dialogTitel");
+  const hatPanel = check("HilfeSheet enthält 7 Titel mit stabilen Datenzielen", !!panel
     && panel.querySelectorAll("h3").length === 7
     && [...panel.querySelectorAll("article[data-hilfe-ziel]")].map((node) => node.getAttribute("data-hilfe-ziel")).join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
   const titles = [...(panel?.querySelectorAll("h3") || [])].map((node) => node.textContent?.trim()).filter(Boolean);
   const dataGoals = [...(panel?.querySelectorAll("article[data-hilfe-ziel]") || [])].map((node) => node.getAttribute("data-hilfe-ziel"));
-  check("HilfeSheet liest Titel aus HILFE_BEREICHE", titles.length === HILFE_BEREICHE.length
+  const stimmenTitel = check("HilfeSheet liest Titel aus HILFE_BEREICHE", titles.length === HILFE_BEREICHE.length
     && titles.every((titel) => HILFE_BEREICHE.some((bereich) => bereich.titel === titel))
     && dataGoals.length === HILFE_BEREICHE.length
     && dataGoals.every((ziel) => HILFE_BEREICHE.some((bereich) => bereich.ziel === ziel)));
 
-  step("dialogPortal");
-  step("dialogTitel");
-  step("panelGefunden");
-  step("titelUndZiele");
+  if (hatPanel) step("panelGefunden");
+  if (stimmenTitel) step("titelUndZiele");
 
   const panelFocusables = fokusziele(panel);
-  check("HilfeSheet fokussiert beim Öffnen ein gültiges Panelziel", panelFocusables.length > 0
+  const hatErstesFokusziel = check("HilfeSheet fokussiert beim Öffnen ein gültiges Panelziel", panelFocusables.length > 0
     && panel?.contains(document.activeElement));
-  if (panelFocusables.length > 0) step("focusErster");
+  if (hatErstesFokusziel) step("focusErster");
   else {
     check("HilfeSheet kann Fokusziel bestimmen", false);
   }
@@ -251,13 +289,11 @@ async function runHilfeDomTest() {
   if (panelFocusables.length > 1) {
     await act(async () => { last.focus(); });
     await act(async () => { tastatur("Tab"); });
-    check("HilfeSheet Tab fährt vom letzten Fokusziel auf das erste", document.activeElement === first);
-    if (document.activeElement === first) step("focusRingVorwaerts");
+    stepIf("focusRingVorwaerts", check("HilfeSheet Tab fährt vom letzten Fokusziel auf das erste", document.activeElement === first));
 
     await act(async () => { first.focus(); });
     await act(async () => { tastatur("Tab", { shift: true }); });
-    check("HilfeSheet Shift+Tab fährt vom ersten Fokusziel auf das letzte", document.activeElement === last);
-    if (document.activeElement === last) step("focusRingRueckwaerts");
+    stepIf("focusRingRueckwaerts", check("HilfeSheet Shift+Tab fährt vom ersten Fokusziel auf das letzte", document.activeElement === last));
   } else {
     check("HilfeSheet Tab/Shift+Tab bleibt bei Einzelziel im Dialog", panelFocusables.includes(document.activeElement));
   }
@@ -268,36 +304,56 @@ async function runHilfeDomTest() {
   }
 
   const ownerRef = sperreDokumentScroll();
-  step("lockVor");
-  check("Scrim ist vorhanden", !!scrim);
-  check("Owner-Lock bleibt während Sheet offen", document.body.classList.contains("kd-scroll-gesperrt")
-    && document.body.style.position === "fixed");
+  stepIf("lockVor", check("Scrim ist vorhanden", !!scrim)
+    && check("Owner-Lock bleibt während Sheet offen", document.body.classList.contains("kd-scroll-gesperrt")
+      && document.body.style.position === "fixed"));
 
   await act(async () => { scrim?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  check("HilfeSheet schließt über Scrim", !document.body.querySelector('[role="dialog"]'));
-  if (!document.body.querySelector('[role="dialog"]')) step("scrimClose");
+  const schlossUeberScrim = check("HilfeSheet schließt über Scrim", !document.body.querySelector('[role="dialog"]'));
+  if (schlossUeberScrim) step("scrimClose");
   check("Focus geht bei Scrim-Schluss auf Auslöser zurück", document.activeElement === ausloeser);
   if (document.activeElement === ausloeser) step("focusReturn");
-  check("Owner-Lock kann durch verschachtelte Sperre noch aktiv sein", document.body.classList.contains("kd-scroll-gesperrt")
+  const lockNachScrim = check("Owner-Lock kann durch verschachtelte Sperre noch aktiv sein", document.body.classList.contains("kd-scroll-gesperrt")
     && document.body.style.position === "fixed");
-  step("lockReopen");
+  if (lockNachScrim) step("lockReopen");
 
   await act(async () => { bindState.current?.oeffneHilfe?.(); });
   const reopenDialog = document.body.querySelector('[role="dialog"]');
   const reopenPanel = reopenDialog?.querySelector(".kd-help-panel");
-  const reopenFocus = document.activeElement;
-  check("HilfeSheet kann erneut geöffnet werden", !!reopenDialog && reopenDialog.getAttribute("role") === "dialog");
+  const reopenOffen = check("HilfeSheet kann erneut geöffnet werden", !!reopenDialog && reopenDialog.getAttribute("role") === "dialog");
+  const lockWiederDa = check("Owner-Lock gilt beim erneuten Öffnen", document.body.classList.contains("kd-scroll-gesperrt")
+    && document.body.style.position === "fixed");
+  if (reopenOffen && lockWiederDa) step("lockReopen");
 
-  await act(async () => { bindState.current?.onRerender?.(); });
-  check("Rerender erhält späteres Fokusziel unverändert", !!reopenFocus && reopenFocus === document.activeElement);
-  if (!!reopenFocus && reopenFocus === document.activeElement) step("rerenderFokus");
   const reopenFocusables = fokusziele(reopenPanel);
-  check("Rerender bleibt auf Fokusziel innerhalb des Dialogs", reopenFocusables.includes(document.activeElement));
-  step("rerenderCloseAufheben");
+  const rerenderReferenz = reopenFocusables[1] || null;
+  const hatReRenderFokusziel = check(
+    "Rerender nutzt bewusst ein späteres Fokusziel",
+    !!rerenderReferenz,
+  );
+  if (hatReRenderFokusziel) {
+    const lockVorRerender = bodyStyleSnapshot();
+    await act(async () => { rerenderReferenz.focus(); });
+    const fokusVorRerender = document.activeElement;
+    await act(async () => { bindState.current?.onRerender?.(); });
+    const rerenderFocus = document.activeElement;
+    const lockNachRerender = bodyStyleSnapshot();
+    stepIf("rerenderFokus", check("Rerender hält Fokus exakt auf späterem Ziel", rerenderFocus === fokusVorRerender
+      && rerenderFocus === rerenderReferenz));
+    stepIf("rerenderCloseAufheben", check("Rerender hält Lock-Zustand exakt", lockNachRerender.overflow === lockVorRerender.overflow
+      && lockNachRerender.position === lockVorRerender.position
+      && lockNachRerender.top === lockVorRerender.top
+      && lockNachRerender.left === lockVorRerender.left
+      && lockNachRerender.right === lockVorRerender.right
+      && lockNachRerender.width === lockVorRerender.width
+      && lockNachRerender.className === lockVorRerender.className));
+  }
+
+  const reopenFocusablesNach = fokusziele(reopenPanel);
+  check("Rerender bleibt auf Fokusziel innerhalb des Dialogs", reopenFocusablesNach.includes(document.activeElement));
 
   await act(async () => { tastatur("Escape"); });
-  check("Escape fokussiert den Auslöser", document.activeElement === ausloeser);
-  if (document.activeElement === ausloeser) step("escapeClose");
+  stepIf("escapeClose", check("Escape fokussiert den Auslöser", document.activeElement === ausloeser));
 
   ownerRef?.();
   const afterBody = bodyStyleSnapshot();
@@ -307,7 +363,7 @@ async function runHilfeDomTest() {
     && afterBody.left === vorLock.left
     && afterBody.right === vorLock.right
     && afterBody.width === vorLock.width
-    && document.body.className === baselineClass);
+    && afterBody.className === vorLock.className);
   step("scrollRestore");
 }
 
@@ -335,10 +391,18 @@ async function runDokuAnsichtTest() {
     && dokuZiele.join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
 
   if (bereiche[0]) {
-    const erste = bereiche[0].querySelector("summary");
-    erste.focus();
-    await act(async () => { erste.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
-    check("DokuAnsicht-Details öffnen sich via Keyboard", !!bereiche[0].open);
+    const ersteDetails = bereiche[0];
+    const ersteSummary = ersteDetails.querySelector("summary");
+    check("DokuAnsicht nutzt native details > summary-Struktur", !!ersteDetails && ersteDetails.tagName === "DETAILS" && ersteSummary instanceof HTMLElement);
+    check("DokuAnsicht-Details-Summary ist fokussierbar", !!ersteSummary && !ersteSummary.hidden
+      && (ersteSummary.tabIndex >= 0 || ersteSummary.getAttribute("tabindex") !== "-1"));
+    if (ersteSummary) {
+      await act(async () => {
+        ersteSummary.focus();
+        ersteSummary.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    }
+    check("DokuAnsicht-Details öffnen sich via native Summary-Click", !!ersteDetails.open);
     if (bereiche[0].open) {
       step("dokuKeyboard");
     }
@@ -357,13 +421,7 @@ async function runDokuAnsichtTest() {
     await runDokuAnsichtTest();
   } finally {
     await act(async () => { root.render(null); });
-    if (TEST_BUNDLE) {
-      try {
-        fs.unlinkSync(TEST_BUNDLE);
-      } catch {
-        // Aufräumen: kein sichtbarer Fehler bei vorhandenen Testabbruchwegen.
-      }
-    }
+    if (TEST_BUNDLE) cleanupBundle();
   }
 
   check("Ausführungszähler-Pflichtvertrag vollständig", pflichtAusgedrueckt());

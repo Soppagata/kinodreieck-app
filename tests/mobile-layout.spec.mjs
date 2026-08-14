@@ -391,13 +391,13 @@ for (const viewport of VIEWPORTS) {
       });
       expect(panelCss.width).toBeLessThanOrEqual(viewport.width + 0.5);
       expect(panelCss.columns).toBe(1);
-      expect(panelCss.rows).toBeGreaterThanOrEqual(5);
+      expect(panelCss.rows).toBe(7);
       expect(panelCss.overflowXVisible).toBe(true);
       expect(panelCss.overflowY).toBe(true);
-      expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(12);
-      expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(10);
-      expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(10);
-      expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(12);
+      expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(20);
+      expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(20);
+      expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(20);
+      expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(20);
       await page.waitForTimeout(20);
       const panelBox = await hilfePanel.boundingBox();
       const layerBox = await hilfeLayer.boundingBox();
@@ -409,6 +409,74 @@ for (const viewport of VIEWPORTS) {
       await expect(hilfeScrim).not.toBeFocused();
       await expect(hilfeFocusables.first()).toBeFocused();
       const focusCount = await hilfeFocusables.count();
+      if (focusCount > 1) {
+        const laterFocusTarget = hilfeFocusables.nth(1);
+        const lockVorMenu = await page.evaluate(() => ({
+          overflow: document.body.style.overflow,
+          position: document.body.style.position,
+          top: document.body.style.top,
+          left: document.body.style.left,
+          right: document.body.style.right,
+          width: document.body.style.width,
+          className: document.body.className,
+          locked: document.body.classList.contains("kd-scroll-gesperrt"),
+        }));
+        const späterMerkmal = await laterFocusTarget.evaluate((el) => ({
+          tagName: el.tagName,
+          text: (el.textContent || "").replace(/\s+/g, " ").trim(),
+          name: el.getAttribute("name") || "",
+          type: el.getAttribute("type") || "",
+          role: el.getAttribute("role") || "",
+        }));
+
+        await laterFocusTarget.focus();
+        await page.evaluate(() => {
+          const menueButton = [...document.querySelectorAll("button")].find(
+            (node) => node.textContent?.trim() === "Menü öffnen"
+          );
+          if (menueButton) {
+            menueButton.dispatchEvent(new MouseEvent("click", {
+              bubbles: true,
+              cancelable: true,
+            }));
+          }
+        });
+
+        const menuDialog = page.getByRole("dialog", { name: "Menü" });
+        await expect(menuDialog).toBeVisible();
+        const menuScrim = menuDialog.locator('.kd-sheet-scrim');
+        await expect(menuScrim).toBeVisible();
+        await menuScrim.click();
+        await expect(menuDialog).toBeHidden();
+
+        await expect(hilfeDialog).toBeVisible();
+        const laterFocusTargetNachher = hilfePanel.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])').nth(1);
+        await expect(laterFocusTargetNachher).toBeFocused();
+        const nachherMerkmal = await laterFocusTargetNachher.evaluate((el) => ({
+          tagName: el.tagName,
+          text: (el.textContent || "").replace(/\s+/g, " ").trim(),
+          name: el.getAttribute("name") || "",
+          type: el.getAttribute("type") || "",
+          role: el.getAttribute("role") || "",
+        }));
+        expect(nachherMerkmal.tagName).toBe(späterMerkmal.tagName);
+        expect(nachherMerkmal.text).toBe(späterMerkmal.text);
+        expect(nachherMerkmal.name).toBe(späterMerkmal.name);
+        expect(nachherMerkmal.type).toBe(späterMerkmal.type);
+        expect(nachherMerkmal.role).toBe(späterMerkmal.role);
+
+        const lockNachMenu = await page.evaluate(() => ({
+          overflow: document.body.style.overflow,
+          position: document.body.style.position,
+          top: document.body.style.top,
+          left: document.body.style.left,
+          right: document.body.style.right,
+          width: document.body.style.width,
+          className: document.body.className,
+          locked: document.body.classList.contains("kd-scroll-gesperrt"),
+        }));
+        expect(lockNachMenu).toEqual(lockVorMenu);
+      }
       if (focusCount > 1) {
         await hilfeFocusables.last().focus();
         await page.keyboard.press("Tab");
@@ -457,6 +525,101 @@ for (const viewport of VIEWPORTS) {
     });
   }
 }
+
+test("Chromium-Mobil respektiert Safe-Area-Insets im Hilfe-Layer", async ({ browserName, page }) => {
+  test.skip(browserName !== "chromium", "Safe-Area-Bestätigung ist als Chromium-Fokusprobe definiert.");
+
+  const SAFE_AREA = { top: 37, right: 11, bottom: 29, left: 7 };
+  const SAFE_PADS = {
+    top: Math.max(20, SAFE_AREA.top),
+    right: Math.max(20, SAFE_AREA.right),
+    bottom: Math.max(20, SAFE_AREA.bottom),
+    left: Math.max(20, SAFE_AREA.left),
+  };
+
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    let schema;
+    try {
+      schema = await cdp.send("Schema.getDomains");
+    } catch (error) {
+      console.log("STOP_PRODUKTFINDING: Schema.getDomains nicht verfügbar in dieser CDP-Version");
+      return;
+    }
+
+    const emulationDomain = schema?.domains?.find((domain) => domain.name === "Emulation");
+    const safeAreaSupported = !!emulationDomain?.commands?.some((command) => command.name === "setSafeAreaInsetsOverride");
+    if (!safeAreaSupported) {
+      console.log("STOP_PRODUKTFINDING: Emulation.setSafeAreaInsetsOverride nicht verfügbar in dieser CDP-Version");
+      return;
+    }
+
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", SAFE_AREA);
+
+    await expect(page.getByRole("button", { name: "Menü öffnen" })).toBeVisible();
+    await page.getByRole("button", { name: "Menü öffnen" }).click();
+    await page.getByRole("dialog", { name: "Menü" }).getByRole("button", { name: "Start", exact: true }).click();
+
+    const hilfeAusloeser = page.getByRole("button", { name: "Anleitung & Hilfe" });
+    await hilfeAusloeser.click();
+    const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
+    const hilfePanel = hilfeDialog.locator(".kd-help-panel");
+    const hilfeLayer = page.locator(".kd-help-layer");
+    await expect(hilfeDialog).toBeVisible();
+
+    const hilfeLayerPads = await hilfeLayer.evaluate((el) => {
+      const st = getComputedStyle(el);
+      return {
+        top: Number.parseFloat(st.paddingTop),
+        right: Number.parseFloat(st.paddingRight),
+        bottom: Number.parseFloat(st.paddingBottom),
+        left: Number.parseFloat(st.paddingLeft),
+      };
+    });
+
+    expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(SAFE_PADS.top - 0.5);
+    expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(SAFE_PADS.right - 0.5);
+    expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(SAFE_PADS.bottom - 0.5);
+    expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(SAFE_PADS.left - 0.5);
+
+    const panelBox = await hilfePanel.boundingBox();
+    const layerBox = await hilfeLayer.boundingBox();
+    expect(panelBox.x).toBeGreaterThanOrEqual(layerBox.x + SAFE_PADS.left - 0.5);
+    expect(panelBox.y).toBeGreaterThanOrEqual(layerBox.y + SAFE_PADS.top - 0.5);
+    expect(852 - (panelBox.y + panelBox.height)).toBeGreaterThanOrEqual(SAFE_PADS.bottom - 0.5);
+
+    const panelCss = await hilfePanel.evaluate((el) => {
+      const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect());
+      const cols = new Set(articleRects.map((rect) => Math.round(rect.left)));
+      const rows = new Set(articleRects.map((rect) => Math.round(rect.top)));
+      return {
+        rows: rows.size,
+        cols: cols.size,
+      };
+    });
+    expect(panelCss.rows).toBe(7);
+    expect(panelCss.cols).toBe(1);
+
+    await page.keyboard.press("Escape");
+  } finally {
+    try {
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      });
+    } catch {
+      /* best effort */
+    }
+    await cdp.detach();
+  }
+});
 
 for (const viewport of VIEWPORTS) {
   test(`Entdecken-Verwaltung ist Full-Sheet, fokussicher und überlauffrei ${viewport.name}`, async ({ page }) => {

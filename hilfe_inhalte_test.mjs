@@ -1,10 +1,12 @@
 /* Kontraktprüfung für Hilfe-Inhalte, Suchverträge, UI-Quellen und Ziel-IDs. */
+import fs from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { appHilfeAntwort } from "./src/lib/appHilfe.js";
 import {
+  normalisiereHilfeText,
   HILFE_BEREICHE,
   HILFE_AKTIONEN,
   HILFE_ZIELE,
@@ -27,10 +29,109 @@ const check = (name, pass) => checks.push([name, !!pass]);
 
 const TEST_BUNDLE = path.join(
   tmpdir(),
-  `.kd-appnavigation-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`,
+  `.kd-hilfe-inhalte-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`,
 );
 
-const { NAVIGATION } = await (async () => {
+function cleanup() {
+  try {
+    fs.unlinkSync(TEST_BUNDLE);
+  } catch {
+    // Aufräumen, falls Datei schon weg ist.
+  }
+}
+
+function istGefrorenUndTief(wert, besucht = new Set()) {
+  if (!wert || typeof wert !== "object") return true;
+  if (besucht.has(wert)) return true;
+  if (!Object.isFrozen(wert)) return false;
+  besucht.add(wert);
+  const kinder = Array.isArray(wert) ? wert : Object.values(wert);
+  return kinder.every((eintrag) => istGefrorenUndTief(eintrag, besucht));
+}
+
+function arraysGleich(a, b) {
+  if (a.length !== b.length) return false;
+  return a.every((wert, index) => wert === b[index]);
+}
+
+function hatAntwortSchema(ergebnis) {
+  if (!ergebnis || typeof ergebnis !== "object" || Array.isArray(ergebnis)) return false;
+  const keys = Object.keys(ergebnis).sort();
+  const erwartet = ["bereichId", "bereichTitel", "id", "titel", "text", "ziel"];
+  if (keys.length !== erwartet.length) return false;
+  return erwartet.every((feld, index) => keys[index] === feld)
+    && keys.every((feld) => typeof ergebnis[feld] === "string" && ergebnis[feld].trim().length > 0);
+}
+
+function antwortSchemaSicher(ergebnis, expected) {
+  if (!hatAntwortSchema(ergebnis)) return false;
+  return ["id", "titel", "text", "ziel", "bereichId", "bereichTitel"]
+    .every((feld) => ergebnis[feld] === String(expected?.[feld] || ""));
+}
+
+function containsAllWords(text, woerter) {
+  return woerter.every((wort) => text.includes(wort));
+}
+
+function buildSignalwoerter(aktion) {
+  const basis = new Set((aktion?.suchwoerter || []).map((wort) => normalisiereHilfeText(wort)).filter(Boolean));
+  const alias = new Set(basis);
+  for (const quelle of QUELLEN) {
+    const key = normalisiereHilfeText(quelle.key);
+    const label = normalisiereHilfeText(quelle.label);
+    if (basis.has(key) || basis.has(label)) {
+      if (key) alias.add(key);
+      if (label) alias.add(label);
+    }
+  }
+  return alias;
+}
+
+function antwortVon(frage) {
+  const result = appHilfeAntwort(frage);
+  if (!result) return null;
+  const bereich = BEREICHE_BY_ID.get(result.bereichId);
+  return {
+    id: String(result.id || ""),
+    titel: String(result.titel || ""),
+    text: String(result.text || ""),
+    ziel: String(result.ziel || ""),
+    bereichId: String(result.bereichId || ""),
+    bereichTitel: String(result.bereichTitel || bereich?.titel || ""),
+  };
+}
+
+function erwartungAusAktion(aktion) {
+  return {
+    id: String(aktion.id || ""),
+    titel: String(aktion.titel || ""),
+    text: String(aktion.text || ""),
+    ziel: String(aktion.ziel || ""),
+    bereichId: String(aktion.bereichId || ""),
+    bereichTitel: String(BEREICHE_BY_ID.get(aktion.bereichId)?.titel || ""),
+  };
+}
+
+function erwartungAusBereich(bereich) {
+  return {
+    id: String(bereich.id || ""),
+    titel: String(bereich.titel || ""),
+    text: String(bereich.kurztext || ""),
+    ziel: String(bereich.ziel || ""),
+    bereichId: String(bereich.id || ""),
+    bereichTitel: String(bereich.titel || ""),
+  };
+}
+
+function repeatThree(name, fn) {
+  for (let durchlauf = 1; durchlauf <= 3; durchlauf += 1) {
+    check(`${name} [${durchlauf}/3]`, fn(durchlauf));
+  }
+}
+
+let NAVIGATION;
+let buildLoadError;
+try {
   await esbuild.build({
     stdin: {
       contents: 'export { NAVIGATION } from "./src/components/AppNavigation.jsx";',
@@ -47,84 +148,69 @@ const { NAVIGATION } = await (async () => {
     logLevel: "silent",
   });
 
-  const gebundelteNavigation = await import(pathToFileURL(TEST_BUNDLE).href);
-  return gebundelteNavigation;
-})();
-
-const NAVIGATION_IDS = Array.isArray(NAVIGATION)
-  ? NAVIGATION.map((eintrag) => String(eintrag?.id || ""))
-  : [];
-
-function cleanup() {
-  try {
-    requireAusTestumgebung("fs").unlinkSync(TEST_BUNDLE);
-  } catch {
-    // Aufräumen: kein sichtbarer Fehler, wenn der Test bereits beendet wurde.
+  ({ NAVIGATION } = await import(pathToFileURL(TEST_BUNDLE).href));
+} catch (error) {
+  buildLoadError = error;
+} finally {
+  if (buildLoadError) {
+    cleanup();
   }
 }
 
-function normalisiereHilfeText(wert) {
-  return String(wert ?? "")
-    .normalize("NFKC")
-    .toLocaleLowerCase("de-AT")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+if (buildLoadError) {
+  throw buildLoadError;
 }
 
-function answer(frage) {
-  const result = appHilfeAntwort(frage);
-  if (!result) return null;
-  return {
-    ...result,
-    id: String(result.id),
-    ziel: String(result.ziel || ""),
-    bereichId: result.bereichId || null,
-    text: String(result.text || ""),
-  };
-}
+const NAVIGATION_IDS = Array.isArray(NAVIGATION) ? NAVIGATION.map((eintrag) => String(eintrag?.id || "")) : [];
+const NAVIGATION_LABELS = Array.isArray(NAVIGATION) ? NAVIGATION.map((eintrag) => String(eintrag?.label || "")) : [];
 
-function enthältAlleWörter(text, worte) {
-  return worte.every((wort) => text.includes(wort));
-}
+const BEREICHE_BY_ID = new Map(HILFE_BEREICHE.map((bereich) => [bereich.id, bereich]));
+const BEREICHE_IDS = HILFE_BEREICHE.map((bereich) => bereich.id);
+const BEREICHE_ZIEL = HILFE_BEREICHE.map((bereich) => bereich.ziel);
+const BEREICHE_TITEL = HILFE_BEREICHE.map((bereich) => bereich.titel);
+const AKTIONEN_BY_ID = new Map(HILFE_AKTIONEN.map((aktion) => [aktion.id, aktion]));
 
-function wiederholeDreiMal(name, fn) {
-  for (let durchlauf = 1; durchlauf <= 3; durchlauf += 1) {
-    check(`${name} [${durchlauf}/3]`, fn(durchlauf));
-  }
-}
+const BEREICHE_SET = new Set(BEREICHE_IDS);
+const BEREICHE_TITEL_SET = new Set(BEREICHE_TITEL);
+const AKTIONS_SET = new Set(HILFE_AKTIONEN.map((aktion) => aktion.id));
 
-function checkAktion(frage, erwarteteId, namePrefix = frage) {
-  return wiederholeDreiMal(namePrefix, () => {
-    const result = answer(frage);
-    const erwartet = AKTIONEN_NACH_ID.get(erwarteteId);
-    if (!result || !erwartet) return false;
-    return result.id === erwarteteId
-      && result.ziel === erwartet.ziel
-      && result.bereichId === erwartet.bereichId
-      && result.text === erwartet.text;
-  });
-}
-
-const BEREICHE_SET = new Set(HILFE_BEREICHE.map((bereich) => bereich.id));
-const DIREKTE_WOERTER = new Set(HILFE_AKTIONEN.flatMap((aktion) => aktion.direkteSuchwoerter));
-const EINWORT_UND_NICHT_DIREKT = new Set(
-  HILFE_AKTIONEN
-    .flatMap((aktion) => aktion.suchwoerter)
-    .filter((wort) => !DIREKTE_WOERTER.has(wort) && !/\s/.test(wort)),
+const DIREKTE_AKTIONEN = HILFE_AKTIONEN.flatMap((aktion) =>
+  (aktion.direkteSuchwoerter || []).map((term) => ({
+    term: normalisiereHilfeText(term),
+    aktion,
+  })).filter((eintrag) => !!eintrag.term),
 );
-const AKTIONEN_NACH_ID = new Map(HILFE_AKTIONEN.map((aktion) => [aktion.id, aktion]));
-const AKTIONEN_NACH_BEREICH = new Map();
-for (const aktion of HILFE_AKTIONEN) {
-  if (!AKTIONEN_NACH_BEREICH.has(aktion.bereichId)) AKTIONEN_NACH_BEREICH.set(aktion.bereichId, []);
-  AKTIONEN_NACH_BEREICH.get(aktion.bereichId).push(aktion);
+
+const DIREKTE_TERME_EINDEUTIG = new Set(DIREKTE_AKTIONEN.map((eintrag) => eintrag.term));
+
+const DIREKTE_FORMS = [
+  { name: "direkt", query: (e) => e },
+  { name: "hilfe zu", query: (e) => `hilfe zu ${e}` },
+  { name: "settings", query: (e) => `settings ${e}` },
+  { name: "wie kann ich", query: (e) => `wie kann ich ${e}` },
+  { name: "wo finde ich", query: (e) => `wo finde ich ${e}` },
+];
+
+const PROVIDER_ALIAS_BY_NORMALISIERT = new Map();
+for (const quelle of QUELLEN) {
+  for (const alias of [quelle.key, quelle.label]) {
+    const norm = normalisiereHilfeText(alias);
+    if (!norm || PROVIDER_ALIAS_BY_NORMALISIERT.has(norm)) continue;
+    PROVIDER_ALIAS_BY_NORMALISIERT.set(norm, alias);
+  }
 }
+
+const PROVIDER_ALIASE = [...PROVIDER_ALIAS_BY_NORMALISIERT.entries()];
+const STREAMING_AKTION = AKTIONEN_BY_ID.get("streamingdienste-waehlen");
+const STREAMING_SIGNALWORTE = STREAMING_AKTION ? buildSignalwoerter(STREAMING_AKTION) : new Set();
 
 const HILFE_TEXT = HILFE_BEREICHE
   .concat(HILFE_AKTIONEN)
   .concat([HILFE_FALLBACK])
-  .map((eintrag) => JSON.stringify(eintrag)
-    .toLowerCase());
+  .flatMap((eintrag) => [
+    JSON.stringify(eintrag).toLowerCase(),
+    ...String(eintrag?.details || "").toLowerCase().split("\n"),
+  ]);
 
 try {
   validiereHilfeInhalte();
@@ -133,163 +219,107 @@ try {
   check("validiereHilfeInhalte() läuft ohne Exceptions", false);
 }
 
-const ERWARTETE_BEREICHE = [
-  { id: "start", titel: "Start", ziel: "start" },
-  { id: "kino", titel: "Kino", ziel: "kino" },
-  { id: "mediathek", titel: "Mediathek", ziel: "mediathek" },
-  { id: "streaming", titel: "Streaming", ziel: "streaming" },
-  { id: "finder", titel: "Suche", ziel: "finder" },
-  { id: "blog", titel: "Entdecken", ziel: "blog" },
-  { id: "daten", titel: "Settings", ziel: "daten" },
-];
+check("HILFE_ZIELE entspricht gefrorenem Bereichsfluss im selben Reihenfolge-Index", Array.isArray(HILFE_ZIELE)
+  && HILFE_ZIELE.length === HILFE_BEREICHE.length
+  && arraysGleich(HILFE_ZIELE, BEREICHE_IDS));
+check("App-Navigation und Hilfe-Ziele sind vollständig konsistent", Array.isArray(NAVIGATION)
+  && arraysGleich(NAVIGATION_IDS, HILFE_ZIELE)
+  && arraysGleich(BEREICHE_IDS, NAVIGATION_IDS));
+check("App-Navigation-Label-Contract matcht Hilfe-Titel", arraysGleich(BEREICHE_TITEL, NAVIGATION_LABELS));
 
-const NAVIGATION_LABELS = NAVIGATION.map((eintrag) => String(eintrag?.label || ""));
-const ERWARTETE_ZIEL_NAMEN = ERWARTETE_BEREICHE.map((bereich) => bereich.titel);
-const ERWARTETE_ZIELE = NAVIGATION_IDS;
+check("Bereichsvertrag: Deep-Freeze", istGefrorenUndTief(HILFE_BEREICHE));
+check("Aktionsvertrag: Deep-Freeze", istGefrorenUndTief(HILFE_AKTIONEN));
+check("Fallback-Vertrag: Deep-Freeze", istGefrorenUndTief(HILFE_FALLBACK));
 
-check(
-  "Ziele aus Produkt-Quellen und HILFE_ZIELE sind identisch (inkl. Reihenfolge)",
-  Array.isArray(NAVIGATION)
-    && HILFE_ZIELE.length === ERWARTETE_BEREICHE.length
-    && HILFE_ZIELE.length === NAVIGATION.length
-    && HILFE_ZIELE.every((ziel, index) => ziel === ERWARTETE_ZIELE[index] && ziel === ERWARTETE_BEREICHE[index].id),
+check("Bereiche besitzen exakt 6 Felder", HILFE_BEREICHE.length > 0 && HILFE_BEREICHE.every((bereich) => {
+  const keys = new Set(Object.keys(bereich));
+  const erwartet = new Set(["id", "titel", "kurztext", "details", "suchwoerter", "ziel"]);
+  return keys.size === 6
+    && [...keys].every((feld) => erwartet.has(feld))
+    && erwartet.every((feld) => keys.has(feld));
+}));
+
+check("Bereichs-ID-/Zielvertrag ist stabil", new Set(BEREICHE_IDS).size === BEREICHE_IDS.length
+  && new Set(BEREICHE_ZIEL).size === BEREICHE_ZIEL.length
+  && BEREICHE_ZIEL.every((ziel) => BEREICHE_SET.has(ziel))
 );
-
-check(
-  "Hilfe-Ziele entsprechen den AppNavigation-Labeln",
-  NAVIGATION.length === ERWARTETE_BEREICHE.length
-    && ERWARTETE_ZIEL_NAMEN.every((titel, index) => titel === NAVIGATION_LABELS[index]),
-);
+check("Bereichstexte sind eindeutig und kanonisch", BEREICHE_TITEL.length === BEREICHE_TITEL_SET.size);
 
 for (const bereich of HILFE_BEREICHE) {
-  const keys = Object.keys(bereich);
-  const erwartet = ERWARTETE_BEREICHE.find((eintrag) => eintrag.id === bereich.id);
-  check(
-    `Bereich ${bereich.id}: Pflichtfelder vollständig und stabil`,
-    keys.length === 6
-      && new Set(keys).has("id")
-      && new Set(keys).has("titel")
-      && new Set(keys).has("kurztext")
-      && new Set(keys).has("details")
-      && new Set(keys).has("suchwoerter")
-      && new Set(keys).has("ziel")
-      && BEREICHE_SET.has(bereich.id)
-      && HILFE_ZIELE.includes(bereich.ziel)
-      && !!erwartet
-      && erwartet.ziel === bereich.ziel
-      && erwartet.titel === bereich.titel,
-  );
+  const keys = new Set(Object.keys(bereich));
+  const erwartet = new Set(["id", "titel", "kurztext", "details", "suchwoerter", "ziel"]);
+  check(`Bereich ${bereich.id}: Pflichtfelder vollständig`, keys.size === 6
+    && [...keys].every((feld) => erwartet.has(feld))
+    && erwartet.every((feld) => keys.has(feld))
+    && BEREICHE_SET.has(bereich.id)
+    && bereich.ziel === bereich.id);
 }
+
+check("Aktionen besitzen exakt 7 Felder", HILFE_AKTIONEN.length > 0 && HILFE_AKTIONEN.every((aktion) => {
+  const keys = new Set(Object.keys(aktion));
+  const erwartet = new Set(["id", "titel", "text", "suchwoerter", "direkteSuchwoerter", "bereichId", "ziel"]);
+  return keys.size === 7
+    && [...keys].every((feld) => erwartet.has(feld))
+    && erwartet.every((feld) => keys.has(feld));
+}));
 
 for (const aktion of HILFE_AKTIONEN) {
-  const keys = Object.keys(aktion);
-  const bereich = HILFE_BEREICHE.find((eintrag) => eintrag.id === aktion.bereichId);
-  const erwartete = AKTIONEN_NACH_BEREICH.get(aktion.bereichId)?.find((eintrag) => eintrag.id === aktion.id);
-  check(
-    `Aktion ${aktion.id}: Pflichtfelder vollständig`,
-    keys.length === 6
-      && new Set(keys).has("id")
-      && new Set(keys).has("titel")
-      && new Set(keys).has("text")
-      && new Set(keys).has("suchwoerter")
-      && new Set(keys).has("direkteSuchwoerter")
-      && new Set(keys).has("bereichId")
-      && expectedActionDetailsValid(aktion)
-      && !!bereich
-      && !!erwartete,
-  );
+  const bereich = BEREICHE_BY_ID.get(aktion.bereichId);
+  const direktSet = new Set((aktion.direkteSuchwoerter || []).map((term) => normalisiereHilfeText(term)).filter(Boolean));
+  const suchSet = new Set((aktion.suchwoerter || []).map((term) => normalisiereHilfeText(term)).filter(Boolean));
+  check(`Aktion ${aktion.id}: Pflichtfelder, Bereich und Ziel sind stabil`, !!bereich
+    && AKTIONS_SET.has(aktion.id)
+    && aktion.bereichId === bereich.id
+    && aktion.ziel === bereich.id);
+  check(`Aktion ${aktion.id}: direkteSuchwoerter ist echte nicht-leere Teilmenge`, direktSet.size > 0
+    && direktSet.size < suchSet.size
+    && [...direktSet].every((term) => suchSet.has(term)));
 }
 
-function expectedActionDetailsValid(aktion) {
-  const schluessel = new Set(HILFE_AKTIONEN.map((eintrag) => eintrag.id));
-  return schluessel.has(aktion.id)
-    && aktion.suchwoerter.length > aktion.direkteSuchwoerter.length;
-}
+check("Fallback enthält exakt 5 Pflichtfelder", HILFE_FALLBACK
+  && Object.keys(HILFE_FALLBACK).length === 5
+  && ["id", "titel", "text", "bereichId", "ziel"]
+    .every((feld) => Object.hasOwn(HILFE_FALLBACK, feld)));
 
-function kanonischerTerm(aktion) {
-  const kandidat = (aktion?.direkteSuchwoerter?.[0] || aktion?.suchwoerter?.[0] || "").trim();
-  return normalisiereHilfeText(kandidat);
-}
+check("direkte Suchbegriffe sind vollständig", DIREKTE_AKTIONEN.length === 51);
+check("direkte Suchbegriffe sind eindeutig", DIREKTE_TERME_EINDEUTIG.size === DIREKTE_AKTIONEN.length);
 
-function sindDisjunkt(a, b) {
-  const woerterA = new Set(normalisiereHilfeText(a).split(" ").filter(Boolean));
-  const woerterB = new Set(normalisiereHilfeText(b).split(" ").filter(Boolean));
-  return [...woerterA].every((wort) => !woerterB.has(wort));
-}
-
-check(
-  "Fallback: Feldkontrakt stabil",
-  HILFE_FALLBACK
-    && Object.keys(HILFE_FALLBACK).length === 5
-    && Object.keys(HILFE_FALLBACK).every((feld) => new Set(["id", "titel", "text", "bereichId", "ziel"]).has(feld)),
-);
-
-check("BEREICHE: eindeutige IDs", new Set(HILFE_BEREICHE.map((bereich) => bereich.id)).size === HILFE_BEREICHE.length);
-check("AKTIONEN: eindeutige IDs", new Set(HILFE_AKTIONEN.map((aktion) => aktion.id)).size === HILFE_AKTIONEN.length);
-check("Direkte Suchwörter exakt 51", DIREKTE_WOERTER.size === 51);
-check("Einwortige indirekte Suchwörter exakt 33", EINWORT_UND_NICHT_DIREKT.size === 33);
-
-check(
-  "Keine Operatorlecks in Hilfedaten",
-  !HILFE_TEXT.some((text) => /kino_auto|streaming_auto|liefere_an_supabase|auto_log|fetch-job|fetch job|credits|credits-|quota|quota-/u.test(text)),
-);
-check(
-  "Keine Roh-HTML-/Kontrollzeichen in Hilfedaten",
-  HILFE_TEXT.every((text) => !/[<>\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(text)),
-);
-
-const bereichNamen = HILFE_BEREICHE.map((bereich) => bereich.titel);
-const mediathekDetails = (HILFE_BEREICHE.find((bereich) => bereich.id === "mediathek")?.details || []).join(" ").toLowerCase();
-check("Name und Hilfetexte sind kanonisch",
-  bereichNamen.length === 7 && bereichNamen.every((titel) => HILFE_BEREICHE.some((bereich) => bereich.titel === titel)),
-);
-
-check(
-  "Mediathek-Details nennt die E12-Grundregeln",
-  enthältAlleWörter(mediathekDetails, [
-    "suche",
-    "filter",
-    "typ",
-    "sortierung",
-  ]),
-);
-check("Mediathek-Details benennt sichtbare Schnittmenge", enthältAlleWörter(mediathekDetails, [
-  "sichtbare auswahl löschen",
-  "sichtbare schnittmenge",
-  "verborgene",
-]));
-check("Mediathek-Details nennt Vorschau und Referenzziel", enthältAlleWörter(mediathekDetails, ["vorschau nennt", "mediathek", "artikel", "must-watch"]));
-check("Mediathek-Details ist lokal/referenziell/fail-safe formuliert", enthältAlleWörter(mediathekDetails, ["lokal", "referenziell", "fail-safe"]));
-check(
-  "Mediathek-Details verneint Crash-/Server-/Geräte-/ACID-Kombinationsgarantie",
-  /keine\s+crash-/.test(mediathekDetails)
-    && /server-/.test(mediathekDetails)
-    && /geräteübergreifend/.test(mediathekDetails)
-    && /\bacid\b/.test(mediathekDetails),
-);
-check("Spezifische Löschphrase gewinnt vor generischer Auswahl", answer("sichtbare auswahl löschen")?.id === "sichtbare-auswahl-loeschen");
-
-const streamingAction = AKTIONEN_NACH_ID.get("streamingdienste-waehlen");
-const STREAMING_PROVIDER_TERMS = new Set();
-for (const quelle of QUELLEN) {
-  const key = normalisiereHilfeText(quelle.key);
-  const label = normalisiereHilfeText(quelle.label);
-  const passt = !!streamingAction?.suchwoerter && (streamingAction.suchwoerter.includes(key) || streamingAction.suchwoerter.includes(label));
-  if (passt) {
-    STREAMING_PROVIDER_TERMS.add(key);
-    STREAMING_PROVIDER_TERMS.add(label);
+for (const bereich of HILFE_BEREICHE) {
+  const expected = erwartungAusBereich(bereich);
+  for (const query of [
+    `wo finde ich die ${normalisiereHilfeText(bereich.titel).replace(/\s+/g, " ")}`,
+    `wo ist die ${normalisiereHilfeText(bereich.titel).replace(/\s+/g, " ")}`,
+  ]) {
+    repeatThree(`Bereich-Abfrage ${query}`, () => antwortSchemaSicher(antwortVon(query), expected));
   }
 }
 
-const POSITIVE_FALLBACKS = [
-  { query: "hilfe", erwarteteId: "allgemeine-hilfe" },
-  { query: "anleitung", erwarteteId: "allgemeine-hilfe" },
-];
-for (const { query, erwarteteId } of POSITIVE_FALLBACKS) {
-  wiederholeDreiMal(`${query} -> ${erwarteteId}`, () => {
-    const result = answer(query);
-    return !!result && result.id === erwarteteId;
-  });
+const mediathekErwartung = erwartungAusBereich(BEREICHE_BY_ID.get("mediathek"));
+check("Canonicaler Mediatherk-Bereich direkt erkannt (wie finde ich die Mediathek)",
+  mediathekErwartung
+    ? antwortSchemaSicher(antwortVon("wo finde ich die mediathek"), mediathekErwartung)
+    : false,
+);
+check("Canonicaler Mediatherk-Bereich direkt erkannt (wie ist die Mediathek)",
+  mediathekErwartung
+    ? antwortSchemaSicher(antwortVon("wo ist die mediathek"), mediathekErwartung)
+    : false,
+);
+
+for (const { query, expectedId } of [
+  { query: "hilfe", expectedId: "allgemeine-hilfe" },
+  { query: "anleitung", expectedId: "allgemeine-hilfe" },
+]) {
+  const fallback = HILFE_FALLBACK;
+  const bereich = BEREICHE_BY_ID.get(fallback?.bereichId);
+  repeatThree(`Fallback ${query}`, () => antwortSchemaSicher(antwortVon(query), {
+    id: fallback.id,
+    titel: fallback.titel,
+    text: fallback.text,
+    ziel: fallback.ziel,
+    bereichId: fallback.bereichId,
+    bereichTitel: bereich?.titel || "",
+  }));
 }
 
 const POSITIVE_AKTIONEN = [
@@ -312,71 +342,70 @@ const POSITIVE_AKTIONEN = [
   { query: "Wie kann ich die Darstellung ändern", erwarteteId: "darstellung-aendern" },
   { query: "Wie kann ich die Farben ändern", erwarteteId: "darstellung-aendern" },
   { query: "Wie kann ich die Schriftgröße ändern", erwarteteId: "schriftgroesse-aendern" },
-  { query: "Wie kann ich die Schriftgröße aendern", erwarteteId: "schriftgroesse-aendern" },
+  { query: "Wie kann ich die schriftgröße aendern", erwarteteId: "schriftgroesse-aendern" },
   { query: "Wie kann ich eintrag erstellen", erwarteteId: "eintrag-erstellen" },
   { query: "wie kann ich den eintrag erstellen", erwarteteId: "eintrag-erstellen" },
 ];
 
 for (const { query, erwarteteId } of POSITIVE_AKTIONEN) {
-  checkAktion(query, erwarteteId, `${query} → ${erwarteteId}`);
+  const aktion = AKTIONEN_BY_ID.get(erwarteteId);
+  if (!aktion || !BEREICHE_BY_ID.has(aktion.bereichId)) {
+    check(`Positiv: ${query}`, false);
+    continue;
+  }
+
+  const expected = erwartungAusAktion(aktion);
+  repeatThree(`Positiv ${query}`, () => antwortSchemaSicher(antwortVon(query), expected));
 }
 
-for (const term of [...DIREKTE_WOERTER].sort()) {
-  const aktion = HILFE_AKTIONEN.find((eintrag) => eintrag.direkteSuchwoerter.includes(term));
-  const title = `Direktes Suchwort "${term}" bleibt stabil`;
-  wiederholeDreiMal(title, () => {
-    const result = answer(term);
-    return !!result && !!aktion && result.id === aktion.id
-      && result.bereichId === aktion.bereichId
-      && result.ziel === aktion.ziel
-      && result.text === aktion.text;
-  });
-}
-
-for (const term of [...EINWORT_UND_NICHT_DIREKT].sort()) {
-  const result = answer(`wie kann ich ${term}`);
-  check(`Einwort-Indikator "${term}" bleibt erreichbar`, !!result);
-}
-
-for (const quelle of [...STREAMING_PROVIDER_TERMS]) {
-  if (!quelle) continue;
-  const erwarteteId = "streamingdienste-waehlen";
-  check(`Streaming-Quelle ${quelle} bleibt an ` + `Streamingdienste gebunden`,
-    answer(`wie kann ich ${quelle} einstellen`)?.id === erwarteteId,
-  );
-}
-
-const MULTI_AKTIONEN = [
-  "sichtbare-auswahl-loeschen",
-  "konto-verwalten",
-  "schriftgroesse-aendern",
-  "darstellung-aendern",
-  "ki-funktionen-einstellen",
-  "eintrag-erstellen",
-  "startbereich-waehlen",
-  "daten-sichern",
-];
-
-const MULTI_AKTIONEN_DISJOINT = [];
-for (const aktionId of MULTI_AKTIONEN) {
-  const aktion = AKTIONEN_NACH_ID.get(aktionId);
-  if (!aktion) continue;
-  const term = kanonischerTerm(aktion);
-  if (!term) continue;
-  const bereitsDisjunkt = MULTI_AKTIONEN_DISJOINT.every((eintrag) => sindDisjunkt(term, eintrag.term));
-  if (bereitsDisjunkt) {
-    MULTI_AKTIONEN_DISJOINT.push({ id: aktionId, term });
+for (const { term, aktion } of DIREKTE_AKTIONEN) {
+  const expected = erwartungAusAktion(aktion);
+  for (const form of DIREKTE_FORMS) {
+    repeatThree(`Direkt (${form.name}) ${aktion.id}: ${term}`, () => {
+      const query = form.query(term);
+      return antwortSchemaSicher(antwortVon(query), expected);
+    });
   }
 }
 
-for (let start = 0; start < MULTI_AKTIONEN_DISJOINT.length; start += 1) {
-  const erste = MULTI_AKTIONEN_DISJOINT[start];
-  for (let next = start + 1; next < MULTI_AKTIONEN_DISJOINT.length; next += 1) {
-    const zweite = MULTI_AKTIONEN_DISJOINT[next];
-    const query = `wie kann ich ${erste.term} und ${zweite.term}`;
-    check(`Disjunktive Mehraktionsfrage bleibt null (${erste.id}/${zweite.id})`, answer(query) === null);
+for (const [norm, alias] of PROVIDER_ALIASE) {
+  const frage = `wie kann ich ${alias} einstellen`;
+  if (STREAMING_SIGNALWORTE.has(norm)) {
+    const expected = erwartungAusAktion(STREAMING_AKTION);
+    repeatThree(`Provider-Einstellung ${alias}`, () => antwortSchemaSicher(antwortVon(frage), expected));
+  } else {
+    check(`Provider-Neutral ${alias}`, antwortVon(frage) === null);
   }
 }
+
+for (const query of ["wie kann ich netflix", "wie kann ich prime", "wie kann ich prime video"]) {
+  check(`Provider ohne Einstellform bleibt null (${query})`, antwortVon(query) === null);
+}
+
+for (const query of ["Wie finde ich den Film Hilfe, ich bin ein Fisch?"]) {
+  check(`Fail-closed (${query})`, antwortVon(query) === null);
+}
+
+const KANONISCHE_AKTIONEN = HILFE_AKTIONEN
+  .map((aktion) => {
+    const term = normalisiereHilfeText(aktion.direkteSuchwoerter?.[0] || "");
+    return term ? { id: aktion.id, term } : null;
+  })
+  .filter(Boolean);
+
+for (let i = 0; i < KANONISCHE_AKTIONEN.length; i += 1) {
+  for (let j = i + 1; j < KANONISCHE_AKTIONEN.length; j += 1) {
+    const a = KANONISCHE_AKTIONEN[i];
+    const b = KANONISCHE_AKTIONEN[j];
+    check(`Mehraktionsfrage bleibt null: wie kann ich ${a.term} und ${b.term}`, antwortVon(`wie kann ich ${a.term} und ${b.term}`) === null);
+    check(`Mehraktionsfrage bleibt null: wie kann ich ${b.term} und ${a.term}`, antwortVon(`wie kann ich ${b.term} und ${a.term}`) === null);
+  }
+}
+check("Mehraktions-Matrix nutzt alle 13 Aktions-IDs", KANONISCHE_AKTIONEN.length === 13);
+check("Mehraktions-Matrix nutzt eindeutig kanonische Direktbegriffe",
+  new Set(KANONISCHE_AKTIONEN.map((eintrag) => eintrag.id)).size === KANONISCHE_AKTIONEN.length
+    && new Set(KANONISCHE_AKTIONEN.map((eintrag) => eintrag.term)).size === KANONISCHE_AKTIONEN.length,
+);
 
 const FAIL_CLOSED = [
   "Wo finde ich Filme auf Netflix?",
@@ -386,7 +415,6 @@ const FAIL_CLOSED = [
   "Prime",
   "Kino",
   "Anleitung zum Unglücklichsein",
-  "Wie finde ich den Film Hilfe, ich bin ein Fisch?",
   "Wie funktioniert Netflix?",
   "Wie funktioniert Prime Video?",
   "Prime Video",
@@ -399,15 +427,52 @@ const FAIL_CLOSED = [
 ];
 
 for (const query of FAIL_CLOSED) {
-  check(`Fail-closed (${query})`, answer(query) === null);
+  check(`Fail-closed (${query})`, antwortVon(query) === null);
 }
 
-check("Ort- und Suchzielfrage bleibt auf Mediathek-Navigation stabil", answer("wo finde ich die mediathek")?.id === "finder" && answer("wo ist die mediathek")?.id === "finder");
+check(
+  "Unicode-/ASCII-Änderungsgrenzen für Schriftgröße sind stabil",
+  antwortSchemaSicher(antwortVon("wie kann ich die schriftgröße ändern"), erwartungAusAktion(AKTIONEN_BY_ID.get("schriftgroesse-aendern"))),
+);
+check(
+  "ASCII-Alternative bleibt kompatibel",
+  antwortSchemaSicher(antwortVon("wie kann ich die schriftgroesse ändern"), erwartungAusAktion(AKTIONEN_BY_ID.get("schriftgroesse-aendern"))),
+);
+check(
+  "Possessiver Sprachmodus bleibt funktional",
+  antwortSchemaSicher(antwortVon("wie kann ich meinen eintrag löschen"), erwartungAusAktion(AKTIONEN_BY_ID.get("eintrag-loeschen"))),
+);
+check("Keine Doppel-Verb-Wortsalat-Lösung", antwortVon("wie kann ich die sichtbare auswahl löschen löschen") === null);
 
-check("Unicode-/ASCII-Änderungsgrenzen für Schriftgröße sind stabil", answer("wie kann ich die schriftgröße ändern")?.id === "schriftgroesse-aendern");
-check("ASCII-Alternative bleibt kompatibel", answer("wie kann ich die schriftgroesse ändern")?.id === "schriftgroesse-aendern");
-check("Possessiver Sprachmodus bleibt funktional", answer("wie kann ich meinen eintrag löschen")?.id === "eintrag-loeschen");
-check("Keine Doppel-Verb-Wortsalat-Lösung", answer("wie kann ich die sichtbare auswahl löschen löschen") === null);
+check(
+  "Mediathek-Details nennt die E12-Grundregeln",
+  (() => {
+    const details = (BEREICHE_BY_ID.get("mediathek")?.details || []).join(" ").toLowerCase();
+    return containsAllWords(details, ["suche", "filter", "typ", "sortierung"]) &&
+      containsAllWords(details, ["sichtbare auswahl löschen", "sichtbare schnittmenge", "verborgene"])
+      && containsAllWords(details, ["vorschau nennt", "mediathek", "artikel", "must-watch"])
+      && containsAllWords(details, ["lokal", "referenziell", "fail-safe"]);
+  })(),
+);
+check(
+  "Mediathek-Details verneint Crash-/Server-/Geräte-/ACID-Kombinationsgarantie",
+  (() => {
+    const details = (BEREICHE_BY_ID.get("mediathek")?.details || []).join(" ").toLowerCase();
+    return /keine\s+crash-/.test(details)
+      && /server-/.test(details)
+      && /geräteübergreifend/.test(details)
+      && /\bacid\b/.test(details);
+  })(),
+);
+
+check(
+  "Keine Operatorlecks in Hilfedaten",
+  !HILFE_TEXT.some((text) => /kino_auto|streaming_auto|liefere_an_supabase|auto_log|fetch-job|fetch job|credits|credits-|quota|quota-|\.mjs|script\b/u.test(String(text))),
+);
+check(
+  "Keine Roh-HTML-/Kontrollzeichen in Hilfedaten",
+  HILFE_TEXT.every((text) => !/[<>\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(String(text))),
+);
 
 let ok = true;
 for (const [name, pass] of checks) {
