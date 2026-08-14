@@ -388,6 +388,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-kompakt .kd-lokalsuche,.kd-kompakt .kd-lokalsuche-loeschen { display:none !important; }
   .kd-globalsuche { position:fixed; left:max(10px,env(safe-area-inset-left)); right:max(10px,env(safe-area-inset-right));
     bottom:calc(9px + env(safe-area-inset-bottom)); z-index:1260; display:flex; gap:6px; align-items:stretch;
+    --kd-suche-safe-area-top:env(safe-area-inset-top,0px); --kd-suche-safe-area-right:env(safe-area-inset-right,0px);
+    --kd-suche-safe-area-bottom:env(safe-area-inset-bottom,0px); --kd-suche-safe-area-left:env(safe-area-inset-left,0px);
     min-width:0; box-sizing:border-box; padding:7px; border:1px solid rgba(227,166,59,.55); border-radius:17px;
     background:rgba(28,26,30,.94); box-shadow:0 9px 30px rgba(0,0,0,.62); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
   .kd-globalsuche.menue-offen { opacity:0; visibility:hidden; pointer-events:none; }

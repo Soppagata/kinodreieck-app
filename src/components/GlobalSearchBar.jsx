@@ -17,6 +17,20 @@ const VIEWPORT_STYLE_VARIABLEN = [
   "--kd-suche-viewport-width",
   "--kd-suche-ergebnis-maxhoehe",
 ];
+const SAFE_AREA_VARIABLEN = Object.freeze({
+  top: "--kd-suche-safe-area-top",
+  right: "--kd-suche-safe-area-right",
+  bottom: "--kd-suche-safe-area-bottom",
+  left: "--kd-suche-safe-area-left",
+});
+
+const liesSafeAreaInsets = (element) => {
+  const style = getComputedStyle(element);
+  return Object.fromEntries(Object.entries(SAFE_AREA_VARIABLEN).map(([seite, name]) => {
+    const wert = Number.parseFloat(style.getPropertyValue(name));
+    return [seite, Number.isFinite(wert) ? wert : 0];
+  }));
+};
 
 const raeumeViewportPosition = (form) => {
   if (!form) return;
@@ -97,7 +111,7 @@ export function GlobalSearchBar({
         const editierbarerFokus = document.activeElement === eingabe
           && !eingabe.disabled && !eingabe.readOnly;
         const neutraleSkalierung = istNeutraleViewportSkalierung(viewport.scale);
-        const breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
+        let breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         const volleGeometrie = Math.abs(layoutHeight - viewport.height) <= MIN_TASTATUR_HOEHENVERLUST;
 
         if (neutraleSkalierung && (!editierbarerFokus || breiteGeaendert || volleGeometrie)) {
@@ -105,6 +119,7 @@ export function GlobalSearchBar({
             height: Math.max(layoutHeight, viewport.height),
             width: viewport.width,
           };
+          breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         }
 
         const tastaturOffen = !breiteGeaendert && klassifiziereBildschirmtastatur({
@@ -121,6 +136,7 @@ export function GlobalSearchBar({
           return;
         }
 
+        const safeAreaInsets = liesSafeAreaInsets(form);
         const vorab = berechneSuchleistenGeometrie({
           height: viewport.height,
           width: viewport.width,
@@ -128,6 +144,7 @@ export function GlobalSearchBar({
           offsetLeft: viewport.offsetLeft,
           basisUnterkante: 0,
           suchleistenHoehe: 0,
+          safeAreaInsets,
         });
         form.style.setProperty("--kd-suche-viewport-left", `${vorab.links}px`);
         form.style.setProperty("--kd-suche-viewport-width", `${vorab.breite}px`);
@@ -142,6 +159,7 @@ export function GlobalSearchBar({
           offsetLeft: viewport.offsetLeft,
           basisUnterkante: rect.bottom,
           suchleistenHoehe: rect.height,
+          safeAreaInsets,
         });
         form.style.setProperty("--kd-suche-viewport-shift", `${geometrie.shiftY}px`);
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);

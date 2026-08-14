@@ -6,7 +6,8 @@ const endlicheZahl = (wert, fallback = 0) => (
 );
 
 export function istNeutraleViewportSkalierung(scale, toleranz = 0.02) {
-  return Math.abs(endlicheZahl(scale, 1) - 1) <= toleranz;
+  const skalierung = Number(scale);
+  return Number.isFinite(skalierung) && Math.abs(skalierung - 1) <= toleranz;
 }
 
 export function klassifiziereBildschirmtastatur({
@@ -40,6 +41,7 @@ export function berechneSuchleistenGeometrie({
   offsetLeft,
   basisUnterkante,
   suchleistenHoehe,
+  safeAreaInsets = {},
   rand = VIEWPORT_RAND,
 }) {
   const viewportHoehe = Math.max(0, endlicheZahl(height));
@@ -49,13 +51,21 @@ export function berechneSuchleistenGeometrie({
   const unterkante = endlicheZahl(basisUnterkante);
   const leistenHoehe = Math.max(0, endlicheZahl(suchleistenHoehe));
   const sichererRand = Math.max(0, endlicheZahl(rand, VIEWPORT_RAND));
-  const zielUnterkante = oben + viewportHoehe - sichererRand;
+  const raender = Object.freeze({
+    oben: Math.max(sichererRand, Math.max(0, endlicheZahl(safeAreaInsets.top))),
+    rechts: Math.max(sichererRand, Math.max(0, endlicheZahl(safeAreaInsets.right))),
+    unten: Math.max(sichererRand, Math.max(0, endlicheZahl(safeAreaInsets.bottom))),
+    links: Math.max(sichererRand, Math.max(0, endlicheZahl(safeAreaInsets.left))),
+  });
+  const zielUnterkante = oben + viewportHoehe - raender.unten;
 
   return Object.freeze({
-    links: links + sichererRand,
-    breite: Math.max(0, viewportBreite - (2 * sichererRand)),
+    links: links + raender.links,
+    breite: Math.max(0, viewportBreite - raender.links - raender.rechts),
     shiftY: zielUnterkante - unterkante,
-    ergebnisMaxHoehe: Math.max(0, viewportHoehe - leistenHoehe - (3 * sichererRand)),
+    ergebnisMaxHoehe: Math.max(0,
+      viewportHoehe - leistenHoehe - raender.oben - raender.unten - sichererRand),
     anker: zielUnterkante - oben - viewportHoehe,
+    raender,
   });
 }

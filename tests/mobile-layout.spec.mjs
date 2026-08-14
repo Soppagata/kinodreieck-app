@@ -1387,10 +1387,18 @@ test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", 
       removeEventListener(typ, fn) { listener[typ]?.delete(fn); },
     };
     Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
-    window.__kdSetVisualViewport = ({ height, offsetTop, typ = "resize" }) => {
-      viewport.height = height;
-      viewport.offsetTop = offsetTop;
-      viewport.pageTop = offsetTop;
+    window.__kdSetVisualViewport = ({
+      height = viewport.height,
+      width = viewport.width,
+      offsetTop = viewport.offsetTop,
+      offsetLeft = viewport.offsetLeft,
+      scale = viewport.scale,
+      typ = "resize",
+    }) => {
+      Object.assign(viewport, {
+        height, width, offsetTop, offsetLeft, scale,
+        pageTop: offsetTop, pageLeft: offsetLeft,
+      });
       for (const fn of listener[typ] || []) fn(new Event(typ));
     };
   });
@@ -1410,6 +1418,149 @@ test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", 
     const rect = element.getBoundingClientRect();
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   })).toBe(-8);
+
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 180, width: 568, offsetTop: 40, offsetLeft: 0,
+  }));
+  await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(() => suche.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      anker: Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height),
+      links: Math.round(rect.left - window.visualViewport.offsetLeft),
+      rechts: Math.round(window.visualViewport.offsetLeft + window.visualViewport.width - rect.right),
+    };
+  })).toEqual({ anker: -8, links: 8, rechts: 8 });
+
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 180, width: 568, offsetTop: 40, offsetLeft: 0, scale: 1.5,
+  }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
+  await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 180, width: 568, offsetTop: 40, offsetLeft: 0, scale: 1,
+  }));
+  await expect(suche).toHaveClass(/tastatur-offen/);
+
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 320, width: 568, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
+  await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+});
+
+test("Globale Suche respektiert Safe Areas im Visual Viewport", async ({ browserName, page }) => {
+  test.skip(browserName !== "chromium", "Safe-Area-Geometrie ist als Chromium-Fokusprobe definiert.");
+
+  const SAFE_AREA = { top: 37, right: 31, bottom: 29, left: 23 };
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: SAFE_AREA });
+    await page.setViewportSize({ width: 393, height: 852 });
+    await blockiereFremdnetz(page);
+    await seedAppMitDarstellung(page);
+    await page.addInitScript(() => {
+      const listener = { resize: new Set(), scroll: new Set() };
+      const viewport = {
+        width: 393, height: 852, offsetTop: 0, offsetLeft: 0,
+        pageTop: 0, pageLeft: 0, scale: 1,
+        addEventListener(typ, fn) { listener[typ]?.add(fn); },
+        removeEventListener(typ, fn) { listener[typ]?.delete(fn); },
+      };
+      Object.defineProperty(window, "visualViewport", { configurable: true, value: viewport });
+      window.__kdSetVisualViewport = (next) => {
+        Object.assign(viewport, next, {
+          pageTop: next.offsetTop ?? viewport.offsetTop,
+          pageLeft: next.offsetLeft ?? viewport.offsetLeft,
+        });
+        for (const fn of listener[next.typ || "resize"] || []) fn(new Event(next.typ || "resize"));
+      };
+    });
+    await page.goto("/");
+
+    const suche = page.getByRole("search", { name: "Globale Suche" });
+    const eingabe = suche.getByRole("textbox", { name: "Sucheingabe" });
+    await suche.evaluate((form, insets) => {
+      for (const [seite, wert] of Object.entries(insets)) {
+        form.style.setProperty(`--kd-suche-safe-area-${seite}`, `${wert}px`);
+      }
+    }, SAFE_AREA);
+    await eingabe.fill("Wo finde ich die Schriftgröße");
+    await eingabe.press("Enter");
+    const antwort = suche.getByRole("dialog", { name: /Suchergebnisse/ });
+    const aktion = suche.getByRole("button", { name: "Ausführliche Ergebnisse öffnen" });
+    await expect(antwort).toBeVisible();
+    await expect(aktion).toBeVisible();
+    await eingabe.focus();
+    await page.evaluate(() => window.__kdSetVisualViewport({
+      height: 500, width: 360, offsetTop: 60, offsetLeft: 20, scale: 1,
+    }));
+    await expect(suche).toHaveClass(/tastatur-offen/);
+    await aktion.scrollIntoViewIfNeeded();
+
+    const geometrie = await suche.evaluate((form) => {
+      const ergebnis = form.querySelector(".kd-globalsuche-antwort");
+      const alle = form.querySelector(".kd-globalsuche-alle");
+      const rect = (element) => {
+        const box = element.getBoundingClientRect();
+        return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+      };
+      return {
+        form: rect(form),
+        ergebnis: rect(ergebnis),
+        aktion: rect(alle),
+        viewport: {
+          width: window.visualViewport.width,
+          height: window.visualViewport.height,
+          offsetTop: window.visualViewport.offsetTop,
+          offsetLeft: window.visualViewport.offsetLeft,
+        },
+      };
+    });
+    const sichtbar = {
+      left: geometrie.viewport.offsetLeft + SAFE_AREA.left,
+      right: geometrie.viewport.offsetLeft + geometrie.viewport.width - SAFE_AREA.right,
+      top: geometrie.viewport.offsetTop + SAFE_AREA.top,
+      bottom: geometrie.viewport.offsetTop + geometrie.viewport.height - SAFE_AREA.bottom,
+    };
+    expect(geometrie.form.left).toBeGreaterThanOrEqual(sichtbar.left - 0.5);
+    expect(geometrie.form.right).toBeLessThanOrEqual(sichtbar.right + 0.5);
+    expect(geometrie.form.bottom).toBeCloseTo(sichtbar.bottom, 0);
+    expect(geometrie.ergebnis.left).toBeGreaterThanOrEqual(sichtbar.left - 0.5);
+    expect(geometrie.ergebnis.right).toBeLessThanOrEqual(sichtbar.right + 0.5);
+    expect(geometrie.ergebnis.top).toBeGreaterThanOrEqual(sichtbar.top - 0.5);
+    expect(geometrie.ergebnis.bottom).toBeLessThanOrEqual(sichtbar.bottom + 0.5);
+    expect(geometrie.aktion.left).toBeGreaterThanOrEqual(sichtbar.left - 0.5);
+    expect(geometrie.aktion.right).toBeLessThanOrEqual(sichtbar.right + 0.5);
+    expect(geometrie.aktion.top).toBeGreaterThanOrEqual(sichtbar.top - 0.5);
+    expect(geometrie.aktion.bottom).toBeLessThanOrEqual(sichtbar.bottom + 0.5);
+    await keineDokumentUeberbreite(page);
+
+    await eingabe.blur();
+    await expect(suche).not.toHaveClass(/tastatur-offen/);
+    await expect.poll(() => suche.evaluate((form) => ({
+      eingang: ["top", "right", "bottom", "left"].map((seite) => (
+        form.style.getPropertyValue(`--kd-suche-safe-area-${seite}`)
+      )),
+      ausgang: ["shift", "left", "width"].map((name) => (
+        form.style.getPropertyValue(`--kd-suche-viewport-${name}`)
+      )),
+      ergebnis: form.style.getPropertyValue("--kd-suche-ergebnis-maxhoehe"),
+    }))).toEqual({
+      eingang: ["37px", "31px", "29px", "23px"],
+      ausgang: ["", "", ""],
+      ergebnis: "",
+    });
+  } finally {
+    try {
+      await cdp.send("Emulation.setSafeAreaInsetsOverride", {
+        insets: { top: 0, right: 0, bottom: 0, left: 0 },
+      });
+    } catch { /* best effort */ }
+    await cdp.detach();
+  }
 });
 
 test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Streaming-Tab", async ({ page }) => {
