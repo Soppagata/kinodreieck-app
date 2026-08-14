@@ -2354,6 +2354,7 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   expect(dialogGeometrie.scrollWidth).toBeLessThanOrEqual(dialogGeometrie.clientWidth + 1);
   expect(dialogGeometrie.hasDialogScroll).toBe(true);
   expect(dialogGeometrie.listeScrollt).toBe(true);
+  expect(dialogGeometrie.listeUeberbreite).toBe(false);
   for (const button of dialogGeometrie.buttons) {
     expect(button.width).toBeGreaterThanOrEqual(44);
     expect(button.height).toBeGreaterThanOrEqual(44);
@@ -2407,8 +2408,8 @@ test("E12-Short-Height bei 568x320 mit Schrift gross bleibt scrollbar und fokuss
   const lockNachEscape = await page.evaluate(() => ({
     body: {
       locked: document.body.classList.contains("kd-scroll-gesperrt"),
-      position: getComputedStyle(document.body).position,
-      overflow: getComputedStyle(document.body).overflow,
+      position: document.body.style.position,
+      overflow: document.body.style.overflow,
     },
     html: {
       locked: document.documentElement.classList.contains("kd-scroll-gesperrt"),
