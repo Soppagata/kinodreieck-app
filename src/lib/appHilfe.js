@@ -14,6 +14,10 @@ const HILFE_INTENT = Object.freeze([
 const ALLGEMEINER_HILFE_INTENT = Object.freeze([
   "hilfe", "anleitung", "settings", "setting", "einstellung", "einstellungen",
 ]);
+const HILFE_GEGENSTAND_HUELLE = Object.freeze(new Set([
+  "der", "die", "das", "den", "dem", "des",
+  "ein", "eine", "einen", "einem", "einer",
+]));
 
 function enthaeltPhrase(text, phrase) {
   return text === phrase || text.startsWith(`${phrase} `) || text.endsWith(` ${phrase}`)
@@ -26,6 +30,28 @@ function hatHilfeIntent(text) {
 
 function hatAllgemeinenHilfeIntent(text) {
   return ALLGEMEINER_HILFE_INTENT.some((phrase) => enthaeltPhrase(text, phrase));
+}
+
+function entfernePhrase(text, phrase) {
+  if (text === phrase) return "";
+  if (text.startsWith(`${phrase} `)) return text.slice(phrase.length + 1);
+  if (text.endsWith(` ${phrase}`)) return text.slice(0, -(phrase.length + 1));
+  return text.replace(` ${phrase} `, " ");
+}
+
+function hatExaktenIntentGegenstand(text, suchwoerter) {
+  for (const intent of HILFE_INTENT) {
+    if (!enthaeltPhrase(text, intent)) continue;
+    const ohneIntent = entfernePhrase(text, intent);
+    for (const suchwort of suchwoerter) {
+      if (!enthaeltPhrase(ohneIntent, suchwort)) continue;
+      const rest = entfernePhrase(ohneIntent, suchwort).trim();
+      if (!rest || rest.split(" ").every((wort) => HILFE_GEGENSTAND_HUELLE.has(wort))) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function werteTreffer(text, suchwoerter) {
@@ -66,11 +92,13 @@ export function appHilfeAntwort(frage) {
   const text = normalisiereHilfeText(frage);
   if (!text) return null;
   const intent = hatHilfeIntent(text);
+  const allgemeinerIntent = hatAllgemeinenHilfeIntent(text);
   const kandidaten = [];
 
   for (const [quellIndex, aktion] of HILFE_AKTIONEN.entries()) {
     const wertung = werteTreffer(text, aktion.suchwoerter);
-    if (wertung && (intent || wertung.starkePhrase)) {
+    if (wertung && (wertung.exakt || wertung.starkePhrase || allgemeinerIntent
+        || hatExaktenIntentGegenstand(text, aktion.suchwoerter))) {
       kandidaten.push({ art: "aktion", inhalt: aktion, wertung, quellIndex });
     }
   }
@@ -78,7 +106,8 @@ export function appHilfeAntwort(frage) {
     const versatz = HILFE_AKTIONEN.length;
     for (const [index, bereich] of HILFE_BEREICHE.entries()) {
       const wertung = werteTreffer(text, bereich.suchwoerter);
-      if (wertung) {
+      if (wertung && (wertung.starkePhrase || allgemeinerIntent
+          || hatExaktenIntentGegenstand(text, bereich.suchwoerter))) {
         kandidaten.push({
           art: "bereich", inhalt: bereich, wertung, quellIndex: versatz + index,
         });
@@ -94,7 +123,7 @@ export function appHilfeAntwort(frage) {
   if (treffer?.art === "bereich") {
     return sichereAntwort(treffer.inhalt, treffer.inhalt.kurztext);
   }
-  return hatAllgemeinenHilfeIntent(text)
+  return allgemeinerIntent
     ? sichereAntwort(HILFE_FALLBACK, HILFE_FALLBACK.text)
     : null;
 }
