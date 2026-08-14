@@ -66,21 +66,6 @@ function cleanupBundle() {
   }
 }
 
-function cleanupHarnessBundles() {
-  try {
-    for (const entry of fs.readdirSync(tmpdir())) {
-      if (!entry.startsWith(TEST_BUNDLE_PREFIX) || !entry.endsWith(".mjs")) continue;
-      try {
-        fs.unlinkSync(path.join(tmpdir(), entry));
-      } catch {
-        // Best effort cleanup.
-      }
-    }
-  } catch {
-    // Best effort cleanup.
-  }
-}
-
 let React;
 let act;
 let useState;
@@ -454,10 +439,12 @@ async function runCageAlphabetDomTests() {
   console.log(`\n${bestanden}/${total} Checks bestanden.`);
   if (bestanden < total) {
     console.log("CAGE-DOM-TEST: BEFUNDE OBEN");
-    process.exitCode = 1;
-  } else {
+    return 1;
+  }
+
+  {
     console.log("CAGE-DOM-TEST BESTANDEN");
-    process.exitCode = 0;
+    return 0;
   }
 }
 
@@ -466,7 +453,6 @@ async function teardownCageAlphabetDomHarness() {
     root.render(null);
   });
   cleanupBundle();
-  cleanupHarnessBundles();
   delete window.__cage;
   if (typeof dom.window.close === "function") {
     dom.window.close();
@@ -476,7 +462,7 @@ async function teardownCageAlphabetDomHarness() {
 let exitCode = 0;
 (async () => {
   try {
-    await runCageAlphabetDomTests();
+    exitCode = await runCageAlphabetDomTests();
   } catch (error) {
     exitCode = 1;
     console.error(error);
