@@ -172,6 +172,15 @@ expect(
     && !/not exists \(select 1 from public\.kd_radar_events/i.test(retentionFixSql),
 );
 
+const privateSettingsColumns = migrationSql.match(
+  /create table public\.kd_private_settings\s*\(([\s\S]*?)\n\);/i,
+)?.[1] || "";
+expect(
+  "Private-Settings enthält genau einen standardmäßig ausgeschalteten Export-Not-Aus",
+  [...privateSettingsColumns.matchAll(/\bexport_enabled\b/gi)].length === 1
+    && /^\s*export_enabled boolean not null default false,?\s*$/mi.test(privateSettingsColumns),
+);
+
 const accessLookupIndex = edgeFunctionSql.indexOf('.from("kd_account_access")');
 const activeGateIndex = edgeFunctionSql.indexOf("if (access?.active !== true)");
 const ownDataIndex = edgeFunctionSql.indexOf('rpc("kd_private_own_data"');
@@ -187,6 +196,29 @@ expect(
     && activeGateIndex > accessLookupIndex
     && activeGateIndex < ownDataIndex
     && activeGateIndex < deleteBeginIndex,
+);
+
+const exportGetBranch = edgeFunctionSql.match(
+  /if \(req\.method === "GET"\) \{([\s\S]*?)\n  \}\n\n  let body:/,
+)?.[1] || "";
+const exportSettingsLookupIndex = exportGetBranch.indexOf('.from("kd_private_settings")');
+const exportDisabledGateIndex = exportGetBranch.indexOf(
+  "if (exportSettingsError || exportSettings?.export_enabled !== true)",
+);
+const gatedOwnDataIndex = exportGetBranch.indexOf('rpc("kd_private_own_data"');
+expect(
+  "Eigendatenexport liest den Singleton im GET-Zweig vor dem Own-Data-RPC",
+  exportSettingsLookupIndex >= 0
+    && exportGetBranch.indexOf('.select("export_enabled")', exportSettingsLookupIndex) > exportSettingsLookupIndex
+    && exportGetBranch.indexOf('.eq("singleton", true)', exportSettingsLookupIndex) > exportSettingsLookupIndex
+    && exportGetBranch.indexOf(".maybeSingle()", exportSettingsLookupIndex) > exportSettingsLookupIndex
+    && exportDisabledGateIndex > exportSettingsLookupIndex
+    && gatedOwnDataIndex > exportDisabledGateIndex,
+);
+expect(
+  "Export-Not-Aus sperrt Fehler, fehlende Werte und false stabil vor dem Own-Data-RPC",
+  /if \(exportSettingsError \|\| exportSettings\?\.export_enabled !== true\) return json\(\{ ok: false, code: "EXPORT_DISABLED" \}, 403, origin\);/.test(exportGetBranch)
+    && gatedOwnDataIndex > exportDisabledGateIndex,
 );
 
 const privateGate = etappe9Plan.match(

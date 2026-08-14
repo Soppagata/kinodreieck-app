@@ -91,6 +91,12 @@ Deno.serve(async (req) => {
   if (access?.active !== true) return json({ ok: false, code: "ACCOUNT_INACTIVE" }, 403, origin);
 
   if (req.method === "GET") {
+    const { data: exportSettings, error: exportSettingsError } = await api.admin
+      .from("kd_private_settings")
+      .select("export_enabled")
+      .eq("singleton", true)
+      .maybeSingle();
+    if (exportSettingsError || exportSettings?.export_enabled !== true) return json({ ok: false, code: "EXPORT_DISABLED" }, 403, origin);
     const { data, error } = await api.admin.rpc("kd_private_own_data", { p_account_id: accountId });
     if (error || !data || typeof data !== "object") return json({ ok: false, code: "OWN_DATA_UNAVAILABLE" }, 503, origin);
     return json({

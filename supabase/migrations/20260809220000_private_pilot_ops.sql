@@ -5,6 +5,7 @@ begin;
 
 create table public.kd_private_settings (
   singleton boolean primary key default true check (singleton),
+  export_enabled boolean not null default false,
   provider_requests_enabled boolean not null default false,
   scheduler_enabled boolean not null default false,
   purge_enabled boolean not null default false,
