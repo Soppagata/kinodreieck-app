@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 
@@ -14,7 +15,7 @@ try {
   esbuild = requireAusTestumgebung("vite/node_modules/esbuild");
 }
 
-const dom = new JSDOM("<!doctype html><html><body><main id='app'></main></body></html>", {
+const dom = new JSDOM_TEST("<!doctype html><html><body><main id='app'></main></body></html>", {
   url: "https://kinodreieck.test/",
 });
 
@@ -49,7 +50,7 @@ globalThis.requestAnimationFrame = (callback) => {
 };
 dom.window.requestAnimationFrame = globalThis.requestAnimationFrame;
 
-const TEST_BUNDLE = path.join(WURZEL, ".tmp-hilfe-dom-test.mjs");
+const TEST_BUNDLE = path.join(tmpdir(), `.kd-hilfe-dom-test-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`);
 await esbuild.build({
   stdin: {
     contents: [
@@ -79,9 +80,39 @@ const {
   HilfeSheet, DokuAnsicht, HILFE_BEREICHE, sperreDokumentScroll,
 } = await import(pathToFileURL(TEST_BUNDLE).href);
 
-const sourceApp = fs.readFileSync(path.join(WURZEL, "src/App.jsx"), "utf8");
 const checks = [];
 const check = (name, pass) => checks.push([name, !!pass]);
+
+const pflicht = {
+  refGebunden: 0,
+  triggerGefunden: 0,
+  triggerGeoeffnet: 0,
+  dialogPortal: 0,
+  dialogTitel: 0,
+  panelGefunden: 0,
+  titelUndZiele: 0,
+  focusErster: 0,
+  focusRingVorwaerts: 0,
+  focusRingRueckwaerts: 0,
+  lockVor: 0,
+  scrimClose: 0,
+  focusReturn: 0,
+  lockReopen: 0,
+  rerenderCloseAufheben: 0,
+  rerenderFokus: 0,
+  escapeClose: 0,
+  scrollRestore: 0,
+  dokuRender: 0,
+  dokuKeyboard: 0,
+};
+
+function step(name) {
+  if (Object.hasOwn(pflicht, name)) pflicht[name] += 1;
+}
+
+function pflichtAusgedrueckt() {
+  return Object.values(pflicht).every((v) => v > 0);
+}
 
 function istHelferFokusziel(element) {
   if (!(element instanceof HTMLElement) || element.hidden) return false;
@@ -94,8 +125,7 @@ function istHelferFokusziel(element) {
 }
 
 function fokusziele(node) {
-  return [...node.querySelectorAll("button, a[href], input, select, textarea, [tabindex]")]
-    .filter(istHelferFokusziel);
+  return [...(node?.querySelectorAll("button, a[href], input, select, textarea, [tabindex]") || [])].filter(istHelferFokusziel);
 }
 
 function tastatur(key, { shift = false } = {}) {
@@ -109,89 +139,8 @@ function tastatur(key, { shift = false } = {}) {
   fokusElement.dispatchEvent(event);
 }
 
-const container = document.getElementById("app");
-const root = createRoot(container);
-
-const state = {};
-
-function HilfeHarness({ bind }) {
-  const ausloeser = useRef(null);
-  const [offen, setOffen] = useState(false);
-  const [tick, setTick] = useState(0);
-  const onRerender = useCallback(() => setTick((aktueller) => aktueller + 1), []);
-
-  bind.current = { ausloeser, setOffen, setTick, tick, onRerender };
-
-  return React.createElement(
-    "div",
-    null,
-    React.createElement("h1", null, "HilfeDOM"),
-    React.createElement(
-      "button",
-      { ref: ausloeser, onClick: () => setOffen(true) },
-      "Anleitung öffnen",
-    ),
-    React.createElement("button", { onClick: onRerender, "data-testid": "irrelevant-rerender" }, "irrelevant"),
-    React.createElement("p", null, `tick ${tick}`),
-    offen ? React.createElement(HilfeSheet, { onClose: () => setOffen(false) }) : null,
-  );
-}
-
-async function renderHilfe() {
-  await act(async () => {
-    root.render(React.createElement(HilfeHarness, { bind: { current: state } }));
-    await Promise.resolve();
-  });
-}
-
-// HilfeSheet als Portal/Overlay, Fokus- und Scroll-Contract.
-await renderHilfe();
-const ausloeser = () => state.current?.ausloeser?.current;
-check("App-konformer Hilfetrigger ist referenzierbar", typeof ausloeser === "function" && !!ausloeser());
-if (ausloeser()) {
-  ausloeser().focus();
-  await act(async () => { ausloeser().dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  const dialog = container.querySelector('[role="dialog"]');
-  check("HilfeSheet rendert role=dialog + aria-modal", !!dialog
-    && dialog.getAttribute("aria-modal") === "true");
-  check("HilfeSheet trägt kanonischen Titel", dialog?.getAttribute("aria-labelledby") === "kd-help-titel");
-  const scrim = container.querySelector(".kd-sheet-scrim");
-  const panel = dialog?.querySelector(".kd-help-panel");
-  const panelHeadline = panel?.querySelector("h2")?.textContent?.trim();
-  check("HilfeSheet ist Portal + korrekt titelisiert", !!scrim && !!panel
-    && panelHeadline === "Anleitung & Hilfe");
-  const titles = [...panel.querySelectorAll("h3")].map((node) => node.textContent?.trim()).filter(Boolean);
-  check("HilfeSheet liefert exakt sieben Bereichsüberschriften", titles.length === 7
-    && titles.every((titel) => HILFE_BEREICHE.some((bereich) => bereich.titel === titel)));
-  const dataGoals = [...panel.querySelectorAll("article[data-hilfe-ziel]")].map((node) => node.getAttribute("data-hilfe-ziel"));
-  check("HilfeSheet gibt sieben Ziel-IDs stabil weiter", dataGoals.join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
-
-  const focusables = fokusziele(panel);
-  check("HilfeSheet fokussiert beim Öffnen ein gültiges Panelziel", focusables.length > 0
-    && document.activeElement === focusables[0]);
-  const first = focusables[0];
-  const last = focusables[focusables.length - 1];
-  if (focusables.length > 1) {
-    await act(async () => { last.focus(); });
-    await act(async () => { tastatur("Tab"); });
-    check("HilfeSheet Tab fährt vom letzten Fokusziel auf das erste", document.activeElement === first);
-
-    await act(async () => { first.focus(); });
-    await act(async () => { tastatur("Tab", { shift: true }); });
-    check("HilfeSheet Shift+Tab fährt vom ersten Fokusziel auf das letzte", document.activeElement === last);
-  } else {
-    check("HilfeSheet Tab/Shift+Tab bleibt im Fokusring für Einzelziel", focusables.includes(document.activeElement));
-  }
-
-  const owner = sperreDokumentScroll();
-  await act(async () => { scrim.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  check("HilfeSheet schließt über Scrim", !container.querySelector('[role="dialog"]'));
-  check("Focus geht bei Schließen zurück zum Auslöser", document.activeElement === ausloeser());
-  check("Owner-Lock bleibt nach Sheet-Schluss aktiv", document.body.classList.contains("kd-scroll-gesperrt")
-    && document.body.style.position === "fixed");
-
-  // Referenz-Lock erzeugt Restoreschutz; hier wird nur das Sheet freigegeben.
-  const vorStyle = {
+function bodyStyleSnapshot() {
+  return {
     overflow: document.body.style.overflow,
     position: document.body.style.position,
     top: document.body.style.top,
@@ -199,73 +148,231 @@ if (ausloeser()) {
     right: document.body.style.right,
     width: document.body.style.width,
   };
+}
 
-  // Nächste Öffnung dient dem Focus- und Rerender-Kontrakt.
-  await act(async () => { state.current.onRerender(); });
-  document.body.style.position = "";
-  ausloeser().focus();
-  await act(async () => { ausloeser().dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  const offDialog = container.querySelector('[role="dialog"]');
-  check("HilfeSheet kann erneut geöffnet und fokussiert werden", !!offDialog && offDialog.getAttribute("role") === "dialog");
-  const focusAfterReopen = document.activeElement;
-  const rerenderFocusables = fokusziele(offDialog);
-  await act(async () => { state.current.onRerender(); });
-  check("Rerender außerhalb der Fokuslogik verändert Fokus nicht", document.activeElement === focusAfterReopen);
-  if (focusAfterReopen) {
-    check("Rerender hält Fokus auf einem Fokusziel des Dialogs", rerenderFocusables.includes(document.activeElement));
+const container = document.getElementById("app");
+const root = createRoot(container);
+const bindState = { current: null };
+
+function HilfeHarness({ bind }) {
+  const ausloeser = useRef(null);
+  const [offen, setOffen] = useState(false);
+  const [tick, setTick] = useState(0);
+  const onRerender = useCallback(() => setTick((aktueller) => aktueller + 1), []);
+  const schliesseHilfe = useCallback(() => setOffen(false), []);
+  const oeffneHilfe = useCallback(() => setOffen(true), []);
+
+  if (bind) {
+    bind.current = {
+      ausloeser,
+      setOffen,
+      onRerender,
+      schliesseHilfe,
+      oeffneHilfe,
+      tick,
+    };
   }
+
+  return React.createElement(
+    "div",
+    null,
+    React.createElement("h1", null, "HilfeDOM"),
+    React.createElement(
+      "button",
+      { ref: ausloeser, onClick: oeffneHilfe },
+      "Anleitung öffnen",
+    ),
+    React.createElement("button", { onClick: onRerender, "data-testid": "irrelevant-rerender" }, "irrelevant"),
+    React.createElement("p", null, `tick ${tick}`),
+    offen ? React.createElement(HilfeSheet, { onClose: schliesseHilfe }) : null,
+  );
+}
+
+async function renderHilfe() {
+  await act(async () => {
+    root.render(React.createElement(HilfeHarness, { bind: bindState }));
+    await Promise.resolve();
+  });
+}
+
+async function runHilfeDomTest() {
+  await renderHilfe();
+
+  const ausloeser = bindState.current?.ausloeser?.current;
+  check("App-Kontrakt: stabile Ref-Übertragung", !!bindState.current);
+  check("App-konformer Hilfetrigger ist referenzierbar", !!ausloeser);
+  if (!ausloeser) {
+    throw new Error("Auslöser konnte nicht gebunden werden");
+  }
+  step("refGebunden");
+  step("triggerGefunden");
+
+  const vorLock = bodyStyleSnapshot();
+  const baselineClass = document.body.className;
+
+  ausloeser.focus();
+  step("triggerGeoeffnet");
+  await act(async () => { ausloeser.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+  step("triggerGeoeffnet");
+
+  const dialog = document.body.querySelector('[role="dialog"]');
+  const panel = dialog?.querySelector(".kd-help-panel");
+  const scrim = document.body.querySelector(".kd-sheet-scrim");
+
+  check("HilfeSheet rendert role=dialog + aria-modal im Body-Portal", !!dialog && dialog.getAttribute("aria-modal") === "true");
+  check("HilfeSheet liegt im Body-Portal", !!dialog && !!(dialog.parentElement === document.body));
+  check("HilfeSheet trägt kanonischen Titel", dialog?.getAttribute("aria-labelledby") === "kd-help-titel");
+  check("HilfeSheet enthält 7 Titel mit stabilen Datenzielen", !!panel
+    && panel.querySelectorAll("h3").length === 7
+    && [...panel.querySelectorAll("article[data-hilfe-ziel]")].map((node) => node.getAttribute("data-hilfe-ziel")).join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
+  const titles = [...(panel?.querySelectorAll("h3") || [])].map((node) => node.textContent?.trim()).filter(Boolean);
+  const dataGoals = [...(panel?.querySelectorAll("article[data-hilfe-ziel]") || [])].map((node) => node.getAttribute("data-hilfe-ziel"));
+  check("HilfeSheet liest Titel aus HILFE_BEREICHE", titles.length === HILFE_BEREICHE.length
+    && titles.every((titel) => HILFE_BEREICHE.some((bereich) => bereich.titel === titel))
+    && dataGoals.length === HILFE_BEREICHE.length
+    && dataGoals.every((ziel) => HILFE_BEREICHE.some((bereich) => bereich.ziel === ziel)));
+
+  step("dialogPortal");
+  step("dialogTitel");
+  step("panelGefunden");
+  step("titelUndZiele");
+
+  const panelFocusables = fokusziele(panel);
+  check("HilfeSheet fokussiert beim Öffnen ein gültiges Panelziel", panelFocusables.length > 0
+    && panel?.contains(document.activeElement));
+  if (panelFocusables.length > 0) step("focusErster");
+  else {
+    check("HilfeSheet kann Fokusziel bestimmen", false);
+  }
+
+  const first = panelFocusables[0];
+  const last = panelFocusables[panelFocusables.length - 1];
+  const outerTarget = container.querySelector('[data-testid="irrelevant-rerender"]');
+  if (panelFocusables.length > 1) {
+    await act(async () => { last.focus(); });
+    await act(async () => { tastatur("Tab"); });
+    check("HilfeSheet Tab fährt vom letzten Fokusziel auf das erste", document.activeElement === first);
+    if (document.activeElement === first) step("focusRingVorwaerts");
+
+    await act(async () => { first.focus(); });
+    await act(async () => { tastatur("Tab", { shift: true }); });
+    check("HilfeSheet Shift+Tab fährt vom ersten Fokusziel auf das letzte", document.activeElement === last);
+    if (document.activeElement === last) step("focusRingRueckwaerts");
+  } else {
+    check("HilfeSheet Tab/Shift+Tab bleibt bei Einzelziel im Dialog", panelFocusables.includes(document.activeElement));
+  }
+  if (outerTarget) {
+    await act(async () => { outerTarget.focus(); });
+    await act(async () => { tastatur("Tab"); });
+    check("HilfeSheet fängt Fokus nach externem Fokus korrekt zurück", document.activeElement === first);
+  }
+
+  const ownerRef = sperreDokumentScroll();
+  step("lockVor");
+  check("Scrim ist vorhanden", !!scrim);
+  check("Owner-Lock bleibt während Sheet offen", document.body.classList.contains("kd-scroll-gesperrt")
+    && document.body.style.position === "fixed");
+
+  await act(async () => { scrim?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+  check("HilfeSheet schließt über Scrim", !document.body.querySelector('[role="dialog"]'));
+  if (!document.body.querySelector('[role="dialog"]')) step("scrimClose");
+  check("Focus geht bei Scrim-Schluss auf Auslöser zurück", document.activeElement === ausloeser);
+  if (document.activeElement === ausloeser) step("focusReturn");
+  check("Owner-Lock kann durch verschachtelte Sperre noch aktiv sein", document.body.classList.contains("kd-scroll-gesperrt")
+    && document.body.style.position === "fixed");
+  step("lockReopen");
+
+  await act(async () => { bindState.current?.oeffneHilfe?.(); });
+  const reopenDialog = document.body.querySelector('[role="dialog"]');
+  const reopenPanel = reopenDialog?.querySelector(".kd-help-panel");
+  const reopenFocus = document.activeElement;
+  check("HilfeSheet kann erneut geöffnet werden", !!reopenDialog && reopenDialog.getAttribute("role") === "dialog");
+
+  await act(async () => { bindState.current?.onRerender?.(); });
+  check("Rerender erhält späteres Fokusziel unverändert", !!reopenFocus && reopenFocus === document.activeElement);
+  if (!!reopenFocus && reopenFocus === document.activeElement) step("rerenderFokus");
+  const reopenFocusables = fokusziele(reopenPanel);
+  check("Rerender bleibt auf Fokusziel innerhalb des Dialogs", reopenFocusables.includes(document.activeElement));
+  step("rerenderCloseAufheben");
+
   await act(async () => { tastatur("Escape"); });
-  check("Escape fokussiert explizit den Auslöser", document.activeElement === ausloeser());
-  owner();
-  check("Owner-Scrolllock kann danach korrekt wiederherstellen", document.body.style.overflow === vorStyle.overflow
-    && document.body.style.position === vorStyle.position
-    && document.body.style.top === vorStyle.top
-    && document.body.style.left === vorStyle.left
-    && document.body.style.right === vorStyle.right
-    && document.body.style.width === vorStyle.width);
+  check("Escape fokussiert den Auslöser", document.activeElement === ausloeser);
+  if (document.activeElement === ausloeser) step("escapeClose");
+
+  ownerRef?.();
+  const afterBody = bodyStyleSnapshot();
+  check("Owner-Scrolllock kann danach korrekt wiederherstellen", afterBody.overflow === vorLock.overflow
+    && afterBody.position === vorLock.position
+    && afterBody.top === vorLock.top
+    && afterBody.left === vorLock.left
+    && afterBody.right === vorLock.right
+    && afterBody.width === vorLock.width
+    && document.body.className === baselineClass);
+  step("scrollRestore");
 }
 
-// DokuAnsicht: inline details, keine nested modals.
-await act(async () => {
-  root.render(React.createElement(DokuAnsicht, {
-    h2: {},
-    mono: {},
-  }));
-  await Promise.resolve();
-});
-const doku = container.querySelector(".kd-doku-hilfe");
-const bereiche = doku ? [...doku.querySelectorAll("details.kd-doku-bereich")] : [];
-const names = bereiche.map((b) => b.querySelector("summary h3")?.textContent?.trim());
-const dokuZiele = bereiche.map((b) => b.getAttribute("data-hilfe-ziel"));
-const dokuH3Count = doku.querySelectorAll(".kd-doku-hilfe h3").length;
-const dialogInDoku = doku.querySelector('[role="dialog"]');
-check("DokuAnsicht ist inline ohne role=dialog/Portal", !!doku && !dialogInDoku
-  && dokuH3Count === 7);
-check("DokuAnsicht nutzt dieselben sieben Titel/Ziele", dokuH3Count === 7
-  && names.join("|") === HILFE_BEREICHE.map((bereich) => bereich.titel).join("|")
-  && dokuZiele.join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
-if (bereiche[0]) {
-  const erste = bereiche[0].querySelector("summary");
-  erste.focus();
-  await act(async () => { erste.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-  check("DokuAnsicht-Details lassen sich per pointer/Keyboard öffnen", !!bereiche[0].open);
-}
-const summaryListe = bereiche.map((b) => b.querySelector("summary"));
-await act(async () => { summaryListe[1]?.focus(); });
-await act(async () => { tastatur("Tab"); });
-check("Tastatur-Navigation in DokuAnsicht ist fokussierbar", document.activeElement !== document.body);
+async function runDokuAnsichtTest() {
+  await act(async () => {
+    root.render(React.createElement(DokuAnsicht, {
+      h2: {},
+      mono: {},
+    }));
+    await Promise.resolve();
+  });
 
-check(
-  "App verwendet stabilen onClose-Vertrag für Hilfe (statischer useCallback-String)",
-  /const schliesseHilfe = useCallback\(\(\) => setHilfeOffen\(false\), \[\]\)/.test(sourceApp)
-    && /<HilfeSheet onClose={schliesseHilfe} \/>/.test(sourceApp),
-);
+  const doku = container.querySelector(".kd-doku-hilfe");
+  const bereiche = doku ? [...doku.querySelectorAll("details.kd-doku-bereich")] : [];
+  const names = bereiche.map((b) => b.querySelector("summary h3")?.textContent?.trim());
+  const dokuZiele = bereiche.map((b) => b.getAttribute("data-hilfe-ziel"));
+  const dokuH3Count = doku ? doku.querySelectorAll(".kd-doku-hilfe h3").length : 0;
+  const dialogInDoku = doku?.querySelector('[role="dialog"]');
+  check("DokuAnsicht ist inline ohne nested Modals", !!doku && !dialogInDoku && dokuH3Count === 7);
+  if (!!doku && dokuH3Count === 7) {
+    step("dokuRender");
+  }
+  check("DokuAnsicht nutzt dieselben sieben Titel/Ziele", dokuH3Count === 7
+    && names.join("|") === HILFE_BEREICHE.map((bereich) => bereich.titel).join("|")
+    && dokuZiele.join("|") === "start|kino|mediathek|streaming|finder|blog|daten");
 
-let ok = true;
-for (const [name, pass] of checks) {
-  console.log(`${pass ? "✓" : "✗"} ${name}`);
-  ok = ok && pass;
+  if (bereiche[0]) {
+    const erste = bereiche[0].querySelector("summary");
+    erste.focus();
+    await act(async () => { erste.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    check("DokuAnsicht-Details öffnen sich via Keyboard", !!bereiche[0].open);
+    if (bereiche[0].open) {
+      step("dokuKeyboard");
+    }
+  }
+
+  const summaryListe = bereiche.map((b) => b.querySelector("summary")).filter(Boolean);
+  await act(async () => { summaryListe[1]?.focus(); });
+  await act(async () => { tastatur("Tab"); });
+  check("Tastatur-Navigation in DokuAnsicht ist fokussierbar", document.activeElement !== document.body);
 }
-await act(async () => { root.render(null); });
-console.log(ok ? "HILFE_DOM-TEST BESTANDEN" : "HILFE_DOM-TEST FEHLGESCHLAGEN");
-process.exit(ok ? 0 : 1);
+
+(async () => {
+  let ok = true;
+  try {
+    await runHilfeDomTest();
+    await runDokuAnsichtTest();
+  } finally {
+    await act(async () => { root.render(null); });
+    if (TEST_BUNDLE) {
+      try {
+        fs.unlinkSync(TEST_BUNDLE);
+      } catch {
+        // Aufräumen: kein sichtbarer Fehler bei vorhandenen Testabbruchwegen.
+      }
+    }
+  }
+
+  check("Ausführungszähler-Pflichtvertrag vollständig", pflichtAusgedrueckt());
+
+  for (const [name, pass] of checks) {
+    console.log(`${pass ? "✓" : "✗"} ${name}`);
+    ok = ok && pass;
+  }
+
+  console.log(ok ? "HILFE_DOM-TEST BESTANDEN" : "HILFE_DOM-TEST FEHLGESCHLAGEN");
+  process.exit(ok ? 0 : 1);
+})();

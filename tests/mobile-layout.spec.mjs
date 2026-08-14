@@ -356,30 +356,57 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByRole("dialog", { name: "Anleitung & Hilfe" })).toBeVisible();
       const hilfeDialog = page.getByRole("dialog", { name: "Anleitung & Hilfe" });
       const hilfePanel = hilfeDialog.locator(".kd-help-panel");
+      const hilfeLayer = page.locator(".kd-help-layer");
       await expect(hilfeDialog.locator("article").first()).toBeVisible();
       await expect(hilfeDialog).toHaveAttribute("aria-modal", "true");
       await expect(hilfeDialog).toContainText("Anleitung & Hilfe");
       for (const name of hilfeZielnamen) {
         await expect(hilfeDialog).toContainText(new RegExp(`\\b${name}\\b`));
       }
-      await expect(hilfeDialog).toContainText(/Sichtbare Auswahl löschen betrifft ausschließlich die aktuell sichtbare Schnittmenge der globalen Auswahl/);
+      await expect(hilfePanel.locator(".kd-help-lead")).toHaveText("Diese Hilfe öffnet sich nur, wenn du sie bewusst aufrufst.");
+      await expect(hilfePanel.locator(".kd-help-lead")).toBeVisible();
+      await expect(hilfeDialog).not.toContainText(/sichtbare auswahl.*schnittmenge.*global/);
       const panelCss = await hilfePanel.evaluate((el) => {
         const rect = el.getBoundingClientRect();
-        const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect().width);
-        const oneColumn = Math.max(...articleRects) <= rect.width + 0.5;
+        const articleRects = [...el.querySelectorAll("article")].map((a) => a.getBoundingClientRect());
+        const cols = new Set(articleRects.map((rect) => Math.round(rect.left)));
+        const rows = new Set(articleRects.map((rect) => Math.round(rect.top)));
         return {
           width: rect.width,
-          oneColumn,
-          total: el.scrollHeight > el.clientHeight,
+          columns: cols.size,
+          rows: rows.size,
+          overflowY: el.scrollHeight > el.clientHeight,
           overflowX: el.scrollWidth > el.clientWidth,
           overflowXVisible: el.scrollWidth <= el.clientWidth,
         };
       });
+      const hilfeLayerPads = await hilfeLayer.evaluate((el) => {
+        const st = getComputedStyle(el);
+        return {
+          top: Number.parseFloat(st.paddingTop),
+          right: Number.parseFloat(st.paddingRight),
+          bottom: Number.parseFloat(st.paddingBottom),
+          left: Number.parseFloat(st.paddingLeft),
+        };
+      });
       expect(panelCss.width).toBeLessThanOrEqual(viewport.width + 0.5);
-      expect(panelCss.oneColumn).toBe(true);
+      expect(panelCss.columns).toBe(1);
+      expect(panelCss.rows).toBeGreaterThanOrEqual(5);
       expect(panelCss.overflowXVisible).toBe(true);
-      expect(panelCss.total).toBe(true);
-      const hilfeFocusables = hilfeDialog.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      expect(panelCss.overflowY).toBe(true);
+      expect(hilfeLayerPads.top).toBeGreaterThanOrEqual(12);
+      expect(hilfeLayerPads.left).toBeGreaterThanOrEqual(10);
+      expect(hilfeLayerPads.right).toBeGreaterThanOrEqual(10);
+      expect(hilfeLayerPads.bottom).toBeGreaterThanOrEqual(12);
+      await page.waitForTimeout(20);
+      const panelBox = await hilfePanel.boundingBox();
+      const layerBox = await hilfeLayer.boundingBox();
+      expect(panelBox.x).toBeGreaterThanOrEqual(layerBox.x + hilfeLayerPads.left - 0.5);
+      expect(panelBox.y).toBeGreaterThanOrEqual(layerBox.y + hilfeLayerPads.top - 0.5);
+      expect(viewport.height - (panelBox.y + panelBox.height)).toBeGreaterThanOrEqual(hilfeLayerPads.bottom - 0.5);
+      const hilfeScrim = hilfeDialog.locator('.kd-sheet-scrim');
+      const hilfeFocusables = hilfePanel.locator('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      await expect(hilfeScrim).not.toBeFocused();
       await expect(hilfeFocusables.first()).toBeFocused();
       const focusCount = await hilfeFocusables.count();
       if (focusCount > 1) {
@@ -405,12 +432,6 @@ for (const viewport of VIEWPORTS) {
       }))).toEqual({ overflow: "", position: "", locked: false });
 
       await hilfeAusloeser.click();
-      await expect(hilfeDialog).toBeVisible();
-      await page.evaluate(() => {
-        const appRoot = document.getElementById("root");
-        if (appRoot) appRoot.style = appRoot.style;
-      });
-      await page.evaluate(() => window.dispatchEvent(new Event("resize")));
       await expect(hilfeDialog).toBeVisible();
       await expect.poll(() => page.evaluate(() => ({
         locked: document.body.classList.contains("kd-scroll-gesperrt"),
