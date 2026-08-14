@@ -42,29 +42,36 @@ function exactKeys(value, keys) {
   const actual = Object.keys(value);
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
-function validUuid(value) { return UUID_FORM.test(text(value)); }
+function validUuid(value) { return typeof value === "string" && UUID_FORM.test(text(value)); }
 function validTargetKey(value) {
+  if (typeof value !== "string") return false;
   const normalized = text(value);
   return normalized.length >= 3 && normalized.length <= 160;
 }
 function validTitle(value) {
+  if (typeof value !== "string") return false;
   const normalized = text(value);
   return normalized.length >= 1 && normalized.length <= 200;
 }
 function validInstant(value) {
+  if (typeof value !== "string") return false;
   const normalized = text(value);
   return !!normalized && Number.isFinite(Date.parse(normalized));
 }
 function validDay(value) {
+  if (typeof value !== "string") return false;
   const normalized = text(value);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
   const millis = Date.parse(`${normalized}T00:00:00.000Z`);
   return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === normalized;
 }
 function validChecksum(revision, checksum) {
-  return revision === 0 ? checksum === null : CHECKSUM_FORM.test(text(checksum));
+  return revision === 0
+    ? checksum === null
+    : typeof checksum === "string" && CHECKSUM_FORM.test(text(checksum));
 }
 function validPlatform(eventType, platform) {
+  if (typeof platform !== "string") return false;
   const normalized = text(platform);
   return eventType === "streamingstart_at" ? !!normalized && normalized !== "-" : platform === "-";
 }
@@ -80,7 +87,9 @@ export function validateRadarPilotSubscriptionAck(value) {
   if (!validTargetKey(value.targetId)) errors.push("subscription-ack-target-invalid");
   if (!["active", "paused", "removed"].includes(value.status)) errors.push("subscription-ack-status-invalid");
   if (!Number.isInteger(value.revision) || value.revision <= 0) errors.push("subscription-ack-revision-invalid");
-  if (!CHECKSUM_FORM.test(text(value.checksum))) errors.push("subscription-ack-checksum-invalid");
+  if (typeof value.checksum !== "string" || !CHECKSUM_FORM.test(text(value.checksum))) {
+    errors.push("subscription-ack-checksum-invalid");
+  }
   return result(errors);
 }
 
@@ -106,8 +115,9 @@ export function validateRadarPilotImportPayload(value) {
         errors.push("import-evidence-shape-invalid");
         continue;
       }
-      if (!text(evidence.sourceId) || text(evidence.sourceId).length > 128) errors.push("import-source-invalid");
-      if (!text(evidence.url)) errors.push("import-url-invalid");
+      if (typeof evidence.sourceId !== "string" || !text(evidence.sourceId)
+          || text(evidence.sourceId).length > 128) errors.push("import-source-invalid");
+      if (typeof evidence.url !== "string" || !text(evidence.url)) errors.push("import-url-invalid");
       if (!validInstant(evidence.retrievedAt)) errors.push("import-retrieved-at-invalid");
       sourceIds.add(text(evidence.sourceId));
     }

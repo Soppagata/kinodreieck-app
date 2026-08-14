@@ -875,7 +875,9 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     return Object.freeze({ ok: false, reason: "pilot-feed-revision-conflict", state, changed: false });
   }
   for (const ack of feed.operationAcks) {
-    const pending = state.outbox.find((entry) => entry.operationId === ack.operationId);
+    const pending = state.outbox.find((entry) => (
+      entry.operationId === ack.operationId && entry.status === "pending"
+    ));
     if (!pending) {
       return Object.freeze({ ok: false, reason: "pilot-feed-ack-conflict", state, changed: false });
     }

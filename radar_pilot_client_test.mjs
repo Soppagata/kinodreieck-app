@@ -90,6 +90,44 @@ await check("Importplattform folgt exakt dem E16A1-Eventtypvertrag", () => {
   assert.equal(C.validateRadarPilotImportPayload(importPayload({ evidence: [importPayload().evidence[0]] })).ok, false);
 });
 
+await check("Pilotverträge akzeptieren Textfelder nur als echte JSON-Strings", () => {
+  for (const invalid of [
+    subscriptionAck({ targetId: 550 }),
+    subscriptionAck({ targetId: { key: targetId } }),
+  ]) assert.equal(C.validateRadarPilotSubscriptionAck(invalid).ok, false);
+  for (const invalid of [
+    importPayload({ targetKey: 550 }),
+    importPayload({ targetKey: { key: targetId } }),
+    importPayload({ eventType: "streamingstart_at", platform: 42 }),
+    importPayload({ eventType: "streamingstart_at", platform: { name: "Netflix" } }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], sourceId: 7 }, importPayload().evidence[1],
+    ] }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], sourceId: { id: "source:official" } }, importPayload().evidence[1],
+    ] }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], url: 7 }, importPayload().evidence[1],
+    ] }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], url: { href: "https://example.test" } }, importPayload().evidence[1],
+    ] }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], retrievedAt: 1_723_622_400_000 }, importPayload().evidence[1],
+    ] }),
+    importPayload({ evidence: [
+      { ...importPayload().evidence[0], retrievedAt: { iso: instant } }, importPayload().evidence[1],
+    ] }),
+  ]) assert.equal(C.validateRadarPilotImportPayload(invalid).ok, false);
+  for (const invalid of [
+    feed({ subscriptions: [{ ...feed().subscriptions[0], title: 7 }] }),
+    feed({ subscriptions: [{ ...feed().subscriptions[0], title: { text: "Fight Club" } }] }),
+    feed({ reconciledAt: 1_723_622_400_000 }),
+    feed({ subscriptions: [{ ...feed().subscriptions[0], updatedAt: { iso: instant } }] }),
+    feed({ events: [{ ...event(), targetId: { key: targetId } }] }),
+  ]) assert.equal(C.validateRadarPilotFeed(invalid).ok, false);
+});
+
 function queuedAccountState() {
   return R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
     operationId, action: "upsert",
@@ -111,7 +149,7 @@ function response(status, payload, { bodyHook = null } = {}) {
 
 function harness({
   enabled = true, mode = "account", state = queuedAccountState(), fetchImpl = null,
-  tokenHook = null, persistHook = null,
+  tokenHook = null, beforeStorageSetHook = null, storageSetHook = null,
 } = {}) {
   const enabledFlag = Object.hasOwn(arguments[0] || {}, "enabled") ? arguments[0].enabled : true;
   let current = state;
@@ -123,6 +161,7 @@ function harness({
   const calls = [];
   let activeFetches = 0;
   let maxFetches = 0;
+  const storageWrites = new Map();
   const transport = fetchImpl || (async (url, init) => {
     calls.push({ url, init, rpc: url.split("/").at(-1), body: JSON.parse(init.body) });
     activeFetches += 1;
@@ -139,6 +178,23 @@ function harness({
     name: driver,
     owner: "account:account-a",
     isCurrent: () => driver === context.name && generation === context.generation,
+    async set(key, value) {
+      if (beforeStorageSetHook) await beforeStorageSetHook();
+      if (!context.isCurrent()) {
+        const error = new Error("storage context changed");
+        error.code = "STORAGE_CONTEXT_CHANGED";
+        throw error;
+      }
+      const boundDriver = context.name;
+      if (storageSetHook) await storageSetHook();
+      storageWrites.set(boundDriver, (storageWrites.get(boundDriver) || 0) + 1);
+      if (!context.isCurrent()) {
+        const error = new Error("storage context changed");
+        error.code = "STORAGE_CONTEXT_CHANGED";
+        throw error;
+      }
+      return { key, value };
+    },
   };
   const service = S.createRadarPilotService({
     config: {
@@ -158,17 +214,14 @@ function harness({
     fetchImpl: transport,
     now: () => instant,
   });
-  const persist = async (next) => {
-    const beforePersist = { session, accountId, driver, generation, tokenBinding };
-    if (persistHook) await persistHook();
-    if (session !== beforePersist.session || accountId !== beforePersist.accountId
-        || driver !== beforePersist.driver || generation !== beforePersist.generation
-        || tokenBinding !== beforePersist.tokenBinding) return false;
+  const commit = (next) => {
     current = next;
     return true;
   };
   return {
-    service, calls, persist, get state() { return current; }, get maxFetches() { return maxFetches; },
+    service, calls, commit,
+    get state() { return current; }, get maxFetches() { return maxFetches; },
+    writes(name) { return storageWrites.get(name) || 0; },
     changeSession() { session = Object.freeze({ ...session }); },
     changeAccount(value = "account-b") { accountId = value; },
     changeDriver() { driver = "account-driver-b"; },
@@ -180,18 +233,22 @@ function harness({
 for (const enabled of [false, undefined]) {
   await check(`Flag ${String(enabled)} erzeugt trotz Outbox null Aufrufe aller vier Pilot-RPCs`, async () => {
     const h = harness({ enabled });
-    const result = await h.service.sync({ state: h.state, persist: h.persist });
+    const result = await h.service.sync({ state: h.state, commit: h.commit });
     assert.equal(result.status, "disabled");
     assert.equal(h.calls.length, 0);
+    assert.equal(h.writes("account-driver-a"), 0);
+    assert.equal(h.writes("account-driver-b"), 0);
     for (const rpc of S.RADAR_PILOT_RPCS) assert.equal(h.calls.some((call) => call.rpc === rpc), false);
   });
 }
 
 await check("Gast erzeugt null Aufrufe aller vier Pilot-RPCs", async () => {
   const h = harness({ mode: "guest" });
-  const result = await h.service.sync({ state: h.state, persist: h.persist });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "guest");
   assert.equal(h.calls.length, 0);
+  assert.equal(h.writes("account-driver-a"), 0);
+  assert.equal(h.writes("account-driver-b"), 0);
   for (const rpc of S.RADAR_PILOT_RPCS) assert.equal(h.calls.some((call) => call.rpc === rpc), false);
 });
 
@@ -223,11 +280,50 @@ await check("Subscription-Outbox läuft seriell mit maximaler Parallelität eins
       return response(200, feed({ subscriptions: [], events: [] }));
     },
   });
-  const result = await h.service.sync({ state: h.state, persist: h.persist });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "ready");
   assert.equal(maxActiveRequests, 1);
   assert.equal(bodies.filter((entry) => entry.url.endsWith("set_subscription")).length, 2);
   assert.equal(h.state.outbox.length, 0);
+});
+
+await check("Überlappende explizite Syncs senden dieselbe Operation instanzweit nur einmal", async () => {
+  let releaseFirstFetch;
+  let markFirstFetchStarted;
+  const firstFetchStarted = new Promise((resolve) => { markFirstFetchStarted = resolve; });
+  const blocked = new Promise((resolve) => { releaseFirstFetch = resolve; });
+  let first = true;
+  let activeFetches = 0;
+  let maxActiveFetches = 0;
+  const sentOperationIds = [];
+  const h = harness({
+    fetchImpl: async (url, init) => {
+      activeFetches += 1;
+      maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
+      if (first) {
+        first = false;
+        markFirstFetchStarted();
+        await blocked;
+      }
+      const body = JSON.parse(init.body);
+      if (url.endsWith("kd_radar_pilot_set_subscription")) sentOperationIds.push(body.p_operation_id);
+      activeFetches -= 1;
+      return url.endsWith("kd_radar_pilot_feed") ? response(200, feed()) : response(200, subscriptionAck());
+    },
+  });
+  const firstRun = h.service.sync({ state: h.state, commit: h.commit });
+  await firstFetchStarted;
+  const secondRun = h.service.sync({ state: h.state, commit: h.commit });
+  await Promise.resolve();
+  assert.equal(maxActiveFetches, 1);
+  releaseFirstFetch();
+  const [firstResult, secondResult] = await Promise.all([firstRun, secondRun]);
+  assert.equal(firstResult.status, "ready");
+  assert.equal(secondResult.status, "busy");
+  assert.deepEqual(sentOperationIds, [operationId]);
+  const thirdResult = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(thirdResult.status, "ready");
+  assert.deepEqual(sentOperationIds, [operationId]);
 });
 
 await check("Verlorene Antwort hält dieselbe operationId pending und Feed-Ack schließt sie später", async () => {
@@ -244,10 +340,10 @@ await check("Verlorene Antwort hält dieselbe operationId pending und Feed-Ack s
       return response(200, feed({ operationAcks: first ? [] : [subscriptionAck()] }));
     },
   });
-  const lost = await h.service.sync({ state: h.state, persist: h.persist });
+  const lost = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(lost.status, "pending");
   assert.equal(h.state.outbox[0].operationId, operationId);
-  const recovered = await h.service.sync({ state: h.state, persist: h.persist });
+  const recovered = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(recovered.status, "ready");
   assert.deepEqual(ids, [operationId]);
   assert.equal(h.state.outbox.length, 0);
@@ -257,7 +353,7 @@ for (const [name, mutate, stage] of [
   ["Sitzungszaun", (h) => h.changeSession(), "fetch"],
   ["Accountzaun", (h) => h.changeAccount(), "fetch"],
   ["Treiberzaun", (h) => h.changeDriver(), "body"],
-  ["Generationszaun", (h) => h.changeGeneration(), "persist"],
+  ["Generationszaun", (h) => h.changeGeneration(), "storage"],
   ["Tokenzaun", (h) => h.changeToken(), "token"],
 ]) {
   await check(`${name} verwirft Kontextwechsel während await ohne Cachemutation`, async () => {
@@ -267,7 +363,7 @@ for (const [name, mutate, stage] of [
     h = harness({
       state: before,
       tokenHook: stage === "token" ? hook : null,
-      persistHook: stage === "persist" ? hook : null,
+      storageSetHook: stage === "storage" ? hook : null,
       fetchImpl: async (url, init) => {
         h.calls.push({ url, init, rpc: url.split("/").at(-1), body: JSON.parse(init.body) });
         if (stage === "fetch") await hook();
@@ -276,7 +372,7 @@ for (const [name, mutate, stage] of [
         });
       },
     });
-    const result = await h.service.sync({ state: h.state, persist: h.persist });
+    const result = await h.service.sync({ state: h.state, commit: h.commit });
     assert.equal(result.status, "context-changed");
     assert.equal(h.state, before);
   });
@@ -286,7 +382,7 @@ await check("Terminale Fachablehnung markiert nur die Operation rejected", async
   const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
     ? response(200, feed())
     : response(400, { code: "23514", message: "radar_quota_exceeded" }) });
-  const result = await h.service.sync({ state: h.state, persist: h.persist });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "rejected");
   assert.equal(h.state.outbox[0].status, "rejected");
   assert.equal(h.state.outbox[0].reason, "radar_quota_exceeded");
@@ -301,7 +397,7 @@ for (const [name, reply] of [
     const h = harness({ fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
       ? response(200, feed())
       : reply() });
-    const result = await h.service.sync({ state: h.state, persist: h.persist });
+    const result = await h.service.sync({ state: h.state, commit: h.commit });
     assert.equal(result.status, "pending");
     assert.equal(h.state.outbox[0].status, "pending");
   });
@@ -309,7 +405,7 @@ for (const [name, reply] of [
 
 await check("Fehlender RPC wird pilot-unavailable ohne Outboxlöschung", async () => {
   const h = harness({ fetchImpl: async () => response(404, { code: "PGRST202", message: "function not found" }) });
-  const result = await h.service.sync({ state: h.state, persist: h.persist });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(result.status, "pilot-unavailable");
   assert.equal(h.state.pilot.status, "pilot-unavailable");
   assert.equal(h.state.outbox[0].status, "pending");
@@ -338,6 +434,18 @@ await check("Feed-Ack darf keine fremde Operation oder Zielprojektion bestätige
   assert.equal(conflict.state, state);
 });
 
+await check("Feed-Ack darf eine lokal rejected Operation nicht bestätigen", () => {
+  const pending = queuedAccountState();
+  const rejected = R.rejectAccountRadarChange(pending, operationId, "radar_quota_exceeded").state;
+  const conflict = R.reconcileAccountRadarPilotFeed(rejected, feed({
+    operationAcks: [subscriptionAck()],
+  }));
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.reason, "pilot-feed-ack-conflict");
+  assert.equal(conflict.state, rejected);
+  assert.equal(conflict.state.outbox[0].status, "rejected");
+});
+
 await check("Receipt bleibt pending unsichtbar und wird erst nach HTTP-Ack sichtbar", async () => {
   let state = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed()).state;
   state = R.queueAccountRadarPilotReceipt(state, {
@@ -346,16 +454,69 @@ await check("Receipt bleibt pending unsichtbar und wird erst nach HTTP-Ack sicht
   assert.equal(state.receipts.length, 0);
   assert.equal(state.pilot.receiptOutbox[0].state, "pending");
   const h = harness({ state });
-  await h.service.sync({ state: h.state, persist: h.persist });
+  await h.service.sync({ state: h.state, commit: h.commit });
   assert.equal(h.state.receipts[0].status, "seen");
   assert.equal(h.state.pilot.receiptOutbox.length, 0);
+
+  let nullState = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed()).state;
+  nullState = R.queueAccountRadarPilotReceipt(nullState, {
+    eventId, eventVersionId, status: "seen", now: instant,
+  }).state;
+  const nullAck = harness({
+    state: nullState,
+    fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+      ? response(200, feed())
+      : response(200, null),
+  });
+  await nullAck.service.sync({ state: nullAck.state, commit: nullAck.commit });
+  assert.equal(nullAck.state.receipts[0].status, "seen");
+  assert.equal(nullAck.state.pilot.receiptOutbox.length, 0);
 });
+
+await check("Receipt-void-Ack akzeptiert nur leeren oder JSON-null Body", async () => {
+  for (const payload of [{ unexpected: true }, [], "ok"]) {
+    let state = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed()).state;
+    state = R.queueAccountRadarPilotReceipt(state, {
+      eventId, eventVersionId, status: "seen", now: instant,
+    }).state;
+    const h = harness({
+      state,
+      fetchImpl: async (url) => url.endsWith("kd_radar_pilot_feed")
+        ? response(200, feed())
+        : response(200, payload),
+    });
+    const result = await h.service.sync({ state: h.state, commit: h.commit });
+    assert.equal(result.status, "pending");
+    assert.equal(h.state.receipts.length, 0);
+    assert.equal(h.state.pilot.receiptOutbox[0].state, "pending");
+  }
+});
+
+for (const [name, hookName, expectedAWrites] of [
+  ["direkt vor gebundenem Storage-set", "beforeStorageSetHook", 0],
+  ["während gebundenem Storage-set", "storageSetHook", 1],
+]) {
+  await check(`Treiberwechsel ${name} schreibt nie in Cache B und committet nicht sichtbar`, async () => {
+    let h;
+    const before = queuedAccountState();
+    h = harness({
+      state: before,
+      [hookName]: async () => h.changeDriver(),
+    });
+    const result = await h.service.sync({ state: h.state, commit: h.commit });
+    assert.equal(result.status, "context-changed");
+    assert.equal(h.writes("account-driver-a"), expectedAWrites);
+    assert.equal(h.writes("account-driver-b"), 0);
+    assert.equal(h.state, before);
+    assert.equal(h.state.outbox[0].status, "pending");
+  });
+}
 
 await check("Import sendet genau eine exakte E16A1-Payload und akzeptiert nur die strikte Antwort", async () => {
   let state = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed({ radarReview: true })).state;
   state = R.queueAccountRadarPilotImport(state, { operationId, payload: importPayload(), now: instant }).state;
   const h = harness({ state });
-  await h.service.sync({ state: h.state, persist: h.persist });
+  await h.service.sync({ state: h.state, commit: h.commit });
   const request = h.calls.find((call) => call.rpc === "kd_radar_pilot_import_event");
   assert.deepEqual(Object.keys(request.body).sort(), ["p_operation_id", "p_payload"]);
   assert.deepEqual(request.body.p_payload, importPayload());

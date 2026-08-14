@@ -17,7 +17,7 @@ import {
   validateRadarPilotSubscriptionAck,
 } from "../lib/radarPilotContracts.js";
 import { authDriver, authService } from "./auth.js";
-import { captureStorageContext } from "./storage.js";
+import { K, captureStorageContext } from "./storage.js";
 
 export const RADAR_PILOT_RPCS = Object.freeze([
   "kd_radar_pilot_set_subscription",
@@ -125,7 +125,7 @@ export function createRadarPilotService({
     return token;
   }
 
-  async function callRpc(name, body, fence, token, { allowEmpty = false } = {}) {
+  async function callRpc(name, body, fence, token, { expectVoid = false } = {}) {
     let response;
     try {
       response = await guarded(Promise.resolve().then(() => fetchImpl(`${basis}/rest/v1/rpc/${name}`, {
@@ -153,26 +153,46 @@ export function createRadarPilotService({
       catch { return { kind: "pending", reason: "pilot-json-invalid" }; }
     }
     if (!response.ok) return rpcStatus(response.status, payload);
-    if (!allowEmpty && payload == null) return { kind: "pending", reason: "pilot-response-empty" };
+    if (expectVoid) {
+      if (raw !== "" && payload !== null) {
+        return { kind: "pending", reason: "pilot-void-response-invalid" };
+      }
+      return { kind: "ok", payload: null };
+    }
+    if (payload == null) return { kind: "pending", reason: "pilot-response-empty" };
     return { kind: "ok", payload };
   }
 
-  async function persistState(persist, next, fence, token) {
-    if (typeof persist !== "function") return false;
-    const confirmed = await guarded(Promise.resolve().then(() => persist(next)), fence, token);
-    return confirmed !== false;
+  async function persistState(commit, next, fence, token) {
+    if (!fenceCurrent(fence, token) || typeof fence.storage?.set !== "function") throw contextError();
+    try {
+      await fence.storage.set(K.radar, JSON.stringify(next));
+    } catch (error) {
+      if (error?.code === "STORAGE_CONTEXT_CHANGED" || !fenceCurrent(fence, token)) throw contextError();
+      return false;
+    }
+    if (!fenceCurrent(fence, token)) throw contextError();
+    if (typeof commit === "function") {
+      let confirmed;
+      try { confirmed = commit(next); }
+      catch { return false; }
+      if (confirmed && typeof confirmed.then === "function") return false;
+      if (confirmed === false) return false;
+      if (!fenceCurrent(fence, token)) throw contextError();
+    }
+    return true;
   }
 
-  async function unavailable(current, persist, fence, token) {
+  async function unavailable(current, commit, fence, token) {
     const marked = markAccountRadarPilotUnavailable(current);
     if (!marked.ok) return { status: "pilot-unavailable", state: current };
-    if (!await persistState(persist, marked.state, fence, token)) {
+    if (!await persistState(commit, marked.state, fence, token)) {
       return { status: "pending", state: current, reason: "pilot-persist-unconfirmed" };
     }
     return { status: "pilot-unavailable", state: marked.state };
   }
 
-  async function sync({ state, persist } = {}) {
+  async function runSync({ state, commit } = {}) {
     if (config.radarPilotClientEnabled !== true) return Object.freeze({ status: "disabled", state });
     const visibleSession = auth.getSnapshot();
     if (visibleSession?.mode !== "account") return Object.freeze({ status: "guest", state });
@@ -204,14 +224,14 @@ export function createRadarPilotService({
 
     try {
       const feedResponse = await callRpc("kd_radar_pilot_feed", { p_operation_ids: runSubscriptionIds }, fence, token);
-      if (feedResponse.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, persist, fence, token));
+      if (feedResponse.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token));
       if (feedResponse.kind !== "ok" || !validateRadarPilotFeed(feedResponse.payload).ok) {
         return Object.freeze({ status: "pending", state: current, reason: feedResponse.reason || "pilot-feed-invalid" });
       }
       const reconciled = reconcileAccountRadarPilotFeed(current, feedResponse.payload);
       if (!reconciled.ok) return Object.freeze({ status: "pending", state: current, reason: reconciled.reason });
       if (reconciled.changed) {
-        if (!await persistState(persist, reconciled.state, fence, token)) {
+        if (!await persistState(commit, reconciled.state, fence, token)) {
           return Object.freeze({ status: "pending", state: current, reason: "pilot-persist-unconfirmed" });
         }
         current = reconciled.state;
@@ -227,10 +247,10 @@ export function createRadarPilotService({
           p_status: status,
           p_operation_id: operation.operationId,
         }, fence, token);
-        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, persist, fence, token));
+        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token));
         if (reply.kind === "rejected") {
           const changed = rejectAccountRadarChange(current, operation.operationId, reply.reason);
-          if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+          if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
             return Object.freeze({ status: "pending", state: current, reason: "pilot-persist-unconfirmed" });
           }
           current = changed.state;
@@ -241,7 +261,7 @@ export function createRadarPilotService({
           return Object.freeze({ status: "pending", state: current, reason: reply.reason || "pilot-subscription-response-invalid" });
         }
         const changed = acknowledgeAccountRadarPilotSubscription(current, operation.operationId, reply.payload);
-        if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+        if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
           return Object.freeze({ status: "pending", state: current, reason: changed.reason || "pilot-persist-unconfirmed" });
         }
         current = changed.state;
@@ -255,11 +275,11 @@ export function createRadarPilotService({
         const reply = await callRpc("kd_radar_pilot_set_receipt", {
           p_event_version_id: operation.eventVersionId,
           p_status: operation.status,
-        }, fence, token, { allowEmpty: true });
-        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, persist, fence, token));
+        }, fence, token, { expectVoid: true });
+        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token));
         if (reply.kind === "rejected") {
           const changed = rejectAccountRadarPilotReceipt(current, operation.eventVersionId, reply.reason);
-          if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+          if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
             return Object.freeze({ status: "pending", state: current, reason: "pilot-persist-unconfirmed" });
           }
           current = changed.state;
@@ -268,7 +288,7 @@ export function createRadarPilotService({
         }
         if (reply.kind !== "ok") return Object.freeze({ status: "pending", state: current, reason: reply.reason });
         const changed = acknowledgeAccountRadarPilotReceipt(current, operation.eventVersionId, now());
-        if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+        if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
           return Object.freeze({ status: "pending", state: current, reason: changed.reason || "pilot-persist-unconfirmed" });
         }
         current = changed.state;
@@ -283,10 +303,10 @@ export function createRadarPilotService({
           p_operation_id: operation.operationId,
           p_payload: operation.payload,
         }, fence, token);
-        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, persist, fence, token));
+        if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token));
         if (reply.kind === "rejected") {
           const changed = rejectAccountRadarPilotImport(current, operation.operationId, reply.reason);
-          if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+          if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
             return Object.freeze({ status: "pending", state: current, reason: "pilot-persist-unconfirmed" });
           }
           current = changed.state;
@@ -297,7 +317,7 @@ export function createRadarPilotService({
           return Object.freeze({ status: "pending", state: current, reason: reply.reason || "pilot-import-response-invalid" });
         }
         const changed = acknowledgeAccountRadarPilotImport(current, operation.operationId, reply.payload);
-        if (!changed.ok || !await persistState(persist, changed.state, fence, token)) {
+        if (!changed.ok || !await persistState(commit, changed.state, fence, token)) {
           return Object.freeze({ status: "pending", state: current, reason: changed.reason || "pilot-persist-unconfirmed" });
         }
         current = changed.state;
@@ -309,6 +329,14 @@ export function createRadarPilotService({
       }
       return Object.freeze({ status: "pending", state: current, reason: "pilot-unknown" });
     }
+  }
+
+  let syncActive = false;
+  async function sync(options = {}) {
+    if (syncActive) return Object.freeze({ status: "busy", state: options?.state });
+    syncActive = true;
+    try { return await runSync(options); }
+    finally { syncActive = false; }
   }
 
   return Object.freeze({ sync });
