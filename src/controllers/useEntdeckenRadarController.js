@@ -72,12 +72,17 @@ export function useEntdeckenRadarController({
       return { status: "disabled", state };
     }
     setRadarPilotSyncStatus("syncing");
-    const status = await radarPilotService.sync({
-      state,
-      commit: (next) => setRadarState(next),
-    });
-    setRadarPilotSyncStatus(status?.status || "pending");
-    return status;
+    try {
+      const status = await radarPilotService.sync({
+        state,
+        commit: (next) => setRadarState(next),
+      });
+      setRadarPilotSyncStatus(status?.status || "pending");
+      return status;
+    } catch {
+      setRadarPilotSyncStatus("pending");
+      return { status: "pending", state, reason: "pilot-unknown" };
+    }
   }, [radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState]);
 
   useEffect(() => {
@@ -92,25 +97,26 @@ export function useEntdeckenRadarController({
         if (!aktiv) return;
         if (!decoded.ok) {
           setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
-          if (decoded.status === "authority-mismatch") {
-            setErr("Der lokale Radar-Stand passt nicht zur aktuellen Ablage. Er wurde auf den lokalen Leerstaat zurückgesetzt.");
-          } else {
-            setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Er wurde auf den lokalen Leerstaat zurückgesetzt.");
-          }
+          setErr("Der lokale Radar-Stand passt nicht zur aktuellen Anmeldung oder ist beschädigt. Er wurde nicht verändert und bleibt vorsichtshalber ausgeblendet.");
           return;
         }
         setRadarState(decoded.state);
         if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return;
         setRadarPilotSyncStatus("syncing");
-        const status = await radarPilotService.sync({
-          state: decoded.state,
-          commit: (next) => (aktiv ? setRadarState(next) : false),
-        });
-        if (!aktiv) return;
-        setRadarPilotSyncStatus(status?.status || "pending");
+        try {
+          const status = await radarPilotService.sync({
+            state: decoded.state,
+            commit: (next) => (aktiv ? setRadarState(next) : false),
+          });
+          if (!aktiv) return;
+          setRadarPilotSyncStatus(status?.status || "pending");
+        } catch {
+          if (aktiv) setRadarPilotSyncStatus("pending");
+        }
       } catch {
+        if (!aktiv) return;
         setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
-        setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Es wurde auf den lokalen Leerstaat zurückgesetzt.");
+        setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Es wurde nichts verändert.");
       }
     })();
     return () => {
@@ -157,7 +163,6 @@ export function useEntdeckenRadarController({
     }
     const target = targetOrEntry?.targetStatus ? targetOrEntry : radarTargetAusEintrag(targetOrEntry || {});
     let grund = "radar-change-invalid";
-    let gespeicherterStand = null;
     const gespeichert = await schreibeRadarState((prev) => {
       if (prev.authority !== radarAuthority) { grund = "authority-mismatch"; return null; }
       const result = prev.authority === "guest"
@@ -168,14 +173,13 @@ export function useEntdeckenRadarController({
           operationId: neueLokaleOperationId(), action, target,
         });
       grund = result.reason;
-      gespeicherterStand = result.state;
       return result.ok ? result.state : null;
     });
     if (
       radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
-      && gespeichert !== false && gespeicherterStand
+      && gespeichert !== false && gespeichert
     ) {
-      void syncRadarPilot(gespeicherterStand);
+      void syncRadarPilot(gespeichert);
     }
     if (gespeichert !== false) return true;
     setErr(grund === "quota-exceeded"
