@@ -57,7 +57,7 @@ function arraysGleich(a, b) {
 function hatAntwortSchema(ergebnis) {
   if (!ergebnis || typeof ergebnis !== "object" || Array.isArray(ergebnis)) return false;
   const keys = Object.keys(ergebnis).sort();
-  const erwartet = ["bereichId", "bereichTitel", "id", "titel", "text", "ziel"];
+  const erwartet = ["bereichId", "bereichTitel", "id", "titel", "text", "ziel"].sort();
   if (keys.length !== erwartet.length) return false;
   return erwartet.every((feld, index) => keys[index] === feld)
     && keys.every((feld) => typeof ergebnis[feld] === "string" && ergebnis[feld].trim().length > 0);
