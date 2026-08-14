@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
@@ -37,8 +37,12 @@ export function useEntdeckenRadarController({
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
-  const radarPilotSyncSerialRef = useRef(0);
-  const radarInitial = useMemo(() => createEmptyLocalRadar({ authority: radarAuthority }), [radarAuthority]);
+  const radarInitial = useMemo(() => {
+    try {
+      const decoded = decodeLocalRadar(localStorage.getItem(K.radar), { authority: radarAuthority });
+      return decoded.ok ? decoded.state : createEmptyLocalRadar({ authority: radarAuthority });
+    } catch { return createEmptyLocalRadar({ authority: radarAuthority }); }
+  }, [radarAuthority]);
   const normalisiereRadar = useCallback((wert) => {
     if (!validateLocalRadarState(wert).ok || wert.authority !== radarAuthority) {
       throw new Error("Radarzustand passt nicht zur aktuellen Ablage");
@@ -67,13 +71,10 @@ export function useEntdeckenRadarController({
       setRadarPilotSyncStatus("disabled");
       return { status: "disabled", state };
     }
-    const callSerial = ++radarPilotSyncSerialRef.current;
+    setRadarPilotSyncStatus("syncing");
     const status = await radarPilotService.sync({
       state,
-      commit: (next) => {
-        if (radarPilotSyncSerialRef.current !== callSerial) return;
-        setRadarState(next);
-      },
+      commit: (next) => setRadarState(next),
     });
     setRadarPilotSyncStatus(status?.status || "pending");
     return status;
@@ -88,22 +89,34 @@ export function useEntdeckenRadarController({
       try {
         const gespeicherterRadar = await store.get(K.radar);
         const decoded = decodeLocalRadar(gespeicherterRadar?.value, { authority: radarAuthority });
-        if (!aktiv || !decoded.ok) return;
+        if (!aktiv) return;
+        if (!decoded.ok) {
+          setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
+          if (decoded.status === "authority-mismatch") {
+            setErr("Der lokale Radar-Stand passt nicht zur aktuellen Ablage. Er wurde auf den lokalen Leerstaat zurückgesetzt.");
+          } else {
+            setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Er wurde auf den lokalen Leerstaat zurückgesetzt.");
+          }
+          return;
+        }
         setRadarState(decoded.state);
         if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return;
-        await syncRadarPilot(decoded.state);
+        setRadarPilotSyncStatus("syncing");
+        const status = await radarPilotService.sync({
+          state: decoded.state,
+          commit: (next) => (aktiv ? setRadarState(next) : false),
+        });
+        if (!aktiv) return;
+        setRadarPilotSyncStatus(status?.status || "pending");
       } catch {
-        return;
+        setRadarState(createEmptyLocalRadar({ authority: radarAuthority }));
+        setErr("Der lokale Radar-Stand konnte nicht gelesen werden. Es wurde auf den lokalen Leerstaat zurückgesetzt.");
       }
     })();
     return () => {
       aktiv = false;
     };
-  }, [bootDone, radarAuthority, radarPilotClientEnabled, remoteKontoAktiv, session.account?.id, setRadarState, syncRadarPilot, setErr]);
-
-  useEffect(() => () => {
-    radarPilotSyncSerialRef.current += 1;
-  }, [session.account?.id, radarAuthority, bootDone]);
+  }, [bootDone, radarAuthority, session.account?.id, setRadarState, setErr]);
 
   const aendereSerienBeobachtung = useCallback(async (eintrag, aktiv) => {
     const watchmodeId = eintrag?.watchmode_id ?? eintrag?.watchmodeId;
@@ -213,7 +226,7 @@ export function useEntdeckenRadarController({
       return result.ok ? result.state : null;
     });
     if (gespeichert === false) return false;
-    await syncRadarPilot();
+    await syncRadarPilot(gespeichert);
     return true;
   }, [
     radarAuthority,
@@ -239,7 +252,7 @@ export function useEntdeckenRadarController({
       return result.ok ? result.state : null;
     });
     if (gespeichert === false) return false;
-    await syncRadarPilot();
+    await syncRadarPilot(gespeichert);
     return true;
   }, [
     radarAuthority,

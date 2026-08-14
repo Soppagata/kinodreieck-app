@@ -555,21 +555,29 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
   && /onRadarPilotReceipt=\{fuehreRadarPilotReceipt\}/.test(app)
   && /onRadarPilotImport=\{fuehreRadarPilotImport\}/.test(app)
   && /onRadarPilotSync=\{fuehreRadarPilotSync\}/.test(app));
+  check("Controller liest Radar-Initialwert aus localStorage und decodiert ihn pro Authority", /const radarInitial = useMemo\(\(\) => \{[\s\S]*decodeLocalRadar\(localStorage\.getItem\(K\.radar\), \{ authority: radarAuthority \}\)[\s\S]*return decoded\.ok \? decoded\.state/.test(radarController));
   check("Controller liest Kd-Radar-Boot aus Store und decodiert pro Authority", /store\.get\(K\.radar\)/.test(radarController)
     && /decodeLocalRadar\(gespeicherterRadar\?\.value/.test(radarController)
     && /setRadarState\(decoded\.state\)/.test(radarController));
+  check("Controller meldet Boot-Malformed und Lesefehler mit separaten Radar-Texten", /setErr\("Der lokale Radar-Stand passt nicht zur aktuellen Ablage/.test(radarController)
+    && /setErr\("Der lokale Radar-Stand konnte nicht gelesen werden/.test(radarController));
+  check("Boot-Sync nutzt decoded.state als Sync-Payload und aktiv-guarded commit", /setRadarPilotSyncStatus\("syncing"\)/.test(radarController)
+    && /await radarPilotService\.sync\(\{[\s\S]*state: decoded\.state,[\s\S]*commit: \(next\) => \(aktiv \? setRadarState\(next\) : false\)[\s\S]*\}\)/.test(radarController));
   check("Controller-Sync ruft radarPilotService exakt mit state und commit auf", /const syncRadarPilot = useCallback\(async \(stateForSync = null\) => \{[\s\S]*radarPilotService\.sync\(\{[\s\S]*state,/.test(radarController)
-    && /commit:\s*\(next\) => \{[\s\S]*setRadarState\(next\)/.test(radarController));
+    && /commit:\s*\(next\) => setRadarState\(next\)/.test(radarController));
   check("Share-Pfad bleibt ohne Pilot-Sync", (() => {
     const start = radarController.indexOf("const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {");
     const ende = radarController.indexOf("const fuehreRadarPilotReceipt = useCallback", start);
     if (start < 0 || ende < 0) return false;
     return !/syncRadarPilot/.test(radarController.slice(start, ende));
   })());
-check("Controller hat keinen Pilot-Timer/Retry für den W2-Pfad", !/setTimeout|setInterval|clearTimeout|clearInterval/.test(radarController));
-check("Pilot-Gates richten sich nur an Flag/Authority/Active-Account", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
-  && /!radarPilotClientEnabled/.test(radarController)
-  && /!remoteKontoAktiv/.test(radarController)
+  check("Controller schreibt bestätigt bestätigten Subscription-/Receipt-/Import-Stand nur über Queuewrite-Ergebnis in Pilot-Sync", /let gespeicherterStand = null;[\s\S]*void syncRadarPilot\(gespeicherterStand\)/.test(radarController)
+    && /const gespeichert = await schreibeRadarState\([\s\S]*queueAccountRadarPilotReceipt[\s\S]*return result\.ok \? result\.state : null;[\s\S]*await syncRadarPilot\(gespeichert\)/.test(radarController)
+    && /const gespeichert = await schreibeRadarState\([\s\S]*queueAccountRadarPilotImport[\s\S]*return result\.ok \? result\.state : null;[\s\S]*await syncRadarPilot\(gespeichert\)/.test(radarController));
+  check("Controller hat keinen Pilot-Timer/Retry/Serial für den W2-Pfad", !/radarPilotSyncSerialRef|setTimeout|setInterval|clearTimeout|clearInterval/.test(radarController));
+  check("Pilot-Gates richten sich nur an Flag/Authority/Active-Account", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
+    && /!radarPilotClientEnabled/.test(radarController)
+    && /!remoteKontoAktiv/.test(radarController)
   && /radarAuthority !== "account-cache"/.test(radarController)
   && /radarStateRef\.current\?\.pilot\?\.radarReview !== true/.test(radarController));
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
