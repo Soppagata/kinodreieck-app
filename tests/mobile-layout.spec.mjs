@@ -2188,7 +2188,7 @@ test("E12-Mehrfachlöschen begrenzt mobile Ziele und bleibt pending/error-sicher
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("12 Masterlöschungen");
   await expect(dialog).toContainText("1 weiterer verborgener ausgewählter Eintrag ist");
-  await expect(dialog).toContainText("nicht Ziel und werden nicht gelöscht");
+  await expect(dialog).toContainText("nicht Ziel und wird nicht gelöscht");
   await expect(dialog).not.toContainText("Verborgene Serie (2024)");
   await expect(dialog.locator(".kd-film-batch-ziel-liste li")).toHaveCount(12);
 
