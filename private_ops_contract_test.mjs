@@ -743,6 +743,11 @@ const validImportOperation = {
   expires_at: "2026-09-09T12:00:00Z",
   created_at: "2026-08-09T12:00:00Z",
 };
+const validImportOperationWithOffsets = {
+  ...validImportOperation,
+  terminal_at: "2026-08-09T12:00:00+01:00",
+  expires_at: "2026-09-09T12:00:00-07:00",
+};
 const validOwnDataWithImportOperations = {
   ...validOwnData,
   data: {
@@ -762,6 +767,57 @@ expect(
       && first.operation_id === validImportOperation.operation_id
       && first.result.status === "ok"
       && first.terminal_at === validImportOperation.terminal_at;
+  })(),
+);
+expect(
+  "Import-Operations mit positivem und negativem Offset werden akzeptiert",
+  (() => {
+    const normalized = validateOwnData({
+      ...validOwnData,
+      data: {
+        ...validOwnData.data,
+        radar: {
+          ...validOwnData.data.radar,
+          importOperations: [validImportOperationWithOffsets],
+        },
+      },
+    });
+    const first = normalized.radar.importOperations[0];
+    return first.terminal_at === validImportOperationWithOffsets.terminal_at
+      && first.expires_at === validImportOperationWithOffsets.expires_at;
+  })(),
+);
+expect(
+  "capabilities.updated_at mit positiven/negativen Offsets wird akzeptiert",
+  (() => {
+    const positiveOffset = validateOwnData({
+      ...validOwnData,
+      data: {
+        ...validOwnData.data,
+        radar: {
+          ...validOwnData.data.radar,
+          capabilities: {
+            ...validOwnData.data.radar.capabilities,
+            updated_at: "2026-08-09T12:00:00+01:00",
+          },
+        },
+      },
+    });
+    const negativeOffset = validateOwnData({
+      ...validOwnData,
+      data: {
+        ...validOwnData.data,
+        radar: {
+          ...validOwnData.data.radar,
+          capabilities: {
+            ...validOwnData.data.radar.capabilities,
+            updated_at: "2026-08-09T12:00:00-07:00",
+          },
+        },
+      },
+    });
+    return positiveOffset.radar.capabilities.updated_at === "2026-08-09T12:00:00+01:00"
+      && negativeOffset.radar.capabilities.updated_at === "2026-08-09T12:00:00-07:00";
   })(),
 );
 const invalidOwnDataCapabilityShape = expectBoundaryError(
@@ -806,6 +862,20 @@ const invalidOwnDataCapabilityTypesUpdatedAt = expectBoundaryError(
   }),
 );
 expect("Falscher updated_at-Typ in Capabilities bricht den Zugriff", invalidOwnDataCapabilityTypesUpdatedAt.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityTypesUpdatedAtTimestampString = expectBoundaryError(
+  "Ungültiger updated_at-Zeitenstring in Capabilities wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: { radar_unlimited: true, radar_review: true, radar_pilot: true, updated_at: "not-a-timestamp" },
+      },
+    },
+  }),
+);
+expect("Nicht-RFC3339 updated_at in Capabilities bricht den Zugriff", invalidOwnDataCapabilityTypesUpdatedAtTimestampString.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataCapabilityBooleanType = expectBoundaryError(
   "Falsch typisiertes Boolean-Feld in Capabilities wird als Boundary-Fehler verworfen",
   () => validateOwnData({
@@ -887,6 +957,60 @@ const invalidOwnDataImportOperationsMissingRequiredKey = expectBoundaryError(
   },
 );
 expect("fehlendes Pflichtfeld in importOperations bricht den Zugriff", invalidOwnDataImportOperationsMissingRequiredKey.code === ERROR_CODES.INVALID_RESPONSE);
+for (const [name, invalidPayload] of [
+  ["terminal_at", { ...validImportOperation, terminal_at: "0" }],
+  ["expires_at", { ...validImportOperation, expires_at: "0" }],
+  ["created_at", { ...validImportOperation, created_at: "0" }],
+]) {
+  const invalidOwnDataImportOperationsZeroTimestamp = expectBoundaryError(
+    `Import-Operation mit ungültigem ${name}="0" wird als Boundary-Fehler verworfen`,
+    () => validateOwnData({
+      ...validOwnData,
+      data: {
+        ...validOwnData.data,
+        radar: {
+          ...validOwnData.data.radar,
+          importOperations: [invalidPayload],
+        },
+      },
+    }),
+  );
+  expect(`importOperations-${name} mit "0" wird abgelehnt`, invalidOwnDataImportOperationsZeroTimestamp.code === ERROR_CODES.INVALID_RESPONSE);
+}
+const invalidOwnDataImportOperationsTimezoneMissing = expectBoundaryError(
+  "Import-Operation mit fehlender Zeitzone in terminal_at wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          terminal_at: "2026-08-09T12:00:00",
+        }],
+      },
+    },
+  }),
+);
+expect("Import-Operation ohne Zeitzone bricht den Zugriff", invalidOwnDataImportOperationsTimezoneMissing.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsImpossibleDate = expectBoundaryError(
+  "Import-Operation mit unmöglichem Datum in created_at wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          created_at: "2026-02-30T12:00:00Z",
+        }],
+      },
+    },
+  }),
+);
+expect("Import-Operation mit unmöglichem Datum bricht den Zugriff", invalidOwnDataImportOperationsImpossibleDate.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataImportOperationsOperationId = expectBoundaryError(
   "Falsch typisierte operation_id in importOperations wird als Boundary-Fehler verworfen",
   () => validateOwnData({

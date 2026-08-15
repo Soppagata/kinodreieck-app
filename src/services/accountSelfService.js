@@ -17,7 +17,44 @@ const rowWithExactKeysAndTypes = (value, keys, checks = {}) => Array.isArray(val
 const lowercaseUuid = (value) => typeof value === "string"
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 const lowercaseHex32 = (value) => typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
-const isoDateString = (value) => typeof value === "string" && !Number.isNaN(Date.parse(value));
+const iso8601TimestampWithOffset = (value) => {
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw, , fractionalRaw, zoneRaw] = match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const second = Number(secondRaw);
+
+  if (month < 1 || month > 12) return false;
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  const maxDayInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > maxDayInMonth) return false;
+
+  let offsetMinutes = 0;
+  if (zoneRaw !== "Z") {
+    const sign = zoneRaw[0] === "-" ? -1 : 1;
+    const zoneHours = Number(zoneRaw.slice(1, 3));
+    const zoneMinutes = Number(zoneRaw.slice(4, 6));
+    if (zoneHours > 23 || zoneMinutes > 59) return false;
+    offsetMinutes = sign * (zoneHours * 60 + zoneMinutes);
+  }
+
+  const fractional = fractionalRaw ? Number(`${fractionalRaw.padEnd(3, "0").slice(0, 3)}`) : 0;
+  const utcMilliseconds = Date.UTC(year, month - 1, day, hour, minute, second, fractional) - (offsetMinutes * 60_000);
+  if (Number.isNaN(utcMilliseconds)) return false;
+  const localCheck = new Date(utcMilliseconds + (offsetMinutes * 60_000));
+  return localCheck.getUTCFullYear() === year
+    && localCheck.getUTCMonth() === month - 1
+    && localCheck.getUTCDate() === day
+    && localCheck.getUTCHours() === hour
+    && localCheck.getUTCMinutes() === minute
+    && localCheck.getUTCSeconds() === second
+    && localCheck.getUTCMilliseconds() === fractional;
+};
 const importRows = (value) => rowWithExactKeysAndTypes(
   value,
   ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
@@ -25,9 +62,9 @@ const importRows = (value) => rowWithExactKeysAndTypes(
     operation_id: lowercaseUuid,
     request_hash: lowercaseHex32,
     result: (value) => fixedObject(value),
-    terminal_at: (value) => isoDateString(value),
-    expires_at: (value) => isoDateString(value),
-    created_at: (value) => isoDateString(value),
+    terminal_at: (value) => iso8601TimestampWithOffset(value),
+    expires_at: (value) => iso8601TimestampWithOffset(value),
+    created_at: (value) => iso8601TimestampWithOffset(value),
   },
 );
 
@@ -45,7 +82,7 @@ export function validateOwnData(value) {
     && typeof value.data.radar.capabilities.radar_unlimited === "boolean"
     && typeof value.data.radar.capabilities.radar_review === "boolean"
     && typeof value.data.radar.capabilities.radar_pilot === "boolean"
-    && typeof value.data.radar.capabilities.updated_at === "string"
+    && iso8601TimestampWithOffset(value.data.radar.capabilities.updated_at)
   );
   const valid = exactKeys(value.data.auth, ["createdAt", "lastSignInAt", "providers"])
     && (value.data.auth.createdAt === null || typeof value.data.auth.createdAt === "string")
