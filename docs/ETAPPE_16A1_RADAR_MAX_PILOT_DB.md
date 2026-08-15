@@ -9,7 +9,7 @@ Die Forward-Kette bis und inkl. `20260815120000_private_export_radar_pilot_compa
 
 Remote-Stand (vorgegeben): `20260809180000`, `20260809220000`, `20260810120000` bestätigt; `20260814120000` und `20260815120000` fehlen und sind nicht aktiviert.
 
-Status außerhalb des Repository-Quellstands: **SAFE_SKIPPED**. Die ersten drei Schritte der Forward-Kette sind verifiziert bestätigt, `20260814120000` und `20260815120000` fehlen; damit ist die Backendentfernung insgesamt nicht angewandt. Backend-Write: **NEIN**. Migrationsanwendung: **NEIN**. Pilotaktivierung: **NEIN**. Praktische Abnahme: **NEIN**.
+Status außerhalb des Repository-Quellstands: **SAFE_SKIPPED**. Die ersten drei Schritte der Forward-Kette sind verifiziert bestätigt, `20260814120000` und `20260815120000` fehlen; damit ist der vollständige E16B2-Backendvertrag remote nicht angewandt. Backend-Write: **NEIN**. Migrationsanwendung: **NEIN**. Pilotaktivierung: **NEIN**. Praktische Abnahme: **NEIN**.
 
 `supabase/current_schema.sql` bleibt bis zu einer später ausdrücklich autorisierten Remote-Anwendung unverändert. Es bildet keinen E16A1-Neustand ab.
 

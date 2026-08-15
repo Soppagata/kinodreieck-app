@@ -9,15 +9,14 @@ Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
 Am 31. Juli 2026 wurde die zuvor leere Remote-Migrationshistorie mit dem live
 verifizierten Bestand abgeglichen. Alle lokalen Versionen bis einschließlich
 `20260809121000_rollen_v1_access_enforcement.sql` sind seither auch remote als
-angewandt markiert. Die vorgeschriebene Forward-Kette für den Private-Pilot bleibt
-darüber hinaus als Source-Only-Kandidat:
+angewandt markiert. Die vorgeschriebene Forward-Kette für den Private-Pilot ist:
 `20260809180000_event_radar_local_basis.sql` →
 `20260809220000_private_pilot_ops.sql` →
 `20260810120000_private_pilot_retention_fix.sql` →
 `20260814120000_radar_max_manual_pilot.sql` →
 `20260815120000_private_export_radar_pilot_compat.sql`.
-Für `20260814120000` und `20260815120000` gilt derzeit der vorgesehene Remote-Stand
-als nicht bestätigt/applied. Vor künftigen
+Die ersten drei Schritte dieser Kette sind remote verbucht; `20260814120000` und
+`20260815120000` sind Source-only/offen. Vor künftigen
 Läufen zuerst `npx supabase migration list --linked` prüfen; eine Migration
 darf nur angewandt werden, wenn ausschließlich die erwartete neue Datei offen
 ist. `20260809220000_private_pilot_ops.sql` ist lokal auf Blob-ID
