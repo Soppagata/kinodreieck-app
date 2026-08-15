@@ -305,6 +305,64 @@ const validPilotImportPayload = {
     { sourceId: "s2", url: "https://example.org/2", retrievedAt: `${heuteIso}T10:00:01.000Z` },
   ],
 };
+const nogaPilotImportPayload = {
+  targetKey: "work:imdb:tt41955949",
+  eventType: "kinostart_at",
+  date: "2026-08-21",
+  region: "AT",
+  platform: "-",
+  evidence: [
+    { sourceId: "filminstitut_at", url: "https://filminstitut.at/filme/noga", retrievedAt: "2026-08-21T10:00:00.000Z" },
+    { sourceId: "votivkino_at", url: "https://www.votivkino.at/film/noga/", retrievedAt: "2026-08-21T10:00:01.000Z" },
+  ],
+};
+const nogaPilotEventSuccessEvidence = [
+  { sourceId: "filminstitut_at", sourceDomain: "filminstitut.at", url: "https://filminstitut.at/filme/noga", retrievedAt: "2026-08-21T10:00:00.000Z" },
+  { sourceId: "votivkino_at", sourceDomain: "votivkino.at", url: "https://votivkino.at/film/noga/", retrievedAt: "2026-08-21T10:00:01.000Z" },
+];
+const pilotEventForMatchingNogaRejection = {
+  ...pilotEvent,
+  targetId: nogaPilotImportPayload.targetKey,
+  eventType: nogaPilotImportPayload.eventType,
+  date: nogaPilotImportPayload.date,
+  region: nogaPilotImportPayload.region,
+  platform: nogaPilotImportPayload.platform,
+  evidence: nogaPilotEventSuccessEvidence.map((entry) => ({
+    ...entry,
+    retrievedAt: entry.retrievedAt,
+  })),
+};
+const rejectedPilotImportState = (payload = validPilotImportPayload, reason = "radar_evidence_url_mismatch") => {
+  const empty = createEmptyLocalRadar({ authority: "account-cache" });
+  return {
+    ...empty,
+    pilot: {
+      ...empty.pilot,
+      importOutbox: [{
+        operationId: "77777777-7777-4777-8777-777777777777",
+        payload,
+        createdAt: "2026-08-09T10:00:00.000Z",
+        status: "rejected",
+        reason,
+      }],
+    },
+  };
+};
+const pendingPilotImportState = (payload = validPilotImportPayload) => {
+  const empty = createEmptyLocalRadar({ authority: "account-cache" });
+  return {
+    ...empty,
+    pilot: {
+      ...empty.pilot,
+      importOutbox: [{
+        operationId: "66666666-6666-4666-8666-666666666666",
+        payload,
+        createdAt: "2026-08-09T10:00:00.000Z",
+        status: "pending",
+      }],
+    },
+  };
+};
 
 const mountPilotUi = async (props) => mount(EntdeckenTab, {
   blogProps: emptyBlogProps,
@@ -335,11 +393,11 @@ const RestoreDate = Date;
 Date = class extends RestoreDate {
   constructor(value) {
     return value == null
-      ? new RestoreDate("2026-08-09T00:00:00.000Z")
+      ? new RestoreDate("2026-08-15T00:00:00.000Z")
       : new RestoreDate(value);
   }
   static now() {
-    return new RestoreDate("2026-08-09T00:00:00.000Z").getTime();
+    return new RestoreDate("2026-08-15T00:00:00.000Z").getTime();
   }
 };
 const pilotGuestConflictUi = await mountPilotUi({
@@ -388,7 +446,10 @@ const pilotImportUi = await mountPilotUi({
   radarPilotActive: true,
   radarPilotEvents: [pilotEvent],
   radarReview: true,
-  onRadarPilotImport: async () => { pilotImportCalls += 1; return true; },
+  onRadarPilotImport: async () => {
+    pilotImportCalls += 1;
+    return { status: "pending", reason: "pilot-import-queued" };
+  },
 });
 await act(async () => { button(pilotImportUi.container, "Radar").click(); await tick(); });
 check("Flag true + radarReview true blendet Pilot-Import ein", () => {
@@ -410,8 +471,91 @@ await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.string
 await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
 check("Gültiger exakter Payload führt genau zu einem Importcallback", () => {
   assert.equal(pilotImportCalls, 1);
+  assert.equal(pilotImportUi.container.textContent.includes("Import ist noch ausstehend. Pilot-Sync starten."), true);
 });
 await pilotImportUi.cleanup();
+
+let rejectedImportUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [],
+  radarReview: true,
+  syncStatus: "ready",
+  radarState: createEmptyLocalRadar({ authority: "account-cache" }),
+  onRadarPilotImport: async () => ({ status: "rejected", reason: "radar_evidence_url_mismatch" }),
+});
+await act(async () => { button(rejectedImportUi.container, "Radar").click(); await tick(); });
+await setTextareaValue(rejectedImportUi.container, "Pilot-Import JSON", JSON.stringify(nogaPilotImportPayload));
+await act(async () => { button(rejectedImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+check("NOGA-Callback-Rejection zeigt sofort Domain-Mismatch-Text und kein Outbox-/Ready-Kontext", () => {
+  assert.ok(rejectedImportUi.container.textContent.includes("Domain-Mismatch"));
+  assert.ok(rejectedImportUi.container.textContent.includes("radar_evidence_url_mismatch"));
+  assert.equal(rejectedImportUi.container.textContent.includes("Outbox"), false);
+  assert.equal(rejectedImportUi.container.textContent.includes("Import ist im Feed bestätigt"), false);
+});
+await rejectedImportUi.cleanup();
+let nogaReadyImportUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEventForMatchingNogaRejection],
+  radarReview: true,
+  syncStatus: "ready",
+  radarState: rejectedPilotImportState(nogaPilotImportPayload),
+  onRadarPilotImport: async () => ({ status: "ready", state: rejectedPilotImportState(nogaPilotImportPayload).pilot }),
+  onRadarPilotReceipt: async () => { return true; },
+});
+await act(async () => { button(nogaReadyImportUi.container, "Radar").click(); await tick(); });
+check("Gleiche Eventidentität und Source-IDs übersteuert persistierte Rejection durch sichtbaren Feed", () => {
+  const weekPanel = [...nogaReadyImportUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
+  const hasSeen = weekPanel?.querySelector("button")?.textContent === "Gesehen";
+  assert.equal(hasSeen, true);
+  const linkTargets = links.map((link) => link.getAttribute("href"));
+  assert.deepEqual(linkTargets.includes("https://votivkino.at/film/noga/"), true);
+  assert.equal(nogaReadyImportUi.container.textContent.includes("Importablehnung (radar_evidence_url_mismatch). Bitte neuen Import prüfen."), false);
+});
+await setTextareaValue(nogaReadyImportUi.container, "Pilot-Import JSON", JSON.stringify(nogaPilotImportPayload));
+await act(async () => { button(nogaReadyImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+check("Ready-Status wird nur bei sichtbarem NOGA-Event als strukturierte Erfolgsmeldung gezeigt", () => {
+  const weekPanel = [...nogaReadyImportUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
+  const linkText = [...links].map((link) => link.textContent);
+  assert.ok(linkText.includes("votivkino.at"));
+  assert.ok(linkText.includes("filminstitut.at"));
+  assert.ok(nogaReadyImportUi.container.textContent.includes("Import ist im Feed bestätigt"));
+  assert.ok(nogaReadyImportUi.container.textContent.includes("Gesehen"));
+});
+await nogaReadyImportUi.cleanup();
+
+const pilotBusyImportUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEvent],
+  radarReview: true,
+  onRadarPilotImport: async () => ({ status: "busy", reason: "pilot-busy" }),
+});
+await act(async () => { button(pilotBusyImportUi.container, "Radar").click(); await tick(); });
+await setTextareaValue(pilotBusyImportUi.container, "Pilot-Import JSON", JSON.stringify(validPilotImportPayload));
+await act(async () => { button(pilotBusyImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
+check("Busy-Callback bleibt handlungsfähig und nennt Pilot-Sync starten", () => {
+  assert.equal(pilotBusyImportUi.container.textContent.includes("Pilot-Sync starten."), true);
+});
+await pilotBusyImportUi.cleanup();
+
+const pilotPersistentPendingUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [],
+  radarReview: true,
+  radarState: pendingPilotImportState(),
+});
+await act(async () => { button(pilotPersistentPendingUi.container, "Radar").click(); await tick(); });
+check("Persistentes Pending bleibt sichtbar und handlungsfähig", () => {
+  assert.equal(pilotPersistentPendingUi.container.textContent.includes("Import ist noch ausstehend. Pilot-Sync starten."), true);
+});
+await pilotPersistentPendingUi.cleanup();
 
 const pilotEvidenceUi = await mountPilotUi({
   radarPilotClientEnabled: true,

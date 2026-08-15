@@ -21,6 +21,22 @@ const ANSICHTEN = Object.freeze([
   ["meinungen", "Meinungen"],
 ]);
 
+function hasImportPayloadEvidenceMatch(payload, evidence) {
+  if (!Array.isArray(payload) || !Array.isArray(evidence)) return false;
+  if (payload.length !== evidence.length) return false;
+  const payloadSourceIds = new Set(payload.map((entry) => `${entry.sourceId || ""}`).filter(Boolean));
+  const eventSourceIds = new Set(evidence.map((entry) => `${entry.sourceId || ""}`).filter(Boolean));
+  if (payloadSourceIds.size !== eventSourceIds.size) return false;
+  return [...payloadSourceIds].every((sourceId) => eventSourceIds.has(sourceId));
+}
+
+function hasMatchingPilotImportEvent(entry = {}, events = []) {
+  const payload = entry.payload || {};
+  return (events || []).some((event) => event.targetId === payload.targetKey && event.eventType === payload.eventType
+    && event.date === payload.date && event.region === payload.region && event.platform === payload.platform
+    && hasImportPayloadEvidenceMatch(Array.isArray(payload.evidence) ? payload.evidence : [], event.evidence || []));
+}
+
 function focusableElements(root) {
   return [...(root?.querySelectorAll(
     'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
@@ -212,6 +228,47 @@ function RadarView({
   const fixtureTarget = radarFixtures.catalog[0];
   const active = radarState?.subscriptions || [];
   const pending = radarState?.outbox || [];
+  const pilotImportOutbox = useMemo(() => radarState?.pilot?.importOutbox || [], [radarState]);
+  const pilotImportStatus = useMemo(() => {
+    const entries = pilotImportOutbox || [];
+    const pendingCount = entries.filter((entry) => entry.status === "pending").length;
+    const rejected = entries.filter((entry) => entry.status === "rejected" && !hasMatchingPilotImportEvent(entry, pilotWeek));
+    const status = [];
+    if (rejected.length > 0) {
+      status.push(...rejected.map((entry) => (
+        `Importablehnung (${entry.reason || "unbekannt"}). Bitte neuen Import prüfen.`
+      )));
+    }
+    if (pendingCount > 0) {
+      status.push("Import ist noch ausstehend. Pilot-Sync starten.");
+    }
+    return status;
+  }, [pilotImportOutbox, pilotWeek]);
+  const formatPilotImportMessage = (result) => {
+    if (!result || result === false) return "Import nicht gespeichert.";
+    if (result === true) return "Import ist im Pilot-Kanal aktiv, aber noch kein sichtbares Feed-Event gefunden. Pilot-Sync starten.";
+    if (result?.status === "rejected") {
+      if (result.reason === "radar_evidence_url_mismatch") {
+        return "Importablehnung wegen Domain-Mismatch: radar_evidence_url_mismatch.";
+      }
+      return `Import wurde abgelehnt: ${result.reason || "unbekannter Grund"}.`;
+    }
+    if (result?.status === "ready") {
+      return "Import ist im Feed bestätigt und kann jetzt als Gesehen markiert werden.";
+    }
+    if (result?.status === "pending") {
+      return "Import ist noch ausstehend. Pilot-Sync starten.";
+    }
+    if (result?.status === "busy") {
+      return "Pilot-Sync läuft. Danach erneut prüfen oder per Pilot-Sync starten.";
+    }
+    if (result?.status === "pilot-unavailable") return "Pilot ist zurzeit nicht verfügbar.";
+    if (result?.status === "context-changed" || result?.status === "disabled" || result?.status === "state-invalid"
+      || result?.status === "guest") {
+      return "Pilot-Import ist im aktuellen Kontext nicht möglich.";
+    }
+    return "Import wurde nicht gespeichert.";
+  };
 
   const ladeBeispiel = () => {
     setProposalRaw(JSON.stringify(radarFixtures.radarProposal, null, 2));
@@ -236,10 +293,9 @@ function RadarView({
       return;
     }
     setPilotImportBusy(true);
-    setPilotImportMessage("");
     try {
       const queued = await onRadarPilotImport(payload);
-      setPilotImportMessage(queued ? "Import wurde in Outbox geschrieben." : "Import nicht gespeichert.");
+      setPilotImportMessage(formatPilotImportMessage(queued));
     } finally {
       setPilotImportBusy(false);
     }
@@ -330,7 +386,7 @@ function RadarView({
       <button type="button" className="kd-entdecken-sekundaer" disabled={pilotSyncBusy} onClick={fuehrePilotSync}>Pilot-Sync starten</button>
     </article> : null}
 
-    {canPilotImport ? <article className="kd-entdecken-proposal">
+      {canPilotImport ? <article className="kd-entdecken-proposal">
       <h3>Pilot-Import</h3>
       <textarea aria-label="Pilot-Import JSON" className="kd-entdecken-textarea" rows={8} value={pilotImportRaw}
         onChange={(event) => setPilotImportRaw(event.target.value)} spellCheck="false" />
@@ -339,6 +395,9 @@ function RadarView({
           {pilotImportBusy ? "Import läuft…" : "Pilot-Import bestätigen"}
         </button>
       </div>
+      {pilotImportStatus.length > 0 ? <ul className="kd-entdecken-kleingedruckt">
+        {pilotImportStatus.map((entry, index) => <li key={index}>{entry}</li>)}
+      </ul> : null}
       {pilotImportMessage ? <p className="kd-entdecken-kleingedruckt">{pilotImportMessage}</p> : null}
     </article> : null}
 

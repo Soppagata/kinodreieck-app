@@ -579,6 +579,16 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
     && !/let gespeicherterStand = null;/.test(radarController)
     && /const gespeichert = await schreibeRadarState\([\s\S]*queueAccountRadarPilotReceipt[\s\S]*return result\.ok \? result\.state : null;[\s\S]*await syncRadarPilot\(gespeichert\)/.test(radarController)
     && /const gespeichert = await schreibeRadarState\([\s\S]*queueAccountRadarPilotImport[\s\S]*return result\.ok \? result\.state : null;[\s\S]*await syncRadarPilot\(gespeichert\)/.test(radarController));
+  check("Controller liefert strukturiertes Pilot-Import-Ergebnis statt booleschem Rückgabewert", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
+    && /\{ status: "not-started", reason: "pilot-not-ready" \}/.test(radarController)
+    && /\{ status: "not-started", reason: "radar-import-state-not-queued" \}/.test(radarController)
+    && /const syncResult = await syncRadarPilot\(gespeichert\);/.test(radarController)
+    && /importEntry\.operationId === operationId/.test(radarController)
+    && /return \{ status: "ready", state: syncResult\.state/.test(radarController)
+    && /return \{ status: "pending", state: syncResult\.state, reason: importEntry\.reason \|\| "pilot-import-pending" \}/.test(radarController)
+    && /return \{\s*status: "rejected",\s*state: syncResult\.state/.test(radarController)
+    && /reason: importEntry\.reason \|\| "pilot-import-rejected"/.test(radarController)
+    && /return syncResult\?\.status \? syncResult : \{ status: "pending", reason: "pilot-unknown" \};/.test(radarController));
   check("Controller hat keinen Pilot-Timer/Retry/Serial für den W2-Pfad", !/radarPilotSyncSerialRef|setTimeout|setInterval|clearTimeout|clearInterval/.test(radarController));
   check("Pilot-Gates richten sich nur an Flag/Authority/Active-Account", /const fuehreRadarPilotImport = useCallback\(async \(payload\) => \{/ .test(radarController)
     && /!radarPilotClientEnabled/.test(radarController)

@@ -27,6 +27,8 @@ const operationId = "11111111-1111-4111-8111-111111111111";
 const eventId = "22222222-2222-4222-8222-222222222222";
 const eventVersionId = "33333333-3333-4333-8333-333333333333";
 const targetId = "work:tmdb:550";
+const nogaTargetId = "work:imdb:tt41955949";
+const nogaDate = "2026-08-21";
 const comparePilotEvidence = (left, right) => {
   if (left.sourceId < right.sourceId) return -1;
   if (left.sourceId > right.sourceId) return 1;
@@ -67,9 +69,43 @@ const importPayload = (extra = {}) => ({
   ],
   ...extra,
 });
+const importPayloadNogaWWW = (extra = {}) => importPayload({
+  targetKey: nogaTargetId, eventType: "kinostart_at", date: nogaDate, region: "AT", platform: "-",
+  evidence: [
+    { sourceId: "votivkino_at", url: "https://www.votivkino.at/film/noga/", retrievedAt: instant },
+    { sourceId: "filminstitut_at", url: "https://filminstitut.at/filme/noga", retrievedAt: later },
+  ],
+  ...extra,
+});
+const importPayloadNogaBaseDomain = (extra = {}) => importPayload({
+  targetKey: nogaTargetId, eventType: "kinostart_at", date: nogaDate, region: "AT", platform: "-",
+  evidence: [
+    { sourceId: "votivkino_at", url: "https://votivkino.at/film/noga/", retrievedAt: instant },
+    { sourceId: "filminstitut_at", url: "https://filminstitut.at/filme/noga", retrievedAt: later },
+  ],
+  ...extra,
+});
 const importResult = (extra = {}) => ({
   eventId, eventVersionId, targetId, eventType: "kinostart_at", date: "2026-08-20",
   region: "AT", platform: "-", ...extra,
+});
+const importResultNoga = (extra = {}) => importResult({
+  eventId: "55555555-5555-4555-8555-555555555555",
+  eventVersionId: "55555555-5555-4666-8666-666666666666",
+  targetId: nogaTargetId,
+  date: nogaDate,
+  ...extra,
+});
+const nogaFeedEvent = (extra = {}) => event({
+  eventId: "55555555-5555-4555-8555-555555555555",
+  eventVersionId: "55555555-5555-4666-8666-666666666666",
+  evidence: [
+    { sourceId: "filminstitut_at", sourceDomain: "filminstitut.at", url: "https://filminstitut.at/filme/noga", retrievedAt: later },
+    { sourceId: "votivkino_at", sourceDomain: "votivkino.at", url: "https://votivkino.at/film/noga/", retrievedAt: instant },
+  ].sort(comparePilotEvidence),
+  targetId: nogaTargetId,
+  date: nogaDate,
+  ...extra,
 });
 
 await check("Alle Pilot-Dokumente verlangen exakt ihre kanonischen Keysets", () => {
@@ -557,6 +593,72 @@ await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaf
   ]);
 });
 
+await check("NOGA-Busy-Race: Konkurrierender Sync bleibt ohne Doppel-RPC, Folge-Sync verarbeitet exakt einen Import", async () => {
+  let releaseFirstFeed;
+  let markFirstFeed;
+  const firstFeedStarted = new Promise((resolve) => { markFirstFeed = resolve; });
+  const firstFeedBlocked = new Promise((resolve) => { releaseFirstFeed = resolve; });
+  const calls = [];
+  let feedCalls = 0;
+  const state = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    feed({ radarReview: true, subscriptions: [], events: [], receipts: [] }),
+  ).state;
+  const h = harness({
+    state,
+    fetchImpl: async (url, init) => {
+      const rpc = String(url).split("/").at(-1);
+      const body = JSON.parse(init.body);
+      calls.push({ rpc, body });
+      if (rpc === "kd_radar_pilot_feed") {
+        feedCalls += 1;
+        if (feedCalls === 1) markFirstFeed();
+        await firstFeedBlocked;
+        return response(200, feedCalls === 1
+          ? { ...feed({ radarReview: true }), events: [], operationAcks: [] }
+          : { ...feed({ radarReview: true }), events: [nogaFeedEvent()], operationAcks: [] });
+      }
+      if (rpc === "kd_radar_pilot_import_event") {
+        assert.equal(body.p_payload.evidence[0].url, "https://votivkino.at/film/noga/");
+        return response(200, importResultNoga());
+      }
+      throw new Error("unexpected rpc");
+    },
+  });
+
+  const active = h.service.sync({ state: h.state, commit: h.commit });
+  await firstFeedStarted;
+  const queued = R.queueAccountRadarPilotImport(h.state, {
+    operationId: "99999999-9999-4999-8999-999999999999",
+    payload: importPayloadNogaBaseDomain(),
+    now: instant,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal(h.commit(queued.state), true);
+
+  const concurrent = h.service.sync({ state: h.state, commit: h.commit });
+  const busy = await concurrent;
+  assert.equal(busy.status, "busy");
+  assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_import_event").length, 0);
+
+  releaseFirstFeed();
+  const done = await active;
+  assert.equal(done.status, "ready");
+
+  const followUp = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(followUp.status, "ready");
+  assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_feed").length, 3);
+  assert.equal(calls.filter((entry) => entry.rpc === "kd_radar_pilot_import_event").length, 1);
+  assert.deepEqual(calls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_import_event",
+    "kd_radar_pilot_feed",
+  ]);
+  assert.equal(h.state.pilot.importOutbox.length, 0);
+  assert.equal(feedCalls, 3);
+});
+
 await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten Queue-Zuwachs", async () => {
   const operationId2 = "55555555-5555-4555-8555-555555555555";
   let releaseFeed;
@@ -818,10 +920,123 @@ await check("Import-Ack darf keinen quellenlosen Event-Zustand nachrüsten", asy
     },
   });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
-  assert.equal(result.status, "ready");
+  assert.equal(result.status, "pending");
+  assert.equal(result.reason, "pilot-import-event-not-visible");
   assert.equal(rpcCalls.filter((rpc) => rpc === "kd_radar_pilot_import_event").length, 1);
   assert.equal(h.state.pilot.importOutbox.length, 0);
   assert.equal(h.state.pilot.events.length, 0);
+});
+
+await check("www-votivkino Rejection bleibt terminal im importOutbox und wird durch späteren leeren Feed nicht überschrieben", async () => {
+  const baseState = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed({ radarReview: true })).state;
+  const queued = R.queueAccountRadarPilotImport(baseState, {
+    operationId: "55555555-5555-4555-8555-555555555555",
+    payload: importPayloadNogaWWW(),
+    now: instant,
+  });
+  assert.equal(queued.ok, true);
+  const rpcCalls = [];
+  const h = harness({
+    state: queued.state,
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      const rpc = String(url).split("/").at(-1);
+      rpcCalls.push({ rpc, body });
+      if (url.endsWith("kd_radar_pilot_feed")) return response(200, feed({ events: [], radarReview: true }));
+      if (url.endsWith("kd_radar_pilot_import_event")) {
+        assert.equal(body.p_payload.evidence[0].url, "https://www.votivkino.at/film/noga/");
+        assert.equal(body.p_payload.evidence[1].sourceId, "filminstitut_at");
+        return response(400, { code: "23514", message: "radar_evidence_url_mismatch" });
+      }
+      throw new Error("unexpected rpc");
+    },
+  });
+  const first = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(first.status, "rejected");
+  assert.deepEqual(rpcCalls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_import_event",
+  ]);
+  assert.deepEqual(h.state.pilot.importOutbox.map((entry) => ({
+    operationId: entry.operationId,
+    status: entry.status,
+    reason: entry.reason,
+  })), [{ operationId: "55555555-5555-4555-8555-555555555555", status: "rejected", reason: "radar_evidence_url_mismatch" }]);
+  assert.equal(h.state.pilot.events.length, 0);
+
+  const hAfterEmptyFeedCalls = [];
+  const hAfterEmptyFeed = harness({
+    state: h.state,
+    fetchImpl: async (url) => {
+      hAfterEmptyFeedCalls.push("kd_radar_pilot_feed");
+      if (!url.endsWith("kd_radar_pilot_feed")) throw new Error("unexpected rpc");
+      return response(200, feed({ events: [], radarReview: true }));
+    },
+  });
+  const after = await hAfterEmptyFeed.service.sync({ state: hAfterEmptyFeed.state, commit: hAfterEmptyFeed.commit });
+  assert.equal(after.status, "ready");
+  assert.deepEqual(hAfterEmptyFeed.state.pilot.importOutbox.map((entry) => ({
+    operationId: entry.operationId,
+    status: entry.status,
+    reason: entry.reason,
+  })), [{ operationId: "55555555-5555-4555-8555-555555555555", status: "rejected", reason: "radar_evidence_url_mismatch" }]);
+  assert.equal(hAfterEmptyFeed.state.pilot.events.length, 0);
+  assert.deepEqual(hAfterEmptyFeedCalls, ["kd_radar_pilot_feed"]);
+});
+
+await check("Base-Domain-NOGA-Import macht genau einen Import-RPC und genau einen Folge-Feed; Event erscheint dann aus Feed", async () => {
+  const baseState = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    feed({ radarReview: true }),
+  ).state;
+  const queued = R.queueAccountRadarPilotImport(baseState, {
+    operationId: "66666666-6666-4666-8666-666666666666",
+    payload: importPayloadNogaBaseDomain(),
+    now: instant,
+  });
+  assert.equal(queued.ok, true);
+  let feedCalls = 0;
+  const calls = [];
+  const h = harness({
+    state: queued.state,
+    fetchImpl: async (url, init) => {
+      const rpc = String(url).split("/").at(-1);
+      const body = JSON.parse(init.body);
+      calls.push({ rpc, body });
+      if (rpc === "kd_radar_pilot_feed") {
+        feedCalls += 1;
+        return response(200, feedCalls === 1
+          ? { ...feed({ radarReview: true }), events: [], operationAcks: [] }
+          : { ...feed({ radarReview: true }), events: [nogaFeedEvent()], operationAcks: [] });
+      }
+      if (rpc === "kd_radar_pilot_import_event") {
+        assert.equal(body.p_operation_id, "66666666-6666-4666-8666-666666666666");
+        assert.equal(body.p_payload.evidence[0].url, "https://votivkino.at/film/noga/");
+        assert.equal(body.p_payload.evidence[1].sourceId, "filminstitut_at");
+        return response(200, importResultNoga());
+      }
+      throw new Error("unexpected rpc");
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready");
+  assert.deepEqual(calls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed",
+    "kd_radar_pilot_import_event",
+    "kd_radar_pilot_feed",
+  ]);
+  assert.deepEqual(calls[0].body.p_operation_ids, []);
+  assert.deepEqual(calls[2].body.p_operation_ids, []);
+  assert.equal(calls[1].body.p_operation_id, "66666666-6666-4666-8666-666666666666");
+  assert.equal(feedCalls, 2);
+  assert.equal(h.state.pilot.importOutbox.length, 0);
+  const event = h.state.pilot.events.find((entry) => entry.eventId === "55555555-5555-4555-8555-555555555555");
+  assert.equal(!!event, true);
+  assert.deepEqual((event.evidence || []).map((entry) => entry.sourceId).sort(), ["filminstitut_at", "votivkino_at"].sort());
+  assert.deepEqual(
+    (event.evidence || []).map((entry) => entry.sourceDomain).sort(),
+    ["filminstitut.at", "votivkino.at"].sort(),
+  );
 });
 
 await check("Controllerprojektion ersetzt Fixtures nur im aktiven Kontopilot", async () => {

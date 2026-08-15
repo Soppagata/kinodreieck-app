@@ -245,7 +245,7 @@ export function useEntdeckenRadarController({
       !radarPilotClientEnabled || !remoteKontoAktiv || radarAuthority !== "account-cache"
       || radarStateRef.current?.pilot?.status !== "ready"
       || radarStateRef.current?.pilot?.radarReview !== true
-    ) return false;
+    ) return { status: "not-started", reason: "pilot-not-ready" };
     const operationId = neueLokaleOperationId();
     const gespeichert = await schreibeRadarState((prev) => {
       const result = queueAccountRadarPilotImport(prev, {
@@ -255,9 +255,21 @@ export function useEntdeckenRadarController({
       });
       return result.ok ? result.state : null;
     });
-    if (gespeichert === false) return false;
-    await syncRadarPilot(gespeichert);
-    return true;
+    if (gespeichert === false) return { status: "not-started", reason: "radar-import-state-not-queued" };
+    const syncResult = await syncRadarPilot(gespeichert);
+    const importEntry = syncResult?.state?.pilot?.importOutbox?.find((entry) => entry.operationId === operationId);
+    if (importEntry?.status === "ready") return { status: "ready", state: syncResult.state, reason: importEntry.reason };
+    if (importEntry?.status === "pending") {
+      return { status: "pending", state: syncResult.state, reason: importEntry.reason || "pilot-import-pending" };
+    }
+    if (importEntry?.status === "rejected") {
+      return {
+        status: "rejected",
+        state: syncResult.state,
+        reason: importEntry.reason || "pilot-import-rejected",
+      };
+    }
+    return syncResult?.status ? syncResult : { status: "pending", reason: "pilot-unknown" };
   }, [
     radarAuthority,
     radarPilotClientEnabled,

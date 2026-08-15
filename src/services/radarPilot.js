@@ -275,6 +275,7 @@ export function createRadarPilotService({
     }
 
     let current = state;
+    const importedEventVersionIds = new Set();
     let rejected = false;
     const runSubscriptionIds = state.outbox.filter((entry) => entry.status === "pending").map((entry) => entry.operationId);
     const runReceiptIds = (state.pilot?.receiptOutbox || [])
@@ -283,20 +284,31 @@ export function createRadarPilotService({
       .filter((entry) => entry.status === "pending").map((entry) => entry.operationId);
 
     try {
-      const feedResponse = await callRpc("kd_radar_pilot_feed", { p_operation_ids: runSubscriptionIds }, fence, token);
-      if (feedResponse.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token, run));
-      if (feedResponse.kind !== "ok" || !validateRadarPilotFeed(feedResponse.payload).ok) {
-        return Object.freeze({ status: "pending", state: current, reason: feedResponse.reason || "pilot-feed-invalid" });
-      }
-      const reconciled = reconcileAccountRadarPilotFeed(current, feedResponse.payload);
-      if (!reconciled.ok) return Object.freeze({ status: "pending", state: current, reason: reconciled.reason });
-      if (reconciled.changed) {
-        const persisted = await persistState(commit, reconciled.state, fence, token, run);
-        if (!persisted) {
-          return Object.freeze({ status: "pending", state: current, reason: "pilot-persist-unconfirmed" });
+      const reconcileFeed = async (operationIds = []) => {
+        const response = await callRpc("kd_radar_pilot_feed", { p_operation_ids: operationIds }, fence, token);
+        if (response.kind === "pilot-unavailable") {
+          return Object.freeze({ kind: "pilot-unavailable", state: current });
         }
+        if (response.kind !== "ok" || !validateRadarPilotFeed(response.payload).ok) {
+          return Object.freeze({
+            kind: "pending",
+            state: current,
+            reason: response.reason || "pilot-feed-invalid",
+          });
+        }
+        const reconciled = reconcileAccountRadarPilotFeed(current, response.payload);
+        if (!reconciled.ok) return Object.freeze({ kind: "pending", state: current, reason: reconciled.reason });
+        if (!reconciled.changed) return Object.freeze({ kind: "ok", state: current });
+        const persisted = await persistState(commit, reconciled.state, fence, token, run);
+        if (!persisted) return Object.freeze({ kind: "pending", state: current, reason: "pilot-persist-unconfirmed" });
         current = persisted;
-      }
+        return Object.freeze({ kind: "ok", state: current });
+      };
+
+      const initialFeed = await reconcileFeed(runSubscriptionIds);
+      if (initialFeed.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token, run));
+      if (initialFeed.kind === "pending") return Object.freeze({ status: "pending", state: initialFeed.state, reason: initialFeed.reason });
+      current = initialFeed.state;
 
       for (const operationId of runSubscriptionIds) {
         const operation = current.outbox.find((entry) => entry.operationId === operationId && entry.status === "pending");
@@ -388,7 +400,28 @@ export function createRadarPilotService({
           return Object.freeze({ status: "pending", state: current, reason: changed.reason || "pilot-persist-unconfirmed" });
         }
         current = persisted;
+        importedEventVersionIds.add(reply.payload.eventVersionId);
       }
+
+      if (importedEventVersionIds.size > 0) {
+        const followupIds = current.outbox
+          .filter((entry) => entry.status === "pending")
+          .map((entry) => entry.operationId);
+        const afterImportFeed = await reconcileFeed(followupIds);
+        if (afterImportFeed.kind === "pilot-unavailable") {
+          return Object.freeze(await unavailable(current, commit, fence, token, run));
+        }
+        if (afterImportFeed.kind === "pending") {
+          return Object.freeze({ status: "pending", state: afterImportFeed.state, reason: afterImportFeed.reason });
+        }
+        current = afterImportFeed.state;
+        const visibleEventVersionIds = new Set((current.pilot?.events || []).map((entry) => entry.eventVersionId));
+        const missing = [...importedEventVersionIds].filter((eventVersionId) => !visibleEventVersionIds.has(eventVersionId));
+        if (missing.length > 0) {
+          return Object.freeze({ status: "pending", state: current, reason: "pilot-import-event-not-visible" });
+        }
+      }
+
       return Object.freeze({ status: rejected ? "rejected" : "ready", state: current });
     } catch (error) {
       if (error?.code === "RADAR_PILOT_CONTEXT_CHANGED") {
