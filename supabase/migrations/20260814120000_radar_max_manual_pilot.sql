@@ -596,7 +596,29 @@ begin
     'region', e.region,
     'platform', e.platform,
     'lifecycleStatus', e.lifecycle_status,
-    'verificationStatus', v.verification_status
+    'verificationStatus', v.verification_status,
+    'evidence', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'sourceId', projected_evidence.source_id,
+        'sourceDomain', projected_evidence.domain,
+        'url', projected_evidence.canonical_url,
+        'retrievedAt', projected_evidence.retrieved_at
+      ) order by
+        projected_evidence.source_id,
+        projected_evidence.canonical_url,
+        projected_evidence.retrieved_at,
+        projected_evidence.evidence_id
+      ), '[]'::jsonb)
+        from (
+          select ev.evidence_id, ev.source_id, rs.domain,
+                 ev.canonical_url, ev.retrieved_at
+            from public.kd_radar_evidence ev
+            join public.kd_radar_sources rs on rs.source_id = ev.source_id
+           where ev.event_version_id = v.event_version_id
+           order by ev.source_id, ev.canonical_url, ev.retrieved_at, ev.evidence_id
+           limit 2
+        ) projected_evidence
+    )
   ) order by v.event_date, e.event_id), '[]'::jsonb)
     into v_events
     from public.kd_radar_subscriptions s

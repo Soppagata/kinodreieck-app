@@ -585,7 +585,8 @@ const expectedTopKeys = [
 ];
 const expectedNestedKeysets = [
   ["targetId", "targetType", "title", "region", "scope", "status", "updatedAt"],
-  ["eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform", "lifecycleStatus", "verificationStatus"],
+  ["eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform", "lifecycleStatus", "verificationStatus", "evidence"],
+  ["sourceId", "sourceDomain", "url", "retrievedAt"],
   ["eventVersionId", "status", "updatedAt"],
   ["operationId", "targetId", "status", "revision", "checksum"],
 ];
@@ -650,11 +651,56 @@ check("Feed gibt target_key als targetId aus und leakt keine internen IDs oder g
   }
   const forbiddenKeys = new Set([
     "accountId", "account_id", "actorId", "actor_id", "event_id",
-    "event_version_id", "versionId", "target_id", "sourceId",
-    "publisherFamily", "canonicalUrl", "url", "subscriberCount", "subscribers",
+    "event_version_id", "versionId", "target_id", "publisherFamily",
+    "canonicalUrl", "sourceClass", "rightsStatus", "attributionApproved",
+    "subdomainsAllowed", "termsCheckedAt", "subscriberCount", "subscribers",
+    "text", "image", "images", "html", "snippet",
   ]);
   for (const [key] of allPairs) assert.equal(forbiddenKeys.has(key), false, `Verbotener Feed-Key: ${key}`);
-  assert.doesNotMatch(feedNormalized, /publisher_family|canonical_url|subscriber_count|count\s*\([^)]*account_id/);
+  assert.doesNotMatch(feedNormalized, /subscriber_count|count\s*\([^)]*account_id/);
+});
+
+check("Event-Evidenz projiziert exakt zwei gespeicherte Registry-Quellen der aktuellen bestätigten Version", () => {
+  const eventProjection = feedPairs.find((pairs) => {
+    const keys = pairs.map(([key]) => key);
+    return keys.length === 10 && keys.includes("eventId") && keys.includes("evidence");
+  });
+  const evidenceProjection = feedPairs.find((pairs) => {
+    const keys = pairs.map(([key]) => key);
+    return keys.length === 4
+      && ["sourceId", "sourceDomain", "url", "retrievedAt"].every((key) => keys.includes(key));
+  });
+  assert.ok(eventProjection, "Event-Projektion mit evidence fehlt");
+  assert.ok(evidenceProjection, "Exakte Evidence-Projektion fehlt");
+
+  const evidenceValue = compact(eventProjection.find(([key]) => key === "evidence")[1]);
+  assert.match(evidenceValue, /^\(\s*select\s+coalesce\s*\(\s*jsonb_agg\s*\(/);
+  assert.match(evidenceValue, /from\s*\(\s*select\b/);
+  assert.match(evidenceValue, /from public\.kd_radar_evidence\s+[a-z_][a-z0-9_]*/);
+  assert.match(evidenceValue, /join public\.kd_radar_sources\s+[a-z_][a-z0-9_]*\s+on\s+[a-z_][a-z0-9_]*\.source_id\s*=\s*[a-z_][a-z0-9_]*\.source_id/);
+  assert.match(evidenceValue, /event_version_id\s*=\s*v\.event_version_id/);
+  assert.match(evidenceValue, /limit\s+2\b/);
+  assert.match(
+    evidenceValue,
+    /order by\s+[a-z_][a-z0-9_]*\.source_id\s*,\s*[a-z_][a-z0-9_]*\.canonical_url\s*,\s*[a-z_][a-z0-9_]*\.retrieved_at\s*,\s*[a-z_][a-z0-9_]*\.evidence_id/,
+  );
+
+  const values = new Map(evidenceProjection.map(([key, value]) => [key, compact(value)]));
+  assert.match(values.get("sourceId"), /source_id/);
+  assert.match(values.get("sourceDomain"), /\.domain\b/);
+  assert.match(values.get("url"), /canonical_url/);
+  assert.match(values.get("retrievedAt"), /retrieved_at/);
+
+  for (const pairs of feedPairs) {
+    if (pairs === evidenceProjection) continue;
+    for (const [key] of pairs) {
+      assert.equal(
+        ["sourceId", "sourceDomain", "url", "retrievedAt"].includes(key),
+        false,
+        `Evidence-Key außerhalb der exakten Evidence-Projektion: ${key}`,
+      );
+    }
+  }
 });
 
 check("Jede Feed-Datenquelle ist in ihrer eigenen Query an den Aufrufer gebunden", () => {
