@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const basePath = "./supabase/migrations/20260809180000_event_radar_local_basis.sql";
 const pilotPath = "./supabase/migrations/20260814120000_radar_max_manual_pilot.sql";
+const triggerFixPath = "./supabase/migrations/20260816010000_radar_deferred_trigger_privilege_fix.sql";
 const schemaPath = "./supabase/current_schema.sql";
 const runbookPath = "./docs/ETAPPE_16A1_RADAR_MAX_PILOT_DB.md";
 
@@ -11,10 +12,15 @@ assert.ok(
   fs.existsSync(new URL(pilotPath, import.meta.url)),
   `W1-Vertrag rot: Zielmigration fehlt noch: ${pilotPath}`,
 );
+assert.ok(
+  fs.existsSync(new URL(triggerFixPath, import.meta.url)),
+  `E16B4-Vertrag rot: Trigger-Fixmigration fehlt noch: ${triggerFixPath}`,
+);
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const baseSql = read(basePath);
 const pilotSql = read(pilotPath);
+const triggerFixSql = read(triggerFixPath);
 const currentSchema = read(schemaPath);
 const runbook = read(runbookPath);
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
@@ -26,6 +32,38 @@ const canonical = (value) => compact(value).replace(/\s*([(),])\s*/g, "$1");
 const executable = compact(pilotSql);
 const canonicalExecutable = canonical(pilotSql);
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const deferredTriggerFixFunctions = [
+  "kd_check_radar_event_pointers",
+  "kd_check_radar_confirmed_version_pointer",
+];
+
+const assertDeferredTriggerFix = (source) => {
+  const normalized = compact(source);
+  const canonicalSource = canonical(source);
+  assert.match(normalized, /^begin\s*;/);
+  assert.match(normalized, /commit\s*;$/);
+  assert.equal((normalized.match(/\balter function\b/g) || []).length, 4);
+
+  const alteredFunctions = [...normalized.matchAll(/\balter function\s+public\.([a-z_][a-z0-9_]*)\s*\(/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(new Set(alteredFunctions), new Set(deferredTriggerFixFunctions));
+
+  for (const name of deferredTriggerFixFunctions) {
+    const call = escapeRegex(`public.${name}()`);
+    assert.match(canonicalSource, new RegExp(`alter function ${call}security definer;`));
+    assert.match(
+      normalized,
+      new RegExp(`alter function\\s+${call}\\s+set search_path\\s*=\\s*pg_catalog\\s*,\\s*public\\s*;`),
+    );
+  }
+
+  assert.doesNotMatch(normalized, /\b(?:create|drop)\s+(?:or replace\s+)?function\b/);
+  assert.doesNotMatch(normalized, /\b(?:create|alter|drop|disable|enable)\s+(?:constraint\s+)?trigger\b/);
+  assert.doesNotMatch(normalized, /\b(?:grant|revoke)\b/);
+  assert.doesNotMatch(normalized, /\b(?:insert into|update|delete from|truncate)\b/);
+  assert.doesNotMatch(normalized, /\balter table\b/);
+};
 
 const findBalancedEnd = (source, openAt) => {
   let depth = 0;
@@ -222,6 +260,69 @@ const check = (name, fn) => {
   checks++;
   console.log(`✓ ${name}`);
 };
+
+check("Red: authenticated scheitert erst an den beiden deferred Pointer-Reads", () => {
+  const baseExecutable = compact(baseSql);
+  const importEnvelope = compact(functionSql(pilotSql, "kd_radar_pilot_import_event"));
+  assert.match(importEnvelope, /\bsecurity definer\b/);
+  assert.match(importEnvelope, /\bset search_path\s*=\s*pg_catalog\s*,\s*public\b/);
+
+  const deferredContracts = [
+    [
+      "kd_check_radar_event_pointers",
+      "kd_radar_event_pointer_guard",
+      ["kd_radar_events", "kd_radar_event_versions"],
+    ],
+    [
+      "kd_check_radar_confirmed_version_pointer",
+      "kd_radar_confirmed_version_pointer_guard",
+      ["kd_radar_events"],
+    ],
+  ];
+  for (const [functionName, triggerName, readTables] of deferredContracts) {
+    const fn = compact(functionSql(baseSql, functionName));
+    assert.doesNotMatch(fn, /\bsecurity definer\b/);
+    assert.match(fn, /\bset search_path\s*=\s*pg_catalog\s*,\s*public\b/);
+    for (const table of readTables) {
+      assert.match(fn, new RegExp(`(?:from|join) public\\.${escapeRegex(table)}\\b`));
+      assert.match(
+        baseExecutable,
+        new RegExp(`revoke all on table public\\.${escapeRegex(table)} from public, anon, authenticated`),
+      );
+    }
+    const trigger = statementsFor(baseSql, new RegExp(`create constraint trigger ${triggerName}\\b`));
+    assert.equal(trigger.length, 1);
+    assert.match(trigger[0], /\bdeferrable initially deferred\b/);
+    assert.match(trigger[0], new RegExp(`execute function public\\.${escapeRegex(functionName)}\\(\\)`));
+  }
+
+  for (const immediateFunction of ["kd_guard_radar_evidence", "kd_guard_radar_event_version"]) {
+    const trigger = statementsFor(
+      baseSql,
+      new RegExp(`execute function public\\.${escapeRegex(immediateFunction)}\\(\\)`),
+    );
+    assert.equal(trigger.length, 1);
+    assert.doesNotMatch(trigger[0], /\bconstraint trigger\b|\bdeferrable\b/);
+  }
+});
+
+check("Green: additive Migration hebt nur die zwei deferred Guards in den Owner-Kontext", () => {
+  assertDeferredTriggerFix(triggerFixSql);
+  assert.equal(sha256(baseSql), "d2bfe936e7ecf3b20c2c0fb5a761a87dbee42149b8b733e0e63fec5af82b94c4");
+});
+
+check("Mutationen an Definer, Searchpath, ACL oder einer dritten Guard-Funktion werden abgewiesen", () => {
+  assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(/security definer/i, "security invoker")));
+  assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(/pg_catalog, public/i, "public")));
+  assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(
+    /commit;/i,
+    "grant execute on function public.kd_check_radar_event_pointers() to authenticated;\ncommit;",
+  )));
+  assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(
+    /commit;/i,
+    "alter function public.kd_guard_radar_event_version() security definer;\ncommit;",
+  )));
+});
 
 check("Basismigration und current_schema bleiben bitidentisch; Pilotmigration ist additiv und atomar", () => {
   assert.equal(sha256(baseSql), "d2bfe936e7ecf3b20c2c0fb5a761a87dbee42149b8b733e0e63fec5af82b94c4");
