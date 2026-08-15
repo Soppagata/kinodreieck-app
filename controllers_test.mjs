@@ -656,7 +656,7 @@ const pilotImportProjectionQueued = R.queueAccountRadarPilotImport(
     },
   },
 );
-assert.equal(pilotImportProjectionQueued.ok, true);
+check("Pilot-Import-Queue akzeptiert den Eingangssatz als erfolgreich", pilotImportProjectionQueued.ok === true);
 const pilotImportProjectionState = pilotImportProjectionQueued.state;
 check("Pilot-Import-Queue bleibt in aktiver Projektion ohne sichtbares Event", (() => {
   const projection = projectEntdeckenRadarPilot({
