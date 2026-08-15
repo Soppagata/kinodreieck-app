@@ -135,9 +135,9 @@ check("Katalog-Verbindungsfehler leakt keine Backenddetails in UI-Texte",
   && !catalogError.message.includes("INTERNAL_TABLE_DETAIL"));
 
 /* Der Check oben deckt nur den GEWORFENEN Fehler ab. testConnection() kann aber
-   auch erfolgreich zurückkehren und den Backendtext im Ergebnis mitführen:
-   manifest ist anon lesbar, nur die geprüfte Zeile scheitert. Genau dieses
-   `asset`-Objekt rendert die Oberfläche (KatalogZugang/Katalog-Status). */
+  auch erfolgreich zurückkehren und den Backendtext im Ergebnis mitführen:
+  manifest ist anon lesbar, nur die geprüfte Zeile scheitert. Genau dieses
+  `asset`-Objekt rendert die Oberfläche (KatalogZugang/Katalog-Status). */
 const fetchVorher = globalThis.fetch;
 globalThis.fetch = async (url) => {
   const name = new URL(String(url)).searchParams.get("name")?.replace(/^eq\./, "");

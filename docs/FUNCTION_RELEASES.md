@@ -4,14 +4,16 @@ Der öffentliche Pages-Build und die Supabase Edge Function sind getrennte
 Artefakte. Dieses Protokoll verhindert, dass eine Plattform-Versionsnummer ohne
 reproduzierbaren Quellstand als Nachweis genügt.
 
-## E16B2 Quellkandidat (15.08.2026)
+## E16B2-Sourcekandidat (15.08.2026)
 
-- Commit `0358278519d7bbd88b995cfcfc9b233ff8972772` ist ein Source-only Kandidat für den Private-Export/Radar-Pilot-Vertrag (Frontend-/Flag-/Own-Data-Contract) mit hartem Default-Off.
-- Weder Edge-Function-Quellen, noch Scheduler/Monitor noch `account-self-service`-Service werden in E16B2 geändert oder aktiviert.
+- `0358278519d7bbd88b995cfcfc9b233ff8972772` ist ein integrierter SQL-/Privacy-Checkpoint der Vorstufen.
+- E16B2 ist ein Sourcekandidat auf Basis dieses SQL-Checkpoints `0358278519d7bbd88b995cfcfc9b233ff8972772` für den Private-Export/Radar-Pilot-Vertrag (Frontend-/Flag-/Own-Data-Contract) mit hartem Default-Off.
+- Weder Edge-Function-Quellen, noch Scheduler/Monitor noch `account-self-service`-Service werden in diesem E16B2-Stand geändert oder aktiviert.
 - Staging- und Production-Wertzuordnung ist unverändert default-off:
   - Staging: `VITE_RADAR_PILOT_CLIENT_ENABLED` und `VITE_PRIVATE_SELF_SERVICE_ENABLED` nur bei exakt `STAGING_* == "true"` true; `VITE_ACCOUNT_DELETE_ENABLED` hart false.
   - Produktion: alle drei (`RADAR`, `PRIVATE_SELF_SERVICE`, `ACCOUNT_DELETE`) hart false.
 - Remote bleibt vor diesem Stand unverändert; kein STAGING_GREEN, kein Function-Deploy, kein shared Backend Write.
+- `export_enabled` ist im bestätigten Remote-Stand nicht gesetzt; die Addierung erfolgt erst in `20260815120000_private_export_radar_pilot_compat.sql` mit Additiv-default `false`.
 
 ## Verbindlicher Ablauf
 

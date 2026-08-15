@@ -15,16 +15,33 @@ const rowWithExactKeysAndTypes = (value, keys, checks = {}) => Array.isArray(val
   return true;
 });
 const stringOrNull = (value) => value === null || typeof value === "string";
+const lowercaseUuid = (value) => typeof value === "string"
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+const lowercaseHex32 = (value) => typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+const isoDateString = (value) => typeof value === "string" && !Number.isNaN(Date.parse(value));
+
 const ownRows = (value) => rowWithExactKeysAndTypes(
   value,
   ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
   {
     operation_id: (value) => typeof value === "string",
     request_hash: (value) => typeof value === "string",
-    result: (value) => typeof value === "string",
+    result: (value) => fixedObject(value),
     terminal_at: stringOrNull,
     expires_at: stringOrNull,
     created_at: (value) => typeof value === "string",
+  },
+);
+const importRows = (value) => rowWithExactKeysAndTypes(
+  value,
+  ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
+  {
+    operation_id: lowercaseUuid,
+    request_hash: lowercaseHex32,
+    result: (value) => fixedObject(value),
+    terminal_at: (value) => isoDateString(value),
+    expires_at: (value) => isoDateString(value),
+    created_at: (value) => isoDateString(value),
   },
 );
 
@@ -42,7 +59,7 @@ export function validateOwnData(value) {
     && typeof value.data.radar.capabilities.radar_unlimited === "boolean"
     && typeof value.data.radar.capabilities.radar_review === "boolean"
     && typeof value.data.radar.capabilities.radar_pilot === "boolean"
-    && stringOrNull(value.data.radar.capabilities.updated_at)
+    && typeof value.data.radar.capabilities.updated_at === "string"
   );
   const valid = exactKeys(value.data.auth, ["createdAt", "lastSignInAt", "providers"])
     && (value.data.auth.createdAt === null || typeof value.data.auth.createdAt === "string")
@@ -64,7 +81,7 @@ export function validateOwnData(value) {
     && rows(value.data.radar.shares, ["target_id", "share_status", "last_operation_id", "created_at", "updated_at"])
     && ownRows(value.data.radar.operations)
     && ownRows(value.data.radar.shareOperations)
-    && ownRows(value.data.radar.importOperations)
+    && importRows(value.data.radar.importOperations)
     && rows(value.data.radar.reviews, ["review_id", "event_version_id", "decision", "reason", "source_id", "created_at"])
     && rows(value.data.retention, ["data_class", "retention_days", "purpose_bound", "purge_trigger"])
     && exactKeys(value.data.deletion, ["enabled", "lastStatus"])

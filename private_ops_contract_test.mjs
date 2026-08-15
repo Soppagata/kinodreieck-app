@@ -676,6 +676,36 @@ const invalidOwnDataFields = expectBoundaryError(
   () => validateOwnData({ ...validOwnData, data: { ...validOwnData.data, unknownField: true } }),
 );
 expect("Unbekannte Zusatzfelder bei eigenen Daten brechen den Zugriff", invalidOwnDataFields.code === ERROR_CODES.INVALID_RESPONSE);
+
+const validImportOperation = {
+  operation_id: "11111111-1111-4111-8111-111111111111",
+  request_hash: "0123456789abcdef0123456789abcdef",
+  result: { status: "ok" },
+  terminal_at: "2026-08-09T12:00:00Z",
+  expires_at: "2026-09-09T12:00:00Z",
+  created_at: "2026-08-09T12:00:00Z",
+};
+const validOwnDataWithImportOperations = {
+  ...validOwnData,
+  data: {
+    ...validOwnData.data,
+    radar: {
+      ...validOwnData.data.radar,
+      importOperations: [validImportOperation],
+    },
+  },
+};
+expect(
+  "Import-Operations mit gültigem Ergebnisobjekt werden akzeptiert",
+  (() => {
+    const normalized = validateOwnData(validOwnDataWithImportOperations);
+    const first = normalized.radar.importOperations[0];
+    return normalized.radar.importOperations.length === 1
+      && first.operation_id === validImportOperation.operation_id
+      && first.result.status === "ok"
+      && first.terminal_at === validImportOperation.terminal_at;
+  })(),
+);
 const invalidOwnDataCapabilityShape = expectBoundaryError(
   "Radar-Capability-Missformen werden als Boundary-Fehler verworfen",
   () => validateOwnData({
@@ -690,20 +720,48 @@ const invalidOwnDataCapabilityShape = expectBoundaryError(
   }),
 );
 expect("Fehlende radar_pilot-Quelle bricht den Zugriff", invalidOwnDataCapabilityShape.code === ERROR_CODES.INVALID_RESPONSE);
-const invalidOwnDataCapabilityTypes = expectBoundaryError(
-  "Radar-Capability-Typfehler werden als Boundary-Fehler verworfen",
+const invalidOwnDataCapabilityTypesRadarPilot = expectBoundaryError(
+  "Falsch typisiertes radar_pilot in Capabilities wird als Boundary-Fehler verworfen",
   () => validateOwnData({
     ...validOwnData,
     data: {
       ...validOwnData.data,
       radar: {
         ...validOwnData.data.radar,
-        capabilities: { radar_unlimited: true, radar_review: true, radar_pilot: "true", updated_at: null },
+        capabilities: { radar_unlimited: true, radar_review: true, radar_pilot: "true", updated_at: "2026-08-09T12:00:00Z" },
       },
     },
   }),
 );
-expect("Falsche Capability-Typen brechen den Zugriff", invalidOwnDataCapabilityTypes.code === ERROR_CODES.INVALID_RESPONSE);
+expect("Falscher radar_pilot-Typ bricht den Zugriff", invalidOwnDataCapabilityTypesRadarPilot.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityTypesUpdatedAt = expectBoundaryError(
+  "Falsch typisiertes updated_at in Capabilities wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: { radar_unlimited: true, radar_review: true, radar_pilot: true, updated_at: 1723200000000 },
+      },
+    },
+  }),
+);
+expect("Falscher updated_at-Typ in Capabilities bricht den Zugriff", invalidOwnDataCapabilityTypesUpdatedAt.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityBooleanType = expectBoundaryError(
+  "Falsch typisiertes Boolean-Feld in Capabilities wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: { radar_unlimited: "true", radar_review: true, radar_pilot: true, updated_at: "2026-08-09T12:00:00Z" },
+      },
+    },
+  }),
+);
+expect("Falscher Boolean-Typ in Capabilities bricht den Zugriff", invalidOwnDataCapabilityBooleanType.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataCapabilityExtra = expectBoundaryError(
   "Zusätzliche Capability-Felder bei Own-Data werden als Boundary-Fehler verworfen",
   () => validateOwnData({
@@ -725,7 +783,7 @@ const invalidOwnDataCapabilityExtra = expectBoundaryError(
 );
 expect("Zusätzliche Capability-Keys brechen den Zugriff", invalidOwnDataCapabilityExtra.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataImportOperations = expectBoundaryError(
-  "Ungültiges importOperations-Feld in Own-Data wird als Boundary-Fehler verworfen",
+  "Ungültiger importOperations-Typ in Own-Data wird als Boundary-Fehler verworfen",
   () => validateOwnData({
     ...validOwnData,
     data: {
@@ -738,8 +796,8 @@ const invalidOwnDataImportOperations = expectBoundaryError(
   }),
 );
 expect("importOperations erfordert ein Array", invalidOwnDataImportOperations.code === ERROR_CODES.INVALID_RESPONSE);
-const invalidOwnDataImportOperationsRows = expectBoundaryError(
-  "Ungültige importOperations-Zeilen werden als Boundary-Fehler verworfen",
+const invalidOwnDataImportOperationsOperationId = expectBoundaryError(
+  "Falsch typisierte operation_id in importOperations wird als Boundary-Fehler verworfen",
   () => validateOwnData({
     ...validOwnData,
     data: {
@@ -747,18 +805,99 @@ const invalidOwnDataImportOperationsRows = expectBoundaryError(
       radar: {
         ...validOwnData.data.radar,
         importOperations: [{
+          ...validImportOperation,
           operation_id: 1234,
-          request_hash: {},
-          result: null,
-          terminal_at: 123,
-          expires_at: false,
-          created_at: 0,
         }],
       },
     },
   }),
 );
-expect("Falsche importOperations-Zeilen brechen den Zugriff", invalidOwnDataImportOperationsRows.code === ERROR_CODES.INVALID_RESPONSE);
+expect("operation_id-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsOperationId.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsRequestHash = expectBoundaryError(
+  "Falsch typisiertes request_hash in importOperations wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          request_hash: "AABBCCDDEEFF00112233445566778899aa",
+        }],
+      },
+    },
+  }),
+);
+expect("request_hash-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsRequestHash.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsResult = expectBoundaryError(
+  "Falsch typisiertes result in importOperations wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          result: [],
+        }],
+      },
+    },
+  }),
+);
+expect("result-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsResult.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsTerminalAt = expectBoundaryError(
+  "Falsch typisierte terminal_at in importOperations wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          terminal_at: 123,
+        }],
+      },
+    },
+  }),
+);
+expect("terminal_at-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsTerminalAt.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsExpiresAt = expectBoundaryError(
+  "Falsch typisierte expires_at in importOperations wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          expires_at: false,
+        }],
+      },
+    },
+  }),
+);
+expect("expires_at-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsExpiresAt.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsCreatedAt = expectBoundaryError(
+  "Falsch typisiertes created_at in importOperations wird als Boundary-Fehler verwertet",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          ...validImportOperation,
+          created_at: true,
+        }],
+      },
+    },
+  }),
+);
+expect("created_at-Abweichungen in importOperations brechen den Zugriff", invalidOwnDataImportOperationsCreatedAt.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataImportOperationsActorId = expectBoundaryError(
   "Import-Operations mit actor_id in Own-Data werden als Boundary-Fehler verworfen",
   () => validateOwnData({
@@ -768,12 +907,7 @@ const invalidOwnDataImportOperationsActorId = expectBoundaryError(
       radar: {
         ...validOwnData.data.radar,
         importOperations: [{
-          operation_id: "11111111-1111-4111-8111-111111111111",
-          request_hash: "abc",
-          result: "done",
-          terminal_at: "2026-08-09T12:00:00Z",
-          expires_at: "2026-08-09T12:00:00Z",
-          created_at: "2026-08-09T12:00:00Z",
+          ...validImportOperation,
           actor_id: "11111111-1111-4111-8111-111111111111",
         }],
       },
