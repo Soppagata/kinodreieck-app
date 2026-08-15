@@ -76,10 +76,10 @@ function compactSql(value) {
 }
 
 const EXPECTED_PILOT_IMPORT_CONSTRAINTS = [
-  "kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:true:foreignkey(actor_id)referencesauth.users(id)ondeletecascade",
-  "kd_radar_pilot_import_operations_pkey:p:false:false:true:true:primarykey(actor_id,operation_id)",
-  "kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~'^[a-f0-9]{32}$')",
-  "kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)='object')",
+  "kd_radar_pilot_import_operations_actor_id_fkey:f:foreignkey(actor_id)referencesauth.users(id)ondeletecascade",
+  "kd_radar_pilot_import_operations_pkey:p:primarykey(actor_id,operation_id)",
+  "kd_radar_pilot_import_operations_request_hash_check:c:check(request_hash~'^[a-f0-9]{32}$')",
+  "kd_radar_pilot_import_operations_result_check:c:check(jsonb_typeof(result)='object')",
 ];
 
 function sqlStringLiterals(value) {
@@ -106,12 +106,35 @@ function hasExactPilotImportConstraintPreflight(value) {
       (constraint, index) => constraint === EXPECTED_PILOT_IMPORT_CONSTRAINTS[index],
     )
     && denseExecutable.includes(
-      "array_agg(format('%s:%s:%s:%s:%s:%s:%s',pc.conname,pc.contype,pc.condeferrable,pc.condeferred,pc.convalidated,pc.connoinherit,regexp_replace(replace(lower(pg_get_constraintdef(pc.oid,true)),'::text',''),'[[:space:]]+','','g'))orderbypc.conname)",
+      "array_agg(format('%s:%s:%s',pc.conname,pc.contype,regexp_replace(replace(lower(pg_get_constraintdef(pc.oid,true)),'::text',''),'[[:space:]]+','','g'))orderbypc.conname)",
     )
     && denseExecutable.includes(
       ")intov_constraintsfrompg_catalog.pg_constraintpcwherepc.conrelid=v_table",
     )
     && !/\blike\b/.test(executable);
+}
+
+function hasTypedPilotImportConstraintBooleans(value) {
+  const start = value.search(/do \$\$/i);
+  const end = value.search(/alter table public\.kd_radar_pilot_import_operations/i);
+  if (start < 0 || end <= start) return false;
+
+  const preflight = stripSqlComments(value.slice(start, end));
+  const formatArguments = preflight.match(
+    /array_agg\(\s*format\(([\s\S]*?)\)\s*order by pc\.conname\s*\)/i,
+  )?.[1] || "";
+  const typedGuard = preflight.match(
+    /if exists\s*\(\s*select 1\s+from pg_catalog\.pg_constraint pc\s+where pc\.conrelid = v_table\s+and\s*\(([\s\S]*?)\)\s*\)\s*then\s*raise exception 'kd_radar_pilot_import_operations_constraint_drift'\s+using errcode = '55000'\s*;\s*end if\s*;/i,
+  );
+  const typedConditions = typedGuard ? compactSql(typedGuard[1]) : "";
+
+  return !/\bpc\.(?:condeferrable|condeferred|convalidated|connoinherit)\b/i.test(formatArguments)
+    && typedConditions === [
+      "pc.condeferrable is distinct from false",
+      "pc.condeferred is distinct from false",
+      "pc.convalidated is distinct from true",
+      "pc.connoinherit is distinct from (pc.contype in ('f', 'p'))",
+    ].join(" or ");
 }
 
 function findBalancedEnd(source, openAt) {
@@ -381,6 +404,40 @@ expect(
     && /if v_row_count <> 0 then/i.test(compatMigrationSql.slice(radarPreflightStart, radarFirstAlter))
     && hasExactPilotImportConstraintPreflight(compatMigrationSql),
 );
+expect(
+  "Constraint-Signatur trennt alle vier pg_constraint-Booleans in typisierte Prüfungen",
+  hasTypedPilotImportConstraintBooleans(compatMigrationSql),
+);
+const typedBooleanMutations = [
+  [
+    "condeferrable",
+    "pc.condeferrable is distinct from false",
+    "pc.condeferrable is distinct from true",
+  ],
+  [
+    "condeferred",
+    "pc.condeferred is distinct from false",
+    "pc.condeferred is distinct from true",
+  ],
+  [
+    "convalidated",
+    "pc.convalidated is distinct from true",
+    "pc.convalidated is distinct from false",
+  ],
+  [
+    "connoinherit",
+    "pc.connoinherit is distinct from (pc.contype in ('f', 'p'))",
+    "pc.connoinherit is distinct from false",
+  ],
+];
+for (const [attribute, expected, mutation] of typedBooleanMutations) {
+  const mutatedSql = compatMigrationSql.replace(expected, mutation);
+  expect(
+    `Typisierter Constraint-Guard verwirft eine Verfälschung von ${attribute}`,
+    mutatedSql !== compatMigrationSql
+      && !hasTypedPilotImportConstraintBooleans(mutatedSql),
+  );
+}
 const requestOrTrueMutation = compatMigrationSql.replace(
   "check(request_hash~''^[a-f0-9]{32}$'')",
   "check((request_hash~''^[a-f0-9]{32}$'')ortrue)",
@@ -400,20 +457,20 @@ expect(
     && !hasExactPilotImportConstraintPreflight(resultNotObjectMutation),
 );
 const foreignKeyInheritabilityMutation = compatMigrationSql.replace(
-  "actor_id_fkey:f:false:false:true:true:foreignkey",
-  "actor_id_fkey:f:false:false:true:false:foreignkey",
+  "actor_id_fkey:f:foreignkey",
+  "actor_id_fkey:f:check",
 );
 expect(
-  "Exakter Schemazaun verwirft falsches connoinherit am Actor-FK als Constraint-Drift",
+  "Exakter Schemazaun verwirft falsche Constraintdefinition am Actor-FK als Constraint-Drift",
   foreignKeyInheritabilityMutation !== compatMigrationSql
     && !hasExactPilotImportConstraintPreflight(foreignKeyInheritabilityMutation),
 );
 const primaryKeyInheritabilityMutation = compatMigrationSql.replace(
-  "operations_pkey:p:false:false:true:true:primarykey",
-  "operations_pkey:p:false:false:true:false:primarykey",
+  "operations_pkey:p:primarykey",
+  "operations_pkey:p:check",
 );
 expect(
-  "Exakter Schemazaun verwirft falsches connoinherit am PK als Constraint-Drift",
+  "Exakter Schemazaun verwirft falsche Constraintdefinition am PK als Constraint-Drift",
   primaryKeyInheritabilityMutation !== compatMigrationSql
     && !hasExactPilotImportConstraintPreflight(primaryKeyInheritabilityMutation),
 );

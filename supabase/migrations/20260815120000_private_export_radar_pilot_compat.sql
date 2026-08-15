@@ -62,13 +62,9 @@ begin
 
   select array_agg(
            format(
-             '%s:%s:%s:%s:%s:%s:%s',
+             '%s:%s:%s',
              pc.conname,
              pc.contype,
-             pc.condeferrable,
-             pc.condeferred,
-             pc.convalidated,
-             pc.connoinherit,
              regexp_replace(
                replace(lower(pg_get_constraintdef(pc.oid, true)), '::text', ''),
                '[[:space:]]+',
@@ -82,11 +78,26 @@ begin
    where pc.conrelid = v_table;
 
   if v_constraints is distinct from array[
-    'kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:true:foreignkey(actor_id)referencesauth.users(id)ondeletecascade',
-    'kd_radar_pilot_import_operations_pkey:p:false:false:true:true:primarykey(actor_id,operation_id)',
-    'kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~''^[a-f0-9]{32}$'')',
-    'kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)=''object'')'
+    'kd_radar_pilot_import_operations_actor_id_fkey:f:foreignkey(actor_id)referencesauth.users(id)ondeletecascade',
+    'kd_radar_pilot_import_operations_pkey:p:primarykey(actor_id,operation_id)',
+    'kd_radar_pilot_import_operations_request_hash_check:c:check(request_hash~''^[a-f0-9]{32}$'')',
+    'kd_radar_pilot_import_operations_result_check:c:check(jsonb_typeof(result)=''object'')'
   ]::text[] then
+    raise exception 'kd_radar_pilot_import_operations_constraint_drift'
+      using errcode = '55000';
+  end if;
+
+  if exists (
+    select 1
+      from pg_catalog.pg_constraint pc
+     where pc.conrelid = v_table
+       and (
+         pc.condeferrable is distinct from false
+         or pc.condeferred is distinct from false
+         or pc.convalidated is distinct from true
+         or pc.connoinherit is distinct from (pc.contype in ('f', 'p'))
+       )
+  ) then
     raise exception 'kd_radar_pilot_import_operations_constraint_drift'
       using errcode = '55000';
   end if;
