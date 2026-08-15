@@ -307,7 +307,12 @@ async function runCageAlphabetDomTests() {
       await click(panel());
       await waitFor(() => (window.__cage?.stakkato || 0) >= 1, { label: "Stakkato startet" });
       await click(document.querySelector("[data-testid='parent-rerender']"));
-      await waitFor(() => window.__cage?.ergebnis, { timeoutMs: 2600, label: "Stakkato führt zu Ergebnis" });
+      await act(async () => {
+        await waitFor(() => {
+          const resultDialog = dialog();
+          return window.__cage?.ergebnis && !!resultDialog && resultDialog.textContent?.includes("Er kann alles sein.");
+        }, { timeoutMs: 2600, label: "Stakkato führt zu Ergebnis-DOM" });
+      });
       check("Stakkato läuft trotz Parent-Rerender weiter", dialog() && document.body.textContent.includes("Er kann alles sein."));
       check("Deterministische Stakkato-Länge ist 15", window.__cage?.stakkato === 15);
       check("Stakkato auf OnClose-Path stabil", onCloseLog.length === 0);
