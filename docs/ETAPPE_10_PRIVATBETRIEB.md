@@ -113,10 +113,10 @@ Zusatz:
 Die Migration setzt Terminal-/Ablaufmarker per Trigger, entfernt widerrufene
 Shares statt sie zwecklos aufzubewahren, entfernt Receipts beim Aboende und
 markiert Ziele bei der letzten Referenz atomar als verwaist. Der Purge setzt
-verwaiste, 30 Tage alte Targets ohne aktives Abo auf Schutzflag, entfernt zuerst
-bestätigte Reviews im kontrollierten Pfad und löscht danach das komplette
-Target→Event→Version→Evidence-Graphenobjekt zeilenweise; Fehler werden pro
-Target gezählt und der Lauf fährt trotzdem fort.
+für den kontrollierten Löschpfad das Schutzflag, verarbeitet 30 Tage verwaiste
+Targets ohne aktives Abo zeilenweise, löscht die zugehörigen Reviews und
+anschließend per Kaskade den vollständigen Target→Event→Version→Evidence-Graphen;
+Fehler werden pro Target gezählt und der Lauf wird fortgesetzt.
 
 ## Own-Data und Self-Delete (global off)
 
