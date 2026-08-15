@@ -129,6 +129,12 @@ await check("Pilot-Event-Evidence muss exakt zwei sichere, eindeutige Quellen-Ob
   })] })).ok, false);
   assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
     evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com:443/official", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
       { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com:8443/official", retrievedAt: instant },
       { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
     ],
@@ -776,17 +782,28 @@ await check("Import sendet genau eine exakte E16A1-Payload und akzeptiert nur di
 });
 
 await check("Import-Ack darf keinen quellenlosen Event-Zustand nachrüsten", async () => {
-  let state = R.queueAccountRadarPilotImport(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+  const baseState = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    feed({ radarReview: true }),
+  ).state;
+  const queued = R.queueAccountRadarPilotImport(baseState, {
     operationId, payload: importPayload(), now: instant,
-  }).state;
+  });
+  assert.equal(queued.ok, true);
+  const rpcCalls = [];
   const h = harness({
-    state,
+    state: queued.state,
     fetchImpl: async (url) => {
+      const rpc = String(url).split("/").at(-1);
+      rpcCalls.push(rpc);
+      if (url.endsWith("kd_radar_pilot_feed")) return response(200, feed({ events: [], radarReview: true }));
       if (url.endsWith("kd_radar_pilot_import_event")) return response(200, importResult());
-      return response(200, feed({ events: [], subscriptions: [] }));
+      throw new Error("unexpected rpc");
     },
   });
-  await h.service.sync({ state: h.state, commit: h.commit });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready");
+  assert.equal(rpcCalls.filter((rpc) => rpc === "kd_radar_pilot_import_event").length, 1);
   assert.equal(h.state.pilot.importOutbox.length, 0);
   assert.equal(h.state.pilot.events.length, 0);
 });

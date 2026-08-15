@@ -120,6 +120,8 @@ function validEvidenceUrl(value, sourceDomain) {
   if (raw !== value) return false;
   let parsed;
   try { parsed = new URL(raw); } catch { return false; }
+  const authorityMatch = raw.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)(?:[/?#]|$)/i);
+  if (!authorityMatch || authorityMatch[1].includes("@") || authorityMatch[1].includes(":")) return false;
   if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return false;
   const host = text(parsed.hostname).toLowerCase();
   const domain = text(sourceDomain).toLowerCase();

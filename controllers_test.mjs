@@ -631,8 +631,19 @@ check("Radarcontroller projiziert den Kontopilot getrennt und lässt Gast-Fixtur
   /projectEntdeckenRadarPilot/.test(radarController)
   && /radarPilotEvents: radarPilotProjection\.events/.test(radarController)
   && /radarReview: radarPilotProjection\.radarReview/.test(radarController));
-const pilotImportProjectionState = R.queueAccountRadarPilotImport(
-  R.createEmptyLocalRadar({ authority: "account-cache" }),
+const pilotImportProjectionQueued = R.queueAccountRadarPilotImport(
+  R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    {
+      format: "kd-radar-pilot-feed-v1", revision: 1, checksum: "a".repeat(64),
+      reconciledAt: "2026-08-14T08:00:00.000Z",
+      subscriptions: [],
+      events: [],
+      receipts: [],
+      operationAcks: [],
+      radarReview: true,
+    },
+  ).state,
   {
     operationId: "11111111-1111-4111-8111-111111111111", now: "2026-08-14T08:00:00.000Z",
     payload: {
@@ -644,16 +655,19 @@ const pilotImportProjectionState = R.queueAccountRadarPilotImport(
       ],
     },
   },
-).state;
-check("Pilot-Import-Queue erzeugt in der Projektion kein unsichtbares Event", () => {
+);
+assert.equal(pilotImportProjectionQueued.ok, true);
+const pilotImportProjectionState = pilotImportProjectionQueued.state;
+check("Pilot-Import-Queue bleibt in aktiver Projektion ohne sichtbares Event", (() => {
   const projection = projectEntdeckenRadarPilot({
     clientEnabled: true,
     radarAuthority: "account-cache",
     radarState: pilotImportProjectionState,
     localEvents: [],
   });
-  assert.equal(projection.events.length, 0);
-  assert.equal(projection.radarReview, false);
-});
+  return projection.active === true
+    && projection.radarReview === true
+    && projection.events.length === 0;
+}));
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);
