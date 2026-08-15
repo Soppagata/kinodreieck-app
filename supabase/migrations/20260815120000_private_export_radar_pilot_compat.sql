@@ -12,12 +12,8 @@ do $$
 declare
   v_table regclass := to_regclass('public.kd_radar_pilot_import_operations');
   v_columns text[];
+  v_constraints text[];
   v_row_count bigint;
-  v_primary_keys integer;
-  v_actor_cascades integer;
-  v_request_checks integer;
-  v_result_checks integer;
-  v_constraint_count integer;
   v_rls_enabled boolean;
 begin
   if v_table is null then
@@ -64,38 +60,33 @@ begin
       using errcode = '55000';
   end if;
 
-  select
-    count(*) filter (
-      where pc.contype = 'p'
-        and regexp_replace(lower(pg_get_constraintdef(pc.oid)), '[[:space:]]+', '', 'g')
-          = 'primarykey(actor_id,operation_id)'
-    ),
-    count(*) filter (
-      where pc.contype = 'f'
-        and regexp_replace(lower(pg_get_constraintdef(pc.oid)), '[[:space:]]+', '', 'g')
-          = 'foreignkey(actor_id)referencesauth.users(id)ondeletecascade'
-    ),
-    count(*) filter (
-      where pc.contype = 'c'
-        and lower(pg_get_constraintdef(pc.oid)) like '%request_hash%'
-        and lower(pg_get_constraintdef(pc.oid)) like '%[a-f0-9]{32}%'
-    ),
-    count(*) filter (
-      where pc.contype = 'c'
-        and lower(pg_get_constraintdef(pc.oid)) like '%jsonb_typeof(result)%'
-        and lower(pg_get_constraintdef(pc.oid)) like '%object%'
-    ),
-    count(*)
-    into v_primary_keys, v_actor_cascades, v_request_checks, v_result_checks,
-         v_constraint_count
+  select array_agg(
+           format(
+             '%s:%s:%s:%s:%s:%s:%s',
+             pc.conname,
+             pc.contype,
+             pc.condeferrable,
+             pc.condeferred,
+             pc.convalidated,
+             pc.connoinherit,
+             regexp_replace(
+               replace(lower(pg_get_constraintdef(pc.oid, true)), '::text', ''),
+               '[[:space:]]+',
+               '',
+               'g'
+             )
+           ) order by pc.conname
+         )
+    into v_constraints
     from pg_catalog.pg_constraint pc
    where pc.conrelid = v_table;
 
-  if v_primary_keys <> 1
-     or v_actor_cascades <> 1
-     or v_request_checks <> 1
-     or v_result_checks <> 1
-     or v_constraint_count <> 4 then
+  if v_constraints is distinct from array[
+    'kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:false:foreignkey(actor_id)referencesauth.users(id)ondeletecascade',
+    'kd_radar_pilot_import_operations_pkey:p:false:false:true:false:primarykey(actor_id,operation_id)',
+    'kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~''^[a-f0-9]{32}$'')',
+    'kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)=''object'')'
+  ]::text[] then
     raise exception 'kd_radar_pilot_import_operations_constraint_drift'
       using errcode = '55000';
   end if;

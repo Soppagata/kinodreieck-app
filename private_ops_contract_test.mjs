@@ -75,6 +75,45 @@ function compactSql(value) {
   return stripSqlComments(value).toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+const EXPECTED_PILOT_IMPORT_CONSTRAINTS = [
+  "kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:false:foreignkey(actor_id)referencesauth.users(id)ondeletecascade",
+  "kd_radar_pilot_import_operations_pkey:p:false:false:true:false:primarykey(actor_id,operation_id)",
+  "kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~'^[a-f0-9]{32}$')",
+  "kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)='object')",
+];
+
+function sqlStringLiterals(value) {
+  return [...value.matchAll(/'((?:''|[^'])*)'/g)]
+    .map((match) => match[1].replace(/''/g, "'"));
+}
+
+function hasExactPilotImportConstraintPreflight(value) {
+  const start = value.search(/do \$\$/i);
+  const end = value.search(/alter table public\.kd_radar_pilot_import_operations/i);
+  if (start < 0 || end <= start) return false;
+
+  const preflight = value.slice(start, end);
+  const executable = compactSql(preflight);
+  const denseExecutable = stripSqlComments(preflight).toLowerCase().replace(/\s+/g, "");
+  const expectedArray = preflight.match(
+    /if v_constraints is distinct from array\[([\s\S]*?)\]::text\[\]\s+then/i,
+  );
+  if (!expectedArray) return false;
+
+  const actualConstraints = sqlStringLiterals(expectedArray[1]);
+  return actualConstraints.length === EXPECTED_PILOT_IMPORT_CONSTRAINTS.length
+    && actualConstraints.every(
+      (constraint, index) => constraint === EXPECTED_PILOT_IMPORT_CONSTRAINTS[index],
+    )
+    && denseExecutable.includes(
+      "array_agg(format('%s:%s:%s:%s:%s:%s:%s',pc.conname,pc.contype,pc.condeferrable,pc.condeferred,pc.convalidated,pc.connoinherit,regexp_replace(replace(lower(pg_get_constraintdef(pc.oid,true)),'::text',''),'[[:space:]]+','','g'))orderbypc.conname)",
+    )
+    && denseExecutable.includes(
+      ")intov_constraintsfrompg_catalog.pg_constraintpcwherepc.conrelid=v_table",
+    )
+    && !/\blike\b/.test(executable);
+}
+
 function findBalancedEnd(source, openAt) {
   let depth = 0;
   let quoted = false;
@@ -339,7 +378,26 @@ expect(
       const index = compatMigrationSql.indexOf(marker, radarPreflightStart);
       return index > radarPreflightStart && index < radarFirstAlter;
     })
-    && /if v_row_count <> 0 then/i.test(compatMigrationSql.slice(radarPreflightStart, radarFirstAlter)),
+    && /if v_row_count <> 0 then/i.test(compatMigrationSql.slice(radarPreflightStart, radarFirstAlter))
+    && hasExactPilotImportConstraintPreflight(compatMigrationSql),
+);
+const requestOrTrueMutation = compatMigrationSql.replace(
+  "check(request_hash~''^[a-f0-9]{32}$'')",
+  "check((request_hash~''^[a-f0-9]{32}$'')ortrue)",
+);
+expect(
+  "Exakter Schemazaun verwirft request_hash OR true als Constraint-Drift",
+  requestOrTrueMutation !== compatMigrationSql
+    && !hasExactPilotImportConstraintPreflight(requestOrTrueMutation),
+);
+const resultNotObjectMutation = compatMigrationSql.replace(
+  "check(jsonb_typeof(result)=''object'')",
+  "check(jsonb_typeof(result)<>''object'')",
+);
+expect(
+  "Exakter Schemazaun verwirft result ungleich object als Constraint-Drift",
+  resultNotObjectMutation !== compatMigrationSql
+    && !hasExactPilotImportConstraintPreflight(resultNotObjectMutation),
 );
 expect(
   "Pilot-Import-TTL ergänzt beide Spalten, partiellen Index und den bestehenden 30-Tage-Trigger",
