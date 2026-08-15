@@ -21,8 +21,10 @@ if (!config.buildVersion || config.buildVersion === "dev") {
   throw new Error("VITE_BUILD_VERSION muss den ausgelieferten Commit bezeichnen.");
 }
 
+const ERLAUBTE_VITE_KEIN_SECRET = new Set(["VITE_PRIVATE_SELF_SERVICE_ENABLED"]);
 const verboteneViteNamen = Object.keys(process.env).filter((name) =>
   name.startsWith("VITE_")
+  && !ERLAUBTE_VITE_KEIN_SECRET.has(name)
   && /(secret|service.?role|private|provider.?key|api.?token|access.?token)/i.test(name));
 if (verboteneViteNamen.length) {
   throw new Error("Secrets dürfen nie VITE_-Variablen sein: " + verboteneViteNamen.join(", "));

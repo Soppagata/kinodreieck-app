@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const local = new Map();
 globalThis.localStorage = {
@@ -28,6 +29,24 @@ const check = (name, value) => {
   if (!value) throw new Error("Fehlgeschlagen: " + name);
   ok++;
   console.log("✓ " + name);
+};
+
+const runDeployEnvCheck = (overrides) => {
+  const pruefLauf = spawnSync(process.execPath, ["tools/check-deploy-env.mjs"], {
+    env: {
+      ...process.env,
+      DEPLOY_TARGET: "staging",
+      VITE_APP_ENV: "staging",
+      VITE_APP_URL: "https://kino.example/app/",
+      VITE_SUPABASE_URL: "https://projekt.supabase.co/",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_xxxxxxxxxxxxxxxxxxxx",
+      VITE_AI_ENDPOINT_NAME: "ai-v1",
+      VITE_BUILD_VERSION: "abc123",
+      ...overrides,
+    },
+    encoding: "utf8",
+  });
+  return pruefLauf;
 };
 
 const config = createRuntimeConfig({
@@ -68,6 +87,25 @@ const privateServiceWhitespace = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE
 check("Self-Service-Flag bleibt bei abweichendem Wert false", privateServiceWhitespace.privateSelfServiceEnabled === false);
 const privateServiceTrue = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "true" });
 check("Self-Service-Flag wird nur bei exakt 'true' true", privateServiceTrue.privateSelfServiceEnabled === true);
+
+const privateServiceDeployCheck = runDeployEnvCheck({
+  VITE_PRIVATE_SELF_SERVICE_ENABLED: "false",
+});
+check("check:deploy-env erlaubt den dedizierten öffentlichen Public-Flag-Namen VITE_PRIVATE_SELF_SERVICE_ENABLED",
+  privateServiceDeployCheck.status === 0);
+const privateKeyDeployCheck = runDeployEnvCheck({
+  VITE_PRIVATE_KEY: "super-secret-key",
+});
+check("check:deploy-env blockiert private Schlüssel-ähnliche Vite-Variablen weiterhin",
+  privateKeyDeployCheck.status !== 0
+  && /Secrets dürfen nie VITE_-Variablen sein/.test(privateKeyDeployCheck.stderr));
+const providerKeyDeployCheck = runDeployEnvCheck({
+  VITE_PROVIDER_KEY: "provider-key",
+});
+check("check:deploy-env blockiert near/canonical Secret-ähnliche Namen mit provider.key-Muster",
+  providerKeyDeployCheck.status !== 0
+  && /Secrets dürfen nie VITE_-Variablen sein/.test(providerKeyDeployCheck.stderr));
+
 const accountDeleteMissing = createRuntimeConfig({});
 check("Account-Delete-Flag bleibt bei fehlendem Wert false", accountDeleteMissing.accountDeleteEnabled === false);
 const accountDeleteFalse = createRuntimeConfig({ VITE_ACCOUNT_DELETE_ENABLED: "false" });
