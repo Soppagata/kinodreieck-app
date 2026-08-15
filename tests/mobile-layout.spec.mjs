@@ -2312,8 +2312,11 @@ test("Gefüllte iPhone-Ansichten schneiden Karten, Editor und Profil nicht ab", 
   });
   await page.goto("/");
 
-  const module = await page.locator(".kd-dash-kopfname").allTextContents();
-  expect(module.slice(0, 4)).toEqual(["Pinboard & Serienradar", "Must-Watch", "Zuletzt hinzugefügt"]);
+  await expect(page.locator(".kd-dash-kopfname")).toHaveText([
+    "Pinboard & Serienradar",
+    "Must-Watch",
+    "Zuletzt hinzugefügt",
+  ]);
   const pinboardPin = page.locator(".kd-pinboard-kino").first();
   await expect(pinboardPin).toBeVisible();
   await expect(page.locator(".kd-pinboard-kino").filter({ hasText: "Obsession - Du sollst mich lieben" })).toBeVisible();
