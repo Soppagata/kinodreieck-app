@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 
 import { PERSONAL_DATA_ENTRIES } from "./src/lib/personalDataRegistry.js";
@@ -56,12 +57,118 @@ function eqSet(actual, expected, name) {
   );
 }
 
+function gitBlobId(value) {
+  const bytes = Buffer.from(value, "utf8");
+  return crypto.createHash("sha1")
+    .update(`blob ${bytes.length}\0`)
+    .update(bytes)
+    .digest("hex");
+}
+
+function stripSqlComments(value) {
+  return value
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\r\n]*/g, " ");
+}
+
+function compactSql(value) {
+  return stripSqlComments(value).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function findBalancedEnd(source, openAt) {
+  let depth = 0;
+  let quoted = false;
+  for (let index = openAt; index < source.length; index++) {
+    const char = source[index];
+    if (char === "'") {
+      if (quoted && source[index + 1] === "'") index += 1;
+      else quoted = !quoted;
+      continue;
+    }
+    if (quoted) continue;
+    if (char === "(") depth += 1;
+    if (char === ")" && --depth === 0) return index;
+  }
+  return -1;
+}
+
+function splitTopLevel(value) {
+  const parts = [];
+  let start = 0;
+  let depth = 0;
+  let quoted = false;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === "'") {
+      if (quoted && value[index + 1] === "'") index += 1;
+      else quoted = !quoted;
+      continue;
+    }
+    if (quoted) continue;
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === "," && depth === 0) {
+      parts.push(value.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts;
+}
+
+function callArguments(source, callName) {
+  const found = [];
+  const regex = new RegExp(`\\b${callName}\\s*\\(`, "ig");
+  for (const match of source.matchAll(regex)) {
+    const openAt = source.indexOf("(", match.index);
+    const closeAt = findBalancedEnd(source, openAt);
+    if (closeAt < 0) throw new Error(`FEHLER: unvollständiger ${callName}-Aufruf`);
+    found.push(source.slice(openAt + 1, closeAt));
+  }
+  return found;
+}
+
+function jsonObjectKeySets(source) {
+  return callArguments(source, "jsonb_build_object").map((argumentsSql) => {
+    const args = splitTopLevel(argumentsSql);
+    if (args.length % 2 !== 0) throw new Error("FEHLER: ungerader jsonb_build_object-Aufruf");
+    const keys = [];
+    for (let index = 0; index < args.length; index += 2) {
+      const key = args[index].match(/^'([^']+)'(?:::text)?$/i)?.[1];
+      if (key) keys.push(key);
+    }
+    return keys;
+  });
+}
+
+function hasExactKeySet(keySets, expected) {
+  const wanted = new Set(expected);
+  return keySets.some((keys) => keys.length === wanted.size
+    && keys.every((key) => wanted.has(key)));
+}
+
 function parseInsertRows(sql, tableName) {
-  const match = sql.match(
-    new RegExp(`insert into public\\.${tableName}[^]*?values([\\s\\S]*?)\\s*;`, "i"),
-  );
-  if (!match) throw new Error(`FEHLER: no ${tableName} insert block`);
-  const body = match[1];
+  const insert = new RegExp(`insert into public\\.${tableName}\\b`, "i").exec(sql);
+  if (!insert) throw new Error(`FEHLER: no ${tableName} insert block`);
+  const values = /\bvalues\b/i.exec(sql.slice(insert.index));
+  if (!values) throw new Error(`FEHLER: no ${tableName} values block`);
+  const bodyStart = insert.index + values.index + values[0].length;
+  let bodyEnd = -1;
+  let quoted = false;
+  for (let index = bodyStart; index < sql.length; index++) {
+    const char = sql[index];
+    if (char === "'") {
+      if (quoted && sql[index + 1] === "'") index += 1;
+      else quoted = !quoted;
+      continue;
+    }
+    if (!quoted && char === ";") {
+      bodyEnd = index;
+      break;
+    }
+  }
+  if (bodyEnd < 0) throw new Error(`FEHLER: incomplete ${tableName} insert block`);
+  const body = sql.slice(bodyStart, bodyEnd);
   const rows = [];
   const rowRe = /\(\s*'([^']+)'\s*,\s*(null|[0-9]+|'[^']*')\s*,\s*([^,]+)\s*,\s*'([^']+)'\s*\)/gi;
   let matchRow;
@@ -123,6 +230,12 @@ const migrationSql = fs.readFileSync(
   "supabase/migrations/20260809220000_private_pilot_ops.sql",
   "utf8",
 );
+const pilotMigrationSql = fs.readFileSync(
+  "supabase/migrations/20260814120000_radar_max_manual_pilot.sql",
+  "utf8",
+);
+const compatMigrationPath = "supabase/migrations/20260815120000_private_export_radar_pilot_compat.sql";
+const compatMigrationSql = fs.readFileSync(compatMigrationPath, "utf8");
 const radarMigrationSql = fs.readFileSync(
   "supabase/migrations/20260809180000_event_radar_local_basis.sql",
   "utf8",
@@ -144,7 +257,30 @@ const privateOpsControllerSql = fs.readFileSync("src/controllers/accountSelfServ
 const authDriverSql = fs.readFileSync("src/lib/authDriver.js", "utf8");
 const etappe9Plan = fs.readFileSync("docs/ETAPPE_9_PLAN.md", "utf8");
 
-const constraintDrops = [...`${radarMigrationSql}\n${migrationSql}`.matchAll(
+const migrationFiles = fs.readdirSync("supabase/migrations")
+  .filter((name) => /^\d{14}_.+\.sql$/.test(name))
+  .sort();
+const compatMigrationName = compatMigrationPath.split("/").at(-1);
+const compatExecutable = compactSql(compatMigrationSql);
+
+expect(
+  "Historische Private-Ops-Migration besitzt wieder exakt ihre belegte Blob-Identität",
+  gitBlobId(migrationSql) === "2143d36957f5be56e9973e15584d02769b9c4222",
+);
+expect(
+  "Forward-Migration existiert genau einmal und folgt lexikografisch auf den Radar-Max-Pilot",
+  migrationFiles.filter((name) => name === compatMigrationName).length === 1
+    && migrationFiles.indexOf(compatMigrationName)
+      === migrationFiles.indexOf("20260814120000_radar_max_manual_pilot.sql") + 1,
+);
+expect(
+  "Forward-Migration ist atomar, additiv und enthält keine destruktiven Radar-Operationen",
+  /^begin\s*;/.test(compatExecutable)
+    && /commit\s*;$/.test(compatExecutable)
+    && !/\b(?:drop|truncate)\s+(?:table\s+)?public\.kd_radar_/.test(compatExecutable),
+);
+
+const constraintDrops = [...`${radarMigrationSql}\n${migrationSql}\n${retentionFixSql}\n${pilotMigrationSql}\n${compatMigrationSql}`.matchAll(
   /drop constraint(?: if exists)?\s+([a-z0-9_]+)/gi,
 )].map((match) => match[1]);
 expect(
@@ -153,32 +289,121 @@ expect(
 );
 expect(
   "Private-Ops benötigt auf dem nachweislich leeren Erstradar keine Datenbackfills",
-  !/update public\.kd_radar_operations\s+set terminal_at/i.test(migrationSql)
-    && !/update public\.kd_radar_share_operations\s+set terminal_at/i.test(migrationSql)
-    && !/update public\.kd_radar_checks\s+set terminal_at/i.test(migrationSql)
-    && !/drop constraint/i.test(migrationSql),
+  !/update public\.kd_radar_operations\s+set terminal_at/i.test(`${migrationSql}\n${compatMigrationSql}`)
+    && !/update public\.kd_radar_share_operations\s+set terminal_at/i.test(`${migrationSql}\n${compatMigrationSql}`)
+    && !/update public\.kd_radar_checks\s+set terminal_at/i.test(`${migrationSql}\n${compatMigrationSql}`)
+    && !/update public\.kd_radar_pilot_import_operations/i.test(compatMigrationSql)
+    && !/drop constraint/i.test(`${migrationSql}\n${compatMigrationSql}`),
 );
 expect(
   "Orphan-Retention deaktiviert Ziele und Checks sofort anhand aktiver Abos",
-  /subscription_status = 'active'/i.test(retentionFixSql)
+  /subscription_status = 'active'/i.test(compatMigrationSql)
     && /target_status = case when v_has_active_subscription then 'active' else 'retired' end/i.test(retentionFixSql)
     && /update public\.kd_radar_checks[\s\S]*?set active = false/i.test(retentionFixSql),
 );
 expect(
   "30-Tage-Purge verarbeitet den gesamten Zielgraph einzeln und setzt Fehlmengen fort",
-  /for v_target_id in[\s\S]*?delete from public\.kd_radar_reviews[\s\S]*?delete from public\.kd_radar_targets/i.test(retentionFixSql)
-    && /exception when others[\s\S]*?v_failed_targets := v_failed_targets \+ 1/i.test(retentionFixSql)
-    && /current_setting\('kd\.private_retention_purge', true\) = '1'/i.test(retentionFixSql)
-    && !/not exists \(select 1 from public\.kd_radar_events/i.test(retentionFixSql),
+  /for v_target_id in[\s\S]*?delete from public\.kd_radar_reviews[\s\S]*?delete from public\.kd_radar_targets/i.test(compatMigrationSql)
+    && /exception when others[\s\S]*?v_failed_targets := v_failed_targets \+ 1/i.test(compatMigrationSql)
+    && /set_config\('kd\.private_retention_purge', '1', true\)/i.test(compatMigrationSql)
+    && /set_config\('kd\.private_retention_purge', '0', true\)/i.test(compatMigrationSql)
+    && !/not exists \(select 1 from public\.kd_radar_events/i.test(compatMigrationSql),
 );
 
 const privateSettingsColumns = migrationSql.match(
   /create table public\.kd_private_settings\s*\(([\s\S]*?)\n\);/i,
 )?.[1] || "";
 expect(
-  "Private-Settings enthält genau einen standardmäßig ausgeschalteten Export-Not-Aus",
-  [...privateSettingsColumns.matchAll(/\bexport_enabled\b/gi)].length === 1
-    && /^\s*export_enabled boolean not null default false,?\s*$/mi.test(privateSettingsColumns),
+  "Export-Not-Aus wird nur vorwärts addiert, startet false und aktiviert keine Daten",
+  [...privateSettingsColumns.matchAll(/\bexport_enabled\b/gi)].length === 0
+    && (compatMigrationSql.match(/alter table public\.kd_private_settings\s+add column export_enabled boolean not null default false\s*;/gi) || []).length === 1
+    && (compatExecutable.match(/\bexport_enabled\b/g) || []).length === 1,
+);
+
+const radarPreflightStart = compatMigrationSql.search(/do \$\$/i);
+const radarFirstAlter = compatMigrationSql.search(/alter table public\.kd_radar_pilot_import_operations/i);
+const requiredPreflightMarkers = [
+  "to_regclass('public.kd_radar_pilot_import_operations')",
+  "kd_radar_pilot_import_operations_missing",
+  "kd_radar_pilot_import_operations_schema_drift",
+  "kd_radar_pilot_import_operations_rls_drift",
+  "kd_radar_pilot_import_operations_constraint_drift",
+  "select count(*) from public.kd_radar_pilot_import_operations",
+  "kd_radar_pilot_import_operations_not_empty",
+];
+expect(
+  "Schema-/Leerheitszaun steht vollständig vor jeder Anpassung der Pilot-Operationen",
+  radarPreflightStart >= 0
+    && radarFirstAlter > radarPreflightStart
+    && requiredPreflightMarkers.every((marker) => {
+      const index = compatMigrationSql.indexOf(marker, radarPreflightStart);
+      return index > radarPreflightStart && index < radarFirstAlter;
+    })
+    && /if v_row_count <> 0 then/i.test(compatMigrationSql.slice(radarPreflightStart, radarFirstAlter)),
+);
+expect(
+  "Pilot-Import-TTL ergänzt beide Spalten, partiellen Index und den bestehenden 30-Tage-Trigger",
+  /alter table public\.kd_radar_pilot_import_operations\s+add column terminal_at timestamptz,\s+add column expires_at timestamptz\s*;/i.test(compatMigrationSql)
+    && /create index kd_radar_pilot_import_operations_expires\s+on public\.kd_radar_pilot_import_operations \(expires_at\)\s+where expires_at is not null\s*;/i.test(compatMigrationSql)
+    && /create trigger kd_radar_pilot_import_operations_private_ttl\s+before insert or update on public\.kd_radar_pilot_import_operations\s+for each row execute function public\.kd_private_mark_operation_ttl\(\)\s*;/i.test(compatMigrationSql)
+    && /new\.expires_at := coalesce\(new\.expires_at, new\.terminal_at \+ interval '30 days'\)/i.test(migrationSql),
+);
+
+const compatOwnDataSql = extractFunction(compatMigrationSql, "kd_private_own_data");
+const ownDataKeySets = jsonObjectKeySets(compatOwnDataSql);
+expect(
+  "Own-Data projiziert Radar-Fähigkeiten und Pilot-Importzeilen mit exakt erlaubten Schlüsseln",
+  hasExactKeySet(ownDataKeySets, [
+    "radar_unlimited", "radar_review", "radar_pilot", "updated_at",
+  ])
+    && hasExactKeySet(ownDataKeySets, [
+      "operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at",
+    ])
+    && hasExactKeySet(ownDataKeySets, [
+      "capabilities", "accountState", "subscriptions", "receipts", "shares",
+      "operations", "shareOperations", "reviews", "importOperations",
+    ]),
+);
+expect(
+  "Own-Data isoliert Pilot-Importoperationen am angefragten Actor und exportiert actor_id nicht",
+  /from public\.kd_radar_pilot_import_operations o\s+where o\.actor_id = p_account_id/i.test(compatOwnDataSql)
+    && !hasExactKeySet(ownDataKeySets, [
+      "actor_id", "operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at",
+    ]),
+);
+
+const compatRetentionSql = extractFunction(compatMigrationSql, "kd_private_retention_run");
+const retentionKeySets = jsonObjectKeySets(compatRetentionSql);
+const retentionTables = extractTables(compatMigrationSql, "kd_private_retention_run", "from");
+expect(
+  "Retention erfasst alle bisherigen Klassen plus Pilot-Importoperationen im Dry-Run",
+  [
+    "kd_radar_operations",
+    "kd_radar_share_operations",
+    "kd_radar_pilot_import_operations",
+    "kd_radar_checks",
+    "kd_ai_log",
+    "kd_private_delete_operations",
+    "kd_radar_targets",
+  ].every((table) => retentionTables.has(table))
+    && hasExactKeySet(retentionKeySets, [
+      "operations", "shareOperations", "pilotImportOperations", "checks",
+      "aiLogs", "deleteLedger", "orphanTargets",
+    ]),
+);
+expect(
+  "Pilot-Import-Retention nutzt 30 Tage in Dry-Run und Purge mit begrenzter Reihenfolge",
+  /from public\.kd_radar_pilot_import_operations\s+where coalesce\(expires_at, created_at \+ interval '30 days'\) <= now\(\)/i.test(compatRetentionSql)
+    && /delete from public\.kd_radar_pilot_import_operations\s+where ctid in \(\s*select ctid from public\.kd_radar_pilot_import_operations\s+where coalesce\(expires_at, created_at \+ interval '30 days'\) <= now\(\)\s+order by expires_at nulls first, created_at limit v_limit\s*\)/i.test(compatRetentionSql),
+);
+expect(
+  "Fortgeschriebene Retention bewahrt Lock, Purge-Not-Aus, Zielgraph und Fehlerfortsetzung",
+  /pg_try_advisory_xact_lock\(hashtextextended\('kd_private_retention_run', 0\)\)/i.test(compatRetentionSql)
+    && /where singleton and purge_enabled/i.test(compatRetentionSql)
+    && /delete from public\.kd_radar_reviews r\s+using public\.kd_radar_event_versions v, public\.kd_radar_events e/i.test(compatRetentionSql)
+    && /delete from public\.kd_radar_targets where target_id = v_target_id/i.test(compatRetentionSql)
+    && /exception when others[\s\S]*?v_failed_targets := v_failed_targets \+ 1/i.test(compatRetentionSql)
+    && hasExactKeySet(retentionKeySets, ["purgedTargets", "failedTargets"]),
 );
 
 const accessLookupIndex = edgeFunctionSql.indexOf('.from("kd_account_access")');
@@ -590,14 +815,20 @@ expect(
     && authDriverSql.includes("async function reauthenticate(passwort)"),
 );
 
-const privateGrantBlock = migrationSql.match(/grant execute on function public\.kd_private_provider_allowed[\s\S]*?to service_role;/i) || [];
+const privateGrantBlock = compatMigrationSql.match(/grant execute on function public\.kd_private_mark_operation_ttl[\s\S]*?to service_role;/i) || [];
 expect(
   "Private RPCs sind nicht für Browser-Rollen ausführbar",
   privateGrantBlock.length === 1 && /to service_role;/i.test(privateGrantBlock[0])
-    && !/to\s+(public|anon|authenticated)\b/i.test(privateGrantBlock[0]),
+    && !/to\s+(public|anon|authenticated)\b/i.test(privateGrantBlock[0])
+    && /revoke all on table public\.kd_radar_pilot_import_operations\s+from public, anon, authenticated;/i.test(compatMigrationSql)
+    && /grant all on table public\.kd_radar_pilot_import_operations\s+to service_role;/i.test(compatMigrationSql)
+    && /notify pgrst, 'reload schema';/i.test(compatMigrationSql),
 );
 
-const deleteMapRows = parseInsertRows(migrationSql, "kd_private_delete_map");
+const deleteMapRows = [
+  ...parseInsertRows(migrationSql, "kd_private_delete_map"),
+  ...parseInsertRows(compatMigrationSql, "kd_private_delete_map"),
+];
 expect(
   "Lösch-Mapping enthält alle Kern-Kontotabellen",
   new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_account_access")
@@ -613,10 +844,20 @@ expect(
     && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_operations")
     && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_share_operations")
     && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_receipts")
-    && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_reviews"),
+    && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_reviews")
+    && new Set(deleteMapRows.map((row) => row.storageClass)).has("kd_radar_pilot_import_operations"),
+);
+const pilotImportDeleteRow = deleteMapRows.find(
+  (row) => row.storageClass === "kd_radar_pilot_import_operations",
+);
+expect(
+  "Pilot-Importoperationen sind genau actor-gebunden und cascaden beim Self-Delete",
+  pilotImportDeleteRow?.accountColumn === "actor_id"
+    && pilotImportDeleteRow?.action === "cascade"
+    && deleteMapRows.filter((row) => row.storageClass === "kd_radar_pilot_import_operations").length === 1,
 );
 
-const ownDataTables = extractTables(migrationSql, "kd_private_own_data", "from");
+const ownDataTables = extractTables(compatMigrationSql, "kd_private_own_data", "from");
 const deleteDataTables = extractTables(migrationSql, "kd_private_delete_begin", "from");
 const operationDataTables = extractTables(migrationSql, "kd_private_delete_begin", "delete from");
 const accountBoundTables = new Set(
@@ -624,6 +865,31 @@ const accountBoundTables = new Set(
     .filter((table) => !table.startsWith("kd_private_")),
 );
 const mappedTables = new Set(deleteMapRows.map((row) => row.storageClass));
+eqSet(
+  mappedTables,
+  new Set([
+    "auth.users",
+    "kd_account_access",
+    "kd_personal",
+    "kd_ai_log",
+    "kd_series_watch",
+    "kd_shared_articles",
+    "kd_shared_article_claims",
+    "kd_radar_capabilities",
+    "kd_radar_account_state",
+    "kd_radar_subscriptions",
+    "kd_radar_target_shares",
+    "kd_radar_operations",
+    "kd_radar_share_operations",
+    "kd_radar_receipts",
+    "kd_radar_reviews",
+    "kd_radar_pilot_import_operations",
+    "browser_auth_session",
+    "browser_account_cache",
+    "logical_dumps",
+  ]),
+  "Delete-Mapping ist über historische und Forward-Migration exakt und erschöpfend",
+);
 const missingMapping = [...accountBoundTables].filter((table) => !mappedTables.has(table));
 expect("Alle accountgebundenen Tabellen aus Own-Data + Delete-Pfad sind im Delete-Mapping erfasst", missingMapping.length === 0);
 const exportRequired = deleteMapRows
@@ -645,8 +911,9 @@ expect(
 expect(
   "Self-Delete löscht Auth zuerst und stützt alle Projektionen auf Cascade",
   /foreign key \(account_id\) references auth\.users\(id\) on delete cascade/i.test(`${radarMigrationSql}\n${migrationSql}`)
-    && /foreign key \(actor_id\) references auth\.users\(id\) on delete cascade/i.test(`${radarMigrationSql}\n${migrationSql}`)
+    && /actor_id\s+uuid\s+not null references auth\.users\(id\) on delete cascade/i.test(pilotMigrationSql)
     && !/delete from public\.kd_personal/i.test(extractFunction(migrationSql, "kd_private_delete_begin"))
+    && !/delete from public\.kd_radar_(?:targets|events|event_versions|evidence)/i.test(extractFunction(migrationSql, "kd_private_delete_begin"))
     && edgeFunctionSql.indexOf("admin.auth.admin.deleteUser") < edgeFunctionSql.indexOf('rpc("kd_private_delete_finish"'),
 );
 expect(
@@ -654,6 +921,7 @@ expect(
   /create trigger kd_radar_operations_private_ttl/i.test(migrationSql)
     && /create trigger kd_radar_checks_private_ttl/i.test(migrationSql)
     && /create trigger kd_radar_subscriptions_private_orphan/i.test(migrationSql)
+    && /create trigger kd_radar_pilot_import_operations_private_ttl/i.test(compatMigrationSql)
     && /delete from public\.kd_radar_target_shares[\s\S]+p_share_enabled/i.test(radarMigrationSql)
     && /delete from public\.kd_radar_receipts/i.test(radarMigrationSql),
 );
