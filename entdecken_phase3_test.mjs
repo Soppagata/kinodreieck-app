@@ -488,10 +488,13 @@ await act(async () => { button(rejectedImportUi.container, "Radar").click(); awa
 await setTextareaValue(rejectedImportUi.container, "Pilot-Import JSON", JSON.stringify(nogaPilotImportPayload));
 await act(async () => { button(rejectedImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
 check("NOGA-Callback-Rejection zeigt sofort Domain-Mismatch-Text und kein Outbox-/Ready-Kontext", () => {
-  assert.ok(rejectedImportUi.container.textContent.includes("Domain-Mismatch"));
-  assert.ok(rejectedImportUi.container.textContent.includes("radar_evidence_url_mismatch"));
-  assert.equal(rejectedImportUi.container.textContent.includes("Outbox"), false);
-  assert.equal(rejectedImportUi.container.textContent.includes("Import ist im Feed bestätigt"), false);
+  const rejectedImportMessage = [...rejectedImportUi.container.querySelectorAll(".kd-entdecken-proposal .kd-entdecken-kleingedruckt")]
+    .find((entry) => entry.textContent.includes("Domain-Mismatch"));
+  assert.ok(rejectedImportMessage);
+  assert.ok(rejectedImportMessage.textContent.includes("Domain-Mismatch"));
+  assert.ok(rejectedImportMessage.textContent.includes("radar_evidence_url_mismatch"));
+  assert.equal(rejectedImportMessage.textContent.includes("Outbox"), false);
+  assert.equal(rejectedImportMessage.textContent.includes("Import ist im Feed bestätigt"), false);
 });
 await rejectedImportUi.cleanup();
 let nogaReadyImportUi = await mountPilotUi({
