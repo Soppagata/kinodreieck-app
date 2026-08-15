@@ -753,6 +753,12 @@ const invalidOwnDataFields = expectBoundaryError(
 );
 expect("Unbekannte Zusatzfelder bei eigenen Daten brechen den Zugriff", invalidOwnDataFields.code === ERROR_CODES.INVALID_RESPONSE);
 
+const invalidOwnDataRadarNull = expectBoundaryError(
+  "Radar:null wird als Boundary-Fehler verworfen",
+  () => validateOwnData({ ...validOwnData, data: { ...validOwnData.data, radar: null } }),
+);
+expect("Radar:null wird als invalid-response statt TypeError abgelehnt", invalidOwnDataRadarNull.code === ERROR_CODES.INVALID_RESPONSE);
+
 const validImportOperation = {
   operation_id: "11111111-1111-4111-8111-111111111111",
   request_hash: "0123456789abcdef0123456789abcdef",

@@ -77,13 +77,13 @@ export function validateOwnData(value) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate", reason: "unknown-field" });
   }
   const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews", "importOperations"];
-  const radarCapabilitiesWithType = (value.data.radar.capabilities === null) || (
+  const radarCapabilitiesWithType = fixedObject(value.data.radar) && ((value.data.radar.capabilities === null) || (
     exactKeys(value.data.radar.capabilities, ["radar_unlimited", "radar_review", "radar_pilot", "updated_at"])
     && typeof value.data.radar.capabilities.radar_unlimited === "boolean"
     && typeof value.data.radar.capabilities.radar_review === "boolean"
     && typeof value.data.radar.capabilities.radar_pilot === "boolean"
     && iso8601TimestampWithOffset(value.data.radar.capabilities.updated_at)
-  );
+  ));
   const valid = exactKeys(value.data.auth, ["createdAt", "lastSignInAt", "providers"])
     && (value.data.auth.createdAt === null || typeof value.data.auth.createdAt === "string")
     && (value.data.auth.lastSignInAt === null || typeof value.data.auth.lastSignInAt === "string")
