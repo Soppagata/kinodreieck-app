@@ -38,31 +38,27 @@ const deferredTriggerFixFunctions = [
   "kd_check_radar_confirmed_version_pointer",
 ];
 
+const normalizedSqlStatements = (source) => stripComments(source)
+  .split(";")
+  .map((statement) => canonical(statement)
+    .replace(/\)(?=\S)/g, ") ")
+    .replace(/\s*=\s*/g, "="))
+  .filter(Boolean);
+
+const allowedDeferredTriggerFixStatements = deferredTriggerFixFunctions.flatMap((name) => [
+  `alter function public.${name}() security definer`,
+  `alter function public.${name}() set search_path=pg_catalog,public`,
+]);
+
 const assertDeferredTriggerFix = (source) => {
-  const normalized = compact(source);
-  const canonicalSource = canonical(source);
-  assert.match(normalized, /^begin\s*;/);
-  assert.match(normalized, /commit\s*;$/);
-  assert.equal((normalized.match(/\balter function\b/g) || []).length, 4);
-
-  const alteredFunctions = [...normalized.matchAll(/\balter function\s+public\.([a-z_][a-z0-9_]*)\s*\(/g)]
-    .map((match) => match[1]);
-  assert.deepEqual(new Set(alteredFunctions), new Set(deferredTriggerFixFunctions));
-
-  for (const name of deferredTriggerFixFunctions) {
-    const call = escapeRegex(`public.${name}()`);
-    assert.match(canonicalSource, new RegExp(`alter function ${call}security definer;`));
-    assert.match(
-      normalized,
-      new RegExp(`alter function\\s+${call}\\s+set search_path\\s*=\\s*pg_catalog\\s*,\\s*public\\s*;`),
-    );
-  }
-
-  assert.doesNotMatch(normalized, /\b(?:create|drop)\s+(?:or replace\s+)?function\b/);
-  assert.doesNotMatch(normalized, /\b(?:create|alter|drop|disable|enable)\s+(?:constraint\s+)?trigger\b/);
-  assert.doesNotMatch(normalized, /\b(?:grant|revoke)\b/);
-  assert.doesNotMatch(normalized, /\b(?:insert into|update|delete from|truncate)\b/);
-  assert.doesNotMatch(normalized, /\balter table\b/);
+  const statements = normalizedSqlStatements(source);
+  assert.equal(statements.length, allowedDeferredTriggerFixStatements.length + 2);
+  assert.equal(statements[0], "begin");
+  assert.equal(statements.at(-1), "commit");
+  assert.deepEqual(
+    new Set(statements.slice(1, -1)),
+    new Set(allowedDeferredTriggerFixStatements),
+  );
 };
 
 const findBalancedEnd = (source, openAt) => {
@@ -308,6 +304,9 @@ check("Red: authenticated scheitert erst an den beiden deferred Pointer-Reads", 
 
 check("Green: additive Migration hebt nur die zwei deferred Guards in den Owner-Kontext", () => {
   assertDeferredTriggerFix(triggerFixSql);
+  assertDeferredTriggerFix(triggerFixSql
+    .replace(/begin;/i, "/* erlaubter Kommentar; mit Semikolon */\n  begin ; -- Transaktionsstart")
+    .replace(/commit;/i, "-- Transaktionsende\n  commit ;\n"));
   assert.equal(sha256(baseSql), "d2bfe936e7ecf3b20c2c0fb5a761a87dbee42149b8b733e0e63fec5af82b94c4");
 });
 
@@ -321,6 +320,10 @@ check("Mutationen an Definer, Searchpath, ACL oder einer dritten Guard-Funktion 
   assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(
     /commit;/i,
     "alter function public.kd_guard_radar_event_version() security definer;\ncommit;",
+  )));
+  assert.throws(() => assertDeferredTriggerFix(triggerFixSql.replace(
+    /commit;/i,
+    "alter routine public.kd_guard_radar_event_version() security definer;\ncommit;",
   )));
 });
 
