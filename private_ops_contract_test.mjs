@@ -76,8 +76,8 @@ function compactSql(value) {
 }
 
 const EXPECTED_PILOT_IMPORT_CONSTRAINTS = [
-  "kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:false:foreignkey(actor_id)referencesauth.users(id)ondeletecascade",
-  "kd_radar_pilot_import_operations_pkey:p:false:false:true:false:primarykey(actor_id,operation_id)",
+  "kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:true:foreignkey(actor_id)referencesauth.users(id)ondeletecascade",
+  "kd_radar_pilot_import_operations_pkey:p:false:false:true:true:primarykey(actor_id,operation_id)",
   "kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~'^[a-f0-9]{32}$')",
   "kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)='object')",
 ];
@@ -398,6 +398,24 @@ expect(
   "Exakter Schemazaun verwirft result ungleich object als Constraint-Drift",
   resultNotObjectMutation !== compatMigrationSql
     && !hasExactPilotImportConstraintPreflight(resultNotObjectMutation),
+);
+const foreignKeyInheritabilityMutation = compatMigrationSql.replace(
+  "actor_id_fkey:f:false:false:true:true:foreignkey",
+  "actor_id_fkey:f:false:false:true:false:foreignkey",
+);
+expect(
+  "Exakter Schemazaun verwirft falsches connoinherit am Actor-FK als Constraint-Drift",
+  foreignKeyInheritabilityMutation !== compatMigrationSql
+    && !hasExactPilotImportConstraintPreflight(foreignKeyInheritabilityMutation),
+);
+const primaryKeyInheritabilityMutation = compatMigrationSql.replace(
+  "operations_pkey:p:false:false:true:true:primarykey",
+  "operations_pkey:p:false:false:true:false:primarykey",
+);
+expect(
+  "Exakter Schemazaun verwirft falsches connoinherit am PK als Constraint-Drift",
+  primaryKeyInheritabilityMutation !== compatMigrationSql
+    && !hasExactPilotImportConstraintPreflight(primaryKeyInheritabilityMutation),
 );
 expect(
   "Pilot-Import-TTL ergänzt beide Spalten, partiellen Index und den bestehenden 30-Tage-Trigger",

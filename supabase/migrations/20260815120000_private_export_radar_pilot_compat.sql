@@ -82,8 +82,8 @@ begin
    where pc.conrelid = v_table;
 
   if v_constraints is distinct from array[
-    'kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:false:foreignkey(actor_id)referencesauth.users(id)ondeletecascade',
-    'kd_radar_pilot_import_operations_pkey:p:false:false:true:false:primarykey(actor_id,operation_id)',
+    'kd_radar_pilot_import_operations_actor_id_fkey:f:false:false:true:true:foreignkey(actor_id)referencesauth.users(id)ondeletecascade',
+    'kd_radar_pilot_import_operations_pkey:p:false:false:true:true:primarykey(actor_id,operation_id)',
     'kd_radar_pilot_import_operations_request_hash_check:c:false:false:true:false:check(request_hash~''^[a-f0-9]{32}$'')',
     'kd_radar_pilot_import_operations_result_check:c:false:false:true:false:check(jsonb_typeof(result)=''object'')'
   ]::text[] then
