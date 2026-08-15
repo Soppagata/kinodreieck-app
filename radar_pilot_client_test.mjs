@@ -152,6 +152,22 @@ await check("Pilot-Event-Evidence muss exakt zwei sichere, eindeutige Quellen-Ob
   assert.equal(reorderedResult.state, originalState);
   assert.equal(reorderedResult.reason, "pilot-feed-invalid");
 });
+await check("Pilot-Event-Evidence akzeptiert portlose Subdomain-URLs und erzwingt eindeutige Quelle/Domain in Kanonreihenfolge", () => {
+  const subdomainEvidence = [
+    { sourceId: "source:editorial", sourceDomain: "example.com", url: "https://sub.example.com/editorial", retrievedAt: later },
+    { sourceId: "source:official", sourceDomain: "news.example.com", url: "https://news.example.com/official", retrievedAt: instant },
+  ];
+  const canonicalSubdomainEvidence = [...subdomainEvidence].sort(comparePilotEvidence);
+  const reversedSubdomainEvidence = [...canonicalSubdomainEvidence].reverse();
+  assert.equal(
+    C.validateRadarPilotFeed(feed({ events: [event({ evidence: canonicalSubdomainEvidence })] })).ok,
+    true,
+  );
+  assert.equal(
+    C.validateRadarPilotFeed(feed({ events: [event({ evidence: reversedSubdomainEvidence })] })).ok,
+    false,
+  );
+});
 
 await check("Importplattform folgt exakt dem E16A1-Eventtypvertrag", () => {
   assert.equal(C.validateRadarPilotImportPayload(importPayload({
@@ -820,6 +836,35 @@ await check("Controllerprojektion ersetzt Fixtures nur im aktiven Kontopilot", a
   const guest = C.projectEntdeckenRadarPilot({ radarAuthority: "guest", radarState: R.createEmptyLocalRadar(), localEvents: localRows });
   assert.equal(guest.events, localRows);
   assert.equal(guest.radarReview, false);
+});
+await check("Projektions-Kontopfad liefert tiefe Kopie und Deep-Freeze im aktiven Kontokontext", () => {
+  const account = R.reconcileAccountRadarPilotFeed(R.createEmptyLocalRadar({ authority: "account-cache" }), feed({ radarReview: true })).state;
+  const projected = C.projectEntdeckenRadarPilot({
+    clientEnabled: true,
+    radarAuthority: "account-cache",
+    radarState: account,
+    localEvents: [],
+  });
+  const projectedEvent = projected.events[0];
+  const sourceEvent = account.pilot.events[0];
+  const sourceEvidence = sourceEvent.evidence;
+
+  assert.equal(projected.active, true);
+  assert.equal(projected.radarReview, true);
+  assert.equal(Object.isFrozen(projected), true);
+  assert.equal(Object.isFrozen(projected.events), true);
+  assert.equal(Object.isFrozen(projectedEvent), true);
+  assert.equal(Object.isFrozen(projectedEvent.evidence), true);
+  assert.equal(Object.isFrozen(projectedEvent.evidence[0]), true);
+  assert.equal(Object.isFrozen(projectedEvent.evidence[1]), true);
+  assert.equal(projected.events.length, 1);
+  assert.equal(projectedEvent.evidence.length, sourceEvidence.length);
+  assert.notStrictEqual(projected.events, account.pilot.events);
+  assert.notStrictEqual(projectedEvent, sourceEvent);
+  assert.notStrictEqual(projectedEvent.evidence, sourceEvidence);
+  assert.notStrictEqual(projectedEvent.evidence[0], sourceEvidence[0]);
+  assert.notStrictEqual(projectedEvent.evidence[1], sourceEvidence[1]);
+  assert.deepEqual(projected.events, account.pilot.events);
 });
 
 await check("Clientquellen leiten Freischaltung nicht aus Settings, Proposal, Share oder Provider ab", () => {

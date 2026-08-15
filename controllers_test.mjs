@@ -668,6 +668,6 @@ check("Pilot-Import-Queue bleibt in aktiver Projektion ohne sichtbares Event", (
   return projection.active === true
     && projection.radarReview === true
     && projection.events.length === 0;
-}));
+})());
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);
