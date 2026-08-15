@@ -610,12 +610,24 @@ begin
         projected_evidence.evidence_id
       ), '[]'::jsonb)
         from (
-          select ev.evidence_id, ev.source_id, rs.domain,
-                 ev.canonical_url, ev.retrieved_at
-            from public.kd_radar_evidence ev
-            join public.kd_radar_sources rs on rs.source_id = ev.source_id
-           where ev.event_version_id = v.event_version_id
-           order by ev.source_id, ev.canonical_url, ev.retrieved_at, ev.evidence_id
+          select family_winners.evidence_id, family_winners.source_id,
+                 family_winners.domain, family_winners.canonical_url,
+                 family_winners.retrieved_at
+            from (
+              select ev.evidence_id, ev.source_id, rs.domain,
+                     ev.canonical_url, ev.retrieved_at,
+                     row_number() over (
+                       partition by rs.publisher_family
+                       order by ev.source_id, ev.canonical_url,
+                                ev.retrieved_at, ev.evidence_id
+                     ) as publisher_family_rank
+                from public.kd_radar_evidence ev
+                join public.kd_radar_sources rs on rs.source_id = ev.source_id
+               where ev.event_version_id = v.event_version_id
+            ) family_winners
+           where family_winners.publisher_family_rank = 1
+           order by family_winners.source_id, family_winners.canonical_url,
+                    family_winners.retrieved_at, family_winners.evidence_id
            limit 2
         ) projected_evidence
     )

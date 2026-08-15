@@ -660,7 +660,7 @@ check("Feed gibt target_key als targetId aus und leakt keine internen IDs oder g
   assert.doesNotMatch(feedNormalized, /subscriber_count|count\s*\([^)]*account_id/);
 });
 
-check("Event-Evidenz projiziert exakt zwei gespeicherte Registry-Quellen der aktuellen bestätigten Version", () => {
+check("Event-Evidenz dedupliziert Registry-Quellen vor LIMIT deterministisch nach Publisherfamilie", () => {
   const eventProjection = feedPairs.find((pairs) => {
     const keys = pairs.map(([key]) => key);
     return keys.length === 10 && keys.includes("eventId") && keys.includes("evidence");
@@ -678,7 +678,25 @@ check("Event-Evidenz projiziert exakt zwei gespeicherte Registry-Quellen der akt
   assert.match(evidenceValue, /from\s*\(\s*select\b/);
   assert.match(evidenceValue, /from public\.kd_radar_evidence\s+[a-z_][a-z0-9_]*/);
   assert.match(evidenceValue, /join public\.kd_radar_sources\s+[a-z_][a-z0-9_]*\s+on\s+[a-z_][a-z0-9_]*\.source_id\s*=\s*[a-z_][a-z0-9_]*\.source_id/);
-  assert.match(evidenceValue, /event_version_id\s*=\s*v\.event_version_id/);
+  assert.match(evidenceValue, /\bev\.event_version_id\s*=\s*v\.event_version_id\b/);
+
+  const familyRank = /row_number\s*\(\s*\)\s*over\s*\(\s*partition by\s+rs\.publisher_family\s+order by\s+ev\.source_id\s*,\s*ev\.canonical_url\s*,\s*ev\.retrieved_at\s*,\s*ev\.evidence_id\s*\)\s+as\s+([a-z_][a-z0-9_]*)/.exec(evidenceValue);
+  assert.ok(familyRank, "Deterministischer Winner je Registry-Publisherfamilie fehlt");
+  const familyRankName = familyRank[1];
+  const familyGuard = new RegExp(`where\\s+[a-z_][a-z0-9_]*\\.${escapeRegex(familyRankName)}\\s*=\\s*1\\b`).exec(evidenceValue);
+  assert.ok(familyGuard, "Publisherfamilien-Winner werden nicht vor LIMIT auf Rang 1 begrenzt");
+  const familyGuardAt = familyGuard.index;
+  const finalOrderAt = evidenceValue.lastIndexOf("order by");
+  const limitAt = evidenceValue.lastIndexOf("limit 2");
+  assert.ok(familyRank.index < familyGuardAt, "Publisherfamilien-Ranking muss vor dem Winner-Filter entstehen");
+  assert.ok(familyGuardAt < finalOrderAt && finalOrderAt < limitAt, "Dedup muss vor finaler Ordnung und LIMIT 2 geschehen");
+  assert.match(
+    evidenceValue.slice(finalOrderAt, limitAt),
+    /^order by\s+[a-z_][a-z0-9_]*\.source_id\s*,\s*[a-z_][a-z0-9_]*\.canonical_url\s*,\s*[a-z_][a-z0-9_]*\.retrieved_at\s*,\s*[a-z_][a-z0-9_]*\.evidence_id\s*$/,
+  );
+  assert.equal((evidenceValue.match(/from public\.kd_radar_evidence\b/g) || []).length, 1, "Evidence darf nicht durch weitere Reads vervielfacht werden");
+  assert.equal((evidenceValue.match(/join public\.kd_radar_sources\b/g) || []).length, 1, "Source-Registry darf nur einmal über source_id gebunden werden");
+  assert.match(baseSql, /create table public\.kd_radar_sources\s*\([\s\S]*?source_id\s+text\s+primary key/);
   assert.match(evidenceValue, /limit\s+2\b/);
   assert.match(
     evidenceValue,
