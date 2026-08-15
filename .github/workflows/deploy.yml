@@ -104,6 +104,9 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
+      VITE_RADAR_PILOT_CLIENT_ENABLED: ${{ vars.STAGING_RADAR_PILOT_CLIENT_ENABLED == 'true' && 'true' || 'false' }}
+      VITE_PRIVATE_SELF_SERVICE_ENABLED: ${{ vars.STAGING_PRIVATE_SELF_SERVICE_ENABLED == 'true' && 'true' || 'false' }}
+      VITE_ACCOUNT_DELETE_ENABLED: "false"
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:
@@ -160,6 +163,9 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
       VITE_AI_ENDPOINT_NAME: ${{ vars.AI_ENDPOINT_NAME }}
+      VITE_RADAR_PILOT_CLIENT_ENABLED: "false"
+      VITE_PRIVATE_SELF_SERVICE_ENABLED: "false"
+      VITE_ACCOUNT_DELETE_ENABLED: "false"
       VITE_BUILD_VERSION: ${{ github.sha }}
       EXPECTED_BUILD_VERSION: ${{ github.sha }}
     steps:

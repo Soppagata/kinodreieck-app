@@ -7,6 +7,26 @@ const exactKeys = (value, keys) => fixedObject(value)
   && Object.keys(value).length === keys.length
   && Object.keys(value).every((key) => keys.includes(key));
 const rows = (value, keys) => Array.isArray(value) && value.every((row) => exactKeys(row, keys));
+const rowWithExactKeysAndTypes = (value, keys, checks = {}) => Array.isArray(value) && value.every((row) => {
+  if (!exactKeys(row, keys)) return false;
+  for (const [field, isValid] of Object.entries(checks)) {
+    if (!isValid(row[field])) return false;
+  }
+  return true;
+});
+const stringOrNull = (value) => value === null || typeof value === "string";
+const ownRows = (value) => rowWithExactKeysAndTypes(
+  value,
+  ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
+  {
+    operation_id: (value) => typeof value === "string",
+    request_hash: (value) => typeof value === "string",
+    result: (value) => typeof value === "string",
+    terminal_at: stringOrNull,
+    expires_at: stringOrNull,
+    created_at: (value) => typeof value === "string",
+  },
+);
 
 export function validateOwnData(value) {
   if (!fixedObject(value) || value.ok !== true || value.schemaVersion !== 1 || !fixedObject(value.data)) {
@@ -16,7 +36,14 @@ export function validateOwnData(value) {
   if (!exactKeys(value.data, allowed)) {
     throw new BoundaryError(ERROR_CODES.INVALID_RESPONSE, { source: "account-self-service", operation: "own-data.validate", reason: "unknown-field" });
   }
-  const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews"];
+  const radarKeys = ["capabilities", "accountState", "subscriptions", "receipts", "shares", "operations", "shareOperations", "reviews", "importOperations"];
+  const radarCapabilitiesWithType = (value.data.radar.capabilities === null) || (
+    exactKeys(value.data.radar.capabilities, ["radar_unlimited", "radar_review", "radar_pilot", "updated_at"])
+    && typeof value.data.radar.capabilities.radar_unlimited === "boolean"
+    && typeof value.data.radar.capabilities.radar_review === "boolean"
+    && typeof value.data.radar.capabilities.radar_pilot === "boolean"
+    && stringOrNull(value.data.radar.capabilities.updated_at)
+  );
   const valid = exactKeys(value.data.auth, ["createdAt", "lastSignInAt", "providers"])
     && (value.data.auth.createdAt === null || typeof value.data.auth.createdAt === "string")
     && (value.data.auth.lastSignInAt === null || typeof value.data.auth.lastSignInAt === "string")
@@ -30,13 +57,14 @@ export function validateOwnData(value) {
     && rows(value.data.sharedArticles, ["publication_id", "article_id", "author", "payload", "published_at", "updated_at"])
     && rows(value.data.sharedClaims, ["share_token", "claimed_at"])
     && exactKeys(value.data.radar, radarKeys)
-    && (value.data.radar.capabilities === null || exactKeys(value.data.radar.capabilities, ["radar_unlimited", "radar_review", "updated_at"]))
+    && (radarCapabilitiesWithType)
     && (value.data.radar.accountState === null || exactKeys(value.data.radar.accountState, ["revision", "checksum", "updated_at"]))
     && rows(value.data.radar.subscriptions, ["target_id", "region", "scope", "subscription_status", "server_revision", "last_operation_id", "created_at", "updated_at"])
     && rows(value.data.radar.receipts, ["event_version_id", "receipt_status", "updated_at"])
     && rows(value.data.radar.shares, ["target_id", "share_status", "last_operation_id", "created_at", "updated_at"])
-    && rows(value.data.radar.operations, ["operation_id", "request_hash", "result", "created_at", "terminal_at", "expires_at"])
-    && rows(value.data.radar.shareOperations, ["operation_id", "request_hash", "result", "created_at", "terminal_at", "expires_at"])
+    && ownRows(value.data.radar.operations)
+    && ownRows(value.data.radar.shareOperations)
+    && ownRows(value.data.radar.importOperations)
     && rows(value.data.radar.reviews, ["review_id", "event_version_id", "decision", "reason", "source_id", "created_at"])
     && rows(value.data.retention, ["data_class", "retention_days", "purpose_bound", "purge_trigger"])
     && exactKeys(value.data.deletion, ["enabled", "lastStatus"])

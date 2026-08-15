@@ -2,9 +2,14 @@
 
 ## Quellkandidat
 
-Die additive Source-Migration `supabase/migrations/20260814120000_radar_max_manual_pilot.sql` ist der lokale Quellkandidat für den manuellen, capability-gebundenen Ein-Nutzer-Pilot. Der statische Vertrag wird durch `npm run test:radar-pilot-migration` geprüft.
+Die Forward-Kette bis und inkl. `20260815120000_private_export_radar_pilot_compat.sql` ist der lokale Quellkandidat für den privaten Export/Radar-Pilot-Vertrag. Der statische Vertrag wird durch `npm run test:private-ops-contract` und den SQL-Readback der Laufhistorie geprüft.
 
-Status außerhalb des Repository-Quellstands: **SAFE_SKIPPED**. Die Source-Migration im Repository ist noch nicht auf ein Backend angewandt. Backend-Write: **NEIN**. Migrationsanwendung: **NEIN**. Pilotaktivierung: **NEIN**. Praktische Abnahme: **NEIN**.
+- Vorkontext: 20260814120000 ergänzt den manualen Pilotvertrag, 20260815120000 ergänzt den Export-Kompatibilitätsvertrag (`importOperations`, Forward-Keys, atomare Default-Off-Kennzeichnung).
+- Basisvertrag bleibt `schemaVersion = 1`, bis ein Remote-Stand die Pilotaktivierung eindeutig bestätigt.
+
+Remote-Stand (vorgegeben): `20260809180000`, `20260809220000`, `20260810120000` bestätigt; `20260814120000` und `20260815120000` fehlen und sind nicht aktiviert.
+
+Status außerhalb des Repository-Quellstands: **SAFE_SKIPPED**. Die Source-Migrationen im Repository sind auf Backendentfernung noch nicht angewandt. Backend-Write: **NEIN**. Migrationsanwendung: **NEIN**. Pilotaktivierung: **NEIN**. Praktische Abnahme: **NEIN**.
 
 `supabase/current_schema.sql` bleibt bis zu einer später ausdrücklich autorisierten Remote-Anwendung samt anschließendem Readback unverändert. Es bildet keinen E16A1-Neustand ab.
 

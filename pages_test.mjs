@@ -82,10 +82,24 @@ check("_headers: aktiver Client darf nur zur eigenen Supabase-Instanz verbinden"
 
 const workflow = readFileSync(join(".github", "workflows", "deploy.yml"), "utf8");
 const remoteSmoke = readFileSync(join("tools", "smoke-deployment.mjs"), "utf8");
+const deployStagingBlock = workflow.match(/deploy-staging:[\s\S]*?^\s{2}deploy-production:/m)?.[0] || "";
+const deployProductionBlock = workflow.match(/deploy-production:[\s\S]*$/m)?.[0] || "";
 check("CI trennt Suiten und beide Mobile-Browser, behält aber den stabilen Test-Gate-Namen",
   /test-suiten:[\s\S]*?npm test[\s\S]*?npm run test:function/.test(workflow)
   && /test-mobile:[\s\S]*?browser: \[chromium, webkit\]/.test(workflow)
   && /\n  test:\n\s+name: test\n\s+if: \$\{\{ always\(\) \}\}\n\s+needs: \[test-suiten, test-mobile\]/.test(workflow));
+check("Staging-Deploy setzt Radar-Pilot genau auf exaktes STAGING-Flag",
+  /VITE_RADAR_PILOT_CLIENT_ENABLED:\s*\$\{\{\s*vars\.STAGING_RADAR_PILOT_CLIENT_ENABLED\s*==\s*'true'\s*&&\s*'true'\s*\|\|\s*'false'\s*\}\}/.test(deployStagingBlock));
+check("Staging-Deploy setzt Private-Self-Service exakt auf exaktes STAGING-Flag",
+  /VITE_PRIVATE_SELF_SERVICE_ENABLED:\s*\$\{\{\s*vars\.STAGING_PRIVATE_SELF_SERVICE_ENABLED\s*==\s*'true'\s*&&\s*'true'\s*\|\|\s*'false'\s*\}\}/.test(deployStagingBlock));
+check("Staging-Deploy sperrt Account-Delete hart auf false",
+  /VITE_ACCOUNT_DELETE_ENABLED:\s*'false'/.test(deployStagingBlock));
+check("Production-Deploy enthält harte false-Werte für alle drei Flags",
+  /VITE_RADAR_PILOT_CLIENT_ENABLED:\s*"false"/.test(deployProductionBlock)
+    && /VITE_PRIVATE_SELF_SERVICE_ENABLED:\s*"false"/.test(deployProductionBlock)
+    && /VITE_ACCOUNT_DELETE_ENABLED:\s*"false"/.test(deployProductionBlock)
+    && !/STAGING_RADAR_PILOT_CLIENT_ENABLED/.test(deployProductionBlock)
+    && !/STAGING_PRIVATE_SELF_SERVICE_ENABLED/.test(deployProductionBlock));
 check("PR-Tests bleiben erhalten und prüfen weiterhin den Merge-Commit",
   !workflow.includes("github.event.pull_request.head.repo.full_name")
   && !workflow.includes("github.head_ref != 'staging'"));

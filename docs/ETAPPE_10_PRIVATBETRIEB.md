@@ -1,5 +1,19 @@
 # Etappe 10: Privater Betrieb (Runbook-Stand 09.08.2026)
 
+## E16B2 Scope-Kontrolle
+
+- E16B2 ist ein Source-Only-Kandidat auf Basis `0358278519d7bbd88b995cfcfc9b233ff8972772` für Private-Export/Radar-Pilot-Kompatibilität mit default-off-Vertrag.
+- Die Datenprojektionskette bleibt `schemaVersion: 1`, weil die vorgegebene Remote-Situation keine positive Pilot-/Exportaktivierung zeigte.
+- Remote-Stand ist vorgegeben als: `20260809180000`, `20260809220000`, `20260810120000` vorhanden; `20260814120000` und `20260815120000` fehlen.
+- Own-Data-Validierung ist für diese Etappe auf exakt (`radar.capabilities`, `radar.importOperations`) verengt:
+  - `capabilities`: exakt `radar_unlimited`, `radar_review`, `radar_pilot`, `updated_at`; ersteres bis drittes boolean, `updated_at` string|null.
+  - `importOperations`: Array aus Zeilen mit exakt `operation_id`, `request_hash`, `result`, `terminal_at`, `expires_at`, `created_at`.
+  - `actor_id` darf in `importOperations` nicht erscheinen.
+- `VITE_RADAR_PILOT_CLIENT_ENABLED` und `VITE_PRIVATE_SELF_SERVICE_ENABLED` sind in Staging nur bei exakter Variable `vars.STAGING_... == 'true'` auf `"true"` gesetzt, sonst `"false"`.
+- `VITE_ACCOUNT_DELETE_ENABLED` ist hart `"false"` in Staging, und Produktion härtet alle drei Flags ebenfalls hart auf `"false"` ab.
+- `account-self-service`-Edge-Function, Private-Ops-Monitor, Delete-Schalter und Remote-Write bleiben unverändert; es erfolgt **kein** Remote-Write, keine Funktionenschaltung, keine `account-delete`-Aktivierung.
+- Ergebnis ist weiterhin Source-only: kein STAGING_GREEN, keine Backend-Aktivierung und kein behaupteter Remoteerfolg.
+
 ## E15A Scope-Kontrolle
 
 - E15A ist ausschließlich ein lokaler, statischer Source-Kandidatenstand.

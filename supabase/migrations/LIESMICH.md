@@ -8,7 +8,16 @@ Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
 
 Am 31. Juli 2026 wurde die zuvor leere Remote-Migrationshistorie mit dem live
 verifizierten Bestand abgeglichen. Alle lokalen Versionen bis einschließlich
-`20260731170000` sind seither auch remote als angewandt markiert. Vor künftigen
+`20260809121000_rollen_v1_access_enforcement.sql` sind seither auch remote als
+angewandt markiert. Die vorgeschriebene Forward-Kette für den Private-Pilot bleibt
+darüber hinaus als Source-Only-Kandidat:
+`20260809180000_event_radar_local_basis.sql` →
+`20260809220000_private_pilot_ops.sql` →
+`20260810120000_private_pilot_retention_fix.sql` →
+`20260814120000_radar_max_manual_pilot.sql` →
+`20260815120000_private_export_radar_pilot_compat.sql`.
+Für `20260814120000` und `20260815120000` gilt derzeit der vorgesehene Remote-Stand
+als nicht bestätigt/applied. Vor künftigen
 Läufen zuerst `npx supabase migration list --linked` prüfen; eine Migration
 darf nur angewandt werden, wenn ausschließlich die erwartete neue Datei offen
 ist. Bei Problemen bleibt der kontrollierte Weg über
@@ -63,6 +72,8 @@ die Statusautorität für den Remote-Lauf.
 | `20260808225500_etappe9_beta_tageslimit_30.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; Tageslimit numerisch auf 30 gesetzt; Betriebsschalter `ai_aktiv=true` und Not-Aus-Bereitschaft, Monatsdeckel 1000, Request-Cap 500, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 sowie Parallelität 2 unverändert verifiziert; alle 27 Migrationsversionen lokal/remote deckungsgleich |
 | `20260809120000_rollen_v1_access_basis.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich einzeln angewandt und rückgelesen; own-select-only, keine Browser-Writes, kein anon-Recht, Helper im Browser nur authenticated/kein anon, KI vorher und danach aus; SHA-256 `3d7281e28a059f4aff0859bf2b99ebc5d2fb1a77263be1a2fcd2312032470173` |
 | `20260809121000_rollen_v1_access_enforcement.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich nach vollständigem 3/3-Bootstrap einzeln angewandt; 15/15 Policies und 3/3 RPCs active-gated, Legacy-ACLs ohne TRUNCATE/MAINTAIN belegt; RLS `active` 73/73, `inactive` 14/14, `missing` 14/14, null Testreste, KI weiter aus; SHA-256 `d010ce9ae653b8abbcefcb6697526449427bd2772192fccc7a43f06ac1717727` |
+| `20260814120000_radar_max_manual_pilot.sql` | | | | Source-only; nicht remote angewandt (REMOTE_STAND: fehlt) |
+| `20260815120000_private_export_radar_pilot_compat.sql` | | | | Source-only; nicht remote angewandt (REMOTE_STAND: fehlt), SQL-Kontrakt wird lokal geprüft |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 

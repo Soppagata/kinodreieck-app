@@ -38,15 +38,17 @@ const config = createRuntimeConfig({
   VITE_AI_ENDPOINT_NAME: "ai-v1",
   VITE_BUILD_VERSION: "abc123",
 });
-check("Runtime-Konfiguration enthält den vollständigen öffentlichen Vertrag",
-  config.appEnvironment === APP_ENVIRONMENTS.STAGING
-  && config.appUrl === "https://kino.example/app"
-  && config.supabaseUrl === "https://projekt.supabase.co"
-  && config.supabasePublishableKey === "sb_publishable_test"
-  && config.aiEndpointName === "ai-v1"
-  && config.radarPilotClientEnabled === false
-  && config.buildVersion === "abc123"
-  && config.schemaVersion === RUNTIME_SCHEMA_VERSION);
+  check("Runtime-Konfiguration enthält den vollständigen öffentlichen Vertrag",
+    config.appEnvironment === APP_ENVIRONMENTS.STAGING
+    && config.appUrl === "https://kino.example/app"
+    && config.supabaseUrl === "https://projekt.supabase.co"
+    && config.supabasePublishableKey === "sb_publishable_test"
+    && config.aiEndpointName === "ai-v1"
+    && config.radarPilotClientEnabled === false
+    && config.privateSelfServiceEnabled === false
+    && config.accountDeleteEnabled === false
+    && config.buildVersion === "abc123"
+    && config.schemaVersion === RUNTIME_SCHEMA_VERSION);
 check("Runtime-Konfiguration ist unveränderlich", Object.isFrozen(config));
 check("Runtime-Konfiguration enthält keine geheimen Vertragsfelder",
   !Object.keys(config).some((key) => /secret|service.?role|provider.?key|sync.?key|token/i.test(key)));
@@ -58,6 +60,22 @@ const radarWhitespace = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "
 check("Radar-Pilot-Flag bleibt bei abweichendem Wert false", radarWhitespace.radarPilotClientEnabled === false);
 const radarTrue = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "true" });
 check("Radar-Pilot-Flag wird nur bei exakt 'true' true", radarTrue.radarPilotClientEnabled === true);
+const privateServiceMissing = createRuntimeConfig({});
+check("Self-Service-Flag bleibt bei fehlendem Wert false", privateServiceMissing.privateSelfServiceEnabled === false);
+const privateServiceFalse = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "false" });
+check("Self-Service-Flag bleibt bei false false", privateServiceFalse.privateSelfServiceEnabled === false);
+const privateServiceWhitespace = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "TRUE" });
+check("Self-Service-Flag bleibt bei abweichendem Wert false", privateServiceWhitespace.privateSelfServiceEnabled === false);
+const privateServiceTrue = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "true" });
+check("Self-Service-Flag wird nur bei exakt 'true' true", privateServiceTrue.privateSelfServiceEnabled === true);
+const accountDeleteMissing = createRuntimeConfig({});
+check("Account-Delete-Flag bleibt bei fehlendem Wert false", accountDeleteMissing.accountDeleteEnabled === false);
+const accountDeleteFalse = createRuntimeConfig({ VITE_ACCOUNT_DELETE_ENABLED: "false" });
+check("Account-Delete-Flag bleibt bei false false", accountDeleteFalse.accountDeleteEnabled === false);
+const accountDeleteWhitespace = createRuntimeConfig({ VITE_ACCOUNT_DELETE_ENABLED: "TRUE" });
+check("Account-Delete-Flag bleibt bei abweichendem Wert false", accountDeleteWhitespace.accountDeleteEnabled === false);
+const accountDeleteTrue = createRuntimeConfig({ VITE_ACCOUNT_DELETE_ENABLED: "true" });
+check("Account-Delete-Flag wird nur bei exakt 'true' true", accountDeleteTrue.accountDeleteEnabled === true);
 check("Leere Runtime-Werte bleiben sicher und lokal funktionsfähig",
   createRuntimeConfig({}).appEnvironment === APP_ENVIRONMENTS.LOCAL
   && createRuntimeConfig({}).supabaseUrl === ""

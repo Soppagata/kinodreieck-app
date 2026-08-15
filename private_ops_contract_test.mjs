@@ -636,7 +636,22 @@ const validOwnData = {
     seriesWatch: [],
     sharedArticles: [],
     sharedClaims: [],
-    radar: { capabilities: null, accountState: null, subscriptions: [], receipts: [], shares: [], operations: [], shareOperations: [], reviews: [] },
+    radar: {
+      capabilities: {
+        radar_unlimited: false,
+        radar_review: false,
+        radar_pilot: false,
+        updated_at: "2026-08-09T12:00:00Z",
+      },
+      accountState: null,
+      subscriptions: [],
+      receipts: [],
+      shares: [],
+      operations: [],
+      shareOperations: [],
+      importOperations: [],
+      reviews: [],
+    },
     retention: [],
     deletion: { enabled: false, lastStatus: null },
   },
@@ -661,6 +676,111 @@ const invalidOwnDataFields = expectBoundaryError(
   () => validateOwnData({ ...validOwnData, data: { ...validOwnData.data, unknownField: true } }),
 );
 expect("Unbekannte Zusatzfelder bei eigenen Daten brechen den Zugriff", invalidOwnDataFields.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityShape = expectBoundaryError(
+  "Radar-Capability-Missformen werden als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: { radar_unlimited: true, radar_review: true, updated_at: "2026-08-09T12:00:00Z" },
+      },
+    },
+  }),
+);
+expect("Fehlende radar_pilot-Quelle bricht den Zugriff", invalidOwnDataCapabilityShape.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityTypes = expectBoundaryError(
+  "Radar-Capability-Typfehler werden als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: { radar_unlimited: true, radar_review: true, radar_pilot: "true", updated_at: null },
+      },
+    },
+  }),
+);
+expect("Falsche Capability-Typen brechen den Zugriff", invalidOwnDataCapabilityTypes.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataCapabilityExtra = expectBoundaryError(
+  "Zusätzliche Capability-Felder bei Own-Data werden als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        capabilities: {
+          radar_unlimited: true,
+          radar_review: true,
+          radar_pilot: true,
+          radar_extras: true,
+          updated_at: "2026-08-09T12:00:00Z",
+        },
+      },
+    },
+  }),
+);
+expect("Zusätzliche Capability-Keys brechen den Zugriff", invalidOwnDataCapabilityExtra.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperations = expectBoundaryError(
+  "Ungültiges importOperations-Feld in Own-Data wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: "kann-nicht-array",
+      },
+    },
+  }),
+);
+expect("importOperations erfordert ein Array", invalidOwnDataImportOperations.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsRows = expectBoundaryError(
+  "Ungültige importOperations-Zeilen werden als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          operation_id: 1234,
+          request_hash: {},
+          result: null,
+          terminal_at: 123,
+          expires_at: false,
+          created_at: 0,
+        }],
+      },
+    },
+  }),
+);
+expect("Falsche importOperations-Zeilen brechen den Zugriff", invalidOwnDataImportOperationsRows.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsActorId = expectBoundaryError(
+  "Import-Operations mit actor_id in Own-Data werden als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: {
+        ...validOwnData.data.radar,
+        importOperations: [{
+          operation_id: "11111111-1111-4111-8111-111111111111",
+          request_hash: "abc",
+          result: "done",
+          terminal_at: "2026-08-09T12:00:00Z",
+          expires_at: "2026-08-09T12:00:00Z",
+          created_at: "2026-08-09T12:00:00Z",
+          actor_id: "11111111-1111-4111-8111-111111111111",
+        }],
+      },
+    },
+  }),
+);
+expect("actor_id in importOperations bricht den Zugriff", invalidOwnDataImportOperationsActorId.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataShapes = expectBoundaryError(
   "Ungültige eigene Felder bei eigenen Daten werfen Boundary-Fehler",
   () => validateOwnData({

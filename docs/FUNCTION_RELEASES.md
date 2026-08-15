@@ -4,6 +4,15 @@ Der öffentliche Pages-Build und die Supabase Edge Function sind getrennte
 Artefakte. Dieses Protokoll verhindert, dass eine Plattform-Versionsnummer ohne
 reproduzierbaren Quellstand als Nachweis genügt.
 
+## E16B2 Quellkandidat (15.08.2026)
+
+- Commit `0358278519d7bbd88b995cfcfc9b233ff8972772` ist ein Source-only Kandidat für den Private-Export/Radar-Pilot-Vertrag (Frontend-/Flag-/Own-Data-Contract) mit hartem Default-Off.
+- Weder Edge-Function-Quellen, noch Scheduler/Monitor noch `account-self-service`-Service werden in E16B2 geändert oder aktiviert.
+- Staging- und Production-Wertzuordnung ist unverändert default-off:
+  - Staging: `VITE_RADAR_PILOT_CLIENT_ENABLED` und `VITE_PRIVATE_SELF_SERVICE_ENABLED` nur bei exakt `STAGING_* == "true"` true; `VITE_ACCOUNT_DELETE_ENABLED` hart false.
+  - Produktion: alle drei (`RADAR`, `PRIVATE_SELF_SERVICE`, `ACCOUNT_DELETE`) hart false.
+- Remote bleibt vor diesem Stand unverändert; kein STAGING_GREEN, kein Function-Deploy, kein shared Backend Write.
+
 ## Verbindlicher Ablauf
 
 1. Alle Function-Quellen committen und die kostenfreien Tests ausführen:
