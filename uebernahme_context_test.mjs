@@ -124,7 +124,7 @@ check(aCalls.join("|") === "pull" && bCalls.length === 0,
 aktiv = "A";
 aCalls.length = 0; bCalls.length = 0;
 werte.set(UEBERNAHME_SNAP, JSON.stringify({
-  t: "2026-08-08T10:00:00Z",
+  t: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
   werte: { "kd:master": "gast-master", "kd:artikel": "gast-artikel" },
 }));
 werte.set(UEBERNOMMEN_KEY, JSON.stringify({ accountId: "A" }));
