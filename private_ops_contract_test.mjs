@@ -796,6 +796,39 @@ const invalidOwnDataImportOperations = expectBoundaryError(
   }),
 );
 expect("importOperations erfordert ein Array", invalidOwnDataImportOperations.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataMissingImportOperationsKey = expectBoundaryError(
+  "Fehlender importOperations-Key in radar wird als Boundary-Fehler verworfen",
+  () => validateOwnData({
+    ...validOwnData,
+    data: {
+      ...validOwnData.data,
+      radar: (() => {
+        const { importOperations, ...rest } = validOwnData.data.radar;
+        return rest;
+      })(),
+    },
+  }),
+);
+expect("Fehlender importOperations-Key bricht den Zugriff", invalidOwnDataMissingImportOperationsKey.code === ERROR_CODES.INVALID_RESPONSE);
+const invalidOwnDataImportOperationsMissingRequiredKey = expectBoundaryError(
+  "Import-Operation mit fehlendem Pflichtkey in Own-Data wird als Boundary-Fehler verworfen",
+  () => {
+    const { request_hash, ...missingRequestHash } = validImportOperation;
+    return validateOwnData({
+      ...validOwnData,
+      data: {
+        ...validOwnData.data,
+        radar: {
+          ...validOwnData.data.radar,
+          importOperations: [{
+            ...missingRequestHash,
+          }],
+        },
+      },
+    });
+  },
+);
+expect("fehlendes Pflichtfeld in importOperations bricht den Zugriff", invalidOwnDataImportOperationsMissingRequiredKey.code === ERROR_CODES.INVALID_RESPONSE);
 const invalidOwnDataImportOperationsOperationId = expectBoundaryError(
   "Falsch typisierte operation_id in importOperations wird als Boundary-Fehler verworfen",
   () => validateOwnData({

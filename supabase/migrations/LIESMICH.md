@@ -22,9 +22,9 @@ Läufen zuerst `npx supabase migration list --linked` prüfen; eine Migration
 darf nur angewandt werden, wenn ausschließlich die erwartete neue Datei offen
 ist. `20260809220000_private_pilot_ops.sql` ist lokal auf Blob-ID
 `2143d36957f5be56e9973e15584d02769b9c4222` verifiziert.
-Die bestätigten Radar-Töpfe wurden als leer verifiziert (`kd_radar_operations`,
-`kd_radar_share_operations`, `kd_radar_pilot_import_operations`).
-`export_enabled` ist im bestätigten Remote-Stand nicht gesetzt; die Addierung erfolgt
+Remote-bestätigt sind die Radar-Töpfe `kd_radar_operations` und
+`kd_radar_share_operations` als leer verifiziert; `kd_radar_pilot_import_operations` ist in diesem Remote-Stand nicht vorhanden und daher nicht leer verifizierbar.
+`export_enabled` ist im bestätigten Remote-Stand vollständig nicht vorhanden; die Addierung erfolgt
 nur in `20260815120000_private_export_radar_pilot_compat.sql` mit Additiv-default `false`.
 Bei Problemen bleibt der kontrollierte Weg über
 `supabase db query --linked --file <genau-eine-migration.sql>` plus

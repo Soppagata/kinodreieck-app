@@ -9,11 +9,13 @@ reproduzierbaren Quellstand als Nachweis genügt.
 - `0358278519d7bbd88b995cfcfc9b233ff8972772` ist ein integrierter SQL-/Privacy-Checkpoint der Vorstufen.
 - E16B2 ist ein Sourcekandidat auf Basis dieses SQL-Checkpoints `0358278519d7bbd88b995cfcfc9b233ff8972772` für den Private-Export/Radar-Pilot-Vertrag (Frontend-/Flag-/Own-Data-Contract) mit hartem Default-Off.
 - Weder Edge-Function-Quellen, noch Scheduler/Monitor noch `account-self-service`-Service werden in diesem E16B2-Stand geändert oder aktiviert.
+- Remote ist vorläufig auf `20260809180000`, `20260809220000`, `20260810120000` bestätigt; `20260814120000` und `20260815120000` fehlen.
+- `account-self-service` ist remote nicht deployed; `kd_radar_settings`/`kd_private_settings`-Flags bleiben remote `false`.
 - Staging- und Production-Wertzuordnung ist unverändert default-off:
   - Staging: `VITE_RADAR_PILOT_CLIENT_ENABLED` und `VITE_PRIVATE_SELF_SERVICE_ENABLED` nur bei exakt `STAGING_* == "true"` true; `VITE_ACCOUNT_DELETE_ENABLED` hart false.
   - Produktion: alle drei (`RADAR`, `PRIVATE_SELF_SERVICE`, `ACCOUNT_DELETE`) hart false.
 - Remote bleibt vor diesem Stand unverändert; kein STAGING_GREEN, kein Function-Deploy, kein shared Backend Write.
-- `export_enabled` ist im bestätigten Remote-Stand nicht gesetzt; die Addierung erfolgt erst in `20260815120000_private_export_radar_pilot_compat.sql` mit Additiv-default `false`.
+- `export_enabled` ist im bestätigten Remote-Stand vollständig nicht vorhanden; die Addierung erfolgt erst in `20260815120000_private_export_radar_pilot_compat.sql` mit Additiv-default `false`.
 
 ## Verbindlicher Ablauf
 

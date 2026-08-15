@@ -14,24 +14,10 @@ const rowWithExactKeysAndTypes = (value, keys, checks = {}) => Array.isArray(val
   }
   return true;
 });
-const stringOrNull = (value) => value === null || typeof value === "string";
 const lowercaseUuid = (value) => typeof value === "string"
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
 const lowercaseHex32 = (value) => typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
 const isoDateString = (value) => typeof value === "string" && !Number.isNaN(Date.parse(value));
-
-const ownRows = (value) => rowWithExactKeysAndTypes(
-  value,
-  ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
-  {
-    operation_id: (value) => typeof value === "string",
-    request_hash: (value) => typeof value === "string",
-    result: (value) => fixedObject(value),
-    terminal_at: stringOrNull,
-    expires_at: stringOrNull,
-    created_at: (value) => typeof value === "string",
-  },
-);
 const importRows = (value) => rowWithExactKeysAndTypes(
   value,
   ["operation_id", "request_hash", "result", "terminal_at", "expires_at", "created_at"],
@@ -79,8 +65,8 @@ export function validateOwnData(value) {
     && rows(value.data.radar.subscriptions, ["target_id", "region", "scope", "subscription_status", "server_revision", "last_operation_id", "created_at", "updated_at"])
     && rows(value.data.radar.receipts, ["event_version_id", "receipt_status", "updated_at"])
     && rows(value.data.radar.shares, ["target_id", "share_status", "last_operation_id", "created_at", "updated_at"])
-    && ownRows(value.data.radar.operations)
-    && ownRows(value.data.radar.shareOperations)
+    && rows(value.data.radar.operations, ["operation_id", "request_hash", "result", "created_at", "terminal_at", "expires_at"])
+    && rows(value.data.radar.shareOperations, ["operation_id", "request_hash", "result", "created_at", "terminal_at", "expires_at"])
     && importRows(value.data.radar.importOperations)
     && rows(value.data.radar.reviews, ["review_id", "event_version_id", "decision", "reason", "source_id", "created_at"])
     && rows(value.data.retention, ["data_class", "retention_days", "purpose_bound", "purge_trigger"])

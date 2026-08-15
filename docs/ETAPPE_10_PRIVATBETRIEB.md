@@ -13,7 +13,10 @@
 - `VITE_ACCOUNT_DELETE_ENABLED` ist hart `"false"` in Staging, und Produktion härtet alle drei Flags ebenfalls hart auf `"false"` ab.
 - `account-self-service`-Edge-Function, Private-Ops-Monitor, Delete-Schalter und Remote-Write bleiben unverändert; es erfolgt **kein** Remote-Write, keine Funktionenschaltung, keine `account-delete`-Aktivierung.
 - `20260809180000`, `20260809220000`, `20260810120000` sind als Remote-Stand bestätigt; `20260814120000` und `20260815120000` bleiben nicht bestätigt.
-- `export_enabled` ist in den bestätigten Ständen nicht aktiv gesetzt; die Addierung erfolgt nur in `20260815120000` mit default `false`.
+- `export_enabled` ist im bestätigten Remote-Stand vollständig nicht vorhanden; die Addierung erfolgt erst in `20260815120000` mit Additiv-default `false`.
+- `account-self-service` ist remote nicht deployed.
+- `kd_radar_pilot_import_operations` ist in diesem bestätigten Remote-Stand nicht vorhanden, daher nicht als leer verifizierbar.
+- Globale Radar- und Private-Ops-Flags stehen remote auf `false`.
 - Ergebnis ist weiterhin Source-only: kein STAGING_GREEN, keine Backend-Aktivierung und kein behaupteter Remoteerfolg.
 
 ## E15A Scope-Kontrolle
