@@ -583,7 +583,7 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
     && /\{ status: "not-started", reason: "pilot-not-ready" \}/.test(radarController)
     && /\{ status: "not-started", reason: "radar-import-state-not-queued" \}/.test(radarController)
     && /const syncResult = await syncRadarPilot\(gespeichert\);/.test(radarController)
-    && /importEntry\.operationId === operationId/.test(radarController)
+    && /const importEntry = syncResult\?\.state\?\.pilot\?\.importOutbox\?\.find\( *\(entry\) => entry\.operationId === operationId *\)/.test(radarController)
     && /return \{ status: "ready", state: syncResult\.state/.test(radarController)
     && /return \{ status: "pending", state: syncResult\.state, reason: importEntry\.reason \|\| "pilot-import-pending" \}/.test(radarController)
     && /return \{\s*status: "rejected",\s*state: syncResult\.state/.test(radarController)
