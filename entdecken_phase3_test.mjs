@@ -553,6 +553,7 @@ const pilotPersistentPendingUi = await mountPilotUi({
   radarPilotEvents: [],
   radarReview: true,
   radarState: pendingPilotImportState(),
+  onRadarPilotImport: async () => ({ status: "pending" }),
 });
 await act(async () => { button(pilotPersistentPendingUi.container, "Radar").click(); await tick(); });
 check("Persistentes Pending bleibt sichtbar und handlungsfähig", () => {
