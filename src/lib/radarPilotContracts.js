@@ -15,7 +15,8 @@ export const RADAR_PILOT_SUBSCRIPTION_ACK_KEYS = Object.freeze([
 export const RADAR_PILOT_IMPORT_ROOT_KEYS = Object.freeze([
   "targetKey", "eventType", "date", "region", "platform", "evidence",
 ]);
-export const RADAR_PILOT_EVIDENCE_KEYS = Object.freeze(["sourceId", "url", "retrievedAt"]);
+export const RADAR_PILOT_IMPORT_EVIDENCE_KEYS = Object.freeze(["sourceId", "url", "retrievedAt"]);
+export const RADAR_PILOT_FEED_EVIDENCE_KEYS = Object.freeze(["sourceId", "sourceDomain", "url", "retrievedAt"]);
 export const RADAR_PILOT_IMPORT_RESULT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
 ]);
@@ -28,12 +29,20 @@ export const RADAR_PILOT_SUBSCRIPTION_KEYS = Object.freeze([
 ]);
 export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
-  "lifecycleStatus", "verificationStatus",
+  "lifecycleStatus", "verificationStatus", "evidence",
 ]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHECKSUM_FORM = /^[a-f0-9]{64}$/;
+const MAX_SOURCE_DOMAIN_LENGTH = 253;
+
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeDeep(child);
+  return Object.freeze(value);
+}
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -75,6 +84,32 @@ function validPlatform(eventType, platform) {
   const normalized = text(platform);
   return eventType === "streamingstart_at" ? !!normalized && normalized !== "-" : platform === "-";
 }
+function validSourceDomain(value) {
+  if (typeof value !== "string") return false;
+  const normalized = text(value);
+  if (normalized !== value || normalized !== normalized.toLowerCase()) return false;
+  if (normalized.length < 4 || normalized.length > MAX_SOURCE_DOMAIN_LENGTH) return false;
+  const labels = normalized.split(".");
+  if (labels.length < 2) return false;
+  return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+function validSourceId(value) {
+  if (typeof value !== "string") return false;
+  const normalized = text(value);
+  if (normalized !== value) return false;
+  return normalized.length >= 3 && normalized.length <= 128;
+}
+function validEvidenceUrl(value, sourceDomain) {
+  if (typeof value !== "string") return false;
+  const raw = text(value);
+  if (raw !== value) return false;
+  let parsed;
+  try { parsed = new URL(raw); } catch { return false; }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return false;
+  const host = text(parsed.hostname).toLowerCase();
+  const domain = text(sourceDomain).toLowerCase();
+  return host === domain || host.endsWith(`.${domain}`);
+}
 function result(errors) {
   const unique = Object.freeze([...new Set(errors)]);
   return Object.freeze({ ok: unique.length === 0, errors: unique });
@@ -111,7 +146,7 @@ export function validateRadarPilotImportPayload(value) {
   } else {
     const sourceIds = new Set();
     for (const evidence of value.evidence) {
-      if (!exactKeys(evidence, RADAR_PILOT_EVIDENCE_KEYS)) {
+      if (!exactKeys(evidence, RADAR_PILOT_IMPORT_EVIDENCE_KEYS)) {
         errors.push("import-evidence-shape-invalid");
         continue;
       }
@@ -147,6 +182,39 @@ function validateSubscription(value) {
   return errors;
 }
 
+function validateRadarPilotFeedEvidence(value, errors) {
+  if (!Array.isArray(value)) {
+    errors.push("feed-event-evidence-list-invalid");
+    return;
+  }
+  if (value.length !== 2) errors.push("feed-event-evidence-count-invalid");
+  const sourceIds = new Set();
+  const sourceDomains = new Set();
+  const urls = new Set();
+  for (let index = 0; index < value.length; index += 1) {
+    const evidence = value[index];
+    if (!exactKeys(evidence, RADAR_PILOT_FEED_EVIDENCE_KEYS)) {
+      errors.push("feed-evidence-shape-invalid");
+      continue;
+    }
+    if (!validSourceId(evidence.sourceId)) errors.push("feed-event-source-id-invalid");
+    if (!validSourceDomain(evidence.sourceDomain)) errors.push("feed-event-source-domain-invalid");
+    if (!validEvidenceUrl(evidence.url, evidence.sourceDomain)) errors.push("feed-event-source-url-invalid");
+    if (!validInstant(evidence.retrievedAt)) errors.push("feed-event-evidence-time-invalid");
+    if (sourceIds.has(evidence.sourceId)) errors.push("feed-event-evidence-source-id-duplicate");
+    if (sourceDomains.has(evidence.sourceDomain)) errors.push("feed-event-evidence-source-domain-duplicate");
+    if (urls.has(evidence.url)) errors.push("feed-event-evidence-url-duplicate");
+    sourceIds.add(evidence.sourceId);
+    sourceDomains.add(evidence.sourceDomain);
+    urls.add(evidence.url);
+  }
+  if (value.length === 2) {
+    if (sourceIds.size !== 2) errors.push("feed-event-evidence-source-id-duplicate");
+    if (sourceDomains.size !== 2) errors.push("feed-event-evidence-source-domain-duplicate");
+    if (urls.size !== 2) errors.push("feed-event-evidence-url-duplicate");
+  }
+}
+
 export function validateRadarPilotEvent(value) {
   const errors = [];
   if (!exactKeys(value, RADAR_PILOT_EVENT_KEYS)) return result(["feed-event-shape-invalid"]);
@@ -163,6 +231,7 @@ export function validateRadarPilotEvent(value) {
   if (!RADAR_VERIFICATION_STATUSES.includes(value.verificationStatus) || value.verificationStatus !== "confirmed") {
     errors.push("feed-event-verification-invalid");
   }
+  validateRadarPilotFeedEvidence(value.evidence, errors);
   return result(errors);
 }
 
@@ -235,7 +304,7 @@ export function projectEntdeckenRadarPilot({
     && radarState?.pilot?.status === "ready";
   return Object.freeze({
     active,
-    events: active ? radarState.pilot.events : localEvents,
+    events: active ? freezeDeep(clone(radarState?.pilot?.events)) : localEvents,
     radarReview: active && radarState.pilot.radarReview === true,
   });
 }

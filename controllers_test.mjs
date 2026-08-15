@@ -26,6 +26,8 @@ import {
   parseMustwatchSicher,
   useMustwatchController,
 } from "./src/controllers/useMustwatchController.js";
+import * as R from "./src/lib/localEventRadar.js";
+import { projectEntdeckenRadarPilot } from "./src/lib/radarPilotContracts.js";
 
 let ok = 0;
 function check(name, wert) {
@@ -629,5 +631,29 @@ check("Radarcontroller projiziert den Kontopilot getrennt und lässt Gast-Fixtur
   /projectEntdeckenRadarPilot/.test(radarController)
   && /radarPilotEvents: radarPilotProjection\.events/.test(radarController)
   && /radarReview: radarPilotProjection\.radarReview/.test(radarController));
+const pilotImportProjectionState = R.queueAccountRadarPilotImport(
+  R.createEmptyLocalRadar({ authority: "account-cache" }),
+  {
+    operationId: "11111111-1111-4111-8111-111111111111", now: "2026-08-14T08:00:00.000Z",
+    payload: {
+      targetKey: "tmdb:0001", eventType: "kinostart_at", date: "2026-08-20",
+      region: "AT", platform: "-",
+      evidence: [
+        { sourceId: "source:official", url: "https://example.com/official", retrievedAt: "2026-08-14T08:00:00.000Z" },
+        { sourceId: "source:editorial", url: "https://news.example.com/editorial", retrievedAt: "2026-08-14T08:00:01.000Z" },
+      ],
+    },
+  },
+).state;
+check("Pilot-Import-Queue erzeugt in der Projektion kein unsichtbares Event", () => {
+  const projection = projectEntdeckenRadarPilot({
+    clientEnabled: true,
+    radarAuthority: "account-cache",
+    radarState: pilotImportProjectionState,
+    localEvents: [],
+  });
+  assert.equal(projection.events.length, 0);
+  assert.equal(projection.radarReview, false);
+});
 
 console.log(`controllers_test: ${ok} Checks bestanden.`);

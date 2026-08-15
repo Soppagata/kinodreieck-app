@@ -199,6 +199,7 @@ function RadarView({
     platform: entry.platform,
     lifecycleStatus: entry.lifecycleStatus,
     verificationStatus: entry.verificationStatus,
+    evidence: entry.evidence,
     title: entry.title || localRadarTargetLabel(entry.targetId, {
       master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
     }),
@@ -293,6 +294,18 @@ function RadarView({
               master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
             })}</strong>
             <span>{entry.date} · {entry.eventType} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
+            {entry.evidence?.length ? <div className="kd-pilot-quellen">
+              <span>Quellen:</span>
+              <div className="kd-pilot-quellen-links">
+                {entry.evidence.map((item, index) => <a
+                  className="kd-pilot-quellen-link"
+                  href={item.url}
+                  key={`${entry.eventVersionId || entry.versionId}-source-${index}`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >{item.sourceDomain}</a>)}
+              </div>
+            </div> : null}
             {canPilotReceipt ? <div>
               {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status ? (
                 <small>Status: {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`).status}</small>

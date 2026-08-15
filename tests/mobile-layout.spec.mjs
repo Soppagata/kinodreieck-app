@@ -897,6 +897,42 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const panel = document.createElement("article");
+    panel.className = "kd-entdecken-panel";
+    panel.innerHTML = `
+      <h3>Diese Woche</h3>
+      <ul><li>
+        <span>Test-Kino</span>
+        <span>2026-08-20 · kinostart_at · scheduled · confirmed · AT · -</span>
+        <div class="kd-pilot-quellen">
+          <span>Quellen:</span>
+          <div class="kd-pilot-quellen-links">
+            <a class="kd-pilot-quellen-link" href="https://example.com/very/long/path/that-should-wrap/but-not-overflow" target="_blank" rel="noopener noreferrer">example.com</a>
+            <a class="kd-pilot-quellen-link" href="https://news.example.com/very/long/path/that-should-wrap/too" target="_blank" rel="noopener noreferrer">news.example.com</a>
+          </div>
+        </div>
+      </li></ul>`;
+    document.body.appendChild(panel);
+  });
+  const links = page.locator(".kd-pilot-quellen-links");
+  const metrics = await links.evaluate((element) => ({
+    display: getComputedStyle(element).display,
+    flexWrap: getComputedStyle(element).flexWrap,
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }));
+  expect(metrics.display).toBe("flex");
+  expect(metrics.flexWrap).toBe("wrap");
+  expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 2);
+  await keineDokumentUeberbreite(page);
+});
+
 test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussicher", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await blockiereFremdnetz(page);

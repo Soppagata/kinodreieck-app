@@ -841,14 +841,6 @@ export function acknowledgeAccountRadarPilotImport(state, operationId, response)
     return Object.freeze({ ok: false, reason: "pilot-import-ack-invalid", state, changed: false });
   }
   next.pilot.importOutbox = next.pilot.importOutbox.filter((entry) => entry.operationId !== id);
-  const projected = {
-    ...response,
-    lifecycleStatus: "scheduled",
-    verificationStatus: "confirmed",
-  };
-  next.pilot.events = next.pilot.events.filter((entry) => entry.eventVersionId !== response.eventVersionId);
-  next.pilot.events.push(projected);
-  next.pilot.events.sort((a, b) => a.date.localeCompare(b.date) || a.eventId.localeCompare(b.eventId));
   next.pilot.status = "ready";
   const stateCheck = validateLocalRadarState(next);
   if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-import-result-invalid", state, changed: false });

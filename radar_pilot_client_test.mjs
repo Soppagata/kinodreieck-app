@@ -27,6 +27,10 @@ const operationId = "11111111-1111-4111-8111-111111111111";
 const eventId = "22222222-2222-4222-8222-222222222222";
 const eventVersionId = "33333333-3333-4333-8333-333333333333";
 const targetId = "work:tmdb:550";
+const buildEvidence = (override = []) => (override.length ? override : [
+  { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant },
+  { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
+]);
 
 const subscriptionAck = (extra = {}) => ({
   operationId, targetId, status: "active", revision: 1, checksum: checksumA, ...extra,
@@ -34,6 +38,7 @@ const subscriptionAck = (extra = {}) => ({
 const event = (extra = {}) => ({
   eventId, eventVersionId, targetId, eventType: "kinostart_at", date: "2026-08-20",
   region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
+  evidence: buildEvidence(),
   ...extra,
 });
 const feed = (extra = {}) => ({
@@ -77,6 +82,55 @@ await check("Alle Pilot-Dokumente verlangen exakt ihre kanonischen Keysets", () 
   assert.equal(C.validateRadarPilotFeed(feed({
     operationAcks: [{ ...subscriptionAck(), title: "verboten" }],
   })).ok, false);
+});
+
+await check("Pilot-Event-Evidence muss exakt zwei sichere, eindeutige Quellen-Objekte tragen", () => {
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [{ sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant }],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://evil.test", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "example.com", url: "http://example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://wrong.test", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "example.com", url: "https://sub.example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant },
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://user:pass@example.com/official", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
+    evidence: [
+      { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com:8443/official", retrievedAt: instant },
+      { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
+    ],
+  })] })).ok, false);
+  const reordered = buildEvidence().slice().reverse();
+  const reorderedResult = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    feed({ events: [event({ evidence: reordered })] }),
+  );
+  assert.equal(reorderedResult.ok, true);
+  assert.deepEqual((reorderedResult.state.pilot.events[0].evidence || []).map((entry) => entry.sourceId), reordered.map((entry) => entry.sourceId));
 });
 
 await check("Importplattform folgt exakt dem E16A1-Eventtypvertrag", () => {
@@ -125,6 +179,11 @@ await check("Pilotverträge akzeptieren Textfelder nur als echte JSON-Strings", 
     feed({ reconciledAt: 1_723_622_400_000 }),
     feed({ subscriptions: [{ ...feed().subscriptions[0], updatedAt: { iso: instant } }] }),
     feed({ events: [{ ...event(), targetId: { key: targetId } }] }),
+    feed({ events: [{ ...event(), evidence: [7, 8] }] }),
+    feed({ events: [{ ...event(), evidence: [
+      { sourceId: "x", sourceDomain: "bad", url: "https://bad", retrievedAt: instant },
+      { sourceId: "y", sourceDomain: "also-bad", url: "https://also-bad", retrievedAt: later },
+    ] }] }),
   ]) assert.equal(C.validateRadarPilotFeed(invalid).ok, false);
 });
 
@@ -700,6 +759,22 @@ await check("Import sendet genau eine exakte E16A1-Payload und akzeptiert nur di
   assert.deepEqual(request.body.p_payload, importPayload());
   assert.equal(h.state.pilot.importOutbox.length, 0);
   assert.equal(h.state.pilot.events.some((entry) => entry.eventVersionId === eventVersionId), true);
+});
+
+await check("Import-Ack darf keinen quellenlosen Event-Zustand nachrüsten", async () => {
+  let state = R.queueAccountRadarPilotImport(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId, payload: importPayload(), now: instant,
+  }).state;
+  const h = harness({
+    state,
+    fetchImpl: async (url) => {
+      if (url.endsWith("kd_radar_pilot_import_event")) return response(200, importResult());
+      return response(200, feed({ events: [], subscriptions: [] }));
+    },
+  });
+  await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(h.state.pilot.importOutbox.length, 0);
+  assert.equal(h.state.pilot.events.length, 0);
 });
 
 await check("Controllerprojektion ersetzt Fixtures nur im aktiven Kontopilot", async () => {

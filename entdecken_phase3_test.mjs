@@ -267,6 +267,13 @@ const pilotEvent = {
   lifecycleStatus: "scheduled",
   verificationStatus: "confirmed",
 };
+const pilotEventWithEvidence = {
+  ...pilotEvent,
+  evidence: [
+    { sourceId: "source-official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: `${heuteIso}T10:00:00.000Z` },
+    { sourceId: "source-editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: `${heuteIso}T10:00:01.000Z` },
+  ],
+};
 const pilotEventOutsideWeek = {
   eventId: "00000000-0000-4000-8000-000000000013",
   eventVersionId: "00000000-0000-4000-8000-000000000023",
@@ -345,6 +352,7 @@ check("Gast mit widersprüchlichen Pilot-Flags zeigt exakt Fixture-Preview, kein
   assert.equal(button(pilotGuestConflictUi.container, "Pilot-Sync starten"), undefined);
   assert.ok(listItem && listItem.textContent.includes("nur Vorschau"));
   assert.equal(listItem?.querySelector("button"), null);
+  assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
 });
 await pilotGuestConflictUi.cleanup();
 Date = RestoreDate;
@@ -352,12 +360,16 @@ Date = RestoreDate;
 const pilotReviewFalseUi = await mountPilotUi({
   radarPilotClientEnabled: true,
   radarPilotActive: false,
-  radarPilotEvents: [pilotEvent],
+  radarPilotEvents: [pilotEventWithEvidence],
   radarReview: false,
 });
 await act(async () => { button(pilotReviewFalseUi.container, "Radar").click(); await tick(); });
 check("Flag true mit radarReview false blendet Pilot-Import aus", () => {
   assert.equal(pilotReviewFalseUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
+  const weekPanel = [...pilotReviewFalseUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  const listItem = weekPanel?.querySelector("li");
+  assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
 });
 await pilotReviewFalseUi.cleanup();
 
@@ -391,6 +403,31 @@ check("Gültiger exakter Payload führt genau zu einem Importcallback", () => {
   assert.equal(pilotImportCalls, 1);
 });
 await pilotImportUi.cleanup();
+
+const pilotEvidenceUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [pilotEventWithEvidence],
+  radarReview: true,
+});
+await act(async () => { button(pilotEvidenceUi.container, "Radar").click(); await tick(); });
+check("Aktive Pilot-Ereignisse zeigen Quellen als zwei sichere Links", () => {
+  const weekPanel = [...pilotEvidenceUi.container.querySelectorAll("article.kd-entdecken-panel")]
+    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
+  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
+  assert.equal(links.length, 2);
+  assert.ok(weekPanel?.textContent.includes("Quellen:"));
+  assert.deepEqual(links.map((link) => ({
+    label: link.textContent,
+    href: link.getAttribute("href"),
+    target: link.getAttribute("target"),
+    rel: link.getAttribute("rel"),
+  })), [
+    { label: "example.com", href: "https://example.com/official", target: "_blank", rel: "noopener noreferrer" },
+    { label: "news.example.com", href: "https://news.example.com/editorial", target: "_blank", rel: "noopener noreferrer" },
+  ]);
+});
+await pilotEvidenceUi.cleanup();
 
 const pilotEmptyActiveUi = await mountPilotUi({
   radarPilotClientEnabled: true,
