@@ -390,16 +390,15 @@ check("Flag false zeigt trotz Review keine Pilot-Importfläche und behält Fixtu
 await pilotNoImportUi.cleanup();
 
 const RestoreDate = Date;
-Date = class extends RestoreDate {
-  constructor(value) {
-    return value == null
-      ? new RestoreDate("2026-08-15T00:00:00.000Z")
-      : new RestoreDate(value);
+const freezeDate = (value) => class extends RestoreDate {
+  constructor(now) {
+    return now == null ? new RestoreDate(value) : new RestoreDate(now);
   }
   static now() {
-    return new RestoreDate("2026-08-15T00:00:00.000Z").getTime();
+    return new RestoreDate(value).getTime();
   }
 };
+Date = freezeDate("2026-08-09T00:00:00.000Z");
 const pilotGuestConflictUi = await mountPilotUi({
   accountMode: false,
   radarPilotClientEnabled: true,
@@ -411,6 +410,7 @@ const pilotGuestConflictUi = await mountPilotUi({
   }).state,
 });
 await act(async () => { button(pilotGuestConflictUi.container, "Radar").click(); await tick(); });
+await act(async () => { await tick(); });
 check("Gast mit widersprüchlichen Pilot-Flags zeigt exakt Fixture-Preview, kein Pilot-Sync und kein Pilot-DOM", () => {
   const weekPanel = [...pilotGuestConflictUi.container.querySelectorAll("article.kd-entdecken-panel")]
     .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
@@ -422,7 +422,7 @@ check("Gast mit widersprüchlichen Pilot-Flags zeigt exakt Fixture-Preview, kein
   assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
 });
 await pilotGuestConflictUi.cleanup();
-Date = RestoreDate;
+Date = freezeDate("2026-08-15T00:00:00.000Z");
 
 const pilotReviewFalseUi = await mountPilotUi({
   radarPilotClientEnabled: true,
