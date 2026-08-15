@@ -27,10 +27,19 @@ const operationId = "11111111-1111-4111-8111-111111111111";
 const eventId = "22222222-2222-4222-8222-222222222222";
 const eventVersionId = "33333333-3333-4333-8333-333333333333";
 const targetId = "work:tmdb:550";
+const comparePilotEvidence = (left, right) => {
+  if (left.sourceId < right.sourceId) return -1;
+  if (left.sourceId > right.sourceId) return 1;
+  if (left.url < right.url) return -1;
+  if (left.url > right.url) return 1;
+  if (left.retrievedAt < right.retrievedAt) return -1;
+  if (left.retrievedAt > right.retrievedAt) return 1;
+  return 0;
+};
 const buildEvidence = (override = []) => (override.length ? override : [
   { sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant },
   { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
-]);
+].sort(comparePilotEvidence));
 
 const subscriptionAck = (extra = {}) => ({
   operationId, targetId, status: "active", revision: 1, checksum: checksumA, ...extra,
@@ -124,13 +133,18 @@ await check("Pilot-Event-Evidence muss exakt zwei sichere, eindeutige Quellen-Ob
       { sourceId: "source:editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: later },
     ],
   })] })).ok, false);
-  const reordered = buildEvidence().slice().reverse();
+  const canonicalEvidence = buildEvidence();
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({ evidence: canonicalEvidence })] })).ok, true);
+  const reorderedEvidence = [...canonicalEvidence].reverse();
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({ evidence: reorderedEvidence })] })).ok, false);
+  const originalState = R.createEmptyLocalRadar({ authority: "account-cache" });
   const reorderedResult = R.reconcileAccountRadarPilotFeed(
-    R.createEmptyLocalRadar({ authority: "account-cache" }),
-    feed({ events: [event({ evidence: reordered })] }),
+    originalState,
+    feed({ events: [event({ evidence: reorderedEvidence })] }),
   );
-  assert.equal(reorderedResult.ok, true);
-  assert.deepEqual((reorderedResult.state.pilot.events[0].evidence || []).map((entry) => entry.sourceId), reordered.map((entry) => entry.sourceId));
+  assert.equal(reorderedResult.ok, false);
+  assert.equal(reorderedResult.state, originalState);
+  assert.equal(reorderedResult.reason, "pilot-feed-invalid");
 });
 
 await check("Importplattform folgt exakt dem E16A1-Eventtypvertrag", () => {

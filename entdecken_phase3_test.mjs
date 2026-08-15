@@ -267,12 +267,21 @@ const pilotEvent = {
   lifecycleStatus: "scheduled",
   verificationStatus: "confirmed",
 };
+const comparePilotEvidence = (left, right) => {
+  if (left.sourceId < right.sourceId) return -1;
+  if (left.sourceId > right.sourceId) return 1;
+  if (left.url < right.url) return -1;
+  if (left.url > right.url) return 1;
+  if (left.retrievedAt < right.retrievedAt) return -1;
+  if (left.retrievedAt > right.retrievedAt) return 1;
+  return 0;
+};
 const pilotEventWithEvidence = {
   ...pilotEvent,
   evidence: [
     { sourceId: "source-official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: `${heuteIso}T10:00:00.000Z` },
     { sourceId: "source-editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: `${heuteIso}T10:00:01.000Z` },
-  ],
+  ].sort(comparePilotEvidence),
 };
 const pilotEventOutsideWeek = {
   eventId: "00000000-0000-4000-8000-000000000013",
@@ -417,15 +426,18 @@ check("Aktive Pilot-Ereignisse zeigen Quellen als zwei sichere Links", () => {
   const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
   assert.equal(links.length, 2);
   assert.ok(weekPanel?.textContent.includes("Quellen:"));
+  const expectedLinks = pilotEventWithEvidence.evidence.map((entry) => ({
+    label: entry.sourceDomain,
+    href: entry.url,
+    target: "_blank",
+    rel: "noopener noreferrer",
+  }));
   assert.deepEqual(links.map((link) => ({
     label: link.textContent,
     href: link.getAttribute("href"),
     target: link.getAttribute("target"),
     rel: link.getAttribute("rel"),
-  })), [
-    { label: "example.com", href: "https://example.com/official", target: "_blank", rel: "noopener noreferrer" },
-    { label: "news.example.com", href: "https://news.example.com/editorial", target: "_blank", rel: "noopener noreferrer" },
-  ]);
+  })), expectedLinks);
 });
 await pilotEvidenceUi.cleanup();
 

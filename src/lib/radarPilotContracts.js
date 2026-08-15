@@ -51,6 +51,21 @@ function exactKeys(value, keys) {
   const actual = Object.keys(value);
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
 }
+function compareFeedEvidence(a, b) {
+  const aSourceId = text(a.sourceId);
+  const bSourceId = text(b.sourceId);
+  if (aSourceId < bSourceId) return -1;
+  if (aSourceId > bSourceId) return 1;
+  const aUrl = text(a.url);
+  const bUrl = text(b.url);
+  if (aUrl < bUrl) return -1;
+  if (aUrl > bUrl) return 1;
+  const aRetrievedAt = text(a.retrievedAt);
+  const bRetrievedAt = text(b.retrievedAt);
+  if (aRetrievedAt < bRetrievedAt) return -1;
+  if (aRetrievedAt > bRetrievedAt) return 1;
+  return 0;
+}
 function validUuid(value) { return typeof value === "string" && UUID_FORM.test(text(value)); }
 function validTargetKey(value) {
   if (typeof value !== "string") return false;
@@ -207,6 +222,12 @@ function validateRadarPilotFeedEvidence(value, errors) {
     sourceIds.add(evidence.sourceId);
     sourceDomains.add(evidence.sourceDomain);
     urls.add(evidence.url);
+  }
+  for (let index = 1; index < value.length; index += 1) {
+    if (compareFeedEvidence(value[index - 1], value[index]) > 0) {
+      errors.push("feed-event-evidence-order-invalid");
+      break;
+    }
   }
   if (value.length === 2) {
     if (sourceIds.size !== 2) errors.push("feed-event-evidence-source-id-duplicate");
