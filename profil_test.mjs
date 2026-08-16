@@ -149,6 +149,18 @@ const SIG = Object.freeze({
   sicherheit: "hoch", quelle: "K1", beleg: "Blade Runner, Kommentar vom 12.03.",
 });
 const sig = (o = {}) => ({ ...SIG, ...o });
+const BLOG_META = Object.freeze({
+  quelle: "bloganalyse",
+  articleId: "artikel_17",
+  contentHash: "a".repeat(64),
+  analyzedAt: "2026-08-17T08:00:00.000Z",
+  promptVersion: "blog-profile-v1",
+});
+const sigFuerQuelle = (quelle, o = {}) => sig({
+  quelle,
+  ...(quelle === "bloganalyse" ? BLOG_META : {}),
+  ...o,
+});
 const mitEinwilligung = () => P.erteileEinwilligung(P.leeresProfil(), T0);
 /* Zahl der Quelle×Art-Wege. Dynamisch, damit eine neue Quelle die
    Abdeckung mitzieht statt sie still zu unterlaufen. */
@@ -201,10 +213,11 @@ check("A", "SICHERHEITEN hat drei Stufen", () => P.SICHERHEITEN.join(",") === "h
    Phase 4 stellt SOLL und IST je Frage gegenüber und braucht die Zuordnung
    Frage → Signal; ein Sammelwert hätte sie unwiederbringlich eingeebnet. */
 check("A", "QUELLEN führen die drei Onboarding-Fragen EINZELN — K1, K2, K4 statt eines Sammelwerts",
-  () => P.QUELLEN.join(",") === "K1,K2,K4,vertiefung,schlagwort,filmwahl,bewertung,prognose,korrektur"
+  () => P.QUELLEN.join(",") === "K1,K2,K4,vertiefung,schlagwort,filmwahl,bewertung,prognose,korrektur,bloganalyse"
     && !P.QUELLEN.includes("onboarding"));
-check("A", "und die Liste bleibt die Lernquellen-Zusage: kein blog/ki/fremd/haeufigkeit",
-  () => !P.QUELLEN.some((q) => /blog|ki|fremd|haeufig|extern/i.test(q)));
+check("A", "bloganalyse ist die einzige Blogquelle; ki/fremd/haeufigkeit bleiben ausgeschlossen",
+  () => P.QUELLEN.filter((q) => /blog/i.test(q)).join(",") === "bloganalyse"
+    && !P.QUELLEN.some((q) => /ki|fremd|haeufig|extern/i.test(q)));
 /* Die Form stammt aus der Edge Function und ist dort ein 400er-Gate. */
 check("A", "VERSION_FORM entspricht der Regel der Edge Function",
   () => P.VERSION_FORM.source === "^[A-Za-z0-9._-]{1,20}$"
@@ -227,7 +240,7 @@ const leererBeleg = [];
 const mitBeleg = [];
 for (const quelle of P.QUELLEN) for (const art of P.SIGNAL_ARTEN) {
   const marke = quelle + "/" + art;
-  const basis = { art, quelle };
+  const basis = quelle === "bloganalyse" ? { art, ...BLOG_META } : { art, quelle };
   if (!P.pruefeSignal(sig({ ...basis, beleg: undefined })).some((f) => /beleg/i.test(f))) ohneBeleg.push(marke);
   if (!P.pruefeSignal(sig({ ...basis, beleg: "   " })).some((f) => /beleg/i.test(f))) leererBeleg.push(marke);
   if (P.pruefeSignal(sig(basis)).length !== 0) mitBeleg.push(marke + " → " + P.pruefeSignal(sig(basis)).join("|"));
@@ -484,7 +497,7 @@ check("E", "sammle ist nicht-mutierend — das Eingabeprofil bleibt leer",
 let viele = mitEinwilligung();
 let direkt = 0;
 for (const quelle of P.QUELLEN) for (const art of P.SIGNAL_ARTEN) {
-  viele = P.sammle(viele, [sig({ quelle, art, wert: quelle + "-" + art })], T1).profil;
+  viele = P.sammle(viele, [sigFuerQuelle(quelle, { art, wert: quelle + "-" + art })], T1).profil;
   if (viele.signale.length) direkt++;
 }
 check("E", "über alle " + KOMBIS + " Quelle×Art-Wege bleibt `signale` leer  [Verstöße: " + direkt + "]",
@@ -1231,8 +1244,8 @@ const BOESE = BOESE_X;
 const durchWert = [], durchBeleg = [];
 for (const [name, text] of BOESE) {
   for (const quelle of P.QUELLEN) for (const art of P.SIGNAL_ARTEN) {
-    if (!P.pruefeSignal(sig({ quelle, art, wert: text })).some((f) => /wert/.test(f))) durchWert.push(name + " " + quelle + "/" + art);
-    if (!P.pruefeSignal(sig({ quelle, art, beleg: text })).some((f) => /beleg/.test(f))) durchBeleg.push(name + " " + quelle + "/" + art);
+    if (!P.pruefeSignal(sigFuerQuelle(quelle, { art, wert: text })).some((f) => /wert/.test(f))) durchWert.push(name + " " + quelle + "/" + art);
+    if (!P.pruefeSignal(sigFuerQuelle(quelle, { art, beleg: text })).some((f) => /beleg/.test(f))) durchBeleg.push(name + " " + quelle + "/" + art);
   }
 }
 check("I", "kein Steuerzeichen kommt durch `wert` — 8 Varianten × " + KOMBIS + " Wege"
@@ -1723,6 +1736,118 @@ check("X", "Z4: ein zweiter Vorschlag verdrängt den ersten nicht stillschweigen
 
 });
 
+/* =========================================================================
+   K — BLOG-PROFIL-ERSATZ
+   ========================================================================= */
+abschnitt("K", async () => {
+console.log("\n--- K: Blog-Profil-Ersatz ---");
+const KOPF = { ...BLOG_META };
+const BLOG_ZUG = Object.freeze({
+  art: "genre", wert: "Neo-Noir", richtung: "zieht_an", staerke: 4,
+  sicherheit: "hoch", beleg: "Diese Textstelle belegt den Geschmackszug.",
+});
+const blogSignal = (o = {}) => ({ ...BLOG_ZUG, ...BLOG_META, ...o });
+
+check("K", "signalId normalisiert wert mit NFKC, innerem Weißraum, trim und lowercase",
+  () => P.signalId(sig({ wert: "  ＮＥＯ\tＮＯＩＲ  " })) === P.signalId(sig({ wert: "neo noir" })));
+check("K", "signalId normalisiert ausschließlich wert — art und richtung bleiben exakt",
+  () => P.signalId(sig({ art: "GENRE", wert: "neo-noir" })) !== P.signalId(sig({ art: "genre", wert: "neo-noir" }))
+    && P.signalId(sig({ richtung: "ZIEHT_AN" })) !== P.signalId(sig({ richtung: "zieht_an" })));
+check("K", "NFKC-identische Werte werden von sammle als ein Signal behandelt",
+  () => { let q = P.sammle(mitEinwilligung(), [sig({ wert: "Café", beleg: "eins" })], T1).profil;
+    q = P.sammle(q, [sig({ wert: "Cafe\u0301", beleg: "zwei" })], T1).profil;
+    return q.offen.length === 1 && q.offen[0].weitereBelege?.[0] === "zwei"; });
+
+check("K", "bloganalyse ist mit vollständiger Provenienz gültig",
+  () => P.pruefeSignal(blogSignal()).length === 0);
+check("K", "Blog-Metafelder sind vollständig und typstreng",
+  () => [
+    { articleId: undefined }, { articleId: "A" }, { contentHash: "A".repeat(64) },
+    { contentHash: "0".repeat(64) }, { analyzedAt: "2026-08-17T08:00:00Z" },
+    { analyzedAt: "2026-02-30T08:00:00.000Z" }, { promptVersion: "blog-profile-v2" },
+  ].every((aenderung) => P.pruefeSignal(blogSignal(aenderung)).length > 0));
+check("K", "articleId akzeptiert exakt die vereinbarte Form bis 120 Zeichen",
+  () => P.pruefeSignal(blogSignal({ articleId: "a" + "_".repeat(119) })).length === 0
+    && P.pruefeSignal(blogSignal({ articleId: "a" + "_".repeat(120) })).length > 0);
+check("K", "wert zählt rohe UTF8-Bytes: 60 sind gültig, 62 nicht",
+  () => P.pruefeSignal(blogSignal({ wert: "ä".repeat(30) })).length === 0
+    && P.pruefeSignal(blogSignal({ wert: "ä".repeat(31) })).some((f) => /UTF8-Bytes/.test(f)));
+check("K", "beleg zählt rohe UTF8-Bytes an beiden Grenzen 16..96",
+  () => P.pruefeSignal(blogSignal({ beleg: "ä".repeat(8) })).length === 0
+    && P.pruefeSignal(blogSignal({ beleg: "ä".repeat(48) })).length === 0
+    && P.pruefeSignal(blogSignal({ beleg: "ä".repeat(7) })).some((f) => /16\.\.96/.test(f))
+    && P.pruefeSignal(blogSignal({ beleg: "ä".repeat(49) })).some((f) => /16\.\.96/.test(f)));
+check("K", "Blog-wert und -beleg bleiben flach",
+  () => P.pruefeSignal(blogSignal({ wert: "neo\nnoir" })).length > 0
+    && P.pruefeSignal(blogSignal({ beleg: "Diese Textstelle\nbelegt etwas." })).length > 0
+    && P.pruefeSignal(blogSignal({ wert: "neo\u007fnoir" })).length > 0
+    && P.pruefeSignal(blogSignal({ beleg: "Diese Textstelle\u0085belegt etwas." })).length > 0);
+check("K", "Nicht-Blogsignale dürfen keine Blog-Metafelder tragen",
+  () => ["articleId", "contentHash", "analyzedAt", "promptVersion"].every((feld) => P.pruefeSignal(sig({ [feld]: BLOG_META[feld] }))
+    .some((f) => /Blog-Metafelder/.test(f))));
+check("K", "Altquellen bleiben ohne Metafelder gültig, unbekannte Quellen bleiben zu",
+  () => P.pruefeSignal(sig({ quelle: "K1" })).length === 0
+    && P.pruefeSignal(sig({ quelle: "unbekannt" })).some((f) => /Quelle/.test(f)));
+
+const leerVorher = mitEinwilligung();
+const leerJson = JSON.stringify(leerVorher);
+const neu = P.uebernimmBlogProfilSignale(leerVorher, KOPF, [BLOG_ZUG]);
+check("K", "Speicherklick sammelt und übernimmt genau den neuen Blogzug",
+  () => !neu.abgelehnt && neu.uebernommen === 1 && neu.bereitsVorhanden === 0
+    && neu.profil.signale.length === 1 && neu.profil.offen.length === 0
+    && neu.profil.signale[0].quelle === "bloganalyse"
+    && neu.profil.signale[0].bestaetigt === KOPF.analyzedAt);
+check("K", "Speicherklick mutiert weder Profil noch geschmackszuege",
+  () => JSON.stringify(leerVorher) === leerJson && JSON.stringify(BLOG_ZUG) === JSON.stringify({
+    art: "genre", wert: "Neo-Noir", richtung: "zieht_an", staerke: 4,
+    sicherheit: "hoch", beleg: "Diese Textstelle belegt den Geschmackszug.",
+  }));
+
+const schonSignal = { ...mitEinwilligung(), signale: [blogSignal({ bestaetigt: T1 })] };
+const doppeltSignal = P.uebernimmBlogProfilSignale(schonSignal, KOPF, [BLOG_ZUG, { ...BLOG_ZUG }]);
+check("K", "exakte Identität in signale oder Kandidaten erzeugt kein Duplikat und wird berichtet",
+  () => !doppeltSignal.abgelehnt && doppeltSignal.uebernommen === 0
+    && doppeltSignal.bereitsVorhanden === 2 && doppeltSignal.profil === schonSignal);
+const schonOffen = { ...mitEinwilligung(), offen: [blogSignal({ erfasst: T1 })] };
+const doppeltOffen = P.uebernimmBlogProfilSignale(schonOffen, KOPF, [BLOG_ZUG]);
+check("K", "exakte Identität in offen wird nicht bestätigt oder dupliziert",
+  () => !doppeltOffen.abgelehnt && doppeltOffen.uebernommen === 0
+    && doppeltOffen.bereitsVorhanden === 1 && doppeltOffen.profil === schonOffen);
+
+const konflikt = (profil, kandidaten) => P.uebernimmBlogProfilSignale(profil, KOPF, kandidaten);
+check("K", "Gegenrichtung in signale lehnt den ganzen Klick atomar ab",
+  () => { const p0 = { ...mitEinwilligung(), signale: [blogSignal({ bestaetigt: T1 })] };
+    const r = konflikt(p0, [{ ...BLOG_ZUG, richtung: "stoesst_ab" }]);
+    return r.abgelehnt && r.profil === p0 && r.uebernommen === 0; });
+check("K", "Gegenrichtung in offen lehnt den ganzen Klick atomar ab",
+  () => { const p0 = { ...mitEinwilligung(), offen: [blogSignal({ erfasst: T1 })] };
+    const r = konflikt(p0, [{ ...BLOG_ZUG, richtung: "stoesst_ab" }]);
+    return r.abgelehnt && r.profil === p0 && p0.offen.length === 1; });
+check("K", "Gegenrichtungen unter Kandidaten lehnen den ganzen Klick atomar ab",
+  () => { const p0 = mitEinwilligung();
+    const r = konflikt(p0, [BLOG_ZUG, { ...BLOG_ZUG, richtung: "stoesst_ab" }]);
+    return r.abgelehnt && r.profil === p0 && r.uebernommen === 0; });
+check("K", "ungültiger Kandidat oder Vorschaukopf lässt das Profil atomar unverändert",
+  () => { const p0 = mitEinwilligung(); const vorher = JSON.stringify(p0);
+    const a = P.uebernimmBlogProfilSignale(p0, KOPF, [{ ...BLOG_ZUG, beleg: "zu kurz" }]);
+    const b = P.uebernimmBlogProfilSignale(p0, { ...KOPF, contentHash: "0".repeat(64) }, [BLOG_ZUG]);
+    return a.abgelehnt && b.abgelehnt && a.profil === p0 && b.profil === p0 && JSON.stringify(p0) === vorher; });
+check("K", "auch formfremde und lückenhafte Kandidatenlisten werden gemeldet statt zu werfen",
+  () => { const p0 = mitEinwilligung(); const luecke = new Array(1);
+    try {
+      return P.uebernimmBlogProfilSignale(p0, KOPF, null).abgelehnt
+        && P.uebernimmBlogProfilSignale(p0, KOPF, luecke).abgelehnt;
+    } catch { return false; } });
+
+const fremdOffen = sig({ wert: "fremder offener Zug", beleg: "schon vorher offen", erfasst: T1 });
+const mitFremdemOffen = { ...mitEinwilligung(), offen: [fremdOffen] };
+const gezielt = P.uebernimmBlogProfilSignale(mitFremdemOffen, KOPF, [BLOG_ZUG]);
+check("K", "nur in diesem Aufruf neu erzeugte offene Signale werden bestätigt",
+  () => gezielt.uebernommen === 1 && gezielt.profil.signale.length === 1
+    && gezielt.profil.signale[0].quelle === "bloganalyse"
+    && gezielt.profil.offen.length === 1 && gezielt.profil.offen[0] === fremdOffen);
+});
+
 /* ------------------------------------------------------------------ Lauf */
 for (const [name, lauf] of ABSCHNITTE) {
   try { await lauf(); }
@@ -1743,6 +1868,7 @@ const TITEL = {
   H: "Speicher",
   I: "Injektionsschranke",
   J: "Dubletten und weitereBelege",
+  K: "Blog-Profil-Ersatz",
   R: "Rahmen-Bestätigung",
   N: "Speicher-Naht (Phase-0-Audit)",
 };

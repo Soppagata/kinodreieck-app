@@ -60,8 +60,8 @@ export const SICHERHEITEN = ["hoch", "mittel", "niedrig"];
 /* Woher ein Signal stammt. Die Liste ist zugleich die Lernquellen-Zusage aus
    dem Leitfaden: NICHT enthalten sind unbestätigte KI-Schätzungen, KI-Texte,
    bloße Worthäufigkeit, fremde Artikel und Daten anderer Konten. Blogtexte
-   fehlen bewusst — sie kommen ausschließlich über die Bloganalyse (Etappe 8)
-   mit eigenem Opt-in, nie stillschweigend hier. */
+   kommen ausschließlich über `bloganalyse` mit Provenienz und ausdrücklichem
+   Speicherklick, nie stillschweigend hier. */
 export const QUELLEN = [
   /* Die drei Onboarding-Fragen EINZELN, nicht als Sammelwert: Der Eval in
      Phase 4 stellt SOLL und IST je Frage gegenueber und braucht die
@@ -76,7 +76,11 @@ export const QUELLEN = [
   "bewertung",    // eigene, abgegebene Bewertung
   "prognose",     // Reaktion auf eine KI-Prognose (angenommen/korrigiert/verworfen)
   "korrektur",    // ausdrückliche Änderung im Profil selbst
+  "bloganalyse",  // ausdrücklich bestätigte Signale aus der Blog-Profil-Vorschau
 ];
+
+export const BLOG_SIGNAL_QUELLE = "bloganalyse";
+export const BLOG_SIGNAL_PROMPT_VERSION = "blog-profile-v1";
 
 /* Profilversion als kurzes Token: Die Edge Function validiert sie gegen
    /^[A-Za-z0-9._-]{1,20}$/ (ai-task/index.ts:443) und weist längere oder
@@ -93,6 +97,39 @@ export const VERSION_FORM = /^[A-Za-z0-9._-]{1,20}$/;
    Ein `wert` mit "\n\nSYSTEM: ..." bricht die Bullet-Struktur der
    Prompt-Fassung auf und schreibt eine eigene Zeile. */
 const VERBOTENE_ZEICHEN = /[\r\n\u0000-\u001f\u2028\u2029]/;
+const BLOG_VERBOTENE_ZEICHEN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const BLOG_SIGNAL_META = ["articleId", "contentHash", "analyzedAt", "promptVersion"];
+const BLOG_ARTICLE_ID = /^[a-z0-9][a-z0-9_]{0,119}$/;
+const BLOG_CONTENT_HASH = /^[a-f0-9]{64}$/;
+const BLOG_NULL_HASH = /^0{64}$/;
+const CANONICAL_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const UTF8_BYTES = (wert) => new TextEncoder().encode(wert).length;
+
+const normalisiereSignalWert = (wert) => String(wert == null ? "" : wert)
+  .normalize("NFKC")
+  .replace(/\s+/gu, " ")
+  .trim()
+  .toLowerCase();
+
+const istCanonicalUtc = (wert) => {
+  if (typeof wert !== "string" || !CANONICAL_UTC.test(wert)) return false;
+  const datum = new Date(wert);
+  return Number.isFinite(datum.getTime()) && datum.toISOString() === wert;
+};
+
+const hatBlogMeta = (s) => BLOG_SIGNAL_META.some((feld) =>
+  Object.prototype.hasOwnProperty.call(s, feld));
+
+const pruefeBlogMeta = (s, fehler) => {
+  if (typeof s.articleId !== "string" || !BLOG_ARTICLE_ID.test(s.articleId)) {
+    fehler.push("articleId ungueltig");
+  }
+  if (typeof s.contentHash !== "string" || !BLOG_CONTENT_HASH.test(s.contentHash) || BLOG_NULL_HASH.test(s.contentHash)) {
+    fehler.push("contentHash ungueltig");
+  }
+  if (!istCanonicalUtc(s.analyzedAt)) fehler.push("analyzedAt nicht canonical UTC ISO");
+  if (s.promptVersion !== BLOG_SIGNAL_PROMPT_VERSION) fehler.push("promptVersion ungueltig");
+};
 
 /* Vereinheitlicht Weißraum. Zweite Schranke, bewusst REDUNDANT zur
    Validierung: Der Prompt-Bau ist die letzte Stelle vor dem Anbieter und
@@ -152,11 +189,25 @@ export function pruefeSignal(s) {
   if (!Number.isInteger(s.staerke) || s.staerke < 1 || s.staerke > 5) fehler.push("staerke muss 1..5 sein");
   if (!SICHERHEITEN.includes(s.sicherheit)) fehler.push("unbekannte Sicherheit: " + String(s.sicherheit));
   if (!QUELLEN.includes(s.quelle)) fehler.push("unbekannte Quelle: " + String(s.quelle));
+  const istBlog = s.quelle === BLOG_SIGNAL_QUELLE;
+  if (istBlog) {
+    pruefeBlogMeta(s, fehler);
+    if (typeof s.wert === "string" && (UTF8_BYTES(s.wert) < 1 || UTF8_BYTES(s.wert) > 60)) {
+      fehler.push("wert ausserhalb 1..60 UTF8-Bytes");
+    }
+    if (typeof s.wert === "string" && BLOG_VERBOTENE_ZEICHEN.test(s.wert)) fehler.push("wert ist nicht flach");
+  } else if (hatBlogMeta(s)) {
+    fehler.push("Blog-Metafelder nur fuer bloganalyse erlaubt");
+  }
   /* Beleg-Pflicht: Der KI-Weg muss auf eine Textstelle zeigen, der
      deterministische auf das gewählte Schlagwort oder den Film. Ohne Beleg
      kein Signal — das ist die strukturelle Fassung von „nie erfundene". */
   if (typeof s.beleg !== "string" || !s.beleg.trim()) fehler.push("beleg fehlt (Pflicht)");
-  if (s.beleg && s.beleg.length > 400) fehler.push("beleg zu lang (max 400)");
+  if (istBlog && typeof s.beleg === "string"
+      && (UTF8_BYTES(s.beleg) < 16 || UTF8_BYTES(s.beleg) > 96)) {
+    fehler.push("beleg ausserhalb 16..96 UTF8-Bytes");
+  } else if (!istBlog && s.beleg && s.beleg.length > 400) fehler.push("beleg zu lang (max 400)");
+  if (istBlog && typeof s.beleg === "string" && BLOG_VERBOTENE_ZEICHEN.test(s.beleg)) fehler.push("beleg ist nicht flach");
   /* `weitereBelege` entsteht beim Zusammenfuehren zweier Fundstellen. Ohne
      Grenze passierte ein Signal mit 500 Belegen a 400 Zeichen (200 KB) die
      Pruefung -- gegen ein Topf-Limit von 1 MiB. Keine Injektions-, eine
@@ -166,7 +217,8 @@ export function pruefeSignal(s) {
     else if (s.weitereBelege.length > 5) fehler.push("weitereBelege: hoechstens 5");
     else s.weitereBelege.forEach((b, i) => {
       if (typeof b !== "string" || !b.trim()) fehler.push("weitereBelege[" + i + "]: leer");
-      else if (b.length > 400) fehler.push("weitereBelege[" + i + "]: zu lang (max 400)");
+      else if (istBlog && (UTF8_BYTES(b) < 16 || UTF8_BYTES(b) > 96)) fehler.push("weitereBelege[" + i + "]: ausserhalb 16..96 UTF8-Bytes");
+      else if (!istBlog && b.length > 400) fehler.push("weitereBelege[" + i + "]: zu lang (max 400)");
       else if (VERBOTENE_ZEICHEN.test(b)) fehler.push("weitereBelege[" + i + "]: Zeilenumbruch oder Steuerzeichen");
     });
   }
@@ -352,7 +404,9 @@ export function widerrufeEinwilligung(p, jetzt) {
    statt dort nachgebaut: Drift zwischen Dublettenprüfung und Auswahl wäre
    ein Bestätigungsfehler, kein bloßes Darstellungsdetail. */
 export const signalId = (s) =>
-  [s.art, String(s.wert).toLowerCase().replace(/\s+/g, " ").trim(), s.richtung].join("\u0001");
+  [s.art, normalisiereSignalWert(s.wert), s.richtung].join("\u0001");
+
+const signalBasisId = (s) => [s.art, normalisiereSignalWert(s.wert)].join("\u0001");
 
 /* Neue Signale landen in `offen`, nie direkt in `signale`. Erst die
    Bestätigung durch den Nutzer hebt sie hinüber (V4: Vorschau/Bestätigung,
@@ -490,6 +544,116 @@ export function uebernimm(p, jetzt, auswahl) {
 export function uebernimmAlle(p, jetzt) {
   const offen = Array.isArray(p?.offen) ? p.offen : [];
   return uebernimm(p, jetzt, offen.map((_, i) => i));
+}
+
+/* Reiner Schreibvertrag fuer den ausdruecklichen Speicherklick der
+   Blog-Profil-Vorschau. Nur die hier neu angelegten offenen Signale werden
+   bestaetigt; schon vorher offene Vorschlaege bleiben unangetastet. */
+export function uebernimmBlogProfilSignale(p, vorschaukopf, geschmackszuege) {
+  const abbruch = (fehler, bereitsVorhanden = 0) => ({
+    profil: p,
+    uebernommen: 0,
+    bereitsVorhanden,
+    abgelehnt: true,
+    fehler: Array.isArray(fehler) ? fehler : [fehler],
+  });
+
+  if (!hatEinwilligung(p) || pruefeProfil(p).length) {
+    return abbruch("Profil ist nicht gueltig und eingewilligt");
+  }
+  if (!vorschaukopf || typeof vorschaukopf !== "object" || Array.isArray(vorschaukopf)) {
+    return abbruch("Vorschaukopf fehlt oder ist ungueltig");
+  }
+  if (vorschaukopf.quelle !== BLOG_SIGNAL_QUELLE) {
+    return abbruch("Vorschaukopf hat eine ungueltige Quelle");
+  }
+  const metaFehler = [];
+  pruefeBlogMeta(vorschaukopf, metaFehler);
+  if (metaFehler.length) return abbruch(metaFehler);
+  if (!Array.isArray(geschmackszuege)) return abbruch("geschmackszuege ist keine Liste");
+
+  const meta = {
+    quelle: BLOG_SIGNAL_QUELLE,
+    articleId: vorschaukopf.articleId,
+    contentHash: vorschaukopf.contentHash,
+    analyzedAt: vorschaukopf.analyzedAt,
+    promptVersion: vorschaukopf.promptVersion,
+  };
+  const kandidaten = Array.from(geschmackszuege, (s) => ({
+    art: s?.art,
+    wert: s?.wert,
+    richtung: s?.richtung,
+    staerke: s?.staerke,
+    sicherheit: s?.sicherheit,
+    beleg: s?.beleg,
+    ...meta,
+  }));
+  const kandidatFehler = [];
+  kandidaten.forEach((s, i) => {
+    pruefeSignal(s).forEach((fehler) => kandidatFehler.push("geschmackszuege[" + i + "]: " + fehler));
+  });
+  if (kandidatFehler.length) return abbruch(kandidatFehler);
+
+  const bestand = [...p.signale, ...p.offen];
+  const richtungen = new Map();
+  for (const s of bestand) {
+    const basis = signalBasisId(s);
+    const menge = richtungen.get(basis) || new Set();
+    menge.add(s.richtung);
+    richtungen.set(basis, menge);
+  }
+
+  for (const s of kandidaten) {
+    const basis = signalBasisId(s);
+    const menge = richtungen.get(basis) || new Set();
+    if ([...menge].some((richtung) => richtung !== s.richtung)) {
+      return abbruch("Gegenrichtung fuer gleiche Art und gleichen Wert");
+    }
+    menge.add(s.richtung);
+    richtungen.set(basis, menge);
+  }
+
+  const vorhanden = new Set(bestand.map(signalId));
+  const inDiesemAufruf = new Set();
+  const neu = [];
+  let bereitsVorhanden = 0;
+  for (const s of kandidaten) {
+    const id = signalId(s);
+    if (vorhanden.has(id) || inDiesemAufruf.has(id)) {
+      bereitsVorhanden++;
+      continue;
+    }
+    inDiesemAufruf.add(id);
+    neu.push(s);
+  }
+  if (!neu.length) {
+    return {
+      profil: p,
+      uebernommen: 0,
+      bereitsVorhanden,
+      abgelehnt: false,
+      fehler: [],
+    };
+  }
+
+  const alteOffene = p.offen.length;
+  const gesammelt = sammle(p, neu, vorschaukopf.analyzedAt);
+  if (gesammelt.abgelehnt || gesammelt.verworfen.length || gesammelt.zusammengefuehrt
+      || gesammelt.uebernommen !== neu.length) {
+    return abbruch("Blogsignale konnten nicht atomar gesammelt werden", bereitsVorhanden);
+  }
+  const auswahl = neu.map((_, i) => alteOffene + i);
+  const bestaetigt = uebernimm(gesammelt.profil, vorschaukopf.analyzedAt, auswahl);
+  if (bestaetigt.fehler || bestaetigt.uebernommen !== neu.length) {
+    return abbruch("Blogsignale konnten nicht atomar bestaetigt werden", bereitsVorhanden);
+  }
+  return {
+    profil: bestaetigt.profil,
+    uebernommen: bestaetigt.uebernommen,
+    bereitsVorhanden,
+    abgelehnt: false,
+    fehler: [],
+  };
 }
 
 /* ---------- Die drei übrigen Extraktionsausgaben ----------
