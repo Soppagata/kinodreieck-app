@@ -4,12 +4,12 @@ const exaktSchluessel = (wert, schluessel) => istObjekt(wert)
   && Object.keys(wert).length === schluessel.length
   && schluessel.every((name) => Object.prototype.hasOwnProperty.call(wert, name));
 
-const istText = (wert) => typeof wert === "string" && wert.length > 0;
+const istText = (wert) => typeof wert === "string";
 const istGanzzahl = (wert) => Number.isInteger(wert);
 
-const BYTE_LAENGE = (text) => new TextEncoder().encode(String(text)).length;
+const BYTE_LAENGE = (text) => new TextEncoder().encode(text).length;
 const NFKC_WHITESPACE = /\s+/gu;
-const ZEILENWECHSEL_OHNE_TEXT = /[\r\n\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const KEINE_STEUERZEICHEN = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 
 const BLOG_PROFILE_ID = /^[a-z0-9][a-z0-9_]{0,119}$/;
 const BLOG_PROFILE_ARTEN = Object.freeze([
@@ -39,268 +39,461 @@ export const BLOG_PROFILE_BELG_MIN_BYTES = 16;
 export const BLOG_PROFILE_MAX_GESCHMAKSE = 12;
 export const BLOG_PROFILE_MAX_VOKABULAR = 6;
 
-const normalisiereIdentitaet = (wert) => String(wert).normalize("NFKC").replace(NFKC_WHITESPACE, " ").trim().toLowerCase();
-const istEinzeilig = (wert) => !ZEILENWECHSEL_OHNE_TEXT.test(String(wert));
-const istZeilenfreierBeleg = (wert) => typeof wert === "string" && istEinzeilig(wert);
+const BLOG_PROFILE_ARTICLE_ROOT_KEYS = Object.freeze(["id", "titel", "text"]);
+const BLOG_PROFILE_LISTEN_KEYS = Object.freeze(["genres", "tags"]);
+const BLOG_PROFILE_HASH_RE = /^[a-f0-9]{64}$/;
+const BLOG_PROFILE_HASH_NOT_ZERO_RE = /^0{64}$/;
+const BLOG_PROFILE_ARTICLE_KEYS = Object.freeze(["artikel", "listen"]);
 
-const fehlschlag = (grund) => ({ ok: false, fehler: [grund], payload: null });
-const erfolg = (payload) => ({ ok: true, fehler: [], payload });
+const CANONICAL_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-const setAusListe = (liste) => {
-  const exact = new Set();
-  const normalisiert = new Set();
-  return liste.reduce((acc, raw) => {
-    const normal = normalisiereIdentitaet(raw);
-    if (raw !== undefined) acc.exact.add(raw);
-    if (normal) acc.normalisiert.add(normal);
-    return acc;
-  }, { exact, normalisiert });
-};
+const normalisiereIdentitaet = (wert) => String(wert)
+  .normalize("NFKC")
+  .replace(NFKC_WHITESPACE, " ")
+  .trim()
+  .toLowerCase();
 
-const istListeWert = (wert, minBytes, maxBytes, zeilenfrei = true) => {
-  if (typeof wert !== "string") return false;
-  if (zeilenfrei && !istEinzeilig(wert)) return false;
+const istEinzeilig = (wert) => istText(wert) && !KEINE_STEUERZEICHEN.test(wert);
+
+const istStringImByteBereich = (wert, minBytes, maxBytes, einzeilig = false) => {
+  if (!istText(wert)) return false;
+  if (einzeilig && !istEinzeilig(wert)) return false;
   const bytes = BYTE_LAENGE(wert);
   return bytes >= minBytes && bytes <= maxBytes;
 };
 
-const validateListenWerte = (werte, listeName, errors) => {
-  if (!Array.isArray(werte)) return { ok: false, werte: [], key: `${listeName}:` + " keine Liste" };
-  if (werte.length > BLOG_PROFILE_LIST_MAX_EINZEL) return { ok: false, werte: [], key: `${listeName}:zu viele` };
-  for (const eintrag of werte) {
-    if (typeof eintrag !== "string") return { ok: false, werte: [], key: `${listeName}:kein String` };
-    if (!istEinzeilig(eintrag)) return { ok: false, werte: [], key: `${listeName}:steuerelement` };
-    const bytes = BYTE_LAENGE(eintrag);
-    if (bytes < 1 || bytes > BLOG_PROFILE_LIST_MAX_BYTES) return { ok: false, werte: [], key: `${listeName}:falsche byteLaenge` };
-  }
-  return { ok: true, werte: [...werte] };
+const fehlschlag = (grund) => ({ ok: false, fehler: [grund], payload: null });
+const erfolg = (payload) => ({ ok: true, fehler: [], payload });
+
+const isCanonicalIsoDate = (wert) => {
+  if (!istText(wert) || !CANONICAL_UTC.test(wert)) return false;
+  const parsed = new Date(wert);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === wert;
 };
 
-function valideEinzelnachweis(article) {
-  if (!istObjekt(article)) return fehlschlag("artikel ist kein Objekt");
-  if (typeof article.herkunft !== "string" || article.herkunft === "gezogen") return fehlschlag("artikel ist nicht eigen");
-  if ("finderGenreKey" in article) return fehlschlag("finderGenreKey ist verboten");
-  if (!BLOG_PROFILE_ID.test(String(article.id || ""))) return fehlschlag("artikelId ungültig");
-  if (!istText(String(article.titel))) return fehlschlag("titel fehlt");
-  if (BYTE_LAENGE(article.titel) < 1 || BYTE_LAENGE(article.titel) > BLOG_PROFILE_TITEL_MAX_BYTES) return fehlschlag("titel-Länge ungültig");
-  if (!istText(String(article.text))) return fehlschlag("text fehlt");
-  if (BYTE_LAENGE(article.text) < 1 || BYTE_LAENGE(article.text) > BLOG_PROFILE_TEXT_MAX_BYTES) return fehlschlag("text-Länge ungültig");
-
-  const genresErgebnis = validateListenWerte(article.genres, "genres");
-  if (!genresErgebnis.ok) return fehlschlag(genresErgebnis.key);
-  if (genresErgebnis.werte.length === 0) return fehlschlag("genres darf nicht leer sein");
-
-  const tagsErgebnis = validateListenWerte(article.tags, "tags");
-  if (!tagsErgebnis.ok) return fehlschlag(tagsErgebnis.key);
-  if (genresErgebnis.werte.length + tagsErgebnis.werte.length > BLOG_PROFILE_LIST_MAX_ZUSAMMEN) return fehlschlag("listen zu lang");
-
-  const normSet = new Set();
-  const exactSet = new Set();
-  for (const wert of [...genresErgebnis.werte, ...tagsErgebnis.werte]) {
-    if (exactSet.has(wert)) return fehlschlag("doppelte Werte");
-    exactSet.add(wert);
-    const normal = normalisiereIdentitaet(wert);
-    if (normSet.has(normal)) return fehlschlag("duplikat über Listen");
-    normSet.add(normal);
+const valideEinzelnachweis = ({ artikel, listen }, errors) => {
+  if (!exaktSchluessel(artikel, BLOG_PROFILE_ARTICLE_ROOT_KEYS)) {
+    errors.push("artikelPayload.artikel hat nicht exakt id/titel/text");
+    return { ok: false, payload: null };
   }
 
-  return erfolg({
-    artikel: {
-      id: String(article.id),
-      titel: String(article.titel),
-      text: String(article.text),
+  if (typeof artikel.id !== "string" || !BLOG_PROFILE_ID.test(artikel.id)) {
+    errors.push("artikelPayload.artikel.id ungültig");
+    return { ok: false, payload: null };
+  }
+
+  if (!istStringImByteBereich(artikel.titel, 1, BLOG_PROFILE_TITEL_MAX_BYTES, true)) {
+    errors.push("artikelPayload.artikel.titel ungültig");
+    return { ok: false, payload: null };
+  }
+
+  if (!istText(artikel.text) || !istStringImByteBereich(artikel.text, 1, BLOG_PROFILE_TEXT_MAX_BYTES, false)) {
+    errors.push("artikelPayload.artikel.text ungültig");
+    return { ok: false, payload: null };
+  }
+
+  if (!exaktSchluessel(listen, BLOG_PROFILE_LISTEN_KEYS)) {
+    errors.push("artikelPayload.listen hat nicht exakt genres/tags");
+    return { ok: false, payload: null };
+  }
+
+  if (!Array.isArray(listen.genres)) {
+    errors.push("artikelPayload.listen.genres ist keine Liste");
+    return { ok: false, payload: null };
+  }
+
+  if (!Array.isArray(listen.tags)) {
+    errors.push("artikelPayload.listen.tags ist keine Liste");
+    return { ok: false, payload: null };
+  }
+
+  const listenErgebnis = validiereArtikelListen(listen.genres, listen.tags);
+  if (!listenErgebnis.ok) {
+    errors.push(listenErgebnis.fehler);
+    return { ok: false, payload: null };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      artikel: {
+        id: artikel.id,
+        titel: artikel.titel,
+        text: artikel.text,
+      },
+      listen: listenErgebnis.listen,
     },
+  };
+};
+
+const validiereListeWerte = (werte) => {
+  const valid = [];
+  const exact = new Set();
+  const norm = new Set();
+
+  if (werte.length > BLOG_PROFILE_LIST_MAX_EINZEL) {
+    return { ok: false, fehler: "liste zu lang" };
+  }
+
+  for (const wert of werte) {
+    if (!istText(wert)) {
+      return { ok: false, fehler: "liste enthält non-string" };
+    }
+
+    if (!istStringImByteBereich(wert, 1, BLOG_PROFILE_LIST_MAX_BYTES, true)) {
+      return { ok: false, fehler: "liste-Eintrag hat falsche Byte-Länge" };
+    }
+
+    const normiert = normalisiereIdentitaet(wert);
+    if (exact.has(wert)) {
+      return { ok: false, fehler: "liste enthält exakte Dublette" };
+    }
+
+    if (norm.has(normiert)) {
+      return { ok: false, fehler: "liste enthält normalisierte Dublette" };
+    }
+
+    exact.add(wert);
+    norm.add(normiert);
+    valid.push(wert);
+  }
+
+  return { ok: true, liste: valid };
+};
+
+const validiereArtikelListen = (genres, tags) => {
+  const genresPruefung = validiereListeWerte(genres);
+  if (!genresPruefung.ok) return { ok: false, fehler: `genres: ${genresPruefung.fehler}` };
+
+  if (genresPruefung.liste.length === 0) return { ok: false, fehler: "genres darf nicht leer sein" };
+
+  const tagsPruefung = validiereListeWerte(tags);
+  if (!tagsPruefung.ok) return { ok: false, fehler: `tags: ${tagsPruefung.fehler}` };
+
+  if (genresPruefung.liste.length + tagsPruefung.liste.length > BLOG_PROFILE_LIST_MAX_ZUSAMMEN) {
+    return { ok: false, fehler: "listen zu lang" };
+  }
+
+  const exact = new Set();
+  const norm = new Set();
+  for (const wert of [...genresPruefung.liste, ...tagsPruefung.liste]) {
+    if (exact.has(wert)) return { ok: false, fehler: "doppelte Werte über beide Listen" };
+    exact.add(wert);
+
+    const normiert = normalisiereIdentitaet(wert);
+    if (norm.has(normiert)) return { ok: false, fehler: "normalisierte Dublette über beide Listen" };
+    norm.add(normiert);
+  }
+
+  return {
+    ok: true,
     listen: {
-      genres: genresErgebnis.werte,
-      tags: tagsErgebnis.werte,
+      genres: genresPruefung.liste,
+      tags: tagsPruefung.liste,
     },
-  });
-}
+  };
+};
 
-export function waehleBlogProfilArtikel({ artikel = [], artikelId }) {
+export function waehleBlogProfilArtikel({ artikel = [], artikelId, listen }) {
   if (!Array.isArray(artikel)) return fehlschlag("artikel ist keine Liste");
-  const id = String(artikelId || "");
-  if (!BLOG_PROFILE_ID.test(id)) return fehlschlag("artikelId ungültig");
+  if (typeof artikelId !== "string" || !BLOG_PROFILE_ID.test(artikelId)) return fehlschlag("artikelId ungültig");
 
-  const treffer = artikel.filter((a) => istObjekt(a) && String(a.id || "") === id);
+  const treffer = artikel.filter((a) => istObjekt(a) && typeof a.id === "string" && a.id === artikelId);
   if (treffer.length !== 1) return fehlschlag("artikelId führt nicht zu exakt einem Treffer");
 
-  return valideEinzelnachweis(treffer[0]);
+  const artikelObjekt = treffer[0];
+
+  if (Object.prototype.hasOwnProperty.call(artikelObjekt, "herkunft") && typeof artikelObjekt.herkunft !== "string") {
+    return fehlschlag("herkunft ist formfremd");
+  }
+
+  if (artikelObjekt.herkunft === "gezogen") {
+    return fehlschlag("artikel ist nicht eigen");
+  }
+
+  if (!istObjekt(listen)) return fehlschlag("listen sind nicht vorhanden");
+
+  const fehler = [];
+  const validiert = valideEinzelnachweis({
+    artikel: {
+      id: artikelObjekt.id,
+      titel: artikelObjekt.titel,
+      text: artikelObjekt.text,
+    },
+    listen,
+  }, fehler);
+
+  if (!validiert.ok) return fehlschlag(fehler.length > 0 ? fehler.join(" | ") : "liste ungültig");
+
+  return erfolg(validiert.payload);
 }
 
-const KEIN_STEUERZEICHEN = /[\u0000-\u001f\u007f-\u009f]/u;
-const listenkonflikt = (liste, erlaubte, name, errors) => {
-  if (!Array.isArray(liste)) {
-    errors.push(`${name} is not array`);
-    return;
-  }
-  if (liste.length > BLOG_PROFILE_MAX_GESCHMAKSE) {
-    errors.push(`${name} too many`);
-  }
+const istBeleg = (beleg, artikelText) => {
+  if (!istStringImByteBereich(beleg, BLOG_PROFILE_BELG_MIN_BYTES, BLOG_PROFILE_BELG_MAX_BYTES, true)) return false;
+  return typeof artikelText === "string" && artikelText.includes(beleg);
 };
 
-const validateGeschmackszuegeItem = (item, erlaubteGenres, allowedKeys, alleFehler, artikelText) => {
+const validateGeschmackszuegeItem = (item, erlaubteGenres, alleFehler, artikelText) => {
   const itemKeys = ["art", "wert", "richtung", "staerke", "sicherheit", "beleg"];
   if (!exaktSchluessel(item, itemKeys)) {
     alleFehler.push("geschmackszuege-item hat falsche Schlüssel");
     return;
   }
+
   if (!BLOG_PROFILE_ARTEN.includes(item.art)) alleFehler.push("geschmackszueg.art ungültig");
-  if (!istListeWert(item.wert, 1, BLOG_PROFILE_WERT_MAX_BYTES)) alleFehler.push("geschmackszueg.wert byte ungültig");
+  if (!istStringImByteBereich(item.wert, 1, BLOG_PROFILE_WERT_MAX_BYTES, true)) alleFehler.push("geschmackszueg.wert byte ungültig");
   if (item.art === "genre" && !erlaubteGenres.includes(item.wert)) alleFehler.push("genre-Wert nicht erlaubt");
   if (!BLOG_PROFILE_RICHTUNGEN.includes(item.richtung)) alleFehler.push("geschmackszueg.richtung ungültig");
   if (!istGanzzahl(item.staerke) || item.staerke < 1 || item.staerke > 5) alleFehler.push("geschmackszueg.staerke ungültig");
   if (!BLOG_PROFILE_SICHERHEITEN.includes(item.sicherheit)) alleFehler.push("geschmackszueg.sicherheit ungültig");
-  if (!istZeilenfreierBeleg(item.beleg) || !istListeWert(item.beleg, BLOG_PROFILE_BELG_MIN_BYTES, BLOG_PROFILE_BELG_MAX_BYTES)) alleFehler.push("geschmackszueg.beleg ungültig");
-  if (typeof artikelText === "string" && !artikelText.includes(item.beleg)) alleFehler.push("geschmackszueg.beleg nicht im Artikel");
+  if (!istBeleg(item.beleg, artikelText)) alleFehler.push("geschmackszueg.beleg ungültig");
 };
 
-const normalizeTagSet = (werte) => Array.from(new Set((werte || []).map((w) => normalisiereIdentitaet(w))))
-  .filter((w) => w.length > 0)
-  .sort();
+const normalizeZuordnung = (werte) => {
+  const exact = new Set();
+  const norm = new Set();
+  const ergebnis = [];
 
-const sameSet = (a, b) => {
-  if (a.length !== b.length) return false;
-  return a.every((v, idx) => v === b[idx]);
+  for (const wert of werte) {
+    if (!istText(wert)) return { ok: false, fehler: "zuordnung enthält non-string" };
+    if (!istStringImByteBereich(wert, 1, BLOG_PROFILE_LIST_MAX_BYTES, true)) return { ok: false, fehler: "zuordnung enthält invaliden string" };
+
+    if (exact.has(wert)) return { ok: false, fehler: "zuordnung enthält exakte Dublette" };
+    exact.add(wert);
+
+    const normiert = normalisiereIdentitaet(wert);
+    if (norm.has(normiert)) return { ok: false, fehler: "zuordnung enthält normalisierte Dublette" };
+    norm.add(normiert);
+    ergebnis.push(wert);
+  }
+
+  return { ok: true, liste: ergebnis, norm: [...norm].sort() };
 };
 
-const validiereVokabularItem = (item, erlaubteGenres, erlaubteTags, alleFehler, artikelText) => {
+const validateZuordnungsMenge = (item, erlaubteGenres, erlaubteTags, alleFehler, artikelText) => {
   const itemKeys = ["wort", "beschreibung", "genres", "tags", "beleg"];
   if (!exaktSchluessel(item, itemKeys)) {
     alleFehler.push("vokabular-item hat falsche Schlüssel");
     return;
   }
-  if (!istListeWert(item.wort, 1, BLOG_PROFILE_WORT_MAX_BYTES)) alleFehler.push("vokabular.wort byte ungültig");
-  if (!istListeWert(item.beschreibung, 1, BLOG_PROFILE_BELG_MAX_BYTES)) alleFehler.push("vokabular.beschreibung byte ungültig");
+
+  if (!istStringImByteBereich(item.wort, 1, BLOG_PROFILE_WORT_MAX_BYTES, true)) alleFehler.push("vokabular.wort byte ungültig");
+  if (!isStringImBeschreibung(item.beschreibung)) {
+    alleFehler.push("vokabular.beschreibung byte ungültig");
+    return;
+  }
+
   if (!Array.isArray(item.genres)) alleFehler.push("vokabular.genres ist keine Liste");
   if (!Array.isArray(item.tags)) alleFehler.push("vokabular.tags ist keine Liste");
 
-  const zuordnung = [...(item.genres || []), ...(item.tags || [])];
-  if (zuordnung.length < 1 || zuordnung.length > 3) alleFehler.push("vokabular-Zuordnung darf nicht 0 oder >3 sein");
+  if (alleFehler.length > 0) return;
 
   for (const wert of item.genres || []) {
     if (!erlaubteGenres.includes(wert)) alleFehler.push("vokabular.genres enthält unbekanntes Genre");
   }
+
   for (const wert of item.tags || []) {
     if (!erlaubteTags.includes(wert)) alleFehler.push("vokabular.tags enthält unbekanntes Tag");
   }
 
-  const normSet = normalizeTagSet(zuordnung);
-  if (new Set(zuordnung).size !== zuordnung.length) alleFehler.push("vokabular.Zuordnung enthält exakte Dublette");
-  if (new Set(normSet).size !== normSet.length) alleFehler.push("vokabular.Zuordnung enthält normalisierte Dublette");
+  const zuordnungGenres = normalizeZuordnung(item.genres || []);
+  if (!zuordnungGenres.ok) alleFehler.push(`vokabular.genres ${zuordnungGenres.fehler}`);
 
-  if (!istZeilenfreierBeleg(item.beleg) || !istListeWert(item.beleg, BLOG_PROFILE_BELG_MIN_BYTES, BLOG_PROFILE_BELG_MAX_BYTES)) alleFehler.push("vokabular.beleg byte ungültig");
-  if (typeof artikelText === "string" && !artikelText.includes(item.beleg)) alleFehler.push("vokabular.beleg nicht im Artikel");
+  const zuordnungTags = normalizeZuordnung(item.tags || []);
+  if (!zuordnungTags.ok) alleFehler.push(`vokabular.tags ${zuordnungTags.fehler}`);
+
+  const gesamtliste = [...item.genres, ...item.tags];
+  if (gesamtliste.length < 1 || gesamtliste.length > 3) alleFehler.push("vokabular-Zuordnung muss 1..3 sein");
+
+  const normGesamt = new Set([...zuordnungGenres.norm || [], ...zuordnungTags.norm || []]);
+  if (normGesamt.size !== gesamtliste.length) {
+    alleFehler.push("vokabular-Zuordnung enthält normalisierte Dublette über beide Listen");
+  }
+
+  if (!istBeleg(item.beleg, artikelText)) alleFehler.push("vokabular.beleg ungültig");
+};
+
+const isStringImBeschreibung = (wert) => {
+  return istStringImByteBereich(wert, 1, BLOG_PROFILE_BELG_MAX_BYTES, true);
 };
 
 export function pruefeBlogProfilAnalyseAntwort(antwort, articlePayload) {
   const fehler = [];
-  if (!exaktSchluessel(antwort, ["geschmackszuege", "vokabular"])) {
-    return fehlschlag("antwort hat nicht genau geschmackszuege/vokabular");
+  const artikelPayloadResult = pruefeArtikelPayload(articlePayload);
+  if (!artikelPayloadResult.ok) {
+    return fehlschlag(`artikelPayload ungültig: ${artikelPayloadResult.fehler.join(" | ")}`);
   }
 
-  const erlaubteGenres = istObjekt(articlePayload?.listen) && Array.isArray(articlePayload.listen.genres)
-    ? articlePayload.listen.genres
-    : [];
-  const erlaubteTags = istObjekt(articlePayload?.listen) && Array.isArray(articlePayload.listen.tags)
-    ? articlePayload.listen.tags
-    : [];
-  const artikelText = istText(articlePayload?.artikel?.text) ? articlePayload.artikel.text : "";
+  const payload = artikelPayloadResult.payload;
+
+  if (!exaktSchluessel(antwort, ["geschmackszuege", "vokabular"])) {
+    return fehlschlag("antwort hat nicht exakt geschmackszuege/vokabular");
+  }
+
+  const erlaubteGenres = [...payload.listen.genres];
+  const erlaubteTags = [...payload.listen.tags];
+  const artikelText = payload.artikel.text;
 
   if (!Array.isArray(antwort.geschmackszuege)) return fehlschlag("geschmackszuege ist keine Liste");
   if (!Array.isArray(antwort.vokabular)) return fehlschlag("vokabular ist keine Liste");
   if (antwort.geschmackszuege.length > BLOG_PROFILE_MAX_GESCHMAKSE) fehler.push("zu viele geschmackszuege");
   if (antwort.vokabular.length > BLOG_PROFILE_MAX_VOKABULAR) fehler.push("zu viele vokabular");
 
-  antwort.geschmackszuege.forEach((item) => validateGeschmackszuegeItem(item, erlaubteGenres, true, fehler, artikelText));
-  antwort.vokabular.forEach((item) => validiereVokabularItem(item, erlaubteGenres, erlaubteTags, fehler, artikelText));
+  antwort.geschmackszuege.forEach((item) => validateGeschmackszuegeItem(item, erlaubteGenres, fehler, artikelText));
+  antwort.vokabular.forEach((item) => validateZuordnungsMenge(item, erlaubteGenres, erlaubteTags, fehler, artikelText));
 
   if (fehler.length > 0) return fehlschlag(fehler.join(" | "));
   return erfolg({
     geschmackszuege: antwort.geschmackszuege.map((item) => ({ ...item })),
     vokabular: antwort.vokabular.map((item) => ({ ...item })),
   });
+}
+
+const pruefeArtikelPayload = (articlePayload) => {
+  if (!exaktSchluessel(articlePayload, BLOG_PROFILE_ARTICLE_KEYS)) {
+    return fehlschlag("articlePayload hat nicht exakt artikel/listen");
+  }
+
+  const fehler = [];
+  const validiert = valideEinzelnachweis(articlePayload, fehler);
+  if (!validiert.ok) return fehlschlag(fehler.join(" | "));
+
+  return erfolg(validiert.payload);
 };
 
 const sha256Hex = async (text) => {
   if (typeof crypto?.subtle?.digest !== "function") {
-    return Promise.resolve("".padEnd(64, "0"));
+    throw new Error("kein crypto.subtle.digest verfügbar");
   }
+
   const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   const bytes = new Uint8Array(hashBuffer);
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
+const berechneContentHash = async (artikelPayload, digest) => {
+  const hash = await digest(`${artikelPayload.artikel.titel}\u0000${artikelPayload.artikel.text}`);
+  if (
+    typeof hash !== "string"
+    || !BLOG_PROFILE_HASH_RE.test(hash)
+    || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(hash)
+  ) return null;
+  return hash;
+};
+
 const statusFuerProfilItem = (item, existingSetsByKey) => {
-  const art = String(item.art);
+  const art = item.art;
   const wert = normalisiereIdentitaet(item.wert);
-  const richtung = String(item.richtung);
-  const key = `${art}|${wert}|${richtung}`;
-  const keyOhneRichtung = `${art}|${wert}`;
-  const bekannteRichtungen = existingSetsByKey.get(keyOhneRichtung) || new Set();
-  if (bekannteRichtungen.has(richtung)) return { status: "bereits_vorhanden", editierbar: false };
-  if (bekannteRichtungen.size > 0) return { status: "konflikt", editierbar: true };
-  if (key) return { status: "neu", editierbar: true };
+  const richtung = item.richtung;
+  const key = `${art}|${wert}`;
+  const bekannteRichtungen = existingSetsByKey.get(key) || new Set();
+
+  if (bekannteRichtungen.has(richtung)) {
+    return { status: "bereits_vorhanden", editierbar: true };
+  }
+
+  if (bekannteRichtungen.size > 0) {
+    return { status: "konflikt", editierbar: true };
+  }
+
   return { status: "neu", editierbar: true };
+};
+
+const sameSet = (a, b) => {
+  if (a.length !== b.length) return false;
+  const normA = [...a].sort();
+  const normB = [...b].sort();
+  return normA.every((value, idx) => value === normB[idx]);
+};
+
+const normalizeZuordnungsSet = (werte) => {
+  const norm = (werte || [])
+    .filter((wert) => istText(wert))
+    .map((wert) => normalisiereIdentitaet(wert))
+    .filter((wert) => wert.length > 0)
+    .sort();
+
+  return [...new Set(norm)];
 };
 
 const statusFuerVokabularItem = (item, existingMap) => {
   const wort = normalisiereIdentitaet(item.wort);
-  const zuordnung = normalizeTagSet([...(item.genres || []), ...(item.tags || [])]);
-  const liste = existingMap.get(wort) || [];
-  if (liste.length === 0) return { status: "neu", editierbar: true };
+  const itemGenres = normalizeZuordnungsSet(item.genres || []);
+  const itemTags = normalizeZuordnungsSet(item.tags || []);
+  const eintraege = existingMap.get(wort);
 
-  const same = liste.some((mapping) => sameSet(mapping, zuordnung));
-  if (same) return { status: "bereits_vorhanden", editierbar: false };
+  if (!eintraege || eintraege.length === 0) {
+    return { status: "neu", editierbar: true };
+  }
+
+  const identisch = eintraege.some((eintrag) => sameSet(eintrag.genres, itemGenres) && sameSet(eintrag.tags, itemTags));
+  if (identisch) return { status: "bereits_vorhanden", editierbar: true };
   return { status: "konflikt", editierbar: true };
 };
 
-const buildExistingSignalMap = (existing = {}) => {
+export const ermittleVokabularStatus = (item, bestehendesVokabular = []) => statusFuerVokabularItem(
+  item,
+  buildExistingVokabularMap(bestehendesVokabular),
+);
+
+const buildExistingSignalMap = (bestehendesProfil = {}) => {
+  const profilSignalQuelle = Array.isArray(bestehendesProfil.signale)
+    ? bestehendesProfil.signale
+    : bestehendesProfil.geschmackszuege;
+
   const map = new Map();
-  for (const signal of (existing.geschmackszuege || [])) {
-    if (!signal || typeof signal !== "object") continue;
+  for (const signal of (profilSignalQuelle || [])) {
+    if (!istObjekt(signal)) continue;
     if (!BLOG_PROFILE_ARTEN.includes(signal.art)) continue;
     if (!istText(signal.wert)) continue;
     if (!BLOG_PROFILE_RICHTUNGEN.includes(signal.richtung)) continue;
-    const art = String(signal.art);
-    const wert = normalisiereIdentitaet(signal.wert);
-    const richtung = String(signal.richtung);
-    const key = `${art}|${wert}`;
+
+    const key = `${signal.art}|${normalisiereIdentitaet(signal.wert)}`;
     if (!map.has(key)) map.set(key, new Set());
-    map.get(key).add(richtung);
+    map.get(key).add(signal.richtung);
   }
   return map;
 };
 
-const buildExistingVokabularMap = (existing = {}) => {
+const buildExistingVokabularMap = (bestehendesVokabular = []) => {
   const map = new Map();
-  for (const eintrag of (existing.vokabular || [])) {
-    if (!eintrag || typeof eintrag !== "object") continue;
-    if (typeof eintrag.wort !== "string") continue;
+  for (const eintrag of (bestehendesVokabular || [])) {
+    if (!istObjekt(eintrag)) continue;
+    if (!istText(eintrag.wort)) continue;
+
     const wort = normalisiereIdentitaet(eintrag.wort);
-    const zuordnung = normalizeTagSet([...(eintrag.genres || []), ...(eintrag.tags || [])]);
+    const genres = normalizeZuordnungsSet(eintrag.genres || []);
+    const tags = normalizeZuordnungsSet(eintrag.tags || []);
+
     if (!map.has(wort)) map.set(wort, []);
-    map.get(wort).push(zuordnung);
+    map.get(wort).push({ genres, tags });
   }
   return map;
 };
 
-const storageKey = (accountId) => `${BLOG_PROFILE_STORAGE_KEY}:${String(accountId || "")}`;
+const storageKey = (accountId) => `${BLOG_PROFILE_STORAGE_KEY}:${accountId}`;
 
 const validiereNachweisMarker = (raw) => {
-  if (!istObjekt(raw)) return null;
   if (!exaktSchluessel(raw, ["articleId", "contentHash", "analyzedAt"])) return null;
-  if (!BLOG_PROFILE_ID.test(String(raw.articleId || ""))) return null;
-  if (!/^[a-f0-9]{64}$/.test(String(raw.contentHash || ""))) return null;
-  if (!istText(raw.analyzedAt)) return null;
-  return { articleId: String(raw.articleId), contentHash: String(raw.contentHash), analyzedAt: String(raw.analyzedAt) };
+  if (!BLOG_PROFILE_ID.test(raw.articleId)) return null;
+  if (!BLOG_PROFILE_HASH_RE.test(raw.contentHash)) return null;
+  if (!isCanonicalIsoDate(raw.analyzedAt)) return null;
+  return {
+    articleId: raw.articleId,
+    contentHash: raw.contentHash,
+    analyzedAt: raw.analyzedAt,
+  };
 };
 
+const accountIdIstGueltig = (accountId) => istText(accountId) && accountId.trim().length > 0;
+
 export function liesBlogProfilAnalyseNachweis(storage, accountId) {
+  if (!accountIdIstGueltig(accountId)) return null;
   if (!storage || typeof storage.getItem !== "function") return null;
-  const raw = storage.getItem(storageKey(accountId));
-  if (typeof raw !== "string") return null;
+
   try {
+    const raw = storage.getItem(storageKey(accountId));
+    if (typeof raw !== "string") return null;
     return validiereNachweisMarker(JSON.parse(raw));
   } catch {
     return null;
@@ -308,74 +501,172 @@ export function liesBlogProfilAnalyseNachweis(storage, accountId) {
 }
 
 export function speichereBlogProfilAnalyseNachweis(storage, accountId, marker) {
+  if (!accountIdIstGueltig(accountId)) return false;
   if (!storage || typeof storage.setItem !== "function") return false;
+
   const valid = validiereNachweisMarker(marker);
   if (!valid) return false;
-  storage.setItem(storageKey(accountId), JSON.stringify(valid));
-  return true;
+
+  try {
+    storage.setItem(storageKey(accountId), JSON.stringify(valid));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function isArtikelUnveraendert(storage, accountId, artikelPayload, options = {}) {
-  if (!istObjekt(artikelPayload?.artikel)) return false;
-  if (typeof artikelPayload.artikel.id !== "string" || !BLOG_PROFILE_ID.test(artikelPayload.artikel.id)) return false;
-  if (typeof artikelPayload.artikel.titel !== "string" || typeof artikelPayload.artikel.text !== "string") return false;
+  const validiert = pruefeArtikelPayload(artikelPayload);
+  if (!validiert.ok) return false;
+  if (!accountIdIstGueltig(accountId)) return false;
 
   const digest = options.digest || sha256Hex;
-  const hash = await digest(`${artikelPayload.artikel.titel}\u0000${artikelPayload.artikel.text}`);
-  if (!/^[a-f0-9]{64}$/.test(hash)) return false;
+
+  let hash;
+  try {
+    hash = await berechneContentHash(validiert.payload, digest);
+  } catch {
+    return false;
+  }
+  if (!BLOG_PROFILE_HASH_RE.test(hash || "")) return false;
+
   const nachweis = liesBlogProfilAnalyseNachweis(storage, accountId);
   if (!nachweis) return false;
 
-  return nachweis.articleId === artikelPayload.artikel.id && nachweis.contentHash === hash;
+  return nachweis.articleId === validiert.payload.artikel.id && nachweis.contentHash === hash;
 }
+
+const bereinigeVorschauAntwort = (modelAntwort) => {
+  const bereinigt = {
+    geschmackszuege: [],
+    vokabular: [],
+  };
+
+  if (Array.isArray(modelAntwort?.geschmackszuege)) {
+    bereinigt.geschmackszuege = modelAntwort.geschmackszuege.map((item) => {
+      if (!istObjekt(item)) return item;
+      const { status: _status, editierbar: _editierbar, ...rest } = item;
+      return rest;
+    });
+  }
+
+  if (Array.isArray(modelAntwort?.vokabular)) {
+    bereinigt.vokabular = modelAntwort.vokabular.map((item) => {
+      if (!istObjekt(item)) return item;
+      const { status: _status, editierbar: _editierbar, ...rest } = item;
+      return rest;
+    });
+  }
+
+  return bereinigt;
+};
+
+const extrahierePreserveMeta = (modelAntwort, articlePayload) => {
+  if (!istObjekt(modelAntwort)) return null;
+  if (!istText(modelAntwort.articleId) || !BLOG_PROFILE_ID.test(modelAntwort.articleId)) return null;
+  if (modelAntwort.articleId !== articlePayload.artikel.id) return null;
+
+  if (!istText(modelAntwort.contentHash) || !BLOG_PROFILE_HASH_RE.test(modelAntwort.contentHash)) return null;
+  if (!isCanonicalIsoDate(modelAntwort.analyzedAt)) return null;
+  if (!istText(modelAntwort.promptVersion)) return null;
+  if (!istText(modelAntwort.quelle)) return null;
+
+  return {
+    articleId: modelAntwort.articleId,
+    contentHash: modelAntwort.contentHash,
+    analyzedAt: modelAntwort.analyzedAt,
+    promptVersion: modelAntwort.promptVersion,
+    quelle: modelAntwort.quelle,
+  };
+};
 
 export async function erzeugeBlogProfilAnalyseVorschau({
   artikelPayload,
   modelAntwort,
   bestehendesProfil = {},
+  bestehendesVokabular = [],
   storage,
   accountId,
   digest = sha256Hex,
   clock = () => new Date().toISOString(),
+  preserveMetadata = null,
 }) {
-  if (!istObjekt(artikelPayload)) return fehlschlag("artikelPayload fehlt");
-  const validation = pruefeBlogProfilAnalyseAntwort(modelAntwort, artikelPayload);
+  const artikelPayloadResult = pruefeArtikelPayload(artikelPayload);
+  if (!artikelPayloadResult.ok) return artikelPayloadResult;
+
+  const payload = artikelPayloadResult.payload;
+
+  const validation = pruefeBlogProfilAnalyseAntwort(modelAntwort, payload);
   if (!validation.ok) return validation;
 
-  const hash = await digest(`${artikelPayload.artikel.titel}\u0000${artikelPayload.artikel.text}`);
-  if (!/^[a-f0-9]{64}$/.test(hash)) return fehlschlag("hash nicht berechenbar");
-  const analyzedAt = String(clock());
+  let contentHash = null;
+  let analyzedAt = null;
+
+  if (preserveMetadata) {
+    contentHash = preserveMetadata.contentHash || null;
+    analyzedAt = preserveMetadata.analyzedAt || null;
+    if (!BLOG_PROFILE_HASH_RE.test(contentHash || "")) {
+      return fehlschlag("contentHash ist ungültig");
+    }
+    if (!isCanonicalIsoDate(analyzedAt)) {
+      return fehlschlag("analyzedAt ist ungültig");
+    }
+    if (preserveMetadata.articleId !== payload.artikel.id) {
+      return fehlschlag("articleId passt nicht zum artikelPayload");
+    }
+  } else {
+    try {
+      contentHash = await berechneContentHash(payload, digest);
+    } catch {
+      return fehlschlag("hash nicht berechenbar");
+    }
+
+    if (!BLOG_PROFILE_HASH_RE.test(contentHash || "")) {
+      return fehlschlag("hash nicht berechenbar");
+    }
+
+    try {
+      analyzedAt = clock();
+    } catch {
+      return fehlschlag("analyzedAt nicht berechenbar");
+    }
+
+    if (!isCanonicalIsoDate(analyzedAt)) {
+      return fehlschlag("analyzedAt ist ungültig");
+    }
+  }
 
   const signalMap = buildExistingSignalMap(bestehendesProfil);
-  const vokabularMap = buildExistingVokabularMap(bestehendesProfil);
+  const vokabularMap = buildExistingVokabularMap(
+    Array.isArray(bestehendesVokabular) ? bestehendesVokabular : bestehendesProfil.vokabular,
+  );
 
   const geschmackszuege = validation.payload.geschmackszuege.map((item) => {
     const statusInfo = statusFuerProfilItem(item, signalMap);
-    return {
-      ...item,
-      status: statusInfo.status,
-      editierbar: statusInfo.editierbar,
-    };
+    return { ...item, ...statusInfo };
   });
+
   const vokabular = validation.payload.vokabular.map((item) => {
     const statusInfo = statusFuerVokabularItem(item, vokabularMap);
-    return {
-      ...item,
-      status: statusInfo.status,
-      editierbar: statusInfo.editierbar,
-    };
+    return { ...item, ...statusInfo };
   });
 
-  const widerspruch = [...geschmackszuege, ...vokabular].some((item) => item.status === "konflikt");
-  const bereits = [...geschmackszuege, ...vokabular].every((item) => item.status === "bereits_vorhanden");
-  const status = widerspruch ? "konflikt" : bereits ? "bereits_vorhanden" : "editierbar";
-  const unveraendert = await isArtikelUnveraendert(storage, accountId, artikelPayload, { digest });
+  const kandidaten = [...geschmackszuege, ...vokabular];
+  const hatKonflikt = kandidaten.some((item) => item.status === "konflikt");
+  const hatBestehend = kandidaten.length > 0 && kandidaten.every((item) => item.status === "bereits_vorhanden");
+  const status = hatKonflikt
+    ? "konflikt"
+    : hatBestehend
+      ? "bereits_vorhanden"
+      : "editierbar";
+
+  const unveraendert = await isArtikelUnveraendert(storage, accountId, payload, { digest });
 
   return erfolg({
-    quelle: BLOG_PROFILE_ANALYSE_SOURCE,
-    promptVersion: BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
-    articleId: artikelPayload.artikel.id,
-    contentHash: hash,
+    quelle: preserveMetadata ? preserveMetadata.quelle : BLOG_PROFILE_ANALYSE_SOURCE,
+    promptVersion: preserveMetadata ? preserveMetadata.promptVersion : BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
+    articleId: payload.artikel.id,
+    contentHash,
     analyzedAt,
     status,
     unveraendert,
@@ -388,19 +679,29 @@ export function revalidiereBlogProfilAnalyseVorschau({
   artikelPayload,
   modelAntwort,
   bestehendesProfil,
+  bestehendesVokabular,
   storage,
   accountId,
   digest,
   clock,
 }) {
+  const artikelPayloadResult = pruefeArtikelPayload(artikelPayload);
+  if (!artikelPayloadResult.ok) return artikelPayloadResult;
+
+  const payload = artikelPayloadResult.payload;
+  const bereinigt = bereinigeVorschauAntwort(modelAntwort);
+  const preserveMetadata = extrahierePreserveMeta(modelAntwort, payload);
+
   return erzeugeBlogProfilAnalyseVorschau({
-    artikelPayload,
-    modelAntwort,
+    artikelPayload: payload,
+    modelAntwort: bereinigt,
     bestehendesProfil,
+    bestehendesVokabular,
     storage,
     accountId,
     digest,
     clock,
+    preserveMetadata,
   });
 }
 

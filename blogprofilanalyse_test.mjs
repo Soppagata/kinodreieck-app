@@ -12,6 +12,7 @@ import {
   liesBlogProfilAnalyseNachweis,
   speichereBlogProfilAnalyseNachweis,
   isArtikelUnveraendert,
+  ermittleVokabularStatus,
   BLOG_PROFILE_ARTEN_SET,
   BLOG_PROFILE_RICHTUNG_SET,
   BLOG_PROFILE_SICHERHEIT_SET,
@@ -39,13 +40,16 @@ const checkAsync = async (name, promise) => {
   }
 };
 
+const BASE_LISTEN = {
+  genres: ["Drama", "Noir", "Action", "Klassiker", "Nocturne"],
+  tags: ["einprägsam", "kristallklar"],
+};
+
 const BASE_ARTICLE = {
   id: "artikel_001",
   herkunft: "eigene_quelle",
   titel: "Musterbeispiel ohne Nebenregeln",
   text: "Diese Rezension enthält einen brauchbaren Beleg. Der Satz enthält eine klare Struktur. Ein weiterer Satz für sauberen Nachweis.",
-  genres: ["Drama", "Noir", "Action", "Klassiker", "Nocturne"],
-  tags: ["einprägsam", "kristallklar"],
   status: "ok",
 };
 
@@ -68,11 +72,20 @@ const makeStorage = () => {
   };
 };
 
-const validModelResponse = (articlePayload) => ({
+const throwingStorage = {
+  getItem: () => {
+    throw new Error("get failed");
+  },
+  setItem: () => {
+    throw new Error("set failed");
+  },
+};
+
+const validModelResponse = (listen) => ({
   geschmackszuege: [
     {
       art: BLOG_PROFILE_ARTEN_SET[0],
-      wert: articlePayload.listen.genres[0],
+      wert: listen.genres[0],
       richtung: BLOG_PROFILE_RICHTUNG_SET[0],
       staerke: 3,
       sicherheit: BLOG_PROFILE_SICHERHEIT_SET[0],
@@ -83,15 +96,14 @@ const validModelResponse = (articlePayload) => ({
     {
       wort: "Tempo",
       beschreibung: "klarer Abschnitt mit Tempo",
-      genres: [articlePayload.listen.genres[0]],
-      tags: [articlePayload.listen.tags[0]],
+      genres: [listen.genres[0]],
+      tags: [listen.tags[0]],
       beleg: "Diese Rezension enthält einen brauchbaren Beleg.",
     },
   ],
 });
 
-// 1) Capability
-const BASIS_HEALTH = {
+const validHealth = {
   ok: true,
   task: "health",
   vorgangId: "00000000-0000-4000-8000-000000000001",
@@ -117,12 +129,13 @@ const BASIS_HEALTH = {
 };
 
 const mutiere = (mutator) => {
-  const kopie = structuredClone(BASIS_HEALTH);
+  const kopie = structuredClone(validHealth);
   mutator(kopie);
   return kopie;
 };
 
-check("gültige Health-Antwort wird akzeptiert", hatBlogProfileAnalyseCapability(BASIS_HEALTH));
+// 1) Capability
+check("gültige Health-Antwort wird akzeptiert", hatBlogProfileAnalyseCapability(validHealth));
 check("contractVersion fehlt wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { delete h.contractVersion; })));
 check("ok != true wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.ok = false; })));
 check("task != health wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.task = "other"; })));
@@ -130,44 +143,123 @@ check("betrieb.aiAktiv != true wird abgelehnt", !hatBlogProfileAnalyseCapability
 check("Zusatzfeld in capabilities wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.capabilities.extra = { a: 1 }; })));
 
 // 2) Auswahl + Payload
-const payloadResult = waehleBlogProfilArtikel({ artikel: [BASE_ARTICLE], artikelId: BASE_ARTICLE.id });
-check("gültiges eigenes Artikel-Payload", payloadResult.ok);
-check("Payload hat exakt artikelfokussierte Felder", payloadResult.ok
-  && payloadResult.payload.artikel.id === BASE_ARTICLE.id
-  && payloadResult.payload.artikel.titel === BASE_ARTICLE.titel
-  && payloadResult.payload.artikel.text === BASE_ARTICLE.text
-  && Array.isArray(payloadResult.payload.listen.genres)
-  && Array.isArray(payloadResult.payload.listen.tags));
+check("gültiges eigenes Artikel-Payload", waehleBlogProfilArtikel({
+  artikel: [BASE_ARTICLE],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+
+const validSelection = waehleBlogProfilArtikel({
+  artikel: [BASE_ARTICLE],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+});
+check("Payload hat exakt artikelfokussierte Felder",
+  validSelection.ok
+    && validSelection.payload.artikel.id === BASE_ARTICLE.id
+    && validSelection.payload.artikel.titel === BASE_ARTICLE.titel
+    && validSelection.payload.artikel.text === BASE_ARTICLE.text
+    && Array.isArray(validSelection.payload.listen.genres)
+    && Array.isArray(validSelection.payload.listen.tags));
+
 check("ID-Match muss exakt einen Treffer haben", !waehleBlogProfilArtikel({
   artikel: [makeArticle(), makeArticle({ id: "duplikat", titel: "x" }), makeArticle({ id: "duplikat", titel: "y" })],
   artikelId: "duplikat",
+  listen: BASE_LISTEN,
 }).ok);
-check("fremde ID wird abgelehnt", !waehleBlogProfilArtikel({ artikel: [BASE_ARTICLE], artikelId: "fremd" }).ok);
-check("finderGenreKey wird als fremd abgelehnt", !waehleBlogProfilArtikel({ artikel: [makeArticle({ finderGenreKey: "skip" })], artikelId: BASE_ARTICLE.id }).ok);
-check("Titel mit 160+ Byte scheitert", !waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "titel_zu_lang", titel: "ä".repeat(81) })], artikelId: "titel_zu_lang" }).ok);
-check("Titel mit genau 160 Byte wird akzeptiert", waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "titel_ok", titel: "ä".repeat(80) })], artikelId: "titel_ok" }).ok);
-check("Text mit 18.000 Byte wird akzeptiert", waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "text_ok", text: "a".repeat(18000), genres: ["Drama"] })], artikelId: "text_ok" }).ok);
-check("Text mit 18.001 Byte wird abgelehnt", !waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "text_zu_lang", text: "a".repeat(18001), genres: ["Drama"] })], artikelId: "text_zu_lang" }).ok);
-check("genres darf nicht leer sein", !waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "no_genres", genres: [], tags: [] })], artikelId: "no_genres" }).ok);
-check("Maximal 80 Einträge je Liste", !waehleBlogProfilArtikel({ artikel: [makeArticle({ id: "genres_too_many", genres: Array.from({ length: 81 }, (_, i) => `g${i}`) })], artikelId: "genres_too_many" }).ok);
+check("fremde ID wird abgelehnt", !waehleBlogProfilArtikel({ artikel: [BASE_ARTICLE], artikelId: "fremd", listen: BASE_LISTEN }).ok);
+check("fehlende herkunft wird akzeptiert", waehleBlogProfilArtikel({
+  artikel: [(() => {
+    const artikel = makeArticle();
+    delete artikel.herkunft;
+    return artikel;
+  })()],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("formfremde Herkunft wird abgelehnt", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ herkunft: 12 })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("gezogene Herkunft wird abgelehnt", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ herkunft: "gezogen" })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("finderGenreKey wird nicht blockiert", waehleBlogProfilArtikel({
+  artikel: [makeArticle({ finderGenreKey: "skip" })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("Titel muss echter String sein", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ titel: undefined })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("Titel darf keine Steuerzeichen enthalten", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ titel: "Muster\nZeile" })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
+check("Titel mit 160+ Byte scheitert", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "titel_zu_lang", titel: "ä".repeat(81) })],
+  artikelId: "titel_zu_lang",
+  listen: BASE_LISTEN,
+}).ok);
+check("Titel mit genau 160 Byte wird akzeptiert", waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "titel_ok", titel: "ä".repeat(80) })],
+  artikelId: "titel_ok",
+  listen: BASE_LISTEN,
+}).ok);
+check("Text mit 18.000 Byte wird akzeptiert", waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "text_ok", text: "a".repeat(18000) })],
+  artikelId: "text_ok",
+  listen: BASE_LISTEN,
+}).ok);
+check("Text mit 18.001 Byte wird abgelehnt", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "text_zu_lang", text: "a".repeat(18001) })],
+  artikelId: "text_zu_lang",
+  listen: BASE_LISTEN,
+}).ok);
+check("genres darf nicht leer sein", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "no_genres", text: "abc" })],
+  artikelId: "no_genres",
+  listen: { ...BASE_LISTEN, genres: [] },
+}).ok);
+check("Maximal 80 Einträge je Liste", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "genres_too_many" })],
+  artikelId: "genres_too_many",
+  listen: { genres: Array.from({ length: 81 }, (_, i) => `g${i}`), tags: ["x"] },
+}).ok);
 check("Maximal 120 Einträge gemeinsam", !waehleBlogProfilArtikel({
-  artikel: [makeArticle({ id: "lists_too_many", genres: Array.from({ length: 80 }, (_, i) => `g${i}`), tags: Array.from({ length: 41 }, (_, i) => `t${i}`) })],
+  artikel: [makeArticle({ id: "lists_too_many" })],
   artikelId: "lists_too_many",
+  listen: { genres: Array.from({ length: 80 }, (_, i) => `g${i}`), tags: Array.from({ length: 41 }, (_, i) => `t${i}`) },
 }).ok);
 check("Cross-List-Dublette (exakt) wird abgelehnt", !waehleBlogProfilArtikel({
-  artikel: [makeArticle({ id: "dupe", genres: ["Noir"], tags: ["Noir"] })],
+  artikel: [makeArticle({ id: "dupe" })],
   artikelId: "dupe",
+  listen: { genres: ["Noir"], tags: ["Noir"] },
 }).ok);
 check("Cross-List-Dublette (normalisiert) wird abgelehnt", !waehleBlogProfilArtikel({
-  artikel: [makeArticle({ id: "dupe_norm", genres: ["Noir Noir"], tags: ["  noir   noir  "] })],
+  artikel: [makeArticle({ id: "dupe_norm" })],
   artikelId: "dupe_norm",
+  listen: { genres: ["Noir Noir"], tags: ["  noir   noir  "] },
 }).ok);
 
-// 3) Whole-response
-const responseBasePayload = payloadResult.ok ? payloadResult.payload : waehleBlogProfilArtikel({ artikel: [BASE_ARTICLE], artikelId: BASE_ARTICLE.id }).payload;
-const validResponse = validModelResponse(responseBasePayload);
+// 3) Whole-response-Validator
+const responseBasePayload = validSelection.ok ? validSelection.payload : waehleBlogProfilArtikel({
+  artikel: [BASE_ARTICLE],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).payload;
+
+const validResponse = validModelResponse(responseBasePayload.listen);
 check("gültige Modellantwort wird akzeptiert", pruefeBlogProfilAnalyseAntwort(validResponse, responseBasePayload).ok);
 check("root darf keine Zusatzfelder haben", !pruefeBlogProfilAnalyseAntwort({ ...validResponse, extra: true }, responseBasePayload).ok);
+check("artikelPayload mit Zusatzfeld wird abgelehnt", !pruefeBlogProfilAnalyseAntwort(validResponse, { ...responseBasePayload, extra: "x" }).ok);
+check("artikelPayload ohne artikel wird abgelehnt", !pruefeBlogProfilAnalyseAntwort(validResponse, { listen: responseBasePayload.listen }).ok);
 
 const maxSchmacks = Array.from({ length: 12 }, (_, i) => ({
   art: BLOG_PROFILE_ARTEN_SET[1],
@@ -235,6 +327,14 @@ check("vokabular hat zu viele Zuordnungen (3+1) → abgelehnt", !pruefeBlogProfi
   ...validResponse,
   vokabular: [{ ...validResponse.vokabular[0], genres: ["Drama", "Action", "Noir"], tags: ["einprägsam"] }],
 }, responseBasePayload).ok);
+check("vokabular-Dupllette über beide Listen wird erkannt", !pruefeBlogProfilAnalyseAntwort({
+  ...validResponse,
+  vokabular: [{
+    ...validResponse.vokabular[0],
+    genres: ["Drama"],
+    tags: [" drama "],
+  }],
+}, responseBasePayload).ok);
 check("genre-art darf nur übergebene Genres nutzen", !pruefeBlogProfilAnalyseAntwort({
   ...validResponse,
   geschmackszuege: [{ ...validResponse.geschmackszuege[0], wert: "NichtInList" }],
@@ -242,7 +342,7 @@ check("genre-art darf nur übergebene Genres nutzen", !pruefeBlogProfilAnalyseAn
 
 // 4) Vorschau + Revalidation
 const existingProfile = {
-  geschmackszuege: [
+  signale: [
     {
       art: BLOG_PROFILE_ARTEN_SET[0],
       wert: responseBasePayload.listen.genres[0],
@@ -252,26 +352,25 @@ const existingProfile = {
       beleg: "bestehender beleg",
     },
   ],
-  vokabular: [
-    {
-      wort: "Tempo",
-      beschreibung: "bereits vorhanden",
-      genres: [responseBasePayload.listen.genres[0]],
-      tags: [responseBasePayload.listen.tags[0]],
-      beleg: "bestehender beleg",
-    },
-  ],
 };
 
-const konfliktResponse = validModelResponse(responseBasePayload);
+const existingVokabular = [
+  {
+    wort: "Tempo",
+    beschreibung: "bestehende Zuordnung",
+    genres: [responseBasePayload.listen.genres[0]],
+    tags: [responseBasePayload.listen.tags[0]],
+  },
+];
+
+const konfliktResponse = validModelResponse(responseBasePayload.listen);
 konfliktResponse.geschmackszuege.push({
   ...validResponse.geschmackszuege[0],
   richtung: BLOG_PROFILE_RICHTUNG_SET[1],
 });
 konfliktResponse.vokabular.push({
   ...validResponse.vokabular[0],
-  beschreibung: "abweichende Zuordnung",
-  tags: [responseBasePayload.listen.tags[1]],
+  genres: [responseBasePayload.listen.genres[1]],
 });
 
 await checkAsync("Vorschau liefert Status und Provenienz-Kopf", (async () => {
@@ -279,9 +378,11 @@ await checkAsync("Vorschau liefert Status und Provenienz-Kopf", (async () => {
     artikelPayload: responseBasePayload,
     modelAntwort: konfliktResponse,
     bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
     digest: async () => "a".repeat(64),
     clock: () => "2026-08-17T08:00:00.000Z",
   });
+
   if (!preview.ok) return false;
   const firstSignal = preview.payload.geschmackszuege[0];
   const secondSignal = preview.payload.geschmackszuege[1];
@@ -289,54 +390,145 @@ await checkAsync("Vorschau liefert Status und Provenienz-Kopf", (async () => {
   const secondWord = preview.payload.vokabular[1];
   return preview.payload.quelle === "bloganalyse"
     && preview.payload.promptVersion === "blog-profile-v1"
+    && preview.payload.articleId === responseBasePayload.artikel.id
     && preview.payload.contentHash === "a".repeat(64)
+    && preview.payload.status === "konflikt"
     && firstSignal.status === "bereits_vorhanden"
     && secondSignal.status === "konflikt"
+    && firstSignal.editierbar === true
+    && secondSignal.editierbar === true
     && firstWord.status === "bereits_vorhanden"
     && secondWord.status === "konflikt"
-    && preview.payload.status === "konflikt"
-    && firstSignal.editierbar === false
-    && secondSignal.editierbar === true;
-} )());
+    && firstWord.editierbar === true
+    && secondWord.editierbar === true;
+})());
 
-await checkAsync("Revalidation bewertet Edits erneut nach Vertrag", (async () => {
+await checkAsync("Bereits vorhandene Kandidaten bleiben editierbar", (async () => {
+  const bereitsVorhandenVorschau = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "c".repeat(64),
+    clock: () => "2026-08-17T09:00:00.000Z",
+  });
+
+  if (!bereitsVorhandenVorschau.ok) return false;
+  return bereitsVorhandenVorschau.payload.status === "bereits_vorhanden"
+    && bereitsVorhandenVorschau.payload.geschmackszuege.every((item) => item.editierbar === true)
+    && bereitsVorhandenVorschau.payload.vokabular.every((item) => item.editierbar === true);
+})());
+
+await checkAsync("Leere Antwort wird nicht als bereits_vorhanden klassifiziert", (async () => {
+  const leer = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: { geschmackszuege: [], vokabular: [] },
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "d".repeat(64),
+    clock: () => "2026-08-17T09:30:00.000Z",
+  });
+  if (!leer.ok) return false;
+  return leer.payload.status !== "bereits_vorhanden";
+})());
+
+await checkAsync("Vokabular-Mappings werden genres/tags getrennt verglichen", (async () => {
+  const existing = [
+    {
+      wort: "Tempo",
+      genres: ["Drama"],
+      tags: ["einprägsam"],
+    },
+  ];
+
+  const unchanged = ermittleVokabularStatus({
+    wort: "Tempo",
+    beschreibung: "bestehend",
+    genres: ["Drama"],
+    tags: ["einprägsam"],
+    beleg: "bestehender beleg",
+  }, existing);
+
+  const moved = ermittleVokabularStatus({
+    wort: "Tempo",
+    beschreibung: "verschoben",
+    genres: ["einprägsam"],
+    tags: ["Drama"],
+    beleg: "bestehender beleg",
+  }, existing);
+
+  return unchanged.status === "bereits_vorhanden" && moved.status === "konflikt";
+})());
+
+await checkAsync("Hash-Fallback mit 64 Nullen wird abgelehnt", (async () => {
+  const invalid = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "0".repeat(64),
+    clock: () => "2026-08-17T12:00:00.000Z",
+  });
+
+  return !invalid.ok;
+}));
+
+await checkAsync("Clock-Fehler wird nicht nach außen geworfen", (async () => {
+  const invalid = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "b".repeat(64),
+    clock: () => {
+      throw new Error("clock-break");
+    },
+  });
+
+  return !invalid.ok;
+}));
+
+await checkAsync("Revalidation verarbeitet editierte Vorschau ohne neue Hash-/Clock-Berechnung", (async () => {
   const first = await erzeugeBlogProfilAnalyseVorschau({
     artikelPayload: responseBasePayload,
     modelAntwort: konfliktResponse,
     bestehendesProfil: existingProfile,
-    digest: async () => "b".repeat(64),
-    clock: () => "2026-08-17T08:00:00.000Z",
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "f".repeat(64),
+    clock: () => "2026-08-17T11:00:00.000Z",
   });
   if (!first.ok) return false;
 
-  const corrected = {
-    ...konfliktResponse,
-    geschmackszuege: [
-      { ...konfliktResponse.geschmackszuege[0], richtung: BLOG_PROFILE_RICHTUNG_SET[0] },
-      { ...konfliktResponse.geschmackszuege[1], richtung: BLOG_PROFILE_RICHTUNG_SET[0] },
-    ],
-    vokabular: [
-      { ...konfliktResponse.vokabular[0], genres: [responseBasePayload.listen.genres[0]], tags: [responseBasePayload.listen.tags[0]] },
-      {
-        ...konfliktResponse.vokabular[1],
-        genres: [responseBasePayload.listen.genres[0]],
-        tags: [responseBasePayload.listen.tags[0]],
-      },
-  ],
-};
+  const edited = {
+    ...first.payload,
+    geschmackszuege: first.payload.geschmackszuege.map((item) => {
+      if (item.art === BLOG_PROFILE_ARTEN_SET[0] && item.wert === responseBasePayload.listen.genres[0]) {
+        return { ...item, richtung: BLOG_PROFILE_RICHTUNG_SET[0] };
+      }
+      return item;
+    }),
+    vokabular: first.payload.vokabular.map((item) => ({
+      ...item,
+      genres: item.genres,
+      tags: item.tags,
+    })),
+  };
 
   const second = await revalidiereBlogProfilAnalyseVorschau({
     artikelPayload: responseBasePayload,
-    modelAntwort: corrected,
+    modelAntwort: edited,
     bestehendesProfil: existingProfile,
-    digest: async () => "b".repeat(64),
-    clock: () => "2026-08-17T08:00:00.000Z",
+    bestehendesVokabular: existingVokabular,
+    digest: async () => { throw new Error("should-not-run"); },
+    clock: () => { throw new Error("should-not-run"); },
   });
+
   if (!second.ok) return false;
-  return second.payload.status === "bereits_vorhanden"
-    && second.payload.geschmackszuege.every((item) => item.status === "bereits_vorhanden")
-    && second.payload.vokabular.every((item) => item.status === "bereits_vorhanden");
-} )());
+  return second.payload.contentHash === first.payload.contentHash
+    && second.payload.analyzedAt === first.payload.analyzedAt
+    && second.payload.quelle === first.payload.quelle
+    && second.payload.promptVersion === first.payload.promptVersion;
+})());
 
 // 5) Nachweis
 await checkAsync("Marker ist account-namespaced und formfremd fail-closed", (async () => {
@@ -353,23 +545,50 @@ await checkAsync("Marker ist account-namespaced und formfremd fail-closed", (asy
   const vermischt = liesBlogProfilAnalyseNachweis(storageA, "kontoB");
 
   if (!gelesenA || !gelesenB || vermischt) return false;
-  return !("titel" in gelesenA) && !("text" in gelesenA) && !("beleg" in gelesenA);
-} )());
+  return !Object.prototype.hasOwnProperty.call(gelesenA, "titel")
+    && !Object.prototype.hasOwnProperty.call(gelesenA, "text")
+    && !Object.prototype.hasOwnProperty.call(gelesenA, "beleg");
+})());
+
+await checkAsync("Leere accountId wird bei Leseversuch abgewiesen", (async () => (
+  liesBlogProfilAnalyseNachweis(makeStorage(), "") === null
+))());
+
+await checkAsync("Leere accountId wird bei Schreibversuch abgewiesen", (async () => (
+  !speichereBlogProfilAnalyseNachweis(makeStorage(), "", { articleId: responseBasePayload.artikel.id, contentHash: "a".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" })
+))());
+
+await checkAsync("Storage-Getter-Exception führt zu fail-closed Leseergebnis", (async () => (
+  liesBlogProfilAnalyseNachweis(throwingStorage, "konto") === null
+))());
+
+await checkAsync("Storage-Setter-Exception führt zu fail-closed Schreibergebnis", (async () => (
+  !speichereBlogProfilAnalyseNachweis(throwingStorage, "konto", { articleId: responseBasePayload.artikel.id, contentHash: "e".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" })
+))());
 
 await checkAsync("Korruptes Marker-JSON wird abgewiesen", (async () => {
   const storage = makeStorage();
   storage.setItem("kd:blog-profile-analyse:nachweis:v1:kontoCorrupt", "not-json");
   return liesBlogProfilAnalyseNachweis(storage, "kontoCorrupt") === null;
-} )());
+})());
+
+await checkAsync("analyseAt muss kanonische ISO sein", (async () => {
+  const storage = makeStorage();
+  return !speichereBlogProfilAnalyseNachweis(storage, "kontoA", {
+    articleId: responseBasePayload.artikel.id,
+    contentHash: "f".repeat(64),
+    analyzedAt: "2026-08-17T10:00:00Z",
+  });
+})());
 
 await checkAsync("Unveränderten Artikel per Marker erkennen", (async () => {
   const storage = makeStorage();
   const marker = { articleId: responseBasePayload.artikel.id, contentHash: "f".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" };
   if (!speichereBlogProfilAnalyseNachweis(storage, "kontoA", marker)) return false;
   return isArtikelUnveraendert(storage, "kontoA", responseBasePayload, { digest: async () => "f".repeat(64) });
-} )());
+})());
 
-console.log("\\nErgebnis:", ok.length, "ok,", rot.length, "offen");
+console.log("\nErgebnis:", ok.length, "ok,", rot.length, "offen");
 if (rot.length > 0) {
   console.error("Fehlgeschlagene Checks:", rot.join(" | "));
   process.exit(1);
