@@ -113,6 +113,10 @@ import { seriesWatchService } from "./services/seriesWatch.js";
 const normalisiereEntdeckenStatus = (wert) => (
   wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
 );
+const normalisiereVokabular = (wert) => {
+  if (!Array.isArray(wert)) throw new TypeError("Vokabular muss eine Liste sein.");
+  return wert;
+};
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
@@ -316,12 +320,20 @@ export default function App() {
   }, [einstellungen, bereinigteEinstellungen]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
-  const [vokabular, setVokabular] = useState([]);
-  const saveVokabular = useCallback((liste) => {
-    setVokabular(liste);
-    setzeEigeneStimmungen(vokabularZuMap(liste));
-    store.set(K.vokabular, JSON.stringify(liste)).catch(() => {});
-  }, []);
+  const {
+    wert: vokabular,
+    uebernehmeBestaetigt: setVokabular,
+    schreibe: saveVokabular,
+  } = useConfirmedStorageState({
+    key: K.vokabular,
+    initial: [],
+    normalisiere: normalisiereVokabular,
+    setErr,
+    fehlermeldung: "Vokabular konnte nicht gespeichert werden. Die Änderung wurde nicht übernommen.",
+  });
+  useEffect(() => {
+    setzeEigeneStimmungen(vokabularZuMap(vokabular));
+  }, [vokabular]);
 
   /* ---- Kinotermin-Pins ----
      Pin = {t, j, z, seit} — z ist der komplette Terminstring inkl. Kino.
@@ -704,8 +716,7 @@ export default function App() {
         const r = await store.get(K.vokabular);
         if (r && r.value) {
           const v = JSON.parse(r.value);
-          setVokabular(v);
-          setzeEigeneStimmungen(vokabularZuMap(v));
+          if (Array.isArray(v)) setVokabular(v);
         }
       } catch { /* kein eigenes Vokabular */ }
       if (m) { setMaster(m); setMasterMeta(meta); setMasterHerkunft(herkunft); }

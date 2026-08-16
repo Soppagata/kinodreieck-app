@@ -2,6 +2,7 @@
    Rein lokal: Komponenten werden mit esbuild gebündelt; kein Netz/Anbieter. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -17,9 +18,10 @@ async function ladeEsbuild() {
   try { return await import("esbuild"); }
   catch { return createRequire(import.meta.resolve("vite"))("esbuild"); }
 }
-const ausgabeDir = path.join(wurzel, "node_modules/.cache/async-persistence-ui-test");
+const ausgabeDir = fs.mkdtempSync(path.join(os.tmpdir(), "kd-async-persistence-ui-test-"));
 const ausgabe = path.join(ausgabeDir, "bundle.mjs");
-fs.mkdirSync(ausgabeDir, { recursive: true });
+fs.symlinkSync(path.join(wurzel, "node_modules"), path.join(ausgabeDir, "node_modules"), "dir");
+process.on("exit", () => fs.rmSync(ausgabeDir, { recursive: true, force: true }));
 const esbuild = await ladeEsbuild();
 await esbuild.build({
   stdin: {
@@ -33,7 +35,9 @@ await esbuild.build({
       'export { ArtikelMaske } from "./src/tabs/BlogTab.jsx";',
       'export { KontoUebernahme } from "./src/components/KontoUebernahme.jsx";',
       'export { useBackupExportController } from "./src/controllers/useBackupExportController.js";',
-      'export { setStorageDriver as setGebundenerTestTreiber } from "./src/lib/storage.js";',
+      'export { K, setStorageDriver as setGebundenerTestTreiber } from "./src/lib/storage.js";',
+      'export { alleStimmungen, setzeEigeneStimmungen } from "./src/lib/finder.js";',
+      'export { vokabularZuMap } from "./src/lib/vokabular.js";',
     ].join("\n"),
     loader: "js",
     resolveDir: wurzel,
@@ -65,7 +69,8 @@ const { createRoot } = await import("react-dom/client");
 const {
   FilmCard, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, KontoUebernahme,
   Wochenplan, StreamingTab,
-  useBackupExportController, setGebundenerTestTreiber,
+  useBackupExportController, K, setGebundenerTestTreiber,
+  alleStimmungen, setzeEigeneStimmungen, vokabularZuMap,
 } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -296,6 +301,137 @@ for (const [key, start, next, label] of [
   check(ergebnis === false && sichtbar === start && meldungen === 1,
     `${label} bleibt bei Storage-Reject auf dem bestätigten Ausgangsstand`);
 }
+
+/* App-Vokabular: dieselbe Writernaht bestätigt Storage und Kontext, bevor
+   React-State/Finder-Projektion wechseln. Die App-Verkabelung wird ergänzend
+   eng geprüft, weil ein vollständiger App-Mount Session- und Boot-Dienste
+   unnötig in diesen fokussierten Persistenztest ziehen würde. */
+const altesVokabular = [{ wort: "altwort", genres: ["Drama"], tags: [] }];
+const neuesVokabular = [{ wort: "neuwort", genres: ["Komödie"], tags: ["leicht"] }];
+const normalisiereVokabular = (wert) => {
+  if (!Array.isArray(wert)) throw new TypeError("Vokabular muss eine Liste sein.");
+  return wert;
+};
+let vokabularSichtbar = altesVokabular;
+let vokabularFehler = 0;
+setzeEigeneStimmungen(vokabularZuMap(vokabularSichtbar));
+const vokabularCommit = (wert) => {
+  vokabularSichtbar = wert;
+  setzeEigeneStimmungen(vokabularZuMap(vokabularSichtbar));
+};
+const finderHat = (wort) => Object.prototype.hasOwnProperty.call(alleStimmungen(), wort);
+
+const rejectWriter = erstelleBestaetigtenStateWriter({
+  key: K.vokabular,
+  liesWert: () => vokabularSichtbar,
+  normalisiere: normalisiereVokabular,
+  commit: vokabularCommit,
+  meldeFehler: () => { vokabularFehler++; },
+  captureContext: () => ({
+    isCurrent: () => true,
+    set: async () => { throw new Error("Storage voll"); },
+  }),
+});
+check(await rejectWriter(neuesVokabular) === false
+  && vokabularSichtbar === altesVokabular && finderHat("altwort") && !finderHat("neuwort")
+  && vokabularFehler === 1,
+"K.vokabular-Reject liefert false und lässt sichtbaren State sowie Finder-Projektion bestätigt");
+check(await rejectWriter({ wort: "keine-liste" }) === false
+  && vokabularSichtbar === altesVokabular && vokabularFehler === 1,
+"K.vokabular weist formfremde Werte fail-closed ohne Scheinerfolg ab");
+
+let loeseVokabularWrite;
+let geschriebenerVokabularwert = null;
+const vokabularWriteOffen = new Promise((resolve) => { loeseVokabularWrite = resolve; });
+const erfolgWriter = erstelleBestaetigtenStateWriter({
+  key: K.vokabular,
+  liesWert: () => vokabularSichtbar,
+  normalisiere: normalisiereVokabular,
+  commit: vokabularCommit,
+  captureContext: () => ({
+    isCurrent: () => true,
+    set: async (key, value) => {
+      check(key === K.vokabular, "bestätigter Vokabular-Writer schreibt exakt K.vokabular");
+      geschriebenerVokabularwert = value;
+      await vokabularWriteOffen;
+    },
+  }),
+});
+const erfolgreicherLauf = erfolgWriter(neuesVokabular);
+await tick();
+check(vokabularSichtbar === altesVokabular && finderHat("altwort") && !finderHat("neuwort"),
+  "offener K.vokabular-Write ändert weder sichtbaren State noch Finder-Projektion vorzeitig");
+loeseVokabularWrite();
+check(await erfolgreicherLauf === neuesVokabular
+  && geschriebenerVokabularwert === JSON.stringify(neuesVokabular)
+  && vokabularSichtbar === neuesVokabular && !finderHat("altwort") && finderHat("neuwort"),
+"bestätigter K.vokabular-Commit aktualisiert danach State und Finder-Projektion gemeinsam");
+
+let kontextAktuell = true;
+let loeseKontextWrite;
+const kontextWriteOffen = new Promise((resolve) => { loeseKontextWrite = resolve; });
+const kontextWriter = erstelleBestaetigtenStateWriter({
+  key: K.vokabular,
+  liesWert: () => vokabularSichtbar,
+  normalisiere: normalisiereVokabular,
+  commit: vokabularCommit,
+  captureContext: () => ({
+    isCurrent: () => kontextAktuell,
+    set: async () => { await kontextWriteOffen; },
+  }),
+});
+const fremderKontextWert = [{ wort: "fremdkontext", genres: ["Horror"], tags: [] }];
+const kontextLauf = kontextWriter(fremderKontextWert);
+await tick();
+kontextAktuell = false;
+loeseKontextWrite();
+check(await kontextLauf === false && vokabularSichtbar === neuesVokabular
+  && finderHat("neuwort") && !finderHat("fremdkontext"),
+"Konto-/Treiberwechsel während K.vokabular-Write liefert false und commitet nicht in den neuen Sichtkontext");
+
+let aktiveVokabularWrites = 0;
+let maximaleVokabularWrites = 0;
+let ersterQueueStart;
+let loeseErstenQueueWrite;
+const ersterQueueGestartet = new Promise((resolve) => { ersterQueueStart = resolve; });
+const ersterQueueOffen = new Promise((resolve) => { loeseErstenQueueWrite = resolve; });
+let queueWriteNr = 0;
+const queueWriter = erstelleBestaetigtenStateWriter({
+  key: K.vokabular,
+  liesWert: () => vokabularSichtbar,
+  normalisiere: normalisiereVokabular,
+  commit: vokabularCommit,
+  captureContext: () => ({
+    isCurrent: () => true,
+    set: async () => {
+      const nr = ++queueWriteNr;
+      aktiveVokabularWrites++;
+      maximaleVokabularWrites = Math.max(maximaleVokabularWrites, aktiveVokabularWrites);
+      if (nr === 1) { ersterQueueStart(); await ersterQueueOffen; }
+      aktiveVokabularWrites--;
+    },
+  }),
+});
+const queueA = [{ wort: "klick-eins", genres: ["Drama"], tags: [] }];
+const queueB = [{ wort: "klick-zwei", genres: ["Thriller"], tags: [] }];
+const ersterKlick = queueWriter(queueA);
+await ersterQueueGestartet;
+const zweiterKlick = queueWriter(queueB);
+await tick();
+check(queueWriteNr === 1 && vokabularSichtbar === neuesVokabular,
+  "Doppelklick-Äquivalent startet keinen zweiten K.vokabular-Write parallel und commitet nicht vorzeitig");
+loeseErstenQueueWrite();
+check(await ersterKlick === queueA && await zweiterKlick === queueB
+  && queueWriteNr === 2 && maximaleVokabularWrites === 1 && vokabularSichtbar === queueB
+  && finderHat("klick-zwei") && !finderHat("klick-eins"),
+"K.vokabular serialisiert zwei schnelle Writes und projiziert den letzten bestätigten Stand");
+
+const appQuelle = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
+check(/wert:\s*vokabular,[\s\S]*uebernehmeBestaetigt:\s*setVokabular,[\s\S]*schreibe:\s*saveVokabular,[\s\S]*key:\s*K\.vokabular,[\s\S]*initial:\s*\[\],[\s\S]*normalisiere:\s*normalisiereVokabular/.test(appQuelle),
+  "App bindet saveVokabular an die gemeinsame bestätigte useConfirmedStorageState-Naht");
+check(/useEffect\(\(\) => \{\s*setzeEigeneStimmungen\(vokabularZuMap\(vokabular\)\);\s*\}, \[vokabular\]\);/.test(appQuelle)
+  && /if \(Array\.isArray\(v\)\) setVokabular\(v\);/.test(appQuelle),
+"App projiziert nur bestätigten React-State und übernimmt beim Boot gültige Arrays ohne neuen Storage-Write");
 
 async function pruefeStatusReihenfolge(erster, zweiter) {
   const titel = {
