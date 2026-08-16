@@ -2403,7 +2403,7 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(r.status, 200, "Status");
   gleich(r.daten.ok, true, "ok");
   gleich(r.daten.task, "health", "task");
-  gleich(r.daten.contractVersion, "ai-task-v4", "Vertragsversion");
+  gleich(r.daten.contractVersion, "ai-task-v5", "Vertragsversion");
   gleich(r.daten.buildVersion, "unversioned", "ohne Deploy-Metadatum fail-closed");
   gleich(kontofreigabeAufrufe().length, 1, "eigene fachliche Freigabe wird gelesen");
   gleich(
@@ -4528,11 +4528,60 @@ test("MB3 Vorbeurteilung mit weniger als fünf Bewertungen endet vor dem Anbiete
    Liste, weil das der Weg ist, auf dem sie real auftreten.
    =========================================================================== */
 
+const BLOG_BUDGET_BELEG = "b".repeat(96);
+const BLOG_BUDGET_GENRE_1 = "g".repeat(40);
+const BLOG_BUDGET_GENRE_2 = "h".repeat(40);
+const BLOG_BUDGET_TAG = "t".repeat(40);
+
+function groessterGueltigerBlogProfilPayload() {
+  return {
+    artikel: {
+      id: "blog_budget_max",
+      titel: "Maximale gueltige E17A-Ausgabe",
+      text: BLOG_BUDGET_BELEG,
+    },
+    listen: {
+      genres: [BLOG_BUDGET_GENRE_1, BLOG_BUDGET_GENRE_2],
+      tags: [BLOG_BUDGET_TAG],
+    },
+  };
+}
+
+function groessteGueltigeBlogProfilAntwort() {
+  return {
+    geschmackszuege: Array.from({ length: 12 }, () => ({
+      art: "erzaehlweise",
+      wert: "w".repeat(60),
+      richtung: "ambivalent",
+      staerke: 5,
+      sicherheit: "niedrig",
+      beleg: BLOG_BUDGET_BELEG,
+    })),
+    vokabular: Array.from({ length: 6 }, () => ({
+      wort: "v".repeat(40),
+      beschreibung: "d".repeat(96),
+      genres: [BLOG_BUDGET_GENRE_1, BLOG_BUDGET_GENRE_2],
+      tags: [BLOG_BUDGET_TAG],
+      beleg: BLOG_BUDGET_BELEG,
+    })),
+  };
+}
+
+type BudgetSonde = {
+  payload: () => Record<string, unknown>;
+  vorbereiten: () => void;
+  /* Aufgaben mit festem Vertrag dürfen nicht in die Override-/Fallback-Tests:
+     bei ihnen ist jeder andere oder fehlende Wert gerade ein harter Fehler.
+     MT7 hält stattdessen die Übereinstimmung mit dem Aufgabenvertrag fest. */
+  maxTokensExakt?: number;
+  groessteGueltigeAntwort?: () => unknown;
+};
+
 /* Je gebauter Aufgabe ein vollständiger, gültiger Durchlauf. Die Tabelle ist
    zugleich der Wächter aus MT7: eine neue Aufgabe ohne Eintrag hier fällt auf. */
 const BUDGET_SONDEN: Record<
   string,
-  { payload: () => Record<string, unknown>; vorbereiten: () => void }
+  BudgetSonde
 > = {
   "echo-struct": {
     payload: () => ({ wort: "Kinodreieck" }),
@@ -4592,7 +4641,24 @@ const BUDGET_SONDEN: Record<
       });
     },
   },
+  "blog-profile-extract": {
+    payload: () => groessterGueltigerBlogProfilPayload(),
+    vorbereiten: () => {
+      z.anbieter = () => anbieterErfolg(groessteGueltigeBlogProfilAntwort());
+    },
+    maxTokensExakt: BLOG_PROFILE_MAX_TOKENS,
+    groessteGueltigeAntwort: () => groessteGueltigeBlogProfilAntwort(),
+  },
 };
+
+/* Die historischen MT1/2/4/6-Fälle prüfen ausdrücklich konfigurierbare
+   Standard-/Fallback-Aufgaben. Exakte Verträge besitzen ihren eigenen,
+   fail-closed MT7-Pfad und die Negativabdeckung in BP8. */
+function konfigurierbareBudgetTasks(): string[] {
+  return Object.keys(BUDGET_SONDEN).filter((task) =>
+    BUDGET_SONDEN[task].maxTokensExakt === undefined
+  );
+}
 
 /* Steht für „die Konfiguration sagt zu dieser Aufgabe NICHTS" — der Zustand,
    in dem der Vorfall entstand. Nicht mit `undefined` verwechselbar, das über
@@ -4677,7 +4743,7 @@ const EINGABEPREIS: Record<string, number> = {
 };
 
 test("MT1 die Konfiguration schlägt die Standardtabelle — je Aufgabe einzeln", async () => {
-  for (const task of Object.keys(BUDGET_SONDEN)) {
+  for (const task of konfigurierbareBudgetTasks()) {
     const soll = standardBudget(task);
     /* Zwei Werte, die BEIDE vom Standardwert dieser Aufgabe abweichen — sonst
        prüfte der Fall mit `gesetzt === soll` nichts. Gewählt wird deshalb
@@ -4715,7 +4781,7 @@ test("MT2 ohne Konfiguration greift die Standardtabelle, nicht die anonyme 256",
      steht, muss beim Anbieter ankommen. Der Test übersteht damit eine
      begründete Änderung des Werts — und geht rot, sobald die Auflösung an der
      Tabelle vorbeiläuft oder die Tabelle den Eintrag verliert. */
-  for (const task of Object.keys(BUDGET_SONDEN)) {
+  for (const task of konfigurierbareBudgetTasks()) {
     const soll = standardBudget(task);
     const m = await messeBudget(task);
     gleich(
@@ -4777,7 +4843,7 @@ test("MT4 unbrauchbare Konfigurationswerte fallen auf den Standard durch", async
       null,
       `KRUMM[${name}]: zuTokens muss diesen Wert verwerfen`,
     );
-    for (const task of Object.keys(BUDGET_SONDEN)) {
+    for (const task of konfigurierbareBudgetTasks()) {
       const soll = standardBudget(task);
       const m = await messeBudget(task, wert);
       const wo = `${task}, task_max_tokens=${name}`;
@@ -4822,7 +4888,7 @@ test("MT4b was sich bloss in eine Zahl VERWANDELN lässt, gilt nicht als Angabe"
   ];
   for (const [name, wert] of FAELLE) {
     gleich(zuTokens(wert), null, `zuTokens(${name}) verwirft den Wert`);
-    for (const task of Object.keys(BUDGET_SONDEN)) {
+    for (const task of konfigurierbareBudgetTasks()) {
       const soll = standardBudget(task);
       const m = await messeBudget(task, wert);
       const wo = `${task}, task_max_tokens=${name}`;
@@ -4933,7 +4999,7 @@ test("MT6 die Reservierung hängt am selben Budget, nicht an einer festen Zahl",
      Anbieterkoerper darf sich zwischen zwei Budgets im Feld `max_tokens` um
      wenige Bytes aendern. Neben dem Ausgabeanteil ist deshalb hoechstens ein
      zusaetzlich geschaetztes Eingabetoken erlaubt. */
-  for (const task of Object.keys(BUDGET_SONDEN)) {
+  for (const task of konfigurierbareBudgetTasks()) {
     const klein = await messeBudget(task, 256);
     const gross = await messeBudget(task, 2048);
     wahr(
@@ -5002,10 +5068,25 @@ test("MT7 Wächter: jede gebaute Aufgabe hat ein bewusst gewähltes Budget", asy
      liefern. Eine geleerte Tabelle fällt damit hier auf, nicht erst beim
      nächsten bezahlten Aufruf. */
   for (const task of Object.keys(AUFGABEN)) {
+    const sonde = BUDGET_SONDEN[task];
     wahr(
-      BUDGET_SONDEN[task],
+      sonde,
       `neue Aufgabe "${task}": trag eine Sonde in BUDGET_SONDEN ein, sonst prüft niemand ihr Ausgabebudget`,
     );
+    if (sonde.maxTokensExakt !== undefined) {
+      gleich(
+        AUFGABEN[task].maxTokensExakt,
+        sonde.maxTokensExakt,
+        `${task}: Sonde und unveränderlicher Aufgabenvertrag stimmen überein`,
+      );
+      const m = await messeBudget(task, sonde.maxTokensExakt);
+      gleich(
+        m.maxTokens,
+        sonde.maxTokensExakt,
+        `${task}: der exakte Vertragswert kommt beim Anbieter an`,
+      );
+      continue;
+    }
     /* Wirft mit klarer Meldung, wenn der eigene Eintrag fehlt oder krumm ist. */
     const soll = standardBudget(task);
     const m = await messeBudget(task);
@@ -5158,6 +5239,60 @@ test("MT8 das Budget deckt die größtmögliche gültige Antwort", async () => {
     budget >= gewoehnlichTok * 2,
     `das Budget muss mindestens das Doppelte einer gewöhnlichen Antwort tragen ` +
       `(gewöhnlich ~${gewoehnlichTok} Token, Budget ${budget})`,
+  );
+
+  /* E17A hat keinen veränderlichen Tabellenstandard, sondern exakt 2048.
+     Die Sonde fährt den vollständigen Providerpfad mit 12 Geschmackszügen,
+     6 Vokabulareinträgen und allen freien Feldern sowie Zuordnungen an ihren
+     Byte-/Anzahlobergrenzen. So belegt MT8 nicht bloss die Zahl, sondern dass
+     die grösste gültige Vertragsantwort validiert und in das Budget passt. */
+  const blogSonde = BUDGET_SONDEN[BLOG_PROFILE_TASK];
+  gleich(blogSonde.maxTokensExakt, 2048, "E17A-Sonde hält den 2048-Vertrag fest");
+  wahr(
+    typeof blogSonde.groessteGueltigeAntwort === "function",
+    "E17A-Sonde benennt ihre grösste gültige Antwort",
+  );
+  const blogAntwort = blogSonde.groessteGueltigeAntwort!() as {
+    geschmackszuege: Array<Record<string, unknown>>;
+    vokabular: Array<Record<string, unknown>>;
+  };
+  const bytes = (wert: unknown) =>
+    new TextEncoder().encode(String(wert)).length;
+  gleich(blogAntwort.geschmackszuege.length, 12, "E17A Geschmackszüge am Maximum");
+  gleich(blogAntwort.vokabular.length, 6, "E17A Vokabular am Maximum");
+  wahr(
+    blogAntwort.geschmackszuege.every((eintrag) =>
+      bytes(eintrag.wert) === 60 && bytes(eintrag.beleg) === 96
+    ),
+    "E17A Geschmackszug-Freitexte an den Byteobergrenzen",
+  );
+  wahr(
+    blogAntwort.vokabular.every((eintrag) =>
+      bytes(eintrag.wort) === 40 &&
+      bytes(eintrag.beschreibung) === 96 &&
+      bytes(eintrag.beleg) === 96 &&
+      ((eintrag.genres as unknown[]).length + (eintrag.tags as unknown[]).length) === 3 &&
+      [...(eintrag.genres as unknown[]), ...(eintrag.tags as unknown[])]
+        .every((wert) => bytes(wert) === 40)
+    ),
+    "E17A Vokabularfelder und drei Allowlist-Zuordnungen an den Obergrenzen",
+  );
+  const blogGross = JSON.stringify(blogAntwort).length;
+  const blogGeschaetzt = Math.ceil(blogGross / ZEICHEN_JE_TOKEN);
+  const blogGeschaetztEng = Math.ceil(blogGross / ZEICHEN_JE_TOKEN_ENG);
+  const blogBudget = (await messeBudget(
+    BLOG_PROFILE_TASK,
+    blogSonde.maxTokensExakt,
+  )).maxTokens as number;
+  const blogRechnung = `${blogGross} Zeichen, / ${ZEICHEN_JE_TOKEN} = ~${blogGeschaetzt} Token, ` +
+    `konservativ / ${ZEICHEN_JE_TOKEN_ENG} = ~${blogGeschaetztEng} Token, Budget ${blogBudget}`;
+  wahr(
+    blogBudget >= blogGeschaetzt,
+    `E17A-Maximalantwort würde abgeschnitten (${blogRechnung})`,
+  );
+  wahr(
+    blogBudget >= blogGeschaetztEng,
+    `E17A-Maximalantwort trägt die konservative Rechnung nicht (${blogRechnung})`,
   );
 });
 
