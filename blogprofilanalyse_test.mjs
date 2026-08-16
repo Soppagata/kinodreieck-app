@@ -45,6 +45,10 @@ const BASE_LISTEN = {
   tags: ["einprägsam", "kristallklar"],
 };
 
+const ACCOUNT_ID_VALID_1 = "11111111-1111-4111-8111-111111111111";
+const ACCOUNT_ID_VALID_2 = "22222222-2222-4222-8222-222222222222";
+const ACCOUNT_ID_VALID_3 = "33333333-3333-4333-8333-333333333333";
+
 const BASE_ARTICLE = {
   id: "artikel_001",
   herkunft: "eigene_quelle",
@@ -141,6 +145,10 @@ check("ok != true wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) 
 check("task != health wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.task = "other"; })));
 check("betrieb.aiAktiv != true wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.betrieb.aiAktiv = false; })));
 check("Zusatzfeld in capabilities wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.capabilities.extra = { a: 1 }; })));
+check("vorgangId darf kein Leerwert sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.vorgangId = ""; })));
+check("phase darf keine Leerzeichenfolge sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.phase = "   "; })));
+check("buildVersion darf kein Leerwert sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.buildVersion = ""; })));
+check("zeit muss kanonische ISO sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.zeit = "2026-08-17T06:00:00Z"; })));
 
 // 2) Auswahl + Payload
 check("gültiges eigenes Artikel-Payload", waehleBlogProfilArtikel({
@@ -354,6 +362,19 @@ const existingProfile = {
   ],
 };
 
+const existingProfileMitOffenen = {
+  offen: [
+    {
+      art: BLOG_PROFILE_ARTEN_SET[1],
+      wert: responseBasePayload.listen.genres[1],
+      richtung: BLOG_PROFILE_RICHTUNG_SET[1],
+      staerke: 4,
+      sicherheit: BLOG_PROFILE_SICHERHEIT_SET[2],
+      beleg: "offener beleg",
+    },
+  ],
+};
+
 const existingVokabular = [
   {
     wort: "Tempo",
@@ -430,6 +451,34 @@ await checkAsync("Leere Antwort wird nicht als bereits_vorhanden klassifiziert",
   });
   if (!leer.ok) return false;
   return leer.payload.status !== "bereits_vorhanden";
+})());
+
+await checkAsync("vorhandene offene Signale werden bei der Dedupe berücksichtigt", (async () => {
+  const mitOffenenSignalen = {
+    ...konfliktResponse,
+    geschmackszuege: [
+      {
+        art: BLOG_PROFILE_ARTEN_SET[1],
+        wert: responseBasePayload.listen.genres[1],
+        richtung: BLOG_PROFILE_RICHTUNG_SET[0],
+        staerke: 3,
+        sicherheit: BLOG_PROFILE_SICHERHEIT_SET[0],
+        beleg: "Diese Rezension enthält einen brauchbaren Beleg.",
+      },
+    ],
+  };
+
+  const preview = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: mitOffenenSignalen,
+    bestehendesProfil: existingProfileMitOffenen,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "d".repeat(64),
+    clock: () => "2026-08-17T09:45:00.000Z",
+  });
+
+  if (!preview.ok) return false;
+  return preview.payload.geschmackszuege[0].status === "konflikt";
 })());
 
 await checkAsync("Vokabular-Mappings werden genres/tags getrennt verglichen", (async () => {
@@ -530,6 +579,102 @@ await checkAsync("Revalidation verarbeitet editierte Vorschau ohne neue Hash-/Cl
     && second.payload.promptVersion === first.payload.promptVersion;
 })());
 
+await checkAsync("Revalidation lehnt fehlende/fehlangepasste Metadaten ab und berechnet keine neuen Hash/Clock", (async () => {
+  const erste = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => "a".repeat(64),
+    clock: () => "2026-08-17T14:00:00.000Z",
+  });
+  if (!erste.ok) return false;
+
+  let digestCalled = 0;
+  let clockCalled = 0;
+
+  const ohneMetadaten = { ...erste.payload };
+  delete ohneMetadaten.articleId;
+  const fehlend = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: ohneMetadaten,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => {
+      digestCalled += 1;
+      return "0".repeat(64);
+    },
+    clock: () => {
+      clockCalled += 1;
+      return "2026-08-17T15:00:00.000Z";
+    },
+  });
+
+  const manipuliertQuelle = {
+    ...erste.payload,
+    quelle: "anderer-kontext",
+  };
+  const quelleFail = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: manipuliertQuelle,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => {
+      digestCalled += 1;
+      return "a".repeat(64);
+    },
+    clock: () => {
+      clockCalled += 1;
+      return "2026-08-17T15:00:00.000Z";
+    },
+  });
+
+  const falschPrompt = {
+    ...erste.payload,
+    promptVersion: "other",
+  };
+  const promptFail = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: falschPrompt,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => {
+      digestCalled += 1;
+      return "a".repeat(64);
+    },
+    clock: () => {
+      clockCalled += 1;
+      return "2026-08-17T15:00:00.000Z";
+    },
+  });
+
+  const nullHash = {
+    ...erste.payload,
+    contentHash: null,
+  };
+  const nullHashFail = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: nullHash,
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    digest: async () => {
+      digestCalled += 1;
+      return "a".repeat(64);
+    },
+    clock: () => {
+      clockCalled += 1;
+      return "2026-08-17T15:00:00.000Z";
+    },
+  });
+
+  return !fehlend.ok
+    && !quelleFail.ok
+    && !promptFail.ok
+    && !nullHashFail.ok
+    && digestCalled === 0
+    && clockCalled === 0;
+})());
+
 // 5) Nachweis
 await checkAsync("Marker ist account-namespaced und formfremd fail-closed", (async () => {
   const storageA = makeStorage();
@@ -537,12 +682,12 @@ await checkAsync("Marker ist account-namespaced und formfremd fail-closed", (asy
   const markerA = { articleId: responseBasePayload.artikel.id, contentHash: "c".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" };
   const markerB = { articleId: "anders", contentHash: "d".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" };
 
-  if (!speichereBlogProfilAnalyseNachweis(storageA, "kontoA", markerA)) return false;
-  if (!speichereBlogProfilAnalyseNachweis(storageB, "kontoB", markerB)) return false;
+  if (!speichereBlogProfilAnalyseNachweis(storageA, ACCOUNT_ID_VALID_1, markerA)) return false;
+  if (!speichereBlogProfilAnalyseNachweis(storageB, ACCOUNT_ID_VALID_2, markerB)) return false;
 
-  const gelesenA = liesBlogProfilAnalyseNachweis(storageA, "kontoA");
-  const gelesenB = liesBlogProfilAnalyseNachweis(storageB, "kontoB");
-  const vermischt = liesBlogProfilAnalyseNachweis(storageA, "kontoB");
+  const gelesenA = liesBlogProfilAnalyseNachweis(storageA, ACCOUNT_ID_VALID_1);
+  const gelesenB = liesBlogProfilAnalyseNachweis(storageB, ACCOUNT_ID_VALID_2);
+  const vermischt = liesBlogProfilAnalyseNachweis(storageA, ACCOUNT_ID_VALID_2);
 
   if (!gelesenA || !gelesenB || vermischt) return false;
   return !Object.prototype.hasOwnProperty.call(gelesenA, "titel")
@@ -554,38 +699,50 @@ await checkAsync("Leere accountId wird bei Leseversuch abgewiesen", (async () =>
   liesBlogProfilAnalyseNachweis(makeStorage(), "") === null
 ))());
 
+await checkAsync("AccountId mit Whitespace wird abgewiesen", (async () => (
+  liesBlogProfilAnalyseNachweis(makeStorage(), `${ACCOUNT_ID_VALID_1} `) === null
+))());
+
 await checkAsync("Leere accountId wird bei Schreibversuch abgewiesen", (async () => (
   !speichereBlogProfilAnalyseNachweis(makeStorage(), "", { articleId: responseBasePayload.artikel.id, contentHash: "a".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" })
 ))());
 
 await checkAsync("Storage-Getter-Exception führt zu fail-closed Leseergebnis", (async () => (
-  liesBlogProfilAnalyseNachweis(throwingStorage, "konto") === null
+  liesBlogProfilAnalyseNachweis(throwingStorage, ACCOUNT_ID_VALID_1) === null
 ))());
 
 await checkAsync("Storage-Setter-Exception führt zu fail-closed Schreibergebnis", (async () => (
-  !speichereBlogProfilAnalyseNachweis(throwingStorage, "konto", { articleId: responseBasePayload.artikel.id, contentHash: "e".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" })
+  !speichereBlogProfilAnalyseNachweis(throwingStorage, ACCOUNT_ID_VALID_1, { articleId: responseBasePayload.artikel.id, contentHash: "e".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" })
 ))());
 
 await checkAsync("Korruptes Marker-JSON wird abgewiesen", (async () => {
   const storage = makeStorage();
-  storage.setItem("kd:blog-profile-analyse:nachweis:v1:kontoCorrupt", "not-json");
-  return liesBlogProfilAnalyseNachweis(storage, "kontoCorrupt") === null;
+  storage.setItem(`kd:blog-profile-analyse:nachweis:v1:${ACCOUNT_ID_VALID_3}`, "not-json");
+  return liesBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_3) === null;
 })());
 
 await checkAsync("analyseAt muss kanonische ISO sein", (async () => {
   const storage = makeStorage();
-  return !speichereBlogProfilAnalyseNachweis(storage, "kontoA", {
+  return !speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, {
     articleId: responseBasePayload.artikel.id,
     contentHash: "f".repeat(64),
     analyzedAt: "2026-08-17T10:00:00Z",
   });
 })());
 
+await checkAsync("Marker mit 64 Nullen wird abgelehnt", (async () => (
+  !speichereBlogProfilAnalyseNachweis(makeStorage(), ACCOUNT_ID_VALID_1, {
+    articleId: responseBasePayload.artikel.id,
+    contentHash: "0".repeat(64),
+    analyzedAt: "2026-08-17T10:00:00.000Z",
+  })
+)));
+
 await checkAsync("Unveränderten Artikel per Marker erkennen", (async () => {
   const storage = makeStorage();
   const marker = { articleId: responseBasePayload.artikel.id, contentHash: "f".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" };
-  if (!speichereBlogProfilAnalyseNachweis(storage, "kontoA", marker)) return false;
-  return isArtikelUnveraendert(storage, "kontoA", responseBasePayload, { digest: async () => "f".repeat(64) });
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+  return isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, responseBasePayload, { digest: async () => "f".repeat(64) });
 })());
 
 console.log("\nErgebnis:", ok.length, "ok,", rot.length, "offen");

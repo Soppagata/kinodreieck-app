@@ -44,6 +44,7 @@ const BLOG_PROFILE_LISTEN_KEYS = Object.freeze(["genres", "tags"]);
 const BLOG_PROFILE_HASH_RE = /^[a-f0-9]{64}$/;
 const BLOG_PROFILE_HASH_NOT_ZERO_RE = /^0{64}$/;
 const BLOG_PROFILE_ARTICLE_KEYS = Object.freeze(["artikel", "listen"]);
+const SUPABASE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const CANONICAL_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -437,9 +438,12 @@ export const ermittleVokabularStatus = (item, bestehendesVokabular = []) => stat
 );
 
 const buildExistingSignalMap = (bestehendesProfil = {}) => {
-  const profilSignalQuelle = Array.isArray(bestehendesProfil.signale)
-    ? bestehendesProfil.signale
-    : bestehendesProfil.geschmackszuege;
+  const signale = Array.isArray(bestehendesProfil.signale) ? bestehendesProfil.signale : [];
+  const offen = Array.isArray(bestehendesProfil.offen) ? bestehendesProfil.offen : [];
+  const profilSignalQuelle = [...signale, ...offen];
+  if (signale.length === 0 && offen.length === 0 && Array.isArray(bestehendesProfil.geschmackszuege)) {
+    profilSignalQuelle.push(...bestehendesProfil.geschmackszuege);
+  }
 
   const map = new Map();
   for (const signal of (profilSignalQuelle || [])) {
@@ -476,7 +480,7 @@ const storageKey = (accountId) => `${BLOG_PROFILE_STORAGE_KEY}:${accountId}`;
 const validiereNachweisMarker = (raw) => {
   if (!exaktSchluessel(raw, ["articleId", "contentHash", "analyzedAt"])) return null;
   if (!BLOG_PROFILE_ID.test(raw.articleId)) return null;
-  if (!BLOG_PROFILE_HASH_RE.test(raw.contentHash)) return null;
+  if (!BLOG_PROFILE_HASH_RE.test(raw.contentHash) || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(raw.contentHash)) return null;
   if (!isCanonicalIsoDate(raw.analyzedAt)) return null;
   return {
     articleId: raw.articleId,
@@ -485,7 +489,7 @@ const validiereNachweisMarker = (raw) => {
   };
 };
 
-const accountIdIstGueltig = (accountId) => istText(accountId) && accountId.trim().length > 0;
+const accountIdIstGueltig = (accountId) => istText(accountId) && SUPABASE_UUID_RE.test(accountId);
 
 export function liesBlogProfilAnalyseNachweis(storage, accountId) {
   if (!accountIdIstGueltig(accountId)) return null;
@@ -567,9 +571,10 @@ const extrahierePreserveMeta = (modelAntwort, articlePayload) => {
   if (modelAntwort.articleId !== articlePayload.artikel.id) return null;
 
   if (!istText(modelAntwort.contentHash) || !BLOG_PROFILE_HASH_RE.test(modelAntwort.contentHash)) return null;
+  if (BLOG_PROFILE_HASH_NOT_ZERO_RE.test(modelAntwort.contentHash)) return null;
   if (!isCanonicalIsoDate(modelAntwort.analyzedAt)) return null;
-  if (!istText(modelAntwort.promptVersion)) return null;
-  if (!istText(modelAntwort.quelle)) return null;
+  if (modelAntwort.promptVersion !== BLOG_PROFILE_ANALYSE_PROMPT_VERSION) return null;
+  if (modelAntwort.quelle !== BLOG_PROFILE_ANALYSE_SOURCE) return null;
 
   return {
     articleId: modelAntwort.articleId,
@@ -605,7 +610,7 @@ export async function erzeugeBlogProfilAnalyseVorschau({
   if (preserveMetadata) {
     contentHash = preserveMetadata.contentHash || null;
     analyzedAt = preserveMetadata.analyzedAt || null;
-    if (!BLOG_PROFILE_HASH_RE.test(contentHash || "")) {
+    if (!BLOG_PROFILE_HASH_RE.test(contentHash || "") || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(contentHash || "")) {
       return fehlschlag("contentHash ist ungültig");
     }
     if (!isCanonicalIsoDate(analyzedAt)) {
@@ -691,6 +696,7 @@ export function revalidiereBlogProfilAnalyseVorschau({
   const payload = artikelPayloadResult.payload;
   const bereinigt = bereinigeVorschauAntwort(modelAntwort);
   const preserveMetadata = extrahierePreserveMeta(modelAntwort, payload);
+  if (!preserveMetadata) return fehlschlag("metadaten fehlen");
 
   return erzeugeBlogProfilAnalyseVorschau({
     artikelPayload: payload,
@@ -742,10 +748,10 @@ export function hatBlogProfileAnalyseCapability(healthAntwort) {
   if (healthAntwort.ok !== true) return false;
   if (healthAntwort.task !== "health") return false;
   if (healthAntwort.contractVersion !== "ai-task-v5") return false;
-  if (!istText(healthAntwort.vorgangId)) return false;
-  if (!istText(healthAntwort.phase)) return false;
-  if (!istText(healthAntwort.buildVersion)) return false;
-  if (!istText(healthAntwort.zeit)) return false;
+  if (!istText(healthAntwort.vorgangId) || healthAntwort.vorgangId.trim().length === 0) return false;
+  if (!istText(healthAntwort.phase) || healthAntwort.phase.trim().length === 0) return false;
+  if (!istText(healthAntwort.buildVersion) || healthAntwort.buildVersion.trim().length === 0) return false;
+  if (!isCanonicalIsoDate(healthAntwort.zeit)) return false;
   if (!istObjekt(healthAntwort.laufzeit)
     || !istObjekt(healthAntwort.schluesselHerkunft)
     || !istObjekt(healthAntwort.aufrufer)) return false;
