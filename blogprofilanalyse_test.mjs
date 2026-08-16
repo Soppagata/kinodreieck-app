@@ -579,6 +579,68 @@ await checkAsync("Revalidation verarbeitet editierte Vorschau ohne neue Hash-/Cl
     && second.payload.promptVersion === first.payload.promptVersion;
 })());
 
+await checkAsync("erzeugeBlogProfilAnalyseVorschau lehnt direkte ungültige Preserve-Metadaten ab", (async () => (
+  !(
+    await erzeugeBlogProfilAnalyseVorschau({
+      artikelPayload: responseBasePayload,
+      modelAntwort: validResponse,
+      bestehendesProfil: existingProfile,
+      bestehendesVokabular: existingVokabular,
+      preserveMetadata: {
+        articleId: responseBasePayload.artikel.id,
+        contentHash: "a".repeat(64),
+        analyzedAt: "2026-08-17T14:00:00.000Z",
+        promptVersion: "other",
+        quelle: "bloganalyse",
+      },
+      digest: async () => "a".repeat(64),
+      clock: () => "2026-08-17T14:00:00.000Z",
+    })
+  ).ok
+))());
+
+await checkAsync("Revalidation nutzt gespeicherten contentHash ohne neue Hash-/Clock-Aufrufe", (async () => {
+  const storage = makeStorage();
+  const marker = {
+    articleId: responseBasePayload.artikel.id,
+    contentHash: "a".repeat(64),
+    analyzedAt: "2026-08-17T13:00:00.000Z",
+  };
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+
+  let digestCalled = 0;
+  let clockCalled = 0;
+
+  const revalidated = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: {
+      ...validResponse,
+      articleId: responseBasePayload.artikel.id,
+      contentHash: marker.contentHash,
+      analyzedAt: marker.analyzedAt,
+      quelle: "bloganalyse",
+      promptVersion: "blog-profile-v1",
+    },
+    bestehendesProfil: existingProfile,
+    bestehendesVokabular: existingVokabular,
+    storage,
+    accountId: ACCOUNT_ID_VALID_1,
+    digest: async () => {
+      digestCalled += 1;
+      throw new Error("digest sollte nicht laufen");
+    },
+    clock: () => {
+      clockCalled += 1;
+      throw new Error("clock sollte nicht laufen");
+    },
+  });
+
+  return revalidated.ok
+    && revalidated.payload.unveraendert
+    && digestCalled === 0
+    && clockCalled === 0;
+})());
+
 await checkAsync("Revalidation lehnt fehlende/fehlangepasste Metadaten ab und berechnet keine neuen Hash/Clock", (async () => {
   const erste = await erzeugeBlogProfilAnalyseVorschau({
     artikelPayload: responseBasePayload,
@@ -737,6 +799,15 @@ await checkAsync("Marker mit 64 Nullen wird abgelehnt", (async () => (
     analyzedAt: "2026-08-17T10:00:00.000Z",
   })
 )));
+
+await checkAsync("Marker mit nicht-string Typen wird explizit abgelehnt", (async () => {
+  const storage = makeStorage();
+  return !speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, {
+    articleId: 123,
+    contentHash: 123,
+    analyzedAt: "2026-08-17T10:00:00.000Z",
+  });
+}));
 
 await checkAsync("Unveränderten Artikel per Marker erkennen", (async () => {
   const storage = makeStorage();

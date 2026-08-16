@@ -363,11 +363,11 @@ const pruefeArtikelPayload = (articlePayload) => {
 };
 
 const sha256Hex = async (text) => {
-  if (typeof crypto?.subtle?.digest !== "function") {
+  if (typeof globalThis?.crypto?.subtle?.digest !== "function") {
     throw new Error("kein crypto.subtle.digest verfügbar");
   }
 
-  const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   const bytes = new Uint8Array(hashBuffer);
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
@@ -477,8 +477,43 @@ const buildExistingVokabularMap = (bestehendesVokabular = []) => {
 
 const storageKey = (accountId) => `${BLOG_PROFILE_STORAGE_KEY}:${accountId}`;
 
+const validierePreserveMetadata = (modelAntwort, articlePayload) => {
+  if (!exaktSchluessel(modelAntwort, ["articleId", "contentHash", "analyzedAt", "promptVersion", "quelle"])) {
+    return null;
+  }
+  if (typeof modelAntwort.articleId !== "string" || !BLOG_PROFILE_ID.test(modelAntwort.articleId)) {
+    return null;
+  }
+  if (modelAntwort.articleId !== articlePayload.artikel.id) {
+    return null;
+  }
+  if (typeof modelAntwort.contentHash !== "string"
+    || !BLOG_PROFILE_HASH_RE.test(modelAntwort.contentHash)
+    || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(modelAntwort.contentHash)) {
+    return null;
+  }
+  if (typeof modelAntwort.analyzedAt !== "string" || !isCanonicalIsoDate(modelAntwort.analyzedAt)) {
+    return null;
+  }
+  if (modelAntwort.promptVersion !== BLOG_PROFILE_ANALYSE_PROMPT_VERSION) {
+    return null;
+  }
+  if (modelAntwort.quelle !== BLOG_PROFILE_ANALYSE_SOURCE) {
+    return null;
+  }
+
+  return {
+    articleId: modelAntwort.articleId,
+    contentHash: modelAntwort.contentHash,
+    analyzedAt: modelAntwort.analyzedAt,
+    promptVersion: modelAntwort.promptVersion,
+    quelle: modelAntwort.quelle,
+  };
+};
+
 const validiereNachweisMarker = (raw) => {
   if (!exaktSchluessel(raw, ["articleId", "contentHash", "analyzedAt"])) return null;
+  if (typeof raw.articleId !== "string" || typeof raw.contentHash !== "string") return null;
   if (!BLOG_PROFILE_ID.test(raw.articleId)) return null;
   if (!BLOG_PROFILE_HASH_RE.test(raw.contentHash) || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(raw.contentHash)) return null;
   if (!isCanonicalIsoDate(raw.analyzedAt)) return null;
@@ -524,6 +559,14 @@ export async function isArtikelUnveraendert(storage, accountId, artikelPayload, 
   if (!validiert.ok) return false;
   if (!accountIdIstGueltig(accountId)) return false;
 
+  if (typeof options.contentHash === "string" && options.contentHash) {
+    if (!BLOG_PROFILE_HASH_RE.test(options.contentHash) || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(options.contentHash)) return false;
+
+    const nachweis = liesBlogProfilAnalyseNachweis(storage, accountId);
+    if (!nachweis) return false;
+    return nachweis.articleId === validiert.payload.artikel.id && nachweis.contentHash === options.contentHash;
+  }
+
   const digest = options.digest || sha256Hex;
 
   let hash;
@@ -567,22 +610,16 @@ const bereinigeVorschauAntwort = (modelAntwort) => {
 
 const extrahierePreserveMeta = (modelAntwort, articlePayload) => {
   if (!istObjekt(modelAntwort)) return null;
-  if (!istText(modelAntwort.articleId) || !BLOG_PROFILE_ID.test(modelAntwort.articleId)) return null;
-  if (modelAntwort.articleId !== articlePayload.artikel.id) return null;
 
-  if (!istText(modelAntwort.contentHash) || !BLOG_PROFILE_HASH_RE.test(modelAntwort.contentHash)) return null;
-  if (BLOG_PROFILE_HASH_NOT_ZERO_RE.test(modelAntwort.contentHash)) return null;
-  if (!isCanonicalIsoDate(modelAntwort.analyzedAt)) return null;
-  if (modelAntwort.promptVersion !== BLOG_PROFILE_ANALYSE_PROMPT_VERSION) return null;
-  if (modelAntwort.quelle !== BLOG_PROFILE_ANALYSE_SOURCE) return null;
-
-  return {
+  const meta = {
     articleId: modelAntwort.articleId,
     contentHash: modelAntwort.contentHash,
     analyzedAt: modelAntwort.analyzedAt,
     promptVersion: modelAntwort.promptVersion,
     quelle: modelAntwort.quelle,
   };
+
+  return validierePreserveMetadata(meta, articlePayload);
 };
 
 export async function erzeugeBlogProfilAnalyseVorschau({
@@ -603,6 +640,14 @@ export async function erzeugeBlogProfilAnalyseVorschau({
 
   const validation = pruefeBlogProfilAnalyseAntwort(modelAntwort, payload);
   if (!validation.ok) return validation;
+
+  if (preserveMetadata) {
+    const validMeta = validierePreserveMetadata(preserveMetadata, payload);
+    if (!validMeta) {
+      return fehlschlag("preserveMetadata ist ungültig");
+    }
+    preserveMetadata = validMeta;
+  }
 
   let contentHash = null;
   let analyzedAt = null;
@@ -665,7 +710,10 @@ export async function erzeugeBlogProfilAnalyseVorschau({
       ? "bereits_vorhanden"
       : "editierbar";
 
-  const unveraendert = await isArtikelUnveraendert(storage, accountId, payload, { digest });
+  const unveraendert = await isArtikelUnveraendert(storage, accountId, payload, {
+    digest,
+    contentHash,
+  });
 
   return erfolg({
     quelle: preserveMetadata ? preserveMetadata.quelle : BLOG_PROFILE_ANALYSE_SOURCE,
