@@ -121,6 +121,9 @@ export function BlogProfilAnalyse({
   const mounted = useRef(true);
   const propsRef = useRef({});
   const marker = markerStorage || sessionStorageProp || sichereSessionStorage();
+  const markerFaehig = !!marker
+    && typeof marker.getItem === "function"
+    && typeof marker.setItem === "function";
   const ausgewaehlt = geeigneteArtikel.find((artikel) => artikel.id === artikelId) || null;
   const aktuellePayloadSignatur = signatur(ausgewaehlt?.payload || null);
 
@@ -147,10 +150,13 @@ export function BlogProfilAnalyse({
     [gruppe]: { ...alt[gruppe], ...patch },
   }));
 
-  useEffect(() => () => {
-    mounted.current = false;
-    analyseController.current?.abort();
-    healthController.current?.abort();
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      analyseController.current?.abort();
+      healthController.current?.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -209,7 +215,7 @@ export function BlogProfilAnalyse({
   useEffect(() => {
     let verworfen = false;
     setUnveraendert(false);
-    if (!aktiv || !ACCOUNT_ID.test(String(accountId || "")) || !ausgewaehlt || !marker) return undefined;
+    if (!aktiv || !ACCOUNT_ID.test(String(accountId || "")) || !ausgewaehlt || !markerFaehig) return undefined;
     let context;
     try { context = captureContext(); } catch { return undefined; }
     const konto = accountId;
@@ -222,7 +228,7 @@ export function BlogProfilAnalyse({
       })
       .catch(() => {});
     return () => { verworfen = true; };
-  }, [aktiv, accountId, artikelId, aktuellePayloadSignatur, marker, digest, captureContext]);
+  }, [aktiv, accountId, artikelId, aktuellePayloadSignatur, marker, markerFaehig, digest, captureContext]);
 
   const pruefeFence = (start, context) => mounted.current
     && propsRef.current.aktiv
@@ -233,7 +239,7 @@ export function BlogProfilAnalyse({
     && context?.isCurrent?.() !== false;
 
   const analysieren = async () => {
-    if (analyseLock.current || !capability || !bestaetigt || !ausgewaehlt) return;
+    if (analyseLock.current || !capability || !bestaetigt || !ausgewaehlt || !markerFaehig) return;
     analyseLock.current = true;
     const controller = new AbortController();
     analyseController.current = controller;
@@ -300,6 +306,12 @@ export function BlogProfilAnalyse({
     }
   };
 
+  const analyseAbbrechen = () => {
+    if (!analyseLock.current || !analyseController.current) return;
+    analyseController.current.abort();
+    setMeldung("Die Analyse wurde abgebrochen. Es wurde kein Ergebnis übernommen.");
+  };
+
   const aktualisiereKandidat = (gruppe, index, feld, wert) => {
     if (!vorschau || gruppenStatus[gruppe].gespeichert) return;
     const listenFeld = gruppe === "profil" ? "geschmackszuege" : "vokabular";
@@ -310,7 +322,7 @@ export function BlogProfilAnalyse({
     setzeGruppenStatus(gruppe, { bearbeitet: true, fehler: "", pending: null });
   };
 
-  const persistiere = async (gruppe, pending, context) => {
+  const persistiere = async (gruppe, pending, wert, context) => {
     const writer = gruppe === "profil" ? propsRef.current.onProfilSpeichern : propsRef.current.onVokabularSpeichern;
     const start = {
       accountId: pending.accountId,
@@ -318,7 +330,7 @@ export function BlogProfilAnalyse({
       payloadSignatur: pending.payloadSignatur,
     };
     try {
-      const bestaetigung = await writer(pending.wert);
+      const bestaetigung = await writer(wert);
       if (bestaetigung == null || bestaetigung === false) throw new Error("nicht bestätigt");
       if (!pruefeFence(start, context)) return;
       setzeGruppenStatus(gruppe, { laeuft: false, gespeichert: true, fehler: "", pending: null });
@@ -335,6 +347,46 @@ export function BlogProfilAnalyse({
     }
   };
 
+  const bereiteGruppenWert = async (gruppe, start, context) => {
+    const payload = kopie(ausgewaehlt?.payload || null);
+    if (!payload || !context || !pruefeFence(start, context)) {
+      return { ok: false, grund: "Kontext" };
+    }
+    try {
+      const revalidiert = await revalidiereBlogProfilAnalyseVorschau({
+        artikelPayload: payload,
+        modelAntwort: antwortFuerGruppe(vorschau, gruppe),
+        bestehendesProfil: propsRef.current.profil,
+        bestehendesVokabular: propsRef.current.vokabular,
+        storage: marker,
+        accountId,
+        digest,
+        clock,
+      });
+      if (!pruefeFence(start, context)) return { ok: false, grund: "Kontext" };
+      if (!revalidiert.ok) return { ok: false, grund: "Validierung" };
+      const kandidaten = gruppe === "profil"
+        ? revalidiert.payload.geschmackszuege
+        : revalidiert.payload.vokabular;
+      if (kandidaten.some((item) => item.status === "konflikt")) {
+        return { ok: false, grund: "Konflikt" };
+      }
+      const kopf = vorschauKopf(revalidiert.payload);
+      const uebernahme = gruppe === "profil"
+        ? uebernimmBlogProfilSignale(propsRef.current.profil, kopf, kandidaten.map((item) => nurFelder(item, PROFIL_FELDER)))
+        : uebernimmBlogVokabular(propsRef.current.vokabular, kopf, kandidaten.map((item) => nurFelder(item, VOKABULAR_FELDER)));
+      if (uebernahme?.abgelehnt || (Array.isArray(uebernahme?.fehler) && uebernahme.fehler.length)) {
+        return { ok: false, grund: "Übernahme" };
+      }
+      const wert = gruppe === "profil" ? uebernahme?.profil : uebernahme?.vokabular;
+      if (wert == null) return { ok: false, grund: "Übernahme" };
+      const basis = gruppe === "profil" ? propsRef.current.profil : propsRef.current.vokabular;
+      return { ok: true, wert, basisSignatur: signatur(basis) };
+    } catch {
+      return { ok: false, grund: "Validierung" };
+    }
+  };
+
   const speichereGruppe = async (gruppe) => {
     if (!vorschau || gruppenLocks.current[gruppe] || gruppenStatus[gruppe].gespeichert) return;
     if (vorschau[gruppe === "profil" ? "geschmackszuege" : "vokabular"].some((item) => item.status === "konflikt")
@@ -346,41 +398,19 @@ export function BlogProfilAnalyse({
     let context;
     try { context = captureContext(); } catch { context = null; }
     try {
-      if (!payload || !context || !pruefeFence(start, context)) throw new Error("Kontext");
-      const revalidiert = await revalidiereBlogProfilAnalyseVorschau({
-        artikelPayload: payload,
-        modelAntwort: antwortFuerGruppe(vorschau, gruppe),
-        bestehendesProfil: propsRef.current.profil,
-        bestehendesVokabular: propsRef.current.vokabular,
-        storage: marker,
-        accountId,
-        digest,
-        clock,
-      });
-      if (!pruefeFence(start, context)) return;
-      if (!revalidiert.ok) throw new Error("Validierung");
-      const kandidaten = gruppe === "profil"
-        ? revalidiert.payload.geschmackszuege
-        : revalidiert.payload.vokabular;
-      if (kandidaten.some((item) => item.status === "konflikt")) {
+      const vorbereitet = await bereiteGruppenWert(gruppe, start, context);
+      if (!vorbereitet.ok) {
         setzeGruppenStatus(gruppe, {
           laeuft: false,
-          fehler: "In dieser Gruppe besteht noch ein Konflikt. Bitte bearbeite den markierten Kandidaten.",
+          fehler: vorbereitet.grund === "Konflikt"
+            ? "In dieser Gruppe besteht noch ein Konflikt. Bitte bearbeite den markierten Kandidaten."
+            : "Diese Gruppe konnte nicht sicher gespeichert werden. Die Vorschau bleibt erhalten.",
         });
         return;
       }
-      const kopf = vorschauKopf(revalidiert.payload);
-      const uebernahme = gruppe === "profil"
-        ? uebernimmBlogProfilSignale(propsRef.current.profil, kopf, kandidaten.map((item) => nurFelder(item, PROFIL_FELDER)))
-        : uebernimmBlogVokabular(propsRef.current.vokabular, kopf, kandidaten.map((item) => nurFelder(item, VOKABULAR_FELDER)));
-      if (uebernahme?.abgelehnt || (Array.isArray(uebernahme?.fehler) && uebernahme.fehler.length)) {
-        throw new Error("Übernahme");
-      }
-      const wert = gruppe === "profil" ? uebernahme?.profil : uebernahme?.vokabular;
-      if (wert == null) throw new Error("Übernahme");
-      const pending = { ...start, wert };
+      const pending = { ...start, basisSignatur: vorbereitet.basisSignatur };
       setzeGruppenStatus(gruppe, { pending });
-      await persistiere(gruppe, pending, context);
+      await persistiere(gruppe, pending, vorbereitet.wert, context);
     } catch {
       if (mounted.current && (!context || pruefeFence(start, context))) {
         setzeGruppenStatus(gruppe, {
@@ -402,7 +432,27 @@ export function BlogProfilAnalyse({
     if (!context || !pruefeFence(pending, context)) return;
     gruppenLocks.current[gruppe] = true;
     setzeGruppenStatus(gruppe, { laeuft: true, fehler: "" });
-    try { await persistiere(gruppe, pending, context); }
+    try {
+      const aktuelleBasis = gruppe === "profil" ? propsRef.current.profil : propsRef.current.vokabular;
+      if (signatur(aktuelleBasis) !== pending.basisSignatur) {
+        setzeGruppenStatus(gruppe, {
+          laeuft: false,
+          pending: null,
+          fehler: "Der lokale Datenstand hat sich geändert. Bitte prüfe die Vorschau und speichere diese Gruppe neu.",
+        });
+        return;
+      }
+      const vorbereitet = await bereiteGruppenWert(gruppe, pending, context);
+      if (!vorbereitet.ok || vorbereitet.basisSignatur !== pending.basisSignatur) {
+        setzeGruppenStatus(gruppe, {
+          laeuft: false,
+          pending: null,
+          fehler: "Die Vorschau konnte nicht mehr sicher gegen den aktuellen Datenstand geprüft werden. Bitte speichere die Gruppe neu.",
+        });
+        return;
+      }
+      await persistiere(gruppe, pending, vorbereitet.wert, context);
+    }
     finally {
       gruppenLocks.current[gruppe] = false;
       if (mounted.current) setzeGruppenStatus(gruppe, { laeuft: false });
@@ -427,16 +477,20 @@ export function BlogProfilAnalyse({
     {aktiv && ACCOUNT_ID.test(String(accountId || "")) && !healthLaeuft && !capability
       && <p>Die Bloganalyse ist für dieses Konto derzeit nicht sicher freigegeben.</p>}
 
-    {capability && ausgewaehlt && <fieldset disabled={analyseLaeuft}>
+    {capability && ausgewaehlt && !markerFaehig
+      && <p>Die Bloganalyse bleibt gesperrt, weil kein sicherer lokaler Analysenachweis gespeichert werden kann.</p>}
+    {capability && ausgewaehlt && markerFaehig && <fieldset>
       <legend>Kostenpflichtigen Auftrag bestätigen</legend>
       <p><strong>Genau dieser eigene Text wird einmalig an den KI-Anbieter gesendet.</strong> Es gibt keinen automatischen Lauf und keine automatische Wiederholung.</p>
       <label>
-        <input type="checkbox" checked={bestaetigt} onChange={(event) => setBestaetigt(event.target.checked)} />
+        <input type="checkbox" checked={bestaetigt} disabled={analyseLaeuft}
+          onChange={(event) => setBestaetigt(event.target.checked)} />
         Ich möchte diesen ausgewählten eigenen Artikel jetzt einmal analysieren lassen.
       </label>
       <button type="button" disabled={!bestaetigt || analyseLaeuft} onClick={analysieren}>
         {analyseLaeuft ? "Artikel wird einmalig analysiert …" : unveraendert ? "Artikel ausdrücklich erneut analysieren" : "Artikel einmalig analysieren"}
       </button>
+      {analyseLaeuft && <button type="button" onClick={analyseAbbrechen}>Laufende Analyse abbrechen</button>}
     </fieldset>}
 
     <div aria-live="polite">{meldung}</div>
