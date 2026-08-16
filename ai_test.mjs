@@ -609,9 +609,9 @@ check("Ohne konfigurierten Transport meldet die Fassade SERVER mit vermerktem Gr
    =========================================================================== */
 console.log("\n--- Fassade: Aufgabenprüfung vor dem Transport ---");
 
-check("Die Etappe kennt genau acht registrierte Aufgaben",
-  AI_TASKS.length === 8
-  && ["health", "echo-struct", "intelligent-search", "masterlist-enrichment", "profile-extract", "film-forecast", "filmwissen-synthese", "media-batch-extract"]
+check("Die Etappe kennt genau neun registrierte Aufgaben",
+  AI_TASKS.length === 9
+  && ["health", "echo-struct", "intelligent-search", "masterlist-enrichment", "profile-extract", "film-forecast", "filmwissen-synthese", "media-batch-extract", "blog-profile-extract"]
     .every((t) => AI_TASKS.includes(t)));
 
 const unbekannteAufgabe = dienstMit({ ok: true });
@@ -664,6 +664,17 @@ const eigeneVersionen = dienstMit({ ok: true });
 await eigeneVersionen.dienst.runTask("health", { x: 1 }, { promptVersion: "v9", profilVersion: "p3" });
 check("Aufrufer-eigene Prompt-/Profilversionen werden übernommen",
   eigeneVersionen.rufe[0]?.promptVersion === "v9" && eigeneVersionen.rufe[0]?.profilVersion === "p3");
+
+const blogVersion = dienstMit({ ok: true });
+await blogVersion.dienst.runTask(
+  "blog-profile-extract",
+  { artikel: { id: "a", titel: "T", text: "Artikeltext" }, listen: { genres: ["Drama"], tags: [] } },
+  { promptVersion: "vom-browser", profilVersion: "vom-browser" },
+);
+check("blog-profile-extract laesst Prompt- und Profilversion ausschliesslich beim Server",
+  blogVersion.rufe[0]?.promptVersion === null
+  && blogVersion.rufe[0]?.profilVersion === null
+  && !Object.keys(blogVersion.rufe[0]?.payload || {}).some((k) => /prompt|provider|modell|model/i.test(k)));
 
 /* ===========================================================================
    T14 — Vorgangs-ID

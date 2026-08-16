@@ -48,6 +48,9 @@ export const AI_TASKS = Object.freeze([
   /* Text-Stapelimport. Die Liste wird vor dem ausdrücklichen, kostenpflichtigen
      Aufruf lokal bereinigt; Bilder gehen nur über den externen Prompt-Weg. */
   "media-batch-extract",
+  /* E17A: Artikelprofil-Extraktion mit ausschliesslich serverseitigem Prompt,
+     Modellrouting und strengem Outputvertrag. */
+  "blog-profile-extract",
 ]);
 
 export const AI_PROMPT_VERSION = "v1";
@@ -112,8 +115,15 @@ export function createAiService({
         const result = await send({
           endpointName: config.aiEndpointName,
           schemaVersion: config.schemaVersion,
-          promptVersion: options.promptVersion || AI_PROMPT_VERSION,
-          profilVersion: options.profilVersion || null,
+          /* Der E17A-Prompt ist ausschliesslich serverseitig versioniert. Ein
+             Aufrufer kann fuer diesen Task weder Prompt- noch Profilversion
+             als Metadaten einschleusen. */
+          promptVersion: task === "blog-profile-extract"
+            ? null
+            : (options.promptVersion || AI_PROMPT_VERSION),
+          profilVersion: task === "blog-profile-extract"
+            ? null
+            : (options.profilVersion || null),
           vorgangId: options.vorgangId || vorgangId(),
           task,
           payload,

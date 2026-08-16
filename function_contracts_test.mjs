@@ -53,7 +53,7 @@ check("Unbekannte und leere Aufgaben erreichen keinen gebauten Pfad",
   klassifiziereAufgabe("frei-erfunden", false) === "unbekannt"
   && klassifiziereAufgabe("", false) === "unbekannt");
 check("Function-Vertrag und Build-Version sind stabil und fail-closed",
-  FUNCTION_CONTRACT_VERSION === "ai-task-v4"
+  FUNCTION_CONTRACT_VERSION === "ai-task-v5"
   && functionBuildVersion("3898152") === "3898152"
   && functionBuildVersion("  341d76b  ") === "341d76b"
   && functionBuildVersion("mit leerzeichen") === "unversioned"
@@ -182,5 +182,40 @@ check("Provider-Timeout bleibt bis nach dem Lesen des Antwortkoerpers aktiv",
       < modellDiagnosePfad.indexOf("clearTimeout(diagStopp);")
   && modellDiagnosePfad.includes("diagUhr.signal.aborted")
   && !providerPfad.includes("antwort.json().catch(() => null)"));
+
+const blogBlock = index.slice(
+  index.indexOf('"blog-profile-extract":'),
+  index.indexOf('"film-forecast":', index.indexOf('"blog-profile-extract":')),
+);
+check("Blog-Profil nutzt einen serverseitigen versionierten Prompt ohne Inhaltslogs",
+  blogBlock.includes("blog-profile-v1")
+  && !/console\.(?:log|info|warn|error)/.test(blogBlock));
+check("Blog-Profil verlangt die feste kleine Modell-, Token- und Task-Cap-Konfiguration",
+  blogBlock.includes('modellAliasPflicht: "klein"')
+  && blogBlock.includes("maxTokensExakt: 2048")
+  && blogBlock.includes("taskCapExakt: 5"));
+
+const blogKostenpfad = index.slice(
+  index.indexOf("const maxTokensJeTask"),
+  index.indexOf("const gemeldeterPreis = preisFuer(konfig, ergebnis.modell)"),
+);
+check("Blog-Pflichtkonfiguration sperrt vor Providercheck, Reservierung und Fetch",
+  [
+    "task-max-tokens-fehlt-oder-falsch",
+    "task-kostenlimit-fehlt-oder-falsch",
+    'pruefeProviderFreigabe(admin, "anthropic")',
+    '"kd_ai_auftrag_starten"',
+    "ergebnis = await rufeAnbieter(",
+  ].every((marke) => blogKostenpfad.includes(marke))
+  && blogKostenpfad.indexOf("task-max-tokens-fehlt-oder-falsch")
+      < blogKostenpfad.indexOf('pruefeProviderFreigabe(admin, "anthropic")')
+  && blogKostenpfad.indexOf("task-kostenlimit-fehlt-oder-falsch")
+      < blogKostenpfad.indexOf('pruefeProviderFreigabe(admin, "anthropic")')
+  && blogKostenpfad.indexOf('pruefeProviderFreigabe(admin, "anthropic")')
+      < blogKostenpfad.indexOf('"kd_ai_auftrag_starten"')
+  && blogKostenpfad.indexOf('"kd_ai_auftrag_starten"')
+      < blogKostenpfad.indexOf("ergebnis = await rufeAnbieter("));
+
+await import("./blog_profile_extract_migration_test.mjs");
 
 console.log(`function_contracts_test: ${ok} Checks bestanden.`);

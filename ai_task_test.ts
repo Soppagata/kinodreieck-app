@@ -81,6 +81,7 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "film-forecast": "gross",
     "filmwissen-synthese": "gross",
     "media-batch-extract": "klein",
+    "blog-profile-extract": "klein",
   },
   task_max_tokens: {
     "echo-struct": 256,
@@ -88,10 +89,12 @@ const STANDARD_KONFIG = (): Record<string, unknown> => ({
     "film-forecast": 2048,
     "filmwissen-synthese": 2048,
     "media-batch-extract": 4096,
+    "blog-profile-extract": 2048,
   },
   task_max_reservierung_usd_cent: {
     "filmwissen-synthese": 6,
     "media-batch-extract": 4,
+    "blog-profile-extract": 5,
   },
   preise_usd_cent_pro_mtok: {
     "claude-haiku-4-5-20251001": { in: 100, out: 500 },
@@ -426,6 +429,13 @@ const {
   leseForecastEingabe,
   FILMWISSEN_KENNUNGSRAEUME,
   leseFilmwissenSyntheseAnfrage,
+  BLOG_PROFILE_TASK,
+  BLOG_PROFILE_PROMPT_VERSION,
+  BLOG_PROFILE_MAX_TOKENS,
+  BLOG_PROFILE_TASK_CAP_USD_CENT,
+  normalisiereBlogListenwert,
+  leseBlogProfileEingabe,
+  pruefeBlogProfileErgebnis,
 } = await import(
   new URL(IMPL_PFAD, import.meta.url).href
 ) as {
@@ -489,6 +499,22 @@ const {
   leseFilmwissenSyntheseAnfrage: (
     p: Record<string, unknown>,
   ) => { namespace: string; kennung: string };
+  BLOG_PROFILE_TASK: string;
+  BLOG_PROFILE_PROMPT_VERSION: string;
+  BLOG_PROFILE_MAX_TOKENS: number;
+  BLOG_PROFILE_TASK_CAP_USD_CENT: number;
+  normalisiereBlogListenwert: (wert: string) => string;
+  leseBlogProfileEingabe: (p: Record<string, unknown>) => {
+    artikel: { id: string; titel: string; text: string };
+    listen: { genres: string[]; tags: string[] };
+  };
+  pruefeBlogProfileErgebnis: (
+    inhalt: unknown,
+    eingabe: {
+      artikel: { id: string; titel: string; text: string };
+      listen: { genres: string[]; tags: string[] };
+    },
+  ) => { fehler: string } | { daten: unknown };
 };
 
 /* Der Vergleichsschlüssel des CLIENTS, als Orakel. Der Server muss mindestens
@@ -7969,4 +7995,369 @@ test("FW8 Konfigurationsfehler nach Adaptervorbereitung gibt den Auftrag sofort 
   );
   gleich(starten().length, 0, "keine KI-Reservierung");
   gleich(anbieterAufrufe().length, 0, "kein Anbieter");
+});
+
+/* ==========================================================================
+   BP. blog-profile-extract — E17A Server-/Datenvertrag
+   ========================================================================== */
+const BP_BELEG = "Die Kamera bleibt lange still.";
+const BP_TEXT = "Ein Auftakt. " + BP_BELEG +
+  " Danach wird der raue Ton durch eine genaue Montage getragen.";
+const bpPayload = (zusatz: Record<string, unknown> = {}) => ({
+  artikel: {
+    id: "artikel_17a",
+    titel: "Ein strenger Filmtext",
+    text: BP_TEXT,
+  },
+  listen: {
+    genres: ["Drama", "Science-Fiction"],
+    tags: ["ruhig", "präzise"],
+  },
+  ...zusatz,
+});
+const bpGeschmackszug = (zusatz: Record<string, unknown> = {}) => ({
+  art: "genre",
+  wert: "Drama",
+  richtung: "zieht_an",
+  staerke: 4,
+  sicherheit: "hoch",
+  beleg: BP_BELEG,
+  ...zusatz,
+});
+const bpVokabular = (zusatz: Record<string, unknown> = {}) => ({
+  wort: "Kadenz",
+  beschreibung: "Bezeichnung fuer den ruhigen Rhythmus der beschriebenen Szene.",
+  genres: ["Drama"],
+  tags: ["ruhig"],
+  beleg: BP_BELEG,
+  ...zusatz,
+});
+const bpAntwort = (zusatz: Record<string, unknown> = {}) => ({
+  geschmackszuege: [bpGeschmackszug()],
+  vokabular: [bpVokabular()],
+  ...zusatz,
+});
+const bpRuf = (
+  payload: Record<string, unknown> = bpPayload(),
+  promptVersion: unknown = undefined,
+) => ruf({
+  task: "blog-profile-extract",
+  vorgangId: neueVorgangId(),
+  ...(promptVersion === undefined ? {} : { promptVersion }),
+  payload,
+});
+function bpMitAntwort(inhalt: unknown) {
+  z.anbieter = () => anbieterErfolg(inhalt);
+}
+function bpAendere(
+  aenderung: (payload: Record<string, unknown>) => void,
+): Record<string, unknown> {
+  const payload = structuredClone(bpPayload()) as Record<string, unknown>;
+  aenderung(payload);
+  return payload;
+}
+function bpInputIstUngueltig(payload: Record<string, unknown>): boolean {
+  try {
+    leseBlogProfileEingabe(payload);
+    return false;
+  } catch {
+    return true;
+  }
+}
+function bpOutputIstUngueltig(
+  inhalt: unknown,
+  payload: Record<string, unknown> = bpPayload(),
+): boolean {
+  return "fehler" in pruefeBlogProfileErgebnis(
+    inhalt,
+    leseBlogProfileEingabe(payload),
+  );
+}
+
+test("BP1 stabiler Task-, Prompt-, Modell-, Token- und Cap-Vertrag", () => {
+  gleich(BLOG_PROFILE_TASK, "blog-profile-extract", "Taskname");
+  gleich(BLOG_PROFILE_PROMPT_VERSION, "blog-profile-v1", "Promptversion");
+  gleich(BLOG_PROFILE_MAX_TOKENS, 2048, "Max Tokens");
+  gleich(BLOG_PROFILE_TASK_CAP_USD_CENT, 5, "Taskcap");
+  gleich(AUFGABEN[BLOG_PROFILE_TASK].modellAliasPflicht, "klein", "Alias");
+  gleich(AUFGABEN[BLOG_PROFILE_TASK].maxTokensExakt, 2048, "exakte Tokens");
+  gleich(AUFGABEN[BLOG_PROFILE_TASK].taskCapExakt, 5, "exakter Cap");
+});
+
+test("BP2 Eingabegrenzen messen UTF-8-Bytes und geschlossene Formen", () => {
+  const gross = bpPayload({
+    artikel: {
+      id: "a".repeat(120),
+      titel: "ä".repeat(80),
+      text: "x".repeat(18_000),
+    },
+    listen: {
+      genres: Array.from({ length: 80 }, (_, i) => `genre ${i}`),
+      tags: Array.from({ length: 40 }, (_, i) => `tag ${i}`),
+    },
+  });
+  const gelesen = leseBlogProfileEingabe(gross);
+  gleich(gelesen.artikel.id.length, 120, "ID-Obergrenze");
+  gleich(new TextEncoder().encode(gelesen.artikel.titel).length, 160, "Titel-Bytes");
+  gleich(new TextEncoder().encode(gelesen.artikel.text).length, 18_000, "Text-Bytes");
+  gleich(gelesen.listen.genres.length + gelesen.listen.tags.length, 120, "Listen gesamt");
+
+  const ungueltig = [
+    bpAendere((p) => { (p as Record<string, unknown>).extra = true; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).extra = true; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).extra = true; }),
+    bpAendere((p) => { delete (p.artikel as Record<string, unknown>).text; }),
+    bpAendere((p) => { delete (p.listen as Record<string, unknown>).tags; }),
+    bpAendere((p) => { p.artikel = null; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).id = "A"; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).id = "a-b"; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).id = "a".repeat(121); }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = ""; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = "ä".repeat(80) + "x"; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = 12; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).text = ""; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).text = "x".repeat(18_001); }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).text = ["Text"]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = []; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = Array.from({ length: 81 }, (_, i) => `g${i}`); }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).tags = Array.from({ length: 81 }, (_, i) => `t${i}`); }),
+    bpAendere((p) => {
+      (p.listen as Record<string, unknown>).genres = Array.from({ length: 80 }, (_, i) => `g${i}`);
+      (p.listen as Record<string, unknown>).tags = Array.from({ length: 41 }, (_, i) => `t${i}`);
+    }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["x".repeat(41)]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = [12]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Drama\nNoir"]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Drama", "Drama"]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Ｄｒａｍａ   Noir", " drama noir "]; }),
+    bpAendere((p) => {
+      (p.listen as Record<string, unknown>).genres = ["Drama"];
+      (p.listen as Record<string, unknown>).tags = [" drama "];
+    }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = "Drama"; }),
+  ];
+  wahr(ungueltig.every(bpInputIstUngueltig), "jede falsche Eingabe faellt geschlossen aus");
+  gleich(
+    leseBlogProfileEingabe(bpAendere((p) => {
+      (p.listen as Record<string, unknown>).genres = ["x".repeat(40)];
+    })).listen.genres[0].length,
+    40,
+    "40-Byte-Listeneintrag erlaubt",
+  );
+});
+
+test("BP3 Dublettennormierung ist exakt NFKC, trim, Whitespace und lowercase", () => {
+  gleich(normalisiereBlogListenwert("  Ｄｒａｍａ\t Noir  "), "drama noir", "eingefrorene Form");
+  falsch(
+    normalisiereBlogListenwert("Ä") === normalisiereBlogListenwert("A"),
+    "keine Diakritikentfernung",
+  );
+  falsch(
+    normalisiereBlogListenwert("Sci-Fi") === normalisiereBlogListenwert("Sci Fi"),
+    "keine Fuzzy- oder Finder-Regel",
+  );
+  const gelesen = leseBlogProfileEingabe(bpAendere((p) => {
+    (p.listen as Record<string, unknown>).genres = ["Ä", "A", "Sci-Fi", "Sci Fi"];
+  }));
+  gleich(gelesen.listen.genres.join("|"), "Ä|A|Sci-Fi|Sci Fi", "rohe Schreibweisen bleiben erhalten");
+});
+
+test("BP4 Provider-Schema und Erfolgspfad sind strikt und provenienzfrei", async () => {
+  stelleZurueck();
+  bpMitAntwort(bpAntwort());
+  const payload = bpPayload();
+  const r = await bpRuf(payload, "v1");
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).geschmackszuege instanceof Array, true, "Daten");
+  const koerper = anbieterKoerper();
+  gleich(koerper.max_tokens, 2048, "Provider-Max-Tokens");
+  gleich(startKoerper().p_modell_alias, "klein", "kleiner Alias");
+  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "serverseitige Logprovenienz");
+  const schema = koerper.output_config.format.schema as Record<string, unknown>;
+  gleich(schema.additionalProperties, false, "Wurzel geschlossen");
+  const props = schema.properties as Record<string, Record<string, unknown>>;
+  gleich((props.geschmackszuege.items as Record<string, unknown>).additionalProperties, false, "Geschmackszug geschlossen");
+  gleich((props.vokabular.items as Record<string, unknown>).additionalProperties, false, "Vokabular geschlossen");
+  const providerRoh = JSON.stringify(koerper);
+  falsch(providerRoh.includes("artikel_17a"), "Artikel-ID erreicht das Modell nicht");
+  falsch(/(?:hash|herkunft|provenienz)/i.test(JSON.stringify(r.daten.data)), "keine Modellprovenienz");
+});
+
+test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell", () => {
+  const ungueltig: unknown[] = [
+    { ...bpAntwort(), extra: true },
+    { geschmackszuege: [] },
+    { geschmackszuege: Array.from({ length: 13 }, () => bpGeschmackszug()), vokabular: [] },
+    { geschmackszuege: [], vokabular: Array.from({ length: 7 }, () => bpVokabular()) },
+    { geschmackszuege: [{ ...bpGeschmackszug(), extra: true }], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ art: "frei" })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ art: ["genre"] })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ richtung: "mag" })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ richtung: ["zieht_an"] })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ staerke: 1.5 })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ staerke: 0 })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ sicherheit: "sicher" })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ sicherheit: ["hoch"] })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ wert: "ä".repeat(31), art: "ton" })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ wert: "drama" })], vokabular: [] },
+    { geschmackszuege: [], vokabular: [{ ...bpVokabular(), extra: true }] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: [] })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["Drama", "Science-Fiction"], tags: ["ruhig", "präzise"] })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["Drama"], tags: ["Drama"] })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["drama"], tags: [] })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: ["Ruhig"] })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ wort: "ä".repeat(21) })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ beschreibung: "ä".repeat(49) })] },
+  ];
+  wahr(ungueltig.every((wert) => bpOutputIstUngueltig(wert)), "alle Outputbrueche werden als Ganzes verworfen");
+  falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [] }), "0/0 erlaubt");
+  falsch(bpOutputIstUngueltig({
+    geschmackszuege: Array.from({ length: 12 }, () => bpGeschmackszug()),
+    vokabular: Array.from({ length: 6 }, () => bpVokabular()),
+  }), "12/6 erlaubt");
+  falsch(bpOutputIstUngueltig({
+    geschmackszuege: [bpGeschmackszug({ art: "ton", wert: "ä".repeat(30) })],
+    vokabular: [bpVokabular({
+      wort: "ä".repeat(20),
+      beschreibung: "ä".repeat(48),
+      genres: ["Drama", "Science-Fiction"],
+      tags: ["ruhig"],
+    })],
+  }), "60-/40-/96-Byte-Felder und drei Zuordnungen erlaubt");
+  const crossListEingabe = {
+    artikel: { id: "a", titel: "T", text: BP_TEXT },
+    listen: { genres: ["Drama"], tags: [" drama "] },
+  };
+  const crossListOutput = {
+    geschmackszuege: [],
+    vokabular: [bpVokabular({ genres: ["Drama"], tags: [" drama "] })],
+  };
+  wahr(
+    "fehler" in pruefeBlogProfileErgebnis(crossListOutput, crossListEingabe),
+    "normalisierte Cross-List-Dublette blockiert den ganzen Output",
+  );
+});
+
+test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () => {
+  const min = "x".repeat(16);
+  const max = "ä".repeat(48);
+  const payload = bpPayload({
+    artikel: { id: "a", titel: "T", text: `Anfang ${min} Mitte ${max} Ende` },
+  });
+  falsch(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: min, art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "16 Bytes erlaubt");
+  falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [bpVokabular({ beleg: max })] }, payload), "96 UTF-8-Bytes erlaubt");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "x".repeat(15), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "15 Bytes blockiert");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "ä".repeat(49), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "98 Bytes blockiert");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: min.toUpperCase(), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine normalisierte Suche");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "x".repeat(8) + "\n" + "x".repeat(8), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine Zeilentrenner");
+});
+
+test("BP7 striktes JSON und ein einziger falscher Eintrag ergeben keinen Teilerfolg", async () => {
+  for (const text of [
+    "```json\n" + JSON.stringify(bpAntwort()) + "\n```",
+    JSON.stringify(bpAntwort()) + " trailing",
+  ]) {
+    stelleZurueck();
+    z.anbieter = () => anbieterErfolg(text);
+    const r = await bpRuf();
+    gleich(r.status, 502, "strikter JSON-Fehler");
+    gleich(r.daten.grund, "antwort-kein-json", "inhaltsfreie Kennung");
+  }
+  stelleZurueck();
+  bpMitAntwort({
+    geschmackszuege: [bpGeschmackszug(), bpGeschmackszug({ beleg: "frei erfundener Beleg" })],
+    vokabular: [],
+  });
+  const r = await bpRuf();
+  gleich(r.status, 502, "keine partielle Rettung");
+  gleich(r.daten.grund, "antwort-verletzt-schema", "stabile Aussenkennung");
+});
+
+test("BP8 exakte 2048-/5-Cent-Konfiguration sperrt vor Providercheck, Reservierung und Fetch", async () => {
+  const tokenFehler: unknown[] = [undefined, null, "2048", 2047, 2049, 2048.5];
+  for (const wert of tokenFehler) {
+    stelleZurueck();
+    const obj = z.konfig.task_max_tokens as Record<string, unknown>;
+    if (wert === undefined) delete obj[BLOG_PROFILE_TASK];
+    else obj[BLOG_PROFILE_TASK] = wert;
+    const r = await bpRuf();
+    gleich(r.status, 500, `Tokenwert ${String(wert)}`);
+    gleich(rpc("kd_private_provider_allowed").length, 0, "kein Providercheck");
+    gleich(starten().length, 0, "keine Reservierung");
+    gleich(anbieterAufrufe().length, 0, "kein Providerfetch");
+  }
+  const capFehler: unknown[] = [undefined, null, "5", 0, -1, 4.999, 5.001, 6];
+  for (const wert of capFehler) {
+    stelleZurueck();
+    const obj = z.konfig.task_max_reservierung_usd_cent as Record<string, unknown>;
+    if (wert === undefined) delete obj[BLOG_PROFILE_TASK];
+    else obj[BLOG_PROFILE_TASK] = wert;
+    const r = await bpRuf();
+    gleich(r.status, 500, `Capwert ${String(wert)}`);
+    gleich(rpc("kd_private_provider_allowed").length, 0, "kein Providercheck");
+    gleich(starten().length, 0, "keine Reservierung");
+    gleich(anbieterAufrufe().length, 0, "kein Providerfetch");
+  }
+});
+
+test("BP9 Health-Capability ist exakt und bei jedem alten/falschen Feld fail-closed", async () => {
+  stelleZurueck();
+  let r = await ruf({ task: "health", vorgangId: neueVorgangId(), payload: {} });
+  let cap = (r.daten.capabilities as Record<string, unknown>).blogProfileExtract as Record<string, unknown>;
+  gleich(JSON.stringify(cap), JSON.stringify({
+    ready: true,
+    task: "blog-profile-extract",
+    promptVersion: "blog-profile-v1",
+    modelAlias: "klein",
+    maxTokens: 2048,
+    taskMaxReservationUsdCent: 5,
+  }), "exakte Capability");
+
+  const fehlerfaelle: Array<(k: Record<string, unknown>) => void> = [
+    (k) => { k.ai_aktiv = false; },
+    (k) => { delete (k.task_modell as Record<string, unknown>)[BLOG_PROFILE_TASK]; },
+    (k) => { (k.task_modell as Record<string, unknown>)[BLOG_PROFILE_TASK] = "gross"; },
+    (k) => { delete (k.task_max_tokens as Record<string, unknown>)[BLOG_PROFILE_TASK]; },
+    (k) => { (k.task_max_tokens as Record<string, unknown>)[BLOG_PROFILE_TASK] = "2048"; },
+    (k) => { delete (k.task_max_reservierung_usd_cent as Record<string, unknown>)[BLOG_PROFILE_TASK]; },
+    (k) => { (k.task_max_reservierung_usd_cent as Record<string, unknown>)[BLOG_PROFILE_TASK] = 4; },
+    (k) => { (k.modell_alias as Record<string, unknown>).klein = "unbekannte-familie"; },
+    (k) => { (k.preise_usd_cent_pro_mtok as Record<string, unknown>)["claude-haiku-4-5-20251001"] = { in: 99, out: 499 }; },
+    (k) => { k.anbieter_request_max_usd_cent = 4; },
+    (k) => { k.anbieter_request_max_usd_cent = 501; },
+    (k) => { k.timeout_ms = "30000"; },
+  ];
+  for (const aendere of fehlerfaelle) {
+    stelleZurueck();
+    aendere(z.konfig);
+    r = await ruf({ task: "health", vorgangId: neueVorgangId(), payload: {} });
+    cap = (r.daten.capabilities as Record<string, unknown>).blogProfileExtract as Record<string, unknown>;
+    gleich(cap.ready, false, "Health bleibt geschlossen");
+    gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
+  }
+});
+
+test("BP10 Artikel- und Modellinhalte erreichen weder Fehlertext noch DB-Logmetadaten", async () => {
+  stelleZurueck();
+  const geheim = "PRIVATER_ARTIKEL_WERT_17A";
+  const payload = bpPayload({
+    artikel: {
+      id: "privater_artikel_17a",
+      titel: geheim + " TITEL",
+      text: BP_TEXT + " " + geheim + " bleibt ausschliesslich Inhalt.",
+    },
+  });
+  bpMitAntwort({
+    geschmackszuege: [bpGeschmackszug({ wert: geheim, beleg: "frei erfundener Beleg" })],
+    vokabular: [],
+  });
+  const r = await bpRuf(payload, "client-v1");
+  gleich(r.status, 502, "Schemafehler");
+  gleich(r.daten.grund, "antwort-verletzt-schema", "fester Fehlertext");
+  falsch(JSON.stringify(r.daten).includes(geheim), "kein Inhalt im Fehlertext");
+  const logRoh = JSON.stringify([...starten(), ...beenden()].map((a) => a.koerper));
+  falsch(logRoh.includes(geheim), "kein Artikel-/Modellwert im DB-Log");
+  falsch(logRoh.includes("privater_artikel_17a"), "keine Artikel-ID im DB-Log");
+  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "Clientversion bestimmt die Provenienz nicht");
+  pruefeKeinInhaltImProtokoll([geheim, "privater_artikel_17a", "frei erfundener Beleg"]);
 });
