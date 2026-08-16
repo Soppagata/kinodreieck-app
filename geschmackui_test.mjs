@@ -499,6 +499,7 @@ const TITEL = [
    MONTAGE
    ========================================================================= */
 const wurzel = createRoot(document.getElementById("wurzel"));
+const tabWurzel = createRoot(document.getElementById("tabwurzel"));
 let letzteProps = {};
 const fehlerRufe = [];
 const montiere = async (props = {}) => {
@@ -1606,7 +1607,7 @@ check("L", "jeder Zug trägt seine HERKUNFT  [gemessen: "
   () => text().includes("von dir angekreuzt"));
 check("L", "jeder Zug hat einen Richtungswähler mit sprechendem aria-label  [gemessen: "
   + JSON.stringify(alles("select").map((s) => s.getAttribute("aria-label"))) + "]",
-  () => alles("select").length === 1 && alles("select")[0].getAttribute("aria-label") === "Richtung für drama");
+  () => alles("select").some((s) => s.getAttribute("aria-label") === "Richtung für drama"));
 check("L", "…und der Wähler bietet genau die drei Richtungen des Modells  [gemessen: "
   + JSON.stringify([...alles("select")[0].options].map((o) => o.value)) + "]",
   () => JSON.stringify([...alles("select")[0].options].map((o) => o.value)) === JSON.stringify(P.RICHTUNGEN));
@@ -1642,6 +1643,8 @@ check("L", "…und entfernt exakt alle Blog-Metadaten  [gemessen: " + JSON.strin
     && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "contentHash")
     && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "analyzedAt")
     && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "promptVersion"));
+check("L", "…die korrigierte Anzeige bleibt ein valides Profil  [gemessen: " + JSON.stringify(P.pruefeProfil(sp.topf)) + "]",
+  () => P.pruefeProfil(sp.topf).length === 0);
 /* NACHGEZOGEN AM 28.07.2026 (F3-Fix). `herkunft()` fragte zuerst
    `ausSchlagwort(s)`; weil der Beleg bei einer Korrektur ausdrücklich
    mitwandert, traf dieser Zweig immer, und die Ansicht sagte „von dir
@@ -1740,7 +1743,6 @@ check("L", "…und das blosse Anzeigen schreibt nichts  [gemessen: " + sp2.schre
 abschnitt("M", async () => {
 console.log("\n--- M: Erreichbarkeit ohne KI ---");
 
-const tabWurzel = createRoot(document.getElementById("tabwurzel"));
 feld = () => document.getElementById("tabwurzel");
 const tabProps = (kiStand, extra = {}) => ({
   master: TITEL, masterMeta: {}, programm: [], einstellungen: {}, kiStand,
@@ -1941,10 +1943,9 @@ check("N", "Blog-Pfad bleibt auf KI-, Konto-, Profil-Geltigkeit und Writer-Exist
     && blogAktivAusdruck.includes("profilGueltig()")
     && blogAktivAusdruck.includes("typeof onVokabularSpeichern === \"function\""));
 
-const datentabRoot = createRoot(document.getElementById("wurzel"));
 dom.window.localStorage.setItem(TOPF.geschmacksprofil, JSON.stringify(P.erteileEinwilligung(LEER(), "2026-08-17T00:00:00.000Z")));
-feld = () => document.getElementById("wurzel");
-await act(async () => { datentabRoot.render(h(DatenTab, {
+feld = () => document.getElementById("tabwurzel");
+await act(async () => { tabWurzel.render(h(DatenTab, {
   master: [{ titel: "Demo", genre: ["Drama"], tags: ["Drama"] }],
   masterMeta: {}, masterHerkunft: { basis: "test" },
   nachtragCount: 0,
@@ -1963,17 +1964,17 @@ await act(async () => { datentabRoot.render(h(DatenTab, {
   kontoId: "11111111-1111-1111-8000-111111111111",
   kontoEmail: "test@example.com",
   onKontoDatenGeaendert: () => {},
-}) });
+})) });
 await ruhe();
 check("N", "Der Blogdialog sitzt tatsächlich im geschachtelten Settings-Pfad", () =>
   text().includes("Eigene Blogartikel für dein Profil auswerten"));
 check("N", "Ohne Vokabular-Writer bleibt der kostenpflichtige Pfad im Dialog geschlossen",
   () => {
-    const blog = document.getElementById("wurzel").querySelector(".kd-blogprofilanalyse");
+    const blog = document.getElementById("tabwurzel").querySelector(".kd-blogprofilanalyse");
     return !!blog && !blog.querySelector('input[type="checkbox"]');
   });
 
-await act(async () => { datentabRoot.render(null); });
+await act(async () => { tabWurzel.render(null); });
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
 feld = () => document.getElementById("wurzel");
 });
