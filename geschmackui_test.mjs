@@ -1586,6 +1586,15 @@ console.log("\n--- L: Ansehen, korrigieren, entfernen, KI=aus ---");
 const sp = neuerSpeicher(null);
 await neuMontieren({ speicher: sp.api });
 await durchlauf({ schlagwort: { text: "Drama", mal: 1 }, film: { text: "Alien", mal: 1 }, achse: { achse: "WIE", wert: 5 } });
+sp.topf.signale[0] = {
+  ...sp.topf.signale[0],
+  quelle: "bloganalyse",
+  articleId: "blogartikel_1",
+  contentHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  analyzedAt: "2026-08-16T00:00:00.000Z",
+  promptVersion: "blog-profile-v1",
+};
+await neuMontieren({ speicher: sp.api });
 await klickT("Ändern");
 await klickT("Aktuelle Infos");
 
@@ -1621,6 +1630,18 @@ check("L", "…trägt den ursprünglichen Beleg WEITER (die Belegpflicht ist üb
   () => sp.topf.signale[0].beleg === "schlagwort:drama");
 check("L", "…und schreibt die Quelle auf `korrektur`  [gemessen: "
   + JSON.stringify(sp.topf.signale[0].quelle) + "]", () => sp.topf.signale[0].quelle === "korrektur");
+check("L", "…und entfernt exakt alle Blog-Metadaten  [gemessen: " + JSON.stringify(
+  {
+    articleId: Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "articleId"),
+    contentHash: Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "contentHash"),
+    analyzedAt: Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "analyzedAt"),
+    promptVersion: Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "promptVersion"),
+  },
+) + "]",
+  () => !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "articleId")
+    && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "contentHash")
+    && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "analyzedAt")
+    && !Object.prototype.hasOwnProperty.call(sp.topf.signale[0], "promptVersion"));
 /* NACHGEZOGEN AM 28.07.2026 (F3-Fix). `herkunft()` fragte zuerst
    `ausSchlagwort(s)`; weil der Beleg bei einer Korrektur ausdrücklich
    mitwandert, traf dieser Zweig immer, und die Ansicht sagte „von dir
@@ -1880,6 +1901,85 @@ feld = () => document.getElementById("wurzel");
 
 
 /* =========================================================================
+   N — BLOGDIALOG-INTEGRATION (E17A)
+   ========================================================================= */
+abschnitt("N", async () => {
+console.log("\n--- N: Blogdialog in Einstellungen ---");
+
+const bereichText = QUELLEN.bereich.text;
+const datentabText = QUELLEN.datentab.text;
+const blogAktivAusdruck = (bereichText.match(/const blogAktiv\s*=\s*([\s\S]*?);/) || ["", ""])[1] || "";
+
+check("N", "DatenTab reicht Blog-Basisdaten deterministisch an den Geschmacksbereich weiter",
+  () => datentabText.includes("<GeschmackBereich")
+    && datentabText.includes("artikelListe={artikelListe}")
+    && datentabText.includes("bekannteTags={bekannteTags}")
+    && datentabText.includes("vokabular={vokabular}")
+    && datentabText.includes("kontoId={kontoId}")
+    && datentabText.includes("onVokabularSpeichern={saveVokabular}"));
+
+check("N", "DatenTab berechnet Blog-Tags ausschließlich aus master[].tags, mit NFKC/Whitespace/Dedupe",
+  () => datentabText.includes("const bekannteTags = useMemo(() => {")
+    && datentabText.includes('eintrag?.tags')
+    && datentabText.includes('normalisiereAnzeige(')
+    && datentabText.includes('normalisiereTagDedupe(')
+    && datentabText.includes('genresSet'));
+
+check("N", "GeschmackBereich verdrahtet den Blogdialog mit Profil-/Vokabular-Propertie",
+  () => bereichText.includes("<BlogProfilAnalyse")
+    && bereichText.includes("artikelListe={artikelListe}")
+    && bereichText.includes("bekannteTags={bekannteTags}")
+    && bereichText.includes("accountId={kontoId}")
+    && bereichText.includes("vokabular={vokabular}")
+    && bereichText.includes("onVokabularSpeichern={vokabularWriter}")
+    && /<BlogProfilAnalyse[\s\S]*onFehler=\{onFehlerText\}/.test(bereichText));
+
+check("N", "Blog-Pfad bleibt auf KI-, Konto-, Profil-Geltigkeit und Writer-Existenz gebremst",
+  () => blogAktivAusdruck.includes("kiWegOffen")
+    && blogAktivAusdruck.includes("kontoBereit")
+    && blogAktivAusdruck.includes("profil?.einwilligung?.erteilt === true")
+    && blogAktivAusdruck.includes("profilGueltig()")
+    && blogAktivAusdruck.includes("typeof onVokabularSpeichern === \"function\""));
+
+const datentabRoot = createRoot(document.getElementById("wurzel"));
+dom.window.localStorage.setItem(TOPF.geschmacksprofil, JSON.stringify(P.erteileEinwilligung(LEER(), "2026-08-17T00:00:00.000Z")));
+feld = () => document.getElementById("wurzel");
+await act(async () => { datentabRoot.render(h(DatenTab, {
+  master: [{ titel: "Demo", genre: ["Drama"], tags: ["Drama"] }],
+  masterMeta: {}, masterHerkunft: { basis: "test" },
+  nachtragCount: 0,
+  exportMaster: () => {},
+  importMaster: () => {},
+  importProgramm: () => {},
+  importNonstop: () => {},
+  programm: [],
+  clearProgrammCache: () => {},
+  startWahl: null,
+  saveVokabular: null,
+  kiStand: { global: true, funktionen: { profil: true } },
+  kiProfilFaehig: true,
+  artikelListe: [{ id: "artikel_001", titel: "Mein eigener Beitrag", text: "Text für den Testlauf, präzise und deutlich." }],
+  kontoAktiv: true,
+  kontoId: "11111111-1111-1111-8000-111111111111",
+  kontoEmail: "test@example.com",
+  onKontoDatenGeaendert: () => {},
+}) });
+await ruhe();
+check("N", "Der Blogdialog sitzt tatsächlich im geschachtelten Settings-Pfad", () =>
+  text().includes("Eigene Blogartikel für dein Profil auswerten"));
+check("N", "Ohne Vokabular-Writer bleibt der kostenpflichtige Pfad im Dialog geschlossen",
+  () => {
+    const blog = document.getElementById("wurzel").querySelector(".kd-blogprofilanalyse");
+    return !!blog && !blog.querySelector('input[type="checkbox"]');
+  });
+
+await act(async () => { datentabRoot.render(null); });
+dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
+feld = () => document.getElementById("wurzel");
+});
+
+
+/* =========================================================================
    F — AUFFÄLLIGKEITEN AM IST-VERHALTEN
    Heute rot. Nicht exit-relevant, damit die Kette grün bleibt; sie stehen
    hier, damit die Befunde nicht in einem Bericht verschwinden. Bewusst NICHT
@@ -1973,6 +2073,7 @@ const TITEL_GRUPPEN = {
   K: "Fehler beim Schreiben",
   L: "Ansehen, korrigieren, entfernen",
   M: "Erreichbarkeit ohne KI",
+  N: "Blogdialog in Einstellungen verdrahtet",
 };
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");

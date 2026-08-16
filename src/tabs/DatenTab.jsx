@@ -21,6 +21,16 @@ import { ERROR_CODES } from "../services/errors.js";
 import { errorText } from "../services/errors.js";
 import { aiService } from "../services/ai.js";
 
+const normalisiereAnzeige = (wert) => {
+  if (typeof wert !== "string") return "";
+  return wert.trim();
+};
+
+const normalisiereTagDedupe = (wert) => {
+  if (typeof wert !== "string") return "";
+  return wert.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
+};
+
 /* ================= EINSTELLUNGEN =================
    Tester-Oberfläche in stabiler Reihenfolge. Persönliche Daten, der gemeinsame
    Katalog und manuelle Wartung bleiben bewusst getrennte Bereiche. */
@@ -108,6 +118,28 @@ export function DatenTab({
     nimm(streamingEntdecken);
     return bekannteWerte(Array.isArray(master) ? master : [], zusaetzlich).genres;
   }, [master, programm, streamingBekannt, streamingEntdecken]);
+
+  const bekannteTags = useMemo(() => {
+    const ausgang = [];
+    const gesehen = new Set();
+    const genresSet = new Set((bekannteGenres || [])
+      .map((e) => normalisiereTagDedupe(e))
+      .filter(Boolean));
+
+    for (const eintrag of Array.isArray(master) ? master : []) {
+      const rohTags = Array.isArray(eintrag?.tags) ? eintrag.tags : [];
+      for (const tag of rohTags) {
+        const sauber = normalisiereAnzeige(tag);
+        if (!sauber) continue;
+        const deduplikat = normalisiereTagDedupe(sauber);
+        if (genresSet.has(deduplikat) || gesehen.has(deduplikat)) continue;
+        gesehen.add(deduplikat);
+        ausgang.push(sauber);
+      }
+    }
+
+    return ausgang;
+  }, [bekannteGenres, master]);
 
   /* Im hellen Grundmodus öffnet der unklare Knopf Showa, im dunklen Neon Noir.
      Bei aktivem Spezialmodus bleibt sein Ziel stabil, damit derselbe Knopf ihn
@@ -233,6 +265,11 @@ export function DatenTab({
           <GeschmackBereich
             bekannteTitel={Array.isArray(master) ? master : []}
             bekannteGenres={bekannteGenres}
+            bekannteTags={bekannteTags}
+            artikelListe={artikelListe}
+            vokabular={vokabular}
+            kontoId={kontoId}
+            onVokabularSpeichern={saveVokabular}
             kiAktiv={kiProfilFaehig
               && kiStand.global === true
               && kiStand.funktionen?.profil !== false

@@ -8,6 +8,7 @@ import {
 } from "../lib/profil.js";
 import { GeschmackOnboarding } from "./GeschmackOnboarding.jsx";
 import { ProfilAnsicht } from "./ProfilAnsicht.jsx";
+import { BlogProfilAnalyse } from "./BlogProfilAnalyse.jsx";
 import { DreiFragen } from "./DreiFragen.jsx";
 import { bauePayload, ausExtraktion } from "../lib/extraktion.js";
 import { aiService } from "../services/ai.js";
@@ -40,6 +41,14 @@ import { errorText } from "../services/errors.js";
    eigene Bühne, weil der Nutzer die Vorschläge nicht selbst gemacht hat. */
 
 const jetzt = () => new Date().toISOString();
+const blogMetaFelder = ["articleId", "contentHash", "analyzedAt", "promptVersion"];
+const accountUuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const sichereFehlerNachricht = (wert) => {
+  if (typeof wert === "string") return wert;
+  if (wert && typeof wert.message === "string") return wert.message;
+  if (wert && typeof wert.meldung === "string") return wert.meldung;
+  return "Ein Fehler ist aufgetreten.";
+};
 
 export function GeschmackBereich({
   bekannteTitel = [],
@@ -48,10 +57,15 @@ export function GeschmackBereich({
      den Endpunkt, damit das Modell Genres auf ECHTE Schreibweisen abbildet
      statt sie zu erfinden -- ohne sie weist der Endpunkt ab, bevor er zahlt. */
   bekannteGenres = [],
+  bekannteTags = [],
   /* Fuer Tests: der KI-Dienst und der Schalter sind einsetzbar, damit die
      Pruefung ohne Netz und ohne echten localStorage laufen kann. */
   ai = aiService,
   kiAktiv = false,
+  artikelListe = [],
+  vokabular = [],
+  kontoId = "",
+  onVokabularSpeichern,
   /* Nur für Tests und den Demo-Modus: erlaubt, die Speicher-Schicht zu
      ersetzen, ohne das echte `store` zu berühren. */
   speicher = null,
@@ -81,6 +95,19 @@ export function GeschmackBereich({
      Meldung; sie heisst "der Betreiber hat abgeschaltet", nicht "du hast
      abgeschaltet". */
   const kiWegOffen = kiAktiv === true;
+  const kontoBereit = accountUuidRe.test(String(kontoId || "")) && !!kontoId;
+  const profilGueltig = () => profil && pruefeProfil(profil).length === 0;
+  const onProfilSchreiben = async (neu, erfolgText) => {
+    const ok = await schreibe(neu, erfolgText);
+    if (ok !== true) return false;
+    return true;
+  };
+  const vokabularWriter = typeof onVokabularSpeichern === "function" ? onVokabularSpeichern : async () => false;
+  const blogAktiv = kiWegOffen && kontoBereit
+    && profil?.einwilligung?.erteilt === true
+    && profilGueltig()
+    && typeof onVokabularSpeichern === "function";
+  const onFehlerText = (fehler) => onFehler?.(sichereFehlerNachricht(fehler));
 
   useEffect(() => {
     let lebt = true;
@@ -241,7 +268,11 @@ export function GeschmackBereich({
        `korrektur`, damit die Herkunft ehrlich bleibt. Der ursprüngliche
        Beleg wandert mit — sonst stünde da ein Zug ohne Herkunft, und die
        Belegpflicht wäre über den Korrekturweg aushebelbar. */
-    signale[index] = { ...signale[index], richtung, quelle: "korrektur" };
+    const korrigiert = { ...signale[index], richtung, quelle: "korrektur" };
+    if (signale[index].quelle === "bloganalyse") {
+      for (const feld of blogMetaFelder) delete korrigiert[feld];
+    }
+    signale[index] = korrigiert;
     const t = jetzt();
     const neu = { ...profil, signale, version: naechsteVersion(profil.version), geaendert: t };
     const fehler = pruefeProfil(neu);
@@ -326,17 +357,32 @@ export function GeschmackBereich({
           onAbbruch={() => setErhebe(false)}
         />
       ) : (
-        <ProfilAnsicht
-          profil={profil}
-          kiGeraeteweiseAus={kiGeraeteweiseAus}
-          onRichtungAendern={richtungAendern}
-          onEntfernen={entfernen}
-          onNichtDeutbarEntfernen={nichtDeutbarEntfernen}
-          onWiderrufen={widerrufen}
-          onNeuErheben={() => { setMeldung(null); setErhebe(true); }}
-          kiWegOffen={kiWegOffen}
-          onKiErheben={() => { setMeldung(null); setExtrakt(null); setExtraktFehler(null); setFrage(true); }}
-        />
+        <>
+          <ProfilAnsicht
+            profil={profil}
+            kiGeraeteweiseAus={kiGeraeteweiseAus}
+            onRichtungAendern={richtungAendern}
+            onEntfernen={entfernen}
+            onNichtDeutbarEntfernen={nichtDeutbarEntfernen}
+            onWiderrufen={widerrufen}
+            onNeuErheben={() => { setMeldung(null); setErhebe(true); }}
+            kiWegOffen={kiWegOffen}
+            onKiErheben={() => { setMeldung(null); setExtrakt(null); setExtraktFehler(null); setFrage(true); }}
+          />
+          <BlogProfilAnalyse
+            artikelListe={artikelListe}
+            bekannteGenres={bekannteGenres}
+            bekannteTags={bekannteTags}
+            profil={profil}
+            vokabular={vokabular}
+            accountId={kontoId}
+            aktiv={blogAktiv}
+            ai={ai}
+            onProfilSpeichern={(neu) => onProfilSchreiben(neu, "Blogprofil gespeichert.")}
+            onVokabularSpeichern={vokabularWriter}
+            onFehler={onFehlerText}
+          />
+        </>
       )}
       {meldung && <p aria-live="polite" style={{ ...klein, marginTop: 12 }}>{meldung}</p>}
     </div>
