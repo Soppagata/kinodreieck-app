@@ -237,6 +237,49 @@ const kaputt = await mounte(standardProps({ aiObj: aiMock({ health: kaputtHealth
 check(!knopf(kaputt.container, "analysieren"), "kaputte Capability-Feldtypen bleiben fail-closed");
 await kaputt.cleanup();
 
+for (const [name, captureContext] of [
+  ["fehlend", () => ({})],
+  ["formfremd", () => ({ isCurrent: "ja" })],
+  ["werfend", () => ({ isCurrent: () => { throw new Error("kaputt"); } })],
+]) {
+  const setup = standardProps({ props: { captureContext } });
+  const fixture = await mounte(setup);
+  check(!knopf(fixture.container, "analysieren")
+    && setup.ai.calls.length >= 1
+    && setup.ai.calls.every((call) => call.task === "health"),
+  `malformed capture (${name}) lässt ausschließlich Health und null paid request zu`);
+  await fixture.cleanup();
+}
+
+let contextNachHealthGueltig = true;
+const startFenceSetup = standardProps({
+  props: {
+    captureContext: () => contextNachHealthGueltig ? { isCurrent: () => true } : {},
+  },
+});
+const startFence = await mounte(startFenceSetup);
+contextNachHealthGueltig = false;
+await bestaetigeUndKlicke(startFence);
+check(startFenceSetup.ai.calls.every((call) => call.task === "health")
+  && startFence.container.textContent.includes("nicht sicher gestartet"),
+"nach Health formfremder Capture sperrt vor blog-profile-extract");
+await startFence.cleanup();
+
+const awaitContext = { isCurrent: () => true };
+const awaitOffen = deferred();
+const awaitAi = aiMock({ analyse: () => awaitOffen.promise });
+const awaitSetup = standardProps({
+  aiObj: awaitAi,
+  props: { captureContext: () => awaitContext },
+});
+const awaitFence = await mounte(awaitSetup);
+await bestaetigeUndKlicke(awaitFence);
+awaitContext.isCurrent = "ja";
+await act(async () => { awaitOffen.resolve({ data: structuredClone(MODELL) }); await tick(); await tick(); });
+check(!awaitFence.container.querySelector(".kd-blogprofilanalyse-vorschau") && awaitSetup.marker.map.size === 0,
+  "nach Await formfremder Capture verhindert Vorschau- und Marker-Erfolg");
+await awaitFence.cleanup();
+
 const strictSetup = standardProps();
 strictSetup.strict = true;
 const strictMode = await mounte(strictSetup);
@@ -434,6 +477,32 @@ check(profilVersuche === 2 && vokErfolge === 1
   && gegen.setup.ai.calls.filter((call) => call.task === "blog-profile-extract").length === gegenAiVorher,
 "Reject-Retry wiederholt ausschließlich den fehlenden Profilwriter");
 await gegen.cleanup();
+
+/* Pending Writer: nur seine Gruppe friert ein, Ref-Lock bleibt exakt einmal. */
+const saveOffen = deferred();
+let saveWriterCalls = 0;
+const saveSetup = standardProps({
+  props: {
+    onProfilSpeichern: () => { saveWriterCalls++; return saveOffen.promise; },
+  },
+});
+const savePending = await mounte(saveSetup);
+await bestaetigeUndKlicke(savePending);
+await warten();
+await act(async () => {
+  const speichern = knopf(savePending.container, "Geschmacksprofil speichern");
+  speichern.click(); speichern.click(); await tick();
+});
+const profilGruppe = savePending.container.querySelector('[aria-labelledby="blogprofilanalyse-profil"]');
+const vokabularGruppe = savePending.container.querySelector('[aria-labelledby="blogprofilanalyse-vokabular"]');
+check(saveWriterCalls === 1
+  && [...profilGruppe.querySelectorAll("input,select")].every((feld) => feld.disabled)
+  && [...vokabularGruppe.querySelectorAll("input,select")].every((feld) => !feld.disabled),
+"pending Profilwriter sperrt exakt seine Felder und Doppelklick bleibt ein Write");
+await act(async () => { saveOffen.resolve(true); await tick(); await tick(); });
+check(knopf(savePending.container, "Geschmacksprofil gespeichert")?.disabled,
+  "wahrer Writer-Erfolg wird erst nach dem unveränderten pending Editstand bestätigt");
+await savePending.cleanup();
 
 /* P1: Ein fehlgeschlagener Retry darf keinen inzwischen neueren Basisstand überschreiben. */
 let p1WriterCalls = 0;

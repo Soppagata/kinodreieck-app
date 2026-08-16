@@ -33,6 +33,10 @@ const kopie = (wert) => JSON.parse(JSON.stringify(wert));
 const signatur = (wert) => {
   try { return JSON.stringify(wert); } catch { return ""; }
 };
+const istAktuellerContext = (context) => {
+  if (!context || typeof context.isCurrent !== "function") return false;
+  try { return context.isCurrent() === true; } catch { return false; }
+};
 const statusText = (status) => ({
   neu: "Neu",
   bereits_vorhanden: "Bereits vorhanden",
@@ -195,7 +199,7 @@ export function BlogProfilAnalyse({
     Promise.resolve(ai.runTask("health", {}, { signal: controller.signal }))
       .then((antwort) => {
         if (!mounted.current || controller.signal.aborted) return;
-        if (propsRef.current.accountId !== konto || !propsRef.current.aktiv || context?.isCurrent?.() === false) return;
+        if (propsRef.current.accountId !== konto || !propsRef.current.aktiv || !istAktuellerContext(context)) return;
         setCapability(hatBlogProfileAnalyseCapability(antwort));
       })
       .catch(() => {
@@ -222,7 +226,7 @@ export function BlogProfilAnalyse({
     const payloadSig = aktuellePayloadSignatur;
     isArtikelUnveraendert(marker, konto, ausgewaehlt.payload, { digest })
       .then((wert) => {
-        if (verworfen || !mounted.current || context?.isCurrent?.() === false) return;
+        if (verworfen || !mounted.current || !istAktuellerContext(context)) return;
         if (propsRef.current.accountId !== konto || propsRef.current.payloadSignatur !== payloadSig) return;
         setUnveraendert(wert === true);
       })
@@ -236,7 +240,7 @@ export function BlogProfilAnalyse({
     && propsRef.current.accountId === start.accountId
     && propsRef.current.artikelId === start.artikelId
     && propsRef.current.payloadSignatur === start.payloadSignatur
-    && context?.isCurrent?.() !== false;
+    && istAktuellerContext(context);
 
   const analysieren = async () => {
     if (analyseLock.current || !capability || !bestaetigt || !ausgewaehlt || !markerFaehig) return;
@@ -247,7 +251,7 @@ export function BlogProfilAnalyse({
     const start = { accountId, artikelId, payloadSignatur: signatur(payload) };
     let context;
     try { context = captureContext(); } catch { context = null; }
-    if (!context || context.isCurrent?.() === false) {
+    if (!istAktuellerContext(context)) {
       analyseLock.current = false;
       meldeFehler("analyse", "Die Analyse konnte nicht sicher gestartet werden.");
       return;
@@ -460,6 +464,8 @@ export function BlogProfilAnalyse({
   };
 
   const beideGespeichert = gruppenStatus.profil.gespeichert && gruppenStatus.vokabular.gespeichert;
+  const profilGesperrt = gruppenStatus.profil.laeuft || gruppenStatus.profil.gespeichert;
+  const vokabularGesperrt = gruppenStatus.vokabular.laeuft || gruppenStatus.vokabular.gespeichert;
 
   return <section className="kd-blogprofilanalyse" aria-labelledby="blogprofilanalyse-titel">
     <h3 id="blogprofilanalyse-titel">Eigene Blogartikel für dein Profil auswerten</h3>
@@ -502,40 +508,40 @@ export function BlogProfilAnalyse({
         {vorschau.geschmackszuege.map((item, index) => <fieldset key={`profil-${index}`} data-status={item.status}>
           <legend>Kandidat {index + 1}: {statusText(item.status)}</legend>
           <label>Art
-            <select aria-label={`Art Geschmackszug ${index + 1}`} value={item.art} disabled={gruppenStatus.profil.gespeichert}
+            <select aria-label={`Art Geschmackszug ${index + 1}`} value={item.art} disabled={profilGesperrt}
               onChange={(event) => aktualisiereKandidat("profil", index, "art", event.target.value)}>
               {BLOG_PROFILE_ARTEN_SET.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
             </select>
           </label>
           <label>Wert
             {item.art === "genre"
-              ? <select aria-label={`Wert Geschmackszug ${index + 1}`} value={item.wert} disabled={gruppenStatus.profil.gespeichert}
+              ? <select aria-label={`Wert Geschmackszug ${index + 1}`} value={item.wert} disabled={profilGesperrt}
                 onChange={(event) => aktualisiereKandidat("profil", index, "wert", event.target.value)}>
                 {!bekannteGenres.includes(item.wert) && <option value={item.wert}>{item.wert}</option>}
                 {bekannteGenres.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
               </select>
-              : <input aria-label={`Wert Geschmackszug ${index + 1}`} value={item.wert} disabled={gruppenStatus.profil.gespeichert}
+              : <input aria-label={`Wert Geschmackszug ${index + 1}`} value={item.wert} disabled={profilGesperrt}
                 onChange={(event) => aktualisiereKandidat("profil", index, "wert", event.target.value)} />}
           </label>
           <label>Richtung
-            <select aria-label={`Richtung Geschmackszug ${index + 1}`} value={item.richtung} disabled={gruppenStatus.profil.gespeichert}
+            <select aria-label={`Richtung Geschmackszug ${index + 1}`} value={item.richtung} disabled={profilGesperrt}
               onChange={(event) => aktualisiereKandidat("profil", index, "richtung", event.target.value)}>
               {BLOG_PROFILE_RICHTUNG_SET.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
             </select>
           </label>
           <label>Stärke
             <input aria-label={`Stärke Geschmackszug ${index + 1}`} type="number" min="1" max="5" step="1" value={item.staerke}
-              disabled={gruppenStatus.profil.gespeichert}
+              disabled={profilGesperrt}
               onChange={(event) => aktualisiereKandidat("profil", index, "staerke", Number(event.target.value))} />
           </label>
           <label>Sicherheit
-            <select aria-label={`Sicherheit Geschmackszug ${index + 1}`} value={item.sicherheit} disabled={gruppenStatus.profil.gespeichert}
+            <select aria-label={`Sicherheit Geschmackszug ${index + 1}`} value={item.sicherheit} disabled={profilGesperrt}
               onChange={(event) => aktualisiereKandidat("profil", index, "sicherheit", event.target.value)}>
               {BLOG_PROFILE_SICHERHEIT_SET.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
             </select>
           </label>
           <label>Beleg
-            <input aria-label={`Beleg Geschmackszug ${index + 1}`} value={item.beleg} disabled={gruppenStatus.profil.gespeichert}
+            <input aria-label={`Beleg Geschmackszug ${index + 1}`} value={item.beleg} disabled={profilGesperrt}
               onChange={(event) => aktualisiereKandidat("profil", index, "beleg", event.target.value)} />
           </label>
         </fieldset>)}
@@ -554,27 +560,27 @@ export function BlogProfilAnalyse({
         {vorschau.vokabular.map((item, index) => <fieldset key={`vokabular-${index}`} data-status={item.status}>
           <legend>Kandidat {index + 1}: {statusText(item.status)}</legend>
           <label>Wort
-            <input aria-label={`Wort Vokabular ${index + 1}`} value={item.wort} disabled={gruppenStatus.vokabular.gespeichert}
+            <input aria-label={`Wort Vokabular ${index + 1}`} value={item.wort} disabled={vokabularGesperrt}
               onChange={(event) => aktualisiereKandidat("vokabular", index, "wort", event.target.value)} />
           </label>
           <label>Beschreibung
-            <input aria-label={`Beschreibung Vokabular ${index + 1}`} value={item.beschreibung} disabled={gruppenStatus.vokabular.gespeichert}
+            <input aria-label={`Beschreibung Vokabular ${index + 1}`} value={item.beschreibung} disabled={vokabularGesperrt}
               onChange={(event) => aktualisiereKandidat("vokabular", index, "beschreibung", event.target.value)} />
           </label>
           <label>Genres
-            <select aria-label={`Genres Vokabular ${index + 1}`} multiple value={item.genres} disabled={gruppenStatus.vokabular.gespeichert}
+            <select aria-label={`Genres Vokabular ${index + 1}`} multiple value={item.genres} disabled={vokabularGesperrt}
               onChange={(event) => aktualisiereKandidat("vokabular", index, "genres", [...event.target.selectedOptions].map((option) => option.value))}>
               {bekannteGenres.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
             </select>
           </label>
           <label>Tags
-            <select aria-label={`Tags Vokabular ${index + 1}`} multiple value={item.tags} disabled={gruppenStatus.vokabular.gespeichert}
+            <select aria-label={`Tags Vokabular ${index + 1}`} multiple value={item.tags} disabled={vokabularGesperrt}
               onChange={(event) => aktualisiereKandidat("vokabular", index, "tags", [...event.target.selectedOptions].map((option) => option.value))}>
               {bekannteTags.map((wert) => <option key={wert} value={wert}>{wert}</option>)}
             </select>
           </label>
           <label>Beleg
-            <input aria-label={`Beleg Vokabular ${index + 1}`} value={item.beleg} disabled={gruppenStatus.vokabular.gespeichert}
+            <input aria-label={`Beleg Vokabular ${index + 1}`} value={item.beleg} disabled={vokabularGesperrt}
               onChange={(event) => aktualisiereKandidat("vokabular", index, "beleg", event.target.value)} />
           </label>
         </fieldset>)}
