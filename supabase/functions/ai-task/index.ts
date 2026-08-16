@@ -1511,8 +1511,7 @@ export function leseBlogProfileEingabe(
   if (typeof id !== "string" || !/^[a-z0-9][a-z0-9_]{0,119}$/.test(id)) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-id");
   }
-  if (typeof titel !== "string" || blogByteLaenge(titel) < 1 ||
-      blogByteLaenge(titel) > 160) {
+  if (!blogEinzeiligImByteBereich(titel, 1, 160)) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-titel");
   }
   if (typeof text !== "string" || blogByteLaenge(text) < 1 ||

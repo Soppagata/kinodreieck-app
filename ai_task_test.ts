@@ -8281,6 +8281,43 @@ test("BP2 Eingabegrenzen messen UTF-8-Bytes und geschlossene Formen", () => {
   );
 });
 
+test("BP2a Artikeltitel sind einzeilig, Artikeltext bleibt mehrzeilig", async () => {
+  const mehrzeilig = "Erste Zeile\nZweite Zeile\r\nDritte Zeile\u2028Vierte Zeile\u2029Fünfte Zeile";
+  const normal = leseBlogProfileEingabe(bpAendere((p) => {
+    const artikel = p.artikel as Record<string, unknown>;
+    artikel.titel = "Ein normaler Titel";
+    artikel.text = mehrzeilig;
+  }));
+  gleich(normal.artikel.titel, "Ein normaler Titel", "normaler Titel erlaubt");
+  gleich(normal.artikel.text, mehrzeilig, "mehrzeiliger Artikeltext unverändert erlaubt");
+
+  const steuerzeichen = [
+    ["LF", "\u000A"],
+    ["CR", "\u000D"],
+    ["C0 NUL", "\u0000"],
+    ["C0 US", "\u001F"],
+    ["DEL", "\u007F"],
+    ["C1 NEL", "\u0085"],
+    ["U+2028", "\u2028"],
+    ["U+2029", "\u2029"],
+  ] as const;
+  const geheim = "PRIVATER_TITEL_BP2A";
+  for (const [name, zeichen] of steuerzeichen) {
+    stelleZurueck();
+    const r = await bpRuf(bpAendere((p) => {
+      (p.artikel as Record<string, unknown>).titel =
+        `Titel${zeichen}${geheim}`;
+    }));
+    gleich(r.status, 400, `${name}: fail-closed Status`);
+    gleich(r.daten.grund, "blog-artikel-titel", `${name}: inhaltsfreie Fehlerkennung`);
+    falsch(JSON.stringify(r.daten).includes(geheim), `${name}: kein Titel im Fehlertext`);
+    gleich(rpc("kd_private_provider_allowed").length, 0, `${name}: kein Providercheck`);
+    gleich(starten().length, 0, `${name}: keine Reservierung`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Providerfetch`);
+    pruefeKeinInhaltImProtokoll([geheim]);
+  }
+});
+
 test("BP3 Dublettennormierung ist exakt NFKC, trim, Whitespace und lowercase", () => {
   gleich(normalisiereBlogListenwert("  Ｄｒａｍａ\t Noir  "), "drama noir", "eingefrorene Form");
   falsch(
