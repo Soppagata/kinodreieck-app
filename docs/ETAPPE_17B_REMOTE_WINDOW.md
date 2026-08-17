@@ -6,12 +6,17 @@
 - Ausfuehrender Vertrag ist ausschliesslich der gemeinsame Helper
   `tools/e17b-remote-window.mjs` mit den unten genannten sieben getrennten Modi;
   dieses Dokument ist das Runbook, nicht der Executor.
-- Baseline-Commit wird beim Start über `git rev-parse HEAD` als 40-hex Kandidat ermittelt und mit
-  der gleichen Remote-Ref (`git ls-remote`) exakt verifiziert.
+- Zielbranch `codex/e17b-bloganalyse-remote` und erlaubte Ref
+  `refs/heads/codex/e17b-bloganalyse-remote` sind expliziter Ownervertrag;
+  ein konfigurierter Upstream ist nie Autoritaet.
+- Baseline-Commit wird beim Start über `git rev-parse HEAD` nur als 40-hex Kandidat ermittelt.
+  Kein Zwischenhash (`a22`, `34d`, Baucommit) ist `finalCommit`. Erst der spaeter
+  an der erlaubten Remote-Ref exakt verifizierte lowercase-40hex-Wert ist
+  `finalCommit` und Buildwert.
 - Nicht erlaubt: echter KI-Provider-Lauf (`npm run test:ai:live`), Live- oder
   Eval-Lauf außerhalb des späteren gesonderten Auftrags.
-- Für den Start ist der finale Branch/Commit nach `HEAD` auf die gleiche Remote-Ref
-  zu pushen und per `git ls-remote` exakt zu verifizieren.
+- Für den Start ist der finale Branch/Commit nach `HEAD` auf die erlaubte Remote-Ref
+  zu pushen und dort per `git ls-remote` exakt zu verifizieren.
 
 ## Zielidentität
 
@@ -26,6 +31,13 @@
   (`TestB` wird in diesem Lauf nicht benötigt).
 - Infrastruktur: Service `at.kinodreieck.codex.supabase.bscjgwcntapobyxsiyce`, Accounts
   `SUPABASE_ACCESS_TOKEN` und `DB_POSTGRES_PASSWORD`.
+- Host, Port und User des Remote-PG sind vor empirischem Rohpayload `NICHT BELEGT`
+  und duerfen nie aus Supabase-Konventionen geraten werden. Nur intern gebrandete,
+  an die Felder `project`, `runId`, `target` und `finalCommit` gebundene
+  Read-Preflight-Evidence
+  darf spaeter das explizite Tupel fuer `pg_dump`/`pg_dumpall` liefern; andernfalls
+  gilt `REMOTE_PAYLOAD_PENDING` und `STOP`.
+- Der Rollen-Dump bleibt fest auf der Datenbank `postgres`.
 
 ## Feste Modi (genau diese sieben)
 
@@ -52,7 +64,7 @@
 - `package.json` im Kernpaket enthält nur den lokalen Mocktest; Remote-Write-Skripte
   (`db push`, `config push`, `migration repair`) sind in diesem Window verboten.
 - Zulässige dynamische Werte sind nur:
-  - exakt ein validierter 40-hex Commit
+  - exakt ein als `finalCommit` validierter lowercase-40hex Commit
   - ein Child-Runverzeichnis unter `/private/tmp` mit `realpath`/mode/owner-Prüfung
 - Alle Owner-Gates sind fremd-/owner-provided und checkpointgebunden; der Helper darf
   keine neuen Function- oder DB-Freigaben erzeugen.
@@ -66,6 +78,18 @@
 `41-db-apply` → `42-db-postflight` → `90-remote-delta` → `91-rollback-plan` →
 `98-credential-cleanup` → `99-final-checkpoint`
 
+- `local-contract`: `00`
+- `read-preflight`: `10/11/12`
+- `backup-restore`: `20/21/22/23`, dabei gilt exakt `22` = Canonical SOURCE und
+  `23` = Canonical RESTORE
+- `function-release`: `30/31/32`
+- `db-apply`: `40/41`
+- `postflight`: `42/90/91`
+- `cleanup-local`: `98/99`
+- Die gruene Kette ist linear. `cleanup-local` besitzt zusaetzlich nach jeder
+  fruehen Phase einen geschlossenen `STOP`-Pfad ueber `98/99`; im `STOP` setzt
+  dieser Pfad `91` nie voraus.
+
 - Evidence enthält nur allowlist-geparste Nichtgeheimwerte, Statuscodes und
   nicht-sensitive Hashes.
 - Rohe Payloadbytes der ersten echten Probe werden vor Parser-Akzeptanz nur
@@ -73,6 +97,11 @@
   Sie gelangen niemals in Evidence, Datei, Chat oder Uebergabe und werden nach
   der Auswertung tatsaechlich verworfen.
 - Evidence speichert keine Rohpayloads und keine rohen CLI-/SQL-/HTTP-Outputs.
+- Die erwartete Ledgerfolge besteht aus exakt 35 committed Vorgaengerversionen
+  bis `20260816010000`; das Ziel `20260817120000` wird separat behandelt.
+  Kanonische Bytes sind exakt `JSON.stringify(array)`, mit SHA-256
+  `c99f0c25f727064a6e3bc5d471ace296bb506818c234fb479c5de5fffc2bf17d`.
+  Die Remote-Tabelle ist Beobachtung, nicht alleinige Quelle dieser Erwartung.
 
 ## Ablauf (lokaler Pflicht-Runbook-Vertrag)
 
@@ -80,7 +109,8 @@
 
 `local-contract` validiert: sauberer Worktree, Commit, Owner-Bereich,
 Dateihoheit, Schreib-/Remotegrenzen, Zielkontrakt.
-- Branch und Commit sind auf der konfigurierten Remote-Ref exakt verifiziert.
+- Branch und Commit sind auf der erlaubten Ref
+  `refs/heads/codex/e17b-bloganalyse-remote` exakt verifiziert.
 - Funktionelles `STOP` bei Unstimmigkeit beendet den Lauf ohne Folgeaktionen.
 
 ### B. Read-Preflight
@@ -95,6 +125,8 @@ Dateihoheit, Schreib-/Remotegrenzen, Zielkontrakt.
   erfasst; bei erfolgreichem Parse wird `REMOTE_PAYLOAD_PENDING` aufgehoben.
 - Bei Parse-Fehler bleibt `REMOTE_PAYLOAD_PENDING` aktiv, der Treffer wird
   als `STOP` dokumentiert.
+- `11-function-preimage` entsteht ausschliesslich in `read-preflight` und ist
+  digestgebunden.
 
 ### C. Backup + Restore-Validierung
 
@@ -123,8 +155,9 @@ Ohne grünen Restore-Postflight folgt direkt `STOP`.
    `30-function-checkpoint`, Function `ai-task` und den validierten 40-Hex-Commit
    gebunden sein; der Helper erzeugt ihn nicht.
 3. Ziel-Function, vollstaendigen Function-Source-Checkpoint und Body-Preimage
-   laden. `functions download ai-task` ist nur als bodygepruefte Vorstufe
-   (`11-function-preimage`) zulaessig.
+   laden. Bei und nach `30-function-checkpoint` wird exakt dasselbe in
+   `read-preflight` erzeugte, digestgebundene `11-function-preimage`-Objekt erneut
+   geladen und revalidiert, niemals neu erzeugt.
 4. `functions deploy ai-task` nach lokaler Pruefung der gebundenen Function-Config
    (`verify_jwt=true`) ausführen.
 5. Nur bei erfolgreichem Deploy: Marker-Satz nur mit exakter Syntax
@@ -173,9 +206,10 @@ Retries.
   geschrieben. Es gibt keine Cross-System-Atomaritaet mit Function oder Health.
 - Vor `db-apply` gilt: Marker gesetzt (`KD_FUNCTION_BUILD_VERSION`), authentifizierter
   Health-Postflight auf TestA positiv mit `buildVersion=<40hex>` und
-  `blog-profile-extract=not-ready`, sowie aktueller DB-Prewrite-Checkpoint vorab
-  bestätigt.
-- Der frische fremd-/owner-provided Gate fuer `db-apply` ist exakt an
+  `blog-profile-extract=not-ready`. Der DB-Prewrite bindet exakt
+  `12-db-preimage` und das externe `40-db-checkpoint` desselben `runId`, `target`
+  und `finalCommit`; eine frei behauptete Zeit oder Frische ist kein Nachweis.
+- Der fremd-/owner-provided Gate fuer `db-apply` ist exakt an
   `40-db-checkpoint`, Remote-Target-Identity, committed Migration und diese eine
   Ledgerzeile gebunden; der Helper erzeugt ihn nicht.
 - Datenvertrag: am Key `blog-profile-extract` werden nur drei vorhandene JSON-Objekte
