@@ -351,6 +351,15 @@ const p8Abschnitt = smokeSkript.slice(
   smokeSkript.indexOf("/* --- P8:"),
   smokeSkript.indexOf("/* --- P9:"),
 );
+const p8Position = smokeSkript.indexOf("const p8 = await ruf(");
+const p5CapabilityPos = smokeSkript.indexOf('pruefeBlogProfilCapabilityAbschnitt("P5", p5);');
+const p22Start = smokeSkript.indexOf("P22: Synthetische Ein-Artikel-Blog-Profilextraktion (bewacht)");
+const p22AbschnittsEnde = p22Start >= 0
+  ? smokeSkript.indexOf("\n/* ===========================================================================", p22Start + 1)
+  : -1;
+const p22Abschnitt = p22Start >= 0 && p22AbschnittsEnde > p22Start
+  ? smokeSkript.slice(p22Start, p22AbschnittsEnde)
+  : "";
 check("Migration erzwingt den 500-Cent-Zaun atomar vor der Anbieter-RPC",
   /anbieter_request_max_usd_cent/.test(kostenMigration)
   && /::numeric > 500/.test(kostenMigration)
@@ -375,13 +384,30 @@ check("Function prueft denselben Kostenzaun vor kd_ai_auftrag_starten und meldet
   functionIndex.indexOf("pruefeAnbieterKostenzaun(")
     < functionIndex.indexOf('admin.rpc(\n    "kd_ai_auftrag_starten"')
   && /anbieterRequestOwnerMaxUsdCent: ANBIETER_REQUEST_MAX_USD_CENT/.test(functionIndex));
-check("Rauchprobe verdrahtet genau neun potentielle Tokenrequests durch dieselbe Laufwache",
+check("Rauchprobe verdrahtet genau neun bewachte Pfade durch dieselbe Laufwache",
   (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === 9
-  && /maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
+  && (smokeSkript.match(/await rufAnbieterBewachtMitCapability\(/g) || []).length === 0
   && (smokeSkript.match(/task: "anbieter-modelle"/g) || []).length === 1
+  && /maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
   && /async function ruf[\s\S]{0,350}fetchMitZeitgrenze/.test(smokeSkript)
   && (p8Abschnitt.match(/const p8 = await ruf\(/g) || []).length === 1
-  && !/\b(?:for|while)\s*\(/.test(p8Abschnitt));
+  && !/\b(?:for|while)\s*\(/.test(p8Abschnitt)
+  && !/await Promise\.all\(/.test(smokeSkript));
+check("P5-Capability-Guard liegt vor P8 im Smoke auf der vorhandenen P5-Healthantwort",
+  /pruefeBlogProfilCapabilityAbschnitt\("P5", p5\);/.test(smokeSkript)
+  && p5CapabilityPos >= 0
+  && p8Position > p5CapabilityPos
+  && /import \{ hatBlogProfileAnalyseCapability \} from "\.\.\/src\/lib\/blogProfilAnalyse\.js"/.test(smokeSkript)
+  && /pruefeBlogProfilCapabilityAbschnitt\(/.test(smokeSkript));
+check("Rauchprobe ersetzt P22 durch genau einen Ein-Artikel-Blog-Capability-Aufruf",
+  (smokeSkript.match(/task: "blog-profile-extract"/g) || []).length === 1
+  && !/task: "profile-extract"/.test(smokeSkript)
+  && /const BLOG_PROFILE_ARTIKEL =/.test(smokeSkript)
+  && /artikel:\s*BLOG_PROFILE_ARTIKEL/.test(p22Abschnitt)
+  && /await rufAnbieterBewacht\(\s*"P22 blog-profile-extract"/.test(smokeSkript));
+check("Kein Health-Vorab-Call pro bewachtem Pfad, stattdessen genau ein P5-Guard",
+  !/rufAnbieterBewachtMitCapability\(/.test(smokeSkript)
+  && !/pruefeHealthVorBewachtemPfad\(/.test(smokeSkript));
 check("Eval ist eine feste serielle 20er-Schleife ohne Promise-All oder Retry-Schleife",
   /ANFRAGEN\.length !== EVAL_MAX_ANBIETER_REQUESTS/.test(evalSkript)
   && /for \(const anfrage of ANFRAGEN\)/.test(evalSkript)

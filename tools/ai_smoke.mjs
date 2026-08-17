@@ -42,8 +42,8 @@
      P19 derselbe Film ist danach ein kostenfreier Cache-Treffer
      P20 der gemeinsame Bericht ist über die enge Lese-RPC sichtbar
      P21 eine neue Prognose übernimmt exakt dessen belegtes WARUM
-     P22 synthetische Profilantworten liefern beleggebundene Signale und den
-         vollständigen WIE/WAS/WARUM-Vertrag
+    P22 synthetische Ein-Artikel Blogprofil-Profilextraktion mit beleggebundenen
+         Geschmackszügen und kontrolliertem Vokabular
      P23 Text-Stapelimport strukturiert synthetische Medien ohne Bildpfad
 
    Der Gesundheitsbericht aus P5 wird vollständig ausgegeben. Er enthält
@@ -60,6 +60,7 @@ import {
   holeBudgetStand,
   liesJsonOderNull,
 } from "./ai_budget_guard.mjs";
+import { hatBlogProfileAnalyseCapability } from "../src/lib/blogProfilAnalyse.js";
 import { readFileSync } from "node:fs";
 
 const FINDER_VOKABULAR = JSON.parse(readFileSync(
@@ -150,6 +151,25 @@ async function rpc(name, token, body) {
 
 const JSON_KOPF = { "Content-Type": "application/json" };
 
+function pruefeBlogProfilCapabilityAbschnitt(abschnitt, healthAntwort) {
+  const healthOk = hatBlogProfileAnalyseCapability(healthAntwort?.daten);
+  pruefe(
+    `${abschnitt}: Health belegt ai-task-v5/blog-profile-extract Capability`,
+    healthOk,
+    healthAntwort?.status === 200
+      ? `HTTP ${healthAntwort.status}, ok=${healthAntwort.daten?.ok}`
+      : `HTTP ${healthAntwort?.status || "(Unbekannt)"}`,
+  );
+  if (!healthOk) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      `${abschnitt}: health schlägt die Blog-Profile-Capability nicht exakt nach.`,
+    ));
+  }
+}
+
+// Capabilities werden nur einmal anhand des bereits vorhandenen P5-Health-Berichts geprüft.
+
 function stoppeLiveLauf(error) {
   const stopp = error instanceof LiveSicherheitsStopp
     ? error
@@ -239,6 +259,8 @@ pruefe(
   !p7.allowOrigin,
   `Allow-Origin: ${p7.allowOrigin ?? "(keiner) — richtig"}`,
 );
+
+pruefeBlogProfilCapabilityAbschnitt("P5", p5);
 
 /* --- P8: Modell-IDs am echten Anbieter belegen ----------------------------- */
 const p8 = await ruf(
@@ -642,54 +664,49 @@ pruefe(
 );
 
 /* ===========================================================================
-   P22–P23: die früheren Sonderwege im gemeinsamen, bewachten Smoke-Lauf
+   P22: Synthetische Ein-Artikel-Blog-Profilextraktion (bewacht)
 
-   Beide Proben sind rein synthetisch, speichern keine Profildaten und laufen
-   seriell durch dieselbe Request-/Kostenwache. P23 ist absichtlich text-only:
-   So belegt dieser erste gemeinsame Staging-Lauf den neuen Task ohne zusaetzliche
-   Medienvariable. Reale Bilder bleiben funktionsfaehig, werden aber separat
-   nur nach Containerpruefung und mit dem vollen Modell-Tierdeckel reserviert.
+   Der erste Pfad nutzt eine einzelne Review als Input — kein Batch und keine
+   weitere externe Datenquelle. Er bleibt ein echter kostenpflichtiger Aufruf.
    =========================================================================== */
-const PROFIL_ANTWORTEN = {
-  K1: "Die warme, langsame Kamera in In the Mood for Love zieht mich besonders an.",
-  K2: "Arrival sehe ich immer wieder wegen der ruhigen Science-Fiction-Erzählung und ihrer nichtlinearen Struktur.",
-  K4: "Mad Max Fury Road sollte man wegen seiner präzisen visuellen Inszenierung und kulturellen Wirkung gesehen haben.",
+const BLOG_PROFILE_ARTIKEL = {
+  id: "artikel_17b",
+  titel: "Ein strenger Filmtext",
+  text: "Die Kamera bleibt lange still und beobachtet, wie sich jede kleinste Bewegung verändert.",
+};
+const BLOG_PROFILE_LISTEN = {
+  genres: ["Drama", "Science-Fiction"],
+  tags: ["ruhig", "präzise"],
 };
 const p22 = await rufAnbieterBewacht(
-  "P22 profile-extract",
+  "P22 blog-profile-extract",
   "POST",
   { ...JSON_KOPF, Authorization: `Bearer ${token}`, apikey: ANON },
   {
-    task: "profile-extract",
+    task: "blog-profile-extract",
     vorgangId: crypto.randomUUID(),
-    promptVersion: "v1",
-    profilVersion: "synthetischer-smoke",
     payload: {
-      antworten: PROFIL_ANTWORTEN,
-      listen: { genres: ["sci-fi", "drama", "action"] },
+      artikel: BLOG_PROFILE_ARTIKEL,
+      listen: BLOG_PROFILE_LISTEN,
     },
   },
 );
 const d22 = p22.daten?.data;
-const achsen22 = d22?.achsen_tendenz;
-const achsenWerte22 = [achsen22?.wie, achsen22?.was, achsen22?.warum];
 pruefe(
-  "Synthetische Profilextraktion behält Belegpflicht und WIE/WAS/WARUM vollständig bei",
+  "Synthetische Ein-Artikel-Profilextraktion bleibt ein bezahlter Pfad mit belegten Ergebnissen",
   p22.status === 200 && p22.daten?.ok === true
-    && Array.isArray(d22?.signale)
-    && Array.isArray(d22?.filme)
-    && Array.isArray(d22?.nicht_deutbar)
-    && achsen22 && typeof achsen22 === "object"
-    && Object.keys(achsen22).sort().join(",") === "warum,was,wie"
-    && achsenWerte22.every((wert) =>
-      wert === null || (Number.isInteger(wert) && wert >= 0 && wert <= 5))
-    && (d22.signale.length > 0 || achsenWerte22.some(Number.isInteger))
+    && Array.isArray(d22?.geschmackszuege)
+    && Array.isArray(d22?.vokabular)
+    && (d22.geschmackszuege.length > 0 || d22.vokabular.length > 0)
     && p22.daten?.verbrauch?.kostenUsdCent > 0,
   p22.status === 200
-    ? `${d22?.signale?.length ?? 0} Signal(e), Achsen ${achsenWerte22.join("/")}, ${p22.daten?.verbrauch?.kostenUsdCent} US-Cent`
+    ? `${d22?.geschmackszuege?.length ?? 0} Geschmackszug, ${d22?.vokabular?.length ?? 0} Vokabular, ${p22.daten?.verbrauch?.kostenUsdCent} US-Cent`
     : `HTTP ${p22.status}: ${JSON.stringify(p22.daten)?.slice(0, 300)}`,
 );
 
+/* ===========================================================================
+   P23: Text-Stapelimport strukturiert synthetische Medien ohne Bildpfad
+   =========================================================================== */
 const p23 = await rufAnbieterBewacht(
   "P23 media-batch-extract text-only",
   "POST",
