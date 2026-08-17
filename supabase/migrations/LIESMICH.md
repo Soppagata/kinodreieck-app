@@ -6,28 +6,28 @@ Gezielte neue Dateien dürfen auch über die verknüpfte Management-API laufen:
 
 `supabase db query --linked --file <genau-eine-migration.sql>`
 
-Am 31. Juli 2026 wurde die zuvor leere Remote-Migrationshistorie mit dem live
-verifizierten Bestand abgeglichen. Alle lokalen Versionen bis einschließlich
-`20260809121000_rollen_v1_access_enforcement.sql` sind seither auch remote als
-angewandt markiert. Die vorgeschriebene Forward-Kette für den Private-Pilot ist:
+Die belegte Remote-Migrationswahrheit reicht exakt bis einschliesslich
+`20260816010000_radar_deferred_trigger_privilege_fix.sql`; damit sind auch
+`20260814120000` und `20260815120000` remote bestaetigt. Daraus werden weder
+Datum, Ausfuehrer noch Objektwerte oder Counts abgeleitet. Die vorgeschriebene
+Forward-Kette fuer den Private-Pilot ist:
 `20260809180000_event_radar_local_basis.sql` →
 `20260809220000_private_pilot_ops.sql` →
 `20260810120000_private_pilot_retention_fix.sql` →
 `20260814120000_radar_max_manual_pilot.sql` →
 `20260815120000_private_export_radar_pilot_compat.sql`.
-Die ersten drei Schritte dieser Kette sind remote verbucht; `20260814120000` und
-`20260815120000` sind Source-only/offen. Vor künftigen
-Läufen zuerst `npx supabase migration list --linked` prüfen; eine Migration
+Fuer den E17B-Stand ist `20260817120000` Source-only/offen. Vor kuenftigen
+Läufen zuerst `./node_modules/.bin/supabase migration list --linked` prüfen; eine Migration
 darf nur angewandt werden, wenn ausschließlich die erwartete neue Datei offen
 ist. `20260809220000_private_pilot_ops.sql` ist lokal auf Blob-ID
 `2143d36957f5be56e9973e15584d02769b9c4222` verifiziert.
-Remote-bestätigt sind die Radar-Töpfe `kd_radar_operations` und
-`kd_radar_share_operations` als leer verifiziert; `kd_radar_pilot_import_operations` ist in diesem Remote-Stand nicht vorhanden und daher nicht leer verifizierbar.
-`export_enabled` ist im bestätigten Remote-Stand vollständig nicht vorhanden; die Addierung erfolgt
-nur in `20260815120000_private_export_radar_pilot_compat.sql` mit Additiv-default `false`.
-Bei Problemen bleibt der kontrollierte Weg über
-`supabase db query --linked --file <genau-eine-migration.sql>` plus
-anschließendes `migration repair --status applied` erhalten.
+Der Ledgerstand belegt keine darueber hinausgehenden Objektwerte, Flags oder
+Counts; solche Zustaende werden hier nur mit eigenstaendigem Beleg aufgefuehrt.
+Für nicht-E17B-Pfade bleibt der kontrollierte Weg über
+`./node_modules/.bin/supabase db query --linked --file <genau-eine-migration.sql>` erhalten.
+E17B ist hiervon explizit ausgeschlossen: dort werden die committeden SQL-Inhalte als
+UTF-8-Byte-Stream in exakt ein und derselben gültigen BEGIN/COMMIT-Transaktion
+ausgefuehrt; `db push`, `config push` und `migration repair` bleiben ausgeschlossen.
 
 **Regel:** Was hier liegt, ist gelaufen oder läuft als Nächstes. Kein loses
 Ideen-SQL im Ordner. Historische Dateien sind idempotent formuliert. Die
@@ -77,8 +77,10 @@ die Statusautorität für den Remote-Lauf.
 | `20260808225500_etappe9_beta_tageslimit_30.sql` | `bscjgwcntapobyxsiyce` | 2026-08-08 | Codex über verknüpfte Management-API | erfolgreich; Tageslimit numerisch auf 30 gesetzt; Betriebsschalter `ai_aktiv=true` und Not-Aus-Bereitschaft, Monatsdeckel 1000, Request-Cap 500, Task-Caps `filmwissen-synthese=6` / `media-batch-extract=4` US-Cent, Sonnet-Preisboden 300/1500 sowie Parallelität 2 unverändert verifiziert; alle 27 Migrationsversionen lokal/remote deckungsgleich |
 | `20260809120000_rollen_v1_access_basis.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich einzeln angewandt und rückgelesen; own-select-only, keine Browser-Writes, kein anon-Recht, Helper im Browser nur authenticated/kein anon, KI vorher und danach aus; SHA-256 `3d7281e28a059f4aff0859bf2b99ebc5d2fb1a77263be1a2fcd2312032470173` |
 | `20260809121000_rollen_v1_access_enforcement.sql` | `bscjgwcntapobyxsiyce` | 2026-08-09 | Codex über verknüpfte Management-API | erfolgreich nach vollständigem 3/3-Bootstrap einzeln angewandt; 15/15 Policies und 3/3 RPCs active-gated, Legacy-ACLs ohne TRUNCATE/MAINTAIN belegt; RLS `active` 73/73, `inactive` 14/14, `missing` 14/14, null Testreste, KI weiter aus; SHA-256 `d010ce9ae653b8abbcefcb6697526449427bd2772192fccc7a43f06ac1717727` |
-| `20260814120000_radar_max_manual_pilot.sql` | | | | Source-only; nicht remote angewandt (REMOTE_STAND: fehlt) |
-| `20260815120000_private_export_radar_pilot_compat.sql` | | | | Source-only; nicht remote angewandt (REMOTE_STAND: fehlt), SQL-Kontrakt wird lokal geprüft |
+| `20260814120000_radar_max_manual_pilot.sql` | `bscjgwcntapobyxsiyce` | | | remote bestätigt |
+| `20260815120000_private_export_radar_pilot_compat.sql` | `bscjgwcntapobyxsiyce` | | | remote bestätigt |
+| `20260816010000_radar_deferred_trigger_privilege_fix.sql` | `bscjgwcntapobyxsiyce` | | | remote bestätigt |
+| `20260817120000_blog_profile_extract_config.sql` | | | | Source-only; `REMOTE_PAYLOAD_PENDING`, Ledger-Zielzeile erst nach atomarem E17B-Lauf |
 
 ## Entscheidung zum Beta-Tageslimit (08.08.2026)
 

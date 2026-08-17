@@ -44,15 +44,34 @@ reproduzierbaren Quellstand als Nachweis genügt.
    kein Fenster, in dem neuer Code wegen einer fehlenden Registry-RPC
    unkontrolliert oder irreführend betrieben wird.
 
-3. Genau diesen Stand deployen. Den vollständigen Commit erst nach
-   erfolgreichem Deploy als nicht geheime Laufzeitversion setzen:
+3. Genau diesen Stand deployen. Commit und Dirty-Check erfolgen vor Deploy:
 
    ```bash
+   if ! npm run check:function-release; then
+     echo "STOP: function-release contract check failed before deploy."
+     exit 75
+   fi
    KD_FUNCTION_COMMIT="$(git rev-parse HEAD)"
-   npx supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce \
-     && npx supabase secrets set \
-     KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT" \
-     --project-ref bscjgwcntapobyxsiyce
+   if ! echo "$KD_FUNCTION_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+     echo "STOP: invalid KD_FUNCTION_COMMIT; function release blocked."
+     exit 75
+   fi
+   if [ -n "$(git status --porcelain)" ]; then
+     echo "STOP: working tree dirty; function release blocked."
+     exit 75
+   fi
+   if ! ./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce; then
+     echo "STOP: functions deploy failed; function-release blocked."
+     exit 75
+   fi
+   if ! ./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT" --project-ref bscjgwcntapobyxsiyce; then
+     echo "STOP: marker write failed; function is new, marker unchanged."
+     exit 75
+   fi
+   if ! npm run check:function-release; then
+     echo "STOP: function-release check failed after deploy and marker."
+     exit 75
+   fi
    unset KD_FUNCTION_COMMIT
    ```
 
@@ -107,6 +126,26 @@ zulässiges Rollbackziel mehr. Der kleinste bekannte sichere Live-Stand ist
 Function 32 aus `65a92df` mit dem oben festgehaltenen Source-Hash. Recovery
 bedeutet einen Forward-Redeploy genau dieses verifizierten Quellstands oder
 eines neueren vollständig geprüften Stands; niemals einen Downgrade auf 26.
+
+## E17B-Dokumentationsvertrag (Kein neuer Release-Eintrag)
+
+Für den E17B-Window gilt bis zum bestätigten Lauf:
+
+- `tools/e17b-remote-window.mjs` ist der ausführende Helper für den E17B-Lauf
+  mit genau sieben Modi; `docs/ETAPPE_17B_REMOTE_WINDOW.md` ist das
+  zuständige Runbook mit den Checkpoints `00` bis `99`.
+- `20260817120000_blog_profile_extract_config.sql` bleibt im aktuellen Stand als
+  Source-only/`REMOTE_PAYLOAD_PENDING`.
+- `KD_FUNCTION_BUILD_VERSION` darf erst nach erfolgreichem
+  `./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce`
+  mit
+  `./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION=<40hex> --project-ref bscjgwcntapobyxsiyce`
+  auf den E17B-Commit gesetzt werden; der kostenfreie Health-Postflight folgt danach.
+- Vor `db-apply` muss der authentifizierte TestA-Health den Build exakt als
+  E17B-Commit und `blog-profile-extract=not-ready` melden. Nach der atomaren
+  Migration-/Ledger-Transaktion muss ein zweiter authentifizierter TestA-Health
+  denselben Build und `blog-profile-extract=ready` melden.
+- Kein neuer Release- oder Source-Hash-Eintrag ist hier vor einem echten E17B-Lauf erlaubt.
 
 Im Privatpilot-Abschluss wurde die Zuordnung read-only erneut belegt. Ein
 praktischer Redeploy blieb `SAFE_SKIPPED`, weil vor Shared-Backend-/Function-

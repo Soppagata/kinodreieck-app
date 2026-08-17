@@ -26,12 +26,14 @@ Fallback im Datenordner und wird von den automatischen Jobs nicht mehr aufgerufe
 ## Migrationen (seit Etappe 3)
 
 Schemaänderungen liegen als versionierte Dateien in `supabase/migrations/`;
-die angewandten Stände sind bis `20260802220000` abgeglichen; einzig die ältere
-Stapelimport-Datei `20260801194500` bleibt laut Laufprotokoll bewusst offen. Das
-kontrollierte Laufverfahren und Protokoll stehen in
+die angewandten Remote-Staende sind bis einschliesslich `20260816010000`
+bestaetigt. Fuer E17B ist
+`20260817120000_blog_profile_extract_config.sql` aktuell
+Source-only/`REMOTE_PAYLOAD_PENDING`.
+Das kontrollierte Laufverfahren und Protokoll stehen in
 `supabase/migrations/LIESMICH.md`. Die erste Migration
-legt `kd_personal` an — den persönlichen Speicher je Konto, geschützt allein
-über die Anmeldung (`auth.uid()`), ohne jeden anon-Zugriff.
+legt `kd_personal` an — den persönlichen Speicher je Konto, geschützt allein über
+die Anmeldung (`auth.uid()`), ohne jeden anon-Zugriff.
 
 `kd_catalog` (diese Datei) und `kd_store` (der alte schlüsselbasierte Sync)
 blieben in Etappe 3 zunächst unberührt. Seit dem Architektur-Cleanup vom
@@ -70,14 +72,39 @@ liegen in kleinen Nachbarmodulen und werden von der CLI gemeinsam gebündelt.
 Ausgeliefert wird er von Hand und nur aus einem committed Stand:
 
 ```bash
-npm run check:function-release
+if ! npm run check:function-release; then
+  echo "STOP: function-release contract check failed before deploy."
+  exit 75
+fi
 KD_FUNCTION_COMMIT="$(git rev-parse HEAD)"
-npx supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT"
+if ! echo "$KD_FUNCTION_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo "STOP: invalid KD_FUNCTION_COMMIT; function release blocked."
+  exit 75
+fi
+if [ -n "$(git status --porcelain)" ]; then
+  echo "STOP: working tree dirty; function release blocked."
+  exit 75
+fi
+if ! ./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce; then
+  echo "STOP: functions deploy failed; build marker unchanged."
+  exit 75
+fi
+if ! ./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT" --project-ref bscjgwcntapobyxsiyce; then
+  echo "STOP: marker write failed; function is new, build marker unchanged."
+  exit 75
+fi
+if ! npm run check:function-release; then
+  echo "STOP: function-release check failed after deploy and marker."
+  exit 75
+fi
 unset KD_FUNCTION_COMMIT
-npx supabase functions deploy ai-task
 ```
 
-Die Supabase-CLI ist als devDependency im Projekt (`npx supabase …`), das
+`check:function-release` ist Teil der vor-deploy Vertragsprüfung, danach folgt
+`functions deploy` mit `--project-ref`, anschließend der Marker-Set. Marker-Write-
+Fehler sind STOP; die Function bleibt neu, Marker bleibt alt.
+
+Die Supabase-CLI ist als devDependency im Projekt (`./node_modules/.bin/supabase`), das
 Projekt ist per `supabase link` verknüpft. Der Anthropic-Schlüssel liegt
 ausschließlich als Supabase-Secret (`ANTHROPIC_API_KEY`) — nie im Repo, nie im
 Browser-Bundle.
@@ -88,12 +115,16 @@ werden nur nach einem sauberen `migration list --linked` und gemäß
 `migrations/LIESMICH.md` angewandt; keine fremden oder unerwarteten Migrationen
 mitziehen.
 
-Nach jedem Deploy: `npm run test:ai:live` gegen die echte Function. Dieser
-Aufruf legt den Budgetwächter vor und nach die Rauchprobe; ein direkter Aufruf
-von `tools/ai_smoke.mjs` ist für autonome Agenten nicht erlaubt. Konfiguration
-nur über Umgebungsvariablen. Runbooks für Not-Aus, Limits, Modellwechsel,
-Protokollpflege und den autonomen Testdeckel stehen in
-`docs/ETAPPE_5_KI_UNTERBAU.md` und `docs/KI_TESTBUDGET.md`.
+Function-Deployment-Readiness (lokal dokumentiert): `KD_FUNCTION_COMMIT`, der
+40-Hex-Vertrag, Dirty-State und `check:function-release` werden vor
+`./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce`
+gebunden. Erst nach bestaetigtem Deploy wird der Buildmarker gesetzt. Bei
+Deployfehler bleibt er unveraendert; bei Marker-Writefehler ist die Function
+bereits neu, der Marker bleibt alt und der Lauf endet mit `STOP`.
+`npm run test:ai:live` bleibt ein eigenständiger, budgetgeschützter und owner-
+gated Auftrag und wird in diesem Dokument nicht gestartet.
+Runbooks für Not-Aus, Limits, Modellwechsel, Protokollpflege und Testdeckel stehen
+in `docs/ETAPPE_5_KI_UNTERBAU.md` und `docs/KI_TESTBUDGET.md`.
 Die Zuordnung von Git-Stand, Quellhash und Plattformversion steht in
 `docs/FUNCTION_RELEASES.md`; der geschützte Healthbericht meldet
 `contractVersion` und `buildVersion`.

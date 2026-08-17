@@ -295,7 +295,13 @@ die falsche Wahl.
 
 ```bash
 cd ~/Documents/GitHub/kinodreieck-app
-read -rs "?Anthropic-Key: " K && npx supabase secrets set ANTHROPIC_API_KEY="$K" && unset K
+read -rs "?Anthropic-Key: " K
+if ! ./node_modules/.bin/supabase secrets set ANTHROPIC_API_KEY="$K" --project-ref bscjgwcntapobyxsiyce; then
+  unset K
+  echo "STOP: provider-key write failed."
+  exit 75
+fi
+unset K
 ```
 
 Bewusst über eine Eingabeaufforderung: So landet der Schlüssel weder in der
@@ -306,12 +312,41 @@ Anthropic-Console den alten Schlüssel löschen.
 
 ```bash
 cd ~/Documents/GitHub/kinodreieck-app
-npm run check:function-release
+if ! npm run check:function-release; then
+  echo "STOP: function-release contract check failed before deploy."
+  exit 75
+fi
 KD_FUNCTION_COMMIT="$(git rev-parse HEAD)"
-npx supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT"
+if ! echo "$KD_FUNCTION_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo "STOP: invalid KD_FUNCTION_COMMIT; function release blocked."
+  exit 75
+fi
+if [ -n "$(git status --porcelain)" ]; then
+  echo "STOP: working tree dirty; function release blocked."
+  exit 75
+fi
+if ! ./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce; then
+  echo "STOP: functions deploy failed; build marker unchanged."
+  exit 75
+fi
+if ! ./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_FUNCTION_COMMIT" --project-ref bscjgwcntapobyxsiyce; then
+  echo "STOP: marker write failed; function is new, build marker unchanged."
+  exit 75
+fi
+if ! npm run check:function-release; then
+  echo "STOP: function-release check failed after deploy and marker."
+  exit 75
+fi
 unset KD_FUNCTION_COMMIT
-npx supabase functions deploy ai-task
 ```
+
+Die Reihenfolge ist strikt fail-closed: Commit/Release-Preflight zuerst, dann Deploy mit
+project-ref, dann Marker-Write. Jeder Fehler auf der Marker-Write-Stufe ist STOP; der
+Function-Stand bleibt neu, Marker bleibt auf dem vorherigen Wert.
+Ein Fehler des abschliessenden Vertragschecks ist ebenfalls `STOP` und wird
+nicht durch das nachfolgende `unset` als Erfolg verdeckt. Fuer E17B ist dieses
+historische Shellbeispiel kein Executor; dort fuehrt ausschliesslich
+`tools/e17b-remote-window.mjs` den gebundenen `function-release`-Modus aus.
 
 Die Function bleibt **ein einziger Endpunkt** (`ai-task`). Der Einstieg
 `index.ts` importiert pure Request- und Filmwissen-Verträge; die Supabase-CLI
@@ -325,14 +360,14 @@ folgenlos — ohne Docker nimmt die CLI den API-Weg.
 ist absichtlich unvollständig; beides würde Live-Settings oder die
 Migrationshistorie überschreiben.
 
-### Nach jedem Deploy: Rauchprobe
+### Nach Deploy: Smoke-Belege (separat, owner-gated)
 
 ```bash
 cd ~/Documents/GitHub/kinodreieck-app && \
 KD_SB_URL=https://bscjgwcntapobyxsiyce.supabase.co \
 KD_SB_ANON=<publishable-key> \
 KD_TESTA_PASS=<testkonto> \
-npm run test:ai:live
+npm run test:ai:live -- --owner-approved-server-budget
 ```
 
 Proben gegen die echte Function. P9, P12 und P14 kosten echtes Geld. Der

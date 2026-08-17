@@ -33,7 +33,7 @@ nicht eindeutig feststehen.
 | Anbieter ausgefallen | keine Wiederholschleife; bei Unsicherheit KI aus | deterministische Kernfunktionen laufen | ohne Migration wieder einschalten |
 | Supabase ausgefallen | nicht abmelden; keine Migration oder Löschung | lokale Änderung bleibt als ausstehend erhalten | nach Erholung „Ausstehende Änderungen erneut senden“ |
 | Frontend-/Pages-Deployment fehlerhaft | letztes gutes Produktions-Deployment wählen | Domain-Smoke meldet erwarteten Commit | korrigierten Commit normal deployen |
-| Edge Function-/Function-Deployment fehlerhaft | KI aus; letzte gute Function aus Git deployen | Function-Vertrag und kostenfreies Health grün | korrigierte Function normal deployen |
+| Edge Function-/Function-Deployment fehlerhaft | KI aus; gesicherte alte `function_preimage` laden | Forward-Redeploy derselben heruntergeladenen/bodygeprüften Version, danach alter Build-Marker setzen | kein automatischer Rollback; neue Owner-Freigabe und neuer Stopppunkt |
 | Schlüssel kompromittiert | betroffenen Datenpfad sperren; Schlüssel widerrufen | alter Schlüssel wird abgewiesen | neuen Schlüssel nur im zuständigen Secret-Store setzen |
 | Accountlöschung unvollständig | keine Erfolgsmeldung; Zustand festhalten | Auth- und Kontozeilen vollständig geprüft | erneut löschen oder eskalieren |
 
@@ -361,41 +361,47 @@ handbearbeiten.
 
 ## 6. Function-Rollback
 
-Supabase besitzt hier keinen migrationsartigen Rückrollknopf. Der Rückweg ist
-die eine Function-Datei aus dem im Releaseprotokoll festgehaltenen guten
-Git-Commit.
+Supabase besitzt hier keinen migrationsartigen Rueckrollknopf. Der Rueckweg ist
+ein separat gepruefter Forward-Redeploy des im Releaseprotokoll festgehaltenen,
+vollstaendig heruntergeladenen und bodygeprueften `function_preimage` der
+kompletten Function-Quelle dieses Stands.
 
 1. KI ausschalten.
-2. Den guten Commit und dessen Function-Diff prüfen.
-3. Einen temporären, abgetrennten Worktree verwenden; den aktuellen
-   Arbeitsstand nicht umschalten:
+2. Einen neuen, fremd-/owner-provided und objektgebundenen Recovery-STOP an
+   Function, Source-Checkpoint und Version binden; der Helper erzeugt diese
+   Freigabe nicht.
+3. Den guten Commit, dessen komplettes bodygeprueftes Source-Preimage und den
+   zugehoerigen alten validierten 40-Hex-Buildmarker als gemeinsamen Checkpoint
+   erfassen.
+4. Objektgebundenen Helper-Pfad/Checkpoint auf einen dedizierten
+   Wiederherstellungsbereich setzen; den aktuellen Arbeitsstand nicht umschalten:
 
-   ```bash
-   KD_GOOD_COMMIT=<GUTER_FUNCTION_COMMIT>
-   KD_FN_PARENT="$(mktemp -d)"
-   KD_FN_TREE="$KD_FN_PARENT/tree"
-   git worktree add --detach "$KD_FN_TREE" "$KD_GOOD_COMMIT"
-   cd "$KD_FN_TREE"
-   npm ci
-   npm run test:function
-   npx supabase functions deploy ai-task
-   ```
+   - `KD_GOOD_COMMIT=<GUTER_FUNCTION_COMMIT>`
+   - `KD_FN_PREIMAGE_DIR=<PFAD_ZUM_GEPRUEFTEN_PREIMAGE_DIR>`
+   - `KD_OLD_BUILD_MARKER=<GUTER_BUILD_MARKER>`
 
-4. Deploy-Ausgabe, Commit und Function-Name festhalten. Niemals
-   `supabase config push` oder `supabase db push` ergänzen.
-5. Kostenfreies `health` und die App-Fehlermeldung prüfen. KI bleibt aus, bis
+   Der Rückweg ist ein komplett bodyverifizierter Forward-Redeploy desselben
+   zuvor vollständig heruntergeladenen Source-Preimages (kompletter `ai-task`-Baum,
+   kein Einzeldatei-Mix). Das Dokument benennt nur die Sicherheitsgrenzen und den
+   geprüften Pfad.
+
+5. Den vollstaendigen gesicherten Source-Stand separat pruefen und exakt diesen
+   Stand forward-redeployen. Keine Einzeldatei wird in einen anderen Commitstand
+   gemischt.
+6. Nur bei bestaetigtem Forward-Redeploy dessen alten Buildmarker setzen:
+   `./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION="$KD_OLD_BUILD_MARKER" --project-ref bscjgwcntapobyxsiyce`.
+   Bei Marker-Writefehler gilt `STOP`: das gesicherte Preimage ist bereits aktiv,
+   der Marker bleibt auf dem Wert vor diesem Recovery-Schritt; kein automatischer
+   Rollback und keine Erfolgsbehauptung.
+7. Bei Deploymentfehler bleibt der Marker unveraendert. `STOP`; jeder weitere
+   Recovery-Versuch braucht eine neue objektgebundene Owner-Freigabe.
+8. Kostenfreies `health` und die App-Fehlermeldung prüfen. KI bleibt aus, bis
    Vertrag, Limits und Ursache geklärt sind.
-6. Nach der Probe den Worktree vom Haupt-Repository aus entfernen:
+9. Nach der Probe wird der ownergebundene Recovery-Kontext vollständig entladen
+   und alle Kontextvariablen gelöscht.
 
-   ```bash
-   cd /Users/max/Documents/GitHub/kinodreieck-app
-   git worktree remove "$KD_FN_TREE"
-   rmdir "$KD_FN_PARENT"
-   unset KD_FN_TREE KD_FN_PARENT KD_GOOD_COMMIT
-   ```
-
-**Nachweis:** grüner Function-Vertrag, Deploy-Ausgabe, guter Function-Commit
-und kostenfreies Health.
+**Nachweis:** gruener Function-Vertrag, Status des Forward-Redeploys, guter
+Function-Commit, alter Marker und kostenfreies Health; keine Roh-Deployausgabe.
 
 **Rückweg:** korrigierte Function aus einem neuen, geprüften Commit auf
 demselben Weg ausliefern; erst danach KI bewusst wieder einschalten.
@@ -421,7 +427,11 @@ Runbook zulässig:
 ```bash
 read -rs "?Neuer Anthropic-Key: " KD_PROVIDER_KEY
 echo
-npx supabase secrets set ANTHROPIC_API_KEY="$KD_PROVIDER_KEY"
+if ! ./node_modules/.bin/supabase secrets set ANTHROPIC_API_KEY="$KD_PROVIDER_KEY" --project-ref bscjgwcntapobyxsiyce; then
+  unset KD_PROVIDER_KEY
+  echo "STOP: provider-key write failed."
+  exit 75
+fi
 unset KD_PROVIDER_KEY
 ```
 
