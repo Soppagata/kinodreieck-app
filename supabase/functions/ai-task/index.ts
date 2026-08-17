@@ -1450,6 +1450,7 @@ function blogEinzeiligImByteBereich(
   max: number,
 ): wert is string {
   return typeof wert === "string" && !BLOG_TRENNER.test(wert) &&
+    wert.normalize("NFKC").trim().length > 0 &&
     blogByteLaenge(wert) >= min && blogByteLaenge(wert) <= max;
 }
 
@@ -1514,7 +1515,8 @@ export function leseBlogProfileEingabe(
   if (!blogEinzeiligImByteBereich(titel, 1, 160)) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-titel");
   }
-  if (typeof text !== "string" || blogByteLaenge(text) < 1 ||
+  if (typeof text !== "string" || text.normalize("NFKC").trim().length === 0 ||
+      blogByteLaenge(text) < 1 ||
       blogByteLaenge(text) > 18_000) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-text");
   }
@@ -2922,7 +2924,14 @@ export const AUFGABEN: Record<string, Aufgabe> = {
   },
 };
 
-function blogProfileCapability(konfig: Konfig) {
+function blogProfileCapability(
+  konfig: Konfig,
+  voraussetzungen: {
+    buildGueltig: boolean;
+    anbieterSecretGesetzt: boolean;
+    providerFreigegeben: boolean;
+  },
+) {
   const taskModelle = istReinesObjekt(konfig["task_modell"])
     ? konfig["task_modell"] as Record<string, unknown>
     : {};
@@ -2947,7 +2956,10 @@ function blogProfileCapability(konfig: Konfig) {
     BLOG_PROFILE_TASK_CAP_USD_CENT,
     true,
   );
-  const ready = konfig["ai_aktiv"] === true &&
+  const ready = voraussetzungen.buildGueltig &&
+    voraussetzungen.anbieterSecretGesetzt &&
+    voraussetzungen.providerFreigegeben &&
+    konfig["ai_aktiv"] === true &&
     eigenerWert(taskModelle, BLOG_PROFILE_TASK) === "klein" &&
     eigenerWert(taskTokens, BLOG_PROFILE_TASK) === BLOG_PROFILE_MAX_TOKENS &&
     eigenerWert(taskCaps, BLOG_PROFILE_TASK) ===
@@ -2997,8 +3009,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   const task = typeof koerper.task === "string" ? koerper.task : "";
   const vorgangId = typeof koerper.vorgangId === "string" ? koerper.vorgangId : null;
-  const promptVersion = typeof koerper.promptVersion === "string" ? koerper.promptVersion : null;
-  const profilVersion = typeof koerper.profilVersion === "string" ? koerper.profilVersion : null;
+  const promptVersionRoh = eigenerWert(koerper, "promptVersion");
+  const profilVersionRoh = eigenerWert(koerper, "profilVersion");
+  const promptVersion = typeof promptVersionRoh === "string" ? promptVersionRoh : null;
+  const profilVersion = typeof profilVersionRoh === "string" ? profilVersionRoh : null;
   const payload = (koerper.payload && typeof koerper.payload === "object" &&
       !Array.isArray(koerper.payload))
     ? koerper.payload as Record<string, unknown>
@@ -3086,6 +3100,21 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
+  /* Beim Blogtask sind beide Provenienzfelder ausschliesslich serverseitig.
+     Fehlende Felder und explizites JSON-null sind die erlaubte Transportform;
+     jeder andere Clientwert stoppt vor Adminclient, Konfiguration, Log und
+     Anbieter. So kann weder eine gueltig aussehende noch eine formfremde
+     Clientversion in einen spaeteren Pfad geraten. */
+  if (task === BLOG_PROFILE_TASK &&
+      ((promptVersionRoh !== undefined && promptVersionRoh !== null) ||
+        (profilVersionRoh !== undefined && profilVersionRoh !== null))) {
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "blog-versionen-nur-serverseitig",
+      status: 400,
+      vorgangId,
+    });
+  }
+
   const admin = adminClient();
   if (!admin) {
     return fehlerAntwort(CODES.SERVER, origin, {
@@ -3131,6 +3160,20 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   if (klassifiziereAufgabe(task, false) === "health") {
     const { herkunft: pubHerkunft } = oeffentlich();
     const { herkunft: secHerkunft } = geheim();
+    const buildVersion = functionBuildVersion(
+      Deno.env.get("KD_FUNCTION_BUILD_VERSION"),
+    );
+    const anbieterSecret = Deno.env.get("ANTHROPIC_API_KEY");
+    const anbieterSecretGesetzt = typeof anbieterSecret === "string" &&
+      anbieterSecret.trim().length > 0;
+    let providerFreigegeben = false;
+    try {
+      await pruefeProviderFreigabe(admin, "anthropic");
+      providerFreigegeben = true;
+    } catch {
+      /* Health bleibt absichtlich erfolgreich und inhaltsfrei, meldet die
+         Capability bei Registry-Fehlern aber fail-closed als nicht bereit. */
+    }
     let stand: unknown = null;
     const { data } = await admin.rpc("kd_ai_stand", {
       p_account: aufrufer.accountId,
@@ -3143,16 +3186,14 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         vorgangId,
         phase: "etappe-5",
         contractVersion: FUNCTION_CONTRACT_VERSION,
-        buildVersion: functionBuildVersion(
-          Deno.env.get("KD_FUNCTION_BUILD_VERSION"),
-        ),
+        buildVersion,
         laufzeit: {
           deno: (Deno as unknown as { version?: { deno?: string } }).version
             ?.deno ?? null,
           region: Deno.env.get("SB_REGION") ?? null,
         },
         schluesselHerkunft: { oeffentlich: pubHerkunft, geheim: secHerkunft },
-        anbieterSecretGesetzt: !!Deno.env.get("ANTHROPIC_API_KEY"),
+        anbieterSecretGesetzt,
         aufrufer: {
           rolle: aufrufer.rolle,
           fachrolle: fachfreigabe.rolle,
@@ -3175,7 +3216,11 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           stand,
         },
         capabilities: {
-          blogProfileExtract: blogProfileCapability(konfig),
+          blogProfileExtract: blogProfileCapability(konfig, {
+            buildGueltig: buildVersion !== "unversioned",
+            anbieterSecretGesetzt,
+            providerFreigegeben,
+          }),
         },
         zeit: new Date().toISOString(),
       },

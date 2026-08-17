@@ -24,6 +24,7 @@ Deno.env.set("SUPABASE_URL", "https://test.supabase.co");
 Deno.env.set("SUPABASE_ANON_KEY", "anon-test");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-test");
 Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
+Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
 Deno.env.set("FILMWISSEN_WIKIMEDIA_KONTAKT", "https://kinodreieck.at");
 
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
@@ -218,6 +219,7 @@ const z = {
     wikidata: { ok: true, code: "PROVIDER_ALLOWED" },
     loc: { ok: true, code: "PROVIDER_ALLOWED" },
   } as Record<string, unknown>,
+  providerFreigabeHttpFehler: null as null | { status: number; koerper: unknown },
   start: { ok: true, log_id: LOG_ID, modell_alias: "klein" } as unknown,
   startHttpFehler: null as null | { status: number; koerper: unknown },
   stand: { heute: 0 } as unknown,
@@ -262,6 +264,9 @@ function stelleZurueck() {
     wikidata: { ok: true, code: "PROVIDER_ALLOWED" },
     loc: { ok: true, code: "PROVIDER_ALLOWED" },
   };
+  z.providerFreigabeHttpFehler = null;
+  Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
+  Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
@@ -343,6 +348,12 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
     return antwort(z.start);
   }
   if (url.includes("/rest/v1/rpc/kd_private_provider_allowed")) {
+    if (z.providerFreigabeHttpFehler) {
+      return antwort(
+        z.providerFreigabeHttpFehler.koerper,
+        z.providerFreigabeHttpFehler.status,
+      );
+    }
     return antwort(z.providerFreigaben[String(koerper?.p_provider_id || "")] ?? { ok: false, code: "PROVIDER_REGISTRY_OFF" });
   }
   if (url.includes("/rest/v1/rpc/kd_ai_auftrag_beenden")) {
@@ -2404,7 +2415,7 @@ test("H1 health: 200, ohne Reservierung und ohne Anbieteraufruf", async () => {
   gleich(r.daten.ok, true, "ok");
   gleich(r.daten.task, "health", "task");
   gleich(r.daten.contractVersion, "ai-task-v5", "Vertragsversion");
-  gleich(r.daten.buildVersion, "unversioned", "ohne Deploy-Metadatum fail-closed");
+  gleich(r.daten.buildVersion, "abcdef1", "sanitisiertes Build-Metadatum");
   gleich(kontofreigabeAufrufe().length, 1, "eigene fachliche Freigabe wird gelesen");
   gleich(
     (r.daten.aufrufer as Record<string, unknown>).fachrolle,
@@ -8248,9 +8259,11 @@ test("BP2 Eingabegrenzen messen UTF-8-Bytes und geschlossene Formen", () => {
     bpAendere((p) => { (p.artikel as Record<string, unknown>).id = "a-b"; }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).id = "a".repeat(121); }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = ""; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = "\u00a0\u00a0"; }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = "ä".repeat(80) + "x"; }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).titel = 12; }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).text = ""; }),
+    bpAendere((p) => { (p.artikel as Record<string, unknown>).text = "\u00a0\u00a0"; }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).text = "x".repeat(18_001); }),
     bpAendere((p) => { (p.artikel as Record<string, unknown>).text = ["Text"]; }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = []; }),
@@ -8262,6 +8275,7 @@ test("BP2 Eingabegrenzen messen UTF-8-Bytes und geschlossene Formen", () => {
     }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["x".repeat(41)]; }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = [12]; }),
+    bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["\u00a0"]; }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Drama\nNoir"]; }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Drama", "Drama"]; }),
     bpAendere((p) => { (p.listen as Record<string, unknown>).genres = ["Ｄｒａｍａ   Noir", " drama noir "]; }),
@@ -8334,17 +8348,45 @@ test("BP3 Dublettennormierung ist exakt NFKC, trim, Whitespace und lowercase", (
   gleich(gelesen.listen.genres.join("|"), "Ä|A|Sci-Fi|Sci Fi", "rohe Schreibweisen bleiben erhalten");
 });
 
+test("BP3a NFKC+trim prueft nur und schreibt gueltige Rohwerte nicht um", () => {
+  const titel = "  Ｅｉｎ Ｔｉｔｅｌ  ";
+  const text = `  Ｅｉｎ unveraenderter Artikeltext. ${BP_BELEG}  `;
+  const genre = "  Ｄｒａｍａ  ";
+  const gelesen = leseBlogProfileEingabe(bpAendere((p) => {
+    (p.artikel as Record<string, unknown>).titel = titel;
+    (p.artikel as Record<string, unknown>).text = text;
+    (p.listen as Record<string, unknown>).genres = [genre];
+  }));
+  gleich(gelesen.artikel.titel, titel, "Titel bleibt roh");
+  gleich(gelesen.artikel.text, text, "Artikeltext bleibt roh");
+  gleich(gelesen.listen.genres[0], genre, "Listenwert bleibt roh");
+
+  const wert = "  Ｒｕｈｉｇ  ";
+  const ausgabe = pruefeBlogProfileErgebnis({
+    geschmackszuege: [bpGeschmackszug({ art: "ton", wert })],
+    vokabular: [],
+  }, gelesen);
+  wahr("daten" in ausgabe, "Rohwert bleibt fachlich gueltig");
+  gleich(
+    ((ausgabe as { daten: { geschmackszuege: Array<Record<string, unknown>> } })
+      .daten.geschmackszuege[0]).wert,
+    wert,
+    "Output-Wert bleibt roh",
+  );
+});
+
 test("BP4 Provider-Schema und Erfolgspfad sind strikt und provenienzfrei", async () => {
   stelleZurueck();
   bpMitAntwort(bpAntwort());
   const payload = bpPayload();
-  const r = await bpRuf(payload, "v1");
+  const r = await bpRuf(payload, null);
   gleich(r.status, 200, "Status");
   gleich((r.daten.data as Record<string, unknown>).geschmackszuege instanceof Array, true, "Daten");
   const koerper = anbieterKoerper();
   gleich(koerper.max_tokens, 2048, "Provider-Max-Tokens");
   gleich(startKoerper().p_modell_alias, "klein", "kleiner Alias");
   gleich(startKoerper().p_prompt_version, "blog-profile-v1", "serverseitige Logprovenienz");
+  gleich(startKoerper().p_profil_version, null, "keine clientseitige Profilprovenienz im Log");
   const schema = koerper.output_config.format.schema as Record<string, unknown>;
   gleich(schema.additionalProperties, false, "Wurzel geschlossen");
   const props = schema.properties as Record<string, Record<string, unknown>>;
@@ -8372,6 +8414,7 @@ test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell"
     { geschmackszuege: [bpGeschmackszug({ sicherheit: ["hoch"] })], vokabular: [] },
     { geschmackszuege: [bpGeschmackszug({ wert: "ä".repeat(31), art: "ton" })], vokabular: [] },
     { geschmackszuege: [bpGeschmackszug({ wert: "drama" })], vokabular: [] },
+    { geschmackszuege: [bpGeschmackszug({ wert: "\u00a0", art: "ton" })], vokabular: [] },
     { geschmackszuege: [], vokabular: [{ ...bpVokabular(), extra: true }] },
     { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: [] })] },
     { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["Drama", "Science-Fiction"], tags: ["ruhig", "präzise"] })] },
@@ -8379,7 +8422,9 @@ test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell"
     { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["drama"], tags: [] })] },
     { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: ["Ruhig"] })] },
     { geschmackszuege: [], vokabular: [bpVokabular({ wort: "ä".repeat(21) })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ wort: "\u00a0" })] },
     { geschmackszuege: [], vokabular: [bpVokabular({ beschreibung: "ä".repeat(49) })] },
+    { geschmackszuege: [], vokabular: [bpVokabular({ beschreibung: "\u00a0" })] },
   ];
   wahr(ungueltig.every((wert) => bpOutputIstUngueltig(wert)), "alle Outputbrueche werden als Ganzes verworfen");
   falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [] }), "0/0 erlaubt");
@@ -8422,6 +8467,11 @@ test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () 
   wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "ä".repeat(49), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "98 Bytes blockiert");
   wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: min.toUpperCase(), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine normalisierte Suche");
   wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "x".repeat(8) + "\n" + "x".repeat(8), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine Zeilentrenner");
+  const leerBeleg = " ".repeat(16);
+  const leerPayload = bpPayload({
+    artikel: { id: "a", titel: "T", text: `Anfang${leerBeleg}Ende` },
+  });
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: leerBeleg, art: "ton", wert: "ruhig" })], vokabular: [] }, leerPayload), "16-Spaces-Beleg bleibt trotz echtem Rohsubstring gesperrt");
 });
 
 test("BP7 striktes JSON und ein einziger falscher Eintrag ergeben keinen Teilerfolg", async () => {
@@ -8484,6 +8534,9 @@ test("BP9 Health-Capability ist exakt und bei jedem alten/falschen Feld fail-clo
     maxTokens: 2048,
     taskMaxReservationUsdCent: 5,
   }), "exakte Capability");
+  gleich(rpc("kd_private_provider_allowed").length, 1, "Health prueft die Registry genau einmal");
+  gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
+  gleich(starten().length, 0, "Health bleibt logfrei");
 
   const fehlerfaelle: Array<(k: Record<string, unknown>) => void> = [
     (k) => { k.ai_aktiv = false; },
@@ -8507,6 +8560,80 @@ test("BP9 Health-Capability ist exakt und bei jedem alten/falschen Feld fail-clo
     gleich(cap.ready, false, "Health bleibt geschlossen");
     gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
   }
+
+  const registryFehler: Array<() => void> = [
+    () => { z.providerFreigaben.anthropic = null; },
+    () => { z.providerFreigaben.anthropic = ["formfremd"]; },
+    () => { z.providerFreigaben.anthropic = { ok: false, code: "PROVIDER_REGISTRY_OFF" }; },
+    () => {
+      z.providerFreigabeHttpFehler = {
+        status: 500,
+        koerper: { code: "XX000", message: "registry error" },
+      };
+    },
+  ];
+  for (const aendere of registryFehler) {
+    stelleZurueck();
+    aendere();
+    r = await ruf({ task: "health", vorgangId: neueVorgangId(), payload: {} });
+    cap = (r.daten.capabilities as Record<string, unknown>).blogProfileExtract as Record<string, unknown>;
+    gleich(cap.ready, false, "Registryfehler schliesst Health");
+    gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
+    gleich(starten().length, 0, "Health bleibt logfrei");
+  }
+
+  for (const [name, buildVersion] of [["unversioned", "unversioned"], ["formfremd", "build version"]] as const) {
+    stelleZurueck();
+    Deno.env.set("KD_FUNCTION_BUILD_VERSION", buildVersion);
+    r = await ruf({ task: "health", vorgangId: neueVorgangId(), payload: {} });
+    cap = (r.daten.capabilities as Record<string, unknown>).blogProfileExtract as Record<string, unknown>;
+    gleich(cap.ready, false, `${name}: Build sperrt Health`);
+  }
+
+  for (const [name, secret] of [["fehlend", null], ["Whitespace", "   "]] as const) {
+    stelleZurueck();
+    if (secret === null) Deno.env.delete("ANTHROPIC_API_KEY");
+    else Deno.env.set("ANTHROPIC_API_KEY", secret);
+    r = await ruf({ task: "health", vorgangId: neueVorgangId(), payload: {} });
+    cap = (r.daten.capabilities as Record<string, unknown>).blogProfileExtract as Record<string, unknown>;
+    gleich(cap.ready, false, `${name}: Secret sperrt Health`);
+    gleich(r.daten.anbieterSecretGesetzt, false, `${name}: Health meldet Secret als nicht gesetzt`);
+  }
+});
+
+test("BP9a Client-Metaversionen stoppen vor Konfiguration, Log und Provider", async () => {
+  for (const [name, zusatz] of [
+    ["Promptversion", { promptVersion: "client-v1" }],
+    ["Profilversion", { profilVersion: "client-p1" }],
+    ["Promptversion als Zahl", { promptVersion: 1 }],
+    ["Profilversion als Objekt", { profilVersion: { client: true } }],
+  ] as const) {
+    stelleZurueck();
+    const r = await ruf({
+      task: BLOG_PROFILE_TASK,
+      vorgangId: neueVorgangId(),
+      payload: bpPayload(),
+      ...zusatz,
+    });
+    gleich(r.status, 400, `${name}: Status`);
+    gleich(r.daten.grund, "blog-versionen-nur-serverseitig", `${name}: feste Kennung`);
+    gleich(aufrufe.filter((a) => a.pfad === "/rest/v1/kd_ai_limits").length, 0, `${name}: keine Konfiguration`);
+    gleich(starten().length, 0, `${name}: keine Logzeile`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein Providerfetch`);
+  }
+
+  stelleZurueck();
+  bpMitAntwort(bpAntwort());
+  const r = await ruf({
+    task: BLOG_PROFILE_TASK,
+    vorgangId: neueVorgangId(),
+    promptVersion: null,
+    profilVersion: null,
+    payload: bpPayload(),
+  });
+  gleich(r.status, 200, "Transport-null bleibt erlaubt");
+  gleich(startKoerper().p_prompt_version, BLOG_PROFILE_PROMPT_VERSION, "exakte serverseitige Promptversion");
+  gleich(startKoerper().p_profil_version, null, "exakte null-Profilversion");
 });
 
 test("BP10 Artikel- und Modellinhalte erreichen weder Fehlertext noch DB-Logmetadaten", async () => {
@@ -8523,13 +8650,13 @@ test("BP10 Artikel- und Modellinhalte erreichen weder Fehlertext noch DB-Logmeta
     geschmackszuege: [bpGeschmackszug({ wert: geheim, beleg: "frei erfundener Beleg" })],
     vokabular: [],
   });
-  const r = await bpRuf(payload, "client-v1");
+  const r = await bpRuf(payload, null);
   gleich(r.status, 502, "Schemafehler");
   gleich(r.daten.grund, "antwort-verletzt-schema", "fester Fehlertext");
   falsch(JSON.stringify(r.daten).includes(geheim), "kein Inhalt im Fehlertext");
   const logRoh = JSON.stringify([...starten(), ...beenden()].map((a) => a.koerper));
   falsch(logRoh.includes(geheim), "kein Artikel-/Modellwert im DB-Log");
   falsch(logRoh.includes("privater_artikel_17a"), "keine Artikel-ID im DB-Log");
-  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "Clientversion bestimmt die Provenienz nicht");
+  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "nur der Server bestimmt die Provenienz");
   pruefeKeinInhaltImProtokoll([geheim, "privater_artikel_17a", "frei erfundener Beleg"]);
 });

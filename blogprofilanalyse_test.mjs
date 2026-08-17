@@ -120,7 +120,7 @@ const validHealth = {
   vorgangId: "00000000-0000-4000-8000-000000000001",
   phase: "etappe-5",
   contractVersion: "ai-task-v5",
-  buildVersion: "unversioned",
+  buildVersion: "abcdef1",
   laufzeit: { deno: "2.0", region: "eu" },
   schluesselHerkunft: { oeffentlich: "pub", geheim: "sec" },
   anbieterSecretGesetzt: true,
@@ -155,6 +155,9 @@ check("Zusatzfeld in capabilities wird abgelehnt", !hatBlogProfileAnalyseCapabil
 check("vorgangId darf kein Leerwert sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.vorgangId = ""; })));
 check("phase darf keine Leerzeichenfolge sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.phase = "   "; })));
 check("buildVersion darf kein Leerwert sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.buildVersion = ""; })));
+check("buildVersion unversioned wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.buildVersion = "unversioned"; })));
+check("buildVersion mit formfremden Zeichen wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.buildVersion = "build version"; })));
+check("fehlendes Anbieter-Secret sperrt die Capability", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.anbieterSecretGesetzt = false; })));
 check("zeit muss kanonische ISO sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.zeit = "2026-08-17T06:00:00Z"; })));
 
 // 2) Auswahl + Payload

@@ -815,7 +815,10 @@ export function hatBlogProfileAnalyseCapability(healthAntwort) {
   if (healthAntwort.contractVersion !== "ai-task-v5") return false;
   if (!istText(healthAntwort.vorgangId) || healthAntwort.vorgangId.trim().length === 0) return false;
   if (!istText(healthAntwort.phase) || healthAntwort.phase.trim().length === 0) return false;
-  if (!istText(healthAntwort.buildVersion) || healthAntwort.buildVersion.trim().length === 0) return false;
+  if (!istText(healthAntwort.buildVersion)
+    || !/^[A-Za-z0-9][A-Za-z0-9._-]{6,63}$/.test(healthAntwort.buildVersion)
+    || healthAntwort.buildVersion === "unversioned") return false;
+  if (healthAntwort.anbieterSecretGesetzt !== true) return false;
   if (!isCanonicalIsoDate(healthAntwort.zeit)) return false;
   if (!istObjekt(healthAntwort.laufzeit)
     || !istObjekt(healthAntwort.schluesselHerkunft)
