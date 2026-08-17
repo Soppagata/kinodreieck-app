@@ -297,8 +297,12 @@ const runbook = readFileSync(
   new URL("./docs/FUNCTION_RELEASES.md", import.meta.url),
   "utf8",
 );
-const deployPosition = runbook.indexOf("npx supabase functions deploy ai-task");
-const secretPosition = runbook.indexOf("&& npx supabase secrets set");
+const deployPosition = runbook.indexOf(
+  "./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce",
+);
+const secretPosition = runbook.indexOf(
+  "./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION=\"$KD_FUNCTION_COMMIT\" --project-ref bscjgwcntapobyxsiyce",
+);
 const versionPosition = runbook.indexOf(
   "KD_FUNCTION_BUILD_VERSION=\"$KD_FUNCTION_COMMIT\"",
   secretPosition,
