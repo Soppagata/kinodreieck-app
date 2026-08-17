@@ -370,10 +370,10 @@ check("Migration erzwingt den 500-Cent-Zaun atomar vor der Anbieter-RPC",
   && /p_task = 'filmwissen-synthese'[\s\S]{0,100}p_modell_alias is distinct from 'gross'/.test(kostenMigration)
   && /kd_ai_auftrag_starten_ohne_task_cap/.test(kostenMigration));
 const functionDeployPosition = releaseDoku.indexOf(
-  "npx supabase functions deploy ai-task",
+  "./node_modules/.bin/supabase functions deploy ai-task --project-ref bscjgwcntapobyxsiyce",
 );
 const buildSecretPosition = releaseDoku.indexOf(
-  "&& npx supabase secrets set",
+  "./node_modules/.bin/supabase secrets set KD_FUNCTION_BUILD_VERSION=\"$KD_FUNCTION_COMMIT\" --project-ref bscjgwcntapobyxsiyce",
 );
 check("Release-Reihenfolge deployt Code vor Secret und hält die Migrationen geordnet",
   functionDeployPosition >= 0
