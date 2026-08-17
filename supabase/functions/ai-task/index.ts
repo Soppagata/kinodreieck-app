@@ -1459,7 +1459,7 @@ function blogEinzeiligImByteBereich(
   max: number,
 ): wert is string {
   return typeof wert === "string" && !BLOG_TRENNER.test(wert) &&
-    wert.normalize("NFKC").trim().length > 0 &&
+    wert.normalize("NFKC").replace(/\p{Default_Ignorable_Code_Point}/gu, "").trim().length > 0 &&
     blogByteLaenge(wert) >= min && blogByteLaenge(wert) <= max;
 }
 
@@ -1524,7 +1524,8 @@ export function leseBlogProfileEingabe(
   if (!blogEinzeiligImByteBereich(titel, 1, 160)) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-titel");
   }
-  if (typeof text !== "string" || text.normalize("NFKC").trim().length === 0 ||
+  if (typeof text !== "string" ||
+      text.normalize("NFKC").replace(/\p{Default_Ignorable_Code_Point}/gu, "").trim().length === 0 ||
       blogByteLaenge(text) < 1 ||
       blogByteLaenge(text) > 18_000) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "blog-artikel-text");

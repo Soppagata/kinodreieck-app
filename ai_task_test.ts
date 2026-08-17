@@ -8257,6 +8257,27 @@ const bpAntwort = (zusatz: Record<string, unknown> = {}) => ({
   vokabular: [bpVokabular()],
   ...zusatz,
 });
+const BP_UNSICHTBARE_INHALTE = [
+  ["U+200B", "\u200B"],
+  ["U+200C", "\u200C"],
+  ["U+200D", "\u200D"],
+  ["U+00AD", "\u00AD"],
+  ["U+FE0F", "\uFE0F"],
+  ["U+2066", "\u2066"],
+  ["U+202E", "\u202E"],
+  ["Whitespace-Mix I", " \t\u200B\n "],
+  ["Whitespace-Mix II", "\u00A0\u200C\u200D\uFE0F\u2066\u202E\u3000"],
+] as const;
+const BP_SICHTBARE_UNICODE_SEQUENZEN = [
+  ["Emoji-ZWJ", "👩‍👩‍👧‍👦"],
+  ["Variation-Selector", "✈️"],
+  ["Keycap", "1️⃣"],
+  ["Persisch mit ZWNJ", "می‌خواهم"],
+] as const;
+const BP_UNSICHTBARE_BELEGE = [
+  ["sechs U+200B", "\u200B".repeat(6), 18],
+  ["gemischte DICP", "\u200C\u200D\u00AD\uFE0F\u2066\u202E", 17],
+] as const;
 const bpRuf = (
   payload: Record<string, unknown> = bpPayload(),
   promptVersion: unknown = undefined,
@@ -8406,6 +8427,45 @@ test("BP2a Artikeltitel sind einzeilig, Artikeltext bleibt mehrzeilig", async ()
   }
 });
 
+test("BP2b Default-Ignorables sind serverseitig und vor jedem Kostenpfad unsichtbar", async () => {
+  const felder = [
+    ["Titel", "blog-artikel-titel", (p: Record<string, unknown>, wert: string) => {
+      (p.artikel as Record<string, unknown>).titel = wert;
+    }],
+    ["Artikeltext", "blog-artikel-text", (p: Record<string, unknown>, wert: string) => {
+      (p.artikel as Record<string, unknown>).text = wert;
+    }],
+    ["Listenwert", "blog-genres-wert", (p: Record<string, unknown>, wert: string) => {
+      (p.listen as Record<string, unknown>).genres = [wert];
+    }],
+  ] as const;
+  for (const [name, wert] of BP_UNSICHTBARE_INHALTE) {
+    for (const [feld, grund, aendere] of felder) {
+      stelleZurueck();
+      const r = await bpRuf(bpAendere((p) => aendere(p, wert)));
+      gleich(r.status, 400, `${name}/${feld}: fail-closed Status`);
+      gleich(r.daten.grund, grund, `${name}/${feld}: inhaltsfreie Fehlerkennung`);
+      gleich(rpc("kd_private_provider_allowed").length, 0, `${name}/${feld}: kein Providercheck`);
+      gleich(starten().length, 0, `${name}/${feld}: keine Reservierung oder Startlogzeile`);
+      gleich(beenden().length, 0, `${name}/${feld}: keine Abschlusslogzeile`);
+      gleich(anbieterAufrufe().length, 0, `${name}/${feld}: kein Providerfetch`);
+    }
+  }
+});
+
+test("BP2c echte Unicode-Sequenzen bleiben sichtbar und roh identisch", () => {
+  for (const [name, wert] of BP_SICHTBARE_UNICODE_SEQUENZEN) {
+    const gelesen = leseBlogProfileEingabe(bpAendere((p) => {
+      (p.artikel as Record<string, unknown>).titel = wert;
+      (p.artikel as Record<string, unknown>).text = wert;
+      (p.listen as Record<string, unknown>).genres = [wert];
+    }));
+    gleich(gelesen.artikel.titel, wert, `${name}: Titel bleibt roh`);
+    gleich(gelesen.artikel.text, wert, `${name}: Artikeltext bleibt roh`);
+    gleich(gelesen.listen.genres[0], wert, `${name}: Listenwert bleibt roh`);
+  }
+});
+
 test("BP3 Dublettennormierung ist exakt NFKC, trim, Whitespace und lowercase", () => {
   gleich(normalisiereBlogListenwert("  Ｄｒａｍａ\t Noir  "), "drama noir", "eingefrorene Form");
   falsch(
@@ -8529,6 +8589,49 @@ test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell"
   );
 });
 
+test("BP5a Default-Ignorables verwerfen jedes sichtbarkeitspflichtige Outputfeld als ganze Antwort", () => {
+  for (const [name, wert] of BP_UNSICHTBARE_INHALTE) {
+    const outputFelder: Array<[string, unknown]> = [
+      ["geschmackszueg.wert", {
+        geschmackszuege: [bpGeschmackszug({ art: "ton", wert })],
+        vokabular: [],
+      }],
+      ["vokabular.wort", {
+        geschmackszuege: [],
+        vokabular: [bpVokabular({ wort: wert })],
+      }],
+      ["vokabular.beschreibung", {
+        geschmackszuege: [],
+        vokabular: [bpVokabular({ beschreibung: wert })],
+      }],
+    ];
+    for (const [feld, antwort] of outputFelder) {
+      const ergebnis = pruefeBlogProfileErgebnis(antwort, leseBlogProfileEingabe(bpPayload()));
+      wahr("fehler" in ergebnis && !("daten" in ergebnis), `${name}/${feld}: gesamte Antwort verworfen`);
+    }
+  }
+});
+
+test("BP5b echte Unicode-Sequenzen bleiben in Outputfeldern roh identisch", () => {
+  const eingabe = leseBlogProfileEingabe(bpPayload());
+  for (const [name, wert] of BP_SICHTBARE_UNICODE_SEQUENZEN) {
+    const ergebnis = pruefeBlogProfileErgebnis({
+      geschmackszuege: [bpGeschmackszug({ art: "ton", wert })],
+      vokabular: [bpVokabular({ wort: wert, beschreibung: wert })],
+    }, eingabe);
+    wahr("daten" in ergebnis, `${name}: Output bleibt gueltig`);
+    const daten = (ergebnis as {
+      daten: {
+        geschmackszuege: Array<Record<string, unknown>>;
+        vokabular: Array<Record<string, unknown>>;
+      };
+    }).daten;
+    gleich(daten.geschmackszuege[0].wert, wert, `${name}: wert bleibt roh`);
+    gleich(daten.vokabular[0].wort, wert, `${name}: wort bleibt roh`);
+    gleich(daten.vokabular[0].beschreibung, wert, `${name}: beschreibung bleibt roh`);
+  }
+});
+
 test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () => {
   const min = "x".repeat(16);
   const max = "ä".repeat(48);
@@ -8546,6 +8649,20 @@ test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () 
     artikel: { id: "a", titel: "T", text: `Anfang${leerBeleg}Ende` },
   });
   wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: leerBeleg, art: "ton", wert: "ruhig" })], vokabular: [] }, leerPayload), "16-Spaces-Beleg bleibt trotz echtem Rohsubstring gesperrt");
+
+  for (const [name, beleg, bytes] of BP_UNSICHTBARE_BELEGE) {
+    gleich(new TextEncoder().encode(beleg).length, bytes, `${name}: belegte UTF-8-Bytelaenge`);
+    const belegPayload = bpPayload({
+      artikel: { id: "a", titel: "T", text: `Anfang${beleg}Ende` },
+    });
+    wahr(
+      bpOutputIstUngueltig({
+        geschmackszuege: [bpGeschmackszug({ beleg, art: "ton", wert: "ruhig" })],
+        vokabular: [],
+      }, belegPayload),
+      `${name}: Beleg bleibt trotz exaktem Rohsubstring gesperrt`,
+    );
+  }
 });
 
 test("BP7 striktes JSON und ein einziger falscher Eintrag ergeben keinen Teilerfolg", async () => {

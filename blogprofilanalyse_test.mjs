@@ -64,6 +64,30 @@ const BASE_ARTICLE = {
   status: "ok",
 };
 
+const UNSICHTBARE_INHALTE = [
+  ["U+200B", "\u200B"],
+  ["U+200C", "\u200C"],
+  ["U+200D", "\u200D"],
+  ["U+00AD", "\u00AD"],
+  ["U+FE0F", "\uFE0F"],
+  ["U+2066", "\u2066"],
+  ["U+202E", "\u202E"],
+  ["Whitespace-Mix I", " \t\u200B\n "],
+  ["Whitespace-Mix II", "\u00A0\u200C\u200D\uFE0F\u2066\u202E\u3000"],
+];
+
+const SICHTBARE_UNICODE_SEQUENZEN = [
+  ["Emoji-ZWJ", "👩‍👩‍👧‍👦"],
+  ["Variation-Selector", "✈️"],
+  ["Keycap", "1️⃣"],
+  ["Persisch mit ZWNJ", "می‌خواهم"],
+];
+
+const UNSICHTBARE_BELEGE = [
+  ["sechs U+200B", "\u200B".repeat(6), 18],
+  ["gemischte DICP", "\u200C\u200D\u00AD\uFE0F\u2066\u202E", 17],
+];
+
 const makeArticle = (overrides = {}) => {
   const basis = structuredClone(BASE_ARTICLE);
   return { ...basis, ...overrides };
@@ -281,6 +305,32 @@ check("Listenwert darf nach NFKC+trim nicht leer sein", !waehleBlogProfilArtikel
   listen: { genres: ["\u00a0"], tags: [] },
 }).ok);
 
+for (const [name, wert] of UNSICHTBARE_INHALTE) {
+  for (const [feld, artikelAenderung, listen] of [
+    ["Titel", { titel: wert }, BASE_LISTEN],
+    ["Artikeltext", { text: wert }, BASE_LISTEN],
+    ["Listenwert", {}, { genres: [wert], tags: [] }],
+  ]) {
+    check(`${name} bleibt als ${feld} unsichtbar`, !waehleBlogProfilArtikel({
+      artikel: [makeArticle(artikelAenderung)],
+      artikelId: BASE_ARTICLE.id,
+      listen,
+    }).ok);
+  }
+}
+
+for (const [name, wert] of SICHTBARE_UNICODE_SEQUENZEN) {
+  const ergebnis = waehleBlogProfilArtikel({
+    artikel: [makeArticle({ titel: wert, text: wert })],
+    artikelId: BASE_ARTICLE.id,
+    listen: { genres: [wert], tags: [] },
+  });
+  check(`${name} bleibt sichtbar und roh identisch`, ergebnis.ok
+    && ergebnis.payload.artikel.titel === wert
+    && ergebnis.payload.artikel.text === wert
+    && ergebnis.payload.listen.genres[0] === wert);
+}
+
 // 3) Whole-response-Validator
 const responseBasePayload = validSelection.ok ? validSelection.payload : waehleBlogProfilArtikel({
   artikel: [BASE_ARTICLE],
@@ -290,6 +340,56 @@ const responseBasePayload = validSelection.ok ? validSelection.payload : waehleB
 
 const validResponse = validModelResponse(responseBasePayload.listen);
 check("gültige Modellantwort wird akzeptiert", pruefeBlogProfilAnalyseAntwort(validResponse, responseBasePayload).ok);
+for (const [name, beleg, bytes] of UNSICHTBARE_BELEGE) {
+  const belegPayload = {
+    ...responseBasePayload,
+    artikel: {
+      ...responseBasePayload.artikel,
+      text: `Vorspann${beleg}Nachspann`,
+    },
+  };
+  check(`${name} hat die belegte UTF-8-Bytelänge`, new TextEncoder().encode(beleg).length === bytes);
+  check(`${name} wird trotz exaktem Rohsubstring als Beleg abgewiesen`, !pruefeBlogProfilAnalyseAntwort({
+    geschmackszuege: [{ ...validResponse.geschmackszuege[0], beleg }],
+    vokabular: [],
+  }, belegPayload).ok);
+}
+
+for (const [name, wert] of UNSICHTBARE_INHALTE) {
+  const outputFelder = [
+    ["geschmackszueg.wert", {
+      geschmackszuege: [{ ...validResponse.geschmackszuege[0], art: "ton", wert }],
+      vokabular: [],
+    }],
+    ["vokabular.wort", {
+      geschmackszuege: [],
+      vokabular: [{ ...validResponse.vokabular[0], wort: wert }],
+    }],
+    ["vokabular.beschreibung", {
+      geschmackszuege: [],
+      vokabular: [{ ...validResponse.vokabular[0], beschreibung: wert }],
+    }],
+  ];
+  for (const [feld, antwort] of outputFelder) {
+    const ergebnis = pruefeBlogProfilAnalyseAntwort(antwort, responseBasePayload);
+    check(`${name} verwirft die gesamte Antwort bei ${feld}`, !ergebnis.ok && ergebnis.payload === null);
+  }
+}
+
+for (const [name, wert] of SICHTBARE_UNICODE_SEQUENZEN) {
+  const ergebnis = pruefeBlogProfilAnalyseAntwort({
+    geschmackszuege: [{ ...validResponse.geschmackszuege[0], art: "ton", wert }],
+    vokabular: [{
+      ...validResponse.vokabular[0],
+      wort: wert,
+      beschreibung: wert,
+    }],
+  }, responseBasePayload);
+  check(`${name} bleibt in allen Outputfeldern roh identisch`, ergebnis.ok
+    && ergebnis.payload.geschmackszuege[0].wert === wert
+    && ergebnis.payload.vokabular[0].wort === wert
+    && ergebnis.payload.vokabular[0].beschreibung === wert);
+}
 check("root darf keine Zusatzfelder haben", !pruefeBlogProfilAnalyseAntwort({ ...validResponse, extra: true }, responseBasePayload).ok);
 check("artikelPayload mit Zusatzfeld wird abgelehnt", !pruefeBlogProfilAnalyseAntwort(validResponse, { ...responseBasePayload, extra: "x" }).ok);
 check("artikelPayload ohne artikel wird abgelehnt", !pruefeBlogProfilAnalyseAntwort(validResponse, { listen: responseBasePayload.listen }).ok);

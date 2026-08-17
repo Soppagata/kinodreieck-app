@@ -55,7 +55,11 @@ const normalisiereIdentitaet = (wert) => String(wert)
   .toLowerCase();
 
 const istEinzeilig = (wert) => istText(wert) && !KEINE_STEUERZEICHEN.test(wert);
-const istSemantischNichtLeer = (wert) => istText(wert) && wert.normalize("NFKC").trim().length > 0;
+const istSemantischNichtLeer = (wert) => istText(wert) && wert
+  .normalize("NFKC")
+  .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+  .trim()
+  .length > 0;
 
 const istStringImByteBereich = (wert, minBytes, maxBytes, einzeilig = false) => {
   if (!istText(wert)) return false;
