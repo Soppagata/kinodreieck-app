@@ -68,6 +68,8 @@ const check = (wert, text) => {
 };
 const knopf = (container, text) => [...container.querySelectorAll("button")]
   .find((element) => element.textContent.includes(text));
+const anzahlBezahlteAufrufe = (setup) => setup.ai.calls.filter((call) => call.task === "blog-profile-extract").length;
+const probeSchluessel = (marker) => [...marker.map.keys()].filter((key) => key.includes("kd-blogprofilanalyse-marker-probe"));
 const setzeWert = (element, wert) => {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
   setter.call(element, wert);
@@ -139,8 +141,67 @@ const markerMock = () => {
     map,
     getItem: (key) => map.has(key) ? map.get(key) : null,
     setItem: (key, value) => map.set(key, String(value)),
+    removeItem: (key) => map.delete(key),
   };
 };
+const markerSetFail = () => {
+  const marker = markerMock();
+  return {
+    ...marker,
+    setItem: () => { throw new Error("quota"); },
+  };
+};
+const markerReadFailProbe = () => {
+  const marker = markerMock();
+  return {
+    ...marker,
+    getItem: (key) => {
+      if (key.includes("kd-blogprofilanalyse-marker-probe")) return null;
+      return marker.getItem(key);
+    },
+  };
+};
+const markerRemoveFail = () => {
+  const marker = markerMock();
+  return {
+    ...marker,
+    removeItem: () => { throw new Error("quota"); },
+  };
+};
+const markerNoRemove = () => {
+  const marker = markerMock();
+  const { removeItem, ...ohne } = marker;
+  return ohne;
+};
+
+const pruefeKeinenBezahltenAufrufBeiProbeFehler = async ({ label, markerStorage, expected }) => {
+  const setup = standardProps({ markerStorage });
+  const fixture = await mounte(setup);
+  const textFeld = knopf(fixture.container, "analysieren");
+  if (!setup.props.markerStorage.removeItem) {
+    check(!textFeld && setup.ai.calls.every((call) => call.task === "health"),
+      `${label}: fehlendes removeItem blockt vor runTask`);
+    await fixture.cleanup();
+    return;
+  }
+  const checkbox = fixture.container.querySelector('input[type="checkbox"]');
+  await act(async () => { checkbox.click(); await tick(); });
+  await act(async () => { textFeld.click(); await tick(); });
+  const status = fixture.container.querySelector('[aria-live="polite"], [role="status"]');
+  check(anzahlBezahlteAufrufe(setup) === 0,
+    `${label}: kein KI-Aufruf bei Markerprobe`);
+  check(!probeSchluessel(setup.marker).length,
+    `${label}: Probe-Schlüssel bleiben nach Fehltest nicht zurück`);
+  check(status?.textContent.includes(expected), `${label}: präzise Fehlertext`);
+  check(!status?.textContent.includes(ARTIKEL.text)
+    && !status?.textContent.includes(ARTIKEL.titel)
+    && !status?.textContent.includes(BELEG),
+    `${label}: Fehler bleibt inhaltsfrei`);
+  check(setup.marker.map.get("vorprobe") === "bleiben",
+    `${label}: vorhandener Marker bleibt unverändert`);
+  await fixture.cleanup();
+};
+
 const kontextMock = () => {
   const zustand = { current: true, captures: 0 };
   return {
@@ -287,14 +348,38 @@ check(!!knopf(strictMode.container, "analysieren") && strictSetup.ai.calls.filte
   "StrictMode-Probe setzt mounted im Effect-Setup zurück und verwirft spätere Async-Ergebnisse nicht dauerhaft");
 await strictMode.cleanup();
 
-const markerKaputtSetup = standardProps({ markerStorage: {} });
-const markerKaputt = await mounte(markerKaputtSetup);
-check(!knopf(markerKaputt.container, "analysieren")
-  && markerKaputt.container.textContent.includes("kein sicherer lokaler Analysenachweis"),
-"fehlendes getItem/setItem sperrt den potenziell zahlenden Start vor runTask");
-check(markerKaputtSetup.ai.calls.every((call) => call.task === "health"),
-  "kaputter Marker-Storage erreicht ausschließlich die providerfreie Health-Abfrage");
-await markerKaputt.cleanup();
+const markerFehler = markerSetFail();
+markerFehler.map.set("vorprobe", "bleiben");
+await pruefeKeinenBezahltenAufrufBeiProbeFehler({
+  label: "marker.setItem",
+  markerStorage: markerFehler,
+  expected: "Der sichere Analysenachweis konnte nicht geprüft werden.",
+});
+
+const markerReadFail = markerReadFailProbe();
+markerReadFail.map.set("vorprobe", "bleiben");
+await pruefeKeinenBezahltenAufrufBeiProbeFehler({
+  label: "marker.readback",
+  markerStorage: markerReadFail,
+  expected: "Der sichere Analysenachweis konnte nicht geprüft werden.",
+});
+
+const markerRemoveFehler = markerRemoveFail();
+markerRemoveFehler.map.set("vorprobe", "bleiben");
+await pruefeKeinenBezahltenAufrufBeiProbeFehler({
+  label: "marker.removeItem",
+  markerStorage: markerRemoveFehler,
+  expected: "Der sichere Analysenachweis konnte nicht geprüft werden.",
+});
+
+const markerKeinRemove = standardProps({ markerStorage: markerNoRemove() });
+const markerNoRemoveFixture = await mounte(markerKeinRemove);
+check(!knopf(markerNoRemoveFixture.container, "analysieren")
+  && markerNoRemoveFixture.container.textContent.includes("kein sicherer lokaler Analysenachweis"),
+  "fehlendes removeItem sperrt den potenziell zahlenden Start vor runTask");
+check(anzahlBezahlteAufrufe(markerKeinRemove) === 0,
+  "fehlendes removeItem startet keinen KI-Aufruf");
+await markerNoRemoveFixture.cleanup();
 
 const abortOffen = deferred();
 const abortAi = aiMock({ analyse: () => abortOffen.promise });
@@ -333,8 +418,15 @@ const haupt = await mounte(filterSetup);
 const optionen = [...haupt.container.querySelectorAll("#blogprofilanalyse-artikel option")];
 check(optionen.length === 1 && optionen[0].value === ARTIKEL.id,
   "nur exakt einmalige, eigene und grenzgültige Artikel sind auswählbar");
-check(haupt.container.textContent.includes("Genau dieser eigene Text wird einmalig an den KI-Anbieter gesendet"),
+check(haupt.container.textContent.includes("Einmalig an den KI-Anbieter gesendet:"),
   "sichtbarer Einmal-Hinweis steht unmittelbar vor dem Auftrag");
+const consentFeld = haupt.container.querySelector(".kd-blogprofilanalyse-consent-felder");
+check(!!consentFeld
+  && consentFeld.textContent.includes(`Titel: ${ARTIKEL.titel}`)
+  && consentFeld.textContent.includes(`Artikeltext: ${ARTIKEL.text}`)
+  && consentFeld.textContent.includes(`Genres: ${JSON.stringify(GENRES)}`)
+  && consentFeld.textContent.includes(`Tags: ${JSON.stringify(TAGS)}`),
+  "Consent zeigt exakt Titel, Artikeltext und vollständige Genre-/Tag-Listen");
 const checkbox = haupt.container.querySelector('input[type="checkbox"]');
 const analyseKnopf = knopf(haupt.container, "analysieren");
 check(checkbox && analyseKnopf.disabled, "Kostenknopf bleibt bis zur ausdrücklichen Checkbox gesperrt");
@@ -363,10 +455,15 @@ check(haupt.container.textContent.includes("Geschmackszüge") && haupt.container
 check(haupt.container.querySelector('[aria-label="Beleg Geschmackszug 1"]').value === BELEG,
   "strikte Belegvalidierung übernimmt nur einen Nachweis aus dem Artikelsnapshot");
 const markerWerte = [...filterSetup.marker.map.values()];
+const markerSchluessel = [...filterSetup.marker.map.keys()];
 check(markerWerte.length === 1 && !markerWerte[0].includes(ARTIKEL.text)
   && !markerWerte[0].includes(ARTIKEL.titel) && !markerWerte[0].includes(BELEG),
-"account-namespaced Marker speichert niemals Artikeltext, Titel oder Beleg");
-check([...filterSetup.marker.map.keys()][0].endsWith(ACCOUNT_A), "Analysenachweis ist an das Konto gebunden");
+  "account-namespaced Marker speichert niemals Artikeltext, Titel oder Beleg");
+check(markerSchluessel.length === 1 && !probeSchluessel(filterSetup.marker).length
+  && markerSchluessel[0].endsWith(ACCOUNT_A)
+  && !markerSchluessel[0].includes(ARTIKEL.text)
+  && !markerSchluessel[0].includes(ARTIKEL.titel),
+  "Probe-Key wird entfernt; Analysemarker ist nicht payload-sensitiv und nur auf Konto gebunden");
 check(haupt.container.textContent.includes("unveränderte Artikel wurde bereits analysiert"),
   "unveränderter bereits analysierter Artikel wird sichtbar gekennzeichnet");
 
@@ -495,14 +592,131 @@ await act(async () => {
 });
 const profilGruppe = savePending.container.querySelector('[aria-labelledby="blogprofilanalyse-profil"]');
 const vokabularGruppe = savePending.container.querySelector('[aria-labelledby="blogprofilanalyse-vokabular"]');
-check(saveWriterCalls === 1
+  const analyseSperreVorher = anzahlBezahlteAufrufe(saveSetup);
+  const artikelWahlProfil = savePending.container.querySelector("#blogprofilanalyse-artikel");
+  const einwilligungProfil = savePending.container.querySelector('input[type="checkbox"]');
+  const analyseKnopfProfil = knopf(savePending.container, "analysieren");
+  const alteAuswahlProfil = artikelWahlProfil.value;
+  await act(async () => {
+    knopf(savePending.container, "analysieren").click();
+    await tick();
+  });
+  check(saveWriterCalls === 1
   && [...profilGruppe.querySelectorAll("input,select")].every((feld) => feld.disabled)
   && [...vokabularGruppe.querySelectorAll("input,select")].every((feld) => !feld.disabled),
-"pending Profilwriter sperrt exakt seine Felder und Doppelklick bleibt ein Write");
-await act(async () => { saveOffen.resolve(true); await tick(); await tick(); });
-check(knopf(savePending.container, "Geschmacksprofil gespeichert")?.disabled,
-  "wahrer Writer-Erfolg wird erst nach dem unveränderten pending Editstand bestätigt");
-await savePending.cleanup();
+  "pending Profilwriter sperrt exakt seine Felder und Doppelklick bleibt ein Write");
+  check(artikelWahlProfil.disabled && einwilligungProfil.disabled && analyseKnopfProfil.disabled,
+    "während laufendem Profilwriter ist keine neue Analyseauslösung möglich");
+  await act(async () => { setzeWert(artikelWahlProfil, ARTIKEL_2.id); await tick(); });
+  check(artikelWahlProfil.value === alteAuswahlProfil
+    && anzahlBezahlteAufrufe(saveSetup) === analyseSperreVorher,
+    "während laufendem Profilwriter ist Auswahl/weiterer Auftrag blockiert");
+  await act(async () => {
+    await savePending.render({ accountId: ACCOUNT_B });
+  });
+  check(!savePending.container.querySelector(".kd-blogprofilanalyse-vorschau")
+    && anzahlBezahlteAufrufe(saveSetup) === analyseSperreVorher
+    && !knopf(savePending.container, "Geschmacksprofil gespeichert")
+    && !knopf(savePending.container, "Geschmacksprofil lokal erneut speichern"),
+    "Accountwechsel leert sofort alte Vorschau und entfernt gespeicherten/Retry-Status bei offener Profil-Writer-Run");
+  await act(async () => {
+    await savePending.render({ artikelListe: [{ ...ARTIKEL, text: `${ARTIKEL.text} — kontoübergreifend neu` }, ARTIKEL_2] });
+  });
+  check(!savePending.container.querySelector(".kd-blogprofilanalyse-vorschau")
+    && anzahlBezahlteAufrufe(saveSetup) === analyseSperreVorher
+    && !knopf(savePending.container, "Geschmacksprofil gespeichert")
+    && !knopf(savePending.container, "Geschmacksprofil lokal erneut speichern"),
+    "Payloadwechsel leert sofort alte Vorschau und entfernt gespeicherten/Retry-Status bei offener Profil-Writer-Run");
+  await act(async () => {
+    await savePending.render({ artikelListe: [ARTIKEL, ARTIKEL_2] });
+  });
+  await act(async () => { knopf(savePending.container, "analysieren").click(); await tick(); });
+  check(anzahlBezahlteAufrufe(saveSetup) === analyseSperreVorher,
+    "Laufender Profilwriter blockiert direkte neue Analyseaufrufe auch nach Externpayloadwechsel");
+  await act(async () => { saveOffen.resolve(true); await tick(); await tick(); });
+  check(!savePending.container.querySelector(".kd-blogprofilanalyse-vorschau")
+    && !knopf(savePending.container, "Geschmacksprofil gespeichert")
+    && !knopf(savePending.container, "Geschmacksprofil lokal erneut speichern"),
+    "alte Profil-Completion setzt keine neue Vorschau oder gespeicherte Gruppe nach Kontextwechsel");
+  await act(async () => { setzeWert(savePending.container.querySelector("#blogprofilanalyse-artikel"), ARTIKEL_2.id); await tick(); });
+  await act(async () => { savePending.container.querySelector('input[type="checkbox"]').click(); await tick(); });
+  const profilNachLock = knopf(savePending.container, "analysieren");
+  await act(async () => { profilNachLock.click(); profilNachLock.click(); await tick(); });
+  check(anzahlBezahlteAufrufe(saveSetup) === analyseSperreVorher + 1,
+    "alte Writercompletion verhindert keine neue Analyse nach Abschluss, startet jedoch neue Aufträge korrekt");
+  const profilNachRun = saveSetup.ai.calls.filter((call) => call.task === "blog-profile-extract").at(-1)?.payload?.artikel?.id;
+  check(profilNachRun === ARTIKEL_2.id,
+    "neue Analyse wird erst nach Writerabschluss und korrekter aktueller Artikelauswahl gestartet");
+  await savePending.cleanup();
+
+const vokOffen = deferred();
+let vokabularSaveCalls = 0;
+const vokabularSaveSetup = standardProps({
+  props: {
+    onVokabularSpeichern: () => { vokabularSaveCalls++; return vokOffen.promise; },
+  },
+});
+const vokabularPending = await mounte(vokabularSaveSetup);
+await bestaetigeUndKlicke(vokabularPending);
+await warten();
+await act(async () => {
+  const speichern = knopf(vokabularPending.container, "Vokabular speichern");
+  speichern.click(); speichern.click(); await tick();
+});
+const vokabularProfilGruppe = vokabularPending.container.querySelector('[aria-labelledby="blogprofilanalyse-profil"]');
+const vokabularVokabularGruppe = vokabularPending.container.querySelector('[aria-labelledby="blogprofilanalyse-vokabular"]');
+const analyseSperreVorherVok = anzahlBezahlteAufrufe(vokabularSaveSetup);
+const artikelWahlVok = vokabularPending.container.querySelector("#blogprofilanalyse-artikel");
+const einwilligungVok = vokabularPending.container.querySelector('input[type="checkbox"]');
+const analyseKnopfVok = knopf(vokabularPending.container, "analysieren");
+const alteAuswahlVok = artikelWahlVok.value;
+check(vokabularSaveCalls === 1
+  && [...vokabularProfilGruppe.querySelectorAll("input,select")].every((feld) => !feld.disabled)
+  && [...vokabularVokabularGruppe.querySelectorAll("input,select")].every((feld) => feld.disabled),
+  "pending Vokabularwriter sperrt exakt seine Felder und Doppelklick bleibt ein Write");
+check(artikelWahlVok.disabled && einwilligungVok.disabled && analyseKnopfVok.disabled,
+  "während laufendem Vokabularwriter ist keine neue Analyseauslösung möglich");
+await act(async () => { setzeWert(artikelWahlVok, ARTIKEL_2.id); await tick(); });
+check(artikelWahlVok.value === alteAuswahlVok
+  && anzahlBezahlteAufrufe(vokabularSaveSetup) === analyseSperreVorherVok,
+  "während laufendem Vokabularwriter ist Auswahl/weiterer Auftrag blockiert");
+await act(async () => {
+  await vokabularPending.render({ accountId: ACCOUNT_B });
+});
+check(!vokabularPending.container.querySelector(".kd-blogprofilanalyse-vorschau")
+  && anzahlBezahlteAufrufe(vokabularSaveSetup) === analyseSperreVorherVok
+  && !knopf(vokabularPending.container, "Vokabular gespeichert")
+  && !knopf(vokabularPending.container, "Vokabular lokal erneut speichern"),
+  "Accountwechsel leert sofort alte Vorschau und entfernt gespeicherten/Retry-Status bei offener Vokabular-Writer-Run");
+await act(async () => {
+  await vokabularPending.render({ artikelListe: [{ ...ARTIKEL, text: `${ARTIKEL.text} — kontoübergreifend neu` }, ARTIKEL_2] });
+});
+check(!vokabularPending.container.querySelector(".kd-blogprofilanalyse-vorschau")
+  && anzahlBezahlteAufrufe(vokabularSaveSetup) === analyseSperreVorherVok
+  && !knopf(vokabularPending.container, "Vokabular gespeichert")
+  && !knopf(vokabularPending.container, "Vokabular lokal erneut speichern"),
+  "Payloadwechsel leert sofort alte Vorschau und entfernt gespeicherten/Retry-Status bei offener Vokabular-Writer-Run");
+await act(async () => {
+  await vokabularPending.render({ artikelListe: [ARTIKEL, ARTIKEL_2] });
+});
+await act(async () => { vokOffen.resolve(true); await tick(); await tick(); });
+const vokabularCompletionVorschau = vokabularPending.container.querySelector('.kd-blogprofilanalyse-vorschau');
+check(vokabularSaveCalls === 1 && !vokabularCompletionVorschau,
+  "alte Vokabular-Completion überschreibt keine neue Vorschau bei Kontextwechsel");
+await act(async () => { await vokabularPending.render({ artikelListe: [ARTIKEL, ARTIKEL_2] }); });
+await act(async () => { knopf(vokabularPending.container, "analysieren").click(); await tick(); });
+check(anzahlBezahlteAufrufe(vokabularSaveSetup) === analyseSperreVorherVok,
+  "Laufender Vokabularwriter blockiert direkte neue Analyseaufrufe auch nach Externpayloadwechsel");
+await act(async () => { setzeWert(vokabularPending.container.querySelector("#blogprofilanalyse-artikel"), ARTIKEL_2.id); await tick(); });
+await act(async () => { vokabularPending.container.querySelector('input[type="checkbox"]').click(); await tick(); });
+const vokabularNachLock = knopf(vokabularPending.container, "analysieren");
+await act(async () => { vokabularNachLock.click(); vokabularNachLock.click(); await tick(); });
+check(anzahlBezahlteAufrufe(vokabularSaveSetup) === analyseSperreVorherVok + 1,
+  "neue Analyse startet erst nach Vokabular-Writerabschluss nur mit aktivierter Consent und aktueller Auswahl");
+const vokNachRun = vokabularSaveSetup.ai.calls.filter((call) => call.task === "blog-profile-extract").at(-1)?.payload?.artikel?.id;
+check(vokNachRun === ARTIKEL_2.id,
+  "neue Vokabularanalyse wird nach Abschluss mit zweiter Artikelauswahl korrekt gestartet");
+await vokabularPending.cleanup();
 
 /* P1: Ein fehlgeschlagener Retry darf keinen inzwischen neueren Basisstand überschreiben. */
 let p1WriterCalls = 0;
