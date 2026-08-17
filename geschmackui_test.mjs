@@ -328,6 +328,14 @@ const { GeschmackBereich: GeschmackBereichAltbau } = await import(ZIEL_ALTBAU);
    BEDIENHILFEN
    ========================================================================= */
 const ruhe = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const warteAuf = async (beschreibung, bedingung, msTimeout = 2500, msSchritt = 25) => {
+  const deadline = Date.now() + msTimeout;
+  while (Date.now() < deadline) {
+    if (bedingung()) return true;
+    await act(async () => { await new Promise((r) => setTimeout(r, msSchritt)); });
+  }
+  return false;
+};
 
 /* `feld` zeigt auf den gerade bespielten Montagepunkt. */
 let feld = () => document.getElementById("wurzel");
@@ -2305,15 +2313,22 @@ if (k) {
     check("O", "Nach Aktivierung der Checkbox ist der kostenpflichtige Bloganalyse-Start aktiv",
       () => !start.disabled);
     await act(async () => { start.click(); await ruhe(); });
-    // Der aktuelle Dialog schliesst Markerprobe, SHA-256 und Vorschauprojektion
-    // in getrennten Microtask-Runden ab. Genau zwei Ticks nutzt auch sein
-    // eigener Lifecycle-Harness; ein einzelner Tick misst nur den Zwischenstand.
-    await ruhe();
-    check("O", "Beide Gruppen erscheinen nach erfolgreicher Analyse-Vorschau", () => {
-      return !!k.querySelector(".kd-blogprofilanalyse-vorschau")
-        && !![...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Geschmacksprofil speichern")
-        && !![...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Vokabular speichern");
-    });
+    const blogVorschauBereit = await warteAuf(
+      "Bloganalyse-Vorschau inklusive Marker ist sichtbar",
+      () => {
+        const root = document.getElementById("tabwurzel");
+        const panel = root?.querySelector(".kd-blogprofilanalyse");
+        if (!panel) return false;
+        const buttons = [...panel.querySelectorAll("button")];
+        return !!panel.querySelector(".kd-blogprofilanalyse-vorschau")
+          && buttons.some((b) => b.textContent.trim() === "Geschmacksprofil speichern")
+          && buttons.some((b) => b.textContent.trim() === "Vokabular speichern")
+          && blogSessionStorage.map.size === 1;
+      },
+      2500,
+      25,
+    );
+    check("O", "Beide Gruppen erscheinen nach erfolgreicher Analyse-Vorschau", () => blogVorschauBereit);
     check("O", "Blog-Analyse-Nachweis nutzt einen lokalen Marker (kein Netzwerk-Klartext)", () => {
       return blogSessionStorage.map.size === 1;
     });
