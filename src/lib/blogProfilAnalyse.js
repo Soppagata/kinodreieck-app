@@ -55,10 +55,12 @@ const normalisiereIdentitaet = (wert) => String(wert)
   .toLowerCase();
 
 const istEinzeilig = (wert) => istText(wert) && !KEINE_STEUERZEICHEN.test(wert);
+const istSemantischNichtLeer = (wert) => istText(wert) && wert.normalize("NFKC").trim().length > 0;
 
 const istStringImByteBereich = (wert, minBytes, maxBytes, einzeilig = false) => {
   if (!istText(wert)) return false;
   if (einzeilig && !istEinzeilig(wert)) return false;
+  if (!istSemantischNichtLeer(wert)) return false;
   const bytes = BYTE_LAENGE(wert);
   return bytes >= minBytes && bytes <= maxBytes;
 };
@@ -559,14 +561,16 @@ export async function isArtikelUnveraendert(storage, accountId, artikelPayload, 
   if (!validiert.ok) return false;
   if (!accountIdIstGueltig(accountId)) return false;
 
-  if (typeof options.contentHash === "string" && options.contentHash) {
-    if (!BLOG_PROFILE_HASH_RE.test(options.contentHash) || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(options.contentHash)) return false;
-
-    const nachweis = liesBlogProfilAnalyseNachweis(storage, accountId);
-    if (!nachweis) return false;
-    return nachweis.articleId === validiert.payload.artikel.id && nachweis.contentHash === options.contentHash;
+  const contentHashUebergeben = Object.prototype.hasOwnProperty.call(options, "contentHash");
+  if (contentHashUebergeben && (
+    typeof options.contentHash !== "string"
+    || !BLOG_PROFILE_HASH_RE.test(options.contentHash)
+    || BLOG_PROFILE_HASH_NOT_ZERO_RE.test(options.contentHash)
+  )) {
+    return false;
   }
 
+  if (Object.prototype.hasOwnProperty.call(options, "digest") && typeof options.digest !== "function") return false;
   const digest = options.digest || sha256Hex;
 
   let hash;
@@ -576,11 +580,14 @@ export async function isArtikelUnveraendert(storage, accountId, artikelPayload, 
     return false;
   }
   if (!BLOG_PROFILE_HASH_RE.test(hash || "")) return false;
+  if (contentHashUebergeben && hash !== options.contentHash) return false;
 
   const nachweis = liesBlogProfilAnalyseNachweis(storage, accountId);
   if (!nachweis) return false;
 
-  return nachweis.articleId === validiert.payload.artikel.id && nachweis.contentHash === hash;
+  return nachweis.articleId === validiert.payload.artikel.id
+    && nachweis.contentHash === hash
+    && (!contentHashUebergeben || nachweis.contentHash === options.contentHash);
 }
 
 const bereinigeVorschauAntwort = (modelAntwort) => {
@@ -663,6 +670,16 @@ export async function erzeugeBlogProfilAnalyseVorschau({
     }
     if (preserveMetadata.articleId !== payload.artikel.id) {
       return fehlschlag("articleId passt nicht zum artikelPayload");
+    }
+
+    let frischerContentHash = null;
+    try {
+      frischerContentHash = await berechneContentHash(payload, digest);
+    } catch {
+      return fehlschlag("hash nicht berechenbar");
+    }
+    if (frischerContentHash !== contentHash) {
+      return fehlschlag("contentHash passt nicht zum aktuellen artikelPayload");
     }
   } else {
     try {

@@ -3,6 +3,8 @@
    Reine, UI-freie Funktionen plus fail-closed Regressionstests.
 */
 
+import { createHash } from "node:crypto";
+
 import {
   hatBlogProfileAnalyseCapability,
   waehleBlogProfilArtikel,
@@ -39,6 +41,11 @@ const checkAsync = async (name, promise) => {
     console.log("✗", name, "-", error.message || String(error));
   }
 };
+
+const sha256Hex = async (text) => createHash("sha256").update(text).digest("hex");
+const contentHashFuer = (payload) => createHash("sha256")
+  .update(`${payload.artikel.titel}\u0000${payload.artikel.text}`)
+  .digest("hex");
 
 const BASE_LISTEN = {
   genres: ["Drama", "Noir", "Action", "Klassiker", "Nocturne"],
@@ -210,6 +217,11 @@ check("Titel darf keine Steuerzeichen enthalten", !waehleBlogProfilArtikel({
   artikelId: BASE_ARTICLE.id,
   listen: BASE_LISTEN,
 }).ok);
+check("Titel darf nach NFKC+trim nicht leer sein", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ titel: "   " })],
+  artikelId: BASE_ARTICLE.id,
+  listen: BASE_LISTEN,
+}).ok);
 check("Titel mit 160+ Byte scheitert", !waehleBlogProfilArtikel({
   artikel: [makeArticle({ id: "titel_zu_lang", titel: "ä".repeat(81) })],
   artikelId: "titel_zu_lang",
@@ -228,6 +240,11 @@ check("Text mit 18.000 Byte wird akzeptiert", waehleBlogProfilArtikel({
 check("Text mit 18.001 Byte wird abgelehnt", !waehleBlogProfilArtikel({
   artikel: [makeArticle({ id: "text_zu_lang", text: "a".repeat(18001) })],
   artikelId: "text_zu_lang",
+  listen: BASE_LISTEN,
+}).ok);
+check("Text darf nach NFKC+trim nicht leer sein", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ text: "\u00a0\u00a0" })],
+  artikelId: BASE_ARTICLE.id,
   listen: BASE_LISTEN,
 }).ok);
 check("genres darf nicht leer sein", !waehleBlogProfilArtikel({
@@ -254,6 +271,11 @@ check("Cross-List-Dublette (normalisiert) wird abgelehnt", !waehleBlogProfilArti
   artikel: [makeArticle({ id: "dupe_norm" })],
   artikelId: "dupe_norm",
   listen: { genres: ["Noir Noir"], tags: ["  noir   noir  "] },
+}).ok);
+check("Listenwert darf nach NFKC+trim nicht leer sein", !waehleBlogProfilArtikel({
+  artikel: [makeArticle({ id: "blank_list" })],
+  artikelId: "blank_list",
+  listen: { genres: ["\u00a0"], tags: [] },
 }).ok);
 
 // 3) Whole-response-Validator
@@ -347,6 +369,28 @@ check("genre-art darf nur übergebene Genres nutzen", !pruefeBlogProfilAnalyseAn
   ...validResponse,
   geschmackszuege: [{ ...validResponse.geschmackszuege[0], wert: "NichtInList" }],
 }, responseBasePayload).ok);
+check("geschmackszueg.wert darf nach NFKC+trim nicht leer sein", !pruefeBlogProfilAnalyseAntwort({
+  ...validResponse,
+  geschmackszuege: [{ ...validResponse.geschmackszuege[0], art: "thema", wert: "   " }],
+}, responseBasePayload).ok);
+check("vokabular.wort darf nach NFKC+trim nicht leer sein", !pruefeBlogProfilAnalyseAntwort({
+  ...validResponse,
+  vokabular: [{ ...validResponse.vokabular[0], wort: "\u00a0" }],
+}, responseBasePayload).ok);
+check("vokabular.beschreibung darf nach NFKC+trim nicht leer sein", !pruefeBlogProfilAnalyseAntwort({
+  ...validResponse,
+  vokabular: [{ ...validResponse.vokabular[0], beschreibung: "   " }],
+}, responseBasePayload).ok);
+check("16-Spaces-Beleg wird trotz Byte-Minimum und Substring abgelehnt", !pruefeBlogProfilAnalyseAntwort({
+  geschmackszuege: [{ ...validResponse.geschmackszuege[0], beleg: " ".repeat(16) }],
+  vokabular: [{ ...validResponse.vokabular[0], beleg: " ".repeat(16) }],
+}, {
+  ...responseBasePayload,
+  artikel: {
+    ...responseBasePayload.artikel,
+    text: `Vorspann${" ".repeat(16)}Nachspann`,
+  },
+}).ok);
 
 // 4) Vorschau + Revalidation
 const existingProfile = {
@@ -537,13 +581,13 @@ await checkAsync("Clock-Fehler wird nicht nach außen geworfen", (async () => {
   return !invalid.ok;
 }));
 
-await checkAsync("Revalidation verarbeitet editierte Vorschau ohne neue Hash-/Clock-Berechnung", (async () => {
+await checkAsync("Revalidation verarbeitet editierte Vorschau mit frischem Hash und ohne neue Clock", (async () => {
   const first = await erzeugeBlogProfilAnalyseVorschau({
     artikelPayload: responseBasePayload,
     modelAntwort: konfliktResponse,
     bestehendesProfil: existingProfile,
     bestehendesVokabular: existingVokabular,
-    digest: async () => "f".repeat(64),
+    digest: sha256Hex,
     clock: () => "2026-08-17T11:00:00.000Z",
   });
   if (!first.ok) return false;
@@ -568,15 +612,71 @@ await checkAsync("Revalidation verarbeitet editierte Vorschau ohne neue Hash-/Cl
     modelAntwort: edited,
     bestehendesProfil: existingProfile,
     bestehendesVokabular: existingVokabular,
-    digest: async () => { throw new Error("should-not-run"); },
+    digest: sha256Hex,
     clock: () => { throw new Error("should-not-run"); },
   });
 
   if (!second.ok) return false;
-  return second.payload.contentHash === first.payload.contentHash
+  return second.payload.articleId === first.payload.articleId
+    && second.payload.contentHash === first.payload.contentHash
     && second.payload.analyzedAt === first.payload.analyzedAt
     && second.payload.quelle === first.payload.quelle
     && second.payload.promptVersion === first.payload.promptVersion;
+})());
+
+await checkAsync("Revalidation lehnt gleichen supplied Hash bei geändertem Titel ab", (async () => {
+  const first = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    digest: sha256Hex,
+    clock: () => "2026-08-17T11:15:00.000Z",
+  });
+  if (!first.ok) return false;
+
+  const geaendert = structuredClone(responseBasePayload);
+  geaendert.artikel.titel = `${geaendert.artikel.titel} geändert`;
+  const second = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: geaendert,
+    modelAntwort: first.payload,
+    digest: sha256Hex,
+  });
+  return !second.ok;
+})());
+
+await checkAsync("Revalidation lehnt gleichen supplied Hash bei geändertem Text ab", (async () => {
+  const first = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    digest: sha256Hex,
+    clock: () => "2026-08-17T11:20:00.000Z",
+  });
+  if (!first.ok) return false;
+
+  const geaendert = structuredClone(responseBasePayload);
+  geaendert.artikel.text = `${geaendert.artikel.text} Inhaltliche Drift.`;
+  const second = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: geaendert,
+    modelAntwort: first.payload,
+    digest: sha256Hex,
+  });
+  return !second.ok;
+})());
+
+await checkAsync("Revalidation lehnt Preserve ohne frischen Digest fail-closed ab", (async () => {
+  const first = await erzeugeBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: validResponse,
+    digest: sha256Hex,
+    clock: () => "2026-08-17T11:25:00.000Z",
+  });
+  if (!first.ok) return false;
+
+  const second = await revalidiereBlogProfilAnalyseVorschau({
+    artikelPayload: responseBasePayload,
+    modelAntwort: first.payload,
+    digest: async () => null,
+  });
+  return !second.ok;
 })());
 
 await checkAsync("erzeugeBlogProfilAnalyseVorschau lehnt direkte ungültige Preserve-Metadaten ab", (async () => (
@@ -599,11 +699,11 @@ await checkAsync("erzeugeBlogProfilAnalyseVorschau lehnt direkte ungültige Pres
   ).ok
 ))());
 
-await checkAsync("Revalidation nutzt gespeicherten contentHash ohne neue Hash-/Clock-Aufrufe", (async () => {
+await checkAsync("Revalidation vergleicht gespeicherten contentHash mit frischem Hash ohne neue Clock", (async () => {
   const storage = makeStorage();
   const marker = {
     articleId: responseBasePayload.artikel.id,
-    contentHash: "a".repeat(64),
+    contentHash: contentHashFuer(responseBasePayload),
     analyzedAt: "2026-08-17T13:00:00.000Z",
   };
   if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
@@ -627,7 +727,7 @@ await checkAsync("Revalidation nutzt gespeicherten contentHash ohne neue Hash-/C
     accountId: ACCOUNT_ID_VALID_1,
     digest: async () => {
       digestCalled += 1;
-      throw new Error("digest sollte nicht laufen");
+      return contentHashFuer(responseBasePayload);
     },
     clock: () => {
       clockCalled += 1;
@@ -637,7 +737,7 @@ await checkAsync("Revalidation nutzt gespeicherten contentHash ohne neue Hash-/C
 
   return revalidated.ok
     && revalidated.payload.unveraendert
-    && digestCalled === 0
+    && digestCalled > 0
     && clockCalled === 0;
 })());
 
@@ -814,6 +914,50 @@ await checkAsync("Unveränderten Artikel per Marker erkennen", (async () => {
   const marker = { articleId: responseBasePayload.artikel.id, contentHash: "f".repeat(64), analyzedAt: "2026-08-17T10:00:00.000Z" };
   if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
   return isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, responseBasePayload, { digest: async () => "f".repeat(64) });
+})());
+
+await checkAsync("Supplied Hash akzeptiert unveränderten aktuellen Inhalt", (async () => {
+  const storage = makeStorage();
+  const contentHash = contentHashFuer(responseBasePayload);
+  const marker = { articleId: responseBasePayload.artikel.id, contentHash, analyzedAt: "2026-08-17T10:05:00.000Z" };
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+  return isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, responseBasePayload, { contentHash, digest: sha256Hex });
+})());
+
+await checkAsync("Supplied Hash schützt gegen Titel-Drift", (async () => {
+  const storage = makeStorage();
+  const contentHash = contentHashFuer(responseBasePayload);
+  const marker = { articleId: responseBasePayload.artikel.id, contentHash, analyzedAt: "2026-08-17T10:10:00.000Z" };
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+  const geaendert = structuredClone(responseBasePayload);
+  geaendert.artikel.titel = `${geaendert.artikel.titel} geändert`;
+  return !(await isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, geaendert, { contentHash, digest: sha256Hex }));
+})());
+
+await checkAsync("Supplied Hash schützt gegen Text-Drift", (async () => {
+  const storage = makeStorage();
+  const contentHash = contentHashFuer(responseBasePayload);
+  const marker = { articleId: responseBasePayload.artikel.id, contentHash, analyzedAt: "2026-08-17T10:15:00.000Z" };
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+  const geaendert = structuredClone(responseBasePayload);
+  geaendert.artikel.text = `${geaendert.artikel.text} geändert`;
+  return !(await isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, geaendert, { contentHash, digest: sha256Hex }));
+})());
+
+await checkAsync("Null-Hash und ungültiger Digest bleiben fail-closed", (async () => {
+  const storage = makeStorage();
+  const contentHash = contentHashFuer(responseBasePayload);
+  const marker = { articleId: responseBasePayload.artikel.id, contentHash, analyzedAt: "2026-08-17T10:20:00.000Z" };
+  if (!speichereBlogProfilAnalyseNachweis(storage, ACCOUNT_ID_VALID_1, marker)) return false;
+  const nullHash = await isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, responseBasePayload, {
+    contentHash: null,
+    digest: sha256Hex,
+  });
+  const invalidDigest = await isArtikelUnveraendert(storage, ACCOUNT_ID_VALID_1, responseBasePayload, {
+    contentHash,
+    digest: null,
+  });
+  return !nullHash && !invalidDigest;
 })());
 
 console.log("\nErgebnis:", ok.length, "ok,", rot.length, "offen");
