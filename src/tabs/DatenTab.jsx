@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { T, btnStyle, inputStyle } from "../lib/tokens.js";
 import { MasterImport } from "../components/MasterImport.jsx";
 import { IconDelete, IconExport, Klappe, SegmentedControl } from "../components/ui.jsx";
@@ -53,6 +53,8 @@ export function DatenTab({
      nachbauen noch erst nach dem Ausfüllen des Freitextformulars scheitern. */
   kiProfilFaehig = false,
   vokabular = [], saveVokabular,
+  speicher = null,
+  ai = aiService,
   streamingBekannt, streamingEntdecken, streamingInfo = null, auswahl, toggleQuelle,
   datenGesperrt = false,
   offeneFlags = 0, migriereMustwatch, migrationsBericht = null,
@@ -270,6 +272,8 @@ export function DatenTab({
             vokabular={vokabular}
             kontoId={kontoId}
             onVokabularSpeichern={saveVokabular}
+            speicher={speicher}
+            ai={ai}
             kiAktiv={kiProfilFaehig
               && kiStand.global === true
               && kiStand.funktionen?.profil !== false
@@ -351,6 +355,7 @@ export function DatenTab({
         <Klappe titel="KI-Vokabular" tour="daten-vokabular">
           <VokabularEditor vokabular={vokabular} saveVokabular={saveVokabular} mono={mono}
             master={master || []} bekannteGenres={bekannteGenres}
+            ai={ai}
             kiAktiv={kiProfilFaehig && kiStand.global === true && kiStand.funktionen?.suche !== false}
             kiSperrgrund={kiStand.global !== true
               ? "Aktiviere zuerst KI-Funktionen. Bereits gespeicherte Wörter funktionieren trotzdem offline."
@@ -465,12 +470,16 @@ export function DatenTab({
 
 function VokabularEditor({
   vokabular, saveVokabular, mono, master, bekannteGenres, kiAktiv, kiSperrgrund,
+  ai = aiService,
 }) {
   const [wort, setWort] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
   const [vorschlag, setVorschlag] = useState(null);
   const [laeuft, setLaeuft] = useState(false);
+  const [schreiben, setSchreiben] = useState(false);
   const [fehler, setFehler] = useState("");
+  const [status, setStatus] = useState("");
+  const speicherLock = useRef(false);
 
   const deuten = async () => {
     const w = wort.trim().toLowerCase();
@@ -480,10 +489,10 @@ function VokabularEditor({
       setFehler(`Die Beschreibung ist mit ${bedeutung.length} Zeichen zu lang (höchstens 300).`);
       return;
     }
-    setLaeuft(true); setFehler(""); setVorschlag(null);
+    setLaeuft(true); setFehler(""); setStatus(""); setVorschlag(null);
     try {
       const listen = bekannteWerte(master || [], bekannteGenres || []);
-      const antwort = await aiService.runTask("intelligent-search", { suchsatz: bedeutung, listen });
+      const antwort = await ai.runTask("intelligent-search", { suchsatz: bedeutung, listen });
       const deutung = sigAusSchema(antwort?.data, master || [], bekannteGenres || []);
       const eintrag = vokabularEintragAusDeutung({
         wort: w,
@@ -501,10 +510,30 @@ function VokabularEditor({
       setLaeuft(false);
     }
   };
-  const speichern = () => {
-    if (!hatOfflineDefinition(vorschlag)) return;
-    saveVokabular([...vokabular.filter((v) => v.wort !== vorschlag.wort), vorschlag]);
-    setWort(""); setBeschreibung(""); setVorschlag(null); setFehler("");
+  const speichern = async () => {
+    if (speicherLock.current || schreiben || !hatOfflineDefinition(vorschlag) || typeof saveVokabular !== "function") return;
+    speicherLock.current = true;
+    setSchreiben(true);
+    setFehler("");
+    setStatus("Definition wird gespeichert …");
+    try {
+      const ok = await saveVokabular([...vokabular.filter((v) => v.wort !== vorschlag.wort), vorschlag]);
+      if (ok) {
+        setWort("");
+        setBeschreibung("");
+        setVorschlag(null);
+        setStatus("Definition gespeichert.");
+        return;
+      }
+      setStatus("");
+      setFehler("Die Definition konnte nicht gespeichert werden. Bitte erneut versuchen.");
+    } catch {
+      setStatus("");
+      setFehler("Die Definition konnte nicht gespeichert werden. Bitte erneut versuchen.");
+    } finally {
+      setSchreiben(false);
+      speicherLock.current = false;
+    }
   };
   return (
     <div style={{ background: T.saalHoch, borderRadius: 6, padding: "16px 18px" }}>
@@ -514,14 +543,17 @@ function VokabularEditor({
             Gib der KI deinen eigenen Ausdruck und erkläre frei, was er für dich bedeutet. Die KI deutet ihn genau einmal. Gespeichert wird danach nur eine kleine lokale Genre-/Tag-Regel — die Suche verwendet sie deterministisch und offline.
           </p>
           <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
-            <input value={wort} onChange={(e) => { setWort(e.target.value); setVorschlag(null); }}
-              placeholder="Begriff (z. B. kuhl)" maxLength={40} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-            <textarea value={beschreibung} onChange={(e) => { setBeschreibung(e.target.value); setVorschlag(null); }}
+            <input value={wort} onChange={(e) => { setWort(e.target.value); setVorschlag(null); setStatus(""); }}
+              placeholder="Begriff (z. B. kuhl)" maxLength={40}
+              disabled={schreiben}
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+            <textarea value={beschreibung} onChange={(e) => { setBeschreibung(e.target.value); setVorschlag(null); setStatus(""); }}
               placeholder="Was bedeutet der Begriff für dich? Beispiele, Stimmung, Genres …"
+              disabled={schreiben}
               maxLength={300} rows={4} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.5 }} />
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <button style={btnStyle(true)} onClick={deuten}
-                disabled={laeuft || !wort.trim() || !beschreibung.trim()}>
+                disabled={laeuft || schreiben || !wort.trim() || !beschreibung.trim()}>
                 {laeuft ? "KI deutet …" : "Mit KI deuten"}
               </button>
               <span style={mono}>ein bewusster KI-Aufruf · keine automatische Wiederholung</span>
@@ -531,6 +563,7 @@ function VokabularEditor({
       )}
       {kiSperrgrund && <p style={{ ...mono, color: T.warum, lineHeight: 1.6 }}>{kiSperrgrund}</p>}
       {fehler && <p role="alert" style={{ ...mono, color: T.gefahr, lineHeight: 1.6 }}>{fehler}</p>}
+      {status && <p role="status" aria-live="polite" style={{ ...mono, lineHeight: 1.6, color: T.wolfram }}>{status}</p>}
       {vorschlag && (
         <div style={{ border: "1px solid " + T.wolfram, borderRadius: 6, padding: 12, margin: "12px 0" }}>
           <strong style={{ color: T.wolfram }}>{vorschlag.wort}</strong>
@@ -538,7 +571,11 @@ function VokabularEditor({
           <p style={{ ...mono, margin: "0 0 10px", lineHeight: 1.6 }}>
             Offline-Regel: {[...vorschlag.genres, ...vorschlag.tags].join(" · ")}
           </p>
-          <button style={btnStyle(true)} onClick={speichern}>Definition speichern</button>
+          <button style={btnStyle(true)}
+            disabled={schreiben || !hatOfflineDefinition(vorschlag)}
+            onClick={speichern}>
+            {schreiben ? "Definition wird gespeichert …" : "Definition speichern"}
+          </button>
         </div>
       )}
       {vokabular.length === 0 ? <p style={mono}>Noch keine eigenen Wörter.</p> : vokabular.map((v) => (

@@ -126,6 +126,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { JSDOM } from "jsdom";
@@ -239,7 +240,16 @@ const EINTRITT_ALTBAU = `
 export { GeschmackBereich } from "./GeschmackBereich.jsx";
 `;
 
-const AUSGABE_DIR = path.join(WURZEL, "node_modules/.cache/geschmackui-test");
+const AUSGABE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "kd-geschmackui-test-"));
+const AUSGABE_NODE_MODULES = path.join(AUSGABE_DIR, "node_modules");
+process.on("exit", () => {
+  try {
+    fs.rmSync(AUSGABE_DIR, { recursive: true, force: true });
+  } catch {}
+});
+if (!fs.existsSync(AUSGABE_NODE_MODULES)) {
+  fs.symlinkSync(path.join(WURZEL, "node_modules"), AUSGABE_NODE_MODULES, "dir");
+}
 fs.mkdirSync(AUSGABE_DIR, { recursive: true });
 const esbuild = await ladeEsbuild();
 
@@ -326,6 +336,12 @@ const knoepfe = () => alles("button");
 const knopf = (t) => knoepfe().find((b) => b.textContent.trim() === t);
 const knopfTeil = (t) => knoepfe().find((b) => b.textContent.includes(t));
 const text = () => { const f = feld(); return f ? f.textContent.replace(/\s+/g, " ").trim() : ""; };
+const setzeWert = (el, wert) => {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set;
+  setter.call(el, wert);
+  el.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  el.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+};
 const klick = async (b, wer) => {
   if (!b) throw new Error("Knopf nicht gefunden: " + (wer || "?"));
   await act(async () => { b.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
@@ -1957,7 +1973,7 @@ await act(async () => { tabWurzel.render(h(DatenTab, {
   clearProgrammCache: () => {},
   startWahl: null,
   saveVokabular: null,
-  kiStand: { global: true, funktionen: { profil: true } },
+  kiStand: { global: true, funktionen: { profil: true, suche: true } },
   kiProfilFaehig: true,
   artikelListe: [{ id: "artikel_001", titel: "Mein eigener Beitrag", text: "Text für den Testlauf, präzise und deutlich." }],
   kontoAktiv: true,
@@ -1977,6 +1993,368 @@ check("N", "Ohne Vokabular-Writer bleibt der kostenpflichtige Pfad im Dialog ges
 await act(async () => { tabWurzel.render(null); });
 dom.window.localStorage.removeItem(TOPF.geschmacksprofil);
 feld = () => document.getElementById("wurzel");
+});
+
+/* =========================================================================
+   O — VOKABULAR-SPEICHERN UND BLOGANALYSE HAPPYPATH (E17A)
+   ========================================================================= */
+abschnitt("O", async () => {
+console.log("\n--- O: Vokabularwrite-Contracts & nested Bloganalyse-Happy-Path ---");
+
+const mockStorage = () => {
+  const map = new Map();
+  return {
+    map,
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => { map.set(key, String(value)); },
+    removeItem: (key) => { map.delete(key); },
+  };
+};
+const defer = () => {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+};
+const aiMock = ({
+  health = {},
+  responses = [],
+  calls = [],
+} = {}) => {
+  const taskCalls = calls;
+  return {
+    calls: taskCalls,
+    api: {
+      runTask(task, payload, options) {
+        taskCalls.push({ task, payload, options });
+        if (task === "health") return Promise.resolve(health);
+        const response = responses.find((r) => r.task === task);
+        if (response) return Promise.resolve(response.factory(payload));
+        return Promise.reject(new Error("unbekannte Task"));
+      },
+    },
+  };
+};
+
+const AI_HEALTH = {
+  ok: true,
+  task: "health",
+  vorgangId: "11111111-1111-4000-8000-111111111111",
+  phase: "etappe-5",
+  contractVersion: "ai-task-v5",
+  buildVersion: "ui-test",
+  laufzeit: { deno: "2", region: "eu" },
+  schluesselHerkunft: { oeffentlich: "gesetzt", geheim: "gesetzt" },
+  anbieterSecretGesetzt: true,
+  aufrufer: { rolle: "authenticated", fachrolle: "owner", weg: "token", accountIdVorhanden: true },
+  betrieb: { aiAktiv: true },
+  zeit: "2026-08-17T00:00:00.000Z",
+  capabilities: {
+    blogProfileExtract: {
+      ready: true,
+      task: "blog-profile-extract",
+      promptVersion: "blog-profile-v1",
+      modelAlias: "klein",
+      maxTokens: 2048,
+      taskMaxReservationUsdCent: 5,
+    },
+  },
+};
+
+const BLOG_BELEG = "Dieser präzise Satz ist im Artikeltext enthalten.";
+const BLOG_ARTIKEL = {
+  id: "blog_001",
+  titel: "Mein genauer Blick auf den Film",
+  text: `Der Satz ist eindeutig vorhanden und dient als sicherer Beleg für den Test.
+${BLOG_BELEG}
+Danach noch ein neutraler Schlussteil.`,
+};
+const BLOG_VORSCHAU = {
+  geschmackszuege: [{
+    art: "genre",
+    wert: "Drama",
+    richtung: "zieht_an",
+    staerke: 4,
+    sicherheit: "hoch",
+    beleg: BLOG_BELEG,
+  }],
+  vokabular: [{
+    wort: "nachtkino",
+    beschreibung: "Schwärzestich am Abend im Saal.",
+    genres: ["Drama"],
+    tags: ["präzise"],
+    beleg: BLOG_BELEG,
+  }],
+};
+
+const makeBlogAnalyseResponse = () => ({
+  data: {
+    geschmackszuege: BLOG_VORSCHAU.geschmackszuege,
+    vokabular: BLOG_VORSCHAU.vokabular,
+  },
+});
+
+/* ---------------- VokabularEditor Save-Contract (truthy-failure, no double click, kein KI-Rerun) */
+const vokabularSave = aiMock({
+  health: AI_HEALTH,
+  responses: [{ task: "intelligent-search", factory: () => ({ data: {
+    harte_filter: { genres: ["Drama"] },
+  } }) }],
+});
+const firstSave = defer();
+const savePlan = [
+  () => firstSave.promise,
+  () => Promise.resolve(false),
+  () => Promise.resolve(null),
+  () => { throw new Error("vokabular-save-failed"); },
+  () => Promise.resolve(true),
+];
+let vokabularCall = 0;
+const vokabularSpeichern = async () => {
+  const task = savePlan[vokabularCall] || (() => Promise.resolve(false));
+  vokabularCall += 1;
+  return task();
+};
+await act(async () => { tabWurzel.render(h(DatenTab, {
+  master: [{ titel: "Demo", genre: ["Drama"], tags: ["Drama"] }],
+  masterMeta: {}, masterHerkunft: { basis: "test" }, nachtragCount: 0,
+  exportMaster: () => {}, importMaster: () => {}, importProgramm: () => {}, importNonstop: () => {},
+  programm: [], clearProgrammCache: () => {}, startWahl: null,
+  vokabular: [],
+  saveVokabular: vokabularSpeichern,
+  kiStand: { global: true, funktionen: { profil: true } },
+  kiProfilFaehig: true,
+  kiSperrgrund: "",
+  streamingBekannt: { stand: "test", titel: [] },
+  streamingEntdecken: { titel: [] },
+  artikelListe: [],
+  kontoId: "",
+  kontoEmail: "",
+  kontoAktiv: false,
+  onKontoDatenGeaendert: () => {},
+  ai: vokabularSave.api,
+  }));
+});
+await ruhe();
+const wort = document.querySelector("#tabwurzel input[placeholder=\"Begriff (z. B. kuhl)\"]");
+  const beschreibung = document.querySelector("#tabwurzel textarea[placeholder=\"Was bedeutet der Begriff für dich? Beispiele, Stimmung, Genres …\"]");
+  check("O", "Vokabular-Editor im Settings-Pfad ist auffindbar", () => !!wort && !!beschreibung);
+  if (wort && beschreibung) {
+    feld = () => document.getElementById("tabwurzel");
+    await act(async () => {
+      setzeWert(wort, "Nacht");
+      setzeWert(beschreibung, "ruhig, düster, genau");
+    await ruhe();
+  });
+  const deutenKnopf = knopf("Mit KI deuten") || knopfTeil("KI deutet") || knopfTeil("deuten");
+  check("O", "Vokabular-Editor zeigt den KI-Button", () => !!deutenKnopf);
+  await klick(deutenKnopf, "Mit KI deuten");
+  check("O", "Vokabular-KI-Lauf startet genau einmal  [gemessen: " + vokabularSave.calls.length + "]",
+    () => vokabularSave.calls.length === 1 && vokabularSave.calls[0].task === "intelligent-search");
+  const speichern = knopf("Definition speichern");
+    await act(async () => {
+      speichern.click();
+      await ruhe();
+    });
+  await ruhe();
+  check("O", "Beim ausstehenden Speichern ist der Save-Button semantisch gesperrt",
+    () => {
+      const b = knopf("Definition wird gespeichert …");
+      return !!b || (speichern && speichern.disabled);
+    });
+  check("O", "Wort- und Beschreibungsfelder sind während des Speicherns gesperrt",
+    () => wort.disabled && beschreibung.disabled);
+  check("O", "Während Save-Write ist der deuten-Pfad gesperrt",
+    () => {
+      const b = knopfTeil("Mit KI deuten");
+      return !!b && b.disabled;
+    });
+  check("O", "Beim ausstehenden Speichern steht ein Live-Status",
+    () => text().includes("Definition wird gespeichert"));
+  check("O", "Beim ausstehenden Speichern entsteht kein zusätzlicher KI-Aufruf",
+    () => vokabularSave.calls.length === 1);
+  check("O", "Eingaben bleiben nach ausstehendem Speichern sichtbar",
+    () => wort.value === "Nacht" && beschreibung.value === "ruhig, düster, genau");
+  firstSave.resolve(false);
+  await ruhe();
+  check("O", "Fehlgeschlagene Speicherung bleibt inhaltlich unverändert",
+    () => wort.value === "Nacht" && beschreibung.value === "ruhig, düster, genau"
+      && text().includes("Bitte erneut versuchen"));
+  check("O", "Fehlgeschlagene Speicherung zeigt inhaltsfreie Nutzer-Fehlermeldung",
+    () => text().includes("Die Definition konnte nicht gespeichert werden."));
+  check("O", "Nach Fehlversuch bleibt Vorschlag erhalten",
+    () => !!knopf("Definition speichern"));
+  await klick(knopf("Definition speichern"), "Definition speichern (Retry, false)");
+  await ruhe();
+  check("O", "Retry nach false-Antwort bleibt ohne neuen KI-Lauf",
+    () => vokabularSave.calls.length === 1 && !!knopf("Definition speichern"));
+  await klick(knopf("Definition speichern"), "Definition speichern (Retry, null)");
+  await ruhe();
+  check("O", "Retry nach null bleibt ohne neuen KI-Lauf",
+    () => vokabularSave.calls.length === 1 && !!knopf("Definition speichern"));
+  await klick(knopf("Definition speichern"), "Definition speichern (Retry, Reject)");
+  await ruhe();
+  await klick(knopf("Definition speichern"), "Definition speichern (Retry, true)");
+  await ruhe();
+  check("O", "Finaler Retry nutzt die vorhandene KI-Suggestion (kein neuer Run)",
+    () => vokabularSave.calls.length === 1 && !knopf("Definition speichern"));
+  check("O", "Bestätigte Speicherung löscht Wort, Beschreibung und Vorschlag",
+    () => wort.value === "" && beschreibung.value === "" && !knopf("Definition speichern"));
+}
+await act(async () => { tabWurzel.render(null); });
+feld = () => document.getElementById("wurzel");
+
+/* ---------------- Nested Settings → Geschmacksprofil → Bloganalyse Happy-Path ---------------- */
+const blogAi = aiMock({
+  health: AI_HEALTH,
+  responses: [{ task: "blog-profile-extract", factory: makeBlogAnalyseResponse }],
+});
+let parentProfil = P.erteileEinwilligung(LEER(), "2026-08-17T00:00:00.000Z");
+let parentVokabular = [];
+let parentProfilWrites = 0;
+let parentVokabularWrites = 0;
+const vorigerSessionStorage = globalThis.sessionStorage;
+const vorigerWindowSessionStorageDescriptor = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+const blogSessionStorage = mockStorage();
+
+const BlogHarness = () => {
+  const [profil, setProfil] = React.useState(parentProfil);
+  const [vokabular, setVokabular] = React.useState(parentVokabular);
+  React.useEffect(() => { parentProfil = profil; parentVokabular = vokabular; }, [profil, vokabular]);
+  return h(DatenTab, {
+    master: [{ titel: "Demo", genre: ["Drama"], tags: ["Drama", "präzise"] }],
+    masterMeta: {}, masterHerkunft: { basis: "test" }, nachtragCount: 0,
+    exportMaster: () => {}, importMaster: () => {}, importProgramm: () => {}, importNonstop: () => {},
+    programm: [], clearProgrammCache: () => {}, startWahl: null,
+    vokabular,
+    saveVokabular: async (neu) => {
+      parentVokabularWrites += 1;
+      setVokabular(neu);
+      return true;
+    },
+    kiStand: { global: true, funktionen: { profil: true } },
+    kiProfilFaehig: true,
+    streamingBekannt: { stand: "test", titel: [] }, streamingEntdecken: { titel: [] },
+    artikelListe: [BLOG_ARTIKEL],
+    kontoId: "11111111-1111-1111-8000-111111111111",
+    kontoEmail: "test@example.com", kontoAktiv: true,
+    onKontoDatenGeaendert: () => {},
+    ai: blogAi.api,
+    speicher: {
+      ladeProfil: async () => profil,
+      speichereProfil: async (wert) => { parentProfilWrites += 1; setProfil(wert); return true; },
+      loescheProfil: async () => ({ ...profil, signale: [], achsen: profil?.achsen || { wie: null, was: null, warum: null }, filme: [], nichtDeutbar: [] }),
+    },
+    kiSperrgrund: "",
+    setErr: () => {},
+  });
+};
+const setBlogSessionStorage = (storage) => {
+  const globalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  if (globalDescriptor?.configurable) {
+    Object.defineProperty(globalThis, "sessionStorage", {
+      value: storage,
+      configurable: true,
+      enumerable: true,
+      writable: false,
+    });
+  } else {
+    globalThis.sessionStorage = storage;
+  }
+  if (vorigerWindowSessionStorageDescriptor?.configurable) {
+    Object.defineProperty(window, "sessionStorage", {
+      value: storage,
+      configurable: true,
+      enumerable: vorigerWindowSessionStorageDescriptor.enumerable !== false,
+      writable: false,
+    });
+  }
+};
+const restoreBlogSessionStorage = () => {
+  const globalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  if (globalDescriptor?.configurable) {
+    if (vorigerSessionStorage == null) {
+      delete globalThis.sessionStorage;
+    } else {
+      Object.defineProperty(globalThis, "sessionStorage", {
+        value: vorigerSessionStorage,
+        configurable: true,
+        enumerable: true,
+        writable: false,
+      });
+    }
+  } else {
+    globalThis.sessionStorage = vorigerSessionStorage;
+  }
+  if (vorigerWindowSessionStorageDescriptor?.configurable) {
+    Object.defineProperty(window, "sessionStorage", vorigerWindowSessionStorageDescriptor);
+  }
+};
+setBlogSessionStorage(blogSessionStorage);
+await act(async () => { tabWurzel.render(h(BlogHarness)); });
+feld = () => document.getElementById("tabwurzel");
+await ruhe();
+const blog = () => document.getElementById("tabwurzel").querySelector(".kd-blogprofilanalyse");
+check("O", "Nested Bloganalyse-Container ist eingebunden", () => !!blog());
+const k = blog();
+if (k) {
+  const cb = k.querySelector('input[type="checkbox"]');
+  const start = [...k.querySelectorAll("button")].find((b) => b.textContent.includes("Artikel"));
+  check("O", "Der kostenpflichtige Bloganalyse-Start ist initial gesperrt", () => cb && start && start.disabled);
+  if (cb && start) {
+    await act(async () => { cb.click(); await ruhe(); });
+    check("O", "Nach Aktivierung der Checkbox ist der kostenpflichtige Bloganalyse-Start aktiv",
+      () => !start.disabled);
+    await act(async () => { start.click(); await ruhe(); });
+    // Der aktuelle Dialog schliesst Markerprobe, SHA-256 und Vorschauprojektion
+    // in getrennten Microtask-Runden ab. Genau zwei Ticks nutzt auch sein
+    // eigener Lifecycle-Harness; ein einzelner Tick misst nur den Zwischenstand.
+    await ruhe();
+    check("O", "Beide Gruppen erscheinen nach erfolgreicher Analyse-Vorschau", () => {
+      return !!k.querySelector(".kd-blogprofilanalyse-vorschau")
+        && !![...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Geschmacksprofil speichern")
+        && !![...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Vokabular speichern");
+    });
+    check("O", "Blog-Analyse-Nachweis nutzt einen lokalen Marker (kein Netzwerk-Klartext)", () => {
+      return blogSessionStorage.map.size === 1;
+    });
+    const blogMarkerInhalt = [...blogSessionStorage.map.values()].map((wert) => {
+      try { return JSON.parse(wert); } catch { return null; }
+    });
+    check("O", "Nachweis enthält keine Artikelinhalte",
+      () => blogMarkerInhalt.every((eintrag) => eintrag && typeof eintrag === "object"
+        && !eintrag.articleText
+        && !JSON.stringify(eintrag).includes(BLOG_ARTIKEL.text)
+        && !JSON.stringify(eintrag).includes(BLOG_BELEG)));
+    const btnProfil = [...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Geschmacksprofil speichern");
+    const btnVokabular = [...k.querySelectorAll("button")].find((b) => b.textContent.trim() === "Vokabular speichern");
+    check("O", "Profil-Save ist zuerst unabhängig bestätigbar",
+      () => !!btnProfil);
+    if (btnProfil && btnVokabular) {
+      const vorProfilWrite = parentProfilWrites;
+      const vorVokWrite = parentVokabularWrites;
+      await act(async () => { btnProfil.click(); await ruhe(); });
+      await ruhe();
+      check("O", `Nach Profilsave steigt nur der Profil-Zähler [gemessen: profil ${parentProfilWrites}/${vorProfilWrite + 1}, vokabular ${parentVokabularWrites}/${vorVokWrite}]`,
+        () => parentProfilWrites === vorProfilWrite + 1 && parentVokabularWrites === vorVokWrite);
+      check("O", "Nach Profilsave bleibt Vokabular-Write unabhängig verfügbar",
+        () => !!btnVokabular && !btnVokabular.disabled);
+      const nachProfil = parentProfilWrites;
+      const nachVok = parentVokabularWrites;
+      await act(async () => { btnVokabular.click(); await ruhe(); });
+      await ruhe();
+      check("O", `Nach Vokabular-Save bleibt der Profil-Zähler stabil, Vokabular steigt [gemessen: profil ${parentProfilWrites}/${nachProfil}, vokabular ${parentVokabularWrites}/${nachVok + 1}]`,
+        () => parentProfilWrites === nachProfil && parentVokabularWrites === nachVok + 1);
+      check("O", "Nach getrennten Saven sind Profil UND Vokabular in Parent-Status wirklich aktualisiert",
+        () => Array.isArray(parentProfil?.signale) && parentProfil.signale.length > 0
+          && Array.isArray(parentVokabular) && parentVokabular.some((eintrag) => eintrag.wort === "nachtkino"));
+      check("O", "Bestätigung erscheint erst nach beiden erfolgreichen Writes",
+        () => k.textContent.includes("Beide Gruppen wurden gespeichert"));
+    }
+  }
+}
+await act(async () => { tabWurzel.render(null); });
+feld = () => document.getElementById("wurzel");
+restoreBlogSessionStorage();
 });
 
 
@@ -2075,6 +2453,7 @@ const TITEL_GRUPPEN = {
   L: "Ansehen, korrigieren, entfernen",
   M: "Erreichbarkeit ohne KI",
   N: "Blogdialog in Einstellungen verdrahtet",
+  O: "Vokabular-Speichern + nested Bloganalyse-Happy-Path",
 };
 let ok = 0, schlecht = 0;
 console.log("\n===========================================================");
