@@ -187,6 +187,7 @@ function RadarView({
   onRadarPilotReceipt,
   onRadarPilotImport,
   onRadarPilotSync,
+  onRadarWebsearchCheck,
 }) {
   const [proposalRaw, setProposalRaw] = useState("");
   const [expectedHash, setExpectedHash] = useState("");
@@ -196,6 +197,8 @@ function RadarView({
   const [pilotSyncBusy, setPilotSyncBusy] = useState(false);
   const [pilotImportMessage, setPilotImportMessage] = useState("");
   const [pilotReceiptBusy, setPilotReceiptBusy] = useState("");
+  const [radarCheckBusyTarget, setRadarCheckBusyTarget] = useState("");
+  const [radarCheckMessage, setRadarCheckMessage] = useState("");
   const pilotReceiptInFlight = useRef(new Set());
   const ledger = useMemo(() => createFixtureRadarLedger(radarFixtures), []);
   const today = new Date().toISOString().slice(0, 10);
@@ -213,6 +216,7 @@ function RadarView({
     date: entry.date,
     region: entry.region,
     platform: entry.platform,
+    seasonNumber: entry.seasonNumber,
     lifecycleStatus: entry.lifecycleStatus,
     verificationStatus: entry.verificationStatus,
     evidence: entry.evidence,
@@ -224,6 +228,8 @@ function RadarView({
   const canPilotReceipt = canPilotControls && typeof onRadarPilotReceipt === "function";
   const canPilotImport = canPilotControls && radarReview === true && typeof onRadarPilotImport === "function";
   const canPilotSync = radarPilotClientEnabled && accountMode;
+  const canRadarCheck = canPilotControls && radarReview === true
+    && typeof onRadarWebsearchCheck === "function";
   const week = canPilotControls ? pilotWeek : fixtureWeek;
   const fixtureTarget = radarFixtures.catalog[0];
   const active = radarState?.subscriptions || [];
@@ -326,6 +332,27 @@ function RadarView({
       setPilotReceiptBusy("");
     }
   };
+  const fuehreRadarCheckAus = async (entry) => {
+    if (!canRadarCheck || entry.status !== "active" || radarCheckBusyTarget) return;
+    setRadarCheckBusyTarget(entry.targetId);
+    setRadarCheckMessage("");
+    try {
+      const result = await onRadarWebsearchCheck(entry.targetId);
+      const messages = {
+        confirmed: "Ein bestätigtes Radarereignis wurde gespeichert.",
+        no_change: "Keine neue bestätigte Änderung gefunden.",
+        insufficient_evidence: "Noch keine ausreichend belegte Änderung gefunden.",
+        forbidden: "Dieses Radarziel kann gerade nicht geprüft werden.",
+        provider_error: "Die Radar-Suche ist noch nicht verfügbar.",
+        unavailable: "Die Radar-Suche ist noch nicht verfügbar.",
+        invalid_response: "Die Radar-Suche lieferte kein verlässliches Ergebnis.",
+        storage_error: "Das bestätigte Ergebnis konnte nicht sicher gespeichert werden.",
+      };
+      setRadarCheckMessage(messages[result?.status] || "Das Radarziel konnte nicht geprüft werden.");
+    } finally {
+      setRadarCheckBusyTarget("");
+    }
+  };
 
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
@@ -338,9 +365,15 @@ function RadarView({
         <h3>Beobachtete Ziele</h3>
         {active.length ? <ul>{active.map((entry) => <li key={entry.targetId}><strong>{localRadarTargetLabel(entry.targetId, {
           master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
-        })}</strong><span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.region}</span></li>)}</ul>
+        })}</strong><span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.region}</span>
+          {canRadarCheck && entry.status === "active" ? <button type="button" className="kd-entdecken-sekundaer"
+            disabled={!!radarCheckBusyTarget} onClick={() => fuehreRadarCheckAus(entry)}>
+            {radarCheckBusyTarget === entry.targetId ? "Wird geprüft…" : "Jetzt prüfen"}
+          </button> : null}
+        </li>)}</ul>
           : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
         {pending.length ? <p className="kd-entdecken-pending">{pending.length} Änderung{pending.length === 1 ? "" : "en"} nur lokal vorgemerkt.</p> : null}
+        {radarCheckMessage ? <p className="kd-entdecken-pending" role="status">{radarCheckMessage}</p> : null}
       </article>
       <article className="kd-entdecken-panel">
         <h3>Diese Woche</h3>
@@ -349,7 +382,7 @@ function RadarView({
             <strong>{entry.title || localRadarTargetLabel(entry.targetId, {
               master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
             })}</strong>
-            <span>{entry.date} · {entry.eventType} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
+            <span>{entry.date} · {entry.eventType}{entry.seasonNumber ? ` · Staffel ${entry.seasonNumber}` : ""} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
             {entry.evidence?.length ? <div className="kd-pilot-quellen">
               <span>Quellen:</span>
               <div className="kd-pilot-quellen-links">
@@ -446,6 +479,7 @@ export function EntdeckenTab({
   onRadarPilotReceipt,
   onRadarPilotImport,
   onRadarPilotSync,
+  onRadarWebsearchCheck,
   onObserveToggle,
   onRadarChange,
   onRadarPreview,
@@ -483,7 +517,8 @@ export function EntdeckenTab({
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotClientEnabled={radarPilotClientEnabled} radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents}
       radarReview={radarReview} syncStatus={syncStatus}
-      onRadarPilotReceipt={onRadarPilotReceipt} onRadarPilotImport={onRadarPilotImport} onRadarPilotSync={onRadarPilotSync} /> : null}
+      onRadarPilotReceipt={onRadarPilotReceipt} onRadarPilotImport={onRadarPilotImport} onRadarPilotSync={onRadarPilotSync}
+      onRadarWebsearchCheck={onRadarWebsearchCheck} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Meinungen"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
 
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}

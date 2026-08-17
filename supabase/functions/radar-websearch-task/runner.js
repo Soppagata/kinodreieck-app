@@ -1,0 +1,106 @@
+import {
+  evaluateRadarWebsearchResponse,
+  validateRadarWebsearchRequest,
+} from "./contract.js";
+
+function frozenResult(value) { return Object.freeze({ ...value }); }
+async function loadFeedSafely(repository, accountId) {
+  try { return await repository.loadFeed({ accountId }); }
+  catch { return null; }
+}
+
+/* Senkrechter Paket-A-Runner. Der Adapter sieht ausschließlich `request`.
+   Accountbindung, Quellenregister, Upsert und Feed bleiben im Repository und
+   damit außerhalb des Providerpayloads. Es gibt genau einen Adapteraufruf und
+   weder Retry noch automatischen Folgecheck. */
+/**
+ * @param {{
+ *   accountId: string,
+ *   targetId: string,
+ *   adapter: { search(request: Record<string, unknown>): Promise<unknown> },
+ *   repository: {
+ *     loadAuthorizedTarget(input: {accountId: string, targetId: string}): Promise<unknown>,
+ *     resolveSources(domains: string[]): Promise<Array<Record<string, unknown>>>,
+ *     upsertConfirmedEvent(input: {accountId: string, operationId: string, event: Record<string, unknown>}): Promise<{status?: string}>,
+ *     loadFeed(input: {accountId: string}): Promise<unknown>
+ *   },
+ *   operationId?: (event: Record<string, unknown>) => string
+ * }} options
+ */
+export async function runRadarWebsearchCheck({
+  accountId,
+  targetId,
+  adapter,
+  repository,
+  operationId = () => crypto.randomUUID(),
+}) {
+  if (!accountId || !targetId || typeof adapter?.search !== "function"
+      || typeof repository?.loadAuthorizedTarget !== "function"
+      || typeof repository?.resolveSources !== "function"
+      || typeof repository?.upsertConfirmedEvent !== "function"
+      || typeof repository?.loadFeed !== "function") {
+    return frozenResult({ status: "unavailable", writes: 0, feed: null });
+  }
+  let request;
+  try {
+    const context = await repository.loadAuthorizedTarget({ accountId, targetId });
+    const checked = validateRadarWebsearchRequest(context);
+    if (!checked.ok) return frozenResult({ status: "forbidden", writes: 0, feed: null });
+    request = checked.value;
+  } catch {
+    return frozenResult({ status: "forbidden", writes: 0, feed: null });
+  }
+
+  let envelope;
+  try {
+    envelope = await adapter.search(request);
+  } catch {
+    return frozenResult({ status: "provider_error", writes: 0, feed: null });
+  }
+
+  let sources = [];
+  try {
+    const domains = [...new Set((envelope?.response?.events || []).flatMap((event) => (
+      (event?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
+    )))];
+    sources = await repository.resolveSources(domains);
+  } catch {
+    return frozenResult({
+      status: "insufficient_evidence", writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+    });
+  }
+  const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
+  if (evaluated.status !== "confirmed") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+    });
+  }
+
+  let writes = 0;
+  let changed = false;
+  try {
+    for (const event of evaluated.events) {
+      const upsert = await repository.upsertConfirmedEvent({
+        accountId,
+        operationId: operationId(event),
+        event,
+      });
+      if (upsert?.status === "confirmed") {
+        writes += 1;
+        changed = true;
+      } else if (upsert?.status !== "no_change") {
+        return frozenResult({ status: "storage_error", writes, feed: null });
+      }
+    }
+  } catch {
+    return frozenResult({ status: "storage_error", writes, feed: null });
+  }
+  return frozenResult({
+    status: changed ? "confirmed" : "no_change",
+    writes,
+    feed: await loadFeedSafely(repository, accountId),
+  });
+}

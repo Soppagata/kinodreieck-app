@@ -31,6 +31,7 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
 ]);
+export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber"]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -50,6 +51,12 @@ function exactKeys(value, keys) {
   if (!plain(value)) return false;
   const actual = Object.keys(value);
   return actual.length === keys.length && actual.every((key) => keys.includes(key));
+}
+function exactKeysWithOptional(value, required, optional) {
+  if (!plain(value)) return false;
+  const actual = Object.keys(value);
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => actual.includes(key)) && actual.every((key) => allowed.has(key));
 }
 function compareFeedEvidence(a, b) {
   const aSourceId = text(a.sourceId);
@@ -204,7 +211,7 @@ function validateRadarPilotFeedEvidence(value, errors) {
     errors.push("feed-event-evidence-list-invalid");
     return;
   }
-  if (value.length !== 2) errors.push("feed-event-evidence-count-invalid");
+  if (value.length < 1 || value.length > 2) errors.push("feed-event-evidence-count-invalid");
   const sourceIds = new Set();
   const sourceDomains = new Set();
   const urls = new Set();
@@ -240,7 +247,9 @@ function validateRadarPilotFeedEvidence(value, errors) {
 
 export function validateRadarPilotEvent(value) {
   const errors = [];
-  if (!exactKeys(value, RADAR_PILOT_EVENT_KEYS)) return result(["feed-event-shape-invalid"]);
+  if (!exactKeysWithOptional(value, RADAR_PILOT_EVENT_KEYS, RADAR_PILOT_EVENT_OPTIONAL_KEYS)) {
+    return result(["feed-event-shape-invalid"]);
+  }
   if (!validUuid(value.eventId)) errors.push("feed-event-id-invalid");
   if (!validUuid(value.eventVersionId)) errors.push("feed-event-version-invalid");
   if (!validTargetKey(value.targetId)) errors.push("feed-event-target-invalid");
@@ -248,6 +257,14 @@ export function validateRadarPilotEvent(value) {
   if (!validDay(value.date)) errors.push("feed-event-date-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-event-region-invalid");
   if (!validPlatform(value.eventType, value.platform)) errors.push("feed-event-platform-invalid");
+  if (value.eventType === "staffelstart") {
+    if (value.seasonNumber !== undefined
+        && (!Number.isInteger(value.seasonNumber) || value.seasonNumber < 1 || value.seasonNumber > 999)) {
+      errors.push("feed-event-season-invalid");
+    }
+  } else if (value.seasonNumber !== undefined && value.seasonNumber !== null) {
+    errors.push("feed-event-season-invalid");
+  }
   if (!RADAR_LIFECYCLE_STATUSES.includes(value.lifecycleStatus) || value.lifecycleStatus === "retracted") {
     errors.push("feed-event-lifecycle-invalid");
   }

@@ -129,10 +129,11 @@ await check("Alle Pilot-Dokumente verlangen exakt ihre kanonischen Keysets", () 
   })).ok, false);
 });
 
-await check("Pilot-Event-Evidence muss exakt zwei sichere, eindeutige Quellen-Objekte tragen", () => {
+await check("Pilot-Event-Evidence trägt ein oder zwei sichere, eindeutige Quellen-Objekte", () => {
   assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
     evidence: [{ sourceId: "source:official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: instant }],
-  })] })).ok, false);
+  })] })).ok, true);
+  assert.equal(C.validateRadarPilotFeed(feed({ events: [event({ evidence: [] })] })).ok, false);
   assert.equal(C.validateRadarPilotFeed(feed({ events: [event({
     evidence: [
       { sourceId: "source:official", sourceDomain: "example.com", url: "https://evil.test", retrievedAt: instant },

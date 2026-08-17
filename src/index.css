@@ -299,6 +299,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-radar-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
 .kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
 .kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
+.kd-entdecken-panel li>.kd-entdecken-sekundaer { align-self:flex-start; min-height:44px; margin-top:7px; }
 .kd-pilot-quellen { margin-top:6px; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .kd-pilot-quellen-links { display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
 .kd-pilot-quellen-link { color:var(--wolfram,#e3a63b); text-decoration:underline; overflow-wrap:anywhere; word-break:break-word; min-width:0; }

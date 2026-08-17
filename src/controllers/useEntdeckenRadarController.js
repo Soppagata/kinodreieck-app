@@ -17,6 +17,7 @@ import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
+import { radarWebsearchService } from "../services/radarWebsearch.js";
 
 export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
@@ -283,6 +284,33 @@ export function useEntdeckenRadarController({
     return syncRadarPilot();
   }, [syncRadarPilot]);
 
+  const fuehreRadarWebsearchCheck = useCallback(async (targetId) => {
+    const state = radarStateRef.current;
+    const activeMatches = (state?.subscriptions || []).filter((entry) => (
+      entry.targetId === targetId && entry.status === "active"
+    ));
+    const hasPendingTargetChange = (state?.outbox || []).some((entry) => (
+      entry.targetId === targetId && entry.status === "pending"
+    ));
+    if (!radarPilotClientEnabled || !remoteKontoAktiv || radarAuthority !== "account-cache"
+        || state?.authority !== "account-cache" || state?.pilot?.status !== "ready"
+        || state?.pilot?.radarReview !== true || activeMatches.length !== 1
+        || hasPendingTargetChange) {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+    const result = await radarWebsearchService.checkNow(targetId);
+    if (["confirmed", "insufficient_evidence", "no_change"].includes(result?.status)) {
+      await syncRadarPilot();
+    }
+    return result;
+  }, [
+    radarAuthority,
+    radarPilotClientEnabled,
+    radarStateRef,
+    remoteKontoAktiv,
+    syncRadarPilot,
+  ]);
+
   const bestaetigeRadarVorschau = useCallback(async (target, { shareEnabled = false } = {}) => {
     if (radarAuthority === "account-cache" && !remoteKontoAktiv) {
       setErr("Radar-Änderungen im Kontomodus brauchen einen fachlich aktiven Kontozugriff.");
@@ -351,6 +379,7 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotReceipt,
     fuehreRadarPilotImport,
     fuehreRadarPilotSync,
+    fuehreRadarWebsearchCheck,
     fuehreGlobaleSuchaktionAus,
   };
 }

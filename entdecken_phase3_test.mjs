@@ -20,6 +20,7 @@ import {
   upsertGuestRadarSubscription,
 } from "./src/lib/localEventRadar.js";
 import { decodeAndValidateLocalProposal } from "./src/lib/radarProposalValidator.js";
+import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
 let act = async (callback) => callback();
@@ -433,12 +434,64 @@ const pilotReviewFalseUi = await mountPilotUi({
 await act(async () => { button(pilotReviewFalseUi.container, "Radar").click(); await tick(); });
 check("Flag true mit radarReview false blendet Pilot-Import aus", () => {
   assert.equal(pilotReviewFalseUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
+  assert.equal(button(pilotReviewFalseUi.container, "Jetzt prüfen"), undefined);
   const weekPanel = [...pilotReviewFalseUi.container.querySelectorAll("article.kd-entdecken-panel")]
     .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
   const listItem = weekPanel?.querySelector("li");
   assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
 });
 await pilotReviewFalseUi.cleanup();
+
+const maxActiveRadarState = {
+  ...createEmptyLocalRadar({ authority: "account-cache" }),
+  subscriptions: [{
+    targetId: "tmdb:0001", targetType: "work", region: "AT", scope: "all",
+    status: "active", updatedAt: `${heuteIso}T09:00:00.000Z`,
+  }],
+};
+let radarCheckCalls = 0;
+const pilotCheckUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [],
+  radarReview: true,
+  radarState: maxActiveRadarState,
+  onRadarWebsearchCheck: async (targetId) => {
+    radarCheckCalls += 1;
+    assert.equal(targetId, "tmdb:0001");
+    return { status: "confirmed", writes: 1 };
+  },
+});
+await act(async () => { button(pilotCheckUi.container, "Radar").click(); await tick(); });
+check("Jetzt prüfen erscheint nur am aktiven Max-Ziel", () => {
+  const checkButtons = [...pilotCheckUi.container.querySelectorAll("button")]
+    .filter((entry) => entry.textContent.trim() === "Jetzt prüfen");
+  assert.equal(checkButtons.length, 1);
+});
+await act(async () => { button(pilotCheckUi.container, "Jetzt prüfen").click(); await tick(); });
+check("Jetzt prüfen ruft genau einen Zielcallback auf und meldet bestätigte Speicherung", () => {
+  assert.equal(radarCheckCalls, 1);
+  assert.ok(pilotCheckUi.container.textContent.includes("Ein bestätigtes Radarereignis wurde gespeichert."));
+});
+await pilotCheckUi.cleanup();
+
+const pausedMaxRadarState = {
+  ...maxActiveRadarState,
+  subscriptions: [{ ...maxActiveRadarState.subscriptions[0], status: "paused" }],
+};
+const pausedCheckUi = await mountPilotUi({
+  radarPilotClientEnabled: true,
+  radarPilotActive: true,
+  radarPilotEvents: [],
+  radarReview: true,
+  radarState: pausedMaxRadarState,
+  onRadarWebsearchCheck: async () => ({ status: "confirmed", writes: 1 }),
+});
+await act(async () => { button(pausedCheckUi.container, "Radar").click(); await tick(); });
+check("Pausiertes Ziel erhält keine Jetzt-prüfen-Aktion", () => {
+  assert.equal(button(pausedCheckUi.container, "Jetzt prüfen"), undefined);
+});
+await pausedCheckUi.cleanup();
 
 let pilotImportCalls = 0;
 const pilotImportUi = await mountPilotUi({
