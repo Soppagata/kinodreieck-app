@@ -35,6 +35,7 @@ await esbuild.build({
       'export { ArtikelMaske } from "./src/tabs/BlogTab.jsx";',
       'export { KontoUebernahme } from "./src/components/KontoUebernahme.jsx";',
       'export { useBackupExportController } from "./src/controllers/useBackupExportController.js";',
+      'export { useVokabularController } from "./src/controllers/useVokabularController.js";',
       'export { K, setStorageDriver as setGebundenerTestTreiber } from "./src/lib/storage.js";',
       'export { alleStimmungen, setzeEigeneStimmungen } from "./src/lib/finder.js";',
       'export { vokabularZuMap } from "./src/lib/vokabular.js";',
@@ -69,7 +70,7 @@ const { createRoot } = await import("react-dom/client");
 const {
   FilmCard, MedienForm, StapelImport, GlobalErrorQueue, ArtikelMaske, KontoUebernahme,
   Wochenplan, StreamingTab,
-  useBackupExportController, K, setGebundenerTestTreiber,
+  useBackupExportController, useVokabularController, K, setGebundenerTestTreiber,
   alleStimmungen, setzeEigeneStimmungen, vokabularZuMap,
 } = await import(ausgabe);
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -427,11 +428,136 @@ check(await ersterKlick === queueA && await zweiterKlick === queueB
 "K.vokabular serialisiert zwei schnelle Writes und projiziert den letzten bestätigten Stand");
 
 const appQuelle = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
-check(/wert:\s*vokabular,[\s\S]*uebernehmeBestaetigt:\s*setVokabular,[\s\S]*schreibe:\s*saveVokabular,[\s\S]*key:\s*K\.vokabular,[\s\S]*initial:\s*\[\],[\s\S]*normalisiere:\s*normalisiereVokabular/.test(appQuelle),
-  "App bindet saveVokabular an die gemeinsame bestätigte useConfirmedStorageState-Naht");
-check(/useEffect\(\(\) => \{\s*setzeEigeneStimmungen\(vokabularZuMap\(vokabular\)\);\s*\}, \[vokabular\]\);/.test(appQuelle)
-  && /if \(Array\.isArray\(v\)\) setVokabular\(v\);/.test(appQuelle),
-"App projiziert nur bestätigten React-State und übernimmt beim Boot gültige Arrays ohne neuen Storage-Write");
+check(/useVokabularController\(\s*\{\s*setErr\s*\}\s*\)/.test(appQuelle),
+  "App bindet den echten useVokabularController im Runtime-Pfad weiter");
+
+const wortImFinder = (wort) => Object.prototype.hasOwnProperty.call(alleStimmungen(), wort);
+async function mounteVokabularController() {
+  let api = null;
+  let setErrCalls = 0;
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  function VokabularProbe() {
+    api = useVokabularController({ setErr: () => { setErrCalls++; } });
+    return null;
+  }
+  await act(async () => { root.render(h(VokabularProbe)); await tick(); });
+  return {
+    api: () => api,
+    setErrCalls: () => setErrCalls,
+    wortImFinder,
+    async cleanup() {
+      await act(async () => { root.unmount(); });
+      container.remove();
+      setGebundenerTestTreiber(null);
+      setzeEigeneStimmungen(vokabularZuMap([]));
+    },
+  };
+}
+
+setzeEigeneStimmungen(vokabularZuMap([]));
+const vokabularFixture = await mounteVokabularController();
+const bootVokabular = [{ wort: "bootwort", genres: ["Drama"], tags: ["hell"] }];
+const neuerVokabular = [{ wort: "zielwort", genres: ["Komödie"], tags: ["leicht"] }];
+const ablehnVokabular = [{ wort: "ablehnwort", genres: ["Doku"], tags: [] }];
+const kontextVokabular = [{ wort: "kontextwort", genres: ["Horror"], tags: ["wechsel"] }];
+await act(async () => {
+  vokabularFixture.api().setVokabular(bootVokabular);
+  await tick();
+});
+check(vokabularFixture.api().vokabular === bootVokabular
+  && vokabularFixture.wortImFinder("bootwort") && !vokabularFixture.wortImFinder("zielwort"),
+  "setVokabular projiziert bestätigte geladene Vokabulardaten in State und Finder");
+
+let gespeichertePayload = null;
+let loeseVokabularControllerWrite;
+const writeBlock = new Promise((resolve) => { loeseVokabularControllerWrite = resolve; });
+setGebundenerTestTreiber({
+  name: "lokal", owner: "guest-local",
+  async get() { return null; },
+  async set(key, value) {
+    check(key === K.vokabular, "saveVokabular schreibt gegen den bestätigten Vokabular-Key");
+    gespeichertePayload = value;
+    await writeBlock;
+    return { key, value };
+  },
+  async delete() { return { key: "ignore", deleted: true }; },
+  async list() { return { keys: [] }; },
+});
+const pendingWrite = vokabularFixture.api().saveVokabular(neuerVokabular);
+check(vokabularFixture.api().vokabular === bootVokabular
+  && !vokabularFixture.wortImFinder("zielwort") && vokabularFixture.wortImFinder("bootwort")
+  && gespeichertePayload === null,
+  "saveVokabular verändert vor Promise-Erfolg weder sichtbaren State noch Finder-Projektion");
+loeseVokabularControllerWrite();
+const writeErgebnis = await act(async () => await pendingWrite);
+check(writeErgebnis === neuerVokabular
+  && vokabularFixture.api().vokabular === neuerVokabular
+  && vokabularFixture.wortImFinder("zielwort") && !vokabularFixture.wortImFinder("bootwort"),
+  "bestätigter saveVokabular-Commit aktualisiert State und Finder gemeinsam");
+check(gespeichertePayload === JSON.stringify(neuerVokabular),
+  "bestätigter Vokabular-Write serialisiert den exakten persistierten Stand");
+
+let loeseAbbruch;
+const writeReject = new Promise((_, reject) => { loeseAbbruch = reject; });
+setGebundenerTestTreiber({
+  name: "lokal-reject", owner: "guest-local",
+  async get() { return null; },
+  async set() { return writeReject; },
+  async delete() { return { key: "ignore", deleted: true }; },
+  async list() { return { keys: [] }; },
+});
+const rejectWrite = vokabularFixture.api().saveVokabular(ablehnVokabular);
+check(vokabularFixture.api().vokabular === neuerVokabular
+  && !vokabularFixture.wortImFinder("ablehnwort"),
+  "Ablehnung eines saveVokabular-Laufs hält vor dem Resolve den alten Stand");
+loeseAbbruch(new Error("Testablehnung"));
+const rejectErgebnis = await rejectWrite;
+check(rejectErgebnis === false && vokabularFixture.api().vokabular === neuerVokabular
+  && !vokabularFixture.wortImFinder("ablehnwort"),
+  "Reject/false hält Vokabular-State und Finder unverändert");
+
+let loeseTreiberAWrite;
+const treiberAWrite = new Promise((resolve) => { loeseTreiberAWrite = resolve; });
+let treiberAStart;
+const treiberAStartSignal = new Promise((resolve) => { treiberAStart = resolve; });
+let treiberASet = 0;
+let treiberBSet = 0;
+const treiberA = {
+  name: "konto-a", owner: "account:A",
+  async get() { return null; },
+  async set() {
+    treiberASet += 1;
+    treiberAStart();
+    await treiberAWrite;
+    return { key: K.vokabular, value: JSON.stringify(kontextVokabular) };
+  },
+  async delete() { return { key: "ignore", deleted: true }; },
+  async list() { return { keys: [] }; },
+};
+const treiberB = {
+  name: "konto-b", owner: "account:B",
+  async get() { return null; },
+  async set() { treiberBSet += 1; return { key: K.vokabular, value: JSON.stringify(kontextVokabular) }; },
+  async delete() { return { key: "ignore", deleted: true }; },
+  async list() { return { keys: [] }; },
+};
+setGebundenerTestTreiber(treiberA);
+const kontextWrite = vokabularFixture.api().saveVokabular(kontextVokabular);
+check(vokabularFixture.api().vokabular === neuerVokabular
+  && !vokabularFixture.wortImFinder("kontextwort"),
+  "Contextwechsel wird während offener Bestätigung sauber vorbereitet");
+await treiberAStartSignal;
+setGebundenerTestTreiber(treiberB);
+loeseTreiberAWrite();
+const kontextErgebnis = await kontextWrite;
+check(kontextErgebnis === false
+  && vokabularFixture.api().vokabular === neuerVokabular
+  && !vokabularFixture.wortImFinder("kontextwort")
+  && treiberASet === 1 && treiberBSet === 0,
+  "Contextwechsel verhindert Commit von saveVokabular und schützt den sichtbaren Stand");
+await vokabularFixture.cleanup();
 
 async function pruefeStatusReihenfolge(erster, zweiter) {
   const titel = {

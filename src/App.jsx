@@ -85,8 +85,6 @@ import {
   publicationState,
 } from "./lib/sharedPublication.js";
 import { parseMustwatch, parseBesitzImport, wendeBesitzImportAn } from "./lib/mustwatch.js";
-import { setzeEigeneStimmungen } from "./lib/finder.js";
-import { vokabularZuMap } from "./lib/vokabular.js";
 import { gruppiereDienstBadges, sichtbareDienste } from "./lib/dienste.js";
 import { StartTab } from "./tabs/StartTab.jsx";
 import { KinoTab } from "./tabs/KinoTab.jsx";
@@ -109,14 +107,11 @@ import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
+import { useVokabularController } from "./controllers/useVokabularController.js";
 
 const normalisiereEntdeckenStatus = (wert) => (
   wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
 );
-const normalisiereVokabular = (wert) => {
-  if (!Array.isArray(wert)) throw new TypeError("Vokabular muss eine Liste sein.");
-  return wert;
-};
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
@@ -320,20 +315,7 @@ export default function App() {
   }, [einstellungen, bereinigteEinstellungen]);
 
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
-  const {
-    wert: vokabular,
-    uebernehmeBestaetigt: setVokabular,
-    schreibe: saveVokabular,
-  } = useConfirmedStorageState({
-    key: K.vokabular,
-    initial: [],
-    normalisiere: normalisiereVokabular,
-    setErr,
-    fehlermeldung: "Vokabular konnte nicht gespeichert werden. Die Änderung wurde nicht übernommen.",
-  });
-  useEffect(() => {
-    setzeEigeneStimmungen(vokabularZuMap(vokabular));
-  }, [vokabular]);
+  const { vokabular, setVokabular, saveVokabular } = useVokabularController({ setErr });
 
   /* ---- Kinotermin-Pins ----
      Pin = {t, j, z, seit} — z ist der komplette Terminstring inkl. Kino.
