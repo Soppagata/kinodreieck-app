@@ -1,6 +1,7 @@
 /* Regressionstest der login-freien Tester-PWA: Erstwahl, Katalog-Gate,
    aufgeräumte Einstellungen, versteckte Modi und gezieltes Demo-Entfernen. */
 import { readFileSync } from "node:fs";
+import { TextEncoder } from "node:util";
 import { JSDOM } from "jsdom";
 
 const pfad = process.argv[2] || "dist-single/Kinodreieck.html";
@@ -226,6 +227,7 @@ function baueDom(seed = () => {}, demoRows = null) {
     beforeParse(w) {
       w.scrollTo = () => {};
       w.confirm = () => true;
+      w.TextEncoder = TextEncoder;
       if (!w.URL.createObjectURL) w.URL.createObjectURL = () => "blob:test";
       if (!w.URL.revokeObjectURL) w.URL.revokeObjectURL = () => {};
       if (!w.matchMedia) w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
