@@ -444,6 +444,7 @@ const {
   BLOG_PROFILE_PROMPT_VERSION,
   BLOG_PROFILE_MAX_TOKENS,
   BLOG_PROFILE_TASK_CAP_USD_CENT,
+  providerFreigabeIstExakt,
   normalisiereBlogListenwert,
   leseBlogProfileEingabe,
   pruefeBlogProfileErgebnis,
@@ -514,6 +515,7 @@ const {
   BLOG_PROFILE_PROMPT_VERSION: string;
   BLOG_PROFILE_MAX_TOKENS: number;
   BLOG_PROFILE_TASK_CAP_USD_CENT: number;
+  providerFreigabeIstExakt: (wert: unknown) => boolean;
   normalisiereBlogListenwert: (wert: string) => string;
   leseBlogProfileEingabe: (p: Record<string, unknown>) => {
     artikel: { id: string; titel: string; text: string };
@@ -2509,6 +2511,78 @@ test("H4b serverseitige Provider-Registry sperrt Diagnose und zahlenden Pfad vor
   gleich(bezahlt.daten.code, "ai-disabled", "zahlender Pfad Code");
   gleich(anbieterAufrufe().length, 0, "kein zahlender Anbieterfetch");
   gleich(starten().length, 0, "keine Kostenreservierung");
+});
+
+const providerAntwortFehler = (): Array<[string, unknown]> => {
+  const geerbt = Object.create({
+    ok: true,
+    code: "PROVIDER_ALLOWED",
+  }) as Record<string, unknown>;
+  return [
+    ["code fehlt", { ok: true }],
+    ["code widerspricht ok", { ok: true, code: "BUDGET_UNKNOWN" }],
+    ["Zusatzkey", { ok: true, code: "PROVIDER_ALLOWED", extra: true }],
+    ["Keys nur geerbt", geerbt],
+  ];
+};
+
+test("H4c Provider-Registry verlangt exakt eigene ok/code-Erfolgsfelder in Health", async () => {
+  for (const [name, registryAntwort] of providerAntwortFehler()) {
+    falsch(providerFreigabeIstExakt(registryAntwort), `${name}: reiner Guard sperrt`);
+    stelleZurueck();
+    z.providerFreigaben.anthropic = registryAntwort;
+    const r = await ruf({ task: "health", vorgangId: neueVorgangId() });
+    const cap = (r.daten.capabilities as Record<string, unknown>)
+      .blogProfileExtract as Record<string, unknown>;
+    gleich(cap.ready, false, `${name}: Health bleibt geschlossen`);
+    gleich(modelleAufrufe().length, 0, `${name}: Health bleibt providerfrei`);
+    gleich(starten().length, 0, `${name}: Health bleibt logfrei`);
+  }
+});
+
+test("H4d formfremder Registry-Erfolg sperrt Diagnose und Zahlung vor Start/Fetch", async () => {
+  for (const [name, registryAntwort] of providerAntwortFehler()) {
+    stelleZurueck();
+    z.providerFreigaben.anthropic = registryAntwort;
+    let r = await ruf({ task: "anbieter-modelle", vorgangId: neueVorgangId() });
+    gleich(r.status, 503, `${name}: Diagnose-Status`);
+    gleich(r.daten.code, "ai-disabled", `${name}: Diagnose-Code`);
+    gleich(r.daten.grund, "provider-registry-gesperrt", `${name}: feste Diagnosekennung`);
+    gleich(modelleAufrufe().length, 0, `${name}: kein Diagnosefetch`);
+    gleich(starten().length, 0, `${name}: kein Diagnosestart`);
+
+    stelleZurueck();
+    z.providerFreigaben.anthropic = registryAntwort;
+    r = await echoRuf();
+    gleich(r.status, 503, `${name}: zahlender Status`);
+    gleich(r.daten.code, "ai-disabled", `${name}: zahlender Code`);
+    gleich(r.daten.grund, "provider-registry-gesperrt", `${name}: feste Zahlkennung`);
+    gleich(anbieterAufrufe().length, 0, `${name}: kein zahlender Fetch`);
+    gleich(starten().length, 0, `${name}: keine Reservierung`);
+  }
+});
+
+test("H4e exakt {ok:true,code:PROVIDER_ALLOWED} erlaubt alle drei Pfade", async () => {
+  z.providerFreigaben.anthropic = { ok: true, code: "PROVIDER_ALLOWED" };
+  wahr(providerFreigabeIstExakt(z.providerFreigaben.anthropic), "reiner Guard erlaubt exakt den SQL-Erfolg");
+  let r = await ruf({ task: "health", vorgangId: neueVorgangId() });
+  let cap = (r.daten.capabilities as Record<string, unknown>)
+    .blogProfileExtract as Record<string, unknown>;
+  gleich(cap.ready, true, "Health ist bei exaktem Erfolg bereit");
+  gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
+  gleich(starten().length, 0, "Health bleibt logfrei");
+
+  stelleZurueck();
+  r = await ruf({ task: "anbieter-modelle", vorgangId: neueVorgangId() });
+  gleich(r.status, 200, "Diagnose ist bei exaktem Erfolg erlaubt");
+  gleich(modelleAufrufe().length, 1, "genau ein Diagnosefetch");
+  gleich(starten().length, 1, "genau ein Diagnosestart");
+
+  stelleZurueck();
+  r = await echoRuf();
+  gleich(r.status, 200, "Zahlung ist bei exaktem Erfolg erlaubt");
+  gleich(anbieterAufrufe().length, 1, "genau ein zahlender Fetch");
+  gleich(starten().length, 1, "genau eine Reservierung");
 });
 
 /* UMGEDREHT am 26.07. (Befund S5, HOCH). Der Test behauptete vorher das

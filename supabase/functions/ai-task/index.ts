@@ -334,6 +334,19 @@ async function ladeKonfig(
    die zentrale, serverseitige Providerfreigabe. Fehlende Migration, unbekannter
    Anbieter, alter Review oder unbekanntes Budget schließen den Pfad vor jedem
    Anbieter-Fetch. UI-Schalter sind ausdrücklich kein Ersatz. */
+export function providerFreigabeIstExakt(wert: unknown): boolean {
+  if (!wert || typeof wert !== "object" || Array.isArray(wert)) return false;
+  const prototyp = Object.getPrototypeOf(wert);
+  if (prototyp !== Object.prototype && prototyp !== null) return false;
+  const result = wert as Record<string, unknown>;
+  const schluessel = Object.keys(result).sort();
+  return schluessel.length === 2 && schluessel[0] === "code" &&
+    schluessel[1] === "ok" &&
+    Object.prototype.hasOwnProperty.call(result, "ok") &&
+    Object.prototype.hasOwnProperty.call(result, "code") &&
+    result.ok === true && result.code === "PROVIDER_ALLOWED";
+}
+
 async function pruefeProviderFreigabe(
   admin: ReturnType<typeof adminClient>,
   providerId: "anthropic" | "wikidata" | "loc",
@@ -342,15 +355,11 @@ async function pruefeProviderFreigabe(
   const { data, error } = await admin.rpc("kd_private_provider_allowed", {
     p_provider_id: providerId,
   });
-  if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+  if (error) {
     throw new AufrufFehler(CODES.SERVER, "provider-registry-nicht-lesbar");
   }
-  const result = data as { ok?: unknown; code?: unknown };
-  if (result.ok !== true) {
-    const code = typeof result.code === "string" && /^[A-Z0-9_]{3,50}$/.test(result.code)
-      ? result.code.toLowerCase().replaceAll("_", "-")
-      : "provider-registry-gesperrt";
-    throw new AufrufFehler(CODES.AI_DISABLED, code);
+  if (!providerFreigabeIstExakt(data)) {
+    throw new AufrufFehler(CODES.AI_DISABLED, "provider-registry-gesperrt");
   }
 }
 
