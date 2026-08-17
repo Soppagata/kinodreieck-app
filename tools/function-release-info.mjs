@@ -9,10 +9,20 @@ const DATEIEN = Object.freeze([
   "supabase/functions/ai-task/index.ts",
   "supabase/functions/ai-task/providerContract.ts",
   "supabase/functions/ai-task/requestContract.ts",
-  "supabase/functions/account-self-service/index.ts",
   "supabase/functions/filmwissen-task/quellen.ts",
   "supabase/functions/filmwissen-task/vertrag.ts",
 ]);
+
+export function sourceHash(dateien, leseInhalt) {
+  const hash = createHash("sha256");
+  for (const datei of dateien) {
+    hash.update(datei);
+    hash.update("\0");
+    hash.update(leseInhalt(datei));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
 
 export function releaseInfo({
   git = (args) => execFileSync("git", args, { encoding: "utf8" }).trim(),
@@ -24,18 +34,14 @@ export function releaseInfo({
       "Function-Quellen sind nicht committed. Erst prüfen und committen, dann deployen.",
     );
   }
-  const hash = createHash("sha256");
-  for (const datei of DATEIEN) {
-    const inhalt = git(["show", `${commit}:${datei}`]);
-    hash.update(datei);
-    hash.update("\0");
-    hash.update(inhalt);
-    hash.update("\0");
-  }
+  const sourceSha256 = sourceHash(
+    DATEIEN,
+    (datei) => git(["show", `${commit}:${datei}`]),
+  );
   return {
     commit,
     buildVersion: commit,
-    sourceSha256: hash.digest("hex"),
+    sourceSha256,
     dateien: [...DATEIEN],
   };
 }
