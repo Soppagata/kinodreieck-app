@@ -9,6 +9,8 @@ import {
   MODI,
   OWNER_SERVER_BUDGET_ENV,
   OWNER_SERVER_BUDGET_FLAG,
+  RADAR_WEBSEARCH_ONCE_ENV,
+  RADAR_WEBSEARCH_ONCE_FLAG,
   REPO_ROOT,
   baueKindUmgebung,
   liesKeychainEintrag,
@@ -31,6 +33,7 @@ const PUBLIC = {
   KD_SB_URL: "https://projekt-ref.supabase.co",
   KD_SB_ANON: "sb_publishable_test_1234567890",
   KD_ORIGIN: "https://staging.kinodreieck.at",
+  KD_RADAR_TARGET_ID: "imdb:tt0137523",
 };
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 
@@ -266,6 +269,33 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     return kind;
   };
   const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
+    radarWebsearchOnce: true,
+  });
+  pruefe("Radar-Einmallauf startet nur sein fest verdrahtetes Skript hinter dem Budgetwächter",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].radarWebsearchOnceArgv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/radar_websearch_live.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Radar-Einmallauf erhält nur den internen Guard und das starke öffentliche Ziel",
+    starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID);
+}
+
+{
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
     modus: "profile-contract",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
@@ -312,6 +342,15 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     fehlerAusgabe: (x) => err.push(String(x)),
   });
   pruefe("freie oder zusätzliche Argumente werden abgelehnt", code === EXIT_KONFIG);
+}
+
+{
+  const err = [];
+  const code = await main(["ai-eval", "--confirm-paid", RADAR_WEBSEARCH_ONCE_FLAG], {
+    fehlerAusgabe: (x) => err.push(String(x)),
+  });
+  pruefe("Radar-Einmalflag ist außerhalb von ai-live gesperrt",
+    code === EXIT_KONFIG && err.length > 0);
 }
 
 {

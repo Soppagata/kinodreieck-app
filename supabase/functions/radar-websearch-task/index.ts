@@ -1,8 +1,9 @@
-/* Paket A: schmale serverseitige Radar-Websearch-Grenze.
-   Der echte Provideradapter bleibt bis Paket B absichtlich unavailable. Die
-   exportierte Handlerfabrik erhält im lokalen Test genau einen Mockadapter. */
+/* Paket B: schmale serverseitige Radar-Websearch-Grenze. Der Anbieteradapter
+   erhaelt nur den bereits autorisierten globalen Zielvertrag. Radar-,
+   Provider-, Quellen- und Kostenkonfiguration bleiben serverseitig. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { createAnthropicRadarWebsearchAdapter } from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
 
 const ALLOWED_ORIGINS = new Set([
@@ -69,6 +70,15 @@ function sourceRows(rows: unknown): Array<Record<string, unknown>> {
   }));
 }
 
+function limitRows(rows: unknown): Map<string, unknown> {
+  const values = new Map<string, unknown>();
+  if (!Array.isArray(rows)) return values;
+  for (const row of rows) {
+    if (typeof row?.schluessel === "string") values.set(row.schluessel, row.wert);
+  }
+  return values;
+}
+
 function rpcEvent(event: Record<string, unknown>) {
   return {
     targetKey: event.targetKey,
@@ -85,7 +95,13 @@ function rpcEvent(event: Record<string, unknown>) {
   };
 }
 
-export function createRadarWebsearchHandler({ adapter }: { adapter: { search(request: unknown): Promise<unknown> } }) {
+export function createRadarWebsearchHandler({
+  adapter = null,
+  fetchImpl = fetch,
+}: {
+  adapter?: { search(request: unknown): Promise<unknown>; telemetry?: () => Record<string, unknown> } | null;
+  fetchImpl?: typeof fetch;
+} = {}) {
   return async function handler(req: Request): Promise<Response> {
     const origin = req.headers.get("Origin");
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
@@ -114,6 +130,23 @@ export function createRadarWebsearchHandler({ adapter }: { adapter: { search(req
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
+    let cachedSources: Array<Record<string, unknown>> | null = null;
+    const loadSources = async () => {
+      if (cachedSources) return cachedSources;
+      const { data, error } = await admin.from("kd_radar_sources")
+        .select("source_id,domain,publisher_family,source_class,rights_status,attribution_approved,subdomains_allowed,active")
+        .eq("active", true)
+        .eq("rights_status", "approved")
+        .eq("attribution_approved", true)
+        .in("source_class", ["official", "editorial"])
+        .order("source_id", { ascending: true })
+        /* Elften Eintrag als Overflow-Wache mitlesen; der Adapter akzeptiert
+           hoechstens zehn Domains und faellt dann geschlossen aus. */
+        .limit(11);
+      if (error) throw error;
+      cachedSources = sourceRows(data);
+      return cachedSources;
+    };
     const repository = {
       async loadAuthorizedTarget({ accountId: actor, targetId: key }: { accountId: string; targetId: string }) {
         const { data, error } = await admin.rpc("kd_radar_websearch_context", {
@@ -124,15 +157,7 @@ export function createRadarWebsearchHandler({ adapter }: { adapter: { search(req
         return data;
       },
       async resolveSources() {
-        const { data, error } = await admin.from("kd_radar_sources")
-          .select("source_id,domain,publisher_family,source_class,rights_status,attribution_approved,subdomains_allowed,active")
-          .eq("active", true)
-          .eq("rights_status", "approved")
-          .eq("attribution_approved", true)
-          .order("source_id", { ascending: true })
-          .limit(256);
-        if (error) throw error;
-        return sourceRows(data);
+        return await loadSources();
       },
       async upsertConfirmedEvent({ accountId: actor, operationId, event }: {
         accountId: string; operationId: string; event: Record<string, unknown>;
@@ -151,17 +176,103 @@ export function createRadarWebsearchHandler({ adapter }: { adapter: { search(req
         return data;
       },
     };
-    const result = await runRadarWebsearchCheck({ accountId, targetId, adapter, repository });
+    const productAdapter = adapter ?? createAnthropicRadarWebsearchAdapter({
+      apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
+      fetchImpl,
+      async loadSetup() {
+        const [radarResult, providerResult, limitsResult, sources] = await Promise.all([
+          admin.from("kd_radar_settings")
+            .select("radar_aktiv,radar_provider_aktiv,radar_scheduler_aktiv")
+            .eq("singleton", true)
+            .maybeSingle(),
+          admin.rpc("kd_private_provider_allowed", { p_provider_id: "anthropic" }),
+          admin.from("kd_ai_limits")
+            .select("schluessel,wert")
+            .in("schluessel", [
+              "anbieter_request_max_usd_cent",
+              "modell_alias",
+              "preise_usd_cent_pro_mtok",
+              "task_max_reservierung_usd_cent",
+              "task_max_tokens",
+              "task_modell",
+              "timeout_ms",
+              "websearch_usd_cent_pro_request",
+            ]),
+          loadSources(),
+        ]);
+        if (radarResult.error || providerResult.error || limitsResult.error) {
+          throw new Error("radar-websearch-setup-unavailable");
+        }
+        const limits = limitRows(limitsResult.data);
+        const taskModels = limits.get("task_modell") as Record<string, unknown> | undefined;
+        const aliases = limits.get("modell_alias") as Record<string, unknown> | undefined;
+        const maxTokens = limits.get("task_max_tokens") as Record<string, unknown> | undefined;
+        const taskCaps = limits.get("task_max_reservierung_usd_cent") as Record<string, unknown> | undefined;
+        const prices = limits.get("preise_usd_cent_pro_mtok") as Record<string, Record<string, unknown>> | undefined;
+        const modelAlias = taskModels?.["radar-websearch"];
+        const model = typeof modelAlias === "string" ? aliases?.[modelAlias] : null;
+        const price = typeof model === "string" ? prices?.[model] : null;
+        return {
+          radarEnabled: radarResult.data?.radar_aktiv,
+          radarProviderEnabled: radarResult.data?.radar_provider_aktiv,
+          radarSchedulerEnabled: radarResult.data?.radar_scheduler_aktiv,
+          providerAllowed: providerResult.data?.ok === true
+            && providerResult.data?.code === "PROVIDER_ALLOWED",
+          modelAlias,
+          model,
+          maxTokens: maxTokens?.["radar-websearch"],
+          taskCapUsdCent: taskCaps?.["radar-websearch"],
+          searchFeeUsdCent: limits.get("websearch_usd_cent_pro_request"),
+          globalRequestCapUsdCent: limits.get("anbieter_request_max_usd_cent"),
+          timeoutMs: limits.get("timeout_ms"),
+          inputPriceUsdCentPerMtok: price?.in,
+          outputPriceUsdCentPerMtok: price?.out,
+          sourceRegistry: sources,
+        };
+      },
+      async reserveCost({ operationId, reservationUsdCent, searchRequests }: {
+        operationId: string; reservationUsdCent: number; searchRequests: number;
+      }) {
+        const { data, error } = await admin.rpc("kd_radar_websearch_auftrag_starten", {
+          p_account_id: accountId,
+          p_target_key: targetId,
+          p_operation_id: operationId,
+          p_reservierung: reservationUsdCent,
+          p_search_requests: searchRequests,
+        });
+        if (error) throw error;
+        return { ok: data?.ok === true, logId: data?.log_id };
+      },
+      async settleCost({
+        logId, status, model, inputTokens, outputTokens, costUsdCent, errorClass,
+      }: Record<string, unknown>) {
+        const { error } = await admin.rpc("kd_ai_auftrag_beenden", {
+          p_id: logId,
+          p_status: status,
+          p_modell: model,
+          p_input_tokens: inputTokens,
+          p_output_tokens: outputTokens,
+          p_kosten: costUsdCent,
+          p_fehlerklasse: errorClass,
+        });
+        if (error) throw error;
+      },
+    });
+    const result = await runRadarWebsearchCheck({
+      accountId, targetId, adapter: productAdapter, repository,
+    });
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;
-    return json({ ok: true, status, writes: result.writes || 0 }, httpStatus, origin);
+    const telemetry = typeof productAdapter.telemetry === "function"
+      ? productAdapter.telemetry() : {};
+    return json({
+      ok: true,
+      status,
+      writes: result.writes || 0,
+      providerRequests: telemetry.providerRequests || 0,
+      searchRequests: telemetry.searchRequests || 0,
+    }, httpStatus, origin);
   };
 }
 
-/* Paket A besitzt absichtlich keinen echten Anbieter. Selbst bei versehentlichem
-   lokalen Start endet der Pfad nach genau diesem fehlgeschlagenen Adaptercall. */
-const unavailableAdapter = Object.freeze({
-  async search() { throw new Error("radar-websearch-provider-not-configured"); },
-});
-
-if (import.meta.main) Deno.serve(createRadarWebsearchHandler({ adapter: unavailableAdapter }));
+if (import.meta.main) Deno.serve(createRadarWebsearchHandler());

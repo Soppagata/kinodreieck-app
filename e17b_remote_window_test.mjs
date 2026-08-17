@@ -221,9 +221,36 @@ const HASH_D = "4".repeat(64);
 const HASH_CATEGORY = "fd80f5a9313f65b7fd93e2922ec25a7cf9fa9789554b0b6de3b913f842d22ae9";
 const TARGET_DIGEST = "5".repeat(64);
 
+/* E17B attestiert seinen historischen ai-task-Releasevertrag. Spaetere
+   Functionsektionen in der gemeinsamen config.toml duerfen diesen Testfixture
+   nicht rueckwirkend umschreiben; das produktive E17B-Hashliteral bleibt
+   unveraendert und wird gegen genau diese eingefrorenen Bytes geprueft. */
+const E17B_FROZEN_CONFIG = Buffer.from(`# Supabase-CLI-Konfiguration — bewusst MINIMAL.
+#
+# Diese Datei existiert nur, damit \`supabase functions deploy\` die
+# Funktionseinstellungen versioniert vorfindet. Sie bildet NICHT den
+# Gesamtzustand des Projekts ab.
+#
+# WARNUNG: Niemals \`supabase config push\` oder \`supabase db push\` ausführen.
+# Beides würde aus dieser unvollständigen Datei heraus Live-Einstellungen
+# beziehungsweise die Migrationshistorie überschreiben. Schemaänderungen laufen
+# in diesem Projekt ausschließlich von Hand über den SQL-Editor
+# (Laufprotokoll: supabase/migrations/LIESMICH.md).
+
+project_id = "bscjgwcntapobyxsiyce"
+
+[functions.ai-task]
+# Plattformprüfung des Sitzungstokens bleibt an — als Vorhut.
+# Die Funktion prüft den Aufrufer zusätzlich selbst (role == "authenticated"),
+# weil die Plattformprüfung laut Doku bei einer Rotation auf asymmetrische
+# Signaturschlüssel abgeschaltet werden müsste. Fällt sie weg, schützt die
+# eigene Prüfung weiter.
+verify_jwt = true
+`, "utf8");
+
 const rawGitFiles = new Map([
   ...LITERAL_FUNCTION_SOURCES.map((path) => [path, readFileSync(new URL(`./${path}`, import.meta.url))]),
-  ["supabase/config.toml", readFileSync(new URL("./supabase/config.toml", import.meta.url))],
+  ["supabase/config.toml", E17B_FROZEN_CONFIG],
   [
     "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
     readFileSync(new URL(

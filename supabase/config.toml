@@ -19,3 +19,8 @@ project_id = "bscjgwcntapobyxsiyce"
 # Signaturschlüssel abgeschaltet werden müsste. Fällt sie weg, schützt die
 # eigene Prüfung weiter.
 verify_jwt = true
+
+[functions.radar-websearch-task]
+# Paket B nutzt denselben doppelten JWT-Vertrag wie ai-task: Plattformpruefung
+# plus eigene authenticated-Claims-Pruefung in der Function.
+verify_jwt = true

@@ -322,11 +322,12 @@ await check("Migration bleibt additiv auf vorhandenen Radar-Tabellen und service
   assert.doesNotMatch(migration, /radar_provider_aktiv\s*=|radar_scheduler_aktiv\s*=|cron\.|pg_cron/i);
 });
 
-await check("Function bleibt providerlos, prüft JWT selbst und übergibt nur den validierten Request", () => {
+await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {
   assert.match(functionIndex, /auth\.getClaims\(token\)/);
   assert.match(functionIndex, /claims\?\.role\s*===\s*"authenticated"/);
-  assert.match(functionIndex, /provider-not-configured/);
-  assert.doesNotMatch(functionIndex, /api\.anthropic\.com|ANTHROPIC_API_KEY|web_search/i);
+  assert.match(functionIndex, /createAnthropicRadarWebsearchAdapter/);
+  assert.match(functionIndex, /ANTHROPIC_API_KEY/);
+  assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.equal((runnerSource.match(/adapter\.search\(request\)/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setTimeout|while\s*\(/i);
 });
