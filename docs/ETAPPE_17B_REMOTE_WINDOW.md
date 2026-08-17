@@ -252,6 +252,40 @@ ausschliesslich den bereinigten Status; `99-final-checkpoint` schliesst mit:
 - nicht geparste Remote-Payload (`REMOTE_PAYLOAD_PENDING`)
 - neue Stopps/Time-Outs/Exit-Errors aus dem Live/Infra-Teilfenster
 
+## Threat-Model-Addendum (Scope-only, ohne Remote-/Release-Erweiterung)
+
+- Kein externer Signer, kein zusätzlicher Key- oder Signaturpfad, keine neue
+  Credentialarchitektur; diese Optionen sind nicht autorisiert.
+- Schutzobjekte:
+  - Fehlbedienung
+  - Cross-run-Verwechslung oder Replay
+  - manipulierte Inputs
+  - Symlink-/Targetdrift
+  - Scopefehler
+  - ausdrücklich kein Schutz gegen einen bösartigen Prozess mit derselben macOS-UID
+- `0600`, `owner/mode`, `realpath`, `hash`, `runId`, `target` und `finalCommit`
+  liefern nur Konsistenz- und Objektbindung; sie sind kein Herkunfts- oder
+  Autorisierungsnachweis.
+- Persistierte Evidence ist immer nur ein untrusted Transcript.
+  Ein Reader darf daraus keine Vertrauenswurzel oder Autorisierung rehydrieren.
+- `30-function-checkpoint` und `40-db-checkpoint` sind bei festen IDs nur
+  Helper-Receipts für einen frischen Orchestrations-/Owner-Gate; sie sind kein
+  externes Gate.
+  Der Helper erzeugt damit weder Authorization noch deren Serialisierung noch
+  deren Wiederherstellung aus Receipt/Evidence.
+- Gefährliche Sinks/Writes sind nur nach fresh same-process Revalidation erlaubt
+  mit nicht-serialisierbaren Runtime-Brands:
+  `FreshGit`, `FreshRemoteTarget`, `FreshPreimage`, `VerifiedOwner`.
+  Für jeden betroffenen Sink sind zusätzlich die jeweils einschlägigen Proofs
+  zwingend: `Secret-Proof` bei Secretmaterial; `Canonical-Proof` bei
+  Canonical-/Restore-/DBbezug.
+  Kein Proof ist optional, sobald seine Wirkungsklasse betroffen ist.
+  Keine einzelne/persistierte Brand und kein Receipt genügt allein.
+- Jeder Write revalidiert unmittelbar vor Wirkung; zwischen Phasen/Prozessen gibt es
+  keine Trust-Rehydration.
+- Diese Threat-Boundary verändert keine Wirkungsreihenfolge, erweitert keine
+  Rechte und führt keine neue Remoteaktion ein.
+
 ## Recovery-Stand
 
 - Paket- und Skriptstand bleibt auf das vereinbarte Kernset begrenzt.
