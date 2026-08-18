@@ -18,6 +18,12 @@ import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
    auf BEIDE Sektionen — Treffer und "Läuft auch". */
 
 const tagKey = (s) => { const m = /(\d{1,2})\.(\d{1,2})\./.exec(String(s)); return m ? m[1] + "." + m[2] + "." : null; };
+const tagLabel = (s, key) => {
+  const text = String(s || "").trim();
+  const position = text.indexOf(key);
+  const wochentag = position > 0 ? text.slice(0, position).replace(/[\s,]+$/, "") : "";
+  return wochentag ? `${wochentag}, ${key}` : key;
+};
 
 export function KinoTab({
   programm, progStand, master, kinoMatches, restSichtbar,
@@ -100,22 +106,40 @@ export function KinoTab({
   const alleProg = useMemo(() => [...kinoMatches.matched.map((m) => m.prog), ...kinoMatches.rest], [kinoMatches]);
   const kinos = useMemo(() => [...new Set(alleProg.flatMap((pf) => pf.k || []))].sort((a, b) => a.localeCompare(b, "de")), [alleProg]);
   const tage = useMemo(() => {
-    const gesehen = new Map(); // key -> sortwert
+    const gesehen = new Map(); // key -> { sortwert, label }
     for (const pf of alleProg) for (const z of pf.z || []) {
       const k = tagKey(z);
       if (k && !gesehen.has(k)) {
         const [t, m] = k.split(".").map(Number);
-        gesehen.set(k, m * 100 + t);
+        gesehen.set(k, { sortwert: m * 100 + t, label: tagLabel(z, k) });
       }
     }
-    return [...gesehen.entries()].sort((a, b) => a[1] - b[1]).map(([k]) => k).slice(0, 8);
+    return [...gesehen.entries()]
+      .sort((a, b) => a[1].sortwert - b[1].sortwert)
+      .map(([key, wert]) => ({ key, label: wert.label }));
   }, [alleProg]);
   const fassungenDa = useMemo(() => alleProg.some((pf) => pf.f), [alleProg]);
 
-  /* Ein Programm-Film gegen alle aktiven Filter (Suche separat pro Sektion) */
+  /* Bei aktivem Tag-/Kino-Filter nur die passenden Termine zeigen */
+  const zeitenGefiltert = (pf) => {
+    let z = pf.z || [];
+    if (tagF) z = z.filter((s) => tagKey(s) === tagF);
+    if (kinoF) {
+      const nurKino = z.filter((s) => s.includes(kinoF));
+      const hatExpliziteKinoangabe = z.some((s) => (pf.k || []).some((kino) => s.includes(kino)));
+      // Nur echte Zuordnungen akzeptieren. Ausschließlich bei Altformaten ganz
+      // ohne Kino im Terminstring bleibt der bisherige sichere Fallback aktiv.
+      if (nurKino.length || hatExpliziteKinoangabe) z = nurKino;
+    }
+    return z;
+  };
+  /* Ein Programm-Film gegen alle aktiven Filter (Suche separat pro Sektion).
+     Datum + Kino müssen bei explizit zugeordneten Terminen auf DIESELBE
+     Vorstellung zeigen; zwei unabhängig passende Metadaten reichen nicht. */
   const passtFilter = (pf) => {
     if (kinoF && !(pf.k || []).includes(kinoF)) return false;
     if (tagF && !(pf.z || []).some((z) => tagKey(z) === tagF)) return false;
+    if ((kinoF || tagF) && zeitenGefiltert(pf).length === 0) return false;
     if (aboFilter !== "alle") {
       const abo = pf.im_abo ?? (pf.k || []).some(istImAbo);
       if (aboFilter === "nonstop" && !abo) return false;
@@ -123,16 +147,6 @@ export function KinoTab({
     }
     if (fassungF && !(String(pf.f || "").includes(fassungF) || (pf.z || []).some((z) => z.includes("(" + fassungF)))) return false;
     return true;
-  };
-  /* Bei aktivem Tag-/Kino-Filter nur die passenden Termine zeigen */
-  const zeitenGefiltert = (pf) => {
-    let z = pf.z || [];
-    if (tagF) z = z.filter((s) => tagKey(s) === tagF);
-    if (kinoF) {
-      const nurKino = z.filter((s) => s.includes(kinoF));
-      if (nurKino.length) z = nurKino; // Altformate ohne Kino im Zeitstring: alle behalten
-    }
-    return z;
   };
   /* Nächster Termin (früheste noch anstehende Vorstellung) als Sortierwert —
      chronologische Programm-Reihenfolge: nächster oben, weitester unten.
@@ -165,7 +179,19 @@ export function KinoTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [restSichtbar, kinoF, tagF, aboFilter, fassungF, nq]);
 
-  const filterAktiv = sucheK || kinoF || tagF || aboFilter !== "alle" || fassungF;
+  const programmFilterAktiv = Boolean(kinoF || tagF || aboFilter !== "alle" || fassungF);
+  const filterAktiv = Boolean(sucheK || programmFilterAktiv);
+  const tagAuswahl = tage.find((tag) => tag.key === tagF);
+  const programmFilterStatus = [
+    tagF ? `Datum ${tagAuswahl?.label || tagF}` : "",
+    kinoF ? `Kino ${kinoF}` : "",
+    aboFilter !== "alle" ? aboLabel : "",
+    fassungF ? `Fassung ${fassungF}` : "",
+  ]
+    .filter(Boolean).join(" · ");
+  const resetProgrammfilter = () => {
+    setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null);
+  };
 
   return (
     <section ref={bereichRef}>
@@ -238,6 +264,30 @@ export function KinoTab({
 
       {programm && (
         <>
+          {/* Datum und Kino sind der immer sichtbare primäre Programmfilter.
+              Die lokale Textsuche bleibt davon unabhängig und mobil bewusst verborgen. */}
+          <div className={`kd-kino-programmfilter${programmFilterAktiv ? " aktiv" : ""}`} role="group" aria-label="Kinoprogramm filtern">
+            <label>
+              <span>Datum</span>
+              <select aria-label="Datum im Kinoprogramm" value={tagF || ""} onChange={(e) => setTagF(e.target.value || null)}>
+                <option value="">Alle Programmtage</option>
+                {tage.map((tag) => <option key={tag.key} value={tag.key}>{tag.label}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Kino</span>
+              <select aria-label="Kino im Kinoprogramm" value={kinoF} onChange={(e) => setKinoF(e.target.value)}>
+                <option value="">Alle Kinos</option>
+                {kinos.map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+            </label>
+            <button type="button" className="kd-kino-programmfilter-reset" disabled={!programmFilterAktiv}
+              onClick={resetProgrammfilter}>Programmfilter zurücksetzen</button>
+            <span className="kd-kino-programmfilter-status" role="status" aria-live="polite">
+              {programmFilterStatus || "Alle Programmtage und Kinos"}
+            </span>
+          </div>
+
           {/* ---- Suche (immer sichtbar) & Filter (einklappbar, P1.4) ---- */}
           <div data-tour="kino-filter" className="kd-kompakt kd-seitensuche" style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
             <input value={sucheK} onChange={(e) => setSucheK(e.target.value)} placeholder="Programm durchsuchen …"
@@ -252,18 +302,12 @@ export function KinoTab({
           {filterMenueOffen && (
             <>
               <ChipReihe>
-                <select value={kinoF} onChange={(e) => setKinoF(e.target.value)} style={{ ...inputStyle, width: "auto", maxWidth: 220 }}>
-                  <option value="">Alle Kinos</option>
-                  {kinos.map((k) => <option key={k} value={k}>{k}</option>)}
-                </select>
                 <Chip active={aboFilter !== "alle"} onClick={aboCycle}>{aboLabel}</Chip>
                 {fassungenDa && ["OmU", "OV", "DF"].map((fs) => (
                   <Chip key={fs} active={fassungF === fs} onClick={() => setFassungF(fassungF === fs ? null : fs)}>{fs}</Chip>
                 ))}
               </ChipReihe>
               <ChipReihe style={{ gap: 6 }}>
-                {tage.map((t) => <Chip key={t} active={tagF === t} onClick={() => setTagF(tagF === t ? null : t)}>{t}</Chip>)}
-                <span style={{ width: 12 }} />
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}
                   title='Zeitgrenze für „Läuft auch": Filme ohne Vorstellung ab dieser Uhrzeit werden ausgeblendet. Deine Treffer sind nie betroffen.'>
                   Rest ab
@@ -275,10 +319,10 @@ export function KinoTab({
                   onClick={() => setZeigeAlles(!zeigeAlles)}>
                   {zeigeAlles ? "Zeitfilter an" : "Ganzes Tagesprogramm"}
                 </button>
-                {filterAktiv && (
+                {programmFilterAktiv && (
                   <button style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}
-                    onClick={() => { setSucheK(""); setKinoF(""); setTagF(null); setAboFilter("alle"); setFassungF(null); }}>
-                    Filter zurücksetzen
+                    onClick={resetProgrammfilter}>
+                    Programmfilter zurücksetzen
                   </button>
                 )}
               </ChipReihe>

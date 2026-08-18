@@ -393,6 +393,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   box-shadow:0 5px 18px rgba(0,0,0,.42); font:500 18px/1 'Space Grotesk',sans-serif; opacity:.9; pointer-events:auto; }
 .kd-mobile-menu-nachoben:hover,.kd-mobile-menu-nachoben:focus-visible { color:#e3a63b; opacity:1; }
 .kd-globalsuche { display:none; }
+.kd-kino-programmfilter { display:grid; grid-template-columns:minmax(132px,180px) minmax(160px,240px) auto;
+  align-items:end; gap:7px 9px; min-width:0; box-sizing:border-box; margin:0 0 9px; padding:9px 10px;
+  border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
+  background:color-mix(in srgb,var(--saal-hoch,#211e26) 82%,transparent); }
+.kd-kino-programmfilter.aktiv { border-color:color-mix(in srgb,var(--wolfram,#e3a63b) 72%,transparent); }
+.kd-kino-programmfilter label { display:grid; gap:4px; min-width:0; }
+.kd-kino-programmfilter label>span { color:var(--rauch,#948fa0);
+  font:700 10px/1.2 'Space Mono',monospace; letter-spacing:.07em; text-transform:uppercase; }
+.kd-kino-programmfilter select { width:100%; min-width:0; height:44px; min-height:44px; box-sizing:border-box; padding:8px 32px 8px 10px;
+  border:1px solid var(--rauch,#948fa0); border-radius:5px; background:var(--saal,#17151a); color:var(--leinwand,#ece8df);
+  font:600 15px/1.2 'Barlow Condensed',sans-serif; }
+.kd-kino-programmfilter select:focus-visible,.kd-kino-programmfilter-reset:focus-visible { outline:2px solid var(--wolfram,#e3a63b); outline-offset:2px; }
+.kd-kino-programmfilter-reset { min-height:44px; padding:7px 11px; border:1px solid var(--rauch,#948fa0); border-radius:5px;
+  background:transparent; color:var(--leinwand,#ece8df); cursor:pointer; font:600 13px/1.15 'Barlow Condensed',sans-serif; }
+.kd-kino-programmfilter-reset:disabled { opacity:.42; cursor:default; }
+.kd-kino-programmfilter-status { grid-column:1/-1; min-width:0; color:var(--wolfram,#e3a63b);
+  font:600 10px/1.35 'Space Mono',monospace; overflow-wrap:anywhere; }
 
 @media (max-width:760px) {
   .kd-app main { padding-bottom:calc(94px + env(safe-area-inset-bottom)) !important; }
@@ -599,6 +616,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
   .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+  .kd-kino-programmfilter { grid-template-columns:repeat(2,minmax(0,1fr)); padding:9px; }
+  .kd-kino-programmfilter-reset { grid-column:1/-1; width:100%; }
   .kd-mediathek-neuaktionen { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:stretch; }
   .kd-mediathek-neuaktionen>.kd-mediathek-hinzufuegen { min-width:0; width:100%; }
   .kd-mediathek-neuaktionen>.kd-auswahl-modus { min-width:0; min-height:44px; padding-inline:12px !important; }

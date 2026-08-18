@@ -33,6 +33,19 @@ check("Kinotickets bleiben dem Kinoprogramm vorbehalten", () => {
   assert.match(lies("./src/components/ui.jsx"), /export function KinoTicket/);
 });
 
+check("Kino-Programmfilter bleiben sichtbar, beschriftet und mobil kompakt", () => {
+  const kino = lies("./src/tabs/KinoTab.jsx");
+  const css = lies("./src/index.css");
+  assert.match(kino, /className=\{`kd-kino-programmfilter/);
+  assert.match(kino, /aria-label="Datum im Kinoprogramm"[\s\S]*Alle Programmtage/);
+  assert.match(kino, /aria-label="Kino im Kinoprogramm"[\s\S]*Alle Kinos/);
+  assert.match(kino, /const resetProgrammfilter[\s\S]*setKinoF\(""\); setTagF\(null\); setAboFilter\("alle"\); setFassungF\(null\)/);
+  assert.doesNotMatch(kino, /resetProgrammfilter[\s\S]{0,180}setSucheK/);
+  assert.match(kino, /zeitenGefiltert[\s\S]*if \(tagF\)[\s\S]*if \(kinoF\)/);
+  assert.match(css, /\.kd-kino-programmfilter select \{[^}]*min-height:44px/);
+  assert.match(css, /@media \(max-width:760px\)[\s\S]*\.kd-kino-programmfilter \{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
+
 check("Mobiler Kino-Fehler verweist nicht auf einen dort unsichtbaren Notfallimport", () => {
   const kino = lies("./src/tabs/KinoTab.jsx");
   assert.match(kino, /manuelle Notfallimport ist dort in der Desktopansicht verfügbar/);

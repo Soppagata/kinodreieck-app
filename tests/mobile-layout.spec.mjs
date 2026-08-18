@@ -1846,7 +1846,9 @@ test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Stream
     return box.top >= 0 && box.bottom <= window.innerHeight;
   })).toBe(true);
   await expect(ziel.getByText(/Passung beruht auf:/)).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "Entdecken sortieren" })).toBeVisible();
+  // Die Sortierung liegt seit KD-OBS-004/005 bewusst im einklappbaren
+  // Filterbereich. Dieser Navigationsvertrag muss nur dessen Zugang belegen.
+  await expect(page.locator(".kd-streamfilter-knopf")).toBeVisible();
 
   /* Derselbe Sprung muss ohne vorgeschaltete globale Suche funktionieren:
      Beim Reload ist zunächst nur der kleine Bundle-Snapshot da. Erst der Klick
@@ -2291,6 +2293,98 @@ test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", a
   await expect(sortierbereichE).toBeVisible();
   await expect(sortierfeldE).toBeVisible();
   await expect(sortierrichtungE).toBeVisible();
+  await keineDokumentUeberbreite(page);
+});
+
+test("KD-OBS-001 filtert das Kinoprogramm bei 320 px nach Datum und Kino", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await blockiereFremdnetz(page);
+  const datum = (offset) => {
+    const d = new Date(Date.now() + offset * 24 * 60 * 60 * 1000);
+    return {
+      key: `${d.getDate()}.${d.getMonth() + 1}.`,
+      wochentag: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"][d.getDay()],
+    };
+  };
+  const tagEins = datum(2);
+  const tagZwei = datum(3);
+  const termine = {
+    einsGartenbau: `${tagEins.wochentag} ${tagEins.key} 18:00 · Gartenbaukino (OmU)`,
+    einsApollo: `${tagEins.wochentag} ${tagEins.key} 20:15 · Apollo (OV)`,
+    zweiGartenbau: `${tagZwei.wochentag} ${tagZwei.key} 19:30 · Gartenbaukino`,
+  };
+  await page.addInitScript(({ tagEins, tagZwei, termine }) => {
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:master", JSON.stringify({ filme: [], meta: { version: "obs-001" }, gespeichertAm: Date.now() }));
+    localStorage.setItem("kd:kino-pins", "[]");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "kino", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:programm-cache", JSON.stringify({
+      fetchedAt: Date.now(), art: "manuell", stand: Date.now(),
+      data: { stand: new Date().toISOString(), filme: [
+        { t: "Filtereins", j: 2026, k: ["Gartenbaukino", "Apollo"], z: [termine.einsGartenbau, `${tagZwei.wochentag} ${tagZwei.key} 21:00 · Apollo`] },
+        { t: "Filterzwei", j: 2026, k: ["Apollo"], z: [termine.einsApollo] },
+        { t: "Filterdrei", j: 2026, k: ["Gartenbaukino"], z: [termine.zweiGartenbau] },
+        { t: "Kreuzfall", j: 2026, k: ["Gartenbaukino", "Apollo"], z: [
+          `${tagEins.wochentag} ${tagEins.key} 17:00 · Apollo`,
+          `${tagZwei.wochentag} ${tagZwei.key} 22:00 · Gartenbaukino`,
+        ] },
+      ] },
+    }));
+  }, { tagEins, tagZwei, termine });
+  await page.goto("/");
+
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Kino");
+  const datumSelect = page.getByRole("combobox", { name: "Datum im Kinoprogramm" });
+  const kinoSelect = page.getByRole("combobox", { name: "Kino im Kinoprogramm" });
+  const reset = page.getByRole("button", { name: "Programmfilter zurücksetzen" }).first();
+  await expect(datumSelect).toBeVisible();
+  await expect(kinoSelect).toBeVisible();
+  await expect(datumSelect).toHaveJSProperty("tagName", "SELECT");
+  await datumSelect.focus();
+  await expect(datumSelect).toBeFocused();
+  const touchhoehen = await page.locator(".kd-kino-programmfilter select, .kd-kino-programmfilter-reset")
+    .evaluateAll((elemente) => elemente.map((element) => element.getBoundingClientRect().height));
+  expect(touchhoehen.every((hoehe) => hoehe >= 44)).toBe(true);
+
+  await datumSelect.selectOption(tagEins.key);
+  await kinoSelect.selectOption({ label: "Gartenbaukino" });
+  await expect(page.locator(".kd-kino-programmfilter")).toHaveClass(/aktiv/);
+  await expect(page.locator(".kd-kino-programmfilter-status")).toHaveText(`Datum ${tagEins.wochentag}, ${tagEins.key} · Kino Gartenbaukino`);
+  await expect(page.getByRole("heading", { name: "Läuft auch, nicht in deiner Liste (1 von 4)" })).toBeVisible();
+  await expect(page.getByText("Filtereins", { exact: true })).toBeVisible();
+  await expect(page.getByText("Filterzwei", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Filterdrei", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Kreuzfall", { exact: true })).toHaveCount(0);
+
+  const eintrag = page.locator('[data-kino-suchtreffer="programm:Filtereins"]');
+  await eintrag.getByText("Filtereins", { exact: true }).click();
+  await expect(eintrag.getByRole("button", { name: "Eintrag erstellen" })).toBeVisible();
+  const pin = eintrag.getByRole("button", { name: termine.einsGartenbau });
+  await expect(pin).toBeVisible();
+  await expect(eintrag.getByText(/Apollo/)).toHaveCount(0);
+  await pin.click();
+  await expect(page.locator(".kd-kino-pins")).toContainText("Filtereins");
+  await keineDokumentUeberbreite(page);
+
+  await reset.click();
+  await expect(datumSelect).toHaveValue("");
+  await expect(kinoSelect).toHaveValue("");
+  await expect(page.locator(".kd-kino-programmfilter-status")).toHaveText("Alle Programmtage und Kinos");
+  await expect(page.getByRole("heading", { name: "Läuft auch, nicht in deiner Liste (4)" })).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(datumSelect).toBeVisible();
+  await expect(kinoSelect).toBeVisible();
+  const lokaleSuche = page.getByPlaceholder("Programm durchsuchen …");
+  await expect(lokaleSuche).toBeVisible();
+  await lokaleSuche.fill("Filtereins");
+  await kinoSelect.selectOption({ label: "Apollo" });
+  await reset.click();
+  await expect(lokaleSuche).toHaveValue("Filtereins");
+  await expect(kinoSelect).toHaveValue("");
   await keineDokumentUeberbreite(page);
 });
 
