@@ -428,13 +428,22 @@ for (const viewport of VIEWPORTS) {
 
       await expect(page.locator("summary", { hasText: /^Masterliste$/ })).toBeHidden();
       await expect(page.locator("summary", { hasText: /^Gesamt-Backup$/ })).toBeVisible();
-      await expect(page.locator("summary", { hasText: /^Kinoprogramm-Status$/ })).toBeVisible();
+      await expect(page.locator("summary", { hasText: /^Datenmodus & Verbindung$/ })).toHaveCount(0);
+      await expect(page.locator("summary", { hasText: /^Technik & Support$/ })).toHaveCount(0);
+      await expect(page.locator("summary", { hasText: /^Kinoprogramm-Status$/ })).toHaveCount(0);
       await expect(page.locator("summary", { hasText: /^Katalog-Status$/ })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "Streaming gesperrt", exact: true })).toHaveCount(2);
+      await expect(page.getByRole("heading", { name: "Streaming gesperrt", exact: true })).toHaveCount(1);
       await expect(page.locator("summary", { hasText: /^Erweitert/ })).toBeHidden();
       await expect(page.locator("summary", { hasText: /^Darstellung & Verhalten$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^Konto & Geräte-Sync$/ })).toBeVisible();
       await expect(page.locator("summary", { hasText: /^KI-Vokabular$/ })).toBeVisible();
+      const rechtliches = page.locator("summary", { hasText: /^Über & Rechtliches$/ });
+      await expect(rechtliches).toBeVisible();
+      await rechtliches.click();
+      const datenschutz = page.locator("summary", { hasText: /^Datenschutz & Datenübersicht$/ });
+      await expect(datenschutz).toBeVisible();
+      expect((await datenschutz.boundingBox())?.height || 0).toBeGreaterThanOrEqual(44);
+      await expect(page.getByRole("button", { name: "Supportdaten kopieren" })).toHaveCount(0);
 
       await globaleSuche.getByRole("textbox", { name: "Sucheingabe" }).fill("Wo finde ich die Schriftgröße?");
       await globaleSuche.getByRole("button", { name: "Suchen" }).click();

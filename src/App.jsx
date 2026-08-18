@@ -27,6 +27,7 @@ import {
 } from "./services/storage.js";
 import { catalogService } from "./services/catalog.js";
 import { sessionCoordinator } from "./services/sessionCoordinator.js";
+import { hatBestaetigteOwnerRolle } from "./lib/accountAccess.js";
 import { sharedArticlesService } from "./services/sharedArticles.js";
 import { errorText, ERROR_CODES } from "./services/errors.js";
 import {
@@ -109,9 +110,7 @@ import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from
 import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
 
-const normalisiereEntdeckenStatus = (wert) => (
-  wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {}
-);
+const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
@@ -127,8 +126,8 @@ export default function App() {
   /* Rollen-v1: technische Anmeldung und fachlich aktiver Kontozugriff sind
      getrennt. Alte, unvollständige oder degradierte Sessions sind hier
      ausdrücklich nicht optimistisch freigeschaltet. */
-  const remoteKontoAktiv = session.mode === "account" && session.state === "ready"
-    && session.capabilities?.remoteStorage === true;
+  const remoteKontoAktiv = session.mode === "account" && session.state === "ready" && session.capabilities?.remoteStorage === true;
+  const ownerTechnikBestaetigt = hatBestaetigteOwnerRolle(session);
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
@@ -2149,20 +2148,20 @@ export default function App() {
             master={master} masterMeta={masterMeta} masterHerkunft={masterHerkunft}
             nachtragCount={nachtragSichtbar.length}
             exportMaster={exportMaster} importMaster={importMaster}
-            importProgramm={importProgramm} importNonstop={importNonstop}
+            importProgramm={ownerTechnikBestaetigt ? importProgramm : undefined} importNonstop={ownerTechnikBestaetigt ? importNonstop : undefined}
             programm={programm}
-            setErr={setErr} clearProgrammCache={clearProgrammCache}
+            setErr={setErr} clearProgrammCache={ownerTechnikBestaetigt ? clearProgrammCache : undefined}
             kiStand={kiStand} onKiGlobal={setzeKiGlobal} onKiFunktion={setzeKiFunktion}
             kiProfilFaehig={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true}
             startWahl={(() => { try { return localStorage.getItem("kd:start"); } catch { return null; } })()}
             demoAktiv={demoAktiv}
-            onStartWahl={oeffneStartWahl}
-            onDemoEntfernen={entferneDemoDaten}
+            onStartWahl={ownerTechnikBestaetigt ? oeffneStartWahl : undefined}
             katalogVerbunden={snapshotFreigabe}
             programmInfo={programmInfo}
             onKatalogVerbinden={() => setKatalogZugangOffen(true)}
             onKatalogRefresh={refreshKatalog}
+            onTechnikKatalogRefresh={ownerTechnikBestaetigt ? refreshKatalog : undefined}
             artikelAnzahl={artikelListe.length} exportArtikel={exportArtikel} importArtikel={importArtikel}
             ungesichertMaster={ungesichertMaster} ungesichertArtikel={ungesichertArtikel}
             artikelListe={artikelListe} autorName={autorName} saveAutorName={saveAutorName}
@@ -2175,9 +2174,9 @@ export default function App() {
             setHeuristikAn={(v) => { setHeuristikAn(v); store.set(K.streamingDienste, streamingCfgJson(auswahl, v)).catch(() => {}); }}
             datenGesperrt={!snapshotFreigabe}
             backupGesamt={backupGesamt} vokabular={vokabular} saveVokabular={saveVokabular}
-            offeneFlags={offeneFlags} migriereMustwatch={migriereMustwatch} migrationsBericht={migrationsBericht}
-            importiereBesitz={importiereBesitz} besitzImportBericht={besitzImportBericht}
-            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoId={session.account?.id || ""} kontoEmail={session.account?.email || ""} onKontoGeloescht={async () => { await sessionCoordinator.finalizeDeletedAccount(); try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
+            offeneFlags={offeneFlags} migriereMustwatch={ownerTechnikBestaetigt ? migriereMustwatch : undefined} migrationsBericht={migrationsBericht}
+            importiereBesitz={ownerTechnikBestaetigt ? importiereBesitz : undefined} besitzImportBericht={besitzImportBericht}
+            onKontoDatenGeaendert={() => { try { location.reload(); } catch { setStartTick((t) => t + 1); } }} kontoAktiv={session.mode === "account" && session.state === "ready"} kontoModus={session.mode === "account"} kontoId={session.account?.id || ""} kontoEmail={session.account?.email || ""} ownerTechnikBestaetigt={ownerTechnikBestaetigt} onKontoGeloescht={async () => { await sessionCoordinator.finalizeDeletedAccount(); try { location.reload(); } catch { setStartTick((t) => t + 1); } }}
           />
         )}
       </main>

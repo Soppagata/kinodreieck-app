@@ -12,6 +12,7 @@ import { aiService } from "../services/ai.js";
 import { kiAn } from "../lib/kiSchalter.js";
 import { ladeKontostandNachDemo } from "../services/demoAccountWechsel.js";
 import { fordereEinstiegNachAbmeldung } from "../controllers/onboardingController.js";
+import { hatBestaetigteOwnerRolle } from "../lib/accountAccess.js";
 
 /* Konto & Geräte-Sync. Der Kern der Etappe aus Nutzersicht:
    anmelden, Bestand übernehmen, auf mehreren Geräten weiterarbeiten.
@@ -80,6 +81,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
     && session.capabilities?.remoteStorage === true;
   const personalAiFreigegeben = remoteFreigegeben
     && session.capabilities?.personalAi === true;
+  const ownerTechnikBestaetigt = hatBestaetigteOwnerRolle(session);
   const kontoSpeicherAktiv = remoteFreigegeben && istKontoTreiberAktiv();
 
   useEffect(() => {
@@ -353,7 +355,7 @@ export function KontoBereich({ onDatenGeaendert, onBackupWunsch, demoAktiv = fal
           Etappe 7: hinter dem KI-Schalter. Eine reine KI-Diagnose hat bei
           KI=aus kein deterministisches Gegenstueck -- es gaebe sie nur als
           Luege. Deshalb ausblenden, nicht ersetzen. */}
-      {personalAiFreigegeben && kiAn("diagnose") && (
+      {ownerTechnikBestaetigt && personalAiFreigegeben && kiAn("diagnose") && (
       <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid " + T.saalHoch }}>
         <button style={{ ...btnStyle(false), fontSize: 13 }} disabled={laeuft} onClick={async () => {
           setLaeuft(true); setKiMeldung(null);

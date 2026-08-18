@@ -332,13 +332,20 @@ check("Mobiles Settings-Menü trägt denselben Sicherungsmarker",
 if (mobileSicherung) { mobileSicherung.click(); await warte(350); }
 const katalogStatus = [...doc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
-if (katalogStatus && !katalogStatus.parentElement.open) {
-  katalogStatus.click(); await warte(250);
-}
-check("Streaming-Demo mit Stand nur auf der Katalogzeile bleibt auch in Settings geladen",
-  !!katalogStatus
-  && !/Noch kein Katalog geladen/.test(text())
-  && /Öffentliche Beispieldaten/.test(text()));
+const datenmodus = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Datenmodus & Verbindung$/.test((summary.textContent || "").trim()));
+const datenschutzSummary = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Datenschutz & Datenübersicht$/.test((summary.textContent || "").trim()));
+const rechtlichesSummary = [...doc.querySelectorAll("summary")]
+  .find((summary) => /^Über & Rechtliches$/.test((summary.textContent || "").trim()));
+check("Gast-Settings behalten die Streaming-Auswahl, aber keine Betriebs-/Supportflächen",
+  !katalogStatus && !datenmodus
+  && ![...doc.querySelectorAll("summary")].some((summary) => /^(Technik & Support|Kinoprogramm-Status|Erweitert —)/.test((summary.textContent || "").trim()))
+  && /Streaming-Quellen/.test(text())
+  && !!doc.querySelector('input[placeholder^="Quelle suchen"]'));
+check("Datenschutz liegt erreichbar unter dem letzten Rechtliches-Block",
+  !!datenschutzSummary && !!rechtlichesSummary
+  && datenschutzSummary.closest("details.kd-klappe") === rechtlichesSummary.parentElement);
 /* Easter-Egg-Modi: versteckt unter dem „Max"-Link in Über & Rechtliches */
 const maxLink = [...doc.querySelectorAll("span")].find((s) => (s.textContent || "").trim() === "Max" && s.style && s.style.cursor === "pointer");
 check("Easter-Egg-Link 'Max' vorhanden", !!maxLink);
@@ -380,25 +387,11 @@ if (ueberKnopf) {
   if (ueberZu) { ueberZu.click(); await warte(200); }
 }
 
-/* ---- Must-Watch-Migration (Flag-Testfilm ist geseedet, jetzt unter Erweitert) ---- */
+/* ---- Manuelle Migration ist als Betriebsfunktion ownergeschützt. ---- */
 const erweitert = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — manuelle Aktualisierung & Wartung/.test(s.textContent || ""));
-if (erweitert && !erweitert.parentElement.open) { erweitert.click(); await warte(250); }
-check("Migration: Abschnitt sichtbar (offenes Flag)", /Einmalige Datenmigration/.test(text()));
 const migKnopf = knopf(/alte Must-Watch-Flags migrieren/);
-check("Migration: Knopf vorhanden", !!migKnopf);
-if (migKnopf) {
-  migKnopf.click(); await warte(500);
-  let mwTopf = null;
-  try { mwTopf = JSON.parse(dom.window.localStorage.getItem("kd:mustwatch") || "null"); } catch { /* */ }
-  const eintraege = (mwTopf && mwTopf.eintraege) || [];
-  /* Etappe 4: 2 Dashboard-Seeds + 1 migrierter Eintrag = 3 in der Liste. */
-  const migriert = eintraege.find((e) => e.verknuepfung && e.verknuepfung.id === "flag_testfilm_1990");
-  check("Migration: 1 Eintrag angelegt + auf Master verknüpft (Seeds unangetastet)",
-    eintraege.length === 3 && !!migriert);
-  check("Migration: im_besitz aus physischer Quelle abgeleitet (bluray)", !!migriert && migriert.im_besitz === true);
-  check("Migration: Bericht angezeigt (1 angelegt)", /Migration: 1 angelegt/.test(text()));
-  check("Migration: Knopf nach Lauf verschwunden (idempotent, nichts mehr offen)", !knopf(/alte Must-Watch-Flags migrieren/));
-}
+check("Gast: Migration, Wartung und ihre Handler fehlen vollständig", !erweitert && !migKnopf
+  && !/Einmalige Datenmigration/.test(text()));
 /* Theme-Wechsel: Foyer anklicken -> Wrapper-Hintergrund hell, dann zurück */
 const foyer = knopf(/Foyer \(hell\)/i);
 check("Theme-Knöpfe vorhanden", !!foyer && !!knopf(/Saal \(dunkel\)/i));
@@ -464,12 +457,13 @@ if (besitzKnopf) {
   }
 }
 
-/* ---- Must-Watch-Ansicht: migrierter Eintrag lebt in der eigenen Liste ---- */
+/* ---- Must-Watch-Ansicht: Gastbestand bleibt ohne Owner-Migration erhalten. ---- */
 const mwKnopf = knopf(/^Must-Watch \(/);
 check("Mediathek: Ansicht-Umschalter 'Must-Watch'", !!mwKnopf);
 if (mwKnopf) {
   mwKnopf.click(); await warte(500);
-  check("Must-Watch: migrierter Eintrag gelistet", /Flag-Testfilm/.test(text()));
+  check("Must-Watch: Owner-geschützter Altflag wird nicht automatisch migriert",
+    !/Flag-Testfilm/.test(text()) && /Stalker/.test(text()));
   check("Must-Watch: eigener '+ Für später merken'-Knopf", !!knopf(/^\+ Für später merken$/));
   check("Must-Watch: im-Besitz-Häkchen pro Eintrag", [...doc.querySelectorAll('input[type="checkbox"]')].length > 0);
   check("Must-Watch: Einleitung und die vier Filter sind erreichbar",
@@ -565,11 +559,13 @@ check("No-Config-file:// kennzeichnet den kleinen Entdecken-Bestand als begrenzt
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));
-if (katalogStatusDatei && !katalogStatusDatei.parentElement.open) {
-  katalogStatusDatei.click(); await warte(250);
-}
-check("No-Config-file:// benennt den eingebetteten Streamingbetrieb ehrlich",
-  /BetriebsartEingebettete Offline-Beispiele/.test(dateiText()));
+const datenmodusDatei = [...dateiDoc.querySelectorAll("summary")]
+  .find((summary) => /^Datenmodus & Verbindung$/.test((summary.textContent || "").trim()));
+const datenschutzDatei = [...dateiDoc.querySelectorAll("summary")]
+  .find((summary) => /^Datenschutz & Datenübersicht$/.test((summary.textContent || "").trim()));
+check("No-Config-file:// bleibt ohne Betriebsflächen und mit erreichbarem Datenschutz ehrlich",
+  !katalogStatusDatei && !datenmodusDatei && !!datenschutzDatei
+  && !/Supportdaten kopieren|Demo-Daten entfernen/.test(dateiText()));
 check("No-Config-file:// pollt weder Katalog noch Build-Metadaten",
   dateiFetches.length === 0
   && ![...dateiDoc.querySelectorAll("script[src]")].some((script) => /Programmdateien/.test(script.src))

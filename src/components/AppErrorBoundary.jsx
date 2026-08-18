@@ -1,13 +1,6 @@
 import { Component } from "react";
 import { baueBackup } from "../lib/backup.js";
-
-function technischeFehlerId() {
-  try {
-    return "KD-" + crypto.randomUUID().slice(0, 8).toUpperCase();
-  } catch {
-    return "KD-" + Date.now().toString(36).toUpperCase();
-  }
-}
+import { createDiagnosticReference, recordLocalDiagnostic } from "../lib/localDiagnostics.js";
 
 function ladeJsonHerunter(dateiname, daten) {
   const blob = new Blob([JSON.stringify(daten, null, 2)], {
@@ -34,14 +27,22 @@ export class AppErrorBoundary extends Component {
   static getDerivedStateFromError() {
     return {
       fehler: true,
-      fehlerId: technischeFehlerId(),
+      fehlerId: createDiagnosticReference(),
       backupStatus: "",
     };
   }
 
   componentDidCatch() {
-    /* Kein Telemetrieversand und bewusst auch kein Fehlertext im DOM:
-       eine geworfene Meldung kann Titel, Notiz oder andere Nutzerdaten tragen. */
+    /* Das Error-Objekt wird absichtlich nicht entgegengenommen. Meldung, Stack
+       und Cause können Titel, Notizen oder andere Nutzerdaten enthalten. */
+    try {
+      recordLocalDiagnostic({
+        code: "UI_RENDER_CRASH",
+        source: "APP_ERROR_BOUNDARY",
+        operation: "RENDER",
+        reference: this.state.fehlerId,
+      }, { ownerConfirmed: this.props.ownerDiagnosticsConfirmed === true });
+    } catch { /* Lokale Diagnose darf die sichere Fehleransicht nie blockieren. */ }
   }
 
   async notfallBackup() {

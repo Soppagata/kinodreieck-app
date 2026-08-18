@@ -9,7 +9,7 @@ import { UeberKinodreieck } from "../components/Erklaerstuecke.jsx";
 import { StapelImport } from "../components/StapelImport.jsx";
 import { KontoBereich } from "../components/KontoBereich.jsx";
 import { GeschmackBereich } from "../components/GeschmackBereich.jsx";
-import { PrivatePilotOps } from "../components/PrivatePilotOps.jsx";
+import { DatenschutzUebersicht, KontoLoeschung, SupportDaten } from "../components/PrivatePilotOps.jsx";
 import { alleStimmungen, bekannteWerte, sigAusSchema } from "../lib/finder.js";
 import { hatOfflineDefinition, vokabularEintragAusDeutung } from "../lib/vokabular.js";
 /* Ohne diesen Import warf der Einstellungs-Tab bei KI=an einen
@@ -38,8 +38,8 @@ export function DatenTab({
   master, masterMeta, masterHerkunft, nachtragCount,
   exportMaster, importMaster, importProgramm, importNonstop,
   programm, clearProgrammCache,
-  startWahl = null, demoAktiv = false, onStartWahl, onDemoEntfernen,
-  katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh,
+  startWahl = null, demoAktiv = false, onStartWahl,
+  katalogVerbunden = false, onKatalogVerbinden, onKatalogRefresh, onTechnikKatalogRefresh,
   programmInfo = null,
   ungesichertMaster = false, ungesichertArtikel = false,
   einstellungen = {}, setzeEinstellung, waehleModus, backupGesamt,
@@ -63,11 +63,13 @@ export function DatenTab({
   addFilm, addFilme,
   onKontoDatenGeaendert,
   kontoAktiv = false,
+  kontoModus = false,
   kontoId = "",
   kontoEmail = "",
   onKontoGeloescht,
+  ownerTechnikBestaetigt = false,
+  einzeldatei = typeof location !== "undefined" && location.protocol === "file:",
 }) {
-  const einzeldatei = typeof location !== "undefined" && location.protocol === "file:";
   const sicherungOffen = ungesichertMaster || ungesichertArtikel;
   /* Hinterlegte Zugangsdaten heißen seit der Zugriffstrennung NICHT, dass
      das Programm auch da ist (anon sieht die Live-Zeilen nicht). Beides wird
@@ -87,6 +89,12 @@ export function DatenTab({
        eines Datenbankstands, den es hier nicht gibt. */
     : programmInfo.art === "manuell" ? { ok: true, text: "manuell eingespielt" }
     : { ok: true, text: "aktuell geladen" };
+  const verbindungBrauchtHilfe = !einzeldatei && (!katalogVerbunden
+    || programmInfo?.code === ERROR_CODES.INVALID_KEY
+    || programmInfo?.anmeldungNoetig === true
+    || !!programmInfo?.fehler
+    || programmInfo?.abgelaufen === true
+    || programmInfo?.ausCache === true);
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
@@ -187,25 +195,34 @@ export function DatenTab({
         </Klappe>
       )}
 
-      {/* 2 — Datenmodus */}
-      <Klappe titel="Datenmodus & Verbindung">
+      {/* Betriebsdetails existieren nur für die frisch serverbestätigte
+          Ownerrolle. Die frühere Demo-Löschfläche wird nicht mehr projiziert;
+          normale Nutzer erhalten bei einem echten Fehler ausschließlich einen
+          kleinen, verständlichen Recoveryweg. */}
+      {ownerTechnikBestaetigt && <Klappe titel="Datenmodus & Verbindung">
         <div style={kasten}>
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
           <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
-            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Settings bleiben nur in diesem Browser. {einzeldatei ? "Datenquelle" : "Datenbankzugang"}: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{einzeldatei ? "eingebettete Offline-Beispiele" : katalogVerbunden ? "Zugangsdaten hinterlegt" : "nicht eingerichtet"}</strong>.
+            Kino- und Streamingprogramm sind ein gemeinsamer, schreibgeschützter Katalog. Deine Mediathek, Merkliste und Settings bleiben geschützt. {einzeldatei ? "Datenquelle" : "Datenbankzugang"}: <strong style={{ color: katalogVerbunden ? T.wolfram : T.gefahr }}>{einzeldatei ? "eingebettete Offline-Beispiele" : katalogVerbunden ? "Zugangsdaten hinterlegt" : "nicht eingerichtet"}</strong>.
             {" "}Kinoprogramm: <strong style={{ color: programmStatus.ok ? T.wolfram : T.gefahr }}>{programmStatus.text}</strong>.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{einzeldatei ? "Online-Katalog verbinden" : katalogVerbunden ? "Datenbankzugang prüfen/ändern" : "Datenbank verbinden"}</button>}
             {onStartWahl && !demoAktiv && !(master && master.length) && <button style={btnStyle(false)} onClick={onStartWahl}>Startmodus wählen</button>}
-            {(demoAktiv || startWahl === "demo") && onDemoEntfernen && (
-              <button style={{ ...btnStyle(false), color: T.gefahr, borderColor: T.gefahr }} onClick={() => {
-                if (window.confirm("Max’ Demo-Einträge entfernen?\n\nDas gemeinsame Kino- und Streamingprogramm bleibt erhalten. Eigene, später ergänzte Einträge bleiben ebenfalls erhalten.")) onDemoEntfernen();
-              }}>Demo-Daten entfernen</button>
-            )}
           </div>
         </div>
-      </Klappe>
+      </Klappe>}
+      {!ownerTechnikBestaetigt && verbindungBrauchtHilfe && <Klappe titel="Verbindung wiederherstellen">
+        <div style={kasten}>
+          <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 12px", lineHeight: 1.6 }}>
+            Das Kinoprogramm ist derzeit <strong style={{ color: T.gefahr }}>{programmStatus.text}</strong>. Deine persönlichen Inhalte bleiben davon unberührt.
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>Datenbankzugang prüfen</button>}
+            {onKatalogRefresh && <button style={btnStyle(false)} onClick={onKatalogRefresh}>Katalog neu laden</button>}
+          </div>
+        </div>
+      </Klappe>}
 
       {/* 2b — Konto & Geräte-Sync (Etappe 3) */}
       {/* KI-Funktionen (Etappe 7). Steht VOR dem Konto-Block, weil die
@@ -292,6 +309,13 @@ export function DatenTab({
         </div>
       </Klappe>
 
+      {kontoModus && <Klappe titel="Konto löschen">
+        <div style={kasten}>
+          <KontoLoeschung accountActive={kontoAktiv} accountId={kontoId} accountEmail={kontoEmail}
+            exportBeforeDelete={backupGesamt} onAccountDeleted={onKontoGeloescht} />
+        </div>
+      </Klappe>}
+
       <Klappe titel="Stapelimport" tour="ki-ingestion">
         <div style={kasten}>
           <h2 style={h2}>Eigene Mediathek stapelweise erfassen</h2>
@@ -342,10 +366,6 @@ export function DatenTab({
         </div>
       </Klappe>
 
-      <Klappe titel="Datenschutz & Datenübersicht">
-        <div style={kasten}><PrivatePilotOps accountActive={kontoAktiv} accountId={kontoId} accountEmail={kontoEmail} exportBeforeDelete={backupGesamt} onAccountDeleted={onKontoGeloescht} /></div>
-      </Klappe>
-
       {/* 5 — Streaming-Quellen */}
       {toggleQuelle && <StreamingEinstellungen bekannt={streamingBekannt} entdecken={streamingEntdecken}
         katalogInfo={streamingInfo} auswahl={auswahl} toggleQuelle={toggleQuelle} teil="quellen" datenGesperrt={datenGesperrt} />}
@@ -367,7 +387,12 @@ export function DatenTab({
         </Klappe>
       )}
 
-      {/* 7 — Technische Stände nur in Settings, nicht in den Inhaltsbereichen. */}
+      {/* Technische DOM-Zweige entstehen ausschließlich für die bestätigte
+          Ownerrolle; bloßes Verbergen per CSS wäre keine Rechteprojektion. */}
+      {ownerTechnikBestaetigt && <>
+      <Klappe titel="Technik & Support">
+        <div style={kasten}><SupportDaten ownerBestaetigt={ownerTechnikBestaetigt} /></div>
+      </Klappe>
       <Klappe titel="Kinoprogramm-Status">
         <div style={kasten}>
           {programm ? (() => {
@@ -384,7 +409,7 @@ export function DatenTab({
                   </p>
                 )}
                 <dl className="kd-statusliste">
-                  <div><dt>Betriebsart</dt><dd>{demoStand ? "Demo" : "Aktuelles Konto-Programm"}</dd></div>
+                  <div><dt>Betriebsart</dt><dd>{demoStand ? "Demo" : programmInfo?.art === "manuell" ? "Manueller Notfallimport" : "Aktuelles Konto-Programm"}</dd></div>
                   <div><dt>Stand</dt><dd style={{ color: programmInfo?.abgelaufen ? T.gefahr : undefined }}>{stand && !Number.isNaN(stand.getTime())
                     ? stand.toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
                     : "unbekannt"}</dd></div>
@@ -393,7 +418,7 @@ export function DatenTab({
                   <div><dt>Anzeige</dt><dd>{Number.isFinite(s.angezeigt) && Number.isFinite(s.gesamt)
                     ? `${s.angezeigt} von ${s.gesamt} Filmen · ${s.fensterTage || 4} Tage`
                     : details.find((x) => x.startsWith("Anzeige:"))?.replace(/^Anzeige:\s*/, "") || `${programm.filme?.length || 0} Filme`}</dd></div>
-                  <div><dt>Speicher</dt><dd>{s.archiviert ? "eingebettetes Archivbeispiel" : programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
+                  <div><dt>Speicher</dt><dd>{s.archiviert ? "eingebettetes Archivbeispiel" : programmInfo?.art === "manuell" ? "manuell eingespielt" : programmInfo?.ausCache ? "Browser-Cache" : "frisch aus dem Katalog"}{programmInfo?.abgelaufen ? " · abgelaufen" : ""}</dd></div>
                 </dl>
               </>
             );
@@ -410,17 +435,17 @@ export function DatenTab({
             <div style={kasten}>
               <h2 style={h2}>Katalog aus der Datenbank</h2>
               <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>Lädt Kino- und Streamingstand neu, ohne selbst Watchmode-Requests auszulösen.</p>
-              {onKatalogRefresh && <button style={btnStyle(true)} onClick={onKatalogRefresh}>Katalog jetzt neu laden</button>}
+              {onTechnikKatalogRefresh && <button style={btnStyle(true)} onClick={onTechnikKatalogRefresh}>Katalog jetzt neu laden</button>}
             </div>
             <div style={kasten}>
               <h2 style={h2}>Programm manuell importieren</h2>
               <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>Nur als Notfallweg: einen Programm-Snapshot oder gespeichertes Nonstop-HTML lokal einspielen.</p>
-              <div data-tour="programm-import"><MasterImport onImport={importProgramm} hasMaster={!!programm}
+              {importProgramm && <div data-tour="programm-import"><MasterImport onImport={importProgramm} hasMaster={!!programm}
                 labelNeu="Programm-Snapshot importieren" labelErsetzen="Programm-Snapshot ersetzen"
-                hinweis='Programm-JSON einfügen ({"erstellt":…, "data":{"filme":[…]}})' /></div>
-              <div style={{ marginTop: 12 }}><MasterImport onImport={importNonstop} hasMaster={!!programm}
+                hinweis='Programm-JSON einfügen ({"erstellt":…, "data":{"filme":[…]}})' /></div>}
+              {importNonstop && <div style={{ marginTop: 12 }}><MasterImport onImport={importNonstop} hasMaster={!!programm}
                 labelNeu="Nonstop-Seite (HTML) laden" labelErsetzen="Nonstop-Seite (HTML) laden"
-                hinweis="HTML-Quelltext der Nonstop-Programmseite einfügen" accept=".html,.htm,.txt" /></div>
+                hinweis="HTML-Quelltext der Nonstop-Programmseite einfügen" accept=".html,.htm,.txt" /></div>}
             </div>
             {(offeneFlags > 0 || migrationsBericht || besitzImportBericht) && (
               <div style={kasten}>
@@ -439,17 +464,18 @@ export function DatenTab({
             <div style={kasten}>
               <h2 style={h2}>Lokaler Cache</h2>
               <p style={{ fontSize: 13, color: T.rauch, margin: "0 0 10px", lineHeight: 1.6 }}>Verwirft den lokal gemerkten Programmstand. Beim nächsten Laden wird wieder die Datenbank verwendet.</p>
-              <button style={btnStyle(false)} onClick={clearProgrammCache}>Programm-Cache leeren</button>
+              {clearProgrammCache && <button style={btnStyle(false)} onClick={clearProgrammCache}>Programm-Cache leeren</button>}
             </div>
           </div>
         </Klappe>
       </div>
+      </>}
 
       {/* 9 — Rechtliches + absichtlich unklarer versteckter Modusknopf. */}
       <Klappe titel="Über & Rechtliches">
         <div style={kasten}>
           <p style={{ fontSize: 12, color: T.rauch, lineHeight: 1.7, margin: 0 }}>
-            Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen im Browser; die App verwendet keine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
+            Kinodreieck — privates, nicht-kommerzielles Projekt. Persönliche Daten liegen lokal und bei aktiviertem Kontospeicher zusätzlich im eigenen Konto; die App verwendet keine allgemeine Telemetrie. Programmdaten: film.at &amp; nonstopkino.at · Streaming-Kataloge: Watchmode. Alle Angaben ohne Gewähr — verbindlich sind die Kino- bzw. Anbieterseiten. Bewertungen und Texte sind persönliche Meinungen ihrer Autoren.
             <br />© {new Date().getFullYear()} <span onClick={() => setEggOffen((v) => !v)} title="…" style={{ color: T.wolfram, cursor: "pointer", textDecorationLine: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}>Max</span> — Nutzung auf eigene Verantwortung.
           </p>
           {eggOffen && waehleModus && <div style={{ marginTop: 12 }}><button onClick={eggToggle} style={btnStyle(eggAktiv)}>{eggLabel}</button></div>}
@@ -462,6 +488,10 @@ export function DatenTab({
             )}
             {ueberOffen && <UeberKinodreieck />}
           </div>
+          <details style={{ marginTop: 18 }}>
+            <summary style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer", color: T.rauch, fontSize: 13 }}>Datenschutz & Datenübersicht</summary>
+            <div style={{ marginTop: 10 }}><DatenschutzUebersicht accountActive={kontoAktiv} /></div>
+          </details>
         </div>
       </Klappe>
     </section>

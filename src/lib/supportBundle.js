@@ -1,4 +1,5 @@
 import { runtimeConfig } from "../config/runtime.js";
+import { sanitizeLocalDiagnosticEntries } from "./localDiagnostics.js";
 
 const ALLOWED_CODES = new Set([
   "OK", "OFFLINE", "NOT_CONFIGURED", "BUILD_MISMATCH", "FUNCTION_UNAVAILABLE",
@@ -11,11 +12,16 @@ function code(value) {
   return ALLOWED_CODES.has(normalized) ? normalized : "NOT_CONFIGURED";
 }
 
-export function buildSupportBundle({ checks = [], online = globalThis.navigator?.onLine !== false } = {}) {
+export function buildSupportBundle({
+  checks = [], diagnostics = [], online = globalThis.navigator?.onLine !== false, now = Date.now(),
+} = {}) {
+  const requestedNow = Number(now);
+  const parsedNow = Number.isFinite(requestedNow) ? new Date(requestedNow).getTime() : NaN;
+  const bundleNow = Number.isFinite(parsedNow) ? parsedNow : Date.now();
   return Object.freeze({
     format: "kinodreieck-support",
-    version: 1,
-    createdAt: new Date().toISOString(),
+    version: 2,
+    createdAt: new Date(bundleNow).toISOString(),
     buildVersion: String(runtimeConfig.buildVersion || "unknown").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80) || "unknown",
     environment: ["local", "staging", "production"].includes(runtimeConfig.appEnvironment) ? runtimeConfig.appEnvironment : "local",
     online: online === true,
@@ -23,6 +29,7 @@ export function buildSupportBundle({ checks = [], online = globalThis.navigator?
       id: String(item?.id || "unknown").replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 50) || "unknown",
       code: code(item?.code),
     })),
+    diagnostics: sanitizeLocalDiagnosticEntries(diagnostics, { now: bundleNow }),
     privacy: "NO_PAYLOAD_NO_ACCOUNT_NO_URL_NO_STORAGE",
   });
 }

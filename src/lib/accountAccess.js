@@ -47,6 +47,18 @@ export function normalizeAccountAccessRows(rows) {
   });
 }
 
+/* Technische Owner-Bedienung entsteht ausschließlich aus der frisch
+   serverprojizierten Own-Row-Rolle. Anzeigename und E-Mail sind absichtlich
+   kein Teil der Entscheidung; jeder unklare Stand fällt geschlossen aus. */
+export function hatBestaetigteOwnerRolle(session) {
+  return session?.mode === "account"
+    && session?.state === "ready"
+    && session?.access?.status === ACCOUNT_ACCESS_STATUS.RESOLVED
+    && session?.access?.role === "owner"
+    && session?.account?.role === "owner"
+    && session?.capabilities?.remoteStorage === true;
+}
+
 export async function loadOwnAccountAccess({
   config = {}, token = null, fetchImpl = null, timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {

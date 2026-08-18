@@ -289,7 +289,7 @@ check("KI-Vokabular: Gast sieht keine unerreichbare KI-Eingabe",
   !wortFeld && !bedeutungsFeld && !knopf(/^Mit KI deuten$/));
 check("KI-Vokabular: keine manuelle Genre-/Tag-Zuordnung mehr",
   ![...doc.querySelectorAll("input")].some((i) => /Genres, kommagetrennt|Tags, kommagetrennt/.test(i.placeholder || "")));
-// Demo-Reihenfolge: Streaming-Quellen exakt an Position 5, Erweitert nach Status.
+// Normale Gastflächen bleiben geordnet; Betriebs- und Ownertechnik fehlt.
 const einstellTexte = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
 const darstellungIndex = einstellTexte.findIndex((s) => /^Darstellung & Verhalten/.test(s));
 const modusIndex = einstellTexte.findIndex((s) => /^Datenmodus & Verbindung/.test(s));
@@ -299,25 +299,26 @@ const streamingIndex = einstellTexte.findIndex((s) => /^Streaming-Quellen/.test(
 const vokIndex = einstellTexte.findIndex((s) => /^KI-Vokabular/.test(s));
 const statusIndex = einstellTexte.findIndex((s) => /^Katalog-Status/.test(s));
 const erweitertIndex = einstellTexte.findIndex((s) => /^Erweitert — manuelle Aktualisierung & Wartung/.test(s));
-check("Demo: feste Reihenfolge inkl. Streaming-Quellen auf Platz 5",
-  darstellungIndex < modusIndex && modusIndex < masterIndex && masterIndex < backupIndex && backupIndex < streamingIndex && streamingIndex < vokIndex && vokIndex < statusIndex && statusIndex < erweitertIndex);
+const rechtIndex = einstellTexte.findIndex((s) => /^Über & Rechtliches/.test(s));
+check("Demo: feste Reihenfolge der normalen Gastflächen",
+  darstellungIndex >= 0 && darstellungIndex < masterIndex && masterIndex < backupIndex
+    && backupIndex < streamingIndex && streamingIndex < vokIndex && vokIndex < rechtIndex);
+check("Gast: allgemeiner Datenmodus und Owner-Technik fehlen vollständig",
+  modusIndex === -1 && statusIndex === -1 && erweitertIndex === -1
+    && !einstellTexte.some((s) => /^(Technik & Support|Kinoprogramm-Status)/.test(s))
+    && !knopf(/^Demo-Daten entfernen$/) && !knopf(/^Supportdaten kopieren$/)
+    && !knopf(/^Programm-Cache leeren$/));
+check("Gast: Datenschutz liegt unter Über & Rechtliches",
+  rechtIndex >= 0 && /Datenschutz & Datenübersicht/.test(text()));
 check("Teilen & Tauschen aus Einstellungen entfernt", !einstellTexte.some((s) => /Teilen & Tauschen/.test(s)));
 check("Phase 2: Restore nicht mehr als eigene Hauptklappe", !einstellTexte.some((s) => s === "Backup wiederherstellen"));
 // Backup-Knopf crasht nicht
 const backup = knopf(/Gesamt-Backup herunterladen/);
 check("Backup-Knopf vorhanden", !!backup);
 if (backup) { backup.click(); await warte(400); check("Backup-Klick ohne Fehler", true); }
-// Erweitert-Dropdown: Inhalte + Reset-Knopf (confirm=false -> folgenlos)
+// Die frühere allgemeine Wartungsfläche ist vollständig ownergeschützt.
 const erwSummary = [...doc.querySelectorAll("summary")].find((s) => /Erweitert — manuelle Aktualisierung & Wartung/.test(s.textContent || ""));
-check("Erweitert-Dropdown vorhanden", !!erwSummary);
-if (erwSummary) {
-  erwSummary.click(); await warte(300);
-  const erwDetails = erwSummary.parentElement;
-  check("Erweitert: Datenbank-Refresh", !!knopf(/^Katalog jetzt neu laden/));
-  check("Erweitert: Programm-Snapshot-Import", /Programm-Snapshot/.test(text()));
-  check("Erweitert: Cache-Knopf", !!knopf(/Programm-Cache leeren/));
-  check("Erweitert: kein Geräte-Sync und kein Blog-Doppelimport", !/Geräte-Sync|Blog-Artikel/.test(erwDetails.textContent || ""));
-}
+check("Gast: Erweitert-Dropdown ist nicht vorhanden", !erwSummary);
 
 /* ---- 7. Kino: Filter-Schalter ---- */
 const kinoTab = tabs.find((b) => /^kino$/i.test((b.textContent || "").trim()));

@@ -1,5 +1,5 @@
 /* Regressionstest der login-freien Tester-PWA: Erstwahl, Katalog-Gate,
-   aufgeräumte Einstellungen, versteckte Modi und gezieltes Demo-Entfernen. */
+   aufgeräumte Einstellungen, versteckte Modi und geschlossene Betriebspfade. */
 import { readFileSync } from "node:fs";
 import { TextEncoder } from "node:util";
 import { JSDOM } from "jsdom";
@@ -91,6 +91,7 @@ const NUR_ANGEMELDET = new Set([
    NICHT nachlädt (Gegenproben zu F1/F2) bzw. ein Betriebsart-Wechsel genau
    einmal nachlädt und danach Ruhe gibt (F3). */
 let katalogRufe = [];
+let accessRole = "member";
 let katalogGueltigBis = KATALOG_GUELTIG_BIS;
 /* Steuerpult der Attrappe für die Wechsel-Blöcke (N–R). `fehlend` lässt eine
    Zeile auch MIT Token leer zurückkommen (der heutige Produktionsfall: die
@@ -236,7 +237,7 @@ function baueDom(seed = () => {}, demoRows = null) {
         if (s.includes("/rest/v1/kd_account_access")) {
           return {
             ok: true, status: 200,
-            json: async () => [{ role: "member", active: true, personal_ai: false }],
+            json: async () => [{ role: accessRole, active: true, personal_ai: false }],
             text: async () => "",
           };
         }
@@ -273,7 +274,7 @@ async function katalogNeuLaden(doc, knopf) {
   knopf(/^Settings$/i)?.click(); await warte(300);
   const erweitert = [...doc.querySelectorAll("summary")].find((s) => /^Erweitert/.test((s.textContent || "").trim()));
   if (erweitert && !erweitert.parentElement?.open) { erweitert.click(); await warte(150); }
-  knopf(/^Katalog jetzt neu laden$/)?.click();
+  (knopf(/^Katalog jetzt neu laden$/) || knopf(/^Katalog neu laden$/))?.click();
   await warte(1200);
 }
 
@@ -333,19 +334,18 @@ function seedKatalog(w, start = "clean") {
   check("B: Clean bootet ins leere Dashboard mit DB-Katalog", /Dein Abend/.test(text()) && !/Programmdaten verbinden/.test(text()));
   knopf(/^Settings$/i)?.click(); await warte(400);
   const summaries = [...doc.querySelectorAll("summary")].map((s) => (s.textContent || "").trim());
-  const ids = ["Darstellung & Verhalten", "Datenmodus & Verbindung", "Masterliste", "Gesamt-Backup", "Streaming-Quellen", "KI-Vokabular", "Kinoprogramm-Status", "Katalog-Status", "Erweitert — manuelle Aktualisierung & Wartung"]
+  const ids = ["Darstellung & Verhalten", "Masterliste", "Gesamt-Backup", "Streaming-Quellen", "KI-Vokabular", "Über & Rechtliches"]
     .map((x) => summaries.findIndex((s) => s.startsWith(x)));
-  check("B: neue Settings-Reihenfolge vollständig", ids.every((x) => x >= 0) && ids.every((x, i) => i === 0 || x > ids[i - 1]));
+  check("B: normale Gast-Settings bleiben vollständig und verständlich geordnet",
+    ids.every((x) => x >= 0) && ids.every((x, i) => i === 0 || x > ids[i - 1]));
+  check("B: Gast-DOM enthält keine Betriebs-, Demo- oder Owner-Technik",
+    !summaries.some((s) => /^(Datenmodus & Verbindung|Technik & Support|Kinoprogramm-Status|Katalog-Status|Erweitert —)/.test(s))
+      && !knopf(/^Demo-Daten entfernen$/) && !knopf(/^Supportdaten kopieren$/));
+  check("B: Datenschutz liegt unter Über & Rechtliches", /Datenschutz & Datenübersicht/.test(text()));
   check("B: Vorführmodus und Teilen & Tauschen entfernt", !/Vorführmodus|Teilen & Tauschen/.test(text()));
   const startmodus = knopf(/^Startmodus wählen$/);
-  check("B: Startmodus bleibt in den Einstellungen erneut wählbar", !!startmodus);
-  startmodus?.click(); await warte(100);
-  check("B: bestätigte Startwahl lässt sich ohne Änderung abbrechen", !!knopf(/^Abbrechen$/));
-  knopf(/^Abbrechen$/)?.click(); await warte(100);
-  check("B: Abbrechen schließt die Startwahl und erhält Clean", !knopf(/^Demo ansehen$/) && dom.window.localStorage.getItem("kd:start") === "clean");
-  knopf(/^Startmodus wählen$/)?.click(); await warte(100);
-  knopf(/^Leer starten$/)?.click(); await warte(100);
-  check("B: erneute Wahl desselben Modus ist nicht destruktiv", !knopf(/^Demo ansehen$/) && dom.window.localStorage.getItem("kd:start") === "clean");
+  check("B: Startmodus ist keine allgemeine Wartungsfläche mehr", !startmodus
+    && dom.window.localStorage.getItem("kd:start") === "clean");
   const stapelKlappe = [...doc.querySelectorAll("summary")].find((s) => /^Stapelimport/.test((s.textContent || "").trim()));
   check("B: Text-Stapelimport ist sichtbar", !!stapelKlappe);
   if (stapelKlappe && !stapelKlappe.parentElement.open) { stapelKlappe.click(); await warte(100); }
@@ -428,7 +428,8 @@ function seedKatalog(w, start = "clean") {
   dom.window.close();
 }
 
-/* C — Demo übernimmt Dienste und lässt sich ohne Katalogverlust entfernen. */
+/* C — Demo übernimmt Dienste; ihre Löschung ist keine allgemeine Settings-
+   Oberfläche mehr. Der Löschvertrag selbst bleibt im fokussierten Seed-Test. */
 {
   const demoRows = [
     { key: "kd:master", value: JSON.stringify(masterDatei) },
@@ -454,30 +455,26 @@ function seedKatalog(w, start = "clean") {
     await warte(120);
   }
   const entfernen = knopf(/^Demo-Daten entfernen$/);
-  check("C: Demo hat klaren Entfernen-Knopf", !!entfernen);
+  check("C: Demo-Löschung fehlt in normalen Settings vollständig", !entfernen);
   const ersetzen = knopf(/^Masterliste ersetzen$/);
   const dateiInput = ersetzen?.parentElement?.querySelector('input[type="file"]');
   let dateiDialog = false;
   if (dateiInput) dateiInput.click = () => { dateiDialog = true; };
   ersetzen?.click();
   check("C: Masterliste ersetzen öffnet bei leerem Text den Dateidialog", !!ersetzen && dateiDialog);
-  entfernen?.click(); await warte(500);
-  check("C: Entfernen schaltet auf Clean und löscht Demo-Protokoll", dom.window.localStorage.getItem("kd:start") === "clean" && !dom.window.localStorage.getItem("kd:demo-seed"));
-  let cfg = null, pins = null, merker = null;
+  let cfg = null;
   try {
     cfg = JSON.parse(dom.window.localStorage.getItem("kd:streaming-dienste") || "null");
-    pins = JSON.parse(dom.window.localStorage.getItem("kd:kino-pins") || "null");
-    merker = JSON.parse(dom.window.localStorage.getItem("kd:merkliste") || "null");
   } catch { /* */ }
-  check("C: Demo-Löschung entfernt nur Demo-Quellen und erhält spätere Auswahl", cfg?.quellen?.includes("MUBI") && !cfg.quellen.includes("Netflix"));
-  check("C: Demo-Pins und Demo-Merker werden gezielt entfernt", Array.isArray(pins) && pins.length === 0 && Array.isArray(merker) && merker.length === 0);
+  check("C: Verdeckte Löschung verändert weder Demo-Stand noch spätere Auswahl",
+    dom.window.localStorage.getItem("kd:start") === "demo"
+      && cfg?.quellen?.includes("MUBI") && cfg?.quellen?.includes("Netflix"));
   knopf(/^Kino$/i)?.click(); await warte(350);
   check("C: gemeinsames Kinoprogramm bleibt erhalten", /Stand \d{2}\.\d{2}\./.test(text()) && !/Datenbank noch nicht verbunden/.test(text()));
   dom.window.close();
 }
 
-/* D — Demo-Erkennung hängt am Seed, nicht nur an einem möglicherweise alten
-   oder versehentlich auf Clean gesetzten Modusnamen. */
+/* D — Ein alter Demo-Marker darf keine Betriebsfläche für Gäste öffnen. */
 {
   const dom = baueDom((w) => {
     seedKatalog(w, "clean");
@@ -486,13 +483,13 @@ function seedKatalog(w, start = "clean") {
   const { text, knopf } = hilfen(dom);
   await warte(1800);
   knopf(/^Settings$/i)?.click(); await warte(300);
-  check("D: vorhandener Demo-Seed zeigt trotz Clean-Wert den Demo-Modus", /Demo-Modus/.test(text()));
-  check("D: vorhandener Demo-Seed bietet Demo-Daten entfernen an", !!knopf(/^Demo-Daten entfernen$/));
+  check("D: vorhandener Demo-Seed öffnet weder Datenmodus noch Demo-Löschung",
+    !/Demo-Modus/.test(text()) && !knopf(/^Demo-Daten entfernen$/));
   dom.window.close();
 }
 
-/* E — Übergangsformat mit Boolean-Markern wird über die Demo-DB auf exakte
-   Einträge aufgelöst; eigene spätere Ergänzungen bleiben erhalten. */
+/* E — Ein Legacy-Marker bleibt ohne sichtbare Löschaktion vollständig
+   unangetastet; die eigentliche Bereinigung prüft demo_seed_test.mjs. */
 {
   const heute = new Date();
   const heuteTermin = `${heute.getDate()}.${heute.getMonth() + 1}.`;
@@ -514,22 +511,23 @@ function seedKatalog(w, start = "clean") {
   const { knopf } = hilfen(dom);
   await warte(1800);
   knopf(/^Settings$/i)?.click(); await warte(300);
-  knopf(/^Demo-Daten entfernen$/)?.click(); await warte(450);
+  check("E: normale Settings bieten keine Legacy-Demo-Löschung an", !knopf(/^Demo-Daten entfernen$/));
   const pins = JSON.parse(dom.window.localStorage.getItem("kd:kino-pins") || "[]");
   const merker = JSON.parse(dom.window.localStorage.getItem("kd:merkliste") || "[]");
   const cfg = JSON.parse(dom.window.localStorage.getItem("kd:streaming-dienste") || "{}");
-  check("E: alter Demo-Seed entfernt nur den exakten Demo-Pin", pins.length === 1 && pins[0].t === "Eigener Pin");
-  check("E: alter Demo-Seed entfernt nur den exakten Demo-Merker", merker.length === 1 && merker[0].watchmode_id === 7002);
-  if (pins.length !== 1 || pins[0]?.t !== "Eigener Pin" || merker.length !== 1 || merker[0]?.watchmode_id !== 7002) {
+  check("E: verdeckte Löschung verändert weder Demo- noch Eigen-Pin", pins.length === 2);
+  check("E: verdeckte Löschung verändert weder Demo- noch Eigen-Merker", merker.length === 2);
+  if (pins.length !== 2 || merker.length !== 2) {
     console.log("  Ist-Wert Pins:", JSON.stringify(pins));
     console.log("  Ist-Wert Merkliste:", JSON.stringify(merker));
   }
-  check("E: alter Demo-Seed erhält eigene Streamingquelle", JSON.stringify(cfg.quellen) === JSON.stringify(["MUBI"]));
+  check("E: verdeckte Löschung erhält Demo- und eigene Streamingquelle",
+    JSON.stringify(cfg.quellen) === JSON.stringify(["Netflix", "MUBI"]));
   dom.window.close();
 }
 
-/* F — Kann ein alter Boolean-Seed ohne Demo-Read nicht auf exakte Einträge
-   aufgelöst werden, bleibt alles samt Seed für einen späteren Versuch erhalten. */
+/* F — Ohne allgemeine Löschaktion bleibt auch ein offline unklarer Legacy-
+   Marker unverändert und löst keinen Bereinigungsrequest aus. */
 {
   netzReset();
   netz.fehlend.add("demo_seed");
@@ -543,20 +541,20 @@ function seedKatalog(w, start = "clean") {
   const { text, knopf } = hilfen(dom);
   await warte(1800);
   knopf(/^Settings$/i)?.click(); await warte(300);
-  knopf(/^Demo-Daten entfernen$/)?.click(); await warte(450);
+  check("F: Offline-Legacy-Seed bietet keine allgemeine Löschaktion", !knopf(/^Demo-Daten entfernen$/));
   check("F: Offline-Legacy-Seed bleibt für einen späteren Versuch erhalten", !!dom.window.localStorage.getItem("kd:demo-seed"));
   check("F: Offline-Legacy-Bereinigung löscht keine Pins oder Merker",
     JSON.parse(dom.window.localStorage.getItem("kd:kino-pins") || "[]").length === 1
     && JSON.parse(dom.window.localStorage.getItem("kd:merkliste") || "[]").length === 1);
   check("F: Offline-Legacy-Bereinigung erhält eigene Streamingauswahl",
     JSON.stringify(JSON.parse(dom.window.localStorage.getItem("kd:streaming-dienste") || "{}").quellen) === JSON.stringify(["MUBI"]));
-  check("F: Offline-Legacy-Bereinigung erklärt den sicheren Abbruch", /nichts gelöscht/i.test(text()));
+  check("F: Settings behaupten keinen ausgeführten Bereinigungsversuch", !/nichts gelöscht/i.test(text()));
   dom.window.close();
   netzReset();
 }
 
-/* G — Ein abgebrochener Wechsel mit persönlichen Daten verändert weder Modus
-   noch gespeicherten Inhalt. */
+/* G — Die frühere allgemeine Startmodus-Wartung bleibt verborgen und verändert
+   weder Modus noch persönliche Inhalte. */
 {
   const artikel = { artikel: [{ id: "eigener_artikel", titel: "Eigener Artikel", text: "Bleibt.", liste: [] }] };
   const dom = baueDom((w) => {
@@ -567,12 +565,10 @@ function seedKatalog(w, start = "clean") {
   const { knopf } = hilfen(dom);
   await warte(1800);
   knopf(/^Settings$/i)?.click(); await warte(300);
-  knopf(/^Startmodus wählen$/)?.click(); await warte(100);
-  knopf(/^Demo ansehen$/)?.click(); await warte(150);
-  check("G: abgebrochener Wechsel bleibt im Clean-Modus", dom.window.localStorage.getItem("kd:start") === "clean");
-  check("G: abgebrochener Wechsel erhält persönliche Artikel",
+  check("G: Settings bieten keinen allgemeinen Startmodus-Wechsel", !knopf(/^Startmodus wählen$/));
+  check("G: verborgener Wechsel lässt den Clean-Modus bestehen", dom.window.localStorage.getItem("kd:start") === "clean");
+  check("G: verborgener Wechsel erhält persönliche Artikel",
     JSON.parse(dom.window.localStorage.getItem("kd:artikel") || "{}").artikel?.[0]?.id === "eigener_artikel");
-  check("G: Startwahl bleibt nach dem Abbruch offen", !!knopf(/^Demo ansehen$/));
   dom.window.close();
 }
 
@@ -1135,7 +1131,7 @@ function seedKatalog(w, start = "clean") {
   netz.fehlend.add("programm_demo");     // der nächste Versuch geht ins Leere
   netz.fehlend.add("streaming_bekannt_demo");
   knopf(/^Settings$/i)?.click(); await warte(400);
-  knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
+  (knopf(/^Katalog jetzt neu laden$/) || knopf(/^Katalog neu laden$/))?.click(); await warte(1400);
   check("S/C1-Vorbedingung: der Nachladeversuch ist wirklich gelaufen und gescheitert",
     zaehle("programm_demo") >= 2 && /noch keine Beispieldaten veröffentlicht/.test(text()));
 
@@ -1168,7 +1164,7 @@ function seedKatalog(w, start = "clean") {
   netz.fehlend.add("streaming_bekannt_demo");
   netz.fehlend.add("programm_demo");
   knopf(/^Settings$/i)?.click(); await warte(400);
-  knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
+  (knopf(/^Katalog jetzt neu laden$/) || knopf(/^Katalog neu laden$/))?.click(); await warte(1400);
   check("T/C1-Vorbedingung: der Streaming-Nachladeversuch ist gelaufen und gescheitert",
     zaehle("streaming_bekannt_demo") >= 2);
 
@@ -1194,16 +1190,20 @@ function seedKatalog(w, start = "clean") {
    im Dokument, ein Regex über alles träfe sie und bewiese nichts. */
 {
   netzReset();
-  netz.fehlend.add("programm_demo");     // der Boot-Versuch scheitert
-  netz.fehlend.add("streaming_bekannt_demo");
+  accessRole = "owner";
+  netz.fehlend.add("programm");     // der Owner-Boot-Versuch scheitert
+  netz.fehlend.add("streaming_bekannt");
   katalogRufe = [];
-  const dom = baueDom((w) => seedKatalog(w, "clean"));
+  const dom = baueDom((w) => {
+    seedKatalog(w, "clean");
+    w.localStorage.setItem("kd:auth:session", sitzungsTopf());
+  });
   const { doc, text, knopf } = hilfen(dom);
   const status = () => programmStatusText(doc);
   await warte(2600);
   knopf(/^Settings$/i)?.click(); await warte(500);
-  check("U-Vorbedingung: der Einstellungen-Tab meldet den gescheiterten Versuch",
-    status() === "noch keine Beispieldaten veröffentlicht");
+  check("U-Vorbedingung: der Einstellungen-Tab meldet den gescheiterten Owner-Versuch",
+    status() === "nicht geladen");
 
   const feld = [...doc.querySelectorAll("textarea")].find((t) => /Programm-JSON einfügen/.test(t.placeholder || ""));
   check("U-Vorbedingung: der Notfallweg „Programm manuell importieren“ ist erreichbar", !!feld);
@@ -1220,9 +1220,13 @@ function seedKatalog(w, start = "clean") {
     !/· Demo-Schnappschuss/.test(text()) && !/· abgelaufen/.test(text())
     && !/· aus dem Browser-Speicher/.test(text()));
   knopf(/^Settings$/i)?.click(); await warte(500);
-  check("U: der Einstellungen-Tab meldet dafür nicht mehr den alten Fehlertext, sondern den Import",
-    status() === "manuell eingespielt");
+  const programmStatus = [...doc.querySelectorAll("summary")]
+    .find((summary) => /^Kinoprogramm-Status$/.test((summary.textContent || "").trim()))?.parentElement;
+  check("U: der Owner-Status meldet dafür nicht den alten Katalogstand, sondern den Import",
+    /BetriebsartManuellerNotfallimport/.test((programmStatus?.textContent || "").replace(/\s+/g, ""))
+      && /Speichermanuelleingespielt/.test((programmStatus?.textContent || "").replace(/\s+/g, "")));
   dom.window.close();
+  accessRole = "member";
   netzReset();
 }
 
@@ -1275,6 +1279,7 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   katalogRufe = [];
+  accessRole = "owner";
   const cacheInhalt = new Map();
   const cacheLoeschungen = [];
   const dom = baueDom((w) => {
@@ -1303,6 +1308,7 @@ function seedKatalog(w, start = "clean") {
   check("W/N1: nach einem 503 meldet der Einstellungen-Tab nicht länger „Anmeldung nötig“",
     status() === "nicht geladen");
   dom.window.close();
+  accessRole = "member";
   netzReset();
 }
 
@@ -1316,28 +1322,33 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   katalogRufe = [];
-  const dom = baueDom((w) => seedKatalog(w, "clean"));
+  accessRole = "owner";
+  const dom = baueDom((w) => {
+    seedKatalog(w, "clean");
+    w.localStorage.setItem("kd:auth:session", sitzungsTopf());
+  });
   const { doc, knopf } = hilfen(dom);
   const status = () => programmStatusText(doc);
   await warte(2600);
   knopf(/^Settings$/i)?.click(); await warte(500);
-  check("X/N2-Vorbedingung: zunächst steht ein sauber geladener Demo-Stand",
-    status() === "Demo-Schnappschuss");
+  check("X/N2-Vorbedingung: zunächst steht ein sauber geladener Owner-Stand",
+    status() === "aktuell geladen");
 
   /* Erster Fehlversuch: der apikey wird durchgehend abgewiesen (auch im
      anon-Rückfall) — das ist INVALID_KEY, nicht „melde dich an". */
-  netz.schluesselAbgelehnt.add("programm_demo");
+  netz.schluesselAbgelehnt.add("programm");
   await katalogNeuLaden(doc, knopf);
   check("X/N2-Vorbedingung: der Einstellungen-Tab meldet den abgelehnten Schlüssel",
     status() === "Zugangsschlüssel wird abgelehnt");
 
   /* Zweiter Fehlversuch, ganz andere Ursache und ohne eigenen Fehlercode. */
-  netz.schluesselAbgelehnt.delete("programm_demo");
-  netz.kaputtePayload.add("programm_demo");
+  netz.schluesselAbgelehnt.delete("programm");
+  netz.kaputtePayload.add("programm");
   await katalogNeuLaden(doc, knopf);
   check("X/N2: ein Folgefehler ohne eigenen Code konserviert den alten Code nicht",
     status() === "nicht geladen");
   dom.window.close();
+  accessRole = "member";
   netzReset();
 }
 
@@ -1352,32 +1363,37 @@ function seedKatalog(w, start = "clean") {
 {
   netzReset();
   katalogRufe = [];
+  accessRole = "owner";
   katalogGueltigBis = new Date(Date.now() + 4000).toISOString();
-  const dom = baueDom((w) => seedKatalog(w, "clean"));
+  const dom = baueDom((w) => {
+    seedKatalog(w, "clean");
+    w.localStorage.setItem("kd:auth:session", sitzungsTopf());
+  });
   const { text, knopf } = hilfen(dom);
   await warte(2600);
   knopf(/^Kino$/i)?.click(); await warte(400);
   check("Y/N3-Vorbedingung: der frisch geladene Stand gilt noch und trägt KEIN Ablaufurteil",
-    standMuster(KATALOG_STAND).test(text()) && !/· abgelaufen/.test(text()));
+    standMuster(KATALOG_STAND_LIVE).test(text()) && !/· abgelaufen/.test(text()));
   knopf(/^Streaming$/i)?.click(); await warte(900);
   check("Y/N3-Vorbedingung: auch der Streamingkatalog gilt noch",
     !/Abgelaufener Schnappschuss/.test(text()));
 
   await warte(2200);                     // die Gültigkeit läuft ab
-  netz.fehlend.add("programm_demo");     // und der nächste Versuch scheitert
-  netz.fehlend.add("streaming_bekannt_demo");
+  netz.fehlend.add("programm");          // und der nächste Owner-Versuch scheitert
+  netz.fehlend.add("streaming_bekannt");
   knopf(/^Settings$/i)?.click(); await warte(400);
-  knopf(/^Katalog jetzt neu laden$/)?.click(); await warte(1400);
+  (knopf(/^Katalog jetzt neu laden$/) || knopf(/^Katalog neu laden$/))?.click(); await warte(1400);
   check("Y/N3-Vorbedingung: beide Nachladeversuche sind gelaufen und gescheitert",
-    zaehle("programm_demo") >= 2 && zaehle("streaming_bekannt_demo") >= 2);
+    zaehle("programm") >= 2 && zaehle("streaming_bekannt") >= 2);
 
   knopf(/^Kino$/i)?.click(); await warte(500);
   check("Y/N3 (Programm): der inzwischen abgelaufene Stand wird beim Ergänzen als abgelaufen erkannt",
-    standMuster(KATALOG_STAND).test(text()) && /· abgelaufen/.test(text()));
+    standMuster(KATALOG_STAND_LIVE).test(text()) && /· abgelaufen/.test(text()));
   knopf(/^Streaming$/i)?.click(); await warte(900);
   check("Y/N3 (Streaming-Zwilling): ebenso im Streamingkatalog",
     /Abgelaufener Schnappschuss/.test(text()));
   dom.window.close();
+  accessRole = "member";
   katalogGueltigBis = KATALOG_GUELTIG_BIS;
   netzReset();
 }

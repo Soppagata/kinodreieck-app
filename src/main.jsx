@@ -9,6 +9,8 @@ import { EinstiegsGate } from "./components/EinstiegsGate.jsx";
 import { AppUpdateHinweis } from "./components/AppUpdateHinweis.jsx";
 import { bereinigeVeralteteImportSnapshots } from "./lib/personalDataRegistry.js";
 import { purgeExpiredLocalData } from "./lib/localRetention.js";
+import { hatBestaetigteOwnerRolle } from "./lib/accountAccess.js";
+import { purgeLocalDiagnostics } from "./lib/localDiagnostics.js";
 
 /* Startreihenfolge (Etappe 3):
    1. Sitzung laden/erneuern — ohne gespeicherte Anmeldung bleibt es beim Gast.
@@ -62,7 +64,7 @@ function appBaum() {
   }
   return (
     <StrictMode>
-      <AppErrorBoundary>
+      <AppErrorBoundary ownerDiagnosticsConfirmed={hatBestaetigteOwnerRolle(sessionCoordinator.getSnapshot())}>
         <AppUpdateHinweis />
         <EinstiegsGate><App /></EinstiegsGate>
       </AppErrorBoundary>
@@ -89,6 +91,7 @@ async function boot() {
      stillgelegten Legacy-Treiber verschwinden auch bei Upgrade-Nutzern. */
   bereinigeVeralteteImportSnapshots();
   purgeExpiredLocalData();
+  purgeLocalDiagnostics();
   try { await sessionCoordinator.initialize(); }
   catch { /* Der Coordinator hat Gast-, Konto- oder Privacy-Lock bereits fail-closed gesetzt. */ }
 
