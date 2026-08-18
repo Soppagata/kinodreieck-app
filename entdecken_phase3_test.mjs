@@ -7,7 +7,9 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
+  createAdditionalServiceDiscoveries,
   createCatalogSearchActions,
+  createEntdeckenCatalogSummary,
   rankLocalEntdeckenRecommendations,
 } from "./src/lib/entdeckenUi.js";
 import {
@@ -56,6 +58,64 @@ check("Lokale Empfehlung ist begründet und mutiert weder Katalog noch Profil", 
   assert.equal(recommendations.length, 1);
   assert.match(recommendations[0].reasons[0], /^Profil:/);
   assert.equal(JSON.stringify({ recommendationInput, profileInput }), recommendationBefore);
+});
+
+const catalogTruthInput = {
+  region: "AT", stand: "2026-08-18T00:00:00.000Z",
+  katalogMengen: { rohkatalog: 12, masterbestand: 3, imMasterGefunden: 3, nachMasterAbzug: 9, umfang: "voll" },
+  titel: [
+    { watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "movie", dienste: ["Testdienst"], genres: ["drama"] },
+    { watchmode_id: 92, titel: "Alpha Neutral", jahr: 2020, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 93, titel: "Bravo Neutral", jahr: 2021, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 94, titel: "Charlie Neutral", jahr: 2022, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 95, titel: "Delta Neutral", jahr: 2023, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 96, titel: "Echo Neutral", jahr: 2024, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 97, titel: "Foxtrot Neutral", jahr: 2025, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 98, titel: "Gamma Neutral", jahr: 2026, typ: "movie", dienste: ["Testdienst"] },
+    { watchmode_id: 99, titel: "Fremder Dienst", jahr: 2026, typ: "movie", dienste: ["Anderer Dienst"] },
+  ],
+};
+const personalRecommendations = [{ targetId: "watchmode:91", title: "Passender Film", reasons: ["Profil: Drama"] }];
+const additional = createAdditionalServiceDiscoveries({
+  streamingEntdecken: catalogTruthInput,
+  selectedServices: ["Testdienst"],
+  personalRecommendations,
+});
+check("Neutrale Dienstetreffer füllen stabil nur bis insgesamt sechs Karten", () => {
+  assert.deepEqual(additional.map((entry) => entry.title), [
+    "Alpha Neutral", "Bravo Neutral", "Charlie Neutral", "Delta Neutral", "Echo Neutral",
+  ]);
+  assert.equal(additional.length + personalRecommendations.length, 6);
+  assert.ok(additional.every((entry) => entry.services.join() === "Testdienst"));
+});
+check("Neutrale Ergänzungen bleiben profilfrei, dublettenfrei und unabhängig von der Eingabereihenfolge", () => {
+  const reversed = createAdditionalServiceDiscoveries({
+    streamingEntdecken: { ...catalogTruthInput, titel: [...catalogTruthInput.titel].reverse() },
+    selectedServices: ["Testdienst"], personalRecommendations,
+  });
+  assert.deepEqual(reversed.map((entry) => entry.targetId), additional.map((entry) => entry.targetId));
+  assert.equal(new Set(additional.map((entry) => entry.targetId)).size, additional.length);
+  assert.ok(additional.every((entry) => !("reasons" in entry) && !("bewertung" in entry) && !("profile" in entry)));
+});
+check("Ohne gewählte Dienste oder bei sechs persönlichen Treffern wird nichts neutral zugeschrieben", () => {
+  assert.deepEqual(createAdditionalServiceDiscoveries({
+    streamingEntdecken: catalogTruthInput, selectedServices: [], personalRecommendations,
+  }), []);
+  assert.deepEqual(createAdditionalServiceDiscoveries({
+    streamingEntdecken: catalogTruthInput, selectedServices: ["Testdienst"],
+    personalRecommendations: Array.from({ length: 6 }, (_, index) => ({ targetId: `personal:${index}` })),
+  }), []);
+});
+check("Kataloggröße und aktuelle Dienstetreffer bleiben getrennte Zahlen", () => {
+  const summary = createEntdeckenCatalogSummary({
+    streamingEntdecken: catalogTruthInput, selectedServices: ["Testdienst"],
+  });
+  assert.deepEqual(summary, {
+    catalogSize: 12, currentCount: 8, afterLibraryCount: 9, selectedServiceCount: 1, coverage: "full",
+  });
+  assert.equal(createEntdeckenCatalogSummary({
+    streamingEntdecken: { titel: catalogTruthInput.titel }, selectedServices: ["Testdienst"],
+  }).coverage, "limited");
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
@@ -192,6 +252,27 @@ try {
     assert.equal(document.activeElement, manageTrigger);
   });
   await ui.cleanup();
+
+  const catalogUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"],
+  });
+  check("Entdecken trennt Vollkatalog und Dienstetreffer sichtbar", () => {
+    const catalog = catalogUi.container.querySelector('[aria-label="Katalog und aktuelle Treffermenge"]');
+    assert.match(catalog?.textContent || "", /Kataloggröße12 Titel/);
+    assert.match(catalog?.textContent || "", /Aktuelle Treffermenge8 Titel aus deinen Diensten/);
+    assert.match(catalog?.textContent || "", /Sie verändert die Kataloggröße nicht/);
+  });
+  check("Neutrale Ergänzungen stehen in einer eigenen, nicht personalisierten Sektion", () => {
+    const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
+    const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
+    assert.match(section?.textContent || "", /Weitere Entdeckungen aus deinen Diensten/);
+    assert.equal(cards.length, 6);
+    assert.ok(cards.every((card) => /Aus deinen Diensten · neutral/.test(card.textContent)
+      && /Keine Bewertung und keine persönliche Passungsbehauptung/.test(card.textContent)
+      && !card.querySelector("ul")));
+  });
+  await catalogUi.cleanup();
 
   const deepLinkUi = await mount(EntdeckenTab, {
     ...baseProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),

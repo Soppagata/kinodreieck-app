@@ -897,6 +897,69 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mobil wie am Desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await blockiereFremdnetz(page);
+  let entdeckenRequests = 0;
+  page.on("request", (request) => {
+    if (/name=eq\.streaming_entdecken_demo/.test(request.url())) entdeckenRequests += 1;
+  });
+  await page.addInitScript(async () => {
+    localStorage.setItem("kd:einstieg", JSON.stringify({ version: "mobile-v1", abgeschlossen: true, weg: "gast" }));
+    localStorage.setItem("kd:start", "clean");
+    localStorage.setItem("kd:start-version", "demo-v1");
+    localStorage.setItem("kd:tutorial", JSON.stringify({ willkommen: true, gesehen: [] }));
+    localStorage.setItem("kd:setup", JSON.stringify({ done: true, installiert: false, skip: [], am: "2026-08-18", version: "beta-2026-07-datenfreigabe-2" }));
+    localStorage.setItem("kd:ki", JSON.stringify({ global: false, funktionen: {}, geaendertAm: "2026-08-18T00:00:00.000Z" }));
+    localStorage.setItem("kd:ki-version", "e8-v1");
+    localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
+    localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+    localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
+    localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
+    const katalogCache = await caches.open("kinodreieck-katalog-v1");
+    const cacheEintrag = (payload) => new Response(JSON.stringify({
+      __kd: "kd-katalog-1", gecachtAm: Date.now(),
+      meta: { stand: "2026-08-18T10:00:00Z", gueltig_bis: "2099-01-01T00:00:00Z" }, payload,
+    }), { headers: { "Content-Type": "application/json" } });
+    const basis = location.origin + "/__kd_katalog_cache__/";
+    await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
+      demo: true, stand: "2026-08-18T10:00:00Z", region: "AT", dienste: ["Netflix"], titel: [],
+    }));
+    await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
+      demo: true, stand: "2026-08-18T10:00:00Z", region: "AT", dienste: ["Netflix", "Prime Video"],
+      titel: [
+        { watchmode_id: 61001, titel: "Alpha Lokal", jahr: 2020, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61002, titel: "Bravo Lokal", jahr: 2021, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61003, titel: "Charlie Lokal", jahr: 2022, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61004, titel: "Delta Lokal", jahr: 2023, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61005, titel: "Echo Lokal", jahr: 2024, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61006, titel: "Foxtrot Lokal", jahr: 2025, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61007, titel: "Prime Eins", jahr: 2025, typ: "movie", dienste: ["Prime Video"] },
+        { watchmode_id: 61008, titel: "Prime Zwei", jahr: 2026, typ: "movie", dienste: ["Prime Video"] },
+      ],
+    }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Entdecken");
+
+  const katalog = page.locator('[aria-label="Katalog und aktuelle Treffermenge"]');
+  await expect(katalog).toContainText("Kataloggröße");
+  await expect(katalog).toContainText("8 Titel");
+  await expect(katalog).toContainText("Aktuelle Treffermenge");
+  await expect(katalog).toContainText("6 Titel aus deinen Diensten");
+  const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
+  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen aus deinen Diensten" })).toBeVisible();
+  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await expect(weitere).not.toContainText("Prime Eins");
+  await expect.poll(() => entdeckenRequests).toBe(1);
+  await keineDokumentUeberbreite(page);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(katalog).toBeVisible();
+  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await keineDokumentUeberbreite(page);
+});
+
 test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);

@@ -553,6 +553,15 @@ const streamingBekanntDatei = /Regenbogen über Kreuzberg/.test(dateiText());
 dateiKnopf(/^Entdecken/i)?.click(); await warte(500);
 check("No-Config-file:// enthält beide Streaming-Snapshots",
   streamingBekanntDatei && /Der stille Zeuge/.test(dateiText()));
+const dateiEntdeckenBereich = [...dateiDoc.querySelectorAll('nav[aria-label="Hauptnavigation"] button')]
+  .find((button) => (button.textContent || "").trim() === "Entdecken");
+dateiEntdeckenBereich?.click(); await warte(700);
+check("No-Config-file:// kennzeichnet den kleinen Entdecken-Bestand als begrenzten Ersatzstand",
+  !!dateiEntdeckenBereich
+  && /Begrenzter Katalogstand\s*3 Titel/.test(dateiText())
+  && /Aktuelle Treffermenge/.test(dateiText())
+  && /keine Aussage über die Größe des Gesamtkatalogs/.test(dateiText())
+  && /Weitere Entdeckungen aus deinen Diensten/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));

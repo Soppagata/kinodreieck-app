@@ -75,6 +75,7 @@ export function localRecommendationCandidates(streamingEntdecken) {
       if (watchmodeId == null || !text(entry?.titel)) return null;
       return Object.freeze({
         targetId: `watchmode:${watchmodeId}`,
+        watchmodeId,
         title: text(entry.titel),
         matchStatus: "matched",
         region: "AT",
@@ -113,6 +114,76 @@ export function rankLocalEntdeckenRecommendations({
     library: localLibraryProjection(master),
     useLibrary,
   });
+}
+
+function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
+function selectedServiceSet(selectedServices) {
+  return new Set((Array.isArray(selectedServices) ? selectedServices : [])
+    .map(normalized).filter(Boolean));
+}
+function matchingServices(candidate, services) {
+  return (candidate.services || []).filter((service) => services.has(normalized(service)));
+}
+
+/* Sichtbare Mengenwahrheit des bereits lokal projizierten Katalogstands.
+   `rohkatalog` kommt vor dem Mediathekabzug aus lib/katalog.js; die aktuelle
+   Treffermenge entsteht dagegen aus der Entdecken-Liste und der Dienstewahl. */
+export function createEntdeckenCatalogSummary({
+  streamingEntdecken, selectedServices = [],
+} = {}) {
+  const rows = Array.isArray(streamingEntdecken?.titel) ? streamingEntdecken.titel : [];
+  const services = selectedServiceSet(selectedServices);
+  const currentCount = services.size
+    ? rows.filter((entry) => matchingServices({ services: entry?.dienste || [] }, services).length > 0).length
+    : rows.length;
+  const reportedTotal = Number(streamingEntdecken?.katalogMengen?.rohkatalog);
+  const catalogSize = Number.isInteger(reportedTotal) && reportedTotal >= rows.length
+    ? reportedTotal : rows.length;
+  return Object.freeze({
+    catalogSize,
+    currentCount,
+    afterLibraryCount: rows.length,
+    selectedServiceCount: services.size,
+    coverage: streamingEntdecken?.katalogMengen?.umfang === "voll" ? "full" : "limited",
+  });
+}
+
+/* Neutrale Ergänzungen lesen weder Profil noch Bewertungen. Sie füllen nur
+   die noch freien Plätze bis sechs, verwenden starke Watchmode-IDs, bleiben
+   stabil sortiert und tragen ausschließlich die gewählte Dienstemenge. */
+export function createAdditionalServiceDiscoveries({
+  streamingEntdecken, selectedServices = [], personalRecommendations = [], master = [],
+} = {}) {
+  const openSlots = Math.max(0, 6 - (Array.isArray(personalRecommendations) ? personalRecommendations.length : 0));
+  const services = selectedServiceSet(selectedServices);
+  if (!openSlots || !services.size) return Object.freeze([]);
+  const excluded = new Set([
+    ...(Array.isArray(personalRecommendations) ? personalRecommendations : []).map((entry) => text(entry?.targetId)),
+    ...localLibraryProjection(master).map((entry) => text(entry?.targetId)),
+  ].filter(Boolean));
+  const unique = new Map();
+  for (const candidate of localRecommendationCandidates(streamingEntdecken)) {
+    const matchedServices = matchingServices(candidate, services);
+    if (!matchedServices.length || excluded.has(candidate.targetId) || unique.has(candidate.targetId)) continue;
+    unique.set(candidate.targetId, { candidate, matchedServices });
+  }
+  return Object.freeze([...unique.values()]
+    .sort((left, right) => {
+      const rankLeft = Number.isInteger(left.candidate.sourceRank) ? left.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
+      const rankRight = Number.isInteger(right.candidate.sourceRank) ? right.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
+      if (rankLeft !== rankRight) return rankLeft - rankRight;
+      const byTitle = left.candidate.title.localeCompare(right.candidate.title, "de-AT");
+      return byTitle || left.candidate.targetId.localeCompare(right.candidate.targetId, "de-AT");
+    })
+    .slice(0, openSlots)
+    .map(({ candidate, matchedServices }) => Object.freeze({
+      targetId: candidate.targetId,
+      watchmodeId: candidate.watchmodeId,
+      title: candidate.title,
+      year: candidate.year,
+      type: candidate.type,
+      services: Object.freeze([...matchedServices].sort((a, b) => a.localeCompare(b, "de-AT"))),
+    })));
 }
 
 export function createFixtureRadarLedger(fixtures) {

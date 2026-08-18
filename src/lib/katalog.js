@@ -480,8 +480,19 @@ export function baueStreamingAnsichten(streaming, master = []) {
     else entdecken.push(t);
   }
   const meta = { ...entdeckenAlt, ...bekanntAlt, titel: undefined };
+  /* Der geladene Rohkatalog, der erkannte Mediathekbestand und die daraus
+     gebildete Entdecken-Ansicht sind verschiedene Mengen. `entdeckenUmfang`
+     stammt ausschließlich aus dem lokalen Ladepfad in App.jsx; fehlt die
+     Marke, darf die Oberfläche den Stand nicht als Vollkatalog ausgeben. */
+  const katalogMengen = Object.freeze({
+    rohkatalog: map.size,
+    masterbestand: Array.isArray(master) ? master.length : 0,
+    imMasterGefunden: meine.length,
+    nachMasterAbzug: entdecken.length,
+    umfang: streaming?.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
+  });
   return {
-    bekannt: { ...meta, titel: meine },
-    entdecken: { ...meta, heuristik: entdeckenAlt.heuristik, titel: entdecken },
+    bekannt: { ...meta, katalogMengen, titel: meine },
+    entdecken: { ...meta, heuristik: entdeckenAlt.heuristik, katalogMengen, titel: entdecken },
   };
 }

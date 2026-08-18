@@ -137,11 +137,24 @@ check("JWT-Key wird als apikey und Bearer gesendet",
   fetchCalls.at(-1)?.headers?.apikey === jwt && fetchCalls.at(-1)?.headers?.Authorization === "Bearer " + jwt);
 
 const ansichten = baueStreamingAnsichten({
+  entdeckenUmfang: "voll",
   bekannt: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 1, titel: "Alien", jahr: 1979, dienste: ["Netflix"] }] },
   entdecken: { stand: "x", dienste: ["Netflix"], titel: [{ watchmode_id: 2, titel: "Arrival", jahr: 2016, dienste: ["Netflix"] }] },
 }, [{ id: "alien_1979", titel: "Alien", jahr: 1979, bewertung: { wie: 5, was: 5, warum: 5 } }]);
 check("aktiver Master wird lokal zu Mein Programm gematcht", ansichten.bekannt.titel.length === 1 && ansichten.bekannt.titel[0].id === "alien_1979");
 check("übriger Titel bleibt in Entdecken", ansichten.entdecken.titel.length === 1 && ansichten.entdecken.titel[0].titel === "Arrival");
+check("Rohkatalog, Masterbestand und lokale Abzugsmengen bleiben getrennt belegt",
+  ansichten.bekannt.katalogMengen.rohkatalog === 2
+  && ansichten.bekannt.katalogMengen.masterbestand === 1
+  && ansichten.bekannt.katalogMengen.imMasterGefunden === 1
+  && ansichten.entdecken.katalogMengen.nachMasterAbzug === 1
+  && ansichten.entdecken.katalogMengen.umfang === "voll"
+  && ansichten.bekannt.katalogMengen === ansichten.entdecken.katalogMengen);
+const unbelegterUmfang = baueStreamingAnsichten({
+  bekannt: { titel: [] }, entdecken: { titel: [{ watchmode_id: 3, titel: "Nur lokal" }] },
+});
+check("Fehlende Umfangsmarke wird fail-closed als begrenzter Stand projiziert",
+  unbelegterUmfang.entdecken.katalogMengen.umfang === "begrenzt");
 const doppelt = baueStreamingAnsichten({
   bekannt: { titel: [{
     watchmode_id: 77, titel: "Doppelter Titel", jahr: 2000,

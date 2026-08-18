@@ -1661,9 +1661,10 @@ export default function App() {
         streamingGeladen.current = false;
         const file = typeof location !== "undefined" && location.protocol === "file:";
         if (!file) { meldeFehler(e, ERROR_SCOPE.STREAMING_KNOWN); return; }
+        const dateiEntdecken = (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot;
         const dateiRoh = {
-          bekannt: streamingBekanntSnapshot,
-          entdecken: (await ladeEntdeckenBeilage()) || streamingEntdeckenSnapshot,
+          bekannt: streamingBekanntSnapshot, entdecken: dateiEntdecken,
+          entdeckenUmfang: dateiEntdecken === streamingEntdeckenSnapshot ? "begrenzt" : "voll",
         };
         if (veraltet()) return;
         streamingRohRef.current = dateiRoh;
@@ -1682,7 +1683,7 @@ export default function App() {
       try {
         const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
         if (veraltet() || !snapshotFreigabeRef.current) return;
-        roh = { ...roh, entdecken: streamingPayloadMitMetadaten(r) };
+        roh = { ...roh, entdecken: streamingPayloadMitMetadaten(r), entdeckenUmfang: "voll" };
         streamingRohRef.current = roh;
         entdeckenGeladen.current = true;
         uebernehmeInfo(r, ERROR_SCOPE.STREAMING_DISCOVER);
@@ -1693,9 +1694,10 @@ export default function App() {
       }
     }
 
+    const hatGeladenenEntdeckenStand = entdeckenGeladen.current && !!roh.entdecken;
     const anzeigeRoh = {
-      bekannt: roh.bekannt,
-      entdecken: (vollKatalog && roh.entdecken) ? roh.entdecken : streamingEntdeckenSnapshot,
+      bekannt: roh.bekannt, entdecken: hatGeladenenEntdeckenStand ? roh.entdecken : streamingEntdeckenSnapshot,
+      entdeckenUmfang: hatGeladenenEntdeckenStand && roh.entdeckenUmfang === "voll" ? "voll" : "begrenzt",
     };
     const a = catalogService.buildStreamingViews(anzeigeRoh, master || []);
     setStreamingBekannt(a.bekannt);
@@ -1703,7 +1705,7 @@ export default function App() {
     return a;
   }, [snapshotFreigabe, master, reportError, resolveError]);
   ladeStreamingDateienRef.current = ladeStreamingDateien;
-  useEffect(() => { if (tab === "streaming") ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // KD-031: Voll-Katalog erst beim Öffnen
+  useEffect(() => { if (tab === "streaming" || tab === "blog") void ladeStreamingDateien(true); }, [tab, ladeStreamingDateien]); // Vollkatalog nur für beide Entdecken-Wege
 
   /* Quellen-Auswahl (Namen, persistiert): steuert Anzeige sofort und via
      Config-Export, welche Kataloge der Job abruft. Default: Kern-Abos. */
@@ -1809,7 +1811,7 @@ export default function App() {
          Sitzung tot. Der Programm-Lauf zählt allein für die Freigabe. */
       const [programmErgebnis] = await Promise.allSettled([
         ladeProgrammDatei(false),
-        ladeStreamingDateien(tabRef.current === "streaming"),
+        ladeStreamingDateien(tabRef.current === "streaming" || tabRef.current === "blog"),
       ]);
       const programmOk = programmErgebnis.status === "fulfilled" && programmErgebnis.value;
       /* Ein weiterer Wechsel ist dazwischengekommen — dessen Effekt führt. */
@@ -2068,7 +2070,7 @@ export default function App() {
         {tab === "blog" && (
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
-            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken}
+            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
