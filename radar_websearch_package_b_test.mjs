@@ -29,6 +29,7 @@ import {
   deriveRadarPackageBReleaseClosure,
   runRadarSupabaseVersionProbe,
   validateRadarSupabaseCliEnvironment,
+  validateRadarLedgerBaseline,
 } from "./tools/radar_websearch_remote_start.mjs";
 
 let checks = 0;
@@ -419,6 +420,42 @@ const expectedRemoteReleaseClosure = Object.freeze([
   "tools/keychain_runner.mjs",
   "tools/radar_websearch_live.mjs",
 ]);
+
+const expectedLedgerBaseline = Object.freeze([
+  Object.freeze({
+    version: "20260817120000",
+    name: "blog_profile_extract_config",
+  }),
+]);
+
+await check("Ledgervergleich akzeptiert umsortierte JSONB-Schluessel semantisch exakt", () => {
+  const reorderedJsonbResult = [{
+    name: "blog_profile_extract_config",
+    version: "20260817120000",
+  }];
+  assert.notEqual(JSON.stringify(reorderedJsonbResult), JSON.stringify(expectedLedgerBaseline));
+  assert.equal(validateRadarLedgerBaseline(reorderedJsonbResult, expectedLedgerBaseline), true);
+});
+
+await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichenden Daten", () => {
+  const driftCases = [
+    [{ version: "20260817120000" }],
+    [{
+      version: "20260817120000",
+      name: "blog_profile_extract_config",
+      unexpected: true,
+    }],
+    [{ version: "20260817120000", name: "other_migration" }],
+    [{ version: 20260817120000, name: "blog_profile_extract_config" }],
+  ];
+  for (const drift of driftCases) {
+    assert.throws(
+      () => validateRadarLedgerBaseline(drift, expectedLedgerBaseline),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "LEDGER_BASELINE_DRIFT",
+    );
+  }
+});
 
 await check("Remote-Release-Closure entsteht aus Paket-A/B-Provenienz und dem echten Function-Importgraph", () => {
   const first = deriveRadarPackageBReleaseClosure();

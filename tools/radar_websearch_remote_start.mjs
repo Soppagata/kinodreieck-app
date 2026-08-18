@@ -18,6 +18,7 @@ import {
   rmSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
 export const RADAR_PACKAGE_A_COMMIT = "b6b2dacf76139d778c8306a8ac954d93bd8caf22";
@@ -98,6 +99,17 @@ export class RadarRemoteStartStop extends Error {
 
 function stop(code, message) {
   throw new RadarRemoteStartStop(code, message);
+}
+
+export function validateRadarLedgerBaseline(actual, expected) {
+  if (!Array.isArray(actual) || !Array.isArray(expected)
+      || !isDeepStrictEqual(actual, expected)) {
+    stop(
+      "LEDGER_BASELINE_DRIFT",
+      "Remote-Ledger weicht von der semantisch exakten Baseline ab.",
+    );
+  }
+  return true;
 }
 
 function normalizeRepoPath(value) {
