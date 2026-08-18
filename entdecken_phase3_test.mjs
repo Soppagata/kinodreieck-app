@@ -1,4 +1,4 @@
-/* Phase 3: reine lokale Verträge plus echte React-/JSDOM-Oberfläche.
+/* Entdecken/Radar: lokale Verträge plus echte React-/JSDOM-Oberfläche.
    Kein Netz, kein Provider, keine KI, keine Migration. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -6,59 +6,36 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
-import radarFixtures from "./src/data/radar_phase2_fixtures.json" with { type: "json" };
 import {
   createCatalogSearchActions,
-  createFixtureRadarLedger,
   rankLocalEntdeckenRecommendations,
 } from "./src/lib/entdeckenUi.js";
 import {
+  applyPersonRadarCheckResult,
   createEmptyLocalRadar,
-  projectLocalRadarWeek,
-  removeGuestRadarSubscription,
-  setLocalRadarReceipt,
+  decodeLocalRadar,
+  reconcileAccountRadarPilotFeed,
+  upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
 } from "./src/lib/localEventRadar.js";
-import { decodeAndValidateLocalProposal } from "./src/lib/radarProposalValidator.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
 let act = async (callback) => callback();
 let tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const check = (name, fn) => {
-  fn(); checks++;
+  fn(); checks += 1;
   console.log(`✓ ${name}`);
 };
-
-const textareas = (root, name) => [...root.querySelectorAll("textarea")].find((entry) => entry.getAttribute("aria-label") === name);
-
-async function setTextareaValue(root, name, value) {
-  const field = textareas(root, name);
-  if (!field) return;
-  await act(async () => {
-    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value");
-    if (descriptor?.set) descriptor.set.call(field, value);
-    else field.value = value;
-    field.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-    field.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-    await tick();
-  });
-}
 
 const seriesActions = createCatalogSearchActions({
   watchmodeId: 4711, title: "Synthetische Serie", type: "tv_series",
 });
-check("Seriensuche trennt Beobachten und Ins Radar in zwei Intent-Verträge", () => {
+check("Seriensuche trennt Beobachten und Radar in zwei Intent-Verträge", () => {
   assert.equal(seriesActions.watch.intent, "watch");
   assert.equal(seriesActions.radar.intent, "radar");
   assert.equal(seriesActions.watch.setsRadar, false);
   assert.equal(seriesActions.radar.setsObserved, false);
-  assert.notEqual(seriesActions.watch.writePath, seriesActions.radar.writePath);
-});
-check("Ein Werk erhält Radar, aber keinen erfundenen Serien-Beobachten-Pfad", () => {
-  const actions = createCatalogSearchActions({ watchmodeId: 815, title: "Film", type: "movie" });
-  assert.equal(actions.watch, null);
-  assert.equal(actions.radar.intent, "radar");
 });
 check("Titeltext allein wird niemals zur Radaridentität", () => {
   const actions = createCatalogSearchActions({ title: "Nur ein Name", type: "movie" });
@@ -67,103 +44,68 @@ check("Titeltext allein wird niemals zur Radaridentität", () => {
 });
 
 const recommendationInput = {
-  region: "AT", stand: "2026-08-09T00:00:00.000Z", titel: [{
+  region: "AT", stand: "2026-08-18T00:00:00.000Z", titel: [{
     watchmode_id: 91, titel: "Passender Film", typ: "movie", dienste: ["Testdienst"],
-    genres: ["drama"], tags: [],
+    genres: ["drama"], tags: [], jahr: 2026,
   }],
 };
 const profileInput = { signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 2 }] };
 const recommendationBefore = JSON.stringify({ recommendationInput, profileInput });
 const recommendations = rankLocalEntdeckenRecommendations({ streamingEntdecken: recommendationInput, profile: profileInput, master: [] });
-check("Lokale Empfehlung ist erklärbar und mutiert weder Katalog noch Profil", () => {
+check("Lokale Empfehlung ist begründet und mutiert weder Katalog noch Profil", () => {
   assert.equal(recommendations.length, 1);
   assert.match(recommendations[0].reasons[0], /^Profil:/);
   assert.equal(JSON.stringify({ recommendationInput, profileInput }), recommendationBefore);
-});
-
-let radarState = upsertGuestRadarSubscription(createEmptyLocalRadar(), {
-  target: radarFixtures.catalog[0], now: "2026-08-09T12:00:00.000Z",
-}).state;
-const ledger = createFixtureRadarLedger(radarFixtures);
-const week = projectLocalRadarWeek({ state: radarState, ledger, startDate: "2026-08-09" });
-check("Fixture-Radar projiziert bestätigte Ereignisse ausschließlich read-only", () => {
-  assert.equal(week.length, 1);
-  assert.equal(week[0].readOnly, true);
-  assert.equal(week[0].createsReminder, false);
-  assert.equal(week[0].createsCalendarEntry, false);
-});
-radarState = setLocalRadarReceipt(radarState, {
-  eventId: week[0].eventId, versionId: week[0].versionId, status: "seen",
-  now: "2026-08-09T12:01:00.000Z",
-}).state;
-const removed = removeGuestRadarSubscription(radarState, radarFixtures.catalog[0].targetId);
-check("Lokales Entfernen löscht das Abo, bewahrt aber den Ereignisbeleg", () => {
-  assert.equal(removed.ok, true);
-  assert.equal(removed.createsProviderJob, false);
-  assert.equal(removed.state.subscriptions.length, 0);
-  assert.equal(removed.state.receipts.length, 1);
-});
-
-const proposal = decodeAndValidateLocalProposal(JSON.stringify(radarFixtures.radarProposal), {
-  sourceRegistry: radarFixtures.sourceRegistry,
-  catalog: radarFixtures.catalog,
-  expectedInputHash: radarFixtures.radarProposal.inputHash,
-});
-check("Proposal-Prüfung bleibt Vorschau ohne Write, Routine oder Auto-Retry", () => {
-  assert.equal(proposal.ok, true);
-  assert.equal(proposal.status, "preview-ready");
-  assert.equal(proposal.writes, false);
-  assert.equal(proposal.routineActivated, false);
-  assert.equal(proposal.automaticRetry, false);
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
 const appNavigation = fs.readFileSync(path.join(wurzel, "src/components/AppNavigation.jsx"), "utf8");
 const appSource = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
 const entdeckenSource = fs.readFileSync(path.join(wurzel, "src/tabs/EntdeckenTab.jsx"), "utf8");
-check("Sichtbares Entdecken bewahrt den technischen Key blog und den Deep-Link-Pfad", () => {
+const cssSource = fs.readFileSync(path.join(wurzel, "src/index.css"), "utf8");
+check("Sichtbar heißt es Blog; technischer blog/meinungen-Deep-Link bleibt kompatibel", () => {
   assert.match(appNavigation, /id:\s*"blog",\s*label:\s*"Entdecken"/);
   assert.match(appSource, /setBlogFokus\(id\);\s*setTab\("blog"\)/);
+  assert.match(entdeckenSource, /\["meinungen", "Blog"\]/);
   assert.match(entdeckenSource, /if \(fokusId\) setAnsicht\("meinungen"\)/);
 });
-check("Personen-Automatik ist sichtbar geparkt und hat keine Phase-3-Aktion", () => {
-  assert.match(entdeckenSource, /Personen-Automatik/);
-  assert.match(entdeckenSource, /weder Personen-Schalter noch automatische Beobachtung oder Radar-Aktion/);
+check("Verwaltung nutzt SVG, 44-Pixel-Ziel und App-Font im Portal", () => {
+  assert.match(entdeckenSource, /aria-label="Entdecken verwalten"/);
+  assert.match(entdeckenSource, /<svg aria-hidden="true"/);
+  assert.doesNotMatch(entdeckenSource, /⚙/);
+  assert.match(cssSource, /\.kd-entdecken-tabs \.kd-entdecken-verwalten[^}]*44px/);
+  assert.match(cssSource, /\.kd-entdecken-layer[^}]*font-family:'Space Grotesk'/);
 });
 
 async function loadEsbuild() {
   try { return await import("esbuild"); }
   catch { return createRequire(import.meta.resolve("vite"))("esbuild"); }
 }
+
 const cacheDir = path.join(wurzel, ".tmp");
 let outputDir = null;
-let esbuildOutput;
 let dom = null;
-const heuteIso = new Date().toISOString().slice(0, 10);
-const plusSiebenTageIso = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 try {
   fs.mkdirSync(cacheDir, { recursive: true });
-  outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-phase3-test-"));
+  outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-radar-test-"));
   const output = path.join(outputDir, "bundle.mjs");
-  fs.mkdirSync(outputDir, { recursive: true });
   const esbuild = await loadEsbuild();
   await esbuild.build({
     stdin: {
       contents: [
         'export { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
         'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
-        'export { GlobalSearchBar } from "./src/components/GlobalSearchBar.jsx";',
       ].join("\n"),
       loader: "js", resolveDir: wurzel,
     },
     bundle: true, format: "esm", outfile: output, jsx: "automatic", target: "es2022", logLevel: "warning",
     external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
   });
-  esbuildOutput = await import(output);
+  const { EntdeckenTab, RadarSubscriptionPreview } = await import(output);
 
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
   for (const name of [
-    "window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement",
+    "window", "document", "navigator", "HTMLElement", "HTMLInputElement", "HTMLSelectElement",
     "Element", "Event", "MouseEvent", "KeyboardEvent", "Node", "NodeList", "getComputedStyle", "localStorage",
   ]) {
     Object.defineProperty(globalThis, name, {
@@ -180,16 +122,33 @@ try {
   const { act: reactAct, createElement: h } = React;
   act = reactAct;
   const { createRoot } = await import("react-dom/client");
-  const { EntdeckenTab, RadarSubscriptionPreview, GlobalSearchBar } = esbuildOutput;
-
   tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-  const button = (root, label) => [...root.querySelectorAll("button")].find((entry) => entry.textContent.trim() === label);
+
+  const button = (root, label) => [...root.querySelectorAll("button")]
+    .find((entry) => entry.textContent.trim() === label);
+  const setControl = async (control, value) => {
+    const prototype = control instanceof dom.window.HTMLSelectElement
+      ? dom.window.HTMLSelectElement.prototype : dom.window.HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    await act(async () => {
+      descriptor.set.call(control, value);
+      control.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      control.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+      await tick();
+    });
+  };
   async function mount(Component, props) {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    await act(async () => { root.render(h(Component, props)); await tick(); });
-    return { container, root, async cleanup() { await act(async () => { root.unmount(); await tick(); }); container.remove(); } };
+    const render = async (nextProps) => {
+      await act(async () => { root.render(h(Component, nextProps)); await tick(); });
+    };
+    await render(props);
+    return {
+      container, root, render,
+      async cleanup() { await act(async () => { root.unmount(); await tick(); }); container.remove(); },
+    };
   }
 
   const emptyBlogProps = {
@@ -198,33 +157,36 @@ try {
     onSetzeRef() {}, onFreigeben: async () => false, onLoeschen: async () => false,
     onAddFilm: async () => null, onSpringeZuFilm() {},
   };
-  const ui = await mount(EntdeckenTab, {
-    blogProps: emptyBlogProps,
-    radarState,
-    seriesCatalog: [], entdeckenStatus: {}, master: [],
+  const baseProps = {
+    blogProps: emptyBlogProps, seriesCatalog: [], entdeckenStatus: {}, master: [],
     streamingKnown: null, streamingDiscover: recommendationInput,
     accountMode: false, onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
-  });
-  check("Entdecken rendert die drei internen Ansichten und startet bei Empfehlungen", () => {
+  };
+
+  const ui = await mount(EntdeckenTab, { ...baseProps, radarState: createEmptyLocalRadar() });
+  check("Entdecken zeigt Blog und ein direkt anschließendes Icon-only-Control", () => {
     const tabs = [...ui.container.querySelectorAll('[role="tab"]')];
-    assert.deepEqual(tabs.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Meinungen"]);
-    assert.equal(tabs[0].getAttribute("aria-selected"), "true");
+    assert.deepEqual(tabs.map((entry) => entry.textContent), ["Empfehlungen", "Radar", "Blog"]);
+    const manage = ui.container.querySelector('button[aria-label="Entdecken verwalten"]');
+    assert.ok(manage?.querySelector("svg"));
+    assert.equal(manage.previousElementSibling?.textContent, "Blog");
+    assert.equal(manage.getAttribute("title"), "Entdecken verwalten");
   });
-  const manageTrigger = button(ui.container, "⚙ Entdecken verwalten");
+  const manageTrigger = ui.container.querySelector('button[aria-label="Entdecken verwalten"]');
   manageTrigger.focus();
   await act(async () => { manageTrigger.click(); await tick(); });
-  check("Entdecken verwalten zeigt gefüllten Radar und leeren Beobachten-Zustand", () => {
+  check("Verwaltung hat verständliche Leerzustände ohne technische Schlüssel", () => {
     const dialog = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
     assert.ok(dialog);
-    assert.match(dialog.textContent, /Synthetischer Kinofilm/);
-    assert.match(dialog.textContent, /Noch keine Serie beobachtet/);
+    assert.match(dialog.textContent, /Noch kein Werk im Radar/);
+    assert.doesNotMatch(dialog.textContent, /Pilot|Fixture|Proposal|Hash|Outbox|watchmode:/i);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
   });
   await act(async () => {
     document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await tick();
   });
-  check("Escape schließt die Verwaltung, löst Scroll-Lock und gibt den Fokus zurück", () => {
+  check("Escape schließt die Verwaltung und gibt den Fokus zurück", () => {
     assert.equal(document.querySelector('[aria-labelledby="kd-entdecken-manage-title"]'), null);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), false);
     assert.equal(document.activeElement, manageTrigger);
@@ -232,486 +194,188 @@ try {
   await ui.cleanup();
 
   const deepLinkUi = await mount(EntdeckenTab, {
-    blogProps: emptyBlogProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),
+    ...baseProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),
   });
-  check("Ein bestehender Blog-Deep-Link öffnet automatisch Meinungen", () => {
-    const selected = deepLinkUi.container.querySelector('[role="tab"][aria-selected="true"]');
-    assert.equal(selected.textContent, "Meinungen");
+  check("Ein bestehender Blog-Deep-Link öffnet weiterhin den Blog", () => {
+    assert.equal(deepLinkUi.container.querySelector('[role="tab"][aria-selected="true"]').textContent, "Blog");
+    assert.equal(deepLinkUi.container.querySelector('[role="tabpanel"]').getAttribute("aria-label"), "Blog");
   });
   await deepLinkUi.cleanup();
 
-  let previewConfirmed = 0;
-  let previewClosed = 0;
-  const preview = await mount(RadarSubscriptionPreview, {
-    target: radarFixtures.catalog[0], radarState: createEmptyLocalRadar(), accountMode: false,
-    onConfirm: async () => { previewConfirmed++; return true; }, onClose: () => { previewClosed++; },
+  const workTarget = {
+    targetId: "watchmode:91", targetType: "work", targetStatus: "active",
+    title: "Passender Film", canonical: true,
+  };
+  let previewTarget = null;
+  const workPicker = await mount(EntdeckenTab, {
+    ...baseProps, radarState: createEmptyLocalRadar(), onRadarPreview: (target) => { previewTarget = target; },
   });
-  check("Radar-Vorschau schreibt vor der expliziten Bestätigung nichts und sperrt Gast-Share", () => {
+  await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
+  await setControl(workPicker.container.querySelector("#kd-radar-work"), "werk-0");
+  await act(async () => { button(workPicker.container, "Werk ins Radar").click(); await tick(); });
+  check("Werk wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
+    assert.deepEqual(previewTarget, workTarget);
+    assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:91|fixture:|work:/i);
+  });
+  await workPicker.cleanup();
+
+  let previewConfirmed = 0;
+  const preview = await mount(RadarSubscriptionPreview, {
+    target: workTarget, radarState: createEmptyLocalRadar(), accountMode: false,
+    onConfirm: async () => { previewConfirmed += 1; return true; }, onClose() {},
+  });
+  check("Werk-Abo entsteht erst nach expliziter Bestätigung", () => {
     assert.equal(previewConfirmed, 0);
     assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
   });
   await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
-  check("Radar-Vorschau ruft nach Bestätigung genau einen gekapselten Write auf", () => {
-    assert.equal(previewConfirmed, 1);
-    assert.equal(previewClosed, 1);
-  });
-await preview.cleanup();
+  check("Bestätigung ruft genau einen gekapselten Write auf", () => assert.equal(previewConfirmed, 1));
+  await preview.cleanup();
 
-const pilotEvent = {
-  eventId: "00000000-0000-4000-8000-000000000001",
-  eventVersionId: "00000000-0000-4000-8000-000000000011",
-  targetId: "tmdb:0001",
-  eventType: "kinostart_at",
-  date: heuteIso,
-  region: "AT",
-  platform: "-",
-  lifecycleStatus: "scheduled",
-  verificationStatus: "confirmed",
-};
-const comparePilotEvidence = (left, right) => {
-  if (left.sourceId < right.sourceId) return -1;
-  if (left.sourceId > right.sourceId) return 1;
-  if (left.url < right.url) return -1;
-  if (left.url > right.url) return 1;
-  if (left.retrievedAt < right.retrievedAt) return -1;
-  if (left.retrievedAt > right.retrievedAt) return 1;
-  return 0;
-};
-const pilotEventWithEvidence = {
-  ...pilotEvent,
-  evidence: [
-    { sourceId: "source-official", sourceDomain: "example.com", url: "https://example.com/official", retrievedAt: `${heuteIso}T10:00:00.000Z` },
-    { sourceId: "source-editorial", sourceDomain: "news.example.com", url: "https://news.example.com/editorial", retrievedAt: `${heuteIso}T10:00:01.000Z` },
-  ].sort(comparePilotEvidence),
-};
-const pilotEventOutsideWeek = {
-  eventId: "00000000-0000-4000-8000-000000000013",
-  eventVersionId: "00000000-0000-4000-8000-000000000023",
-  targetId: "tmdb:0009",
-  eventType: "kinostart_at",
-  date: plusSiebenTageIso,
-  region: "AT",
-  platform: "-",
-  lifecycleStatus: "scheduled",
-  verificationStatus: "confirmed",
-};
-const validPilotImportPayload = {
-  targetKey: "tmdb:0001",
-  eventType: "kinostart_at",
-  date: heuteIso,
-  region: "AT",
-  platform: "-",
-  evidence: [
-    { sourceId: "s1", url: "https://example.org/1", retrievedAt: `${heuteIso}T10:00:00.000Z` },
-    { sourceId: "s2", url: "https://example.org/2", retrievedAt: `${heuteIso}T10:00:01.000Z` },
-  ],
-};
-const nogaPilotImportPayload = {
-  targetKey: "work:imdb:tt41955949",
-  eventType: "kinostart_at",
-  date: "2026-08-21",
-  region: "AT",
-  platform: "-",
-  evidence: [
-    { sourceId: "filminstitut_at", url: "https://filminstitut.at/filme/noga", retrievedAt: "2026-08-21T10:00:00.000Z" },
-    { sourceId: "votivkino_at", url: "https://www.votivkino.at/film/noga/", retrievedAt: "2026-08-21T10:00:01.000Z" },
-  ],
-};
-const nogaPilotEventSuccessEvidence = [
-  { sourceId: "filminstitut_at", sourceDomain: "filminstitut.at", url: "https://filminstitut.at/filme/noga", retrievedAt: "2026-08-21T10:00:00.000Z" },
-  { sourceId: "votivkino_at", sourceDomain: "votivkino.at", url: "https://votivkino.at/film/noga/", retrievedAt: "2026-08-21T10:00:01.000Z" },
-];
-const pilotEventForMatchingNogaRejection = {
-  ...pilotEvent,
-  targetId: nogaPilotImportPayload.targetKey,
-  eventType: nogaPilotImportPayload.eventType,
-  date: nogaPilotImportPayload.date,
-  region: nogaPilotImportPayload.region,
-  platform: nogaPilotImportPayload.platform,
-  evidence: nogaPilotEventSuccessEvidence.map((entry) => ({
-    ...entry,
-    retrievedAt: entry.retrievedAt,
-  })),
-};
-const rejectedPilotImportState = (payload = validPilotImportPayload, reason = "radar_evidence_url_mismatch") => {
-  const empty = createEmptyLocalRadar({ authority: "account-cache" });
-  return {
-    ...empty,
-    pilot: {
-      ...empty.pilot,
-      importOutbox: [{
-        operationId: "77777777-7777-4777-8777-777777777777",
-        payload,
-        createdAt: "2026-08-09T10:00:00.000Z",
-        status: "rejected",
-        reason,
-      }],
-    },
-  };
-};
-const pendingPilotImportState = (payload = validPilotImportPayload) => {
-  const empty = createEmptyLocalRadar({ authority: "account-cache" });
-  return {
-    ...empty,
-    pilot: {
-      ...empty.pilot,
-      importOutbox: [{
-        operationId: "66666666-6666-4666-8666-666666666666",
-        payload,
-        createdAt: "2026-08-09T10:00:00.000Z",
-        status: "pending",
-      }],
-    },
-  };
-};
-
-const mountPilotUi = async (props) => mount(EntdeckenTab, {
-  blogProps: emptyBlogProps,
-  radarState: createEmptyLocalRadar({ authority: "account-cache" }),
-  seriesCatalog: [], entdeckenStatus: {}, master: [],
-  streamingKnown: null, streamingDiscover: recommendationInput,
-  accountMode: true,
-  onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
-  ...props,
-});
-
-const pilotNoImportUi = await mountPilotUi({
-  radarPilotClientEnabled: false,
-  radarPilotActive: false,
-  radarPilotEvents: [pilotEvent],
-  radarReview: true,
-});
-await act(async () => { button(pilotNoImportUi.container, "Radar").click(); await tick(); });
-check("Flag false zeigt trotz Review keine Pilot-Importfläche und behält Fixture-Inhalt", () => {
-  const fixtureTitle = pilotNoImportUi.container.querySelector(".kd-entdecken-kicker")?.textContent;
-  const hasImport = pilotNoImportUi.container.querySelector("[aria-label='Pilot-Import JSON']");
-  assert.equal(!!fixtureTitle && fixtureTitle.includes("Synthetische Fixture"), true);
-  assert.equal(hasImport, null);
-});
-await pilotNoImportUi.cleanup();
-
-const RestoreDate = Date;
-const freezeDate = (value) => class extends RestoreDate {
-  constructor(now) {
-    return now == null ? new RestoreDate(value) : new RestoreDate(now);
-  }
-  static now() {
-    return new RestoreDate(value).getTime();
-  }
-};
-Date = freezeDate("2026-08-09T00:00:00.000Z");
-const pilotGuestConflictUi = await mountPilotUi({
-  accountMode: false,
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEvent, pilotEventOutsideWeek],
-  radarReview: true,
-  radarState: upsertGuestRadarSubscription(createEmptyLocalRadar({ authority: "guest" }), {
-    target: radarFixtures.catalog[0], now: `${heuteIso}T12:00:00.000Z`,
-  }).state,
-});
-await act(async () => { button(pilotGuestConflictUi.container, "Radar").click(); await tick(); });
-await act(async () => { await tick(); });
-check("Gast mit widersprüchlichen Pilot-Flags zeigt exakt Fixture-Preview, kein Pilot-Sync und kein Pilot-DOM", () => {
-  const weekPanel = [...pilotGuestConflictUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  const listItem = weekPanel?.querySelector("li");
-  assert.equal(pilotGuestConflictUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
-  assert.equal(button(pilotGuestConflictUi.container, "Pilot-Sync starten"), undefined);
-  assert.ok(listItem && listItem.textContent.includes("nur Vorschau"));
-  assert.equal(listItem?.querySelector("button"), null);
-  assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
-});
-await pilotGuestConflictUi.cleanup();
-Date = freezeDate("2026-08-15T00:00:00.000Z");
-
-const pilotReviewFalseUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: false,
-  radarPilotEvents: [pilotEventWithEvidence],
-  radarReview: false,
-});
-await act(async () => { button(pilotReviewFalseUi.container, "Radar").click(); await tick(); });
-check("Flag true mit radarReview false blendet Pilot-Import aus", () => {
-  assert.equal(pilotReviewFalseUi.container.querySelector("[aria-label='Pilot-Import JSON']"), null);
-  assert.equal(button(pilotReviewFalseUi.container, "Jetzt prüfen"), undefined);
-  const weekPanel = [...pilotReviewFalseUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  const listItem = weekPanel?.querySelector("li");
-  assert.equal(listItem?.querySelectorAll(".kd-pilot-quellen-link")?.length || 0, 0);
-});
-await pilotReviewFalseUi.cleanup();
-
-const maxActiveRadarState = {
-  ...createEmptyLocalRadar({ authority: "account-cache" }),
-  subscriptions: [{
-    targetId: "tmdb:0001", targetType: "work", region: "AT", scope: "all",
-    status: "active", updatedAt: `${heuteIso}T09:00:00.000Z`,
-  }],
-};
-let radarCheckCalls = 0;
-const pilotCheckUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [],
-  radarReview: true,
-  radarState: maxActiveRadarState,
-  onRadarWebsearchCheck: async (targetId) => {
-    radarCheckCalls += 1;
-    assert.equal(targetId, "tmdb:0001");
-    return { status: "confirmed", writes: 1 };
-  },
-});
-await act(async () => { button(pilotCheckUi.container, "Radar").click(); await tick(); });
-check("Jetzt prüfen erscheint nur am aktiven Max-Ziel", () => {
-  const checkButtons = [...pilotCheckUi.container.querySelectorAll("button")]
-    .filter((entry) => entry.textContent.trim() === "Jetzt prüfen");
-  assert.equal(checkButtons.length, 1);
-});
-await act(async () => { button(pilotCheckUi.container, "Jetzt prüfen").click(); await tick(); });
-check("Jetzt prüfen ruft genau einen Zielcallback auf und meldet bestätigte Speicherung", () => {
-  assert.equal(radarCheckCalls, 1);
-  assert.ok(pilotCheckUi.container.textContent.includes("Ein bestätigtes Radarereignis wurde gespeichert."));
-});
-await pilotCheckUi.cleanup();
-
-const pausedMaxRadarState = {
-  ...maxActiveRadarState,
-  subscriptions: [{ ...maxActiveRadarState.subscriptions[0], status: "paused" }],
-};
-const pausedCheckUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [],
-  radarReview: true,
-  radarState: pausedMaxRadarState,
-  onRadarWebsearchCheck: async () => ({ status: "confirmed", writes: 1 }),
-});
-await act(async () => { button(pausedCheckUi.container, "Radar").click(); await tick(); });
-check("Pausiertes Ziel erhält keine Jetzt-prüfen-Aktion", () => {
-  assert.equal(button(pausedCheckUi.container, "Jetzt prüfen"), undefined);
-});
-await pausedCheckUi.cleanup();
-
-let pilotImportCalls = 0;
-const pilotImportUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEvent],
-  radarReview: true,
-  onRadarPilotImport: async () => {
-    pilotImportCalls += 1;
-    return { status: "pending", reason: "pilot-import-queued" };
-  },
-});
-await act(async () => { button(pilotImportUi.container, "Radar").click(); await tick(); });
-check("Flag true + radarReview true blendet Pilot-Import ein", () => {
-  assert.ok(pilotImportUi.container.querySelector("[aria-label='Pilot-Import JSON']"));
-  assert.ok(button(pilotImportUi.container, "Pilot-Import bestätigen"));
-});
-
-await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", "{ ");
-await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify([1,2,3]));
-await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify({ ...validPilotImportPayload, extra: true }));
-await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-check("Malformed/Array/Extra-Key-Import führt zu null Callbacks", () => {
-  assert.equal(pilotImportCalls, 0);
-});
-
-await setTextareaValue(pilotImportUi.container, "Pilot-Import JSON", JSON.stringify(validPilotImportPayload));
-await act(async () => { button(pilotImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-check("Gültiger exakter Payload führt genau zu einem Importcallback", () => {
-  assert.equal(pilotImportCalls, 1);
-  assert.equal(pilotImportUi.container.textContent.includes("Import ist noch ausstehend. Pilot-Sync starten."), true);
-});
-await pilotImportUi.cleanup();
-
-let rejectedImportUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [],
-  radarReview: true,
-  syncStatus: "ready",
-  radarState: createEmptyLocalRadar({ authority: "account-cache" }),
-  onRadarPilotImport: async () => ({ status: "rejected", reason: "radar_evidence_url_mismatch" }),
-});
-await act(async () => { button(rejectedImportUi.container, "Radar").click(); await tick(); });
-await setTextareaValue(rejectedImportUi.container, "Pilot-Import JSON", JSON.stringify(nogaPilotImportPayload));
-await act(async () => { button(rejectedImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-check("NOGA-Callback-Rejection zeigt sofort Domain-Mismatch-Text und kein Outbox-/Ready-Kontext", () => {
-  const rejectedImportMessage = [...rejectedImportUi.container.querySelectorAll(".kd-entdecken-proposal .kd-entdecken-kleingedruckt")]
-    .find((entry) => entry.textContent.includes("Domain-Mismatch"));
-  assert.ok(rejectedImportMessage);
-  assert.ok(rejectedImportMessage.textContent.includes("Domain-Mismatch"));
-  assert.ok(rejectedImportMessage.textContent.includes("radar_evidence_url_mismatch"));
-  assert.equal(rejectedImportMessage.textContent.includes("Outbox"), false);
-  assert.equal(rejectedImportMessage.textContent.includes("Import ist im Feed bestätigt"), false);
-});
-await rejectedImportUi.cleanup();
-let nogaReadyImportUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEventForMatchingNogaRejection],
-  radarReview: true,
-  syncStatus: "ready",
-  radarState: rejectedPilotImportState(nogaPilotImportPayload),
-  onRadarPilotImport: async () => ({ status: "ready", state: rejectedPilotImportState(nogaPilotImportPayload).pilot }),
-  onRadarPilotReceipt: async () => { return true; },
-});
-await act(async () => { button(nogaReadyImportUi.container, "Radar").click(); await tick(); });
-check("Gleiche Eventidentität und Source-IDs übersteuert persistierte Rejection durch sichtbaren Feed", () => {
-  const weekPanel = [...nogaReadyImportUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
-  const hasSeen = weekPanel?.querySelector("button")?.textContent === "Gesehen";
-  assert.equal(hasSeen, true);
-  const linkTargets = links.map((link) => link.getAttribute("href"));
-  assert.deepEqual(linkTargets.includes("https://votivkino.at/film/noga/"), true);
-  assert.equal(nogaReadyImportUi.container.textContent.includes("Importablehnung (radar_evidence_url_mismatch). Bitte neuen Import prüfen."), false);
-});
-await setTextareaValue(nogaReadyImportUi.container, "Pilot-Import JSON", JSON.stringify(nogaPilotImportPayload));
-await act(async () => { button(nogaReadyImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-check("Ready-Status wird nur bei sichtbarem NOGA-Event als strukturierte Erfolgsmeldung gezeigt", () => {
-  const weekPanel = [...nogaReadyImportUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
-  const linkText = [...links].map((link) => link.textContent);
-  assert.ok(linkText.includes("votivkino.at"));
-  assert.ok(linkText.includes("filminstitut.at"));
-  assert.ok(nogaReadyImportUi.container.textContent.includes("Import ist im Feed bestätigt"));
-  assert.ok(nogaReadyImportUi.container.textContent.includes("Gesehen"));
-});
-await nogaReadyImportUi.cleanup();
-
-const pilotBusyImportUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEvent],
-  radarReview: true,
-  onRadarPilotImport: async () => ({ status: "busy", reason: "pilot-busy" }),
-});
-await act(async () => { button(pilotBusyImportUi.container, "Radar").click(); await tick(); });
-await setTextareaValue(pilotBusyImportUi.container, "Pilot-Import JSON", JSON.stringify(validPilotImportPayload));
-await act(async () => { button(pilotBusyImportUi.container, "Pilot-Import bestätigen").click(); await tick(); });
-check("Busy-Callback bleibt handlungsfähig und nennt Pilot-Sync starten", () => {
-  assert.equal(pilotBusyImportUi.container.textContent.includes("Pilot-Sync starten."), true);
-});
-await pilotBusyImportUi.cleanup();
-
-const pilotPersistentPendingUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [],
-  radarReview: true,
-  radarState: pendingPilotImportState(),
-  onRadarPilotImport: async () => ({ status: "pending" }),
-});
-await act(async () => { button(pilotPersistentPendingUi.container, "Radar").click(); await tick(); });
-check("Persistentes Pending bleibt sichtbar und handlungsfähig", () => {
-  assert.equal(pilotPersistentPendingUi.container.textContent.includes("Import ist noch ausstehend. Pilot-Sync starten."), true);
-});
-await pilotPersistentPendingUi.cleanup();
-
-const pilotEvidenceUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEventWithEvidence],
-  radarReview: true,
-});
-await act(async () => { button(pilotEvidenceUi.container, "Radar").click(); await tick(); });
-check("Aktive Pilot-Ereignisse zeigen Quellen als zwei sichere Links", () => {
-  const weekPanel = [...pilotEvidenceUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  const links = [...(weekPanel?.querySelectorAll(".kd-pilot-quellen-link") || [])];
-  assert.equal(links.length, 2);
-  assert.ok(weekPanel?.textContent.includes("Quellen:"));
-  const expectedLinks = pilotEventWithEvidence.evidence.map((entry) => ({
-    label: entry.sourceDomain,
-    href: entry.url,
-    target: "_blank",
-    rel: "noopener noreferrer",
-  }));
-  assert.deepEqual(links.map((link) => ({
-    label: link.textContent,
-    href: link.getAttribute("href"),
-    target: link.getAttribute("target"),
-    rel: link.getAttribute("rel"),
-  })), expectedLinks);
-});
-await pilotEvidenceUi.cleanup();
-
-const pilotEmptyActiveUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [],
-  radarReview: true,
-});
-await act(async () => { button(pilotEmptyActiveUi.container, "Radar").click(); await tick(); });
-check("Aktiver Pilot mit leerem Feed hat keine Vorbefüllungs-Woche", () => {
-  const currentWeek = [...pilotEmptyActiveUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  assert.equal(currentWeek?.querySelector("li"), null);
-  assert.ok(currentWeek?.textContent.includes("Keine lokal bestätigten Ereignisse für deine aktiven Ziele."));
-});
-await pilotEmptyActiveUi.cleanup();
-
-let receiptCalls = 0;
-const receiptUi = await mountPilotUi({
-  radarPilotClientEnabled: true,
-  radarPilotActive: true,
-  radarPilotEvents: [pilotEvent, pilotEventOutsideWeek],
-  radarReview: true,
-  onRadarPilotReceipt: async () => {
-    receiptCalls += 1;
-    return true;
-  },
-});
-await act(async () => { button(receiptUi.container, "Radar").click(); await tick(); });
-await act(async () => {
-  const btn = button(receiptUi.container, "Gesehen");
-  btn.click();
-  btn.click();
-  await tick();
-});
-check("Pilot-Ereignisse außerhalb der 7-Tage-Woche sind nicht in der Ansicht", () => {
-  const weekPanel = [...receiptUi.container.querySelectorAll("article.kd-entdecken-panel")]
-    .find((entry) => entry.querySelector("h3")?.textContent === "Diese Woche");
-  assert.equal(weekPanel?.textContent.includes(pilotEventOutsideWeek.targetId), false);
-});
-check("Pilot-Ereignis-Receipt klickt genau einmal, ohne optimistischen Status", () => {
-  assert.equal(receiptCalls, 1);
-  assert.equal(receiptUi.container.textContent.includes("Status: seen"), false);
-});
-await receiptUi.cleanup();
-
-const searchCalls = [];
-const searchUi = await mount(GlobalSearchBar, {
-  bereich: "blog", onSuchen: async () => {}, onTreffer: () => searchCalls.push("open"),
-  onSuchaktion: (_item, intent) => searchCalls.push(intent), onAlleErgebnisse() {}, onMenu() {},
-  antwort: {
-    frage: "Serie", gesamt: 1, items: [{
-      key: "series:4711", titel: "Synthetische Serie", bereichLabel: "Streaming", meta: "Serie",
-      searchActions: seriesActions,
+  const checksum = "a".repeat(64);
+  const now = "2026-08-18T10:00:00.000Z";
+  const eventId = "00000000-0000-4000-8000-000000000001";
+  const eventVersionId = "00000000-0000-4000-8000-000000000011";
+  const feed = (events = []) => ({
+    format: "kd-radar-pilot-feed-v1", revision: 1, checksum, reconciledAt: now,
+    subscriptions: [{
+      targetId: workTarget.targetId, targetType: "work", title: workTarget.title,
+      region: "AT", scope: "all", status: "active", updatedAt: now,
     }],
-  },
-});
-await act(async () => { button(searchUi.container, "Beobachten").click(); await tick(); });
-await act(async () => { button(searchUi.container, "Ins Radar").click(); await tick(); });
-  await act(async () => { searchUi.container.querySelector("[data-globaler-suchtreffer]").click(); await tick(); });
-  check("Globale Suche hält Beobachten, Ins Radar und Öffnen als getrennte Bedienelemente", () => {
-    assert.deepEqual(searchCalls, ["watch", "radar", "open"]);
-    assert.equal(searchUi.container.querySelectorAll(".kd-globalsuche-aktionen button").length, 2);
+    events, receipts: [], operationAcks: [], radarReview: true,
   });
-  await searchUi.cleanup();
+  let accountState = reconcileAccountRadarPilotFeed(createEmptyLocalRadar({ authority: "account-cache" }), feed()).state;
+  let workResolve;
+  const workCheck = new Promise((resolve) => { workResolve = resolve; });
+  let workCalls = 0;
+  const renderWorkProps = () => ({
+    ...baseProps, accountMode: true, radarState: accountState,
+    radarPilotEvents: accountState.pilot.events, radarCheckAvailable: true,
+    onRadarWebsearchCheck: async () => { workCalls += 1; return workCheck; },
+  });
+  const workUi = await mount(EntdeckenTab, renderWorkProps());
+  await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
+  await act(async () => { button(workUi.container, "Jetzt prüfen").click(); await tick(); });
+  check("Werkprüfung zeigt einen klaren Ladezustand und startet genau einmal", () => {
+    assert.equal(workCalls, 1);
+    assert.ok(button(workUi.container, "Wird geprüft…")?.disabled);
+  });
+  const confirmedEvent = {
+    eventId, eventVersionId, targetId: workTarget.targetId, eventType: "kinostart_at", date: "2026-09-03",
+    region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
+    evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/start", retrievedAt: now }],
+  };
+  await act(async () => { workResolve({ status: "confirmed", writes: 1 }); await workCheck; await tick(); });
+  accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
+  await workUi.render(renderWorkProps());
+  check("Bestätigter Werk-Treffer zeigt Titel, Datum und Quelle", () => {
+    assert.match(workUi.container.textContent, /Passender Film/);
+    assert.match(workUi.container.textContent, /2026-09-03/);
+    assert.match(workUi.container.textContent, /Kinostart in Österreich/);
+    assert.equal(workUi.container.querySelector("a")?.textContent, "film.at");
+  });
+  const accountReload = decodeLocalRadar(JSON.stringify(accountState), { authority: "account-cache" });
+  assert.equal(accountReload.ok, true);
+  await workUi.cleanup();
+  const workReloadUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: accountReload.state,
+    radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true,
+  });
+  await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
+  check("Werk-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
+    assert.match(workReloadUi.container.textContent, /Passender Film/);
+    assert.match(workReloadUi.container.textContent, /2026-09-03/);
+    assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
+  });
+  await workReloadUi.cleanup();
+
+  const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];
+  let personState = createEmptyLocalRadar();
+  let personAddCalls = 0;
+  let personCheckCalls = 0;
+  let personResolve;
+  const personCheckPromise = new Promise((resolve) => { personResolve = resolve; });
+  let personUi;
+  const renderPersonProps = () => ({
+    ...baseProps, radarState: personState, personRadarAvailable: true,
+    onPersonRadarAdd: async ({ name, role }) => {
+      personAddCalls += 1;
+      assert.deepEqual({ name, role }, { name: "Nicolas Cage", role: "actor" });
+      personState = upsertGuestPersonRadarSubscription(personState, { identity, now }).state;
+      return { status: "active", writes: 1, identity };
+    },
+    onPersonRadarCheck: async () => { personCheckCalls += 1; return personCheckPromise; },
+  });
+  personUi = await mount(EntdeckenTab, renderPersonProps());
+  await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
+  await setControl(personUi.container.querySelector("#kd-radar-person"), "Nicolas Cage");
+  await act(async () => { button(personUi.container, "Person ins Radar").click(); await tick(); });
+  await personUi.render(renderPersonProps());
+  check("Person wird mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
+    assert.equal(personAddCalls, 1);
+    assert.match(personUi.container.textContent, /Nicolas Cage/);
+    assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
+    assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
+  });
+  await act(async () => {
+    const personButton = [...personUi.container.querySelectorAll("button")]
+      .filter((entry) => entry.textContent.trim() === "Jetzt prüfen").at(-1);
+    personButton.click(); await tick();
+  });
+  check("Personenprüfung zeigt Ladezustand und startet keinen zweiten Aufruf", () => {
+    assert.equal(personCheckCalls, 1);
+    assert.ok(button(personUi.container, "Wird geprüft…")?.disabled);
+  });
+  const personResponse = {
+    status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z", person: identity,
+    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+  };
+  const applied = applyPersonRadarCheckResult(personState, { identity, response: personResponse, catalog: personCatalog });
+  assert.equal(applied.ok, true);
+  personState = applied.state;
+  await act(async () => { personResolve({ status: "confirmed", writes: 1 }); await personCheckPromise; await tick(); });
+  await personUi.render(renderPersonProps());
+  check("Validierter Personen-Treffer bleibt Vorschlag ohne Werk-Abo", () => {
+    assert.match(personUi.container.textContent, /Dream Scenario/);
+    assert.match(personUi.container.textContent, /2023/);
+    assert.equal(personState.subscriptions.length, 0);
+  });
+  const savedPersonState = JSON.stringify(personState);
+  await personUi.cleanup();
+  const reloadedPerson = decodeLocalRadar(savedPersonState, { authority: "guest" });
+  const personReloadUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: reloadedPerson.state, personRadarAvailable: false,
+  });
+  await act(async () => { button(personReloadUi.container, "Radar").click(); await tick(); });
+  check("Person, Rolle und Treffer überstehen Reload bei ehrlich nicht verfügbarer Quelle", () => {
+    assert.match(personReloadUi.container.textContent, /Nicolas Cage/);
+    assert.match(personReloadUi.container.textContent, /Schauspiel/);
+    assert.match(personReloadUi.container.textContent, /Dream Scenario/);
+    assert.match(personReloadUi.container.textContent, /Personensuche ist derzeit nicht verfügbar/);
+    assert.doesNotMatch(personReloadUi.container.textContent, /wikidata:|watchmode:|fixture:|Proposal|Hash|Outbox|Pilot/i);
+  });
+  await personReloadUi.cleanup();
+
+  const errorUi = await mount(EntdeckenTab, {
+    ...baseProps,
+    radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
+      target: workTarget, now,
+    }).state,
+    radarCheckAvailable: true,
+    onRadarWebsearchCheck: async () => { throw new Error("mock failure"); },
+  });
+  await act(async () => { button(errorUi.container, "Radar").click(); await tick(); });
+  await act(async () => { button(errorUi.container, "Jetzt prüfen").click(); await tick(); });
+  check("Fehlerzustand bleibt verständlich und enthält keine Rohantwort", () => {
+    const alert = errorUi.container.querySelector('[role="alert"]');
+    assert.equal(alert?.textContent, "Die Suche ist derzeit nicht erreichbar.");
+    assert.doesNotMatch(errorUi.container.textContent, /mock failure/);
+  });
+  await errorUi.cleanup();
 } finally {
-  if (outputDir) {
-    fs.rmSync(outputDir, { recursive: true, force: true });
-  }
-  if (dom) {
-    dom.window.close();
-  }
+  if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });
+  if (dom) dom.window.close();
 }
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);

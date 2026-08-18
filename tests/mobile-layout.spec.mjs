@@ -840,13 +840,13 @@ for (const viewport of VIEWPORTS) {
     await seedAppMitDarstellung(page);
     await page.addInitScript(() => {
       localStorage.setItem("kd:radar", JSON.stringify({
-        format: "kinodreieck-radar-local", version: 1, authority: "guest",
+        format: "kinodreieck-radar-local", version: 2, authority: "guest",
         subscriptions: [{
-          targetId: "fixture:target:radar-work-01", targetType: "work", region: "AT", scope: "all",
+          targetId: "fixture:target:radar-work-01", targetType: "work", title: "Synthetischer Kinofilm", region: "AT", scope: "all",
           status: "active", authority: "local", serverRevision: null, serverChecksum: null,
           updatedAt: "2026-08-09T12:00:00.000Z",
         }],
-        outbox: [], shares: [], shareOutbox: [], receipts: [],
+        outbox: [], personSubscriptions: [], personResults: [], shares: [], shareOutbox: [], receipts: [],
         display: { showDismissed: false },
         server: { revision: 0, checksum: null, reconciledAt: null },
       }));
@@ -856,7 +856,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.locator(".kd-bereichshero h1")).toHaveText("Entdecken");
     await expect(page.getByRole("tab", { name: "Empfehlungen" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Radar" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Meinungen" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Blog" })).toBeVisible();
 
     const ausloeser = page.getByRole("button", { name: /Entdecken verwalten/ });
     await ausloeser.focus();
@@ -937,6 +937,13 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await page.setViewportSize({ width: 1280, height: 900 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "radar-browser-contract" },
+      gespeichertAm: Date.now(),
+      filme: [{ id: "radar-browser-work", titel: "Passender Film", jahr: 2026, typ: "film" }],
+    }));
+  });
   await page.goto("/");
   await page.locator("nav").getByRole("button", { name: "Entdecken", exact: true }).click();
   const verwalten = page.getByRole("button", { name: /Entdecken verwalten/ });
@@ -952,18 +959,15 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await expect(verwalten).toBeFocused();
 
   await page.getByRole("tab", { name: "Radar" }).click();
-  await page.getByRole("button", { name: "In mein Radar", exact: true }).click();
+  await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Werk ins Radar", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "Ins Radar" });
   await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
   await expect(preview.getByRole("checkbox")).toBeDisabled();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
   await page.keyboard.press("Escape");
   await expect(preview).toBeHidden();
-
-  await page.locator(".kd-entdecken-proposal summary").click();
-  await page.getByRole("button", { name: "Synthetisches Beispiel einsetzen" }).click();
-  await page.getByRole("button", { name: "Nur Vorschau prüfen" }).click();
-  await expect(page.getByText("Writes: false · Routine: false · Auto-Retry: false", { exact: true })).toBeVisible();
+  await expect(page.locator(".kd-entdecken")).not.toContainText(/Pilot|Fixture|Proposal|Hash|Outbox/i);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
   await keineDokumentUeberbreite(page);
 });

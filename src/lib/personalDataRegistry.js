@@ -123,8 +123,9 @@ export const PERSONAL_DATA_ENTRIES = Object.freeze([
     einheit: "Einträge",
     backupFallback: null,
     pruefe: isLocalRadarBackupState,
-    zaehle: (v) => v.subscriptions.length + v.outbox.length + v.shares.length
-      + v.shareOutbox.length + v.receipts.length,
+    zaehle: (v) => v.subscriptions.length + v.outbox.length
+      + (v.personSubscriptions?.length || 0) + (v.personResults?.length || 0)
+      + v.shares.length + v.shareOutbox.length + v.receipts.length,
   }),
   jsonEintrag({
     key: K.merkliste,

@@ -3,17 +3,22 @@ import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
+  applyPersonRadarCheckResult,
   createEmptyLocalRadar,
   decodeLocalRadar,
   queueAccountRadarChange,
   queueAccountRadarPilotImport,
   queueAccountRadarPilotReceipt,
   queueAccountRadarShareChange,
+  removeGuestPersonRadarSubscription,
   removeGuestRadarSubscription,
+  setGuestPersonRadarSubscriptionStatus,
+  upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
-import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
+import { createCatalogRadarTarget, localRadarTargetLabel } from "../lib/entdeckenUi.js";
+import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
@@ -35,6 +40,7 @@ function neueLokaleOperationId() {
 export function useEntdeckenRadarController({
   session, remoteKontoAktiv, bootDone, master, streamingKnown, streamingDiscover,
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
+  personRadarAdapter = null,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
@@ -151,7 +157,7 @@ export function useEntdeckenRadarController({
     targetId: entry.targetId,
     targetType: entry.targetType,
     targetStatus: "active",
-    title: localRadarTargetLabel(entry.targetId, {
+    title: localRadarTargetLabel(entry, {
       master: master || [], streamingKnown, streamingDiscover,
     }),
     canonical: true,
@@ -198,6 +204,105 @@ export function useEntdeckenRadarController({
     setErr,
     syncRadarPilot,
   ]);
+
+  const personRadarCatalog = useMemo(() => {
+    const rows = [
+      ...(Array.isArray(master) ? master.map((entry) => ({
+        watchmodeId: entry.watchmode_id,
+        catalogId: entry.id,
+        title: entry.titel,
+        type: entry.typ,
+        year: Number(entry.jahr),
+      })) : []),
+      ...[...(streamingKnown?.titel || []), ...(streamingDiscover?.titel || [])].map((entry) => ({
+        watchmodeId: entry.watchmode_id,
+        title: entry.titel,
+        type: entry.typ,
+        year: Number(entry.jahr),
+      })),
+    ];
+    const byId = new Map();
+    for (const row of rows) {
+      const target = createCatalogRadarTarget(row);
+      if (!target || !Number.isInteger(row.year) || byId.has(target.targetId)) continue;
+      byId.set(target.targetId, Object.freeze({
+        targetId: target.targetId, targetType: target.targetType, title: target.title, year: row.year,
+      }));
+    }
+    return Object.freeze([...byId.values()]);
+  }, [master, streamingDiscover, streamingKnown]);
+
+  const personRadarAvailable = radarAuthority === "guest"
+    && typeof personRadarAdapter?.resolve === "function"
+    && typeof personRadarAdapter?.check === "function";
+
+  const fuegePersonRadarHinzu = useCallback(async ({ name, role } = {}) => {
+    if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
+    let resolved;
+    try { resolved = await personRadarAdapter.resolve({ name: String(name || "").trim(), role }); }
+    catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+    const checked = validatePersonIdentity(resolved);
+    if (!checked.ok || resolved.name !== String(name || "").trim() || resolved.role !== role) {
+      return Object.freeze({ status: "unresolved", writes: 0 });
+    }
+    const identity = Object.freeze({
+      personExternalId: resolved.personExternalId,
+      name: resolved.name,
+      role: resolved.role,
+      canonical: true,
+    });
+    const saved = await schreibeRadarState((previous) => {
+      const result = upsertGuestPersonRadarSubscription(previous, { identity });
+      return result.ok ? result.state : null;
+    });
+    return Object.freeze(saved === false
+      ? { status: "storage_error", writes: 0 }
+      : { status: "active", writes: 1, identity });
+  }, [personRadarAdapter, personRadarAvailable, schreibeRadarState]);
+
+  const aenderePersonRadar = useCallback(async (identity, action) => {
+    if (radarAuthority !== "guest") return Object.freeze({ status: "unavailable", writes: 0 });
+    const saved = await schreibeRadarState((previous) => {
+      const result = action === "remove"
+        ? removeGuestPersonRadarSubscription(previous, identity)
+        : setGuestPersonRadarSubscriptionStatus(previous, identity, action === "pause" ? "paused" : "active");
+      return result.ok ? result.state : null;
+    });
+    return Object.freeze(saved === false
+      ? { status: "storage_error", writes: 0 }
+      : { status: action === "remove" ? "removed" : action === "pause" ? "paused" : "active", writes: 1 });
+  }, [radarAuthority, schreibeRadarState]);
+
+  const fuehrePersonRadarCheck = useCallback(async (identity) => {
+    const state = radarStateRef.current;
+    const matches = (state?.personSubscriptions || []).filter((entry) => (
+      entry.personExternalId === identity?.personExternalId && entry.role === identity?.role && entry.status === "active"
+    ));
+    if (!personRadarAvailable || matches.length !== 1) {
+      return Object.freeze({ status: "forbidden", writes: 0 });
+    }
+    let response;
+    try {
+      response = await personRadarAdapter.check(Object.freeze({
+        personExternalId: matches[0].personExternalId,
+        name: matches[0].name,
+        role: matches[0].role,
+        canonical: true,
+      }));
+    } catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+    let reason = "person-check-invalid";
+    const saved = await schreibeRadarState((previous) => {
+      const result = applyPersonRadarCheckResult(previous, {
+        identity: matches[0], response, catalog: personRadarCatalog,
+      });
+      reason = result.reason;
+      return result.ok ? result.state : null;
+    });
+    if (saved === false) {
+      return Object.freeze({ status: reason === "person-check-invalid" ? "invalid_response" : "storage_error", writes: 0 });
+    }
+    return Object.freeze({ status: reason, writes: 1 });
+  }, [personRadarAdapter, personRadarAvailable, personRadarCatalog, radarStateRef, schreibeRadarState]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
@@ -348,6 +453,8 @@ export function useEntdeckenRadarController({
     radarAuthority,
     radarState: sichtbarerRadarState,
   }), [radarAuthority, sichtbarerRadarState]);
+  const radarCheckAvailable = remoteKontoAktiv && radarAuthority === "account-cache"
+    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true;
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;
@@ -367,6 +474,7 @@ export function useEntdeckenRadarController({
     radarPilotActive: radarPilotProjection.active,
     radarPilotEvents: radarPilotProjection.events,
     radarReview: radarPilotProjection.radarReview,
+    radarCheckAvailable,
     radarPilotSyncStatus,
     setRadarPreviewTarget,
     schliesseRadarPreview,
@@ -380,6 +488,10 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotImport,
     fuehreRadarPilotSync,
     fuehreRadarWebsearchCheck,
+    personRadarAvailable,
+    fuegePersonRadarHinzu,
+    aenderePersonRadar,
+    fuehrePersonRadarCheck,
     fuehreGlobaleSuchaktionAus,
   };
 }

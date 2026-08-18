@@ -58,6 +58,26 @@ await check("Fehlender Topf ist gültig leer; beschädigter Topf bleibt erkennba
   assert.equal(corrupt.state, null);
 });
 
+await check("Radar-v1 wird verlustfrei nur beim Lesen auf v2 projiziert", () => {
+  const v1 = JSON.parse(JSON.stringify(R.createEmptyLocalRadar({ authority: "guest" })));
+  v1.version = 1;
+  delete v1.personSubscriptions;
+  delete v1.personResults;
+  v1.subscriptions = [{
+    targetId: "fixture:target:legacy", targetType: "work", region: "AT", scope: "all",
+    status: "active", authority: "local", serverRevision: null, serverChecksum: null, updatedAt: instant,
+  }];
+  const raw = JSON.stringify(v1);
+  const decoded = R.decodeLocalRadar(raw, { authority: "guest" });
+  assert.equal(decoded.ok, true);
+  assert.equal(decoded.migratedFromVersion, 1);
+  assert.equal(decoded.state.version, 2);
+  assert.equal(decoded.state.subscriptions[0].targetId, "fixture:target:legacy");
+  assert.equal(decoded.state.subscriptions[0].title, null);
+  assert.deepEqual(decoded.state.personSubscriptions, []);
+  assert.equal(JSON.stringify(v1), raw);
+});
+
 await check("Gast- und Account-Cache-Autorität werden nie still vertauscht", () => {
   const guest = R.createEmptyLocalRadar({ authority: "guest" });
   const mismatch = R.decodeLocalRadar(JSON.stringify(guest), { authority: "account-cache" });
@@ -71,7 +91,41 @@ await check("Gast-Abo ist lokal wirksam, erzeugt aber niemals Providerarbeit", (
   assert.equal(result.ok, true);
   assert.equal(result.state.subscriptions[0].authority, "local");
   assert.equal(result.state.subscriptions[0].status, "active");
+  assert.equal(result.state.subscriptions[0].title, "Lokales Testwerk 01");
   assert.equal(result.createsProviderJob, false);
+});
+
+await check("Personen-Abo hält Schauspiel und Regie getrennt und erzeugt kein Werk-Abo", () => {
+  const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const actor = R.upsertGuestPersonRadarSubscription(R.createEmptyLocalRadar(), { identity, now: instant });
+  assert.equal(actor.ok, true);
+  const director = R.upsertGuestPersonRadarSubscription(actor.state, {
+    identity: { ...identity, role: "director" }, now: "2026-08-09T12:01:00.000Z",
+  });
+  assert.equal(director.ok, true);
+  assert.equal(director.state.personSubscriptions.length, 2);
+  assert.equal(director.state.subscriptions.length, 0);
+  assert.equal(director.createsWorkSubscription, false);
+});
+
+await check("Validierter Personen-Treffer bleibt im Cache und erzeugt keinen Auto-Fan-out", () => {
+  const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const subscribed = R.upsertGuestPersonRadarSubscription(R.createEmptyLocalRadar(), { identity, now: instant });
+  const applied = R.applyPersonRadarCheckResult(subscribed.state, {
+    identity,
+    catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    response: {
+      status: "confirmed", checkedAt: "2026-08-09T12:02:00.000Z", person: identity,
+      candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    },
+  });
+  assert.equal(applied.ok, true);
+  assert.equal(applied.state.personResults[0].decisions[0].status, "matched");
+  assert.equal(applied.state.subscriptions.length, 0);
+  assert.equal(applied.createsWorkSubscription, false);
+  const reloaded = R.decodeLocalRadar(JSON.stringify(applied.state), { authority: "guest" });
+  assert.equal(reloaded.ok, true);
+  assert.equal(reloaded.state.personResults[0].decisions[0].work.title, "Dream Scenario");
 });
 
 await check("Personen und unkanonische Ziele bleiben aus dem lokalen Event-Radar", () => {

@@ -7,6 +7,8 @@ import {
   createPersonRadarDraft,
   validateDiscoveryCandidate,
   createCandidateRadarDraft,
+  matchPersonWorkCandidate,
+  validatePersonRadarCheckResult,
   personDiscoveryFallback,
 } from "./src/lib/personDiscoveryContracts.js";
 
@@ -114,6 +116,66 @@ check("Personenfixtures enthalten weder URL noch Providerpayload", () => {
   const source = fs.readFileSync(new URL("./src/data/person_discovery_phase1_fixtures.json", import.meta.url), "utf8");
   assert.equal(fixture.meta.providerPayload, false);
   assert.doesNotMatch(source, /https?:\/\//i);
+});
+
+const productionIdentity = Object.freeze({
+  personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true,
+});
+const catalog = Object.freeze([
+  { targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 },
+  { targetId: "catalog:longlegs", targetType: "work", title: "Longlegs", year: 2024 },
+]);
+
+check("Gemeinsame starke Werk-ID gewinnt nur ohne widersprechende Fakten", () => {
+  assert.equal(matchPersonWorkCandidate({
+    targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+  }, catalog).status, "matched");
+  assert.equal(matchPersonWorkCandidate({
+    targetId: "watchmode:101", targetType: "work", title: "Anderer Film", year: 2023,
+  }, catalog).status, "ambiguous");
+  assert.equal(matchPersonWorkCandidate({
+    targetId: "watchmode:999", targetType: "work", title: "Dream Scenario", year: 2023,
+  }, catalog).status, "no_match");
+});
+
+check("Fallback verlangt substantiellen exakten Titel plus Jahr und Eindeutigkeit", () => {
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, catalog).status, "matched");
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2024 }, catalog).status, "no_match");
+  assert.equal(matchPersonWorkCandidate({ title: "Up", year: 2009 }, [
+    { targetId: "catalog:up", targetType: "work", title: "Up", year: 2009 },
+  ]).status, "no_match");
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, [
+    ...catalog,
+    { targetId: "catalog:dream-duplicate", targetType: "work", title: "Dream Scenario", year: 2023 },
+  ]).status, "ambiguous");
+});
+
+check("Personen-Check ist auf sechs Kandidaten begrenzt und erzeugt nie automatisch Werk-Abos", () => {
+  const checked = validatePersonRadarCheckResult({
+    status: "confirmed",
+    checkedAt: "2026-08-18T10:00:00.000Z",
+    person: productionIdentity,
+    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+  }, { identity: productionIdentity, catalog });
+  assert.equal(checked.ok, true);
+  assert.equal(checked.result.decisions[0].status, "matched");
+  assert.equal(checked.result.createsWorkSubscription, false);
+  assert.equal(checked.result.createsEvent, false);
+  assert.equal(validatePersonRadarCheckResult({
+    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z", person: productionIdentity,
+    candidates: Array.from({ length: 7 }, () => ({ title: "Dream Scenario", year: 2023 })),
+  }, { identity: productionIdentity, catalog }).ok, false);
+});
+
+check("Confirmed ohne deterministischen Treffer und fremde Identität stoppen fail-closed", () => {
+  assert.equal(validatePersonRadarCheckResult({
+    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z", person: productionIdentity,
+    candidates: [{ title: "Unbekanntes Werk", year: 2026 }],
+  }, { identity: productionIdentity, catalog }).ok, false);
+  assert.equal(validatePersonRadarCheckResult({
+    status: "no_change", checkedAt: "2026-08-18T10:00:00.000Z",
+    person: { ...productionIdentity, role: "director" }, candidates: [],
+  }, { identity: productionIdentity, catalog }).ok, false);
 });
 
 console.log(`\n${checks}/${checks} Checks bestanden.`);

@@ -28,9 +28,16 @@ import {
   validateRadarPilotImportResult,
   validateRadarPilotSubscriptionAck,
 } from "./radarPilotContracts.js";
+import {
+  PERSON_DISCOVERY_CHECK_STATUSES,
+  PERSON_DISCOVERY_MATCH_STATUSES,
+  createPersonIdentityKey,
+  validatePersonIdentity,
+  validatePersonRadarCheckResult,
+} from "./personDiscoveryContracts.js";
 
 export const LOCAL_RADAR_FORMAT = "kinodreieck-radar-local";
-export const LOCAL_RADAR_VERSION = 1;
+export const LOCAL_RADAR_VERSION = 2;
 export const LOCAL_RADAR_AUTHORITIES = Object.freeze(["guest", "account-cache"]);
 export const LOCAL_RADAR_OUTBOX_ACTIONS = Object.freeze(["upsert", "pause", "remove"]);
 export const LOCAL_RADAR_OUTBOX_STATUSES = Object.freeze(["pending", "rejected"]);
@@ -52,6 +59,11 @@ function plain(value) { return !!value && typeof value === "object" && !Array.is
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function result(errors) { return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) }); }
 function byteLength(value) { return new TextEncoder().encode(value).byteLength; }
+function validPublicLabel(value, max = 240) {
+  const normalized = text(value);
+  return !!normalized && normalized.length <= max
+    && !/^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(normalized);
+}
 function validInstant(value) {
   const normalized = text(value);
   return ISO_INSTANT_FORM.test(normalized) && Number.isFinite(Date.parse(normalized));
@@ -93,6 +105,8 @@ export function createEmptyLocalRadar({ authority = "guest" } = {}) {
     authority: safeAuthority,
     subscriptions: [],
     outbox: [],
+    personSubscriptions: [],
+    personResults: [],
     shares: [],
     shareOutbox: [],
     receipts: [],
@@ -168,12 +182,15 @@ function validateAccountRadarPilot(pilot) {
 function validateSubscription(subscription, authority) {
   const errors = [];
   const keys = [
-    "targetId", "targetType", "region", "scope", "status", "authority",
+    "targetId", "targetType", "title", "region", "scope", "status", "authority",
     "serverRevision", "serverChecksum", "updatedAt",
   ];
   if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
   if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
+  if (subscription.title !== null && (!text(subscription.title) || text(subscription.title).length > 240)) {
+    errors.push("subscription-title-invalid");
+  }
   if (subscription.region !== RADAR_DEFAULT_REGION) errors.push("subscription-region-invalid");
   if (!RADAR_SCOPES.includes(subscription.scope)) errors.push("subscription-scope-invalid");
   if (!["active", "paused"].includes(subscription.status)) errors.push("subscription-status-invalid");
@@ -199,7 +216,7 @@ function validateSubscription(subscription, authority) {
 function validateOutboxEntry(entry) {
   const errors = [];
   const keys = [
-    "operationId", "action", "targetId", "targetType", "region", "scope",
+    "operationId", "action", "targetId", "targetType", "title", "region", "scope",
     "status", "createdAt", "reason",
   ];
   if (!exactKeys(entry, keys)) return ["outbox-shape-invalid"];
@@ -207,12 +224,75 @@ function validateOutboxEntry(entry) {
   if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
   if (!isStableContractId(entry.targetId)) errors.push("outbox-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("outbox-target-type-invalid");
+  if (entry.title !== null && (!text(entry.title) || text(entry.title).length > 240)) errors.push("outbox-title-invalid");
   if (entry.region !== RADAR_DEFAULT_REGION) errors.push("outbox-region-invalid");
   if (!RADAR_SCOPES.includes(entry.scope)) errors.push("outbox-scope-invalid");
   if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("outbox-status-invalid");
   if (!validInstant(entry.createdAt)) errors.push("outbox-created-at-invalid");
   if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
     errors.push("outbox-reason-invalid");
+  }
+  return errors;
+}
+
+function validatePersonSubscription(subscription, authority) {
+  const keys = [
+    "personExternalId", "name", "role", "status", "authority",
+    "serverRevision", "serverChecksum", "updatedAt",
+  ];
+  if (!exactKeys(subscription, keys)) return ["person-subscription-shape-invalid"];
+  const errors = [...validatePersonIdentity({
+    personExternalId: subscription.personExternalId,
+    name: subscription.name,
+    role: subscription.role,
+    canonical: true,
+  }).errors];
+  if (!["active", "paused"].includes(subscription.status)) errors.push("person-subscription-status-invalid");
+  if (!validInstant(subscription.updatedAt)) errors.push("person-subscription-updated-at-invalid");
+  if (authority === "guest") {
+    if (subscription.authority !== "local") errors.push("guest-person-authority-invalid");
+    if (subscription.serverRevision !== null || subscription.serverChecksum !== null) {
+      errors.push("guest-person-server-state-forbidden");
+    }
+  } else {
+    if (subscription.authority !== "server") errors.push("account-person-authority-invalid");
+    if (!Number.isInteger(subscription.serverRevision) || subscription.serverRevision <= 0) {
+      errors.push("account-person-revision-invalid");
+    }
+    if (!CHECKSUM_FORM.test(text(subscription.serverChecksum))) errors.push("account-person-checksum-invalid");
+  }
+  return errors;
+}
+
+function validatePersonResult(entry) {
+  const keys = ["personExternalId", "name", "role", "status", "checkedAt", "decisions"];
+  if (!exactKeys(entry, keys)) return ["person-result-shape-invalid"];
+  const errors = [...validatePersonIdentity({
+    personExternalId: entry.personExternalId,
+    name: entry.name,
+    role: entry.role,
+    canonical: true,
+  }).errors];
+  if (!PERSON_DISCOVERY_CHECK_STATUSES.includes(entry.status)) errors.push("person-result-status-invalid");
+  if (!validInstant(entry.checkedAt)) errors.push("person-result-time-invalid");
+  if (!Array.isArray(entry.decisions) || entry.decisions.length > 6) errors.push("person-result-decisions-invalid");
+  else for (const decision of entry.decisions) {
+    if (!exactKeys(decision, ["status", "title", "year", "work"])) {
+      errors.push("person-result-decision-shape-invalid"); continue;
+    }
+    if (!PERSON_DISCOVERY_MATCH_STATUSES.includes(decision.status)) errors.push("person-result-match-status-invalid");
+    if (!validPublicLabel(decision.title)) errors.push("person-result-title-invalid");
+    if (!Number.isInteger(decision.year) || decision.year < 1888 || decision.year > new Date().getUTCFullYear() + 10) {
+      errors.push("person-result-year-invalid");
+    }
+    if (decision.status === "matched") {
+      if (!exactPilotKeys(decision.work, ["targetId", "targetType", "title", "year"])
+          || !isStableContractId(decision.work?.targetId)
+          || !RADAR_TARGET_TYPES.includes(decision.work?.targetType)
+          || !validPublicLabel(decision.work?.title) || decision.work?.year !== decision.year) {
+        errors.push("person-result-work-invalid");
+      }
+    } else if (decision.work !== null) errors.push("person-result-unmatched-work-forbidden");
   }
   return errors;
 }
@@ -265,7 +345,7 @@ function validateReceipt(receipt) {
 export function validateLocalRadarState(state) {
   const errors = [];
   const baseKeys = [
-    "format", "version", "authority", "subscriptions", "outbox", "shares",
+    "format", "version", "authority", "subscriptions", "outbox", "personSubscriptions", "personResults", "shares",
     "shareOutbox", "receipts", "display", "server",
   ];
   const keys = state?.pilot === undefined ? baseKeys : [...baseKeys, "pilot"];
@@ -279,6 +359,8 @@ export function validateLocalRadarState(state) {
   }
   if (!Array.isArray(state.subscriptions)) errors.push("radar-subscriptions-invalid");
   if (!Array.isArray(state.outbox) || state.outbox.length > LOCAL_RADAR_MAX_OUTBOX) errors.push("radar-outbox-invalid");
+  if (!Array.isArray(state.personSubscriptions)) errors.push("radar-person-subscriptions-invalid");
+  if (!Array.isArray(state.personResults)) errors.push("radar-person-results-invalid");
   if (!Array.isArray(state.shares) || state.shares.length > LOCAL_RADAR_MAX_SHARES) errors.push("radar-shares-invalid");
   if (!Array.isArray(state.shareOutbox) || state.shareOutbox.length > LOCAL_RADAR_MAX_OUTBOX) {
     errors.push("radar-share-outbox-invalid");
@@ -325,6 +407,32 @@ export function validateLocalRadarState(state) {
     }
     if (state.authority === "guest" && state.outbox.length) errors.push("guest-outbox-forbidden");
   }
+  if (Array.isArray(state.personSubscriptions)) {
+    const seen = new Set();
+    for (const subscription of state.personSubscriptions) {
+      errors.push(...validatePersonSubscription(subscription, state.authority));
+      const id = createPersonIdentityKey(subscription);
+      if (!id || seen.has(id)) errors.push("person-subscription-duplicate");
+      if (id) seen.add(id);
+    }
+    if (state.authority === "guest") {
+      const activeCount = state.subscriptions.filter((entry) => entry?.status === "active").length
+        + state.personSubscriptions.filter((entry) => entry?.status === "active").length;
+      if (activeCount > RADAR_NORMAL_ACTIVE_LIMIT) errors.push("guest-subscription-limit-exceeded");
+    }
+  }
+  if (Array.isArray(state.personResults)) {
+    const seen = new Set();
+    const subscriptions = new Set((Array.isArray(state.personSubscriptions) ? state.personSubscriptions : [])
+      .map((entry) => createPersonIdentityKey(entry)).filter(Boolean));
+    for (const entry of state.personResults) {
+      errors.push(...validatePersonResult(entry));
+      const id = createPersonIdentityKey(entry);
+      if (!id || seen.has(id)) errors.push("person-result-duplicate");
+      if (id && !subscriptions.has(id)) errors.push("person-result-without-subscription");
+      if (id) seen.add(id);
+    }
+  }
   if (Array.isArray(state.shares)) {
     const seen = new Set();
     const activeSubscriptions = new Set((Array.isArray(state.subscriptions) ? state.subscriptions : [])
@@ -360,8 +468,27 @@ export function validateLocalRadarState(state) {
   return result([...new Set(errors)]);
 }
 
+function migrateLocalRadarV1(value) {
+  if (!plain(value) || value.format !== LOCAL_RADAR_FORMAT || value.version !== 1) return null;
+  const next = clone(value);
+  next.version = LOCAL_RADAR_VERSION;
+  next.personSubscriptions = [];
+  next.personResults = [];
+  next.subscriptions = Array.isArray(next.subscriptions)
+    ? next.subscriptions.map((entry) => ({ ...entry, title: null })) : next.subscriptions;
+  next.outbox = Array.isArray(next.outbox)
+    ? next.outbox.map((entry) => ({ ...entry, title: null })) : next.outbox;
+  return validateLocalRadarState(next).ok ? next : null;
+}
+
+function normalizeLocalRadarVersion(value) {
+  if (validateLocalRadarState(value).ok) return { state: value, migratedFromVersion: null };
+  const migrated = migrateLocalRadarV1(value);
+  return migrated ? { state: migrated, migratedFromVersion: 1 } : null;
+}
+
 export function isLocalRadarBackupState(value) {
-  return validateLocalRadarState(value).ok;
+  return normalizeLocalRadarVersion(value) !== null;
 }
 
 export function decodeLocalRadar(raw, { authority = "guest" } = {}) {
@@ -382,22 +509,29 @@ export function decodeLocalRadar(raw, { authority = "guest" } = {}) {
   catch {
     return Object.freeze({ ok: false, status: "corrupt", state: null, errors: Object.freeze(["radar-json-invalid"]) });
   }
-  const checked = validateLocalRadarState(parsed);
-  if (checked.ok && LOCAL_RADAR_AUTHORITIES.includes(authority) && parsed.authority !== authority) {
+  const normalized = normalizeLocalRadarVersion(parsed);
+  const checked = normalized ? validateLocalRadarState(normalized.state) : result(["radar-version-or-shape-invalid"]);
+  if (checked.ok && LOCAL_RADAR_AUTHORITIES.includes(authority) && normalized.state.authority !== authority) {
     return Object.freeze({
       ok: false, status: "authority-mismatch", state: null,
       errors: Object.freeze(["radar-authority-mismatch"]),
     });
   }
   return checked.ok
-    ? Object.freeze({ ok: true, status: "loaded", state: freezeDeep(parsed), errors: checked.errors })
+    ? Object.freeze({
+      ok: true,
+      status: "loaded",
+      state: freezeDeep(normalized.state),
+      errors: checked.errors,
+      migratedFromVersion: normalized.migratedFromVersion,
+    })
     : Object.freeze({ ok: false, status: "corrupt", state: null, errors: checked.errors });
 }
 
 function targetDraft(target) {
   const checked = validateRadarTarget(target, { allowFixture: true });
   return checked.ok && target.targetStatus === "active" && target.canonical === true
-    ? { targetId: text(target.targetId), targetType: target.targetType }
+    ? { targetId: text(target.targetId), targetType: target.targetType, title: text(target.title) }
     : null;
 }
 
@@ -470,6 +604,119 @@ export function removeGuestRadarSubscription(state, targetId) {
   });
 }
 
+export function upsertGuestPersonRadarSubscription(state, {
+  identity, status = "active", now = new Date().toISOString(),
+} = {}) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "guest") {
+    return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
+  }
+  const identityCheck = validatePersonIdentity(identity);
+  const identityKey = createPersonIdentityKey(identity);
+  if (!identityCheck.ok || !identityKey || !["active", "paused"].includes(status) || !validInstant(now)) {
+    return Object.freeze({ ok: false, reason: "person-subscription-invalid", state, changed: false });
+  }
+  const existing = state.personSubscriptions.find((entry) => createPersonIdentityKey(entry) === identityKey);
+  const activeCount = state.subscriptions.filter((entry) => entry.status === "active").length
+    + state.personSubscriptions.filter((entry) => entry.status === "active").length;
+  if (status === "active" && existing?.status !== "active" && activeCount >= RADAR_NORMAL_ACTIVE_LIMIT) {
+    return Object.freeze({ ok: false, reason: "quota-exceeded", state, changed: false });
+  }
+  const nextSubscription = {
+    personExternalId: text(identity.personExternalId),
+    name: text(identity.name),
+    role: identity.role,
+    status,
+    authority: "local",
+    serverRevision: null,
+    serverChecksum: null,
+    updatedAt: now,
+  };
+  const next = clone(state);
+  next.personSubscriptions = existing
+    ? next.personSubscriptions.map((entry) => createPersonIdentityKey(entry) === identityKey ? nextSubscription : entry)
+    : [...next.personSubscriptions, nextSubscription];
+  next.personSubscriptions.sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)));
+  const checked = validateLocalRadarState(next);
+  if (!checked.ok) return Object.freeze({ ok: false, reason: "person-subscription-result-invalid", state, changed: false });
+  return Object.freeze({
+    ok: true,
+    reason: existing ? "updated" : "created",
+    state: freezeDeep(next),
+    changed: !existing || JSON.stringify(existing) !== JSON.stringify(nextSubscription),
+    createsProviderJob: false,
+    createsWorkSubscription: false,
+  });
+}
+
+export function setGuestPersonRadarSubscriptionStatus(state, identity, status, now = new Date().toISOString()) {
+  return upsertGuestPersonRadarSubscription(state, { identity, status, now });
+}
+
+export function removeGuestPersonRadarSubscription(state, identity) {
+  if (!validateLocalRadarState(state).ok || state.authority !== "guest") {
+    return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
+  }
+  const identityKey = createPersonIdentityKey(identity);
+  if (!identityKey) return Object.freeze({ ok: false, reason: "person-subscription-invalid", state, changed: false });
+  if (!state.personSubscriptions.some((entry) => createPersonIdentityKey(entry) === identityKey)) {
+    return Object.freeze({ ok: true, reason: "already-missing", state, changed: false, createsProviderJob: false });
+  }
+  const next = clone(state);
+  next.personSubscriptions = next.personSubscriptions.filter((entry) => createPersonIdentityKey(entry) !== identityKey);
+  next.personResults = next.personResults.filter((entry) => createPersonIdentityKey(entry) !== identityKey);
+  return Object.freeze({
+    ok: true,
+    reason: "removed",
+    state: freezeDeep(next),
+    changed: true,
+    createsProviderJob: false,
+    createsWorkSubscription: false,
+  });
+}
+
+export function applyPersonRadarCheckResult(state, {
+  identity, response, catalog = [], mode = "production",
+} = {}) {
+  if (!validateLocalRadarState(state).ok) {
+    return Object.freeze({ ok: false, reason: "state-invalid", state, changed: false });
+  }
+  const identityKey = createPersonIdentityKey(identity);
+  const subscription = state.personSubscriptions.find((entry) => createPersonIdentityKey(entry) === identityKey);
+  if (!identityKey || !subscription || subscription.status !== "active") {
+    return Object.freeze({ ok: false, reason: "active-person-subscription-required", state, changed: false });
+  }
+  const checked = validatePersonRadarCheckResult(response, { identity: subscription, catalog, mode });
+  if (!checked.ok) {
+    return Object.freeze({ ok: false, reason: "person-check-invalid", state, changed: false, errors: checked.errors });
+  }
+  const resultEntry = {
+    personExternalId: subscription.personExternalId,
+    name: subscription.name,
+    role: subscription.role,
+    status: checked.result.status,
+    checkedAt: checked.result.checkedAt,
+    decisions: checked.result.decisions,
+  };
+  const next = clone(state);
+  const existing = next.personResults.find((entry) => createPersonIdentityKey(entry) === identityKey);
+  next.personResults = existing
+    ? next.personResults.map((entry) => createPersonIdentityKey(entry) === identityKey ? resultEntry : entry)
+    : [...next.personResults, resultEntry];
+  const stateCheck = validateLocalRadarState(next);
+  if (!stateCheck.ok) {
+    return Object.freeze({ ok: false, reason: "person-check-result-invalid", state, changed: false, errors: stateCheck.errors });
+  }
+  return Object.freeze({
+    ok: true,
+    reason: checked.result.status,
+    state: freezeDeep(next),
+    changed: !existing || JSON.stringify(existing) !== JSON.stringify(resultEntry),
+    createsProviderJob: false,
+    createsWorkSubscription: false,
+    createsEvent: false,
+  });
+}
+
 export function queueAccountRadarChange(state, {
   operationId, action, target, scope = "all", now = new Date().toISOString(),
 } = {}) {
@@ -480,7 +727,7 @@ export function queueAccountRadarChange(state, {
   const draft = targetDraft(target);
   const entry = {
     operationId: text(operationId), action, targetId: draft?.targetId || "",
-    targetType: draft?.targetType || "", region: RADAR_DEFAULT_REGION, scope,
+    targetType: draft?.targetType || "", title: draft?.title || null, region: RADAR_DEFAULT_REGION, scope,
     status: "pending", createdAt: now, reason: null,
   };
   if (!draft || validateOutboxEntry(entry).length) {
@@ -601,10 +848,13 @@ function validateServerSnapshot(snapshot) {
   if (Array.isArray(snapshot.subscriptions)) {
     const seen = new Set();
     for (const entry of snapshot.subscriptions) {
-      const keys2 = ["targetId", "targetType", "region", "scope", "status", "updatedAt"];
+      const keys2 = ["targetId", "targetType", "title", "region", "scope", "status", "updatedAt"];
       if (!exactKeys(entry, keys2)) { errors.push("server-subscription-shape-invalid"); continue; }
       if (!isStableContractId(entry.targetId)) errors.push("server-subscription-target-invalid");
       if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("server-subscription-target-type-invalid");
+      if (entry.title !== undefined && (!text(entry.title) || text(entry.title).length > 240)) {
+        errors.push("server-subscription-title-invalid");
+      }
       if (entry.region !== RADAR_DEFAULT_REGION) errors.push("server-subscription-region-invalid");
       if (!RADAR_SCOPES.includes(entry.scope)) errors.push("server-subscription-scope-invalid");
       if (!["active", "paused"].includes(entry.status)) errors.push("server-subscription-status-invalid");
@@ -653,12 +903,19 @@ export function reconcileAccountRadarSnapshot(state, snapshot) {
   const acknowledged = new Set(snapshot.acknowledgedOperationIds);
   const acknowledgedShares = new Set(snapshot.acknowledgedShareOperationIds);
   const next = clone(state);
-  next.subscriptions = snapshot.subscriptions.map((entry) => ({
-    ...entry,
-    authority: "server",
-    serverRevision: snapshot.revision,
-    serverChecksum: snapshot.checksum,
-  })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  next.subscriptions = snapshot.subscriptions.map((entry) => {
+    const retainedTitle = text(entry.title)
+      || text(state.subscriptions.find((item) => item.targetId === entry.targetId)?.title)
+      || text([...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title)
+      || null;
+    return {
+      ...entry,
+      title: retainedTitle,
+      authority: "server",
+      serverRevision: snapshot.revision,
+      serverChecksum: snapshot.checksum,
+    };
+  }).sort((a, b) => a.targetId.localeCompare(b.targetId));
   next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
   next.shares = snapshot.shares.map((entry) => ({
     ...entry,
@@ -882,6 +1139,7 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
   next.subscriptions = feed.subscriptions.map((entry) => ({
     targetId: entry.targetId,
     targetType: entry.targetType,
+    title: entry.title,
     region: entry.region,
     scope: entry.scope,
     status: entry.status,

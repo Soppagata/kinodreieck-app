@@ -6,10 +6,48 @@ import { isStableContractId } from "./radarContracts.js";
 export const PERSON_DISCOVERY_ROLES = Object.freeze(["actor", "director"]);
 export const PERSON_DISCOVERY_SUBSCRIPTION_STATUSES = Object.freeze(["active", "paused", "pending", "rejected"]);
 export const PERSON_DISCOVERY_CANDIDATE_STATUSES = Object.freeze(["candidate", "ambiguous", "blocked", "retired"]);
+export const PERSON_DISCOVERY_MATCH_STATUSES = Object.freeze(["matched", "no_match", "ambiguous"]);
+export const PERSON_DISCOVERY_CHECK_STATUSES = Object.freeze(["confirmed", "insufficient_evidence", "no_change"]);
+export const PERSON_DISCOVERY_MAX_CANDIDATES = 6;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
+function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+function exactKeys(value, allowed) {
+  return plain(value) && Object.keys(value).every((key) => allowed.includes(key));
+}
 function result(errors) {
   return Object.freeze({ ok: errors.length === 0, errors: Object.freeze(errors) });
+}
+
+function normalizedTitle(value) {
+  return text(value).normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("de-AT").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function usefulTitle(value) {
+  const normalized = normalizedTitle(value);
+  return normalized.length >= 10 || (normalized.length >= 6 && normalized.split(" ").length >= 2);
+}
+
+function validYear(value) {
+  return Number.isInteger(value) && value >= 1888 && value <= new Date().getUTCFullYear() + 10;
+}
+
+function publicLabel(value) {
+  const normalized = text(value);
+  return !!normalized && !/^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(normalized);
+}
+
+function normalizedCatalogWork(entry) {
+  if (!plain(entry) || !isStableContractId(entry.targetId)
+      || !["work", "series"].includes(entry.targetType) || !publicLabel(entry.title)
+      || text(entry.title).length > 240 || !validYear(entry.year)) return null;
+  return Object.freeze({
+    targetId: text(entry.targetId),
+    targetType: entry.targetType,
+    title: text(entry.title),
+    year: entry.year,
+  });
 }
 
 export function createPersonIdentityKey({ personExternalId, role } = {}) {
@@ -26,7 +64,8 @@ export function validatePersonIdentity(identity, { mode = "production" } = {}) {
   }
   if (!isStableContractId(identity.personExternalId)) errors.push("person-external-id-invalid");
   if (!PERSON_DISCOVERY_ROLES.includes(identity.role)) errors.push("person-role-invalid");
-  if (!text(identity.name) || text(identity.name).length > 160) errors.push("person-name-invalid");
+  if (!publicLabel(identity.name) || text(identity.name).length > 160
+      || text(identity.name) === text(identity.personExternalId)) errors.push("person-name-invalid");
   if (identity.canonical !== true) errors.push("person-not-canonical");
   if (mode === "production" && text(identity.personExternalId).startsWith("fixture:")) {
     errors.push("fixture-person-forbidden");
@@ -99,6 +138,94 @@ export function createCandidateRadarDraft(candidate, { mode = "production" } = {
       eventCreated: false,
       checkCreated: false,
       shareEnabled: false,
+    }),
+  });
+}
+
+/* Eine gemeinsame starke Werk-ID gewinnt. Ohne gemeinsame ID ist ausschließlich
+   ein eindeutiger Titel+Jahr-Treffer zulässig; unscharfe Ähnlichkeit bleibt
+   bewusst außerhalb dieses Vertrags. */
+export function matchPersonWorkCandidate(candidate, catalog = []) {
+  if (!plain(candidate) || !exactKeys(candidate, ["targetId", "targetType", "title", "year"])
+      || !publicLabel(candidate.title) || text(candidate.title).length > 240 || !validYear(candidate.year)
+      || (candidate.targetId != null && !isStableContractId(candidate.targetId))
+      || (candidate.targetType != null && !["work", "series"].includes(candidate.targetType))) {
+    return Object.freeze({ status: "no_match", work: null });
+  }
+  const works = (Array.isArray(catalog) ? catalog : []).map(normalizedCatalogWork).filter(Boolean);
+  const candidateId = text(candidate.targetId);
+  if (candidateId) {
+    const strong = works.filter((entry) => entry.targetId === candidateId);
+    if (strong.length !== 1) {
+      return Object.freeze({ status: strong.length > 1 ? "ambiguous" : "no_match", work: null });
+    }
+    const [work] = strong;
+    const contradicts = (candidate.targetType && candidate.targetType !== work.targetType)
+      || normalizedTitle(candidate.title) !== normalizedTitle(work.title)
+      || candidate.year !== work.year;
+    return contradicts
+      ? Object.freeze({ status: "ambiguous", work: null })
+      : Object.freeze({ status: "matched", work });
+  }
+  if (!usefulTitle(candidate.title)) return Object.freeze({ status: "no_match", work: null });
+  const title = normalizedTitle(candidate.title);
+  const fallback = works.filter((entry) => normalizedTitle(entry.title) === title && entry.year === candidate.year);
+  if (fallback.length !== 1) {
+    return Object.freeze({ status: fallback.length > 1 ? "ambiguous" : "no_match", work: null });
+  }
+  return Object.freeze({ status: "matched", work: fallback[0] });
+}
+
+/* Dies ist der kleine lokale Adaptervertrag, nicht die Payload eines fremden
+   Providers. Er lässt nur kanonische Personen und höchstens sechs belegbare
+   Werkkandidaten durch; ein Treffer erzeugt ausdrücklich kein Werk-Abo. */
+export function validatePersonRadarCheckResult(value, { identity, catalog = [], mode = "production" } = {}) {
+  const errors = [];
+  if (!plain(value) || !exactKeys(value, ["status", "checkedAt", "person", "candidates"])) {
+    return Object.freeze({ ok: false, errors: Object.freeze(["person-check-shape-invalid"]), result: null });
+  }
+  if (!PERSON_DISCOVERY_CHECK_STATUSES.includes(value.status)) errors.push("person-check-status-invalid");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text(value.checkedAt))
+      || !Number.isFinite(Date.parse(value.checkedAt))) errors.push("person-check-time-invalid");
+  const personCheck = validatePersonIdentity(value.person, { mode });
+  if (!personCheck.ok) errors.push("person-check-identity-invalid");
+  const expectedKey = createPersonIdentityKey(identity);
+  if (!expectedKey || createPersonIdentityKey(value.person) !== expectedKey
+      || text(value.person?.name) !== text(identity?.name)) errors.push("person-check-identity-mismatch");
+  if (!Array.isArray(value.candidates) || value.candidates.length > PERSON_DISCOVERY_MAX_CANDIDATES) {
+    errors.push("person-check-candidates-invalid");
+  }
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), result: null });
+
+  const decisions = value.candidates.map((candidate) => {
+    const decision = matchPersonWorkCandidate(candidate, catalog);
+    return Object.freeze({
+      status: decision.status,
+      title: text(candidate.title),
+      year: candidate.year,
+      work: decision.work,
+    });
+  });
+  const matched = decisions.filter((entry) => entry.status === "matched");
+  if (value.status === "confirmed" && matched.length === 0) errors.push("person-check-confirmed-without-match");
+  if (value.status !== "confirmed" && matched.length > 0) errors.push("person-check-unreported-match");
+  if (value.status === "no_change" && value.candidates.length > 0) errors.push("person-check-no-change-candidates-forbidden");
+  if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze(errors), result: null });
+  return Object.freeze({
+    ok: true,
+    errors: Object.freeze([]),
+    result: Object.freeze({
+      status: value.status,
+      checkedAt: new Date(value.checkedAt).toISOString(),
+      person: Object.freeze({
+        personExternalId: text(value.person.personExternalId),
+        name: text(value.person.name),
+        role: value.person.role,
+        canonical: true,
+      }),
+      decisions: Object.freeze(decisions),
+      createsWorkSubscription: false,
+      createsEvent: false,
     }),
   });
 }

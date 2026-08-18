@@ -1,41 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import radarFixtures from "../data/radar_phase2_fixtures.json";
 import { BlogTab } from "./BlogTab.jsx";
 import { ladeProfil } from "../lib/profil.js";
-import { decodeAndValidateLocalProposal } from "../lib/radarProposalValidator.js";
-import { projectLocalRadarWeek } from "../lib/localEventRadar.js";
 import {
   createCatalogRadarTarget,
-  createFixtureRadarLedger,
   localRadarTargetLabel,
   rankLocalEntdeckenRecommendations,
 } from "../lib/entdeckenUi.js";
-import { validateRadarPilotImportPayload } from "../lib/radarPilotContracts.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
   ["radar", "Radar"],
-  ["meinungen", "Meinungen"],
+  ["meinungen", "Blog"],
 ]);
 
-function hasImportPayloadEvidenceMatch(payload, evidence) {
-  if (!Array.isArray(payload) || !Array.isArray(evidence)) return false;
-  if (payload.length !== evidence.length) return false;
-  const payloadSourceIds = new Set(payload.map((entry) => `${entry.sourceId || ""}`).filter(Boolean));
-  const eventSourceIds = new Set(evidence.map((entry) => `${entry.sourceId || ""}`).filter(Boolean));
-  if (payloadSourceIds.size !== eventSourceIds.size) return false;
-  return [...payloadSourceIds].every((sourceId) => eventSourceIds.has(sourceId));
-}
-
-function hasMatchingPilotImportEvent(entry = {}, events = []) {
-  const payload = entry.payload || {};
-  return (events || []).some((event) => event.targetId === payload.targetKey && event.eventType === payload.eventType
-    && event.date === payload.date && event.region === payload.region && event.platform === payload.platform
-    && hasImportPayloadEvidenceMatch(Array.isArray(payload.evidence) ? payload.evidence : [], event.evidence || []));
-}
+const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
+const EREIGNIS_LABEL = Object.freeze({
+  kinostart_at: "Kinostart in Österreich",
+  streamingstart_at: "Streamingstart in Österreich",
+  dvd_bluray_at: "DVD-/Blu-ray-Start in Österreich",
+  festival_at: "Festivaltermin in Österreich",
+});
 
 function focusableElements(root) {
   return [...(root?.querySelectorAll(
@@ -45,7 +32,8 @@ function focusableElements(root) {
 
 function ManageDialog({
   radarState, seriesCatalog, entdeckenStatus, master, useLibrary, accountMode,
-  onUseLibrary, onObserveToggle, onRadarChange, onShareChange, onOpinions, onClose, returnFocusRef,
+  onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange, onShareChange,
+  onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
   const beobachtet = useMemo(
@@ -53,6 +41,7 @@ function ManageDialog({
     [entdeckenStatus, seriesCatalog],
   );
   const subscriptions = radarState?.subscriptions || [];
+  const people = radarState?.personSubscriptions || [];
   const pending = radarState?.outbox || [];
 
   useEffect(() => {
@@ -77,12 +66,7 @@ function ManageDialog({
       cancelAnimationFrame(frame);
       document.removeEventListener("keydown", taste);
       entsperren();
-      /* WebKit verwirft einen Fokuswechsel, der noch im Escape-Keydown und
-         gleichzeitig mit dem Portalabbau passiert. Ein Frame später ist der
-         Auslöser wieder der stabile, sichtbare Zielknoten. */
-      requestAnimationFrame(() => {
-        if (vorher?.isConnected) vorher.focus?.({ preventScroll: true });
-      });
+      requestAnimationFrame(() => { if (vorher?.isConnected) vorher.focus?.({ preventScroll: true }); });
     };
   }, [onClose, returnFocusRef]);
 
@@ -94,24 +78,22 @@ function ManageDialog({
           <div><span>Persönliche Auswahl</span><h2 id="kd-entdecken-manage-title">Entdecken verwalten</h2></div>
           <button type="button" className="kd-entdecken-schliessen" aria-label="Entdecken verwalten schließen und zurück" onClick={onClose}>×</button>
         </header>
-
         <div className="kd-entdecken-manage-grid">
           <section>
             <h3>Beobachten</h3>
-            <p>Serien- und Folgenstände aus dem vorhandenen Streaming-Katalog. Das ist unabhängig vom Event-Radar.</p>
+            <p>Deine beobachteten Serien und Folgenstände.</p>
             {beobachtet.length ? <ul className="kd-entdecken-verwalten-liste">{beobachtet.map((entry) => (
-              <li key={entry.watchmode_id}><span><strong>{entry.titel}</strong><small>Watchmode {entry.watchmode_id}</small></span>
+              <li key={entry.watchmode_id}><span><strong>{entry.titel}</strong><small>Serie</small></span>
                 <button type="button" onClick={() => onObserveToggle?.(entry, false)}>Beobachtung beenden</button></li>
             ))}</ul> : <p className="kd-entdecken-leer">Noch keine Serie beobachtet.</p>}
           </section>
-
           <section>
             <h3>Mein Radar</h3>
-            <p>{accountMode ? "Nur der serverbestätigte Kontocache ist wirksam; lokale Änderungen warten in der Outbox." : "Diese Abos bleiben nur in deinem lokalen persönlichen Topf."}</p>
+            <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Diese Ziele bleiben auf diesem Gerät."}</p>
             {subscriptions.length ? <ul className="kd-entdecken-verwalten-liste">{subscriptions.map((entry) => {
               const shared = (radarState?.shares || []).some((share) => share.targetId === entry.targetId && share.status === "active");
               return <li key={entry.targetId}>
-                <span><strong>{localRadarTargetLabel(entry.targetId, { master, fixtures: radarFixtures })}</strong><small>{entry.status === "active" ? "Aktiv" : "Pausiert"} · AT</small></span>
+                <span><strong>{localRadarTargetLabel(entry, { master })}</strong><small>{entry.status === "active" ? "Aktiv" : "Pausiert"} · Österreich</small></span>
                 <div>
                   <button type="button" onClick={() => onRadarChange?.(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button>
                   <button type="button" onClick={() => onRadarChange?.(entry, "remove")}>Entfernen</button>
@@ -119,20 +101,25 @@ function ManageDialog({
                     onClick={() => onShareChange?.(entry.targetId, !shared)}>{shared ? "Nicht mehr teilen" : "Anonym teilen"}</button> : null}
                 </div>
               </li>;
-            })}</ul> : <p className="kd-entdecken-leer">Noch kein Radarziel aktiv.</p>}
-            {pending.length ? <div className="kd-entdecken-pending"><strong>{pending.length} lokale Änderung{pending.length === 1 ? "" : "en"}</strong> warten auf Serverbestätigung. Kein Providerjob wurde gestartet.</div> : null}
+            })}</ul> : <p className="kd-entdecken-leer">Noch kein Werk im Radar.</p>}
+            {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
+              <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</small></span>
+              {entry.authority === "local" && onPersonRadarChange ? <div>
+                <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button>
+                <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Entfernen</button>
+              </div> : <small>Änderung derzeit nicht verfügbar.</small>}
+            </li>)}</ul> : null}
+            {pending.length ? <div className="kd-entdecken-pending" role="status"><strong>{pending.length} Änderung{pending.length === 1 ? "" : "en"}</strong> warten noch auf Bestätigung.</div> : null}
           </section>
-
           <section>
             <h3>Empfehlungen</h3>
             <label className="kd-entdecken-check"><input type="checkbox" checked={useLibrary} onChange={(event) => onUseLibrary(event.target.checked)} />
-              <span><strong>Explizit bewertete Mediathek einbeziehen</strong><small>Nur lesend; keine neuen Profilsignale und keine Telemetrie.</small></span></label>
+              <span><strong>Explizit bewertete Mediathek einbeziehen</strong><small>Nur lesend; ohne neue Profilsignale.</small></span></label>
           </section>
-
           <section>
-            <h3>Meinungen</h3>
-            <p>Deine bestehenden Blog-Daten, geteilten Artikel und Deep-Links bleiben unverändert.</p>
-            <button type="button" className="kd-entdecken-primaer" onClick={onOpinions}>Meinungen öffnen</button>
+            <h3>Blog</h3>
+            <p>Deine bestehenden Artikel und Deep-Links bleiben unverändert.</p>
+            <button type="button" className="kd-entdecken-primaer" onClick={onBlog}>Blog öffnen</button>
           </section>
         </div>
       </section>
@@ -145,7 +132,6 @@ function RecommendationsView({ streamingEntdecken, master, profile, useLibrary, 
   const recommendations = useMemo(() => rankLocalEntdeckenRecommendations({
     streamingEntdecken, master, profile, useLibrary,
   }), [master, profile, streamingEntdecken, useLibrary]);
-
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     <div className="kd-entdecken-einleitung">
       <div><span>Lokal & erklärbar</span><h2 id="kd-entdecken-empfehlungen">Empfehlungen für dich</h2></div>
@@ -159,338 +145,214 @@ function RecommendationsView({ streamingEntdecken, master, profile, useLibrary, 
         <span className="kd-entdecken-kicker">Persönliche Passung · AT verfügbar</span>
         <h3>{entry.title}</h3>
         <ul>{entry.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
-        <small>Quelle: lokaler Streaming-Katalog AT. Ein Quellenrang wird nicht als Geschmacksrang ausgegeben.</small>
-        {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={(event) => {
-          event.currentTarget.focus(); onRadarPreview?.(target);
-        }}>Ins Radar</button> : null}
+        <small>Quelle: lokaler Streaming-Katalog AT.</small>
+        {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
       </article>;
     })}</div> : <p className="kd-entdecken-leer gross">Noch keine belastbare persönliche Empfehlung. Dafür braucht es ein bestätigtes Profilsignal oder eine passende ausdrücklich positive Mediathek-Bewertung.</p>}
-    <div className="kd-entdecken-quellenblock">
-      <article><strong>Streaming-Charts</strong><span>Nicht aktiv – Rechtefreigabe fehlt.</span></article>
-      <article><strong>ÖFI-/Kinostart-Listen</strong><span>Nicht aktiv – Rechtefreigabe fehlt.</span></article>
-    </div>
   </section>;
 }
 
-function RadarView({
-  radarState,
-  master,
-  streamingKnown,
-  streamingDiscover,
-  accountMode,
-  onRadarPreview,
-  radarPilotClientEnabled = false,
-  radarPilotActive = false,
-  radarPilotEvents = [],
-  radarReview = false,
-  syncStatus = "disabled",
-  onRadarPilotReceipt,
-  onRadarPilotImport,
-  onRadarPilotSync,
-  onRadarWebsearchCheck,
-}) {
-  const [proposalRaw, setProposalRaw] = useState("");
-  const [expectedHash, setExpectedHash] = useState("");
-  const [proposalResult, setProposalResult] = useState(null);
-  const [pilotImportRaw, setPilotImportRaw] = useState("");
-  const [pilotImportBusy, setPilotImportBusy] = useState(false);
-  const [pilotSyncBusy, setPilotSyncBusy] = useState(false);
-  const [pilotImportMessage, setPilotImportMessage] = useState("");
-  const [pilotReceiptBusy, setPilotReceiptBusy] = useState("");
-  const [radarCheckBusyTarget, setRadarCheckBusyTarget] = useState("");
-  const [radarCheckMessage, setRadarCheckMessage] = useState("");
-  const pilotReceiptInFlight = useRef(new Set());
-  const ledger = useMemo(() => createFixtureRadarLedger(radarFixtures), []);
-  const today = new Date().toISOString().slice(0, 10);
-  const weekEnd = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const fixtureWeek = useMemo(() => projectLocalRadarWeek({ state: radarState, ledger, startDate: today }), [ledger, radarState, today]);
-  const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
-    `${entry.eventId}|${entry.versionId}`,
-    entry,
-  ])), [radarState?.receipts]);
-  const pilotWeek = useMemo(() => (radarPilotEvents || []).map((entry) => ({
-    eventId: entry.eventId,
-    eventVersionId: entry.eventVersionId,
-    targetId: entry.targetId,
-    eventType: entry.eventType,
-    date: entry.date,
-    region: entry.region,
-    platform: entry.platform,
-    seasonNumber: entry.seasonNumber,
-    lifecycleStatus: entry.lifecycleStatus,
-    verificationStatus: entry.verificationStatus,
-    evidence: entry.evidence,
-    title: entry.title || localRadarTargetLabel(entry.targetId, {
-      master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
-    }),
-  })).filter((entry) => entry.date >= today && entry.date <= weekEnd), [radarPilotEvents, master, streamingDiscover, streamingKnown, today, weekEnd]);
-  const canPilotControls = radarPilotClientEnabled && accountMode && radarPilotActive;
-  const canPilotReceipt = canPilotControls && typeof onRadarPilotReceipt === "function";
-  const canPilotImport = canPilotControls && radarReview === true && typeof onRadarPilotImport === "function";
-  const canPilotSync = radarPilotClientEnabled && accountMode;
-  const canRadarCheck = canPilotControls && radarReview === true
-    && typeof onRadarWebsearchCheck === "function";
-  const week = canPilotControls ? pilotWeek : fixtureWeek;
-  const fixtureTarget = radarFixtures.catalog[0];
-  const active = radarState?.subscriptions || [];
-  const pending = radarState?.outbox || [];
-  const pilotImportOutbox = useMemo(() => radarState?.pilot?.importOutbox || [], [radarState]);
-  const pilotImportStatus = useMemo(() => {
-    const entries = pilotImportOutbox || [];
-    const pendingCount = entries.filter((entry) => entry.status === "pending").length;
-    const rejected = entries.filter((entry) => entry.status === "rejected" && !hasMatchingPilotImportEvent(entry, pilotWeek));
-    const status = [];
-    if (rejected.length > 0) {
-      status.push(...rejected.map((entry) => (
-        `Importablehnung (${entry.reason || "unbekannt"}). Bitte neuen Import prüfen.`
-      )));
-    }
-    if (pendingCount > 0) {
-      status.push("Import ist noch ausstehend. Pilot-Sync starten.");
-    }
-    return status;
-  }, [pilotImportOutbox, pilotWeek]);
-  const formatPilotImportMessage = (result) => {
-    if (!result || result === false) return "Import nicht gespeichert.";
-    if (result === true) return "Import ist im Pilot-Kanal aktiv, aber noch kein sichtbares Feed-Event gefunden. Pilot-Sync starten.";
-    if (result?.status === "rejected") {
-      if (result.reason === "radar_evidence_url_mismatch") {
-        return "Importablehnung wegen Domain-Mismatch: radar_evidence_url_mismatch.";
-      }
-      return `Import wurde abgelehnt: ${result.reason || "unbekannter Grund"}.`;
-    }
-    if (result?.status === "ready") {
-      return "Import ist im Feed bestätigt und kann jetzt als Gesehen markiert werden.";
-    }
-    if (result?.status === "pending") {
-      return "Import ist noch ausstehend. Pilot-Sync starten.";
-    }
-    if (result?.status === "busy") {
-      return "Pilot-Sync läuft. Danach erneut prüfen oder per Pilot-Sync starten.";
-    }
-    if (result?.status === "pilot-unavailable") return "Pilot ist zurzeit nicht verfügbar.";
-    if (result?.status === "context-changed" || result?.status === "disabled" || result?.status === "state-invalid"
-      || result?.status === "guest") {
-      return "Pilot-Import ist im aktuellen Kontext nicht möglich.";
-    }
-    return "Import wurde nicht gespeichert.";
-  };
+function catalogRadarTargets({ master, streamingKnown, streamingDiscover }) {
+  const rows = [
+    ...(master || []).map((entry) => ({ watchmodeId: entry.watchmode_id, catalogId: entry.id, title: entry.titel, type: entry.typ })),
+    ...(streamingKnown?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
+    ...(streamingDiscover?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
+  ];
+  const targets = new Map();
+  for (const row of rows) {
+    const target = createCatalogRadarTarget(row);
+    if (target && !targets.has(target.targetId)) targets.set(target.targetId, target);
+  }
+  return [...targets.values()].sort((a, b) => a.title.localeCompare(b.title, "de-AT"));
+}
 
-  const ladeBeispiel = () => {
-    setProposalRaw(JSON.stringify(radarFixtures.radarProposal, null, 2));
-    setExpectedHash(radarFixtures.radarProposal.inputHash);
-    setProposalResult(null);
+function statusText(status, kind = "work") {
+  const person = kind === "person";
+  return ({
+    active: person ? "Person ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
+    confirmed: person ? "Bestätigte Werke wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
+    no_change: "Keine neue bestätigte Änderung gefunden.",
+    insufficient_evidence: person ? "Noch keine ausreichend belegten Werke gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
+    forbidden: "Dieses Ziel kann gerade nicht geprüft werden.",
+    unresolved: "Die Person konnte nicht eindeutig bestätigt werden.",
+    unavailable: "Die Suche ist derzeit nicht verfügbar.",
+    provider_error: "Die Suche ist derzeit nicht erreichbar.",
+    invalid_response: "Die Suche lieferte kein verlässliches Ergebnis.",
+    storage_error: "Das Ergebnis konnte nicht sicher gespeichert werden.",
+  })[status] || "Das Ziel konnte nicht geprüft werden.";
+}
+
+function isErrorStatus(status) {
+  return ["forbidden", "unresolved", "unavailable", "provider_error", "invalid_response", "storage_error"].includes(status);
+}
+
+function RadarView({
+  radarState, master, streamingKnown, streamingDiscover, accountMode,
+  onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
+  onRadarPilotReceipt, onRadarWebsearchCheck,
+  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarCheck,
+}) {
+  const [selectedWork, setSelectedWork] = useState("");
+  const [personName, setPersonName] = useState("");
+  const [personRole, setPersonRole] = useState("actor");
+  const [personAddBusy, setPersonAddBusy] = useState(false);
+  const [busyKey, setBusyKey] = useState("");
+  const [message, setMessage] = useState(null);
+  const targets = useMemo(
+    () => catalogRadarTargets({ master, streamingKnown, streamingDiscover }),
+    [master, streamingDiscover, streamingKnown],
+  );
+  const targetByToken = useMemo(() => new Map(targets.map((target, index) => [`werk-${index}`, target])), [targets]);
+  const subscriptions = radarState?.subscriptions || [];
+  const people = radarState?.personSubscriptions || [];
+  const personResults = radarState?.personResults || [];
+  const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
+    `${entry.eventId}|${entry.versionId}`, entry,
+  ])), [radarState?.receipts]);
+  const events = useMemo(() => (radarPilotEvents || [])
+    .filter((entry) => entry.verificationStatus === "confirmed")
+    .map((entry) => ({
+      ...entry,
+      title: localRadarTargetLabel(subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId, {
+        master, streamingKnown, streamingDiscover,
+      }),
+    }))
+    .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
+  [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
+
+  const addWork = () => {
+    const target = targetByToken.get(selectedWork);
+    if (!target) return;
+    onRadarPreview?.(target);
+    setMessage({ status: "active", text: "Prüfe das Werk und bestätige es anschließend für dein Radar." });
   };
-  const pruefe = () => setProposalResult(decodeAndValidateLocalProposal(proposalRaw, {
-    sourceRegistry: radarFixtures.sourceRegistry,
-    catalog: radarFixtures.catalog,
-    expectedInputHash: expectedHash.trim(),
-  }));
-  const fuehrePilotImport = async () => {
-    if (!canPilotImport || pilotImportBusy) return;
-    let payload = null;
-    try { payload = JSON.parse(pilotImportRaw); } catch {
-      setPilotImportMessage("JSON ungültig");
-      return;
-    }
-    const result = validateRadarPilotImportPayload(payload);
-    if (!result.ok) {
-      setPilotImportMessage(`Import ungültig: ${result.errors.join(", ")}`);
-      return;
-    }
-    setPilotImportBusy(true);
+  const addPerson = async () => {
+    const name = personName.trim();
+    if (!personRadarAvailable || !name || personAddBusy) return;
+    setPersonAddBusy(true); setMessage(null);
     try {
-      const queued = await onRadarPilotImport(payload);
-      setPilotImportMessage(formatPilotImportMessage(queued));
-    } finally {
-      setPilotImportBusy(false);
-    }
+      const result = await onPersonRadarAdd?.({ name, role: personRole });
+      setMessage({ status: result?.status, text: statusText(result?.status, "person") });
+      if (result?.status === "active") setPersonName("");
+    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
+    finally { setPersonAddBusy(false); }
   };
-  const fuehrePilotSync = useCallback(async () => {
-    if (!canPilotSync || pilotSyncBusy) return;
-    setPilotSyncBusy(true);
+  const checkWork = async (entry) => {
+    if (!radarCheckAvailable || busyKey) return;
+    setBusyKey(`work|${entry.targetId}`); setMessage(null);
     try {
-      await onRadarPilotSync?.();
-    } finally {
-      setPilotSyncBusy(false);
-    }
-  }, [canPilotSync, onRadarPilotSync, pilotSyncBusy]);
-  const fuehrePilotReceipt = async (entry) => {
-    if (!canPilotReceipt || pilotReceiptBusy === entry.eventVersionId
-      || pilotReceiptInFlight.current.has(entry.eventVersionId) || !entry.eventId || !entry.eventVersionId
-    ) return;
-    pilotReceiptInFlight.current.add(entry.eventVersionId);
-    setPilotReceiptBusy(entry.eventVersionId);
-    try {
-      await onRadarPilotReceipt({
-        eventId: entry.eventId,
-        eventVersionId: entry.eventVersionId,
-        status: "seen",
-      });
-    } finally {
-      pilotReceiptInFlight.current.delete(entry.eventVersionId);
-      setPilotReceiptBusy("");
-    }
+      const result = await onRadarWebsearchCheck?.(entry.targetId);
+      setMessage({ status: result?.status, text: statusText(result?.status) });
+    } catch { setMessage({ status: "provider_error", text: statusText("provider_error") }); }
+    finally { setBusyKey(""); }
   };
-  const fuehreRadarCheckAus = async (entry) => {
-    if (!canRadarCheck || entry.status !== "active" || radarCheckBusyTarget) return;
-    setRadarCheckBusyTarget(entry.targetId);
-    setRadarCheckMessage("");
+  const checkPerson = async (entry) => {
+    if (!personRadarAvailable || busyKey) return;
+    setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
     try {
-      const result = await onRadarWebsearchCheck(entry.targetId);
-      const messages = {
-        confirmed: "Ein bestätigtes Radarereignis wurde gespeichert.",
-        no_change: "Keine neue bestätigte Änderung gefunden.",
-        insufficient_evidence: "Noch keine ausreichend belegte Änderung gefunden.",
-        forbidden: "Dieses Radarziel kann gerade nicht geprüft werden.",
-        provider_error: "Die Radar-Suche ist noch nicht verfügbar.",
-        unavailable: "Die Radar-Suche ist noch nicht verfügbar.",
-        invalid_response: "Die Radar-Suche lieferte kein verlässliches Ergebnis.",
-        storage_error: "Das bestätigte Ergebnis konnte nicht sicher gespeichert werden.",
-      };
-      setRadarCheckMessage(messages[result?.status] || "Das Radarziel konnte nicht geprüft werden.");
-    } finally {
-      setRadarCheckBusyTarget("");
-    }
+      const result = await onPersonRadarCheck?.(entry);
+      setMessage({ status: result?.status, text: statusText(result?.status, "person") });
+    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
+    finally { setBusyKey(""); }
   };
 
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
-      <div><span>Lokaler Event-Radar</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
-      <p>{accountMode ? "Kontomodus: nur serverbestätigte Abos wirken; neue Aktionen bleiben lokale Outbox-Vorschläge." : "Gastmodus: Abos bleiben lokal auf diesem Gerät."} Diese Phase startet weder Provider noch Scheduler.</p>
+      <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
+      <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Deine Ziele bleiben auf diesem Gerät."} Ergebnisse erscheinen erst, wenn Werk, Österreich-Bezug und Datum eindeutig belegt sind.</p>
     </div>
-
+    <div className="kd-entdecken-radar-add-grid">
+      <article className="kd-entdecken-panel">
+        <h3>Werk hinzufügen</h3>
+        {targets.length ? <div className="kd-entdecken-formzeile">
+          <label htmlFor="kd-radar-work">Film oder Serie</label>
+          <select id="kd-radar-work" value={selectedWork} onChange={(event) => setSelectedWork(event.target.value)}>
+            <option value="">Werk auswählen</option>
+            {targets.map((target, index) => <option key={target.targetId} value={`werk-${index}`}>{target.title}</option>)}
+          </select>
+          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWork} onClick={addWork}>Werk ins Radar</button>
+        </div> : <p className="kd-entdecken-leer">Der vorbereitete Katalog ist gerade nicht verfügbar.</p>}
+      </article>
+      <article className="kd-entdecken-panel">
+        <h3>Person hinzufügen</h3>
+        {personRadarAvailable ? <div className="kd-entdecken-formzeile">
+          <label htmlFor="kd-radar-person">Name</label>
+          <input id="kd-radar-person" value={personName} maxLength={160} autoComplete="off" onChange={(event) => setPersonName(event.target.value)} />
+          <label htmlFor="kd-radar-role">Rolle</label>
+          <select id="kd-radar-role" value={personRole} onChange={(event) => setPersonRole(event.target.value)}>
+            <option value="actor">Schauspiel</option><option value="director">Regie</option>
+          </select>
+          <button type="button" className="kd-entdecken-primaer" disabled={!personName.trim() || personAddBusy} onClick={addPerson}>
+            {personAddBusy ? "Wird angelegt…" : "Person ins Radar"}
+          </button>
+        </div> : <p className="kd-entdecken-leer" role="status">Die Personensuche ist derzeit nicht verfügbar. Bereits bestätigte Personen bleiben sichtbar.</p>}
+      </article>
+    </div>
+    {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
+      role={isErrorStatus(message.status) ? "alert" : "status"}>{message.text}</p> : null}
     <div className="kd-entdecken-radar-grid">
       <article className="kd-entdecken-panel">
-        <h3>Beobachtete Ziele</h3>
-        {active.length ? <ul>{active.map((entry) => <li key={entry.targetId}><strong>{localRadarTargetLabel(entry.targetId, {
-          master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
-        })}</strong><span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.region}</span>
-          {canRadarCheck && entry.status === "active" ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={!!radarCheckBusyTarget} onClick={() => fuehreRadarCheckAus(entry)}>
-            {radarCheckBusyTarget === entry.targetId ? "Wird geprüft…" : "Jetzt prüfen"}
+        <h3>Meine Ziele</h3>
+        {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
+        {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
+          <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
+          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · Werk</span>
+          {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
+            disabled={!!busyKey} onClick={() => checkWork(entry)}>
+            {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
           </button> : null}
-        </li>)}</ul>
-          : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
-        {pending.length ? <p className="kd-entdecken-pending">{pending.length} Änderung{pending.length === 1 ? "" : "en"} nur lokal vorgemerkt.</p> : null}
-        {radarCheckMessage ? <p className="kd-entdecken-pending" role="status">{radarCheckMessage}</p> : null}
+        </li>)}</ul> : null}
+        {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
+          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
+          {entry.status === "active" && personRadarAvailable ? <button type="button" className="kd-entdecken-sekundaer"
+            disabled={!!busyKey} onClick={() => checkPerson(entry)}>
+            {busyKey === `person|${entry.personExternalId}|${entry.role}` ? "Wird geprüft…" : "Jetzt prüfen"}
+          </button> : null}
+        </li>)}</ul> : null}
+        {(radarState?.outbox || []).length ? <p className="kd-entdecken-pending" role="status">Eine Änderung wartet noch auf Bestätigung.</p> : null}
       </article>
       <article className="kd-entdecken-panel">
-        <h3>Diese Woche</h3>
-        {week.length ? <ul>{week.map((entry) => canPilotControls
-          ? <li key={entry.eventVersionId || entry.versionId}>
-            <strong>{entry.title || localRadarTargetLabel(entry.targetId, {
-              master, streamingKnown, streamingDiscover, fixtures: radarFixtures,
-            })}</strong>
-            <span>{entry.date} · {entry.eventType}{entry.seasonNumber ? ` · Staffel ${entry.seasonNumber}` : ""} · {entry.lifecycleStatus || ""} · {entry.verificationStatus || ""} · {entry.region} · {entry.platform}</span>
-            {entry.evidence?.length ? <div className="kd-pilot-quellen">
-              <span>Quellen:</span>
-              <div className="kd-pilot-quellen-links">
-                {entry.evidence.map((item, index) => <a
-                  className="kd-pilot-quellen-link"
-                  href={item.url}
-                  key={`${entry.eventVersionId || entry.versionId}-source-${index}`}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >{item.sourceDomain}</a>)}
-              </div>
-            </div> : null}
-            {canPilotReceipt ? <div>
-              {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status ? (
-                <small>Status: {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`).status}</small>
-              ) : null}
-              <button type="button" className="kd-entdecken-sekundaer" disabled={pilotReceiptBusy === entry.eventVersionId}
-                onClick={() => fuehrePilotReceipt(entry)}>
-                {pilotReceiptBusy === entry.eventVersionId ? "Wird gespeichert…" : "Gesehen"}
-              </button>
-            </div> : null}
-          </li>
-          : <li key={entry.versionId}>
-            <strong>{entry.title}</strong><span>{entry.date} · {entry.eventType} · nur Vorschau</span>
-          </li>)}</ul>
-          : <p className="kd-entdecken-leer">Keine lokal bestätigten Ereignisse für deine aktiven Ziele.</p>}
-        <small>Keine Kalender- oder Erinnerungsänderung.</small>
+        <h3>Bestätigte Treffer</h3>
+        {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
+          <strong>{entry.title}</strong>
+          <span>{entry.date} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
+          {entry.evidence?.length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
+            {entry.evidence.map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}
+              key={`${entry.eventVersionId}-source-${index}`} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
+          </div></div> : null}
+          {typeof onRadarPilotReceipt === "function" ? <button type="button" className="kd-entdecken-sekundaer"
+            disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen"}
+            onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "seen" })}>
+            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen" ? "Gesehen" : "Als gesehen markieren"}
+          </button> : null}
+        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Ereignisse für deine aktiven Werke.</p>}
+        {personResults.map((result) => {
+          const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
+          return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
+            <h4>{result.name} · {ROLLEN_LABEL[result.role]}</h4>
+            {matches.length ? <ul>{matches.map((entry) => <li key={entry.work.targetId}>
+              <strong>{entry.work.title}</strong><span>{entry.work.year}</span>
+            </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Werke.</p>}
+          </section>;
+        })}
       </article>
     </div>
-
-    {canPilotSync || canPilotControls ? <article className="kd-entdecken-panel">
-      <h3>Pilot</h3>
-      <p className="kd-entdecken-kopfleiste">Status: {pilotSyncBusy ? "syncing" : syncStatus}</p>
-      <button type="button" className="kd-entdecken-sekundaer" disabled={pilotSyncBusy} onClick={fuehrePilotSync}>Pilot-Sync starten</button>
-    </article> : null}
-
-      {canPilotImport ? <article className="kd-entdecken-proposal">
-      <h3>Pilot-Import</h3>
-      <textarea aria-label="Pilot-Import JSON" className="kd-entdecken-textarea" rows={8} value={pilotImportRaw}
-        onChange={(event) => setPilotImportRaw(event.target.value)} spellCheck="false" />
-      <div className="kd-entdecken-proposal-aktionen">
-        <button type="button" className="kd-entdecken-sekundaer" onClick={fuehrePilotImport} disabled={pilotImportBusy || !pilotImportRaw.trim()}>
-          {pilotImportBusy ? "Import läuft…" : "Pilot-Import bestätigen"}
-        </button>
-      </div>
-      {pilotImportStatus.length > 0 ? <ul className="kd-entdecken-kleingedruckt">
-        {pilotImportStatus.map((entry, index) => <li key={index}>{entry}</li>)}
-      </ul> : null}
-      {pilotImportMessage ? <p className="kd-entdecken-kleingedruckt">{pilotImportMessage}</p> : null}
-    </article> : null}
-
-    <article className="kd-entdecken-hub-karte kd-entdecken-fixture">
-      <span className="kd-entdecken-kicker">Synthetische Fixture · keine Live-Nutzerdaten</span>
-      <h3>Von anderen entdeckt: {fixtureTarget.title}</h3>
-      <p>Diese Karte demonstriert nur den anonymen Übergabepunkt. Sie enthält keine echte Community-Auswertung.</p>
-      <button type="button" className="kd-entdecken-sekundaer" onClick={(event) => {
-        event.currentTarget.focus(); onRadarPreview?.(fixtureTarget);
-      }}>In mein Radar</button>
-    </article>
-
-    <article className="kd-entdecken-parked">
-      <span>Bewusst geparkt</span><h3>Personen-Automatik</h3>
-      <p>Der Recall-Spike hat die Abnahmegrenze verfehlt. Deshalb gibt es hier weder Personen-Schalter noch automatische Beobachtung oder Radar-Aktion.</p>
-    </article>
-
-    <details className="kd-entdecken-proposal">
-      <summary>Read-only Proposal-Vorschau</summary>
-      <p>Lokale JSON-Prüfung gegen synthetisches Register und Katalog. Es gibt keinen Import, keinen Retry und keine Routine.</p>
-      <div className="kd-entdecken-proposal-aktionen">
-        <button type="button" className="kd-entdecken-sekundaer" onClick={ladeBeispiel}>Synthetisches Beispiel einsetzen</button>
-        <label>Erwarteter Input-Hash<input value={expectedHash} onChange={(event) => setExpectedHash(event.target.value)} spellCheck="false" /></label>
-      </div>
-      <textarea aria-label="Proposal JSON" value={proposalRaw} onChange={(event) => setProposalRaw(event.target.value)} rows={10} spellCheck="false" />
-      <button type="button" className="kd-entdecken-primaer" onClick={pruefe}>Nur Vorschau prüfen</button>
-      {proposalResult ? <div className={`kd-entdecken-proposal-result ${proposalResult.ok ? "ok" : "blockiert"}`} role="status">
-        <strong>{proposalResult.ok ? "Vorschau geprüft" : "Vorschau blockiert"}</strong>
-        <span>Status: {proposalResult.status}</span>
-        {proposalResult.summary ? <span>{proposalResult.summary.matched}/{proposalResult.summary.total} passend · {proposalResult.summary.ambiguous} mehrdeutig · {proposalResult.summary.blocked} blockiert</span> : null}
-        {proposalResult.errors?.length ? <span>Fehler: {proposalResult.errors.join(", ")}</span> : null}
-        <span>Writes: {String(proposalResult.writes)} · Routine: {String(proposalResult.routineActivated)} · Auto-Retry: {String(proposalResult.automaticRetry)}</span>
-      </div> : null}
-    </details>
   </section>;
 }
 
 export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, accountMode = false,
-  radarPilotClientEnabled = false,
-  radarPilotActive = false,
-  radarPilotEvents = [],
-  radarReview = false,
-  syncStatus = "disabled",
-  onRadarPilotReceipt,
-  onRadarPilotImport,
-  onRadarPilotSync,
-  onRadarWebsearchCheck,
-  onObserveToggle,
-  onRadarChange,
-  onRadarPreview,
-  onShareChange,
+  radarPilotEvents = [], radarCheckAvailable = false,
+  onRadarPilotReceipt, onRadarWebsearchCheck,
+  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
+  onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
   const [manageOffen, setManageOffen] = useState(false);
   const [useLibrary, setUseLibrary] = useState(true);
   const [profile, setProfile] = useState(null);
   const manageButtonRef = useRef(null);
-
   useEffect(() => {
     let aktiv = true;
     ladeProfil().then((value) => { if (aktiv) setProfile(value); });
@@ -498,32 +360,33 @@ export function EntdeckenTab({
   }, []);
   useEffect(() => { if (fokusId) setAnsicht("meinungen"); }, [fokusId]);
   const closeManage = useCallback(() => setManageOffen(false), []);
-  const openOpinions = useCallback(() => { setManageOffen(false); setAnsicht("meinungen"); }, []);
+  const openBlog = useCallback(() => { setManageOffen(false); setAnsicht("meinungen"); }, []);
 
   return <section className="kd-entdecken" data-testid="entdecken-tab">
     <div className="kd-entdecken-toolbar">
       <nav className="kd-entdecken-tabs" aria-label="Entdecken-Ansichten" role="tablist">
         {ANSICHTEN.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={ansicht === id}
           className={ansicht === id ? "aktiv" : ""} onClick={() => setAnsicht(id)}>{label}</button>)}
+        <button ref={manageButtonRef} type="button" className="kd-entdecken-verwalten" aria-label="Entdecken verwalten"
+          title="Entdecken verwalten" onClick={() => setManageOffen(true)}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6" />
+          </svg>
+        </button>
       </nav>
-      <button ref={manageButtonRef} type="button" className="kd-entdecken-verwalten" onClick={(event) => {
-        event.currentTarget.focus(); setManageOffen(true);
-      }}>⚙ Entdecken verwalten</button>
     </div>
-
     {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} master={master}
       profile={profile} useLibrary={useLibrary} onRadarPreview={onRadarPreview} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
-      radarPilotClientEnabled={radarPilotClientEnabled} radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents}
-      radarReview={radarReview} syncStatus={syncStatus}
-      onRadarPilotReceipt={onRadarPilotReceipt} onRadarPilotImport={onRadarPilotImport} onRadarPilotSync={onRadarPilotSync}
-      onRadarWebsearchCheck={onRadarWebsearchCheck} /> : null}
-    {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Meinungen"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
-
+      radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
+      onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
+      personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
+      onPersonRadarCheck={onPersonRadarCheck} /> : null}
+    {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}
-      onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onShareChange={onShareChange}
-      onOpinions={openOpinions} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
+      onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
+      onShareChange={onShareChange} onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
   </section>;
 }

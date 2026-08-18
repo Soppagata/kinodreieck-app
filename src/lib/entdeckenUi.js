@@ -145,10 +145,12 @@ export function createFixtureRadarLedger(fixtures) {
   return confirmed.ok ? confirmed.ledger : staged.ledger;
 }
 
-export function localRadarTargetLabel(targetId, {
-  master = [], streamingKnown = null, streamingDiscover = null, fixtures = null,
+export function localRadarTargetLabel(targetOrId, {
+  master = [], streamingKnown = null, streamingDiscover = null, fixtures = null, title = null,
 } = {}) {
-  const normalized = text(targetId);
+  const entryTitle = text(typeof targetOrId === "object" ? targetOrId?.title : title);
+  if (entryTitle && !/^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(entryTitle)) return entryTitle;
+  const normalized = text(typeof targetOrId === "object" ? targetOrId?.targetId : targetOrId);
   const fixture = fixtures?.catalog?.find((entry) => entry.targetId === normalized);
   if (fixture?.title) return fixture.title;
   if (normalized.startsWith("watchmode:")) {
@@ -165,5 +167,5 @@ export function localRadarTargetLabel(targetId, {
     const found = (master || []).find((entry) => String(entry.id) === id);
     if (found?.titel) return found.titel;
   }
-  return normalized || "Unbekanntes Radarziel";
+  return "Radarziel";
 }

@@ -36,6 +36,24 @@ const radarBackup = radarEintrag.backupAusRoh(JSON.stringify(radarStand));
 check("Event-Radar durchläuft Backup und Restore bytegetreu",
   JSON.stringify(radarBackup) === JSON.stringify(radarStand)
   && radarEintrag.restorePlan(radarBackup, "2026-08-09T12:00:00.000Z")?.wert === JSON.stringify(radarStand));
+const personIdentity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+let personRadarStand = LR.upsertGuestPersonRadarSubscription(LR.createEmptyLocalRadar(), {
+  identity: personIdentity, now: "2026-08-09T12:00:00.000Z",
+}).state;
+personRadarStand = LR.applyPersonRadarCheckResult(personRadarStand, {
+  identity: personIdentity,
+  catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+  response: {
+    status: "confirmed", checkedAt: "2026-08-09T12:01:00.000Z", person: personIdentity,
+    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+  },
+}).state;
+const personRadarRaw = JSON.stringify(personRadarStand);
+check("Personen-Radar reist bytegetreu und datensparsam durch Backup/Restore",
+  radarEintrag.backupAusRoh(personRadarRaw) != null
+  && radarEintrag.restorePlan(personRadarStand, "2026-08-09T12:02:00.000Z")?.wert === personRadarRaw
+  && radarEintrag.zaehleRoh(personRadarRaw) === 2
+  && !/provider|prompt|citation/i.test(personRadarRaw));
 let radarWarnung = null;
 check("Beschädigter Radar-Topf wird beim Backup nicht still repariert",
   radarEintrag.backupAusRoh("{kaputt", (key, grund) => { radarWarnung = { key, grund }; }) === null

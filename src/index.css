@@ -270,11 +270,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Der technische Navigationsschlüssel bleibt `blog`; diese Klassen betreffen
    nur die neue sichtbare Hülle und ihre vollständig lokalen Vorschauen. */
 .kd-entdecken { min-width:0; }
-.kd-entdecken-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 18px; }
+.kd-entdecken-toolbar { display:flex; align-items:center; gap:12px; margin:0 0 18px; }
 .kd-entdecken-tabs { min-width:0; display:flex; gap:5px; padding:4px; border:1px solid var(--saalHoch,#3c3742); border-radius:10px; background:var(--saal,#17151a); }
 .kd-entdecken-tabs button,.kd-entdecken-verwalten,.kd-entdecken-primaer,.kd-entdecken-sekundaer,
 .kd-entdecken-verwalten-liste button { min-height:42px; box-sizing:border-box; padding:8px 12px; border:1px solid transparent; border-radius:7px;
   background:transparent; color:var(--leinwandTief,#dfdacd); font:600 13px 'Space Grotesk',sans-serif; cursor:pointer; }
+.kd-entdecken-tabs .kd-entdecken-verwalten { display:grid; place-items:center; flex:0 0 44px; width:44px; min-width:44px; min-height:44px; padding:0; border-color:var(--rauch,#948fa0); }
+.kd-entdecken-verwalten svg { display:block; }
 .kd-entdecken-tabs button.aktiv { border-color:var(--wolfram,#e3a63b); background:rgba(227,166,59,.12); color:var(--wolfram,#e3a63b); }
 .kd-entdecken-verwalten,.kd-entdecken-sekundaer,.kd-entdecken-verwalten-liste button { border-color:var(--rauch,#948fa0); }
 .kd-entdecken-primaer { border-color:var(--wolfram,#e3a63b); background:var(--wolfram,#e3a63b); color:var(--tinte,#1c1a1e); }
@@ -297,6 +299,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-quellenblock article { padding:11px 13px; border:1px dashed var(--rauch,#948fa0); border-radius:7px; opacity:.72; }
 .kd-entdecken-quellenblock strong,.kd-entdecken-quellenblock span { display:block; }.kd-entdecken-quellenblock span { margin-top:3px; color:var(--rauch,#948fa0); font-size:12px; }
 .kd-entdecken-radar-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.kd-entdecken-radar-add-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-bottom:12px; }
+.kd-entdecken-formzeile { display:grid; gap:7px; }
+.kd-entdecken-formzeile label { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
+.kd-entdecken-formzeile input,.kd-entdecken-formzeile select { width:100%; min-height:44px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--rauch,#948fa0); border-radius:7px; background:#111014; color:var(--leinwand,#ece8df); font:15px 'Space Grotesk',sans-serif; }
+.kd-entdecken-formzeile button { justify-self:start; min-height:44px; }
 .kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
 .kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
 .kd-entdecken-panel li>.kd-entdecken-sekundaer { align-self:flex-start; min-height:44px; margin-top:7px; }
@@ -305,6 +312,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-pilot-quellen-link { color:var(--wolfram,#e3a63b); text-decoration:underline; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
 .kd-pilot-quellen-link:focus-visible { outline-offset:3px; }
 .kd-entdecken-pending { margin:10px 0 0; padding:9px 10px; border-radius:6px; background:rgba(227,166,59,.09); color:var(--leinwandTief,#dfdacd); font-size:12px; line-height:1.5; }
+.kd-entdecken-person-result { margin-top:13px; padding-top:11px; border-top:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-person-result h4 { margin:0 0 6px; color:var(--leinwand,#ece8df); font:700 17px 'Barlow Condensed',sans-serif; letter-spacing:.035em; text-transform:uppercase; }
 .kd-entdecken-fixture { margin:12px 0; border-color:rgba(227,166,59,.58); }
 .kd-entdecken-parked { margin:12px 0; opacity:.74; }.kd-entdecken-parked>span { color:var(--rauch,#948fa0); }
 .kd-entdecken-proposal { margin:12px 0 0; }.kd-entdecken-proposal summary { cursor:pointer; color:var(--wolfram,#e3a63b); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
@@ -315,7 +324,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-proposal-result { display:flex; flex-direction:column; gap:3px; margin-top:10px; padding:10px 12px; border:1px solid #6f9d77; border-radius:7px; color:var(--leinwandTief,#dfdacd); font:11px/1.5 'Space Mono',monospace; }
 .kd-entdecken-proposal-result.blockiert { border-color:var(--kd-gefahr,#c85b51); }
 
-.kd-entdecken-layer { position:fixed; inset:0; z-index:14000; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:24px; }
+.kd-entdecken-layer { position:fixed; inset:0; z-index:14000; display:flex; align-items:center; justify-content:center; box-sizing:border-box; padding:24px; font-family:'Space Grotesk',sans-serif; }
 .kd-entdecken-dialog { position:relative; width:min(760px,100%); max-height:calc(100dvh - 48px); overflow:auto; overscroll-behavior:contain; box-sizing:border-box; padding:20px;
   border:1px solid var(--rauch,#948fa0); border-radius:14px; background:var(--saalHoch,#211e26); color:var(--leinwand,#ece8df); box-shadow:0 24px 80px rgba(0,0,0,.66); }
 .kd-entdecken-dialog-kopf { display:flex; align-items:flex-start; gap:15px; margin-bottom:16px; }.kd-entdecken-dialog-kopf>div { min-width:0; }
@@ -347,7 +356,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
-  .kd-entdecken-verwalten { width:100%; min-height:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
+  .kd-entdecken-tabs .kd-entdecken-verwalten { flex:0 0 44px; width:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-radar-add-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
   .kd-entdecken-layer { align-items:flex-end; padding:0; }.kd-entdecken-dialog { width:100%; height:100dvh; max-height:100dvh; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border-inline:0; border-bottom:0; border-radius:0; }
   .kd-entdecken-manage-grid { grid-template-columns:1fr; }.kd-entdecken-verwalten-liste li { align-items:flex-start; flex-direction:column; }.kd-entdecken-verwalten-liste li>div { justify-content:flex-start; }
   .kd-entdecken-dialog-aktionen { position:sticky; bottom:calc(-20px - env(safe-area-inset-bottom)); margin:16px -16px calc(-20px - env(safe-area-inset-bottom)); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--saalHoch,#211e26); border-top:1px solid var(--saal,#3c3742); }
