@@ -2,6 +2,7 @@
    sonstiger Netzwerkzugriff. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { delimiter, dirname, resolve } from "node:path";
 import {
   RADAR_WEBSEARCH_FEE_USD_CENT,
   RADAR_WEBSEARCH_MAX_TOKENS,
@@ -486,6 +487,28 @@ await check("Eine fehlende echte Closuredatei stoppt statt durch einen geratenen
   );
 });
 
+await check("Der echte JS-CLI-Startmodus findet Node im engen lokalen Lesepfad", () => {
+  const workspace = createRadarCliWorkspace();
+  try {
+    const cliDirectory = `${workspace.runDir}/cli-bin`;
+    fs.mkdirSync(cliDirectory, { mode: 0o700 });
+    const fakeCli = `${cliDirectory}/supabase`;
+    fs.writeFileSync(
+      fakeCli,
+      "#!/usr/bin/env node\nprocess.stdout.write(\"2.109.1\\n\");\n",
+      { mode: 0o700 },
+    );
+    const blueprint = buildRadarSupabaseVersionBlueprint({ workspace, executable: fakeCli });
+    assert.deepEqual(blueprint.env.PATH.split(delimiter), [
+      cliDirectory,
+      resolve(dirname(process.execPath)),
+    ]);
+    assert.equal(runRadarSupabaseVersionProbe(blueprint), "2.109.1");
+  } finally {
+    cleanupRadarCliWorkspace(workspace);
+  }
+});
+
 await check("Supabase-CLI-Schreibpfade bleiben ohne HOME-Umlenkung im validierten Radar-Tempzaun", () => {
   const workspace = createRadarCliWorkspace();
   try {
@@ -499,6 +522,10 @@ await check("Supabase-CLI-Schreibpfade bleiben ohne HOME-Umlenkung im validierte
     assert.equal(env.SUPABASE_TELEMETRY_DISABLED, "1");
     assert.equal(env.DO_NOT_TRACK, "1");
     assert.equal(env.SUPABASE_NO_KEYRING, "1");
+    assert.deepEqual(env.PATH.split(delimiter), [
+      workspace.runDir,
+      resolve(dirname(process.execPath)),
+    ]);
     for (const name of ["SUPABASE_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "TMPDIR"]) {
       assert.equal(env[name].startsWith(`${workspace.runDir}/`), true);
     }
@@ -532,6 +559,44 @@ await check("Supabase-CLI-Schreibpfade bleiben ohne HOME-Umlenkung im validierte
         && error.code === "CLI_WRITE_PATH_OUTSIDE_TMP",
     );
     assert.equal(invalidLaunches, 0);
+
+    let missingRuntimeLaunches = 0;
+    const missingRuntime = {
+      ...blueprint,
+      env: { ...blueprint.env, PATH: workspace.runDir },
+    };
+    assert.throws(
+      () => runRadarSupabaseVersionProbe(missingRuntime, {
+        spawn() { missingRuntimeLaunches += 1; },
+      }),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "CLI_RUNTIME_PATH_INVALID",
+    );
+    assert.equal(missingRuntimeLaunches, 0);
+
+    let extraPathLaunches = 0;
+    const extraPath = {
+      ...blueprint,
+      env: { ...blueprint.env, PATH: `${blueprint.env.PATH}${delimiter}/usr/bin` },
+    };
+    assert.throws(
+      () => runRadarSupabaseVersionProbe(extraPath, {
+        spawn() { extraPathLaunches += 1; },
+      }),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "CLI_RUNTIME_PATH_INVALID",
+    );
+    assert.equal(extraPathLaunches, 0);
+
+    assert.throws(
+      () => runRadarSupabaseVersionProbe(blueprint, {
+        spawn() {
+          return { status: 0, stdout: Buffer.from("2.109.0\n"), stderr: Buffer.alloc(0) };
+        },
+      }),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "SUPABASE_VERSION_MISMATCH",
+    );
   } finally {
     cleanupRadarCliWorkspace(workspace);
   }

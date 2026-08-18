@@ -17,7 +17,7 @@ import {
   realpathSync,
   rmSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
+import { delimiter, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -39,6 +39,7 @@ const FUNCTION_ROOT = "supabase/functions/radar-websearch-task";
 const FUNCTION_ENTRY = `${FUNCTION_ROOT}/index.ts`;
 const TEMP_PREFIX = "/private/tmp/kinodreieck-radar-b-local-";
 const EXPECTED_SUPABASE_VERSION = "2.109.1";
+const NODE_RUNTIME_DIRECTORY = resolve(dirname(process.execPath));
 
 const FIXED_RELEASE_PATHS = Object.freeze([
   "package.json",
@@ -364,13 +365,16 @@ export function buildRadarSupabaseCliEnvironment(workspace, { cliDirectory } = {
     stop("CLI_DIRECTORY_INVALID", "Supabase-CLI-Verzeichnis ist nicht eng gebunden.");
   }
   const cliDir = resolve(rawCliDir);
-  if (cliDir === "/") stop("CLI_DIRECTORY_INVALID", "Supabase-CLI-Verzeichnis ist nicht eng gebunden.");
+  if (cliDir === "/" || cliDir.includes(delimiter)
+      || NODE_RUNTIME_DIRECTORY === "/" || NODE_RUNTIME_DIRECTORY.includes(delimiter)) {
+    stop("CLI_DIRECTORY_INVALID", "Supabase-CLI-Verzeichnis ist nicht eng gebunden.");
+  }
   const env = Object.freeze({
     DO_NOT_TRACK: "1",
     LANG: "C",
     LC_ALL: "C",
     NO_COLOR: "1",
-    PATH: cliDir,
+    PATH: [cliDir, NODE_RUNTIME_DIRECTORY].join(delimiter),
     SUPABASE_HOME: valid.supabaseHome,
     SUPABASE_NO_KEYRING: "1",
     SUPABASE_TELEMETRY_DISABLED: "1",
@@ -394,6 +398,15 @@ export function validateRadarSupabaseCliEnvironment(env, workspace) {
   if (env.SUPABASE_TELEMETRY_DISABLED !== "1" || env.DO_NOT_TRACK !== "1"
       || env.SUPABASE_NO_KEYRING !== "1") {
     stop("CLI_TELEMETRY_GUARD_MISSING", "CLI-Telemetrie-/Keyring-Zaun fehlt.");
+  }
+  const readPath = String(env.PATH || "").split(delimiter);
+  if (readPath.length !== 2
+      || readPath.some((path) => !isAbsolute(path) || resolve(path) !== path || path === "/")
+      || readPath[1] !== NODE_RUNTIME_DIRECTORY) {
+    stop(
+      "CLI_RUNTIME_PATH_INVALID",
+      "CLI-Lesepfad muss genau CLI-Verzeichnis und laufende Node-Runtime enthalten.",
+    );
   }
   const expected = {
     SUPABASE_HOME: valid.supabaseHome,
@@ -446,6 +459,9 @@ export function runRadarSupabaseVersionProbe(blueprint, { spawn = spawnSync } = 
     tmp: blueprint.env.TMPDIR,
   };
   validateRadarSupabaseCliEnvironment(blueprint.env, workspace);
+  if (dirname(resolve(blueprint.executable)) !== blueprint.env.PATH.split(delimiter)[0]) {
+    stop("CLI_EXECUTABLE_PATH_MISMATCH", "CLI-Executable liegt nicht im engen CLI-Lesepfad.");
+  }
   const result = spawn(blueprint.executable, blueprint.argv, {
     cwd: blueprint.cwd,
     env: blueprint.env,
