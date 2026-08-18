@@ -56,6 +56,7 @@ const expectedReceipts = Object.freeze({
   "package-b-restore": { status: "DISPOSABLE_RESTORE_VERIFIED" },
   "package-b-migrations": { status: "MIGRATIONS_APPLIED" },
   "package-b-function": { status: "FUNCTION_DEPLOYED" },
+  "package-b-provider-secret-write": { status: "PROVIDER_SECRET_CONFIGURED" },
   "package-b-secret-flags": { status: "SECRET_FLAGS_CONFIGURED" },
   "package-b-live-request": { status: "LIVE_REQUEST_COMPLETE" },
   "package-b-postflight": { status: "POSTFLIGHT_COMPLETE" },
@@ -164,12 +165,13 @@ await check("Effektmodus stoppt ohne exakten Startmarker vor Executor und Creden
   const exactErr = [];
   let contractLoads = 0;
   const exactCode = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+    executeBlueprint: null,
     loadE17AContract() { contractLoads += 1; },
     ausgabe() {},
     fehlerAusgabe: (line) => exactErr.push(line),
   });
   assert.equal(exactCode, 75);
-  assert.deepEqual(exactErr, ["PROCESS_BLUEPRINT_EXECUTOR_REQUIRED"]);
+  assert.deepEqual(exactErr, ["PROCESS_BLUEPRINT_EXECUTOR_INVALID"]);
   assert.equal(contractLoads, 0);
 });
 
@@ -223,6 +225,7 @@ await check("Provider-Key bleibt bei PRESENT unangetastet und folgt bei MISSING 
   const keyIndex = missing.calls.indexOf("credential-anthropic-api-key");
   const writeIndex = missing.calls.indexOf("package-b-provider-secret-write");
   assert.ok(remoteIndex >= 0 && remoteIndex < keyIndex && keyIndex < writeIndex);
+  assert.ok(missing.calls.indexOf("package-b-function") < writeIndex);
   assert.equal(result.providerSecretAction, "written-after-remote-missing");
   assert.doesNotMatch(JSON.stringify(result), /synthetic-.*-secret/);
 });

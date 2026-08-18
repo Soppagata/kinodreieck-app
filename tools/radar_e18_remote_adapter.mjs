@@ -2,10 +2,10 @@
 /* E18-Remoteadapter: commitfaehige, effektinjizierte Verbindung zwischen
    E17A-Reparatur-One-Shot und Radar-Websearch-Paket B.
 
-   Das Modul startet selbst keine Credential-, Netzwerk-, DB-, Function- oder
-   Provideroperation. Jeder moegliche Effekt passiert ausschliesslich hinter
-   einem validierten Blueprint und einem injizierten Executor. Der direkte
-   Dry-Run ist effektfrei; ein Effektlauf braucht den expliziten Startmarker.
+   Jeder moegliche Effekt passiert ausschliesslich hinter einem validierten,
+   commitgebundenen Prozessblueprint. Der direkte Dry-Run ist effektfrei; ein
+   Effektlauf braucht den expliziten Startmarker und nutzt ohne Testinjektion
+   den engen Default-Executor.
 */
 
 import { isDeepStrictEqual } from "node:util";
@@ -22,6 +22,12 @@ import {
   SUPABASE_INFRA_KEYCHAIN,
   createRadarRemotePreflightOnce,
 } from "./radar_websearch_remote_start.mjs";
+import {
+  RadarE18ProcessStop,
+  createRadarE18DefaultExecutor,
+  createRadarE18ProcessContract,
+  validateRadarE18ProcessContract,
+} from "./radar_e18_process_executor.mjs";
 
 export const RADAR_E18_PROJECT_REF = "bscjgwcntapobyxsiyce";
 export const RADAR_E18_MIGRATIONS = Object.freeze([
@@ -120,6 +126,7 @@ const PACKAGE_B_RECEIPTS = Object.freeze({
   "package-b-restore": "DISPOSABLE_RESTORE_VERIFIED",
   "package-b-migrations": "MIGRATIONS_APPLIED",
   "package-b-function": "FUNCTION_DEPLOYED",
+  "package-b-provider-secret-write": "PROVIDER_SECRET_CONFIGURED",
   "package-b-secret-flags": "SECRET_FLAGS_CONFIGURED",
   "package-b-live-request": "LIVE_REQUEST_COMPLETE",
   "package-b-postflight": "POSTFLIGHT_COMPLETE",
@@ -153,12 +160,14 @@ function plainObject(value) {
 }
 
 function makeBlueprint([id, operation, stage, target]) {
+  const targetCopy = deepFreeze({ ...target });
   return deepFreeze({
     id,
     operation,
     stage,
     attempts: BLUEPRINT_ATTEMPTS,
-    target: { ...target },
+    target: targetCopy,
+    process: createRadarE18ProcessContract(id, targetCopy),
   });
 }
 
@@ -176,6 +185,14 @@ function validateBlueprintSet(blueprints) {
   for (const blueprint of blueprints) {
     if (!plainObject(blueprint) || blueprint.attempts !== 1 || !plainObject(blueprint.target)) {
       stop("BLUEPRINT_INVALID", "E18-Blueprint ist formfremd oder erlaubt Wiederholung.");
+    }
+    try {
+      validateRadarE18ProcessContract(blueprint);
+    } catch (error) {
+      if (error instanceof RadarE18ProcessStop) {
+        stop(error.code, "E18-Prozessblueprint ist nicht exakt.");
+      }
+      throw error;
     }
     const target = blueprint.target;
     if (Object.hasOwn(target, "projectRef") && target.projectRef !== RADAR_E18_PROJECT_REF) {
@@ -225,9 +242,12 @@ function requireAuthorization(marker) {
   return marker;
 }
 
-function requireExecutor(executeBlueprint) {
+function requireExecutor(executeBlueprint, defaultExecutorOptions) {
+  if (executeBlueprint === undefined) {
+    return createRadarE18DefaultExecutor(defaultExecutorOptions);
+  }
   if (typeof executeBlueprint !== "function") {
-    stop("PROCESS_BLUEPRINT_EXECUTOR_REQUIRED", "E18-Effektmodus braucht einen injizierten Executor.");
+    stop("PROCESS_BLUEPRINT_EXECUTOR_INVALID", "E18-Executor ist nicht aufrufbar.");
   }
   return executeBlueprint;
 }
@@ -259,6 +279,9 @@ function normalizeFailure(error, phase) {
   if (error instanceof RadarE17ARepairStop || error instanceof RadarRemoteStartStop) {
     return new RadarE18AdapterStop(error.code, "Untervertrag stoppte fail-closed.");
   }
+  if (error instanceof RadarE18ProcessStop) {
+    return new RadarE18AdapterStop(error.code, "Prozessvertrag stoppte fail-closed.");
+  }
   return new RadarE18AdapterStop(
     `STOP_${phase.toUpperCase().replaceAll("-", "_")}`,
     `E18 stoppte in ${phase}; keine automatische Wiederholung.`,
@@ -269,13 +292,14 @@ export function createRadarE18CommittedAdapter({
   authorization,
   blueprints = createRadarE18ProcessBlueprints(),
   executeBlueprint,
+  defaultExecutorOptions,
   createE17AOnce = createRadarE17ARepairOnce,
   loadE17AContract = loadRadarE17ARepairContract,
   createPackageBPreflightOnce = createRadarRemotePreflightOnce,
 } = {}) {
   requireAuthorization(authorization);
   const blueprintList = validateBlueprintSet(blueprints);
-  const executor = requireExecutor(executeBlueprint);
+  const executor = requireExecutor(executeBlueprint, defaultExecutorOptions);
   const e17aFactory = requireFactory("E17A", createE17AOnce);
   const contractLoader = requireFactory("E17A-Contract", loadE17AContract);
   const packageBFactory = requireFactory("Paket-B-Preflight", createPackageBPreflightOnce);
@@ -304,6 +328,7 @@ export function createRadarE18CommittedAdapter({
     let stage = "e17a";
     let phase = "e17a-local-gate";
     let packageBCleanupNeeded = false;
+    let providerSecretPending = false;
 
     const invoke = async (id, input = {}) => {
       phase = id;
@@ -314,6 +339,12 @@ export function createRadarE18CommittedAdapter({
         trace.push(id);
         return result;
       } catch (error) {
+        if (error instanceof RadarE18ProcessStop) {
+          throw new RadarRemoteStartStop(error.code, "Prozessvertrag stoppte fail-closed.");
+        }
+        if (error instanceof RadarRemoteStartStop || error instanceof RadarE17ARepairStop) {
+          throw error;
+        }
         throw normalizeFailure(error, id);
       }
     };
@@ -399,9 +430,8 @@ export function createRadarE18CommittedAdapter({
           if (anthropicApiKey !== credentials.anthropicApiKey) {
             stop("RUNTIME_SECRET_CONTEXT_MISMATCH", "Providerwrite verlor den Secret-Kontext.");
           }
-          const result = await invoke("package-b-provider-secret-write", { secretContext });
-          credentials.anthropicApiKey = null;
-          return result;
+          providerSecretPending = true;
+          return Object.freeze({ status: "PROVIDER_SECRET_DEFERRED_UNTIL_BACKUP" });
         },
       });
       const preflightResult = await packageBPreflight();
@@ -415,6 +445,21 @@ export function createRadarE18CommittedAdapter({
         "package-b-restore",
         "package-b-migrations",
         "package-b-function",
+      ]) {
+        validatePackageBReceipt(id, await invoke(id, {
+          preflight: preflightResult,
+          secretContext,
+        }));
+      }
+      if (providerSecretPending) {
+        validatePackageBReceipt(
+          "package-b-provider-secret-write",
+          await invoke("package-b-provider-secret-write", { preflight: preflightResult, secretContext }),
+        );
+        providerSecretPending = false;
+        credentials.anthropicApiKey = null;
+      }
+      for (const id of [
         "package-b-secret-flags",
         "package-b-live-request",
         "package-b-postflight",
@@ -466,6 +511,7 @@ export async function main(argv = process.argv.slice(2), {
   ausgabe = console.log,
   fehlerAusgabe = console.error,
   executeBlueprint,
+  defaultExecutorOptions,
   createE17AOnce,
   loadE17AContract,
   createPackageBPreflightOnce,
@@ -491,6 +537,7 @@ export async function main(argv = process.argv.slice(2), {
     const run = createRadarE18CommittedAdapter({
       authorization: createRadarE18AuthorizationMarker(argv[1]),
       executeBlueprint,
+      defaultExecutorOptions,
       ...(createE17AOnce ? { createE17AOnce } : {}),
       ...(loadE17AContract ? { loadE17AContract } : {}),
       ...(createPackageBPreflightOnce ? { createPackageBPreflightOnce } : {}),
