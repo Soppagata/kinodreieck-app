@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { quelleBadges, QUELLEN_KLASSEN } from "./src/lib/quellen.js";
 import {
   sortiereStreamingTitel, streamingAnfangsbuchstabe,
-  streamingJahrzehnte, streamingJahrzehntLabel, streamingGenreFilterSichtbar,
+  streamingJahrzehnte, streamingJahrzehntLabel, streamingJahrzehntBereich, streamingGenreFilterSichtbar,
   passtInJahrzehntMitKulanz,
 } from "./src/lib/streamingSort.js";
 
@@ -96,7 +96,7 @@ check("Beobachten ist ein eigener Serien-Pin im ausgeklappten Streaming-Eintrag"
   assert.match(streaming, /Unabhängig davon, ob du die Serie schon gesehen hast/);
 });
 
-check("Streaming sortiert ohne Relevanzwerte und nutzt tolerante Schnellregler", () => {
+check("Streaming sortiert ohne Relevanzwerte und nutzt eindeutige Schnellregler", () => {
   const titel = [
     { titel: "Zulu", jahr: 2001, typ: "movie", dienste: [] },
     { titel: "Alien", jahr: 1979, typ: "movie", dienste: ["Netflix"] },
@@ -110,31 +110,44 @@ check("Streaming sortiert ohne Relevanzwerte und nutzt tolerante Schnellregler",
   assert.deepEqual(streamingJahrzehnte([{ jahr: 1987 }, { jahr: 2012 }]), [1980, 1990, 2000, 2010]);
   assert.equal(streamingJahrzehntLabel(1920), "20er");
   assert.equal(streamingJahrzehntLabel(2000), "00er");
+  assert.deepEqual(streamingJahrzehntBereich(1950), { von: 1948, bis: 1962, label: "1948–1962" });
   assert.equal(streamingGenreFilterSichtbar([
     { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: [] },
   ]), false);
   assert.equal(streamingGenreFilterSichtbar([
     { genres: ["Crime"] }, { genres: ["Drama"] }, { genres: ["Drama"] },
   ]), true);
-  assert.equal(passtInJahrzehntMitKulanz(1980, 1990), true);
-  assert.equal(passtInJahrzehntMitKulanz(2000, 1990), true);
-  assert.equal(passtInJahrzehntMitKulanz(1979, 1990), false);
-  assert.equal(passtInJahrzehntMitKulanz(null, 1990), false);
+  assert.equal(passtInJahrzehntMitKulanz(1948, 1950), true);
+  assert.equal(passtInJahrzehntMitKulanz(1962, 1950), true);
+  assert.equal(passtInJahrzehntMitKulanz("1950", "1950"), true);
+  assert.equal(passtInJahrzehntMitKulanz(1947, 1950), false);
+  assert.equal(passtInJahrzehntMitKulanz(1963, 1950), false);
+  assert.equal(passtInJahrzehntMitKulanz(null, 1950), false);
+  assert.equal(passtInJahrzehntMitKulanz("kein Jahr", 1950), false);
+  assert.equal(passtInJahrzehntMitKulanz(Number.NaN, 1950), false);
 
   const streaming = lies("./src/tabs/StreamingTab.jsx");
   assert.doesNotMatch(streaming, /Sortierung: Passung|User-Score|Könnte dir gefallen|passungStufe|lesbaresPassungsSignal/);
-  assert.match(streaming, /data-tour="entdecken-sortierung"/);
+  assert.match(streaming, /"data-tour": "entdecken-sortierung"/);
+  assert.doesNotMatch(streaming, /Absteigend sortiert|aufsteigend wechseln|↑|↓/);
+  assert.match(streaming, /function SortierFilter[\s\S]*Sortieren nach[\s\S]*Richtung[\s\S]*Aufsteigend[\s\S]*Absteigend/);
+  assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name="Mein Programm"/);
+  assert.match(streaming, /kd-streamfilter-panel[\s\S]*SortierFilter name="Entdecken"/);
   assert.match(streaming, /className="kd-nur-desktop"[\s\S]*Merkliste \(\{merkliste\.length\}\) exportieren/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*nurBewertet/);
   assert.match(streaming, /Gesehen \(\{statusAnzahlenE\.gesehen\}\)/);
   assert.match(streaming, /Beobachtet \(\{statusAnzahlenE\.beobachtet\}\)/);
   assert.match(streaming, /type="range"[\s\S]*Anfangsbuchstaben filtern/);
-  assert.match(streaming, /Jahrzehnt · ±10 Jahre/);
+  assert.match(streaming, /Jahrzehntbereich/);
+  assert.match(streaming, /bereich\?\.label \|\| "Alle"/);
+  assert.match(streaming, /aria-valuetext=\{bereich \? `\$\{Number\(wert\)\}er: \$\{bereich\.von\} bis \$\{bereich\.bis\}` : "Alle Jahrzehnte"\}/);
+  assert.match(streaming, /Filter &amp; Sortierung/);
   assert.match(streaming, /name="Mein Programm"[\s\S]*optionen=\{dekadenP\}/);
   assert.match(streaming, /kd-kompakt kd-streaming-werkzeuge[\s\S]*kd-streamfilter-knopf/);
   assert.match(streaming, /genreFilterSichtbarE && <div className="kd-streamfilter-gruppe kd-streamfilter-genre"/);
   const css = lies("./src/index.css");
-  assert.match(css, /\.kd-streamfilter-abc-kopf \{[^}]*grid-template-columns:minmax\(0,1fr\) 64px 48px/);
+  assert.match(css, /\.kd-streamfilter-abc-kopf \{[^}]*grid-template-columns:minmax\(0,1fr\) 104px 48px/);
+  assert.match(css, /\.kd-streamfilter-sortierung select \{[^}]*min-height:44px/);
   assert.match(streaming, /className="kd-streamfilter-knopf"/);
 });
 

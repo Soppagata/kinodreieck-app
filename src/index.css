@@ -538,11 +538,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-frage { margin:10px 0 2px 40px; padding:10px; border:1px solid var(--wolfram,#e3a63b); border-radius:6px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-entdecken-frage>div { display:flex; flex-wrap:wrap; gap:7px; margin-top:8px; }
 .kd-streamfilter-knopf { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
-.kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { min-width:0; }
 .kd-streamfilter-panel { display:grid; grid-template-columns:minmax(190px,280px) minmax(0,1fr); gap:10px 14px;
   align-items:end; box-sizing:border-box; margin:0 0 10px; padding:11px 12px; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 52%,transparent);
   border-radius:7px; background:color-mix(in srgb,var(--saal-hoch,#211e26) 88%,transparent); }
 .kd-streamfilter-plattform,.kd-streamfilter-gruppe { display:grid; gap:5px; min-width:0; }
+.kd-streamfilter-sortierung { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; min-width:0; }
+.kd-streamfilter-sortierung>label { display:grid; gap:5px; min-width:0; }
+.kd-streamfilter-sortierung>label>span { color:var(--rauch,#948fa0);
+  font:700 10px/1.2 'Space Mono',monospace; letter-spacing:.07em; text-transform:uppercase; }
+.kd-streamfilter-sortierung select { box-sizing:border-box; width:100%; min-width:0; height:44px; min-height:44px; padding:8px 32px 8px 10px;
+  border:1px solid var(--rauch,#948fa0); border-radius:5px; background:var(--saal,#17151a); color:var(--leinwand,#ece8df);
+  font:600 15px/1.2 'Barlow Condensed',sans-serif; }
 .kd-streamfilter-genre { grid-column:1 / -1; }
 .kd-streamfilter-plattform>span,.kd-streamfilter-gruppe>span,.kd-streamfilter-abc-kopf>span { color:var(--rauch,#948fa0);
   font:700 10px/1.2 'Space Mono',monospace; letter-spacing:.07em; text-transform:uppercase; }
@@ -553,8 +559,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-streamfilter-abc { box-sizing:border-box; width:100%; min-width:0; margin:0; padding:8px 12px 7px;
   border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 42%,transparent); border-radius:7px;
   background:color-mix(in srgb,var(--saal-hoch,#211e26) 76%,transparent); }
-.kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) 64px 48px; align-items:center; gap:9px; margin-bottom:3px; }
-.kd-streamfilter-abc-kopf strong { display:grid; place-items:center; box-sizing:border-box; width:64px; min-width:0; height:24px; padding:0 5px; border-radius:4px;
+.kd-streamfilter-abc-kopf { display:grid; grid-template-columns:minmax(0,1fr) 104px 48px; align-items:center; gap:9px; margin-bottom:3px; }
+.kd-streamfilter-abc-kopf strong { display:grid; place-items:center; box-sizing:border-box; width:104px; min-width:0; height:24px; padding:0 5px; border-radius:4px;
   background:var(--wolfram,#e3a63b); color:var(--tinte,#17151a); font:800 13px/1 'Space Mono',monospace; }
 .kd-streamfilter-abc-kopf button { box-sizing:border-box; width:48px; min-height:24px; padding:2px 5px; border:1px solid var(--rauch,#948fa0); border-radius:4px;
   background:transparent; color:var(--leinwand,#ece8df); cursor:pointer; font:700 10px/1 'Space Mono',monospace; text-transform:uppercase; }
@@ -608,12 +614,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-film-batch-dialog { padding:14px; }
   .kd-film-batch-aktionen { grid-template-columns:1fr; }
   .kd-titelliste-ausgabe { width:100%; }
-  .kd-streaming-werkzeuge { display:grid !important; grid-template-columns:minmax(0,1fr) auto; align-items:stretch !important; }
-  .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] { display:flex !important; width:100%; min-width:0; }
-  .kd-streaming-werkzeuge>[data-tour="entdecken-sortierung"] select { flex:1 1 auto; }
+  .kd-streaming-werkzeuge { display:grid !important; grid-template-columns:auto minmax(0,1fr); align-items:stretch !important; }
   .kd-streaming-werkzeuge>.kd-streamfilter-knopf { margin-left:0; white-space:nowrap; }
   .kd-streamfilter-knopf { min-height:44px; margin-left:auto; padding:7px 12px !important; }
   .kd-streamfilter-panel { grid-template-columns:minmax(0,1fr); gap:11px; padding:10px; }
+  .kd-streamfilter-sortierung { grid-template-columns:minmax(0,1fr); }
   .kd-streamfilter-panel .kd-chiprow { display:flex; }
   .kd-streamfilter-plattform select { min-height:44px; }
   .kd-streamfilter-regler { grid-template-columns:minmax(0,1fr); gap:8px; }

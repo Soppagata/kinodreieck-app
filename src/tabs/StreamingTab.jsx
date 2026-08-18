@@ -15,7 +15,7 @@ import {
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import {
   sortiereStreamingTitel, STREAMING_ALPHABET, streamingAnfangsbuchstabe,
-  streamingJahrzehnte, streamingJahrzehntLabel, streamingGenreFilterSichtbar,
+  streamingJahrzehnte, streamingJahrzehntLabel, streamingJahrzehntBereich, streamingGenreFilterSichtbar,
   passtInJahrzehntMitKulanz,
 } from "../lib/streamingSort.js";
 import { mitBestaetigterStringId } from "../controllers/confirmedIdController.js";
@@ -72,6 +72,31 @@ function PlattformFilter({ wert, optionen, onChange, name }) {
   );
 }
 
+function SortierFilter({ feld, richtung, onFeld, onRichtung, name, entdecken = false }) {
+  return (
+    <div className="kd-streamfilter-sortierung" {...(entdecken ? { "data-tour": "entdecken-sortierung" } : {})}>
+      <label>
+        <span>Sortieren nach</span>
+        <select value={feld} onChange={(event) => onFeld(event.target.value)}
+          aria-label={`${name}: Sortierfeld`}>
+          <option value="titel">Titel</option>
+          <option value="jahr">Jahr</option>
+          {entdecken && <option value="art">Art</option>}
+          <option value="anbieter">Anbieter</option>
+        </select>
+      </label>
+      <label>
+        <span>Richtung</span>
+        <select value={richtung} onChange={(event) => onRichtung(event.target.value)}
+          aria-label={`${name}: Sortierrichtung`}>
+          <option value="auf">Aufsteigend</option>
+          <option value="ab">Absteigend</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function AlphabetFilter({ wert, onChange, name }) {
   const index = wert ? STREAMING_ALPHABET.indexOf(wert) + 1 : 0;
   return (
@@ -101,11 +126,12 @@ function AlphabetFilter({ wert, onChange, name }) {
 function JahrzehntFilter({ wert, optionen, onChange, name }) {
   if (!optionen.length) return null;
   const index = wert == null ? 0 : Math.max(0, optionen.indexOf(wert) + 1);
+  const bereich = streamingJahrzehntBereich(wert);
   return (
     <div className="kd-streamfilter-abc kd-streamfilter-dekade" data-aktiv={wert != null ? "1" : "0"}>
       <div className="kd-streamfilter-abc-kopf">
-        <span>Jahrzehnt · ±10 Jahre</span>
-        <strong aria-live="polite">{wert == null ? "Alle" : streamingJahrzehntLabel(wert)}</strong>
+        <span>Jahrzehntbereich</span>
+        <strong aria-live="polite">{bereich?.label || "Alle"}</strong>
         <button type="button" onClick={() => onChange(null)} disabled={wert == null}>Alle</button>
       </div>
       <input type="range" min="0" max={optionen.length} step="1" value={index}
@@ -114,7 +140,7 @@ function JahrzehntFilter({ wert, optionen, onChange, name }) {
           onChange(naechsterIndex === 0 ? null : optionen[naechsterIndex - 1]);
         }}
         aria-label={`${name}: Jahrzehnt filtern`}
-        aria-valuetext={wert == null ? "Alle Jahrzehnte" : `${streamingJahrzehntLabel(wert)}, mit zehn Jahren Kulanz davor und danach`} />
+        aria-valuetext={bereich ? `${Number(wert)}er: ${bereich.von} bis ${bereich.bis}` : "Alle Jahrzehnte"} />
       <div className="kd-streamfilter-dekade-skala" aria-hidden="true"
         style={{ gridTemplateColumns: `repeat(${optionen.length + 1}, minmax(0, 1fr))` }}>
         <span className={wert == null ? "aktiv alle" : "alle"}>•</span>
@@ -518,27 +544,15 @@ export function StreamingTab({
         <>
           <div className="kd-kompakt" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
             <input value={suche} onChange={(e) => { setFokusOverride(null); setSuche(e.target.value); }} placeholder="Titel suchen …" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
-            <span style={{ display: "inline-flex" }}>
-              <select value={sortP} onChange={(e) => setSortP(e.target.value)} aria-label="Mein Programm sortieren"
-                style={{ ...inputStyle, width: "auto" }}>
-                <option value="titel">Titel</option>
-                <option value="jahr">Jahr</option>
-                <option value="anbieter">Anbieter</option>
-              </select>
-              <button type="button" style={{ ...btnStyle(false), minWidth: 42, padding: "7px 10px" }}
-                onClick={() => setSortRichtungP((r) => r === "ab" ? "auf" : "ab")}
-                aria-label={sortRichtungP === "ab" ? "Absteigend sortiert; aufsteigend wechseln" : "Aufsteigend sortiert; absteigend wechseln"}
-                title={sortRichtungP === "ab" ? "Absteigend" : "Aufsteigend"}>
-                {sortRichtungP === "ab" ? "↓" : "↑"}
-              </button>
-            </span>
-            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterP ? ` (${aktiveFilterP})` : ""}
+              {streamFilterOffen ? "▾" : "▸"} Filter &amp; Sortierung{aktiveFilterP ? ` (${aktiveFilterP})` : ""}
             </button>
           </div>
           {streamFilterOffen && (
             <div className="kd-streamfilter-panel">
+              <SortierFilter name="Mein Programm" feld={sortP} richtung={sortRichtungP}
+                onFeld={setSortP} onRichtung={setSortRichtungP} />
               <PlattformFilter name="Mein Programm" wert={plattformP} optionen={plattformOptionenP}
                 onChange={(wert) => aendereFilter(setPlattformP, wert)} />
               <div className="kd-streamfilter-gruppe">
@@ -632,26 +646,9 @@ export function StreamingTab({
             </div>
           )}
           <div className="kd-kompakt kd-streaming-werkzeuge" style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-            {/* data-tour auf dem Wrapper, NICHT dem <select>: native Form-Controls
-                schlucken den box-shadow-Rahmen, dann käme der Hinweis ohne Rahmen. */}
-            <span data-tour="entdecken-sortierung" style={{ display: "inline-flex" }}>
-              <select value={sortE} onChange={(e) => setSortE(e.target.value)} aria-label="Entdecken sortieren"
-                style={{ ...inputStyle, width: "auto" }}>
-                <option value="titel">Titel</option>
-                <option value="jahr">Jahr</option>
-                <option value="art">Art</option>
-                <option value="anbieter">Anbieter</option>
-              </select>
-              <button type="button" style={{ ...btnStyle(false), minWidth: 42, padding: "7px 10px" }}
-                onClick={() => setSortRichtungE((r) => r === "ab" ? "auf" : "ab")}
-                aria-label={sortRichtungE === "ab" ? "Absteigend sortiert; aufsteigend wechseln" : "Aufsteigend sortiert; absteigend wechseln"}
-                title={sortRichtungE === "ab" ? "Absteigend" : "Aufsteigend"}>
-                {sortRichtungE === "ab" ? "↓" : "↑"}
-              </button>
-            </span>
-            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter einklappen" : "Filter ausklappen"}
+            <button className="kd-streamfilter-knopf" onClick={toggleStreamFilter} title={streamFilterOffen ? "Filter und Sortierung einklappen" : "Filter und Sortierung ausklappen"}
               style={{ ...btnStyle(false), fontSize: 12, padding: "5px 10px" }}>
-              {streamFilterOffen ? "▾" : "▸"} Filter{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
+              {streamFilterOffen ? "▾" : "▸"} Filter &amp; Sortierung{aktiveFilterE ? ` (${aktiveFilterE})` : ""}
             </button>
             <button className="kd-nur-desktop" style={{ ...btnStyle(false), fontSize: 13, padding: "7px 12px" }}
               onClick={() => download("merkliste.json", { exportiert_am: new Date().toISOString(), eintraege: merkliste })}
@@ -661,6 +658,9 @@ export function StreamingTab({
           </div>
           {streamFilterOffen && (
             <div className="kd-streamfilter-panel">
+              {/* data-tour umfasst Feld und Richtung gemeinsam; native Controls bleiben selbst bedienbar. */}
+              <SortierFilter name="Entdecken" feld={sortE} richtung={sortRichtungE}
+                onFeld={setSortE} onRichtung={setSortRichtungE} entdecken />
               <PlattformFilter name="Entdecken" wert={plattformE} optionen={plattformOptionenE}
                 onChange={(wert) => aendereFilter(setPlattformE, wert)} />
               <div className="kd-streamfilter-gruppe">

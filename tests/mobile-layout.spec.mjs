@@ -2117,8 +2117,8 @@ test("Suche und Wochenplan öffnen den gewählten Streaming-Eintrag eindeutig", 
   await expect(page.locator('[data-streaming-suchtreffer="entdecken:43001"]')).toBeFocused();
 });
 
-test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten eindeutig ein", async ({ page }) => {
-  await page.setViewportSize({ width: 393, height: 852 });
+test("Streaming-Sortierung und Jahrzehntbereich stimmen mobil und am Desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);
   await page.addInitScript(async () => {
     const filme = [
@@ -2185,6 +2185,25 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   const filterKnopf = page.locator(".kd-streamfilter-knopf");
   await expect(filterKnopf).toBeVisible();
   await filterKnopf.click();
+  const sortierfeldP = page.getByRole("combobox", { name: "Mein Programm: Sortierfeld" });
+  const sortierrichtungP = page.getByRole("combobox", { name: "Mein Programm: Sortierrichtung" });
+  await expect(sortierfeldP).toBeVisible();
+  await expect(sortierrichtungP).toHaveValue("auf");
+  await sortierrichtungP.focus();
+  await sortierrichtungP.pressSequentially("Ab");
+  await expect(sortierrichtungP).toHaveValue("ab");
+  await expect(programmKarten.first()).toContainText("Zebra Zone");
+  const mobileTouchziele = await page.locator(".kd-streamfilter-knopf, .kd-streamfilter-sortierung select").evaluateAll((elemente) => (
+    elemente.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { breite: rect.width, hoehe: rect.height };
+    })
+  ));
+  for (const groesse of mobileTouchziele) {
+    expect(groesse.breite).toBeGreaterThanOrEqual(44);
+    expect(groesse.hoehe).toBeGreaterThanOrEqual(44);
+  }
+  await expect(page.locator('button[aria-label*="sortiert"]')).toHaveCount(0);
   const plattformP = page.getByRole("combobox", { name: "Mein Programm: Plattform filtern" });
   await plattformP.selectOption("Crunchyroll");
   await expect(programmKarten).toHaveCount(2);
@@ -2192,8 +2211,10 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   const dekadeP = page.getByRole("slider", { name: "Mein Programm: Jahrzehnt filtern" });
   await expect(dekadeP).toBeVisible();
   await dekadeP.fill("2");
-  await expect(programmKarten).toHaveCount(2);
-  await expect(page.locator('[data-streaming-suchtreffer="programm:alpha-rated"]')).toBeVisible();
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").first()).toHaveText("1988–2002");
+  await expect(dekadeP).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
+  await expect(programmKarten).toHaveCount(1);
+  await expect(page.locator('[data-streaming-suchtreffer="programm:bravo-unrated"]')).toBeVisible();
   await dekadeP.fill("0");
   await page.getByRole("button", { name: "Bewertet", exact: true }).click();
   await expect(programmKarten).toHaveCount(2);
@@ -2219,11 +2240,15 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   }
   const werkzeuge = page.locator(".kd-streaming-werkzeuge");
   await expect(werkzeuge.locator(".kd-streamfilter-knopf")).toBeVisible();
-  await expect.poll(() => werkzeuge.evaluate((element) => {
-    const sortierung = element.querySelector('[data-tour="entdecken-sortierung"]')?.getBoundingClientRect();
-    const filter = element.querySelector(".kd-streamfilter-knopf")?.getBoundingClientRect();
-    return !!sortierung && !!filter && Math.abs(sortierung.top - filter.top) <= 2 && filter.left >= sortierung.right;
-  })).toBe(true);
+  const sortierbereichE = page.locator('[data-tour="entdecken-sortierung"]');
+  await expect(sortierbereichE).toBeVisible();
+  const sortierfeldE = page.getByRole("combobox", { name: "Entdecken: Sortierfeld" });
+  const sortierrichtungE = page.getByRole("combobox", { name: "Entdecken: Sortierrichtung" });
+  await expect(sortierfeldE).toBeVisible();
+  await sortierrichtungE.focus();
+  await sortierrichtungE.pressSequentially("Ab");
+  await expect(sortierrichtungE).toHaveValue("ab");
+  await expect(entdeckenKarten.first()).toContainText("Charlie Cloud");
   await expect(page.locator(".kd-streamfilter-genre")).toHaveCount(0);
   const plattformE = page.getByRole("combobox", { name: "Entdecken: Plattform filtern" });
   await plattformE.selectOption("Crunchyroll");
@@ -2250,8 +2275,9 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   expect(reglerKopfGeometrie).toHaveLength(2);
   expect(Math.abs(reglerKopfGeometrie[0].anzeige - reglerKopfGeometrie[1].anzeige)).toBeLessThanOrEqual(0.5);
   expect(Math.abs(reglerKopfGeometrie[0].alle - reglerKopfGeometrie[1].alle)).toBeLessThanOrEqual(0.5);
-  await dekadeE.fill("2");
-  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("00er");
+  await dekadeE.fill("1");
+  await expect(page.locator(".kd-streamfilter-dekade .kd-streamfilter-abc-kopf strong").last()).toHaveText("1988–2002");
+  await expect(dekadeE).toHaveAttribute("aria-valuetext", "1990er: 1988 bis 2002");
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Apollo Road");
   await dekadeE.fill("0");
@@ -2259,6 +2285,12 @@ test("Streamingfilter sind mobil sichtbar und grenzen beide Katalogansichten ein
   await abcE.fill("3");
   await expect(entdeckenKarten).toHaveCount(1);
   await expect(entdeckenKarten).toContainText("Charlie Cloud");
+  await keineDokumentUeberbreite(page);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(sortierbereichE).toBeVisible();
+  await expect(sortierfeldE).toBeVisible();
+  await expect(sortierrichtungE).toBeVisible();
   await keineDokumentUeberbreite(page);
 });
 

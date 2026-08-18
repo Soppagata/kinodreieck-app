@@ -269,12 +269,15 @@ check("Entdecken-Ansicht erreichbar", !!entdeckenKnopf);
 if (entdeckenKnopf) {
   entdeckenKnopf.click(); await warte(600);
   /* Filterleiste ist default zugeklappt -> vor den Chip-Checks aufklappen */
-  const sFilter = [...doc.querySelectorAll("button")].find((b) => /Filter$/.test((b.textContent || "").trim()) && /[▸▾]/.test(b.textContent || ""));
+  const sFilter = doc.querySelector(".kd-streaming-werkzeuge .kd-streamfilter-knopf");
   if (sFilter && /▸/.test(sFilter.textContent)) { sFilter.click(); await warte(300); }
-  const entdeckenSortierung = doc.querySelector('select[aria-label="Entdecken sortieren"]');
+  const entdeckenSortierung = doc.querySelector('select[aria-label="Entdecken: Sortierfeld"]');
+  const entdeckenRichtung = doc.querySelector('select[aria-label="Entdecken: Sortierrichtung"]');
   check("Entdecken sortiert nur nach sichtbaren Metadaten",
     !!entdeckenSortierung
-    && [...entdeckenSortierung.options].map((o) => o.value).join(",") === "titel,jahr,art,anbieter");
+    && entdeckenSortierung.closest(".kd-streamfilter-panel")
+    && [...entdeckenSortierung.options].map((o) => o.value).join(",") === "titel,jahr,art,anbieter"
+    && [...entdeckenRichtung?.options || []].map((o) => o.textContent).join(",") === "Aufsteigend,Absteigend");
   check("Entdecken enthält weder zweite Titelsuche noch Relevanzfilter",
     !entdeckenSortierung?.closest(".kd-kompakt")?.querySelector('input[placeholder="Titel suchen …"]')
     && !knopf(/^Könnte dir gefallen$/i));

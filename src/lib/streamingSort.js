@@ -33,6 +33,14 @@ export function streamingJahrzehntLabel(jahrzehnt) {
   return `${String(Math.abs(nummer) % 100).padStart(2, "0")}er`;
 }
 
+export function streamingJahrzehntBereich(jahrzehnt) {
+  const startjahr = Number(jahrzehnt);
+  if (!Number.isInteger(startjahr)) return null;
+  const von = startjahr - 2;
+  const bis = startjahr + 12;
+  return { von, bis, label: `${von}–${bis}` };
+}
+
 export function streamingGenreFilterSichtbar(titel = []) {
   const genreTitel = titel.filter((eintrag) => Array.isArray(eintrag?.genres)
     && eintrag.genres.some((genre) => String(genre || "").trim()));
@@ -42,10 +50,11 @@ export function streamingGenreFilterSichtbar(titel = []) {
   return genreTitel.length > 2 && genres.size > 1;
 }
 
-export function passtInJahrzehntMitKulanz(jahr, jahrzehnt, kulanz = 10) {
+export function passtInJahrzehntMitKulanz(jahr, jahrzehnt) {
   if (jahrzehnt == null) return true;
+  const bereich = streamingJahrzehntBereich(jahrzehnt);
   const nummer = Number(jahr);
-  return Number.isFinite(nummer) && Math.abs(nummer - Number(jahrzehnt)) <= kulanz;
+  return Number.isInteger(nummer) && !!bereich && nummer >= bereich.von && nummer <= bereich.bis;
 }
 
 export function sortiereStreamingTitel(liste, feld = "titel", richtung = "auf") {
