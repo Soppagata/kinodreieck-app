@@ -589,7 +589,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
       )}
 
       {ansicht !== "mustwatch" && (<>
-      <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
+      {auswahlmodus && <div className="kd-auswahl-werkzeuge" aria-label="Mediathek-Auswahl">
         <button ref={auswahlModusButtonRef} type="button" className="kd-auswahl-modus" style={btnStyle(auswahlmodus)}
           aria-pressed={auswahlmodus} onClick={auswahlmodus ? beendeAuswahl : starteAuswahl}>
           {auswahlmodus ? "Auswahl beenden" : "Auswählen"}
@@ -610,7 +610,7 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
             Sichtbare Auswahl löschen
           </button>
         </>)}
-      </div>
+      </div>}
       {loeschHinweis && <p className="kd-film-batch-vorschaufehler" role="alert">{loeschHinweis}</p>}
       {auswahlmodus && problematischeIds > 0 && (
         <p className="kd-auswahl-idwarnung" role="status">
@@ -726,11 +726,19 @@ export function MediathekTab({ master, nachtragFlach, expandedId, setExpandedId,
               data-eintrag-neu-tab={tab}
               hidden={versteckt} aria-hidden={versteckt || undefined}
               style={{ marginBottom: 16 }}>
-              {hatDreieck(hauptTyp)
-                ? <FilmForm typOptionen={typOptionen} onAdd={addFilm}
-                    onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
-                    prognoseSperrgrund={prognoseSperrgrund} />
-                : <MedienForm typ={hauptTyp} onAdd={addFilm} />}
+              <div className="kd-mediathek-neuaktionen">
+                {hatDreieck(hauptTyp)
+                  ? <FilmForm typOptionen={typOptionen} onAdd={addFilm}
+                      onAddMitPrognose={addFilmMitPrognose} prognoseAktiv={vorbewertungAktiv}
+                      prognoseSperrgrund={prognoseSperrgrund} />
+                  : <MedienForm typ={hauptTyp} onAdd={addFilm} />}
+                {tab === typTab && !auswahlmodus && (
+                  <button ref={auswahlModusButtonRef} type="button" className="kd-auswahl-modus"
+                    style={btnStyle(false)} aria-pressed="false" onClick={starteAuswahl}>
+                    Auswählen
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

@@ -2652,6 +2652,74 @@ test("Desktop behält oberhalb 760 px die Hauptnavigation samt Suche", async ({ 
   await keineDokumentUeberbreite(page);
 });
 
+test("KD-OBS-002/003 hält Mediathek-Aktionen und Must-Watch-Felder bei 320 px kompakt", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "kd-obs-002" }, gespeichertAm: 1_787_000_000_000,
+      filme: [{ id: "mobil", typ: "film", titel: "Mobilfilm", jahr: 2026,
+        bewertung: { wie: 2, was: 2, warum: 2 } }],
+    }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [], gespeichertAm: 1_787_000_000_000 }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Mediathek");
+
+  const hinzufuegen = page.getByRole("button", { name: "+ Eintrag hinzufügen", exact: true });
+  const auswaehlen = page.getByRole("button", { name: "Auswählen", exact: true });
+  await expect(hinzufuegen).toBeVisible();
+  await expect(auswaehlen).toBeVisible();
+  expect(await hinzufuegen.evaluate((knopf) => (
+    knopf.parentElement === knopf.nextElementSibling?.parentElement
+      && knopf.nextElementSibling?.textContent?.trim() === "Auswählen"
+  ))).toBe(true);
+  const [hinzufuegenBox, auswaehlenBox] = await Promise.all([hinzufuegen.boundingBox(), auswaehlen.boundingBox()]);
+  expect(hinzufuegenBox?.height).toBeGreaterThanOrEqual(44);
+  expect(auswaehlenBox?.height).toBeGreaterThanOrEqual(44);
+  expect(auswaehlenBox?.width).toBeLessThan((hinzufuegenBox?.width || 0) * 0.72);
+  expect(Math.abs((hinzufuegenBox?.y || 0) - (auswaehlenBox?.y || 0))).toBeLessThan(2);
+  await keineDokumentUeberbreite(page);
+
+  await hinzufuegen.click();
+  const entwurfTitel = page.getByPlaceholder("Titel *");
+  await entwurfTitel.fill("Mobiler Entwurf bleibt");
+  await page.getByPlaceholder("Jahr *").fill("2026");
+  await page.getByRole("button", { name: "Auswählen", exact: true }).click();
+  await expect(entwurfTitel).toHaveValue("Mobiler Entwurf bleibt");
+  await page.getByRole("button", { name: "Auswahl beenden", exact: true }).click();
+  await expect(entwurfTitel).toBeVisible();
+  await expect(entwurfTitel).toHaveValue("Mobiler Entwurf bleibt");
+  await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+
+  await page.getByRole("button", { name: /^Must-Watch/ }).click();
+  await page.getByRole("button", { name: "+ Für später merken", exact: true }).click();
+  const jahr = page.getByPlaceholder("Jahr (optional)");
+  await expect(jahr).toBeVisible();
+  const placeholderPasst = await jahr.evaluate((feld) => {
+    const stil = getComputedStyle(feld);
+    const messung = document.createElement("canvas").getContext("2d");
+    messung.font = stil.font;
+    const innenbreite = feld.clientWidth - Number.parseFloat(stil.paddingLeft) - Number.parseFloat(stil.paddingRight);
+    return { innenbreite, textbreite: messung.measureText(feld.placeholder).width };
+  });
+  expect(placeholderPasst.innenbreite).toBeGreaterThanOrEqual(placeholderPasst.textbreite + 2);
+  await keineDokumentUeberbreite(page);
+
+  await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+  await page.setViewportSize({ width: 761, height: 768 });
+  await page.getByRole("button", { name: /^Einträge/ }).click();
+  const desktopHinzufuegen = page.getByRole("button", { name: "+ Eintrag hinzufügen", exact: true });
+  const desktopAuswaehlen = page.getByRole("button", { name: "Auswählen", exact: true });
+  await expect(desktopHinzufuegen).toBeVisible();
+  await expect(desktopAuswaehlen).toBeVisible();
+  expect(await desktopHinzufuegen.evaluate((knopf) => knopf.nextElementSibling?.textContent?.trim() === "Auswählen")).toBe(true);
+  const desktopAuswahlBox = await desktopAuswaehlen.boundingBox();
+  expect(desktopAuswahlBox?.width).toBeLessThan(200);
+  await keineDokumentUeberbreite(page);
+});
+
 test("E11-Auswahlmodus bleibt mobil nicht-destruktiv und kopierbar", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);

@@ -32,10 +32,12 @@ function MetaFelder({ jahr, typ, onJahr, onTyp, farbeAufKarte = false }) {
   return (
     <>
       <input value={jahr} onChange={(e) => onJahr(e.target.value)}
+        className="kd-mustwatch-jahr"
         inputMode="numeric" placeholder="Jahr (optional)" aria-label="Jahr (optional)"
-        style={{ ...feldStil, width: 130, minWidth: 110, boxSizing: "border-box" }} />
+        style={{ ...feldStil, width: 150, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }} />
       <select value={typ} onChange={(e) => onTyp(e.target.value)} aria-label="Art"
-        style={{ ...feldStil, width: 150, minWidth: 130, boxSizing: "border-box" }}>
+        className="kd-mustwatch-art"
+        style={{ ...feldStil, width: 150, minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}>
         <option value="">Art offen lassen</option>
         <option value="film">Film</option>
         <option value="serie">Serie</option>
@@ -113,8 +115,8 @@ function MustWatchForm({ onAdd, onDone, kandidaten }) {
     } finally { setSpeichert(false); }
   };
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+    <div className="kd-mustwatch-form" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="kd-mustwatch-form-hauptfelder" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <input placeholder="Titel *" value={titel} onChange={(e) => setTitel(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 180 }} />
         <MetaFelder jahr={jahr} typ={typ} onJahr={setJahr} onTyp={setTyp} />
         <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, color: T.leinwandTief, cursor: "pointer", whiteSpace: "nowrap" }}>

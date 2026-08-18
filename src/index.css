@@ -485,6 +485,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-profil-unklar button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:1px solid var(--gefahr,#d96a5a); border-radius:4px; background:transparent; color:var(--gefahr,#d96a5a); }
 .kd-profil-infogruppe ul { margin:4px 0; padding-left:20px; color:var(--leinwand,#ece8df); font-size:13px; }
 .kd-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.kd-mediathek-neuaktionen { display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; min-width:0; }
+.kd-mediathek-neuaktionen>button { min-height:44px; }
+.kd-mediathek-neuformular { flex:1 0 100%; min-width:0; max-width:100%; box-sizing:border-box; }
+.kd-mustwatch-form { width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
 .kd-auswahl-werkzeuge { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:-4px 0 14px; }
 .kd-auswahl-werkzeuge button { min-height:44px; }
 .kd-auswahl-zaehler { min-width:105px; color:var(--wolfram,#e3a63b); font:700 12px 'Space Mono',monospace; }
@@ -589,6 +593,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
      Select kollidiert nicht mit inline width:auto und braucht keins. */
   .kd-kompakt { gap: 6px !important; align-items: stretch !important; }
   .kd-kompakt input, .kd-kompakt select { width: 100% !important; max-width: none !important; min-width: 0 !important; }
+  .kd-mediathek-neuaktionen { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:stretch; }
+  .kd-mediathek-neuaktionen>.kd-mediathek-hinzufuegen { min-width:0; width:100%; }
+  .kd-mediathek-neuaktionen>.kd-auswahl-modus { min-width:0; min-height:44px; padding-inline:12px !important; }
+  .kd-mediathek-neuaktionen>.kd-mediathek-neuformular { grid-column:1 / -1; }
+  .kd-mustwatch-form-hauptfelder>input,
+  .kd-mustwatch-form-hauptfelder>select { flex:1 1 100% !important; width:100% !important; min-width:0 !important; max-width:100% !important; }
   .kd-auswahl-werkzeuge { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; }
   .kd-auswahl-werkzeuge>button { width:100%; min-width:0; padding:8px !important; white-space:normal; }
   .kd-auswahl-werkzeuge>.kd-auswahl-modus { grid-column:1 / -1; }

@@ -54,10 +54,10 @@ export function MedienForm({ typ, onAdd, initial = null, startOffen = false, onD
   };
 
   if (!open) {
-    return <button style={btnStyle(false)} onClick={() => setOpen(true)}>+ {typ === "musik" ? "Musik" : "Eintrag"} hinzufügen</button>;
+    return <button className="kd-mediathek-hinzufuegen" style={btnStyle(false)} onClick={() => setOpen(true)}>+ {typ === "musik" ? "Musik" : "Eintrag"} hinzufügen</button>;
   }
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={f.titel} onChange={set("titel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />
         <input placeholder="Jahr" value={f.jahr} onChange={set("jahr")} style={{ ...inputStyle, width: 80 }} />

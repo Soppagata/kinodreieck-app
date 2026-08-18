@@ -60,7 +60,7 @@ export function FilmForm({
   const rollen = ["Regisseur:In", "Schauspieler:In", "Komponist:In", "Drehbuch:In", "Sonstige"];
 
   if (!open) {
-    return <button style={btnStyle(false)} onClick={() => setOpen(true)}>+ Eintrag hinzufügen</button>;
+    return <button className="kd-mediathek-hinzufuegen" style={btnStyle(false)} onClick={() => setOpen(true)}>+ Eintrag hinzufügen</button>;
   }
 
   const speichern = async (mitPrognose = false) => {
@@ -154,7 +154,7 @@ export function FilmForm({
   };
 
   return (
-    <div style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="kd-mediathek-neuformular" style={{ background: T.saalHoch, borderRadius: 6, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
       {/* Zeile 1: Titel, (Originaltitel nur bewertbar), Jahr */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <input placeholder="Titel *" value={f.titel} onChange={set("titel")} style={{ ...inputStyle, flex: 2, minWidth: 160 }} />
