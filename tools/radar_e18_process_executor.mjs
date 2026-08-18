@@ -64,6 +64,19 @@ const LIVE_TIMEOUT = 15 * 60_000;
 const MAX_BUFFER = 4 * 1024 * 1024;
 const BACKUP_PREFIX = "/private/tmp/kinodreieck-e18-backup-";
 const CONNECTION_FILE = "supabase/.temp/pooler-url";
+const RESTORE_SCOPE_ARGS = Object.freeze([
+  "--schema=public",
+  "--schema=supabase_migrations",
+]);
+const RESTORE_POLICY_ROLES = Object.freeze([
+  "anon",
+  "authenticated",
+  "service_role",
+]);
+const RESTORE_ROLE_SCAFFOLD_SQL = RESTORE_POLICY_ROLES
+  .map((role) => `create role ${role} nologin;`)
+  .join("\n");
+const RESTORE_SCHEMA_SCAFFOLD_SQL = "create schema supabase_migrations;";
 const COMMITTED_EXECUTOR_PATHS = Object.freeze([
   "tools/radar_e17a_repair_once.mjs",
   "tools/radar_e18_process_executor.mjs",
@@ -203,19 +216,43 @@ function psqlStep(id, stdin, parser = "json") {
 function backupSteps(prefix) {
   return [
     step(`${prefix}-custom`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$BACKUP_FILE", "$REMOTE_DB_URL"], "$RUN_PROJECT", PSQL_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "backup-file"),
-    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
-    step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
   ];
+}
+
+function restorePsqlStep(id, database, stdin) {
+  return step(
+    id,
+    pg("psql"),
+    [
+      "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT",
+      "--dbname", database,
+      "--no-psqlrc", "--set", "ON_ERROR_STOP=on", "--file", "-",
+    ],
+    "$RESTORE_ROOT",
+    LOCAL_PG_ENV,
+    stdin,
+    "ignore",
+    PROCESS_TIMEOUT,
+    "opaque",
+  );
 }
 
 function restoreSteps(prefix) {
   return [
     step(`${prefix}-initdb`, pg("initdb"), ["--no-locale", "--encoding=UTF8", "--auth=trust", "--pgdata", "$RESTORE_DATA"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
     step(`${prefix}-start`, pg("pg_ctl"), ["--pgdata", "$RESTORE_DATA", "--log", "$RESTORE_LOG", "--options", "$RESTORE_OPTIONS", "--wait", "start"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
+    restorePsqlStep(`${prefix}-roles`, "postgres", "sql:restore-roles"),
+    step(`${prefix}-preflight-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "schema_preflight"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
+    restorePsqlStep(`${prefix}-preflight-schema`, "schema_preflight", "sql:restore-schema"),
+    step(`${prefix}-preflight`, pg("pg_restore"), ["--schema-only", "--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "schema_preflight", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "schema-preflight"),
     step(`${prefix}-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
-    step(`${prefix}-restore`, pg("pg_restore"), ["--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "radar_restore", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
-    step(`${prefix}-schema`, pg("pg_dump"), ["--schema-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
-    step(`${prefix}-data`, pg("pg_dump"), ["--data-only", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    restorePsqlStep(`${prefix}-schema-scaffold`, "radar_restore", "sql:restore-schema"),
+    step(`${prefix}-restore`, pg("pg_restore"), ["--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "radar_restore", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
+    step(`${prefix}-scoped-backup`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$RESTORED_BACKUP_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "restored-backup-file"),
+    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
     step(`${prefix}-stop`, pg("pg_ctl"), ["--pgdata", "$RESTORE_DATA", "--wait", "stop"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
   ];
 }
@@ -618,6 +655,7 @@ export function createRadarE18DefaultExecutor({
       "$RUN_PROJECT": state.projectDir,
       "$REMOTE_DB_URL": state.connectionUrl,
       "$BACKUP_FILE": runtime.backupFile,
+      "$RESTORED_BACKUP_FILE": runtime.restoredBackupFile,
       "$RESTORE_ROOT": runtime.restoreRoot,
       "$RESTORE_DATA": runtime.restoreData,
       "$RESTORE_LOG": runtime.restoreLog,
@@ -657,6 +695,8 @@ export function createRadarE18DefaultExecutor({
     else if (mode === "sql:package-state") value = PACKAGE_STATE_SQL;
     else if (mode === "sql:package-flags-enable") value = PACKAGE_FLAG_ENABLE_SQL;
     else if (mode === "sql:package-flags-restore") value = flagsRestoreSql(state.packagePreflight);
+    else if (mode === "sql:restore-roles") value = RESTORE_ROLE_SCAFFOLD_SQL;
+    else if (mode === "sql:restore-schema") value = RESTORE_SCHEMA_SCAFFOLD_SQL;
     if (typeof value !== "string") {
       stop("PROCESS_STDIN_CONTRACT_UNKNOWN", "Prozess-stdin ist nicht exakt gebunden.");
     }
@@ -751,6 +791,9 @@ export function createRadarE18DefaultExecutor({
       });
     } catch {
       removeProjection(runtime);
+      if (processStep.parser === "schema-preflight") {
+        stop("RESTORE_SCOPE_DEPENDENCY_UNSUPPORTED", "Schema-Preflight stoppte vor dem Full-Restore.");
+      }
       stop(processFailureCode(stepId), "E18-Prozessschritt schlug fail-closed fehl.");
     }
     if (processStep.parser === "live-one-shot" && result && !result.error && !result.signal) {
@@ -767,6 +810,9 @@ export function createRadarE18DefaultExecutor({
     }
     if (!result || result.error || result.signal || result.status !== 0) {
       removeProjection(runtime);
+      if (processStep.parser === "schema-preflight") {
+        stop("RESTORE_SCOPE_DEPENDENCY_UNSUPPORTED", "Schema-Preflight stoppte vor dem Full-Restore.");
+      }
       stop(processFailureCode(stepId), "E18-Prozessschritt schlug fail-closed fehl.");
     }
     const stdout = Buffer.from(result.stdout || []);
@@ -777,6 +823,7 @@ export function createRadarE18DefaultExecutor({
     }
     if (processStep.parser === "json") return parseJson(stdout, "REMOTE_JSON_INVALID");
     if (processStep.parser === "projection-digest") return projectionDigest(runtime);
+    if (processStep.parser === "schema-preflight") return true;
     if (processStep.parser === "supabase-secrets-json") return validateSecrets(parseJson(stdout, "REMOTE_SECRETS_JSON_INVALID"));
     if (processStep.parser === "supabase-functions-json") return validateFunctions(parseJson(stdout, "REMOTE_FUNCTIONS_JSON_INVALID"));
     if (processStep.parser === "supabase-2.109.1") {
@@ -800,6 +847,17 @@ export function createRadarE18DefaultExecutor({
       io.chmod(runtime.backupFile, 0o600);
       const info = io.stat(runtime.backupFile);
       if (!info.isFile() || info.size < 1 || (info.mode & 0o077) !== 0) stop("BACKUP_FILE_INVALID", "Backup-Artefakt ist nicht regulaer und 0600.");
+      return true;
+    }
+    if (processStep.parser === "restored-backup-file") {
+      if (!runtime.restoredBackupFile || !io.exists(runtime.restoredBackupFile)) {
+        stop("RESTORED_BACKUP_FILE_MISSING", "Enges Restore-Projektionsarchiv fehlt.");
+      }
+      io.chmod(runtime.restoredBackupFile, 0o600);
+      const info = io.stat(runtime.restoredBackupFile);
+      if (!info.isFile() || info.size < 1 || (info.mode & 0o077) !== 0) {
+        stop("RESTORED_BACKUP_FILE_INVALID", "Enges Restore-Projektionsarchiv ist nicht regulaer und 0600.");
+      }
       return true;
     }
     if (processStep.parser !== "opaque") stop("PROCESS_PARSER_UNKNOWN", "E18-Parservertrag ist unbekannt.");
@@ -899,6 +957,7 @@ export function createRadarE18DefaultExecutor({
       restoreSocket,
       restorePort: port,
       restoreOptions: `-c listen_addresses= -c unix_socket_directories=${restoreSocket} -p ${port}`,
+      restoredBackupFile: join(restoreRoot, `${stage}-scoped.dump`),
     };
     let startAttempted = false;
     try {
@@ -906,8 +965,14 @@ export function createRadarE18DefaultExecutor({
       startAttempted = true;
       state.localServerMayBeRunning = true;
       runStep(blueprint, `${stage}-restore-start`, runtime);
+      runStep(blueprint, `${stage}-restore-roles`, runtime);
+      runStep(blueprint, `${stage}-restore-preflight-createdb`, runtime);
+      runStep(blueprint, `${stage}-restore-preflight-schema`, runtime);
+      runStep(blueprint, `${stage}-restore-preflight`, runtime);
       runStep(blueprint, `${stage}-restore-createdb`, runtime);
+      runStep(blueprint, `${stage}-restore-schema-scaffold`, runtime);
       runStep(blueprint, `${stage}-restore-restore`, runtime);
+      runStep(blueprint, `${stage}-restore-scoped-backup`, runtime);
       const schema = runStep(blueprint, `${stage}-restore-schema`, {
         ...runtime,
         projectionFile: createProjection(restoreRoot, `${stage}-schema`),

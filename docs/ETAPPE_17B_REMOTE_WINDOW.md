@@ -145,6 +145,18 @@ Dateihoheit, Schreib-/Remotegrenzen, Zielkontrakt.
 
 Ohne grünen Restore-Postflight folgt direkt `STOP`.
 
+Für den committed E18-Radar-Executor ist ein TOC-only-Preflight verworfen:
+Abhängigkeiten von Policy-Rollen oder nicht mitrestaurierten Extensions werden
+erst beim Restore zuverlässig aufgelöst. Deshalb läuft vor dem Full-Restore ein
+separater schema-only Restore in die frische Datenbank `schema_preflight`, eng
+auf `public` und `supabase_migrations` begrenzt. Nur die feste minimale
+`NOLOGIN`-Allowlist `anon`, `authenticated`, `service_role` wird lokal
+vorgerüstet; Rollen oder Scaffolds werden nie aus Dump-SQL oder Fehlerausgaben
+abgeleitet. Jeder Schemafehler stoppt opak mit
+`RESTORE_SCOPE_DEPENDENCY_UNSUPPORTED`. Erst nach Grün beginnt der Full-Restore
+in der zweiten frischen Datenbank `radar_restore`; beide Ziele werden gemeinsam
+mit dem socket-only Cluster bereinigt.
+
 ### D. Function Release
 
 `function-release` zwingt die Reihenfolge:

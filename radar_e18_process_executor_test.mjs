@@ -151,6 +151,7 @@ function processFixture({
   liveBudgetUnknown = false,
   largeProjection = false,
   projectionBufferError = false,
+  schemaPreflightFailure = null,
 } = {}) {
   const contract = loadRadarE17ARepairContract();
   const privateSecrets = Object.freeze({
@@ -281,6 +282,12 @@ function processFixture({
     }
     if (binary.endsWith("/psql")) {
       const sql = String(options.input || "");
+      if (sql === [
+        "create role anon nologin;",
+        "create role authenticated nologin;",
+        "create role service_role nologin;",
+      ].join("\n")) return ok();
+      if (sql === "create schema supabase_migrations;") return ok();
       if (sql.includes("'targetLedger'")) return ok(`${JSON.stringify(e17aState(contract, e17aApplied))}\n`);
       if (sql.includes("INSERT INTO supabase_migrations.schema_migrations")) {
         e17aApplied = true;
@@ -300,10 +307,20 @@ function processFixture({
     if (binary.endsWith("/pg_dump")) {
       const outputFile = argv[argv.indexOf("--file") + 1];
       if (argv.includes("--format=custom")) {
+        if (argv.includes("radar_restore")) {
+          assert.deepEqual(
+            argv.filter((value) => value.startsWith("--schema=")),
+            ["--schema=public", "--schema=supabase_migrations"],
+          );
+        }
         allBackupDirs.add(dirname(outputFile));
         writeFileSync(outputFile, "synthetic-custom-archive", { mode: 0o600 });
         return ok();
       }
+      assert.deepEqual(
+        argv.filter((value) => value.startsWith("--schema=")),
+        ["--schema=public", "--schema=supabase_migrations"],
+      );
       assert.notEqual(outputFile, "-");
       assert.equal(options.stdio[1], "ignore");
       assert.equal(statSync(outputFile).mode & 0o077, 0);
@@ -314,10 +331,29 @@ function processFixture({
     if (binary.endsWith("/pg_restore") && argv.includes("--exit-on-error")) {
       const backup = argv.at(-1);
       assert.equal(statSync(backup).mode & 0o077, 0);
+      assert.deepEqual(
+        argv.filter((value) => value.startsWith("--schema=")),
+        ["--schema=public", "--schema=supabase_migrations"],
+      );
+      if (argv.includes("--schema-only")) {
+        assert.equal(argv[argv.indexOf("--dbname") + 1], "schema_preflight");
+        if (schemaPreflightFailure) {
+          const opaqueInternal = schemaPreflightFailure === "foreign-role"
+            ? "synthetic role detail"
+            : "synthetic extension detail";
+          return { ...ok(), status: 1, stderr: Buffer.from(opaqueInternal) };
+        }
+      } else {
+        assert.equal(argv[argv.indexOf("--dbname") + 1], "radar_restore");
+      }
       return ok();
     }
     if (binary.endsWith("/pg_restore") && argv.includes("--file")) {
       const outputFile = argv[argv.indexOf("--file") + 1];
+      assert.deepEqual(
+        argv.filter((value) => value.startsWith("--schema=")),
+        ["--schema=public", "--schema=supabase_migrations"],
+      );
       assert.notEqual(outputFile, "-");
       assert.equal(options.stdio[1], "ignore");
       assert.equal(statSync(outputFile).mode & 0o077, 0);
@@ -467,6 +503,32 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     flagsEnabled: false,
   });
   assert.equal(fixture.sourceGateCalls(), 1);
+  const schemaPreflights = fixture.visibleCalls.filter(({ binary, argv }) => (
+    binary.endsWith("/pg_restore")
+      && argv.includes("--schema-only")
+      && argv.includes("--exit-on-error")
+  ));
+  const fullRestores = fixture.visibleCalls.filter(({ binary, argv }) => (
+    binary.endsWith("/pg_restore")
+      && argv.includes("--exit-on-error")
+      && !argv.includes("--schema-only")
+  ));
+  assert.equal(schemaPreflights.length, 2);
+  assert.equal(fullRestores.length, 2);
+  assert.deepEqual(
+    fixture.visibleCalls
+      .filter(({ binary, argv }) => binary.endsWith("/pg_restore") && argv.includes("--exit-on-error"))
+      .map(({ argv }) => argv[argv.indexOf("--dbname") + 1]),
+    ["schema_preflight", "radar_restore", "schema_preflight", "radar_restore"],
+  );
+  const roleScaffolds = fixture.visibleCalls.filter(({ input }) => String(input || "").startsWith("create role anon nologin;"));
+  assert.equal(roleScaffolds.length, 2);
+  assert.ok(roleScaffolds.every(({ input }) => String(input) === [
+    "create role anon nologin;",
+    "create role authenticated nologin;",
+    "create role service_role nologin;",
+  ].join("\n")));
+  assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("--list") || argv.includes("--use-list")), false);
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
@@ -499,6 +561,43 @@ await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
 });
+
+for (const failure of ["foreign-role", "extension-dependency"]) {
+  await check(`Schema-Preflight stoppt ${failure} opak vor Full-Restore und raeumt lokal auf`, async () => {
+    const fixture = processFixture({
+      providerInitiallyPresent: true,
+      schemaPreflightFailure: failure,
+    });
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+      },
+      ausgabe() {},
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75);
+    assert.deepEqual(err, ["RESTORE_SCOPE_DEPENDENCY_UNSUPPORTED"]);
+    assert.doesNotMatch(err.join(" "), /synthetic role detail|synthetic extension detail/);
+    const preflightCalls = fixture.visibleCalls.filter(({ binary, argv }) => (
+      binary.endsWith("/pg_restore") && argv.includes("--schema-only")
+        && argv.includes("--exit-on-error")
+    ));
+    const fullRestoreCalls = fixture.visibleCalls.filter(({ binary, argv }) => (
+      binary.endsWith("/pg_restore") && argv.includes("--exit-on-error")
+        && !argv.includes("--schema-only")
+    ));
+    assert.equal(preflightCalls.length, 1);
+    assert.equal(fullRestoreCalls.length, 0);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);
+    for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+    for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+    for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+  });
+}
 
 await check("synthetischer ENOBUFS wird exakt normalisiert, nicht wiederholt und rueckstandsfrei gestoppt", async () => {
   const fixture = processFixture({ projectionBufferError: true });
