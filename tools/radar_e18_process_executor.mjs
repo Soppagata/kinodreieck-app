@@ -272,11 +272,6 @@ function definition(id, target) {
         step("supabase-link", SUPABASE, ["link", "--project-ref", PROJECT_REF, "--output-format", "json"], "$RUN_PROJECT", CLI_LINK_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
         psqlStep("e17a-state-read", "sql:e17a-state"),
       ] };
-    case "e17a-backup": return { kind: "process", steps: backupSteps("e17a-backup") };
-    case "e17a-restore": return { kind: "process", steps: restoreSteps("e17a-restore") };
-    case "e17a-write": return { kind: "process", steps: [psqlStep("e17a-transaction", "sql:e17a-transaction", "opaque")] };
-    case "e17a-postflight": return { kind: "process", steps: [psqlStep("e17a-state-postflight", "sql:e17a-state")] };
-    case "e17a-cleanup": return { kind: "internal", action: "e17a-cleanup", steps: [] };
     case "package-b-local-closure": return { kind: "internal", action: "derive-package-b-closure", steps: [] };
     case "package-b-local-workspace": return { kind: "internal", action: "create-package-b-workspace", steps: [] };
     case "package-b-local-cli":
@@ -691,7 +686,6 @@ export function createRadarE18DefaultExecutor({
     if (mode === "ignore") return null;
     let value = null;
     if (mode === "sql:e17a-state") value = E17A_STATE_SQL;
-    else if (mode === "sql:e17a-transaction") value = runtime.sql;
     else if (mode === "sql:package-state") value = PACKAGE_STATE_SQL;
     else if (mode === "sql:package-flags-enable") value = PACKAGE_FLAG_ENABLE_SQL;
     else if (mode === "sql:package-flags-restore") value = flagsRestoreSql(state.packagePreflight);
@@ -1039,22 +1033,9 @@ export function createRadarE18DefaultExecutor({
     if (id === "e17a-remote-read") {
       runStep(blueprint, "supabase-link");
       readConnection();
-      return runStep(blueprint, "e17a-state-read");
-    }
-    if (id === "e17a-backup") return backup(blueprint, "e17a");
-    if (id === "e17a-restore") return restore(blueprint, "e17a", 65431);
-    if (id === "e17a-write") {
-      runStep(blueprint, "e17a-transaction", { sql: input.sql });
-      return { status: "ONE_BOUNDED_MUTATION", transactionSha256: input.transactionSha256, ledgerRows: 1 };
-    }
-    if (id === "e17a-postflight") {
-      const result = runStep(blueprint, "e17a-state-postflight");
+      const result = runStep(blueprint, "e17a-state-read");
       state.e17aLedger = result?.ledger;
       return result;
-    }
-    if (id === "e17a-cleanup") {
-      if (input.stopped) cleanupAll();
-      return { status: "CLEANUP_COMPLETE" };
     }
     if (id === "package-b-local-closure") { ensureLocalReady(); return state.closure; }
     if (id === "package-b-local-workspace") { ensureLocalReady(); return state.workspace; }

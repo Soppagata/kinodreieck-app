@@ -39,7 +39,7 @@ function isProcessStop(error) {
 
 await check("alle committed Rezepte sind tief immutable, one-shot, shell-frei und exakt allowlistet", () => {
   const blueprints = createRadarE18ProcessBlueprints();
-  assert.equal(blueprints.length, 22);
+  assert.equal(blueprints.length, 17);
   for (const blueprint of blueprints) {
     assert.equal(Object.isFrozen(blueprint), true);
     assert.equal(Object.isFrozen(blueprint.process), true);
@@ -123,16 +123,8 @@ await check("Quellgate akzeptiert nur vier getrackte, saubere HEAD-Dateien und s
   }), (error) => error instanceof RadarE18ProcessStop && error.code === "COMMITTED_SOURCE_DIRTY");
 });
 
-function e17aState(contract, applied) {
-  const baseLimits = {
-    task_modell: { stable: "klein" },
-    task_max_tokens: { stable: 1000 },
-    task_max_reservierung_usd_cent: { stable: 2 },
-  };
-  if (!applied) {
-    return { ledger: contract.expectedLedgerBaseline, limits: baseLimits, targetLedger: null };
-  }
-  return {
+function e17aState(contract, mode = "valid") {
+  const valid = {
     ledger: [...contract.expectedLedgerBaseline, contract.targetHistory],
     limits: {
       task_modell: { stable: "klein", "blog-profile-extract": "klein" },
@@ -141,9 +133,23 @@ function e17aState(contract, applied) {
     },
     targetLedger: contract.targetLedger,
   };
+  if (mode === "missing") {
+    return { ...valid, ledger: contract.expectedLedgerBaseline, targetLedger: null };
+  }
+  if (mode === "state-drift") {
+    return {
+      ...valid,
+      limits: {
+        ...valid.limits,
+        task_max_tokens: { stable: 1000, "blog-profile-extract": 4096 },
+      },
+    };
+  }
+  return valid;
 }
 
 function processFixture({
+  baselineMode = "valid",
   failVersion = false,
   wrongPgVersion = false,
   providerInitiallyPresent = false,
@@ -163,7 +169,6 @@ function processFixture({
   const allRunDirs = new Set();
   const allBackupDirs = new Set();
   const allProjectionFiles = new Set();
-  let e17aApplied = false;
   let packageMigrated = false;
   let functionDeployed = false;
   let providerSecretPresent = providerInitiallyPresent;
@@ -288,10 +293,9 @@ function processFixture({
         "create role service_role nologin;",
       ].join("\n")) return ok();
       if (sql === "create schema supabase_migrations;") return ok();
-      if (sql.includes("'targetLedger'")) return ok(`${JSON.stringify(e17aState(contract, e17aApplied))}\n`);
+      if (sql.includes("'targetLedger'")) return ok(`${JSON.stringify(e17aState(contract, baselineMode))}\n`);
       if (sql.includes("INSERT INTO supabase_migrations.schema_migrations")) {
-        e17aApplied = true;
-        return ok();
+        assert.fail("E18 darf die vorhandene E17A-Basismigration nie schreiben");
       }
       if (sql.includes("'providerGate'")) return ok(`${JSON.stringify(packageState())}\n`);
       if (sql.includes("E18 provider approval is not current")) {
@@ -360,7 +364,7 @@ function processFixture({
       allProjectionFiles.add(outputFile);
       if (projectionBufferError
           && argv.includes("--data-only")
-          && outputFile.endsWith("e17a-data.projection.sql")) {
+          && outputFile.endsWith("package-b-data.projection.sql")) {
         return {
           status: null,
           signal: "SIGTERM",
@@ -513,16 +517,16 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
       && argv.includes("--exit-on-error")
       && !argv.includes("--schema-only")
   ));
-  assert.equal(schemaPreflights.length, 2);
-  assert.equal(fullRestores.length, 2);
+  assert.equal(schemaPreflights.length, 1);
+  assert.equal(fullRestores.length, 1);
   assert.deepEqual(
     fixture.visibleCalls
       .filter(({ binary, argv }) => binary.endsWith("/pg_restore") && argv.includes("--exit-on-error"))
       .map(({ argv }) => argv[argv.indexOf("--dbname") + 1]),
-    ["schema_preflight", "radar_restore", "schema_preflight", "radar_restore"],
+    ["schema_preflight", "radar_restore"],
   );
   const roleScaffolds = fixture.visibleCalls.filter(({ input }) => String(input || "").startsWith("create role anon nologin;"));
-  assert.equal(roleScaffolds.length, 2);
+  assert.equal(roleScaffolds.length, 1);
   assert.ok(roleScaffolds.every(({ input }) => String(input) === [
     "create role anon nologin;",
     "create role authenticated nologin;",
@@ -532,6 +536,40 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+});
+
+await check("fehlende oder driftende Basismigration stoppt vor Backup, Mutation und Provider", async () => {
+  for (const [baselineMode, expectedCode] of [
+    ["missing", "LEDGER_BASELINE_DRIFT"],
+    ["state-drift", "BASELINE_MIGRATION_STATE_DRIFT"],
+  ]) {
+    const fixture = processFixture({ baselineMode });
+    const out = [];
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+      },
+      ausgabe: (line) => out.push(line),
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, baselineMode);
+    assert.deepEqual(err, [expectedCode], baselineMode);
+    assert.deepEqual(out, [], baselineMode);
+    assert.equal(fixture.visibleCalls.filter(({ input }) => (
+      String(input || "").includes("'targetLedger'")
+    )).length, 1, baselineMode);
+    assert.equal(fixture.visibleCalls.some(({ binary, argv }) => (
+      binary.endsWith("/pg_dump") && argv.includes("--format=custom")
+    )), false, baselineMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false, baselineMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("ANTHROPIC_API_KEY")), false, baselineMode);
+    assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false, baselineMode);
+    for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false, baselineMode);
+  }
 });
 
 await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als 4 MiB ohne stdout-Puffer", async () => {
@@ -551,7 +589,7 @@ await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als
   const projectionCalls = fixture.visibleCalls.filter(({ argv }) => (
     argv.includes("--file") && argv.some((value) => value.endsWith?.(".projection.sql"))
   ));
-  assert.ok(projectionCalls.length >= 8);
+  assert.ok(projectionCalls.length >= 4);
   for (const call of projectionCalls) {
     assert.equal(call.stdio[1], "ignore");
     assert.equal(call.maxBuffer, 4 * 1024 * 1024);
@@ -599,7 +637,7 @@ for (const failure of ["foreign-role", "extension-dependency"]) {
   });
 }
 
-await check("synthetischer ENOBUFS wird exakt normalisiert, nicht wiederholt und rueckstandsfrei gestoppt", async () => {
+await check("synthetischer Paket-B-ENOBUFS wird exakt normalisiert, nicht wiederholt und rueckstandsfrei gestoppt", async () => {
   const fixture = processFixture({ projectionBufferError: true });
   const err = [];
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
@@ -613,10 +651,10 @@ await check("synthetischer ENOBUFS wird exakt normalisiert, nicht wiederholt und
     fehlerAusgabe: (line) => err.push(line),
   });
   assert.equal(code, 75);
-  assert.deepEqual(err, ["PROCESS_E17A_BACKUP_DATA_FAILED"]);
+  assert.deepEqual(err, ["PROCESS_PACKAGE_B_BACKUP_DATA_FAILED"]);
   const failedDataCalls = fixture.visibleCalls.filter(({ argv }) => (
     argv.includes("--data-only")
-      && argv.some((value) => value.endsWith?.("e17a-data.projection.sql"))
+      && argv.some((value) => value.endsWith?.("package-b-data.projection.sql"))
   ));
   assert.equal(failedDataCalls.length, 1);
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);

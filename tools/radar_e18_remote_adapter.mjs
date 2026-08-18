@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* E18-Remoteadapter: commitfaehige, effektinjizierte Verbindung zwischen
-   E17A-Reparatur-One-Shot und Radar-Websearch-Paket B.
+   vorhandener E17A-Basismigration und Radar-Websearch-Paket B.
 
    Jeder moegliche Effekt passiert ausschliesslich hinter einem validierten,
    commitgebundenen Prozessblueprint. Der direkte Dry-Run ist effektfrei; ein
@@ -12,8 +12,11 @@ import { isDeepStrictEqual } from "node:util";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import {
+  RADAR_E17A_LEDGER_NAME,
+  RADAR_E17A_MIGRATION_PATH,
+  RADAR_E17A_MIGRATION_SHA256,
+  RADAR_E17A_MIGRATION_VERSION,
   RadarE17ARepairStop,
-  createRadarE17ARepairOnce,
   loadRadarE17ARepairContract,
 } from "./radar_e17a_repair_once.mjs";
 import {
@@ -21,6 +24,7 @@ import {
   RadarRemoteStartStop,
   SUPABASE_INFRA_KEYCHAIN,
   createRadarRemotePreflightOnce,
+  validateRadarLedgerBaseline,
 } from "./radar_websearch_remote_start.mjs";
 import {
   RadarE18ProcessStop,
@@ -30,10 +34,14 @@ import {
 } from "./radar_e18_process_executor.mjs";
 
 export const RADAR_E18_PROJECT_REF = "bscjgwcntapobyxsiyce";
-export const RADAR_E18_MIGRATIONS = Object.freeze([
-  "20260817120000",
+export const RADAR_E18_BASELINE_MIGRATION = RADAR_E17A_MIGRATION_VERSION;
+export const RADAR_E18_MUTATION_MIGRATIONS = Object.freeze([
   "20260817180000",
   "20260817190000",
+]);
+export const RADAR_E18_MIGRATIONS = Object.freeze([
+  RADAR_E18_BASELINE_MIGRATION,
+  ...RADAR_E18_MUTATION_MIGRATIONS,
 ]);
 export const RADAR_E18_FUNCTION = "radar-websearch-task";
 export const RADAR_E18_LIVE_COMMAND = Object.freeze([
@@ -62,19 +70,8 @@ const BLUEPRINT_DEFINITIONS = Object.freeze([
   }],
   ["e17a-remote-read", "remote-read", "e17a", {
     projectRef: RADAR_E18_PROJECT_REF,
-    migrations: Object.freeze([RADAR_E18_MIGRATIONS[0]]),
+    migrations: Object.freeze([RADAR_E18_BASELINE_MIGRATION]),
   }],
-  ["e17a-backup", "backup", "e17a", { projectRef: RADAR_E18_PROJECT_REF }],
-  ["e17a-restore", "disposable-restore", "e17a", { localOnly: true }],
-  ["e17a-write", "migration-write", "e17a", {
-    projectRef: RADAR_E18_PROJECT_REF,
-    migrations: Object.freeze([RADAR_E18_MIGRATIONS[0]]),
-  }],
-  ["e17a-postflight", "remote-read", "e17a", {
-    projectRef: RADAR_E18_PROJECT_REF,
-    migrations: Object.freeze([RADAR_E18_MIGRATIONS[0]]),
-  }],
-  ["e17a-cleanup", "cleanup", "e17a", { localOnly: true }],
   ["package-b-local-closure", "local-gate", "package-b", { localOnly: true }],
   ["package-b-local-workspace", "local-gate", "package-b", { localOnly: true }],
   ["package-b-local-cli", "local-gate", "package-b", { localOnly: true }],
@@ -97,7 +94,7 @@ const BLUEPRINT_DEFINITIONS = Object.freeze([
   ["package-b-restore", "disposable-restore", "package-b", { localOnly: true }],
   ["package-b-migrations", "migration-write", "package-b", {
     projectRef: RADAR_E18_PROJECT_REF,
-    migrations: Object.freeze(RADAR_E18_MIGRATIONS.slice(1)),
+    migrations: RADAR_E18_MUTATION_MIGRATIONS,
   }],
   ["package-b-function", "function-deploy", "package-b", {
     projectRef: RADAR_E18_PROJECT_REF,
@@ -121,6 +118,11 @@ const BLUEPRINT_DEFINITIONS = Object.freeze([
 ]);
 
 const EXPECTED_BLUEPRINT_IDS = Object.freeze(BLUEPRINT_DEFINITIONS.map(([id]) => id));
+const BASELINE_LIMITS = Object.freeze({
+  task_modell: Object.freeze({ key: "blog-profile-extract", value: "klein" }),
+  task_max_tokens: Object.freeze({ key: "blog-profile-extract", value: 2048 }),
+  task_max_reservierung_usd_cent: Object.freeze({ key: "blog-profile-extract", value: 5 }),
+});
 const PACKAGE_B_RECEIPTS = Object.freeze({
   "package-b-backup": "BACKUP_CREATED",
   "package-b-restore": "DISPOSABLE_RESTORE_VERIFIED",
@@ -157,6 +159,59 @@ function plainObject(value) {
     && typeof value === "object"
     && !Array.isArray(value)
     && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function exactPlainObject(value, keys) {
+  return plainObject(value) && isDeepStrictEqual(Object.keys(value).sort(), [...keys].sort());
+}
+
+function validateBaselineContract(contract) {
+  if (!plainObject(contract)
+      || !/^[0-9a-f]{40}$/.test(String(contract.finalCommit || ""))
+      || contract.migrationPath !== RADAR_E17A_MIGRATION_PATH
+      || !Array.isArray(contract.expectedLedgerBaseline)
+      || !isDeepStrictEqual(contract.targetHistory, {
+        version: RADAR_E18_BASELINE_MIGRATION,
+        name: RADAR_E17A_LEDGER_NAME,
+      })
+      || !isDeepStrictEqual(contract.targetLedger, {
+        version: RADAR_E18_BASELINE_MIGRATION,
+        name: RADAR_E17A_LEDGER_NAME,
+        statements: [],
+      })) {
+    stop("BASELINE_MIGRATION_CONTRACT_DRIFT", "Lokaler E17A-Baselinevertrag ist nicht exakt.");
+  }
+  if (contract.migrationSha256 !== RADAR_E17A_MIGRATION_SHA256) {
+    stop("BASELINE_MIGRATION_HASH_DRIFT", "Lokaler E17A-Migrationshash driftet.");
+  }
+  return contract;
+}
+
+function isJsonScalar(value) {
+  return value === null || typeof value === "string" || typeof value === "boolean"
+    || (typeof value === "number" && Number.isFinite(value));
+}
+
+function validateAppliedBaseline(state, contract) {
+  if (!exactPlainObject(state, ["ledger", "limits", "targetLedger"])
+      || !exactPlainObject(state.limits, Object.keys(BASELINE_LIMITS))) {
+    stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Baselinezustand ist formfremd.");
+  }
+  validateRadarLedgerBaseline(
+    state.ledger,
+    [...contract.expectedLedgerBaseline, contract.targetHistory],
+  );
+  if (!isDeepStrictEqual(state.targetLedger, contract.targetLedger)) {
+    stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Ledgerzustand ist nicht exakt.");
+  }
+  for (const [rowName, patch] of Object.entries(BASELINE_LIMITS)) {
+    const row = state.limits[rowName];
+    if (!plainObject(row) || !Object.values(row).every(isJsonScalar)
+        || !isDeepStrictEqual(row[patch.key], patch.value)) {
+      stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Limitzustand ist nicht exakt.");
+    }
+  }
+  return state;
 }
 
 function makeBlueprint([id, operation, stage, target]) {
@@ -293,14 +348,12 @@ export function createRadarE18CommittedAdapter({
   blueprints = createRadarE18ProcessBlueprints(),
   executeBlueprint,
   defaultExecutorOptions,
-  createE17AOnce = createRadarE17ARepairOnce,
   loadE17AContract = loadRadarE17ARepairContract,
   createPackageBPreflightOnce = createRadarRemotePreflightOnce,
 } = {}) {
   requireAuthorization(authorization);
   const blueprintList = validateBlueprintSet(blueprints);
   const executor = requireExecutor(executeBlueprint, defaultExecutorOptions);
-  const e17aFactory = requireFactory("E17A", createE17AOnce);
   const contractLoader = requireFactory("E17A-Contract", loadE17AContract);
   const packageBFactory = requireFactory("Paket-B-Preflight", createPackageBPreflightOnce);
   const byId = new Map(blueprintList.map((blueprint) => [blueprint.id, blueprint]));
@@ -325,8 +378,7 @@ export function createRadarE18CommittedAdapter({
         return table[name];
       },
     });
-    let stage = "e17a";
-    let phase = "e17a-local-gate";
+    let phase = "e17a-baseline-local-gate";
     let packageBCleanupNeeded = false;
     let providerSecretPending = false;
 
@@ -363,42 +415,16 @@ export function createRadarE18CommittedAdapter({
       return credentials;
     };
 
-    const e17aRun = e17aFactory({
-      async localGate() { return contractLoader(); },
-      async remoteRead({ contract }) {
-        await readSupabaseCredentials();
-        return invoke("e17a-remote-read", { contract, secretContext });
-      },
-      async backup(input) {
-        return invoke("e17a-backup", { ...input, secretContext });
-      },
-      async restore(input) { return invoke("e17a-restore", input); },
-      async write(input) {
-        return invoke("e17a-write", { ...input, secretContext });
-      },
-      async postflight(input) {
-        return invoke("e17a-postflight", { ...input, secretContext });
-      },
-      async cleanup(input) {
-        const receipt = await invoke("e17a-cleanup", input);
-        if (input.stopped) {
-          credentials.accessToken = null;
-          credentials.dbPassword = null;
-          credentials.anthropicApiKey = null;
-        }
-        return receipt;
-      },
-    });
-
     try {
-      const e17aResult = await e17aRun();
-      if (!plainObject(e17aResult) || e17aResult.status !== "E17A_REPAIR_COMPLETE") {
-        stop("E17A_RESULT_INVALID", "E17A-One-Shot meldete keinen exakten Abschluss.");
-      }
-      trace.push("e17a-complete");
-
-      stage = "package-b";
+      const baselineContract = validateBaselineContract(await contractLoader());
       packageBCleanupNeeded = true;
+      await readSupabaseCredentials();
+      validateAppliedBaseline(
+        await invoke("e17a-remote-read", { secretContext }),
+        baselineContract,
+      );
+      trace.push("e17a-baseline-confirmed");
+
       const packageBPreflight = packageBFactory({
         async localClosureGate() { return invoke("package-b-local-closure"); },
         async localWorkspaceGate(input) { return invoke("package-b-local-workspace", input); },
@@ -485,7 +511,7 @@ export function createRadarE18CommittedAdapter({
       });
     } catch (error) {
       const failure = normalizeFailure(error, phase);
-      if (stage === "package-b" && packageBCleanupNeeded) {
+      if (packageBCleanupNeeded) {
         packageBCleanupNeeded = false;
         try {
           validatePackageBReceipt("package-b-cleanup", await invoke("package-b-cleanup", {
@@ -512,7 +538,6 @@ export async function main(argv = process.argv.slice(2), {
   fehlerAusgabe = console.error,
   executeBlueprint,
   defaultExecutorOptions,
-  createE17AOnce,
   loadE17AContract,
   createPackageBPreflightOnce,
 } = {}) {
@@ -523,7 +548,9 @@ export async function main(argv = process.argv.slice(2), {
       attempts: 1,
       blueprintIds: blueprints.map(({ id }) => id),
       projectRef: RADAR_E18_PROJECT_REF,
-      migrations: RADAR_E18_MIGRATIONS,
+      baselineMigration: RADAR_E18_BASELINE_MIGRATION,
+      requiredMigrations: RADAR_E18_MIGRATIONS,
+      mutationMigrations: RADAR_E18_MUTATION_MIGRATIONS,
       functionName: RADAR_E18_FUNCTION,
       liveCommand: RADAR_E18_LIVE_COMMAND.join(" "),
     }));
@@ -538,7 +565,6 @@ export async function main(argv = process.argv.slice(2), {
       authorization: createRadarE18AuthorizationMarker(argv[1]),
       executeBlueprint,
       defaultExecutorOptions,
-      ...(createE17AOnce ? { createE17AOnce } : {}),
       ...(loadE17AContract ? { loadE17AContract } : {}),
       ...(createPackageBPreflightOnce ? { createPackageBPreflightOnce } : {}),
     });
