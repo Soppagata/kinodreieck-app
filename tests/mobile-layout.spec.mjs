@@ -1662,7 +1662,7 @@ test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Ein
   await expect(page.locator(".kd-fx-deep-space")).toHaveCount(0);
 });
 
-test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", async ({ page }) => {
+test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visual Viewport stabil", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
@@ -1693,21 +1693,114 @@ test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", 
   await page.goto("/");
 
   const suche = page.getByRole("search", { name: "Globale Suche" });
-  await suche.getByRole("textbox", { name: "Sucheingabe" }).focus();
+  const eingabe = suche.getByRole("textbox", { name: "Sucheingabe" });
+  const suchen = suche.getByRole("button", { name: "Suchen" });
+  const menue = suche.getByRole("button", { name: "Menü öffnen" });
+  const seitenstand = await page.evaluate(() => {
+    window.scrollTo(0, Math.min(240, Math.max(0, document.documentElement.scrollHeight - innerHeight)));
+    return window.scrollY;
+  });
+  const anker = () => suche.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
+  });
+
+  await eingabe.focus();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
-  await expect.poll(() => suche.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
-  })).toBe(-8);
+  await expect.poll(anker).toBe(-8);
+
+  /* Ein Button-/Trefferfokus darf die erkannte Keyboard-Phase nicht räumen,
+     solange der Browser den Visual Viewport noch verkleinert meldet. */
+  await suchen.focus();
+  await expect.poll(anker).toBe(-8);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
 
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
-  await expect.poll(() => suche.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
-  })).toBe(-8);
+  await expect.poll(anker).toBe(-8);
+
+  await eingabe.fill("Wo finde ich die Schriftgröße?");
+  await suchen.click();
+  const antwort = suche.getByRole("dialog", { name: /Suchergebnisse für Wo finde ich die Schriftgröße/ });
+  await expect(antwort).toBeVisible();
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 260, offsetTop: 60 }));
+  await expect.poll(anker).toBe(-8);
+
+  const geometrie = await suche.evaluate((form) => {
+    const viewport = window.visualViewport;
+    const sichtbar = {
+      left: viewport.offsetLeft,
+      right: viewport.offsetLeft + viewport.width,
+      top: viewport.offsetTop,
+      bottom: viewport.offsetTop + viewport.height,
+    };
+    const rect = (selector) => {
+      const box = form.querySelector(selector).getBoundingClientRect();
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    };
+    return {
+      sichtbar,
+      eingabe: rect("input"),
+      suchen: rect(".kd-globalsuche-los"),
+      menue: rect(".kd-globalsuche-menu"),
+      antwort: rect(".kd-globalsuche-antwort"),
+      schliessen: rect(".kd-globalsuche-schliessen"),
+      bodyLock: { position: document.body.style.position, overflow: document.body.style.overflow },
+    };
+  });
+  for (const name of ["eingabe", "suchen", "menue", "antwort", "schliessen"]) {
+    const box = geometrie[name];
+    expect(box.left, name).toBeGreaterThanOrEqual(geometrie.sichtbar.left - 0.5);
+    expect(box.right, name).toBeLessThanOrEqual(geometrie.sichtbar.right + 0.5);
+    expect(box.top, name).toBeGreaterThanOrEqual(geometrie.sichtbar.top - 0.5);
+    expect(box.bottom, name).toBeLessThanOrEqual(geometrie.sichtbar.bottom + 0.5);
+  }
+  expect(geometrie.bodyLock).toEqual({ position: "", overflow: "" });
+
+  const scrollStand = await antwort.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowY: style.overflowY,
+      touchAction: style.touchAction,
+    };
+  });
+  expect(scrollStand.overflowY).toBe("auto");
+  expect(scrollStand.touchAction).toBe("pan-y");
+  expect(scrollStand.scrollHeight).toBeGreaterThan(scrollStand.clientHeight);
+  await antwort.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect.poll(() => antwort.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await antwort.evaluate((element) => { element.scrollTop = 0; });
+
+  await antwort.getByRole("button", { name: "Suchergebnisse schließen" }).click();
+  await expect(antwort).toBeHidden();
+  await expect(eingabe).toBeFocused();
+  await expect.poll(anker).toBe(-8);
+
+  await eingabe.fill("kd-obs-019-ohne-direkten-treffer-928374");
+  await suchen.click();
+  const leereAntwort = suche.getByRole("dialog", { name: /Suchergebnisse für kd-obs-019-ohne/ });
+  await expect(leereAntwort).toContainText("Kein direkter Treffer");
+  await expect(leereAntwort.getByRole("button", { name: "Suchergebnisse schließen" })).toBeVisible();
+  await expect.poll(anker).toBe(-8);
+  await leereAntwort.getByRole("button", { name: "Suchergebnisse schließen" }).click();
+  await expect(eingabe).toBeFocused();
+
+  await eingabe.blur();
+  await expect.poll(anker).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
+  await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
 
   await page.setViewportSize({ width: 568, height: 320 });
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 320, width: 568, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+  await eingabe.focus();
   await page.evaluate(() => window.__kdSetVisualViewport({
     height: 180, width: 568, offsetTop: 40, offsetLeft: 0,
   }));
@@ -1737,6 +1830,53 @@ test("Globale Suche bleibt beim Tastatur-Panning am Visual Viewport verankert", 
   }));
   await expect(suche).not.toHaveClass(/tastatur-offen/);
   await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+});
+
+test("Globale Suche bleibt beim Layout-Resize ohne VisualViewport erreichbar", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "visualViewport", { configurable: true, value: undefined });
+  });
+  await page.goto("/");
+
+  const suche = page.getByRole("search", { name: "Globale Suche" });
+  const eingabe = suche.getByRole("textbox", { name: "Sucheingabe" });
+  await eingabe.focus();
+  await page.setViewportSize({ width: 393, height: 280 });
+  await eingabe.fill("Wo finde ich die Schriftgröße?");
+  await suche.getByRole("button", { name: "Suchen" }).click();
+  const antwort = suche.getByRole("dialog", { name: /Suchergebnisse für Wo finde ich die Schriftgröße/ });
+  await expect(antwort).toBeVisible();
+
+  const stand = await suche.evaluate((form) => {
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+    };
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      form: box(form),
+      eingabe: box(form.querySelector("input")),
+      suchen: box(form.querySelector(".kd-globalsuche-los")),
+      menue: box(form.querySelector(".kd-globalsuche-menu")),
+      antwort: box(form.querySelector(".kd-globalsuche-antwort")),
+      scroll: {
+        clientHeight: form.querySelector(".kd-globalsuche-antwort").clientHeight,
+        scrollHeight: form.querySelector(".kd-globalsuche-antwort").scrollHeight,
+      },
+    };
+  });
+  for (const name of ["form", "eingabe", "suchen", "menue", "antwort"]) {
+    expect(stand[name].top, name).toBeGreaterThanOrEqual(-0.5);
+    expect(stand[name].bottom, name).toBeLessThanOrEqual(stand.viewport.height + 0.5);
+    expect(stand[name].left, name).toBeGreaterThanOrEqual(-0.5);
+    expect(stand[name].right, name).toBeLessThanOrEqual(stand.viewport.width + 0.5);
+  }
+  expect(stand.scroll.scrollHeight).toBeGreaterThan(stand.scroll.clientHeight);
+  await antwort.getByRole("button", { name: "Suchergebnisse schließen" }).click();
+  await expect(eingabe).toBeFocused();
 });
 
 test("Globale Suche respektiert Safe Areas im Visual Viewport", async ({ browserName, page }) => {
@@ -1827,6 +1967,10 @@ test("Globale Suche respektiert Safe Areas im Visual Viewport", async ({ browser
     await keineDokumentUeberbreite(page);
 
     await eingabe.blur();
+    await expect(suche).toHaveClass(/tastatur-offen/);
+    await page.evaluate(() => window.__kdSetVisualViewport({
+      height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+    }));
     await expect(suche).not.toHaveClass(/tastatur-offen/);
     await expect.poll(() => suche.evaluate((form) => ({
       eingang: ["top", "right", "bottom", "left"].map((seite) => (
@@ -1849,6 +1993,21 @@ test("Globale Suche respektiert Safe Areas im Visual Viewport", async ({ browser
     } catch { /* best effort */ }
     await cdp.detach();
   }
+});
+
+test("KD-OBS-019 lässt den Desktop-Finder unverändert", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+
+  await expect(page.getByRole("search", { name: "Globale Suche" })).toBeHidden();
+  const hauptnavigation = page.getByRole("navigation", { name: "Hauptnavigation" });
+  const finder = hauptnavigation.getByRole("button", { name: "Suche", exact: true });
+  await expect(finder).toBeVisible();
+  await finder.click();
+  await expect(page.locator(".kd-bereichshero h1")).toHaveText("Suche");
+  await expect(page.getByPlaceholder("Titel, Genre, Stimmung, Jahrzehnt, Quelle …")).toBeVisible();
 });
 
 test("Globale Suche öffnet einen Entdecken-Treffer gezielt statt nur den Streaming-Tab", async ({ page }) => {

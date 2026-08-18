@@ -38,6 +38,12 @@ const raeumeViewportPosition = (form) => {
   for (const name of VIEWPORT_STYLE_VARIABLEN) form.style.removeProperty(name);
 };
 
+const fokussiereOhneBrowserScroll = (element) => {
+  if (!element?.focus) return;
+  try { element.focus({ preventScroll: true }); }
+  catch { element.focus(); }
+};
+
 export function GlobalSearchBar({
   bereich, onSuchen, antwort, onAntwortSchliessen, onTreffer, onAlleErgebnisse,
   menuOffen = false, onMenu, onSuchaktion, beobachteteIds = [], radarTargetIds = [],
@@ -47,7 +53,6 @@ export function GlobalSearchBar({
   const formRef = useRef(null);
   const eingabeRef = useRef(null);
   const dialogRef = useRef(null);
-  const viewportCleanupRef = useRef(() => {});
   const viewportUpdateRef = useRef(() => {});
   const beobachtet = new Set((beobachteteIds || []).map(String));
   const imRadar = new Set((radarTargetIds || []).map(String));
@@ -60,10 +65,9 @@ export function GlobalSearchBar({
     finally { setLaeuft(false); }
   };
   const schliesseAntwort = () => {
-    viewportCleanupRef.current();
     onAntwortSchliessen?.();
     requestAnimationFrame(() => {
-      eingabeRef.current?.focus();
+      fokussiereOhneBrowserScroll(eingabeRef.current);
       viewportUpdateRef.current();
     });
   };
@@ -72,8 +76,7 @@ export function GlobalSearchBar({
     const frame = requestAnimationFrame(() => {
       if (document.activeElement === eingabeRef.current) return;
       const ersterTreffer = dialogRef.current?.querySelector("[data-globaler-suchtreffer], .kd-globalsuche-alle");
-      viewportCleanupRef.current();
-      ersterTreffer?.focus?.();
+      fokussiereOhneBrowserScroll(ersterTreffer);
     });
     const taste = (event) => {
       if (event.key === "Escape") {
@@ -97,13 +100,8 @@ export function GlobalSearchBar({
       height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
       width: viewport.width,
     };
+    let tastaturPhaseAktiv = false;
     const raeume = () => raeumeViewportPosition(form);
-    const raeumeGeplantePosition = () => {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      raeume();
-    };
-    viewportCleanupRef.current = raeumeGeplantePosition;
     const aktualisiere = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -123,7 +121,11 @@ export function GlobalSearchBar({
         }
 
         const tastaturOffen = !breiteGeaendert && klassifiziereBildschirmtastatur({
-          editierbarerFokus,
+          /* Ein Fokuswechsel auf Suchen, Schließen oder einen Treffer beendet
+             die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
+             verkleinert ist, bleibt deshalb eine einmal erkannte Phase aktiv.
+             Erst die echte Viewport-Erholung (oder Rotation/Zoom) räumt sie. */
+          editierbarerFokus: editierbarerFokus || tastaturPhaseAktiv,
           scale: viewport.scale,
           height: viewport.height,
           width: viewport.width,
@@ -131,6 +133,7 @@ export function GlobalSearchBar({
           basisHeight: basis.height,
           basisWidth: basis.width,
         });
+        tastaturPhaseAktiv = tastaturOffen;
         if (!tastaturOffen) {
           raeume();
           return;
@@ -181,8 +184,8 @@ export function GlobalSearchBar({
       window.removeEventListener("scroll", aktualisiere);
       eingabe.removeEventListener("focus", aktualisiere);
       eingabe.removeEventListener("blur", aktualisiere);
+      tastaturPhaseAktiv = false;
       raeume();
-      if (viewportCleanupRef.current === raeumeGeplantePosition) viewportCleanupRef.current = () => {};
       if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};
     };
   }, []);
