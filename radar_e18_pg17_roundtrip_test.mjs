@@ -1,6 +1,7 @@
 /* E18 PG17-Roundtrip: ausschliesslich synthetische lokale Daten. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -10,6 +11,7 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 
@@ -29,6 +31,10 @@ const restored = {
   port: "65442",
 };
 const archive = join(root, "synthetic.dump");
+const archivedSchemaProjection = join(root, "archive-schema.projection.sql");
+const archivedDataProjection = join(root, "archive-data.projection.sql");
+const restoredSchemaProjection = join(root, "restore-schema.projection.sql");
+const restoredDataProjection = join(root, "restore-data.projection.sql");
 const env = Object.freeze({
   LANG: "C",
   LC_ALL: "C",
@@ -38,7 +44,12 @@ const env = Object.freeze({
 });
 const running = new Set();
 
-function run(binary, argv, { input = null, ok = [0], timeout = 120_000 } = {}) {
+function run(binary, argv, {
+  input = null,
+  ok = [0],
+  timeout = 120_000,
+  stdout = "pipe",
+} = {}) {
   const result = spawnSync(`${PG}/${binary}`, argv, {
     cwd: root,
     env,
@@ -47,7 +58,7 @@ function run(binary, argv, { input = null, ok = [0], timeout = 120_000 } = {}) {
     maxBuffer: 4 * 1024 * 1024,
     timeout,
     shell: false,
-    stdio: [input === null ? "ignore" : "pipe", "pipe", "pipe"],
+    stdio: [input === null ? "ignore" : "pipe", stdout, "pipe"],
   });
   if (!result || result.error || result.signal || !ok.includes(result.status)) {
     throw new Error(`PG17_SYNTHETIC_${binary.toUpperCase()}_FAILED`);
@@ -98,6 +109,29 @@ function canonicalDump(bytes) {
     .trim();
 }
 
+function projectionDigest(path) {
+  try {
+    const info = statSync(path);
+    assert.equal(info.isFile(), true);
+    assert.equal(info.mode & 0o077, 0);
+    const canonical = canonicalDump(readFileSync(path));
+    return Object.freeze({
+      sha256: createHash("sha256").update(canonical).digest("hex"),
+      lineCount: canonical === "" ? 0 : canonical.split("\n").length,
+    });
+  } finally {
+    rmSync(path, { force: true });
+    assert.equal(existsSync(path), false);
+  }
+}
+
+function runProjection(binary, argv, path) {
+  writeFileSync(path, Buffer.alloc(0), { flag: "wx", mode: 0o600 });
+  chmodSync(path, 0o600);
+  run(binary, argv, { stdout: "ignore" });
+  return projectionDigest(path);
+}
+
 const schemaSql = String.raw`begin;
 create schema spike;
 create table spike.items (
@@ -108,10 +142,17 @@ create table spike.items (
   note text
 );
 create unique index items_title_year_unique on spike.items (title, release_year);
+create table spike.large_items (
+  id integer primary key,
+  payload text not null
+);
 insert into spike.items values
   (1, 'Die Bühne', 2026, '{"kind":"film","regions":["AT"]}'::jsonb, null),
   (2, 'Österreich Eins', 2025, '{"nested":{"b":2,"a":1}}'::jsonb, 'synthetisch'),
   (3, 'Radar Δ', 2024, '[true,false,3]'::jsonb, 'nur lokal');
+insert into spike.large_items
+select id, repeat(chr(96 + id), 1024 * 1024)
+from generate_series(1, 5) id;
 commit;`;
 
 const projectionSql = String.raw`select jsonb_build_object(
@@ -123,7 +164,10 @@ const projectionSql = String.raw`select jsonb_build_object(
    where n.nspname='spike' and c.relname='items'),
   'indexes', (select jsonb_agg(indexdef order by indexname) from pg_catalog.pg_indexes where schemaname='spike' and tablename='items'),
   'count', (select count(*) from spike.items),
-  'rows', (select jsonb_agg(jsonb_build_object('id',id,'title',title,'year',release_year,'payload',payload,'note',note) order by id) from spike.items)
+  'rows', (select jsonb_agg(jsonb_build_object('id',id,'title',title,'year',release_year,'payload',payload,'note',note) order by id) from spike.items),
+  'largeCount', (select count(*) from spike.large_items),
+  'largeBytes', (select sum(octet_length(payload)) from spike.large_items),
+  'largeDigest', (select md5(string_agg(md5(payload), ',' order by id)) from spike.large_items)
 )::text;`;
 
 try {
@@ -134,6 +178,8 @@ try {
   assert.equal(before.columns.length, 5);
   assert.equal(before.constraints.length, 2);
   assert.equal(before.indexes.length, 2);
+  assert.equal(before.largeCount, 5);
+  assert.ok(before.largeBytes > 4 * 1024 * 1024);
 
   run("pg_dump", [
     "--format=custom", "--column-inserts", "--no-owner", "--no-privileges", "--file", archive,
@@ -142,12 +188,14 @@ try {
   chmodSync(archive, 0o600);
   assert.equal(statSync(archive).mode & 0o077, 0);
   assert.ok(readFileSync(archive).length > 0);
-  const archivedSchema = canonicalDump(run("pg_restore", [
-    "--schema-only", "--no-owner", "--no-privileges", "--file", "-", archive,
-  ]));
-  const archivedData = canonicalDump(run("pg_restore", [
-    "--data-only", "--no-owner", "--no-privileges", "--file", "-", archive,
-  ]));
+  const archivedSchema = runProjection("pg_restore", [
+    "--schema-only", "--no-owner", "--no-privileges",
+    "--file", archivedSchemaProjection, archive,
+  ], archivedSchemaProjection);
+  const archivedData = runProjection("pg_restore", [
+    "--data-only", "--no-owner", "--no-privileges",
+    "--file", archivedDataProjection, archive,
+  ], archivedDataProjection);
 
   init(restored);
   run("pg_restore", [
@@ -157,20 +205,20 @@ try {
   ]);
   const after = JSON.parse(psql(restored, projectionSql));
   assert.deepEqual(after, before);
-  const restoredSchema = canonicalDump(run("pg_dump", [
-    "--schema-only", "--no-owner", "--no-privileges",
+  const restoredSchema = runProjection("pg_dump", [
+    "--schema-only", "--no-owner", "--no-privileges", "--file", restoredSchemaProjection,
     "--host", restored.socket, "--port", restored.port, "radar_roundtrip",
-  ]));
-  const restoredData = canonicalDump(run("pg_dump", [
-    "--data-only", "--column-inserts", "--no-owner", "--no-privileges",
+  ], restoredSchemaProjection);
+  const restoredData = runProjection("pg_dump", [
+    "--data-only", "--column-inserts", "--no-owner", "--no-privileges", "--file", restoredDataProjection,
     "--host", restored.socket, "--port", restored.port, "radar_roundtrip",
-  ]));
-  assert.equal(restoredSchema, archivedSchema);
-  assert.equal(restoredData, archivedData);
+  ], restoredDataProjection);
+  assert.deepEqual(restoredSchema, archivedSchema);
+  assert.deepEqual(restoredData, archivedData);
 
   stop(restored);
   stop(source);
-  console.log("1 E18-PG17-Roundtripcheck bestanden (3 Zeilen, 5 Spalten, 2 Constraints, 2 Indizes).");
+  console.log("1 E18-PG17-Roundtripcheck bestanden (synthetische Datenprojektion groesser 4 MiB).");
 } finally {
   try { stop(restored); } catch { /* primaerer Testfehler bleibt massgeblich */ }
   try { stop(source); } catch { /* primaerer Testfehler bleibt massgeblich */ }

@@ -203,8 +203,8 @@ function psqlStep(id, stdin, parser = "json") {
 function backupSteps(prefix) {
   return [
     step(`${prefix}-custom`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$BACKUP_FILE", "$REMOTE_DB_URL"], "$RUN_PROJECT", PSQL_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "backup-file"),
-    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", "--file", "-", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "canonical-dump"),
-    step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", "--file", "-", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "canonical-dump"),
+    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
   ];
 }
 
@@ -214,8 +214,8 @@ function restoreSteps(prefix) {
     step(`${prefix}-start`, pg("pg_ctl"), ["--pgdata", "$RESTORE_DATA", "--log", "$RESTORE_LOG", "--options", "$RESTORE_OPTIONS", "--wait", "start"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
     step(`${prefix}-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
     step(`${prefix}-restore`, pg("pg_restore"), ["--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "radar_restore", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
-    step(`${prefix}-schema`, pg("pg_dump"), ["--schema-only", "--no-owner", "--no-privileges", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "canonical-dump"),
-    step(`${prefix}-data`, pg("pg_dump"), ["--data-only", "--column-inserts", "--no-owner", "--no-privileges", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "canonical-dump"),
+    step(`${prefix}-schema`, pg("pg_dump"), ["--schema-only", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
+    step(`${prefix}-data`, pg("pg_dump"), ["--data-only", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$PROJECTION_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
     step(`${prefix}-stop`, pg("pg_ctl"), ["--pgdata", "$RESTORE_DATA", "--wait", "stop"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
   ];
 }
@@ -624,6 +624,7 @@ export function createRadarE18DefaultExecutor({
       "$RESTORE_SOCKET": runtime.restoreSocket,
       "$RESTORE_PORT": String(runtime.restorePort ?? ""),
       "$RESTORE_OPTIONS": runtime.restoreOptions,
+      "$PROJECTION_FILE": runtime.projectionFile,
       "$PROVIDER_ENV_FILE": runtime.providerEnvFile,
     };
     return Object.hasOwn(table, token) ? table[token] : token;
@@ -662,6 +663,66 @@ export function createRadarE18DefaultExecutor({
     return value;
   };
 
+  const removeProjection = (runtime) => {
+    if (!runtime.projectionFile) return;
+    if (typeof runtime.projectionFile !== "string"
+        || !runtime.projectionFile.startsWith("/private/tmp/")) {
+      stop("PROJECTION_PATH_INVALID", "Private E18-Projektion liegt nicht im erlaubten Tempbereich.");
+    }
+    try {
+      if (io.exists(runtime.projectionFile)) {
+        io.remove(runtime.projectionFile, { force: false });
+      }
+    } catch {
+      stop("PROJECTION_CLEANUP_FAILED", "Private E18-Projektion konnte nicht entfernt werden.");
+    }
+  };
+
+  const projectionDigest = (runtime) => {
+    const path = runtime.projectionFile;
+    try {
+      if (typeof path !== "string" || !path.startsWith("/private/tmp/")) {
+        stop("PROJECTION_PATH_INVALID", "Private E18-Projektion liegt nicht im erlaubten Tempbereich.");
+      }
+      const info = io.stat(path);
+      if (!info.isFile() || (info.mode & 0o077) !== 0) {
+        stop("PROJECTION_FILE_INVALID", "Private E18-Projektion ist nicht regulaer und 0600.");
+      }
+      const canonical = canonicalDump(io.readFile(path));
+      return Object.freeze({
+        sha256: sha256(canonical),
+        lineCount: canonical === "" ? 0 : canonical.split("\n").length,
+      });
+    } catch (error) {
+      if (error instanceof RadarE18ProcessStop) throw error;
+      stop("PROJECTION_READ_FAILED", "Private E18-Projektion konnte nicht sicher gelesen werden.");
+    } finally {
+      removeProjection(runtime);
+    }
+  };
+
+  const createProjection = (root, name) => {
+    try {
+      const rootInfo = io.stat(root);
+      if (!rootInfo.isDirectory() || (rootInfo.mode & 0o077) !== 0) {
+        stop("PROJECTION_ROOT_INVALID", "Privater E18-Projektionsraum ist nicht 0700.");
+      }
+      const path = join(root, `${name}.projection.sql`);
+      io.writeFile(path, Buffer.alloc(0), { flag: "wx", mode: 0o600 });
+      io.chmod(path, 0o600);
+      return path;
+    } catch (error) {
+      if (error instanceof RadarE18ProcessStop) throw error;
+      stop("PROJECTION_CREATE_FAILED", "Private E18-Projektion konnte nicht angelegt werden.");
+    }
+  };
+
+  const processFailureCode = (stepId) => (stepId === "supabase-version"
+    ? "LOCAL_CLI_VERSION_FAILED"
+    : (stepId.startsWith("postgresql-17-")
+      ? "POSTGRESQL_VERSION_FAILED"
+      : `PROCESS_${stepId.toUpperCase().replaceAll("-", "_")}_FAILED`));
+
   const runStep = (blueprint, stepId, runtime = {}) => {
     validateRadarE18ProcessContract(blueprint);
     const processStep = blueprint.process.steps.find(({ id }) => id === stepId);
@@ -676,16 +737,22 @@ export function createRadarE18DefaultExecutor({
       stop("PROCESS_RESOLUTION_INVALID", "E18-Prozess konnte nicht absolut und textuell aufgeloest werden.");
     }
     const input = stdinFor(processStep.stdin, runtime);
-    const result = spawn(processStep.binary, argv, {
-      cwd,
-      env: envFor(processStep, runtime),
-      encoding: null,
-      input,
-      maxBuffer: MAX_BUFFER,
-      timeout: processStep.timeoutMs,
-      shell: false,
-      stdio: [input === null ? "ignore" : "pipe", processStep.stdout === "ignore" ? "ignore" : "pipe", "pipe"],
-    });
+    let result;
+    try {
+      result = spawn(processStep.binary, argv, {
+        cwd,
+        env: envFor(processStep, runtime),
+        encoding: null,
+        input,
+        maxBuffer: MAX_BUFFER,
+        timeout: processStep.timeoutMs,
+        shell: false,
+        stdio: [input === null ? "ignore" : "pipe", processStep.stdout === "ignore" ? "ignore" : "pipe", "pipe"],
+      });
+    } catch {
+      removeProjection(runtime);
+      stop(processFailureCode(stepId), "E18-Prozessschritt schlug fail-closed fehl.");
+    }
     if (processStep.parser === "live-one-shot" && result && !result.error && !result.signal) {
       const guardedOutput = decodeUtf8(
         Buffer.concat([Buffer.from(result.stdout || []), Buffer.from(result.stderr || [])]),
@@ -699,12 +766,8 @@ export function createRadarE18DefaultExecutor({
       }
     }
     if (!result || result.error || result.signal || result.status !== 0) {
-      const code = stepId === "supabase-version"
-        ? "LOCAL_CLI_VERSION_FAILED"
-        : (stepId.startsWith("postgresql-17-")
-          ? "POSTGRESQL_VERSION_FAILED"
-          : `PROCESS_${stepId.toUpperCase().replaceAll("-", "_")}_FAILED`);
-      stop(code, "E18-Prozessschritt schlug fail-closed fehl.");
+      removeProjection(runtime);
+      stop(processFailureCode(stepId), "E18-Prozessschritt schlug fail-closed fehl.");
     }
     const stdout = Buffer.from(result.stdout || []);
     if (processStep.parser === "credential-line") {
@@ -713,7 +776,7 @@ export function createRadarE18DefaultExecutor({
       return value;
     }
     if (processStep.parser === "json") return parseJson(stdout, "REMOTE_JSON_INVALID");
-    if (processStep.parser === "canonical-dump") return canonicalDump(stdout);
+    if (processStep.parser === "projection-digest") return projectionDigest(runtime);
     if (processStep.parser === "supabase-secrets-json") return validateSecrets(parseJson(stdout, "REMOTE_SECRETS_JSON_INVALID"));
     if (processStep.parser === "supabase-functions-json") return validateFunctions(parseJson(stdout, "REMOTE_FUNCTIONS_JSON_INVALID"));
     if (processStep.parser === "supabase-2.109.1") {
@@ -792,8 +855,14 @@ export function createRadarE18DefaultExecutor({
     let data;
     try {
       runStep(blueprint, `${stage}-backup-custom`, { backupFile });
-      schema = runStep(blueprint, `${stage}-backup-schema`, { backupFile });
-      data = runStep(blueprint, `${stage}-backup-data`, { backupFile });
+      schema = runStep(blueprint, `${stage}-backup-schema`, {
+        backupFile,
+        projectionFile: createProjection(dir, `${stage}-schema`),
+      });
+      data = runStep(blueprint, `${stage}-backup-data`, {
+        backupFile,
+        projectionFile: createProjection(dir, `${stage}-data`),
+      });
       const bytes = io.readFile(backupFile);
       const receipt = Object.freeze({
         status: "BACKUP_CREATED",
@@ -801,7 +870,12 @@ export function createRadarE18DefaultExecutor({
         bytes: bytes.length,
         sha256: sha256(bytes),
       });
-      state.backups.set(stage, Object.freeze({ ...receipt, dir, schemaSha256: sha256(schema), dataSha256: sha256(data) }));
+      state.backups.set(stage, Object.freeze({
+        ...receipt,
+        dir,
+        schemaProjection: schema,
+        dataProjection: data,
+      }));
       return receipt;
     } catch (error) {
       try { io.remove(dir, { recursive: true, force: true }); } catch { /* primaerer Stopp bleibt */ }
@@ -834,9 +908,16 @@ export function createRadarE18DefaultExecutor({
       runStep(blueprint, `${stage}-restore-start`, runtime);
       runStep(blueprint, `${stage}-restore-createdb`, runtime);
       runStep(blueprint, `${stage}-restore-restore`, runtime);
-      const schema = runStep(blueprint, `${stage}-restore-schema`, runtime);
-      const data = runStep(blueprint, `${stage}-restore-data`, runtime);
-      if (sha256(schema) !== source.schemaSha256 || sha256(data) !== source.dataSha256) {
+      const schema = runStep(blueprint, `${stage}-restore-schema`, {
+        ...runtime,
+        projectionFile: createProjection(restoreRoot, `${stage}-schema`),
+      });
+      const data = runStep(blueprint, `${stage}-restore-data`, {
+        ...runtime,
+        projectionFile: createProjection(restoreRoot, `${stage}-data`),
+      });
+      if (!isDeepStrictEqual(schema, source.schemaProjection)
+          || !isDeepStrictEqual(data, source.dataProjection)) {
         stop("RESTORE_CONTENT_DRIFT", "Wegwerf-Restore weicht in Schema oder kanonischem Inhalt ab.");
       }
       runStep(blueprint, `${stage}-restore-stop`, runtime);
@@ -845,8 +926,8 @@ export function createRadarE18DefaultExecutor({
       return Object.freeze({
         status: "DISPOSABLE_RESTORE_VERIFIED",
         backupSha256: source.sha256,
-        schemaSha256: source.schemaSha256,
-        dataSha256: source.dataSha256,
+        schemaSha256: source.schemaProjection.sha256,
+        dataSha256: source.dataProjection.sha256,
       });
     } catch (error) {
       if (startAttempted && !state.started.has(`${blueprint.id}:${stage}-restore-stop`)) {

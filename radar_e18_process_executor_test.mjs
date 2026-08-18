@@ -1,5 +1,6 @@
 /* E18-Default-Executor: ausschliesslich lokale Prozess-Spies/Fakes. */
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -148,6 +149,8 @@ function processFixture({
   providerInitiallyPresent = false,
   unknownFunctionField = false,
   liveBudgetUnknown = false,
+  largeProjection = false,
+  projectionBufferError = false,
 } = {}) {
   const contract = loadRadarE17ARepairContract();
   const privateSecrets = Object.freeze({
@@ -158,6 +161,7 @@ function processFixture({
   const visibleCalls = [];
   const allRunDirs = new Set();
   const allBackupDirs = new Set();
+  const allProjectionFiles = new Set();
   let e17aApplied = false;
   let packageMigrated = false;
   let functionDeployed = false;
@@ -214,6 +218,15 @@ function processFixture({
     return { status: 0, signal: null, error: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0) };
   }
 
+  function projectionContent(schemaOnly) {
+    if (schemaOnly) return Buffer.from("-- volatile header\nCREATE TABLE t (id integer);\n");
+    const prefix = Buffer.from("-- volatile header\nCOPY t (id) FROM stdin;\n");
+    const suffix = Buffer.from("\n\\.\n");
+    return largeProjection
+      ? Buffer.concat([prefix, Buffer.alloc(5 * 1024 * 1024, 120), suffix])
+      : Buffer.concat([prefix, Buffer.from("1"), suffix]);
+  }
+
   function spawn(binary, argv, options) {
     const envNames = Object.keys(options.env || {}).sort();
     const visible = JSON.stringify({ binary, argv, cwd: options.cwd, envNames });
@@ -231,7 +244,15 @@ function processFixture({
       }
       assert.equal(Object.hasOwn(options.env, "HOME"), false);
     }
-    visibleCalls.push({ binary, argv: [...argv], cwd: options.cwd, envNames, input: options.input });
+    visibleCalls.push({
+      binary,
+      argv: [...argv],
+      cwd: options.cwd,
+      envNames,
+      input: options.input,
+      maxBuffer: options.maxBuffer,
+      stdio: [...options.stdio],
+    });
     if (options.env?.SUPABASE_HOME) allRunDirs.add(dirname(options.env.SUPABASE_HOME));
 
     if (argv.length === 1 && argv[0] === "--version") {
@@ -283,16 +304,36 @@ function processFixture({
         writeFileSync(outputFile, "synthetic-custom-archive", { mode: 0o600 });
         return ok();
       }
-      if (argv.includes("--schema-only")) return ok("-- volatile header\nCREATE TABLE t (id integer);\n");
-      return ok("-- volatile header\nCOPY t (id) FROM stdin;\n1\n\\.\n");
-    }
-    if (binary.endsWith("/pg_restore") && argv.includes("--file") && argv.includes("-")) {
-      if (argv.includes("--schema-only")) return ok("-- volatile header\nCREATE TABLE t (id integer);\n");
-      return ok("-- volatile header\nCOPY t (id) FROM stdin;\n1\n\\.\n");
+      assert.notEqual(outputFile, "-");
+      assert.equal(options.stdio[1], "ignore");
+      assert.equal(statSync(outputFile).mode & 0o077, 0);
+      allProjectionFiles.add(outputFile);
+      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only")));
+      return ok();
     }
     if (binary.endsWith("/pg_restore") && argv.includes("--exit-on-error")) {
       const backup = argv.at(-1);
       assert.equal(statSync(backup).mode & 0o077, 0);
+      return ok();
+    }
+    if (binary.endsWith("/pg_restore") && argv.includes("--file")) {
+      const outputFile = argv[argv.indexOf("--file") + 1];
+      assert.notEqual(outputFile, "-");
+      assert.equal(options.stdio[1], "ignore");
+      assert.equal(statSync(outputFile).mode & 0o077, 0);
+      allProjectionFiles.add(outputFile);
+      if (projectionBufferError
+          && argv.includes("--data-only")
+          && outputFile.endsWith("e17a-data.projection.sql")) {
+        return {
+          status: null,
+          signal: "SIGTERM",
+          error: Object.assign(new Error("synthetic buffer overflow"), { code: "ENOBUFS" }),
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.alloc(0),
+        };
+      }
+      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only")));
       return ok();
     }
     if (binary.endsWith("/initdb") || binary.endsWith("/pg_ctl") || binary.endsWith("/createdb")) {
@@ -358,6 +399,7 @@ function processFixture({
     visibleCalls,
     allRunDirs,
     allBackupDirs,
+    allProjectionFiles,
     committedSourceGate() {
       sourceGateCalls += 1;
       return Object.freeze({
@@ -378,6 +420,21 @@ function processFixture({
   };
 }
 
+await check("synthetische Ausgabe oberhalb 4 MiB belegt ENOBUFS im bisherigen spawnSync-Vertrag", () => {
+  const result = spawnSync(process.execPath, [
+    "-e", "process.stdout.write(Buffer.alloc(5 * 1024 * 1024, 120))",
+  ], {
+    encoding: null,
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 20_000,
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  assert.equal(result.error?.code, "ENOBUFS");
+  assert.equal(result.status, null);
+  assert.equal(result.signal, "SIGTERM");
+});
+
 await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen Default-Executor", async () => {
   const fixture = processFixture();
   const out = [];
@@ -395,7 +452,7 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   assert.equal(
     code,
     0,
-    `${err.join(",")} after ${fixture.visibleCalls.length} calls: ${JSON.stringify(fixture.visibleCalls.at(-1)?.argv || [])}`,
+    `${err.join(",")} after ${fixture.visibleCalls.length} calls`,
   );
   assert.deepEqual(err, []);
   assert.equal(JSON.parse(out[0]).status, "E18_REMOTE_CHAIN_COMPLETE");
@@ -410,8 +467,63 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     flagsEnabled: false,
   });
   assert.equal(fixture.sourceGateCalls(), 1);
-  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false, path);
-  for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false, path);
+  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+});
+
+await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als 4 MiB ohne stdout-Puffer", async () => {
+  const fixture = processFixture({ largeProjection: true, providerInitiallyPresent: true });
+  const err = [];
+  const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+    defaultExecutorOptions: {
+      spawn: fixture.spawn,
+      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      committedSourceGate: fixture.committedSourceGate,
+      retainBackups: false,
+    },
+    ausgabe() {},
+    fehlerAusgabe: (line) => err.push(line),
+  });
+  assert.equal(code, 0, err.join(","));
+  const projectionCalls = fixture.visibleCalls.filter(({ argv }) => (
+    argv.includes("--file") && argv.some((value) => value.endsWith?.(".projection.sql"))
+  ));
+  assert.ok(projectionCalls.length >= 8);
+  for (const call of projectionCalls) {
+    assert.equal(call.stdio[1], "ignore");
+    assert.equal(call.maxBuffer, 4 * 1024 * 1024);
+    assert.equal(call.argv.includes("-"), false);
+  }
+  for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+});
+
+await check("synthetischer ENOBUFS wird exakt normalisiert, nicht wiederholt und rueckstandsfrei gestoppt", async () => {
+  const fixture = processFixture({ projectionBufferError: true });
+  const err = [];
+  const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+    defaultExecutorOptions: {
+      spawn: fixture.spawn,
+      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      committedSourceGate: fixture.committedSourceGate,
+      retainBackups: false,
+    },
+    ausgabe() {},
+    fehlerAusgabe: (line) => err.push(line),
+  });
+  assert.equal(code, 75);
+  assert.deepEqual(err, ["PROCESS_E17A_BACKUP_DATA_FAILED"]);
+  const failedDataCalls = fixture.visibleCalls.filter(({ argv }) => (
+    argv.includes("--data-only")
+      && argv.some((value) => value.endsWith?.("e17a-data.projection.sql"))
+  ));
+  assert.equal(failedDataCalls.length, 1);
+  assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);
+  for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
 });
 
 await check("lokaler CLI-Fehler stoppt vor Keychain und wird nicht automatisch wiederholt", async () => {
@@ -432,7 +544,7 @@ await check("lokaler CLI-Fehler stoppt vor Keychain und wird nicht automatisch w
   assert.equal(fixture.visibleCalls.length, 1);
   assert.deepEqual(fixture.visibleCalls[0].argv, ["--version"]);
   assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/bin/security"), false);
-  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false, path);
+  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
 });
 
 await check("PostgreSQL-Versionsdrift stoppt seriell nach Supabase und vor jedem Credential", async () => {
