@@ -14,6 +14,22 @@ import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-tas
 import { createRadarWebsearchMemoryRepository } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
 import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
+import {
+  ANTHROPIC_PROVIDER_KEYCHAIN,
+  RADAR_PACKAGE_A_COMMIT,
+  RADAR_PACKAGE_B_COMMIT,
+  REPO_ROOT,
+  SUPABASE_INFRA_KEYCHAIN,
+  RadarRemoteStartStop,
+  buildRadarSupabaseCliEnvironment,
+  buildRadarSupabaseVersionBlueprint,
+  cleanupRadarCliWorkspace,
+  createRadarCliWorkspace,
+  createRadarRemotePreflightOnce,
+  deriveRadarPackageBReleaseClosure,
+  runRadarSupabaseVersionProbe,
+  validateRadarSupabaseCliEnvironment,
+} from "./tools/radar_websearch_remote_start.mjs";
 
 let checks = 0;
 async function check(name, fn) {
@@ -389,6 +405,213 @@ await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfr
     /fest verdrahteten npm-Budgetweg/,
   );
   assert.equal(fetches, 0);
+});
+
+const expectedRemoteReleaseClosure = Object.freeze([
+  "package.json",
+  "supabase/config.toml",
+  "supabase/functions/radar-websearch-task/anthropicAdapter.js",
+  "supabase/functions/radar-websearch-task/contract.js",
+  "supabase/functions/radar-websearch-task/index.ts",
+  "supabase/functions/radar-websearch-task/runner.js",
+  "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
+  "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
+  "tools/keychain_runner.mjs",
+  "tools/radar_websearch_live.mjs",
+]);
+
+await check("Remote-Release-Closure entsteht aus Paket-A/B-Provenienz und dem echten Function-Importgraph", () => {
+  const first = deriveRadarPackageBReleaseClosure();
+  const second = deriveRadarPackageBReleaseClosure();
+  assert.deepEqual(first.contractCommits, [RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]);
+  assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
+  assert.equal(first.files.length, expectedRemoteReleaseClosure.length);
+  assert.equal(first.files.every((file) => fs.existsSync(`${REPO_ROOT}/${file.path}`)), true);
+  assert.equal(first.paths.includes("tools/radar_websearch_contract.mjs"), false);
+  assert.equal(first.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), false);
+  assert.match(first.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(first.sha256, second.sha256);
+});
+
+await check("Eine fehlende echte Closuredatei stoppt statt durch einen geratenen Pfad ersetzt zu werden", () => {
+  assert.throws(
+    () => deriveRadarPackageBReleaseClosure({
+      readFile(path) {
+        if (String(path).endsWith("/radar-websearch-task/contract.js")) {
+          const error = new Error("synthetic-missing");
+          error.code = "ENOENT";
+          throw error;
+        }
+        return fs.readFileSync(path);
+      },
+    }),
+    (error) => error instanceof RadarRemoteStartStop && error.code === "CLOSURE_FILE_MISSING",
+  );
+});
+
+await check("Supabase-CLI-Schreibpfade bleiben ohne HOME-Umlenkung im validierten Radar-Tempzaun", () => {
+  const workspace = createRadarCliWorkspace();
+  try {
+    const fakeCli = `${workspace.runDir}/mock-supabase`;
+    fs.writeFileSync(fakeCli, "mock-only", { mode: 0o700 });
+    const env = buildRadarSupabaseCliEnvironment(workspace, {
+      cliDirectory: workspace.runDir,
+    });
+    const forbiddenHome = ["HOME", "home", "CODEX_HOME"];
+    assert.equal(forbiddenHome.some((name) => Object.hasOwn(env, name)), false);
+    assert.equal(env.SUPABASE_TELEMETRY_DISABLED, "1");
+    assert.equal(env.DO_NOT_TRACK, "1");
+    assert.equal(env.SUPABASE_NO_KEYRING, "1");
+    for (const name of ["SUPABASE_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "TMPDIR"]) {
+      assert.equal(env[name].startsWith(`${workspace.runDir}/`), true);
+    }
+
+    const blueprint = buildRadarSupabaseVersionBlueprint({ workspace, executable: fakeCli });
+    let launches = 0;
+    const version = runRadarSupabaseVersionProbe(blueprint, {
+      spawn(executable, argv, options) {
+        launches += 1;
+        assert.equal(executable, fakeCli);
+        assert.deepEqual(argv, ["--version"]);
+        assert.equal(options.shell, false);
+        assert.equal(options.cwd, REPO_ROOT);
+        validateRadarSupabaseCliEnvironment(options.env, workspace);
+        return { status: 0, stdout: Buffer.from("2.109.1\n"), stderr: Buffer.alloc(0) };
+      },
+    });
+    assert.equal(version, "2.109.1");
+    assert.equal(launches, 1);
+
+    let invalidLaunches = 0;
+    const invalid = {
+      ...blueprint,
+      env: { ...blueprint.env, XDG_CACHE_HOME: "/Users/max/.cache" },
+    };
+    assert.throws(
+      () => runRadarSupabaseVersionProbe(invalid, {
+        spawn() { invalidLaunches += 1; },
+      }),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "CLI_WRITE_PATH_OUTSIDE_TMP",
+    );
+    assert.equal(invalidLaunches, 0);
+  } finally {
+    cleanupRadarCliWorkspace(workspace);
+  }
+});
+
+await check("Lokale Gates laufen seriell vor jedem Credential-/Remote-Effekt", async () => {
+  const effects = [];
+  const credentialReads = [];
+  const run = createRadarRemotePreflightOnce({
+    async localClosureGate() { effects.push("local-closure"); return { sha256: "mock" }; },
+    async localWorkspaceGate() { effects.push("local-workspace"); return { runDir: "mock" }; },
+    async localCliGate() { effects.push("local-cli"); },
+    async readCredential(ref) {
+      effects.push(`credential:${ref.account}`);
+      credentialReads.push(ref);
+      return `synthetic-${ref.account}`;
+    },
+    async remoteRead() {
+      effects.push("remote-read");
+      return { anthropicApiKey: "PRESENT" };
+    },
+    async writeMissingProviderSecret() { effects.push("provider-write"); },
+  });
+  const result = await run();
+  assert.deepEqual(effects, [
+    "local-closure",
+    "local-workspace",
+    "local-cli",
+    `credential:${SUPABASE_INFRA_KEYCHAIN.accounts[0]}`,
+    `credential:${SUPABASE_INFRA_KEYCHAIN.accounts[1]}`,
+    "remote-read",
+  ]);
+  assert.deepEqual(credentialReads, SUPABASE_INFRA_KEYCHAIN.accounts.map((account) => ({
+    service: SUPABASE_INFRA_KEYCHAIN.service,
+    account,
+  })));
+  assert.equal(result.providerSecretAction, "untouched");
+  assert.deepEqual(result.trace, [
+    "local-closure", "local-workspace", "local-cli", "supabase-credentials", "remote-read",
+  ]);
+});
+
+await check("Anthropic-Key wird nur nach exakt allowlistetem Remote-MISSING einmal gelesen und geschrieben", async () => {
+  const effects = [];
+  let providerReads = 0;
+  let providerWrites = 0;
+  const run = createRadarRemotePreflightOnce({
+    async localClosureGate() { effects.push("local-closure"); return {}; },
+    async localWorkspaceGate() { effects.push("local-workspace"); return {}; },
+    async localCliGate() { effects.push("local-cli"); },
+    async readCredential(ref) {
+      effects.push(`credential:${ref.account}`);
+      if (ref.service === ANTHROPIC_PROVIDER_KEYCHAIN.service) providerReads += 1;
+      return `synthetic-${ref.account}`;
+    },
+    async remoteRead() { effects.push("remote-read:MISSING"); return { anthropicApiKey: "MISSING" }; },
+    async writeMissingProviderSecret(input) {
+      effects.push("provider-write");
+      providerWrites += 1;
+      assert.equal(input.anthropicApiKey, `synthetic-${ANTHROPIC_PROVIDER_KEYCHAIN.account}`);
+    },
+  });
+  const result = await run();
+  assert.equal(providerReads, 1);
+  assert.equal(providerWrites, 1);
+  assert.ok(effects.indexOf("remote-read:MISSING")
+    < effects.indexOf(`credential:${ANTHROPIC_PROVIDER_KEYCHAIN.account}`));
+  assert.equal(result.providerSecretAction, "written-after-remote-missing");
+});
+
+await check("Lokaler Fehler stoppt vor Keychain/Netzwerk und verbraucht den one-shot Lauf", async () => {
+  let workspaceGates = 0;
+  let cliGates = 0;
+  let credentialReads = 0;
+  let remoteReads = 0;
+  let providerWrites = 0;
+  const run = createRadarRemotePreflightOnce({
+    async localClosureGate() { throw new Error("synthetic-local-failure"); },
+    async localWorkspaceGate() { workspaceGates += 1; },
+    async localCliGate() { cliGates += 1; },
+    async readCredential() { credentialReads += 1; },
+    async remoteRead() { remoteReads += 1; },
+    async writeMissingProviderSecret() { providerWrites += 1; },
+  });
+  await assert.rejects(run(), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "STOP_LOCAL_CLOSURE");
+  await assert.rejects(run(), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "AUTONOMIE_STOPP_NO_RETRY");
+  assert.deepEqual({ workspaceGates, cliGates, credentialReads, remoteReads, providerWrites }, {
+    workspaceGates: 0,
+    cliGates: 0,
+    credentialReads: 0,
+    remoteReads: 0,
+    providerWrites: 0,
+  });
+});
+
+await check("Remote-Fehler wird nicht automatisch wiederholt und beruehrt keinen Provider-Key", async () => {
+  let remoteReads = 0;
+  let providerReads = 0;
+  const run = createRadarRemotePreflightOnce({
+    async localClosureGate() { return {}; },
+    async localWorkspaceGate() { return {}; },
+    async localCliGate() {},
+    async readCredential(ref) {
+      if (ref.service === ANTHROPIC_PROVIDER_KEYCHAIN.service) providerReads += 1;
+      return "synthetic";
+    },
+    async remoteRead() { remoteReads += 1; throw new Error("synthetic-remote-failure"); },
+    async writeMissingProviderSecret() {},
+  });
+  await assert.rejects(run(), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "STOP_REMOTE_READ");
+  await assert.rejects(run(), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "AUTONOMIE_STOPP_NO_RETRY");
+  assert.equal(remoteReads, 1);
+  assert.equal(providerReads, 0);
 });
 
 const migration = fs.readFileSync(
