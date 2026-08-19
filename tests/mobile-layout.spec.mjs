@@ -3136,12 +3136,19 @@ test("KD-OBS-002/003 hält Mediathek-Aktionen und Must-Watch-Felder bei 320 px k
   await expect(jahr).toBeVisible();
   const placeholderPasst = await jahr.evaluate((feld) => {
     const stil = getComputedStyle(feld);
+    const placeholderStil = getComputedStyle(feld, "::placeholder");
     const messung = document.createElement("canvas").getContext("2d");
-    messung.font = stil.font;
+    messung.font = placeholderStil.font;
     const innenbreite = feld.clientWidth - Number.parseFloat(stil.paddingLeft) - Number.parseFloat(stil.paddingRight);
-    return { innenbreite, textbreite: messung.measureText(feld.placeholder).width };
+    return {
+      innenbreite,
+      textbreite: messung.measureText(feld.placeholder).width,
+      feldschrift: Number.parseFloat(stil.fontSize),
+      placeholderSchrift: Number.parseFloat(placeholderStil.fontSize),
+    };
   });
   expect(placeholderPasst.innenbreite).toBeGreaterThanOrEqual(placeholderPasst.textbreite + 2);
+  expect(placeholderPasst.placeholderSchrift).toBeLessThan(placeholderPasst.feldschrift);
   await keineDokumentUeberbreite(page);
 
   await page.getByRole("button", { name: "Abbrechen", exact: true }).click();

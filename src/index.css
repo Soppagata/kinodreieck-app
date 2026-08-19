@@ -519,6 +519,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-mediathek-neuaktionen>button { min-height:44px; }
 .kd-mediathek-neuformular { flex:1 0 100%; min-width:0; max-width:100%; box-sizing:border-box; }
 .kd-mustwatch-form { width:100%; min-width:0; max-width:100%; box-sizing:border-box; }
+.kd-mustwatch-jahr::placeholder { font-size:calc(12px * var(--kd-schriftfaktor,1)); white-space:nowrap; }
 .kd-auswahl-werkzeuge { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:-4px 0 14px; }
 .kd-auswahl-werkzeuge button { min-height:44px; }
 .kd-auswahl-zaehler { min-width:105px; color:var(--wolfram,#e3a63b); font:700 12px 'Space Mono',monospace; }
