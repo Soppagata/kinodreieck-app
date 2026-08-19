@@ -19,6 +19,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
   statSync,
@@ -420,6 +421,338 @@ export function validateRadarE18ProcessContract(blueprint) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+export const RADAR_E18_READ_PREFLIGHT_SUBCODES = Object.freeze([
+  "READ_PREFLIGHT_SHAPE_DRIFT",
+  "READ_PREFLIGHT_LEDGER_SHAPE_DRIFT",
+  "READ_PREFLIGHT_LEDGER_COUNT_DRIFT",
+  "READ_PREFLIGHT_LEDGER_DIGEST_DRIFT",
+  "READ_PREFLIGHT_FLAGS_DRIFT",
+  "READ_PREFLIGHT_LIMITS_DRIFT",
+  "READ_PREFLIGHT_SOURCES_DRIFT",
+  "READ_PREFLIGHT_ACCOUNT_ROLE_DRIFT",
+  "READ_PREFLIGHT_ACCOUNT_CAPABILITIES_DRIFT",
+  "READ_PREFLIGHT_SURFACE_DRIFT",
+  "READ_PREFLIGHT_WRITERS_DRIFT",
+]);
+
+const READ_PREFLIGHT_FLAG_KEYS = Object.freeze([
+  "privateRequests", "privateScheduler", "providerApproved", "providerCurrent",
+  "providerDpa", "providerFeature", "providerPrice", "providerRetention",
+  "providerRights", "radarActive", "radarProposal", "radarProvider",
+  "radarScheduler", "radarShares",
+]);
+const READ_PREFLIGHT_LIMIT_KEYS = Object.freeze([
+  "modelMatches", "requestCap", "searchFee", "taskCap", "tokens",
+]);
+const READ_PREFLIGHT_ACCOUNT_KEYS = Object.freeze([
+  "active", "personalAi", "pilot", "review",
+]);
+const READ_PREFLIGHT_SURFACE_KEYS = Object.freeze([
+  "candidateLedger", "personColumn", "personRpc", "personTarget", "personUpsert",
+]);
+
+function nonnegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function finiteNonnegative(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function booleanObject(value, keys) {
+  return exactObject(value, keys) && Object.values(value).every((entry) => typeof entry === "boolean");
+}
+
+function readPreflightShape(value) {
+  return exactObject(value, ["account", "flags", "ledger", "limits", "sources", "surface", "writers"])
+    && Array.isArray(value.ledger)
+    && exactObject(value.flags, ["private", "provider", "radar"])
+    && exactObject(value.flags.radar, ["proposal", "provider", "radar", "scheduler", "shares"])
+    && Object.values(value.flags.radar).every((entry) => typeof entry === "boolean")
+    && exactObject(value.flags.private, ["requests", "scheduler"])
+    && Object.values(value.flags.private).every((entry) => typeof entry === "boolean")
+    && exactObject(value.flags.provider, ["current", "dpa", "feature", "legal", "price", "retention", "rights"])
+    && [
+      value.flags.provider.current, value.flags.provider.dpa, value.flags.provider.feature,
+      value.flags.provider.price, value.flags.provider.retention, value.flags.provider.rights,
+    ].every((entry) => typeof entry === "boolean")
+    && typeof value.flags.provider.legal === "string"
+    && exactObject(value.limits, ["model", "requestCap", "searchFee", "taskCap", "tokens"])
+    && typeof value.limits.model === "string"
+    && nonnegativeInteger(value.limits.tokens)
+    && [value.limits.requestCap, value.limits.searchFee, value.limits.taskCap].every(finiteNonnegative)
+    && exactObject(value.sources, ["eligible", "families", "official"])
+    && Object.values(value.sources).every(nonnegativeInteger)
+    && exactObject(value.account, ["active", "personalAi", "pilot", "review", "role"])
+    && typeof value.account.role === "string"
+    && [value.account.active, value.account.personalAi, value.account.pilot, value.account.review]
+      .every((entry) => typeof entry === "boolean")
+    && exactObject(value.surface, READ_PREFLIGHT_SURFACE_KEYS)
+    && [
+      value.surface.candidateLedger, value.surface.personColumn,
+      value.surface.personRpc, value.surface.personUpsert,
+    ].every((entry) => typeof entry === "boolean")
+    && nonnegativeInteger(value.surface.personTarget)
+    && exactObject(value.writers, ["locks", "sessions"])
+    && Object.values(value.writers).every(nonnegativeInteger);
+}
+
+function readPreflightLedgerShape(ledger) {
+  if (!Array.isArray(ledger) || ledger.length < 1) return false;
+  const identities = ledger.map((row) => {
+    if (!exactObject(row, ["name", "version"])
+        || typeof row.version !== "string" || !/^[0-9]{14}$/.test(row.version)
+        || typeof row.name !== "string" || !/^[a-z0-9_]{1,128}$/.test(row.name)) {
+      return null;
+    }
+    return `${row.version}:${row.name}`;
+  });
+  return !identities.includes(null)
+    && new Set(identities).size === identities.length
+    && isDeepStrictEqual(
+      ledger.map(({ version }) => version),
+      ledger.map(({ version }) => version).sort(),
+    );
+}
+
+function readPreflightLedgerDigest(ledger) {
+  return sha256(Buffer.from(JSON.stringify(ledger), "utf8"));
+}
+
+function readPreflightFlags(value) {
+  return Object.freeze({
+    privateRequests: value.flags.private.requests,
+    privateScheduler: value.flags.private.scheduler,
+    providerApproved: value.flags.provider.legal === "APPROVED",
+    providerCurrent: value.flags.provider.current,
+    providerDpa: value.flags.provider.dpa,
+    providerFeature: value.flags.provider.feature,
+    providerPrice: value.flags.provider.price,
+    providerRetention: value.flags.provider.retention,
+    providerRights: value.flags.provider.rights,
+    radarActive: value.flags.radar.radar,
+    radarProposal: value.flags.radar.proposal,
+    radarProvider: value.flags.radar.provider,
+    radarScheduler: value.flags.radar.scheduler,
+    radarShares: value.flags.radar.shares,
+  });
+}
+
+function readPreflightLimits(value) {
+  return Object.freeze({
+    modelMatches: value.limits.model === "klein",
+    requestCap: value.limits.requestCap,
+    searchFee: value.limits.searchFee,
+    taskCap: value.limits.taskCap,
+    tokens: value.limits.tokens,
+  });
+}
+
+function readPreflightAccountCapabilities(value) {
+  return Object.freeze({
+    active: value.account.active,
+    personalAi: value.account.personalAi,
+    pilot: value.account.pilot,
+    review: value.account.review,
+  });
+}
+
+function safeReadPreflightRole(value) {
+  return value === "owner" || value === "member" ? value : "invalid";
+}
+
+function validReadPreflightEvidence(evidence) {
+  if (!exactObject(evidence, ["code", "expected", "observed"])
+      || !RADAR_E18_READ_PREFLIGHT_SUBCODES.includes(evidence.code)) return false;
+  if (["READ_PREFLIGHT_SHAPE_DRIFT", "READ_PREFLIGHT_LEDGER_SHAPE_DRIFT"].includes(evidence.code)) {
+    return evidence.expected === true && evidence.observed === false;
+  }
+  if (evidence.code === "READ_PREFLIGHT_LEDGER_COUNT_DRIFT") {
+    return nonnegativeInteger(evidence.expected) && nonnegativeInteger(evidence.observed);
+  }
+  if (evidence.code === "READ_PREFLIGHT_LEDGER_DIGEST_DRIFT") {
+    return [evidence.expected, evidence.observed].every((value) => (
+      typeof value === "string" && /^[0-9a-f]{64}$/.test(value)
+    ));
+  }
+  if (evidence.code === "READ_PREFLIGHT_FLAGS_DRIFT") {
+    return booleanObject(evidence.expected, READ_PREFLIGHT_FLAG_KEYS)
+      && booleanObject(evidence.observed, READ_PREFLIGHT_FLAG_KEYS);
+  }
+  if (evidence.code === "READ_PREFLIGHT_LIMITS_DRIFT") {
+    return exactObject(evidence.expected, READ_PREFLIGHT_LIMIT_KEYS)
+      && exactObject(evidence.observed, READ_PREFLIGHT_LIMIT_KEYS)
+      && evidence.expected.modelMatches === true
+      && typeof evidence.observed.modelMatches === "boolean"
+      && [...READ_PREFLIGHT_LIMIT_KEYS].filter((key) => key !== "modelMatches")
+        .every((key) => finiteNonnegative(evidence.expected[key]) && finiteNonnegative(evidence.observed[key]));
+  }
+  if (evidence.code === "READ_PREFLIGHT_SOURCES_DRIFT") {
+    return booleanObject(evidence.expected, ["eligible", "independent"])
+      && booleanObject(evidence.observed, ["eligible", "independent"]);
+  }
+  if (evidence.code === "READ_PREFLIGHT_ACCOUNT_ROLE_DRIFT") {
+    return evidence.expected === "owner" && ["owner", "member", "invalid"].includes(evidence.observed);
+  }
+  if (evidence.code === "READ_PREFLIGHT_ACCOUNT_CAPABILITIES_DRIFT") {
+    return booleanObject(evidence.expected, READ_PREFLIGHT_ACCOUNT_KEYS)
+      && booleanObject(evidence.observed, READ_PREFLIGHT_ACCOUNT_KEYS);
+  }
+  if (evidence.code === "READ_PREFLIGHT_SURFACE_DRIFT") {
+    const valid = (entry) => exactObject(entry, READ_PREFLIGHT_SURFACE_KEYS)
+      && [entry.candidateLedger, entry.personColumn, entry.personRpc, entry.personUpsert]
+        .every((value) => typeof value === "boolean")
+      && nonnegativeInteger(entry.personTarget);
+    return valid(evidence.expected) && valid(evidence.observed);
+  }
+  if (evidence.code === "READ_PREFLIGHT_WRITERS_DRIFT") {
+    const valid = (entry) => exactObject(entry, ["locks", "sessions"])
+      && Object.values(entry).every(nonnegativeInteger);
+    return valid(evidence.expected) && valid(evidence.observed);
+  }
+  return false;
+}
+
+function requireReadPreflightEvidencePath(evidencePath) {
+  if (typeof evidencePath !== "string" || resolve(evidencePath) !== evidencePath
+      || !evidencePath.startsWith("/private/tmp/")
+      || basename(evidencePath) !== "read-preflight-stop.json") {
+    stop("READ_PREFLIGHT_EVIDENCE_PATH_INVALID", "Read-Preflight-Belegpfad ist nicht exakt allowlistet.");
+  }
+  const root = dirname(evidencePath);
+  try {
+    const info = lstatSync(root);
+    if (resolve(realpathSync(root)) !== root || !info.isDirectory() || info.isSymbolicLink()
+        || (info.mode & 0o077) !== 0
+        || (typeof process.getuid === "function" && info.uid !== process.getuid())
+        || existsSync(evidencePath)) {
+      stop("READ_PREFLIGHT_EVIDENCE_PATH_INVALID", "Read-Preflight-Belegraum ist nicht privat und leer.");
+    }
+  } catch (error) {
+    if (error instanceof RadarE18ProcessStop) throw error;
+    stop("READ_PREFLIGHT_EVIDENCE_PATH_INVALID", "Read-Preflight-Belegraum ist nicht pruefbar.");
+  }
+  return evidencePath;
+}
+
+function persistReadPreflightEvidence(evidencePath, evidence) {
+  if (!validReadPreflightEvidence(evidence)) {
+    stop("READ_PREFLIGHT_EVIDENCE_INVALID", "Read-Preflight-Beleg ist nicht allowlistbar.");
+  }
+  try {
+    writeFileSync(evidencePath, `${JSON.stringify(evidence)}\n`, {
+      encoding: "utf8", flag: "wx", mode: 0o600,
+    });
+    chmodSync(evidencePath, 0o600);
+    const info = lstatSync(evidencePath);
+    const readback = JSON.parse(readFileSync(evidencePath, "utf8"));
+    if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0
+        || !isDeepStrictEqual(readback, evidence)) {
+      throw new Error("evidence readback drift");
+    }
+  } catch (error) {
+    try { if (existsSync(evidencePath)) rmSync(evidencePath, { force: true }); } catch { /* fail closed below */ }
+    if (error instanceof RadarE18ProcessStop) throw error;
+    stop("READ_PREFLIGHT_EVIDENCE_WRITE_FAILED", "Read-Preflight-Beleg konnte nicht sicher persistiert werden.");
+  }
+}
+
+function stopReadPreflight(code, expected, observed, evidencePath, fehlerAusgabe) {
+  const evidence = deepFreeze({ code, expected, observed });
+  persistReadPreflightEvidence(evidencePath, evidence);
+  try {
+    fehlerAusgabe(JSON.stringify(evidence));
+  } catch {
+    stop("READ_PREFLIGHT_EVIDENCE_OUTPUT_FAILED", "Read-Preflight-Beleg konnte nicht sicher ausgegeben werden.");
+  }
+  const error = new RadarE18ProcessStop(code, "Read-Preflight stoppte beim ersten abweichenden Vergleich.");
+  Object.defineProperty(error, "readPreflightEvidence", {
+    value: evidence, enumerable: false, configurable: false, writable: false,
+  });
+  throw error;
+}
+
+export function validateRadarE18ReadPreflight({
+  observed,
+  expectedLedger,
+  evidencePath,
+  fehlerAusgabe = console.error,
+} = {}) {
+  if (typeof fehlerAusgabe !== "function") {
+    stop("READ_PREFLIGHT_EVIDENCE_OUTPUT_INVALID", "Read-Preflight-Ausgabe fehlt.");
+  }
+  requireReadPreflightEvidencePath(evidencePath);
+  if (!readPreflightLedgerShape(expectedLedger)) {
+    stop("READ_PREFLIGHT_EXPECTATION_INVALID", "Read-Preflight-Sollerwartung ist formfremd.");
+  }
+  const mismatch = (code, expected, actual) => {
+    if (!isDeepStrictEqual(actual, expected)) {
+      stopReadPreflight(code, expected, actual, evidencePath, fehlerAusgabe);
+    }
+  };
+  if (!readPreflightShape(observed)) {
+    stopReadPreflight("READ_PREFLIGHT_SHAPE_DRIFT", true, false, evidencePath, fehlerAusgabe);
+  }
+  if (!readPreflightLedgerShape(observed.ledger)) {
+    stopReadPreflight("READ_PREFLIGHT_LEDGER_SHAPE_DRIFT", true, false, evidencePath, fehlerAusgabe);
+  }
+  mismatch("READ_PREFLIGHT_LEDGER_COUNT_DRIFT", expectedLedger.length, observed.ledger.length);
+  mismatch(
+    "READ_PREFLIGHT_LEDGER_DIGEST_DRIFT",
+    readPreflightLedgerDigest(expectedLedger),
+    readPreflightLedgerDigest(observed.ledger),
+  );
+  mismatch("READ_PREFLIGHT_FLAGS_DRIFT", Object.freeze({
+    privateRequests: false,
+    privateScheduler: false,
+    providerApproved: true,
+    providerCurrent: true,
+    providerDpa: true,
+    providerFeature: false,
+    providerPrice: true,
+    providerRetention: true,
+    providerRights: true,
+    radarActive: false,
+    radarProposal: false,
+    radarProvider: false,
+    radarScheduler: false,
+    radarShares: false,
+  }), readPreflightFlags(observed));
+  mismatch("READ_PREFLIGHT_LIMITS_DRIFT", Object.freeze({
+    modelMatches: true,
+    requestCap: 500,
+    searchFee: 1,
+    taskCap: 5,
+    tokens: 1200,
+  }), readPreflightLimits(observed));
+  mismatch("READ_PREFLIGHT_SOURCES_DRIFT", Object.freeze({
+    eligible: true,
+    independent: true,
+  }), Object.freeze({
+    eligible: observed.sources.eligible >= 1 && observed.sources.eligible <= 10,
+    independent: observed.sources.official >= 1 || observed.sources.families >= 2,
+  }));
+  mismatch("READ_PREFLIGHT_ACCOUNT_ROLE_DRIFT", "owner", safeReadPreflightRole(observed.account.role));
+  mismatch("READ_PREFLIGHT_ACCOUNT_CAPABILITIES_DRIFT", Object.freeze({
+    active: true,
+    personalAi: true,
+    pilot: true,
+    review: true,
+  }), readPreflightAccountCapabilities(observed));
+  mismatch("READ_PREFLIGHT_SURFACE_DRIFT", Object.freeze({
+    candidateLedger: false,
+    personColumn: false,
+    personRpc: false,
+    personTarget: 0,
+    personUpsert: false,
+  }), Object.freeze({ ...observed.surface }));
+  mismatch("READ_PREFLIGHT_WRITERS_DRIFT", Object.freeze({
+    locks: 0,
+    sessions: 0,
+  }), Object.freeze({ ...observed.writers }));
+  return true;
 }
 
 export function verifyRadarE18CommittedSources({ gitSpawn = spawnSync } = {}) {
