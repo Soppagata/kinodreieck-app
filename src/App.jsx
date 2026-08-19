@@ -1312,7 +1312,7 @@ export default function App() {
     beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
     radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, radarCheckAvailable,
     fuehreRadarPilotReceipt, fuehreRadarPilotImport, fuehreRadarPilotSync, fuehreRadarWebsearchCheck,
-    personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, fuehrePersonRadarCheck, } = useEntdeckenRadarController({
+    personRadarAvailable, personRadarCheckAvailable, fuegePersonRadarHinzu, aenderePersonRadar, fuehrePersonRadarCheck, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
     entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
   const {
@@ -2077,7 +2077,7 @@ export default function App() {
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
             onRadarWebsearchCheck={fuehreRadarWebsearchCheck}
             radarCheckAvailable={radarCheckAvailable}
-            personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu}
+            personRadarAvailable={personRadarAvailable} personRadarCheckAvailable={personRadarCheckAvailable} onPersonRadarAdd={fuegePersonRadarHinzu}
             onPersonRadarChange={aenderePersonRadar} onPersonRadarCheck={fuehrePersonRadarCheck}
             blogProps={{
               artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,

@@ -67,6 +67,17 @@ const sameFamily = Object.freeze({
   publisherFamily: "news-a",
 });
 const sources = Object.freeze([official, editorialA, editorialB, sameFamily]);
+const personTarget = Object.freeze({
+  kind: "person",
+  targetId: "person:wikidata:Q42869:actor",
+  personExternalId: "wikidata:Q42869",
+  canonicalName: "Nicolas Cage",
+  role: "actor",
+  region: "AT",
+  windowStart: "2026-08-18",
+  windowEnd: "2026-08-24",
+  catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+});
 
 function evidence(source, path = "start") {
   return {
@@ -109,6 +120,42 @@ function envelope({
   };
 }
 
+function personEnvelope({
+  request = personTarget,
+  status = "confirmed",
+  role = request.role,
+  date = "2026-08-21",
+  targetId: workTargetId = request.catalog[0].targetId,
+  title = request.catalog[0].title,
+  proof = [evidence(editorialA, "person"), evidence(editorialB, "person")],
+  searchResultCount = proof.length,
+} = {}) {
+  return {
+    searchResultCount,
+    response: {
+      status,
+      checkedAt,
+      person: {
+        personExternalId: request.personExternalId,
+        canonicalName: request.canonicalName,
+        role: request.role,
+      },
+      candidates: status === "confirmed" ? [{
+        targetId: workTargetId,
+        targetType: request.catalog[0].targetType,
+        title,
+        year: request.catalog[0].year,
+        role,
+        eventType: "kinostart_at",
+        eventDate: date,
+        region: "AT",
+        platform: "-",
+        evidence: proof,
+      }] : [],
+    },
+  };
+}
+
 function repository(sourceRows = sources) {
   return createRadarWebsearchMemoryRepository({ target, sources: sourceRows });
 }
@@ -122,6 +169,56 @@ await check("Requestvertrag akzeptiert nur globale Zieldaten", () => {
   assert.equal(validateRadarWebsearchRequest({ ...target, accountId: "max-account" }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...target, profile: {} }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...target, targetId: "fixture:film:1" }).ok, false);
+});
+
+await check("Personenrequest ist auf starke ID, zwei Rollen, sieben Tage und sechs Katalogwerke geschlossen", () => {
+  const accepted = validateRadarWebsearchRequest(personTarget);
+  assert.equal(accepted.ok, true);
+  assert.equal(validateRadarWebsearchRequest({ ...personTarget, role: "writer" }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({ ...personTarget, targetId: "person:Nicolas-Cage:actor" }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({ ...personTarget, windowEnd: "2026-08-25" }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({ ...personTarget, accountId: "max-account" }).ok, false);
+});
+
+await check("Schauspiel-Person läuft einmal durch denselben Runner und erzeugt nur einen belegten Kandidaten", async () => {
+  const adapter = createRadarWebsearchMockAdapter(personEnvelope());
+  const repo = createRadarWebsearchMemoryRepository({ target: personTarget, sources });
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: personTarget.targetId, adapter, repository: repo,
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 0);
+  assert.equal(adapter.calls.length, 1);
+  assert.equal(repo.events.size, 0);
+  assert.equal(result.personResult.candidates[0].targetId, "watchmode:101");
+  assert.equal(result.personResult.candidates[0].date, "2026-08-21");
+  assert.equal(result.personResult.candidates[0].evidence.length, 2);
+});
+
+await check("Regie bleibt ein eigener eindeutiger Rollenvertrag", async () => {
+  const director = {
+    ...personTarget,
+    targetId: "person:wikidata:Q47284:director",
+    personExternalId: "wikidata:Q47284",
+    canonicalName: "Robert Rodriguez",
+    role: "director",
+  };
+  const repo = createRadarWebsearchMemoryRepository({ target: director, sources });
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: director.targetId,
+    adapter: createRadarWebsearchMockAdapter(personEnvelope({ request: director })), repository: repo,
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.personResult.person.role, "director");
+});
+
+await check("Rollenwiderspruch, unbekannte Werk-ID, Datumsfehler und gleiche Quellenfamilie schreiben keinen Treffer", () => {
+  assert.equal(evaluateRadarWebsearchResponse(personEnvelope({ role: "director" }), personTarget, sources).status, "insufficient_evidence");
+  assert.equal(evaluateRadarWebsearchResponse(personEnvelope({ targetId: "watchmode:999" }), personTarget, sources).status, "insufficient_evidence");
+  assert.equal(evaluateRadarWebsearchResponse(personEnvelope({ date: "2026-08-25" }), personTarget, sources).status, "insufficient_evidence");
+  assert.equal(evaluateRadarWebsearchResponse(personEnvelope({
+    proof: [evidence(editorialA, "person-a"), evidence(sameFamily, "person-b")],
+  }), personTarget, sources).status, "insufficient_evidence");
 });
 
 await check("Antwortvertrag kennt genau die vier Radar-Ereignisarten", () => {
@@ -307,6 +404,35 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
   assert.equal(calls[0].options.body.includes("max-account"), false);
 });
 
+await check("Browserdienst nutzt auch für Personen nur denselben opaken targetId-Request", async () => {
+  const session = { mode: "account", state: "ready", account: { id: "max-account" } };
+  const calls = [];
+  const personResult = {
+    status: "no_change", checkedAt, windowStart: "2026-08-18", windowEnd: "2026-08-24",
+    person: { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true },
+    candidates: [],
+  };
+  const service = createRadarWebsearchService({
+    config: { radarPilotClientEnabled: true, supabaseUrl: "https://project.example.supabase.co", supabasePublishableKey: "public-key" },
+    auth: { getSnapshot: () => session }, getAccount: () => session.account,
+    getAccessToken: async () => "session-token",
+    fetchImpl: async (_url, options) => {
+      calls.push(options);
+      return { ok: true, status: 200, async json() { return { ok: true, status: "no_change", writes: 0, personResult }; } };
+    },
+  });
+  const result = await service.checkPersonNow({
+    targetId: personTarget.targetId,
+    personExternalId: personTarget.personExternalId,
+    name: personTarget.canonicalName,
+    role: personTarget.role,
+    canonical: true,
+  });
+  assert.equal(result.status, "no_change");
+  assert.deepEqual(JSON.parse(calls[0].body), { targetId: personTarget.targetId });
+  assert.equal(calls.length, 1);
+});
+
 await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", async () => {
   const session = { mode: "account", state: "ready", account: { id: "max-account" } };
   let tokenCalls = 0;
@@ -324,6 +450,13 @@ await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", asyn
     fetchImpl: async () => { fetchCalls += 1; throw new Error("darf nicht laufen"); },
   });
   assert.deepEqual(await service.checkNow(target.targetId), { status: "forbidden", writes: 0 });
+  assert.deepEqual(await service.checkPersonNow({
+    targetId: personTarget.targetId,
+    personExternalId: personTarget.personExternalId,
+    name: personTarget.canonicalName,
+    role: personTarget.role,
+    canonical: true,
+  }), { status: "forbidden", writes: 0 });
   assert.equal(tokenCalls, 0);
   assert.equal(fetchCalls, 0);
 });
@@ -331,8 +464,9 @@ await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", asyn
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");
+const personSliceDoc = fs.readFileSync("./docs/zukunft/PERSONEN_RADAR_LOCAL_SLICE_2026-08-19.md", "utf8");
 
-await check("Migration bleibt additiv auf vorhandenen Radar-Tabellen und service-role-only", () => {
+await check("Vorhandene Werk-Migration bleibt additiv auf Radar-Tabellen und service-role-only", () => {
   assert.doesNotMatch(migration, /create\s+table/i);
   assert.match(migration, /kd_radar_websearch_context\(uuid,text\)[\s\S]*to service_role/i);
   assert.match(migration, /kd_radar_websearch_upsert_event\(uuid,uuid,jsonb\)[\s\S]*to service_role/i);
@@ -341,6 +475,12 @@ await check("Migration bleibt additiv auf vorhandenen Radar-Tabellen und service
   assert.match(migration, /source_state_hash/i);
   assert.match(migration, /radar_websearch_event_outside_subscription/i);
   assert.doesNotMatch(migration, /radar_provider_aktiv\s*=|radar_scheduler_aktiv\s*=|cron\.|pg_cron/i);
+});
+
+await check("Personen-Remote-Kandidatenmigration ist ausdrücklich nicht Teil dieses lokalen Slices", () => {
+  assert.match(personSliceDoc, /Remote-Kandidatenmigration \*\*NICHT GEBAUT\*\*/);
+  assert.match(personSliceDoc, /keine zweite Tabelle, Queue, Prüfschleife/);
+  assert.match(personSliceDoc, /weder angelegt noch angewendet/);
 });
 
 await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {

@@ -75,9 +75,13 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
       return {
         subscriptions: [{
           targetId: targetCopy.targetId,
-          targetType: targetCopy.mediaType === "series" ? "series" : "work",
-          title: targetCopy.canonicalTitle,
+          targetType: targetCopy.kind === "person" ? "person" : targetCopy.mediaType === "series" ? "series" : "work",
+          title: targetCopy.kind === "person" ? targetCopy.canonicalName : targetCopy.canonicalTitle,
           region: "AT", scope: "all", status: "active", updatedAt,
+          ...(targetCopy.kind === "person" ? {
+            personExternalId: targetCopy.personExternalId,
+            personRole: targetCopy.role,
+          } : {}),
         }],
         events: [...events.values()].map((stored) => {
           const version = stored.versions.at(-1);

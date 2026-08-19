@@ -7,6 +7,7 @@ import {
   RADAR_RECEIPT_STATUSES, RADAR_SCOPES, RADAR_TARGET_TYPES,
   RADAR_VERIFICATION_STATUSES,
 } from "./radarContracts.js";
+import { createPersonRadarTargetId, PERSON_RADAR_ROLES } from "./personRadarCatalog.js";
 
 export const RADAR_PILOT_FEED_FORMAT = "kd-radar-pilot-feed-v1";
 export const RADAR_PILOT_SUBSCRIPTION_ACK_KEYS = Object.freeze([
@@ -27,6 +28,7 @@ export const RADAR_PILOT_FEED_KEYS = Object.freeze([
 export const RADAR_PILOT_SUBSCRIPTION_KEYS = Object.freeze([
   "targetId", "targetType", "title", "region", "scope", "status", "updatedAt",
 ]);
+export const RADAR_PILOT_PERSON_SUBSCRIPTION_KEYS = Object.freeze(["personExternalId", "personRole"]);
 export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
@@ -196,14 +198,25 @@ export function validateRadarPilotImportResult(value) {
 
 function validateSubscription(value) {
   const errors = [];
-  if (!exactKeys(value, RADAR_PILOT_SUBSCRIPTION_KEYS)) return ["feed-subscription-shape-invalid"];
+  if (!exactKeysWithOptional(value, RADAR_PILOT_SUBSCRIPTION_KEYS, RADAR_PILOT_PERSON_SUBSCRIPTION_KEYS)) {
+    return ["feed-subscription-shape-invalid"];
+  }
   if (!validTargetKey(value.targetId)) errors.push("feed-subscription-target-invalid");
-  if (!RADAR_TARGET_TYPES.includes(value.targetType)) errors.push("feed-subscription-type-invalid");
+  const person = value.targetType === "person";
+  if (!RADAR_TARGET_TYPES.includes(value.targetType) && !person) errors.push("feed-subscription-type-invalid");
   if (!validTitle(value.title)) errors.push("feed-subscription-title-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-subscription-region-invalid");
   if (!RADAR_SCOPES.includes(value.scope)) errors.push("feed-subscription-scope-invalid");
   if (!["active", "paused"].includes(value.status)) errors.push("feed-subscription-status-invalid");
   if (!validInstant(value.updatedAt)) errors.push("feed-subscription-time-invalid");
+  if (person) {
+    if (!PERSON_RADAR_ROLES.includes(value.personRole)
+        || createPersonRadarTargetId(value.personExternalId, value.personRole) !== value.targetId) {
+      errors.push("feed-subscription-person-invalid");
+    }
+  } else if (value.personExternalId !== undefined || value.personRole !== undefined) {
+    errors.push("feed-subscription-person-unexpected");
+  }
   return errors;
 }
 

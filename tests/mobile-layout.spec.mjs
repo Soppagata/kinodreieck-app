@@ -949,10 +949,21 @@ test("Radar zeigt mobil den schmalen Gastweg ohne technische oder serverseitige 
   await page.getByRole("tab", { name: "Radar" }).click();
 
   await expect(page.getByRole("heading", { name: "Ziel hinzufügen" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ins Radar", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ziel hinzufügen" }).locator("..").getByRole("button", {
+    name: "Ins Radar", exact: true,
+  })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Diese Woche" })).toBeVisible();
   await expect(page.getByText("Noch keine bestätigten Ereignisse für deine aktiven Ziele.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Es läuft keine serverseitige Prüfung/)).toBeVisible();
+
+  await page.getByLabel("Person suchen").fill("Nicolas Cage");
+  await expect(page.getByLabel("Eindeutige Person")).toContainText("Nicolas Cage · Schauspiel");
+  await page.getByLabel("Eindeutige Person").selectOption({ label: "Nicolas Cage · Schauspiel" });
+  await page.getByRole("heading", { name: "Person hinzufügen" }).locator("..").getByRole("button", { name: "Ins Radar" }).click();
+  const personCard = page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Nicolas Cage" });
+  await expect(personCard.getByText("Schauspiel · Aktiv", { exact: true })).toBeVisible();
+  await expect(personCard.getByRole("button", { name: "Pausieren" })).toBeVisible();
+  await expect(personCard.getByRole("button", { name: "Entfernen" })).toBeVisible();
 
   const card = page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Fight Club" });
   await expect(card.getByText("Film oder Werk · Aktiv", { exact: true })).toBeVisible();
@@ -964,7 +975,7 @@ test("Radar zeigt mobil den schmalen Gastweg ohne technische oder serverseitige 
   await expect(card.getByRole("button", { name: "Aktivieren" })).toBeVisible();
 
   const html = await page.getByTestId("entdecken-tab").evaluate((element) => element.outerHTML);
-  expect(html).not.toMatch(/Pilot|Fixture|Proposal|JSON|Outbox|Serverrevision|(?:work|watchmode|fixture):/i);
+  expect(html).not.toMatch(/Pilot|Fixture|Proposal|JSON|Outbox|Serverrevision|(?:person|wikidata|work|watchmode|fixture):/i);
   expect(serverChecks).toBe(0);
   await keineDokumentUeberbreite(page);
 });
@@ -1095,7 +1106,9 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
 
   await page.getByRole("tab", { name: "Radar" }).click();
   await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Ins Radar", exact: true }).click();
+  await page.getByRole("heading", { name: "Ziel hinzufügen" }).locator("..").getByRole("button", {
+    name: "Ins Radar", exact: true,
+  }).click();
   const preview = page.getByRole("dialog", { name: "Ins Radar" });
   await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
   await expect(preview.getByRole("checkbox")).toBeDisabled();
@@ -2883,7 +2896,7 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
   const ueber = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Über & Rechtliches$/ }) });
-  const ueberSummary = ueber.locator("summary");
+  const ueberSummary = ueber.locator(":scope > summary");
   await expect(ueberSummary).toBeVisible();
   await ueberSummary.focus();
   await page.keyboard.press("Enter");

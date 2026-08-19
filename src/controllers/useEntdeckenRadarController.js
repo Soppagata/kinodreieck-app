@@ -6,6 +6,7 @@ import {
   applyPersonRadarCheckResult,
   createEmptyLocalRadar,
   decodeLocalRadar,
+  queueAccountPersonRadarChange,
   queueAccountRadarChange,
   queueAccountRadarPilotImport,
   queueAccountRadarPilotReceipt,
@@ -19,6 +20,10 @@ import {
 } from "../lib/localEventRadar.js";
 import { createCatalogRadarTarget, localRadarTargetLabel } from "../lib/entdeckenUi.js";
 import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
+import {
+  createPersonRadarTargetId,
+  findPersonRadarCatalogIdentity,
+} from "../lib/personRadarCatalog.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
@@ -43,7 +48,7 @@ function neueLokaleOperationId() {
 export function useEntdeckenRadarController({
   session, remoteKontoAktiv, bootDone, master, streamingKnown, streamingDiscover,
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
-  personRadarAdapter = null,
+  personRadarAdapter = radarWebsearchService,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
@@ -236,16 +241,18 @@ export function useEntdeckenRadarController({
   }, [master, streamingDiscover, streamingKnown]);
 
   const personRadarAvailable = radarAuthority === "guest"
-    && typeof personRadarAdapter?.resolve === "function"
-    && typeof personRadarAdapter?.check === "function";
+    || (radarPilotClientEnabled && remoteKontoAktiv);
+  const personRadarCheckAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
+    && radarAuthority === "account-cache" && remoteKontoAktiv
+    && radarPilotClientEnabled && radarState?.pilot?.status === "ready"
+    && radarState.pilot.radarReview === true
+    && typeof personRadarAdapter?.checkPersonNow === "function";
 
-  const fuegePersonRadarHinzu = useCallback(async ({ name, role } = {}) => {
+  const fuegePersonRadarHinzu = useCallback(async (selected = {}) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
-    let resolved;
-    try { resolved = await personRadarAdapter.resolve({ name: String(name || "").trim(), role }); }
-    catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+    const resolved = findPersonRadarCatalogIdentity(selected);
     const checked = validatePersonIdentity(resolved);
-    if (!checked.ok || resolved.name !== String(name || "").trim() || resolved.role !== role) {
+    if (!resolved || !checked.ok) {
       return Object.freeze({ status: "unresolved", writes: 0 });
     }
     const identity = Object.freeze({
@@ -254,49 +261,77 @@ export function useEntdeckenRadarController({
       role: resolved.role,
       canonical: true,
     });
+    let reason = "person-subscription-invalid";
+    const targetId = createPersonRadarTargetId(identity.personExternalId, identity.role);
     const saved = await schreibeRadarState((previous) => {
-      const result = upsertGuestPersonRadarSubscription(previous, { identity });
+      const result = previous.authority === "guest"
+        ? upsertGuestPersonRadarSubscription(previous, { identity })
+        : queueAccountPersonRadarChange(previous, {
+          operationId: neueLokaleOperationId(), action: "upsert", identity, targetId,
+        });
+      reason = result.reason;
       return result.ok ? result.state : null;
     });
-    return Object.freeze(saved === false
-      ? { status: "storage_error", writes: 0 }
-      : { status: "active", writes: 1, identity });
-  }, [personRadarAdapter, personRadarAvailable, schreibeRadarState]);
+    if (saved === false) return Object.freeze({ status: reason === "outbox-person-invalid" ? "unresolved" : "storage_error", writes: 0 });
+    if (radarAuthority === "guest") return Object.freeze({ status: "active", writes: 1, identity });
+    const synced = await syncRadarPilot(saved);
+    const active = (synced?.state?.personSubscriptions || []).some((entry) => (
+      entry.personExternalId === identity.personExternalId && entry.role === identity.role && entry.status === "active"
+    ));
+    return Object.freeze({ status: active ? "active" : "unavailable", writes: active ? 1 : 0, identity });
+  }, [personRadarAvailable, radarAuthority, schreibeRadarState, syncRadarPilot]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {
-    if (radarAuthority !== "guest") return Object.freeze({ status: "unavailable", writes: 0 });
+    if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
+    const canonical = findPersonRadarCatalogIdentity({
+      targetId: createPersonRadarTargetId(identity?.personExternalId, identity?.role),
+      personExternalId: identity?.personExternalId,
+      name: identity?.name,
+      role: identity?.role,
+    });
+    if (!canonical) return Object.freeze({ status: "unresolved", writes: 0 });
+    let reason = "person-subscription-invalid";
     const saved = await schreibeRadarState((previous) => {
-      const result = action === "remove"
-        ? removeGuestPersonRadarSubscription(previous, identity)
-        : setGuestPersonRadarSubscriptionStatus(previous, identity, action === "pause" ? "paused" : "active");
+      const result = previous.authority === "guest"
+        ? action === "remove"
+          ? removeGuestPersonRadarSubscription(previous, canonical)
+          : setGuestPersonRadarSubscriptionStatus(previous, canonical, action === "pause" ? "paused" : "active")
+        : queueAccountPersonRadarChange(previous, {
+          operationId: neueLokaleOperationId(), action, identity: canonical, targetId: canonical.targetId,
+        });
+      reason = result.reason;
       return result.ok ? result.state : null;
     });
-    return Object.freeze(saved === false
-      ? { status: "storage_error", writes: 0 }
-      : { status: action === "remove" ? "removed" : action === "pause" ? "paused" : "active", writes: 1 });
-  }, [radarAuthority, schreibeRadarState]);
+    if (saved === false) return Object.freeze({ status: reason === "outbox-person-invalid" ? "unresolved" : "storage_error", writes: 0 });
+    if (radarAuthority === "account-cache") await syncRadarPilot(saved);
+    return Object.freeze({ status: action === "remove" ? "removed" : action === "pause" ? "paused" : "active", writes: 1 });
+  }, [personRadarAvailable, radarAuthority, schreibeRadarState, syncRadarPilot]);
 
   const fuehrePersonRadarCheck = useCallback(async (identity) => {
     const state = radarStateRef.current;
     const matches = (state?.personSubscriptions || []).filter((entry) => (
       entry.personExternalId === identity?.personExternalId && entry.role === identity?.role && entry.status === "active"
     ));
-    if (!personRadarAvailable || matches.length !== 1) {
+    if (!personRadarCheckAvailable || matches.length !== 1) {
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
-    let response;
+    let serviceResult;
     try {
-      response = await personRadarAdapter.check(Object.freeze({
+      serviceResult = await personRadarAdapter.checkPersonNow(Object.freeze({
+        targetId: createPersonRadarTargetId(matches[0].personExternalId, matches[0].role),
         personExternalId: matches[0].personExternalId,
         name: matches[0].name,
         role: matches[0].role,
         canonical: true,
       }));
     } catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+    if (!serviceResult?.personResult) {
+      return Object.freeze({ status: serviceResult?.status || "invalid_response", writes: 0 });
+    }
     let reason = "person-check-invalid";
     const saved = await schreibeRadarState((previous) => {
       const result = applyPersonRadarCheckResult(previous, {
-        identity: matches[0], response, catalog: personRadarCatalog,
+        identity: matches[0], response: serviceResult.personResult, catalog: personRadarCatalog,
       });
       reason = result.reason;
       return result.ok ? result.state : null;
@@ -305,7 +340,7 @@ export function useEntdeckenRadarController({
       return Object.freeze({ status: reason === "person-check-invalid" ? "invalid_response" : "storage_error", writes: 0 });
     }
     return Object.freeze({ status: reason, writes: 1 });
-  }, [personRadarAdapter, personRadarAvailable, personRadarCatalog, radarStateRef, schreibeRadarState]);
+  }, [personRadarAdapter, personRadarCheckAvailable, personRadarCatalog, radarStateRef, schreibeRadarState]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
@@ -493,6 +528,7 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotSync,
     fuehreRadarWebsearchCheck,
     personRadarAvailable,
+    personRadarCheckAvailable,
     fuegePersonRadarHinzu,
     aenderePersonRadar,
     fuehrePersonRadarCheck,

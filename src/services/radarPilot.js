@@ -319,6 +319,10 @@ export function createRadarPilotService({
           p_scope: operation.scope,
           p_status: status,
           p_operation_id: operation.operationId,
+          ...(operation.targetType === "person" ? {
+            p_person_external_id: operation.personExternalId,
+            p_person_role: operation.personRole,
+          } : {}),
         }, fence, token);
         if (reply.kind === "pilot-unavailable") return Object.freeze(await unavailable(current, commit, fence, token, run));
         if (reply.kind === "rejected") {

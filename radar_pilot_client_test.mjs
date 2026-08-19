@@ -27,6 +27,10 @@ const operationId = "11111111-1111-4111-8111-111111111111";
 const eventId = "22222222-2222-4222-8222-222222222222";
 const eventVersionId = "33333333-3333-4333-8333-333333333333";
 const targetId = "work:tmdb:550";
+const personTargetId = "person:wikidata:Q42869:actor";
+const personIdentity = Object.freeze({
+  personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true,
+});
 const nogaTargetId = "work:imdb:tt41955949";
 const nogaDate = "2026-08-21";
 const comparePilotEvidence = (left, right) => {
@@ -60,6 +64,10 @@ const feed = (extra = {}) => ({
     status: "active", updatedAt: instant,
   }],
   events: [event()], receipts: [], operationAcks: [], radarReview: false, ...extra,
+});
+const personSubscription = (extra = {}) => ({
+  targetId: personTargetId, targetType: "person", title: "Nicolas Cage", region: "AT", scope: "all",
+  status: "active", updatedAt: instant, personExternalId: "wikidata:Q42869", personRole: "actor", ...extra,
 });
 const importPayload = (extra = {}) => ({
   targetKey: targetId, eventType: "kinostart_at", date: "2026-08-20", region: "AT", platform: "-",
@@ -263,6 +271,25 @@ await check("Pilotverträge akzeptieren Textfelder nur als echte JSON-Strings", 
   })).ok, false);
 });
 
+await check("Personen-Feed nutzt denselben Vertrag und projiziert Name plus Rolle ohne Werk-Abo", () => {
+  const payload = feed({ subscriptions: [personSubscription()], events: [] });
+  assert.equal(C.validateRadarPilotFeed(payload).ok, true);
+  assert.equal(C.validateRadarPilotFeed(feed({
+    subscriptions: [personSubscription({ personRole: "director" })], events: [],
+  })).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({
+    subscriptions: [personSubscription({ title: "wikidata:Q42869" })], events: [],
+  })).ok, false);
+  const reconciled = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }), payload,
+  );
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.subscriptions.length, 0);
+  assert.deepEqual(reconciled.state.personSubscriptions.map(({ name, role }) => ({ name, role })), [
+    { name: "Nicolas Cage", role: "actor" },
+  ]);
+});
+
 function queuedAccountState() {
   return R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
     operationId, action: "upsert",
@@ -420,6 +447,46 @@ await check("Subscription-Outbox läuft seriell mit maximaler Parallelität eins
   assert.equal(maxActiveRequests, 1);
   assert.equal(bodies.filter((entry) => entry.url.endsWith("set_subscription")).length, 2);
   assert.equal(h.state.outbox.length, 0);
+});
+
+await check("Personen-Discriminator läuft über dieselbe Subscription-RPC ohne zweite Queue", async () => {
+  const operation = "77777777-7777-4777-8777-777777777777";
+  const state = R.queueAccountPersonRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: operation, action: "upsert", identity: personIdentity, targetId: personTargetId, now: instant,
+  }).state;
+  const calls = [];
+  const h = harness({
+    state,
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ url, body });
+      if (url.endsWith("kd_radar_pilot_feed")) {
+        return response(200, feed({ subscriptions: [], events: [] }));
+      }
+      if (url.endsWith("kd_radar_pilot_set_subscription")) {
+        return response(200, subscriptionAck({
+          operationId: operation, targetId: personTargetId, status: "active",
+        }));
+      }
+      throw new Error("unexpected rpc");
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready");
+  const write = calls.find((entry) => entry.url.endsWith("kd_radar_pilot_set_subscription"));
+  assert.deepEqual(write.body, {
+    p_target_key: personTargetId,
+    p_scope: "all",
+    p_status: "active",
+    p_operation_id: operation,
+    p_person_external_id: "wikidata:Q42869",
+    p_person_role: "actor",
+  });
+  assert.equal(calls.filter((entry) => entry.url.endsWith("kd_radar_pilot_set_subscription")).length, 1);
+  assert.equal(h.state.outbox.length, 0);
+  assert.deepEqual(h.state.personSubscriptions.map(({ name, role, status, authority }) => ({
+    name, role, status, authority,
+  })), [{ name: "Nicolas Cage", role: "actor", status: "active", authority: "server" }]);
 });
 
 await check("Überlappende explizite Syncs senden dieselbe Operation instanzweit nur einmal", async () => {

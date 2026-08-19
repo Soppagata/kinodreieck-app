@@ -11,6 +11,7 @@ import {
 } from "../lib/entdeckenUi.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
+import { searchPersonRadarCatalog } from "../lib/personRadarCatalog.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -277,12 +278,14 @@ function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
   onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarCheck,
+  personRadarAvailable = false, personRadarCheckAvailable = false,
+  onPersonRadarAdd, onPersonRadarCheck,
   onRadarChange, onPersonRadarChange, today = null,
 }) {
   const [selectedWork, setSelectedWork] = useState("");
-  const [personName, setPersonName] = useState("");
+  const [personQuery, setPersonQuery] = useState("");
   const [personRole, setPersonRole] = useState("actor");
+  const [selectedPerson, setSelectedPerson] = useState("");
   const [personAddBusy, setPersonAddBusy] = useState(false);
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState(null);
@@ -291,6 +294,8 @@ function RadarView({
     [master, streamingDiscover, streamingKnown],
   );
   const targetByToken = useMemo(() => new Map(targets.map((target, index) => [`werk-${index}`, target])), [targets]);
+  const personSearch = useMemo(() => searchPersonRadarCatalog({ query: personQuery, role: personRole }), [personQuery, personRole]);
+  const personByToken = useMemo(() => new Map(personSearch.entries.map((entry, index) => [`person-${index}`, entry])), [personSearch]);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const personResults = radarState?.personResults || [];
@@ -312,6 +317,13 @@ function RadarView({
   const weekEvents = events.filter((entry) => entry.date >= startDay && entry.date <= weekEnd);
   const otherEvents = events.filter((entry) => entry.date < startDay || entry.date > weekEnd);
   const canCheckWork = accountMode && radarCheckAvailable && typeof onRadarWebsearchCheck === "function";
+  const canCheckPerson = accountMode && personRadarCheckAvailable && typeof onPersonRadarCheck === "function";
+  const personWeekResults = personResults.map((result) => ({
+    ...result,
+    decisions: result.decisions.filter((entry) => (
+      entry.status === "matched" && entry.work && entry.date >= startDay && entry.date <= weekEnd
+    )),
+  })).filter((result) => result.decisions.length);
 
   const addWork = () => {
     const target = targetByToken.get(selectedWork);
@@ -320,13 +332,13 @@ function RadarView({
     setMessage({ status: "active", text: "Prüfe das Werk und bestätige es anschließend für dein Radar." });
   };
   const addPerson = async () => {
-    const name = personName.trim();
-    if (!personRadarAvailable || !name || personAddBusy) return;
+    const identity = personByToken.get(selectedPerson);
+    if (!personRadarAvailable || !identity || personAddBusy) return;
     setPersonAddBusy(true); setMessage(null);
     try {
-      const result = await onPersonRadarAdd?.({ name, role: personRole });
+      const result = await onPersonRadarAdd?.(identity);
       setMessage({ status: result?.status, text: statusText(result?.status, "person") });
-      if (result?.status === "active") setPersonName("");
+      if (result?.status === "active") { setPersonQuery(""); setSelectedPerson(""); }
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
     finally { setPersonAddBusy(false); }
   };
@@ -340,7 +352,7 @@ function RadarView({
     finally { setBusyKey(""); }
   };
   const checkPerson = async (entry) => {
-    if (!personRadarAvailable || busyKey) return;
+    if (!canCheckPerson || busyKey) return;
     setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
     try {
       const result = await onPersonRadarCheck?.(entry);
@@ -353,7 +365,7 @@ function RadarView({
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
       <p>{accountMode
-        ? canCheckWork
+        ? canCheckWork || canCheckPerson
           ? "Du startest jede Online-Prüfung selbst mit „Jetzt prüfen“. Es läuft keine automatische Prüfung."
           : "Deine Kontoziele bleiben sichtbar. Die manuelle Online-Prüfung ist derzeit nicht verfügbar."
         : "Im Gast- und Einzeldatei-Modus bleiben Ziele auf diesem Gerät. Es läuft keine serverseitige Prüfung."} Ergebnisse erscheinen erst, wenn Werk, Österreich-Bezug und Datum eindeutig belegt sind.</p>
@@ -373,14 +385,28 @@ function RadarView({
       <article className="kd-entdecken-panel">
         <h3>Person hinzufügen</h3>
         {personRadarAvailable ? <div className="kd-entdecken-formzeile">
-          <label htmlFor="kd-radar-person">Name</label>
-          <input id="kd-radar-person" value={personName} maxLength={160} autoComplete="off" onChange={(event) => setPersonName(event.target.value)} />
+          <label htmlFor="kd-radar-person">Person suchen</label>
+          <input id="kd-radar-person" value={personQuery} maxLength={160} autoComplete="off"
+            placeholder="Kanonischen Namen eingeben"
+            onChange={(event) => { setPersonQuery(event.target.value); setSelectedPerson(""); }} />
           <label htmlFor="kd-radar-role">Rolle</label>
-          <select id="kd-radar-role" value={personRole} onChange={(event) => setPersonRole(event.target.value)}>
+          <select id="kd-radar-role" value={personRole}
+            onChange={(event) => { setPersonRole(event.target.value); setSelectedPerson(""); }}>
             <option value="actor">Schauspiel</option><option value="director">Regie</option>
           </select>
-          <button type="button" className="kd-entdecken-primaer" disabled={!personName.trim() || personAddBusy} onClick={addPerson}>
-            {personAddBusy ? "Wird angelegt…" : "Person ins Radar"}
+          {personSearch.entries.length ? <>
+            <label htmlFor="kd-radar-person-result">Eindeutige Person</label>
+            <select id="kd-radar-person-result" value={selectedPerson} onChange={(event) => setSelectedPerson(event.target.value)}>
+              <option value="">Person auswählen</option>
+              {personSearch.entries.map((entry, index) => <option key={`${entry.personExternalId}|${entry.role}`}
+                value={`person-${index}`}>{entry.name} · {ROLLEN_LABEL[entry.role]}</option>)}
+            </select>
+          </> : null}
+          {personSearch.status === "role_mismatch" ? <p className="kd-entdecken-leer" role="status">Name gefunden, aber nicht in der gewählten Rolle.</p> : null}
+          {personSearch.status === "ambiguous" ? <p className="kd-entdecken-leer" role="status">Mehrdeutiger Name. Bitte keine Person automatisch auswählen.</p> : null}
+          {personSearch.status === "no_match" ? <p className="kd-entdecken-leer" role="status">Keine kuratierte Person gefunden.</p> : null}
+          <button type="button" className="kd-entdecken-primaer" disabled={!selectedPerson || personAddBusy} onClick={addPerson}>
+            {personAddBusy ? "Wird angelegt…" : "Ins Radar"}
           </button>
         </div> : <p className="kd-entdecken-leer" role="status">Die Personensuche ist derzeit nicht verfügbar. Bereits bestätigte Personen bleiben sichtbar.</p>}
       </article>
@@ -408,7 +434,7 @@ function RadarView({
         </RadarZielkarte>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <RadarZielkarte key={`${entry.personExternalId}|${entry.role}`}
           title={entry.name} typeLabel={zielTypLabel(entry)} status={entry.status}>
-          {entry.status === "active" && personRadarAvailable ? <button type="button" className="kd-entdecken-sekundaer"
+          {entry.status === "active" && canCheckPerson ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkPerson(entry)}>
             {busyKey === `person|${entry.personExternalId}|${entry.role}` ? "Wird geprüft…" : "Jetzt prüfen"}
           </button> : null}
@@ -426,19 +452,25 @@ function RadarView({
         <h3>Diese Woche</h3>
         {weekEvents.length
           ? <RadarEreignisse entries={weekEvents} receiptByEvent={receiptByEvent} onReceipt={onRadarPilotReceipt} />
-          : <p className="kd-entdecken-leer">{events.length
+          : !personWeekResults.length ? <p className="kd-entdecken-leer">{events.length
             ? "Für die nächsten sieben Tage gibt es noch kein bestätigtes Ereignis."
-            : "Noch keine bestätigten Ereignisse für deine aktiven Ziele."}</p>}
+            : "Noch keine bestätigten Ereignisse für deine aktiven Ziele."}</p> : null}
         {otherEvents.length ? <section className="kd-entdecken-weitere-ereignisse">
           <h4>Weitere bestätigte Ereignisse</h4>
           <RadarEreignisse entries={otherEvents} receiptByEvent={receiptByEvent} onReceipt={onRadarPilotReceipt} />
         </section> : null}
-        {personResults.map((result) => {
-          const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
+        {personWeekResults.map((result) => {
+          const matches = result.decisions;
           return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
             <h4>{result.name} · {ROLLEN_LABEL[result.role]}</h4>
-            {matches.length ? <ul>{matches.map((entry) => <li key={entry.work.targetId}>
-              <strong>{entry.work.title}</strong><span>{entry.work.year}</span>
+            {matches.length ? <ul>{matches.map((entry) => <li key={`${entry.work.targetId}|${entry.eventType}|${entry.date}|${entry.platform}`}>
+              <strong>{entry.work.title}</strong>
+              <span>Kuratierter Treffer · {lesbarerTag(entry.date)} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}
+                {entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
+              <div className="kd-radar-quellen"><span>Quellen</span><div className="kd-radar-quellen-links">
+                {entry.evidence.map((item) => <a className="kd-radar-quellen-link" href={item.url}
+                  key={item.url} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
+              </div></div>
             </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Werke.</p>}
           </section>;
         })}
@@ -452,7 +484,8 @@ export function EntdeckenTab({
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
+  personRadarAvailable = false, personRadarCheckAvailable = false,
+  onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
   today = null,
 }) {
@@ -490,6 +523,7 @@ export function EntdeckenTab({
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
       onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
+      personRadarCheckAvailable={personRadarCheckAvailable}
       onPersonRadarCheck={onPersonRadarCheck} onRadarChange={onRadarChange}
       onPersonRadarChange={onPersonRadarChange} today={today} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}

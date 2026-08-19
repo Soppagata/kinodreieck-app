@@ -281,6 +281,7 @@ export function createRadarWebsearchHandler({
       providerRequests: telemetry.providerRequests || 0,
       searchRequests: telemetry.searchRequests || 0,
       phaseCode: safePhaseCode(telemetry.phaseCode),
+      ...(result.personResult ? { personResult: result.personResult } : {}),
     }, httpStatus, origin);
   };
 }

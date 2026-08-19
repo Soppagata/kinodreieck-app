@@ -115,8 +115,16 @@ await check("Validierter Personen-Treffer bleibt im Cache und erzeugt keinen Aut
     identity,
     catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
     response: {
-      status: "confirmed", checkedAt: "2026-08-09T12:02:00.000Z", person: identity,
-      candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+      status: "confirmed", checkedAt: "2026-08-09T12:02:00.000Z",
+      windowStart: "2026-08-09", windowEnd: "2026-08-15", person: identity,
+      candidates: [{
+        targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+        role: "actor", eventType: "streamingstart_at", date: "2026-08-12", region: "AT", platform: "Netflix",
+        evidence: [{
+          sourceId: "netflix-at", sourceDomain: "netflix.example", url: "https://netflix.example/dream-scenario",
+          retrievedAt: "2026-08-09T12:02:00.000Z",
+        }],
+      }],
     },
   });
   assert.equal(applied.ok, true);
@@ -178,6 +186,26 @@ await check("Accountänderung landet nur in der Outbox und aktiviert kein Abo", 
   assert.equal(queued.state.outbox.length, 1);
   assert.equal(queued.state.subscriptions.length, 0);
   assert.equal(queued.createsProviderJob, false);
+});
+
+await check("Personenänderung nutzt dieselbe Outbox mit geschlossenem ID- und Rollen-Discriminator", () => {
+  const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const queued = R.queueAccountPersonRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: "fixture:operation:person-01", action: "upsert", identity,
+    targetId: "person:wikidata:Q42869:actor", now: instant,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal(queued.state.outbox.length, 1);
+  assert.equal(queued.state.outbox[0].targetType, "person");
+  assert.equal(queued.state.outbox[0].personExternalId, "wikidata:Q42869");
+  assert.equal(queued.state.outbox[0].personRole, "actor");
+  assert.equal(queued.state.subscriptions.length, 0);
+  assert.equal(queued.state.personSubscriptions.length, 0);
+  assert.equal(queued.createsProviderJob, false);
+  assert.equal(R.queueAccountPersonRadarChange(queued.state, {
+    operationId: "fixture:operation:person-role-conflict", action: "upsert", identity,
+    targetId: "person:wikidata:Q42869:director", now: instant,
+  }).ok, false);
 });
 
 await check("Outbox-Vorgangs-ID ist idempotent und kollisionsfest", () => {

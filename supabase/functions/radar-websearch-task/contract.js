@@ -13,6 +13,8 @@ export const RADAR_WEBSEARCH_SCOPES = Object.freeze([
   "cinema", "streaming", "series_start", "season_start",
 ]);
 export const RADAR_WEBSEARCH_MAX_RESULTS = 6;
+export const RADAR_WEBSEARCH_PERSON_MAX_CANDIDATES = 3;
+export const RADAR_WEBSEARCH_PERSON_ROLES = Object.freeze(["actor", "director"]);
 
 const EVENT_SCOPE = Object.freeze({
   kinostart_at: "cinema",
@@ -71,7 +73,66 @@ function parsedDirectUrl(value) {
 }
 function compareText(a, b) { return text(a).localeCompare(text(b), "de"); }
 
+function dayNumber(value) {
+  return validDay(value) ? Math.floor(Date.parse(`${value}T00:00:00.000Z`) / 86400000) : null;
+}
+
+function validCatalogWork(value) {
+  return exactKeys(value, ["targetId", "targetType", "title", "year"])
+    && Object.keys(value).length === 4
+    && TARGET_ID_FORM.test(text(value.targetId)) && text(value.targetId) === value.targetId
+    && !/^(?:fixture|synthetic):/i.test(value.targetId)
+    && ["work", "series"].includes(value.targetType)
+    && typeof value.title === "string" && text(value.title) === value.title
+    && value.title.length >= 1 && value.title.length <= 200
+    && validYear(value.year);
+}
+
+export function validatePersonRadarWebsearchRequest(value) {
+  const required = [
+    "kind", "targetId", "personExternalId", "canonicalName", "role", "region",
+    "windowStart", "windowEnd", "catalog",
+  ];
+  if (!exactKeys(value, required) || Object.keys(value || {}).length !== required.length) {
+    return result(["request-shape-invalid"]);
+  }
+  const errors = [];
+  if (value.kind !== "person") errors.push("request-kind-invalid");
+  if (!TARGET_ID_FORM.test(text(value.personExternalId)) || text(value.personExternalId) !== value.personExternalId
+      || /^(?:fixture|synthetic):/i.test(value.personExternalId)) errors.push("request-person-id-invalid");
+  if (!RADAR_WEBSEARCH_PERSON_ROLES.includes(value.role)) errors.push("request-person-role-invalid");
+  const expectedTarget = `person:${value.personExternalId}:${value.role}`;
+  if (value.targetId !== expectedTarget || !TARGET_ID_FORM.test(text(value.targetId))) {
+    errors.push("request-target-invalid");
+  }
+  if (typeof value.canonicalName !== "string" || text(value.canonicalName) !== value.canonicalName
+      || value.canonicalName.length < 1 || value.canonicalName.length > 160
+      || value.canonicalName === value.personExternalId) errors.push("request-person-name-invalid");
+  if (value.region !== "AT") errors.push("request-region-invalid");
+  const start = dayNumber(value.windowStart);
+  const end = dayNumber(value.windowEnd);
+  if (start == null || end == null || end - start !== 6) errors.push("request-window-invalid");
+  if (!Array.isArray(value.catalog) || value.catalog.length < 1 || value.catalog.length > RADAR_WEBSEARCH_MAX_RESULTS
+      || value.catalog.some((entry) => !validCatalogWork(entry))) errors.push("request-catalog-invalid");
+  else if (new Set(value.catalog.map((entry) => entry.targetId)).size !== value.catalog.length) {
+    errors.push("request-catalog-duplicate");
+  }
+  if (errors.length) return result(errors);
+  return result([], freezeDeep({
+    kind: "person",
+    targetId: value.targetId,
+    personExternalId: value.personExternalId,
+    canonicalName: value.canonicalName,
+    role: value.role,
+    region: "AT",
+    windowStart: value.windowStart,
+    windowEnd: value.windowEnd,
+    catalog: value.catalog.map((entry) => ({ ...entry })),
+  }));
+}
+
 export function validateRadarWebsearchRequest(value) {
+  if (value?.kind === "person") return validatePersonRadarWebsearchRequest(value);
   const required = ["targetId", "canonicalTitle", "mediaType", "region", "scopes"];
   const optional = ["releaseYear", "knownEvidenceUrls"];
   if (!exactKeys(value, required, optional)) return result(["request-shape-invalid"]);
@@ -261,6 +322,175 @@ function selectEvidence(event, sourceRegistry, checkedAt, errors) {
   }));
 }
 
+function validatePersonEcho(person, request, errors) {
+  const keys = ["personExternalId", "canonicalName", "role"];
+  if (!exactKeys(person, keys) || Object.keys(person || {}).length !== keys.length) {
+    errors.push("response-person-shape-invalid");
+    return;
+  }
+  if (person.personExternalId !== request.personExternalId) errors.push("response-person-id-mismatch");
+  if (person.canonicalName !== request.canonicalName) errors.push("response-person-name-mismatch");
+  if (person.role !== request.role) errors.push("response-person-role-mismatch");
+}
+
+function validatePersonCandidateShape(candidate, errors) {
+  const required = [
+    "targetId", "targetType", "title", "year", "role", "eventType", "eventDate",
+    "region", "platform", "evidence",
+  ];
+  if (!exactKeys(candidate, required) || Object.keys(candidate || {}).length !== required.length) {
+    errors.push("response-person-candidate-shape-invalid");
+    return;
+  }
+  if (!validCatalogWork({
+    targetId: candidate.targetId,
+    targetType: candidate.targetType,
+    title: candidate.title,
+    year: candidate.year,
+  })) errors.push("response-person-work-invalid");
+  if (!RADAR_WEBSEARCH_PERSON_ROLES.includes(candidate.role)) errors.push("response-person-role-invalid");
+  if (!RADAR_WEBSEARCH_EVENT_TYPES.includes(candidate.eventType)) errors.push("response-person-event-type-invalid");
+  if (!validDay(candidate.eventDate)) errors.push("response-person-date-invalid");
+  if (candidate.region !== "AT") errors.push("response-person-region-invalid");
+  if (candidate.eventType === "streamingstart_at") {
+    if (typeof candidate.platform !== "string" || text(candidate.platform) !== candidate.platform
+        || !candidate.platform || candidate.platform === "-" || candidate.platform.length > 80) {
+      errors.push("response-person-platform-invalid");
+    }
+  } else if (candidate.platform !== "-") errors.push("response-person-platform-invalid");
+  if (!Array.isArray(candidate.evidence) || candidate.evidence.length < 1
+      || candidate.evidence.length > RADAR_WEBSEARCH_MAX_RESULTS) errors.push("response-person-evidence-invalid");
+  else for (const evidence of candidate.evidence) validateEvidenceShape(evidence, errors);
+}
+
+export function evaluatePersonRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput = []) {
+  const requestCheck = validatePersonRadarWebsearchRequest(requestInput);
+  if (!requestCheck.ok) {
+    return Object.freeze({ status: "invalid_response", personResult: null, errors: requestCheck.errors });
+  }
+  const request = requestCheck.value;
+  if (!exactKeys(envelope, ["searchResultCount", "response"])
+      || Object.keys(envelope || {}).length !== 2
+      || !Number.isInteger(envelope.searchResultCount) || envelope.searchResultCount < 0
+      || envelope.searchResultCount > RADAR_WEBSEARCH_MAX_RESULTS) {
+    return Object.freeze({ status: "invalid_response", personResult: null, errors: Object.freeze(["adapter-envelope-invalid"]) });
+  }
+  const response = envelope.response;
+  if (!exactKeys(response, ["status", "checkedAt", "person", "candidates"])
+      || Object.keys(response || {}).length !== 4) {
+    return Object.freeze({ status: "invalid_response", personResult: null, errors: Object.freeze(["response-shape-invalid"]) });
+  }
+  const shapeErrors = [];
+  if (!RADAR_WEBSEARCH_STATUSES.includes(response.status)) shapeErrors.push("response-status-invalid");
+  if (!validInstant(response.checkedAt)) shapeErrors.push("response-checked-at-invalid");
+  validatePersonEcho(response.person, request, shapeErrors);
+  if (!Array.isArray(response.candidates) || response.candidates.length > RADAR_WEBSEARCH_PERSON_MAX_CANDIDATES) {
+    shapeErrors.push("response-person-candidates-invalid");
+  } else for (const candidate of response.candidates) validatePersonCandidateShape(candidate, shapeErrors);
+  if (shapeErrors.some((error) => error.includes("shape-invalid") || error.endsWith("-invalid"))) {
+    return Object.freeze({ status: "invalid_response", personResult: null, errors: uniqueErrors(shapeErrors) });
+  }
+  const emptyResult = () => freezeDeep({
+    status: response.status,
+    checkedAt: response.checkedAt,
+    windowStart: request.windowStart,
+    windowEnd: request.windowEnd,
+    person: {
+      personExternalId: request.personExternalId,
+      name: request.canonicalName,
+      role: request.role,
+      canonical: true,
+    },
+    candidates: [],
+  });
+  if (response.status !== "confirmed") {
+    const errors = [...shapeErrors];
+    if (response.candidates.length) errors.push("response-nonconfirmed-candidates-forbidden");
+    const status = errors.length ? "insufficient_evidence" : response.status;
+    const personResult = emptyResult();
+    return Object.freeze({ status, personResult: freezeDeep({ ...personResult, status }), errors: uniqueErrors(errors) });
+  }
+
+  const errors = [...shapeErrors];
+  if (!response.candidates.length) errors.push("response-confirmed-candidates-required");
+  const evidenceCount = new Set(response.candidates.flatMap((candidate) => (
+    Array.isArray(candidate.evidence) ? candidate.evidence.map((entry) => entry.url) : []
+  ))).size;
+  if (evidenceCount > envelope.searchResultCount) errors.push("response-evidence-count-exceeds-results");
+  const registry = Array.isArray(sourceRegistryInput) ? sourceRegistryInput : [];
+  if (registry.some((source) => !validSourceRow(source))) errors.push("source-registry-invalid");
+  const seen = new Map();
+  const normalized = [];
+  for (const candidate of response.candidates) {
+    const catalogMatches = request.catalog.filter((entry) => entry.targetId === candidate.targetId);
+    const catalogWork = catalogMatches.length === 1 ? catalogMatches[0] : null;
+    if (!catalogWork || catalogWork.targetType !== candidate.targetType
+        || catalogWork.title !== candidate.title || catalogWork.year !== candidate.year) {
+      errors.push("response-person-work-mismatch");
+      continue;
+    }
+    if (candidate.role !== request.role) errors.push("response-person-role-mismatch");
+    if (candidate.eventDate < request.windowStart || candidate.eventDate > request.windowEnd) {
+      errors.push("response-person-date-outside-window");
+    }
+    if (candidate.targetType === "work" && ["serienstart", "staffelstart"].includes(candidate.eventType)) {
+      errors.push("response-person-work-type-conflict");
+    }
+    if (candidate.targetType === "series" && candidate.eventType === "kinostart_at") {
+      errors.push("response-person-work-type-conflict");
+    }
+    const key = [candidate.targetId, candidate.eventType, candidate.platform].join("|");
+    const previousDate = seen.get(key);
+    if (previousDate && previousDate !== candidate.eventDate) errors.push("response-person-date-conflict");
+    if (previousDate) continue;
+    seen.set(key, candidate.eventDate);
+    const evidence = selectEvidence({ evidence: candidate.evidence }, registry, response.checkedAt, errors)
+      .map((entry) => ({
+        sourceId: entry.sourceId,
+        sourceDomain: entry.sourceDomain,
+        url: entry.url,
+        retrievedAt: entry.retrievedAt,
+      }));
+    normalized.push({
+      targetId: catalogWork.targetId,
+      targetType: catalogWork.targetType,
+      title: catalogWork.title,
+      year: catalogWork.year,
+      role: request.role,
+      eventType: candidate.eventType,
+      date: candidate.eventDate,
+      region: "AT",
+      platform: candidate.platform,
+      evidence,
+    });
+  }
+  if (errors.length) {
+    return Object.freeze({
+      status: "insufficient_evidence",
+      personResult: freezeDeep({ ...emptyResult(), status: "insufficient_evidence" }),
+      errors: uniqueErrors(errors),
+    });
+  }
+  normalized.sort((a, b) => compareText(a.date, b.date) || compareText(a.title, b.title));
+  return Object.freeze({
+    status: "confirmed",
+    personResult: freezeDeep({
+      status: "confirmed",
+      checkedAt: response.checkedAt,
+      windowStart: request.windowStart,
+      windowEnd: request.windowEnd,
+      person: {
+        personExternalId: request.personExternalId,
+        name: request.canonicalName,
+        role: request.role,
+        canonical: true,
+      },
+      candidates: normalized,
+    }),
+    errors: Object.freeze([]),
+  });
+}
+
 function eventIdentity(event) {
   return [event.eventType, event.platform || "-", event.seasonNumber || "-"].join("|");
 }
@@ -269,6 +499,9 @@ function eventIdentity(event) {
    insufficient_evidence heruntergestuft. Nur strukturell kaputte Antworten
    sind invalid-response. */
 export function evaluateRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput = []) {
+  if (requestInput?.kind === "person") {
+    return evaluatePersonRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput);
+  }
   const requestCheck = validateRadarWebsearchRequest(requestInput);
   if (!requestCheck.ok) return Object.freeze({ status: "invalid_response", events: Object.freeze([]), errors: requestCheck.errors });
   const request = requestCheck.value;

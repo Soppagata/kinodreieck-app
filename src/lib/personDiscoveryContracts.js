@@ -9,6 +9,9 @@ export const PERSON_DISCOVERY_CANDIDATE_STATUSES = Object.freeze(["candidate", "
 export const PERSON_DISCOVERY_MATCH_STATUSES = Object.freeze(["matched", "no_match", "ambiguous"]);
 export const PERSON_DISCOVERY_CHECK_STATUSES = Object.freeze(["confirmed", "insufficient_evidence", "no_change"]);
 export const PERSON_DISCOVERY_MAX_CANDIDATES = 6;
+export const PERSON_DISCOVERY_EVENT_TYPES = Object.freeze([
+  "kinostart_at", "streamingstart_at", "serienstart", "staffelstart",
+]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -31,6 +34,99 @@ function usefulTitle(value) {
 
 function validYear(value) {
   return Number.isInteger(value) && value >= 1888 && value <= new Date().getUTCFullYear() + 10;
+}
+
+function validDay(value) {
+  const normalized = text(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+  const millis = Date.parse(`${normalized}T00:00:00.000Z`);
+  return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === normalized;
+}
+
+function dayNumber(value) {
+  return validDay(value) ? Math.floor(Date.parse(`${value}T00:00:00.000Z`) / 86400000) : null;
+}
+
+function validInstant(value) {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text(value))
+    && Number.isFinite(Date.parse(value));
+}
+
+function validDomain(value) {
+  const domain = text(value);
+  return domain === value && domain === domain.toLowerCase() && domain.length <= 253
+    && domain.split(".").length >= 2
+    && domain.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+
+function validEvidenceUrl(value, sourceDomain) {
+  if (typeof value !== "string" || text(value) !== value || value.length > 2048) return false;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.port && !parsed.hash
+      && (host === sourceDomain || host.endsWith(`.${sourceDomain}`));
+  } catch { return false; }
+}
+
+function validatePersonCandidate(candidate, { role, windowStart, windowEnd, checkedAt }) {
+  const errors = [];
+  const keys = [
+    "targetId", "targetType", "title", "year", "role", "eventType", "date",
+    "region", "platform", "evidence",
+  ];
+  if (!exactKeys(candidate, keys) || keys.some((key) => !(key in candidate))) {
+    return ["person-candidate-shape-invalid"];
+  }
+  const matchInput = {
+    targetId: candidate.targetId,
+    targetType: candidate.targetType,
+    title: candidate.title,
+    year: candidate.year,
+  };
+  if (matchPersonWorkCandidate(matchInput, [matchInput]).status !== "matched") {
+    errors.push("person-candidate-work-invalid");
+  }
+  if (candidate.role !== role) errors.push("person-candidate-role-mismatch");
+  if (!PERSON_DISCOVERY_EVENT_TYPES.includes(candidate.eventType)) errors.push("person-candidate-event-type-invalid");
+  if (!validDay(candidate.date) || candidate.date < windowStart || candidate.date > windowEnd) {
+    errors.push("person-candidate-date-invalid");
+  }
+  if (candidate.region !== "AT") errors.push("person-candidate-region-invalid");
+  if (candidate.eventType === "streamingstart_at") {
+    if (!text(candidate.platform) || text(candidate.platform) !== candidate.platform || candidate.platform === "-"
+        || candidate.platform.length > 80) errors.push("person-candidate-platform-invalid");
+  } else if (candidate.platform !== "-") errors.push("person-candidate-platform-invalid");
+  if (candidate.targetType === "work" && ["serienstart", "staffelstart"].includes(candidate.eventType)) {
+    errors.push("person-candidate-type-conflict");
+  }
+  if (candidate.targetType === "series" && candidate.eventType === "kinostart_at") {
+    errors.push("person-candidate-type-conflict");
+  }
+  if (!Array.isArray(candidate.evidence) || candidate.evidence.length < 1 || candidate.evidence.length > 2) {
+    errors.push("person-candidate-evidence-invalid");
+  } else {
+    const sourceIds = new Set();
+    const sourceDomains = new Set();
+    const urls = new Set();
+    for (const evidence of candidate.evidence) {
+      if (!exactKeys(evidence, ["sourceId", "sourceDomain", "url", "retrievedAt"])
+          || !["sourceId", "sourceDomain", "url", "retrievedAt"].every((key) => key in evidence)) {
+        errors.push("person-candidate-evidence-shape-invalid");
+        continue;
+      }
+      if (!isStableContractId(evidence.sourceId)) errors.push("person-candidate-evidence-source-invalid");
+      if (!validDomain(evidence.sourceDomain)) errors.push("person-candidate-evidence-domain-invalid");
+      if (!validEvidenceUrl(evidence.url, evidence.sourceDomain)) errors.push("person-candidate-evidence-url-invalid");
+      if (!validInstant(evidence.retrievedAt) || Date.parse(evidence.retrievedAt) > Date.parse(checkedAt)) {
+        errors.push("person-candidate-evidence-time-invalid");
+      }
+      if (sourceIds.has(evidence.sourceId) || sourceDomains.has(evidence.sourceDomain)
+          || urls.has(evidence.url)) errors.push("person-candidate-evidence-duplicate");
+      sourceIds.add(evidence.sourceId); sourceDomains.add(evidence.sourceDomain); urls.add(evidence.url);
+    }
+  }
+  return errors;
 }
 
 function publicLabel(value) {
@@ -142,9 +238,8 @@ export function createCandidateRadarDraft(candidate, { mode = "production" } = {
   });
 }
 
-/* Eine gemeinsame starke Werk-ID gewinnt. Ohne gemeinsame ID ist ausschließlich
-   ein eindeutiger Titel+Jahr-Treffer zulässig; unscharfe Ähnlichkeit bleibt
-   bewusst außerhalb dieses Vertrags. */
+/* Eine gemeinsame starke Werk-ID gewinnt. Ohne gemeinsame ID darf Titel+Jahr
+   höchstens Mehrdeutigkeit belegen, aber niemals automatisch matchen. */
 export function matchPersonWorkCandidate(candidate, catalog = []) {
   if (!plain(candidate) || !exactKeys(candidate, ["targetId", "targetType", "title", "year"])
       || !publicLabel(candidate.title) || text(candidate.title).length > 240 || !validYear(candidate.year)
@@ -170,10 +265,7 @@ export function matchPersonWorkCandidate(candidate, catalog = []) {
   if (!usefulTitle(candidate.title)) return Object.freeze({ status: "no_match", work: null });
   const title = normalizedTitle(candidate.title);
   const fallback = works.filter((entry) => normalizedTitle(entry.title) === title && entry.year === candidate.year);
-  if (fallback.length !== 1) {
-    return Object.freeze({ status: fallback.length > 1 ? "ambiguous" : "no_match", work: null });
-  }
-  return Object.freeze({ status: "matched", work: fallback[0] });
+  return Object.freeze({ status: fallback.length ? "ambiguous" : "no_match", work: null });
 }
 
 /* Dies ist der kleine lokale Adaptervertrag, nicht die Payload eines fremden
@@ -181,12 +273,17 @@ export function matchPersonWorkCandidate(candidate, catalog = []) {
    Werkkandidaten durch; ein Treffer erzeugt ausdrücklich kein Werk-Abo. */
 export function validatePersonRadarCheckResult(value, { identity, catalog = [], mode = "production" } = {}) {
   const errors = [];
-  if (!plain(value) || !exactKeys(value, ["status", "checkedAt", "person", "candidates"])) {
+  if (!plain(value) || !exactKeys(value, ["status", "checkedAt", "windowStart", "windowEnd", "person", "candidates"])
+      || !["status", "checkedAt", "windowStart", "windowEnd", "person", "candidates"].every((key) => key in value)) {
     return Object.freeze({ ok: false, errors: Object.freeze(["person-check-shape-invalid"]), result: null });
   }
   if (!PERSON_DISCOVERY_CHECK_STATUSES.includes(value.status)) errors.push("person-check-status-invalid");
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(text(value.checkedAt))
-      || !Number.isFinite(Date.parse(value.checkedAt))) errors.push("person-check-time-invalid");
+  if (!validInstant(value.checkedAt)) errors.push("person-check-time-invalid");
+  const startNumber = dayNumber(value.windowStart);
+  const endNumber = dayNumber(value.windowEnd);
+  if (startNumber == null || endNumber == null || endNumber - startNumber !== 6) {
+    errors.push("person-check-window-invalid");
+  }
   const personCheck = validatePersonIdentity(value.person, { mode });
   if (!personCheck.ok) errors.push("person-check-identity-invalid");
   const expectedKey = createPersonIdentityKey(identity);
@@ -194,16 +291,33 @@ export function validatePersonRadarCheckResult(value, { identity, catalog = [], 
       || text(value.person?.name) !== text(identity?.name)) errors.push("person-check-identity-mismatch");
   if (!Array.isArray(value.candidates) || value.candidates.length > PERSON_DISCOVERY_MAX_CANDIDATES) {
     errors.push("person-check-candidates-invalid");
+  } else {
+    for (const candidate of value.candidates) errors.push(...validatePersonCandidate(candidate, {
+      role: identity?.role,
+      windowStart: value.windowStart,
+      windowEnd: value.windowEnd,
+      checkedAt: value.checkedAt,
+    }));
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), result: null });
 
   const decisions = value.candidates.map((candidate) => {
-    const decision = matchPersonWorkCandidate(candidate, catalog);
+    const decision = matchPersonWorkCandidate({
+      targetId: candidate.targetId,
+      targetType: candidate.targetType,
+      title: candidate.title,
+      year: candidate.year,
+    }, catalog);
     return Object.freeze({
       status: decision.status,
       title: text(candidate.title),
       year: candidate.year,
       work: decision.work,
+      eventType: candidate.eventType,
+      date: candidate.date,
+      region: "AT",
+      platform: candidate.platform,
+      evidence: Object.freeze(candidate.evidence.map((entry) => Object.freeze({ ...entry }))),
     });
   });
   const matched = decisions.filter((entry) => entry.status === "matched");
@@ -217,6 +331,8 @@ export function validatePersonRadarCheckResult(value, { identity, catalog = [], 
     result: Object.freeze({
       status: value.status,
       checkedAt: new Date(value.checkedAt).toISOString(),
+      windowStart: value.windowStart,
+      windowEnd: value.windowEnd,
       person: Object.freeze({
         personExternalId: text(value.person.personExternalId),
         name: text(value.person.name),

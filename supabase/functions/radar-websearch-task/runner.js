@@ -60,8 +60,11 @@ export async function runRadarWebsearchCheck({
 
   let sources = [];
   try {
-    const domains = [...new Set((envelope?.response?.events || []).flatMap((event) => (
-      (event?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
+    const findings = request.kind === "person"
+      ? envelope?.response?.candidates
+      : envelope?.response?.events;
+    const domains = [...new Set((findings || []).flatMap((finding) => (
+      (finding?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
     )))];
     sources = await repository.resolveSources(domains);
   } catch {
@@ -71,6 +74,14 @@ export async function runRadarWebsearchCheck({
     });
   }
   const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
+  if (request.kind === "person") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+      personResult: evaluated.personResult || null,
+    });
+  }
   if (evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,

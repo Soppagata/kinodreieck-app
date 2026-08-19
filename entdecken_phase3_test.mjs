@@ -389,69 +389,105 @@ try {
   await workReloadUi.cleanup();
 
   const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const selectedIdentity = {
+    targetId: "person:wikidata:Q42869:actor",
+    personExternalId: identity.personExternalId, name: identity.name, role: identity.role,
+  };
   const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];
   let personState = createEmptyLocalRadar();
   let personAddCalls = 0;
-  let personCheckCalls = 0;
-  let personResolve;
-  const personCheckPromise = new Promise((resolve) => { personResolve = resolve; });
   let personUi;
   const renderPersonProps = () => ({
     ...baseProps, radarState: personState, personRadarAvailable: true,
-    onPersonRadarAdd: async ({ name, role }) => {
+    onPersonRadarAdd: async (selected) => {
       personAddCalls += 1;
-      assert.deepEqual({ name, role }, { name: "Nicolas Cage", role: "actor" });
+      assert.deepEqual(selected, selectedIdentity);
       personState = upsertGuestPersonRadarSubscription(personState, { identity, now }).state;
       return { status: "active", writes: 1, identity };
     },
-    onPersonRadarCheck: async () => { personCheckCalls += 1; return personCheckPromise; },
   });
   personUi = await mount(EntdeckenTab, renderPersonProps());
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
   await setControl(personUi.container.querySelector("#kd-radar-person"), "Nicolas Cage");
-  await act(async () => { button(personUi.container, "Person ins Radar").click(); await tick(); });
+  await setControl(personUi.container.querySelector("#kd-radar-person-result"), "person-0");
+  const personPanel = [...personUi.container.querySelectorAll(".kd-entdecken-panel")]
+    .find((entry) => /Person hinzufügen/.test(entry.textContent));
+  await act(async () => { button(personPanel, "Ins Radar").click(); await tick(); });
   await personUi.render(renderPersonProps());
-  check("Person wird mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
+  check("Kuratierte Person wird mit Name und Rolle, aber ohne Roh-ID lokal sichtbar", () => {
     assert.equal(personAddCalls, 1);
     assert.match(personUi.container.textContent, /Nicolas Cage/);
     assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
+    assert.equal(button(personUi.container, "Jetzt prüfen"), undefined);
+    assert.match(personUi.container.textContent, /Es läuft keine serverseitige Prüfung/);
   });
-  await act(async () => {
-    const personButton = [...personUi.container.querySelectorAll("button")]
-      .filter((entry) => entry.textContent.trim() === "Jetzt prüfen").at(-1);
-    personButton.click(); await tick();
+  await personUi.cleanup();
+
+  const personFeed = {
+    ...feed(),
+    subscriptions: [{
+      targetId: selectedIdentity.targetId, targetType: "person", title: identity.name,
+      personExternalId: identity.personExternalId, personRole: identity.role,
+      region: "AT", scope: "all", status: "active", updatedAt: now,
+    }],
+    events: [],
+  };
+  personState = reconcileAccountRadarPilotFeed(createEmptyLocalRadar({ authority: "account-cache" }), personFeed).state;
+  let personCheckCalls = 0;
+  let personResolve;
+  const personCheckPromise = new Promise((resolve) => { personResolve = resolve; });
+  const renderAccountPersonProps = () => ({
+    ...baseProps, accountMode: true, radarState: personState,
+    radarPilotEvents: personState.pilot.events, personRadarAvailable: true,
+    personRadarCheckAvailable: true, today: "2026-08-18",
+    onPersonRadarCheck: async () => { personCheckCalls += 1; return personCheckPromise; },
   });
-  check("Personenprüfung zeigt Ladezustand und startet keinen zweiten Aufruf", () => {
+  personUi = await mount(EntdeckenTab, renderAccountPersonProps());
+  await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
+  await act(async () => { button(personUi.container, "Jetzt prüfen").click(); await tick(); });
+  check("Personenprüfung zeigt Ladezustand und startet genau einen manuellen Aufruf", () => {
     assert.equal(personCheckCalls, 1);
     assert.ok(button(personUi.container, "Wird geprüft…")?.disabled);
   });
   const personResponse = {
-    status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z", person: identity,
-    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24", person: identity,
+    candidates: [{
+      targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+      role: "actor", eventType: "streamingstart_at", date: "2026-08-21", region: "AT", platform: "Netflix",
+      evidence: [{
+        sourceId: "netflix-at", sourceDomain: "netflix.example", url: "https://netflix.example/dream-scenario",
+        retrievedAt: "2026-08-18T10:01:00.000Z",
+      }],
+    }],
   };
   const applied = applyPersonRadarCheckResult(personState, { identity, response: personResponse, catalog: personCatalog });
   assert.equal(applied.ok, true);
   personState = applied.state;
   await act(async () => { personResolve({ status: "confirmed", writes: 1 }); await personCheckPromise; await tick(); });
-  await personUi.render(renderPersonProps());
-  check("Validierter Personen-Treffer bleibt Vorschlag ohne Werk-Abo", () => {
+  await personUi.render(renderAccountPersonProps());
+  check("Validierter Personen-Treffer erscheint belegt in Diese Woche, ohne Werk-Abo", () => {
     assert.match(personUi.container.textContent, /Dream Scenario/);
-    assert.match(personUi.container.textContent, /2023/);
+    assert.match(personUi.container.textContent, /Kuratierter Treffer/);
+    assert.match(personUi.container.textContent, /Netflix/);
+    assert.equal(personUi.container.querySelector("a")?.textContent, "netflix.example");
     assert.equal(personState.subscriptions.length, 0);
   });
   const savedPersonState = JSON.stringify(personState);
   await personUi.cleanup();
-  const reloadedPerson = decodeLocalRadar(savedPersonState, { authority: "guest" });
+  const reloadedPerson = decodeLocalRadar(savedPersonState, { authority: "account-cache" });
   const personReloadUi = await mount(EntdeckenTab, {
-    ...baseProps, radarState: reloadedPerson.state, personRadarAvailable: false,
+    ...baseProps, accountMode: true, radarState: reloadedPerson.state,
+    radarPilotEvents: reloadedPerson.state.pilot.events,
+    personRadarAvailable: true, personRadarCheckAvailable: false, today: "2026-08-18",
   });
   await act(async () => { button(personReloadUi.container, "Radar").click(); await tick(); });
   check("Person, Rolle und Treffer überstehen Reload bei ehrlich nicht verfügbarer Quelle", () => {
     assert.match(personReloadUi.container.textContent, /Nicolas Cage/);
     assert.match(personReloadUi.container.textContent, /Schauspiel/);
     assert.match(personReloadUi.container.textContent, /Dream Scenario/);
-    assert.match(personReloadUi.container.textContent, /Personensuche ist derzeit nicht verfügbar/);
+    assert.match(personReloadUi.container.textContent, /manuelle Online-Prüfung ist derzeit nicht verfügbar/);
     assert.doesNotMatch(personReloadUi.container.textContent, /wikidata:|watchmode:|fixture:|Proposal|Hash|Outbox|Pilot/i);
   });
   await personReloadUi.cleanup();
