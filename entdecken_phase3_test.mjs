@@ -135,6 +135,7 @@ check("Verwaltung nutzt SVG, 44-Pixel-Ziel und App-Font im Portal", () => {
   assert.doesNotMatch(entdeckenSource, /⚙/);
   assert.match(cssSource, /\.kd-entdecken-tabs \.kd-entdecken-verwalten[^}]*44px/);
   assert.match(cssSource, /\.kd-entdecken-layer[^}]*font-family:'Space Grotesk'/);
+  assert.doesNotMatch(entdeckenSource, /kd-pilot-quellen/);
 });
 
 async function loadEsbuild() {
@@ -239,7 +240,7 @@ try {
     const dialog = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
     assert.ok(dialog);
     assert.match(dialog.textContent, /Noch kein Werk im Radar/);
-    assert.doesNotMatch(dialog.textContent, /Pilot|Fixture|Proposal|Hash|Outbox|watchmode:/i);
+    assert.doesNotMatch(dialog.outerHTML, /Pilot|Fixture|Proposal|JSON|Hash|Outbox|Serverrevision|watchmode:/i);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
   });
   await act(async () => {
@@ -293,9 +294,10 @@ try {
   });
   await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
   await setControl(workPicker.container.querySelector("#kd-radar-work"), "werk-0");
-  await act(async () => { button(workPicker.container, "Werk ins Radar").click(); await tick(); });
-  check("Werk wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
+  await act(async () => { button(workPicker.container, "Ins Radar").click(); await tick(); });
+  check("Ziel wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
     assert.deepEqual(previewTarget, workTarget);
+    assert.match(workPicker.container.textContent, /Ziel hinzufügen/);
     assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:91|fixture:|work:/i);
   });
   await workPicker.cleanup();
@@ -308,6 +310,8 @@ try {
   check("Werk-Abo entsteht erst nach expliziter Bestätigung", () => {
     assert.equal(previewConfirmed, 0);
     assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
+    assert.doesNotMatch(document.querySelector('.kd-radar-preview').outerHTML, /watchmode:91|fixture:|work:/i);
+    assert.match(document.querySelector('.kd-radar-preview').textContent, /Im Gastmodus läuft keine serverseitige Prüfung/);
   });
   await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
   check("Bestätigung ruft genau einen gekapselten Write auf", () => assert.equal(previewConfirmed, 1));
@@ -317,10 +321,14 @@ try {
   const now = "2026-08-18T10:00:00.000Z";
   const eventId = "00000000-0000-4000-8000-000000000001";
   const eventVersionId = "00000000-0000-4000-8000-000000000011";
+  const feedTarget = {
+    targetId: "work:imdb:tt0137523", targetType: "work", targetStatus: "active",
+    title: "Fight Club", canonical: true,
+  };
   const feed = (events = []) => ({
     format: "kd-radar-pilot-feed-v1", revision: 1, checksum, reconciledAt: now,
     subscriptions: [{
-      targetId: workTarget.targetId, targetType: "work", title: workTarget.title,
+      targetId: feedTarget.targetId, targetType: feedTarget.targetType, title: feedTarget.title,
       region: "AT", scope: "all", status: "active", updatedAt: now,
     }],
     events, receipts: [], operationAcks: [], radarReview: true,
@@ -332,6 +340,7 @@ try {
   const renderWorkProps = () => ({
     ...baseProps, accountMode: true, radarState: accountState,
     radarPilotEvents: accountState.pilot.events, radarCheckAvailable: true,
+    today: "2026-09-01",
     onRadarWebsearchCheck: async () => { workCalls += 1; return workCheck; },
   });
   const workUi = await mount(EntdeckenTab, renderWorkProps());
@@ -342,16 +351,24 @@ try {
     assert.ok(button(workUi.container, "Wird geprüft…")?.disabled);
   });
   const confirmedEvent = {
-    eventId, eventVersionId, targetId: workTarget.targetId, eventType: "kinostart_at", date: "2026-09-03",
+    eventId, eventVersionId, targetId: feedTarget.targetId, eventType: "kinostart_at", date: "2026-09-03",
     region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
     evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/start", retrievedAt: now }],
   };
   await act(async () => { workResolve({ status: "confirmed", writes: 1 }); await workCheck; await tick(); });
   accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
   await workUi.render(renderWorkProps());
-  check("Bestätigter Werk-Treffer zeigt Titel, Datum und Quelle", () => {
-    assert.match(workUi.container.textContent, /Passender Film/);
-    assert.match(workUi.container.textContent, /2026-09-03/);
+  check("Typfähige Zielkarte zeigt Produktstatus und direkte Verwaltung", () => {
+    const card = workUi.container.querySelector(".kd-entdecken-zielkarte");
+    assert.match(card?.textContent || "", /Fight Club/);
+    assert.match(card?.textContent || "", /Film oder Werk · Aktiv/);
+    assert.ok(button(card, "Pausieren"));
+    assert.ok(button(card, "Entfernen"));
+  });
+  check("Bestätigtes Werk-Ereignis erscheint im Sieben-Tage-Fenster", () => {
+    assert.match(workUi.container.textContent, /Diese Woche/);
+    assert.match(workUi.container.textContent, /Bestätigtes Ereignis/);
+    assert.match(workUi.container.textContent, /Fight Club/);
     assert.match(workUi.container.textContent, /Kinostart in Österreich/);
     assert.equal(workUi.container.querySelector("a")?.textContent, "film.at");
   });
@@ -360,13 +377,14 @@ try {
   await workUi.cleanup();
   const workReloadUi = await mount(EntdeckenTab, {
     ...baseProps, accountMode: true, radarState: accountReload.state,
-    radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true,
+    radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true, today: "2026-09-01",
   });
   await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
-  check("Werk-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
-    assert.match(workReloadUi.container.textContent, /Passender Film/);
-    assert.match(workReloadUi.container.textContent, /2026-09-03/);
-    assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
+  check("Kanonischer Feed-Titel und Ereignis bleiben ohne Katalogfallback nach Reload sichtbar", () => {
+    assert.match(workReloadUi.container.textContent, /Fight Club/);
+    assert.match(workReloadUi.container.textContent, /Diese Woche/);
+    assert.match(workReloadUi.container.textContent, /Bestätigtes Ereignis/);
+    assert.doesNotMatch(workReloadUi.container.innerHTML, /Pilot|Fixture|Proposal|JSON|Outbox|Serverrevision|(?:watchmode|fixture|work):/i);
   });
   await workReloadUi.cleanup();
 
@@ -438,11 +456,23 @@ try {
   });
   await personReloadUi.cleanup();
 
-  const errorUi = await mount(EntdeckenTab, {
+  const guestUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
       target: workTarget, now,
     }).state,
+    radarCheckAvailable: true,
+  });
+  await act(async () => { button(guestUi.container, "Radar").click(); await tick(); });
+  check("Gast und Einzeldatei zeigen trotz irrtümlichem Availability-Prop keine Serverprüfung", () => {
+    assert.equal(button(guestUi.container, "Jetzt prüfen"), undefined);
+    assert.match(guestUi.container.textContent, /Es läuft keine serverseitige Prüfung/);
+  });
+  await guestUi.cleanup();
+
+  const errorUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: accountReload.state,
+    radarPilotEvents: accountReload.state.pilot.events,
     radarCheckAvailable: true,
     onRadarWebsearchCheck: async () => { throw new Error("mock failure"); },
   });

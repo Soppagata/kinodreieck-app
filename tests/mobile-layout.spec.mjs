@@ -872,6 +872,8 @@ for (const viewport of VIEWPORTS) {
     await ausloeser.click();
     const dialog = page.getByRole("dialog", { name: "Entdecken verwalten" });
     await expect(dialog).toBeVisible();
+    await expect.poll(() => dialog.evaluate((element) => getComputedStyle(element).fontFamily))
+      .toContain("Space Grotesk");
     const box = await dialog.boundingBox();
     expect(box.x).toBeLessThanOrEqual(1);
     expect(box.y).toBeLessThanOrEqual(1);
@@ -905,6 +907,67 @@ for (const viewport of VIEWPORTS) {
     await keineDokumentUeberbreite(page);
   });
 }
+
+test("Radar zeigt mobil den schmalen Gastweg ohne technische oder serverseitige Behauptung", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  let serverChecks = 0;
+  page.on("request", (request) => {
+    if (/\/functions\/v1\/radar-websearch-task/.test(request.url())) serverChecks += 1;
+  });
+  await page.addInitScript(async () => {
+    localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+    localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
+    localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
+    localStorage.setItem("kd:radar", JSON.stringify({
+      format: "kinodreieck-radar-local", version: 2, authority: "guest",
+      subscriptions: [{
+        targetId: "work:imdb:tt0137523", targetType: "work", title: "Fight Club",
+        region: "AT", scope: "all", status: "active", authority: "local",
+        serverRevision: null, serverChecksum: null, updatedAt: "2026-08-19T10:00:00.000Z",
+      }],
+      outbox: [], personSubscriptions: [], personResults: [], shares: [], shareOutbox: [], receipts: [],
+      display: { showDismissed: false }, server: { revision: 0, checksum: null, reconciledAt: null },
+    }));
+    const katalogCache = await caches.open("kinodreieck-katalog-v1");
+    const cacheEintrag = (payload) => new Response(JSON.stringify({
+      __kd: "kd-katalog-1", gecachtAm: Date.now(),
+      meta: { stand: "2026-08-19T10:00:00Z", gueltig_bis: "2099-01-01T00:00:00Z" }, payload,
+    }), { headers: { "Content-Type": "application/json" } });
+    const basis = location.origin + "/__kd_katalog_cache__/";
+    await katalogCache.put(basis + "streaming_bekannt_demo", cacheEintrag({
+      demo: true, stand: "2026-08-19T10:00:00Z", region: "AT", dienste: ["Netflix"], titel: [],
+    }));
+    await katalogCache.put(basis + "streaming_entdecken_demo", cacheEintrag({
+      demo: true, stand: "2026-08-19T10:00:00Z", region: "AT", dienste: ["Netflix"],
+      titel: [{ watchmode_id: 61001, titel: "Alpha Lokal", jahr: 2026, typ: "movie", dienste: ["Netflix"] }],
+    }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Entdecken");
+  await page.getByRole("tab", { name: "Radar" }).click();
+
+  await expect(page.getByRole("heading", { name: "Ziel hinzufügen" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ins Radar", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diese Woche" })).toBeVisible();
+  await expect(page.getByText("Noch keine bestätigten Ereignisse für deine aktiven Ziele.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Es läuft keine serverseitige Prüfung/)).toBeVisible();
+
+  const card = page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Fight Club" });
+  await expect(card.getByText("Film oder Werk · Aktiv", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Pausieren" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Entfernen" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Jetzt prüfen" })).toHaveCount(0);
+  await card.getByRole("button", { name: "Pausieren" }).click();
+  await expect(card.getByText("Film oder Werk · Pausiert", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Aktivieren" })).toBeVisible();
+
+  const html = await page.getByTestId("entdecken-tab").evaluate((element) => element.outerHTML);
+  expect(html).not.toMatch(/Pilot|Fixture|Proposal|JSON|Outbox|Serverrevision|(?:work|watchmode|fixture):/i);
+  expect(serverChecks).toBe(0);
+  await keineDokumentUeberbreite(page);
+});
 
 test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mobil wie am Desktop", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
@@ -969,7 +1032,7 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
   await keineDokumentUeberbreite(page);
 });
 
-test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ page }) => {
+test("Radar-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
@@ -982,17 +1045,17 @@ test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ p
       <ul><li>
         <span>Test-Kino</span>
         <span>2026-08-20 · kinostart_at · scheduled · confirmed · AT · -</span>
-        <div class="kd-pilot-quellen">
+        <div class="kd-radar-quellen">
           <span>Quellen:</span>
-          <div class="kd-pilot-quellen-links">
-            <a class="kd-pilot-quellen-link" href="https://example.com/very/long/path/that-should-wrap/but-not-overflow" target="_blank" rel="noopener noreferrer">example.com</a>
-            <a class="kd-pilot-quellen-link" href="https://news.example.com/very/long/path/that-should-wrap/too" target="_blank" rel="noopener noreferrer">news.example.com</a>
+          <div class="kd-radar-quellen-links">
+            <a class="kd-radar-quellen-link" href="https://example.com/very/long/path/that-should-wrap/but-not-overflow" target="_blank" rel="noopener noreferrer">example.com</a>
+            <a class="kd-radar-quellen-link" href="https://news.example.com/very/long/path/that-should-wrap/too" target="_blank" rel="noopener noreferrer">news.example.com</a>
           </div>
         </div>
       </li></ul>`;
     document.body.appendChild(panel);
   });
-  const links = page.locator(".kd-pilot-quellen-links");
+  const links = page.locator(".kd-radar-quellen-links");
   const metrics = await links.evaluate((element) => ({
     display: getComputedStyle(element).display,
     flexWrap: getComputedStyle(element).flexWrap,
@@ -1032,10 +1095,14 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
 
   await page.getByRole("tab", { name: "Radar" }).click();
   await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Werk ins Radar", exact: true }).click();
+  await page.getByRole("button", { name: "Ins Radar", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "Ins Radar" });
   await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
   await expect(preview.getByRole("checkbox")).toBeDisabled();
+  await expect.poll(() => preview.evaluate((element) => getComputedStyle(element).fontFamily))
+    .toContain("Space Grotesk");
+  expect(await preview.evaluate((element) => element.outerHTML))
+    .not.toMatch(/Pilot|Fixture|Proposal|JSON|Outbox|Serverrevision|(?:work|watchmode|fixture|catalog):/i);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
   await page.keyboard.press("Escape");
   await expect(preview).toBeHidden();

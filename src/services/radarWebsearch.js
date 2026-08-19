@@ -2,6 +2,8 @@ import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 
 export const RADAR_WEBSEARCH_ENDPOINT = "radar-websearch-task";
+export const RADAR_WEBSEARCH_SINGLE_FILE_DISABLED = typeof __KD_SINGLE_FILE__ !== "undefined"
+  && __KD_SINGLE_FILE__ === true;
 export const RADAR_WEBSEARCH_CLIENT_STATUSES = Object.freeze([
   "confirmed", "insufficient_evidence", "no_change", "provider_error",
   "invalid_response", "forbidden", "unavailable", "storage_error",
@@ -25,12 +27,13 @@ export function createRadarWebsearchService({
   getAccount = authDriver.konto,
   getAccessToken = authDriver.getAccessToken,
   fetchImpl = globalThis.fetch,
+  singleFile = RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
 } = {}) {
   async function checkNow(targetId) {
     const normalizedTargetId = text(targetId);
     const session = auth.getSnapshot();
     const accountId = text(session?.account?.id);
-    if (config.radarPilotClientEnabled !== true || session?.mode !== "account"
+    if (singleFile === true || config.radarPilotClientEnabled !== true || session?.mode !== "account"
         || session?.state !== "ready" || !accountId
         || text(getAccount()?.id) !== accountId || !normalizedTargetId
         || normalizedTargetId.length > 160 || typeof fetchImpl !== "function") {

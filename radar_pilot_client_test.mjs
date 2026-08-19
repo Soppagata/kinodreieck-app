@@ -258,6 +258,9 @@ await check("Pilotverträge akzeptieren Textfelder nur als echte JSON-Strings", 
       { sourceId: "y", sourceDomain: "also-bad", url: "https://also-bad", retrievedAt: later },
     ] }] }),
   ]) assert.equal(C.validateRadarPilotFeed(invalid).ok, false);
+  assert.equal(C.validateRadarPilotFeed(feed({
+    subscriptions: [{ ...feed().subscriptions[0], title: "work:tmdb:550" }],
+  })).ok, false);
 });
 
 function queuedAccountState() {

@@ -188,7 +188,7 @@ function validateSubscription(subscription, authority) {
   if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
   if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
-  if (subscription.title !== null && (!text(subscription.title) || text(subscription.title).length > 240)) {
+  if (subscription.title !== null && !validPublicLabel(subscription.title)) {
     errors.push("subscription-title-invalid");
   }
   if (subscription.region !== RADAR_DEFAULT_REGION) errors.push("subscription-region-invalid");
@@ -224,7 +224,7 @@ function validateOutboxEntry(entry) {
   if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
   if (!isStableContractId(entry.targetId)) errors.push("outbox-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("outbox-target-type-invalid");
-  if (entry.title !== null && (!text(entry.title) || text(entry.title).length > 240)) errors.push("outbox-title-invalid");
+  if (entry.title !== null && !validPublicLabel(entry.title)) errors.push("outbox-title-invalid");
   if (entry.region !== RADAR_DEFAULT_REGION) errors.push("outbox-region-invalid");
   if (!RADAR_SCOPES.includes(entry.scope)) errors.push("outbox-scope-invalid");
   if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("outbox-status-invalid");
@@ -852,7 +852,7 @@ function validateServerSnapshot(snapshot) {
       if (!exactKeys(entry, keys2)) { errors.push("server-subscription-shape-invalid"); continue; }
       if (!isStableContractId(entry.targetId)) errors.push("server-subscription-target-invalid");
       if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("server-subscription-target-type-invalid");
-      if (entry.title !== undefined && (!text(entry.title) || text(entry.title).length > 240)) {
+      if (entry.title !== undefined && !validPublicLabel(entry.title)) {
         errors.push("server-subscription-title-invalid");
       }
       if (entry.region !== RADAR_DEFAULT_REGION) errors.push("server-subscription-region-invalid");
@@ -904,10 +904,11 @@ export function reconcileAccountRadarSnapshot(state, snapshot) {
   const acknowledgedShares = new Set(snapshot.acknowledgedShareOperationIds);
   const next = clone(state);
   next.subscriptions = snapshot.subscriptions.map((entry) => {
-    const retainedTitle = text(entry.title)
-      || text(state.subscriptions.find((item) => item.targetId === entry.targetId)?.title)
-      || text([...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title)
-      || null;
+    const retainedTitle = [
+      entry.title,
+      state.subscriptions.find((item) => item.targetId === entry.targetId)?.title,
+      [...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title,
+    ].map(text).find((value) => validPublicLabel(value)) || null;
     return {
       ...entry,
       title: retainedTitle,

@@ -316,13 +316,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
 .kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
 .kd-entdecken-panel li>.kd-entdecken-sekundaer { align-self:flex-start; min-height:44px; margin-top:7px; }
-.kd-pilot-quellen { margin-top:6px; display:flex; flex-direction:column; gap:6px; min-width:0; }
-.kd-pilot-quellen-links { display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
-.kd-pilot-quellen-link { color:var(--wolfram,#e3a63b); text-decoration:underline; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
-.kd-pilot-quellen-link:focus-visible { outline-offset:3px; }
+.kd-entdecken-zielaktionen { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; }
+.kd-entdecken-zielaktionen .kd-entdecken-sekundaer { min-height:44px; }
+.kd-radar-quellen { margin-top:6px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.kd-radar-quellen-links { display:flex; flex-wrap:wrap; gap:5px; min-width:0; }
+.kd-radar-quellen-link { color:var(--wolfram,#e3a63b); text-decoration:underline; overflow-wrap:anywhere; word-break:break-word; min-width:0; }
+.kd-radar-quellen-link:focus-visible { outline-offset:3px; }
 .kd-entdecken-pending { margin:10px 0 0; padding:9px 10px; border-radius:6px; background:rgba(227,166,59,.09); color:var(--leinwandTief,#dfdacd); font-size:12px; line-height:1.5; }
 .kd-entdecken-person-result { margin-top:13px; padding-top:11px; border-top:1px solid rgba(148,143,160,.3); }
 .kd-entdecken-person-result h4 { margin:0 0 6px; color:var(--leinwand,#ece8df); font:700 17px 'Barlow Condensed',sans-serif; letter-spacing:.035em; text-transform:uppercase; }
+.kd-entdecken-weitere-ereignisse { margin-top:15px; padding-top:12px; border-top:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-weitere-ereignisse h4 { margin:0 0 7px; color:var(--leinwand,#ece8df); font:700 17px 'Barlow Condensed',sans-serif; letter-spacing:.035em; text-transform:uppercase; }
 .kd-entdecken-fixture { margin:12px 0; border-color:rgba(227,166,59,.58); }
 .kd-entdecken-parked { margin:12px 0; opacity:.74; }.kd-entdecken-parked>span { color:var(--rauch,#948fa0); }
 .kd-entdecken-proposal { margin:12px 0 0; }.kd-entdecken-proposal summary { cursor:pointer; color:var(--wolfram,#e3a63b); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }

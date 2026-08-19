@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 import { RADAR_NORMAL_ACTIVE_LIMIT } from "../lib/radarContracts.js";
@@ -28,9 +28,9 @@ export function RadarSubscriptionPreview({
   ));
   const targetType = target?.targetType === "series" ? "Serie" : "Film oder Werk";
   const quotaText = accountMode
-    ? `${activeCount} serverbestätigte Ziele im Kontocache`
+    ? `${activeCount} aktive Ziele in deinem Konto`
     : `${activeCount} von ${RADAR_NORMAL_ACTIVE_LIMIT} lokalen Zielen aktiv`;
-  const headingId = useMemo(() => `kd-radar-preview-${String(target?.targetId || "ziel").replace(/[^a-z0-9_-]/gi, "-")}`, [target]);
+  const headingId = useId();
 
   useEffect(() => {
     if (!target) return undefined;
@@ -92,7 +92,9 @@ export function RadarSubscriptionPreview({
         <dl className="kd-entdecken-fakten">
           <div><dt>Status</dt><dd>{alreadyActive ? "Bereits aktiv; Bestätigung aktualisiert den Eintrag" : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
           <div><dt>Kapazität</dt><dd>{quotaText}</dd></div>
-          <div><dt>Kosten</dt><dd>Diese lokale Phase startet keinen Provider-Aufruf und keine Routine.</dd></div>
+          <div><dt>Prüfung</dt><dd>{accountMode
+            ? "Das Hinzufügen startet keine sofortige Suche. Du prüfst das Ziel später bewusst mit „Jetzt prüfen“."
+            : "Im Gastmodus läuft keine serverseitige Prüfung."}</dd></div>
           <div><dt>Privatsphäre</dt><dd>Standardmäßig bleibt das Ziel privat. Geteilt werden nie Bewertungen oder Profilsignale.</dd></div>
         </dl>
         <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
@@ -100,10 +102,10 @@ export function RadarSubscriptionPreview({
             onChange={(event) => setShareEnabled(event.target.checked)} />
           <span><strong>Ohne meinen Namen für „Von anderen entdeckt“ teilen</strong>
             <small>{shareAllowed
-              ? "Explizites Opt-in für dieses bereits serverbestätigte Radarziel."
+              ? "Explizites Opt-in für dieses bereits in deinem Konto bestätigte Radarziel."
               : accountMode
-                ? "Erst nach einer serverbestätigten aktiven Beobachtung verfügbar."
-                : "Nur mit aktivem Konto und serverbestätigtem Radarziel verfügbar."}</small></span>
+                ? "Erst nach einer im Konto bestätigten aktiven Beobachtung verfügbar."
+                : "Nur mit aktivem Konto und dort bestätigtem Radarziel verfügbar."}</small></span>
         </label>
         {fehler ? <p className="kd-entdecken-fehler" role="alert">{fehler}</p> : null}
         <div className="kd-entdecken-dialog-aktionen">

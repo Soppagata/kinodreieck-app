@@ -499,7 +499,10 @@ await check("Pilotfeed reconciliiert atomar und erhält ungeklärte lokale Vorg�
     revision: 1,
     checksum: checksumA,
     reconciledAt: "2026-08-09T14:00:00+02:00",
-    subscriptions: [],
+    subscriptions: [{
+      targetId: "work:imdb:tt0137523", targetType: "work", title: "Fight Club",
+      region: "AT", scope: "all", status: "active", updatedAt: instant,
+    }],
     events: [],
     receipts: [],
     operationAcks: [],
@@ -509,6 +512,13 @@ await check("Pilotfeed reconciliiert atomar und erhält ungeklärte lokale Vorg�
   assert.equal(reconciled.state.outbox.length, 1);
   assert.equal(reconciled.state.server.reconciledAt, "2026-08-09T12:00:00.000Z");
   assert.equal(reconciled.state.pilot.status, "ready");
+  assert.equal(reconciled.state.subscriptions[0].title, "Fight Club");
+  const reloaded = R.decodeLocalRadar(JSON.stringify(reconciled.state), { authority: "account-cache" });
+  assert.equal(reloaded.ok, true);
+  assert.equal(reloaded.state.subscriptions[0].title, "Fight Club");
+  const technicalTitle = JSON.parse(JSON.stringify(reconciled.state));
+  technicalTitle.subscriptions[0].title = technicalTitle.subscriptions[0].targetId;
+  assert.equal(R.decodeLocalRadar(JSON.stringify(technicalTitle), { authority: "account-cache" }).ok, false);
 });
 
 await check("Persönlicher Topf enthält keine globale Target-, Event- oder Evidence-Wahrheit", () => {

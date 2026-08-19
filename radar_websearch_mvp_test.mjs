@@ -307,6 +307,27 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
   assert.equal(calls[0].options.body.includes("max-account"), false);
 });
 
+await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", async () => {
+  const session = { mode: "account", state: "ready", account: { id: "max-account" } };
+  let tokenCalls = 0;
+  let fetchCalls = 0;
+  const service = createRadarWebsearchService({
+    singleFile: true,
+    config: {
+      radarPilotClientEnabled: true,
+      supabaseUrl: "https://project.example.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => session.account,
+    getAccessToken: async () => { tokenCalls += 1; return "session-token"; },
+    fetchImpl: async () => { fetchCalls += 1; throw new Error("darf nicht laufen"); },
+  });
+  assert.deepEqual(await service.checkNow(target.targetId), { status: "forbidden", writes: 0 });
+  assert.equal(tokenCalls, 0);
+  assert.equal(fetchCalls, 0);
+});
+
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");

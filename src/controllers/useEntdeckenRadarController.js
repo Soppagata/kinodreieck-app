@@ -22,7 +22,10 @@ import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
-import { radarWebsearchService } from "../services/radarWebsearch.js";
+import {
+  RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
+  radarWebsearchService,
+} from "../services/radarWebsearch.js";
 
 export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
@@ -453,7 +456,8 @@ export function useEntdeckenRadarController({
     radarAuthority,
     radarState: sichtbarerRadarState,
   }), [radarAuthority, sichtbarerRadarState]);
-  const radarCheckAvailable = remoteKontoAktiv && radarAuthority === "account-cache"
+  const radarCheckAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
+    && remoteKontoAktiv && radarAuthority === "account-cache"
     && radarPilotProjection.active === true && radarPilotProjection.radarReview === true;
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];

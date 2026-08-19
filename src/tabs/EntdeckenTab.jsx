@@ -26,6 +26,55 @@ const EREIGNIS_LABEL = Object.freeze({
   festival_at: "Festivaltermin in Österreich",
 });
 
+function zielTypLabel(entry) {
+  if (entry?.role) return ROLLEN_LABEL[entry.role] || "Person";
+  return entry?.targetType === "series" ? "Serie" : "Film oder Werk";
+}
+
+function aktuellerWienTag() {
+  const teile = new Intl.DateTimeFormat("de-AT", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const wert = Object.fromEntries(teile.map((entry) => [entry.type, entry.value]));
+  return `${wert.year}-${wert.month}-${wert.day}`;
+}
+
+function plusTage(tag, anzahl) {
+  const datum = new Date(`${tag}T00:00:00.000Z`);
+  datum.setUTCDate(datum.getUTCDate() + anzahl);
+  return datum.toISOString().slice(0, 10);
+}
+
+function lesbarerTag(tag) {
+  return new Intl.DateTimeFormat("de-AT", {
+    timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric",
+  }).format(new Date(`${tag}T00:00:00.000Z`));
+}
+
+function RadarZielkarte({ title, typeLabel, status, children }) {
+  return <li className="kd-entdecken-zielkarte">
+    <strong>{title}</strong>
+    <span>{typeLabel} · {status === "active" ? "Aktiv" : "Pausiert"}</span>
+    {children ? <div className="kd-entdecken-zielaktionen">{children}</div> : null}
+  </li>;
+}
+
+function RadarEreignisse({ entries, receiptByEvent, onReceipt }) {
+  return <ul>{entries.map((entry) => <li key={entry.eventVersionId}>
+    <strong>{entry.title}</strong>
+    <span>Bestätigtes Ereignis · {lesbarerTag(entry.date)} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
+    {entry.evidence?.length ? <div className="kd-radar-quellen"><span>Quellen</span><div className="kd-radar-quellen-links">
+      {entry.evidence.map((item, index) => <a className="kd-radar-quellen-link" href={item.url}
+        key={`${entry.eventVersionId}-source-${index}`} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
+    </div></div> : null}
+    {typeof onReceipt === "function" ? <button type="button" className="kd-entdecken-sekundaer"
+      disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen"}
+      onClick={() => onReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "seen" })}>
+      {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen" ? "Gesehen" : "Als gesehen markieren"}
+    </button> : null}
+  </li>)}</ul>;
+}
+
 function focusableElements(root) {
   return [...(root?.querySelectorAll(
     'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex]:not([tabindex="-1"])',
@@ -229,6 +278,7 @@ function RadarView({
   onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarCheck,
+  onRadarChange, onPersonRadarChange, today = null,
 }) {
   const [selectedWork, setSelectedWork] = useState("");
   const [personName, setPersonName] = useState("");
@@ -257,6 +307,11 @@ function RadarView({
     }))
     .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
   [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
+  const startDay = /^\d{4}-\d{2}-\d{2}$/.test(today || "") ? today : aktuellerWienTag();
+  const weekEnd = plusTage(startDay, 6);
+  const weekEvents = events.filter((entry) => entry.date >= startDay && entry.date <= weekEnd);
+  const otherEvents = events.filter((entry) => entry.date < startDay || entry.date > weekEnd);
+  const canCheckWork = accountMode && radarCheckAvailable && typeof onRadarWebsearchCheck === "function";
 
   const addWork = () => {
     const target = targetByToken.get(selectedWork);
@@ -276,7 +331,7 @@ function RadarView({
     finally { setPersonAddBusy(false); }
   };
   const checkWork = async (entry) => {
-    if (!radarCheckAvailable || busyKey) return;
+    if (!canCheckWork || busyKey) return;
     setBusyKey(`work|${entry.targetId}`); setMessage(null);
     try {
       const result = await onRadarWebsearchCheck?.(entry.targetId);
@@ -297,18 +352,22 @@ function RadarView({
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
-      <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Deine Ziele bleiben auf diesem Gerät."} Ergebnisse erscheinen erst, wenn Werk, Österreich-Bezug und Datum eindeutig belegt sind.</p>
+      <p>{accountMode
+        ? canCheckWork
+          ? "Du startest jede Online-Prüfung selbst mit „Jetzt prüfen“. Es läuft keine automatische Prüfung."
+          : "Deine Kontoziele bleiben sichtbar. Die manuelle Online-Prüfung ist derzeit nicht verfügbar."
+        : "Im Gast- und Einzeldatei-Modus bleiben Ziele auf diesem Gerät. Es läuft keine serverseitige Prüfung."} Ergebnisse erscheinen erst, wenn Werk, Österreich-Bezug und Datum eindeutig belegt sind.</p>
     </div>
     <div className="kd-entdecken-radar-add-grid">
       <article className="kd-entdecken-panel">
-        <h3>Werk hinzufügen</h3>
+        <h3>Ziel hinzufügen</h3>
         {targets.length ? <div className="kd-entdecken-formzeile">
           <label htmlFor="kd-radar-work">Film oder Serie</label>
           <select id="kd-radar-work" value={selectedWork} onChange={(event) => setSelectedWork(event.target.value)}>
             <option value="">Werk auswählen</option>
             {targets.map((target, index) => <option key={target.targetId} value={`werk-${index}`}>{target.title}</option>)}
           </select>
-          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWork} onClick={addWork}>Werk ins Radar</button>
+          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWork} onClick={addWork}>Ins Radar</button>
         </div> : <p className="kd-entdecken-leer">Der vorbereitete Katalog ist gerade nicht verfügbar.</p>}
       </article>
       <article className="kd-entdecken-panel">
@@ -332,38 +391,48 @@ function RadarView({
       <article className="kd-entdecken-panel">
         <h3>Meine Ziele</h3>
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
-        {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
-          <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · Werk</span>
-          {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
+        {subscriptions.length ? <ul>{subscriptions.map((entry) => <RadarZielkarte key={entry.targetId}
+          title={localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}
+          typeLabel={zielTypLabel(entry)} status={entry.status}>
+          {entry.status === "active" && canCheckWork ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkWork(entry)}>
             {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
           </button> : null}
-        </li>)}</ul> : null}
-        {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
+          {typeof onRadarChange === "function" ? <>
+            <button type="button" className="kd-entdecken-sekundaer"
+              onClick={() => onRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>
+              {entry.status === "active" ? "Pausieren" : "Aktivieren"}
+            </button>
+            <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarChange(entry, "remove")}>Entfernen</button>
+          </> : null}
+        </RadarZielkarte>)}</ul> : null}
+        {people.length ? <ul>{people.map((entry) => <RadarZielkarte key={`${entry.personExternalId}|${entry.role}`}
+          title={entry.name} typeLabel={zielTypLabel(entry)} status={entry.status}>
           {entry.status === "active" && personRadarAvailable ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkPerson(entry)}>
             {busyKey === `person|${entry.personExternalId}|${entry.role}` ? "Wird geprüft…" : "Jetzt prüfen"}
           </button> : null}
-        </li>)}</ul> : null}
+          {typeof onPersonRadarChange === "function" ? <>
+            <button type="button" className="kd-entdecken-sekundaer"
+              onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>
+              {entry.status === "active" ? "Pausieren" : "Aktivieren"}
+            </button>
+            <button type="button" className="kd-entdecken-sekundaer" onClick={() => onPersonRadarChange(entry, "remove")}>Entfernen</button>
+          </> : null}
+        </RadarZielkarte>)}</ul> : null}
         {(radarState?.outbox || []).length ? <p className="kd-entdecken-pending" role="status">Eine Änderung wartet noch auf Bestätigung.</p> : null}
       </article>
       <article className="kd-entdecken-panel">
-        <h3>Bestätigte Treffer</h3>
-        {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
-          <strong>{entry.title}</strong>
-          <span>{entry.date} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
-          {entry.evidence?.length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
-            {entry.evidence.map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}
-              key={`${entry.eventVersionId}-source-${index}`} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
-          </div></div> : null}
-          {typeof onRadarPilotReceipt === "function" ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen"}
-            onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "seen" })}>
-            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen" ? "Gesehen" : "Als gesehen markieren"}
-          </button> : null}
-        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Ereignisse für deine aktiven Werke.</p>}
+        <h3>Diese Woche</h3>
+        {weekEvents.length
+          ? <RadarEreignisse entries={weekEvents} receiptByEvent={receiptByEvent} onReceipt={onRadarPilotReceipt} />
+          : <p className="kd-entdecken-leer">{events.length
+            ? "Für die nächsten sieben Tage gibt es noch kein bestätigtes Ereignis."
+            : "Noch keine bestätigten Ereignisse für deine aktiven Ziele."}</p>}
+        {otherEvents.length ? <section className="kd-entdecken-weitere-ereignisse">
+          <h4>Weitere bestätigte Ereignisse</h4>
+          <RadarEreignisse entries={otherEvents} receiptByEvent={receiptByEvent} onReceipt={onRadarPilotReceipt} />
+        </section> : null}
         {personResults.map((result) => {
           const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
           return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
@@ -385,6 +454,7 @@ export function EntdeckenTab({
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
+  today = null,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
   const [manageOffen, setManageOffen] = useState(false);
@@ -420,7 +490,8 @@ export function EntdeckenTab({
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
       onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
-      onPersonRadarCheck={onPersonRadarCheck} /> : null}
+      onPersonRadarCheck={onPersonRadarCheck} onRadarChange={onRadarChange}
+      onPersonRadarChange={onPersonRadarChange} today={today} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}

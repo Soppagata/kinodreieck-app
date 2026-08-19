@@ -82,7 +82,8 @@ function validTargetKey(value) {
 function validTitle(value) {
   if (typeof value !== "string") return false;
   const normalized = text(value);
-  return normalized.length >= 1 && normalized.length <= 200;
+  return normalized.length >= 1 && normalized.length <= 200
+    && !/^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(normalized);
 }
 function validInstant(value) {
   if (typeof value !== "string") return false;
