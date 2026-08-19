@@ -756,6 +756,165 @@ export function validateRadarE18ReadPreflight({
   return true;
 }
 
+export const RADAR_PERSON_CANDIDATE_RLS_TABLES = Object.freeze([
+  "kd_radar_subscriptions",
+  "kd_radar_events",
+  "kd_radar_event_versions",
+  "kd_radar_evidence",
+  "kd_radar_operations",
+]);
+
+export const RADAR_PERSON_CANDIDATE_SURFACE_COMPARISONS = Object.freeze([
+  "personTargets",
+  "curatedTarget",
+  "personColumns",
+  "rpc",
+  "upsert",
+  "feed",
+  "authRpc",
+  "anonRpc",
+  "authFeed",
+  "anonFeed",
+  ...RADAR_PERSON_CANDIDATE_RLS_TABLES.flatMap((table) => [
+    `rls.${table}.enabled`,
+    `rls.${table}.forced`,
+  ]),
+]);
+
+function radarPersonCandidateRlsProjectionSql() {
+  return RADAR_PERSON_CANDIDATE_RLS_TABLES.map((table) => `'${table}',(
+      select jsonb_build_object(
+        'enabled',c.relrowsecurity,
+        'forced',c.relforcerowsecurity
+      )
+        from pg_class c
+        join pg_namespace n on n.oid=c.relnamespace
+       where n.nspname='public' and c.relname='${table}'
+    )`).join(",\n    ");
+}
+
+export function buildRadarPersonCandidateSurfaceSql() {
+  return `select jsonb_build_object(
+    'personTargets',(select count(*) from public.kd_radar_targets where target_type='person'),
+    'curatedTarget',(select count(*) from public.kd_radar_targets
+      where target_key='person:wikidata:Q42869:actor'
+        and target_type='person'
+        and target_status='active'
+        and canonical_title='Nicolas Cage'
+        and external_ids->>'personExternalId'='wikidata:Q42869'
+        and external_ids->>'personRole'='actor'),
+    'personColumns',(select count(*) from information_schema.columns
+      where table_schema='public'
+        and table_name='kd_radar_subscriptions'
+        and column_name in ('person_external_id','person_role')),
+    'rpc',to_regprocedure(
+      'public.kd_radar_pilot_set_subscription(text,text,text,uuid,text,text)'
+    ) is not null,
+    'upsert',to_regprocedure(
+      'public.kd_radar_websearch_upsert_person_event(uuid,uuid,jsonb)'
+    ) is not null,
+    'feed',to_regprocedure('public.kd_radar_pilot_feed(uuid[])') is not null,
+    'authRpc',has_function_privilege(
+      'authenticated',
+      'public.kd_radar_pilot_set_subscription(text,text,text,uuid,text,text)',
+      'EXECUTE'
+    ),
+    'anonRpc',has_function_privilege(
+      'anon',
+      'public.kd_radar_pilot_set_subscription(text,text,text,uuid,text,text)',
+      'EXECUTE'
+    ),
+    'authFeed',has_function_privilege(
+      'authenticated','public.kd_radar_pilot_feed(uuid[])','EXECUTE'
+    ),
+    'anonFeed',has_function_privilege(
+      'anon','public.kd_radar_pilot_feed(uuid[])','EXECUTE'
+    ),
+    'rls',jsonb_build_object(
+      ${radarPersonCandidateRlsProjectionSql()}
+    )
+  )::text;`;
+}
+
+function radarPersonCandidateSurfaceShape(value) {
+  return exactObject(value, [
+    "anonFeed", "anonRpc", "authFeed", "authRpc", "curatedTarget", "feed",
+    "personColumns", "personTargets", "rls", "rpc", "upsert",
+  ])
+    && [value.personTargets, value.curatedTarget, value.personColumns].every(nonnegativeInteger)
+    && [
+      value.rpc, value.upsert, value.feed, value.authRpc, value.anonRpc,
+      value.authFeed, value.anonFeed,
+    ].every((entry) => typeof entry === "boolean")
+    && exactObject(value.rls, RADAR_PERSON_CANDIDATE_RLS_TABLES)
+    && RADAR_PERSON_CANDIDATE_RLS_TABLES.every((table) => (
+      booleanObject(value.rls[table], ["enabled", "forced"])
+    ));
+}
+
+function stopRadarPersonCandidateSurface(name, expected, observed, fehlerAusgabe) {
+  const evidence = deepFreeze({ name, expected, observed });
+  try {
+    fehlerAusgabe(JSON.stringify(evidence));
+  } catch {
+    stop(
+      "CANDIDATE_SURFACE_EVIDENCE_OUTPUT_FAILED",
+      "Kandidaten-Surface-Beleg konnte nicht sicher ausgegeben werden.",
+    );
+  }
+  const error = new RadarE18ProcessStop(
+    "CANDIDATE_SURFACE_DRIFT",
+    "Kandidaten-Surface stoppte beim ersten abweichenden allowlisteten Vergleich.",
+  );
+  Object.defineProperty(error, "candidateSurfaceEvidence", {
+    value: evidence, enumerable: false, configurable: false, writable: false,
+  });
+  throw error;
+}
+
+export function validateRadarPersonCandidateSurface(
+  observed,
+  { fehlerAusgabe = console.error } = {},
+) {
+  if (typeof fehlerAusgabe !== "function") {
+    stop(
+      "CANDIDATE_SURFACE_EVIDENCE_OUTPUT_INVALID",
+      "Kandidaten-Surface-Ausgabe fehlt.",
+    );
+  }
+  if (!radarPersonCandidateSurfaceShape(observed)) {
+    stopRadarPersonCandidateSurface("shape", true, false, fehlerAusgabe);
+  }
+  const comparisons = [
+    ["personTargets", 5, observed.personTargets],
+    ["curatedTarget", 1, observed.curatedTarget],
+    ["personColumns", 2, observed.personColumns],
+    ["rpc", true, observed.rpc],
+    ["upsert", true, observed.upsert],
+    ["feed", true, observed.feed],
+    ["authRpc", true, observed.authRpc],
+    ["anonRpc", false, observed.anonRpc],
+    ["authFeed", true, observed.authFeed],
+    ["anonFeed", false, observed.anonFeed],
+    ...RADAR_PERSON_CANDIDATE_RLS_TABLES.flatMap((table) => [
+      [`rls.${table}.enabled`, true, observed.rls[table].enabled],
+      [`rls.${table}.forced`, false, observed.rls[table].forced],
+    ]),
+  ];
+  if (!isDeepStrictEqual(
+    comparisons.map(([name]) => name),
+    RADAR_PERSON_CANDIDATE_SURFACE_COMPARISONS,
+  )) {
+    stop("CANDIDATE_SURFACE_CONTRACT_INVALID", "Kandidaten-Surface-Reihenfolge driftet.");
+  }
+  for (const [name, expected, actual] of comparisons) {
+    if (!Object.is(actual, expected)) {
+      stopRadarPersonCandidateSurface(name, expected, actual, fehlerAusgabe);
+    }
+  }
+  return true;
+}
+
 export function verifyRadarE18CommittedSources({ gitSpawn = spawnSync } = {}) {
   if (typeof gitSpawn !== "function") stop("LOCAL_GIT_ADAPTER_REQUIRED", "E18-Gitgate fehlt.");
   const run = (args, { allowOne = false } = {}) => {

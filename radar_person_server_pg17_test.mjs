@@ -11,6 +11,10 @@ import {
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
+import {
+  buildRadarPersonCandidateSurfaceSql,
+  validateRadarPersonCandidateSurface,
+} from "./tools/radar_e18_process_executor.mjs";
 
 const PG = "/Applications/Postgres.app/Contents/Versions/17/bin";
 const MIGRATIONS = Object.freeze([
@@ -189,6 +193,9 @@ try {
     psql(entry.source);
   }
   check("additive Kandidatenmigration laeuft auf der echten lokalen Migrationskette", true);
+  const candidateSurface = jsonResult(buildRadarPersonCandidateSurfaceSql());
+  check("Kandidaten-Surface prueft RLS enabled und FORCE separat auf echtem PG17",
+    validateRadarPersonCandidateSurface(candidateSurface, { fehlerAusgabe() {} }) === true);
 
   psql(`
     insert into auth.users (id) values ('${ACCOUNT_ID}');
