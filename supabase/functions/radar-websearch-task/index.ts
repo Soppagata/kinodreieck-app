@@ -3,7 +3,10 @@
    Provider-, Quellen- und Kostenkonfiguration bleiben serverseitig. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createAnthropicRadarWebsearchAdapter } from "./anthropicAdapter.js";
+import {
+  RADAR_WEBSEARCH_PHASE_CODES,
+  createAnthropicRadarWebsearchAdapter,
+} from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
 
 const ALLOWED_ORIGINS = new Set([
@@ -77,6 +80,12 @@ function limitRows(rows: unknown): Map<string, unknown> {
     if (typeof row?.schluessel === "string") values.set(row.schluessel, row.wert);
   }
   return values;
+}
+
+function safePhaseCode(value: unknown): string {
+  return typeof value === "string" && RADAR_WEBSEARCH_PHASE_CODES.includes(value)
+    ? value
+    : "runtime-setup";
 }
 
 function rpcEvent(event: Record<string, unknown>) {
@@ -271,6 +280,7 @@ export function createRadarWebsearchHandler({
       writes: result.writes || 0,
       providerRequests: telemetry.providerRequests || 0,
       searchRequests: telemetry.searchRequests || 0,
+      phaseCode: safePhaseCode(telemetry.phaseCode),
     }, httpStatus, origin);
   };
 }

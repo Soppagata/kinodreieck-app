@@ -9,6 +9,12 @@ export const RADAR_WEBSEARCH_FEE_USD_CENT = 1;
 export const RADAR_WEBSEARCH_MAX_DOMAINS = 10;
 export const RADAR_WEBSEARCH_TIMEOUT_MAX_MS = 135_000;
 export const RADAR_WEBSEARCH_RESPONSE_MAX_BYTES = 512_000;
+export const RADAR_WEBSEARCH_PHASE_CODES = Object.freeze([
+  "runtime-setup",
+  "cost-reservation",
+  "provider-request",
+  "provider-complete",
+]);
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -364,6 +370,7 @@ export function createAnthropicRadarWebsearchAdapter({
     searchRequests: 0,
     resultCount: 0,
     costUsdCent: null,
+    phaseCode: "runtime-setup",
   };
   async function search(request) {
     if (used) throw new RadarWebsearchProviderError("already-used");
@@ -375,6 +382,7 @@ export function createAnthropicRadarWebsearchAdapter({
     const setup = validateRadarWebsearchProviderSetup(await loadSetup());
     const body = buildAnthropicRadarWebsearchBody(request, setup);
     const reservationUsdCent = estimateRadarWebsearchReservation(body, setup);
+    telemetry.phaseCode = "cost-reservation";
     const providerOperationId = operationId();
     const reservation = await reserveCost({
       targetId: request.targetId,
@@ -387,6 +395,7 @@ export function createAnthropicRadarWebsearchAdapter({
     if (!Number.isInteger(logId) || logId <= 0) {
       throw new RadarWebsearchProviderError("cost-log-invalid");
     }
+    telemetry.phaseCode = "provider-request";
 
     let usage = null;
     let costUsdCent = null;
@@ -454,6 +463,7 @@ export function createAnthropicRadarWebsearchAdapter({
       telemetry.searchRequests = usage.searchRequests;
       telemetry.resultCount = parsed.envelope.searchResultCount;
       telemetry.costUsdCent = costUsdCent;
+      telemetry.phaseCode = "provider-complete";
       return parsed.envelope;
     } catch (error) {
       const safe = error instanceof RadarWebsearchProviderError

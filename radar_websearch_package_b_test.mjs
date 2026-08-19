@@ -6,6 +6,7 @@ import { delimiter, dirname, resolve } from "node:path";
 import {
   RADAR_WEBSEARCH_FEE_USD_CENT,
   RADAR_WEBSEARCH_MAX_TOKENS,
+  RADAR_WEBSEARCH_PHASE_CODES,
   RADAR_WEBSEARCH_TASK_CAP_USD_CENT,
   RadarWebsearchProviderError,
   createAnthropicRadarWebsearchAdapter,
@@ -13,7 +14,10 @@ import {
 import { evaluateRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
 import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
 import { createRadarWebsearchMemoryRepository } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
-import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
+import {
+  runRadarWebsearchOnce,
+  validateFunctionResponse,
+} from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import { RADAR_E17A_MIGRATION_SHA256 } from "./tools/radar_e17a_repair_once.mjs";
 import {
@@ -156,6 +160,7 @@ function response(body, status = 200) {
 }
 
 function adapterHarness({
+  apiKey = "mock-api-key-never-logged",
   setupPatch = {},
   providerBody = providerMessage(),
   httpStatus = 200,
@@ -167,7 +172,7 @@ function adapterHarness({
   const settleCalls = [];
   const effectiveSetup = { ...setup, ...setupPatch };
   const adapter = createAnthropicRadarWebsearchAdapter({
-    apiKey: "mock-api-key-never-logged",
+    apiKey,
     loadSetup: async () => effectiveSetup,
     reserveCost: async (input) => {
       reserveCalls.push(input);
@@ -208,6 +213,10 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
   assert.equal(harness.reserveCalls.length, 1);
   assert.equal(harness.settleCalls.length, 1);
   assert.equal(harness.settleCalls[0].status, "fertig");
+  assert.deepEqual(RADAR_WEBSEARCH_PHASE_CODES, [
+    "runtime-setup", "cost-reservation", "provider-request", "provider-complete",
+  ]);
+  assert.equal(harness.adapter.telemetry().phaseCode, "provider-complete");
   assert.ok(harness.reserveCalls[0].reservationUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
   assert.ok(harness.settleCalls[0].costUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
 
@@ -248,12 +257,14 @@ await check("HTTP- und Netzwerkfehler enden nach einem Fetch ohne Rohfehler", as
   assert.equal(http.fetchCalls.length, 1);
   assert.equal(http.settleCalls.length, 1);
   assert.equal(http.settleCalls[0].status, "fehler");
+  assert.equal(http.adapter.telemetry().phaseCode, "provider-request");
   assert.equal(JSON.stringify(http.settleCalls).includes("raw-private"), false);
 
   const network = adapterHarness({ fetchError: new Error("socket raw-private") });
   await expectProviderError(network.adapter.search(target), "http-error");
   assert.equal(network.fetchCalls.length, 1);
   assert.equal(network.settleCalls.length, 1);
+  assert.equal(network.adapter.telemetry().phaseCode, "provider-request");
   assert.equal(JSON.stringify(network.settleCalls).includes("raw-private"), false);
 });
 
@@ -297,6 +308,12 @@ await check("Mehr als sechs Resultate und eine fremde Citation werden vor dem Pr
 });
 
 await check("Radar-, Provider-, Scheduler-, Allowlist- und lokale Kostengates stoppen vor Reservierung und Fetch", async () => {
+  const missingSecret = adapterHarness({ apiKey: "" });
+  await expectProviderError(missingSecret.adapter.search(target), "setup-invalid");
+  assert.equal(missingSecret.adapter.telemetry().phaseCode, "runtime-setup");
+  assert.equal(missingSecret.reserveCalls.length, 0);
+  assert.equal(missingSecret.fetchCalls.length, 0);
+
   const gates = [
     { radarEnabled: false },
     { radarProviderEnabled: false },
@@ -311,6 +328,7 @@ await check("Radar-, Provider-, Scheduler-, Allowlist- und lokale Kostengates st
   for (const setupPatch of gates) {
     const harness = adapterHarness({ setupPatch });
     await expectProviderError(harness.adapter.search(target), "setup-invalid");
+    assert.equal(harness.adapter.telemetry().phaseCode, "runtime-setup");
     assert.equal(harness.reserveCalls.length, 0);
     assert.equal(harness.fetchCalls.length, 0);
   }
@@ -319,11 +337,13 @@ await check("Radar-, Provider-, Scheduler-, Allowlist- und lokale Kostengates st
 await check("Atomare Kostenablehnung und unbrauchbare Log-ID stoppen vor dem Provider", async () => {
   const rejected = adapterHarness({ reserveResult: { ok: false, logId: null } });
   await expectProviderError(rejected.adapter.search(target), "cost-gate-rejected");
+  assert.equal(rejected.adapter.telemetry().phaseCode, "cost-reservation");
   assert.equal(rejected.fetchCalls.length, 0);
   assert.equal(rejected.settleCalls.length, 0);
 
   const badLog = adapterHarness({ reserveResult: { ok: true, logId: 0 } });
   await expectProviderError(badLog.adapter.search(target), "cost-log-invalid");
+  assert.equal(badLog.adapter.telemetry().phaseCode, "cost-reservation");
   assert.equal(badLog.fetchCalls.length, 0);
   assert.equal(badLog.settleCalls.length, 0);
 });
@@ -383,6 +403,7 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
         writes: 1,
         providerRequests: 1,
         searchRequests: 1,
+        phaseCode: "provider-complete",
       });
     }
     throw new Error("unexpected-mock-url");
@@ -397,6 +418,27 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
   assert.equal(calls.some((call) => call.options?.body?.includes?.("echo-struct")), false);
   assert.equal(output.length, 1);
   assert.equal(output[0].includes(target.targetId), false);
+});
+
+await check("Live-Fehlerabbildung nennt nur den stabil allowlisteten Phasencode", () => {
+  const responseMeta = { ok: true, status: 200 };
+  const base = {
+    ok: true,
+    status: "provider_error",
+    writes: 0,
+    providerRequests: 0,
+    searchRequests: 0,
+  };
+  assert.throws(
+    () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "cost-reservation" }),
+    (error) => error.message.includes("Phase cost-reservation")
+      && !error.message.includes("secret") && !error.message.includes("stack"),
+  );
+  assert.throws(
+    () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "raw-private-secret" }),
+    (error) => error.message.includes("Phase unknown")
+      && !error.message.includes("raw-private-secret"),
+  );
 });
 
 await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfrei", async () => {
@@ -755,6 +797,7 @@ await check("Function-Konfiguration erzwingt JWT und Produktcode enthält keine 
   assert.match(config, /\[functions\.radar-websearch-task\][\s\S]*?verify_jwt\s*=\s*true/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.match(functionIndex, /kd_private_provider_allowed/);
+  assert.match(functionIndex, /safePhaseCode\(telemetry\.phaseCode\)/);
   assert.equal((adapterSource.match(/\bfetchImpl\(/g) || []).length, 1);
   assert.doesNotMatch(adapterSource, /console\.(?:log|error)|JSON\.stringify\([^)]*providerBody/);
   assert.doesNotMatch(functionIndex, /console\.(?:log|error)/);

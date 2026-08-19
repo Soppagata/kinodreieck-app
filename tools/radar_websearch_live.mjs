@@ -27,7 +27,13 @@ const RADAR_FUNCTION = "radar-websearch-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
 const TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
 const RESPONSE_KEYS = Object.freeze([
-  "ok", "providerRequests", "searchRequests", "status", "writes",
+  "ok", "phaseCode", "providerRequests", "searchRequests", "status", "writes",
+]);
+const PHASE_CODES = new Set([
+  "runtime-setup",
+  "cost-reservation",
+  "provider-request",
+  "provider-complete",
 ]);
 
 function validTarget(value) {
@@ -35,14 +41,17 @@ function validTarget(value) {
     && TARGET_FORM.test(value) && !/^(?:fixture|synthetic):/i.test(value);
 }
 
-function validateFunctionResponse(response, body) {
+export function validateFunctionResponse(response, body) {
+  const phaseCode = PHASE_CODES.has(body?.phaseCode) ? body.phaseCode : "unknown";
   if (!response?.ok || !body || typeof body !== "object" || Array.isArray(body)
       || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(RESPONSE_KEYS)
+      || !PHASE_CODES.has(body.phaseCode)
       || body.ok !== true || body.status !== "confirmed" || body.writes !== 1
-      || body.providerRequests !== 1 || body.searchRequests !== 1) {
+      || body.providerRequests !== 1 || body.searchRequests !== 1
+      || body.phaseCode !== "provider-complete") {
     throw new LiveSicherheitsStopp(
       "unbekannt",
-      `Radar-Websearch-Abnahme endete ohne bestaetigten Einzelwrite (HTTP ${response?.status ?? "?"}).`,
+      `Radar-Websearch-Abnahme endete ohne bestaetigten Einzelwrite (HTTP ${response?.status ?? "?"}, Phase ${phaseCode}).`,
     );
   }
 }
