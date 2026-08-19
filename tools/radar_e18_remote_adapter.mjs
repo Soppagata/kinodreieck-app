@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* E18-Remoteadapter: commitfaehige, effektinjizierte Verbindung zwischen
-   vorhandener E17A-Basismigration und Radar-Websearch-Paket B.
+   ausstehender E17A-Basismigration und Radar-Websearch-Paket B.
 
    Jeder moegliche Effekt passiert ausschliesslich hinter einem validierten,
    commitgebundenen Prozessblueprint. Der direkte Dry-Run ist effektfrei; ein
@@ -36,13 +36,11 @@ import {
 export const RADAR_E18_PROJECT_REF = "bscjgwcntapobyxsiyce";
 export const RADAR_E18_BASELINE_MIGRATION = RADAR_E17A_MIGRATION_VERSION;
 export const RADAR_E18_MUTATION_MIGRATIONS = Object.freeze([
+  RADAR_E18_BASELINE_MIGRATION,
   "20260817180000",
   "20260817190000",
 ]);
-export const RADAR_E18_MIGRATIONS = Object.freeze([
-  RADAR_E18_BASELINE_MIGRATION,
-  ...RADAR_E18_MUTATION_MIGRATIONS,
-]);
+export const RADAR_E18_MIGRATIONS = Object.freeze([...RADAR_E18_MUTATION_MIGRATIONS]);
 export const RADAR_E18_FUNCTION = "radar-websearch-task";
 export const RADAR_E18_LIVE_COMMAND = Object.freeze([
   "npm", "run", "test:ai:live", "--", "--radar-websearch-once",
@@ -118,10 +116,12 @@ const BLUEPRINT_DEFINITIONS = Object.freeze([
 ]);
 
 const EXPECTED_BLUEPRINT_IDS = Object.freeze(BLUEPRINT_DEFINITIONS.map(([id]) => id));
-const BASELINE_LIMITS = Object.freeze({
-  task_modell: Object.freeze({ key: "blog-profile-extract", value: "klein" }),
-  task_max_tokens: Object.freeze({ key: "blog-profile-extract", value: 2048 }),
-  task_max_reservierung_usd_cent: Object.freeze({ key: "blog-profile-extract", value: 5 }),
+const EXPECTED_LEDGER_BASELINE_COUNT = 35;
+const EXPECTED_PREVIOUS_LEDGER_VERSION = "20260816010000";
+const BASELINE_LIMIT_KEYS = Object.freeze({
+  task_modell: "blog-profile-extract",
+  task_max_tokens: "blog-profile-extract",
+  task_max_reservierung_usd_cent: "blog-profile-extract",
 });
 const PACKAGE_B_RECEIPTS = Object.freeze({
   "package-b-backup": "BACKUP_CREATED",
@@ -166,10 +166,23 @@ function exactPlainObject(value, keys) {
 }
 
 function validateBaselineContract(contract) {
+  const ledgerVersions = Array.isArray(contract?.expectedLedgerBaseline)
+    ? contract.expectedLedgerBaseline.map((row) => row?.version)
+    : [];
   if (!plainObject(contract)
       || !/^[0-9a-f]{40}$/.test(String(contract.finalCommit || ""))
       || contract.migrationPath !== RADAR_E17A_MIGRATION_PATH
       || !Array.isArray(contract.expectedLedgerBaseline)
+      || contract.expectedLedgerBaseline.length !== EXPECTED_LEDGER_BASELINE_COUNT
+      || contract.expectedLedgerBaseline.some((row, index) => (
+        !exactPlainObject(row, ["name", "version"])
+        || !/^[0-9]{14}$/.test(row.version)
+        || !/^[a-z0-9_]+$/.test(row.name)
+        || row.version >= RADAR_E18_BASELINE_MIGRATION
+        || (index > 0 && row.version <= ledgerVersions[index - 1])
+      ))
+      || new Set(ledgerVersions).size !== EXPECTED_LEDGER_BASELINE_COUNT
+      || ledgerVersions.at(-1) !== EXPECTED_PREVIOUS_LEDGER_VERSION
       || !isDeepStrictEqual(contract.targetHistory, {
         version: RADAR_E18_BASELINE_MIGRATION,
         name: RADAR_E17A_LEDGER_NAME,
@@ -192,22 +205,19 @@ function isJsonScalar(value) {
     || (typeof value === "number" && Number.isFinite(value));
 }
 
-function validateAppliedBaseline(state, contract) {
+function validatePendingBaseline(state, contract) {
   if (!exactPlainObject(state, ["ledger", "limits", "targetLedger"])
-      || !exactPlainObject(state.limits, Object.keys(BASELINE_LIMITS))) {
+      || !exactPlainObject(state.limits, Object.keys(BASELINE_LIMIT_KEYS))) {
     stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Baselinezustand ist formfremd.");
   }
-  validateRadarLedgerBaseline(
-    state.ledger,
-    [...contract.expectedLedgerBaseline, contract.targetHistory],
-  );
-  if (!isDeepStrictEqual(state.targetLedger, contract.targetLedger)) {
-    stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Ledgerzustand ist nicht exakt.");
+  validateRadarLedgerBaseline(state.ledger, contract.expectedLedgerBaseline);
+  if (state.targetLedger !== null) {
+    stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Zielmigration ist nicht absent.");
   }
-  for (const [rowName, patch] of Object.entries(BASELINE_LIMITS)) {
+  for (const [rowName, targetKey] of Object.entries(BASELINE_LIMIT_KEYS)) {
     const row = state.limits[rowName];
     if (!plainObject(row) || !Object.values(row).every(isJsonScalar)
-        || !isDeepStrictEqual(row[patch.key], patch.value)) {
+        || Object.hasOwn(row, targetKey)) {
       stop("BASELINE_MIGRATION_STATE_DRIFT", "Remote E17A-Limitzustand ist nicht exakt.");
     }
   }
@@ -419,11 +429,11 @@ export function createRadarE18CommittedAdapter({
       const baselineContract = validateBaselineContract(await contractLoader());
       packageBCleanupNeeded = true;
       await readSupabaseCredentials();
-      validateAppliedBaseline(
+      validatePendingBaseline(
         await invoke("e17a-remote-read", { secretContext }),
         baselineContract,
       );
-      trace.push("e17a-baseline-confirmed");
+      trace.push("e17a-baseline-absent-confirmed");
 
       const packageBPreflight = packageBFactory({
         async localClosureGate() { return invoke("package-b-local-closure"); },
@@ -549,6 +559,8 @@ export async function main(argv = process.argv.slice(2), {
       blueprintIds: blueprints.map(({ id }) => id),
       projectRef: RADAR_E18_PROJECT_REF,
       baselineMigration: RADAR_E18_BASELINE_MIGRATION,
+      baselineMigrationState: "absent",
+      expectedLedgerCount: EXPECTED_LEDGER_BASELINE_COUNT,
       requiredMigrations: RADAR_E18_MIGRATIONS,
       mutationMigrations: RADAR_E18_MUTATION_MIGRATIONS,
       functionName: RADAR_E18_FUNCTION,

@@ -17,9 +17,8 @@ import {
   main,
 } from "./tools/radar_e18_remote_adapter.mjs";
 import {
-  RADAR_E17A_LEDGER_NAME,
-  RADAR_E17A_MIGRATION_PATH,
   RADAR_E17A_MIGRATION_SHA256,
+  loadRadarE17ARepairContract,
 } from "./tools/radar_e17a_repair_once.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
@@ -45,39 +44,39 @@ const expectedReceipts = Object.freeze({
   "package-b-cleanup": { status: "CLEANUP_COMPLETE" },
 });
 
-const baselineContract = Object.freeze({
-  finalCommit: "f".repeat(40),
-  migrationPath: RADAR_E17A_MIGRATION_PATH,
-  migrationSha256: RADAR_E17A_MIGRATION_SHA256,
-  expectedLedgerBaseline: Object.freeze([
-    Object.freeze({ version: "20260816010000", name: "radar_deferred_trigger_privilege_fix" }),
-  ]),
-  targetHistory: Object.freeze({
-    version: RADAR_E18_BASELINE_MIGRATION,
-    name: RADAR_E17A_LEDGER_NAME,
-  }),
-  targetLedger: Object.freeze({
-    version: RADAR_E18_BASELINE_MIGRATION,
-    name: RADAR_E17A_LEDGER_NAME,
-    statements: Object.freeze([]),
-  }),
-});
+const baselineContract = loadRadarE17ARepairContract();
 
-function appliedBaselineState(mode = "valid") {
+function pendingBaselineState(mode = "valid") {
   const valid = {
-    ledger: [...baselineContract.expectedLedgerBaseline, baselineContract.targetHistory],
+    ledger: baselineContract.expectedLedgerBaseline,
     limits: {
-      task_modell: { stable: "klein", "blog-profile-extract": "klein" },
-      task_max_tokens: { stable: 1000, "blog-profile-extract": 2048 },
-      task_max_reservierung_usd_cent: { stable: 2, "blog-profile-extract": 5 },
+      task_modell: { stable: "klein" },
+      task_max_tokens: { stable: 1000 },
+      task_max_reservierung_usd_cent: { stable: 2 },
     },
-    targetLedger: baselineContract.targetLedger,
+    targetLedger: null,
   };
   if (mode === "missing") {
-    return { ...valid, ledger: baselineContract.expectedLedgerBaseline, targetLedger: null };
+    return { ...valid, ledger: baselineContract.expectedLedgerBaseline.slice(0, -1) };
+  }
+  if (mode === "additional") {
+    return {
+      ...valid,
+      ledger: [...baselineContract.expectedLedgerBaseline, baselineContract.targetHistory],
+      targetLedger: baselineContract.targetLedger,
+    };
   }
   if (mode === "state-drift") {
-    return { ...valid, targetLedger: { ...baselineContract.targetLedger, statements: ["unexpected"] } };
+    return {
+      ...valid,
+      limits: {
+        ...valid.limits,
+        task_max_tokens: { stable: 1000, "blog-profile-extract": 2048 },
+      },
+    };
+  }
+  if (mode === "target-drift") {
+    return { ...valid, targetLedger: baselineContract.targetLedger };
   }
   return valid;
 }
@@ -87,6 +86,7 @@ function fixture({
   anthropicState = "PRESENT",
   baselineMode = "valid",
   baselineHash = RADAR_E17A_MIGRATION_SHA256,
+  invalidReceiptAt = null,
 } = {}) {
   const calls = [];
   const inputs = [];
@@ -102,10 +102,11 @@ function fixture({
     if (blueprint.id === "credential-supabase-access-token") return secrets.access;
     if (blueprint.id === "credential-db-postgres-password") return secrets.database;
     if (blueprint.id === "credential-anthropic-api-key") return secrets.anthropic;
-    if (blueprint.id === "e17a-remote-read") return appliedBaselineState(baselineMode);
+    if (blueprint.id === "e17a-remote-read") return pendingBaselineState(baselineMode);
     if (blueprint.id === "package-b-remote-read") {
       return { anthropicApiKey: anthropicState };
     }
+    if (blueprint.id === invalidReceiptAt) return { status: "INVALID_RECEIPT" };
     return expectedReceipts[blueprint.id] || {};
   };
   const run = createRadarE18CommittedAdapter({
@@ -120,8 +121,10 @@ function isStop(code) {
   return (error) => error instanceof RadarE18AdapterStop && error.code === code;
 }
 
-await check("Blueprintsatz ist one-shot; Baseline bleibt reine Vorbedingung und nur Paket A/B sind Mutationen", () => {
+await check("Blueprintsatz plant one-shot exakt E17A, Paket A und Paket B als geordnete Mutationen", () => {
   const blueprints = createRadarE18ProcessBlueprints();
+  assert.equal(baselineContract.expectedLedgerBaseline.length, 35);
+  assert.equal(baselineContract.expectedLedgerBaseline.at(-1).version, "20260816010000");
   assert.ok(blueprints.every(({ attempts }) => attempts === 1));
   const projects = new Set(blueprints.flatMap(({ target }) => (
     target.projectRef ? [target.projectRef] : []
@@ -138,7 +141,11 @@ await check("Blueprintsatz ist one-shot; Baseline bleibt reine Vorbedingung und 
   const migrationWrites = blueprints.filter(({ operation }) => operation === "migration-write");
   assert.deepEqual(migrationWrites.map(({ id }) => id), ["package-b-migrations"]);
   assert.deepEqual(migrationWrites[0].target.migrations, RADAR_E18_MUTATION_MIGRATIONS);
-  assert.equal(migrationWrites[0].target.migrations.includes(RADAR_E18_BASELINE_MIGRATION), false);
+  assert.deepEqual(migrationWrites[0].target.migrations, [
+    RADAR_E18_BASELINE_MIGRATION,
+    "20260817180000",
+    "20260817190000",
+  ]);
   assert.equal(blueprints.some(({ id }) => /^e17a-(?:backup|restore|write|postflight|cleanup)$/.test(id)), false);
 });
 
@@ -169,9 +176,11 @@ await check("Dry-Run startet weder Prozess- noch Credentialeffekt und gibt nur d
   assert.equal(payload.status, "E18_REMOTE_ADAPTER_DRY_RUN");
   assert.equal(payload.attempts, 1);
   assert.equal(payload.baselineMigration, RADAR_E18_BASELINE_MIGRATION);
+  assert.equal(payload.baselineMigrationState, "absent");
+  assert.equal(payload.expectedLedgerCount, 35);
   assert.deepEqual(payload.requiredMigrations, RADAR_E18_MIGRATIONS);
   assert.deepEqual(payload.mutationMigrations, RADAR_E18_MUTATION_MIGRATIONS);
-  assert.equal(payload.mutationMigrations.includes(RADAR_E18_BASELINE_MIGRATION), false);
+  assert.equal(payload.mutationMigrations[0], RADAR_E18_BASELINE_MIGRATION);
   assert.equal(payload.liveCommand, RADAR_E18_LIVE_COMMAND.join(" "));
   assert.doesNotMatch(out[0], /synthetic-.*-secret/);
 });
@@ -208,7 +217,7 @@ await check("Effektmodus stoppt ohne exakten Startmarker vor Executor und Creden
   assert.equal(contractLoads, 0);
 });
 
-await check("Vorhandene unveraenderte E17A-Baseline laesst Paket B strikt seriell fortfahren", async () => {
+await check("Exakt 35 Vorgaenger ohne E17A lassen Backup, Restore und drei Migrationen strikt seriell fortfahren", async () => {
   const f = fixture();
   const result = await f.run();
   assert.equal(result.status, "E18_REMOTE_CHAIN_COMPLETE");
@@ -235,7 +244,7 @@ await check("Vorhandene unveraenderte E17A-Baseline laesst Paket B strikt seriel
   assert.equal(f.calls.filter((id) => id === "credential-supabase-access-token").length, 1);
   assert.equal(f.calls.filter((id) => id === "credential-db-postgres-password").length, 1);
   assert.equal(f.calls.filter((id) => id === "package-b-live-request").length, 1);
-  assert.equal(result.trace.includes("e17a-baseline-confirmed"), true);
+  assert.equal(result.trace.includes("e17a-baseline-absent-confirmed"), true);
   assert.doesNotMatch(JSON.stringify(result), /synthetic-.*-secret/);
   assert.doesNotMatch(JSON.stringify(f.inputs), /synthetic-.*-secret/);
   await assert.rejects(f.run(), isStop("AUTONOMIE_STOPP_NO_RETRY"));
@@ -259,10 +268,12 @@ await check("Provider-Key bleibt bei PRESENT unangetastet und folgt bei MISSING 
   assert.doesNotMatch(JSON.stringify(result), /synthetic-.*-secret/);
 });
 
-await check("Fehlende oder driftende Basismigration stoppt vor Backup, Write und Provider ohne Retry", async () => {
+await check("Fehlender, zusaetzlicher oder funktional driftender Ausgangsledger stoppt vor Backup und Mutation", async () => {
   for (const [baselineMode, code] of [
     ["missing", "LEDGER_BASELINE_DRIFT"],
+    ["additional", "LEDGER_BASELINE_DRIFT"],
     ["state-drift", "BASELINE_MIGRATION_STATE_DRIFT"],
+    ["target-drift", "BASELINE_MIGRATION_STATE_DRIFT"],
   ]) {
     const f = fixture({ baselineMode });
     await assert.rejects(f.run(), isStop(code));
@@ -279,6 +290,19 @@ await check("Fehlende oder driftende Basismigration stoppt vor Backup, Write und
     await assert.rejects(f.run(), isStop("AUTONOMIE_STOPP_NO_RETRY"));
     assert.equal(f.calls.length, count, baselineMode);
     assert.doesNotMatch(JSON.stringify(f.inputs), /synthetic-.*-secret/);
+  }
+});
+
+await check("Mutation startet nur nach exakten BACKUP_CREATED- und DISPOSABLE_RESTORE_VERIFIED-Belegen", async () => {
+  for (const failedReceipt of ["package-b-backup", "package-b-restore"]) {
+    const f = fixture({ invalidReceiptAt: failedReceipt });
+    await assert.rejects(f.run(), isStop("PACKAGE_B_RECEIPT_INVALID"));
+    assert.equal(f.calls.filter((id) => id === failedReceipt).length, 1, failedReceipt);
+    assert.equal(f.calls.includes("package-b-migrations"), false, failedReceipt);
+    assert.equal(f.calls.filter((id) => id === "package-b-cleanup").length, 1, failedReceipt);
+    const count = f.calls.length;
+    await assert.rejects(f.run(), isStop("AUTONOMIE_STOPP_NO_RETRY"));
+    assert.equal(f.calls.length, count, failedReceipt);
   }
 });
 

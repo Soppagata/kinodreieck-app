@@ -15,8 +15,10 @@ import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-tas
 import { createRadarWebsearchMemoryRepository } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
 import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
+import { RADAR_E17A_MIGRATION_SHA256 } from "./tools/radar_e17a_repair_once.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
+  RADAR_E17A_COMMIT,
   RADAR_PACKAGE_A_COMMIT,
   RADAR_PACKAGE_B_COMMIT,
   REPO_ROOT,
@@ -416,6 +418,7 @@ const expectedRemoteReleaseClosure = Object.freeze([
   "supabase/functions/radar-websearch-task/contract.js",
   "supabase/functions/radar-websearch-task/index.ts",
   "supabase/functions/radar-websearch-task/runner.js",
+  "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
   "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
   "tools/keychain_runner.mjs",
@@ -458,13 +461,21 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Remote-Release-Closure entsteht aus Paket-A/B-Provenienz und dem echten Function-Importgraph", () => {
+await check("Remote-Release-Closure bindet E17A-Quelle/Hash, Paket A/B und den echten Function-Importgraph", () => {
   const first = deriveRadarPackageBReleaseClosure();
   const second = deriveRadarPackageBReleaseClosure();
-  assert.deepEqual(first.contractCommits, [RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]);
+  assert.deepEqual(first.contractCommits, [
+    RADAR_E17A_COMMIT,
+    RADAR_PACKAGE_A_COMMIT,
+    RADAR_PACKAGE_B_COMMIT,
+  ]);
   assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
   assert.equal(first.files.length, expectedRemoteReleaseClosure.length);
   assert.equal(first.files.every((file) => fs.existsSync(`${REPO_ROOT}/${file.path}`)), true);
+  assert.equal(
+    first.files.find(({ path }) => path === "supabase/migrations/20260817120000_blog_profile_extract_config.sql")?.sha256,
+    RADAR_E17A_MIGRATION_SHA256,
+  );
   assert.equal(first.paths.includes("tools/radar_websearch_contract.mjs"), false);
   assert.equal(first.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), false);
   assert.match(first.sha256, /^[a-f0-9]{64}$/);

@@ -21,8 +21,15 @@ import { delimiter, dirname, isAbsolute, join, posix, relative, resolve, sep } f
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
+export const RADAR_E17A_COMMIT = "be987dfde700e5a5069f6c43352b8a03a7624208";
 export const RADAR_PACKAGE_A_COMMIT = "b6b2dacf76139d778c8306a8ac954d93bd8caf22";
 export const RADAR_PACKAGE_B_COMMIT = "6e14a7b72a73b7af6b9bdb411647ce899aadea6e";
+
+const RADAR_RELEASE_COMMITS = Object.freeze([
+  RADAR_E17A_COMMIT,
+  RADAR_PACKAGE_A_COMMIT,
+  RADAR_PACKAGE_B_COMMIT,
+]);
 
 export const SUPABASE_INFRA_KEYCHAIN = Object.freeze({
   service: "at.kinodreieck.codex.supabase.bscjgwcntapobyxsiyce",
@@ -44,6 +51,7 @@ const NODE_RUNTIME_DIRECTORY = resolve(dirname(process.execPath));
 const FIXED_RELEASE_PATHS = Object.freeze([
   "package.json",
   "supabase/config.toml",
+  "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
   "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
   FUNCTION_ENTRY,
@@ -52,6 +60,9 @@ const FIXED_RELEASE_PATHS = Object.freeze([
 ]);
 
 const REQUIRED_PROVENANCE = Object.freeze({
+  [RADAR_E17A_COMMIT]: Object.freeze([
+    "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
+  ]),
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
     "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
     `${FUNCTION_ROOT}/contract.js`,
@@ -239,7 +250,7 @@ function framedHash(commits, files) {
     hash.update(length);
     hash.update(payload);
   };
-  update("radar-websearch-package-b-release-closure-v1");
+  update("radar-websearch-package-b-release-closure-v2");
   for (const commit of commits) update(commit);
   for (const file of files) {
     update(file.path);
@@ -249,11 +260,12 @@ function framedHash(commits, files) {
 }
 
 export function deriveRadarPackageBReleaseClosure(options = {}) {
+  requireAncestor(RADAR_E17A_COMMIT, RADAR_PACKAGE_A_COMMIT, options);
   requireAncestor(RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT, options);
   requireAncestor(RADAR_PACKAGE_B_COMMIT, "HEAD", options);
 
   const changedByCommit = new Map();
-  for (const commit of [RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]) {
+  for (const commit of RADAR_RELEASE_COMMITS) {
     changedByCommit.set(commit, new Set(changedPathsAtCommit(commit, options)));
   }
   for (const [commit, paths] of Object.entries(REQUIRED_PROVENANCE)) {
@@ -284,10 +296,10 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
   });
   requireClosureClean(paths, options);
   return Object.freeze({
-    contractCommits: Object.freeze([RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]),
+    contractCommits: RADAR_RELEASE_COMMITS,
     paths: Object.freeze([...paths]),
     files: Object.freeze(files.map(({ path, sha256 }) => Object.freeze({ path, sha256 }))),
-    sha256: framedHash([RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT], files),
+    sha256: framedHash(RADAR_RELEASE_COMMITS, files),
   });
 }
 

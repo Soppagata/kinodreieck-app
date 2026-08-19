@@ -21,6 +21,7 @@ import {
 } from "./tools/radar_e18_remote_adapter.mjs";
 import {
   RadarE18ProcessStop,
+  createRadarE18DefaultExecutor,
   validateRadarE18ProcessContract,
   verifyRadarE18CommittedSources,
 } from "./tools/radar_e18_process_executor.mjs";
@@ -101,7 +102,22 @@ await check("exakte Kopien bleiben gleich; Erweiterungen und Formdrift werden fa
   }
 });
 
-await check("Quellgate akzeptiert nur vier getrackte, saubere HEAD-Dateien und stoppt bei Dirty-State", () => {
+await check("Default-Executor startet ohne gebundene Backup-/Restorebelege keine Migration", async () => {
+  let processStarts = 0;
+  const executor = createRadarE18DefaultExecutor({
+    spawn() { processStarts += 1; throw new Error("must not start"); },
+  });
+  const migrationBlueprint = createRadarE18ProcessBlueprints()
+    .find(({ id }) => id === "package-b-migrations");
+  await assert.rejects(
+    executor(migrationBlueprint),
+    (error) => error instanceof RadarE18ProcessStop
+      && error.code === "MIGRATION_RESTORE_RECEIPT_REQUIRED",
+  );
+  assert.equal(processStarts, 0);
+});
+
+await check("Quellgate akzeptiert nur Migration plus vier getrackte, saubere HEAD-Dateien und stoppt bei Dirty-State", () => {
   const calls = [];
   const gitSpawn = (_binary, argv) => {
     calls.push([...argv]);
@@ -110,7 +126,7 @@ await check("Quellgate akzeptiert nur vier getrackte, saubere HEAD-Dateien und s
   };
   const receipt = verifyRadarE18CommittedSources({ gitSpawn });
   assert.equal(receipt.status, "E18_COMMITTED_SOURCES_OK");
-  assert.equal(receipt.paths.length, 4);
+  assert.equal(receipt.paths.length, 5);
   assert.deepEqual(calls.map(([command]) => command), ["rev-parse", "ls-files", "status", "diff"]);
 
   assert.throws(() => verifyRadarE18CommittedSources({
@@ -125,26 +141,34 @@ await check("Quellgate akzeptiert nur vier getrackte, saubere HEAD-Dateien und s
 
 function e17aState(contract, mode = "valid") {
   const valid = {
-    ledger: [...contract.expectedLedgerBaseline, contract.targetHistory],
+    ledger: contract.expectedLedgerBaseline,
     limits: {
-      task_modell: { stable: "klein", "blog-profile-extract": "klein" },
-      task_max_tokens: { stable: 1000, "blog-profile-extract": 2048 },
-      task_max_reservierung_usd_cent: { stable: 2, "blog-profile-extract": 5 },
+      task_modell: { stable: "klein" },
+      task_max_tokens: { stable: 1000 },
+      task_max_reservierung_usd_cent: { stable: 2 },
     },
-    targetLedger: contract.targetLedger,
+    targetLedger: null,
   };
   if (mode === "missing") {
-    return { ...valid, ledger: contract.expectedLedgerBaseline, targetLedger: null };
+    return { ...valid, ledger: contract.expectedLedgerBaseline.slice(0, -1) };
+  }
+  if (mode === "additional") {
+    return {
+      ...valid,
+      ledger: [...contract.expectedLedgerBaseline, contract.targetHistory],
+      targetLedger: contract.targetLedger,
+    };
   }
   if (mode === "state-drift") {
     return {
       ...valid,
       limits: {
         ...valid.limits,
-        task_max_tokens: { stable: 1000, "blog-profile-extract": 4096 },
+        task_max_tokens: { stable: 1000, "blog-profile-extract": 2048 },
       },
     };
   }
+  if (mode === "target-drift") return { ...valid, targetLedger: contract.targetLedger };
   return valid;
 }
 
@@ -158,6 +182,7 @@ function processFixture({
   largeProjection = false,
   projectionBufferError = false,
   schemaPreflightFailure = null,
+  postflightLedgerMode = "valid",
 } = {}) {
   const contract = loadRadarE17ARepairContract();
   const privateSecrets = Object.freeze({
@@ -176,49 +201,58 @@ function processFixture({
   let providerFileObserved = false;
   let migrationWorkspaceObserved = false;
   let sourceGateCalls = 0;
+  let liveCompleted = false;
 
-  const packageState = () => ({
-    ledger: [
+  const packageState = () => {
+    let ledger = [
       ...contract.expectedLedgerBaseline,
-      contract.targetHistory,
       ...(packageMigrated ? [
+        contract.targetHistory,
         { version: "20260817180000", name: "radar_websearch_mvp_package_a" },
         { version: "20260817190000", name: "radar_websearch_mvp_package_b" },
       ] : []),
-    ],
-    radar: {
-      radar_aktiv: flagsEnabled,
-      radar_provider_aktiv: flagsEnabled,
-      radar_shares_aktiv: false,
-      radar_scheduler_aktiv: false,
-      radar_proposal_import_aktiv: false,
-    },
-    private: { provider_requests_enabled: flagsEnabled, scheduler_enabled: false },
-    provider: {
-      feature_enabled: flagsEnabled,
-      rights_confirmed: true,
-      dpa_transfer_confirmed: true,
-      retention_confirmed: true,
-      price_budget_confirmed: true,
-      legal_status: "APPROVED",
-      review_current: true,
-    },
-    providerGate: {
-      ok: flagsEnabled,
-      code: flagsEnabled ? "PROVIDER_ALLOWED" : "PROVIDER_GLOBAL_OFF",
-    },
-    limits: packageMigrated ? {
-      task_modell: "klein",
-      task_max_tokens: 1200,
-      task_max_reservierung_usd_cent: 5,
-      websearch_usd_cent_pro_request: 1,
-    } : {
-      task_modell: null,
-      task_max_tokens: null,
-      task_max_reservierung_usd_cent: null,
-      websearch_usd_cent_pro_request: null,
-    },
-  });
+    ];
+    if (liveCompleted && postflightLedgerMode === "missing") {
+      ledger = ledger.filter(({ version }) => version !== "20260817120000");
+    } else if (liveCompleted && postflightLedgerMode === "additional") {
+      ledger = [...ledger, { version: "20260817200000", name: "unexpected_migration" }];
+    }
+    return {
+      ledger,
+      radar: {
+        radar_aktiv: flagsEnabled,
+        radar_provider_aktiv: flagsEnabled,
+        radar_shares_aktiv: false,
+        radar_scheduler_aktiv: false,
+        radar_proposal_import_aktiv: false,
+      },
+      private: { provider_requests_enabled: flagsEnabled, scheduler_enabled: false },
+      provider: {
+        feature_enabled: flagsEnabled,
+        rights_confirmed: true,
+        dpa_transfer_confirmed: true,
+        retention_confirmed: true,
+        price_budget_confirmed: true,
+        legal_status: "APPROVED",
+        review_current: true,
+      },
+      providerGate: {
+        ok: flagsEnabled,
+        code: flagsEnabled ? "PROVIDER_ALLOWED" : "PROVIDER_GLOBAL_OFF",
+      },
+      limits: packageMigrated ? {
+        task_modell: "klein",
+        task_max_tokens: 1200,
+        task_max_reservierung_usd_cent: 5,
+        websearch_usd_cent_pro_request: 1,
+      } : {
+        task_modell: null,
+        task_max_tokens: null,
+        task_max_reservierung_usd_cent: null,
+        websearch_usd_cent_pro_request: null,
+      },
+    };
+  };
 
   function ok(stdout = "") {
     return { status: 0, signal: null, error: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0) };
@@ -295,7 +329,7 @@ function processFixture({
       if (sql === "create schema supabase_migrations;") return ok();
       if (sql.includes("'targetLedger'")) return ok(`${JSON.stringify(e17aState(contract, baselineMode))}\n`);
       if (sql.includes("INSERT INTO supabase_migrations.schema_migrations")) {
-        assert.fail("E18 darf die vorhandene E17A-Basismigration nie schreiben");
+        assert.fail("E18 darf E17A nicht ausserhalb des geordneten CLI-Migrationsplans schreiben");
       }
       if (sql.includes("'providerGate'")) return ok(`${JSON.stringify(packageState())}\n`);
       if (sql.includes("E18 provider approval is not current")) {
@@ -409,10 +443,14 @@ function processFixture({
     if (argv[0] === "migration" && argv[1] === "up") {
       const migrationFiles = readdirSync(join(options.cwd, "supabase/migrations")).sort();
       assert.deepEqual(migrationFiles, [
+        "20260817120000_blog_profile_extract_config.sql",
         "20260817180000_radar_websearch_mvp_package_a.sql",
         "20260817190000_radar_websearch_mvp_package_b.sql",
       ]);
-      assert.equal(existsSync(join(options.cwd, "supabase/migrations/20260817120000_blog_profile_extract_config.sql")), false);
+      assert.deepEqual(
+        readFileSync(join(options.cwd, "supabase/migrations/20260817120000_blog_profile_extract_config.sql")),
+        readFileSync("supabase/migrations/20260817120000_blog_profile_extract_config.sql"),
+      );
       migrationWorkspaceObserved = true;
       packageMigrated = true;
       return ok("{}\n");
@@ -428,6 +466,7 @@ function processFixture({
       if (liveBudgetUnknown) {
         return { ...ok(), status: 75, stderr: Buffer.from("BUDGET_UNBEKANNT\n") };
       }
+      liveCompleted = true;
       return ok("RADAR-WEBSEARCH-EINMAL: confirmed\n");
     }
     return { ...ok(), status: 1 };
@@ -446,6 +485,7 @@ function processFixture({
         status: "E18_COMMITTED_SOURCES_OK",
         head: "f".repeat(40),
         paths: Object.freeze([
+          "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
           "tools/radar_e17a_repair_once.mjs",
           "tools/radar_e18_process_executor.mjs",
           "tools/radar_e18_remote_adapter.mjs",
@@ -506,6 +546,19 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     migrationWorkspaceObserved: true,
     flagsEnabled: false,
   });
+  const backupIndex = fixture.visibleCalls.findIndex(({ binary, argv }) => (
+    binary.endsWith("/pg_dump")
+      && argv.includes("--format=custom")
+      && argv.some((value) => value.endsWith?.("/package-b.dump"))
+  ));
+  const restoreVerifiedIndex = fixture.visibleCalls.findIndex(({ binary, argv }) => (
+    binary.endsWith("/pg_ctl") && argv.at(-1) === "stop"
+  ));
+  const migrationIndex = fixture.visibleCalls.findIndex(({ argv }) => (
+    argv[0] === "migration" && argv[1] === "up"
+  ));
+  assert.ok(backupIndex >= 0 && backupIndex < restoreVerifiedIndex);
+  assert.ok(restoreVerifiedIndex < migrationIndex);
   assert.equal(fixture.sourceGateCalls(), 1);
   const schemaPreflights = fixture.visibleCalls.filter(({ binary, argv }) => (
     binary.endsWith("/pg_restore")
@@ -538,10 +591,12 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
 });
 
-await check("fehlende oder driftende Basismigration stoppt vor Backup, Mutation und Provider", async () => {
+await check("fehlender, zusaetzlicher oder funktional driftender 35er-Ausgangsledger stoppt vor Backup", async () => {
   for (const [baselineMode, expectedCode] of [
     ["missing", "LEDGER_BASELINE_DRIFT"],
+    ["additional", "LEDGER_BASELINE_DRIFT"],
     ["state-drift", "BASELINE_MIGRATION_STATE_DRIFT"],
+    ["target-drift", "BASELINE_MIGRATION_STATE_DRIFT"],
   ]) {
     const fixture = processFixture({ baselineMode });
     const out = [];
@@ -720,6 +775,30 @@ await check("remote PRESENT laesst den lokalen Provider-Key und die Secretmutati
   assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/bin/security").length, 2);
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("ANTHROPIC_API_KEY")), false);
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "secrets" && argv[1] === "set"), false);
+});
+
+await check("Postflight verlangt alle drei neuen Ledgerzeilen ohne fehlenden oder zusaetzlichen Eintrag", async () => {
+  for (const postflightLedgerMode of ["missing", "additional"]) {
+    const fixture = processFixture({ providerInitiallyPresent: true, postflightLedgerMode });
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+      },
+      ausgabe() {},
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, postflightLedgerMode);
+    assert.deepEqual(err, ["PACKAGE_DEPLOYMENT_READBACK_DRIFT"], postflightLedgerMode);
+    assert.equal(fixture.visibleCalls.filter(({ argv }) => (
+      argv[0] === "migration" && argv[1] === "up"
+    )).length, 1, postflightLedgerMode);
+    assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/local/bin/node").length, 1);
+    assert.equal(fixture.facts().flagsEnabled, false);
+  }
 });
 
 await check("unbekanntes Remote-Functionfeld stoppt vor Backup, Mutation und Provider-Key", async () => {

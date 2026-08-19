@@ -41,6 +41,7 @@ const MIGRATIONS = Object.freeze([
   "20260817190000",
 ]);
 const PACKAGE_MIGRATIONS = Object.freeze([
+  "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
   "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
 ]);
@@ -78,6 +79,7 @@ const RESTORE_ROLE_SCAFFOLD_SQL = RESTORE_POLICY_ROLES
   .join("\n");
 const RESTORE_SCHEMA_SCAFFOLD_SQL = "create schema supabase_migrations;";
 const COMMITTED_EXECUTOR_PATHS = Object.freeze([
+  "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
   "tools/radar_e17a_repair_once.mjs",
   "tools/radar_e18_process_executor.mjs",
   "tools/radar_e18_remote_adapter.mjs",
@@ -568,6 +570,7 @@ export function createRadarE18DefaultExecutor({
 
   const expectedPackageLedger = () => [
     ...state.e17aLedger,
+    { version: MIGRATIONS[0], name: "blog_profile_extract_config" },
     { version: MIGRATIONS[1], name: "radar_websearch_mvp_package_a" },
     { version: MIGRATIONS[2], name: "radar_websearch_mvp_package_b" },
   ];
@@ -982,12 +985,14 @@ export function createRadarE18DefaultExecutor({
       runStep(blueprint, `${stage}-restore-stop`, runtime);
       state.localServerMayBeRunning = false;
       io.remove(restoreRoot, { recursive: true, force: false });
-      return Object.freeze({
+      const receipt = Object.freeze({
         status: "DISPOSABLE_RESTORE_VERIFIED",
         backupSha256: source.sha256,
         schemaSha256: source.schemaProjection.sha256,
         dataSha256: source.dataProjection.sha256,
       });
+      state.restores.set(stage, receipt);
+      return receipt;
     } catch (error) {
       if (startAttempted && !state.started.has(`${blueprint.id}:${stage}-restore-stop`)) {
         try {
@@ -1082,6 +1087,16 @@ export function createRadarE18DefaultExecutor({
       return { status: "DISPOSABLE_RESTORE_VERIFIED" };
     }
     if (id === "package-b-migrations") {
+      const backupReceipt = state.backups.get("package-b");
+      const restoreReceipt = state.restores.get("package-b");
+      if (backupReceipt?.status !== "BACKUP_CREATED"
+          || restoreReceipt?.status !== "DISPOSABLE_RESTORE_VERIFIED"
+          || restoreReceipt.backupSha256 !== backupReceipt.sha256) {
+        stop(
+          "MIGRATION_RESTORE_RECEIPT_REQUIRED",
+          "E18-Mutationen brauchen das gebundene Backup und den erfolgreichen Wegwerf-Restore.",
+        );
+      }
       runStep(blueprint, "package-b-migration-up");
       requirePackageDeploymentState(
         runStep(blueprint, "package-b-migration-readback"),
