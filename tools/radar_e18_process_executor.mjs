@@ -26,6 +26,12 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
+  LOCAL_ROLE_ALLOWLIST,
+  buildLocalRoleScaffoldSql,
+  describeAuthProjectionSql,
+  parseAuthIdProjectionOutput,
+} from "./e17b-remote-window.mjs";
+import {
   REPO_ROOT,
   buildRadarSupabaseCliEnvironment,
   cleanupRadarCliWorkspace,
@@ -69,22 +75,59 @@ const RESTORE_SCOPE_ARGS = Object.freeze([
   "--schema=public",
   "--schema=supabase_migrations",
 ]);
-const RESTORE_POLICY_ROLES = Object.freeze([
-  "anon",
-  "authenticated",
-  "service_role",
-]);
-const RESTORE_ROLE_SCAFFOLD_SQL = RESTORE_POLICY_ROLES
-  .map((role) => `create role ${role} nologin;`)
-  .join("\n");
-const RESTORE_SCHEMA_SCAFFOLD_SQL = "create schema supabase_migrations;";
 const COMMITTED_EXECUTOR_PATHS = Object.freeze([
   "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
+  "tools/e17b-remote-window.mjs",
   "tools/radar_e17a_repair_once.mjs",
   "tools/radar_e18_process_executor.mjs",
   "tools/radar_e18_remote_adapter.mjs",
   "tools/radar_websearch_remote_start.mjs",
 ]);
+
+function deriveE17bRestoreScaffold() {
+  const sql = buildLocalRoleScaffoldSql();
+  const lines = sql.split("\n");
+  const roleLines = lines.filter((line) => line.startsWith("CREATE ROLE "));
+  const expectedRoleLines = LOCAL_ROLE_ALLOWLIST
+    .map((role) => `CREATE ROLE ${role} NOLOGIN;`);
+  const schemaLines = lines.filter((line) => (
+    line !== "BEGIN;" && line !== "COMMIT;" && line !== ""
+      && !line.startsWith("CREATE ROLE ")
+  ));
+  if (!isDeepStrictEqual(roleLines, expectedRoleLines)
+      || !schemaLines.includes("CREATE SCHEMA IF NOT EXISTS auth;")
+      || !schemaLines.includes("CREATE TABLE auth.users (id uuid PRIMARY KEY);")
+      || !schemaLines.includes("CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;")
+      || !schemaLines.includes("CREATE SCHEMA IF NOT EXISTS extensions;")
+      || !schemaLines.includes("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;")
+      || schemaLines.length !== 5) {
+    throw new Error("E17B restore scaffold drifted");
+  }
+  return Object.freeze({
+    roles: ["BEGIN;", ...roleLines, "COMMIT;", ""].join("\n"),
+    schema: ["BEGIN;", ...schemaLines, "CREATE SCHEMA supabase_migrations;", "COMMIT;", ""].join("\n"),
+  });
+}
+
+function deriveAuthProjectionSql() {
+  const descriptor = describeAuthProjectionSql();
+  const snapshotLine = "SET TRANSACTION SNAPSHOT '<SNAPSHOT_CAPABILITY>';";
+  if (!exactObject(descriptor, ["sinkConsumable", "snapshotPlaceholder", "sqlTemplate"])
+      || descriptor.sinkConsumable !== false
+      || descriptor.snapshotPlaceholder !== true
+      || descriptor.sqlTemplate.split("\n").filter((line) => line === snapshotLine).length !== 1) {
+    throw new Error("E17B auth projection descriptor drifted");
+  }
+  // E18 besitzt keine Snapshot-Capability und behauptet deshalb keine. Die
+  // eigentliche ID-only COPY-Projektion bleibt unveraendert aus E17B abgeleitet.
+  return descriptor.sqlTemplate
+    .split("\n")
+    .filter((line) => line !== snapshotLine)
+    .join("\n");
+}
+
+const E17B_RESTORE_SCAFFOLD = deriveE17bRestoreScaffold();
+const AUTH_ID_PROJECTION_SQL = deriveAuthProjectionSql();
 
 const CLI_ENV = Object.freeze([
   "DO_NOT_TRACK", "LANG", "LC_ALL", "NO_COLOR", "PATH", "SUPABASE_HOME",
@@ -215,9 +258,24 @@ function psqlStep(id, stdin, parser = "json") {
   );
 }
 
+function authProjectionStep(id) {
+  return step(
+    id,
+    pg("psql"),
+    ["--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set", "ON_ERROR_STOP=on", "--file", "-", "$REMOTE_DB_URL"],
+    "$RUN_PROJECT",
+    PSQL_ENV,
+    "sql:auth-id-projection",
+    "pipe",
+    DATABASE_TIMEOUT,
+    "auth-id-projection",
+  );
+}
+
 function backupSteps(prefix) {
   return [
     step(`${prefix}-custom`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$BACKUP_FILE", "$REMOTE_DB_URL"], "$RUN_PROJECT", PSQL_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "backup-file"),
+    authProjectionStep(`${prefix}-auth-ids`),
     step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
     step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
   ];
@@ -248,9 +306,11 @@ function restoreSteps(prefix) {
     restorePsqlStep(`${prefix}-roles`, "postgres", "sql:restore-roles"),
     step(`${prefix}-preflight-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "schema_preflight"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
     restorePsqlStep(`${prefix}-preflight-schema`, "schema_preflight", "sql:restore-schema"),
+    restorePsqlStep(`${prefix}-preflight-auth-ids`, "schema_preflight", "sql:restore-auth-ids"),
     step(`${prefix}-preflight`, pg("pg_restore"), ["--schema-only", "--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "schema_preflight", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "schema-preflight"),
     step(`${prefix}-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
     restorePsqlStep(`${prefix}-schema-scaffold`, "radar_restore", "sql:restore-schema"),
+    restorePsqlStep(`${prefix}-auth-ids`, "radar_restore", "sql:restore-auth-ids"),
     step(`${prefix}-restore`, pg("pg_restore"), ["--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "radar_restore", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "opaque"),
     step(`${prefix}-scoped-backup`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$RESTORED_BACKUP_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "restored-backup-file"),
     step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
@@ -661,6 +721,7 @@ export function createRadarE18DefaultExecutor({
       "$RESTORE_PORT": String(runtime.restorePort ?? ""),
       "$RESTORE_OPTIONS": runtime.restoreOptions,
       "$PROJECTION_FILE": runtime.projectionFile,
+      "$AUTH_PROJECTION_FILE": runtime.authProjectionFile,
       "$PROVIDER_ENV_FILE": runtime.providerEnvFile,
     };
     return Object.hasOwn(table, token) ? table[token] : token;
@@ -692,8 +753,17 @@ export function createRadarE18DefaultExecutor({
     else if (mode === "sql:package-state") value = PACKAGE_STATE_SQL;
     else if (mode === "sql:package-flags-enable") value = PACKAGE_FLAG_ENABLE_SQL;
     else if (mode === "sql:package-flags-restore") value = flagsRestoreSql(state.packagePreflight);
-    else if (mode === "sql:restore-roles") value = RESTORE_ROLE_SCAFFOLD_SQL;
-    else if (mode === "sql:restore-schema") value = RESTORE_SCHEMA_SCAFFOLD_SQL;
+    else if (mode === "sql:auth-id-projection") value = AUTH_ID_PROJECTION_SQL;
+    else if (mode === "sql:restore-roles") value = E17B_RESTORE_SCAFFOLD.roles;
+    else if (mode === "sql:restore-schema") value = E17B_RESTORE_SCAFFOLD.schema;
+    else if (mode === "sql:restore-auth-ids") {
+      if (typeof runtime.authProjectionFile !== "string"
+          || !runtime.authProjectionFile.startsWith("/private/tmp/")
+          || runtime.authProjectionFile.includes("'")) {
+        stop("AUTH_ID_PROJECTION_PATH_INVALID", "Private Auth-ID-Projektion liegt nicht im erlaubten Tempbereich.");
+      }
+      value = `\\copy auth.users (id) FROM '${runtime.authProjectionFile}' WITH (FORMAT text)\n`;
+    }
     if (typeof value !== "string") {
       stop("PROCESS_STDIN_CONTRACT_UNKNOWN", "Prozess-stdin ist nicht exakt gebunden.");
     }
@@ -751,6 +821,40 @@ export function createRadarE18DefaultExecutor({
     } catch (error) {
       if (error instanceof RadarE18ProcessStop) throw error;
       stop("PROJECTION_CREATE_FAILED", "Private E18-Projektion konnte nicht angelegt werden.");
+    }
+  };
+
+  const validateAuthProjection = (bytes) => {
+    try {
+      const receipt = parseAuthIdProjectionOutput(bytes, {
+        secrets: Object.values(state.credentials).filter((value) => typeof value === "string"),
+      });
+      if (receipt.authIdCount < 1) throw new Error("empty auth projection");
+      return receipt;
+    } catch {
+      stop("AUTH_ID_PROJECTION_INVALID", "Auth-ID-Projektion ist formfremd, leer, mehrspaltig oder driftet.");
+    }
+  };
+
+  const createAuthProjection = (root, bytes, expected) => {
+    const path = join(root, "auth-ids.txt");
+    try {
+      const rootInfo = io.stat(root);
+      if (!rootInfo.isDirectory() || (rootInfo.mode & 0o077) !== 0) {
+        stop("AUTH_ID_PROJECTION_ROOT_INVALID", "Privater Auth-ID-Projektionsraum ist nicht 0700.");
+      }
+      io.writeFile(path, Buffer.from(bytes), { flag: "wx", mode: 0o600 });
+      io.chmod(path, 0o600);
+      const info = io.stat(path);
+      const observed = validateAuthProjection(io.readFile(path));
+      if (!info.isFile() || (info.mode & 0o077) !== 0
+          || !isDeepStrictEqual(observed, expected)) {
+        stop("AUTH_ID_PROJECTION_FILE_INVALID", "Private Auth-ID-Projektion ist nicht exakt und 0600.");
+      }
+      return path;
+    } catch (error) {
+      if (error instanceof RadarE18ProcessStop) throw error;
+      stop("AUTH_ID_PROJECTION_CREATE_FAILED", "Private Auth-ID-Projektion konnte nicht sicher angelegt werden.");
     }
   };
 
@@ -819,6 +923,12 @@ export function createRadarE18DefaultExecutor({
       return value;
     }
     if (processStep.parser === "json") return parseJson(stdout, "REMOTE_JSON_INVALID");
+    if (processStep.parser === "auth-id-projection") {
+      return Object.freeze({
+        bytes: Buffer.from(stdout),
+        receipt: validateAuthProjection(stdout),
+      });
+    }
     if (processStep.parser === "projection-digest") return projectionDigest(runtime);
     if (processStep.parser === "schema-preflight") return true;
     if (processStep.parser === "supabase-secrets-json") return validateSecrets(parseJson(stdout, "REMOTE_SECRETS_JSON_INVALID"));
@@ -908,8 +1018,10 @@ export function createRadarE18DefaultExecutor({
     const backupFile = join(dir, `${stage}.dump`);
     let schema;
     let data;
+    let auth;
     try {
       runStep(blueprint, `${stage}-backup-custom`, { backupFile });
+      auth = runStep(blueprint, `${stage}-backup-auth-ids`);
       schema = runStep(blueprint, `${stage}-backup-schema`, {
         backupFile,
         projectionFile: createProjection(dir, `${stage}-schema`),
@@ -928,6 +1040,7 @@ export function createRadarE18DefaultExecutor({
       state.backups.set(stage, Object.freeze({
         ...receipt,
         dir,
+        authProjection: auth,
         schemaProjection: schema,
         dataProjection: data,
       }));
@@ -956,6 +1069,14 @@ export function createRadarE18DefaultExecutor({
       restoreOptions: `-c listen_addresses= -c unix_socket_directories=${restoreSocket} -p ${port}`,
       restoredBackupFile: join(restoreRoot, `${stage}-scoped.dump`),
     };
+    if (!source.authProjection?.receipt || !Buffer.isBuffer(source.authProjection.bytes)) {
+      stop("AUTH_ID_PROJECTION_REQUIRED", "Restore besitzt keine intern validierte Auth-ID-Projektion.");
+    }
+    runtime.authProjectionFile = createAuthProjection(
+      restoreRoot,
+      source.authProjection.bytes,
+      source.authProjection.receipt,
+    );
     let startAttempted = false;
     try {
       runStep(blueprint, `${stage}-restore-initdb`, runtime);
@@ -965,9 +1086,11 @@ export function createRadarE18DefaultExecutor({
       runStep(blueprint, `${stage}-restore-roles`, runtime);
       runStep(blueprint, `${stage}-restore-preflight-createdb`, runtime);
       runStep(blueprint, `${stage}-restore-preflight-schema`, runtime);
+      runStep(blueprint, `${stage}-restore-preflight-auth-ids`, runtime);
       runStep(blueprint, `${stage}-restore-preflight`, runtime);
       runStep(blueprint, `${stage}-restore-createdb`, runtime);
       runStep(blueprint, `${stage}-restore-schema-scaffold`, runtime);
+      runStep(blueprint, `${stage}-restore-auth-ids`, runtime);
       runStep(blueprint, `${stage}-restore-restore`, runtime);
       runStep(blueprint, `${stage}-restore-scoped-backup`, runtime);
       const schema = runStep(blueprint, `${stage}-restore-schema`, {

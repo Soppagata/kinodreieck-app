@@ -102,6 +102,41 @@ await check("exakte Kopien bleiben gleich; Erweiterungen und Formdrift werden fa
   }
 });
 
+await check("vier kanonische public-/Migrationsprojektionen behalten ihre exakten argv", () => {
+  const blueprints = createRadarE18ProcessBlueprints();
+  const backup = blueprints.find(({ id }) => id === "package-b-backup").process.steps;
+  const restore = blueprints.find(({ id }) => id === "package-b-restore").process.steps;
+  const scope = ["--schema=public", "--schema=supabase_migrations"];
+  assert.deepEqual(
+    backup.find(({ id }) => id === "package-b-backup-schema").argv,
+    ["--schema-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"],
+  );
+  assert.deepEqual(
+    backup.find(({ id }) => id === "package-b-backup-data").argv,
+    ["--data-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"],
+  );
+  assert.deepEqual(
+    restore.find(({ id }) => id === "package-b-restore-schema").argv,
+    ["--schema-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"],
+  );
+  assert.deepEqual(
+    restore.find(({ id }) => id === "package-b-restore-data").argv,
+    ["--data-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"],
+  );
+});
+
+await check("Auth-ID-Quelle nutzt den quieten E17B-PSQL-Projektionsvertrag", () => {
+  const step = createRadarE18ProcessBlueprints()
+    .find(({ id }) => id === "package-b-backup").process.steps
+    .find(({ id }) => id === "package-b-backup-auth-ids");
+  assert.deepEqual(step.argv, [
+    "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set",
+    "ON_ERROR_STOP=on", "--file", "-", "$REMOTE_DB_URL",
+  ]);
+  assert.equal(step.stdin, "sql:auth-id-projection");
+  assert.equal(step.parser, "auth-id-projection");
+});
+
 await check("Default-Executor startet ohne gebundene Backup-/Restorebelege keine Migration", async () => {
   let processStarts = 0;
   const executor = createRadarE18DefaultExecutor({
@@ -117,7 +152,7 @@ await check("Default-Executor startet ohne gebundene Backup-/Restorebelege keine
   assert.equal(processStarts, 0);
 });
 
-await check("Quellgate akzeptiert nur Migration plus vier getrackte, saubere HEAD-Dateien und stoppt bei Dirty-State", () => {
+await check("Quellgate bindet E17B plus Migration und vier Runnerdateien sauber an HEAD", () => {
   const calls = [];
   const gitSpawn = (_binary, argv) => {
     calls.push([...argv]);
@@ -126,7 +161,8 @@ await check("Quellgate akzeptiert nur Migration plus vier getrackte, saubere HEA
   };
   const receipt = verifyRadarE18CommittedSources({ gitSpawn });
   assert.equal(receipt.status, "E18_COMMITTED_SOURCES_OK");
-  assert.equal(receipt.paths.length, 5);
+  assert.equal(receipt.paths.length, 6);
+  assert.equal(receipt.paths.includes("tools/e17b-remote-window.mjs"), true);
   assert.deepEqual(calls.map(([command]) => command), ["rev-parse", "ls-files", "status", "diff"]);
 
   assert.throws(() => verifyRadarE18CommittedSources({
@@ -182,6 +218,7 @@ function processFixture({
   largeProjection = false,
   projectionBufferError = false,
   schemaPreflightFailure = null,
+  authProjectionMode = "valid",
   postflightLedgerMode = "valid",
 } = {}) {
   const contract = loadRadarE17ARepairContract();
@@ -194,6 +231,7 @@ function processFixture({
   const allRunDirs = new Set();
   const allBackupDirs = new Set();
   const allProjectionFiles = new Set();
+  const allAuthProjectionFiles = new Set();
   let packageMigrated = false;
   let functionDeployed = false;
   let providerSecretPresent = providerInitiallyPresent;
@@ -202,6 +240,21 @@ function processFixture({
   let migrationWorkspaceObserved = false;
   let sourceGateCalls = 0;
   let liveCompleted = false;
+  const authIds = Object.freeze([
+    "00000000-0000-1000-8000-000000000001",
+    "00000000-0000-1000-8000-000000000002",
+  ]);
+
+  function authProjectionOutput() {
+    if (authProjectionMode === "unsorted") return `${[...authIds].reverse().join("\n")}\n`;
+    if (authProjectionMode === "duplicate") return `${authIds[0]}\n${authIds[0]}\n`;
+    if (authProjectionMode === "empty") return "";
+    if (authProjectionMode === "form") return "not-a-uuid\n";
+    if (authProjectionMode === "multicolumn") {
+      return `${authIds[0]}\tmail@example.test password token metadata\n`;
+    }
+    return `${authIds.join("\n")}\n`;
+  }
 
   const packageState = () => {
     let ledger = [
@@ -322,11 +375,37 @@ function processFixture({
     if (binary.endsWith("/psql")) {
       const sql = String(options.input || "");
       if (sql === [
-        "create role anon nologin;",
-        "create role authenticated nologin;",
-        "create role service_role nologin;",
+        "BEGIN;",
+        "CREATE ROLE anon NOLOGIN;",
+        "CREATE ROLE authenticated NOLOGIN;",
+        "CREATE ROLE authenticator NOLOGIN;",
+        "CREATE ROLE postgres NOLOGIN;",
+        "CREATE ROLE service_role NOLOGIN;",
+        "CREATE ROLE supabase_admin NOLOGIN;",
+        "COMMIT;",
+        "",
       ].join("\n")) return ok();
-      if (sql === "create schema supabase_migrations;") return ok();
+      if (sql.includes("COPY (SELECT id::text FROM auth.users ORDER BY id::text COLLATE \"C\") TO STDOUT;")) {
+        assert.doesNotMatch(sql, /SNAPSHOT_CAPABILITY/);
+        assert.doesNotMatch(sql, /email|phone|password|token|metadata/i);
+        return ok(authProjectionOutput());
+      }
+      if (sql.includes("CREATE TABLE auth.users (id uuid PRIMARY KEY);")) {
+        assert.match(sql, /CREATE OR REPLACE FUNCTION auth\.uid\(\) RETURNS uuid/);
+        assert.match(sql, /CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions/);
+        assert.match(sql, /CREATE SCHEMA supabase_migrations/);
+        assert.doesNotMatch(sql, /email|phone|password|token|metadata/i);
+        return ok();
+      }
+      if (sql.startsWith("\\copy auth.users (id) FROM '")) {
+        const match = sql.match(/^\\copy auth\.users \(id\) FROM '([^']+)' WITH \(FORMAT text\)\n$/);
+        assert.ok(match);
+        const authPath = match[1];
+        allAuthProjectionFiles.add(authPath);
+        assert.equal(statSync(authPath).mode & 0o077, 0);
+        assert.equal(readFileSync(authPath, "utf8"), `${authIds.join("\n")}\n`);
+        return ok();
+      }
       if (sql.includes("'targetLedger'")) return ok(`${JSON.stringify(e17aState(contract, baselineMode))}\n`);
       if (sql.includes("INSERT INTO supabase_migrations.schema_migrations")) {
         assert.fail("E18 darf E17A nicht ausserhalb des geordneten CLI-Migrationsplans schreiben");
@@ -479,6 +558,7 @@ function processFixture({
     allRunDirs,
     allBackupDirs,
     allProjectionFiles,
+    allAuthProjectionFiles,
     committedSourceGate() {
       sourceGateCalls += 1;
       return Object.freeze({
@@ -486,6 +566,7 @@ function processFixture({
         head: "f".repeat(40),
         paths: Object.freeze([
           "supabase/migrations/20260817120000_blog_profile_extract_config.sql",
+          "tools/e17b-remote-window.mjs",
           "tools/radar_e17a_repair_once.mjs",
           "tools/radar_e18_process_executor.mjs",
           "tools/radar_e18_remote_adapter.mjs",
@@ -537,6 +618,7 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   assert.deepEqual(err, []);
   assert.equal(JSON.parse(out[0]).status, "E18_REMOTE_CHAIN_COMPLETE");
   assert.doesNotMatch(out[0], /fixture_(?:access|database|anthropic)_value/);
+  assert.doesNotMatch(out[0], /00000000-0000-1000-8000-00000000000[12]/);
   assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/bin/security").length, 3);
   const secretReadIndex = fixture.visibleCalls.findIndex(({ argv }) => argv.includes("ANTHROPIC_API_KEY"));
   const remoteSecretReadIndex = fixture.visibleCalls.findIndex(({ argv }) => argv[0] === "secrets" && argv[1] === "list");
@@ -578,17 +660,40 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
       .map(({ argv }) => argv[argv.indexOf("--dbname") + 1]),
     ["schema_preflight", "radar_restore"],
   );
-  const roleScaffolds = fixture.visibleCalls.filter(({ input }) => String(input || "").startsWith("create role anon nologin;"));
+  const roleScaffolds = fixture.visibleCalls.filter(({ input }) => String(input || "").startsWith("BEGIN;\nCREATE ROLE anon NOLOGIN;"));
   assert.equal(roleScaffolds.length, 1);
-  assert.ok(roleScaffolds.every(({ input }) => String(input) === [
-    "create role anon nologin;",
-    "create role authenticated nologin;",
-    "create role service_role nologin;",
-  ].join("\n")));
+  assert.ok(roleScaffolds.every(({ input }) => String(input).includes("CREATE ROLE supabase_admin NOLOGIN;")));
+  const schemaScaffolds = fixture.visibleCalls.filter(({ input }) => (
+    String(input || "").includes("CREATE TABLE auth.users (id uuid PRIMARY KEY);")
+  ));
+  assert.equal(schemaScaffolds.length, 2);
+  assert.ok(schemaScaffolds.every(({ input }) => (
+    !/email|phone|password|token|metadata/i.test(String(input))
+      && String(input).includes("CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid")
+      && String(input).includes("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;")
+  )));
+  const authLoads = fixture.visibleCalls.filter(({ input }) => (
+    String(input || "").startsWith("\\copy auth.users (id) FROM '")
+  ));
+  assert.equal(authLoads.length, 2);
+  assert.deepEqual(authLoads.map(({ argv }) => argv[argv.indexOf("--dbname") + 1]), [
+    "schema_preflight",
+    "radar_restore",
+  ]);
+  for (const database of ["schema_preflight", "radar_restore"]) {
+    const authIndex = fixture.visibleCalls.findIndex(({ argv, input }) => (
+      argv.includes(database) && String(input || "").startsWith("\\copy auth.users (id) FROM '")
+    ));
+    const restoreIndex = fixture.visibleCalls.findIndex(({ binary, argv }) => (
+      binary.endsWith("/pg_restore") && argv.includes("--exit-on-error") && argv.includes(database)
+    ));
+    assert.ok(authIndex >= 0 && authIndex < restoreIndex);
+  }
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("--list") || argv.includes("--use-list")), false);
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+  for (const path of fixture.allAuthProjectionFiles) assert.equal(existsSync(path), false);
 });
 
 await check("fehlender, zusaetzlicher oder funktional driftender 35er-Ausgangsledger stoppt vor Backup", async () => {
@@ -653,6 +758,42 @@ await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+});
+
+await check("Auth-ID-Projektion stoppt unsortiert, doppelt, leer, formfremd und mehrspaltig vor jedem Restore-Sink", async () => {
+  for (const authProjectionMode of ["unsorted", "duplicate", "empty", "form", "multicolumn"]) {
+    const fixture = processFixture({
+      authProjectionMode,
+      providerInitiallyPresent: true,
+    });
+    const out = [];
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+      },
+      ausgabe: (line) => out.push(line),
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, authProjectionMode);
+    assert.deepEqual(err, ["AUTH_ID_PROJECTION_INVALID"], authProjectionMode);
+    assert.deepEqual(out, [], authProjectionMode);
+    assert.doesNotMatch(err.join(" "), /mail|password|token|metadata|00000000-/i);
+    assert.equal(fixture.visibleCalls.some(({ binary, argv }) => (
+      binary.endsWith("/pg_restore") && argv.includes("--exit-on-error")
+    )), false, authProjectionMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "functions" && argv[1] === "deploy"), false);
+    assert.equal(fixture.visibleCalls.some(({ input }) => String(input || "").includes("provider_requests_enabled=true")), false);
+    assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false);
+    for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+    for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+    for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+    for (const path of fixture.allAuthProjectionFiles) assert.equal(existsSync(path), false);
+  }
 });
 
 for (const failure of ["foreign-role", "extension-dependency"]) {
