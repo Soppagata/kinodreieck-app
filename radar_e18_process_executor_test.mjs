@@ -102,27 +102,32 @@ await check("exakte Kopien bleiben gleich; Erweiterungen und Formdrift werden fa
   }
 });
 
-await check("vier kanonische public-/Migrationsprojektionen behalten ihre exakten argv", () => {
+await check("beide Schemaprojektionen nutzen denselben Restore-/Dump-Weg und PGTZ=UTC", () => {
   const blueprints = createRadarE18ProcessBlueprints();
   const backup = blueprints.find(({ id }) => id === "package-b-backup").process.steps;
   const restore = blueprints.find(({ id }) => id === "package-b-restore").process.steps;
   const scope = ["--schema=public", "--schema=supabase_migrations"];
   assert.deepEqual(
-    backup.find(({ id }) => id === "package-b-backup-schema").argv,
-    ["--schema-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"],
-  );
-  assert.deepEqual(
     backup.find(({ id }) => id === "package-b-backup-data").argv,
     ["--data-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"],
   );
   assert.deepEqual(
-    restore.find(({ id }) => id === "package-b-restore-schema").argv,
-    ["--schema-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"],
+    restore.find(({ id }) => id === "package-b-restore-preflight-scoped-backup").argv,
+    ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", ...scope, "--file", "$PREFLIGHT_BACKUP_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "schema_preflight"],
+  );
+  assert.deepEqual(
+    restore.find(({ id }) => id === "package-b-restore-preflight-canonical-schema").argv,
+    ["--schema-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$PREFLIGHT_BACKUP_FILE"],
   );
   assert.deepEqual(
     restore.find(({ id }) => id === "package-b-restore-data").argv,
     ["--data-only", "--no-owner", "--no-privileges", ...scope, "--file", "$PROJECTION_FILE", "$RESTORED_BACKUP_FILE"],
   );
+  for (const processStep of [...backup, ...restore]) {
+    if (processStep.binary.startsWith("/Applications/Postgres.app/")) {
+      assert.equal(processStep.envNames.includes("PGTZ"), true, processStep.id);
+    }
+  }
 });
 
 await check("Auth-ID-Quelle nutzt den quieten E17B-PSQL-Projektionsvertrag", () => {
@@ -217,6 +222,7 @@ function processFixture({
   liveBudgetUnknown = false,
   largeProjection = false,
   projectionBufferError = false,
+  schemaProjectionMode = "equivalent-normalized",
   schemaPreflightFailure = null,
   authProjectionMode = "valid",
   postflightLedgerMode = "valid",
@@ -311,8 +317,16 @@ function processFixture({
     return { status: 0, signal: null, error: null, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0) };
   }
 
-  function projectionContent(schemaOnly) {
-    if (schemaOnly) return Buffer.from("-- volatile header\nCREATE TABLE t (id integer);\n");
+  function projectionContent(schemaOnly, archive = "") {
+    if (schemaOnly) {
+      if (archive.endsWith("package-b.dump")) {
+        return Buffer.from("-- volatile header\nCREATE POLICY p TO authenticated, anon;\nCHECK ((id > 0));\n");
+      }
+      if (schemaProjectionMode === "true-drift" && archive.endsWith("package-b-scoped.dump")) {
+        return Buffer.from("-- volatile header\nCREATE POLICY p TO anon, authenticated;\nCHECK (id >= 0);\n");
+      }
+      return Buffer.from("-- volatile header\nCREATE POLICY p TO anon, authenticated;\nCHECK (id > 0);\n");
+    }
     const prefix = Buffer.from("-- volatile header\nCOPY t (id) FROM stdin;\n");
     const suffix = Buffer.from("\n\\.\n");
     return largeProjection
@@ -329,6 +343,7 @@ function processFixture({
     assert.equal(Object.hasOwn(options.env || {}, "home"), false);
     if (binary.startsWith("/Applications/Postgres.app/Contents/Versions/17/bin/")) {
       assert.match(options.env.TMPDIR, /^\/private\/tmp\/kinodreieck-radar-b-local-/);
+      assert.equal(options.env.PGTZ, "UTC");
     }
     if (binary.includes("@supabase/cli-darwin-arm64/bin/supabase")) {
       const runDir = dirname(options.env.SUPABASE_HOME);
@@ -442,7 +457,7 @@ function processFixture({
       assert.equal(options.stdio[1], "ignore");
       assert.equal(statSync(outputFile).mode & 0o077, 0);
       allProjectionFiles.add(outputFile);
-      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only")));
+      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only"), argv.at(-1)));
       return ok();
     }
     if (binary.endsWith("/pg_restore") && argv.includes("--exit-on-error")) {
@@ -486,7 +501,7 @@ function processFixture({
           stderr: Buffer.alloc(0),
         };
       }
-      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only")));
+      writeFileSync(outputFile, projectionContent(argv.includes("--schema-only"), argv.at(-1)));
       return ok();
     }
     if (binary.endsWith("/initdb") || binary.endsWith("/pg_ctl") || binary.endsWith("/createdb")) {
@@ -660,6 +675,17 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
       .map(({ argv }) => argv[argv.indexOf("--dbname") + 1]),
     ["schema_preflight", "radar_restore"],
   );
+  const schemaProjectionArchives = fixture.visibleCalls
+    .filter(({ binary, argv }) => (
+      binary.endsWith("/pg_restore")
+        && argv.includes("--schema-only")
+        && argv.includes("--file")
+    ))
+    .map(({ argv }) => argv.at(-1));
+  assert.equal(schemaProjectionArchives.length, 2);
+  assert.equal(schemaProjectionArchives.some((path) => path.endsWith("/package-b.dump")), false);
+  assert.equal(schemaProjectionArchives.some((path) => path.endsWith("/package-b-preflight-scoped.dump")), true);
+  assert.equal(schemaProjectionArchives.some((path) => path.endsWith("/package-b-scoped.dump")), true);
   const roleScaffolds = fixture.visibleCalls.filter(({ input }) => String(input || "").startsWith("BEGIN;\nCREATE ROLE anon NOLOGIN;"));
   assert.equal(roleScaffolds.length, 1);
   assert.ok(roleScaffolds.every(({ input }) => String(input).includes("CREATE ROLE supabase_admin NOLOGIN;")));
@@ -690,6 +716,40 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     assert.ok(authIndex >= 0 && authIndex < restoreIndex);
   }
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("--list") || argv.includes("--use-list")), false);
+  for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
+  for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
+  for (const path of fixture.allAuthProjectionFiles) assert.equal(existsSync(path), false);
+});
+
+await check("echte restore-normalisierte Schemadrift stoppt vor Migration, Function, Secret, Flags und Provider", async () => {
+  const fixture = processFixture({
+    providerInitiallyPresent: true,
+    schemaProjectionMode: "true-drift",
+  });
+  const out = [];
+  const err = [];
+  const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+    defaultExecutorOptions: {
+      spawn: fixture.spawn,
+      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      committedSourceGate: fixture.committedSourceGate,
+      retainBackups: false,
+    },
+    ausgabe: (line) => out.push(line),
+    fehlerAusgabe: (line) => err.push(line),
+  });
+  assert.equal(code, 75);
+  assert.deepEqual(err, ["RESTORE_CONTENT_DRIFT"]);
+  assert.deepEqual(out, []);
+  assert.equal(fixture.visibleCalls.filter(({ binary, argv }) => (
+    binary.endsWith("/pg_restore") && argv.includes("--schema-only") && argv.includes("--file")
+  )).length, 2);
+  assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);
+  assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "functions" && argv[1] === "deploy"), false);
+  assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "secrets" && argv[1] === "set"), false);
+  assert.equal(fixture.visibleCalls.some(({ input }) => String(input || "").includes("provider_requests_enabled=true")), false);
+  assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false);
   for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);

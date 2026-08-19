@@ -139,9 +139,9 @@ const CLI_LINK_ENV = Object.freeze([
   ...CLI_ENV, "SUPABASE_ACCESS_TOKEN", "SUPABASE_DB_PASSWORD",
 ]);
 const PSQL_ENV = Object.freeze([
-  "LANG", "LC_ALL", "NO_COLOR", "PATH", "PGCONNECT_TIMEOUT", "PGPASSWORD", "PGSSLMODE", "TMPDIR",
+  "LANG", "LC_ALL", "NO_COLOR", "PATH", "PGCONNECT_TIMEOUT", "PGPASSWORD", "PGSSLMODE", "PGTZ", "TMPDIR",
 ]);
-const LOCAL_PG_ENV = Object.freeze(["LANG", "LC_ALL", "NO_COLOR", "PATH", "TMPDIR"]);
+const LOCAL_PG_ENV = Object.freeze(["LANG", "LC_ALL", "NO_COLOR", "PATH", "PGTZ", "TMPDIR"]);
 const SECURITY_ENV = Object.freeze(["LANG", "LC_ALL", "NO_COLOR", "PATH"]);
 const LIVE_ENV = Object.freeze([
   "HOME", "LANG", "LC_ALL", "NO_COLOR", "PATH", "TMPDIR",
@@ -276,7 +276,6 @@ function backupSteps(prefix) {
   return [
     step(`${prefix}-custom`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", "--file", "$BACKUP_FILE", "$REMOTE_DB_URL"], "$RUN_PROJECT", PSQL_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "backup-file"),
     authProjectionStep(`${prefix}-auth-ids`),
-    step(`${prefix}-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
     step(`${prefix}-data`, pg("pg_restore"), ["--data-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$BACKUP_FILE"], "$RUN_PROJECT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
   ];
 }
@@ -308,6 +307,8 @@ function restoreSteps(prefix) {
     restorePsqlStep(`${prefix}-preflight-schema`, "schema_preflight", "sql:restore-schema"),
     restorePsqlStep(`${prefix}-preflight-auth-ids`, "schema_preflight", "sql:restore-auth-ids"),
     step(`${prefix}-preflight`, pg("pg_restore"), ["--schema-only", "--exit-on-error", "--single-transaction", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "--dbname", "schema_preflight", "$BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", DATABASE_TIMEOUT, "schema-preflight"),
+    step(`${prefix}-preflight-scoped-backup`, pg("pg_dump"), ["--format=custom", "--column-inserts", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PREFLIGHT_BACKUP_FILE", "--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "schema_preflight"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "preflight-backup-file"),
+    step(`${prefix}-preflight-canonical-schema`, pg("pg_restore"), ["--schema-only", "--no-owner", "--no-privileges", ...RESTORE_SCOPE_ARGS, "--file", "$PROJECTION_FILE", "$PREFLIGHT_BACKUP_FILE"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "ignore", DATABASE_TIMEOUT, "projection-digest"),
     step(`${prefix}-createdb`, pg("createdb"), ["--host", "$RESTORE_SOCKET", "--port", "$RESTORE_PORT", "radar_restore"], "$RESTORE_ROOT", LOCAL_PG_ENV, "ignore", "pipe", PROCESS_TIMEOUT, "opaque"),
     restorePsqlStep(`${prefix}-schema-scaffold`, "radar_restore", "sql:restore-schema"),
     restorePsqlStep(`${prefix}-auth-ids`, "radar_restore", "sql:restore-auth-ids"),
@@ -694,6 +695,7 @@ export function createRadarE18DefaultExecutor({
     LC_ALL: "C",
     NO_COLOR: "1",
     PATH: `${PG17}:/usr/bin:/bin`,
+    PGTZ: "UTC",
     TMPDIR: state.workspace?.tmp,
   });
   const psqlEnv = () => ({
@@ -713,6 +715,7 @@ export function createRadarE18DefaultExecutor({
       "$RUN_PROJECT": state.projectDir,
       "$REMOTE_DB_URL": state.connectionUrl,
       "$BACKUP_FILE": runtime.backupFile,
+      "$PREFLIGHT_BACKUP_FILE": runtime.preflightBackupFile,
       "$RESTORED_BACKUP_FILE": runtime.restoredBackupFile,
       "$RESTORE_ROOT": runtime.restoreRoot,
       "$RESTORE_DATA": runtime.restoreData,
@@ -967,6 +970,17 @@ export function createRadarE18DefaultExecutor({
       }
       return true;
     }
+    if (processStep.parser === "preflight-backup-file") {
+      if (!runtime.preflightBackupFile || !io.exists(runtime.preflightBackupFile)) {
+        stop("PREFLIGHT_BACKUP_FILE_MISSING", "Enges Preflight-Projektionsarchiv fehlt.");
+      }
+      io.chmod(runtime.preflightBackupFile, 0o600);
+      const info = io.stat(runtime.preflightBackupFile);
+      if (!info.isFile() || info.size < 1 || (info.mode & 0o077) !== 0) {
+        stop("PREFLIGHT_BACKUP_FILE_INVALID", "Enges Preflight-Projektionsarchiv ist nicht regulaer und 0600.");
+      }
+      return true;
+    }
     if (processStep.parser !== "opaque") stop("PROCESS_PARSER_UNKNOWN", "E18-Parservertrag ist unbekannt.");
     return true;
   };
@@ -1016,16 +1030,11 @@ export function createRadarE18DefaultExecutor({
     const dir = io.mkdtemp(BACKUP_PREFIX);
     io.chmod(dir, 0o700);
     const backupFile = join(dir, `${stage}.dump`);
-    let schema;
     let data;
     let auth;
     try {
       runStep(blueprint, `${stage}-backup-custom`, { backupFile });
       auth = runStep(blueprint, `${stage}-backup-auth-ids`);
-      schema = runStep(blueprint, `${stage}-backup-schema`, {
-        backupFile,
-        projectionFile: createProjection(dir, `${stage}-schema`),
-      });
       data = runStep(blueprint, `${stage}-backup-data`, {
         backupFile,
         projectionFile: createProjection(dir, `${stage}-data`),
@@ -1041,7 +1050,6 @@ export function createRadarE18DefaultExecutor({
         ...receipt,
         dir,
         authProjection: auth,
-        schemaProjection: schema,
         dataProjection: data,
       }));
       return receipt;
@@ -1067,6 +1075,7 @@ export function createRadarE18DefaultExecutor({
       restoreSocket,
       restorePort: port,
       restoreOptions: `-c listen_addresses= -c unix_socket_directories=${restoreSocket} -p ${port}`,
+      preflightBackupFile: join(restoreRoot, `${stage}-preflight-scoped.dump`),
       restoredBackupFile: join(restoreRoot, `${stage}-scoped.dump`),
     };
     if (!source.authProjection?.receipt || !Buffer.isBuffer(source.authProjection.bytes)) {
@@ -1088,6 +1097,11 @@ export function createRadarE18DefaultExecutor({
       runStep(blueprint, `${stage}-restore-preflight-schema`, runtime);
       runStep(blueprint, `${stage}-restore-preflight-auth-ids`, runtime);
       runStep(blueprint, `${stage}-restore-preflight`, runtime);
+      runStep(blueprint, `${stage}-restore-preflight-scoped-backup`, runtime);
+      const preflightSchema = runStep(blueprint, `${stage}-restore-preflight-canonical-schema`, {
+        ...runtime,
+        projectionFile: createProjection(restoreRoot, `${stage}-preflight-schema`),
+      });
       runStep(blueprint, `${stage}-restore-createdb`, runtime);
       runStep(blueprint, `${stage}-restore-schema-scaffold`, runtime);
       runStep(blueprint, `${stage}-restore-auth-ids`, runtime);
@@ -1101,7 +1115,7 @@ export function createRadarE18DefaultExecutor({
         ...runtime,
         projectionFile: createProjection(restoreRoot, `${stage}-data`),
       });
-      if (!isDeepStrictEqual(schema, source.schemaProjection)
+      if (!isDeepStrictEqual(schema, preflightSchema)
           || !isDeepStrictEqual(data, source.dataProjection)) {
         stop("RESTORE_CONTENT_DRIFT", "Wegwerf-Restore weicht in Schema oder kanonischem Inhalt ab.");
       }
@@ -1111,7 +1125,7 @@ export function createRadarE18DefaultExecutor({
       const receipt = Object.freeze({
         status: "DISPOSABLE_RESTORE_VERIFIED",
         backupSha256: source.sha256,
-        schemaSha256: source.schemaProjection.sha256,
+        schemaSha256: preflightSchema.sha256,
         dataSha256: source.dataProjection.sha256,
       });
       state.restores.set(stage, receipt);
