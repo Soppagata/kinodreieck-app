@@ -188,8 +188,7 @@ export default function App() {
      und „noch keine Beispieldaten", ohne Texte zu deuten. */
   const [programmInfo, setProgrammInfo] = useState(null);
   const [streamingInfo, setStreamingInfo] = useState(null);
-  const [streamingBekannt, setStreamingBekannt] = useState(null);
-  const [streamingEntdecken, setStreamingEntdecken] = useState(null);
+  const [streamingBekannt, setStreamingBekannt] = useState(null); const [streamingEntdecken, setStreamingEntdecken] = useState(null); const [streamingEntdeckenLaedt, setStreamingEntdeckenLaedt] = useState(false);
   /* Dieser Zustand wird bereits vom Boot und von der gezielten
      Demo-Bereinigung gebraucht; seine Grenze muss deshalb vor diesen
      Callbacks liegen. */
@@ -1679,6 +1678,7 @@ export default function App() {
     }
 
     if (vollKatalog && (!entdeckenGeladen.current || !roh.entdecken)) {
+      setStreamingEntdeckenLaedt(true);
       try {
         const r = await holeEinmal(streamingEntdeckenLaufRef, "streamingEntdecken", 20000);
         if (veraltet() || !snapshotFreigabeRef.current) return;
@@ -1690,7 +1690,7 @@ export default function App() {
         if (veraltet()) return;
         entdeckenGeladen.current = false;
         meldeFehler(e, ERROR_SCOPE.STREAMING_DISCOVER, true);
-      }
+      } finally { if (!veraltet()) setStreamingEntdeckenLaedt(false); }
     }
 
     const hatGeladenenEntdeckenStand = entdeckenGeladen.current && !!roh.entdecken;
@@ -1797,7 +1797,7 @@ export default function App() {
        unberührt. Synchron, damit zwischen Wechsel und Reset nichts Altes mehr
        gerendert wird. */
     setProgramm(null); setProgrammArt(null); setProgStand(null); setProgrammInfo(null);
-    setStreamingBekannt(null); setStreamingEntdecken(null); setStreamingInfo(null);
+    setStreamingBekannt(null); setStreamingEntdecken(null); setStreamingInfo(null); setStreamingEntdeckenLaedt(false);
     /* Ohne Datenbankzugang lädt dieser Wechsel nichts nach. Dann muss er die
        Ladeanzeige selbst freigeben: ein noch laufender Programm-Lauf der alten
        Betriebsart überspringt sein `setLoading("")` seit C3 (er ist veraltet),
@@ -2069,7 +2069,8 @@ export default function App() {
         {tab === "blog" && (
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
-            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl}
+            master={master || []} mustwatch={mustwatch} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken}
+            selectedServices={auswahl} catalogLoading={streamingEntdeckenLaedt || (snapshotFreigabe && !streamingEntdecken)} catalogError={!!streamingInfo?.fehler}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}

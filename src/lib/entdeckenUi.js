@@ -14,7 +14,11 @@ import {
   createEmptyLocalEventLedger,
   stageLocalEventCandidate,
 } from "./localEventRadar.js";
-import { rankRecommendations } from "./recommendationRanking.js";
+import {
+  createRecommendationFunnel,
+  rankNeutralCandidates,
+  rankRecommendations,
+} from "./recommendationRanking.js";
 
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
 
@@ -22,6 +26,11 @@ function text(value) { return String(value == null ? "" : value).trim(); }
 function positiveInteger(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
+}
+function finiteNumber(value) {
+  if (value == null || text(value) === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 function stablePrefixedId(prefix, value) {
   const suffix = text(value);
@@ -84,9 +93,12 @@ export function localRecommendationCandidates(streamingEntdecken) {
         genres: Array.isArray(entry.genres) ? entry.genres : [],
         tags: Array.isArray(entry.tags) ? entry.tags : [],
         franchiseId: text(entry.franchise_id || entry.franchiseId) || null,
-        freshnessAt: entry.available_from || streamingEntdecken.stand || null,
+        freshnessAt: entry.available_from || entry.verfuegbar_ab
+          || streamingEntdecken.katalog_stand || streamingEntdecken.stand || null,
+        quality: finiteNumber(entry.user_score) ?? finiteNumber(entry.relevanz),
         sourceId,
-        sourceRank: Number.isInteger(entry.rang) ? entry.rang : null,
+        sourceRank: Number.isInteger(entry.rang) ? entry.rang
+          : Number.isInteger(entry.source_rank) ? entry.source_rank : null,
         services: Array.isArray(entry.dienste) ? [...entry.dienste] : [],
         year: Number.isInteger(entry.jahr) ? entry.jahr : null,
         type: entry.typ || null,
@@ -106,14 +118,43 @@ export function localLibraryProjection(master) {
   })));
 }
 
-export function rankLocalEntdeckenRecommendations({
-  streamingEntdecken, profile, master, useLibrary = true,
+function localMustWatchTargetIds(mustwatch) {
+  return (Array.isArray(mustwatch) ? mustwatch : [])
+    .filter((entry) => entry?.verknuepfung?.ziel === "streaming")
+    .map((entry) => positiveInteger(entry.verknuepfung.id))
+    .filter((id) => id != null)
+    .map((id) => `watchmode:${id}`);
+}
+
+function localRecommendationContext({
+  profile, master, mustwatch, useLibrary = true, selectedServices,
 } = {}) {
-  return rankRecommendations(localRecommendationCandidates(streamingEntdecken), {
+  const context = {
     profile: profile && profile.beschaedigt !== true ? profile : {},
     library: localLibraryProjection(master),
+    excludedTargetIds: localMustWatchTargetIds(mustwatch),
     useLibrary,
-  });
+  };
+  if (Array.isArray(selectedServices)) context.selectedServices = selectedServices;
+  return context;
+}
+
+export function rankLocalEntdeckenRecommendations({
+  streamingEntdecken, profile, master, mustwatch, useLibrary = true, selectedServices,
+} = {}) {
+  return rankRecommendations(
+    localRecommendationCandidates(streamingEntdecken),
+    localRecommendationContext({ profile, master, mustwatch, useLibrary, selectedServices }),
+  );
+}
+
+export function createEntdeckenRecommendationFunnel({
+  streamingEntdecken, profile, master, mustwatch, useLibrary = true, selectedServices,
+} = {}) {
+  return createRecommendationFunnel(
+    localRecommendationCandidates(streamingEntdecken),
+    localRecommendationContext({ profile, master, mustwatch, useLibrary, selectedServices }),
+  );
 }
 
 function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
@@ -148,41 +189,32 @@ export function createEntdeckenCatalogSummary({
   });
 }
 
-/* Neutrale Ergänzungen lesen weder Profil noch Bewertungen. Sie füllen nur
-   die noch freien Plätze bis sechs, verwenden starke Watchmode-IDs, bleiben
-   stabil sortiert und tragen ausschließlich die gewählte Dienstemenge. */
+/* Neutrale Ergänzungen verwenden positive Profil- oder Bewertungsbelege nie
+   als Passung oder Rang. Sie respektieren aber dieselben harten Ausschlüsse,
+   füllen nur die freien Plätze bis sechs und bleiben stabil sortiert. */
 export function createAdditionalServiceDiscoveries({
   streamingEntdecken, selectedServices = [], personalRecommendations = [], master = [],
+  mustwatch = [], profile = null,
 } = {}) {
   const openSlots = Math.max(0, 6 - (Array.isArray(personalRecommendations) ? personalRecommendations.length : 0));
   const services = selectedServiceSet(selectedServices);
   if (!openSlots || !services.size) return Object.freeze([]);
-  const excluded = new Set([
-    ...(Array.isArray(personalRecommendations) ? personalRecommendations : []).map((entry) => text(entry?.targetId)),
-    ...localLibraryProjection(master).map((entry) => text(entry?.targetId)),
-  ].filter(Boolean));
-  const unique = new Map();
-  for (const candidate of localRecommendationCandidates(streamingEntdecken)) {
-    const matchedServices = matchingServices(candidate, services);
-    if (!matchedServices.length || excluded.has(candidate.targetId) || unique.has(candidate.targetId)) continue;
-    unique.set(candidate.targetId, { candidate, matchedServices });
-  }
-  return Object.freeze([...unique.values()]
-    .sort((left, right) => {
-      const rankLeft = Number.isInteger(left.candidate.sourceRank) ? left.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-      const rankRight = Number.isInteger(right.candidate.sourceRank) ? right.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-      if (rankLeft !== rankRight) return rankLeft - rankRight;
-      const byTitle = left.candidate.title.localeCompare(right.candidate.title, "de-AT");
-      return byTitle || left.candidate.targetId.localeCompare(right.candidate.targetId, "de-AT");
-    })
+  const personalIds = (Array.isArray(personalRecommendations) ? personalRecommendations : [])
+    .map((entry) => text(entry?.targetId)).filter(Boolean);
+  const context = localRecommendationContext({
+    profile, master, mustwatch, useLibrary: false, selectedServices,
+  });
+  context.excludedTargetIds = [...context.excludedTargetIds, ...personalIds];
+  return Object.freeze(rankNeutralCandidates(localRecommendationCandidates(streamingEntdecken), context)
     .slice(0, openSlots)
-    .map(({ candidate, matchedServices }) => Object.freeze({
+    .map((candidate) => Object.freeze({
       targetId: candidate.targetId,
       watchmodeId: candidate.watchmodeId,
       title: candidate.title,
       year: candidate.year,
       type: candidate.type,
-      services: Object.freeze([...matchedServices].sort((a, b) => a.localeCompare(b, "de-AT"))),
+      services: Object.freeze(matchingServices(candidate, services)
+        .sort((a, b) => a.localeCompare(b, "de-AT"))),
     })));
 }
 

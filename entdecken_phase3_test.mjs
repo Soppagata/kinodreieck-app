@@ -10,6 +10,7 @@ import {
   createAdditionalServiceDiscoveries,
   createCatalogSearchActions,
   createEntdeckenCatalogSummary,
+  createEntdeckenRecommendationFunnel,
   rankLocalEntdeckenRecommendations,
 } from "./src/lib/entdeckenUi.js";
 import {
@@ -53,7 +54,10 @@ const recommendationInput = {
 };
 const profileInput = { signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 2 }] };
 const recommendationBefore = JSON.stringify({ recommendationInput, profileInput });
-const recommendations = rankLocalEntdeckenRecommendations({ streamingEntdecken: recommendationInput, profile: profileInput, master: [] });
+const recommendations = rankLocalEntdeckenRecommendations({
+  streamingEntdecken: recommendationInput, profile: profileInput, master: [],
+  selectedServices: ["Testdienst"],
+});
 check("Lokale Empfehlung ist begründet und mutiert weder Katalog noch Profil", () => {
   assert.equal(recommendations.length, 1);
   assert.match(recommendations[0].reasons[0], /^Profil:/);
@@ -88,7 +92,7 @@ check("Neutrale Dienstetreffer füllen stabil nur bis insgesamt sechs Karten", (
   assert.equal(additional.length + personalRecommendations.length, 6);
   assert.ok(additional.every((entry) => entry.services.join() === "Testdienst"));
 });
-check("Neutrale Ergänzungen bleiben profilfrei, dublettenfrei und unabhängig von der Eingabereihenfolge", () => {
+check("Neutrale Ergänzungen tragen keine Profilurteile, bleiben dublettenfrei und eingabestabil", () => {
   const reversed = createAdditionalServiceDiscoveries({
     streamingEntdecken: { ...catalogTruthInput, titel: [...catalogTruthInput.titel].reverse() },
     selectedServices: ["Testdienst"], personalRecommendations,
@@ -118,6 +122,58 @@ check("Kataloggröße und aktuelle Dienstetreffer bleiben getrennte Zahlen", () 
   }).coverage, "limited");
 });
 
+const funnelCatalog = {
+  region: "AT", stand: "2026-08-18T00:00:00.000Z", titel: [
+    { watchmode_id: 201, titel: "Fixture 201", dienste: ["Testdienst"], genres: ["drama"] },
+    { watchmode_id: 202, titel: "Fixture 202", dienste: ["Testdienst"] },
+    { watchmode_id: 203, titel: "Fixture 203", dienste: ["Testdienst"] },
+    { watchmode_id: 204, titel: "Fixture 204", dienste: ["Testdienst"], genres: ["gore"] },
+    { watchmode_id: 205, titel: "Fixture 205", dienste: ["Testdienst"], available_from: "2026-08-10", relevanz: 2 },
+    { watchmode_id: 206, titel: "Fixture 206", dienste: ["Testdienst"], available_from: "2026-08-10", relevanz: 4 },
+    { watchmode_id: 207, titel: "Fixture 207", dienste: ["Testdienst"], available_from: "2026-08-09", relevanz: 5 },
+    { watchmode_id: 208, titel: "Fixture 208", dienste: ["Testdienst"], available_from: "2026-08-08", relevanz: 3 },
+    { watchmode_id: 209, titel: "Fixture 209", dienste: ["Testdienst"], available_from: "2026-08-07", relevanz: 1 },
+    { watchmode_id: 210, titel: "Fixture 210", dienste: ["Anderer Dienst"] },
+    { watchmode_id: 211, titel: "Fixture 211", dienste: [] },
+  ],
+};
+const funnelProfile = { signals: [
+  { kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 3 },
+  { kind: "genre", value: "gore", direction: "negative", confirmed: true, strength: 5, blocking: true },
+] };
+const funnelMaster = [{ watchmode_id: 202, titel: "Fixture 202", bewertung: null }];
+const funnelMustwatch = [{
+  id: "mw_fixture", titel: "Fixture 203", verknuepfung: { ziel: "streaming", id: 203 },
+}];
+const funnel = createEntdeckenRecommendationFunnel({
+  streamingEntdecken: funnelCatalog, profile: funnelProfile, master: funnelMaster,
+  mustwatch: funnelMustwatch, selectedServices: ["Testdienst"],
+});
+check("Realistischer Trichter belegt rein numerisch genau eine persönliche Karte", () => {
+  assert.deepEqual(funnel, {
+    catalogCount: 11, serviceAvailableCount: 9, hardEligibleCount: 6,
+    reasonedCount: 1, personalCount: 1,
+  });
+  assert.ok(Object.values(funnel).every(Number.isInteger));
+  assert.doesNotMatch(JSON.stringify(funnel), /"(?:titel|title|profil|profile|signals?|reasons?)"\s*:|fixture:/i);
+});
+check("Neutrale Ergänzungen respektieren Besitz, Must-Watch und blockierende Signale", () => {
+  const personal = rankLocalEntdeckenRecommendations({
+    streamingEntdecken: funnelCatalog, profile: funnelProfile, master: funnelMaster,
+    mustwatch: funnelMustwatch, selectedServices: ["Testdienst"],
+  });
+  const neutral = createAdditionalServiceDiscoveries({
+    streamingEntdecken: funnelCatalog, selectedServices: ["Testdienst"],
+    personalRecommendations: personal, master: funnelMaster, mustwatch: funnelMustwatch,
+    profile: funnelProfile,
+  });
+  assert.equal(personal.length, 1);
+  assert.equal(neutral.length, 5);
+  assert.deepEqual(neutral.map((entry) => entry.targetId), [
+    "watchmode:206", "watchmode:205", "watchmode:207", "watchmode:208", "watchmode:209",
+  ]);
+});
+
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
 const appNavigation = fs.readFileSync(path.join(wurzel, "src/components/AppNavigation.jsx"), "utf8");
 const appSource = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
@@ -136,6 +192,7 @@ check("Verwaltung nutzt SVG, 44-Pixel-Ziel und App-Font im Portal", () => {
   assert.match(cssSource, /\.kd-entdecken-tabs \.kd-entdecken-verwalten[^}]*44px/);
   assert.match(cssSource, /\.kd-entdecken-layer[^}]*font-family:'Space Grotesk'/);
   assert.doesNotMatch(entdeckenSource, /kd-pilot-quellen/);
+  assert.match(appSource, /mustwatch=\{mustwatch\}/);
 });
 
 async function loadEsbuild() {
@@ -274,6 +331,25 @@ try {
       && !card.querySelector("ul")));
   });
   await catalogUi.cleanup();
+
+  const loadingUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: null,
+    selectedServices: ["Testdienst"], catalogLoading: true,
+  });
+  check("Entdecken benennt Laden und Fehler ohne einen leeren Vollkatalog vorzutäuschen", () => {
+    assert.match(loadingUi.container.querySelector('[role="status"]')?.textContent || "", /Katalog wird geladen/);
+    assert.equal(loadingUi.container.querySelector('[aria-label="Katalog und aktuelle Treffermenge"]'), null);
+  });
+  await loadingUi.render({
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"], catalogError: true,
+  });
+  check("Fehlgeschlagener Vollkatalog bleibt als verständlicher Ersatzstand erkennbar", () => {
+    const alert = loadingUi.container.querySelector('[role="alert"]');
+    assert.match(alert?.textContent || "", /vollständige Katalog konnte nicht geladen werden/);
+    assert.doesNotMatch(alert?.textContent || "", /RPC|HTTP|Cache|Payload|Exception/i);
+  });
+  await loadingUi.cleanup();
 
   const deepLinkUi = await mount(EntdeckenTab, {
     ...baseProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),

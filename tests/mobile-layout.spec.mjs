@@ -997,6 +997,10 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
     localStorage.setItem("kd:ki-version", "e8-v1");
     localStorage.setItem("kd:einstellungen", JSON.stringify({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" }));
     localStorage.setItem("kd:streaming-dienste", JSON.stringify({ quellen: ["Netflix"], heuristik: true }));
+    localStorage.setItem("kd:mustwatch", JSON.stringify({ eintraege: [{
+      id: "mw_alpha_lokal", titel: "Alpha Lokal", verknuepfung: { ziel: "streaming", id: 61001 },
+      erstellt_am: "2026-08-18T00:00:00.000Z",
+    }], gespeichertAm: 1_787_000_000_000 }));
     localStorage.setItem("kd:katalog:url", "https://abcdefghijklmnopqrst.supabase.co");
     localStorage.setItem("kd:katalog:key", "test-publishable-key-1234567890");
     const katalogCache = await caches.open("kinodreieck-katalog-v1");
@@ -1017,6 +1021,7 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
         { watchmode_id: 61004, titel: "Delta Lokal", jahr: 2023, typ: "movie", dienste: ["Netflix"] },
         { watchmode_id: 61005, titel: "Echo Lokal", jahr: 2024, typ: "movie", dienste: ["Netflix"] },
         { watchmode_id: 61006, titel: "Foxtrot Lokal", jahr: 2025, typ: "movie", dienste: ["Netflix"] },
+        { watchmode_id: 61009, titel: "Golf Lokal", jahr: 2026, typ: "movie", dienste: ["Netflix"] },
         { watchmode_id: 61007, titel: "Prime Eins", jahr: 2025, typ: "movie", dienste: ["Prime Video"] },
         { watchmode_id: 61008, titel: "Prime Zwei", jahr: 2026, typ: "movie", dienste: ["Prime Video"] },
       ],
@@ -1027,12 +1032,13 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
 
   const katalog = page.locator('[aria-label="Katalog und aktuelle Treffermenge"]');
   await expect(katalog).toContainText("Kataloggröße");
-  await expect(katalog).toContainText("8 Titel");
+  await expect(katalog).toContainText("9 Titel");
   await expect(katalog).toContainText("Aktuelle Treffermenge");
-  await expect(katalog).toContainText("6 Titel aus deinen Diensten");
+  await expect(katalog).toContainText("7 Titel aus deinen Diensten");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
   await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen aus deinen Diensten" })).toBeVisible();
   await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await expect(weitere).not.toContainText("Alpha Lokal");
   await expect(weitere).not.toContainText("Prime Eins");
   await expect.poll(() => entdeckenRequests).toBe(1);
   await keineDokumentUeberbreite(page);

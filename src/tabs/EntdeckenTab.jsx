@@ -181,24 +181,35 @@ function ManageDialog({
 }
 
 function RecommendationsView({
-  streamingEntdecken, master, profile, useLibrary, selectedServices, onRadarPreview,
+  streamingEntdecken, master, mustwatch, profile, profileLoading, useLibrary,
+  selectedServices, catalogLoading, catalogError, onRadarPreview,
 }) {
   const recommendations = useMemo(() => rankLocalEntdeckenRecommendations({
-    streamingEntdecken, master, profile, useLibrary,
-  }), [master, profile, streamingEntdecken, useLibrary]);
+    streamingEntdecken, master, mustwatch, profile, useLibrary, selectedServices,
+  }), [master, mustwatch, profile, selectedServices, streamingEntdecken, useLibrary]);
   const catalogSummary = useMemo(() => createEntdeckenCatalogSummary({
     streamingEntdecken, selectedServices,
   }), [selectedServices, streamingEntdecken]);
-  const additional = useMemo(() => createAdditionalServiceDiscoveries({
-    streamingEntdecken, selectedServices, personalRecommendations: recommendations, master,
-  }), [master, recommendations, selectedServices, streamingEntdecken]);
+  const additional = useMemo(() => (
+    profileLoading || profile?.beschaedigt ? [] : createAdditionalServiceDiscoveries({
+      streamingEntdecken, selectedServices, personalRecommendations: recommendations,
+      master, mustwatch, profile,
+    })
+  ), [master, mustwatch, profile, profileLoading, recommendations, selectedServices, streamingEntdecken]);
   const formatCount = (value) => Number(value || 0).toLocaleString("de-AT");
+  const hasSelectedServices = Array.isArray(selectedServices) && selectedServices.length > 0;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     <div className="kd-entdecken-einleitung">
       <div><span>Lokal & erklärbar</span><h2 id="kd-entdecken-empfehlungen">Empfehlungen für dich</h2></div>
-      <p>Deterministisch aus bestätigten Profilsignalen und – wenn gewählt – ausdrücklich bewerteten Mediathek-Einträgen. Kein LLM, kein Profil-Write.</p>
+      <p>Deterministisch aus bestätigten Profilsignalen und – wenn gewählt – ausdrücklich bewerteten Mediathek-Einträgen, jeweils verfügbar auf deinen gewählten Diensten in Österreich. Kein LLM, kein Profil-Write.</p>
     </div>
-    <div className="kd-entdecken-katalogwahrheit" aria-label="Katalog und aktuelle Treffermenge">
+    {catalogLoading ? <p className="kd-entdecken-laden" role="status">{streamingEntdecken
+      ? "Der vollständige Katalog wird geladen. Bis dahin siehst du den verfügbaren lokalen Ersatzstand."
+      : "Der Katalog wird geladen …"}</p> : null}
+    {catalogError ? <p className="kd-entdecken-fehler" role="alert">{streamingEntdecken
+      ? "Der vollständige Katalog konnte nicht geladen werden. Du siehst den verfügbaren lokalen Ersatzstand."
+      : "Der Katalog konnte nicht geladen werden. Versuche es später erneut."}</p> : null}
+    {streamingEntdecken ? <div className="kd-entdecken-katalogwahrheit" aria-label="Katalog und aktuelle Treffermenge">
       <dl className="kd-entdecken-katalogzahlen">
         <div><dt>{catalogSummary.coverage === "full" ? "Kataloggröße" : "Begrenzter Katalogstand"}</dt><dd>{formatCount(catalogSummary.catalogSize)} Titel</dd></div>
         <div><dt>Aktuelle Treffermenge</dt><dd>{formatCount(catalogSummary.currentCount)} Titel{catalogSummary.selectedServiceCount ? " aus deinen Diensten" : " ohne Dienstefilter"}</dd></div>
@@ -206,23 +217,26 @@ function RecommendationsView({
       <p>{catalogSummary.coverage === "full"
         ? "Die Treffermenge berücksichtigt deine Dienstewahl und den bereits in deiner Mediathek erkannten Bestand. Sie verändert die Kataloggröße nicht."
         : "Nur der lokale Ersatzstand ist geladen. Seine Zahl ist keine Aussage über die Größe des Gesamtkatalogs."}</p>
-    </div>
-    {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
-    {recommendations.length ? <div className="kd-entdecken-karten">{recommendations.map((entry) => {
+    </div> : null}
+    {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Vorschläge bleiben vorsichtshalber leer, damit bestätigte Ausschlüsse nicht übergangen werden.</p> : null}
+    {profileLoading ? <p className="kd-entdecken-laden" role="status">Deine bestätigten Profilsignale werden geladen …</p>
+      : recommendations.length ? <div className="kd-entdecken-karten">{recommendations.map((entry) => {
       const catalogEntry = (streamingEntdecken?.titel || []).find((item) => `watchmode:${item.watchmode_id}` === entry.targetId);
       const target = createCatalogRadarTarget({ watchmodeId: catalogEntry?.watchmode_id, title: entry.title, type: catalogEntry?.typ });
       return <article key={entry.targetId} className="kd-entdecken-hub-karte">
-        <span className="kd-entdecken-kicker">Persönliche Passung · AT verfügbar</span>
+        <span className="kd-entdecken-kicker">Persönliche Passung · bei deinen Diensten in AT</span>
         <h3>{entry.title}</h3>
         <ul>{entry.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
         <small>Quelle: lokaler Streaming-Katalog AT.</small>
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
       </article>;
-    })}</div> : <p className="kd-entdecken-leer gross">Noch keine belastbare persönliche Empfehlung. Dafür braucht es ein bestätigtes Profilsignal oder eine passende ausdrücklich positive Mediathek-Bewertung.</p>}
-    {recommendations.length < 6 ? <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
+    })}</div> : <p className="kd-entdecken-leer gross">{hasSelectedServices
+      ? "Noch keine belastbare persönliche Empfehlung. Dafür braucht es ein bestätigtes Profilsignal oder eine passende ausdrücklich positive Mediathek-Bewertung."
+      : "Wähle unter Streaming-Quellen mindestens einen Dienst aus. Persönliche Karten erscheinen nur für dort verfügbare Titel."}</p>}
+    {!profileLoading && !profile?.beschaedigt && recommendations.length < 6 ? <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-einleitung kompakt">
         <div><span>Neutral ergänzt</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen aus deinen Diensten</h2></div>
-        <p>Deterministisch aus dem verfügbaren Dienstekatalog. Diese Titel sind ausdrücklich keine persönliche Passung.</p>
+        <p>Stabil nach Verfügbarkeitsstand und vorhandener Katalogqualität sortiert. Diese Titel sind ausdrücklich keine persönliche Passung.</p>
       </div>
       {additional.length ? <div className="kd-entdecken-karten">{additional.map((entry) => {
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
@@ -481,7 +495,8 @@ function RadarView({
 
 export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
-  streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
+  mustwatch = [], streamingKnown = null, streamingDiscover = null, selectedServices = [],
+  catalogLoading = false, catalogError = false, accountMode = false,
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, personRadarCheckAvailable = false,
@@ -493,10 +508,12 @@ export function EntdeckenTab({
   const [manageOffen, setManageOffen] = useState(false);
   const [useLibrary, setUseLibrary] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const manageButtonRef = useRef(null);
   useEffect(() => {
     let aktiv = true;
-    ladeProfil().then((value) => { if (aktiv) setProfile(value); });
+    ladeProfil().then((value) => { if (aktiv) setProfile(value); })
+      .finally(() => { if (aktiv) setProfileLoading(false); });
     return () => { aktiv = false; };
   }, []);
   useEffect(() => { if (fokusId) setAnsicht("meinungen"); }, [fokusId]);
@@ -517,7 +534,9 @@ export function EntdeckenTab({
       </nav>
     </div>
     {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} master={master}
-      profile={profile} useLibrary={useLibrary} selectedServices={selectedServices} onRadarPreview={onRadarPreview} /> : null}
+      mustwatch={mustwatch} profile={profile} profileLoading={profileLoading} useLibrary={useLibrary}
+      selectedServices={selectedServices} catalogLoading={catalogLoading} catalogError={catalogError}
+      onRadarPreview={onRadarPreview} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}

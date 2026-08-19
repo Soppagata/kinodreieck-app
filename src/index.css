@@ -303,6 +303,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-weitere { margin-top:26px; padding-top:20px; border-top:1px solid rgba(148,143,160,.3); }
 .kd-entdecken-einleitung.kompakt { margin-bottom:14px; }
 .kd-entdecken-neutral p { margin:7px 0 10px; }
+.kd-entdecken-laden { margin:0 0 14px; padding:11px 13px; border:1px solid rgba(148,143,160,.55); border-radius:7px; background:rgba(148,143,160,.08); color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
 .kd-entdecken-warnung,.kd-entdecken-fehler { padding:10px 12px; border:1px solid var(--kd-gefahr,#c85b51); border-radius:7px; color:var(--kd-gefahr,#c85b51); font-size:13px; }
 .kd-entdecken-quellenblock { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:14px; }
 .kd-entdecken-quellenblock article { padding:11px 13px; border:1px dashed var(--rauch,#948fa0); border-radius:7px; opacity:.72; }

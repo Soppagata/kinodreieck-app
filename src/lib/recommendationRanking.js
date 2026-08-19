@@ -4,6 +4,7 @@
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
 function list(value) { return Array.isArray(value) ? value : []; }
+function values(value) { return value instanceof Set ? [...value] : list(value); }
 function stringSet(value) { return new Set(list(value).map(normalized).filter(Boolean)); }
 function overlap(a, b) {
   for (const value of a) if (b.has(value)) return true;
@@ -98,13 +99,20 @@ function analyze(candidate, context) {
   };
 }
 
-function eligible(candidate, libraryTargetIds) {
+function requiredServices(context) {
+  return Object.prototype.hasOwnProperty.call(context, "selectedServices")
+    ? stringSet(context.selectedServices)
+    : null;
+}
+
+function available(candidate, services) {
+  const serviceMatch = services == null
+    || (services.size > 0 && overlap(stringSet(candidate?.services), services));
   return candidate?.matchStatus === "matched"
     && candidate?.region === "AT"
     && candidate?.availabilityConfirmed === true
-    && candidate?.eligible !== false
     && text(candidate.targetId)
-    && !libraryTargetIds.has(text(candidate.targetId));
+    && serviceMatch;
 }
 
 function compareRows(a, b) {
@@ -128,17 +136,61 @@ function compareRows(a, b) {
   return text(a.candidate.targetId).localeCompare(text(b.candidate.targetId), "de-AT");
 }
 
+function quality(candidate) {
+  const number = Number(candidate?.quality);
+  return Number.isFinite(number) ? number : Number.NEGATIVE_INFINITY;
+}
+
+function compareNeutralRows(a, b) {
+  if (a.analysis.freshness !== b.analysis.freshness) {
+    return b.analysis.freshness - a.analysis.freshness;
+  }
+  const qualityA = quality(a.candidate);
+  const qualityB = quality(b.candidate);
+  if (qualityA !== qualityB) return qualityB - qualityA;
+  if (a.candidate.sourceId === b.candidate.sourceId) {
+    const rankA = Number.isInteger(a.candidate.sourceRank) ? a.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
+    const rankB = Number.isInteger(b.candidate.sourceRank) ? b.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
+    if (rankA !== rankB) return rankA - rankB;
+  }
+  const byTitle = text(a.candidate.title).localeCompare(text(b.candidate.title), "de-AT");
+  return byTitle || text(a.candidate.targetId).localeCompare(text(b.candidate.targetId), "de-AT");
+}
+
+function uniqueRows(rows) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const id = text(row.candidate.targetId);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+function projectPipeline(candidates, context) {
+  const catalog = list(candidates);
+  const library = list(context.library);
+  /* Besitz bleibt ein harter Ausschluss, auch wenn die ausdrücklich bewertete
+     Mediathek als positiver Empfehlungsgrund abgeschaltet ist. */
+  const excludedTargetIds = new Set([
+    ...library.map((item) => text(item?.targetId)),
+    ...values(context.excludedTargetIds).map(text),
+  ].filter(Boolean));
+  const serviceSelection = requiredServices(context);
+  const serviceAvailable = catalog.filter((candidate) => available(candidate, serviceSelection));
+  const analyzed = serviceAvailable.map((candidate) => ({ candidate, analysis: analyze(candidate, context) }));
+  const hardEligible = analyzed.filter((row) => (
+    row.candidate?.eligible !== false
+    && !excludedTargetIds.has(text(row.candidate.targetId))
+    && !row.analysis.blockingNegative
+  ));
+  const reasoned = hardEligible.filter((row) => row.analysis.reasons.length > 0);
+  const personal = uniqueRows([...reasoned].sort(compareRows));
+  return { catalog, serviceAvailable, hardEligible, reasoned, personal };
+}
+
 export function rankRecommendations(candidates, context = {}) {
-  const library = context.useLibrary === false ? [] : list(context.library);
-  const libraryTargetIds = new Set(library.map((item) => text(item.targetId)).filter(Boolean));
-  return list(candidates)
-    .filter((candidate) => eligible(candidate, libraryTargetIds))
-    .map((candidate) => ({ candidate, analysis: analyze(candidate, context) }))
-    .filter((row) => !row.analysis.blockingNegative)
-    /* Ohne belegten Profil-/Mediatheksgrund bleibt der Kandidat in seiner
-       unpersonalisierten Quellenliste und wird nicht zur Empfehlung. */
-    .filter((row) => row.analysis.reasons.length > 0)
-    .sort(compareRows)
+  return projectPipeline(candidates, context).personal
     .map((row) => Object.freeze({
       targetId: row.candidate.targetId,
       title: row.candidate.title,
@@ -147,4 +199,26 @@ export function rankRecommendations(candidates, context = {}) {
       sourceId: row.candidate.sourceId,
       sourceRank: row.candidate.sourceRank ?? null,
     }));
+}
+
+/* Dieselbe Verfügbarkeits- und Ausschlussgrenze wie bei persönlichen Karten,
+   aber ohne positive Profil-/Bewertungsgründe als Rankingfaktor oder Ausgabe. */
+export function rankNeutralCandidates(candidates, context = {}) {
+  return Object.freeze(uniqueRows(
+    [...projectPipeline(candidates, context).hardEligible].sort(compareNeutralRows),
+  ).map((row) => row.candidate));
+}
+
+/* Ausschließlich aggregierte Zahlen: keine Titel, Signale oder Profildaten.
+   Dadurch kann eine dünne persönliche Auswahl reproduzierbar diagnostiziert
+   werden, ohne Nutzerdaten in Logs oder Telemetrie zu tragen. */
+export function createRecommendationFunnel(candidates, context = {}) {
+  const stages = projectPipeline(candidates, context);
+  return Object.freeze({
+    catalogCount: stages.catalog.length,
+    serviceAvailableCount: stages.serviceAvailable.length,
+    hardEligibleCount: stages.hardEligible.length,
+    reasonedCount: stages.reasoned.length,
+    personalCount: stages.personal.length,
+  });
 }

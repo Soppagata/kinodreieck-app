@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { isPositiveLibraryEvidence, rankRecommendations } from "./src/lib/recommendationRanking.js";
+import {
+  createRecommendationFunnel,
+  isPositiveLibraryEvidence,
+  rankNeutralCandidates,
+  rankRecommendations,
+} from "./src/lib/recommendationRanking.js";
 
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
@@ -82,10 +87,61 @@ check("Kandidaten ohne belastbaren Grund bleiben in der unpersonalisierten Quell
 
 check("Mediatheksprojektion kann vollständig deaktiviert werden", () => {
   const rows = rankRecommendations([
-    candidate("library:owned", { genres: ["noir"] }),
+    candidate("fixture:not-owned", { genres: ["noir"] }),
   ], { ...context, useLibrary: false });
   assert.equal(rows.length, 1);
   assert.ok(!rows[0].reasons.some((reason) => /Mediathek|Reihe/.test(reason)));
+});
+
+check("Besitz bleibt auch ohne Mediathekgründe hart ausgeschlossen", () => {
+  const rows = rankRecommendations([
+    candidate("library:owned", { genres: ["noir"] }),
+  ], { ...context, useLibrary: false });
+  assert.deepEqual(rows, []);
+});
+
+check("Persönliche Treffer verlangen Verfügbarkeit auf einem gewählten Dienst", () => {
+  const rows = rankRecommendations([
+    candidate("fixture:selected", { genres: ["noir"], services: ["Testdienst"] }),
+    candidate("fixture:other", { genres: ["noir"], services: ["Anderer Dienst"] }),
+  ], { ...context, selectedServices: ["Testdienst"] });
+  assert.deepEqual(rows.map((row) => row.targetId), ["fixture:selected"]);
+  assert.deepEqual(rankRecommendations([
+    candidate("fixture:selected", { genres: ["noir"], services: ["Testdienst"] }),
+  ], { ...context, selectedServices: [] }), []);
+});
+
+check("Neutrale Kandidaten respektieren harte Ausschlüsse und sortieren stabil nach Stand und Qualität", () => {
+  const rows = rankNeutralCandidates([
+    candidate("fixture:older", { services: ["Testdienst"], freshnessAt: "2026-08-01", quality: 9 }),
+    candidate("fixture:fresh-low", { services: ["Testdienst"], freshnessAt: "2026-08-10", quality: 1 }),
+    candidate("fixture:fresh-high", { services: ["Testdienst"], freshnessAt: "2026-08-10", quality: 4 }),
+    candidate("fixture:blocked", { services: ["Testdienst"], freshnessAt: "2026-08-11", genres: ["gore"] }),
+    candidate("fixture:excluded", { services: ["Testdienst"], freshnessAt: "2026-08-12" }),
+  ], {
+    profile: context.profile,
+    library: [],
+    useLibrary: false,
+    selectedServices: ["Testdienst"],
+    excludedTargetIds: ["fixture:excluded"],
+  });
+  assert.deepEqual(rows.map((row) => row.targetId), [
+    "fixture:fresh-high", "fixture:fresh-low", "fixture:older",
+  ]);
+});
+
+check("Empfehlungstrichter enthält ausschließlich aggregierte Zahlen", () => {
+  const funnel = createRecommendationFunnel([
+    candidate("fixture:reasoned", { genres: ["noir"], services: ["Testdienst"] }),
+    candidate("fixture:neutral", { services: ["Testdienst"] }),
+    candidate("fixture:other", { services: ["Anderer Dienst"] }),
+  ], { ...context, selectedServices: ["Testdienst"] });
+  assert.deepEqual(funnel, {
+    catalogCount: 3, serviceAvailableCount: 2, hardEligibleCount: 2,
+    reasonedCount: 1, personalCount: 1,
+  });
+  assert.ok(Object.values(funnel).every(Number.isInteger));
+  assert.doesNotMatch(JSON.stringify(funnel), /"(?:title|profile|signals?|reasons?)"\s*:|fixture:/i);
 });
 
 check("Quellenrang entscheidet nur innerhalb derselben Quelle", () => {
