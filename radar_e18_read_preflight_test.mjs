@@ -148,6 +148,39 @@ check("nur der erste Drift erscheint; gruen erzeugt keinen Beleg", () => {
   }
 });
 
+check("Ledger-Digest kanonisiert JSONB-Schluessel und haelt den Kandidaten aus PRE", () => {
+  const root = mkdtempSync("/private/tmp/kinodreieck-read-preflight-ledger-");
+  chmodSync(root, 0o700);
+  try {
+    const state = fixture();
+    state.observed.ledger = state.observed.ledger.map(({ version, name }) => ({ name, version }));
+    const evidencePath = join(root, "read-preflight-stop.json");
+    assert.equal(validateRadarE18ReadPreflight({
+      ...state, evidencePath, fehlerAusgabe() {},
+    }), true);
+    assert.equal(existsSync(evidencePath), false);
+
+    state.observed.ledger.push({
+      name: "radar_person_server_candidate",
+      version: "20260819220000",
+    });
+    assert.throws(
+      () => validateRadarE18ReadPreflight({
+        ...state, evidencePath, fehlerAusgabe() {},
+      }),
+      (error) => error instanceof RadarE18ProcessStop
+        && error.code === "READ_PREFLIGHT_LEDGER_COUNT_DRIFT",
+    );
+    assert.deepEqual(JSON.parse(readFileSync(evidencePath, "utf8")), {
+      code: "READ_PREFLIGHT_LEDGER_COUNT_DRIFT",
+      expected: 3,
+      observed: 4,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 check("Persistenz bleibt auf leeren privaten Tempraum begrenzt", () => {
   const state = fixture();
   state.observed.account.role = "member";

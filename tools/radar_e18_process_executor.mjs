@@ -518,7 +518,8 @@ function readPreflightLedgerShape(ledger) {
 }
 
 function readPreflightLedgerDigest(ledger) {
-  return sha256(Buffer.from(JSON.stringify(ledger), "utf8"));
+  const canonicalLedger = ledger.map(({ version, name }) => ({ version, name }));
+  return sha256(Buffer.from(JSON.stringify(canonicalLedger), "utf8"));
 }
 
 function readPreflightFlags(value) {
