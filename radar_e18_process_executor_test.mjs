@@ -3,13 +3,14 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   RADAR_E18_AUTHORIZATION_FLAG,
   RADAR_E18_EXECUTE_FLAG,
@@ -215,6 +216,7 @@ function e17aState(contract, mode = "valid") {
 
 function processFixture({
   baselineMode = "valid",
+  migrationTreeMode = "valid",
   failVersion = false,
   wrongPgVersion = false,
   providerInitiallyPresent = false,
@@ -228,6 +230,45 @@ function processFixture({
   postflightLedgerMode = "valid",
 } = {}) {
   const contract = loadRadarE17ARepairContract();
+  const firstBaselineFile = `${contract.expectedLedgerBaseline[0].version}_${contract.expectedLedgerBaseline[0].name}.sql`;
+  const injectedMigrationFiles = new Set();
+  const migrationFs = {
+    readdir(path) {
+      const entries = readdirSync(path);
+      if (!path.endsWith("/supabase/migrations")) return entries;
+      if (migrationTreeMode === "missing") {
+        return entries.filter((entry) => entry !== firstBaselineFile);
+      }
+      if (migrationTreeMode === "additional") {
+        injectedMigrationFiles.add("20260816020000_unexpected.sql");
+        return [...entries, "20260816020000_unexpected.sql"];
+      }
+      if (migrationTreeMode === "duplicate") {
+        const duplicate = `${contract.expectedLedgerBaseline[0].version}_duplicate.sql`;
+        injectedMigrationFiles.add(duplicate);
+        return [...entries, duplicate];
+      }
+      if (migrationTreeMode === "name-drift") {
+        const drifted = `${contract.expectedLedgerBaseline[0].version}_wrong_name.sql`;
+        injectedMigrationFiles.add(drifted);
+        return [...entries.filter((entry) => entry !== firstBaselineFile), drifted];
+      }
+      if (migrationTreeMode === "malformed") {
+        injectedMigrationFiles.add("notes.txt");
+        return [...entries, "notes.txt"];
+      }
+      return entries;
+    },
+    lstat(path) {
+      if (migrationTreeMode === "symlink" && basename(path) === firstBaselineFile) {
+        return { isFile: () => false, isSymbolicLink: () => true };
+      }
+      if (injectedMigrationFiles.has(basename(path))) {
+        return { isFile: () => true, isSymbolicLink: () => false };
+      }
+      return lstatSync(path);
+    },
+  };
   const privateSecrets = Object.freeze({
     access: "fixture_access_value",
     database: "fixture_database_value",
@@ -536,15 +577,19 @@ function processFixture({
     }
     if (argv[0] === "migration" && argv[1] === "up") {
       const migrationFiles = readdirSync(join(options.cwd, "supabase/migrations")).sort();
-      assert.deepEqual(migrationFiles, [
+      const expectedMigrationFiles = [
+        ...contract.expectedLedgerBaseline.map(({ version, name }) => `${version}_${name}.sql`),
         "20260817120000_blog_profile_extract_config.sql",
         "20260817180000_radar_websearch_mvp_package_a.sql",
         "20260817190000_radar_websearch_mvp_package_b.sql",
-      ]);
-      assert.deepEqual(
-        readFileSync(join(options.cwd, "supabase/migrations/20260817120000_blog_profile_extract_config.sql")),
-        readFileSync("supabase/migrations/20260817120000_blog_profile_extract_config.sql"),
-      );
+      ];
+      assert.deepEqual(migrationFiles, expectedMigrationFiles);
+      assert.equal(migrationFiles.includes("LIESMICH.md"), false);
+      for (const file of expectedMigrationFiles) {
+        const isolated = join(options.cwd, "supabase/migrations", file);
+        assert.equal(statSync(isolated).mode & 0o077, 0, file);
+        assert.deepEqual(readFileSync(isolated), readFileSync(join("supabase/migrations", file)), file);
+      }
       migrationWorkspaceObserved = true;
       packageMigrated = true;
       return ok("{}\n");
@@ -574,6 +619,7 @@ function processFixture({
     allBackupDirs,
     allProjectionFiles,
     allAuthProjectionFiles,
+    fs: migrationFs,
     committedSourceGate() {
       sourceGateCalls += 1;
       return Object.freeze({
@@ -656,6 +702,9 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   ));
   assert.ok(backupIndex >= 0 && backupIndex < restoreVerifiedIndex);
   assert.ok(restoreVerifiedIndex < migrationIndex);
+  assert.equal(fixture.visibleCalls.filter(({ argv }) => (
+    argv[0] === "migration" && argv[1] === "up"
+  )).length, 1);
   assert.equal(fixture.sourceGateCalls(), 1);
   const schemaPreflights = fixture.visibleCalls.filter(({ binary, argv }) => (
     binary.endsWith("/pg_restore")
@@ -720,6 +769,49 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   for (const path of fixture.allBackupDirs) assert.equal(existsSync(path), false);
   for (const path of fixture.allProjectionFiles) assert.equal(existsSync(path), false);
   for (const path of fixture.allAuthProjectionFiles) assert.equal(existsSync(path), false);
+});
+
+await check("historische Migrationsclosure stoppt bei fehlend, extra, doppelt, namensdriftend, Symlink oder formfremd vor Wirkung", async () => {
+  for (const [migrationTreeMode, expectedCode] of [
+    ["missing", "MIGRATION_HISTORY_BASELINE_DRIFT"],
+    ["additional", "MIGRATION_HISTORY_BASELINE_DRIFT"],
+    ["duplicate", "MIGRATION_HISTORY_BASELINE_DRIFT"],
+    ["name-drift", "MIGRATION_HISTORY_BASELINE_DRIFT"],
+    ["symlink", "MIGRATION_HISTORY_SOURCE_INVALID"],
+    ["malformed", "MIGRATION_HISTORY_SOURCE_INVALID"],
+  ]) {
+    const fixture = processFixture({ migrationTreeMode });
+    const out = [];
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+        fs: fixture.fs,
+      },
+      ausgabe: (line) => out.push(line),
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, migrationTreeMode);
+    assert.deepEqual(err, [expectedCode], migrationTreeMode);
+    assert.deepEqual(out, [], migrationTreeMode);
+    assert.equal(fixture.visibleCalls.filter(({ input }) => (
+      String(input || "").includes("'targetLedger'")
+    )).length, 1, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ binary, argv }) => (
+      binary.endsWith("/pg_dump") && argv.includes("--format=custom")
+    )), false, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "functions" && argv[1] === "deploy"), false, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "secrets" && argv[1] === "set"), false, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ input }) => (
+      String(input || "").includes("provider_requests_enabled=true")
+    )), false, migrationTreeMode);
+    assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false, migrationTreeMode);
+    for (const path of fixture.allRunDirs) assert.equal(existsSync(path), false, migrationTreeMode);
+  }
 });
 
 await check("echte restore-normalisierte Schemadrift stoppt vor Migration, Function, Secret, Flags und Provider", async () => {

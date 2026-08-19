@@ -19,11 +19,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
   LOCAL_ROLE_ALLOWLIST,
@@ -57,6 +58,9 @@ const PACKAGE_FUNCTION_FILES = Object.freeze([
   "supabase/functions/radar-websearch-task/index.ts",
   "supabase/functions/radar-websearch-task/runner.js",
 ]);
+const MIGRATION_DIRECTORY = "supabase/migrations";
+const MIGRATION_README = "LIESMICH.md";
+const MIGRATION_FILE_PATTERN = /^([0-9]{14})_([a-z0-9_]+)\.sql$/;
 const SECURITY = "/usr/bin/security";
 const SUPABASE = resolve(
   REPO_ROOT,
@@ -605,6 +609,7 @@ export function createRadarE18DefaultExecutor({
     mkdir: fs.mkdir || mkdirSync,
     mkdtemp: fs.mkdtemp || mkdtempSync,
     readFile: fs.readFile || readFileSync,
+    readdir: fs.readdir || readdirSync,
     remove: fs.remove || rmSync,
     stat: fs.stat || statSync,
     writeFile: fs.writeFile || writeFileSync,
@@ -621,6 +626,7 @@ export function createRadarE18DefaultExecutor({
     backups: new Map(),
     restores: new Map(),
     e17aLedger: null,
+    migrationWorkspacePrepared: false,
     packagePreflight: null,
     functionPreflight: null,
     functionDeployment: null,
@@ -676,10 +682,10 @@ export function createRadarE18DefaultExecutor({
   const prepareProject = () => {
     const projectDir = join(state.workspace.runDir, "project");
     io.mkdir(projectDir, { mode: 0o700 });
-    for (const path of ["supabase", "supabase/migrations", "supabase/functions", `supabase/functions/${FUNCTION_NAME}`]) {
+    for (const path of ["supabase", MIGRATION_DIRECTORY, "supabase/functions", `supabase/functions/${FUNCTION_NAME}`]) {
       io.mkdir(join(projectDir, path), { mode: 0o700 });
     }
-    const files = ["supabase/config.toml", ...PACKAGE_MIGRATIONS, ...PACKAGE_FUNCTION_FILES];
+    const files = ["supabase/config.toml", ...PACKAGE_FUNCTION_FILES];
     const allowed = new Set(state.closure.paths);
     for (const path of files) {
       if (!allowed.has(path)) stop("ISOLATED_RELEASE_FILE_REJECTED", "Isolierter Arbeitsraum enthaelt keine belegte Datei.");
@@ -688,6 +694,102 @@ export function createRadarE18DefaultExecutor({
       io.chmod(destination, 0o600);
     }
     state.projectDir = projectDir;
+  };
+
+  const migrationIdentity = (file) => {
+    const match = file.match(MIGRATION_FILE_PATTERN);
+    return match ? Object.freeze({ file, version: match[1], name: match[2] }) : null;
+  };
+
+  const prepareMigrationWorkspace = () => {
+    if (state.migrationWorkspacePrepared) {
+      stop("MIGRATION_HISTORY_ALREADY_PREPARED", "Historischer Migrationskontext darf nur einmal materialisiert werden.");
+    }
+    const ledger = state.e17aLedger;
+    if (!Array.isArray(ledger) || ledger.length < 1
+        || !ledger.every((row) => exactObject(row, ["name", "version"])
+          && /^[0-9]{14}$/.test(row.version)
+          && /^[a-z0-9_]+$/.test(row.name))
+        || new Set(ledger.map(({ version }) => version)).size !== ledger.length
+        || !isDeepStrictEqual(ledger.map(({ version }) => version), ledger.map(({ version }) => version).sort())
+        || ledger.some(({ version }) => MIGRATIONS.includes(version))) {
+      stop("MIGRATION_HISTORY_LEDGER_INVALID", "Read-only Ledger ist keine eindeutige historische Migrationsclosure.");
+    }
+
+    const sourceDirectory = join(REPO_ROOT, MIGRATION_DIRECTORY);
+    let entries;
+    try {
+      entries = io.readdir(sourceDirectory);
+    } catch {
+      stop("MIGRATION_HISTORY_SOURCE_INVALID", "Lokaler Migrationsbaum ist nicht lesbar.");
+    }
+    if (!Array.isArray(entries) || !entries.every((entry) => typeof entry === "string")) {
+      stop("MIGRATION_HISTORY_SOURCE_INVALID", "Lokaler Migrationsbaum liefert keine exakten Dateinamen.");
+    }
+
+    const sourcesByVersion = new Map();
+    for (const file of entries) {
+      const source = join(sourceDirectory, file);
+      let info;
+      try {
+        info = io.lstat(source);
+      } catch {
+        stop("MIGRATION_HISTORY_SOURCE_INVALID", "Lokaler Migrationseintrag ist nicht sicher lesbar.");
+      }
+      if (!info?.isFile?.() || info.isSymbolicLink?.()) {
+        stop("MIGRATION_HISTORY_SOURCE_INVALID", "Lokaler Migrationsbaum enthaelt keine ausschliesslich regulaeren Dateien.");
+      }
+      if (file === MIGRATION_README) continue;
+      const identity = migrationIdentity(file);
+      if (!identity) {
+        stop("MIGRATION_HISTORY_SOURCE_INVALID", "Lokaler Migrationsbaum enthaelt einen formfremden Eintrag.");
+      }
+      if (sourcesByVersion.has(identity.version)) {
+        stop("MIGRATION_HISTORY_BASELINE_DRIFT", "Lokaler Migrationsbaum enthaelt eine doppelte Version.");
+      }
+      sourcesByVersion.set(identity.version, Object.freeze({ ...identity, source }));
+    }
+
+    const packageIdentities = PACKAGE_MIGRATIONS.map((path) => migrationIdentity(basename(path)));
+    if (packageIdentities.some((identity) => !identity)
+        || !isDeepStrictEqual(packageIdentities.map(({ version }) => version), MIGRATIONS)
+        || packageIdentities.some(({ version }) => version <= ledger.at(-1).version)) {
+      stop("MIGRATION_HISTORY_PACKAGE_INVALID", "Paketmigrationen liegen nicht exakt und geordnet oberhalb des Remote-Ledgers.");
+    }
+    const expected = [
+      ...ledger.map(({ version, name }) => Object.freeze({ version, name })),
+      ...packageIdentities.map(({ version, name }) => Object.freeze({ version, name })),
+    ];
+    if (sourcesByVersion.size !== expected.length
+        || expected.some(({ version, name }) => sourcesByVersion.get(version)?.name !== name)) {
+      stop("MIGRATION_HISTORY_BASELINE_DRIFT", "Lokaler Migrationsbaum entspricht nicht exakt dem Read-only Ledger plus Paketclosure.");
+    }
+
+    const allowedPackagePaths = new Set(state.closure.paths);
+    for (const path of PACKAGE_MIGRATIONS) {
+      if (!allowedPackagePaths.has(path)) {
+        stop("ISOLATED_RELEASE_FILE_REJECTED", "Paketmigration ist nicht releasegebunden.");
+      }
+    }
+    try {
+      for (const { version } of expected) {
+        const source = sourcesByVersion.get(version);
+        const destination = join(state.projectDir, MIGRATION_DIRECTORY, source.file);
+        if (io.exists(destination)) {
+          stop("MIGRATION_WORKSPACE_NOT_EMPTY", "Isolierter Migrationsarbeitsraum ist nicht leer.");
+        }
+        io.copyFile(source.source, destination);
+        io.chmod(destination, 0o600);
+        const info = io.stat(destination);
+        if (!info.isFile() || (info.mode & 0o077) !== 0) {
+          stop("MIGRATION_WORKSPACE_FILE_INVALID", "Isolierte Migrationsdatei ist nicht regulaer und 0600.");
+        }
+      }
+    } catch (error) {
+      if (error instanceof RadarE18ProcessStop) throw error;
+      stop("MIGRATION_WORKSPACE_COPY_FAILED", "Historischer Migrationskontext konnte nicht sicher kopiert werden.");
+    }
+    state.migrationWorkspacePrepared = true;
   };
 
   const baseLocalEnv = () => ({
@@ -1188,6 +1290,7 @@ export function createRadarE18DefaultExecutor({
     if (id === "package-b-remote-read") {
       const packageState = validatePackageState(runStep(blueprint, "package-b-state-read"));
       if (!isDeepStrictEqual(packageState.ledger, state.e17aLedger)) stop("PACKAGE_LEDGER_BASELINE_DRIFT", "Paket-B-Ledger driftet vom E17A-Postflight.");
+      prepareMigrationWorkspace();
       state.packagePreflight = Object.freeze({
         radar: packageState.radar.radar_aktiv,
         radarProvider: packageState.radar.radar_provider_aktiv,
