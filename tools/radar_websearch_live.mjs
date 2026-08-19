@@ -22,6 +22,7 @@ import {
   meldeTestkontoAn,
 } from "./ai_budget_guard.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./keychain_runner.mjs";
+import { validatePersonRadarCheckResult } from "../src/lib/personDiscoveryContracts.js";
 
 const RADAR_FUNCTION = "radar-websearch-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
@@ -30,6 +31,12 @@ const RESPONSE_KEYS = Object.freeze([
   "ok", "phaseCode", "providerRequests", "reservationDecision",
   "reservationStatus", "reservationUsdCent", "searchRequests", "status", "writes",
 ]);
+const PERSON_RESPONSE_KEYS = Object.freeze([...RESPONSE_KEYS, "personResult"].sort());
+const PERSON_RESULT_KEYS = Object.freeze([
+  "status", "checkedAt", "windowStart", "windowEnd", "person", "candidates",
+]);
+const PERSON_KEYS = Object.freeze(["personExternalId", "name", "role", "canonical"]);
+const PERSON_ROLES = Object.freeze(["actor", "director"]);
 const PHASE_CODES = new Set([
   "runtime-setup",
   "cost-reservation",
@@ -42,7 +49,54 @@ function validTarget(value) {
     && TARGET_FORM.test(value) && !/^(?:fixture|synthetic):/i.test(value);
 }
 
-export function validateFunctionResponse(response, body) {
+function exactKeys(value, keys) {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === keys.length
+    && keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function personTargetIdentity(targetId) {
+  if (!validTarget(targetId) || !targetId.startsWith("person:")) return null;
+  for (const role of PERSON_ROLES) {
+    const suffix = `:${role}`;
+    if (!targetId.endsWith(suffix)) continue;
+    const personExternalId = targetId.slice("person:".length, -suffix.length);
+    return validTarget(personExternalId)
+        && targetId === `person:${personExternalId}:${role}`
+      ? Object.freeze({ personExternalId, role })
+      : null;
+  }
+  return null;
+}
+
+function validPersonResult(value, targetIdentity) {
+  if (!targetIdentity || !exactKeys(value, PERSON_RESULT_KEYS)
+      || value.status !== "confirmed" || !exactKeys(value.person, PERSON_KEYS)
+      || value.person.personExternalId !== targetIdentity.personExternalId
+      || value.person.role !== targetIdentity.role
+      || !Array.isArray(value.candidates) || value.candidates.length < 1
+      || value.candidates.length > 3) return false;
+  const catalog = value.candidates.map((candidate) => ({
+    targetId: candidate?.targetId,
+    targetType: candidate?.targetType,
+    title: candidate?.title,
+    year: candidate?.year,
+  }));
+  const checked = validatePersonRadarCheckResult(value, {
+    identity: {
+      personExternalId: targetIdentity.personExternalId,
+      name: value.person.name,
+      role: targetIdentity.role,
+      canonical: true,
+    },
+    catalog,
+    mode: "production",
+  });
+  return checked.ok && checked.result.decisions.length === value.candidates.length
+    && checked.result.decisions.every((decision) => decision.status === "matched" && decision.work);
+}
+
+export function validateFunctionResponse(response, body, targetId = null) {
   const phaseCode = PHASE_CODES.has(body?.phaseCode) ? body.phaseCode : "unknown";
   const reservationDecision = ["limit", "disabled", "forbidden", "server"].includes(body?.reservationDecision)
     ? body.reservationDecision : "unknown";
@@ -52,8 +106,14 @@ export function validateFunctionResponse(response, body) {
       `Radar-Websearch-Reservierung wurde sicher abgelehnt (${reservationDecision}, Phase ${phaseCode}).`,
     );
   }
+  const hasPersonResult = !!body && typeof body === "object" && !Array.isArray(body)
+    && Object.prototype.hasOwnProperty.call(body, "personResult");
+  const targetIdentity = personTargetIdentity(targetId);
+  const responseKeys = hasPersonResult ? PERSON_RESPONSE_KEYS : RESPONSE_KEYS;
   if (!response?.ok || !body || typeof body !== "object" || Array.isArray(body)
-      || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(RESPONSE_KEYS)
+      || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(responseKeys)
+      || (targetIdentity ? !hasPersonResult : hasPersonResult)
+      || (hasPersonResult && !validPersonResult(body.personResult, targetIdentity))
       || !PHASE_CODES.has(body.phaseCode)
       || body.ok !== true || body.status !== "confirmed" || body.writes !== 1
       || body.providerRequests !== 1 || body.searchRequests !== 1
@@ -127,7 +187,7 @@ export async function runRadarWebsearchOnce({
       ? requestError
       : new LiveSicherheitsStopp("unbekannt", "Radar-Function war nicht verlaesslich erreichbar.");
   }
-  validateFunctionResponse(response, body);
+  validateFunctionResponse(response, body, targetId);
   ausgabe("RADAR-WEBSEARCH-EINMAL: confirmed · 1 Providerrequest · 1 Suchrequest · 1 Write");
   return Object.freeze({
     status: body.status,

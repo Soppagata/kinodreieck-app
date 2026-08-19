@@ -446,7 +446,40 @@ function budgetBody(spent) {
   };
 }
 
-await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine andere KI-Probe", async () => {
+function confirmedPersonResult() {
+  const checkedAt = "2026-08-18T10:00:00.000Z";
+  return {
+    status: "confirmed",
+    checkedAt,
+    windowStart: personTarget.windowStart,
+    windowEnd: personTarget.windowEnd,
+    person: {
+      personExternalId: personTarget.personExternalId,
+      name: personTarget.canonicalName,
+      role: personTarget.role,
+      canonical: true,
+    },
+    candidates: [{
+      targetId: personTarget.catalog[0].targetId,
+      targetType: personTarget.catalog[0].targetType,
+      title: personTarget.catalog[0].title,
+      year: personTarget.catalog[0].year,
+      role: personTarget.role,
+      eventType: "kinostart_at",
+      date: "2026-08-21",
+      region: "AT",
+      platform: "-",
+      evidence: sources.map((source) => ({
+        sourceId: source.sourceId,
+        sourceDomain: source.domain,
+        url: `https://${source.domain}/person`,
+        retrievedAt: checkedAt,
+      })),
+    }],
+  };
+}
+
+async function runLiveFunctionBody(targetId, functionBody) {
   const calls = [];
   let radarCalled = false;
   const env = {
@@ -457,7 +490,7 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
     KD_MAIL_DOMAIN: "login.kinodreieck.at",
     KD_AI_FUNKTION: "ai-task",
     KD_ORIGIN: "https://staging.kinodreieck.at",
-    KD_RADAR_TARGET_ID: target.targetId,
+    KD_RADAR_TARGET_ID: targetId,
     [RADAR_WEBSEARCH_ONCE_ENV]: "keychain-budget-guard-v1",
   };
   const fetchImpl = async (url, options) => {
@@ -471,23 +504,28 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
     }
     if (String(url).endsWith("/functions/v1/radar-websearch-task")) {
       radarCalled = true;
-      assert.deepEqual(JSON.parse(options.body), { targetId: target.targetId });
-      return response({
-        ok: true,
-        status: "confirmed",
-        writes: 1,
-        providerRequests: 1,
-        searchRequests: 1,
-        phaseCode: "provider-complete",
-        reservationStatus: "reserved",
-        reservationUsdCent: 2.25,
-        reservationDecision: "accepted",
-      });
+      assert.deepEqual(JSON.parse(options.body), { targetId });
+      return response(functionBody);
     }
     throw new Error("unexpected-mock-url");
   };
   const output = [];
   const result = await runRadarWebsearchOnce({ env, fetchImpl, ausgabe: (line) => output.push(line) });
+  return { calls, output, result };
+}
+
+await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine andere KI-Probe", async () => {
+  const { calls, output, result } = await runLiveFunctionBody(target.targetId, {
+    ok: true,
+    status: "confirmed",
+    writes: 1,
+    providerRequests: 1,
+    searchRequests: 1,
+    phaseCode: "provider-complete",
+    reservationStatus: "reserved",
+    reservationUsdCent: 2.25,
+    reservationDecision: "accepted",
+  });
   const radarCalls = calls.filter((call) => call.url.endsWith("/functions/v1/radar-websearch-task"));
   assert.equal(result.status, "confirmed");
   assert.equal(radarCalls.length, 1);
@@ -496,6 +534,101 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
   assert.equal(calls.some((call) => call.options?.body?.includes?.("echo-struct")), false);
   assert.equal(output.length, 1);
   assert.equal(output[0].includes(target.targetId), false);
+});
+
+await check("Live-Einstieg akzeptiert die streng projizierte Personenantwort mit genau einem Providerrequest", async () => {
+  const personResult = confirmedPersonResult();
+  const { calls, output, result } = await runLiveFunctionBody(personTarget.targetId, {
+    ok: true,
+    status: "confirmed",
+    writes: 1,
+    providerRequests: 1,
+    searchRequests: 1,
+    phaseCode: "provider-complete",
+    reservationStatus: "reserved",
+    reservationUsdCent: 2.25,
+    reservationDecision: "accepted",
+    personResult,
+  });
+  const radarCalls = calls.filter((call) => call.url.endsWith("/functions/v1/radar-websearch-task"));
+  assert.deepEqual(result, {
+    status: "confirmed", providerRequests: 1, searchRequests: 1, writes: 1,
+  });
+  assert.equal(radarCalls.length, 1);
+  assert.equal(output.length, 1);
+  for (const privateValue of [
+    personTarget.targetId,
+    personTarget.personExternalId,
+    personTarget.canonicalName,
+    personResult.candidates[0].targetId,
+    personResult.candidates[0].title,
+    personResult.candidates[0].evidence[0].sourceId,
+    personResult.candidates[0].evidence[0].url,
+  ]) assert.equal(output[0].includes(privateValue), false);
+});
+
+await check("Personenantwort stoppt bei falscher Rolle, ID, Form oder unbekannten und rohen Zusatzfeldern", () => {
+  const responseMeta = { ok: true, status: 200 };
+  const personResult = confirmedPersonResult();
+  const base = {
+    ok: true,
+    status: "confirmed",
+    writes: 1,
+    providerRequests: 1,
+    searchRequests: 1,
+    phaseCode: "provider-complete",
+    reservationStatus: "reserved",
+    reservationUsdCent: 2.25,
+    reservationDecision: "accepted",
+    personResult,
+  };
+  const rawMarker = "raw-private-provider-text";
+  const invalidBodies = [
+    {
+      ...base,
+      personResult: {
+        ...personResult,
+        person: { ...personResult.person, role: "director" },
+      },
+    },
+    {
+      ...base,
+      personResult: {
+        ...personResult,
+        person: { ...personResult.person, personExternalId: "wikidata:Q47284" },
+      },
+    },
+    {
+      ...base,
+      personResult: { ...personResult, candidates: [] },
+    },
+    {
+      ...base,
+      personResult: {
+        ...personResult,
+        person: { ...personResult.person, technicalId: rawMarker },
+      },
+    },
+    {
+      ...base,
+      personResult: {
+        ...personResult,
+        candidates: [{
+          ...personResult.candidates[0],
+          evidence: [{ ...personResult.candidates[0].evidence[0], claim: rawMarker }],
+        }],
+      },
+    },
+    { ...base, unknownRootField: rawMarker },
+  ];
+  for (const invalidBody of invalidBodies) {
+    assert.throws(
+      () => validateFunctionResponse(responseMeta, invalidBody, personTarget.targetId),
+      (error) => error.exitCode === 74
+        && !error.message.includes(rawMarker)
+        && !error.message.includes(personTarget.personExternalId),
+    );
+  }
 });
 
 await check("Live-Fehlerabbildung nennt nur den stabil allowlisteten Phasencode", () => {
@@ -512,7 +645,7 @@ await check("Live-Fehlerabbildung nennt nur den stabil allowlisteten Phasencode"
   };
   assert.throws(
     () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "cost-reservation" }),
-    (error) => error.message.includes("Phase cost-reservation")
+    (error) => error.exitCode === 74 && error.message.includes("Phase cost-reservation")
       && !error.message.includes("secret") && !error.message.includes("stack"),
   );
   assert.throws(
@@ -528,6 +661,15 @@ await check("Live-Fehlerabbildung nennt nur den stabil allowlisteten Phasencode"
     () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "raw-private-secret" }),
     (error) => error.message.includes("Phase unknown")
       && !error.message.includes("raw-private-secret"),
+  );
+  assert.throws(
+    () => validateFunctionResponse(responseMeta, {
+      ...base,
+      phaseCode: "cost-reservation",
+      reservationStatus: "rejected",
+      reservationDecision: "server",
+    }),
+    (error) => error.exitCode === 74 && error.message.includes("(server, Phase cost-reservation)"),
   );
 });
 
