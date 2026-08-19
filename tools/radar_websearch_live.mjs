@@ -27,7 +27,8 @@ const RADAR_FUNCTION = "radar-websearch-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
 const TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
 const RESPONSE_KEYS = Object.freeze([
-  "ok", "phaseCode", "providerRequests", "searchRequests", "status", "writes",
+  "ok", "phaseCode", "providerRequests", "reservationDecision",
+  "reservationStatus", "reservationUsdCent", "searchRequests", "status", "writes",
 ]);
 const PHASE_CODES = new Set([
   "runtime-setup",
@@ -43,12 +44,25 @@ function validTarget(value) {
 
 export function validateFunctionResponse(response, body) {
   const phaseCode = PHASE_CODES.has(body?.phaseCode) ? body.phaseCode : "unknown";
+  const reservationDecision = ["limit", "disabled", "forbidden", "server"].includes(body?.reservationDecision)
+    ? body.reservationDecision : "unknown";
+  if (body?.reservationStatus === "rejected") {
+    throw new LiveSicherheitsStopp(
+      reservationDecision === "limit" ? "limit" : "unbekannt",
+      `Radar-Websearch-Reservierung wurde sicher abgelehnt (${reservationDecision}, Phase ${phaseCode}).`,
+    );
+  }
   if (!response?.ok || !body || typeof body !== "object" || Array.isArray(body)
       || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(RESPONSE_KEYS)
       || !PHASE_CODES.has(body.phaseCode)
       || body.ok !== true || body.status !== "confirmed" || body.writes !== 1
       || body.providerRequests !== 1 || body.searchRequests !== 1
-      || body.phaseCode !== "provider-complete") {
+      || body.phaseCode !== "provider-complete"
+      || body.reservationStatus !== "reserved"
+      || body.reservationDecision !== "accepted"
+      || typeof body.reservationUsdCent !== "number"
+      || !Number.isFinite(body.reservationUsdCent)
+      || body.reservationUsdCent <= 0 || body.reservationUsdCent > 5) {
     throw new LiveSicherheitsStopp(
       "unbekannt",
       `Radar-Websearch-Abnahme endete ohne bestaetigten Einzelwrite (HTTP ${response?.status ?? "?"}, Phase ${phaseCode}).`,

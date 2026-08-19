@@ -430,6 +430,7 @@ export function evaluatePersonRadarWebsearchResponse(envelope, requestInput, sou
       continue;
     }
     if (candidate.role !== request.role) errors.push("response-person-role-mismatch");
+    if (candidate.eventType === "staffelstart") errors.push("response-person-season-unsupported");
     if (candidate.eventDate < request.windowStart || candidate.eventDate > request.windowEnd) {
       errors.push("response-person-date-outside-window");
     }

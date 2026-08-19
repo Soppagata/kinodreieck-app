@@ -3,7 +3,6 @@ import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
-  applyPersonRadarCheckResult,
   createEmptyLocalRadar,
   decodeLocalRadar,
   queueAccountPersonRadarChange,
@@ -18,7 +17,7 @@ import {
   upsertGuestRadarSubscription,
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
-import { createCatalogRadarTarget, localRadarTargetLabel } from "../lib/entdeckenUi.js";
+import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
 import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import {
   createPersonRadarTargetId,
@@ -213,33 +212,6 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const personRadarCatalog = useMemo(() => {
-    const rows = [
-      ...(Array.isArray(master) ? master.map((entry) => ({
-        watchmodeId: entry.watchmode_id,
-        catalogId: entry.id,
-        title: entry.titel,
-        type: entry.typ,
-        year: Number(entry.jahr),
-      })) : []),
-      ...[...(streamingKnown?.titel || []), ...(streamingDiscover?.titel || [])].map((entry) => ({
-        watchmodeId: entry.watchmode_id,
-        title: entry.titel,
-        type: entry.typ,
-        year: Number(entry.jahr),
-      })),
-    ];
-    const byId = new Map();
-    for (const row of rows) {
-      const target = createCatalogRadarTarget(row);
-      if (!target || !Number.isInteger(row.year) || byId.has(target.targetId)) continue;
-      byId.set(target.targetId, Object.freeze({
-        targetId: target.targetId, targetType: target.targetType, title: target.title, year: row.year,
-      }));
-    }
-    return Object.freeze([...byId.values()]);
-  }, [master, streamingDiscover, streamingKnown]);
-
   const personRadarAvailable = radarAuthority === "guest"
     || (radarPilotClientEnabled && remoteKontoAktiv);
   const personRadarCheckAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
@@ -328,19 +300,18 @@ export function useEntdeckenRadarController({
     if (!serviceResult?.personResult) {
       return Object.freeze({ status: serviceResult?.status || "invalid_response", writes: 0 });
     }
-    let reason = "person-check-invalid";
-    const saved = await schreibeRadarState((previous) => {
-      const result = applyPersonRadarCheckResult(previous, {
-        identity: matches[0], response: serviceResult.personResult, catalog: personRadarCatalog,
-      });
-      reason = result.reason;
-      return result.ok ? result.state : null;
-    });
-    if (saved === false) {
-      return Object.freeze({ status: reason === "person-check-invalid" ? "invalid_response" : "storage_error", writes: 0 });
+    const synced = await syncRadarPilot(radarStateRef.current);
+    if (synced?.status !== "ready") {
+      return Object.freeze({ status: "storage_error", writes: 0 });
     }
-    return Object.freeze({ status: reason, writes: 1 });
-  }, [personRadarAdapter, personRadarCheckAvailable, personRadarCatalog, radarStateRef, schreibeRadarState]);
+    const visible = (synced.state?.personResults || []).find((entry) => (
+      entry.personExternalId === matches[0].personExternalId && entry.role === matches[0].role
+    ));
+    if (serviceResult.status === "confirmed" && !visible?.decisions?.length) {
+      return Object.freeze({ status: "storage_error", writes: 0 });
+    }
+    return Object.freeze({ status: serviceResult.status, writes: serviceResult.writes });
+  }, [personRadarAdapter, personRadarCheckAvailable, radarStateRef, syncRadarPilot]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {

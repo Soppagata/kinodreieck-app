@@ -17,10 +17,31 @@ function plain(value) { return !!value && typeof value === "object" && !Array.is
 function exactResult(value, expectedPerson = null) {
   const allowed = [
     "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
+    "reservationStatus", "reservationUsdCent", "reservationDecision",
   ];
   if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
       || !Number.isInteger(value.writes) || value.writes < 0) return null;
+  const reservationKeys = ["reservationStatus", "reservationUsdCent", "reservationDecision"];
+  const reservationCount = reservationKeys.filter((key) => value[key] !== undefined).length;
+  if (reservationCount !== 0 && reservationCount !== reservationKeys.length) return null;
+  if (reservationCount === reservationKeys.length) {
+    const statuses = ["not-started", "reserved", "rejected", "unknown"];
+    const decisions = ["not-started", "accepted", "limit", "disabled", "forbidden", "server", "unknown"];
+    if (!statuses.includes(value.reservationStatus) || !decisions.includes(value.reservationDecision)
+        || (value.reservationUsdCent !== null
+          && (typeof value.reservationUsdCent !== "number" || !Number.isFinite(value.reservationUsdCent)
+            || value.reservationUsdCent <= 0 || value.reservationUsdCent > 5))
+        || (value.reservationStatus === "not-started"
+          && (value.reservationDecision !== "not-started" || value.reservationUsdCent !== null))
+        || (value.reservationStatus === "reserved"
+          && (value.reservationDecision !== "accepted" || value.reservationUsdCent === null))
+        || (value.reservationStatus === "rejected"
+          && (!["limit", "disabled", "forbidden", "server", "unknown"].includes(value.reservationDecision)
+            || value.reservationUsdCent !== null))
+        || (value.reservationStatus === "unknown"
+          && (value.reservationDecision !== "unknown" || value.reservationUsdCent !== null))) return null;
+  }
   if (!expectedPerson) {
     if (value.personResult !== undefined) return null;
     return Object.freeze({ status: value.status, writes: value.writes });
@@ -29,7 +50,7 @@ function exactResult(value, expectedPerson = null) {
   if (!plain(result) || !validatePersonIdentity(result.person).ok
       || result.person.personExternalId !== expectedPerson.personExternalId
       || result.person.name !== expectedPerson.name || result.person.role !== expectedPerson.role
-      || result.status !== value.status || value.writes !== 0) return null;
+      || result.status !== value.status || value.writes > 3) return null;
   return Object.freeze({ status: value.status, writes: value.writes, personResult: result });
 }
 

@@ -187,12 +187,25 @@ await check("Schauspiel-Person läuft einmal durch denselben Runner und erzeugt 
     accountId: "max-account", targetId: personTarget.targetId, adapter, repository: repo,
   });
   assert.equal(result.status, "confirmed");
-  assert.equal(result.writes, 0);
+  assert.equal(result.writes, 1);
   assert.equal(adapter.calls.length, 1);
-  assert.equal(repo.events.size, 0);
+  assert.equal(repo.events.size, 1);
   assert.equal(result.personResult.candidates[0].targetId, "watchmode:101");
   assert.equal(result.personResult.candidates[0].date, "2026-08-21");
   assert.equal(result.personResult.candidates[0].evidence.length, 2);
+  assert.equal(result.feed.events.length, 0);
+  assert.equal(result.feed.personResults[0].person.role, "actor");
+  assert.equal(result.feed.personResults[0].candidates[0].title, "Dream Scenario");
+
+  const repeated = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: personTarget.targetId,
+    adapter: createRadarWebsearchMockAdapter(personEnvelope()), repository: repo,
+  });
+  assert.equal(repeated.status, "no_change");
+  assert.equal(repeated.writes, 0);
+  assert.equal(repeated.personResult.candidates.length, 0);
+  assert.equal(repo.events.size, 1);
+  assert.equal(repeated.feed.personResults[0].candidates.length, 1);
 });
 
 await check("Regie bleibt ein eigener eindeutiger Rollenvertrag", async () => {
@@ -418,7 +431,10 @@ await check("Browserdienst nutzt auch für Personen nur denselben opaken targetI
     getAccessToken: async () => "session-token",
     fetchImpl: async (_url, options) => {
       calls.push(options);
-      return { ok: true, status: 200, async json() { return { ok: true, status: "no_change", writes: 0, personResult }; } };
+      return { ok: true, status: 200, async json() { return {
+        ok: true, status: "no_change", writes: 0, personResult,
+        reservationStatus: "reserved", reservationUsdCent: 2.25, reservationDecision: "accepted",
+      }; } };
     },
   });
   const result = await service.checkPersonNow({
@@ -462,6 +478,7 @@ await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", asyn
 });
 
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
+const personCandidateMigration = fs.readFileSync("./supabase/migrations/20260819220000_radar_person_server_candidate.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");
 const personSliceDoc = fs.readFileSync("./docs/zukunft/PERSONEN_RADAR_LOCAL_SLICE_2026-08-19.md", "utf8");
@@ -477,10 +494,16 @@ await check("Vorhandene Werk-Migration bleibt additiv auf Radar-Tabellen und ser
   assert.doesNotMatch(migration, /radar_provider_aktiv\s*=|radar_scheduler_aktiv\s*=|cron\.|pg_cron/i);
 });
 
-await check("Personen-Remote-Kandidatenmigration ist ausdrücklich nicht Teil dieses lokalen Slices", () => {
-  assert.match(personSliceDoc, /Remote-Kandidatenmigration \*\*NICHT GEBAUT\*\*/);
-  assert.match(personSliceDoc, /keine zweite Tabelle, Queue, Prüfschleife/);
-  assert.match(personSliceDoc, /weder angelegt noch angewendet/);
+await check("Personen-Serverkandidat bleibt lokal, additiv und auf vorhandene Radar-Primitiven begrenzt", () => {
+  assert.match(personSliceDoc, /\*\*NICHT REMOTE ANGEWANDT\*\*/);
+  assert.match(personSliceDoc, /keine neue Tabelle/);
+  assert.match(personSliceDoc, /Target-, Event-, Versions-, Evidence- und Operations-Primitiven/);
+  assert.doesNotMatch(personCandidateMigration, /create\s+table/i);
+  assert.match(personCandidateMigration, /add column person_external_id text/);
+  assert.match(personCandidateMigration, /add column person_role text/);
+  assert.match(personCandidateMigration, /kd_radar_websearch_upsert_person_event/);
+  assert.match(personCandidateMigration, /kd-radar-pilot-feed-v2/);
+  assert.doesNotMatch(personCandidateMigration.replace(/--[^\n]*/g, ""), /\bcron\.|pg_cron|scheduler|\branking\b/i);
 });
 
 await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {

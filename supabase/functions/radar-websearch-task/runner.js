@@ -74,7 +74,7 @@ export async function runRadarWebsearchCheck({
     });
   }
   const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
-  if (request.kind === "person") {
+  if (request.kind === "person" && evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
       writes: 0,
@@ -93,11 +93,36 @@ export async function runRadarWebsearchCheck({
   let writes = 0;
   let changed = false;
   try {
-    for (const event of evaluated.events) {
+    const events = request.kind === "person"
+      ? evaluated.personResult.candidates.map((candidate) => ({
+        targetKey: candidate.targetId,
+        targetType: candidate.targetType,
+        title: candidate.title,
+        year: candidate.year,
+        eventType: candidate.eventType,
+        date: candidate.date,
+        region: candidate.region,
+        platform: candidate.platform,
+        seasonNumber: null,
+        evidence: candidate.evidence,
+      }))
+      : evaluated.events;
+    for (const event of events) {
       const upsert = await repository.upsertConfirmedEvent({
         accountId,
         operationId: operationId(event),
         event,
+        ...(request.kind === "person" ? {
+          personContext: {
+            targetId: request.targetId,
+            personExternalId: request.personExternalId,
+            canonicalName: request.canonicalName,
+            role: request.role,
+            checkedAt: evaluated.personResult.checkedAt,
+            windowStart: request.windowStart,
+            windowEnd: request.windowEnd,
+          },
+        } : {}),
       });
       if (upsert?.status === "confirmed") {
         writes += 1;
@@ -108,6 +133,24 @@ export async function runRadarWebsearchCheck({
     }
   } catch {
     return frozenResult({ status: "storage_error", writes, feed: null });
+  }
+  if (request.kind === "person") {
+    const personResult = changed
+      ? evaluated.personResult
+      : {
+        status: "no_change",
+        checkedAt: evaluated.personResult.checkedAt,
+        windowStart: request.windowStart,
+        windowEnd: request.windowEnd,
+        person: evaluated.personResult.person,
+        candidates: [],
+      };
+    return frozenResult({
+      status: changed ? "confirmed" : "no_change",
+      writes,
+      feed: await loadFeedSafely(repository, accountId),
+      personResult,
+    });
   }
   return frozenResult({
     status: changed ? "confirmed" : "no_change",

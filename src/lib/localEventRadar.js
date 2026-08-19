@@ -22,6 +22,7 @@ import {
   validateRadarTarget,
 } from "./radarContracts.js";
 import {
+  projectRadarPilotPersonResult,
   validateRadarPilotEvent,
   validateRadarPilotFeed,
   validateRadarPilotImportPayload,
@@ -1291,7 +1292,11 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     updatedAt: normalizedInstant(entry.updatedAt),
   })).sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)));
   const activePersonKeys = new Set(next.personSubscriptions.map((entry) => createPersonIdentityKey(entry)));
-  next.personResults = next.personResults.filter((entry) => activePersonKeys.has(createPersonIdentityKey(entry)));
+  next.personResults = Array.isArray(feed.personResults)
+    ? feed.personResults.map((entry) => projectRadarPilotPersonResult(entry, feed.subscriptions))
+      .filter(Boolean)
+      .sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)))
+    : next.personResults.filter((entry) => activePersonKeys.has(createPersonIdentityKey(entry)));
   next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
   const priorPilotVersions = new Set(next.pilot.events.map((entry) => entry.eventVersionId));
   const eventsByVersion = new Map(feed.events.map((entry) => [entry.eventVersionId, entry]));

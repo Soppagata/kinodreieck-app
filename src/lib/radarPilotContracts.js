@@ -8,8 +8,10 @@ import {
   RADAR_VERIFICATION_STATUSES,
 } from "./radarContracts.js";
 import { createPersonRadarTargetId, PERSON_RADAR_ROLES } from "./personRadarCatalog.js";
+import { validatePersonRadarCheckResult } from "./personDiscoveryContracts.js";
 
-export const RADAR_PILOT_FEED_FORMAT = "kd-radar-pilot-feed-v1";
+export const RADAR_PILOT_FEED_FORMAT = "kd-radar-pilot-feed-v2";
+export const RADAR_PILOT_LEGACY_FEED_FORMAT = "kd-radar-pilot-feed-v1";
 export const RADAR_PILOT_SUBSCRIPTION_ACK_KEYS = Object.freeze([
   "operationId", "targetId", "status", "revision", "checksum",
 ]);
@@ -24,6 +26,9 @@ export const RADAR_PILOT_IMPORT_RESULT_KEYS = Object.freeze([
 export const RADAR_PILOT_FEED_KEYS = Object.freeze([
   "format", "revision", "checksum", "reconciledAt", "subscriptions", "events",
   "receipts", "operationAcks", "radarReview",
+]);
+export const RADAR_PILOT_FEED_V2_KEYS = Object.freeze([
+  ...RADAR_PILOT_FEED_KEYS, "personResults",
 ]);
 export const RADAR_PILOT_SUBSCRIPTION_KEYS = Object.freeze([
   "targetId", "targetType", "title", "region", "scope", "status", "updatedAt",
@@ -298,10 +303,63 @@ function validateReceipt(value) {
   return errors;
 }
 
+export function projectRadarPilotPersonResult(value, subscriptions = []) {
+  const keys = [
+    "targetId", "status", "checkedAt", "windowStart", "windowEnd", "person", "candidates",
+  ];
+  if (!exactKeys(value, keys) || value.status !== "confirmed"
+      || !Array.isArray(value.candidates) || value.candidates.length < 1) return null;
+  const matching = (Array.isArray(subscriptions) ? subscriptions : []).filter((entry) => (
+    entry?.targetType === "person" && entry.status === "active"
+      && entry.targetId === value.targetId
+      && entry.personExternalId === value.person?.personExternalId
+      && entry.personRole === value.person?.role
+      && entry.title === value.person?.name
+      && createPersonRadarTargetId(entry.personExternalId, entry.personRole) === entry.targetId
+  ));
+  if (matching.length !== 1) return null;
+  const catalog = value.candidates.map((candidate) => ({
+    targetId: candidate?.targetId,
+    targetType: candidate?.targetType,
+    title: candidate?.title,
+    year: candidate?.year,
+  }));
+  const checked = validatePersonRadarCheckResult({
+    status: value.status,
+    checkedAt: value.checkedAt,
+    windowStart: value.windowStart,
+    windowEnd: value.windowEnd,
+    person: value.person,
+    candidates: value.candidates,
+  }, {
+    identity: {
+      personExternalId: matching[0].personExternalId,
+      name: matching[0].title,
+      role: matching[0].personRole,
+      canonical: true,
+    },
+    catalog,
+  });
+  if (!checked.ok) return null;
+  return freezeDeep({
+    personExternalId: checked.result.person.personExternalId,
+    name: checked.result.person.name,
+    role: checked.result.person.role,
+    status: checked.result.status,
+    checkedAt: checked.result.checkedAt,
+    windowStart: checked.result.windowStart,
+    windowEnd: checked.result.windowEnd,
+    decisions: checked.result.decisions.map((entry) => ({ ...entry })),
+  });
+}
+
 export function validateRadarPilotFeed(value) {
-  if (!exactKeys(value, RADAR_PILOT_FEED_KEYS)) return result(["feed-shape-invalid"]);
+  const v2 = value?.format === RADAR_PILOT_FEED_FORMAT;
+  const v1 = value?.format === RADAR_PILOT_LEGACY_FEED_FORMAT;
+  if ((!v2 && !v1) || !exactKeys(value, v2 ? RADAR_PILOT_FEED_V2_KEYS : RADAR_PILOT_FEED_KEYS)) {
+    return result(["feed-shape-invalid"]);
+  }
   const errors = [];
-  if (value.format !== RADAR_PILOT_FEED_FORMAT) errors.push("feed-format-invalid");
   if (!Number.isInteger(value.revision) || value.revision < 0) errors.push("feed-revision-invalid");
   if (!validChecksum(value.revision, value.checksum)) errors.push("feed-checksum-invalid");
   if (!validInstant(value.reconciledAt)) errors.push("feed-time-invalid");
@@ -344,6 +402,19 @@ export function validateRadarPilotFeed(value) {
       const id = text(entry?.operationId);
       if (seen.has(id)) errors.push("feed-operation-ack-duplicate");
       seen.add(id);
+    }
+  }
+  if (v2) {
+    if (!Array.isArray(value.personResults)) errors.push("feed-person-results-invalid");
+    else {
+      const seen = new Set();
+      for (const entry of value.personResults) {
+        const projected = projectRadarPilotPersonResult(entry, value.subscriptions);
+        if (!projected) errors.push("feed-person-result-invalid");
+        const id = text(entry?.targetId);
+        if (seen.has(id)) errors.push("feed-person-result-duplicate");
+        seen.add(id);
+      }
     }
   }
   return result(errors);

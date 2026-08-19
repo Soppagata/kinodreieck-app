@@ -88,7 +88,13 @@ function safePhaseCode(value: unknown): string {
     : "runtime-setup";
 }
 
-function rpcEvent(event: Record<string, unknown>) {
+function safeReservationDecision(value: unknown): string {
+  return ["limit", "disabled", "forbidden", "server"].includes(String(value))
+    ? String(value)
+    : "unknown";
+}
+
+function rpcEvent(event: Record<string, unknown>, personContext: Record<string, unknown> | null = null) {
   return {
     targetKey: event.targetKey,
     eventType: event.eventType,
@@ -101,6 +107,18 @@ function rpcEvent(event: Record<string, unknown>) {
       url: entry.url,
       retrievedAt: entry.retrievedAt,
     })) : [],
+    ...(personContext ? {
+      personTargetKey: personContext.targetId,
+      personExternalId: personContext.personExternalId,
+      personRole: personContext.role,
+      personName: personContext.canonicalName,
+      workTargetType: event.targetType,
+      workTitle: event.title,
+      workYear: event.year,
+      checkedAt: personContext.checkedAt,
+      windowStart: personContext.windowStart,
+      windowEnd: personContext.windowEnd,
+    } : {}),
   };
 }
 
@@ -168,14 +186,18 @@ export function createRadarWebsearchHandler({
       async resolveSources() {
         return await loadSources();
       },
-      async upsertConfirmedEvent({ accountId: actor, operationId, event }: {
+      async upsertConfirmedEvent({ accountId: actor, operationId, event, personContext = null }: {
         accountId: string; operationId: string; event: Record<string, unknown>;
+        personContext?: Record<string, unknown> | null;
       }) {
-        const { data, error } = await admin.rpc("kd_radar_websearch_upsert_event", {
+        const { data, error } = await admin.rpc(
+          personContext ? "kd_radar_websearch_upsert_person_event" : "kd_radar_websearch_upsert_event",
+          {
           p_account_id: actor,
           p_operation_id: operationId,
-          p_payload: rpcEvent(event),
-        });
+          p_payload: rpcEvent(event, personContext),
+          },
+        );
         if (error) throw error;
         return data;
       },
@@ -250,7 +272,11 @@ export function createRadarWebsearchHandler({
           p_search_requests: searchRequests,
         });
         if (error) throw error;
-        return { ok: data?.ok === true, logId: data?.log_id };
+        return {
+          ok: data?.ok === true,
+          logId: data?.log_id,
+          decision: data?.ok === true ? "accepted" : safeReservationDecision(data?.code),
+        };
       },
       async settleCost({
         logId, status, model, inputTokens, outputTokens, costUsdCent, errorClass,
@@ -281,6 +307,10 @@ export function createRadarWebsearchHandler({
       providerRequests: telemetry.providerRequests || 0,
       searchRequests: telemetry.searchRequests || 0,
       phaseCode: safePhaseCode(telemetry.phaseCode),
+      reservationStatus: telemetry.reservationStatus || "unknown",
+      reservationUsdCent: typeof telemetry.reservationUsdCent === "number"
+        ? telemetry.reservationUsdCent : null,
+      reservationDecision: telemetry.reservationDecision || "unknown",
       ...(result.personResult ? { personResult: result.personResult } : {}),
     }, httpStatus, origin);
   };

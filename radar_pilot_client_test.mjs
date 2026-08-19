@@ -69,6 +69,27 @@ const personSubscription = (extra = {}) => ({
   targetId: personTargetId, targetType: "person", title: "Nicolas Cage", region: "AT", scope: "all",
   status: "active", updatedAt: instant, personExternalId: "wikidata:Q42869", personRole: "actor", ...extra,
 });
+const personResult = (extra = {}) => ({
+  targetId: personTargetId,
+  status: "confirmed",
+  checkedAt: later,
+  windowStart: "2026-08-14",
+  windowEnd: "2026-08-20",
+  person: personIdentity,
+  candidates: [{
+    targetId: "catalog:dream-scenario-2023",
+    targetType: "work",
+    title: "Dream Scenario",
+    year: 2023,
+    role: "actor",
+    eventType: "kinostart_at",
+    date: "2026-08-20",
+    region: "AT",
+    platform: "-",
+    evidence: buildEvidence(),
+  }],
+  ...extra,
+});
 const importPayload = (extra = {}) => ({
   targetKey: targetId, eventType: "kinostart_at", date: "2026-08-20", region: "AT", platform: "-",
   evidence: [
@@ -288,6 +309,30 @@ await check("Personen-Feed nutzt denselben Vertrag und projiziert Name plus Roll
   assert.deepEqual(reconciled.state.personSubscriptions.map(({ name, role }) => ({ name, role })), [
     { name: "Nicolas Cage", role: "actor" },
   ]);
+});
+
+await check("Feed v2 validiert den Serverfund und behaelt ihn nach lokalem Reload ohne Werk-Abo", () => {
+  const payload = feed({
+    format: "kd-radar-pilot-feed-v2",
+    subscriptions: [personSubscription()],
+    events: [],
+    personResults: [personResult()],
+  });
+  assert.equal(C.validateRadarPilotFeed(payload).ok, true);
+  const reconciled = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }), payload,
+  );
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.subscriptions.length, 0);
+  assert.equal(reconciled.state.personResults.length, 1);
+  assert.equal(reconciled.state.personResults[0].name, "Nicolas Cage");
+  assert.equal(reconciled.state.personResults[0].role, "actor");
+  assert.equal(reconciled.state.personResults[0].decisions[0].work.title, "Dream Scenario");
+  const reloaded = R.decodeLocalRadar(JSON.stringify(reconciled.state), { authority: "account-cache" });
+  assert.equal(reloaded.ok, true);
+  assert.equal(reloaded.state.personResults[0].name, "Nicolas Cage");
+  assert.equal(reloaded.state.personResults[0].decisions[0].work.title, "Dream Scenario");
+  assert.equal(reloaded.state.subscriptions.length, 0);
 });
 
 function queuedAccountState() {

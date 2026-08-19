@@ -15,6 +15,12 @@ export const RADAR_WEBSEARCH_PHASE_CODES = Object.freeze([
   "provider-request",
   "provider-complete",
 ]);
+export const RADAR_WEBSEARCH_RESERVATION_STATUSES = Object.freeze([
+  "not-started", "reserved", "rejected", "unknown",
+]);
+export const RADAR_WEBSEARCH_RESERVATION_DECISIONS = Object.freeze([
+  "not-started", "accepted", "limit", "disabled", "forbidden", "server", "unknown",
+]);
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -50,6 +56,9 @@ function text(value) {
 }
 function finitePositive(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+function safeReservationDecision(value) {
+  return ["limit", "disabled", "forbidden", "server"].includes(value) ? value : "unknown";
 }
 function validDomain(value) {
   return typeof value === "string" && value === value.toLowerCase()
@@ -387,7 +396,7 @@ async function responseJson(response) {
  * @param {{
  *   apiKey?: string,
  *   loadSetup?: (() => Promise<unknown>) | null,
- *   reserveCost?: ((input: {targetId: string, operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
+ *   reserveCost?: ((input: {targetId: string, operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown, decision?: unknown}>) | null,
  *   settleCost?: ((input: Record<string, unknown>) => Promise<void>) | null,
  *   fetchImpl?: typeof fetch,
  *   now?: () => string,
@@ -410,6 +419,9 @@ export function createAnthropicRadarWebsearchAdapter({
     resultCount: 0,
     costUsdCent: null,
     phaseCode: "runtime-setup",
+    reservationStatus: "not-started",
+    reservationUsdCent: null,
+    reservationDecision: "not-started",
   };
   async function search(request) {
     if (used) throw new RadarWebsearchProviderError("already-used");
@@ -423,17 +435,33 @@ export function createAnthropicRadarWebsearchAdapter({
     const reservationUsdCent = estimateRadarWebsearchReservation(body, setup);
     telemetry.phaseCode = "cost-reservation";
     const providerOperationId = operationId();
-    const reservation = await reserveCost({
-      targetId: request.targetId,
-      operationId: providerOperationId,
-      reservationUsdCent,
-      searchRequests: 1,
-    });
+    let reservation;
+    try {
+      reservation = await reserveCost({
+        targetId: request.targetId,
+        operationId: providerOperationId,
+        reservationUsdCent,
+        searchRequests: 1,
+      });
+    } catch {
+      telemetry.reservationStatus = "unknown";
+      telemetry.reservationDecision = "unknown";
+      throw new RadarWebsearchProviderError("cost-gate-rejected");
+    }
     const logId = Number(reservation?.logId);
-    if (reservation?.ok !== true) throw new RadarWebsearchProviderError("cost-gate-rejected");
+    if (reservation?.ok !== true) {
+      telemetry.reservationStatus = "rejected";
+      telemetry.reservationDecision = safeReservationDecision(reservation?.decision);
+      throw new RadarWebsearchProviderError("cost-gate-rejected");
+    }
     if (!Number.isInteger(logId) || logId <= 0) {
+      telemetry.reservationStatus = "unknown";
+      telemetry.reservationDecision = "unknown";
       throw new RadarWebsearchProviderError("cost-log-invalid");
     }
+    telemetry.reservationStatus = "reserved";
+    telemetry.reservationUsdCent = reservationUsdCent;
+    telemetry.reservationDecision = "accepted";
     telemetry.phaseCode = "provider-request";
 
     let usage = null;

@@ -54,6 +54,22 @@ const target = Object.freeze({
   region: "AT",
   scopes: ["cinema", "streaming"],
 });
+const personTarget = Object.freeze({
+  kind: "person",
+  targetId: "person:wikidata:Q42869:actor",
+  personExternalId: "wikidata:Q42869",
+  canonicalName: "Nicolas Cage",
+  role: "actor",
+  region: "AT",
+  windowStart: "2026-08-18",
+  windowEnd: "2026-08-24",
+  catalog: Object.freeze([Object.freeze({
+    targetId: "catalog:dream-scenario-2023",
+    targetType: "work",
+    title: "Dream Scenario",
+    year: 2023,
+  })]),
+});
 const sources = Object.freeze([
   Object.freeze({
     sourceId: "news-a",
@@ -106,6 +122,7 @@ function evidence(source, path = "start") {
 function providerMessage({
   status = "confirmed",
   events = null,
+  candidates,
   resultUrls = [evidence(sources[0]).url, evidence(sources[1]).url],
   citationUrls = null,
   usageSearch = 1,
@@ -142,7 +159,9 @@ function providerMessage({
     content: [
       { type: "server_tool_use", id: "srvtoolu_mock", name: "web_search", input: { query: "global" } },
       { type: "web_search_tool_result", tool_use_id: "srvtoolu_mock", content: toolContent },
-      { type: "text", text: JSON.stringify({ status, events: eventList }), citations },
+      { type: "text", text: JSON.stringify(candidates === undefined
+        ? { status, events: eventList }
+        : { status, candidates }), citations },
     ],
     usage: {
       input_tokens: 100,
@@ -217,6 +236,9 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
     "runtime-setup", "cost-reservation", "provider-request", "provider-complete",
   ]);
   assert.equal(harness.adapter.telemetry().phaseCode, "provider-complete");
+  assert.equal(harness.adapter.telemetry().reservationStatus, "reserved");
+  assert.equal(harness.adapter.telemetry().reservationDecision, "accepted");
+  assert.equal(harness.adapter.telemetry().reservationUsdCent, harness.reserveCalls[0].reservationUsdCent);
   assert.ok(harness.reserveCalls[0].reservationUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
   assert.ok(harness.settleCalls[0].costUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
 
@@ -233,6 +255,54 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
     assert.equal(harness.fetchCalls[0].options.body.includes(forbidden), false);
   }
   assert.equal("output_config" in sent, false);
+});
+
+await check("Personenpfad verbindet starke ID und Rolle mit messbarer Reservierung, genau einem Provider-Mock, Upsert und Feed", async () => {
+  const candidates = [{
+    targetId: personTarget.catalog[0].targetId,
+    targetType: personTarget.catalog[0].targetType,
+    title: personTarget.catalog[0].title,
+    year: personTarget.catalog[0].year,
+    role: personTarget.role,
+    eventType: "kinostart_at",
+    eventDate: "2026-08-21",
+    region: "AT",
+    platform: "-",
+    evidence: [evidence(sources[0], "person"), evidence(sources[1], "person")],
+  }];
+  const resultUrls = candidates[0].evidence.map((entry) => entry.url);
+  const harness = adapterHarness({
+    providerBody: providerMessage({ candidates, resultUrls, citationUrls: resultUrls }),
+  });
+  const repository = createRadarWebsearchMemoryRepository({ target: personTarget, sources });
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account",
+    targetId: personTarget.targetId,
+    adapter: harness.adapter,
+    repository,
+    operationId: () => "72000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 1);
+  assert.equal(harness.reserveCalls.length, 1);
+  assert.equal(harness.fetchCalls.length, 1);
+  assert.equal(harness.settleCalls.length, 1);
+  assert.equal(harness.adapter.telemetry().reservationStatus, "reserved");
+  assert.equal(harness.adapter.telemetry().reservationDecision, "accepted");
+  assert.equal(harness.adapter.telemetry().reservationUsdCent, harness.reserveCalls[0].reservationUsdCent);
+  assert.ok(harness.adapter.telemetry().reservationUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
+  assert.equal(repository.events.size, 1);
+  assert.equal(result.feed.personResults.length, 1);
+  assert.equal(result.feed.personResults[0].person.personExternalId, personTarget.personExternalId);
+  assert.equal(result.feed.personResults[0].person.role, "actor");
+  assert.equal(result.feed.personResults[0].candidates[0].title, "Dream Scenario");
+
+  const sent = JSON.parse(harness.fetchCalls[0].options.body);
+  const providerInput = JSON.parse(sent.messages[0].content);
+  assert.equal(providerInput.personExternalId, personTarget.personExternalId);
+  assert.equal(providerInput.role, personTarget.role);
+  assert.equal("accountId" in providerInput, false);
+  assert.equal("targetId" in providerInput, false);
 });
 
 await check("Insufficient und no_change bleiben kleine terminale Antworten ohne Write", async () => {
@@ -335,15 +405,20 @@ await check("Radar-, Provider-, Scheduler-, Allowlist- und lokale Kostengates st
 });
 
 await check("Atomare Kostenablehnung und unbrauchbare Log-ID stoppen vor dem Provider", async () => {
-  const rejected = adapterHarness({ reserveResult: { ok: false, logId: null } });
+  const rejected = adapterHarness({ reserveResult: { ok: false, logId: null, decision: "limit" } });
   await expectProviderError(rejected.adapter.search(target), "cost-gate-rejected");
   assert.equal(rejected.adapter.telemetry().phaseCode, "cost-reservation");
+  assert.equal(rejected.adapter.telemetry().reservationStatus, "rejected");
+  assert.equal(rejected.adapter.telemetry().reservationDecision, "limit");
+  assert.equal(rejected.adapter.telemetry().reservationUsdCent, null);
   assert.equal(rejected.fetchCalls.length, 0);
   assert.equal(rejected.settleCalls.length, 0);
 
   const badLog = adapterHarness({ reserveResult: { ok: true, logId: 0 } });
   await expectProviderError(badLog.adapter.search(target), "cost-log-invalid");
   assert.equal(badLog.adapter.telemetry().phaseCode, "cost-reservation");
+  assert.equal(badLog.adapter.telemetry().reservationStatus, "unknown");
+  assert.equal(badLog.adapter.telemetry().reservationDecision, "unknown");
   assert.equal(badLog.fetchCalls.length, 0);
   assert.equal(badLog.settleCalls.length, 0);
 });
@@ -404,6 +479,9 @@ await check("Live-Einstieg ruft genau die Radar-Function auf und startet keine a
         providerRequests: 1,
         searchRequests: 1,
         phaseCode: "provider-complete",
+        reservationStatus: "reserved",
+        reservationUsdCent: 2.25,
+        reservationDecision: "accepted",
       });
     }
     throw new Error("unexpected-mock-url");
@@ -428,11 +506,23 @@ await check("Live-Fehlerabbildung nennt nur den stabil allowlisteten Phasencode"
     writes: 0,
     providerRequests: 0,
     searchRequests: 0,
+    reservationStatus: "not-started",
+    reservationUsdCent: null,
+    reservationDecision: "not-started",
   };
   assert.throws(
     () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "cost-reservation" }),
     (error) => error.message.includes("Phase cost-reservation")
       && !error.message.includes("secret") && !error.message.includes("stack"),
+  );
+  assert.throws(
+    () => validateFunctionResponse(responseMeta, {
+      ...base,
+      phaseCode: "cost-reservation",
+      reservationStatus: "rejected",
+      reservationDecision: "limit",
+    }),
+    (error) => error.exitCode === 75 && error.message.includes("(limit, Phase cost-reservation)"),
   );
   assert.throws(
     () => validateFunctionResponse(responseMeta, { ...base, phaseCode: "raw-private-secret" }),
