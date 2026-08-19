@@ -114,6 +114,7 @@ check("Unbekannte, degradierte und Gastrollen fallen geschlossen aus",
 let cacheRufe = 0;
 let technikRefreshRufe = 0;
 let recoveryRufe = 0;
+let verbindungRufe = 0;
 const basisProps = {
   master: [], masterMeta: null, masterHerkunft: null, nachtragCount: 0,
   exportMaster: () => {}, importMaster: () => {},
@@ -121,7 +122,7 @@ const basisProps = {
   programm: { stand: "2026-08-18T10:00:00Z", filme: [], status: {} },
   clearProgrammCache: () => { cacheRufe += 1; },
   startWahl: "clean", demoAktiv: false, onStartWahl: () => {},
-  katalogVerbunden: true, onKatalogVerbinden: () => {},
+  katalogVerbunden: true, onKatalogVerbinden: () => { verbindungRufe += 1; },
   onKatalogRefresh: () => { recoveryRufe += 1; },
   onTechnikKatalogRefresh: () => { technikRefreshRufe += 1; },
   programmInfo: { art: "remote", variante: "live", stand: "2026-08-18T10:00:00Z" },
@@ -184,20 +185,24 @@ check("Member mit Owner-Namen sieht keine Technik oder Supportdaten", keineTechn
 check("Kontolöschung bleibt als eigener Kontoweg erreichbar", !!summary("Konto löschen"));
 
 await render({
-  kontoModus: true, kontoAktiv: true, katalogVerbunden: false,
+  kontoModus: false, kontoAktiv: false, katalogVerbunden: false,
   programmInfo: { fehler: true }, einzeldatei: false, ownerTechnikBestaetigt: false,
 });
-check("Ein echter Verbindungsfehler zeigt nur den begrenzten Recoveryweg",
-  summary("Verbindung wiederherstellen") && button("Katalog neu laden") && keineTechnik());
+check("Ein Gast mit Verbindungsfehler sieht nur den begrenzten Recoveryweg",
+  summary("Verbindung wiederherstellen") && button("Datenbankzugang prüfen")
+    && button("Katalog neu laden") && keineTechnik());
 await act(async () => { button("Katalog neu laden").click(); });
-check("Der Recoveryweg erreicht ausschließlich seinen begrenzten Handler", recoveryRufe === 1);
+check("Der Gast-Recoveryweg erreicht ausschließlich seinen begrenzten Handler", recoveryRufe === 1);
 
 await render({
   kontoModus: false, kontoAktiv: false, katalogVerbunden: false,
   programmInfo: { fehler: true }, einzeldatei: true, ownerTechnikBestaetigt: false,
 });
-check("Single File behauptet keine Verbindung und rendert keine technische Bedienfläche",
-  !summary("Verbindung wiederherstellen") && keineTechnik());
+check("Single File behält bei gestörtem Katalog eine verständliche Recovery-Aktion ohne Ownertechnik",
+  summary("Verbindung wiederherstellen") && button("Online-Katalog verbinden")
+    && button("Katalog neu laden") && keineTechnik());
+await act(async () => { button("Online-Katalog verbinden").click(); });
+check("Die Single-File-Recovery-Aktion erreicht nur den Verbindungsdialog-Handler", verbindungRufe === 1);
 
 const diagnoseZeit = new Date(Date.now() - 1000).toISOString();
 localStorage.setItem("kd:local-diagnostics:v1", JSON.stringify({

@@ -89,12 +89,12 @@ export function DatenTab({
        eines Datenbankstands, den es hier nicht gibt. */
     : programmInfo.art === "manuell" ? { ok: true, text: "manuell eingespielt" }
     : { ok: true, text: "aktuell geladen" };
-  const verbindungBrauchtHilfe = !einzeldatei && (!katalogVerbunden
+  const verbindungBrauchtHilfe = !katalogVerbunden
     || programmInfo?.code === ERROR_CODES.INVALID_KEY
     || programmInfo?.anmeldungNoetig === true
     || !!programmInfo?.fehler
     || programmInfo?.abgelaufen === true
-    || programmInfo?.ausCache === true);
+    || programmInfo?.ausCache === true;
   const h2 = { fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "0 0 8px" };
   const mono = { fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch };
   const kasten = { background: T.saalHoch, borderRadius: 6, padding: "16px 18px" };
@@ -197,8 +197,8 @@ export function DatenTab({
 
       {/* Betriebsdetails existieren nur für die frisch serverbestätigte
           Ownerrolle. Die frühere Demo-Löschfläche wird nicht mehr projiziert;
-          normale Nutzer erhalten bei einem echten Fehler ausschließlich einen
-          kleinen, verständlichen Recoveryweg. */}
+          normale Nutzer erhalten bei fehlender oder gestörter Verbindung
+          ausschließlich einen kleinen, verständlichen Recoveryweg. */}
       {ownerTechnikBestaetigt && <Klappe titel="Datenmodus & Verbindung">
         <div style={kasten}>
           <h2 style={h2}>{demoAktiv || startWahl === "demo" ? "Demo-Modus" : "Clean Mode"}</h2>
@@ -218,7 +218,7 @@ export function DatenTab({
             Das Kinoprogramm ist derzeit <strong style={{ color: T.gefahr }}>{programmStatus.text}</strong>. Deine persönlichen Inhalte bleiben davon unberührt.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>Datenbankzugang prüfen</button>}
+            {onKatalogVerbinden && <button style={btnStyle(false)} onClick={onKatalogVerbinden}>{einzeldatei ? "Online-Katalog verbinden" : "Datenbankzugang prüfen"}</button>}
             {onKatalogRefresh && <button style={btnStyle(false)} onClick={onKatalogRefresh}>Katalog neu laden</button>}
           </div>
         </div>
