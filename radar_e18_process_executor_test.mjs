@@ -28,6 +28,12 @@ import {
 } from "./tools/radar_e18_process_executor.mjs";
 import { loadRadarE17ARepairContract } from "./tools/radar_e17a_repair_once.mjs";
 
+const RADAR_TARGET_ID = "work:imdb:tt41955949";
+const LIVE_AMBIENT_ENV = Object.freeze({
+  HOME: "/private/tmp/synthetic-home",
+  KD_RADAR_TARGET_ID: RADAR_TARGET_ID,
+});
+
 let checks = 0;
 async function check(name, fn) {
   await fn();
@@ -661,10 +667,16 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   const fixture = processFixture();
   const out = [];
   const err = [];
+  let liveEnv = null;
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
-      spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      spawn(binary, argv, options) {
+        if (binary === "/usr/local/bin/node" && argv[0].endsWith("/npm-cli.js")) {
+          liveEnv = { ...options.env };
+        }
+        return fixture.spawn(binary, argv, options);
+      },
+      ambientEnv: { ...LIVE_AMBIENT_ENV, UNRELATED_ENV_MUST_NOT_PASS: "sentinel" },
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -678,6 +690,11 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   );
   assert.deepEqual(err, []);
   assert.equal(JSON.parse(out[0]).status, "E18_REMOTE_CHAIN_COMPLETE");
+  assert.equal(liveEnv.KD_RADAR_TARGET_ID, RADAR_TARGET_ID);
+  assert.deepEqual(Object.keys(liveEnv).sort(), [
+    "HOME", "KD_RADAR_TARGET_ID", "LANG", "LC_ALL", "NO_COLOR", "PATH", "TMPDIR",
+  ]);
+  assert.equal(Object.hasOwn(liveEnv, "UNRELATED_ENV_MUST_NOT_PASS"), false);
   assert.doesNotMatch(out[0], /fixture_(?:access|database|anthropic)_value/);
   assert.doesNotMatch(out[0], /00000000-0000-1000-8000-00000000000[12]/);
   assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/bin/security").length, 3);
@@ -771,6 +788,30 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
   for (const path of fixture.allAuthProjectionFiles) assert.equal(existsSync(path), false);
 });
 
+await check("fehlendes, leeres oder fremdes Radarziel stoppt vor dem inneren Login-, Budget- und Providerpfad", async () => {
+  for (const targetId of [undefined, "", "work:imdb:tt00000000"]) {
+    const fixture = processFixture({ providerInitiallyPresent: true });
+    const err = [];
+    const ambientEnv = { HOME: LIVE_AMBIENT_ENV.HOME };
+    if (targetId !== undefined) ambientEnv.KD_RADAR_TARGET_ID = targetId;
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv,
+        committedSourceGate: fixture.committedSourceGate,
+        retainBackups: false,
+      },
+      ausgabe() {},
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, String(targetId));
+    assert.deepEqual(err, ["PROCESS_PACKAGE_B_LIVE_ONCE_FAILED"], String(targetId));
+    assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false);
+    assert.equal(fixture.visibleCalls.some(({ argv }) => argv.includes("ANTHROPIC_API_KEY")), false);
+    assert.equal(fixture.facts().flagsEnabled, false);
+  }
+});
+
 await check("historische Migrationsclosure stoppt bei fehlend, extra, doppelt, namensdriftend, Symlink oder formfremd vor Wirkung", async () => {
   for (const [migrationTreeMode, expectedCode] of [
     ["missing", "MIGRATION_HISTORY_BASELINE_DRIFT"],
@@ -786,7 +827,7 @@ await check("historische Migrationsclosure stoppt bei fehlend, extra, doppelt, n
     const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
-        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        ambientEnv: LIVE_AMBIENT_ENV,
         committedSourceGate: fixture.committedSourceGate,
         retainBackups: false,
         fs: fixture.fs,
@@ -824,7 +865,7 @@ await check("echte restore-normalisierte Schemadrift stoppt vor Migration, Funct
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -861,7 +902,7 @@ await check("fehlender, zusaetzlicher oder funktional driftender 35er-Ausgangsle
     const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
-        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        ambientEnv: LIVE_AMBIENT_ENV,
         committedSourceGate: fixture.committedSourceGate,
         retainBackups: false,
       },
@@ -890,7 +931,7 @@ await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -923,7 +964,7 @@ await check("Auth-ID-Projektion stoppt unsortiert, doppelt, leer, formfremd und 
     const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
-        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        ambientEnv: LIVE_AMBIENT_ENV,
         committedSourceGate: fixture.committedSourceGate,
         retainBackups: false,
       },
@@ -958,7 +999,7 @@ for (const failure of ["foreign-role", "extension-dependency"]) {
     const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
-        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        ambientEnv: LIVE_AMBIENT_ENV,
         committedSourceGate: fixture.committedSourceGate,
         retainBackups: false,
       },
@@ -991,7 +1032,7 @@ await check("synthetischer Paket-B-ENOBUFS wird exakt normalisiert, nicht wieder
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1017,7 +1058,7 @@ await check("lokaler CLI-Fehler stoppt vor Keychain und wird nicht automatisch w
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1038,7 +1079,7 @@ await check("PostgreSQL-Versionsdrift stoppt seriell nach Supabase und vor jedem
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1057,7 +1098,7 @@ await check("remote PRESENT laesst den lokalen Provider-Key und die Secretmutati
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1077,7 +1118,7 @@ await check("Postflight verlangt alle drei neuen Ledgerzeilen ohne fehlenden ode
     const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
-        ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+        ambientEnv: LIVE_AMBIENT_ENV,
         committedSourceGate: fixture.committedSourceGate,
         retainBackups: false,
       },
@@ -1100,7 +1141,7 @@ await check("unbekanntes Remote-Functionfeld stoppt vor Backup, Mutation und Pro
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1120,7 +1161,7 @@ await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt
   const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },
@@ -1141,7 +1182,7 @@ await check("Default-Executor ist auch als Adapterfabrik one-shot und akzeptiert
     authorization: createRadarE18AuthorizationMarker(RADAR_E18_AUTHORIZATION_FLAG),
     defaultExecutorOptions: {
       spawn: fixture.spawn,
-      ambientEnv: { HOME: "/private/tmp/synthetic-home" },
+      ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
       retainBackups: false,
     },

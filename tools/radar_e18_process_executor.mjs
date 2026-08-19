@@ -147,8 +147,9 @@ const PSQL_ENV = Object.freeze([
 ]);
 const LOCAL_PG_ENV = Object.freeze(["LANG", "LC_ALL", "NO_COLOR", "PATH", "PGTZ", "TMPDIR"]);
 const SECURITY_ENV = Object.freeze(["LANG", "LC_ALL", "NO_COLOR", "PATH"]);
+const RADAR_E18_LIVE_TARGET_ID = "work:imdb:tt41955949";
 const LIVE_ENV = Object.freeze([
-  "HOME", "LANG", "LC_ALL", "NO_COLOR", "PATH", "TMPDIR",
+  "HOME", "KD_RADAR_TARGET_ID", "LANG", "LC_ALL", "NO_COLOR", "PATH", "TMPDIR",
 ]);
 
 const E17A_STATE_SQL = String.raw`select jsonb_build_object(
@@ -579,6 +580,9 @@ function flagsRestoreSql(preimage) {
 }
 
 function cleanLiveEnv(ambient, tmp) {
+  if (ambient?.KD_RADAR_TARGET_ID !== RADAR_E18_LIVE_TARGET_ID) {
+    stop("LIVE_TARGET_INVALID", "Radar-Live-One-Shot besitzt nicht das exakt freigegebene Ziel.");
+  }
   const env = {};
   for (const name of LIVE_ENV) {
     if (name === "TMPDIR") env[name] = tmp;
