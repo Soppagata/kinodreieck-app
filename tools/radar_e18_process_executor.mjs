@@ -166,7 +166,7 @@ const E17A_STATE_SQL = String.raw`select jsonb_build_object(
 const PACKAGE_STATE_SQL = String.raw`select jsonb_build_object(
   'ledger', coalesce((select jsonb_agg(jsonb_build_object('version', version, 'name', name) order by version) from supabase_migrations.schema_migrations), '[]'::jsonb),
   'radar', (select jsonb_build_object('radar_aktiv',radar_aktiv,'radar_provider_aktiv',radar_provider_aktiv,'radar_shares_aktiv',radar_shares_aktiv,'radar_scheduler_aktiv',radar_scheduler_aktiv,'radar_proposal_import_aktiv',radar_proposal_import_aktiv) from public.kd_radar_settings where singleton),
-  'private', (select jsonb_build_object('ai_aktiv',ai_aktiv,'provider_requests_enabled',provider_requests_enabled,'scheduler_enabled',scheduler_enabled) from public.kd_private_settings where singleton),
+  'private', (select jsonb_build_object('ai_aktiv',(select wert from public.kd_ai_limits where schluessel='ai_aktiv'),'provider_requests_enabled',provider_requests_enabled,'scheduler_enabled',scheduler_enabled) from public.kd_private_settings where singleton),
   'provider', (select jsonb_build_object('feature_enabled',feature_enabled,'rights_confirmed',rights_confirmed,'dpa_transfer_confirmed',dpa_transfer_confirmed,'retention_confirmed',retention_confirmed,'price_budget_confirmed',price_budget_confirmed,'legal_status',legal_status,'review_current',coalesce(reviewed_at >= current_date - 90,false)) from public.kd_private_provider_registry where provider_id='anthropic'),
   'providerGate', public.kd_private_provider_allowed('anthropic'),
   'limits', jsonb_build_object(
@@ -183,6 +183,7 @@ declare
   r public.kd_radar_settings%rowtype;
   s public.kd_private_settings%rowtype;
   p public.kd_private_provider_registry%rowtype;
+  v_ai_aktiv jsonb;
 begin
   select * into r from public.kd_radar_settings where singleton for update;
   if not found or r.radar_shares_aktiv or r.radar_scheduler_aktiv or r.radar_proposal_import_aktiv then
@@ -192,11 +193,17 @@ begin
   if not found or s.scheduler_enabled then
     raise exception 'E18 private scheduler flag is active';
   end if;
+  select wert into v_ai_aktiv from public.kd_ai_limits
+   where schluessel='ai_aktiv' for update;
+  if not found or jsonb_typeof(v_ai_aktiv) is distinct from 'boolean' then
+    raise exception 'E18 ai_aktiv is missing or malformed';
+  end if;
   select * into p from public.kd_private_provider_registry where provider_id='anthropic' for update;
   if not found or not p.rights_confirmed or not p.dpa_transfer_confirmed or not p.retention_confirmed or not p.price_budget_confirmed or p.legal_status <> 'APPROVED' or p.reviewed_at is null or p.reviewed_at < current_date - 90 then
     raise exception 'E18 provider approval is not current';
   end if;
-  update public.kd_private_settings set ai_aktiv=true, provider_requests_enabled=true, updated_at=now() where singleton;
+  update public.kd_ai_limits set wert='true'::jsonb where schluessel='ai_aktiv';
+  update public.kd_private_settings set provider_requests_enabled=true, updated_at=now() where singleton;
   update public.kd_private_provider_registry set feature_enabled=true, updated_at=now() where provider_id='anthropic';
   update public.kd_radar_settings set radar_aktiv=true, radar_provider_aktiv=true, updated_at=now() where singleton;
 end $$;
@@ -1069,7 +1076,8 @@ function validateConnectionUrl(text) {
 function flagsRestoreSql(preimage) {
   if (!preimage) stop("FLAG_PREIMAGE_REQUIRED", "Flag-Rueckbau braucht das exakte Preimage.");
   const bit = (value) => value === true ? "true" : value === false ? "false" : stop("FLAG_PREIMAGE_INVALID", "Flag-Preimage ist formfremd.");
-  return `begin;\nupdate public.kd_private_settings set ai_aktiv=${bit(preimage.aiActive)}, provider_requests_enabled=${bit(preimage.providerRequests)}, updated_at=now() where singleton;\nupdate public.kd_private_provider_registry set feature_enabled=${bit(preimage.providerFeature)}, updated_at=now() where provider_id='anthropic';\nupdate public.kd_radar_settings set radar_aktiv=${bit(preimage.radar)}, radar_provider_aktiv=${bit(preimage.radarProvider)}, updated_at=now() where singleton;\ncommit;`;
+  const jsonBit = (value) => `'${bit(value)}'::jsonb`;
+  return `begin;\nupdate public.kd_ai_limits set wert=${jsonBit(preimage.aiActive)} where schluessel='ai_aktiv';\nupdate public.kd_private_settings set provider_requests_enabled=${bit(preimage.providerRequests)}, updated_at=now() where singleton;\nupdate public.kd_private_provider_registry set feature_enabled=${bit(preimage.providerFeature)}, updated_at=now() where provider_id='anthropic';\nupdate public.kd_radar_settings set radar_aktiv=${bit(preimage.radar)}, radar_provider_aktiv=${bit(preimage.radarProvider)}, updated_at=now() where singleton;\ncommit;`;
 }
 
 function cleanLiveEnv(ambient, tmp) {

@@ -262,6 +262,7 @@ function processFixture({
   authProjectionMode = "valid",
   postflightLedgerMode = "valid",
   aiStateMode = "valid",
+  aiInitiallyActive = false,
 } = {}) {
   const contract = loadFixtureE17AContract();
   const firstBaselineFile = `${contract.expectedLedgerBaseline[0].version}_${contract.expectedLedgerBaseline[0].name}.sql`;
@@ -320,7 +321,7 @@ function processFixture({
   let functionDeployed = false;
   let providerSecretPresent = providerInitiallyPresent;
   let flagsEnabled = false;
-  let aiActive = false;
+  let aiActive = aiInitiallyActive;
   let providerFileObserved = false;
   let migrationWorkspaceObserved = false;
   let sourceGateCalls = 0;
@@ -510,20 +511,26 @@ function processFixture({
       if (sql.includes("INSERT INTO supabase_migrations.schema_migrations")) {
         assert.fail("E18 darf E17A nicht ausserhalb des geordneten CLI-Migrationsplans schreiben");
       }
-      if (sql.includes("'providerGate'")) return ok(`${JSON.stringify(packageState())}\n`);
+      if (sql.includes("'providerGate'")) {
+        assert.match(sql, /'ai_aktiv',\(select wert from public\.kd_ai_limits where schluessel='ai_aktiv'\)/);
+        assert.doesNotMatch(sql, /jsonb_build_object\('ai_aktiv',ai_aktiv/);
+        return ok(`${JSON.stringify(packageState())}\n`);
+      }
       if (sql.includes("E18 provider approval is not current")) {
+        assert.match(sql, /select wert into v_ai_aktiv from public\.kd_ai_limits[\s\S]*where schluessel='ai_aktiv' for update/);
+        assert.match(sql, /jsonb_typeof\(v_ai_aktiv\) is distinct from 'boolean'/);
+        assert.match(sql, /update public\.kd_ai_limits set wert='true'::jsonb where schluessel='ai_aktiv'/);
+        assert.match(sql, /update public\.kd_private_settings set provider_requests_enabled=true/);
+        assert.doesNotMatch(sql, /kd_private_settings set ai_aktiv/);
         flagsEnabled = true;
         aiActive = true;
         return ok();
       }
-      if (sql.includes("update public.kd_private_settings set provider_requests_enabled=false")) {
+      const aiRestore = sql.match(/update public\.kd_ai_limits set wert='(true|false)'::jsonb where schluessel='ai_aktiv'/);
+      if (aiRestore && sql.includes("update public.kd_private_settings set provider_requests_enabled=false")) {
+        assert.doesNotMatch(sql, /kd_private_settings set ai_aktiv/);
         flagsEnabled = false;
-        aiActive = false;
-        return ok();
-      }
-      if (sql.includes("update public.kd_private_settings set ai_aktiv=false, provider_requests_enabled=false")) {
-        flagsEnabled = false;
-        aiActive = false;
+        aiActive = aiRestore[1] === "true";
         return ok();
       }
       return { ...ok(), status: 1 };
@@ -687,6 +694,7 @@ function processFixture({
       });
     },
     sourceGateCalls() { return sourceGateCalls; },
+    aiActive() { return aiActive; },
     facts() {
       return { providerFileObserved, migrationWorkspaceObserved, flagsEnabled };
     },
@@ -753,10 +761,10 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     flagsEnabled: false,
   });
   const aiEnableIndex = fixture.visibleCalls.findIndex(({ input }) => (
-    String(input || "").includes("set ai_aktiv=true, provider_requests_enabled=true")
+    String(input || "").includes("kd_ai_limits set wert='true'::jsonb")
   ));
   const aiRestoreIndex = fixture.visibleCalls.findIndex(({ input }) => (
-    String(input || "").includes("set ai_aktiv=false, provider_requests_enabled=false")
+    String(input || "").includes("kd_ai_limits set wert='false'::jsonb")
   ));
   const liveIndex = fixture.visibleCalls.findIndex(({ binary }) => binary === "/usr/local/bin/node");
   assert.ok(aiEnableIndex >= 0 && aiEnableIndex < liveIndex);
@@ -1245,9 +1253,36 @@ await check("fehlendes oder formfremdes ai_aktiv stoppt geschlossen vor Live", a
     assert.deepEqual(err, [expectedCode], aiStateMode);
     assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false);
     assert.equal(fixture.visibleCalls.some(({ input }) => (
-      String(input || "").includes("set ai_aktiv=true")
+      String(input || "").includes("kd_ai_limits set wert='true'::jsonb")
     )), false);
   }
+});
+
+await check("bereits aktives ai_aktiv wird nach dem Livefenster exakt als JSON-Boolean true restauriert", async () => {
+  const fixture = processFixture({ aiInitiallyActive: true, providerInitiallyPresent: true });
+  const err = [];
+  const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+    defaultExecutorOptions: {
+      spawn: fixture.spawn,
+      ambientEnv: LIVE_AMBIENT_ENV,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
+    },
+    ausgabe() {},
+    fehlerAusgabe: (line) => err.push(line),
+  });
+  assert.equal(code, 0, err.join(","));
+  assert.deepEqual(err, []);
+  assert.equal(fixture.aiActive(), true);
+  const liveIndex = fixture.visibleCalls.findIndex(({ binary }) => binary === "/usr/local/bin/node");
+  const trueWrites = fixture.visibleCalls
+    .map(({ input }, index) => String(input || "").includes(
+      "kd_ai_limits set wert='true'::jsonb where schluessel='ai_aktiv'",
+    ) ? index : -1)
+    .filter((index) => index >= 0);
+  assert.equal(trueWrites.length, 2);
+  assert.ok(trueWrites[0] < liveIndex && trueWrites[1] > liveIndex);
 });
 
 await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt nur Cleanup aus", async () => {
@@ -1269,10 +1304,10 @@ await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt
   assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/local/bin/node").length, 1);
   const liveIndex = fixture.visibleCalls.findIndex(({ binary }) => binary === "/usr/local/bin/node");
   const aiEnableIndex = fixture.visibleCalls.findIndex(({ input }) => (
-    String(input || "").includes("set ai_aktiv=true, provider_requests_enabled=true")
+    String(input || "").includes("kd_ai_limits set wert='true'::jsonb")
   ));
   const aiRestoreIndex = fixture.visibleCalls.findIndex(({ input }) => (
-    String(input || "").includes("set ai_aktiv=false, provider_requests_enabled=false")
+    String(input || "").includes("kd_ai_limits set wert='false'::jsonb")
   ));
   assert.ok(aiEnableIndex >= 0 && aiEnableIndex < liveIndex);
   assert.ok(aiRestoreIndex > liveIndex);
