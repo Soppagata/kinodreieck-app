@@ -57,7 +57,8 @@ function text(value) {
 function finitePositive(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
-function safeReservationDecision(value) {
+export function normalizeRadarReservationDecision(value) {
+  if (value === "ai-disabled") return "disabled";
   return ["limit", "disabled", "forbidden", "server"].includes(value) ? value : "unknown";
 }
 function validDomain(value) {
@@ -451,7 +452,7 @@ export function createAnthropicRadarWebsearchAdapter({
     const logId = Number(reservation?.logId);
     if (reservation?.ok !== true) {
       telemetry.reservationStatus = "rejected";
-      telemetry.reservationDecision = safeReservationDecision(reservation?.decision);
+      telemetry.reservationDecision = normalizeRadarReservationDecision(reservation?.decision);
       throw new RadarWebsearchProviderError("cost-gate-rejected");
     }
     if (!Number.isInteger(logId) || logId <= 0) {

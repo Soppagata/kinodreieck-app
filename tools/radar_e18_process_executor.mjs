@@ -166,7 +166,7 @@ const E17A_STATE_SQL = String.raw`select jsonb_build_object(
 const PACKAGE_STATE_SQL = String.raw`select jsonb_build_object(
   'ledger', coalesce((select jsonb_agg(jsonb_build_object('version', version, 'name', name) order by version) from supabase_migrations.schema_migrations), '[]'::jsonb),
   'radar', (select jsonb_build_object('radar_aktiv',radar_aktiv,'radar_provider_aktiv',radar_provider_aktiv,'radar_shares_aktiv',radar_shares_aktiv,'radar_scheduler_aktiv',radar_scheduler_aktiv,'radar_proposal_import_aktiv',radar_proposal_import_aktiv) from public.kd_radar_settings where singleton),
-  'private', (select jsonb_build_object('provider_requests_enabled',provider_requests_enabled,'scheduler_enabled',scheduler_enabled) from public.kd_private_settings where singleton),
+  'private', (select jsonb_build_object('ai_aktiv',ai_aktiv,'provider_requests_enabled',provider_requests_enabled,'scheduler_enabled',scheduler_enabled) from public.kd_private_settings where singleton),
   'provider', (select jsonb_build_object('feature_enabled',feature_enabled,'rights_confirmed',rights_confirmed,'dpa_transfer_confirmed',dpa_transfer_confirmed,'retention_confirmed',retention_confirmed,'price_budget_confirmed',price_budget_confirmed,'legal_status',legal_status,'review_current',coalesce(reviewed_at >= current_date - 90,false)) from public.kd_private_provider_registry where provider_id='anthropic'),
   'providerGate', public.kd_private_provider_allowed('anthropic'),
   'limits', jsonb_build_object(
@@ -196,7 +196,7 @@ begin
   if not found or not p.rights_confirmed or not p.dpa_transfer_confirmed or not p.retention_confirmed or not p.price_budget_confirmed or p.legal_status <> 'APPROVED' or p.reviewed_at is null or p.reviewed_at < current_date - 90 then
     raise exception 'E18 provider approval is not current';
   end if;
-  update public.kd_private_settings set provider_requests_enabled=true, updated_at=now() where singleton;
+  update public.kd_private_settings set ai_aktiv=true, provider_requests_enabled=true, updated_at=now() where singleton;
   update public.kd_private_provider_registry set feature_enabled=true, updated_at=now() where provider_id='anthropic';
   update public.kd_radar_settings set radar_aktiv=true, radar_provider_aktiv=true, updated_at=now() where singleton;
 end $$;
@@ -1026,7 +1026,7 @@ function validatePackageState(value) {
   if (!exactObject(value, ["ledger", "limits", "private", "provider", "providerGate", "radar"])
       || !Array.isArray(value.ledger)
       || !exactObject(value.radar, ["radar_aktiv", "radar_provider_aktiv", "radar_proposal_import_aktiv", "radar_scheduler_aktiv", "radar_shares_aktiv"])
-      || !exactObject(value.private, ["provider_requests_enabled", "scheduler_enabled"])
+      || !exactObject(value.private, ["ai_aktiv", "provider_requests_enabled", "scheduler_enabled"])
       || !exactObject(value.provider, ["dpa_transfer_confirmed", "feature_enabled", "legal_status", "price_budget_confirmed", "retention_confirmed", "review_current", "rights_confirmed"])
       || !exactObject(value.providerGate, ["code", "ok"])
       || !exactObject(value.limits, ["task_max_reservierung_usd_cent", "task_max_tokens", "task_modell", "websearch_usd_cent_pro_request"])) {
@@ -1069,7 +1069,7 @@ function validateConnectionUrl(text) {
 function flagsRestoreSql(preimage) {
   if (!preimage) stop("FLAG_PREIMAGE_REQUIRED", "Flag-Rueckbau braucht das exakte Preimage.");
   const bit = (value) => value === true ? "true" : value === false ? "false" : stop("FLAG_PREIMAGE_INVALID", "Flag-Preimage ist formfremd.");
-  return `begin;\nupdate public.kd_private_settings set provider_requests_enabled=${bit(preimage.providerRequests)}, updated_at=now() where singleton;\nupdate public.kd_private_provider_registry set feature_enabled=${bit(preimage.providerFeature)}, updated_at=now() where provider_id='anthropic';\nupdate public.kd_radar_settings set radar_aktiv=${bit(preimage.radar)}, radar_provider_aktiv=${bit(preimage.radarProvider)}, updated_at=now() where singleton;\ncommit;`;
+  return `begin;\nupdate public.kd_private_settings set ai_aktiv=${bit(preimage.aiActive)}, provider_requests_enabled=${bit(preimage.providerRequests)}, updated_at=now() where singleton;\nupdate public.kd_private_provider_registry set feature_enabled=${bit(preimage.providerFeature)}, updated_at=now() where provider_id='anthropic';\nupdate public.kd_radar_settings set radar_aktiv=${bit(preimage.radar)}, radar_provider_aktiv=${bit(preimage.radarProvider)}, updated_at=now() where singleton;\ncommit;`;
 }
 
 function cleanLiveEnv(ambient, tmp) {
@@ -1142,6 +1142,7 @@ export function createRadarE18DefaultExecutor({
   const requirePackageDeploymentState = (value, { enabled }) => {
     const packageState = validatePackageState(value);
     const expectedFlags = enabled ? {
+      aiActive: true,
       radar: true,
       radarProvider: true,
       providerRequests: true,
@@ -1149,6 +1150,7 @@ export function createRadarE18DefaultExecutor({
     } : state.packagePreflight;
     if (!expectedFlags
         || !isDeepStrictEqual(packageState.ledger, expectedPackageLedger())
+        || packageState.private.ai_aktiv !== expectedFlags.aiActive
         || packageState.radar.radar_aktiv !== expectedFlags.radar
         || packageState.radar.radar_provider_aktiv !== expectedFlags.radarProvider
         || packageState.private.provider_requests_enabled !== expectedFlags.providerRequests
@@ -1789,6 +1791,7 @@ export function createRadarE18DefaultExecutor({
       if (!isDeepStrictEqual(packageState.ledger, state.e17aLedger)) stop("PACKAGE_LEDGER_BASELINE_DRIFT", "Paket-B-Ledger driftet vom E17A-Postflight.");
       prepareMigrationWorkspace();
       state.packagePreflight = Object.freeze({
+        aiActive: packageState.private.ai_aktiv,
         radar: packageState.radar.radar_aktiv,
         radarProvider: packageState.radar.radar_provider_aktiv,
         providerRequests: packageState.private.provider_requests_enabled,
@@ -1882,7 +1885,8 @@ export function createRadarE18DefaultExecutor({
         if (state.flagsChanged) {
           runStep(blueprint, "package-b-flags-restore");
           const restored = validatePackageState(runStep(blueprint, "package-b-flags-readback"));
-          if (restored.radar.radar_aktiv !== state.packagePreflight.radar
+          if (restored.private.ai_aktiv !== state.packagePreflight.aiActive
+              || restored.radar.radar_aktiv !== state.packagePreflight.radar
               || restored.radar.radar_provider_aktiv !== state.packagePreflight.radarProvider
               || restored.private.provider_requests_enabled !== state.packagePreflight.providerRequests
               || restored.provider.feature_enabled !== state.packagePreflight.providerFeature) {

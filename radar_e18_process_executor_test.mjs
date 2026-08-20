@@ -18,7 +18,7 @@ import {
   createRadarE18AuthorizationMarker,
   createRadarE18CommittedAdapter,
   createRadarE18ProcessBlueprints,
-  main,
+  main as adapterMain,
 } from "./tools/radar_e18_remote_adapter.mjs";
 import {
   RadarE18ProcessStop,
@@ -33,6 +33,33 @@ const LIVE_AMBIENT_ENV = Object.freeze({
   HOME: "/private/tmp/synthetic-home",
   KD_RADAR_TARGET_ID: RADAR_TARGET_ID,
 });
+const E17A_CONTRACT_COMMIT = "698d4b678fb921128e14b8111b68bdb0a4bdc037";
+
+function loadFixtureE17AContract() {
+  return loadRadarE17ARepairContract({
+    git(args) {
+      const effectiveArgs = args[0] === "rev-parse" && args[1] === "HEAD"
+        ? ["rev-parse", E17A_CONTRACT_COMMIT]
+        : args;
+      return spawnSync("/usr/bin/git", effectiveArgs, {
+        cwd: process.cwd(),
+        env: { LANG: "C", LC_ALL: "C", NO_COLOR: "1", PATH: "/usr/bin:/bin" },
+        encoding: null,
+        maxBuffer: 4 * 1024 * 1024,
+        timeout: 20_000,
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    },
+  });
+}
+
+function main(argv, options = {}) {
+  return adapterMain(argv, {
+    loadE17AContract: loadFixtureE17AContract,
+    ...options,
+  });
+}
 
 let checks = 0;
 async function check(name, fn) {
@@ -234,36 +261,40 @@ function processFixture({
   schemaPreflightFailure = null,
   authProjectionMode = "valid",
   postflightLedgerMode = "valid",
+  aiStateMode = "valid",
 } = {}) {
-  const contract = loadRadarE17ARepairContract();
+  const contract = loadFixtureE17AContract();
   const firstBaselineFile = `${contract.expectedLedgerBaseline[0].version}_${contract.expectedLedgerBaseline[0].name}.sql`;
   const injectedMigrationFiles = new Set();
   const migrationFs = {
     readdir(path) {
       const entries = readdirSync(path);
       if (!path.endsWith("/supabase/migrations")) return entries;
+      const packageBEntries = entries.filter(
+        (entry) => entry !== "20260819220000_radar_person_server_candidate.sql",
+      );
       if (migrationTreeMode === "missing") {
-        return entries.filter((entry) => entry !== firstBaselineFile);
+        return packageBEntries.filter((entry) => entry !== firstBaselineFile);
       }
       if (migrationTreeMode === "additional") {
         injectedMigrationFiles.add("20260816020000_unexpected.sql");
-        return [...entries, "20260816020000_unexpected.sql"];
+        return [...packageBEntries, "20260816020000_unexpected.sql"];
       }
       if (migrationTreeMode === "duplicate") {
         const duplicate = `${contract.expectedLedgerBaseline[0].version}_duplicate.sql`;
         injectedMigrationFiles.add(duplicate);
-        return [...entries, duplicate];
+        return [...packageBEntries, duplicate];
       }
       if (migrationTreeMode === "name-drift") {
         const drifted = `${contract.expectedLedgerBaseline[0].version}_wrong_name.sql`;
         injectedMigrationFiles.add(drifted);
-        return [...entries.filter((entry) => entry !== firstBaselineFile), drifted];
+        return [...packageBEntries.filter((entry) => entry !== firstBaselineFile), drifted];
       }
       if (migrationTreeMode === "malformed") {
         injectedMigrationFiles.add("notes.txt");
-        return [...entries, "notes.txt"];
+        return [...packageBEntries, "notes.txt"];
       }
-      return entries;
+      return packageBEntries;
     },
     lstat(path) {
       if (migrationTreeMode === "symlink" && basename(path) === firstBaselineFile) {
@@ -289,6 +320,7 @@ function processFixture({
   let functionDeployed = false;
   let providerSecretPresent = providerInitiallyPresent;
   let flagsEnabled = false;
+  let aiActive = false;
   let providerFileObserved = false;
   let migrationWorkspaceObserved = false;
   let sourceGateCalls = 0;
@@ -323,6 +355,12 @@ function processFixture({
     } else if (liveCompleted && postflightLedgerMode === "additional") {
       ledger = [...ledger, { version: "20260817200000", name: "unexpected_migration" }];
     }
+    const privateState = {
+      ai_aktiv: aiStateMode === "malformed" ? "false" : aiActive,
+      provider_requests_enabled: flagsEnabled,
+      scheduler_enabled: false,
+    };
+    if (aiStateMode === "missing") delete privateState.ai_aktiv;
     return {
       ledger,
       radar: {
@@ -332,7 +370,7 @@ function processFixture({
         radar_scheduler_aktiv: false,
         radar_proposal_import_aktiv: false,
       },
-      private: { provider_requests_enabled: flagsEnabled, scheduler_enabled: false },
+      private: privateState,
       provider: {
         feature_enabled: flagsEnabled,
         rights_confirmed: true,
@@ -475,10 +513,17 @@ function processFixture({
       if (sql.includes("'providerGate'")) return ok(`${JSON.stringify(packageState())}\n`);
       if (sql.includes("E18 provider approval is not current")) {
         flagsEnabled = true;
+        aiActive = true;
         return ok();
       }
       if (sql.includes("update public.kd_private_settings set provider_requests_enabled=false")) {
         flagsEnabled = false;
+        aiActive = false;
+        return ok();
+      }
+      if (sql.includes("update public.kd_private_settings set ai_aktiv=false, provider_requests_enabled=false")) {
+        flagsEnabled = false;
+        aiActive = false;
         return ok();
       }
       return { ...ok(), status: 1 };
@@ -678,6 +723,7 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
       },
       ambientEnv: { ...LIVE_AMBIENT_ENV, UNRELATED_ENV_MUST_NOT_PASS: "sentinel" },
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe: (line) => out.push(line),
@@ -706,6 +752,15 @@ await check("direkter CLI-Einstieg nutzt ohne High-Level-Executor den seriellen 
     migrationWorkspaceObserved: true,
     flagsEnabled: false,
   });
+  const aiEnableIndex = fixture.visibleCalls.findIndex(({ input }) => (
+    String(input || "").includes("set ai_aktiv=true, provider_requests_enabled=true")
+  ));
+  const aiRestoreIndex = fixture.visibleCalls.findIndex(({ input }) => (
+    String(input || "").includes("set ai_aktiv=false, provider_requests_enabled=false")
+  ));
+  const liveIndex = fixture.visibleCalls.findIndex(({ binary }) => binary === "/usr/local/bin/node");
+  assert.ok(aiEnableIndex >= 0 && aiEnableIndex < liveIndex);
+  assert.ok(aiRestoreIndex > liveIndex);
   const backupIndex = fixture.visibleCalls.findIndex(({ binary, argv }) => (
     binary.endsWith("/pg_dump")
       && argv.includes("--format=custom")
@@ -798,8 +853,9 @@ await check("fehlendes, leeres oder fremdes Radarziel stoppt vor dem inneren Log
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
       },
       ausgabe() {},
       fehlerAusgabe: (line) => err.push(line),
@@ -828,8 +884,9 @@ await check("historische Migrationsclosure stoppt bei fehlend, extra, doppelt, n
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv: LIVE_AMBIENT_ENV,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
         fs: fixture.fs,
       },
       ausgabe: (line) => out.push(line),
@@ -867,6 +924,7 @@ await check("echte restore-normalisierte Schemadrift stoppt vor Migration, Funct
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe: (line) => out.push(line),
@@ -903,8 +961,9 @@ await check("fehlender, zusaetzlicher oder funktional driftender 35er-Ausgangsle
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv: LIVE_AMBIENT_ENV,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
       },
       ausgabe: (line) => out.push(line),
       fehlerAusgabe: (line) => err.push(line),
@@ -933,6 +992,7 @@ await check("private Datei-/Digest-Projektionen verarbeiten synthetisch mehr als
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -965,8 +1025,9 @@ await check("Auth-ID-Projektion stoppt unsortiert, doppelt, leer, formfremd und 
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv: LIVE_AMBIENT_ENV,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
       },
       ausgabe: (line) => out.push(line),
       fehlerAusgabe: (line) => err.push(line),
@@ -1000,8 +1061,9 @@ for (const failure of ["foreign-role", "extension-dependency"]) {
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv: LIVE_AMBIENT_ENV,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
       },
       ausgabe() {},
       fehlerAusgabe: (line) => err.push(line),
@@ -1034,6 +1096,7 @@ await check("synthetischer Paket-B-ENOBUFS wird exakt normalisiert, nicht wieder
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1060,6 +1123,7 @@ await check("lokaler CLI-Fehler stoppt vor Keychain und wird nicht automatisch w
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1081,6 +1145,7 @@ await check("PostgreSQL-Versionsdrift stoppt seriell nach Supabase und vor jedem
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1100,6 +1165,7 @@ await check("remote PRESENT laesst den lokalen Provider-Key und die Secretmutati
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1119,8 +1185,9 @@ await check("Postflight verlangt alle drei neuen Ledgerzeilen ohne fehlenden ode
       defaultExecutorOptions: {
         spawn: fixture.spawn,
         ambientEnv: LIVE_AMBIENT_ENV,
-        committedSourceGate: fixture.committedSourceGate,
-        retainBackups: false,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
       },
       ausgabe() {},
       fehlerAusgabe: (line) => err.push(line),
@@ -1143,6 +1210,7 @@ await check("unbekanntes Remote-Functionfeld stoppt vor Backup, Mutation und Pro
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1155,6 +1223,33 @@ await check("unbekanntes Remote-Functionfeld stoppt vor Backup, Mutation und Pro
   assert.equal(fixture.visibleCalls.some(({ argv }) => argv[0] === "migration"), false);
 });
 
+await check("fehlendes oder formfremdes ai_aktiv stoppt geschlossen vor Live", async () => {
+  for (const [aiStateMode, expectedCode] of [
+    ["missing", "REMOTE_PACKAGE_STATE_UNKNOWN"],
+    ["malformed", "REMOTE_PACKAGE_GATE_CLOSED"],
+  ]) {
+    const fixture = processFixture({ aiStateMode, providerInitiallyPresent: true });
+    const err = [];
+    const code = await main([RADAR_E18_EXECUTE_FLAG, RADAR_E18_AUTHORIZATION_FLAG], {
+      defaultExecutorOptions: {
+        spawn: fixture.spawn,
+        ambientEnv: LIVE_AMBIENT_ENV,
+      committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
+      retainBackups: false,
+      },
+      ausgabe() {},
+      fehlerAusgabe: (line) => err.push(line),
+    });
+    assert.equal(code, 75, aiStateMode);
+    assert.deepEqual(err, [expectedCode], aiStateMode);
+    assert.equal(fixture.visibleCalls.some(({ binary }) => binary === "/usr/local/bin/node"), false);
+    assert.equal(fixture.visibleCalls.some(({ input }) => (
+      String(input || "").includes("set ai_aktiv=true")
+    )), false);
+  }
+});
+
 await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt nur Cleanup aus", async () => {
   const fixture = processFixture({ providerInitiallyPresent: true, liveBudgetUnknown: true });
   const err = [];
@@ -1163,6 +1258,7 @@ await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
     ausgabe() {},
@@ -1172,6 +1268,14 @@ await check("Budget-unbekannt im Live-One-Shot ist terminal, einmalig und fuehrt
   assert.deepEqual(err, ["BUDGET_UNBEKANNT"]);
   assert.equal(fixture.visibleCalls.filter(({ binary }) => binary === "/usr/local/bin/node").length, 1);
   const liveIndex = fixture.visibleCalls.findIndex(({ binary }) => binary === "/usr/local/bin/node");
+  const aiEnableIndex = fixture.visibleCalls.findIndex(({ input }) => (
+    String(input || "").includes("set ai_aktiv=true, provider_requests_enabled=true")
+  ));
+  const aiRestoreIndex = fixture.visibleCalls.findIndex(({ input }) => (
+    String(input || "").includes("set ai_aktiv=false, provider_requests_enabled=false")
+  ));
+  assert.ok(aiEnableIndex >= 0 && aiEnableIndex < liveIndex);
+  assert.ok(aiRestoreIndex > liveIndex);
   assert.equal(fixture.visibleCalls.slice(liveIndex + 1).some(({ argv }) => argv[0] === "functions"), false);
   assert.equal(fixture.facts().flagsEnabled, false);
 });
@@ -1180,10 +1284,12 @@ await check("Default-Executor ist auch als Adapterfabrik one-shot und akzeptiert
   const fixture = processFixture({ failVersion: true });
   const run = createRadarE18CommittedAdapter({
     authorization: createRadarE18AuthorizationMarker(RADAR_E18_AUTHORIZATION_FLAG),
+    loadE17AContract: loadFixtureE17AContract,
     defaultExecutorOptions: {
       spawn: fixture.spawn,
       ambientEnv: LIVE_AMBIENT_ENV,
       committedSourceGate: fixture.committedSourceGate,
+      fs: fixture.fs,
       retainBackups: false,
     },
   });

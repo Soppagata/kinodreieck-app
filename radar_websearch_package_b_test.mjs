@@ -10,6 +10,7 @@ import {
   RADAR_WEBSEARCH_TASK_CAP_USD_CENT,
   RadarWebsearchProviderError,
   createAnthropicRadarWebsearchAdapter,
+  normalizeRadarReservationDecision,
 } from "./supabase/functions/radar-websearch-task/anthropicAdapter.js";
 import { evaluateRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
 import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
@@ -421,6 +422,26 @@ await check("Atomare Kostenablehnung und unbrauchbare Log-ID stoppen vor dem Pro
   assert.equal(badLog.adapter.telemetry().reservationDecision, "unknown");
   assert.equal(badLog.fetchCalls.length, 0);
   assert.equal(badLog.settleCalls.length, 0);
+});
+
+await check("ai-disabled wird sanitisiert als disabled abgelehnt und bleibt providerfrei", async () => {
+  const rawMarker = "ai-disabled:raw-private-secret";
+  assert.equal(normalizeRadarReservationDecision("ai-disabled"), "disabled");
+  assert.equal(normalizeRadarReservationDecision(rawMarker), "unknown");
+
+  const disabled = adapterHarness({
+    reserveResult: {
+      ok: false,
+      logId: null,
+      decision: normalizeRadarReservationDecision("ai-disabled"),
+    },
+  });
+  await expectProviderError(disabled.adapter.search(target), "cost-gate-rejected");
+  assert.equal(disabled.adapter.telemetry().reservationStatus, "rejected");
+  assert.equal(disabled.adapter.telemetry().reservationDecision, "disabled");
+  assert.equal(disabled.fetchCalls.length, 0);
+  assert.equal(disabled.settleCalls.length, 0);
+  assert.equal(JSON.stringify(disabled.adapter.telemetry()).includes(rawMarker), false);
 });
 
 await check("Eine Adapterinstanz ist one-shot und kann keinen zweiten Request auslösen", async () => {

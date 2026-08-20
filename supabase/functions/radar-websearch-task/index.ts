@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   RADAR_WEBSEARCH_PHASE_CODES,
   createAnthropicRadarWebsearchAdapter,
+  normalizeRadarReservationDecision,
 } from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
 
@@ -86,12 +87,6 @@ function safePhaseCode(value: unknown): string {
   return typeof value === "string" && RADAR_WEBSEARCH_PHASE_CODES.includes(value)
     ? value
     : "runtime-setup";
-}
-
-function safeReservationDecision(value: unknown): string {
-  return ["limit", "disabled", "forbidden", "server"].includes(String(value))
-    ? String(value)
-    : "unknown";
 }
 
 function rpcEvent(event: Record<string, unknown>, personContext: Record<string, unknown> | null = null) {
@@ -275,7 +270,7 @@ export function createRadarWebsearchHandler({
         return {
           ok: data?.ok === true,
           logId: data?.log_id,
-          decision: data?.ok === true ? "accepted" : safeReservationDecision(data?.code),
+          decision: data?.ok === true ? "accepted" : normalizeRadarReservationDecision(data?.code),
         };
       },
       async settleCost({
