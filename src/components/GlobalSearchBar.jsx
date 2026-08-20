@@ -108,11 +108,12 @@ export function GlobalSearchBar({
         const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
         const editierbarerFokus = document.activeElement === eingabe
           && !eingabe.disabled && !eingabe.readOnly;
+        const suchfokus = editierbarerFokus || form.contains(document.activeElement);
         const neutraleSkalierung = istNeutraleViewportSkalierung(viewport.scale);
         let breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         const volleGeometrie = Math.abs(layoutHeight - viewport.height) <= MIN_TASTATUR_HOEHENVERLUST;
 
-        if (neutraleSkalierung && (!editierbarerFokus || breiteGeaendert || volleGeometrie)) {
+        if (neutraleSkalierung && (!suchfokus || breiteGeaendert || volleGeometrie)) {
           basis = {
             height: Math.max(layoutHeight, viewport.height),
             width: viewport.width,
@@ -125,7 +126,7 @@ export function GlobalSearchBar({
              die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
              verkleinert ist, bleibt deshalb eine einmal erkannte Phase aktiv.
              Erst die echte Viewport-Erholung (oder Rotation/Zoom) räumt sie. */
-          editierbarerFokus: editierbarerFokus || tastaturPhaseAktiv,
+          editierbarerFokus: suchfokus || tastaturPhaseAktiv,
           scale: viewport.scale,
           height: viewport.height,
           width: viewport.width,

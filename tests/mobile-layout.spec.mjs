@@ -1791,6 +1791,28 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
 
+  /* VisualViewport-Resize und der Fokuswechsel zum Suchbutton können noch im
+     selben Browser-Frame landen. Der erste Geometrie-Frame muss die von der
+     Eingabe gestartete Tastaturphase trotzdem erkennen. */
+  await eingabe.fill("Fokus und Text bleiben erhalten");
+  await page.evaluate(() => {
+    window.__kdSetVisualViewport({ height: 500, offsetTop: 60 });
+    document.querySelector(".kd-globalsuche-los")?.focus();
+  });
+  await expect(suchen).toBeFocused();
+  await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
+  await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(anker).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
+  await expect(suchen).toBeFocused();
+  await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
+  await expect.poll(anker).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
+  await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+
   await eingabe.focus();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
