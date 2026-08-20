@@ -11,6 +11,7 @@ import { runEntdeckenDailyRefresh } from "./runner.js";
 const ALLOWED_ORIGINS = new Set([
   "https://kinodreieck.at",
   "https://staging.kinodreieck.at",
+  "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev",
   "http://localhost:5173",
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

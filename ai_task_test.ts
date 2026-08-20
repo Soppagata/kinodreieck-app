@@ -530,6 +530,12 @@ const {
   ) => { fehler: string } | { daten: unknown };
 };
 
+const { createEntdeckenDailyHandler } = await import(
+  new URL("./supabase/functions/entdecken-daily-task/index.ts", import.meta.url).href
+) as {
+  createEntdeckenDailyHandler: () => (req: Request) => Promise<Response>;
+};
+
 /* Der Vergleichsschlüssel des CLIENTS, als Orakel. Der Server muss mindestens
    so tolerant sein wie er (siehe R2/R2c) — verglichen wird deshalb nicht gegen
    eine im Test nachgebaute Regel, sondern gegen die echte Funktion. Ein
@@ -1596,6 +1602,24 @@ test("C8 OPTIONS: 204 mit CORS-Kopf, erlaubter Origin wird gespiegelt", async ()
     "authorization ist erlaubt",
   );
   gleich(antw.headers.get("Vary"), "Origin", "Vary: Origin");
+});
+
+test("ED1 Entdecken erlaubt nur den festen Preview-Branch-Origin", async () => {
+  const handler = createEntdeckenDailyHandler();
+  const previewOrigin = "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev";
+  const erlaubt = await handler(new Request(
+    "https://test.supabase.co/functions/v1/entdecken-daily-task",
+    { method: "OPTIONS", headers: { Origin: previewOrigin } },
+  ));
+  gleich(erlaubt.status, 204, "Preview-Preflight");
+  gleich(erlaubt.headers.get("Access-Control-Allow-Origin"), previewOrigin, "Preview-Origin");
+
+  const unveroeffentlicht = await handler(new Request(
+    "https://test.supabase.co/functions/v1/entdecken-daily-task",
+    { method: "OPTIONS", headers: { Origin: "https://nicht-freigegeben.kinodreieck.pages.dev" } },
+  ));
+  gleich(unveroeffentlicht.status, 403, "kein Pages-Wildcard");
+  gleich(unveroeffentlicht.headers.get("Access-Control-Allow-Origin"), null, "fremder Preview-Origin");
 });
 
 test("C9 fremder Origin wird NICHT zurückgespiegelt", async () => {
