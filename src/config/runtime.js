@@ -19,6 +19,7 @@ const STANDARD = Object.freeze({
   privateSelfServiceEnabled: false,
   accountDeleteEnabled: false,
   radarPilotClientEnabled: false,
+  entdeckenDailyFeedEnabled: false,
   buildVersion: "dev",
   schemaVersion: RUNTIME_SCHEMA_VERSION,
 });
@@ -43,6 +44,7 @@ export function createRuntimeConfig(env = {}) {
     privateSelfServiceEnabled: text(env.VITE_PRIVATE_SELF_SERVICE_ENABLED) === "true",
     accountDeleteEnabled: text(env.VITE_ACCOUNT_DELETE_ENABLED) === "true",
     radarPilotClientEnabled: text(env.VITE_RADAR_PILOT_CLIENT_ENABLED) === "true",
+    entdeckenDailyFeedEnabled: text(env.VITE_ENTDECKEN_DAILY_FEED_ENABLED) === "true",
     buildVersion: text(env.VITE_BUILD_VERSION) || STANDARD.buildVersion,
     schemaVersion: RUNTIME_SCHEMA_VERSION,
   });

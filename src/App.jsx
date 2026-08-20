@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-
 /* ============================================================
    KINODREIECK · WIEN — v4 (Webapp, Vite)
    ------------------------------------------------------------
@@ -109,7 +108,7 @@ import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
-
+import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
@@ -213,6 +212,7 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
+  const webDiscoveryFeed = useWebDiscoveryFeed(bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
@@ -2069,7 +2069,7 @@ export default function App() {
         {tab === "blog" && (
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
-            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl}
+            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryFeed}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}

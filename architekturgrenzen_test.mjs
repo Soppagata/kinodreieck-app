@@ -64,6 +64,7 @@ const config = createRuntimeConfig({
     && config.supabasePublishableKey === "sb_publishable_test"
     && config.aiEndpointName === "ai-v1"
     && config.radarPilotClientEnabled === false
+    && config.entdeckenDailyFeedEnabled === false
     && config.privateSelfServiceEnabled === false
     && config.accountDeleteEnabled === false
     && config.buildVersion === "abc123"
@@ -79,6 +80,14 @@ const radarWhitespace = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "
 check("Radar-Pilot-Flag bleibt bei abweichendem Wert false", radarWhitespace.radarPilotClientEnabled === false);
 const radarTrue = createRuntimeConfig({ VITE_RADAR_PILOT_CLIENT_ENABLED: "true" });
 check("Radar-Pilot-Flag wird nur bei exakt 'true' true", radarTrue.radarPilotClientEnabled === true);
+const entdeckenMissing = createRuntimeConfig({});
+check("Entdecken-Tagesfeed bleibt bei fehlendem Wert false", entdeckenMissing.entdeckenDailyFeedEnabled === false);
+const entdeckenFalse = createRuntimeConfig({ VITE_ENTDECKEN_DAILY_FEED_ENABLED: "false" });
+check("Entdecken-Tagesfeed bleibt bei false false", entdeckenFalse.entdeckenDailyFeedEnabled === false);
+const entdeckenWhitespace = createRuntimeConfig({ VITE_ENTDECKEN_DAILY_FEED_ENABLED: "TRUE" });
+check("Entdecken-Tagesfeed bleibt bei abweichendem Wert false", entdeckenWhitespace.entdeckenDailyFeedEnabled === false);
+const entdeckenTrue = createRuntimeConfig({ VITE_ENTDECKEN_DAILY_FEED_ENABLED: "true" });
+check("Entdecken-Tagesfeed wird nur bei exakt 'true' true", entdeckenTrue.entdeckenDailyFeedEnabled === true);
 const privateServiceMissing = createRuntimeConfig({});
 check("Self-Service-Flag bleibt bei fehlendem Wert false", privateServiceMissing.privateSelfServiceEnabled === false);
 const privateServiceFalse = createRuntimeConfig({ VITE_PRIVATE_SELF_SERVICE_ENABLED: "false" });

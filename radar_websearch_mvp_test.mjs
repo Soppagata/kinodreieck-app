@@ -297,7 +297,9 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
     getAccessToken: async () => "session-token",
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
-      return { ok: true, status: 200, async json() { return { ok: true, status: "confirmed", writes: 1 }; } };
+      return { ok: true, status: 200, async json() {
+        return { ok: true, status: "confirmed", writes: 1, providerRequests: 1, searchRequests: 1 };
+      } };
     },
   });
   const result = await service.checkNow(target.targetId);

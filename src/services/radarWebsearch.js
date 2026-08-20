@@ -10,9 +10,14 @@ export const RADAR_WEBSEARCH_CLIENT_STATUSES = Object.freeze([
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function exactResult(value) {
-  if (!plain(value) || Object.keys(value).some((key) => !["ok", "status", "writes"].includes(key))) return null;
+  const allowed = ["ok", "status", "writes", "providerRequests", "searchRequests"];
+  if (!plain(value) || !["ok", "status", "writes"].every((key) => key in value)
+      || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
       || !Number.isInteger(value.writes) || value.writes < 0) return null;
+  for (const key of ["providerRequests", "searchRequests"]) {
+    if (key in value && (!Number.isInteger(value[key]) || value[key] < 0)) return null;
+  }
   return Object.freeze({ status: value.status, writes: value.writes });
 }
 

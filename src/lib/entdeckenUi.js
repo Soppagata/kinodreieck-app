@@ -15,6 +15,10 @@ import {
   stageLocalEventCandidate,
 } from "./localEventRadar.js";
 import { rankRecommendations } from "./recommendationRanking.js";
+import {
+  discoveryExternalIdsFromCatalog,
+  matchWebDiscoveryFeed,
+} from "./webDiscoveryFeed.js";
 
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
 const PROFIL_ATTRIBUT_ARTEN = new Set([
@@ -174,6 +178,8 @@ export function localRecommendationCandidates(streamingEntdecken, {
         services: Object.freeze([...availableServices]),
         year: Number.isInteger(entry.jahr) ? entry.jahr : null,
         type: entry.typ || null,
+        originalTitle: text(entry.originaltitel || entry.original_title) || null,
+        externalIds: discoveryExternalIdsFromCatalog(entry),
       });
     })
     .filter(Boolean));
@@ -251,57 +257,36 @@ export function shouldRefreshWebDiscovery(lastRefreshDay, today) {
   return !!current && calendarDay(lastRefreshDay) !== current;
 }
 
-function httpsUrl(value) {
-  try {
-    const raw = text(value);
-    if (!raw || raw.length > 2048) return null;
-    const url = new URL(raw);
-    return url.protocol === "https:" && !url.username && !url.password ? url.toString() : null;
-  } catch { return null; }
-}
-
-function webEvidence(value) {
-  return list(value).map((entry) => {
-    const sourceLabel = text(entry?.sourceLabel);
-    const url = httpsUrl(entry?.url);
-    if (!sourceLabel || sourceLabel.length > 100 || !url || entry?.stance !== "recommended") return null;
-    return Object.freeze({ sourceLabel, url, stance: "recommended" });
-  }).filter(Boolean);
-}
-
-/* Ein Webfund wird ausschließlich gegen starke Katalog-IDs gebunden. Der
-   injizierte Feed darf strukturierte Werkmerkmale liefern, aber keinen
-   persönlichen Score und kein Nutzerurteil. Die persönliche Einordnung
-   entsteht erst darunter aus dem bestätigten Profil. */
+/* Der globale Feed kennt keine lokale Katalogliste. Das Matching geschieht
+   deshalb erst hier: gemeinsame starke ID, sonst exakt Titel + Jahr + Typ.
+   Mehrdeutige und fehlende Treffer bleiben leer. Ein Webfund darf Merkmale,
+   aber niemals einen persoenlichen Score oder ein Nutzerurteil liefern. */
 export function webDiscoveryCandidates({
   webDiscoveryFeed, catalogCandidates = [],
 } = {}) {
-  if (webDiscoveryFeed?.format !== 1 || webDiscoveryFeed?.region !== "AT"
-    || !calendarDay(webDiscoveryFeed?.refreshedOn)
-    || !isStableContractId(webDiscoveryFeed?.sourceId)) return Object.freeze([]);
-  if (!Array.isArray(webDiscoveryFeed.items) || webDiscoveryFeed.items.length > ENTDECKEN_TOP_POOL) {
-    return Object.freeze([]);
-  }
-  const catalog = new Map(list(catalogCandidates).map((candidate) => [candidate.targetId, candidate]));
   const unique = new Map();
-  for (const item of list(webDiscoveryFeed.items)) {
-    const targetId = text(item?.targetId);
-    const base = catalog.get(targetId);
-    const evidence = webEvidence(item?.evidence);
-    const rank = positiveInteger(item?.rank);
-    if (!base || !evidence.length || rank == null || rank > ENTDECKEN_TOP_POOL) continue;
-    const existing = unique.get(targetId);
-    if (existing && existing.sourceRank <= rank) continue;
-    const attributes = item?.attributes && typeof item.attributes === "object" ? item.attributes : {};
-    unique.set(targetId, Object.freeze({
+  for (const decision of matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates)) {
+    if (decision.status !== "matched") continue;
+    const { record, candidate: base } = decision;
+    const existing = unique.get(base.targetId);
+    if (existing && existing.sourceRank <= record.rank) continue;
+    const evidence = record.opinions.map((opinion) => Object.freeze({
+      sourceId: opinion.sourceId,
+      sourceFamily: opinion.sourceFamily,
+      sourceLabel: opinion.sourceLabel,
+      url: opinion.url,
+      stance: "recommended",
+      summary: opinion.summary,
+    }));
+    unique.set(base.targetId, Object.freeze({
       ...base,
-      genres: Object.freeze(uniqueText([...list(base.genres), ...list(attributes.genres)])),
-      tags: Object.freeze(uniqueText([...list(base.tags), ...list(attributes.tags)])),
-      franchiseId: text(attributes.franchiseId).slice(0, 80) || base.franchiseId || null,
+      genres: Object.freeze(uniqueText([...list(base.genres), ...list(record.attributes.genres)])),
+      tags: Object.freeze(uniqueText([...list(base.tags), ...list(record.attributes.tags)])),
       sourceId: webDiscoveryFeed.sourceId,
-      sourceRank: rank,
+      sourceRank: record.rank,
       externalDiscovery: true,
       externalEvidence: Object.freeze(evidence),
+      discoveryRecordId: record.recordId,
     }));
   }
   return Object.freeze([...unique.values()].sort((left, right) => (

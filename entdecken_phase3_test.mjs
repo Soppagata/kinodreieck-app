@@ -74,14 +74,21 @@ const catalogTruthInput = {
   })),
 };
 const webDiscoveryFeed = {
-  format: 1, region: "AT", refreshedOn: "2026-08-20", sourceId: "websearch:daily-tips",
+  format: 2, feedId: "websearch:daily-tips-at", region: "AT",
+  refreshedOn: "2026-08-20", validUntil: "2026-08-26", sourceId: "websearch:daily-tips",
   items: catalogTruthInput.titel.slice(1, 21).map((entry, index) => ({
-    targetId: `watchmode:${entry.watchmode_id}`, rank: index + 1,
-    /* Diese Felder werden absichtlich ignoriert: Der Feed darf kein Urteil
-       über den Nutzer in den Auswahlpfad schmuggeln. */
-    profileScore: 100, userOpinion: "erfunden",
+    recordId: `webtip:${(index + 1).toString(16).padStart(16, "0")}`,
+    title: entry.titel, originalTitle: null,
+    mediaType: entry.typ === "tv_series" ? "series" : "film",
+    releaseYear: entry.jahr,
+    externalIds: { watchmode: String(entry.watchmode_id) },
     attributes: { genres: index < 14 ? ["drama"] : ["komödie"], tags: [] },
-    evidence: [{ sourceLabel: `Quelle ${index + 1}`, url: `https://example.invalid/tipp-${index + 1}`, stance: "recommended" }],
+    opinions: [{
+      sourceId: "editorial:testquelle", sourceFamily: "Testverlag",
+      sourceLabel: `Quelle ${index + 1}`, url: `https://example.invalid/tipp-${index + 1}`,
+      stance: "recommended", summary: `Positiver Testbeleg ${index + 1}`,
+    }],
+    rank: index + 1, retrievedOn: "2026-08-20", validUntil: "2026-08-26",
   })),
 };
 const dailyInput = {
@@ -124,20 +131,21 @@ check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht
     && !stableSelection.personal.some((personal) => personal.targetId === entry.targetId)));
   const catalogCandidates = localRecommendationCandidates(catalogTruthInput, { selectedServices: ["Testdienst"] });
   const invalid = webDiscoveryCandidates({
-    webDiscoveryFeed: { ...webDiscoveryFeed, items: [{ ...webDiscoveryFeed.items[0], evidence: [] }] },
+    webDiscoveryFeed: { ...webDiscoveryFeed, items: [{ ...webDiscoveryFeed.items[0], opinions: [] }] },
     catalogCandidates,
   });
   assert.deepEqual(invalid, []);
 });
-check("Ein vom Feed behaupteter Profilscore wird ignoriert und erzeugt keine persönliche Passung", () => {
+check("Ein Webtipp ohne lokales Profilsignal bleibt weitere Entdeckung", () => {
   const scoreOnlyItem = webDiscoveryFeed.items.find((entry) => entry.attributes.genres.includes("komödie"));
+  const targetId = `watchmode:${scoreOnlyItem.externalIds.watchmode}`;
   const result = createEntdeckenRecommendations({
     streamingEntdecken: catalogTruthInput, profile: profileInput, master: [],
     selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
     webDiscoveryFeed: { ...webDiscoveryFeed, items: [scoreOnlyItem] },
   });
-  assert.ok(!result.personal.some((entry) => entry.targetId === scoreOnlyItem.targetId));
-  assert.ok(result.further.some((entry) => entry.targetId === scoreOnlyItem.targetId));
+  assert.ok(!result.personal.some((entry) => entry.targetId === targetId));
+  assert.ok(result.further.some((entry) => entry.targetId === targetId));
 });
 check("Tägliche Abwechslung ist am selben Tag stabil, wechselt zwischen Tagen und bewahrt den Passungsrang", () => {
   const ranked = Array.from({ length: 20 }, (_, index) => ({ targetId: `ranked:${index}`, rank: index }));

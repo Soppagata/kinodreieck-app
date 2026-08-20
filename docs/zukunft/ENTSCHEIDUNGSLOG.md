@@ -1,12 +1,16 @@
 # Zukunftsplanung: Entscheidungs- und Verworfen-Log
 
-Stand: 09.08.2026
+Stand: 20.08.2026
 Audit-Scope: `FUTURE_PLAN_METADATA_ONLY`
 
 > **Status: Zukunftsplanung – nicht implementiert.**
 > Dieses Log ist aus Rollen-v1, der privaten Demo-Schlussabnahme und dem
 > abgeschlossenen Audit-/Cleanup-Scope ausgeschlossen. Es dokumentiert
 > Produktentscheidungen, keine gelieferten Funktionen.
+>
+> Der Nachtrag vom 20.08.2026 beschreibt den lokal gebauten Entdecken-
+> Tagesfeed. Remote-Anwendung, Quellen-Seeds, Aktivierung und Deployment sind
+> weiterhin nicht geliefert.
 
 ## Entschieden
 
@@ -53,6 +57,9 @@ Audit-Scope: `FUTURE_PLAN_METADATA_ONLY`
 | Phase 2 liefert nur lokalen Event-Radar und read-only Proposal-Prüfung (09.08.2026) | Subscription, Share, Receipt und globale Eventversion brauchen zuerst deterministische, testbare Grenzen; eine Routine würde Quellen-, Kosten- und Remote-Autorität vorwegnehmen | lokaler Cache/Outbox/Ledger plus vorbereitete Migration; Personen-Automatik, Importer, Provider, Scheduler, Remote-Migration und Deploy bleiben am nächsten STOP |
 | Eine Adaptionsbeziehung ist ein sichtbarer Kontexthinweis, kein stiller Ranking-Boost (09.08.2026) | folgt der bestehenden Trennung von Beobachtung und Vorliebe; zusätzlich trägt `Sonstiges` hart `bewertung: null` und liefert damit keine Präferenzstärke | Gewichtung nur nach ausdrücklicher Bestätigung; Finder, Prognose und Passung bleiben unverändert |
 | Der `fa225c1f`-Deployfehler ist historisch geschlossen (09.08.2026) | Run #116 lieferte atomar korrekt, nur die feste Domain zeigte während der Propagation noch `289abff`; `bf82304` verlängerte den Domain-Retry | #117 und #120 sowie live `65a92df` grün; kein Rerun/Fix, im neuen Auftrag nur aktuellen Stand erneut belegen |
+| Entdecken erhält einen globalen, accountlosen Tagesfeed mit lokaler Personalisierung (20.08.2026) | Ein gemeinsamer Suchlauf genügt für alle; Profil, Seen-Status, Mediathek, Account-ID und Kataloglisten bleiben vollständig aus dem Anbieterpayload | serverseitig höchstens ein Versuch je Wiener Kalendertag; gültiger Altfeed bleibt bei Fehler; keine Clienttimer |
+| Webtipps werden lokal fail-closed gegen aktuelle AT-Verfügbarkeit gematcht (20.08.2026) | Verfügbarkeit ist Katalogwahrheit des Clients und darf nicht an den Suchanbieter gehen | gemeinsame starke ID gewinnt; sonst nur exakt Titel + Jahr + Typ; Mehrdeutigkeit bleibt sichtbar blockiert |
+| Der belegte Anthropic-Websearch-Transport wird für den Tagesfeed hinter einem eigenen Vertrag wiederverwendet (20.08.2026) | Endpoint, Tool-, Result-, Citation- und Usage-Felder sind belegt; Radarereignisse und allgemeine Empfehlungen sind trotzdem verschiedene Domänen | keine geratenen Source-Seeds; konkrete redaktionelle Quellen erst nach Betreiber-/Terms-/Anzeigeprüfung aktivieren |
 
 ## Geparkt – nur unter genannter Bedingung wieder öffnen
 
@@ -71,6 +78,7 @@ Audit-Scope: `FUTURE_PLAN_METADATA_ONLY`
 | JustWatch als exklusive Streaming-Chartquelle | FlixPatrol erhält kein ausreichendes Nutzungsrecht oder scheidet qualitativ aus; JustWatch-Vertrag erlaubt den Elf-Konten-Pfad und Gesamtpreis bleibt im selben 15-Euro-Unterdeckel | 09.08.2026 |
 | Zweiter bezahlter Rankinganbieter | Shadow-/Stichproben belegen trotz korrekter IDs, Region und Verfügbarkeit einen für Nutzer relevanten Qualitätsfehler, der nicht mit Quellenlabel oder manueller QA lösbar ist; neuer Kosten-/Rechteauftrag nötig | 09.08.2026 |
 | Direkte Claude-Websuche für jeden Zielcheck | Payload-/Kosten-Spike belegt Modellunterstützung, `max_uses: 1`, Präzision und Monatskosten unter dem Ownerdeckel | 09.08.2026 |
+| Konkrete redaktionelle Source-Seeds für den Entdecken-Tagesfeed | Betreiber, Terms sowie Rechte für automatisierte Suche, kurze Paraphrase, serverseitigen Cache, Linkanzeige und Attribution sind je Domain belegt | 20.08.2026 |
 | Weitere Discovery-Targets (Buch, Videospiel, Studio, Theaterstück sowie Komposition/Drehbuch) | Personenpfad für Schauspiel/Regie läuft stabil; eigener Nutzen-, Daten-, Fan-out- und Privacyvertrag liegt vor | 09.08.2026 |
 | Ereignistyp „neues Projekt angekündigt" | Anbahnungs- und Besetzungsmeldungen haben ein eigenes Evidenzproblem; erst nach belegtem Discovery-Pfad und eigenem Gate erneut prüfen | 09.08.2026 |
 | Automatische Übernahme bestehender `Persönlichkeit`-Einträge der Mediathek in Radar-Abos | dieselbe Bedingung wie bei der Serienübernahme: Inventur, Vorschau, Parität, wiederaufnehmbarer Vertrag | 09.08.2026 |
@@ -93,6 +101,10 @@ Audit-Scope: `FUTURE_PLAN_METADATA_ONLY`
 | Bestehende `kd_series_watch`-Zeilen still auf zehn kürzen | möglicher Datenverlust und fachlich anderer bestehender Vertrag | 09.08.2026 |
 | Drei Suchrequests je Check-Key und Lauf als MVP | bei 100 unterschiedlichen Check-Keys entstünden 600 statt 200 Suchen pro Woche, ohne dreifache unabhängige Evidenz | 09.08.2026 |
 | Fehlgeschlagenen Batch sofort vollständig wiederholen | erzeugt Requeststürme, Duplikate und unkontrollierte Kosten; Wiederanlauf nur über Fehlmenge | 09.08.2026 |
+| Profil, Seen-Status oder lokaler Katalog im Websearch-Payload | unnötige persönliche Datenweitergabe; globale Tipps werden einmal gesammelt und erst im Browser personalisiert | 20.08.2026 |
+| Titel-only-, Fuzzy- oder Prefix-Match für Webtipps | Remakes, gleichnamige Werke und kurze Titel erzeugen stille False Positives; ohne starke ID ist Titel + Jahr + Typ die Mindestsubstanz | 20.08.2026 |
+| Providerretry am selben Tag oder Resolverrequest je Titel | bricht den globalen Tageskostenzaun und erzeugt Requestschleifen; ein fehlender Match bleibt eine Lücke | 20.08.2026 |
+| Ungeprüfte Nachrichten-, Blog- oder Empfehlungsdomains automatisch erlauben | Suchauffindbarkeit ist kein Nutzungs-, Speicher- oder Anzeigerecht und keine belastbare Quellenprovenienz | 20.08.2026 |
 | Radar-Share in `kd_shared_articles` oder einer gemeinsamen Social-Tabelle speichern | Blogpayload, Autor-/Tokenvertrag und Radar-Privacy sind fachlich unvereinbar | 09.08.2026 |
 | Netflix-, FlixPatrol- oder ÖFI-Seiten im privaten Elf-Konten-Pilot einfach wöchentlich scrapen | kleine Reichweite senkt Exposition, hebt aber automatisierungs-, speicher- und weitergabebezogene Bedingungen nicht auf | 09.08.2026 |
 | Chartpositionen in das Geschmacksprofil schreiben | nationale Nutzung ist weder persönliche Vorliebe noch Qualitätsurteil | 09.08.2026 |
