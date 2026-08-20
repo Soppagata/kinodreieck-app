@@ -130,8 +130,7 @@ export default function App() {
   const [frischerStart] = useState(() => verbraucheFrischenStart());
   const [frischerStartWarnung] = useState(() => liesFrischenStartWarnung());
   const { errors, reportError, resolveError, dismissError, setErr } = useErrorQueue(
-    frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : [],
-  );
+    frischerStartWarnung ? [{ scope: ERROR_SCOPE.FRISCHER_START, text: frischerStartWarnung }] : []);
   const [tab, setTab] = useState("start");
   /* Der offene Tab als Ref: Effekte, die nicht bei jedem Tabwechsel neu laufen
      sollen, dürfen ihn trotzdem lesen (z. B. „ist der Streaming-Tab offen?"). */
@@ -212,12 +211,8 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
-  const webDiscoveryOwnerFreigegeben = ownerTechnikBestaetigt
-    && session.capabilities?.personalAi === true;
-  const webDiscoveryFeed = useWebDiscoveryFeed(
-    bootDone && tab === "blog",
-    webDiscoveryOwnerFreigegeben,
-  );
+  const webDiscoveryOwnerFreigegeben = ownerTechnikBestaetigt && session.capabilities?.personalAi === true;
+  const webDiscoveryFeed = useWebDiscoveryFeed(bootDone && tab === "blog", webDiscoveryOwnerFreigegeben);
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
