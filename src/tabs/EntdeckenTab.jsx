@@ -3,11 +3,10 @@ import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
 import { ladeProfil } from "../lib/profil.js";
 import {
-  createAdditionalServiceDiscoveries,
   createCatalogRadarTarget,
-  createEntdeckenCatalogSummary,
+  createEntdeckenRecommendations,
+  localCalendarDay,
   localRadarTargetLabel,
-  rankLocalEntdeckenRecommendations,
 } from "../lib/entdeckenUi.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
@@ -131,62 +130,50 @@ function ManageDialog({
 }
 
 function RecommendationsView({
-  streamingEntdecken, master, profile, useLibrary, selectedServices, onRadarPreview,
+  streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
+  entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay, onRadarPreview,
 }) {
-  const recommendations = useMemo(() => rankLocalEntdeckenRecommendations({
-    streamingEntdecken, master, profile, useLibrary,
-  }), [master, profile, streamingEntdecken, useLibrary]);
-  const catalogSummary = useMemo(() => createEntdeckenCatalogSummary({
-    streamingEntdecken, selectedServices,
-  }), [selectedServices, streamingEntdecken]);
-  const additional = useMemo(() => createAdditionalServiceDiscoveries({
-    streamingEntdecken, selectedServices, personalRecommendations: recommendations, master,
-  }), [master, recommendations, selectedServices, streamingEntdecken]);
-  const formatCount = (value) => Number(value || 0).toLocaleString("de-AT");
+  const selection = useMemo(() => createEntdeckenRecommendations({
+    streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
+    entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
+  }), [dailyVariety, entdeckenStatus, master, profile, selectedServices, selectionDay,
+    streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed]);
+  const { personal, further } = selection;
+  const source = (entry) => entry.externalEvidence?.[0] || null;
+  const meta = (entry) => [...(entry.services || []).slice(0, 2), entry.year].filter(Boolean).join(" · ");
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
-    <div className="kd-entdecken-einleitung">
-      <div><span>Lokal & erklärbar</span><h2 id="kd-entdecken-empfehlungen">Empfehlungen für dich</h2></div>
-      <p>Deterministisch aus bestätigten Profilsignalen und – wenn gewählt – ausdrücklich bewerteten Mediathek-Einträgen. Kein LLM, kein Profil-Write.</p>
-    </div>
-    <div className="kd-entdecken-katalogwahrheit" aria-label="Katalog und aktuelle Treffermenge">
-      <dl className="kd-entdecken-katalogzahlen">
-        <div><dt>{catalogSummary.coverage === "full" ? "Kataloggröße" : "Begrenzter Katalogstand"}</dt><dd>{formatCount(catalogSummary.catalogSize)} Titel</dd></div>
-        <div><dt>Aktuelle Treffermenge</dt><dd>{formatCount(catalogSummary.currentCount)} Titel{catalogSummary.selectedServiceCount ? " aus deinen Diensten" : " ohne Dienstefilter"}</dd></div>
-      </dl>
-      <p>{catalogSummary.coverage === "full"
-        ? "Die Treffermenge berücksichtigt deine Dienstewahl und den bereits in deiner Mediathek erkannten Bestand. Sie verändert die Kataloggröße nicht."
-        : "Nur der lokale Ersatzstand ist geladen. Seine Zahl ist keine Aussage über die Größe des Gesamtkatalogs."}</p>
+    <div className="kd-entdecken-sektionskopf">
+      <div><span>Für dich</span><h2 id="kd-entdecken-empfehlungen">Persönliche Passung</h2></div>
+      <p>Verfügbar und noch nicht gesehen.{dailyVariety ? " Heute neu gemischt." : " Beste Passung zuerst."}</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
-    {recommendations.length ? <div className="kd-entdecken-karten">{recommendations.map((entry) => {
-      const catalogEntry = (streamingEntdecken?.titel || []).find((item) => `watchmode:${item.watchmode_id}` === entry.targetId);
-      const target = createCatalogRadarTarget({ watchmodeId: catalogEntry?.watchmode_id, title: entry.title, type: catalogEntry?.typ });
+    {personal.length ? <div className="kd-entdecken-karten">{personal.map((entry) => {
+      const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
       return <article key={entry.targetId} className="kd-entdecken-hub-karte">
-        <span className="kd-entdecken-kicker">Persönliche Passung · AT verfügbar</span>
+        <span className="kd-entdecken-kicker">Persönliche Passung</span>
         <h3>{entry.title}</h3>
-        <ul>{entry.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
-        <small>Quelle: lokaler Streaming-Katalog AT.</small>
+        <p className="kd-entdecken-grund">{entry.reasons[0]}</p>
+        <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).sourceLabel}` : " · Streamingkatalog Österreich"}</small>
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
       </article>;
-    })}</div> : <p className="kd-entdecken-leer gross">Noch keine belastbare persönliche Empfehlung. Dafür braucht es ein bestätigtes Profilsignal oder eine passende ausdrücklich positive Mediathek-Bewertung.</p>}
-    {recommendations.length < 6 ? <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
-      <div className="kd-entdecken-einleitung kompakt">
-        <div><span>Neutral ergänzt</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen aus deinen Diensten</h2></div>
-        <p>Deterministisch aus dem verfügbaren Dienstekatalog. Diese Titel sind ausdrücklich keine persönliche Passung.</p>
+    })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
+    <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
+      <div className="kd-entdecken-sektionskopf">
+        <div><span>Von anderen empfohlen</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen</h2></div>
+        <p>Webtipps, die aktuell in Österreich verfügbar sind.</p>
       </div>
-      {additional.length ? <div className="kd-entdecken-karten">{additional.map((entry) => {
+      {further.length ? <div className="kd-entdecken-karten">{further.map((entry) => {
+        const evidence = source(entry);
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
         return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
-          <span className="kd-entdecken-kicker">Aus deinen Diensten · neutral</span>
+          <span className="kd-entdecken-kicker">{evidence?.sourceLabel || "Webtipp"}</span>
           <h3>{entry.title}</h3>
-          <p>{entry.services.join(" · ")}{entry.year ? ` · ${entry.year}` : ""}</p>
-          <small>Keine Bewertung und keine persönliche Passungsbehauptung.</small>
+          <p>{meta(entry)}</p>
+          {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
         </article>;
-      })}</div> : <p className="kd-entdecken-leer gross">{catalogSummary.selectedServiceCount
-        ? "Keine weiteren eindeutigen Titel aus deinen gewählten Diensten verfügbar."
-        : "Wähle unter Streaming-Quellen mindestens einen Dienst aus, damit hier neutrale Entdeckungen erscheinen."}</p>}
-    </section> : null}
+      })}</div> : <p className="kd-entdecken-leer gross">Noch keine belegten Webtipps geladen.</p>}
+    </section>
   </section>;
 }
 
@@ -381,6 +368,7 @@ function RadarView({
 export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
+  webDiscoveryFeed = null, dailyVariety = false, calendarDay = null,
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
@@ -390,6 +378,7 @@ export function EntdeckenTab({
   const [manageOffen, setManageOffen] = useState(false);
   const [useLibrary, setUseLibrary] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [selectionDay] = useState(() => calendarDay || localCalendarDay());
   const manageButtonRef = useRef(null);
   useEffect(() => {
     let aktiv = true;
@@ -413,8 +402,10 @@ export function EntdeckenTab({
         </button>
       </nav>
     </div>
-    {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} master={master}
-      profile={profile} useLibrary={useLibrary} selectedServices={selectedServices} onRadarPreview={onRadarPreview} /> : null}
+    {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} streamingKnown={streamingKnown}
+      master={master} profile={profile} useLibrary={useLibrary} selectedServices={selectedServices}
+      entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} dailyVariety={dailyVariety}
+      selectionDay={selectionDay} onRadarPreview={onRadarPreview} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}

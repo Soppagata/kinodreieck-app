@@ -550,12 +550,12 @@ check("No-Config-file:// enthält beide Streaming-Snapshots",
 const dateiEntdeckenBereich = [...dateiDoc.querySelectorAll('nav[aria-label="Hauptnavigation"] button')]
   .find((button) => (button.textContent || "").trim() === "Entdecken");
 dateiEntdeckenBereich?.click(); await warte(700);
-check("No-Config-file:// kennzeichnet den kleinen Entdecken-Bestand als begrenzten Ersatzstand",
+check("No-Config-file:// zeigt die kompakte Entdecken-Fläche ohne erfundene Webtipps",
   !!dateiEntdeckenBereich
-  && /Begrenzter Katalogstand\s*3 Titel/.test(dateiText())
-  && /Aktuelle Treffermenge/.test(dateiText())
-  && /keine Aussage über die Größe des Gesamtkatalogs/.test(dateiText())
-  && /Weitere Entdeckungen aus deinen Diensten/.test(dateiText()));
+  && /Persönliche Passung/.test(dateiText())
+  && /Weitere Entdeckungen/.test(dateiText())
+  && /Noch keine belegten Webtipps geladen/.test(dateiText())
+  && !/Kataloggröße|Aktuelle Treffermenge/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));

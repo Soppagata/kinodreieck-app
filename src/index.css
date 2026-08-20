@@ -285,13 +285,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-einleitung span,.kd-entdecken-kicker,.kd-entdecken-dialog-kopf span,.kd-entdecken-parked>span { color:var(--wolfram,#e3a63b); font:700 10px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
 .kd-entdecken-einleitung h2,.kd-entdecken-dialog-kopf h2 { margin:3px 0 0; color:var(--leinwand,#ece8df); font:700 29px 'Barlow Condensed',sans-serif; letter-spacing:.045em; text-transform:uppercase; }
 .kd-entdecken-einleitung p { margin:0; color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-sektionskopf { display:flex; align-items:end; justify-content:space-between; gap:14px; margin:0 0 12px; }
+.kd-entdecken-sektionskopf span { color:var(--wolfram,#e3a63b); font:700 9px 'Space Mono',monospace; letter-spacing:.08em; text-transform:uppercase; }
+.kd-entdecken-sektionskopf h2 { margin:2px 0 0; color:var(--leinwand,#ece8df); font:700 25px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+.kd-entdecken-sektionskopf p { margin:0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.4; text-align:right; }
 .kd-entdecken-karten { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { min-width:0; padding:16px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
+.kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { min-width:0; padding:14px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
 .kd-entdecken-hub-karte h3,.kd-entdecken-panel h3,.kd-entdecken-parked h3 { margin:5px 0 8px; color:var(--leinwand,#ece8df); font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.03em; text-transform:uppercase; }
 .kd-entdecken-hub-karte p,.kd-entdecken-parked p,.kd-entdecken-panel p { color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
+.kd-entdecken-hub-karte .kd-entdecken-grund { margin:4px 0 8px; color:var(--leinwandTief,#dfdacd); }
 .kd-entdecken-hub-karte ul { min-height:45px; margin:8px 0 12px; padding-left:19px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
 .kd-entdecken-hub-karte small,.kd-entdecken-panel small { display:block; color:var(--rauch,#948fa0); font:10px/1.55 'Space Mono',monospace; }
 .kd-entdecken-hub-karte button { margin-top:13px; }
+.kd-entdecken-quellenlink { display:inline-block; margin-top:2px; color:var(--wolfram,#e3a63b); font:600 11px 'Space Grotesk',sans-serif; }
 .kd-entdecken-leer { margin:9px 0; color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
 .kd-entdecken-leer.gross { padding:20px; border:1px dashed var(--rauch,#948fa0); border-radius:8px; text-align:center; }
 .kd-entdecken-katalogwahrheit { margin:0 0 18px; padding:14px 16px; border:1px solid rgba(148,143,160,.42); border-radius:9px; background:rgba(23,21,26,.72); }
@@ -300,7 +306,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-katalogzahlen dt { color:var(--rauch,#948fa0); font:700 9px 'Space Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
 .kd-entdecken-katalogzahlen dd { margin:3px 0 0; color:var(--leinwand,#ece8df); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.025em; }
 .kd-entdecken-katalogwahrheit>p { margin:10px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.5; }
-.kd-entdecken-weitere { margin-top:26px; padding-top:20px; border-top:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-weitere { margin-top:22px; padding-top:16px; border-top:1px solid rgba(148,143,160,.3); }
 .kd-entdecken-einleitung.kompakt { margin-bottom:14px; }
 .kd-entdecken-neutral p { margin:7px 0 10px; }
 .kd-entdecken-warnung,.kd-entdecken-fehler { padding:10px 12px; border:1px solid var(--kd-gefahr,#c85b51); border-radius:7px; color:var(--kd-gefahr,#c85b51); font-size:13px; }
@@ -349,6 +355,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-check,.kd-entdecken-share { display:flex; align-items:flex-start; gap:10px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.4; }
 .kd-entdecken-check input,.kd-entdecken-share input { width:20px; height:20px; flex:0 0 auto; margin:1px 0 0; }.kd-entdecken-check strong,.kd-entdecken-check small,.kd-entdecken-share strong,.kd-entdecken-share small { display:block; }
 .kd-entdecken-check small,.kd-entdecken-share small { margin-top:3px; color:var(--rauch,#948fa0); font-size:11px; }.kd-entdecken-share.gesperrt { opacity:.62; }
+.kd-einstellcheck { display:flex; align-items:flex-start; gap:10px; padding-top:2px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.4; cursor:pointer; }
+.kd-einstellcheck input { width:20px; height:20px; flex:0 0 auto; margin:1px 0 0; }.kd-einstellcheck strong,.kd-einstellcheck small { display:block; }
+.kd-einstellcheck small { margin-top:2px; color:var(--rauch,#948fa0); font-size:11px; }
 .kd-entdecken-preview-ziel { display:flex; flex-direction:column; gap:3px; padding:14px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:6px; background:var(--saal,#17151a); }
 .kd-entdecken-preview-ziel strong { font:700 24px 'Barlow Condensed',sans-serif; text-transform:uppercase; }.kd-entdecken-preview-ziel span { color:var(--rauch,#948fa0); font-size:12px; }
 .kd-entdecken-fakten { margin:13px 0; }.kd-entdecken-fakten>div { display:grid; grid-template-columns:100px minmax(0,1fr); gap:10px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.24); }
@@ -365,7 +374,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main img,.kd-app main video,.kd-app main svg { max-width:100%; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
-  .kd-entdecken-tabs .kd-entdecken-verwalten { flex:0 0 44px; width:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-radar-add-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
+  .kd-entdecken-tabs .kd-entdecken-verwalten { flex:0 0 44px; width:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-sektionskopf { align-items:flex-start; flex-direction:column; gap:4px; }.kd-entdecken-sektionskopf p { text-align:left; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-radar-add-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
   .kd-entdecken-layer { align-items:flex-end; padding:0; }.kd-entdecken-dialog { width:100%; height:100dvh; max-height:100dvh; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border-inline:0; border-bottom:0; border-radius:0; }
   .kd-entdecken-manage-grid,.kd-entdecken-katalogzahlen { grid-template-columns:1fr; }.kd-entdecken-verwalten-liste li { align-items:flex-start; flex-direction:column; }.kd-entdecken-verwalten-liste li>div { justify-content:flex-start; }
   .kd-entdecken-dialog-aktionen { position:sticky; bottom:calc(-20px - env(safe-area-inset-bottom)); margin:16px -16px calc(-20px - env(safe-area-inset-bottom)); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--saalHoch,#211e26); border-top:1px solid var(--saal,#3c3742); }

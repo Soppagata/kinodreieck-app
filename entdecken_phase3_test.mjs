@@ -7,10 +7,13 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
-  createAdditionalServiceDiscoveries,
   createCatalogSearchActions,
-  createEntdeckenCatalogSummary,
+  createEntdeckenRecommendations,
+  localRecommendationCandidates,
   rankLocalEntdeckenRecommendations,
+  selectDailyRecommendations,
+  shouldRefreshWebDiscovery,
+  webDiscoveryCandidates,
 } from "./src/lib/entdeckenUi.js";
 import {
   applyPersonRadarCheckResult,
@@ -62,66 +65,98 @@ check("Lokale Empfehlung ist begründet und mutiert weder Katalog noch Profil", 
 
 const catalogTruthInput = {
   region: "AT", stand: "2026-08-18T00:00:00.000Z",
-  katalogMengen: { rohkatalog: 12, masterbestand: 3, imMasterGefunden: 3, nachMasterAbzug: 9, umfang: "voll" },
-  titel: [
-    { watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "movie", dienste: ["Testdienst"], genres: ["drama"] },
-    { watchmode_id: 92, titel: "Alpha Neutral", jahr: 2020, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 93, titel: "Bravo Neutral", jahr: 2021, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 94, titel: "Charlie Neutral", jahr: 2022, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 95, titel: "Delta Neutral", jahr: 2023, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 96, titel: "Echo Neutral", jahr: 2024, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 97, titel: "Foxtrot Neutral", jahr: 2025, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 98, titel: "Gamma Neutral", jahr: 2026, typ: "movie", dienste: ["Testdienst"] },
-    { watchmode_id: 99, titel: "Fremder Dienst", jahr: 2026, typ: "movie", dienste: ["Anderer Dienst"] },
-  ],
+  katalogMengen: { rohkatalog: 24, masterbestand: 1, imMasterGefunden: 0, nachMasterAbzug: 24, umfang: "voll" },
+  titel: Array.from({ length: 24 }, (_, index) => ({
+    watchmode_id: 91 + index,
+    titel: `Synthetischer Tipp ${String(index + 1).padStart(2, "0")}`,
+    jahr: 2000 + index, typ: index % 5 === 0 ? "tv_series" : "movie",
+    dienste: ["Testdienst"], genres: index === 0 ? ["drama"] : [],
+  })),
 };
-const personalRecommendations = [{ targetId: "watchmode:91", title: "Passender Film", reasons: ["Profil: Drama"] }];
-const additional = createAdditionalServiceDiscoveries({
-  streamingEntdecken: catalogTruthInput,
-  selectedServices: ["Testdienst"],
-  personalRecommendations,
+const webDiscoveryFeed = {
+  format: 1, region: "AT", refreshedOn: "2026-08-20", sourceId: "websearch:daily-tips",
+  items: catalogTruthInput.titel.slice(1, 21).map((entry, index) => ({
+    targetId: `watchmode:${entry.watchmode_id}`, rank: index + 1,
+    /* Diese Felder werden absichtlich ignoriert: Der Feed darf kein Urteil
+       über den Nutzer in den Auswahlpfad schmuggeln. */
+    profileScore: 100, userOpinion: "erfunden",
+    attributes: { genres: index < 14 ? ["drama"] : ["komödie"], tags: [] },
+    evidence: [{ sourceLabel: `Quelle ${index + 1}`, url: `https://example.invalid/tipp-${index + 1}`, stance: "recommended" }],
+  })),
+};
+const dailyInput = {
+  streamingEntdecken: catalogTruthInput, profile: profileInput, master: [],
+  selectedServices: ["Testdienst"], webDiscoveryFeed,
+};
+const stableSelection = createEntdeckenRecommendations({ ...dailyInput, dailyVariety: false, selectionDay: "2026-08-20" });
+check("Persönliche Passung zeigt sechs verfügbare, ungesehene Titel in Passungsreihenfolge", () => {
+  assert.equal(stableSelection.personal.length, 6);
+  assert.ok(stableSelection.personal.every((entry) => entry.services.includes("Testdienst")
+    && entry.reasons.some((reason) => /^Profil:/.test(reason))));
+  assert.equal(new Set(stableSelection.personal.map((entry) => entry.targetId)).size, 6);
 });
-check("Neutrale Dienstetreffer füllen stabil nur bis insgesamt sechs Karten", () => {
-  assert.deepEqual(additional.map((entry) => entry.title), [
-    "Alpha Neutral", "Bravo Neutral", "Charlie Neutral", "Delta Neutral", "Echo Neutral",
-  ]);
-  assert.equal(additional.length + personalRecommendations.length, 6);
-  assert.ok(additional.every((entry) => entry.services.join() === "Testdienst"));
-});
-check("Neutrale Ergänzungen bleiben profilfrei, dublettenfrei und unabhängig von der Eingabereihenfolge", () => {
-  const reversed = createAdditionalServiceDiscoveries({
-    streamingEntdecken: { ...catalogTruthInput, titel: [...catalogTruthInput.titel].reverse() },
-    selectedServices: ["Testdienst"], personalRecommendations,
+check("Explizit gesehene Titel bleiben aus persönlicher und weiterer Auswahl", () => {
+  const result = createEntdeckenRecommendations({
+    ...dailyInput, entdeckenStatus: { 92: "gesehen" }, selectionDay: "2026-08-20",
   });
-  assert.deepEqual(reversed.map((entry) => entry.targetId), additional.map((entry) => entry.targetId));
-  assert.equal(new Set(additional.map((entry) => entry.targetId)).size, additional.length);
-  assert.ok(additional.every((entry) => !("reasons" in entry) && !("bewertung" in entry) && !("profile" in entry)));
+  assert.ok(![...result.personal, ...result.further].some((entry) => entry.targetId === "watchmode:92"));
 });
-check("Ohne gewählte Dienste oder bei sechs persönlichen Treffern wird nichts neutral zugeschrieben", () => {
-  assert.deepEqual(createAdditionalServiceDiscoveries({
-    streamingEntdecken: catalogTruthInput, selectedServices: [], personalRecommendations,
-  }), []);
-  assert.deepEqual(createAdditionalServiceDiscoveries({
-    streamingEntdecken: catalogTruthInput, selectedServices: ["Testdienst"],
-    personalRecommendations: Array.from({ length: 6 }, (_, index) => ({ targetId: `personal:${index}` })),
-  }), []);
+check("Ein bloßer Mediathek-Eintrag bleibt auffindbar, eine vollständige Bewertung gilt als Sehbeleg", () => {
+  const known = {
+    region: "AT", titel: [
+      { watchmode_id: 801, titel: "Synthetisch ungesehen", typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
+      { watchmode_id: 802, titel: "Synthetisch gesehen", typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
+    ],
+  };
+  const result = createEntdeckenRecommendations({
+    streamingEntdecken: { region: "AT", titel: [] }, streamingKnown: known,
+    profile: profileInput, selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
+    master: [
+      { watchmode_id: 801, titel: "Synthetisch ungesehen", bewertung: null, genre: ["drama"] },
+      { watchmode_id: 802, titel: "Synthetisch gesehen", bewertung: { wie: 4, was: 3, warum: 3 }, genre: ["drama"] },
+    ],
+  });
+  assert.deepEqual(result.personal.map((entry) => entry.targetId), ["watchmode:801"]);
 });
-check("Kataloggröße und aktuelle Dienstetreffer bleiben getrennte Zahlen", () => {
-  const summary = createEntdeckenCatalogSummary({
-    streamingEntdecken: catalogTruthInput, selectedServices: ["Testdienst"],
+check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht aus dem Streaming-Anfang", () => {
+  assert.equal(stableSelection.further.length, 6);
+  assert.ok(stableSelection.further.every((entry) => entry.externalEvidence.length > 0
+    && !stableSelection.personal.some((personal) => personal.targetId === entry.targetId)));
+  const catalogCandidates = localRecommendationCandidates(catalogTruthInput, { selectedServices: ["Testdienst"] });
+  const invalid = webDiscoveryCandidates({
+    webDiscoveryFeed: { ...webDiscoveryFeed, items: [{ ...webDiscoveryFeed.items[0], evidence: [] }] },
+    catalogCandidates,
   });
-  assert.deepEqual(summary, {
-    catalogSize: 12, currentCount: 8, afterLibraryCount: 9, selectedServiceCount: 1, coverage: "full",
+  assert.deepEqual(invalid, []);
+});
+check("Ein vom Feed behaupteter Profilscore wird ignoriert und erzeugt keine persönliche Passung", () => {
+  const scoreOnlyItem = webDiscoveryFeed.items.find((entry) => entry.attributes.genres.includes("komödie"));
+  const result = createEntdeckenRecommendations({
+    streamingEntdecken: catalogTruthInput, profile: profileInput, master: [],
+    selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
+    webDiscoveryFeed: { ...webDiscoveryFeed, items: [scoreOnlyItem] },
   });
-  assert.equal(createEntdeckenCatalogSummary({
-    streamingEntdecken: { titel: catalogTruthInput.titel }, selectedServices: ["Testdienst"],
-  }).coverage, "limited");
+  assert.ok(!result.personal.some((entry) => entry.targetId === scoreOnlyItem.targetId));
+  assert.ok(result.further.some((entry) => entry.targetId === scoreOnlyItem.targetId));
+});
+check("Tägliche Abwechslung ist am selben Tag stabil, wechselt zwischen Tagen und bewahrt den Passungsrang", () => {
+  const ranked = Array.from({ length: 20 }, (_, index) => ({ targetId: `ranked:${index}`, rank: index }));
+  const dayA = selectDailyRecommendations(ranked, { dailyVariety: true, selectionDay: "2026-08-20" });
+  const dayARepeat = selectDailyRecommendations(ranked, { dailyVariety: true, selectionDay: "2026-08-20" });
+  const dayB = selectDailyRecommendations(ranked, { dailyVariety: true, selectionDay: "2026-08-21" });
+  assert.deepEqual(dayA, dayARepeat);
+  assert.notDeepEqual(dayA.map((entry) => entry.targetId), dayB.map((entry) => entry.targetId));
+  assert.deepEqual(dayA.map((entry) => entry.rank), [...dayA.map((entry) => entry.rank)].sort((a, b) => a - b));
+  assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-20"), false);
+  assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-21"), true);
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
 const appNavigation = fs.readFileSync(path.join(wurzel, "src/components/AppNavigation.jsx"), "utf8");
 const appSource = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
+const datenSource = fs.readFileSync(path.join(wurzel, "src/tabs/DatenTab.jsx"), "utf8");
 const entdeckenSource = fs.readFileSync(path.join(wurzel, "src/tabs/EntdeckenTab.jsx"), "utf8");
+const entdeckenUiSource = fs.readFileSync(path.join(wurzel, "src/lib/entdeckenUi.js"), "utf8");
 const cssSource = fs.readFileSync(path.join(wurzel, "src/index.css"), "utf8");
 check("Sichtbar heißt es Blog; technischer blog/meinungen-Deep-Link bleibt kompatibel", () => {
   assert.match(appNavigation, /id:\s*"blog",\s*label:\s*"Entdecken"/);
@@ -135,6 +170,12 @@ check("Verwaltung nutzt SVG, 44-Pixel-Ziel und App-Font im Portal", () => {
   assert.doesNotMatch(entdeckenSource, /⚙/);
   assert.match(cssSource, /\.kd-entdecken-tabs \.kd-entdecken-verwalten[^}]*44px/);
   assert.match(cssSource, /\.kd-entdecken-layer[^}]*font-family:'Space Grotesk'/);
+});
+check("Tägliche Abwechslung ist eine persistierte Einstellung ohne Timer- oder Netzwerk-Loop", () => {
+  assert.match(datenSource, /Täglich neue Entdecken-Auswahl/);
+  assert.match(datenSource, /setzeEinstellung\("entdeckenTaeglich"/);
+  assert.match(appSource, /dailyVariety=\{einstellungen\.entdeckenTaeglich === true\}/);
+  assert.doesNotMatch(entdeckenUiSource, /fetch\s*\(|setInterval\s*\(|setTimeout\s*\(/);
 });
 
 async function loadEsbuild() {
@@ -253,26 +294,36 @@ try {
   });
   await ui.cleanup();
 
+  localStorage.setItem("kd:geschmacksprofil", JSON.stringify({
+    format: 1, version: "p1", erstellt: null, geaendert: null, einwilligung: null,
+    signale: [{ art: "genre", wert: "drama", richtung: "zieht_an", staerke: 4,
+      sicherheit: "hoch", quelle: "schlagwort", beleg: "schlagwort:drama" }],
+    offen: [], achsen: { wie: null, was: null, warum: null }, filme: [], nichtDeutbar: [],
+  }));
   const catalogUi = await mount(EntdeckenTab, {
     ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
-    selectedServices: ["Testdienst"],
+    selectedServices: ["Testdienst"], webDiscoveryFeed, calendarDay: "2026-08-20",
   });
-  check("Entdecken trennt Vollkatalog und Dienstetreffer sichtbar", () => {
-    const catalog = catalogUi.container.querySelector('[aria-label="Katalog und aktuelle Treffermenge"]');
-    assert.match(catalog?.textContent || "", /Kataloggröße12 Titel/);
-    assert.match(catalog?.textContent || "", /Aktuelle Treffermenge8 Titel aus deinen Diensten/);
-    assert.match(catalog?.textContent || "", /Sie verändert die Kataloggröße nicht/);
+  await act(async () => { await tick(); await tick(); });
+  check("Entdecken zeigt kompakt sechs persönliche Passungen statt Mengenerklärung", () => {
+    const personal = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
+    const beforeFurther = [...personal.children].filter((element) => element.matches(".kd-entdecken-karten"))[0];
+    assert.match(personal?.textContent || "", /Persönliche Passung/);
+    assert.equal(beforeFurther?.querySelectorAll(".kd-entdecken-hub-karte").length, 6);
+    assert.doesNotMatch(personal?.textContent || "", /Kataloggröße|Aktuelle Treffermenge|Kein LLM|Profil-Write/);
+    assert.ok([...beforeFurther.querySelectorAll(".kd-entdecken-hub-karte")]
+      .every((card) => !card.querySelector("ul") && /Profil:/.test(card.textContent)));
   });
-  check("Neutrale Ergänzungen stehen in einer eigenen, nicht personalisierten Sektion", () => {
+  check("Weitere Entdeckungen zeigen ausschließlich belegte Webtipps mit Quellenlink", () => {
     const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
     const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
-    assert.match(section?.textContent || "", /Weitere Entdeckungen aus deinen Diensten/);
+    assert.match(section?.textContent || "", /Weitere Entdeckungen/);
     assert.equal(cards.length, 6);
-    assert.ok(cards.every((card) => /Aus deinen Diensten · neutral/.test(card.textContent)
-      && /Keine Bewertung und keine persönliche Passungsbehauptung/.test(card.textContent)
-      && !card.querySelector("ul")));
+    assert.ok(cards.every((card) => card.querySelector('a[href^="https://example.invalid/"]')
+      && /Quelle ansehen/.test(card.textContent)));
   });
   await catalogUi.cleanup();
+  localStorage.removeItem("kd:geschmacksprofil");
 
   const deepLinkUi = await mount(EntdeckenTab, {
     ...baseProps, fokusId: "blog:fehlend", radarState: createEmptyLocalRadar(),

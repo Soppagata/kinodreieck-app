@@ -98,13 +98,13 @@ function analyze(candidate, context) {
   };
 }
 
-function eligible(candidate, libraryTargetIds) {
+function eligible(candidate, excludedTargetIds) {
   return candidate?.matchStatus === "matched"
     && candidate?.region === "AT"
     && candidate?.availabilityConfirmed === true
     && candidate?.eligible !== false
     && text(candidate.targetId)
-    && !libraryTargetIds.has(text(candidate.targetId));
+    && !excludedTargetIds.has(text(candidate.targetId));
 }
 
 function compareRows(a, b) {
@@ -130,9 +130,16 @@ function compareRows(a, b) {
 
 export function rankRecommendations(candidates, context = {}) {
   const library = context.useLibrary === false ? [] : list(context.library);
-  const libraryTargetIds = new Set(library.map((item) => text(item.targetId)).filter(Boolean));
+  /* Altaufrufer behandeln die ganze Mediathek weiterhin als Ausschlussmenge.
+     Entdecken kann dagegen die fachlich engere Aussage "noch nicht gesehen"
+     explizit übergeben: Ein bloßer Mediathek-Eintrag ist kein Sehbeleg. */
+  const hasExplicitExclusions = Object.prototype.hasOwnProperty.call(context, "excludedTargetIds");
+  const excludedTargetIds = new Set((hasExplicitExclusions
+    ? list(context.excludedTargetIds)
+    : library.map((item) => item?.targetId))
+    .map(text).filter(Boolean));
   return list(candidates)
-    .filter((candidate) => eligible(candidate, libraryTargetIds))
+    .filter((candidate) => eligible(candidate, excludedTargetIds))
     .map((candidate) => ({ candidate, analysis: analyze(candidate, context) }))
     .filter((row) => !row.analysis.blockingNegative)
     /* Ohne belegten Profil-/Mediatheksgrund bleibt der Kandidat in seiner
@@ -146,5 +153,11 @@ export function rankRecommendations(candidates, context = {}) {
       negativeMatches: row.analysis.negativeCount,
       sourceId: row.candidate.sourceId,
       sourceRank: row.candidate.sourceRank ?? null,
+      watchmodeId: row.candidate.watchmodeId ?? null,
+      services: Object.freeze([...list(row.candidate.services)]),
+      year: row.candidate.year ?? null,
+      type: row.candidate.type ?? null,
+      externalDiscovery: row.candidate.externalDiscovery === true,
+      externalEvidence: Object.freeze(list(row.candidate.externalEvidence).map((entry) => Object.freeze({ ...entry }))),
     }));
 }

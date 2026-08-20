@@ -250,7 +250,7 @@ export default function App() {
   /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Darstellungsmodus ----
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
-  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
+  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "", entdeckenTaeglich: false });
   const effektiveSchrift = normalisiereSchrift(einstellungen.schrift);
   useEffect(() => {
     const root = document.documentElement;
@@ -264,7 +264,7 @@ export default function App() {
   }, [effektiveSchrift]);
   const [neonEintrittSerial, setNeonEintrittSerial] = useState(0);
   const bereinigteEinstellungen = useCallback((wert) => {
-    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift) };
+    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift), entdeckenTaeglich: wert?.entdeckenTaeglich === true };
     delete next.linkshaender;
     return next;
   }, []);
@@ -682,7 +682,7 @@ export default function App() {
             || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus)
             || normalisiereSchrift(roh.schrift) !== roh.schrift;
           const e = { theme: "dunkel", startTab: "start", modus: "", ...roh,
-            schrift: normalisiereSchrift(roh.schrift) };
+            schrift: normalisiereSchrift(roh.schrift), entdeckenTaeglich: roh.entdeckenTaeglich === true };
           delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
           if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen
@@ -2070,6 +2070,7 @@ export default function App() {
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl}
+            dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}

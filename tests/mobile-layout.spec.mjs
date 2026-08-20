@@ -906,7 +906,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mobil wie am Desktop", async ({ page }) => {
+test("Entdecken bleibt kompakt und erfindet ohne injizierten Webfeed keine Tipps", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);
   let entdeckenRequests = 0;
@@ -951,21 +951,20 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
   await page.goto("/");
   await waehleMobileTab(page, "Entdecken");
 
-  const katalog = page.locator('[aria-label="Katalog und aktuelle Treffermenge"]');
-  await expect(katalog).toContainText("Kataloggröße");
-  await expect(katalog).toContainText("8 Titel");
-  await expect(katalog).toContainText("Aktuelle Treffermenge");
-  await expect(katalog).toContainText("6 Titel aus deinen Diensten");
+  const persoenlich = page.locator('[aria-labelledby="kd-entdecken-empfehlungen"]');
+  await expect(persoenlich.getByRole("heading", { name: "Persönliche Passung" })).toBeVisible();
+  await expect(persoenlich).not.toContainText("Kataloggröße");
+  await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
-  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen aus deinen Diensten" })).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
-  await expect(weitere).not.toContainText("Prime Eins");
+  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen" })).toBeVisible();
+  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(0);
+  await expect(weitere).toContainText("Noch keine belegten Webtipps geladen");
   await expect.poll(() => entdeckenRequests).toBe(1);
   await keineDokumentUeberbreite(page);
 
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect(katalog).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await expect(persoenlich).toBeVisible();
+  await expect(weitere).toBeVisible();
   await keineDokumentUeberbreite(page);
 });
 

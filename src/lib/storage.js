@@ -165,7 +165,7 @@ export const K = {
   radar: "kd:radar",                  // Lokaler Event-Radar: Gastabos oder accountgebundener Cache/Outbox/Receipts
   autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt
   entdeckenStatus: "kd:entdecken-status", // {watchmode_id: "gesehen"|"erstellt"} — Erledigtes im Entdecken ausblenden
-  einstellungen: "kd:einstellungen",  // {theme, startTab, schrift, kurosawa}
+  einstellungen: "kd:einstellungen",  // {theme, startTab, schrift, modus, entdeckenTaeglich}
   filterMediathek: "kd:filter-mediathek", // Mediathek-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
   filterKino: "kd:filter-kino",       // Kino-Filtermenü auf/zu (Sicht-Präferenz, "0"=zu)
   filterStreaming: "kd:filter-streaming", // Streaming-Filterleiste auf/zu (Sicht-Präferenz, "0"=zu)
