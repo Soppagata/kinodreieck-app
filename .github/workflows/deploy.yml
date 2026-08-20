@@ -35,6 +35,7 @@ jobs:
         with:
           deno-version: v2.9.4
       - run: npm ci
+      - run: sudo install -d -m 1777 /private/tmp
       - run: npm test
       - run: npm run test:function
 
