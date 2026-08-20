@@ -5,6 +5,7 @@
 
 import { pathToFileURL } from "node:url";
 import {
+  BUDGET_FETCH_TIMEOUT_MS,
   BUDGET_UNBEKANNT_EXIT,
   ENTDECKEN_LAUF_LIMIT_USD_CENT,
   LiveLaufWache,
@@ -23,6 +24,46 @@ const GUARD_VALUE = "keychain-budget-guard-v1";
 const RESPONSE_KEYS = Object.freeze([
   "feed", "ok", "providerRequests", "searchRequests", "status", "writes",
 ]);
+const OWNER_ACCESS_KEYS = Object.freeze(["active", "personal_ai", "role"]);
+
+export async function pruefeEntdeckenOwnerZugang({
+  verbindung,
+  token,
+  fetchImpl = fetch,
+}) {
+  let response;
+  let body;
+  try {
+    response = await fetchMitZeitgrenze(
+      `${verbindung.urlBasis}/rest/v1/kd_account_access?select=role%2Cactive%2Cpersonal_ai&limit=2`,
+      {
+        method: "GET",
+        headers: {
+          apikey: verbindung.anon,
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      },
+      { fetchImpl, timeoutMs: BUDGET_FETCH_TIMEOUT_MS },
+    );
+    body = await liesJsonOderNull(response);
+  } catch (error) {
+    throw error instanceof LiveSicherheitsStopp
+      ? error
+      : new LiveSicherheitsStopp("unbekannt", "Entdecken-Owner-Zugang war nicht verlaesslich lesbar.");
+  }
+
+  const row = Array.isArray(body) && body.length === 1 ? body[0] : null;
+  if (!response?.ok || !row || typeof row !== "object" || Array.isArray(row)
+      || JSON.stringify(Object.keys(row).sort()) !== JSON.stringify(OWNER_ACCESS_KEYS)
+      || row.role !== "owner" || row.active !== true || row.personal_ai !== true) {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Kein bestaetigter Owner-Credentialpfad; Provider-Qualitaetssmoke wurde nicht gestartet.",
+    );
+  }
+  return Object.freeze({ status: "owner-confirmed" });
+}
 
 function validateFunctionResponse(response, body) {
   const checkedFeed = validateEntdeckenDailyFeed(body?.feed);
@@ -51,6 +92,7 @@ export async function runEntdeckenDailyOnce({
   }
   const verbindung = liesBudgetVerbindung(env);
   const token = await meldeTestkontoAn(verbindung, fetchImpl);
+  await pruefeEntdeckenOwnerZugang({ verbindung, token, fetchImpl });
   const laufWache = new LiveLaufWache({
     maxAnbieterRequests: 1,
     laufLimitUsdCent: ENTDECKEN_LAUF_LIMIT_USD_CENT,

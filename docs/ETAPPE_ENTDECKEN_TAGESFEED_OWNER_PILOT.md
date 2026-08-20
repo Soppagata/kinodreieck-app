@@ -61,3 +61,22 @@ einen Websearch. Zusätzlich zu den allgemeinen Grenzen gilt für diesen Lauf
 ein nicht erhöhbarer Delta-Deckel von 900 US-Cent. Unbekannter Kostenstand,
 Exit 75, `AUTONOMIE_STOPP` oder `BUDGET_UNBEKANNT` beendet die Etappe ohne
 Retry.
+
+## Praktische Beleggrenzen
+
+Vor dem Provider-Schritt liest der Livepfad mit derselben Sitzung genau die
+eigene `kd_account_access`-Zeile. Nur `owner`, `active=true` und
+`personal_ai=true` lassen den Provider-Qualitätssmoke beginnen. Ein vorhandenes
+Member-Testkonto stoppt davor; es wird weder hochgestuft noch als Owner
+ausgegeben. Für den derzeit einzigen berechtigten Owner ist in den bekannten
+Projekt-Keychain-Pfaden kein Credential hinterlegt. Der reale Owner-Produktweg
+bleibt deshalb offen, bis ein bereits autorisierter Credentialpfad separat
+bereitsteht.
+
+Der Remote-Ledger enthielt beim Read-Preflight bereits
+`20260819220000_radar_person_server_candidate` mit 39 Statements. Diese Branch-
+Basis spiegelt ausschließlich die schon remote gelaufene Quelle aus Commit
+`ca4414a1108981158db143bd8e9248fb2ef54e80`, Git-Blob
+`225018c2ee32270be8de14aba549cb606db2b9ca` und SHA-256
+`d23f80f7073deb1197fdcb0b5a73f4abd1ad002e0b3bded6ee08c691d937f658`.
+Sie darf in diesem Entdecken-Fenster nicht erneut remote angewandt werden.
