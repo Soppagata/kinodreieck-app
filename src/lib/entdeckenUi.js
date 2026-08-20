@@ -270,13 +270,12 @@ export function webDiscoveryCandidates({
     const { record, candidate: base } = decision;
     const existing = unique.get(base.targetId);
     if (existing && existing.sourceRank <= record.rank) continue;
-    const evidence = record.opinions.map((opinion) => Object.freeze({
-      sourceId: opinion.sourceId,
-      sourceFamily: opinion.sourceFamily,
-      sourceLabel: opinion.sourceLabel,
-      url: opinion.url,
-      stance: "recommended",
-      summary: opinion.summary,
+    const evidence = record.evidence.map((entry) => Object.freeze({
+      domain: entry.domain,
+      url: entry.url,
+      publishedOn: entry.publishedOn,
+      retrievedOn: entry.retrievedOn,
+      positiveRecommendation: entry.positiveRecommendation,
     }));
     unique.set(base.targetId, Object.freeze({
       ...base,

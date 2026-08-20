@@ -13,11 +13,12 @@ const ALLOWED_ORIGINS = new Set([
   "https://staging.kinodreieck.at",
   "http://localhost:5173",
 ]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "apikey, content-type",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -87,14 +88,36 @@ export function createEntdeckenDailyHandler({
     const supabaseUrl = text(Deno.env.get("SUPABASE_URL"));
     const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
     const serviceKey = envKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
+    const authorization = req.headers.get("Authorization") || "";
+    const token = authorization.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
     if (!supabaseUrl || !publishableKey || !serviceKey
-        || req.headers.get("apikey") !== publishableKey) {
+        || req.headers.get("apikey") !== publishableKey || !token) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const user = createClient(supabaseUrl, publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: authorization } },
+    });
+    const { data: userData, error: userError } = await user.auth.getUser(token);
+    const accountId = String(userData?.user?.id || "");
+    if (userError || !UUID.test(accountId)) {
+      return json({ ok: false, status: "disabled", feed: null }, 401, origin);
+    }
+    const { data: accessRows, error: accessError } = await admin
+      .from("kd_account_access")
+      .select("role,active,personal_ai")
+      .eq("account_id", accountId)
+      .limit(2);
+    if (accessError) return json({ ok: false, status: "disabled", feed: null }, 503, origin);
+    if (!Array.isArray(accessRows) || accessRows.length !== 1
+        || accessRows[0]?.role !== "owner" || accessRows[0]?.active !== true
+        || accessRows[0]?.personal_ai !== true) {
+      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
     const loadSources = async () => {
@@ -208,7 +231,16 @@ export function createEntdeckenDailyHandler({
     });
 
     const result = await runEntdeckenDailyRefresh({ repository, adapter: productAdapter });
-    return json({ ok: true, status: result.status, feed: result.feed }, 200, origin);
+    const telemetry = typeof productAdapter.telemetry === "function"
+      ? productAdapter.telemetry() : {};
+    return json({
+      ok: true,
+      status: result.status,
+      feed: result.feed,
+      writes: Number.isInteger(result.writes) ? result.writes : 0,
+      providerRequests: Number.isInteger(telemetry?.providerRequests) ? telemetry.providerRequests : 0,
+      searchRequests: Number.isInteger(telemetry?.searchRequests) ? telemetry.searchRequests : 0,
+    }, 200, origin);
   };
 }
 

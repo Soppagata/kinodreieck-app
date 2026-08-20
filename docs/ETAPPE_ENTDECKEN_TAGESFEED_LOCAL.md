@@ -1,5 +1,9 @@
 # Entdecken-Tagesfeed · Etappe 2 lokal
 
+> Historischer Checkpoint auf Commit `7d4fa9f`. Die konkrete private
+> Aktivierung, Quellenentscheidung und Datenminimierung stehen in
+> [ETAPPE_ENTDECKEN_TAGESFEED_OWNER_PILOT.md](ETAPPE_ENTDECKEN_TAGESFEED_OWNER_PILOT.md).
+
 Stand: 20.08.2026
 Baseline: `0582ee80cf976e11e0093791ff6f83701daaa1d9`
 Arbeitsbranch: `codex/entdecken-tagesfeed-etappe2`

@@ -2,7 +2,7 @@
    Der Feed enthaelt ausschliesslich globale, belegte Webtipps. Aktuelle
    Verfuegbarkeit und persoenliche Passung werden erst im Browser bestimmt. */
 
-export const WEB_DISCOVERY_FEED_FORMAT = 2;
+export const WEB_DISCOVERY_FEED_FORMAT = 3;
 export const WEB_DISCOVERY_FEED_ID = "websearch:daily-tips-at";
 export const WEB_DISCOVERY_SOURCE_ID = "websearch:daily-tips";
 export const WEB_DISCOVERY_MAX_ITEMS = 20;
@@ -55,8 +55,10 @@ function httpsUrl(value) {
       && !parsed.port && !parsed.hash ? parsed.toString() : null;
   } catch { return null; }
 }
-function stableContractId(value) {
-  return typeof value === "string" && /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i.test(value);
+function validDomain(value) {
+  return typeof value === "string" && value === value.toLowerCase() && text(value) === value
+    && value.split(".").length >= 2
+    && value.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
 }
 function boundedTextArray(value, maxItems) {
   if (!Array.isArray(value) || value.length > maxItems) return null;
@@ -108,30 +110,27 @@ export function discoveryExternalIdsFromCatalog(entry = {}) {
   return normalizeDiscoveryExternalIds(candidates) || Object.freeze({});
 }
 
-function validateOpinion(value, errors, prefix) {
-  if (!exactKeys(value, ["sourceId", "sourceFamily", "sourceLabel", "url", "stance", "summary"])) {
+function validateEvidence(value, feed, errors, prefix) {
+  if (!exactKeys(value, ["domain", "url", "publishedOn", "retrievedOn", "positiveRecommendation"])) {
     errors.push(`${prefix}-shape-invalid`); return null;
   }
-  if (!stableContractId(value.sourceId)) errors.push(`${prefix}-source-id-invalid`);
-  if (!text(value.sourceFamily) || text(value.sourceFamily) !== value.sourceFamily || value.sourceFamily.length > 120) {
-    errors.push(`${prefix}-source-family-invalid`);
+  const url = httpsUrl(value.url);
+  if (!validDomain(value.domain) || !url || new URL(url).hostname.toLowerCase() !== value.domain) {
+    errors.push(`${prefix}-source-invalid`);
   }
-  if (!text(value.sourceLabel) || text(value.sourceLabel) !== value.sourceLabel || value.sourceLabel.length > 240) {
-    errors.push(`${prefix}-source-label-invalid`);
-  }
-  if (!httpsUrl(value.url)) errors.push(`${prefix}-url-invalid`);
-  if (value.stance !== "recommended") errors.push(`${prefix}-stance-invalid`);
-  if (!text(value.summary) || text(value.summary) !== value.summary || value.summary.length > 320) {
-    errors.push(`${prefix}-summary-invalid`);
-  }
+  if (!(value.domain === "derstandard.at" || value.domain.endsWith(".derstandard.at")
+      || value.domain === "film.at" || value.domain.endsWith(".film.at"))) errors.push(`${prefix}-domain-invalid`);
+  const publishedOn = calendarDay(value.publishedOn);
+  if (!publishedOn || publishedOn > feed.refreshedOn) errors.push(`${prefix}-published-on-invalid`);
+  if (value.retrievedOn !== feed.refreshedOn) errors.push(`${prefix}-retrieved-on-invalid`);
+  if (value.positiveRecommendation !== true) errors.push(`${prefix}-positive-invalid`);
   return value;
 }
 
 function validateRecord(value, feed, errors, index) {
   const prefix = `item-${index}`;
   if (!exactKeys(value, [
-    "recordId", "title", "originalTitle", "mediaType", "releaseYear", "externalIds",
-    "attributes", "opinions", "rank", "retrievedOn", "validUntil",
+    "recordId", "title", "mediaType", "releaseYear", "attributes", "evidence", "rank",
   ])) {
     errors.push(`${prefix}-shape-invalid`); return;
   }
@@ -139,31 +138,23 @@ function validateRecord(value, feed, errors, index) {
   if (!text(value.title) || text(value.title) !== value.title || value.title.length > 200) {
     errors.push(`${prefix}-title-invalid`);
   }
-  if (value.originalTitle !== null && (
-    typeof value.originalTitle !== "string" || text(value.originalTitle) !== value.originalTitle
-    || !value.originalTitle || value.originalTitle.length > 200
-  )) errors.push(`${prefix}-original-title-invalid`);
   if (!normalizeDiscoveryMediaType(value.mediaType) || normalizeDiscoveryMediaType(value.mediaType) !== value.mediaType) {
     errors.push(`${prefix}-media-type-invalid`);
   }
   if (!validYear(value.releaseYear)) errors.push(`${prefix}-year-invalid`);
-  if (!normalizeDiscoveryExternalIds(value.externalIds)) errors.push(`${prefix}-external-ids-invalid`);
   if (!exactKeys(value.attributes, ["genres", "tags"])
       || !boundedTextArray(value.attributes?.genres, 8)
       || !boundedTextArray(value.attributes?.tags, 8)) errors.push(`${prefix}-attributes-invalid`);
-  if (!Array.isArray(value.opinions) || value.opinions.length < 1 || value.opinions.length > 3) {
-    errors.push(`${prefix}-opinions-invalid`);
+  if (!Array.isArray(value.evidence) || value.evidence.length < 1 || value.evidence.length > 3) {
+    errors.push(`${prefix}-evidence-invalid`);
   } else {
-    value.opinions.forEach((opinion, opinionIndex) => validateOpinion(opinion, errors, `${prefix}-opinion-${opinionIndex}`));
-    if (new Set(value.opinions.map((opinion) => opinion?.url)).size !== value.opinions.length) {
-      errors.push(`${prefix}-opinion-url-duplicate`);
+    value.evidence.forEach((evidence, evidenceIndex) => validateEvidence(evidence, feed, errors, `${prefix}-evidence-${evidenceIndex}`));
+    if (new Set(value.evidence.map((evidence) => evidence?.url)).size !== value.evidence.length) {
+      errors.push(`${prefix}-evidence-url-duplicate`);
     }
   }
   if (!Number.isInteger(value.rank) || value.rank < 1 || value.rank > WEB_DISCOVERY_MAX_ITEMS) {
     errors.push(`${prefix}-rank-invalid`);
-  }
-  if (value.retrievedOn !== feed.refreshedOn || value.validUntil !== feed.validUntil) {
-    errors.push(`${prefix}-day-mismatch`);
   }
 }
 
@@ -198,7 +189,7 @@ function candidateTitles(candidate) {
 }
 
 function recordTitles(record) {
-  return new Set([record?.title, record?.originalTitle].map(normalizeDiscoveryTitle).filter(Boolean));
+  return new Set([record?.title].map(normalizeDiscoveryTitle).filter(Boolean));
 }
 
 function hasOverlap(left, right) {
@@ -212,43 +203,18 @@ export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) 
   const catalog = list(catalogCandidates).filter((candidate) => (
     text(candidate?.targetId) && normalizeDiscoveryMediaType(candidate?.type) && validYear(candidate?.year)
   ));
-  const idIndex = new Map();
-  for (const candidate of catalog) {
-    const ids = normalizeDiscoveryExternalIds(candidate.externalIds || {}) || {};
-    for (const [namespace, id] of Object.entries(ids)) {
-      const key = `${namespace}:${id}`;
-      if (!idIndex.has(key)) idIndex.set(key, new Set());
-      idIndex.get(key).add(candidate);
-    }
-  }
-
   return Object.freeze(checked.value.items.map((record) => {
-    const recordIds = normalizeDiscoveryExternalIds(record.externalIds) || {};
-    const strongMatches = new Set();
-    for (const [namespace, id] of Object.entries(recordIds)) {
-      for (const candidate of idIndex.get(`${namespace}:${id}`) || []) strongMatches.add(candidate);
-    }
-    let matches;
-    let matchedBy;
-    if (strongMatches.size) {
-      matches = [...strongMatches].filter((candidate) => (
-        normalizeDiscoveryMediaType(candidate.type) === record.mediaType && candidate.year === record.releaseYear
-      ));
-      matchedBy = "external-id";
-    } else {
-      const titles = recordTitles(record);
-      matches = catalog.filter((candidate) => (
-        normalizeDiscoveryMediaType(candidate.type) === record.mediaType
-        && candidate.year === record.releaseYear
-        && hasOverlap(titles, candidateTitles(candidate))
-      ));
-      matchedBy = "title-year-type";
-    }
+    const titles = recordTitles(record);
+    const matches = catalog.filter((candidate) => (
+      normalizeDiscoveryMediaType(candidate.type) === record.mediaType
+      && candidate.year === record.releaseYear
+      && hasOverlap(titles, candidateTitles(candidate))
+    ));
     const status = matches.length === 1 ? "matched" : matches.length > 1 ? "ambiguous" : "unmatched";
     return freezeDeep({
       record,
       status,
-      matchedBy: status === "matched" ? matchedBy : null,
+      matchedBy: status === "matched" ? "title-year-type" : null,
       candidate: status === "matched" ? matches[0] : null,
     });
   }));

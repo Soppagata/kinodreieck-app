@@ -28,6 +28,8 @@ export const OWNER_SERVER_BUDGET_FLAG = "--owner-approved-server-budget";
 export const OWNER_SERVER_BUDGET_ENV = "KD_AI_OWNER_APPROVED_SERVER_BUDGET";
 export const RADAR_WEBSEARCH_ONCE_FLAG = "--radar-websearch-once";
 export const RADAR_WEBSEARCH_ONCE_ENV = "KD_RADAR_WEBSEARCH_ONCE_GUARD";
+export const ENTDECKEN_DAILY_ONCE_REQUEST_ENV = "KD_ENTDECKEN_DAILY_ONCE_REQUEST";
+export const ENTDECKEN_DAILY_ONCE_ENV = "KD_ENTDECKEN_DAILY_ONCE_GUARD";
 
 const DATEI = fileURLToPath(import.meta.url);
 export const REPO_ROOT = resolve(dirname(DATEI), "..");
@@ -51,6 +53,8 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   "KD_AI_AUTONOM_LIMIT_USD_CENT",
   OWNER_SERVER_BUDGET_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
+  ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
+  ENTDECKEN_DAILY_ONCE_ENV,
   "KD_EVAL_JA",
 ]);
 
@@ -88,6 +92,12 @@ export const MODI = Object.freeze({
       "--",
       process.execPath,
       SKRIPT("radar_websearch_live.mjs"),
+    ],
+    entdeckenDailyOnceArgv: [
+      SKRIPT("ai_budget_guard.mjs"),
+      "--",
+      process.execPath,
+      SKRIPT("entdecken_daily_live.mjs"),
     ],
   },
   "profile-contract": {
@@ -288,6 +298,7 @@ export function baueKindUmgebung({
   confirmPaid = false,
   ownerApprovedServerBudget = false,
   radarWebsearchOnce = false,
+  entdeckenDailyOnce = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
@@ -296,6 +307,9 @@ export function baueKindUmgebung({
   }
   if (radarWebsearchOnce && modus !== "ai-live") {
     throw new Error("Der einmalige Radar-Websearch ist nur im AI-Live-Pfad erlaubt.");
+  }
+  if (entdeckenDailyOnce && (modus !== "ai-live" || !ownerApprovedServerBudget || radarWebsearchOnce)) {
+    throw new Error("Der einmalige Entdecken-Lauf braucht den AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
 
   const env = harmloseBasis(ambientEnv);
@@ -333,6 +347,7 @@ export function baueKindUmgebung({
     }
     env[RADAR_WEBSEARCH_ONCE_ENV] = "keychain-budget-guard-v1";
   }
+  if (entdeckenDailyOnce) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
   return env;
 }
 
@@ -345,6 +360,7 @@ export async function starteModus({
   confirmPaid = false,
   ownerApprovedServerBudget = false,
   radarWebsearchOnce = false,
+  entdeckenDailyOnce = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
@@ -356,6 +372,7 @@ export async function starteModus({
     confirmPaid,
     ownerApprovedServerBudget,
     radarWebsearchOnce,
+    entdeckenDailyOnce,
   });
   const gibLiveLaufFrei = ["ai-live", "ai-eval"].includes(modus)
     ? reserviereLiveLauf()
@@ -364,7 +381,7 @@ export async function starteModus({
     return await new Promise((resolveCode) => {
       const argv = radarWebsearchOnce
         ? definition.radarWebsearchOnceArgv
-        : definition.argv;
+        : (entdeckenDailyOnce ? definition.entdeckenDailyOnceArgv : definition.argv);
       const kind = spawnImpl(process.execPath, argv, {
         cwd: REPO_ROOT,
         env,
@@ -406,6 +423,7 @@ export async function main(
   const bezahlt = MODI[modus]?.bezahlt === true;
   const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
+  const entdeckenDailyOnce = process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV] === "remote-window-v1";
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
   ));
@@ -437,6 +455,7 @@ export async function main(
       confirmPaid,
       ownerApprovedServerBudget,
       radarWebsearchOnce,
+      entdeckenDailyOnce,
     });
   } catch (error) {
     const keychain = error instanceof KeychainFehler;

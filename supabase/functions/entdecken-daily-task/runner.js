@@ -18,7 +18,7 @@ function dayStatus(feed, today) {
   return feed.refreshedOn === today ? "fresh" : "stale";
 }
 function frozen(status, feed, extra = {}) {
-  return Object.freeze({ status, feed, ...extra });
+  return Object.freeze({ status, feed, writes: 0, ...extra });
 }
 
 async function failSafely(repository, code) {
@@ -68,5 +68,5 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await failSafely(repository, "storage_error");
     return frozen(dayStatus(cached, context.today), cached, { reason: "storage_error" });
   }
-  return frozen("fresh", evaluated.feed);
+  return frozen("fresh", evaluated.feed, { writes: 1 });
 }

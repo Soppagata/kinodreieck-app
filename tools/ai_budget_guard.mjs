@@ -37,6 +37,7 @@ export const BUDGET_UNBEKANNT_EXIT = 74;
 export const OWNER_SERVER_BUDGET_ENV = "KD_AI_OWNER_APPROVED_SERVER_BUDGET";
 export const ANBIETER_REQUEST_LIMIT_USD_CENT = 500;
 export const LAUF_LIMIT_USD_CENT = 1500;
+export const ENTDECKEN_LAUF_LIMIT_USD_CENT = 900;
 export const LIVE_REQUEST_TIMEOUT_MS = 135_000;
 export const LIVE_PROCESS_TIMEOUT_MS = 15 * 60_000;
 export const BUDGET_FETCH_TIMEOUT_MS = 20_000;
@@ -323,15 +324,21 @@ export function beurteileLaufBudget(vorher, nachher) {
 }
 
 export class LiveLaufWache {
-  constructor({ standLeser, maxAnbieterRequests }) {
+  constructor({ standLeser, maxAnbieterRequests, laufLimitUsdCent = LAUF_LIMIT_USD_CENT }) {
     if (typeof standLeser !== "function") {
       throw new LiveSicherheitsStopp("unbekannt", "Laufmessung besitzt keinen Standleser.");
     }
     if (!Number.isInteger(maxAnbieterRequests) || maxAnbieterRequests < 1 || maxAnbieterRequests > 100) {
       throw new LiveSicherheitsStopp("unbekannt", "Maximale Anbieterrequest-Zahl ist ungueltig.");
     }
+    if (!Number.isFinite(laufLimitUsdCent)
+        || laufLimitUsdCent < ANBIETER_REQUEST_LIMIT_USD_CENT
+        || laufLimitUsdCent > LAUF_LIMIT_USD_CENT) {
+      throw new LiveSicherheitsStopp("unbekannt", "Laufdelta-Deckel ist ungueltig.");
+    }
     this.standLeser = standLeser;
     this.maxAnbieterRequests = maxAnbieterRequests;
+    this.laufLimitUsdCent = laufLimitUsdCent;
     this.anzahl = 0;
     this.basis = null;
     this.offen = null;
@@ -390,10 +397,10 @@ export class LiveLaufWache {
     /* Der naechste Request darf laut Server maximal 500 Cent reservieren. Mit
        diesem Vorab-Puffer kann der Laufdeckel nicht erst nachtraeglich um einen
        ganzen Request ueberschritten werden. */
-    if (bisher + ANBIETER_REQUEST_LIMIT_USD_CENT > LAUF_LIMIT_USD_CENT) {
+    if (bisher + ANBIETER_REQUEST_LIMIT_USD_CENT > this.laufLimitUsdCent) {
       throw new LiveSicherheitsStopp(
         "limit",
-        `15-Euro-Naeherungsgrenze: vor ${label} fehlt der 500-Cent-Sicherheitspuffer.`,
+        `Laufdelta-Deckel ${this.laufLimitUsdCent} US-Cent: vor ${label} fehlt der 500-Cent-Sicherheitspuffer.`,
       );
     }
     this.anzahl += 1;
@@ -418,8 +425,8 @@ export class LiveLaufWache {
         && antwortKostenUsdCent > ANBIETER_REQUEST_LIMIT_USD_CENT)) {
       throw new LiveSicherheitsStopp("limit", "Einzelrequest-Grenze von 500 US-Cent erreicht.");
     }
-    if (laufKosten > LAUF_LIMIT_USD_CENT) {
-      throw new LiveSicherheitsStopp("limit", "15-Euro-Naeherungsgrenze des Laufs erreicht.");
+    if (laufKosten > this.laufLimitUsdCent) {
+      throw new LiveSicherheitsStopp("limit", `Laufdelta-Deckel ${this.laufLimitUsdCent} US-Cent erreicht.`);
     }
     return { requestKostenUsdCent: requestKosten, laufKostenUsdCent: laufKosten };
   }

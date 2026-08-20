@@ -74,21 +74,23 @@ const catalogTruthInput = {
   })),
 };
 const webDiscoveryFeed = {
-  format: 2, feedId: "websearch:daily-tips-at", region: "AT",
+  format: 3, feedId: "websearch:daily-tips-at", region: "AT",
   refreshedOn: "2026-08-20", validUntil: "2026-08-26", sourceId: "websearch:daily-tips",
   items: catalogTruthInput.titel.slice(1, 21).map((entry, index) => ({
     recordId: `webtip:${(index + 1).toString(16).padStart(16, "0")}`,
-    title: entry.titel, originalTitle: null,
+    title: entry.titel,
     mediaType: entry.typ === "tv_series" ? "series" : "film",
     releaseYear: entry.jahr,
-    externalIds: { watchmode: String(entry.watchmode_id) },
     attributes: { genres: index < 14 ? ["drama"] : ["komödie"], tags: [] },
-    opinions: [{
-      sourceId: "editorial:testquelle", sourceFamily: "Testverlag",
-      sourceLabel: `Quelle ${index + 1}`, url: `https://example.invalid/tipp-${index + 1}`,
-      stance: "recommended", summary: `Positiver Testbeleg ${index + 1}`,
+    evidence: [{
+      domain: index % 2 === 0 ? "www.derstandard.at" : "www.film.at",
+      url: index % 2 === 0
+        ? `https://www.derstandard.at/story/tipp-${index + 1}`
+        : `https://www.film.at/streaming/tipp-${index + 1}`,
+      publishedOn: "2026-08-19", retrievedOn: "2026-08-20",
+      positiveRecommendation: true,
     }],
-    rank: index + 1, retrievedOn: "2026-08-20", validUntil: "2026-08-26",
+    rank: index + 1,
   })),
 };
 const dailyInput = {
@@ -131,14 +133,14 @@ check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht
     && !stableSelection.personal.some((personal) => personal.targetId === entry.targetId)));
   const catalogCandidates = localRecommendationCandidates(catalogTruthInput, { selectedServices: ["Testdienst"] });
   const invalid = webDiscoveryCandidates({
-    webDiscoveryFeed: { ...webDiscoveryFeed, items: [{ ...webDiscoveryFeed.items[0], opinions: [] }] },
+    webDiscoveryFeed: { ...webDiscoveryFeed, items: [{ ...webDiscoveryFeed.items[0], evidence: [] }] },
     catalogCandidates,
   });
   assert.deepEqual(invalid, []);
 });
 check("Ein Webtipp ohne lokales Profilsignal bleibt weitere Entdeckung", () => {
   const scoreOnlyItem = webDiscoveryFeed.items.find((entry) => entry.attributes.genres.includes("komödie"));
-  const targetId = `watchmode:${scoreOnlyItem.externalIds.watchmode}`;
+  const targetId = `watchmode:${catalogTruthInput.titel.find((entry) => entry.titel === scoreOnlyItem.title).watchmode_id}`;
   const result = createEntdeckenRecommendations({
     streamingEntdecken: catalogTruthInput, profile: profileInput, master: [],
     selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
@@ -327,8 +329,11 @@ try {
     const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
     assert.match(section?.textContent || "", /Weitere Entdeckungen/);
     assert.equal(cards.length, 6);
-    assert.ok(cards.every((card) => card.querySelector('a[href^="https://example.invalid/"]')
-      && /Quelle ansehen/.test(card.textContent)));
+    assert.ok(cards.every((card) => {
+      const link = card.querySelector('a[href^="https://"]');
+      return link && /^(?:www\.)?(?:derstandard\.at|film\.at)$/.test(new URL(link.href).hostname)
+        && /Quelle ansehen/.test(card.textContent);
+    }));
   });
   await catalogUi.cleanup();
   localStorage.removeItem("kd:geschmacksprofil");

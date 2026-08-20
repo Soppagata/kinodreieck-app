@@ -153,7 +153,7 @@ function RecommendationsView({
         <span className="kd-entdecken-kicker">Persönliche Passung</span>
         <h3>{entry.title}</h3>
         <p className="kd-entdecken-grund">{entry.reasons[0]}</p>
-        <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).sourceLabel}` : " · Streamingkatalog Österreich"}</small>
+        <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
       </article>;
     })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
@@ -166,7 +166,7 @@ function RecommendationsView({
         const evidence = source(entry);
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
         return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
-          <span className="kd-entdecken-kicker">{evidence?.sourceLabel || "Webtipp"}</span>
+          <span className="kd-entdecken-kicker">{evidence?.domain || "Webtipp"}</span>
           <h3>{entry.title}</h3>
           <p>{meta(entry)}</p>
           {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}

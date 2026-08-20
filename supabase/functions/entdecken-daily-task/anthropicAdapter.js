@@ -83,13 +83,14 @@ export function validateEntdeckenDailyProviderSetup(value) {
 }
 
 const SYSTEM_PROMPT = [
-  "Du sammelst ausschliesslich aktuell positiv empfohlene Filme und Serien aus den erlaubten redaktionellen Quellen.",
-  "Fuehre genau eine Websuche nach neuen Serien- und Filmtipps aus und nutze nur die serverseitig erlaubten Domains.",
-  "Nenne nur Werke, deren Titel, Werktyp, Veroeffentlichungsjahr und positive Empfehlung von der zitierten Fundstelle getragen werden.",
-  "Genres und Tags sind kurze strukturierte Merkmale aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
+  "Du sammelst ausschliesslich aktuell positiv empfohlene Filme und Serien aus derstandard.at und film.at.",
+  "Fuehre genau eine Websuche nach neuen Serien- und Filmtipps aus, nutze beide erlaubten Domains und keine andere Quelle.",
+  "Nenne nur Werke, deren Titel, Werktyp, Veroeffentlichungsjahr, Publikationsdatum und positive Empfehlung von der direkt verlinkten Fundstelle getragen werden.",
+  "Genres und Tags sind kurze strukturierte Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
+  "Gib niemals Rezensionstext, Zitat, Zusammenfassung, Bild, Logo, Autor oder redaktionelle Ueberschrift aus.",
   "Antworte im letzten Textblock ausschliesslich als JSON-Objekt mit dem Schluessel items.",
-  "Jedes Item enthaelt title, originalTitle (String oder null), mediaType (film oder series), releaseYear, attributes mit genres/tags und opinion.",
-  "opinion enthaelt url, sourceTitle, summary und stance; stance ist exakt recommended, summary ist eine kurze Paraphrase und kein langes Zitat.",
+  "Jedes Item enthaelt exakt title, mediaType (film oder series), releaseYear, attributes mit genres/tags und evidence.",
+  "evidence enthaelt exakt url, publishedOn im Format YYYY-MM-DD und positiveRecommendation mit dem booleschen Wert true.",
 ].join(" ");
 
 export function buildAnthropicEntdeckenDailyBody(setupInput) {
@@ -151,13 +152,13 @@ function parseProviderJson(block) {
   }
   return value;
 }
-function opinionUrls(value) {
+function evidenceUrls(value) {
   const urls = [];
   for (const item of value.items) {
-    if (!plain(item) || !plain(item.opinion) || typeof item.opinion.url !== "string") {
+    if (!plain(item) || !plain(item.evidence) || typeof item.evidence.url !== "string") {
       throw new EntdeckenDailyProviderError("provider-output-invalid");
     }
-    urls.push(item.opinion.url);
+    urls.push(item.evidence.url);
   }
   return urls;
 }
@@ -204,7 +205,7 @@ export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedA
     }
   }
   const parsed = parseProviderJson(responseTextBlock(value.content));
-  for (const url of opinionUrls(parsed)) {
+  for (const url of evidenceUrls(parsed)) {
     if (!resultUrls.has(url) || !citationUrls.has(url)) {
       throw new EntdeckenDailyProviderError("provider-citation-invalid", usage);
     }

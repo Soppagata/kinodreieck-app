@@ -1,12 +1,16 @@
 /* Providerunabhaengiger Vertrag fuer den globalen Entdecken-Tagesfeed.
    Keine Konten, Profile, Seen-Staende oder lokalen Kataloglisten. */
 
-export const ENTDECKEN_DAILY_FEED_FORMAT = 2;
+export const ENTDECKEN_DAILY_FEED_FORMAT = 3;
 export const ENTDECKEN_DAILY_FEED_ID = "websearch:daily-tips-at";
 export const ENTDECKEN_DAILY_SOURCE_ID = "websearch:daily-tips";
 export const ENTDECKEN_DAILY_MAX_ITEMS = 20;
 export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = 10;
 export const ENTDECKEN_DAILY_VALID_DAYS = 7;
+export const ENTDECKEN_DAILY_SOURCE_DOMAINS = Object.freeze([
+  "derstandard.at",
+  "film.at",
+]);
 
 const MEDIA_TYPES = new Set(["film", "series"]);
 
@@ -61,14 +65,6 @@ function directUrl(value) {
 function stableSourceId(value) {
   return typeof value === "string" && /^editorial:[a-z0-9][a-z0-9_-]{1,95}$/.test(value);
 }
-function validExternalIds(value) {
-  if (!plain(value) || Object.keys(value).some((key) => !["imdb", "tmdb", "watchmode"].includes(key))) return false;
-  return Object.entries(value).every(([key, raw]) => {
-    const valueText = text(raw);
-    if (key === "imdb") return /^tt\d{5,12}$/i.test(valueText) && valueText === valueText.toLowerCase();
-    return /^[1-9]\d{0,14}$/.test(valueText);
-  });
-}
 function normalizedTitle(value) {
   return text(value).normalize("NFKC").toLocaleLowerCase("de-AT")
     .replace(/[\p{P}\p{S}]+/gu, " ").replace(/\s+/g, " ").trim();
@@ -96,7 +92,7 @@ function result(status, errors = [], feed = null) {
 }
 
 export function validateEntdeckenSourceRegistry(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > ENTDECKEN_DAILY_MAX_SEARCH_RESULTS) {
+  if (!Array.isArray(value) || value.length !== ENTDECKEN_DAILY_SOURCE_DOMAINS.length) {
     return Object.freeze({ ok: false, errors: Object.freeze(["source-registry-size-invalid"]), value: null });
   }
   const errors = [];
@@ -125,35 +121,33 @@ export function validateEntdeckenSourceRegistry(value) {
     if (ids.has(source.sourceId)) errors.push(`${prefix}-id-duplicate`);
     domains.add(source.domain); ids.add(source.sourceId);
   }
+  if (JSON.stringify([...domains].sort()) !== JSON.stringify(ENTDECKEN_DAILY_SOURCE_DOMAINS)) {
+    errors.push("source-registry-domains-invalid");
+  }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
 }
 
-function validateProviderItem(item, index, errors) {
+function validateProviderItem(item, index, errors, retrievedOn) {
   const prefix = `provider-item-${index}`;
-  if (!exactKeys(item, ["title", "originalTitle", "mediaType", "releaseYear", "attributes", "opinion"])) {
+  if (!exactKeys(item, ["title", "mediaType", "releaseYear", "attributes", "evidence"])) {
     errors.push(`${prefix}-shape-invalid`); return;
   }
   if (!text(item.title) || text(item.title) !== item.title || item.title.length > 200) errors.push(`${prefix}-title-invalid`);
-  if (item.originalTitle !== null && (
-    typeof item.originalTitle !== "string" || text(item.originalTitle) !== item.originalTitle
-      || !item.originalTitle || item.originalTitle.length > 200
-  )) errors.push(`${prefix}-original-title-invalid`);
   if (!MEDIA_TYPES.has(item.mediaType)) errors.push(`${prefix}-media-type-invalid`);
   if (!validYear(item.releaseYear)) errors.push(`${prefix}-year-invalid`);
   if (!exactKeys(item.attributes, ["genres", "tags"])) errors.push(`${prefix}-attributes-shape-invalid`);
   const genres = unique(item.attributes?.genres);
   const tags = unique(item.attributes?.tags);
   if (!genres || genres.length > 8 || !tags || tags.length > 8) errors.push(`${prefix}-attributes-invalid`);
-  if (!exactKeys(item.opinion, ["url", "sourceTitle", "summary", "stance"])) {
-    errors.push(`${prefix}-opinion-shape-invalid`); return;
+  if (!exactKeys(item.evidence, ["url", "publishedOn", "positiveRecommendation"])) {
+    errors.push(`${prefix}-evidence-shape-invalid`); return;
   }
-  if (!directUrl(item.opinion.url)) errors.push(`${prefix}-opinion-url-invalid`);
-  if (!text(item.opinion.sourceTitle) || text(item.opinion.sourceTitle) !== item.opinion.sourceTitle
-      || item.opinion.sourceTitle.length > 240) errors.push(`${prefix}-opinion-title-invalid`);
-  if (!text(item.opinion.summary) || text(item.opinion.summary) !== item.opinion.summary
-      || item.opinion.summary.length > 320) errors.push(`${prefix}-opinion-summary-invalid`);
-  if (item.opinion.stance !== "recommended") errors.push(`${prefix}-opinion-stance-invalid`);
+  if (!directUrl(item.evidence.url)) errors.push(`${prefix}-evidence-url-invalid`);
+  if (!validDay(item.evidence.publishedOn) || item.evidence.publishedOn > retrievedOn) {
+    errors.push(`${prefix}-evidence-published-on-invalid`);
+  }
+  if (item.evidence.positiveRecommendation !== true) errors.push(`${prefix}-evidence-positive-invalid`);
 }
 
 function sourceForUrl(url, sources) {
@@ -166,31 +160,26 @@ function sourceForUrl(url, sources) {
   return matches.length === 1 ? matches[0] : null;
 }
 
-function canonicalRecord(item, source, rank, retrievedOn, validUntil) {
+function canonicalRecord(item, rank, retrievedOn) {
   const key = `${item.mediaType}|${item.releaseYear}|${normalizedTitle(item.title)}`;
   return {
     key,
     recordId: `webtip:${hash64(key)}`,
     title: item.title,
-    originalTitle: item.originalTitle,
     mediaType: item.mediaType,
     releaseYear: item.releaseYear,
-    externalIds: {},
     attributes: {
       genres: [...item.attributes.genres],
       tags: [...item.attributes.tags],
     },
-    opinions: [{
-      sourceId: source.sourceId,
-      sourceFamily: source.publisherFamily,
-      sourceLabel: item.opinion.sourceTitle,
-      url: item.opinion.url,
-      stance: "recommended",
-      summary: item.opinion.summary,
+    evidence: [{
+      domain: directUrl(item.evidence.url).hostname.toLowerCase(),
+      url: item.evidence.url,
+      publishedOn: item.evidence.publishedOn,
+      retrievedOn,
+      positiveRecommendation: true,
     }],
     rank,
-    retrievedOn,
-    validUntil,
   };
 }
 
@@ -218,9 +207,9 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     return result("insufficient_evidence", ["provider-items-insufficient"]);
   }
   const shapeErrors = [];
-  envelope.response.items.forEach((item, index) => validateProviderItem(item, index, shapeErrors));
+  envelope.response.items.forEach((item, index) => validateProviderItem(item, index, shapeErrors, retrievedOn));
   if (shapeErrors.length) return result("invalid_response", shapeErrors);
-  const uniqueUrls = new Set(envelope.response.items.map((item) => item.opinion.url));
+  const uniqueUrls = new Set(envelope.response.items.map((item) => item.evidence.url));
   if (uniqueUrls.size > envelope.searchResultCount) {
     return result("invalid_response", ["opinion-url-count-exceeds-search-results"]);
   }
@@ -228,13 +217,13 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   const records = new Map();
   const sourceErrors = [];
   envelope.response.items.forEach((item, index) => {
-    const source = sourceForUrl(item.opinion.url, sources.value);
+    const source = sourceForUrl(item.evidence.url, sources.value);
     if (!source) { sourceErrors.push(`provider-item-${index}-source-unavailable`); return; }
-    const next = canonicalRecord(item, source, index + 1, retrievedOn, validUntil);
+    const next = canonicalRecord(item, index + 1, retrievedOn);
     const previous = records.get(next.key);
     if (!previous) { records.set(next.key, next); return; }
-    if (!previous.opinions.some((opinion) => opinion.url === next.opinions[0].url)
-        && previous.opinions.length < 3) previous.opinions.push(next.opinions[0]);
+    if (!previous.evidence.some((evidence) => evidence.url === next.evidence[0].url)
+        && previous.evidence.length < 3) previous.evidence.push(next.evidence[0]);
     previous.attributes.genres = [...new Set([...previous.attributes.genres, ...next.attributes.genres])].slice(0, 8);
     previous.attributes.tags = [...new Set([...previous.attributes.tags, ...next.attributes.tags])].slice(0, 8);
   });
@@ -269,36 +258,33 @@ export function validateEntdeckenDailyFeed(value) {
   const ranks = new Set();
   for (const item of value.items) {
     if (!exactKeys(item, [
-      "recordId", "title", "originalTitle", "mediaType", "releaseYear", "externalIds",
-      "attributes", "opinions", "rank", "retrievedOn", "validUntil",
+      "recordId", "title", "mediaType", "releaseYear", "attributes", "evidence", "rank",
     ]) || !/^webtip:[a-f0-9]{16}$/.test(item.recordId)
       || !text(item.title) || text(item.title) !== item.title || item.title.length > 200
-      || (item.originalTitle !== null && (
-        typeof item.originalTitle !== "string" || text(item.originalTitle) !== item.originalTitle
-        || !item.originalTitle || item.originalTitle.length > 200
-      ))
       || !MEDIA_TYPES.has(item.mediaType) || !validYear(item.releaseYear)
-      || !validExternalIds(item.externalIds)
       || !exactKeys(item.attributes, ["genres", "tags"])
       || !unique(item.attributes.genres) || item.attributes.genres.length > 8
       || !unique(item.attributes.tags) || item.attributes.tags.length > 8
-      || !Array.isArray(item.opinions) || item.opinions.length < 1 || item.opinions.length > 3
-      || !Number.isInteger(item.rank) || item.rank < 1 || item.rank > ENTDECKEN_DAILY_MAX_ITEMS
-      || item.retrievedOn !== value.refreshedOn || item.validUntil !== value.validUntil) {
+      || !Array.isArray(item.evidence) || item.evidence.length < 1 || item.evidence.length > 3
+      || !Number.isInteger(item.rank) || item.rank < 1 || item.rank > ENTDECKEN_DAILY_MAX_ITEMS) {
       return Object.freeze({ ok: false, value: null });
     }
     if (recordIds.has(item.recordId) || ranks.has(item.rank)) return Object.freeze({ ok: false, value: null });
     recordIds.add(item.recordId); ranks.add(item.rank);
-    const opinionUrls = new Set();
-    for (const opinion of item.opinions) {
-      if (!exactKeys(opinion, ["sourceId", "sourceFamily", "sourceLabel", "url", "stance", "summary"])
-          || !stableSourceId(opinion.sourceId)
-          || !text(opinion.sourceFamily) || text(opinion.sourceFamily) !== opinion.sourceFamily || opinion.sourceFamily.length > 120
-          || !text(opinion.sourceLabel) || text(opinion.sourceLabel) !== opinion.sourceLabel || opinion.sourceLabel.length > 240
-          || !directUrl(opinion.url) || opinion.stance !== "recommended"
-          || !text(opinion.summary) || text(opinion.summary) !== opinion.summary || opinion.summary.length > 320
-          || opinionUrls.has(opinion.url)) return Object.freeze({ ok: false, value: null });
-      opinionUrls.add(opinion.url);
+    const evidenceUrls = new Set();
+    for (const evidence of item.evidence) {
+      const parsed = directUrl(evidence.url);
+      if (!exactKeys(evidence, ["domain", "url", "publishedOn", "retrievedOn", "positiveRecommendation"])
+          || !validDomain(evidence.domain) || !parsed
+          || parsed.hostname.toLowerCase() !== evidence.domain
+          || !ENTDECKEN_DAILY_SOURCE_DOMAINS.some((domain) => (
+            evidence.domain === domain || evidence.domain.endsWith(`.${domain}`)
+          ))
+          || !validDay(evidence.publishedOn) || evidence.publishedOn > value.refreshedOn
+          || evidence.retrievedOn !== value.refreshedOn
+          || evidence.positiveRecommendation !== true
+          || evidenceUrls.has(evidence.url)) return Object.freeze({ ok: false, value: null });
+      evidenceUrls.add(evidence.url);
     }
   }
   return Object.freeze({ ok: true, value: freezeDeep(JSON.parse(JSON.stringify(value))) });

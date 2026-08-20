@@ -1,11 +1,11 @@
--- Kinodreieck · Entdecken-Tagesfeed · Etappe 2
+-- Kinodreieck · Entdecken-Tagesfeed · Etappe 3 (privater Owner-Pilot)
 -- =============================================================================
--- STATUS: NUR LOKAL VORBEREITET. NICHT REMOTE ANGEWANDT.
+-- STATUS: ADDITIVE ERSTANLAGE. DARF NIE ALS HISTORISCHE MIGRATION WIEDERHOLT WERDEN.
 --
--- Additiver, globaler Feed fuer redaktionell belegte Film-/Serientipps.
--- Die Migration aktiviert weder Client, Feed, Anbieter noch Scheduler und
--- enthaelt bewusst keine Quellen-Seeds. Ein Anbieterrequest ist auch bei
--- parallelen GETs hoechstens einmal je Wien-Kalendertag reservierbar.
+-- Privater, nichtkommerzieller Max-only-Feed fuer redaktionell belegte
+-- Film-/Serientipps. Browser-Public, kommerzielle Nutzung, Scheduler und
+-- Frontendflag bleiben hart aus. Ein Anbieterrequest ist auch bei parallelen
+-- GETs hoechstens einmal je Wien-Kalendertag reservierbar.
 -- =============================================================================
 
 begin;
@@ -65,18 +65,23 @@ end
 $$;
 
 create table public.kd_entdecken_daily_settings (
-  singleton         boolean primary key default true check (singleton),
-  feed_enabled      boolean not null default false,
-  provider_enabled  boolean not null default false,
-  updated_at        timestamptz not null default now()
+  singleton                   boolean primary key default true check (singleton),
+  owner_pilot_enabled         boolean not null default false,
+  feed_enabled                boolean not null default false,
+  provider_enabled            boolean not null default false,
+  public_enabled              boolean not null default false,
+  commercial_enabled          boolean not null default false,
+  updated_at                  timestamptz not null default now(),
+  check (not public_enabled and not commercial_enabled),
+  check (not provider_enabled or (owner_pilot_enabled and feed_enabled))
 );
 
 insert into public.kd_entdecken_daily_settings
-  (singleton, feed_enabled, provider_enabled)
-values (true, false, false);
+  (singleton, owner_pilot_enabled, feed_enabled, provider_enabled, public_enabled, commercial_enabled)
+values (true, false, false, false, false, false);
 
 comment on table public.kd_entdecken_daily_settings is
-  'Globale Entdecken-Not-Aus-Schalter. Etappe 2 liefert beide hart false; Aktivierung gehoert in ein eigenes Remote-Fenster.';
+  'Privater Max-only-Pilot. Public, kommerziell und Scheduler bleiben ausserhalb dieses Vertrages hart aus.';
 
 create table public.kd_entdecken_sources (
   source_id             text primary key
@@ -97,7 +102,20 @@ create table public.kd_entdecken_sources (
 );
 
 comment on table public.kd_entdecken_sources is
-  'Leeres, service-role-only Quellenregister. Domains duerfen erst nach dokumentierter Rechte-/Nutzungspruefung aktiv werden.';
+  'Service-role-only Quellenregister fuer den privaten, nichtkommerziellen Pilot; gespeichert werden keine Rezensionstexte, Zitate, Bilder oder Logos.';
+
+insert into public.kd_entdecken_sources (
+  source_id, domain, publisher_family, source_class, rights_status,
+  attribution_approved, subdomains_allowed, active, terms_url, terms_checked_on
+) values
+  (
+    'editorial:derstandard', 'derstandard.at', 'DER STANDARD', 'editorial', 'approved',
+    true, true, true, 'https://about.derstandard.at/nutzungsbedingungen/', date '2026-08-20'
+  ),
+  (
+    'editorial:filmat', 'film.at', 'film.at / k-digital Medien', 'editorial', 'approved',
+    true, true, true, 'https://www.film.at/kontakt-impressum-redaktion-filmat/401835922', date '2026-08-20'
+  );
 
 create table public.kd_entdecken_daily_feed (
   singleton              boolean primary key default true check (singleton),
@@ -149,12 +167,15 @@ declare
   v_today date := (now() at time zone 'Europe/Vienna')::date;
   v_feed_enabled boolean;
   v_provider_enabled boolean;
+  v_owner_pilot_enabled boolean;
+  v_public_enabled boolean;
+  v_commercial_enabled boolean;
   v_feed public.kd_entdecken_daily_feed%rowtype;
   v_refresh boolean := false;
   v_payload jsonb;
 begin
-  select feed_enabled, provider_enabled
-    into v_feed_enabled, v_provider_enabled
+  select owner_pilot_enabled, feed_enabled, provider_enabled, public_enabled, commercial_enabled
+    into v_owner_pilot_enabled, v_feed_enabled, v_provider_enabled, v_public_enabled, v_commercial_enabled
     from public.kd_entdecken_daily_settings
    where singleton
    for update;
@@ -177,7 +198,8 @@ begin
     v_payload := null;
   end if;
 
-  if v_feed_enabled and v_provider_enabled
+  if v_owner_pilot_enabled and v_feed_enabled and v_provider_enabled
+     and not v_public_enabled and not v_commercial_enabled
      and v_feed.last_attempt_on is distinct from v_today
      and v_feed.refreshed_on is distinct from v_today then
     update public.kd_entdecken_daily_feed
@@ -214,7 +236,7 @@ declare
 begin
   if jsonb_typeof(p_payload) is distinct from 'object'
      or (select count(*) from pg_catalog.jsonb_object_keys(p_payload)) is distinct from 7::bigint
-     or p_payload->>'format' is distinct from '2'
+     or p_payload->>'format' is distinct from '3'
      or p_payload->>'feedId' is distinct from 'websearch:daily-tips-at'
      or p_payload->>'region' is distinct from 'AT'
      or p_payload->>'sourceId' is distinct from 'websearch:daily-tips'
@@ -286,6 +308,9 @@ declare
   v_today date := (now() at time zone 'Europe/Vienna')::date;
   v_feed_enabled boolean;
   v_provider_enabled boolean;
+  v_owner_pilot_enabled boolean;
+  v_public_enabled boolean;
+  v_commercial_enabled boolean;
   v_provider jsonb;
   v_fee numeric;
   v_task_cap numeric;
@@ -297,12 +322,14 @@ begin
     return jsonb_build_object('ok',false,'code','server','grund','entdecken-daily-request-invalid');
   end if;
 
-  select feed_enabled, provider_enabled
-    into v_feed_enabled, v_provider_enabled
+  select owner_pilot_enabled, feed_enabled, provider_enabled, public_enabled, commercial_enabled
+    into v_owner_pilot_enabled, v_feed_enabled, v_provider_enabled, v_public_enabled, v_commercial_enabled
     from public.kd_entdecken_daily_settings
    where singleton
    for key share;
-  if not coalesce(v_feed_enabled,false) or not coalesce(v_provider_enabled,false) then
+  if not coalesce(v_owner_pilot_enabled,false)
+     or not coalesce(v_feed_enabled,false) or not coalesce(v_provider_enabled,false)
+     or coalesce(v_public_enabled,true) or coalesce(v_commercial_enabled,true) then
     return jsonb_build_object('ok',false,'code','disabled','grund','entdecken-daily-off');
   end if;
 
@@ -322,7 +349,7 @@ begin
    where active and rights_status = 'approved' and attribution_approved
      and source_class = 'editorial' and terms_checked_on is not null
      and terms_url ~ '^https://';
-  if v_source_count < 1 or v_source_count > 10
+  if v_source_count is distinct from 2
      or v_source_count is distinct from (select count(*) from public.kd_entdecken_sources where active) then
     return jsonb_build_object('ok',false,'code','disabled','grund','entdecken-daily-sources-unavailable');
   end if;
@@ -380,5 +407,28 @@ comment on function public.kd_entdecken_daily_claim() is
   'Liefert einen noch gueltigen globalen Feed und beansprucht hoechstens einen Refresh je Wien-Kalendertag; nur service_role.';
 comment on function public.kd_entdecken_daily_auftrag_starten(uuid,numeric,integer) is
   'Reserviert den einen taeglichen globalen Websearch nach Quellen-, Provider- und allgemeinem KI-Kostenzaun; kein Nutzerpayload, nur service_role.';
+
+-- Aktivierung erst am Ende derselben atomaren Erstanlage. Zu diesem Zeitpunkt
+-- muss die neue Function bereits mit serverseitigem Own-Row-Owner-Gate deployed
+-- sein. Public/kommerziell bleiben durch CHECK und Readback unveraenderbar aus.
+update public.kd_entdecken_daily_settings
+   set owner_pilot_enabled = true,
+       feed_enabled = true,
+       provider_enabled = true,
+       updated_at = now()
+ where singleton
+   and not public_enabled
+   and not commercial_enabled;
+do $$
+begin
+  if not exists (
+    select 1 from public.kd_entdecken_daily_settings
+     where singleton and owner_pilot_enabled and feed_enabled and provider_enabled
+       and not public_enabled and not commercial_enabled
+  ) then
+    raise exception 'Entdecken privater Owner-Pilot konnte nicht fail-closed aktiviert werden';
+  end if;
+end
+$$;
 
 commit;
