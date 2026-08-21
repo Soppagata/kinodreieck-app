@@ -212,8 +212,12 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
+  /* Die kuratierte lokale Suche und das kontogebundene Vormerken sind keine
+     Providerfreigabe. Ein aktives personalAi-Konto darf deshalb ein starkes
+     Personenziel lokal in die Outbox legen, auch wenn der Build die spätere
+     Online-Bestätigung noch sperrt. Der Netzwerkpfad bleibt unten am Flag. */
   const personRadarAvailable = radarAuthority === "guest"
-    || (radarPilotClientEnabled && remoteKontoAktiv);
+    || (remoteKontoAktiv && session?.capabilities?.personalAi === true);
   const personRadarCheckAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
     && radarAuthority === "account-cache" && remoteKontoAktiv
     && radarPilotClientEnabled && radarState?.pilot?.status === "ready"
@@ -246,6 +250,7 @@ export function useEntdeckenRadarController({
     });
     if (saved === false) return Object.freeze({ status: reason === "outbox-person-invalid" ? "unresolved" : "storage_error", writes: 0 });
     if (radarAuthority === "guest") return Object.freeze({ status: "active", writes: 1, identity });
+    if (!radarPilotClientEnabled) return Object.freeze({ status: "pending", writes: 1, identity });
     const synced = await syncRadarPilot(saved);
     const active = (synced?.state?.personSubscriptions || []).some((entry) => (
       entry.personExternalId === identity.personExternalId && entry.role === identity.role && entry.status === "active"
@@ -275,9 +280,13 @@ export function useEntdeckenRadarController({
       return result.ok ? result.state : null;
     });
     if (saved === false) return Object.freeze({ status: reason === "outbox-person-invalid" ? "unresolved" : "storage_error", writes: 0 });
-    if (radarAuthority === "account-cache") await syncRadarPilot(saved);
-    return Object.freeze({ status: action === "remove" ? "removed" : action === "pause" ? "paused" : "active", writes: 1 });
-  }, [personRadarAvailable, radarAuthority, schreibeRadarState, syncRadarPilot]);
+    if (radarAuthority === "account-cache" && radarPilotClientEnabled) await syncRadarPilot(saved);
+    return Object.freeze({
+      status: radarAuthority === "account-cache" && !radarPilotClientEnabled
+        ? "pending" : action === "remove" ? "removed" : action === "pause" ? "paused" : "active",
+      writes: 1,
+    });
+  }, [personRadarAvailable, radarAuthority, radarPilotClientEnabled, schreibeRadarState, syncRadarPilot]);
 
   const fuehrePersonRadarCheck = useCallback(async (identity) => {
     const state = radarStateRef.current;
@@ -425,19 +434,53 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const bestaetigeRadarVorschau = useCallback(async (target, { shareEnabled = false } = {}) => {
+  const bestaetigeRadarVorschau = useCallback(async (targetOrTargets, { shareEnabled = false } = {}) => {
     if (radarAuthority === "account-cache" && !remoteKontoAktiv) {
       setErr("Radar-Änderungen im Kontomodus brauchen einen fachlich aktiven Kontozugriff.");
       return false;
     }
-    const bereitsAktiv = radarStateRef.current?.authority === radarAuthority
-      && (radarStateRef.current.subscriptions || []).some((entry) => (
-        entry.targetId === target.targetId && entry.status === "active"
-      ));
-    if (!bereitsAktiv && !await aendereRadar(target, "upsert")) return false;
-    if (shareEnabled && !await aendereRadarShare(target.targetId, true)) return false;
+    const requestedTargets = Array.isArray(targetOrTargets) ? targetOrTargets : [targetOrTargets];
+    const targets = requestedTargets
+      .filter((target) => target?.targetStatus === "active" && target?.canonical === true && target?.targetId);
+    const uniqueTargets = [...new Map(targets.map((target) => [target.targetId, target])).values()];
+    if (!uniqueTargets.length || targets.length !== requestedTargets.length || uniqueTargets.length !== targets.length) {
+      setErr("Die Radar-Auswahl ist nicht eindeutig. Es wurde nichts verändert.");
+      return false;
+    }
+    let grund = "radar-change-invalid";
+    const gespeichert = await schreibeRadarState((previous) => {
+      if (previous.authority !== radarAuthority) { grund = "authority-mismatch"; return null; }
+      let next = previous;
+      for (const target of uniqueTargets) {
+        const bereitsAktiv = (next.subscriptions || []).some((entry) => (
+          entry.targetId === target.targetId && entry.status === "active"
+        ));
+        if (bereitsAktiv) continue;
+        const result = next.authority === "guest"
+          ? upsertGuestRadarSubscription(next, { target, status: "active" })
+          : queueAccountRadarChange(next, {
+            operationId: neueLokaleOperationId(), action: "upsert", target,
+          });
+        grund = result.reason;
+        if (!result.ok) return null;
+        next = result.state;
+      }
+      return next;
+    });
+    if (gespeichert === false) {
+      setErr(grund === "quota-exceeded"
+        ? "Für diese Auswahl sind nicht genug freie Radarplätze vorhanden. Es wurde kein Titel übernommen."
+        : "Die Radar-Auswahl wurde nicht bestätigt gespeichert. Es wurde kein Titel übernommen.");
+      return false;
+    }
+    if (radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv) {
+      void syncRadarPilot(gespeichert);
+    }
+    if (shareEnabled && uniqueTargets.length === 1
+        && !await aendereRadarShare(uniqueTargets[0].targetId, true)) return false;
     return true;
-  }, [aendereRadar, aendereRadarShare, radarAuthority, radarStateRef, remoteKontoAktiv, setErr]);
+  }, [aendereRadarShare, radarAuthority, radarPilotClientEnabled, remoteKontoAktiv,
+    schreibeRadarState, setErr, syncRadarPilot]);
 
   const beobachteteWatchmodeIds = useMemo(
     () => serienBeobachten(entdeckenStatus, serienKatalog).map((entry) => String(entry.watchmode_id)),

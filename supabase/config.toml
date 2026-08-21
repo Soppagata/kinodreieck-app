@@ -24,3 +24,9 @@ verify_jwt = true
 # Paket B nutzt denselben doppelten JWT-Vertrag wie ai-task: Plattformpruefung
 # plus eigene authenticated-Claims-Pruefung in der Function.
 verify_jwt = true
+
+[functions.entdecken-daily-task]
+# Globaler, nicht personalisierter Nur-Lese-Endpunkt. Die Function prueft JWT
+# und Own-Row selbst; Tagesclaim und Kostenzaun erlauben hoechstens einen
+# Providerlauf je Wien-Kalendertag.
+verify_jwt = false

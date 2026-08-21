@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-
 /* ============================================================
    KINODREIECK · WIEN — v4 (Webapp, Vite)
    ------------------------------------------------------------
@@ -109,7 +108,7 @@ import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
-
+import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
 const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
 const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
@@ -212,6 +211,7 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
+  const webDiscoveryOwnerFreigegeben = ownerTechnikBestaetigt && session.capabilities?.personalAi === true; const webDiscoveryFeed = useWebDiscoveryFeed(bootDone && tab === "blog", webDiscoveryOwnerFreigegeben);
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
@@ -249,7 +249,7 @@ export default function App() {
   /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Darstellungsmodus ----
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
-  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "" });
+  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "", entdeckenTaeglich: false });
   const effektiveSchrift = normalisiereSchrift(einstellungen.schrift);
   useEffect(() => {
     const root = document.documentElement;
@@ -263,7 +263,7 @@ export default function App() {
   }, [effektiveSchrift]);
   const [neonEintrittSerial, setNeonEintrittSerial] = useState(0);
   const bereinigteEinstellungen = useCallback((wert) => {
-    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift) };
+    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift), entdeckenTaeglich: wert?.entdeckenTaeglich === true };
     delete next.linkshaender;
     return next;
   }, []);
@@ -681,7 +681,7 @@ export default function App() {
             || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus)
             || normalisiereSchrift(roh.schrift) !== roh.schrift;
           const e = { theme: "dunkel", startTab: "start", modus: "", ...roh,
-            schrift: normalisiereSchrift(roh.schrift) };
+            schrift: normalisiereSchrift(roh.schrift), entdeckenTaeglich: roh.entdeckenTaeglich === true };
           delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
           if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen
@@ -2069,8 +2069,8 @@ export default function App() {
         {tab === "blog" && (
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
-            master={master || []} mustwatch={mustwatch} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken}
-            selectedServices={auswahl} catalogLoading={streamingEntdeckenLaedt || (snapshotFreigabe && !streamingEntdecken)} catalogError={!!streamingInfo?.fehler}
+            master={master || []} mustwatch={mustwatch} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl}
+            webDiscoveryFeed={webDiscoveryFeed} dailyVariety={einstellungen.entdeckenTaeglich === true} catalogLoading={streamingEntdeckenLaedt || (snapshotFreigabe && !streamingEntdecken)} catalogError={!!streamingInfo?.fehler}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}

@@ -16,24 +16,42 @@ import {
 } from "./localEventRadar.js";
 import {
   createRecommendationFunnel,
-  rankNeutralCandidates,
   rankRecommendations,
 } from "./recommendationRanking.js";
 import { norm } from "./match.js";
+import {
+  discoveryExternalIdsFromCatalog,
+  matchWebDiscoveryFeed,
+} from "./webDiscoveryFeed.js";
 
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
+const PROFIL_ATTRIBUT_ARTEN = new Set([
+  "genre", "tag", "thema", "erzaehlweise", "inszenierung", "tempo", "ton",
+  "haltung", "regie", "epoche", "land", "kritikpunkt", "achse", "name", "person", "franchise",
+]);
 export const RADAR_CATALOG_SEARCH_LIMIT = 8;
 export const RADAR_CATALOG_SEARCH_MIN_LENGTH = 2;
+export const ENTDECKEN_PERSONAL_LIMIT = 6;
+export const ENTDECKEN_TOP_POOL = 20;
+export const ENTDECKEN_WEITERE_LIMIT = 6;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
+function list(value) { return Array.isArray(value) ? value : []; }
+function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
+function uniqueText(values) {
+  const found = new Map();
+  for (const value of values) {
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    const clean = text(value);
+    if (clean.length > 80) continue;
+    const key = normalized(clean);
+    if (clean && !found.has(key)) found.set(key, clean);
+  }
+  return [...found.values()];
+}
 function positiveInteger(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
-}
-function finiteNumber(value) {
-  if (value == null || text(value) === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
 }
 function stablePrefixedId(prefix, value) {
   const suffix = text(value);
@@ -75,16 +93,41 @@ export function createRadarCatalogIndex({
   const masterRows = Array.isArray(master) ? master : [];
   const knownRows = Array.isArray(streamingKnown?.titel) ? streamingKnown.titel : [];
   const discoverRows = Array.isArray(streamingDiscover?.titel) ? streamingDiscover.titel : [];
-  const rows = [
-    ...masterRows.map((entry) => ({
-      source: "Mediathek", watchmodeId: entry?.watchmode_id, catalogId: entry?.id,
+  const streamingRows = [...knownRows, ...discoverRows].map((entry) => ({
+    source: "Streaming", watchmodeId: entry?.watchmode_id,
+    title: entry?.titel, originalTitle: entry?.originaltitel || entry?.original_title,
+    type: entry?.typ, year: entry?.jahr,
+  }));
+  const strongByTitleYearType = new Map();
+  for (const row of streamingRows) {
+    const watchmodeId = positiveInteger(row.watchmodeId);
+    const year = positiveInteger(row.year);
+    if (watchmodeId == null || year == null) continue;
+    for (const alias of [row.title, row.originalTitle].map(norm).filter(Boolean)) {
+      const key = `${alias}|${year}|${radarTargetTypeForCatalogType(row.type)}`;
+      if (!strongByTitleYearType.has(key)) strongByTitleYearType.set(key, new Set());
+      strongByTitleYearType.get(key).add(watchmodeId);
+    }
+  }
+  const guardedMasterRows = masterRows.map((entry) => {
+    let watchmodeId = positiveInteger(entry?.watchmode_id);
+    const year = positiveInteger(entry?.jahr);
+    if (watchmodeId == null && year != null) {
+      const guarded = new Set();
+      for (const alias of [entry?.titel, entry?.originaltitel].map(norm).filter(Boolean)) {
+        const key = `${alias}|${year}|${radarTargetTypeForCatalogType(entry?.typ)}`;
+        for (const candidateId of strongByTitleYearType.get(key) || []) guarded.add(candidateId);
+      }
+      if (guarded.size === 1) watchmodeId = [...guarded][0];
+    }
+    return {
+      source: "Mediathek", watchmodeId, catalogId: entry?.id,
       title: entry?.titel, originalTitle: entry?.originaltitel, type: entry?.typ, year: entry?.jahr,
-    })),
-    ...[...knownRows, ...discoverRows].map((entry) => ({
-      source: "Streaming", watchmodeId: entry?.watchmode_id,
-      title: entry?.titel, originalTitle: entry?.originaltitel || entry?.original_title,
-      type: entry?.typ, year: entry?.jahr,
-    })),
+    };
+  });
+  const rows = [
+    ...guardedMasterRows,
+    ...streamingRows,
   ];
   const byTargetId = new Map();
   for (const row of rows) {
@@ -110,12 +153,13 @@ export function createRadarCatalogIndex({
       ...baseKeys,
       ...(year == null ? [] : baseKeys.map((key) => `${key} ${year}`)),
     ])];
+    const sources = Object.freeze([...entry.sources]);
     return Object.freeze({
-      target: entry.target,
+      target: Object.freeze({ ...entry.target, year, sources }),
       targetId: entry.target.targetId,
       title: entry.target.title,
       year,
-      sources: Object.freeze([...entry.sources]),
+      sources,
       searchKeys: Object.freeze(searchKeys),
     });
   }).sort((left, right) => (
@@ -126,10 +170,17 @@ export function createRadarCatalogIndex({
 }
 
 export function searchRadarCatalog(index, query) {
+  return searchRadarCatalogResult(index, query).entries;
+}
+
+export function searchRadarCatalogResult(index, query) {
   const needle = norm(query);
-  if (needle.length < RADAR_CATALOG_SEARCH_MIN_LENGTH) return Object.freeze([]);
+  if (needle.length < RADAR_CATALOG_SEARCH_MIN_LENGTH) {
+    return Object.freeze({ entries: Object.freeze([]), total: 0, truncated: false });
+  }
   const tokens = needle.split(" ").filter((token) => token.length >= 2);
   const buckets = [[], [], [], []];
+  let total = 0;
   for (const entry of Array.isArray(index) ? index : []) {
     const keys = Array.isArray(entry?.searchKeys) ? entry.searchKeys : [];
     let rank = -1;
@@ -137,9 +188,13 @@ export function searchRadarCatalog(index, query) {
     else if (keys.some((key) => key.startsWith(needle))) rank = 1;
     else if (keys.some((key) => key.includes(needle))) rank = 2;
     else if (tokens.length > 1 && keys.some((key) => tokens.every((token) => key.includes(token)))) rank = 3;
-    if (rank >= 0 && buckets[rank].length < RADAR_CATALOG_SEARCH_LIMIT) buckets[rank].push(entry);
+    if (rank >= 0) {
+      total += 1;
+      if (buckets[rank].length < RADAR_CATALOG_SEARCH_LIMIT) buckets[rank].push(entry);
+    }
   }
-  return Object.freeze(buckets.flat().slice(0, RADAR_CATALOG_SEARCH_LIMIT));
+  const entries = Object.freeze(buckets.flat().slice(0, RADAR_CATALOG_SEARCH_LIMIT));
+  return Object.freeze({ entries, total, truncated: total > entries.length });
 }
 
 export function createCatalogSearchActions(input = {}) {
@@ -155,33 +210,96 @@ export function createCatalogSearchActions(input = {}) {
   });
 }
 
-export function localRecommendationCandidates(streamingEntdecken) {
-  if (streamingEntdecken?.region !== "AT") return Object.freeze([]);
+function selectedServiceSet(selectedServices) {
+  return new Set(list(selectedServices).map(normalized).filter(Boolean));
+}
+function matchingServices(candidate, services) {
+  return list(candidate?.services).filter((service) => services.has(normalized(service)));
+}
+function statusIsSeen(value) {
+  if (typeof value === "string") return value === "gesehen";
+  return !!value && typeof value === "object" && value.status === "gesehen";
+}
+function hasCompleteRating(item) {
+  const axes = item?.bewertung ?? item?.axes;
+  if (!axes || typeof axes !== "object") return false;
+  return [axes.wie, axes.was, axes.warum]
+    .every((value) => Number.isInteger(value) && value >= 0 && value <= 5);
+}
+function seenTargetIds(master, entdeckenStatus) {
+  const ids = [];
+  for (const item of list(master)) {
+    const watchmodeId = positiveInteger(item?.watchmode_id);
+    if (watchmodeId != null && (hasCompleteRating(item) || item?.gesehen === true || item?.status === "gesehen")) {
+      ids.push(`watchmode:${watchmodeId}`);
+    }
+  }
+  for (const [watchmodeId, status] of Object.entries(entdeckenStatus || {})) {
+    const parsed = positiveInteger(watchmodeId);
+    if (parsed != null && statusIsSeen(status)) ids.push(`watchmode:${parsed}`);
+  }
+  return uniqueText(ids);
+}
+function structuredCatalogAttributes(entry) {
+  const genres = [...list(entry?.genres), ...list(entry?.genre)];
+  const tags = [...list(entry?.tags)];
+  let franchiseId = text(entry?.franchise_id || entry?.franchiseId) || null;
+  for (const raw of list(entry?.relevanz_signale)) {
+    const core = text(raw).replace(/\([^)]*\)\s*$/, "");
+    const splitAt = core.indexOf(":");
+    if (splitAt < 1) continue;
+    const kind = normalized(core.slice(0, splitAt));
+    const value = text(core.slice(splitAt + 1));
+    if (!value || !PROFIL_ATTRIBUT_ARTEN.has(kind)) continue;
+    if (kind === "genre") genres.push(value);
+    else if (kind === "franchise") franchiseId = value;
+    else tags.push(value);
+  }
+  return { genres: uniqueText(genres), tags: uniqueText(tags), franchiseId };
+}
+
+export function localRecommendationCandidates(streamingEntdecken, {
+  streamingKnown = null, selectedServices = [], entdeckenStatus = {},
+} = {}) {
+  const region = streamingEntdecken?.region || streamingKnown?.region;
+  if (region !== "AT") return Object.freeze([]);
   const sourceId = "local:streaming-catalog-at";
-  return Object.freeze((Array.isArray(streamingEntdecken?.titel) ? streamingEntdecken.titel : [])
+  const services = selectedServiceSet(selectedServices);
+  const rows = new Map();
+  for (const entry of [...list(streamingEntdecken?.titel), ...list(streamingKnown?.titel)]) {
+    const watchmodeId = positiveInteger(entry?.watchmode_id);
+    if (watchmodeId == null) continue;
+    rows.set(watchmodeId, { ...(rows.get(watchmodeId) || {}), ...entry });
+  }
+  return Object.freeze([...rows.values()]
     .map((entry) => {
       const watchmodeId = positiveInteger(entry?.watchmode_id);
       if (watchmodeId == null || !text(entry?.titel)) return null;
+      if (statusIsSeen(entdeckenStatus?.[watchmodeId])) return null;
+      const availableServices = list(entry.dienste);
+      if (services.size && !matchingServices({ services: availableServices }, services).length) return null;
+      const attributes = structuredCatalogAttributes(entry);
       return Object.freeze({
         targetId: `watchmode:${watchmodeId}`,
         watchmodeId,
         title: text(entry.titel),
         matchStatus: "matched",
         region: "AT",
-        availabilityConfirmed: Array.isArray(entry.dienste) && entry.dienste.length > 0,
+        availabilityConfirmed: availableServices.length > 0,
         eligible: true,
-        genres: Array.isArray(entry.genres) ? entry.genres : [],
-        tags: Array.isArray(entry.tags) ? entry.tags : [],
-        franchiseId: text(entry.franchise_id || entry.franchiseId) || null,
+        genres: Object.freeze(attributes.genres),
+        tags: Object.freeze(attributes.tags),
+        franchiseId: attributes.franchiseId,
         freshnessAt: entry.available_from || entry.verfuegbar_ab
           || streamingEntdecken.katalog_stand || streamingEntdecken.stand || null,
-        quality: finiteNumber(entry.user_score) ?? finiteNumber(entry.relevanz),
         sourceId,
         sourceRank: Number.isInteger(entry.rang) ? entry.rang
           : Number.isInteger(entry.source_rank) ? entry.source_rank : null,
-        services: Array.isArray(entry.dienste) ? [...entry.dienste] : [],
+        services: Object.freeze([...availableServices]),
         year: Number.isInteger(entry.jahr) ? entry.jahr : null,
         type: entry.typ || null,
+        originalTitle: text(entry.originaltitel || entry.original_title) || null,
+        externalIds: discoveryExternalIdsFromCatalog(entry),
       });
     })
     .filter(Boolean));
@@ -209,10 +327,14 @@ function localMustWatchTargetIds(mustwatch) {
 function localRecommendationContext({
   profile, master, mustwatch, useLibrary = true, selectedServices,
 } = {}) {
+  const library = localLibraryProjection(master);
   const context = {
     profile: profile && profile.beschaedigt !== true ? profile : {},
-    library: localLibraryProjection(master),
-    excludedTargetIds: localMustWatchTargetIds(mustwatch),
+    library,
+    excludedTargetIds: [
+      ...library.map((entry) => entry.targetId).filter(Boolean),
+      ...localMustWatchTargetIds(mustwatch),
+    ],
     useLibrary,
   };
   if (Array.isArray(selectedServices)) context.selectedServices = selectedServices;
@@ -235,15 +357,6 @@ export function createEntdeckenRecommendationFunnel({
     localRecommendationCandidates(streamingEntdecken),
     localRecommendationContext({ profile, master, mustwatch, useLibrary, selectedServices }),
   );
-}
-
-function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
-function selectedServiceSet(selectedServices) {
-  return new Set((Array.isArray(selectedServices) ? selectedServices : [])
-    .map(normalized).filter(Boolean));
-}
-function matchingServices(candidate, services) {
-  return (candidate.services || []).filter((service) => services.has(normalized(service)));
 }
 
 /* Sichtbare Mengenwahrheit des bereits lokal projizierten Katalogstands.
@@ -269,33 +382,132 @@ export function createEntdeckenCatalogSummary({
   });
 }
 
-/* Neutrale Ergänzungen verwenden positive Profil- oder Bewertungsbelege nie
-   als Passung oder Rang. Sie respektieren aber dieselben harten Ausschlüsse,
-   füllen nur die freien Plätze bis sechs und bleiben stabil sortiert. */
-export function createAdditionalServiceDiscoveries({
-  streamingEntdecken, selectedServices = [], personalRecommendations = [], master = [],
-  mustwatch = [], profile = null,
+function calendarDay(value) {
+  const normalizedDay = text(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDay)) return null;
+  const parsed = Date.parse(`${normalizedDay}T00:00:00.000Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === normalizedDay
+    ? normalizedDay : null;
+}
+
+export function localCalendarDay(now = new Date()) {
+  const value = now instanceof Date ? now : new Date(now);
+  if (!Number.isFinite(value.getTime())) return null;
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
+export function shouldRefreshWebDiscovery(lastRefreshDay, today) {
+  const current = calendarDay(today);
+  return !!current && calendarDay(lastRefreshDay) !== current;
+}
+
+/* Der globale Feed kennt den lokalen Katalog nicht. Nur ein eindeutiger
+   Titel+Jahr+Typ-Treffer wird sichtbar; mehrdeutige und fehlende Treffer
+   bleiben ausgeschlossen. Webfunde liefern Merkmale, nie Nutzerurteile. */
+export function webDiscoveryCandidates({
+  webDiscoveryFeed, catalogCandidates = [],
 } = {}) {
-  const openSlots = Math.max(0, 6 - (Array.isArray(personalRecommendations) ? personalRecommendations.length : 0));
-  const services = selectedServiceSet(selectedServices);
-  if (!openSlots || !services.size) return Object.freeze([]);
-  const personalIds = (Array.isArray(personalRecommendations) ? personalRecommendations : [])
-    .map((entry) => text(entry?.targetId)).filter(Boolean);
-  const context = localRecommendationContext({
-    profile, master, mustwatch, useLibrary: false, selectedServices,
+  const unique = new Map();
+  for (const decision of matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates)) {
+    if (decision.status !== "matched") continue;
+    const { record, candidate: base } = decision;
+    const existing = unique.get(base.targetId);
+    if (existing && existing.sourceRank <= record.rank) continue;
+    const evidence = record.evidence.map((entry) => Object.freeze({
+      domain: entry.domain,
+      url: entry.url,
+      publishedOn: entry.publishedOn,
+      retrievedOn: entry.retrievedOn,
+      positiveRecommendation: entry.positiveRecommendation,
+    }));
+    unique.set(base.targetId, Object.freeze({
+      ...base,
+      genres: Object.freeze(uniqueText([...list(base.genres), ...list(record.attributes.genres)])),
+      tags: Object.freeze(uniqueText([...list(base.tags), ...list(record.attributes.tags)])),
+      sourceId: webDiscoveryFeed.sourceId,
+      sourceRank: record.rank,
+      externalDiscovery: true,
+      externalEvidence: Object.freeze(evidence),
+      discoveryRecordId: record.recordId,
+    }));
+  }
+  return Object.freeze([...unique.values()].sort((left, right) => (
+    left.sourceRank - right.sourceRank
+    || left.targetId.localeCompare(right.targetId, "de-AT")
+  )));
+}
+
+function stableHash(value) {
+  let hash = 2166136261;
+  for (const char of String(value)) {
+    hash ^= char.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/* Die Tagesoption wählt stabil aus höchstens zwanzig bereits passend
+   gerankten Treffern. Danach gilt wieder die Passungsreihenfolge: Abwechslung
+   entscheidet nur, welche Titel heute vorkommen, nie über ihre Begründung. */
+export function selectDailyRecommendations(rows, {
+  dailyVariety = false, selectionDay = null,
+  limit = ENTDECKEN_PERSONAL_LIMIT, poolLimit = ENTDECKEN_TOP_POOL,
+} = {}) {
+  const safeLimit = Math.max(0, Math.min(ENTDECKEN_PERSONAL_LIMIT, Number(limit) || 0));
+  const ranked = list(rows).slice(0, Math.max(safeLimit, Math.min(ENTDECKEN_TOP_POOL, Number(poolLimit) || 0)));
+  if (!dailyVariety || !calendarDay(selectionDay) || ranked.length <= safeLimit) {
+    return Object.freeze(ranked.slice(0, safeLimit));
+  }
+  const rankById = new Map(ranked.map((entry, index) => [entry.targetId, index]));
+  const selected = [...ranked]
+    .sort((left, right) => (
+      stableHash(`${selectionDay}|${left.targetId}`) - stableHash(`${selectionDay}|${right.targetId}`)
+      || left.targetId.localeCompare(right.targetId, "de-AT")
+    ))
+    .slice(0, safeLimit)
+    .sort((left, right) => rankById.get(left.targetId) - rankById.get(right.targetId));
+  return Object.freeze(selected);
+}
+
+export function createEntdeckenRecommendations({
+  streamingEntdecken, streamingKnown = null, profile, master, useLibrary = true,
+  selectedServices = [], entdeckenStatus = {}, webDiscoveryFeed = null,
+  dailyVariety = false, selectionDay = null,
+} = {}) {
+  if (!selectedServiceSet(selectedServices).size) {
+    return Object.freeze({ personal: Object.freeze([]), further: Object.freeze([]) });
+  }
+  const excludedTargetIds = seenTargetIds(master, entdeckenStatus);
+  const excluded = new Set(excludedTargetIds);
+  const catalogCandidates = localRecommendationCandidates(streamingEntdecken, {
+    streamingKnown, selectedServices, entdeckenStatus,
+  }).filter((candidate) => !excluded.has(candidate.targetId));
+  const external = webDiscoveryCandidates({ webDiscoveryFeed, catalogCandidates });
+  const externalById = new Map(external.map((candidate) => [candidate.targetId, candidate]));
+  const rankingCandidates = catalogCandidates.map((candidate) => externalById.get(candidate.targetId) || candidate);
+  const ranked = rankRecommendations(rankingCandidates, {
+    profile: profile && profile.beschaedigt !== true ? profile : {},
+    library: localLibraryProjection(master),
+    useLibrary,
+    excludedTargetIds,
   });
-  context.excludedTargetIds = [...context.excludedTargetIds, ...personalIds];
-  return Object.freeze(rankNeutralCandidates(localRecommendationCandidates(streamingEntdecken), context)
-    .slice(0, openSlots)
+  const personal = selectDailyRecommendations(ranked, { dailyVariety, selectionDay });
+  const personalIds = new Set(personal.map((entry) => entry.targetId));
+  const further = external
+    .filter((candidate) => !personalIds.has(candidate.targetId))
+    .slice(0, ENTDECKEN_WEITERE_LIMIT)
     .map((candidate) => Object.freeze({
       targetId: candidate.targetId,
       watchmodeId: candidate.watchmodeId,
       title: candidate.title,
       year: candidate.year,
       type: candidate.type,
-      services: Object.freeze(matchingServices(candidate, services)
-        .sort((a, b) => a.localeCompare(b, "de-AT"))),
-    })));
+      services: candidate.services,
+      sourceRank: candidate.sourceRank,
+      externalEvidence: candidate.externalEvidence,
+    }));
+  return Object.freeze({ personal, further: Object.freeze(further) });
 }
 
 export function createFixtureRadarLedger(fixtures) {

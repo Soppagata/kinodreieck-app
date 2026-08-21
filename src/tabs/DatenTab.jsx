@@ -190,6 +190,11 @@ export function DatenTab({
                   {[["start", "Start (Dashboard)"], ["kino", "Kino"], ["mediathek", "Mediathek"], ["streaming", "Streaming"], ["blog", "Entdecken"]].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </div>
+              <label className="kd-einstellcheck">
+                <input type="checkbox" checked={einstellungen.entdeckenTaeglich === true}
+                  onChange={(event) => setzeEinstellung("entdeckenTaeglich", event.target.checked)} />
+                <span><strong>Täglich neue Entdecken-Auswahl</strong><small>Wählt einmal pro Kalendertag stabil aus den 20 besten persönlichen Passungen.</small></span>
+              </label>
             </div>
           </div>
         </Klappe>

@@ -3,6 +3,8 @@ import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import {
   EXIT_KEYCHAIN,
   EXIT_KONFIG,
+  ENTDECKEN_DAILY_ONCE_ENV,
+  ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
   KEYCHAIN_ACCOUNTS,
   KEYCHAIN_SERVICE,
   LIVE_LOCK_PATH,
@@ -107,7 +109,10 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     config.KD_SB_URL === PUBLIC.KD_SB_URL
       && config.KD_SB_ANON === PUBLIC.KD_SB_ANON
       && config.KD_ORIGIN === PUBLIC.KD_ORIGIN);
-  for (const name of ["KD_TESTA_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV, "KD_EVAL_JA"]) {
+  for (const name of [
+    "KD_TESTA_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
+    ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV, "KD_EVAL_JA",
+  ]) {
     let abgelehnt = false;
     try { parseLokaleKonfig(`${name}=verboten`); } catch { abgelehnt = true; }
     pruefe(`${name} ist in der lokalen Datei verboten`, abgelehnt);
@@ -177,6 +182,21 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   } catch { budgetcheckGesperrt = true; }
   pruefe("Owner-Budgetfreigabe kann auch nicht an einen reinen Budgetcheck gehaengt werden",
     budgetcheckGesperrt);
+}
+
+{
+  let ohneOwnerFreigabeGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS,
+      entdeckenDailyOnce: true,
+    });
+  } catch { ohneOwnerFreigabeGesperrt = true; }
+  pruefe("Entdecken-Einmallauf ist ohne exakte Owner-Budgetfreigabe gesperrt",
+    ohneOwnerFreigabeGesperrt);
 }
 
 {
@@ -285,6 +305,34 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   pruefe("Radar-Einmallauf erhält nur den internen Guard und das starke öffentliche Ziel",
     starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID);
+}
+
+{
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    entdeckenDailyOnce: true,
+  });
+  pruefe("Entdecken-Einmallauf startet nur sein fest verdrahtetes Skript hinter dem Budgetwächter",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Entdecken-Einmallauf erhält nur internen Guard und Owner-Serverbudgetfreigabe",
+    starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1");
 }
 
 {

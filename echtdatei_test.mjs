@@ -555,7 +555,8 @@ check("No-Config-file:// kennzeichnet den kleinen Entdecken-Bestand als begrenzt
   && /Begrenzter Katalogstand\s*3 Titel/.test(dateiText())
   && /Aktuelle Treffermenge/.test(dateiText())
   && /keine Aussage über die Größe des Gesamtkatalogs/.test(dateiText())
-  && /Weitere Entdeckungen aus deinen Diensten/.test(dateiText()));
+  && /Weitere Entdeckungen/.test(dateiText())
+  && /keine Katalogtitel als Ersatz aufgefüllt/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
   .find((summary) => /^Katalog-Status$/.test((summary.textContent || "").trim()));

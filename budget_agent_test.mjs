@@ -14,6 +14,7 @@ import {
   AUTONOMIE_STOPP_EXIT,
   BUDGET_UNBEKANNT_EXIT,
   BudgetKonfigFehler,
+  ENTDECKEN_LAUF_LIMIT_USD_CENT,
   EVAL_MAX_ANBIETER_REQUESTS,
   LAUF_LIMIT_USD_CENT,
   LIVE_PROCESS_TIMEOUT_MS,
@@ -193,6 +194,7 @@ check("eigene Exit-Codes unterscheiden Stopp und unbekannten Stand",
 check("unveraenderliche Live-Grenzen bilden 500 Cent je Request und 1500 Cent je Lauf ab",
   ANBIETER_REQUEST_LIMIT_USD_CENT === 500
   && LAUF_LIMIT_USD_CENT === 1500
+  && ENTDECKEN_LAUF_LIMIT_USD_CENT === 900
   && SMOKE_MAX_ANBIETER_REQUESTS === 9
   && EVAL_MAX_ANBIETER_REQUESTS === 20
   && LIVE_PROCESS_TIMEOUT_MS === 15 * 60_000);
@@ -251,6 +253,27 @@ try { await pufferWache.vorAnbieterRequest("zu teuer"); } catch (error) {
 }
 check("vor jedem Request bleiben 500 Cent Puffer unter dem 1500-Cent-Laufdeckel",
   laufPufferStoppt);
+
+let entdeckenPufferStand = 0;
+const entdeckenPufferWache = new LiveLaufWache({
+  maxAnbieterRequests: 1,
+  laufLimitUsdCent: ENTDECKEN_LAUF_LIMIT_USD_CENT,
+  standLeser: async () => ({
+    verbrauchtUsdCent: entdeckenPufferStand,
+    globalesBudgetErschoepft: false,
+    anbieterRequestLimitUsdCent: 500,
+    anbieterRequestTimeoutMs: 120000,
+  }),
+});
+await entdeckenPufferWache.initialisiere();
+entdeckenPufferStand = 400.000001;
+let entdeckenPufferStoppt = false;
+try { await entdeckenPufferWache.vorAnbieterRequest("Entdecken"); } catch (error) {
+  entdeckenPufferStoppt = error instanceof LiveSicherheitsStopp
+    && error.exitCode === AUTONOMIE_STOPP_EXIT;
+}
+check("Entdecken-Livepfad erzwingt vorab seinen niedrigeren 900-Cent-Laufdeckel",
+  entdeckenPufferStoppt);
 
 let requestStand = 0;
 const requestWache = new LiveLaufWache({

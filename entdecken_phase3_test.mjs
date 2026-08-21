@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
-  createAdditionalServiceDiscoveries,
+  createEntdeckenRecommendations,
   createRadarCatalogIndex,
   createCatalogSearchActions,
   createEntdeckenCatalogSummary,
@@ -15,15 +15,18 @@ import {
   RADAR_CATALOG_SEARCH_LIMIT,
   rankLocalEntdeckenRecommendations,
   searchRadarCatalog,
+  selectDailyRecommendations,
 } from "./src/lib/entdeckenUi.js";
 import {
   applyPersonRadarCheckResult,
   createEmptyLocalRadar,
   decodeLocalRadar,
+  queueAccountRadarChange,
   reconcileAccountRadarPilotFeed,
   upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
 } from "./src/lib/localEventRadar.js";
+import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
@@ -55,9 +58,14 @@ const radarCatalogIndex = createRadarCatalogIndex({
     { id: "dune-1984", titel: "Dune", jahr: 1984, typ: "film" },
     { id: "dune-2021", titel: "Dune", jahr: 2021, typ: "film" },
     { id: "passender-film", watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "film" },
+    { id: "guarded-merge", titel: "Guarded Merge", jahr: 2024, typ: "film" },
+    { id: "guarded-ambiguous", titel: "Guarded Ambiguous", jahr: 2025, typ: "film" },
   ],
   streamingKnown: { titel: [
     { watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "movie" },
+    { watchmode_id: 92, titel: "Guarded Merge", jahr: 2024, typ: "movie" },
+    { watchmode_id: 93, titel: "Guarded Ambiguous", jahr: 2025, typ: "movie" },
+    { watchmode_id: 94, titel: "Guarded Ambiguous", jahr: 2025, typ: "movie" },
   ] },
   streamingDiscover: { titel: [
     ...Array.from({ length: 10_050 }, (_, index) => ({
@@ -71,6 +79,14 @@ check("Radar-Suchindex vereinigt Mediathek und Streaming nur über starke Ziel-I
   assert.deepEqual(shared[0].sources, ["Mediathek", "Streaming"]);
   const dunes = searchRadarCatalog(radarCatalogIndex, "Dune");
   assert.deepEqual(dunes.map((entry) => entry.year), [1984, 2021]);
+});
+check("Ohne gemeinsame ID vereinigt nur ein eindeutiger Titel+Jahr+Typ-Guard die Quellen", () => {
+  const guarded = radarCatalogIndex.filter((entry) => entry.title === "Guarded Merge");
+  assert.deepEqual(guarded.map((entry) => entry.targetId), ["watchmode:92"]);
+  assert.deepEqual(guarded[0].sources, ["Mediathek", "Streaming"]);
+  const ambiguous = radarCatalogIndex.filter((entry) => entry.title === "Guarded Ambiguous");
+  assert.equal(ambiguous.length, 3);
+  assert.ok(ambiguous.some((entry) => entry.targetId === "catalog:guarded-ambiguous"));
 });
 check("Radar-Suche findet Mediathek-Originaltitel und begrenzt große Kataloge hart", () => {
   assert.equal(searchRadarCatalog(radarCatalogIndex, "Library Secret")[0]?.targetId, "catalog:mediathek-geheimnis-2001");
@@ -112,36 +128,102 @@ const catalogTruthInput = {
     { watchmode_id: 99, titel: "Fremder Dienst", jahr: 2026, typ: "movie", dienste: ["Anderer Dienst"] },
   ],
 };
-const personalRecommendations = [{ targetId: "watchmode:91", title: "Passender Film", reasons: ["Profil: Drama"] }];
-const additional = createAdditionalServiceDiscoveries({
-  streamingEntdecken: catalogTruthInput,
+const discoveryFeed = {
+  format: 3, feedId: "websearch:daily-tips-at", region: "AT", sourceId: "websearch:daily-tips",
+  refreshedOn: "2026-08-21", validUntil: "2026-08-22", items: [{
+    recordId: "webtip:aaaaaaaaaaaaaaaa", title: "Alpha Neutral", mediaType: "film", releaseYear: 2020,
+    attributes: { genres: [], tags: ["kritik-tipp"] }, rank: 1,
+    evidence: [{ domain: "film.at", url: "https://film.at/alpha-neutral", publishedOn: "2026-08-21", retrievedOn: "2026-08-21", positiveRecommendation: true }],
+  }],
+};
+const ohneFeed = createEntdeckenRecommendations({
+  streamingEntdecken: catalogTruthInput, profile: profileInput,
   selectedServices: ["Testdienst"],
-  personalRecommendations,
 });
-check("Neutrale Dienstetreffer füllen stabil nur bis insgesamt sechs Karten", () => {
-  assert.deepEqual(additional.map((entry) => entry.title), [
-    "Alpha Neutral", "Bravo Neutral", "Charlie Neutral", "Delta Neutral", "Echo Neutral",
-  ]);
-  assert.equal(additional.length + personalRecommendations.length, 6);
-  assert.ok(additional.every((entry) => entry.services.join() === "Testdienst"));
+check("Ohne belegten Tagesfeed bleibt Weitere Entdeckungen leer statt alphabetisch aufzufüllen", () => {
+  assert.deepEqual(ohneFeed.personal.map((entry) => entry.targetId), ["watchmode:91"]);
+  assert.deepEqual(ohneFeed.further, []);
 });
-check("Neutrale Ergänzungen tragen keine Profilurteile, bleiben dublettenfrei und eingabestabil", () => {
-  const reversed = createAdditionalServiceDiscoveries({
-    streamingEntdecken: { ...catalogTruthInput, titel: [...catalogTruthInput.titel].reverse() },
-    selectedServices: ["Testdienst"], personalRecommendations,
+check("Ohne gewählten Streamingdienst bleiben persönliche und weitere Karten leer", () => {
+  assert.deepEqual(createEntdeckenRecommendations({
+    streamingEntdecken: catalogTruthInput, profile: profileInput, webDiscoveryFeed: discoveryFeed,
+  }), { personal: [], further: [] });
+});
+check("Weitere Entdeckungen enthält nur den streng lokal gematchten Webtipp", () => {
+  const withFeed = createEntdeckenRecommendations({
+    streamingEntdecken: catalogTruthInput, profile: profileInput,
+    selectedServices: ["Testdienst"], webDiscoveryFeed: discoveryFeed,
   });
-  assert.deepEqual(reversed.map((entry) => entry.targetId), additional.map((entry) => entry.targetId));
-  assert.equal(new Set(additional.map((entry) => entry.targetId)).size, additional.length);
-  assert.ok(additional.every((entry) => !("reasons" in entry) && !("bewertung" in entry) && !("profile" in entry)));
+  assert.deepEqual(withFeed.personal.map((entry) => entry.targetId), ["watchmode:91"]);
+  assert.deepEqual(withFeed.further.map((entry) => entry.targetId), ["watchmode:92"]);
+  assert.equal(withFeed.further[0].externalEvidence[0].domain, "film.at");
 });
-check("Ohne gewählte Dienste oder bei sechs persönlichen Treffern wird nichts neutral zugeschrieben", () => {
-  assert.deepEqual(createAdditionalServiceDiscoveries({
-    streamingEntdecken: catalogTruthInput, selectedServices: [], personalRecommendations,
-  }), []);
-  assert.deepEqual(createAdditionalServiceDiscoveries({
-    streamingEntdecken: catalogTruthInput, selectedServices: ["Testdienst"],
-    personalRecommendations: Array.from({ length: 6 }, (_, index) => ({ targetId: `personal:${index}` })),
-  }), []);
+check("Mehrdeutiger Titel+Jahr+Typ-Treffer wird nicht als Webentdeckung geraten", () => {
+  const ambiguous = createEntdeckenRecommendations({
+    streamingEntdecken: {
+      ...catalogTruthInput,
+      titel: [...catalogTruthInput.titel, {
+        watchmode_id: 192, titel: "Alpha Neutral", jahr: 2020, typ: "movie", dienste: ["Testdienst"],
+      }],
+    },
+    profile: profileInput, selectedServices: ["Testdienst"], webDiscoveryFeed: discoveryFeed,
+  });
+  assert.ok(!ambiguous.further.some((entry) => entry.title === "Alpha Neutral"));
+});
+const topTwentyOne = Array.from({ length: 21 }, (_, index) => ({
+  targetId: `watchmode:${1000 + index}`, title: `Passung ${String(index + 1).padStart(2, "0")}`,
+}));
+check("Tagesoption ist pro Tag stabil, wechselt zwischen Tagen und bleibt in den Top 20", () => {
+  const fixed = selectDailyRecommendations(topTwentyOne, { dailyVariety: false, selectionDay: "2026-08-21" });
+  const todayA = selectDailyRecommendations(topTwentyOne, { dailyVariety: true, selectionDay: "2026-08-21" });
+  const todayB = selectDailyRecommendations(topTwentyOne, { dailyVariety: true, selectionDay: "2026-08-21" });
+  const tomorrow = selectDailyRecommendations(topTwentyOne, { dailyVariety: true, selectionDay: "2026-08-22" });
+  assert.deepEqual(fixed.map((entry) => entry.targetId), topTwentyOne.slice(0, 6).map((entry) => entry.targetId));
+  assert.deepEqual(todayA, todayB);
+  assert.notDeepEqual(todayA.map((entry) => entry.targetId), tomorrow.map((entry) => entry.targetId));
+  assert.ok([...todayA, ...tomorrow].every((entry) => entry.targetId !== "watchmode:1020"));
+});
+const ownerSession = Object.freeze({
+  mode: "account", state: "ready", account: Object.freeze({ id: "account-1", role: "owner" }),
+  access: Object.freeze({ status: "resolved", role: "owner" }),
+  capabilities: Object.freeze({ remoteStorage: true, personalAi: true }),
+});
+let dailyFetches = 0;
+const dailyRequests = [];
+const dailyService = createEntdeckenDailyFeedService({
+  config: {
+    entdeckenDailyFeedEnabled: true,
+    supabaseUrl: "https://project.example.supabase.co",
+    supabasePublishableKey: "public-key",
+  },
+  auth: { getSnapshot: () => ownerSession },
+  getAccount: () => ({ id: "account-1" }),
+  getAccessToken: async () => "session-token",
+  currentDay: () => "2026-08-21",
+  fetchImpl: async (...request) => {
+    dailyFetches += 1; dailyRequests.push(request);
+    return { ok: true, json: async () => ({ ok: true, status: "fresh", feed: discoveryFeed, writes: 0, providerRequests: 0, searchRequests: 0 }) };
+  },
+});
+const dailyResult = await dailyService.load();
+check("Daily-Feed-Client lädt genau einmal bodylos und übernimmt nur den validierten Feed", () => {
+  assert.equal(dailyFetches, 1);
+  assert.equal(dailyResult.status, "fresh");
+  assert.equal(dailyResult.feed.items[0].recordId, "webtip:aaaaaaaaaaaaaaaa");
+  assert.match(dailyRequests[0][0], /\/functions\/v1\/entdecken-daily-task$/);
+  assert.equal(dailyRequests[0][1].method, "GET");
+  assert.equal("body" in dailyRequests[0][1], false);
+});
+let disabledSideEffects = 0;
+const disabledDaily = await createEntdeckenDailyFeedService({
+  config: { entdeckenDailyFeedEnabled: false },
+  auth: { getSnapshot: () => { disabledSideEffects += 1; return ownerSession; } },
+  getAccessToken: async () => { disabledSideEffects += 1; return "token"; },
+  fetchImpl: async () => { disabledSideEffects += 1; return null; },
+}).load();
+check("Daily-Feed-Buildgate sperrt vor Sitzung, Token und Netzwerk", () => {
+  assert.equal(disabledDaily.status, "disabled");
+  assert.equal(disabledSideEffects, 0);
 });
 check("Kataloggröße und aktuelle Dienstetreffer bleiben getrennte Zahlen", () => {
   const summary = createEntdeckenCatalogSummary({
@@ -190,21 +272,17 @@ check("Realistischer Trichter belegt rein numerisch genau eine persönliche Kart
   assert.ok(Object.values(funnel).every(Number.isInteger));
   assert.doesNotMatch(JSON.stringify(funnel), /"(?:titel|title|profil|profile|signals?|reasons?)"\s*:|fixture:/i);
 });
-check("Neutrale Ergänzungen respektieren Besitz, Must-Watch und blockierende Signale", () => {
+check("Persönliche Passung bleibt getrennt; ohne Feed entstehen keine weiteren Füllkarten", () => {
   const personal = rankLocalEntdeckenRecommendations({
     streamingEntdecken: funnelCatalog, profile: funnelProfile, master: funnelMaster,
     mustwatch: funnelMustwatch, selectedServices: ["Testdienst"],
   });
-  const neutral = createAdditionalServiceDiscoveries({
+  const projected = createEntdeckenRecommendations({
     streamingEntdecken: funnelCatalog, selectedServices: ["Testdienst"],
-    personalRecommendations: personal, master: funnelMaster, mustwatch: funnelMustwatch,
-    profile: funnelProfile,
+    master: funnelMaster, profile: funnelProfile,
   });
   assert.equal(personal.length, 1);
-  assert.equal(neutral.length, 5);
-  assert.deepEqual(neutral.map((entry) => entry.targetId), [
-    "watchmode:206", "watchmode:205", "watchmode:207", "watchmode:208", "watchmode:209",
-  ]);
+  assert.deepEqual(projected.further, []);
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));
@@ -244,15 +322,22 @@ try {
   await esbuild.build({
     stdin: {
       contents: [
-        'export { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
+        'import React from "react";',
+        'import { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
+        'import { useWebDiscoveryFeed } from "./src/controllers/useWebDiscoveryFeed.js";',
+        'export { EntdeckenTab };',
         'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
+        'export function DailyFeedHarness({ dailyService, ...props }) {',
+        '  const webDiscoveryFeed = useWebDiscoveryFeed(true, true, dailyService);',
+        '  return React.createElement(EntdeckenTab, { ...props, webDiscoveryFeed });',
+        '}',
       ].join("\n"),
       loader: "js", resolveDir: wurzel,
     },
     bundle: true, format: "esm", outfile: output, jsx: "automatic", target: "es2022", logLevel: "warning",
     external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
   });
-  const { EntdeckenTab, RadarSubscriptionPreview } = await import(output);
+  const { DailyFeedHarness, EntdeckenTab, RadarSubscriptionPreview } = await import(output);
 
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
   for (const name of [
@@ -354,14 +439,64 @@ try {
     assert.match(catalog?.textContent || "", /Aktuelle Treffermenge8 Titel aus deinen Diensten/);
     assert.match(catalog?.textContent || "", /Sie verändert die Kataloggröße nicht/);
   });
-  check("Neutrale Ergänzungen stehen in einer eigenen, nicht personalisierten Sektion", () => {
+  check("Ohne Tagesfeed zeigt Weitere Entdeckungen einen ehrlichen Leerzustand ohne Katalogfüller", () => {
     const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
-    const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
-    assert.match(section?.textContent || "", /Weitere Entdeckungen aus deinen Diensten/);
-    assert.equal(cards.length, 6);
-    assert.ok(cards.every((card) => /Aus deinen Diensten · neutral/.test(card.textContent)
-      && /Keine Bewertung und keine persönliche Passungsbehauptung/.test(card.textContent)
-      && !card.querySelector("ul")));
+    assert.match(section?.textContent || "", /Weitere Entdeckungen/);
+    assert.match(section?.textContent || "", /keine Katalogtitel als Ersatz aufgefüllt/);
+    assert.equal(section?.querySelectorAll("article").length, 0);
+    assert.doesNotMatch(section?.textContent || "", /Alpha Neutral|Bravo Neutral|Charlie Neutral/);
+  });
+  let dailyHookRequests = 0;
+  const dailyHookService = {
+    async load() {
+      dailyHookRequests += 1;
+      return { status: "fresh", feed: discoveryFeed };
+    },
+  };
+  const dailyHookUi = await mount(DailyFeedHarness, {
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"], dailyService: dailyHookService,
+  });
+  await act(async () => { await tick(); });
+  check("Taböffnung lädt genau einmal und zeigt nur den streng gematchten Tagesfeed-Titel", () => {
+    const section = dailyHookUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
+    assert.equal(dailyHookRequests, 1);
+    assert.equal(section?.querySelectorAll(".kd-entdecken-webtipp").length, 1);
+    assert.match(section?.textContent || "", /Alpha Neutral.*film.at/);
+    assert.doesNotMatch(section?.textContent || "", /Bravo Neutral|Charlie Neutral/);
+  });
+  await dailyHookUi.render({
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"], dailyService: dailyHookService,
+  });
+  check("Ein Re-Render desselben Tabs startet keinen zweiten Tagesfeed-Request", () => {
+    assert.equal(dailyHookRequests, 1);
+  });
+  await dailyHookUi.cleanup();
+
+  const unavailableDailyUi = await mount(DailyFeedHarness, {
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"],
+    dailyService: { load: async () => ({ status: "unavailable", feed: null }) },
+  });
+  await act(async () => { await tick(); });
+  check("Fehler ohne validierten Cache bleibt ein ehrlicher Leerzustand ohne Füllkarten", () => {
+    const section = unavailableDailyUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
+    assert.equal(section?.querySelectorAll("article").length, 0);
+    assert.match(section?.textContent || "", /keine Katalogtitel als Ersatz aufgefüllt/);
+  });
+  await unavailableDailyUi.cleanup();
+
+  await catalogUi.render({
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: catalogTruthInput,
+    selectedServices: ["Testdienst"], webDiscoveryFeed: discoveryFeed,
+  });
+  check("Ein streng gematchter Webtipp erscheint mit Beleg statt neutraler Passungsbehauptung", () => {
+    const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
+    const cards = [...(section?.querySelectorAll(".kd-entdecken-webtipp") || [])];
+    assert.equal(cards.length, 1);
+    assert.match(cards[0].textContent, /Alpha Neutral.*film.at/);
+    assert.doesNotMatch(cards[0].textContent, /persönliche Passung/i);
   });
   await catalogUi.cleanup();
 
@@ -398,8 +533,17 @@ try {
     title: "Passender Film", canonical: true,
   };
   let previewTarget = null;
+  const starWarsCatalog = {
+    region: "AT", stand: "2026-08-21T00:00:00.000Z", titel: [
+      { watchmode_id: 71001, titel: "Star Wars: Episode I", jahr: 1999, typ: "movie", dienste: ["Testdienst"] },
+      { watchmode_id: 71002, titel: "Star Wars: Episode II", jahr: 2002, typ: "movie", dienste: ["Testdienst"] },
+      { watchmode_id: 71003, titel: "Star Wars: Episode III", jahr: 2005, typ: "movie", dienste: ["Testdienst"] },
+      { watchmode_id: 71004, titel: "Star Wars: Episode IV", jahr: 1977, typ: "movie", dienste: ["Testdienst"] },
+    ],
+  };
   const workPicker = await mount(EntdeckenTab, {
-    ...baseProps, radarState: createEmptyLocalRadar(), onRadarPreview: (target) => { previewTarget = target; },
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: starWarsCatalog,
+    onRadarPreview: (target) => { previewTarget = target; },
   });
   await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
   const workSearch = workPicker.container.querySelector("#kd-radar-work");
@@ -408,19 +552,31 @@ try {
     assert.equal(workPicker.container.querySelectorAll("#kd-radar-work option").length, 0);
     assert.equal(workPicker.container.querySelectorAll(".kd-radar-work-results li").length, 0);
   });
-  await setControl(workSearch, "Passender Film");
+  await setControl(workSearch, "Star Wars");
   check("Radar-Suchtreffer bleiben begrenzt und stammen aus dem vorbereiteten Katalog", () => {
     const results = workPicker.container.querySelectorAll(".kd-radar-work-results li");
-    assert.ok(results.length > 0);
+    assert.equal(results.length, 4);
     assert.ok(results.length <= RADAR_CATALOG_SEARCH_LIMIT);
-    assert.match(results[0].textContent, /Passender Film/);
+    assert.match(results[0].textContent, /Star Wars: Episode I.*1999.*Streaming/);
   });
-  await act(async () => { workPicker.container.querySelector(".kd-radar-work-results button").click(); await tick(); });
-  await act(async () => { button(workPicker.container, "Ins Radar").click(); await tick(); });
-  check("Ziel wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
-    assert.deepEqual(previewTarget, workTarget);
+  for (const resultButton of workPicker.container.querySelectorAll(".kd-radar-work-results button")) {
+    await act(async () => { resultButton.click(); await tick(); });
+  }
+  check("Breite Suchbegriffe wählen nur die vier ausdrücklich angeklickten starken Ziele", () => {
+    assert.equal(workPicker.container.querySelectorAll('.kd-radar-work-results button[aria-pressed="true"]').length, 4);
+    assert.match(workPicker.container.textContent, /4 Titel ausgewählt/);
+    assert.match(workPicker.container.textContent, /Kein Reihen- oder Franchise-Abo/);
+  });
+  await act(async () => { button(workPicker.container, "4 Titel prüfen").click(); await tick(); });
+  check("Exakte Mehrfachauswahl wird gemeinsam an die Bestätigung übergeben", () => {
+    assert.deepEqual(previewTarget.map((entry) => entry.targetId), [
+      "watchmode:71001", "watchmode:71002", "watchmode:71003", "watchmode:71004",
+    ]);
+    assert.deepEqual(previewTarget.map((entry) => [entry.year, ...entry.sources]), [
+      [1999, "Streaming"], [2002, "Streaming"], [2005, "Streaming"], [1977, "Streaming"],
+    ]);
     assert.match(workPicker.container.textContent, /Ziel hinzufügen/);
-    assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:91|fixture:|work:/i);
+    assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:7100|fixture:|work:/i);
   });
   await workPicker.cleanup();
 
@@ -438,6 +594,30 @@ try {
   await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
   check("Bestätigung ruft genau einen gekapselten Write auf", () => assert.equal(previewConfirmed, 1));
   await preview.cleanup();
+
+  let multiConfirmed = null;
+  const multiTargets = starWarsCatalog.titel.map((entry) => ({
+    targetId: `watchmode:${entry.watchmode_id}`, targetType: "work", targetStatus: "active",
+    title: entry.titel, year: entry.jahr, sources: ["Streaming"], canonical: true,
+  }));
+  const multiPreview = await mount(RadarSubscriptionPreview, {
+    target: multiTargets, radarState: createEmptyLocalRadar(), accountMode: false,
+    onConfirm: async (selected) => { multiConfirmed = selected; return true; }, onClose() {},
+  });
+  check("Gemeinsame Vorschau nennt jeden exakten Titel und erfindet kein Franchise-Ziel", () => {
+    const dialog = document.querySelector(".kd-radar-preview");
+    assert.match(dialog.textContent, /4 ausgewählte Titel/);
+    for (const entry of multiTargets) {
+      assert.match(dialog.textContent, new RegExp(entry.title));
+      assert.match(dialog.textContent, new RegExp(`${entry.year}.*Streaming`));
+    }
+    assert.doesNotMatch(dialog.innerHTML, /franchise:/i);
+  });
+  await act(async () => { button(document, "4 Titel ins Radar bestätigen").click(); await tick(); });
+  check("Eine gemeinsame Bestätigung übergibt exakt die vier ausgewählten Ziele", () => {
+    assert.deepEqual(multiConfirmed.map((entry) => entry.targetId), multiTargets.map((entry) => entry.targetId));
+  });
+  await multiPreview.cleanup();
 
   const checksum = "a".repeat(64);
   const now = "2026-08-18T10:00:00.000Z";
@@ -497,6 +677,52 @@ try {
   const accountReload = decodeLocalRadar(JSON.stringify(accountState), { authority: "account-cache" });
   assert.equal(accountReload.ok, true);
   await workUi.cleanup();
+
+  const pendingState = queueAccountRadarChange(accountState, {
+    operationId: "10000000-0000-4000-8000-000000000090", action: "upsert", target: workTarget, now,
+  }).state;
+  let pendingSyncCalls = 0;
+  let pendingSyncResolve;
+  const pendingSync = new Promise((resolve) => { pendingSyncResolve = resolve; });
+  const pendingUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: pendingState, syncStatus: "pending",
+    onRadarPilotSync: async () => { pendingSyncCalls += 1; return pendingSync; },
+  });
+  await act(async () => { button(pendingUi.container, "Radar").click(); await tick(); });
+  check("Ausstehende Kontoänderung hat eine sichtbare echte Bestätigung", () => {
+    assert.match(pendingUi.container.textContent, /1 Änderung wartet noch auf Bestätigung/);
+    assert.ok(button(pendingUi.container, "Änderung bestätigen"));
+  });
+  await act(async () => { button(pendingUi.container, "Änderung bestätigen").click(); await tick(); });
+  check("Bestätigung zeigt Busy und startet den Sync exakt einmal", () => {
+    assert.equal(pendingSyncCalls, 1);
+    assert.ok(button(pendingUi.container, "Wird bestätigt…")?.disabled);
+  });
+  await act(async () => { pendingSyncResolve({ status: "ready", state: accountState }); await pendingSync; await tick(); });
+  check("Erfolgreicher Sync benennt Commit und Feed-Reload verständlich", () => {
+    assert.match(pendingUi.container.textContent, /Änderung bestätigt.*Radar wurde neu geladen/);
+  });
+  await act(async () => { pendingUi.container.querySelector('button[aria-label="Entdecken verwalten"]').click(); await tick(); });
+  check("Auch die Verwaltungsfläche bietet für denselben Pending-Stand die echte Bestätigung an", () => {
+    const manage = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
+    assert.ok(button(manage, "Änderung bestätigen"));
+  });
+  await act(async () => { document.querySelector('button[aria-label="Entdecken verwalten schließen und zurück"]').click(); await tick(); });
+  await pendingUi.cleanup();
+  const settledOutboxUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true,
+    radarState: {
+      ...pendingState,
+      outbox: pendingState.outbox.map((entry) => ({ ...entry, status: "rejected" })),
+    },
+    syncStatus: "pending", onRadarPilotSync: async () => ({ status: "ready" }),
+  });
+  await act(async () => { button(settledOutboxUi.container, "Radar").click(); await tick(); });
+  check("Nur wirklich ausstehende Outbox-Einträge bieten die Bestätigung an", () => {
+    assert.equal(button(settledOutboxUi.container, "Änderung bestätigen"), undefined);
+    assert.doesNotMatch(settledOutboxUi.container.textContent, /wartet noch auf Bestätigung/);
+  });
+  await settledOutboxUi.cleanup();
   const workReloadUi = await mount(EntdeckenTab, {
     ...baseProps, accountMode: true, radarState: accountReload.state,
     radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true, today: "2026-09-01",
@@ -545,6 +771,20 @@ try {
     assert.match(personUi.container.textContent, /Es läuft keine serverseitige Prüfung/);
   });
   await personUi.cleanup();
+
+  const gatedPersonUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: createEmptyLocalRadar({ authority: "account-cache" }),
+    personRadarAvailable: false,
+  });
+  await act(async () => { button(gatedPersonUi.container, "Radar").click(); await tick(); });
+  await setControl(gatedPersonUi.container.querySelector("#kd-radar-person"), "Nicolas Cage");
+  check("Lokaler Personenindex bleibt sichtbar, wenn nur die Kontoaktivierung fehlt", () => {
+    assert.match(gatedPersonUi.container.textContent, /Nicolas Cage/);
+    assert.match(gatedPersonUi.container.textContent, /Hinzufügen ist in diesem Konto noch nicht freigeschaltet/);
+    assert.ok(button(gatedPersonUi.container, "Ins Radar")?.disabled);
+    assert.doesNotMatch(gatedPersonUi.container.textContent, /Personensuche ist derzeit nicht verfügbar/);
+  });
+  await gatedPersonUi.cleanup();
 
   const personFeed = {
     ...feed(),

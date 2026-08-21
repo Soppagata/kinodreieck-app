@@ -248,8 +248,28 @@ project_id = "bscjgwcntapobyxsiyce"
 verify_jwt = true
 `, "utf8");
 
+function frozenE17bFunctionSource(path) {
+  const current = readFileSync(new URL(`./${path}`, import.meta.url));
+  if (path !== "supabase/functions/ai-task/index.ts") return current;
+  const helper = `
+function aiTaskIstAktiv(): boolean {
+  return Deno.env.get("KD_AI_TASK_ENABLED") === "true";
+}
+`;
+  const gate = `  if (!aiTaskIstAktiv()) {
+    return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "ai-task-aus" });
+  }
+`;
+  const source = current.toString("utf8");
+  const frozen = source.replace(helper, "").replace(gate, "");
+  if (frozen === source || frozen.includes("aiTaskIstAktiv")) {
+    throw new Error("E17B-Fixture konnte die spaetere ai-task-Default-off-Haertung nicht isolieren.");
+  }
+  return Buffer.from(frozen, "utf8");
+}
+
 const rawGitFiles = new Map([
-  ...LITERAL_FUNCTION_SOURCES.map((path) => [path, readFileSync(new URL(`./${path}`, import.meta.url))]),
+  ...LITERAL_FUNCTION_SOURCES.map((path) => [path, frozenE17bFunctionSource(path)]),
   ["supabase/config.toml", E17B_FROZEN_CONFIG],
   [
     "supabase/migrations/20260817120000_blog_profile_extract_config.sql",

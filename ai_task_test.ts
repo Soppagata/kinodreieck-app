@@ -25,6 +25,7 @@ Deno.env.set("SUPABASE_ANON_KEY", "anon-test");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "service-test");
 Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
 Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
+Deno.env.set("KD_AI_TASK_ENABLED", "true");
 Deno.env.set("FILMWISSEN_WIKIMEDIA_KONTAKT", "https://kinodreieck.at");
 
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
@@ -267,6 +268,7 @@ function stelleZurueck() {
   z.providerFreigabeHttpFehler = null;
   Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
   Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
+  Deno.env.set("KD_AI_TASK_ENABLED", "true");
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
@@ -528,6 +530,12 @@ const {
       listen: { genres: string[]; tags: string[] };
     },
   ) => { fehler: string } | { daten: unknown };
+};
+
+const { createEntdeckenDailyHandler } = await import(
+  new URL("./supabase/functions/entdecken-daily-task/index.ts", import.meta.url).href
+) as {
+  createEntdeckenDailyHandler: () => (req: Request) => Promise<Response>;
 };
 
 /* Der Vergleichsschlüssel des CLIENTS, als Orakel. Der Server muss mindestens
@@ -1349,6 +1357,29 @@ test("B5 eine im Körper mitgeschickte Konto-ID wird nie gelesen", async () => {
    C. Aufrufer und Grenzen
    =========================================================================== */
 
+test("C0 ai-task ist ohne exakt true vor Auth, Budget, Log und Provider aus", async () => {
+  for (const wert of [null, "", "TRUE", "1", " true "] as const) {
+    stelleZurueck();
+    if (wert === null) Deno.env.delete("KD_AI_TASK_ENABLED");
+    else Deno.env.set("KD_AI_TASK_ENABLED", wert);
+    const r = await echoRuf();
+    gleich(r.status, 503, `${JSON.stringify(wert)}: Status`);
+    gleich(r.daten.code, "ai-disabled", `${JSON.stringify(wert)}: Code`);
+    gleich(r.daten.grund, "ai-task-aus", `${JSON.stringify(wert)}: Grund`);
+    gleich(aufrufe.length, 0, `${JSON.stringify(wert)}: kein Netzpfad`);
+  }
+});
+
+test("C0b ai-task bewahrt mit exakt true den bisherigen Vertrag", async () => {
+  Deno.env.set("KD_AI_TASK_ENABLED", "true");
+  const r = await echoRuf();
+  gleich(r.status, 200, "Status");
+  gleich(kontofreigabeAufrufe().length, 1, "genau eine Access-Lesung");
+  gleich(konfigAufrufe().length, 1, "genau eine Konfigurationslesung");
+  gleich(starten().length, 1, "genau eine Reservierung");
+  gleich(anbieterAufrufe().length, 1, "genau ein Anbieteraufruf");
+});
+
 test("C1 ohne Authorization-Header: 401, ohne jeden Netzaufruf", async () => {
   const r = await ruf({ task: "echo-struct", payload: {} }, {
     ohneToken: true,
@@ -1596,6 +1627,24 @@ test("C8 OPTIONS: 204 mit CORS-Kopf, erlaubter Origin wird gespiegelt", async ()
     "authorization ist erlaubt",
   );
   gleich(antw.headers.get("Vary"), "Origin", "Vary: Origin");
+});
+
+test("ED1 Entdecken erlaubt nur den festen Preview-Branch-Origin", async () => {
+  const handler = createEntdeckenDailyHandler();
+  const previewOrigin = "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev";
+  const erlaubt = await handler(new Request(
+    "https://test.supabase.co/functions/v1/entdecken-daily-task",
+    { method: "OPTIONS", headers: { Origin: previewOrigin } },
+  ));
+  gleich(erlaubt.status, 204, "Preview-Preflight");
+  gleich(erlaubt.headers.get("Access-Control-Allow-Origin"), previewOrigin, "Preview-Origin");
+
+  const unveroeffentlicht = await handler(new Request(
+    "https://test.supabase.co/functions/v1/entdecken-daily-task",
+    { method: "OPTIONS", headers: { Origin: "https://nicht-freigegeben.kinodreieck.pages.dev" } },
+  ));
+  gleich(unveroeffentlicht.status, 403, "kein Pages-Wildcard");
+  gleich(unveroeffentlicht.headers.get("Access-Control-Allow-Origin"), null, "fremder Preview-Origin");
 });
 
 test("C9 fremder Origin wird NICHT zurückgespiegelt", async () => {

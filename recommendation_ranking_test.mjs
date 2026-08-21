@@ -3,7 +3,6 @@ import fs from "node:fs";
 import {
   createRecommendationFunnel,
   isPositiveLibraryEvidence,
-  rankNeutralCandidates,
   rankRecommendations,
 } from "./src/lib/recommendationRanking.js";
 
@@ -109,25 +108,6 @@ check("Persönliche Treffer verlangen Verfügbarkeit auf einem gewählten Dienst
   assert.deepEqual(rankRecommendations([
     candidate("fixture:selected", { genres: ["noir"], services: ["Testdienst"] }),
   ], { ...context, selectedServices: [] }), []);
-});
-
-check("Neutrale Kandidaten respektieren harte Ausschlüsse und sortieren stabil nach Stand und Qualität", () => {
-  const rows = rankNeutralCandidates([
-    candidate("fixture:older", { services: ["Testdienst"], freshnessAt: "2026-08-01", quality: 9 }),
-    candidate("fixture:fresh-low", { services: ["Testdienst"], freshnessAt: "2026-08-10", quality: 1 }),
-    candidate("fixture:fresh-high", { services: ["Testdienst"], freshnessAt: "2026-08-10", quality: 4 }),
-    candidate("fixture:blocked", { services: ["Testdienst"], freshnessAt: "2026-08-11", genres: ["gore"] }),
-    candidate("fixture:excluded", { services: ["Testdienst"], freshnessAt: "2026-08-12" }),
-  ], {
-    profile: context.profile,
-    library: [],
-    useLibrary: false,
-    selectedServices: ["Testdienst"],
-    excludedTargetIds: ["fixture:excluded"],
-  });
-  assert.deepEqual(rows.map((row) => row.targetId), [
-    "fixture:fresh-high", "fixture:fresh-low", "fixture:older",
-  ]);
 });
 
 check("Empfehlungstrichter enthält ausschließlich aggregierte Zahlen", () => {

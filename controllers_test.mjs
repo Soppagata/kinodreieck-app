@@ -595,6 +595,9 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
     && /!remoteKontoAktiv/.test(radarController)
   && /radarAuthority !== "account-cache"/.test(radarController)
   && /radarStateRef\.current\?\.pilot\?\.radarReview !== true/.test(radarController));
+  check("Personenziel kann bei aktivem personalAi-Konto lokal vorgemerkt werden, der Netzpfad bleibt am Buildflag", /const personRadarAvailable = radarAuthority === "guest"[\s\S]*remoteKontoAktiv && session\?\.capabilities\?\.personalAi === true/.test(radarController)
+    && /if \(!radarPilotClientEnabled\) return Object\.freeze\(\{ status: "pending", writes: 1, identity \}\)/.test(radarController)
+    && /personRadarCheckAvailable[\s\S]*radarPilotClientEnabled/.test(radarController));
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
   /\["master", "programm", "streaming"\]/.test(mustwatchListe)
   && /onSpringeZuMustwatchRef=\{springeZuMustwatchRef\}/.test(app));

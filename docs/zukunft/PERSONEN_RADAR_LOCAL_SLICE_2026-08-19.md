@@ -1,7 +1,16 @@
 # Personenradar: lokaler vertikaler Slice
 
-**Stand:** 19.08.2026
-**Status:** lokaler Serverkandidat gebaut und mockbasiert geprüft; **NICHT REMOTE ANGEWANDT**
+**Stand:** 19.08.2026; Remote-Nachtrag 21.08.2026
+**Status:** Serverkandidat gebaut und mockbasiert geprüft; Migration und Function
+wurden laut späterem Remote-Lauf aktiviert. Die praktische Providerabnahme ist
+weiterhin **NICHT BELEGT**.
+
+> Der ursprüngliche Satz „nicht remote angewandt“ war nach dem späteren Lauf
+> veraltet. Belegt gemeldet sind die remote angewandte Migration
+> `20260819220000` (Hash-Präfix `d23f80f`) und `radar-websearch-task` v3. Der
+> praktische Providerlauf stoppte mit `BUDGET_UNBEKANNT` vor dem Fetch; Flags
+> und Subscription wurden danach bereinigt. Dieser Nachtrag ist kein neuer
+> Live-Check und keine Providerfreigabe.
 
 Der kleine Slice nutzt die vorhandenen Radar-Strukturen: dieselbe Subscription-
 Outbox, denselben Feed, denselben manuellen Websearch-Aufruf und denselben lokalen
@@ -26,11 +35,14 @@ Rollenwiderspruch, Namensabgleich ohne ID, unbekanntes Werk und nicht kuratierte
 Evidenz stoppen fail-closed. Der Kostenpfad bewahrt die atomare allgemeine
 Reservierung; unbekannter Verbrauch wird nicht als Erfolg behandelt.
 
-## Bewusst nicht geliefert
+## Noch nicht praktisch abgenommen
 
-Die Kandidatenmigration wurde nur lokal gebaut und auf einer synthetischen lokalen
-PG17-Kette geprüft. Keine Migration und keine Function wurde remote angewendet oder
-deployt; kein Flag und kein Secret wurde verändert. Scheduler, Retry, Batch,
-Ranking, Historienmodell, zweite Personenplattform und zweiter Provider bleiben
-außerhalb dieses Slices. Remote-Fähigkeit und praktische Live-Abnahme sind damit
-nicht belegt.
+Die lokale PG17-Kette bleibt der reproduzierbare Strukturbeleg. Die spätere
+Remote-Aktivierung belegt Migration und Function, aber keinen erfolgreichen
+Providerabruf und keinen sichtbaren Personenfund im Produkt. Ein erneuter Lauf
+braucht deshalb zuerst einen read-only Abgleich von Buildflag, aktiver
+Subscription sowie den serverprojizierten Fähigkeiten `personal_ai`,
+`radar_pilot` und `radar_review`. Erst danach darf eine separat freigegebene,
+budgetüberwachte Providerprüfung folgen. Scheduler, Retry, Batch, Ranking,
+Historienmodell, zweite Personenplattform und zweiter Provider bleiben außerhalb
+dieses Slices.

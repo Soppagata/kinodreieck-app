@@ -18,15 +18,18 @@ export function RadarSubscriptionPreview({
   const [shareEnabled, setShareEnabled] = useState(false);
   const [speichert, setSpeichert] = useState(false);
   const [fehler, setFehler] = useState("");
-  const activeCount = (radarState?.subscriptions || []).filter((entry) => entry.status === "active").length;
-  const serverSubscriptionActive = accountMode && (radarState?.subscriptions || []).some((entry) => (
-    entry.targetId === target?.targetId && entry.status === "active" && entry.authority === "server"
+  const targets = (Array.isArray(target) ? target : [target]).filter((entry) => entry?.targetId);
+  const multi = targets.length > 1;
+  const activeSubscriptions = (radarState?.subscriptions || []).filter((entry) => entry.status === "active");
+  const activeCount = activeSubscriptions.length;
+  const activeIds = new Set(activeSubscriptions.map((entry) => entry.targetId));
+  const serverSubscriptionActive = !multi && accountMode && activeSubscriptions.some((entry) => (
+    entry.targetId === targets[0]?.targetId && entry.authority === "server"
   ));
-  const shareAllowed = accountActive && serverSubscriptionActive;
-  const alreadyActive = (radarState?.subscriptions || []).some((entry) => (
-    entry.targetId === target?.targetId && entry.status === "active"
-  ));
-  const targetType = target?.targetType === "series" ? "Serie" : "Film oder Werk";
+  const shareAllowed = !multi && accountActive && serverSubscriptionActive;
+  const alreadyActiveCount = targets.filter((entry) => activeIds.has(entry.targetId)).length;
+  const newTargetCount = targets.length - alreadyActiveCount;
+  const alreadyActive = targets.length > 0 && alreadyActiveCount === targets.length;
   const quotaText = accountMode
     ? `${activeCount} aktive Ziele in deinem Konto`
     : `${activeCount} von ${RADAR_NORMAL_ACTIVE_LIMIT} lokalen Zielen aktiv`;
@@ -61,12 +64,12 @@ export function RadarSubscriptionPreview({
     };
   }, [onClose, target]);
 
-  if (!target || typeof document === "undefined") return null;
+  if (!targets.length || typeof document === "undefined") return null;
   const bestaetigen = async () => {
     if (speichert) return;
     setSpeichert(true); setFehler("");
     try {
-      const ok = await onConfirm?.(target, { shareEnabled: shareAllowed && shareEnabled });
+      const ok = await onConfirm?.(multi ? targets : targets[0], { shareEnabled: shareAllowed && shareEnabled });
       if (ok) onClose?.();
       else setFehler("Die Radar-Änderung wurde nicht bestätigt gespeichert.");
     } catch (error) {
@@ -86,18 +89,29 @@ export function RadarSubscriptionPreview({
           <button type="button" className="kd-entdecken-schliessen" aria-label="Radar-Vorschau schließen" onClick={onClose}>×</button>
         </header>
         <div className="kd-entdecken-preview-ziel">
-          <strong>{target.title}</strong>
-          <span>{targetType} · Österreich · alle bestätigten Ereignistypen</span>
+          {multi ? <>
+            <strong>{targets.length} ausgewählte Titel</strong>
+            <ul>{targets.map((entry) => <li key={entry.targetId}><strong>{entry.title}</strong>
+              <span>{[entry.targetType === "series" ? "Serie" : "Film oder Werk", entry.year,
+                ...(entry.sources || []), "Österreich"].filter(Boolean).join(" · ")}</span></li>)}</ul>
+            <small>Kein Franchise-Ziel: Bestätigt werden ausschließlich diese starken Einzel-IDs.</small>
+          </> : <>
+            <strong>{targets[0]?.title}</strong>
+            <span>{[targets[0]?.targetType === "series" ? "Serie" : "Film oder Werk", targets[0]?.year,
+              ...(targets[0]?.sources || []), "Österreich", "alle bestätigten Ereignistypen"].filter(Boolean).join(" · ")}</span>
+          </>}
         </div>
         <dl className="kd-entdecken-fakten">
-          <div><dt>Status</dt><dd>{alreadyActive ? "Bereits aktiv; Bestätigung aktualisiert den Eintrag" : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
+          <div><dt>Status</dt><dd>{alreadyActive
+            ? multi ? "Alle ausgewählten Titel sind bereits aktiv" : "Bereits aktiv; Bestätigung aktualisiert den Eintrag"
+            : multi ? `${newTargetCount} Titel werden erst nach deiner Bestätigung aktiv` : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
           <div><dt>Kapazität</dt><dd>{quotaText}</dd></div>
           <div><dt>Prüfung</dt><dd>{accountMode
             ? "Das Hinzufügen startet keine sofortige Suche. Du prüfst das Ziel später bewusst mit „Jetzt prüfen“."
             : "Im Gastmodus läuft keine serverseitige Prüfung."}</dd></div>
           <div><dt>Privatsphäre</dt><dd>Standardmäßig bleibt das Ziel privat. Geteilt werden nie Bewertungen oder Profilsignale.</dd></div>
         </dl>
-        <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
+        {!multi ? <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
           <input type="checkbox" checked={shareEnabled} disabled={!shareAllowed}
             onChange={(event) => setShareEnabled(event.target.checked)} />
           <span><strong>Ohne meinen Namen für „Von anderen entdeckt“ teilen</strong>
@@ -106,12 +120,13 @@ export function RadarSubscriptionPreview({
               : accountMode
                 ? "Erst nach einer im Konto bestätigten aktiven Beobachtung verfügbar."
                 : "Nur mit aktivem Konto und dort bestätigtem Radarziel verfügbar."}</small></span>
-        </label>
+        </label> : null}
         {fehler ? <p className="kd-entdecken-fehler" role="alert">{fehler}</p> : null}
         <div className="kd-entdecken-dialog-aktionen">
           <button type="button" className="kd-entdecken-sekundaer" disabled={speichert} onClick={onClose}>Abbrechen</button>
-          <button type="button" className="kd-entdecken-primaer" disabled={speichert || (!accountMode && !alreadyActive && activeCount >= RADAR_NORMAL_ACTIVE_LIMIT)}
-            onClick={() => void bestaetigen()}>{speichert ? "Speichert …" : alreadyActive ? "Aktiv lassen" : "Ins Radar bestätigen"}</button>
+          <button type="button" className="kd-entdecken-primaer" disabled={speichert || (!accountMode && activeCount + newTargetCount > RADAR_NORMAL_ACTIVE_LIMIT)}
+            onClick={() => void bestaetigen()}>{speichert ? "Speichert …" : alreadyActive ? "Aktiv lassen"
+              : multi ? `${targets.length} Titel ins Radar bestätigen` : "Ins Radar bestätigen"}</button>
         </div>
       </section>
     </div>,

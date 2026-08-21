@@ -980,7 +980,64 @@ test("Radar zeigt mobil den schmalen Gastweg ohne technische oder serverseitige 
   await keineDokumentUeberbreite(page);
 });
 
-test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mobil wie am Desktop", async ({ page }) => {
+test("Radar bestätigt mobil eine explizite Star-Wars-Mehrfachauswahl und lädt exakt diese Ziele neu", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  let radarRequests = 0;
+  page.on("request", (request) => {
+    if (/\/functions\/v1\/radar-websearch-task|\/rest\/v1\/rpc\/kd_radar/i.test(new URL(request.url()).pathname)) radarRequests += 1;
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "radar-star-wars-multi" }, gespeichertAm: Date.now(),
+      filme: [
+        { id: "star-wars-episode-i", watchmode_id: 71001, titel: "Star Wars: Episode I", jahr: 1999, typ: "film" },
+        { id: "star-wars-episode-ii", watchmode_id: 71002, titel: "Star Wars: Episode II", jahr: 2002, typ: "film" },
+        { id: "star-wars-episode-iii", watchmode_id: 71003, titel: "Star Wars: Episode III", jahr: 2005, typ: "film" },
+        { id: "star-wars-episode-iv", watchmode_id: 71004, titel: "Star Wars: Episode IV", jahr: 1977, typ: "film" },
+      ],
+    }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Entdecken");
+  await page.getByRole("tab", { name: "Radar" }).click();
+  await page.getByLabel("Film oder Serie").fill("Star Wars");
+  const resultList = page.getByRole("list", { name: "Passende Radar-Werke" });
+  const resultButtons = resultList.getByRole("button");
+  await expect(resultButtons).toHaveCount(4);
+  for (const [title, year] of [
+    ["Star Wars: Episode I", "1999"], ["Star Wars: Episode II", "2002"],
+    ["Star Wars: Episode III", "2005"], ["Star Wars: Episode IV", "1977"],
+  ]) {
+    const result = resultList.getByText(title, { exact: true }).locator("..");
+    await expect(result).toContainText(year);
+    await expect(result).toContainText("Mediathek");
+    await result.click();
+  }
+  await expect(page.getByText("4 Titel ausgewählt", { exact: false })).toBeVisible();
+  await expect(page.getByText(/Kein Reihen- oder Franchise-Abo/)).toBeVisible();
+  await page.getByRole("button", { name: "4 Titel prüfen" }).click();
+  const preview = page.getByRole("dialog", { name: "Ins Radar" });
+  await expect(preview).toContainText("4 ausgewählte Titel");
+  await expect(preview).toContainText("Kein Franchise-Ziel");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await preview.getByRole("button", { name: "4 Titel ins Radar bestätigen" }).click();
+  await expect(preview).toBeHidden();
+  await expect(page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Star Wars" })).toHaveCount(4);
+  await expect.poll(() => page.evaluate(() => {
+    const radar = JSON.parse(localStorage.getItem("kd:radar") || "null");
+    return (radar?.subscriptions || []).map((entry) => entry.targetId).sort();
+  })).toEqual(["watchmode:71001", "watchmode:71002", "watchmode:71003", "watchmode:71004"]);
+  expect(radarRequests).toBe(0);
+  await page.reload();
+  await waehleMobileTab(page, "Entdecken");
+  await page.getByRole("tab", { name: "Radar" }).click();
+  await expect(page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Star Wars" })).toHaveCount(4);
+  await keineDokumentUeberbreite(page);
+});
+
+test("Entdecken trennt Vollkatalog und Dienstetreffer, ohne Feed aber ohne Katalogfüller", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);
   let entdeckenRequests = 0;
@@ -1036,8 +1093,10 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
   await expect(katalog).toContainText("Aktuelle Treffermenge");
   await expect(katalog).toContainText("7 Titel aus deinen Diensten");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
-  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen aus deinen Diensten" })).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen" })).toBeVisible();
+  await expect(weitere.locator("article")).toHaveCount(0);
+  await expect(weitere).toContainText("Noch keine belegten Webtipps geladen");
+  await expect(weitere).toContainText("keine Katalogtitel als Ersatz aufgefüllt");
   await expect(weitere).not.toContainText("Alpha Lokal");
   await expect(weitere).not.toContainText("Prime Eins");
   await expect.poll(() => entdeckenRequests).toBe(1);
@@ -1045,7 +1104,7 @@ test("Entdecken trennt Vollkatalog, Dienstetreffer und neutrale Ergänzungen mob
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect(katalog).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  await expect(weitere.locator("article")).toHaveCount(0);
   await keineDokumentUeberbreite(page);
 });
 

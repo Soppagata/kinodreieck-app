@@ -494,8 +494,10 @@ await check("Vorhandene Werk-Migration bleibt additiv auf Radar-Tabellen und ser
   assert.doesNotMatch(migration, /radar_provider_aktiv\s*=|radar_scheduler_aktiv\s*=|cron\.|pg_cron/i);
 });
 
-await check("Personen-Serverkandidat bleibt lokal, additiv und auf vorhandene Radar-Primitiven begrenzt", () => {
-  assert.match(personSliceDoc, /\*\*NICHT REMOTE ANGEWANDT\*\*/);
+await check("Personen-Serverkandidat bleibt additiv; Remote-Aktivierung und Providerabnahme sind getrennt", () => {
+  assert.match(personSliceDoc, /Migration und Function[\s\S]*aktiviert/);
+  assert.match(personSliceDoc, /Providerabnahme[\s\S]*\*\*NICHT BELEGT\*\*/);
+  assert.match(personSliceDoc, /BUDGET_UNBEKANNT[\s\S]*vor dem Fetch/);
   assert.match(personSliceDoc, /keine neue Tabelle/);
   assert.match(personSliceDoc, /Target-, Event-, Versions-, Evidence- und Operations-Primitiven/);
   assert.doesNotMatch(personCandidateMigration, /create\s+table/i);

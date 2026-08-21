@@ -136,27 +136,6 @@ function compareRows(a, b) {
   return text(a.candidate.targetId).localeCompare(text(b.candidate.targetId), "de-AT");
 }
 
-function quality(candidate) {
-  const number = Number(candidate?.quality);
-  return Number.isFinite(number) ? number : Number.NEGATIVE_INFINITY;
-}
-
-function compareNeutralRows(a, b) {
-  if (a.analysis.freshness !== b.analysis.freshness) {
-    return b.analysis.freshness - a.analysis.freshness;
-  }
-  const qualityA = quality(a.candidate);
-  const qualityB = quality(b.candidate);
-  if (qualityA !== qualityB) return qualityB - qualityA;
-  if (a.candidate.sourceId === b.candidate.sourceId) {
-    const rankA = Number.isInteger(a.candidate.sourceRank) ? a.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-    const rankB = Number.isInteger(b.candidate.sourceRank) ? b.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-    if (rankA !== rankB) return rankA - rankB;
-  }
-  const byTitle = text(a.candidate.title).localeCompare(text(b.candidate.title), "de-AT");
-  return byTitle || text(a.candidate.targetId).localeCompare(text(b.candidate.targetId), "de-AT");
-}
-
 function uniqueRows(rows) {
   const seen = new Set();
   return rows.filter((row) => {
@@ -170,12 +149,14 @@ function uniqueRows(rows) {
 function projectPipeline(candidates, context) {
   const catalog = list(candidates);
   const library = list(context.library);
-  /* Besitz bleibt ein harter Ausschluss, auch wenn die ausdrücklich bewertete
-     Mediathek als positiver Empfehlungsgrund abgeschaltet ist. */
-  const excludedTargetIds = new Set([
-    ...library.map((item) => text(item?.targetId)),
-    ...values(context.excludedTargetIds).map(text),
-  ].filter(Boolean));
+  /* Altaufrufer behandeln die ganze Mediathek weiterhin als Ausschlussmenge.
+     Entdecken kann dagegen explizit die fachlich engere Aussage "gesehen"
+     übergeben: Ein bloßer Mediathek-Eintrag ist kein Sehbeleg. */
+  const hasExplicitExclusions = Object.prototype.hasOwnProperty.call(context, "excludedTargetIds");
+  const excludedTargetIds = new Set((hasExplicitExclusions
+    ? values(context.excludedTargetIds)
+    : library.map((item) => item?.targetId))
+    .map(text).filter(Boolean));
   const serviceSelection = requiredServices(context);
   const serviceAvailable = catalog.filter((candidate) => available(candidate, serviceSelection));
   const analyzed = serviceAvailable.map((candidate) => ({ candidate, analysis: analyze(candidate, context) }));
@@ -198,15 +179,14 @@ export function rankRecommendations(candidates, context = {}) {
       negativeMatches: row.analysis.negativeCount,
       sourceId: row.candidate.sourceId,
       sourceRank: row.candidate.sourceRank ?? null,
+      watchmodeId: row.candidate.watchmodeId ?? null,
+      services: Object.freeze([...list(row.candidate.services)]),
+      year: row.candidate.year ?? null,
+      type: row.candidate.type ?? null,
+      externalDiscovery: row.candidate.externalDiscovery === true,
+      externalEvidence: Object.freeze(list(row.candidate.externalEvidence)
+        .map((entry) => Object.freeze({ ...entry }))),
     }));
-}
-
-/* Dieselbe Verfügbarkeits- und Ausschlussgrenze wie bei persönlichen Karten,
-   aber ohne positive Profil-/Bewertungsgründe als Rankingfaktor oder Ausgabe. */
-export function rankNeutralCandidates(candidates, context = {}) {
-  return Object.freeze(uniqueRows(
-    [...projectPipeline(candidates, context).hardEligible].sort(compareNeutralRows),
-  ).map((row) => row.candidate));
 }
 
 /* Ausschließlich aggregierte Zahlen: keine Titel, Signale oder Profildaten.

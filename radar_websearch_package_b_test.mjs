@@ -1,6 +1,7 @@
 /* Paket B: ausschließlich lokale Mocks. Kein Provider-, Supabase- oder
    sonstiger Netzwerkzugriff. */
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { delimiter, dirname, resolve } from "node:path";
 import {
@@ -727,6 +728,15 @@ const expectedLedgerBaseline = Object.freeze([
   }),
 ]);
 
+function spawnGitWithReleaseStatus(stdout) {
+  return (executable, args, options) => {
+    if (executable === "/usr/bin/git" && args[0] === "status") {
+      return { status: 0, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0) };
+    }
+    return spawnSync(executable, args, options);
+  };
+}
+
 await check("Ledgervergleich akzeptiert umsortierte JSONB-Schluessel semantisch exakt", () => {
   const reorderedJsonbResult = [{
     name: "blog_profile_extract_config",
@@ -756,9 +766,24 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
+await check("Remote-Release-Closure stoppt bei einer uncommitteten Closuredatei", () => {
+  assert.throws(
+    () => deriveRadarPackageBReleaseClosure({
+      spawn: spawnGitWithReleaseStatus(" M supabase/config.toml\n"),
+    }),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "RELEASE_CLOSURE_DIRTY",
+  );
+});
+
 await check("Remote-Release-Closure bindet E17A-Quelle/Hash, Paket A/B und den echten Function-Importgraph", () => {
-  const first = deriveRadarPackageBReleaseClosure();
-  const second = deriveRadarPackageBReleaseClosure();
+  // Der Produktzaun bleibt strikt. Nur dieser lokale Vertragstest simuliert
+  // einen sauberen Git-Status, damit vorwaertsgerichtete, noch nicht
+  // committete Aenderungen an gemeinsam genutzten Closuredateien mitgeprueft
+  // werden koennen. Der vorangehende Test belegt den echten Dirty-Stop.
+  const options = { spawn: spawnGitWithReleaseStatus("") };
+  const first = deriveRadarPackageBReleaseClosure(options);
+  const second = deriveRadarPackageBReleaseClosure(options);
   assert.deepEqual(first.contractCommits, [
     RADAR_E17A_COMMIT,
     RADAR_PACKAGE_A_COMMIT,
@@ -780,6 +805,7 @@ await check("Remote-Release-Closure bindet E17A-Quelle/Hash, Paket A/B und den e
 await check("Eine fehlende echte Closuredatei stoppt statt durch einen geratenen Pfad ersetzt zu werden", () => {
   assert.throws(
     () => deriveRadarPackageBReleaseClosure({
+      spawn: spawnGitWithReleaseStatus(""),
       readFile(path) {
         if (String(path).endsWith("/radar-websearch-task/contract.js")) {
           const error = new Error("synthetic-missing");
