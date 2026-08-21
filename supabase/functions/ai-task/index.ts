@@ -72,6 +72,10 @@ const ANBIETER_URL = "https://api.anthropic.com/v1/messages";
 const ANBIETER_MODELLE_URL = "https://api.anthropic.com/v1/models";
 const ANBIETER_VERSION = "2023-06-01";
 
+function aiTaskIstAktiv(): boolean {
+  return Deno.env.get("KD_AI_TASK_ENABLED") === "true";
+}
+
 /* ---------- CORS ------------------------------------------------------------
    Allowlist statt Wildcard. Ehrlich eingeordnet: CORS ist hier keine
    Sicherheitsgrenze — das Sitzungstoken liegt im localStorage und wird nicht
@@ -2998,6 +3002,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsKopf(origin) });
+  }
+  if (!aiTaskIstAktiv()) {
+    return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "ai-task-aus" });
   }
   if (req.method !== "POST") {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
