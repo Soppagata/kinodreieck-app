@@ -19,8 +19,11 @@ import {
   rankNeutralCandidates,
   rankRecommendations,
 } from "./recommendationRanking.js";
+import { norm } from "./match.js";
 
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
+export const RADAR_CATALOG_SEARCH_LIMIT = 8;
+export const RADAR_CATALOG_SEARCH_MIN_LENGTH = 2;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function positiveInteger(value) {
@@ -60,6 +63,83 @@ export function createCatalogRadarTarget({
     title: normalizedTitle,
     canonical: true,
   });
+}
+
+/* Der Radar-Picker darf den fünfstelligen Katalog nicht als DOM-Optionsliste
+   materialisieren. Der Index vereinigt Mediathek und Streaming ausschließlich
+   über die bereits kanonische Ziel-ID. Gleichnamige Werke ohne gemeinsame ID
+   bleiben getrennt und werden über Jahr/Quelle unterscheidbar angezeigt. */
+export function createRadarCatalogIndex({
+  master = [], streamingKnown = null, streamingDiscover = null,
+} = {}) {
+  const masterRows = Array.isArray(master) ? master : [];
+  const knownRows = Array.isArray(streamingKnown?.titel) ? streamingKnown.titel : [];
+  const discoverRows = Array.isArray(streamingDiscover?.titel) ? streamingDiscover.titel : [];
+  const rows = [
+    ...masterRows.map((entry) => ({
+      source: "Mediathek", watchmodeId: entry?.watchmode_id, catalogId: entry?.id,
+      title: entry?.titel, originalTitle: entry?.originaltitel, type: entry?.typ, year: entry?.jahr,
+    })),
+    ...[...knownRows, ...discoverRows].map((entry) => ({
+      source: "Streaming", watchmodeId: entry?.watchmode_id,
+      title: entry?.titel, originalTitle: entry?.originaltitel || entry?.original_title,
+      type: entry?.typ, year: entry?.jahr,
+    })),
+  ];
+  const byTargetId = new Map();
+  for (const row of rows) {
+    const target = createCatalogRadarTarget(row);
+    if (!target) continue;
+    if (!byTargetId.has(target.targetId)) {
+      byTargetId.set(target.targetId, {
+        target, aliases: [], sources: new Set(), years: new Set(),
+      });
+    }
+    const indexed = byTargetId.get(target.targetId);
+    indexed.aliases.push(row.title, row.originalTitle);
+    indexed.sources.add(row.source);
+    const year = positiveInteger(row.year);
+    if (year != null) indexed.years.add(year);
+  }
+  return Object.freeze([...byTargetId.values()].map((entry) => {
+    const aliases = [...new Set(entry.aliases.map(text).filter(Boolean))];
+    const years = [...entry.years];
+    const year = years.length === 1 ? years[0] : null;
+    const baseKeys = [...new Set(aliases.map(norm).filter(Boolean))];
+    const searchKeys = [...new Set([
+      ...baseKeys,
+      ...(year == null ? [] : baseKeys.map((key) => `${key} ${year}`)),
+    ])];
+    return Object.freeze({
+      target: entry.target,
+      targetId: entry.target.targetId,
+      title: entry.target.title,
+      year,
+      sources: Object.freeze([...entry.sources]),
+      searchKeys: Object.freeze(searchKeys),
+    });
+  }).sort((left, right) => (
+    left.title.localeCompare(right.title, "de-AT", { sensitivity: "base", numeric: true })
+    || (left.year || 0) - (right.year || 0)
+    || left.targetId.localeCompare(right.targetId, "de-AT")
+  )));
+}
+
+export function searchRadarCatalog(index, query) {
+  const needle = norm(query);
+  if (needle.length < RADAR_CATALOG_SEARCH_MIN_LENGTH) return Object.freeze([]);
+  const tokens = needle.split(" ").filter((token) => token.length >= 2);
+  const buckets = [[], [], [], []];
+  for (const entry of Array.isArray(index) ? index : []) {
+    const keys = Array.isArray(entry?.searchKeys) ? entry.searchKeys : [];
+    let rank = -1;
+    if (keys.some((key) => key === needle)) rank = 0;
+    else if (keys.some((key) => key.startsWith(needle))) rank = 1;
+    else if (keys.some((key) => key.includes(needle))) rank = 2;
+    else if (tokens.length > 1 && keys.some((key) => tokens.every((token) => key.includes(token)))) rank = 3;
+    if (rank >= 0 && buckets[rank].length < RADAR_CATALOG_SEARCH_LIMIT) buckets[rank].push(entry);
+  }
+  return Object.freeze(buckets.flat().slice(0, RADAR_CATALOG_SEARCH_LIMIT));
 }
 
 export function createCatalogSearchActions(input = {}) {

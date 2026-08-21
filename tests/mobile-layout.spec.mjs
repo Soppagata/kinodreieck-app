@@ -1111,7 +1111,9 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await expect(verwalten).toBeFocused();
 
   await page.getByRole("tab", { name: "Radar" }).click();
-  await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
+  await page.getByLabel("Film oder Serie").fill("Passender Film");
+  await page.getByRole("list", { name: "Passende Radar-Werke" })
+    .getByRole("button", { name: /Passender Film/ }).click();
   await page.getByRole("heading", { name: "Ziel hinzufügen" }).locator("..").getByRole("button", {
     name: "Ins Radar", exact: true,
   }).click();
@@ -1790,6 +1792,27 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     const rect = element.getBoundingClientRect();
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
+
+  /* iOS kann die VisualViewport-Geometrie erst nach dem Focus-Frame liefern,
+     ohne unmittelbar ein Resize-Ereignis zu senden. Das folgende kurze
+     Fenster bildet diesen WebKit-Vertrag nach: Scrollen darf nicht der erste
+     Auslöser sein, der die Suchleiste wieder über die Tastatur holt. */
+  await eingabe.focus();
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+  await page.evaluate(() => {
+    Object.assign(window.visualViewport, {
+      height: 500, offsetTop: 60, pageTop: 60,
+    });
+  });
+  await page.waitForTimeout(160);
+  await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(anker).toBe(-8);
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
+  }));
+  await expect(suche).not.toHaveClass(/tastatur-offen/);
 
   /* VisualViewport-Resize und der Fokuswechsel zum Suchbutton können noch im
      selben Browser-Frame landen. Der erste Geometrie-Frame muss die von der

@@ -6,8 +6,10 @@ import {
   createAdditionalServiceDiscoveries,
   createCatalogRadarTarget,
   createEntdeckenCatalogSummary,
+  createRadarCatalogIndex,
   localRadarTargetLabel,
   rankLocalEntdeckenRecommendations,
+  searchRadarCatalog,
 } from "../lib/entdeckenUi.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
@@ -254,20 +256,6 @@ function RecommendationsView({
   </section>;
 }
 
-function catalogRadarTargets({ master, streamingKnown, streamingDiscover }) {
-  const rows = [
-    ...(master || []).map((entry) => ({ watchmodeId: entry.watchmode_id, catalogId: entry.id, title: entry.titel, type: entry.typ })),
-    ...(streamingKnown?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
-    ...(streamingDiscover?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
-  ];
-  const targets = new Map();
-  for (const row of rows) {
-    const target = createCatalogRadarTarget(row);
-    if (target && !targets.has(target.targetId)) targets.set(target.targetId, target);
-  }
-  return [...targets.values()].sort((a, b) => a.title.localeCompare(b.title, "de-AT"));
-}
-
 function statusText(status, kind = "work") {
   const person = kind === "person";
   return ({
@@ -296,6 +284,7 @@ function RadarView({
   onPersonRadarAdd, onPersonRadarCheck,
   onRadarChange, onPersonRadarChange, today = null,
 }) {
+  const [workQuery, setWorkQuery] = useState("");
   const [selectedWork, setSelectedWork] = useState("");
   const [personQuery, setPersonQuery] = useState("");
   const [personRole, setPersonRole] = useState("actor");
@@ -304,10 +293,12 @@ function RadarView({
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState(null);
   const targets = useMemo(
-    () => catalogRadarTargets({ master, streamingKnown, streamingDiscover }),
+    () => createRadarCatalogIndex({ master, streamingKnown, streamingDiscover }),
     [master, streamingDiscover, streamingKnown],
   );
-  const targetByToken = useMemo(() => new Map(targets.map((target, index) => [`werk-${index}`, target])), [targets]);
+  const targetById = useMemo(() => new Map(targets.map((entry) => [entry.targetId, entry])), [targets]);
+  const workMatches = useMemo(() => searchRadarCatalog(targets, workQuery), [targets, workQuery]);
+  const selectedWorkEntry = targetById.get(selectedWork) || null;
   const personSearch = useMemo(() => searchPersonRadarCatalog({ query: personQuery, role: personRole }), [personQuery, personRole]);
   const personByToken = useMemo(() => new Map(personSearch.entries.map((entry, index) => [`person-${index}`, entry])), [personSearch]);
   const subscriptions = radarState?.subscriptions || [];
@@ -340,9 +331,9 @@ function RadarView({
   })).filter((result) => result.decisions.length);
 
   const addWork = () => {
-    const target = targetByToken.get(selectedWork);
-    if (!target) return;
-    onRadarPreview?.(target);
+    const entry = targetById.get(selectedWork);
+    if (!entry) return;
+    onRadarPreview?.(entry.target);
     setMessage({ status: "active", text: "Prüfe das Werk und bestätige es anschließend für dein Radar." });
   };
   const addPerson = async () => {
@@ -389,11 +380,28 @@ function RadarView({
         <h3>Ziel hinzufügen</h3>
         {targets.length ? <div className="kd-entdecken-formzeile">
           <label htmlFor="kd-radar-work">Film oder Serie</label>
-          <select id="kd-radar-work" value={selectedWork} onChange={(event) => setSelectedWork(event.target.value)}>
-            <option value="">Werk auswählen</option>
-            {targets.map((target, index) => <option key={target.targetId} value={`werk-${index}`}>{target.title}</option>)}
-          </select>
-          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWork} onClick={addWork}>Ins Radar</button>
+          <input id="kd-radar-work" type="search" value={workQuery} maxLength={160} autoComplete="off"
+            placeholder="Titel in Streaming und Mediathek suchen …" aria-autocomplete="list"
+            aria-controls="kd-radar-work-results" aria-describedby="kd-radar-work-status"
+            onChange={(event) => { setWorkQuery(event.target.value); setSelectedWork(""); }} />
+          <small id="kd-radar-work-status" role="status" aria-live="polite">
+            {workQuery.trim().length < 2
+              ? "Tippe mindestens zwei Buchstaben. Es werden höchstens acht Treffer angezeigt."
+              : workMatches.length
+                ? `${workMatches.length} ${workMatches.length === 1 ? "Treffer" : "beste Treffer"}.`
+                : "Kein passender Titel gefunden."}
+          </small>
+          {workMatches.length ? <ul id="kd-radar-work-results" className="kd-radar-work-results" aria-label="Passende Radar-Werke">
+            {workMatches.map((entry) => <li key={entry.targetId}>
+              <button type="button" className={selectedWork === entry.targetId ? "ausgewaehlt" : ""}
+                aria-pressed={selectedWork === entry.targetId} onClick={() => setSelectedWork(entry.targetId)}>
+                <strong>{entry.title}</strong>
+                <span>{[entry.year, entry.sources.join(" + ")].filter(Boolean).join(" · ")}</span>
+              </button>
+            </li>)}
+          </ul> : null}
+          {selectedWorkEntry ? <small className="kd-radar-work-auswahl">Ausgewählt: {selectedWorkEntry.title}</small> : null}
+          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWorkEntry} onClick={addWork}>Ins Radar</button>
         </div> : <p className="kd-entdecken-leer">Der vorbereitete Katalog ist gerade nicht verfügbar.</p>}
       </article>
       <article className="kd-entdecken-panel">

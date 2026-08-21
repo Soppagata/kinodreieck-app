@@ -8,10 +8,13 @@ import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
   createAdditionalServiceDiscoveries,
+  createRadarCatalogIndex,
   createCatalogSearchActions,
   createEntdeckenCatalogSummary,
   createEntdeckenRecommendationFunnel,
+  RADAR_CATALOG_SEARCH_LIMIT,
   rankLocalEntdeckenRecommendations,
+  searchRadarCatalog,
 } from "./src/lib/entdeckenUi.js";
 import {
   applyPersonRadarCheckResult,
@@ -44,6 +47,36 @@ check("Titeltext allein wird niemals zur Radaridentität", () => {
   const actions = createCatalogSearchActions({ title: "Nur ein Name", type: "movie" });
   assert.equal(actions.target, null);
   assert.equal(actions.radar, null);
+});
+
+const radarCatalogIndex = createRadarCatalogIndex({
+  master: [
+    { id: "mediathek-geheimnis-2001", titel: "Das Geheimnis", originaltitel: "Library Secret", jahr: 2001, typ: "film" },
+    { id: "dune-1984", titel: "Dune", jahr: 1984, typ: "film" },
+    { id: "dune-2021", titel: "Dune", jahr: 2021, typ: "film" },
+    { id: "passender-film", watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "film" },
+  ],
+  streamingKnown: { titel: [
+    { watchmode_id: 91, titel: "Passender Film", jahr: 2026, typ: "movie" },
+  ] },
+  streamingDiscover: { titel: [
+    ...Array.from({ length: 10_050 }, (_, index) => ({
+      watchmode_id: 10_000 + index, titel: `Katalog Titel ${index}`, jahr: 2020, typ: "movie",
+    })),
+  ] },
+});
+check("Radar-Suchindex vereinigt Mediathek und Streaming nur über starke Ziel-IDs", () => {
+  const shared = radarCatalogIndex.filter((entry) => entry.targetId === "watchmode:91");
+  assert.equal(shared.length, 1);
+  assert.deepEqual(shared[0].sources, ["Mediathek", "Streaming"]);
+  const dunes = searchRadarCatalog(radarCatalogIndex, "Dune");
+  assert.deepEqual(dunes.map((entry) => entry.year), [1984, 2021]);
+});
+check("Radar-Suche findet Mediathek-Originaltitel und begrenzt große Kataloge hart", () => {
+  assert.equal(searchRadarCatalog(radarCatalogIndex, "Library Secret")[0]?.targetId, "catalog:mediathek-geheimnis-2001");
+  const viele = searchRadarCatalog(radarCatalogIndex, "Katalog Titel");
+  assert.equal(viele.length, RADAR_CATALOG_SEARCH_LIMIT);
+  assert.ok(viele.every((entry) => entry.searchKeys.length > 0));
 });
 
 const recommendationInput = {
@@ -369,7 +402,20 @@ try {
     ...baseProps, radarState: createEmptyLocalRadar(), onRadarPreview: (target) => { previewTarget = target; },
   });
   await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
-  await setControl(workPicker.container.querySelector("#kd-radar-work"), "werk-0");
+  const workSearch = workPicker.container.querySelector("#kd-radar-work");
+  check("Radar materialisiert den Katalog nicht mehr als Options-Dropdown", () => {
+    assert.equal(workSearch?.getAttribute("type"), "search");
+    assert.equal(workPicker.container.querySelectorAll("#kd-radar-work option").length, 0);
+    assert.equal(workPicker.container.querySelectorAll(".kd-radar-work-results li").length, 0);
+  });
+  await setControl(workSearch, "Passender Film");
+  check("Radar-Suchtreffer bleiben begrenzt und stammen aus dem vorbereiteten Katalog", () => {
+    const results = workPicker.container.querySelectorAll(".kd-radar-work-results li");
+    assert.ok(results.length > 0);
+    assert.ok(results.length <= RADAR_CATALOG_SEARCH_LIMIT);
+    assert.match(results[0].textContent, /Passender Film/);
+  });
+  await act(async () => { workPicker.container.querySelector(".kd-radar-work-results button").click(); await tick(); });
   await act(async () => { button(workPicker.container, "Ins Radar").click(); await tick(); });
   check("Ziel wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
     assert.deepEqual(previewTarget, workTarget);

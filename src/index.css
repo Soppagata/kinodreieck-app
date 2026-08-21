@@ -314,6 +314,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-formzeile label { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
 .kd-entdecken-formzeile input,.kd-entdecken-formzeile select { width:100%; min-height:44px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--rauch,#948fa0); border-radius:7px; background:#111014; color:var(--leinwand,#ece8df); font:15px 'Space Grotesk',sans-serif; }
 .kd-entdecken-formzeile button { justify-self:start; min-height:44px; }
+.kd-entdecken-panel .kd-radar-work-results { display:grid; gap:5px; margin:0; padding:0; list-style:none; }
+.kd-entdecken-panel .kd-radar-work-results li { padding:0; border:0; }
+.kd-radar-work-results button { display:grid; width:100%; min-width:0; min-height:48px; box-sizing:border-box; gap:2px; padding:8px 10px; text-align:left;
+  border:1px solid var(--saal,#3c3742); border-radius:7px; background:var(--saal,#17151a); color:var(--leinwand,#ece8df); }
+.kd-radar-work-results button:hover,.kd-radar-work-results button:focus-visible,.kd-radar-work-results button.ausgewaehlt { border-color:var(--wolfram,#e3a63b); }
+.kd-radar-work-results button.ausgewaehlt { background:color-mix(in srgb,var(--saalHoch,#211e26) 80%,var(--wolfram,#e3a63b)); }
+.kd-radar-work-results strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:700 16px 'Barlow Condensed',sans-serif; }
+.kd-radar-work-results span { color:var(--rauch,#948fa0); font:9px/1.4 'Space Mono',monospace; }
+.kd-entdecken-formzeile .kd-radar-work-auswahl { color:var(--wolfram,#e3a63b); }
 .kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
 .kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
 .kd-entdecken-panel li>.kd-entdecken-sekundaer { align-self:flex-start; min-height:44px; margin-top:7px; }
