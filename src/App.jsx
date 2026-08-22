@@ -211,8 +211,7 @@ export default function App() {
   const [loading, setLoading] = useState("");
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
-  /* Der Wochenfeed ist global und accountlos. Erst das lokale Matching in
-     Entdecken verwendet Profil, Seen-Stand und ausgewaehlte Dienste. */
+  /* Der Wochenfeed ist global/accountlos; Profil, Seen-Stand und Dienste bleiben im lokalen Matching. */
   const webDiscoveryFeed = useWebDiscoveryFeed(bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
