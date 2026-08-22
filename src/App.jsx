@@ -109,9 +109,9 @@ import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from
 import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
 import { useWebDiscoveryFeed } from "./controllers/useWebDiscoveryFeed.js";
+import { normalisiereEntdeckenTaeglich } from "./lib/entdeckenUi.js";
 const normalisiereEntdeckenStatus = (wert) => (wert && typeof wert === "object" && !Array.isArray(wert) ? wert : {});
-const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]);
-const normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
+const SCHRIFTWERTE = new Set(["klein", "normal", "gross"]), normalisiereSchrift = (wert) => (SCHRIFTWERTE.has(wert) ? wert : "normal");
 export const LEERER_MEDIATHEK_MASTER = Object.freeze([]);
 export default function App() {
   /* Lokale Animationswerkstatt: nur der Vite-Entwicklungsserver wertet den
@@ -249,7 +249,7 @@ export default function App() {
   /* ---- Einstellungen: Theme, Startbereich, Schriftgröße, Darstellungsmodus ----
      Ein Objekt im Storage; setzeTheme tauscht die Token-Werte, der
      State-Wechsel rendert alles neu — Komponenten bleiben unangetastet. */
-  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "", entdeckenTaeglich: false });
+  const [einstellungen, setEinstellungenState] = useState({ theme: "dunkel", startTab: "start", schrift: "normal", modus: "", entdeckenTaeglich: normalisiereEntdeckenTaeglich() });
   const effektiveSchrift = normalisiereSchrift(einstellungen.schrift);
   useEffect(() => {
     const root = document.documentElement;
@@ -263,7 +263,7 @@ export default function App() {
   }, [effektiveSchrift]);
   const [neonEintrittSerial, setNeonEintrittSerial] = useState(0);
   const bereinigteEinstellungen = useCallback((wert) => {
-    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift), entdeckenTaeglich: wert?.entdeckenTaeglich === true };
+    const next = { ...wert, schrift: normalisiereSchrift(wert?.schrift), entdeckenTaeglich: normalisiereEntdeckenTaeglich(wert?.entdeckenTaeglich) };
     delete next.linkshaender;
     return next;
   }, []);
@@ -676,12 +676,12 @@ export default function App() {
         const r = await store.get(K.einstellungen);
         if (r && r.value) {
           const roh = JSON.parse(r.value);
-          const hatteVeralteteEinstellung = Object.prototype.hasOwnProperty.call(roh, "linkshaender")
+          const hatteVeralteteEinstellung = typeof roh.entdeckenTaeglich !== "boolean" || Object.prototype.hasOwnProperty.call(roh, "linkshaender")
             || Object.prototype.hasOwnProperty.call(roh, "kurosawa")
             || ["kurosawa", "grindhouse", "nerv"].includes(roh.modus)
             || normalisiereSchrift(roh.schrift) !== roh.schrift;
           const e = { theme: "dunkel", startTab: "start", modus: "", ...roh,
-            schrift: normalisiereSchrift(roh.schrift), entdeckenTaeglich: roh.entdeckenTaeglich === true };
+            schrift: normalisiereSchrift(roh.schrift), entdeckenTaeglich: normalisiereEntdeckenTaeglich(roh.entdeckenTaeglich) };
           delete e.linkshaender;                                  // veraltete Menüpräferenz wird nicht mehr ausgewertet
           delete e.kurosawa;                                     // uralter Bool, längst durch modus ersetzt
           if (e.modus === "kurosawa" || e.modus === "grindhouse") e.modus = ""; // v1-Modi zurückgezogen

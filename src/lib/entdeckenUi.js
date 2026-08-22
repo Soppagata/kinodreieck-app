@@ -452,6 +452,10 @@ function stableHash(value) {
   return hash >>> 0;
 }
 
+export function normalisiereEntdeckenTaeglich(wert) {
+  return wert !== false;
+}
+
 /* Die Tagesoption wählt stabil aus höchstens zwanzig bereits passend
    gerankten Treffern. Danach gilt wieder die Passungsreihenfolge: Abwechslung
    entscheidet nur, welche Titel heute vorkommen, nie über ihre Begründung. */

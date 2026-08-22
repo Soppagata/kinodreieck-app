@@ -8,6 +8,7 @@ import {
   istScrollTaste,
   klassifiziereBildschirmtastatur,
   berechneSuchleistenGeometrie,
+  berechneSuchleistenRectDrift,
 } from "./src/lib/visualViewport.js";
 
 const pruefe = (beschreibung, fn) => {
@@ -59,6 +60,21 @@ pruefe("Wheel/Scrolltaste können Nutzerabsicht markieren und Recovery normalisi
   assert.equal(provenienz.modus(), SCROLL_PROVENIENZ.NUTZER);
   provenienz.normalisiere();
   assert.equal(provenienz.modus(), SCROLL_PROVENIENZ.NEUTRAL);
+});
+
+pruefe("quellenloser Fixed-Rect-Drift wird auf den sichtbaren Anker kompensiert", () => {
+  const ausgleich = berechneSuchleistenRectDrift({
+    ankerUnterkante: 552,
+    aktuelleUnterkante: 624,
+    aktuellerShift: -291,
+  });
+  assert.equal(ausgleich.driftY, -72);
+  assert.equal(ausgleich.shiftY, -363);
+  assert.deepEqual(berechneSuchleistenRectDrift({
+    ankerUnterkante: undefined,
+    aktuelleUnterkante: 624,
+    aktuellerShift: -291,
+  }), { driftY: 0, shiftY: -291 });
 });
 
 pruefe("klassifizierte Tastatur bleibt aktiv bei Fokus, scale ~1 und ausreichend großem Höhenverlust", () => {

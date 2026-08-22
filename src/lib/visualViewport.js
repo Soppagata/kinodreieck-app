@@ -133,3 +133,18 @@ export function berechneSuchleistenGeometrie({
     raender,
   });
 }
+
+export function berechneSuchleistenRectDrift({
+  ankerUnterkante,
+  aktuelleUnterkante,
+  aktuellerShift = 0,
+} = {}) {
+  const shift = endlicheZahl(aktuellerShift);
+  const anker = Number(ankerUnterkante);
+  const aktuell = Number(aktuelleUnterkante);
+  if (!Number.isFinite(anker) || !Number.isFinite(aktuell)) {
+    return Object.freeze({ driftY: 0, shiftY: shift });
+  }
+  const driftY = anker - aktuell;
+  return Object.freeze({ driftY, shiftY: shift + driftY });
+}

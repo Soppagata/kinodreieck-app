@@ -18,6 +18,7 @@ import {
   rankLocalEntdeckenRecommendations,
   searchRadarCatalog,
   selectDailyRecommendations,
+  normalisiereEntdeckenTaeglich,
 } from "./src/lib/entdeckenUi.js";
 import {
   applyPersonRadarCheckResult,
@@ -225,6 +226,12 @@ check("Tagesoption ist pro Tag stabil, wechselt zwischen Tagen und bleibt in den
   assert.deepEqual(todayA, todayB);
   assert.notDeepEqual(todayA.map((entry) => entry.targetId), tomorrow.map((entry) => entry.targetId));
   assert.ok([...todayA, ...tomorrow].every((entry) => entry.targetId !== "watchmode:1020"));
+});
+check("Fehlende Legacy-Tagesoption ist aktiv, explizites false bleibt aus", () => {
+  assert.equal(normalisiereEntdeckenTaeglich(undefined), true);
+  assert.equal(normalisiereEntdeckenTaeglich(null), true);
+  assert.equal(normalisiereEntdeckenTaeglich(true), true);
+  assert.equal(normalisiereEntdeckenTaeglich(false), false);
 });
 const ownerSession = Object.freeze({
   mode: "account", state: "ready", account: Object.freeze({ id: "account-1", role: "owner" }),

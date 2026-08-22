@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   berechneSuchleistenGeometrie,
+  berechneSuchleistenRectDrift,
   erstelleScrollProvenienz,
   istNeutraleViewportSkalierung,
   istScrollTaste,
@@ -111,12 +112,16 @@ export function GlobalSearchBar({
       width: viewport.width,
     };
     let tastaturPhaseAktiv = false;
+    let sichtbarerRectAnker = null;
+    let suchleistenShiftY = 0;
     const scrollProvenienz = erstelleScrollProvenienz();
     const suchphaseRelevant = () => tastaturPhaseAktiv
       || document.activeElement === eingabe
       || form.contains(document.activeElement);
     const normalisiere = () => {
       scrollProvenienz.normalisiere();
+      sichtbarerRectAnker = null;
+      suchleistenShiftY = 0;
       raeumeViewportPosition(form);
     };
     const aktualisiere = () => {
@@ -154,6 +159,8 @@ export function GlobalSearchBar({
         });
         tastaturPhaseAktiv = tastaturOffen;
         if (!tastaturOffen) {
+          sichtbarerRectAnker = null;
+          suchleistenShiftY = 0;
           raeumeViewportPosition(form);
           const wartetAufKeyboard = suchfokus && !warTastaturPhaseAktiv
             && neutraleSkalierung && !breiteGeaendert && volleGeometrie;
@@ -163,6 +170,17 @@ export function GlobalSearchBar({
 
         if (scrollProvenienz.istKeyboardAuto() && form.classList.contains("tastatur-offen")) {
           form.classList.add("tastatur-autoscroll");
+          const rect = form.getBoundingClientRect();
+          if (!sichtbarerRectAnker) sichtbarerRectAnker = { bottom: rect.bottom };
+          const ausgleich = berechneSuchleistenRectDrift({
+            ankerUnterkante: sichtbarerRectAnker.bottom,
+            aktuelleUnterkante: rect.bottom,
+            aktuellerShift: suchleistenShiftY,
+          });
+          if (Math.abs(ausgleich.driftY) >= 0.5) {
+            suchleistenShiftY = ausgleich.shiftY;
+            form.style.setProperty("--kd-suche-viewport-shift", `${suchleistenShiftY}px`);
+          }
           return;
         }
         form.classList.remove("tastatur-autoscroll");
@@ -179,6 +197,7 @@ export function GlobalSearchBar({
         });
         form.style.setProperty("--kd-suche-viewport-left", `${vorab.links}px`);
         form.style.setProperty("--kd-suche-viewport-width", `${vorab.breite}px`);
+        suchleistenShiftY = 0;
         form.style.setProperty("--kd-suche-viewport-shift", "0px");
         form.classList.add("tastatur-offen");
 
@@ -192,12 +211,15 @@ export function GlobalSearchBar({
           suchleistenHoehe: rect.height,
           safeAreaInsets,
         });
-        form.style.setProperty("--kd-suche-viewport-shift", `${geometrie.shiftY}px`);
+        suchleistenShiftY = geometrie.shiftY;
+        form.style.setProperty("--kd-suche-viewport-shift", `${suchleistenShiftY}px`);
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
+        sichtbarerRectAnker = { bottom: form.getBoundingClientRect().bottom };
       });
     };
     const markiereNutzerabsicht = () => {
       scrollProvenienz.markiereNutzerabsicht();
+      sichtbarerRectAnker = null;
       form.classList.remove("tastatur-autoscroll");
       aktualisiere();
     };

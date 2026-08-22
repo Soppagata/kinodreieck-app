@@ -1951,6 +1951,29 @@ test("Globale Suche trennt Keyboard-Autoscroll und echte Nutzergesten im kleinen
   await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
   await expect(suche).toHaveClass(/tastatur-offen/);
   await expect.poll(anker).toBe(-8);
+  await suche.evaluate((form) => {
+    const original = form.getBoundingClientRect.bind(form);
+    let driftY = 0;
+    form.getBoundingClientRect = () => {
+      const rect = original();
+      return {
+        x: rect.x, y: rect.y + driftY, width: rect.width, height: rect.height,
+        top: rect.top + driftY, right: rect.right, bottom: rect.bottom + driftY, left: rect.left,
+        toJSON: () => ({}),
+      };
+    };
+    window.__kdSetSearchFixedRectDrift = (value) => { driftY = Number(value) || 0; };
+  });
+  const vorWindowAutoScroll = await position();
+  await page.evaluate(() => {
+    window.__kdSetSearchFixedRectDrift(72);
+    window.dispatchEvent(new Event("scroll"));
+  });
+  await expect(suche).toHaveClass(/tastatur-autoscroll/);
+  await expect.poll(position).toMatchObject({
+    top: vorWindowAutoScroll.top,
+    bottom: vorWindowAutoScroll.bottom,
+  });
   const vorAutoScroll = await position();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
   await expect(suchen).toBeFocused();
@@ -1971,6 +1994,7 @@ test("Globale Suche trennt Keyboard-Autoscroll und echte Nutzergesten im kleinen
   });
   await expect.poll(position).toMatchObject({ bottom: vorAutoScroll.bottom, anker: -88 });
   await page.evaluate(() => {
+    window.__kdSetSearchFixedRectDrift(0);
     document.dispatchEvent(new PointerEvent("pointermove", {
       bubbles: true, pointerId: 19, clientX: 180, clientY: 314,
     }));
