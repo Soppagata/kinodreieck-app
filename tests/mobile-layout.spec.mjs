@@ -1037,6 +1037,55 @@ test("Radar bestätigt mobil eine explizite Star-Wars-Mehrfachauswahl und lädt 
   await keineDokumentUeberbreite(page);
 });
 
+test("Radar bestätigt mobil Star Wars als eine persistente Titelgruppe", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.addInitScript(() => {
+    localStorage.setItem("kd:master", JSON.stringify({
+      meta: { version: "radar-star-wars-title-group" }, gespeichertAm: Date.now(),
+      filme: [
+        { id: "star-wars-episode-i", watchmode_id: 71001, titel: "Star Wars: Episode I", jahr: 1999, typ: "film" },
+        { id: "star-wars-episode-ii", watchmode_id: 71002, titel: "Star Wars: Episode II", jahr: 2002, typ: "film" },
+        { id: "star-wars-episode-iii", watchmode_id: 71003, titel: "Star Wars: Episode III", jahr: 2005, typ: "film" },
+        { id: "star-wars-episode-iv", watchmode_id: 71004, titel: "Star Wars: Episode IV", jahr: 1977, typ: "film" },
+      ],
+    }));
+  });
+  await page.goto("/");
+  await waehleMobileTab(page, "Entdecken");
+  await page.getByRole("tab", { name: "Radar" }).click();
+  await page.getByLabel("Film oder Serie").fill("Star Wars");
+  await page.getByRole("button", { name: "Alle Treffer für „Star Wars“ beobachten" }).click();
+
+  const preview = page.getByRole("dialog", { name: "Ins Radar" });
+  await expect(preview).toContainText("Titelgruppe „Star Wars“");
+  await expect(preview).toContainText("4 aktuelle eindeutige Werke · ein Radarziel");
+  await expect(preview.locator("li")).toHaveCount(4);
+  await preview.getByRole("button", { name: "Titelgruppe ins Radar bestätigen" }).click();
+  await expect(preview).toBeHidden();
+
+  const groupCard = page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Star Wars" });
+  await expect(groupCard).toHaveCount(1);
+  await expect(groupCard).toContainText("Titelgruppe · 4 Werke");
+  await expect.poll(() => page.evaluate(() => {
+    const radar = JSON.parse(localStorage.getItem("kd:radar") || "null");
+    return {
+      count: radar?.subscriptions?.length,
+      targetId: radar?.subscriptions?.[0]?.targetId,
+      members: radar?.subscriptions?.[0]?.titleGroup?.members?.length,
+    };
+  })).toEqual({ count: 1, targetId: "title-group:v1:star-wars", members: 4 });
+
+  await page.reload();
+  await waehleMobileTab(page, "Entdecken");
+  await page.getByRole("tab", { name: "Radar" }).click();
+  const reloadedGroupCard = page.locator(".kd-entdecken-zielkarte").filter({ hasText: "Star Wars" });
+  await expect(reloadedGroupCard).toHaveCount(1);
+  await expect(reloadedGroupCard).toContainText("Titelgruppe · 4 Werke");
+  await keineDokumentUeberbreite(page);
+});
+
 test("Entdecken trennt Vollkatalog und Dienstetreffer, ohne Feed aber ohne Katalogfüller", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);

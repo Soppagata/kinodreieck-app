@@ -7,6 +7,7 @@ import {
   createEntdeckenRecommendations,
   createEntdeckenCatalogSummary,
   createRadarCatalogIndex,
+  createTitleGroupRadarTarget,
   localCalendarDay,
   localRadarTargetLabel,
   searchRadarCatalogResult,
@@ -32,6 +33,7 @@ const EREIGNIS_LABEL = Object.freeze({
 
 function zielTypLabel(entry) {
   if (entry?.role) return ROLLEN_LABEL[entry.role] || "Person";
+  if (entry?.titleGroup) return `Titelgruppe · ${entry.titleGroup.members.length} Werke`;
   return entry?.targetType === "series" ? "Serie" : "Film oder Werk";
 }
 
@@ -337,6 +339,10 @@ function RadarView({
   );
   const targetById = useMemo(() => new Map(targets.map((entry) => [entry.targetId, entry])), [targets]);
   const workSearch = useMemo(() => searchRadarCatalogResult(targets, workQuery), [targets, workQuery]);
+  const titleGroupSearch = useMemo(
+    () => createTitleGroupRadarTarget(targets, workQuery),
+    [targets, workQuery],
+  );
   const workMatches = workSearch.entries;
   const selectedWorkEntries = selectedWorks.map((targetId) => targetById.get(targetId)).filter(Boolean);
   const personSearch = useMemo(() => searchPersonRadarCatalog({ query: personQuery, role: personRole }), [personQuery, personRole]);
@@ -382,6 +388,14 @@ function RadarView({
     if (!selectedTargets.length) return;
     onRadarPreview?.(selectedTargets.length === 1 ? selectedTargets[0] : selectedTargets);
     setMessage({ status: "active", text: `${selectedTargets.length === 1 ? "Prüfe das Werk" : `Prüfe die ${selectedTargets.length} Titel`} und bestätige ${selectedTargets.length === 1 ? "es" : "sie"} anschließend gemeinsam für dein Radar.` });
+  };
+  const addTitleGroup = () => {
+    if (titleGroupSearch.status !== "ready" || !titleGroupSearch.target) return;
+    onRadarPreview?.(titleGroupSearch.target);
+    setMessage({
+      status: "active",
+      text: `Prüfe die Titelgruppe mit ${titleGroupSearch.total} aktuellen Werken und bestätige sie anschließend als ein Radarziel.`,
+    });
   };
   const addPerson = async () => {
     const identity = personByToken.get(selectedPerson);
@@ -440,6 +454,17 @@ function RadarView({
                   : `${workMatches.length} ${workMatches.length === 1 ? "Treffer" : "Treffer"}.`
                 : "Kein passender Titel gefunden."}
           </small>
+          {titleGroupSearch.status === "ready" ? <div className="kd-radar-title-group-option">
+            <strong>Titelgruppe „{titleGroupSearch.target.titleGroup.displayName}“</strong>
+            <span>{titleGroupSearch.total} eindeutige aktuelle Werke · zählt als ein Radarziel</span>
+            <button type="button" className="kd-entdecken-sekundaer" onClick={addTitleGroup}>
+              Alle Treffer für „{titleGroupSearch.target.titleGroup.displayName}“ beobachten
+            </button>
+          </div> : titleGroupSearch.status === "too_many" ? <small className="kd-radar-title-group-hinweis">
+            Für eine Titelgruppe sind {titleGroupSearch.total} Treffer zu breit. Bitte verfeinere den Suchbegriff auf höchstens 20 eindeutige Werke.
+          </small> : titleGroupSearch.status === "ambiguous" && workQuery.trim().length >= 8 ? <small className="kd-radar-title-group-hinweis">
+            Eine Titelgruppe braucht mindestens zwei eindeutige Werke mit starker ID, Jahr und Typ.
+          </small> : null}
           {workMatches.length ? <ul id="kd-radar-work-results" className="kd-radar-work-results" aria-label="Passende Radar-Werke">
             {workMatches.map((entry) => <li key={entry.targetId}>
               <button type="button" className={selectedWorks.includes(entry.targetId) ? "ausgewaehlt" : ""}

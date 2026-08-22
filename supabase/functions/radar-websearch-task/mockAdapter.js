@@ -35,6 +35,7 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
   const sourceById = new Map(sources.map((source) => [source.sourceId, clone(source)]));
   const targetCopy = clone(target);
   const person = targetCopy.kind === "person";
+  const titleGroup = targetCopy.kind === "title_group";
   const updatedAt = "2026-08-17T12:00:00.000Z";
   const subscriptions = new Map([[`${accountId}|${targetCopy.targetId}`, { active: true }]]);
 
@@ -50,16 +51,24 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
         domain === source.domain || (source.subdomainsAllowed && domain.endsWith(`.${source.domain}`))
       ))).map(clone);
     },
-    async upsertConfirmedEvent({ accountId: actor, event, personContext = null }) {
-      const catalogMatch = person && personContext
+    async upsertConfirmedEvent({ accountId: actor, event, personContext = null, titleGroupContext = null }) {
+      const catalogContext = person ? personContext : titleGroup ? titleGroupContext : null;
+      const catalogMatch = (person || titleGroup) && catalogContext
         ? targetCopy.catalog.filter((entry) => entry.targetId === event.targetKey)
         : [];
-      const authorized = person
-        ? subscriptions.get(`${actor}|${personContext?.targetId}`)?.active
-          && personContext.targetId === targetCopy.targetId
-          && personContext.personExternalId === targetCopy.personExternalId
+      const authorized = person || titleGroup
+        ? subscriptions.get(`${actor}|${catalogContext?.targetId}`)?.active
+          && catalogContext.targetId === targetCopy.targetId
+          && (!titleGroup || (
+            catalogContext.queryVersion === targetCopy.queryVersion
+            && catalogContext.queryKey === targetCopy.queryKey
+            && catalogContext.displayName === targetCopy.displayName
+          ))
+          && (!person || (
+            personContext.personExternalId === targetCopy.personExternalId
           && personContext.canonicalName === targetCopy.canonicalName
           && personContext.role === targetCopy.role
+          ))
           && catalogMatch.length === 1
           && catalogMatch[0].targetType === event.targetType
           && catalogMatch[0].title === event.title
@@ -131,12 +140,20 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
       return {
         subscriptions: [{
           targetId: targetCopy.targetId,
-          targetType: targetCopy.kind === "person" ? "person" : targetCopy.mediaType === "series" ? "series" : "work",
-          title: targetCopy.kind === "person" ? targetCopy.canonicalName : targetCopy.canonicalTitle,
+          targetType: person ? "person" : titleGroup ? "franchise" : targetCopy.mediaType === "series" ? "series" : "work",
+          title: person ? targetCopy.canonicalName : titleGroup ? targetCopy.displayName : targetCopy.canonicalTitle,
           region: "AT", scope: "all", status: "active", updatedAt,
-          ...(targetCopy.kind === "person" ? {
+          ...(person ? {
             personExternalId: targetCopy.personExternalId,
             personRole: targetCopy.role,
+          } : titleGroup ? {
+            titleGroup: {
+              format: "kd-radar-title-group-v1",
+              queryVersion: targetCopy.queryVersion,
+              queryKey: targetCopy.queryKey,
+              displayName: targetCopy.displayName,
+              members: targetCopy.catalog.map(clone),
+            },
           } : {}),
         }],
         events: person ? [] : [...events.values()].map((stored) => {

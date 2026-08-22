@@ -72,6 +72,18 @@ const personTarget = Object.freeze({
     year: 2023,
   })]),
 });
+const titleGroupTarget = Object.freeze({
+  kind: "title_group",
+  targetId: "title-group:v1:star-wars",
+  queryVersion: "title-group-query-v1",
+  queryKey: "star wars",
+  displayName: "Star Wars",
+  region: "AT",
+  catalog: Object.freeze([
+    Object.freeze({ targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999 }),
+    Object.freeze({ targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977 }),
+  ]),
+});
 const sources = Object.freeze([
   Object.freeze({
     sourceId: "news-a",
@@ -305,6 +317,52 @@ await check("Personenpfad verbindet starke ID und Rolle mit messbarer Reservieru
   assert.equal(providerInput.role, personTarget.role);
   assert.equal("accountId" in providerInput, false);
   assert.equal("targetId" in providerInput, false);
+});
+
+await check("Titelgruppenpfad sendet nur Queryvertrag und konkrete Werke und schreibt pro Werk in den Feed", async () => {
+  const candidate = {
+    ...titleGroupTarget.catalog[1],
+    eventType: "kinostart_at",
+    eventDate: "2026-08-21",
+    region: "AT",
+    platform: "-",
+    seasonNumber: null,
+    evidence: [evidence(sources[0], "title-group"), evidence(sources[1], "title-group")],
+  };
+  const resultUrls = candidate.evidence.map((entry) => entry.url);
+  const harness = adapterHarness({
+    providerBody: providerMessage({ candidates: [candidate], resultUrls, citationUrls: resultUrls }),
+  });
+  const repository = createRadarWebsearchMemoryRepository({ target: titleGroupTarget, sources });
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account",
+    targetId: titleGroupTarget.targetId,
+    adapter: harness.adapter,
+    repository,
+    operationId: () => "72500000-0000-4000-8000-000000000001",
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 1);
+  assert.equal(harness.fetchCalls.length, 1);
+  assert.equal(harness.reserveCalls.length, 1);
+  assert.equal(harness.settleCalls.length, 1);
+  assert.equal(repository.events.size, 1);
+  assert.equal(result.feed.subscriptions.length, 1);
+  assert.equal(result.feed.subscriptions[0].targetId, titleGroupTarget.targetId);
+  assert.equal(result.feed.events[0].targetId, candidate.targetId);
+
+  const sent = JSON.parse(harness.fetchCalls[0].options.body);
+  const providerInput = JSON.parse(sent.messages[0].content);
+  assert.deepEqual(providerInput, {
+    queryVersion: titleGroupTarget.queryVersion,
+    queryKey: titleGroupTarget.queryKey,
+    displayName: titleGroupTarget.displayName,
+    region: "AT",
+    catalog: titleGroupTarget.catalog,
+  });
+  for (const forbidden of ["accountId", "profile", "library", "subscriptions", "password", "secret"]) {
+    assert.equal(harness.fetchCalls[0].options.body.includes(forbidden), false);
+  }
 });
 
 await check("Insufficient und no_change bleiben kleine terminale Antworten ohne Write", async () => {

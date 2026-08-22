@@ -28,6 +28,7 @@ const eventId = "22222222-2222-4222-8222-222222222222";
 const eventVersionId = "33333333-3333-4333-8333-333333333333";
 const targetId = "work:tmdb:550";
 const personTargetId = "person:wikidata:Q42869:actor";
+const titleGroupTargetId = "title-group:v1:star-wars";
 const personIdentity = Object.freeze({
   personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true,
 });
@@ -68,6 +69,21 @@ const feed = (extra = {}) => ({
 const personSubscription = (extra = {}) => ({
   targetId: personTargetId, targetType: "person", title: "Nicolas Cage", region: "AT", scope: "all",
   status: "active", updatedAt: instant, personExternalId: "wikidata:Q42869", personRole: "actor", ...extra,
+});
+const titleGroupMetadata = Object.freeze({
+  format: "kd-radar-title-group-v1",
+  queryVersion: "title-group-query-v1",
+  queryKey: "star wars",
+  displayName: "Star Wars",
+  members: Object.freeze([
+    Object.freeze({ targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999 }),
+    Object.freeze({ targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977 }),
+  ]),
+});
+const titleGroupSubscription = (extra = {}) => ({
+  targetId: titleGroupTargetId, targetType: "franchise", title: "Star Wars",
+  region: "AT", scope: "all", status: "active", updatedAt: instant,
+  titleGroup: titleGroupMetadata, ...extra,
 });
 const personResult = (extra = {}) => ({
   targetId: personTargetId,
@@ -335,6 +351,26 @@ await check("Feed v2 validiert den Serverfund und behaelt ihn nach lokalem Reloa
   assert.equal(reloaded.state.subscriptions.length, 0);
 });
 
+await check("Titelgruppen-Feed bleibt als ein Ziel samt konkreten Mitgliedern über Reload erhalten", () => {
+  const payload = feed({ subscriptions: [titleGroupSubscription()], events: [] });
+  assert.equal(C.validateRadarPilotFeed(payload).ok, true);
+  assert.equal(C.validateRadarPilotFeed(feed({
+    subscriptions: [titleGroupSubscription({
+      titleGroup: { ...titleGroupMetadata, queryKey: "star warship" },
+    })], events: [],
+  })).ok, false);
+  const reconciled = R.reconcileAccountRadarPilotFeed(
+    R.createEmptyLocalRadar({ authority: "account-cache" }), payload,
+  );
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.subscriptions.length, 1);
+  assert.equal(reconciled.state.subscriptions[0].targetId, titleGroupTargetId);
+  assert.deepEqual(reconciled.state.subscriptions[0].titleGroup, titleGroupMetadata);
+  const reloaded = R.decodeLocalRadar(JSON.stringify(reconciled.state), { authority: "account-cache" });
+  assert.equal(reloaded.ok, true);
+  assert.deepEqual(reloaded.state.subscriptions[0].titleGroup.members, titleGroupMetadata.members);
+});
+
 function queuedAccountState() {
   return R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
     operationId, action: "upsert",
@@ -484,7 +520,11 @@ await check("Subscription-Outbox läuft seriell mit maximaler Parallelität eins
         }));
       }
       activeRequests -= 1;
-      return response(200, feed({ subscriptions: [], events: [] }));
+      const writeCount = bodies.filter((entry) => entry.url.endsWith("set_subscription")).length;
+      return response(200, feed({
+        revision: writeCount === 2 ? 3 : 1,
+        subscriptions: [], events: [],
+      }));
     },
   });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
@@ -500,13 +540,17 @@ await check("Personen-Discriminator läuft über dieselbe Subscription-RPC ohne 
     operationId: operation, action: "upsert", identity: personIdentity, targetId: personTargetId, now: instant,
   }).state;
   const calls = [];
+  let personFeedCalls = 0;
   const h = harness({
     state,
     fetchImpl: async (url, init) => {
       const body = JSON.parse(init.body);
       calls.push({ url, body });
       if (url.endsWith("kd_radar_pilot_feed")) {
-        return response(200, feed({ subscriptions: [], events: [] }));
+        personFeedCalls += 1;
+        return response(200, feed({
+          subscriptions: personFeedCalls === 1 ? [] : [personSubscription()], events: [],
+        }));
       }
       if (url.endsWith("kd_radar_pilot_set_subscription")) {
         return response(200, subscriptionAck({
@@ -532,6 +576,66 @@ await check("Personen-Discriminator läuft über dieselbe Subscription-RPC ohne 
   assert.deepEqual(h.state.personSubscriptions.map(({ name, role, status, authority }) => ({
     name, role, status, authority,
   })), [{ name: "Nicolas Cage", role: "actor", status: "active", authority: "server" }]);
+});
+
+await check("Titelgruppe nutzt ihre RPC und wird erst aus dem nachgelagerten Serverfeed sichtbar", async () => {
+  const groupOperationId = "78888888-8888-4888-8888-888888888888";
+  const state = R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: groupOperationId,
+    action: "upsert",
+    target: {
+      targetId: titleGroupTargetId,
+      targetType: "franchise",
+      targetStatus: "active",
+      title: "Star Wars",
+      canonical: true,
+      titleGroup: titleGroupMetadata,
+    },
+    now: instant,
+  }).state;
+  const calls = [];
+  let feedCalls = 0;
+  const h = harness({
+    state,
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push({ rpc: url.split("/").at(-1), body });
+      if (url.endsWith("kd_radar_pilot_feed")) {
+        feedCalls += 1;
+        return response(200, feed(feedCalls === 1 ? {
+          subscriptions: [], events: [],
+        } : {
+          revision: 2, checksum: checksumB,
+          subscriptions: [titleGroupSubscription()], events: [],
+        }));
+      }
+      if (url.endsWith("kd_radar_pilot_set_title_group")) {
+        return response(200, subscriptionAck({
+          operationId: groupOperationId,
+          targetId: titleGroupTargetId,
+          status: "active",
+          revision: 2,
+          checksum: checksumB,
+        }));
+      }
+      throw new Error("unexpected rpc");
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready");
+  assert.deepEqual(calls.map((entry) => entry.rpc), [
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_title_group", "kd_radar_pilot_feed",
+  ]);
+  assert.deepEqual(calls[1].body, {
+    p_target_key: titleGroupTargetId,
+    p_scope: "all",
+    p_status: "active",
+    p_operation_id: groupOperationId,
+    p_title_group: titleGroupMetadata,
+  });
+  assert.equal(h.state.outbox.length, 0);
+  assert.equal(h.state.subscriptions.length, 1);
+  assert.deepEqual(h.state.subscriptions[0].titleGroup, titleGroupMetadata);
 });
 
 await check("Überlappende explizite Syncs senden dieselbe Operation instanzweit nur einmal", async () => {
@@ -631,7 +735,7 @@ await check("Busy-Sync bewahrt eine während des aktiven Laufs lokal ergänzte O
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: "66666666-6666-4666-8666-666666666666", status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
   assert.deepEqual(rpcCalls.filter((call) => call.rpc === "kd_radar_pilot_set_subscription")
     .map((call) => call.body.p_operation_id), [operationId]);
@@ -705,7 +809,7 @@ await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaf
     })), [{ operationId: importOperationId, status: "pending" }]);
   }
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
 });
 
@@ -813,7 +917,7 @@ await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten 
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: operationId2, status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
 });
 

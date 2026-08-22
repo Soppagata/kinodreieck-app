@@ -9,6 +9,7 @@ import {
 } from "./radarContracts.js";
 import { createPersonRadarTargetId, PERSON_RADAR_ROLES } from "./personRadarCatalog.js";
 import { validatePersonRadarCheckResult } from "./personDiscoveryContracts.js";
+import { validateTitleGroupMetadata } from "./titleGroupRadar.js";
 
 export const RADAR_PILOT_FEED_FORMAT = "kd-radar-pilot-feed-v2";
 export const RADAR_PILOT_LEGACY_FEED_FORMAT = "kd-radar-pilot-feed-v1";
@@ -34,6 +35,7 @@ export const RADAR_PILOT_SUBSCRIPTION_KEYS = Object.freeze([
   "targetId", "targetType", "title", "region", "scope", "status", "updatedAt",
 ]);
 export const RADAR_PILOT_PERSON_SUBSCRIPTION_KEYS = Object.freeze(["personExternalId", "personRole"]);
+export const RADAR_PILOT_TITLE_GROUP_SUBSCRIPTION_KEYS = Object.freeze(["titleGroup"]);
 export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
@@ -203,7 +205,9 @@ export function validateRadarPilotImportResult(value) {
 
 function validateSubscription(value) {
   const errors = [];
-  if (!exactKeysWithOptional(value, RADAR_PILOT_SUBSCRIPTION_KEYS, RADAR_PILOT_PERSON_SUBSCRIPTION_KEYS)) {
+  if (!exactKeysWithOptional(value, RADAR_PILOT_SUBSCRIPTION_KEYS, [
+    ...RADAR_PILOT_PERSON_SUBSCRIPTION_KEYS, ...RADAR_PILOT_TITLE_GROUP_SUBSCRIPTION_KEYS,
+  ])) {
     return ["feed-subscription-shape-invalid"];
   }
   if (!validTargetKey(value.targetId)) errors.push("feed-subscription-target-invalid");
@@ -221,6 +225,11 @@ function validateSubscription(value) {
     }
   } else if (value.personExternalId !== undefined || value.personRole !== undefined) {
     errors.push("feed-subscription-person-unexpected");
+  }
+  if (value.titleGroup !== undefined) {
+    if (value.targetType !== "franchise" || !validateTitleGroupMetadata(value.titleGroup, {
+      targetId: value.targetId, title: value.title,
+    })) errors.push("feed-subscription-title-group-invalid");
   }
   return errors;
 }

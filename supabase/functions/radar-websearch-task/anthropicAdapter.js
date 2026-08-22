@@ -167,10 +167,20 @@ const PERSON_SYSTEM_PROMPT = [
   "Jeder Eintrag enthaelt targetId, targetType, title, year, role, eventType, eventDate, region, platform und evidence.",
   "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
 ].join(" ");
+const TITLE_GROUP_SYSTEM_PROMPT = [
+  "Du extrahierst nur belegte Starttermine fuer die konkret aufgelisteten Werke einer Kinodreieck-Titelgruppe.",
+  "Nutze hoechstens eine Websuche und nur die erlaubten Domains; erfinde oder matche keine weiteren Werke.",
+  "Jeder Kandidat muss dieselbe starke Werk-ID, denselben Titel, dasselbe Jahr und denselben Typ wie ein Katalogeintrag tragen.",
+  "Antworte im letzten Textblock ausschliesslich als JSON mit den Schluesseln status und candidates.",
+  "status ist confirmed, insufficient_evidence oder no_change; candidates enthaelt hoechstens sechs Eintraege.",
+  "Jeder Eintrag enthaelt targetId, targetType, title, year, eventType, eventDate, region, platform, seasonNumber und evidence.",
+  "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
+].join(" ");
 
 export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   const setup = validateRadarWebsearchProviderSetup(setupInput);
   const person = request.kind === "person";
+  const titleGroup = request.kind === "title_group";
   const providerInput = person ? {
     personExternalId: request.personExternalId,
     canonicalName: request.canonicalName,
@@ -178,6 +188,12 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     region: request.region,
     windowStart: request.windowStart,
     windowEnd: request.windowEnd,
+    catalog: request.catalog,
+  } : titleGroup ? {
+    queryVersion: request.queryVersion,
+    queryKey: request.queryKey,
+    displayName: request.displayName,
+    region: request.region,
     catalog: request.catalog,
   } : {
     targetId: request.targetId,
@@ -193,7 +209,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   return Object.freeze({
     model: setup.model,
     max_tokens: setup.maxTokens,
-    system: person ? PERSON_SYSTEM_PROMPT : SYSTEM_PROMPT,
+    system: person ? PERSON_SYSTEM_PROMPT : titleGroup ? TITLE_GROUP_SYSTEM_PROMPT : SYSTEM_PROMPT,
     messages: Object.freeze([Object.freeze({
       role: "user",
       content: JSON.stringify(providerInput),
@@ -245,13 +261,13 @@ function responseTextBlock(content) {
   return blocks[blocks.length - 1];
 }
 
-function parseProviderJson(block, person = false) {
+function parseProviderJson(block, kind = "work") {
   let value;
   try { value = JSON.parse(block.text); } catch {
     throw new RadarWebsearchProviderError("provider-output-invalid");
   }
-  const listKey = person ? "candidates" : "events";
-  const maxItems = person ? 3 : 4;
+  const listKey = ["person", "title_group"].includes(kind) ? "candidates" : "events";
+  const maxItems = kind === "person" ? 3 : kind === "title_group" ? 6 : 4;
   if (!plain(value) || Object.keys(value).length !== 2
       || !("status" in value) || !(listKey in value)
       || !ALLOWED_STATUSES.has(value.status) || !Array.isArray(value[listKey])
@@ -262,9 +278,9 @@ function parseProviderJson(block, person = false) {
   return value;
 }
 
-function urlsFromEvidence(value, person = false) {
+function urlsFromEvidence(value, kind = "work") {
   const urls = [];
-  for (const finding of value[person ? "candidates" : "events"]) {
+  for (const finding of value[["person", "title_group"].includes(kind) ? "candidates" : "events"]) {
     if (!plain(finding) || !Array.isArray(finding.evidence)) {
       throw new RadarWebsearchProviderError("provider-output-invalid");
     }
@@ -334,14 +350,14 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
     }
   }
 
-  const person = request.kind === "person";
-  const parsed = parseProviderJson(responseTextBlock(value.content), person);
-  for (const url of urlsFromEvidence(parsed, person)) {
+  const kind = request.kind === "person" ? "person" : request.kind === "title_group" ? "title_group" : "work";
+  const parsed = parseProviderJson(responseTextBlock(value.content), kind);
+  for (const url of urlsFromEvidence(parsed, kind)) {
     if (!resultUrls.has(url) || !citationUrls.has(url)) {
       throw new RadarWebsearchProviderError("provider-citation-invalid", usage);
     }
   }
-  if (person) {
+  if (kind === "person") {
     return Object.freeze({
       envelope: Object.freeze({
         searchResultCount: results[0].content.length,
@@ -352,6 +368,24 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
             personExternalId: request.personExternalId,
             canonicalName: request.canonicalName,
             role: request.role,
+          }),
+          candidates: parsed.candidates,
+        }),
+      }),
+      usage,
+    });
+  }
+  if (kind === "title_group") {
+    return Object.freeze({
+      envelope: Object.freeze({
+        searchResultCount: results[0].content.length,
+        response: Object.freeze({
+          status: parsed.status,
+          checkedAt,
+          titleGroup: Object.freeze({
+            queryVersion: request.queryVersion,
+            queryKey: request.queryKey,
+            displayName: request.displayName,
           }),
           candidates: parsed.candidates,
         }),

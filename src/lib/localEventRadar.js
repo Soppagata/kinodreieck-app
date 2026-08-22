@@ -37,6 +37,7 @@ import {
   validatePersonRadarCheckResult,
 } from "./personDiscoveryContracts.js";
 import { createPersonRadarTargetId } from "./personRadarCatalog.js";
+import { validateTitleGroupMetadata } from "./titleGroupRadar.js";
 
 export const LOCAL_RADAR_FORMAT = "kinodreieck-radar-local";
 export const LOCAL_RADAR_VERSION = 2;
@@ -200,13 +201,19 @@ function validateSubscription(subscription, authority) {
   const errors = [];
   const keys = [
     "targetId", "targetType", "title", "region", "scope", "status", "authority",
-    "serverRevision", "serverChecksum", "updatedAt",
+    "serverRevision", "serverChecksum", "updatedAt", "titleGroup",
   ];
   if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
   if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
   if (subscription.title !== null && !validPublicLabel(subscription.title)) {
     errors.push("subscription-title-invalid");
+  }
+  if (subscription.titleGroup !== undefined) {
+    if (subscription.targetType !== "franchise"
+        || !validateTitleGroupMetadata(subscription.titleGroup, {
+          targetId: subscription.targetId, title: subscription.title,
+        })) errors.push("subscription-title-group-invalid");
   }
   if (subscription.region !== RADAR_DEFAULT_REGION) errors.push("subscription-region-invalid");
   if (!RADAR_SCOPES.includes(subscription.scope)) errors.push("subscription-scope-invalid");
@@ -237,7 +244,10 @@ function validateOutboxEntry(entry) {
     "status", "createdAt", "reason",
   ];
   const person = entry?.targetType === "person";
-  const keys = person ? [...baseKeys, "personExternalId", "personRole"] : baseKeys;
+  const titleGroup = entry?.targetType === "franchise" && entry?.titleGroup !== undefined;
+  const keys = person
+    ? [...baseKeys, "personExternalId", "personRole"]
+    : titleGroup ? [...baseKeys, "titleGroup"] : baseKeys;
   if (!exactKeys(entry, keys)) return ["outbox-shape-invalid"];
   if (!validOperationId(entry.operationId)) errors.push("outbox-operation-id-invalid");
   if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
@@ -262,6 +272,9 @@ function validateOutboxEntry(entry) {
         || entry.targetId !== createPersonRadarTargetId(entry.personExternalId, entry.personRole)
         || entry.scope !== "all") errors.push("outbox-person-invalid");
   }
+  if (titleGroup && !validateTitleGroupMetadata(entry.titleGroup, {
+    targetId: entry.targetId, title: entry.title,
+  })) errors.push("outbox-title-group-invalid");
   return errors;
 }
 
@@ -593,9 +606,15 @@ export function decodeLocalRadar(raw, { authority = "guest" } = {}) {
 
 function targetDraft(target) {
   const checked = validateRadarTarget(target, { allowFixture: true });
-  return checked.ok && target.targetStatus === "active" && target.canonical === true
-    ? { targetId: text(target.targetId), targetType: target.targetType, title: text(target.title) }
-    : null;
+  if (!checked.ok || target.targetStatus !== "active" || target.canonical !== true) return null;
+  const draft = { targetId: text(target.targetId), targetType: target.targetType, title: text(target.title) };
+  if (target.titleGroup !== undefined) {
+    if (target.targetType !== "franchise" || !validateTitleGroupMetadata(target.titleGroup, {
+      targetId: draft.targetId, title: draft.title,
+    })) return null;
+    draft.titleGroup = clone(target.titleGroup);
+  }
+  return draft;
 }
 
 export function upsertGuestRadarSubscription(state, {
@@ -794,6 +813,7 @@ export function queueAccountRadarChange(state, {
     operationId: text(operationId), action, targetId: draft?.targetId || "",
     targetType: draft?.targetType || "", title: draft?.title || null, region: RADAR_DEFAULT_REGION, scope,
     status: "pending", createdAt: now, reason: null,
+    ...(draft?.titleGroup ? { titleGroup: clone(draft.titleGroup) } : {}),
   };
   if (!draft || validateOutboxEntry(entry).length) {
     return Object.freeze({ ok: false, reason: "outbox-entry-invalid", state, changed: false });
@@ -1280,6 +1300,7 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     serverRevision: feed.revision,
     serverChecksum: feed.checksum,
     updatedAt: normalizedInstant(entry.updatedAt),
+    ...(entry.titleGroup === undefined ? {} : { titleGroup: clone(entry.titleGroup) }),
   })).sort((a, b) => a.targetId.localeCompare(b.targetId));
   next.personSubscriptions = feed.subscriptions.filter((entry) => entry.targetType === "person").map((entry) => ({
     personExternalId: entry.personExternalId,

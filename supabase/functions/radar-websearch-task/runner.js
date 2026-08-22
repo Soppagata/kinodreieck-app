@@ -60,7 +60,7 @@ export async function runRadarWebsearchCheck({
 
   let sources = [];
   try {
-    const findings = request.kind === "person"
+    const findings = ["person", "title_group"].includes(request.kind)
       ? envelope?.response?.candidates
       : envelope?.response?.events;
     const domains = [...new Set((findings || []).flatMap((finding) => (
@@ -82,6 +82,13 @@ export async function runRadarWebsearchCheck({
       personResult: evaluated.personResult || null,
     });
   }
+  if (request.kind === "title_group" && evaluated.status !== "confirmed") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+    });
+  }
   if (evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
@@ -93,8 +100,11 @@ export async function runRadarWebsearchCheck({
   let writes = 0;
   let changed = false;
   try {
-    const events = request.kind === "person"
-      ? evaluated.personResult.candidates.map((candidate) => ({
+    const catalogResult = request.kind === "person"
+      ? evaluated.personResult
+      : request.kind === "title_group" ? evaluated.titleGroupResult : null;
+    const events = catalogResult
+      ? catalogResult.candidates.map((candidate) => ({
         targetKey: candidate.targetId,
         targetType: candidate.targetType,
         title: candidate.title,
@@ -103,7 +113,7 @@ export async function runRadarWebsearchCheck({
         date: candidate.date,
         region: candidate.region,
         platform: candidate.platform,
-        seasonNumber: null,
+        seasonNumber: candidate.seasonNumber ?? null,
         evidence: candidate.evidence,
       }))
       : evaluated.events;
@@ -121,6 +131,14 @@ export async function runRadarWebsearchCheck({
             checkedAt: evaluated.personResult.checkedAt,
             windowStart: request.windowStart,
             windowEnd: request.windowEnd,
+          },
+        } : request.kind === "title_group" ? {
+          titleGroupContext: {
+            targetId: request.targetId,
+            queryVersion: request.queryVersion,
+            queryKey: request.queryKey,
+            displayName: request.displayName,
+            checkedAt: evaluated.titleGroupResult.checkedAt,
           },
         } : {}),
       });

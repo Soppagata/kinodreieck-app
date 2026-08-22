@@ -598,6 +598,18 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
   check("Personenziel kann bei aktivem personalAi-Konto lokal vorgemerkt werden, der Netzpfad bleibt am Buildflag", /const personRadarAvailable = radarAuthority === "guest"[\s\S]*remoteKontoAktiv && session\?\.capabilities\?\.personalAi === true/.test(radarController)
     && /if \(!radarPilotClientEnabled\) return Object\.freeze\(\{ status: "pending", writes: 1, identity \}\)/.test(radarController)
     && /personRadarCheckAvailable[\s\S]*radarPilotClientEnabled/.test(radarController));
+  check("Titelgruppen werden vor einer Anbieterprüfung deterministisch neu aufgelöst und zuerst serverbestätigt", (() => {
+    const start = radarController.indexOf("const fuehreRadarWebsearchCheck = useCallback(async (targetId) => {");
+    const end = radarController.indexOf("const bestaetigeRadarVorschau = useCallback", start);
+    const path = start >= 0 && end > start ? radarController.slice(start, end) : "";
+    const resolved = path.indexOf("resolveTitleGroupRadarTarget");
+    const queued = path.indexOf("queueAccountRadarChange", resolved);
+    const synced = path.indexOf("await syncRadarPilot(saved)", queued);
+    const provider = path.indexOf("radarWebsearchService.checkNow(targetId)", synced);
+    return resolved >= 0 && queued > resolved && synced > queued && provider > synced
+      && /title-group-refresh-pending/.test(path)
+      && /\.\.\.\(entry\?\.titleGroup \? \{ titleGroup: entry\.titleGroup \} : \{\}\)/.test(radarController);
+  })());
 check("Must-Watch-Verknüpfungen springen stabil in alle drei Katalogbereiche",
   /\["master", "programm", "streaming"\]/.test(mustwatchListe)
   && /onSpringeZuMustwatchRef=\{springeZuMustwatchRef\}/.test(app));

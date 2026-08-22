@@ -15,6 +15,7 @@ export const RADAR_WEBSEARCH_SCOPES = Object.freeze([
 export const RADAR_WEBSEARCH_MAX_RESULTS = 6;
 export const RADAR_WEBSEARCH_PERSON_MAX_CANDIDATES = 3;
 export const RADAR_WEBSEARCH_PERSON_ROLES = Object.freeze(["actor", "director"]);
+export const RADAR_WEBSEARCH_TITLE_GROUP_MAX_MEMBERS = 20;
 
 const EVENT_SCOPE = Object.freeze({
   kinostart_at: "cinema",
@@ -88,6 +89,51 @@ function validCatalogWork(value) {
     && validYear(value.year);
 }
 
+function validTitleGroupQuery(value) {
+  if (typeof value !== "string" || text(value) !== value || value !== value.toLowerCase()
+      || value.length > 100 || !/^[a-z0-9]+(?: [a-z0-9]+)+$/.test(value)) return false;
+  return value.split(" ").join("").length >= 8;
+}
+
+export function validateTitleGroupRadarWebsearchRequest(value) {
+  const required = [
+    "kind", "targetId", "queryVersion", "queryKey", "displayName", "region", "catalog",
+  ];
+  if (!exactKeys(value, required) || Object.keys(value || {}).length !== required.length) {
+    return result(["request-shape-invalid"]);
+  }
+  const errors = [];
+  if (value.kind !== "title_group") errors.push("request-kind-invalid");
+  if (value.queryVersion !== "title-group-query-v1") errors.push("request-query-version-invalid");
+  if (!validTitleGroupQuery(value.queryKey)) errors.push("request-query-invalid");
+  const expectedTarget = `title-group:v1:${String(value.queryKey || "").replace(/ /g, "-")}`;
+  if (value.targetId !== expectedTarget || !TARGET_ID_FORM.test(text(value.targetId))) {
+    errors.push("request-target-invalid");
+  }
+  if (typeof value.displayName !== "string" || text(value.displayName) !== value.displayName
+      || value.displayName.length < 1 || value.displayName.length > 160
+      || /^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(value.displayName)) {
+    errors.push("request-display-name-invalid");
+  }
+  if (value.region !== "AT") errors.push("request-region-invalid");
+  if (!Array.isArray(value.catalog) || value.catalog.length < 2
+      || value.catalog.length > RADAR_WEBSEARCH_TITLE_GROUP_MAX_MEMBERS
+      || value.catalog.some((entry) => !validCatalogWork(entry))) errors.push("request-catalog-invalid");
+  else if (new Set(value.catalog.map((entry) => entry.targetId)).size !== value.catalog.length) {
+    errors.push("request-catalog-duplicate");
+  }
+  if (errors.length) return result(errors);
+  return result([], freezeDeep({
+    kind: "title_group",
+    targetId: value.targetId,
+    queryVersion: value.queryVersion,
+    queryKey: value.queryKey,
+    displayName: value.displayName,
+    region: "AT",
+    catalog: value.catalog.map((entry) => ({ ...entry })),
+  }));
+}
+
 export function validatePersonRadarWebsearchRequest(value) {
   const required = [
     "kind", "targetId", "personExternalId", "canonicalName", "role", "region",
@@ -133,6 +179,7 @@ export function validatePersonRadarWebsearchRequest(value) {
 
 export function validateRadarWebsearchRequest(value) {
   if (value?.kind === "person") return validatePersonRadarWebsearchRequest(value);
+  if (value?.kind === "title_group") return validateTitleGroupRadarWebsearchRequest(value);
   const required = ["targetId", "canonicalTitle", "mediaType", "region", "scopes"];
   const optional = ["releaseYear", "knownEvidenceUrls"];
   if (!exactKeys(value, required, optional)) return result(["request-shape-invalid"]);
@@ -492,6 +539,167 @@ export function evaluatePersonRadarWebsearchResponse(envelope, requestInput, sou
   });
 }
 
+function validateTitleGroupEcho(group, request, errors) {
+  const keys = ["queryVersion", "queryKey", "displayName"];
+  if (!exactKeys(group, keys) || Object.keys(group || {}).length !== keys.length) {
+    errors.push("response-title-group-shape-invalid");
+    return;
+  }
+  if (group.queryVersion !== request.queryVersion) errors.push("response-title-group-version-mismatch");
+  if (group.queryKey !== request.queryKey) errors.push("response-title-group-query-mismatch");
+  if (group.displayName !== request.displayName) errors.push("response-title-group-name-mismatch");
+}
+
+function validateTitleGroupCandidateShape(candidate, errors) {
+  const required = [
+    "targetId", "targetType", "title", "year", "eventType", "eventDate",
+    "region", "platform", "seasonNumber", "evidence",
+  ];
+  if (!exactKeys(candidate, required) || Object.keys(candidate || {}).length !== required.length) {
+    errors.push("response-title-group-candidate-shape-invalid");
+    return;
+  }
+  if (!validCatalogWork({
+    targetId: candidate.targetId,
+    targetType: candidate.targetType,
+    title: candidate.title,
+    year: candidate.year,
+  })) errors.push("response-title-group-work-invalid");
+  if (!RADAR_WEBSEARCH_EVENT_TYPES.includes(candidate.eventType)) errors.push("response-title-group-event-type-invalid");
+  if (!validDay(candidate.eventDate)) errors.push("response-title-group-date-invalid");
+  if (candidate.region !== "AT") errors.push("response-title-group-region-invalid");
+  if (candidate.eventType === "streamingstart_at") {
+    if (typeof candidate.platform !== "string" || text(candidate.platform) !== candidate.platform
+        || !candidate.platform || candidate.platform === "-" || candidate.platform.length > 80) {
+      errors.push("response-title-group-platform-invalid");
+    }
+  } else if (candidate.platform !== "-") errors.push("response-title-group-platform-invalid");
+  if (candidate.eventType === "staffelstart") {
+    if (!Number.isInteger(candidate.seasonNumber) || candidate.seasonNumber < 1 || candidate.seasonNumber > 999) {
+      errors.push("response-title-group-season-invalid");
+    }
+  } else if (candidate.seasonNumber !== null) errors.push("response-title-group-season-invalid");
+  if (!Array.isArray(candidate.evidence) || candidate.evidence.length < 1
+      || candidate.evidence.length > RADAR_WEBSEARCH_MAX_RESULTS) errors.push("response-title-group-evidence-invalid");
+  else for (const evidence of candidate.evidence) validateEvidenceShape(evidence, errors);
+}
+
+export function evaluateTitleGroupRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput = []) {
+  const requestCheck = validateTitleGroupRadarWebsearchRequest(requestInput);
+  if (!requestCheck.ok) {
+    return Object.freeze({ status: "invalid_response", titleGroupResult: null, errors: requestCheck.errors });
+  }
+  const request = requestCheck.value;
+  if (!exactKeys(envelope, ["searchResultCount", "response"])
+      || Object.keys(envelope || {}).length !== 2
+      || !Number.isInteger(envelope.searchResultCount) || envelope.searchResultCount < 0
+      || envelope.searchResultCount > RADAR_WEBSEARCH_MAX_RESULTS) {
+    return Object.freeze({ status: "invalid_response", titleGroupResult: null, errors: Object.freeze(["adapter-envelope-invalid"]) });
+  }
+  const response = envelope.response;
+  if (!exactKeys(response, ["status", "checkedAt", "titleGroup", "candidates"])
+      || Object.keys(response || {}).length !== 4) {
+    return Object.freeze({ status: "invalid_response", titleGroupResult: null, errors: Object.freeze(["response-shape-invalid"]) });
+  }
+  const shapeErrors = [];
+  if (!RADAR_WEBSEARCH_STATUSES.includes(response.status)) shapeErrors.push("response-status-invalid");
+  if (!validInstant(response.checkedAt)) shapeErrors.push("response-checked-at-invalid");
+  validateTitleGroupEcho(response.titleGroup, request, shapeErrors);
+  if (!Array.isArray(response.candidates) || response.candidates.length > RADAR_WEBSEARCH_MAX_RESULTS) {
+    shapeErrors.push("response-title-group-candidates-invalid");
+  } else for (const candidate of response.candidates) validateTitleGroupCandidateShape(candidate, shapeErrors);
+  if (shapeErrors.some((error) => error.includes("shape-invalid") || error.endsWith("-invalid"))) {
+    return Object.freeze({ status: "invalid_response", titleGroupResult: null, errors: uniqueErrors(shapeErrors) });
+  }
+  const emptyResult = (status = response.status) => freezeDeep({
+    status,
+    checkedAt: response.checkedAt,
+    titleGroup: {
+      queryVersion: request.queryVersion,
+      queryKey: request.queryKey,
+      displayName: request.displayName,
+    },
+    candidates: [],
+  });
+  if (response.status !== "confirmed") {
+    const errors = [...shapeErrors];
+    if (response.candidates.length) errors.push("response-nonconfirmed-candidates-forbidden");
+    const status = errors.length ? "insufficient_evidence" : response.status;
+    return Object.freeze({ status, titleGroupResult: emptyResult(status), errors: uniqueErrors(errors) });
+  }
+  const errors = [...shapeErrors];
+  if (!response.candidates.length) errors.push("response-confirmed-candidates-required");
+  const evidenceCount = new Set(response.candidates.flatMap((candidate) => (
+    Array.isArray(candidate.evidence) ? candidate.evidence.map((entry) => entry.url) : []
+  ))).size;
+  if (evidenceCount > envelope.searchResultCount) errors.push("response-evidence-count-exceeds-results");
+  const registry = Array.isArray(sourceRegistryInput) ? sourceRegistryInput : [];
+  if (registry.some((source) => !validSourceRow(source))) errors.push("source-registry-invalid");
+  const seen = new Map();
+  const normalized = [];
+  for (const candidate of response.candidates) {
+    const catalogMatches = request.catalog.filter((entry) => entry.targetId === candidate.targetId);
+    const catalogWork = catalogMatches.length === 1 ? catalogMatches[0] : null;
+    if (!catalogWork || catalogWork.targetType !== candidate.targetType
+        || catalogWork.title !== candidate.title || catalogWork.year !== candidate.year) {
+      errors.push("response-title-group-work-mismatch");
+      continue;
+    }
+    if (candidate.targetType === "work" && ["serienstart", "staffelstart"].includes(candidate.eventType)) {
+      errors.push("response-title-group-work-type-conflict");
+    }
+    if (candidate.targetType === "series" && candidate.eventType === "kinostart_at") {
+      errors.push("response-title-group-work-type-conflict");
+    }
+    const key = [candidate.targetId, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
+    const previousDate = seen.get(key);
+    if (previousDate && previousDate !== candidate.eventDate) errors.push("response-title-group-date-conflict");
+    if (previousDate) continue;
+    seen.set(key, candidate.eventDate);
+    const evidence = selectEvidence({ evidence: candidate.evidence }, registry, response.checkedAt, errors)
+      .map((entry) => ({
+        sourceId: entry.sourceId,
+        sourceDomain: entry.sourceDomain,
+        url: entry.url,
+        retrievedAt: entry.retrievedAt,
+      }));
+    normalized.push({
+      targetId: catalogWork.targetId,
+      targetType: catalogWork.targetType,
+      title: catalogWork.title,
+      year: catalogWork.year,
+      eventType: candidate.eventType,
+      date: candidate.eventDate,
+      region: "AT",
+      platform: candidate.platform,
+      seasonNumber: candidate.seasonNumber,
+      evidence,
+    });
+  }
+  if (errors.length) {
+    return Object.freeze({
+      status: "insufficient_evidence",
+      titleGroupResult: emptyResult("insufficient_evidence"),
+      errors: uniqueErrors(errors),
+    });
+  }
+  normalized.sort((a, b) => compareText(a.date, b.date) || compareText(a.title, b.title));
+  return Object.freeze({
+    status: "confirmed",
+    titleGroupResult: freezeDeep({
+      status: "confirmed",
+      checkedAt: response.checkedAt,
+      titleGroup: {
+        queryVersion: request.queryVersion,
+        queryKey: request.queryKey,
+        displayName: request.displayName,
+      },
+      candidates: normalized,
+    }),
+    errors: Object.freeze([]),
+  });
+}
+
 function eventIdentity(event) {
   return [event.eventType, event.platform || "-", event.seasonNumber || "-"].join("|");
 }
@@ -502,6 +710,9 @@ function eventIdentity(event) {
 export function evaluateRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput = []) {
   if (requestInput?.kind === "person") {
     return evaluatePersonRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput);
+  }
+  if (requestInput?.kind === "title_group") {
+    return evaluateTitleGroupRadarWebsearchResponse(envelope, requestInput, sourceRegistryInput);
   }
   const requestCheck = validateRadarWebsearchRequest(requestInput);
   if (!requestCheck.ok) return Object.freeze({ status: "invalid_response", events: Object.freeze([]), errors: requestCheck.errors });

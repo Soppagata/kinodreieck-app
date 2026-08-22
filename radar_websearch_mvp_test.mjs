@@ -78,6 +78,20 @@ const personTarget = Object.freeze({
   windowEnd: "2026-08-24",
   catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
 });
+const titleGroupTarget = Object.freeze({
+  kind: "title_group",
+  targetId: "title-group:v1:star-wars",
+  queryVersion: "title-group-query-v1",
+  queryKey: "star wars",
+  displayName: "Star Wars",
+  region: "AT",
+  catalog: [
+    { targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999 },
+    { targetId: "watchmode:71002", targetType: "work", title: "Star Wars: Episode II", year: 2002 },
+    { targetId: "watchmode:71003", targetType: "work", title: "Star Wars: Episode III", year: 2005 },
+    { targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977 },
+  ],
+});
 
 function evidence(source, path = "start") {
   return {
@@ -156,6 +170,43 @@ function personEnvelope({
   };
 }
 
+function titleGroupEnvelope({
+  request = titleGroupTarget,
+  status = "confirmed",
+  candidateIndex = 3,
+  targetId: workTargetId = request.catalog[candidateIndex]?.targetId,
+  title = request.catalog[candidateIndex]?.title,
+  date = "2026-08-21",
+  proof = [evidence(editorialA, "title-group-a"), evidence(editorialB, "title-group-b")],
+  searchResultCount = proof.length,
+} = {}) {
+  const work = request.catalog[candidateIndex] || request.catalog[0];
+  return {
+    searchResultCount,
+    response: {
+      status,
+      checkedAt,
+      titleGroup: {
+        queryVersion: request.queryVersion,
+        queryKey: request.queryKey,
+        displayName: request.displayName,
+      },
+      candidates: status === "confirmed" ? [{
+        targetId: workTargetId,
+        targetType: work.targetType,
+        title,
+        year: work.year,
+        eventType: "kinostart_at",
+        eventDate: date,
+        region: "AT",
+        platform: "-",
+        seasonNumber: null,
+        evidence: proof,
+      }] : [],
+    },
+  };
+}
+
 function repository(sourceRows = sources) {
   return createRadarWebsearchMemoryRepository({ target, sources: sourceRows });
 }
@@ -178,6 +229,50 @@ await check("Personenrequest ist auf starke ID, zwei Rollen, sieben Tage und sec
   assert.equal(validateRadarWebsearchRequest({ ...personTarget, targetId: "person:Nicolas-Cage:actor" }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...personTarget, windowEnd: "2026-08-25" }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...personTarget, accountId: "max-account" }).ok, false);
+});
+
+await check("Titelgruppenrequest enthält nur versionierte Suchgruppe und starke konkrete Werke", () => {
+  const accepted = validateRadarWebsearchRequest(titleGroupTarget);
+  assert.equal(accepted.ok, true);
+  assert.equal(validateRadarWebsearchRequest({ ...titleGroupTarget, queryKey: "star" }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({ ...titleGroupTarget, targetId: "title-group:v1:star-warship" }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({ ...titleGroupTarget, profile: {} }).ok, false);
+  assert.equal(validateRadarWebsearchRequest({
+    ...titleGroupTarget,
+    catalog: [...titleGroupTarget.catalog, titleGroupTarget.catalog[0]],
+  }).ok, false);
+});
+
+await check("Titelgruppenprüfung expandiert einmal auf konkrete Member und validiert Evidenz pro Werk", async () => {
+  const adapter = createRadarWebsearchMockAdapter(titleGroupEnvelope());
+  const repo = createRadarWebsearchMemoryRepository({ target: titleGroupTarget, sources });
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: titleGroupTarget.targetId, adapter, repository: repo,
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 1);
+  assert.equal(adapter.calls.length, 1);
+  assert.deepEqual(adapter.calls[0].catalog, titleGroupTarget.catalog);
+  assert.equal(repo.events.size, 1);
+  assert.equal(result.feed.events[0].targetId, "watchmode:71004");
+  assert.equal(result.feed.subscriptions[0].targetType, "franchise");
+  assert.equal(result.feed.subscriptions[0].titleGroup.members.length, 4);
+});
+
+await check("Titelgruppenvalidator blockiert unbekannte IDs und Titelwidersprüche vor jedem Write", async () => {
+  for (const response of [
+    titleGroupEnvelope({ targetId: "watchmode:79999" }),
+    titleGroupEnvelope({ title: "Star Warship" }),
+  ]) {
+    const repo = createRadarWebsearchMemoryRepository({ target: titleGroupTarget, sources });
+    const result = await runRadarWebsearchCheck({
+      accountId: "max-account", targetId: titleGroupTarget.targetId,
+      adapter: createRadarWebsearchMockAdapter(response), repository: repo,
+    });
+    assert.equal(result.status, "insufficient_evidence");
+    assert.equal(result.writes, 0);
+    assert.equal(repo.events.size, 0);
+  }
 });
 
 await check("Schauspiel-Person läuft einmal durch denselben Runner und erzeugt nur einen belegten Kandidaten", async () => {
@@ -479,6 +574,8 @@ await check("Einzeldatei sperrt die Serverprüfung vor Token und Netzwerk", asyn
 
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
 const personCandidateMigration = fs.readFileSync("./supabase/migrations/20260819220000_radar_person_server_candidate.sql", "utf8");
+const personCatalogRepairMigration = fs.readFileSync("./supabase/migrations/20260821120000_radar_person_catalog_repair.sql", "utf8");
+const titleGroupMigration = fs.readFileSync("./supabase/migrations/20260821130000_radar_title_group.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");
 const personSliceDoc = fs.readFileSync("./docs/zukunft/PERSONEN_RADAR_LOCAL_SLICE_2026-08-19.md", "utf8");
@@ -508,12 +605,58 @@ await check("Personen-Serverkandidat bleibt additiv; Remote-Aktivierung und Prov
   assert.doesNotMatch(personCandidateMigration.replace(/--[^\n]*/g, ""), /\bcron\.|pg_cron|scheduler|\branking\b/i);
 });
 
+await check("Personenkatalog-Forwardrepair schliesst exakt 4/5 auf 5/5 ohne fremde Surface", () => {
+  const executable = personCatalogRepairMigration.replace(/--[^\n]*/g, "");
+  const pairs = [
+    ["Q42869", "actor"],
+    ["Q47284", "director"],
+    ["Q271967", "actor"],
+    ["Q271967", "director"],
+    ["Q7374", "director"],
+  ];
+  for (const [qid, role] of pairs) {
+    assert.match(personCatalogRepairMigration, new RegExp(`person:wikidata:${qid}:${role}`));
+  }
+  assert.match(executable, /v_present_count\s+not\s+in\s*\(4,\s*5\)/i);
+  assert.match(executable, /radar_person_catalog_work_seed_drift/);
+  assert.match(executable, /radar_person_catalog_person_seed_drift/);
+  assert.match(executable, /radar_person_catalog_repair_postcondition/);
+  assert.equal((executable.match(/insert\s+into\s+public\.kd_radar_targets/gi) || []).length, 1);
+  assert.doesNotMatch(executable,
+    /(?:insert\s+into|update|delete\s+from|truncate)\s+public\.(?!kd_radar_targets\b)/i);
+  assert.doesNotMatch(executable,
+    /kd_radar_subscriptions|kd_radar_events|kd_radar_capabilities|kd_radar_settings|kd_account_access|schema_migrations/i);
+  assert.doesNotMatch(executable, /\bilike\b|similarity\s*\(|levenshtein\s*\(|soundex\s*\(/i);
+  assert.doesNotMatch(executable, /radar_aktiv\s*=|radar_provider_aktiv\s*=/i);
+  assert.match(personSliceDoc, /20260821120000_radar_person_catalog_repair\.sql/);
+  assert.match(personSliceDoc, /4\/5[\s\S]*5\/5/);
+  assert.match(personSliceDoc, /radar_aktiv[\s\S]*radar_provider_aktiv[\s\S]*separat/);
+});
+
+await check("Titelgruppenmigration bleibt additiv, zählt die Gruppe einmal und expandiert Evidenz nur auf konkrete Werke", () => {
+  const executable = titleGroupMigration.replace(/--[^\n]*/g, "");
+  assert.match(titleGroupMigration, /^begin;/m);
+  assert.match(titleGroupMigration, /^commit;/m);
+  assert.equal((titleGroupMigration.match(/^commit;/gm) || []).length, 1);
+  assert.match(titleGroupMigration, /kd_radar_pilot_set_title_group/);
+  assert.match(titleGroupMigration, /kd_radar_websearch_upsert_title_group_event/);
+  assert.match(titleGroupMigration, /kd_radar_pilot_feed_person_internal/);
+  assert.match(titleGroupMigration, /t\.target_type = 'franchise'[\s\S]*kd_radar_title_group_metadata_valid/);
+  assert.match(titleGroupMigration, /v_active_others\s*>=\s*10/);
+  assert.match(titleGroupMigration, /jsonb_array_elements[\s\S]*titleGroup,members/);
+  assert.match(titleGroupMigration, /kd_radar_websearch_upsert_event\([\s\S]*v_inner_operation_id/);
+  assert.match(titleGroupMigration, /v_direct_inserted[\s\S]*delete from public\.kd_radar_subscriptions/);
+  assert.doesNotMatch(executable, /create\s+table|\bcron\.|pg_cron|scheduler|\bilike\b|similarity\s*\(|levenshtein\s*\(/i);
+  assert.doesNotMatch(executable, /radar_aktiv\s*=\s*true|radar_provider_aktiv\s*=\s*true/i);
+});
+
 await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {
   assert.match(functionIndex, /auth\.getClaims\(token\)/);
   assert.match(functionIndex, /claims\?\.role\s*===\s*"authenticated"/);
   assert.match(functionIndex, /createAnthropicRadarWebsearchAdapter/);
   assert.match(functionIndex, /ANTHROPIC_API_KEY/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
+  assert.match(functionIndex, /kd_radar_websearch_upsert_title_group_event/);
   assert.equal((runnerSource.match(/adapter\.search\(request\)/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setTimeout|while\s*\(/i);
 });

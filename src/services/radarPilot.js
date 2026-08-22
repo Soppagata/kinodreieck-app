@@ -21,6 +21,7 @@ import { K, captureStorageContext } from "./storage.js";
 
 export const RADAR_PILOT_RPCS = Object.freeze([
   "kd_radar_pilot_set_subscription",
+  "kd_radar_pilot_set_title_group",
   "kd_radar_pilot_set_receipt",
   "kd_radar_pilot_import_event",
   "kd_radar_pilot_feed",
@@ -310,15 +311,20 @@ export function createRadarPilotService({
       if (initialFeed.kind === "pending") return Object.freeze({ status: "pending", state: initialFeed.state, reason: initialFeed.reason });
       current = initialFeed.state;
 
+      let subscriptionWriteConfirmed = false;
       for (const operationId of runSubscriptionIds) {
         const operation = current.outbox.find((entry) => entry.operationId === operationId && entry.status === "pending");
         if (!operation) continue;
         const status = operation.action === "remove" ? "removed" : operation.action === "pause" ? "paused" : "active";
-        const reply = await callRpc("kd_radar_pilot_set_subscription", {
+        const titleGroup = operation.targetType === "franchise" && operation.titleGroup;
+        const reply = await callRpc(titleGroup
+          ? "kd_radar_pilot_set_title_group"
+          : "kd_radar_pilot_set_subscription", {
           p_target_key: operation.targetId,
           p_scope: operation.scope,
           p_status: status,
           p_operation_id: operation.operationId,
+          ...(titleGroup ? { p_title_group: titleGroup } : {}),
           ...(operation.targetType === "person" ? {
             p_person_external_id: operation.personExternalId,
             p_person_role: operation.personRole,
@@ -338,12 +344,28 @@ export function createRadarPilotService({
         if (reply.kind !== "ok" || !validateRadarPilotSubscriptionAck(reply.payload).ok) {
           return Object.freeze({ status: "pending", state: current, reason: reply.reason || "pilot-subscription-response-invalid" });
         }
+        subscriptionWriteConfirmed = true;
         const changed = acknowledgeAccountRadarPilotSubscription(current, operation.operationId, reply.payload);
         const persisted = changed.ok ? await persistState(commit, changed.state, fence, token, run) : null;
         if (!persisted) {
           return Object.freeze({ status: "pending", state: current, reason: changed.reason || "pilot-persist-unconfirmed" });
         }
         current = persisted;
+      }
+
+      if (subscriptionWriteConfirmed) {
+        const afterSubscriptionFeed = await reconcileFeed([]);
+        if (afterSubscriptionFeed.kind === "pilot-unavailable") {
+          return Object.freeze(await unavailable(current, commit, fence, token, run));
+        }
+        if (afterSubscriptionFeed.kind === "pending") {
+          return Object.freeze({
+            status: "pending",
+            state: afterSubscriptionFeed.state,
+            reason: afterSubscriptionFeed.reason || "pilot-subscription-feed-pending",
+          });
+        }
+        current = afterSubscriptionFeed.state;
       }
 
       for (const eventVersionId of runReceiptIds) {

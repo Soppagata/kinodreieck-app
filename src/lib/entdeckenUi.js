@@ -24,6 +24,11 @@ import {
   matchWebDiscoveryFeed,
 } from "./webDiscoveryFeed.js";
 
+export {
+  createTitleGroupRadarTarget,
+  resolveTitleGroupRadarTarget,
+} from "./titleGroupRadar.js";
+
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
 const PROFIL_ATTRIBUT_ARTEN = new Set([
   "genre", "tag", "thema", "erzaehlweise", "inszenierung", "tempo", "ton",

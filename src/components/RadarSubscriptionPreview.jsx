@@ -20,13 +20,14 @@ export function RadarSubscriptionPreview({
   const [fehler, setFehler] = useState("");
   const targets = (Array.isArray(target) ? target : [target]).filter((entry) => entry?.targetId);
   const multi = targets.length > 1;
+  const titleGroup = !multi ? targets[0]?.titleGroup : null;
   const activeSubscriptions = (radarState?.subscriptions || []).filter((entry) => entry.status === "active");
   const activeCount = activeSubscriptions.length;
   const activeIds = new Set(activeSubscriptions.map((entry) => entry.targetId));
   const serverSubscriptionActive = !multi && accountMode && activeSubscriptions.some((entry) => (
     entry.targetId === targets[0]?.targetId && entry.authority === "server"
   ));
-  const shareAllowed = !multi && accountActive && serverSubscriptionActive;
+  const shareAllowed = !multi && !titleGroup && accountActive && serverSubscriptionActive;
   const alreadyActiveCount = targets.filter((entry) => activeIds.has(entry.targetId)).length;
   const newTargetCount = targets.length - alreadyActiveCount;
   const alreadyActive = targets.length > 0 && alreadyActiveCount === targets.length;
@@ -89,7 +90,13 @@ export function RadarSubscriptionPreview({
           <button type="button" className="kd-entdecken-schliessen" aria-label="Radar-Vorschau schließen" onClick={onClose}>×</button>
         </header>
         <div className="kd-entdecken-preview-ziel">
-          {multi ? <>
+          {titleGroup ? <>
+            <strong>Titelgruppe „{titleGroup.displayName}“</strong>
+            <span>{titleGroup.members.length} aktuelle eindeutige Werke · ein Radarziel</span>
+            <ul>{titleGroup.members.map((entry) => <li key={entry.targetId}><strong>{entry.title}</strong>
+              <span>{[entry.targetType === "series" ? "Serie" : "Film oder Werk", entry.year, "Österreich"].join(" · ")}</span></li>)}</ul>
+            <small>Die Gruppe folgt ausschließlich dem gespeicherten Suchbegriff an Wortgrenzen. Neue eindeutige Katalogtreffer werden bei der nächsten manuellen Prüfung aufgelöst.</small>
+          </> : multi ? <>
             <strong>{targets.length} ausgewählte Titel</strong>
             <ul>{targets.map((entry) => <li key={entry.targetId}><strong>{entry.title}</strong>
               <span>{[entry.targetType === "series" ? "Serie" : "Film oder Werk", entry.year,
@@ -104,14 +111,15 @@ export function RadarSubscriptionPreview({
         <dl className="kd-entdecken-fakten">
           <div><dt>Status</dt><dd>{alreadyActive
             ? multi ? "Alle ausgewählten Titel sind bereits aktiv" : "Bereits aktiv; Bestätigung aktualisiert den Eintrag"
-            : multi ? `${newTargetCount} Titel werden erst nach deiner Bestätigung aktiv` : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
+            : titleGroup ? "Die Titelgruppe wird erst nach deiner Bestätigung als ein Ziel aktiv"
+              : multi ? `${newTargetCount} Titel werden erst nach deiner Bestätigung aktiv` : "Wird erst nach deiner Bestätigung aktiv"}</dd></div>
           <div><dt>Kapazität</dt><dd>{quotaText}</dd></div>
           <div><dt>Prüfung</dt><dd>{accountMode
             ? "Das Hinzufügen startet keine sofortige Suche. Du prüfst das Ziel später bewusst mit „Jetzt prüfen“."
             : "Im Gastmodus läuft keine serverseitige Prüfung."}</dd></div>
           <div><dt>Privatsphäre</dt><dd>Standardmäßig bleibt das Ziel privat. Geteilt werden nie Bewertungen oder Profilsignale.</dd></div>
         </dl>
-        {!multi ? <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
+        {!multi && !titleGroup ? <label className={`kd-entdecken-share${shareAllowed ? "" : " gesperrt"}`}>
           <input type="checkbox" checked={shareEnabled} disabled={!shareAllowed}
             onChange={(event) => setShareEnabled(event.target.checked)} />
           <span><strong>Ohne meinen Namen für „Von anderen entdeckt“ teilen</strong>
@@ -126,7 +134,8 @@ export function RadarSubscriptionPreview({
           <button type="button" className="kd-entdecken-sekundaer" disabled={speichert} onClick={onClose}>Abbrechen</button>
           <button type="button" className="kd-entdecken-primaer" disabled={speichert || (!accountMode && activeCount + newTargetCount > RADAR_NORMAL_ACTIVE_LIMIT)}
             onClick={() => void bestaetigen()}>{speichert ? "Speichert …" : alreadyActive ? "Aktiv lassen"
-              : multi ? `${targets.length} Titel ins Radar bestätigen` : "Ins Radar bestätigen"}</button>
+              : titleGroup ? "Titelgruppe ins Radar bestätigen"
+                : multi ? `${targets.length} Titel ins Radar bestätigen` : "Ins Radar bestätigen"}</button>
         </div>
       </section>
     </div>,

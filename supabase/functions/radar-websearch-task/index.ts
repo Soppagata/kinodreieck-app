@@ -89,7 +89,11 @@ function safePhaseCode(value: unknown): string {
     : "runtime-setup";
 }
 
-function rpcEvent(event: Record<string, unknown>, personContext: Record<string, unknown> | null = null) {
+function rpcEvent(
+  event: Record<string, unknown>,
+  personContext: Record<string, unknown> | null = null,
+  titleGroupContext: Record<string, unknown> | null = null,
+) {
   return {
     targetKey: event.targetKey,
     eventType: event.eventType,
@@ -113,6 +117,15 @@ function rpcEvent(event: Record<string, unknown>, personContext: Record<string, 
       checkedAt: personContext.checkedAt,
       windowStart: personContext.windowStart,
       windowEnd: personContext.windowEnd,
+    } : titleGroupContext ? {
+      titleGroupTargetKey: titleGroupContext.targetId,
+      queryVersion: titleGroupContext.queryVersion,
+      queryKey: titleGroupContext.queryKey,
+      displayName: titleGroupContext.displayName,
+      workTargetType: event.targetType,
+      workTitle: event.title,
+      workYear: event.year,
+      checkedAt: titleGroupContext.checkedAt,
     } : {}),
   };
 }
@@ -181,16 +194,21 @@ export function createRadarWebsearchHandler({
       async resolveSources() {
         return await loadSources();
       },
-      async upsertConfirmedEvent({ accountId: actor, operationId, event, personContext = null }: {
+      async upsertConfirmedEvent({
+        accountId: actor, operationId, event, personContext = null, titleGroupContext = null,
+      }: {
         accountId: string; operationId: string; event: Record<string, unknown>;
         personContext?: Record<string, unknown> | null;
+        titleGroupContext?: Record<string, unknown> | null;
       }) {
         const { data, error } = await admin.rpc(
-          personContext ? "kd_radar_websearch_upsert_person_event" : "kd_radar_websearch_upsert_event",
+          personContext
+            ? "kd_radar_websearch_upsert_person_event"
+            : titleGroupContext ? "kd_radar_websearch_upsert_title_group_event" : "kd_radar_websearch_upsert_event",
           {
           p_account_id: actor,
           p_operation_id: operationId,
-          p_payload: rpcEvent(event, personContext),
+          p_payload: rpcEvent(event, personContext, titleGroupContext),
           },
         );
         if (error) throw error;

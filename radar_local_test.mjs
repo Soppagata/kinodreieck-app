@@ -11,6 +11,7 @@ globalThis.localStorage = {
 
 const R = await import("./src/lib/localEventRadar.js");
 const C = await import("./src/lib/radarContracts.js");
+const E = await import("./src/lib/entdeckenUi.js");
 
 let checks = 0;
 const check = async (name, fn) => {
@@ -93,6 +94,38 @@ await check("Gast-Abo ist lokal wirksam, erzeugt aber niemals Providerarbeit", (
   assert.equal(result.state.subscriptions[0].status, "active");
   assert.equal(result.state.subscriptions[0].title, "Lokales Testwerk 01");
   assert.equal(result.createsProviderJob, false);
+});
+
+const titleGroupIndex = E.createRadarCatalogIndex({ streamingDiscover: { titel: [
+  { watchmode_id: 71001, titel: "Star Wars: Episode I", jahr: 1999, typ: "movie" },
+  { watchmode_id: 71004, titel: "Star Wars: Episode IV", jahr: 1977, typ: "movie" },
+] } });
+const titleGroup = E.createTitleGroupRadarTarget(titleGroupIndex, "Star Wars").target;
+
+await check("Eine Titelgruppe bleibt als genau ein lokales Radarziel mit konkreten Mitgliedern erhalten", () => {
+  const saved = R.upsertGuestRadarSubscription(R.createEmptyLocalRadar(), {
+    target: titleGroup, now: instant,
+  });
+  assert.equal(saved.ok, true);
+  assert.equal(saved.state.subscriptions.length, 1);
+  assert.equal(saved.state.subscriptions[0].targetType, "franchise");
+  assert.equal(saved.state.subscriptions[0].titleGroup.queryKey, "star wars");
+  assert.deepEqual(saved.state.subscriptions[0].titleGroup.members.map((entry) => entry.targetId), [
+    "watchmode:71001", "watchmode:71004",
+  ]);
+  const reloaded = R.decodeLocalRadar(JSON.stringify(saved.state), { authority: "guest" });
+  assert.equal(reloaded.ok, true);
+  assert.deepEqual(reloaded.state.subscriptions[0].titleGroup, saved.state.subscriptions[0].titleGroup);
+});
+
+await check("Eine Account-Titelgruppe bleibt ein Outbox-Ziel und verliert ihre Auflösung nicht", () => {
+  const queued = R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: "fixture:operation:title-group", action: "upsert", target: titleGroup, now: instant,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal(queued.state.outbox.length, 1);
+  assert.equal(queued.state.outbox[0].targetId, "title-group:v1:star-wars");
+  assert.deepEqual(queued.state.outbox[0].titleGroup.members, titleGroup.titleGroup.members);
 });
 
 await check("Personen-Abo hält Schauspiel und Regie getrennt und erzeugt kein Werk-Abo", () => {

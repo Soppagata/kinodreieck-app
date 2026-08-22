@@ -17,7 +17,11 @@ import {
   upsertGuestRadarSubscription,
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
-import { localRadarTargetLabel } from "../lib/entdeckenUi.js";
+import {
+  createRadarCatalogIndex,
+  localRadarTargetLabel,
+  resolveTitleGroupRadarTarget,
+} from "../lib/entdeckenUi.js";
 import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import {
   createPersonRadarTargetId,
@@ -164,10 +168,11 @@ export function useEntdeckenRadarController({
     targetId: entry.targetId,
     targetType: entry.targetType,
     targetStatus: "active",
-    title: localRadarTargetLabel(entry, {
+    title: entry?.titleGroup?.displayName || localRadarTargetLabel(entry, {
       master: master || [], streamingKnown, streamingDiscover,
     }),
     canonical: true,
+    ...(entry?.titleGroup ? { titleGroup: entry.titleGroup } : {}),
   }), [master, streamingKnown, streamingDiscover]);
 
   const aendereRadar = useCallback(async (targetOrEntry, action = "upsert") => {
@@ -408,8 +413,8 @@ export function useEntdeckenRadarController({
   }, [syncRadarPilot]);
 
   const fuehreRadarWebsearchCheck = useCallback(async (targetId) => {
-    const state = radarStateRef.current;
-    const activeMatches = (state?.subscriptions || []).filter((entry) => (
+    let state = radarStateRef.current;
+    let activeMatches = (state?.subscriptions || []).filter((entry) => (
       entry.targetId === targetId && entry.status === "active"
     ));
     const hasPendingTargetChange = (state?.outbox || []).some((entry) => (
@@ -421,6 +426,46 @@ export function useEntdeckenRadarController({
         || hasPendingTargetChange) {
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
+
+    const activeTarget = activeMatches[0];
+    if (activeTarget?.targetType === "franchise" && activeTarget?.titleGroup) {
+      const currentCatalog = createRadarCatalogIndex({
+        master: master || [], streamingKnown, streamingDiscover,
+      });
+      const resolved = resolveTitleGroupRadarTarget(radarTargetAusEintrag(activeTarget), currentCatalog);
+      if (resolved.status !== "ready" || resolved.target?.targetId !== targetId) {
+        return Object.freeze({ status: "forbidden", writes: 0, reason: "title-group-unavailable" });
+      }
+      if (JSON.stringify(resolved.target.titleGroup) !== JSON.stringify(activeTarget.titleGroup)) {
+        const operationId = neueLokaleOperationId();
+        const saved = await schreibeRadarState((previous) => {
+          if (previous.authority !== "account-cache"
+              || (previous.outbox || []).some((entry) => (
+                entry.targetId === targetId && entry.status === "pending"
+              ))) return null;
+          const queued = queueAccountRadarChange(previous, {
+            operationId, action: "upsert", target: resolved.target,
+          });
+          return queued.ok ? queued.state : null;
+        });
+        if (saved === false) {
+          return Object.freeze({ status: "storage_error", writes: 0, reason: "title-group-refresh-not-queued" });
+        }
+        const synced = await syncRadarPilot(saved);
+        state = synced?.state;
+        activeMatches = (state?.subscriptions || []).filter((entry) => (
+          entry.targetId === targetId && entry.status === "active"
+        ));
+        const refreshed = activeMatches.length === 1
+          && JSON.stringify(activeMatches[0].titleGroup) === JSON.stringify(resolved.target.titleGroup);
+        const stillPending = (state?.outbox || []).some((entry) => (
+          entry.targetId === targetId && entry.status === "pending"
+        ));
+        if (synced?.status !== "ready" || !refreshed || stillPending) {
+          return Object.freeze({ status: "pending", writes: 0, reason: "title-group-refresh-pending" });
+        }
+      }
+    }
     const result = await radarWebsearchService.checkNow(targetId);
     if (["confirmed", "insufficient_evidence", "no_change"].includes(result?.status)) {
       await syncRadarPilot();
@@ -431,6 +476,11 @@ export function useEntdeckenRadarController({
     radarPilotClientEnabled,
     radarStateRef,
     remoteKontoAktiv,
+    master,
+    streamingKnown,
+    streamingDiscover,
+    radarTargetAusEintrag,
+    schreibeRadarState,
     syncRadarPilot,
   ]);
 

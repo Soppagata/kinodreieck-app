@@ -36,8 +36,23 @@ const MIGRATIONS = Object.freeze([
   }),
   Object.freeze({
     path: "supabase/migrations/20260819220000_radar_person_server_candidate.sql",
+    sha256: "d23f80f7073deb1197fdcb0b5a73f4abd1ad002e0b3bded6ee08c691d937f658",
   }),
 ]);
+const DAILY_HISTORY = Object.freeze({
+  path: "supabase/migrations/20260820200000_entdecken_daily_feed.sql",
+  sha256: "bc951974a199be606285c6358c05e64e68ba88193c83ffc5888b022217e8e978",
+});
+const PERSON_CATALOG_REPAIR = Object.freeze({
+  path: "supabase/migrations/20260821120000_radar_person_catalog_repair.sql",
+  version: "20260821120000",
+  name: "radar_person_catalog_repair",
+});
+const TITLE_GROUP_MIGRATION = Object.freeze({
+  path: "supabase/migrations/20260821130000_radar_title_group.sql",
+  version: "20260821130000",
+  name: "radar_title_group",
+});
 const ACCOUNT_ID = "11111111-1111-4111-8111-111111111111";
 const root = mkdtempSync("/private/tmp/kinodreieck-radar-person-pg17-");
 const cluster = Object.freeze({
@@ -110,6 +125,15 @@ do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
   if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
 end $$;
+create schema supabase_migrations;
+create table supabase_migrations.schema_migrations (
+  version text not null,
+  name text not null,
+  statements text[]
+);
+insert into supabase_migrations.schema_migrations (version,name,statements) values
+  ('20260819220000','radar_person_server_candidate',array[]::text[]),
+  ('20260820200000','entdecken_daily_feed',array[]::text[]);
 create schema auth;
 create table auth.users (id uuid primary key);
 create function auth.uid() returns uuid language sql stable as $$
@@ -166,6 +190,9 @@ const migrationBytes = MIGRATIONS.map((entry) => ({
   ...entry,
   source: readFileSync(entry.path, "utf8"),
 }));
+const dailyHistorySource = readFileSync(DAILY_HISTORY.path, "utf8");
+const repairSource = readFileSync(PERSON_CATALOG_REPAIR.path, "utf8");
+const titleGroupSource = readFileSync(TITLE_GROUP_MIGRATION.path, "utf8");
 
 try {
   chmodSync(root, 0o700);
@@ -192,6 +219,8 @@ try {
     }
     psql(entry.source);
   }
+  check(`${DAILY_HISTORY.path.split("/").at(-1)} bleibt historisch unveraendert`,
+    createHash("sha256").update(dailyHistorySource).digest("hex") === DAILY_HISTORY.sha256);
   check("additive Kandidatenmigration laeuft auf der echten lokalen Migrationskette", true);
   const candidateSurface = jsonResult(buildRadarPersonCandidateSurfaceSql());
   check("Kandidaten-Surface prueft RLS enabled und FORCE separat auf echtem PG17",
@@ -199,6 +228,81 @@ try {
 
   psql(`
     insert into auth.users (id) values ('${ACCOUNT_ID}');
+    insert into public.kd_radar_targets (
+      target_key,target_type,target_status,canonical_title,external_ids
+    ) values (
+      'person:wikidata:Q999999:actor','person','active','Unberuehrte Person',
+      '{"personExternalId":"wikidata:Q999999","personRole":"actor","catalog":[{"targetId":"catalog:psycho-1960","targetType":"work","title":"Psycho","year":1960}]}'::jsonb
+    );
+    insert into public.kd_radar_subscriptions (
+      account_id,target_id,region,scope,subscription_status,server_revision,
+      last_operation_id,person_external_id,person_role
+    )
+    select '${ACCOUNT_ID}',target_id,'AT','all','active',1,
+      '10000000-0000-4000-8000-000000000099','wikidata:Q999999','actor'
+    from public.kd_radar_targets
+    where target_key='person:wikidata:Q999999:actor';
+    delete from public.kd_radar_targets
+    where target_key='person:wikidata:Q7374:director';
+  `);
+  const curatedCountSql = `select count(*) from public.kd_radar_targets
+    where target_type='person' and target_status='active' and target_key in (
+      'person:wikidata:Q42869:actor','person:wikidata:Q47284:director',
+      'person:wikidata:Q271967:actor','person:wikidata:Q271967:director',
+      'person:wikidata:Q7374:director'
+    );`;
+  check("synthetischer Remote-Drift startet mit exakt 4/5 kuratierten Personenzielen",
+    psql(curatedCountSql).stdout === "4");
+  const foreignBefore = jsonResult(`select jsonb_build_object(
+    'target',to_jsonb(t) - 'created_at' - 'updated_at',
+    'subscription',to_jsonb(s) - 'created_at' - 'updated_at'
+  ) from public.kd_radar_targets t
+  join public.kd_radar_subscriptions s on s.target_id=t.target_id
+  where t.target_key='person:wikidata:Q999999:actor';`);
+
+  psql(repairSource);
+  psql(`insert into supabase_migrations.schema_migrations (version,name,statements)
+    values ('${PERSON_CATALOG_REPAIR.version}','${PERSON_CATALOG_REPAIR.name}',array[]::text[]);`);
+  check("Forwardrepair schliesst die belegte 4/5-Baseline exakt auf 5/5",
+    psql(curatedCountSql).stdout === "5");
+  const foreignAfterFirst = jsonResult(`select jsonb_build_object(
+    'target',to_jsonb(t) - 'created_at' - 'updated_at',
+    'subscription',to_jsonb(s) - 'created_at' - 'updated_at'
+  ) from public.kd_radar_targets t
+  join public.kd_radar_subscriptions s on s.target_id=t.target_id
+  where t.target_key='person:wikidata:Q999999:actor';`);
+  check("Forwardrepair veraendert weder fremdes Personenziel noch dessen Subscription",
+    JSON.stringify(foreignAfterFirst) === JSON.stringify(foreignBefore));
+
+  psql(repairSource);
+  const forwardCounts = jsonResult(`select jsonb_build_object(
+    'curated',(${curatedCountSql.replace(/;$/, "")}),
+    'foreignTargets',(select count(*) from public.kd_radar_targets
+      where target_key='person:wikidata:Q999999:actor'),
+    'foreignSubscriptions',(select count(*) from public.kd_radar_subscriptions s
+      join public.kd_radar_targets t on t.target_id=s.target_id
+      where t.target_key='person:wikidata:Q999999:actor'),
+    'personHistory',(select count(*) from supabase_migrations.schema_migrations
+      where version='20260819220000'),
+    'dailyHistory',(select count(*) from supabase_migrations.schema_migrations
+      where version='20260820200000'),
+    'repairLedger',(select count(*) from supabase_migrations.schema_migrations
+      where version='${PERSON_CATALOG_REPAIR.version}')
+  );`);
+  check("zweiter SQL-Lauf ist idempotent und historische Ledger bleiben genau einmal",
+    forwardCounts.curated === 5
+      && forwardCounts.foreignTargets === 1
+      && forwardCounts.foreignSubscriptions === 1
+      && forwardCounts.personHistory === 1
+      && forwardCounts.dailyHistory === 1
+      && forwardCounts.repairLedger === 1);
+
+  psql(titleGroupSource);
+  psql(`insert into supabase_migrations.schema_migrations (version,name,statements)
+    values ('${TITLE_GROUP_MIGRATION.version}','${TITLE_GROUP_MIGRATION.name}',array[]::text[]);`);
+  check("additive Titelgruppenmigration schliesst Feed, Start und Schreibvertrag auf PG17", true);
+
+  psql(`
     insert into public.kd_account_access (account_id,role,active,personal_ai)
       values ('${ACCOUNT_ID}','owner',true,true);
     insert into public.kd_radar_capabilities
@@ -329,12 +433,155 @@ try {
       && workContext.canonicalTitle === "Barbie"
       && workContext.kind === undefined);
 
+  const starWarsMembers = [
+    { targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999 },
+    { targetId: "watchmode:71002", targetType: "work", title: "Star Wars: Episode II", year: 2002 },
+    { targetId: "watchmode:71003", targetType: "work", title: "Star Wars: Episode III", year: 2005 },
+    { targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977 },
+  ];
+  const starWarsGroup = {
+    format: "kd-radar-title-group-v1",
+    queryVersion: "title-group-query-v1",
+    queryKey: "star wars",
+    displayName: "Star Wars",
+    members: starWarsMembers,
+  };
+  const starWarsGroupSql = `$group$${JSON.stringify(starWarsGroup)}$group$::jsonb`;
+  const groupSubscription = jsonResult(`select public.kd_radar_pilot_set_title_group(
+    'title-group:v1:star-wars','all','active',
+    '60000000-0000-4000-8000-000000000001'::uuid,${starWarsGroupSql}
+  );`, { account: true });
+  const groupContext = jsonResult(`select public.kd_radar_websearch_context(
+    '${ACCOUNT_ID}'::uuid,'title-group:v1:star-wars'
+  );`);
+  check("Titelgruppe wird als genau ein aktives Ziel mit vier starken Werken persistiert",
+    groupSubscription.status === "active"
+      && groupContext.kind === "title_group"
+      && groupContext.targetId === "title-group:v1:star-wars"
+      && groupContext.catalog.length === 4
+      && psql(`select count(*) from public.kd_radar_subscriptions s
+        join public.kd_radar_targets t on t.target_id=s.target_id
+        where s.account_id='${ACCOUNT_ID}' and t.target_key='title-group:v1:star-wars';`).stdout === "1");
+
+  const groupReservation = jsonResult(`select public.kd_radar_websearch_auftrag_starten(
+    '${ACCOUNT_ID}'::uuid,'title-group:v1:star-wars',
+    '60000000-0000-4000-8000-000000000002'::uuid,2.25,1
+  );`);
+  check("Titelgruppe darf den bestehenden kostenbegrenzten Startvertrag nutzen",
+    groupReservation.ok === true && groupReservation.reservationUsdCent === 2.25);
+
+  const groupCheckedAt = `${context.windowStart}T12:00:00.000Z`;
+  const groupPayload = {
+    targetKey: "watchmode:71004",
+    eventType: "kinostart_at",
+    date: context.windowStart,
+    region: "AT",
+    platform: "-",
+    seasonNumber: null,
+    evidence: [{
+      sourceId: "studio-official",
+      url: "https://studio.example/star-wars-episode-iv-at",
+      retrievedAt: groupCheckedAt,
+    }],
+    titleGroupTargetKey: "title-group:v1:star-wars",
+    queryVersion: "title-group-query-v1",
+    queryKey: "star wars",
+    displayName: "Star Wars",
+    workTargetType: "work",
+    workTitle: "Star Wars: Episode IV",
+    workYear: 1977,
+    checkedAt: groupCheckedAt,
+  };
+  const groupPayloadSql = `$payload$${JSON.stringify(groupPayload)}$payload$::jsonb`;
+  const groupEvent = jsonResult(`select public.kd_radar_websearch_upsert_title_group_event(
+    '${ACCOUNT_ID}'::uuid,'60000000-0000-4000-8000-000000000003'::uuid,${groupPayloadSql}
+  );`);
+  const groupEventReplay = jsonResult(`select public.kd_radar_websearch_upsert_title_group_event(
+    '${ACCOUNT_ID}'::uuid,'60000000-0000-4000-8000-000000000003'::uuid,${groupPayloadSql}
+  );`);
+  const groupFeed = jsonResult("select public.kd_radar_pilot_feed(array[]::uuid[]);", { account: true });
+  check("Gruppenfund schreibt Evidenz pro konkretem Werk und erscheint nach Feed-Reload",
+    groupEvent.status === "confirmed"
+      && groupEventReplay.eventVersionId === groupEvent.eventVersionId
+      && groupFeed.subscriptions.find((entry) => entry.targetId === "title-group:v1:star-wars")?.titleGroup.members.length === 4
+      && groupFeed.events.some((entry) => (
+        entry.targetId === "watchmode:71004" && entry.eventVersionId === groupEvent.eventVersionId
+      )));
+  check("temporäre Werkautorisierung hinterlässt kein verborgenes Einzelabo",
+    psql(`select count(*) from public.kd_radar_subscriptions s
+      join public.kd_radar_targets t on t.target_id=s.target_id
+      where s.account_id='${ACCOUNT_ID}' and t.target_key='watchmode:71004';`).stdout === "0");
+
+  const individualEpisode = jsonResult(`select public.kd_radar_pilot_set_subscription(
+    'watchmode:71004','all','active','60000000-0000-4000-8000-000000000004'::uuid
+  );`, { account: true });
+  jsonResult(`select public.kd_radar_pilot_set_subscription(
+    'watchmode:71004','all','paused','60000000-0000-4000-8000-000000000005'::uuid
+  );`, { account: true });
+  jsonResult(`select public.kd_radar_websearch_upsert_title_group_event(
+    '${ACCOUNT_ID}'::uuid,'60000000-0000-4000-8000-000000000006'::uuid,${groupPayloadSql}
+  );`);
+  check("ein ausdrücklich gewähltes Episode-IV-Werk bleibt ein eigenes Ziel und nach Gruppenprüfung pausiert",
+    individualEpisode.targetId === "watchmode:71004"
+      && psql(`select s.subscription_status from public.kd_radar_subscriptions s
+        join public.kd_radar_targets t on t.target_id=s.target_id
+        where s.account_id='${ACCOUNT_ID}' and t.target_key='watchmode:71004';`).stdout === "paused");
+
+  const futureStarWarsGroup = {
+    ...starWarsGroup,
+    members: [...starWarsMembers, {
+      targetId: "watchmode:71005", targetType: "work", title: "Star Wars: Episode V", year: 1980,
+    }],
+  };
+  const futureGroupSql = `$group$${JSON.stringify(futureStarWarsGroup)}$group$::jsonb`;
+  jsonResult(`select public.kd_radar_pilot_set_title_group(
+    'title-group:v1:star-wars','all','active',
+    '60000000-0000-4000-8000-000000000007'::uuid,${futureGroupSql}
+  );`, { account: true });
+  const futureGroupFeed = jsonResult("select public.kd_radar_pilot_feed(array[]::uuid[]);", { account: true });
+  const futureSubscription = futureGroupFeed.subscriptions.find((entry) => (
+    entry.targetId === "title-group:v1:star-wars"
+  ));
+  check("eine spätere deterministische Auflösung ergänzt Episode V, die Gruppe bleibt ein Ziel",
+    futureSubscription?.titleGroup.members.length === 5
+      && futureSubscription.titleGroup.members.at(-1).targetId === "watchmode:71005"
+      && futureGroupFeed.subscriptions.filter((entry) => entry.targetId === "title-group:v1:star-wars").length === 1);
+
+  const mismatchedGroupPayload = {
+    ...groupPayload,
+    workTitle: "Star Warship",
+  };
+  const mismatchWrite = psql(`select public.kd_radar_websearch_upsert_title_group_event(
+    '${ACCOUNT_ID}'::uuid,'60000000-0000-4000-8000-000000000008'::uuid,
+    $payload$${JSON.stringify(mismatchedGroupPayload)}$payload$::jsonb
+  );`, { allowFailure: true });
+  check("Titelwiderspruch im Gruppenfund stoppt vor einem Evidenzwrite",
+    mismatchWrite.ok === false
+      && mismatchWrite.stderr.includes("radar_title_group_member_unavailable"));
+
   const candidateSql = migrationBytes.at(-1).source;
   const executableCandidateSql = candidateSql.replace(/--[^\n]*/g, "");
   check("Kandidat fuehrt keine neue Tabelle, Queue, Planung oder Ranking ein",
     !/create\s+table|\bcron\.|pg_cron|scheduler|\bretry\b|\branking\b/i.test(executableCandidateSql));
   check("Kandidat ergaenzt genau die zwei noetigen Personenfelder am bestehenden Abo",
     (candidateSql.match(/add column person_(?:external_id|role) text/g) || []).length === 2);
+
+  psql(`update public.kd_radar_targets set canonical_title='Drift'
+    where target_key='person:wikidata:Q7374:director';`);
+  const inconsistent = psql(repairSource, { allowFailure: true });
+  check("inkonsistenter vorhandener Seed stoppt die Forwardmigration fail-closed",
+    inconsistent.ok === false
+      && inconsistent.stderr.includes("radar_person_catalog_person_seed_drift"));
+  psql(`update public.kd_radar_targets set canonical_title='Alfred Hitchcock'
+    where target_key='person:wikidata:Q7374:director';
+    delete from public.kd_radar_targets where target_key in (
+      'person:wikidata:Q271967:actor','person:wikidata:Q271967:director'
+    );`);
+  const missing = psql(repairSource, { allowFailure: true });
+  check("eine unbekannte 3/5-Baseline wird nicht still neu geseedet",
+    missing.ok === false
+      && missing.stderr.includes("radar_person_catalog_baseline_count_drift")
+      && psql(curatedCountSql).stdout === "3");
 
   console.log(`${checks} Personenradar-PG17-Checks bestanden.`);
 } finally {

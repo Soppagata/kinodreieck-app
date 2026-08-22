@@ -12,7 +12,9 @@ import {
   createCatalogSearchActions,
   createEntdeckenCatalogSummary,
   createEntdeckenRecommendationFunnel,
+  createTitleGroupRadarTarget,
   RADAR_CATALOG_SEARCH_LIMIT,
+  resolveTitleGroupRadarTarget,
   rankLocalEntdeckenRecommendations,
   searchRadarCatalog,
   selectDailyRecommendations,
@@ -72,6 +74,47 @@ const radarCatalogIndex = createRadarCatalogIndex({
       watchmode_id: 10_000 + index, titel: `Katalog Titel ${index}`, jahr: 2020, typ: "movie",
     })),
   ] },
+});
+
+const titleGroupCatalog = createRadarCatalogIndex({
+  streamingDiscover: { titel: [
+    { watchmode_id: 71001, titel: "Star Wars: Episode I", jahr: 1999, typ: "movie" },
+    { watchmode_id: 71002, titel: "Star Wars: Episode II", jahr: 2002, typ: "movie" },
+    { watchmode_id: 71003, titel: "Star Wars: Episode III", jahr: 2005, typ: "movie" },
+    { watchmode_id: 71004, titel: "Star Wars: Episode IV", jahr: 1977, typ: "movie" },
+    { watchmode_id: 71999, titel: "Star Warship", jahr: 2024, typ: "movie" },
+    { watchmode_id: 71998, titel: "Star Warsome", jahr: 2025, typ: "movie" },
+  ] },
+});
+const starWarsTitleGroup = createTitleGroupRadarTarget(titleGroupCatalog, "Star Wars");
+check("Titelgruppen nutzen eine substanzielle Wortgrenzen-Suche und starke konkrete Mitglieder", () => {
+  assert.equal(starWarsTitleGroup.status, "ready");
+  assert.equal(starWarsTitleGroup.target.targetType, "franchise");
+  assert.equal(starWarsTitleGroup.target.titleGroup.queryKey, "star wars");
+  assert.equal(starWarsTitleGroup.target.titleGroup.displayName, "Star Wars");
+  assert.deepEqual(starWarsTitleGroup.target.titleGroup.members.map((entry) => entry.targetId), [
+    "watchmode:71001", "watchmode:71002", "watchmode:71003", "watchmode:71004",
+  ]);
+  assert.doesNotMatch(starWarsTitleGroup.target.titleGroup.members.map((entry) => entry.title).join("|"), /Warship|Warsome/);
+  assert.equal(createTitleGroupRadarTarget(titleGroupCatalog, "Star").status, "too_short");
+  assert.equal(createTitleGroupRadarTarget(titleGroupCatalog, "Star W").status, "too_short");
+  assert.equal(createTitleGroupRadarTarget(titleGroupCatalog, "Episode IV").status, "ambiguous");
+});
+check("Eine gespeicherte Titelgruppe nimmt bei späterer Auflösung neue eindeutige Werke auf", () => {
+  const futureCatalog = createRadarCatalogIndex({
+    streamingDiscover: { titel: [
+      ...titleGroupCatalog.map((entry) => ({
+        watchmode_id: Number(entry.targetId.split(":")[1]), titel: entry.title,
+        jahr: entry.year, typ: entry.target.targetType === "series" ? "tv_series" : "movie",
+      })),
+      { watchmode_id: 71005, titel: "Star Wars: Episode V", jahr: 1980, typ: "movie" },
+    ] },
+  });
+  const resolved = resolveTitleGroupRadarTarget(starWarsTitleGroup.target, futureCatalog);
+  assert.equal(resolved.status, "ready");
+  assert.deepEqual(resolved.target.titleGroup.members.map((entry) => entry.targetId), [
+    "watchmode:71001", "watchmode:71002", "watchmode:71003", "watchmode:71004", "watchmode:71005",
+  ]);
 });
 check("Radar-Suchindex vereinigt Mediathek und Streaming nur über starke Ziel-IDs", () => {
   const shared = radarCatalogIndex.filter((entry) => entry.targetId === "watchmode:91");
@@ -559,6 +602,17 @@ try {
     assert.ok(results.length <= RADAR_CATALOG_SEARCH_LIMIT);
     assert.match(results[0].textContent, /Star Wars: Episode I.*1999.*Streaming/);
   });
+  const titleGroupButton = [...workPicker.container.querySelectorAll("button")].find((entry) => (
+    entry.textContent.includes("Alle Treffer für „Star Wars“ beobachten")
+  ));
+  await act(async () => { titleGroupButton.click(); await tick(); });
+  check("Radar bietet die Suchgruppe getrennt von der Einzeltitel-Auswahl zur Bestätigung an", () => {
+    assert.equal(previewTarget.targetId, "title-group:v1:star-wars");
+    assert.equal(previewTarget.targetType, "franchise");
+    assert.equal(previewTarget.titleGroup.members.length, 4);
+    assert.match(workPicker.container.textContent, /als ein Radarziel/);
+  });
+  previewTarget = null;
   for (const resultButton of workPicker.container.querySelectorAll(".kd-radar-work-results button")) {
     await act(async () => { resultButton.click(); await tick(); });
   }
@@ -594,6 +648,23 @@ try {
   await act(async () => { button(document, "Ins Radar bestätigen").click(); await tick(); });
   check("Bestätigung ruft genau einen gekapselten Write auf", () => assert.equal(previewConfirmed, 1));
   await preview.cleanup();
+
+  let titleGroupConfirmed = null;
+  const titleGroupPreview = await mount(RadarSubscriptionPreview, {
+    target: starWarsTitleGroup.target, radarState: createEmptyLocalRadar(), accountMode: false,
+    onConfirm: async (target) => { titleGroupConfirmed = target; return true; }, onClose() {},
+  });
+  check("Titelgruppen-Vorschau nennt alle aktuellen Mitglieder und zählt nur ein Ziel", () => {
+    assert.match(document.querySelector(".kd-radar-preview").textContent, /Titelgruppe „Star Wars“/);
+    assert.match(document.querySelector(".kd-radar-preview").textContent, /4 aktuelle eindeutige Werke · ein Radarziel/);
+    assert.equal(document.querySelectorAll(".kd-radar-preview li").length, 4);
+  });
+  await act(async () => { button(document, "Titelgruppe ins Radar bestätigen").click(); await tick(); });
+  check("Titelgruppen-Bestätigung übergibt genau das eine persistente Gruppenziel", () => {
+    assert.equal(titleGroupConfirmed?.targetId, "title-group:v1:star-wars");
+    assert.equal(titleGroupConfirmed?.titleGroup?.members.length, 4);
+  });
+  await titleGroupPreview.cleanup();
 
   let multiConfirmed = null;
   const multiTargets = starWarsCatalog.titel.map((entry) => ({
