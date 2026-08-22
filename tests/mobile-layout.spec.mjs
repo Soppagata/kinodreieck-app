@@ -952,7 +952,7 @@ test("Entdecken bleibt kompakt und erfindet ohne injizierten Webfeed keine Tipps
   await waehleMobileTab(page, "Entdecken");
 
   const persoenlich = page.locator('[aria-labelledby="kd-entdecken-empfehlungen"]');
-  await expect(persoenlich.getByRole("heading", { name: "Persönliche Passung" })).toBeVisible();
+  await expect(persoenlich.getByRole("heading", { name: "Für mich" })).toBeVisible();
   await expect(persoenlich).not.toContainText("Kataloggröße");
   await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
@@ -1713,7 +1713,11 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
      solange der Browser den Visual Viewport noch verkleinert meldet. */
   await suchen.focus();
   await expect.poll(anker).toBe(-8);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
+  await expect.poll(() => page.evaluate(() => ({
+    position: document.body.style.position,
+    top: Number.parseFloat(document.body.style.top) || 0,
+    scrollY: window.scrollY,
+  }))).toEqual({ position: "fixed", top: -seitenstand, scrollY: 0 });
 
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
   await expect.poll(anker).toBe(-8);
@@ -1754,7 +1758,7 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     expect(box.top, name).toBeGreaterThanOrEqual(geometrie.sichtbar.top - 0.5);
     expect(box.bottom, name).toBeLessThanOrEqual(geometrie.sichtbar.bottom + 0.5);
   }
-  expect(geometrie.bodyLock).toEqual({ position: "", overflow: "" });
+  expect(geometrie.bodyLock).toEqual({ position: "fixed", overflow: "hidden" });
 
   const scrollStand = await antwort.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -2814,8 +2818,8 @@ test("Mobiler Sicherungsmarker führt zum Gesamt-Backup und verschwindet erst na
   await settings.click();
   await expect(page.locator(".kd-bereichshero h1")).toHaveText("Settings");
 
-  const ueber = page.locator("details").filter({ has: page.locator("summary", { hasText: /^Über & Rechtliches$/ }) });
-  const ueberSummary = ueber.locator("summary");
+  const ueberSummary = page.locator("summary:visible", { hasText: /^Über & Rechtliches$/ });
+  const ueber = ueberSummary.locator("..");
   await expect(ueberSummary).toBeVisible();
   await ueberSummary.focus();
   await page.keyboard.press("Enter");

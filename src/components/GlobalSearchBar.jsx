@@ -56,6 +56,7 @@ export function GlobalSearchBar({
   const eingabeRef = useRef(null);
   const dialogRef = useRef(null);
   const viewportUpdateRef = useRef(() => {});
+  const viewportEndRef = useRef(() => {});
   const beobachtet = new Set((beobachteteIds || []).map(String));
   const imRadar = new Set((radarTargetIds || []).map(String));
   const absenden = async (event) => {
@@ -140,9 +141,18 @@ export function GlobalSearchBar({
         /* Rotation, Zoom und die echte Viewport-Erholung beenden den optischen
            Pin. Eine anlaufende Fokusphase darf volle Geometrie dagegen kurz
            sehen, weil WebKit die Tastaturmaße verzögert liefern kann. */
-        if (phase !== "idle" && (!neutraleSkalierung || breiteGeaendert
+        if (phase !== "idle" && (!neutraleSkalierung
           || (phase === "keyboard-open" && volleGeometrie))) {
           beendePhase({ neueBasis: true });
+          return;
+        }
+        if (phase !== "idle" && breiteGeaendert) {
+          beendePhase({ neueBasis: true });
+          if (editierbarerFokus && !volleGeometrie) {
+            phase = "focus-pending";
+            entsperreScroll = sperreDokumentScroll();
+            aktualisiere();
+          }
           return;
         }
 
@@ -151,7 +161,7 @@ export function GlobalSearchBar({
           breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         }
 
-        const tastaturOffen = phase !== "idle" && !breiteGeaendert && klassifiziereBildschirmtastatur({
+        const tastaturKandidat = !breiteGeaendert && klassifiziereBildschirmtastatur({
           /* Ein Fokuswechsel auf Suchen, Schließen oder einen Treffer beendet
              die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
              verkleinert ist, bleibt deshalb eine einmal erkannte Phase aktiv.
@@ -164,6 +174,14 @@ export function GlobalSearchBar({
           basisHeight: basis.height,
           basisWidth: basis.width,
         });
+        /* Manche Browser liefern den verkleinerten Viewport erst deutlich nach
+           dem Fokusereignis. Ein weiterhin editierbares Feld darf die Phase
+           deshalb anhand der echten Geometrie erneut eröffnen. */
+        if (phase === "idle" && editierbarerFokus && tastaturKandidat) {
+          phase = "focus-pending";
+          entsperreScroll = sperreDokumentScroll();
+        }
+        const tastaturOffen = phase !== "idle" && tastaturKandidat;
         if (!tastaturOffen) {
           raeumeViewportPosition(form);
           return;
@@ -239,7 +257,9 @@ export function GlobalSearchBar({
         aktualisiere();
       });
     };
+    const stoppeViewportPhase = () => beendePhase({ neueBasis: true });
     viewportUpdateRef.current = aktualisiere;
+    viewportEndRef.current = stoppeViewportPhase;
     viewport.addEventListener("resize", aktualisiere);
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
@@ -262,6 +282,7 @@ export function GlobalSearchBar({
       eingabe.removeEventListener("blur", verarbeiteBlur);
       beendePhase();
       if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};
+      if (viewportEndRef.current === stoppeViewportPhase) viewportEndRef.current = () => {};
     };
   }, []);
 
@@ -283,7 +304,9 @@ export function GlobalSearchBar({
           <div className="kd-globalsuche-treffer" aria-live="polite">
             {antwort.items.length > 0 ? antwort.items.map((item) => (
               <div className="kd-globalsuche-trefferzeile" key={item.key}>
-                <button type="button" className="kd-globalsuche-ziel" data-globaler-suchtreffer onClick={() => onTreffer?.(item)}>
+                <button type="button" className="kd-globalsuche-ziel" data-globaler-suchtreffer onClick={() => {
+                  viewportEndRef.current(); onTreffer?.(item);
+                }}>
                   <span>{item.bereichLabel}</span>
                   <strong>{item.titel}</strong>
                   {item.meta ? <small>{item.meta}</small> : null}
@@ -291,16 +314,20 @@ export function GlobalSearchBar({
                 {item.searchActions?.watch || item.searchActions?.radar ? <div className="kd-globalsuche-aktionen" aria-label={`Aktionen für ${item.titel}`}>
                   {item.searchActions.watch ? <button type="button"
                     aria-pressed={beobachtet.has(String(item.searchActions.watch.watchmodeId))}
-                    onClick={(event) => { event.currentTarget.focus(); onSuchaktion?.(item, "watch"); }}>{beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}</button> : null}
+                    onClick={(event) => { event.currentTarget.focus(); viewportEndRef.current();
+                      onSuchaktion?.(item, "watch"); }}>{beobachtet.has(String(item.searchActions.watch.watchmodeId)) ? "Beobachtet" : "Beobachten"}</button> : null}
                   {item.searchActions.radar ? <button type="button"
                     aria-pressed={imRadar.has(item.searchActions.radar.targetId)}
                     disabled={imRadar.has(item.searchActions.radar.targetId)}
-                    onClick={(event) => { event.currentTarget.focus(); onSuchaktion?.(item, "radar"); }}>{imRadar.has(item.searchActions.radar.targetId) ? "Im Radar" : "Ins Radar"}</button> : null}
+                    onClick={(event) => { event.currentTarget.focus(); viewportEndRef.current();
+                      onSuchaktion?.(item, "radar"); }}>{imRadar.has(item.searchActions.radar.targetId) ? "Im Radar" : "Ins Radar"}</button> : null}
                 </div> : null}
               </div>
             )) : <p>Kein direkter Treffer. Probiere einen Titel, ein Genre oder eine Frage zur App.</p>}
           </div>
-          <button type="button" className="kd-globalsuche-alle" onClick={onAlleErgebnisse}>Ausführliche Ergebnisse öffnen</button>
+          <button type="button" className="kd-globalsuche-alle" onClick={() => {
+            viewportEndRef.current(); onAlleErgebnisse?.();
+          }}>Ausführliche Ergebnisse öffnen</button>
         </section>
       )}
       <input ref={eingabeRef} value={text} onChange={(event) => setText(event.target.value)}
@@ -309,7 +336,7 @@ export function GlobalSearchBar({
       <button type="submit" className="kd-globalsuche-los" aria-label={laeuft ? "Suche läuft" : "Suchen"} disabled={laeuft}>⌕</button>
       <button type="button" className={"kd-globalsuche-menu" + (menuOffen ? " offen" : "")}
         aria-label={menuOffen ? "Menü schließen" : "Menü öffnen"} aria-expanded={menuOffen}
-        aria-controls="kd-mobile-menu" onClick={onMenu}>
+        aria-controls="kd-mobile-menu" onClick={() => { viewportEndRef.current(); onMenu?.(); }}>
         <i /><i /><i />
       </button>
     </form>
