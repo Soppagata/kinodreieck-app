@@ -5,6 +5,7 @@ import {
   klassifiziereBildschirmtastatur,
   MIN_TASTATUR_HOEHENVERLUST,
 } from "../lib/visualViewport.js";
+import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 const LABELS = Object.freeze({
   start: "Alles", kino: "Kino", mediathek: "Mediathek", streaming: "Streaming",
@@ -23,6 +24,7 @@ const SAFE_AREA_VARIABLEN = Object.freeze({
   bottom: "--kd-suche-safe-area-bottom",
   left: "--kd-suche-safe-area-left",
 });
+const VIEWPORT_STABILISIERUNGS_FRAMES = 45;
 
 const liesSafeAreaInsets = (element) => {
   const style = getComputedStyle(element);
@@ -96,36 +98,65 @@ export function GlobalSearchBar({
     const eingabe = eingabeRef.current;
     if (!viewport || !form || !eingabe) return undefined;
     let frame = 0;
+    let stabilisierungFrame = 0;
+    let stabilisierungGeneration = 0;
+    let phase = "idle";
+    let entsperreScroll = null;
+    let aktiv = true;
     let basis = {
       height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
       width: viewport.width,
     };
-    let tastaturPhaseAktiv = false;
-    const raeume = () => raeumeViewportPosition(form);
+    const aktualisiereBasis = () => {
+      const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
+      basis = { height: Math.max(layoutHeight, viewport.height), width: viewport.width };
+    };
+    const loeseScrollsperre = () => {
+      const entsperren = entsperreScroll;
+      entsperreScroll = null;
+      entsperren?.();
+    };
+    const beendePhase = ({ neueBasis = false } = {}) => {
+      phase = "idle";
+      stabilisierungGeneration += 1;
+      cancelAnimationFrame(stabilisierungFrame);
+      raeumeViewportPosition(form);
+      loeseScrollsperre();
+      if (neueBasis) aktualisiereBasis();
+    };
     const aktualisiere = () => {
+      if (!aktiv) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        if (!aktiv) return;
         const layoutHeight = Math.max(window.innerHeight, document.documentElement.clientHeight);
         const editierbarerFokus = document.activeElement === eingabe
           && !eingabe.disabled && !eingabe.readOnly;
+        const suchfokus = editierbarerFokus || form.contains(document.activeElement);
         const neutraleSkalierung = istNeutraleViewportSkalierung(viewport.scale);
         let breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         const volleGeometrie = Math.abs(layoutHeight - viewport.height) <= MIN_TASTATUR_HOEHENVERLUST;
 
-        if (neutraleSkalierung && (!editierbarerFokus || breiteGeaendert || volleGeometrie)) {
-          basis = {
-            height: Math.max(layoutHeight, viewport.height),
-            width: viewport.width,
-          };
+        /* Rotation, Zoom und die echte Viewport-Erholung beenden den optischen
+           Pin. Eine anlaufende Fokusphase darf volle Geometrie dagegen kurz
+           sehen, weil WebKit die Tastaturmaße verzögert liefern kann. */
+        if (phase !== "idle" && (!neutraleSkalierung || breiteGeaendert
+          || (phase === "keyboard-open" && volleGeometrie))) {
+          beendePhase({ neueBasis: true });
+          return;
+        }
+
+        if (phase === "idle" && neutraleSkalierung && (!suchfokus || breiteGeaendert || volleGeometrie)) {
+          aktualisiereBasis();
           breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         }
 
-        const tastaturOffen = !breiteGeaendert && klassifiziereBildschirmtastatur({
+        const tastaturOffen = phase !== "idle" && !breiteGeaendert && klassifiziereBildschirmtastatur({
           /* Ein Fokuswechsel auf Suchen, Schließen oder einen Treffer beendet
              die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
              verkleinert ist, bleibt deshalb eine einmal erkannte Phase aktiv.
              Erst die echte Viewport-Erholung (oder Rotation/Zoom) räumt sie. */
-          editierbarerFokus: editierbarerFokus || tastaturPhaseAktiv,
+          editierbarerFokus: suchfokus || phase === "focus-pending" || phase === "keyboard-open",
           scale: viewport.scale,
           height: viewport.height,
           width: viewport.width,
@@ -133,11 +164,11 @@ export function GlobalSearchBar({
           basisHeight: basis.height,
           basisWidth: basis.width,
         });
-        tastaturPhaseAktiv = tastaturOffen;
         if (!tastaturOffen) {
-          raeume();
+          raeumeViewportPosition(form);
           return;
         }
+        phase = "keyboard-open";
 
         const safeAreaInsets = liesSafeAreaInsets(form);
         const vorab = berechneSuchleistenGeometrie({
@@ -168,24 +199,68 @@ export function GlobalSearchBar({
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
       });
     };
+    const stabilisiereFokusphase = () => {
+      if (!aktiv || phase === "idle") return;
+      const generation = ++stabilisierungGeneration;
+      cancelAnimationFrame(stabilisierungFrame);
+      let verbleibend = VIEWPORT_STABILISIERUNGS_FRAMES;
+      const sample = () => {
+        if (!aktiv || generation !== stabilisierungGeneration) return;
+        aktualisiere();
+        verbleibend -= 1;
+        if (verbleibend > 0) {
+          stabilisierungFrame = requestAnimationFrame(sample);
+          return;
+        }
+        stabilisierungFrame = requestAnimationFrame(() => {
+          if (!aktiv || generation !== stabilisierungGeneration) return;
+          if (phase === "focus-pending") beendePhase({ neueBasis: true });
+        });
+      };
+      stabilisierungFrame = requestAnimationFrame(sample);
+    };
+    const starteFokusphase = () => {
+      if (phase === "idle") {
+        aktualisiereBasis();
+        phase = "focus-pending";
+        entsperreScroll = sperreDokumentScroll();
+      }
+      stabilisiereFokusphase();
+      aktualisiere();
+    };
+    const verarbeiteBlur = () => {
+      requestAnimationFrame(() => {
+        if (!aktiv) return;
+        if (phase === "focus-pending" && !form.contains(document.activeElement)) {
+          beendePhase({ neueBasis: true });
+          return;
+        }
+        stabilisiereFokusphase();
+        aktualisiere();
+      });
+    };
     viewportUpdateRef.current = aktualisiere;
     viewport.addEventListener("resize", aktualisiere);
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
     window.addEventListener("scroll", aktualisiere, { passive: true });
-    eingabe.addEventListener("focus", aktualisiere);
-    eingabe.addEventListener("blur", aktualisiere);
+    eingabe.addEventListener("pointerdown", starteFokusphase, { passive: true });
+    eingabe.addEventListener("focus", starteFokusphase);
+    eingabe.addEventListener("blur", verarbeiteBlur);
     aktualisiere();
     return () => {
+      aktiv = false;
       cancelAnimationFrame(frame);
+      stabilisierungGeneration += 1;
+      cancelAnimationFrame(stabilisierungFrame);
       viewport.removeEventListener("resize", aktualisiere);
       viewport.removeEventListener("scroll", aktualisiere);
       window.removeEventListener("resize", aktualisiere);
       window.removeEventListener("scroll", aktualisiere);
-      eingabe.removeEventListener("focus", aktualisiere);
-      eingabe.removeEventListener("blur", aktualisiere);
-      tastaturPhaseAktiv = false;
-      raeume();
+      eingabe.removeEventListener("pointerdown", starteFokusphase);
+      eingabe.removeEventListener("focus", starteFokusphase);
+      eingabe.removeEventListener("blur", verarbeiteBlur);
+      beendePhase();
       if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};
     };
   }, []);
