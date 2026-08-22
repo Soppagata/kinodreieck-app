@@ -12,14 +12,16 @@ import {
   queueAccountRadarShareChange,
   removeGuestPersonRadarSubscription,
   removeGuestRadarSubscription,
+  setLocalRadarReceipt,
   setGuestPersonRadarSubscriptionStatus,
   upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
 import { createCatalogRadarTarget, localRadarTargetLabel } from "../lib/entdeckenUi.js";
-import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
+import { createPersonIdentityKey, validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
+import { projectVisibleRadarWebsearchEvents, validateRadarWebsearchTarget } from "../lib/radarWebsearchFlow.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
 import { radarWebsearchService } from "../services/radarWebsearch.js";
@@ -33,14 +35,16 @@ function neueLokaleOperationId() {
   ));
 }
 
-/* Phase-3-Grenze für alle persönlichen Entdecken-/Radar-Mutationen.
-   Der Controller kennt keinen Provider, Scheduler, Proposal-Import oder
-   Personen-Automatik-Pfad. Sichtbarer State folgt exakt der Gast- bzw.
-   Kontocache-Autorität und wird erst nach bestätigtem Storage-Write übernommen. */
+/* Grenze für alle persönlichen Entdecken-/Radar-Mutationen. Ein optional
+   injizierter lokaler Executor trägt ausschließlich den begrenzten Mockpfad;
+   Scheduler, freie Katalogsuche und automatische Werk-Abos bleiben verboten.
+   Sichtbarer State folgt exakt der Gast- bzw. Kontocache-Autorität und wird
+   erst nach bestätigtem Storage-Write übernommen. */
 export function useEntdeckenRadarController({
   session, remoteKontoAktiv, bootDone, master, streamingKnown, streamingDiscover,
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
   personRadarAdapter = null,
+  radarWebsearchExecutor = null,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = runtimeConfig.radarPilotClientEnabled === true;
@@ -70,7 +74,26 @@ export function useEntdeckenRadarController({
   });
   const [radarPreviewTarget, setRadarPreviewTarget] = useState(null);
   const [radarPilotSyncStatus, setRadarPilotSyncStatus] = useState(radarPilotClientEnabled ? "idle" : "disabled");
+  const [localRadarWebsearchEvents, setLocalRadarWebsearchEvents] = useState([]);
+  const localRadarWebsearchAvailable = radarAuthority === "guest"
+    && radarWebsearchExecutor?.valid === true
+    && typeof radarWebsearchExecutor?.check === "function"
+    && typeof radarWebsearchExecutor?.loadEvents === "function";
   const schliesseRadarPreview = useCallback(() => setRadarPreviewTarget(null), []);
+
+  useEffect(() => {
+    let active = true;
+    if (!bootDone || !localRadarWebsearchAvailable) {
+      setLocalRadarWebsearchEvents([]);
+      return () => { active = false; };
+    }
+    void radarWebsearchExecutor.loadEvents().then((events) => {
+      if (active) setLocalRadarWebsearchEvents(Array.isArray(events) ? events : []);
+    }).catch(() => {
+      if (active) setLocalRadarWebsearchEvents([]);
+    });
+    return () => { active = false; };
+  }, [bootDone, localRadarWebsearchAvailable, radarWebsearchExecutor]);
 
   const syncRadarPilot = useCallback(async (stateForSync = null) => {
     const state = stateForSync || radarStateRef.current;
@@ -232,14 +255,21 @@ export function useEntdeckenRadarController({
     return Object.freeze([...byId.values()]);
   }, [master, streamingDiscover, streamingKnown]);
 
-  const personRadarAvailable = radarAuthority === "guest"
-    && typeof personRadarAdapter?.resolve === "function"
-    && typeof personRadarAdapter?.check === "function";
+  const localPersonRadarAvailable = localRadarWebsearchAvailable
+    && typeof radarWebsearchExecutor?.resolvePerson === "function";
+  const personRadarAvailable = radarAuthority === "guest" && (localPersonRadarAvailable
+    || (typeof personRadarAdapter?.resolve === "function" && typeof personRadarAdapter?.check === "function"));
+  const franchiseRadarAvailable = localRadarWebsearchAvailable
+    && typeof radarWebsearchExecutor?.resolveFranchise === "function";
 
   const fuegePersonRadarHinzu = useCallback(async ({ name, role } = {}) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
     let resolved;
-    try { resolved = await personRadarAdapter.resolve({ name: String(name || "").trim(), role }); }
+    try {
+      resolved = localPersonRadarAvailable
+        ? await radarWebsearchExecutor.resolvePerson({ name: String(name || "").trim(), role })
+        : await personRadarAdapter.resolve({ name: String(name || "").trim(), role });
+    }
     catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
     const checked = validatePersonIdentity(resolved);
     if (!checked.ok || resolved.name !== String(name || "").trim() || resolved.role !== role) {
@@ -258,7 +288,38 @@ export function useEntdeckenRadarController({
     return Object.freeze(saved === false
       ? { status: "storage_error", writes: 0 }
       : { status: "active", writes: 1, identity });
-  }, [personRadarAdapter, personRadarAvailable, schreibeRadarState]);
+  }, [
+    localPersonRadarAvailable,
+    personRadarAdapter,
+    personRadarAvailable,
+    radarWebsearchExecutor,
+    schreibeRadarState,
+  ]);
+
+  const fuegeFranchiseRadarHinzu = useCallback(async ({ name } = {}) => {
+    const requestedName = String(name || "").trim();
+    if (!franchiseRadarAvailable || !requestedName) {
+      return Object.freeze({ status: "unavailable", writes: 0 });
+    }
+    let resolved;
+    try { resolved = await radarWebsearchExecutor.resolveFranchise({ name: requestedName }); }
+    catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+    const checked = validateRadarWebsearchTarget(resolved);
+    if (!checked.ok || resolved.kind !== "franchise"
+        || !resolved.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)) {
+      return Object.freeze({ status: "unresolved", writes: 0 });
+    }
+    const saved = await aendereRadar(Object.freeze({
+      targetId: resolved.franchiseId,
+      targetType: "franchise",
+      targetStatus: "active",
+      title: resolved.title,
+      canonical: true,
+    }), "upsert");
+    return Object.freeze(saved
+      ? { status: "active", writes: 1, target: resolved }
+      : { status: "storage_error", writes: 0 });
+  }, [aendereRadar, franchiseRadarAvailable, radarWebsearchExecutor]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {
     if (radarAuthority !== "guest") return Object.freeze({ status: "unavailable", writes: 0 });
@@ -281,6 +342,20 @@ export function useEntdeckenRadarController({
     if (!personRadarAvailable || matches.length !== 1) {
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
+    if (localPersonRadarAvailable) {
+      const result = await radarWebsearchExecutor.check({
+        target: Object.freeze({
+          kind: "person",
+          personExternalId: matches[0].personExternalId,
+          name: matches[0].name,
+          role: matches[0].role,
+          canonical: true,
+        }),
+        catalog: personRadarCatalog,
+      });
+      if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
+      return result;
+    }
     let response;
     try {
       response = await personRadarAdapter.check(Object.freeze({
@@ -302,7 +377,15 @@ export function useEntdeckenRadarController({
       return Object.freeze({ status: reason === "person-check-invalid" ? "invalid_response" : "storage_error", writes: 0 });
     }
     return Object.freeze({ status: reason, writes: 1 });
-  }, [personRadarAdapter, personRadarAvailable, personRadarCatalog, radarStateRef, schreibeRadarState]);
+  }, [
+    localPersonRadarAvailable,
+    personRadarAdapter,
+    personRadarAvailable,
+    personRadarCatalog,
+    radarStateRef,
+    radarWebsearchExecutor,
+    schreibeRadarState,
+  ]);
 
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
@@ -325,6 +408,22 @@ export function useEntdeckenRadarController({
   }, [radarAuthority, remoteKontoAktiv, schreibeRadarState, setErr]);
 
   const fuehreRadarPilotReceipt = useCallback(async ({ eventId, eventVersionId, status = "seen" }) => {
+    if (localRadarWebsearchAvailable && radarAuthority === "guest") {
+      const known = localRadarWebsearchEvents.some((event) => (
+        event.eventId === eventId && event.eventVersionId === eventVersionId
+      ));
+      if (!known) return false;
+      const gespeichert = await schreibeRadarState((prev) => {
+        const result = setLocalRadarReceipt(prev, {
+          eventId,
+          versionId: eventVersionId,
+          status,
+          now: new Date().toISOString(),
+        });
+        return result.ok ? result.state : null;
+      });
+      return gespeichert !== false;
+    }
     if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) return false;
     const gespeichert = await schreibeRadarState((prev) => {
       const result = queueAccountRadarPilotReceipt(prev, {
@@ -339,6 +438,8 @@ export function useEntdeckenRadarController({
     await syncRadarPilot(gespeichert);
     return true;
   }, [
+    localRadarWebsearchAvailable,
+    localRadarWebsearchEvents,
     radarAuthority,
     radarPilotClientEnabled,
     remoteKontoAktiv,
@@ -397,6 +498,40 @@ export function useEntdeckenRadarController({
     const hasPendingTargetChange = (state?.outbox || []).some((entry) => (
       entry.targetId === targetId && entry.status === "pending"
     ));
+    if (localRadarWebsearchAvailable && state?.authority === "guest") {
+      if (activeMatches.length !== 1 || hasPendingTargetChange
+          || !["work", "series", "franchise"].includes(activeMatches[0].targetType)) {
+        return Object.freeze({ status: "forbidden", writes: 0 });
+      }
+      if (activeMatches[0].targetType === "franchise") {
+        let resolved;
+        try { resolved = await radarWebsearchExecutor.resolveFranchise?.({ name: activeMatches[0].title }); }
+        catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
+        if (!validateRadarWebsearchTarget(resolved).ok || resolved.kind !== "franchise"
+            || resolved.franchiseId !== targetId || resolved.title !== activeMatches[0].title) {
+          return Object.freeze({ status: "forbidden", writes: 0 });
+        }
+        const result = await radarWebsearchExecutor.check({ target: resolved, catalog: personRadarCatalog });
+        if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
+        return result;
+      }
+      const catalogEntry = personRadarCatalog.find((entry) => entry.targetId === targetId);
+      const title = catalogEntry?.title || activeMatches[0].title;
+      if (!title) return Object.freeze({ status: "forbidden", writes: 0 });
+      const result = await radarWebsearchExecutor.check({
+        target: Object.freeze({
+          kind: "work",
+          targetId,
+          targetType: activeMatches[0].targetType,
+          title,
+          year: catalogEntry?.year ?? null,
+          canonical: true,
+        }),
+        catalog: personRadarCatalog,
+      });
+      if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
+      return result;
+    }
     if (!radarPilotClientEnabled || !remoteKontoAktiv || radarAuthority !== "account-cache"
         || state?.authority !== "account-cache" || state?.pilot?.status !== "ready"
         || state?.pilot?.radarReview !== true || activeMatches.length !== 1
@@ -409,9 +544,12 @@ export function useEntdeckenRadarController({
     }
     return result;
   }, [
+    localRadarWebsearchAvailable,
+    personRadarCatalog,
     radarAuthority,
     radarPilotClientEnabled,
     radarStateRef,
+    radarWebsearchExecutor,
     remoteKontoAktiv,
     syncRadarPilot,
   ]);
@@ -448,13 +586,40 @@ export function useEntdeckenRadarController({
     () => radarState?.authority === radarAuthority ? radarState : createEmptyLocalRadar({ authority: radarAuthority }),
     [radarAuthority, radarState],
   );
-  const radarPilotProjection = useMemo(() => projectEntdeckenRadarPilot({
+  const accountRadarPilotProjection = useMemo(() => projectEntdeckenRadarPilot({
     clientEnabled: runtimeConfig.radarPilotClientEnabled,
     radarAuthority,
     radarState: sichtbarerRadarState,
   }), [radarAuthority, sichtbarerRadarState]);
-  const radarCheckAvailable = remoteKontoAktiv && radarAuthority === "account-cache"
-    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true;
+  const activePersonKeys = useMemo(() => (sichtbarerRadarState.personSubscriptions || [])
+    .filter((entry) => entry.status === "active")
+    .map((entry) => createPersonIdentityKey(entry)).filter(Boolean), [sichtbarerRadarState.personSubscriptions]);
+  const activeWorkTargetIds = useMemo(() => (sichtbarerRadarState.subscriptions || [])
+    .filter((entry) => entry.status === "active" && entry.targetType !== "franchise")
+    .map((entry) => entry.targetId), [sichtbarerRadarState.subscriptions]);
+  const activeFranchiseIds = useMemo(() => (sichtbarerRadarState.subscriptions || [])
+    .filter((entry) => entry.status === "active" && entry.targetType === "franchise")
+    .map((entry) => entry.targetId), [sichtbarerRadarState.subscriptions]);
+  const visibleLocalRadarEvents = useMemo(() => projectVisibleRadarWebsearchEvents({
+    events: localRadarWebsearchEvents,
+    receipts: sichtbarerRadarState.receipts,
+    activeWorkTargetIds,
+    activeFranchiseIds,
+    activePersonKeys,
+  }), [activeFranchiseIds, activePersonKeys, activeWorkTargetIds, localRadarWebsearchEvents, sichtbarerRadarState.receipts]);
+  const visiblePilotRadarEvents = useMemo(() => {
+    const receipts = new Map((sichtbarerRadarState.receipts || []).map((entry) => [entry.versionId, entry.status]));
+    return (accountRadarPilotProjection.events || []).filter((event) => {
+      const status = receipts.get(event.eventVersionId) || "new";
+      return status === "new" || status === "accepted_week";
+    });
+  }, [accountRadarPilotProjection.events, sichtbarerRadarState.receipts]);
+  const radarPilotProjection = useMemo(() => Object.freeze({
+    ...accountRadarPilotProjection,
+    events: radarAuthority === "guest" ? visibleLocalRadarEvents : visiblePilotRadarEvents,
+  }), [accountRadarPilotProjection, radarAuthority, visibleLocalRadarEvents, visiblePilotRadarEvents]);
+  const radarCheckAvailable = localRadarWebsearchAvailable || (remoteKontoAktiv && radarAuthority === "account-cache"
+    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true);
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;
@@ -488,6 +653,8 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotImport,
     fuehreRadarPilotSync,
     fuehreRadarWebsearchCheck,
+    franchiseRadarAvailable,
+    fuegeFranchiseRadarHinzu,
     personRadarAvailable,
     fuegePersonRadarHinzu,
     aenderePersonRadar,
