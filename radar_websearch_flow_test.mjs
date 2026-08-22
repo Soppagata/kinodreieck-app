@@ -32,8 +32,8 @@ const workTarget = Object.freeze({
   title: "Passender Film", year: 2026, canonical: true,
 });
 const personTarget = Object.freeze({
-  kind: "person", personExternalId: "wikidata:Q123456", name: "Test Person",
-  role: "director", canonical: true,
+  kind: "person", personExternalId: "wikidata:Q42869", name: "Nicolas Cage",
+  role: "actor", canonical: true,
 });
 const franchiseTarget = Object.freeze({
   kind: "franchise", franchiseId: "wikidata:Q462", title: "Star Wars",
@@ -384,18 +384,15 @@ try {
     };
   }
 
-  async function chooseWork(container) {
-    const control = container.querySelector("#kd-radar-work");
+  async function chooseRadarTarget(container, query, kind) {
+    const control = container.querySelector("#kd-radar-target-search");
     assert.ok(control);
-    if (control instanceof dom.window.HTMLSelectElement) {
-      assert.ok(control.options.length > 1);
-      await setControl(control, control.options[1].value);
-    } else {
-      await setControl(control, "Passender Film");
-      const resultButton = container.querySelector(".kd-radar-work-results button");
-      assert.ok(resultButton);
-      await act(async () => { resultButton.click(); await tick(); });
-    }
+    await setControl(control, query);
+    await act(async () => { await tick(); await tick(); });
+    const resultButton = container.querySelector(`[data-radar-target-kind="${kind}"]`);
+    assert.ok(resultButton);
+    await act(async () => { resultButton.click(); await tick(); });
+    await settle();
   }
 
   localStorage.removeItem("kd:radar");
@@ -420,9 +417,7 @@ try {
   });
   const workUi = await mount(uiExecutor);
   await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
-  await chooseWork(workUi.container);
-  await act(async () => { button(workUi.container, "Werk ins Radar").click(); await tick(); });
-  await settle();
+  await chooseRadarTarget(workUi.container, "Passender Film", "catalog");
   await check("Mock-Nutzerweg startet Websearch erst vom bestätigten aktiven Werkziel", async () => {
     assert.match(workUi.container.textContent, /Passender Film/);
     assert.ok(button(workUi.container, "Jetzt prüfen"));
@@ -468,10 +463,7 @@ try {
   localStorage.removeItem("kd:radar");
   const personUi = await mount(reloadExecutor);
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
-  await setControl(personUi.container.querySelector("#kd-radar-person"), personTarget.name);
-  await setControl(personUi.container.querySelector("#kd-radar-role"), personTarget.role);
-  await act(async () => { button(personUi.container, "Person ins Radar").click(); await tick(); });
-  await settle();
+  await chooseRadarTarget(personUi.container, personTarget.name, "person");
   await check("Personenziel findet unbekannten Titel mit starker ID ohne automatisches Werk-Abo", async () => {
     assert.ok(button(personUi.container, "Jetzt prüfen"));
     await act(async () => { button(personUi.container, "Jetzt prüfen").click(); await tick(); });
@@ -493,9 +485,7 @@ try {
   });
   const franchiseUi = await mount(franchiseExecutor);
   await act(async () => { button(franchiseUi.container, "Radar").click(); await tick(); });
-  await setControl(franchiseUi.container.querySelector("#kd-radar-franchise"), franchiseTarget.title);
-  await act(async () => { button(franchiseUi.container, "Reihe ins Radar").click(); await tick(); });
-  await settle();
+  await chooseRadarTarget(franchiseUi.container, franchiseTarget.title, "franchise");
   await check("Star Wars im Radar zeigt The Ninth Jedi und pinnt den Fund nur auf Nutzeraktion", async () => {
     assert.match(franchiseUi.container.textContent, /Star Wars/);
     assert.match(franchiseUi.container.textContent, /Aktiv · Reihe/);

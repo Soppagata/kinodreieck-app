@@ -28,6 +28,7 @@ import {
 import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { projectVisibleRadarWebsearchEvents, validateRadarWebsearchTarget } from "../lib/radarWebsearchFlow.js";
 import {
+  CANONICAL_FRANCHISE_RADAR_CATALOG,
   resolveCanonicalFranchiseRadarTarget,
   validateTitleGroupMetadata,
 } from "../lib/titleGroupRadar.js";
@@ -384,9 +385,17 @@ export function useEntdeckenRadarController({
       resolved?.status === "ready" && target?.targetType === "franchise"
       && validateTitleGroupMetadata(target.titleGroup, { targetId: target.targetId, title: target.title })
     );
+    const requestedTargetValid = targetId == null || (localRadarWebsearchAvailable
+      ? CANONICAL_FRANCHISE_RADAR_CATALOG.some((entry) => (
+        entry.targetId === targetId
+        && entry.franchiseId === franchise?.franchiseId
+        && entry.title === franchise?.title
+        && entry.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)
+      ))
+      : target?.targetId === targetId);
     if (!checked.ok || franchise.kind !== "franchise" || !serverTargetValid
         || (franchiseId != null && franchise.franchiseId !== franchiseId)
-        || (targetId != null && target?.targetId !== targetId)
+        || !requestedTargetValid
         || !franchise.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)) {
       return Object.freeze({ status: resolved?.status === "unavailable" ? "unavailable" : "unresolved", writes: 0 });
     }
