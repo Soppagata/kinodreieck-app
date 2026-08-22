@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   berechneSuchleistenGeometrie,
+  erstelleScrollProvenienz,
   istNeutraleViewportSkalierung,
+  istScrollTaste,
   klassifiziereBildschirmtastatur,
   MIN_TASTATUR_HOEHENVERLUST,
 } from "../lib/visualViewport.js";
@@ -35,9 +37,14 @@ const liesSafeAreaInsets = (element) => {
 
 const raeumeViewportPosition = (form) => {
   if (!form) return;
-  form.classList.remove("tastatur-offen");
+  form.classList.remove("tastatur-offen", "tastatur-autoscroll");
   for (const name of VIEWPORT_STYLE_VARIABLEN) form.style.removeProperty(name);
 };
+
+const istEditierbaresOderInteraktivesZiel = (ziel) => Boolean(
+  ziel instanceof Element
+  && ziel.closest("input,textarea,select,button,a[href],[contenteditable]:not([contenteditable='false'])"),
+);
 
 const fokussiereOhneBrowserScroll = (element) => {
   if (!element?.focus) return;
@@ -104,7 +111,14 @@ export function GlobalSearchBar({
       width: viewport.width,
     };
     let tastaturPhaseAktiv = false;
-    const raeume = () => raeumeViewportPosition(form);
+    const scrollProvenienz = erstelleScrollProvenienz();
+    const suchphaseRelevant = () => tastaturPhaseAktiv
+      || document.activeElement === eingabe
+      || form.contains(document.activeElement);
+    const normalisiere = () => {
+      scrollProvenienz.normalisiere();
+      raeumeViewportPosition(form);
+    };
     const aktualisiere = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -124,6 +138,7 @@ export function GlobalSearchBar({
           breiteGeaendert = Math.abs(viewport.width - basis.width) > Math.max(2, basis.width * 0.04);
         }
 
+        const warTastaturPhaseAktiv = tastaturPhaseAktiv;
         const tastaturOffen = !breiteGeaendert && klassifiziereBildschirmtastatur({
           /* Ein Fokuswechsel auf Suchen, Schließen oder einen Treffer beendet
              die OS-Tastatur nicht atomar. Solange der Visual Viewport noch
@@ -139,9 +154,18 @@ export function GlobalSearchBar({
         });
         tastaturPhaseAktiv = tastaturOffen;
         if (!tastaturOffen) {
-          raeume();
+          raeumeViewportPosition(form);
+          const wartetAufKeyboard = suchfokus && !warTastaturPhaseAktiv
+            && neutraleSkalierung && !breiteGeaendert && volleGeometrie;
+          if (!wartetAufKeyboard) scrollProvenienz.normalisiere();
           return;
         }
+
+        if (scrollProvenienz.istKeyboardAuto() && form.classList.contains("tastatur-offen")) {
+          form.classList.add("tastatur-autoscroll");
+          return;
+        }
+        form.classList.remove("tastatur-autoscroll");
 
         const safeAreaInsets = liesSafeAreaInsets(form);
         const vorab = berechneSuchleistenGeometrie({
@@ -172,6 +196,55 @@ export function GlobalSearchBar({
         form.style.setProperty("--kd-suche-ergebnis-maxhoehe", `${geometrie.ergebnisMaxHoehe}px`);
       });
     };
+    const markiereNutzerabsicht = () => {
+      scrollProvenienz.markiereNutzerabsicht();
+      form.classList.remove("tastatur-autoscroll");
+      aktualisiere();
+    };
+    const beobachteViewportBewegung = () => {
+      if (suchphaseRelevant() && form.classList.contains("tastatur-offen")
+        && !scrollProvenienz.istNutzerabsicht()) {
+        scrollProvenienz.markiereKeyboardAuto();
+      }
+      aktualisiere();
+    };
+    const startePointer = (event) => {
+      if (!suchphaseRelevant() && !form.contains(event.target)) return;
+      scrollProvenienz.starteKontakt("pointer", event.pointerId, event.clientX, event.clientY);
+    };
+    const bewegePointer = (event) => {
+      if (!suchphaseRelevant()) return;
+      if (scrollProvenienz.bewegeKontakt("pointer", event.pointerId, event.clientX, event.clientY)) {
+        markiereNutzerabsicht();
+      }
+    };
+    const endePointer = (event) => scrollProvenienz.endeKontakt("pointer", event.pointerId);
+    const starteTouch = (event) => {
+      if (!suchphaseRelevant() && !form.contains(event.target)) return;
+      for (const touch of Array.from(event.changedTouches || [])) {
+        scrollProvenienz.starteKontakt("touch", touch.identifier, touch.clientX, touch.clientY);
+      }
+    };
+    const bewegeTouch = (event) => {
+      if (!suchphaseRelevant()) return;
+      for (const touch of Array.from(event.changedTouches || [])) {
+        if (scrollProvenienz.bewegeKontakt("touch", touch.identifier, touch.clientX, touch.clientY)) {
+          markiereNutzerabsicht();
+        }
+      }
+    };
+    const endeTouch = (event) => {
+      for (const touch of Array.from(event.changedTouches || [])) {
+        scrollProvenienz.endeKontakt("touch", touch.identifier);
+      }
+    };
+    const beobachteWheel = () => {
+      if (suchphaseRelevant()) markiereNutzerabsicht();
+    };
+    const beobachteScrollTaste = (event) => {
+      if (!event.defaultPrevented && suchphaseRelevant() && istScrollTaste(event.key)
+        && !istEditierbaresOderInteraktivesZiel(event.target)) markiereNutzerabsicht();
+    };
     const stabilisiereFokuswechsel = () => {
       const generation = ++stabilisierungGeneration;
       cancelAnimationFrame(stabilisierungFrame);
@@ -185,10 +258,20 @@ export function GlobalSearchBar({
       stabilisierungFrame = requestAnimationFrame(sample);
     };
     viewportUpdateRef.current = aktualisiere;
-    viewport.addEventListener("resize", aktualisiere);
-    viewport.addEventListener("scroll", aktualisiere);
-    window.addEventListener("resize", aktualisiere);
-    window.addEventListener("scroll", aktualisiere, { passive: true });
+    viewport.addEventListener("resize", beobachteViewportBewegung);
+    viewport.addEventListener("scroll", beobachteViewportBewegung);
+    window.addEventListener("resize", beobachteViewportBewegung);
+    window.addEventListener("scroll", beobachteViewportBewegung, { passive: true });
+    document.addEventListener("pointerdown", startePointer, { passive: true });
+    document.addEventListener("pointermove", bewegePointer, { passive: true });
+    document.addEventListener("pointerup", endePointer, { passive: true });
+    document.addEventListener("pointercancel", endePointer, { passive: true });
+    document.addEventListener("touchstart", starteTouch, { passive: true });
+    document.addEventListener("touchmove", bewegeTouch, { passive: true });
+    document.addEventListener("touchend", endeTouch, { passive: true });
+    document.addEventListener("touchcancel", endeTouch, { passive: true });
+    document.addEventListener("wheel", beobachteWheel, { passive: true });
+    document.addEventListener("keydown", beobachteScrollTaste);
     /* WebKit liefert die Keyboard-Geometrie teils erst nach dem Focus-Frame,
        ohne sofort ein VisualViewport-Resize auszulösen. Eine kurze, begrenzte
        Samplingphase schließt dieses Loch; dauerhaftes Polling gibt es nicht. */
@@ -199,14 +282,24 @@ export function GlobalSearchBar({
       cancelAnimationFrame(frame);
       stabilisierungGeneration += 1;
       cancelAnimationFrame(stabilisierungFrame);
-      viewport.removeEventListener("resize", aktualisiere);
-      viewport.removeEventListener("scroll", aktualisiere);
-      window.removeEventListener("resize", aktualisiere);
-      window.removeEventListener("scroll", aktualisiere);
+      viewport.removeEventListener("resize", beobachteViewportBewegung);
+      viewport.removeEventListener("scroll", beobachteViewportBewegung);
+      window.removeEventListener("resize", beobachteViewportBewegung);
+      window.removeEventListener("scroll", beobachteViewportBewegung);
+      document.removeEventListener("pointerdown", startePointer);
+      document.removeEventListener("pointermove", bewegePointer);
+      document.removeEventListener("pointerup", endePointer);
+      document.removeEventListener("pointercancel", endePointer);
+      document.removeEventListener("touchstart", starteTouch);
+      document.removeEventListener("touchmove", bewegeTouch);
+      document.removeEventListener("touchend", endeTouch);
+      document.removeEventListener("touchcancel", endeTouch);
+      document.removeEventListener("wheel", beobachteWheel);
+      document.removeEventListener("keydown", beobachteScrollTaste);
       eingabe.removeEventListener("focus", stabilisiereFokuswechsel);
       eingabe.removeEventListener("blur", stabilisiereFokuswechsel);
       tastaturPhaseAktiv = false;
-      raeume();
+      normalisiere();
       if (viewportUpdateRef.current === aktualisiere) viewportUpdateRef.current = () => {};
     };
   }, []);

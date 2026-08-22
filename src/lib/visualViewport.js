@@ -1,9 +1,73 @@
 export const VIEWPORT_RAND = 8;
 export const MIN_TASTATUR_HOEHENVERLUST = 120;
+export const SCROLL_ABSICHT_SCHWELLE = 8;
+export const SCROLL_PROVENIENZ = Object.freeze({
+  NEUTRAL: "neutral",
+  KEYBOARD_AUTO: "keyboard-auto",
+  NUTZER: "nutzer",
+});
+
+const SCROLL_TASTEN = new Set([
+  "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp",
+  "End", "Home", "PageDown", "PageUp", " ", "Spacebar",
+]);
 
 const endlicheZahl = (wert, fallback = 0) => (
   Number.isFinite(Number(wert)) ? Number(wert) : fallback
 );
+
+export function istScrollTaste(taste) {
+  return SCROLL_TASTEN.has(String(taste || ""));
+}
+
+/* Scroll-Events besitzen weder in Safari noch im VisualViewport eine belastbare
+   Quelle. Diese kleine Zustandsmaschine wertet deshalb nur eine echte, vorher
+   beobachtete Absicht als Nutzerscroll: Bewegung über der Schwelle, Wheel oder
+   Scrolltaste. Ein Fokus-/Keyboard-Scroll ohne solche Absicht bleibt davon
+   getrennt und darf die bereits sichtbare Suchleiste nicht weiterziehen. */
+export function erstelleScrollProvenienz({
+  bewegungsschwelle = SCROLL_ABSICHT_SCHWELLE,
+} = {}) {
+  const schwelle = Math.max(1, endlicheZahl(bewegungsschwelle, SCROLL_ABSICHT_SCHWELLE));
+  const kontakte = new Map();
+  let modus = SCROLL_PROVENIENZ.NEUTRAL;
+  const kontaktKey = (typ, id) => `${String(typ || "pointer")}:${String(id ?? "0")}`;
+  return Object.freeze({
+    starteKontakt(typ, id, x, y) {
+      kontakte.set(kontaktKey(typ, id), { x: endlicheZahl(x), y: endlicheZahl(y) });
+      return modus;
+    },
+    bewegeKontakt(typ, id, x, y) {
+      const start = kontakte.get(kontaktKey(typ, id));
+      if (!start) return false;
+      const deltaX = endlicheZahl(x) - start.x;
+      const deltaY = endlicheZahl(y) - start.y;
+      if (Math.hypot(deltaX, deltaY) < schwelle) return false;
+      modus = SCROLL_PROVENIENZ.NUTZER;
+      return true;
+    },
+    endeKontakt(typ, id) {
+      kontakte.delete(kontaktKey(typ, id));
+      return modus;
+    },
+    markiereNutzerabsicht() {
+      modus = SCROLL_PROVENIENZ.NUTZER;
+      return modus;
+    },
+    markiereKeyboardAuto() {
+      if (modus !== SCROLL_PROVENIENZ.NUTZER) modus = SCROLL_PROVENIENZ.KEYBOARD_AUTO;
+      return modus;
+    },
+    normalisiere() {
+      kontakte.clear();
+      modus = SCROLL_PROVENIENZ.NEUTRAL;
+      return modus;
+    },
+    modus() { return modus; },
+    istKeyboardAuto() { return modus === SCROLL_PROVENIENZ.KEYBOARD_AUTO; },
+    istNutzerabsicht() { return modus === SCROLL_PROVENIENZ.NUTZER; },
+  });
+}
 
 export function istNeutraleViewportSkalierung(scale, toleranz = 0.02) {
   const skalierung = Number(scale);

@@ -2,7 +2,10 @@ import { strict as assert } from "node:assert";
 import {
   VIEWPORT_RAND,
   MIN_TASTATUR_HOEHENVERLUST,
+  SCROLL_PROVENIENZ,
+  erstelleScrollProvenienz,
   istNeutraleViewportSkalierung,
+  istScrollTaste,
   klassifiziereBildschirmtastatur,
   berechneSuchleistenGeometrie,
 } from "./src/lib/visualViewport.js";
@@ -22,6 +25,40 @@ pruefe("neutrale Skalierung akzeptiert scale rund um 1", () => {
   assert.equal(istNeutraleViewportSkalierung(1.001), true);
   assert.equal(istNeutraleViewportSkalierung(1.019), true);
   assert.equal(istNeutraleViewportSkalierung(0.981), true);
+});
+
+pruefe("Keyboard-Autoscroll bleibt ohne echte Bewegungsabsicht getrennt", () => {
+  const provenienz = erstelleScrollProvenienz();
+  provenienz.starteKontakt("touch", 4, 120, 540);
+  assert.equal(provenienz.bewegeKontakt("touch", 4, 124, 545), false);
+  assert.equal(provenienz.markiereKeyboardAuto(), SCROLL_PROVENIENZ.KEYBOARD_AUTO);
+  assert.equal(provenienz.istKeyboardAuto(), true);
+  assert.equal(provenienz.istNutzerabsicht(), false);
+});
+
+pruefe("Touch-/Pointer-Bewegung über der Schwelle gewinnt gegen Keyboard-Autoscroll", () => {
+  const provenienz = erstelleScrollProvenienz({ bewegungsschwelle: 8 });
+  provenienz.markiereKeyboardAuto();
+  provenienz.starteKontakt("pointer", 7, 20, 20);
+  assert.equal(provenienz.bewegeKontakt("pointer", 7, 20, 27), false);
+  assert.equal(provenienz.bewegeKontakt("pointer", 7, 20, 28), true);
+  assert.equal(provenienz.istNutzerabsicht(), true);
+  provenienz.markiereKeyboardAuto();
+  assert.equal(provenienz.modus(), SCROLL_PROVENIENZ.NUTZER);
+  provenienz.endeKontakt("pointer", 7);
+  assert.equal(provenienz.bewegeKontakt("pointer", 7, 20, 40), false);
+});
+
+pruefe("Wheel/Scrolltaste können Nutzerabsicht markieren und Recovery normalisiert", () => {
+  const provenienz = erstelleScrollProvenienz();
+  for (const taste of ["ArrowDown", "PageUp", "Home", "End", " "]) {
+    assert.equal(istScrollTaste(taste), true, taste);
+  }
+  assert.equal(istScrollTaste("a"), false);
+  provenienz.markiereNutzerabsicht();
+  assert.equal(provenienz.modus(), SCROLL_PROVENIENZ.NUTZER);
+  provenienz.normalisiere();
+  assert.equal(provenienz.modus(), SCROLL_PROVENIENZ.NEUTRAL);
 });
 
 pruefe("klassifizierte Tastatur bleibt aktiv bei Fokus, scale ~1 und ausreichend großem Höhenverlust", () => {

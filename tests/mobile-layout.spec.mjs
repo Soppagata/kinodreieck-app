@@ -1858,7 +1858,7 @@ test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Ein
   await expect(page.locator(".kd-fx-deep-space")).toHaveCount(0);
 });
 
-test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visual Viewport stabil", async ({ page }) => {
+test("Globale Suche trennt Keyboard-Autoscroll und echte Nutzergesten im kleinen Visual Viewport", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
@@ -1896,15 +1896,31 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     window.scrollTo(0, Math.min(240, Math.max(0, document.documentElement.scrollHeight - innerHeight)));
     return window.scrollY;
   });
-  const anker = () => suche.evaluate((element) => {
+  const position = () => suche.evaluate((element) => {
     const rect = element.getBoundingClientRect();
-    return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
+    return {
+      top: Math.round(rect.top),
+      bottom: Math.round(rect.bottom),
+      anker: Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height),
+    };
   });
+  const anker = async () => (await position()).anker;
 
   /* iOS kann die VisualViewport-Geometrie erst nach dem Focus-Frame liefern,
      ohne unmittelbar ein Resize-Ereignis zu senden. Das folgende kurze
      Fenster bildet diesen WebKit-Vertrag nach: Scrollen darf nicht der erste
      Auslöser sein, der die Suchleiste wieder über die Tastatur holt. */
+  await page.evaluate(() => {
+    document.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true, pointerId: 18, clientX: 180, clientY: 300,
+    }));
+    document.dispatchEvent(new PointerEvent("pointermove", {
+      bubbles: true, pointerId: 18, clientX: 180, clientY: 330,
+    }));
+    document.dispatchEvent(new PointerEvent("pointerup", {
+      bubbles: true, pointerId: 18, clientX: 180, clientY: 330,
+    }));
+  });
   await eingabe.focus();
   await page.evaluate(() => new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -1916,6 +1932,7 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   });
   await page.waitForTimeout(160);
   await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect(suche).not.toHaveClass(/tastatur-autoscroll/);
   await expect.poll(anker).toBe(-8);
   await page.evaluate(() => window.__kdSetVisualViewport({
     height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
@@ -1934,9 +1951,34 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
   await expect(suche).toHaveClass(/tastatur-offen/);
   await expect.poll(anker).toBe(-8);
+  const vorAutoScroll = await position();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
   await expect(suchen).toBeFocused();
   await expect(eingabe).toHaveValue("Fokus und Text bleiben erhalten");
+  await expect(suche).toHaveClass(/tastatur-autoscroll/);
+  await expect.poll(position).toMatchObject({ bottom: vorAutoScroll.bottom, anker: -88 });
+
+  /* Ein Tap oder Fingerzittern ist noch keine Scrollabsicht. Erst eine echte
+     Bewegung über der Schwelle darf die Leiste wieder am aktuellen sichtbaren
+     Viewport anpinnen. */
+  await page.evaluate(() => {
+    document.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true, pointerId: 19, clientX: 180, clientY: 300,
+    }));
+    document.dispatchEvent(new PointerEvent("pointermove", {
+      bubbles: true, pointerId: 19, clientX: 184, clientY: 304,
+    }));
+  });
+  await expect.poll(position).toMatchObject({ bottom: vorAutoScroll.bottom, anker: -88 });
+  await page.evaluate(() => {
+    document.dispatchEvent(new PointerEvent("pointermove", {
+      bubbles: true, pointerId: 19, clientX: 180, clientY: 314,
+    }));
+    document.dispatchEvent(new PointerEvent("pointerup", {
+      bubbles: true, pointerId: 19, clientX: 180, clientY: 314,
+    }));
+  });
+  await expect(suche).not.toHaveClass(/tastatur-autoscroll/);
   await expect.poll(anker).toBe(-8);
   await page.evaluate(() => window.__kdSetVisualViewport({
     height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
@@ -1947,6 +1989,27 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   await eingabe.focus();
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
+  await expect.poll(anker).toBe(-8);
+  const vorWheelAutoScroll = await position();
+  await page.evaluate(() => window.__kdSetVisualViewport({
+    height: 500, offsetTop: 100, typ: "scroll",
+  }));
+  await expect(suche).toHaveClass(/tastatur-autoscroll/);
+  await expect.poll(position).toMatchObject({
+    bottom: vorWheelAutoScroll.bottom,
+    anker: -48,
+  });
+  await eingabe.evaluate((element) => element.dispatchEvent(new KeyboardEvent("keydown", {
+    bubbles: true, key: "ArrowDown",
+  })));
+  await suchen.evaluate((element) => element.dispatchEvent(new KeyboardEvent("keydown", {
+    bubbles: true, key: " ",
+  })));
+  await expect(suche).toHaveClass(/tastatur-autoscroll/);
+  await page.evaluate(() => document.dispatchEvent(new WheelEvent("wheel", {
+    bubbles: true, deltaY: 32,
+  })));
+  await expect(suche).not.toHaveClass(/tastatur-autoscroll/);
   await expect.poll(anker).toBe(-8);
 
   /* Ein Button-/Trefferfokus darf die erkannte Keyboard-Phase nicht räumen,
@@ -2044,6 +2107,9 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     height: 180, width: 568, offsetTop: 40, offsetLeft: 0,
   }));
   await expect(suche).toHaveClass(/tastatur-offen/);
+  await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", {
+    bubbles: true, key: "PageDown",
+  })));
   await expect.poll(() => suche.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return {
