@@ -1370,6 +1370,18 @@ test("C0 ai-task ist ohne exakt true vor Auth, Budget, Log und Provider aus", as
   }
 });
 
+test("C0a kostenfreie health-Messung bleibt bei ausgeschaltetem ai-task lesbar", async () => {
+  Deno.env.delete("KD_AI_TASK_ENABLED");
+  const r = await ruf({ task: "health", vorgangId: neueVorgangId() });
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.ok, true, "ok");
+  gleich(r.daten.task, "health", "nur der reservierte Messpfad läuft");
+  gleich(kontofreigabeAufrufe().length, 1, "Auth und Kontofreigabe bleiben aktiv");
+  gleich(konfigAufrufe().length, 1, "serverseitige Budgetkonfiguration wird gelesen");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
+});
+
 test("C0b ai-task bewahrt mit exakt true den bisherigen Vertrag", async () => {
   Deno.env.set("KD_AI_TASK_ENABLED", "true");
   const r = await echoRuf();

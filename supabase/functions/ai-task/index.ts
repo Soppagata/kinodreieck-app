@@ -3003,9 +3003,6 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsKopf(origin) });
   }
-  if (!aiTaskIstAktiv()) {
-    return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "ai-task-aus" });
-  }
   if (req.method !== "POST") {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "nur-post",
@@ -3025,6 +3022,13 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   const task = typeof koerper.task === "string" ? koerper.task : "";
+  /* Der Default-off-Schalter sperrt alle eigentlichen KI-Aufgaben weiterhin
+     vor Auth, DB, Budget und Anbieter. Nur `health` bleibt lesbar: Dieser
+     reservierte, providerfreie Pfad IST die serverseitige Vor-/Nachmessung,
+     die den Entdecken-Livevertrag erst fail-closed freigeben kann. */
+  if (task !== "health" && !aiTaskIstAktiv()) {
+    return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "ai-task-aus" });
+  }
   const vorgangId = typeof koerper.vorgangId === "string" ? koerper.vorgangId : null;
   const promptVersionRoh = eigenerWert(koerper, "promptVersion");
   const profilVersionRoh = eigenerWert(koerper, "profilVersion");
