@@ -1638,6 +1638,19 @@ test("ED1 Entdecken erlaubt nur den festen Preview-Branch-Origin", async () => {
   ));
   gleich(erlaubt.status, 204, "Preview-Preflight");
   gleich(erlaubt.headers.get("Access-Control-Allow-Origin"), previewOrigin, "Preview-Origin");
+  wahr(
+    erlaubt.headers.get("Access-Control-Allow-Headers")?.includes("x-kd-entdecken-recovery"),
+    "Recoveryheader ist fuer den geschuetzten Owner-Smoke erlaubt",
+  );
+
+  const falscherRecoveryHeader = await handler(new Request(
+    "https://test.supabase.co/functions/v1/entdecken-daily-task",
+    {
+      method: "GET",
+      headers: { Origin: previewOrigin, "X-KD-Entdecken-Recovery": "irgendetwas" },
+    },
+  ));
+  gleich(falscherRecoveryHeader.status, 403, "unbekannter Recoveryheader bleibt fail-closed");
 
   const unveroeffentlicht = await handler(new Request(
     "https://test.supabase.co/functions/v1/entdecken-daily-task",

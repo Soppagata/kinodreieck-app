@@ -357,17 +357,22 @@ await check("Browserdienst sendet accountlos genau einen bodylosen GET", async (
 
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");
 const recoveryMigration = fs.readFileSync("./supabase/migrations/20260822210000_entdecken_weekly_recovery.sql", "utf8");
+const recoveryClaimMigration = fs.readFileSync("./supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
 const controllerSource = fs.readFileSync("./src/controllers/useWebDiscoveryFeed.js", "utf8");
 const appSource = fs.readFileSync("./src/App.jsx", "utf8");
 
-await check("Function bleibt auf dem bestehenden Endpoint accountlos und ohne lokale Nutzerdaten", () => {
+await check("Normaler Browser-GET bleibt accountlos; nur der interne Recoveryheader verlangt den Owner", () => {
   assert.match(functionSource, /req\.method !== "GET"/);
   assert.match(functionSource, /req\.body !== null/);
   assert.match(functionSource, /req\.headers\.get\("apikey"\) !== publishableKey/);
-  assert.doesNotMatch(functionSource, /auth\.getUser|kd_account_access|personal_ai|accountId/);
+  assert.match(functionSource, /recoveryRequested/);
+  assert.match(functionSource, /user\.auth\.getUser\(token\)/);
+  assert.match(functionSource, /\.from\("kd_account_access"\)/);
+  assert.match(functionSource, /access\?\.role !== "owner"/);
+  assert.match(functionSource, /\.rpc\("kd_entdecken_daily_recovery_claim"\)/);
   assert.doesNotMatch(functionSource, /profile|seen|gesehen|watchlist|selectedServices|radar/i);
   assert.match(functionSource, /p_fence_token: claimContext\?\.fenceToken/);
   assert.equal((runnerSource.match(/adapter\.search\(queryContext\)/g) || []).length, 1);
@@ -402,6 +407,18 @@ await check("Recovery ist default-off, nach Cooldown genau einmal service-role-a
   assert.match(recoveryMigration, /grant execute on function public\.kd_entdecken_weekly_recovery_authorize\(text\)\s+to service_role/i);
   assert.match(recoveryMigration, /revoke all on function public\.kd_entdecken_weekly_recovery_authorize\(text\)\s+from public, anon, authenticated/i);
   assert.doesNotMatch(recoveryCode, /set\s+payload\s*=\s*null|setInterval|setTimeout|scheduler/i);
+});
+
+await check("Owner-Recovery autorisiert und claimt atomar in genau einem service-role-only RPC", () => {
+  const recoveryClaimCode = recoveryClaimMigration.replace(/^--.*$/gm, "");
+  assert.match(recoveryClaimMigration, /create function public\.kd_entdecken_daily_recovery_claim\(\)/i);
+  assert.match(recoveryClaimMigration, /auth\.role\(\) is distinct from 'service_role'/i);
+  assert.match(recoveryClaimMigration, /kd_entdecken_weekly_recovery_authorize\(v_iso_week\)/i);
+  assert.match(recoveryClaimMigration, /kd_entdecken_daily_claim\(\)/i);
+  assert.match(recoveryClaimMigration, /raise exception/i);
+  assert.match(recoveryClaimMigration, /grant execute on function public\.kd_entdecken_daily_recovery_claim\(\)\s+to service_role/i);
+  assert.match(recoveryClaimMigration, /revoke all on function public\.kd_entdecken_daily_recovery_claim\(\)\s+from public, anon, authenticated/i);
+  assert.doesNotMatch(recoveryClaimCode, /setInterval|setTimeout|scheduler|loop\s|while\s/i);
 });
 
 await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {

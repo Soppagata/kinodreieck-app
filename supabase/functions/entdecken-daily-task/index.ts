@@ -14,11 +14,14 @@ const ALLOWED_ORIGINS = new Set([
   "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev",
   "http://localhost:5173",
 ]);
+const RECOVERY_HEADER = "x-kd-entdecken-recovery";
+const RECOVERY_HEADER_VALUE = "owner-once-v1";
+const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${RECOVERY_HEADER}`,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -84,6 +87,11 @@ export function createEntdeckenDailyHandler({
         || (origin !== null && !ALLOWED_ORIGINS.has(origin))) {
       return json({ ok: false, status: "disabled", feed: null }, 405, origin);
     }
+    const recoveryHeader = req.headers.get(RECOVERY_HEADER);
+    const recoveryRequested = recoveryHeader !== null;
+    if (recoveryRequested && recoveryHeader !== RECOVERY_HEADER_VALUE) {
+      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
 
     const supabaseUrl = text(Deno.env.get("SUPABASE_URL"));
     const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
@@ -96,6 +104,43 @@ export function createEntdeckenDailyHandler({
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    let preclaimedRecovery: Record<string, unknown> | null = null;
+    if (recoveryRequested) {
+      const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
+      const user = createClient(supabaseUrl, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: claimsData, error: claimsError } = await user.auth.getClaims(token);
+      const claims = (claimsData as { claims?: Record<string, unknown> } | null)?.claims;
+      const accountId = typeof claims?.sub === "string" ? claims.sub : "";
+      const { data: userData, error: userError } = token
+        ? await user.auth.getUser(token)
+        : { data: null, error: new Error("missing-token") };
+      if (claimsError || userError || claims?.role !== "authenticated"
+          || !UUID_FORM.test(accountId) || userData?.user?.id !== accountId) {
+        return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+      }
+      const { data: access, error: accessError } = await admin
+        .from("kd_account_access")
+        .select("role,active,personal_ai")
+        .eq("account_id", accountId)
+        .maybeSingle();
+      if (accessError || access?.role !== "owner" || access?.active !== true
+          || access?.personal_ai !== true) {
+        return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+      }
+      const { data: recoveryClaim, error: recoveryError } = await admin
+        .rpc("kd_entdecken_daily_recovery_claim");
+      if (recoveryError) {
+        return json({ ok: false, status: "recovery_unavailable", feed: null }, 503, origin);
+      }
+      if (!recoveryClaim || typeof recoveryClaim !== "object" || Array.isArray(recoveryClaim)
+          || recoveryClaim.refresh !== true) {
+        return json({ ok: false, status: "recovery_unavailable", feed: null }, 409, origin);
+      }
+      preclaimedRecovery = recoveryClaim as Record<string, unknown>;
+    }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
     const loadSources = async () => {
@@ -114,6 +159,12 @@ export function createEntdeckenDailyHandler({
     };
     const repository = {
       async claimRefresh() {
+        if (preclaimedRecovery) {
+          const data = preclaimedRecovery;
+          preclaimedRecovery = null;
+          claimContext = data;
+          return data;
+        }
         const { data, error } = await admin.rpc("kd_entdecken_daily_claim");
         if (error) throw error;
         claimContext = data;

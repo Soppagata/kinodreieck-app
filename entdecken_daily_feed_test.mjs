@@ -316,6 +316,7 @@ await check("Budgetpfad macht genau einen bodylosen Live-GET ohne Retry und miss
   assert.equal(discoveryCalls.length, 1);
   assert.equal(discoveryCalls[0].options.method, "GET");
   assert.equal("body" in discoveryCalls[0].options, false);
+  assert.equal(discoveryCalls[0].options.headers["X-KD-Entdecken-Recovery"], "owner-once-v1");
   assert.equal(healthSpends.length, 0);
   assert.equal(output.length, 1);
 

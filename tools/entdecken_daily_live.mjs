@@ -21,6 +21,8 @@ import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-dail
 
 const FUNCTION_NAME = "entdecken-daily-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
+const RECOVERY_HEADER = "X-KD-Entdecken-Recovery";
+const RECOVERY_HEADER_VALUE = "owner-once-v1";
 const RESPONSE_KEYS = Object.freeze([
   "feed", "ok", "providerRequests", "searchRequests", "status", "writes",
 ]);
@@ -114,6 +116,7 @@ export async function runEntdeckenDailyOnce({
           apikey: verbindung.anon,
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
+          [RECOVERY_HEADER]: RECOVERY_HEADER_VALUE,
         },
       },
       { fetchImpl, timeoutMs: initialStand.anbieterRequestTimeoutMs },

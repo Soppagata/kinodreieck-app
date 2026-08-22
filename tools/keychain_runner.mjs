@@ -379,6 +379,9 @@ export async function starteModus({
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
+  const effectiveEntdeckenDailyOnce = entdeckenDailyOnce
+    || (modus === "ai-live" && ownerApprovedServerBudget
+      && !radarWebsearchOnce && !radarEntdeckenOnce);
   const env = baueKindUmgebung({
     modus,
     ambientEnv,
@@ -387,7 +390,7 @@ export async function starteModus({
     confirmPaid,
     ownerApprovedServerBudget,
     radarWebsearchOnce,
-    entdeckenDailyOnce,
+    entdeckenDailyOnce: effectiveEntdeckenDailyOnce,
     radarEntdeckenOnce,
   });
   const gibLiveLaufFrei = ["ai-live", "ai-eval"].includes(modus)
@@ -397,7 +400,7 @@ export async function starteModus({
     return await new Promise((resolveCode) => {
       const argv = radarWebsearchOnce
         ? definition.radarWebsearchOnceArgv
-        : (entdeckenDailyOnce
+        : (effectiveEntdeckenDailyOnce
           ? definition.entdeckenDailyOnceArgv
           : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv));
       const kind = spawnImpl(process.execPath, argv, {
@@ -442,7 +445,13 @@ export async function main(
   const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
   const radarEntdeckenOnce = rest.includes(RADAR_ENTDECKEN_ONCE_FLAG);
-  const entdeckenDailyOnce = process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV] === "remote-window-v1";
+  /* Die exakt freigegebene Owner-Variante ohne weiteren Sonderparameter ist
+     der eine Entdecken-Produktlauf. Damit bleibt der Nutzerbefehl schmal und
+     der Recoveryrequest startet trotzdem erst hinter der Budget-Vorabmessung. */
+  const ownerEntdeckenOnce = modus === "ai-live" && ownerApprovedServerBudget
+    && !radarWebsearchOnce && !radarEntdeckenOnce;
+  const entdeckenDailyOnce = ownerEntdeckenOnce
+    || process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV] === "remote-window-v1";
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
       && arg !== RADAR_ENTDECKEN_ONCE_FLAG

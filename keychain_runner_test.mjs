@@ -310,6 +310,29 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     lokaleKonfig: PUBLIC,
     keychainLeser: () => SONDERGEHEIMNIS,
     spawnImpl,
+    ownerApprovedServerBudget: true,
+  });
+  pruefe("Exakte Owner-Variante startet Entdecken hinter dem Budgetwächter",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
+      && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1");
+}
+
+{
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
     radarWebsearchOnce: true,
   });
   pruefe("Radar-Einmallauf startet nur sein fest verdrahtetes Skript hinter dem Budgetwächter",
