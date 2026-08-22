@@ -181,6 +181,33 @@ function stop(code, message) {
   throw new RadarRemoteStartStop(code, message);
 }
 
+function canonicalSqlIdentifier(value) {
+  if (typeof value !== "string" || !/^[a-z_][a-z0-9_]*$/.test(value)) {
+    stop("CANONICAL_QUERY_INVALID", "Kanonische Tabellenprojektion enthaelt einen ungueltigen Bezeichner.");
+  }
+  return `"${value}"`;
+}
+
+export function buildRadarEntdeckenCanonicalTableRowsSql({
+  schema,
+  table,
+  excludedColumns = [],
+} = {}) {
+  if (!Array.isArray(excludedColumns)
+      || new Set(excludedColumns).size !== excludedColumns.length) {
+    stop("CANONICAL_QUERY_INVALID", "Kanonische Tabellenprojektion enthaelt ungueltige Ausschlussspalten.");
+  }
+  const relation = `${canonicalSqlIdentifier(schema)}.${canonicalSqlIdentifier(table)}`;
+  const columns = excludedColumns.map((column) => {
+    canonicalSqlIdentifier(column);
+    return `'${column}'`;
+  });
+  const excluded = columns.length > 0
+    ? `ARRAY[${columns.join(",")}]::text[]`
+    : "ARRAY[]::text[]";
+  return `COPY (SELECT payload FROM (SELECT (to_jsonb(t)-${excluded})::text AS payload FROM ONLY ${relation} t) canonical_rows ORDER BY payload COLLATE "C") TO STDOUT;`;
+}
+
 export function validateRadarLedgerBaseline(actual, expected) {
   if (!Array.isArray(actual) || !Array.isArray(expected)
       || !isDeepStrictEqual(actual, expected)) {
