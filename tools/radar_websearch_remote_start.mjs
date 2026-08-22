@@ -208,6 +208,45 @@ export function buildRadarEntdeckenCanonicalTableRowsSql({
   return `COPY (SELECT payload FROM (SELECT (to_jsonb(t)-${excluded})::text AS payload FROM ONLY ${relation} t) canonical_rows ORDER BY payload COLLATE "C") TO STDOUT;`;
 }
 
+export function parseRadarEntdeckenAuthIdProjection(value) {
+  let text;
+  try {
+    text = Buffer.isBuffer(value)
+      ? new TextDecoder("utf-8", { fatal: true }).decode(value)
+      : String(value ?? "");
+  } catch {
+    stop("RESTORE_AUTH_IDS_INVALID", "Auth-ID-Projektion ist nicht gueltiges UTF-8.");
+  }
+  if (!text.endsWith("\n") || /[\0\r]/.test(text)) {
+    stop("RESTORE_AUTH_IDS_INVALID", "Auth-ID-Projektion besitzt keine kanonische Zeilenform.");
+  }
+  const ids = text.slice(0, -1).split("\n");
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  if (ids.length === 0 || ids.some((id) => !uuid.test(id))
+      || new Set(ids).size !== ids.length
+      || ids.some((id, index) => index > 0 && ids[index - 1] >= id)) {
+    stop("RESTORE_AUTH_IDS_INVALID", "Auth-ID-Projektion ist leer, unsortiert, doppelt oder ungueltig.");
+  }
+  return Object.freeze(ids);
+}
+
+export function buildRadarEntdeckenRestoreScaffoldSql(authIds) {
+  if (!Array.isArray(authIds) || authIds.length === 0) {
+    stop("RESTORE_AUTH_IDS_INVALID", "Restore-Scaffold benoetigt kanonische Auth-IDs.");
+  }
+  const ids = parseRadarEntdeckenAuthIdProjection(Buffer.from(`${authIds.join("\n")}\n`, "utf8"));
+  const values = ids.map((id) => `('${id}'::uuid)`).join(",");
+  return [
+    "create schema auth;",
+    "create table auth.users(id uuid primary key);",
+    "create function auth.uid() returns uuid language sql stable as 'select nullif(current_setting(''request.jwt.claim.sub'', true), '''')::uuid';",
+    "create schema extensions;",
+    "create extension pgcrypto with schema extensions;",
+    "create schema supabase_migrations;",
+    `insert into auth.users(id) values ${values};`,
+  ].join("\n");
+}
+
 export function validateRadarLedgerBaseline(actual, expected) {
   if (!Array.isArray(actual) || !Array.isArray(expected)
       || !isDeepStrictEqual(actual, expected)) {
