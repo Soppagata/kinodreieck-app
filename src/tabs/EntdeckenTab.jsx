@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
 import { ladeProfil } from "../lib/profil.js";
@@ -10,6 +10,10 @@ import {
 } from "../lib/entdeckenUi.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
+import {
+  RADAR_TARGET_SEARCH_MIN_LENGTH,
+  searchRadarTargets,
+} from "../lib/radarTargetSearch.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -102,7 +106,7 @@ function ManageDialog({
                     onClick={() => onShareChange?.(entry.targetId, !shared)}>{shared ? "Nicht mehr teilen" : "Anonym teilen"}</button> : null}
                 </div>
               </li>;
-            })}</ul> : <p className="kd-entdecken-leer">Noch kein Werk im Radar.</p>}
+            })}</ul> : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
             {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
               <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</small></span>
               {entry.authority === "local" && onPersonRadarChange ? <div>
@@ -179,28 +183,14 @@ function RecommendationsView({
   </section>;
 }
 
-function catalogRadarTargets({ master, streamingKnown, streamingDiscover }) {
-  const rows = [
-    ...(master || []).map((entry) => ({ watchmodeId: entry.watchmode_id, catalogId: entry.id, title: entry.titel, type: entry.typ })),
-    ...(streamingKnown?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
-    ...(streamingDiscover?.titel || []).map((entry) => ({ watchmodeId: entry.watchmode_id, title: entry.titel, type: entry.typ })),
-  ];
-  const targets = new Map();
-  for (const row of rows) {
-    const target = createCatalogRadarTarget(row);
-    if (target && !targets.has(target.targetId)) targets.set(target.targetId, target);
-  }
-  return [...targets.values()].sort((a, b) => a.title.localeCompare(b.title, "de-AT"));
-}
-
 function statusText(status, kind = "work") {
   const person = kind === "person";
   const franchise = kind === "franchise";
   return ({
     active: person ? "Person ist jetzt im Radar." : franchise ? "Reihe ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
-    confirmed: person ? "Bestätigte Werke wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
+    confirmed: person ? "Bestätigte Filme oder Serien wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
     no_change: "Keine neue bestätigte Änderung gefunden.",
-    insufficient_evidence: person ? "Noch keine ausreichend belegten Werke gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
+    insufficient_evidence: person ? "Noch keine ausreichend belegten Filme oder Serien gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
     busy: "Dieses Ziel wird bereits geprüft.",
     forbidden: "Dieses Ziel kann gerade nicht geprüft werden.",
     unresolved: franchise ? "Die Reihe konnte nicht eindeutig bestätigt werden." : "Die Person konnte nicht eindeutig bestätigt werden.",
@@ -224,19 +214,21 @@ function RadarView({
   onPersonRadarAdd, onPersonRadarCheck,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
 }) {
-  const [selectedWork, setSelectedWork] = useState("");
-  const [personName, setPersonName] = useState("");
-  const [personRole, setPersonRole] = useState("actor");
-  const [personAddBusy, setPersonAddBusy] = useState(false);
-  const [franchiseName, setFranchiseName] = useState("");
-  const [franchiseAddBusy, setFranchiseAddBusy] = useState(false);
+  const [targetQuery, setTargetQuery] = useState("");
+  const deferredTargetQuery = useDeferredValue(targetQuery);
+  const [targetAddBusy, setTargetAddBusy] = useState("");
+  const targetAddLockRef = useRef(false);
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState(null);
-  const targets = useMemo(
-    () => catalogRadarTargets({ master, streamingKnown, streamingDiscover }),
-    [master, streamingDiscover, streamingKnown],
-  );
-  const targetByToken = useMemo(() => new Map(targets.map((target, index) => [`werk-${index}`, target])), [targets]);
+  const targetSearch = useMemo(() => searchRadarTargets({
+    query: deferredTargetQuery,
+    master,
+    streamingKnown,
+    streamingDiscover,
+    personAvailable: personRadarAvailable,
+    franchiseAvailable: franchiseRadarAvailable,
+  }), [deferredTargetQuery, franchiseRadarAvailable, master, personRadarAvailable,
+    streamingDiscover, streamingKnown]);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const personResults = radarState?.personResults || [];
@@ -254,33 +246,28 @@ function RadarView({
     .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
   [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
 
-  const addWork = () => {
-    const target = targetByToken.get(selectedWork);
-    if (!target) return;
-    onRadarPreview?.(target);
-    setMessage({ status: "active", text: "Prüfe das Werk und bestätige es anschließend für dein Radar." });
-  };
-  const addPerson = async () => {
-    const name = personName.trim();
-    if (!personRadarAvailable || !name || personAddBusy) return;
-    setPersonAddBusy(true); setMessage(null);
+  const addTarget = async (entry) => {
+    if (!entry || targetAddLockRef.current) return;
+    targetAddLockRef.current = true;
+    setMessage(null);
+    if (entry.kind === "catalog") {
+      onRadarPreview?.(entry.target);
+      setTargetQuery("");
+      targetAddLockRef.current = false;
+      return;
+    }
+    setTargetAddBusy(entry.key);
     try {
-      const result = await onPersonRadarAdd?.({ name, role: personRole });
-      setMessage({ status: result?.status, text: statusText(result?.status, "person") });
-      if (result?.status === "active") setPersonName("");
-    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
-    finally { setPersonAddBusy(false); }
-  };
-  const addFranchise = async () => {
-    const name = franchiseName.trim();
-    if (!franchiseRadarAvailable || !name || franchiseAddBusy) return;
-    setFranchiseAddBusy(true); setMessage(null);
-    try {
-      const result = await onFranchiseRadarAdd?.({ name });
-      setMessage({ status: result?.status, text: statusText(result?.status, "franchise") });
-      if (result?.status === "active") setFranchiseName("");
-    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "franchise") }); }
-    finally { setFranchiseAddBusy(false); }
+      const result = entry.kind === "person"
+        ? await onPersonRadarAdd?.(entry.identity)
+        : await onFranchiseRadarAdd?.(entry.franchise);
+      const kind = entry.kind === "person" ? "person" : "franchise";
+      setMessage({ status: result?.status, text: statusText(result?.status, kind) });
+      if (["active", "pending"].includes(result?.status)) setTargetQuery("");
+    } catch {
+      const kind = entry.kind === "person" ? "person" : "franchise";
+      setMessage({ status: "provider_error", text: statusText("provider_error", kind) });
+    } finally { targetAddLockRef.current = false; setTargetAddBusy(""); }
   };
   const checkWork = async (entry) => {
     if (!radarCheckAvailable || busyKey) return;
@@ -304,47 +291,30 @@ function RadarView({
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
-      <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Deine Ziele bleiben auf diesem Gerät."} Ergebnisse erscheinen erst, wenn Werk, Österreich-Bezug und Datum eindeutig belegt sind.</p>
+      <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Deine Ziele bleiben auf diesem Gerät."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
     </div>
-    <div className="kd-entdecken-radar-add-grid">
-      <article className="kd-entdecken-panel">
-        <h3>Werk hinzufügen</h3>
-        {targets.length ? <div className="kd-entdecken-formzeile">
-          <label htmlFor="kd-radar-work">Film oder Serie</label>
-          <select id="kd-radar-work" value={selectedWork} onChange={(event) => setSelectedWork(event.target.value)}>
-            <option value="">Werk auswählen</option>
-            {targets.map((target, index) => <option key={target.targetId} value={`werk-${index}`}>{target.title}</option>)}
-          </select>
-          <button type="button" className="kd-entdecken-primaer" disabled={!selectedWork} onClick={addWork}>Werk ins Radar</button>
-        </div> : <p className="kd-entdecken-leer">Der vorbereitete Katalog ist gerade nicht verfügbar.</p>}
-      </article>
-      <article className="kd-entdecken-panel">
-        <h3>Person hinzufügen</h3>
-        {personRadarAvailable ? <div className="kd-entdecken-formzeile">
-          <label htmlFor="kd-radar-person">Name</label>
-          <input id="kd-radar-person" value={personName} maxLength={160} autoComplete="off" onChange={(event) => setPersonName(event.target.value)} />
-          <label htmlFor="kd-radar-role">Rolle</label>
-          <select id="kd-radar-role" value={personRole} onChange={(event) => setPersonRole(event.target.value)}>
-            <option value="actor">Schauspiel</option><option value="director">Regie</option>
-          </select>
-          <button type="button" className="kd-entdecken-primaer" disabled={!personName.trim() || personAddBusy} onClick={addPerson}>
-            {personAddBusy ? "Wird angelegt…" : "Person ins Radar"}
-          </button>
-        </div> : <p className="kd-entdecken-leer" role="status">Die Personensuche ist derzeit nicht verfügbar. Bereits bestätigte Personen bleiben sichtbar.</p>}
-      </article>
-      <article className="kd-entdecken-panel">
-        <h3>Reihe hinzufügen</h3>
-        {franchiseRadarAvailable ? <div className="kd-entdecken-formzeile">
-          <label htmlFor="kd-radar-franchise">Kanonische Film- oder Serienreihe</label>
-          <input id="kd-radar-franchise" value={franchiseName} maxLength={160} autoComplete="off"
-            placeholder="Zum Beispiel Star Wars" onChange={(event) => setFranchiseName(event.target.value)} />
-          <small>Nur eine eindeutig aufgelöste Reihe mit stabiler ID wird aktiviert.</small>
-          <button type="button" className="kd-entdecken-primaer" disabled={!franchiseName.trim() || franchiseAddBusy} onClick={addFranchise}>
-            {franchiseAddBusy ? "Wird bestätigt…" : "Reihe ins Radar"}
-          </button>
-        </div> : <p className="kd-entdecken-leer" role="status">Die Reihensuche ist derzeit nicht verfügbar. Bereits bestätigte Reihen bleiben sichtbar.</p>}
-      </article>
-    </div>
+    <article className="kd-entdecken-panel kd-radar-zielsuche">
+      <h3>Radarziel hinzufügen</h3>
+      <div className="kd-entdecken-formzeile">
+        <label htmlFor="kd-radar-target-search">Film, Serie, Person oder Reihe</label>
+        <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
+          autoComplete="off" spellCheck={false} placeholder="Film, Serie, Person oder Reihe"
+          aria-controls="kd-radar-target-results" aria-expanded={targetSearch.entries.length > 0}
+          aria-autocomplete="list" onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
+        {targetSearch.status === "idle" ? <small>Gib mindestens {RADAR_TARGET_SEARCH_MIN_LENGTH} Zeichen ein. Die Vorschläge stammen nur aus bereits ID-bestätigten Katalogen.</small> : null}
+        {targetSearch.status === "no_match" ? <p className="kd-entdecken-leer" role="status">Kein eindeutiger Treffer. Versuche einen genaueren Namen.</p> : null}
+        {targetSearch.entries.length ? <ul id="kd-radar-target-results" className="kd-radar-zieltreffer" aria-label="Radarziele">
+          {targetSearch.entries.map((entry) => <li key={entry.key}>
+            <button type="button" data-radar-target-kind={entry.kind} disabled={!!targetAddBusy}
+              onClick={() => void addTarget(entry)}>
+              <strong>{entry.title}</strong>
+              <span>{entry.category}{entry.meta ? ` · ${entry.meta}` : ""}</span>
+              {targetAddBusy === entry.key ? <small>Wird hinzugefügt …</small> : null}
+            </button>
+          </li>)}
+        </ul> : null}
+      </div>
+    </article>
     {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
       role={isErrorStatus(message.status) ? "alert" : "status"}>{message.text}</p> : null}
     <div className="kd-entdecken-radar-grid">
@@ -353,7 +323,7 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.targetType === "franchise" ? "Reihe" : "Werk"}</span>
+          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}</span>
           {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkWork(entry)}>
             {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
@@ -389,7 +359,7 @@ function RadarView({
             <h4>{result.name} · {ROLLEN_LABEL[result.role]}</h4>
             {matches.length ? <ul>{matches.map((entry) => <li key={entry.work.targetId}>
               <strong>{entry.work.title}</strong><span>{entry.work.year}</span>
-            </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Werke.</p>}
+            </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Filme oder Serien.</p>}
           </section>;
         })}
       </article>

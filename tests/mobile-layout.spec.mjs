@@ -1704,7 +1704,18 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
 
-  await eingabe.focus();
+  await eingabe.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true });
+  await expect.poll(() => page.evaluate(() => ({
+    active: document.activeElement?.getAttribute?.("aria-label") || null,
+    position: document.body.style.position,
+    scrollY: window.scrollY,
+  }))).toEqual({ active: null, position: "", scrollY: seitenstand });
+  await eingabe.click();
+  await expect(eingabe).toBeFocused();
+  await expect.poll(() => page.evaluate(() => ({
+    position: document.body.style.position,
+    top: Number.parseFloat(document.body.style.top) || 0,
+  }))).toEqual({ position: "fixed", top: -seitenstand });
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
   await expect.poll(anker).toBe(-8);

@@ -308,7 +308,7 @@ export function useEntdeckenRadarController({
     && typeof radarWebsearchExecutor?.resolveFranchise === "function")
     || (accountRadarServerAvailable && typeof franchiseRadarResolver === "function");
 
-  const fuegePersonRadarHinzu = useCallback(async ({ name, role } = {}) => {
+  const fuegePersonRadarHinzu = useCallback(async ({ name, role, personExternalId = null } = {}) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
     const requestedName = String(name || "").trim();
     let resolved;
@@ -320,6 +320,7 @@ export function useEntdeckenRadarController({
     catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
     const checked = validatePersonIdentity(resolved);
     if (!checked.ok || resolved.role !== role
+        || (personExternalId != null && resolved.personExternalId !== personExternalId)
         || resolved.name.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) !== 0) {
       return Object.freeze({ status: "unresolved", writes: 0 });
     }
@@ -358,7 +359,7 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const fuegeFranchiseRadarHinzu = useCallback(async ({ name } = {}) => {
+  const fuegeFranchiseRadarHinzu = useCallback(async ({ name, franchiseId = null, targetId = null } = {}) => {
     const requestedName = String(name || "").trim();
     if (!franchiseRadarAvailable || !requestedName) {
       return Object.freeze({ status: "unavailable", writes: 0 });
@@ -384,6 +385,8 @@ export function useEntdeckenRadarController({
       && validateTitleGroupMetadata(target.titleGroup, { targetId: target.targetId, title: target.title })
     );
     if (!checked.ok || franchise.kind !== "franchise" || !serverTargetValid
+        || (franchiseId != null && franchise.franchiseId !== franchiseId)
+        || (targetId != null && target?.targetId !== targetId)
         || !franchise.aliases.some((alias) => alias.localeCompare(requestedName, "de-AT", { sensitivity: "base" }) === 0)) {
       return Object.freeze({ status: resolved?.status === "unavailable" ? "unavailable" : "unresolved", writes: 0 });
     }

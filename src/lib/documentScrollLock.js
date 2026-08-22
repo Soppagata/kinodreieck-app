@@ -21,7 +21,7 @@ function restauriere() {
   try { window.scrollTo(0, stand.scrollY); } catch { /* jsdom oder alter Browser */ }
 }
 
-export function sperreDokumentScroll() {
+export function sperreDokumentScroll({ scrollY = null } = {}) {
   if (typeof document === "undefined" || !document.body) return () => {};
   if (sperren === 0) {
     const body = document.body;
@@ -32,7 +32,9 @@ export function sperreDokumentScroll() {
       left: body.style.left,
       right: body.style.right,
       width: body.style.width,
-      scrollY: typeof window !== "undefined" ? window.scrollY || 0 : 0,
+      scrollY: Number.isFinite(scrollY) && scrollY >= 0
+        ? scrollY
+        : typeof window !== "undefined" ? window.scrollY || 0 : 0,
     };
     body.style.overflow = "hidden";
     body.style.position = "fixed";

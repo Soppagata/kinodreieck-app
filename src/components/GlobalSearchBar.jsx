@@ -100,9 +100,12 @@ export function GlobalSearchBar({
     if (!viewport || !form || !eingabe) return undefined;
     let frame = 0;
     let stabilisierungFrame = 0;
+    let fokusFrame = 0;
     let stabilisierungGeneration = 0;
     let phase = "idle";
     let entsperreScroll = null;
+    let fokusIntent = false;
+    let fokusScrollY = 0;
     let aktiv = true;
     let basis = {
       height: Math.max(window.innerHeight, document.documentElement.clientHeight, viewport.height),
@@ -119,6 +122,9 @@ export function GlobalSearchBar({
     };
     const beendePhase = ({ neueBasis = false } = {}) => {
       phase = "idle";
+      cancelAnimationFrame(fokusFrame);
+      fokusFrame = 0;
+      fokusIntent = false;
       stabilisierungGeneration += 1;
       cancelAnimationFrame(stabilisierungFrame);
       raeumeViewportPosition(form);
@@ -237,14 +243,25 @@ export function GlobalSearchBar({
       };
       stabilisierungFrame = requestAnimationFrame(sample);
     };
+    const merkeFokusIntent = () => {
+      fokusIntent = true;
+      fokusScrollY = window.scrollY || 0;
+    };
     const starteFokusphase = () => {
-      if (phase === "idle") {
-        aktualisiereBasis();
-        phase = "focus-pending";
-        entsperreScroll = sperreDokumentScroll();
-      }
-      stabilisiereFokusphase();
-      aktualisiere();
+      cancelAnimationFrame(fokusFrame);
+      fokusFrame = requestAnimationFrame(() => {
+        if (!aktiv || document.activeElement !== eingabe) return;
+        if (phase === "idle") {
+          aktualisiereBasis();
+          phase = "focus-pending";
+          entsperreScroll = sperreDokumentScroll({
+            scrollY: fokusIntent ? fokusScrollY : window.scrollY || 0,
+          });
+        }
+        fokusIntent = false;
+        stabilisiereFokusphase();
+        aktualisiere();
+      });
     };
     const verarbeiteBlur = () => {
       requestAnimationFrame(() => {
@@ -264,20 +281,21 @@ export function GlobalSearchBar({
     viewport.addEventListener("scroll", aktualisiere);
     window.addEventListener("resize", aktualisiere);
     window.addEventListener("scroll", aktualisiere, { passive: true });
-    eingabe.addEventListener("pointerdown", starteFokusphase, { passive: true });
+    eingabe.addEventListener("pointerdown", merkeFokusIntent, { passive: true });
     eingabe.addEventListener("focus", starteFokusphase);
     eingabe.addEventListener("blur", verarbeiteBlur);
     aktualisiere();
     return () => {
       aktiv = false;
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(fokusFrame);
       stabilisierungGeneration += 1;
       cancelAnimationFrame(stabilisierungFrame);
       viewport.removeEventListener("resize", aktualisiere);
       viewport.removeEventListener("scroll", aktualisiere);
       window.removeEventListener("resize", aktualisiere);
       window.removeEventListener("scroll", aktualisiere);
-      eingabe.removeEventListener("pointerdown", starteFokusphase);
+      eingabe.removeEventListener("pointerdown", merkeFokusIntent);
       eingabe.removeEventListener("focus", starteFokusphase);
       eingabe.removeEventListener("blur", verarbeiteBlur);
       beendePhase();

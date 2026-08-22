@@ -23,6 +23,10 @@ import {
   upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
 } from "./src/lib/localEventRadar.js";
+import {
+  RADAR_TARGET_SEARCH_MAX_RESULTS,
+  searchRadarTargets,
+} from "./src/lib/radarTargetSearch.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
@@ -46,6 +50,37 @@ check("Titeltext allein wird niemals zur Radaridentität", () => {
   const actions = createCatalogSearchActions({ title: "Nur ein Name", type: "movie" });
   assert.equal(actions.target, null);
   assert.equal(actions.radar, null);
+});
+check("Radarzielsuche startet erst ab zwei Zeichen, bleibt bei acht ID-Treffern und verwirft ununterscheidbare Kollisionen", () => {
+  assert.equal(searchRadarTargets({ query: "S" }).status, "idle");
+  const many = searchRadarTargets({
+    query: "Testfilm",
+    streamingDiscover: {
+      titel: Array.from({ length: 20 }, (_, index) => ({
+        watchmode_id: 5000 + index, titel: `Testfilm ${index + 1}`, typ: "movie", jahr: 2026,
+      })),
+    },
+  });
+  assert.equal(many.entries.length, RADAR_TARGET_SEARCH_MAX_RESULTS);
+  assert.ok(many.entries.every((entry) => entry.stableId.startsWith("watchmode:") && entry.category === "Film"));
+  const ambiguous = searchRadarTargets({
+    query: "Doppelter Titel",
+    streamingDiscover: { titel: [
+      { watchmode_id: 6101, titel: "Doppelter Titel", typ: "movie", jahr: 2026 },
+      { watchmode_id: 6102, titel: "Doppelter Titel", typ: "movie", jahr: 2026 },
+    ] },
+  });
+  assert.deepEqual(ambiguous.entries, []);
+});
+check("Person und Reihe erscheinen nur als kanonische, typisierte ID-Treffer", () => {
+  const person = searchRadarTargets({ query: "Nicolas", personAvailable: true });
+  assert.deepEqual(person.entries.map((entry) => [entry.category, entry.stableId]), [
+    ["Person", "person:wikidata:Q42869:actor"],
+  ]);
+  const franchise = searchRadarTargets({ query: "Star Wars", franchiseAvailable: true });
+  assert.deepEqual(franchise.entries.map((entry) => [entry.category, entry.stableId]), [
+    ["Reihe", "title-group:v1:star-wars"],
+  ]);
 });
 
 const recommendationInput = {
@@ -305,7 +340,7 @@ try {
   check("Verwaltung hat verständliche Leerzustände ohne technische Schlüssel", () => {
     const dialog = document.querySelector('[role="dialog"][aria-labelledby="kd-entdecken-manage-title"]');
     assert.ok(dialog);
-    assert.match(dialog.textContent, /Noch kein Werk im Radar/);
+    assert.match(dialog.textContent, /Noch kein Ziel im Radar/);
     assert.doesNotMatch(dialog.textContent, /Pilot|Fixture|Proposal|Hash|Outbox|watchmode:/i);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
   });
@@ -372,9 +407,19 @@ try {
     ...baseProps, radarState: createEmptyLocalRadar(), onRadarPreview: (target) => { previewTarget = target; },
   });
   await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
-  await setControl(workPicker.container.querySelector("#kd-radar-work"), "werk-0");
-  await act(async () => { button(workPicker.container, "Werk ins Radar").click(); await tick(); });
-  check("Werk wird nur über den vorbereiteten Katalog an die Bestätigung übergeben", () => {
+  check("Radar öffnet genau ein leeres Suchfeld ohne Vollkatalog-Select oder Fehler", () => {
+    assert.equal(workPicker.container.querySelectorAll("#kd-radar-target-search").length, 1);
+    assert.equal(workPicker.container.querySelectorAll(".kd-radar-zielsuche select").length, 0);
+    assert.equal(workPicker.container.querySelectorAll(".kd-radar-zieltreffer li").length, 0);
+    assert.doesNotMatch(workPicker.container.textContent, /nicht verfügbar|Werk hinzufügen/i);
+  });
+  await setControl(workPicker.container.querySelector("#kd-radar-target-search"), "Passender Film");
+  await act(async () => { await tick(); await tick(); });
+  await act(async () => {
+    workPicker.container.querySelector('[data-radar-target-kind="catalog"]').click();
+    await tick();
+  });
+  check("Film wird nur über die stabile Katalog-ID an die Bestätigung übergeben", () => {
     assert.deepEqual(previewTarget, workTarget);
     assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:91|fixture:|work:/i);
   });
@@ -385,7 +430,7 @@ try {
     target: workTarget, radarState: createEmptyLocalRadar(), accountMode: false,
     onConfirm: async () => { previewConfirmed += 1; return true; }, onClose() {},
   });
-  check("Werk-Abo entsteht erst nach expliziter Bestätigung", () => {
+  check("Radarziel entsteht erst nach expliziter Bestätigung", () => {
     assert.equal(previewConfirmed, 0);
     assert.equal(document.querySelector('.kd-radar-preview input[type="checkbox"]').disabled, true);
   });
@@ -417,7 +462,7 @@ try {
   const workUi = await mount(EntdeckenTab, renderWorkProps());
   await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
   await act(async () => { button(workUi.container, "Jetzt prüfen").click(); await tick(); });
-  check("Werkprüfung zeigt einen klaren Ladezustand und startet genau einmal", () => {
+  check("Radarprüfung zeigt einen klaren Ladezustand und startet genau einmal", () => {
     assert.equal(workCalls, 1);
     assert.ok(button(workUi.container, "Wird geprüft…")?.disabled);
   });
@@ -429,7 +474,7 @@ try {
   await act(async () => { workResolve({ status: "confirmed", writes: 1 }); await workCheck; await tick(); });
   accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
   await workUi.render(renderWorkProps());
-  check("Bestätigter Werk-Treffer zeigt Titel, Datum und Quelle", () => {
+  check("Bestätigter Film-Treffer zeigt Titel, Datum und Quelle", () => {
     assert.match(workUi.container.textContent, /Passender Film/);
     assert.match(workUi.container.textContent, /2026-09-03/);
     assert.match(workUi.container.textContent, /Kinostart in Österreich/);
@@ -443,7 +488,7 @@ try {
     radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true,
   });
   await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
-  check("Werk-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
+  check("Film-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
     assert.match(workReloadUi.container.textContent, /Passender Film/);
     assert.match(workReloadUi.container.textContent, /2026-09-03/);
     assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
@@ -460,9 +505,11 @@ try {
   let personUi;
   const renderPersonProps = () => ({
     ...baseProps, radarState: personState, personRadarAvailable: true,
-    onPersonRadarAdd: async ({ name, role }) => {
+    onPersonRadarAdd: async ({ name, role, personExternalId }) => {
       personAddCalls += 1;
-      assert.deepEqual({ name, role }, { name: "Nicolas Cage", role: "actor" });
+      assert.deepEqual({ name, role, personExternalId }, {
+        name: "Nicolas Cage", role: "actor", personExternalId: "wikidata:Q42869",
+      });
       personState = upsertGuestPersonRadarSubscription(personState, { identity, now }).state;
       return { status: "active", writes: 1, identity };
     },
@@ -470,8 +517,12 @@ try {
   });
   personUi = await mount(EntdeckenTab, renderPersonProps());
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
-  await setControl(personUi.container.querySelector("#kd-radar-person"), "Nicolas Cage");
-  await act(async () => { button(personUi.container, "Person ins Radar").click(); await tick(); });
+  await setControl(personUi.container.querySelector("#kd-radar-target-search"), "Nicolas Cage");
+  await act(async () => { await tick(); await tick(); });
+  await act(async () => {
+    personUi.container.querySelector('[data-radar-target-kind="person"]').click();
+    await tick();
+  });
   await personUi.render(renderPersonProps());
   check("Person wird mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
     assert.equal(personAddCalls, 1);
@@ -503,7 +554,7 @@ try {
   personState = applied.state;
   await act(async () => { personResolve({ status: "confirmed", writes: 1 }); await personCheckPromise; await tick(); });
   await personUi.render(renderPersonProps());
-  check("Validierter Personen-Treffer bleibt Vorschlag ohne Werk-Abo", () => {
+  check("Validierter Personen-Treffer bleibt Vorschlag ohne Film-Abo", () => {
     assert.match(personUi.container.textContent, /Dream Scenario/);
     assert.match(personUi.container.textContent, /2023/);
     assert.equal(personState.subscriptions.length, 0);
@@ -515,14 +566,39 @@ try {
     ...baseProps, radarState: reloadedPerson.state, personRadarAvailable: false,
   });
   await act(async () => { button(personReloadUi.container, "Radar").click(); await tick(); });
-  check("Person, Rolle und Treffer überstehen Reload bei ehrlich nicht verfügbarer Quelle", () => {
+  check("Person, Rolle und Treffer überstehen Reload ohne irreführenden Suchfehler", () => {
     assert.match(personReloadUi.container.textContent, /Nicolas Cage/);
     assert.match(personReloadUi.container.textContent, /Schauspiel/);
     assert.match(personReloadUi.container.textContent, /Dream Scenario/);
-    assert.match(personReloadUi.container.textContent, /Personensuche ist derzeit nicht verfügbar/);
+    assert.doesNotMatch(personReloadUi.container.textContent, /Suche ist derzeit nicht verfügbar|Personensuche ist derzeit nicht verfügbar/);
     assert.doesNotMatch(personReloadUi.container.textContent, /wikidata:|watchmode:|fixture:|Proposal|Hash|Outbox|Pilot/i);
   });
   await personReloadUi.cleanup();
+
+  let franchiseAddCalls = 0;
+  const franchiseUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: createEmptyLocalRadar(), franchiseRadarAvailable: true,
+    onFranchiseRadarAdd: async (request) => {
+      franchiseAddCalls += 1;
+      assert.deepEqual(request, {
+        name: "Star Wars", franchiseId: "wikidata:Q462", targetId: "title-group:v1:star-wars",
+      });
+      return { status: "active", writes: 1 };
+    },
+  });
+  await act(async () => { button(franchiseUi.container, "Radar").click(); await tick(); });
+  await setControl(franchiseUi.container.querySelector("#kd-radar-target-search"), "Star Wars");
+  await act(async () => { await tick(); await tick(); });
+  await act(async () => {
+    franchiseUi.container.querySelector('[data-radar-target-kind="franchise"]').click();
+    await tick();
+  });
+  check("Reihentreffer übergibt exakt kanonische Gruppen- und Ziel-ID", () => {
+    assert.equal(franchiseAddCalls, 1);
+    assert.match(franchiseUi.container.textContent, /Reihe ist jetzt im Radar/);
+    assert.doesNotMatch(franchiseUi.container.innerHTML, /wikidata:Q462|title-group:v1:star-wars/);
+  });
+  await franchiseUi.cleanup();
 
   const errorUi = await mount(EntdeckenTab, {
     ...baseProps,

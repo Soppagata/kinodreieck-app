@@ -319,6 +319,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-formzeile label { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:uppercase; }
 .kd-entdecken-formzeile input,.kd-entdecken-formzeile select { width:100%; min-height:44px; box-sizing:border-box; padding:9px 10px; border:1px solid var(--rauch,#948fa0); border-radius:7px; background:#111014; color:var(--leinwand,#ece8df); font:15px 'Space Grotesk',sans-serif; }
 .kd-entdecken-formzeile button { justify-self:start; min-height:44px; }
+.kd-radar-zielsuche { margin-bottom:12px; }
+.kd-radar-zielsuche .kd-entdecken-formzeile { max-width:720px; }
+.kd-radar-zieltreffer { max-height:min(360px,45dvh); margin:0; padding:0; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; list-style:none; border:1px solid rgba(148,143,160,.35); border-radius:8px; background:#111014; }
+.kd-radar-zieltreffer li { padding:0; border-bottom:1px solid rgba(148,143,160,.2); }
+.kd-radar-zieltreffer li:last-child { border-bottom:0; }
+.kd-radar-zieltreffer button { display:flex; width:100%; min-height:52px; flex-direction:column; align-items:flex-start; justify-content:center; gap:2px; box-sizing:border-box; padding:9px 11px; border:0; border-radius:0; background:transparent; color:var(--leinwand,#ece8df); text-align:left; }
+.kd-radar-zieltreffer button:hover,.kd-radar-zieltreffer button:focus-visible { background:rgba(227,166,59,.12); }
+.kd-radar-zieltreffer button span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
+.kd-radar-zieltreffer button small { margin-top:2px; color:var(--wolfram,#e3a63b); }
 .kd-entdecken-panel ul { margin:8px 0; padding:0; list-style:none; }.kd-entdecken-panel li { display:flex; flex-direction:column; gap:2px; padding:8px 0; border-bottom:1px solid rgba(148,143,160,.25); }
 .kd-entdecken-panel li span { color:var(--rauch,#948fa0); font:10px 'Space Mono',monospace; }
 .kd-entdecken-panel li>.kd-entdecken-sekundaer { align-self:flex-start; min-height:44px; margin-top:7px; }

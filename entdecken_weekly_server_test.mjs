@@ -356,6 +356,7 @@ await check("Browserdienst sendet accountlos genau einen bodylosen GET", async (
 });
 
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");
+const recoveryMigration = fs.readFileSync("./supabase/migrations/20260822210000_entdecken_weekly_recovery.sql", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
@@ -385,6 +386,22 @@ await check("SQL-Vertrag besitzt Wochenclaim, 180-Sekunden-Lease, Fencing und ke
   assert.match(migration, /p_search_requests is distinct from 1/i);
   assert.match(migration, /public_enabled darf durch die lokale Wochenmigration nicht aktiviert werden/i);
   assert.doesNotMatch(migration, /create\s+(?:or\s+replace\s+)?function\s+public\.kd_entdecken_weekly/i);
+});
+
+await check("Recovery ist default-off, nach Cooldown genau einmal service-role-autorisierbar und erhaelt den Cache", () => {
+  const recoveryCode = recoveryMigration.replace(/^--.*$/gm, "");
+  assert.match(recoveryMigration, /recovery_authorized_iso_week\s+text/i);
+  assert.match(recoveryMigration, /recovery_attempted_iso_week\s+text/i);
+  assert.match(recoveryMigration, /last_failure_at\s+timestamptz/i);
+  assert.match(recoveryMigration, /last_failure_at <= v_now - interval '15 minutes'/i);
+  assert.match(recoveryMigration, /recovery_authorized_iso_week = v_iso_week/i);
+  assert.match(recoveryMigration, /recovery_attempted_iso_week is distinct from v_iso_week/i);
+  assert.match(recoveryMigration, /recovery_authorized_iso_week = null/i);
+  assert.match(recoveryMigration, /when v_recovery then v_iso_week/i);
+  assert.match(recoveryMigration, /create function public\.kd_entdecken_weekly_recovery_authorize/i);
+  assert.match(recoveryMigration, /grant execute on function public\.kd_entdecken_weekly_recovery_authorize\(text\)\s+to service_role/i);
+  assert.match(recoveryMigration, /revoke all on function public\.kd_entdecken_weekly_recovery_authorize\(text\)\s+from public, anon, authenticated/i);
+  assert.doesNotMatch(recoveryCode, /set\s+payload\s*=\s*null|setInterval|setTimeout|scheduler/i);
 });
 
 await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {

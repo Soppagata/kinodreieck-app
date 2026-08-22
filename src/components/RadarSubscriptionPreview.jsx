@@ -26,7 +26,8 @@ export function RadarSubscriptionPreview({
   const alreadyActive = (radarState?.subscriptions || []).some((entry) => (
     entry.targetId === target?.targetId && entry.status === "active"
   ));
-  const targetType = target?.targetType === "series" ? "Serie" : "Film oder Werk";
+  const targetType = target?.targetType === "series" ? "Serie"
+    : target?.targetType === "franchise" ? "Reihe" : "Film";
   const quotaText = accountMode
     ? `${activeCount} serverbestätigte Ziele im Kontocache`
     : `${activeCount} von ${RADAR_NORMAL_ACTIVE_LIMIT} lokalen Zielen aktiv`;
@@ -102,7 +103,7 @@ export function RadarSubscriptionPreview({
             <small>{shareAllowed
               ? "Explizites Opt-in für dieses bereits serverbestätigte Radarziel."
               : accountMode
-                ? "Erst nach einer serverbestätigten aktiven Beobachtung verfügbar."
+                ? "Erst nach einem serverbestätigten aktiven Radarziel verfügbar."
                 : "Nur mit aktivem Konto und serverbestätigtem Radarziel verfügbar."}</small></span>
         </label>
         {fehler ? <p className="kd-entdecken-fehler" role="alert">{fehler}</p> : null}
