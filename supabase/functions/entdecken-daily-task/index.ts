@@ -1,7 +1,7 @@
-/* Globaler Entdecken-Tagesfeed. Der Browser uebergibt keinerlei persoenliche
-   Daten und keinen Suchtext. Der serverseitige Claim entscheidet atomar, ob
-   heute noch genau ein Providerlauf zulaessig ist; andernfalls wird nur der
-   noch gueltige Cache ausgeliefert. */
+/* Globaler Entdecken-Wochenfeed auf dem kompatiblen Tagesfeed-Endpoint.
+   Der accountlose Browser uebergibt weder Token noch Suchtext oder lokale
+   Daten. Wochenclaim und Fencing-Token erlauben hoechstens einen Providerlauf
+   je ISO-Woche; bei Fehler bleibt der letzte erfolgreiche Feed sichtbar. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createAnthropicEntdeckenDailyAdapter } from "./anthropicAdapter.js";
@@ -14,7 +14,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev",
   "http://localhost:5173",
 ]);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
@@ -89,36 +88,14 @@ export function createEntdeckenDailyHandler({
     const supabaseUrl = text(Deno.env.get("SUPABASE_URL"));
     const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
     const serviceKey = envKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
-    const authorization = req.headers.get("Authorization") || "";
-    const token = authorization.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
     if (!supabaseUrl || !publishableKey || !serviceKey
-        || req.headers.get("apikey") !== publishableKey || !token) {
+        || req.headers.get("apikey") !== publishableKey) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const user = createClient(supabaseUrl, publishableKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: authorization } },
-    });
-    const { data: userData, error: userError } = await user.auth.getUser(token);
-    const accountId = String(userData?.user?.id || "");
-    if (userError || !UUID.test(accountId)) {
-      return json({ ok: false, status: "disabled", feed: null }, 401, origin);
-    }
-    const { data: accessRows, error: accessError } = await admin
-      .from("kd_account_access")
-      .select("role,active,personal_ai")
-      .eq("account_id", accountId)
-      .limit(2);
-    if (accessError) return json({ ok: false, status: "disabled", feed: null }, 503, origin);
-    if (!Array.isArray(accessRows) || accessRows.length !== 1
-        || accessRows[0]?.role !== "owner" || accessRows[0]?.active !== true
-        || accessRows[0]?.personal_ai !== true) {
-      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
-    }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
     const loadSources = async () => {
@@ -143,14 +120,20 @@ export function createEntdeckenDailyHandler({
         return data;
       },
       async loadSources() { return await loadSources(); },
-      async saveFeed(feed: unknown) {
+      async saveFeed(feed: unknown, { fenceToken }: { fenceToken: number }) {
         const checked = validateEntdeckenDailyFeed(feed);
         if (!checked.ok) throw new Error("entdecken-daily-feed-invalid");
-        const { data, error } = await admin.rpc("kd_entdecken_daily_save", { p_payload: checked.value });
+        const { data, error } = await admin.rpc("kd_entdecken_daily_save", {
+          p_payload: checked.value,
+          p_fence_token: fenceToken,
+        });
         if (error || data?.ok !== true) throw error || new Error("entdecken-daily-save-rejected");
       },
-      async markFailure({ code }: { code: string }) {
-        const { error } = await admin.rpc("kd_entdecken_daily_fail", { p_code: code });
+      async markFailure({ code, fenceToken }: { code: string; fenceToken: number }) {
+        const { error } = await admin.rpc("kd_entdecken_daily_fail", {
+          p_code: code,
+          p_fence_token: fenceToken,
+        });
         if (error) throw error;
       },
     };
@@ -211,6 +194,7 @@ export function createEntdeckenDailyHandler({
           p_operation_id: operationId,
           p_reservierung: reservationUsdCent,
           p_search_requests: searchRequests,
+          p_fence_token: claimContext?.fenceToken,
         });
         if (error) throw error;
         return { ok: data?.ok === true, logId: data?.log_id };

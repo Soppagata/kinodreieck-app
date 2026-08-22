@@ -1,18 +1,34 @@
-/* Providerunabhaengiger Vertrag fuer den globalen Entdecken-Tagesfeed.
-   Keine Konten, Profile, Seen-Staende oder lokalen Kataloglisten. */
+/* Providerunabhaengiger Vertrag fuer den globalen Entdecken-Wochenfeed.
+   Der historische Function-/Exportname bleibt kompatibel. Konten, Profile,
+   Seen-Staende, Dienste und lokale Kataloglisten gehoeren nie in diesen Pfad. */
 
-export const ENTDECKEN_DAILY_FEED_FORMAT = 3;
-export const ENTDECKEN_DAILY_FEED_ID = "websearch:daily-tips-at";
-export const ENTDECKEN_DAILY_SOURCE_ID = "websearch:daily-tips";
-export const ENTDECKEN_DAILY_MAX_ITEMS = 20;
-export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = 10;
-export const ENTDECKEN_DAILY_VALID_DAYS = 7;
-export const ENTDECKEN_DAILY_SOURCE_DOMAINS = Object.freeze([
+export const ENTDECKEN_WEEKLY_FEED_FORMAT = 4;
+export const ENTDECKEN_WEEKLY_FEED_ID = "websearch:weekly-positive-at";
+export const ENTDECKEN_WEEKLY_SOURCE_ID = "websearch:weekly-positive";
+export const ENTDECKEN_WEEKLY_MAX_ITEMS = 20;
+export const ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS = 10;
+export const ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS = 35;
+export const ENTDECKEN_WEEKLY_SOURCE_DOMAINS = Object.freeze([
   "derstandard.at",
   "film.at",
 ]);
 
+/* Kompatibilitaetsnamen fuer bestehende lokale Runner und Live-Gates. */
+export const ENTDECKEN_DAILY_FEED_FORMAT = ENTDECKEN_WEEKLY_FEED_FORMAT;
+export const ENTDECKEN_DAILY_FEED_ID = ENTDECKEN_WEEKLY_FEED_ID;
+export const ENTDECKEN_DAILY_SOURCE_ID = ENTDECKEN_WEEKLY_SOURCE_ID;
+export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_MAX_ITEMS;
+export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS;
+export const ENTDECKEN_DAILY_VALID_DAYS = 7;
+export const ENTDECKEN_DAILY_SOURCE_DOMAINS = ENTDECKEN_WEEKLY_SOURCE_DOMAINS;
+
+const LEGACY_FEED = Object.freeze({
+  format: 3,
+  feedId: "websearch:daily-tips-at",
+  sourceId: "websearch:daily-tips",
+});
 const MEDIA_TYPES = new Set(["film", "series"]);
+const EXTERNAL_ID_NAMESPACES = Object.freeze(["imdb", "tmdb", "watchmode"]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -77,10 +93,8 @@ function hash64(value) {
   }
   return hash.toString(16).padStart(16, "0");
 }
-function dayPlus(day, count) {
-  const value = new Date(`${day}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + count);
-  return value.toISOString().slice(0, 10);
+function daysBetween(earlier, later) {
+  return Math.floor((Date.parse(`${later}T00:00:00.000Z`) - Date.parse(`${earlier}T00:00:00.000Z`)) / 86_400_000);
 }
 function result(status, errors = [], feed = null) {
   return Object.freeze({
@@ -91,8 +105,72 @@ function result(status, errors = [], feed = null) {
   });
 }
 
+function isoWeekData(day) {
+  if (!validDay(day)) return null;
+  const current = new Date(`${day}T00:00:00.000Z`);
+  const weekday = current.getUTCDay() || 7;
+  const weekEnd = new Date(current);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7 - weekday);
+  current.setUTCDate(current.getUTCDate() + 4 - weekday);
+  const year = current.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const calendarWeek = Math.ceil((((current - yearStart) / 86_400_000) + 1) / 7);
+  const paddedWeek = String(calendarWeek).padStart(2, "0");
+  return Object.freeze({
+    year,
+    calendarWeek,
+    isoWeek: `${year}-W${paddedWeek}`,
+    validUntil: weekEnd.toISOString().slice(0, 10),
+  });
+}
+
+function weeklyQuery(year, calendarWeek) {
+  return `Film- und Serien-Charts Österreich ${year} KW ${String(calendarWeek).padStart(2, "0")}: aktuell und allgemein positiv besprochene Filme und Serien`;
+}
+
+export function createEntdeckenWeeklyQueryContext(day, claimedIsoWeek = null) {
+  const week = isoWeekData(day);
+  if (!week || (claimedIsoWeek !== null && claimedIsoWeek !== week.isoWeek)) return null;
+  return freezeDeep({
+    year: week.year,
+    calendarWeek: week.calendarWeek,
+    isoWeek: week.isoWeek,
+    query: weeklyQuery(week.year, week.calendarWeek),
+  });
+}
+
+export function validateEntdeckenWeeklyQueryContext(value) {
+  if (!exactKeys(value, ["year", "calendarWeek", "isoWeek", "query"])
+      || !Number.isInteger(value.year) || value.year < 2020 || value.year > 2200
+      || !Number.isInteger(value.calendarWeek) || value.calendarWeek < 1 || value.calendarWeek > 53
+      || value.isoWeek !== `${value.year}-W${String(value.calendarWeek).padStart(2, "0")}`
+      || value.query !== weeklyQuery(value.year, value.calendarWeek)) return null;
+  const januaryFourth = new Date(Date.UTC(value.year, 0, 4));
+  const weekday = januaryFourth.getUTCDay() || 7;
+  januaryFourth.setUTCDate(januaryFourth.getUTCDate() - weekday + 1 + ((value.calendarWeek - 1) * 7));
+  const check = isoWeekData(januaryFourth.toISOString().slice(0, 10));
+  return check?.isoWeek === value.isoWeek ? freezeDeep(JSON.parse(JSON.stringify(value))) : null;
+}
+
+function normalizeExternalIds(value) {
+  if (!plain(value) || Object.keys(value).some((key) => !EXTERNAL_ID_NAMESPACES.includes(key))) return null;
+  const normalized = {};
+  for (const namespace of EXTERNAL_ID_NAMESPACES) {
+    if (!(namespace in value)) continue;
+    const id = text(value[namespace]);
+    if (namespace === "imdb") {
+      if (!/^tt\d{5,12}$/i.test(id)) return null;
+      normalized.imdb = id.toLowerCase();
+    } else {
+      if (!/^[1-9]\d{0,14}$/.test(id)) return null;
+      normalized[namespace] = id;
+    }
+  }
+  return normalized;
+}
+
 export function validateEntdeckenSourceRegistry(value) {
-  if (!Array.isArray(value) || value.length !== ENTDECKEN_DAILY_SOURCE_DOMAINS.length) {
+  if (!Array.isArray(value) || value.length !== ENTDECKEN_WEEKLY_SOURCE_DOMAINS.length) {
     return Object.freeze({ ok: false, errors: Object.freeze(["source-registry-size-invalid"]), value: null });
   }
   const errors = [];
@@ -121,7 +199,7 @@ export function validateEntdeckenSourceRegistry(value) {
     if (ids.has(source.sourceId)) errors.push(`${prefix}-id-duplicate`);
     domains.add(source.domain); ids.add(source.sourceId);
   }
-  if (JSON.stringify([...domains].sort()) !== JSON.stringify(ENTDECKEN_DAILY_SOURCE_DOMAINS)) {
+  if (JSON.stringify([...domains].sort()) !== JSON.stringify(ENTDECKEN_WEEKLY_SOURCE_DOMAINS)) {
     errors.push("source-registry-domains-invalid");
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
@@ -130,22 +208,29 @@ export function validateEntdeckenSourceRegistry(value) {
 
 function validateProviderItem(item, index, errors, retrievedOn) {
   const prefix = `provider-item-${index}`;
-  if (!exactKeys(item, ["title", "mediaType", "releaseYear", "attributes", "evidence"])) {
+  if (!exactKeys(item, ["title", "mediaType", "releaseYear", "externalIds", "attributes", "evidence"])) {
     errors.push(`${prefix}-shape-invalid`); return;
   }
   if (!text(item.title) || text(item.title) !== item.title || item.title.length > 200) errors.push(`${prefix}-title-invalid`);
   if (!MEDIA_TYPES.has(item.mediaType)) errors.push(`${prefix}-media-type-invalid`);
   if (!validYear(item.releaseYear)) errors.push(`${prefix}-year-invalid`);
-  if (!exactKeys(item.attributes, ["genres", "tags"])) errors.push(`${prefix}-attributes-shape-invalid`);
-  const genres = unique(item.attributes?.genres);
-  const tags = unique(item.attributes?.tags);
-  if (!genres || genres.length > 8 || !tags || tags.length > 8) errors.push(`${prefix}-attributes-invalid`);
+  if (!normalizeExternalIds(item.externalIds)) errors.push(`${prefix}-external-ids-invalid`);
+  if (!exactKeys(item.attributes, ["genres", "tones", "themes"])) errors.push(`${prefix}-attributes-shape-invalid`);
+  for (const key of ["genres", "tones", "themes"]) {
+    const values = unique(item.attributes?.[key]);
+    if (!values || values.length > 8) errors.push(`${prefix}-${key}-invalid`);
+  }
   if (!exactKeys(item.evidence, ["url", "publishedOn", "positiveRecommendation"])) {
     errors.push(`${prefix}-evidence-shape-invalid`); return;
   }
   if (!directUrl(item.evidence.url)) errors.push(`${prefix}-evidence-url-invalid`);
-  if (!validDay(item.evidence.publishedOn) || item.evidence.publishedOn > retrievedOn) {
+  if (!validDay(item.evidence.publishedOn)) {
     errors.push(`${prefix}-evidence-published-on-invalid`);
+  } else {
+    const age = daysBetween(item.evidence.publishedOn, retrievedOn);
+    if (age < 0 || age > ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS) {
+      errors.push(`${prefix}-evidence-age-invalid`);
+    }
   }
   if (item.evidence.positiveRecommendation !== true) errors.push(`${prefix}-evidence-positive-invalid`);
 }
@@ -168,9 +253,11 @@ function canonicalRecord(item, rank, retrievedOn) {
     title: item.title,
     mediaType: item.mediaType,
     releaseYear: item.releaseYear,
+    externalIds: { ...normalizeExternalIds(item.externalIds) },
     attributes: {
       genres: [...item.attributes.genres],
-      tags: [...item.attributes.tags],
+      tones: [...item.attributes.tones],
+      themes: [...item.attributes.themes],
     },
     evidence: [{
       domain: directUrl(item.evidence.url).hostname.toLowerCase(),
@@ -185,25 +272,29 @@ function canonicalRecord(item, rank, retrievedOn) {
 
 export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   retrievedOn,
-  validUntil = validDay(retrievedOn) ? dayPlus(retrievedOn, ENTDECKEN_DAILY_VALID_DAYS - 1) : null,
+  claimedIsoWeek = null,
 } = {}) {
   const sources = validateEntdeckenSourceRegistry(sourceRegistry);
   if (!sources.ok) return result("invalid_response", sources.errors);
-  if (!validDay(retrievedOn) || !validDay(validUntil) || validUntil < retrievedOn) {
-    return result("invalid_response", ["feed-days-invalid"]);
-  }
-  if (!exactKeys(envelope, ["searchResultCount", "response"])) {
+  const week = isoWeekData(retrievedOn);
+  const expectedQuery = createEntdeckenWeeklyQueryContext(retrievedOn, claimedIsoWeek);
+  if (!week || !expectedQuery) return result("invalid_response", ["feed-week-invalid"]);
+  if (!exactKeys(envelope, ["searchResultCount", "queryContext", "response"])) {
     return result("invalid_response", ["adapter-envelope-invalid"]);
   }
+  const queryContext = validateEntdeckenWeeklyQueryContext(envelope.queryContext);
+  if (!queryContext || JSON.stringify(queryContext) !== JSON.stringify(expectedQuery)) {
+    return result("invalid_response", ["adapter-query-context-invalid"]);
+  }
   if (!Number.isInteger(envelope.searchResultCount) || envelope.searchResultCount < 1
-      || envelope.searchResultCount > ENTDECKEN_DAILY_MAX_SEARCH_RESULTS) {
+      || envelope.searchResultCount > ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS) {
     return result("invalid_response", ["adapter-result-count-invalid"]);
   }
   if (!exactKeys(envelope.response, ["checkedAt", "items"]) || !validInstant(envelope.response.checkedAt)) {
     return result("invalid_response", ["provider-response-shape-invalid"]);
   }
   if (!Array.isArray(envelope.response.items) || envelope.response.items.length < 1
-      || envelope.response.items.length > ENTDECKEN_DAILY_MAX_ITEMS) {
+      || envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) {
     return result("insufficient_evidence", ["provider-items-insufficient"]);
   }
   const shapeErrors = [];
@@ -215,77 +306,111 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   }
 
   const records = new Map();
-  const sourceErrors = [];
+  const evidenceErrors = [];
   envelope.response.items.forEach((item, index) => {
     const source = sourceForUrl(item.evidence.url, sources.value);
-    if (!source) { sourceErrors.push(`provider-item-${index}-source-unavailable`); return; }
+    if (!source) { evidenceErrors.push(`provider-item-${index}-source-unavailable`); return; }
     const next = canonicalRecord(item, index + 1, retrievedOn);
     const previous = records.get(next.key);
     if (!previous) { records.set(next.key, next); return; }
+    for (const [namespace, id] of Object.entries(next.externalIds)) {
+      if (previous.externalIds[namespace] && previous.externalIds[namespace] !== id) {
+        evidenceErrors.push(`provider-item-${index}-external-id-conflict`);
+      } else previous.externalIds[namespace] = id;
+    }
     if (!previous.evidence.some((evidence) => evidence.url === next.evidence[0].url)
         && previous.evidence.length < 3) previous.evidence.push(next.evidence[0]);
-    previous.attributes.genres = [...new Set([...previous.attributes.genres, ...next.attributes.genres])].slice(0, 8);
-    previous.attributes.tags = [...new Set([...previous.attributes.tags, ...next.attributes.tags])].slice(0, 8);
+    for (const key of ["genres", "tones", "themes"]) {
+      previous.attributes[key] = [...new Set([...previous.attributes[key], ...next.attributes[key]])].slice(0, 8);
+    }
   });
-  if (sourceErrors.length || !records.size) return result("insufficient_evidence", sourceErrors.length ? sourceErrors : ["records-empty"]);
+  if (evidenceErrors.length || !records.size) {
+    return result("insufficient_evidence", evidenceErrors.length ? evidenceErrors : ["records-empty"]);
+  }
   const items = [...records.values()]
     .sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"))
     .map(({ key: _key, ...record }) => freezeDeep(record));
   const feed = freezeDeep({
-    format: ENTDECKEN_DAILY_FEED_FORMAT,
-    feedId: ENTDECKEN_DAILY_FEED_ID,
+    format: ENTDECKEN_WEEKLY_FEED_FORMAT,
+    feedId: ENTDECKEN_WEEKLY_FEED_ID,
     region: "AT",
-    sourceId: ENTDECKEN_DAILY_SOURCE_ID,
+    sourceId: ENTDECKEN_WEEKLY_SOURCE_ID,
+    isoWeek: week.isoWeek,
     refreshedOn: retrievedOn,
-    validUntil,
+    validUntil: week.validUntil,
     items,
   });
   return result("confirmed", [], feed);
 }
 
+function validateEvidence(evidence, feed, evidenceUrls, weekly) {
+  const parsed = directUrl(evidence?.url);
+  return exactKeys(evidence, ["domain", "url", "publishedOn", "retrievedOn", "positiveRecommendation"])
+    && validDomain(evidence.domain) && parsed
+    && parsed.hostname.toLowerCase() === evidence.domain
+    && ENTDECKEN_WEEKLY_SOURCE_DOMAINS.some((domain) => (
+      evidence.domain === domain || evidence.domain.endsWith(`.${domain}`)
+    ))
+    && validDay(evidence.publishedOn)
+    && daysBetween(evidence.publishedOn, feed.refreshedOn) >= 0
+    && (!weekly || daysBetween(evidence.publishedOn, feed.refreshedOn) <= ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS)
+    && evidence.retrievedOn === feed.refreshedOn
+    && evidence.positiveRecommendation === true
+    && !evidenceUrls.has(evidence.url);
+}
+
+function validateFeedItem(item, feed, weekly) {
+  const baseKeys = ["recordId", "title", "mediaType", "releaseYear", "attributes", "evidence", "rank"];
+  if (!exactKeys(item, weekly ? [...baseKeys, "externalIds"] : baseKeys)
+      || !/^webtip:[a-f0-9]{16}$/.test(item.recordId)
+      || !text(item.title) || text(item.title) !== item.title || item.title.length > 200
+      || !MEDIA_TYPES.has(item.mediaType) || !validYear(item.releaseYear)
+      || !Array.isArray(item.evidence) || item.evidence.length < 1 || item.evidence.length > 3
+      || !Number.isInteger(item.rank) || item.rank < 1 || item.rank > ENTDECKEN_WEEKLY_MAX_ITEMS) return false;
+  if (weekly) {
+    if (!normalizeExternalIds(item.externalIds)
+        || !exactKeys(item.attributes, ["genres", "tones", "themes"])) return false;
+    for (const key of ["genres", "tones", "themes"]) {
+      if (!unique(item.attributes[key]) || item.attributes[key].length > 8) return false;
+    }
+  } else if (!exactKeys(item.attributes, ["genres", "tags"])
+      || !unique(item.attributes.genres) || item.attributes.genres.length > 8
+      || !unique(item.attributes.tags) || item.attributes.tags.length > 8) return false;
+  const evidenceUrls = new Set();
+  for (const evidence of item.evidence) {
+    if (!validateEvidence(evidence, feed, evidenceUrls, weekly)) return false;
+    evidenceUrls.add(evidence.url);
+  }
+  return true;
+}
+
 export function validateEntdeckenDailyFeed(value) {
-  if (!exactKeys(value, ["format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items"])
-      || value.format !== ENTDECKEN_DAILY_FEED_FORMAT
-      || value.feedId !== ENTDECKEN_DAILY_FEED_ID
+  const weekly = value?.format === ENTDECKEN_WEEKLY_FEED_FORMAT;
+  const legacy = value?.format === LEGACY_FEED.format;
+  const required = ["format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items"];
+  if ((!weekly && !legacy) || !exactKeys(value, weekly ? [...required, "isoWeek"] : required)
+      || value.feedId !== (weekly ? ENTDECKEN_WEEKLY_FEED_ID : LEGACY_FEED.feedId)
       || value.region !== "AT"
-      || value.sourceId !== ENTDECKEN_DAILY_SOURCE_ID
+      || value.sourceId !== (weekly ? ENTDECKEN_WEEKLY_SOURCE_ID : LEGACY_FEED.sourceId)
       || !validDay(value.refreshedOn) || !validDay(value.validUntil)
       || value.validUntil < value.refreshedOn
-      || !Array.isArray(value.items) || value.items.length < 1 || value.items.length > ENTDECKEN_DAILY_MAX_ITEMS) {
+      || !Array.isArray(value.items) || value.items.length < 1 || value.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) {
     return Object.freeze({ ok: false, value: null });
+  }
+  if (weekly) {
+    const week = isoWeekData(value.refreshedOn);
+    if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== week.validUntil) {
+      return Object.freeze({ ok: false, value: null });
+    }
   }
   const recordIds = new Set();
   const ranks = new Set();
   for (const item of value.items) {
-    if (!exactKeys(item, [
-      "recordId", "title", "mediaType", "releaseYear", "attributes", "evidence", "rank",
-    ]) || !/^webtip:[a-f0-9]{16}$/.test(item.recordId)
-      || !text(item.title) || text(item.title) !== item.title || item.title.length > 200
-      || !MEDIA_TYPES.has(item.mediaType) || !validYear(item.releaseYear)
-      || !exactKeys(item.attributes, ["genres", "tags"])
-      || !unique(item.attributes.genres) || item.attributes.genres.length > 8
-      || !unique(item.attributes.tags) || item.attributes.tags.length > 8
-      || !Array.isArray(item.evidence) || item.evidence.length < 1 || item.evidence.length > 3
-      || !Number.isInteger(item.rank) || item.rank < 1 || item.rank > ENTDECKEN_DAILY_MAX_ITEMS) {
+    if (!validateFeedItem(item, value, weekly)
+        || recordIds.has(item.recordId) || ranks.has(item.rank)) {
       return Object.freeze({ ok: false, value: null });
     }
-    if (recordIds.has(item.recordId) || ranks.has(item.rank)) return Object.freeze({ ok: false, value: null });
     recordIds.add(item.recordId); ranks.add(item.rank);
-    const evidenceUrls = new Set();
-    for (const evidence of item.evidence) {
-      const parsed = directUrl(evidence.url);
-      if (!exactKeys(evidence, ["domain", "url", "publishedOn", "retrievedOn", "positiveRecommendation"])
-          || !validDomain(evidence.domain) || !parsed
-          || parsed.hostname.toLowerCase() !== evidence.domain
-          || !ENTDECKEN_DAILY_SOURCE_DOMAINS.some((domain) => (
-            evidence.domain === domain || evidence.domain.endsWith(`.${domain}`)
-          ))
-          || !validDay(evidence.publishedOn) || evidence.publishedOn > value.refreshedOn
-          || evidence.retrievedOn !== value.refreshedOn
-          || evidence.positiveRecommendation !== true
-          || evidenceUrls.has(evidence.url)) return Object.freeze({ ok: false, value: null });
-      evidenceUrls.add(evidence.url);
-    }
   }
   return Object.freeze({ ok: true, value: freezeDeep(JSON.parse(JSON.stringify(value))) });
 }

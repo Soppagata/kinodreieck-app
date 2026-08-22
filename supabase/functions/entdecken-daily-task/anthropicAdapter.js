@@ -1,13 +1,14 @@
 import {
   ENTDECKEN_DAILY_MAX_ITEMS,
   ENTDECKEN_DAILY_MAX_SEARCH_RESULTS,
+  validateEntdeckenWeeklyQueryContext,
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
 
 export const ENTDECKEN_DAILY_PROVIDER_TASK = "entdecken-daily";
 export const ENTDECKEN_DAILY_PROVIDER_VERSION = "anthropic-web-search-20250305";
-export const ENTDECKEN_DAILY_PROMPT_VERSION = "entdecken-daily-v1";
-export const ENTDECKEN_DAILY_MAX_TOKENS = 1800;
+export const ENTDECKEN_DAILY_PROMPT_VERSION = "entdecken-weekly-v1";
+export const ENTDECKEN_DAILY_MAX_TOKENS = 2800;
 export const ENTDECKEN_DAILY_TASK_CAP_USD_CENT = 5;
 export const ENTDECKEN_DAILY_SEARCH_FEE_USD_CENT = 1;
 export const ENTDECKEN_DAILY_TIMEOUT_MAX_MS = 135_000;
@@ -22,7 +23,8 @@ const SAFE_ERROR_CODES = new Set([
   "http-error", "provider-body-invalid", "provider-response-too-large", "provider-timeout",
   "provider-tool-error", "provider-tool-shape-invalid", "provider-usage-invalid",
   "provider-stop-reason-invalid", "provider-output-invalid", "provider-result-count-invalid",
-  "provider-citation-invalid", "provider-domain-invalid", "provider-cost-invalid", "setup-invalid",
+  "provider-citation-invalid", "provider-domain-invalid", "provider-cost-invalid",
+  "provider-query-context-invalid", "setup-invalid",
 ]);
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -83,20 +85,24 @@ export function validateEntdeckenDailyProviderSetup(value) {
 }
 
 const SYSTEM_PROMPT = [
-  "Du sammelst ausschliesslich aktuell positiv empfohlene Filme und Serien aus derstandard.at und film.at.",
-  "Fuehre genau eine Websuche nach neuen Serien- und Filmtipps aus, nutze beide erlaubten Domains und keine andere Quelle.",
+  "Du erstellst einen allgemeinen, nicht personalisierten Wochenfeed fuer Oesterreich.",
+  "Fuehre genau eine Websuche fuer das im Nutzerobjekt genannte ISO-Jahr und die dort genannte Kalenderwoche aus.",
+  "Suche ausschliesslich aktuell und allgemein positiv besprochene Filme und Serien aus derstandard.at und film.at; nutze keine andere Quelle.",
   "Nenne nur Werke, deren Titel, Werktyp, Veroeffentlichungsjahr, Publikationsdatum und positive Empfehlung von der direkt verlinkten Fundstelle getragen werden.",
-  "Genres und Tags sind kurze strukturierte Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
+  "Genres, Ton und Themen sind kurze neutrale Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
+  "externalIds enthaelt nur direkt belegte imdb-, tmdb- oder watchmode-IDs als Strings; sonst bleibt das Objekt leer.",
   "Gib niemals Rezensionstext, Zitat, Zusammenfassung, Bild, Logo, Autor oder redaktionelle Ueberschrift aus.",
   "Antworte im letzten Textblock ausschliesslich als JSON-Objekt mit dem Schluessel items.",
-  "Jedes Item enthaelt exakt title, mediaType (film oder series), releaseYear, attributes mit genres/tags und evidence.",
+  "Jedes Item enthaelt exakt title, mediaType (film oder series), releaseYear, externalIds, attributes mit genres/tones/themes und evidence.",
   "evidence enthaelt exakt url, publishedOn im Format YYYY-MM-DD und positiveRecommendation mit dem booleschen Wert true.",
 ].join(" ");
 
-export function buildAnthropicEntdeckenDailyBody(setupInput) {
+export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) {
   const setup = validateEntdeckenDailyProviderSetup(setupInput);
+  const queryContext = validateEntdeckenWeeklyQueryContext(queryContextInput);
+  if (!queryContext) throw new EntdeckenDailyProviderError("provider-query-context-invalid");
   const globalInput = Object.freeze({
-    query: "neue Serien- und Filmtipps",
+    queryContext,
     region: "AT",
     language: "de",
     maxItems: ENTDECKEN_DAILY_MAX_ITEMS,
@@ -163,8 +169,10 @@ function evidenceUrls(value) {
   return urls;
 }
 
-export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedAt) {
+export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedAt, queryContextInput) {
   const setup = validateEntdeckenDailyProviderSetup(setupInput);
+  const queryContext = validateEntdeckenWeeklyQueryContext(queryContextInput);
+  if (!queryContext) throw new EntdeckenDailyProviderError("provider-query-context-invalid");
   const usage = providerUsage(value);
   if (!usage || usage.searchRequests !== 1) throw new EntdeckenDailyProviderError("provider-usage-invalid", usage);
   if (value?.stop_reason === "pause_turn") throw new EntdeckenDailyProviderError("provider-stop-reason-invalid", usage);
@@ -213,6 +221,7 @@ export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedA
   return Object.freeze({
     envelope: Object.freeze({
       searchResultCount: results[0].content.length,
+      queryContext,
       response: Object.freeze({ checkedAt, items: parsed.items }),
     }),
     usage,
@@ -239,14 +248,16 @@ export function createAnthropicEntdeckenDailyAdapter({
 } = {}) {
   let used = false;
   const telemetry = { providerRequests: 0, searchRequests: 0, resultCount: 0, costUsdCent: null };
-  async function search() {
+  async function search(queryContextInput) {
     if (used) throw new EntdeckenDailyProviderError("already-used");
     used = true;
     if (typeof apiKey !== "string" || !apiKey || typeof loadSetup !== "function"
         || typeof reserveCost !== "function" || typeof settleCost !== "function"
         || typeof fetchImpl !== "function") setupError();
     const setup = validateEntdeckenDailyProviderSetup(await loadSetup());
-    const body = buildAnthropicEntdeckenDailyBody(setup);
+    const queryContext = validateEntdeckenWeeklyQueryContext(queryContextInput);
+    if (!queryContext) throw new EntdeckenDailyProviderError("provider-query-context-invalid");
+    const body = buildAnthropicEntdeckenDailyBody(setup, queryContext);
     const reservationUsdCent = estimateEntdeckenDailyReservation(body, setup);
     const reservation = await reserveCost({
       operationId: operationId(), reservationUsdCent, searchRequests: 1,
@@ -292,7 +303,7 @@ export function createAnthropicEntdeckenDailyAdapter({
       const providerBody = await responseJson(response);
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new EntdeckenDailyProviderError("http-error", usage);
-      const parsed = parseAnthropicEntdeckenDailyResponse(providerBody, setup, now());
+      const parsed = parseAnthropicEntdeckenDailyResponse(providerBody, setup, now(), queryContext);
       usage = parsed.usage;
       costUsdCent = costFromUsage(setup, usage.inputTokens, usage.outputTokens, usage.searchRequests);
       if (!finitePositive(costUsdCent) || costUsdCent > setup.taskCapUsdCent

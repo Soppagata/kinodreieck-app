@@ -1,4 +1,5 @@
 import {
+  createEntdeckenWeeklyQueryContext,
   evaluateEntdeckenDailyResponse,
   validateEntdeckenDailyFeed,
   validateEntdeckenSourceRegistry,
@@ -13,16 +14,22 @@ function validDay(value) {
   const parsed = Date.parse(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value;
 }
-function dayStatus(feed, today) {
+function weekStatus(feed, today, isoWeek) {
   if (!feed) return "empty";
+  if (feed.format === 4) return feed.isoWeek === isoWeek ? "fresh" : "stale";
   return feed.refreshedOn === today ? "fresh" : "stale";
 }
 function frozen(status, feed, extra = {}) {
   return Object.freeze({ status, feed, writes: 0, ...extra });
 }
 
-async function failSafely(repository, code) {
-  try { await repository.markFailure({ code: SAFE_FAILURE_CODES.has(code) ? code : "provider_error" }); }
+async function failSafely(repository, code, fenceToken) {
+  try {
+    await repository.markFailure({
+      code: SAFE_FAILURE_CODES.has(code) ? code : "provider_error",
+      fenceToken,
+    });
+  }
   catch { /* Der alte Feed bleibt trotzdem die einzige sichtbare Wahrheit. */ }
 }
 
@@ -37,36 +44,46 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   let context;
   try { context = await repository.claimRefresh(); }
   catch { return frozen("empty", null, { reason: "storage_error" }); }
-  if (!context || context.feedEnabled !== true || !validDay(context.today)) {
+  const queryContext = createEntdeckenWeeklyQueryContext(context?.today, context?.isoWeek);
+  if (!context || context.feedEnabled !== true || !validDay(context.today) || !queryContext) {
     return frozen("disabled", null);
   }
   const checkedCached = validateEntdeckenDailyFeed(context.feed);
-  const cached = checkedCached.ok && context.feed.validUntil >= context.today ? checkedCached.value : null;
-  if (context.refresh !== true) return frozen(dayStatus(cached, context.today), cached);
+  /* Auch ein abgelaufener letzter Erfolg bleibt bei einem Wochenfehler sichtbar.
+     `stale` ist dabei eine ehrliche Zustandsaussage, keine neue Gueltigkeit. */
+  const cached = checkedCached.ok ? checkedCached.value : null;
+  if (context.refresh !== true) return frozen(weekStatus(cached, context.today, context.isoWeek), cached);
+  const fenceToken = Number(context.fenceToken);
+  if (!Number.isSafeInteger(fenceToken) || fenceToken <= 0) {
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "storage_error" });
+  }
 
   let sources;
   try { sources = validateEntdeckenSourceRegistry(await repository.loadSources()); }
   catch { sources = { ok: false }; }
   if (!sources.ok) {
-    await failSafely(repository, "source_registry_unavailable");
-    return frozen(dayStatus(cached, context.today), cached, { reason: "source_registry_unavailable" });
+    await failSafely(repository, "source_registry_unavailable", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "source_registry_unavailable" });
   }
 
   let envelope;
-  try { envelope = await adapter.search(); }
+  try { envelope = await adapter.search(queryContext); }
   catch {
-    await failSafely(repository, "provider_error");
-    return frozen(dayStatus(cached, context.today), cached, { reason: "provider_error" });
+    await failSafely(repository, "provider_error", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "provider_error" });
   }
-  const evaluated = evaluateEntdeckenDailyResponse(envelope, sources.value, { retrievedOn: context.today });
+  const evaluated = evaluateEntdeckenDailyResponse(envelope, sources.value, {
+    retrievedOn: context.today,
+    claimedIsoWeek: context.isoWeek,
+  });
   if (!evaluated.ok) {
-    await failSafely(repository, "invalid_response");
-    return frozen(dayStatus(cached, context.today), cached, { reason: evaluated.status });
+    await failSafely(repository, "invalid_response", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: evaluated.status });
   }
-  try { await repository.saveFeed(evaluated.feed); }
+  try { await repository.saveFeed(evaluated.feed, { fenceToken }); }
   catch {
-    await failSafely(repository, "storage_error");
-    return frozen(dayStatus(cached, context.today), cached, { reason: "storage_error" });
+    await failSafely(repository, "storage_error", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "storage_error" });
   }
   return frozen("fresh", evaluated.feed, { writes: 1 });
 }
