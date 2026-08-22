@@ -19,6 +19,7 @@ import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
   ENTDECKEN_WEEKLY_COMMIT,
   ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
+  ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
   RADAR_PACKAGE_A_COMMIT,
   RADAR_PACKAGE_B_COMMIT,
   RADAR_TITLE_GROUP_V6_COMMIT,
@@ -429,6 +430,8 @@ const expectedRemoteReleaseClosure = Object.freeze([
   "supabase/migrations/20260822190000_entdecken_weekly_feed.sql",
   "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
   "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
+  "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
+  "tools/entdecken_daily_live.mjs",
   "tools/keychain_runner.mjs",
   "tools/radar_websearch_live.mjs",
 ]);
@@ -478,6 +481,7 @@ await check("Remote-Release-Closure entsteht aus der v6-Provenienz und dem echte
     ENTDECKEN_WEEKLY_COMMIT,
     RADAR_TITLE_GROUP_V6_COMMIT,
     ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
+    ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
   ]);
   assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
   assert.equal(first.files.length, expectedRemoteReleaseClosure.length);
