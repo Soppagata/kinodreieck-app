@@ -27,6 +27,8 @@ jobs:
       cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -35,6 +37,7 @@ jobs:
         with:
           deno-version: v2.9.4
       - run: npm ci
+      - run: sudo install -d -m 1777 /private/tmp
       - run: npm test
       - run: npm run test:function
 
