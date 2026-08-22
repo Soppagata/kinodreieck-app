@@ -544,17 +544,21 @@ check("No-Config-file:// zeigt das ehrliche Archivprogramm funktionsfähig",
   && /Sommer der Kometen/.test(dateiText()));
 dateiKnopf(/^Streaming$/i)?.click(); await warte(900);
 const streamingBekanntDatei = /Regenbogen über Kreuzberg/.test(dateiText());
-dateiKnopf(/^Entdecken/i)?.click(); await warte(500);
+const streamingEntdeckenDatei = [...dateiDoc.querySelectorAll('[data-tour="streaming-views"] button')]
+  .find((button) => /^Entdecken/i.test((button.textContent || "").trim()));
+streamingEntdeckenDatei?.click(); await warte(500);
 check("No-Config-file:// enthält beide Streaming-Snapshots",
-  streamingBekanntDatei && /Der stille Zeuge/.test(dateiText()));
+  !!streamingEntdeckenDatei && streamingBekanntDatei && /Der stille Zeuge/.test(dateiText()));
 const dateiEntdeckenBereich = [...dateiDoc.querySelectorAll('nav[aria-label="Hauptnavigation"] button')]
   .find((button) => (button.textContent || "").trim() === "Entdecken");
 dateiEntdeckenBereich?.click(); await warte(700);
 check("No-Config-file:// zeigt die kompakte Entdecken-Fläche ohne erfundene Webtipps",
   !!dateiEntdeckenBereich
-  && /Persönliche Passung/.test(dateiText())
+  && /Für mich/.test(dateiText())
+  && /Noch keine bestätigte Passung/.test(dateiText())
   && /Weitere Entdeckungen/.test(dateiText())
   && /Noch keine belegten Webtipps geladen/.test(dateiText())
+  && !dateiDoc.querySelector(".kd-entdecken-hub-karte")
   && !/Kataloggröße|Aktuelle Treffermenge/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
