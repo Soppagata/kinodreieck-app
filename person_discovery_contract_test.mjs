@@ -11,6 +11,11 @@ import {
   validatePersonRadarCheckResult,
   personDiscoveryFallback,
 } from "./src/lib/personDiscoveryContracts.js";
+import {
+  PERSON_RADAR_CATALOG,
+  findPersonRadarCatalogIdentity,
+  searchPersonRadarCatalog,
+} from "./src/lib/personRadarCatalog.js";
 
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log(`✓ ${name}`); };
@@ -18,6 +23,28 @@ const fixture = JSON.parse(fs.readFileSync(new URL("./src/data/person_discovery_
 
 check("Personenrollen sind ausschließlich Schauspiel und Regie", () => {
   assert.deepEqual(PERSON_DISCOVERY_ROLES, ["actor", "director"]);
+});
+
+check("Kuratierter Katalog löst Schauspiel und Regie nur über ID plus Rolle auf", () => {
+  const cage = searchPersonRadarCatalog({ query: "Nicolas Cage", role: "actor" });
+  const rodriguez = searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "director" });
+  assert.equal(cage.status, "found");
+  assert.equal(rodriguez.status, "found");
+  assert.equal(findPersonRadarCatalogIdentity(cage.entries[0])?.personExternalId, "wikidata:Q42869");
+  assert.equal(findPersonRadarCatalogIdentity(rodriguez.entries[0])?.personExternalId, "wikidata:Q47284");
+  assert.equal(searchPersonRadarCatalog({ query: "Robert Rodriguez", role: "actor" }).status, "role_mismatch");
+});
+
+check("Namensdoublette bleibt mehrdeutig und Rollenwiderspruch blockiert", () => {
+  const duplicate = [
+    ...PERSON_RADAR_CATALOG,
+    { targetId: "person:wikidata:Q999999:actor", personExternalId: "wikidata:Q999999", name: "Nicolas Cage", role: "actor" },
+  ];
+  assert.equal(searchPersonRadarCatalog({ query: "Nicolas Cage", role: "actor" }, duplicate).status, "ambiguous");
+  assert.equal(findPersonRadarCatalogIdentity({
+    targetId: "person:wikidata:Q42869:director",
+    personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "director",
+  }), null);
 });
 
 check("Nicolas Cage und Robert Rodriguez sind ehrlich nur synthetisch fixiert", () => {
@@ -138,44 +165,60 @@ check("Gemeinsame starke Werk-ID gewinnt nur ohne widersprechende Fakten", () =>
   }, catalog).status, "no_match");
 });
 
-check("Fallback verlangt substantiellen exakten Titel plus Jahr, Typ und Eindeutigkeit", () => {
-  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2023 }, catalog).status, "matched");
-  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2024 }, catalog).status, "no_match");
-  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Up", year: 2009 }, [
+check("Ohne gemeinsame Werk-ID bleibt selbst exakter Titel plus Jahr unbestätigt", () => {
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, catalog).status, "ambiguous");
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2024 }, catalog).status, "no_match");
+  assert.equal(matchPersonWorkCandidate({ title: "Up", year: 2009 }, [
     { targetId: "catalog:up", targetType: "work", title: "Up", year: 2009 },
   ]).status, "no_match");
-  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2023 }, [
+  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, [
     ...catalog,
     { targetId: "catalog:dream-duplicate", targetType: "work", title: "Dream Scenario", year: 2023 },
   ]).status, "ambiguous");
-  assert.equal(matchPersonWorkCandidate({ targetId: null, title: "Dream Scenario", year: 2023 }, catalog).status, "no_match");
-  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "series", title: "Dream Scenario", year: 2023 }, catalog).status, "no_match");
 });
 
 check("Personen-Check ist auf sechs Kandidaten begrenzt und erzeugt nie automatisch Werk-Abos", () => {
+  const evidence = [{
+    sourceId: "news-a", sourceDomain: "news-a.example", url: "https://news-a.example/start",
+    retrievedAt: "2026-08-18T10:00:00.000Z",
+  }];
   const checked = validatePersonRadarCheckResult({
     status: "confirmed",
     checkedAt: "2026-08-18T10:00:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24",
     person: productionIdentity,
-    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    candidates: [{
+      targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+      role: "actor", eventType: "kinostart_at", date: "2026-08-21", region: "AT", platform: "-", evidence,
+    }],
   }, { identity: productionIdentity, catalog });
   assert.equal(checked.ok, true);
   assert.equal(checked.result.decisions[0].status, "matched");
   assert.equal(checked.result.createsWorkSubscription, false);
   assert.equal(checked.result.createsEvent, false);
   assert.equal(validatePersonRadarCheckResult({
-    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z", person: productionIdentity,
-    candidates: Array.from({ length: 7 }, () => ({ title: "Dream Scenario", year: 2023 })),
+    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24", person: productionIdentity,
+    candidates: Array.from({ length: 7 }, () => ({
+      targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+      role: "actor", eventType: "kinostart_at", date: "2026-08-21", region: "AT", platform: "-", evidence,
+    })),
   }, { identity: productionIdentity, catalog }).ok, false);
 });
 
 check("Confirmed ohne deterministischen Treffer und fremde Identität stoppen fail-closed", () => {
   assert.equal(validatePersonRadarCheckResult({
-    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z", person: productionIdentity,
-    candidates: [{ title: "Unbekanntes Werk", year: 2026 }],
+    status: "confirmed", checkedAt: "2026-08-18T10:00:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24", person: productionIdentity,
+    candidates: [{
+      targetId: "watchmode:999", targetType: "work", title: "Unbekanntes Werk", year: 2026,
+      role: "actor", eventType: "kinostart_at", date: "2026-08-21", region: "AT", platform: "-",
+      evidence: [{ sourceId: "news-a", sourceDomain: "news-a.example", url: "https://news-a.example/unknown", retrievedAt: "2026-08-18T10:00:00.000Z" }],
+    }],
   }, { identity: productionIdentity, catalog }).ok, false);
   assert.equal(validatePersonRadarCheckResult({
     status: "no_change", checkedAt: "2026-08-18T10:00:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24",
     person: { ...productionIdentity, role: "director" }, candidates: [],
   }, { identity: productionIdentity, catalog }).ok, false);
 });

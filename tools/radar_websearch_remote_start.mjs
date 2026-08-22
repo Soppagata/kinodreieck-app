@@ -51,6 +51,25 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   "tools/radar_websearch_live.mjs",
 ]);
 
+/* Lokaler Rollbackzaun fuer die bereits deployte v5-Baseline. Der historische
+   Paket-B-Runner darf nur noch starten, wenn Function und drei angewandte
+   Migrationen exakt der belegten Serverprovenienz entsprechen. Eine spaetere
+   v6 braucht deshalb einen ausdruecklich aktualisierten Vertrag. */
+export const RADAR_DEPLOYED_V5_BUNDLE_SHA256 = "52f2e82d9909b36bd209b73e52eeb0d112ee4473ace30cb632913742e10d2bad";
+export const RADAR_DEPLOYED_V5_CLOSURE_SHA256 = "841e395b80dd2580d21a10620b55da1f139908c767154ffaeb587404beb09e6f";
+export const RADAR_DEPLOYED_V5_FILES = Object.freeze([
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "abd64082191434eb91892303ca655926fc75916ddf4148ba2629082c1c52efcc" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "248da1034f320b6bed48e98f02c3e42b4a2899473e0a4232ef46b02bdfe5f2c8" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "6a79fab4386a6c634530fb7db936b70995786be02c9cab2c47ab3e2401c065ac" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/mockAdapter.js`, sha256: "a7e02f1b98f7aa48ae0b0838a474071409cce9613c8758562a968aa29555a9c3" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "7e51264964f11a697178ad0d6fd319709132611764f3cfaafa636d5de44eab03" }),
+]);
+export const RADAR_DEPLOYED_V5_MIGRATIONS = Object.freeze([
+  Object.freeze({ path: "supabase/migrations/20260819220000_radar_person_server_candidate.sql", sha256: "d23f80f7073deb1197fdcb0b5a73f4abd1ad002e0b3bded6ee08c691d937f658" }),
+  Object.freeze({ path: "supabase/migrations/20260821120000_radar_person_catalog_repair.sql", sha256: "8d2624a4ee34dae6b8080ba1bdb74f402c8144328815d21c99762cc22c6af765" }),
+  Object.freeze({ path: "supabase/migrations/20260821130000_radar_title_group.sql", sha256: "6e1b7b8a638536f223d82fd62220b80e130da0ba20e855336145d5afc31b228c" }),
+]);
+
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
     "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
@@ -196,6 +215,32 @@ function readRegularFile(repoPath, { readFile = readFileSync, stat = lstatSync }
   return Buffer.from(bytes);
 }
 
+export function requireRadarDeployedV5Provenance(options = {}) {
+  const files = RADAR_DEPLOYED_V5_FILES.map(({ path, sha256 }) => {
+    const bytes = readRegularFile(path, options);
+    const actual = createHash("sha256").update(bytes).digest("hex");
+    if (actual !== sha256) {
+      stop("RADAR_V5_PROVENANCE_DRIFT", "Lokale Radar-v5-Quelle weicht von der deployten Provenienz ab.");
+    }
+    return { path, sha256: actual };
+  });
+  const closure = createHash("sha256").update(JSON.stringify(files)).digest("hex");
+  if (closure !== RADAR_DEPLOYED_V5_CLOSURE_SHA256) {
+    stop("RADAR_V5_PROVENANCE_DRIFT", "Lokale Radar-v5-Closure weicht von der deployten Provenienz ab.");
+  }
+  for (const entry of RADAR_DEPLOYED_V5_MIGRATIONS) {
+    const actual = createHash("sha256").update(readRegularFile(entry.path, options)).digest("hex");
+    if (actual !== entry.sha256) {
+      stop("RADAR_V5_PROVENANCE_DRIFT", "Lokale Radar-v5-Migration weicht von der angewandten Provenienz ab.");
+    }
+  }
+  return Object.freeze({
+    bundleSha256: RADAR_DEPLOYED_V5_BUNDLE_SHA256,
+    closureSha256: closure,
+    files: Object.freeze(files.map((entry) => Object.freeze(entry))),
+  });
+}
+
 function localImports(repoPath, bytes) {
   let source;
   try {
@@ -251,6 +296,7 @@ function framedHash(commits, files) {
 export function deriveRadarPackageBReleaseClosure(options = {}) {
   requireAncestor(RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT, options);
   requireAncestor(RADAR_PACKAGE_B_COMMIT, "HEAD", options);
+  requireRadarDeployedV5Provenance(options);
 
   const changedByCommit = new Map();
   for (const commit of [RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]) {

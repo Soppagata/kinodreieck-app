@@ -22,6 +22,7 @@ import {
   validateRadarTarget,
 } from "./radarContracts.js";
 import {
+  projectRadarPilotPersonResult,
   validateRadarPilotEvent,
   validateRadarPilotFeed,
   validateRadarPilotImportPayload,
@@ -35,6 +36,8 @@ import {
   validatePersonIdentity,
   validatePersonRadarCheckResult,
 } from "./personDiscoveryContracts.js";
+import { createPersonRadarTargetId } from "./personRadarCatalog.js";
+import { validateTitleGroupMetadata } from "./titleGroupRadar.js";
 
 export const LOCAL_RADAR_FORMAT = "kinodreieck-radar-local";
 export const LOCAL_RADAR_VERSION = 2;
@@ -67,6 +70,21 @@ function validPublicLabel(value, max = 240) {
 function validInstant(value) {
   const normalized = text(value);
   return ISO_INSTANT_FORM.test(normalized) && Number.isFinite(Date.parse(normalized));
+}
+function validDomain(value) {
+  const domain = text(value);
+  return domain === value && domain === domain.toLowerCase() && domain.length <= 253
+    && domain.split(".").length >= 2
+    && domain.split(".").every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+function validEvidenceUrl(value, sourceDomain) {
+  if (typeof value !== "string" || text(value) !== value || value.length > 2048) return false;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase();
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.port && !parsed.hash
+      && (host === sourceDomain || host.endsWith(`.${sourceDomain}`));
+  } catch { return false; }
 }
 function normalizedInstant(value) {
   return Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : value;
@@ -183,13 +201,19 @@ function validateSubscription(subscription, authority) {
   const errors = [];
   const keys = [
     "targetId", "targetType", "title", "region", "scope", "status", "authority",
-    "serverRevision", "serverChecksum", "updatedAt",
+    "serverRevision", "serverChecksum", "updatedAt", "titleGroup",
   ];
   if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
   if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
   if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
-  if (subscription.title !== null && (!text(subscription.title) || text(subscription.title).length > 240)) {
+  if (subscription.title !== null && !validPublicLabel(subscription.title)) {
     errors.push("subscription-title-invalid");
+  }
+  if (subscription.titleGroup !== undefined) {
+    if (subscription.targetType !== "franchise"
+        || !validateTitleGroupMetadata(subscription.titleGroup, {
+          targetId: subscription.targetId, title: subscription.title,
+        })) errors.push("subscription-title-group-invalid");
   }
   if (subscription.region !== RADAR_DEFAULT_REGION) errors.push("subscription-region-invalid");
   if (!RADAR_SCOPES.includes(subscription.scope)) errors.push("subscription-scope-invalid");
@@ -215,16 +239,21 @@ function validateSubscription(subscription, authority) {
 
 function validateOutboxEntry(entry) {
   const errors = [];
-  const keys = [
+  const baseKeys = [
     "operationId", "action", "targetId", "targetType", "title", "region", "scope",
     "status", "createdAt", "reason",
   ];
+  const person = entry?.targetType === "person";
+  const titleGroup = entry?.targetType === "franchise" && entry?.titleGroup !== undefined;
+  const keys = person
+    ? [...baseKeys, "personExternalId", "personRole"]
+    : titleGroup ? [...baseKeys, "titleGroup"] : baseKeys;
   if (!exactKeys(entry, keys)) return ["outbox-shape-invalid"];
   if (!validOperationId(entry.operationId)) errors.push("outbox-operation-id-invalid");
   if (!LOCAL_RADAR_OUTBOX_ACTIONS.includes(entry.action)) errors.push("outbox-action-invalid");
   if (!isStableContractId(entry.targetId)) errors.push("outbox-target-invalid");
-  if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("outbox-target-type-invalid");
-  if (entry.title !== null && (!text(entry.title) || text(entry.title).length > 240)) errors.push("outbox-title-invalid");
+  if (!RADAR_TARGET_TYPES.includes(entry.targetType) && !person) errors.push("outbox-target-type-invalid");
+  if (entry.title !== null && !validPublicLabel(entry.title)) errors.push("outbox-title-invalid");
   if (entry.region !== RADAR_DEFAULT_REGION) errors.push("outbox-region-invalid");
   if (!RADAR_SCOPES.includes(entry.scope)) errors.push("outbox-scope-invalid");
   if (!LOCAL_RADAR_OUTBOX_STATUSES.includes(entry.status)) errors.push("outbox-status-invalid");
@@ -232,6 +261,20 @@ function validateOutboxEntry(entry) {
   if (entry.reason !== null && (!text(entry.reason) || text(entry.reason).length > 120)) {
     errors.push("outbox-reason-invalid");
   }
+  if (person) {
+    const identity = {
+      personExternalId: entry.personExternalId,
+      name: entry.title,
+      role: entry.personRole,
+      canonical: true,
+    };
+    if (!validatePersonIdentity(identity).ok
+        || entry.targetId !== createPersonRadarTargetId(entry.personExternalId, entry.personRole)
+        || entry.scope !== "all") errors.push("outbox-person-invalid");
+  }
+  if (titleGroup && !validateTitleGroupMetadata(entry.titleGroup, {
+    targetId: entry.targetId, title: entry.title,
+  })) errors.push("outbox-title-group-invalid");
   return errors;
 }
 
@@ -265,7 +308,9 @@ function validatePersonSubscription(subscription, authority) {
 }
 
 function validatePersonResult(entry) {
-  const keys = ["personExternalId", "name", "role", "status", "checkedAt", "decisions"];
+  const keys = [
+    "personExternalId", "name", "role", "status", "checkedAt", "windowStart", "windowEnd", "decisions",
+  ];
   if (!exactKeys(entry, keys)) return ["person-result-shape-invalid"];
   const errors = [...validatePersonIdentity({
     personExternalId: entry.personExternalId,
@@ -277,7 +322,9 @@ function validatePersonResult(entry) {
   if (!validInstant(entry.checkedAt)) errors.push("person-result-time-invalid");
   if (!Array.isArray(entry.decisions) || entry.decisions.length > 6) errors.push("person-result-decisions-invalid");
   else for (const decision of entry.decisions) {
-    if (!exactKeys(decision, ["status", "title", "year", "work"])) {
+    if (!exactKeys(decision, [
+      "status", "title", "year", "work", "eventType", "date", "region", "platform", "evidence",
+    ])) {
       errors.push("person-result-decision-shape-invalid"); continue;
     }
     if (!PERSON_DISCOVERY_MATCH_STATUSES.includes(decision.status)) errors.push("person-result-match-status-invalid");
@@ -293,7 +340,36 @@ function validatePersonResult(entry) {
         errors.push("person-result-work-invalid");
       }
     } else if (decision.work !== null) errors.push("person-result-unmatched-work-forbidden");
+    if (!RADAR_EVENT_TYPES.includes(decision.eventType)) errors.push("person-result-event-type-invalid");
+    if (!validDay(decision.date) || decision.date < entry.windowStart || decision.date > entry.windowEnd) {
+      errors.push("person-result-date-invalid");
+    }
+    if (decision.region !== RADAR_DEFAULT_REGION) errors.push("person-result-region-invalid");
+    if (decision.eventType === "streamingstart_at") {
+      if (!validPublicLabel(decision.platform, 80) || decision.platform === "-") errors.push("person-result-platform-invalid");
+    } else if (decision.platform !== "-") errors.push("person-result-platform-invalid");
+    if (!Array.isArray(decision.evidence) || decision.evidence.length < 1 || decision.evidence.length > 2) {
+      errors.push("person-result-evidence-invalid");
+    } else {
+      const sourceIds = new Set();
+      const sourceDomains = new Set();
+      const urls = new Set();
+      for (const evidence of decision.evidence) {
+        if (!exactPilotKeys(evidence, ["sourceId", "sourceDomain", "url", "retrievedAt"])
+            || !isStableContractId(evidence.sourceId) || !validDomain(evidence.sourceDomain)
+            || !validEvidenceUrl(evidence.url, evidence.sourceDomain) || !validInstant(evidence.retrievedAt)
+            || Date.parse(evidence.retrievedAt) > Date.parse(entry.checkedAt)
+            || sourceIds.has(evidence.sourceId) || sourceDomains.has(evidence.sourceDomain)
+            || urls.has(evidence.url)) {
+          errors.push("person-result-evidence-invalid");
+        }
+        sourceIds.add(evidence.sourceId); sourceDomains.add(evidence.sourceDomain); urls.add(evidence.url);
+      }
+    }
   }
+  const start = dayNumber(entry.windowStart);
+  const end = dayNumber(entry.windowEnd);
+  if (start == null || end == null || end - start !== 6) errors.push("person-result-window-invalid");
   return errors;
 }
 
@@ -530,9 +606,15 @@ export function decodeLocalRadar(raw, { authority = "guest" } = {}) {
 
 function targetDraft(target) {
   const checked = validateRadarTarget(target, { allowFixture: true });
-  return checked.ok && target.targetStatus === "active" && target.canonical === true
-    ? { targetId: text(target.targetId), targetType: target.targetType, title: text(target.title) }
-    : null;
+  if (!checked.ok || target.targetStatus !== "active" || target.canonical !== true) return null;
+  const draft = { targetId: text(target.targetId), targetType: target.targetType, title: text(target.title) };
+  if (target.titleGroup !== undefined) {
+    if (target.targetType !== "franchise" || !validateTitleGroupMetadata(target.titleGroup, {
+      targetId: draft.targetId, title: draft.title,
+    })) return null;
+    draft.titleGroup = clone(target.titleGroup);
+  }
+  return draft;
 }
 
 export function upsertGuestRadarSubscription(state, {
@@ -695,6 +777,8 @@ export function applyPersonRadarCheckResult(state, {
     role: subscription.role,
     status: checked.result.status,
     checkedAt: checked.result.checkedAt,
+    windowStart: checked.result.windowStart,
+    windowEnd: checked.result.windowEnd,
     decisions: checked.result.decisions,
   };
   const next = clone(state);
@@ -729,9 +813,53 @@ export function queueAccountRadarChange(state, {
     operationId: text(operationId), action, targetId: draft?.targetId || "",
     targetType: draft?.targetType || "", title: draft?.title || null, region: RADAR_DEFAULT_REGION, scope,
     status: "pending", createdAt: now, reason: null,
+    ...(draft?.titleGroup ? { titleGroup: clone(draft.titleGroup) } : {}),
   };
   if (!draft || validateOutboxEntry(entry).length) {
     return Object.freeze({ ok: false, reason: "outbox-entry-invalid", state, changed: false });
+  }
+  const existing = state.outbox.find((item) => item.operationId === entry.operationId);
+  if (existing) {
+    const same = JSON.stringify(existing) === JSON.stringify(entry);
+    return Object.freeze({ ok: same, reason: same ? "idempotent" : "operation-id-conflict", state, changed: false });
+  }
+  if (state.outbox.length >= LOCAL_RADAR_MAX_OUTBOX) {
+    return Object.freeze({ ok: false, reason: "outbox-full", state, changed: false });
+  }
+  const next = clone(state);
+  next.outbox.push(entry);
+  return Object.freeze({ ok: true, reason: "queued", state: freezeDeep(next), changed: true, createsProviderJob: false });
+}
+
+/* Personen nutzen dieselbe accountgebundene Outbox. Der geschlossene
+   Discriminator ist additiv; Werk-Abos und deren Zielvalidator bleiben
+   unverändert. Eine spätere Server-RPC muss ID, Name und Rolle erneut gegen
+   ihren kuratierten Vertrag prüfen. */
+export function queueAccountPersonRadarChange(state, {
+  operationId, action, identity, targetId, now = new Date().toISOString(),
+} = {}) {
+  const stateCheck = validateLocalRadarState(state);
+  const identityCheck = validatePersonIdentity(identity);
+  const expectedTargetId = createPersonRadarTargetId(identity?.personExternalId, identity?.role);
+  if (!stateCheck.ok || state.authority !== "account-cache") {
+    return Object.freeze({ ok: false, reason: "account-cache-required", state, changed: false });
+  }
+  const entry = {
+    operationId: text(operationId),
+    action,
+    targetId: text(targetId),
+    targetType: "person",
+    title: text(identity?.name) || null,
+    region: RADAR_DEFAULT_REGION,
+    scope: "all",
+    status: "pending",
+    createdAt: now,
+    reason: null,
+    personExternalId: text(identity?.personExternalId),
+    personRole: identity?.role,
+  };
+  if (!identityCheck.ok || entry.targetId !== expectedTargetId || validateOutboxEntry(entry).length) {
+    return Object.freeze({ ok: false, reason: "outbox-person-invalid", state, changed: false });
   }
   const existing = state.outbox.find((item) => item.operationId === entry.operationId);
   if (existing) {
@@ -852,7 +980,7 @@ function validateServerSnapshot(snapshot) {
       if (!exactKeys(entry, keys2)) { errors.push("server-subscription-shape-invalid"); continue; }
       if (!isStableContractId(entry.targetId)) errors.push("server-subscription-target-invalid");
       if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("server-subscription-target-type-invalid");
-      if (entry.title !== undefined && (!text(entry.title) || text(entry.title).length > 240)) {
+      if (entry.title !== undefined && !validPublicLabel(entry.title)) {
         errors.push("server-subscription-title-invalid");
       }
       if (entry.region !== RADAR_DEFAULT_REGION) errors.push("server-subscription-region-invalid");
@@ -904,10 +1032,11 @@ export function reconcileAccountRadarSnapshot(state, snapshot) {
   const acknowledgedShares = new Set(snapshot.acknowledgedShareOperationIds);
   const next = clone(state);
   next.subscriptions = snapshot.subscriptions.map((entry) => {
-    const retainedTitle = text(entry.title)
-      || text(state.subscriptions.find((item) => item.targetId === entry.targetId)?.title)
-      || text([...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title)
-      || null;
+    const retainedTitle = [
+      entry.title,
+      state.subscriptions.find((item) => item.targetId === entry.targetId)?.title,
+      [...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title,
+    ].map(text).find((value) => validPublicLabel(value)) || null;
     return {
       ...entry,
       title: retainedTitle,
@@ -1060,6 +1189,30 @@ export function acknowledgeAccountRadarPilotSubscription(state, operationId, ack
   }
   next.outbox = next.outbox.filter((entry) => entry.operationId !== id);
   next.server = { revision: ack.revision, checksum: ack.checksum, reconciledAt: state.server.reconciledAt };
+  if (pending.targetType === "person") {
+    const identityKey = createPersonIdentityKey({
+      personExternalId: pending.personExternalId,
+      role: pending.personRole,
+    });
+    next.personSubscriptions = next.personSubscriptions.filter((entry) => (
+      createPersonIdentityKey(entry) !== identityKey
+    ));
+    if (ack.status !== "removed") {
+      next.personSubscriptions.push({
+        personExternalId: pending.personExternalId,
+        name: pending.title,
+        role: pending.personRole,
+        status: ack.status,
+        authority: "server",
+        serverRevision: ack.revision,
+        serverChecksum: ack.checksum,
+        updatedAt: normalizedInstant(pending.createdAt),
+      });
+      next.personSubscriptions.sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)));
+    } else {
+      next.personResults = next.personResults.filter((entry) => createPersonIdentityKey(entry) !== identityKey);
+    }
+  }
   next.pilot.status = "ready";
   const stateCheck = validateLocalRadarState(next);
   if (!stateCheck.ok) return Object.freeze({ ok: false, reason: "pilot-subscription-result-invalid", state, changed: false });
@@ -1136,7 +1289,7 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     }
   }
   const acknowledged = new Set(feed.operationAcks.map((entry) => entry.operationId));
-  next.subscriptions = feed.subscriptions.map((entry) => ({
+  next.subscriptions = feed.subscriptions.filter((entry) => entry.targetType !== "person").map((entry) => ({
     targetId: entry.targetId,
     targetType: entry.targetType,
     title: entry.title,
@@ -1147,7 +1300,24 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     serverRevision: feed.revision,
     serverChecksum: feed.checksum,
     updatedAt: normalizedInstant(entry.updatedAt),
+    ...(entry.titleGroup === undefined ? {} : { titleGroup: clone(entry.titleGroup) }),
   })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  next.personSubscriptions = feed.subscriptions.filter((entry) => entry.targetType === "person").map((entry) => ({
+    personExternalId: entry.personExternalId,
+    name: entry.title,
+    role: entry.personRole,
+    status: entry.status,
+    authority: "server",
+    serverRevision: feed.revision,
+    serverChecksum: feed.checksum,
+    updatedAt: normalizedInstant(entry.updatedAt),
+  })).sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)));
+  const activePersonKeys = new Set(next.personSubscriptions.map((entry) => createPersonIdentityKey(entry)));
+  next.personResults = Array.isArray(feed.personResults)
+    ? feed.personResults.map((entry) => projectRadarPilotPersonResult(entry, feed.subscriptions))
+      .filter(Boolean)
+      .sort((a, b) => createPersonIdentityKey(a).localeCompare(createPersonIdentityKey(b)))
+    : next.personResults.filter((entry) => activePersonKeys.has(createPersonIdentityKey(entry)));
   next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
   const priorPilotVersions = new Set(next.pilot.events.map((entry) => entry.eventVersionId));
   const eventsByVersion = new Map(feed.events.map((entry) => [entry.eventVersionId, entry]));

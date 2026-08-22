@@ -220,7 +220,8 @@ function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
   onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarCheck,
+  personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
+  onPersonRadarAdd, onPersonRadarCheck,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
 }) {
   const [selectedWork, setSelectedWork] = useState("");
@@ -291,7 +292,7 @@ function RadarView({
     finally { setBusyKey(""); }
   };
   const checkPerson = async (entry) => {
-    if (!personRadarAvailable || busyKey) return;
+    if (!personRadarCheckAvailable || busyKey) return;
     setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
     try {
       const result = await onPersonRadarCheck?.(entry);
@@ -360,7 +361,7 @@ function RadarView({
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
-          {entry.status === "active" && personRadarAvailable ? <button type="button" className="kd-entdecken-sekundaer"
+          {entry.status === "active" && personRadarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkPerson(entry)}>
             {busyKey === `person|${entry.personExternalId}|${entry.role}` ? "Wird geprüft…" : "Jetzt prüfen"}
           </button> : null}
@@ -402,7 +403,8 @@ export function EntdeckenTab({
   webDiscoveryFeed = null, dailyVariety = false, calendarDay = null,
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
+  personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
+  onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
 }) {
@@ -443,7 +445,8 @@ export function EntdeckenTab({
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
       onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
-      onPersonRadarCheck={onPersonRadarCheck} franchiseRadarAvailable={franchiseRadarAvailable}
+      personRadarCheckAvailable={personRadarCheckAvailable} onPersonRadarCheck={onPersonRadarCheck}
+      franchiseRadarAvailable={franchiseRadarAvailable}
       onFranchiseRadarAdd={onFranchiseRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}

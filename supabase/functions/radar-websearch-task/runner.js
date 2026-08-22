@@ -60,8 +60,11 @@ export async function runRadarWebsearchCheck({
 
   let sources = [];
   try {
-    const domains = [...new Set((envelope?.response?.events || []).flatMap((event) => (
-      (event?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
+    const findings = ["person", "title_group"].includes(request.kind)
+      ? envelope?.response?.candidates
+      : envelope?.response?.events;
+    const domains = [...new Set((findings || []).flatMap((finding) => (
+      (finding?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
     )))];
     sources = await repository.resolveSources(domains);
   } catch {
@@ -71,6 +74,21 @@ export async function runRadarWebsearchCheck({
     });
   }
   const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
+  if (request.kind === "person" && evaluated.status !== "confirmed") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+      personResult: evaluated.personResult || null,
+    });
+  }
+  if (request.kind === "title_group" && evaluated.status !== "confirmed") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+    });
+  }
   if (evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
@@ -82,11 +100,47 @@ export async function runRadarWebsearchCheck({
   let writes = 0;
   let changed = false;
   try {
-    for (const event of evaluated.events) {
+    const catalogResult = request.kind === "person"
+      ? evaluated.personResult
+      : request.kind === "title_group" ? evaluated.titleGroupResult : null;
+    const events = catalogResult
+      ? catalogResult.candidates.map((candidate) => ({
+        targetKey: candidate.targetId,
+        targetType: candidate.targetType,
+        title: candidate.title,
+        year: candidate.year,
+        eventType: candidate.eventType,
+        date: candidate.date,
+        region: candidate.region,
+        platform: candidate.platform,
+        seasonNumber: candidate.seasonNumber ?? null,
+        evidence: candidate.evidence,
+      }))
+      : evaluated.events;
+    for (const event of events) {
       const upsert = await repository.upsertConfirmedEvent({
         accountId,
         operationId: operationId(event),
         event,
+        ...(request.kind === "person" ? {
+          personContext: {
+            targetId: request.targetId,
+            personExternalId: request.personExternalId,
+            canonicalName: request.canonicalName,
+            role: request.role,
+            checkedAt: evaluated.personResult.checkedAt,
+            windowStart: request.windowStart,
+            windowEnd: request.windowEnd,
+          },
+        } : request.kind === "title_group" ? {
+          titleGroupContext: {
+            targetId: request.targetId,
+            queryVersion: request.queryVersion,
+            queryKey: request.queryKey,
+            displayName: request.displayName,
+            checkedAt: evaluated.titleGroupResult.checkedAt,
+          },
+        } : {}),
       });
       if (upsert?.status === "confirmed") {
         writes += 1;
@@ -97,6 +151,24 @@ export async function runRadarWebsearchCheck({
     }
   } catch {
     return frozenResult({ status: "storage_error", writes, feed: null });
+  }
+  if (request.kind === "person") {
+    const personResult = changed
+      ? evaluated.personResult
+      : {
+        status: "no_change",
+        checkedAt: evaluated.personResult.checkedAt,
+        windowStart: request.windowStart,
+        windowEnd: request.windowEnd,
+        person: evaluated.personResult.person,
+        candidates: [],
+      };
+    return frozenResult({
+      status: changed ? "confirmed" : "no_change",
+      writes,
+      feed: await loadFeedSafely(repository, accountId),
+      personResult,
+    });
   }
   return frozenResult({
     status: changed ? "confirmed" : "no_change",

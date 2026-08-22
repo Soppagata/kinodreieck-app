@@ -1,0 +1,240 @@
+/* Fokussierter, vollstaendig lokaler Radar-v5-Provenienz- und Servicecheck.
+   Kein Netz, keine DB, kein Provider, kein Scheduler und kein Retry. */
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import {
+  acknowledgeAccountRadarPilotReceipt,
+  createEmptyLocalRadar,
+  queueAccountRadarPilotReceipt,
+  reconcileAccountRadarPilotFeed,
+} from "./src/lib/localEventRadar.js";
+import { projectEntdeckenRadarPilot } from "./src/lib/radarPilotContracts.js";
+import { resolveCanonicalFranchiseRadarTarget } from "./src/lib/titleGroupRadar.js";
+import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
+import { requireRadarDeployedV5Provenance } from "./tools/radar_websearch_remote_start.mjs";
+
+let checks = 0;
+async function check(name, run) {
+  await run();
+  checks += 1;
+  console.log(`✓ ${name}`);
+}
+function sha256(value) { return createHash("sha256").update(value).digest("hex"); }
+function fileSha(path) { return sha256(fs.readFileSync(path)); }
+
+const deployedV5 = Object.freeze({
+  sourceCommit: "e2154483b2c378bb54a63b3101c30a389d451997",
+  bundleSha256: "52f2e82d9909b36bd209b73e52eeb0d112ee4473ace30cb632913742e10d2bad",
+  closureSha256: "841e395b80dd2580d21a10620b55da1f139908c767154ffaeb587404beb09e6f",
+  files: Object.freeze([
+    ["supabase/functions/radar-websearch-task/anthropicAdapter.js", "abd64082191434eb91892303ca655926fc75916ddf4148ba2629082c1c52efcc"],
+    ["supabase/functions/radar-websearch-task/contract.js", "248da1034f320b6bed48e98f02c3e42b4a2899473e0a4232ef46b02bdfe5f2c8"],
+    ["supabase/functions/radar-websearch-task/index.ts", "6a79fab4386a6c634530fb7db936b70995786be02c9cab2c47ab3e2401c065ac"],
+    ["supabase/functions/radar-websearch-task/mockAdapter.js", "a7e02f1b98f7aa48ae0b0838a474071409cce9613c8758562a968aa29555a9c3"],
+    ["supabase/functions/radar-websearch-task/runner.js", "7e51264964f11a697178ad0d6fd319709132611764f3cfaafa636d5de44eab03"],
+  ]),
+  migrations: Object.freeze([
+    ["supabase/migrations/20260819220000_radar_person_server_candidate.sql", "d23f80f7073deb1197fdcb0b5a73f4abd1ad002e0b3bded6ee08c691d937f658"],
+    ["supabase/migrations/20260821120000_radar_person_catalog_repair.sql", "8d2624a4ee34dae6b8080ba1bdb74f402c8144328815d21c99762cc22c6af765"],
+    ["supabase/migrations/20260821130000_radar_title_group.sql", "6e1b7b8a638536f223d82fd62220b80e130da0ba20e855336145d5afc31b228c"],
+  ]),
+});
+
+await check("Deployte v5-Function und angewandte Migrationen bleiben bytegenau gebunden", () => {
+  const closureRows = deployedV5.files.map(([path, expected]) => {
+    const actual = fileSha(path);
+    assert.equal(actual, expected, path);
+    return { path, sha256: actual };
+  });
+  assert.equal(sha256(JSON.stringify(closureRows)), deployedV5.closureSha256);
+  for (const [path, expected] of deployedV5.migrations) assert.equal(fileSha(path), expected, path);
+  assert.match(deployedV5.sourceCommit, /^[a-f0-9]{40}$/);
+  assert.match(deployedV5.bundleSha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(requireRadarDeployedV5Provenance(), {
+    bundleSha256: deployedV5.bundleSha256,
+    closureSha256: deployedV5.closureSha256,
+    files: closureRows,
+  });
+  assert.throws(() => requireRadarDeployedV5Provenance({
+    readFile(path) {
+      return String(path).endsWith("/radar-websearch-task/index.ts")
+        ? Buffer.from("rollback") : fs.readFileSync(path);
+    },
+  }), (error) => error?.code === "RADAR_V5_PROVENANCE_DRIFT");
+});
+
+const franchiseCatalog = Object.freeze([
+  Object.freeze({ targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999, franchiseId: "wikidata:Q462" }),
+  Object.freeze({ targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977, franchiseId: "wikidata:Q462" }),
+  Object.freeze({ targetId: "watchmode:79999", targetType: "work", title: "Star Wards", year: 2026, franchiseId: "wikidata:Q999999" }),
+]);
+const starWars = resolveCanonicalFranchiseRadarTarget({ name: "Star Wars", catalog: franchiseCatalog });
+
+await check("Reihenvertrag bindet Star Wars exakt an Q462 und schliesst ähnlich benannte Werke aus", () => {
+  assert.equal(starWars.status, "ready");
+  assert.equal(starWars.franchise.franchiseId, "wikidata:Q462");
+  assert.equal(starWars.target.targetId, "title-group:v1:star-wars");
+  assert.deepEqual(starWars.target.titleGroup.members.map((entry) => entry.targetId), [
+    "watchmode:71001", "watchmode:71004",
+  ]);
+  assert.equal(resolveCanonicalFranchiseRadarTarget({ name: "Star Wards", catalog: franchiseCatalog }).status, "unresolved");
+});
+
+const checkedAt = "2026-08-20T08:01:00.000Z";
+const personIdentity = Object.freeze({
+  targetId: "person:wikidata:Q42869:actor",
+  personExternalId: "wikidata:Q42869",
+  name: "Nicolas Cage",
+  role: "actor",
+  canonical: true,
+});
+const personResult = Object.freeze({
+  targetId: personIdentity.targetId,
+  status: "confirmed",
+  checkedAt,
+  windowStart: "2026-08-14",
+  windowEnd: "2026-08-20",
+  person: Object.freeze({
+    personExternalId: personIdentity.personExternalId,
+    name: personIdentity.name,
+    role: personIdentity.role,
+    canonical: true,
+  }),
+  candidates: Object.freeze([]),
+});
+const serviceCalls = [];
+const serverService = createRadarWebsearchService({
+  config: {
+    radarPilotClientEnabled: true,
+    supabaseUrl: "https://example.supabase.co",
+    supabasePublishableKey: "publishable-mock-key",
+  },
+  auth: { getSnapshot: () => accountSession },
+  getAccount: () => ({ id: "account-a" }),
+  getAccessToken: async () => "token-mock",
+  fetchImpl: async (url, init) => {
+    const body = JSON.parse(init.body);
+    serviceCalls.push({ url, body });
+    const payload = body.targetId === personIdentity.targetId
+      ? { ok: true, status: "confirmed", writes: 1, providerRequests: 1, searchRequests: 1, personResult }
+      : { ok: true, status: "confirmed", writes: 1, providerRequests: 1, searchRequests: 1 };
+    return { ok: true, status: 200, async json() { return payload; } };
+  },
+  singleFile: false,
+});
+const accountSession = Object.freeze({ mode: "account", state: "ready", account: Object.freeze({ id: "account-a" }) });
+
+await check("Person und Star-Wars-Reihe gehen mit ausschließlich der starken Ziel-ID über den Serverservice", async () => {
+  const person = await serverService.checkPersonNow(personIdentity);
+  const franchise = await serverService.checkNow(starWars.target.targetId);
+  assert.equal(person.status, "confirmed");
+  assert.equal(franchise.status, "confirmed");
+  assert.deepEqual(serviceCalls.map((entry) => entry.body), [
+    { targetId: personIdentity.targetId },
+    { targetId: starWars.target.targetId },
+  ]);
+  assert.ok(serviceCalls.every((entry) => entry.url.endsWith("/functions/v1/radar-websearch-task")));
+});
+
+const evidence = Object.freeze([Object.freeze({
+  sourceId: "source:official",
+  sourceDomain: "example.com",
+  url: "https://example.com/radar/termin",
+  retrievedAt: "2026-08-20T08:00:00.000Z",
+})]);
+const personEventId = "11111111-1111-4111-8111-111111111111";
+const personVersionId = "22222222-2222-4222-8222-222222222222";
+const franchiseEventId = "33333333-3333-4333-8333-333333333333";
+const franchiseVersionId = "44444444-4444-4444-8444-444444444444";
+const subscriptions = Object.freeze([
+  Object.freeze({
+    targetId: personIdentity.targetId, targetType: "person", title: personIdentity.name,
+    region: "AT", scope: "all", status: "active", updatedAt: checkedAt,
+    personExternalId: personIdentity.personExternalId, personRole: personIdentity.role,
+  }),
+  Object.freeze({
+    targetId: starWars.target.targetId, targetType: "franchise", title: "Star Wars",
+    region: "AT", scope: "all", status: "active", updatedAt: checkedAt,
+    titleGroup: starWars.target.titleGroup,
+  }),
+]);
+const events = Object.freeze([
+  Object.freeze({
+    eventId: personEventId, eventVersionId: personVersionId, targetId: "watchmode:101",
+    eventType: "kinostart_at", date: "2026-08-20", region: "AT", platform: "-",
+    lifecycleStatus: "scheduled", verificationStatus: "confirmed", evidence,
+  }),
+  Object.freeze({
+    eventId: franchiseEventId, eventVersionId: franchiseVersionId, targetId: "watchmode:71004",
+    eventType: "streamingstart_at", date: "2026-08-20", region: "AT", platform: "Teststream",
+    lifecycleStatus: "scheduled", verificationStatus: "confirmed", evidence,
+  }),
+]);
+const fullPersonResult = Object.freeze({
+  ...personResult,
+  candidates: Object.freeze([Object.freeze({
+    targetId: "watchmode:101", targetType: "work", title: "Neues Cage-Projekt", year: 2026,
+    role: "actor", eventType: "kinostart_at", date: "2026-08-20", region: "AT", platform: "-", evidence,
+  })]),
+});
+const feed = Object.freeze({
+  format: "kd-radar-pilot-feed-v2",
+  revision: 1,
+  checksum: "a".repeat(64),
+  reconciledAt: checkedAt,
+  subscriptions,
+  events,
+  receipts: Object.freeze([]),
+  operationAcks: Object.freeze([]),
+  radarReview: true,
+  personResults: Object.freeze([fullPersonResult]),
+});
+
+await check("Nur belegte neue Events werden idempotent projiziert; Pin entsteht erst durch Nutzeraktion", () => {
+  const first = reconcileAccountRadarPilotFeed(createEmptyLocalRadar({ authority: "account-cache" }), feed);
+  assert.equal(first.ok, true, first.errors?.join(","));
+  const projection = projectEntdeckenRadarPilot({
+    clientEnabled: true, radarAuthority: "account-cache", radarState: first.state,
+  });
+  assert.equal(projection.events.length, 2);
+  assert.ok(projection.events.every((entry) => entry.verificationStatus === "confirmed" && entry.evidence.length >= 1));
+  assert.equal(first.state.receipts.length, 0);
+  assert.equal(first.state.pilot.receiptOutbox.length, 0);
+
+  const repeated = reconcileAccountRadarPilotFeed(first.state, feed);
+  assert.equal(repeated.ok, true);
+  assert.equal(repeated.changed, false);
+  assert.equal(repeated.state.pilot.events.length, 2);
+
+  const queued = queueAccountRadarPilotReceipt(repeated.state, {
+    eventId: franchiseEventId,
+    eventVersionId: franchiseVersionId,
+    status: "accepted_week",
+    now: checkedAt,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal(queued.state.receipts.length, 0);
+  assert.equal(queued.state.pilot.receiptOutbox.length, 1);
+  const pinned = acknowledgeAccountRadarPilotReceipt(queued.state, franchiseVersionId, checkedAt);
+  assert.equal(pinned.ok, true);
+  assert.deepEqual(pinned.state.receipts.map(({ versionId, status }) => ({ versionId, status })), [
+    { versionId: franchiseVersionId, status: "accepted_week" },
+  ]);
+
+  const invalidFeed = { ...feed, events: [{ ...events[0], evidence: [] }] };
+  const rejected = reconcileAccountRadarPilotFeed(pinned.state, invalidFeed);
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.state, pinned.state);
+});
+
+await check("Controller nutzt den echten Radar-Service standardmäßig; Injektion bleibt Testnaht", () => {
+  const source = fs.readFileSync("src/controllers/useEntdeckenRadarController.js", "utf8");
+  assert.match(source, /radarServerService\s*=\s*radarWebsearchService/);
+  assert.match(source, /radarServerService\.checkPersonNow/);
+  assert.match(source, /radarServerService\.checkNow/);
+  assert.doesNotMatch(source, /personRadarAdapter/);
+});
+
+console.log(`\n${checks} Radar-Serverprovenienz-Checks bestanden.`);
+console.log("Betrieb: lokale Mocks · kein Netz · keine DB · kein Anbieter · kein Retry");

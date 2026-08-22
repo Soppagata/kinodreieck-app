@@ -9,6 +9,18 @@ export const RADAR_WEBSEARCH_FEE_USD_CENT = 1;
 export const RADAR_WEBSEARCH_MAX_DOMAINS = 10;
 export const RADAR_WEBSEARCH_TIMEOUT_MAX_MS = 135_000;
 export const RADAR_WEBSEARCH_RESPONSE_MAX_BYTES = 512_000;
+export const RADAR_WEBSEARCH_PHASE_CODES = Object.freeze([
+  "runtime-setup",
+  "cost-reservation",
+  "provider-request",
+  "provider-complete",
+]);
+export const RADAR_WEBSEARCH_RESERVATION_STATUSES = Object.freeze([
+  "not-started", "reserved", "rejected", "unknown",
+]);
+export const RADAR_WEBSEARCH_RESERVATION_DECISIONS = Object.freeze([
+  "not-started", "accepted", "limit", "disabled", "forbidden", "server", "unknown",
+]);
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -44,6 +56,10 @@ function text(value) {
 }
 function finitePositive(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+export function normalizeRadarReservationDecision(value) {
+  if (value === "ai-disabled") return "disabled";
+  return ["limit", "disabled", "forbidden", "server"].includes(value) ? value : "unknown";
 }
 function validDomain(value) {
   return typeof value === "string" && value === value.toLowerCase()
@@ -142,10 +158,44 @@ const SYSTEM_PROMPT = [
   "events enthaelt nur eventType, eventDate, optional platform/seasonNumber und evidence.",
   "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; zitiere jede verwendete URL.",
 ].join(" ");
+const PERSON_SYSTEM_PROMPT = [
+  "Du extrahierst nur belegte Starttermine fuer Werke der exakt genannten Person in der exakt genannten Rolle.",
+  "Nutze hoechstens eine Websuche, nur die erlaubten Domains und nur Werke aus dem mitgegebenen kleinen Katalog.",
+  "Ein Kandidat braucht dieselbe starke Werk-ID, dieselbe Rolle, Region AT und ein Datum im angegebenen Sieben-Tage-Fenster.",
+  "Antworte im letzten Textblock ausschliesslich als JSON mit den Schluesseln status und candidates.",
+  "status ist confirmed, insufficient_evidence oder no_change; candidates enthaelt hoechstens drei Eintraege.",
+  "Jeder Eintrag enthaelt targetId, targetType, title, year, role, eventType, eventDate, region, platform und evidence.",
+  "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
+].join(" ");
+const TITLE_GROUP_SYSTEM_PROMPT = [
+  "Du extrahierst nur belegte Starttermine fuer die konkret aufgelisteten Werke einer Kinodreieck-Titelgruppe.",
+  "Nutze hoechstens eine Websuche und nur die erlaubten Domains; erfinde oder matche keine weiteren Werke.",
+  "Jeder Kandidat muss dieselbe starke Werk-ID, denselben Titel, dasselbe Jahr und denselben Typ wie ein Katalogeintrag tragen.",
+  "Antworte im letzten Textblock ausschliesslich als JSON mit den Schluesseln status und candidates.",
+  "status ist confirmed, insufficient_evidence oder no_change; candidates enthaelt hoechstens sechs Eintraege.",
+  "Jeder Eintrag enthaelt targetId, targetType, title, year, eventType, eventDate, region, platform, seasonNumber und evidence.",
+  "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
+].join(" ");
 
 export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   const setup = validateRadarWebsearchProviderSetup(setupInput);
-  const providerInput = {
+  const person = request.kind === "person";
+  const titleGroup = request.kind === "title_group";
+  const providerInput = person ? {
+    personExternalId: request.personExternalId,
+    canonicalName: request.canonicalName,
+    role: request.role,
+    region: request.region,
+    windowStart: request.windowStart,
+    windowEnd: request.windowEnd,
+    catalog: request.catalog,
+  } : titleGroup ? {
+    queryVersion: request.queryVersion,
+    queryKey: request.queryKey,
+    displayName: request.displayName,
+    region: request.region,
+    catalog: request.catalog,
+  } : {
     targetId: request.targetId,
     canonicalTitle: request.canonicalTitle,
     ...(request.releaseYear === undefined ? {} : { releaseYear: request.releaseYear }),
@@ -159,7 +209,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   return Object.freeze({
     model: setup.model,
     max_tokens: setup.maxTokens,
-    system: SYSTEM_PROMPT,
+    system: person ? PERSON_SYSTEM_PROMPT : titleGroup ? TITLE_GROUP_SYSTEM_PROMPT : SYSTEM_PROMPT,
     messages: Object.freeze([Object.freeze({
       role: "user",
       content: JSON.stringify(providerInput),
@@ -211,28 +261,30 @@ function responseTextBlock(content) {
   return blocks[blocks.length - 1];
 }
 
-function parseProviderJson(block) {
+function parseProviderJson(block, kind = "work") {
   let value;
   try { value = JSON.parse(block.text); } catch {
     throw new RadarWebsearchProviderError("provider-output-invalid");
   }
+  const listKey = ["person", "title_group"].includes(kind) ? "candidates" : "events";
+  const maxItems = kind === "person" ? 3 : kind === "title_group" ? 6 : 4;
   if (!plain(value) || Object.keys(value).length !== 2
-      || !("status" in value) || !("events" in value)
-      || !ALLOWED_STATUSES.has(value.status) || !Array.isArray(value.events)
-      || value.events.length > 4
-      || (value.status !== "confirmed" && value.events.length !== 0)) {
+      || !("status" in value) || !(listKey in value)
+      || !ALLOWED_STATUSES.has(value.status) || !Array.isArray(value[listKey])
+      || value[listKey].length > maxItems
+      || (value.status !== "confirmed" && value[listKey].length !== 0)) {
     throw new RadarWebsearchProviderError("provider-output-invalid");
   }
   return value;
 }
 
-function urlsFromEvidence(value) {
+function urlsFromEvidence(value, kind = "work") {
   const urls = [];
-  for (const event of value.events) {
-    if (!plain(event) || !Array.isArray(event.evidence)) {
+  for (const finding of value[["person", "title_group"].includes(kind) ? "candidates" : "events"]) {
+    if (!plain(finding) || !Array.isArray(finding.evidence)) {
       throw new RadarWebsearchProviderError("provider-output-invalid");
     }
-    for (const evidence of event.evidence) {
+    for (const evidence of finding.evidence) {
       if (!plain(evidence) || typeof evidence.url !== "string") {
         throw new RadarWebsearchProviderError("provider-output-invalid");
       }
@@ -298,11 +350,48 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
     }
   }
 
-  const parsed = parseProviderJson(responseTextBlock(value.content));
-  for (const url of urlsFromEvidence(parsed)) {
+  const kind = request.kind === "person" ? "person" : request.kind === "title_group" ? "title_group" : "work";
+  const parsed = parseProviderJson(responseTextBlock(value.content), kind);
+  for (const url of urlsFromEvidence(parsed, kind)) {
     if (!resultUrls.has(url) || !citationUrls.has(url)) {
       throw new RadarWebsearchProviderError("provider-citation-invalid", usage);
     }
+  }
+  if (kind === "person") {
+    return Object.freeze({
+      envelope: Object.freeze({
+        searchResultCount: results[0].content.length,
+        response: Object.freeze({
+          status: parsed.status,
+          checkedAt,
+          person: Object.freeze({
+            personExternalId: request.personExternalId,
+            canonicalName: request.canonicalName,
+            role: request.role,
+          }),
+          candidates: parsed.candidates,
+        }),
+      }),
+      usage,
+    });
+  }
+  if (kind === "title_group") {
+    return Object.freeze({
+      envelope: Object.freeze({
+        searchResultCount: results[0].content.length,
+        response: Object.freeze({
+          status: parsed.status,
+          checkedAt,
+          titleGroup: Object.freeze({
+            queryVersion: request.queryVersion,
+            queryKey: request.queryKey,
+            displayName: request.displayName,
+          }),
+          candidates: parsed.candidates,
+        }),
+      }),
+      usage,
+    });
   }
   const target = {
     targetId: request.targetId,
@@ -342,7 +431,7 @@ async function responseJson(response) {
  * @param {{
  *   apiKey?: string,
  *   loadSetup?: (() => Promise<unknown>) | null,
- *   reserveCost?: ((input: {targetId: string, operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
+ *   reserveCost?: ((input: {targetId: string, operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown, decision?: unknown}>) | null,
  *   settleCost?: ((input: Record<string, unknown>) => Promise<void>) | null,
  *   fetchImpl?: typeof fetch,
  *   now?: () => string,
@@ -364,6 +453,10 @@ export function createAnthropicRadarWebsearchAdapter({
     searchRequests: 0,
     resultCount: 0,
     costUsdCent: null,
+    phaseCode: "runtime-setup",
+    reservationStatus: "not-started",
+    reservationUsdCent: null,
+    reservationDecision: "not-started",
   };
   async function search(request) {
     if (used) throw new RadarWebsearchProviderError("already-used");
@@ -375,18 +468,36 @@ export function createAnthropicRadarWebsearchAdapter({
     const setup = validateRadarWebsearchProviderSetup(await loadSetup());
     const body = buildAnthropicRadarWebsearchBody(request, setup);
     const reservationUsdCent = estimateRadarWebsearchReservation(body, setup);
+    telemetry.phaseCode = "cost-reservation";
     const providerOperationId = operationId();
-    const reservation = await reserveCost({
-      targetId: request.targetId,
-      operationId: providerOperationId,
-      reservationUsdCent,
-      searchRequests: 1,
-    });
+    let reservation;
+    try {
+      reservation = await reserveCost({
+        targetId: request.targetId,
+        operationId: providerOperationId,
+        reservationUsdCent,
+        searchRequests: 1,
+      });
+    } catch {
+      telemetry.reservationStatus = "unknown";
+      telemetry.reservationDecision = "unknown";
+      throw new RadarWebsearchProviderError("cost-gate-rejected");
+    }
     const logId = Number(reservation?.logId);
-    if (reservation?.ok !== true) throw new RadarWebsearchProviderError("cost-gate-rejected");
+    if (reservation?.ok !== true) {
+      telemetry.reservationStatus = "rejected";
+      telemetry.reservationDecision = normalizeRadarReservationDecision(reservation?.decision);
+      throw new RadarWebsearchProviderError("cost-gate-rejected");
+    }
     if (!Number.isInteger(logId) || logId <= 0) {
+      telemetry.reservationStatus = "unknown";
+      telemetry.reservationDecision = "unknown";
       throw new RadarWebsearchProviderError("cost-log-invalid");
     }
+    telemetry.reservationStatus = "reserved";
+    telemetry.reservationUsdCent = reservationUsdCent;
+    telemetry.reservationDecision = "accepted";
+    telemetry.phaseCode = "provider-request";
 
     let usage = null;
     let costUsdCent = null;
@@ -454,6 +565,7 @@ export function createAnthropicRadarWebsearchAdapter({
       telemetry.searchRequests = usage.searchRequests;
       telemetry.resultCount = parsed.envelope.searchResultCount;
       telemetry.costUsdCent = costUsdCent;
+      telemetry.phaseCode = "provider-complete";
       return parsed.envelope;
     } catch (error) {
       const safe = error instanceof RadarWebsearchProviderError

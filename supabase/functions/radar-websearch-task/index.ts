@@ -3,7 +3,11 @@
    Provider-, Quellen- und Kostenkonfiguration bleiben serverseitig. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createAnthropicRadarWebsearchAdapter } from "./anthropicAdapter.js";
+import {
+  RADAR_WEBSEARCH_PHASE_CODES,
+  createAnthropicRadarWebsearchAdapter,
+  normalizeRadarReservationDecision,
+} from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
 
 const ALLOWED_ORIGINS = new Set([
@@ -79,7 +83,17 @@ function limitRows(rows: unknown): Map<string, unknown> {
   return values;
 }
 
-function rpcEvent(event: Record<string, unknown>) {
+function safePhaseCode(value: unknown): string {
+  return typeof value === "string" && RADAR_WEBSEARCH_PHASE_CODES.includes(value)
+    ? value
+    : "runtime-setup";
+}
+
+function rpcEvent(
+  event: Record<string, unknown>,
+  personContext: Record<string, unknown> | null = null,
+  titleGroupContext: Record<string, unknown> | null = null,
+) {
   return {
     targetKey: event.targetKey,
     eventType: event.eventType,
@@ -92,6 +106,27 @@ function rpcEvent(event: Record<string, unknown>) {
       url: entry.url,
       retrievedAt: entry.retrievedAt,
     })) : [],
+    ...(personContext ? {
+      personTargetKey: personContext.targetId,
+      personExternalId: personContext.personExternalId,
+      personRole: personContext.role,
+      personName: personContext.canonicalName,
+      workTargetType: event.targetType,
+      workTitle: event.title,
+      workYear: event.year,
+      checkedAt: personContext.checkedAt,
+      windowStart: personContext.windowStart,
+      windowEnd: personContext.windowEnd,
+    } : titleGroupContext ? {
+      titleGroupTargetKey: titleGroupContext.targetId,
+      queryVersion: titleGroupContext.queryVersion,
+      queryKey: titleGroupContext.queryKey,
+      displayName: titleGroupContext.displayName,
+      workTargetType: event.targetType,
+      workTitle: event.title,
+      workYear: event.year,
+      checkedAt: titleGroupContext.checkedAt,
+    } : {}),
   };
 }
 
@@ -159,14 +194,23 @@ export function createRadarWebsearchHandler({
       async resolveSources() {
         return await loadSources();
       },
-      async upsertConfirmedEvent({ accountId: actor, operationId, event }: {
+      async upsertConfirmedEvent({
+        accountId: actor, operationId, event, personContext = null, titleGroupContext = null,
+      }: {
         accountId: string; operationId: string; event: Record<string, unknown>;
+        personContext?: Record<string, unknown> | null;
+        titleGroupContext?: Record<string, unknown> | null;
       }) {
-        const { data, error } = await admin.rpc("kd_radar_websearch_upsert_event", {
+        const { data, error } = await admin.rpc(
+          personContext
+            ? "kd_radar_websearch_upsert_person_event"
+            : titleGroupContext ? "kd_radar_websearch_upsert_title_group_event" : "kd_radar_websearch_upsert_event",
+          {
           p_account_id: actor,
           p_operation_id: operationId,
-          p_payload: rpcEvent(event),
-        });
+          p_payload: rpcEvent(event, personContext, titleGroupContext),
+          },
+        );
         if (error) throw error;
         return data;
       },
@@ -241,7 +285,11 @@ export function createRadarWebsearchHandler({
           p_search_requests: searchRequests,
         });
         if (error) throw error;
-        return { ok: data?.ok === true, logId: data?.log_id };
+        return {
+          ok: data?.ok === true,
+          logId: data?.log_id,
+          decision: data?.ok === true ? "accepted" : normalizeRadarReservationDecision(data?.code),
+        };
       },
       async settleCost({
         logId, status, model, inputTokens, outputTokens, costUsdCent, errorClass,
@@ -271,6 +319,12 @@ export function createRadarWebsearchHandler({
       writes: result.writes || 0,
       providerRequests: telemetry.providerRequests || 0,
       searchRequests: telemetry.searchRequests || 0,
+      phaseCode: safePhaseCode(telemetry.phaseCode),
+      reservationStatus: telemetry.reservationStatus || "unknown",
+      reservationUsdCent: typeof telemetry.reservationUsdCent === "number"
+        ? telemetry.reservationUsdCent : null,
+      reservationDecision: telemetry.reservationDecision || "unknown",
+      ...(result.personResult ? { personResult: result.personResult } : {}),
     }, httpStatus, origin);
   };
 }
