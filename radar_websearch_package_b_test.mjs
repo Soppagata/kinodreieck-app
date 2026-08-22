@@ -18,6 +18,7 @@ import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
   ENTDECKEN_WEEKLY_COMMIT,
+  ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
   RADAR_PACKAGE_A_COMMIT,
   RADAR_PACKAGE_B_COMMIT,
   RADAR_TITLE_GROUP_V6_COMMIT,
@@ -427,6 +428,7 @@ const expectedRemoteReleaseClosure = Object.freeze([
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
   "supabase/migrations/20260822190000_entdecken_weekly_feed.sql",
   "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
+  "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   "tools/keychain_runner.mjs",
   "tools/radar_websearch_live.mjs",
 ]);
@@ -475,6 +477,7 @@ await check("Remote-Release-Closure entsteht aus der v6-Provenienz und dem echte
     RADAR_PACKAGE_B_COMMIT,
     ENTDECKEN_WEEKLY_COMMIT,
     RADAR_TITLE_GROUP_V6_COMMIT,
+    ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
   ]);
   assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
   assert.equal(first.files.length, expectedRemoteReleaseClosure.length);

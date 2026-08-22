@@ -80,7 +80,7 @@ await check("Deployte v5-Function bleibt im angenommenen Baselinecommit bytegena
   ));
 });
 
-await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und beide Forward-Migrationen bytegenau", () => {
+await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und alle drei Forward-Migrationen bytegenau", () => {
   const release = requireRadarEntdeckenV6ReleaseProvenance();
   assert.equal(release.releaseSha256, RADAR_ENTDECKEN_V6_RELEASE_SHA256);
   assert.equal(

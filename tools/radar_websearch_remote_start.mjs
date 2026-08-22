@@ -25,6 +25,7 @@ export const RADAR_PACKAGE_A_COMMIT = "b6b2dacf76139d778c8306a8ac954d93bd8caf22"
 export const RADAR_PACKAGE_B_COMMIT = "6e14a7b72a73b7af6b9bdb411647ce899aadea6e";
 export const ENTDECKEN_WEEKLY_COMMIT = "47d7ea995375cd7437ca3b858adf9b784156c692";
 export const RADAR_TITLE_GROUP_V6_COMMIT = "12bbe874fdfbc99ff3b577c09f5a95670f2950e3";
+export const ENTDECKEN_WEEKLY_RECOVERY_COMMIT = "20bbb3057c8328c67260486478956fac386b7d8b";
 
 export const SUPABASE_INFRA_KEYCHAIN = Object.freeze({
   service: "at.kinodreieck.codex.supabase.bscjgwcntapobyxsiyce",
@@ -52,6 +53,7 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
   "supabase/migrations/20260822190000_entdecken_weekly_feed.sql",
   "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
+  "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   FUNCTION_ENTRY,
   `${FUNCTION_ROOT}/mockAdapter.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
@@ -112,8 +114,14 @@ export const RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS = Object.freeze([
     path: "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
     sha256: "303d64f1073177d7b1b7ae374dafb3f86468d83d73413039f2295689104aa1b4",
   }),
+  Object.freeze({
+    version: "20260822210000",
+    name: "entdecken_weekly_recovery",
+    path: "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
+    sha256: "91ee831d893097e7d00e09eeb147a0db3408a015ed8314c4266dfc69a9f58408",
+  }),
 ]);
-export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "65acd51a584c94ad255235902a46e561fcf05c42aef1dab796a91e3cd758f79d";
+export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "7078cd756c1516df5f7327b47fbf47904390e3c755f5e5fecde31677b8888e9e";
 
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
@@ -145,6 +153,9 @@ const REQUIRED_PROVENANCE = Object.freeze({
     FUNCTION_ENTRY,
     `${FUNCTION_ROOT}/mockAdapter.js`,
     `${FUNCTION_ROOT}/runner.js`,
+  ]),
+  [ENTDECKEN_WEEKLY_RECOVERY_COMMIT]: Object.freeze([
+    "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   ]),
 });
 
@@ -506,6 +517,7 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
   requireAncestor(RADAR_PACKAGE_B_COMMIT, "HEAD", options);
   requireAncestor(ENTDECKEN_WEEKLY_COMMIT, "HEAD", options);
   requireAncestor(RADAR_TITLE_GROUP_V6_COMMIT, "HEAD", options);
+  requireAncestor(ENTDECKEN_WEEKLY_RECOVERY_COMMIT, "HEAD", options);
   requireRadarEntdeckenV6ReleaseProvenance(options);
 
   const changedByCommit = new Map();
@@ -514,6 +526,7 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
     RADAR_PACKAGE_B_COMMIT,
     ENTDECKEN_WEEKLY_COMMIT,
     RADAR_TITLE_GROUP_V6_COMMIT,
+    ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
   ];
   for (const commit of contractCommits) {
     changedByCommit.set(commit, new Set(changedPathsAtCommit(commit, options)));
