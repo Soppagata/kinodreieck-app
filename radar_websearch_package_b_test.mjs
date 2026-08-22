@@ -17,8 +17,10 @@ import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
+  ENTDECKEN_WEEKLY_COMMIT,
   RADAR_PACKAGE_A_COMMIT,
   RADAR_PACKAGE_B_COMMIT,
+  RADAR_TITLE_GROUP_V6_COMMIT,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
   RadarRemoteStartStop,
@@ -412,12 +414,19 @@ await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfr
 const expectedRemoteReleaseClosure = Object.freeze([
   "package.json",
   "supabase/config.toml",
+  "supabase/functions/entdecken-daily-task/anthropicAdapter.js",
+  "supabase/functions/entdecken-daily-task/contract.js",
+  "supabase/functions/entdecken-daily-task/index.ts",
+  "supabase/functions/entdecken-daily-task/runner.js",
   "supabase/functions/radar-websearch-task/anthropicAdapter.js",
   "supabase/functions/radar-websearch-task/contract.js",
   "supabase/functions/radar-websearch-task/index.ts",
+  "supabase/functions/radar-websearch-task/mockAdapter.js",
   "supabase/functions/radar-websearch-task/runner.js",
   "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
   "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
+  "supabase/migrations/20260822190000_entdecken_weekly_feed.sql",
+  "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
   "tools/keychain_runner.mjs",
   "tools/radar_websearch_live.mjs",
 ]);
@@ -458,15 +467,20 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Remote-Release-Closure entsteht aus Paket-A/B-Provenienz und dem echten Function-Importgraph", () => {
+await check("Remote-Release-Closure entsteht aus der v6-Provenienz und dem echten Function-Importgraph", () => {
   const first = deriveRadarPackageBReleaseClosure();
   const second = deriveRadarPackageBReleaseClosure();
-  assert.deepEqual(first.contractCommits, [RADAR_PACKAGE_A_COMMIT, RADAR_PACKAGE_B_COMMIT]);
+  assert.deepEqual(first.contractCommits, [
+    RADAR_PACKAGE_A_COMMIT,
+    RADAR_PACKAGE_B_COMMIT,
+    ENTDECKEN_WEEKLY_COMMIT,
+    RADAR_TITLE_GROUP_V6_COMMIT,
+  ]);
   assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
   assert.equal(first.files.length, expectedRemoteReleaseClosure.length);
   assert.equal(first.files.every((file) => fs.existsSync(`${REPO_ROOT}/${file.path}`)), true);
   assert.equal(first.paths.includes("tools/radar_websearch_contract.mjs"), false);
-  assert.equal(first.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), false);
+  assert.equal(first.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), true);
   assert.match(first.sha256, /^[a-f0-9]{64}$/);
   assert.equal(first.sha256, second.sha256);
 });
