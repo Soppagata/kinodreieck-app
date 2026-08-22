@@ -44,8 +44,14 @@ personRadarStand = LR.applyPersonRadarCheckResult(personRadarStand, {
   identity: personIdentity,
   catalog: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
   response: {
-    status: "confirmed", checkedAt: "2026-08-09T12:01:00.000Z", person: personIdentity,
-    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    status: "confirmed", checkedAt: "2026-08-09T12:01:00.000Z",
+    windowStart: "2026-08-09", windowEnd: "2026-08-15", person: personIdentity,
+    candidates: [{
+      targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+      role: "actor", eventType: "kinostart_at", date: "2026-08-12", region: "AT", platform: "-",
+      evidence: [{ sourceId: "news-a", sourceDomain: "news-a.example",
+        url: "https://news-a.example/dream-scenario", retrievedAt: "2026-08-09T12:00:00.000Z" }],
+    }],
   },
 }).state;
 const personRadarRaw = JSON.stringify(personRadarStand);

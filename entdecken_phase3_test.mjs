@@ -489,8 +489,14 @@ try {
     assert.ok(button(personUi.container, "Wird geprüft…")?.disabled);
   });
   const personResponse = {
-    status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z", person: identity,
-    candidates: [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }],
+    status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z",
+    windowStart: "2026-08-18", windowEnd: "2026-08-24", person: identity,
+    candidates: [{
+      targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023,
+      role: "actor", eventType: "kinostart_at", date: "2026-08-21", region: "AT", platform: "-",
+      evidence: [{ sourceId: "news-a", sourceDomain: "news-a.example",
+        url: "https://news-a.example/dream-scenario", retrievedAt: "2026-08-18T10:00:00.000Z" }],
+    }],
   };
   const applied = applyPersonRadarCheckResult(personState, { identity, response: personResponse, catalog: personCatalog });
   assert.equal(applied.ok, true);
