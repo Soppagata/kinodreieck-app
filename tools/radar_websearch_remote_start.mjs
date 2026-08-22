@@ -97,10 +97,10 @@ export const RADAR_V6_FILES = Object.freeze([
   Object.freeze({ path: `${FUNCTION_ROOT}/mockAdapter.js`, sha256: "1c7038b67870210befb9aa7ed77c1c7a0a887c973947a2016c3085fdfbe76d2d" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "2ae570110b61554450eb3542bfd7ed07445535650624b19cd97faa833c7e0e37" }),
 ]);
-export const ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256 = "77959e002daf58ea277fa3c30289e5e84b6d988ae9be55690ebc501b87233bbf";
+export const ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256 = "5d2134e05deb3812e5bb26789ea5645ee2654911e3ec2bb4e045087b207607e3";
 export const ENTDECKEN_WEEKLY_FILES = Object.freeze([
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "c0b9f9f211317bf1a080872405c1b275ae1993bd34212d96ef45266ad3810ba7" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "a7ab3e41cd9ee9a7bdb4ad18a30e7e10defd314c8125a93463e4c208a6022d95" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "af671f907f87faf852c01a2ffb87cdd5233cc98018eec93097c348d3a00ee330" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "296578d021b046810232c402c3b5823767519b2c10ae0f3aaa6eb067dc7efd48" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "c4278a38508ffabfe99ce196b40b3340d4f61924a0cdfaccd26cde7b7d790430" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "0bad6951dc3f9ddf3aa36d6d7db7a220c2f44e6660c35b123c78911aa507cf40" }),
 ]);
@@ -130,7 +130,7 @@ export const RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS = Object.freeze([
     sha256: "7f521614774d5565ff70cb38edb77b7d1717555bbb2106b3a3ce01f37f303080",
   }),
 ]);
-export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "8cade83a729a5f1bf854590d8bcce608d3d84e6eb74d976fb2d83fddca3b04e7";
+export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "e96f236c18cef7cc45857bae2d92391f47951ef2cbefd7f6bc39d3c54307375f";
 
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([

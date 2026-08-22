@@ -131,8 +131,8 @@ const selectionInput = {
 };
 const selection = createEntdeckenRecommendations(selectionInput);
 
-check("Weitere Entdeckungen zeigt sechs belegte AT-Titel und The Ninth Jedi", () => {
-  assert.equal(selection.further.length, 6);
+check("Insgesamt bleiben sieben belegte AT-Titel sichtbar", () => {
+  assert.equal(selection.further.length, 1);
   assert.ok(selection.further.some((entry) => /The Ninth Jedi/.test(entry.title)));
   assert.ok(selection.further.every((entry) => entry.services.includes("Disney+")
     && entry.externalEvidence.length > 0));
@@ -147,6 +147,14 @@ check("Für mich sortiert nur denselben Wochenfeed lokal und schließt Gesehenes
   assert.ok(!visible.some((entry) => entry.title === "Nur im lokalen Katalog"));
   assert.ok(!visible.some((entry) => entry.targetId === "watchmode:5015"));
   assert.equal(new Set(visible.map((entry) => entry.targetId)).size, visible.length);
+  assert.equal(visible.length, 7);
+});
+
+check("Neutrale Webtreffer bleiben aus Für mich und folgen in Weitere der Quellenreihenfolge", () => {
+  const neutral = createEntdeckenRecommendations({ ...selectionInput, profile: {} });
+  assert.deepEqual(neutral.personal, []);
+  assert.equal(neutral.further.length, 7);
+  assert.deepEqual(neutral.further.map((entry) => entry.sourceRank), [1, 2, 3, 4, 5, 6, 7]);
 });
 
 check("Unbelegter positiver Status leert den Pfad fail-closed", () => {
@@ -281,12 +289,12 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  check("Mock-Nutzerweg zeigt Für mich und sechs Weitere Entdeckungen ohne zweite Suche", () => {
+  check("Mock-Nutzerweg zeigt insgesamt sieben Titel ohne zweite Suche", () => {
     const personalSection = container.querySelector('[aria-labelledby="kd-entdecken-empfehlungen"]');
     const furtherSection = container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
     assert.match(personalSection?.textContent || "", /Für mich/);
     assert.equal(personalSection?.querySelectorAll(":scope > .kd-entdecken-karten .kd-entdecken-hub-karte").length, 6);
-    assert.equal(furtherSection?.querySelectorAll(".kd-entdecken-neutral").length, 6);
+    assert.equal(furtherSection?.querySelectorAll(".kd-entdecken-neutral").length, 1);
     assert.match(furtherSection?.textContent || "", /The Ninth Jedi/);
     assert.match(furtherSection?.textContent || "", /KW 34\/2026/);
     assert.ok([...furtherSection.querySelectorAll('a[href^="https://"]')]

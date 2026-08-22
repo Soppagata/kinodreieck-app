@@ -27,7 +27,7 @@ const PROFIL_ATTRIBUT_ARTEN = new Set([
 ]);
 export const ENTDECKEN_PERSONAL_LIMIT = 6;
 export const ENTDECKEN_TOP_POOL = 20;
-export const ENTDECKEN_WEITERE_LIMIT = 6;
+export const ENTDECKEN_VISIBLE_LIMIT = 7;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function normalized(value) { return text(value).toLocaleLowerCase("de-AT"); }
@@ -361,16 +361,15 @@ export function createEntdeckenRecommendations({
     library: localLibraryProjection(master),
     useLibrary,
     excludedTargetIds,
-    includeNeutral: true,
   });
   const personal = selectDailyRecommendations(ranked, { dailyVariety, selectionDay });
   const personalIds = new Set(personal.map((entry) => entry.targetId));
   const remaining = external.filter((candidate) => !personalIds.has(candidate.targetId));
-  /* Bei einem kleinen, aber noch brauchbaren Matchbestand bleiben fuenf bis
-     sieben allgemeine Tipps wichtiger als kuenstliche Duplikatfreiheit. */
-  const furtherPool = remaining.length >= 5 ? remaining : external;
-  const further = furtherPool
-    .slice(0, ENTDECKEN_WEITERE_LIMIT)
+  /* Insgesamt bleiben hoechstens sieben eindeutige Webtreffer sichtbar.
+     Fuer mich bekommt nur lokal begruendete Passungen; alle uebrigen Plaetze
+     folgen ohne erfundene Fueller der Quellenreihenfolge. */
+  const further = remaining
+    .slice(0, Math.max(0, ENTDECKEN_VISIBLE_LIMIT - personal.length))
     .map((candidate) => Object.freeze({
       targetId: candidate.targetId,
       watchmodeId: candidate.watchmodeId,

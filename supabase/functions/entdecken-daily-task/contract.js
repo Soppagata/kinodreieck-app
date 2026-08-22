@@ -125,7 +125,7 @@ function isoWeekData(day) {
 }
 
 function weeklyQuery(year, calendarWeek) {
-  return `Film- und Serien-Charts Österreich ${year} KW ${String(calendarWeek).padStart(2, "0")}: aktuell und allgemein positiv besprochene Filme und Serien`;
+  return `Top 50 Film- und Serien-Charts Österreich ${year} KW ${String(calendarWeek).padStart(2, "0")}`;
 }
 
 export function createEntdeckenWeeklyQueryContext(day, claimedIsoWeek = null) {

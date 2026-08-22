@@ -129,7 +129,7 @@ await check("Query-Kontext bindet ISO-Jahr und Kalenderwoche auch am Jahreswechs
     year: 2026,
     calendarWeek: 34,
     isoWeek: "2026-W34",
-    query: "Film- und Serien-Charts Österreich 2026 KW 34: aktuell und allgemein positiv besprochene Filme und Serien",
+    query: "Top 50 Film- und Serien-Charts Österreich 2026 KW 34",
   });
   assert.equal(createEntdeckenWeeklyQueryContext("2027-01-01")?.isoWeek, "2026-W53");
   assert.equal(createEntdeckenWeeklyQueryContext("2026-08-20", "2026-W33"), null);

@@ -176,7 +176,8 @@ check("Ein bloßer Mediathek-Eintrag bleibt auffindbar, eine vollständige Bewer
   assert.deepEqual(result.personal.map((entry) => entry.targetId), ["watchmode:801"]);
 });
 check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht aus dem Streaming-Anfang", () => {
-  assert.equal(stableSelection.further.length, 6);
+  assert.equal(stableSelection.further.length, 1);
+  assert.equal(stableSelection.personal.length + stableSelection.further.length, 7);
   assert.ok(stableSelection.further.every((entry) => entry.externalEvidence.length > 0
     && !stableSelection.personal.some((personal) => personal.targetId === entry.targetId)));
   const catalogCandidates = localRecommendationCandidates(catalogTruthInput, { selectedServices: ["Testdienst"] });
@@ -186,7 +187,7 @@ check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht
   });
   assert.deepEqual(invalid, []);
 });
-check("Ein Webtipp ohne lokales Profilsignal bleibt neutral statt ein Nutzerurteil zu erfinden", () => {
+check("Ein Webtipp ohne lokales Profilsignal bleibt in Weitere statt Für mich", () => {
   const scoreOnlyItem = webDiscoveryFeed.items.find((entry) => entry.attributes.genres.includes("komödie"));
   const targetId = `watchmode:${catalogTruthInput.titel.find((entry) => entry.titel === scoreOnlyItem.title).watchmode_id}`;
   const result = createEntdeckenRecommendations({
@@ -194,9 +195,7 @@ check("Ein Webtipp ohne lokales Profilsignal bleibt neutral statt ein Nutzerurte
     selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
     webDiscoveryFeed: { ...webDiscoveryFeed, items: [scoreOnlyItem] },
   });
-  const personal = result.personal.find((entry) => entry.targetId === targetId);
-  assert.ok(personal);
-  assert.deepEqual(personal.reasons, []);
+  assert.ok(!result.personal.some((entry) => entry.targetId === targetId));
   assert.ok(result.further.some((entry) => entry.targetId === targetId));
 });
 check("Tägliche Abwechslung ist am selben Tag stabil, wechselt zwischen Tagen und bewahrt den Passungsrang", () => {
@@ -379,7 +378,7 @@ try {
     const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
     const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
     assert.match(section?.textContent || "", /Weitere Entdeckungen/);
-    assert.equal(cards.length, 6);
+    assert.equal(cards.length, 1);
     assert.ok(cards.every((card) => {
       const link = card.querySelector('a[href^="https://"]');
       return link && /^(?:www\.)?(?:derstandard\.at|film\.at)$/.test(new URL(link.href).hostname)

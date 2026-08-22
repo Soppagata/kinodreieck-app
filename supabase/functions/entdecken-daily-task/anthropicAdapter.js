@@ -87,6 +87,7 @@ export function validateEntdeckenDailyProviderSetup(value) {
 const SYSTEM_PROMPT = [
   "Du erstellst einen allgemeinen, nicht personalisierten Wochenfeed fuer Oesterreich.",
   "Fuehre genau eine Websuche fuer das im Nutzerobjekt genannte ISO-Jahr und die dort genannte Kalenderwoche aus.",
+  "Verwende die Query aus queryContext unveraendert als einzige Suchanfrage.",
   "Suche ausschliesslich aktuell und allgemein positiv besprochene Filme und Serien aus derstandard.at und film.at; nutze keine andere Quelle.",
   "Nenne nur Werke, deren Titel, Werktyp, Veroeffentlichungsjahr, Publikationsdatum und positive Empfehlung von der direkt verlinkten Fundstelle getragen werden.",
   "Genres, Ton und Themen sind kurze neutrale Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
