@@ -195,22 +195,25 @@ function catalogRadarTargets({ master, streamingKnown, streamingDiscover }) {
 
 function statusText(status, kind = "work") {
   const person = kind === "person";
+  const franchise = kind === "franchise";
   return ({
-    active: person ? "Person ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
+    active: person ? "Person ist jetzt im Radar." : franchise ? "Reihe ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
     confirmed: person ? "Bestätigte Werke wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
     no_change: "Keine neue bestätigte Änderung gefunden.",
     insufficient_evidence: person ? "Noch keine ausreichend belegten Werke gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
+    busy: "Dieses Ziel wird bereits geprüft.",
     forbidden: "Dieses Ziel kann gerade nicht geprüft werden.",
-    unresolved: "Die Person konnte nicht eindeutig bestätigt werden.",
+    unresolved: franchise ? "Die Reihe konnte nicht eindeutig bestätigt werden." : "Die Person konnte nicht eindeutig bestätigt werden.",
     unavailable: "Die Suche ist derzeit nicht verfügbar.",
     provider_error: "Die Suche ist derzeit nicht erreichbar.",
+    timeout: "Die Suche hat ihre Zeitgrenze erreicht und wurde nicht wiederholt.",
     invalid_response: "Die Suche lieferte kein verlässliches Ergebnis.",
     storage_error: "Das Ergebnis konnte nicht sicher gespeichert werden.",
   })[status] || "Das Ziel konnte nicht geprüft werden.";
 }
 
 function isErrorStatus(status) {
-  return ["forbidden", "unresolved", "unavailable", "provider_error", "invalid_response", "storage_error"].includes(status);
+  return ["forbidden", "unresolved", "unavailable", "provider_error", "timeout", "invalid_response", "storage_error"].includes(status);
 }
 
 function RadarView({
@@ -218,11 +221,14 @@ function RadarView({
   onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarCheck,
+  franchiseRadarAvailable = false, onFranchiseRadarAdd,
 }) {
   const [selectedWork, setSelectedWork] = useState("");
   const [personName, setPersonName] = useState("");
   const [personRole, setPersonRole] = useState("actor");
   const [personAddBusy, setPersonAddBusy] = useState(false);
+  const [franchiseName, setFranchiseName] = useState("");
+  const [franchiseAddBusy, setFranchiseAddBusy] = useState(false);
   const [busyKey, setBusyKey] = useState("");
   const [message, setMessage] = useState(null);
   const targets = useMemo(
@@ -240,7 +246,7 @@ function RadarView({
     .filter((entry) => entry.verificationStatus === "confirmed")
     .map((entry) => ({
       ...entry,
-      title: localRadarTargetLabel(subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId, {
+      title: entry.title || localRadarTargetLabel(subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId, {
         master, streamingKnown, streamingDiscover,
       }),
     }))
@@ -263,6 +269,17 @@ function RadarView({
       if (result?.status === "active") setPersonName("");
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
     finally { setPersonAddBusy(false); }
+  };
+  const addFranchise = async () => {
+    const name = franchiseName.trim();
+    if (!franchiseRadarAvailable || !name || franchiseAddBusy) return;
+    setFranchiseAddBusy(true); setMessage(null);
+    try {
+      const result = await onFranchiseRadarAdd?.({ name });
+      setMessage({ status: result?.status, text: statusText(result?.status, "franchise") });
+      if (result?.status === "active") setFranchiseName("");
+    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "franchise") }); }
+    finally { setFranchiseAddBusy(false); }
   };
   const checkWork = async (entry) => {
     if (!radarCheckAvailable || busyKey) return;
@@ -314,6 +331,18 @@ function RadarView({
           </button>
         </div> : <p className="kd-entdecken-leer" role="status">Die Personensuche ist derzeit nicht verfügbar. Bereits bestätigte Personen bleiben sichtbar.</p>}
       </article>
+      <article className="kd-entdecken-panel">
+        <h3>Reihe hinzufügen</h3>
+        {franchiseRadarAvailable ? <div className="kd-entdecken-formzeile">
+          <label htmlFor="kd-radar-franchise">Kanonische Film- oder Serienreihe</label>
+          <input id="kd-radar-franchise" value={franchiseName} maxLength={160} autoComplete="off"
+            placeholder="Zum Beispiel Star Wars" onChange={(event) => setFranchiseName(event.target.value)} />
+          <small>Nur eine eindeutig aufgelöste Reihe mit stabiler ID wird aktiviert.</small>
+          <button type="button" className="kd-entdecken-primaer" disabled={!franchiseName.trim() || franchiseAddBusy} onClick={addFranchise}>
+            {franchiseAddBusy ? "Wird bestätigt…" : "Reihe ins Radar"}
+          </button>
+        </div> : <p className="kd-entdecken-leer" role="status">Die Reihensuche ist derzeit nicht verfügbar. Bereits bestätigte Reihen bleiben sichtbar.</p>}
+      </article>
     </div>
     {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
       role={isErrorStatus(message.status) ? "alert" : "status"}>{message.text}</p> : null}
@@ -323,7 +352,7 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · Werk</span>
+          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.targetType === "franchise" ? "Reihe" : "Werk"}</span>
           {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkWork(entry)}>
             {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
@@ -339,20 +368,20 @@ function RadarView({
         {(radarState?.outbox || []).length ? <p className="kd-entdecken-pending" role="status">Eine Änderung wartet noch auf Bestätigung.</p> : null}
       </article>
       <article className="kd-entdecken-panel">
-        <h3>Bestätigte Treffer</h3>
+        <h3>Neue Funde</h3>
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
-          <span>{entry.date} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
-          {entry.evidence?.length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
-            {entry.evidence.map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}
+          <span>{entry.date} · {entry.region} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
+          {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
+            {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}
               key={`${entry.eventVersionId}-source-${index}`} rel="noopener noreferrer" target="_blank">{item.sourceDomain}</a>)}
           </div></div> : null}
           {typeof onRadarPilotReceipt === "function" ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen"}
-            onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "seen" })}>
-            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "seen" ? "Gesehen" : "Als gesehen markieren"}
+            disabled={receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week"}
+            onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "accepted_week" })}>
+            {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week" ? "Angepinnt" : "Fund anpinnen"}
           </button> : null}
-        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine bestätigten Ereignisse für deine aktiven Werke.</p>}
+        </li>)}</ul> : <p className="kd-entdecken-leer">Noch kein neuer belegter Fund für deine aktiven Ziele.</p>}
         {personResults.map((result) => {
           const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
           return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
@@ -374,6 +403,7 @@ export function EntdeckenTab({
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
+  franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
@@ -413,7 +443,8 @@ export function EntdeckenTab({
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
       onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
-      onPersonRadarCheck={onPersonRadarCheck} /> : null}
+      onPersonRadarCheck={onPersonRadarCheck} franchiseRadarAvailable={franchiseRadarAvailable}
+      onFranchiseRadarAdd={onFranchiseRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}

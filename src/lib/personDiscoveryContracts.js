@@ -143,7 +143,7 @@ export function createCandidateRadarDraft(candidate, { mode = "production" } = {
 }
 
 /* Eine gemeinsame starke Werk-ID gewinnt. Ohne gemeinsame ID ist ausschließlich
-   ein eindeutiger Titel+Jahr-Treffer zulässig; unscharfe Ähnlichkeit bleibt
+   ein eindeutiger Titel+Jahr+Typ-Treffer zulässig; unscharfe Ähnlichkeit bleibt
    bewusst außerhalb dieses Vertrags. */
 export function matchPersonWorkCandidate(candidate, catalog = []) {
   if (!plain(candidate) || !exactKeys(candidate, ["targetId", "targetType", "title", "year"])
@@ -167,9 +167,12 @@ export function matchPersonWorkCandidate(candidate, catalog = []) {
       ? Object.freeze({ status: "ambiguous", work: null })
       : Object.freeze({ status: "matched", work });
   }
-  if (!usefulTitle(candidate.title)) return Object.freeze({ status: "no_match", work: null });
+  if (!candidate.targetType || !usefulTitle(candidate.title)) {
+    return Object.freeze({ status: "no_match", work: null });
+  }
   const title = normalizedTitle(candidate.title);
-  const fallback = works.filter((entry) => normalizedTitle(entry.title) === title && entry.year === candidate.year);
+  const fallback = works.filter((entry) => entry.targetType === candidate.targetType
+    && normalizedTitle(entry.title) === title && entry.year === candidate.year);
   if (fallback.length !== 1) {
     return Object.freeze({ status: fallback.length > 1 ? "ambiguous" : "no_match", work: null });
   }

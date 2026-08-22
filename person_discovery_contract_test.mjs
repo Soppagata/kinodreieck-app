@@ -138,16 +138,18 @@ check("Gemeinsame starke Werk-ID gewinnt nur ohne widersprechende Fakten", () =>
   }, catalog).status, "no_match");
 });
 
-check("Fallback verlangt substantiellen exakten Titel plus Jahr und Eindeutigkeit", () => {
-  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, catalog).status, "matched");
-  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2024 }, catalog).status, "no_match");
-  assert.equal(matchPersonWorkCandidate({ title: "Up", year: 2009 }, [
+check("Fallback verlangt substantiellen exakten Titel plus Jahr, Typ und Eindeutigkeit", () => {
+  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2023 }, catalog).status, "matched");
+  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2024 }, catalog).status, "no_match");
+  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Up", year: 2009 }, [
     { targetId: "catalog:up", targetType: "work", title: "Up", year: 2009 },
   ]).status, "no_match");
-  assert.equal(matchPersonWorkCandidate({ title: "Dream Scenario", year: 2023 }, [
+  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "work", title: "Dream Scenario", year: 2023 }, [
     ...catalog,
     { targetId: "catalog:dream-duplicate", targetType: "work", title: "Dream Scenario", year: 2023 },
   ]).status, "ambiguous");
+  assert.equal(matchPersonWorkCandidate({ targetId: null, title: "Dream Scenario", year: 2023 }, catalog).status, "no_match");
+  assert.equal(matchPersonWorkCandidate({ targetId: null, targetType: "series", title: "Dream Scenario", year: 2023 }, catalog).status, "no_match");
 });
 
 check("Personen-Check ist auf sechs Kandidaten begrenzt und erzeugt nie automatisch Werk-Abos", () => {
