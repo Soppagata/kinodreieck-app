@@ -20,6 +20,17 @@ function viennaDay(now = new Date()) {
     return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
   } catch { return null; }
 }
+function isoWeekForDay(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) return null;
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const isoYear = date.getUTCFullYear();
+  const start = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil((((date - start) / 86_400_000) + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
+}
 function frozen(status, feed = null) { return Object.freeze({ status, feed }); }
 function exactResult(value, today) {
   const allowed = ["ok", "status", "feed", "writes", "providerRequests", "searchRequests"];
@@ -33,8 +44,15 @@ function exactResult(value, today) {
     return value.feed === null ? frozen(value.status) : null;
   }
   const checked = validateWebDiscoveryFeed(value.feed);
-  if (!checked.ok || !today || checked.value.validUntil < today) return null;
-  if ((value.status === "fresh") !== (checked.value.refreshedOn === today)) return null;
+  if (!checked.ok || !today) return null;
+  if (checked.value.format === 4) {
+    const currentWeek = isoWeekForDay(today);
+    if (!currentWeek || (value.status === "fresh") !== (checked.value.isoWeek === currentWeek)) return null;
+    if (value.status === "fresh" && checked.value.validUntil < today) return null;
+  } else {
+    if (checked.value.validUntil < today) return null;
+    if ((value.status === "fresh") !== (checked.value.refreshedOn === today)) return null;
+  }
   return frozen(value.status, checked.value);
 }
 

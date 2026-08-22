@@ -241,6 +241,17 @@ function calendarDay(value) {
   return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === normalizedDay
     ? normalizedDay : null;
 }
+function isoWeekForCalendarDay(value) {
+  const day = calendarDay(value);
+  if (!day) return null;
+  const date = new Date(`${day}T00:00:00.000Z`);
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const isoYear = date.getUTCFullYear();
+  const start = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil((((date - start) / 86_400_000) + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
+}
 
 export function localCalendarDay(now = new Date()) {
   const value = now instanceof Date ? now : new Date(now);
@@ -249,12 +260,12 @@ export function localCalendarDay(now = new Date()) {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
 }
 
-/* Der spätere Adapter darf einmal je lokalem Kalendertag entscheiden, ob er
+/* Der spätere Adapter darf einmal je ISO-Kalenderwoche entscheiden, ob er
    einen neuen Feed benötigt. Diese reine Funktion startet selbst weder Netz
    noch Timer und macht damit aus einem Reload keinen Hintergrund-Loop. */
 export function shouldRefreshWebDiscovery(lastRefreshDay, today) {
-  const current = calendarDay(today);
-  return !!current && calendarDay(lastRefreshDay) !== current;
+  const current = isoWeekForCalendarDay(today);
+  return !!current && isoWeekForCalendarDay(lastRefreshDay) !== current;
 }
 
 /* Der globale Feed kennt keine lokale Katalogliste. Das Matching geschieht
@@ -280,7 +291,12 @@ export function webDiscoveryCandidates({
     unique.set(base.targetId, Object.freeze({
       ...base,
       genres: Object.freeze(uniqueText([...list(base.genres), ...list(record.attributes.genres)])),
-      tags: Object.freeze(uniqueText([...list(base.tags), ...list(record.attributes.tags)])),
+      tags: Object.freeze(uniqueText([
+        ...list(base.tags),
+        ...list(record.attributes.tags),
+        ...list(record.attributes.tones),
+        ...list(record.attributes.themes),
+      ])),
       sourceId: webDiscoveryFeed.sourceId,
       sourceRank: record.rank,
       externalDiscovery: true,
@@ -337,18 +353,23 @@ export function createEntdeckenRecommendations({
     streamingKnown, selectedServices, entdeckenStatus,
   }).filter((candidate) => !excluded.has(candidate.targetId));
   const external = webDiscoveryCandidates({ webDiscoveryFeed, catalogCandidates });
-  const externalById = new Map(external.map((candidate) => [candidate.targetId, candidate]));
-  const rankingCandidates = catalogCandidates.map((candidate) => externalById.get(candidate.targetId) || candidate);
-  const ranked = rankRecommendations(rankingCandidates, {
+  /* Beide sichtbaren Listen stammen aus genau demselben belegten Webfeed.
+     Der lokale Katalog bestaetigt nur Identitaet und AT-Verfuegbarkeit; er
+     darf keine zusaetzlichen Titel in "Fuer mich" einschleusen. */
+  const ranked = rankRecommendations(external, {
     profile: profile && profile.beschaedigt !== true ? profile : {},
     library: localLibraryProjection(master),
     useLibrary,
     excludedTargetIds,
+    includeNeutral: true,
   });
   const personal = selectDailyRecommendations(ranked, { dailyVariety, selectionDay });
   const personalIds = new Set(personal.map((entry) => entry.targetId));
-  const further = external
-    .filter((candidate) => !personalIds.has(candidate.targetId))
+  const remaining = external.filter((candidate) => !personalIds.has(candidate.targetId));
+  /* Bei einem kleinen, aber noch brauchbaren Matchbestand bleiben fuenf bis
+     sieben allgemeine Tipps wichtiger als kuenstliche Duplikatfreiheit. */
+  const furtherPool = remaining.length >= 5 ? remaining : external;
+  const further = furtherPool
     .slice(0, ENTDECKEN_WEITERE_LIMIT)
     .map((candidate) => Object.freeze({
       targetId: candidate.targetId,

@@ -113,13 +113,26 @@ check("Explizit gesehene Titel bleiben aus persönlicher und weiterer Auswahl", 
 check("Ein bloßer Mediathek-Eintrag bleibt auffindbar, eine vollständige Bewertung gilt als Sehbeleg", () => {
   const known = {
     region: "AT", titel: [
-      { watchmode_id: 801, titel: "Synthetisch ungesehen", typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
-      { watchmode_id: 802, titel: "Synthetisch gesehen", typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
+      { watchmode_id: 801, titel: "Synthetisch ungesehen", jahr: 2026, typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
+      { watchmode_id: 802, titel: "Synthetisch gesehen", jahr: 2026, typ: "movie", dienste: ["Testdienst"], genre: ["drama"] },
     ],
+  };
+  const knownFeed = {
+    ...webDiscoveryFeed,
+    items: known.titel.map((entry, index) => ({
+      ...webDiscoveryFeed.items[index],
+      recordId: `webtip:${(240 + index).toString(16).padStart(16, "0")}`,
+      title: entry.titel,
+      mediaType: "film",
+      releaseYear: entry.jahr,
+      attributes: { genres: ["drama"], tags: [] },
+      rank: index + 1,
+    })),
   };
   const result = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] }, streamingKnown: known,
     profile: profileInput, selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
+    webDiscoveryFeed: knownFeed,
     master: [
       { watchmode_id: 801, titel: "Synthetisch ungesehen", bewertung: null, genre: ["drama"] },
       { watchmode_id: 802, titel: "Synthetisch gesehen", bewertung: { wie: 4, was: 3, warum: 3 }, genre: ["drama"] },
@@ -138,7 +151,7 @@ check("Weitere Entdeckungen stammen nur aus positiv belegten Webfunden und nicht
   });
   assert.deepEqual(invalid, []);
 });
-check("Ein Webtipp ohne lokales Profilsignal bleibt weitere Entdeckung", () => {
+check("Ein Webtipp ohne lokales Profilsignal bleibt neutral statt ein Nutzerurteil zu erfinden", () => {
   const scoreOnlyItem = webDiscoveryFeed.items.find((entry) => entry.attributes.genres.includes("komödie"));
   const targetId = `watchmode:${catalogTruthInput.titel.find((entry) => entry.titel === scoreOnlyItem.title).watchmode_id}`;
   const result = createEntdeckenRecommendations({
@@ -146,7 +159,9 @@ check("Ein Webtipp ohne lokales Profilsignal bleibt weitere Entdeckung", () => {
     selectedServices: ["Testdienst"], selectionDay: "2026-08-20",
     webDiscoveryFeed: { ...webDiscoveryFeed, items: [scoreOnlyItem] },
   });
-  assert.ok(!result.personal.some((entry) => entry.targetId === targetId));
+  const personal = result.personal.find((entry) => entry.targetId === targetId);
+  assert.ok(personal);
+  assert.deepEqual(personal.reasons, []);
   assert.ok(result.further.some((entry) => entry.targetId === targetId));
 });
 check("Tägliche Abwechslung ist am selben Tag stabil, wechselt zwischen Tagen und bewahrt den Passungsrang", () => {
@@ -158,7 +173,8 @@ check("Tägliche Abwechslung ist am selben Tag stabil, wechselt zwischen Tagen u
   assert.notDeepEqual(dayA.map((entry) => entry.targetId), dayB.map((entry) => entry.targetId));
   assert.deepEqual(dayA.map((entry) => entry.rank), [...dayA.map((entry) => entry.rank)].sort((a, b) => a - b));
   assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-20"), false);
-  assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-21"), true);
+  assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-21"), false);
+  assert.equal(shouldRefreshWebDiscovery("2026-08-20", "2026-08-24"), true);
 });
 
 const wurzel = path.dirname(fileURLToPath(import.meta.url));

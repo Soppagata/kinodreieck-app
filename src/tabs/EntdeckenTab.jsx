@@ -141,18 +141,20 @@ function RecommendationsView({
   const { personal, further } = selection;
   const source = (entry) => entry.externalEvidence?.[0] || null;
   const meta = (entry) => [...(entry.services || []).slice(0, 2), entry.year].filter(Boolean).join(" · ");
+  const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
+  const weekLabel = weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     <div className="kd-entdecken-sektionskopf">
-      <div><span>Für dich</span><h2 id="kd-entdecken-empfehlungen">Persönliche Passung</h2></div>
+      <div><span>Dein lokaler Abgleich</span><h2 id="kd-entdecken-empfehlungen">Für mich</h2></div>
       <p>Verfügbar und noch nicht gesehen.{dailyVariety ? " Heute neu gemischt." : " Beste Passung zuerst."}</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
     {personal.length ? <div className="kd-entdecken-karten">{personal.map((entry) => {
       const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
       return <article key={entry.targetId} className="kd-entdecken-hub-karte">
-        <span className="kd-entdecken-kicker">Persönliche Passung</span>
+        <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
         <h3>{entry.title}</h3>
-        <p className="kd-entdecken-grund">{entry.reasons[0]}</p>
+        {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
         <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
       </article>;
@@ -160,7 +162,7 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Von anderen empfohlen</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen</h2></div>
-        <p>Webtipps, die aktuell in Österreich verfügbar sind.</p>
+        <p>Webtipps, die aktuell in Österreich verfügbar sind.{weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
       {further.length ? <div className="kd-entdecken-karten">{further.map((entry) => {
         const evidence = source(entry);

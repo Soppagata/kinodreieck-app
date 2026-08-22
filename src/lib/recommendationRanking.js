@@ -143,8 +143,10 @@ export function rankRecommendations(candidates, context = {}) {
     .map((candidate) => ({ candidate, analysis: analyze(candidate, context) }))
     .filter((row) => !row.analysis.blockingNegative)
     /* Ohne belegten Profil-/Mediatheksgrund bleibt der Kandidat in seiner
-       unpersonalisierten Quellenliste und wird nicht zur Empfehlung. */
-    .filter((row) => row.analysis.reasons.length > 0)
+       unpersonalisierten Quellenliste und wird nicht zur Empfehlung. Der
+       Wochenfeed darf diese neutralen Kandidaten ausdruecklich mitnehmen,
+       damit "Fuer mich" denselben Feed nur sortiert statt neu zu suchen. */
+    .filter((row) => context.includeNeutral === true || row.analysis.reasons.length > 0)
     .sort(compareRows)
     .map((row) => Object.freeze({
       targetId: row.candidate.targetId,
