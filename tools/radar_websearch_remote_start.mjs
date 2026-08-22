@@ -247,6 +247,39 @@ export function buildRadarEntdeckenRestoreScaffoldSql(authIds) {
   ].join("\n");
 }
 
+export function verifyRadarEntdeckenDisposableRestore({
+  sourceSchema,
+  restoredSchema,
+  sourceData,
+  restoredData,
+  sourceBusiness,
+  restoredBusiness,
+} = {}) {
+  const receiptValid = (receipt) => receipt
+    && /^[a-f0-9]{64}$/.test(receipt.sha256)
+    && Number.isSafeInteger(receipt.lines) && receipt.lines > 0;
+  if (![sourceSchema, restoredSchema, sourceData, restoredData].every(receiptValid)) {
+    stop("RESTORE_PROJECTION_INVALID", "Restoreprojektion besitzt keine gueltige Quittung.");
+  }
+  if (!isDeepStrictEqual(restoredSchema, sourceSchema)) {
+    stop("RESTORE_SCHEMA_DRIFT", "Kanonische Schema-Projektionen weichen ab.");
+  }
+  if (!isDeepStrictEqual(restoredData, sourceData)) {
+    stop("RESTORE_DATA_DRIFT", "Restore-Datenprojektion weicht vom Quellarchiv ab.");
+  }
+  if (!sourceBusiness || !restoredBusiness
+      || sourceBusiness.sha256 !== restoredBusiness.sha256
+      || !isDeepStrictEqual(sourceBusiness.rows, restoredBusiness.rows)) {
+    stop("RESTORE_BUSINESS_DRIFT", "Fachliche Restoreprojektion weicht von der Quelle ab.");
+  }
+  return Object.freeze({
+    status: "DISPOSABLE_RESTORE_VERIFIED",
+    schemaProjectionSha256: sourceSchema.sha256,
+    dataProjectionSha256: sourceData.sha256,
+    businessProjectionSha256: sourceBusiness.sha256,
+  });
+}
+
 export function validateRadarLedgerBaseline(actual, expected) {
   if (!Array.isArray(actual) || !Array.isArray(expected)
       || !isDeepStrictEqual(actual, expected)) {
