@@ -1030,8 +1030,8 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await expect(verwalten).toBeFocused();
 
   await page.getByRole("tab", { name: "Radar" }).click();
-  await page.getByLabel("Film oder Serie").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Werk ins Radar", exact: true }).click();
+  await page.getByLabel("Film, Serie, Person oder Reihe").fill("Passender Film");
+  await page.locator('[data-radar-target-kind="catalog"]').filter({ hasText: "Passender Film" }).click();
   const preview = page.getByRole("dialog", { name: "Ins Radar" });
   await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
   await expect(preview.getByRole("checkbox")).toBeDisabled();
