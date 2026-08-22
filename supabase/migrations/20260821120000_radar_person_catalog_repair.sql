@@ -61,12 +61,17 @@ declare
   v_work_count integer;
   v_present_count integer;
   v_exact_count integer;
+  v_known_fingerprint constant text :=
+    'bade140d6710349110be22457cbfd1a9398a99fe23a885b39f0ebbbd7885c812';
+  v_current_fingerprint text;
+  v_updated integer;
   v_inserted integer;
 begin
   if to_regclass('public.kd_radar_targets') is null
      or to_regprocedure(
        'public.kd_radar_person_target_metadata_valid(text,text,jsonb)'
-     ) is null then
+     ) is null
+     or to_regprocedure('extensions.digest(bytea,text)') is null then
     raise exception 'radar_person_catalog_contract_missing';
   end if;
 
@@ -123,11 +128,40 @@ begin
   left join public.kd_radar_targets target
     on target.target_key = item ->> 'targetKey';
 
-  if v_present_count <> v_exact_count then
-    raise exception 'radar_person_catalog_person_seed_drift';
-  end if;
   if v_present_count not in (4, 5) then
     raise exception 'radar_person_catalog_baseline_count_drift';
+  end if;
+  if (v_present_count = 4 and v_exact_count <> 4)
+     or (v_present_count = 5 and v_exact_count not in (4, 5)) then
+    raise exception 'radar_person_catalog_person_seed_drift';
+  end if;
+
+  if v_present_count = 5 and v_exact_count = 4 then
+    select encode(
+      extensions.digest(convert_to(to_jsonb(target)::text, 'UTF8'), 'sha256'),
+      'hex'
+    )
+      into v_current_fingerprint
+    from public.kd_radar_targets target
+    where target.target_key = 'person:wikidata:Q42869:actor';
+
+    if v_current_fingerprint is distinct from v_known_fingerprint then
+      raise exception 'radar_person_catalog_person_fingerprint_drift';
+    end if;
+
+    update public.kd_radar_targets target
+       set target_status = 'active'
+     where target.target_key = 'person:wikidata:Q42869:actor'
+       and target.target_status is distinct from 'active'
+       and encode(
+         extensions.digest(convert_to(to_jsonb(target)::text, 'UTF8'), 'sha256'),
+         'hex'
+       ) = v_known_fingerprint;
+
+    get diagnostics v_updated = row_count;
+    if v_updated <> 1 then
+      raise exception 'radar_person_catalog_person_repair_write_drift';
+    end if;
   end if;
 
   insert into public.kd_radar_targets (

@@ -54,6 +54,8 @@ const TITLE_GROUP_MIGRATION = Object.freeze({
   name: "radar_title_group",
 });
 const ACCOUNT_ID = "11111111-1111-4111-8111-111111111111";
+const REMOTE_PERSON_FINGERPRINT =
+  "bade140d6710349110be22457cbfd1a9398a99fe23a885b39f0ebbbd7885c812";
 const root = mkdtempSync("/private/tmp/kinodreieck-radar-person-pg17-");
 const cluster = Object.freeze({
   data: join(root, "data"),
@@ -126,6 +128,8 @@ do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
 end $$;
 create schema supabase_migrations;
+create schema extensions;
+create extension pgcrypto with schema extensions;
 create table supabase_migrations.schema_migrations (
   version text not null,
   name text not null,
@@ -251,6 +255,47 @@ try {
       'person:wikidata:Q271967:actor','person:wikidata:Q271967:director',
       'person:wikidata:Q7374:director'
     );`;
+  const curatedExactCountSql = `select count(*) from (values
+      ('person:wikidata:Q42869:actor','person','active','Nicolas Cage',
+       '{"personExternalId":"wikidata:Q42869","personRole":"actor","catalog":[{"targetId":"catalog:dream-scenario-2023","targetType":"work","title":"Dream Scenario","year":2023}]}'::jsonb),
+      ('person:wikidata:Q47284:director','person','active','Robert Rodriguez',
+       '{"personExternalId":"wikidata:Q47284","personRole":"director","catalog":[{"targetId":"catalog:sin-city-2005","targetType":"work","title":"Sin City","year":2005}]}'::jsonb),
+      ('person:wikidata:Q271967:actor','person','active','Greta Gerwig',
+       '{"personExternalId":"wikidata:Q271967","personRole":"actor","catalog":[{"targetId":"catalog:frances-ha-2012","targetType":"work","title":"Frances Ha","year":2012}]}'::jsonb),
+      ('person:wikidata:Q271967:director','person','active','Greta Gerwig',
+       '{"personExternalId":"wikidata:Q271967","personRole":"director","catalog":[{"targetId":"catalog:barbie-2023","targetType":"work","title":"Barbie","year":2023}]}'::jsonb),
+      ('person:wikidata:Q7374:director','person','active','Alfred Hitchcock',
+       '{"personExternalId":"wikidata:Q7374","personRole":"director","catalog":[{"targetId":"catalog:psycho-1960","targetType":"work","title":"Psycho","year":1960}]}'::jsonb)
+    ) expected(target_key,target_type,target_status,canonical_title,external_ids)
+    join public.kd_radar_targets target
+      on target.target_key=expected.target_key
+     and target.target_type=expected.target_type
+     and target.target_status=expected.target_status
+     and target.canonical_title=expected.canonical_title
+     and target.external_ids=expected.external_ids;`;
+  const protectedSurfaceSql = `select jsonb_build_object(
+    'curatedWithoutStatus',(select coalesce(jsonb_agg(to_jsonb(target)-'target_status'
+      order by target.target_key),'[]'::jsonb) from public.kd_radar_targets target
+      where target.target_key in (
+        'person:wikidata:Q42869:actor','person:wikidata:Q47284:director',
+        'person:wikidata:Q271967:actor','person:wikidata:Q271967:director',
+        'person:wikidata:Q7374:director')),
+    'otherTargets',(select coalesce(jsonb_agg(to_jsonb(target) order by target.target_key),'[]'::jsonb)
+      from public.kd_radar_targets target where target.target_key not in (
+        'person:wikidata:Q42869:actor','person:wikidata:Q47284:director',
+        'person:wikidata:Q271967:actor','person:wikidata:Q271967:director',
+        'person:wikidata:Q7374:director')),
+    'subscriptions',(select coalesce(jsonb_agg(to_jsonb(subscription)
+      order by to_jsonb(subscription)::text),'[]'::jsonb) from public.kd_radar_subscriptions subscription),
+    'events',(select coalesce(jsonb_agg(to_jsonb(event)
+      order by to_jsonb(event)::text),'[]'::jsonb) from public.kd_radar_events event),
+    'flags',(select coalesce(jsonb_agg(to_jsonb(settings)
+      order by to_jsonb(settings)::text),'[]'::jsonb) from public.kd_radar_settings settings)
+  );`;
+  const knownFingerprintSql = `select encode(extensions.digest(
+    convert_to(to_jsonb(target)::text,'UTF8'),'sha256'),'hex')
+    from public.kd_radar_targets target
+    where target.target_key='person:wikidata:Q42869:actor';`;
   check("synthetischer Remote-Drift startet mit exakt 4/5 kuratierten Personenzielen",
     psql(curatedCountSql).stdout === "4");
   const foreignBefore = jsonResult(`select jsonb_build_object(
@@ -264,7 +309,7 @@ try {
   psql(`insert into supabase_migrations.schema_migrations (version,name,statements)
     values ('${PERSON_CATALOG_REPAIR.version}','${PERSON_CATALOG_REPAIR.name}',array[]::text[]);`);
   check("Forwardrepair schliesst die belegte 4/5-Baseline exakt auf 5/5",
-    psql(curatedCountSql).stdout === "5");
+    psql(curatedExactCountSql).stdout === "5");
   const foreignAfterFirst = jsonResult(`select jsonb_build_object(
     'target',to_jsonb(t) - 'created_at' - 'updated_at',
     'subscription',to_jsonb(s) - 'created_at' - 'updated_at'
@@ -274,7 +319,41 @@ try {
   check("Forwardrepair veraendert weder fremdes Personenziel noch dessen Subscription",
     JSON.stringify(foreignAfterFirst) === JSON.stringify(foreignBefore));
 
+  check("Forwardrepair ist genau an den belegten Remote-Fingerprint gebunden",
+    (repairSource.match(new RegExp(REMOTE_PERSON_FINGERPRINT, "g")) || []).length === 1);
+  psql(`update public.kd_radar_targets set target_status='retired'
+    where target_key='person:wikidata:Q42869:actor';`);
+  const localPersonFingerprint = psql(knownFingerprintSql).stdout;
+  check("synthetischer Statusdrift bildet die belegte 5-vorhanden/4-exakt-Form ab",
+    /^[0-9a-f]{64}$/.test(localPersonFingerprint)
+      && localPersonFingerprint !== REMOTE_PERSON_FINGERPRINT
+      && psql(curatedCountSql).stdout === "4"
+      && psql(curatedExactCountSql).stdout === "4");
+  const protectedBeforeFingerprintCheck = jsonResult(protectedSurfaceSql);
+  const fingerprintMismatch = psql(repairSource, { allowFailure: true });
+  const protectedAfterFingerprintCheck = jsonResult(protectedSurfaceSql);
+  check("abweichender Vollzeilen-Fingerprint rollt die Statuskorrektur ohne Nebenwirkung zurueck",
+    fingerprintMismatch.ok === false
+      && fingerprintMismatch.stderr.includes("radar_person_catalog_person_fingerprint_drift")
+      && psql(`select target_status from public.kd_radar_targets
+        where target_key='person:wikidata:Q42869:actor';`).stdout === "retired"
+      && JSON.stringify(protectedAfterFingerprintCheck)
+        === JSON.stringify(protectedBeforeFingerprintCheck));
+
+  const locallyBoundRepairSource = repairSource.replace(
+    REMOTE_PERSON_FINGERPRINT, localPersonFingerprint,
+  );
+  psql(locallyBoundRepairSource);
+  const protectedAfterKnownRepair = jsonResult(protectedSurfaceSql);
+  check("exakt gebundener 5/4-Statusdrift wird mit einer Feldkorrektur auf 5/5 geschlossen",
+    psql(curatedExactCountSql).stdout === "5"
+      && psql(`select target_status from public.kd_radar_targets
+        where target_key='person:wikidata:Q42869:actor';`).stdout === "active"
+      && JSON.stringify(protectedAfterKnownRepair)
+        === JSON.stringify(protectedBeforeFingerprintCheck));
+
   psql(repairSource);
+  const protectedAfterReplay = jsonResult(protectedSurfaceSql);
   const forwardCounts = jsonResult(`select jsonb_build_object(
     'curated',(${curatedCountSql.replace(/;$/, "")}),
     'foreignTargets',(select count(*) from public.kd_radar_targets
@@ -295,7 +374,8 @@ try {
       && forwardCounts.foreignSubscriptions === 1
       && forwardCounts.personHistory === 1
       && forwardCounts.dailyHistory === 1
-      && forwardCounts.repairLedger === 1);
+      && forwardCounts.repairLedger === 1
+      && JSON.stringify(protectedAfterReplay) === JSON.stringify(protectedAfterKnownRepair));
 
   psql(titleGroupSource);
   psql(`insert into supabase_migrations.schema_migrations (version,name,statements)
@@ -569,9 +649,9 @@ try {
   psql(`update public.kd_radar_targets set canonical_title='Drift'
     where target_key='person:wikidata:Q7374:director';`);
   const inconsistent = psql(repairSource, { allowFailure: true });
-  check("inkonsistenter vorhandener Seed stoppt die Forwardmigration fail-closed",
+  check("abweichender Zielschluessel statt des belegten Statusfalls stoppt fail-closed",
     inconsistent.ok === false
-      && inconsistent.stderr.includes("radar_person_catalog_person_seed_drift"));
+      && inconsistent.stderr.includes("radar_person_catalog_person_fingerprint_drift"));
   psql(`update public.kd_radar_targets set canonical_title='Alfred Hitchcock'
     where target_key='person:wikidata:Q7374:director';
     delete from public.kd_radar_targets where target_key in (
