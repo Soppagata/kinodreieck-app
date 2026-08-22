@@ -43,6 +43,7 @@
     "test:radar-pilot-migration": "node radar_pilot_migration_test.mjs",
     "test:radar-websearch-package-b": "node radar_websearch_package_b_test.mjs",
     "test:radar-server-provenance": "node radar_server_provenance_test.mjs",
+    "test:radar-title-group-v6": "node radar_title_group_discovery_v6_test.mjs",
     "test:radar-websearch-flow": "node radar_websearch_flow_test.mjs && npm run test:radar-server-provenance",
     "test:radar-phase2-local": "node radar_local_test.mjs && node radar_proposal_validator_test.mjs && node radar_migration_test.mjs && npm run test:radar-pilot-migration && node personaldataregistry_test.mjs",
     "test:entdecken-phase3": "node entdecken_phase3_test.mjs",

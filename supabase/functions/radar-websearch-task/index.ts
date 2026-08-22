@@ -94,6 +94,7 @@ function rpcEvent(
   personContext: Record<string, unknown> | null = null,
   titleGroupContext: Record<string, unknown> | null = null,
 ) {
+  const titleGroupDiscovery = titleGroupContext?.discoveryMode === "canonical-group-v1";
   return {
     targetKey: event.targetKey,
     eventType: event.eventType,
@@ -126,6 +127,19 @@ function rpcEvent(
       workTitle: event.title,
       workYear: event.year,
       checkedAt: titleGroupContext.checkedAt,
+      ...(titleGroupDiscovery ? {
+        discoveryMode: titleGroupContext.discoveryMode,
+        groupExternalId: titleGroupContext.groupExternalId,
+        canonicalGroupName: titleGroupContext.canonicalGroupName,
+        windowStart: titleGroupContext.windowStart,
+        windowEnd: titleGroupContext.windowEnd,
+        membershipEvidence: Array.isArray(event.membershipEvidence)
+          ? event.membershipEvidence.map((entry: Record<string, unknown>) => ({
+            sourceId: entry.sourceId,
+            url: entry.url,
+            retrievedAt: entry.retrievedAt,
+          })) : [],
+      } : {}),
     } : {}),
   };
 }
@@ -204,7 +218,9 @@ export function createRadarWebsearchHandler({
         const { data, error } = await admin.rpc(
           personContext
             ? "kd_radar_websearch_upsert_person_event"
-            : titleGroupContext ? "kd_radar_websearch_upsert_title_group_event" : "kd_radar_websearch_upsert_event",
+            : titleGroupContext?.discoveryMode === "canonical-group-v1"
+              ? "kd_radar_websearch_upsert_title_group_discovery_event"
+              : titleGroupContext ? "kd_radar_websearch_upsert_title_group_event" : "kd_radar_websearch_upsert_event",
           {
           p_account_id: actor,
           p_operation_id: operationId,

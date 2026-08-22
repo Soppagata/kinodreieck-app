@@ -24,6 +24,12 @@ function eventIdentity(event) {
 function sourceFingerprint(event) {
   return JSON.stringify(event.evidence.map((entry) => [entry.sourceId, entry.url]).sort());
 }
+function strongExternalWorkId(targetId, targetType) {
+  if (/^imdb:tt[1-9][0-9]{6,10}$/.test(targetId)) return ["work", "series"].includes(targetType);
+  if (/^tmdb:movie:[1-9][0-9]{0,11}$/.test(targetId)) return targetType === "work";
+  if (/^tmdb:tv:[1-9][0-9]{0,11}$/.test(targetId)) return targetType === "series";
+  return false;
+}
 
 /* Kleine persistente In-memory-Doppelung der bereits vorhandenen
    Target/Subscription/Event/Version/Evidence/Feed-Grenze. Nur Mocktests nutzen
@@ -31,16 +37,19 @@ function sourceFingerprint(event) {
 export function createRadarWebsearchMemoryRepository({ target, sources = [], accountId = "max-account" } = {}) {
   const events = new Map();
   const personChecks = new Map();
+  const titleGroupMemberships = new Map();
   let nextId = 1;
   const sourceById = new Map(sources.map((source) => [source.sourceId, clone(source)]));
   const targetCopy = clone(target);
   const person = targetCopy.kind === "person";
   const titleGroup = targetCopy.kind === "title_group";
+  const titleGroupDiscovery = titleGroup && targetCopy.discoveryMode === "canonical-group-v1";
   const updatedAt = "2026-08-17T12:00:00.000Z";
   const subscriptions = new Map([[`${accountId}|${targetCopy.targetId}`, { active: true }]]);
 
   return Object.freeze({
     events,
+    titleGroupMemberships,
     async loadAuthorizedTarget(input) {
       if (input.accountId !== accountId || input.targetId !== targetCopy.targetId
           || !subscriptions.get(`${input.accountId}|${input.targetId}`)?.active) return null;
@@ -56,6 +65,20 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
       const catalogMatch = (person || titleGroup) && catalogContext
         ? targetCopy.catalog.filter((entry) => entry.targetId === event.targetKey)
         : [];
+      const knownCatalogWork = catalogMatch.length === 1
+        && catalogMatch[0].targetType === event.targetType
+        && catalogMatch[0].title === event.title
+        && catalogMatch[0].year === event.year;
+      const membershipUrls = new Set((event.membershipEvidence || []).map((entry) => entry.url));
+      const separateMembershipEvidence = membershipUrls.size > 0
+        && event.evidence.every((entry) => !membershipUrls.has(entry.url));
+      const discoveryWork = titleGroupDiscovery
+        && titleGroupContext?.discoveryMode === targetCopy.discoveryMode
+        && titleGroupContext?.groupExternalId === targetCopy.groupExternalId
+        && titleGroupContext?.canonicalGroupName === targetCopy.canonicalGroupName
+        && event.groupExternalId === targetCopy.groupExternalId
+        && separateMembershipEvidence
+        && (knownCatalogWork || strongExternalWorkId(event.targetKey, event.targetType));
       const authorized = person || titleGroup
         ? subscriptions.get(`${actor}|${catalogContext?.targetId}`)?.active
           && catalogContext.targetId === targetCopy.targetId
@@ -67,15 +90,27 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
           && (!person || (
             personContext.personExternalId === targetCopy.personExternalId
           && personContext.canonicalName === targetCopy.canonicalName
-          && personContext.role === targetCopy.role
+            && personContext.role === targetCopy.role
           ))
-          && catalogMatch.length === 1
-          && catalogMatch[0].targetType === event.targetType
-          && catalogMatch[0].title === event.title
-          && catalogMatch[0].year === event.year
+          && (titleGroupDiscovery ? discoveryWork : knownCatalogWork)
         : subscriptions.get(`${actor}|${event.targetKey}`)?.active;
       if (actor !== accountId || !authorized) {
         return { status: "forbidden" };
+      }
+      if (titleGroupDiscovery) {
+        if (!knownCatalogWork) {
+          targetCopy.catalog.push({
+            targetId: event.targetKey,
+            targetType: event.targetType,
+            title: event.title,
+            year: event.year,
+          });
+          targetCopy.catalog.sort((a, b) => a.targetId.localeCompare(b.targetId, "de-AT"));
+        }
+        titleGroupMemberships.set(`${targetCopy.targetId}|${event.targetKey}`, {
+          groupExternalId: event.groupExternalId,
+          evidence: clone(event.membershipEvidence),
+        });
       }
       const key = eventIdentity(event);
       let stored = events.get(key);
@@ -149,7 +184,7 @@ export function createRadarWebsearchMemoryRepository({ target, sources = [], acc
           } : titleGroup ? {
             titleGroup: {
               format: "kd-radar-title-group-v1",
-              queryVersion: targetCopy.queryVersion,
+              queryVersion: titleGroupDiscovery ? "title-group-query-v1" : targetCopy.queryVersion,
               queryKey: targetCopy.queryKey,
               displayName: targetCopy.displayName,
               members: targetCopy.catalog.map(clone),

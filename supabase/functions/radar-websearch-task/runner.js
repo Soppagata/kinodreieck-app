@@ -64,7 +64,8 @@ export async function runRadarWebsearchCheck({
       ? envelope?.response?.candidates
       : envelope?.response?.events;
     const domains = [...new Set((findings || []).flatMap((finding) => (
-      (finding?.evidence || []).map((entry) => entry?.sourceDomain).filter(Boolean)
+      [...(finding?.evidence || []), ...(finding?.membershipEvidence || [])]
+        .map((entry) => entry?.sourceDomain).filter(Boolean)
     )))];
     sources = await repository.resolveSources(domains);
   } catch {
@@ -115,6 +116,10 @@ export async function runRadarWebsearchCheck({
         platform: candidate.platform,
         seasonNumber: candidate.seasonNumber ?? null,
         evidence: candidate.evidence,
+        ...(candidate.groupExternalId ? {
+          groupExternalId: candidate.groupExternalId,
+          membershipEvidence: candidate.membershipEvidence,
+        } : {}),
       }))
       : evaluated.events;
     for (const event of events) {
@@ -139,6 +144,13 @@ export async function runRadarWebsearchCheck({
             queryKey: request.queryKey,
             displayName: request.displayName,
             checkedAt: evaluated.titleGroupResult.checkedAt,
+            ...(request.discoveryMode ? {
+              discoveryMode: request.discoveryMode,
+              groupExternalId: request.groupExternalId,
+              canonicalGroupName: request.canonicalGroupName,
+              windowStart: request.windowStart,
+              windowEnd: request.windowEnd,
+            } : {}),
           },
         } : {}),
       });

@@ -1,8 +1,10 @@
 /* Fokussierter, vollstaendig lokaler Radar-v5-Provenienz- und Servicecheck.
    Kein Netz, keine DB, kein Provider, kein Scheduler und kein Retry. */
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import {
   acknowledgeAccountRadarPilotReceipt,
   createEmptyLocalRadar,
@@ -24,6 +26,7 @@ function sha256(value) { return createHash("sha256").update(value).digest("hex")
 function fileSha(path) { return sha256(fs.readFileSync(path)); }
 
 const deployedV5 = Object.freeze({
+  acceptedBaselineCommit: "02852ece7f6fe1c3e63b8910b0faf93cea307479",
   sourceCommit: "e2154483b2c378bb54a63b3101c30a389d451997",
   bundleSha256: "52f2e82d9909b36bd209b73e52eeb0d112ee4473ace30cb632913742e10d2bad",
   closureSha256: "841e395b80dd2580d21a10620b55da1f139908c767154ffaeb587404beb09e6f",
@@ -40,10 +43,15 @@ const deployedV5 = Object.freeze({
     ["supabase/migrations/20260821130000_radar_title_group.sql", "6e1b7b8a638536f223d82fd62220b80e130da0ba20e855336145d5afc31b228c"],
   ]),
 });
+function fileAtAcceptedV5(pathname) {
+  return execFileSync("/usr/bin/git", [
+    "show", `${deployedV5.acceptedBaselineCommit}:${pathname}`,
+  ], { cwd: process.cwd(), encoding: null });
+}
 
-await check("Deployte v5-Function und angewandte Migrationen bleiben bytegenau gebunden", () => {
+await check("Deployte v5-Function bleibt im angenommenen Baselinecommit bytegenau gebunden und blockiert v6-Rollback", () => {
   const closureRows = deployedV5.files.map(([path, expected]) => {
-    const actual = fileSha(path);
+    const actual = sha256(fileAtAcceptedV5(path));
     assert.equal(actual, expected, path);
     return { path, sha256: actual };
   });
@@ -51,17 +59,18 @@ await check("Deployte v5-Function und angewandte Migrationen bleiben bytegenau g
   for (const [path, expected] of deployedV5.migrations) assert.equal(fileSha(path), expected, path);
   assert.match(deployedV5.sourceCommit, /^[a-f0-9]{40}$/);
   assert.match(deployedV5.bundleSha256, /^[a-f0-9]{64}$/);
-  assert.deepEqual(requireRadarDeployedV5Provenance(), {
+  assert.deepEqual(requireRadarDeployedV5Provenance({
+    readFile(absolutePath) {
+      return fileAtAcceptedV5(path.relative(process.cwd(), String(absolutePath)).split(path.sep).join("/"));
+    },
+  }), {
     bundleSha256: deployedV5.bundleSha256,
     closureSha256: deployedV5.closureSha256,
     files: closureRows,
   });
-  assert.throws(() => requireRadarDeployedV5Provenance({
-    readFile(path) {
-      return String(path).endsWith("/radar-websearch-task/index.ts")
-        ? Buffer.from("rollback") : fs.readFileSync(path);
-    },
-  }), (error) => error?.code === "RADAR_V5_PROVENANCE_DRIFT");
+  assert.throws(() => requireRadarDeployedV5Provenance(), (error) => (
+    error?.code === "RADAR_V5_PROVENANCE_DRIFT"
+  ));
 });
 
 const franchiseCatalog = Object.freeze([

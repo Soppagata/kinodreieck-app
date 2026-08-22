@@ -1,4 +1,7 @@
-import { RADAR_WEBSEARCH_MAX_RESULTS } from "./contract.js";
+import {
+  RADAR_WEBSEARCH_MAX_RESULTS,
+  RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE,
+} from "./contract.js";
 
 export const RADAR_WEBSEARCH_PROVIDER_TASK = "radar-websearch";
 export const RADAR_WEBSEARCH_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -176,11 +179,24 @@ const TITLE_GROUP_SYSTEM_PROMPT = [
   "Jeder Eintrag enthaelt targetId, targetType, title, year, eventType, eventDate, region, platform, seasonNumber und evidence.",
   "Jede evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
 ].join(" ");
+const TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT = [
+  "Du suchst nur neue belegte Starttermine fuer die exakt genannte kanonische Titelgruppe mit ihrer exakten externen Gruppen-ID.",
+  "Nutze genau eine Websuche und nur die erlaubten Domains; fuehre keinen Vollkatalogscan und kein Stichwort-, Alias- oder Fuzzy-Matching aus.",
+  "Ein noch unbekanntes Werk ist nur zulaessig, wenn targetId eine starke IMDb- oder TMDB-Werk-ID ist und groupExternalId exakt der Anfrage entspricht.",
+  "Jeder Kandidat braucht einen separaten Zugehoerigkeitsbeleg in membershipEvidence und einen anderen Termin- oder Verfuegbarkeitsbeleg in evidence.",
+  "Das Ereignis muss Region AT und ein Datum im mitgegebenen Fenster tragen; Streaming braucht eine konkrete Plattform.",
+  "Antworte im letzten Textblock ausschliesslich als JSON mit den Schluesseln status und candidates.",
+  "status ist confirmed, insufficient_evidence oder no_change; candidates enthaelt hoechstens sechs Eintraege.",
+  "Jeder Eintrag enthaelt targetId, targetType, title, year, eventType, eventDate, region, platform, seasonNumber, groupExternalId, membershipEvidence und evidence.",
+  "Jede Evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
+].join(" ");
 
 export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   const setup = validateRadarWebsearchProviderSetup(setupInput);
   const person = request.kind === "person";
   const titleGroup = request.kind === "title_group";
+  const titleGroupDiscovery = titleGroup
+    && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE;
   const providerInput = person ? {
     personExternalId: request.personExternalId,
     canonicalName: request.canonicalName,
@@ -195,6 +211,13 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     displayName: request.displayName,
     region: request.region,
     catalog: request.catalog,
+    ...(titleGroupDiscovery ? {
+      discoveryMode: request.discoveryMode,
+      groupExternalId: request.groupExternalId,
+      canonicalGroupName: request.canonicalGroupName,
+      windowStart: request.windowStart,
+      windowEnd: request.windowEnd,
+    } : {}),
   } : {
     targetId: request.targetId,
     canonicalTitle: request.canonicalTitle,
@@ -209,7 +232,9 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   return Object.freeze({
     model: setup.model,
     max_tokens: setup.maxTokens,
-    system: person ? PERSON_SYSTEM_PROMPT : titleGroup ? TITLE_GROUP_SYSTEM_PROMPT : SYSTEM_PROMPT,
+    system: person ? PERSON_SYSTEM_PROMPT
+      : titleGroupDiscovery ? TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT
+        : titleGroup ? TITLE_GROUP_SYSTEM_PROMPT : SYSTEM_PROMPT,
     messages: Object.freeze([Object.freeze({
       role: "user",
       content: JSON.stringify(providerInput),
@@ -289,6 +314,17 @@ function urlsFromEvidence(value, kind = "work") {
         throw new RadarWebsearchProviderError("provider-output-invalid");
       }
       urls.push(evidence.url);
+    }
+    if (kind === "title_group" && finding.membershipEvidence !== undefined) {
+      if (!Array.isArray(finding.membershipEvidence)) {
+        throw new RadarWebsearchProviderError("provider-output-invalid");
+      }
+      for (const evidence of finding.membershipEvidence) {
+        if (!plain(evidence) || typeof evidence.url !== "string") {
+          throw new RadarWebsearchProviderError("provider-output-invalid");
+        }
+        urls.push(evidence.url);
+      }
     }
   }
   return urls;
@@ -386,6 +422,10 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
             queryVersion: request.queryVersion,
             queryKey: request.queryKey,
             displayName: request.displayName,
+            ...(request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE ? {
+              groupExternalId: request.groupExternalId,
+              canonicalGroupName: request.canonicalGroupName,
+            } : {}),
           }),
           candidates: parsed.candidates,
         }),
