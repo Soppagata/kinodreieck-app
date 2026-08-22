@@ -14,7 +14,14 @@ import {
 import { projectEntdeckenRadarPilot } from "./src/lib/radarPilotContracts.js";
 import { resolveCanonicalFranchiseRadarTarget } from "./src/lib/titleGroupRadar.js";
 import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
-import { requireRadarDeployedV5Provenance } from "./tools/radar_websearch_remote_start.mjs";
+import {
+  ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256,
+  RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS,
+  RADAR_ENTDECKEN_V6_RELEASE_SHA256,
+  RADAR_V6_SOURCE_BUNDLE_SHA256,
+  requireRadarDeployedV5Provenance,
+  requireRadarEntdeckenV6ReleaseProvenance,
+} from "./tools/radar_websearch_remote_start.mjs";
 
 let checks = 0;
 async function check(name, run) {
@@ -71,6 +78,33 @@ await check("Deployte v5-Function bleibt im angenommenen Baselinecommit bytegena
   assert.throws(() => requireRadarDeployedV5Provenance(), (error) => (
     error?.code === "RADAR_V5_PROVENANCE_DRIFT"
   ));
+});
+
+await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und beide Forward-Migrationen bytegenau", () => {
+  const release = requireRadarEntdeckenV6ReleaseProvenance();
+  assert.equal(release.releaseSha256, RADAR_ENTDECKEN_V6_RELEASE_SHA256);
+  assert.equal(
+    sha256(JSON.stringify(release.functions.radar)),
+    RADAR_V6_SOURCE_BUNDLE_SHA256,
+  );
+  assert.equal(
+    sha256(JSON.stringify(release.functions.entdecken)),
+    ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256,
+  );
+  assert.deepEqual(
+    release.migrations.map(({ version, name, sha256: digest }) => ({ version, name, sha256: digest })),
+    RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS.map(({ version, name, sha256: digest }) => ({ version, name, sha256: digest })),
+  );
+  assert.notEqual(RADAR_V6_SOURCE_BUNDLE_SHA256, deployedV5.closureSha256);
+
+  const migrationPath = RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS[1].path;
+  assert.throws(() => requireRadarEntdeckenV6ReleaseProvenance({
+    readFile(absolutePath) {
+      const pathname = path.relative(process.cwd(), String(absolutePath)).split(path.sep).join("/");
+      const bytes = fs.readFileSync(pathname);
+      return pathname === migrationPath ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
+    },
+  }), (error) => error?.code === "RADAR_V6_RELEASE_PROVENANCE_DRIFT");
 });
 
 const franchiseCatalog = Object.freeze([

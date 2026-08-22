@@ -11,6 +11,7 @@ import {
   MODI,
   OWNER_SERVER_BUDGET_ENV,
   OWNER_SERVER_BUDGET_FLAG,
+  RADAR_ENTDECKEN_ONCE_FLAG,
   RADAR_WEBSEARCH_ONCE_ENV,
   RADAR_WEBSEARCH_ONCE_FLAG,
   REPO_ROOT,
@@ -200,6 +201,21 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 }
 
 {
+  let ohneOwnerFreigabeGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser: () => SONDERGEHEIMNIS,
+      radarEntdeckenOnce: true,
+    });
+  } catch { ohneOwnerFreigabeGesperrt = true; }
+  pruefe("Kombinierter Produkt-Smoke ist ohne exakte Owner-Budgetfreigabe gesperrt",
+    ohneOwnerFreigabeGesperrt);
+}
+
+{
   const gelesen = [];
   const env = baueKindUmgebung({
     modus: "rls",
@@ -344,6 +360,36 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     return kind;
   };
   const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser: () => SONDERGEHEIMNIS,
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    radarEntdeckenOnce: true,
+  });
+  pruefe("Kombinierter Produkt-Smoke startet genau ein fest verdrahtetes Kind hinter dem Budgetwächter",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].radarEntdeckenOnceArgv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/radar_entdecken_live.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Kombinierter Produkt-Smoke erhält beide internen Guards, Ziel und Ownerfreigabe",
+    starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1");
+}
+
+{
+  const starts = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
     modus: "profile-contract",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
@@ -390,6 +436,15 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     fehlerAusgabe: (x) => err.push(String(x)),
   });
   pruefe("freie oder zusätzliche Argumente werden abgelehnt", code === EXIT_KONFIG);
+}
+
+{
+  const err = [];
+  const code = await main(["ai-live", RADAR_WEBSEARCH_ONCE_FLAG, RADAR_ENTDECKEN_ONCE_FLAG], {
+    fehlerAusgabe: (x) => err.push(String(x)),
+  });
+  pruefe("Einzel- und Kombinations-Smoke sind gegenseitig exklusiv",
+    code === EXIT_KONFIG && err.length > 0);
 }
 
 {
