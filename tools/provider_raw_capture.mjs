@@ -33,7 +33,7 @@ function kurzeSichereDiagnose(value, fallback = null) {
   return SAFE_DIAGNOSTIC_FORM.test(normalized) ? normalized : fallback;
 }
 
-function providerfreieFilmwissenAntwort(
+function pendingFilmwissenCapture(
   body,
   fileName,
   responseStatus,
@@ -41,22 +41,29 @@ function providerfreieFilmwissenAntwort(
   expectedVorgangId,
 ) {
   if (fileName !== "04-filmwissen-synthese.json"
-      || responseStatus !== 200
-      || body.ok !== true
-      || body.task !== "filmwissen-synthese"
-      || !UUID_FORM.test(body.vorgangId || "")
       || expectedTask !== "filmwissen-synthese"
-      || body.task !== expectedTask
-      || body.vorgangId !== expectedVorgangId
-      || Object.hasOwn(body, "verbrauch")) {
+      || !UUID_FORM.test(expectedVorgangId || "")) {
     return null;
   }
-  const data = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+  const responseBody = body && typeof body === "object" && !Array.isArray(body)
+    ? body
+    : {};
+  const data = responseBody.data
+      && typeof responseBody.data === "object"
+      && !Array.isArray(responseBody.data)
     ? body.data
     : {};
   return Object.freeze({
-    fachstatus: kurzeSichereDiagnose(data.status, "unbekannt"),
-    fachgrund: kurzeSichereDiagnose(data.grund),
+    captureState: "pending-no-raw",
+    filePath: null,
+    bytes: 0,
+    providerRequests: null,
+    httpStatus: Number.isInteger(responseStatus) ? responseStatus : null,
+    fachstatus: kurzeSichereDiagnose(
+      data.status ?? responseBody.status ?? responseBody.code,
+      "unbekannt",
+    ),
+    fachgrund: kurzeSichereDiagnose(data.grund ?? responseBody.grund),
   });
 }
 
@@ -131,34 +138,28 @@ export function captureProviderRawResponse(
   if (!FILE_NAME_FORM.test(fileName) || basename(fileName) !== fileName) {
     throw new Error("Provider-Dateiname ist nicht fest begrenzt.");
   }
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new Error("Function-Antwort enthaelt keine private Providerdiagnose.");
-  }
-
-  const diagnostic = body[PROVIDER_DIAGNOSTIC_FIELD];
-  const hatDiagnostic = Object.hasOwn(body, PROVIDER_DIAGNOSTIC_FIELD);
-  delete body[PROVIDER_DIAGNOSTIC_FIELD];
-  if (!hatDiagnostic) {
-    const providerfrei = providerfreieFilmwissenAntwort(
+  const responseBody = body && typeof body === "object" && !Array.isArray(body)
+    ? body
+    : null;
+  const diagnostic = responseBody?.[PROVIDER_DIAGNOSTIC_FIELD];
+  const diagnosticGueltig = !!diagnostic
+    && typeof diagnostic === "object"
+    && !Array.isArray(diagnostic)
+    && Object.keys(diagnostic).sort().join(",") === "rawResponse"
+    && typeof diagnostic.rawResponse === "string"
+    && diagnostic.rawResponse.length > 0;
+  if (responseBody) delete responseBody[PROVIDER_DIAGNOSTIC_FIELD];
+  if (!diagnosticGueltig) {
+    const pending = pendingFilmwissenCapture(
       body,
       fileName,
       responseStatus,
       expectedTask,
       expectedVorgangId,
     );
-    if (providerfrei) {
-      return Object.freeze({
-        filePath: null,
-        bytes: 0,
-        providerRequests: 0,
-        ...providerfrei,
-      });
-    }
+    if (pending) return pending;
   }
-  if (!diagnostic || typeof diagnostic !== "object" || Array.isArray(diagnostic)
-      || Object.keys(diagnostic).sort().join(",") !== "rawResponse"
-      || typeof diagnostic.rawResponse !== "string"
-      || diagnostic.rawResponse.length === 0) {
+  if (!diagnosticGueltig) {
     throw new Error("Function-Antwort enthaelt keine gueltige private Providerdiagnose.");
   }
   const bytes = Buffer.byteLength(diagnostic.rawResponse, "utf8");
@@ -183,19 +184,29 @@ export function captureProviderRawResponse(
   }
   assertOwned(stats, "Providerdatei");
   return Object.freeze({
+    captureState: "raw",
     filePath,
     bytes,
     providerRequests: 1,
+    httpStatus: Number.isInteger(responseStatus) ? responseStatus : null,
     fachstatus: null,
     fachgrund: null,
   });
 }
 
-export function assertProviderCaptureCost(capture, measuredCostUsdCent) {
-  if (capture?.providerRequests === 0
-      && Number.isFinite(measuredCostUsdCent)
-      && measuredCostUsdCent > 0) {
-    throw new Error("Providerfreier Fachstatus hatte serverseitig gemessene Kosten.");
+export function finalizeProviderCapture(capture, measuredCostUsdCent) {
+  if (capture?.captureState !== "pending-no-raw") return capture;
+  if (!Number.isFinite(measuredCostUsdCent) || measuredCostUsdCent !== 0) {
+    throw new Error("Fehlender Providerrohpayload war kostenfuehrend oder nicht messbar.");
   }
-  return capture;
+  return Object.freeze({
+    ...capture,
+    captureState: "provider-free",
+    providerRequests: 0,
+  });
+}
+
+export function isZeroCostProviderFreeCapture(capture) {
+  return capture?.captureState === "provider-free"
+    && capture.providerRequests === 0;
 }

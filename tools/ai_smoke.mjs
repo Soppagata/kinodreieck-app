@@ -69,8 +69,9 @@ import { readFileSync } from "node:fs";
 import {
   OWNER_CORE_SIX_GUARD_ENV,
   OWNER_CORE_SIX_GUARD_VALUE,
-  assertProviderCaptureCost,
   captureProviderRawResponse,
+  finalizeProviderCapture,
+  isZeroCostProviderFreeCapture,
   providerDiagnosticHeaders,
   providerRawCaptureEnabled,
 } from "./provider_raw_capture.mjs";
@@ -402,7 +403,6 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
           expectedTask: koerper?.task ?? null,
           expectedVorgangId: koerper?.vorgangId ?? null,
         });
-        providerCaptureNachLabel.set(label, capture);
       } catch {
         captureError = new LiveSicherheitsStopp(
           "unbekannt",
@@ -414,7 +414,8 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
     try {
-      assertProviderCaptureCost(capture, kostenMessung.requestKostenUsdCent);
+      capture = finalizeProviderCapture(capture, kostenMessung.requestKostenUsdCent);
+      if (capture) providerCaptureNachLabel.set(label, capture);
     } catch {
       captureError = new LiveSicherheitsStopp(
         "unbekannt",
@@ -422,7 +423,9 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       );
     }
     if (captureError) throw captureError;
-    if (ergebnis.status !== 200) {
+    const lokalerKostenfreierP18Fehler = label === "P18 filmwissen-synthese"
+      && isZeroCostProviderFreeCapture(capture);
+    if (ergebnis.status !== 200 && !lokalerKostenfreierP18Fehler) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${ergebnis.status}.`,
@@ -645,7 +648,7 @@ const p18ProviderfreierFachstatus = p18Capture?.providerRequests === 0
 const p18ProviderfreierFachgrund = p18Capture?.providerRequests === 0
   ? p18Capture.fachgrund
   : null;
-const p18Fachdiagnose = `Fachstatus ${p18ProviderfreierFachstatus}`
+const p18Fachdiagnose = `HTTP ${p18.status}, Fachstatus ${p18ProviderfreierFachstatus}`
   + (p18ProviderfreierFachgrund ? `, Grund ${p18ProviderfreierFachgrund}` : "")
   + ", providerRequests=0";
 const p18Erfolg = p18.status === 200
@@ -667,6 +670,8 @@ pruefe(
 );
 
 const p18CacheReadback = p18ProviderfreierFachstatus === "cache_hit"
+  && p18.status === 200
+  && p18.daten?.ok === true
   && typeof d18?.versionId === "string";
 const p20 = (p18Erfolg || p18CacheReadback)
   ? await rpc("kd_filmwissen_aktuell_lesen", token, {

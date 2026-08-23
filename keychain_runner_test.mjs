@@ -35,9 +35,10 @@ import {
   starteModus,
 } from "./tools/keychain_runner.mjs";
 import {
-  assertProviderCaptureCost,
   captureProviderRawResponse,
   createPrivateProviderRawDirectory,
+  finalizeProviderCapture,
+  isZeroCostProviderFreeCapture,
 } from "./tools/provider_raw_capture.mjs";
 
 let bestanden = 0;
@@ -218,6 +219,7 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
       && (statSync(written.filePath).mode & 0o777) === 0o600
       && (statSync(directory).mode & 0o777) === 0o700
       && !written.filePath.startsWith(REPO_ROOT + "/")
+      && written.captureState === "raw"
       && written.providerRequests === 1
       && written.fachstatus === null
       && written.fachgrund === null);
@@ -234,63 +236,44 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     task: "filmwissen-synthese",
     vorgangId: "11111111-1111-4111-8111-111111111111",
   };
-  const fachstatusAntworten = [
-    { ...basis, data: { status: "neuer_fachstatus", grund: "quellen-vor-ki-stopp" } },
-    { ...basis, data: { status: "mehr\nzeilig", grund: "nicht sicher loggbar" } },
+  const ungewoehnlicheAntworten = [
+    { status: 503, body: { ok: false, code: "server", grund: "quellen-vor-ki-stopp" } },
+    { status: 418, body: { antwortForm: ["ungewoehnlich"] } },
   ];
-  const ergebnisse = fachstatusAntworten.map((body) => captureProviderRawResponse(
-    body,
-    "04-filmwissen-synthese.json",
-    {
-      env: {
-        [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
-        [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+  const pending = ungewoehnlicheAntworten.map(({ body, status }) =>
+    captureProviderRawResponse(
+      body,
+      "04-filmwissen-synthese.json",
+      {
+        env: {
+          [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+          [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+        },
+        repoRoot: REPO_ROOT,
+        responseStatus: status,
+        expectedTask: basis.task,
+        expectedVorgangId: basis.vorgangId,
       },
-      repoRoot: REPO_ROOT,
-      responseStatus: 200,
-      expectedTask: basis.task,
-      expectedVorgangId: basis.vorgangId,
-    },
-  ));
-  pruefe("Jede erfolgreiche Filmwissen-Nullproviderhülle wird statusunabhängig sicher diagnostiziert",
-    ergebnisse[0].fachstatus === "neuer_fachstatus"
+    ));
+  const ergebnisse = pending.map((capture) => finalizeProviderCapture(capture, 0));
+  pruefe("Kostenfreie P18-Fehler mit non-200 oder ungewoehnlicher Hülle bleiben lokal",
+    pending.every((capture) => capture.captureState === "pending-no-raw"
+        && capture.providerRequests === null)
+      && ergebnisse[0].httpStatus === 503
+      && ergebnisse[0].fachstatus === "server"
       && ergebnisse[0].fachgrund === "quellen-vor-ki-stopp"
+      && ergebnisse[1].httpStatus === 418
       && ergebnisse[1].fachstatus === "unbekannt"
-      && ergebnisse[1].fachgrund === null
-      && ergebnisse.every((ergebnis) => ergebnis.providerRequests === 0
+      && ergebnisse.every((ergebnis) => isZeroCostProviderFreeCapture(ergebnis)
         && ergebnis.filePath === null
-        && ergebnis.bytes === 0)
-      && assertProviderCaptureCost(ergebnisse[0], 0) === ergebnisse[0]);
+        && ergebnis.bytes === 0));
 
-  const kostenAntwortOhneRohpayloadGesperrt = [null, { kostenUsdCent: 0.1 }]
-    .every((verbrauch) => {
-      try {
-      captureProviderRawResponse(
-        {
-          ...basis,
-          data: { status: "beliebig" },
-          verbrauch,
-        },
-        "04-filmwissen-synthese.json",
-        {
-          env: {
-            [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
-            [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
-          },
-          repoRoot: REPO_ROOT,
-          responseStatus: 200,
-          expectedTask: basis.task,
-          expectedVorgangId: basis.vorgangId,
-        },
-      );
-        return false;
-      } catch { return true; }
-    });
-  let gemesseneKostenOhneRohpayloadGesperrt = false;
-  try { assertProviderCaptureCost(ergebnisse[0], 0.0001); }
-  catch { gemesseneKostenOhneRohpayloadGesperrt = true; }
-  pruefe("Verbrauchshülle oder gemessene Kosten ohne Providerrohpayload bleiben fail-closed",
-    kostenAntwortOhneRohpayloadGesperrt && gemesseneKostenOhneRohpayloadGesperrt);
+  const kostenmessungGesperrt = [0.0001, null].every((kosten) => {
+    try { finalizeProviderCapture(pending[0], kosten); return false; }
+    catch { return true; }
+  });
+  pruefe("Positive oder unbekannte Kosten ohne Providerrohpayload bleiben fail-closed",
+    kostenmessungGesperrt);
   rmdirSync(directory);
 }
 
