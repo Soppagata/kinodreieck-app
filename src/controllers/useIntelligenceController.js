@@ -44,7 +44,7 @@ export function useIntelligenceController({
   const [aktuelleProfilVersion, setAktuelleProfilVersion] = useState(null);
 
   useEffect(() => {
-    if (!["mediathek", "kino", "streaming"].includes(tab)) return undefined;
+    if (!["mediathek", "kino", "streaming", "finder"].includes(tab)) return undefined;
     let aktiv = true;
     ladeProfil().then((profil) => {
       if (!aktiv) return;
@@ -307,6 +307,7 @@ export function useIntelligenceController({
     vorbewertungSperrgrund,
     prognoseLaufId,
     prognoseFehler,
+    aktuellesProfil,
     aktuelleProfilVersion,
     starteVorbewertung,
     setzeFilmPrognoseStatus,

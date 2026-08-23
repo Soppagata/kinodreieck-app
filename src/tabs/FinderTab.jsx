@@ -12,6 +12,7 @@ import { AxisChips, KategorieTag, Chip, Dreieck } from "../components/ui.jsx";
 import { FilmForm } from "../components/EintragForm.jsx";
 import { appHilfeAntwort } from "../lib/appHilfe.js";
 import { createCatalogSearchActions } from "../lib/entdeckenUi.js";
+import { rankRecommendations } from "../lib/recommendationRanking.js";
 
 /* Sperre gegen zwei gleichzeitige, bezahlte KI-Deutungen. Bewusst im
    Modul-Scope: der Finder-Tab wird beim Wechseln auf einen anderen Tab
@@ -58,6 +59,83 @@ function sichereKiErklaerung(wert) {
   return text.length <= 320 ? text : `${text.slice(0, 319).trimEnd()}…`;
 }
 
+const EMPFEHLUNGS_MUSTER = /\b(?:empfiehl(?:st)?|empfehlung|vorschlag|f(?:ü|ue)r\s+mich|was\s+passt\s+(?:gut\s+)?zu\s+mir|was\s+soll\s+ich\s+(?:sehen|schauen|gucken))\b/iu;
+const PERSONEN_MUSTER = /\b(?:von|mit|regie|regisseur(?:in)?|schauspieler(?:in)?|darsteller(?:in)?)\s+[\p{L}][\p{L}.'’\-]*/iu;
+
+/* Personalisierung bleibt ein lokaler Tie-Break fuer bereits erkannte offene
+   Empfehlungen. Titel, Personen und konkrete Grenzen sind query-first; eine
+   blosse Genre-Suche ist ebenfalls kein stiller Profilauftrag. */
+export function istOffeneFinderEmpfehlung(text, sig = {}) {
+  const frage = String(text || "").normalize("NFKC").trim();
+  if (!frage || !EMPFEHLUNGS_MUSTER.test(frage) || PERSONEN_MUSTER.test(frage)) return false;
+  if ((sig.titel || []).length || (sig.reihen || []).length) return false;
+  if ((sig.kategorien || []).length || (sig.dekaden || []).length
+      || (sig.quellen || []).length || (sig.zeit || []).length
+      || sig.jahrMin != null || sig.jahrMax != null
+      || (sig.genresAusschluss || []).length || (sig.dekadenAusschluss || []).length
+      || (sig.kategorienAusschluss || []).length || (sig.stimmungenAbschlag || []).length) return false;
+  return !!((sig.genres || []).length || (sig.stimmungen || []).length || sig.entdecken);
+}
+
+const profilFuerLokalesRanking = (profil) => {
+  if (!istReinesObjekt(profil) || profil.beschaedigt
+      || profil.einwilligung?.erteilt !== true || !Array.isArray(profil.signale)
+      || profil.signale.length === 0) return null;
+  /* `rankRecommendations` liest aus dem bestehenden Modell ausschliesslich
+     `signale`; `offen` wird nicht einmal in diese fluechtige Projektion kopiert. */
+  return { signale: profil.signale };
+};
+
+function lokalerProfilTieBreak(treffer, profil) {
+  const bestaetigtesProfil = profilFuerLokalesRanking(profil);
+  if (!bestaetigtesProfil || !Array.isArray(treffer) || treffer.length < 2) return treffer;
+  const gruppen = new Map();
+  for (const [index, eintrag] of treffer.entries()) {
+    const key = `${eintrag.rel}|${eintrag.wert}`;
+    if (!gruppen.has(key)) gruppen.set(key, []);
+    gruppen.get(key).push({ eintrag, index });
+  }
+  const neu = [];
+  for (const gruppe of gruppen.values()) {
+    if (gruppe.length < 2) {
+      neu.push(gruppe[0].eintrag);
+      continue;
+    }
+    const kandidaten = gruppe.map(({ eintrag, index }) => ({
+      targetId: String(eintrag.film.id),
+      title: eintrag.film.titel,
+      genres: eintrag.film.genre || [],
+      /* Der vorhandene Ranker gleicht alle nicht-Genre-Signale gegen Tags ab.
+         Regie/Reihe/Franchise sind strukturierte Filmfelder und werden deshalb
+         nur fuer diese lokale Projektion als matchbare Tags beigelegt. */
+      tags: [
+        ...(eintrag.film.tags || []), ...(eintrag.film.regie || []),
+        ...(eintrag.film.reihe || []), ...(eintrag.film.franchise || []),
+      ],
+      franchiseId: (eintrag.film.franchise || [])[0] || (eintrag.film.reihe || [])[0] || null,
+      sourceId: "finder",
+      sourceRank: index,
+      matchStatus: "matched",
+      region: "AT",
+      availabilityConfirmed: true,
+    }));
+    const rang = new Map(rankRecommendations(kandidaten, {
+      profile: bestaetigtesProfil,
+      useLibrary: false,
+      excludedTargetIds: [],
+      includeNeutral: true,
+    }).map((item, index) => [item.targetId, index]));
+    /* Blocking-Negatives duerfen in Entdecken ausblenden; der Finder darf das
+       nicht. Fehlende Ranker-Zeilen bleiben deshalb erhalten und kommen nur
+       innerhalb dieses Gleichstands nach den belegten Passungen. */
+    gruppe.sort((a, b) => (rang.get(String(a.eintrag.film.id)) ?? Number.MAX_SAFE_INTEGER)
+      - (rang.get(String(b.eintrag.film.id)) ?? Number.MAX_SAFE_INTEGER)
+      || a.index - b.index);
+    neu.push(...gruppe.map(({ eintrag }) => eintrag));
+  }
+  return neu;
+}
+
 export function kinoGenresAusMatches(kinoMatches) {
   const genres = new Set();
   for (const pf of (kinoMatches && kinoMatches.rest) || []) for (const genre of pf.g || []) genres.add(genre);
@@ -72,7 +150,7 @@ export function kinoGenresAusMatches(kinoMatches) {
 export function erstelleFinderAntwort({
   text, sig: vorhandeneSignale = null, bevorzugterBereich = "alles",
   master = [], kinoMatches, streamingBekannt, streamingEntdecken,
-  artikel = [],
+  artikel = [], geschmacksprofil = null,
 }) {
   const frage = String(text || "").trim();
   const sig = vorhandeneSignale || parseAnfrage(frage, master, kinoGenresAusMatches(kinoMatches));
@@ -83,11 +161,13 @@ export function erstelleFinderAntwort({
       ...(eintrag.liste || []).flatMap((zeile) => [zeile.eingabe, zeile.notiz]),
     ].some((wert) => String(wert || "").toLocaleLowerCase("de-AT").includes(nq))).slice(0, 10)
     : [];
+  const treffer = sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt });
   return {
     sig,
     scope: bevorzugterBereich || "alles",
     hilfe: appHilfeAntwort(frage),
-    treffer: sucheFinder(sig, { master: master || [], kinoMatches, streamingBekannt }),
+    treffer: istOffeneFinderEmpfehlung(frage, sig)
+      ? lokalerProfilTieBreak(treffer, geschmacksprofil) : treffer,
     entdecken: sucheEntdecken(sig, streamingEntdecken),
     kino: sucheKino(sig, (kinoMatches && kinoMatches.rest) || []),
     artikel: artikelTreffer,
@@ -462,6 +542,7 @@ export function FinderTab({
   vokabular = [], saveVokabular,
   suchauftrag = null, onSuchauftragVerbraucht,
   scopeArtikel = [], onArtikelKlick, onNavigiere,
+  geschmacksprofil = null,
 }) {
   const [formFuer, setFormFuer] = useState(null); // id der Karte mit offener "Eintrag erstellen"-Maske
   /* Index des Verlaufseintrags, der gerade gedeutet wird. Der Wahrheitswert
@@ -493,7 +574,7 @@ export function FinderTab({
   const suche = (sig, scope = "alles", text = "") => {
     return erstelleFinderAntwort({
       text, sig, bevorzugterBereich: scope, master, kinoMatches,
-      streamingBekannt, streamingEntdecken, artikel: scopeArtikel,
+      streamingBekannt, streamingEntdecken, artikel: scopeArtikel, geschmacksprofil,
     });
   };
 

@@ -201,7 +201,9 @@ const React = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { act, useState, createElement: h } = React;
 const { T, THEMES, kontrastFarbe } = await import("./src/lib/tokens.js");
-const { FinderTab, erstelleFinderAntwort, kompakteFinderTreffer } = await import(AUSGABE);
+const {
+  FinderTab, erstelleFinderAntwort, kompakteFinderTreffer, istOffeneFinderEmpfehlung,
+} = await import(AUSGABE);
 
 /* ---------------------------------------------------- Stub des KI-Aufrufs */
 /* Ein Zähler und drei Betriebsarten. „haengen" ist die wichtigste: sie hält
@@ -887,6 +889,78 @@ check("G6", "degraded Freitext bleibt Erklärung und erzeugt weder neuen Filter 
 });
 
 /* =========================================================================
+   G8 — BESTAETIGTES PROFIL NUR ALS LOKALER TIE-BREAK
+   Der bestehende Empfehlungs-Ranker darf innerhalb eines echten Finder-
+   Gleichstands helfen. Trefferumfang und Query-Reihenfolge bleiben ansonsten
+   unangetastet; `offen` wird nie gelesen und nichts geht an den KI-Stub.
+   ========================================================================= */
+abschnitt("G8", async () => {
+console.log("\n--- G8: Lokaler Profil-Tie-Break fuer offene Empfehlungen ---");
+const TIE_MASTER = [
+  { id: "rasantes_drama", titel: "Rasantes Drama", jahr: 2012, typ: "film",
+    quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: ["rasant"],
+    bewertung: { wie: 3, was: 3, warum: 3 } },
+  { id: "ruhiges_drama", titel: "Ruhiges Drama", jahr: 2013, typ: "film",
+    quelle: "dvd", kategorie: "sehenswert", genre: ["drama"], tags: ["ruhig"],
+    bewertung: { wie: 3, was: 3, warum: 3 } },
+];
+const BESTAETIGTES_PROFIL = {
+  einwilligung: { erteilt: true },
+  signale: [{ art: "tempo", wert: "ruhig", richtung: "zieht_an", staerke: 4, sicherheit: "hoch" }],
+  /* Dieses staerkere Gegenmerkmal wartet nur auf Bestaetigung. Wuerde der
+     Finder `offen` lesen, stuende der rasante Film weiter zuerst. */
+  offen: [{ art: "tempo", wert: "rasant", richtung: "zieht_an", staerke: 5, sicherheit: "hoch" }],
+};
+const antwort = (text, geschmacksprofil) => erstelleFinderAntwort({
+  text, master: TIE_MASTER, kinoMatches: KINO_MATCHES,
+  streamingBekannt: STREAMING_BEKANNT, streamingEntdecken: STREAMING_ENTDECKEN,
+  ...(geschmacksprofil === undefined ? {} : { geschmacksprofil }),
+});
+const ids = (a) => (a.treffer || []).map((t) => t.film.id);
+
+const offenOhneProfil = antwort("Empfiehl mir Drama");
+const offenMitProfil = antwort("Empfiehl mir Drama", BESTAETIGTES_PROFIL);
+check("G8", "offene Genre-Empfehlung wird als Profil-Tie-Break erkannt",
+  () => istOffeneFinderEmpfehlung("Empfiehl mir Drama", offenMitProfil.sig));
+check("G8", "bestaetigtes Signal loest nur den Gleichstand; beide Finder-Treffer bleiben sichtbar",
+  () => JSON.stringify(ids(offenOhneProfil)) === JSON.stringify(["rasantes_drama", "ruhiges_drama"])
+    && JSON.stringify(ids(offenMitProfil)) === JSON.stringify(["ruhiges_drama", "rasantes_drama"])
+    && ids(offenMitProfil).length === ids(offenOhneProfil).length);
+
+const titelOhneProfil = antwort("Rasantes Drama");
+const titelMitProfil = antwort("Rasantes Drama", BESTAETIGTES_PROFIL);
+check("G8", "exakte Titelsuche bleibt mit Profil signal- und trefferidentisch",
+  () => !istOffeneFinderEmpfehlung("Rasantes Drama", titelMitProfil.sig)
+    && JSON.stringify(titelMitProfil.sig) === JSON.stringify(titelOhneProfil.sig)
+    && JSON.stringify(ids(titelMitProfil)) === JSON.stringify(ids(titelOhneProfil)));
+
+const hartOhneProfil = antwort("Drama");
+const hartMitProfil = antwort("Drama", BESTAETIGTES_PROFIL);
+check("G8", "blosse harte Genre-Suche wird durch das Profil nicht umsortiert",
+  () => !istOffeneFinderEmpfehlung("Drama", hartMitProfil.sig)
+    && JSON.stringify(ids(hartMitProfil)) === JSON.stringify(ids(hartOhneProfil)));
+
+const personenAntwort = (geschmacksprofil) => erstelleFinderAntwort({
+  text: "Orla Vendtberg", master: MASTER, kinoMatches: KINO_MATCHES,
+  streamingBekannt: STREAMING_BEKANNT, streamingEntdecken: STREAMING_ENTDECKEN,
+  ...(geschmacksprofil ? { geschmacksprofil } : {}),
+});
+const personOhneProfil = personenAntwort(null);
+const personMitProfil = personenAntwort(BESTAETIGTES_PROFIL);
+check("G8", "konkrete Personensuche bleibt mit Profil signal- und trefferidentisch",
+  () => !istOffeneFinderEmpfehlung("Orla Vendtberg", personMitProfil.sig)
+    && JSON.stringify(personMitProfil.sig) === JSON.stringify(personOhneProfil.sig)
+    && JSON.stringify(ids(personMitProfil)) === JSON.stringify(ids(personOhneProfil)));
+
+const nurOffen = { einwilligung: { erteilt: true }, signale: [], offen: BESTAETIGTES_PROFIL.offen };
+check("G8", "fehlendes oder leeres Profil bleibt kompatibel; offene Signale wirken nicht",
+  () => JSON.stringify(ids(antwort("Empfiehl mir Drama", null))) === JSON.stringify(ids(offenOhneProfil))
+    && JSON.stringify(ids(antwort("Empfiehl mir Drama", nurOffen))) === JSON.stringify(ids(offenOhneProfil)));
+check("G8", "lokales Profilranking erzeugt keinen KI-Aufruf",
+  () => !stub.rufe.some((ruf) => ruf.payload?.profilKontext || ruf.payload?.profil));
+});
+
+/* =========================================================================
    G7 — DER KI-SCHALTER: DIE GEGENRICHTUNG
    Alles oben prüft den KI-Pfad bei KI=AN. Hier steht die eigentliche Zusage
    von Phase 2: Bei KI=AUS existiert der Knopf NICHT — und es entsteht KEIN
@@ -1092,6 +1166,7 @@ const TITEL = {
   G5: "300-Zeichen-Grenze vor dem Bezahlen",
   G6: "Robustheit gegen jede Antwortform",
   G7: "KI-Schalter, Gegenrichtung (Phase 2)",
+  G8: "Lokaler Profil-Tie-Break fuer offene Empfehlungen",
 };
 /* Wache: Eine Gruppe, die es gibt, aber in TITEL fehlt, wuerde weder
    gezaehlt noch exit-relevant sein — ihre roten Checks verschwaenden
