@@ -204,6 +204,8 @@ await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach
   assert.equal(providerRequests, 1);
   assert.equal(reservations, 1);
   assert.equal(settlements, 1);
+  assert.equal(adapter.takeProviderRawResponse(), JSON.stringify(anthropicResponse()));
+  assert.equal(adapter.takeProviderRawResponse(), null);
 });
 
 await check("Wochenvertrag akzeptiert hoechstens 20 belegte Titel und den Clientvertrag", () => {
@@ -373,6 +375,9 @@ await check("Normaler Browser-GET bleibt accountlos; nur der interne Recoveryhea
   assert.match(functionSource, /\.from\("kd_account_access"\)/);
   assert.match(functionSource, /access\?\.role !== "owner"/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_daily_recovery_claim"\)/);
+  assert.match(functionSource, /PROVIDER_DIAGNOSTIC_ENV/);
+  assert.match(functionSource, /takeProviderRawResponse/);
+  assert.match(functionSource, /ownerRecoveryConfirmed/);
   assert.doesNotMatch(functionSource, /profile|seen|gesehen|watchlist|selectedServices|radar/i);
   assert.match(functionSource, /p_fence_token: claimContext\?\.fenceToken/);
   assert.equal((runnerSource.match(/adapter\.search\(queryContext\)/g) || []).length, 1);

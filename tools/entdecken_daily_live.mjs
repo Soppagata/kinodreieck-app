@@ -18,6 +18,11 @@ import {
 } from "./ai_budget_guard.mjs";
 import { ENTDECKEN_DAILY_ONCE_ENV } from "./keychain_runner.mjs";
 import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
+import {
+  captureProviderRawResponse,
+  providerDiagnosticHeaders,
+  providerRawCaptureEnabled,
+} from "./provider_raw_capture.mjs";
 
 const FUNCTION_NAME = "entdecken-daily-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
@@ -93,6 +98,14 @@ export async function runEntdeckenDailyOnce({
     );
   }
   const verbindung = liesBudgetVerbindung(env);
+  let diagnosticHeaders = Object.freeze({});
+  try { diagnosticHeaders = providerDiagnosticHeaders(env); }
+  catch {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Entdecken hat keine sichere private Provider-Capture-Senke.",
+    );
+  }
   const token = await meldeTestkontoAn(verbindung, fetchImpl);
   await pruefeEntdeckenOwnerZugang({ verbindung, token, fetchImpl });
   const laufWache = new LiveLaufWache({
@@ -117,6 +130,7 @@ export async function runEntdeckenDailyOnce({
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
           [RECOVERY_HEADER]: RECOVERY_HEADER_VALUE,
+          ...diagnosticHeaders,
         },
       },
       { fetchImpl, timeoutMs: initialStand.anbieterRequestTimeoutMs },
@@ -126,12 +140,28 @@ export async function runEntdeckenDailyOnce({
     requestError = error;
   }
 
+  let captureError = null;
+  if (!requestError && providerRawCaptureEnabled(env)) {
+    try {
+      captureProviderRawResponse(body, "07-entdecken-weekly-websearch.json", {
+        env,
+        repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
+      });
+    } catch {
+      captureError = new LiveSicherheitsStopp(
+        "unbekannt",
+        "Entdecken-Providerpayload wurde nicht sicher privat erfasst.",
+      );
+    }
+  }
+
   const costs = await laufWache.nachAnbieterRequest(markierung, null);
   if (requestError) {
     throw requestError instanceof LiveSicherheitsStopp
       ? requestError
       : new LiveSicherheitsStopp("unbekannt", "Entdecken-Function war nicht verlaesslich erreichbar.");
   }
+  if (captureError) throw captureError;
   validateFunctionResponse(response, body);
   ausgabe(
     `ENTDECKEN-TAGESFEED-EINMAL: fresh · 1 Providerrequest · 1 Suchrequest · 1 Write · Laufdelta ${costs.laufKostenUsdCent.toFixed(4)} US-Cent`,

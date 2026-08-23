@@ -28,6 +28,13 @@ Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
 Deno.env.set("KD_AI_TASK_ENABLED", "true");
 Deno.env.set("FILMWISSEN_WIKIMEDIA_KONTAKT", "https://kinodreieck.at");
 
+import {
+  PROVIDER_DIAGNOSTIC_ENV,
+  PROVIDER_DIAGNOSTIC_FIELD,
+  PROVIDER_DIAGNOSTIC_HEADER,
+  PROVIDER_DIAGNOSTIC_HEADER_VALUE,
+} from "./supabase/functions/_shared/providerDiagnostic.js";
+
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
 function gleich(ist: unknown, soll: unknown, was = "Wert") {
   if (!Object.is(ist, soll)) {
@@ -269,6 +276,7 @@ function stelleZurueck() {
   Deno.env.set("ANTHROPIC_API_KEY", "sk-test");
   Deno.env.set("KD_FUNCTION_BUILD_VERSION", "abcdef1");
   Deno.env.set("KD_AI_TASK_ENABLED", "true");
+  Deno.env.delete(PROVIDER_DIAGNOSTIC_ENV);
   z.start = { ok: true, log_id: LOG_ID, modell_alias: "klein" };
   z.startHttpFehler = null;
   z.stand = { heute: 0 };
@@ -1410,6 +1418,74 @@ test("C0b ai-task bewahrt mit exakt true den bisherigen Vertrag", async () => {
   gleich(konfigAufrufe().length, 2, "je eine Konfigurationslesung für Health und Aufgabe");
   gleich(starten().length, 1, "genau eine Reservierung");
   gleich(anbieterAufrufe().length, 1, "genau ein Anbieteraufruf");
+  falsch(PROVIDER_DIAGNOSTIC_FIELD in r.daten, "normale Antwort enthaelt nie Providerrohtext");
+});
+
+test("C0c Providerdiagnose ist default-off und stoppt vor Log und Provider", async () => {
+  const r = await ruf(
+    { task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" } },
+    { kopf: { [PROVIDER_DIAGNOSTIC_HEADER]: PROVIDER_DIAGNOSTIC_HEADER_VALUE } },
+  );
+  gleich(r.status, 403, "Status");
+  gleich(r.daten.grund, "provider-diagnose-nicht-erlaubt", "feste Diagnose");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Providerrequest");
+});
+
+test("C0d Providerdiagnose bleibt trotz Serverflag fuer Nicht-Owner gesperrt", async () => {
+  Deno.env.set(PROVIDER_DIAGNOSTIC_ENV, "true");
+  z.kontofreigabe = [{ role: "member", active: true, personal_ai: true }];
+  const r = await ruf(
+    { task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" } },
+    { kopf: { [PROVIDER_DIAGNOSTIC_HEADER]: PROVIDER_DIAGNOSTIC_HEADER_VALUE } },
+  );
+  gleich(r.status, 403, "Status");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Providerrequest");
+});
+
+test("C0e Ownerdiagnose gibt den exakten Rohtext nur im Diagnosefeld zurueck", async () => {
+  Deno.env.set(PROVIDER_DIAGNOSTIC_ENV, "true");
+  const raw = JSON.stringify({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "end_turn",
+    content: [{ type: "text", text: '{"echo":"Kinodreieck","zeichen":11}' }],
+    usage: { input_tokens: 100, output_tokens: 20 },
+  });
+  z.anbieter = () => new Response(raw, {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  const r = await ruf(
+    { task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" } },
+    { kopf: { [PROVIDER_DIAGNOSTIC_HEADER]: PROVIDER_DIAGNOSTIC_HEADER_VALUE } },
+  );
+  gleich(r.status, 200, "Status");
+  const diagnostic = r.daten[PROVIDER_DIAGNOSTIC_FIELD] as Record<string, unknown>;
+  gleich(diagnostic.rawResponse, raw, "unveraenderter Providertext");
+  gleich(anbieterAufrufe().length, 1, "derselbe eine Providerrequest");
+});
+
+test("C0f Ownerdiagnose behaelt Rohtext auch bei nachgelagertem Parserfehler", async () => {
+  Deno.env.set(PROVIDER_DIAGNOSTIC_ENV, "true");
+  const raw = JSON.stringify({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "end_turn",
+    content: [{ type: "text", text: "{}" }],
+    usage: { input_tokens: 100, output_tokens: 20 },
+  });
+  z.anbieter = () => new Response(raw, {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+  const r = await ruf(
+    { task: "echo-struct", vorgangId: neueVorgangId(), payload: { wort: "Kinodreieck" } },
+    { kopf: { [PROVIDER_DIAGNOSTIC_HEADER]: PROVIDER_DIAGNOSTIC_HEADER_VALUE } },
+  );
+  gleich(r.status, 502, "Parserfehlerstatus");
+  const diagnostic = r.daten[PROVIDER_DIAGNOSTIC_FIELD] as Record<string, unknown>;
+  gleich(diagnostic.rawResponse, raw, "Rohtext bleibt trotz Parserfehler belegt");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
 });
 
 test("C1 ohne Authorization-Header: 401, ohne jeden Netzaufruf", async () => {
@@ -1657,6 +1733,10 @@ test("C8 OPTIONS: 204 mit CORS-Kopf, erlaubter Origin wird gespiegelt", async ()
   wahr(
     antw.headers.get("Access-Control-Allow-Headers")?.includes("authorization"),
     "authorization ist erlaubt",
+  );
+  wahr(
+    antw.headers.get("Access-Control-Allow-Headers")?.includes(PROVIDER_DIAGNOSTIC_HEADER),
+    "enger Providerdiagnoseheader ist fuer den Owner-Runner erlaubt",
   );
   gleich(antw.headers.get("Vary"), "Origin", "Vary: Origin");
 });

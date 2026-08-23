@@ -213,6 +213,11 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
   assert.equal(harness.settleCalls[0].status, "fertig");
   assert.ok(harness.reserveCalls[0].reservationUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
   assert.ok(harness.settleCalls[0].costUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
+  assert.equal(
+    harness.adapter.takeProviderRawResponse(),
+    JSON.stringify(providerMessage()),
+  );
+  assert.equal(harness.adapter.takeProviderRawResponse(), null);
 
   const sent = JSON.parse(harness.fetchCalls[0].options.body);
   assert.equal(harness.fetchCalls[0].url, "https://api.anthropic.com/v1/messages");
@@ -417,6 +422,7 @@ await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfr
 const expectedRemoteReleaseClosure = Object.freeze([
   "package.json",
   "supabase/config.toml",
+  "supabase/functions/_shared/providerDiagnostic.js",
   "supabase/functions/entdecken-daily-task/anthropicAdapter.js",
   "supabase/functions/entdecken-daily-task/contract.js",
   "supabase/functions/entdecken-daily-task/index.ts",
@@ -771,6 +777,9 @@ await check("Function-Konfiguration erzwingt JWT und Produktcode enthält keine 
   assert.equal((adapterSource.match(/\bfetchImpl\(/g) || []).length, 1);
   assert.doesNotMatch(adapterSource, /console\.(?:log|error)|JSON\.stringify\([^)]*providerBody/);
   assert.doesNotMatch(functionIndex, /console\.(?:log|error)/);
+  assert.match(functionIndex, /PROVIDER_DIAGNOSTIC_ENV/);
+  assert.match(functionIndex, /takeProviderRawResponse/);
+  assert.match(functionIndex, /access\?\.role === "owner"/);
 });
 
 await check("Einziger freigegebener Einstieg ist das vorhandene Live-npm-Skript mit engem Flag", () => {

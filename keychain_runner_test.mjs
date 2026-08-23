@@ -1,5 +1,11 @@
 import { EventEmitter } from "node:events";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  readFileSync,
+  rmdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import {
   EXIT_KEYCHAIN,
   EXIT_KONFIG,
@@ -12,6 +18,11 @@ import {
   MODI,
   OWNER_SERVER_BUDGET_ENV,
   OWNER_SERVER_BUDGET_FLAG,
+  OWNER_CORE_SIX_GUARD_ENV,
+  OWNER_CORE_SIX_GUARD_VALUE,
+  PROVIDER_RAW_CAPTURE_DIR_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_VALUE,
   RADAR_ENTDECKEN_ONCE_FLAG,
   RADAR_WEBSEARCH_ONCE_ENV,
   RADAR_WEBSEARCH_ONCE_FLAG,
@@ -23,6 +34,10 @@ import {
   reserviereLiveLauf,
   starteModus,
 } from "./tools/keychain_runner.mjs";
+import {
+  captureProviderRawResponse,
+  createPrivateProviderRawDirectory,
+} from "./tools/provider_raw_capture.mjs";
 
 let bestanden = 0;
 let gesamt = 0;
@@ -40,6 +55,7 @@ const PUBLIC = {
   KD_OWNER_USER: "owner-lokal",
   KD_ORIGIN: "https://staging.kinodreieck.at",
   KD_RADAR_TARGET_ID: "imdb:tt0137523",
+  KD_FILMWISSEN_TARGET_ID: "imdb:tt0081505",
 };
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
@@ -136,7 +152,9 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
       && config.KD_ORIGIN === PUBLIC.KD_ORIGIN);
   for (const name of [
     "KD_TESTA_PASS", "KD_OWNER_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
-    ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV, "KD_EVAL_JA",
+    ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV,
+    OWNER_CORE_SIX_GUARD_ENV, PROVIDER_RAW_CAPTURE_DIR_ENV,
+    PROVIDER_RAW_CAPTURE_GUARD_ENV, "KD_EVAL_JA",
   ]) {
     let abgelehnt = false;
     try { parseLokaleKonfig(`${name}=verboten`); } catch { abgelehnt = true; }
@@ -182,15 +200,45 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
 }
 
 {
+  const directory = createPrivateProviderRawDirectory();
+  const body = {
+    ok: true,
+    providerDiagnostic: { rawResponse: '{"private":"provider-raw"}' },
+  };
+  const written = captureProviderRawResponse(body, "01-intelligent-search.json", {
+    env: {
+      [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+      [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+    },
+    repoRoot: REPO_ROOT,
+  });
+  pruefe("Providerrohtext wird ausserhalb des Repos exakt mit Modus 0600 geschrieben",
+    readFileSync(written.filePath, "utf8") === '{"private":"provider-raw"}'
+      && (statSync(written.filePath).mode & 0o777) === 0o600
+      && (statSync(directory).mode & 0o777) === 0o700
+      && !written.filePath.startsWith(REPO_ROOT + "/"));
+  pruefe("Providerdiagnose wird vor jeder weiteren Antwortverarbeitung entfernt",
+    !("providerDiagnostic" in body));
+  unlinkSync(written.filePath);
+  rmdirSync(directory);
+}
+
+{
+  const gelesen = [];
   const env = baueKindUmgebung({
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser: (account) => { gelesen.push(account); return OWNER_GEHEIMNIS; },
     ownerApprovedServerBudget: true,
   });
-  pruefe("exakte Owner-Freigabe reicht nur den Serverbudget-Schalter an den Wächter",
+  pruefe("exakte Owner-Freigabe bindet den Sechserlauf an Owner, Budget und starke Filmkennung",
     env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
+      && env.KD_FILMWISSEN_TARGET_ID === PUBLIC.KD_FILMWISSEN_TARGET_ID
+      && env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && !("KD_AI_AUTONOM_LIMIT_USD_CENT" in env));
   let falscherModus = false;
   try {
@@ -402,13 +450,19 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     },
     spawnImpl,
     ownerApprovedServerBudget: true,
+    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-core-six-test",
+    ausgabe: () => {},
   });
-  pruefe("Exakte Owner-Variante startet Entdecken hinter dem Budgetwächter",
+  pruefe("Exakte Owner-Variante startet den Sechserlauf hinter dem Budgetwächter",
     code === 0
       && starts.length === 1
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
-      && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1");
-  pruefe("Automatische Entdecken-Owner-Variante mappt ausschließlich Owner auf TestA",
+      && starts[0].argv.join("|") === MODI["ai-live"].argv.join("|")
+      && starts[0].optionen.env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
+      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
+        === "/private/tmp/keychain-runner-core-six-test"
+      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_GUARD_ENV]
+        === PROVIDER_RAW_CAPTURE_GUARD_VALUE);
+  pruefe("Owner-Sechservariante mappt ausschließlich Owner auf TestA",
     gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
       && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
@@ -511,6 +565,8 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     spawnImpl,
     ownerApprovedServerBudget: true,
     radarEntdeckenOnce: true,
+    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-combined-test",
+    ausgabe: () => {},
   });
   pruefe("Kombinierter Produkt-Smoke startet genau ein fest verdrahtetes Kind hinter dem Budgetwächter",
     code === 0
@@ -523,6 +579,10 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
       && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
+        === "/private/tmp/keychain-runner-combined-test"
+      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_GUARD_ENV]
+        === PROVIDER_RAW_CAPTURE_GUARD_VALUE
       && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
       && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS

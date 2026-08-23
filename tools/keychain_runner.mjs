@@ -14,6 +14,22 @@ import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  OWNER_CORE_SIX_GUARD_ENV,
+  OWNER_CORE_SIX_GUARD_VALUE,
+  PROVIDER_RAW_CAPTURE_DIR_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+  createPrivateProviderRawDirectory,
+} from "./provider_raw_capture.mjs";
+
+export {
+  OWNER_CORE_SIX_GUARD_ENV,
+  OWNER_CORE_SIX_GUARD_VALUE,
+  PROVIDER_RAW_CAPTURE_DIR_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+} from "./provider_raw_capture.mjs";
 
 export const KEYCHAIN_SERVICE = "at.kinodreieck.codex.live-tests.shared";
 export const KEYCHAIN_ACCOUNTS = Object.freeze({
@@ -48,6 +64,7 @@ const OEFFENTLICHE_NAMEN = new Set([
   "KD_AI_FUNKTION",
   "KD_ORIGIN",
   "KD_RADAR_TARGET_ID",
+  "KD_FILMWISSEN_TARGET_ID",
 ]);
 
 const VERBOTENE_LOKALE_NAMEN = new Set([
@@ -59,6 +76,9 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   RADAR_WEBSEARCH_ONCE_ENV,
   ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
   ENTDECKEN_DAILY_ONCE_ENV,
+  OWNER_CORE_SIX_GUARD_ENV,
+  PROVIDER_RAW_CAPTURE_DIR_ENV,
+  PROVIDER_RAW_CAPTURE_GUARD_ENV,
   "KD_EVAL_JA",
 ]);
 
@@ -310,6 +330,7 @@ export function baueKindUmgebung({
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
   radarEntdeckenOnce = false,
+  ownerCoreSix = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
@@ -327,8 +348,15 @@ export function baueKindUmgebung({
       || radarWebsearchOnce || entdeckenDailyOnce)) {
     throw new Error("Der kombinierte Radar-/Entdecken-Lauf braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
+  const effectiveOwnerCoreSix = ownerCoreSix
+    || (modus === "ai-live" && ownerApprovedServerBudget
+      && !radarWebsearchOnce && !entdeckenDailyOnce && !radarEntdeckenOnce);
+  if (effectiveOwnerCoreSix && (modus !== "ai-live" || !ownerApprovedServerBudget
+      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce)) {
+    throw new Error("Der Sechser-Einmallauf braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
+  }
   const ownerCredentialLane = modus === "ai-live"
-    && (entdeckenDailyOnce || radarEntdeckenOnce);
+    && (effectiveOwnerCoreSix || entdeckenDailyOnce || radarEntdeckenOnce);
 
   const env = harmloseBasis(ambientEnv);
   for (const name of OEFFENTLICHE_NAMEN) {
@@ -375,6 +403,15 @@ export function baueKindUmgebung({
     env.KD_EVAL_JA = "1";
   }
   if (ownerApprovedServerBudget) env[OWNER_SERVER_BUDGET_ENV] = "1";
+  if (effectiveOwnerCoreSix) {
+    const target = String(env.KD_FILMWISSEN_TARGET_ID || "").trim();
+    if (!/^(?:imdb|tmdb|wikidata):[^\s:]{1,150}$/i.test(target)) {
+      throw new Error("KD_FILMWISSEN_TARGET_ID fehlt oder ist keine starke reale Filmkennung.");
+    }
+    env[OWNER_CORE_SIX_GUARD_ENV] = OWNER_CORE_SIX_GUARD_VALUE;
+  } else {
+    delete env.KD_FILMWISSEN_TARGET_ID;
+  }
   if (radarWebsearchOnce || radarEntdeckenOnce) {
     const targetId = String(env.KD_RADAR_TARGET_ID || "").trim();
     if (!/^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i.test(targetId)
@@ -399,12 +436,13 @@ export async function starteModus({
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
   radarEntdeckenOnce = false,
+  rawCaptureDirectoryFactory = createPrivateProviderRawDirectory,
+  ausgabe = console.log,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
-  const effectiveEntdeckenDailyOnce = entdeckenDailyOnce
-    || (modus === "ai-live" && ownerApprovedServerBudget
-      && !radarWebsearchOnce && !radarEntdeckenOnce);
+  const ownerCoreSix = modus === "ai-live" && ownerApprovedServerBudget
+    && !radarWebsearchOnce && !entdeckenDailyOnce && !radarEntdeckenOnce;
   const env = baueKindUmgebung({
     modus,
     ambientEnv,
@@ -413,17 +451,24 @@ export async function starteModus({
     confirmPaid,
     ownerApprovedServerBudget,
     radarWebsearchOnce,
-    entdeckenDailyOnce: effectiveEntdeckenDailyOnce,
+    entdeckenDailyOnce,
     radarEntdeckenOnce,
+    ownerCoreSix,
   });
   const gibLiveLaufFrei = ["ai-live", "ai-eval"].includes(modus)
     ? reserviereLiveLauf()
     : () => {};
   try {
-    return await new Promise((resolveCode) => {
+    let rawCaptureDirectory = null;
+    if (ownerCoreSix || radarEntdeckenOnce) {
+      rawCaptureDirectory = rawCaptureDirectoryFactory();
+      env[PROVIDER_RAW_CAPTURE_DIR_ENV] = rawCaptureDirectory;
+      env[PROVIDER_RAW_CAPTURE_GUARD_ENV] = PROVIDER_RAW_CAPTURE_GUARD_VALUE;
+    }
+    const code = await new Promise((resolveCode) => {
       const argv = radarWebsearchOnce
         ? definition.radarWebsearchOnceArgv
-        : (effectiveEntdeckenDailyOnce
+        : (entdeckenDailyOnce
           ? definition.entdeckenDailyOnceArgv
           : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv));
       const kind = spawnImpl(process.execPath, argv, {
@@ -437,6 +482,10 @@ export async function starteModus({
         resolveCode(signal ? EXIT_START : (Number.isInteger(code) ? code : EXIT_START));
       });
     });
+    if (rawCaptureDirectory) {
+      ausgabe(`Privates Provider-Rohpayload-Verzeichnis: ${rawCaptureDirectory}`);
+    }
+    return code;
   } finally {
     gibLiveLaufFrei();
   }
@@ -468,13 +517,11 @@ export async function main(
   const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
   const radarEntdeckenOnce = rest.includes(RADAR_ENTDECKEN_ONCE_FLAG);
-  /* Die exakt freigegebene Owner-Variante ohne weiteren Sonderparameter ist
-     der eine Entdecken-Produktlauf. Damit bleibt der Nutzerbefehl schmal und
-     der Recoveryrequest startet trotzdem erst hinter der Budget-Vorabmessung. */
-  const ownerEntdeckenOnce = modus === "ai-live" && ownerApprovedServerBudget
-    && !radarWebsearchOnce && !radarEntdeckenOnce;
-  const entdeckenDailyOnce = ownerEntdeckenOnce
-    || process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV] === "remote-window-v1";
+  /* Der exakte Ownerbefehl ohne Sonderflag ist der einmalige Sechserlauf.
+     Entdecken bleibt nur ueber seinen internen Remote-Fenster-Request oder den
+     expliziten kombinierten Radar-/Entdecken-Modus erreichbar. */
+  const entdeckenDailyOnce = process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV]
+    === "remote-window-v1";
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
       && arg !== RADAR_ENTDECKEN_ONCE_FLAG
@@ -512,6 +559,7 @@ export async function main(
       radarWebsearchOnce,
       entdeckenDailyOnce,
       radarEntdeckenOnce,
+      ausgabe,
     });
   } catch (error) {
     const keychain = error instanceof KeychainFehler;

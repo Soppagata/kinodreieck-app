@@ -66,6 +66,13 @@ import {
 } from "../src/lib/blogProfilAnalyse.js";
 import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
 import { readFileSync } from "node:fs";
+import {
+  OWNER_CORE_SIX_GUARD_ENV,
+  OWNER_CORE_SIX_GUARD_VALUE,
+  captureProviderRawResponse,
+  providerDiagnosticHeaders,
+  providerRawCaptureEnabled,
+} from "./provider_raw_capture.mjs";
 
 const FINDER_VOKABULAR = JSON.parse(readFileSync(
   new URL("../src/data/finder_vokabular.json", import.meta.url),
@@ -79,6 +86,8 @@ const PASS = process.env.KD_TESTA_PASS || "";
 const MAIL_DOMAIN = (process.env.KD_MAIL_DOMAIN || "login.kinodreieck.at").trim();
 const FUNKTION = (process.env.KD_AI_FUNKTION || "ai-task").trim();
 const ORIGIN = (process.env.KD_ORIGIN || "https://kinodreieck.at").trim();
+const OWNER_CORE_SIX = process.env[OWNER_CORE_SIX_GUARD_ENV]
+  === OWNER_CORE_SIX_GUARD_VALUE;
 
 if (!URL_BASIS || !ANON || !PASS) {
   console.error("Fehlende Konfiguration. Erwartet: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS.");
@@ -107,7 +116,7 @@ async function ruf(methode, kopf = {}, koerper = null, extraKopf = {}) {
     });
     let daten = null;
     const text = await antwort.text();
-    try { daten = text ? JSON.parse(text) : null; } catch { daten = { rohtext: text.slice(0, 300) }; }
+    try { daten = text ? JSON.parse(text) : null; } catch { daten = { antwortForm: "kein-json" }; }
     return {
       status: antwort.status,
       daten,
@@ -233,6 +242,21 @@ function stoppeLiveLauf(error) {
 
 console.log(`KI-Endpunkt-Rauchprobe gegen ${ENDPUNKT}\n`);
 
+let PROVIDER_DIAGNOSTIC_HEADERS = Object.freeze({});
+if (OWNER_CORE_SIX) {
+  try {
+    if (!providerRawCaptureEnabled(process.env)) {
+      throw new Error("privater Capture-Guard fehlt");
+    }
+    PROVIDER_DIAGNOSTIC_HEADERS = providerDiagnosticHeaders(process.env);
+  } catch {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      "Owner-Sechserlauf hat keine sichere private Provider-Capture-Senke.",
+    ));
+  }
+}
+
 /* --- P1: Preflight ohne Anmeldung ---------------------------------------- */
 const p1 = await ruf("OPTIONS", {
   "Access-Control-Request-Method": "POST",
@@ -330,7 +354,7 @@ if (!(p8.status === 200 && modellIds.length > 0)) {
 }
 
 const laufWache = new LiveLaufWache({
-  maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS,
+  maxAnbieterRequests: OWNER_CORE_SIX ? 6 : SMOKE_MAX_ANBIETER_REQUESTS,
   standLeser: () => holeBudgetStand({
     verbindung: {
       urlBasis: URL_BASIS,
@@ -351,10 +375,37 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
   let markierung;
   try {
     markierung = await laufWache.vorAnbieterRequest(label);
-    const ergebnis = await ruf(methode, kopf, koerper, extraKopf);
+    const ergebnis = await ruf(methode, kopf, koerper, {
+      ...extraKopf,
+      ...PROVIDER_DIAGNOSTIC_HEADERS,
+    });
+    let captureError = null;
+    if (OWNER_CORE_SIX) {
+      const fileName = ({
+        "P12 intelligent-search": "01-intelligent-search.json",
+        "P14 profile-extract": "02-profile-extract.json",
+        "P17 film-forecast": "03-film-forecast.json",
+        "P18 filmwissen-synthese": "04-filmwissen-synthese.json",
+        "P22 blog-profile-extract": "05-blog-profile-extract.json",
+        "P23 media-batch-extract": "06-media-batch-extract.json",
+      })[label];
+      try {
+        if (!fileName) throw new Error("unbekannter Sechserpfad");
+        captureProviderRawResponse(ergebnis.daten, fileName, {
+          env: process.env,
+          repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
+        });
+      } catch {
+        captureError = new LiveSicherheitsStopp(
+          "unbekannt",
+          `${label}: unveraenderter Providerpayload wurde nicht sicher privat erfasst.`,
+        );
+      }
+    }
     const kostenRoh = ergebnis.daten?.verbrauch?.kostenUsdCent;
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     await laufWache.nachAnbieterRequest(markierung, kosten);
+    if (captureError) throw captureError;
     if (ergebnis.status !== 200) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
@@ -547,7 +598,19 @@ pruefeNutzerTaskReadback("S3 film-forecast", "film-forecast", p17.daten, {
    P18 ist der einzige möglicherweise zahlende Syntheselauf. Der veröffentlichte
    Bericht wird danach ausschließlich über die providerfreie Lese-RPC geprüft.
    =========================================================================== */
-const FILMWISSEN_KENNUNG = { namespace: "imdb", kennung: "tt0078748" };
+function liesFilmwissenKennung() {
+  if (!OWNER_CORE_SIX) return { namespace: "imdb", kennung: "tt0078748" };
+  const raw = String(process.env.KD_FILMWISSEN_TARGET_ID || "").trim();
+  const match = raw.match(/^(imdb|tmdb|wikidata):([^\s:]{1,150})$/i);
+  if (!match) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      "Owner-Sechserlauf hat keine starke reale Filmwissen-Kennung.",
+    ));
+  }
+  return { namespace: match[1].toLowerCase(), kennung: match[2] };
+}
+const FILMWISSEN_KENNUNG = liesFilmwissenKennung();
 const p18 = await rufAnbieterBewacht(
   "P18 filmwissen-synthese",
   "POST",
@@ -561,7 +624,7 @@ const p18 = await rufAnbieterBewacht(
 const d18 = p18.daten?.data;
 const p18Erfolg = p18.status === 200
   && p18.daten?.ok === true
-  && ["belegt", "cache_hit"].includes(d18?.status)
+  && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
   && typeof d18?.versionId === "string";
 pruefe(
   "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",

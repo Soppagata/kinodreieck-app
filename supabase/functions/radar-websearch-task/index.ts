@@ -9,6 +9,12 @@ import {
   normalizeRadarReservationDecision,
 } from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
+import {
+  PROVIDER_DIAGNOSTIC_ENV,
+  PROVIDER_DIAGNOSTIC_HEADER,
+  providerDiagnosticAccess,
+  providerDiagnosticField,
+} from "../_shared/providerDiagnostic.js";
 
 const ALLOWED_ORIGINS = new Set([
   "https://kinodreieck.at",
@@ -20,7 +26,7 @@ const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": `authorization, x-client-info, apikey, content-type, ${PROVIDER_DIAGNOSTIC_HEADER}`,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -157,11 +163,16 @@ export function createRadarWebsearchHandler({
   adapter = null,
   fetchImpl = fetch,
 }: {
-  adapter?: { search(request: unknown): Promise<unknown>; telemetry?: () => Record<string, unknown> } | null;
+  adapter?: {
+    search(request: unknown): Promise<unknown>;
+    telemetry?: () => Record<string, unknown>;
+    takeProviderRawResponse?: () => string | null;
+  } | null;
   fetchImpl?: typeof fetch;
 } = {}) {
   return async function handler(req: Request): Promise<Response> {
     const origin = req.headers.get("Origin");
+    const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
     if (req.method !== "POST") return json({ ok: false, status: "forbidden", writes: 0 }, 405, origin);
 
@@ -191,6 +202,27 @@ export function createRadarWebsearchHandler({
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    let providerDiagnostic = providerDiagnosticAccess({
+      headerValue: providerDiagnosticHeader,
+      enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
+      owner: false,
+    });
+    if (providerDiagnostic.requested) {
+      const { data: access, error: accessError } = await admin
+        .from("kd_account_access")
+        .select("role,active,personal_ai")
+        .eq("account_id", accountId)
+        .maybeSingle();
+      providerDiagnostic = providerDiagnosticAccess({
+        headerValue: providerDiagnosticHeader,
+        enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
+        owner: !accessError && access?.role === "owner"
+          && access?.active === true && access?.personal_ai === true,
+      });
+      if (!providerDiagnostic.allowed) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      }
+    }
     const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
     const user = createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -354,6 +386,13 @@ export function createRadarWebsearchHandler({
     const httpStatus = status === "forbidden" ? 403 : 200;
     const telemetry = typeof productAdapter.telemetry === "function"
       ? productAdapter.telemetry() : {};
+    const providerRawResponse = providerDiagnostic.allowed
+      && typeof productAdapter.takeProviderRawResponse === "function"
+      ? productAdapter.takeProviderRawResponse()
+      : null;
+    if (providerDiagnostic.allowed && typeof providerRawResponse !== "string") {
+      return json({ ok: false, status: "provider_error", writes: result.writes || 0 }, 500, origin);
+    }
     return json({
       ok: true,
       status,
@@ -366,6 +405,9 @@ export function createRadarWebsearchHandler({
         ? telemetry.reservationUsdCent : null,
       reservationDecision: telemetry.reservationDecision || "unknown",
       ...(result.personResult ? { personResult: result.personResult } : {}),
+      ...(providerDiagnostic.allowed
+        ? providerDiagnosticField(providerRawResponse)
+        : {}),
     }, httpStatus, origin);
   };
 }

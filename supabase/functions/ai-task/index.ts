@@ -63,6 +63,12 @@ import {
   schaetzeAnbieterEingabeTokens,
   type AnbieterBild,
 } from "./providerContract.ts";
+import {
+  PROVIDER_DIAGNOSTIC_ENV,
+  PROVIDER_DIAGNOSTIC_HEADER,
+  providerDiagnosticAccess,
+  providerDiagnosticField,
+} from "../_shared/providerDiagnostic.js";
 
 export {
   baueAnbieterKoerper,
@@ -89,7 +95,7 @@ const ERLAUBTE_ORIGINS = new Set([
 
 function corsKopf(origin: string | null): Record<string, string> {
   const kopf: Record<string, string> = {
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": `authorization, x-client-info, apikey, content-type, ${PROVIDER_DIAGNOSTIC_HEADER}`,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -118,6 +124,7 @@ function fehlerAntwort(
     vorgangId?: string | null;
     status?: number;
     diagnose?: unknown;
+    providerRawResponse?: string;
   } = {},
 ) {
   const koerper: Record<string, unknown> = {
@@ -127,6 +134,9 @@ function fehlerAntwort(
     vorgangId: extra.vorgangId ?? null,
   };
   if (extra.diagnose !== undefined) koerper.diagnose = extra.diagnose;
+  if (typeof extra.providerRawResponse === "string") {
+    Object.assign(koerper, providerDiagnosticField(extra.providerRawResponse));
+  }
   return jsonAntwort(koerper, extra.status ?? STATUS[code] ?? 500, origin);
 }
 
@@ -390,6 +400,7 @@ async function rufeAnbieter(
   timeoutMs: number,
   schema: Record<string, unknown> | null,
   bilder: AnbieterBild[] = [],
+  onRawResponse: (raw: string) => void = () => {},
 ): Promise<AnbieterErgebnis> {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new AufrufFehler(CODES.SERVER, "anbieterschluessel-fehlt");
@@ -424,7 +435,9 @@ async function rufeAnbieter(
        nach den Headern erfuellt; den Timer davor zu loeschen liess ein
        haengendes `json()` unbegrenzt weiterlaufen. */
     try {
-      daten = await antwort.json();
+      const raw = await antwort.text();
+      onRawResponse(raw);
+      daten = raw ? JSON.parse(raw) : null;
     } catch (e) {
       /* Ein normal unlesbarer Body wird unten als `antwort-kein-json`
          behandelt. Ein Abort ist dagegen die harte Zeitgrenze und darf nicht
@@ -3000,6 +3013,7 @@ function blogProfileCapability(
 export async function handhabeAnfrage(req: Request): Promise<Response> {
   const origin = req.headers.get("Origin");
   const beginn = Date.now();
+  const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsKopf(origin) });
@@ -3089,6 +3103,28 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       vorgangId,
     });
   }
+
+  const providerDiagnostic = providerDiagnosticAccess({
+    headerValue: providerDiagnosticHeader,
+    enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
+    owner: fachfreigabe.rolle === "owner",
+  });
+  if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
+    return fehlerAntwort(CODES.FORBIDDEN, origin, {
+      grund: "provider-diagnose-nicht-erlaubt",
+      status: 403,
+      vorgangId,
+    });
+  }
+  let providerRawResponse: string | null = null;
+  const providerRawExtra = () => providerDiagnostic.allowed &&
+      typeof providerRawResponse === "string"
+    ? { providerRawResponse }
+    : {};
+  const providerRawBody = () => providerDiagnostic.allowed &&
+      typeof providerRawResponse === "string"
+    ? providerDiagnosticField(providerRawResponse)
+    : {};
 
   /* N1: Ein nicht UUID-förmiges Feld ließ den uuid-Parameter in Postgres
      scheitern — der Nutzer las dann „Der Server ist vorübergehend nicht
@@ -4053,6 +4089,9 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       timeoutMs,
       auftrag.schema,
       auftrag.bilder ?? [],
+      (raw) => {
+        if (providerDiagnostic.allowed) providerRawResponse = raw;
+      },
     );
   } catch (e) {
     const f = e as AufrufFehler;
@@ -4081,7 +4120,11 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
          als vermeintlichen Istwert an Postgres schicken. */
       kosten: Number.isFinite(fehlerKosten) ? fehlerKosten : null,
     });
-    return fehlerAntwort(klasse, origin, { grund: f.grund, vorgangId });
+    return fehlerAntwort(klasse, origin, {
+      grund: f.grund,
+      vorgangId,
+      ...providerRawExtra(),
+    });
   }
 
   const gemeldeterPreis = preisFuer(konfig, ergebnis.modell);
@@ -4119,6 +4162,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           ? "anbieter-request-istkostenlimit-ueberschritten"
           : "anbieter-request-istkosten-unbekannt",
         vorgangId,
+        ...providerRawExtra(),
       },
     );
   }
@@ -4138,6 +4182,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "antwort-zu-gross",
       vorgangId,
+      ...providerRawExtra(),
     });
   }
 
@@ -4155,6 +4200,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "antwort-kein-json",
       vorgangId,
+      ...providerRawExtra(),
     });
   }
   /* Fachliche Prüfung NACH der strukturellen: ein technisch gültiges JSON ist
@@ -4188,6 +4234,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
       grund: "antwort-verletzt-schema",
       vorgangId,
+      ...providerRawExtra(),
     });
   }
 
@@ -4248,6 +4295,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         grund: "filmwissen-abschluss-fehlgeschlagen:" +
           ((abschlussFehler as { code?: string }).code ?? "?"),
         vorgangId,
+        ...providerRawExtra(),
       });
     }
     const abschluss = abschlussRoh as
@@ -4259,6 +4307,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       return fehlerAntwort(CODES.SERVER, origin, {
         grund: "filmwissen-abschluss-formfremd",
         vorgangId,
+        ...providerRawExtra(),
       });
     }
     return jsonAntwort(
@@ -4279,6 +4328,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           dauerMs: Date.now() - beginn,
           stopReason: ergebnis.stopReason,
         },
+        ...providerRawBody(),
       },
       200,
       origin,
@@ -4314,6 +4364,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         dauerMs: Date.now() - beginn,
         stopReason: ergebnis.stopReason,
       },
+      ...providerRawBody(),
     },
     200,
     origin,

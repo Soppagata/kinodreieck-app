@@ -7,6 +7,12 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createAnthropicEntdeckenDailyAdapter } from "./anthropicAdapter.js";
 import { validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
+import {
+  PROVIDER_DIAGNOSTIC_ENV,
+  PROVIDER_DIAGNOSTIC_HEADER,
+  providerDiagnosticAccess,
+  providerDiagnosticField,
+} from "../_shared/providerDiagnostic.js";
 
 const ALLOWED_ORIGINS = new Set([
   "https://kinodreieck.at",
@@ -21,7 +27,7 @@ const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${RECOVERY_HEADER}`,
+    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${RECOVERY_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}`,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -74,11 +80,16 @@ export function createEntdeckenDailyHandler({
   adapter = null,
   fetchImpl = fetch,
 }: {
-  adapter?: { search(): Promise<unknown>; telemetry?: () => Record<string, unknown> } | null;
+  adapter?: {
+    search(): Promise<unknown>;
+    telemetry?: () => Record<string, unknown>;
+    takeProviderRawResponse?: () => string | null;
+  } | null;
   fetchImpl?: typeof fetch;
 } = {}) {
   return async function handler(req: Request): Promise<Response> {
     const origin = req.headers.get("Origin");
+    const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
     if (req.method === "OPTIONS") {
       if (!origin || !ALLOWED_ORIGINS.has(origin)) return new Response(null, { status: 403, headers: cors(origin) });
       return new Response(null, { status: 204, headers: cors(origin) });
@@ -105,6 +116,12 @@ export function createEntdeckenDailyHandler({
       auth: { persistSession: false, autoRefreshToken: false },
     });
     let preclaimedRecovery: Record<string, unknown> | null = null;
+    let ownerRecoveryConfirmed = false;
+    let providerDiagnostic = providerDiagnosticAccess({
+      headerValue: providerDiagnosticHeader,
+      enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
+      owner: false,
+    });
     if (recoveryRequested) {
       const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
       const user = createClient(supabaseUrl, publishableKey, {
@@ -130,6 +147,15 @@ export function createEntdeckenDailyHandler({
           || access?.personal_ai !== true) {
         return json({ ok: false, status: "disabled", feed: null }, 403, origin);
       }
+      ownerRecoveryConfirmed = true;
+      providerDiagnostic = providerDiagnosticAccess({
+        headerValue: providerDiagnosticHeader,
+        enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
+        owner: ownerRecoveryConfirmed,
+      });
+      if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
+        return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+      }
       const { data: recoveryClaim, error: recoveryError } = await admin
         .rpc("kd_entdecken_daily_recovery_claim");
       if (recoveryError) {
@@ -140,6 +166,9 @@ export function createEntdeckenDailyHandler({
         return json({ ok: false, status: "recovery_unavailable", feed: null }, 409, origin);
       }
       preclaimedRecovery = recoveryClaim as Record<string, unknown>;
+    }
+    if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
+      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
@@ -269,6 +298,13 @@ export function createEntdeckenDailyHandler({
     const result = await runEntdeckenDailyRefresh({ repository, adapter: productAdapter });
     const telemetry = typeof productAdapter.telemetry === "function"
       ? productAdapter.telemetry() : {};
+    const providerRawResponse = providerDiagnostic.allowed
+      && typeof productAdapter.takeProviderRawResponse === "function"
+      ? productAdapter.takeProviderRawResponse()
+      : null;
+    if (providerDiagnostic.allowed && typeof providerRawResponse !== "string") {
+      return json({ ok: false, status: "provider_error", feed: result.feed, writes: 0 }, 500, origin);
+    }
     return json({
       ok: true,
       status: result.status,
@@ -276,6 +312,9 @@ export function createEntdeckenDailyHandler({
       writes: Number.isInteger(result.writes) ? result.writes : 0,
       providerRequests: Number.isInteger(telemetry?.providerRequests) ? telemetry.providerRequests : 0,
       searchRequests: Number.isInteger(telemetry?.searchRequests) ? telemetry.searchRequests : 0,
+      ...(providerDiagnostic.allowed
+        ? providerDiagnosticField(providerRawResponse)
+        : {}),
     }, 200, origin);
   };
 }

@@ -494,7 +494,7 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   });
 }
 
-async function responseJson(response) {
+async function responseJson(response, onRawResponse = () => {}) {
   let raw;
   try { raw = await response.text(); } catch {
     throw new RadarWebsearchProviderError("provider-body-invalid");
@@ -502,6 +502,7 @@ async function responseJson(response) {
   if (typeof raw !== "string" || new TextEncoder().encode(raw).length > RADAR_WEBSEARCH_RESPONSE_MAX_BYTES) {
     throw new RadarWebsearchProviderError("provider-response-too-large");
   }
+  onRawResponse(raw);
   try { return raw ? JSON.parse(raw) : null; } catch {
     throw new RadarWebsearchProviderError("provider-body-invalid");
   }
@@ -528,6 +529,7 @@ export function createAnthropicRadarWebsearchAdapter({
   operationId = () => crypto.randomUUID(),
 } = {}) {
   let used = false;
+  let providerRawResponse = null;
   const telemetry = {
     providerRequests: 0,
     searchRequests: 0,
@@ -621,7 +623,9 @@ export function createAnthropicRadarWebsearchAdapter({
           error?.name === "AbortError" ? "provider-timeout" : "http-error",
         );
       }
-      const providerBody = await responseJson(response);
+      const providerBody = await responseJson(response, (raw) => {
+        providerRawResponse = raw;
+      });
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new RadarWebsearchProviderError("http-error", usage);
       const parsed = parseAnthropicRadarWebsearchResponse(
@@ -670,5 +674,10 @@ export function createAnthropicRadarWebsearchAdapter({
   return Object.freeze({
     search,
     telemetry: () => Object.freeze({ ...telemetry }),
+    takeProviderRawResponse: () => {
+      const raw = providerRawResponse;
+      providerRawResponse = null;
+      return raw;
+    },
   });
 }

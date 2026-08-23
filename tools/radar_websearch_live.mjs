@@ -22,6 +22,11 @@ import {
   meldeTestkontoAn,
 } from "./ai_budget_guard.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./keychain_runner.mjs";
+import {
+  captureProviderRawResponse,
+  providerDiagnosticHeaders,
+  providerRawCaptureEnabled,
+} from "./provider_raw_capture.mjs";
 
 const RADAR_FUNCTION = "radar-websearch-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
@@ -67,6 +72,14 @@ export async function runRadarWebsearchOnce({
   }
 
   const verbindung = liesBudgetVerbindung(env);
+  let diagnosticHeaders = Object.freeze({});
+  try { diagnosticHeaders = providerDiagnosticHeaders(env); }
+  catch {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Radar-Websearch hat keine sichere private Provider-Capture-Senke.",
+    );
+  }
   const token = await meldeTestkontoAn(verbindung, fetchImpl);
   const laufWache = new LiveLaufWache({
     maxAnbieterRequests: 1,
@@ -88,6 +101,7 @@ export async function runRadarWebsearchOnce({
           apikey: verbindung.anon,
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          ...diagnosticHeaders,
         },
         body: JSON.stringify({ targetId }),
       },
@@ -98,12 +112,28 @@ export async function runRadarWebsearchOnce({
     requestError = error;
   }
 
+  let captureError = null;
+  if (!requestError && providerRawCaptureEnabled(env)) {
+    try {
+      captureProviderRawResponse(body, "08-radar-websearch.json", {
+        env,
+        repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
+      });
+    } catch {
+      captureError = new LiveSicherheitsStopp(
+        "unbekannt",
+        "Radar-Websearch-Providerpayload wurde nicht sicher privat erfasst.",
+      );
+    }
+  }
+
   await laufWache.nachAnbieterRequest(markierung, null);
   if (requestError) {
     throw requestError instanceof LiveSicherheitsStopp
       ? requestError
       : new LiveSicherheitsStopp("unbekannt", "Radar-Function war nicht verlaesslich erreichbar.");
   }
+  if (captureError) throw captureError;
   validateFunctionResponse(response, body);
   ausgabe("RADAR-WEBSEARCH-EINMAL: confirmed · 1 Providerrequest · 1 Suchrequest · 1 Write");
   return Object.freeze({

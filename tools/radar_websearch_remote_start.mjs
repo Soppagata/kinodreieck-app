@@ -58,6 +58,7 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
   "supabase/migrations/20260823120000_radar_text_target.sql",
+  "supabase/functions/_shared/providerDiagnostic.js",
   FUNCTION_ENTRY,
   `${FUNCTION_ROOT}/mockAdapter.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
@@ -136,14 +137,15 @@ export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "e96f236c18cef7cc45857bae2d9239
 
 /* Additiver Releasevertrag fuer das commitgebundene Radar-Text-Target. Der
    historische v6-Vertrag bleibt oben unveraendert als Provenienzbeleg; der
-   aktuelle Startzaun bindet nur die vier in RADAR_TEXT_TARGET_COMMIT
-   geaenderten Function-Dateien und die zugehoerige Forward-Migration. */
-export const RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256 = "86261827ecc126c38aa6f96b1594027b042d7dc37d43143d328e0c9e84975eda";
+   aktuelle Startzaun bindet die Radar-Function samt gemeinsamem, default-OFF
+   Diagnosemodul und die zugehoerige Forward-Migration. */
+export const RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256 = "369f696362486b04417aa622007078a471bcb186cc145602be894353f66a119b";
 export const RADAR_TEXT_TARGET_FILES = Object.freeze([
-  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "3e4272aa3a9b7577a992dcfc63b1d54e8f41ec58bf46106544e1cf989e08fce3" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "a53c7d1c808803500aecf624a230f4c9b2897271d20d801ac911bac30d35cf52" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "9a6cc53260acdc79eeeab44fced47781cde7176f0e8fe305d79c25da96ca44cb" }),
-  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "3ff1a89d75818bb8e811af08c6c5899f61538c6ec66bdf2756ad4e0f8624ce73" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "28b36031b2e7ce52fbafd4ab34870350ac6fc461b2192eabf5b8b640dbdd3b02" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "ed78eb4d735443958906cff22ea0f5b46f97bb594a4c55764b833c767dac7d22" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
 ]);
 export const RADAR_TEXT_TARGET_RELEASE_MIGRATIONS = Object.freeze([
   Object.freeze({
@@ -153,7 +155,7 @@ export const RADAR_TEXT_TARGET_RELEASE_MIGRATIONS = Object.freeze([
     sha256: "c52ec0a2f9215fe6b554f3916f861fe121b3ab92e6ee8a14abe97467def1c9f7",
   }),
 ]);
-export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "dbcf080f798336d96a156c73b0472a030d39afc93a3eab539c52f65352040755";
+export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "99a14e217ac935c06175e687bd9010066f2e6946ecf2fdc0094813e2bc1f07bf";
 
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
@@ -551,7 +553,8 @@ function localImports(repoPath, bytes) {
   const pattern = /\bfrom\s*["'](\.\.?\/[^"']+)["']/g;
   for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
     const resolved = posix.normalize(posix.join(posix.dirname(repoPath), match[1]));
-    if (!resolved.startsWith(`${FUNCTION_ROOT}/`) || resolved === FUNCTION_ROOT) {
+    const allowedSharedDiagnostic = resolved === "supabase/functions/_shared/providerDiagnostic.js";
+    if ((!resolved.startsWith(`${FUNCTION_ROOT}/`) || resolved === FUNCTION_ROOT) && !allowedSharedDiagnostic) {
       stop("FUNCTION_IMPORT_ESCAPE", "Function-Import verlaesst die autorisierte Closure.");
     }
     imports.push(normalizeRepoPath(resolved));
@@ -625,6 +628,7 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
   const closure = new Set(FIXED_RELEASE_PATHS);
   for (const path of collectFunctionGraph(options)) closure.add(path);
   const union = new Set([...changedByCommit.values()].flatMap((set) => [...set]));
+  union.add("supabase/functions/_shared/providerDiagnostic.js");
   const paths = [...closure].sort();
   if (paths.some((path) => !union.has(path))) {
     stop("UNCOMMITTED_CLOSURE_PATH", "Release-Closure enthaelt eine nicht paketgebundene Datei.");

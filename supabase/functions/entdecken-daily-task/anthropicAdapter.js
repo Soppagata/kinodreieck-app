@@ -229,15 +229,27 @@ export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedA
   });
 }
 
-async function responseJson(response) {
+async function responseJson(response, onRawResponse = () => {}) {
   let raw;
   try { raw = await response.text(); } catch { throw new EntdeckenDailyProviderError("provider-body-invalid"); }
   if (typeof raw !== "string" || new TextEncoder().encode(raw).length > ENTDECKEN_DAILY_RESPONSE_MAX_BYTES) {
     throw new EntdeckenDailyProviderError("provider-response-too-large");
   }
+  onRawResponse(raw);
   try { return raw ? JSON.parse(raw) : null; } catch { throw new EntdeckenDailyProviderError("provider-body-invalid"); }
 }
 
+/**
+ * @param {{
+ *   apiKey?: string,
+ *   loadSetup?: (() => Promise<unknown>) | null,
+ *   reserveCost?: ((input: {operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
+ *   settleCost?: ((input: Record<string, unknown>) => Promise<void>) | null,
+ *   fetchImpl?: typeof fetch,
+ *   now?: () => string,
+ *   operationId?: () => string
+ * }} [options]
+ */
 export function createAnthropicEntdeckenDailyAdapter({
   apiKey = "",
   loadSetup = null,
@@ -248,6 +260,7 @@ export function createAnthropicEntdeckenDailyAdapter({
   operationId = () => crypto.randomUUID(),
 } = {}) {
   let used = false;
+  let providerRawResponse = null;
   const telemetry = { providerRequests: 0, searchRequests: 0, resultCount: 0, costUsdCent: null };
   async function search(queryContextInput) {
     if (used) throw new EntdeckenDailyProviderError("already-used");
@@ -301,7 +314,9 @@ export function createAnthropicEntdeckenDailyAdapter({
       } catch (error) {
         throw new EntdeckenDailyProviderError(error?.name === "AbortError" ? "provider-timeout" : "http-error");
       }
-      const providerBody = await responseJson(response);
+      const providerBody = await responseJson(response, (raw) => {
+        providerRawResponse = raw;
+      });
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new EntdeckenDailyProviderError("http-error", usage);
       const parsed = parseAnthropicEntdeckenDailyResponse(providerBody, setup, now(), queryContext);
@@ -329,5 +344,13 @@ export function createAnthropicEntdeckenDailyAdapter({
       throw safe;
     } finally { clearTimeout(timer); }
   }
-  return Object.freeze({ search, telemetry: () => Object.freeze({ ...telemetry }) });
+  return Object.freeze({
+    search,
+    telemetry: () => Object.freeze({ ...telemetry }),
+    takeProviderRawResponse: () => {
+      const raw = providerRawResponse;
+      providerRawResponse = null;
+      return raw;
+    },
+  });
 }
