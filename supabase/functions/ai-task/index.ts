@@ -765,18 +765,27 @@ type Aufgabe = {
   taskCapExakt?: number;
 };
 
-/* Suche und persönliche Profilextraktion teilen sich denselben additiven
-   Ergebnisvertrag. Andere Aufgaben bleiben beim bisherigen strikten JSON-Weg;
-   damit erweitert diese Etappe weder Prognose noch Filmwissen oder Bloganalyse. */
+/* Suche, persönliche Profilextraktion und Prognose teilen sich denselben
+   additiven Ergebnisvertrag. Ein alter Client kann weiterhin die bisherige
+   strukturierte Antwort lesen; neue Clients unterscheiden zusätzlich zwischen
+   vollständigen, feldweise geretteten und rein erklärenden Ergebnissen. */
 const TOLERANTE_JSON_AUFGABEN = new Set([
   "intelligent-search",
   "profile-extract",
+  "film-forecast",
 ]);
 
 function hinweiseFuerAufgabe(task: string) {
-  return task === "profile-extract"
-    ? { partial: PROFIL_PARTIAL_NOTICE, degraded: PROFIL_DEGRADED_NOTICE }
-    : { partial: SUCHE_PARTIAL_NOTICE, degraded: SUCHE_DEGRADED_NOTICE };
+  if (task === "profile-extract") {
+    return { partial: PROFIL_PARTIAL_NOTICE, degraded: PROFIL_DEGRADED_NOTICE };
+  }
+  if (task === "film-forecast") {
+    return {
+      partial: FORECAST_PARTIAL_NOTICE,
+      degraded: FORECAST_DEGRADED_NOTICE,
+    };
+  }
+  return { partial: SUCHE_PARTIAL_NOTICE, degraded: SUCHE_DEGRADED_NOTICE };
 }
 
 function kombiniereErgebnisDarstellung(
@@ -1188,6 +1197,10 @@ const PROFIL_PARTIAL_NOTICE =
   "Die KI-Antwort war teilweise unvollständig. Nur sichere Profilvorschläge werden angezeigt.";
 const PROFIL_DEGRADED_NOTICE =
   "Die KI-Antwort konnte nicht sicher in Profilvorschläge umgewandelt werden.";
+const FORECAST_PARTIAL_NOTICE =
+  "Die KI-Antwort war teilweise unvollständig. Nur sicher validierbare Prognosefelder werden angezeigt.";
+const FORECAST_DEGRADED_NOTICE =
+  "Die KI-Antwort konnte nicht sicher in Prognosefelder umgewandelt werden.";
 
 /* Derselbe additive Ergebnisvertrag gilt inzwischen fuer mehrere Aufgaben.
    Die Warncodes beschreiben ausschliesslich Bereinigungsschritte und bleiben
@@ -2150,55 +2163,210 @@ const FORECAST_SCHEMA = {
   },
 };
 
-function forecastAntwortFormGueltig(
-  wert: unknown,
-): wert is Record<string, unknown> {
-  if (
-    !istReinesObjekt(wert) || !hatGenauSchluessel(wert, [
-      "format",
-      "achsen",
-      "passung",
-      "kategorie_vorschlag",
-      "sicherheit",
-      "begruendung",
-      "verwendete_signal_ids",
-    ])
-  ) return false;
-  if (
-    wert.format !== FORECAST_FORMAT || !istReinesObjekt(wert.achsen) ||
-    !hatGenauSchluessel(wert.achsen, ["wie", "was", "warum"])
-  ) return false;
-  for (const achse of ["wie", "was", "warum"]) {
-    const v = eigenerWert(wert.achsen, achse);
-    if (
-      !(v === null ||
-        (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 5))
-    ) return false;
+/* Anbieter-JSON ist Fremddaten. Deshalb wird jedes Prognosefeld unabhängig
+   geprüft: Ein kaputtes WIE darf eine sichere Passung oder Begründung nicht
+   vernichten. Umgekehrt wird aus einem freien Satz nie ein Score, eine Achse,
+   Sicherheit oder Begründung geraten. Die stabile Ausgabeform setzt unsichere
+   Einzelwerte auf null beziehungsweise eine leere Signalliste. */
+export function pruefeForecastErgebnis(
+  inhalt: unknown,
+  eingabe: ForecastEingabe,
+): Pruefung {
+  const warnungen = new Set<string>();
+  const warn = (code: string) => warnungen.add(code);
+  if (!istReinesObjekt(inhalt)) {
+    return {
+      daten: null,
+      darstellung: {
+        responseMode: "degraded",
+        displayText: FORECAST_DEGRADED_NOTICE,
+        warnings: ["no-safe-structure"],
+      },
+    };
+  }
+
+  const erlaubt = [
+    "format",
+    "achsen",
+    "passung",
+    "kategorie_vorschlag",
+    "sicherheit",
+    "begruendung",
+    "verwendete_signal_ids",
+  ];
+  if (Object.keys(inhalt).some((key) => !erlaubt.includes(key))) {
+    warn("extra-fields-ignored");
+  }
+  const hat = (objekt: Record<string, unknown>, feld: string) =>
+    Object.prototype.hasOwnProperty.call(objekt, feld);
+  if (!hat(inhalt, "format")) warn("missing-fields-defaulted");
+  else if (inhalt.format !== FORECAST_FORMAT) warn("unknown-values-ignored");
+
+  let sichereFelder = 0;
+  const achsen: Record<string, number | null> = {
+    wie: null,
+    was: null,
+    warum: null,
+  };
+  const achsenRoh = inhalt.achsen;
+  if (!hat(inhalt, "achsen")) {
+    warn("missing-fields-defaulted");
+  } else if (!istReinesObjekt(achsenRoh)) {
+    warn("invalid-fields-ignored");
+  } else {
+    if (Object.keys(achsenRoh).some((key) => !["wie", "was", "warum"].includes(key))) {
+      warn("extra-fields-ignored");
+    }
+    for (const achse of ["wie", "was", "warum"]) {
+      if (!hat(achsenRoh, achse)) {
+        warn("missing-fields-defaulted");
+        continue;
+      }
+      const wert = eigenerWert(achsenRoh, achse);
+      if (wert === null) continue;
+      if (
+        typeof wert === "number" && Number.isInteger(wert) && wert >= 0 &&
+        wert <= 5
+      ) {
+        achsen[achse] = wert;
+        sichereFelder++;
+      } else warn("invalid-fields-ignored");
+    }
   }
   if (
-    typeof wert.passung !== "number" || !Number.isInteger(wert.passung) ||
-    wert.passung < 0 || wert.passung > 100
-  ) return false;
-  if (
-    typeof wert.kategorie_vorschlag !== "string" ||
-    ![...FORECAST_KATEGORIEN, FORECAST_KEINE_KATEGORIE].includes(
-      wert.kategorie_vorschlag,
-    )
+    eingabe.filmwissen && achsen.warum !== null &&
+    achsen.warum !== eingabe.filmwissen.warum
   ) {
-    return false;
+    achsen.warum = null;
+    sichereFelder--;
+    warn("invalid-fields-ignored");
   }
-  if (
-    typeof wert.sicherheit !== "string" ||
-    !FORECAST_SICHERHEITEN.includes(wert.sicherheit)
-  ) return false;
-  if (typeof wert.begruendung !== "string") return false;
-  if (
-    !Array.isArray(wert.verwendete_signal_ids) ||
-    wert.verwendete_signal_ids.length < 1 ||
-    wert.verwendete_signal_ids.length > FORECAST_MAX_SIGNALE ||
-    !wert.verwendete_signal_ids.every((id) => typeof id === "string")
-  ) return false;
-  return true;
+
+  let passung: number | null = null;
+  if (!hat(inhalt, "passung")) {
+    warn("missing-fields-defaulted");
+  } else if (inhalt.passung === null) {
+    warn("missing-fields-defaulted");
+  } else if (
+    typeof inhalt.passung === "number" && Number.isInteger(inhalt.passung) &&
+    inhalt.passung >= 0 && inhalt.passung <= 100
+  ) {
+    passung = inhalt.passung;
+    sichereFelder++;
+  } else warn("invalid-fields-ignored");
+
+  let kategorie: string | null = null;
+  if (!hat(inhalt, "kategorie_vorschlag")) {
+    warn("missing-fields-defaulted");
+  } else if (
+    inhalt.kategorie_vorschlag === null ||
+    inhalt.kategorie_vorschlag === FORECAST_KEINE_KATEGORIE
+  ) {
+    kategorie = null;
+  } else if (
+    typeof inhalt.kategorie_vorschlag === "string" &&
+    FORECAST_KATEGORIEN.includes(inhalt.kategorie_vorschlag)
+  ) {
+    kategorie = inhalt.kategorie_vorschlag;
+    sichereFelder++;
+  } else warn("unknown-values-ignored");
+
+  let sicherheit: string | null = null;
+  if (!hat(inhalt, "sicherheit")) {
+    warn("missing-fields-defaulted");
+  } else if (inhalt.sicherheit === null) {
+    warn("missing-fields-defaulted");
+  } else if (
+    typeof inhalt.sicherheit === "string" &&
+    FORECAST_SICHERHEITEN.includes(inhalt.sicherheit)
+  ) {
+    sicherheit = deckeleForecastSicherheit(inhalt.sicherheit, eingabe, achsen);
+    sichereFelder++;
+  } else warn("unknown-values-ignored");
+
+  let begruendung: string | null = null;
+  if (!hat(inhalt, "begruendung")) {
+    warn("missing-fields-defaulted");
+  } else if (inhalt.begruendung === null) {
+    warn("missing-fields-defaulted");
+  } else if (typeof inhalt.begruendung === "string") {
+    const text = kurzText(
+      sanitizeProviderDisplayText(inhalt.begruendung) ?? "",
+      280,
+    );
+    if (text) {
+      begruendung = text;
+      sichereFelder++;
+    } else warn("invalid-fields-ignored");
+  } else warn("invalid-fields-ignored");
+
+  const nachId = new Map(
+    eingabe.profil.signale.map((signal) => [signal.id, signal]),
+  );
+  const gesehen = new Set<string>();
+  const verwendet: Array<
+    { id: string; art: string; wert: string; richtung: string }
+  > = [];
+  if (!hat(inhalt, "verwendete_signal_ids")) {
+    warn("missing-fields-defaulted");
+  } else if (!Array.isArray(inhalt.verwendete_signal_ids)) {
+    warn("invalid-fields-ignored");
+  } else {
+    if (inhalt.verwendete_signal_ids.length > FORECAST_MAX_SIGNALE) {
+      warn("invalid-items-ignored");
+    }
+    for (const roh of inhalt.verwendete_signal_ids.slice(0, FORECAST_MAX_SIGNALE)) {
+      if (typeof roh !== "string" || gesehen.has(roh)) {
+        warn("invalid-items-ignored");
+        continue;
+      }
+      gesehen.add(roh);
+      const signal = nachId.get(roh);
+      if (!signal) {
+        warn("unknown-values-ignored");
+        continue;
+      }
+      verwendet.push({
+        id: signal.id,
+        art: signal.art,
+        wert: signal.wert,
+        richtung: signal.richtung,
+      });
+      sichereFelder++;
+    }
+    if (inhalt.verwendete_signal_ids.length === 0) {
+      warn("missing-fields-defaulted");
+    }
+  }
+
+  if (sichereFelder < 1) {
+    warn("no-safe-structure");
+    return {
+      daten: null,
+      darstellung: {
+        responseMode: "degraded",
+        displayText: FORECAST_DEGRADED_NOTICE,
+        warnings: sichereAiWarnings([...warnungen]),
+      },
+    };
+  }
+  const warnings = sichereAiWarnings([...warnungen]);
+  return {
+    daten: {
+      format: FORECAST_FORMAT,
+      achsen,
+      passung,
+      kategorie_vorschlag: kategorie,
+      sicherheit,
+      begruendung,
+      verwendete_signale: verwendet,
+    },
+    darstellung: {
+      responseMode: warnings.length ? "partial" : "structured",
+      displayText: warnings.length ? FORECAST_PARTIAL_NOTICE : null,
+      warnings,
+    },
+  };
 }
 
 function deckeleForecastSicherheit(
@@ -3256,58 +3424,8 @@ export const AUFGABEN: Record<string, Aufgabe> = {
       return { system, nutzertext, schema: FORECAST_SCHEMA };
     },
     pruefeErgebnis(inhalt, payload) {
-      if (!forecastAntwortFormGueltig(inhalt)) {
-        return { fehler: "forecast-schema" };
-      }
       const eingabe = leseForecastEingabe(payload);
-      const ids = inhalt.verwendete_signal_ids as string[];
-      const gesehen = new Set<string>();
-      const nachId = new Map(
-        eingabe.profil.signale.map((signal) => [signal.id, signal]),
-      );
-      const verwendet: Array<
-        { id: string; art: string; wert: string; richtung: string }
-      > = [];
-      for (const id of ids) {
-        if (gesehen.has(id)) return { fehler: "forecast-signal-id-doppelt" };
-        gesehen.add(id);
-        const signal = nachId.get(id);
-        if (!signal) return { fehler: "forecast-signal-id-fremd" };
-        verwendet.push({
-          id: signal.id,
-          art: signal.art,
-          wert: signal.wert,
-          richtung: signal.richtung,
-        });
-      }
-      const begruendung = kurzText(inhalt.begruendung, 280);
-      if (!begruendung) return { fehler: "forecast-begruendung-leer" };
-      const achsen = inhalt.achsen as Record<string, unknown>;
-      if (
-        eingabe.filmwissen &&
-        eigenerWert(achsen, "warum") !== eingabe.filmwissen.warum
-      ) {
-        return { fehler: "forecast-warum-widerspricht-filmwissen" };
-      }
-      return {
-        daten: {
-          format: FORECAST_FORMAT,
-          achsen: {
-            wie: eigenerWert(achsen, "wie"),
-            was: eigenerWert(achsen, "was"),
-            warum: eigenerWert(achsen, "warum"),
-          },
-          passung: inhalt.passung,
-          kategorie_vorschlag: inhalt.kategorie_vorschlag === FORECAST_KEINE_KATEGORIE ? null : inhalt.kategorie_vorschlag,
-          sicherheit: deckeleForecastSicherheit(
-            String(inhalt.sicherheit),
-            eingabe,
-            achsen,
-          ),
-          begruendung,
-          verwendete_signale: verwendet,
-        },
-      };
+      return pruefeForecastErgebnis(inhalt, eingabe);
     },
   },
 };

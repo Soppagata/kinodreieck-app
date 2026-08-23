@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { sessionCoordinator } from "../services/sessionCoordinator.js";
-import { erstelleVorbewertung } from "../services/vorbewertung.js";
+import { erstelleVorbewertungsErgebnis } from "../services/vorbewertung.js";
 import { filmwissenService } from "../services/filmwissen.js";
 import { errorText } from "../services/errors.js";
 import { kiAn } from "../lib/kiSchalter.js";
@@ -125,13 +125,27 @@ export function useIntelligenceController({
     setPrognoseLaufId(film.id);
     setPrognoseFehler((alt) => ({ ...alt, [film.id]: null }));
     try {
-      const prognose = await erstelleVorbewertung(film, { signal: controller.signal });
+      const ergebnis = await erstelleVorbewertungsErgebnis(film, { signal: controller.signal });
       if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
+      if (!ergebnis.prognose) {
+        setPrognoseFehler((alt) => ({
+          ...alt,
+          [film.id]: { art: "hinweis", text: ergebnis.displayText },
+        }));
+        return true;
+      }
+      const prognose = ergebnis.prognose;
       if (!await speichereFilmAenderungStrikt(film.id, { prognose }, startKonto)) {
         throw new Error("Die KI-Prognose konnte nicht im Eintrag gespeichert werden.");
       }
       if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;
       setAktuelleProfilVersion(prognose.profilVersion);
+      setPrognoseFehler((alt) => ({
+        ...alt,
+        [film.id]: ergebnis.responseMode === "partial"
+          ? { art: "hinweis", text: ergebnis.displayText }
+          : null,
+      }));
       return true;
     } catch (error) {
       if (prognoseLaufRef.current !== lauf || !kontoIstAktuell(startKonto)) return false;

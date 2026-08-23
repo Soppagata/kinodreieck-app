@@ -1,4 +1,8 @@
-import { erstelleVorbewertung, pruefeVorbewertungsBereitschaft } from "./src/services/vorbewertung.js";
+import {
+  erstelleVorbewertung,
+  erstelleVorbewertungsErgebnis,
+  pruefeVorbewertungsBereitschaft,
+} from "./src/services/vorbewertung.js";
 import { erteileEinwilligung, leeresProfil } from "./src/lib/profil.js";
 import { pruefePrognose } from "./src/lib/prognose.js";
 
@@ -119,6 +123,41 @@ await check("belegtes Filmwissen wird mit seiner Version in der Prognose markier
   });
   const p = await erstelleVorbewertung(film, { profil, ai: d.ai });
   return p.warumHerkunft === "filmwissen" && p.filmwissenVersionId === versionId;
+});
+await check("partial persistiert nur die serverseitig validierten Prognosefelder", async () => {
+  const displayText = "Die KI-Antwort war teilweise unvollständig. Nur sicher validierbare Prognosefelder werden angezeigt.";
+  const d = aiDoppel({
+    ...antwort,
+    responseMode: "partial",
+    displayText,
+    warnings: ["json-extracted-from-text", "invalid-fields-ignored"],
+    data: {
+      ...antwort.data,
+      achsen: { wie: null, was: 3, warum: null },
+      sicherheit: null,
+      verwendete_signale: [],
+    },
+  });
+  const ergebnis = await erstelleVorbewertungsErgebnis(film, { profil, ai: d.ai });
+  return ergebnis.responseMode === "partial" && ergebnis.displayText === displayText
+    && pruefePrognose(ergebnis.prognose).length === 0
+    && ergebnis.prognose.ergebnis.passung === 78
+    && ergebnis.prognose.ergebnis.begruendung === antwort.data.begruendung
+    && ergebnis.prognose.ergebnis.achsen.wie === null
+    && ergebnis.prognose.ergebnis.sicherheit === null;
+});
+await check("degraded bleibt ein unverbindlicher Hinweis ohne persistierbares Prognoseobjekt", async () => {
+  const d = aiDoppel({
+    ...antwort,
+    data: null,
+    responseMode: "degraded",
+    displayText: "Ich kann dazu nur einen vorsichtigen, unstrukturierten Hinweis geben.",
+    warnings: ["unstructured-provider-text"],
+  });
+  const ergebnis = await erstelleVorbewertungsErgebnis(film, { profil, ai: d.ai });
+  return d.rufe.length === 1 && ergebnis.responseMode === "degraded"
+    && ergebnis.prognose === null
+    && ergebnis.displayText.includes("unstrukturierten Hinweis");
 });
 await check("ungültiger WARUM-Wert aus einer manipulierten Antwort wird nie gespeichert", async () => {
   const d = aiDoppel({ ...antwort, data: { ...antwort.data, achsen: { wie: 4, was: 3, warum: 6 } } });

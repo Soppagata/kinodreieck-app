@@ -76,10 +76,12 @@ check("WIE/WAS akzeptieren nur ganze 0..5 oder null", () =>
   && pruefePrognoseErgebnis({ ...ergebnis, achsen: { ...ergebnis.achsen, wie: null } }).length === 0);
 check("Passung akzeptiert nur ganze 0..100", () =>
   [-1, 42.5, 101, "72"].every((passung) =>
-    pruefePrognoseErgebnis({ ...ergebnis, passung }).length > 0));
+    pruefePrognoseErgebnis({ ...ergebnis, passung }).length > 0)
+  && pruefePrognoseErgebnis({ ...ergebnis, passung: null }).length === 0);
 check("mehrzeilige oder überlange Begründung wird abgewiesen", () =>
   pruefePrognoseErgebnis({ ...ergebnis, begruendung: "erste\nzweite" }).length > 0
-  && pruefePrognoseErgebnis({ ...ergebnis, begruendung: "x".repeat(281) }).length > 0);
+  && pruefePrognoseErgebnis({ ...ergebnis, begruendung: "x".repeat(281) }).length > 0
+  && pruefePrognoseErgebnis({ ...ergebnis, begruendung: null }).length === 0);
 check("verwendete Signale haben neutrale eindeutige IDs", () =>
   pruefePrognoseErgebnis({
     ...ergebnis,

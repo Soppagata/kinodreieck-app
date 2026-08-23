@@ -22,6 +22,8 @@ const istObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray
 const hatExakt = (objekt, keys) => istObjekt(objekt)
   && Object.keys(objekt).sort().join("|") === [...keys].sort().join("|");
 const istSkala = (wert) => wert === null || (Number.isInteger(wert) && wert >= 0 && wert <= 5);
+const istPassung = (wert) => wert === null
+  || (Number.isInteger(wert) && wert >= 0 && wert <= 100);
 const istIso = (wert) => typeof wert === "string"
   && wert.length <= 40
   && !Number.isNaN(Date.parse(wert));
@@ -57,15 +59,19 @@ export function pruefePrognoseErgebnis(ergebnis) {
     if (!istSkala(ergebnis.achsen.was)) fehler.push("WAS muss 0..5 oder null sein");
     if (!istSkala(ergebnis.achsen.warum)) fehler.push("WARUM muss 0..5 oder null sein");
   }
-  if (!Number.isInteger(ergebnis.passung) || ergebnis.passung < 0 || ergebnis.passung > 100) {
-    fehler.push("Passung muss eine ganze Zahl von 0 bis 100 sein");
+  if (!istPassung(ergebnis.passung)) {
+    fehler.push("Passung muss eine ganze Zahl von 0 bis 100 oder null sein");
   }
   if (ergebnis.kategorie_vorschlag !== null
       && !BEWERTUNGSKATEGORIE_IDS.includes(ergebnis.kategorie_vorschlag)) {
     fehler.push("Kategorie-Vorschlag ist unbekannt");
   }
-  if (!PROGNOSE_SICHERHEIT.includes(ergebnis.sicherheit)) fehler.push("Sicherheit ist unbekannt");
-  if (!istKurztext(ergebnis.begruendung, 280)) fehler.push("Begründung ist ungültig");
+  if (ergebnis.sicherheit !== null && !PROGNOSE_SICHERHEIT.includes(ergebnis.sicherheit)) {
+    fehler.push("Sicherheit ist unbekannt");
+  }
+  if (ergebnis.begruendung !== null && !istKurztext(ergebnis.begruendung, 280)) {
+    fehler.push("Begründung ist ungültig");
+  }
   if (!Array.isArray(ergebnis.verwendete_signale) || ergebnis.verwendete_signale.length > 20) {
     fehler.push("Verwendete Signale müssen eine Liste mit höchstens 20 Einträgen sein");
   } else {

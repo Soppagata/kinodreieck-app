@@ -1005,7 +1005,10 @@ function forecastMit(
     antwort({
       model: modell,
       stop_reason: "end_turn",
-      content: [{ type: "text", text: JSON.stringify(inhalt) }],
+      content: [{
+        type: "text",
+        text: typeof inhalt === "string" ? inhalt : JSON.stringify(inhalt),
+      }],
       usage: { input_tokens: 700, output_tokens: 180 },
     });
 }
@@ -7654,7 +7657,7 @@ test("FF3b Browser darf Filmwissen weder liefern noch überschreiben", async () 
   gleich(anbieterAufrufe().length, 0, "kein Anbieteraufruf");
 });
 
-test("FF3c Modell darf einen belegten WARUM-Wert nicht umdeuten", async () => {
+test("FF3c ein abweichender belegter WARUM-Wert wird feldweise verworfen", async () => {
   z.filmwissenAktuell = {
     format: "filmwissen-cache-v1",
     status: "belegt",
@@ -7666,11 +7669,13 @@ test("FF3c Modell darf einen belegten WARUM-Wert nicht umdeuten", async () => {
   const r = await forecastRuf(ffPayload({
     filmkennung: { namespace: "imdb", kennung: "tt0078748" },
   }));
-  gleich(r.status, 502, "abweichender Modellwert wird verworfen");
-  gleich(r.daten.grund, "antwort-verletzt-schema", "stabile Außenkennung");
+  gleich(r.status, 200, "übrige sichere Prognosefelder bleiben nutzbar");
+  gleich(r.daten.responseMode, "partial", "Teilantwort wird kenntlich gemacht");
+  gleich(daten(r).achsen.warum, null, "abweichender Modellwert wird nicht übernommen");
+  gleich(daten(r).passung, 72, "unabhängige sichere Passung bleibt erhalten");
   gleich(
     genauEinAbschluss().p_status,
-    "fehler",
+    "fertig",
     "Protokollzeile wird geschlossen",
   );
 });
@@ -7741,7 +7746,7 @@ test("FF4 das Structured-Output-Schema fordert alle drei Achsen und begrenzt all
   );
 });
 
-test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien nicht", async () => {
+test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien werden ausgelassen", async () => {
   for (const kategorie of [...FORECAST_KATEGORIEN, null]) {
     stelleZurueck();
     const providerKategorie = kategorie === null ? FORECAST_KEINE_KATEGORIE : kategorie;
@@ -7764,89 +7769,69 @@ test("FF5 alle sieben Kategorien und null passieren; alte Zwischenkategorien nic
     stelleZurueck();
     forecastMit({ ...FF_ANTWORT(), kategorie_vorschlag: alt });
     const r = await forecastRuf();
-    gleich(r.status, 502, `Legacy-Zwischenwert ${alt} wird abgewiesen`);
-    gleich(genauEinAbschluss().p_status, "fehler", `${alt}: Abschluss`);
+    gleich(r.status, 200, `Legacy-Zwischenwert ${alt} zerstört nicht die Antwort`);
+    gleich(r.daten.responseMode, "partial", `${alt}: als Teilantwort markiert`);
+    gleich(daten(r).kategorie_vorschlag, null, `${alt}: nicht übernommen`);
+    gleich(genauEinAbschluss().p_status, "fertig", `${alt}: Abschluss`);
   }
   stelleZurueck();
   forecastMit({ ...FF_ANTWORT(), kategorie_vorschlag: null });
   const nullDirekt = await forecastRuf();
-  gleich(
-    nullDirekt.status,
-    502,
-    "Provider-null wird nur über die explizite Mappinggrenze akzeptiert",
+  gleich(nullDirekt.status, 200, "Provider-null bleibt sicherer Leerwert");
+  gleich(daten(nullDirekt).kategorie_vorschlag, null, "kein erfundener Ersatz");
+});
+
+test("FF6 JSON-Codeblock rettet sichere Felder und nullt kaputte Einzelwerte", async () => {
+  const teilweise = {
+    ...FF_ANTWORT(),
+    achsen: { wie: 9, was: 3, warum: "4" },
+    sicherheit: "absolut",
+    zusatz: "wird ignoriert",
+  };
+  forecastMit(
+    "Kurzer Zusatz vor dem Ergebnis.\n```json\n" + JSON.stringify(teilweise) +
+      "\n```\nKurzer Zusatz danach.",
   );
-  gleich(genauEinAbschluss().p_status, "fehler", "Provider-null: Abschluss");
+  const r = await forecastRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "partial", "sichtbarer Teilantwortmodus");
+  gleich(daten(r).passung, 72, "gültige Passung bleibt erhalten");
+  gleich(
+    daten(r).begruendung,
+    FF_ANTWORT().begruendung,
+    "gültige strukturierte Begründung bleibt erhalten",
+  );
+  gleich(daten(r).achsen.wie, null, "kaputtes WIE wird nicht geraten");
+  gleich(daten(r).achsen.was, 3, "gültiges WAS bleibt erhalten");
+  gleich(daten(r).achsen.warum, null, "formfremdes WARUM wird nicht geraten");
+  gleich(daten(r).sicherheit, null, "unbekannte Sicherheit wird nicht ersetzt");
+  wahr(
+    (r.daten.warnings as string[]).includes("json-extracted-from-text") &&
+      (r.daten.warnings as string[]).includes("invalid-fields-ignored") &&
+      (r.daten.warnings as string[]).includes("extra-fields-ignored"),
+    "nur stabile Bereinigungswarnungen reisen zum Client",
+  );
+  gleich(
+    pruefeClientPrognoseErgebnis(daten(r)).length,
+    0,
+    "gerettete Teilantwort ist direkt persistierbar",
+  );
 });
 
-test("FF6 formfremde oder fachlich unmögliche Modellantworten werden vollständig verworfen und abgeschlossen", async () => {
-  const faelle: Array<[string, (a: Record<string, unknown>) => void]> = [
-    ["Zusatzfeld", (a) => {
-      a.systemprompt = "leak";
-    }],
-    ["WARUM außerhalb", (a) => {
-      (a.achsen as Record<string, unknown>).warum = 6;
-    }],
-    ["WARUM negativ", (a) => {
-      (a.achsen as Record<string, unknown>).warum = -1;
-    }],
-    ["WARUM Dezimalzahl", (a) => {
-      (a.achsen as Record<string, unknown>).warum = 2.5;
-    }],
-    ["WARUM als String", (a) => {
-      (a.achsen as Record<string, unknown>).warum = "4";
-    }],
-    ["WARUM fehlt", (a) => {
-      delete (a.achsen as Record<string, unknown>).warum;
-    }],
-    ["WIE außerhalb", (a) => {
-      (a.achsen as Record<string, unknown>).wie = 6;
-    }],
-    ["Passung außerhalb", (a) => {
-      a.passung = 101;
-    }],
-    ["Passung Dezimalzahl", (a) => {
-      a.passung = 72.5;
-    }],
-    ["unbekannte Kategorie", (a) => {
-      a.kategorie_vorschlag = "super";
-    }],
-    ["unbekannte Sicherheit", (a) => {
-      a.sicherheit = "sehr_hoch";
-    }],
-    ["fehlende ID-Liste", (a) => {
-      delete a.verwendete_signal_ids;
-    }],
-    ["leere ID-Liste", (a) => {
-      a.verwendete_signal_ids = [];
-    }],
-    ["nicht-textliche ID", (a) => {
-      a.verwendete_signal_ids = [1];
-    }],
-  ];
-  for (const [name, aendere] of faelle) {
-    stelleZurueck();
-    const antwortDaten = structuredClone(FF_ANTWORT()) as Record<
-      string,
-      unknown
-    >;
-    aendere(antwortDaten);
-    forecastMit(antwortDaten);
-    const r = await forecastRuf();
-    gleich(r.status, 502, `${name}: Status`);
-    gleich(
-      r.daten.grund,
-      "antwort-verletzt-schema",
-      `${name}: stabile Außenkennung`,
-    );
-    gleich(
-      genauEinAbschluss().p_status,
-      "fehler",
-      `${name}: Protokollzeile geschlossen`,
-    );
-  }
+test("FF6b sicherer Freitext wird degraded und erzeugt keinerlei Prognosewerte", async () => {
+  forecastMit("Ich kann dazu nur einen vorsichtigen unstrukturierten Hinweis geben.");
+  const r = await forecastRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "degraded", "degraded-Modus");
+  gleich(r.daten.data, null, "keine Prognosewerte");
+  wahr(
+    String(r.daten.displayText).includes("unstrukturierten Hinweis"),
+    "bereinigter Hinweis bleibt sichtbar",
+  );
+  gleich(genauEinAbschluss().p_status, "fertig", "bezahlter Lauf wird abgeschlossen");
 });
 
-test("FF7 verwendete IDs müssen vorhanden und eindeutig sein; zurück kommen aufgelöste Signale", async () => {
+test("FF7 nur vorhandene eindeutige IDs werden als verwendete Signale übernommen", async () => {
   for (
     const [name, ids] of [
       ["fremd", ["S99"]],
@@ -7858,8 +7843,10 @@ test("FF7 verwendete IDs müssen vorhanden und eindeutig sein; zurück kommen au
     stelleZurueck();
     forecastMit({ ...FF_ANTWORT(), verwendete_signal_ids: ids });
     const r = await forecastRuf();
-    gleich(r.status, 502, `${name}: Status`);
-    gleich(genauEinAbschluss().p_status, "fehler", `${name}: Abschluss`);
+    gleich(r.status, 200, `${name}: übrige sichere Felder bleiben erhalten`);
+    gleich(r.daten.responseMode, "partial", `${name}: Teilantwort`);
+    gleich(daten(r).verwendete_signale.length, name === "doppelt" ? 1 : 0, `${name}: nur sichere IDs`);
+    gleich(genauEinAbschluss().p_status, "fertig", `${name}: Abschluss`);
   }
 
   stelleZurueck();
@@ -8069,8 +8056,10 @@ test("FF11 Modellbegründung wird einzeilig bereinigt und innerhalb 280 Zeichen 
   stelleZurueck();
   forecastMit({ ...FF_ANTWORT(), begruendung: "   " });
   r = await forecastRuf();
-  gleich(r.status, 502, "inhaltlich leere Begründung wird abgewiesen");
-  gleich(genauEinAbschluss().p_status, "fehler", "Protokollzeile geschlossen");
+  gleich(r.status, 200, "inhaltlich leere Begründung zerstört sichere Felder nicht");
+  gleich(r.daten.responseMode, "partial", "Teilantwort wird kenntlich gemacht");
+  gleich(daten(r).begruendung, null, "leere Begründung wird nicht ersetzt");
+  gleich(genauEinAbschluss().p_status, "fertig", "Protokollzeile geschlossen");
 });
 
 test("FF12 film-forecast fällt bei fehlender oder falscher Modellzuordnung fail-closed aus", async () => {

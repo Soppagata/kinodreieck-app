@@ -39,6 +39,19 @@ function kostenText(kosten) {
   return `${kosten.toLocaleString("de-AT", { maximumFractionDigits: 2 })} US-Cent`;
 }
 
+function PrognoseMeldung({ meldung }) {
+  if (meldung?.art === "hinweis" && typeof meldung.text === "string" && meldung.text) {
+    return (
+      <span role="status" style={{ color: T.wolfram, fontSize: 12, lineHeight: 1.5 }}>
+        <strong>KI-Hinweis (unverbindlich):</strong> {meldung.text}
+      </span>
+    );
+  }
+  return typeof meldung === "string" && meldung
+    ? <span role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{meldung}</span>
+    : null;
+}
+
 export function PrognoseBereich({
   film,
   laeuft = false,
@@ -72,7 +85,7 @@ export function PrognoseBereich({
           Auf Wunsch · genau ein kostenpflichtiger KI-Aufruf · keine Websuche
         </span>
         {!erstellenMoeglich && sperrgrund && <span style={{ color: T.wolfram, fontSize: 12 }}>{sperrgrund}</span>}
-        {fehler && <span role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</span>}
+        <PrognoseMeldung meldung={fehler} />
       </div>
     );
   }
@@ -98,16 +111,25 @@ export function PrognoseBereich({
         <Achse name="WARUM" wert={e.achsen.warum} farbe={T.warum} />
       </div>
       <p style={{ margin: 0, color: T.rauch, fontSize: 12 }}>
-        {prognose.warumHerkunft === "filmwissen"
-          ? "WARUM übernimmt die belegte kulturelle Einordnung aus dem gemeinsamen Filmwissen; Sonnet erklärt nur die persönliche Verbindung dazu."
-          : "WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil – kein belegter gemeinsamer Filmwissen-Wert."}
+        {e.achsen.warum == null
+          ? "Für WARUM liegt kein sicher validierbarer Prognosewert vor."
+          : prognose.warumHerkunft === "filmwissen"
+            ? "WARUM übernimmt die belegte kulturelle Einordnung aus dem gemeinsamen Filmwissen; Sonnet erklärt nur die persönliche Verbindung dazu."
+            : "WARUM ist eine vorläufige Sonnet-Schätzung aus Filmkontext und deinem Geschmacksprofil – kein belegter gemeinsamer Filmwissen-Wert."}
         {" "}Die KI-Prognose ist keine echte Bewertung.
       </p>
-      <div style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.55 }}>{e.begruendung}</div>
-      <div style={{ ...mono }}>
-        Kategorie-Vorschlag: <strong style={{ color: T.leinwand }}>{e.kategorie_vorschlag ? bewertungskategorieLabel(e.kategorie_vorschlag) : "keiner"}</strong>
-        {" "}· KI-Vorschlag · {SICHERHEIT_LABEL[e.sicherheit]}
-      </div>
+      {e.begruendung && (
+        <div style={{ color: T.leinwandTief, fontSize: 13, lineHeight: 1.55 }}>{e.begruendung}</div>
+      )}
+      {(e.kategorie_vorschlag || e.sicherheit) && (
+        <div style={{ ...mono }}>
+          {e.kategorie_vorschlag && (
+            <>Kategorie-Vorschlag: <strong style={{ color: T.leinwand }}>{bewertungskategorieLabel(e.kategorie_vorschlag)}</strong></>
+          )}
+          {e.kategorie_vorschlag && e.sicherheit ? " · " : ""}
+          {e.sicherheit ? `KI-Vorschlag · ${SICHERHEIT_LABEL[e.sicherheit]}` : ""}
+        </div>
+      )}
 
       {e.verwendete_signale.length > 0 && (
         <div>
@@ -128,7 +150,7 @@ export function PrognoseBereich({
         {kosten ? ` · ${kosten}` : ""}
         {veraltet ? " · mit älterem Profil erstellt" : ""}
       </div>
-      {fehler && <span role="alert" style={{ color: T.gefahr, fontSize: 12 }}>{fehler}</span>}
+      <PrognoseMeldung meldung={fehler} />
 
       {(prognose.status === "offen" || prognose.status === "angenommen") && (
         <div className="kd-prognose-aktionen">

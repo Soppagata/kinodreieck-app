@@ -91,13 +91,13 @@ function displayTextIstSicher(wert) {
     && !/[*_>#`~]/.test(wert) && !AI_DISPLAY_UNSAFE.test(wert);
 }
 
-/* Der Ergebnisvertrag ist fuer Suche und Profilextraktion additiv: ein alter
-   Function-Stand ohne Darstellungsfelder bleibt lesbar. Sobald eines der
-   Felder vorhanden ist, muessen aber alle zusammenpassen. Insbesondere darf
-   ein degradierter Freitext niemals als `data` in Filter- oder Profilpfade
-   geraten. */
+/* Der Ergebnisvertrag ist fuer Suche, Profilextraktion und Prognose additiv:
+   ein alter Function-Stand ohne Darstellungsfelder bleibt lesbar. Sobald eines
+   der Felder vorhanden ist, muessen aber alle zusammenpassen. Insbesondere
+   darf ein degradierter Freitext niemals als `data` in Filter-, Profil- oder
+   Prognosepfade geraten. */
 export function normalisiereAiErgebnis(task, result) {
-  if (task !== "intelligent-search" && task !== "profile-extract") return result;
+  if (!["intelligent-search", "profile-extract", "film-forecast"].includes(task)) return result;
   const hatDarstellung = ["responseMode", "displayText", "warnings"]
     .some((feld) => Object.prototype.hasOwnProperty.call(result, feld));
   if (!hatDarstellung) return result;
