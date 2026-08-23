@@ -136,6 +136,8 @@ npm run check:keychain
 | `KD_SB_ANON` | nein | öffentlicher Publishable-/Anon-Key |
 | `KD_TESTA_USER` | nein | begrenztes Testkonto, Standard `testa` |
 | `KD_TESTA_PASS` | **ja** | Passwort des Testkontos |
+| `KD_OWNER_USER` | nein | Ownerkonto nur für Entdecken-once und Radar+Entdecken-once |
+| `KD_OWNER_PASS` | **ja** | Passwort des Ownerkontos im Schlüsselbund |
 | `KD_MAIL_DOMAIN` | nein | Standard `login.kinodreieck.at` |
 | `KD_AI_FUNKTION` | nein | Standard `ai-task` |
 | `KD_ORIGIN` | nein | erlaubte App-Origin |
@@ -152,12 +154,19 @@ Der feste Service heißt:
 
 `at.kinodreieck.codex.live-tests.shared`
 
-Darunter liegen nur die Accounts `KD_TESTA_PASS` und `KD_TESTB_PASS`. Der
+Darunter liegen die Accounts `KD_TESTA_PASS`, `KD_TESTB_PASS` und
+`KD_OWNER_PASS`. Der
 Loader `tools/keychain_runner.mjs` liest diese Werte über `/usr/bin/security`,
 gibt sie nie aus und übergibt sie nur an fest verdrahtete Testprogramme. Freie
 Befehle oder zusätzliche Argumente sind nicht möglich. Zufällig gesetzte
 Anthropic-, Service-Role-, Datenbank- oder Cloudflare-Schlüssel werden nicht
 an die Kindprozesse vererbt.
+
+Der normale AI-Live-Lauf und Radar-only bleiben auf TestA. Nur die bereits
+ownerpflichtigen Wege Entdecken-once und Radar+Entdecken-once lesen
+`KD_OWNER_USER`/`KD_OWNER_PASS` und reichen sie im Kindprozess über die
+bestehende Schnittstelle `KD_TESTA_USER`/`KD_TESTA_PASS` weiter. Fehlt einer
+der beiden Ownerwerte, stoppt der Runner vor dem Teststart.
 
 Die nicht geheime Zielkonfiguration liegt lokal in `.env.live.local`, das von
 Git ignoriert wird. Erlaubt sind ausschließlich:
@@ -167,12 +176,13 @@ KD_SB_URL=https://projekt-ref.supabase.co
 KD_SB_ANON=sb_publishable_...
 KD_TESTA_USER=testa
 KD_TESTB_USER=testb
+KD_OWNER_USER=owner
 KD_MAIL_DOMAIN=login.kinodreieck.at
 KD_AI_FUNKTION=ai-task
 KD_ORIGIN=https://staging.kinodreieck.at
 ```
 
-Passwörter, `KD_AI_AUTONOM_LIMIT_USD_CENT`,
+Passwörter einschließlich `KD_OWNER_PASS`, `KD_AI_AUTONOM_LIMIT_USD_CENT`,
 `KD_AI_OWNER_APPROVED_SERVER_BUDGET` und `KD_EVAL_JA` werden in dieser Datei
 ausdrücklich abgelehnt. Owner- und Eval-Freigabe entstehen ausschließlich für
 den einen ausdrücklich gestarteten, budgetüberwachten Lauf.

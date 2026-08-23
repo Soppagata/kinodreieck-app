@@ -6,6 +6,7 @@ import {
   ENTDECKEN_DAILY_ONCE_ENV,
   ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
   KEYCHAIN_ACCOUNTS,
+  KeychainFehler,
   KEYCHAIN_SERVICE,
   LIVE_LOCK_PATH,
   MODI,
@@ -35,10 +36,13 @@ function pruefe(name, bedingung) {
 const PUBLIC = {
   KD_SB_URL: "https://projekt-ref.supabase.co",
   KD_SB_ANON: "sb_publishable_test_1234567890",
+  KD_TESTA_USER: "testa",
+  KD_OWNER_USER: "owner-lokal",
   KD_ORIGIN: "https://staging.kinodreieck.at",
   KD_RADAR_TARGET_ID: "imdb:tt0137523",
 };
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
+const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
 
 {
   const lockPath = `${LIVE_LOCK_PATH}.${process.pid}.test`;
@@ -80,6 +84,24 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 }
 
 {
+  const rufe = [];
+  const wert = liesKeychainEintrag(KEYCHAIN_ACCOUNTS.owner, {
+    platform: "darwin",
+    securityRun(programm, argv, optionen) {
+      rufe.push({ programm, argv, optionen });
+      return { status: 0, stdout: OWNER_GEHEIMNIS + "\n", stderr: "" };
+    },
+  });
+  pruefe("Ownerpasswort ist als eng benannter Account desselben Services erlaubt",
+    rufe.length === 1
+      && rufe[0].programm === "/usr/bin/security"
+      && rufe[0].argv.join("|")
+        === `find-generic-password|-s|${KEYCHAIN_SERVICE}|-a|KD_OWNER_PASS|-w`
+      && rufe[0].optionen.shell === false
+      && wert === OWNER_GEHEIMNIS);
+}
+
+{
   let meldung = "";
   try {
     liesKeychainEintrag(KEYCHAIN_ACCOUNTS.testa, {
@@ -104,14 +126,16 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     # nur öffentliche Werte
     KD_SB_URL=${PUBLIC.KD_SB_URL}
     KD_SB_ANON="${PUBLIC.KD_SB_ANON}"
+    KD_OWNER_USER=${PUBLIC.KD_OWNER_USER}
     KD_ORIGIN='${PUBLIC.KD_ORIGIN}'
   `);
   pruefe("öffentliche lokale Konfiguration wird gelesen",
     config.KD_SB_URL === PUBLIC.KD_SB_URL
       && config.KD_SB_ANON === PUBLIC.KD_SB_ANON
+      && config.KD_OWNER_USER === PUBLIC.KD_OWNER_USER
       && config.KD_ORIGIN === PUBLIC.KD_ORIGIN);
   for (const name of [
-    "KD_TESTA_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
+    "KD_TESTA_PASS", "KD_OWNER_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
     ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV, "KD_EVAL_JA",
   ]) {
     let abgelehnt = false;
@@ -141,8 +165,11 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     },
   });
   pruefe("AI-Lauf liest nur Testkonto A", gelesen.join(",") === KEYCHAIN_ACCOUNTS.testa);
-  pruefe("Keychain überschreibt ein ambient gesetztes Testpasswort",
-    env.KD_TESTA_PASS === SONDERGEHEIMNIS);
+  pruefe("Normaler AI-Lauf bleibt vollständig auf Testkonto A",
+    env.KD_TESTA_USER === PUBLIC.KD_TESTA_USER
+      && env.KD_TESTA_PASS === SONDERGEHEIMNIS
+      && !("KD_OWNER_USER" in env)
+      && !("KD_OWNER_PASS" in env));
   pruefe("hochprivilegierte Ambient-Secrets werden nicht vererbt",
     !("ANTHROPIC_API_KEY" in env)
       && !("SUPABASE_SERVICE_ROLE_KEY" in env)
@@ -183,6 +210,66 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
   } catch { budgetcheckGesperrt = true; }
   pruefe("Owner-Budgetfreigabe kann auch nicht an einen reinen Budgetcheck gehaengt werden",
     budgetcheckGesperrt);
+}
+
+{
+  const gelesen = [];
+  const env = baueKindUmgebung({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
+    ownerApprovedServerBudget: true,
+    entdeckenDailyOnce: true,
+  });
+  pruefe("Ownerpflichtiger Entdecken-Lauf liest ausschließlich den Owner-Account",
+    gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner);
+  pruefe("Owner-Credentials werden nur auf die bestehende TestA-Kindschnittstelle gemappt",
+    env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !("KD_OWNER_USER" in env)
+      && !("KD_OWNER_PASS" in env));
+}
+
+{
+  const ohneOwnerUser = { ...PUBLIC };
+  delete ohneOwnerUser.KD_OWNER_USER;
+  let keychainGelesen = false;
+  let fehlermeldung = "";
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: ohneOwnerUser,
+      keychainLeser: () => { keychainGelesen = true; return OWNER_GEHEIMNIS; },
+      ownerApprovedServerBudget: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch (error) { fehlermeldung = String(error?.message || ""); }
+  pruefe("Ownerpfad stoppt bei fehlendem öffentlichen Owner-Nutzer vor dem Keychain-Read",
+    fehlermeldung === "KD_OWNER_USER fehlt oder ist ungültig." && !keychainGelesen);
+}
+
+{
+  let fehler = null;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser: () => { throw new Error(`Rohfehler ${OWNER_GEHEIMNIS}`); },
+      ownerApprovedServerBudget: true,
+      radarEntdeckenOnce: true,
+    });
+  } catch (error) { fehler = error; }
+  pruefe("Ownerpfad stoppt bei fehlendem Owner-Keychain-Eintrag sanitisiert",
+    fehler instanceof KeychainFehler
+      && String(fehler.message).includes(KEYCHAIN_ACCOUNTS.owner)
+      && !String(fehler.message).includes(OWNER_GEHEIMNIS)
+      && !String(fehler.message).includes("Rohfehler"));
 }
 
 {
@@ -298,6 +385,7 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 
 {
   const starts = [];
+  const gelesen = [];
   const spawnImpl = (programm, argv, optionen) => {
     starts.push({ programm, argv, optionen });
     const kind = new EventEmitter();
@@ -308,7 +396,10 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
     spawnImpl,
     ownerApprovedServerBudget: true,
   });
@@ -317,10 +408,17 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       && starts.length === 1
       && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
       && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1");
+  pruefe("Automatische Entdecken-Owner-Variante mappt ausschließlich Owner auf TestA",
+    gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !("KD_OWNER_USER" in starts[0].optionen.env)
+      && !("KD_OWNER_PASS" in starts[0].optionen.env));
 }
 
 {
   const starts = [];
+  const gelesen = [];
   const spawnImpl = (programm, argv, optionen) => {
     starts.push({ programm, argv, optionen });
     const kind = new EventEmitter();
@@ -331,8 +429,12 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.testa ? SONDERGEHEIMNIS : OWNER_GEHEIMNIS;
+    },
     spawnImpl,
+    ownerApprovedServerBudget: true,
     radarWebsearchOnce: true,
   });
   pruefe("Radar-Einmallauf startet nur sein fest verdrahtetes Skript hinter dem Budgetwächter",
@@ -343,11 +445,17 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
   pruefe("Radar-Einmallauf erhält nur den internen Guard und das starke öffentliche Ziel",
     starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID);
+      && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.testa
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_TESTA_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === SONDERGEHEIMNIS
+      && !("KD_OWNER_USER" in starts[0].optionen.env)
+      && !("KD_OWNER_PASS" in starts[0].optionen.env));
 }
 
 {
   const starts = [];
+  const gelesen = [];
   const spawnImpl = (programm, argv, optionen) => {
     starts.push({ programm, argv, optionen });
     const kind = new EventEmitter();
@@ -358,7 +466,10 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
     spawnImpl,
     ownerApprovedServerBudget: true,
     entdeckenDailyOnce: true,
@@ -371,11 +482,18 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
       && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
   pruefe("Entdecken-Einmallauf erhält nur internen Guard und Owner-Serverbudgetfreigabe",
     starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1");
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !starts[0].argv.join(" ").includes(OWNER_GEHEIMNIS)
+      && !("KD_OWNER_USER" in starts[0].optionen.env)
+      && !("KD_OWNER_PASS" in starts[0].optionen.env));
 }
 
 {
   const starts = [];
+  const gelesen = [];
   const spawnImpl = (programm, argv, optionen) => {
     starts.push({ programm, argv, optionen });
     const kind = new EventEmitter();
@@ -386,7 +504,10 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     modus: "ai-live",
     ambientEnv: {},
     lokaleKonfig: PUBLIC,
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
     spawnImpl,
     ownerApprovedServerBudget: true,
     radarEntdeckenOnce: true,
@@ -401,7 +522,13 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
     starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
-      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1");
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !starts[0].argv.join(" ").includes(OWNER_GEHEIMNIS)
+      && !("KD_OWNER_USER" in starts[0].optionen.env)
+      && !("KD_OWNER_PASS" in starts[0].optionen.env));
 }
 
 {
@@ -430,12 +557,15 @@ const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 {
   const aus = [];
   const err = [];
+  const gelesen = [];
   const code = await main(["keychain-check"], {
     ausgabe: (x) => aus.push(String(x)),
     fehlerAusgabe: (x) => err.push(String(x)),
-    keychainLeser: () => SONDERGEHEIMNIS,
+    keychainLeser: (account) => { gelesen.push(account); return SONDERGEHEIMNIS; },
   });
   pruefe("reiner Schlüsselbundcheck startet keinen Test", code === 0 && aus.length === 1);
+  pruefe("bestehender Schlüsselbundcheck bleibt exakt auf TestA und TestB begrenzt",
+    gelesen.join(",") === `${KEYCHAIN_ACCOUNTS.testa},${KEYCHAIN_ACCOUNTS.testb}`);
   pruefe("reiner Schlüsselbundcheck gibt kein Secret aus",
     !aus.join("").includes(SONDERGEHEIMNIS) && !err.join("").includes(SONDERGEHEIMNIS));
 }

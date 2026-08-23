@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Sichere lokale Brücke vom macOS-Schlüsselbund zu den Infrastrukturtests.
    ==========================================================================
-   Die beiden Testpasswörter bleiben im Login-Schlüsselbund. Dieses Programm
+   Die fest gebundenen Testpasswörter bleiben im Login-Schlüsselbund. Dieses Programm
    liest nur die fest benannten Einträge und reicht sie ausschließlich an
    fest verdrahtete Testwege weiter. Es gibt keine freie Befehlsausführung.
 
@@ -19,6 +19,7 @@ export const KEYCHAIN_SERVICE = "at.kinodreieck.codex.live-tests.shared";
 export const KEYCHAIN_ACCOUNTS = Object.freeze({
   testa: "KD_TESTA_PASS",
   testb: "KD_TESTB_PASS",
+  owner: "KD_OWNER_PASS",
 });
 
 export const EXIT_KONFIG = 64;
@@ -42,6 +43,7 @@ const OEFFENTLICHE_NAMEN = new Set([
   "KD_SB_ANON",
   "KD_TESTA_USER",
   "KD_TESTB_USER",
+  "KD_OWNER_USER",
   "KD_MAIL_DOMAIN",
   "KD_AI_FUNKTION",
   "KD_ORIGIN",
@@ -51,6 +53,7 @@ const OEFFENTLICHE_NAMEN = new Set([
 const VERBOTENE_LOKALE_NAMEN = new Set([
   "KD_TESTA_PASS",
   "KD_TESTB_PASS",
+  "KD_OWNER_PASS",
   "KD_AI_AUTONOM_LIMIT_USD_CENT",
   OWNER_SERVER_BUDGET_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
@@ -324,6 +327,8 @@ export function baueKindUmgebung({
       || radarWebsearchOnce || entdeckenDailyOnce)) {
     throw new Error("Der kombinierte Radar-/Entdecken-Lauf braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
+  const ownerCredentialLane = modus === "ai-live"
+    && (entdeckenDailyOnce || radarEntdeckenOnce);
 
   const env = harmloseBasis(ambientEnv);
   for (const name of OEFFENTLICHE_NAMEN) {
@@ -340,13 +345,31 @@ export function baueKindUmgebung({
   }
   pruefeOeffentlicheKonfig(env);
 
-  for (const account of definition.accounts) {
+  if (ownerCredentialLane) {
+    const ownerUser = String(env.KD_OWNER_USER || "").trim();
+    if (!ownerUser || /[\0\r\n]/.test(ownerUser)) {
+      throw new Error("KD_OWNER_USER fehlt oder ist ungültig.");
+    }
     try {
-      env[account] = keychainLeser(account);
+      const ownerPass = keychainLeser(KEYCHAIN_ACCOUNTS.owner);
+      if (typeof ownerPass !== "string" || ownerPass === "") throw new Error("leer");
+      env.KD_TESTA_USER = ownerUser;
+      env.KD_TESTA_PASS = ownerPass;
     } catch {
-      throw new KeychainFehler(`Schlüsselbund-Eintrag ${account} ist nicht lesbar.`);
+      throw new KeychainFehler(
+        `Schlüsselbund-Eintrag ${KEYCHAIN_ACCOUNTS.owner} ist nicht lesbar.`,
+      );
+    }
+  } else {
+    for (const account of definition.accounts) {
+      try {
+        env[account] = keychainLeser(account);
+      } catch {
+        throw new KeychainFehler(`Schlüsselbund-Eintrag ${account} ist nicht lesbar.`);
+      }
     }
   }
+  delete env.KD_OWNER_USER;
   if (definition.bezahlt) {
     if (!confirmPaid) throw new Error("KI-Eval braucht die ausdrückliche Lauf-Freigabe --confirm-paid.");
     env.KD_EVAL_JA = "1";
