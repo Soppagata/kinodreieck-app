@@ -19,7 +19,7 @@ function parseExterneAntwort(text) {
 
 const LEER = { wie: "", was: "", warum: "" };
 
-export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {} }) {
+export function StapelImport({ master = [], addFilm, addFilme, autorName = "", kiAktiv = false, setErr = () => {}, ai = aiService }) {
   const [liste, setListe] = useState("");
   const [standardQuelle, setStandardQuelle] = useState("unklar");
   const [modus, setModus] = useState("nur");
@@ -49,13 +49,15 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
     setLaeuft(true); setErr(""); setBericht(null);
     try {
       const payload = baueStapelPayload(liste, standardQuelle, modus === "vorbeurteilung", kompletteBewertungen);
-      const antwort = await aiService.runTask("media-batch-extract", payload, { promptVersion: "media-list-v2" });
-      setVorschau({ ...normalisiereStapelAntwort(antwort, master), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null });
+      const antwort = await ai.runTask("media-batch-extract", payload, { promptVersion: "media-list-v2" });
+      const indexMap = payload.liste.map((_, index) => index);
+      setVorschau({ ...normalisiereStapelAntwort(antwort, master, { indexMap }), kostenUsdCent: antwort?.verbrauch?.kostenUsdCent ?? null });
     } catch (e) { setErr("Stapelimport: " + (e?.code ? errorText(e) : e.message)); }
     finally { setLaeuft(false); }
   };
 
   const ladeExtern = (text) => {
+    if (vorschau) return;
     try { setVorschau(normalisiereStapelAntwort(parseExterneAntwort(text), master)); setExternText(""); setErr(""); }
     catch (e) { setErr("Stapelimport: " + e.message); }
   };
@@ -85,9 +87,10 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id ? { ...k, [feld]: wert } : k) }));
   const uebernehmen = async () => {
     if (!vorschau || uebernahmeRef.current) return;
+    const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
+    if (!mediathek.length) return;
     uebernahmeRef.current = true; setUebernahmeLaeuft(true);
     try {
-      const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
       let eintraege = 0;
       if (addFilme) {
         const ids = await addFilme(mediathek);
@@ -97,6 +100,10 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
       setBericht({ eintraege }); setVorschau(null);
     } finally { uebernahmeRef.current = false; setUebernahmeLaeuft(false); }
   };
+
+  const hatImportierbareAuswahl = !!vorschau?.kandidaten?.some((kandidat) =>
+    kandidat.zustand === "ok" && kandidat.ausgewaehlt && !kandidat.vorhandenMediathek
+  );
 
   return <div className="kd-stapelimport">
     <p className="kd-stapel-lead">Schreibe oder kopiere deine Titel hier hinein. Die KI ordnet Filme, Serien und CDs; gespeichert wird erst nach deiner Kontrolle und immer unbewertet.</p>
@@ -129,9 +136,9 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
       <small>{kompletteBewertungen.length}/5 erforderliche Kurzbewertungen vollständig.</small>
     </section>}
 
-    {kiAktiv ? <button style={btnStyle(true)} disabled={laeuft || !liste.trim() || !!listenStand.fehler || (modus === "vorbeurteilung" && kompletteBewertungen.length < 5)} onClick={internAuswerten}>
+    {kiAktiv && !vorschau ? <button style={btnStyle(true)} disabled={laeuft || !liste.trim() || !!listenStand.fehler || (modus === "vorbeurteilung" && kompletteBewertungen.length < 5)} onClick={internAuswerten}>
       {laeuft ? "KI ordnet die Liste …" : modus === "vorbeurteilung" ? "Liste ordnen & vorbeurteilen" : "Liste mit KI ordnen"}
-    </button> : <p className="kd-stapel-hinweis">Die App-KI ist ausgeschaltet oder dein Konto ist nicht KI-fähig. Der externe Fotoweg darunter bleibt verfügbar.</p>}
+    </button> : !kiAktiv ? <p className="kd-stapel-hinweis">Die App-KI ist ausgeschaltet oder dein Konto ist nicht KI-fähig. Der externe Fotoweg darunter bleibt verfügbar.</p> : null}
     <p className="kd-stapel-kosten">Text statt Bilder: kleines Modell, keine automatische Wiederholung. Der Aufruf zählt zu deinem KI-Kontingent.</p>
 
     <details className="kd-stapel-extern">
@@ -143,22 +150,27 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
         <button style={btnStyle(false)} onClick={ladePromptHerunter}>Workflow (.md) herunterladen</button>
       </div>
       <p className="kd-stapel-importtitel">Fertiges Ergebnis aus dem KI-Chat</p>
-      <div className="kd-stapel-aktionen"><button style={btnStyle(false)} onClick={() => jsonRef.current?.click()}>JSON-Datei wählen</button></div>
+      <div className="kd-stapel-aktionen"><button style={btnStyle(false)} disabled={!!vorschau} onClick={() => jsonRef.current?.click()}>JSON-Datei wählen</button></div>
       <input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(ladeExtern); e.target.value = ""; }} />
-      <textarea value={externText} onChange={(e) => setExternText(e.target.value)} rows={4} placeholder="JSON-Antwort hier einfügen …" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
-      <button style={btnStyle(false)} disabled={!externText.trim()} onClick={() => ladeExtern(externText)}>Antwort prüfen</button>
+      <textarea value={externText} disabled={!!vorschau} onChange={(e) => setExternText(e.target.value)} rows={4} placeholder="JSON-Antwort hier einfügen …" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+      <button style={btnStyle(false)} disabled={!!vorschau || !externText.trim()} onClick={() => ladeExtern(externText)}>Antwort prüfen</button>
     </details>
 
     {vorschau && <section className="kd-stapel-vorschau">
       <h3>Vorschau – noch ist nichts gespeichert</h3>
       {Number.isFinite(vorschau.kostenUsdCent) && <p className="kd-stapel-kosten">Dieser Lauf hat {Number(vorschau.kostenUsdCent).toLocaleString("de-AT", { maximumFractionDigits: 4 })} US-Cent verbraucht.</p>}
+      {vorschau.displayText && <p className="kd-stapel-warnung" role="status">{vorschau.displayText}</p>}
       {vorschau.warnungen.map((w, i) => <p className="kd-stapel-warnung" key={i}>{w}</p>)}
+      {!!vorschau.fehlmenge?.length && <div className="kd-stapel-fehlmenge" aria-label="Offene Medieneinträge">
+        <p>{vorschau.fehlmenge.length} {vorschau.fehlmenge.length === 1 ? "Eintrag bleibt" : "Einträge bleiben"} offen und wird nicht importiert.</p>
+        <ul>{vorschau.fehlmenge.map((eintrag) => <li key={eintrag.id}>Zeile {eintrag.index + 1}: {eintrag.grund}</li>)}</ul>
+      </div>}
       {vorschau.kandidaten.map((k) => <div className="kd-stapel-kandidat" key={k.id}>
         <label className="kd-stapel-titel"><input type="checkbox" checked={k.ausgewaehlt} onChange={(e) => aktualisiere(k.id, "ausgewaehlt", e.target.checked)} /><span><strong>{k.titel}</strong>{k.jahr ? ` (${k.jahr})` : ""}<small>{k.typ} · Sicherheit {k.sicherheit}{k.vorbeurteilung !== "offen" ? ` · Voreindruck: ${k.vorbeurteilung === "passt" ? "passt" : "eher nicht"}` : ""}{k.begruendung ? ` · ${k.begruendung}` : ""}</small></span></label>
         <div className="kd-stapel-felder"><select aria-label={`Typ für ${k.titel}`} value={k.typ} onChange={(e) => aktualisiere(k.id, "typ", e.target.value)}>{STAPEL_TYPEN.map((t) => <option key={t}>{t}</option>)}</select><select aria-label={`Quelle für ${k.titel}`} value={k.quelle} onChange={(e) => aktualisiere(k.id, "quelle", e.target.value)}>{STAPEL_QUELLEN.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}</select>{k.typ === "serie" && <input aria-label={`Staffeln für ${k.titel}`} placeholder="Staffeln optional, z. B. 1–3" value={k.staffeln || ""} onChange={(e) => aktualisiere(k.id, "staffeln", e.target.value)} />}</div>
         {k.vorhandenMediathek && <small className="kd-stapel-dublette">Schon in der Mediathek – wird übersprungen.</small>}
       </div>)}
-      <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>
+      <div className="kd-stapel-aktionen"><button style={btnStyle(true)} disabled={uebernahmeLaeuft || !hatImportierbareAuswahl} onClick={uebernehmen}>{uebernahmeLaeuft ? "Übernimmt …" : "Auswahl übernehmen"}</button><button style={btnStyle(false)} disabled={uebernahmeLaeuft} onClick={() => setVorschau(null)}>Verwerfen</button></div>
     </section>}
     {bericht && <p className="kd-stapel-bericht" role="status">Übernommen: {bericht.eintraege} neue Einträge in die Mediathek.</p>}
   </div>;

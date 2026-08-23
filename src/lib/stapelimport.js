@@ -22,10 +22,50 @@ export const STAPEL_QUELLEN = [
   { key: "virt_sonst", label: "Sonstiger digitaler Kauf" },
 ];
 const STAPEL_QUELLEN_KEYS = new Set(STAPEL_QUELLEN.map((q) => q.key));
+export const STAPEL_PARTIAL_HINWEIS = "Die Medienliste war teilweise unvollständig. Nur sichere Einträge werden angezeigt; offene Zeilen bleiben separat erhalten.";
+export const STAPEL_DEGRADED_HINWEIS = "Die KI-Antwort konnte nicht sicher in Medieneinträge umgewandelt werden.";
+
+const STAPEL_FEHLGRUENDE = new Set([
+  "Der Medieneintrag hatte kein lesbares Objektformat.",
+  "Der Medieneintrag ließ sich keiner Eingabezeile sicher zuordnen.",
+  "Der Titel fehlt oder ist nicht sicher lesbar.",
+  "Der Medientyp ist nicht sicher zuordenbar.",
+  "Für diese Eingabezeile kam kein sicher prüfbarer Medieneintrag zurück.",
+]);
+const STAPEL_STANDARD_FEHLGRUND = "Dieser Eintrag konnte nicht sicher übernommen werden.";
+const STAPEL_WARNUNG_UNSICHER = /(?:https:\/\/|sk-ant-|sbp_|bearer\s+|(?:authorization|x-api-key|api[_ -]?key|password|passwort|service[_ -]?role|secret|token)\s*[=:]|<\/?(?:thinking|system|developer|prompt)\b|chain[ -]of[ -]thought|system(?:-| )prompt|developer(?:-| )message)/i;
 
 const kurz = (wert, max) => String(wert ?? "")
   .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
   .replace(/\s+/g, " ").trim().slice(0, max);
+const istObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
+const eigenerWert = (objekt, feld) => istObjekt(objekt) && Object.prototype.hasOwnProperty.call(objekt, feld)
+  ? objekt[feld] : undefined;
+const sichererIndex = (wert, fallback = null) => Number.isInteger(wert) && wert >= 0 && wert < STAPEL_MAX_ZEILEN
+  ? wert : fallback;
+const sichererGrund = (wert) => {
+  const grund = kurz(wert, 180);
+  return STAPEL_FEHLGRUENDE.has(grund) ? grund : STAPEL_STANDARD_FEHLGRUND;
+};
+const sichereWarnung = (wert) => {
+  const warnung = kurz(wert, 180);
+  return warnung && !STAPEL_WARNUNG_UNSICHER.test(warnung) ? warnung : "";
+};
+
+function normalisiereIndex(lokalerIndex, indexMap) {
+  const lokal = sichererIndex(lokalerIndex);
+  if (lokal === null) return null;
+  return Array.isArray(indexMap) ? sichererIndex(indexMap[lokal]) : lokal;
+}
+
+function fehlEintrag(index, zustand = "fehlgeschlagen", grund = STAPEL_STANDARD_FEHLGRUND, id = null) {
+  return {
+    id: /^stapel-(?:ausgabe-)?\d+$/.test(String(id || "")) ? String(id) : `stapel-${index}`,
+    index,
+    zustand: zustand === "offen" ? "offen" : "fehlgeschlagen",
+    grund: sichererGrund(grund),
+  };
+}
 
 export function vorbereiteTitelliste(text) {
   const roh = String(text || "").replace(/\r/g, "");
@@ -59,15 +99,68 @@ export function baueStapelPayload(text, standardQuelle = "unklar", vorbeurteilen
   return { liste: zeilen, standardQuelle: quelle, vorbeurteilen: vorbeurteilen === true, bewertungen: vorbeurteilen ? komplett : [] };
 }
 
-export function normalisiereStapelAntwort(antwort, master = []) {
-  const roh = antwort?.data?.kandidaten ?? antwort?.kandidaten;
-  if (!Array.isArray(roh)) throw new Error("Die KI-Antwort enthält keine lesbaren Einträge.");
+export function normalisiereStapelAntwort(antwort, master = [], { indexMap = null } = {}) {
+  const hatData = istObjekt(antwort) && Object.prototype.hasOwnProperty.call(antwort, "data");
+  const daten = hatData ? antwort.data : antwort;
+  const gemeldeterModus = ["structured", "partial", "degraded"].includes(antwort?.responseMode)
+    ? antwort.responseMode : null;
+  const erwarteteIndices = Array.isArray(indexMap)
+    ? [...new Set(indexMap.map((index) => sichererIndex(index)).filter((index) => index !== null))]
+    : [];
+  if (gemeldeterModus === "degraded" || daten === null) {
+    return {
+      kandidaten: [],
+      fehlmenge: erwarteteIndices.map((index) => fehlEintrag(
+        index,
+        "offen",
+        "Für diese Eingabezeile kam kein sicher prüfbarer Medieneintrag zurück.",
+      )),
+      warnungen: [],
+      responseMode: "degraded",
+      displayText: STAPEL_DEGRADED_HINWEIS,
+    };
+  }
+
+  const roh = daten?.kandidaten;
+  if (!Array.isArray(roh)) {
+    if (!erwarteteIndices.length) throw new Error("Die KI-Antwort enthält keine lesbaren Einträge.");
+    return {
+      kandidaten: [],
+      fehlmenge: erwarteteIndices.map((index) => fehlEintrag(
+        index,
+        "offen",
+        "Für diese Eingabezeile kam kein sicher prüfbarer Medieneintrag zurück.",
+      )),
+      warnungen: [],
+      responseMode: "partial",
+      displayText: STAPEL_PARTIAL_HINWEIS,
+    };
+  }
   const masterKeys = new Set((master || []).map((e) => `${norm(e.titel)}|${e.jahr ?? ""}`));
   const gesehen = new Set();
   const kandidaten = [];
+  const fehlNachId = new Map();
+  const abgedeckteIndices = new Set();
   for (const [index, kandidat] of roh.slice(0, STAPEL_MAX_ZEILEN).entries()) {
+    const gemeldeterIndex = eigenerWert(kandidat, "index") ?? eigenerWert(kandidat, "eingabeIndex");
+    const quellIndex = sichererIndex(gemeldeterIndex, index);
+    const stabilerIndex = normalisiereIndex(quellIndex, indexMap);
+    if (stabilerIndex === null) continue;
+    abgedeckteIndices.add(stabilerIndex);
+    const serverId = eigenerWert(kandidat, "id");
+    const id = Array.isArray(indexMap) ? `stapel-${stabilerIndex}` : serverId;
+    if (!istObjekt(kandidat) || (kandidat.zustand !== undefined && kandidat.zustand !== "ok")) {
+      const fehl = fehlEintrag(stabilerIndex, "fehlgeschlagen", eigenerWert(kandidat, "grund"), id);
+      fehlNachId.set(fehl.id, fehl);
+      continue;
+    }
     const titel = kurz(kandidat?.titel, 160);
-    if (!titel || !STAPEL_TYPEN.includes(kandidat?.typ)) continue;
+    if (!titel || !STAPEL_TYPEN.includes(kandidat?.typ)) {
+      const grund = !titel ? "Der Titel fehlt oder ist nicht sicher lesbar." : "Der Medientyp ist nicht sicher zuordenbar.";
+      const fehl = fehlEintrag(stabilerIndex, "fehlgeschlagen", grund, id);
+      fehlNachId.set(fehl.id, fehl);
+      continue;
+    }
     const typ = kandidat.typ;
     const jahrZahl = Number(kandidat?.jahr);
     const jahr = Number.isInteger(jahrZahl) && jahrZahl >= 1888 && jahrZahl <= 2100 ? jahrZahl : null;
@@ -76,23 +169,54 @@ export function normalisiereStapelAntwort(antwort, master = []) {
     gesehen.add(schluessel);
     const quelle = STAPEL_QUELLEN_KEYS.has(kandidat?.quelle) ? kandidat.quelle : "unklar";
     const staffeln = typ === "serie" ? kurz(kandidat?.staffeln, 80) || null : null;
-    const vorbeurteilung = ["passt", "offen", "eher_nicht"].includes(kandidat?.vorbeurteilung)
+    const gemeldeteBegruendung = kurz(kandidat?.begruendung, 300);
+    const vorbeurteilung = ["passt", "eher_nicht"].includes(kandidat?.vorbeurteilung) && gemeldeteBegruendung
       ? kandidat.vorbeurteilung : "offen";
     kandidaten.push({
-      id: `stapel-${index}-${norm(titel).slice(0, 30) || index}`,
+      id: `stapel-${stabilerIndex}`,
+      index: stabilerIndex,
+      zustand: "ok",
       titel, typ, jahr, quelle, staffeln, vorbeurteilung,
-      begruendung: kurz(kandidat?.begruendung, 300),
+      begruendung: vorbeurteilung === "offen" ? "" : gemeldeteBegruendung,
       sicherheit: ["hoch", "mittel", "niedrig"].includes(kandidat?.sicherheit) ? kandidat.sicherheit : "niedrig",
       ausgewaehlt: true,
       vorhandenMediathek: masterKeys.has(`${norm(titel)}|${jahr ?? ""}`),
     });
   }
-  if (!kandidaten.length) throw new Error("Es wurde kein eindeutiger Film-, Serien- oder Musiktitel erkannt.");
+  const serverFehlmenge = Array.isArray(daten?.fehlmenge) ? daten.fehlmenge : [];
+  for (const [fallbackIndex, rohFehl] of serverFehlmenge.slice(0, STAPEL_MAX_ZEILEN).entries()) {
+    if (!istObjekt(rohFehl)) continue;
+    const quellIndex = sichererIndex(rohFehl.index, fallbackIndex);
+    const index = normalisiereIndex(quellIndex, indexMap);
+    if (index === null) continue;
+    abgedeckteIndices.add(index);
+    const id = Array.isArray(indexMap) ? `stapel-${index}` : rohFehl.id;
+    const fehl = fehlEintrag(index, rohFehl.zustand, rohFehl.grund, id);
+    fehlNachId.set(fehl.id, fehl);
+  }
+  for (const index of erwarteteIndices) {
+    if (abgedeckteIndices.has(index)) continue;
+    const fehl = fehlEintrag(
+      index,
+      "offen",
+      "Für diese Eingabezeile kam kein sicher prüfbarer Medieneintrag zurück.",
+    );
+    fehlNachId.set(fehl.id, fehl);
+  }
+  for (const kandidat of kandidaten) fehlNachId.delete(kandidat.id);
+  const fehlmenge = [...fehlNachId.values()].sort((a, b) => a.index - b.index);
+  if (!kandidaten.length && !fehlmenge.length) {
+    throw new Error("Es wurde kein eindeutiger Film-, Serien- oder Musiktitel erkannt.");
+  }
+  const responseMode = gemeldeterModus === "partial" || fehlmenge.length ? "partial" : "structured";
   return {
     kandidaten,
-    warnungen: Array.isArray(antwort?.data?.warnungen ?? antwort?.warnungen)
-      ? (antwort?.data?.warnungen ?? antwort.warnungen).map((w) => kurz(w, 180)).filter(Boolean).slice(0, 8)
+    fehlmenge,
+    warnungen: Array.isArray(daten?.warnungen)
+      ? daten.warnungen.map(sichereWarnung).filter(Boolean).slice(0, 8)
       : [],
+    responseMode,
+    displayText: responseMode === "partial" ? STAPEL_PARTIAL_HINWEIS : null,
   };
 }
 
@@ -107,7 +231,7 @@ function notizFuer(k) {
 export function baueStapelUebernahme(kandidaten) {
   const mediathek = [];
   for (const k of kandidaten || []) {
-    if (!k.ausgewaehlt || k.vorhandenMediathek || !STAPEL_TYPEN.includes(k.typ)) continue;
+    if (!k.ausgewaehlt || k.vorhandenMediathek || (k.zustand && k.zustand !== "ok") || !STAPEL_TYPEN.includes(k.typ)) continue;
     const quelle = STAPEL_QUELLEN_KEYS.has(k.quelle) ? k.quelle : "unklar";
     mediathek.push({
       titel: k.titel, originaltitel: k.titel, jahr: k.jahr, jahr_bis: null,

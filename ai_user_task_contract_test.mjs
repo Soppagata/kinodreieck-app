@@ -99,10 +99,11 @@ const filmwissenAntwort = huelle("filmwissen-synthese", { status: "belegt", vers
 
 const stapelAntwort = huelle("media-batch-extract", {
   kandidaten: [{
+    id: "stapel-0", index: 0, zustand: "ok",
     titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null,
     vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
   }],
-  warnungen: [],
+  warnungen: [], fehlmenge: [],
 });
 
 const artikelPayload = {

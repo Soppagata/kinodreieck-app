@@ -587,6 +587,49 @@ check("filmwissen-synthese degraded transportiert nie belegte Daten",
   && filmwissenDegradedLauf.ergebnis?.data === null
   && /unverbindlicher Entwurf/.test(filmwissenDegradedLauf.ergebnis.displayText));
 
+const stapelTeilLauf = await laufe(
+  dienstMit({
+    ok: true,
+    data: {
+      kandidaten: [{
+        id: "stapel-0", index: 0, zustand: "ok", titel: "Alien", typ: "film",
+        jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "offen",
+        begruendung: "", sicherheit: "hoch",
+      }],
+      fehlmenge: [{
+        id: "stapel-1", index: 1, zustand: "fehlgeschlagen",
+        grund: "Der Titel fehlt oder ist nicht sicher lesbar.",
+      }],
+      warnungen: [],
+    },
+    responseMode: "partial",
+    displayText: "Die Medienliste war teilweise unvollständig. Nur sichere Einträge werden angezeigt; offene Zeilen bleiben separat erhalten.",
+    warnings: ["invalid-items-ignored"],
+  }).dienst,
+  "media-batch-extract",
+  { liste: ["Alien", "unlesbar"], standardQuelle: "unklar", vorbeurteilen: false, bewertungen: [] },
+);
+check("media-batch-extract übernimmt sichere Items und Fehlmenge im partial-Vertrag",
+  stapelTeilLauf.fehler === null
+  && stapelTeilLauf.ergebnis?.responseMode === "partial"
+  && stapelTeilLauf.ergebnis.data.kandidaten.length === 1
+  && stapelTeilLauf.ergebnis.data.fehlmenge[0].zustand === "fehlgeschlagen"
+  && Object.isFrozen(stapelTeilLauf.ergebnis.warnings));
+
+const stapelDegradedLauf = await laufe(
+  dienstMit({
+    ok: true,
+    data: null,
+    responseMode: "degraded",
+    displayText: "Die KI-Antwort konnte nicht sicher in Medieneinträge umgewandelt werden.",
+    warnings: ["unstructured-provider-text"],
+  }).dienst,
+  "media-batch-extract",
+  { liste: ["unlesbar"], standardQuelle: "unklar", vorbeurteilen: false, bewertungen: [] },
+);
+check("media-batch-extract degraded transportiert niemals Medienitems",
+  stapelDegradedLauf.fehler === null && stapelDegradedLauf.ergebnis?.data === null);
+
 for (const [name, antwort] of [
   ["degraded mit Filterdaten", { ...degradedAntwort, data: { harte_filter: { genres: ["horror"] } } }],
   ["freier Warntext", { ...degradedAntwort, warnings: ["Modell sagt etwas Beliebiges"] }],

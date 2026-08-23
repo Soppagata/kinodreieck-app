@@ -30,6 +30,39 @@ check("CD bleibt als eigene physische Quelle erhalten", v.kandidaten.find((k) =>
 check("Vorhandene Mediathektitel werden erkannt", v.kandidaten[0].vorhandenMediathek === true);
 check("Unklare Serienstaffeln bleiben freiwillig ergänzbar", v.kandidaten[1].staffeln === null);
 
+const teilantwort = normalisiereStapelAntwort({
+  responseMode: "partial",
+  displayText: "wird nicht ungeprüft angezeigt",
+  data: {
+    kandidaten: [
+      { eingabeIndex: 0, titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch", zusatz: true },
+      { eingabeIndex: 1, titel: "", typ: "film", jahr: null, quelle: "dvd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "niedrig" },
+      { eingabeIndex: 2, titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" },
+    ],
+    warnungen: [],
+  },
+}, [], { indexMap: [0, 1, 2] });
+check("Teilantwort behält zwei sichere Medien und weist das kaputte Item separat aus",
+  teilantwort.kandidaten.length === 2 && teilantwort.fehlmenge.length === 1
+  && teilantwort.fehlmenge[0].id === "stapel-1" && teilantwort.fehlmenge[0].zustand === "fehlgeschlagen");
+check("Teilantwort verwendet ausschließlich den festen sicheren Anzeigehinweis",
+  teilantwort.displayText === "Die Medienliste war teilweise unvollständig. Nur sichere Einträge werden angezeigt; offene Zeilen bleiben separat erhalten.");
+teilantwort.kandidaten[1].ausgewaehlt = false;
+check("Nur ausdrücklich ausgewählte sichere Vorschauitems erreichen die Übernahme",
+  baueStapelUebernahme(teilantwort.kandidaten).mediathek.map((eintrag) => eintrag.titel).join("|") === "Alien");
+
+const degradiert = normalisiereStapelAntwort({
+  responseMode: "degraded",
+  displayText: "Beliebiger Anbietertext",
+  warnings: ["unstructured-provider-text"],
+  data: null,
+}, [], { indexMap: [0, 1, 2] });
+check("Degraded bleibt ein fester Hinweis mit vollständiger offener Menge",
+  degradiert.kandidaten.length === 0 && degradiert.fehlmenge.length === 3
+  && degradiert.displayText === "Die KI-Antwort konnte nicht sicher in Medieneinträge umgewandelt werden.");
+check("Degraded kann niemals einen Mediatheksimport erzeugen",
+  baueStapelUebernahme(degradiert.kandidaten).mediathek.length === 0);
+
 const uebernahme = baueStapelUebernahme(v.kandidaten);
 check("Vorhandenes wird nicht nochmals in die Mediathek geschrieben", uebernahme.mediathek.length === 3);
 check("Digitale Käufe bleiben von Streaming-Abos unterscheidbar", uebernahme.mediathek[0].quelle === "amazon");

@@ -1330,6 +1330,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-stapel-vorschau { margin-top:16px; border:1px solid #e3a63b; border-radius:8px; padding:12px; }
 .kd-stapel-vorschau h3 { margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.05em; }
 .kd-stapel-warnung,.kd-stapel-dublette { color:#e3a63b; font-size:11px; }
+.kd-stapel-fehlmenge { margin:10px 0; padding:9px 11px; border-left:3px solid #e3a63b; background:rgba(227,166,59,.08); color:var(--kd-rauch,#9d97a8); font-size:12px; line-height:1.5; }
+.kd-stapel-fehlmenge p { margin:0 0 5px; color:#e3a63b; }
+.kd-stapel-fehlmenge ul { margin:0; padding-left:18px; }
 .kd-stapel-kandidat { padding:10px 0; border-top:1px solid rgba(157,151,168,.25); }
 .kd-stapel-titel { display:flex; align-items:flex-start; gap:9px; }
 .kd-stapel-titel input { margin-top:4px; }

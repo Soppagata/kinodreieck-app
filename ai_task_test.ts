@@ -4770,20 +4770,24 @@ const medienPayload = (vorbeurteilen = false) => ({
 
 test("MB1 der Stapelimport sendet nur Text und hält Einträge ohne Prognose offen", async () => {
   z.anbieter = () => anbieterErfolg({
-    kandidaten: [{ titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" }],
+    kandidaten: [{ eingabeIndex: 0, titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" }],
     warnungen: [],
   });
   const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(false) });
   gleich(r.status, 200, "Status");
   gleich(daten(r).kandidaten[0].typ, "musik", "Musiktyp");
   gleich(daten(r).kandidaten[0].quelle, "cd", "CD-Quelle");
+  gleich(daten(r).kandidaten[0].zustand, "ok", "stabiler Itemzustand");
+  gleich(daten(r).kandidaten[0].index, 0, "stabiler Eingabeindex");
   falsch("bilder" in JSON.parse(nutzertext()), "kein Bildfeld im Anbietertext");
   falsch(systemtext().includes("Kind of Blue"), "Nutzerliste steht nicht im Systemprompt");
+  const schema = AUFGABEN["media-batch-extract"].bauAuftrag(medienPayload(false)).schema as any;
+  wahr(schema.properties.kandidaten.items.required.includes("eingabeIndex"), "Anbieterschema bindet jedes Item an seine Eingabezeile");
 });
 
 test("MB2 fünf Kurzbewertungen erlauben einen begründeten KI-Voreindruck, keine echte Bewertung", async () => {
   z.anbieter = () => anbieterErfolg({
-    kandidaten: [{ titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "passt", begruendung: "Die Kurzbewertungen bevorzugen ähnlich konzentrierte Genreklassiker.", sicherheit: "mittel" }],
+    kandidaten: [{ eingabeIndex: 0, titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "passt", begruendung: "Die Kurzbewertungen bevorzugen ähnlich konzentrierte Genreklassiker.", sicherheit: "mittel" }],
     warnungen: [],
   });
   const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(true) });
@@ -4798,6 +4802,43 @@ test("MB3 Vorbeurteilung mit weniger als fünf Bewertungen endet vor dem Anbiete
   const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload });
   gleich(r.status, 400, "Status");
   gleich(anbieterAufrufe().length, 0, "kein kostenpflichtiger Aufruf");
+});
+
+test("MB4 JSON-Codeblock rettet zwei sichere Medien und weist das kaputte einzeln aus", async () => {
+  const providerJson = {
+    kandidaten: [
+      { eingabeIndex: 0, titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch", zusatzfeld: "ignorieren" },
+      { eingabeIndex: 1, titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" },
+      { eingabeIndex: 2, titel: "", typ: "film", jahr: null, quelle: "dvd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "niedrig" },
+    ],
+    warnungen: ["Eine Zeile blieb unlesbar."],
+    fremdesWurzelfeld: true,
+  };
+  z.anbieter = () => anbieterErfolg(
+    `Kurzer Zusatz.\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\`\nEnde.`,
+  );
+  const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(false) });
+  gleich(r.status, 200, "sichtbarer Teilerfolg");
+  gleich(r.daten.responseMode, "partial", "additiver Teilantwortmodus");
+  gleich(daten(r).kandidaten.length, 2, "zwei sichere Medien bleiben erhalten");
+  gleich(daten(r).fehlmenge.length, 1, "genau das kaputte Item bildet die Fehlmenge");
+  gleich(daten(r).fehlmenge[0].index, 2, "Fehlmenge bleibt an den Eingabeindex gebunden");
+  gleich(daten(r).fehlmenge[0].zustand, "fehlgeschlagen", "kaputtes Item hat einen Endzustand");
+  wahr((r.daten.warnings as string[]).includes("json-extracted-from-text"), "Codeblock wurde erkannt");
+  wahr((r.daten.warnings as string[]).includes("extra-fields-ignored"), "Zusatzfelder wurden verworfen");
+  wahr((r.daten.warnings as string[]).includes("invalid-items-ignored"), "kaputtes Item wurde einzeln verworfen");
+  gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
+});
+
+test("MB5 sicherer unparsebarer Text bleibt degraded und importdatenfrei", async () => {
+  z.anbieter = () => anbieterErfolg("Ich konnte die Liste nicht sicher strukturieren.");
+  const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(false) });
+  gleich(r.status, 200, "sichtbarer Hinweis statt harter Fehler");
+  gleich(r.daten.responseMode, "degraded", "degraded-Modus");
+  gleich(r.daten.data, null, "kein Freitext wird zu Medienitems");
+  wahr(String(r.daten.displayText).includes("nicht sicher strukturieren"), "bereinigter Hinweis bleibt sichtbar");
+  wahr((r.daten.warnings as string[]).includes("unstructured-provider-text"), "stabiler Freitext-Warncode");
+  gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
 });
 
 /* ===========================================================================

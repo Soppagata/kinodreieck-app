@@ -783,6 +783,7 @@ const TOLERANTE_JSON_AUFGABEN = new Set([
   "profile-extract",
   "film-forecast",
   "filmwissen-synthese",
+  "media-batch-extract",
   "blog-profile-extract",
 ]);
 
@@ -800,6 +801,12 @@ function hinweiseFuerAufgabe(task: string) {
     return {
       partial: FILMWISSEN_PARTIAL_NOTICE,
       degraded: FILMWISSEN_DEGRADED_NOTICE,
+    };
+  }
+  if (task === "media-batch-extract") {
+    return {
+      partial: MEDIA_PARTIAL_NOTICE,
+      degraded: MEDIA_DEGRADED_NOTICE,
     };
   }
   if (task === "blog-profile-extract") {
@@ -863,6 +870,7 @@ const MEDIA_SCHEMA = {
       items: {
         type: "object",
         properties: {
+          eingabeIndex: { type: "integer", minimum: 0, maximum: 59 },
           titel: { type: "string" },
           typ: { type: "string", enum: MEDIA_TYPEN },
           jahr: { type: ["integer", "null"] },
@@ -872,7 +880,7 @@ const MEDIA_SCHEMA = {
           begruendung: { type: "string" },
           sicherheit: { type: "string", enum: MEDIA_SICHERHEIT },
         },
-        required: ["titel", "typ", "jahr", "quelle", "staffeln", "vorbeurteilung", "begruendung", "sicherheit"],
+        required: ["eingabeIndex", "titel", "typ", "jahr", "quelle", "staffeln", "vorbeurteilung", "begruendung", "sicherheit"],
         additionalProperties: false,
       },
     },
@@ -1228,6 +1236,10 @@ const FILMWISSEN_PARTIAL_NOTICE =
   "Die Filmwissen-Antwort war teilweise unvollständig. Nur einzeln belegte Wissensbausteine wurden berücksichtigt.";
 const FILMWISSEN_DEGRADED_NOTICE =
   "Die Filmwissen-Antwort blieb ein unverbindlicher Entwurf und wurde nicht als belegt veröffentlicht.";
+const MEDIA_PARTIAL_NOTICE =
+  "Die Medienliste war teilweise unvollständig. Nur sichere Einträge werden angezeigt; offene Zeilen bleiben separat erhalten.";
+const MEDIA_DEGRADED_NOTICE =
+  "Die KI-Antwort konnte nicht sicher in Medieneinträge umgewandelt werden.";
 const BLOG_PROFILE_PARTIAL_NOTICE =
   "Die Bloganalyse war teilweise unvollständig. Nur einzeln belegte Vorschläge werden angezeigt.";
 const BLOG_PROFILE_DEGRADED_NOTICE =
@@ -2574,7 +2586,8 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         system: [
           "Du strukturierst eine vom Nutzer geschriebene Liste seiner eigenen Mediathek fuer den Import im Kinodreieck.",
           "Ordne nur Film, Serie oder Musik zu. Physische Quellen sind DVD, Blu-ray und CD; uebernimm ausdrueckliche andere Kaufquellen aus der Zeile nur als erlaubten Schemawert.",
-          "Bereinige Schreibweisen und fasse Dubletten zusammen. Hoechstens 60 Kandidaten und 8 Warnungen.",
+          "Bewahre jede Eingabezeile mit ihrem 0-basierten eingabeIndex. Sichere Dubletten fuehrt die lokale Vorschau zusammen. Hoechstens 60 Kandidaten und 8 Warnungen.",
+          "Lass eine Zeile aus kandidaten weg, wenn Titel oder Medientyp nicht sicher erkennbar sind. Der Server weist fehlende Eingabeindizes separat als offen aus.",
           "Erfinde nichts und recherchiere nicht. Jahr und Staffel nur bei sicherer Zuordnung; sonst null. Die Standardquelle gilt nur, wenn die Zeile keine Quelle nennt.",
           eingabe.vorbeurteilen
             ? "Leite aus den mitgesendeten echten Kurzbewertungen vorsichtige Voreindruecke ab. passt oder eher_nicht braucht eine kurze konkrete Begruendung; bei zu schwacher Basis offen und leer."
@@ -2588,31 +2601,173 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
     pruefeErgebnis(inhalt, payload) {
       const eingabe = leseMedienListe(payload);
-      const o = inhalt as Record<string, unknown> | null;
-      if (!o || typeof o !== "object" || !Array.isArray(o.kandidaten) || !Array.isArray(o.warnungen) || o.kandidaten.length > 60 || o.warnungen.length > 8) {
-        return { fehler: "media-schema" };
+      if (!istReinesObjekt(inhalt)) {
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: MEDIA_DEGRADED_NOTICE,
+            warnings: ["no-safe-structure"],
+          },
+        };
       }
-      const kandidaten = [];
-      for (const roh of o.kandidaten) {
-        if (!roh || typeof roh !== "object" || Array.isArray(roh)) return { fehler: "media-kandidat-form" };
-        const k = roh as Record<string, unknown>;
+
+      const o = inhalt;
+      const bereinigungsCodes = new Set<string>();
+      const warn = (code: string) => bereinigungsCodes.add(code);
+      const rootFelder = ["kandidaten", "warnungen"];
+      if (Object.keys(o).some((key) => !rootFelder.includes(key))) {
+        warn("extra-fields-ignored");
+      }
+
+      const rohKandidaten = Array.isArray(o.kandidaten) ? o.kandidaten : [];
+      if (!Array.isArray(o.kandidaten)) warn("missing-fields-defaulted");
+      if (rohKandidaten.length > 60) warn("invalid-items-ignored");
+      const kandidatFelder = [
+        "eingabeIndex", "titel", "typ", "jahr", "quelle", "staffeln",
+        "vorbeurteilung", "begruendung", "sicherheit",
+      ];
+      const kandidaten: Array<Record<string, unknown>> = [];
+      const fehlmenge: Array<Record<string, unknown>> = [];
+      const belegteEingabeIndices = new Set<number>();
+      const meldeFehler = (
+        id: string,
+        index: number,
+        zustand: "fehlgeschlagen" | "offen",
+        grund: string,
+      ) => {
+        fehlmenge.push({ id, index, zustand, grund });
+      };
+
+      for (const [ausgabeIndex, roh] of rohKandidaten.slice(0, 60).entries()) {
+        const k = istReinesObjekt(roh) ? roh : null;
+        const gemeldeterIndex = k?.eingabeIndex;
+        let eingabeIndex = Number.isInteger(gemeldeterIndex) && Number(gemeldeterIndex) >= 0 &&
+            Number(gemeldeterIndex) < eingabe.liste.length && !belegteEingabeIndices.has(Number(gemeldeterIndex))
+          ? Number(gemeldeterIndex)
+          : null;
+        if (eingabeIndex === null && gemeldeterIndex === undefined && ausgabeIndex < eingabe.liste.length &&
+            !belegteEingabeIndices.has(ausgabeIndex)) {
+          /* Abwaertskompatibilitaet fuer einen alten Function-/Mockstand. Der
+             neue Anbieter-Vertrag liefert den Index immer explizit. */
+          eingabeIndex = ausgabeIndex;
+          warn("missing-fields-defaulted");
+        } else if (eingabeIndex === null) {
+          warn("invalid-fields-ignored");
+        }
+        const index = eingabeIndex ?? ausgabeIndex;
+        const id = eingabeIndex === null ? `stapel-ausgabe-${ausgabeIndex}` : `stapel-${eingabeIndex}`;
+        if (eingabeIndex !== null) belegteEingabeIndices.add(eingabeIndex);
+
+        if (!k) {
+          warn("invalid-items-ignored");
+          meldeFehler(id, index, "fehlgeschlagen", "Der Medieneintrag hatte kein lesbares Objektformat.");
+          continue;
+        }
+        if (Object.keys(k).some((key) => !kandidatFelder.includes(key))) {
+          warn("extra-fields-ignored");
+        }
+        if (eingabeIndex === null) {
+          warn("invalid-items-ignored");
+          meldeFehler(id, index, "fehlgeschlagen", "Der Medieneintrag ließ sich keiner Eingabezeile sicher zuordnen.");
+          continue;
+        }
+
         const titel = kurzText(k.titel, 160);
-        const begruendung = kurzText(k.begruendung, 300);
-        const staffeln = k.staffeln === null ? null : kurzText(k.staffeln, 80);
-        const jahr = k.jahr === null ? null : k.jahr;
-        const vorbeurteilung = String(k.vorbeurteilung);
-        if (!titel || !MEDIA_TYPEN.includes(String(k.typ)) || !MEDIA_QUELLEN.includes(String(k.quelle)) ||
-            !MEDIA_SICHERHEIT.includes(String(k.sicherheit)) ||
-            (jahr !== null && (!Number.isInteger(jahr) || Number(jahr) < 1888 || Number(jahr) > 2100)) ||
-            (k.staffeln !== null && !staffeln) || (k.typ !== "serie" && staffeln !== null) ||
-            !["passt", "offen", "eher_nicht"].includes(vorbeurteilung) ||
-            (!eingabe.vorbeurteilen && (vorbeurteilung !== "offen" || begruendung)) ||
-            (eingabe.vorbeurteilen && vorbeurteilung !== "offen" && !begruendung) ||
-            (vorbeurteilung === "offen" && begruendung)) return { fehler: "media-kandidat-ungueltig" };
-        kandidaten.push({ titel, typ: k.typ, jahr, quelle: k.quelle, staffeln, vorbeurteilung, begruendung, sicherheit: k.sicherheit });
+        if (!titel) {
+          warn("invalid-items-ignored");
+          meldeFehler(id, index, "fehlgeschlagen", "Der Titel fehlt oder ist nicht sicher lesbar.");
+          continue;
+        }
+        const typ = String(k.typ);
+        if (!MEDIA_TYPEN.includes(typ)) {
+          warn("invalid-items-ignored");
+          meldeFehler(id, index, "fehlgeschlagen", "Der Medientyp ist nicht sicher zuordenbar.");
+          continue;
+        }
+
+        let jahr: number | null = null;
+        if (k.jahr !== null && k.jahr !== undefined) {
+          if (Number.isInteger(k.jahr) && Number(k.jahr) >= 1888 && Number(k.jahr) <= 2100) jahr = Number(k.jahr);
+          else warn("invalid-fields-ignored");
+        }
+        const quelle = MEDIA_QUELLEN.includes(String(k.quelle)) ? String(k.quelle) : "unklar";
+        if (quelle === "unklar" && k.quelle !== "unklar") warn("invalid-fields-ignored");
+        const staffelnText = typ === "serie" ? kurzText(k.staffeln, 80) : "";
+        const staffeln = staffelnText || null;
+        if ((typ === "serie" && k.staffeln !== null && k.staffeln !== undefined && !staffelnText) ||
+            (typ !== "serie" && k.staffeln !== null && k.staffeln !== undefined)) {
+          warn("invalid-fields-ignored");
+        }
+        const sicherheit = MEDIA_SICHERHEIT.includes(String(k.sicherheit)) ? String(k.sicherheit) : "niedrig";
+        if (sicherheit === "niedrig" && k.sicherheit !== "niedrig") warn("invalid-fields-ignored");
+
+        let vorbeurteilung = "offen";
+        let begruendung = "";
+        if (eingabe.vorbeurteilen) {
+          const gemeldeteVorbeurteilung = String(k.vorbeurteilung);
+          const gemeldeteBegruendung = kurzText(k.begruendung, 300);
+          if (["passt", "eher_nicht"].includes(gemeldeteVorbeurteilung) && gemeldeteBegruendung) {
+            vorbeurteilung = gemeldeteVorbeurteilung;
+            begruendung = gemeldeteBegruendung;
+          } else if (gemeldeteVorbeurteilung !== "offen" || gemeldeteBegruendung) {
+            warn("invalid-fields-ignored");
+          }
+        } else if (k.vorbeurteilung !== "offen" || kurzText(k.begruendung, 300)) {
+          warn("invalid-fields-ignored");
+        }
+
+        kandidaten.push({
+          id,
+          index,
+          zustand: "ok",
+          titel,
+          typ,
+          jahr,
+          quelle,
+          staffeln,
+          vorbeurteilung,
+          begruendung,
+          sicherheit,
+        });
       }
-      const warnungen = o.warnungen.map((w) => kurzText(w, 180)).filter(Boolean);
-      return { daten: { kandidaten, warnungen } };
+
+      for (let index = 0; index < eingabe.liste.length; index++) {
+        if (belegteEingabeIndices.has(index)) continue;
+        warn("invalid-items-ignored");
+        meldeFehler(
+          `stapel-${index}`,
+          index,
+          "offen",
+          "Für diese Eingabezeile kam kein sicher prüfbarer Medieneintrag zurück.",
+        );
+      }
+
+      const rohWarnungen = Array.isArray(o.warnungen) ? o.warnungen : [];
+      if (!Array.isArray(o.warnungen)) warn("missing-fields-defaulted");
+      if (rohWarnungen.length > 8) warn("invalid-items-ignored");
+      const warnungen = rohWarnungen.slice(0, 8).map((wert) => {
+        if (typeof wert !== "string") {
+          warn("invalid-items-ignored");
+          return null;
+        }
+        try {
+          return sanitizeProviderDisplayText(wert)?.slice(0, 180) || null;
+        } catch {
+          warn("invalid-items-ignored");
+          return null;
+        }
+      }).filter((wert): wert is string => !!wert);
+      if (!kandidaten.length) warn("no-safe-structure");
+      const warnings = sichereAiWarnings([...bereinigungsCodes]);
+      return {
+        daten: { kandidaten, warnungen, fehlmenge },
+        darstellung: {
+          responseMode: warnings.length ? "partial" : "structured",
+          displayText: warnings.length ? MEDIA_PARTIAL_NOTICE : null,
+          warnings,
+        },
+      };
     },
   },
 
