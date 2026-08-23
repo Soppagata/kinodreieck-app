@@ -12,7 +12,7 @@ import {
 } from "../lib/blogProfilAnalyse.js";
 import { uebernimmBlogProfilSignale, speichereProfil } from "../lib/profil.js";
 import { uebernimmBlogVokabular } from "../lib/vokabular.js";
-import { aiService } from "../services/ai.js";
+import { aiService, normalisiereAiErgebnis } from "../services/ai.js";
 import { captureStorageContext, K, store } from "../services/storage.js";
 
 const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -323,8 +323,25 @@ export function BlogProfilAnalyse({
     }, 25);
 
     try {
-      const response = await ai.runTask("blog-profile-extract", payload, { signal: controller.signal });
+      const response = normalisiereAiErgebnis(
+        "blog-profile-extract",
+        await ai.runTask("blog-profile-extract", payload, { signal: controller.signal }),
+      );
       if (controller.signal.aborted || !pruefeFence(start, context)) return;
+      if (response?.responseMode === "degraded") {
+        /* Bereinigter Providertext bleibt ein sichtbarer Hinweis, niemals ein
+           Profilkandidat. Auch eine ältere Vorschau muss hier verschwinden,
+           damit sie nicht wie das Ergebnis dieses Laufs bestätigt wird. */
+        setVorschau(null);
+        setVorschauGeneration(0);
+        setBestaetigt(false);
+        setGruppenStatus({
+          profil: { laeuft: false, gespeichert: false, fehler: "", pending: null, bearbeitet: false },
+          vokabular: { laeuft: false, gespeichert: false, fehler: "", pending: null, bearbeitet: false },
+        });
+        setMeldung(response.displayText);
+        return;
+      }
       const ergebnis = await erzeugeBlogProfilAnalyseVorschau({
         artikelPayload: payload,
         modelAntwort: response?.data,
@@ -354,6 +371,7 @@ export function BlogProfilAnalyse({
       setVorschauGeneration(start.vorschauGeneration);
       setUnveraendert(true);
       setBestaetigt(false);
+      setMeldung(response?.responseMode === "partial" ? response.displayText : "");
       setGruppenStatus({
         profil: { laeuft: false, gespeichert: false, fehler: "", pending: null, bearbeitet: false },
         vokabular: { laeuft: false, gespeichert: false, fehler: "", pending: null, bearbeitet: false },

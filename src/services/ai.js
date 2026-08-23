@@ -91,14 +91,14 @@ function displayTextIstSicher(wert) {
     && !/[*_>#`~]/.test(wert) && !AI_DISPLAY_UNSAFE.test(wert);
 }
 
-/* Der Ergebnisvertrag ist fuer Suche, Profilextraktion, Prognose und
-   Filmwissen additiv:
+/* Der Ergebnisvertrag ist fuer Suche, Profilextraktion, Prognose, Filmwissen
+   und Bloganalyse additiv:
    ein alter Function-Stand ohne Darstellungsfelder bleibt lesbar. Sobald eines
    der Felder vorhanden ist, muessen aber alle zusammenpassen. Insbesondere
    darf ein degradierter Freitext niemals als `data` in Filter-, Profil-,
-   Prognose- oder Filmwissenspfade geraten. */
+   Prognose-, Filmwissens- oder Blogprofilpfade geraten. */
 export function normalisiereAiErgebnis(task, result) {
-  if (!["intelligent-search", "profile-extract", "film-forecast", "filmwissen-synthese"].includes(task)) return result;
+  if (!["intelligent-search", "profile-extract", "film-forecast", "filmwissen-synthese", "blog-profile-extract"].includes(task)) return result;
   const hatDarstellung = ["responseMode", "displayText", "warnings"]
     .some((feld) => Object.prototype.hasOwnProperty.call(result, feld));
   if (!hatDarstellung) return result;

@@ -783,6 +783,7 @@ const TOLERANTE_JSON_AUFGABEN = new Set([
   "profile-extract",
   "film-forecast",
   "filmwissen-synthese",
+  "blog-profile-extract",
 ]);
 
 function hinweiseFuerAufgabe(task: string) {
@@ -799,6 +800,12 @@ function hinweiseFuerAufgabe(task: string) {
     return {
       partial: FILMWISSEN_PARTIAL_NOTICE,
       degraded: FILMWISSEN_DEGRADED_NOTICE,
+    };
+  }
+  if (task === "blog-profile-extract") {
+    return {
+      partial: BLOG_PROFILE_PARTIAL_NOTICE,
+      degraded: BLOG_PROFILE_DEGRADED_NOTICE,
     };
   }
   return { partial: SUCHE_PARTIAL_NOTICE, degraded: SUCHE_DEGRADED_NOTICE };
@@ -1221,6 +1228,10 @@ const FILMWISSEN_PARTIAL_NOTICE =
   "Die Filmwissen-Antwort war teilweise unvollständig. Nur einzeln belegte Wissensbausteine wurden berücksichtigt.";
 const FILMWISSEN_DEGRADED_NOTICE =
   "Die Filmwissen-Antwort blieb ein unverbindlicher Entwurf und wurde nicht als belegt veröffentlicht.";
+const BLOG_PROFILE_PARTIAL_NOTICE =
+  "Die Bloganalyse war teilweise unvollständig. Nur einzeln belegte Vorschläge werden angezeigt.";
+const BLOG_PROFILE_DEGRADED_NOTICE =
+  "Die Bloganalyse konnte nicht sicher in belegte Vorschläge umgewandelt werden.";
 
 /* Derselbe additive Ergebnisvertrag gilt inzwischen fuer mehrere Aufgaben.
    Die Warncodes beschreiben ausschliesslich Bereinigungsschritte und bleiben
@@ -1735,12 +1746,21 @@ export function pruefeBlogProfileErgebnis(
   inhalt: unknown,
   eingabe: BlogProfileEingabe,
 ): Pruefung {
-  if (!istReinesObjekt(inhalt) ||
-      !hatGenauSchluessel(inhalt, ["geschmackszuege", "vokabular"]) ||
-      !Array.isArray(inhalt.geschmackszuege) ||
-      !Array.isArray(inhalt.vokabular) ||
-      inhalt.geschmackszuege.length > 12 || inhalt.vokabular.length > 6) {
-    return { fehler: "blog-schema" };
+  const warnungen = new Set<string>();
+  const warn = (code: string) => warnungen.add(code);
+  if (!istReinesObjekt(inhalt)) {
+    return {
+      daten: null,
+      darstellung: {
+        responseMode: "degraded",
+        displayText: BLOG_PROFILE_DEGRADED_NOTICE,
+        warnings: ["no-safe-structure"],
+      },
+    };
+  }
+  const rootFelder = ["geschmackszuege", "vokabular"];
+  if (Object.keys(inhalt).some((key) => !rootFelder.includes(key))) {
+    warn("extra-fields-ignored");
   }
   const genreSet = new Set(eingabe.listen.genres);
   const tagSet = new Set(eingabe.listen.tags);
@@ -1749,10 +1769,29 @@ export function pruefeBlogProfileErgebnis(
     eingabe.artikel.text.includes(wert);
 
   const geschmackszuege: Array<Record<string, unknown>> = [];
-  for (const roh of inhalt.geschmackszuege) {
-    if (!istReinesObjekt(roh) || !hatGenauSchluessel(roh, [
-      "art", "wert", "richtung", "staerke", "sicherheit", "beleg",
-    ])) return { fehler: "blog-schema" };
+  let hatSichereStruktur = false;
+  let geschmackszuegeListeSicher = false;
+  let roheGeschmackszuege: unknown[] = [];
+  if (!Object.prototype.hasOwnProperty.call(inhalt, "geschmackszuege")) {
+    warn("missing-fields-defaulted");
+  } else if (!Array.isArray(inhalt.geschmackszuege)) {
+    warn("invalid-fields-ignored");
+  } else {
+    geschmackszuegeListeSicher = true;
+    roheGeschmackszuege = inhalt.geschmackszuege;
+    if (roheGeschmackszuege.length > 12) warn("invalid-items-ignored");
+  }
+  const geschmackszugFelder = [
+    "art", "wert", "richtung", "staerke", "sicherheit", "beleg",
+  ];
+  for (const roh of roheGeschmackszuege.slice(0, 12)) {
+    if (!istReinesObjekt(roh)) {
+      warn("invalid-items-ignored");
+      continue;
+    }
+    if (Object.keys(roh).some((key) => !geschmackszugFelder.includes(key))) {
+      warn("extra-fields-ignored");
+    }
     if (typeof roh.art !== "string" ||
         !BLOG_PROFILE_ARTEN.includes(roh.art) ||
         !blogEinzeiligImByteBereich(roh.wert, 1, 60) ||
@@ -1764,7 +1803,8 @@ export function pruefeBlogProfileErgebnis(
         !BLOG_PROFILE_SICHERHEITEN.includes(roh.sicherheit) ||
         !belegGueltig(roh.beleg) ||
         (roh.art === "genre" && !genreSet.has(roh.wert as string))) {
-      return { fehler: "blog-schema" };
+      warn("invalid-items-ignored");
+      continue;
     }
     geschmackszuege.push({
       art: roh.art,
@@ -1774,16 +1814,37 @@ export function pruefeBlogProfileErgebnis(
       sicherheit: roh.sicherheit,
       beleg: roh.beleg,
     });
+    hatSichereStruktur = true;
   }
 
   const vokabular: Array<Record<string, unknown>> = [];
-  for (const roh of inhalt.vokabular) {
-    if (!istReinesObjekt(roh) || !hatGenauSchluessel(roh, [
-      "wort", "beschreibung", "genres", "tags", "beleg",
-    ]) || !blogEinzeiligImByteBereich(roh.wort, 1, 40) ||
+  let vokabularListeSicher = false;
+  let rohesVokabular: unknown[] = [];
+  if (!Object.prototype.hasOwnProperty.call(inhalt, "vokabular")) {
+    warn("missing-fields-defaulted");
+  } else if (!Array.isArray(inhalt.vokabular)) {
+    warn("invalid-fields-ignored");
+  } else {
+    vokabularListeSicher = true;
+    rohesVokabular = inhalt.vokabular;
+    if (rohesVokabular.length > 6) warn("invalid-items-ignored");
+  }
+  const vokabularFelder = ["wort", "beschreibung", "genres", "tags", "beleg"];
+  for (const roh of rohesVokabular.slice(0, 6)) {
+    if (!istReinesObjekt(roh)) {
+      warn("invalid-items-ignored");
+      continue;
+    }
+    if (Object.keys(roh).some((key) => !vokabularFelder.includes(key))) {
+      warn("extra-fields-ignored");
+    }
+    if (!blogEinzeiligImByteBereich(roh.wort, 1, 40) ||
       !blogEinzeiligImByteBereich(roh.beschreibung, 1, 96) ||
       !Array.isArray(roh.genres) || !Array.isArray(roh.tags) ||
-      !belegGueltig(roh.beleg)) return { fehler: "blog-schema" };
+      !belegGueltig(roh.beleg)) {
+      warn("invalid-items-ignored");
+      continue;
+    }
     const genres = roh.genres as unknown[];
     const tags = roh.tags as unknown[];
     const zusammen = [...genres, ...tags];
@@ -1796,7 +1857,8 @@ export function pruefeBlogProfileErgebnis(
         new Set(zusammenNormalisiert).size !== zusammen.length ||
         genres.some((wert) => !genreSet.has(wert as string)) ||
         tags.some((wert) => !tagSet.has(wert as string))) {
-      return { fehler: "blog-schema" };
+      warn("invalid-items-ignored");
+      continue;
     }
     vokabular.push({
       wort: roh.wort,
@@ -1805,8 +1867,35 @@ export function pruefeBlogProfileErgebnis(
       tags: [...tags],
       beleg: roh.beleg,
     });
+    hatSichereStruktur = true;
   }
-  return { daten: { geschmackszuege, vokabular } };
+  if (geschmackszuegeListeSicher && vokabularListeSicher &&
+      roheGeschmackszuege.length === 0 && rohesVokabular.length === 0) {
+    /* Zwei ausdruecklich leere Listen sind ein sicher strukturiertes Ergebnis.
+       Eine leere Liste darf dagegen keine zweite, komplett kaputte Liste als
+       scheinbar sichere leere Analyse maskieren. */
+    hatSichereStruktur = true;
+  }
+  if (!hatSichereStruktur) {
+    warn("no-safe-structure");
+    return {
+      daten: null,
+      darstellung: {
+        responseMode: "degraded",
+        displayText: BLOG_PROFILE_DEGRADED_NOTICE,
+        warnings: sichereAiWarnings([...warnungen]),
+      },
+    };
+  }
+  const warnings = sichereAiWarnings([...warnungen]);
+  return {
+    daten: { geschmackszuege, vokabular },
+    darstellung: {
+      responseMode: warnings.length ? "partial" : "structured",
+      displayText: warnings.length ? BLOG_PROFILE_PARTIAL_NOTICE : null,
+      warnings,
+    },
+  };
 }
 
 /* ---------- film-forecast: Eingabe- und Ausgabegrenze (Etappe 8) ------------

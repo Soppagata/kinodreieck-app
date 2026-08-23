@@ -515,6 +515,45 @@ check("profile-extract bleibt ohne neue Darstellungsfelder abwärtskompatibel",
   profilAltLauf.fehler === null && profilAltLauf.ergebnis?.data.signale.length === 0
   && !("responseMode" in profilAltLauf.ergebnis));
 
+const blogTeilAntwort = {
+  ok: true,
+  data: {
+    geschmackszuege: [{ art: "ton", wert: "ruhig" }],
+    vokabular: [{ wort: "Kadenz" }],
+  },
+  responseMode: "partial",
+  displayText: "Die Bloganalyse war teilweise unvollständig. Nur einzeln belegte Vorschläge werden angezeigt.",
+  warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+};
+const blogTeilLauf = await laufe(
+  dienstMit(blogTeilAntwort).dienst,
+  "blog-profile-extract",
+  { artikel: { id: "a", titel: "T", text: "Ein Artikeltext" }, listen: { genres: ["Drama"], tags: [] } },
+);
+check("blog-profile-extract übernimmt belegte partial-Vorschläge additiv",
+  blogTeilLauf.fehler === null
+  && blogTeilLauf.ergebnis?.responseMode === "partial"
+  && blogTeilLauf.ergebnis.data.geschmackszuege.length === 1
+  && blogTeilLauf.ergebnis.data.vokabular.length === 1
+  && Object.isFrozen(blogTeilLauf.ergebnis.warnings));
+
+const blogDegradedAntwort = {
+  ok: true,
+  data: null,
+  responseMode: "degraded",
+  displayText: "Die Antwort blieb lesbar, aber ohne sicher belegte Vorschläge.",
+  warnings: ["unstructured-provider-text"],
+};
+const blogDegradedLauf = await laufe(
+  dienstMit(blogDegradedAntwort).dienst,
+  "blog-profile-extract",
+  { artikel: { id: "a", titel: "T", text: "Ein Artikeltext" }, listen: { genres: ["Drama"], tags: [] } },
+);
+check("blog-profile-extract degraded bleibt Anzeigetext ohne Profilmerkmale",
+  blogDegradedLauf.fehler === null
+  && blogDegradedLauf.ergebnis?.data === null
+  && /ohne sicher belegte Vorschläge/.test(blogDegradedLauf.ergebnis.displayText));
+
 const filmwissenTeilLauf = await laufe(
   dienstMit({
     ok: true,
@@ -564,6 +603,14 @@ const profilUnsicher = await laufe(
 );
 check("profile-extract sperrt unsicheren degradierten Anzeigetext",
   profilUnsicher.fehler?.code === ERROR_CODES.INVALID_RESPONSE);
+
+const blogUnsicher = await laufe(
+  dienstMit({ ...blogDegradedAntwort, displayText: "api_key=synthetischer-geheimer-wert" }).dienst,
+  "blog-profile-extract",
+  { artikel: { id: "a", titel: "T", text: "Ein Artikeltext" }, listen: { genres: ["Drama"], tags: [] } },
+);
+check("blog-profile-extract sperrt unsicheren degradierten Anzeigetext",
+  blogUnsicher.fehler?.code === ERROR_CODES.INVALID_RESPONSE);
 
 let widerrufen = false;
 const widerrufAuth = {

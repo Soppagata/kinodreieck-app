@@ -298,6 +298,83 @@ const kaputt = await mounte(standardProps({ aiObj: aiMock({ health: kaputtHealth
 check(!knopf(kaputt.container, "analysieren"), "kaputte Capability-Feldtypen bleiben fail-closed");
 await kaputt.cleanup();
 
+/* Partiell gerettete Einzelitems bleiben Vorschau. Erst die ausdrücklich
+   gewählte Gruppe erreicht ihren bestehenden Writer. Dieser neue senkrechte
+   Pfad läuft vor den historischen Recovery-Proben des großen Harnesses. */
+const partialHealth = structuredClone(HEALTH);
+partialHealth.activation = {
+  gate: "KD_AI_TASK_ENABLED",
+  requiredValue: "true",
+  enabled: true,
+  userTasks: [
+    "intelligent-search", "profile-extract", "film-forecast",
+    "filmwissen-synthese", "media-batch-extract", "blog-profile-extract",
+  ],
+};
+const partialProfilWrites = [];
+const partialVokabularWrites = [];
+const partial = await mounte(standardProps({
+  aiObj: aiMock({
+    health: partialHealth,
+    analyse: () => ({
+      ok: true,
+      data: structuredClone(MODELL),
+      responseMode: "partial",
+      displayText: "Die Bloganalyse war teilweise unvollständig. Nur einzeln belegte Vorschläge werden angezeigt.",
+      warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+    }),
+  }),
+  props: {
+    onProfilSpeichern: async (wert) => { partialProfilWrites.push(wert); return true; },
+    onVokabularSpeichern: async (wert) => { partialVokabularWrites.push(wert); return true; },
+  },
+}));
+await bestaetigeUndKlicke(partial);
+await warten();
+check(partial.container.querySelectorAll("[data-status]").length === 2
+  && partial.container.textContent.includes("Nur einzeln belegte Vorschläge werden angezeigt"),
+"partial zeigt genau die zwei geretteten Vorschläge samt bereinigtem Hinweis");
+check(partialProfilWrites.length === 0 && partialVokabularWrites.length === 0,
+  "die partial-Vorschau schreibt vor Bestätigung weder Profil noch Vokabular");
+await act(async () => {
+  knopf(partial.container, "Geschmacksprofil speichern").click();
+  await tick(); await tick();
+});
+check(partialProfilWrites.length === 1
+  && partialProfilWrites[0].signale.some((signal) => signal.art === "genre" && signal.wert === "Drama")
+  && partialVokabularWrites.length === 0,
+"selektive Bestätigung übernimmt nur den gewählten Profilvorschlag über den bestehenden Profilweg");
+await partial.cleanup();
+
+const degradedProfilWrites = [];
+const degradedVokabularWrites = [];
+const degraded = await mounte(standardProps({
+  aiObj: aiMock({
+    health: partialHealth,
+    analyse: () => ({
+      ok: true,
+      data: null,
+      responseMode: "degraded",
+      displayText: "Die Antwort blieb lesbar, aber ohne sicher belegte Vorschläge.",
+      warnings: ["unstructured-provider-text"],
+    }),
+  }),
+  props: {
+    onProfilSpeichern: async (wert) => { degradedProfilWrites.push(wert); return true; },
+    onVokabularSpeichern: async (wert) => { degradedVokabularWrites.push(wert); return true; },
+  },
+}));
+await bestaetigeUndKlicke(degraded);
+await warten();
+check(!degraded.container.querySelector(".kd-blogprofilanalyse-vorschau")
+  && degraded.container.textContent.includes("ohne sicher belegte Vorschläge"),
+  "degraded zeigt nur den bereinigten Hinweis und keine Profilvorschau");
+check(degradedProfilWrites.length === 0 && degradedVokabularWrites.length === 0
+  && degraded.setup.marker.map.size === 0
+  && degraded.container.querySelector('input[type="checkbox"]').checked === false,
+  "degraded schreibt weder Profil, Vokabular noch Analysenachweis und verlangt für einen neuen Lauf erneut Zustimmung");
+await degraded.cleanup();
+
 for (const [name, captureContext] of [
   ["fehlend", () => ({})],
   ["formfremd", () => ({ isCurrent: "ja" })],

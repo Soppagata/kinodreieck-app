@@ -8636,10 +8636,11 @@ function bpOutputIstUngueltig(
   inhalt: unknown,
   payload: Record<string, unknown> = bpPayload(),
 ): boolean {
-  return "fehler" in pruefeBlogProfileErgebnis(
+  const ergebnis = pruefeBlogProfileErgebnis(
     inhalt,
     leseBlogProfileEingabe(payload),
   );
+  return "fehler" in ergebnis || ergebnis.daten === null;
 }
 
 test("BP1 stabiler Task-, Prompt-, Modell-, Token- und Cap-Vertrag", () => {
@@ -8858,41 +8859,60 @@ test("BP4 Provider-Schema und Erfolgspfad sind strikt und provenienzfrei", async
   falsch(/(?:hash|herkunft|provenienz)/i.test(JSON.stringify(r.daten.data)), "keine Modellprovenienz");
 });
 
-test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell", () => {
-  const ungueltig: unknown[] = [
-    { ...bpAntwort(), extra: true },
-    { geschmackszuege: [] },
-    { geschmackszuege: Array.from({ length: 13 }, () => bpGeschmackszug()), vokabular: [] },
-    { geschmackszuege: [], vokabular: Array.from({ length: 7 }, () => bpVokabular()) },
-    { geschmackszuege: [{ ...bpGeschmackszug(), extra: true }], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ art: "frei" })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ art: ["genre"] })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ richtung: "mag" })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ richtung: ["zieht_an"] })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ staerke: 1.5 })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ staerke: 0 })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ sicherheit: "sicher" })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ sicherheit: ["hoch"] })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ wert: "ä".repeat(31), art: "ton" })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ wert: "drama" })], vokabular: [] },
-    { geschmackszuege: [bpGeschmackszug({ wert: "\u00a0", art: "ton" })], vokabular: [] },
-    { geschmackszuege: [], vokabular: [{ ...bpVokabular(), extra: true }] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: [] })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["Drama", "Science-Fiction"], tags: ["ruhig", "präzise"] })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["Drama"], tags: ["Drama"] })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ genres: ["drama"], tags: [] })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ genres: [], tags: ["Ruhig"] })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ wort: "ä".repeat(21) })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ wort: "\u00a0" })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ beschreibung: "ä".repeat(49) })] },
-    { geschmackszuege: [], vokabular: [bpVokabular({ beschreibung: "\u00a0" })] },
-  ];
-  wahr(ungueltig.every((wert) => bpOutputIstUngueltig(wert)), "alle Outputbrueche werden als Ganzes verworfen");
-  falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [] }), "0/0 erlaubt");
-  falsch(bpOutputIstUngueltig({
-    geschmackszuege: Array.from({ length: 12 }, () => bpGeschmackszug()),
-    vokabular: Array.from({ length: 6 }, () => bpVokabular()),
-  }), "12/6 erlaubt");
+test("BP5 Outputgrenzen retten gueltige Einzelitems und verwerfen nur kaputte", () => {
+  const eingabe = leseBlogProfileEingabe(bpPayload());
+  const tolerant = pruefeBlogProfileErgebnis({
+    geschmackszuege: [
+      { ...bpGeschmackszug(), ignoriert: true },
+      bpGeschmackszug({ beleg: "Dieser Beleg steht nicht im Artikeltext." }),
+    ],
+    vokabular: [
+      { ...bpVokabular(), ignoriert: "Zusatz" },
+      bpVokabular({ genres: ["unbekannt"], tags: [] }),
+    ],
+    ignoriertesWurzelfeld: true,
+  }, eingabe);
+  wahr("daten" in tolerant && tolerant.daten !== null, "sichere Teildaten bleiben erhalten");
+  const teildaten = (tolerant as {
+    daten: { geschmackszuege: Array<Record<string, unknown>>; vokabular: Array<Record<string, unknown>> };
+    darstellung: { responseMode: string; warnings: string[] };
+  });
+  gleich(teildaten.daten.geschmackszuege.length, 1, "genau ein belegter Geschmackszug");
+  gleich(teildaten.daten.vokabular.length, 1, "genau ein belegter Vokabulareintrag");
+  falsch("ignoriert" in teildaten.daten.geschmackszuege[0], "Item-Zusatzfeld wird nicht weitergereicht");
+  falsch("ignoriert" in teildaten.daten.vokabular[0], "Vokabular-Zusatzfeld wird nicht weitergereicht");
+  gleich(teildaten.darstellung.responseMode, "partial", "Teilergebnis ist sichtbar partial");
+  wahr(teildaten.darstellung.warnings.includes("extra-fields-ignored"), "Zusatzfelder werden stabil gemeldet");
+  wahr(teildaten.darstellung.warnings.includes("invalid-items-ignored"), "kaputte Items werden stabil gemeldet");
+
+  const fehlendesFeld = pruefeBlogProfileErgebnis({
+    geschmackszuege: [bpGeschmackszug()],
+  }, eingabe) as {
+    daten: { geschmackszuege: unknown[]; vokabular: unknown[] };
+    darstellung: { responseMode: string; warnings: string[] };
+  };
+  gleich(fehlendesFeld.daten.geschmackszuege.length, 1, "sicheres Item ueberlebt fehlende Nachbarliste");
+  gleich(fehlendesFeld.daten.vokabular.length, 0, "fehlende Nachbarliste wird leer vorbelegt");
+  wahr(fehlendesFeld.darstellung.warnings.includes("missing-fields-defaulted"), "fehlendes Feld wird gemeldet");
+
+  const ueberlauf = pruefeBlogProfileErgebnis({
+    geschmackszuege: Array.from({ length: 13 }, () => bpGeschmackszug()),
+    vokabular: Array.from({ length: 7 }, () => bpVokabular()),
+  }, eingabe) as {
+    daten: { geschmackszuege: unknown[]; vokabular: unknown[] };
+    darstellung: { responseMode: string; warnings: string[] };
+  };
+  gleich(ueberlauf.daten.geschmackszuege.length, 12, "Geschmacksgrenze bleibt 12");
+  gleich(ueberlauf.daten.vokabular.length, 6, "Vokabulargrenze bleibt 6");
+  wahr(ueberlauf.darstellung.warnings.includes("invalid-items-ignored"), "Ueberlauf wird nicht still verschluckt");
+
+  const leer = pruefeBlogProfileErgebnis({ geschmackszuege: [], vokabular: [] }, eingabe) as {
+    daten: { geschmackszuege: unknown[]; vokabular: unknown[] };
+    darstellung: { responseMode: string; warnings: string[] };
+  };
+  gleich(leer.darstellung.responseMode, "structured", "ausdrueckliches 0/0 bleibt strukturiert");
+  gleich(leer.darstellung.warnings.length, 0, "ausdrueckliches 0/0 braucht keine Warnung");
+
   falsch(bpOutputIstUngueltig({
     geschmackszuege: [bpGeschmackszug({ art: "ton", wert: "ä".repeat(30) })],
     vokabular: [bpVokabular({
@@ -8901,22 +8921,10 @@ test("BP5 Outputgrenzen, Unknown Keys und 13/7-Ueberlauf retten nichts partiell"
       genres: ["Drama", "Science-Fiction"],
       tags: ["ruhig"],
     })],
-  }), "60-/40-/96-Byte-Felder und drei Zuordnungen erlaubt");
-  const crossListEingabe = {
-    artikel: { id: "a", titel: "T", text: BP_TEXT },
-    listen: { genres: ["Drama"], tags: [" drama "] },
-  };
-  const crossListOutput = {
-    geschmackszuege: [],
-    vokabular: [bpVokabular({ genres: ["Drama"], tags: [" drama "] })],
-  };
-  wahr(
-    "fehler" in pruefeBlogProfileErgebnis(crossListOutput, crossListEingabe),
-    "normalisierte Cross-List-Dublette blockiert den ganzen Output",
-  );
+  }), "60-/40-/96-Byte-Felder und drei Zuordnungen bleiben erlaubt");
 });
 
-test("BP5a Default-Ignorables verwerfen jedes sichtbarkeitspflichtige Outputfeld als ganze Antwort", () => {
+test("BP5a Default-Ignorables verwerfen das einzelne Item und ergeben ohne sicheren Rest degraded", () => {
   for (const [name, wert] of BP_UNSICHTBARE_INHALTE) {
     const outputFelder: Array<[string, unknown]> = [
       ["geschmackszueg.wert", {
@@ -8934,7 +8942,14 @@ test("BP5a Default-Ignorables verwerfen jedes sichtbarkeitspflichtige Outputfeld
     ];
     for (const [feld, antwort] of outputFelder) {
       const ergebnis = pruefeBlogProfileErgebnis(antwort, leseBlogProfileEingabe(bpPayload()));
-      wahr("fehler" in ergebnis && !("daten" in ergebnis), `${name}/${feld}: gesamte Antwort verworfen`);
+      const dargestellt = ergebnis as {
+        daten: unknown;
+        darstellung?: { responseMode: string; warnings: string[] };
+      };
+      wahr("daten" in ergebnis && dargestellt.daten === null
+        && dargestellt.darstellung?.responseMode === "degraded"
+        && dargestellt.darstellung.warnings.includes("invalid-items-ignored"),
+      `${name}/${feld}: unsichtbares Item verworfen, keine Profildaten`);
     }
   }
 });
@@ -8992,25 +9007,46 @@ test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () 
   }
 });
 
-test("BP7 striktes JSON und ein einziger falscher Eintrag ergeben keinen Teilerfolg", async () => {
-  for (const text of [
-    "```json\n" + JSON.stringify(bpAntwort()) + "\n```",
-    JSON.stringify(bpAntwort()) + " trailing",
-  ]) {
-    stelleZurueck();
-    z.anbieter = () => anbieterErfolg(text);
-    const r = await bpRuf();
-    gleich(r.status, 502, "strikter JSON-Fehler");
-    gleich(r.daten.grund, "antwort-kein-json", "inhaltsfreie Kennung");
-  }
+test("BP7 JSON-Codeblock behaelt zwei belegte Vorschlaege und verwirft den kaputten", async () => {
   stelleZurueck();
-  bpMitAntwort({
-    geschmackszuege: [bpGeschmackszug(), bpGeschmackszug({ beleg: "frei erfundener Beleg" })],
-    vokabular: [],
-  });
+  const providerJson = {
+    geschmackszuege: [
+      { ...bpGeschmackszug(), ignoriertesItemFeld: true },
+      bpGeschmackszug({ beleg: "frei erfundener Beleg" }),
+    ],
+    vokabular: [bpVokabular()],
+    ignoriertesWurzelfeld: "kein Profilmerkmal",
+  };
+  z.anbieter = () => anbieterErfolg(
+    `Hier ist die Antwort:\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\`\nEnde.`,
+  );
   const r = await bpRuf();
-  gleich(r.status, 502, "keine partielle Rettung");
-  gleich(r.daten.grund, "antwort-verletzt-schema", "stabile Aussenkennung");
+  gleich(r.status, 200, "sichtbarer Teilerfolg");
+  gleich(r.daten.responseMode, "partial", "additiver Ergebnisvertrag");
+  const daten = r.daten.data as {
+    geschmackszuege: Array<Record<string, unknown>>;
+    vokabular: Array<Record<string, unknown>>;
+  };
+  gleich(daten.geschmackszuege.length, 1, "genau ein belegter Geschmackszug bleibt");
+  gleich(daten.vokabular.length, 1, "genau ein belegter Vokabulareintrag bleibt");
+  falsch("ignoriertesItemFeld" in daten.geschmackszuege[0], "Item-Zusatzfeld erreicht die Vorschau nicht");
+  falsch(JSON.stringify(daten).includes("frei erfundener Beleg"), "unbelegtes Item erreicht die Vorschau nicht");
+  const warnings = r.daten.warnings as string[];
+  wahr(warnings.includes("json-extracted-from-text"), "Codeblock und Zusatztext werden bereinigt");
+  wahr(warnings.includes("extra-fields-ignored"), "Zusatzfelder werden gemeldet");
+  wahr(warnings.includes("invalid-items-ignored"), "kaputtes Item wird einzeln gemeldet");
+
+  stelleZurueck();
+  z.anbieter = () => anbieterErfolg(
+    "**Hinweis:** Die Antwort bleibt lesbar, aber ohne sicher belegte Vorschläge. https://beispiel.invalid",
+  );
+  const degraded = await bpRuf();
+  gleich(degraded.status, 200, "sicherer Freitext bleibt ein sichtbarer Hinweis");
+  gleich(degraded.daten.data, null, "Freitext wird nie zu Profildaten");
+  gleich(degraded.daten.responseMode, "degraded", "Freitext bleibt degraded");
+  wahr(String(degraded.daten.displayText).includes("ohne sicher belegte Vorschläge"), "bereinigter Hinweis bleibt sichtbar");
+  falsch(/[\*`]|https:\/\//.test(String(degraded.daten.displayText)), "Markup und URL werden nicht angezeigt");
+  wahr((degraded.daten.warnings as string[]).includes("unstructured-provider-text"), "stabiler Freitext-Warncode");
 });
 
 test("BP8 exakte 2048-/5-Cent-Konfiguration sperrt vor Providercheck, Reservierung und Fetch", async () => {
@@ -9167,7 +9203,7 @@ test("BP9a Client-Metaversionen stoppen vor Konfiguration, Log und Provider", as
   gleich(startKoerper().p_profil_version, null, "exakte null-Profilversion");
 });
 
-test("BP10 Artikel- und Modellinhalte erreichen weder Fehlertext noch DB-Logmetadaten", async () => {
+test("BP10 verworfene Artikel- und Modellinhalte erreichen weder Hinweis noch DB-Logmetadaten", async () => {
   stelleZurueck();
   const geheim = "PRIVATER_ARTIKEL_WERT_17A";
   const payload = bpPayload({
@@ -9182,9 +9218,11 @@ test("BP10 Artikel- und Modellinhalte erreichen weder Fehlertext noch DB-Logmeta
     vokabular: [],
   });
   const r = await bpRuf(payload, null);
-  gleich(r.status, 502, "Schemafehler");
-  gleich(r.daten.grund, "antwort-verletzt-schema", "fester Fehlertext");
-  falsch(JSON.stringify(r.daten).includes(geheim), "kein Inhalt im Fehlertext");
+  gleich(r.status, 200, "unsicheres Einzelitem wird sichtbar degradiert");
+  gleich(r.daten.data, null, "kein Profilmerkmal aus verworfenem Item");
+  gleich(r.daten.responseMode, "degraded", "fester degradierter Vertrag");
+  falsch(JSON.stringify(r.daten).includes(geheim), "kein Inhalt im Hinweistext");
+  falsch(JSON.stringify(r.daten).includes("frei erfundener Beleg"), "kein unbelegter Modelltext im Hinweis");
   const logRoh = JSON.stringify([...starten(), ...beenden()].map((a) => a.koerper));
   falsch(logRoh.includes(geheim), "kein Artikel-/Modellwert im DB-Log");
   falsch(logRoh.includes("privater_artikel_17a"), "keine Artikel-ID im DB-Log");
