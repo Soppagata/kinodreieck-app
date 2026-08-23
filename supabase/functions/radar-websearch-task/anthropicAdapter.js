@@ -2,6 +2,10 @@ import {
   RADAR_WEBSEARCH_MAX_RESULTS,
   RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE,
 } from "./contract.js";
+import {
+  ProviderTextSafetyError,
+  parseProviderLooseJsonText,
+} from "../_shared/providerText.js";
 
 export const RADAR_WEBSEARCH_PROVIDER_TASK = "radar-websearch";
 export const RADAR_WEBSEARCH_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -294,65 +298,198 @@ function providerUsage(value) {
   });
 }
 
-function responseTextBlock(content) {
-  const blocks = content.filter((block) => block?.type === "text" && text(block.text));
-  if (!blocks.length) throw new RadarWebsearchProviderError("provider-output-invalid");
-  return blocks[blocks.length - 1];
+const RADAR_WEBSEARCH_EVENT_TYPES = new Set([
+  "kinostart_at", "streamingstart_at", "serienstart", "staffelstart",
+]);
+const PROVIDER_WARNING_MAX = 8;
+
+function addWarning(warnings, code) {
+  if (warnings.size < PROVIDER_WARNING_MAX) warnings.add(code);
 }
 
-function parseProviderJson(block, kind = "work") {
-  let value;
-  try { value = JSON.parse(block.text); } catch {
-    throw new RadarWebsearchProviderError("provider-output-invalid");
-  }
-  const listKey = ["person", "title_group", "text"].includes(kind) ? "candidates" : "events";
-  const maxItems = kind === "person" ? 3 : ["title_group", "text"].includes(kind) ? 6 : 4;
-  if (!plain(value) || Object.keys(value).length !== 2
-      || !("status" in value) || !(listKey in value)
-      || !ALLOWED_STATUSES.has(value.status) || !Array.isArray(value[listKey])
-      || value[listKey].length > maxItems
-      || (value.status !== "confirmed" && value[listKey].length !== 0)) {
-    throw new RadarWebsearchProviderError("provider-output-invalid");
-  }
-  return value;
+function safeWarnings(warnings) {
+  return Object.freeze([...warnings].slice(0, PROVIDER_WARNING_MAX));
 }
 
-function urlsFromEvidence(value, kind = "work") {
-  const urls = [];
-  for (const finding of value[["person", "title_group", "text"].includes(kind) ? "candidates" : "events"]) {
-    if (!plain(finding) || !Array.isArray(finding.evidence)) {
+function parseProviderText(content, warnings) {
+  if (content.some((block) => ["thinking", "redacted_thinking"].includes(block?.type))) {
+    throw new RadarWebsearchProviderError("provider-output-invalid");
+  }
+  const parsedBlocks = [];
+  try {
+    for (const block of content.filter((entry) => entry?.type === "text" && text(entry.text))) {
+      parsedBlocks.push(parseProviderLooseJsonText(block.text));
+    }
+  } catch (error) {
+    if (error instanceof ProviderTextSafetyError) {
       throw new RadarWebsearchProviderError("provider-output-invalid");
     }
-    for (const evidence of finding.evidence) {
-      if (!plain(evidence) || typeof evidence.url !== "string") {
-        throw new RadarWebsearchProviderError("provider-output-invalid");
-      }
-      urls.push(evidence.url);
-    }
-    if (kind === "title_group" && finding.membershipEvidence !== undefined) {
-      if (!Array.isArray(finding.membershipEvidence)) {
-        throw new RadarWebsearchProviderError("provider-output-invalid");
-      }
-      for (const evidence of finding.membershipEvidence) {
-        if (!plain(evidence) || typeof evidence.url !== "string") {
-          throw new RadarWebsearchProviderError("provider-output-invalid");
-        }
-        urls.push(evidence.url);
-      }
-    }
-    if (kind === "text") {
-      if (!Array.isArray(finding.relationEvidence)) {
-        throw new RadarWebsearchProviderError("provider-output-invalid");
-      }
-      for (const evidence of finding.relationEvidence) {
-        if (!plain(evidence) || typeof evidence.url !== "string") {
-          throw new RadarWebsearchProviderError("provider-output-invalid");
-        }
-        urls.push(evidence.url);
-      }
-    }
+    throw error;
   }
-  return urls;
+  if (!parsedBlocks.length) {
+    addWarning(warnings, "provider-text-missing");
+    return Object.freeze({
+      mode: "degraded", value: null, displayText: null, warnings: Object.freeze([]),
+    });
+  }
+  if (parsedBlocks.length > 1) addWarning(warnings, "multiple-text-blocks-normalized");
+  const selected = [...parsedBlocks].reverse().find((entry) => entry.value) || parsedBlocks.at(-1);
+  for (const warning of selected.warnings) addWarning(warnings, warning);
+  return selected;
+}
+
+function normalizeEvidenceList(value, resultUrls, citationUrls, warnings) {
+  if (!Array.isArray(value)) {
+    addWarning(warnings, "evidence-list-dropped");
+    return [];
+  }
+  const normalized = [];
+  for (const entry of value.slice(0, RADAR_WEBSEARCH_MAX_RESULTS)) {
+    if (!plain(entry)) {
+      addWarning(warnings, "evidence-item-dropped");
+      continue;
+    }
+    const parsedUrl = directUrl(entry.url);
+    const sourceDomain = typeof entry.sourceDomain === "string" ? entry.sourceDomain : "";
+    if (!parsedUrl || parsedUrl.hostname.toLowerCase() !== sourceDomain
+        || !resultUrls.has(entry.url) || !citationUrls.has(entry.url)
+        || typeof entry.sourceTitle !== "string" || !text(entry.sourceTitle)
+        || typeof entry.claim !== "string" || !text(entry.claim)) {
+      addWarning(warnings, "evidence-item-dropped");
+      continue;
+    }
+    const normalizedEntry = {
+      url: entry.url,
+      sourceDomain,
+      sourceTitle: entry.sourceTitle,
+      claim: entry.claim,
+      ...(typeof entry.publishedAt === "string" ? { publishedAt: entry.publishedAt } : {}),
+    };
+    if (Object.keys(entry).some((key) => !["url", "sourceDomain", "sourceTitle", "claim", "publishedAt"].includes(key))) {
+      addWarning(warnings, "extra-fields-ignored");
+    }
+    normalized.push(normalizedEntry);
+  }
+  if (value.length > RADAR_WEBSEARCH_MAX_RESULTS) addWarning(warnings, "evidence-list-truncated");
+  return normalized;
+}
+
+function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnings) {
+  if (!plain(value)) {
+    addWarning(warnings, "finding-dropped");
+    return null;
+  }
+  const evidence = normalizeEvidenceList(value.evidence, resultUrls, citationUrls, warnings);
+  if (!evidence.length) {
+    addWarning(warnings, "finding-dropped");
+    return null;
+  }
+  if (kind === "work") {
+    const allowed = ["eventType", "eventDate", "platform", "seasonNumber", "evidence"];
+    if (Object.keys(value).some((key) => !allowed.includes(key))) addWarning(warnings, "extra-fields-ignored");
+    if (!RADAR_WEBSEARCH_EVENT_TYPES.has(value.eventType)) {
+      addWarning(warnings, "finding-dropped");
+      return null;
+    }
+    return {
+      eventType: value.eventType,
+      eventDate: value.eventDate,
+      ...(value.eventType === "streamingstart_at" ? { platform: value.platform } : {}),
+      ...(value.eventType === "staffelstart" ? { seasonNumber: value.seasonNumber } : {}),
+      evidence,
+    };
+  }
+
+  const commonAllowed = [
+    "targetId", "targetType", "title", "year", "role", "eventType", "eventDate",
+    "region", "platform", "seasonNumber", "groupExternalId", "membershipEvidence",
+    "relationEvidence", "evidence",
+  ];
+  if (Object.keys(value).some((key) => !commonAllowed.includes(key))) addWarning(warnings, "extra-fields-ignored");
+  const base = {
+    targetId: value.targetId,
+    targetType: value.targetType,
+    title: value.title,
+    year: value.year,
+    ...(kind === "person" ? { role: value.role } : {}),
+    eventType: value.eventType,
+    eventDate: value.eventDate,
+    region: value.region,
+    platform: value.platform ?? (value.eventType === "streamingstart_at" ? undefined : "-"),
+    ...(kind === "person" ? {} : {
+      seasonNumber: value.seasonNumber ?? (value.eventType === "staffelstart" ? undefined : null),
+    }),
+    evidence,
+  };
+  if (value.platform === undefined && value.eventType !== "streamingstart_at") {
+    addWarning(warnings, "optional-fields-filled");
+  }
+  if (kind !== "person" && value.seasonNumber === undefined && value.eventType !== "staffelstart") {
+    addWarning(warnings, "optional-fields-filled");
+  }
+  if (kind === "text") {
+    const relationEvidence = normalizeEvidenceList(
+      value.relationEvidence, resultUrls, citationUrls, warnings,
+    );
+    if (!relationEvidence.length) {
+      addWarning(warnings, "finding-dropped");
+      return null;
+    }
+    return { ...base, relationEvidence };
+  }
+  if (kind === "title_group"
+      && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE) {
+    const membershipEvidence = normalizeEvidenceList(
+      value.membershipEvidence, resultUrls, citationUrls, warnings,
+    );
+    if (!membershipEvidence.length) {
+      addWarning(warnings, "finding-dropped");
+      return null;
+    }
+    return { ...base, groupExternalId: value.groupExternalId, membershipEvidence };
+  }
+  return base;
+}
+
+function normalizeProviderJson(parsedText, kind, request, resultUrls, citationUrls, warnings) {
+  const listKey = ["person", "title_group", "text"].includes(kind) ? "candidates" : "events";
+  const maxItems = kind === "person" ? 3 : kind === "work" ? 4 : 6;
+  if (!plain(parsedText.value)) {
+    return { status: "insufficient_evidence", [listKey]: [] };
+  }
+  if (Object.keys(parsedText.value).some((key) => !["status", listKey].includes(key))) {
+    addWarning(warnings, "extra-fields-ignored");
+  }
+  const rawItems = Array.isArray(parsedText.value[listKey]) ? parsedText.value[listKey] : [];
+  if (!Array.isArray(parsedText.value[listKey])) addWarning(warnings, "finding-list-missing");
+  if (rawItems.length > maxItems) addWarning(warnings, "finding-list-truncated");
+  const normalized = rawItems.slice(0, maxItems)
+    .map((entry) => normalizeFinding(entry, kind, request, resultUrls, citationUrls, warnings))
+    .filter(Boolean);
+  let status = ALLOWED_STATUSES.has(parsedText.value.status)
+    ? parsedText.value.status : normalized.length ? "confirmed" : "insufficient_evidence";
+  if (!ALLOWED_STATUSES.has(parsedText.value.status)) addWarning(warnings, "status-normalized");
+  if (normalized.length && status !== "confirmed") {
+    status = "confirmed";
+    addWarning(warnings, "status-normalized");
+  }
+  if (!normalized.length && status === "confirmed") {
+    status = "insufficient_evidence";
+    addWarning(warnings, "status-normalized");
+  }
+  return { status, [listKey]: normalized };
+}
+
+function responsePresentation(parsedText, warnings) {
+  const allWarnings = safeWarnings(warnings);
+  const mode = parsedText.mode === "degraded"
+    ? "degraded" : allWarnings.length || parsedText.mode === "partial" ? "partial" : "structured";
+  const safeDisplay = mode === "degraded"
+    ? parsedText.displayText || "Die Suche lieferte einen unstrukturierten Hinweis. Es wurde nichts gespeichert."
+    : mode === "partial"
+      ? "Teile der Antwort waren unvollständig. Nur belegte Funde wurden berücksichtigt."
+      : null;
+  return Object.freeze({ responseMode: mode, displayText: safeDisplay, warnings: allWarnings });
 }
 
 export function parseAnthropicRadarWebsearchResponse(value, request, setupInput, checkedAt) {
@@ -361,51 +498,54 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   if (!usage || usage.searchRequests !== 1) {
     throw new RadarWebsearchProviderError("provider-usage-invalid", usage);
   }
-  if (value?.stop_reason === "pause_turn") {
+  if (!Array.isArray(value?.content)) {
     throw new RadarWebsearchProviderError("provider-stop-reason-invalid", usage);
   }
-  if (value?.stop_reason !== "end_turn" || !Array.isArray(value?.content)) {
-    throw new RadarWebsearchProviderError("provider-stop-reason-invalid", usage);
-  }
+  const warnings = new Set();
+  if (value?.stop_reason !== "end_turn") addWarning(warnings, "stop-reason-normalized");
 
   const uses = value.content.filter((block) => (
     block?.type === "server_tool_use" && block?.name === "web_search"
   ));
   const results = value.content.filter((block) => block?.type === "web_search_tool_result");
-  if (uses.length !== 1 || results.length !== 1 || results[0].tool_use_id !== uses[0].id) {
-    throw new RadarWebsearchProviderError("provider-tool-shape-invalid", usage);
-  }
-  if (plain(results[0].content) && results[0].content.type === "web_search_tool_result_error") {
-    throw new RadarWebsearchProviderError("provider-tool-error", usage);
-  }
-  if (!Array.isArray(results[0].content)) {
-    throw new RadarWebsearchProviderError("provider-tool-shape-invalid", usage);
-  }
-  if (results[0].content.length > RADAR_WEBSEARCH_MAX_RESULTS) {
-    throw new RadarWebsearchProviderError("provider-result-count-invalid", usage);
-  }
+  if (uses.length !== 1 || results.length !== 1) addWarning(warnings, "tool-blocks-normalized");
+  const useIds = new Set(uses.map((entry) => entry.id).filter((entry) => typeof entry === "string"));
 
   const resultUrls = new Set();
-  for (const item of results[0].content) {
-    const parsed = item?.type === "web_search_result" ? directUrl(item.url) : null;
-    if (!parsed || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
-      throw new RadarWebsearchProviderError("provider-domain-invalid", usage);
+  for (const result of results) {
+    if (plain(result.content) && result.content.type === "web_search_tool_result_error") {
+      throw new RadarWebsearchProviderError("provider-tool-error", usage);
     }
-    resultUrls.add(item.url);
+    if (!Array.isArray(result.content)) {
+      addWarning(warnings, "tool-blocks-normalized");
+      continue;
+    }
+    if (useIds.size && !useIds.has(result.tool_use_id)) addWarning(warnings, "tool-blocks-normalized");
+    for (const item of result.content) {
+      const parsed = item?.type === "web_search_result" ? directUrl(item.url) : null;
+      if (!parsed || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
+        addWarning(warnings, "search-result-dropped");
+        continue;
+      }
+      if (resultUrls.size < RADAR_WEBSEARCH_MAX_RESULTS) resultUrls.add(item.url);
+      else addWarning(warnings, "search-results-truncated");
+    }
   }
 
   const citationUrls = new Set();
   for (const block of value.content.filter((item) => item?.type === "text")) {
     if (block.citations === undefined) continue;
     if (!Array.isArray(block.citations)) {
-      throw new RadarWebsearchProviderError("provider-citation-invalid", usage);
+      addWarning(warnings, "citation-dropped");
+      continue;
     }
     for (const citation of block.citations) {
       const parsed = citation?.type === "web_search_result_location"
         ? directUrl(citation.url) : null;
       if (!parsed || !resultUrls.has(citation.url)
           || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
-        throw new RadarWebsearchProviderError("provider-citation-invalid", usage);
+        addWarning(warnings, "citation-dropped");
+        continue;
       }
       citationUrls.add(citation.url);
     }
@@ -413,16 +553,16 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
 
   const kind = request.kind === "person" ? "person"
     : request.kind === "title_group" ? "title_group" : request.kind === "text" ? "text" : "work";
-  const parsed = parseProviderJson(responseTextBlock(value.content), kind);
-  for (const url of urlsFromEvidence(parsed, kind)) {
-    if (!resultUrls.has(url) || !citationUrls.has(url)) {
-      throw new RadarWebsearchProviderError("provider-citation-invalid", usage);
-    }
-  }
+  const parsedText = parseProviderText(value.content, warnings);
+  const parsed = normalizeProviderJson(
+    parsedText, kind, request, resultUrls, citationUrls, warnings,
+  );
+  const presentation = responsePresentation(parsedText, warnings);
   if (kind === "person") {
     return Object.freeze({
       envelope: Object.freeze({
-        searchResultCount: results[0].content.length,
+        searchResultCount: resultUrls.size,
+        ...presentation,
         response: Object.freeze({
           status: parsed.status,
           checkedAt,
@@ -440,7 +580,8 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   if (kind === "title_group") {
     return Object.freeze({
       envelope: Object.freeze({
-        searchResultCount: results[0].content.length,
+        searchResultCount: resultUrls.size,
+        ...presentation,
         response: Object.freeze({
           status: parsed.status,
           checkedAt,
@@ -462,7 +603,8 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   if (kind === "text") {
     return Object.freeze({
       envelope: Object.freeze({
-        searchResultCount: results[0].content.length,
+        searchResultCount: resultUrls.size,
+        ...presentation,
         response: Object.freeze({
           status: parsed.status,
           checkedAt,
@@ -482,7 +624,8 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   };
   return Object.freeze({
     envelope: Object.freeze({
-      searchResultCount: results[0].content.length,
+      searchResultCount: resultUrls.size,
+      ...presentation,
       response: Object.freeze({
         status: parsed.status,
         checkedAt,

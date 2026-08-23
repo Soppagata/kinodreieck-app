@@ -405,6 +405,11 @@ export function createRadarWebsearchHandler({
         ? telemetry.reservationUsdCent : null,
       reservationDecision: telemetry.reservationDecision || "unknown",
       ...(result.personResult ? { personResult: result.personResult } : {}),
+      ...(result.responseMode ? {
+        responseMode: result.responseMode,
+        displayText: result.displayText,
+        warnings: result.warnings,
+      } : {}),
       ...(providerDiagnostic.allowed
         ? providerDiagnosticField(providerRawResponse)
         : {}),

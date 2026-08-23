@@ -246,7 +246,9 @@ async function loadEsbuild() {
 }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
-const cacheDir = path.join(rootDir, ".tmp");
+const cacheDir = process.env.KD_RADAR_TEST_TMPDIR
+  ? path.resolve(process.env.KD_RADAR_TEST_TMPDIR)
+  : path.join(rootDir, ".tmp");
 let outputDir = null;
 let dom = null;
 try {
@@ -386,13 +388,63 @@ try {
 
   localStorage.removeItem("kd:radar");
   localStorage.removeItem("kd:radar-websearch-cache");
+  const testSafeId = (prefix, value) => {
+    let hash = 0xcbf29ce484222325n;
+    for (const character of String(value).trim()) {
+      hash ^= BigInt(character.codePointAt(0));
+      hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+    }
+    return `${prefix}:${hash.toString(16).padStart(16, "0")}`;
+  };
+  const visibleTextEvent = (sourceTargetId) => {
+    const sourceTargetKey = `work:${sourceTargetId}`;
+    const targetId = "imdb:tt14409336";
+    const eventType = "streamingstart_at";
+    const region = "AT";
+    const platform = "Beispiel+";
+    const date = "2026-08-29";
+    const url = "https://radar.example/mutter-teresa/start";
+    const targetBoundIdentity = `${sourceTargetKey}|${targetId}|${eventType}|${region}|${platform}|-`;
+    const proofIdentity = `release:studio-official|${url}`;
+    return Object.freeze({
+      eventId: testSafeId("radar:event", targetBoundIdentity),
+      eventVersionId: testSafeId("radar:version", `${targetBoundIdentity}|${date}|${proofIdentity}`),
+      sourceTargetKey,
+      sourceTargetKind: "work",
+      targetId,
+      targetType: "work",
+      title: "Mother Teresa: No Greater Love",
+      year: 2022,
+      eventType,
+      date,
+      region,
+      platform,
+      seasonNumber: null,
+      lifecycleStatus: "scheduled",
+      verificationStatus: "confirmed",
+      evidence: Object.freeze([Object.freeze({
+        sourceId: "studio-official",
+        sourceDomain: "radar.example",
+        url,
+        retrievedAt: checkedAt,
+      })]),
+      franchiseEvidence: null,
+    });
+  };
   const textChecks = [];
   const textExecutor = Object.freeze({
     valid: true,
     async loadEvents() { return []; },
     async check(payload) {
       textChecks.push(payload);
-      return Object.freeze({ status: "insufficient_evidence", writes: 0, events: Object.freeze([]) });
+      return Object.freeze({
+        status: "confirmed",
+        writes: 1,
+        responseMode: "partial",
+        displayText: "Teile der Antwort waren unvollständig. Nur belegte Funde wurden berücksichtigt.",
+        warnings: Object.freeze(["json-extracted-from-text", "finding-dropped"]),
+        events: Object.freeze([visibleTextEvent(payload.target.targetId)]),
+      });
     },
   });
   const textUi = await mount(textExecutor);
@@ -419,11 +471,46 @@ try {
     await settle();
     assert.equal(textChecks.length, 1);
     assert.equal(textChecks[0].target.targetText, "Mutter Teresa");
-    assert.match(textUi.container.textContent, /Kein belegter neuer Fund/);
+    assert.match(textUi.container.textContent, /Ein bestätigter Treffer wurde gespeichert/);
+    assert.match(textUi.container.textContent, /Nur belegte Funde wurden berücksichtigt/);
+    assert.match(textUi.container.textContent, /Mother Teresa: No Greater Love/);
     assert.doesNotMatch(textUi.container.textContent, /Suche ist derzeit nicht verfügbar/);
-    assert.match(textUi.container.textContent, /Noch kein neuer belegter Fund/);
   });
   await textUi.cleanup();
+
+  localStorage.removeItem("kd:radar");
+  const degradedChecks = [];
+  const degradedExecutor = Object.freeze({
+    valid: true,
+    async loadEvents() { return []; },
+    async check(payload) {
+      degradedChecks.push(payload);
+      return Object.freeze({
+        status: "insufficient_evidence",
+        writes: 0,
+        responseMode: "degraded",
+        displayText: "Keine eindeutig belegte Zuordnung zu einem Österreich-Termin gefunden.",
+        warnings: Object.freeze(["unstructured-provider-text"]),
+        events: Object.freeze([]),
+      });
+    },
+  });
+  const degradedUi = await mount(degradedExecutor);
+  await act(async () => { button(degradedUi.container, "Radar").click(); await tick(); });
+  await setControl(degradedUi.container.querySelector("#kd-radar-target-search"), "Tommy Wiseau");
+  await check("Unstrukturierter sicherer Hinweis bleibt sichtbar und persistiert keinen Fund", async () => {
+    await act(async () => { button(degradedUi.container, "Im Radar speichern").click(); await tick(); });
+    await settle();
+    await act(async () => { button(degradedUi.container, "Jetzt prüfen").click(); await tick(); });
+    await settle();
+    assert.equal(degradedChecks.length, 1);
+    assert.equal(degradedChecks[0].target.targetText, "Tommy Wiseau");
+    assert.match(degradedUi.container.textContent, /Kein belegter neuer Fund/);
+    assert.match(degradedUi.container.textContent, /Keine eindeutig belegte Zuordnung/);
+    assert.match(degradedUi.container.textContent, /Noch kein neuer belegter Fund/);
+    assert.doesNotMatch(degradedUi.container.textContent, /Mother Teresa: No Greater Love/);
+  });
+  await degradedUi.cleanup();
 } finally {
   if (dom) dom.window.close();
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });

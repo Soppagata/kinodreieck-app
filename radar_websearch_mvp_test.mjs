@@ -481,12 +481,23 @@ await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, status: 200, async json() {
-        return { ok: true, status: "insufficient_evidence", writes: 0, providerRequests: 1, searchRequests: 1 };
+        return {
+          ok: true,
+          status: "insufficient_evidence",
+          writes: 0,
+          providerRequests: 1,
+          searchRequests: 1,
+          responseMode: "degraded",
+          displayText: "Keine eindeutig belegte Zuordnung gefunden.",
+          warnings: ["unstructured-provider-text"],
+        };
       } };
     },
   });
   const result = await service.checkNow("text:0123456789abcdef", "Mutter Teresa");
   assert.equal(result.status, "insufficient_evidence");
+  assert.equal(result.responseMode, "degraded");
+  assert.equal(result.displayText, "Keine eindeutig belegte Zuordnung gefunden.");
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     targetId: "text:0123456789abcdef", targetText: "Mutter Teresa",

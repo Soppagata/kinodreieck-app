@@ -203,6 +203,13 @@ function isErrorStatus(status) {
   return ["forbidden", "unresolved", "unavailable", "provider_error", "timeout", "invalid_response", "storage_error"].includes(status);
 }
 
+function radarResultText(result, kind) {
+  const base = statusText(result?.status, kind);
+  if (!["partial", "degraded"].includes(result?.responseMode)
+      || typeof result?.displayText !== "string" || !result.displayText) return base;
+  return `${base} ${result.displayText}`;
+}
+
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
   radarPilotEvents = [], radarCheckAvailable = false,
@@ -252,7 +259,7 @@ function RadarView({
     setBusyKey(`work|${entry.targetId}`); setMessage(null);
     try {
       const result = await onRadarWebsearchCheck?.(entry.targetId);
-      setMessage({ status: result?.status, text: statusText(result?.status, entry.targetType) });
+      setMessage({ status: result?.status, text: radarResultText(result, entry.targetType) });
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error") }); }
     finally { checkLockRef.current = false; setBusyKey(""); }
   };
@@ -262,7 +269,7 @@ function RadarView({
     setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
     try {
       const result = await onPersonRadarCheck?.(entry);
-      setMessage({ status: result?.status, text: statusText(result?.status, "person") });
+      setMessage({ status: result?.status, text: radarResultText(result, "person") });
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
     finally { checkLockRef.current = false; setBusyKey(""); }
   };

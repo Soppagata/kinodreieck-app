@@ -4,6 +4,23 @@ import {
 } from "./contract.js";
 
 function frozenResult(value) { return Object.freeze({ ...value }); }
+function safePresentation(value) {
+  if (!value || !["structured", "partial", "degraded"].includes(value.responseMode)
+      || (value.displayText !== null
+        && (typeof value.displayText !== "string" || !value.displayText.trim()
+          || value.displayText !== value.displayText.trim() || value.displayText.length > 320
+          || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value.displayText)))
+      || !Array.isArray(value.warnings) || value.warnings.length > 8
+      || value.warnings.some((warning) => (
+        typeof warning !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(warning)
+        || warning.length > 64
+      ))) return Object.freeze({});
+  return Object.freeze({
+    responseMode: value.responseMode,
+    displayText: value.displayText,
+    warnings: Object.freeze([...value.warnings]),
+  });
+}
 async function loadFeedSafely(repository, accountId) {
   try { return await repository.loadFeed({ accountId }); }
   catch { return null; }
@@ -59,6 +76,7 @@ export async function runRadarWebsearchCheck({
   } catch {
     return frozenResult({ status: "provider_error", writes: 0, feed: null });
   }
+  const presentation = safePresentation(envelope);
 
   let sources = [];
   try {
@@ -78,6 +96,7 @@ export async function runRadarWebsearchCheck({
     return frozenResult({
       status: "insufficient_evidence", writes: 0,
       feed: await loadFeedSafely(repository, accountId),
+      ...presentation,
     });
   }
   const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
@@ -87,6 +106,7 @@ export async function runRadarWebsearchCheck({
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
       personResult: evaluated.personResult || null,
+      ...presentation,
     });
   }
   if (request.kind === "title_group" && evaluated.status !== "confirmed") {
@@ -94,6 +114,7 @@ export async function runRadarWebsearchCheck({
       status: evaluated.status,
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
+      ...presentation,
     });
   }
   if (request.kind === "text" && evaluated.status !== "confirmed") {
@@ -101,6 +122,7 @@ export async function runRadarWebsearchCheck({
       status: evaluated.status,
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
+      ...presentation,
     });
   }
   if (evaluated.status !== "confirmed") {
@@ -108,6 +130,7 @@ export async function runRadarWebsearchCheck({
       status: evaluated.status,
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
+      ...presentation,
     });
   }
 
@@ -180,11 +203,11 @@ export async function runRadarWebsearchCheck({
         writes += 1;
         changed = true;
       } else if (upsert?.status !== "no_change") {
-        return frozenResult({ status: "storage_error", writes, feed: null });
+        return frozenResult({ status: "storage_error", writes, feed: null, ...presentation });
       }
     }
   } catch {
-    return frozenResult({ status: "storage_error", writes, feed: null });
+    return frozenResult({ status: "storage_error", writes, feed: null, ...presentation });
   }
   if (request.kind === "person") {
     const personResult = changed
@@ -202,11 +225,13 @@ export async function runRadarWebsearchCheck({
       writes,
       feed: await loadFeedSafely(repository, accountId),
       personResult,
+      ...presentation,
     });
   }
   return frozenResult({
     status: changed ? "confirmed" : "no_change",
     writes,
     feed: await loadFeedSafely(repository, accountId),
+    ...presentation,
   });
 }

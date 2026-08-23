@@ -18,6 +18,7 @@ function exactResult(value, expectedPerson = null) {
   const allowed = [
     "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
     "reservationStatus", "reservationUsdCent", "reservationDecision",
+    "responseMode", "displayText", "warnings",
   ];
   if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
@@ -42,16 +43,41 @@ function exactResult(value, expectedPerson = null) {
         || (value.reservationStatus === "unknown"
           && (value.reservationDecision !== "unknown" || value.reservationUsdCent !== null))) return null;
   }
+  const presentationKeys = ["responseMode", "displayText", "warnings"];
+  const presentationCount = presentationKeys.filter((key) => value[key] !== undefined).length;
+  let presentation = {};
+  if (presentationCount !== 0) {
+    if (presentationCount !== presentationKeys.length
+        || !["structured", "partial", "degraded"].includes(value.responseMode)
+        || (value.displayText !== null
+          && (typeof value.displayText !== "string" || !value.displayText.trim()
+            || value.displayText !== value.displayText.trim() || value.displayText.length > 320
+            || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value.displayText)))
+        || !Array.isArray(value.warnings) || value.warnings.length > 8
+        || new Set(value.warnings).size !== value.warnings.length
+        || value.warnings.some((warning) => (
+          typeof warning !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(warning)
+          || warning.length > 64
+        ))
+        || (value.responseMode === "structured"
+          ? value.displayText !== null || value.warnings.length !== 0
+          : value.displayText === null)) return null;
+    presentation = {
+      responseMode: value.responseMode,
+      displayText: value.displayText,
+      warnings: Object.freeze([...value.warnings]),
+    };
+  }
   if (!expectedPerson) {
     if (value.personResult !== undefined) return null;
-    return Object.freeze({ status: value.status, writes: value.writes });
+    return Object.freeze({ status: value.status, writes: value.writes, ...presentation });
   }
   const result = value.personResult;
   if (!plain(result) || !validatePersonIdentity(result.person).ok
       || result.person.personExternalId !== expectedPerson.personExternalId
       || result.person.name !== expectedPerson.name || result.person.role !== expectedPerson.role
       || result.status !== value.status || value.writes > 3) return null;
-  return Object.freeze({ status: value.status, writes: value.writes, personResult: result });
+  return Object.freeze({ status: value.status, writes: value.writes, personResult: result, ...presentation });
 }
 
 /* Der Browser sendet die starke Zielkennung und nur bei einem lokalen

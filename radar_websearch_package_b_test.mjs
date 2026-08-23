@@ -17,13 +17,6 @@ import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
-  ENTDECKEN_WEEKLY_COMMIT,
-  ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
-  ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
-  RADAR_PACKAGE_A_COMMIT,
-  RADAR_PACKAGE_B_COMMIT,
-  RADAR_TEXT_TARGET_COMMIT,
-  RADAR_TITLE_GROUP_V6_COMMIT,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
   RadarRemoteStartStop,
@@ -151,6 +144,81 @@ function providerMessage({
   };
 }
 
+const textTarget = Object.freeze({
+  kind: "text",
+  targetId: "text:d9e6b48aa971462a",
+  targetText: "Mutter Teresa",
+  region: "AT",
+  scopes: Object.freeze(["cinema", "streaming", "series_start", "season_start"]),
+});
+
+function textProof(source, path, claim) {
+  return {
+    url: `https://${source.domain}/${path}`,
+    sourceDomain: source.domain,
+    sourceTitle: `${source.publisherFamily} Beleg`,
+    publishedAt: "2026-08-22",
+    claim,
+  };
+}
+
+function textProviderMessage({ rawText = null, stopReason = "end_turn" } = {}) {
+  const relationEvidence = [
+    textProof(sources[0], "mutter-teresa/relation-a", "Das Werk handelt eindeutig von Mutter Teresa."),
+    textProof(sources[1], "mutter-teresa/relation-b", "Das Werk ist Mutter Teresa eindeutig zugeordnet."),
+  ];
+  const eventEvidence = [
+    textProof(sources[0], "mutter-teresa/start-a", "Streamingstart in Österreich am 29. August 2026."),
+    textProof(sources[1], "mutter-teresa/start-b", "Österreichstart am 29. August 2026 bestätigt."),
+  ];
+  const resultUrls = [...relationEvidence, ...eventEvidence].map((entry) => entry.url);
+  const candidates = [{ title: "kaputt-ohne-identitaet" }, {
+    targetId: "imdb:tt14409336",
+    targetType: "work",
+    title: "Mother Teresa: No Greater Love",
+    year: 2022,
+    eventType: "streamingstart_at",
+    eventDate: "2026-08-29",
+    region: "AT",
+    platform: "Beispiel+",
+    relationEvidence,
+    evidence: eventEvidence,
+    harmlessExtra: "ignored",
+  }];
+  const textBody = rawText ?? [
+    "Hier ist die auswertbare Antwort:",
+    "```json",
+    JSON.stringify({ status: "confirmed", candidates, harmlessTopLevel: true }),
+    "```",
+    "Nur die belegten Einträge sind relevant.",
+  ].join("\n");
+  return {
+    id: "msg_text_mock",
+    type: "message",
+    role: "assistant",
+    model: "claude-haiku-4-5",
+    stop_reason: stopReason,
+    content: [
+      { type: "server_tool_use", id: "srvtoolu_text", name: "web_search", input: {} },
+      {
+        type: "web_search_tool_result",
+        tool_use_id: "srvtoolu_text",
+        content: resultUrls.map((url) => ({ type: "web_search_result", url, title: "Beleg" })),
+      },
+      {
+        type: "text",
+        text: textBody,
+        citations: resultUrls.map((url) => ({ type: "web_search_result_location", url })),
+      },
+    ],
+    usage: {
+      input_tokens: 120,
+      output_tokens: 180,
+      server_tool_use: { web_search_requests: 1 },
+    },
+  };
+}
+
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -247,6 +315,93 @@ await check("Insufficient und no_change bleiben kleine terminale Antworten ohne 
   }
 });
 
+function textRepository() {
+  const calls = { upserts: 0 };
+  const stored = [];
+  return {
+    calls,
+    async loadAuthorizedTarget({ accountId, targetId, targetText }) {
+      assert.equal(accountId, "max-account");
+      assert.equal(targetId, textTarget.targetId);
+      assert.equal(targetText, textTarget.targetText);
+      return structuredClone(textTarget);
+    },
+    async resolveSources(domains) {
+      assert.equal(domains.every((domain) => sources.some((source) => source.domain === domain)), true);
+      return structuredClone(sources.filter((source) => domains.includes(source.domain)));
+    },
+    async upsertConfirmedEvent({ event }) {
+      calls.upserts += 1;
+      stored.push(structuredClone(event));
+      return { status: "confirmed" };
+    },
+    async loadFeed() { return { events: structuredClone(stored) }; },
+  };
+}
+
+await check("Freitext-Codeblock rettet einen belegten Fund und verwirft ein kaputtes Item ohne zweiten Request", async () => {
+  const harness = adapterHarness({ providerBody: textProviderMessage({ stopReason: "max_tokens" }) });
+  const repository = textRepository();
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account",
+    targetId: textTarget.targetId,
+    targetText: textTarget.targetText,
+    adapter: harness.adapter,
+    repository,
+    operationId: () => "72000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 1);
+  assert.equal(result.responseMode, "partial");
+  assert.match(result.displayText, /Nur belegte Funde/);
+  assert.ok(result.warnings.includes("json-extracted-from-text"));
+  assert.equal(repository.calls.upserts, 1);
+  assert.equal(result.feed.events[0].targetKey, "imdb:tt14409336");
+  assert.equal(harness.fetchCalls.length, 1);
+  assert.equal(harness.reserveCalls.length, 1);
+  assert.equal(harness.settleCalls.length, 1);
+});
+
+await check("Sicherer unstrukturierter Freitext wird degraded sichtbar und bleibt writes=0", async () => {
+  const safeText = "Keine eindeutig belegte Zuordnung zu einem Österreich-Termin gefunden.";
+  const harness = adapterHarness({ providerBody: textProviderMessage({ rawText: safeText }) });
+  const repository = textRepository();
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account",
+    targetId: textTarget.targetId,
+    targetText: textTarget.targetText,
+    adapter: harness.adapter,
+    repository,
+  });
+  assert.equal(result.status, "insufficient_evidence");
+  assert.equal(result.writes, 0);
+  assert.equal(result.responseMode, "degraded");
+  assert.equal(result.displayText, safeText);
+  assert.equal(repository.calls.upserts, 0);
+  assert.equal(harness.fetchCalls.length, 1);
+});
+
+await check("Thinking, Secrettext und eine eingebettete API-Hülle bleiben harte Ausgabesperren", async () => {
+  const thinkingBody = providerMessage();
+  thinkingBody.content.push({ type: "thinking", thinking: "private" });
+  const unsafeBodies = [
+    thinkingBody,
+    textProviderMessage({ rawText: "api_key=sk-ant-synthetic-secret-value" }),
+    textProviderMessage({
+      rawText: JSON.stringify({
+        id: "msg_leak", type: "message", role: "assistant", model: "claude-haiku-4-5",
+        content: [], usage: {},
+      }),
+    }),
+  ];
+  for (const providerBody of unsafeBodies) {
+    const harness = adapterHarness({ providerBody });
+    await expectProviderError(harness.adapter.search(textTarget), "provider-output-invalid");
+    assert.equal(harness.fetchCalls.length, 1);
+    assert.equal(harness.settleCalls[0].status, "fehler");
+  }
+});
+
 await check("HTTP- und Netzwerkfehler enden nach einem Fetch ohne Rohfehler", async () => {
   const http = adapterHarness({
     providerBody: { type: "error", error: { type: "overloaded_error", message: "raw-private" } },
@@ -265,14 +420,16 @@ await check("HTTP- und Netzwerkfehler enden nach einem Fetch ohne Rohfehler", as
   assert.equal(JSON.stringify(network.settleCalls).includes("raw-private"), false);
 });
 
-await check("Toolfehler und pause_turn sind terminal und starten niemals einen Folgefetch", async () => {
+await check("Toolfehler bleibt hart; abweichender stop_reason nutzt brauchbare Antwort ohne Folgefetch", async () => {
   const tool = adapterHarness({ providerBody: providerMessage({ toolError: true }) });
   await expectProviderError(tool.adapter.search(target), "provider-tool-error");
   assert.equal(tool.fetchCalls.length, 1);
   assert.equal(tool.settleCalls.length, 1);
 
   const paused = adapterHarness({ providerBody: providerMessage({ stopReason: "pause_turn" }) });
-  await expectProviderError(paused.adapter.search(target), "provider-stop-reason-invalid");
+  const envelope = await paused.adapter.search(target);
+  assert.equal(envelope.responseMode, "partial");
+  assert.ok(envelope.warnings.includes("stop-reason-normalized"));
   assert.equal(paused.fetchCalls.length, 1);
   assert.equal(paused.settleCalls.length, 1);
 });
@@ -287,12 +444,15 @@ await check("Usage 0 und Usage größer 1 werden trotz HTTP 200 fail-closed abge
   }
 });
 
-await check("Mehr als sechs Resultate und eine fremde Citation werden vor dem Produktvalidator blockiert", async () => {
+await check("Zusätzliche Resultate und fremde Citation werden weich begrenzt, Evidence bleibt geschlossen", async () => {
   const tooManyUrls = Array.from({ length: 7 }, (_, index) => `https://news-a.example/${index}`);
   const tooMany = adapterHarness({
     providerBody: providerMessage({ resultUrls: tooManyUrls, citationUrls: tooManyUrls }),
   });
-  await expectProviderError(tooMany.adapter.search(target), "provider-result-count-invalid");
+  const truncated = await tooMany.adapter.search(target);
+  assert.equal(truncated.searchResultCount, 6);
+  assert.equal(truncated.responseMode, "partial");
+  assert.ok(truncated.warnings.includes("search-results-truncated"));
   assert.equal(tooMany.fetchCalls.length, 1);
 
   const foreign = adapterHarness({
@@ -300,7 +460,9 @@ await check("Mehr als sechs Resultate und eine fremde Citation werden vor dem Pr
       citationUrls: [evidence(sources[0]).url, "https://foreign.example/start"],
     }),
   });
-  await expectProviderError(foreign.adapter.search(target), "provider-citation-invalid");
+  const filtered = await foreign.adapter.search(target);
+  assert.equal(filtered.responseMode, "partial");
+  assert.equal(evaluateRadarWebsearchResponse(filtered, target, sources).status, "insufficient_evidence");
   assert.equal(foreign.fetchCalls.length, 1);
 });
 
@@ -419,31 +581,6 @@ await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfr
   assert.equal(fetches, 0);
 });
 
-const expectedRemoteReleaseClosure = Object.freeze([
-  "package.json",
-  "supabase/config.toml",
-  "supabase/functions/_shared/providerDiagnostic.js",
-  "supabase/functions/entdecken-daily-task/anthropicAdapter.js",
-  "supabase/functions/entdecken-daily-task/contract.js",
-  "supabase/functions/entdecken-daily-task/index.ts",
-  "supabase/functions/entdecken-daily-task/runner.js",
-  "supabase/functions/radar-websearch-task/anthropicAdapter.js",
-  "supabase/functions/radar-websearch-task/contract.js",
-  "supabase/functions/radar-websearch-task/index.ts",
-  "supabase/functions/radar-websearch-task/mockAdapter.js",
-  "supabase/functions/radar-websearch-task/runner.js",
-  "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
-  "supabase/migrations/20260817190000_radar_websearch_mvp_package_b.sql",
-  "supabase/migrations/20260822190000_entdecken_weekly_feed.sql",
-  "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
-  "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
-  "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
-  "supabase/migrations/20260823120000_radar_text_target.sql",
-  "tools/entdecken_daily_live.mjs",
-  "tools/keychain_runner.mjs",
-  "tools/radar_websearch_live.mjs",
-]);
-
 const expectedLedgerBaseline = Object.freeze([
   Object.freeze({
     version: "20260817120000",
@@ -480,40 +617,11 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Remote-Release-Closure entsteht aus v6-Historie, Radar-Text-Target und echtem Function-Importgraph", () => {
-  const first = deriveRadarPackageBReleaseClosure();
-  const second = deriveRadarPackageBReleaseClosure();
-  assert.deepEqual(first.contractCommits, [
-    RADAR_PACKAGE_A_COMMIT,
-    RADAR_PACKAGE_B_COMMIT,
-    ENTDECKEN_WEEKLY_COMMIT,
-    RADAR_TITLE_GROUP_V6_COMMIT,
-    ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
-    ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
-    RADAR_TEXT_TARGET_COMMIT,
-  ]);
-  assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
-  assert.equal(first.files.length, expectedRemoteReleaseClosure.length);
-  assert.equal(first.files.every((file) => fs.existsSync(`${REPO_ROOT}/${file.path}`)), true);
-  assert.equal(first.paths.includes("tools/radar_websearch_contract.mjs"), false);
-  assert.equal(first.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), true);
-  assert.match(first.sha256, /^[a-f0-9]{64}$/);
-  assert.equal(first.sha256, second.sha256);
-});
-
-await check("Eine fehlende echte Closuredatei stoppt statt durch einen geratenen Pfad ersetzt zu werden", () => {
+await check("Neue lokale Antwortgrenze bleibt bis zu einer eigenen Remote-Etappe am alten Releasezaun gesperrt", () => {
   assert.throws(
-    () => deriveRadarPackageBReleaseClosure({
-      readFile(path) {
-        if (String(path).endsWith("/radar-websearch-task/contract.js")) {
-          const error = new Error("synthetic-missing");
-          error.code = "ENOENT";
-          throw error;
-        }
-        return fs.readFileSync(path);
-      },
-    }),
-    (error) => error instanceof RadarRemoteStartStop && error.code === "CLOSURE_FILE_MISSING",
+    () => deriveRadarPackageBReleaseClosure(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
   );
 });
 
