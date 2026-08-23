@@ -20,6 +20,7 @@ import {
   RADAR_ENTDECKEN_V6_RELEASE_SHA256,
   RADAR_TEXT_TARGET_COMMIT,
   RADAR_TEXT_TARGET_FILES,
+  RADAR_TEXT_TARGET_ORIGIN_COMMIT,
   RADAR_TEXT_TARGET_RELEASE_MIGRATIONS,
   RADAR_TEXT_TARGET_RELEASE_SHA256,
   RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256,
@@ -65,6 +66,11 @@ const radarEntdeckenV6BaselineCommit = "8b1f4aa654bf4c272514a8e9fb4918dda42eac0b
 function fileAtAcceptedV6(pathname) {
   return execFileSync("/usr/bin/git", [
     "show", `${radarEntdeckenV6BaselineCommit}:${pathname}`,
+  ], { cwd: process.cwd(), encoding: null });
+}
+function fileAtRadarTextSource(pathname) {
+  return execFileSync("/usr/bin/git", [
+    "show", `${RADAR_TEXT_TARGET_COMMIT}:${pathname}`,
   ], { cwd: process.cwd(), encoding: null });
 }
 function provenancePath(absolutePath) {
@@ -126,8 +132,21 @@ await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und alle vie
   }), (error) => error?.code === "RADAR_V6_RELEASE_PROVENANCE_DRIFT");
 });
 
-await check("Aktueller Radar-Text-Target-Zaun bindet Commit, vier Function-Dateien und Forward-Migration bytegenau", () => {
-  assert.equal(RADAR_TEXT_TARGET_COMMIT, "3c3482041c9036eefa3cd6f8b2d25a48549fcdf8");
+await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-Dateien und Forward-Migration bytegenau", () => {
+  assert.equal(RADAR_TEXT_TARGET_ORIGIN_COMMIT, "3c3482041c9036eefa3cd6f8b2d25a48549fcdf8");
+  assert.equal(RADAR_TEXT_TARGET_COMMIT, "e312deea826efc53dd7281edf74f10cd42b17ffc");
+  assert.deepEqual(RADAR_TEXT_TARGET_FILES.map(({ path: pathname }) => pathname), [
+    "supabase/functions/radar-websearch-task/anthropicAdapter.js",
+    "supabase/functions/radar-websearch-task/contract.js",
+    "supabase/functions/radar-websearch-task/index.ts",
+    "supabase/functions/radar-websearch-task/runner.js",
+    "supabase/functions/_shared/providerDiagnostic.js",
+    "supabase/functions/_shared/providerText.js",
+  ]);
+  assert.equal(RADAR_TEXT_TARGET_FILES.some(({ path: pathname }) => pathname.endsWith("/mockAdapter.js")), false);
+  for (const { path: pathname, sha256: digest } of RADAR_TEXT_TARGET_FILES) {
+    assert.equal(sha256(fileAtRadarTextSource(pathname)), digest, pathname);
+  }
   const release = requireRadarTextTargetReleaseProvenance();
   assert.equal(release.releaseSha256, RADAR_TEXT_TARGET_RELEASE_SHA256);
   assert.deepEqual(release.functions.radar, RADAR_TEXT_TARGET_FILES);
@@ -146,6 +165,15 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Commit, vier Function-Datei
       const pathname = provenancePath(absolutePath);
       const bytes = fs.readFileSync(pathname);
       return pathname === migrationPath ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
+    },
+  }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
+
+  const sharedPath = "supabase/functions/_shared/providerText.js";
+  assert.throws(() => requireRadarTextTargetReleaseProvenance({
+    readFile(absolutePath) {
+      const pathname = provenancePath(absolutePath);
+      const bytes = fs.readFileSync(pathname);
+      return pathname === sharedPath ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
     },
   }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
 });

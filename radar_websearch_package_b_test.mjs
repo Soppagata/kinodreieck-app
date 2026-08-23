@@ -17,6 +17,8 @@ import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
+  RADAR_TEXT_TARGET_COMMIT,
+  RADAR_TEXT_TARGET_FILES,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
   RadarRemoteStartStop,
@@ -617,12 +619,14 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Neue lokale Antwortgrenze bleibt bis zu einer eigenen Remote-Etappe am alten Releasezaun gesperrt", () => {
-  assert.throws(
-    () => deriveRadarPackageBReleaseClosure(),
-    (error) => error instanceof RadarRemoteStartStop
-      && error.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
-  );
+await check("Aktueller Radar-Quellcommit traegt die transitiven Runtime-Dateien ohne Testadapter", () => {
+  const closure = deriveRadarPackageBReleaseClosure();
+  assert.equal(closure.contractCommits.at(-1), RADAR_TEXT_TARGET_COMMIT);
+  assert.equal(closure.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), false);
+  for (const { path: pathname } of RADAR_TEXT_TARGET_FILES) {
+    assert.equal(closure.paths.includes(pathname), true, pathname);
+  }
+  assert.match(closure.sha256, /^[a-f0-9]{64}$/);
 });
 
 await check("Der echte JS-CLI-Startmodus findet Node im engen lokalen Lesepfad", () => {
