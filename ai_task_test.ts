@@ -1039,14 +1039,21 @@ function test(name: string, fn: () => Promise<void> | void) {
    A. Aufgaben-Auflösung (der Refactor von Etappe 6)
    =========================================================================== */
 
+const ERWARTETE_NUTZER_AUFGABEN = [
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "media-batch-extract",
+  "blog-profile-extract",
+];
+
 test("A1 AUFGABEN enthält alle gebauten Aufgaben", () => {
   wahr(AUFGABEN && typeof AUFGABEN === "object", "AUFGABEN ist exportiert");
   for (
     const gebaut of [
       "echo-struct",
-      "intelligent-search",
-      "profile-extract",
-      "film-forecast",
+      ...ERWARTETE_NUTZER_AUFGABEN,
     ]
   ) {
     wahr(gebaut in AUFGABEN, `${gebaut} ist in der Aufgaben-Tabelle`);
@@ -1376,6 +1383,15 @@ test("C0a kostenfreie health-Messung bleibt bei ausgeschaltetem ai-task lesbar",
   gleich(r.status, 200, "Status");
   gleich(r.daten.ok, true, "ok");
   gleich(r.daten.task, "health", "nur der reservierte Messpfad läuft");
+  const activation = r.daten.activation as Record<string, unknown> | undefined;
+  gleich(activation?.gate, "KD_AI_TASK_ENABLED", "exakt benanntes Aktivierungsgate");
+  gleich(activation?.requiredValue, "true", "nur der String true aktiviert");
+  gleich(activation?.enabled, false, "Health weist den Default-off-Zustand aus");
+  gleich(
+    JSON.stringify(activation?.userTasks),
+    JSON.stringify(ERWARTETE_NUTZER_AUFGABEN),
+    "Health bindet die Aktivierung exakt an die sechs Nutzeraufgaben",
+  );
   gleich(kontofreigabeAufrufe().length, 1, "Auth und Kontofreigabe bleiben aktiv");
   gleich(konfigAufrufe().length, 1, "serverseitige Budgetkonfiguration wird gelesen");
   gleich(starten().length, 0, "keine Reservierung");
@@ -1384,10 +1400,14 @@ test("C0a kostenfreie health-Messung bleibt bei ausgeschaltetem ai-task lesbar",
 
 test("C0b ai-task bewahrt mit exakt true den bisherigen Vertrag", async () => {
   Deno.env.set("KD_AI_TASK_ENABLED", "true");
+  const health = await ruf({ task: "health", vorgangId: neueVorgangId() });
+  const activation = health.daten.activation as Record<string, unknown> | undefined;
+  gleich(health.status, 200, "Health-Status");
+  gleich(activation?.enabled, true, "Health weist exakt true als aktiviert aus");
   const r = await echoRuf();
   gleich(r.status, 200, "Status");
-  gleich(kontofreigabeAufrufe().length, 1, "genau eine Access-Lesung");
-  gleich(konfigAufrufe().length, 1, "genau eine Konfigurationslesung");
+  gleich(kontofreigabeAufrufe().length, 2, "je eine Access-Lesung für Health und Aufgabe");
+  gleich(konfigAufrufe().length, 2, "je eine Konfigurationslesung für Health und Aufgabe");
   gleich(starten().length, 1, "genau eine Reservierung");
   gleich(anbieterAufrufe().length, 1, "genau ein Anbieteraufruf");
 });

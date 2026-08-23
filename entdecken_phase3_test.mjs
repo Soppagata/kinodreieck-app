@@ -343,10 +343,10 @@ try {
     assert.doesNotMatch(dialog.textContent, /Pilot|Fixture|Proposal|Hash|Outbox|watchmode:/i);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), true);
   });
-  await act(async () => {
+  await act(() => {
     document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    await tick();
   });
+  await tick();
   check("Escape schließt die Verwaltung und gibt den Fokus zurück", () => {
     assert.equal(document.querySelector('[aria-labelledby="kd-entdecken-manage-title"]'), null);
     assert.equal(document.body.classList.contains("kd-scroll-gesperrt"), false);
@@ -401,9 +401,13 @@ try {
     targetId: "watchmode:91", targetType: "work", targetStatus: "active",
     title: "Passender Film", canonical: true,
   };
-  let previewTarget = null;
+  const savedTextTargets = [];
   const workPicker = await mount(EntdeckenTab, {
-    ...baseProps, radarState: createEmptyLocalRadar(), onRadarPreview: (target) => { previewTarget = target; },
+    ...baseProps, radarState: createEmptyLocalRadar(),
+    onRadarTextAdd: async (targetText) => {
+      savedTextTargets.push(targetText);
+      return { status: "active", writes: 1 };
+    },
   });
   await act(async () => { button(workPicker.container, "Radar").click(); await tick(); });
   check("Radar öffnet genau ein leeres Suchfeld ohne Vollkatalog-Select oder Fehler", () => {
@@ -413,13 +417,13 @@ try {
     assert.doesNotMatch(workPicker.container.textContent, /nicht verfügbar|Werk hinzufügen/i);
   });
   await setControl(workPicker.container.querySelector("#kd-radar-target-search"), "Passender Film");
-  await act(async () => { await tick(); await tick(); });
   await act(async () => {
-    workPicker.container.querySelector('[data-radar-target-kind="catalog"]').click();
+    button(workPicker.container, "Im Radar speichern").click();
     await tick();
   });
-  check("Film wird nur über die stabile Katalog-ID an die Bestätigung übergeben", () => {
-    assert.deepEqual(previewTarget, workTarget);
+  check("Radar speichert den unveränderten Freitext ohne lokalen Katalogpicker", () => {
+    assert.deepEqual(savedTextTargets, ["Passender Film"]);
+    assert.equal(workPicker.container.querySelectorAll('[data-radar-target-kind]').length, 0);
     assert.doesNotMatch(workPicker.container.innerHTML, /watchmode:91|fixture:|work:/i);
   });
   await workPicker.cleanup();
@@ -496,35 +500,20 @@ try {
 
   const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
   const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];
-  let personState = createEmptyLocalRadar();
-  let personAddCalls = 0;
+  let personState = upsertGuestPersonRadarSubscription(
+    createEmptyLocalRadar(), { identity, now },
+  ).state;
   let personCheckCalls = 0;
   let personResolve;
   const personCheckPromise = new Promise((resolve) => { personResolve = resolve; });
   let personUi;
   const renderPersonProps = () => ({
-    ...baseProps, radarState: personState, personRadarAvailable: true,
-    onPersonRadarAdd: async ({ name, role, personExternalId }) => {
-      personAddCalls += 1;
-      assert.deepEqual({ name, role, personExternalId }, {
-        name: "Nicolas Cage", role: "actor", personExternalId: "wikidata:Q42869",
-      });
-      personState = upsertGuestPersonRadarSubscription(personState, { identity, now }).state;
-      return { status: "active", writes: 1, identity };
-    },
+    ...baseProps, radarState: personState, personRadarCheckAvailable: true,
     onPersonRadarCheck: async () => { personCheckCalls += 1; return personCheckPromise; },
   });
   personUi = await mount(EntdeckenTab, renderPersonProps());
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
-  await setControl(personUi.container.querySelector("#kd-radar-target-search"), "Nicolas Cage");
-  await act(async () => { await tick(); await tick(); });
-  await act(async () => {
-    personUi.container.querySelector('[data-radar-target-kind="person"]').click();
-    await tick();
-  });
-  await personUi.render(renderPersonProps());
-  check("Person wird mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
-    assert.equal(personAddCalls, 1);
+  check("Bestehende Person bleibt mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
     assert.match(personUi.container.textContent, /Nicolas Cage/);
     assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
@@ -574,27 +563,23 @@ try {
   });
   await personReloadUi.cleanup();
 
-  let franchiseAddCalls = 0;
+  const savedFranchiseTexts = [];
   const franchiseUi = await mount(EntdeckenTab, {
-    ...baseProps, radarState: createEmptyLocalRadar(), franchiseRadarAvailable: true,
-    onFranchiseRadarAdd: async (request) => {
-      franchiseAddCalls += 1;
-      assert.deepEqual(request, {
-        name: "Star Wars", franchiseId: "wikidata:Q462", targetId: "title-group:v1:star-wars",
-      });
+    ...baseProps, radarState: createEmptyLocalRadar(),
+    onRadarTextAdd: async (targetText) => {
+      savedFranchiseTexts.push(targetText);
       return { status: "active", writes: 1 };
     },
   });
   await act(async () => { button(franchiseUi.container, "Radar").click(); await tick(); });
   await setControl(franchiseUi.container.querySelector("#kd-radar-target-search"), "Star Wars");
-  await act(async () => { await tick(); await tick(); });
   await act(async () => {
-    franchiseUi.container.querySelector('[data-radar-target-kind="franchise"]').click();
+    button(franchiseUi.container, "Im Radar speichern").click();
     await tick();
   });
-  check("Reihentreffer übergibt exakt kanonische Gruppen- und Ziel-ID", () => {
-    assert.equal(franchiseAddCalls, 1);
-    assert.match(franchiseUi.container.textContent, /Reihe ist jetzt im Radar/);
+  check("Reihenname bleibt Freitext und erzeugt keine zweite Zielauflösung", () => {
+    assert.deepEqual(savedFranchiseTexts, ["Star Wars"]);
+    assert.match(franchiseUi.container.textContent, /Ziel gespeichert/);
     assert.doesNotMatch(franchiseUi.container.innerHTML, /wikidata:Q462|title-group:v1:star-wars/);
   });
   await franchiseUi.cleanup();

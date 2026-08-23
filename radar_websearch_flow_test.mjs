@@ -10,7 +10,6 @@ import {
   createRadarWebsearchExecutor,
   createRadarWebsearchMemoryStore,
   createRadarWebsearchMockAdapter,
-  createRadarWebsearchStorageStore,
   createRadarWebsearchTargetKey,
   projectVisibleRadarWebsearchEvents,
   radarWebsearchFranchiseRelation,
@@ -363,6 +362,7 @@ try {
       onShareChange: controller.aendereRadarShare,
       onRadarPilotReceipt: controller.fuehreRadarPilotReceipt,
       onRadarWebsearchCheck: controller.fuehreRadarWebsearchCheck,
+      onRadarTextAdd: controller.fuegeRadarTextHinzu,
       personRadarAvailable: controller.personRadarAvailable,
       onPersonRadarAdd: controller.fuegePersonRadarHinzu,
       onPersonRadarChange: controller.aenderePersonRadar,
@@ -384,126 +384,46 @@ try {
     };
   }
 
-  async function chooseRadarTarget(container, query, kind) {
-    const control = container.querySelector("#kd-radar-target-search");
-    assert.ok(control);
-    await setControl(control, query);
-    await act(async () => { await tick(); await tick(); });
-    const resultButton = container.querySelector(`[data-radar-target-kind="${kind}"]`);
-    assert.ok(resultButton);
-    await act(async () => { resultButton.click(); await tick(); });
-    await settle();
-  }
-
   localStorage.removeItem("kd:radar");
   localStorage.removeItem("kd:radar-websearch-cache");
-  const uiStorage = {
-    async get(key) {
-      const value = localStorage.getItem(key);
-      return value === null ? null : { key, value };
+  const textChecks = [];
+  const textExecutor = Object.freeze({
+    valid: true,
+    async loadEvents() { return []; },
+    async check(payload) {
+      textChecks.push(payload);
+      return Object.freeze({ status: "insufficient_evidence", writes: 0, events: Object.freeze([]) });
     },
-    async set(key, value) {
-      localStorage.setItem(key, value);
-      return { key, value };
-    },
-  };
-  const uiStore = createRadarWebsearchStorageStore({ storage: uiStorage });
-  const uiAdapter = createRadarWebsearchMockAdapter({
-    people: [personTarget], franchises: [franchiseTarget], responses,
   });
-  const uiExecutor = createRadarWebsearchExecutor({
-    adapter: uiAdapter, store: uiStore, sources: [officialSource],
-    now: () => checkedAt, timeoutMs: 2_000, leaseMs: 3_000,
-  });
-  const workUi = await mount(uiExecutor);
-  await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
-  await chooseRadarTarget(workUi.container, "Passender Film", "catalog");
-  await check("Mock-Nutzerweg startet Websearch erst vom bestätigten aktiven Werkziel", async () => {
-    assert.match(workUi.container.textContent, /Passender Film/);
-    assert.ok(button(workUi.container, "Jetzt prüfen"));
-    assert.equal(uiAdapter.calls.length, 0);
-    await act(async () => { button(workUi.container, "Jetzt prüfen").click(); await tick(); });
+  const textUi = await mount(textExecutor);
+  await act(async () => { button(textUi.container, "Radar").click(); await tick(); });
+  const textInput = textUi.container.querySelector("#kd-radar-target-search");
+  await setControl(textInput, "Mutter Teresa");
+  await check("Freitext wird unverändert lokal gespeichert und erst auf Jetzt prüfen exakt einmal übergeben", async () => {
+    assert.equal(textChecks.length, 0);
+    assert.equal(textUi.container.querySelectorAll("#kd-radar-target-search").length, 1);
+    assert.equal(textUi.container.querySelectorAll("#kd-radar-target-results").length, 0);
+    await act(async () => { button(textUi.container, "Im Radar speichern").click(); await tick(); });
     await settle();
-    assert.equal(uiAdapter.calls.length, 1);
-    assert.match(workUi.container.textContent, /Neue Funde/);
-    assert.match(workUi.container.textContent, /GLOBAL/);
-    assert.equal(workUi.container.querySelectorAll(".kd-pilot-quellen-link").length, 1);
-  });
-  await check("Konkreter Fund wird nur per Nutzeraktion angepinnt", async () => {
-    assert.ok(button(workUi.container, "Fund anpinnen"));
-    await act(async () => { button(workUi.container, "Fund anpinnen").click(); await tick(); });
+    assert.equal(textChecks.length, 0);
+    assert.match(textUi.container.textContent, /Mutter Teresa/);
+    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions.length, 1);
+    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetText, "Mutter Teresa");
+    assert.equal(JSON.parse(localStorage.getItem("kd:radar")).subscriptions[0].targetText, "Mutter Teresa");
+    assert.ok(button(textUi.container, "Jetzt prüfen"));
+    await act(async () => {
+      button(textUi.container, "Jetzt prüfen").click();
+      button(textUi.container, "Jetzt prüfen").click();
+      await tick();
+    });
     await settle();
-    assert.ok(button(workUi.container, "Angepinnt")?.disabled);
-    assert.equal(controllerRef.current.sichtbarerRadarState.receipts[0].status, "accepted_week");
+    assert.equal(textChecks.length, 1);
+    assert.equal(textChecks[0].target.targetText, "Mutter Teresa");
+    assert.match(textUi.container.textContent, /Kein belegter neuer Fund/);
+    assert.doesNotMatch(textUi.container.textContent, /Suche ist derzeit nicht verfügbar/);
+    assert.match(textUi.container.textContent, /Noch kein neuer belegter Fund/);
   });
-  await workUi.cleanup();
-
-  const reloadAdapter = createRadarWebsearchMockAdapter({
-    people: [personTarget], franchises: [franchiseTarget], responses,
-  });
-  const reloadExecutor = createRadarWebsearchExecutor({
-    adapter: reloadAdapter,
-    store: createRadarWebsearchStorageStore({ storage: uiStorage }),
-    sources: [officialSource], now: () => checkedAt, timeoutMs: 2_000, leaseMs: 3_000,
-  });
-  const reloadUi = await mount(reloadExecutor);
-  await act(async () => { button(reloadUi.container, "Radar").click(); await tick(); });
-  await settle();
-  await check("Fund und Pin bleiben nach Reload sichtbar und derselbe Lauf erzeugt kein Duplikat", async () => {
-    assert.ok(button(reloadUi.container, "Angepinnt")?.disabled);
-    assert.equal(reloadUi.container.querySelectorAll(".kd-pilot-quellen-link").length, 1);
-    await act(async () => { button(reloadUi.container, "Jetzt prüfen").click(); await tick(); });
-    await settle();
-    assert.equal((await reloadExecutor.loadEvents()).length, 1);
-    assert.equal(uiAdapter.calls.length, 1);
-    assert.equal(reloadAdapter.calls.length, 1);
-  });
-  await reloadUi.cleanup();
-
-  localStorage.removeItem("kd:radar");
-  const personUi = await mount(reloadExecutor);
-  await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
-  await chooseRadarTarget(personUi.container, personTarget.name, "person");
-  await check("Personenziel findet unbekannten Titel mit starker ID ohne automatisches Werk-Abo", async () => {
-    assert.ok(button(personUi.container, "Jetzt prüfen"));
-    await act(async () => { button(personUi.container, "Jetzt prüfen").click(); await tick(); });
-    await settle();
-    assert.match(personUi.container.textContent, /Neues Regieprojekt/);
-    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions.length, 0);
-    assert.equal(controllerRef.current.sichtbarerRadarState.personSubscriptions.length, 1);
-    assert.ok(button(personUi.container, "Fund anpinnen"));
-  });
-  await personUi.cleanup();
-
-  localStorage.removeItem("kd:radar");
-  localStorage.removeItem("kd:radar-websearch-cache");
-  const franchiseAdapter = createRadarWebsearchMockAdapter({ franchises: [franchiseTarget], responses });
-  const franchiseExecutor = createRadarWebsearchExecutor({
-    adapter: franchiseAdapter,
-    store: createRadarWebsearchStorageStore({ storage: uiStorage }),
-    sources: [officialSource], now: () => checkedAt, timeoutMs: 2_000, leaseMs: 3_000,
-  });
-  const franchiseUi = await mount(franchiseExecutor);
-  await act(async () => { button(franchiseUi.container, "Radar").click(); await tick(); });
-  await chooseRadarTarget(franchiseUi.container, franchiseTarget.title, "franchise");
-  await check("Star Wars im Radar zeigt The Ninth Jedi und pinnt den Fund nur auf Nutzeraktion", async () => {
-    assert.match(franchiseUi.container.textContent, /Star Wars/);
-    assert.match(franchiseUi.container.textContent, /Aktiv · Reihe/);
-    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetId, franchiseTarget.franchiseId);
-    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetType, "franchise");
-    assert.equal(franchiseAdapter.calls.length, 0);
-    await act(async () => { button(franchiseUi.container, "Jetzt prüfen").click(); await tick(); });
-    await settle();
-    assert.equal(franchiseAdapter.calls.length, 1);
-    assert.match(franchiseUi.container.textContent, /The Ninth Jedi/);
-    assert.equal(franchiseUi.container.querySelectorAll(".kd-pilot-quellen-link").length, 2);
-    assert.ok(button(franchiseUi.container, "Fund anpinnen"));
-    await act(async () => { button(franchiseUi.container, "Fund anpinnen").click(); await tick(); });
-    await settle();
-    assert.ok(button(franchiseUi.container, "Angepinnt")?.disabled);
-    assert.equal(controllerRef.current.sichtbarerRadarState.receipts[0].status, "accepted_week");
-  });
-  await franchiseUi.cleanup();
+  await textUi.cleanup();
 } finally {
   if (dom) dom.window.close();
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });

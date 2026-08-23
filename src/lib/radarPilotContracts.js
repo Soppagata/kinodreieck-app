@@ -40,7 +40,7 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
 ]);
-export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber"]);
+export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title"]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -212,7 +212,10 @@ function validateSubscription(value) {
   }
   if (!validTargetKey(value.targetId)) errors.push("feed-subscription-target-invalid");
   const person = value.targetType === "person";
-  if (!RADAR_TARGET_TYPES.includes(value.targetType) && !person) errors.push("feed-subscription-type-invalid");
+  const textTarget = value.targetType === "text";
+  if (!RADAR_TARGET_TYPES.includes(value.targetType) && !person && !textTarget) {
+    errors.push("feed-subscription-type-invalid");
+  }
   if (!validTitle(value.title)) errors.push("feed-subscription-title-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-subscription-region-invalid");
   if (!RADAR_SCOPES.includes(value.scope)) errors.push("feed-subscription-scope-invalid");
@@ -281,6 +284,7 @@ export function validateRadarPilotEvent(value) {
   if (!validUuid(value.eventId)) errors.push("feed-event-id-invalid");
   if (!validUuid(value.eventVersionId)) errors.push("feed-event-version-invalid");
   if (!validTargetKey(value.targetId)) errors.push("feed-event-target-invalid");
+  if (value.title !== undefined && !validTitle(value.title)) errors.push("feed-event-title-invalid");
   if (!RADAR_EVENT_TYPES.includes(value.eventType)) errors.push("feed-event-type-invalid");
   if (!validDay(value.date)) errors.push("feed-event-date-invalid");
   if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-event-region-invalid");

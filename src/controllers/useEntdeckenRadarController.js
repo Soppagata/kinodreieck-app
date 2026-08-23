@@ -3,6 +3,7 @@ import { runtimeConfig } from "../config/runtime.js";
 import { K, store } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
+  changeLocalTextRadarSubscription,
   createEmptyLocalRadar,
   decodeLocalRadar,
   queueAccountPersonRadarChange,
@@ -221,7 +222,8 @@ export function useEntdeckenRadarController({
   }), [master, streamingKnown, streamingDiscover]);
 
   const aendereRadar = useCallback(async (targetOrEntry, action = "upsert") => {
-    if (radarAuthority === "account-cache" && !remoteKontoAktiv) {
+    const textTarget = targetOrEntry?.targetType === "text";
+    if (radarAuthority === "account-cache" && !remoteKontoAktiv && !textTarget) {
       setErr("Radar-Änderungen im Kontomodus brauchen einen fachlich aktiven Kontozugriff. Es wurde nichts verändert.");
       return false;
     }
@@ -229,7 +231,9 @@ export function useEntdeckenRadarController({
     let grund = "radar-change-invalid";
     const gespeichert = await schreibeRadarState((prev) => {
       if (prev.authority !== radarAuthority) { grund = "authority-mismatch"; return null; }
-      const result = prev.authority === "guest"
+      const result = textTarget
+        ? changeLocalTextRadarSubscription(prev, { targetText: targetOrEntry.targetText, action })
+        : prev.authority === "guest"
         ? action === "remove"
           ? removeGuestRadarSubscription(prev, target.targetId)
           : upsertGuestRadarSubscription(prev, { target, status: action === "pause" ? "paused" : "active" })
@@ -240,7 +244,7 @@ export function useEntdeckenRadarController({
       return result.ok ? result.state : null;
     });
     if (
-      radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
+      !textTarget && radarPilotClientEnabled && radarAuthority === "account-cache" && remoteKontoAktiv
       && gespeichert !== false && gespeichert
     ) {
       await syncRadarPilot(gespeichert);
@@ -261,6 +265,21 @@ export function useEntdeckenRadarController({
     setErr,
     syncRadarPilot,
   ]);
+
+  const fuegeRadarTextHinzu = useCallback(async (targetText) => {
+    let reason = "text-subscription-invalid";
+    const saved = await schreibeRadarState((previous) => {
+      if (previous.authority !== radarAuthority) { reason = "authority-mismatch"; return null; }
+      const result = changeLocalTextRadarSubscription(previous, { targetText, action: "upsert" });
+      reason = result.reason;
+      return result.ok ? result.state : null;
+    });
+    if (saved !== false) return Object.freeze({ status: "active", writes: 1 });
+    if (reason === "quota-exceeded") {
+      setErr("Dein lokaler Radar hat bereits zehn aktive Ziele. Pausiere oder entferne zuerst eines.");
+    }
+    return Object.freeze({ status: reason === "quota-exceeded" ? "forbidden" : "storage_error", writes: 0 });
+  }, [radarAuthority, schreibeRadarState, setErr]);
 
   const personRadarCatalog = useMemo(() => {
     const rows = [
@@ -609,8 +628,22 @@ export function useEntdeckenRadarController({
     ));
     if (localRadarWebsearchAvailable && state?.authority === "guest") {
       if (activeMatches.length !== 1 || hasPendingTargetChange
-          || !["work", "series", "franchise"].includes(activeMatches[0].targetType)) {
+          || !["work", "series", "franchise", "text"].includes(activeMatches[0].targetType)) {
         return Object.freeze({ status: "forbidden", writes: 0 });
+      }
+      if (activeMatches[0].targetType === "text") {
+        const result = await radarWebsearchExecutor.check({
+          target: Object.freeze({
+            kind: "text",
+            targetId,
+            targetType: "text",
+            targetText: activeMatches[0].targetText,
+            title: activeMatches[0].targetText,
+          }),
+          catalog: personRadarCatalog,
+        });
+        if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
+        return result;
       }
       if (activeMatches[0].targetType === "franchise") {
         let resolved;
@@ -645,7 +678,7 @@ export function useEntdeckenRadarController({
         || state?.authority !== "account-cache" || state?.pilot?.status !== "ready"
         || state?.pilot?.radarReview !== true || activeMatches.length !== 1
         || hasPendingTargetChange
-        || !["work", "series", "franchise"].includes(activeMatches[0].targetType)
+        || !["work", "series", "franchise", "text"].includes(activeMatches[0].targetType)
         || (activeMatches[0].targetType === "franchise"
           && !validateTitleGroupMetadata(activeMatches[0].titleGroup, {
             targetId: activeMatches[0].targetId, title: activeMatches[0].title,
@@ -653,7 +686,7 @@ export function useEntdeckenRadarController({
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
     let result;
-    try { result = await radarServerService.checkNow(targetId); }
+    try { result = await radarServerService.checkNow(targetId, activeMatches[0].targetText); }
     catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
     if (["confirmed", "insufficient_evidence", "no_change"].includes(result?.status)) {
       await syncRadarPilot();
@@ -762,6 +795,7 @@ export function useEntdeckenRadarController({
     schliesseRadarPreview,
     aendereSerienBeobachtung,
     aendereRadar,
+    fuegeRadarTextHinzu,
     aendereRadarShare,
     bestaetigeRadarVorschau,
     beobachteteWatchmodeIds,

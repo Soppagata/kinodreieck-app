@@ -54,8 +54,9 @@ function exactResult(value, expectedPerson = null) {
   return Object.freeze({ status: value.status, writes: value.writes, personResult: result });
 }
 
-/* Der Browser sendet ausschließlich die starke Zielkennung. Kontoidentität
-   und Capability werden serverseitig aus dem Sitzungstoken abgeleitet; weder
+/* Der Browser sendet die starke Zielkennung und nur bei einem lokalen
+   Freitextziel zusätzlich dessen unveränderten targetText. Kontoidentität und
+   Capability werden serverseitig aus dem Sitzungstoken abgeleitet; weder
    Profildaten noch Mediathek oder weitere Abos gehören in den Request. */
 export function createRadarWebsearchService({
   config = runtimeConfig,
@@ -65,14 +66,18 @@ export function createRadarWebsearchService({
   fetchImpl = globalThis.fetch,
   singleFile = RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
 } = {}) {
-  async function checkTarget(targetId, expectedPerson = null) {
+  async function checkTarget(targetId, expectedPerson = null, targetText = null) {
     const normalizedTargetId = text(targetId);
+    const hasTargetText = targetText !== null && targetText !== undefined;
+    const validTargetText = typeof targetText === "string" && targetText.trim().length > 0
+      && targetText.length <= 160;
     const session = auth.getSnapshot();
     const accountId = text(session?.account?.id);
     if (singleFile === true || config.radarPilotClientEnabled !== true || session?.mode !== "account"
         || session?.state !== "ready" || !accountId
         || text(getAccount()?.id) !== accountId || !normalizedTargetId
-        || normalizedTargetId.length > 160 || typeof fetchImpl !== "function") {
+        || normalizedTargetId.length > 160 || (hasTargetText && !validTargetText)
+        || typeof fetchImpl !== "function") {
       return Object.freeze({ status: "forbidden", writes: 0 });
     }
     const basis = text(config.supabaseUrl).replace(/\/+$/, "");
@@ -95,7 +100,7 @@ export function createRadarWebsearchService({
           apikey: publishableKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ targetId: normalizedTargetId }),
+        body: JSON.stringify({ targetId: normalizedTargetId, ...(hasTargetText ? { targetText } : {}) }),
       });
     } catch {
       return Object.freeze({ status: "unavailable", writes: 0 });
@@ -119,8 +124,8 @@ export function createRadarWebsearchService({
     return checked;
   }
 
-  async function checkNow(targetId) {
-    return checkTarget(targetId);
+  async function checkNow(targetId, targetText = null) {
+    return checkTarget(targetId, null, targetText);
   }
 
   async function checkPersonNow(identity) {

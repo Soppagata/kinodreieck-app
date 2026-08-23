@@ -11,6 +11,7 @@ globalThis.localStorage = {
 
 const R = await import("./src/lib/localEventRadar.js");
 const C = await import("./src/lib/radarContracts.js");
+const U = await import("./src/lib/entdeckenUi.js");
 
 let checks = 0;
 const check = async (name, fn) => {
@@ -93,6 +94,55 @@ await check("Gast-Abo ist lokal wirksam, erzeugt aber niemals Providerarbeit", (
   assert.equal(result.state.subscriptions[0].status, "active");
   assert.equal(result.state.subscriptions[0].title, "Lokales Testwerk 01");
   assert.equal(result.createsProviderJob, false);
+});
+
+await check("Freitext bleibt roh erhalten, stabil geschlüsselt und beim Speichern providerfrei", () => {
+  const targetText = "  Mutter Teresa  ";
+  const guest = R.changeLocalTextRadarSubscription(R.createEmptyLocalRadar(), { targetText, now: instant });
+  assert.equal(guest.ok, true);
+  assert.equal(guest.state.subscriptions[0].targetText, targetText);
+  assert.equal(guest.state.subscriptions[0].targetId, R.createLocalTextRadarTargetId(targetText));
+  assert.equal(guest.createsProviderJob, false);
+  assert.equal(R.decodeLocalRadar(JSON.stringify(guest.state), { authority: "guest" }).ok, true);
+
+  const account = R.changeLocalTextRadarSubscription(
+    R.createEmptyLocalRadar({ authority: "account-cache" }), { targetText, now: instant },
+  );
+  assert.equal(account.ok, true);
+  assert.equal(account.state.outbox.length, 0);
+  const reconciled = R.reconcileAccountRadarSnapshot(account.state, serverSnapshot());
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.subscriptions[0].targetText, targetText);
+
+  const canonicalCollision = R.upsertGuestRadarSubscription(R.createEmptyLocalRadar(), {
+    target: {
+      targetId: R.createLocalTextRadarTargetId(targetText), targetType: "work",
+      targetStatus: "active", title: "Kanonisches Werk", canonical: true,
+    },
+    now: instant,
+  });
+  const blocked = R.changeLocalTextRadarSubscription(canonicalCollision.state, { targetText, now: instant });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, "text-subscription-id-conflict");
+
+  const idLikeText = R.changeLocalTextRadarSubscription(R.createEmptyLocalRadar(), {
+    targetText: "IMDb:tt0068646", now: instant,
+  });
+  assert.equal(idLikeText.ok, true);
+  assert.equal(idLikeText.state.subscriptions[0].targetText, "IMDb:tt0068646");
+  assert.equal(U.localRadarTargetLabel(idLikeText.state.subscriptions[0]), "IMDb:tt0068646");
+  const idLikeAccount = R.changeLocalTextRadarSubscription(
+    R.createEmptyLocalRadar({ authority: "account-cache" }),
+    { targetText: "IMDb:tt0068646", now: instant },
+  ).state;
+  const idLikeServer = R.reconcileAccountRadarSnapshot(idLikeAccount, serverSnapshot({
+    subscriptions: [{
+      targetId: R.createLocalTextRadarTargetId("IMDb:tt0068646"), targetType: "text",
+      title: "IMDb:tt0068646", region: "AT", scope: "all", status: "active", updatedAt: instant,
+    }],
+  }));
+  assert.equal(idLikeServer.ok, true);
+  assert.equal(idLikeServer.state.subscriptions[0].targetText, "IMDb:tt0068646");
 });
 
 await check("Personen-Abo hält Schauspiel und Regie getrennt und erzeugt kein Werk-Abo", () => {
@@ -515,6 +565,58 @@ await check("Pilotfeed reconciliiert atomar und erhält ungeklärte lokale Vorg�
   assert.equal(reconciled.state.outbox.length, 1);
   assert.equal(reconciled.state.server.reconciledAt, "2026-08-09T12:00:00.000Z");
   assert.equal(reconciled.state.pilot.status, "ready");
+});
+
+await check("Serverfeed ersetzt das lokale Freitextabo und liest den bestätigten Fund zurück", () => {
+  const targetText = "Mutter Teresa";
+  const targetId = R.createLocalTextRadarTargetId(targetText);
+  const account = R.changeLocalTextRadarSubscription(
+    R.createEmptyLocalRadar({ authority: "account-cache" }), { targetText, now: instant },
+  ).state;
+  const reconciled = R.reconcileAccountRadarPilotFeed(account, {
+    format: "kd-radar-pilot-feed-v1",
+    revision: 1,
+    checksum: checksumA,
+    reconciledAt: instant,
+    subscriptions: [{
+      targetId, targetType: "text", title: targetText, region: "AT", scope: "all",
+      status: "active", updatedAt: instant,
+    }],
+    events: [{
+      eventId: "21111111-1111-4111-8111-111111111111",
+      eventVersionId: "31111111-1111-4111-8111-111111111111",
+      targetId: "imdb:tt1234567",
+      title: "Mother Teresa: No Greater Love",
+      eventType: "kinostart_at",
+      date: "2026-08-21",
+      region: "AT",
+      platform: "-",
+      lifecycleStatus: "announced",
+      verificationStatus: "confirmed",
+      evidence: [{
+        sourceId: "studio-official",
+        sourceDomain: "studio.example",
+        url: "https://studio.example/mutter-teresa-start",
+        retrievedAt: instant,
+      }],
+    }],
+    receipts: [],
+    operationAcks: [],
+    radarReview: false,
+  });
+  assert.equal(reconciled.ok, true);
+  assert.equal(reconciled.state.subscriptions.length, 1);
+  assert.equal(reconciled.state.subscriptions[0].authority, "server");
+  assert.equal(reconciled.state.subscriptions[0].targetText, targetText);
+  assert.equal(reconciled.state.pilot.events[0].targetId, "imdb:tt1234567");
+  assert.equal(reconciled.state.pilot.events[0].title, "Mother Teresa: No Greater Love");
+  const pinned = R.queueAccountRadarPilotReceipt(reconciled.state, {
+    eventId: "21111111-1111-4111-8111-111111111111",
+    eventVersionId: "31111111-1111-4111-8111-111111111111",
+    status: "accepted_week",
+    now: instant,
+  });
+  assert.equal(pinned.ok, true);
 });
 
 await check("Persönlicher Topf enthält keine globale Target-, Event- oder Evidence-Wahrheit", () => {

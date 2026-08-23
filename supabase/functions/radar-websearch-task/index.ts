@@ -93,10 +93,11 @@ function rpcEvent(
   event: Record<string, unknown>,
   personContext: Record<string, unknown> | null = null,
   titleGroupContext: Record<string, unknown> | null = null,
+  textContext: Record<string, unknown> | null = null,
 ) {
   const titleGroupDiscovery = titleGroupContext?.discoveryMode === "canonical-group-v1";
   return {
-    targetKey: event.targetKey,
+    targetKey: textContext ? textContext.targetId : event.targetKey,
     eventType: event.eventType,
     date: event.date,
     region: event.region,
@@ -107,7 +108,15 @@ function rpcEvent(
       url: entry.url,
       retrievedAt: entry.retrievedAt,
     })) : [],
-    ...(personContext ? {
+    ...(textContext ? {
+      textTargetKey: textContext.targetId,
+      targetText: textContext.targetText,
+      workTargetType: event.targetType,
+      workTitle: event.title,
+      workYear: event.year,
+      checkedAt: textContext.checkedAt,
+      relationEvidence: textContext.relationEvidence,
+    } : personContext ? {
       personTargetKey: personContext.targetId,
       personExternalId: personContext.personExternalId,
       personRole: personContext.role,
@@ -165,11 +174,19 @@ export function createRadarWebsearchHandler({
     let body: unknown;
     try { body = await req.json(); } catch { return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin); }
     if (!body || typeof body !== "object" || Array.isArray(body)
-        || Object.keys(body).length !== 1 || typeof (body as { targetId?: unknown }).targetId !== "string") {
+        || ![1, 2].includes(Object.keys(body).length)
+        || typeof (body as { targetId?: unknown }).targetId !== "string"
+        || Object.keys(body).some((key) => !["targetId", "targetText"].includes(key))) {
       return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
     }
     const targetId = text((body as { targetId: string }).targetId);
-    if (!targetId || targetId.length > 160) return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
+    const hasTargetText = Object.prototype.hasOwnProperty.call(body, "targetText");
+    const targetText = hasTargetText ? (body as { targetText?: unknown }).targetText : null;
+    if (!targetId || targetId.length > 160
+        || (hasTargetText && (typeof targetText !== "string" || !targetText.trim() || targetText.length > 160))) {
+      return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
+    }
+    const rawTargetText: string | null = hasTargetText ? targetText as string : null;
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -197,10 +214,15 @@ export function createRadarWebsearchHandler({
       return cachedSources;
     };
     const repository = {
-      async loadAuthorizedTarget({ accountId: actor, targetId: key }: { accountId: string; targetId: string }) {
-        const { data, error } = await admin.rpc("kd_radar_websearch_context", {
-          p_account_id: actor,
-          p_target_key: key,
+      async loadAuthorizedTarget({
+        accountId: actor, targetId: key, targetText: rawText = null,
+      }: { accountId: string; targetId: string; targetText?: string | null }) {
+        const rpc = rawText === null ? "kd_radar_websearch_context" : "kd_radar_websearch_prepare_text";
+        const { data, error } = await admin.rpc(rpc, rawText === null ? {
+          p_account_id: actor, p_target_key: key,
+        } : {
+          p_account_id: actor, p_target_key: key, p_target_text: rawText,
+          p_operation_id: crypto.randomUUID(),
         });
         if (error) throw error;
         return data;
@@ -209,14 +231,17 @@ export function createRadarWebsearchHandler({
         return await loadSources();
       },
       async upsertConfirmedEvent({
-        accountId: actor, operationId, event, personContext = null, titleGroupContext = null,
+        accountId: actor, operationId, event, personContext = null, titleGroupContext = null, textContext = null,
       }: {
         accountId: string; operationId: string; event: Record<string, unknown>;
         personContext?: Record<string, unknown> | null;
         titleGroupContext?: Record<string, unknown> | null;
+        textContext?: Record<string, unknown> | null;
       }) {
         const { data, error } = await admin.rpc(
-          personContext
+          textContext
+            ? "kd_radar_websearch_upsert_text_event"
+            : personContext
             ? "kd_radar_websearch_upsert_person_event"
             : titleGroupContext?.discoveryMode === "canonical-group-v1"
               ? "kd_radar_websearch_upsert_title_group_discovery_event"
@@ -224,7 +249,7 @@ export function createRadarWebsearchHandler({
           {
           p_account_id: actor,
           p_operation_id: operationId,
-          p_payload: rpcEvent(event, personContext, titleGroupContext),
+          p_payload: rpcEvent(event, personContext, titleGroupContext, textContext),
           },
         );
         if (error) throw error;
@@ -323,7 +348,7 @@ export function createRadarWebsearchHandler({
       },
     });
     const result = await runRadarWebsearchCheck({
-      accountId, targetId, adapter: productAdapter, repository,
+      accountId, targetId, targetText: rawTargetText, adapter: productAdapter, repository,
     });
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;

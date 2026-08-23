@@ -1310,7 +1310,7 @@ export default function App() {
   const { radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
     aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
     beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
-    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, radarCheckAvailable,
+    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, radarCheckAvailable, fuegeRadarTextHinzu,
     fuehreRadarPilotReceipt, fuehreRadarPilotImport, fuehreRadarPilotSync, fuehreRadarWebsearchCheck,
     personRadarAvailable, personRadarCheckAvailable, fuegePersonRadarHinzu, aenderePersonRadar, fuehrePersonRadarCheck, franchiseRadarAvailable, fuegeFranchiseRadarHinzu, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
@@ -2076,7 +2076,7 @@ export default function App() {
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
-            onRadarWebsearchCheck={fuehreRadarWebsearchCheck}
+            onRadarWebsearchCheck={fuehreRadarWebsearchCheck} onRadarTextAdd={fuegeRadarTextHinzu}
             radarCheckAvailable={radarCheckAvailable}
             personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} personRadarCheckAvailable={personRadarCheckAvailable}
             onPersonRadarChange={aenderePersonRadar} onPersonRadarCheck={fuehrePersonRadarCheck} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}

@@ -32,6 +32,17 @@ export const RESERVIERTE_AUFGABEN = Object.freeze([
   "anbieter-modelle",
 ] as const);
 
+/* Die später aktivierbare Produktfläche ist absichtlich eine geschlossene,
+   geordnete Liste. Diagnosen und noch nicht gebaute Ideen gehören nicht dazu. */
+export const NUTZER_AUFGABEN = Object.freeze([
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "media-batch-extract",
+  "blog-profile-extract",
+] as const);
+
 export const NOCH_NICHT_GEBAUTE_AUFGABEN = Object.freeze([
   "masterlist-enrichment",
 ] as const);

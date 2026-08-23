@@ -1661,8 +1661,12 @@ test("Lokale Deep-Space-Animationswerkstatt steuert alle Effekte ohne echten Ein
   await expect(page.locator(".kd-fx-deep-space")).toHaveCount(0);
 });
 
-test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visual Viewport stabil", async ({ page }) => {
-  await page.setViewportSize({ width: 393, height: 852 });
+test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visual Viewport stabil", async ({ browser }, testInfo) => {
+  const page = await browser.newPage({
+    baseURL: testInfo.project.use.baseURL,
+    viewport: { width: 393, height: 852 },
+    hasTouch: true,
+  });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
   await page.addInitScript(() => {
@@ -1695,30 +1699,66 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   const eingabe = suche.getByRole("textbox", { name: "Sucheingabe" });
   const suchen = suche.getByRole("button", { name: "Suchen" });
   const menue = suche.getByRole("button", { name: "Menü öffnen" });
-  const seitenstand = await page.evaluate(() => {
+  await page.evaluate(() => {
     window.scrollTo(0, Math.min(240, Math.max(0, document.documentElement.scrollHeight - innerHeight)));
-    return window.scrollY;
   });
   const anker = () => suche.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return Math.round(rect.bottom - window.visualViewport.offsetTop - window.visualViewport.height);
   });
 
-  await eingabe.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true });
-  await expect.poll(() => page.evaluate(() => ({
-    active: document.activeElement?.getAttribute?.("aria-label") || null,
-    position: document.body.style.position,
-    scrollY: window.scrollY,
-  }))).toEqual({ active: null, position: "", scrollY: seitenstand });
-  await eingabe.click();
+  const touchStand = await eingabe.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const punkt = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    window.__kdTouchStand = { pointerdown: 0, pointerup: 0, click: 0, trusted: 0, pointerId: null };
+    for (const typ of ["pointerdown", "pointerup", "click"]) {
+      element.addEventListener(typ, (event) => {
+        window.__kdTouchStand[typ] += 1;
+        if (event.isTrusted && (typ === "click" || event.pointerType === "touch")) {
+          window.__kdTouchStand.trusted += 1;
+        }
+        if (typeof event.pointerId === "number") window.__kdTouchStand.pointerId = event.pointerId;
+      });
+    }
+    return {
+      punkt,
+      hit: document.elementFromPoint(punkt.x, punkt.y) === element,
+      position: document.body.style.position,
+      scrollY: window.scrollY,
+    };
+  });
+  const seitenstand = touchStand.scrollY;
+  const gesperrterTop = seitenstand === 0 ? 0 : -seitenstand;
+  expect(touchStand).toEqual({
+    punkt: touchStand.punkt,
+    hit: true,
+    position: "",
+    scrollY: seitenstand,
+  });
+  await page.touchscreen.tap(touchStand.punkt.x, touchStand.punkt.y);
   await expect(eingabe).toBeFocused();
   await expect.poll(() => page.evaluate(() => ({
     position: document.body.style.position,
-    top: Number.parseFloat(document.body.style.top) || 0,
-  }))).toEqual({ position: "fixed", top: -seitenstand });
+    overflow: document.body.style.overflow,
+    scrollY: window.scrollY,
+  }))).toEqual({ position: "", overflow: "", scrollY: seitenstand });
+  await page.touchscreen.tap(touchStand.punkt.x, touchStand.punkt.y);
+  await expect.poll(() => eingabe.evaluate((element) => ({
+    pointerdown: window.__kdTouchStand.pointerdown,
+    pointerup: window.__kdTouchStand.pointerup,
+    click: window.__kdTouchStand.click,
+    trusted: window.__kdTouchStand.trusted,
+    remainingCapture: window.__kdTouchStand.pointerId === null
+      ? false
+      : element.hasPointerCapture(window.__kdTouchStand.pointerId),
+  }))).toEqual({ pointerdown: 2, pointerup: 2, click: 2, trusted: 6, remainingCapture: false });
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 60 }));
   await expect(suche).toHaveClass(/tastatur-offen/);
   await expect.poll(anker).toBe(-8);
+  await expect.poll(() => page.evaluate(() => ({
+    position: document.body.style.position,
+    top: Number.parseFloat(document.body.style.top) || 0,
+  }))).toEqual({ position: "fixed", top: gesperrterTop });
 
   /* Ein Button-/Trefferfokus darf die erkannte Keyboard-Phase nicht räumen,
      solange der Browser den Visual Viewport noch verkleinert meldet. */
@@ -1728,7 +1768,7 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
     position: document.body.style.position,
     top: Number.parseFloat(document.body.style.top) || 0,
     scrollY: window.scrollY,
-  }))).toEqual({ position: "fixed", top: -seitenstand, scrollY: 0 });
+  }))).toEqual({ position: "fixed", top: gesperrterTop, scrollY: 0 });
 
   await page.evaluate(() => window.__kdSetVisualViewport({ height: 500, offsetTop: 140, typ: "scroll" }));
   await expect.poll(anker).toBe(-8);
@@ -1787,28 +1827,61 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   await expect.poll(() => antwort.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await antwort.evaluate((element) => { element.scrollTop = 0; });
 
-  await antwort.getByRole("button", { name: "Suchergebnisse schließen" }).click();
+  await eingabe.focus();
+  await expect(eingabe).toBeFocused();
+  await antwort.getByRole("button", { name: "Suchergebnisse schließen" }).evaluate((button) => button.click());
   await expect(antwort).toBeHidden();
   await expect(eingabe).toBeFocused();
   await expect.poll(anker).toBe(-8);
-
-  await eingabe.fill("kd-obs-019-ohne-direkten-treffer-928374");
-  await suchen.click();
-  const leereAntwort = suche.getByRole("dialog", { name: /Suchergebnisse für kd-obs-019-ohne/ });
-  await expect(leereAntwort).toContainText("Kein direkter Treffer");
-  await expect(leereAntwort.getByRole("button", { name: "Suchergebnisse schließen" })).toBeVisible();
-  await expect.poll(anker).toBe(-8);
-  await leereAntwort.getByRole("button", { name: "Suchergebnisse schließen" }).click();
-  await expect(eingabe).toBeFocused();
+  await expect.poll(() => page.evaluate(() => ({
+    position: document.body.style.position,
+    overflow: document.body.style.overflow,
+  }))).toEqual({ position: "", overflow: "" });
 
   await eingabe.blur();
+  await eingabe.focus();
+  await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("fixed");
+  await suchen.click();
+  const zweiteAntwort = suche.getByRole("dialog", { name: /Suchergebnisse für Wo finde ich die Schriftgröße/ });
+  const treffer = zweiteAntwort.locator("[data-globaler-suchtreffer]").first();
+  await expect(treffer).toBeVisible();
   await expect.poll(anker).toBe(-8);
+  await eingabe.focus();
+  await expect(eingabe).toBeFocused();
+  await treffer.evaluate((button) => button.click());
+  await expect.poll(() => page.evaluate(() => ({
+    position: document.body.style.position,
+    overflow: document.body.style.overflow,
+  }))).toEqual({ position: "", overflow: "" });
+
+  await eingabe.focus();
+  await expect.poll(() => page.evaluate(() => document.body.style.position)).toBe("fixed");
+  await expect(eingabe).toBeFocused();
+  await menue.evaluate((button) => button.click());
+  const menuePopup = page.getByRole("dialog", { name: "Menü" });
+  await expect(menuePopup).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    inputAktiv: document.activeElement?.getAttribute?.("aria-label") === "Sucheingabe",
+    position: document.body.style.position,
+    overflow: document.body.style.overflow,
+  }))).toEqual({ inputAktiv: false, position: "fixed", overflow: "hidden" });
+
+  await page.locator(".kd-mobile-menu-layer > .kd-sheet-scrim").click();
+  await expect(menuePopup).toBeHidden();
+  await expect.poll(() => page.evaluate(() => ({
+    inputAktiv: document.activeElement?.getAttribute?.("aria-label") === "Sucheingabe",
+    position: document.body.style.position,
+    overflow: document.body.style.overflow,
+  }))).toEqual({ inputAktiv: false, position: "", overflow: "" });
+  const freigegebenerSeitenstand = await page.evaluate(() => window.scrollY);
+
+  await eingabe.blur();
   await page.evaluate(() => window.__kdSetVisualViewport({
     height: 852, width: 393, offsetTop: 0, offsetLeft: 0, scale: 1,
   }));
   await expect(suche).not.toHaveClass(/tastatur-offen/);
   await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(seitenstand);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(freigegebenerSeitenstand);
 
   await page.setViewportSize({ width: 568, height: 320 });
   await page.evaluate(() => window.__kdSetVisualViewport({
@@ -1844,6 +1917,7 @@ test("Globale Suche hält Fokuswechsel, Ergebnisse und Scrollen im kleinen Visua
   }));
   await expect(suche).not.toHaveClass(/tastatur-offen/);
   await expect(suche).not.toHaveAttribute("style", /kd-suche-viewport/);
+  await page.context().close();
 });
 
 test("Globale Suche bleibt beim Layout-Resize ohne VisualViewport erreichbar", async ({ page }) => {

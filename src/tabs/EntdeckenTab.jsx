@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
 import { ladeProfil } from "../lib/profil.js";
@@ -10,10 +10,6 @@ import {
 } from "../lib/entdeckenUi.js";
 import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
-import {
-  RADAR_TARGET_SEARCH_MIN_LENGTH,
-  searchRadarTargets,
-} from "../lib/radarTargetSearch.js";
 
 const ANSICHTEN = Object.freeze([
   ["empfehlungen", "Empfehlungen"],
@@ -186,11 +182,12 @@ function RecommendationsView({
 function statusText(status, kind = "work") {
   const person = kind === "person";
   const franchise = kind === "franchise";
+  const freeText = kind === "text";
   return ({
-    active: person ? "Person ist jetzt im Radar." : franchise ? "Reihe ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
+    active: freeText ? "Ziel gespeichert." : person ? "Person ist jetzt im Radar." : franchise ? "Reihe ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
     confirmed: person ? "Bestätigte Filme oder Serien wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
     no_change: "Keine neue bestätigte Änderung gefunden.",
-    insufficient_evidence: person ? "Noch keine ausreichend belegten Filme oder Serien gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
+    insufficient_evidence: freeText ? "Kein belegter neuer Fund." : person ? "Noch keine ausreichend belegten Filme oder Serien gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
     busy: "Dieses Ziel wird bereits geprüft.",
     forbidden: "Dieses Ziel kann gerade nicht geprüft werden.",
     unresolved: franchise ? "Die Reihe konnte nicht eindeutig bestätigt werden." : "Die Person konnte nicht eindeutig bestätigt werden.",
@@ -208,27 +205,16 @@ function isErrorStatus(status) {
 
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
-  onRadarPreview, radarPilotEvents = [], radarCheckAvailable = false,
+  radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
-  onPersonRadarAdd, onPersonRadarCheck,
-  franchiseRadarAvailable = false, onFranchiseRadarAdd,
+  personRadarCheckAvailable = false, onPersonRadarCheck, onRadarTextAdd,
 }) {
   const [targetQuery, setTargetQuery] = useState("");
-  const deferredTargetQuery = useDeferredValue(targetQuery);
-  const [targetAddBusy, setTargetAddBusy] = useState("");
+  const [targetAddBusy, setTargetAddBusy] = useState(false);
   const targetAddLockRef = useRef(false);
   const [busyKey, setBusyKey] = useState("");
+  const checkLockRef = useRef(false);
   const [message, setMessage] = useState(null);
-  const targetSearch = useMemo(() => searchRadarTargets({
-    query: deferredTargetQuery,
-    master,
-    streamingKnown,
-    streamingDiscover,
-    personAvailable: personRadarAvailable,
-    franchiseAvailable: franchiseRadarAvailable,
-  }), [deferredTargetQuery, franchiseRadarAvailable, master, personRadarAvailable,
-    streamingDiscover, streamingKnown]);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const personResults = radarState?.personResults || [];
@@ -246,46 +232,39 @@ function RadarView({
     .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
   [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
 
-  const addTarget = async (entry) => {
-    if (!entry || targetAddLockRef.current) return;
+  const addTarget = async (event) => {
+    event.preventDefault();
+    if (!targetQuery.trim() || targetQuery.length > 160 || targetAddLockRef.current) return;
     targetAddLockRef.current = true;
+    setTargetAddBusy(true);
     setMessage(null);
-    if (entry.kind === "catalog") {
-      onRadarPreview?.(entry.target);
-      setTargetQuery("");
-      targetAddLockRef.current = false;
-      return;
-    }
-    setTargetAddBusy(entry.key);
     try {
-      const result = entry.kind === "person"
-        ? await onPersonRadarAdd?.(entry.identity)
-        : await onFranchiseRadarAdd?.(entry.franchise);
-      const kind = entry.kind === "person" ? "person" : "franchise";
-      setMessage({ status: result?.status, text: statusText(result?.status, kind) });
+      const result = await onRadarTextAdd?.(targetQuery);
+      setMessage({ status: result?.status, text: statusText(result?.status, "text") });
       if (["active", "pending"].includes(result?.status)) setTargetQuery("");
     } catch {
-      const kind = entry.kind === "person" ? "person" : "franchise";
-      setMessage({ status: "provider_error", text: statusText("provider_error", kind) });
-    } finally { targetAddLockRef.current = false; setTargetAddBusy(""); }
+      setMessage({ status: "storage_error", text: statusText("storage_error") });
+    } finally { targetAddLockRef.current = false; setTargetAddBusy(false); }
   };
   const checkWork = async (entry) => {
-    if (!radarCheckAvailable || busyKey) return;
+    if (!radarCheckAvailable || checkLockRef.current) return;
+    checkLockRef.current = true;
     setBusyKey(`work|${entry.targetId}`); setMessage(null);
     try {
       const result = await onRadarWebsearchCheck?.(entry.targetId);
-      setMessage({ status: result?.status, text: statusText(result?.status) });
+      setMessage({ status: result?.status, text: statusText(result?.status, entry.targetType) });
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error") }); }
-    finally { setBusyKey(""); }
+    finally { checkLockRef.current = false; setBusyKey(""); }
   };
   const checkPerson = async (entry) => {
-    if (!personRadarCheckAvailable || busyKey) return;
+    if (!personRadarCheckAvailable || checkLockRef.current) return;
+    checkLockRef.current = true;
     setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
     try {
       const result = await onPersonRadarCheck?.(entry);
       setMessage({ status: result?.status, text: statusText(result?.status, "person") });
     } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
-    finally { setBusyKey(""); }
+    finally { checkLockRef.current = false; setBusyKey(""); }
   };
 
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
@@ -295,25 +274,15 @@ function RadarView({
     </div>
     <article className="kd-entdecken-panel kd-radar-zielsuche">
       <h3>Radarziel hinzufügen</h3>
-      <div className="kd-entdecken-formzeile">
-        <label htmlFor="kd-radar-target-search">Film, Serie, Person oder Reihe</label>
+      <form className="kd-entdecken-formzeile" onSubmit={addTarget}>
+        <label htmlFor="kd-radar-target-search">Wonach soll dein Radar suchen?</label>
         <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
-          autoComplete="off" spellCheck={false} placeholder="Film, Serie, Person oder Reihe"
-          aria-controls="kd-radar-target-results" aria-expanded={targetSearch.entries.length > 0}
-          aria-autocomplete="list" onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
-        {targetSearch.status === "idle" ? <small>Gib mindestens {RADAR_TARGET_SEARCH_MIN_LENGTH} Zeichen ein. Die Vorschläge stammen nur aus bereits ID-bestätigten Katalogen.</small> : null}
-        {targetSearch.status === "no_match" ? <p className="kd-entdecken-leer" role="status">Kein eindeutiger Treffer. Versuche einen genaueren Namen.</p> : null}
-        {targetSearch.entries.length ? <ul id="kd-radar-target-results" className="kd-radar-zieltreffer" aria-label="Radarziele">
-          {targetSearch.entries.map((entry) => <li key={entry.key}>
-            <button type="button" data-radar-target-kind={entry.kind} disabled={!!targetAddBusy}
-              onClick={() => void addTarget(entry)}>
-              <strong>{entry.title}</strong>
-              <span>{entry.category}{entry.meta ? ` · ${entry.meta}` : ""}</span>
-              {targetAddBusy === entry.key ? <small>Wird hinzugefügt …</small> : null}
-            </button>
-          </li>)}
-        </ul> : null}
-      </div>
+          autoComplete="off" spellCheck={false} placeholder="Zum Beispiel Mutter Teresa"
+          onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
+        <small>Beliebiger Text, maximal 160 Zeichen. Gespeichert wird erst beim Absenden; geprüft nur auf deinen Klick.</small>
+        <button type="submit" className="kd-entdecken-primaer"
+          disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? "Wird gespeichert…" : "Im Radar speichern"}</button>
+      </form>
     </article>
     {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
       role={isErrorStatus(message.status) ? "alert" : "status"}>{message.text}</p> : null}
@@ -323,7 +292,7 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"} · {entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}</span>
+          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"}{entry.targetType === "text" ? "" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
           {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
             disabled={!!busyKey} onClick={() => checkWork(entry)}>
             {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
@@ -372,7 +341,7 @@ export function EntdeckenTab({
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, dailyVariety = false, calendarDay = null,
   radarPilotEvents = [], radarCheckAvailable = false,
-  onRadarPilotReceipt, onRadarWebsearchCheck,
+  onRadarPilotReceipt, onRadarWebsearchCheck, onRadarTextAdd,
   personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
   onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
@@ -414,6 +383,7 @@ export function EntdeckenTab({
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
       onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
+      onRadarTextAdd={onRadarTextAdd}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
       personRadarCheckAvailable={personRadarCheckAvailable} onPersonRadarCheck={onPersonRadarCheck}
       franchiseRadarAvailable={franchiseRadarAvailable}

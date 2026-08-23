@@ -50,6 +50,7 @@ import {
   FUNCTION_CONTRACT_VERSION,
   functionBuildVersion,
   klassifiziereAufgabe,
+  NUTZER_AUFGABEN,
   STATUS,
 } from "./requestContract.ts";
 import {
@@ -3220,6 +3221,12 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           fachrolle: fachfreigabe.rolle,
           weg: aufrufer.weg,
           accountIdVorhanden: !!aufrufer.accountId,
+        },
+        activation: {
+          gate: "KD_AI_TASK_ENABLED",
+          requiredValue: "true",
+          enabled: aiTaskIstAktiv(),
+          userTasks: NUTZER_AUFGABEN,
         },
         betrieb: {
           aiAktiv: konfig["ai_aktiv"] === true,

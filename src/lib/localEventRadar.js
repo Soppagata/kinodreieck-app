@@ -3,7 +3,8 @@
    - kein Netzwerk, kein Provider, kein Scheduler
    - keine Personen-Automatik
    - globale Eventwahrheit bleibt vom persönlichen kd:radar-Topf getrennt
-   - im Kontomodus ist nur ein serverbestätigter Snapshot wirksam
+   - im Kontomodus bleiben kanonische Ziele serverbestätigt; Freitextziele
+     bleiben bis zum ausdrücklichen Prüfen lokale Entwürfe
    - Wochenprojektion ist read-only und schreibt nie in den Kalender */
 
 import { K, store } from "./storage.js";
@@ -49,6 +50,7 @@ export const LOCAL_RADAR_MAX_OUTBOX = 100;
 export const LOCAL_RADAR_MAX_SHARES = 1000;
 export const LOCAL_RADAR_MAX_RECEIPTS = 1000;
 export const LOCAL_RADAR_MAX_BYTES = 1024 * 1024;
+export const LOCAL_RADAR_TARGET_TEXT_MAX_LENGTH = 160;
 
 export const LOCAL_EVENT_LEDGER_FORMAT = "kinodreieck-radar-ledger";
 export const LOCAL_EVENT_LEDGER_VERSION = 1;
@@ -113,6 +115,23 @@ function freezeDeep(value) {
 function validOperationId(value) {
   const normalized = text(value);
   return UUID_FORM.test(normalized) || (normalized.startsWith("fixture:") && isStableContractId(normalized));
+}
+
+function validRadarTargetText(value) {
+  return typeof value === "string" && value.trim().length > 0
+    && value.length <= LOCAL_RADAR_TARGET_TEXT_MAX_LENGTH;
+}
+
+export function createLocalTextRadarTargetId(targetText) {
+  if (!validRadarTargetText(targetText)) return null;
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  const bytes = new TextEncoder().encode(targetText);
+  for (let index = 0; index < bytes.length; index += 1) {
+    first = Math.imul(first ^ bytes[index], 0x01000193) >>> 0;
+    second = Math.imul(second ^ (bytes[index] + index), 0x85ebca6b) >>> 0;
+  }
+  return `text:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
 }
 
 export function createEmptyLocalRadar({ authority = "guest" } = {}) {
@@ -199,14 +218,21 @@ function validateAccountRadarPilot(pilot) {
 
 function validateSubscription(subscription, authority) {
   const errors = [];
-  const keys = [
+  const baseKeys = [
     "targetId", "targetType", "title", "region", "scope", "status", "authority",
     "serverRevision", "serverChecksum", "updatedAt", "titleGroup",
   ];
+  const textTarget = subscription?.targetType === "text";
+  const keys = textTarget ? [...baseKeys, "targetText"] : baseKeys;
   if (!exactKeys(subscription, keys)) return ["subscription-shape-invalid"];
   if (!isStableContractId(subscription.targetId)) errors.push("subscription-target-invalid");
-  if (!RADAR_TARGET_TYPES.includes(subscription.targetType)) errors.push("subscription-target-type-invalid");
-  if (subscription.title !== null && !validPublicLabel(subscription.title)) {
+  if (!RADAR_TARGET_TYPES.includes(subscription.targetType) && !textTarget) errors.push("subscription-target-type-invalid");
+  if (textTarget && (!validRadarTargetText(subscription.targetText)
+      || subscription.title !== subscription.targetText
+      || subscription.targetId !== createLocalTextRadarTargetId(subscription.targetText))) {
+    errors.push("subscription-target-text-invalid");
+  }
+  if (!textTarget && subscription.title !== null && !validPublicLabel(subscription.title)) {
     errors.push("subscription-title-invalid");
   }
   if (subscription.titleGroup !== undefined) {
@@ -220,7 +246,7 @@ function validateSubscription(subscription, authority) {
   if (!["active", "paused"].includes(subscription.status)) errors.push("subscription-status-invalid");
   if (!validInstant(subscription.updatedAt)) errors.push("subscription-updated-at-invalid");
 
-  if (authority === "guest") {
+  if (authority === "guest" || (textTarget && subscription.authority === "local")) {
     if (subscription.authority !== "local") errors.push("guest-subscription-authority-invalid");
     if (subscription.serverRevision !== null || subscription.serverChecksum !== null) {
       errors.push("guest-subscription-server-state-forbidden");
@@ -661,6 +687,60 @@ export function upsertGuestRadarSubscription(state, {
   });
 }
 
+export function changeLocalTextRadarSubscription(state, {
+  targetText, action = "upsert", now = new Date().toISOString(), scope = "all",
+} = {}) {
+  const stateCheck = validateLocalRadarState(state);
+  const targetId = createLocalTextRadarTargetId(targetText);
+  if (!stateCheck.ok || !targetId || !LOCAL_RADAR_OUTBOX_ACTIONS.includes(action)
+      || !RADAR_SCOPES.includes(scope) || !validInstant(now)) {
+    return Object.freeze({ ok: false, reason: "text-subscription-invalid", state, changed: false });
+  }
+  const existing = state.subscriptions.find((entry) => entry.targetId === targetId);
+  if (existing && (existing.targetType !== "text" || existing.targetText !== targetText)) {
+    return Object.freeze({ ok: false, reason: "text-subscription-id-conflict", state, changed: false });
+  }
+  if (action === "remove") {
+    if (!existing) return Object.freeze({ ok: true, reason: "already-missing", state, changed: false, createsProviderJob: false });
+    const next = clone(state);
+    next.subscriptions = next.subscriptions.filter((entry) => entry.targetId !== targetId);
+    return Object.freeze({ ok: true, reason: "removed", state: freezeDeep(next), changed: true, createsProviderJob: false });
+  }
+  const status = action === "pause" ? "paused" : "active";
+  const activeCount = state.subscriptions.filter((entry) => entry.status === "active").length
+    + state.personSubscriptions.filter((entry) => entry.status === "active").length;
+  if (status === "active" && existing?.status !== "active" && activeCount >= RADAR_NORMAL_ACTIVE_LIMIT) {
+    return Object.freeze({ ok: false, reason: "quota-exceeded", state, changed: false });
+  }
+  const nextSubscription = {
+    targetId,
+    targetType: "text",
+    targetText,
+    title: targetText,
+    region: RADAR_DEFAULT_REGION,
+    scope,
+    status,
+    authority: "local",
+    serverRevision: null,
+    serverChecksum: null,
+    updatedAt: now,
+  };
+  const next = clone(state);
+  next.subscriptions = existing
+    ? next.subscriptions.map((entry) => entry.targetId === targetId ? nextSubscription : entry)
+    : [...next.subscriptions, nextSubscription];
+  next.subscriptions.sort((a, b) => a.targetId.localeCompare(b.targetId));
+  const checked = validateLocalRadarState(next);
+  if (!checked.ok) return Object.freeze({ ok: false, reason: "text-subscription-result-invalid", state, changed: false });
+  return Object.freeze({
+    ok: true,
+    reason: existing ? "updated" : "created",
+    state: freezeDeep(next),
+    changed: !existing || JSON.stringify(existing) !== JSON.stringify(nextSubscription),
+    createsProviderJob: false,
+  });
+}
+
 export function removeGuestRadarSubscription(state, targetId) {
   if (!validateLocalRadarState(state).ok || state.authority !== "guest") {
     return Object.freeze({ ok: false, reason: "guest-state-required", state, changed: false });
@@ -979,8 +1059,12 @@ function validateServerSnapshot(snapshot) {
       const keys2 = ["targetId", "targetType", "title", "region", "scope", "status", "updatedAt"];
       if (!exactKeys(entry, keys2)) { errors.push("server-subscription-shape-invalid"); continue; }
       if (!isStableContractId(entry.targetId)) errors.push("server-subscription-target-invalid");
-      if (!RADAR_TARGET_TYPES.includes(entry.targetType)) errors.push("server-subscription-target-type-invalid");
-      if (entry.title !== undefined && !validPublicLabel(entry.title)) {
+      if (!RADAR_TARGET_TYPES.includes(entry.targetType) && entry.targetType !== "text") {
+        errors.push("server-subscription-target-type-invalid");
+      }
+      if (entry.title !== undefined && (entry.targetType === "text"
+        ? !validRadarTargetText(entry.title)
+        : !validPublicLabel(entry.title))) {
         errors.push("server-subscription-title-invalid");
       }
       if (entry.region !== RADAR_DEFAULT_REGION) errors.push("server-subscription-region-invalid");
@@ -1031,20 +1115,27 @@ export function reconcileAccountRadarSnapshot(state, snapshot) {
   const acknowledged = new Set(snapshot.acknowledgedOperationIds);
   const acknowledgedShares = new Set(snapshot.acknowledgedShareOperationIds);
   const next = clone(state);
-  next.subscriptions = snapshot.subscriptions.map((entry) => {
+  const serverTextIds = new Set(snapshot.subscriptions
+    .filter((entry) => entry.targetType === "text").map((entry) => entry.targetId));
+  const localTextSubscriptions = state.subscriptions
+    .filter((entry) => entry.targetType === "text" && !serverTextIds.has(entry.targetId));
+  next.subscriptions = [...snapshot.subscriptions.map((entry) => {
     const retainedTitle = [
       entry.title,
       state.subscriptions.find((item) => item.targetId === entry.targetId)?.title,
       [...state.outbox].reverse().find((item) => item.targetId === entry.targetId)?.title,
-    ].map(text).find((value) => validPublicLabel(value)) || null;
+    ].map(text).find((value) => entry.targetType === "text"
+      ? validRadarTargetText(value)
+      : validPublicLabel(value)) || null;
     return {
       ...entry,
       title: retainedTitle,
+      ...(entry.targetType === "text" ? { targetText: retainedTitle } : {}),
       authority: "server",
       serverRevision: snapshot.revision,
       serverChecksum: snapshot.checksum,
     };
-  }).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  }), ...localTextSubscriptions].sort((a, b) => a.targetId.localeCompare(b.targetId));
   next.outbox = next.outbox.filter((entry) => !acknowledged.has(entry.operationId));
   next.shares = snapshot.shares.map((entry) => ({
     ...entry,
@@ -1289,10 +1380,15 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     }
   }
   const acknowledged = new Set(feed.operationAcks.map((entry) => entry.operationId));
-  next.subscriptions = feed.subscriptions.filter((entry) => entry.targetType !== "person").map((entry) => ({
+  const serverTextIds = new Set(feed.subscriptions
+    .filter((entry) => entry.targetType === "text").map((entry) => entry.targetId));
+  const localTextSubscriptions = state.subscriptions
+    .filter((entry) => entry.targetType === "text" && !serverTextIds.has(entry.targetId));
+  next.subscriptions = [...feed.subscriptions.filter((entry) => entry.targetType !== "person").map((entry) => ({
     targetId: entry.targetId,
     targetType: entry.targetType,
     title: entry.title,
+    ...(entry.targetType === "text" ? { targetText: entry.title } : {}),
     region: entry.region,
     scope: entry.scope,
     status: entry.status,
@@ -1301,7 +1397,7 @@ export function reconcileAccountRadarPilotFeed(state, feed) {
     serverChecksum: feed.checksum,
     updatedAt: normalizedInstant(entry.updatedAt),
     ...(entry.titleGroup === undefined ? {} : { titleGroup: clone(entry.titleGroup) }),
-  })).sort((a, b) => a.targetId.localeCompare(b.targetId));
+  })), ...localTextSubscriptions].sort((a, b) => a.targetId.localeCompare(b.targetId));
   next.personSubscriptions = feed.subscriptions.filter((entry) => entry.targetType === "person").map((entry) => ({
     personExternalId: entry.personExternalId,
     name: entry.title,

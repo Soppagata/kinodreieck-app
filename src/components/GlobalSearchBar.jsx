@@ -71,6 +71,7 @@ export function GlobalSearchBar({
     onAntwortSchliessen?.();
     requestAnimationFrame(() => {
       fokussiereOhneBrowserScroll(eingabeRef.current);
+      viewportEndRef.current();
       viewportUpdateRef.current();
     });
   };
@@ -105,6 +106,7 @@ export function GlobalSearchBar({
     let phase = "idle";
     let entsperreScroll = null;
     let fokusIntent = false;
+    let fokusBestaetigt = false;
     let fokusScrollY = 0;
     let aktiv = true;
     let basis = {
@@ -156,7 +158,6 @@ export function GlobalSearchBar({
           beendePhase({ neueBasis: true });
           if (editierbarerFokus && !volleGeometrie) {
             phase = "focus-pending";
-            entsperreScroll = sperreDokumentScroll();
             aktualisiere();
           }
           return;
@@ -185,12 +186,17 @@ export function GlobalSearchBar({
            deshalb anhand der echten Geometrie erneut eröffnen. */
         if (phase === "idle" && editierbarerFokus && tastaturKandidat) {
           phase = "focus-pending";
-          entsperreScroll = sperreDokumentScroll();
         }
         const tastaturOffen = phase !== "idle" && tastaturKandidat;
         if (!tastaturOffen) {
           raeumeViewportPosition(form);
           return;
+        }
+        if (fokusBestaetigt && !entsperreScroll) {
+          entsperreScroll = sperreDokumentScroll({
+            scrollY: fokusIntent ? fokusScrollY : window.scrollY || 0,
+          });
+          fokusIntent = false;
         }
         phase = "keyboard-open";
 
@@ -251,14 +257,11 @@ export function GlobalSearchBar({
       cancelAnimationFrame(fokusFrame);
       fokusFrame = requestAnimationFrame(() => {
         if (!aktiv || document.activeElement !== eingabe) return;
+        fokusBestaetigt = true;
         if (phase === "idle") {
           aktualisiereBasis();
           phase = "focus-pending";
-          entsperreScroll = sperreDokumentScroll({
-            scrollY: fokusIntent ? fokusScrollY : window.scrollY || 0,
-          });
         }
-        fokusIntent = false;
         stabilisiereFokusphase();
         aktualisiere();
       });
@@ -274,7 +277,10 @@ export function GlobalSearchBar({
         aktualisiere();
       });
     };
-    const stoppeViewportPhase = () => beendePhase({ neueBasis: true });
+    const stoppeViewportPhase = () => {
+      fokusBestaetigt = false;
+      beendePhase({ neueBasis: true });
+    };
     viewportUpdateRef.current = aktualisiere;
     viewportEndRef.current = stoppeViewportPhase;
     viewport.addEventListener("resize", aktualisiere);
@@ -322,8 +328,8 @@ export function GlobalSearchBar({
           <div className="kd-globalsuche-treffer" aria-live="polite">
             {antwort.items.length > 0 ? antwort.items.map((item) => (
               <div className="kd-globalsuche-trefferzeile" key={item.key}>
-                <button type="button" className="kd-globalsuche-ziel" data-globaler-suchtreffer onClick={() => {
-                  viewportEndRef.current(); onTreffer?.(item);
+                <button type="button" className="kd-globalsuche-ziel" data-globaler-suchtreffer onClick={(event) => {
+                  event.currentTarget.focus(); viewportEndRef.current(); onTreffer?.(item);
                 }}>
                   <span>{item.bereichLabel}</span>
                   <strong>{item.titel}</strong>
@@ -343,8 +349,8 @@ export function GlobalSearchBar({
               </div>
             )) : <p>Kein direkter Treffer. Probiere einen Titel, ein Genre oder eine Frage zur App.</p>}
           </div>
-          <button type="button" className="kd-globalsuche-alle" onClick={() => {
-            viewportEndRef.current(); onAlleErgebnisse?.();
+          <button type="button" className="kd-globalsuche-alle" onClick={(event) => {
+            event.currentTarget.focus(); viewportEndRef.current(); onAlleErgebnisse?.();
           }}>Ausführliche Ergebnisse öffnen</button>
         </section>
       )}
@@ -354,7 +360,8 @@ export function GlobalSearchBar({
       <button type="submit" className="kd-globalsuche-los" aria-label={laeuft ? "Suche läuft" : "Suchen"} disabled={laeuft}>⌕</button>
       <button type="button" className={"kd-globalsuche-menu" + (menuOffen ? " offen" : "")}
         aria-label={menuOffen ? "Menü schließen" : "Menü öffnen"} aria-expanded={menuOffen}
-        aria-controls="kd-mobile-menu" onClick={() => { viewportEndRef.current(); onMenu?.(); }}>
+        aria-controls="kd-mobile-menu" onClick={(event) => { event.currentTarget.focus();
+          viewportEndRef.current(); onMenu?.(); }}>
         <i /><i /><i />
       </button>
     </form>

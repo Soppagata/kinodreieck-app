@@ -416,6 +416,10 @@ export function createFixtureRadarLedger(fixtures) {
 export function localRadarTargetLabel(targetOrId, {
   master = [], streamingKnown = null, streamingDiscover = null, fixtures = null, title = null,
 } = {}) {
+  if (typeof targetOrId === "object" && targetOrId?.targetType === "text"
+      && typeof targetOrId.targetText === "string" && targetOrId.targetText.trim()) {
+    return targetOrId.targetText;
+  }
   const entryTitle = text(typeof targetOrId === "object" ? targetOrId?.title : title);
   if (entryTitle && !/^(?:work|watchmode|fixture|catalog|tmdb|imdb|wikidata):/i.test(entryTitle)) return entryTitle;
   const normalized = text(typeof targetOrId === "object" ? targetOrId?.targetId : targetOrId);

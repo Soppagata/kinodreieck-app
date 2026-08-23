@@ -17,9 +17,10 @@ async function loadFeedSafely(repository, accountId) {
  * @param {{
  *   accountId: string,
  *   targetId: string,
+ *   targetText?: string | null,
  *   adapter: { search(request: Record<string, unknown>): Promise<unknown> },
  *   repository: {
- *     loadAuthorizedTarget(input: {accountId: string, targetId: string}): Promise<unknown>,
+ *     loadAuthorizedTarget(input: {accountId: string, targetId: string, targetText?: string | null}): Promise<unknown>,
  *     resolveSources(domains: string[]): Promise<Array<Record<string, unknown>>>,
  *     upsertConfirmedEvent(input: {accountId: string, operationId: string, event: Record<string, unknown>}): Promise<{status?: string}>,
  *     loadFeed(input: {accountId: string}): Promise<unknown>
@@ -30,6 +31,7 @@ async function loadFeedSafely(repository, accountId) {
 export async function runRadarWebsearchCheck({
   accountId,
   targetId,
+  targetText = null,
   adapter,
   repository,
   operationId = () => crypto.randomUUID(),
@@ -43,7 +45,7 @@ export async function runRadarWebsearchCheck({
   }
   let request;
   try {
-    const context = await repository.loadAuthorizedTarget({ accountId, targetId });
+    const context = await repository.loadAuthorizedTarget({ accountId, targetId, targetText });
     const checked = validateRadarWebsearchRequest(context);
     if (!checked.ok) return frozenResult({ status: "forbidden", writes: 0, feed: null });
     request = checked.value;
@@ -60,11 +62,15 @@ export async function runRadarWebsearchCheck({
 
   let sources = [];
   try {
-    const findings = ["person", "title_group"].includes(request.kind)
+    const findings = ["person", "title_group", "text"].includes(request.kind)
       ? envelope?.response?.candidates
       : envelope?.response?.events;
     const domains = [...new Set((findings || []).flatMap((finding) => (
-      [...(finding?.evidence || []), ...(finding?.membershipEvidence || [])]
+      [
+        ...(finding?.evidence || []),
+        ...(finding?.membershipEvidence || []),
+        ...(finding?.relationEvidence || []),
+      ]
         .map((entry) => entry?.sourceDomain).filter(Boolean)
     )))];
     sources = await repository.resolveSources(domains);
@@ -90,6 +96,13 @@ export async function runRadarWebsearchCheck({
       feed: await loadFeedSafely(repository, accountId),
     });
   }
+  if (request.kind === "text" && evaluated.status !== "confirmed") {
+    return frozenResult({
+      status: evaluated.status,
+      writes: 0,
+      feed: await loadFeedSafely(repository, accountId),
+    });
+  }
   if (evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
@@ -103,7 +116,8 @@ export async function runRadarWebsearchCheck({
   try {
     const catalogResult = request.kind === "person"
       ? evaluated.personResult
-      : request.kind === "title_group" ? evaluated.titleGroupResult : null;
+      : request.kind === "title_group" ? evaluated.titleGroupResult
+        : request.kind === "text" ? evaluated.textResult : null;
     const events = catalogResult
       ? catalogResult.candidates.map((candidate) => ({
         targetKey: candidate.targetId,
@@ -120,6 +134,7 @@ export async function runRadarWebsearchCheck({
           groupExternalId: candidate.groupExternalId,
           membershipEvidence: candidate.membershipEvidence,
         } : {}),
+        ...(request.kind === "text" ? { relationEvidence: candidate.relationEvidence } : {}),
       }))
       : evaluated.events;
     for (const event of events) {
@@ -151,6 +166,13 @@ export async function runRadarWebsearchCheck({
               windowStart: request.windowStart,
               windowEnd: request.windowEnd,
             } : {}),
+          },
+        } : request.kind === "text" ? {
+          textContext: {
+            targetId: request.targetId,
+            targetText: request.targetText,
+            checkedAt: evaluated.textResult.checkedAt,
+            relationEvidence: event.relationEvidence,
           },
         } : {}),
       });

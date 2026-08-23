@@ -368,15 +368,41 @@ const kostenMigration = readFileSync(
 );
 const releaseDoku = readFileSync("docs/FUNCTION_RELEASES.md", "utf8");
 const functionIndex = readFileSync("supabase/functions/ai-task/index.ts", "utf8");
+const requestContract = readFileSync("supabase/functions/ai-task/requestContract.ts", "utf8");
 const smokeSkript = readFileSync("tools/ai_smoke.mjs", "utf8");
+const userTaskContract = readFileSync("tools/ai_user_task_contract.mjs", "utf8");
 const evalSkript = readFileSync("tools/ai_eval_etappe6.mjs", "utf8");
+const NUTZER_TASKS_SOLL = [
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "media-batch-extract",
+  "blog-profile-extract",
+];
+const leseTaskListe = (quelle, anker) => {
+  const start = quelle.indexOf(anker);
+  const block = start < 0
+    ? null
+    : /Object\.freeze\(\[([\s\S]*?)\]\s*(?:as const)?\);/.exec(quelle.slice(start));
+  return block
+    ? [...block[1].matchAll(/"([a-z][a-z-]+)"/g)].map((treffer) => treffer[1])
+    : [];
+};
 const p8Abschnitt = smokeSkript.slice(
   smokeSkript.indexOf("/* --- P8:"),
   smokeSkript.indexOf("/* --- P9:"),
 );
 const p8Position = smokeSkript.indexOf("const p8 = await ruf(");
 const p5CapabilityPos = smokeSkript.indexOf('pruefeBlogProfilCapabilityAbschnitt("P5", p5);');
-const p22Start = smokeSkript.indexOf("P22: Synthetische Ein-Artikel-Blog-Profilextraktion (bewacht)");
+const p5ActivationPos = smokeSkript.indexOf('pruefeAktivierungsvertrag("P5", p5);');
+const bewachteTasks = [...smokeSkript.matchAll(
+  /await rufAnbieterBewacht\([\s\S]{0,360}?task:\s*"([^"]+)"/g,
+)].map((treffer) => treffer[1]);
+const readbackTasks = [...smokeSkript.matchAll(
+  /pruefeNutzerTaskReadback\("[^"]+",\s*"([^"]+)"/g,
+)].map((treffer) => treffer[1]);
+const p22Start = smokeSkript.indexOf("S5: Synthetische Ein-Artikel-Blog-Profilextraktion");
 const p22AbschnittsEnde = p22Start >= 0
   ? smokeSkript.indexOf("\n/* ===========================================================================", p22Start + 1)
   : -1;
@@ -407,8 +433,17 @@ check("Function prueft denselben Kostenzaun vor kd_ai_auftrag_starten und meldet
   functionIndex.indexOf("pruefeAnbieterKostenzaun(")
     < functionIndex.indexOf('admin.rpc(\n    "kd_ai_auftrag_starten"')
   && /anbieterRequestOwnerMaxUsdCent: ANBIETER_REQUEST_MAX_USD_CENT/.test(functionIndex));
-check("Rauchprobe verdrahtet genau neun bewachte Pfade durch dieselbe Laufwache",
-  (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === 9
+check("Health benennt das spätere Gate und bindet es an exakt sechs Nutzeraufgaben",
+  /gate:\s*"KD_AI_TASK_ENABLED"/.test(functionIndex)
+  && /requiredValue:\s*"true"/.test(functionIndex)
+  && /enabled:\s*aiTaskIstAktiv\(\)/.test(functionIndex)
+  && JSON.stringify(leseTaskListe(requestContract, "export const NUTZER_AUFGABEN"))
+    === JSON.stringify(NUTZER_TASKS_SOLL)
+  && JSON.stringify(leseTaskListe(userTaskContract, "export const AI_USER_TASKS"))
+    === JSON.stringify(NUTZER_TASKS_SOLL));
+check("Rauchprobe verdrahtet genau die sechs beauftragten Anbieterpfade durch dieselbe Laufwache",
+  (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === 6
+  && JSON.stringify([...bewachteTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
   && (smokeSkript.match(/await rufAnbieterBewachtMitCapability\(/g) || []).length === 0
   && (smokeSkript.match(/task: "anbieter-modelle"/g) || []).length === 1
   && /maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
@@ -420,14 +455,31 @@ check("P5-Capability-Guard liegt vor P8 im Smoke auf der vorhandenen P5-Healthan
   /pruefeBlogProfilCapabilityAbschnitt\("P5", p5\);/.test(smokeSkript)
   && p5CapabilityPos >= 0
   && p8Position > p5CapabilityPos
-  && /import \{ hatBlogProfileAnalyseCapability \} from "\.\.\/src\/lib\/blogProfilAnalyse\.js"/.test(smokeSkript)
+  && /hatBlogProfileAnalyseCapability,[\s\S]{0,120}from "\.\.\/src\/lib\/blogProfilAnalyse\.js"/.test(smokeSkript)
   && /pruefeBlogProfilCapabilityAbschnitt\(/.test(smokeSkript));
-check("Rauchprobe ersetzt P22 durch genau einen Ein-Artikel-Blog-Capability-Aufruf",
+check("P5 stoppt vor P8, wenn Gate oder Sechs-Aufgaben-Vertrag nicht exakt aktiv ist",
+  p5ActivationPos >= 0
+  && p8Position > p5ActivationPos
+  && /activation\.gate === "KD_AI_TASK_ENABLED"/.test(smokeSkript)
+  && /activation\.requiredValue === "true"/.test(smokeSkript)
+  && /activation\.enabled === true/.test(smokeSkript)
+  && /JSON\.stringify\(activation\.userTasks\) === JSON\.stringify\(AI_USER_TASKS\)/.test(smokeSkript));
+check("Jede Nutzerszene läuft genau einmal durch Produktionsparser und Readback",
+  readbackTasks.length === 6
+  && JSON.stringify([...readbackTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
+  && /pruefeAiUserTaskReadback/.test(smokeSkript)
+  && /persistenz/.test(smokeSkript));
+check("Rauchprobe enthält genau je einen persönlichen und einen Blog-Profilextraktionspfad",
   (smokeSkript.match(/task: "blog-profile-extract"/g) || []).length === 1
-  && !/task: "profile-extract"/.test(smokeSkript)
+  && (smokeSkript.match(/task: "profile-extract"/g) || []).length === 1
+  && /const PROFILE_ANTWORTEN =/.test(smokeSkript)
+  && /PROFILE_ANTWORTEN\[signal\.quelle\]\.includes\(signal\.beleg\)/.test(smokeSkript)
   && /const BLOG_PROFILE_ARTIKEL =/.test(smokeSkript)
   && /artikel:\s*BLOG_PROFILE_ARTIKEL/.test(p22Abschnitt)
   && /await rufAnbieterBewacht\(\s*"P22 blog-profile-extract"/.test(smokeSkript));
+check("Echo fehlt vollständig und Health bleibt eine niemals bewachte Diagnose",
+  (smokeSkript.match(/task: "echo-struct"/g) || []).length === 0
+  && !/rufAnbieterBewacht\([\s\S]{0,180}?task:\s*"health"/.test(smokeSkript));
 check("Kein Health-Vorab-Call pro bewachtem Pfad, stattdessen genau ein P5-Guard",
   !/rufAnbieterBewachtMitCapability\(/.test(smokeSkript)
   && !/pruefeHealthVorBewachtemPfad\(/.test(smokeSkript));

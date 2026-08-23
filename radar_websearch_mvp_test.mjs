@@ -109,6 +109,96 @@ function envelope({
   };
 }
 
+const textTarget = Object.freeze({
+  kind: "text",
+  targetId: "text:d9e6b48aa971462a",
+  targetText: "Mutter Teresa",
+  region: "AT",
+  scopes: ["cinema", "streaming", "series_start", "season_start"],
+});
+
+function textEvidence(path, claim) {
+  return {
+    url: `https://${official.domain}/${path}`,
+    sourceDomain: official.domain,
+    sourceTitle: "Offizieller Beleg",
+    publishedAt: "2026-08-17",
+    claim,
+  };
+}
+
+function textEnvelope(status = "confirmed", twoWorks = false) {
+  const candidates = status === "confirmed" ? [{
+    targetId: "imdb:tt1234567",
+    targetType: "work",
+    title: "Mother Teresa: No Greater Love",
+    year: 2022,
+    eventType: "streamingstart_at",
+    eventDate: "2026-08-21",
+    region: "AT",
+    platform: "Beispiel+",
+    seasonNumber: null,
+    relationEvidence: [textEvidence("mutter-teresa-beziehung", "Das Werk handelt von Mutter Teresa.")],
+    evidence: [textEvidence("mutter-teresa-start", "Streamingstart in Österreich am 21. August 2026.")],
+  }, ...(twoWorks ? [{
+    targetId: "tmdb:movie:7654321",
+    targetType: "work",
+    title: "The Letters",
+    year: 2014,
+    eventType: "streamingstart_at",
+    eventDate: "2026-08-22",
+    region: "AT",
+    platform: "Beispiel+",
+    seasonNumber: null,
+    relationEvidence: [textEvidence("the-letters-beziehung", "Das Werk erzählt von Mutter Teresa.")],
+    evidence: [textEvidence("the-letters-start", "Streamingstart in Österreich am 22. August 2026.")],
+  }] : [])] : [];
+  return {
+    searchResultCount: candidates.length ? candidates.length * 2 : 1,
+    response: {
+      status,
+      checkedAt,
+      textTarget: { targetId: textTarget.targetId, targetText: textTarget.targetText },
+      candidates,
+    },
+  };
+}
+
+function textRepository() {
+  const calls = { loads: [], upserts: [], feeds: 0 };
+  const stored = [];
+  return {
+    calls,
+    stored,
+    async loadAuthorizedTarget(input) {
+      calls.loads.push(structuredClone(input));
+      if (input.accountId !== "max-account" || input.targetId !== textTarget.targetId
+          || input.targetText !== textTarget.targetText) throw new Error("forbidden");
+      return structuredClone(textTarget);
+    },
+    async resolveSources(domains) {
+      assert.deepEqual(domains, [official.domain]);
+      return [structuredClone(official)];
+    },
+    async upsertConfirmedEvent(input) {
+      calls.upserts.push(structuredClone(input));
+      stored.push(structuredClone(input.event));
+      return { status: "confirmed" };
+    },
+    async loadFeed() {
+      calls.feeds += 1;
+      return {
+        subscriptions: [{
+          targetId: textTarget.targetId,
+          targetType: "text",
+          title: textTarget.targetText,
+        }],
+        events: stored.map((event) => ({ ...event, targetId: event.targetKey, title: event.title })),
+      };
+    },
+  };
+}
+
 function repository(sourceRows = sources) {
   return createRadarWebsearchMemoryRepository({ target, sources: sourceRows });
 }
@@ -122,6 +212,73 @@ await check("Requestvertrag akzeptiert nur globale Zieldaten", () => {
   assert.equal(validateRadarWebsearchRequest({ ...target, accountId: "max-account" }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...target, profile: {} }).ok, false);
   assert.equal(validateRadarWebsearchRequest({ ...target, targetId: "fixture:film:1" }).ok, false);
+});
+
+await check("Freitextvertrag erhaelt Mutter Teresa roh und verlangt weder Nutzer-ID noch Zielart", () => {
+  const accepted = validateRadarWebsearchRequest(textTarget);
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.value.targetText, "Mutter Teresa");
+  assert.equal("accountId" in accepted.value, false);
+  assert.equal("targetType" in accepted.value, false);
+  assert.equal(validateRadarWebsearchRequest({ ...textTarget, targetText: " Mutter Teresa " }).ok, true);
+  assert.equal(validateRadarWebsearchRequest({ ...textTarget, targetText: "" }).ok, false);
+});
+
+await check("Mutter Teresa startet genau einen Suchpfad und der bestaetigte Fund ist im Feed ruecklesbar", async () => {
+  const repo = textRepository();
+  const adapter = createRadarWebsearchMockAdapter(textEnvelope());
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account",
+    targetId: textTarget.targetId,
+    targetText: textTarget.targetText,
+    adapter,
+    repository: repo,
+    operationId: () => "40000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 1);
+  assert.equal(adapter.calls.length, 1);
+  assert.deepEqual(repo.calls.loads, [{
+    accountId: "max-account", targetId: textTarget.targetId, targetText: "Mutter Teresa",
+  }]);
+  assert.equal(repo.calls.upserts.length, 1);
+  assert.equal(repo.calls.upserts[0].textContext.targetText, "Mutter Teresa");
+  assert.equal(repo.calls.upserts[0].textContext.relationEvidence.length, 1);
+  assert.equal(result.feed.subscriptions[0].title, "Mutter Teresa");
+  assert.equal(result.feed.events[0].targetId, "imdb:tt1234567");
+  assert.equal(result.feed.events[0].title, "Mother Teresa: No Greater Love");
+});
+
+await check("Zwei Freitextwerke derselben Plattform bleiben werkgebundene getrennte Events", async () => {
+  const repo = textRepository();
+  const adapter = createRadarWebsearchMockAdapter(textEnvelope("confirmed", true));
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: textTarget.targetId, targetText: textTarget.targetText,
+    adapter, repository: repo,
+    operationId: (event) => event.targetKey.startsWith("imdb:")
+      ? "41000000-0000-4000-8000-000000000001"
+      : "41000000-0000-4000-8000-000000000002",
+  });
+  assert.equal(result.status, "confirmed");
+  assert.equal(result.writes, 2);
+  assert.equal(adapter.calls.length, 1);
+  assert.deepEqual(result.feed.events.map((event) => event.targetId).sort(), [
+    "imdb:tt1234567", "tmdb:movie:7654321",
+  ]);
+});
+
+await check("Unsicherer Freitextfund bleibt ehrlich leer und ohne Persistenz", async () => {
+  const repo = textRepository();
+  const adapter = createRadarWebsearchMockAdapter(textEnvelope("insufficient_evidence"));
+  const result = await runRadarWebsearchCheck({
+    accountId: "max-account", targetId: textTarget.targetId, targetText: textTarget.targetText,
+    adapter, repository: repo,
+  });
+  assert.equal(result.status, "insufficient_evidence");
+  assert.equal(result.writes, 0);
+  assert.equal(adapter.calls.length, 1);
+  assert.equal(repo.calls.upserts.length, 0);
+  assert.deepEqual(result.feed.events, []);
 });
 
 await check("Antwortvertrag kennt genau die vier Radar-Ereignisarten", () => {
@@ -309,7 +466,35 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
   assert.equal(calls[0].options.body.includes("max-account"), false);
 });
 
+await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check genau einmal und unverändert", async () => {
+  const session = { mode: "account", state: "ready", account: { id: "max-account" } };
+  const calls = [];
+  const service = createRadarWebsearchService({
+    config: {
+      radarPilotClientEnabled: true,
+      supabaseUrl: "https://project.example.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => session.account,
+    getAccessToken: async () => "session-token",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return { ok: true, status: 200, async json() {
+        return { ok: true, status: "insufficient_evidence", writes: 0, providerRequests: 1, searchRequests: 1 };
+      } };
+    },
+  });
+  const result = await service.checkNow("text:0123456789abcdef", "Mutter Teresa");
+  assert.equal(result.status, "insufficient_evidence");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    targetId: "text:0123456789abcdef", targetText: "Mutter Teresa",
+  });
+});
+
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
+const textMigration = fs.readFileSync("./supabase/migrations/20260823120000_radar_text_target.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");
 
@@ -322,6 +507,28 @@ await check("Migration bleibt additiv auf vorhandenen Radar-Tabellen und service
   assert.match(migration, /source_state_hash/i);
   assert.match(migration, /radar_websearch_event_outside_subscription/i);
   assert.doesNotMatch(migration, /radar_provider_aktiv\s*=|radar_scheduler_aktiv\s*=|cron\.|pg_cron/i);
+});
+
+await check("Freitextmigration nutzt nur bestehende Radarpfade und sperrt Rohtext-Schluessel-Drift", () => {
+  assert.doesNotMatch(textMigration, /create\s+table/i);
+  assert.match(textMigration, /kd_radar_websearch_prepare_text\(uuid,text,text,uuid\)/i);
+  assert.match(textMigration, /kd_radar_websearch_upsert_text_event\(uuid,uuid,jsonb\)/i);
+  assert.match(textMigration, /p_target_key\s+is\s+distinct\s+from\s+public\.kd_radar_text_target_key\(p_target_text\)/i);
+  assert.match(textMigration, /'targetKey',v_work_key/i);
+  assert.match(textMigration, /radar-text-inner/i);
+  assert.match(textMigration, /public\.kd_radar_websearch_upsert_event\([\s\S]*?v_inner_operation_id,v_core_payload/i);
+  assert.match(textMigration, /v_direct_inserted[\s\S]*?delete from public\.kd_radar_subscriptions/i);
+  assert.match(textMigration, /select subscription\.subscription_status,subscription\.scope,subscription\.region[\s\S]*?into v_direct_status,v_direct_scope,v_direct_region/i);
+  assert.match(textMigration, /set subscription_status='active',scope='all',region='AT'[\s\S]*?kd_radar_websearch_upsert_event/i);
+  assert.match(textMigration, /kd_radar_websearch_upsert_event[\s\S]*?set subscription_status=v_direct_status,scope=v_direct_scope,region=v_direct_region/i);
+  assert.doesNotMatch(textMigration, /exception\s+when[\s\S]*?kd_radar_websearch_upsert_event/i);
+  assert.match(textMigration, /'format','kd-radar-text-event-v1'[\s\S]*?'checkedAt'/i);
+  assert.match(textMigration, /account_id,operation_id,request_hash,result,terminal_at,created_at/i);
+  assert.match(textMigration, /rename to kd_radar_pilot_feed_text_internal/i);
+  assert.match(textMigration, /'targetId',item\.target_key,'title',item\.canonical_title/i);
+  assert.doesNotMatch(textMigration, /radar_text_event_definition_drift/i);
+  assert.match(textMigration, /target_type\s+in\s+\('work','series','franchise','person','text'\)/i);
+  assert.doesNotMatch(textMigration, /anthropic|pg_net|http_post|curl/i);
 });
 
 await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {
