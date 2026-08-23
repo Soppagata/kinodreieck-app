@@ -2054,6 +2054,19 @@ const AI_HEALTH = {
   schluesselHerkunft: { oeffentlich: "gesetzt", geheim: "gesetzt" },
   anbieterSecretGesetzt: true,
   aufrufer: { rolle: "authenticated", fachrolle: "owner", weg: "token", accountIdVorhanden: true },
+  activation: {
+    gate: "KD_AI_TASK_ENABLED",
+    requiredValue: "true",
+    enabled: true,
+    userTasks: [
+      "intelligent-search",
+      "profile-extract",
+      "film-forecast",
+      "filmwissen-synthese",
+      "media-batch-extract",
+      "blog-profile-extract",
+    ],
+  },
   betrieb: { aiAktiv: true },
   zeit: "2026-08-17T00:00:00.000Z",
   capabilities: {
