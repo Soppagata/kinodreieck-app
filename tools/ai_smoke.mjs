@@ -50,6 +50,7 @@
    ============================================================================ */
 
 import {
+  BUDGET_FETCH_TIMEOUT_MS,
   BUDGET_UNBEKANNT_EXIT,
   ENTDECKEN_LAUF_LIMIT_USD_CENT,
   LAUF_LIMIT_USD_CENT,
@@ -76,7 +77,9 @@ import { readFileSync } from "node:fs";
 import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
+  RADAR_TARGET_AUTO_RESOLVE_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
+  loeseStarkesOwnerRadarZiel,
 } from "./keychain_runner.mjs";
 import {
   OWNER_CORE_SIX_GUARD_ENV,
@@ -120,7 +123,6 @@ const LIVE_ANBIETER_PFADE = Object.freeze([
 const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT
   ? LIVE_ANBIETER_PFADE
   : LIVE_ANBIETER_PFADE.slice(0, 6);
-const RADAR_TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
 const ENTDECKEN_FUNCTION = "entdecken-daily-task";
 const RADAR_FUNCTION = "radar-websearch-task";
 const ENTDECKEN_RECOVERY_HEADER = "X-KD-Entdecken-Recovery";
@@ -194,7 +196,7 @@ async function meldeAn() {
   return daten.access_token;
 }
 
-async function rpc(name, token, body) {
+async function rpc(name, token, body, timeoutMs = LIVE_REQUEST_TIMEOUT_MS) {
   try {
     const antwort = await fetchMitZeitgrenze(`${URL_BASIS}/rest/v1/rpc/${name}`, {
       method: "POST",
@@ -204,7 +206,7 @@ async function rpc(name, token, body) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-    });
+    }, { timeoutMs });
     const daten = await liesJsonOderNull(antwort);
     return { status: antwort.status, daten };
   } catch (error) {
@@ -315,24 +317,13 @@ function bestaetigeExakteAnbieterPfadfolge() {
   );
 }
 
-function liesRadarTargetId() {
-  const targetId = String(process.env.KD_RADAR_TARGET_ID || "").trim();
-  if (!RADAR_TARGET_FORM.test(targetId) || /^(?:fixture|synthetic):/i.test(targetId)) {
-    stoppeLiveLauf(new LiveSicherheitsStopp(
-      "unbekannt",
-      "Combined-Eight-Smoke hat kein starkes reales Radar-Ziel.",
-    ));
-  }
-  return targetId;
-}
-
 if (OWNER_CORE_SIX && !OWNER_COMBINED_EIGHT) {
   stoppeLiveLauf(new LiveSicherheitsStopp(
     "unbekannt",
     "Der Owner-Smoke ist nicht auf alle acht seriellen Anbieterpfade gebunden.",
   ));
 }
-const RADAR_TARGET_ID = OWNER_COMBINED_EIGHT ? liesRadarTargetId() : null;
+let RADAR_TARGET_ID = null;
 
 console.log(`KI-Endpunkt-Rauchprobe gegen ${ENDPUNKT}\n`);
 
@@ -430,8 +421,23 @@ pruefeBlogProfilCapabilityAbschnitt("P5", p5);
 if (OWNER_COMBINED_EIGHT) {
   try {
     await pruefeEntdeckenOwnerZugang({ verbindung: LIVE_VERBINDUNG, token });
+    RADAR_TARGET_ID = await loeseStarkesOwnerRadarZiel({
+      override: process.env.KD_RADAR_TARGET_ID,
+      autoResolveGuard: process.env[RADAR_TARGET_AUTO_RESOLVE_ENV],
+      feedLeser: () => rpc(
+        "kd_radar_pilot_feed",
+        token,
+        { p_operation_ids: [] },
+        BUDGET_FETCH_TIMEOUT_MS,
+      ),
+    });
   } catch (error) {
-    stoppeLiveLauf(error);
+    stoppeLiveLauf(error instanceof LiveSicherheitsStopp
+      ? error
+      : new LiveSicherheitsStopp(
+        "unbekannt",
+        "Combined-Eight-Smoke hat kein accountgebundenes starkes Radar-Ziel.",
+      ));
   }
 }
 

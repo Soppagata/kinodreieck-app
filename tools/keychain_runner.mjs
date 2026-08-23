@@ -45,6 +45,8 @@ export const OWNER_SERVER_BUDGET_FLAG = "--owner-approved-server-budget";
 export const OWNER_SERVER_BUDGET_ENV = "KD_AI_OWNER_APPROVED_SERVER_BUDGET";
 export const RADAR_WEBSEARCH_ONCE_FLAG = "--radar-websearch-once";
 export const RADAR_WEBSEARCH_ONCE_ENV = "KD_RADAR_WEBSEARCH_ONCE_GUARD";
+export const RADAR_TARGET_AUTO_RESOLVE_ENV = "KD_RADAR_TARGET_AUTO_RESOLVE_GUARD";
+export const RADAR_TARGET_AUTO_RESOLVE_VALUE = "owner-session-feed-v1";
 export const RADAR_ENTDECKEN_ONCE_FLAG = "--radar-entdecken-once";
 export const ENTDECKEN_DAILY_ONCE_REQUEST_ENV = "KD_ENTDECKEN_DAILY_ONCE_REQUEST";
 export const ENTDECKEN_DAILY_ONCE_ENV = "KD_ENTDECKEN_DAILY_ONCE_GUARD";
@@ -74,6 +76,7 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   "KD_AI_AUTONOM_LIMIT_USD_CENT",
   OWNER_SERVER_BUDGET_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
+  RADAR_TARGET_AUTO_RESOLVE_ENV,
   ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
   ENTDECKEN_DAILY_ONCE_ENV,
   OWNER_CORE_SIX_GUARD_ENV,
@@ -95,6 +98,8 @@ const HARMLOSE_PROZESSWERTE = [
   "CI",
 ];
 const RLS_ACCESS_MODI = new Set(["active", "inactive", "missing"]);
+const RADAR_TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
+const RADAR_AUTO_TARGET_TYPES = new Set(["work", "series", "person", "franchise"]);
 
 const SKRIPT = (name) => resolve(REPO_ROOT, "tools", name);
 
@@ -320,6 +325,90 @@ function pruefeOeffentlicheKonfig(env) {
   }
 }
 
+export class RadarTargetFehler extends Error {
+  constructor(message = "Kein eindeutig berechtigtes starkes Radarziel lesbar.") {
+    super(message);
+    this.name = "RadarTargetFehler";
+  }
+}
+
+export function normalisiereStarkesRadarZiel(wert) {
+  const targetId = typeof wert === "string" ? wert.trim() : "";
+  return RADAR_TARGET_FORM.test(targetId) && !/^(?:fixture|synthetic):/i.test(targetId)
+    ? targetId
+    : null;
+}
+
+function enthaeltAccountIdentitaet(wert) {
+  if (!wert || typeof wert !== "object" || Array.isArray(wert)) return false;
+  return ["accountId", "account_id", "actorId", "actor_id", "ownerId", "owner_id", "userId", "user_id"]
+    .some((name) => Object.prototype.hasOwnProperty.call(wert, name));
+}
+
+function istAutoRadarZielBerechtigt(abo) {
+  if (!abo || typeof abo !== "object" || Array.isArray(abo)
+      || enthaeltAccountIdentitaet(abo)
+      || abo.status !== "active" || abo.region !== "AT"
+      || (Object.prototype.hasOwnProperty.call(abo, "targetStatus")
+        && abo.targetStatus !== "active")
+      || !RADAR_AUTO_TARGET_TYPES.has(abo.targetType)) return false;
+  const targetId = normalisiereStarkesRadarZiel(abo.targetId);
+  if (!targetId || targetId !== abo.targetId) return false;
+  if (abo.targetType === "work") {
+    return ["all", "cinema", "streaming"].includes(abo.scope);
+  }
+  if (abo.targetType === "series") {
+    return ["all", "streaming"].includes(abo.scope);
+  }
+  if (abo.targetType === "person") {
+    const personId = typeof abo.personExternalId === "string" ? abo.personExternalId.trim() : "";
+    const rolle = typeof abo.personRole === "string" ? abo.personRole.trim() : "";
+    return abo.scope === "all" && !!personId && ["actor", "director"].includes(rolle)
+      && targetId === `person:${personId}:${rolle}`;
+  }
+  return abo.scope === "all" && /^title-group:v1:[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(targetId)
+    && !!abo.titleGroup && typeof abo.titleGroup === "object" && !Array.isArray(abo.titleGroup);
+}
+
+export async function loeseStarkesOwnerRadarZiel({
+  override = "",
+  autoResolveGuard = "",
+  feedLeser,
+} = {}) {
+  const overrideRoh = typeof override === "string" ? override.trim() : "";
+  if (overrideRoh) {
+    const targetId = normalisiereStarkesRadarZiel(overrideRoh);
+    if (!targetId) throw new RadarTargetFehler("Radarziel-Override ist nicht stark und real.");
+    return targetId;
+  }
+  if (autoResolveGuard !== RADAR_TARGET_AUTO_RESOLVE_VALUE || typeof feedLeser !== "function") {
+    throw new RadarTargetFehler();
+  }
+
+  let antwort;
+  try {
+    antwort = await feedLeser();
+  } catch {
+    throw new RadarTargetFehler();
+  }
+  const feed = antwort?.daten;
+  if (antwort?.status !== 200 || !feed || typeof feed !== "object" || Array.isArray(feed)
+      || enthaeltAccountIdentitaet(feed) || feed.radarReview !== true
+      || !Array.isArray(feed.subscriptions)) {
+    throw new RadarTargetFehler();
+  }
+
+  const kandidaten = feed.subscriptions
+    .filter(istAutoRadarZielBerechtigt)
+    .map((abo) => abo.targetId)
+    .sort((a, b) => (a < b ? -1 : (a > b ? 1 : 0)));
+  if (kandidaten.length === 0
+      || kandidaten.some((targetId, index) => index > 0 && targetId === kandidaten[index - 1])) {
+    throw new RadarTargetFehler();
+  }
+  return kandidaten.slice(0, 1)[0];
+}
+
 export function baueKindUmgebung({
   modus,
   ambientEnv = process.env,
@@ -415,10 +504,18 @@ export function baueKindUmgebung({
     delete env.KD_FILMWISSEN_TARGET_ID;
   }
   if (effectiveOwnerCoreSix || radarWebsearchOnce || radarEntdeckenOnce) {
-    const targetId = String(env.KD_RADAR_TARGET_ID || "").trim();
-    if (!/^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i.test(targetId)
-        || /^(?:fixture|synthetic):/i.test(targetId)) {
+    const targetRoh = String(env.KD_RADAR_TARGET_ID || "").trim();
+    const targetId = normalisiereStarkesRadarZiel(targetRoh);
+    if (targetRoh && !targetId) {
+      throw new Error("KD_RADAR_TARGET_ID ist kein starkes reales Ziel.");
+    }
+    if (!targetId && !effectiveOwnerCoreSix) {
       throw new Error("KD_RADAR_TARGET_ID fehlt oder ist kein starkes reales Ziel.");
+    }
+    if (targetId) env.KD_RADAR_TARGET_ID = targetId;
+    else delete env.KD_RADAR_TARGET_ID;
+    if (effectiveOwnerCoreSix) {
+      env[RADAR_TARGET_AUTO_RESOLVE_ENV] = RADAR_TARGET_AUTO_RESOLVE_VALUE;
     }
     env[RADAR_WEBSEARCH_ONCE_ENV] = "keychain-budget-guard-v1";
   }

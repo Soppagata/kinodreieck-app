@@ -409,6 +409,8 @@ const p8Abschnitt = smokeSkript.slice(
 const p8Position = smokeSkript.indexOf("const p8 = await ruf(");
 const p5CapabilityPos = smokeSkript.indexOf('pruefeBlogProfilCapabilityAbschnitt("P5", p5);');
 const p5ActivationPos = smokeSkript.indexOf('pruefeAktivierungsvertrag("P5", p5);');
+const ownerAccessPos = smokeSkript.indexOf("await pruefeEntdeckenOwnerZugang");
+const radarAutoResolvePos = smokeSkript.indexOf("RADAR_TARGET_ID = await loeseStarkesOwnerRadarZiel");
 const bewachteTasks = [...smokeSkript.matchAll(
   /await rufAnbieterBewacht\([\s\S]{0,360}?task:\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
@@ -533,6 +535,13 @@ check("P5 stoppt vor P8, wenn Gate oder Sechs-Aufgaben-Vertrag nicht exakt aktiv
   && /activation\.requiredValue === "true"/.test(smokeSkript)
   && /activation\.enabled === true/.test(smokeSkript)
   && /JSON\.stringify\(activation\.userTasks\) === JSON\.stringify\(AI_USER_TASKS\)/.test(smokeSkript));
+check("Owner-Radarziel wird nach Owner-Read und vor jedem Anbieterpfad genau einmal accountgebunden gelesen",
+  ownerAccessPos >= 0
+  && radarAutoResolvePos > ownerAccessPos
+  && p8Position > radarAutoResolvePos
+  && (smokeSkript.match(/loeseStarkesOwnerRadarZiel\(\{/g) || []).length === 1
+  && (smokeSkript.match(/rpc\(\s*"kd_radar_pilot_feed",\s*token,\s*\{ p_operation_ids: \[\] \},\s*BUDGET_FETCH_TIMEOUT_MS,\s*\)/g) || []).length === 1
+  && !/console\.(?:log|error)\([^\n]*(?:RADAR_TARGET_ID|KD_RADAR_TARGET_ID)/.test(smokeSkript));
 check("Jede Nutzerszene läuft genau einmal durch Produktionsparser und Readback",
   readbackTasks.length === 6
   && JSON.stringify([...readbackTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())

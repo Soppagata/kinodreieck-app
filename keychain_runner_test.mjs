@@ -23,13 +23,18 @@ import {
   PROVIDER_RAW_CAPTURE_DIR_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+  RADAR_TARGET_AUTO_RESOLVE_ENV,
+  RADAR_TARGET_AUTO_RESOLVE_VALUE,
   RADAR_ENTDECKEN_ONCE_FLAG,
   RADAR_WEBSEARCH_ONCE_ENV,
   RADAR_WEBSEARCH_ONCE_FLAG,
+  RadarTargetFehler,
   REPO_ROOT,
   baueKindUmgebung,
   liesKeychainEintrag,
+  loeseStarkesOwnerRadarZiel,
   main,
+  normalisiereStarkesRadarZiel,
   parseLokaleKonfig,
   reserviereLiveLauf,
   starteModus,
@@ -159,6 +164,7 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   for (const name of [
     "KD_TESTA_PASS", "KD_OWNER_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
     ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV,
+    RADAR_TARGET_AUTO_RESOLVE_ENV,
     OWNER_CORE_SIX_GUARD_ENV, PROVIDER_RAW_CAPTURE_DIR_ENV,
     PROVIDER_RAW_CAPTURE_GUARD_ENV, "KD_EVAL_JA",
   ]) {
@@ -295,6 +301,7 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
       && env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
       && env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && env[RADAR_TARGET_AUTO_RESOLVE_ENV] === RADAR_TARGET_AUTO_RESOLVE_VALUE
       && env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && env.KD_FILMWISSEN_TARGET_ID === PUBLIC.KD_FILMWISSEN_TARGET_ID
       && env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
@@ -319,6 +326,118 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   } catch { budgetcheckGesperrt = true; }
   pruefe("Owner-Budgetfreigabe kann auch nicht an einen reinen Budgetcheck gehaengt werden",
     budgetcheckGesperrt);
+}
+
+{
+  const ohneRadarOverride = { ...PUBLIC };
+  delete ohneRadarOverride.KD_RADAR_TARGET_ID;
+  const env = baueKindUmgebung({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: ohneRadarOverride,
+    keychainLeser: () => OWNER_GEHEIMNIS,
+    ownerApprovedServerBudget: true,
+  });
+  pruefe("fehlendes Radar-Override aktiviert nur im Owner-Combined-Eight die accountgebundene Autoauflösung",
+    !("KD_RADAR_TARGET_ID" in env)
+      && env[RADAR_TARGET_AUTO_RESOLVE_ENV] === RADAR_TARGET_AUTO_RESOLVE_VALUE
+      && env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1");
+
+  let ungueltigesOverrideGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: { ...ohneRadarOverride, KD_RADAR_TARGET_ID: "fixture:radar-ziel" },
+      keychainLeser: () => OWNER_GEHEIMNIS,
+      ownerApprovedServerBudget: true,
+    });
+  } catch { ungueltigesOverrideGesperrt = true; }
+  pruefe("ein vorhandenes schwaches Radar-Override fällt nie auf Autoauflösung zurück",
+    ungueltigesOverrideGesperrt);
+}
+
+{
+  const abo = (targetId, extra = {}) => ({
+    targetId,
+    targetType: "work",
+    title: "Echtes Ziel",
+    region: "AT",
+    scope: "all",
+    status: "active",
+    updatedAt: "2026-08-24T10:00:00.000Z",
+    ...extra,
+  });
+  const feed = (subscriptions, extra = {}) => ({
+    status: 200,
+    daten: { radarReview: true, subscriptions, ...extra },
+  });
+
+  let overrideReads = 0;
+  const override = await loeseStarkesOwnerRadarZiel({
+    override: ` ${PUBLIC.KD_RADAR_TARGET_ID} `,
+    autoResolveGuard: RADAR_TARGET_AUTO_RESOLVE_VALUE,
+    feedLeser: async () => { overrideReads += 1; throw new Error("darf nicht lesen"); },
+  });
+  pruefe("gültiger KD_RADAR_TARGET_ID-Override gewinnt ohne Produktpreflight-Read",
+    override === PUBLIC.KD_RADAR_TARGET_ID && overrideReads === 0);
+
+  let autoReads = 0;
+  const automatisch = await loeseStarkesOwnerRadarZiel({
+    autoResolveGuard: RADAR_TARGET_AUTO_RESOLVE_VALUE,
+    feedLeser: async () => {
+      autoReads += 1;
+      return feed([
+        abo("tmdb:movie:603"),
+        abo("imdb:tt0133093"),
+      ]);
+    },
+  });
+  pruefe("Autoauflösung liest genau einmal und wählt stabil das erste eligible starke Ziel",
+    autoReads === 1 && automatisch === "imdb:tt0133093");
+
+  const stoppFaelle = [
+    ["falsches Konto", feed([abo("imdb:tt0133093")], { accountId: "konto-fremd" })],
+    ["inaktives Ziel", feed([abo("imdb:tt0133093", { status: "paused" })])],
+    ["mehrdeutiger Zielstatus", feed([abo("imdb:tt0133093", { targetStatus: "ambiguous" })])],
+    ["schwaches Ziel", feed([abo("fixture:radar-ziel")])],
+    ["kein Ziel", feed([])],
+    ["mehrdeutiges Ziel", feed([abo("imdb:tt0133093"), abo("imdb:tt0133093")])],
+  ];
+  for (const [name, antwort] of stoppFaelle) {
+    let error = null;
+    let reads = 0;
+    try {
+      await loeseStarkesOwnerRadarZiel({
+        autoResolveGuard: RADAR_TARGET_AUTO_RESOLVE_VALUE,
+        feedLeser: async () => { reads += 1; return antwort; },
+      });
+    } catch (caught) { error = caught; }
+    pruefe(`${name} stoppt nach genau einem read fail-closed`,
+      reads === 1 && error instanceof RadarTargetFehler
+        && !String(error.message).includes("konto-fremd")
+        && !String(error.message).includes("imdb:tt0133093"));
+  }
+
+  const identitaetsMarker = "private-owner-zielbezeichnung";
+  const logs = [];
+  const altesLog = console.log;
+  const alterFehler = console.error;
+  console.log = (...teile) => { logs.push(teile.join(" ")); };
+  console.error = (...teile) => { logs.push(teile.join(" ")); };
+  try {
+    await loeseStarkesOwnerRadarZiel({
+      autoResolveGuard: RADAR_TARGET_AUTO_RESOLVE_VALUE,
+      feedLeser: async () => feed([abo("imdb:tt0133093", { title: identitaetsMarker })]),
+    });
+  } finally {
+    console.log = altesLog;
+    console.error = alterFehler;
+  }
+  pruefe("Autoauflösung loggt weder Ziel-ID noch private Bezeichnung oder Accountidentität",
+    logs.length === 0
+      && normalisiereStarkesRadarZiel("fixture:radar-ziel") === null
+      && normalisiereStarkesRadarZiel("imdb:tt0133093") === "imdb:tt0133093");
 }
 
 {
@@ -553,6 +672,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && starts[0].optionen.env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
       && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[RADAR_TARGET_AUTO_RESOLVE_ENV]
+        === RADAR_TARGET_AUTO_RESOLVE_VALUE
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
         === "/private/tmp/keychain-runner-eight-test"
