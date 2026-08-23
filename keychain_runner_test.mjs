@@ -216,10 +216,67 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     readFileSync(written.filePath, "utf8") === '{"private":"provider-raw"}'
       && (statSync(written.filePath).mode & 0o777) === 0o600
       && (statSync(directory).mode & 0o777) === 0o700
-      && !written.filePath.startsWith(REPO_ROOT + "/"));
+      && !written.filePath.startsWith(REPO_ROOT + "/")
+      && written.providerRequests === 1
+      && written.fachstatus === null);
   pruefe("Providerdiagnose wird vor jeder weiteren Antwortverarbeitung entfernt",
     !("providerDiagnostic" in body));
   unlinkSync(written.filePath);
+  rmdirSync(directory);
+}
+
+{
+  const directory = createPrivateProviderRawDirectory();
+  const basis = {
+    ok: true,
+    task: "filmwissen-synthese",
+    vorgangId: "11111111-1111-4111-8111-111111111111",
+  };
+  const fachstatusAntworten = [
+    { ...basis, data: { status: "cache_hit", versionId: "22222222-2222-4222-8222-222222222222" } },
+    { ...basis, data: { status: "nicht_belegt", grund: "kein-institutioneller-beleg" } },
+    { ...basis, data: { status: "nicht_zuordenbar" } },
+  ];
+  const ergebnisse = fachstatusAntworten.map((body) => captureProviderRawResponse(
+    body,
+    "04-filmwissen-synthese.json",
+    {
+      env: {
+        [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+        [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+      },
+      repoRoot: REPO_ROOT,
+      responseStatus: 200,
+    },
+  ));
+  pruefe("Legitime Filmwissen-Nullproviderstatus bleiben explizit und brauchen keine Rohdatei",
+    ergebnisse.map((ergebnis) => ergebnis.fachstatus).join(",")
+      === "cache_hit,nicht_belegt,nicht_zuordenbar"
+      && ergebnisse.every((ergebnis) => ergebnis.providerRequests === 0
+        && ergebnis.filePath === null
+        && ergebnis.bytes === 0));
+
+  let kostenAntwortOhneRohpayloadGesperrt = false;
+  try {
+    captureProviderRawResponse(
+      {
+        ...basis,
+        data: { status: "nicht_zuordenbar" },
+        verbrauch: { kostenUsdCent: 0.1 },
+      },
+      "04-filmwissen-synthese.json",
+      {
+        env: {
+          [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+          [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+        },
+        repoRoot: REPO_ROOT,
+        responseStatus: 200,
+      },
+    );
+  } catch { kostenAntwortOhneRohpayloadGesperrt = true; }
+  pruefe("Kostenhülle ohne Providerrohpayload bleibt fail-closed",
+    kostenAntwortOhneRohpayloadGesperrt);
   rmdirSync(directory);
 }
 

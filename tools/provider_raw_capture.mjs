@@ -25,6 +25,27 @@ export const PROVIDER_RAW_CAPTURE_DIR_ENV = "KD_PROVIDER_RAW_CAPTURE_DIR";
 
 const FILE_NAME_FORM = /^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 const MAX_RAW_BYTES = 8 * 1024 * 1024;
+const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function providerfreierFilmwissenFachstatus(body, fileName, responseStatus) {
+  if (fileName !== "04-filmwissen-synthese.json"
+      || responseStatus !== 200
+      || body.ok !== true
+      || body.task !== "filmwissen-synthese"
+      || !UUID_FORM.test(body.vorgangId || "")
+      || !body.data
+      || typeof body.data !== "object"
+      || Array.isArray(body.data)
+      || (Object.hasOwn(body, "verbrauch") && body.verbrauch !== null)) {
+    return null;
+  }
+  if (body.data.status === "cache_hit"
+      && UUID_FORM.test(body.data.versionId || "")) return "cache_hit";
+  if (body.data.status === "nicht_belegt"
+      && body.data.grund === "kein-institutioneller-beleg") return "nicht_belegt";
+  if (body.data.status === "nicht_zuordenbar") return "nicht_zuordenbar";
+  return null;
+}
 
 function modeBits(stats) {
   return stats.mode & 0o777;
@@ -84,7 +105,7 @@ function assertPrivateDirectory(directory, repoRoot) {
 export function captureProviderRawResponse(
   body,
   fileName,
-  { env = process.env, repoRoot } = {},
+  { env = process.env, repoRoot, responseStatus = null } = {},
 ) {
   if (!providerRawCaptureEnabled(env)) return null;
   if (!repoRoot) throw new Error("Repositorywurzel fuer Provider-Capture fehlt.");
@@ -96,7 +117,19 @@ export function captureProviderRawResponse(
   }
 
   const diagnostic = body[PROVIDER_DIAGNOSTIC_FIELD];
+  const hatDiagnostic = Object.hasOwn(body, PROVIDER_DIAGNOSTIC_FIELD);
   delete body[PROVIDER_DIAGNOSTIC_FIELD];
+  if (!hatDiagnostic) {
+    const fachstatus = providerfreierFilmwissenFachstatus(body, fileName, responseStatus);
+    if (fachstatus) {
+      return Object.freeze({
+        filePath: null,
+        bytes: 0,
+        providerRequests: 0,
+        fachstatus,
+      });
+    }
+  }
   if (!diagnostic || typeof diagnostic !== "object" || Array.isArray(diagnostic)
       || Object.keys(diagnostic).sort().join(",") !== "rawResponse"
       || typeof diagnostic.rawResponse !== "string"
@@ -124,5 +157,10 @@ export function captureProviderRawResponse(
     throw new Error("Private Providerdatei wurde nicht mit Modus 0600 geschrieben.");
   }
   assertOwned(stats, "Providerdatei");
-  return Object.freeze({ filePath, bytes });
+  return Object.freeze({
+    filePath,
+    bytes,
+    providerRequests: 1,
+    fachstatus: null,
+  });
 }

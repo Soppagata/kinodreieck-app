@@ -371,6 +371,8 @@ try {
   stoppeLiveLauf(error);
 }
 
+const providerCaptureNachLabel = new Map();
+
 async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {}) {
   let markierung;
   try {
@@ -391,10 +393,12 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       })[label];
       try {
         if (!fileName) throw new Error("unbekannter Sechserpfad");
-        captureProviderRawResponse(ergebnis.daten, fileName, {
+        const capture = captureProviderRawResponse(ergebnis.daten, fileName, {
           env: process.env,
           repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
+          responseStatus: ergebnis.status,
         });
+        providerCaptureNachLabel.set(label, capture);
       } catch {
         captureError = new LiveSicherheitsStopp(
           "unbekannt",
@@ -622,37 +626,57 @@ const p18 = await rufAnbieterBewacht(
   },
 );
 const d18 = p18.daten?.data;
+const p18Capture = providerCaptureNachLabel.get("P18 filmwissen-synthese") ?? null;
+const p18ProviderfreierFachstatus = p18Capture?.providerRequests === 0
+  ? p18Capture.fachstatus
+  : null;
 const p18Erfolg = p18.status === 200
   && p18.daten?.ok === true
   && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
-  && typeof d18?.versionId === "string";
+  && typeof d18?.versionId === "string"
+  && (!OWNER_CORE_SIX || (
+    p18Capture?.providerRequests === 1
+    && p18.daten?.verbrauch?.kostenUsdCent > 0
+  ));
 pruefe(
   "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",
   p18Erfolg,
-  p18.status === 200
+  p18ProviderfreierFachstatus
+    ? `Fachstatus ${p18ProviderfreierFachstatus}, providerRequests=0; keine Providerrohhuelle erwartet`
+    : p18.status === 200
     ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
     : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
 );
 
-const p20 = p18Erfolg
+const p18CacheReadback = p18ProviderfreierFachstatus === "cache_hit"
+  && typeof d18?.versionId === "string";
+const p20 = (p18Erfolg || p18CacheReadback)
   ? await rpc("kd_filmwissen_aktuell_lesen", token, {
     p_namespace: FILMWISSEN_KENNUNG.namespace,
     p_kennung: FILMWISSEN_KENNUNG.kennung,
   })
   : null;
-pruefe(
-  "Der veröffentlichte gemeinsame Bericht ist über die enge Lese-RPC sichtbar",
-  p20?.status === 200
-    && p20?.daten?.status === "belegt"
-    && p20?.daten?.version?.id === d18?.versionId
-    && Number.isInteger(p20?.daten?.warum?.wert),
-  p20
-    ? `HTTP ${p20.status}, WARUM ${p20.daten?.warum?.wert}, Version ${p20.daten?.version?.id}`
-    : "übersprungen, weil P18 fehlgeschlagen ist",
-);
-pruefeNutzerTaskReadback("S4 filmwissen-synthese", "filmwissen-synthese", p18.daten, {
-  rpcReadback: p20?.daten,
-});
+if (p18ProviderfreierFachstatus && !p18CacheReadback) {
+  pruefe(
+    "Providerfreier Filmwissen-Fachstatus ist explizit erfasst; der Sechserlauf läuft weiter",
+    true,
+    `Fachstatus ${p18ProviderfreierFachstatus}, providerRequests=0`,
+  );
+} else {
+  pruefe(
+    "Der veröffentlichte gemeinsame Bericht ist über die enge Lese-RPC sichtbar",
+    p20?.status === 200
+      && p20?.daten?.status === "belegt"
+      && p20?.daten?.version?.id === d18?.versionId
+      && Number.isInteger(p20?.daten?.warum?.wert),
+    p20
+      ? `HTTP ${p20.status}, WARUM ${p20.daten?.warum?.wert}, Version ${p20.daten?.version?.id}`
+      : "übersprungen, weil P18 fehlgeschlagen ist",
+  );
+  pruefeNutzerTaskReadback("S4 filmwissen-synthese", "filmwissen-synthese", p18.daten, {
+    rpcReadback: p20?.daten,
+  });
+}
 
 /* ===========================================================================
    S5: Synthetische Ein-Artikel-Blog-Profilextraktion
