@@ -149,6 +149,19 @@ const validHealth = {
   schluesselHerkunft: { oeffentlich: "pub", geheim: "sec" },
   anbieterSecretGesetzt: true,
   aufrufer: { rolle: "member", fachrolle: "owner", weg: "token", accountIdVorhanden: true },
+  activation: {
+    gate: "KD_AI_TASK_ENABLED",
+    requiredValue: "true",
+    enabled: true,
+    userTasks: [
+      "intelligent-search",
+      "profile-extract",
+      "film-forecast",
+      "filmwissen-synthese",
+      "media-batch-extract",
+      "blog-profile-extract",
+    ],
+  },
   betrieb: { aiAktiv: true },
   zeit: "2026-08-17T06:00:00.000Z",
   capabilities: {
@@ -174,6 +187,7 @@ check("gültige Health-Antwort wird akzeptiert", hatBlogProfileAnalyseCapability
 check("contractVersion fehlt wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { delete h.contractVersion; })));
 check("ok != true wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.ok = false; })));
 check("task != health wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.task = "other"; })));
+check("activation fehlt wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { delete h.activation; })));
 check("betrieb.aiAktiv != true wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.betrieb.aiAktiv = false; })));
 check("Zusatzfeld in capabilities wird abgelehnt", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.capabilities.extra = { a: 1 }; })));
 check("vorgangId darf kein Leerwert sein", !hatBlogProfileAnalyseCapability(mutiere((h) => { h.vorgangId = ""; })));

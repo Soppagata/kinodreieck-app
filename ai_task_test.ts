@@ -8899,6 +8899,19 @@ test("BP9 Health-Capability ist exakt und bei jedem alten/falschen Feld fail-clo
     maxTokens: 2048,
     taskMaxReservationUsdCent: 5,
   }), "exakte Capability");
+  gleich(JSON.stringify(r.daten.activation), JSON.stringify({
+    gate: "KD_AI_TASK_ENABLED",
+    requiredValue: "true",
+    enabled: true,
+    userTasks: [
+      "intelligent-search",
+      "profile-extract",
+      "film-forecast",
+      "filmwissen-synthese",
+      "media-batch-extract",
+      "blog-profile-extract",
+    ],
+  }), "BP9 bindet die Capability an den exakten Sechservertrag");
   gleich(rpc("kd_private_provider_allowed").length, 1, "Health prueft die Registry genau einmal");
   gleich(modelleAufrufe().length, 0, "Health bleibt providerfrei");
   gleich(starten().length, 0, "Health bleibt logfrei");

@@ -791,9 +791,26 @@ const HEALTH_ROOT_KEYS = Object.freeze([
   "schluesselHerkunft",
   "anbieterSecretGesetzt",
   "aufrufer",
+  "activation",
   "betrieb",
   "zeit",
   "capabilities",
+]);
+
+const HEALTH_ACTIVATION_KEYS = Object.freeze([
+  "gate",
+  "requiredValue",
+  "enabled",
+  "userTasks",
+]);
+
+const HEALTH_USER_TASKS = Object.freeze([
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "media-batch-extract",
+  "blog-profile-extract",
 ]);
 
 const BLOG_PROFILE_EXTRACT_KEYS = Object.freeze([
@@ -830,6 +847,14 @@ export function hatBlogProfileAnalyseCapability(healthAntwort) {
 
   if (!istObjekt(healthAntwort.betrieb)
     || healthAntwort.betrieb.aiAktiv !== true) return false;
+
+  if (!exaktSchluessel(healthAntwort.activation, HEALTH_ACTIVATION_KEYS)) return false;
+  if (healthAntwort.activation.gate !== "KD_AI_TASK_ENABLED"
+    || healthAntwort.activation.requiredValue !== "true"
+    || healthAntwort.activation.enabled !== true
+    || JSON.stringify(healthAntwort.activation.userTasks) !== JSON.stringify(HEALTH_USER_TASKS)) {
+    return false;
+  }
 
   if (!exaktSchluessel(healthAntwort.capabilities, ["blogProfileExtract"])) return false;
   if (!exaktSchluessel(healthAntwort.capabilities.blogProfileExtract, BLOG_PROFILE_EXTRACT_KEYS)) return false;
