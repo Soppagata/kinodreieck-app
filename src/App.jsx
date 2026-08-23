@@ -1321,8 +1321,7 @@ export default function App() {
     vorbewertungSperrgrund,
     prognoseLaufId,
     prognoseFehler,
-    aktuellesProfil,
-    aktuelleProfilVersion,
+    aktuellesProfil, aktuelleProfilVersion,
     starteVorbewertung,
     setzeFilmPrognoseStatus,
     addFilmMitPrognose,
@@ -2139,8 +2138,7 @@ export default function App() {
             onSuchauftragVerbraucht={() => setFinderSuchauftrag(null)}
             scopeArtikel={artikelListe}
             onArtikelKlick={springeZuArtikel}
-            onNavigiere={navigiere}
-            geschmacksprofil={aktuellesProfil}
+            onNavigiere={navigiere} geschmacksprofil={aktuellesProfil}
             kiVerfuegbar={session.mode === "account" && session.state === "ready"
               && session.capabilities?.personalAi === true}
           />

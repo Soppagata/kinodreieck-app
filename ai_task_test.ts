@@ -7027,7 +7027,7 @@ test("PER4 fünfzig Signale werden auf den Deckel gestutzt", async () => {
   );
 });
 
-test("PER5 eine krumme staerke lässt das Signal fallen — sie wird nie zurechtgebogen", async () => {
+test("PER5 eine krumme staerke wird verworfen und nie zu Profildaten zurechtgebogen", async () => {
   /* `Number("3")` wäre 3 und `Number([3])` ebenfalls. Beide kämen unbemerkt
      durch und schrieben eine Stärke ins Profil, die das Modell so nie geliefert
      hat. `profil.js` verlangt eine ganze Zahl 1..5 — ein zurechtgebogener Wert
@@ -7051,9 +7051,16 @@ test("PER5 eine krumme staerke lässt das Signal fallen — sie wird nie zurecht
     const r = await extrakt({ signale: [peSignal({ staerke })] });
     gleich(
       r.status,
-      502,
-      `${name}: verletzt die strukturierte Providerform vollständig`,
+      200,
+      `${name}: der tolerante Vertrag schliesst den bezahlten Lauf sichtbar ab`,
     );
+    gleich(r.daten.responseMode, "degraded", `${name}: ohne sichere Restdaten degraded`);
+    gleich(r.daten.data, null, `${name}: niemals ein zurechtgebogenes Signal`);
+    wahr(
+      (r.daten.warnings as string[]).includes("invalid-items-ignored"),
+      `${name}: der Verwurf bleibt diagnostisch sichtbar`,
+    );
+    gleich(genauEinAbschluss().p_status, "fertig", `${name}: Reservation abgeschlossen`);
   }
   for (
     const [name, staerke] of [
@@ -7069,12 +7076,11 @@ test("PER5 eine krumme staerke lässt das Signal fallen — sie wird nie zurecht
       null,
       `${name}: ganzzahlImBereich verwirft den Wert`,
     );
-    const { signale } = await peEinSignal({ staerke });
-    gleich(
-      signale.length,
-      0,
-      `${name}: das Signal fällt, statt eine Stärke zu erfinden`,
-    );
+    const r = await extrakt({ signale: [peSignal({ staerke })] });
+    gleich(r.status, 200, `${name}: der Lauf bleibt verwertbar`);
+    gleich(r.daten.responseMode, "degraded", `${name}: ohne sichere Restdaten degraded`);
+    gleich(r.daten.data, null, `${name}: das Signal fällt, statt eine Stärke zu erfinden`);
+    gleich(genauEinAbschluss().p_status, "fertig", `${name}: Reservation abgeschlossen`);
   }
   /* Gegenprobe: die Grenzen selbst sind gültig. */
   for (const gut of [1, 2, 3, 4, 5]) {
@@ -7099,7 +7105,7 @@ test("PER6 achsen_tendenz: 0 ist ein GÜLTIGER Wert", async () => {
   gleich(a.warum, 3, "und die Mitte bleibt auch");
 });
 
-test("PER6b fachlich krumme Achsenwerte werden null, Strukturfehler ganz abgewiesen", async () => {
+test("PER6b fachlich krumme Achsenwerte werden null, Strukturfehler feldweise bereinigt", async () => {
   const r = await extrakt({ achsen_tendenz: { wie: -1, was: 6, warum: 99 } });
   // deno-lint-ignore no-explicit-any
   const a = (daten(r) as any).achsen_tendenz;
@@ -7107,7 +7113,8 @@ test("PER6b fachlich krumme Achsenwerte werden null, Strukturfehler ganz abgewie
   gleich(a.was, null, "über dem Band");
   gleich(a.warum, null, "auch 99 liegt außerhalb");
 
-  /* Die Providerform selbst wird nicht halb gerettet. */
+  /* Der additive Vertrag rettet die sicheren leeren Profilteile und setzt nur
+     die formfremden Achsen auf null. */
   for (
     const krumm of [
       { wie: -1, was: 6, warum: "3" },
@@ -7122,13 +7129,20 @@ test("PER6b fachlich krumme Achsenwerte werden null, Strukturfehler ganz abgewie
     const r2 = await extrakt({ achsen_tendenz: krumm });
     gleich(
       r2.status,
-      502,
-      `achsen_tendenz=${JSON.stringify(krumm)} ist ein Schemabruch`,
+      200,
+      `achsen_tendenz=${JSON.stringify(krumm)} wird ohne Totalverlust bereinigt`,
     );
+    gleich(r2.daten.responseMode, "partial", "die Bereinigung bleibt sichtbar");
+    // deno-lint-ignore no-explicit-any
+    const a2 = (daten(r2) as any).achsen_tendenz;
+    gleich(a2.wie, null, "wie bleibt ohne sicheren Wert null");
+    gleich(a2.was, null, "was bleibt ohne sicheren Wert null");
+    gleich(a2.warum, null, "warum bleibt ohne sicheren Wert null");
+    gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
   }
 });
 
-test("PER7 unbekannte Arten, Richtungen, Sicherheiten und Quellen fallen durch", async () => {
+test("PER7 unbekannte Arten, Richtungen, Sicherheiten und Quellen werden keine Profildaten", async () => {
   for (
     const [name, zusatz] of [
       ["Art", { art: "stimmung" }],
@@ -7144,20 +7158,22 @@ test("PER7 unbekannte Arten, Richtungen, Sicherheiten und Quellen fallen durch",
     ] as Array<[string, Record<string, unknown>]>
   ) {
     stelleZurueck();
-    const { signale } = await peEinSignal(zusatz);
-    gleich(
-      signale.length,
-      0,
-      `${name}: ${JSON.stringify(zusatz)} kommt nicht durch`,
-    );
+    const r = await extrakt({ signale: [peSignal(zusatz)] });
+    gleich(r.status, 200, `${name}: der Lauf wird sicher abgeschlossen`);
+    gleich(r.daten.responseMode, "degraded", `${name}: ohne sicheren Rest degraded`);
+    gleich(r.daten.data, null, `${name}: ${JSON.stringify(zusatz)} kommt nicht durch`);
+    gleich(genauEinAbschluss().p_status, "fertig", `${name}: Reservation abgeschlossen`);
   }
   stelleZurueck();
   const formbruch = await extrakt({ signale: [peSignal({ art: 7 })] });
   gleich(
     formbruch.status,
-    502,
-    "Art als Zahl verletzt die strukturierte Providerform",
+    200,
+    "Art als Zahl wird verworfen, ohne den ganzen Lauf zu entwerten",
   );
+  gleich(formbruch.daten.responseMode, "degraded", "ohne sicheren Rest degraded");
+  gleich(formbruch.daten.data, null, "Art als Zahl wird niemals Profildatum");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
 });
 
 test("PER7b Groß-/Kleinschreibung und Weißraum bei den Listenwerten werden verziehen", async () => {
@@ -7284,7 +7300,7 @@ test("PER9c nicht_deutbar übernimmt nur wirkliche Worte aus den Antworten", asy
   );
 });
 
-test("PER10 eine formfremde Modellantwort wird abgewiesen, nicht halb verarbeitet", async () => {
+test("PER10 eine formfremde Modellantwort wird sichtbar degradiert, nicht als Profil verarbeitet", async () => {
   for (
     const [name, inhalt] of [
       ["null", null],
@@ -7296,18 +7312,22 @@ test("PER10 eine formfremde Modellantwort wird abgewiesen, nicht halb verarbeite
     stelleZurueck();
     z.anbieter = () => anbieterErfolg(inhalt);
     const r = await peRuf();
-    gleich(r.status, 502, `${name}: Status`);
-    gleich(r.daten.grund, "antwort-verletzt-schema", `${name}: Kennung`);
+    gleich(r.status, 200, `${name}: Status`);
+    gleich(r.daten.responseMode, "degraded", `${name}: Modus`);
+    gleich(r.daten.data, null, `${name}: keine Profildaten`);
+    gleich(genauEinAbschluss().p_status, "fertig", `${name}: Reservation abgeschlossen`);
   }
-  /* Auch ein Objekt ohne Pflichtfelder ist formfremd. Das Provider-Schema
-     verlangt sie alle; die eigene Grenze spiegelt denselben Vertrag. */
+  /* Auch ein Objekt ohne sichere Pflichtfelder bleibt schreibfrei, darf aber
+     als sichtbarer degradierter Erfolg zurückkehren. */
   stelleZurueck();
   const r = await extrakt({ signale: undefined, filme: undefined });
-  gleich(r.status, 502, "ein Objekt ohne Pflichtlisten ist ein Formfehler");
-  gleich(r.daten.grund, "antwort-verletzt-schema", "mit stabiler Kennung");
+  gleich(r.status, 200, "ein Objekt ohne Pflichtlisten wird sicher abgeschlossen");
+  gleich(r.daten.responseMode, "degraded", "ohne sichere Struktur degraded");
+  gleich(r.daten.data, null, "keine Profilfelder gelangen zum Client");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
 });
 
-test("PER11 krumme Listeneinträge werden als ganzer Schemabruch geschlossen", async () => {
+test("PER11 krumme Listeneinträge werden verworfen, sichere Einträge bleiben erhalten", async () => {
   /* Eine werfende Prüfung liesse die Protokollzeile offen — sie bliebe auf
      `laufend` und blockierte den Parallelzähler bis zur Zeitgrenze. Das ist
      der teuerste Ausgang, den dieser Endpunkt hat. */
@@ -7322,14 +7342,25 @@ test("PER11 krumme Listeneinträge werden als ganzer Schemabruch geschlossen", a
   });
   gleich(
     r.status,
-    502,
-    "keine halbe Rettung einer strukturell falschen Antwort",
+    200,
+    "die sichere Teilmenge bleibt nutzbar",
   );
-  gleich(r.daten.grund, "antwort-verletzt-schema", "stabile Kennung");
+  gleich(r.daten.responseMode, "partial", "die Verwürfe bleiben sichtbar");
+  // deno-lint-ignore no-explicit-any
+  const d = daten(r) as any;
+  gleich(d.signale.length, 1, "nur das vollständige belegte Signal bleibt");
+  gleich(d.signale[0].wert, "ruhig", "das sichere Signal bleibt unverändert");
+  gleich(d.filme.length, 1, "nur der belegte Film bleibt");
+  gleich(d.filme[0].titel, "Heat", "der sichere Film bleibt unverändert");
+  gleich(d.nicht_deutbar.length, 0, "unbelegter freier Modelltext bleibt draußen");
+  wahr(
+    (r.daten.warnings as string[]).includes("invalid-items-ignored"),
+    "der itemweise Verwurf bleibt diagnostisch sichtbar",
+  );
   gleich(
     genauEinAbschluss().p_status,
-    "fehler",
-    "und die Protokollzeile ist sauber geschlossen",
+    "fertig",
+    "und die Protokollzeile ist sauber abgeschlossen",
   );
 });
 
