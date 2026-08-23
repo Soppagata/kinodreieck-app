@@ -5660,6 +5660,74 @@ test("PE2 der Erfolgsfall: ein Signal mit echtem Beleg kommt vollständig durch"
   );
 });
 
+test("PE2a JSON-Codeblock rettet zwei gültige Signale und verwirft ein kaputtes itemweise", async () => {
+  const teil = {
+    signale: [
+      peSignal({ zusatz_feld: "ignorieren" }),
+      peSignal({
+        art: "tempo",
+        wert: "langsam",
+        richtung: "ambivalent",
+        staerke: 3,
+        sicherheit: "mittel",
+        quelle: "K4",
+        beleg: PE_BELEG.K4,
+      }),
+      peSignal({ art: "unbekannt", richtung: "mag", staerke: "stark" }),
+    ],
+    zusaetzliche_erklaerung: "nicht in Profildaten übernehmen",
+  };
+  extraktMit(`Vorweg ein Satz.\n\`\`\`json\n${JSON.stringify(teil)}\n\`\`\`\nNachsatz.`);
+  const r = await peRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "partial", "teilstrukturierter Modus");
+  // deno-lint-ignore no-explicit-any
+  const d = daten(r) as any;
+  gleich(d.signale.length, 2, "beide gültigen Vorschläge bleiben");
+  gleich(d.signale.map((s: Record<string, unknown>) => s.wert).join("|"), "ruhig|langsam", "nur sichere Werte");
+  falsch(JSON.stringify(d).includes("unbekannt"), "das kaputte Signal bleibt draußen");
+  falsch(JSON.stringify(d).includes("zusaetzliche_erklaerung"), "Zusatzfelder werden nie Profildaten");
+  const warnings = r.daten.warnings as string[];
+  wahr(warnings.includes("json-extracted-from-text"), "Codeblock wurde erkannt");
+  wahr(warnings.includes("extra-fields-ignored"), "Zusatzfelder wurden verworfen");
+  wahr(warnings.includes("missing-fields-defaulted"), "fehlende optionale Felder wurden ergänzt");
+  wahr(warnings.includes("unknown-values-ignored"), "kaputte bekannte Wertfelder wurden verworfen");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
+});
+
+test("PE2b sicherer unparsebarer Text wird degraded und liefert keine Profildaten", async () => {
+  extraktMit("Ich konnte die Antworten nicht sicher in Profilvorschläge gliedern.");
+  const r = await peRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "degraded", "Modus");
+  gleich(r.daten.data, null, "keine Profildaten");
+  gleich(
+    r.daten.displayText,
+    "Ich konnte die Antworten nicht sicher in Profilvorschläge gliedern.",
+    "bereinigter sichtbarer Hinweis",
+  );
+  wahr((r.daten.warnings as string[]).includes("unstructured-provider-text"), "stabiler Warncode");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
+});
+
+test("PE2c Secret-, Thinking- und API-Hüllenverdacht bleibt harter Stopp", async () => {
+  for (const roh of [
+    "token=synthetischer-geheimer-wert",
+    "<thinking>private Herleitung</thinking>",
+    JSON.stringify({ id: "msg_1", type: "message", role: "assistant", content: [] }),
+  ]) {
+    stelleZurueck();
+    extraktMit(roh);
+    const r = await peRuf();
+    gleich(r.status, 502, "Status");
+    gleich(r.daten.grund, "antwort-verletzt-schema", "inhaltsfreie Außenkennung");
+    falsch(JSON.stringify(r.daten).includes(roh), "kein Rohtext in der Antwort");
+    gleich(genauEinAbschluss().p_fehlerklasse, "invalid-response:provider-text-unsafe", "harte Fehlerklasse");
+  }
+});
+
 /* ---------------------------------------------------------------------------
    PES — das Antwortschema. Der Anbieter ist streng; ein Verstoß quittiert mit
    400 und fiele sonst erst am deployten Endpunkt auf, gegen echtes Geld.
@@ -6189,12 +6257,18 @@ test("PEF3 Jahr und Richtung werden einzeln geprüft, der Titel trägt den Eintr
   gleich(nach("Blade Runner").jahr, null, "null bleibt unbekannt");
 });
 
-test("PEF3b ein Filmjahr als Text ist ein Schemabruch, keine halbe Rettung", async () => {
+test("PEF3b ein Filmjahr als Text wird feldweise verworfen, der belegte Titel bleibt", async () => {
   const r = await extrakt({
     filme: [{ titel: "Blade Runner", jahr: "1982", richtung: null }],
   });
-  gleich(r.status, 502, "Status");
-  gleich(r.daten.grund, "antwort-verletzt-schema", "Kennung");
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "partial", "teilstrukturierter Modus");
+  // deno-lint-ignore no-explicit-any
+  const f = (daten(r) as any).filme;
+  gleich(f.length, 1, "der belegte Titel bleibt");
+  gleich(f[0].titel, "Blade Runner", "Titel");
+  gleich(f[0].jahr, null, "das kaputte optionale Jahr wird nicht geraten");
+  wahr((r.daten.warnings as string[]).includes("invalid-fields-ignored"), "stabiler Warncode");
 });
 
 test("PEF3c kurze Filmtitel brauchen echte Wortgrenzen", async () => {
@@ -6398,18 +6472,20 @@ test("PEH1 im Erfolgsfall steht kein Antworttext, kein Beleg und kein Wert im Pr
   gleich(signale[0].beleg, PE_BELEG.K2, "und der Beleg kam beim Client an");
 });
 
-test("PEH2 auch im Fehlerfall bleibt das Protokoll inhaltsfrei", async () => {
-  /* Eine Modellantwort, die das Schema verletzt: die Prüfung schlägt fehl,
-     die Zeile wird als Fehler geschlossen — mit einer Kennung, nie mit Text. */
+test("PEH2 auch ohne sichere Struktur bleibt der degradierte Erfolg inhaltsfrei", async () => {
+  /* Eine formfremde Modellantwort liefert keine Profildaten, aber einen
+     bereinigten Hinweis. Weder Antworttext noch Modellfelder landen im Log. */
   extraktMit({ voellig: "anders" });
   const r = await peRuf();
-  gleich(r.status, 502, "Status");
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "degraded", "Modus");
+  gleich(r.daten.data, null, "keine Profildaten");
   const k = genauEinAbschluss();
-  gleich(k.p_fehlerklasse, "invalid-response:schema", "formreine Fehlerklasse");
+  gleich(k.p_status, "fertig", "Reservation abgeschlossen");
   peKeinInhaltIrgendwo();
   falsch(
-    JSON.stringify(r.daten).includes("Vogelperspektive"),
-    "auch die FEHLERANTWORT an den Client trägt keinen Antworttext",
+    JSON.stringify(r.daten).includes("voellig") || JSON.stringify(r.daten).includes("anders"),
+    "auch die degradierte Antwort trägt keine fremden Modellfelder",
   );
 });
 
@@ -6445,18 +6521,6 @@ const PE_ABBRUCHPFADE: Array<[string, () => void]> = [
   }],
   ["anbieter-429", () => {
     z.anbieter = () => antwort({ error: { type: "rate_limit_error" } }, 429);
-  }],
-  ["antwort-kein-json", () => {
-    z.anbieter = () => anbieterErfolg("kein json");
-  }],
-  ["schemabruch", () => {
-    extraktMit({ nichts: true });
-  }],
-  ["Antwort ist null", () => {
-    extraktMit(null);
-  }],
-  ["Antwort ist eine Liste", () => {
-    extraktMit([1, 2, 3]);
   }],
 ];
 

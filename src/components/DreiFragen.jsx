@@ -86,6 +86,7 @@ export function DreiFragen({
   }, [ergebnis, abgewaehlt, filmeAus, achsenAus, nichtDeutbarAus]);
 
   const nichtsUebrig = auswahl && auswahl.signale.length === 0 && !auswahl.rahmen;
+  const istDegraded = ergebnis?.responseMode === "degraded";
 
   const p = { color: T.leinwand, fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" };
   const klein = { ...p, color: T.rauch, fontSize: 13 };
@@ -96,13 +97,21 @@ export function DreiFragen({
   if (ergebnis) {
     return (
       <div style={{ background: T.saalHoch, borderRadius: 8, padding: "18px 20px" }}>
-        <h3 style={h}>Das habe ich aus deinen Antworten gelesen</h3>
-        <p style={klein}>
+        <h3 style={h}>{istDegraded
+          ? "Die Antwort ließ sich nicht sicher auswerten"
+          : "Das habe ich aus deinen Antworten gelesen"}</h3>
+        {!istDegraded && <p style={klein}>
           Nichts davon ist schon gespeichert. Nimm weg, was nicht stimmt — und schau
           dir die Belege an: Das ist die Stelle in deinem Text, aus der der Zug stammen soll.
-        </p>
+        </p>}
 
-        {ergebnis.signale.length === 0 && (
+        {ergebnis.hinweis && (
+          <p role="status" style={{ ...klein, color: istDegraded ? T.wolfram : T.leinwand }}>
+            {ergebnis.hinweis}
+          </p>
+        )}
+
+        {ergebnis.signale.length === 0 && !istDegraded && (
           <p style={p}>
             Aus deinen Antworten ließ sich nichts Belegbares lesen. Das liegt eher an der
             Frageform als an dir — du kannst es mit ausführlicheren Antworten erneut

@@ -63,7 +63,7 @@ export const AI_RESPONSE_MODES = Object.freeze([
 
 const AI_RESPONSE_MODE_SET = new Set(AI_RESPONSE_MODES);
 const AI_DISPLAY_TEXT_MAX = 320;
-const AI_INTELLIGENT_SEARCH_WARNINGS = new Set([
+const AI_RESULT_WARNINGS = new Set([
   "json-extracted-from-text",
   "unstructured-provider-text",
   "display-text-truncated",
@@ -91,12 +91,13 @@ function displayTextIstSicher(wert) {
     && !/[*_>#`~]/.test(wert) && !AI_DISPLAY_UNSAFE.test(wert);
 }
 
-/* Der neue Ergebnisvertrag ist fuer die intelligente Suche additiv: ein alter
+/* Der Ergebnisvertrag ist fuer Suche und Profilextraktion additiv: ein alter
    Function-Stand ohne Darstellungsfelder bleibt lesbar. Sobald eines der
    Felder vorhanden ist, muessen aber alle zusammenpassen. Insbesondere darf
-   ein degradierter Freitext niemals als `data` in den Filterpfad geraten. */
+   ein degradierter Freitext niemals als `data` in Filter- oder Profilpfade
+   geraten. */
 export function normalisiereAiErgebnis(task, result) {
-  if (task !== "intelligent-search") return result;
+  if (task !== "intelligent-search" && task !== "profile-extract") return result;
   const hatDarstellung = ["responseMode", "displayText", "warnings"]
     .some((feld) => Object.prototype.hasOwnProperty.call(result, feld));
   if (!hatDarstellung) return result;
@@ -107,21 +108,21 @@ export function normalisiereAiErgebnis(task, result) {
       || !Array.isArray(warnings) || warnings.length > 12
       || new Set(warnings).size !== warnings.length
       || warnings.some((warning) => typeof warning !== "string"
-        || !AI_INTELLIGENT_SEARCH_WARNINGS.has(warning))) {
-    throw ungueltigeAiAntwort("intelligent-search-presentation");
+        || !AI_RESULT_WARNINGS.has(warning))) {
+    throw ungueltigeAiAntwort(task + "-presentation");
   }
   if (mode === "structured") {
     if (!istReinesObjekt(result.data) || result.displayText !== null || warnings.length !== 0) {
-      throw ungueltigeAiAntwort("intelligent-search-structured");
+      throw ungueltigeAiAntwort(task + "-structured");
     }
   } else if (mode === "partial") {
     if (!istReinesObjekt(result.data) || !displayTextIstSicher(result.displayText)
         || warnings.length === 0) {
-      throw ungueltigeAiAntwort("intelligent-search-partial");
+      throw ungueltigeAiAntwort(task + "-partial");
     }
   } else if (result.data !== null || !displayTextIstSicher(result.displayText)
       || warnings.length === 0) {
-    throw ungueltigeAiAntwort("intelligent-search-degraded");
+    throw ungueltigeAiAntwort(task + "-degraded");
   }
   return { ...result, warnings: Object.freeze([...warnings]) };
 }

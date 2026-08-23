@@ -1290,11 +1290,71 @@ check("I", "…die abgewählten Achsen sind unverändert null  [gemessen: " + ku
 check("I", "…und nicht abgewähltes Nicht-Gedeutetes ist trotzdem da",
   () => gleich(p2.nichtDeutbar, ["etwas mit dem Ende"]));
 
+/* Der neue tolerante Anbieterpfad als kompletter Mock-Nutzerweg: Der Server
+   hat aus Codeblock/Zusatztext zwei sichere Signale gerettet und ein kaputtes
+   verworfen. Bis zum ausdrücklichen Klick bleibt der Profiltopf unverändert;
+   danach reist nur die einzelne Auswahl hinein. */
+const sTeil = neuerSpeicher(null);
+const kiTeil = neueKi();
+const teilHinweis = "Die KI-Antwort war teilweise unvollständig. Nur sichere Profilvorschläge werden angezeigt.";
+const teilDaten = {
+  ...DATEN(),
+  signale: DATEN().signale.slice(0, 2),
+  filme: [],
+  achsen_tendenz: { wie: null, was: null, warum: null },
+  nicht_deutbar: [],
+  verworfen_ohne_beleg: 0,
+};
+kiTeil.antwort = () => ({
+  ...HUELLE(teilDaten),
+  responseMode: "partial",
+  displayText: teilHinweis,
+  warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+});
+await bisVorschau(kiTeil, sTeil);
+check("I", "partial: genau zwei gerettete Vorschläge stehen in der Vorschau",
+  () => zeilen().length === 2);
+check("I", "partial: der bereinigte Hinweis ist sichtbar",
+  () => text().includes(teilHinweis));
+check("I", "partial: vor der Bestätigung bleibt das Profil unverändert",
+  () => sTeil.topf === null && sTeil.schreibOps().length === 0);
+const teilBehalten = zeilen()[0].beleg;
+const teilVerwerfen = zeilen()[1].beleg;
+await klick(zeilen()[1].knopf, "zweiten geretteten Vorschlag weglassen");
+await klick(knopf("Ausgewähltes übernehmen"), "einzeln bestätigen");
+const pTeil = sTeil.letzteNutzlast();
+check("I", "partial: selektive Bestätigung schreibt genau ein gewähltes Signal",
+  () => sTeil.schreibOps().length === 1 && pTeil?.signale?.length === 1
+    && pTeil.signale[0].beleg === teilBehalten
+    && !pTeil.signale.some((signal) => signal.beleg === teilVerwerfen));
+check("I", "partial: Darstellungs-Hinweis und Warncodes werden nie Profilmerkmale",
+  () => !JSON.stringify(pTeil).includes(teilHinweis)
+    && !("displayText" in pTeil) && !("warnings" in pTeil) && !("responseMode" in pTeil));
+
+const sDegraded = neuerSpeicher(null);
+const kiDegraded = neueKi();
+const degradedHinweis = "Ich konnte die Antworten nicht sicher in Profilvorschläge gliedern.";
+kiDegraded.antwort = () => ({
+  ...HUELLE(null),
+  responseMode: "degraded",
+  displayText: degradedHinweis,
+  warnings: ["unstructured-provider-text"],
+});
+await bisVorschau(kiDegraded, sDegraded);
+check("I", "degraded: der bereinigte Hinweis erscheint statt eines undurchsichtigen Fehlers",
+  () => text().includes(degradedHinweis) && /nicht sicher auswerten/.test(text()));
+check("I", "degraded: es gibt keine Profilvorschläge und keine Schreibmöglichkeit",
+  () => zeilen().length === 0 && knopf("Ausgewähltes übernehmen")?.disabled === true);
+await klick(knopf("Verwerfen"), "degradierten Hinweis schließen");
+check("I", "degraded: auch nach dem Schließen gab es null Profilwrites",
+  () => sDegraded.topf === null && sDegraded.schreibOps().length === 0);
+
 /* Zweiter Durchlauf auf einem bestehenden Profil. */
 const ki3 = neueKi();
 ki3.antwort = () => HUELLE({ ...DATEN(), signale: [SIG({ art: "epoche", wert: "70er",
   beleg: "diese lange stille Kamerafahrt durch das Dunkel" })], filme: [], nicht_deutbar: [],
   achsen_tendenz: { wie: null, was: null, warum: 2 } });
+await neuMontieren({ ai: ki2.api, speicher: s2.api });
 s2.leeren();
 await klickT("Drei Fragen beantworten");
 await tippe("K1", A_K1);

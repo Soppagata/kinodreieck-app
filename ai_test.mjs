@@ -473,6 +473,48 @@ check("degraded transportiert nur bereinigten Anzeigetext und niemals Filterdate
   degradedLauf.fehler === null && degradedLauf.ergebnis?.data === null
   && degradedLauf.ergebnis.displayText.includes("nicht sicher als Filter"));
 
+const profilTeilAntwort = {
+  ok: true,
+  data: { signale: [{ art: "ton", wert: "ruhig" }] },
+  responseMode: "partial",
+  displayText: "Die KI-Antwort war teilweise unvollständig. Nur sichere Profilvorschläge werden angezeigt.",
+  warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+};
+const profilTeilLauf = await laufe(
+  dienstMit(profilTeilAntwort).dienst,
+  "profile-extract",
+  { antworten: { K2: "Ruhige Kamera" }, listen: { genres: ["Drama"] } },
+);
+check("profile-extract übernimmt denselben sicheren partial-Vertrag",
+  profilTeilLauf.fehler === null && profilTeilLauf.ergebnis?.responseMode === "partial"
+  && profilTeilLauf.ergebnis.data.signale.length === 1
+  && Object.isFrozen(profilTeilLauf.ergebnis.warnings));
+
+const profilDegradedAntwort = {
+  ok: true,
+  data: null,
+  responseMode: "degraded",
+  displayText: "Die Antwort konnte nicht sicher strukturiert werden.",
+  warnings: ["unstructured-provider-text"],
+};
+const profilDegradedLauf = await laufe(
+  dienstMit(profilDegradedAntwort).dienst,
+  "profile-extract",
+  { antworten: { K2: "Ruhige Kamera" }, listen: { genres: ["Drama"] } },
+);
+check("profile-extract degraded bleibt sichtbarer Text ohne Profildaten",
+  profilDegradedLauf.fehler === null && profilDegradedLauf.ergebnis?.data === null
+  && profilDegradedLauf.ergebnis.displayText.includes("nicht sicher strukturiert"));
+
+const profilAltLauf = await laufe(
+  dienstMit({ ok: true, data: { signale: [] } }).dienst,
+  "profile-extract",
+  { antworten: { K2: "Ruhige Kamera" }, listen: { genres: ["Drama"] } },
+);
+check("profile-extract bleibt ohne neue Darstellungsfelder abwärtskompatibel",
+  profilAltLauf.fehler === null && profilAltLauf.ergebnis?.data.signale.length === 0
+  && !("responseMode" in profilAltLauf.ergebnis));
+
 for (const [name, antwort] of [
   ["degraded mit Filterdaten", { ...degradedAntwort, data: { harte_filter: { genres: ["horror"] } } }],
   ["freier Warntext", { ...degradedAntwort, warnings: ["Modell sagt etwas Beliebiges"] }],
@@ -481,6 +523,14 @@ for (const [name, antwort] of [
   const lauf = await laufe(dienstMit(antwort).dienst);
   check(`Ergebnisvertrag sperrt ${name}`, lauf.fehler?.code === ERROR_CODES.INVALID_RESPONSE);
 }
+
+const profilUnsicher = await laufe(
+  dienstMit({ ...profilDegradedAntwort, displayText: "<thinking>privat</thinking>" }).dienst,
+  "profile-extract",
+  { antworten: { K2: "Ruhige Kamera" }, listen: { genres: ["Drama"] } },
+);
+check("profile-extract sperrt unsicheren degradierten Anzeigetext",
+  profilUnsicher.fehler?.code === ERROR_CODES.INVALID_RESPONSE);
 
 let widerrufen = false;
 const widerrufAuth = {

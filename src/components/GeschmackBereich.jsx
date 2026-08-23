@@ -232,12 +232,20 @@ export function GeschmackBereich({
          `data: []` wäre sonst als „leere Extraktion" durchgegangen. Das ist
          ein anderer Satz als die Wahrheit — der Nutzer läse „deine Antworten
          geben nichts her", wo in Wirklichkeit die Form nicht stimmt. */
+      /* Ein degradierter Lauf ist ein sichtbares, aber schreibfreies Ergebnis:
+         `displayText` wird getrennt von Signalen/Rahmen gehalten. Selbst ein
+         fehlerhaft injizierter Dienst kann ihn dadurch nicht als Profilmerkmal
+         in den Übernahmepfad schmuggeln. */
+      if (antwort?.responseMode === "degraded") {
+        setExtrakt(ausExtraktion({}, antwort));
+        return;
+      }
       const daten = antwort?.data ?? null;
       if (!daten || typeof daten !== "object" || Array.isArray(daten)) {
         setExtraktFehler("Die Antwort des Dienstes hatte nicht die erwartete Form.");
         return;
       }
-      setExtrakt(ausExtraktion(daten));
+      setExtrakt(ausExtraktion(daten, antwort));
     } catch (e) {
       /* `errorText` statt `e.message`: Die Fehlercodes dieses Pfads haben
          eigene, verständliche Texte (LIMIT, AI_DISABLED, FORBIDDEN …), und

@@ -90,6 +90,37 @@ export function bauePayload(antworten, { genres = [] } = {}) {
 
 const istText = (x) => typeof x === "string" && x.trim().length > 0;
 
+const ERGEBNIS_MODI = new Set(["structured", "partial", "degraded"]);
+const HINWEIS_MAX_ZEICHEN = 320;
+const HINWEIS_UNSICHER = /(?:https:\/\/|sk-ant-[a-z0-9_-]{12,}|sbp_[a-z0-9_-]{12,}|(?:bearer\s+)[a-z0-9._~+\/-]{16,}|(?:authorization|x-api-key|api[_ -]?key|password|passwort|service[_ -]?role|secret|token)\s*[=:]|<\/?(?:thinking|system|developer|prompt)\b|chain[ -]of[ -]thought|system(?:-| )prompt|developer(?:-| )message)/i;
+const PROFIL_PARTIAL_HINWEIS =
+  "Die KI-Antwort war teilweise unvollständig. Nur sichere Profilvorschläge werden angezeigt.";
+const PROFIL_DEGRADED_HINWEIS =
+  "Die KI-Antwort konnte nicht sicher in Profilvorschläge umgewandelt werden.";
+
+/* `displayText` bleibt reine Darstellung. Er wird weder Teil von `rahmen`
+   noch eines Signals und kann deshalb selbst bei einer späteren Bestätigung
+   nicht in den Profiltopf geraten. Die Servicegrenze prüft denselben Vertrag;
+   diese kleine zweite Wache schützt auch injizierte Test-/Demo-Dienste. */
+function liesDarstellung(darstellung) {
+  const mode = ERGEBNIS_MODI.has(darstellung?.responseMode)
+    ? darstellung.responseMode : null;
+  if (mode !== "partial" && mode !== "degraded") {
+    return { responseMode: mode, hinweis: null };
+  }
+  const text = darstellung?.displayText;
+  const sicher = typeof text === "string" && text === text.trim() && !!text
+    && text.length <= HINWEIS_MAX_ZEICHEN
+    && !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(text)
+    && !/[*_>#`~]/.test(text) && !HINWEIS_UNSICHER.test(text);
+  return {
+    responseMode: mode,
+    hinweis: sicher
+      ? text
+      : mode === "degraded" ? PROFIL_DEGRADED_HINWEIS : PROFIL_PARTIAL_HINWEIS,
+  };
+}
+
 /* NUR die drei Fragenkennungen, nicht die ganze `QUELLEN`-Liste.
 
    Der Unterschied ist kein Formalismus. `QUELLEN` enthält auch `schlagwort`,
@@ -123,7 +154,7 @@ function quelleGueltig(q) {
    heißt: Server und Client sind sich über das Datenmodell nicht einig — eine
    Aussage über den Bauzustand. Zusammengeworfen sähen beide gleich aus, und
    der zweite Fall verschwände hinter dem ersten. */
-export function ausExtraktion(antwort) {
+export function ausExtraktion(antwort, darstellung = null) {
   const a = antwort && typeof antwort === "object" ? antwort : {};
   const signale = [];
   const verworfen = [];
@@ -214,6 +245,7 @@ export function ausExtraktion(antwort) {
     rahmen: Object.keys(rahmen).length ? rahmen : null,
     verworfen,
     ohneBeleg: Number.isInteger(a.verworfen_ohne_beleg) ? a.verworfen_ohne_beleg : 0,
+    ...liesDarstellung(darstellung),
   };
 }
 

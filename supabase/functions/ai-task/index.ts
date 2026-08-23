@@ -765,6 +765,51 @@ type Aufgabe = {
   taskCapExakt?: number;
 };
 
+/* Suche und persönliche Profilextraktion teilen sich denselben additiven
+   Ergebnisvertrag. Andere Aufgaben bleiben beim bisherigen strikten JSON-Weg;
+   damit erweitert diese Etappe weder Prognose noch Filmwissen oder Bloganalyse. */
+const TOLERANTE_JSON_AUFGABEN = new Set([
+  "intelligent-search",
+  "profile-extract",
+]);
+
+function hinweiseFuerAufgabe(task: string) {
+  return task === "profile-extract"
+    ? { partial: PROFIL_PARTIAL_NOTICE, degraded: PROFIL_DEGRADED_NOTICE }
+    : { partial: SUCHE_PARTIAL_NOTICE, degraded: SUCHE_DEGRADED_NOTICE };
+}
+
+function kombiniereErgebnisDarstellung(
+  task: string,
+  provider: ErgebnisDarstellung | null,
+  fach: ErgebnisDarstellung | undefined,
+): ErgebnisDarstellung {
+  const hinweise = hinweiseFuerAufgabe(task);
+  const fachlich = fach ?? {
+    responseMode: "structured" as const,
+    displayText: null,
+    warnings: [],
+  };
+  const warnings = sichereAiWarnings([
+    ...(provider?.warnings ?? []),
+    ...fachlich.warnings,
+  ]);
+  const responseMode = provider?.responseMode === "degraded" ||
+      fachlich.responseMode === "degraded"
+    ? "degraded"
+    : provider?.responseMode === "partial" ||
+        fachlich.responseMode === "partial" || warnings.length
+    ? "partial"
+    : "structured";
+  return {
+    responseMode,
+    displayText: responseMode === "degraded"
+      ? (fachlich.displayText || provider?.displayText || hinweise.degraded)
+      : responseMode === "partial" ? hinweise.partial : null,
+    warnings,
+  };
+}
+
 const ECHO_SCHEMA = {
   type: "object",
   properties: {
@@ -1139,8 +1184,16 @@ const SUCHE_PARTIAL_NOTICE =
   "Die KI-Antwort war teilweise unvollständig. Nur sichere Filter wurden berücksichtigt.";
 const SUCHE_DEGRADED_NOTICE =
   "Die KI-Antwort konnte nicht sicher als Filter verwendet werden.";
+const PROFIL_PARTIAL_NOTICE =
+  "Die KI-Antwort war teilweise unvollständig. Nur sichere Profilvorschläge werden angezeigt.";
+const PROFIL_DEGRADED_NOTICE =
+  "Die KI-Antwort konnte nicht sicher in Profilvorschläge umgewandelt werden.";
 
-const SUCHE_WARNING_CODES = new Set([
+/* Derselbe additive Ergebnisvertrag gilt inzwischen fuer mehrere Aufgaben.
+   Die Warncodes beschreiben ausschliesslich Bereinigungsschritte und bleiben
+   damit aufgabenunabhaengig; freie Anbietertexte duerfen nie zu Warncodes
+   werden. */
+const AI_RESULT_WARNING_CODES = new Set([
   "json-extracted-from-text",
   "unstructured-provider-text",
   "display-text-truncated",
@@ -1152,9 +1205,9 @@ const SUCHE_WARNING_CODES = new Set([
   "no-safe-structure",
 ]);
 
-function sichereSucheWarnings(werte: unknown[]): string[] {
+function sichereAiWarnings(werte: unknown[]): string[] {
   return [...new Set(werte.filter((wert): wert is string =>
-    typeof wert === "string" && SUCHE_WARNING_CODES.has(wert)
+    typeof wert === "string" && AI_RESULT_WARNING_CODES.has(wert)
   ))].slice(0, 12);
 }
 
@@ -2673,11 +2726,11 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           darstellung: {
             responseMode: "degraded",
             displayText: klartext || SUCHE_DEGRADED_NOTICE,
-            warnings: sichereSucheWarnings([...warnungen]),
+            warnings: sichereAiWarnings([...warnungen]),
           },
         };
       }
-      const warnings = sichereSucheWarnings([...warnungen]);
+      const warnings = sichereAiWarnings([...warnungen]);
       return {
         daten,
         darstellung: {
@@ -2788,8 +2841,23 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
 
     pruefeErgebnis(inhalt, payload) {
-      if (!extraktFormGueltig(inhalt)) return { fehler: "schema" };
+      const warnungen = new Set<string>();
+      const warn = (code: string) => warnungen.add(code);
+      if (!istReinesObjekt(inhalt)) {
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: PROFIL_DEGRADED_NOTICE,
+            warnings: ["no-safe-structure"],
+          },
+        };
+      }
       const a = inhalt;
+      const rootFelder = ["signale", "filme", "achsen_tendenz", "nicht_deutbar"];
+      if (Object.keys(a).some((key) => !rootFelder.includes(key))) {
+        warn("extra-fields-ignored");
+      }
       const antworten = leseAntworten(payload);
       /* Dieselbe Werteliste wie beim Bau des Auftrags -- `leseListen` ist die
          einzige Lesart des Feldes. Zwei Lesarten waeren der stillste Weg,
@@ -2808,10 +2876,33 @@ export const AUFGABEN: Record<string, Aufgabe> = {
       const offen: string[] = [];
       const signale: Array<Record<string, unknown>> = [];
       let verworfenOhneBeleg = 0;
+      let hatSichereStruktur = false;
 
-      const rohSignale = Array.isArray(a.signale) ? a.signale : [];
+      let rohSignale: unknown[] = [];
+      if (!Object.prototype.hasOwnProperty.call(a, "signale")) {
+        warn("missing-fields-defaulted");
+      } else if (!Array.isArray(a.signale)) {
+        warn("invalid-fields-ignored");
+      } else {
+        rohSignale = a.signale;
+        /* Eine ausdruecklich leere Signalliste ist eine sichere fachliche
+           Aussage. Eine nichtleere Liste aus ausschliesslich kaputten Items ist
+           es dagegen nicht; dann soll der Nutzer den degradierten Hinweis sehen. */
+        if (rohSignale.length === 0) hatSichereStruktur = true;
+        if (rohSignale.length > EXTRAKT_MAX_SIGNALE) warn("invalid-items-ignored");
+      }
+      const signalFelder = [
+        "art", "wert", "richtung", "staerke", "sicherheit", "quelle", "beleg",
+      ];
       for (const roh of rohSignale.slice(0, EXTRAKT_MAX_SIGNALE)) {
-        const o = (roh ?? {}) as Record<string, unknown>;
+        if (!istReinesObjekt(roh)) {
+          warn("invalid-items-ignored");
+          continue;
+        }
+        const o = roh;
+        if (Object.keys(o).some((key) => !signalFelder.includes(key))) {
+          warn("extra-fields-ignored");
+        }
         const art = String(o.art ?? "").trim().toLowerCase();
         const richtung = String(o.richtung ?? "").trim().toLowerCase();
         const sicherheit = String(o.sicherheit ?? "").trim().toLowerCase();
@@ -2820,11 +2911,24 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         const quelle = String(o.quelle ?? "").trim().toUpperCase();
         const staerke = ganzzahlImBereich(o.staerke, 1, 5);
 
-        if (!EXTRAKT_ARTEN.includes(art)) continue;
-        if (!EXTRAKT_RICHTUNGEN.includes(richtung)) continue;
-        if (!EXTRAKT_SICHERHEITEN.includes(sicherheit)) continue;
-        if (!EXTRAKT_QUELLEN.includes(quelle)) continue;
-        if (!wert || staerke === null) continue;
+        if (
+          !EXTRAKT_ARTEN.includes(art) ||
+          !EXTRAKT_RICHTUNGEN.includes(richtung) ||
+          !EXTRAKT_SICHERHEITEN.includes(sicherheit) ||
+          !EXTRAKT_QUELLEN.includes(quelle)
+        ) {
+          warn("unknown-values-ignored");
+          continue;
+        }
+        if (!wert || staerke === null) {
+          warn("invalid-items-ignored");
+          continue;
+        }
+        /* Ab hier ist die Signalform sicher genug, um auch einen belegten
+           Verwurf als strukturiertes Teilergebnis zu melden. Der Beleg selbst
+           wird trotzdem erst unten freigegeben und gelangt bei einem Fehlgriff
+           nie in `signale`. */
+        hatSichereStruktur = true;
 
         /* DIE BELEGPRUEFUNG. Nicht auf Gleichheit, sondern auf Vorkommen in
            der Vergleichsform: Ein Modell schreibt eine Textstelle selten
@@ -2839,6 +2943,7 @@ export const AUFGABEN: Record<string, Aufgabe> = {
            fast jedem Text und belegte damit alles. */
         if (beleg.length < BELEG_MIN_ZEICHEN || !belegHatInhalt(beleg)) {
           verworfenOhneBeleg++;
+          warn("invalid-items-ignored");
           continue;
         }
         const belegForm = vergleichsform(beleg);
@@ -2847,11 +2952,13 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           .map(([frage]) => frage);
         if (!fundstellen.length) {
           verworfenOhneBeleg++;
+          warn("invalid-items-ignored");
           continue;
         }
         const echteQuelle = fundstellen.includes(quelle) ? quelle : fundstellen.length === 1 ? fundstellen[0] : null;
         if (!echteQuelle) {
           verworfenOhneBeleg++;
+          warn("invalid-items-ignored");
           continue;
         }
 
@@ -2864,6 +2971,8 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           const treffer = listen.genres.find((g) => vergleichsform(g) === vergleichsform(wert));
           if (!treffer) {
             offen.push(kurzText(wert, WUNSCH_MAX_ZEICHEN));
+            warn("unknown-values-ignored");
+            hatSichereStruktur = true;
             continue;
           }
           signale.push({
@@ -2875,6 +2984,7 @@ export const AUFGABEN: Record<string, Aufgabe> = {
             quelle: echteQuelle,
             beleg,
           });
+          hatSichereStruktur = true;
           continue;
         }
         signale.push({
@@ -2886,26 +2996,56 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           quelle: echteQuelle,
           beleg,
         });
+        hatSichereStruktur = true;
       }
 
       const filme: Array<Record<string, unknown>> = [];
-      const rohFilme = Array.isArray(a.filme) ? a.filme : [];
+      let rohFilme: unknown[] = [];
+      if (!Object.prototype.hasOwnProperty.call(a, "filme")) {
+        warn("missing-fields-defaulted");
+      } else if (!Array.isArray(a.filme)) {
+        warn("invalid-fields-ignored");
+      } else {
+        rohFilme = a.filme;
+        if (rohFilme.length > EXTRAKT_MAX_FILME) warn("invalid-items-ignored");
+      }
       for (const roh of rohFilme.slice(0, EXTRAKT_MAX_FILME)) {
-        const o = (roh ?? {}) as Record<string, unknown>;
+        if (!istReinesObjekt(roh)) {
+          warn("invalid-items-ignored");
+          continue;
+        }
+        const o = roh;
+        if (Object.keys(o).some((key) => !["titel", "jahr", "richtung"].includes(key))) {
+          warn("extra-fields-ignored");
+        }
         const titel = kurzText(o.titel, WERT_MAX_ZEICHEN);
-        if (!titel) continue;
+        if (!titel) {
+          warn("invalid-items-ignored");
+          continue;
+        }
+        hatSichereStruktur = true;
         /* Auch der Titel muss in den Antworten VORKOMMEN. Ohne diese Pruefung
            waere `filme` die bequemste Umgehung der Belegpflicht: ein Feld
            ohne Belegfeld, das ab Etappe 8 in jede Prompt-Fassung reist. */
         if (!antworten.some((x) => enthaeltWortfolge(x.text, titel))) {
           verworfenOhneBeleg++;
+          warn("invalid-items-ignored");
           continue;
         }
-        const jahr = ganzzahlImBereich(o.jahr, 1880, 2200);
+        const jahr = o.jahr === null || o.jahr === undefined
+          ? null
+          : ganzzahlImBereich(o.jahr, 1880, 2200);
+        if (o.jahr !== null && o.jahr !== undefined && jahr === null) {
+          warn("invalid-fields-ignored");
+        }
         const richtung = String(o.richtung ?? "").trim().toLowerCase();
         const eintrag: Record<string, unknown> = { titel, jahr };
         if (EXTRAKT_RICHTUNGEN.includes(richtung)) eintrag.richtung = richtung;
+        else if (o.richtung !== null && o.richtung !== undefined && o.richtung !== "") {
+          warn("unknown-values-ignored");
+        }
         filme.push(eintrag);
+        hatSichereStruktur = true;
       }
 
       const achsen: Record<string, number | null> = {
@@ -2913,14 +3053,40 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         was: null,
         warum: null,
       };
-      const rohAchsen = (a.achsen_tendenz ?? {}) as Record<string, unknown>;
-      for (const k of ["wie", "was", "warum"]) {
-        achsen[k] = ganzzahlImBereich(eigenerWert(rohAchsen, k), 0, 5);
+      let rohAchsen: Record<string, unknown> = {};
+      if (!Object.prototype.hasOwnProperty.call(a, "achsen_tendenz")) {
+        warn("missing-fields-defaulted");
+      } else if (!istReinesObjekt(a.achsen_tendenz)) {
+        warn("invalid-fields-ignored");
+      } else {
+        rohAchsen = a.achsen_tendenz;
+        if (Object.keys(rohAchsen).some((key) => !["wie", "was", "warum"].includes(key))) {
+          warn("extra-fields-ignored");
+        }
+        for (const k of ["wie", "was", "warum"]) {
+          const rohWert = eigenerWert(rohAchsen, k);
+          if (rohWert === null || rohWert === undefined) continue;
+          const wert = ganzzahlImBereich(rohWert, 0, 5);
+          if (wert === null) warn("invalid-fields-ignored");
+          else {
+            achsen[k] = wert;
+            hatSichereStruktur = true;
+          }
+        }
       }
 
-      const rohOffen = Array.isArray(a.nicht_deutbar) ? a.nicht_deutbar : [];
+      let rohOffen: unknown[] = [];
+      if (!Object.prototype.hasOwnProperty.call(a, "nicht_deutbar")) {
+        warn("missing-fields-defaulted");
+      } else if (!Array.isArray(a.nicht_deutbar)) {
+        warn("invalid-fields-ignored");
+      } else {
+        rohOffen = a.nicht_deutbar;
+        if (rohOffen.length > EXTRAKT_MAX_OFFEN) warn("invalid-items-ignored");
+      }
       for (const w of rohOffen.slice(0, EXTRAKT_MAX_OFFEN)) {
         const t = kurzText(w, WUNSCH_MAX_ZEICHEN);
+        if (t) hatSichereStruktur = true;
         /* `nicht_deutbar` ist sichtbarer, synchronisierter Profiltext. Der
            Prompt verlangt Worte der Person; freie Modellzusammenfassungen
            duerfen nicht als ihre Aussage gespeichert werden. */
@@ -2929,8 +3095,12 @@ export const AUFGABEN: Record<string, Aufgabe> = {
           antworten.some((x) => vergleichsform(x.text).includes(vergleichsform(t)))
         ) {
           offen.push(t);
+          hatSichereStruktur = true;
         } else if (t) {
           verworfenOhneBeleg++;
+          warn("invalid-items-ignored");
+        } else {
+          warn("invalid-items-ignored");
         }
       }
 
@@ -2939,22 +3109,40 @@ export const AUFGABEN: Record<string, Aufgabe> = {
          nichts her" und "das Modell hat gefabelt" -- sonst sieht der Nutzer
          beide Male dasselbe leere Ergebnis und haelt seine Antworten fuer
          unbrauchbar. Die ZAHL geht mit, nie ein Textbruchstueck. */
+      const daten = {
+        signale,
+        filme,
+        achsen_tendenz: achsen,
+        /* Einfacher Deckel statt `gedeckelt`: Jenes fuegt beim Ueberlauf ein
+           OBJEKT `{wunsch, grund}` an -- richtig fuer `nicht_unterstuetzt`
+           der Suche, falsch hier, denn `nicht_deutbar` ist im Schema und
+           beim Client eine reine Zeichenkettenliste. Ein Objekt darin
+           haette der Client stillschweigend verworfen. */
+        nicht_deutbar: offen.length <= EXTRAKT_MAX_OFFEN * 2 ? offen : [
+          ...offen.slice(0, EXTRAKT_MAX_OFFEN * 2 - 1),
+          "und " + (offen.length - (EXTRAKT_MAX_OFFEN * 2 - 1)) +
+          " weitere",
+        ],
+        verworfen_ohne_beleg: verworfenOhneBeleg,
+      };
+      if (!hatSichereStruktur) {
+        warn("no-safe-structure");
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: PROFIL_DEGRADED_NOTICE,
+            warnings: sichereAiWarnings([...warnungen]),
+          },
+        };
+      }
+      const warnings = sichereAiWarnings([...warnungen]);
       return {
-        daten: {
-          signale,
-          filme,
-          achsen_tendenz: achsen,
-          /* Einfacher Deckel statt `gedeckelt`: Jenes fuegt beim Ueberlauf ein
-             OBJEKT `{wunsch, grund}` an -- richtig fuer `nicht_unterstuetzt`
-             der Suche, falsch hier, denn `nicht_deutbar` ist im Schema und
-             beim Client eine reine Zeichenkettenliste. Ein Objekt darin
-             haette der Client stillschweigend verworfen. */
-          nicht_deutbar: offen.length <= EXTRAKT_MAX_OFFEN * 2 ? offen : [
-            ...offen.slice(0, EXTRAKT_MAX_OFFEN * 2 - 1),
-            "und " + (offen.length - (EXTRAKT_MAX_OFFEN * 2 - 1)) +
-            " weitere",
-          ],
-          verworfen_ohne_beleg: verworfenOhneBeleg,
+        daten,
+        darstellung: {
+          responseMode: warnings.length ? "partial" : "structured",
+          displayText: warnings.length ? PROFIL_PARTIAL_NOTICE : null,
+          warnings,
         },
       };
     },
@@ -4359,17 +4547,18 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   let inhalt: unknown = null;
-  let sucheProviderDarstellung: ErgebnisDarstellung | null = null;
-  if (task === "intelligent-search") {
+  let providerDarstellung: ErgebnisDarstellung | null = null;
+  if (TOLERANTE_JSON_AUFGABEN.has(task)) {
     try {
       const parsed = parseProviderLooseJsonText(ergebnis.text);
       inhalt = parsed.value;
-      sucheProviderDarstellung = {
+      const hinweise = hinweiseFuerAufgabe(task);
+      providerDarstellung = {
         responseMode: parsed.mode,
         displayText: parsed.mode === "degraded"
-          ? (parsed.displayText || SUCHE_DEGRADED_NOTICE)
-          : parsed.mode === "partial" ? SUCHE_PARTIAL_NOTICE : null,
-        warnings: sichereSucheWarnings([...parsed.warnings]),
+          ? (parsed.displayText || hinweise.degraded)
+          : parsed.mode === "partial" ? hinweise.partial : null,
+        warnings: sichereAiWarnings([...parsed.warnings]),
       };
     } catch {
       /* Geheimnis-, Thinking-/Prompt- oder API-Huellenverdacht bleibt ein
@@ -4409,10 +4598,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
      noch kein brauchbares Ergebnis. Die Aufgabe liefert nur eine Kennung
      zurück — nie einen Text mit Nutzerinhalt darin. */
   let pruefung: Pruefung;
-  if (sucheProviderDarstellung?.responseMode === "degraded") {
+  if (providerDarstellung?.responseMode === "degraded") {
     pruefung = {
       daten: null,
-      darstellung: sucheProviderDarstellung,
+      darstellung: providerDarstellung,
     };
   } else {
     try {
@@ -4447,33 +4636,14 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     });
   }
 
-  let sucheDarstellung: ErgebnisDarstellung | null = null;
-  if (task === "intelligent-search") {
-    const fach = pruefung.darstellung ?? {
-      responseMode: "structured" as const,
-      displayText: null,
-      warnings: [],
-    };
-    const warnings = sichereSucheWarnings([
-      ...(sucheProviderDarstellung?.warnings ?? []),
-      ...fach.warnings,
-    ]);
-    const responseMode = sucheProviderDarstellung?.responseMode === "degraded" ||
-        fach.responseMode === "degraded"
-      ? "degraded"
-      : sucheProviderDarstellung?.responseMode === "partial" ||
-          fach.responseMode === "partial" || warnings.length
-      ? "partial"
-      : "structured";
-    sucheDarstellung = {
-      responseMode,
-      displayText: responseMode === "degraded"
-        ? (fach.displayText || sucheProviderDarstellung?.displayText ||
-          SUCHE_DEGRADED_NOTICE)
-        : responseMode === "partial" ? SUCHE_PARTIAL_NOTICE : null,
-      warnings,
-    };
-    if (responseMode === "degraded") pruefung.daten = null;
+  let ergebnisDarstellung: ErgebnisDarstellung | null = null;
+  if (TOLERANTE_JSON_AUFGABEN.has(task)) {
+    ergebnisDarstellung = kombiniereErgebnisDarstellung(
+      task,
+      providerDarstellung,
+      pruefung.darstellung,
+    );
+    if (ergebnisDarstellung.responseMode === "degraded") pruefung.daten = null;
   }
 
   if (filmwissenLauf) {
@@ -4594,7 +4764,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        wird der konfigurierte Modellname als belegbarer Ersatz verwendet. */
       modell: /^[a-z0-9][a-z0-9._:-]{0,79}$/.test(ergebnis.modell) ? ergebnis.modell : modell,
       data: pruefung.daten,
-      ...(sucheDarstellung ?? {}),
+      ...(ergebnisDarstellung ?? {}),
       ...(forecastProvenienz ? { provenienz: forecastProvenienz } : {}),
       verbrauch: {
         inputTokens: ergebnis.inputTokens,
