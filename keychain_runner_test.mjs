@@ -61,6 +61,10 @@ const PUBLIC = {
 };
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
+const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
+
+pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner verdrahtet",
+  PACKAGE.scripts?.["test:ai:live"] === "node tools/keychain_runner.mjs ai-live");
 
 {
   const lockPath = `${LIVE_LOCK_PATH}.${process.pid}.test`;
@@ -286,9 +290,12 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     keychainLeser: (account) => { gelesen.push(account); return OWNER_GEHEIMNIS; },
     ownerApprovedServerBudget: true,
   });
-  pruefe("exakte Owner-Freigabe bindet den Sechserlauf an Owner, Budget und starke Filmkennung",
+  pruefe("exakte Owner-Freigabe bindet Combined Eight an Owner, Budget und beide Produktguards",
     env[OWNER_SERVER_BUDGET_ENV] === "1"
       && env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
+      && env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && env.KD_FILMWISSEN_TARGET_ID === PUBLIC.KD_FILMWISSEN_TARGET_ID
       && env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
       && env.KD_TESTA_PASS === OWNER_GEHEIMNIS
@@ -312,6 +319,36 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
   } catch { budgetcheckGesperrt = true; }
   pruefe("Owner-Budgetfreigabe kann auch nicht an einen reinen Budgetcheck gehaengt werden",
     budgetcheckGesperrt);
+}
+
+{
+  const ohneFilmwissenOverride = { ...PUBLIC };
+  delete ohneFilmwissenOverride.KD_FILMWISSEN_TARGET_ID;
+  const env = baueKindUmgebung({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: ohneFilmwissenOverride,
+    keychainLeser: () => OWNER_GEHEIMNIS,
+    ownerApprovedServerBudget: true,
+  });
+  pruefe("fehlendes Filmwissen-Override bleibt fuer den stabilen Smoke-Harness-Fallback leer",
+    !("KD_FILMWISSEN_TARGET_ID" in env)
+      && env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
+      && env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1");
+
+  let ungueltigesOverrideGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: { ...PUBLIC, KD_FILMWISSEN_TARGET_ID: "tt0133093" },
+      keychainLeser: () => OWNER_GEHEIMNIS,
+      ownerApprovedServerBudget: true,
+    });
+  } catch { ungueltigesOverrideGesperrt = true; }
+  pruefe("ein vorhandenes Filmwissen-Override muss weiterhin eine starke Kennung sein",
+    ungueltigesOverrideGesperrt);
 }
 
 {
@@ -504,19 +541,24 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     },
     spawnImpl,
     ownerApprovedServerBudget: true,
-    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-core-six-test",
+    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-eight-test",
     ausgabe: () => {},
   });
-  pruefe("Exakte Owner-Variante startet den Sechserlauf hinter dem Budgetwächter",
+  pruefe("Exakte Owner-Variante startet Combined Eight als genau einen Smoke-Kindprozess",
     code === 0
       && starts.length === 1
       && starts[0].argv.join("|") === MODI["ai-live"].argv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/radar_entdecken_live.mjs"))
       && starts[0].optionen.env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
+      && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
-        === "/private/tmp/keychain-runner-core-six-test"
+        === "/private/tmp/keychain-runner-eight-test"
       && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_GUARD_ENV]
         === PROVIDER_RAW_CAPTURE_GUARD_VALUE);
-  pruefe("Owner-Sechservariante mappt ausschließlich Owner auf TestA",
+  pruefe("Owner-Combined-Eight mappt ausschließlich Owner auf TestA",
     gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
       && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS

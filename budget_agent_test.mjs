@@ -384,9 +384,14 @@ const NUTZER_TASKS_SOLL = [
   "blog-profile-extract",
 ];
 const ANBIETER_PFADE_SOLL = [
-  ...NUTZER_TASKS_SOLL,
-  "radar-websearch-task",
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "blog-profile-extract",
+  "media-batch-extract",
   "entdecken-daily-task",
+  "radar-websearch-task",
 ];
 const leseTaskListe = (quelle, anker) => {
   const start = quelle.indexOf(anker);
@@ -397,11 +402,6 @@ const leseTaskListe = (quelle, anker) => {
     ? [...block[1].matchAll(/"([a-z][a-z-]+)"/g)].map((treffer) => treffer[1])
     : [];
 };
-const importiertGemeinsameLaufwache = (quelle) => (
-  [...quelle.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*"([^"]+)";/g)]
-    .some(([, namen, modul]) => modul === "./ai_budget_guard.mjs"
-      && /\bLiveLaufWache\b/.test(namen))
-);
 const p8Abschnitt = smokeSkript.slice(
   smokeSkript.indexOf("/* --- P8:"),
   smokeSkript.indexOf("/* --- P9:"),
@@ -412,11 +412,7 @@ const p5ActivationPos = smokeSkript.indexOf('pruefeAktivierungsvertrag("P5", p5)
 const bewachteTasks = [...smokeSkript.matchAll(
   /await rufAnbieterBewacht\([\s\S]{0,360}?task:\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
-const bewachteAnbieterPfade = [
-  ...bewachteTasks,
-  /const RADAR_FUNCTION = "([^"]+)";/.exec(radarWebsearchSkript)?.[1],
-  /const FUNCTION_NAME = "([^"]+)";/.exec(entdeckenWebsearchSkript)?.[1],
-].filter(Boolean);
+const bewachteAnbieterPfade = leseTaskListe(smokeSkript, "const LIVE_ANBIETER_PFADE");
 const websearchSkripte = [radarWebsearchSkript, entdeckenWebsearchSkript];
 const entdeckenKombiPosition = radarEntdeckenSkript.indexOf(
   "const entdecken = await runEntdecken({ env, ausgabe });",
@@ -424,6 +420,22 @@ const entdeckenKombiPosition = radarEntdeckenSkript.indexOf(
 const radarKombiPosition = radarEntdeckenSkript.indexOf(
   "const radar = await runRadar({ env, ausgabe });",
 );
+const livePfadPositionen = [
+  '"P12 intelligent-search"',
+  '"P14 profile-extract"',
+  '"P17 film-forecast"',
+  '"P18 filmwissen-synthese"',
+  '"P22 blog-profile-extract"',
+  '"P23 media-batch-extract text-only"',
+  'label: "P24 entdecken-daily-task"',
+  'label: "P25 radar-websearch-task"',
+].map((anker) => smokeSkript.indexOf(anker));
+const livePfadAbschnitt = smokeSkript.slice(
+  livePfadPositionen[0],
+  smokeSkript.indexOf("bestaetigeExakteAnbieterPfadfolge();") + 40,
+);
+const filmwissenFallback = /const FILMWISSEN_DEFAULT_TARGET = "([^"]+)";/
+  .exec(smokeSkript)?.[1] ?? null;
 const readbackTasks = [...smokeSkript.matchAll(
   /pruefeNutzerTaskReadback\("[^"]+",\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
@@ -469,19 +481,25 @@ check("Health benennt das spätere Gate und bindet es an exakt sechs Nutzeraufga
 check("Rauchprobe verdrahtet genau die acht beauftragten Anbieterpfade durch dieselbe Laufwache",
   (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === NUTZER_TASKS_SOLL.length
   && bewachteAnbieterPfade.length === ANBIETER_PFADE_SOLL.length
-  && JSON.stringify([...bewachteAnbieterPfade].sort())
-    === JSON.stringify([...ANBIETER_PFADE_SOLL].sort())
-  && [smokeSkript, ...websearchSkripte].every(importiertGemeinsameLaufwache)
+  && JSON.stringify(bewachteAnbieterPfade) === JSON.stringify(ANBIETER_PFADE_SOLL)
   && (smokeSkript.match(/new LiveLaufWache\(\{/g) || []).length === 1
+  && (smokeSkript.match(/await rufProduktAnbieterBewacht\(\{/g) || []).length === 2
+  && (smokeSkript.match(/registriereAnbieterPfad\(/g) || []).length === 3
+  && /maxAnbieterRequests:\s*SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
+  && /laufLimitUsdCent:\s*OWNER_COMBINED_EIGHT[\s\S]{0,100}\? ENTDECKEN_LAUF_LIMIT_USD_CENT[\s\S]{0,100}: LAUF_LIMIT_USD_CENT/.test(smokeSkript)
+  && /const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT/.test(smokeSkript)
+  && /bestaetigeExakteAnbieterPfadfolge\(\);/.test(smokeSkript)
+  && livePfadPositionen.every((position, index) =>
+    position >= 0 && (index === 0 || position > livePfadPositionen[index - 1]))
+  && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(livePfadAbschnitt)
   && (smokeSkript.match(/await rufAnbieterBewachtMitCapability\(/g) || []).length === 0
   && (smokeSkript.match(/task: "anbieter-modelle"/g) || []).length === 1
-  && /maxAnbieterRequests:\s*OWNER_CORE_SIX\s*\?\s*6\s*:\s*SMOKE_MAX_ANBIETER_REQUESTS/
-    .test(smokeSkript)
   && /async function ruf[\s\S]{0,350}fetchMitZeitgrenze/.test(smokeSkript)
   && (p8Abschnitt.match(/const p8 = await ruf\(/g) || []).length === 1
   && !/\b(?:for|while)\s*\(/.test(p8Abschnitt)
-  && !/await Promise\.all\(/.test(smokeSkript)
-  && websearchSkripte.every((skript) =>
+  && !/await Promise\.all\(/.test(smokeSkript));
+check("bestehende explizite Produkt-One-Shots bleiben je auf einen Request und ohne Retry begrenzt",
+  websearchSkripte.every((skript) =>
     (skript.match(/new LiveLaufWache\(\{/g) || []).length === 1
     && (skript.match(/maxAnbieterRequests:\s*1/g) || []).length === 1
     && (skript.match(/await laufWache\.vorAnbieterRequest\(/g) || []).length === 1
@@ -492,6 +510,16 @@ check("Rauchprobe verdrahtet genau die acht beauftragten Anbieterpfade durch die
   && radarKombiPosition > entdeckenKombiPosition
   && (radarEntdeckenSkript.match(/await run(?:Entdecken|Radar)\(/g) || []).length === 2
   && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(radarEntdeckenSkript));
+check("Filmwissen nutzt nur im Smoke den stabilen starken Default und erlaubt ein Env-Override",
+  filmwissenFallback === "imdb:tt0133093"
+  && /^imdb:tt[0-9]{7,10}$/.test(filmwissenFallback)
+  && /process\.env\.KD_FILMWISSEN_TARGET_ID \|\| FILMWISSEN_DEFAULT_TARGET/.test(smokeSkript)
+  && /raw\.match\(\/\^\(imdb\|tmdb\|wikidata\)/.test(smokeSkript)
+  && /normalisiereFilmkennung\(namespace, match\[2\]\)/.test(smokeSkript));
+check("Smoke mappt unbekannten Kostenstand und Limit ohne Retry auf die terminalen Exitcodes",
+  /stopp\.exitCode === BUDGET_UNBEKANNT_EXIT[\s\S]{0,100}\? "BUDGET_UNBEKANNT"[\s\S]{0,100}: "AUTONOMIE_STOPP"/.test(smokeSkript)
+  && /process\.exit\(stopp\.exitCode\)/.test(smokeSkript)
+  && /Keine automatische Wiederholung; keine weiteren echten KI-Requests\./.test(smokeSkript));
 check("P5-Capability-Guard liegt vor P8 im Smoke auf der vorhandenen P5-Healthantwort",
   /pruefeBlogProfilCapabilityAbschnitt\("P5", p5\);/.test(smokeSkript)
   && p5CapabilityPos >= 0

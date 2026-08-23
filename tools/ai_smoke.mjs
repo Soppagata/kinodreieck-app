@@ -37,6 +37,8 @@
      S4 quellengeführte Filmwissen-Synthese plus enge Lese-RPC
      S5 Ein-Artikel-Blogprofilextraktion mit beleggebundenen Geschmackszügen
      S6 Text-Stapelimport ohne Bildpfad
+     S7 privater Entdecken-Tagesfeed mit genau einem Websearch-Request
+     S8 Radar-Websearch mit genau einem Ziel-Request
 
    Jede Nutzerszene wird genau einmal potenziell zahlend aufgerufen. Ihre
    Antwort läuft anschließend durch den echten Clientparser und einen lokalen
@@ -49,6 +51,9 @@
 
 import {
   BUDGET_UNBEKANNT_EXIT,
+  ENTDECKEN_LAUF_LIMIT_USD_CENT,
+  LAUF_LIMIT_USD_CENT,
+  LIVE_REQUEST_TIMEOUT_MS,
   LiveLaufWache,
   LiveSicherheitsStopp,
   SMOKE_MAX_ANBIETER_REQUESTS,
@@ -64,8 +69,15 @@ import {
   BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
   hatBlogProfileAnalyseCapability,
 } from "../src/lib/blogProfilAnalyse.js";
+import { normalisiereFilmkennung } from "../src/lib/filmwissen.js";
 import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
+import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
 import { readFileSync } from "node:fs";
+import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
+import {
+  ENTDECKEN_DAILY_ONCE_ENV,
+  RADAR_WEBSEARCH_ONCE_ENV,
+} from "./keychain_runner.mjs";
 import {
   OWNER_CORE_SIX_GUARD_ENV,
   OWNER_CORE_SIX_GUARD_VALUE,
@@ -90,6 +102,29 @@ const FUNKTION = (process.env.KD_AI_FUNKTION || "ai-task").trim();
 const ORIGIN = (process.env.KD_ORIGIN || "https://kinodreieck.at").trim();
 const OWNER_CORE_SIX = process.env[OWNER_CORE_SIX_GUARD_ENV]
   === OWNER_CORE_SIX_GUARD_VALUE;
+const COMBINED_GUARD_VALUE = "keychain-budget-guard-v1";
+const OWNER_COMBINED_EIGHT = OWNER_CORE_SIX
+  && process.env[ENTDECKEN_DAILY_ONCE_ENV] === COMBINED_GUARD_VALUE
+  && process.env[RADAR_WEBSEARCH_ONCE_ENV] === COMBINED_GUARD_VALUE;
+const FILMWISSEN_DEFAULT_TARGET = "imdb:tt0133093";
+const LIVE_ANBIETER_PFADE = Object.freeze([
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "blog-profile-extract",
+  "media-batch-extract",
+  "entdecken-daily-task",
+  "radar-websearch-task",
+]);
+const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT
+  ? LIVE_ANBIETER_PFADE
+  : LIVE_ANBIETER_PFADE.slice(0, 6);
+const RADAR_TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
+const ENTDECKEN_FUNCTION = "entdecken-daily-task";
+const RADAR_FUNCTION = "radar-websearch-task";
+const ENTDECKEN_RECOVERY_HEADER = "X-KD-Entdecken-Recovery";
+const ENTDECKEN_RECOVERY_HEADER_VALUE = "owner-once-v1";
 
 if (!URL_BASIS || !ANON || !PASS) {
   console.error("Fehlende Konfiguration. Erwartet: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS.");
@@ -98,8 +133,15 @@ if (!URL_BASIS || !ANON || !PASS) {
 }
 
 const ENDPUNKT = `${URL_BASIS}/functions/v1/${FUNKTION}`;
+const LIVE_VERBINDUNG = Object.freeze({
+  urlBasis: URL_BASIS,
+  anon: ANON,
+  funktion: FUNKTION,
+  origin: ORIGIN,
+});
 let fehler = 0;
 let nummer = 0;
+const ausgefuehrteAnbieterPfade = [];
 
 function pruefe(name, bedingung, details) {
   nummer += 1;
@@ -109,13 +151,19 @@ function pruefe(name, bedingung, details) {
   if (details) console.log(`     ${details}`);
 }
 
-async function ruf(methode, kopf = {}, koerper = null, extraKopf = {}) {
+async function ruf(
+  methode,
+  kopf = {},
+  koerper = null,
+  extraKopf = {},
+  timeoutMs = LIVE_REQUEST_TIMEOUT_MS,
+) {
   try {
     const antwort = await fetchMitZeitgrenze(ENDPUNKT, {
       method: methode,
       headers: { Origin: ORIGIN, ...kopf, ...extraKopf },
       body: koerper === null ? undefined : JSON.stringify(koerper),
-    });
+    }, { timeoutMs });
     let daten = null;
     const text = await antwort.text();
     try { daten = text ? JSON.parse(text) : null; } catch { daten = { antwortForm: "kein-json" }; }
@@ -242,6 +290,50 @@ function stoppeLiveLauf(error) {
   process.exit(stopp.exitCode);
 }
 
+function registriereAnbieterPfad(pfad) {
+  const erwartet = ERWARTETE_ANBIETER_PFADE[ausgefuehrteAnbieterPfade.length];
+  if (pfad !== erwartet) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      `Live-Pfadfolge driftet: erwartet ${erwartet || "Laufende"}, erhalten ${pfad}.`,
+    ));
+  }
+  ausgefuehrteAnbieterPfade.push(pfad);
+}
+
+function bestaetigeExakteAnbieterPfadfolge() {
+  const exakt = JSON.stringify(ausgefuehrteAnbieterPfade)
+    === JSON.stringify(ERWARTETE_ANBIETER_PFADE);
+  if (!exakt) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      `Live-Smoke endete nach ${ausgefuehrteAnbieterPfade.length}/${ERWARTETE_ANBIETER_PFADE.length} Anbieterpfaden.`,
+    ));
+  }
+  console.log(
+    `LIVE-ANBIETERPFADE: ${ausgefuehrteAnbieterPfade.length}/${ERWARTETE_ANBIETER_PFADE.length} seriell · kein Retry`,
+  );
+}
+
+function liesRadarTargetId() {
+  const targetId = String(process.env.KD_RADAR_TARGET_ID || "").trim();
+  if (!RADAR_TARGET_FORM.test(targetId) || /^(?:fixture|synthetic):/i.test(targetId)) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      "Combined-Eight-Smoke hat kein starkes reales Radar-Ziel.",
+    ));
+  }
+  return targetId;
+}
+
+if (OWNER_CORE_SIX && !OWNER_COMBINED_EIGHT) {
+  stoppeLiveLauf(new LiveSicherheitsStopp(
+    "unbekannt",
+    "Der Owner-Smoke ist nicht auf alle acht seriellen Anbieterpfade gebunden.",
+  ));
+}
+const RADAR_TARGET_ID = OWNER_COMBINED_EIGHT ? liesRadarTargetId() : null;
+
 console.log(`KI-Endpunkt-Rauchprobe gegen ${ENDPUNKT}\n`);
 
 let PROVIDER_DIAGNOSTIC_HEADERS = Object.freeze({});
@@ -335,6 +427,14 @@ pruefe(
 
 pruefeBlogProfilCapabilityAbschnitt("P5", p5);
 
+if (OWNER_COMBINED_EIGHT) {
+  try {
+    await pruefeEntdeckenOwnerZugang({ verbindung: LIVE_VERBINDUNG, token });
+  } catch (error) {
+    stoppeLiveLauf(error);
+  }
+}
+
 /* --- P8: Modell-IDs am echten Anbieter belegen ----------------------------- */
 const p8 = await ruf(
   "POST",
@@ -356,19 +456,18 @@ if (!(p8.status === 200 && modellIds.length > 0)) {
 }
 
 const laufWache = new LiveLaufWache({
-  maxAnbieterRequests: OWNER_CORE_SIX ? 6 : SMOKE_MAX_ANBIETER_REQUESTS,
+  maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS,
+  laufLimitUsdCent: OWNER_COMBINED_EIGHT
+    ? ENTDECKEN_LAUF_LIMIT_USD_CENT
+    : LAUF_LIMIT_USD_CENT,
   standLeser: () => holeBudgetStand({
-    verbindung: {
-      urlBasis: URL_BASIS,
-      anon: ANON,
-      funktion: FUNKTION,
-      origin: ORIGIN,
-    },
+    verbindung: LIVE_VERBINDUNG,
     token,
   }),
 });
+let laufBasis;
 try {
-  await laufWache.initialisiere();
+  laufBasis = await laufWache.initialisiere();
 } catch (error) {
   stoppeLiveLauf(error);
 }
@@ -378,11 +477,12 @@ const providerCaptureNachLabel = new Map();
 async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {}) {
   let markierung;
   try {
+    registriereAnbieterPfad(koerper?.task);
     markierung = await laufWache.vorAnbieterRequest(label);
     const ergebnis = await ruf(methode, kopf, koerper, {
       ...extraKopf,
       ...PROVIDER_DIAGNOSTIC_HEADERS,
-    });
+    }, laufBasis.anbieterRequestTimeoutMs);
     let captureError = null;
     let capture = null;
     if (OWNER_CORE_SIX) {
@@ -432,6 +532,68 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       );
     }
     return ergebnis;
+  } catch (error) {
+    stoppeLiveLauf(error);
+  }
+}
+
+async function rufProduktAnbieterBewacht({
+  pfad,
+  label,
+  methode,
+  endpunkt,
+  kopf,
+  koerper = null,
+  captureDatei,
+}) {
+  let markierung;
+  try {
+    registriereAnbieterPfad(pfad);
+    markierung = await laufWache.vorAnbieterRequest(label);
+    let antwort = null;
+    let daten = null;
+    let requestError = null;
+    try {
+      antwort = await fetchMitZeitgrenze(endpunkt, {
+        method: methode,
+        headers: { ...kopf, ...PROVIDER_DIAGNOSTIC_HEADERS },
+        body: koerper === null ? undefined : JSON.stringify(koerper),
+      }, { timeoutMs: laufBasis.anbieterRequestTimeoutMs });
+      daten = await liesJsonOderNull(antwort);
+    } catch (error) {
+      requestError = error;
+    }
+
+    let captureError = null;
+    if (!requestError && OWNER_COMBINED_EIGHT) {
+      try {
+        captureProviderRawResponse(daten, captureDatei, {
+          env: process.env,
+          repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
+          responseStatus: antwort?.status ?? null,
+        });
+      } catch {
+        captureError = new LiveSicherheitsStopp(
+          "unbekannt",
+          `${label}: unveraenderter Providerpayload wurde nicht sicher privat erfasst.`,
+        );
+      }
+    }
+
+    const kostenMessung = await laufWache.nachAnbieterRequest(markierung, null);
+    if (requestError) {
+      throw requestError instanceof LiveSicherheitsStopp
+        ? requestError
+        : new LiveSicherheitsStopp("unbekannt", `${label} war nicht verlaesslich erreichbar.`);
+    }
+    if (captureError) throw captureError;
+    if (!antwort?.ok) {
+      throw new LiveSicherheitsStopp(
+        antwort?.status === 429 ? "limit" : "unbekannt",
+        `${label} endete mit HTTP ${antwort?.status ?? "?"}.`,
+      );
+    }
+    return { status: antwort.status, daten, kostenMessung };
   } catch (error) {
     stoppeLiveLauf(error);
   }
@@ -619,15 +781,19 @@ pruefeNutzerTaskReadback("S3 film-forecast", "film-forecast", p17.daten, {
    =========================================================================== */
 function liesFilmwissenKennung() {
   if (!OWNER_CORE_SIX) return { namespace: "imdb", kennung: "tt0078748" };
-  const raw = String(process.env.KD_FILMWISSEN_TARGET_ID || "").trim();
+  const raw = String(
+    process.env.KD_FILMWISSEN_TARGET_ID || FILMWISSEN_DEFAULT_TARGET,
+  ).trim();
   const match = raw.match(/^(imdb|tmdb|wikidata):([^\s:]{1,150})$/i);
-  if (!match) {
+  const namespace = match?.[1]?.toLowerCase() ?? "";
+  const kennung = match ? normalisiereFilmkennung(namespace, match[2]) : null;
+  if (!kennung) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
-      "Owner-Sechserlauf hat keine starke reale Filmwissen-Kennung.",
+      "Owner-Kernphase hat keine starke reale Filmwissen-Kennung.",
     ));
   }
-  return { namespace: match[1].toLowerCase(), kennung: match[2] };
+  return { namespace, kennung };
 }
 const FILMWISSEN_KENNUNG = liesFilmwissenKennung();
 const p18 = await rufAnbieterBewacht(
@@ -801,6 +967,89 @@ pruefe(
 pruefeNutzerTaskReadback("S6 media-batch-extract", "media-batch-extract", p23.daten, {
   master: [],
 });
+
+/* ===========================================================================
+   S7: Entdecken-Tagesfeed — genau ein potenziell zahlender Websearch
+   =========================================================================== */
+if (OWNER_COMBINED_EIGHT) {
+  const p24 = await rufProduktAnbieterBewacht({
+    pfad: "entdecken-daily-task",
+    label: "P24 entdecken-daily-task",
+    methode: "GET",
+    endpunkt: `${URL_BASIS}/functions/v1/${ENTDECKEN_FUNCTION}`,
+    kopf: {
+      Origin: ORIGIN,
+      apikey: ANON,
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      [ENTDECKEN_RECOVERY_HEADER]: ENTDECKEN_RECOVERY_HEADER_VALUE,
+    },
+    captureDatei: "07-entdecken-weekly-websearch.json",
+  });
+  let entdeckenFeedGueltig = false;
+  try {
+    entdeckenFeedGueltig = validateEntdeckenDailyFeed(p24.daten?.feed).ok === true;
+  } catch { /* Formfehler wird unten fail-closed klassifiziert. */ }
+  const entdeckenOk = p24.status === 200
+    && JSON.stringify(Object.keys(p24.daten || {}).sort())
+      === JSON.stringify(["feed", "ok", "providerRequests", "searchRequests", "status", "writes"])
+    && p24.daten?.ok === true
+    && p24.daten?.status === "fresh"
+    && p24.daten?.writes === 1
+    && p24.daten?.providerRequests === 1
+    && p24.daten?.searchRequests === 1
+    && entdeckenFeedGueltig;
+  pruefe(
+    "Entdecken liefert genau einen frischen, validierten Websearch-Write",
+    entdeckenOk,
+    `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
+  );
+  if (!entdeckenOk) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      "Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite.",
+    ));
+  }
+
+  /* ===========================================================================
+     S8: Radar-Websearch — genau ein potenziell zahlender Zielrequest
+     =========================================================================== */
+  const p25 = await rufProduktAnbieterBewacht({
+    pfad: "radar-websearch-task",
+    label: "P25 radar-websearch-task",
+    methode: "POST",
+    endpunkt: `${URL_BASIS}/functions/v1/${RADAR_FUNCTION}`,
+    kopf: {
+      Origin: ORIGIN,
+      apikey: ANON,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    koerper: { targetId: RADAR_TARGET_ID },
+    captureDatei: "08-radar-websearch.json",
+  });
+  const radarOk = p25.status === 200
+    && JSON.stringify(Object.keys(p25.daten || {}).sort())
+      === JSON.stringify(["ok", "providerRequests", "searchRequests", "status", "writes"])
+    && p25.daten?.ok === true
+    && p25.daten?.status === "confirmed"
+    && p25.daten?.writes === 1
+    && p25.daten?.providerRequests === 1
+    && p25.daten?.searchRequests === 1;
+  pruefe(
+    "Radar liefert genau einen bestaetigten Websearch-Write fuer das starke Ziel",
+    radarOk,
+    `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
+  );
+  if (!radarOk) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      "Radar-Websearch endete ohne bestaetigten Einzelwrite.",
+    ));
+  }
+}
+
+bestaetigeExakteAnbieterPfadfolge();
 
 /* --- Diagnose -------------------------------------------------------------- */
 if (d12) {
