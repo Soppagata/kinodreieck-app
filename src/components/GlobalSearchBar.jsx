@@ -360,7 +360,8 @@ export function GlobalSearchBar({
       <button type="submit" className="kd-globalsuche-los" aria-label={laeuft ? "Suche läuft" : "Suchen"} disabled={laeuft}>⌕</button>
       <button type="button" className={"kd-globalsuche-menu" + (menuOffen ? " offen" : "")}
         aria-label={menuOffen ? "Menü schließen" : "Menü öffnen"} aria-expanded={menuOffen}
-        aria-controls="kd-mobile-menu" onClick={(event) => { event.currentTarget.focus();
+        aria-controls="kd-mobile-menu" onClick={(event) => {
+          if (!document.activeElement?.closest?.('[aria-modal="true"]')) event.currentTarget.focus();
           viewportEndRef.current(); onMenu?.(); }}>
         <i /><i /><i />
       </button>
