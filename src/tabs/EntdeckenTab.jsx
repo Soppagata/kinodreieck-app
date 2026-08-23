@@ -8,7 +8,7 @@ import {
   localCalendarDay,
   localRadarTargetLabel,
 } from "../lib/entdeckenUi.js";
-import { serienBeobachten } from "../lib/staffeln.js";
+import { istBeobachtet, serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 const ANSICHTEN = Object.freeze([
@@ -131,7 +131,8 @@ function ManageDialog({
 
 function RecommendationsView({
   streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
-  entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay, onRadarPreview,
+  entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
+  onRadarPreview, onObserveToggle,
 }) {
   const selection = useMemo(() => createEntdeckenRecommendations({
     streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
@@ -140,10 +141,20 @@ function RecommendationsView({
     streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed]);
   const { personal, further } = selection;
   const source = (entry) => entry.externalEvidence?.[0] || null;
-  const meta = (entry) => [...(entry.services || []).slice(0, 2), entry.year].filter(Boolean).join(" · ");
+  const mediaLabel = (entry) => ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase())
+    ? "Serie" : "Film";
+  const meta = (entry) => [...(entry.services || []).slice(0, 2), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
+  const observeAction = (entry) => entry.watchmodeId
+    && ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase());
+  const feedNotice = webDiscoveryStatus?.responseMode === "partial"
+    ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
+    : webDiscoveryStatus?.responseMode === "degraded"
+      ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
+      : null;
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
   const weekLabel = weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
+    {feedNotice ? <p className="kd-entdecken-pending" role="status">{feedNotice}</p> : null}
     <div className="kd-entdecken-sektionskopf">
       <div><span>Dein lokaler Abgleich</span><h2 id="kd-entdecken-empfehlungen">Für mich</h2></div>
       <p>Verfügbar und noch nicht gesehen.{dailyVariety ? " Heute neu gemischt." : " Beste Passung zuerst."}</p>
@@ -157,12 +168,17 @@ function RecommendationsView({
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
         <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
+        {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
+          aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
+          onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
+          {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
+        </button> : null}
       </article>;
     })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Von anderen empfohlen</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen</h2></div>
-        <p>Webtipps, die aktuell in Österreich verfügbar sind.{weekLabel ? ` · ${weekLabel}` : ""}</p>
+        <p>Aktuell positiv belegte Wochentipps aus dem Feed.{weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
       {further.length ? <div className="kd-entdecken-karten">{further.map((entry) => {
         const evidence = source(entry);
@@ -173,6 +189,11 @@ function RecommendationsView({
           <p>{meta(entry)}</p>
           {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
+          {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
+            aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
+            onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
+            {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
+          </button> : null}
         </article>;
       })}</div> : <p className="kd-entdecken-leer gross">Noch keine belegten Webtipps geladen.</p>}
     </section>
@@ -346,7 +367,7 @@ function RadarView({
 export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
-  webDiscoveryFeed = null, dailyVariety = false, calendarDay = null,
+  webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
   radarPilotEvents = [], radarCheckAvailable = false,
   onRadarPilotReceipt, onRadarWebsearchCheck, onRadarTextAdd,
   personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
@@ -384,8 +405,9 @@ export function EntdeckenTab({
     </div>
     {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} streamingKnown={streamingKnown}
       master={master} profile={profile} useLibrary={useLibrary} selectedServices={selectedServices}
-      entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} dailyVariety={dailyVariety}
-      selectionDay={selectionDay} onRadarPreview={onRadarPreview} /> : null}
+      entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
+      dailyVariety={dailyVariety} selectionDay={selectionDay} onRadarPreview={onRadarPreview}
+      onObserveToggle={onObserveToggle} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}

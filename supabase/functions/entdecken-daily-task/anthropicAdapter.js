@@ -1,9 +1,15 @@
 import {
   ENTDECKEN_DAILY_MAX_ITEMS,
   ENTDECKEN_DAILY_MAX_SEARCH_RESULTS,
+  ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
+  ENTDECKEN_WEEKLY_PARTIAL_NOTICE,
   validateEntdeckenWeeklyQueryContext,
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
+import {
+  parseProviderLooseJsonText,
+  ProviderTextSafetyError,
+} from "../_shared/providerText.js";
 
 export const ENTDECKEN_DAILY_PROVIDER_TASK = "entdecken-daily";
 export const ENTDECKEN_DAILY_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -13,6 +19,7 @@ export const ENTDECKEN_DAILY_TASK_CAP_USD_CENT = 5;
 export const ENTDECKEN_DAILY_SEARCH_FEE_USD_CENT = 1;
 export const ENTDECKEN_DAILY_TIMEOUT_MAX_MS = 135_000;
 export const ENTDECKEN_DAILY_RESPONSE_MAX_BYTES = 512_000;
+export const ENTDECKEN_DAILY_MAX_SEARCH_USES = 2;
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -86,14 +93,14 @@ export function validateEntdeckenDailyProviderSetup(value) {
 
 const SYSTEM_PROMPT = [
   "Du erstellst einen allgemeinen, nicht personalisierten Wochenfeed fuer Oesterreich.",
-  "Fuehre genau eine Websuche fuer das im Nutzerobjekt genannte ISO-Jahr und die dort genannte Kalenderwoche aus.",
-  "Verwende die Query aus queryContext unveraendert als einzige Suchanfrage.",
-  "Suche ausschliesslich aktuell und allgemein positiv besprochene Filme und Serien aus derstandard.at und film.at; nutze keine andere Quelle.",
+  "Suche nach aktuellen, allgemein positiv bewerteten Film- und Serien-Charts oder redaktionellen Tipps fuer das im Nutzerobjekt genannte ISO-Jahr und die Kalenderwoche.",
+  "Nutze innerhalb dieses einen Requests hoechstens zwei kleine Websuchen und nur die serverseitig erlaubten Quellen.",
+  "Bevorzuge Oesterreich-Bezug; nenne fuenf bis sieben unterschiedliche, aktuell relevante Titel, wenn sie sicher belegt sind.",
   "Nenne nur Werke, deren Titel, Werktyp, Veroeffentlichungsjahr, Publikationsdatum und positive Empfehlung von der direkt verlinkten Fundstelle getragen werden.",
   "Genres, Ton und Themen sind kurze neutrale Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
   "externalIds enthaelt nur direkt belegte imdb-, tmdb- oder watchmode-IDs als Strings; sonst bleibt das Objekt leer.",
   "Gib niemals Rezensionstext, Zitat, Zusammenfassung, Bild, Logo, Autor oder redaktionelle Ueberschrift aus.",
-  "Antworte im letzten Textblock ausschliesslich als JSON-Objekt mit dem Schluessel items.",
+  "Antworte mit einem JSON-Objekt mit dem Schluessel items.",
   "Jedes Item enthaelt exakt title, mediaType (film oder series), releaseYear, externalIds, attributes mit genres/tones/themes und evidence.",
   "evidence enthaelt exakt url, publishedOn im Format YYYY-MM-DD und positiveRecommendation mit dem booleschen Wert true.",
 ].join(" ");
@@ -116,7 +123,7 @@ export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) 
     tools: Object.freeze([Object.freeze({
       type: "web_search_20250305",
       name: "web_search",
-      max_uses: 1,
+      max_uses: ENTDECKEN_DAILY_MAX_SEARCH_USES,
       allowed_domains: setup.allowedDomains,
       allowed_callers: Object.freeze(["direct"]),
     })]),
@@ -127,7 +134,9 @@ export function estimateEntdeckenDailyReservation(body, setupInput) {
   const setup = validateEntdeckenDailyProviderSetup(setupInput);
   const bytes = new TextEncoder().encode(JSON.stringify(body)).length;
   const conservativeInputTokens = bytes + 4096;
-  const cost = costFromUsage(setup, conservativeInputTokens, setup.maxTokens, 1);
+  const cost = costFromUsage(
+    setup, conservativeInputTokens, setup.maxTokens, ENTDECKEN_DAILY_MAX_SEARCH_USES,
+  );
   if (!finitePositive(cost) || cost > setup.taskCapUsdCent) throw new EntdeckenDailyProviderError("provider-cost-invalid");
   return cost;
 }
@@ -145,29 +154,161 @@ function providerUsage(value) {
     searchRequests: websearch,
   });
 }
-function responseTextBlock(content) {
-  const blocks = content.filter((block) => block?.type === "text" && text(block.text));
-  if (!blocks.length) throw new EntdeckenDailyProviderError("provider-output-invalid");
-  return blocks[blocks.length - 1];
+const PROVIDER_WARNING_MAX = 8;
+const PROVIDER_ITEM_FIELDS = new Set([
+  "title", "mediaType", "releaseYear", "externalIds", "attributes", "evidence",
+]);
+
+function addWarning(warnings, code) {
+  if (warnings.size < PROVIDER_WARNING_MAX) warnings.add(code);
 }
-function parseProviderJson(block) {
-  let value;
-  try { value = JSON.parse(block.text); } catch { throw new EntdeckenDailyProviderError("provider-output-invalid"); }
-  if (!plain(value) || Object.keys(value).length !== 1 || !Array.isArray(value.items)
-      || value.items.length < 1 || value.items.length > ENTDECKEN_DAILY_MAX_ITEMS) {
+function safeWarnings(warnings) {
+  return Object.freeze([...warnings].slice(0, PROVIDER_WARNING_MAX));
+}
+function parseProviderText(content, warnings) {
+  if (content.some((block) => ["thinking", "redacted_thinking"].includes(block?.type))) {
     throw new EntdeckenDailyProviderError("provider-output-invalid");
   }
-  return value;
-}
-function evidenceUrls(value) {
-  const urls = [];
-  for (const item of value.items) {
-    if (!plain(item) || !plain(item.evidence) || typeof item.evidence.url !== "string") {
+  const parsedBlocks = [];
+  try {
+    for (const block of content.filter((entry) => entry?.type === "text" && text(entry.text))) {
+      parsedBlocks.push(parseProviderLooseJsonText(block.text));
+    }
+  } catch (error) {
+    if (error instanceof ProviderTextSafetyError) {
       throw new EntdeckenDailyProviderError("provider-output-invalid");
     }
-    urls.push(item.evidence.url);
+    throw error;
   }
-  return urls;
+  if (!parsedBlocks.length) {
+    addWarning(warnings, "provider-text-missing");
+    return Object.freeze({ mode: "degraded", value: null });
+  }
+  if (parsedBlocks.length > 1) addWarning(warnings, "multiple-text-blocks-normalized");
+  const selected = [...parsedBlocks].reverse().find((entry) => entry.value) || parsedBlocks.at(-1);
+  for (const warning of selected.warnings) addWarning(warnings, warning);
+  return selected;
+}
+function normalizedTextList(value, warnings) {
+  if (value === undefined) {
+    addWarning(warnings, "optional-fields-filled");
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    addWarning(warnings, "attribute-list-dropped");
+    return [];
+  }
+  const normalized = [];
+  const keys = new Set();
+  for (const entry of value) {
+    const clean = typeof entry === "string" ? text(entry) : "";
+    const key = clean.toLocaleLowerCase("de-AT");
+    if (!clean || clean !== entry || clean.length > 80 || keys.has(key)) {
+      addWarning(warnings, "attribute-item-dropped");
+      continue;
+    }
+    keys.add(key);
+    if (normalized.length < 8) normalized.push(clean);
+    else addWarning(warnings, "attribute-list-truncated");
+  }
+  return normalized;
+}
+function normalizedExternalIds(value, warnings) {
+  if (value === undefined) {
+    addWarning(warnings, "optional-fields-filled");
+    return {};
+  }
+  if (!plain(value)) {
+    addWarning(warnings, "external-ids-dropped");
+    return {};
+  }
+  const normalized = {};
+  for (const [namespace, raw] of Object.entries(value)) {
+    const id = text(raw);
+    if (namespace === "imdb" && /^tt\d{5,12}$/i.test(id)) normalized.imdb = id.toLowerCase();
+    else if (["tmdb", "watchmode"].includes(namespace) && /^[1-9]\d{0,14}$/.test(id)) {
+      normalized[namespace] = id;
+    } else addWarning(warnings, "external-id-dropped");
+  }
+  return normalized;
+}
+function normalizeProviderItem(value, resultUrls, citationUrls, warnings) {
+  if (!plain(value)) {
+    addWarning(warnings, "item-dropped");
+    return null;
+  }
+  if (Object.keys(value).some((key) => !PROVIDER_ITEM_FIELDS.has(key))) {
+    addWarning(warnings, "extra-fields-ignored");
+  }
+  if (typeof value.title !== "string" || !value.title || text(value.title) !== value.title
+      || value.title.length > 200 || !["film", "series"].includes(value.mediaType)
+      || !Number.isInteger(value.releaseYear) || value.releaseYear < 1888
+      || value.releaseYear > new Date().getUTCFullYear() + 10) {
+    addWarning(warnings, "item-dropped");
+    return null;
+  }
+  if (!plain(value.evidence)) {
+    addWarning(warnings, "item-dropped");
+    return null;
+  }
+  if (Object.keys(value.evidence).some((key) => ![
+    "url", "publishedOn", "positiveRecommendation",
+  ].includes(key))) addWarning(warnings, "extra-fields-ignored");
+  const evidenceUrl = directUrl(value.evidence.url);
+  if (!evidenceUrl || !resultUrls.has(value.evidence.url) || !citationUrls.has(value.evidence.url)
+      || typeof value.evidence.publishedOn !== "string"
+      || value.evidence.positiveRecommendation !== true) {
+    addWarning(warnings, "item-dropped");
+    return null;
+  }
+  const rawAttributes = plain(value.attributes) ? value.attributes : {};
+  if (!plain(value.attributes)) addWarning(warnings, "optional-fields-filled");
+  if (Object.keys(rawAttributes).some((key) => !["genres", "tones", "themes"].includes(key))) {
+    addWarning(warnings, "extra-fields-ignored");
+  }
+  return Object.freeze({
+    title: value.title,
+    mediaType: value.mediaType,
+    releaseYear: value.releaseYear,
+    externalIds: Object.freeze(normalizedExternalIds(value.externalIds, warnings)),
+    attributes: Object.freeze({
+      genres: Object.freeze(normalizedTextList(rawAttributes.genres, warnings)),
+      tones: Object.freeze(normalizedTextList(rawAttributes.tones, warnings)),
+      themes: Object.freeze(normalizedTextList(rawAttributes.themes, warnings)),
+    }),
+    evidence: Object.freeze({
+      url: value.evidence.url,
+      publishedOn: value.evidence.publishedOn,
+      positiveRecommendation: true,
+    }),
+  });
+}
+function normalizeProviderJson(parsedText, resultUrls, citationUrls, warnings) {
+  if (!plain(parsedText.value)) return [];
+  if (Object.keys(parsedText.value).some((key) => key !== "items")) {
+    addWarning(warnings, "extra-fields-ignored");
+  }
+  if (!Array.isArray(parsedText.value.items)) {
+    addWarning(warnings, "item-list-missing");
+    return [];
+  }
+  if (parsedText.value.items.length > ENTDECKEN_DAILY_MAX_ITEMS) {
+    addWarning(warnings, "item-list-truncated");
+  }
+  return parsedText.value.items.slice(0, ENTDECKEN_DAILY_MAX_ITEMS)
+    .map((item) => normalizeProviderItem(item, resultUrls, citationUrls, warnings))
+    .filter(Boolean);
+}
+function responsePresentation(parsedText, warnings, itemCount) {
+  const allWarnings = safeWarnings(warnings);
+  const responseMode = parsedText.mode === "degraded" || itemCount === 0
+    ? "degraded" : parsedText.mode === "partial" || allWarnings.length ? "partial" : "structured";
+  return Object.freeze({
+    responseMode,
+    displayText: responseMode === "degraded" ? ENTDECKEN_WEEKLY_DEGRADED_NOTICE
+      : responseMode === "partial" ? ENTDECKEN_WEEKLY_PARTIAL_NOTICE : null,
+    warnings: allWarnings,
+  });
 }
 
 export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedAt, queryContextInput) {
@@ -175,55 +316,68 @@ export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedA
   const queryContext = validateEntdeckenWeeklyQueryContext(queryContextInput);
   if (!queryContext) throw new EntdeckenDailyProviderError("provider-query-context-invalid");
   const usage = providerUsage(value);
-  if (!usage || usage.searchRequests !== 1) throw new EntdeckenDailyProviderError("provider-usage-invalid", usage);
-  if (value?.stop_reason === "pause_turn") throw new EntdeckenDailyProviderError("provider-stop-reason-invalid", usage);
-  if (value?.stop_reason !== "end_turn" || !Array.isArray(value?.content)) {
+  if (!usage || usage.searchRequests < 1
+      || usage.searchRequests > ENTDECKEN_DAILY_MAX_SEARCH_USES) {
+    throw new EntdeckenDailyProviderError("provider-usage-invalid", usage);
+  }
+  if (!Array.isArray(value?.content)) {
     throw new EntdeckenDailyProviderError("provider-stop-reason-invalid", usage);
   }
+  const warnings = new Set();
+  if (value?.stop_reason !== "end_turn") addWarning(warnings, "stop-reason-normalized");
   const uses = value.content.filter((block) => block?.type === "server_tool_use" && block?.name === "web_search");
   const results = value.content.filter((block) => block?.type === "web_search_tool_result");
-  if (uses.length !== 1 || results.length !== 1 || results[0].tool_use_id !== uses[0].id) {
-    throw new EntdeckenDailyProviderError("provider-tool-shape-invalid", usage);
+  if (uses.length !== usage.searchRequests || results.length !== usage.searchRequests) {
+    addWarning(warnings, "tool-blocks-normalized");
   }
-  if (plain(results[0].content) && results[0].content.type === "web_search_tool_result_error") {
-    throw new EntdeckenDailyProviderError("provider-tool-error", usage);
-  }
-  if (!Array.isArray(results[0].content) || results[0].content.length < 1
-      || results[0].content.length > ENTDECKEN_DAILY_MAX_SEARCH_RESULTS) {
-    throw new EntdeckenDailyProviderError("provider-result-count-invalid", usage);
-  }
+  const useIds = new Set(uses.slice(0, ENTDECKEN_DAILY_MAX_SEARCH_USES)
+    .map((entry) => entry.id).filter((entry) => typeof entry === "string" && entry));
   const resultUrls = new Set();
-  for (const item of results[0].content) {
-    const parsed = item?.type === "web_search_result" ? directUrl(item.url) : null;
-    if (!parsed || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
-      throw new EntdeckenDailyProviderError("provider-domain-invalid", usage);
+  for (const result of results) {
+    if (plain(result.content) && result.content.type === "web_search_tool_result_error") {
+      addWarning(warnings, "search-result-dropped");
+      continue;
     }
-    resultUrls.add(item.url);
+    if (!Array.isArray(result.content) || !useIds.has(result.tool_use_id)) {
+      addWarning(warnings, "tool-blocks-normalized");
+      continue;
+    }
+    for (const item of result.content) {
+      const parsed = item?.type === "web_search_result" ? directUrl(item.url) : null;
+      if (!parsed || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
+        addWarning(warnings, "search-result-dropped");
+        continue;
+      }
+      if (resultUrls.size < ENTDECKEN_DAILY_MAX_SEARCH_RESULTS) resultUrls.add(item.url);
+      else addWarning(warnings, "search-results-truncated");
+    }
   }
   const citationUrls = new Set();
   for (const block of value.content.filter((item) => item?.type === "text")) {
     if (block.citations === undefined) continue;
-    if (!Array.isArray(block.citations)) throw new EntdeckenDailyProviderError("provider-citation-invalid", usage);
+    if (!Array.isArray(block.citations)) {
+      addWarning(warnings, "citation-dropped");
+      continue;
+    }
     for (const citation of block.citations) {
       const parsed = citation?.type === "web_search_result_location" ? directUrl(citation.url) : null;
       if (!parsed || !resultUrls.has(citation.url)
           || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
-        throw new EntdeckenDailyProviderError("provider-citation-invalid", usage);
+        addWarning(warnings, "citation-dropped");
+        continue;
       }
       citationUrls.add(citation.url);
     }
   }
-  const parsed = parseProviderJson(responseTextBlock(value.content));
-  for (const url of evidenceUrls(parsed)) {
-    if (!resultUrls.has(url) || !citationUrls.has(url)) {
-      throw new EntdeckenDailyProviderError("provider-citation-invalid", usage);
-    }
-  }
+  const parsedText = parseProviderText(value.content, warnings);
+  const items = normalizeProviderJson(parsedText, resultUrls, citationUrls, warnings);
+  const presentation = responsePresentation(parsedText, warnings, items.length);
   return Object.freeze({
     envelope: Object.freeze({
-      searchResultCount: results[0].content.length,
+      searchResultCount: resultUrls.size,
       queryContext,
-      response: Object.freeze({ checkedAt, items: parsed.items }),
+      ...presentation,
+      response: Object.freeze({ checkedAt, items: Object.freeze(items) }),
     }),
     usage,
   });
@@ -243,7 +397,7 @@ async function responseJson(response, onRawResponse = () => {}) {
  * @param {{
  *   apiKey?: string,
  *   loadSetup?: (() => Promise<unknown>) | null,
- *   reserveCost?: ((input: {operationId: string, reservationUsdCent: number, searchRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
+ *   reserveCost?: ((input: {operationId: string, reservationUsdCent: number, providerRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
  *   settleCost?: ((input: Record<string, unknown>) => Promise<void>) | null,
  *   fetchImpl?: typeof fetch,
  *   now?: () => string,
@@ -274,7 +428,7 @@ export function createAnthropicEntdeckenDailyAdapter({
     const body = buildAnthropicEntdeckenDailyBody(setup, queryContext);
     const reservationUsdCent = estimateEntdeckenDailyReservation(body, setup);
     const reservation = await reserveCost({
-      operationId: operationId(), reservationUsdCent, searchRequests: 1,
+      operationId: operationId(), reservationUsdCent, providerRequests: 1,
     });
     const logId = Number(reservation?.logId);
     if (reservation?.ok !== true) throw new EntdeckenDailyProviderError("cost-gate-rejected");

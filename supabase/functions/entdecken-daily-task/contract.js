@@ -6,12 +6,11 @@ export const ENTDECKEN_WEEKLY_FEED_FORMAT = 4;
 export const ENTDECKEN_WEEKLY_FEED_ID = "websearch:weekly-positive-at";
 export const ENTDECKEN_WEEKLY_SOURCE_ID = "websearch:weekly-positive";
 export const ENTDECKEN_WEEKLY_MAX_ITEMS = 20;
-export const ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS = 10;
+export const ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS = 20;
 export const ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS = 35;
-export const ENTDECKEN_WEEKLY_SOURCE_DOMAINS = Object.freeze([
-  "derstandard.at",
-  "film.at",
-]);
+export const ENTDECKEN_WEEKLY_MAX_SOURCES = 10;
+export const ENTDECKEN_WEEKLY_PARTIAL_NOTICE = "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel.";
+export const ENTDECKEN_WEEKLY_DEGRADED_NOTICE = "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar.";
 
 /* Kompatibilitaetsnamen fuer bestehende lokale Runner und Live-Gates. */
 export const ENTDECKEN_DAILY_FEED_FORMAT = ENTDECKEN_WEEKLY_FEED_FORMAT;
@@ -20,15 +19,18 @@ export const ENTDECKEN_DAILY_SOURCE_ID = ENTDECKEN_WEEKLY_SOURCE_ID;
 export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_MAX_ITEMS;
 export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS;
 export const ENTDECKEN_DAILY_VALID_DAYS = 7;
-export const ENTDECKEN_DAILY_SOURCE_DOMAINS = ENTDECKEN_WEEKLY_SOURCE_DOMAINS;
 
 const LEGACY_FEED = Object.freeze({
   format: 3,
   feedId: "websearch:daily-tips-at",
   sourceId: "websearch:daily-tips",
 });
+const LEGACY_SOURCE_DOMAINS = Object.freeze(["derstandard.at", "film.at"]);
 const MEDIA_TYPES = new Set(["film", "series"]);
 const EXTERNAL_ID_NAMESPACES = Object.freeze(["imdb", "tmdb", "watchmode"]);
+const RESPONSE_MODES = new Set(["structured", "partial", "degraded"]);
+const WARNING_FORM = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_WARNINGS = 8;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -96,12 +98,56 @@ function hash64(value) {
 function daysBetween(earlier, later) {
   return Math.floor((Date.parse(`${later}T00:00:00.000Z`) - Date.parse(`${earlier}T00:00:00.000Z`)) / 86_400_000);
 }
-function result(status, errors = [], feed = null) {
+function safePresentation(value) {
+  const keys = ["responseMode", "displayText", "warnings"];
+  const count = keys.filter((key) => Object.prototype.hasOwnProperty.call(value || {}, key)).length;
+  if (count === 0) {
+    return Object.freeze({ responseMode: "structured", displayText: null, warnings: Object.freeze([]) });
+  }
+  if (count !== keys.length || !RESPONSE_MODES.has(value.responseMode)
+      || (value.displayText !== null
+        && (typeof value.displayText !== "string" || text(value.displayText) !== value.displayText
+          || !value.displayText || value.displayText.length > 320
+          || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value.displayText)))
+      || !Array.isArray(value.warnings) || value.warnings.length > MAX_WARNINGS
+      || value.warnings.some((warning) => (
+        typeof warning !== "string" || warning.length > 64 || !WARNING_FORM.test(warning)
+      ))) return null;
+  if (value.responseMode === "structured"
+      && (value.displayText !== null || value.warnings.length !== 0)) return null;
+  if (value.responseMode !== "structured" && value.displayText === null) return null;
+  return freezeDeep({
+    responseMode: value.responseMode,
+    displayText: value.displayText,
+    warnings: [...new Set(value.warnings)],
+  });
+}
+function mergePresentation(base, warnings = [], degraded = false) {
+  const mergedWarnings = [...new Set([...(base?.warnings || []), ...warnings])].slice(0, MAX_WARNINGS);
+  if (degraded || base?.responseMode === "degraded") {
+    return freezeDeep({
+      responseMode: "degraded",
+      displayText: ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
+      warnings: mergedWarnings,
+    });
+  }
+  if (base?.responseMode === "partial" || mergedWarnings.length) {
+    return freezeDeep({
+      responseMode: "partial",
+      displayText: ENTDECKEN_WEEKLY_PARTIAL_NOTICE,
+      warnings: mergedWarnings,
+    });
+  }
+  return freezeDeep({ responseMode: "structured", displayText: null, warnings: [] });
+}
+function result(status, errors = [], feed = null, presentation = null) {
+  const safe = presentation || mergePresentation(null, ["response-invalid"], true);
   return Object.freeze({
     ok: status === "confirmed",
     status,
     errors: Object.freeze([...new Set(errors)]),
     feed,
+    ...safe,
   });
 }
 
@@ -125,7 +171,7 @@ function isoWeekData(day) {
 }
 
 function weeklyQuery(year, calendarWeek) {
-  return `Top 50 Film- und Serien-Charts Österreich ${year} KW ${String(calendarWeek).padStart(2, "0")}`;
+  return `Aktuelle positiv bewertete Film- und Serien-Charts und Tipps Österreich ${year} KW ${String(calendarWeek).padStart(2, "0")}`;
 }
 
 export function createEntdeckenWeeklyQueryContext(day, claimedIsoWeek = null) {
@@ -170,7 +216,7 @@ function normalizeExternalIds(value) {
 }
 
 export function validateEntdeckenSourceRegistry(value) {
-  if (!Array.isArray(value) || value.length !== ENTDECKEN_WEEKLY_SOURCE_DOMAINS.length) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > ENTDECKEN_WEEKLY_MAX_SOURCES) {
     return Object.freeze({ ok: false, errors: Object.freeze(["source-registry-size-invalid"]), value: null });
   }
   const errors = [];
@@ -198,9 +244,6 @@ export function validateEntdeckenSourceRegistry(value) {
     if (domains.has(source.domain)) errors.push(`${prefix}-domain-duplicate`);
     if (ids.has(source.sourceId)) errors.push(`${prefix}-id-duplicate`);
     domains.add(source.domain); ids.add(source.sourceId);
-  }
-  if (JSON.stringify([...domains].sort()) !== JSON.stringify(ENTDECKEN_WEEKLY_SOURCE_DOMAINS)) {
-    errors.push("source-registry-domains-invalid");
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
@@ -279,44 +322,64 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   const week = isoWeekData(retrievedOn);
   const expectedQuery = createEntdeckenWeeklyQueryContext(retrievedOn, claimedIsoWeek);
   if (!week || !expectedQuery) return result("invalid_response", ["feed-week-invalid"]);
-  if (!exactKeys(envelope, ["searchResultCount", "queryContext", "response"])) {
+  if (!exactKeys(envelope, ["searchResultCount", "queryContext", "response"], [
+    "responseMode", "displayText", "warnings",
+  ])) {
     return result("invalid_response", ["adapter-envelope-invalid"]);
   }
+  const presentation = safePresentation(envelope);
+  if (!presentation) return result("invalid_response", ["adapter-presentation-invalid"]);
   const queryContext = validateEntdeckenWeeklyQueryContext(envelope.queryContext);
   if (!queryContext || JSON.stringify(queryContext) !== JSON.stringify(expectedQuery)) {
-    return result("invalid_response", ["adapter-query-context-invalid"]);
+    return result("invalid_response", ["adapter-query-context-invalid"], null,
+      mergePresentation(presentation, ["query-context-invalid"], true));
   }
-  if (!Number.isInteger(envelope.searchResultCount) || envelope.searchResultCount < 1
+  if (!Number.isInteger(envelope.searchResultCount) || envelope.searchResultCount < 0
       || envelope.searchResultCount > ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS) {
-    return result("invalid_response", ["adapter-result-count-invalid"]);
+    return result("invalid_response", ["adapter-result-count-invalid"], null,
+      mergePresentation(presentation, ["result-count-invalid"], true));
   }
   if (!exactKeys(envelope.response, ["checkedAt", "items"]) || !validInstant(envelope.response.checkedAt)) {
-    return result("invalid_response", ["provider-response-shape-invalid"]);
+    return result("invalid_response", ["provider-response-shape-invalid"], null,
+      mergePresentation(presentation, ["response-shape-invalid"], true));
   }
-  if (!Array.isArray(envelope.response.items) || envelope.response.items.length < 1
-      || envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) {
-    return result("insufficient_evidence", ["provider-items-insufficient"]);
-  }
-  const shapeErrors = [];
-  envelope.response.items.forEach((item, index) => validateProviderItem(item, index, shapeErrors, retrievedOn));
-  if (shapeErrors.length) return result("invalid_response", shapeErrors);
-  const uniqueUrls = new Set(envelope.response.items.map((item) => item.evidence.url));
-  if (uniqueUrls.size > envelope.searchResultCount) {
-    return result("invalid_response", ["opinion-url-count-exceeds-search-results"]);
+  if (!Array.isArray(envelope.response.items)) {
+    return result("insufficient_evidence", ["provider-items-insufficient"], null,
+      mergePresentation(presentation, ["items-missing"], true));
   }
 
   const records = new Map();
-  const evidenceErrors = [];
-  envelope.response.items.forEach((item, index) => {
+  const itemErrors = [];
+  const warnings = [];
+  const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_MAX_ITEMS);
+  if (envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) warnings.push("items-truncated");
+  rawItems.forEach((item, index) => {
+    const shapeErrors = [];
+    validateProviderItem(item, index, shapeErrors, retrievedOn);
+    if (shapeErrors.length) {
+      itemErrors.push(...shapeErrors);
+      warnings.push("item-dropped");
+      return;
+    }
     const source = sourceForUrl(item.evidence.url, sources.value);
-    if (!source) { evidenceErrors.push(`provider-item-${index}-source-unavailable`); return; }
+    if (!source) {
+      itemErrors.push(`provider-item-${index}-source-unavailable`);
+      warnings.push("item-dropped");
+      return;
+    }
     const next = canonicalRecord(item, index + 1, retrievedOn);
     const previous = records.get(next.key);
     if (!previous) { records.set(next.key, next); return; }
+    const idConflict = Object.entries(next.externalIds).some(([namespace, id]) => (
+      previous.externalIds[namespace] && previous.externalIds[namespace] !== id
+    ));
+    if (idConflict) {
+      itemErrors.push(`provider-item-${index}-external-id-conflict`);
+      warnings.push("item-dropped");
+      return;
+    }
     for (const [namespace, id] of Object.entries(next.externalIds)) {
-      if (previous.externalIds[namespace] && previous.externalIds[namespace] !== id) {
-        evidenceErrors.push(`provider-item-${index}-external-id-conflict`);
-      } else previous.externalIds[namespace] = id;
+      previous.externalIds[namespace] = id;
     }
     if (!previous.evidence.some((evidence) => evidence.url === next.evidence[0].url)
         && previous.evidence.length < 3) previous.evidence.push(next.evidence[0]);
@@ -324,8 +387,14 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
       previous.attributes[key] = [...new Set([...previous.attributes[key], ...next.attributes[key]])].slice(0, 8);
     }
   });
-  if (evidenceErrors.length || !records.size) {
-    return result("insufficient_evidence", evidenceErrors.length ? evidenceErrors : ["records-empty"]);
+  const uniqueUrls = new Set([...records.values()].flatMap((record) => record.evidence.map((entry) => entry.url)));
+  if (uniqueUrls.size > envelope.searchResultCount) {
+    return result("invalid_response", ["opinion-url-count-exceeds-search-results"], null,
+      mergePresentation(presentation, ["result-count-invalid"], true));
+  }
+  if (!records.size) {
+    return result("insufficient_evidence", itemErrors.length ? itemErrors : ["records-empty"], null,
+      mergePresentation(presentation, ["records-empty"], true));
   }
   const items = [...records.values()]
     .sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"))
@@ -340,7 +409,7 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     validUntil: week.validUntil,
     items,
   });
-  return result("confirmed", [], feed);
+  return result("confirmed", itemErrors, feed, mergePresentation(presentation, warnings));
 }
 
 function validateEvidence(evidence, feed, evidenceUrls, weekly) {
@@ -348,9 +417,9 @@ function validateEvidence(evidence, feed, evidenceUrls, weekly) {
   return exactKeys(evidence, ["domain", "url", "publishedOn", "retrievedOn", "positiveRecommendation"])
     && validDomain(evidence.domain) && parsed
     && parsed.hostname.toLowerCase() === evidence.domain
-    && ENTDECKEN_WEEKLY_SOURCE_DOMAINS.some((domain) => (
+    && (weekly || LEGACY_SOURCE_DOMAINS.some((domain) => (
       evidence.domain === domain || evidence.domain.endsWith(`.${domain}`)
-    ))
+    )))
     && validDay(evidence.publishedOn)
     && daysBetween(evidence.publishedOn, feed.refreshedOn) >= 0
     && (!weekly || daysBetween(evidence.publishedOn, feed.refreshedOn) <= ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS)

@@ -267,13 +267,16 @@ export function createEntdeckenDailyHandler({
           sourceRegistry: sources,
         };
       },
-      async reserveCost({ operationId, reservationUsdCent, searchRequests }: {
-        operationId: string; reservationUsdCent: number; searchRequests: number;
+      async reserveCost({ operationId, reservationUsdCent, providerRequests }: {
+        operationId: string; reservationUsdCent: number; providerRequests: number;
       }) {
         const { data, error } = await admin.rpc("kd_entdecken_daily_auftrag_starten", {
           p_operation_id: operationId,
           p_reservierung: reservationUsdCent,
-          p_search_requests: searchRequests,
+          /* Die bestehende RPC-Spalte zaehlt hier den genau einen
+             Providerrequest. Dessen bis zu zwei Websuchen sind bereits in
+             der Kostenreservierung enthalten und werden danach gemessen. */
+          p_search_requests: providerRequests,
           p_fence_token: claimContext?.fenceToken,
         });
         if (error) throw error;
@@ -312,6 +315,9 @@ export function createEntdeckenDailyHandler({
       writes: Number.isInteger(result.writes) ? result.writes : 0,
       providerRequests: Number.isInteger(telemetry?.providerRequests) ? telemetry.providerRequests : 0,
       searchRequests: Number.isInteger(telemetry?.searchRequests) ? telemetry.searchRequests : 0,
+      responseMode: result.responseMode,
+      displayText: result.displayText,
+      warnings: result.warnings,
       ...(providerDiagnostic.allowed
         ? providerDiagnosticField(providerRawResponse)
         : {}),

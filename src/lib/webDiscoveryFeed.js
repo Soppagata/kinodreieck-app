@@ -134,8 +134,11 @@ function validateEvidence(value, feed, errors, prefix) {
   if (!validDomain(value.domain) || !url || new URL(url).hostname.toLowerCase() !== value.domain) {
     errors.push(`${prefix}-source-invalid`);
   }
-  if (!(value.domain === "derstandard.at" || value.domain.endsWith(".derstandard.at")
-      || value.domain === "film.at" || value.domain.endsWith(".film.at"))) errors.push(`${prefix}-domain-invalid`);
+  if (feed.format === LEGACY_FEED.format
+      && !(value.domain === "derstandard.at" || value.domain.endsWith(".derstandard.at")
+        || value.domain === "film.at" || value.domain.endsWith(".film.at"))) {
+    errors.push(`${prefix}-domain-invalid`);
+  }
   const publishedOn = calendarDay(value.publishedOn);
   if (!publishedOn || publishedOn > feed.refreshedOn) errors.push(`${prefix}-published-on-invalid`);
   if (value.retrievedOn !== feed.refreshedOn) errors.push(`${prefix}-retrieved-on-invalid`);

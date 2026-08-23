@@ -1,5 +1,6 @@
 import {
   createEntdeckenWeeklyQueryContext,
+  ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
   evaluateEntdeckenDailyResponse,
   validateEntdeckenDailyFeed,
   validateEntdeckenSourceRegistry,
@@ -22,6 +23,33 @@ function weekStatus(feed, today, isoWeek) {
 function frozen(status, feed, extra = {}) {
   return Object.freeze({ status, feed, writes: 0, ...extra });
 }
+function structuredPresentation() {
+  return Object.freeze({ responseMode: "structured", displayText: null, warnings: Object.freeze([]) });
+}
+function degradedPresentation(warning) {
+  return Object.freeze({
+    responseMode: "degraded",
+    displayText: ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
+    warnings: Object.freeze(warning ? [warning] : []),
+  });
+}
+function evaluatedPresentation(value) {
+  if (!value || !["structured", "partial", "degraded"].includes(value.responseMode)
+      || (value.displayText !== null
+        && (typeof value.displayText !== "string" || !value.displayText.trim()
+          || value.displayText !== value.displayText.trim() || value.displayText.length > 320
+          || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(value.displayText)))
+      || !Array.isArray(value.warnings) || value.warnings.length > 8
+      || value.warnings.some((warning) => (
+        typeof warning !== "string" || warning.length > 64
+        || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(warning)
+      ))) return degradedPresentation("response-invalid");
+  return Object.freeze({
+    responseMode: value.responseMode,
+    displayText: value.displayText,
+    warnings: Object.freeze([...value.warnings]),
+  });
+}
 
 async function failSafely(repository, code, fenceToken) {
   try {
@@ -39,23 +67,29 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       || typeof repository.saveFeed !== "function"
       || typeof repository.markFailure !== "function"
       || !adapter || typeof adapter.search !== "function") {
-    return frozen("empty", null, { reason: "setup-invalid" });
+    return frozen("empty", null, { reason: "setup-invalid", ...degradedPresentation("setup-invalid") });
   }
   let context;
   try { context = await repository.claimRefresh(); }
-  catch { return frozen("empty", null, { reason: "storage_error" }); }
+  catch {
+    return frozen("empty", null, { reason: "storage_error", ...degradedPresentation("storage-error") });
+  }
   const queryContext = createEntdeckenWeeklyQueryContext(context?.today, context?.isoWeek);
   if (!context || context.feedEnabled !== true || !validDay(context.today) || !queryContext) {
-    return frozen("disabled", null);
+    return frozen("disabled", null, structuredPresentation());
   }
   const checkedCached = validateEntdeckenDailyFeed(context.feed);
   /* Auch ein abgelaufener letzter Erfolg bleibt bei einem Wochenfehler sichtbar.
      `stale` ist dabei eine ehrliche Zustandsaussage, keine neue Gueltigkeit. */
   const cached = checkedCached.ok ? checkedCached.value : null;
-  if (context.refresh !== true) return frozen(weekStatus(cached, context.today, context.isoWeek), cached);
+  if (context.refresh !== true) {
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, structuredPresentation());
+  }
   const fenceToken = Number(context.fenceToken);
   if (!Number.isSafeInteger(fenceToken) || fenceToken <= 0) {
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "storage_error" });
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "storage_error", ...degradedPresentation("storage-error"),
+    });
   }
 
   let sources;
@@ -63,14 +97,18 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   catch { sources = { ok: false }; }
   if (!sources.ok) {
     await failSafely(repository, "source_registry_unavailable", fenceToken);
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "source_registry_unavailable" });
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "source_registry_unavailable", ...degradedPresentation("sources-unavailable"),
+    });
   }
 
   let envelope;
   try { envelope = await adapter.search(queryContext); }
   catch {
     await failSafely(repository, "provider_error", fenceToken);
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "provider_error" });
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "provider_error", ...degradedPresentation("provider-error"),
+    });
   }
   const evaluated = evaluateEntdeckenDailyResponse(envelope, sources.value, {
     retrievedOn: context.today,
@@ -78,12 +116,16 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   });
   if (!evaluated.ok) {
     await failSafely(repository, "invalid_response", fenceToken);
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: evaluated.status });
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: evaluated.status, ...evaluatedPresentation(evaluated),
+    });
   }
   try { await repository.saveFeed(evaluated.feed, { fenceToken }); }
   catch {
     await failSafely(repository, "storage_error", fenceToken);
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, { reason: "storage_error" });
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "storage_error", ...degradedPresentation("storage-error"),
+    });
   }
-  return frozen("fresh", evaluated.feed, { writes: 1 });
+  return frozen("fresh", evaluated.feed, { writes: 1, ...evaluatedPresentation(evaluated) });
 }

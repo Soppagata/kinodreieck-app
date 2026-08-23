@@ -1,6 +1,7 @@
 /* Entdecken-Wochenfeed: schmaler Mock-Nutzerweg ohne Netz, DB oder Anbieter. */
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -63,6 +64,17 @@ const weeklyFeed = {
 
 check("ISO-Wochenfeed akzeptiert nur die kanonische Woche und neutrale Merkmale", () => {
   assert.equal(validateWebDiscoveryFeed(weeklyFeed).ok, true);
+  assert.equal(validateWebDiscoveryFeed({
+    ...weeklyFeed,
+    items: [{
+      ...weeklyFeed.items[0],
+      evidence: [{
+        ...weeklyFeed.items[0].evidence[0],
+        domain: "tv.orf.at",
+        url: "https://tv.orf.at/stories/wochentipp-1",
+      }],
+    }],
+  }).ok, true);
   assert.equal(validateWebDiscoveryFeed({ ...weeklyFeed, isoWeek: "2026-W33" }).ok, false);
   assert.equal(validateWebDiscoveryFeed({
     ...weeklyFeed,
@@ -211,12 +223,11 @@ async function loadEsbuild() {
 }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
-const cacheDir = path.join(rootDir, ".tmp");
 let outputDir = null;
 let dom = null;
 try {
-  fs.mkdirSync(cacheDir, { recursive: true });
-  outputDir = fs.mkdtempSync(path.join(cacheDir, "entdecken-weekly-test-"));
+  outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "kinodreieck-entdecken-weekly-"));
+  fs.symlinkSync(fs.realpathSync(path.join(rootDir, "node_modules")), path.join(outputDir, "node_modules"), "dir");
   const output = path.join(outputDir, "bundle.mjs");
   const esbuild = await loadEsbuild();
   await esbuild.build({
@@ -282,6 +293,10 @@ try {
       streamingDiscover: selectionInput.streamingEntdecken,
       selectedServices: selectionInput.selectedServices,
       webDiscoveryFeed: weeklyFeed,
+      webDiscoveryStatus: {
+        status: "fresh", responseMode: "degraded",
+        displayText: "Dieser freie Text darf nicht direkt angezeigt werden.", warnings: [],
+      },
       calendarDay: "2026-08-22",
       onObserveToggle() {}, onRadarChange() {}, onRadarPreview() {}, onShareChange() {},
     }));
@@ -297,6 +312,9 @@ try {
     assert.equal(furtherSection?.querySelectorAll(".kd-entdecken-neutral").length, 1);
     assert.match(furtherSection?.textContent || "", /The Ninth Jedi/);
     assert.match(furtherSection?.textContent || "", /KW 34\/2026/);
+    assert.match(container.textContent, /bisherige Feed bleibt sichtbar/);
+    assert.doesNotMatch(container.textContent, /freie Text darf nicht direkt/);
+    assert.ok([...container.querySelectorAll("button")].some((button) => button.textContent === "Beobachten"));
     assert.ok([...furtherSection.querySelectorAll('a[href^="https://"]')]
       .every((link) => /derstandard\.at|film\.at/.test(new URL(link.href).hostname)));
     assert.doesNotMatch(container.textContent, /Nur im lokalen Katalog/);

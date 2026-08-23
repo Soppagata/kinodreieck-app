@@ -18,6 +18,7 @@ import { rankRecommendations } from "./recommendationRanking.js";
 import {
   discoveryExternalIdsFromCatalog,
   matchWebDiscoveryFeed,
+  validateWebDiscoveryFeed,
 } from "./webDiscoveryFeed.js";
 
 const SERIEN_TYPEN = new Set(["serie", "series", "tv", "tv_series"]);
@@ -310,6 +311,55 @@ export function webDiscoveryCandidates({
   )));
 }
 
+function discoveryEvidence(record) {
+  return Object.freeze(record.evidence.map((entry) => Object.freeze({
+    domain: entry.domain,
+    url: entry.url,
+    publishedOn: entry.publishedOn,
+    retrievedOn: entry.retrievedOn,
+    positiveRecommendation: entry.positiveRecommendation,
+  })));
+}
+
+/* Alle weiteren Karten bleiben eine direkte Projektion des validierten
+   Wochenfeeds. Ein sicherer lokaler Match reichert die Karte mit
+   Verfuegbarkeit und bestehenden Aktionen an; unklare Matches bleiben reine
+   Webtipps und loesen keinerlei Pin-/Persistenzaktion aus. */
+export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = [] } = {}) {
+  const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
+  if (!checked.ok) return Object.freeze([]);
+  return Object.freeze(matchWebDiscoveryFeed(checked.value, catalogCandidates).map((decision) => {
+    const { record } = decision;
+    const evidence = discoveryEvidence(record);
+    if (decision.status !== "matched") {
+      return Object.freeze({
+        targetId: record.recordId,
+        discoveryRecordId: record.recordId,
+        title: record.title,
+        year: record.releaseYear,
+        type: record.mediaType,
+        services: Object.freeze([]),
+        sourceRank: record.rank,
+        externalEvidence: evidence,
+        matchStatus: decision.status,
+      });
+    }
+    const candidate = decision.candidate;
+    return Object.freeze({
+      targetId: candidate.targetId,
+      discoveryRecordId: record.recordId,
+      watchmodeId: candidate.watchmodeId,
+      title: candidate.title,
+      year: candidate.year,
+      type: candidate.type,
+      services: candidate.services,
+      sourceRank: record.rank,
+      externalEvidence: evidence,
+      matchStatus: "matched",
+    });
+  }));
+}
+
 function stableHash(value) {
   let hash = 2166136261;
   for (const char of String(value)) {
@@ -364,7 +414,15 @@ export function createEntdeckenRecommendations({
   });
   const personal = selectDailyRecommendations(ranked, { dailyVariety, selectionDay });
   const personalIds = new Set(personal.map((entry) => entry.targetId));
-  const remaining = external.filter((candidate) => !personalIds.has(candidate.targetId));
+  const seenFurther = new Set();
+  const remaining = webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates }).filter((candidate) => {
+    if (candidate.matchStatus === "matched" && personalIds.has(candidate.targetId)) return false;
+    const identity = candidate.matchStatus === "matched" ? candidate.targetId
+      : `${normalized(candidate.title)}|${candidate.year}|${normalized(candidate.type)}`;
+    if (seenFurther.has(identity)) return false;
+    seenFurther.add(identity);
+    return true;
+  });
   /* Insgesamt bleiben hoechstens sieben eindeutige Webtreffer sichtbar.
      Fuer mich bekommt nur lokal begruendete Passungen; alle uebrigen Plaetze
      folgen ohne erfundene Fueller der Quellenreihenfolge. */
@@ -379,6 +437,8 @@ export function createEntdeckenRecommendations({
       services: candidate.services,
       sourceRank: candidate.sourceRank,
       externalEvidence: candidate.externalEvidence,
+      matchStatus: candidate.matchStatus,
+      discoveryRecordId: candidate.discoveryRecordId,
     }));
   return Object.freeze({ personal, further: Object.freeze(further) });
 }

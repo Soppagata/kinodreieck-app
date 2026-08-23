@@ -212,7 +212,7 @@ export default function App() {
   const [expandedId, setExpandedId] = useState(null);
   const [bootDone, setBootDone] = useState(false);
   /* Der Wochenfeed ist global/accountlos; Profil, Seen-Stand und Dienste bleiben im lokalen Matching. */
-  const webDiscoveryFeed = useWebDiscoveryFeed(bootDone && tab === "blog");
+  const webDiscoveryState = useWebDiscoveryFeed(bootDone && tab === "blog");
   const [zeitgrenze, setZeitgrenze] = useState("14:00"); // Filter für "Läuft auch" (einstellbar, persistiert)
   const [zeigeAlles, setZeigeAlles] = useState(false);   // "Ganzes Tagesprogramm zeigen" (Session-flüchtig)
   /* Der Storage-Boot gehört ausschließlich zum ersten Render. Gast/Konto-
@@ -2069,7 +2069,7 @@ export default function App() {
         {tab === "blog" && (
           <EntdeckenTab
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
-            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryFeed}
+            master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
             dailyVariety={einstellungen.entdeckenTaeglich === true}
             accountMode={radarAuthority === "account-cache"} radarPilotClientEnabled={radarPilotClientEnabled}
             radarPilotActive={radarPilotActive} radarPilotEvents={radarPilotEvents} radarReview={radarReview}

@@ -20,6 +20,7 @@ import {
 } from "./supabase/functions/entdecken-daily-task/anthropicAdapter.js";
 import { runEntdeckenDailyRefresh } from "./supabase/functions/entdecken-daily-task/runner.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
+import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
 
 let checks = 0;
@@ -48,7 +49,14 @@ const filmAtSource = Object.freeze({
   publisherFamily: "film.at / k-digital Medien",
   termsUrl: "https://www.film.at/kontakt-impressum-redaktion-filmat/401835922",
 });
-const sources = Object.freeze([standardSource, filmAtSource]);
+const orfSource = Object.freeze({
+  ...standardSource,
+  sourceId: "editorial:orf",
+  domain: "orf.at",
+  publisherFamily: "ORF",
+  termsUrl: "https://orf.at/stories/impressum/",
+});
+const sources = Object.freeze([standardSource, filmAtSource, orfSource]);
 const queryContext = createEntdeckenWeeklyQueryContext("2026-08-20", "2026-W34");
 
 function providerItem(index = 1) {
@@ -124,30 +132,37 @@ function anthropicResponse(items = [providerItem()]) {
   };
 }
 
+let endToEndFeed = null;
+
 await check("Query-Kontext bindet ISO-Jahr und Kalenderwoche auch am Jahreswechsel", () => {
   assert.deepEqual(queryContext, {
     year: 2026,
     calendarWeek: 34,
     isoWeek: "2026-W34",
-    query: "Top 50 Film- und Serien-Charts Österreich 2026 KW 34",
+    query: "Aktuelle positiv bewertete Film- und Serien-Charts und Tipps Österreich 2026 KW 34",
   });
   assert.equal(createEntdeckenWeeklyQueryContext("2027-01-01")?.isoWeek, "2026-W53");
   assert.equal(createEntdeckenWeeklyQueryContext("2026-08-20", "2026-W33"), null);
 });
 
-await check("Quellenregister ist auf genau zwei freigegebene Redaktionen begrenzt", () => {
+await check("Quellenregister akzeptiert eine kleine freigegebene Redaktionsliste ohne Zwei-Domain-Zwang", () => {
   assert.equal(validateEntdeckenSourceRegistry(sources).ok, true);
-  assert.equal(validateEntdeckenSourceRegistry([standardSource]).ok, false);
+  assert.equal(validateEntdeckenSourceRegistry([standardSource]).ok, true);
+  assert.equal(validateEntdeckenSourceRegistry(Array.from({ length: 11 }, (_, index) => ({
+    ...standardSource,
+    sourceId: `editorial:quelle_${index}`,
+    domain: `quelle-${index}.example`,
+  }))).ok, false);
   assert.equal(validateEntdeckenSourceRegistry([{ ...standardSource, active: false }, filmAtSource]).ok, false);
 });
 
-await check("Anthropic-Body enthaelt genau eine allgemeine AT-Wochensuche und keine lokalen Daten", () => {
+await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lokalen Daten", () => {
   const body = buildAnthropicEntdeckenDailyBody(providerSetup, queryContext);
   const input = JSON.parse(body.messages[0].content);
   assert.deepEqual(input, { queryContext, region: "AT", language: "de", maxItems: 20 });
   assert.deepEqual(body.tools, [{
-    type: "web_search_20250305", name: "web_search", max_uses: 1,
-    allowed_domains: ["derstandard.at", "film.at"], allowed_callers: ["direct"],
+    type: "web_search_20250305", name: "web_search", max_uses: 2,
+    allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
   }]);
   assert.doesNotMatch(JSON.stringify(input), /account|profile|seen|gesehen|dienst|service|mediathek|catalog|watchlist|radar/i);
 });
@@ -165,7 +180,7 @@ await check("Zeit-, Token-, Kosten- und Antwortgrenzen sind hart und nicht erwei
   }), /setup-invalid/);
 });
 
-await check("Bestehender Anthropic-Transport akzeptiert nur einen Suchrequest mit direkten Zitationen", () => {
+await check("Anthropic-Transport behält sichere Items und begrenzt Suchrequests", () => {
   const response = anthropicResponse();
   const parsed = parseAnthropicEntdeckenDailyResponse(
     response, providerSetup, "2026-08-20T09:00:00.000Z", queryContext,
@@ -174,22 +189,25 @@ await check("Bestehender Anthropic-Transport akzeptiert nur einen Suchrequest mi
   assert.deepEqual(parsed.envelope.queryContext, queryContext);
   assert.throws(() => parseAnthropicEntdeckenDailyResponse({
     ...response,
-    usage: { ...response.usage, server_tool_use: { web_search_requests: 2 } },
+    usage: { ...response.usage, server_tool_use: { web_search_requests: 3 } },
   }, providerSetup, "2026-08-20T09:00:00.000Z", queryContext), /provider-usage-invalid/);
-  assert.throws(() => parseAnthropicEntdeckenDailyResponse({
+  const withoutCitation = parseAnthropicEntdeckenDailyResponse({
     ...response,
     content: response.content.map((block) => block.type === "text" ? { ...block, citations: [] } : block),
-  }, providerSetup, "2026-08-20T09:00:00.000Z", queryContext), /provider-citation-invalid/);
+  }, providerSetup, "2026-08-20T09:00:00.000Z", queryContext);
+  assert.equal(withoutCitation.envelope.responseMode, "degraded");
+  assert.deepEqual(withoutCitation.envelope.response.items, []);
 });
 
 await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach verbraucht", async () => {
   let providerRequests = 0;
   let reservations = 0;
   let settlements = 0;
+  let reservationInput = null;
   const adapter = createAnthropicEntdeckenDailyAdapter({
     apiKey: "mock-key",
     loadSetup: async () => providerSetup,
-    reserveCost: async () => { reservations += 1; return { ok: true, logId: 71 }; },
+    reserveCost: async (input) => { reservations += 1; reservationInput = input; return { ok: true, logId: 71 }; },
     settleCost: async () => { settlements += 1; },
     fetchImpl: async () => {
       providerRequests += 1;
@@ -203,9 +221,161 @@ await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach
   await assert.rejects(() => adapter.search(queryContext), /already-used/);
   assert.equal(providerRequests, 1);
   assert.equal(reservations, 1);
+  assert.equal(reservationInput.providerRequests, 1);
   assert.equal(settlements, 1);
   assert.equal(adapter.takeProviderRawResponse(), JSON.stringify(anthropicResponse()));
   assert.equal(adapter.takeProviderRawResponse(), null);
+});
+
+await check("Weicher Websearch-Mock speichert sechs sichere Titel und projiziert Für mich plus Weitere", async () => {
+  const validItems = Array.from({ length: 6 }, (_, index) => providerItem(index + 1));
+  validItems[5] = {
+    ...validItems[5],
+    evidence: {
+      ...validItems[5].evidence,
+      url: "https://tv.orf.at/stories/film-serien-tipps-kw-34",
+    },
+  };
+  const flexibleItems = validItems.map((item, index) => {
+    if (index === 0) return { ...item, providerNote: "wird ignoriert" };
+    if (index === 1) {
+      const { externalIds: _externalIds, attributes: _attributes, ...required } = item;
+      return required;
+    }
+    return item;
+  });
+  const urls = [...new Set(validItems.map((item) => item.evidence.url))];
+  const response = {
+    model: "claude-haiku-4-5",
+    stop_reason: "max_tokens",
+    usage: { input_tokens: 180, output_tokens: 420, server_tool_use: { web_search_requests: 2 } },
+    content: [
+      { type: "server_tool_use", id: "tool-1", name: "web_search", input: { query: queryContext.query } },
+      { type: "web_search_tool_result", tool_use_id: "tool-1", content: [{
+        type: "web_search_result", url: urls[0], title: "Wochentipps A",
+      }] },
+      { type: "text", text: "Zwischenstand: Die zweite kleine Suche ergänzt die Liste." },
+      { type: "server_tool_use", id: "tool-2", name: "web_search", input: { query: `${queryContext.query} Serien` } },
+      { type: "web_search_tool_result", tool_use_id: "tool-2", content: urls.slice(1).map((url) => ({
+        type: "web_search_result", url, title: "Wochentipps B",
+      })) },
+      {
+        type: "text",
+        text: `Hier sind die belegten Titel.\n\`\`\`json\n${JSON.stringify({
+          items: [...flexibleItems, { title: "Kaputter Titel" }],
+          providerExtra: "wird ignoriert",
+        })}\n\`\`\`\nWeitere Erklärung wird nicht angezeigt.`,
+        citations: urls.map((url) => ({ type: "web_search_result_location", url, title: "Wochentipps" })),
+      },
+    ],
+  };
+  const parsed = parseAnthropicEntdeckenDailyResponse(
+    response, providerSetup, "2026-08-20T09:00:00.000Z", queryContext,
+  );
+  assert.equal(parsed.envelope.responseMode, "partial");
+  assert.equal(parsed.envelope.response.items.length, 6);
+
+  let saves = 0;
+  const run = await runEntdeckenDailyRefresh({
+    repository: {
+      async claimRefresh() {
+        return {
+          feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
+          refresh: true, fenceToken: 81, feed: null,
+        };
+      },
+      async loadSources() { return sources; },
+      async saveFeed(feed) {
+        assert.equal(validateEntdeckenDailyFeed(feed).ok, true);
+        endToEndFeed = feed;
+        saves += 1;
+      },
+      async markFailure() { throw new Error("unerwartet"); },
+    },
+    adapter: { async search() { return parsed.envelope; } },
+  });
+  assert.equal(run.status, "fresh");
+  assert.equal(run.responseMode, "partial");
+  assert.equal(saves, 1);
+  assert.equal(endToEndFeed.items.length, 6);
+
+  const selection = createEntdeckenRecommendations({
+    streamingEntdecken: {
+      region: "AT", stand: "2026-08-20T00:00:00.000Z", titel: [{
+        watchmode_id: 5001, titel: "The Ninth Jedi", jahr: 2026, typ: "movie",
+        dienste: ["ORF ON"], genres: ["Drama"], tags: [],
+      }, {
+        watchmode_id: 9999, titel: "Nur aus streaming_entdecken", jahr: 2026, typ: "movie",
+        dienste: ["ORF ON"], genres: ["Drama"], tags: [],
+      }],
+    },
+    profile: {
+      signals: [{ kind: "genre", value: "Drama", direction: "positive", confirmed: true, strength: 4 }],
+    },
+    master: [], selectedServices: ["ORF ON"], entdeckenStatus: {},
+    webDiscoveryFeed: endToEndFeed, selectionDay: "2026-08-20",
+  });
+  assert.equal(selection.personal.length, 1);
+  assert.equal(selection.personal[0].title, "The Ninth Jedi");
+  assert.equal(selection.further.length, 5);
+  assert.equal([...selection.personal, ...selection.further].length, 6);
+  assert.ok(selection.further.every((item) => item.externalEvidence.length > 0));
+  assert.ok(selection.further.some((item) => item.services.length === 0));
+  assert.ok(![...selection.personal, ...selection.further]
+    .some((item) => item.title === "Nur aus streaming_entdecken"));
+});
+
+await check("Unparsebarer sicherer Text ersetzt den Feed nicht und liefert nur den bereinigten Hinweis", async () => {
+  assert.ok(endToEndFeed);
+  const response = anthropicResponse();
+  response.content = response.content.map((block) => block.type === "text" ? {
+    ...block,
+    text: "Diese Woche war keine verlässliche strukturierte Liste ableitbar.",
+  } : block);
+  const parsed = parseAnthropicEntdeckenDailyResponse(
+    response, providerSetup, "2026-08-20T10:00:00.000Z", queryContext,
+  );
+  assert.equal(parsed.envelope.responseMode, "degraded");
+  assert.deepEqual(parsed.envelope.response.items, []);
+  let saves = 0;
+  const failures = [];
+  const run = await runEntdeckenDailyRefresh({
+    repository: {
+      async claimRefresh() {
+        return {
+          feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
+          refresh: true, fenceToken: 82, feed: endToEndFeed,
+        };
+      },
+      async loadSources() { return sources; },
+      async saveFeed() { saves += 1; },
+      async markFailure(value) { failures.push(value); },
+    },
+    adapter: { async search() { return parsed.envelope; } },
+  });
+  assert.equal(saves, 0);
+  assert.equal(run.responseMode, "degraded");
+  assert.match(run.displayText, /bisherige Feed bleibt sichtbar/);
+  assert.deepEqual(run.feed, endToEndFeed);
+  assert.deepEqual(failures, [{ code: "invalid_response", fenceToken: 82 }]);
+
+  const service = createEntdeckenDailyFeedService({
+    config: {
+      entdeckenDailyFeedEnabled: true,
+      supabaseUrl: "https://project.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    currentDay: () => "2026-08-20",
+    fetchImpl: async () => ({ ok: true, async json() {
+      return { ok: true, status: run.status, feed: run.feed, writes: 0,
+        providerRequests: 1, searchRequests: 1, responseMode: run.responseMode,
+        displayText: run.displayText, warnings: run.warnings };
+    } }),
+  });
+  const loaded = await service.load();
+  assert.equal(loaded.responseMode, "degraded");
+  assert.match(loaded.displayText, /bisherige Feed bleibt sichtbar/);
+  assert.equal(loaded.feed.items.length, 6);
 });
 
 await check("Wochenvertrag akzeptiert hoechstens 20 belegte Titel und den Clientvertrag", () => {
@@ -219,9 +389,12 @@ await check("Wochenvertrag akzeptiert hoechstens 20 belegte Titel und den Client
   assert.deepEqual(Object.keys(feed.items[0].attributes).sort(), ["genres", "themes", "tones"]);
   assert.equal(validateEntdeckenDailyFeed(feed).ok, true);
   assert.equal(validateWebDiscoveryFeed(feed).ok, true);
-  assert.equal(evaluateEntdeckenDailyResponse(envelope([...items, providerItem(21)]), sources, {
+  const truncated = evaluateEntdeckenDailyResponse(envelope([...items, providerItem(21)]), sources, {
     retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
-  }).ok, false);
+  });
+  assert.equal(truncated.ok, true);
+  assert.equal(truncated.feed.items.length, 20);
+  assert.equal(truncated.responseMode, "partial");
 });
 
 await check("Unbelegte, zu alte oder identitaetswiderspruechliche Ergebnisse bleiben fail-closed", () => {
@@ -233,9 +406,12 @@ await check("Unbelegte, zu alte oder identitaetswiderspruechliche Ergebnisse ble
     ...unpositive, evidence: { ...unpositive.evidence, publishedOn: "2026-06-01" },
   }]), sources, { retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34" }).ok, false);
   const duplicate = { ...providerItem(), externalIds: { watchmode: "5002" } };
-  assert.equal(evaluateEntdeckenDailyResponse(envelope([providerItem(), duplicate]), sources, {
+  const duplicateResult = evaluateEntdeckenDailyResponse(envelope([providerItem(), duplicate]), sources, {
     retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
-  }).ok, false);
+  });
+  assert.equal(duplicateResult.ok, true);
+  assert.equal(duplicateResult.feed.items.length, 1);
+  assert.equal(duplicateResult.responseMode, "partial");
 });
 
 await check("Runner bindet Query und Save an denselben Fencing-Token und sucht nur einmal je Woche", async () => {
@@ -296,6 +472,8 @@ await check("Providerfehler behaelt den letzten erfolgreichen Vorwochenfeed ohne
   });
   assert.equal(result.status, "stale");
   assert.equal(result.feed.isoWeek, "2026-W33");
+  assert.equal(result.responseMode, "degraded");
+  assert.match(result.displayText, /bisherige Feed bleibt sichtbar/);
   assert.equal(adapterCalls, 1);
   assert.deepEqual(failures, [{ code: "provider_error", fenceToken: 42 }]);
 });
@@ -430,7 +608,9 @@ await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale D
   assert.match(appSource, /useWebDiscoveryFeed\(bootDone && tab === "blog"\)/);
   assert.doesNotMatch(appSource, /webDiscoveryOwnerFreigegeben/);
   assert.match(controllerSource, /!active \|\| laufRef\.current/);
-  assert.match(controllerSource, /if \(laufRef\.current === lauf && result\?\.feed\) setFeed\(result\.feed\)/);
+  assert.match(controllerSource, /feed: result\.feed \|\| current\.feed/);
+  assert.match(appSource, /webDiscoveryFeed=\{webDiscoveryState\.feed\}/);
+  assert.match(appSource, /webDiscoveryStatus=\{webDiscoveryState\}/);
   assert.doesNotMatch(clientSource, /getAccessToken|hatBestaetigteOwnerRolle|Authorization|profile|seen|selectedServices|radar/);
 });
 
