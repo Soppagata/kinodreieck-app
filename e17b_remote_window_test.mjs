@@ -1,6 +1,7 @@
 /* Rein lokale, dependency-freie Wave-A-Vertrags- und Forgerytests. */
 
 import { createHash, randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   lstatSync,
@@ -248,57 +249,14 @@ project_id = "bscjgwcntapobyxsiyce"
 verify_jwt = true
 `, "utf8");
 
-function frozenE17bFunctionSource(path) {
-  const current = readFileSync(new URL(`./${path}`, import.meta.url));
-  if (path === "supabase/functions/ai-task/requestContract.ts") {
-    const userTasks = `/* Die später aktivierbare Produktfläche ist absichtlich eine geschlossene,
-   geordnete Liste. Diagnosen und noch nicht gebaute Ideen gehören nicht dazu. */
-export const NUTZER_AUFGABEN = Object.freeze([
-  "intelligent-search",
-  "profile-extract",
-  "film-forecast",
-  "filmwissen-synthese",
-  "media-batch-extract",
-  "blog-profile-extract",
-] as const);
+const E17B_FROZEN_FUNCTION_COMMIT = "d121ec4243b891efac0f55d5027204a6fe087d0a";
 
-`;
-    const source = current.toString("utf8");
-    const frozen = source.replace(userTasks, "");
-    if (frozen === source || frozen.includes("NUTZER_AUFGABEN")) {
-      throw new Error("E17B-Fixture konnte die spätere Nutzeraufgabenliste nicht isolieren.");
-    }
-    return Buffer.from(frozen, "utf8");
-  }
-  if (path !== "supabase/functions/ai-task/index.ts") return current;
-  const helper = `
-function aiTaskIstAktiv(): boolean {
-  return Deno.env.get("KD_AI_TASK_ENABLED") === "true";
-}
-`;
-  const taskImport = `  NUTZER_AUFGABEN,
-`;
-  const gate = `  /* Der Default-off-Schalter sperrt alle eigentlichen KI-Aufgaben weiterhin
-     vor Auth, DB, Budget und Anbieter. Nur \`health\` bleibt lesbar: Dieser
-     reservierte, providerfreie Pfad IST die serverseitige Vor-/Nachmessung,
-     die den Entdecken-Livevertrag erst fail-closed freigeben kann. */
-  if (task !== "health" && !aiTaskIstAktiv()) {
-    return fehlerAntwort(CODES.AI_DISABLED, origin, { grund: "ai-task-aus" });
-  }
-`;
-  const activation = `        activation: {
-          gate: "KD_AI_TASK_ENABLED",
-          requiredValue: "true",
-          enabled: aiTaskIstAktiv(),
-          userTasks: NUTZER_AUFGABEN,
-        },
-`;
-  const source = current.toString("utf8");
-  const frozen = source.replace(taskImport, "").replace(helper, "").replace(gate, "").replace(activation, "");
-  if (frozen === source || frozen.includes("aiTaskIstAktiv") || frozen.includes("NUTZER_AUFGABEN")) {
-    throw new Error("E17B-Fixture konnte die spaetere ai-task-Default-off-Haertung nicht isolieren.");
-  }
-  return Buffer.from(frozen, "utf8");
+function frozenE17bFunctionSource(path) {
+  return execFileSync(
+    "git",
+    ["show", `${E17B_FROZEN_FUNCTION_COMMIT}:${path}`],
+    { cwd: new URL(".", import.meta.url), encoding: null },
+  );
 }
 
 const rawGitFiles = new Map([
