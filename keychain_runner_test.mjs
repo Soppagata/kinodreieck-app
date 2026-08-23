@@ -35,6 +35,7 @@ import {
   starteModus,
 } from "./tools/keychain_runner.mjs";
 import {
+  assertProviderCaptureCost,
   captureProviderRawResponse,
   createPrivateProviderRawDirectory,
 } from "./tools/provider_raw_capture.mjs";
@@ -218,7 +219,8 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
       && (statSync(directory).mode & 0o777) === 0o700
       && !written.filePath.startsWith(REPO_ROOT + "/")
       && written.providerRequests === 1
-      && written.fachstatus === null);
+      && written.fachstatus === null
+      && written.fachgrund === null);
   pruefe("Providerdiagnose wird vor jeder weiteren Antwortverarbeitung entfernt",
     !("providerDiagnostic" in body));
   unlinkSync(written.filePath);
@@ -233,9 +235,8 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
     vorgangId: "11111111-1111-4111-8111-111111111111",
   };
   const fachstatusAntworten = [
-    { ...basis, data: { status: "cache_hit", versionId: "22222222-2222-4222-8222-222222222222" } },
-    { ...basis, data: { status: "nicht_belegt", grund: "kein-institutioneller-beleg" } },
-    { ...basis, data: { status: "nicht_zuordenbar" } },
+    { ...basis, data: { status: "neuer_fachstatus", grund: "quellen-vor-ki-stopp" } },
+    { ...basis, data: { status: "mehr\nzeilig", grund: "nicht sicher loggbar" } },
   ];
   const ergebnisse = fachstatusAntworten.map((body) => captureProviderRawResponse(
     body,
@@ -247,36 +248,49 @@ const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
       },
       repoRoot: REPO_ROOT,
       responseStatus: 200,
+      expectedTask: basis.task,
+      expectedVorgangId: basis.vorgangId,
     },
   ));
-  pruefe("Legitime Filmwissen-Nullproviderstatus bleiben explizit und brauchen keine Rohdatei",
-    ergebnisse.map((ergebnis) => ergebnis.fachstatus).join(",")
-      === "cache_hit,nicht_belegt,nicht_zuordenbar"
+  pruefe("Jede erfolgreiche Filmwissen-Nullproviderhülle wird statusunabhängig sicher diagnostiziert",
+    ergebnisse[0].fachstatus === "neuer_fachstatus"
+      && ergebnisse[0].fachgrund === "quellen-vor-ki-stopp"
+      && ergebnisse[1].fachstatus === "unbekannt"
+      && ergebnisse[1].fachgrund === null
       && ergebnisse.every((ergebnis) => ergebnis.providerRequests === 0
         && ergebnis.filePath === null
-        && ergebnis.bytes === 0));
+        && ergebnis.bytes === 0)
+      && assertProviderCaptureCost(ergebnisse[0], 0) === ergebnisse[0]);
 
-  let kostenAntwortOhneRohpayloadGesperrt = false;
-  try {
-    captureProviderRawResponse(
-      {
-        ...basis,
-        data: { status: "nicht_zuordenbar" },
-        verbrauch: { kostenUsdCent: 0.1 },
-      },
-      "04-filmwissen-synthese.json",
-      {
-        env: {
-          [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
-          [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+  const kostenAntwortOhneRohpayloadGesperrt = [null, { kostenUsdCent: 0.1 }]
+    .every((verbrauch) => {
+      try {
+      captureProviderRawResponse(
+        {
+          ...basis,
+          data: { status: "beliebig" },
+          verbrauch,
         },
-        repoRoot: REPO_ROOT,
-        responseStatus: 200,
-      },
-    );
-  } catch { kostenAntwortOhneRohpayloadGesperrt = true; }
-  pruefe("Kostenhülle ohne Providerrohpayload bleibt fail-closed",
-    kostenAntwortOhneRohpayloadGesperrt);
+        "04-filmwissen-synthese.json",
+        {
+          env: {
+            [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+            [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+          },
+          repoRoot: REPO_ROOT,
+          responseStatus: 200,
+          expectedTask: basis.task,
+          expectedVorgangId: basis.vorgangId,
+        },
+      );
+        return false;
+      } catch { return true; }
+    });
+  let gemesseneKostenOhneRohpayloadGesperrt = false;
+  try { assertProviderCaptureCost(ergebnisse[0], 0.0001); }
+  catch { gemesseneKostenOhneRohpayloadGesperrt = true; }
+  pruefe("Verbrauchshülle oder gemessene Kosten ohne Providerrohpayload bleiben fail-closed",
+    kostenAntwortOhneRohpayloadGesperrt && gemesseneKostenOhneRohpayloadGesperrt);
   rmdirSync(directory);
 }
 

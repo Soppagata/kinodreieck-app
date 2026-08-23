@@ -69,6 +69,7 @@ import { readFileSync } from "node:fs";
 import {
   OWNER_CORE_SIX_GUARD_ENV,
   OWNER_CORE_SIX_GUARD_VALUE,
+  assertProviderCaptureCost,
   captureProviderRawResponse,
   providerDiagnosticHeaders,
   providerRawCaptureEnabled,
@@ -382,6 +383,7 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       ...PROVIDER_DIAGNOSTIC_HEADERS,
     });
     let captureError = null;
+    let capture = null;
     if (OWNER_CORE_SIX) {
       const fileName = ({
         "P12 intelligent-search": "01-intelligent-search.json",
@@ -393,10 +395,12 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       })[label];
       try {
         if (!fileName) throw new Error("unbekannter Sechserpfad");
-        const capture = captureProviderRawResponse(ergebnis.daten, fileName, {
+        capture = captureProviderRawResponse(ergebnis.daten, fileName, {
           env: process.env,
           repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
           responseStatus: ergebnis.status,
+          expectedTask: koerper?.task ?? null,
+          expectedVorgangId: koerper?.vorgangId ?? null,
         });
         providerCaptureNachLabel.set(label, capture);
       } catch {
@@ -408,7 +412,15 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     }
     const kostenRoh = ergebnis.daten?.verbrauch?.kostenUsdCent;
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
-    await laufWache.nachAnbieterRequest(markierung, kosten);
+    const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
+    try {
+      assertProviderCaptureCost(capture, kostenMessung.requestKostenUsdCent);
+    } catch {
+      captureError = new LiveSicherheitsStopp(
+        "unbekannt",
+        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend.`,
+      );
+    }
     if (captureError) throw captureError;
     if (ergebnis.status !== 200) {
       throw new LiveSicherheitsStopp(
@@ -630,6 +642,12 @@ const p18Capture = providerCaptureNachLabel.get("P18 filmwissen-synthese") ?? nu
 const p18ProviderfreierFachstatus = p18Capture?.providerRequests === 0
   ? p18Capture.fachstatus
   : null;
+const p18ProviderfreierFachgrund = p18Capture?.providerRequests === 0
+  ? p18Capture.fachgrund
+  : null;
+const p18Fachdiagnose = `Fachstatus ${p18ProviderfreierFachstatus}`
+  + (p18ProviderfreierFachgrund ? `, Grund ${p18ProviderfreierFachgrund}` : "")
+  + ", providerRequests=0";
 const p18Erfolg = p18.status === 200
   && p18.daten?.ok === true
   && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
@@ -642,7 +660,7 @@ pruefe(
   "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",
   p18Erfolg,
   p18ProviderfreierFachstatus
-    ? `Fachstatus ${p18ProviderfreierFachstatus}, providerRequests=0; keine Providerrohhuelle erwartet`
+    ? `${p18Fachdiagnose}; keine Providerrohhuelle erwartet`
     : p18.status === 200
     ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
     : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
@@ -660,7 +678,7 @@ if (p18ProviderfreierFachstatus && !p18CacheReadback) {
   pruefe(
     "Providerfreier Filmwissen-Fachstatus ist explizit erfasst; der Sechserlauf läuft weiter",
     true,
-    `Fachstatus ${p18ProviderfreierFachstatus}, providerRequests=0`,
+    p18Fachdiagnose,
   );
 } else {
   pruefe(

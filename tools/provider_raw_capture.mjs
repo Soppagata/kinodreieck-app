@@ -26,25 +26,38 @@ export const PROVIDER_RAW_CAPTURE_DIR_ENV = "KD_PROVIDER_RAW_CAPTURE_DIR";
 const FILE_NAME_FORM = /^\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 const MAX_RAW_BYTES = 8 * 1024 * 1024;
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SAFE_DIAGNOSTIC_FORM = /^[a-z0-9][a-z0-9._:-]{0,79}$/i;
 
-function providerfreierFilmwissenFachstatus(body, fileName, responseStatus) {
+function kurzeSichereDiagnose(value, fallback = null) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return SAFE_DIAGNOSTIC_FORM.test(normalized) ? normalized : fallback;
+}
+
+function providerfreieFilmwissenAntwort(
+  body,
+  fileName,
+  responseStatus,
+  expectedTask,
+  expectedVorgangId,
+) {
   if (fileName !== "04-filmwissen-synthese.json"
       || responseStatus !== 200
       || body.ok !== true
       || body.task !== "filmwissen-synthese"
       || !UUID_FORM.test(body.vorgangId || "")
-      || !body.data
-      || typeof body.data !== "object"
-      || Array.isArray(body.data)
-      || (Object.hasOwn(body, "verbrauch") && body.verbrauch !== null)) {
+      || expectedTask !== "filmwissen-synthese"
+      || body.task !== expectedTask
+      || body.vorgangId !== expectedVorgangId
+      || Object.hasOwn(body, "verbrauch")) {
     return null;
   }
-  if (body.data.status === "cache_hit"
-      && UUID_FORM.test(body.data.versionId || "")) return "cache_hit";
-  if (body.data.status === "nicht_belegt"
-      && body.data.grund === "kein-institutioneller-beleg") return "nicht_belegt";
-  if (body.data.status === "nicht_zuordenbar") return "nicht_zuordenbar";
-  return null;
+  const data = body.data && typeof body.data === "object" && !Array.isArray(body.data)
+    ? body.data
+    : {};
+  return Object.freeze({
+    fachstatus: kurzeSichereDiagnose(data.status, "unbekannt"),
+    fachgrund: kurzeSichereDiagnose(data.grund),
+  });
 }
 
 function modeBits(stats) {
@@ -105,7 +118,13 @@ function assertPrivateDirectory(directory, repoRoot) {
 export function captureProviderRawResponse(
   body,
   fileName,
-  { env = process.env, repoRoot, responseStatus = null } = {},
+  {
+    env = process.env,
+    repoRoot,
+    responseStatus = null,
+    expectedTask = null,
+    expectedVorgangId = null,
+  } = {},
 ) {
   if (!providerRawCaptureEnabled(env)) return null;
   if (!repoRoot) throw new Error("Repositorywurzel fuer Provider-Capture fehlt.");
@@ -120,13 +139,19 @@ export function captureProviderRawResponse(
   const hatDiagnostic = Object.hasOwn(body, PROVIDER_DIAGNOSTIC_FIELD);
   delete body[PROVIDER_DIAGNOSTIC_FIELD];
   if (!hatDiagnostic) {
-    const fachstatus = providerfreierFilmwissenFachstatus(body, fileName, responseStatus);
-    if (fachstatus) {
+    const providerfrei = providerfreieFilmwissenAntwort(
+      body,
+      fileName,
+      responseStatus,
+      expectedTask,
+      expectedVorgangId,
+    );
+    if (providerfrei) {
       return Object.freeze({
         filePath: null,
         bytes: 0,
         providerRequests: 0,
-        fachstatus,
+        ...providerfrei,
       });
     }
   }
@@ -162,5 +187,15 @@ export function captureProviderRawResponse(
     bytes,
     providerRequests: 1,
     fachstatus: null,
+    fachgrund: null,
   });
+}
+
+export function assertProviderCaptureCost(capture, measuredCostUsdCent) {
+  if (capture?.providerRequests === 0
+      && Number.isFinite(measuredCostUsdCent)
+      && measuredCostUsdCent > 0) {
+    throw new Error("Providerfreier Fachstatus hatte serverseitig gemessene Kosten.");
+  }
+  return capture;
 }
