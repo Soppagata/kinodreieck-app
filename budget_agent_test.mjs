@@ -370,6 +370,9 @@ const releaseDoku = readFileSync("docs/FUNCTION_RELEASES.md", "utf8");
 const functionIndex = readFileSync("supabase/functions/ai-task/index.ts", "utf8");
 const requestContract = readFileSync("supabase/functions/ai-task/requestContract.ts", "utf8");
 const smokeSkript = readFileSync("tools/ai_smoke.mjs", "utf8");
+const radarWebsearchSkript = readFileSync("tools/radar_websearch_live.mjs", "utf8");
+const entdeckenWebsearchSkript = readFileSync("tools/entdecken_daily_live.mjs", "utf8");
+const radarEntdeckenSkript = readFileSync("tools/radar_entdecken_live.mjs", "utf8");
 const userTaskContract = readFileSync("tools/ai_user_task_contract.mjs", "utf8");
 const evalSkript = readFileSync("tools/ai_eval_etappe6.mjs", "utf8");
 const NUTZER_TASKS_SOLL = [
@@ -380,6 +383,11 @@ const NUTZER_TASKS_SOLL = [
   "media-batch-extract",
   "blog-profile-extract",
 ];
+const ANBIETER_PFADE_SOLL = [
+  ...NUTZER_TASKS_SOLL,
+  "radar-websearch-task",
+  "entdecken-daily-task",
+];
 const leseTaskListe = (quelle, anker) => {
   const start = quelle.indexOf(anker);
   const block = start < 0
@@ -389,6 +397,11 @@ const leseTaskListe = (quelle, anker) => {
     ? [...block[1].matchAll(/"([a-z][a-z-]+)"/g)].map((treffer) => treffer[1])
     : [];
 };
+const importiertGemeinsameLaufwache = (quelle) => (
+  [...quelle.matchAll(/import\s*\{([\s\S]*?)\}\s*from\s*"([^"]+)";/g)]
+    .some(([, namen, modul]) => modul === "./ai_budget_guard.mjs"
+      && /\bLiveLaufWache\b/.test(namen))
+);
 const p8Abschnitt = smokeSkript.slice(
   smokeSkript.indexOf("/* --- P8:"),
   smokeSkript.indexOf("/* --- P9:"),
@@ -399,6 +412,18 @@ const p5ActivationPos = smokeSkript.indexOf('pruefeAktivierungsvertrag("P5", p5)
 const bewachteTasks = [...smokeSkript.matchAll(
   /await rufAnbieterBewacht\([\s\S]{0,360}?task:\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
+const bewachteAnbieterPfade = [
+  ...bewachteTasks,
+  /const RADAR_FUNCTION = "([^"]+)";/.exec(radarWebsearchSkript)?.[1],
+  /const FUNCTION_NAME = "([^"]+)";/.exec(entdeckenWebsearchSkript)?.[1],
+].filter(Boolean);
+const websearchSkripte = [radarWebsearchSkript, entdeckenWebsearchSkript];
+const entdeckenKombiPosition = radarEntdeckenSkript.indexOf(
+  "const entdecken = await runEntdecken({ env, ausgabe });",
+);
+const radarKombiPosition = radarEntdeckenSkript.indexOf(
+  "const radar = await runRadar({ env, ausgabe });",
+);
 const readbackTasks = [...smokeSkript.matchAll(
   /pruefeNutzerTaskReadback\("[^"]+",\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
@@ -441,16 +466,32 @@ check("Health benennt das spätere Gate und bindet es an exakt sechs Nutzeraufga
     === JSON.stringify(NUTZER_TASKS_SOLL)
   && JSON.stringify(leseTaskListe(userTaskContract, "export const AI_USER_TASKS"))
     === JSON.stringify(NUTZER_TASKS_SOLL));
-check("Rauchprobe verdrahtet genau die sechs beauftragten Anbieterpfade durch dieselbe Laufwache",
-  (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === 6
-  && JSON.stringify([...bewachteTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
+check("Rauchprobe verdrahtet genau die acht beauftragten Anbieterpfade durch dieselbe Laufwache",
+  (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === NUTZER_TASKS_SOLL.length
+  && bewachteAnbieterPfade.length === ANBIETER_PFADE_SOLL.length
+  && JSON.stringify([...bewachteAnbieterPfade].sort())
+    === JSON.stringify([...ANBIETER_PFADE_SOLL].sort())
+  && [smokeSkript, ...websearchSkripte].every(importiertGemeinsameLaufwache)
+  && (smokeSkript.match(/new LiveLaufWache\(\{/g) || []).length === 1
   && (smokeSkript.match(/await rufAnbieterBewachtMitCapability\(/g) || []).length === 0
   && (smokeSkript.match(/task: "anbieter-modelle"/g) || []).length === 1
-  && /maxAnbieterRequests: SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
+  && /maxAnbieterRequests:\s*OWNER_CORE_SIX\s*\?\s*6\s*:\s*SMOKE_MAX_ANBIETER_REQUESTS/
+    .test(smokeSkript)
   && /async function ruf[\s\S]{0,350}fetchMitZeitgrenze/.test(smokeSkript)
   && (p8Abschnitt.match(/const p8 = await ruf\(/g) || []).length === 1
   && !/\b(?:for|while)\s*\(/.test(p8Abschnitt)
-  && !/await Promise\.all\(/.test(smokeSkript));
+  && !/await Promise\.all\(/.test(smokeSkript)
+  && websearchSkripte.every((skript) =>
+    (skript.match(/new LiveLaufWache\(\{/g) || []).length === 1
+    && (skript.match(/maxAnbieterRequests:\s*1/g) || []).length === 1
+    && (skript.match(/await laufWache\.vorAnbieterRequest\(/g) || []).length === 1
+    && (skript.match(/await laufWache\.nachAnbieterRequest\(/g) || []).length === 1
+    && /fetchMitZeitgrenze\(/.test(skript)
+    && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(skript))
+  && entdeckenKombiPosition >= 0
+  && radarKombiPosition > entdeckenKombiPosition
+  && (radarEntdeckenSkript.match(/await run(?:Entdecken|Radar)\(/g) || []).length === 2
+  && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(radarEntdeckenSkript));
 check("P5-Capability-Guard liegt vor P8 im Smoke auf der vorhandenen P5-Healthantwort",
   /pruefeBlogProfilCapabilityAbschnitt\("P5", p5\);/.test(smokeSkript)
   && p5CapabilityPos >= 0
