@@ -449,6 +449,39 @@ const freigabeLauf = await laufe(freigabe.dienst);
 check("T13-Gegenprobe: mit personalAi läuft genau derselbe Aufruf durch",
   freigabeLauf.fehler === null && freigabeLauf.ergebnis?.ok === true && freigabe.rufe.length === 1);
 
+const teilAntwort = {
+  ok: true,
+  data: { harte_filter: { genres: ["horror"] } },
+  responseMode: "partial",
+  displayText: "Die KI-Antwort war teilweise unvollständig. Nur sichere Filter wurden berücksichtigt.",
+  warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+};
+const teilDienst = dienstMit(teilAntwort);
+const teilLauf = await laufe(teilDienst.dienst);
+check("intelligent-search übernimmt den sicheren partial-Vertrag mit stabilen Warncodes",
+  teilLauf.fehler === null && teilLauf.ergebnis?.responseMode === "partial"
+  && teilLauf.ergebnis.data.harte_filter.genres[0] === "horror"
+  && Object.isFrozen(teilLauf.ergebnis.warnings));
+
+const degradedAntwort = {
+  ok: true, data: null, responseMode: "degraded",
+  displayText: "Die KI-Antwort konnte nicht sicher als Filter verwendet werden.",
+  warnings: ["unstructured-provider-text"],
+};
+const degradedLauf = await laufe(dienstMit(degradedAntwort).dienst);
+check("degraded transportiert nur bereinigten Anzeigetext und niemals Filterdaten",
+  degradedLauf.fehler === null && degradedLauf.ergebnis?.data === null
+  && degradedLauf.ergebnis.displayText.includes("nicht sicher als Filter"));
+
+for (const [name, antwort] of [
+  ["degraded mit Filterdaten", { ...degradedAntwort, data: { harte_filter: { genres: ["horror"] } } }],
+  ["freier Warntext", { ...degradedAntwort, warnings: ["Modell sagt etwas Beliebiges"] }],
+  ["unsicherer Anzeigetext", { ...degradedAntwort, displayText: "token=synthetischer-geheimer-wert" }],
+]) {
+  const lauf = await laufe(dienstMit(antwort).dienst);
+  check(`Ergebnisvertrag sperrt ${name}`, lauf.fehler?.code === ERROR_CODES.INVALID_RESPONSE);
+}
+
 let widerrufen = false;
 const widerrufAuth = {
   requireAccount(capability) {

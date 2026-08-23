@@ -102,6 +102,15 @@ function displayText(value) {
     : `${cleaned.slice(0, PROVIDER_TEXT_MAX_DISPLAY_CHARS - 1).trimEnd()}…`;
 }
 
+/* Auch bereits aus JSON gelesene Freitextfelder laufen durch dieselbe
+   Schranke wie degradierter Providertext. So koennen aufgabenspezifische
+   Parser einen erklaerenden Satz anzeigen, ohne die Sicherheits- und
+   Darstellungsregeln dieses Moduls ein zweites Mal nachzubauen. */
+export function sanitizeProviderDisplayText(value) {
+  assertSafeText(value);
+  return displayText(value);
+}
+
 export class ProviderTextSafetyError extends Error {
   constructor() {
     super("provider-text-unsafe");

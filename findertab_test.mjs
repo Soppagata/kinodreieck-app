@@ -841,6 +841,49 @@ await klick(knopf("Mit KI deuten"));
 check("G6", "nicht umsetzbare Wünsche werden sichtbar gemacht, auch die als reine Zeichenkette",
   () => text().includes("Nicht umsetzbar") && text().includes("nach Laufzeit") && text().includes("nach Sprache"));
 
+/* Der neue senkrechte Nutzerweg: brauchbare Teilstruktur darf sichere Filter
+   nutzen; reine Erläuterung darf dagegen keinerlei Suchsignal austauschen. */
+await leere();
+await suche("horror blubbergrunzel");
+const teilTrefferVorher = (steuer.verlauf[0].treffer || []).map((t) => t.film.id);
+stub.antwort = {
+  ok: true,
+  responseMode: "partial",
+  data: {
+    harte_filter: { genres: ["horror", 7] },
+    interpretation_klartext: "Du suchst einen Horrorfilm.",
+  },
+  displayText: "Die KI-Antwort war teilweise unvollständig. Nur sichere Filter wurden berücksichtigt.",
+  warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+};
+await klick(knopf("Mit KI deuten"));
+check("G6", "teilstrukturierte Antwort behält den sicheren Horrorfilter und den lokalen Treffer",
+  () => chip("Genre: horror")?.art === "hart"
+    && JSON.stringify((steuer.verlauf[0].treffer || []).map((t) => t.film.id)) === JSON.stringify(teilTrefferVorher)
+    && text().includes("Du suchst einen Horrorfilm"));
+check("G6", "partial-Hinweis ist sichtbar und ausdrücklich unverbindlich",
+  () => text().includes("KI-Erläuterung (unverbindlich)")
+    && text().includes("Nur sichere Filter wurden berücksichtigt"));
+
+await leere();
+await suche("horror blubbergrunzel");
+const degradedSigVorher = JSON.stringify(steuer.verlauf[0].sig);
+const degradedTrefferVorher = JSON.stringify((steuer.verlauf[0].treffer || []).map((t) => t.film.id));
+stub.antwort = {
+  ok: true, responseMode: "degraded", data: null,
+  displayText: "Die Antwort war frei formuliert; deine bisherigen Treffer bleiben sichtbar.",
+  warnings: ["unstructured-provider-text"],
+};
+await klick(knopf("Mit KI deuten"));
+check("G6", "degraded zeigt dieselben Finder-Treffer und verändert kein einziges Suchsignal",
+  () => JSON.stringify(steuer.verlauf[0].sig) === degradedSigVorher
+    && JSON.stringify((steuer.verlauf[0].treffer || []).map((t) => t.film.id)) === degradedTrefferVorher
+    && text().includes("deine bisherigen Treffer bleiben sichtbar"));
+check("G6", "degraded Freitext bleibt Erklärung und erzeugt weder neuen Filter noch Treffer",
+  () => steuer.verlauf[0].ki.responseMode === "degraded"
+    && steuer.verlauf[0].ki.sig === null
+    && stub.rufe.at(-1).task === "intelligent-search");
+
 });
 
 /* =========================================================================

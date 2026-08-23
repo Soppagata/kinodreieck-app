@@ -57,6 +57,75 @@ export const AI_PROMPT_VERSION = "v1";
 
 const BEKANNTE_CODES = new Set(Object.values(ERROR_CODES));
 
+export const AI_RESPONSE_MODES = Object.freeze([
+  "structured", "partial", "degraded",
+]);
+
+const AI_RESPONSE_MODE_SET = new Set(AI_RESPONSE_MODES);
+const AI_DISPLAY_TEXT_MAX = 320;
+const AI_INTELLIGENT_SEARCH_WARNINGS = new Set([
+  "json-extracted-from-text",
+  "unstructured-provider-text",
+  "display-text-truncated",
+  "extra-fields-ignored",
+  "missing-fields-defaulted",
+  "invalid-fields-ignored",
+  "invalid-items-ignored",
+  "unknown-values-ignored",
+  "no-safe-structure",
+]);
+const AI_DISPLAY_UNSAFE = /(?:https:\/\/|sk-ant-[a-z0-9_-]{12,}|sbp_[a-z0-9_-]{12,}|(?:bearer\s+)[a-z0-9._~+\/-]{16,}|(?:authorization|x-api-key|api[_ -]?key|password|passwort|service[_ -]?role|secret|token)\s*[=:]|<\/?(?:thinking|system|developer|prompt)\b|chain[ -]of[ -]thought|system(?:-| )prompt|developer(?:-| )message)/i;
+
+const istReinesObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
+
+function ungueltigeAiAntwort(grund) {
+  return new BoundaryError(ERROR_CODES.INVALID_RESPONSE, {
+    source: "ai", operation: "task.decode", reason: grund,
+  });
+}
+
+function displayTextIstSicher(wert) {
+  return typeof wert === "string" && !!wert && wert === wert.trim()
+    && wert.length <= AI_DISPLAY_TEXT_MAX
+    && !/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/.test(wert)
+    && !/[*_>#`~]/.test(wert) && !AI_DISPLAY_UNSAFE.test(wert);
+}
+
+/* Der neue Ergebnisvertrag ist fuer die intelligente Suche additiv: ein alter
+   Function-Stand ohne Darstellungsfelder bleibt lesbar. Sobald eines der
+   Felder vorhanden ist, muessen aber alle zusammenpassen. Insbesondere darf
+   ein degradierter Freitext niemals als `data` in den Filterpfad geraten. */
+export function normalisiereAiErgebnis(task, result) {
+  if (task !== "intelligent-search") return result;
+  const hatDarstellung = ["responseMode", "displayText", "warnings"]
+    .some((feld) => Object.prototype.hasOwnProperty.call(result, feld));
+  if (!hatDarstellung) return result;
+
+  const mode = result.responseMode;
+  const warnings = result.warnings;
+  if (!AI_RESPONSE_MODE_SET.has(mode)
+      || !Array.isArray(warnings) || warnings.length > 12
+      || new Set(warnings).size !== warnings.length
+      || warnings.some((warning) => typeof warning !== "string"
+        || !AI_INTELLIGENT_SEARCH_WARNINGS.has(warning))) {
+    throw ungueltigeAiAntwort("intelligent-search-presentation");
+  }
+  if (mode === "structured") {
+    if (!istReinesObjekt(result.data) || result.displayText !== null || warnings.length !== 0) {
+      throw ungueltigeAiAntwort("intelligent-search-structured");
+    }
+  } else if (mode === "partial") {
+    if (!istReinesObjekt(result.data) || !displayTextIstSicher(result.displayText)
+        || warnings.length === 0) {
+      throw ungueltigeAiAntwort("intelligent-search-partial");
+    }
+  } else if (result.data !== null || !displayTextIstSicher(result.displayText)
+      || warnings.length === 0) {
+    throw ungueltigeAiAntwort("intelligent-search-degraded");
+  }
+  return { ...result, warnings: Object.freeze([...warnings]) };
+}
+
 function neueVorgangId() {
   const c = globalThis.crypto;
   if (typeof c?.randomUUID === "function") return c.randomUUID();
@@ -148,7 +217,7 @@ export function createAiService({
           });
         }
         if (result.ok === false) throw aiFehler(result, ctx);
-        return result;
+        return normalisiereAiErgebnis(task, result);
       } catch (error) {
         throw normalizeBoundaryError(error, ctx);
       }

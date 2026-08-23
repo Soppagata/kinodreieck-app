@@ -39,6 +39,25 @@ function setzeLaufendeDeutung(wert) {
 let verlaufZaehler = 0;
 const neueEintragId = () => "vl" + (++verlaufZaehler);
 
+const KI_DEGRADED_NOTICE = "Die KI-Antwort konnte nicht sicher als Filter verwendet werden.";
+const KI_RESPONSE_MODES = new Set(["structured", "partial", "degraded"]);
+const istReinesObjekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
+
+/* Letzter UI-Boden fuer alten Function-Stand und Teststubs. Der neue
+   Servicevertrag liefert bereits bereinigten Text; hier kann trotzdem weder
+   Markup/URL noch Secret- oder Prompttext sichtbar werden. */
+function sichereKiErklaerung(wert) {
+  if (typeof wert !== "string" || wert.length > 64 * 1024
+      || /(?:sk-ant-[a-z0-9_-]{12,}|sbp_[a-z0-9_-]{12,}|(?:bearer\s+)[a-z0-9._~+\/-]{16,}|(?:authorization|x-api-key|api[_ -]?key|password|passwort|service[_ -]?role|secret|token)\s*[=:]|<\/?(?:thinking|system|developer|prompt)\b|chain[ -]of[ -]thought|system(?:-| )prompt|developer(?:-| )message)/i.test(wert)) return "";
+  const text = wert
+    .replace(/```(?:json)?/gi, " ").replace(/```/g, " ")
+    .replace(/https:\/\/\S+/gi, " ")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ")
+    .replace(/[*_>#`~]/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= 320 ? text : `${text.slice(0, 319).trimEnd()}…`;
+}
+
 export function kinoGenresAusMatches(kinoMatches) {
   const genres = new Set();
   for (const pf of (kinoMatches && kinoMatches.rest) || []) for (const genre of pf.g || []) genres.add(genre);
@@ -268,6 +287,11 @@ function KiDeutung({ ki, onMerken, merkbar }) {
   if (!ki) return null;
   return (
     <div style={{ ...mono, marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+      {ki.displayText && (
+        <span style={{ color: T.rauch }}>
+          KI-Erläuterung (unverbindlich): {ki.displayText}
+        </span>
+      )}
       {ki.klartext && <span style={{ color: T.rauch }}>KI-Deutung: {ki.klartext}</span>}
       {(ki.nichtUnterstuetzt || []).length > 0 && (
         <span style={{ color: T.warum }}>
@@ -587,9 +611,35 @@ export function FinderTab({
     try {
       const listen = bekannteWerte(master || [], kinoGenresAusMatches(kinoMatches));
       const antwort = await aiService.runTask("intelligent-search", { suchsatz: e.frage, listen });
-      const gedeutet = sigAusSchema(antwort && antwort.data, master || [], kinoGenresAusMatches(kinoMatches));
+      const gemeldeterModus = KI_RESPONSE_MODES.has(antwort?.responseMode)
+        ? antwort.responseMode : null;
+      const daten = gemeldeterModus === "degraded" || !istReinesObjekt(antwort?.data)
+        ? null : antwort.data;
+      const gedeutet = daten
+        ? sigAusSchema(daten, master || [], kinoGenresAusMatches(kinoMatches))
+        : { sig: null, nichtInDaten: [], nichtUnterstuetzt: [], klartext: "" };
+      const filterAnwendbar = !!gedeutet.sig && hatSignale(gedeutet.sig);
+      const responseMode = gemeldeterModus || (filterAnwendbar ? "structured" : "degraded");
+      const erklaerung = sichereKiErklaerung(antwort?.displayText)
+        || (!filterAnwendbar ? sichereKiErklaerung(gedeutet.klartext) : "")
+        || (!filterAnwendbar ? KI_DEGRADED_NOTICE : "");
+      const warnings = Array.isArray(antwort?.warnings)
+        ? [...new Set(antwort.warnings.filter((warning) =>
+          typeof warning === "string" && /^[a-z0-9-]{1,48}$/.test(warning)
+        ))].slice(0, 12)
+        : [];
+      const ki = {
+        ...gedeutet,
+        klartext: sichereKiErklaerung(gedeutet.klartext),
+        responseMode,
+        displayText: erklaerung || null,
+        warnings,
+        offeneWoerter: filterAnwendbar ? offeneWoerter : [],
+      };
       setVerlauf((v) => v.map((x) => (x.id === id
-        ? { ...x, ...suche(gedeutet.sig, x.scope || "alles", x.frage), ki: { ...gedeutet, offeneWoerter }, kiFehler: null }
+        ? filterAnwendbar
+          ? { ...x, ...suche(gedeutet.sig, x.scope || "alles", x.frage), ki, kiFehler: null }
+          : { ...x, ki, kiFehler: null }
         : x)));
     } catch (fehler) {
       /* Die deterministische Antwort bleibt unangetastet. Bei Fehler, Zeitgrenze

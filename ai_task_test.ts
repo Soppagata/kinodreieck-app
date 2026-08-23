@@ -720,6 +720,16 @@ function sucheMitAntwort(inhalt: unknown) {
     });
 }
 
+function sucheMitRohtext(text: string) {
+  z.anbieter = () =>
+    antwort({
+      model: "claude-sonnet-5",
+      stop_reason: "end_turn",
+      content: [{ type: "text", text }],
+      usage: { input_tokens: 500, output_tokens: 200 },
+    });
+}
+
 const sucheRuf = (payload: Record<string, unknown> = suchPayload()) => ruf({ task: "intelligent-search", vorgangId: neueVorgangId(), payload });
 
 /* Ein Durchlauf mit einer Modellantwort, die nur in den genannten Feldern von
@@ -3673,26 +3683,59 @@ test("W10 entdecken ist immer ein echter Boolescher Wert", async () => {
   gleich(daten(r).entdecken, false, "false bleibt false");
 });
 
-test("W11 eine strukturell unbrauchbare Antwort wird als Schemabruch abgewiesen", async () => {
-  for (
-    const kaputt of [
-      { harte_filter: undefined },
-      { weiche_wuensche: undefined },
-      { ausschluesse: undefined },
-      { entdecken: "ja" },
-    ]
-  ) {
+test("W11 JSON-Codeblock mit Zusatztext rettet sichere Filter itemweise", async () => {
+  const teil = antwortMit({
+    harte_filter: {
+      genres: ["horror", 7],
+      fremdes_feld: "ignorieren",
+    },
+    interpretation_klartext: "Du suchst einen Horrorfilm.",
+  });
+  delete teil.nicht_unterstuetzt;
+  sucheMitRohtext(`Vorweg ein kurzer Satz.\n\`\`\`json\n${JSON.stringify(teil)}\n\`\`\`\nEnde.`);
+  const r = await sucheRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "partial", "teilstrukturierter Modus");
+  gleich(daten(r).harte_filter.genres.join("|"), "horror", "sicherer Filter bleibt");
+  gleich(daten(r).interpretation_klartext, "Du suchst einen Horrorfilm.", "Erklärung bleibt");
+  const warnings = r.daten.warnings as string[];
+  wahr(warnings.includes("json-extracted-from-text"), "Codeblock wurde erkannt");
+  wahr(warnings.includes("invalid-items-ignored"), "kaputtes Item wurde verworfen");
+  wahr(warnings.includes("extra-fields-ignored"), "Zusatzfeld wurde verworfen");
+  wahr(warnings.includes("missing-fields-defaulted"), "optionales Feld wurde ergänzt");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
+});
+
+test("W11b sicherer unparsebarer Text wird degraded ohne Filterdaten", async () => {
+  sucheMitRohtext("Ich konnte nur frei erklären, aber keinen sicheren Filter bilden.");
+  const r = await sucheRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "degraded", "Modus");
+  gleich(r.daten.data, null, "keine Filterdaten");
+  gleich(
+    r.daten.displayText,
+    "Ich konnte nur frei erklären, aber keinen sicheren Filter bilden.",
+    "bereinigte Erläuterung",
+  );
+  wahr((r.daten.warnings as string[]).includes("unstructured-provider-text"), "stabiler Warncode");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+  gleich(genauEinAbschluss().p_status, "fertig", "Reservation abgeschlossen");
+});
+
+test("W11c Secret-, Thinking- und API-Hüllenverdacht bleibt harter Stopp", async () => {
+  for (const roh of [
+    "token=synthetischer-geheimer-wert",
+    "<thinking>private Herleitung</thinking>",
+    JSON.stringify({ id: "msg_1", type: "message", role: "assistant", content: [] }),
+  ]) {
     stelleZurueck();
-    sucheMitAntwort(antwortMit(kaputt));
+    sucheMitRohtext(roh);
     const r = await sucheRuf();
-    gleich(r.status, 502, `Status bei ${JSON.stringify(kaputt)}`);
-    gleich(r.daten.grund, "antwort-verletzt-schema", "Grund");
-    const k = genauEinAbschluss();
-    gleich(
-      k.p_fehlerklasse,
-      "invalid-response:schema",
-      "formreine Fehlerklasse",
-    );
+    gleich(r.status, 502, "Status");
+    gleich(r.daten.grund, "antwort-verletzt-schema", "inhaltsfreie Außenkennung");
+    falsch(JSON.stringify(r.daten).includes(roh), "kein Rohtext in der Antwort");
+    gleich(genauEinAbschluss().p_fehlerklasse, "invalid-response:provider-text-unsafe", "harte Fehlerklasse");
   }
 });
 
@@ -3736,13 +3779,14 @@ test("HY1 der Suchsatz taucht in keinem Protokollfeld auf — Erfolgsfall", asyn
   );
 });
 
-test("HY2 der Suchsatz taucht auch im Fehlerfall in keinem Protokollfeld auf", async () => {
+test("HY2 der Suchsatz taucht auch im degradierten Erfolgsfall in keinem Protokollfeld auf", async () => {
   sucheMitAntwort({ voellig: "anders" });
   const r = await sucheRuf({ suchsatz: HEIKEL, listen: SUCH_LISTEN });
-  gleich(r.status, 502, "Status");
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.responseMode, "degraded", "keine fremde Struktur als Filter");
+  gleich(r.daten.data, null, "keine Filterdaten");
   const k = genauEinAbschluss();
-  gleich(k.p_fehlerklasse, "invalid-response:schema", "formreine Fehlerklasse");
-  pruefeFehlerklasseSauber(k);
+  gleich(k.p_status, "fertig", "Reservation abgeschlossen");
   const roh = JSON.stringify([starten()[0].koerper, k]);
   for (const stueck of BRUCHSTUECKE) {
     falsch(roh.includes(stueck), `kein Bruchstück: ${JSON.stringify(stueck)}`);
@@ -3777,11 +3821,8 @@ const SUCH_ABBRUCHPFADE: Array<[string, () => void]> = [
   ["anbieter-429", () => {
     z.anbieter = () => antwort({ error: { type: "rate_limit_error" } }, 429);
   }],
-  ["antwort-kein-json", () => {
-    z.anbieter = () => anbieterErfolg("kein json");
-  }],
-  ["schemabruch", () => {
-    sucheMitAntwort({ nichts: true });
+  ["provider-text-unsafe", () => {
+    sucheMitRohtext("token=synthetischer-geheimer-wert");
   }],
 ];
 

@@ -69,6 +69,10 @@ import {
   providerDiagnosticAccess,
   providerDiagnosticField,
 } from "../_shared/providerDiagnostic.js";
+import {
+  parseProviderLooseJsonText,
+  sanitizeProviderDisplayText,
+} from "../_shared/providerText.js";
 
 export {
   baueAnbieterKoerper,
@@ -732,7 +736,16 @@ type Auftrag = {
    Client bekommt — bewusst an derselben Stelle. Eine Aufgabe, die fremde Werte
    aussortiert, muss sagen können, was übrig bleibt; getrennte Prüf- und
    Bereinigungsstufen wären zwei Orte, von denen man den zweiten vergisst. */
-type Pruefung = { fehler: string } | { daten: unknown };
+type ErgebnisDarstellung = {
+  responseMode: "structured" | "partial" | "degraded";
+  displayText: string | null;
+  warnings: string[];
+};
+
+type Pruefung = { fehler: string } | {
+  daten: unknown;
+  darstellung?: ErgebnisDarstellung;
+};
 
 type Aufgabe = {
   bauAuftrag: (payload: Record<string, unknown>) => Auftrag;
@@ -1120,6 +1133,29 @@ export function kurzText(w: unknown, max = WUNSCH_MAX_ZEICHEN): string {
   const luecke = schnitt.lastIndexOf(" ");
   return (luecke > platz * 0.6 ? schnitt.slice(0, luecke) : schnitt).trimEnd() +
     " …";
+}
+
+const SUCHE_PARTIAL_NOTICE =
+  "Die KI-Antwort war teilweise unvollständig. Nur sichere Filter wurden berücksichtigt.";
+const SUCHE_DEGRADED_NOTICE =
+  "Die KI-Antwort konnte nicht sicher als Filter verwendet werden.";
+
+const SUCHE_WARNING_CODES = new Set([
+  "json-extracted-from-text",
+  "unstructured-provider-text",
+  "display-text-truncated",
+  "extra-fields-ignored",
+  "missing-fields-defaulted",
+  "invalid-fields-ignored",
+  "invalid-items-ignored",
+  "unknown-values-ignored",
+  "no-safe-structure",
+]);
+
+function sichereSucheWarnings(werte: unknown[]): string[] {
+  return [...new Set(werte.filter((wert): wert is string =>
+    typeof wert === "string" && SUCHE_WARNING_CODES.has(wert)
+  ))].slice(0, 12);
 }
 
 /* ---------- profile-extract: Grenzen und Wertelisten -------------------------
@@ -2323,32 +2359,89 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
 
     pruefeErgebnis(inhalt, payload) {
-      const a = inhalt as Record<string, unknown> | null;
-      if (!a || typeof a !== "object") return { fehler: "schema" };
-      const hart = a.harte_filter as Record<string, unknown> | undefined;
-      const weich = a.weiche_wuensche as Record<string, unknown> | undefined;
-      const aus = a.ausschluesse as Record<string, unknown> | undefined;
-      if (!hart || !weich || !aus || typeof a.entdecken !== "boolean") {
-        return { fehler: "schema" };
+      if (!istReinesObjekt(inhalt)) {
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: SUCHE_DEGRADED_NOTICE,
+            warnings: ["no-safe-structure"],
+          },
+        };
       }
+      const a = inhalt;
+      const warnungen = new Set<string>();
+      const warn = (code: string) => warnungen.add(code);
+      const rootFelder = [
+        "harte_filter", "weiche_wuensche", "ausschluesse", "entdecken",
+        "nicht_unterstuetzt", "interpretation_klartext",
+      ];
+      if (Object.keys(a).some((key) => !rootFelder.includes(key))) {
+        warn("extra-fields-ignored");
+      }
+
+      const gruppe = (name: string, felder: string[], optionale: string[] = []) => {
+        const roh = a[name];
+        if (roh === undefined) {
+          warn("missing-fields-defaulted");
+          return {} as Record<string, unknown>;
+        }
+        if (!istReinesObjekt(roh)) {
+          warn("invalid-fields-ignored");
+          return {} as Record<string, unknown>;
+        }
+        if (Object.keys(roh).some((key) => !felder.includes(key) && !optionale.includes(key))) {
+          warn("extra-fields-ignored");
+        }
+        if (felder.some((key) => !Object.prototype.hasOwnProperty.call(roh, key))) {
+          warn("missing-fields-defaulted");
+        }
+        return roh;
+      };
+      const hartFelder = [
+        "genres", "kategorien", "quellen", "zeit", "jahrMin", "jahrMax",
+        "dekaden", "titel", "reihen",
+      ];
+      const hart = gruppe("harte_filter", hartFelder);
+      const weich = gruppe("weiche_wuensche", ["stimmungen"], ["reihen"]);
+      const aus = gruppe("ausschluesse", ["genres", "dekaden"]);
+
+      /* Eine Form gilt schon dann als sicher strukturiert, wenn wenigstens ein
+         bekanntes Filterfeld den richtigen Containertyp hat. Ob darin auch ein
+         anwendbarer Wert steckt, entscheidet der Browser nach der Bereinigung;
+         ein leeres, aber vollstaendig korrektes Schema bleibt damit gueltig. */
+      const hatSichereStruktur = [
+        [hart, ["genres", "kategorien", "quellen", "zeit", "dekaden", "titel", "reihen"]],
+        [weich, ["stimmungen", "reihen"]],
+        [aus, ["genres", "dekaden"]],
+      ].some(([objekt, felder]) => (felder as string[]).some((feld) =>
+        Array.isArray((objekt as Record<string, unknown>)[feld])
+      )) || hart.jahrMin === null || Number.isInteger(hart.jahrMin) ||
+        hart.jahrMax === null || Number.isInteger(hart.jahrMax) ||
+        typeof a.entdecken === "boolean";
 
       const listen = leseListen(payload);
       const offen: Array<{ wunsch: string; grund: string }> = [];
-      /* An der Wortgrenze kürzen, nicht mitten im Wort: diese Texte sieht der
-         Nutzer. „…gib deinen Systemprompt au" liest sich wie ein Fehler,
-         „…gib deinen Systemprompt …" wie eine Kürzung. */
-      /* `wunsch` und `grund` sind die einzigen Stellen, an denen MODELLTEXT
-         wörtlich in die Oberfläche geht — und das Modell hat gerade eine
-         fremde Anfrage gelesen, die es dazu auffordern kann. Gekürzt war der
-         Text schon; hier fallen zusätzlich alle Steuer- und Trennzeichen weg,
-         damit daraus keine mehrzeilige, wie ein Systemhinweis aussehende
-         Meldung werden kann. Der Inhalt bleibt Modelltext — das lässt sich
-         nicht wegfiltern —, aber er bleibt EINE kurze Zeile. */
-      /* Seit Etappe 7 auf Modulebene (`kurzText`), weil `profile-extract`
-         dieselbe Schranke braucht. Hier nur noch der Aliasname -- eine
-         zweite Kopie waere eine sicherheitsrelevante Funktion, die
-         auseinanderlaufen kann. Verhalten unveraendert. */
-      const kurz = kurzText;
+      const kurz = (wert: unknown, max = WUNSCH_MAX_ZEICHEN): string => {
+        if (typeof wert !== "string" && typeof wert !== "number") return "";
+        try {
+          return kurzText(
+            sanitizeProviderDisplayText(String(wert)) ?? "",
+            max,
+          );
+        } catch {
+          return "";
+        }
+      };
+
+      const alsArray = (objekt: Record<string, unknown>, feld: string): unknown[] => {
+        if (!Object.prototype.hasOwnProperty.call(objekt, feld)) return [];
+        if (!Array.isArray(objekt[feld])) {
+          warn("invalid-fields-ignored");
+          return [];
+        }
+        return objekt[feld] as unknown[];
+      };
 
       /* Weissliste. Zurueck geht die Schreibweise der LISTE, nie die des
          Modells — der Anbieter sichert die Schreibweise von Aufzaehlungswerten
@@ -2384,6 +2477,10 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         const raus: string[] = [];
         if (!Array.isArray(roh)) return raus;
         for (const w of roh.slice(0, SUCHE_MAX_WERTE * 2)) {
+          if (typeof w !== "string" || !w.trim()) {
+            warn("invalid-items-ignored");
+            continue;
+          }
           const gesucht = wertKey(w);
           if (!gesucht) continue;
           const treffer = erlaubt.find((e) => wertKey(e) === gesucht);
@@ -2394,27 +2491,35 @@ export const AUFGABEN: Record<string, Aufgabe> = {
               wunsch: kurz(w),
               grund: `kein bekannter Wert fuer ${feld}`,
             });
+            warn("unknown-values-ignored");
           }
           if (raus.length >= SUCHE_MAX_WERTE) break;
         }
         return raus;
       };
 
-      const jahr = (w: unknown): number | null => {
-        const n = typeof w === "number" ? Math.trunc(w) : NaN;
-        return Number.isFinite(n) && n >= 1900 && n <= 2099 ? n : null;
+      const jahr = (objekt: Record<string, unknown>, feld: string): number | null => {
+        if (!Object.prototype.hasOwnProperty.call(objekt, feld)) return null;
+        const w = objekt[feld];
+        if (w === null) return null;
+        if (!Number.isInteger(w) || Number(w) < 1900 || Number(w) > 2099) {
+          warn("invalid-fields-ignored");
+          return null;
+        }
+        return Number(w);
       };
       const dekaden = (roh: unknown): number[] => {
         const raus: number[] = [];
         if (!Array.isArray(roh)) return raus;
         for (const w of roh.slice(0, SUCHE_MAX_WERTE)) {
-          const n = jahr(w);
+          const n = Number.isInteger(w) && Number(w) >= 1900 && Number(w) <= 2099
+            ? Number(w) : null;
           if (n !== null && n % 10 === 0) {
             if (!raus.includes(n)) raus.push(n);
           } else {offen.push({
               wunsch: kurz(w),
               grund: "kein gueltiges Jahrzehnt",
-            });}
+            }); warn("invalid-items-ignored");}
         }
         return raus;
       };
@@ -2428,7 +2533,11 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         if (!Array.isArray(roh)) return [];
         const raus: string[] = [];
         for (const w of roh.slice(0, SUCHE_MAX_WERTE)) {
-          const t = String(w ?? "").trim().slice(0, LISTE_MAX_ZEICHEN);
+          if (typeof w !== "string") {
+            warn("invalid-items-ignored");
+            continue;
+          }
+          const t = w.trim().slice(0, LISTE_MAX_ZEICHEN);
           if (t && !raus.includes(t)) raus.push(t);
         }
         return raus;
@@ -2439,65 +2548,112 @@ export const AUFGABEN: Record<string, Aufgabe> = {
          `harte_filter` gewandert. Ein Modell, das noch nach dem alten Schema
          antwortet (oder ein Zwischenstand im Cache), soll seinen Wert nicht
          still verlieren. */
-      const rohReihen = Array.isArray(hart.reihen) ? hart.reihen : (Array.isArray((weich as { reihen?: unknown }).reihen) ? (weich as { reihen?: unknown }).reihen : null);
+      const rohReihen = Array.isArray(hart.reihen) ? hart.reihen :
+        (Array.isArray(weich.reihen) ? weich.reihen : null);
       if (Array.isArray(rohReihen)) {
         for (const r of (rohReihen as unknown[]).slice(0, SUCHE_MAX_WERTE)) {
+          if (!istReinesObjekt(r)) {
+            warn("invalid-items-ignored");
+            continue;
+          }
+          if (Object.keys(r).some((key) => !["typ", "name"].includes(key))) {
+            warn("extra-fields-ignored");
+          }
           const o = r as { typ?: unknown; name?: unknown };
-          const typ = String(o?.typ ?? "").trim().toLowerCase();
-          const name = String(o?.name ?? "").trim().slice(0, LISTE_MAX_ZEICHEN);
+          if (typeof o.typ !== "string" || typeof o.name !== "string") {
+            warn("invalid-items-ignored");
+            continue;
+          }
+          const typ = o.typ.trim().toLowerCase();
+          const name = o.name.trim().slice(0, LISTE_MAX_ZEICHEN);
           if (REIHEN_TYPEN.includes(typ) && name) reihen.push({ typ, name });
           else if (name) {
             offen.push({
               wunsch: kurz(name),
               grund: "unbekannte Art von Reihe",
             });
+            warn("unknown-values-ignored");
           }
         }
       }
 
-      if (Array.isArray(a.nicht_unterstuetzt)) {
+      if (!Object.prototype.hasOwnProperty.call(a, "nicht_unterstuetzt")) {
+        warn("missing-fields-defaulted");
+      } else if (!Array.isArray(a.nicht_unterstuetzt)) {
+        warn("invalid-fields-ignored");
+      } else {
         for (
           const e of (a.nicht_unterstuetzt as unknown[]).slice(
             0,
             SUCHE_MAX_WERTE,
           )
         ) {
-          const o = e as { wunsch?: unknown; grund?: unknown };
-          const wunsch = kurz(o?.wunsch);
-          if (wunsch) {
-            offen.push({ wunsch, grund: kurz(o?.grund, WUNSCH_MAX_ZEICHEN) });
+          if (typeof e === "string") {
+            const wunsch = kurz(e);
+            if (wunsch) offen.push({ wunsch, grund: "" });
+            warn("invalid-items-ignored");
+            continue;
           }
+          if (!istReinesObjekt(e)) {
+            warn("invalid-items-ignored");
+            continue;
+          }
+          if (Object.keys(e).some((key) => !["wunsch", "grund"].includes(key))) {
+            warn("extra-fields-ignored");
+          }
+          const wunsch = kurz(e.wunsch);
+          if (wunsch) {
+            const grund = kurz(e.grund, WUNSCH_MAX_ZEICHEN);
+            if (typeof e.grund !== "string") warn("invalid-items-ignored");
+            offen.push({ wunsch, grund });
+          } else warn("invalid-items-ignored");
         }
       }
 
+      let klartext = "";
+      if (!Object.prototype.hasOwnProperty.call(a, "interpretation_klartext")) {
+        warn("missing-fields-defaulted");
+      } else if (typeof a.interpretation_klartext !== "string") {
+        warn("invalid-fields-ignored");
+      } else {
+        klartext = kurz(a.interpretation_klartext, KLARTEXT_MAX_ZEICHEN);
+      }
+
+      let entdecken = false;
+      if (!Object.prototype.hasOwnProperty.call(a, "entdecken")) {
+        warn("missing-fields-defaulted");
+      } else if (typeof a.entdecken !== "boolean") {
+        warn("invalid-fields-ignored");
+      } else entdecken = a.entdecken;
+
       const daten = {
         harte_filter: {
-          genres: nurBekannte(hart.genres, listen.genres, "Genre"),
+          genres: nurBekannte(alsArray(hart, "genres"), listen.genres, "Genre"),
           kategorien: nurBekannte(
-            hart.kategorien,
+            alsArray(hart, "kategorien"),
             listen.kategorien,
             "Kategorie",
           ),
-          quellen: nurBekannte(hart.quellen, listen.quellen, "Quelle"),
-          zeit: nurBekannte(hart.zeit, listen.zeit, "Zeitangabe"),
-          jahrMin: jahr(hart.jahrMin),
-          jahrMax: jahr(hart.jahrMax),
-          dekaden: dekaden(hart.dekaden),
-          titel: texte(hart.titel),
+          quellen: nurBekannte(alsArray(hart, "quellen"), listen.quellen, "Quelle"),
+          zeit: nurBekannte(alsArray(hart, "zeit"), listen.zeit, "Zeitangabe"),
+          jahrMin: jahr(hart, "jahrMin"),
+          jahrMax: jahr(hart, "jahrMax"),
+          dekaden: dekaden(alsArray(hart, "dekaden")),
+          titel: texte(alsArray(hart, "titel")),
           reihen,
         },
         weiche_wuensche: {
           stimmungen: nurBekannte(
-            weich.stimmungen,
+            alsArray(weich, "stimmungen"),
             listen.stimmungen,
             "Stimmung",
           ),
         },
         ausschluesse: {
-          genres: nurBekannte(aus.genres, listen.genres, "Genre"),
-          dekaden: dekaden(aus.dekaden),
+          genres: nurBekannte(alsArray(aus, "genres"), listen.genres, "Genre"),
+          dekaden: dekaden(alsArray(aus, "dekaden")),
         },
-        entdecken: a.entdecken === true,
+        entdecken,
         /* Der Deckel darf nicht stumm abschneiden. In `offen` stehen nicht nur
            die Meldungen des Modells, sondern auch jede Weisslisten-Absage —
            also genau die Antwort auf "warum wurde mein Wunsch ignoriert?".
@@ -2508,12 +2664,28 @@ export const AUFGABEN: Record<string, Aufgabe> = {
            Feld ist mit 220 Zeichen der LÄNGSTE Modelltext, der wörtlich in die
            Oberfläche geht. Gekappt war es schon, gescrubt nicht; damit kamen
            Zeilentrenner und ein wörtliches Ende-Tag unverändert beim Client an. */
-        interpretation_klartext: kurz(
-          a.interpretation_klartext,
-          KLARTEXT_MAX_ZEICHEN,
-        ),
+        interpretation_klartext: klartext,
       };
-      return { daten };
+      if (!hatSichereStruktur) {
+        warn("no-safe-structure");
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: klartext || SUCHE_DEGRADED_NOTICE,
+            warnings: sichereSucheWarnings([...warnungen]),
+          },
+        };
+      }
+      const warnings = sichereSucheWarnings([...warnungen]);
+      return {
+        daten,
+        darstellung: {
+          responseMode: warnings.length ? "partial" : "structured",
+          displayText: warnings.length ? SUCHE_PARTIAL_NOTICE : null,
+          warnings,
+        },
+      };
     },
   },
 
@@ -4187,41 +4359,78 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   let inhalt: unknown = null;
-  try {
-    inhalt = JSON.parse(ergebnis.text);
-  } catch {
-    await beende("fehler", {
-      modell: ergebnis.modell,
-      inputTokens: ergebnis.inputTokens,
-      outputTokens: ergebnis.outputTokens,
-      kosten,
-      fehlerklasse: CODES.INVALID_RESPONSE + ":kein-json",
-    });
-    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
-      grund: "antwort-kein-json",
-      vorgangId,
-      ...providerRawExtra(),
-    });
+  let sucheProviderDarstellung: ErgebnisDarstellung | null = null;
+  if (task === "intelligent-search") {
+    try {
+      const parsed = parseProviderLooseJsonText(ergebnis.text);
+      inhalt = parsed.value;
+      sucheProviderDarstellung = {
+        responseMode: parsed.mode,
+        displayText: parsed.mode === "degraded"
+          ? (parsed.displayText || SUCHE_DEGRADED_NOTICE)
+          : parsed.mode === "partial" ? SUCHE_PARTIAL_NOTICE : null,
+        warnings: sichereSucheWarnings([...parsed.warnings]),
+      };
+    } catch {
+      /* Geheimnis-, Thinking-/Prompt- oder API-Huellenverdacht bleibt ein
+         harter Ausgabestopp. Gerade hier darf auch der Owner-Diagnosepfad den
+         Rohtext nicht in die Antwort zurueckreichen. */
+      await beende("fehler", {
+        modell: ergebnis.modell,
+        inputTokens: ergebnis.inputTokens,
+        outputTokens: ergebnis.outputTokens,
+        kosten,
+        fehlerklasse: CODES.INVALID_RESPONSE + ":provider-text-unsafe",
+      });
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "antwort-verletzt-schema",
+        vorgangId,
+      });
+    }
+  } else {
+    try {
+      inhalt = JSON.parse(ergebnis.text);
+    } catch {
+      await beende("fehler", {
+        modell: ergebnis.modell,
+        inputTokens: ergebnis.inputTokens,
+        outputTokens: ergebnis.outputTokens,
+        kosten,
+        fehlerklasse: CODES.INVALID_RESPONSE + ":kein-json",
+      });
+      return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+        grund: "antwort-kein-json",
+        vorgangId,
+        ...providerRawExtra(),
+      });
+    }
   }
   /* Fachliche Prüfung NACH der strukturellen: ein technisch gültiges JSON ist
      noch kein brauchbares Ergebnis. Die Aufgabe liefert nur eine Kennung
      zurück — nie einen Text mit Nutzerinhalt darin. */
   let pruefung: Pruefung;
-  try {
-    const roh = aufgabe.pruefeErgebnis(inhalt, aufgabenPayload);
-    /* Auch die FORMPRÜFUNG gehört in den Schutz, nicht nur der Aufruf: gibt
-       eine Aufgabe die alte Rückgabeform zurück — einen rohen String, wie ihn
-       jede Kopiervorlage aus der Versionsgeschichte liefert —, dann wirft
-       schon `"fehler" in roh` auf einem Primitiv. Diese Ausnahme fiele
-       außerhalb des try an und ließe die Protokollzeile offen. */
-    pruefung = roh && typeof roh === "object" && ("fehler" in roh || "daten" in roh) ? roh : { fehler: "pruefung-formfremd" };
-  } catch {
-    /* Eine werfende Prüfung darf die Protokollzeile nicht offen lassen: sie
-       bliebe auf `laufend` stehen und blockierte den Parallelzähler bis zur
-       Zeitgrenze, die Reservierung bliebe dauerhaft gebucht. Für `echo-struct`
-       ist das unmöglich — aber ab Etappe 6 bringt jede neue Aufgabe eigenen
-       Prüfcode mit, und dann ist genau das die naheliegendste Fehlerquelle. */
-    pruefung = { fehler: "pruefung-abgestuerzt" };
+  if (sucheProviderDarstellung?.responseMode === "degraded") {
+    pruefung = {
+      daten: null,
+      darstellung: sucheProviderDarstellung,
+    };
+  } else {
+    try {
+      const roh = aufgabe.pruefeErgebnis(inhalt, aufgabenPayload);
+      /* Auch die FORMPRÜFUNG gehört in den Schutz, nicht nur der Aufruf: gibt
+         eine Aufgabe die alte Rückgabeform zurück — einen rohen String, wie ihn
+         jede Kopiervorlage aus der Versionsgeschichte liefert —, dann wirft
+         schon `"fehler" in roh` auf einem Primitiv. Diese Ausnahme fiele
+         außerhalb des try an und ließe die Protokollzeile offen. */
+      pruefung = roh && typeof roh === "object" && ("fehler" in roh || "daten" in roh) ? roh : { fehler: "pruefung-formfremd" };
+    } catch {
+      /* Eine werfende Prüfung darf die Protokollzeile nicht offen lassen: sie
+         bliebe auf `laufend` stehen und blockierte den Parallelzähler bis zur
+         Zeitgrenze, die Reservierung bliebe dauerhaft gebucht. Für `echo-struct`
+         ist das unmöglich — aber ab Etappe 6 bringt jede neue Aufgabe eigenen
+         Prüfcode mit, und dann ist genau das die naheliegendste Fehlerquelle. */
+      pruefung = { fehler: "pruefung-abgestuerzt" };
+    }
   }
   if ("fehler" in pruefung) {
     await beende("fehler", {
@@ -4236,6 +4445,35 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       vorgangId,
       ...providerRawExtra(),
     });
+  }
+
+  let sucheDarstellung: ErgebnisDarstellung | null = null;
+  if (task === "intelligent-search") {
+    const fach = pruefung.darstellung ?? {
+      responseMode: "structured" as const,
+      displayText: null,
+      warnings: [],
+    };
+    const warnings = sichereSucheWarnings([
+      ...(sucheProviderDarstellung?.warnings ?? []),
+      ...fach.warnings,
+    ]);
+    const responseMode = sucheProviderDarstellung?.responseMode === "degraded" ||
+        fach.responseMode === "degraded"
+      ? "degraded"
+      : sucheProviderDarstellung?.responseMode === "partial" ||
+          fach.responseMode === "partial" || warnings.length
+      ? "partial"
+      : "structured";
+    sucheDarstellung = {
+      responseMode,
+      displayText: responseMode === "degraded"
+        ? (fach.displayText || sucheProviderDarstellung?.displayText ||
+          SUCHE_DEGRADED_NOTICE)
+        : responseMode === "partial" ? SUCHE_PARTIAL_NOTICE : null,
+      warnings,
+    };
+    if (responseMode === "degraded") pruefung.daten = null;
   }
 
   if (filmwissenLauf) {
@@ -4356,6 +4594,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
        wird der konfigurierte Modellname als belegbarer Ersatz verwendet. */
       modell: /^[a-z0-9][a-z0-9._:-]{0,79}$/.test(ergebnis.modell) ? ergebnis.modell : modell,
       data: pruefung.daten,
+      ...(sucheDarstellung ?? {}),
       ...(forecastProvenienz ? { provenienz: forecastProvenienz } : {}),
       verbrauch: {
         inputTokens: ergebnis.inputTokens,
