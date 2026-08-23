@@ -1004,7 +1004,7 @@ test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ p
   await keineDokumentUeberbreite(page);
 });
 
-test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussicher", async ({ page }) => {
+test("Entdecken-Dialog und freies Radarziel bleiben am Desktop lokal und fokussicher", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await blockiereFremdnetz(page);
   await seedAppMitDarstellung(page);
@@ -1030,16 +1030,18 @@ test("Entdecken-Dialog und Radar-Vorschauen bleiben am Desktop lokal und fokussi
   await expect(verwalten).toBeFocused();
 
   await page.getByRole("tab", { name: "Radar" }).click();
-  await page.getByLabel("Film, Serie, Person oder Reihe").fill("Passender Film");
-  await page.locator('[data-radar-target-kind="catalog"]').filter({ hasText: "Passender Film" }).click();
-  const preview = page.getByRole("dialog", { name: "Ins Radar" });
-  await expect(preview).toContainText("Vorschau · noch nicht gespeichert");
-  await expect(preview.getByRole("checkbox")).toBeDisabled();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
-  await page.keyboard.press("Escape");
-  await expect(preview).toBeHidden();
+  await page.getByLabel("Wonach soll dein Radar suchen?").fill("Passender Film");
+  await page.getByRole("button", { name: "Im Radar speichern", exact: true }).click();
+  await expect(page.locator('[role="dialog"]')).toHaveCount(0);
+  const meineZiele = page.locator(".kd-entdecken-panel").filter({
+    has: page.getByRole("heading", { name: "Meine Ziele" }),
+  });
+  await expect(meineZiele).toContainText("Passender Film");
   await expect(page.locator(".kd-entdecken")).not.toContainText(/Pilot|Fixture|Proposal|Hash|Outbox/i);
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("kd:radar"))).toBeNull();
+  await expect.poll(() => page.evaluate(() => {
+    const radar = JSON.parse(localStorage.getItem("kd:radar") || "null");
+    return radar?.subscriptions?.map(({ targetType, targetText }) => ({ targetType, targetText })) || null;
+  })).toEqual([{ targetType: "text", targetText: "Passender Film" }]);
   await keineDokumentUeberbreite(page);
 });
 
