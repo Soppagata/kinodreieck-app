@@ -18,9 +18,15 @@ import {
   ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256,
   RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS,
   RADAR_ENTDECKEN_V6_RELEASE_SHA256,
+  RADAR_TEXT_TARGET_COMMIT,
+  RADAR_TEXT_TARGET_FILES,
+  RADAR_TEXT_TARGET_RELEASE_MIGRATIONS,
+  RADAR_TEXT_TARGET_RELEASE_SHA256,
+  RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256,
   RADAR_V6_SOURCE_BUNDLE_SHA256,
   requireRadarDeployedV5Provenance,
   requireRadarEntdeckenV6ReleaseProvenance,
+  requireRadarTextTargetReleaseProvenance,
 } from "./tools/radar_websearch_remote_start.mjs";
 
 let checks = 0;
@@ -55,6 +61,15 @@ function fileAtAcceptedV5(pathname) {
     "show", `${deployedV5.acceptedBaselineCommit}:${pathname}`,
   ], { cwd: process.cwd(), encoding: null });
 }
+const radarEntdeckenV6BaselineCommit = "8b1f4aa654bf4c272514a8e9fb4918dda42eac0b";
+function fileAtAcceptedV6(pathname) {
+  return execFileSync("/usr/bin/git", [
+    "show", `${radarEntdeckenV6BaselineCommit}:${pathname}`,
+  ], { cwd: process.cwd(), encoding: null });
+}
+function provenancePath(absolutePath) {
+  return path.relative(process.cwd(), String(absolutePath)).split(path.sep).join("/");
+}
 
 await check("Deployte v5-Function bleibt im angenommenen Baselinecommit bytegenau gebunden und blockiert v6-Rollback", () => {
   const closureRows = deployedV5.files.map(([path, expected]) => {
@@ -81,7 +96,11 @@ await check("Deployte v5-Function bleibt im angenommenen Baselinecommit bytegena
 });
 
 await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und alle vier Forward-Migrationen bytegenau", () => {
-  const release = requireRadarEntdeckenV6ReleaseProvenance();
+  const release = requireRadarEntdeckenV6ReleaseProvenance({
+    readFile(absolutePath) {
+      return fileAtAcceptedV6(provenancePath(absolutePath));
+    },
+  });
   assert.equal(release.releaseSha256, RADAR_ENTDECKEN_V6_RELEASE_SHA256);
   assert.equal(
     sha256(JSON.stringify(release.functions.radar)),
@@ -100,11 +119,35 @@ await check("Neuer Deployzaun bindet Radar v6, Entdecken-Wochenfeed und alle vie
   const migrationPath = RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS[1].path;
   assert.throws(() => requireRadarEntdeckenV6ReleaseProvenance({
     readFile(absolutePath) {
-      const pathname = path.relative(process.cwd(), String(absolutePath)).split(path.sep).join("/");
-      const bytes = fs.readFileSync(pathname);
+      const pathname = provenancePath(absolutePath);
+      const bytes = fileAtAcceptedV6(pathname);
       return pathname === migrationPath ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
     },
   }), (error) => error?.code === "RADAR_V6_RELEASE_PROVENANCE_DRIFT");
+});
+
+await check("Aktueller Radar-Text-Target-Zaun bindet Commit, vier Function-Dateien und Forward-Migration bytegenau", () => {
+  assert.equal(RADAR_TEXT_TARGET_COMMIT, "3c3482041c9036eefa3cd6f8b2d25a48549fcdf8");
+  const release = requireRadarTextTargetReleaseProvenance();
+  assert.equal(release.releaseSha256, RADAR_TEXT_TARGET_RELEASE_SHA256);
+  assert.deepEqual(release.functions.radar, RADAR_TEXT_TARGET_FILES);
+  assert.equal(
+    sha256(JSON.stringify(release.functions.radar)),
+    RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256,
+  );
+  assert.deepEqual(
+    release.migrations.map(({ version, name, sha256: digest }) => ({ version, name, sha256: digest })),
+    RADAR_TEXT_TARGET_RELEASE_MIGRATIONS.map(({ version, name, sha256: digest }) => ({ version, name, sha256: digest })),
+  );
+
+  const migrationPath = RADAR_TEXT_TARGET_RELEASE_MIGRATIONS[0].path;
+  assert.throws(() => requireRadarTextTargetReleaseProvenance({
+    readFile(absolutePath) {
+      const pathname = provenancePath(absolutePath);
+      const bytes = fs.readFileSync(pathname);
+      return pathname === migrationPath ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
+    },
+  }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
 });
 
 const franchiseCatalog = Object.freeze([
