@@ -77,6 +77,12 @@ check("E8 Recherche bleibt eine einzelne bestätigte Sonnet-Ausgabe ohne Auto-Re
   && /genau einen Sonnet-Aufruf/.test(intelligenceController)
   && /keine automatische Wiederholung/.test(filmwissen));
 
+check("E8a Teil- und Entwurfsantworten bleiben sichtbar von belegtem Filmwissen getrennt", () =>
+  /FILMWISSEN_STATUS\.ENTWURF/.test(filmwissen)
+  && /Unverbindlicher Hinweis\/Entwurf/.test(filmwissen)
+  && /nicht\s+als „belegt“ veröffentlicht/.test(filmwissen)
+  && /wurde nicht als Filmwissen gespeichert/.test(filmwissen));
+
 check("E9 Ohne-Bewertung-Schalter wird nur nach erfolgreichem Speichern zurückgesetzt", () => {
   const erfolgsGate = eintrag.indexOf("if (ergebnis === null || ergebnis === false)");
   const ruecksetzen = eintrag.indexOf("setOhneBewertung(false)", erfolgsGate);

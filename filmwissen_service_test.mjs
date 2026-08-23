@@ -130,6 +130,80 @@ await check("Cache-Miss startet genau eine kennungsenge Synthese und liest danac
     && kiRufe[0].task === "filmwissen-synthese"
     && JSON.stringify(kiRufe[0].payload) === JSON.stringify({ namespace: "imdb", kennung: "tt0078748" });
 });
+await check("Partielle Synthese zeigt den festen Hinweis am belegten Readback", async () => {
+  let liest = 0;
+  const hinweis = "Die Filmwissen-Antwort war teilweise unvollständig. Nur einzeln belegte Wissensbausteine wurden berücksichtigt.";
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => ({
+      ok: true,
+      data: liest++ === 0
+        ? { format: "filmwissen-cache-v1", status: "cache_miss" }
+        : bereit,
+    }),
+    ai: { runTask: async () => ({
+      ok: true,
+      data: { status: "belegt", versionId: bereit.version.id },
+      responseMode: "partial",
+      displayText: hinweis,
+      warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+    }) },
+  });
+  const result = await s.recherchiere({ imdb_id: "tt0078748" });
+  return result.status === "belegt" && result.responseMode === "partial"
+    && result.displayText === hinweis && liest === 2
+    && Object.isFrozen(result.warnings);
+});
+await check("Degradierter Freitext bleibt unverbindlicher Hinweis ohne Belegt-Readback", async () => {
+  let liest = 0;
+  const hinweis = "Die Antwort ließ sich nicht sicher als Filmwissen gliedern.";
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => {
+      liest++;
+      return { ok: true, data: { format: "filmwissen-cache-v1", status: "cache_miss" } };
+    },
+    ai: { runTask: async () => ({
+      ok: true,
+      data: null,
+      responseMode: "degraded",
+      displayText: hinweis,
+      warnings: ["unstructured-provider-text"],
+    }) },
+  });
+  const result = await s.recherchiere({ imdb_id: "tt0078748" });
+  return result.status === "nicht_belegt" && result.responseMode === "degraded"
+    && result.displayText === hinweis && liest === 1;
+});
+await check("Sichere, aber nicht publizierbare Claims bleiben ungespeicherte Vorschauitems", async () => {
+  let liest = 0;
+  const hinweis = "Nur sichere Einzelclaims werden als unverbindliche Vorschau angezeigt.";
+  const s = createFilmwissenService({
+    auth: authDoppel(),
+    transport: async () => {
+      liest++;
+      return { ok: true, data: { format: "filmwissen-cache-v1", status: "cache_miss" } };
+    },
+    ai: { runTask: async () => ({
+      ok: true,
+      data: {
+        format: "filmwissen-entwurf-v1",
+        status: "entwurf",
+        claims: [
+          { aussage: "Erstveröffentlichung: 1979.", quelle: "wikidata", titel: "Wikidata: Alien", url: "https://www.wikidata.org/wiki/Q103569" },
+          { aussage: "Aufnahme in das National Film Registry.", quelle: "loc-nfr", titel: "Library of Congress: Alien", url: "https://www.loc.gov/alien" },
+        ],
+      },
+      responseMode: "partial",
+      displayText: hinweis,
+      warnings: ["invalid-fields-ignored"],
+    }) },
+  });
+  const result = await s.recherchiere({ imdb_id: "tt0078748" });
+  return result.status === "entwurf" && result.claims.length === 2
+    && result.displayText === hinweis && liest === 1
+    && Object.isFrozen(result.claims[0]);
+});
 await check("Noch nicht zugeordnete starke ID darf den ersten Bericht anlegen", async () => {
   let liest = 0; let kiRufe = 0;
   const s = createFilmwissenService({

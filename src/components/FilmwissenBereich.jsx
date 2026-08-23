@@ -34,6 +34,14 @@ export function FilmwissenBereich({
       {fehler && (
         <p role="alert" style={{ margin: "0 0 8px", color: T.gefahr, fontSize: 13 }}>{fehler}</p>
       )}
+      {daten?.displayText && ["partial", "degraded"].includes(daten.responseMode) && (
+        <p role="status" style={{ margin: "0 0 8px", color: T.rauch, fontSize: 12, lineHeight: 1.5 }}>
+          <strong style={{ color: T.leinwand }}>
+            {daten.responseMode === "degraded" ? "Unverbindlicher Hinweis/Entwurf: " : "Teilweise bereinigt: "}
+          </strong>
+          {daten.displayText}
+        </p>
+      )}
 
       {status === FILMWISSEN_STATUS.BELEGT && (
         <>
@@ -78,6 +86,26 @@ export function FilmwissenBereich({
           Noch keine ausreichend belegte gemeinsame WARUM-Einordnung. Das bedeutet nicht,
           dass der Film wenig relevant ist — nur, dass der feste Quellenweg es derzeit nicht belegt.
         </p>
+      )}
+      {status === FILMWISSEN_STATUS.ENTWURF && (
+        <>
+          <p style={{ margin: "0 0 8px", color: T.rauch, fontSize: 13, lineHeight: 1.5 }}>
+            Diese einzeln geprüften Bausteine sind nur eine Vorschau. Das Paket ist nicht
+            als „belegt“ veröffentlicht und wurde nicht als Filmwissen gespeichert.
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            {daten.claims.map((claim) => (
+              <div key={claim.quelle + "|" + claim.url + "|" + claim.aussage}
+                style={{ borderLeft: "2px solid " + T.wolfram, paddingLeft: 9 }}>
+                <div style={{ color: T.leinwand, fontSize: 13 }}>{claim.aussage}</div>
+                <a href={claim.url} target="_blank" rel="noopener noreferrer"
+                  style={{ color: T.rauch, fontSize: 11 }}>
+                  {claim.titel} · {claim.quelle} ↗
+                </a>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       {status === FILMWISSEN_STATUS.NICHT_ZUORDENBAR && (
         <>

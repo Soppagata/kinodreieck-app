@@ -8186,6 +8186,23 @@ function filmwissenAnbieterAntwort(aenderung: Record<string, unknown> = {}) {
   };
 }
 
+const filmwissenWerkClaim = {
+  typ: "film",
+  titel: "Alien – Das unheimliche Wesen aus einer fremden Welt",
+  jahr: 1979,
+};
+const filmwissenClaim = (
+  belegId: string,
+  zitat: string,
+  aenderung: Record<string, unknown> = {},
+) => ({
+  werk: filmwissenWerkClaim,
+  aussage: zitat,
+  belegId,
+  zitat,
+  ...aenderung,
+});
+
 test("FW1 Filmwissen akzeptiert ausschliesslich eine starke Kennung", async () => {
   gleich(
     FILMWISSEN_KENNUNGSRAEUME.join(","),
@@ -8387,7 +8404,7 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   );
   gleich(
     start.p_prompt_version,
-    "filmwissen-war-v1",
+    "filmwissen-war-v2",
     "Promptversion kommt vom Server",
   );
   const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
@@ -8411,6 +8428,48 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
     belege.some((b) => b.quelle === "loc-nfr"),
     "institutioneller Beleg gespeichert",
   );
+});
+
+test("FW5a JSON-Codeblock behaelt zwei einzeln belegte Claims und verwirft den kaputten", async () => {
+  stelleZurueck();
+  const auftragId = crypto.randomUUID();
+  const versionId = crypto.randomUUID();
+  z.filmwissenAdapterStart = { status: "neu", auftragId };
+  z.filmwissenAbschluss = { status: "fertig", versionId };
+  const f1 = "Erstveröffentlichung: 1979.";
+  const f2 = "Alien (1979) wurde 2002 in das National Film Registry aufgenommen.";
+  const providerJson = {
+    format: "filmwissen-synthese-v1",
+    warum: 5,
+    sicherheit: "hoch",
+    claims: [
+      filmwissenClaim("F1", f1),
+      filmwissenClaim("F2", f2),
+      filmwissenClaim("F9", "Eine unbelegte fremde Behauptung."),
+    ],
+    ignoriertesZusatzfeld: "kein Wissensitem",
+  };
+  z.anbieter = () => anbieterErfolg(
+    `Hier ist die strukturierte Antwort:\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\`\nEnde.`,
+  );
+
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status, "belegt", "belegt erst nach Abschluss");
+  gleich(r.daten.responseMode, "partial", "partieller Ergebnisvertrag");
+  const warnings = r.daten.warnings as string[];
+  wahr(warnings.includes("json-extracted-from-text"), "Codeblock bereinigt");
+  wahr(warnings.includes("invalid-items-ignored"), "kaputter Claim verworfen");
+  wahr(warnings.includes("extra-fields-ignored"), "Zusatzfeld ignoriert");
+  gleich(rpc("kd_filmwissen_synthese_abschliessen").length, 1, "genau ein atomarer Publikationswrite");
+  gleich(rpc("kd_filmwissen_synthese_fehlgeschlagen").length, 0, "kein Fehlerabschluss");
+  const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
+    .koerper as Record<string, unknown>;
+  const belege = abschluss.p_belege as Array<Record<string, unknown>>;
+  const items = belege.flatMap((beleg) => beleg.kernaussagen as string[]);
+  gleich(items.length, 2, "genau zwei Wissensitems");
+  wahr(items.includes(f1) && items.includes(f2), "beide sicheren Claims bleiben");
+  falsch(items.some((item) => /unbelegte fremde/.test(item)), "kaputter Claim wird nicht persistiert");
 });
 
 test("FW6 Film ohne LOC-Treffer endet ehrlich vor KI-Kosten", async () => {
@@ -8440,18 +8499,18 @@ test("FW6 Film ohne LOC-Treffer endet ehrlich vor KI-Kosten", async () => {
   gleich(anbieterAufrufe().length, 0, "kein Anbieter");
 });
 
-test("FW7 ungültige Synthese schliesst Auftrag und KI-Log gemeinsam als Fehler", async () => {
+test("FW7 unparsebarer sicherer Text bleibt unverbindlich und publiziert nichts", async () => {
   stelleZurueck();
   const auftragId = crypto.randomUUID();
   z.filmwissenAdapterStart = { status: "neu", auftragId };
-  z.anbieter = () =>
-    anbieterErfolg(filmwissenAnbieterAntwort({
-      belegIds: ["F1"],
-      warum: 5,
-    }));
+  z.anbieter = () => anbieterErfolg(
+    "Die Quellen wirken relevant, aber ich kann daraus keinen sicher strukturierten Bericht bilden.",
+  );
   const r = await filmwissenRuf();
-  gleich(r.status, 502, "Schemafehler");
-  gleich(r.daten.code, "invalid-response", "stabiler Fehlercode");
+  gleich(r.status, 200, "sichtbarer degradierter Status");
+  gleich(r.daten.data, null, "keine Filmwissensdaten");
+  gleich(r.daten.responseMode, "degraded", "unverbindlicher Darstellungsmodus");
+  wahr(/keinen sicher strukturierten Bericht/.test(String(r.daten.displayText)), "sicherer Hinweis bleibt sichtbar");
   gleich(
     rpc("kd_filmwissen_synthese_fehlgeschlagen").length,
     1,

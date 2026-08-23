@@ -1,9 +1,10 @@
 /* Strikter, accountfreier Clientvertrag fuer gemeinsames Filmwissen. */
 export const FILMWISSEN_FORMAT = "filmwissen-cache-v1";
+export const FILMWISSEN_ENTWURF_FORMAT = "filmwissen-entwurf-v1";
 export const FILMWISSEN_STATUS = Object.freeze({
   NICHT_ZUORDENBAR: "nicht_zuordenbar", CACHE_MISS: "cache_miss",
   GESPERRT: "gesperrt", NICHT_BELEGT: "nicht_belegt",
-  BELEGT: "belegt", VERALTET: "veraltet",
+  BELEGT: "belegt", ENTWURF: "entwurf", VERALTET: "veraltet",
 });
 const PRIORITAET = [
   ["kinodreieck", ["filmwissen_werk_id", "filmwissenWerkId"]],
@@ -74,4 +75,56 @@ export function dekodiereFilmwissen(raw) {
     version: { id: text(version.id), nr: version.nr, schemaVersion: text(version.schemaVersion), rubrikVersion: text(version.rubrikVersion), stand: version.stand },
     warum: { wert, sicherheit: warum.sicherheit, kurztext: text(warum.kurztext) }, fundstellen: fund });
 }
-export const filmwissenSonderstatus = (status) => friere({ format: FILMWISSEN_FORMAT, status });
+
+export function dekodiereFilmwissenEntwurf(raw) {
+  if (!objekt(raw) || raw.format !== FILMWISSEN_ENTWURF_FORMAT
+      || raw.status !== FILMWISSEN_STATUS.ENTWURF
+      || Object.keys(raw).sort().join(",") !== "claims,format,status"
+      || !Array.isArray(raw.claims) || raw.claims.length < 1 || raw.claims.length > 8) {
+    ungueltig("entwurf");
+  }
+  const claims = raw.claims.map((claim) => {
+    if (!objekt(claim)
+        || Object.keys(claim).sort().join(",") !== "aussage,quelle,titel,url") {
+      ungueltig("entwurf-claim");
+    }
+    const aussage = text(claim.aussage);
+    const quelle = text(claim.quelle);
+    const titel = text(claim.titel);
+    const url = text(claim.url);
+    let parsed;
+    try { parsed = new URL(url); } catch { ungueltig("entwurf-url"); }
+    if (!aussage || aussage.length > 500 || !quelle || !titel
+        || parsed.protocol !== "https:" || parsed.username || parsed.password) {
+      ungueltig("entwurf-claim");
+    }
+    return { aussage, quelle, titel, url };
+  });
+  return friere({
+    format: FILMWISSEN_ENTWURF_FORMAT,
+    status: FILMWISSEN_STATUS.ENTWURF,
+    claims,
+  });
+}
+
+/* Darstellungsmetadaten sind nie Filmwissen. Insbesondere kann ein
+   degradierter Freitext keinen belegten Cache-Readback dekorieren. */
+export function mitFilmwissenDarstellung(daten, antwort) {
+  if (!objekt(daten) || !objekt(antwort)) ungueltig("darstellung");
+  const mode = antwort.responseMode;
+  if (!["partial", "degraded"].includes(mode)
+      || typeof antwort.displayText !== "string" || !text(antwort.displayText)
+      || !Array.isArray(antwort.warnings) || antwort.warnings.length < 1
+      || (mode === "degraded" && daten.status === FILMWISSEN_STATUS.BELEGT)) {
+    ungueltig("darstellung");
+  }
+  return friere({
+    ...daten,
+    responseMode: mode,
+    displayText: text(antwort.displayText),
+    warnings: [...antwort.warnings],
+  });
+}
+
+export const filmwissenSonderstatus = (status) =>
+  friere({ format: FILMWISSEN_FORMAT, status });

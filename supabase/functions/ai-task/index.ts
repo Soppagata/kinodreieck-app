@@ -42,7 +42,16 @@
    =========================================================================== */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { baueSyntheseAuftrag, FILMWISSEN_PROMPT_VERSION, FILMWISSEN_SYNTHESE_FORMAT, type Fundstelle, pruefeSyntheseAusgabe, type Werk } from "../filmwissen-task/vertrag.ts";
+import {
+  baueSyntheseAuftrag,
+  bereinigeSyntheseAusgabe,
+  type BereinigteSynthese,
+  FILMWISSEN_ENTWURF_FORMAT,
+  FILMWISSEN_PROMPT_VERSION,
+  type Fundstelle,
+  type SyntheseEvidenz,
+  type Werk,
+} from "../filmwissen-task/vertrag.ts";
 import { type AdapterFundstelle, fundstelleAusLocNfrSnapshot, fundstellenFuerSynthese, holeLocNfrSnapshot, holeWikidataFundstelle, LOC_NFR_ADAPTER_VERSION, type LocNfrSnapshot, pruefeLocNfrSnapshot, QuellenFehler, type StarkeFilmkennung } from "../filmwissen-task/quellen.ts";
 import {
   AufrufFehler,
@@ -773,6 +782,7 @@ const TOLERANTE_JSON_AUFGABEN = new Set([
   "intelligent-search",
   "profile-extract",
   "film-forecast",
+  "filmwissen-synthese",
 ]);
 
 function hinweiseFuerAufgabe(task: string) {
@@ -783,6 +793,12 @@ function hinweiseFuerAufgabe(task: string) {
     return {
       partial: FORECAST_PARTIAL_NOTICE,
       degraded: FORECAST_DEGRADED_NOTICE,
+    };
+  }
+  if (task === "filmwissen-synthese") {
+    return {
+      partial: FILMWISSEN_PARTIAL_NOTICE,
+      degraded: FILMWISSEN_DEGRADED_NOTICE,
     };
   }
   return { partial: SUCHE_PARTIAL_NOTICE, degraded: SUCHE_DEGRADED_NOTICE };
@@ -1201,6 +1217,10 @@ const FORECAST_PARTIAL_NOTICE =
   "Die KI-Antwort war teilweise unvollständig. Nur sicher validierbare Prognosefelder werden angezeigt.";
 const FORECAST_DEGRADED_NOTICE =
   "Die KI-Antwort konnte nicht sicher in Prognosefelder umgewandelt werden.";
+const FILMWISSEN_PARTIAL_NOTICE =
+  "Die Filmwissen-Antwort war teilweise unvollständig. Nur einzeln belegte Wissensbausteine wurden berücksichtigt.";
+const FILMWISSEN_DEGRADED_NOTICE =
+  "Die Filmwissen-Antwort blieb ein unverbindlicher Entwurf und wurde nicht als belegt veröffentlicht.";
 
 /* Derselbe additive Ergebnisvertrag gilt inzwischen fuer mehrere Aufgaben.
    Die Warncodes beschreiben ausschliesslich Bereinigungsschritte und bleiben
@@ -2394,6 +2414,7 @@ function deckeleForecastSicherheit(
 type FilmwissenInternerPayload = {
   werk: Werk;
   fundstellen: Fundstelle[];
+  evidenz: SyntheseEvidenz[];
 };
 
 function leseFilmwissenIntern(
@@ -2401,21 +2422,38 @@ function leseFilmwissenIntern(
 ): FilmwissenInternerPayload {
   if (
     !payload || typeof payload !== "object" || Array.isArray(payload) ||
-    Object.keys(payload).sort().join(",") !== "fundstellen,werk"
+    Object.keys(payload).sort().join(",") !== "evidenz,fundstellen,werk"
   ) {
     throw new AufrufFehler(CODES.INVALID_RESPONSE, "filmwissen-intern-form");
   }
   const werk = eigenerWert(payload, "werk") as Werk;
   const fundstellen = eigenerWert(payload, "fundstellen") as Fundstelle[];
+  const evidenz = eigenerWert(payload, "evidenz") as SyntheseEvidenz[];
   try {
     baueSyntheseAuftrag(werk, fundstellen);
+    if (!Array.isArray(evidenz) || evidenz.length !== fundstellen.length) {
+      throw new Error("filmwissen-evidenz-anzahl");
+    }
+    const ids = new Set<string>();
+    for (const beleg of evidenz) {
+      if (!beleg || Object.keys(beleg).sort().join(",") !== "id,url" ||
+          !fundstellen.some((fundstelle) => fundstelle.id === beleg.id) ||
+          ids.has(beleg.id)) {
+        throw new Error("filmwissen-evidenz-form");
+      }
+      const url = new URL(beleg.url);
+      if (url.protocol !== "https:" || url.username || url.password) {
+        throw new Error("filmwissen-evidenz-url");
+      }
+      ids.add(beleg.id);
+    }
   } catch {
     throw new AufrufFehler(
       CODES.INVALID_RESPONSE,
       "filmwissen-intern-ungueltig",
     );
   }
-  return { werk, fundstellen };
+  return { werk, fundstellen, evidenz };
 }
 
 export const AUFGABEN: Record<string, Aufgabe> = {
@@ -3324,8 +3362,31 @@ export const AUFGABEN: Record<string, Aufgabe> = {
     },
     pruefeErgebnis(inhalt, payload) {
       const eingabe = leseFilmwissenIntern(payload);
-      const fehler = pruefeSyntheseAusgabe(inhalt, eingabe.fundstellen);
-      return fehler.length ? { fehler: "filmwissen-" + fehler[0] } : { daten: inhalt };
+      const bereinigt = bereinigeSyntheseAusgabe(
+        inhalt,
+        eingabe.werk,
+        eingabe.fundstellen,
+        eingabe.evidenz,
+      );
+      if (!bereinigt.daten) {
+        return {
+          daten: null,
+          darstellung: {
+            responseMode: "degraded",
+            displayText: FILMWISSEN_DEGRADED_NOTICE,
+            warnings: sichereAiWarnings(bereinigt.warnings),
+          },
+        };
+      }
+      const warnings = sichereAiWarnings(bereinigt.warnings);
+      return {
+        daten: bereinigt.daten,
+        darstellung: {
+          responseMode: warnings.length ? "partial" : "structured",
+          displayText: warnings.length ? FILMWISSEN_PARTIAL_NOTICE : null,
+          warnings,
+        },
+      };
     },
   },
 
@@ -4293,6 +4354,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         jahr,
       },
       fundstellen: fundstellenFuerSynthese(wikidata, loc),
+      evidenz: adapterBelege.map((beleg) => ({ id: beleg.id, url: beleg.url })),
     };
     protokollPromptVersion = FILMWISSEN_PROMPT_VERSION;
   }
@@ -4765,20 +4827,67 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
 
   if (filmwissenLauf) {
-    const synthese = pruefung.daten as {
-      format: string;
-      warum: number;
-      sicherheit: string;
-      kurztext: string;
-      belegIds: string[];
-    };
+    const synthese = pruefung.daten as BereinigteSynthese | null;
+    if (!synthese?.publizierbar) {
+      /* Ein sicher lesbarer Freitext oder ein noch nicht vollstaendig belegtes
+         Claim-Paket beendet Auftrag und Kostenprotokoll, erreicht aber niemals
+         den Publikations-RPC. Sichere Einzelclaims duerfen als klarer,
+         ungespeicherter Entwurf zurueckkehren. */
+      await beende("fehler", {
+        modell: ergebnis.modell,
+        inputTokens: ergebnis.inputTokens,
+        outputTokens: ergebnis.outputTokens,
+        kosten,
+        fehlerklasse: synthese?.claims.length
+          ? "invalid-response:filmwissen-nicht-publizierbar"
+          : "invalid-response:filmwissen-keine-sicheren-claims",
+      });
+      const entwurfClaims = (synthese?.claims ?? []).map((claim) => {
+        const beleg = filmwissenLauf!.belege.find((wert) =>
+          wert.id === claim.belegId
+        )!;
+        return {
+          aussage: claim.aussage,
+          quelle: beleg.quelle,
+          titel: beleg.titel,
+          url: beleg.url,
+        };
+      });
+      return jsonAntwort(
+        {
+          ok: true,
+          task,
+          vorgangId,
+          modellAlias: alias,
+          modell: ergebnis.modell,
+          data: entwurfClaims.length
+            ? {
+              format: FILMWISSEN_ENTWURF_FORMAT,
+              status: "entwurf",
+              claims: entwurfClaims,
+            }
+            : null,
+          ...(ergebnisDarstellung ?? {}),
+          verbrauch: {
+            inputTokens: ergebnis.inputTokens,
+            outputTokens: ergebnis.outputTokens,
+            kostenUsdCent: Number(kosten.toFixed(6)),
+            dauerMs: Date.now() - beginn,
+            stopReason: ergebnis.stopReason,
+          },
+          ...providerRawBody(),
+        },
+        200,
+        origin,
+      );
+    }
     const version = {
       schemaVersion: "filmwissen-cache-v1",
       rubrikVersion: "warum-v1",
       pipelineVersion: "wikidata-loc-v1",
       promptVersion: FILMWISSEN_PROMPT_VERSION,
-      warum: synthese.warum,
-      sicherheit: synthese.sicherheit,
+      warum: synthese.warum as number,
+      sicherheit: synthese.sicherheit as string,
       kurztext: synthese.kurztext,
       modell: ergebnis.modell,
       kostenUsdCent: Number(kosten.toFixed(6)),
@@ -4789,7 +4898,11 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       titel: beleg.titel,
       veroeffentlichtAm: beleg.veroeffentlichtAm,
       abgerufenAm: beleg.abgerufenAm,
-      kernaussagen: beleg.kernaussagen,
+      /* Nur die einzeln an dieses Werk, diese Quelle, dieses exakte Zitat und
+         die serverseitige URL gebundenen Claims werden Wissensitems. */
+      kernaussagen: synthese.claims
+        .filter((claim) => claim.belegId === beleg.id)
+        .map((claim) => claim.aussage),
       abrufSha256: beleg.abrufSha256,
     }));
     const { data: abschlussRoh, error: abschlussFehler } = await admin.rpc(
@@ -4847,6 +4960,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           status: "belegt",
           versionId: abschluss.versionId,
         },
+        ...(ergebnisDarstellung ?? {}),
         verbrauch: {
           inputTokens: ergebnis.inputTokens,
           outputTokens: ergebnis.outputTokens,

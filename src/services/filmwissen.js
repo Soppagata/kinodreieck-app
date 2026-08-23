@@ -2,8 +2,9 @@ import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 import { BoundaryError, ERROR_CODES, errorFromStatus, normalizeBoundaryError } from "./errors.js";
 import {
-  FILMWISSEN_STATUS, dekodiereFilmwissen, filmwissenKennungen,
-  filmwissenRechercheKennung, filmwissenSonderstatus,
+  FILMWISSEN_STATUS, dekodiereFilmwissen, dekodiereFilmwissenEntwurf,
+  filmwissenKennungen, filmwissenRechercheKennung,
+  filmwissenSonderstatus, mitFilmwissenDarstellung,
 } from "../lib/filmwissen.js";
 import { createFilmwissenTransport } from "../lib/filmwissenTransport.js";
 import { aiService } from "./ai.js";
@@ -89,7 +90,22 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
         if (generation !== start || kiKontoVon(auth.getSnapshot?.()) !== accountId) {
           return filmwissenSonderstatus(FILMWISSEN_STATUS.VERALTET);
         }
+        if (result?.responseMode === "degraded") {
+          /* Der sichere Freitext ist nur eine sichtbare, unverbindliche
+             Rueckmeldung. Er wird weder als Cacheobjekt gelesen noch als
+             `belegt` behandelt. */
+          return mitFilmwissenDarstellung(
+            filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_BELEGT),
+            result,
+          );
+        }
         const status = result?.data?.status;
+        if (status === FILMWISSEN_STATUS.ENTWURF) {
+          return mitFilmwissenDarstellung(
+            dekodiereFilmwissenEntwurf(result.data),
+            result,
+          );
+        }
         if (status === "nicht_belegt") {
           return filmwissenSonderstatus(FILMWISSEN_STATUS.NICHT_BELEGT);
         }
@@ -104,7 +120,10 @@ export function createFilmwissenService({ auth = authService, transport, ai = ai
             source: "filmwissen", operation: "research.decode", reason: "status-unbekannt",
           });
         }
-        return await read(film, options);
+        const gelesen = await read(film, options);
+        return result?.responseMode === "partial"
+          ? mitFilmwissenDarstellung(gelesen, result)
+          : gelesen;
       } catch (error) {
         if (error instanceof BoundaryError) throw error;
         throw normalizeBoundaryError(error, { source: "filmwissen", operation: "research" });

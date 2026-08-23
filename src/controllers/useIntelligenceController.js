@@ -281,7 +281,7 @@ export function useIntelligenceController({
   const recherchiereFilmwissen = useCallback(async (film) => {
     if (!film?.id || !filmwissenRechercheAktiv || filmwissenRechercheRef.current) return false;
     if (!window.confirm(
-      "Jetzt einen belegten Recherchebericht erstellen? Das startet genau einen Sonnet-Aufruf und kostet höchstens 6 US-Cent. Es gibt keine automatische Wiederholung.",
+      "Jetzt Filmwissen recherchieren? Nur einzeln belegte Bausteine dürfen veröffentlicht werden; unsichere Teile bleiben höchstens ein unverbindlicher Entwurf. Das startet genau einen Sonnet-Aufruf und kostet höchstens 6 US-Cent. Es gibt keine automatische Wiederholung.",
     )) return false;
     const key = String(film.id);
     const startKonto = accountId;

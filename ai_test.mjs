@@ -515,6 +515,39 @@ check("profile-extract bleibt ohne neue Darstellungsfelder abwärtskompatibel",
   profilAltLauf.fehler === null && profilAltLauf.ergebnis?.data.signale.length === 0
   && !("responseMode" in profilAltLauf.ergebnis));
 
+const filmwissenTeilLauf = await laufe(
+  dienstMit({
+    ok: true,
+    data: { status: "belegt", versionId: "22222222-2222-4222-8222-222222222222" },
+    responseMode: "partial",
+    displayText: "Nur einzeln belegte Filmwissensbausteine wurden berücksichtigt.",
+    warnings: ["json-extracted-from-text", "invalid-items-ignored"],
+  }).dienst,
+  "filmwissen-synthese",
+  { namespace: "imdb", kennung: "tt0078748" },
+);
+check("filmwissen-synthese übernimmt den additiven partial-Vertrag",
+  filmwissenTeilLauf.fehler === null
+  && filmwissenTeilLauf.ergebnis?.responseMode === "partial"
+  && filmwissenTeilLauf.ergebnis.data.status === "belegt"
+  && Object.isFrozen(filmwissenTeilLauf.ergebnis.warnings));
+
+const filmwissenDegradedLauf = await laufe(
+  dienstMit({
+    ok: true,
+    data: null,
+    responseMode: "degraded",
+    displayText: "Die Antwort blieb ein unverbindlicher Entwurf.",
+    warnings: ["unstructured-provider-text"],
+  }).dienst,
+  "filmwissen-synthese",
+  { namespace: "imdb", kennung: "tt0078748" },
+);
+check("filmwissen-synthese degraded transportiert nie belegte Daten",
+  filmwissenDegradedLauf.fehler === null
+  && filmwissenDegradedLauf.ergebnis?.data === null
+  && /unverbindlicher Entwurf/.test(filmwissenDegradedLauf.ergebnis.displayText));
+
 for (const [name, antwort] of [
   ["degraded mit Filterdaten", { ...degradedAntwort, data: { harte_filter: { genres: ["horror"] } } }],
   ["freier Warntext", { ...degradedAntwort, warnings: ["Modell sagt etwas Beliebiges"] }],
