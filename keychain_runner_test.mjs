@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import {
+  existsSync,
   readFileSync,
+  readdirSync,
   rmdirSync,
   statSync,
   unlinkSync,
@@ -44,7 +46,9 @@ import {
   createPrivateProviderRawDirectory,
   finalizeProviderCapture,
   isZeroCostProviderFreeCapture,
+  isZeroCostUnprovenCapture,
 } from "./tools/provider_raw_capture.mjs";
+import { erstelleAnbieterPfadBelege } from "./tools/ai_smoke_contract.mjs";
 
 let bestanden = 0;
 let gesamt = 0;
@@ -237,6 +241,73 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     !("providerDiagnostic" in body));
   unlinkSync(written.filePath);
   rmdirSync(directory);
+}
+
+{
+  const directory = createPrivateProviderRawDirectory();
+  const env = {
+    [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
+    [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
+  };
+  const envVorher = JSON.stringify(env);
+  let pending;
+  let finalisiert;
+  let naechsterPfadLaeufe = 0;
+  let abschluss;
+  let positiveKostenGesperrt = false;
+  let unbekannteKostenGesperrt = false;
+  let keineDateiGeschrieben = false;
+  let cleanupOk = false;
+  try {
+    pending = captureProviderRawResponse(
+      { ok: true, data: { nichtAlsProviderbelegAuswerten: true } },
+      "01-intelligent-search.json",
+      {
+        env,
+        repoRoot: REPO_ROOT,
+        responseStatus: 200,
+        expectedTask: "intelligent-search",
+        expectedVorgangId: "22222222-2222-4222-8222-222222222222",
+      },
+    );
+    const pfade = erstelleAnbieterPfadBelege(["intelligent-search", "profile-extract"]);
+    pfade.registriere("intelligent-search");
+    finalisiert = finalizeProviderCapture(pending, 0);
+    pfade.erfasseProviderCapture("intelligent-search", finalisiert);
+    pfade.registriere("profile-extract");
+    naechsterPfadLaeufe += 1;
+    abschluss = pfade.abschluss();
+    positiveKostenGesperrt = [0.0001, 1].every((kosten) => {
+      try { finalizeProviderCapture(pending, kosten); return false; }
+      catch { return true; }
+    });
+    unbekannteKostenGesperrt = [null, undefined, Number.NaN].every((kosten) => {
+      try { finalizeProviderCapture(pending, kosten); return false; }
+      catch { return true; }
+    });
+    keineDateiGeschrieben = readdirSync(directory).length === 0;
+  } finally {
+    rmdirSync(directory);
+    cleanupOk = !existsSync(directory);
+  }
+  pruefe("P12 ohne Rawpayload bleibt bis zur serverseitigen Nachmessung pending",
+    pending?.captureState === "pending-no-raw"
+      && pending?.proofState === "pending"
+      && pending?.providerRequests === null);
+  pruefe("P12 mit exaktem Nulldelta bleibt unbelegt und laesst den naechsten Pfad genau einmal laufen",
+    isZeroCostUnprovenCapture(finalisiert)
+      && naechsterPfadLaeufe === 1
+      && abschluss?.pfadeVollstaendig === true);
+  pruefe("P12 mit positiven Kosten ohne Rawpayload stoppt weiterhin fail-closed",
+    positiveKostenGesperrt);
+  pruefe("P12 mit unbekannten Kosten ohne Rawpayload stoppt weiterhin fail-closed",
+    unbekannteKostenGesperrt);
+  pruefe("Vollstaendige Pfadfolge mit unbelegtem P12 endet ehrlich rot statt sofort abzubrechen",
+    abschluss?.ok === false
+      && abschluss?.providerBelegeVollstaendig === false
+      && abschluss?.unbelegt.join(",") === "intelligent-search");
+  pruefe("P12-Mock schreibt kein Rohpayload, veraendert keine Guards und raeumt lokal auf",
+    keineDateiGeschrieben && JSON.stringify(env) === envVorher && cleanupOk);
 }
 
 {

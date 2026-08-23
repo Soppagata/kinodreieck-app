@@ -75,6 +75,7 @@ import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
 import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
 import { readFileSync } from "node:fs";
 import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
+import { erstelleAnbieterPfadBelege } from "./ai_smoke_contract.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
   RADAR_TARGET_AUTO_RESOLVE_ENV,
@@ -87,6 +88,7 @@ import {
   captureProviderRawResponse,
   finalizeProviderCapture,
   isZeroCostProviderFreeCapture,
+  isZeroCostUnprovenCapture,
   providerDiagnosticHeaders,
   providerRawCaptureEnabled,
 } from "./provider_raw_capture.mjs";
@@ -143,7 +145,7 @@ const LIVE_VERBINDUNG = Object.freeze({
 });
 let fehler = 0;
 let nummer = 0;
-const ausgefuehrteAnbieterPfade = [];
+const anbieterPfadBelege = erstelleAnbieterPfadBelege(ERWARTETE_ANBIETER_PFADE);
 
 function pruefe(name, bedingung, details) {
   nummer += 1;
@@ -293,27 +295,33 @@ function stoppeLiveLauf(error) {
 }
 
 function registriereAnbieterPfad(pfad) {
-  const erwartet = ERWARTETE_ANBIETER_PFADE[ausgefuehrteAnbieterPfade.length];
-  if (pfad !== erwartet) {
+  try {
+    anbieterPfadBelege.registriere(pfad);
+  } catch (error) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
-      `Live-Pfadfolge driftet: erwartet ${erwartet || "Laufende"}, erhalten ${pfad}.`,
+      error?.message || "Live-Pfadfolge driftet.",
     ));
   }
-  ausgefuehrteAnbieterPfade.push(pfad);
 }
 
 function bestaetigeExakteAnbieterPfadfolge() {
-  const exakt = JSON.stringify(ausgefuehrteAnbieterPfade)
-    === JSON.stringify(ERWARTETE_ANBIETER_PFADE);
-  if (!exakt) {
+  const abschluss = anbieterPfadBelege.abschluss();
+  if (!abschluss.pfadeVollstaendig) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
-      `Live-Smoke endete nach ${ausgefuehrteAnbieterPfade.length}/${ERWARTETE_ANBIETER_PFADE.length} Anbieterpfaden.`,
+      `Live-Smoke endete nach ${abschluss.ausgefuehrt.length}/${abschluss.erwartet.length} Anbieterpfaden.`,
     ));
   }
   console.log(
-    `LIVE-ANBIETERPFADE: ${ausgefuehrteAnbieterPfade.length}/${ERWARTETE_ANBIETER_PFADE.length} seriell · kein Retry`,
+    `LIVE-ANBIETERPFADE: ${abschluss.ausgefuehrt.length}/${abschluss.erwartet.length} seriell · kein Retry`,
+  );
+  pruefe(
+    "Alle Anbieterpfade sind privat providerbelegt oder sicher providerfrei",
+    abschluss.providerBelegeVollstaendig,
+    abschluss.providerBelegeVollstaendig
+      ? `${abschluss.erwartet.length}/${abschluss.erwartet.length} belegt`
+      : `${abschluss.unbelegt.length} Pfad unproven/pending-no-raw, providerRequests=0`,
   );
 }
 
@@ -521,17 +529,23 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
     try {
       capture = finalizeProviderCapture(capture, kostenMessung.requestKostenUsdCent);
-      if (capture) providerCaptureNachLabel.set(label, capture);
+      if (capture) {
+        providerCaptureNachLabel.set(label, capture);
+        anbieterPfadBelege.erfasseProviderCapture(koerper?.task, capture);
+      }
     } catch {
       captureError = new LiveSicherheitsStopp(
         "unbekannt",
-        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend.`,
+        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend oder nicht messbar.`,
       );
     }
     if (captureError) throw captureError;
     const lokalerKostenfreierP18Fehler = label === "P18 filmwissen-synthese"
       && isZeroCostProviderFreeCapture(capture);
-    if (ergebnis.status !== 200 && !lokalerKostenfreierP18Fehler) {
+    const lokalerUnbelegterP12 = label === "P12 intelligent-search"
+      && isZeroCostUnprovenCapture(capture);
+    if (ergebnis.status === 429
+        || (ergebnis.status !== 200 && !lokalerKostenfreierP18Fehler && !lokalerUnbelegterP12)) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${ergebnis.status}.`,
@@ -650,10 +664,16 @@ const p12 = await rufAnbieterBewacht(
     payload: { suchsatz: suchsatzEcht, listen: SUCH_LISTEN },
   },
 );
-const d12 = p12.daten?.data;
+const p12Capture = providerCaptureNachLabel.get("P12 intelligent-search");
+const p12ProviderBelegt = !OWNER_CORE_SIX
+  || (p12Capture?.captureState === "raw"
+    && p12Capture?.proofState === "proven"
+    && p12Capture?.providerRequests === 1);
+const p12Unbelegt = isZeroCostUnprovenCapture(p12Capture);
+const d12 = p12ProviderBelegt ? p12.daten?.data : null;
 pruefe(
   "Intelligente Suche liefert ein gueltiges Filterschema aus erlaubten Werten",
-  p12.status === 200 && !!d12
+  p12ProviderBelegt && p12.status === 200 && !!d12
     && ausListe(d12.harte_filter?.genres, SUCH_LISTEN.genres)
     && ausListe(d12.ausschluesse?.genres, SUCH_LISTEN.genres)
     && ausListe(d12.weiche_wuensche?.stimmungen, SUCH_LISTEN.stimmungen)
@@ -661,12 +681,22 @@ pruefe(
     && Array.isArray(d12.nicht_unterstuetzt)
     && p12.daten?.modellAlias === "gross"
     && p12.daten?.verbrauch?.kostenUsdCent > 0,
-  `HTTP ${p12.status}, Modell ${p12.daten?.modellAlias}, ${p12.daten?.verbrauch?.kostenUsdCent} US-Cent`,
+  p12Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw, providerRequests=0"
+    : `HTTP ${p12.status}, Modell ${p12.daten?.modellAlias}, ${p12.daten?.verbrauch?.kostenUsdCent} US-Cent`,
 );
-pruefeNutzerTaskReadback("S1 intelligent-search", "intelligent-search", p12.daten, {
-  master: [],
-  zusatzGenres: SUCH_LISTEN.genres,
-});
+if (p12ProviderBelegt) {
+  pruefeNutzerTaskReadback("S1 intelligent-search", "intelligent-search", p12.daten, {
+    master: [],
+    zusatzGenres: SUCH_LISTEN.genres,
+  });
+} else {
+  pruefe(
+    "S1 intelligent-search: Produktionsparser, Speicherung und Readback bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+  );
+}
 
 /* ===========================================================================
    P14: Persönliche Profilextraktion mit repräsentativem Beleg-/Schemafall

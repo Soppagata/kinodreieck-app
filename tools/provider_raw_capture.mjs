@@ -33,15 +33,21 @@ function kurzeSichereDiagnose(value, fallback = null) {
   return SAFE_DIAGNOSTIC_FORM.test(normalized) ? normalized : fallback;
 }
 
-function pendingFilmwissenCapture(
+const PENDING_NO_RAW_TASK_BY_FILE = Object.freeze({
+  "01-intelligent-search.json": "intelligent-search",
+  "04-filmwissen-synthese.json": "filmwissen-synthese",
+});
+
+function pendingProviderCapture(
   body,
   fileName,
   responseStatus,
   expectedTask,
   expectedVorgangId,
 ) {
-  if (fileName !== "04-filmwissen-synthese.json"
-      || expectedTask !== "filmwissen-synthese"
+  const task = PENDING_NO_RAW_TASK_BY_FILE[fileName];
+  if (!task
+      || expectedTask !== task
       || !UUID_FORM.test(expectedVorgangId || "")) {
     return null;
   }
@@ -55,6 +61,8 @@ function pendingFilmwissenCapture(
     : {};
   return Object.freeze({
     captureState: "pending-no-raw",
+    proofState: "pending",
+    task,
     filePath: null,
     bytes: 0,
     providerRequests: null,
@@ -150,7 +158,7 @@ export function captureProviderRawResponse(
     && diagnostic.rawResponse.length > 0;
   if (responseBody) delete responseBody[PROVIDER_DIAGNOSTIC_FIELD];
   if (!diagnosticGueltig) {
-    const pending = pendingFilmwissenCapture(
+    const pending = pendingProviderCapture(
       body,
       fileName,
       responseStatus,
@@ -185,6 +193,7 @@ export function captureProviderRawResponse(
   assertOwned(stats, "Providerdatei");
   return Object.freeze({
     captureState: "raw",
+    proofState: "proven",
     filePath,
     bytes,
     providerRequests: 1,
@@ -199,14 +208,31 @@ export function finalizeProviderCapture(capture, measuredCostUsdCent) {
   if (!Number.isFinite(measuredCostUsdCent) || measuredCostUsdCent !== 0) {
     throw new Error("Fehlender Providerrohpayload war kostenfuehrend oder nicht messbar.");
   }
+  if (capture.task === "intelligent-search") {
+    return Object.freeze({
+      ...capture,
+      proofState: "unproven",
+      providerRequests: 0,
+    });
+  }
+  if (capture.task !== "filmwissen-synthese") {
+    throw new Error("Pending-Capture ist keinem erlaubten Providerpfad zugeordnet.");
+  }
   return Object.freeze({
     ...capture,
     captureState: "provider-free",
+    proofState: "provider-free",
     providerRequests: 0,
   });
 }
 
 export function isZeroCostProviderFreeCapture(capture) {
   return capture?.captureState === "provider-free"
+    && capture.providerRequests === 0;
+}
+
+export function isZeroCostUnprovenCapture(capture) {
+  return capture?.proofState === "unproven"
+    && capture.captureState === "pending-no-raw"
     && capture.providerRequests === 0;
 }

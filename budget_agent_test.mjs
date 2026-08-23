@@ -438,6 +438,10 @@ const livePfadAbschnitt = smokeSkript.slice(
 );
 const filmwissenFallback = /const FILMWISSEN_DEFAULT_TARGET = "([^"]+)";/
   .exec(smokeSkript)?.[1] ?? null;
+const p12Abschnitt = smokeSkript.slice(
+  smokeSkript.indexOf("/* --- P12:"),
+  smokeSkript.indexOf("P14: Persönliche Profilextraktion"),
+);
 const readbackTasks = [...smokeSkript.matchAll(
   /pruefeNutzerTaskReadback\("[^"]+",\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
@@ -542,11 +546,17 @@ check("Owner-Radarziel wird nach Owner-Read und vor jedem Anbieterpfad genau ein
   && (smokeSkript.match(/loeseStarkesOwnerRadarZiel\(\{/g) || []).length === 1
   && (smokeSkript.match(/rpc\(\s*"kd_radar_pilot_feed",\s*token,\s*\{ p_operation_ids: \[\] \},\s*BUDGET_FETCH_TIMEOUT_MS,\s*\)/g) || []).length === 1
   && !/console\.(?:log|error)\([^\n]*(?:RADAR_TARGET_ID|KD_RADAR_TARGET_ID)/.test(smokeSkript));
-check("Jede Nutzerszene läuft genau einmal durch Produktionsparser und Readback",
+check("Jede belegbare Nutzerszene besitzt genau einen Produktionsparser- und Readbackpfad",
   readbackTasks.length === 6
   && JSON.stringify([...readbackTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
   && /pruefeAiUserTaskReadback/.test(smokeSkript)
   && /persistenz/.test(smokeSkript));
+check("P12 beurteilt Parser und Persistenz nur mit privatem Providerbeleg",
+  /const p12ProviderBelegt = !OWNER_CORE_SIX/.test(p12Abschnitt)
+  && /const d12 = p12ProviderBelegt \? p12\.daten\?\.data : null;/.test(p12Abschnitt)
+  && /if \(p12ProviderBelegt\) \{[\s\S]*pruefeNutzerTaskReadback\("S1 intelligent-search"/.test(p12Abschnitt)
+  && /else \{[\s\S]*Produktionsparser, Speicherung und Readback bleiben offen/.test(p12Abschnitt)
+  && /Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt\./.test(p12Abschnitt));
 check("Rauchprobe enthält genau je einen persönlichen und einen Blog-Profilextraktionspfad",
   (smokeSkript.match(/task: "blog-profile-extract"/g) || []).length === 1
   && (smokeSkript.match(/task: "profile-extract"/g) || []).length === 1
