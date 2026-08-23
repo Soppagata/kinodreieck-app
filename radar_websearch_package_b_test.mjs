@@ -22,6 +22,7 @@ import {
   ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
   RADAR_PACKAGE_A_COMMIT,
   RADAR_PACKAGE_B_COMMIT,
+  RADAR_TEXT_TARGET_COMMIT,
   RADAR_TITLE_GROUP_V6_COMMIT,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
@@ -431,6 +432,7 @@ const expectedRemoteReleaseClosure = Object.freeze([
   "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
   "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
+  "supabase/migrations/20260823120000_radar_text_target.sql",
   "tools/entdecken_daily_live.mjs",
   "tools/keychain_runner.mjs",
   "tools/radar_websearch_live.mjs",
@@ -472,7 +474,7 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Remote-Release-Closure entsteht aus der v6-Provenienz und dem echten Function-Importgraph", () => {
+await check("Remote-Release-Closure entsteht aus v6-Historie, Radar-Text-Target und echtem Function-Importgraph", () => {
   const first = deriveRadarPackageBReleaseClosure();
   const second = deriveRadarPackageBReleaseClosure();
   assert.deepEqual(first.contractCommits, [
@@ -482,6 +484,7 @@ await check("Remote-Release-Closure entsteht aus der v6-Provenienz und dem echte
     RADAR_TITLE_GROUP_V6_COMMIT,
     ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
     ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
+    RADAR_TEXT_TARGET_COMMIT,
   ]);
   assert.deepEqual(first.paths, expectedRemoteReleaseClosure);
   assert.equal(first.files.length, expectedRemoteReleaseClosure.length);

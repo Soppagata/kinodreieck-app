@@ -27,6 +27,7 @@ export const ENTDECKEN_WEEKLY_COMMIT = "47d7ea995375cd7437ca3b858adf9b784156c692
 export const RADAR_TITLE_GROUP_V6_COMMIT = "12bbe874fdfbc99ff3b577c09f5a95670f2950e3";
 export const ENTDECKEN_WEEKLY_RECOVERY_COMMIT = "20bbb3057c8328c67260486478956fac386b7d8b";
 export const ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT = "1d2f13f42cec110eb1947411bc3caef68010efb1";
+export const RADAR_TEXT_TARGET_COMMIT = "3c3482041c9036eefa3cd6f8b2d25a48549fcdf8";
 
 export const SUPABASE_INFRA_KEYCHAIN = Object.freeze({
   service: "at.kinodreieck.codex.supabase.bscjgwcntapobyxsiyce",
@@ -56,6 +57,7 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260822200000_radar_title_group_discovery_v6.sql",
   "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
   "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
+  "supabase/migrations/20260823120000_radar_text_target.sql",
   FUNCTION_ENTRY,
   `${FUNCTION_ROOT}/mockAdapter.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
@@ -132,6 +134,27 @@ export const RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS = Object.freeze([
 ]);
 export const RADAR_ENTDECKEN_V6_RELEASE_SHA256 = "e96f236c18cef7cc45857bae2d92391f47951ef2cbefd7f6bc39d3c54307375f";
 
+/* Additiver Releasevertrag fuer das commitgebundene Radar-Text-Target. Der
+   historische v6-Vertrag bleibt oben unveraendert als Provenienzbeleg; der
+   aktuelle Startzaun bindet nur die vier in RADAR_TEXT_TARGET_COMMIT
+   geaenderten Function-Dateien und die zugehoerige Forward-Migration. */
+export const RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256 = "86261827ecc126c38aa6f96b1594027b042d7dc37d43143d328e0c9e84975eda";
+export const RADAR_TEXT_TARGET_FILES = Object.freeze([
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "3e4272aa3a9b7577a992dcfc63b1d54e8f41ec58bf46106544e1cf989e08fce3" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "9a6cc53260acdc79eeeab44fced47781cde7176f0e8fe305d79c25da96ca44cb" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "3ff1a89d75818bb8e811af08c6c5899f61538c6ec66bdf2756ad4e0f8624ce73" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "ed78eb4d735443958906cff22ea0f5b46f97bb594a4c55764b833c767dac7d22" }),
+]);
+export const RADAR_TEXT_TARGET_RELEASE_MIGRATIONS = Object.freeze([
+  Object.freeze({
+    version: "20260823120000",
+    name: "radar_text_target",
+    path: "supabase/migrations/20260823120000_radar_text_target.sql",
+    sha256: "c52ec0a2f9215fe6b554f3916f861fe121b3ab92e6ee8a14abe97467def1c9f7",
+  }),
+]);
+export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "dbcf080f798336d96a156c73b0472a030d39afc93a3eab539c52f65352040755";
+
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
     "supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql",
@@ -171,6 +194,13 @@ const REQUIRED_PROVENANCE = Object.freeze({
     "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
     "tools/entdecken_daily_live.mjs",
     "tools/keychain_runner.mjs",
+  ]),
+  [RADAR_TEXT_TARGET_COMMIT]: Object.freeze([
+    "supabase/migrations/20260823120000_radar_text_target.sql",
+    `${FUNCTION_ROOT}/anthropicAdapter.js`,
+    `${FUNCTION_ROOT}/contract.js`,
+    FUNCTION_ENTRY,
+    `${FUNCTION_ROOT}/runner.js`,
   ]),
 });
 
@@ -475,6 +505,41 @@ export function requireRadarEntdeckenV6ReleaseProvenance(options = {}) {
   });
 }
 
+export function requireRadarTextTargetReleaseProvenance(options = {}) {
+  const radarFiles = requireExactFileRows(
+    RADAR_TEXT_TARGET_FILES,
+    RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256,
+    "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
+    options,
+  );
+  const migrations = RADAR_TEXT_TARGET_RELEASE_MIGRATIONS.map((entry) => {
+    const actual = createHash("sha256").update(readRegularFile(entry.path, options)).digest("hex");
+    if (actual !== entry.sha256) {
+      stop(
+        "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
+        "Lokale Radar-Text-Target-Migration weicht vom exakten Bytevertrag ab.",
+      );
+    }
+    return Object.freeze({ ...entry, sha256: actual });
+  });
+  const rows = [
+    { kind: "function", name: "radar-websearch-task", sha256: RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256 },
+    ...migrations.map(({ version, name, sha256 }) => ({ kind: "migration", name: `${version}_${name}`, sha256 })),
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== RADAR_TEXT_TARGET_RELEASE_SHA256) {
+    stop(
+      "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
+      "Lokaler Radar-Text-Target-Releasevertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    releaseSha256,
+    functions: Object.freeze({ radar: radarFiles }),
+    migrations: Object.freeze(migrations),
+  });
+}
+
 function localImports(repoPath, bytes) {
   let source;
   try {
@@ -534,7 +599,8 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
   requireAncestor(RADAR_TITLE_GROUP_V6_COMMIT, "HEAD", options);
   requireAncestor(ENTDECKEN_WEEKLY_RECOVERY_COMMIT, "HEAD", options);
   requireAncestor(ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT, "HEAD", options);
-  requireRadarEntdeckenV6ReleaseProvenance(options);
+  requireAncestor(RADAR_TEXT_TARGET_COMMIT, "HEAD", options);
+  requireRadarTextTargetReleaseProvenance(options);
 
   const changedByCommit = new Map();
   const contractCommits = [
@@ -544,6 +610,7 @@ export function deriveRadarPackageBReleaseClosure(options = {}) {
     RADAR_TITLE_GROUP_V6_COMMIT,
     ENTDECKEN_WEEKLY_RECOVERY_COMMIT,
     ENTDECKEN_WEEKLY_RECOVERY_CLAIM_COMMIT,
+    RADAR_TEXT_TARGET_COMMIT,
   ];
   for (const commit of contractCommits) {
     changedByCommit.set(commit, new Set(changedPathsAtCommit(commit, options)));
