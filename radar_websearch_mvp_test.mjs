@@ -12,6 +12,7 @@ import {
   createRadarWebsearchMemoryRepository,
   createRadarWebsearchMockAdapter,
 } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
+import { createProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
 
 let checks = 0;
@@ -67,6 +68,19 @@ const sameFamily = Object.freeze({
   publisherFamily: "news-a",
 });
 const sources = Object.freeze([official, editorialA, editorialB, sameFamily]);
+const liveProviderReceipt = await createProviderReceipt({
+  provider: "anthropic",
+  providerResponseText: "radar-freitext-live-fixture",
+  model: "claude-haiku-4-5",
+  inputTokens: 100,
+  outputTokens: 40,
+  webSearchRequests: 1,
+  resultMode: "degraded",
+  serverLogId: 71,
+  providerRequests: 1,
+  reservationUsdCent: 2,
+  costUsdCent: 1.1,
+});
 
 function evidence(source, path = "start") {
   return {
@@ -487,9 +501,11 @@ await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check
           writes: 0,
           providerRequests: 1,
           searchRequests: 1,
+          phaseCode: "provider-complete",
           responseMode: "degraded",
           displayText: "Keine eindeutig belegte Zuordnung gefunden.",
           warnings: ["unstructured-provider-text"],
+          providerReceipt: liveProviderReceipt,
         };
       } };
     },
@@ -498,6 +514,7 @@ await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check
   assert.equal(result.status, "insufficient_evidence");
   assert.equal(result.responseMode, "degraded");
   assert.equal(result.displayText, "Keine eindeutig belegte Zuordnung gefunden.");
+  assert.equal("providerReceipt" in result, false);
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     targetId: "text:0123456789abcdef", targetText: "Mutter Teresa",

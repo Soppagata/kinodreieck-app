@@ -38,7 +38,7 @@
      S5 Ein-Artikel-Blogprofilextraktion mit beleggebundenen Geschmackszügen
      S6 Text-Stapelimport ohne Bildpfad
      S7 privater Entdecken-Tagesfeed mit genau einem Websearch-Request
-     S8 Radar-Websearch mit genau einem Ziel-Request
+     S8 Radar-Freitext mit genau einem expliziten Websearch-Request
 
    Jede Nutzerszene wird genau einmal potenziell zahlend aufgerufen. Ihre
    Antwort läuft anschließend durch den echten Clientparser und einen lokalen
@@ -89,14 +89,17 @@ import {
 } from "./media_batch_live_contract.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
-  RADAR_TARGET_AUTO_RESOLVE_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
-  loeseStarkesOwnerRadarZiel,
 } from "./keychain_runner.mjs";
 import {
   OWNER_CORE_SIX_GUARD_ENV,
   OWNER_CORE_SIX_GUARD_VALUE,
 } from "./provider_raw_capture.mjs";
+import {
+  bewerteRadarFreitextLiveReadback,
+  erfasseRadarFreitextFeedSnapshot,
+  erstelleRadarFreitextLiveSzenario,
+} from "./radar_freitext_live_contract.mjs";
 
 const FINDER_VOKABULAR = JSON.parse(readFileSync(
   new URL("../src/data/finder_vokabular.json", import.meta.url),
@@ -357,7 +360,8 @@ if (OWNER_CORE_SIX && !OWNER_COMBINED_EIGHT) {
     "Der Owner-Smoke ist nicht auf alle acht seriellen Anbieterpfade gebunden.",
   ));
 }
-let RADAR_TARGET_ID = null;
+const RADAR_FREITEXT_SZENARIO = erstelleRadarFreitextLiveSzenario();
+let RADAR_FREITEXT_FEED_VORHER = null;
 
 console.log(`KI-Endpunkt-Rauchprobe gegen ${ENDPUNKT}\n`);
 
@@ -440,22 +444,21 @@ pruefeBlogProfilCapabilityAbschnitt("P5", p5);
 if (OWNER_COMBINED_EIGHT) {
   try {
     await pruefeEntdeckenOwnerZugang({ verbindung: LIVE_VERBINDUNG, token });
-    RADAR_TARGET_ID = await loeseStarkesOwnerRadarZiel({
-      override: process.env.KD_RADAR_TARGET_ID,
-      autoResolveGuard: process.env[RADAR_TARGET_AUTO_RESOLVE_ENV],
-      feedLeser: () => rpc(
-        "kd_radar_pilot_feed",
-        token,
-        { p_operation_ids: [] },
-        BUDGET_FETCH_TIMEOUT_MS,
-      ),
-    });
+    const radarFeedVorher = await rpc(
+      "kd_radar_pilot_feed",
+      token,
+      { p_operation_ids: [] },
+      BUDGET_FETCH_TIMEOUT_MS,
+    );
+    if (radarFeedVorher.status !== 200) throw new Error("radar-feed-preflight-http");
+    RADAR_FREITEXT_FEED_VORHER = erfasseRadarFreitextFeedSnapshot(radarFeedVorher.daten);
+    if (!RADAR_FREITEXT_FEED_VORHER.ok) throw new Error("radar-feed-preflight-invalid");
   } catch (error) {
     stoppeLiveLauf(error instanceof LiveSicherheitsStopp
       ? error
       : new LiveSicherheitsStopp(
         "unbekannt",
-        "Combined-Eight-Smoke hat kein accountgebundenes starkes Radar-Ziel.",
+        "Combined-Eight-Smoke kann den normalen Radar-Freitext-Feed nicht sicher vorbereiten.",
       ));
   }
 }
@@ -1198,7 +1201,7 @@ if (OWNER_COMBINED_EIGHT) {
   }
 
   /* ===========================================================================
-     S8: Radar-Websearch — genau ein potenziell zahlender Zielrequest
+     S8: Radar-Freitext — genau ein potenziell zahlender Submit-Request
      =========================================================================== */
   const p25 = await rufProduktAnbieterBewacht({
     pfad: "radar-websearch-task",
@@ -1211,30 +1214,40 @@ if (OWNER_COMBINED_EIGHT) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    koerper: { targetId: RADAR_TARGET_ID },
+    koerper: RADAR_FREITEXT_SZENARIO.requestBody,
   });
   const p25ProviderBelegt = istProviderPfadBelegt("P25 radar-websearch-task");
   const p25Unbelegt = istProviderPfadUnbelegt("P25 radar-websearch-task");
-  const radarOk = p25ProviderBelegt && p25.status === 200
+  const radarFeedNachher = await rpc(
+    "kd_radar_pilot_feed",
+    token,
+    { p_operation_ids: [] },
+    BUDGET_FETCH_TIMEOUT_MS,
+  );
+  const radarReadback = bewerteRadarFreitextLiveReadback({
+    httpStatus: p25.status,
+    body: p25.daten,
+    feedVorher: RADAR_FREITEXT_FEED_VORHER,
+    feedNachher: radarFeedNachher.status === 200 ? radarFeedNachher.daten : null,
+    szenario: RADAR_FREITEXT_SZENARIO,
+  });
+  const radarOk = p25ProviderBelegt
     && !("providerDiagnostic" in (p25.daten || {}))
-    && p25.daten?.ok === true
-    && p25.daten?.status === "confirmed"
-    && p25.daten?.writes === 1
-    && p25.daten?.providerRequests === 1
-    && p25.daten?.searchRequests === 1;
+    && radarReadback.ok;
   pruefe(
-    "Radar liefert genau einen bestaetigten Websearch-Write fuer das starke Ziel",
+    "Radar-Freitext liefert genau einen Websearch und einen sicheren Ziel-/Resultatreadback",
     radarOk,
     p25Unbelegt
       ? providerPfadUnbelegtHinweis("P25 radar-websearch-task")
-      : `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
+      : `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Ergebnis ${radarReadback.outcome}, `
+        + `neue belegte Events ${radarReadback.newEventCount}`,
   );
   if (!p25Unbelegt) {
     schliesseAnbieterPfad(
       "P25 radar-websearch-task",
       "radar-websearch-task",
       radarOk,
-      "quality-contract-failed",
+      radarReadback.reason || "quality-contract-failed",
     );
   }
 }

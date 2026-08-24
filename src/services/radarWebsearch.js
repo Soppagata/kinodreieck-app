@@ -2,6 +2,7 @@ import { runtimeConfig } from "../config/runtime.js";
 import { authDriver, authService } from "./auth.js";
 import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
+import { normalizeProviderReceipt } from "../../supabase/functions/_shared/providerReceipt.js";
 
 export const RADAR_WEBSEARCH_ENDPOINT = "radar-websearch-task";
 export const RADAR_WEBSEARCH_SINGLE_FILE_DISABLED = typeof __KD_SINGLE_FILE__ !== "undefined"
@@ -18,7 +19,7 @@ function exactResult(value, expectedPerson = null) {
   const allowed = [
     "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
     "reservationStatus", "reservationUsdCent", "reservationDecision",
-    "responseMode", "displayText", "warnings",
+    "responseMode", "displayText", "warnings", "providerReceipt",
   ];
   if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
@@ -43,6 +44,25 @@ function exactResult(value, expectedPerson = null) {
         || (value.reservationStatus === "unknown"
           && (value.reservationDecision !== "unknown" || value.reservationUsdCent !== null))) return null;
   }
+  const telemetryKeys = ["providerRequests", "searchRequests", "phaseCode"];
+  const telemetryCount = telemetryKeys.filter((key) => value[key] !== undefined).length;
+  const hasRequestTelemetry = value.providerRequests !== undefined || value.searchRequests !== undefined;
+  if (telemetryCount !== 0 && ((!hasRequestTelemetry
+      && value.phaseCode !== undefined)
+      || (hasRequestTelemetry && (value.providerRequests === undefined || value.searchRequests === undefined))
+      || !Number.isInteger(value.providerRequests) || value.providerRequests < 0 || value.providerRequests > 1
+      || !Number.isInteger(value.searchRequests) || value.searchRequests < 0 || value.searchRequests > 1
+      || (value.phaseCode !== undefined
+        && !["runtime-setup", "cost-reservation", "provider-request", "provider-complete"].includes(value.phaseCode)))) {
+    return null;
+  }
+  const providerReceipt = value.providerReceipt === undefined
+    ? null : normalizeProviderReceipt(value.providerReceipt);
+  if (value.providerReceipt !== undefined && (!providerReceipt
+      || telemetryCount !== telemetryKeys.length
+      || value.providerRequests !== providerReceipt.server.providerRequests
+      || ("webSearchRequests" in providerReceipt.usage
+        && value.searchRequests !== providerReceipt.usage.webSearchRequests))) return null;
   const presentationKeys = ["responseMode", "displayText", "warnings"];
   const presentationCount = presentationKeys.filter((key) => value[key] !== undefined).length;
   let presentation = {};
@@ -68,6 +88,8 @@ function exactResult(value, expectedPerson = null) {
       warnings: Object.freeze([...value.warnings]),
     };
   }
+  if (providerReceipt && presentationCount !== 0
+      && providerReceipt.resultMode !== value.responseMode) return null;
   if (!expectedPerson) {
     if (value.personResult !== undefined) return null;
     return Object.freeze({ status: value.status, writes: value.writes, ...presentation });
