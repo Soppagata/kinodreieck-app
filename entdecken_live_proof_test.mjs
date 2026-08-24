@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   createEntdeckenWeeklyQueryContext,
 } from "./supabase/functions/entdecken-daily-task/contract.js";
@@ -272,6 +273,13 @@ await check("Zentraler Harnesshook beweist 5-bis-7, Provenienz und Korrelation o
     costState: "known",
   });
   assert.doesNotMatch(JSON.stringify(proof), /https?:|Aktueller AT-Tipp|account|providerLogId/i);
+});
+
+await check("Acht-Pfade-Smoke verwendet den korrelierten Entdecken-Livebeleg", () => {
+  const smoke = readFileSync(new URL("./tools/ai_smoke.mjs", import.meta.url), "utf8");
+  assert.match(smoke, /pruefeEntdeckenLiveAntwort\(p24\.daten/);
+  assert.match(smoke, /measuredCostUsdCent:\s*p24\.kostenMessung\?\.requestKostenUsdCent/);
+  assert.doesNotMatch(smoke, /entdeckenFeedGueltig\s*=\s*validateEntdeckenDailyFeed/);
 });
 
 await check("Manipulierter Readback oder nicht korrelierte Kosten fallen geschlossen aus", () => {

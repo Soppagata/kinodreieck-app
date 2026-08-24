@@ -72,9 +72,9 @@ import {
 } from "../src/lib/blogProfilAnalyse.js";
 import { normalisiereFilmkennung } from "../src/lib/filmwissen.js";
 import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
-import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
 import { readFileSync } from "node:fs";
 import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
+import { pruefeEntdeckenLiveAntwort } from "./entdecken_live_proof.mjs";
 import {
   ProviderReceiptEvidenceError,
   erstelleAnbieterPfadBelege,
@@ -1171,32 +1171,37 @@ if (OWNER_COMBINED_EIGHT) {
   });
   const p24ProviderBelegt = istProviderPfadBelegt("P24 entdecken-daily-task");
   const p24Unbelegt = istProviderPfadUnbelegt("P24 entdecken-daily-task");
-  let entdeckenFeedGueltig = false;
+  let entdeckenLiveBeleg = null;
+  let entdeckenLiveGrund = "quality-contract-failed";
   try {
     if (!p24ProviderBelegt) throw new Error("provider-unproven");
-    entdeckenFeedGueltig = validateEntdeckenDailyFeed(p24.daten?.feed).ok === true;
-  } catch { /* Formfehler wird unten fail-closed klassifiziert. */ }
+    entdeckenLiveBeleg = pruefeEntdeckenLiveAntwort(p24.daten, {
+      measuredCostUsdCent: p24.kostenMessung?.requestKostenUsdCent,
+    });
+  } catch (error) {
+    /* Nur die stabile Vertragsklasse wird ausgegeben; Feedinhalt, Konten,
+       Providertext und URLs bleiben in Function und Datenbank. */
+    entdeckenLiveGrund = typeof error?.code === "string"
+      ? error.code : "quality-contract-failed";
+  }
   const entdeckenOk = p24ProviderBelegt && p24.status === 200
-    && !("providerDiagnostic" in (p24.daten || {}))
-    && p24.daten?.ok === true
-    && p24.daten?.status === "fresh"
-    && p24.daten?.writes === 1
-    && p24.daten?.providerRequests === 1
-    && p24.daten?.searchRequests === 1
-    && entdeckenFeedGueltig;
+    && entdeckenLiveBeleg?.ok === true;
   pruefe(
-    "Entdecken liefert genau einen frischen, validierten Websearch-Write",
+    "Entdecken liefert einen frischen 5-bis-7-Titel-Feed mit Kosten- und Persistenzreadback",
     entdeckenOk,
     p24Unbelegt
       ? providerPfadUnbelegtHinweis("P24 entdecken-daily-task")
-      : `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
+      : entdeckenLiveBeleg
+        ? `HTTP ${p24.status}, Items ${entdeckenLiveBeleg.itemCount}, Belege ${entdeckenLiveBeleg.evidenceCount}, `
+          + `Quellen ${entdeckenLiveBeleg.sourceCount}, Websuchen ${entdeckenLiveBeleg.searchRequests}`
+        : `HTTP ${p24.status}, Livebeleg ${entdeckenLiveGrund}`,
   );
   if (!p24Unbelegt) {
     schliesseAnbieterPfad(
       "P24 entdecken-daily-task",
       "entdecken-daily-task",
       entdeckenOk,
-      "quality-contract-failed",
+      entdeckenLiveBeleg ? "quality-contract-failed" : entdeckenLiveGrund,
     );
   }
 
