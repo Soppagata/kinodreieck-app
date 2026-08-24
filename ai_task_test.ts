@@ -1844,7 +1844,7 @@ test("C8 OPTIONS: 204 mit CORS-Kopf, erlaubter Origin wird gespiegelt", async ()
   gleich(antw.headers.get("Vary"), "Origin", "Vary: Origin");
 });
 
-test("ED1 Entdecken erlaubt nur den festen Preview-Branch-Origin", async () => {
+test("ED1 Entdecken erlaubt nur den festen Preview-Origin und Refresh-Vertrag", async () => {
   const handler = createEntdeckenDailyHandler();
   const previewOrigin = "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev";
   const erlaubt = await handler(new Request(
@@ -1854,18 +1854,18 @@ test("ED1 Entdecken erlaubt nur den festen Preview-Branch-Origin", async () => {
   gleich(erlaubt.status, 204, "Preview-Preflight");
   gleich(erlaubt.headers.get("Access-Control-Allow-Origin"), previewOrigin, "Preview-Origin");
   wahr(
-    erlaubt.headers.get("Access-Control-Allow-Headers")?.includes("x-kd-entdecken-recovery"),
-    "Recoveryheader ist fuer den geschuetzten Owner-Smoke erlaubt",
+    erlaubt.headers.get("Access-Control-Allow-Headers")?.includes("x-kd-entdecken-refresh"),
+    "Refreshheader ist fuer den geschuetzten Owner-Smoke erlaubt",
   );
 
-  const falscherRecoveryHeader = await handler(new Request(
+  const falscherRefreshHeader = await handler(new Request(
     "https://test.supabase.co/functions/v1/entdecken-daily-task",
     {
       method: "GET",
-      headers: { Origin: previewOrigin, "X-KD-Entdecken-Recovery": "irgendetwas" },
+      headers: { Origin: previewOrigin, "X-KD-Entdecken-Refresh": "irgendetwas" },
     },
   ));
-  gleich(falscherRecoveryHeader.status, 403, "unbekannter Recoveryheader bleibt fail-closed");
+  gleich(falscherRefreshHeader.status, 403, "unbekannter Refreshheader bleibt fail-closed");
 
   const unveroeffentlicht = await handler(new Request(
     "https://test.supabase.co/functions/v1/entdecken-daily-task",

@@ -104,6 +104,9 @@ globalThis.fetch = async (input, options = {}) => {
     return json(200, radarFeed());
   }
   if (url.endsWith("/functions/v1/entdecken-daily-task")) {
+    if (method === "GET") {
+      return json(200, { ok: false, status: "empty", feed: null });
+    }
     console.log("FIXTURE_PROVIDER_PATH entdecken-daily-task");
     throw new TypeError("fixture-known-zero-transport-error");
   }

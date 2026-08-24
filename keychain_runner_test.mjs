@@ -416,7 +416,7 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
         && source.includes("providerDiagnosticAccess({")
         && source.includes("providerDiagnosticField("))
       && functionSources[0].includes('owner: fachfreigabe.rolle === "owner"')
-      && functionSources[1].includes("owner: ownerRecoveryConfirmed")
+      && functionSources[1].includes("owner: ownerRefreshConfirmed")
       && functionSources[2].includes('access?.role === "owner"'));
   const runnerSources = `${keychainSource}\n${smokeSource}`;
   pruefe("Aktueller Runner verwaltet weder Diagnoseflag noch private Rawcapture-Senke",

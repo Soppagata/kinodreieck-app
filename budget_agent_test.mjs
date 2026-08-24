@@ -399,6 +399,14 @@ const ANBIETER_PFADE_SOLL = [
   "blog-profile-extract",
   "media-batch-extract",
 ];
+const CORE_ANBIETER_PFADE_SOLL = [
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "blog-profile-extract",
+  "media-batch-extract",
+];
 const leseTaskListe = (quelle, anker) => {
   const start = quelle.indexOf(anker);
   const block = start < 0
@@ -428,6 +436,7 @@ const bewachteTasks = [...smokeSkript.matchAll(
   /await rufAnbieterBewacht\([\s\S]{0,360}?task:\s*"([^"]+)"/g,
 )].map((treffer) => treffer[1]);
 const bewachteAnbieterPfade = leseTaskListe(smokeSkript, "const LIVE_ANBIETER_PFADE");
+const kernAnbieterPfade = leseTaskListe(smokeSkript, "const CORE_ANBIETER_PFADE");
 const websearchSkripte = [radarWebsearchSkript, entdeckenWebsearchSkript];
 const entdeckenKombiPosition = radarEntdeckenSkript.indexOf(
   "const entdecken = await runEntdecken({ env, ausgabe });",
@@ -509,12 +518,13 @@ check("Rauchprobe verdrahtet genau die acht beauftragten Anbieterpfade durch die
   (smokeSkript.match(/await rufAnbieterBewacht\(/g) || []).length === NUTZER_TASKS_SOLL.length
   && bewachteAnbieterPfade.length === ANBIETER_PFADE_SOLL.length
   && JSON.stringify(bewachteAnbieterPfade) === JSON.stringify(ANBIETER_PFADE_SOLL)
+  && JSON.stringify(kernAnbieterPfade) === JSON.stringify(CORE_ANBIETER_PFADE_SOLL)
   && (smokeSkript.match(/new LiveLaufWache\(\{/g) || []).length === 1
   && (smokeSkript.match(/await rufProduktAnbieterBewacht\(\{/g) || []).length === 2
   && (smokeSkript.match(/registriereAnbieterPfad\(/g) || []).length === 3
   && /maxAnbieterRequests:\s*SMOKE_MAX_ANBIETER_REQUESTS/.test(smokeSkript)
   && /laufLimitUsdCent:\s*OWNER_COMBINED_EIGHT[\s\S]{0,100}\? ENTDECKEN_LAUF_LIMIT_USD_CENT[\s\S]{0,100}: LAUF_LIMIT_USD_CENT/.test(smokeSkript)
-  && /const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT/.test(smokeSkript)
+  && /const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT[\s\S]{0,100}: CORE_ANBIETER_PFADE;/.test(smokeSkript)
   && /bestaetigeExakteAnbieterPfadfolge\(\);/.test(smokeSkript)
   && kritischeProduktpfadePos > smokeSkript.indexOf('"P17 film-forecast"')
   && filmwissenPfadPos > kritischeProduktpfadePos

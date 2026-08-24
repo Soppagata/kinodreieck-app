@@ -34,11 +34,11 @@
      S1 intelligente Suche
      S2 persönliche Profilextraktion mit wörtlich belegtem Signal
      S3 persönliche Vorbewertung mit getrenntem WARUM
+     S7 privater Entdecken-Tagesfeed mit genau einem Websearch-Request
+     S8 Radar-Freitext mit genau einem expliziten Websearch-Request
      S4 quellengeführte Filmwissen-Synthese plus enge Lese-RPC
      S5 Ein-Artikel-Blogprofilextraktion mit beleggebundenen Geschmackszügen
      S6 Text-Stapelimport ohne Bildpfad
-     S7 privater Entdecken-Tagesfeed mit genau einem Websearch-Request
-     S8 Radar-Freitext mit genau einem expliziten Websearch-Request
 
    Jede Nutzerszene wird genau einmal potenziell zahlend aufgerufen. Ihre
    Antwort läuft anschließend durch den echten Clientparser und einen lokalen
@@ -130,9 +130,17 @@ const LIVE_ANBIETER_PFADE = Object.freeze([
   "blog-profile-extract",
   "media-batch-extract",
 ]);
+const CORE_ANBIETER_PFADE = Object.freeze([
+  "intelligent-search",
+  "profile-extract",
+  "film-forecast",
+  "filmwissen-synthese",
+  "blog-profile-extract",
+  "media-batch-extract",
+]);
 const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT
   ? LIVE_ANBIETER_PFADE
-  : LIVE_ANBIETER_PFADE.slice(0, 6);
+  : CORE_ANBIETER_PFADE;
 const ENTDECKEN_FUNCTION = "entdecken-daily-task";
 const RADAR_FUNCTION = "radar-websearch-task";
 const ENTDECKEN_REFRESH_HEADER = "X-KD-Entdecken-Refresh";
