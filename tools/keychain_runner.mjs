@@ -21,6 +21,11 @@ import {
   PROVIDER_RAW_CAPTURE_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_VALUE,
 } from "./provider_raw_capture.mjs";
+import {
+  FILMWISSEN_TARGET_ID_ENV,
+  FILMWISSEN_TARGET_IDS_ENV,
+  liesFilmwissenLiveTargets,
+} from "./filmwissen_live_target.mjs";
 
 export {
   OWNER_CORE_SIX_GUARD_ENV,
@@ -65,7 +70,8 @@ const OEFFENTLICHE_NAMEN = new Set([
   "KD_AI_FUNKTION",
   "KD_ORIGIN",
   "KD_RADAR_TARGET_ID",
-  "KD_FILMWISSEN_TARGET_ID",
+  FILMWISSEN_TARGET_ID_ENV,
+  FILMWISSEN_TARGET_IDS_ENV,
 ]);
 
 const VERBOTENE_LOKALE_NAMEN = new Set([
@@ -113,7 +119,7 @@ export const MODI = Object.freeze({
       SKRIPT("ai_budget_guard.mjs"),
       "--",
       process.execPath,
-      SKRIPT("ai_smoke.mjs"),
+      SKRIPT("filmwissen_live_target.mjs"),
     ],
     radarWebsearchOnceArgv: [
       SKRIPT("ai_budget_guard.mjs"),
@@ -494,13 +500,23 @@ export function baueKindUmgebung({
   }
   if (ownerApprovedServerBudget) env[OWNER_SERVER_BUDGET_ENV] = "1";
   if (effectiveOwnerCoreSix) {
-    const target = String(env.KD_FILMWISSEN_TARGET_ID || "").trim();
-    if (target && !/^(?:imdb|tmdb|wikidata):[^\s:]{1,150}$/i.test(target)) {
-      throw new Error("KD_FILMWISSEN_TARGET_ID ist keine starke reale Filmkennung.");
+    const targets = liesFilmwissenLiveTargets({
+      einzel: env[FILMWISSEN_TARGET_ID_ENV],
+      liste: env[FILMWISSEN_TARGET_IDS_ENV],
+    });
+    if (typeof env[FILMWISSEN_TARGET_IDS_ENV] === "string") {
+      env[FILMWISSEN_TARGET_IDS_ENV] = targets
+        .map((target) => `${target.namespace}:${target.kennung}`).join(",");
+      delete env[FILMWISSEN_TARGET_ID_ENV];
+    } else {
+      env[FILMWISSEN_TARGET_ID_ENV] =
+        `${targets[0].namespace}:${targets[0].kennung}`;
+      delete env[FILMWISSEN_TARGET_IDS_ENV];
     }
     env[OWNER_CORE_SIX_GUARD_ENV] = OWNER_CORE_SIX_GUARD_VALUE;
   } else {
-    delete env.KD_FILMWISSEN_TARGET_ID;
+    delete env[FILMWISSEN_TARGET_ID_ENV];
+    delete env[FILMWISSEN_TARGET_IDS_ENV];
   }
   if (effectiveOwnerCoreSix || radarWebsearchOnce || radarEntdeckenOnce) {
     const targetRoh = String(env.KD_RADAR_TARGET_ID || "").trim();

@@ -370,6 +370,8 @@ const releaseDoku = readFileSync("docs/FUNCTION_RELEASES.md", "utf8");
 const functionIndex = readFileSync("supabase/functions/ai-task/index.ts", "utf8");
 const requestContract = readFileSync("supabase/functions/ai-task/requestContract.ts", "utf8");
 const smokeSkript = readFileSync("tools/ai_smoke.mjs", "utf8");
+const filmwissenLiveTargetSkript = readFileSync("tools/filmwissen_live_target.mjs", "utf8");
+const keychainRunnerSkript = readFileSync("tools/keychain_runner.mjs", "utf8");
 const radarWebsearchSkript = readFileSync("tools/radar_websearch_live.mjs", "utf8");
 const entdeckenWebsearchSkript = readFileSync("tools/entdecken_daily_live.mjs", "utf8");
 const radarEntdeckenSkript = readFileSync("tools/radar_entdecken_live.mjs", "utf8");
@@ -527,12 +529,18 @@ check("bestehende explizite Produkt-One-Shots bleiben je auf einen Request und o
   && radarKombiPosition > entdeckenKombiPosition
   && (radarEntdeckenSkript.match(/await run(?:Entdecken|Radar)\(/g) || []).length === 2
   && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(radarEntdeckenSkript));
-check("Filmwissen nutzt nur im Smoke den stabilen starken Default und erlaubt ein Env-Override",
+check("Filmwissen-Default bleibt nur fuer Nicht-Owner; Owner muss vorab einen Cache-Miss waehlen",
   filmwissenFallback === "imdb:tt0133093"
   && /^imdb:tt[0-9]{7,10}$/.test(filmwissenFallback)
   && /process\.env\.KD_FILMWISSEN_TARGET_ID \|\| FILMWISSEN_DEFAULT_TARGET/.test(smokeSkript)
   && /raw\.match\(\/\^\(imdb\|tmdb\|wikidata\)/.test(smokeSkript)
-  && /normalisiereFilmkennung\(namespace, match\[2\]\)/.test(smokeSkript));
+  && /normalisiereFilmkennung\(namespace, match\[2\]\)/.test(smokeSkript)
+  && /SKRIPT\("filmwissen_live_target\.mjs"\)/.test(keychainRunnerSkript)
+  && /kd_filmwissen_aktuell_lesen/.test(filmwissenLiveTargetSkript)
+  && /dekodiereFilmwissen\(antwort\.daten\)/.test(filmwissenLiveTargetSkript)
+  && /gelesen\.status === FILMWISSEN_STATUS\.CACHE_MISS/.test(filmwissenLiveTargetSkript)
+  && /await smokeImporter\(\)/.test(filmwissenLiveTargetSkript)
+  && !/functions\/v1\/ai-task/.test(filmwissenLiveTargetSkript));
 check("Smoke mappt unbekannten Kostenstand und Limit ohne Retry auf die terminalen Exitcodes",
   /stopp\.exitCode === BUDGET_UNBEKANNT_EXIT[\s\S]{0,100}\? "BUDGET_UNBEKANNT"[\s\S]{0,100}: "AUTONOMIE_STOPP"/.test(smokeSkript)
   && /process\.exit\(stopp\.exitCode\)/.test(smokeSkript)

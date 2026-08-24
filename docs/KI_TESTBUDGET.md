@@ -180,12 +180,21 @@ KD_OWNER_USER=owner
 KD_MAIL_DOMAIN=login.kinodreieck.at
 KD_AI_FUNKTION=ai-task
 KD_ORIGIN=https://staging.kinodreieck.at
+KD_FILMWISSEN_TARGET_ID=<starke-reale-kennung>
+# alternativ, nie gleichzeitig: bis zu acht institutionell vorgepruefte Ziele
+KD_FILMWISSEN_TARGET_IDS=<kennung-1>,<kennung-2>,<kennung-3>
 ```
 
 Passwörter einschließlich `KD_OWNER_PASS`, `KD_AI_AUTONOM_LIMIT_USD_CENT`,
 `KD_AI_OWNER_APPROVED_SERVER_BUDGET` und `KD_EVAL_JA` werden in dieser Datei
 ausdrücklich abgelehnt. Owner- und Eval-Freigabe entstehen ausschließlich für
 den einen ausdrücklich gestarteten, budgetüberwachten Lauf.
+
+Der Owner-Acht-Pfade-Smoke verlangt ein explizites Filmwissen-Ziel oder eine
+begrenzte Zielliste. Vor dem Smoke wählt ein providerfreier, schreibfreier
+Readback-Preflight den ersten `cache_miss`; IDs und Titel werden nicht geloggt.
+Details und die Grenze zwischen Cache-Miss und tatsächlicher Evidence stehen
+in `docs/FILMWISSEN_LIVE_PROOF.md`.
 
 Für `npm run test:rls` kommt ein zweites begrenztes Testkonto mit
 `KD_TESTB_USER` und dem geheimen `KD_TESTB_PASS` hinzu. Dieser Test macht

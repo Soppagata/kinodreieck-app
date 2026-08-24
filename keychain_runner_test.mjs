@@ -42,6 +42,9 @@ import {
   starteModus,
 } from "./tools/keychain_runner.mjs";
 import {
+  FILMWISSEN_TARGET_IDS_ENV,
+} from "./tools/filmwissen_live_target.mjs";
+import {
   captureProviderRawResponse,
   createPrivateProviderRawDirectory,
   finalizeProviderCapture,
@@ -580,18 +583,34 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
 {
   const ohneFilmwissenOverride = { ...PUBLIC };
   delete ohneFilmwissenOverride.KD_FILMWISSEN_TARGET_ID;
-  const env = baueKindUmgebung({
+  let fehlendesZielGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: ohneFilmwissenOverride,
+      keychainLeser: () => OWNER_GEHEIMNIS,
+      ownerApprovedServerBudget: true,
+    });
+  } catch { fehlendesZielGesperrt = true; }
+  pruefe("fehlendes Filmwissen-Liveziel stoppt die Owner-Rauchprobe vor dem Smoke",
+    fehlendesZielGesperrt);
+
+  const zielListe = `${PUBLIC.KD_FILMWISSEN_TARGET_ID},wikidata:Q103569`;
+  const listenEnv = baueKindUmgebung({
     modus: "ai-live",
     ambientEnv: {},
-    lokaleKonfig: ohneFilmwissenOverride,
+    lokaleKonfig: {
+      ...ohneFilmwissenOverride,
+      [FILMWISSEN_TARGET_IDS_ENV]: zielListe,
+    },
     keychainLeser: () => OWNER_GEHEIMNIS,
     ownerApprovedServerBudget: true,
   });
-  pruefe("fehlendes Filmwissen-Override bleibt fuer den stabilen Smoke-Harness-Fallback leer",
-    !("KD_FILMWISSEN_TARGET_ID" in env)
-      && env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
-      && env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
-      && env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1");
+  pruefe("begrenzte Filmwissen-Zielliste wird nur fuer den Owner-Preflight weitergereicht",
+    listenEnv[FILMWISSEN_TARGET_IDS_ENV] === zielListe
+      && !("KD_FILMWISSEN_TARGET_ID" in listenEnv)
+      && listenEnv[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE);
 
   let ungueltigesOverrideGesperrt = false;
   try {
@@ -802,7 +821,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     code === 0
       && starts.length === 1
       && starts[0].argv.join("|") === MODI["ai-live"].argv.join("|")
-      && starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs"))
+      && starts[0].argv.some((arg) => arg.endsWith("/filmwissen_live_target.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs"))
       && !starts[0].argv.some((arg) => arg.endsWith("/radar_entdecken_live.mjs"))
       && starts[0].optionen.env[OWNER_CORE_SIX_GUARD_ENV] === OWNER_CORE_SIX_GUARD_VALUE
       && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
