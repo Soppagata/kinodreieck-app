@@ -229,10 +229,14 @@ export async function meldeTestkontoAn(verbindung, fetchImpl = fetch) {
   return daten.access_token;
 }
 
-export async function holeBudgetStand({
+/* Gemeinsamer, providerfreier Health-Transport fuer Budgetwache und
+   kontrollierte Function-Readbacks. Damit bauen einmalige Remote-Fenster
+   weder die Owner-E-Mail noch den Health-Body ein zweites Mal nach. */
+export async function holeHealthAntwort({
   verbindung,
   token,
   fetchImpl = fetch,
+  vorgangId = crypto.randomUUID(),
 }) {
   if (typeof token !== "string" || !token) {
     throw new Error("Budgetprüfung hat keine gültige Testkonto-Sitzung.");
@@ -249,12 +253,22 @@ export async function holeBudgetStand({
       },
       body: JSON.stringify({
         task: "health",
-        vorgangId: crypto.randomUUID(),
+        vorgangId,
       }),
     },
     { fetchImpl, timeoutMs: BUDGET_FETCH_TIMEOUT_MS },
   );
   const daten = await liesJsonOderNull(antwort);
+  return { status: antwort.status, ok: antwort.ok, daten };
+}
+
+export async function holeBudgetStand({
+  verbindung,
+  token,
+  fetchImpl = fetch,
+}) {
+  const antwort = await holeHealthAntwort({ verbindung, token, fetchImpl });
+  const daten = antwort.daten;
   const stand = daten?.betrieb?.stand;
   const verbraucht = stand?.monatVerbrauchtUsdCent;
   const serverLimit = daten?.betrieb?.monatsbudgetUsdCent;
