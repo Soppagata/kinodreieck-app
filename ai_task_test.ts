@@ -606,6 +606,26 @@ const {
   PROGNOSE_SICHERHEIT: string[];
   pruefePrognoseErgebnis: (w: unknown) => string[];
 };
+const { pruefeAiUserTaskReadback } = await import(
+  new URL("./tools/ai_user_task_contract.mjs", import.meta.url).href
+) as {
+  pruefeAiUserTaskReadback: (input: Record<string, unknown>) => Record<string, unknown>;
+};
+const { klassifiziereMediaBatchLiveAntwort } = await import(
+  new URL("./tools/media_batch_live_contract.mjs", import.meta.url).href
+) as {
+  klassifiziereMediaBatchLiveAntwort: (
+    input: Record<string, unknown>,
+  ) => Record<string, unknown>;
+};
+const { persistiereStapelAuswahl } = await import(
+  new URL("./src/lib/stapelimport.js", import.meta.url).href
+) as {
+  persistiereStapelAuswahl: (
+    kandidaten: Array<Record<string, unknown>>,
+    adapter: Record<string, unknown>,
+  ) => Promise<{ eintraege: number } | null>;
+};
 
 /* ---------- Aufruf-Hilfen ---------------------------------------------------- */
 function neueVorgangId() {
@@ -4936,6 +4956,144 @@ test("MB5 sicherer unparsebarer Text bleibt degraded und importdatenfrei", async
   wahr(String(r.daten.displayText).includes("nicht sicher strukturieren"), "bereinigter Hinweis bleibt sichtbar");
   wahr((r.daten.warnings as string[]).includes("unstructured-provider-text"), "stabiler Freitext-Warncode");
   gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
+});
+
+test("MB6 leerer konsumierter Providertext bleibt degraded und traegt seinen normalen Receipt", async () => {
+  z.anbieter = () => anbieterErfolg("");
+  const r = await ruf({
+    task: "media-batch-extract",
+    vorgangId: neueVorgangId(),
+    payload: medienPayload(false),
+  });
+  gleich(r.status, 200, "leerer Text bleibt eine sichere degradierte Erfolgshuelle");
+  gleich(r.daten.responseMode, "degraded", "degraded-Modus");
+  gleich(r.daten.data, null, "kein Text erzeugt keine Importdaten");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  wahr(isProviderReceipt(receipt), "normaler Receipt bleibt vorhanden");
+  gleich(
+    receipt.responseSha256,
+    await sha256Hex(""),
+    "Receipt bindet exakt den leeren konsumierten Text",
+  );
+  gleich(receipt.resultMode, "degraded", "Receipt bindet Ergebnisform");
+  gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
+});
+
+test("MB-E2E normale Partial-Huelle belegt Receipt, Fehlmenge und nur die ausgewaehlte Persistenz", async () => {
+  const providerJson = {
+    kandidaten: [
+      { eingabeIndex: 0, titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" },
+      { eingabeIndex: 1, titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch" },
+      { eingabeIndex: 2, titel: "", typ: "film", jahr: null, quelle: "dvd", staffeln: null, vorbeurteilung: "offen", begruendung: "", sicherheit: "niedrig" },
+    ],
+    warnungen: ["Eine Zeile blieb unlesbar."],
+  };
+  const konsumierterText = `Antwort:\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\``;
+  z.anbieter = () => anbieterErfolg(konsumierterText);
+  const r = await ruf({
+    task: "media-batch-extract",
+    vorgangId: neueVorgangId(),
+    payload: medienPayload(false),
+  });
+  gleich(r.status, 200, "normale Function-Erfolgshuelle");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  const usage = receipt.usage as Record<string, unknown>;
+  const server = receipt.server as Record<string, unknown>;
+  const verbrauch = r.daten.verbrauch as Record<string, unknown>;
+  gleich(receipt.responseSha256, await sha256Hex(konsumierterText), "Receipt bindet Parsertext");
+  gleich(receipt.model, r.daten.modell, "Receipt bindet Modell");
+  gleich(usage.inputTokens, verbrauch.inputTokens, "Receipt bindet Inputusage");
+  gleich(usage.outputTokens, verbrauch.outputTokens, "Receipt bindet Outputusage");
+  gleich(server.logId, LOG_ID, "Receipt bindet Log-ID");
+  gleich(server.costUsdCent, verbrauch.kostenUsdCent, "Receipt bindet Functionkosten");
+
+  const klassifikation = klassifiziereMediaBatchLiveAntwort({
+    antwort: r.daten,
+    status: r.status,
+    measuredCostUsdCent: verbrauch.kostenUsdCent,
+  });
+  gleich(klassifikation.receiptState, "valid", "normaler Receipt ist gueltig");
+  gleich(klassifikation.providerProof, "proven", "Providerpfad ist belegt");
+  gleich(klassifikation.parserEligible, true, "erst ein belegter Erfolg darf zum Parser");
+  const sichereKlassifikation = JSON.stringify(klassifikation);
+  falsch(sichereKlassifikation.includes("Alien"), "Klassifikation enthaelt keinen Providerinhalt");
+  falsch(sichereKlassifikation.includes(String(r.daten.vorgangId)), "Klassifikation enthaelt keine Vorgangs-ID");
+
+  const auswertung = pruefeAiUserTaskReadback({
+    task: "media-batch-extract",
+    antwort: r.daten,
+    kontext: { master: [] },
+  });
+  const gelesen = auswertung.gelesen as {
+    kandidaten: Array<Record<string, unknown>>;
+    fehlmenge: Array<Record<string, unknown>>;
+    responseMode: string;
+  };
+  gleich(gelesen.responseMode, "partial", "Produktionsparser behaelt Partial");
+  gleich(gelesen.kandidaten.length, 2, "zwei sichere Items bleiben nutzbar");
+  gleich(gelesen.fehlmenge.length, 1, "Fehlmenge bleibt separat");
+  gleich(gelesen.fehlmenge[0].index, 2, "Fehlmenge bindet die Eingabezeile");
+
+  const auswahl = gelesen.kandidaten.map((kandidat) => ({
+    ...kandidat,
+    ausgewaehlt: kandidat.id === "stapel-0",
+  }));
+  const gespeichert: Array<Record<string, unknown>> = [];
+  let schreibaufrufe = 0;
+  const persistenz = await persistiereStapelAuswahl(auswahl, {
+    addFilme: async (eintraege: Array<Record<string, unknown>>) => {
+      schreibaufrufe += 1;
+      gespeichert.push(...JSON.parse(JSON.stringify(eintraege)));
+      return eintraege.map((_, index) => `lokal-${index}`);
+    },
+  });
+  gleich(persistenz?.eintraege, 1, "genau eine Auswahl wurde gespeichert");
+  gleich(schreibaufrufe, 1, "ein Write ohne Batch-Vollretry");
+  const readback = JSON.parse(JSON.stringify(gespeichert));
+  gleich(readback.length, 1, "Readback enthaelt nur die Auswahl");
+  gleich(readback[0].titel, "Alien", "ausgewaehltes Item bleibt erhalten");
+  gleich(readback[0].bewertung, null, "KI-Item bleibt unbewertet");
+  gleich(anbieterAufrufe().length, 1, "kein Anbieter-Vollretry");
+
+  const absent = structuredClone(r.daten);
+  delete absent.providerReceipt;
+  const malformed = structuredClone(r.daten);
+  (malformed.providerReceipt as Record<string, unknown>).zusatz = true;
+  const uncorrelated = structuredClone(r.daten);
+  const uncorrelatedServer = (uncorrelated.providerReceipt as Record<string, unknown>)
+    .server as Record<string, unknown>;
+  uncorrelatedServer.costUsdCent = Number(uncorrelatedServer.costUsdCent) + 0.000001;
+  for (const [name, antwort, receiptState] of [
+    ["absent", absent, "absent"],
+    ["malformed", malformed, "malformed"],
+    ["uncorrelated", uncorrelated, "uncorrelated"],
+  ] as const) {
+    const rot = klassifiziereMediaBatchLiveAntwort({
+      antwort,
+      status: 200,
+      measuredCostUsdCent: verbrauch.kostenUsdCent,
+    });
+    gleich(rot.receiptState, receiptState, `${name}: sichere Receipt-Klasse`);
+    gleich(rot.providerProof, "unproven", `${name}: niemals Providerbeweis`);
+    gleich(rot.parserEligible, false, `${name}: keine fachliche Auswertung`);
+  }
+  gleich(schreibaufrufe, 1, "unbelegte Varianten starten keine Persistenz");
+
+  const receiptFehler = klassifiziereMediaBatchLiveAntwort({
+    antwort: {
+      ok: false,
+      code: "invalid-response",
+      grund: "provider-receipt-invalid",
+      vorgangId: "11111111-2222-4333-8444-555555555555",
+    },
+    status: 502,
+    measuredCostUsdCent: verbrauch.kostenUsdCent,
+  });
+  gleich(receiptFehler.branch, "receipt-construction-failed", "stabiler Vor-Receipt-Zweig");
+  gleich(receiptFehler.receiptState, "absent", "Fehlerhuelle bleibt ehrlich absent");
+  const sichereFehlerklasse = JSON.stringify(receiptFehler);
+  falsch(sichereFehlerklasse.includes("provider-receipt-invalid"), "kein Fehlerwert im Shape-Trace");
+  falsch(sichereFehlerklasse.includes("11111111-2222"), "keine Vorgangs-ID im Shape-Trace");
 });
 
 /* ===========================================================================

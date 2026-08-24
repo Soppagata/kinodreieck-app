@@ -244,6 +244,29 @@ export function baueStapelUebernahme(kandidaten) {
   return { mediathek, mustwatch: [] };
 }
 
+/* Ein einziger Produktionsweg fuer die bestaetigte Auswahl. Die KI-Teilantwort
+   bleibt eine Vorschau; erst diese Funktion reicht ausschliesslich angehakte,
+   sichere und noch nicht vorhandene Items an den vorhandenen Schreibadapter.
+   Ein Teilausfall fuehrt nie zu einem automatischen Vollretry. */
+export async function persistiereStapelAuswahl(
+  kandidaten,
+  { addFilme, addFilm } = {},
+) {
+  const { mediathek } = baueStapelUebernahme(kandidaten);
+  if (!mediathek.length) return { eintraege: 0 };
+  if (typeof addFilme === "function") {
+    const ids = await addFilme(mediathek);
+    if (ids == null) return null;
+    if (!Array.isArray(ids)) throw new Error("Stapelimport: Speicherantwort ist nicht lesbar.");
+    return { eintraege: ids.length };
+  }
+  let eintraege = 0;
+  for (const film of mediathek) {
+    if (await addFilm?.(film)) eintraege += 1;
+  }
+  return { eintraege };
+}
+
 export function externerStapelPrompt() {
   return `# Kinodreieck – Mediathek-Erfassung
 

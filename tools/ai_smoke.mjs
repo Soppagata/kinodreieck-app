@@ -84,6 +84,10 @@ import {
   schliesseBekanntenAnbieterPfad,
 } from "./ai_smoke_contract.mjs";
 import {
+  MEDIA_BATCH_LIVE_TASK,
+  formatiereMediaBatchLiveKlassifikation,
+} from "./media_batch_live_contract.mjs";
+import {
   ENTDECKEN_DAILY_ONCE_ENV,
   RADAR_TARGET_AUTO_RESOLVE_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
@@ -573,6 +577,17 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
     anbieterMessungNachLabel.set(label, kostenMessung);
+    if (koerper?.task === MEDIA_BATCH_LIVE_TASK) {
+      /* Dauerhafter, wertfreier Integrationshook: Der fruehere Live-Lauf konnte
+         nur `providerReceipt=absent` festhalten. Diese Klassifikation bewahrt
+         fuer den naechsten Lauf Root-Keynamen/Typklassen und einen stabilen
+         Zweig, aber weder Provider-/Nutzerwerte noch Rohtext. */
+      console.log(`MEDIA_BATCH_LIVE_SHAPE ${formatiereMediaBatchLiveKlassifikation({
+        antwort: ergebnis.daten,
+        status: ergebnis.status,
+        measuredCostUsdCent: kostenMessung.requestKostenUsdCent,
+      })}`);
+    }
     erfasseNormalenProviderBeleg(
       label,
       koerper?.task,

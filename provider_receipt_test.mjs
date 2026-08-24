@@ -71,6 +71,21 @@ await check("Receipt hasht deterministisch und enthaelt keine reversiblen Provid
   ]) assert.equal(visible.includes(forbidden), false);
 });
 
+await check("Receipt bindet auch den vom toleranten Parser konsumierten leeren Text", async () => {
+  const empty = await createProviderReceipt({
+    ...receiptInput,
+    providerResponseText: "",
+    webSearchRequests: null,
+    resultMode: "degraded",
+  });
+  assert.equal(isProviderReceipt(empty), true);
+  assert.equal(
+    empty.responseSha256,
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  );
+  assert.equal(empty.resultMode, "degraded");
+});
+
 await check("Receipt faellt bei fehlender Usage oder manipulierter Korrelation geschlossen aus", async () => {
   assert.equal(await createProviderReceipt({ ...receiptInput, inputTokens: undefined }), null);
   assert.equal(await createProviderReceipt({ ...receiptInput, serverLogId: 0 }), null);

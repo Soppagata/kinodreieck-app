@@ -52,7 +52,11 @@ export async function createProviderReceipt({
   costUsdCent,
 } = {}) {
   if (!PROVIDERS.has(provider)
-      || typeof providerResponseText !== "string" || !providerResponseText
+      /* Auch ein leerer Text ist der exakt konsumierte Providertext. Der
+         tolerante Parser klassifiziert ihn bewusst als `degraded`; ihn hier
+         abzuweisen wuerde den bezahlten, sicher eingeordneten Aufruf erst NACH
+         Parser und Kostenmessung in eine receiptlose Fehlerhuelle verwandeln. */
+      || typeof providerResponseText !== "string"
       || new TextEncoder().encode(providerResponseText).length > MAX_PROVIDER_RESPONSE_TEXT_BYTES
       || typeof model !== "string" || !MODEL_FORM.test(model)
       || !nonNegativeInteger(inputTokens) || !nonNegativeInteger(outputTokens)

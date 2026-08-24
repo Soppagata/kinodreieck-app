@@ -4,7 +4,7 @@ import { aiService } from "../services/ai.js";
 import { errorText } from "../services/errors.js";
 import {
   EXTERNER_STAPEL_WORKFLOW_DATEINAME, STAPEL_MAX_ZEILEN, STAPEL_QUELLEN, STAPEL_STANDARD_QUELLEN, STAPEL_TYPEN,
-  baueStapelPayload, baueStapelUebernahme, externerStapelPrompt,
+  baueStapelPayload, externerStapelPrompt, persistiereStapelAuswahl,
   normalisiereStapelAntwort, vorbereiteTitelliste,
 } from "../lib/stapelimport.js";
 
@@ -87,17 +87,17 @@ export function StapelImport({ master = [], addFilm, addFilme, autorName = "", k
   const aktualisiere = (id, feld, wert) => setVorschau((alt) => ({ ...alt, kandidaten: alt.kandidaten.map((k) => k.id === id ? { ...k, [feld]: wert } : k) }));
   const uebernehmen = async () => {
     if (!vorschau || uebernahmeRef.current) return;
-    const { mediathek } = baueStapelUebernahme(vorschau.kandidaten);
-    if (!mediathek.length) return;
+    if (!vorschau.kandidaten.some((kandidat) =>
+      kandidat.zustand === "ok" && kandidat.ausgewaehlt && !kandidat.vorhandenMediathek
+    )) return;
     uebernahmeRef.current = true; setUebernahmeLaeuft(true);
     try {
-      let eintraege = 0;
-      if (addFilme) {
-        const ids = await addFilme(mediathek);
-        if (ids == null) return;
-        eintraege = ids.length;
-      } else for (const film of mediathek) if (await addFilm?.(film)) eintraege++;
-      setBericht({ eintraege }); setVorschau(null);
+      const gespeichert = await persistiereStapelAuswahl(
+        vorschau.kandidaten,
+        { addFilme, addFilm },
+      );
+      if (gespeichert == null) return;
+      setBericht({ eintraege: gespeichert.eintraege }); setVorschau(null);
     } finally { uebernahmeRef.current = false; setUebernahmeLaeuft(false); }
   };
 
