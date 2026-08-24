@@ -124,11 +124,11 @@ const LIVE_ANBIETER_PFADE = Object.freeze([
   "intelligent-search",
   "profile-extract",
   "film-forecast",
+  "entdecken-daily-task",
+  "radar-websearch-task",
   "filmwissen-synthese",
   "blog-profile-extract",
   "media-batch-extract",
-  "entdecken-daily-task",
-  "radar-websearch-task",
 ]);
 const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT
   ? LIVE_ANBIETER_PFADE
@@ -177,28 +177,32 @@ function druckeAnbieterPfadStatus() {
   return abschluss;
 }
 
-async function ruf(
+async function rufRoh(
   methode,
   kopf = {},
   koerper = null,
   extraKopf = {},
   timeoutMs = LIVE_REQUEST_TIMEOUT_MS,
 ) {
+  const antwort = await fetchMitZeitgrenze(ENDPUNKT, {
+    method: methode,
+    headers: { Origin: ORIGIN, ...kopf, ...extraKopf },
+    body: koerper === null ? undefined : JSON.stringify(koerper),
+  }, { timeoutMs });
+  let daten = null;
+  const text = await antwort.text();
+  try { daten = text ? JSON.parse(text) : null; } catch { daten = { antwortForm: "kein-json" }; }
+  return {
+    status: antwort.status,
+    daten,
+    allowOrigin: antwort.headers.get("access-control-allow-origin"),
+    allowHeaders: antwort.headers.get("access-control-allow-headers"),
+  };
+}
+
+async function ruf(...argumente) {
   try {
-    const antwort = await fetchMitZeitgrenze(ENDPUNKT, {
-      method: methode,
-      headers: { Origin: ORIGIN, ...kopf, ...extraKopf },
-      body: koerper === null ? undefined : JSON.stringify(koerper),
-    }, { timeoutMs });
-    let daten = null;
-    const text = await antwort.text();
-    try { daten = text ? JSON.parse(text) : null; } catch { daten = { antwortForm: "kein-json" }; }
-    return {
-      status: antwort.status,
-      daten,
-      allowOrigin: antwort.headers.get("access-control-allow-origin"),
-      allowHeaders: antwort.headers.get("access-control-allow-headers"),
-    };
+    return await rufRoh(...argumente);
   } catch (error) {
     stoppeLiveLauf(error);
   }
@@ -234,7 +238,15 @@ async function rpc(name, token, body, timeoutMs = LIVE_REQUEST_TIMEOUT_MS) {
     const daten = await liesJsonOderNull(antwort);
     return { status: antwort.status, daten };
   } catch (error) {
-    stoppeLiveLauf(error);
+    if (error instanceof LiveSicherheitsStopp
+        && error.code !== "FETCH_RESPONSE_INVALID") {
+      stoppeLiveLauf(error);
+    }
+    /* Der Aufrufer entscheidet anhand des fehlenden Readbacks fachlich rot.
+       Im Vorlauf fuehrt das weiterhin zum Stopp vor jedem Anbieterrequest; nach
+       sicherer Kostenmessung darf ein normaler RPC-Transportfehler dagegen den
+       naechsten seriellen Pfad nicht abschneiden. */
+    return Object.freeze({ status: null, daten: null, pfadFehler: "rpc-readback-failed" });
   }
 }
 
@@ -547,6 +559,24 @@ function erfasseNormalenProviderBeleg(label, pfad, antwort, kostenMessung) {
   }
 }
 
+function istTerminalerProviderRequestFehler(error) {
+  /* Der Request-Wrapper kennzeichnet echte Zeitgrenzen stabil. Andere
+     Transportfehler werden erst nach der vorgeschriebenen Nachmessung als
+     normaler Pfadfehler behandelt. FETCH_RESPONSE_INVALID ist ebenfalls eine
+     Antwort-/Pfadabweichung, sobald die Kosten exakt bekannt sind. */
+  return error instanceof LiveSicherheitsStopp
+    && error.code !== "FETCH_RESPONSE_INVALID";
+}
+
+function bekannterProviderRequestFehler(kostenMessung) {
+  return Object.freeze({
+    status: null,
+    daten: null,
+    kostenMessung,
+    pfadFehler: "request-failed-known-cost",
+  });
+}
+
 function schliesseAnbieterPfad(label, pfad, ok, reason) {
   try {
     return schliesseBekanntenAnbieterPfad({
@@ -569,18 +599,24 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
   try {
     markierung = await laufWache.vorAnbieterRequest(label);
     registriereAnbieterPfad(koerper?.task);
-    const ergebnis = await ruf(
-      methode,
-      kopf,
-      koerper,
-      extraKopf,
-      laufBasis.anbieterRequestTimeoutMs,
-    );
-    const kostenRoh = ergebnis.daten?.verbrauch?.kostenUsdCent;
+    let ergebnis = null;
+    let requestError = null;
+    try {
+      ergebnis = await rufRoh(
+        methode,
+        kopf,
+        koerper,
+        extraKopf,
+        laufBasis.anbieterRequestTimeoutMs,
+      );
+    } catch (error) {
+      requestError = error;
+    }
+    const kostenRoh = ergebnis?.daten?.verbrauch?.kostenUsdCent;
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
     anbieterMessungNachLabel.set(label, kostenMessung);
-    if (koerper?.task === MEDIA_BATCH_LIVE_TASK) {
+    if (koerper?.task === MEDIA_BATCH_LIVE_TASK && ergebnis) {
       /* Dauerhafter, wertfreier Integrationshook: Der fruehere Live-Lauf konnte
          nur `providerReceipt=absent` festhalten. Diese Klassifikation bewahrt
          fuer den naechsten Lauf Root-Keynamen/Typklassen und einen stabilen
@@ -594,16 +630,20 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     erfasseNormalenProviderBeleg(
       label,
       koerper?.task,
-      ergebnis.daten,
+      ergebnis?.daten ?? null,
       kostenMessung,
     );
+    if (requestError) {
+      if (istTerminalerProviderRequestFehler(requestError)) throw requestError;
+      return bekannterProviderRequestFehler(kostenMessung);
+    }
     if (istTerminalerAnbieterPfadHttpStatus(ergebnis.status)) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${ergebnis.status}.`,
       );
     }
-    return ergebnis;
+    return { ...ergebnis, kostenMessung };
   } catch (error) {
     stoppeLiveLauf(error);
   }
@@ -637,12 +677,11 @@ async function rufProduktAnbieterBewacht({
 
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, null);
     anbieterMessungNachLabel.set(label, kostenMessung);
-    if (requestError) {
-      throw requestError instanceof LiveSicherheitsStopp
-        ? requestError
-        : new LiveSicherheitsStopp("unbekannt", `${label} war nicht verlaesslich erreichbar.`);
-    }
     erfasseNormalenProviderBeleg(label, pfad, daten, kostenMessung);
+    if (requestError) {
+      if (istTerminalerProviderRequestFehler(requestError)) throw requestError;
+      return bekannterProviderRequestFehler(kostenMessung);
+    }
     if (istTerminalerAnbieterPfadHttpStatus(antwort?.status)) {
       throw new LiveSicherheitsStopp(
         antwort?.status === 429 ? "limit" : "unbekannt",
@@ -916,6 +955,11 @@ if (!p17Unbelegt) {
   );
 }
 
+/* Die beiden sichtbaren Produktpfade laufen direkt nach Basis, Suche, Profil
+   und Prognose. Optionale Filmwissen-/Blog-/Mediaabweichungen koennen sie so
+   nicht mehr abschneiden; Requestzaun und Gesamtzahl bleiben unveraendert. */
+if (OWNER_COMBINED_EIGHT) await pruefeKritischeEntdeckenRadarPfade();
+
 /* ===========================================================================
    S4: gemeinsames Filmwissen und seine enge providerfreie Lese-RPC
 
@@ -1167,7 +1211,7 @@ if (!p23Unbelegt) {
 /* ===========================================================================
    S7: Entdecken-Tagesfeed — genau ein potenziell zahlender Websearch
    =========================================================================== */
-if (OWNER_COMBINED_EIGHT) {
+async function pruefeKritischeEntdeckenRadarPfade() {
   const p24 = await rufProduktAnbieterBewacht({
     pfad: "entdecken-daily-task",
     label: "P24 entdecken-daily-task",

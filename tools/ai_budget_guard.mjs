@@ -55,10 +55,11 @@ export class BudgetKonfigFehler extends Error {
 }
 
 export class LiveSicherheitsStopp extends Error {
-  constructor(art, message) {
+  constructor(art, message, { code = null } = {}) {
     super(message);
     this.name = "LiveSicherheitsStopp";
     this.art = art;
+    this.code = code;
     this.exitCode = art === "limit" ? AUTONOMIE_STOPP_EXIT : BUDGET_UNBEKANNT_EXIT;
   }
 }
@@ -76,7 +77,11 @@ export async function fetchMitZeitgrenze(
   } = {},
 ) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > LIVE_PROCESS_TIMEOUT_MS) {
-    throw new LiveSicherheitsStopp("unbekannt", "Request-Zeitgrenze ist ungueltig.");
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Request-Zeitgrenze ist ungueltig.",
+      { code: "REQUEST_TIMEOUT_CONFIG_INVALID" },
+    );
   }
   const controller = new AbortController();
   let fertig = false;
@@ -89,6 +94,7 @@ export async function fetchMitZeitgrenze(
   const zeitfehler = new LiveSicherheitsStopp(
     "unbekannt",
     `Request-Zeitgrenze von ${timeoutMs} ms erreicht.`,
+    { code: "REQUEST_TIMEOUT" },
   );
   const zeitPromise = new Promise((_, reject) => {
     timer = setTimeout(() => {
@@ -112,7 +118,11 @@ export async function fetchMitZeitgrenze(
 
   if ((typeof antwort !== "object" && typeof antwort !== "function") || antwort === null) {
     raeumeAuf();
-    throw new LiveSicherheitsStopp("unbekannt", "Fetch lieferte keine Antwort.");
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Fetch lieferte keine Antwort.",
+      { code: "FETCH_RESPONSE_INVALID" },
+    );
   }
 
   const koerperMethoden = new Set(["arrayBuffer", "blob", "formData", "json", "text"]);

@@ -414,6 +414,53 @@ export async function loeseStarkesOwnerRadarZiel({
   return kandidaten.slice(0, 1)[0];
 }
 
+/* Providerfreier Auth-Transport fuer kontrollierte Health-/Buildmarker-
+   Readbacks. Er nutzt dieselbe oeffentliche Zielkonfiguration und denselben
+   Owner-Keychain-Eintrag wie der freigegebene Live-Lauf, aktiviert aber weder
+   dessen Budgetoverride noch Filmwissen-, Radar- oder Entdecken-Guards. */
+export function baueOwnerReadbackUmgebung({
+  ambientEnv = process.env,
+  lokaleKonfig = liesLokaleKonfig(),
+  keychainLeser = liesKeychainEintrag,
+} = {}) {
+  const env = harmloseBasis(ambientEnv);
+  for (const name of OEFFENTLICHE_NAMEN) {
+    const wert = ambientEnv?.[name] ?? lokaleKonfig?.[name];
+    if (typeof wert === "string" && wert !== "") env[name] = wert;
+  }
+  pruefeOeffentlicheKonfig(env);
+
+  const ownerUser = String(env.KD_OWNER_USER || "").trim();
+  if (!ownerUser || !/^[a-z0-9._-]+$/i.test(ownerUser)) {
+    throw new Error("KD_OWNER_USER fehlt oder ist ungueltig.");
+  }
+  let ownerPass;
+  try {
+    ownerPass = keychainLeser(KEYCHAIN_ACCOUNTS.owner);
+  } catch {
+    throw new KeychainFehler(
+      `Schluesselbund-Eintrag ${KEYCHAIN_ACCOUNTS.owner} ist nicht lesbar.`,
+    );
+  }
+  if (typeof ownerPass !== "string" || ownerPass === "") {
+    throw new KeychainFehler(
+      `Schluesselbund-Eintrag ${KEYCHAIN_ACCOUNTS.owner} ist nicht lesbar.`,
+    );
+  }
+
+  env.KD_TESTA_USER = ownerUser;
+  env.KD_TESTA_PASS = ownerPass;
+  delete env.KD_OWNER_USER;
+  delete env.KD_RADAR_TARGET_ID;
+  delete env[FILMWISSEN_TARGET_ID_ENV];
+  delete env[FILMWISSEN_TARGET_IDS_ENV];
+  delete env[OWNER_SERVER_BUDGET_ENV];
+  delete env[OWNER_CORE_SIX_GUARD_ENV];
+  delete env[RADAR_WEBSEARCH_ONCE_ENV];
+  delete env[ENTDECKEN_DAILY_ONCE_ENV];
+  return env;
+}
+
 export function baueKindUmgebung({
   modus,
   ambientEnv = process.env,

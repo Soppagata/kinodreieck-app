@@ -3,7 +3,9 @@
    Kein Test meldet sich an, kein Test ruft Supabase oder einen Anbieter auf. */
 
 import { EventEmitter } from "node:events";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   fremdeEvalWerte,
   hatWirkendeEvalDeutung,
@@ -303,7 +305,8 @@ try {
   });
 } catch (error) {
   timeoutStoppt = error instanceof LiveSicherheitsStopp
-    && error.exitCode === BUDGET_UNBEKANNT_EXIT;
+    && error.exitCode === BUDGET_UNBEKANNT_EXIT
+    && error.code === "REQUEST_TIMEOUT";
 }
 check("Request-Timeout stoppt auch ein Fetch, das Abort ignoriert", timeoutStoppt);
 
@@ -320,7 +323,8 @@ try {
   await haengendeAntwort.json();
 } catch (error) {
   koerperTimeoutStoppt = error instanceof LiveSicherheitsStopp
-    && error.exitCode === BUDGET_UNBEKANNT_EXIT;
+    && error.exitCode === BUDGET_UNBEKANNT_EXIT
+    && error.code === "REQUEST_TIMEOUT";
 }
 check("Request-Timeout umfasst auch einen haengenden Antwortkoerper",
   koerperTimeoutStoppt);
@@ -389,11 +393,11 @@ const ANBIETER_PFADE_SOLL = [
   "intelligent-search",
   "profile-extract",
   "film-forecast",
+  "entdecken-daily-task",
+  "radar-websearch-task",
   "filmwissen-synthese",
   "blog-profile-extract",
   "media-batch-extract",
-  "entdecken-daily-task",
-  "radar-websearch-task",
 ];
 const leseTaskListe = (quelle, anker) => {
   const start = quelle.indexOf(anker);
@@ -411,6 +415,10 @@ const p8Abschnitt = smokeSkript.slice(
 const p8Position = smokeSkript.indexOf("const p8 = await ruf(");
 const p5CapabilityPos = smokeSkript.indexOf('pruefeBlogProfilCapabilityAbschnitt("P5", p5);');
 const p5ActivationPos = smokeSkript.indexOf('pruefeAktivierungsvertrag("P5", p5);');
+const kritischeProduktpfadePos = smokeSkript.indexOf(
+  "await pruefeKritischeEntdeckenRadarPfade();",
+);
+const filmwissenPfadPos = smokeSkript.indexOf('"P18 filmwissen-synthese"');
 const ownerAccessPos = smokeSkript.indexOf("await pruefeEntdeckenOwnerZugang");
 const radarFreitextSzenarioPos = smokeSkript.indexOf(
   "const RADAR_FREITEXT_SZENARIO = erstelleRadarFreitextLiveSzenario();",
@@ -508,6 +516,8 @@ check("Rauchprobe verdrahtet genau die acht beauftragten Anbieterpfade durch die
   && /laufLimitUsdCent:\s*OWNER_COMBINED_EIGHT[\s\S]{0,100}\? ENTDECKEN_LAUF_LIMIT_USD_CENT[\s\S]{0,100}: LAUF_LIMIT_USD_CENT/.test(smokeSkript)
   && /const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT/.test(smokeSkript)
   && /bestaetigeExakteAnbieterPfadfolge\(\);/.test(smokeSkript)
+  && kritischeProduktpfadePos > smokeSkript.indexOf('"P17 film-forecast"')
+  && filmwissenPfadPos > kritischeProduktpfadePos
   && livePfadPositionen.every((position, index) =>
     position >= 0 && (index === 0 || position > livePfadPositionen[index - 1]))
   && !/\b(?:for|while)\s*\(|Promise\.all\(/.test(livePfadAbschnitt)
@@ -627,6 +637,48 @@ check("Eval verbietet bei ausserhalb-Faellen zugleich jeden wirkenden Filter ode
   && hatWirkendeEvalDeutung({
     harte_filter: {}, weiche_wuensche: {}, ausschluesse: {}, entdecken: false,
   }) === false);
+
+const harnessFixture = fileURLToPath(new URL(
+  "./tests/fixtures/ai_smoke_known_zero_failure_mock.mjs",
+  import.meta.url,
+));
+const harnessSkript = fileURLToPath(new URL("./tools/ai_smoke.mjs", import.meta.url));
+const harnessLauf = spawnSync(process.execPath, ["--import", harnessFixture, harnessSkript], {
+  cwd: process.cwd(),
+  encoding: "utf8",
+  timeout: 30_000,
+  maxBuffer: 2 * 1024 * 1024,
+  env: {
+    PATH: process.env.PATH || "/usr/bin:/bin",
+    LANG: "C",
+    LC_ALL: "C",
+    NO_COLOR: "1",
+    KD_SB_URL: "https://fixtureproject.supabase.co",
+    KD_SB_ANON: "sb_publishable_fixture_key_1234567890",
+    KD_TESTA_USER: "owner-fixture",
+    KD_TESTA_PASS: "fixture-only-password",
+    KD_MAIL_DOMAIN: "login.fixture.at",
+    KD_AI_FUNKTION: "ai-task",
+    KD_ORIGIN: "https://staging.fixture.invalid",
+    KD_AI_OWNER_APPROVED_SERVER_BUDGET: "1",
+    KD_AI_OWNER_CORE_SIX_GUARD: "keychain-owner-core-six-v1",
+    KD_ENTDECKEN_DAILY_ONCE_GUARD: "keychain-budget-guard-v1",
+    KD_RADAR_WEBSEARCH_ONCE_GUARD: "keychain-budget-guard-v1",
+    KD_FILMWISSEN_TARGET_ID: "imdb:tt0133093",
+  },
+});
+const harnessAusgabe = `${harnessLauf.stdout || ""}\n${harnessLauf.stderr || ""}`;
+const harnessPfade = [...harnessAusgabe.matchAll(/^FIXTURE_PROVIDER_PATH ([a-z0-9-]+)$/gm)]
+  .map((treffer) => treffer[1]);
+check("Acht-Pfade-Harness versucht Radar genau einmal nach bekannten Fehlern und Entdecken-Nulldelta",
+  harnessLauf.status === 1
+  && harnessLauf.signal === null
+  && JSON.stringify(harnessPfade) === JSON.stringify(ANBIETER_PFADE_SOLL)
+  && (harnessAusgabe.match(/^FIXTURE_RADAR_SUBMIT valid$/gm) || []).length === 1
+  && harnessAusgabe.includes("LIVE-ANBIETERREQUESTS: attempted=8")
+  && harnessAusgabe.includes("entdecken-daily-task: unproven/absent")
+  && harnessAusgabe.includes("radar-websearch-task: unproven/absent")
+  && !/BUDGET_UNBEKANNT|AUTONOMIE_STOPP/.test(harnessAusgabe));
 
 const alteUmgebung = {
   KD_SB_URL: process.env.KD_SB_URL,
