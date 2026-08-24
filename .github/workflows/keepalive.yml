@@ -35,11 +35,11 @@ jobs:
         timeout-minutes: 3
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            echo "::error::SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY nicht gesetzt."
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nicht gesetzt."
             exit 1
           fi
 
@@ -47,13 +47,15 @@ jobs:
           trap 'rm -f "$response_file"' EXIT
           response_meta="$(
             curl --silent --show-error \
-              --request GET \
+              --request POST \
               --connect-timeout 10 \
               --max-time 150 \
               --output "$response_file" \
               --write-out "%{http_code} %{content_type}" \
               "${SUPABASE_URL%/}/functions/v1/entdecken-daily-task" \
-              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}"
+              --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "x-kd-entdecken-refresh: scheduled-v1"
           )"
 
           http_status="${response_meta%% *}"
@@ -70,16 +72,33 @@ jobs:
             catch { process.exit(2); }
             const statuses = new Set(["fresh", "stale", "empty"]);
             const modes = new Set(["structured", "partial", "degraded"]);
+            const refreshStatuses = new Set([
+              "refreshed", "already_fresh", "in_progress", "cooldown",
+              "exhausted", "held", "failed",
+            ]);
             if (!body || body.ok !== true || !statuses.has(body.status)
                 || !modes.has(body.responseMode)
+                || !body.refresh || body.refresh.requested !== true
+                || body.refresh.mode !== "scheduled"
+                || !refreshStatuses.has(body.refresh.status)
+                || !Number.isInteger(body.refresh.attemptCount)
+                || body.refresh.attemptCount < 0 || body.refresh.attemptCount > 3
+                || body.refresh.maxAttempts !== 3
                 || !Number.isInteger(body.providerRequests)
                 || body.providerRequests < 0 || body.providerRequests > 1
+                || !Number.isInteger(body.searchRequests)
+                || body.searchRequests < 0 || body.searchRequests > 2
                 || !Number.isInteger(body.writes) || body.writes < 0 || body.writes > 1) {
               process.exit(3);
             }
-            if (body.responseMode === "degraded") process.stdout.write("degraded");
-            else if (body.providerRequests === 0 && body.writes === 0) process.stdout.write("claim-held");
-            else if (body.providerRequests === 1 && body.writes === 1 && body.status === "fresh") {
+            if (body.refresh.status === "failed" && body.responseMode === "degraded"
+                && body.writes === 0) process.stdout.write("failed");
+            else if (["already_fresh", "in_progress", "cooldown", "exhausted", "held"]
+                .includes(body.refresh.status)
+                && body.providerRequests === 0 && body.searchRequests === 0
+                && body.writes === 0) process.stdout.write(body.refresh.status);
+            else if (body.refresh.status === "refreshed" && body.providerRequests === 1
+                && body.writes === 1 && body.status === "fresh") {
               process.stdout.write("refreshed");
             } else process.exit(4);
           ' "$response_file")"; then
@@ -89,6 +108,10 @@ jobs:
 
           case "$outcome" in
             refreshed) echo "Entdecken-Wochenfeed: Wochenrefresh gespeichert." ;;
-            claim-held) echo "Entdecken-Wochenfeed: Wochenclaim bereits gehalten oder Feed aktuell; kein Providerrequest." ;;
-            degraded) echo "::warning::Entdecken-Wochenfeed: begrenzter Versuch endete degraded; kein Retry." ;;
+            already_fresh) echo "Entdecken-Wochenfeed: aktueller Wochenfeed bereits vorhanden; kein Providerrequest." ;;
+            in_progress) echo "Entdecken-Wochenfeed: ein Refresh haelt die aktive Lease; kein Providerrequest." ;;
+            cooldown) echo "::warning::Entdecken-Wochenfeed: spaeterer Recoveryversuch wartet auf Cooldown; kein Retry in diesem Lauf." ;;
+            exhausted) echo "::warning::Entdecken-Wochenfeed: Wochenkontingent erschoepft; kein Providerrequest." ;;
+            held) echo "Entdecken-Wochenfeed: Claim nicht frei; kein Providerrequest." ;;
+            failed) echo "::warning::Entdecken-Wochenfeed: begrenzter Versuch endete degraded; kein Retry." ;;
           esac

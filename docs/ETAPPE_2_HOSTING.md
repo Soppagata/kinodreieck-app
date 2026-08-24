@@ -62,27 +62,30 @@ Der Workflow erzeugt daraus ausschließlich `VITE_APP_ENV`, `VITE_APP_URL`,
 Zusätzlich müssen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` auch als
 **Repository-Variablen** (Ebene Repository, nicht Environment) angelegt werden:
 Der zeitgesteuerte Keep-alive-Workflow (`keepalive.yml`) läuft ohne
-GitHub-Environment und liest nur Repository-Variablen. Er bekommt bewusst kein
-Environment zugewiesen, weil der erforderliche Production-Reviewer sonst jeden
-Cron-Lauf blockieren würde. Beide Werte sind öffentlich; es entsteht kein
-Secret auf Repository-Ebene.
+GitHub-Environment. Für den reinen Keep-alive-Read genügen diese öffentlichen
+Werte. Der Entdecken-Scheduler benötigt zusätzlich das bereits für private
+Betriebsprüfungen verwendete Repository-Secret `SUPABASE_SERVICE_ROLE_KEY`; der
+Wert wird weder ausgegeben noch Teil des Function-Payloads.
 
 ### Entdecken-Wochenanstoß im Keep-alive
 
 Der bestehende Drei-Tage-Zeitplan stößt im `schedule`-Event zusätzlich genau
-einen accountlosen `GET` auf `entdecken-daily-task` an. Der Step hat eine harte
-Zeitgrenze, folgt keinen Redirects und besitzt weder Schleife noch Curl-Retry.
-Ein manueller `workflow_dispatch` führt weiterhin den harmlosen Keep-alive-Read
-aus, den providerpotenziellen Entdecken-Step aber nicht.
+einen service-role-authentifizierten, bodylosen Refresh-`POST` auf
+`entdecken-daily-task` an. Der Step hat eine harte Zeitgrenze, folgt keinen
+Redirects und besitzt weder Schleife noch Curl-Retry. Ein manueller
+`workflow_dispatch` führt weiterhin den harmlosen Keep-alive-Read aus, den
+providerpotenziellen Entdecken-Step aber nicht. Normale Browser-, Health- und
+Readback-`GET`s bleiben strikt read-only und konsumieren keinen Claim.
 
 Die mehreren Cron-Aufrufe sind keine Kostendeduplizierung. Ausschließlich der
-atomare Datenbankclaim über `last_attempt_iso_week` und `refreshed_iso_week`
-entscheidet, ob der normale Aufruf dieser ISO-Woche noch einen Providerrequest
-erhält. Ein bereits gehaltener Claim liest nur den Cache; der Workflow sendet
-weder den Owner-Recovery-Header noch ein Service-Role-, Sitzungs- oder
-Anbieter-Secret. Ein `degraded`-Ergebnis wird ohne Retry als Workflow-Warnung
-sichtbar, während HTTP-, Auth-, HTML- und ungültige JSON-/Vertragsantworten den
-Lauf rot markieren.
+atomare Datenbankclaim mit Fencing-Lease entscheidet, ob ein ausdrücklicher
+Refresh noch einen Providerrequest erhält. Nach Fehler oder abgelaufener Lease
+ist frühestens nach dem Cooldown ein späterer Workflowlauf erlaubt; pro
+ISO-Woche gibt es höchstens drei Versuche und höchstens einen erfolgreichen
+Providerrefresh. Ein einzelner Lauf wiederholt keinen Request. Gehaltene,
+abkühlende und erschöpfte Claims werden getrennt vom erfolgreichen Refresh
+gemeldet; HTTP-, Auth-, HTML- und ungültige JSON-/Vertragsantworten markieren
+den Lauf rot. Der letzte gute Feed wird durch einen Folgefehler nicht ersetzt.
 
 Wiederkehrende Wirkung entsteht erst nach Aufnahme in den GitHub-Default-Branch.
 Ein Staging- oder Feature-Branch aktiviert für sich keinen Zeitplan automatisch;

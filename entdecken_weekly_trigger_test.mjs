@@ -1,4 +1,4 @@
-/* Vertrag fuer den wiederkehrenden, providerpotenziellen Entdecken-GET.
+/* Vertrag fuer den wiederkehrenden, providerpotenziellen Entdecken-POST.
    Rein statisch/lokal: kein Netzwerk, kein GitHub-Lauf, kein Anbieter. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -20,7 +20,7 @@ function check(name, test) {
 const workflow = readFileSync(".github/workflows/keepalive.yml", "utf8");
 const hostingDoc = readFileSync("docs/ETAPPE_2_HOSTING.md", "utf8");
 const weeklyClaimSql = readFileSync(
-  "supabase/migrations/20260822210000_entdecken_weekly_recovery.sql",
+  "supabase/migrations/20260824140000_entdecken_weekly_refresh_lease.sql",
   "utf8",
 );
 const weeklySaveSql = readFileSync(
@@ -116,9 +116,10 @@ check("Providerpotenzieller Step laeuft ausschliesslich im schedule-Event", () =
   assert.doesNotMatch(triggerStep, /workflow_dispatch|staging|github\.ref/);
 });
 
-check("Step sendet exakt einen retryfreien, nicht umgeleiteten GET", () => {
+check("Step sendet exakt einen retryfreien, nicht umgeleiteten Refresh-POST", () => {
   assert.equal((triggerStep.match(/^\s*curl\b/gm) || []).length, 1);
-  assert.match(triggerStep, /--request GET/);
+  assert.match(triggerStep, /--request POST/);
+  assert.match(triggerStep, /--header "x-kd-entdecken-refresh: scheduled-v1"/);
   assert.doesNotMatch(triggerStep, /--retry|--location|\bcurl\s+[^\n]*\bcurl\b|\b(for|while|until)\b/);
 });
 
@@ -129,7 +130,7 @@ check("Workflow-Shell und eingebetteter JSON-Parser sind syntaktisch gueltig", (
   assert.equal(spawnSync(process.execPath, ["--check", "-"], { input: responseParser }).status, 0);
 });
 
-check("GET und gesamter Job besitzen harte kurze Zeitgrenzen", () => {
+check("POST und gesamter Job besitzen harte kurze Zeitgrenzen", () => {
   const connectSeconds = Number(triggerStep.match(/--connect-timeout\s+(\d+)/)?.[1]);
   const maxSeconds = Number(triggerStep.match(/--max-time\s+(\d+)/)?.[1]);
   const stepMinutes = Number(triggerStep.match(/timeout-minutes:\s*(\d+)/)?.[1]);
@@ -139,16 +140,20 @@ check("GET und gesamter Job besitzen harte kurze Zeitgrenzen", () => {
   assert.match(workflow, /jobs:\n\s+ping:[\s\S]*?timeout-minutes:\s*5/);
 });
 
-check("Function-URL und Repository-Variablen folgen dem accountlosen Produktvertrag", () => {
+check("Function-URL und Scheduler-Credentials bleiben im Secret und nicht im Payload", () => {
   assert.match(triggerStep, /SUPABASE_URL:\s*\$\{\{\s*vars\.SUPABASE_URL\s*\}\}/);
-  assert.match(triggerStep, /SUPABASE_PUBLISHABLE_KEY:\s*\$\{\{\s*vars\.SUPABASE_PUBLISHABLE_KEY\s*\}\}/);
+  assert.match(triggerStep, /SUPABASE_SERVICE_ROLE_KEY:\s*\$\{\{\s*secrets\.SUPABASE_SERVICE_ROLE_KEY\s*\}\}/);
   assert.match(triggerStep, /"\$\{SUPABASE_URL%\/\}\/functions\/v1\/entdecken-daily-task"/);
-  assert.match(triggerStep, /--header "apikey: \$\{SUPABASE_PUBLISHABLE_KEY\}"/);
-  assert.doesNotMatch(triggerStep, /secrets\.|SERVICE_ROLE|ANTHROPIC|Authorization:|x-kd-entdecken-recovery|https:\/\/[^\s"']+\.supabase\.co/);
+  assert.match(triggerStep, /--header "apikey: \$\{SUPABASE_SERVICE_ROLE_KEY\}"/);
+  assert.match(triggerStep, /--header "Authorization: Bearer \$\{SUPABASE_SERVICE_ROLE_KEY\}"/);
+  assert.match(triggerStep, /x-kd-entdecken-refresh: scheduled-v1/);
+  assert.doesNotMatch(triggerStep, /SUPABASE_PUBLISHABLE_KEY|ANTHROPIC|x-kd-entdecken-recovery|https:\/\/[^\s"']+\.supabase\.co|set\s+-x|printenv/);
 });
 
-check("Antwortpfad trennt Refresh, gehaltenen Claim und degraded ohne Payload-Log", () => {
-  for (const outcome of ["refreshed", "claim-held", "degraded"]) assert.match(triggerStep, new RegExp(outcome));
+check("Antwortpfad trennt Refresh, Claimzustaende und Fehler ohne Payload-Log", () => {
+  for (const outcome of ["refreshed", "already_fresh", "in_progress", "cooldown", "exhausted", "failed"]) {
+    assert.match(triggerStep, new RegExp(outcome));
+  }
   assert.match(triggerStep, /body\.ok !== true/);
   assert.match(triggerStep, /application\/json/);
   assert.match(triggerStep, /::warning::[\s\S]*degraded; kein Retry/);
@@ -156,30 +161,39 @@ check("Antwortpfad trennt Refresh, gehaltenen Claim und degraded ohne Payload-Lo
   assert.doesNotMatch(triggerStep, /cat\s+"?\$response_file|console\.log\(body|JSON\.stringify\(body/);
 });
 
-check("JSON-Parser klassifiziert die drei erlaubten Ergebnisse und verwirft HTML/Authvertraege", () => {
+check("JSON-Parser klassifiziert Refresh, Hold und Fehler und verwirft HTML/Authvertraege", () => {
   const refreshed = runResponseParser(JSON.stringify({
-    ok: true, status: "fresh", responseMode: "structured", providerRequests: 1, writes: 1,
+    ok: true, status: "fresh", responseMode: "structured", providerRequests: 1,
+    searchRequests: 1, writes: 1,
+    refresh: { requested: true, mode: "scheduled", status: "refreshed", attemptCount: 2, maxAttempts: 3 },
   }));
   const claimHeld = runResponseParser(JSON.stringify({
-    ok: true, status: "stale", responseMode: "structured", providerRequests: 0, writes: 0,
+    ok: true, status: "stale", responseMode: "structured", providerRequests: 0,
+    searchRequests: 0, writes: 0,
+    refresh: { requested: true, mode: "scheduled", status: "cooldown", attemptCount: 1, maxAttempts: 3 },
   }));
   const degraded = runResponseParser(JSON.stringify({
-    ok: true, status: "empty", responseMode: "degraded", providerRequests: 1, writes: 0,
+    ok: true, status: "empty", responseMode: "degraded", providerRequests: 1,
+    searchRequests: 1, writes: 0,
+    refresh: { requested: true, mode: "scheduled", status: "failed", attemptCount: 1, maxAttempts: 3 },
   }));
   assert.deepEqual([refreshed.status, refreshed.stdout], [0, "refreshed"]);
-  assert.deepEqual([claimHeld.status, claimHeld.stdout], [0, "claim-held"]);
-  assert.deepEqual([degraded.status, degraded.stdout], [0, "degraded"]);
+  assert.deepEqual([claimHeld.status, claimHeld.stdout], [0, "cooldown"]);
+  assert.deepEqual([degraded.status, degraded.stdout], [0, "failed"]);
   assert.notEqual(runResponseParser("<!doctype html><title>Login</title>").status, 0);
   assert.notEqual(runResponseParser(JSON.stringify({
     ok: false, status: "disabled", responseMode: "structured", providerRequests: 0, writes: 0,
   })).status, 0);
 });
 
-check("DB bleibt alleiniger Wochenzaun; Scheduled Step fordert keinen Recoveryclaim an", () => {
-  assert.match(weeklyClaimSql, /last_attempt_iso_week is distinct from v_iso_week or v_recovery/);
-  assert.match(weeklyClaimSql, /refreshed_iso_week is distinct from v_iso_week/);
+check("DB bleibt alleiniger Wochenzaun; GET ist read-only und Scheduled nutzt den expliziten Claim", () => {
+  assert.match(weeklyClaimSql, /create function public\.kd_entdecken_weekly_feed_status\(\)[\s\S]*?stable/);
+  assert.match(weeklyClaimSql, /create function public\.kd_entdecken_weekly_refresh_claim/);
+  assert.match(weeklyClaimSql, /v_feed\.refreshed_iso_week = v_iso_week/);
+  assert.match(weeklyClaimSql, /v_attempt_count >= 3/);
   assert.match(weeklyClaimSql, /for update/);
-  assert.doesNotMatch(triggerStep, /recovery/i);
+  assert.match(weeklyClaimSql, /kd_entdecken_daily_claim\(\)[\s\S]*kd_entdecken_weekly_feed_status\(\)/);
+  assert.doesNotMatch(triggerStep, /x-kd-entdecken-recovery|owner-once-v1/i);
 });
 
 check("Wochenfeed bleibt auf exakt fuenf bis sieben gespeicherte Titel begrenzt", () => {

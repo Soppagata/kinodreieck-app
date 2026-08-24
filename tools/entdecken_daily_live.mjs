@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Einmalige praktische Abnahme des privaten Entdecken-Tagesfeeds.
    Dieser Pfad wird nur vom fest verdrahteten Keychain-/Budgetweg gestartet.
-   Er macht genau einen GET zur Discovery-Function und keinen Retry. */
+   Er macht genau einen expliziten Refresh-POST, danach einen read-only GET-
+   Persistenzreadback und keinen Retry. */
 
 import { pathToFileURL } from "node:url";
 import {
@@ -17,7 +18,7 @@ import {
   meldeTestkontoAn,
 } from "./ai_budget_guard.mjs";
 import { ENTDECKEN_DAILY_ONCE_ENV } from "./keychain_runner.mjs";
-import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
+import { pruefeEntdeckenLiveAntwort } from "./entdecken_live_proof.mjs";
 import {
   captureProviderRawResponse,
   providerDiagnosticHeaders,
@@ -26,11 +27,8 @@ import {
 
 const FUNCTION_NAME = "entdecken-daily-task";
 const GUARD_VALUE = "keychain-budget-guard-v1";
-const RECOVERY_HEADER = "X-KD-Entdecken-Recovery";
-const RECOVERY_HEADER_VALUE = "owner-once-v1";
-const RESPONSE_KEYS = Object.freeze([
-  "feed", "ok", "providerRequests", "searchRequests", "status", "writes",
-]);
+const REFRESH_HEADER = "X-KD-Entdecken-Refresh";
+const OWNER_REFRESH_VALUE = "owner-v1";
 const OWNER_ACCESS_KEYS = Object.freeze(["active", "personal_ai", "role"]);
 
 export async function pruefeEntdeckenOwnerZugang({
@@ -72,16 +70,22 @@ export async function pruefeEntdeckenOwnerZugang({
   return Object.freeze({ status: "owner-confirmed" });
 }
 
-function validateFunctionResponse(response, body) {
-  const checkedFeed = validateEntdeckenDailyFeed(body?.feed);
-  if (!response?.ok || !body || typeof body !== "object" || Array.isArray(body)
-      || JSON.stringify(Object.keys(body).sort()) !== JSON.stringify(RESPONSE_KEYS)
-      || body.ok !== true || body.status !== "fresh" || body.writes !== 1
-      || body.providerRequests !== 1 || body.searchRequests !== 1
-      || !checkedFeed.ok) {
+function validateFunctionResponse(response, body, readbackBody, measuredCostUsdCent) {
+  if (!response?.ok) {
     throw new LiveSicherheitsStopp(
       "unbekannt",
       `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (HTTP ${response?.status ?? "?"}).`,
+    );
+  }
+  try {
+    return pruefeEntdeckenLiveAntwort(body, {
+      measuredCostUsdCent,
+      readbackResponse: readbackBody,
+    });
+  } catch (error) {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (${error?.code || "LIVE_PROOF"}).`,
     );
   }
 }
@@ -123,13 +127,13 @@ export async function runEntdeckenDailyOnce({
     response = await fetchMitZeitgrenze(
       `${verbindung.urlBasis}/functions/v1/${FUNCTION_NAME}`,
       {
-        method: "GET",
+        method: "POST",
         headers: {
           Origin: verbindung.origin,
           apikey: verbindung.anon,
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
-          [RECOVERY_HEADER]: RECOVERY_HEADER_VALUE,
+          [REFRESH_HEADER]: OWNER_REFRESH_VALUE,
           ...diagnosticHeaders,
         },
       },
@@ -162,12 +166,43 @@ export async function runEntdeckenDailyOnce({
       : new LiveSicherheitsStopp("unbekannt", "Entdecken-Function war nicht verlaesslich erreichbar.");
   }
   if (captureError) throw captureError;
-  validateFunctionResponse(response, body);
+  let readbackResponse;
+  let readbackBody;
+  try {
+    readbackResponse = await fetchMitZeitgrenze(
+      `${verbindung.urlBasis}/functions/v1/${FUNCTION_NAME}`,
+      {
+        method: "GET",
+        headers: {
+          Origin: verbindung.origin,
+          apikey: verbindung.anon,
+          Accept: "application/json",
+        },
+      },
+      { fetchImpl, timeoutMs: BUDGET_FETCH_TIMEOUT_MS },
+    );
+    readbackBody = await liesJsonOderNull(readbackResponse);
+  } catch {
+    readbackResponse = null;
+    readbackBody = null;
+  }
+  if (!readbackResponse?.ok) {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      "Entdecken-Persistenzreadback war nach dem Einzelwrite nicht verlaesslich lesbar.",
+    );
+  }
+  const proof = validateFunctionResponse(
+    response,
+    body,
+    readbackBody,
+    costs.laufKostenUsdCent,
+  );
   ausgabe(
     `ENTDECKEN-TAGESFEED-EINMAL: fresh · 1 Providerrequest · 1 Suchrequest · 1 Write · Laufdelta ${costs.laufKostenUsdCent.toFixed(4)} US-Cent`,
   );
   return Object.freeze({
-    status: body.status,
+    status: proof.status,
     providerRequests: body.providerRequests,
     searchRequests: body.searchRequests,
     writes: body.writes,

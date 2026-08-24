@@ -447,7 +447,7 @@ await check("Weicher Websearch-Mock speichert sechs sichere Titel und projiziert
     .some((item) => item.title === "Nur aus streaming_entdecken"));
 });
 
-await check("Unparsebarer sicherer Text ersetzt den Feed nicht und liefert nur den bereinigten Hinweis", async () => {
+await check("Unparsebarer sicherer Text ersetzt den Feed nicht; spaeterer GET liest nur den alten Feed", async () => {
   assert.ok(endToEndFeed);
   const response = anthropicResponse();
   response.content = response.content.map((block) => block.type === "text" ? {
@@ -490,13 +490,16 @@ await check("Unparsebarer sicherer Text ersetzt den Feed nicht und liefert nur d
     currentDay: () => "2026-08-20",
     fetchImpl: async () => ({ ok: true, async json() {
       return { ok: true, status: run.status, feed: run.feed, writes: 0,
-        providerRequests: 1, searchRequests: 1, responseMode: run.responseMode,
-        displayText: run.displayText, warnings: run.warnings };
+        providerRequests: 0, searchRequests: 0, responseMode: "structured",
+        displayText: null, warnings: [], refresh: {
+          requested: false, mode: "read", status: "read_only",
+          attemptCount: 1, maxAttempts: 3,
+        } };
     } }),
   });
   const loaded = await service.load();
-  assert.equal(loaded.responseMode, "degraded");
-  assert.match(loaded.displayText, /bisherige Feed bleibt sichtbar/);
+  assert.equal(loaded.responseMode, "structured");
+  assert.equal(loaded.refresh.status, "read_only");
   assert.equal(loaded.feed.items.length, 6);
 });
 
@@ -552,6 +555,8 @@ await check("Runner bindet Query und Save an denselben Fencing-Token und sucht n
       return {
         feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
         refresh, fenceToken: refresh ? 41 : null, feed: stored,
+        requestMode: "scheduled", claimStatus: refresh ? "claimed" : "already_fresh",
+        attemptCount: 1, maxAttempts: 3,
       };
     },
     async loadSources() { return sources; },
@@ -571,8 +576,12 @@ await check("Runner bindet Query und Save an denselben Fencing-Token und sucht n
     assert.deepEqual(context, queryContext);
     return { ...envelope(), providerReceipt: receipt };
   } };
-  assert.equal((await runEntdeckenDailyRefresh({ repository, adapter })).status, "fresh");
-  assert.equal((await runEntdeckenDailyRefresh({ repository, adapter })).status, "fresh");
+  const first = await runEntdeckenDailyRefresh({ repository, adapter });
+  const second = await runEntdeckenDailyRefresh({ repository, adapter });
+  assert.equal(first.status, "fresh");
+  assert.equal(first.refresh.status, "refreshed");
+  assert.equal(second.status, "fresh");
+  assert.equal(second.refresh.status, "already_fresh");
   assert.equal(adapterCalls, 1);
   assert.deepEqual(savedFences, [41]);
 });
@@ -610,6 +619,59 @@ await check("Providerfehler behaelt den letzten erfolgreichen Vorwochenfeed ohne
   assert.match(result.displayText, /bisherige Feed bleibt sichtbar/);
   assert.equal(adapterCalls, 1);
   assert.deepEqual(failures, [{ code: "provider_error", fenceToken: 42 }]);
+});
+
+await check("Fehler darf erst in einem spaeteren Lauf recovern; danach bleibt die Woche providerfrei", async () => {
+  let attempt = 0;
+  let providerCalls = 0;
+  let stored = null;
+  let failures = 0;
+  let saves = 0;
+  const receipt = await mockReceipt({ logId: 43 });
+  const repository = {
+    async claimRefresh() {
+      attempt += 1;
+      if (attempt === 1) return {
+        feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
+        refresh: true, fenceToken: 42, feed: null, requestMode: "scheduled",
+        claimStatus: "claimed", attemptCount: 1, maxAttempts: 3,
+      };
+      if (attempt === 2) return {
+        feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
+        refresh: true, fenceToken: 43, feed: null, requestMode: "scheduled",
+        claimStatus: "claimed", attemptCount: 2, maxAttempts: 3,
+      };
+      return {
+        feedEnabled: true, providerEnabled: true, today: "2026-08-20", isoWeek: "2026-W34",
+        refresh: false, fenceToken: null, feed: stored, requestMode: "scheduled",
+        claimStatus: "already_fresh", attemptCount: 2, maxAttempts: 3,
+      };
+    },
+    async loadSources() { return sources; },
+    async saveFeed(feed) { stored = feed; saves += 1; },
+    async readFeed({ fenceToken }) { return persistenceReadback(stored, receipt, fenceToken); },
+    async markFailure() { failures += 1; },
+  };
+  const adapter = { async search() {
+    providerCalls += 1;
+    if (providerCalls === 1) throw new Error("synthetic-first-attempt-failed");
+    return { ...envelope(), providerReceipt: receipt };
+  } };
+
+  const failed = await runEntdeckenDailyRefresh({ repository, adapter });
+  assert.equal(failed.refresh.status, "failed");
+  assert.equal(providerCalls, 1);
+  assert.equal(saves, 0);
+  const recovered = await runEntdeckenDailyRefresh({ repository, adapter });
+  assert.equal(recovered.status, "fresh");
+  assert.equal(recovered.refresh.status, "refreshed");
+  assert.equal(recovered.feed.items.length, 5);
+  assert.equal(providerCalls, 2);
+  assert.equal(saves, 1);
+  const current = await runEntdeckenDailyRefresh({ repository, adapter });
+  assert.equal(current.refresh.status, "already_fresh");
+  assert.equal(providerCalls, 2);
+  assert.equal(failures, 1);
 });
 
 await check("Alter Tagesfeed bleibt als stale lesbar, erzeugt aber keinen zweiten Vertrag", async () => {
@@ -656,7 +718,8 @@ await check("Browserdienst sendet accountlos genau einen bodylosen GET", async (
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, async json() {
-        return { ok: true, status: "fresh", feed, writes: 1, providerRequests: 1, searchRequests: 1 };
+        return { ok: true, status: "fresh", feed, writes: 0, providerRequests: 0, searchRequests: 0,
+          refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 1, maxAttempts: 3 } };
       } };
     },
   });
@@ -673,27 +736,33 @@ const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecke
 const recoveryMigration = fs.readFileSync("./supabase/migrations/20260822210000_entdecken_weekly_recovery.sql", "utf8");
 const recoveryClaimMigration = fs.readFileSync("./supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql", "utf8");
 const liveProofMigration = fs.readFileSync("./supabase/migrations/20260824120000_entdecken_weekly_live_proof.sql", "utf8");
+const refreshLeaseMigration = fs.readFileSync("./supabase/migrations/20260824140000_entdecken_weekly_refresh_lease.sql", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
 const controllerSource = fs.readFileSync("./src/controllers/useWebDiscoveryFeed.js", "utf8");
 const appSource = fs.readFileSync("./src/App.jsx", "utf8");
 
-await check("Normaler Browser-GET bleibt accountlos; nur der interne Recoveryheader verlangt den Owner", () => {
-  assert.match(functionSource, /req\.method !== "GET"/);
+await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf claimen", () => {
+  assert.match(functionSource, /\["GET", "POST"\]\.includes\(req\.method\)/);
   assert.match(functionSource, /req\.body !== null/);
-  assert.match(functionSource, /req\.headers\.get\("apikey"\) !== publishableKey/);
-  assert.match(functionSource, /recoveryRequested/);
+  assert.match(functionSource, /scheduledAuthorized = requestMode === "scheduled"/);
+  assert.match(functionSource, /req\.headers\.get\("apikey"\) === serviceKey && bearerToken === serviceKey/);
+  assert.match(functionSource, /publicKeyAuthorized = requestMode !== "scheduled"/);
+  assert.match(functionSource, /requestMode = req\.method === "GET"[\s\S]*"read"/);
+  assert.match(functionSource, /SCHEDULED_REFRESH_VALUE/);
+  assert.match(functionSource, /OWNER_REFRESH_VALUE/);
   assert.match(functionSource, /user\.auth\.getUser\(token\)/);
   assert.match(functionSource, /\.from\("kd_account_access"\)/);
   assert.match(functionSource, /access\?\.role !== "owner"/);
-  assert.match(functionSource, /\.rpc\("kd_entdecken_daily_recovery_claim"\)/);
+  assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_status"\)/);
+  assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_refresh_claim"/);
   assert.match(functionSource, /PROVIDER_DIAGNOSTIC_ENV/);
   assert.match(functionSource, /takeProviderRawResponse/);
-  assert.match(functionSource, /ownerRecoveryConfirmed/);
+  assert.match(functionSource, /ownerRefreshConfirmed/);
   assert.doesNotMatch(functionSource, /profile|seen|gesehen|watchlist|selectedServices|radar/i);
   assert.match(functionSource, /p_fence_token: claimContext\?\.fenceToken/);
-  assert.match(functionSource, /p_account: ownerRecoveryAccountId/);
+  assert.match(functionSource, /p_account: ownerRefreshAccountId/);
   assert.match(functionSource, /\.from\("kd_ai_log"\)/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_readback"/);
   assert.equal((runnerSource.match(/adapter\.search\(queryContext\)/g) || []).length, 1);
@@ -740,6 +809,26 @@ await check("Owner-Recovery autorisiert und claimt atomar in genau einem service
   assert.match(recoveryClaimMigration, /grant execute on function public\.kd_entdecken_daily_recovery_claim\(\)\s+to service_role/i);
   assert.match(recoveryClaimMigration, /revoke all on function public\.kd_entdecken_daily_recovery_claim\(\)\s+from public, anon, authenticated/i);
   assert.doesNotMatch(recoveryClaimCode, /setInterval|setTimeout|scheduler|loop\s|while\s/i);
+});
+
+await check("Additive Refresh-Lease trennt read-only GET von drei begrenzten Wochenversuchen", () => {
+  const code = refreshLeaseMigration.replace(/^--.*$/gm, "");
+  assert.match(refreshLeaseMigration, /add column attempt_iso_week text/i);
+  assert.match(refreshLeaseMigration, /add column attempt_count integer not null default 0/i);
+  assert.match(refreshLeaseMigration, /attempt_count between 1 and 3/i);
+  assert.match(refreshLeaseMigration, /create function public\.kd_entdecken_weekly_feed_status\(\)[\s\S]*?stable/i);
+  assert.match(refreshLeaseMigration, /create function public\.kd_entdecken_weekly_refresh_claim\([\s\S]*?p_source text/i);
+  assert.match(refreshLeaseMigration, /p_source not in \('scheduled','owner'\)/i);
+  assert.match(refreshLeaseMigration, /from public\.kd_entdecken_daily_feed[\s\S]*for update/i);
+  assert.match(refreshLeaseMigration, /v_feed\.refreshed_iso_week = v_iso_week[\s\S]*'already_fresh'/i);
+  assert.match(refreshLeaseMigration, /v_attempt_count >= 3[\s\S]*'exhausted'/i);
+  assert.match(refreshLeaseMigration, /last_failure_at <= v_now - interval '15 minutes'/i);
+  assert.match(refreshLeaseMigration, /lease_expires_at <= v_now/i);
+  assert.match(refreshLeaseMigration, /attempt_count = case when attempt_iso_week = v_iso_week[\s\S]*attempt_count \+ 1 else 1 end/i);
+  assert.match(refreshLeaseMigration, /create or replace function public\.kd_entdecken_daily_claim\(\)[\s\S]*kd_entdecken_weekly_feed_status\(\)/i);
+  assert.match(refreshLeaseMigration, /ready_provider_operation_id = v_operation_id/i);
+  assert.match(refreshLeaseMigration, /ready_fence_token = p_fence_token/i);
+  assert.doesNotMatch(code, /set\s+payload\s*=\s*null|\bloop\b|\bwhile\b|setInterval|setTimeout/i);
 });
 
 await check("Live-Beleg bindet Ownerkosten, fertigen Log und unabhaengigen 5-bis-7-Readback", () => {

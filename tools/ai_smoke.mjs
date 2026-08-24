@@ -135,8 +135,8 @@ const ERWARTETE_ANBIETER_PFADE = OWNER_COMBINED_EIGHT
   : LIVE_ANBIETER_PFADE.slice(0, 6);
 const ENTDECKEN_FUNCTION = "entdecken-daily-task";
 const RADAR_FUNCTION = "radar-websearch-task";
-const ENTDECKEN_RECOVERY_HEADER = "X-KD-Entdecken-Recovery";
-const ENTDECKEN_RECOVERY_HEADER_VALUE = "owner-once-v1";
+const ENTDECKEN_REFRESH_HEADER = "X-KD-Entdecken-Refresh";
+const ENTDECKEN_OWNER_REFRESH_VALUE = "owner-v1";
 
 if (!URL_BASIS || !ANON || !PASS) {
   console.error("Fehlende Konfiguration. Erwartet: KD_SB_URL, KD_SB_ANON, KD_TESTA_PASS.");
@@ -655,6 +655,18 @@ async function rufProduktAnbieterBewacht({
   }
 }
 
+async function rufEntdeckenReadback(endpunkt) {
+  try {
+    const antwort = await fetchMitZeitgrenze(endpunkt, {
+      method: "GET",
+      headers: { Origin: ORIGIN, apikey: ANON, Accept: "application/json" },
+    }, { timeoutMs: BUDGET_FETCH_TIMEOUT_MS });
+    return { status: antwort.status, daten: await liesJsonOderNull(antwort) };
+  } catch {
+    return { status: 0, daten: null };
+  }
+}
+
 /* --- P9: Verbrauch ist im Gesundheitsbericht sichtbar ---------------------- */
 const p9 = await ruf(
   "POST",
@@ -1159,16 +1171,19 @@ if (OWNER_COMBINED_EIGHT) {
   const p24 = await rufProduktAnbieterBewacht({
     pfad: "entdecken-daily-task",
     label: "P24 entdecken-daily-task",
-    methode: "GET",
+    methode: "POST",
     endpunkt: `${URL_BASIS}/functions/v1/${ENTDECKEN_FUNCTION}`,
     kopf: {
       Origin: ORIGIN,
       apikey: ANON,
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
-      [ENTDECKEN_RECOVERY_HEADER]: ENTDECKEN_RECOVERY_HEADER_VALUE,
+      [ENTDECKEN_REFRESH_HEADER]: ENTDECKEN_OWNER_REFRESH_VALUE,
     },
   });
+  const p24Readback = await rufEntdeckenReadback(
+    `${URL_BASIS}/functions/v1/${ENTDECKEN_FUNCTION}`,
+  );
   const p24ProviderBelegt = istProviderPfadBelegt("P24 entdecken-daily-task");
   const p24Unbelegt = istProviderPfadUnbelegt("P24 entdecken-daily-task");
   let entdeckenLiveBeleg = null;
@@ -1177,6 +1192,7 @@ if (OWNER_COMBINED_EIGHT) {
     if (!p24ProviderBelegt) throw new Error("provider-unproven");
     entdeckenLiveBeleg = pruefeEntdeckenLiveAntwort(p24.daten, {
       measuredCostUsdCent: p24.kostenMessung?.requestKostenUsdCent,
+      readbackResponse: p24Readback.daten,
     });
   } catch (error) {
     /* Nur die stabile Vertragsklasse wird ausgegeben; Feedinhalt, Konten,

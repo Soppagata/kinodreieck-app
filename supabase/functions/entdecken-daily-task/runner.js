@@ -11,6 +11,11 @@ import { normalizeEntdeckenPersistenceReadback } from "./readbackContract.js";
 const SAFE_FAILURE_CODES = new Set([
   "provider_error", "invalid_response", "storage_error", "source_registry_unavailable",
 ]);
+const REFRESH_MODES = new Set(["read", "scheduled", "owner"]);
+const REFRESH_STATUSES = new Set([
+  "read_only", "claimed", "already_fresh", "in_progress", "cooldown",
+  "exhausted", "held", "disabled", "failed", "refreshed", "unavailable",
+]);
 
 function validDay(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -24,6 +29,25 @@ function weekStatus(feed, today, isoWeek) {
 }
 function frozen(status, feed, extra = {}) {
   return Object.freeze({ status, feed, writes: 0, ...extra });
+}
+function refreshState(context, override = null) {
+  const inferredMode = context?.refresh === true ? "scheduled" : "read";
+  const mode = REFRESH_MODES.has(context?.requestMode) ? context.requestMode : inferredMode;
+  const inferredStatus = context?.refresh === true ? "claimed"
+    : mode === "read" ? "read_only" : "held";
+  const status = REFRESH_STATUSES.has(override) ? override
+    : REFRESH_STATUSES.has(context?.claimStatus) ? context.claimStatus : inferredStatus;
+  const attemptCount = Number.isInteger(context?.attemptCount) && context.attemptCount >= 0
+    ? context.attemptCount : (context?.refresh === true ? 1 : 0);
+  const maxAttempts = Number.isInteger(context?.maxAttempts) && context.maxAttempts > 0
+    ? context.maxAttempts : 3;
+  return Object.freeze({
+    requested: mode !== "read",
+    mode,
+    status,
+    attemptCount: Math.min(attemptCount, maxAttempts),
+    maxAttempts,
+  });
 }
 function structuredPresentation() {
   return Object.freeze({ responseMode: "structured", displayText: null, warnings: Object.freeze([]) });
@@ -69,28 +93,43 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       || typeof repository.saveFeed !== "function"
       || typeof repository.markFailure !== "function"
       || !adapter || typeof adapter.search !== "function") {
-    return frozen("empty", null, { reason: "setup-invalid", ...degradedPresentation("setup-invalid") });
+    return frozen("empty", null, {
+      reason: "setup-invalid", ...degradedPresentation("setup-invalid"),
+      refresh: refreshState(null, "unavailable"),
+    });
   }
   let context;
   try { context = await repository.claimRefresh(); }
   catch {
-    return frozen("empty", null, { reason: "storage_error", ...degradedPresentation("storage-error") });
+    return frozen("empty", null, {
+      reason: "storage_error", ...degradedPresentation("storage-error"),
+      refresh: refreshState(null, "unavailable"),
+    });
   }
   const queryContext = createEntdeckenWeeklyQueryContext(context?.today, context?.isoWeek);
   if (!context || context.feedEnabled !== true || !validDay(context.today) || !queryContext) {
-    return frozen("disabled", null, structuredPresentation());
+    return frozen("disabled", null, {
+      ...structuredPresentation(), refresh: refreshState(context, "disabled"),
+    });
   }
   const checkedCached = validateEntdeckenDailyFeed(context.feed);
   /* Auch ein abgelaufener letzter Erfolg bleibt bei einem Wochenfehler sichtbar.
      `stale` ist dabei eine ehrliche Zustandsaussage, keine neue Gueltigkeit. */
   const cached = checkedCached.ok ? checkedCached.value : null;
   if (context.refresh !== true) {
-    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, structuredPresentation());
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      ...structuredPresentation(),
+      refresh: refreshState(context),
+      ...(context.feedReadback && typeof context.feedReadback === "object"
+        && !Array.isArray(context.feedReadback)
+        ? { feedReadback: Object.freeze({ ...context.feedReadback }) } : {}),
+    });
   }
   const fenceToken = Number(context.fenceToken);
   if (!Number.isSafeInteger(fenceToken) || fenceToken <= 0) {
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "storage_error", ...degradedPresentation("storage-error"),
+      refresh: refreshState(context, "failed"),
     });
   }
 
@@ -101,6 +140,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await failSafely(repository, "source_registry_unavailable", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "source_registry_unavailable", ...degradedPresentation("sources-unavailable"),
+      refresh: refreshState(context, "failed"),
     });
   }
 
@@ -110,6 +150,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await failSafely(repository, "provider_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "provider_error", ...degradedPresentation("provider-error"),
+      refresh: refreshState(context, "failed"),
     });
   }
   const normalizedReceipt = normalizeProviderReceipt(envelope?.providerReceipt);
@@ -128,12 +169,14 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: evaluated.status, ...evaluatedPresentation(evaluated),
       ...providerEvidence,
+      refresh: refreshState(context, "failed"),
     });
   }
   if (!normalizedReceipt) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "invalid_response", ...degradedPresentation("provider-receipt-invalid"),
+      refresh: refreshState(context, "failed"),
     });
   }
   let persisted;
@@ -158,6 +201,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "storage_error", ...degradedPresentation("storage-error"),
       ...providerEvidence,
+      refresh: refreshState(context, "failed"),
     });
   }
   return frozen("fresh", persisted.feed, {
@@ -165,5 +209,6 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     feedReadback: persisted.readback,
     ...evaluatedPresentation(evaluated),
     ...providerEvidence,
+    refresh: refreshState(context, "refreshed"),
   });
 }

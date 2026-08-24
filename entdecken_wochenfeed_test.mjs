@@ -207,6 +207,10 @@ await checkAsync("Client akzeptiert denselben Feed in der Folgewoche nur als sta
         return {
           ok: true, status: "stale", feed: weeklyFeed,
           writes: 0, providerRequests: 0, searchRequests: 0,
+          refresh: {
+            requested: false, mode: "read", status: "read_only",
+            attemptCount: 0, maxAttempts: 3,
+          },
         };
       } };
     },

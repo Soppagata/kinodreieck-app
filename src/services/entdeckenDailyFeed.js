@@ -9,6 +9,7 @@ export const ENTDECKEN_DAILY_PARTIAL_NOTICE =
   "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel.";
 export const ENTDECKEN_DAILY_DEGRADED_NOTICE =
   "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar.";
+const READ_REFRESH_STATUSES = new Set(["read_only", "disabled", "unavailable"]);
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -55,17 +56,28 @@ function presentation(value) {
     warnings: Object.freeze([...new Set(warnings)]),
   });
 }
-function frozen(status, feed = null, response = null) {
+function refreshState(value) {
+  if (!plain(value)
+      || Object.keys(value).sort().join(",")
+        !== ["attemptCount", "maxAttempts", "mode", "requested", "status"].sort().join(",")
+      || value.requested !== false || value.mode !== "read"
+      || !READ_REFRESH_STATUSES.has(value.status)
+      || !Number.isInteger(value.attemptCount) || value.attemptCount < 0
+      || value.maxAttempts !== 3 || value.attemptCount > value.maxAttempts) return null;
+  return Object.freeze({ ...value });
+}
+function frozen(status, feed = null, response = null, refresh = null) {
   return Object.freeze({
     status,
     feed,
     ...(response || presentation({})),
+    ...(refresh ? { refresh } : {}),
   });
 }
 function exactResult(value, today) {
   const allowed = [
     "ok", "status", "feed", "writes", "providerRequests", "searchRequests",
-    "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback",
+    "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback", "refresh",
   ];
   if (!plain(value) || !["ok", "status", "feed"].every((key) => key in value)
       || Object.keys(value).some((key) => !allowed.includes(key))
@@ -80,9 +92,10 @@ function exactResult(value, today) {
   if (("providerReceipt" in value && !plain(value.providerReceipt))
       || ("feedReadback" in value && !plain(value.feedReadback))) return null;
   const response = presentation(value);
-  if (!response) return null;
+  const refresh = refreshState(value.refresh);
+  if (!response || !refresh) return null;
   if (value.status === "empty" || value.status === "disabled") {
-    return value.feed === null ? frozen(value.status, null, response) : null;
+    return value.feed === null ? frozen(value.status, null, response, refresh) : null;
   }
   const checked = validateWebDiscoveryFeed(value.feed);
   if (!checked.ok || !today) return null;
@@ -94,7 +107,7 @@ function exactResult(value, today) {
     if (checked.value.validUntil < today) return null;
     if ((value.status === "fresh") !== (checked.value.refreshedOn === today)) return null;
   }
-  return frozen(value.status, checked.value, response);
+  return frozen(value.status, checked.value, response, refresh);
 }
 
 /* Ein App-Lauf startet hoechstens einen accountlosen GET. Body, Sitzung,

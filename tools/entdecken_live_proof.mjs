@@ -23,6 +23,7 @@ function plain(value) {
 
 export function pruefeEntdeckenLiveAntwort(antwort, {
   measuredCostUsdCent,
+  readbackResponse,
 } = {}) {
   if (!plain(antwort) || Object.prototype.hasOwnProperty.call(antwort, "providerDiagnostic")) {
     throw new EntdeckenLiveProofError("FUNCTION_ENVELOPE");
@@ -30,6 +31,16 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
   if (typeof measuredCostUsdCent !== "number" || !Number.isFinite(measuredCostUsdCent)
       || measuredCostUsdCent < 0) {
     throw new EntdeckenLiveProofError("COST_UNKNOWN");
+  }
+  if (!plain(antwort.refresh) || antwort.refresh.requested !== true
+      || antwort.refresh.mode !== "owner" || antwort.refresh.status !== "refreshed"
+      || !Number.isSafeInteger(antwort.refresh.attemptCount)
+      || antwort.refresh.attemptCount < 1 || antwort.refresh.attemptCount > 3
+      || antwort.refresh.maxAttempts !== 3) {
+    const safeStatus = typeof antwort?.refresh?.status === "string"
+      && /^[a-z_]+$/.test(antwort.refresh.status)
+      ? antwort.refresh.status.toUpperCase() : "INVALID";
+    throw new EntdeckenLiveProofError(`CLAIM_${safeStatus}`);
   }
   const receipt = normalizeProviderReceipt(antwort.providerReceipt);
   if (!receipt || receipt.server.costUsdCent <= 0
@@ -45,11 +56,30 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
       || antwort.responseMode !== receipt.resultMode) {
     throw new EntdeckenLiveProofError("FUNCTION_RESULT");
   }
-  const readback = normalizeEntdeckenFeedReadback(antwort.feedReadback, {
+  const requestReadback = normalizeEntdeckenFeedReadback(antwort.feedReadback, {
     feed: antwort.feed,
     providerReceipt: receipt,
   });
-  if (!readback) throw new EntdeckenLiveProofError("FEED_READBACK");
+  if (!requestReadback) throw new EntdeckenLiveProofError("FEED_READBACK");
+  if (!plain(readbackResponse)
+      || Object.prototype.hasOwnProperty.call(readbackResponse, "providerDiagnostic")
+      || readbackResponse.ok !== true || readbackResponse.status !== "fresh"
+      || readbackResponse.writes !== 0 || readbackResponse.providerRequests !== 0
+      || readbackResponse.searchRequests !== 0
+      || !plain(readbackResponse.refresh)
+      || readbackResponse.refresh.requested !== false
+      || readbackResponse.refresh.mode !== "read"
+      || readbackResponse.refresh.status !== "read_only"
+      || JSON.stringify(readbackResponse.feed) !== JSON.stringify(antwort.feed)) {
+    throw new EntdeckenLiveProofError("INDEPENDENT_READBACK");
+  }
+  const readback = normalizeEntdeckenFeedReadback(readbackResponse.feedReadback, {
+    feed: readbackResponse.feed,
+    providerReceipt: receipt,
+  });
+  if (!readback || JSON.stringify(readback) !== JSON.stringify(requestReadback)) {
+    throw new EntdeckenLiveProofError("INDEPENDENT_READBACK");
+  }
 
   return Object.freeze({
     ok: true,

@@ -2,6 +2,13 @@
    bewusst kein Teil dieses Vertrags und werden fuer Live-Belege nie benoetigt. */
 
 export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
+  const refresh = result?.refresh && typeof result.refresh === "object"
+    && !Array.isArray(result.refresh)
+    ? Object.freeze({ ...result.refresh })
+    : Object.freeze({
+      requested: false, mode: "read", status: "unavailable",
+      attemptCount: 0, maxAttempts: 3,
+    });
   return Object.freeze({
     ok: true,
     status: result.status,
@@ -14,6 +21,7 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
     responseMode: result.responseMode,
     displayText: result.displayText,
     warnings: result.warnings,
+    refresh,
     ...(result.feedReadback ? { feedReadback: result.feedReadback } : {}),
     ...(result.providerReceipt ? { providerReceipt: result.providerReceipt } : {}),
   });

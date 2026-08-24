@@ -1,7 +1,7 @@
 /* Globaler Entdecken-Wochenfeed auf dem kompatiblen Tagesfeed-Endpoint.
    Der accountlose Browser uebergibt weder Token noch Suchtext oder lokale
-   Daten. Wochenclaim und Fencing-Token erlauben hoechstens einen Providerlauf
-   je ISO-Woche; bei Fehler bleibt der letzte erfolgreiche Feed sichtbar. */
+   Daten; GET liest ausschliesslich. Nur explizites scheduled-/owner-POST darf
+   den begrenzten Wochenclaim samt Fencing-Lease beanspruchen. */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createAnthropicEntdeckenDailyAdapter } from "./anthropicAdapter.js";
@@ -21,15 +21,16 @@ const ALLOWED_ORIGINS = new Set([
   "https://codex-entdecken-tagesfeed.kinodreieck.pages.dev",
   "http://localhost:5173",
 ]);
-const RECOVERY_HEADER = "x-kd-entdecken-recovery";
-const RECOVERY_HEADER_VALUE = "owner-once-v1";
+const REFRESH_HEADER = "x-kd-entdecken-refresh";
+const SCHEDULED_REFRESH_VALUE = "scheduled-v1";
+const OWNER_REFRESH_VALUE = "owner-v1";
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${RECOVERY_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}`,
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}`,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
@@ -95,37 +96,44 @@ export function createEntdeckenDailyHandler({
       if (!origin || !ALLOWED_ORIGINS.has(origin)) return new Response(null, { status: 403, headers: cors(origin) });
       return new Response(null, { status: 204, headers: cors(origin) });
     }
-    if (req.method !== "GET" || req.body !== null
+    if (!["GET", "POST"].includes(req.method) || req.body !== null
         || (origin !== null && !ALLOWED_ORIGINS.has(origin))) {
       return json({ ok: false, status: "disabled", feed: null }, 405, origin);
     }
-    const recoveryHeader = req.headers.get(RECOVERY_HEADER);
-    const recoveryRequested = recoveryHeader !== null;
-    if (recoveryRequested && recoveryHeader !== RECOVERY_HEADER_VALUE) {
+    const refreshHeader = req.headers.get(REFRESH_HEADER);
+    const requestMode = req.method === "GET" && refreshHeader === null ? "read"
+      : req.method === "POST" && refreshHeader === SCHEDULED_REFRESH_VALUE ? "scheduled"
+      : req.method === "POST" && refreshHeader === OWNER_REFRESH_VALUE ? "owner"
+      : null;
+    if (!requestMode) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
     const supabaseUrl = text(Deno.env.get("SUPABASE_URL"));
     const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
     const serviceKey = envKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
+    const bearerToken = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
+    const scheduledAuthorized = requestMode === "scheduled"
+      && req.headers.get("apikey") === serviceKey && bearerToken === serviceKey;
+    const publicKeyAuthorized = requestMode !== "scheduled"
+      && req.headers.get("apikey") === publishableKey;
     if (!supabaseUrl || !publishableKey || !serviceKey
-        || req.headers.get("apikey") !== publishableKey) {
+        || (!scheduledAuthorized && !publicKeyAuthorized)) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    let preclaimedRecovery: Record<string, unknown> | null = null;
-    let ownerRecoveryConfirmed = false;
-    let ownerRecoveryAccountId: string | null = null;
+    let ownerRefreshConfirmed = false;
+    let ownerRefreshAccountId: string | null = null;
     let providerDiagnostic = providerDiagnosticAccess({
       headerValue: providerDiagnosticHeader,
       enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
       owner: false,
     });
-    if (recoveryRequested) {
-      const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
+    if (requestMode === "owner") {
+      const token = bearerToken;
       const user = createClient(supabaseUrl, publishableKey, {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { headers: { Authorization: `Bearer ${token}` } },
@@ -149,26 +157,16 @@ export function createEntdeckenDailyHandler({
           || access?.personal_ai !== true) {
         return json({ ok: false, status: "disabled", feed: null }, 403, origin);
       }
-      ownerRecoveryConfirmed = true;
-      ownerRecoveryAccountId = accountId;
+      ownerRefreshConfirmed = true;
+      ownerRefreshAccountId = accountId;
       providerDiagnostic = providerDiagnosticAccess({
         headerValue: providerDiagnosticHeader,
         enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
-        owner: ownerRecoveryConfirmed,
+        owner: ownerRefreshConfirmed,
       });
       if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
         return json({ ok: false, status: "disabled", feed: null }, 403, origin);
       }
-      const { data: recoveryClaim, error: recoveryError } = await admin
-        .rpc("kd_entdecken_daily_recovery_claim");
-      if (recoveryError) {
-        return json({ ok: false, status: "recovery_unavailable", feed: null }, 503, origin);
-      }
-      if (!recoveryClaim || typeof recoveryClaim !== "object" || Array.isArray(recoveryClaim)
-          || recoveryClaim.refresh !== true) {
-        return json({ ok: false, status: "recovery_unavailable", feed: null }, 409, origin);
-      }
-      preclaimedRecovery = recoveryClaim as Record<string, unknown>;
     }
     if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
@@ -191,13 +189,11 @@ export function createEntdeckenDailyHandler({
     };
     const repository = {
       async claimRefresh() {
-        if (preclaimedRecovery) {
-          const data = preclaimedRecovery;
-          preclaimedRecovery = null;
-          claimContext = data;
-          return data;
-        }
-        const { data, error } = await admin.rpc("kd_entdecken_daily_claim");
+        const { data, error } = requestMode === "read"
+          ? await admin.rpc("kd_entdecken_weekly_feed_status")
+          : await admin.rpc("kd_entdecken_weekly_refresh_claim", {
+            p_source: requestMode,
+          });
         if (error) throw error;
         claimContext = data;
         return data;
@@ -296,11 +292,11 @@ export function createEntdeckenDailyHandler({
              der Kostenreservierung enthalten und werden danach gemessen. */
           p_search_requests: providerRequests,
           p_fence_token: claimContext?.fenceToken,
-          /* Nur der explizite Owner-Recoverylauf wird fuer die bereits
+          /* Nur der explizite Owner-Refresh wird fuer die bereits
              vorgeschriebene kontogebundene Vor-/Nachmessung verbucht. Der
              globale Browserfeed bleibt accountlos und sendet die ID nie an
              den Provider. */
-          p_account: ownerRecoveryAccountId,
+          p_account: ownerRefreshAccountId,
         });
         if (error) throw error;
         return { ok: data?.ok === true, logId: data?.log_id };
@@ -329,9 +325,9 @@ export function createEntdeckenDailyHandler({
           .eq("vorgang_id", operationId)
           .maybeSingle();
         if (error || !data
-            || (ownerRecoveryAccountId === null
+            || (ownerRefreshAccountId === null
               ? data.account_id !== null
-              : data.account_id !== ownerRecoveryAccountId)) {
+              : data.account_id !== ownerRefreshAccountId)) {
           throw error || new Error("entdecken-provider-log-unavailable");
         }
         return {

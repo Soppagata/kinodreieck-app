@@ -139,6 +139,7 @@ function persistedReadback(feed, receipt, fenceToken) {
 }
 
 let normalResponse = null;
+let independentResponse = null;
 let storedFeed = null;
 
 await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kosten, Save und Readback", async () => {
@@ -185,6 +186,10 @@ await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kost
           refresh: true,
           fenceToken: 901,
           feed: null,
+          requestMode: "owner",
+          claimStatus: "claimed",
+          attemptCount: 1,
+          maxAttempts: 3,
         };
       },
       async loadSources() { return sources; },
@@ -203,6 +208,17 @@ await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kost
     adapter,
   });
   normalResponse = createEntdeckenDailyResponse(run, adapter.telemetry());
+  const { providerReceipt: _providerReceipt, ...readProjection } = normalResponse;
+  independentResponse = Object.freeze({
+    ...readProjection,
+    writes: 0,
+    providerRequests: 0,
+    searchRequests: 0,
+    refresh: Object.freeze({
+      requested: false, mode: "read", status: "read_only",
+      attemptCount: 1, maxAttempts: 3,
+    }),
+  });
   const receipt = normalResponse.providerReceipt;
   assert.equal(providerCalls, 1);
   assert.equal(saves, 1);
@@ -257,6 +273,7 @@ await check("Abweichender Serverlog erzeugt keinen Receipt und keinen Provider-R
 await check("Zentraler Harnesshook beweist 5-bis-7, Provenienz und Korrelation ohne Inhaltsausgabe", () => {
   const proof = pruefeEntdeckenLiveAntwort(normalResponse, {
     measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
   });
   assert.deepEqual(proof, {
     ok: true,
@@ -279,6 +296,8 @@ await check("Acht-Pfade-Smoke verwendet den korrelierten Entdecken-Livebeleg", (
   const smoke = readFileSync(new URL("./tools/ai_smoke.mjs", import.meta.url), "utf8");
   assert.match(smoke, /pruefeEntdeckenLiveAntwort\(p24\.daten/);
   assert.match(smoke, /measuredCostUsdCent:\s*p24\.kostenMessung\?\.requestKostenUsdCent/);
+  assert.match(smoke, /readbackResponse:\s*p24Readback\.daten/);
+  assert.match(smoke, /methode:\s*"POST"/);
   assert.doesNotMatch(smoke, /entdeckenFeedGueltig\s*=\s*validateEntdeckenDailyFeed/);
 });
 
@@ -288,16 +307,33 @@ await check("Manipulierter Readback oder nicht korrelierte Kosten fallen geschlo
     feedReadback: { ...normalResponse.feedReadback, itemCount: 6 },
   }, {
     measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
   }), (error) => error instanceof EntdeckenLiveProofError && error.code === "FEED_READBACK");
   assert.throws(() => pruefeEntdeckenLiveAntwort(normalResponse, {
     measuredCostUsdCent: 0,
+    readbackResponse: independentResponse,
   }), (error) => error instanceof EntdeckenLiveProofError && error.code === "RECEIPT_UNCORRELATED");
   assert.throws(() => pruefeEntdeckenLiveAntwort({
     ...normalResponse,
     providerDiagnostic: { raw: "nicht-zulaessig" },
   }, {
     measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
   }), (error) => error instanceof EntdeckenLiveProofError && error.code === "FUNCTION_ENVELOPE");
+  assert.throws(() => pruefeEntdeckenLiveAntwort(normalResponse, {
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: { ...independentResponse, feed: null },
+  }), (error) => error instanceof EntdeckenLiveProofError && error.code === "INDEPENDENT_READBACK");
+  assert.throws(() => pruefeEntdeckenLiveAntwort({
+    ...normalResponse,
+    refresh: {
+      requested: true, mode: "owner", status: "exhausted",
+      attemptCount: 3, maxAttempts: 3,
+    },
+  }, {
+    measuredCostUsdCent: 0,
+    readbackResponse: independentResponse,
+  }), (error) => error instanceof EntdeckenLiveProofError && error.code === "CLAIM_EXHAUSTED");
 });
 
 await check("Browser akzeptiert dieselbe normale Beleg-Huelle und behaelt Belege ausserhalb des UI-State", async () => {
@@ -308,7 +344,7 @@ await check("Browser akzeptiert dieselbe normale Beleg-Huelle und behaelt Belege
       supabasePublishableKey: "public-key",
     },
     currentDay: () => "2026-08-20",
-    fetchImpl: async () => ({ ok: true, async json() { return normalResponse; } }),
+    fetchImpl: async () => ({ ok: true, async json() { return independentResponse; } }),
   });
   const result = await service.load();
   assert.equal(result.status, "fresh");
@@ -355,6 +391,7 @@ await check("Lokaler Katalog-, Streaming-, Mediathek- und Profilabgleich teilt d
   assert.deepEqual(selection.personal.map((entry) => entry.sourceRank), [1, 2, 3, 4, 5]);
   assert.equal(selection.personal.length, 5);
   assert.equal(selection.further.length, 2);
+  assert.equal(selection.personal.length + selection.further.length, 7);
   assert.ok(selection.personal.every((entry) => entry.services.includes("ORF ON")
     && entry.reasons.some((reason) => /^Profil:/.test(reason))
     && entry.reasons.some((reason) => /Mediathek/.test(reason))));

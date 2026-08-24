@@ -27,6 +27,6 @@ verify_jwt = true
 
 [functions.entdecken-daily-task]
 # Globaler, nicht personalisierter Nur-Lese-Endpunkt. Die Function prueft den
-# oeffentlichen Projekt-Key selbst; der service-role-only Tages-Claim und der
-# Kostenzaun erlauben unabhaengig von der Aufrufzahl nur einen Providerlauf.
+# oeffentlichen Projekt-Key selbst. GET bleibt ein reiner Readback; nur der
+# explizite service-role-/Owner-POST darf den gezaunten Wochenrefresh claimen.
 verify_jwt = false
