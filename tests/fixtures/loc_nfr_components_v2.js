@@ -25,6 +25,7 @@ export function baueLocNfrComponentsV2Fixture({
         ? {
           description: ignorierterMarker,
           contributors: [{ name: ignorierterMarker, role: ignorierterMarker }],
+          url: `https://ignored.invalid/${ignorierterMarker}`,
         }
         : {}),
     });
@@ -58,6 +59,7 @@ export function baueLocNfrComponentsV2Fixture({
         files: [],
         sort_keys: "fixture",
         template: `<template>${ignorierterMarker}</template>`,
+        url: `https://ignored.invalid/${ignorierterMarker}`,
         items,
       },
     ],

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const sql = readFileSync(
   new URL("./supabase/migrations/20260730210000_etappe8_filmwissen_adapter_betrieb.sql", import.meta.url),
@@ -8,6 +8,13 @@ const locV2Sql = readFileSync(
   new URL("./supabase/migrations/20260824130000_filmwissen_loc_nfr_v2.sql", import.meta.url),
   "utf8",
 );
+const entdeckenLiveProofSql = readFileSync(
+  new URL("./supabase/migrations/20260824120000_entdecken_weekly_live_proof.sql", import.meta.url),
+  "utf8",
+);
+const migrationen = readdirSync(new URL("./supabase/migrations/", import.meta.url))
+  .filter((name) => /^[0-9]{14}_.+\.sql$/.test(name))
+  .sort();
 let ok = 0;
 const fehler = [];
 function check(name, fn) {
@@ -101,6 +108,18 @@ check("B11 v2-Speichervertrag bleibt eng, service-only und 24 Stunden gueltig", 
     && /v_abgerufen \+ interval '24 hours'/i.test(speichern)
     && (locV2Sql.match(/revoke all on function public\.kd_filmwissen_loc_snapshot_(?:lesen|speichern)[\s\S]+?from public, anon, authenticated;/gi) || []).length === 2
     && (locV2Sql.match(/grant execute on function public\.kd_filmwissen_loc_snapshot_(?:lesen|speichern)[\s\S]+?to service_role;/gi) || []).length === 2;
+});
+check("B12 Entdecken- und LOC-Forward-Migrationen sind eindeutig, geordnet und additiv", () => {
+  const entdecken = "20260824120000_entdecken_weekly_live_proof.sql";
+  const loc = "20260824130000_filmwissen_loc_nfr_v2.sql";
+  const versionen = migrationen.map((name) => name.slice(0, 14));
+  return migrationen.indexOf(entdecken) >= 0
+    && migrationen.indexOf(entdecken) < migrationen.indexOf(loc)
+    && versionen.length === new Set(versionen).size
+    && !/\b(?:drop\s+table|truncate|delete\s+from)\b/i.test(entdeckenLiveProofSql)
+    && !/\b(?:drop\s+table|truncate|delete\s+from)\b/i.test(locV2Sql)
+    && !/kd_filmwissen/i.test(entdeckenLiveProofSql)
+    && !/kd_entdecken/i.test(locV2Sql);
 });
 
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Adapterbetriebs-Checks bestanden.`);

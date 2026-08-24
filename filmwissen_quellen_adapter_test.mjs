@@ -284,7 +284,7 @@ await check("Q10 LOC-Snapshot wird vollstaendig validiert und ergibt starken Bel
     && /2002/.test(beleg.kernaussagen[0]) && /^[a-f0-9]{64}$/.test(beleg.abrufSha256);
 });
 
-await check("Q10b aktuelles LOC-components/items-Schema bleibt eng, sauber und deterministisch", async () => {
+await check("Q10b LOC-components/items laesst keine Beschreibungen, Templates oder URLs entkommen", async () => {
   const marker = "IGNORIERTER-FREMDTEXT-771";
   const body = baueLocNfrComponentsV2Fixture({ ignorierterMarker: marker });
   body["content.components.items"][1].items[1].title = "<b>Alien</b>";
