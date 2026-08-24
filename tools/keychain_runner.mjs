@@ -20,7 +20,6 @@ import {
   PROVIDER_RAW_CAPTURE_DIR_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_VALUE,
-  createPrivateProviderRawDirectory,
 } from "./provider_raw_capture.mjs";
 
 export {
@@ -536,8 +535,6 @@ export async function starteModus({
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
   radarEntdeckenOnce = false,
-  rawCaptureDirectoryFactory = createPrivateProviderRawDirectory,
-  ausgabe = console.log,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
@@ -559,12 +556,6 @@ export async function starteModus({
     ? reserviereLiveLauf()
     : () => {};
   try {
-    let rawCaptureDirectory = null;
-    if (ownerCoreSix || radarEntdeckenOnce) {
-      rawCaptureDirectory = rawCaptureDirectoryFactory();
-      env[PROVIDER_RAW_CAPTURE_DIR_ENV] = rawCaptureDirectory;
-      env[PROVIDER_RAW_CAPTURE_GUARD_ENV] = PROVIDER_RAW_CAPTURE_GUARD_VALUE;
-    }
     const code = await new Promise((resolveCode) => {
       const argv = radarWebsearchOnce
         ? definition.radarWebsearchOnceArgv
@@ -582,9 +573,6 @@ export async function starteModus({
         resolveCode(signal ? EXIT_START : (Number.isInteger(code) ? code : EXIT_START));
       });
     });
-    if (rawCaptureDirectory) {
-      ausgabe(`Privates Provider-Rohpayload-Verzeichnis: ${rawCaptureDirectory}`);
-    }
     return code;
   } finally {
     gibLiveLaufFrei();
@@ -658,7 +646,6 @@ export async function main(
       radarWebsearchOnce,
       entdeckenDailyOnce,
       radarEntdeckenOnce,
-      ausgabe,
     });
   } catch (error) {
     const keychain = error instanceof KeychainFehler;

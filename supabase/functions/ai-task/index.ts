@@ -82,6 +82,7 @@ import {
   parseProviderLooseJsonText,
   sanitizeProviderDisplayText,
 } from "../_shared/providerText.js";
+import { createProviderReceipt } from "../_shared/providerReceipt.js";
 
 export {
   baueAnbieterKoerper,
@@ -400,9 +401,11 @@ function zahl(k: Konfig, name: string, ersatz: number): number {
 type AnbieterErgebnis = {
   text: string;
   modell: string;
+  providerModel: string;
   inputTokens: number;
   outputTokens: number;
   stopReason: string;
+  providerRawResponse: string;
 };
 
 async function rufeAnbieter(
@@ -433,6 +436,7 @@ async function rufeAnbieter(
   const stopp = setTimeout(() => uhr.abort(), timeoutMs);
   let antwort: Response;
   let daten: unknown = null;
+  let providerRawResponse = "";
   try {
     antwort = await fetch(ANBIETER_URL, {
       method: "POST",
@@ -449,6 +453,7 @@ async function rufeAnbieter(
        haengendes `json()` unbegrenzt weiterlaufen. */
     try {
       const raw = await antwort.text();
+      providerRawResponse = raw;
       onRawResponse(raw);
       daten = raw ? JSON.parse(raw) : null;
     } catch (e) {
@@ -512,6 +517,12 @@ async function rufeAnbieter(
   const usage = (daten as
     | { usage?: { input_tokens?: number; output_tokens?: number } }
     | null)?.usage ?? {};
+  const inputTokens = usage.input_tokens;
+  const outputTokens = usage.output_tokens;
+  if (!Number.isSafeInteger(inputTokens) || (inputTokens as number) < 0
+      || !Number.isSafeInteger(outputTokens) || (outputTokens as number) < 0) {
+    throw new AufrufFehler(CODES.INVALID_RESPONSE, "provider-usage-invalid");
+  }
   /* Die Modell-ID aus der Antwort ist Fremddaten wie alles andere. Stand hier
      eine Zahl statt einer Zeichenkette, flog `preisFuer` spaeter bei
      `modell.startsWith` AUSSERHALB jedes try — und dann bleibt die Reservierung
@@ -519,7 +530,13 @@ async function rufeAnbieter(
      Zeichenkette ist, wird verworfen; das konfigurierte Modell ist der
      verlaessliche Ersatz. */
   const rohModell = (daten as { model?: unknown } | null)?.model;
-  const modellAusAntwort = typeof rohModell === "string" && rohModell.trim() ? rohModell.trim().slice(0, 80) : modell;
+  const modellAusAntwort = typeof rohModell === "string" && rohModell.trim()
+    ? rohModell.trim().slice(0, 80)
+    : modell;
+  const providerModel = typeof rohModell === "string"
+      && /^[a-z0-9][a-z0-9._:-]{0,79}$/.test(rohModell.trim())
+    ? rohModell.trim()
+    : modell;
 
   /* Eine Verweigerung kommt als reguläre Antwort mit Status 200 — sie ist kein
      Serverfehler und darf nicht als solcher erscheinen. Der Verbrauch wird
@@ -527,8 +544,8 @@ async function rufeAnbieter(
      Brauchbares herauskam. */
   const verbrauch = {
     modell: modellAusAntwort,
-    inputTokens: Number(usage.input_tokens ?? 0),
-    outputTokens: Number(usage.output_tokens ?? 0),
+    inputTokens: inputTokens as number,
+    outputTokens: outputTokens as number,
   };
 
   if (stopReason === "refusal") {
@@ -578,9 +595,14 @@ async function rufeAnbieter(
   return {
     text,
     modell: modellAusAntwort,
-    inputTokens: Number(usage.input_tokens ?? 0),
-    outputTokens: Number(usage.output_tokens ?? 0),
+    /* Bei einer gueltigen Response-ID ist dies das vom Provider gemeldete
+       Modell. Andernfalls bleibt es exakt die bereits aufgeloeste Modell-ID,
+       die dieser Adapter gesendet hat; fremde Metadaten werden nie geraten. */
+    providerModel,
+    inputTokens: inputTokens as number,
+    outputTokens: outputTokens as number,
     stopReason,
+    providerRawResponse,
   };
 }
 
@@ -5070,6 +5092,39 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     if (ergebnisDarstellung.responseMode === "degraded") pruefung.daten = null;
   }
 
+  /* Der normale Produktvertrag traegt einen dauerhaften, inhaltsfreien
+     Providerbeleg. Er entsteht nur aus dem wirklich gelesenen Response-Text,
+     den bereits streng geprueften Usagewerten und derselben Log-/Kostenzeile,
+     die diesen Request reserviert und abschliesst. */
+  let providerReceipt = null;
+  try {
+    providerReceipt = await createProviderReceipt({
+      provider: "anthropic",
+      rawResponse: ergebnis.providerRawResponse,
+      model: ergebnis.providerModel,
+      inputTokens: ergebnis.inputTokens,
+      outputTokens: ergebnis.outputTokens,
+      resultMode: ergebnisDarstellung?.responseMode ?? "structured",
+      serverLogId: logId,
+      providerRequests: 1,
+      reservationUsdCent: Number(reservierung.toFixed(6)),
+      costUsdCent: Number(kosten.toFixed(6)),
+    });
+  } catch { /* Hashing ist Teil des fail-closed Providervertrags. */ }
+  if (!providerReceipt) {
+    await beende("fehler", {
+      modell: ergebnis.modell,
+      inputTokens: ergebnis.inputTokens,
+      outputTokens: ergebnis.outputTokens,
+      kosten,
+      fehlerklasse: CODES.INVALID_RESPONSE + ":provider-receipt-invalid",
+    });
+    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+      grund: "provider-receipt-invalid",
+      vorgangId,
+    });
+  }
+
   if (filmwissenLauf) {
     const synthese = pruefung.daten as BereinigteSynthese | null;
     if (!synthese?.publizierbar) {
@@ -5112,6 +5167,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
             }
             : null,
           ...(ergebnisDarstellung ?? {}),
+          providerReceipt,
           verbrauch: {
             inputTokens: ergebnis.inputTokens,
             outputTokens: ergebnis.outputTokens,
@@ -5205,6 +5261,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
           versionId: abschluss.versionId,
         },
         ...(ergebnisDarstellung ?? {}),
+        providerReceipt,
         verbrauch: {
           inputTokens: ergebnis.inputTokens,
           outputTokens: ergebnis.outputTokens,
@@ -5241,6 +5298,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       modell: /^[a-z0-9][a-z0-9._:-]{0,79}$/.test(ergebnis.modell) ? ergebnis.modell : modell,
       data: pruefung.daten,
       ...(ergebnisDarstellung ?? {}),
+      providerReceipt,
       ...(forecastProvenienz ? { provenienz: forecastProvenienz } : {}),
       verbrauch: {
         inputTokens: ergebnis.inputTokens,

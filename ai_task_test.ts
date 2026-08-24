@@ -34,6 +34,7 @@ import {
   PROVIDER_DIAGNOSTIC_HEADER,
   PROVIDER_DIAGNOSTIC_HEADER_VALUE,
 } from "./supabase/functions/_shared/providerDiagnostic.js";
+import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
 function gleich(ist: unknown, soll: unknown, was = "Wert") {
@@ -1213,6 +1214,59 @@ test("B1 Erfolgsfall liefert die vollständige Hülle", async () => {
     (v.kostenUsdCent as number) > 0,
     `kostenUsdCent > 0 (war ${v.kostenUsdCent})`,
   );
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  wahr(isProviderReceipt(receipt), "normaler Providerbeleg ist gueltig");
+  gleich(receipt.provider, "anthropic", "Receipt-Anbieter");
+  gleich(receipt.model, "claude-haiku-4-5-20251001", "Receipt-Modell");
+  gleich(receipt.resultMode, "structured", "Receipt-Ergebnisform");
+  gleich(
+    (receipt.server as Record<string, unknown>).logId,
+    LOG_ID,
+    "Receipt bindet die reservierte Serverzeile",
+  );
+  gleich(
+    (receipt.server as Record<string, unknown>).costUsdCent,
+    v.kostenUsdCent,
+    "Receipt bindet die Antwortkosten",
+  );
+  gleich(
+    (receipt.server as Record<string, unknown>).reservationUsdCent,
+    startKoerper().p_reservierung,
+    "Receipt bindet die Vorabreservierung",
+  );
+  gleich(
+    ((receipt.usage as Record<string, unknown>).inputTokens),
+    v.inputTokens,
+    "Receipt bindet Input-Usage",
+  );
+  gleich(
+    ((receipt.usage as Record<string, unknown>).outputTokens),
+    v.outputTokens,
+    "Receipt bindet Output-Usage",
+  );
+  wahr(
+    /^[a-f0-9]{64}$/.test(String(receipt.responseSha256)),
+    "Receipt enthaelt nur den SHA-256 des Providertexts",
+  );
+  falsch(
+    JSON.stringify(receipt).includes("Kinodreieck"),
+    "Receipt enthaelt keinen Providerinhalt",
+  );
+});
+
+test("B1b fehlende Provider-Usage erzeugt weder Receipt noch falschen Erfolg", async () => {
+  z.anbieter = () => antwort({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "end_turn",
+    content: [{ type: "text", text: '{"echo":"Kinodreieck","zeichen":11}' }],
+  });
+  const r = await echoRuf();
+  gleich(r.status, 502, "Status");
+  gleich(r.daten.grund, "provider-usage-invalid", "Diagnose");
+  falsch("providerReceipt" in r.daten, "Fehler-vor-Receipt liefert keinen Beleg");
+  gleich(anbieterAufrufe().length, 1, "genau ein Providerrequest");
+  const k = genauEinAbschluss();
+  gleich(k.p_status, "fehler", "Protokollabschluss");
 });
 
 test("B2 Erfolgsfall bucht Istverbrauch und Kosten über null", async () => {

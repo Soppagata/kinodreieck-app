@@ -21,6 +21,9 @@ const dateien = [
   "supabase/functions/ai-task/requestContract.ts",
   "supabase/functions/filmwissen-task/quellen.ts",
   "supabase/functions/filmwissen-task/vertrag.ts",
+  "supabase/functions/_shared/providerDiagnostic.js",
+  "supabase/functions/_shared/providerReceipt.js",
+  "supabase/functions/_shared/providerText.js",
 ];
 const configDatei = "supabase/config.toml";
 const validConfig = Buffer.from(

@@ -60,6 +60,7 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql",
   "supabase/migrations/20260823120000_radar_text_target.sql",
   "supabase/functions/_shared/providerDiagnostic.js",
+  "supabase/functions/_shared/providerReceipt.js",
   "supabase/functions/_shared/providerText.js",
   FUNCTION_ENTRY,
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
@@ -158,6 +159,25 @@ export const RADAR_TEXT_TARGET_RELEASE_MIGRATIONS = Object.freeze([
   }),
 ]);
 export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "fa09ae27b42a964e172997081f676663f0ba38cf088d87be11633165aa13db1f";
+
+/* Additiver, unveraenderlicher Bytevertrag fuer die aktuelle normale
+   Provider-Receipt-Runtime. Historische Deployvertraege oben bleiben
+   unangetastet; diese Closure bindet beide Websearch-Functions samt allen
+   drei transitiven Shared-Modulen und enthaelt keine Migration. */
+export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "54fb6ce81749e4362564134c17da81160823d3a0bcaeb5f93a902f1218b20c6b";
+export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "d34d889e6a12e8d461e2275fad8765ac240ca9241569f95d46ab1fe7784e990c" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "d02ef620bea5fa0ddf4532b750470d009e630b5f4245ea66e87825412d5670e4" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "81c9045d0f90e9c0bca28d4fe1948b980f67234ab6e0a2f0c6dbfe7f1da3c8d7" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "97d46ba29b5056ece036f0049e8a6af8ab3889182fc0d65be6d8a17f8212a8ef" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "6ed55d527b43f2bc6e4aa59037a48024489f227870dd8036f9c49ed78e191130" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "78056e57b8cf04883a497c6330604a64482e261a34c9fc3c7fb6920349b0ed63" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "d91de5cd6f600a35e74591615aa9b97d52f223aceec2d46e81134c0354ce55c7" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "676fb4fcd8cabc519895eadffe9ed0e5f37125ba5bf234658571ae18f2663ce3" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "e659152ab042ece41ed91e2d3f6a2e77824fe9dfa57ab83208fb57444b9bf722" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
+]);
 
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
@@ -560,6 +580,21 @@ export function requireRadarTextTargetReleaseProvenance(options = {}) {
   });
 }
 
+/* Reiner lokaler Bytebeleg der neuen Runtime. Er ersetzt keinen historischen
+   Deployzaun und fuehrt selbst keine Remoteaktion aus. */
+export function requireProviderReceiptRuntimeProvenance(options = {}) {
+  const files = requireExactFileRows(
+    PROVIDER_RECEIPT_RUNTIME_FILES,
+    PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
+    "PROVIDER_RECEIPT_RUNTIME_PROVENANCE_DRIFT",
+    options,
+  );
+  return Object.freeze({
+    bundleSha256: PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
+    files,
+  });
+}
+
 function localImports(repoPath, bytes) {
   let source;
   try {
@@ -573,6 +608,7 @@ function localImports(repoPath, bytes) {
     const resolved = posix.normalize(posix.join(posix.dirname(repoPath), match[1]));
     const allowedSharedRuntime = new Set([
       "supabase/functions/_shared/providerDiagnostic.js",
+      "supabase/functions/_shared/providerReceipt.js",
       "supabase/functions/_shared/providerText.js",
     ]).has(resolved);
     if ((!resolved.startsWith(`${FUNCTION_ROOT}/`) || resolved === FUNCTION_ROOT) && !allowedSharedRuntime) {

@@ -78,6 +78,7 @@ import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
 import {
   erstelleAnbieterPfadBelege,
   formatiereAnbieterPfadZusammenfassung,
+  providerReceiptBelegAusAntwort,
 } from "./ai_smoke_contract.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
@@ -88,11 +89,6 @@ import {
 import {
   OWNER_CORE_SIX_GUARD_ENV,
   OWNER_CORE_SIX_GUARD_VALUE,
-  captureProviderRawResponse,
-  finalizeProviderCapture,
-  isZeroCostUnprovenCapture,
-  providerDiagnosticHeaders,
-  providerRawCaptureEnabled,
 } from "./provider_raw_capture.mjs";
 
 const FINDER_VOKABULAR = JSON.parse(readFileSync(
@@ -149,7 +145,7 @@ let fehler = 0;
 let nummer = 0;
 const anbieterPfadBelege = erstelleAnbieterPfadBelege(ERWARTETE_ANBIETER_PFADE, {
   maxPotentialRequests: SMOKE_MAX_ANBIETER_REQUESTS,
-  requireProviderCapture: OWNER_CORE_SIX,
+  requireProviderReceipt: OWNER_CORE_SIX,
 });
 let anbieterStatusGedruckt = false;
 
@@ -353,21 +349,6 @@ let RADAR_TARGET_ID = null;
 
 console.log(`KI-Endpunkt-Rauchprobe gegen ${ENDPUNKT}\n`);
 
-let PROVIDER_DIAGNOSTIC_HEADERS = Object.freeze({});
-if (OWNER_CORE_SIX) {
-  try {
-    if (!providerRawCaptureEnabled(process.env)) {
-      throw new Error("privater Capture-Guard fehlt");
-    }
-    PROVIDER_DIAGNOSTIC_HEADERS = providerDiagnosticHeaders(process.env);
-  } catch {
-    stoppeLiveLauf(new LiveSicherheitsStopp(
-      "unbekannt",
-      "Owner-Sechserlauf hat keine sichere private Provider-Capture-Senke.",
-    ));
-  }
-}
-
 /* --- P1: Preflight ohne Anmeldung ---------------------------------------- */
 const p1 = await ruf("OPTIONS", {
   "Access-Control-Request-Method": "POST",
@@ -504,18 +485,35 @@ try {
   stoppeLiveLauf(error);
 }
 
-const providerCaptureNachLabel = new Map();
+const providerBelegNachLabel = new Map();
 
 function istProviderPfadBelegt(label) {
   if (!OWNER_CORE_SIX) return true;
-  const capture = providerCaptureNachLabel.get(label);
-  return capture?.captureState === "raw"
-    && capture?.proofState === "proven"
-    && capture?.providerRequests === 1;
+  return providerBelegNachLabel.get(label) === "proven";
 }
 
 function istProviderPfadUnbelegt(label) {
-  return isZeroCostUnprovenCapture(providerCaptureNachLabel.get(label));
+  return providerBelegNachLabel.get(label) === "unproven";
+}
+
+function erfasseNormalenProviderBeleg(label, pfad, antwort, kostenMessung) {
+  if (!OWNER_CORE_SIX) return "not-required";
+  try {
+    const proof = providerReceiptBelegAusAntwort(
+      pfad,
+      antwort,
+      kostenMessung?.requestKostenUsdCent ?? null,
+    );
+    const status = anbieterPfadBelege.erfasseProviderReceipt(pfad, proof);
+    const providerState = status.providerProof === "proven" ? "proven" : "unproven";
+    providerBelegNachLabel.set(label, providerState);
+    return providerState;
+  } catch {
+    throw new LiveSicherheitsStopp(
+      "unbekannt",
+      `${label}: normaler Providerbeleg fehlt bei positiven oder unbekannten Kosten oder ist nicht mit dieser Functionantwort korreliert.`,
+    );
+  }
 }
 
 function erfassePfadErgebnis(pfad, ok, reason) {
@@ -534,54 +532,23 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
   try {
     markierung = await laufWache.vorAnbieterRequest(label);
     registriereAnbieterPfad(koerper?.task);
-    const ergebnis = await ruf(methode, kopf, koerper, {
-      ...extraKopf,
-      ...PROVIDER_DIAGNOSTIC_HEADERS,
-    }, laufBasis.anbieterRequestTimeoutMs);
-    let captureError = null;
-    let capture = null;
-    if (OWNER_CORE_SIX) {
-      const fileName = ({
-        "P12 intelligent-search": "01-intelligent-search.json",
-        "P14 profile-extract": "02-profile-extract.json",
-        "P17 film-forecast": "03-film-forecast.json",
-        "P18 filmwissen-synthese": "04-filmwissen-synthese.json",
-        "P22 blog-profile-extract": "05-blog-profile-extract.json",
-        "P23 media-batch-extract": "06-media-batch-extract.json",
-      })[label];
-      try {
-        if (!fileName) throw new Error("unbekannter Sechserpfad");
-        capture = captureProviderRawResponse(ergebnis.daten, fileName, {
-          env: process.env,
-          repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
-          responseStatus: ergebnis.status,
-          expectedTask: koerper?.task ?? null,
-          expectedVorgangId: koerper?.vorgangId ?? null,
-        });
-      } catch {
-        captureError = new LiveSicherheitsStopp(
-          "unbekannt",
-          `${label}: unveraenderter Providerpayload wurde nicht sicher privat erfasst.`,
-        );
-      }
-    }
+    const ergebnis = await ruf(
+      methode,
+      kopf,
+      koerper,
+      extraKopf,
+      laufBasis.anbieterRequestTimeoutMs,
+    );
     const kostenRoh = ergebnis.daten?.verbrauch?.kostenUsdCent;
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
-    try {
-      capture = finalizeProviderCapture(capture, kostenMessung.requestKostenUsdCent);
-      if (capture) {
-        providerCaptureNachLabel.set(label, capture);
-        anbieterPfadBelege.erfasseProviderCapture(koerper?.task, capture);
-      }
-    } catch {
-      captureError = new LiveSicherheitsStopp(
-        "unbekannt",
-        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend oder nicht messbar.`,
-      );
-    }
-    if (captureError) throw captureError;
-    const lokalerNullkostenPfadUnbelegt = isZeroCostUnprovenCapture(capture);
+    const providerState = erfasseNormalenProviderBeleg(
+      label,
+      koerper?.task,
+      ergebnis.daten,
+      kostenMessung,
+    );
+    const lokalerNullkostenPfadUnbelegt = providerState === "unproven";
     if (ergebnis.status === 429
         || (ergebnis.status !== 200 && !lokalerNullkostenPfadUnbelegt)) {
       throw new LiveSicherheitsStopp(
@@ -602,7 +569,6 @@ async function rufProduktAnbieterBewacht({
   endpunkt,
   kopf,
   koerper = null,
-  captureDatei,
 }) {
   let markierung;
   try {
@@ -611,11 +577,10 @@ async function rufProduktAnbieterBewacht({
     let antwort = null;
     let daten = null;
     let requestError = null;
-    let capture = null;
     try {
       antwort = await fetchMitZeitgrenze(endpunkt, {
         method: methode,
-        headers: { ...kopf, ...PROVIDER_DIAGNOSTIC_HEADERS },
+        headers: kopf,
         body: koerper === null ? undefined : JSON.stringify(koerper),
       }, { timeoutMs: laufBasis.anbieterRequestTimeoutMs });
       daten = await liesJsonOderNull(antwort);
@@ -623,43 +588,14 @@ async function rufProduktAnbieterBewacht({
       requestError = error;
     }
 
-    let captureError = null;
-    if (!requestError && OWNER_COMBINED_EIGHT) {
-      try {
-        capture = captureProviderRawResponse(daten, captureDatei, {
-          env: process.env,
-          repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
-          responseStatus: antwort?.status ?? null,
-          expectedTask: pfad,
-        });
-      } catch {
-        captureError = new LiveSicherheitsStopp(
-          "unbekannt",
-          `${label}: unveraenderter Providerpayload wurde nicht sicher privat erfasst.`,
-        );
-      }
-    }
-
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, null);
-    try {
-      capture = finalizeProviderCapture(capture, kostenMessung.requestKostenUsdCent);
-      if (capture) {
-        providerCaptureNachLabel.set(label, capture);
-        anbieterPfadBelege.erfasseProviderCapture(pfad, capture);
-      }
-    } catch {
-      captureError = new LiveSicherheitsStopp(
-        "unbekannt",
-        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend oder nicht messbar.`,
-      );
-    }
     if (requestError) {
       throw requestError instanceof LiveSicherheitsStopp
         ? requestError
         : new LiveSicherheitsStopp("unbekannt", `${label} war nicht verlaesslich erreichbar.`);
     }
-    if (captureError) throw captureError;
-    const lokalerNullkostenPfadUnbelegt = isZeroCostUnprovenCapture(capture);
+    const providerState = erfasseNormalenProviderBeleg(label, pfad, daten, kostenMessung);
+    const lokalerNullkostenPfadUnbelegt = providerState === "unproven";
     if (antwort?.status === 429 || (!antwort?.ok && !lokalerNullkostenPfadUnbelegt)) {
       throw new LiveSicherheitsStopp(
         antwort?.status === 429 ? "limit" : "unbekannt",
@@ -717,9 +653,8 @@ const p12 = await rufAnbieterBewacht(
     payload: { suchsatz: suchsatzEcht, listen: SUCH_LISTEN },
   },
 );
-const p12Capture = providerCaptureNachLabel.get("P12 intelligent-search");
 const p12ProviderBelegt = istProviderPfadBelegt("P12 intelligent-search");
-const p12Unbelegt = isZeroCostUnprovenCapture(p12Capture);
+const p12Unbelegt = istProviderPfadUnbelegt("P12 intelligent-search");
 const d12 = p12ProviderBelegt ? p12.daten?.data : null;
 const p12SchemaOk = p12ProviderBelegt && p12.status === 200 && !!d12
   && ausListe(d12.harte_filter?.genres, SUCH_LISTEN.genres)
@@ -733,7 +668,7 @@ pruefe(
   "Intelligente Suche liefert ein gueltiges Filterschema aus erlaubten Werten",
   p12SchemaOk,
   p12Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : `HTTP ${p12.status}, Modell ${p12.daten?.modellAlias}, ${p12.daten?.verbrauch?.kostenUsdCent} US-Cent`,
 );
 let p12ReadbackOk = false;
@@ -747,7 +682,7 @@ if (p12ProviderBelegt) {
   pruefe(
     "S1 intelligent-search: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
 }
 if (!p12Unbelegt) {
@@ -791,7 +726,7 @@ pruefe(
   "Profilextraktion liefert ein striktes Schema mit wörtlich zuordenbaren Belegen",
   p14SchemaOk,
   p14Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : p14.status === 200
     ? `${d14?.signale?.length ?? 0} Signal(e), alle Belege wörtlich: ${profileBelegeSindWoertlich}`
     : `HTTP ${p14.status}: ${JSON.stringify(p14.daten)?.slice(0, 300)}`,
@@ -806,7 +741,7 @@ if (p14ProviderBelegt) {
   pruefe(
     "S2 profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
 }
 if (!p14Unbelegt) {
@@ -877,7 +812,7 @@ pruefe(
   "Echte Vorbewertung bleibt getrennt, nachvollziehbar und weist reale Kosten aus",
   p17SchemaOk,
   p17Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : p17.status === 200
     ? `Modell ${p17.daten?.modell}, ${p17.daten?.verbrauch?.kostenUsdCent} US-Cent, Sicherheit ${d17?.sicherheit}`
     : `HTTP ${p17.status}: ${JSON.stringify(p17.daten)?.slice(0, 300)}`,
@@ -894,7 +829,7 @@ if (p17ProviderBelegt) {
   pruefe(
     "S3 film-forecast: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
 }
 if (!p17Unbelegt) {
@@ -942,14 +877,14 @@ const p18Erfolg = p18ProviderBelegt && p18.status === 200
   && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
   && typeof d18?.versionId === "string"
   && (!OWNER_CORE_SIX || (
-    p18Capture?.providerRequests === 1
-    && p18.daten?.verbrauch?.kostenUsdCent > 0
+    p18.daten?.providerReceipt?.server?.providerRequests === 1
+      && p18.daten?.verbrauch?.kostenUsdCent > 0
   ));
 pruefe(
   "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",
   p18Erfolg,
   p18Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : p18.status === 200
     ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
     : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
@@ -971,7 +906,7 @@ if (p18Unbelegt) {
   pruefe(
     "S4 filmwissen-synthese: Parser, Persistenz, Readback und Qualität bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird weder Antwort noch Lese-RPC fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird weder Antwort noch Lese-RPC fachlich beurteilt.",
   );
 } else {
   p18RpcOk = p20?.status === 200
@@ -1036,7 +971,7 @@ pruefe(
   "Synthetische Ein-Artikel-Profilextraktion bleibt ein bezahlter Pfad mit belegten Ergebnissen",
   p22SchemaOk,
   p22Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : p22.status === 200
     ? `${d22?.geschmackszuege?.length ?? 0} Geschmackszug, ${d22?.vokabular?.length ?? 0} Vokabular, ${p22.daten?.verbrauch?.kostenUsdCent} US-Cent`
     : `HTTP ${p22.status}: ${JSON.stringify(p22.daten)?.slice(0, 300)}`,
@@ -1063,7 +998,7 @@ if (p22ProviderBelegt) {
   pruefe(
     "S5 blog-profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
 }
 if (!p22Unbelegt) {
@@ -1111,7 +1046,7 @@ pruefe(
   "Text-Stapelimport ist live gebaut, bleibt unbewertet und benötigt keinen Bildpfad",
   p23SchemaOk,
   p23Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
     : p23.status === 200
     ? `${d23?.kandidaten?.length ?? 0} Kandidat(en), ${p23.daten?.verbrauch?.kostenUsdCent} US-Cent`
     : `HTTP ${p23.status}: ${JSON.stringify(p23.daten)?.slice(0, 300)}`,
@@ -1126,7 +1061,7 @@ if (p23ProviderBelegt) {
   pruefe(
     "S6 media-batch-extract: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
 }
 if (!p23Unbelegt) {
@@ -1149,7 +1084,6 @@ if (OWNER_COMBINED_EIGHT) {
       Accept: "application/json",
       [ENTDECKEN_RECOVERY_HEADER]: ENTDECKEN_RECOVERY_HEADER_VALUE,
     },
-    captureDatei: "07-entdecken-weekly-websearch.json",
   });
   const p24ProviderBelegt = istProviderPfadBelegt("P24 entdecken-daily-task");
   const p24Unbelegt = istProviderPfadUnbelegt("P24 entdecken-daily-task");
@@ -1159,8 +1093,7 @@ if (OWNER_COMBINED_EIGHT) {
     entdeckenFeedGueltig = validateEntdeckenDailyFeed(p24.daten?.feed).ok === true;
   } catch { /* Formfehler wird unten fail-closed klassifiziert. */ }
   const entdeckenOk = p24ProviderBelegt && p24.status === 200
-    && JSON.stringify(Object.keys(p24.daten || {}).sort())
-      === JSON.stringify(["feed", "ok", "providerRequests", "searchRequests", "status", "writes"])
+    && !("providerDiagnostic" in (p24.daten || {}))
     && p24.daten?.ok === true
     && p24.daten?.status === "fresh"
     && p24.daten?.writes === 1
@@ -1171,7 +1104,7 @@ if (OWNER_COMBINED_EIGHT) {
     "Entdecken liefert genau einen frischen, validierten Websearch-Write",
     entdeckenOk,
     p24Unbelegt
-      ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+      ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
       : `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
   );
   if (!entdeckenOk && !p24Unbelegt) {
@@ -1200,13 +1133,11 @@ if (OWNER_COMBINED_EIGHT) {
       "Content-Type": "application/json",
     },
     koerper: { targetId: RADAR_TARGET_ID },
-    captureDatei: "08-radar-websearch.json",
   });
   const p25ProviderBelegt = istProviderPfadBelegt("P25 radar-websearch-task");
   const p25Unbelegt = istProviderPfadUnbelegt("P25 radar-websearch-task");
   const radarOk = p25ProviderBelegt && p25.status === 200
-    && JSON.stringify(Object.keys(p25.daten || {}).sort())
-      === JSON.stringify(["ok", "providerRequests", "searchRequests", "status", "writes"])
+    && !("providerDiagnostic" in (p25.daten || {}))
     && p25.daten?.ok === true
     && p25.daten?.status === "confirmed"
     && p25.daten?.writes === 1
@@ -1216,7 +1147,7 @@ if (OWNER_COMBINED_EIGHT) {
     "Radar liefert genau einen bestaetigten Websearch-Write fuer das starke Ziel",
     radarOk,
     p25Unbelegt
-      ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+      ? "Providerbeleg unproven/missing-zero-cost; Qualität offen; potentialProviderRequests=1"
       : `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
   );
   if (!radarOk && !p25Unbelegt) {

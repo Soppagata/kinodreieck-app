@@ -6,6 +6,7 @@ import {
   ProviderTextSafetyError,
   parseProviderLooseJsonText,
 } from "../_shared/providerText.js";
+import { createProviderReceipt } from "../_shared/providerReceipt.js";
 
 export const RADAR_WEBSEARCH_PROVIDER_TASK = "radar-websearch";
 export const RADAR_WEBSEARCH_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -48,6 +49,7 @@ const SAFE_ERROR_CODES = new Set([
   "provider-usage-invalid",
   "provider-stop-reason-invalid",
   "provider-output-invalid",
+  "provider-receipt-invalid",
   "provider-result-count-invalid",
   "provider-citation-invalid",
   "provider-domain-invalid",
@@ -726,6 +728,7 @@ export function createAnthropicRadarWebsearchAdapter({
 
     let usage = null;
     let costUsdCent = null;
+    let providerRawForReceipt = "";
     let settled = false;
     const settle = async (status, code = null) => {
       if (settled) throw new RadarWebsearchProviderError("cost-settlement-failed");
@@ -768,6 +771,7 @@ export function createAnthropicRadarWebsearchAdapter({
       }
       const providerBody = await responseJson(response, (raw) => {
         providerRawResponse = raw;
+        providerRawForReceipt = raw;
       });
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new RadarWebsearchProviderError("http-error", usage);
@@ -788,12 +792,31 @@ export function createAnthropicRadarWebsearchAdapter({
           || costUsdCent > setup.globalRequestCapUsdCent) {
         throw new RadarWebsearchProviderError("provider-cost-invalid", usage);
       }
+      let providerReceipt = null;
+      try {
+        providerReceipt = await createProviderReceipt({
+          provider: "anthropic",
+          rawResponse: providerRawForReceipt,
+          model: usage.model,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          webSearchRequests: usage.searchRequests,
+          resultMode: parsed.envelope.responseMode,
+          serverLogId: logId,
+          providerRequests: 1,
+          reservationUsdCent,
+          costUsdCent,
+        });
+      } catch { /* Der Hash ist Teil des fail-closed Produktvertrags. */ }
+      if (!providerReceipt) {
+        throw new RadarWebsearchProviderError("provider-receipt-invalid", usage);
+      }
       await settle("fertig");
       telemetry.searchRequests = usage.searchRequests;
       telemetry.resultCount = parsed.envelope.searchResultCount;
       telemetry.costUsdCent = costUsdCent;
       telemetry.phaseCode = "provider-complete";
-      return parsed.envelope;
+      return Object.freeze({ ...parsed.envelope, providerReceipt });
     } catch (error) {
       const safe = error instanceof RadarWebsearchProviderError
         ? error : new RadarWebsearchProviderError("provider-body-invalid");

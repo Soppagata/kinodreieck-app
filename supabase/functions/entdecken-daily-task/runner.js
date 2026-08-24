@@ -5,6 +5,7 @@ import {
   validateEntdeckenDailyFeed,
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
+import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
 const SAFE_FAILURE_CODES = new Set([
   "provider_error", "invalid_response", "storage_error", "source_registry_unavailable",
@@ -110,7 +111,14 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       reason: "provider_error", ...degradedPresentation("provider-error"),
     });
   }
-  const evaluated = evaluateEntdeckenDailyResponse(envelope, sources.value, {
+  const normalizedReceipt = normalizeProviderReceipt(envelope?.providerReceipt);
+  const providerEvidence = normalizedReceipt
+    ? Object.freeze({ providerReceipt: normalizedReceipt })
+    : Object.freeze({});
+  const providerEnvelope = envelope && typeof envelope === "object" && !Array.isArray(envelope)
+    ? Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "providerReceipt"))
+    : envelope;
+  const evaluated = evaluateEntdeckenDailyResponse(providerEnvelope, sources.value, {
     retrievedOn: context.today,
     claimedIsoWeek: context.isoWeek,
   });
@@ -118,6 +126,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: evaluated.status, ...evaluatedPresentation(evaluated),
+      ...providerEvidence,
     });
   }
   try { await repository.saveFeed(evaluated.feed, { fenceToken }); }
@@ -125,7 +134,10 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await failSafely(repository, "storage_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "storage_error", ...degradedPresentation("storage-error"),
+      ...providerEvidence,
     });
   }
-  return frozen("fresh", evaluated.feed, { writes: 1, ...evaluatedPresentation(evaluated) });
+  return frozen("fresh", evaluated.feed, {
+    writes: 1, ...evaluatedPresentation(evaluated), ...providerEvidence,
+  });
 }

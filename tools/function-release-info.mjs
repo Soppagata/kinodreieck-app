@@ -11,6 +11,9 @@ const DATEIEN = Object.freeze([
   "supabase/functions/ai-task/requestContract.ts",
   "supabase/functions/filmwissen-task/quellen.ts",
   "supabase/functions/filmwissen-task/vertrag.ts",
+  "supabase/functions/_shared/providerDiagnostic.js",
+  "supabase/functions/_shared/providerReceipt.js",
+  "supabase/functions/_shared/providerText.js",
 ]);
 const CONFIG_DATEI = "supabase/config.toml";
 const DEPLOY_CONTRACT_VERSION = "release-contract-v1";

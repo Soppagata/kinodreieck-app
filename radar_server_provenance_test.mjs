@@ -147,7 +147,11 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-
   for (const { path: pathname, sha256: digest } of RADAR_TEXT_TARGET_FILES) {
     assert.equal(sha256(fileAtRadarTextSource(pathname)), digest, pathname);
   }
-  const release = requireRadarTextTargetReleaseProvenance();
+  const release = requireRadarTextTargetReleaseProvenance({
+    readFile(absolutePath) {
+      return fileAtRadarTextSource(provenancePath(absolutePath));
+    },
+  });
   assert.equal(release.releaseSha256, RADAR_TEXT_TARGET_RELEASE_SHA256);
   assert.deepEqual(release.functions.radar, RADAR_TEXT_TARGET_FILES);
   assert.equal(
@@ -163,7 +167,7 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-
   assert.throws(() => requireRadarTextTargetReleaseProvenance({
     readFile(absolutePath) {
       const pathname = provenancePath(absolutePath);
-      const bytes = fs.readFileSync(pathname);
+      const bytes = fileAtRadarTextSource(pathname);
       return pathname === migrationPath ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
     },
   }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
@@ -172,7 +176,7 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-
   assert.throws(() => requireRadarTextTargetReleaseProvenance({
     readFile(absolutePath) {
       const pathname = provenancePath(absolutePath);
-      const bytes = fs.readFileSync(pathname);
+      const bytes = fileAtRadarTextSource(pathname);
       return pathname === sharedPath ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
     },
   }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");

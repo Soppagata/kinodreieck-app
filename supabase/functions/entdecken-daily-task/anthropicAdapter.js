@@ -10,6 +10,7 @@ import {
   parseProviderLooseJsonText,
   ProviderTextSafetyError,
 } from "../_shared/providerText.js";
+import { createProviderReceipt } from "../_shared/providerReceipt.js";
 
 export const ENTDECKEN_DAILY_PROVIDER_TASK = "entdecken-daily";
 export const ENTDECKEN_DAILY_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -30,6 +31,7 @@ const SAFE_ERROR_CODES = new Set([
   "http-error", "provider-body-invalid", "provider-response-too-large", "provider-timeout",
   "provider-tool-error", "provider-tool-shape-invalid", "provider-usage-invalid",
   "provider-stop-reason-invalid", "provider-output-invalid", "provider-result-count-invalid",
+  "provider-receipt-invalid",
   "provider-citation-invalid", "provider-domain-invalid", "provider-cost-invalid",
   "provider-query-context-invalid", "setup-invalid",
 ]);
@@ -436,6 +438,7 @@ export function createAnthropicEntdeckenDailyAdapter({
 
     let usage = null;
     let costUsdCent = null;
+    let providerRawForReceipt = "";
     let settled = false;
     const settle = async (status, code = null) => {
       if (settled) throw new EntdeckenDailyProviderError("cost-settlement-failed");
@@ -470,6 +473,7 @@ export function createAnthropicEntdeckenDailyAdapter({
       }
       const providerBody = await responseJson(response, (raw) => {
         providerRawResponse = raw;
+        providerRawForReceipt = raw;
       });
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new EntdeckenDailyProviderError("http-error", usage);
@@ -480,11 +484,30 @@ export function createAnthropicEntdeckenDailyAdapter({
           || costUsdCent > setup.globalRequestCapUsdCent) {
         throw new EntdeckenDailyProviderError("provider-cost-invalid", usage);
       }
+      let providerReceipt = null;
+      try {
+        providerReceipt = await createProviderReceipt({
+          provider: "anthropic",
+          rawResponse: providerRawForReceipt,
+          model: usage.model,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          webSearchRequests: usage.searchRequests,
+          resultMode: parsed.envelope.responseMode,
+          serverLogId: logId,
+          providerRequests: 1,
+          reservationUsdCent,
+          costUsdCent,
+        });
+      } catch { /* Der Hash ist Teil des fail-closed Produktvertrags. */ }
+      if (!providerReceipt) {
+        throw new EntdeckenDailyProviderError("provider-receipt-invalid", usage);
+      }
       await settle("fertig");
       telemetry.searchRequests = usage.searchRequests;
       telemetry.resultCount = parsed.envelope.searchResultCount;
       telemetry.costUsdCent = costUsdCent;
-      return parsed.envelope;
+      return Object.freeze({ ...parsed.envelope, providerReceipt });
     } catch (error) {
       const safe = error instanceof EntdeckenDailyProviderError
         ? error : new EntdeckenDailyProviderError("provider-body-invalid");

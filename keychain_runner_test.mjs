@@ -50,7 +50,6 @@ import {
 } from "./tools/provider_raw_capture.mjs";
 import {
   erstelleAnbieterPfadBelege,
-  formatiereAnbieterPfadZusammenfassung,
 } from "./tools/ai_smoke_contract.mjs";
 import {
   PROVIDER_DIAGNOSTIC_ENV,
@@ -82,17 +81,6 @@ const PUBLIC = {
 const SONDERGEHEIMNIS = " -x ; $() `ticks` \"quote\" 'leer' \nzweite-zeile";
 const OWNER_GEHEIMNIS = `owner:${SONDERGEHEIMNIS}`;
 const PACKAGE = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const LIVE_CAPTURE_CASES = Object.freeze([
-  Object.freeze({ file: "01-intelligent-search.json", task: "intelligent-search", vorgangId: "10000000-0000-4000-8000-000000000001" }),
-  Object.freeze({ file: "02-profile-extract.json", task: "profile-extract", vorgangId: "10000000-0000-4000-8000-000000000002" }),
-  Object.freeze({ file: "03-film-forecast.json", task: "film-forecast", vorgangId: "10000000-0000-4000-8000-000000000003" }),
-  Object.freeze({ file: "04-filmwissen-synthese.json", task: "filmwissen-synthese", vorgangId: "10000000-0000-4000-8000-000000000004" }),
-  Object.freeze({ file: "05-blog-profile-extract.json", task: "blog-profile-extract", vorgangId: "10000000-0000-4000-8000-000000000005" }),
-  Object.freeze({ file: "06-media-batch-extract.json", task: "media-batch-extract", vorgangId: "10000000-0000-4000-8000-000000000006" }),
-  Object.freeze({ file: "07-entdecken-weekly-websearch.json", task: "entdecken-daily-task", vorgangId: null }),
-  Object.freeze({ file: "08-radar-websearch.json", task: "radar-websearch-task", vorgangId: null }),
-]);
-
 pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner verdrahtet",
   PACKAGE.scripts?.["test:ai:live"] === "node tools/keychain_runner.mjs ai-live");
 
@@ -280,7 +268,6 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   let pending;
   let finalisiert;
   let naechsterPfadLaeufe = 0;
-  let abschluss;
   let positiveKostenGesperrt = false;
   let unbekannteKostenGesperrt = false;
   let keineDateiGeschrieben = false;
@@ -297,13 +284,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
         expectedVorgangId: "22222222-2222-4222-8222-222222222222",
       },
     );
-    const pfade = erstelleAnbieterPfadBelege(["intelligent-search", "profile-extract"]);
-    pfade.registriere("intelligent-search");
     finalisiert = finalizeProviderCapture(pending, 0);
-    pfade.erfasseProviderCapture("intelligent-search", finalisiert);
-    pfade.registriere("profile-extract");
     naechsterPfadLaeufe += 1;
-    abschluss = pfade.abschluss();
     positiveKostenGesperrt = [0.0001, 1].every((kosten) => {
       try { finalizeProviderCapture(pending, kosten); return false; }
       catch { return true; }
@@ -321,18 +303,13 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     pending?.captureState === "pending-no-raw"
       && pending?.proofState === "pending"
       && pending?.providerRequests === null);
-  pruefe("P12 mit exaktem Nulldelta bleibt unbelegt und laesst den naechsten Pfad genau einmal laufen",
+  pruefe("Alter Rawcapture-Helfer bleibt bei exaktem Nulldelta unbelegt und blockiert keinen Aufrufer",
     isZeroCostUnprovenCapture(finalisiert)
-      && naechsterPfadLaeufe === 1
-      && abschluss?.pfadeVollstaendig === true);
+      && naechsterPfadLaeufe === 1);
   pruefe("P12 mit positiven Kosten ohne Rawpayload stoppt weiterhin fail-closed",
     positiveKostenGesperrt);
   pruefe("P12 mit unbekannten Kosten ohne Rawpayload stoppt weiterhin fail-closed",
     unbekannteKostenGesperrt);
-  pruefe("Vollstaendige Pfadfolge mit unbelegtem P12 endet ehrlich rot statt sofort abzubrechen",
-    abschluss?.ok === false
-      && abschluss?.providerBelegeVollstaendig === false
-      && abschluss?.unbelegt.join(",") === "intelligent-search");
   pruefe("P12-Mock schreibt kein Rohpayload, veraendert keine Guards und raeumt lokal auf",
     keineDateiGeschrieben && JSON.stringify(env) === envVorher && cleanupOk);
 }
@@ -386,116 +363,6 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
 }
 
 {
-  const directory = createPrivateProviderRawDirectory();
-  const env = {
-    [PROVIDER_RAW_CAPTURE_DIR_ENV]: directory,
-    [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
-  };
-  const envVorher = JSON.stringify(env);
-  const tasks = LIVE_CAPTURE_CASES.map(({ task }) => task);
-  const pfade = erstelleAnbieterPfadBelege(tasks, { maxPotentialRequests: 9 });
-  const captures = [];
-  let abschluss = null;
-  let terminaleKostenGesperrt = true;
-  let cleanupOk = false;
-  try {
-    for (const fall of LIVE_CAPTURE_CASES) {
-      pfade.registriere(fall.task);
-      const pending = captureProviderRawResponse(
-        { ok: false, code: "provider-diagnose-nicht-erlaubt" },
-        fall.file,
-        {
-          env,
-          repoRoot: REPO_ROOT,
-          responseStatus: 403,
-          expectedTask: fall.task,
-          expectedVorgangId: fall.vorgangId,
-        },
-      );
-      terminaleKostenGesperrt &&= [0.0001, null, undefined, Number.NaN].every((kosten) => {
-        try { finalizeProviderCapture(pending, kosten); return false; }
-        catch { return true; }
-      });
-      const finalisiert = finalizeProviderCapture(pending, 0);
-      captures.push(finalisiert);
-      pfade.erfasseProviderCapture(fall.task, finalisiert);
-    }
-    abschluss = pfade.abschluss();
-  } finally {
-    rmdirSync(directory);
-    cleanupOk = !existsSync(directory);
-  }
-  const summary = formatiereAnbieterPfadZusammenfassung(abschluss);
-  pruefe("Alle acht Nulldelta-Pfade laufen seriell genau einmal bis zur roten Gesamtsummary",
-    JSON.stringify(abschluss?.ausgefuehrt) === JSON.stringify(tasks)
-      && abschluss?.attemptedProviderRequests === 8
-      && abschluss?.potentialProviderRequests === 8
-      && abschluss?.provenProviderRequests === 0
-      && abschluss?.provenPaths === 0
-      && abschluss?.ok === false
-      && captures.every(isZeroCostUnprovenCapture));
-  pruefe("Alle acht Nulldelta-Pfade bleiben unproven/pending-no-raw mit offener Qualität",
-    JSON.stringify(abschluss?.unbelegt) === JSON.stringify(tasks)
-      && abschluss?.pfade.every((pfad) => pfad.status === "unproven"
-        && pfad.captureState === "pending-no-raw"
-        && pfad.quality === "open"));
-  pruefe("Jeder gestartete Funktionsversuch zählt trotz Nulldelta im Neuner-Potentialzaun",
-    captures.every((capture) => capture.providerRequests === null
-      && capture.attemptedProviderRequests === 1
-      && capture.potentialProviderRequests === 1
-      && capture.provenProviderRequests === 0)
-      && abschluss?.potentialProviderRequests === 8
-      && abschluss?.maxPotentialRequests === 9);
-  pruefe("Positive oder unbekannte Kosten ohne Raw bleiben für alle acht Pfade terminal",
-    terminaleKostenGesperrt);
-  pruefe("Finale Summary trennt attempted, potential und proven und nennt alle acht Status",
-    summary[0] === "LIVE-ANBIETERREQUESTS: attempted=8 · potential=8/9 · provider-proven=0 · path-proven=0"
-      && tasks.every((task) => summary.some((zeile) =>
-        zeile.includes(`${task}: unproven/pending-no-raw · quality=open`)))
-      && !summary.join("\n").includes("providerRequests=0"));
-  pruefe("Acht-Pfade-Mock schreibt kein Raw, ändert keine Guards und räumt auf",
-    JSON.stringify(env) === envVorher && cleanupOk);
-}
-
-{
-  const tasks = LIVE_CAPTURE_CASES.slice(0, 3).map(({ task }) => task);
-  const pfade = erstelleAnbieterPfadBelege(tasks, { maxPotentialRequests: 9 });
-  const raw = (task) => ({
-    task,
-    captureState: "raw",
-    proofState: "proven",
-    providerRequests: 1,
-    attemptedProviderRequests: 1,
-    potentialProviderRequests: 1,
-    provenProviderRequests: 1,
-  });
-  const unproven = (task) => ({
-    task,
-    captureState: "pending-no-raw",
-    proofState: "unproven",
-    measuredCostUsdCent: 0,
-    providerRequests: null,
-    attemptedProviderRequests: 1,
-    potentialProviderRequests: 1,
-    provenProviderRequests: 0,
-  });
-  pfade.registriere(tasks[0]);
-  pfade.erfasseProviderCapture(tasks[0], raw(tasks[0]));
-  pfade.erfassePfadErgebnis(tasks[0], { ok: true });
-  pfade.registriere(tasks[1]);
-  pfade.erfasseProviderCapture(tasks[1], unproven(tasks[1]));
-  pfade.registriere(tasks[2]);
-  pfade.erfasseProviderCapture(tasks[2], raw(tasks[2]));
-  pfade.erfassePfadErgebnis(tasks[2], { ok: false, reason: "quality-contract-failed" });
-  const abschluss = pfade.abschluss();
-  pruefe("Gemischte Summary trennt proven, unproven und failed",
-    abschluss.provenProviderRequests === 2
-      && abschluss.provenPaths === 1
-      && abschluss.unbelegt.join(",") === "profile-extract"
-      && abschluss.fehlgeschlagen.join(",") === "film-forecast"
-      && abschluss.pfade.map(({ status }) => status).join(",") === "proven,unproven,failed"
-      && abschluss.ok === false);
-
   let potentialzaunGesperrt = false;
   try {
     erstelleAnbieterPfadBelege(
@@ -521,12 +388,14 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     [PROVIDER_RAW_CAPTURE_DIR_ENV]: "/private/tmp/static-provider-capture-preflight",
     [PROVIDER_RAW_CAPTURE_GUARD_ENV]: PROVIDER_RAW_CAPTURE_GUARD_VALUE,
   });
-  pruefe("Runner setzt statisch exakt den festen Diagnoseheader und erwartet das feste Function-Feld",
+  pruefe("Alter Diagnosehelfer bleibt verfuegbar, ist aber keine Belegpflicht des normalen Smoke mehr",
     Object.keys(headers).join(",") === PROVIDER_DIAGNOSTIC_HEADER
       && headers[PROVIDER_DIAGNOSTIC_HEADER] === PROVIDER_DIAGNOSTIC_HEADER_VALUE
       && providerDiagnosticField("raw")[PROVIDER_DIAGNOSTIC_FIELD].rawResponse === "raw"
-      && smokeSource.includes("providerDiagnosticHeaders(process.env)")
-      && smokeSource.includes("captureProviderRawResponse("));
+      && !smokeSource.includes("providerDiagnosticHeaders(process.env)")
+      && !smokeSource.includes("captureProviderRawResponse(")
+      && smokeSource.includes("providerReceiptBelegAusAntwort(")
+      && smokeSource.includes("erfasseProviderReceipt("));
   pruefe("Diagnosezugang braucht gleichzeitig Header, temporäres Serverflag und Ownerrolle",
     providerDiagnosticAccess({
       headerValue: PROVIDER_DIAGNOSTIC_HEADER_VALUE,
@@ -547,11 +416,12 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && functionSources[1].includes("owner: ownerRecoveryConfirmed")
       && functionSources[2].includes('access?.role === "owner"'));
   const runnerSources = `${keychainSource}\n${smokeSource}`;
-  pruefe("Aktueller Runner verwaltet statisch weder Serverflag-Preimage noch Flagrestaurierung",
+  pruefe("Aktueller Runner verwaltet weder Diagnoseflag noch private Rawcapture-Senke",
     !runnerSources.includes(PROVIDER_DIAGNOSTIC_ENV)
       && !/supabase\s+secrets\s+(?:set|unset)/.test(runnerSources)
-      && keychainSource.includes("PROVIDER_RAW_CAPTURE_GUARD_VALUE")
-      && keychainSource.includes("PROVIDER_RAW_CAPTURE_DIR_ENV"));
+      && !keychainSource.includes("createPrivateProviderRawDirectory")
+      && !keychainSource.includes("rawCaptureDirectoryFactory")
+      && !smokeSource.includes(PROVIDER_DIAGNOSTIC_HEADER));
 }
 
 {
@@ -927,8 +797,6 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     },
     spawnImpl,
     ownerApprovedServerBudget: true,
-    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-eight-test",
-    ausgabe: () => {},
   });
   pruefe("Exakte Owner-Variante startet Combined Eight als genau einen Smoke-Kindprozess",
     code === 0
@@ -942,10 +810,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && starts[0].optionen.env[RADAR_TARGET_AUTO_RESOLVE_ENV]
         === RADAR_TARGET_AUTO_RESOLVE_VALUE
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
-      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
-        === "/private/tmp/keychain-runner-eight-test"
-      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_GUARD_ENV]
-        === PROVIDER_RAW_CAPTURE_GUARD_VALUE);
+      && !(PROVIDER_RAW_CAPTURE_DIR_ENV in starts[0].optionen.env)
+      && !(PROVIDER_RAW_CAPTURE_GUARD_ENV in starts[0].optionen.env));
   pruefe("Owner-Combined-Eight mappt ausschließlich Owner auf TestA",
     gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
@@ -1049,8 +915,6 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     spawnImpl,
     ownerApprovedServerBudget: true,
     radarEntdeckenOnce: true,
-    rawCaptureDirectoryFactory: () => "/private/tmp/keychain-runner-combined-test",
-    ausgabe: () => {},
   });
   pruefe("Kombinierter Produkt-Smoke startet genau ein fest verdrahtetes Kind hinter dem Budgetwächter",
     code === 0
@@ -1063,10 +927,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
       && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
-      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_DIR_ENV]
-        === "/private/tmp/keychain-runner-combined-test"
-      && starts[0].optionen.env[PROVIDER_RAW_CAPTURE_GUARD_ENV]
-        === PROVIDER_RAW_CAPTURE_GUARD_VALUE
+      && !(PROVIDER_RAW_CAPTURE_DIR_ENV in starts[0].optionen.env)
+      && !(PROVIDER_RAW_CAPTURE_GUARD_ENV in starts[0].optionen.env)
       && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
       && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
       && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS

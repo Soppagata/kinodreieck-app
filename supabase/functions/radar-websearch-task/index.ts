@@ -410,6 +410,9 @@ export function createRadarWebsearchHandler({
         displayText: result.displayText,
         warnings: result.warnings,
       } : {}),
+      ...(result.providerReceipt
+        ? { providerReceipt: result.providerReceipt }
+        : {}),
       ...(providerDiagnostic.allowed
         ? providerDiagnosticField(providerRawResponse)
         : {}),

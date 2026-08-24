@@ -13,12 +13,16 @@ import {
 import { evaluateRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
 import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
 import { createRadarWebsearchMemoryRepository } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
+import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 import { runRadarWebsearchOnce } from "./tools/radar_websearch_live.mjs";
+import { erstelleAnbieterPfadBelege } from "./tools/ai_smoke_contract.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
   RADAR_TEXT_TARGET_COMMIT,
   RADAR_TEXT_TARGET_FILES,
+  PROVIDER_RECEIPT_RUNTIME_FILES,
+  PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
   RadarRemoteStartStop,
@@ -28,6 +32,7 @@ import {
   createRadarCliWorkspace,
   createRadarRemotePreflightOnce,
   deriveRadarPackageBReleaseClosure,
+  requireProviderReceiptRuntimeProvenance,
   runRadarSupabaseVersionProbe,
   validateRadarSupabaseCliEnvironment,
   validateRadarLedgerBaseline,
@@ -277,12 +282,52 @@ await check("Realer Adapter macht genau einen begrenzten Fetch und der determini
   });
   assert.equal(result.status, "confirmed");
   assert.equal(result.writes, 1);
+  assert.equal(result.feed.events.length, 1);
+  assert.equal(result.feed.events[0].targetId, target.targetId);
+  assert.equal(result.feed.events[0].eventType, "kinostart_at");
   assert.equal(harness.fetchCalls.length, 1);
   assert.equal(harness.reserveCalls.length, 1);
   assert.equal(harness.settleCalls.length, 1);
   assert.equal(harness.settleCalls[0].status, "fertig");
   assert.ok(harness.reserveCalls[0].reservationUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
   assert.ok(harness.settleCalls[0].costUsdCent > RADAR_WEBSEARCH_FEE_USD_CENT);
+  assert.equal(isProviderReceipt(result.providerReceipt), true);
+  assert.equal(result.providerReceipt.provider, "anthropic");
+  assert.equal(result.providerReceipt.model, "claude-haiku-4-5");
+  assert.deepEqual(result.providerReceipt.usage, {
+    inputTokens: 100,
+    outputTokens: 50,
+    webSearchRequests: 1,
+  });
+  assert.equal(result.providerReceipt.resultMode, "structured");
+  assert.equal(result.providerReceipt.server.logId, 71);
+  assert.equal(
+    result.providerReceipt.server.reservationUsdCent,
+    harness.reserveCalls[0].reservationUsdCent,
+  );
+  assert.equal(
+    result.providerReceipt.server.costUsdCent,
+    harness.settleCalls[0].costUsdCent,
+  );
+  assert.doesNotMatch(
+    JSON.stringify(result.providerReceipt),
+    /mock-api-key|news-a\.example|web_search_result|opaque|Fight Club/,
+  );
+  const proof = erstelleAnbieterPfadBelege(["radar-websearch-task"], {
+    maxPotentialRequests: 1,
+    requireProviderReceipt: true,
+  });
+  proof.registriere("radar-websearch-task");
+  proof.erfasseProviderReceipt("radar-websearch-task", {
+    receipt: result.providerReceipt,
+    measuredCostUsdCent: harness.settleCalls[0].costUsdCent,
+    responseCostUsdCent: harness.settleCalls[0].costUsdCent,
+    responseProviderRequests: 1,
+    responseSearchRequests: 1,
+    expectedResultMode: "structured",
+  });
+  proof.erfassePfadErgebnis("radar-websearch-task", { ok: true });
+  assert.equal(proof.abschluss().ok, true);
   assert.equal(
     harness.adapter.takeProviderRawResponse(),
     JSON.stringify(providerMessage()),
@@ -310,7 +355,9 @@ await check("Insufficient und no_change bleiben kleine terminale Antworten ohne 
       providerBody: providerMessage({ status, events: [], resultUrls: [], citationUrls: [] }),
     });
     const envelope = await harness.adapter.search(target);
-    const evaluated = evaluateRadarWebsearchResponse(envelope, target, sources);
+    const { providerReceipt, ...providerEnvelope } = envelope;
+    assert.equal(isProviderReceipt(providerReceipt), true);
+    const evaluated = evaluateRadarWebsearchResponse(providerEnvelope, target, sources);
     assert.equal(evaluated.status, status);
     assert.equal(harness.fetchCalls.length, 1);
     assert.equal(harness.settleCalls[0].status, "fertig");
@@ -464,7 +511,12 @@ await check("Zusätzliche Resultate und fremde Citation werden weich begrenzt, E
   });
   const filtered = await foreign.adapter.search(target);
   assert.equal(filtered.responseMode, "partial");
-  assert.equal(evaluateRadarWebsearchResponse(filtered, target, sources).status, "insufficient_evidence");
+  const { providerReceipt: filteredReceipt, ...filteredEnvelope } = filtered;
+  assert.equal(isProviderReceipt(filteredReceipt), true);
+  assert.equal(
+    evaluateRadarWebsearchResponse(filteredEnvelope, target, sources).status,
+    "insufficient_evidence",
+  );
   assert.equal(foreign.fetchCalls.length, 1);
 });
 
@@ -619,14 +671,27 @@ await check("Ledgervergleich stoppt bei fehlenden, zusaetzlichen oder abweichend
   }
 });
 
-await check("Aktueller Radar-Quellcommit traegt die transitiven Runtime-Dateien ohne Testadapter", () => {
-  const closure = deriveRadarPackageBReleaseClosure();
-  assert.equal(closure.contractCommits.at(-1), RADAR_TEXT_TARGET_COMMIT);
-  assert.equal(closure.paths.includes("supabase/functions/radar-websearch-task/mockAdapter.js"), false);
-  for (const { path: pathname } of RADAR_TEXT_TARGET_FILES) {
-    assert.equal(closure.paths.includes(pathname), true, pathname);
-  }
-  assert.match(closure.sha256, /^[a-f0-9]{64}$/);
+await check("Historischer Radar-Deployzaun blockiert die neue Runtime statt sie still zu akzeptieren", () => {
+  assert.throws(
+    () => deriveRadarPackageBReleaseClosure(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT",
+  );
+  assert.equal(RADAR_TEXT_TARGET_FILES.some(({ path: pathname }) => (
+    pathname.endsWith("providerReceipt.js")
+  )), false);
+});
+
+await check("Neue Receipt-Runtime bindet Radar und Entdecken samt Shared-Helper bytegenau", () => {
+  const closure = requireProviderReceiptRuntimeProvenance();
+  assert.equal(closure.bundleSha256, PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256);
+  assert.deepEqual(closure.files, PROVIDER_RECEIPT_RUNTIME_FILES);
+  assert.equal(closure.files.some(({ path: pathname }) => (
+    pathname.endsWith("providerReceipt.js")
+  )), true);
+  assert.equal(closure.files.some(({ path: pathname }) => (
+    pathname.endsWith("mockAdapter.js")
+  )), false);
 });
 
 await check("Der echte JS-CLI-Startmodus findet Node im engen lokalen Lesepfad", () => {

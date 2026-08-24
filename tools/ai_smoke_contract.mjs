@@ -1,6 +1,9 @@
 /* Reiner Zustandsvertrag fuer die serielle Live-Pfadfolge.
    Keine Netzwerk-, Provider- oder Persistenzwirkung. */
 
+import { normalizeProviderReceipt } from
+  "../supabase/functions/_shared/providerReceipt.js";
+
 const PFAD_STATUS = Object.freeze({
   OFFEN: "not-attempted",
   VERSUCHT: "attempted",
@@ -9,6 +12,16 @@ const PFAD_STATUS = Object.freeze({
   FEHLGESCHLAGEN: "failed",
   BELEGT: "proven",
 });
+
+const WEBSEARCH_PFADE = new Set([
+  "entdecken-daily-task",
+  "radar-websearch-task",
+]);
+const COST_EPSILON_USD_CENT = 0.000001;
+
+function plain(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
 function normalisiereErwartetePfade(erwartetePfade) {
   if (!Array.isArray(erwartetePfade) || erwartetePfade.length < 1
@@ -27,7 +40,7 @@ function normalisiereOptionen(erwartet, optionen) {
   }
   return Object.freeze({
     maxPotentialRequests,
-    requireProviderCapture: optionen?.requireProviderCapture !== false,
+    requireProviderReceipt: optionen?.requireProviderReceipt !== false,
   });
 }
 
@@ -44,30 +57,78 @@ function snapshot(record) {
     potentialProviderRequests: record.potentialProviderRequests,
     providerProof: record.providerProof,
     quality: record.quality,
-    captureState: record.captureState,
+    receiptState: record.receiptState,
     reason: record.reason,
   });
 }
 
-function istProviderBelegt(pfad, capture) {
-  return capture?.task === pfad
-    && capture.captureState === "raw"
-    && capture.proofState === "proven"
-    && capture.providerRequests === 1
-    && capture.attemptedProviderRequests === 1
-    && capture.potentialProviderRequests === 1
-    && capture.provenProviderRequests === 1;
+function finiteNonNegative(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-function istNullkostenUnbelegt(pfad, capture) {
-  return capture?.task === pfad
-    && capture.captureState === "pending-no-raw"
-    && capture.proofState === "unproven"
-    && capture.measuredCostUsdCent === 0
-    && capture.providerRequests === null
-    && capture.attemptedProviderRequests === 1
-    && capture.potentialProviderRequests === 1
-    && capture.provenProviderRequests === 0;
+function exactNumber(a, b) {
+  return typeof a === "number" && typeof b === "number"
+    && Number.isFinite(a) && Number.isFinite(b) && a === b;
+}
+
+function validReceiptProof(proof) {
+  const receipt = normalizeProviderReceipt(proof?.receipt);
+  if (!receipt || !finiteNonNegative(proof?.measuredCostUsdCent)
+      || proof?.responseProviderRequests !== 1
+      || !exactNumber(receipt.server.costUsdCent, proof?.responseCostUsdCent)
+      || receipt.server.costUsdCent <= 0
+      || proof.measuredCostUsdCent + COST_EPSILON_USD_CENT < receipt.server.costUsdCent
+      || receipt.resultMode !== proof?.expectedResultMode) return null;
+  if (proof?.responseSearchRequests === null) {
+    if ("webSearchRequests" in receipt.usage) return null;
+  } else if (!Number.isSafeInteger(proof?.responseSearchRequests)
+      || receipt.usage.webSearchRequests !== proof.responseSearchRequests) {
+    return null;
+  }
+  return receipt;
+}
+
+function zeroCostWithoutReceipt(proof) {
+  return (proof?.receipt === null || proof?.receipt === undefined)
+    && proof?.measuredCostUsdCent === 0
+    && (proof?.responseCostUsdCent === null
+      || proof?.responseCostUsdCent === undefined
+      || proof?.responseCostUsdCent === 0);
+}
+
+/* Baut den Providerbeleg ausschliesslich aus der normalen Produktantwort und
+   der bereits vorgeschriebenen serverseitigen Vor-/Nachmessung. Diagnoseheader,
+   Rawpayload-Dateien und private Antwortfelder sind fuer diesen Vertrag weder
+   noetig noch erlaubt. */
+export function providerReceiptBelegAusAntwort(
+  pfad,
+  antwort,
+  measuredCostUsdCent,
+) {
+  if (typeof pfad !== "string" || !pfad || !plain(antwort)) {
+    return Object.freeze({
+      receipt: null,
+      measuredCostUsdCent,
+      responseCostUsdCent: null,
+      responseProviderRequests: null,
+      responseSearchRequests: null,
+      expectedResultMode: null,
+    });
+  }
+  const receipt = normalizeProviderReceipt(antwort.providerReceipt);
+  const websearch = WEBSEARCH_PFADE.has(pfad);
+  return Object.freeze({
+    receipt,
+    measuredCostUsdCent,
+    responseCostUsdCent: websearch
+      ? (receipt?.server.costUsdCent ?? null)
+      : (antwort.verbrauch?.kostenUsdCent ?? null),
+    responseProviderRequests: websearch
+      ? antwort.providerRequests
+      : (receipt?.server.providerRequests ?? null),
+    responseSearchRequests: websearch ? antwort.searchRequests : null,
+    expectedResultMode: antwort.responseMode ?? null,
+  });
 }
 
 export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
@@ -78,9 +139,9 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
     status: PFAD_STATUS.OFFEN,
     attempted: false,
     potentialProviderRequests: 0,
-    providerProof: vertrag.requireProviderCapture ? "pending" : "not-required",
+    providerProof: vertrag.requireProviderReceipt ? "pending" : "not-required",
     quality: "open",
-    captureState: null,
+    receiptState: null,
     reason: null,
   }]));
   const ausgefuehrt = [];
@@ -111,23 +172,25 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
       ausgefuehrt.push(pfad);
     },
 
-    erfasseProviderCapture(pfad, capture) {
+    erfasseProviderReceipt(pfad, proof) {
       const record = versuchterRecord(pfad);
-      if (istProviderBelegt(pfad, capture)) {
+      if (validReceiptProof(proof)) {
         record.providerProof = "proven";
-        record.captureState = "raw";
+        record.receiptState = "valid";
         record.status = PFAD_STATUS.PROVIDER_BELEGT;
-        return;
+        return snapshot(record);
       }
-      if (istNullkostenUnbelegt(pfad, capture)) {
+      if (zeroCostWithoutReceipt(proof)) {
         record.providerProof = "unproven";
-        record.captureState = "pending-no-raw";
+        record.receiptState = "missing-zero-cost";
         record.status = PFAD_STATUS.UNBELEGT;
         record.quality = "open";
-        record.reason = "missing-private-raw-after-zero-cost";
-        return;
+        record.reason = "missing-provider-receipt-after-zero-cost";
+        return snapshot(record);
       }
-      throw new Error("Provider-Capture ist keinem sicheren Pfadbelegzustand zugeordnet.");
+      throw new Error(
+        "Providerbeleg fehlt oder ist nicht mit Functionkosten, Log und Ergebnisform verbunden.",
+      );
     },
 
     erfassePfadErgebnis(pfad, { ok, reason = null } = {}) {
@@ -135,8 +198,8 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
       if (record.status === PFAD_STATUS.UNBELEGT) {
         throw new Error("Unbelegter Pfad darf fachlich nicht ausgewertet werden.");
       }
-      if (vertrag.requireProviderCapture && record.providerProof !== "proven") {
-        throw new Error("Pfadergebnis darf ohne privaten Providerbeleg nicht bestaetigt werden.");
+      if (vertrag.requireProviderReceipt && record.providerProof !== "proven") {
+        throw new Error("Pfadergebnis darf ohne normalen Providerbeleg nicht bestaetigt werden.");
       }
       record.quality = ok === true ? "proven" : "failed";
       record.status = ok === true ? PFAD_STATUS.BELEGT : PFAD_STATUS.FEHLGESCHLAGEN;
@@ -171,7 +234,7 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
         PFAD_STATUS.FEHLGESCHLAGEN,
       ].includes(pfad.status)).map((pfad) => pfad.pfad);
       const pfadeVollstaendig = attemptedProviderRequests === erwartet.length;
-      const providerBelegeVollstaendig = !vertrag.requireProviderCapture
+      const providerBelegeVollstaendig = !vertrag.requireProviderReceipt
         || provenProviderRequests === erwartet.length;
       return Object.freeze({
         ok: pfadeVollstaendig && provenPaths === erwartet.length,
@@ -205,8 +268,8 @@ export function formatiereAnbieterPfadZusammenfassung(abschluss) {
     "LIVE-PFADSTATUS:",
   ];
   for (const pfad of abschluss.pfade) {
-    const capture = pfad.captureState ? `/${pfad.captureState}` : "";
-    zeilen.push(`  ${pfad.pfad}: ${pfad.status}${capture} · quality=${pfad.quality}`);
+    const receipt = pfad.receiptState ? `/${pfad.receiptState}` : "";
+    zeilen.push(`  ${pfad.pfad}: ${pfad.status}${receipt} · quality=${pfad.quality}`);
   }
   return Object.freeze(zeilen);
 }

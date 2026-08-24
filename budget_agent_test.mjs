@@ -551,12 +551,12 @@ check("Jede belegbare Nutzerszene besitzt genau einen Produktionsparser- und Rea
   && JSON.stringify([...readbackTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
   && /pruefeAiUserTaskReadback/.test(smokeSkript)
   && /persistenz/.test(smokeSkript));
-check("P12 beurteilt Parser und Persistenz nur mit privatem Providerbeleg",
+check("P12 beurteilt Parser und Persistenz nur mit normalem Providerbeleg",
   /const p12ProviderBelegt = istProviderPfadBelegt\("P12 intelligent-search"\)/.test(p12Abschnitt)
   && /const d12 = p12ProviderBelegt \? p12\.daten\?\.data : null;/.test(p12Abschnitt)
   && /if \(p12ProviderBelegt\) \{[\s\S]*pruefeNutzerTaskReadback\("S1 intelligent-search"/.test(p12Abschnitt)
   && /else \{[\s\S]*Produktionsparser, Speicherung und Readback bleiben offen/.test(p12Abschnitt)
-  && /Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt\./.test(p12Abschnitt));
+  && /Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt\./.test(p12Abschnitt));
 check("Rauchprobe enthält genau je einen persönlichen und einen Blog-Profilextraktionspfad",
   (smokeSkript.match(/task: "blog-profile-extract"/g) || []).length === 1
   && (smokeSkript.match(/task: "profile-extract"/g) || []).length === 1

@@ -19,6 +19,7 @@ import {
   validateEntdeckenDailyProviderSetup,
 } from "./supabase/functions/entdecken-daily-task/anthropicAdapter.js";
 import { runEntdeckenDailyRefresh } from "./supabase/functions/entdecken-daily-task/runner.js";
+import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
@@ -218,6 +219,18 @@ await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach
   });
   const result = await adapter.search(queryContext);
   assert.equal(result.queryContext.isoWeek, "2026-W34");
+  assert.equal(isProviderReceipt(result.providerReceipt), true);
+  assert.equal(result.providerReceipt.provider, "anthropic");
+  assert.equal(result.providerReceipt.model, "claude-haiku-4-5");
+  assert.deepEqual(result.providerReceipt.usage, {
+    inputTokens: 120, outputTokens: 240, webSearchRequests: 1,
+  });
+  assert.equal(result.providerReceipt.resultMode, "structured");
+  assert.equal(result.providerReceipt.server.logId, 71);
+  assert.doesNotMatch(
+    JSON.stringify(result.providerReceipt),
+    /mock-key|film\.at|web_search_result|The Ninth Jedi/,
+  );
   await assert.rejects(() => adapter.search(queryContext), /already-used/);
   assert.equal(providerRequests, 1);
   assert.equal(reservations, 1);

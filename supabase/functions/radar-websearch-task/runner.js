@@ -2,6 +2,7 @@ import {
   evaluateRadarWebsearchResponse,
   validateRadarWebsearchRequest,
 } from "./contract.js";
+import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
 function frozenResult(value) { return Object.freeze({ ...value }); }
 function safePresentation(value) {
@@ -76,13 +77,20 @@ export async function runRadarWebsearchCheck({
   } catch {
     return frozenResult({ status: "provider_error", writes: 0, feed: null });
   }
-  const presentation = safePresentation(envelope);
+  const normalizedReceipt = normalizeProviderReceipt(envelope?.providerReceipt);
+  const providerEvidence = normalizedReceipt
+    ? Object.freeze({ providerReceipt: normalizedReceipt })
+    : Object.freeze({});
+  const providerEnvelope = envelope && typeof envelope === "object" && !Array.isArray(envelope)
+    ? Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "providerReceipt"))
+    : envelope;
+  const presentation = safePresentation(providerEnvelope);
 
   let sources = [];
   try {
     const findings = ["person", "title_group", "text"].includes(request.kind)
-      ? envelope?.response?.candidates
-      : envelope?.response?.events;
+      ? providerEnvelope?.response?.candidates
+      : providerEnvelope?.response?.events;
     const domains = [...new Set((findings || []).flatMap((finding) => (
       [
         ...(finding?.evidence || []),
@@ -97,9 +105,10 @@ export async function runRadarWebsearchCheck({
       status: "insufficient_evidence", writes: 0,
       feed: await loadFeedSafely(repository, accountId),
       ...presentation,
+      ...providerEvidence,
     });
   }
-  const evaluated = evaluateRadarWebsearchResponse(envelope, request, sources);
+  const evaluated = evaluateRadarWebsearchResponse(providerEnvelope, request, sources);
   if (request.kind === "person" && evaluated.status !== "confirmed") {
     return frozenResult({
       status: evaluated.status,
@@ -107,6 +116,7 @@ export async function runRadarWebsearchCheck({
       feed: await loadFeedSafely(repository, accountId),
       personResult: evaluated.personResult || null,
       ...presentation,
+      ...providerEvidence,
     });
   }
   if (request.kind === "title_group" && evaluated.status !== "confirmed") {
@@ -115,6 +125,7 @@ export async function runRadarWebsearchCheck({
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
       ...presentation,
+      ...providerEvidence,
     });
   }
   if (request.kind === "text" && evaluated.status !== "confirmed") {
@@ -123,6 +134,7 @@ export async function runRadarWebsearchCheck({
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
       ...presentation,
+      ...providerEvidence,
     });
   }
   if (evaluated.status !== "confirmed") {
@@ -131,6 +143,7 @@ export async function runRadarWebsearchCheck({
       writes: 0,
       feed: await loadFeedSafely(repository, accountId),
       ...presentation,
+      ...providerEvidence,
     });
   }
 
@@ -203,11 +216,17 @@ export async function runRadarWebsearchCheck({
         writes += 1;
         changed = true;
       } else if (upsert?.status !== "no_change") {
-        return frozenResult({ status: "storage_error", writes, feed: null, ...presentation });
+        return frozenResult({
+          status: "storage_error", writes, feed: null,
+          ...presentation, ...providerEvidence,
+        });
       }
     }
   } catch {
-    return frozenResult({ status: "storage_error", writes, feed: null, ...presentation });
+    return frozenResult({
+      status: "storage_error", writes, feed: null,
+      ...presentation, ...providerEvidence,
+    });
   }
   if (request.kind === "person") {
     const personResult = changed
@@ -226,6 +245,7 @@ export async function runRadarWebsearchCheck({
       feed: await loadFeedSafely(repository, accountId),
       personResult,
       ...presentation,
+      ...providerEvidence,
     });
   }
   return frozenResult({
@@ -233,5 +253,6 @@ export async function runRadarWebsearchCheck({
     writes,
     feed: await loadFeedSafely(repository, accountId),
     ...presentation,
+    ...providerEvidence,
   });
 }
