@@ -5,7 +5,9 @@ import {
   normalizeProviderReceipt,
 } from "./supabase/functions/_shared/providerReceipt.js";
 import {
+  ProviderReceiptEvidenceError,
   erstelleAnbieterPfadBelege,
+  istTerminalerAnbieterPfadHttpStatus,
   providerReceiptBelegAusAntwort,
 } from "./tools/ai_smoke_contract.mjs";
 
@@ -31,7 +33,7 @@ const rawResponse = JSON.stringify({
 
 const receiptInput = Object.freeze({
   provider: "anthropic",
-  rawResponse,
+  providerResponseText: rawResponse,
   model: "claude-haiku-4-5",
   inputTokens: 120,
   outputTokens: 80,
@@ -48,7 +50,7 @@ await check("Receipt hasht deterministisch und enthaelt keine reversiblen Provid
   const second = await createProviderReceipt(receiptInput);
   const changed = await createProviderReceipt({
     ...receiptInput,
-    rawResponse: rawResponse.replace("nicht ausgeben", "anderer Inhalt"),
+    providerResponseText: rawResponse.replace("nicht ausgeben", "anderer Inhalt"),
   });
   assert.equal(isProviderReceipt(first), true);
   assert.equal(first.responseSha256, second.responseSha256);
@@ -97,7 +99,7 @@ await check("Harness belegt eine normale Function-Antwort ohne Diagnoseheader od
     requireProviderReceipt: true,
   });
   uncorrelated.registriere("radar-websearch-task");
-  assert.throws(() => uncorrelated.erfasseProviderReceipt(
+  const uncorrelatedStatus = uncorrelated.erfasseProviderReceipt(
     "radar-websearch-task",
     providerReceiptBelegAusAntwort("radar-websearch-task", {
       ok: true,
@@ -106,7 +108,10 @@ await check("Harness belegt eine normale Function-Antwort ohne Diagnoseheader od
       responseMode: "partial",
       providerReceipt: valid,
     }, 0),
-  ), /nicht mit Functionkosten/);
+  );
+  assert.equal(uncorrelatedStatus.status, "failed");
+  assert.equal(uncorrelatedStatus.providerProof, "unproven");
+  assert.equal(uncorrelatedStatus.receiptState, "uncorrelated");
 
   const unproven = erstelleAnbieterPfadBelege(["radar-websearch-task"], {
     maxPotentialRequests: 1,
@@ -124,19 +129,44 @@ await check("Harness belegt eine normale Function-Antwort ohne Diagnoseheader od
   assert.equal(zero.ok, false);
   assert.deepEqual(zero.unbelegt, ["radar-websearch-task"]);
   assert.equal(zero.provenProviderRequests, 0);
+  assert.equal(zero.pfade[0].receiptState, "absent");
 
   const paidMissing = erstelleAnbieterPfadBelege(["radar-websearch-task"], {
     maxPotentialRequests: 1,
     requireProviderReceipt: true,
   });
   paidMissing.registriere("radar-websearch-task");
-  assert.throws(() => paidMissing.erfasseProviderReceipt(
+  const paidMissingStatus = paidMissing.erfasseProviderReceipt(
     "radar-websearch-task",
     providerReceiptBelegAusAntwort("radar-websearch-task", {
       ok: false,
       status: "provider_error",
     }, 0.01),
-  ), /Providerbeleg fehlt/);
+  );
+  assert.equal(paidMissingStatus.status, "failed");
+  assert.equal(paidMissingStatus.providerProof, "unproven");
+  assert.equal(paidMissingStatus.receiptState, "absent");
+  assert.equal(paidMissing.abschluss().potentialProviderRequests, 1);
+
+  const malformed = erstelleAnbieterPfadBelege(["radar-websearch-task"], {
+    maxPotentialRequests: 1,
+    requireProviderReceipt: true,
+  });
+  malformed.registriere("radar-websearch-task");
+  const malformedStatus = malformed.erfasseProviderReceipt(
+    "radar-websearch-task",
+    providerReceiptBelegAusAntwort("radar-websearch-task", {
+      ok: true,
+      providerRequests: 1,
+      searchRequests: 1,
+      responseMode: "partial",
+      providerReceipt: { ...valid, reversiblesZusatzfeld: "nicht erlaubt" },
+    }, 0.01),
+  );
+  assert.equal(malformedStatus.status, "failed");
+  assert.equal(malformedStatus.providerProof, "unproven");
+  assert.equal(malformedStatus.receiptState, "malformed");
+  assert.equal(malformed.abschluss().provenProviderRequests, 0);
 
   const unknownMissing = erstelleAnbieterPfadBelege(["radar-websearch-task"], {
     maxPotentialRequests: 1,
@@ -149,7 +179,87 @@ await check("Harness belegt eine normale Function-Antwort ohne Diagnoseheader od
       ok: false,
       status: "provider_error",
     }, null),
-  ), /Providerbeleg fehlt/);
+  ), (error) => error instanceof ProviderReceiptEvidenceError
+    && error.code === "COST_UNKNOWN"
+    && error.terminalCode === "BUDGET_UNBEKANNT");
+});
+
+await check("Bekannte Receipt-Fehlkosten lassen exakt den naechsten seriellen Pfad einmal zu", async () => {
+  const paths = ["intelligent-search", "media-batch-extract"];
+  const proofs = erstelleAnbieterPfadBelege(paths, {
+    maxPotentialRequests: 2,
+    requireProviderReceipt: true,
+  });
+  proofs.registriere(paths[0]);
+  const failed = proofs.erfasseProviderReceipt(
+    paths[0],
+    providerReceiptBelegAusAntwort(paths[0], {
+      ok: false,
+      responseMode: "degraded",
+      verbrauch: { kostenUsdCent: 0.25 },
+    }, 0.25),
+  );
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.providerProof, "unproven");
+  assert.equal(failed.receiptState, "absent");
+
+  const nextReceipt = await createProviderReceipt({
+    ...receiptInput,
+    providerResponseText: '{"kandidaten":[{"titel":"Alien"}]}',
+    webSearchRequests: null,
+    resultMode: "partial",
+    serverLogId: 72,
+    costUsdCent: 0.42,
+  });
+  proofs.registriere(paths[1]);
+  const next = proofs.erfasseProviderReceipt(
+    paths[1],
+    providerReceiptBelegAusAntwort(paths[1], {
+      ok: true,
+      responseMode: "partial",
+      providerReceipt: nextReceipt,
+      verbrauch: { kostenUsdCent: 0.42 },
+    }, 0.42),
+  );
+  assert.equal(next.providerProof, "proven");
+  proofs.erfassePfadErgebnis(paths[1], { ok: true });
+
+  const complete = proofs.abschluss();
+  assert.deepEqual(complete.ausgefuehrt, paths);
+  assert.equal(complete.attemptedProviderRequests, 2);
+  assert.equal(complete.potentialProviderRequests, 2);
+  assert.equal(complete.provenProviderRequests, 1);
+  assert.equal(complete.provenPaths, 1);
+  assert.deepEqual(complete.fehlgeschlagen, [paths[0]]);
+  assert.deepEqual(complete.offen, []);
+});
+
+await check("Unbekannte Kosten bleiben terminal und lassen den Folgepfad unangetastet", async () => {
+  const paths = ["intelligent-search", "media-batch-extract"];
+  const proofs = erstelleAnbieterPfadBelege(paths, {
+    maxPotentialRequests: 2,
+    requireProviderReceipt: true,
+  });
+  proofs.registriere(paths[0]);
+  assert.throws(() => proofs.erfasseProviderReceipt(
+    paths[0],
+    providerReceiptBelegAusAntwort(paths[0], { ok: false }, Number.NaN),
+  ), (error) => error instanceof ProviderReceiptEvidenceError
+    && error.terminalCode === "BUDGET_UNBEKANNT");
+  const stopped = proofs.abschluss();
+  assert.deepEqual(stopped.ausgefuehrt, [paths[0]]);
+  assert.equal(stopped.attemptedProviderRequests, 1);
+  assert.equal(stopped.potentialProviderRequests, 1);
+  assert.equal(stopped.pfade[1].status, "not-attempted");
+});
+
+await check("Timeout-, Lock-, Owner- und Limitstatus bleiben trotz Receipt-Fortsetzung terminal", async () => {
+  for (const status of [401, 403, 408, 409, 423, 429, 504, 524]) {
+    assert.equal(istTerminalerAnbieterPfadHttpStatus(status), true, String(status));
+  }
+  for (const status of [200, 400, 422, 500, null, "429"]) {
+    assert.equal(istTerminalerAnbieterPfadHttpStatus(status), false, String(status));
+  }
 });
 
 await check("Harness schliesst alle acht normalen Produktpfade seriell mit eigenen Receipts", async () => {
@@ -172,7 +282,7 @@ await check("Harness schliesst alle acht normalen Produktpfade seriell mit eigen
     const costUsdCent = 0.1 + (index / 100);
     const receipt = await createProviderReceipt({
       ...receiptInput,
-      rawResponse: `${rawResponse}\n${path}`,
+      providerResponseText: `${rawResponse}\n${path}`,
       webSearchRequests: webSearch ? 1 : null,
       resultMode: "structured",
       serverLogId: 100 + index,

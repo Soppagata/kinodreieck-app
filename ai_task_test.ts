@@ -64,6 +64,16 @@ const LOG_ID = 42;
 
 const aufrufe: Netzaufruf[] = [];
 
+async function sha256Hex(wert: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(wert),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function antwort(koerper: unknown, status = 200): Response {
   return new Response(koerper === null ? "null" : JSON.stringify(koerper), {
     status,
@@ -4868,9 +4878,20 @@ test("MB4 JSON-Codeblock rettet zwei sichere Medien und weist das kaputte einzel
     warnungen: ["Eine Zeile blieb unlesbar."],
     fremdesWurzelfeld: true,
   };
-  z.anbieter = () => anbieterErfolg(
-    `Kurzer Zusatz.\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\`\nEnde.`,
-  );
+  const konsumierterProvidertext =
+    `Kurzer Zusatz.\n\`\`\`json\n${JSON.stringify(providerJson)}\n\`\`\`\nEnde.`;
+  z.anbieter = () => antwort({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "end_turn",
+    content: [
+      {
+        type: "thinking",
+        thinking: "https://private.example/ nie sichtbare interne Ueberlegung",
+      },
+      { type: "text", text: konsumierterProvidertext },
+    ],
+    usage: { input_tokens: 100, output_tokens: 20 },
+  });
   const r = await ruf({ task: "media-batch-extract", vorgangId: neueVorgangId(), payload: medienPayload(false) });
   gleich(r.status, 200, "sichtbarer Teilerfolg");
   gleich(r.daten.responseMode, "partial", "additiver Teilantwortmodus");
@@ -4881,6 +4902,28 @@ test("MB4 JSON-Codeblock rettet zwei sichere Medien und weist das kaputte einzel
   wahr((r.daten.warnings as string[]).includes("json-extracted-from-text"), "Codeblock wurde erkannt");
   wahr((r.daten.warnings as string[]).includes("extra-fields-ignored"), "Zusatzfelder wurden verworfen");
   wahr((r.daten.warnings as string[]).includes("invalid-items-ignored"), "kaputtes Item wurde einzeln verworfen");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  wahr(isProviderReceipt(receipt), "Teilantwort traegt einen gueltigen normalen Providerbeleg");
+  gleich(receipt.resultMode, "partial", "Receipt bindet die tatsaechliche Teilantwortform");
+  gleich(
+    receipt.responseSha256,
+    await sha256Hex(konsumierterProvidertext),
+    "Receipt bindet exakt den vom Parser konsumierten Providertext",
+  );
+  gleich(
+    (receipt.server as Record<string, unknown>).logId,
+    LOG_ID,
+    "Receipt bindet dieselbe reservierte Logzeile",
+  );
+  gleich(
+    (receipt.server as Record<string, unknown>).costUsdCent,
+    (r.daten.verbrauch as Record<string, unknown>).kostenUsdCent,
+    "Receipt bindet dieselben Functionkosten",
+  );
+  const sichtbarerReceipt = JSON.stringify(receipt);
+  for (const verboten of [
+    "Kurzer Zusatz", "private.example", "thinking", "Alien", KONTO,
+  ]) falsch(sichtbarerReceipt.includes(verboten), `Receipt bleibt frei von ${verboten}`);
   gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
 });
 

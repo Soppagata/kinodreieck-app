@@ -796,7 +796,7 @@ export function createAnthropicRadarWebsearchAdapter({
       try {
         providerReceipt = await createProviderReceipt({
           provider: "anthropic",
-          rawResponse: providerRawForReceipt,
+          providerResponseText: providerRawForReceipt,
           model: usage.model,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,

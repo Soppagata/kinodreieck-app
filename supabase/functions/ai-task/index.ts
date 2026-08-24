@@ -405,7 +405,6 @@ type AnbieterErgebnis = {
   inputTokens: number;
   outputTokens: number;
   stopReason: string;
-  providerRawResponse: string;
 };
 
 async function rufeAnbieter(
@@ -436,7 +435,6 @@ async function rufeAnbieter(
   const stopp = setTimeout(() => uhr.abort(), timeoutMs);
   let antwort: Response;
   let daten: unknown = null;
-  let providerRawResponse = "";
   try {
     antwort = await fetch(ANBIETER_URL, {
       method: "POST",
@@ -453,7 +451,6 @@ async function rufeAnbieter(
        haengendes `json()` unbegrenzt weiterlaufen. */
     try {
       const raw = await antwort.text();
-      providerRawResponse = raw;
       onRawResponse(raw);
       daten = raw ? JSON.parse(raw) : null;
     } catch (e) {
@@ -602,7 +599,6 @@ async function rufeAnbieter(
     inputTokens: inputTokens as number,
     outputTokens: outputTokens as number,
     stopReason,
-    providerRawResponse,
   };
 }
 
@@ -5100,7 +5096,10 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   try {
     providerReceipt = await createProviderReceipt({
       provider: "anthropic",
-      rawResponse: ergebnis.providerRawResponse,
+      /* Gebunden wird exakt der Text, den Parser und Fachpruefung konsumiert
+         haben. Die restliche Providerhuelle kann Thinking, URLs oder andere
+         nicht ausgewertete Metadaten tragen und gehoert nicht in diesen Beleg. */
+      providerResponseText: ergebnis.text,
       model: ergebnis.providerModel,
       inputTokens: ergebnis.inputTokens,
       outputTokens: ergebnis.outputTokens,

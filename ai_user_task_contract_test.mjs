@@ -6,6 +6,7 @@ import {
   pruefeAiUserTaskReadback,
 } from "./tools/ai_user_task_contract.mjs";
 import { erteileEinwilligung, leeresProfil } from "./src/lib/profil.js";
+import { baueStapelUebernahme } from "./src/lib/stapelimport.js";
 
 let checks = 0;
 const check = (name, fn) => {
@@ -202,6 +203,50 @@ check("filmwissen-synthese bindet Task-Version an den providerfreien RPC-Readbac
 });
 check("media-batch-extract erzeugt einen lokalen Übernahmesnapshot", () => {
   assert.equal(ergebnisse.get("media-batch-extract").uebernahme.mediathek[0].titel, "Alien");
+});
+check("normale Media-Teilantwort läuft mit Receipt bis zur selektiven Persistenz und zum Readback", () => {
+  const antwort = huelle("media-batch-extract", {
+    kandidaten: [
+      {
+        id: "stapel-0", index: 0, zustand: "ok",
+        titel: "Alien", typ: "film", jahr: 1979, quelle: "bluray", staffeln: null,
+        vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
+      },
+      {
+        id: "stapel-1", index: 1, zustand: "ok",
+        titel: "Kind of Blue", typ: "musik", jahr: 1959, quelle: "cd", staffeln: null,
+        vorbeurteilung: "offen", begruendung: "", sicherheit: "hoch",
+      },
+    ],
+    warnungen: ["Eine Zeile blieb offen."],
+    fehlmenge: [{
+      id: "stapel-2", index: 2, zustand: "fehlgeschlagen",
+      grund: "Der Titel fehlt oder ist nicht sicher lesbar.",
+    }],
+  }, {
+    responseMode: "partial",
+    displayText: "Die Medienliste war teilweise unvollständig.",
+    warnings: ["invalid-items-ignored"],
+    providerReceipt: { ...PROVIDER_RECEIPT, resultMode: "partial" },
+  });
+  const ausgewertet = pruefeAiUserTaskReadback({
+    task: "media-batch-extract", antwort, kontext: { master: [] },
+  });
+  assert.equal(ausgewertet.gelesen.responseMode, "partial");
+  assert.equal(ausgewertet.gelesen.kandidaten.length, 2);
+  assert.equal(ausgewertet.gelesen.fehlmenge[0].index, 2);
+
+  const kontrollierteAuswahl = ausgewertet.gelesen.kandidaten.map((kandidat) => ({
+    ...kandidat,
+    ausgewaehlt: kandidat.id === "stapel-0",
+  }));
+  const gespeichert = JSON.parse(JSON.stringify(
+    baueStapelUebernahme(kontrollierteAuswahl),
+  ));
+  assert.deepEqual(gespeichert.mediathek.map((eintrag) => eintrag.titel), ["Alien"]);
+  assert.equal(gespeichert.mediathek[0].bewertung, null);
+  assert.equal(gespeichert.mediathek[0].kategorie, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(gespeichert)), gespeichert);
 });
 check("blog-profile-extract liest Profil und Vokabular über Produktionsverträge zurück", () => {
   const gelesen = ergebnisse.get("blog-profile-extract").gelesen;

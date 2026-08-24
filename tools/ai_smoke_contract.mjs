@@ -17,7 +17,22 @@ const WEBSEARCH_PFADE = new Set([
   "entdecken-daily-task",
   "radar-websearch-task",
 ]);
+const TERMINALE_PFAD_HTTP_STATUS = new Set([
+  401, 403, // Sitzung oder Ownerfreigabe
+  408, 504, 524, // explizite Server-/Gateway-Zeitgrenzen
+  409, 423, // Claim- oder Lauf-Lock
+  429, // Budget-/Requestlimit
+]);
 const COST_EPSILON_USD_CENT = 0.000001;
+
+export class ProviderReceiptEvidenceError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ProviderReceiptEvidenceError";
+    this.code = "COST_UNKNOWN";
+    this.terminalCode = "BUDGET_UNBEKANNT";
+  }
+}
 
 function plain(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -71,25 +86,65 @@ function exactNumber(a, b) {
     && Number.isFinite(a) && Number.isFinite(b) && a === b;
 }
 
-function validReceiptProof(proof) {
-  const receipt = normalizeProviderReceipt(proof?.receipt);
-  if (!receipt || !finiteNonNegative(proof?.measuredCostUsdCent)
-      || proof?.responseProviderRequests !== 1
-      || !exactNumber(receipt.server.costUsdCent, proof?.responseCostUsdCent)
-      || receipt.server.costUsdCent <= 0
-      || proof.measuredCostUsdCent + COST_EPSILON_USD_CENT < receipt.server.costUsdCent
-      || receipt.resultMode !== proof?.expectedResultMode) return null;
-  if (proof?.responseSearchRequests === null) {
-    if ("webSearchRequests" in receipt.usage) return null;
-  } else if (!Number.isSafeInteger(proof?.responseSearchRequests)
-      || receipt.usage.webSearchRequests !== proof.responseSearchRequests) {
-    return null;
-  }
-  return receipt;
+export function istTerminalerAnbieterPfadHttpStatus(status) {
+  return Number.isInteger(status) && TERMINALE_PFAD_HTTP_STATUS.has(status);
 }
 
-function zeroCostWithoutReceipt(proof) {
-  return (proof?.receipt === null || proof?.receipt === undefined)
+function uncorrelated(detail) {
+  return Object.freeze({
+    kind: "invalid",
+    receipt: null,
+    receiptState: "uncorrelated",
+    detail,
+  });
+}
+
+function bewerteReceiptProof(proof) {
+  if (!finiteNonNegative(proof?.measuredCostUsdCent)) {
+    return Object.freeze({
+      kind: "unknown-cost",
+      receipt: null,
+      receiptState: "cost-unknown",
+      detail: null,
+    });
+  }
+  const receipt = normalizeProviderReceipt(proof?.receipt);
+  if (!receipt) {
+    return Object.freeze({
+      kind: "invalid",
+      receipt: null,
+      receiptState: proof?.receiptState === "malformed" ? "malformed" : "absent",
+      detail: null,
+    });
+  }
+  if (proof?.responseProviderRequests !== 1) {
+    return uncorrelated("provider-count");
+  }
+  if (!exactNumber(receipt.server.costUsdCent, proof?.responseCostUsdCent)) {
+    return uncorrelated("response-cost");
+  }
+  if (receipt.server.costUsdCent <= 0) {
+    return uncorrelated("receipt-cost-not-positive");
+  }
+  if (proof.measuredCostUsdCent + COST_EPSILON_USD_CENT < receipt.server.costUsdCent) {
+    return uncorrelated("measured-cost");
+  }
+  if (receipt.resultMode !== proof?.expectedResultMode) {
+    return uncorrelated("result-mode");
+  }
+  if (proof?.responseSearchRequests === null) {
+    if ("webSearchRequests" in receipt.usage) {
+      return uncorrelated("search-count");
+    }
+  } else if (!Number.isSafeInteger(proof?.responseSearchRequests)
+      || receipt.usage.webSearchRequests !== proof.responseSearchRequests) {
+    return uncorrelated("search-count");
+  }
+  return Object.freeze({ kind: "valid", receipt, receiptState: "valid", detail: null });
+}
+
+function zeroCostWithoutReceipt(proof, bewertung) {
+  return bewertung?.receiptState === "absent"
     && proof?.measuredCostUsdCent === 0
     && (proof?.responseCostUsdCent === null
       || proof?.responseCostUsdCent === undefined
@@ -108,6 +163,7 @@ export function providerReceiptBelegAusAntwort(
   if (typeof pfad !== "string" || !pfad || !plain(antwort)) {
     return Object.freeze({
       receipt: null,
+      receiptState: "absent",
       measuredCostUsdCent,
       responseCostUsdCent: null,
       responseProviderRequests: null,
@@ -115,10 +171,12 @@ export function providerReceiptBelegAusAntwort(
       expectedResultMode: null,
     });
   }
+  const hatReceipt = Object.prototype.hasOwnProperty.call(antwort, "providerReceipt");
   const receipt = normalizeProviderReceipt(antwort.providerReceipt);
   const websearch = WEBSEARCH_PFADE.has(pfad);
   return Object.freeze({
     receipt,
+    receiptState: hatReceipt ? (receipt ? "valid-shape" : "malformed") : "absent",
     measuredCostUsdCent,
     responseCostUsdCent: websearch
       ? (receipt?.server.costUsdCent ?? null)
@@ -174,23 +232,37 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
 
     erfasseProviderReceipt(pfad, proof) {
       const record = versuchterRecord(pfad);
-      if (validReceiptProof(proof)) {
+      const bewertung = bewerteReceiptProof(proof);
+      if (bewertung.kind === "unknown-cost") {
+        throw new ProviderReceiptEvidenceError(
+          "Serverseitige Requestkosten sind nicht verlaesslich messbar.",
+        );
+      }
+      if (bewertung.kind === "valid") {
         record.providerProof = "proven";
         record.receiptState = "valid";
         record.status = PFAD_STATUS.PROVIDER_BELEGT;
         return snapshot(record);
       }
-      if (zeroCostWithoutReceipt(proof)) {
+      if (zeroCostWithoutReceipt(proof, bewertung)) {
         record.providerProof = "unproven";
-        record.receiptState = "missing-zero-cost";
+        record.receiptState = "absent";
         record.status = PFAD_STATUS.UNBELEGT;
         record.quality = "open";
-        record.reason = "missing-provider-receipt-after-zero-cost";
+        record.reason = "provider-receipt-absent-zero-cost";
         return snapshot(record);
       }
-      throw new Error(
-        "Providerbeleg fehlt oder ist nicht mit Functionkosten, Log und Ergebnisform verbunden.",
-      );
+      /* Ein bekannter serverseitiger Kostenstand bleibt bekannt, auch wenn der
+         Produktbeleg fehlt oder nicht korreliert. Der Pfad ist dann klar rot und
+         niemals PROVEN, aber die serielle Folge darf innerhalb ihrer festen
+         Request-/Kostenzaeune weiterlaufen. */
+      record.providerProof = "unproven";
+      record.receiptState = bewertung.receiptState;
+      record.status = PFAD_STATUS.FEHLGESCHLAGEN;
+      record.quality = "failed";
+      const detail = bewertung.detail ? `-${bewertung.detail}` : "";
+      record.reason = `provider-receipt-${bewertung.receiptState}${detail}-known-cost`;
+      return snapshot(record);
     },
 
     erfassePfadErgebnis(pfad, { ok, reason = null } = {}) {
@@ -269,7 +341,11 @@ export function formatiereAnbieterPfadZusammenfassung(abschluss) {
   ];
   for (const pfad of abschluss.pfade) {
     const receipt = pfad.receiptState ? `/${pfad.receiptState}` : "";
-    zeilen.push(`  ${pfad.pfad}: ${pfad.status}${receipt} · quality=${pfad.quality}`);
+    const reason = pfad.reason ? ` · reason=${pfad.reason}` : "";
+    zeilen.push(
+      `  ${pfad.pfad}: ${pfad.status}${receipt}`
+        + ` · provider=${pfad.providerProof} · quality=${pfad.quality}${reason}`,
+    );
   }
   return Object.freeze(zeilen);
 }
