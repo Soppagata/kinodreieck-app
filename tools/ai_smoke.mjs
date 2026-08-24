@@ -81,6 +81,7 @@ import {
   formatiereAnbieterPfadZusammenfassung,
   istTerminalerAnbieterPfadHttpStatus,
   providerReceiptBelegAusAntwort,
+  schliesseBekanntenAnbieterPfad,
 } from "./ai_smoke_contract.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
@@ -280,15 +281,20 @@ function pruefeNutzerTaskReadback(label, task, antwort, kontext = {}) {
       auswertung.ok === true && !!auswertung.persistenz && !!auswertung.gelesen,
       `Persistenz ${auswertung.persistenz}`,
     );
-    return auswertung;
+    return Object.freeze({ ...auswertung, pfadErgebnis: "PROVEN", reason: null });
   } catch (error) {
     const code = typeof error?.code === "string" ? error.code : "UNBEKANNT";
     pruefe(`${label}: Produktionsparser, Speicherung und Readback sind grün`, false, `Code ${code}`);
-    try { anbieterPfadBelege.erfassePfadFehler(task, `readback-${code}`); } catch { /* Stopp unten bleibt massgeblich. */ }
-    stoppeLiveLauf(new LiveSicherheitsStopp(
-      "unbekannt",
-      `${label}: Parser-/Persistenz-/Readback-Vertrag scheiterte (${code}).`,
-    ));
+    /* Zu diesem Zeitpunkt hat rufAnbieterBewacht bereits Kosten und Receipt
+       klassifiziert. Der fachliche Fehler bleibt sichtbar rot, ist aber kein
+       unbekannter Budgetstand und darf den naechsten seriellen Pfad nicht
+       verhindern. */
+    return Object.freeze({
+      ok: false,
+      pfadErgebnis: "FAIL/UNPROVEN",
+      code,
+      reason: `readback-${code}`,
+    });
   }
 }
 
@@ -488,6 +494,7 @@ try {
 }
 
 const providerBelegNachLabel = new Map();
+const anbieterMessungNachLabel = new Map();
 
 function istProviderPfadBelegt(label) {
   if (!OWNER_CORE_SIX) return true;
@@ -533,13 +540,19 @@ function erfasseNormalenProviderBeleg(label, pfad, antwort, kostenMessung) {
   }
 }
 
-function erfassePfadErgebnis(pfad, ok, reason) {
+function schliesseAnbieterPfad(label, pfad, ok, reason) {
   try {
-    anbieterPfadBelege.erfassePfadErgebnis(pfad, { ok, reason });
+    return schliesseBekanntenAnbieterPfad({
+      belege: anbieterPfadBelege,
+      pfad,
+      ok,
+      reason,
+      requestKostenUsdCent: anbieterMessungNachLabel.get(label)?.requestKostenUsdCent,
+    });
   } catch (error) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
-      error?.message || `${pfad}: Pfadstatus konnte nicht sicher abgeschlossen werden.`,
+      error?.message || `${label}: Pfadstatus konnte nicht sicher abgeschlossen werden.`,
     ));
   }
 }
@@ -559,15 +572,14 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     const kostenRoh = ergebnis.daten?.verbrauch?.kostenUsdCent;
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
-    const providerStatus = erfasseNormalenProviderBeleg(
+    anbieterMessungNachLabel.set(label, kostenMessung);
+    erfasseNormalenProviderBeleg(
       label,
       koerper?.task,
       ergebnis.daten,
       kostenMessung,
     );
-    const providerPfadUnbelegt = providerStatus.providerProof === "unproven";
-    if (istTerminalerAnbieterPfadHttpStatus(ergebnis.status)
-        || (ergebnis.status !== 200 && !providerPfadUnbelegt)) {
+    if (istTerminalerAnbieterPfadHttpStatus(ergebnis.status)) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${ergebnis.status}.`,
@@ -606,15 +618,14 @@ async function rufProduktAnbieterBewacht({
     }
 
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, null);
+    anbieterMessungNachLabel.set(label, kostenMessung);
     if (requestError) {
       throw requestError instanceof LiveSicherheitsStopp
         ? requestError
         : new LiveSicherheitsStopp("unbekannt", `${label} war nicht verlaesslich erreichbar.`);
     }
-    const providerStatus = erfasseNormalenProviderBeleg(label, pfad, daten, kostenMessung);
-    const providerPfadUnbelegt = providerStatus.providerProof === "unproven";
-    if (istTerminalerAnbieterPfadHttpStatus(antwort?.status)
-        || (!antwort?.ok && !providerPfadUnbelegt)) {
+    erfasseNormalenProviderBeleg(label, pfad, daten, kostenMessung);
+    if (istTerminalerAnbieterPfadHttpStatus(antwort?.status)) {
       throw new LiveSicherheitsStopp(
         antwort?.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${antwort?.status ?? "?"}.`,
@@ -690,12 +701,14 @@ pruefe(
     : `HTTP ${p12.status}, Modell ${p12.daten?.modellAlias}, ${p12.daten?.verbrauch?.kostenUsdCent} US-Cent`,
 );
 let p12ReadbackOk = false;
+let p12ReadbackReason = null;
 if (p12ProviderBelegt) {
   const p12Readback = pruefeNutzerTaskReadback("S1 intelligent-search", "intelligent-search", p12.daten, {
     master: [],
     zusatzGenres: SUCH_LISTEN.genres,
   });
   p12ReadbackOk = p12Readback?.ok === true;
+  p12ReadbackReason = p12Readback?.reason ?? null;
 } else {
   pruefe(
     "S1 intelligent-search: Produktionsparser, Speicherung und Readback bleiben offen",
@@ -704,7 +717,12 @@ if (p12ProviderBelegt) {
   );
 }
 if (!p12Unbelegt) {
-  erfassePfadErgebnis("intelligent-search", p12SchemaOk && p12ReadbackOk, "quality-or-readback-failed");
+  schliesseAnbieterPfad(
+    "P12 intelligent-search",
+    "intelligent-search",
+    p12SchemaOk && p12ReadbackOk,
+    p12ReadbackReason ?? "quality-contract-failed",
+  );
 }
 
 /* ===========================================================================
@@ -750,11 +768,13 @@ pruefe(
     : `HTTP ${p14.status}: ${JSON.stringify(p14.daten)?.slice(0, 300)}`,
 );
 let p14ReadbackOk = false;
+let p14ReadbackReason = null;
 if (p14ProviderBelegt) {
   const p14Readback = pruefeNutzerTaskReadback("S2 profile-extract", "profile-extract", p14.daten, {
     jetzt: READBACK_ZEIT,
   });
   p14ReadbackOk = p14Readback?.ok === true;
+  p14ReadbackReason = p14Readback?.reason ?? null;
 } else {
   pruefe(
     "S2 profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
@@ -763,7 +783,12 @@ if (p14ProviderBelegt) {
   );
 }
 if (!p14Unbelegt) {
-  erfassePfadErgebnis("profile-extract", p14SchemaOk && p14ReadbackOk, "quality-or-readback-failed");
+  schliesseAnbieterPfad(
+    "P14 profile-extract",
+    "profile-extract",
+    p14SchemaOk && p14ReadbackOk,
+    p14ReadbackReason ?? "quality-contract-failed",
+  );
 }
 
 /* ===========================================================================
@@ -836,6 +861,7 @@ pruefe(
     : `HTTP ${p17.status}: ${JSON.stringify(p17.daten)?.slice(0, 300)}`,
 );
 let p17ReadbackOk = false;
+let p17ReadbackReason = null;
 if (p17ProviderBelegt) {
   const p17Readback = pruefeNutzerTaskReadback("S3 film-forecast", "film-forecast", p17.daten, {
     profilVersion: "p-test",
@@ -843,6 +869,7 @@ if (p17ProviderBelegt) {
     jetzt: READBACK_ZEIT,
   });
   p17ReadbackOk = p17Readback?.ok === true;
+  p17ReadbackReason = p17Readback?.reason ?? null;
 } else {
   pruefe(
     "S3 film-forecast: Produktionsparser, Speicherung und Readback bleiben offen",
@@ -851,7 +878,12 @@ if (p17ProviderBelegt) {
   );
 }
 if (!p17Unbelegt) {
-  erfassePfadErgebnis("film-forecast", p17SchemaOk && p17ReadbackOk, "quality-or-readback-failed");
+  schliesseAnbieterPfad(
+    "P17 film-forecast",
+    "film-forecast",
+    p17SchemaOk && p17ReadbackOk,
+    p17ReadbackReason ?? "quality-contract-failed",
+  );
 }
 
 /* ===========================================================================
@@ -920,6 +952,7 @@ const p20 = (p18Erfolg || p18CacheReadback)
   : null;
 let p18ReadbackOk = false;
 let p18RpcOk = false;
+let p18ReadbackReason = null;
 if (p18Unbelegt) {
   pruefe(
     "S4 filmwissen-synthese: Parser, Persistenz, Readback und Qualität bleiben offen",
@@ -942,10 +975,12 @@ if (p18Unbelegt) {
     rpcReadback: p20?.daten,
   });
   p18ReadbackOk = p18Readback?.ok === true;
-  erfassePfadErgebnis(
+  p18ReadbackReason = p18Readback?.reason ?? null;
+  schliesseAnbieterPfad(
+    "P18 filmwissen-synthese",
     "filmwissen-synthese",
     p18Erfolg && p18RpcOk && p18ReadbackOk,
-    "quality-or-readback-failed",
+    p18ReadbackReason ?? "quality-contract-failed",
   );
 }
 
@@ -983,10 +1018,9 @@ const d22 = p22ProviderBelegt ? p22.daten?.data : null;
 const p22SchemaOk = p22ProviderBelegt && p22.status === 200 && p22.daten?.ok === true
   && Array.isArray(d22?.geschmackszuege)
   && Array.isArray(d22?.vokabular)
-  && (d22.geschmackszuege.length > 0 || d22.vokabular.length > 0)
   && p22.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
-  "Synthetische Ein-Artikel-Profilextraktion bleibt ein bezahlter Pfad mit belegten Ergebnissen",
+  "Synthetische Ein-Artikel-Profilextraktion bleibt ein bezahlter Pfad mit wohldefiniertem Ergebnis",
   p22SchemaOk,
   p22Unbelegt
     ? providerPfadUnbelegtHinweis("P22 blog-profile-extract")
@@ -995,6 +1029,7 @@ pruefe(
     : `HTTP ${p22.status}: ${JSON.stringify(p22.daten)?.slice(0, 300)}`,
 );
 let p22ReadbackOk = false;
+let p22ReadbackReason = null;
 if (p22ProviderBelegt) {
   const p22Readback = pruefeNutzerTaskReadback("S5 blog-profile-extract", "blog-profile-extract", p22.daten, {
     artikelPayload: {
@@ -1012,6 +1047,7 @@ if (p22ProviderBelegt) {
     },
   });
   p22ReadbackOk = p22Readback?.ok === true;
+  p22ReadbackReason = p22Readback?.reason ?? null;
 } else {
   pruefe(
     "S5 blog-profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
@@ -1020,7 +1056,12 @@ if (p22ProviderBelegt) {
   );
 }
 if (!p22Unbelegt) {
-  erfassePfadErgebnis("blog-profile-extract", p22SchemaOk && p22ReadbackOk, "quality-or-readback-failed");
+  schliesseAnbieterPfad(
+    "P22 blog-profile-extract",
+    "blog-profile-extract",
+    p22SchemaOk && p22ReadbackOk,
+    p22ReadbackReason ?? "quality-contract-failed",
+  );
 }
 
 /* ===========================================================================
@@ -1070,11 +1111,13 @@ pruefe(
     : `HTTP ${p23.status}: ${JSON.stringify(p23.daten)?.slice(0, 300)}`,
 );
 let p23ReadbackOk = false;
+let p23ReadbackReason = null;
 if (p23ProviderBelegt) {
   const p23Readback = pruefeNutzerTaskReadback("S6 media-batch-extract", "media-batch-extract", p23.daten, {
     master: [],
   });
   p23ReadbackOk = p23Readback?.ok === true;
+  p23ReadbackReason = p23Readback?.reason ?? null;
 } else {
   pruefe(
     "S6 media-batch-extract: Produktionsparser, Speicherung und Readback bleiben offen",
@@ -1083,7 +1126,12 @@ if (p23ProviderBelegt) {
   );
 }
 if (!p23Unbelegt) {
-  erfassePfadErgebnis("media-batch-extract", p23SchemaOk && p23ReadbackOk, "quality-or-readback-failed");
+  schliesseAnbieterPfad(
+    "P23 media-batch-extract text-only",
+    "media-batch-extract",
+    p23SchemaOk && p23ReadbackOk,
+    p23ReadbackReason ?? "quality-contract-failed",
+  );
 }
 
 /* ===========================================================================
@@ -1125,15 +1173,13 @@ if (OWNER_COMBINED_EIGHT) {
       ? providerPfadUnbelegtHinweis("P24 entdecken-daily-task")
       : `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
   );
-  if (!entdeckenOk && !p24Unbelegt) {
-    try { anbieterPfadBelege.erfassePfadFehler("entdecken-daily-task", "quality-contract-failed"); } catch { /* Stopp unten. */ }
-    stoppeLiveLauf(new LiveSicherheitsStopp(
-      "unbekannt",
-      "Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite.",
-    ));
-  }
   if (!p24Unbelegt) {
-    erfassePfadErgebnis("entdecken-daily-task", entdeckenOk, "quality-contract-failed");
+    schliesseAnbieterPfad(
+      "P24 entdecken-daily-task",
+      "entdecken-daily-task",
+      entdeckenOk,
+      "quality-contract-failed",
+    );
   }
 
   /* ===========================================================================
@@ -1168,15 +1214,13 @@ if (OWNER_COMBINED_EIGHT) {
       ? providerPfadUnbelegtHinweis("P25 radar-websearch-task")
       : `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
   );
-  if (!radarOk && !p25Unbelegt) {
-    try { anbieterPfadBelege.erfassePfadFehler("radar-websearch-task", "quality-contract-failed"); } catch { /* Stopp unten. */ }
-    stoppeLiveLauf(new LiveSicherheitsStopp(
-      "unbekannt",
-      "Radar-Websearch endete ohne bestaetigten Einzelwrite.",
-    ));
-  }
   if (!p25Unbelegt) {
-    erfassePfadErgebnis("radar-websearch-task", radarOk, "quality-contract-failed");
+    schliesseAnbieterPfad(
+      "P25 radar-websearch-task",
+      "radar-websearch-task",
+      radarOk,
+      "quality-contract-failed",
+    );
   }
 }
 

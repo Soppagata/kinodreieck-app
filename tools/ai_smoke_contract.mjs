@@ -71,6 +71,8 @@ function snapshot(record) {
     attempted: record.attempted,
     potentialProviderRequests: record.potentialProviderRequests,
     providerProof: record.providerProof,
+    costState: record.costState,
+    requestKostenUsdCent: record.requestKostenUsdCent,
     quality: record.quality,
     receiptState: record.receiptState,
     reason: record.reason,
@@ -88,6 +90,38 @@ function exactNumber(a, b) {
 
 export function istTerminalerAnbieterPfadHttpStatus(status) {
   return Number.isInteger(status) && TERMINALE_PFAD_HTTP_STATUS.has(status);
+}
+
+export function schliesseBekanntenAnbieterPfad({
+  belege,
+  pfad,
+  ok,
+  reason = null,
+  requestKostenUsdCent,
+} = {}) {
+  /* Fachliche Fehler duerfen erst NACH der serverseitigen Nachmessung als
+     nichtterminal klassifiziert werden. Ohne einen endlichen, nichtnegativen
+     Request-Delta bleibt der Kostenstand unbekannt und damit terminal. */
+  if (!finiteNonNegative(requestKostenUsdCent)) {
+    throw new ProviderReceiptEvidenceError(
+      "Serverseitige Requestkosten sind vor dem Pfadabschluss nicht verlaesslich messbar.",
+    );
+  }
+  if (!belege || typeof belege.erfasseKostenmessung !== "function"
+      || typeof belege.erfassePfadErgebnis !== "function"
+      || typeof belege.erfassePfadFehler !== "function") {
+    throw new Error("Anbieterpfadbelege fehlen beim Pfadabschluss.");
+  }
+  belege.erfasseKostenmessung(pfad, requestKostenUsdCent);
+  if (ok === true) {
+    const status = belege.erfassePfadErgebnis(pfad, { ok: true });
+    return Object.freeze({ ergebnis: "PROVEN", ...status });
+  }
+  const status = belege.erfassePfadFehler(
+    pfad,
+    kurzeUrsache(reason, "quality-contract-failed"),
+  );
+  return Object.freeze({ ergebnis: "FAIL/UNPROVEN", ...status });
 }
 
 function uncorrelated(detail) {
@@ -198,6 +232,8 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
     attempted: false,
     potentialProviderRequests: 0,
     providerProof: vertrag.requireProviderReceipt ? "pending" : "not-required",
+    costState: "pending",
+    requestKostenUsdCent: null,
     quality: "open",
     receiptState: null,
     reason: null,
@@ -238,6 +274,8 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
           "Serverseitige Requestkosten sind nicht verlaesslich messbar.",
         );
       }
+      record.costState = "known";
+      record.requestKostenUsdCent = proof.measuredCostUsdCent;
       if (bewertung.kind === "valid") {
         record.providerProof = "proven";
         record.receiptState = "valid";
@@ -265,6 +303,24 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
       return snapshot(record);
     },
 
+    erfasseKostenmessung(pfad, requestKostenUsdCent) {
+      const record = versuchterRecord(pfad);
+      if (!finiteNonNegative(requestKostenUsdCent)) {
+        throw new ProviderReceiptEvidenceError(
+          "Serverseitige Requestkosten sind nicht verlaesslich messbar.",
+        );
+      }
+      if (record.costState === "known"
+          && !exactNumber(record.requestKostenUsdCent, requestKostenUsdCent)) {
+        throw new ProviderReceiptEvidenceError(
+          "Serverseitige Requestkosten driften innerhalb desselben Pfads.",
+        );
+      }
+      record.costState = "known";
+      record.requestKostenUsdCent = requestKostenUsdCent;
+      return snapshot(record);
+    },
+
     erfassePfadErgebnis(pfad, { ok, reason = null } = {}) {
       const record = versuchterRecord(pfad);
       if (record.status === PFAD_STATUS.UNBELEGT) {
@@ -276,13 +332,20 @@ export function erstelleAnbieterPfadBelege(erwartetePfade, optionen = {}) {
       record.quality = ok === true ? "proven" : "failed";
       record.status = ok === true ? PFAD_STATUS.BELEGT : PFAD_STATUS.FEHLGESCHLAGEN;
       record.reason = ok === true ? null : kurzeUrsache(reason, "quality-contract-failed");
+      return snapshot(record);
     },
 
     erfassePfadFehler(pfad, reason = null) {
       const record = versuchterRecord(pfad);
+      if (record.costState !== "known") {
+        throw new ProviderReceiptEvidenceError(
+          "Pfadfehler darf nicht vor sicherer Kostenmessung abgeschlossen werden.",
+        );
+      }
       record.status = PFAD_STATUS.FEHLGESCHLAGEN;
       record.quality = "failed";
       record.reason = kurzeUrsache(reason, "live-path-failed");
+      return snapshot(record);
     },
 
     abschluss() {

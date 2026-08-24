@@ -612,6 +612,20 @@ check(!strict.container.querySelector(".kd-blogprofilanalyse-vorschau")
 "formfremdes response.data wird trotz brauchbarer oberer Hülle strikt verworfen");
 await strict.cleanup();
 
+/* Ein belegtes Nullergebnis bleibt ein vollständiges data-Objekt und erreicht
+   den App-Consumer; es wird nicht mit fehlenden oder malformed Daten verwechselt. */
+const leer = await mounte(standardProps({
+  aiObj: aiMock({ analyse: () => ({ data: { geschmackszuege: [], vokabular: [] } }) }),
+}));
+await bestaetigeUndKlicke(leer);
+await warten();
+check(!!leer.container.querySelector(".kd-blogprofilanalyse-vorschau")
+  && leer.container.querySelectorAll(".kd-blogprofilanalyse-vorschau fieldset").length === 0
+  && !!knopf(leer.container, "Geschmacksprofil speichern")
+  && !!knopf(leer.container, "Vokabular speichern"),
+"explizit leeres data-Objekt erreicht den App-Consumer als wohldefinierte leere Vorschau");
+await leer.cleanup();
+
 /* Konflikte sperren nur ihre Gruppe bis zum Edit; Dedupe bleibt sichtbar. */
 const konfliktProfil = profilBasis();
 konfliktProfil.signale.push({

@@ -9028,6 +9028,24 @@ test("BP4 Provider-Schema und Erfolgspfad sind strikt und provenienzfrei", async
   falsch(/(?:hash|herkunft|provenienz)/i.test(JSON.stringify(r.daten.data)), "keine Modellprovenienz");
 });
 
+test("BP4a ausdrueckliches 0/0 bleibt durch ai-task ein strukturiertes leeres data-Objekt", async () => {
+  stelleZurueck();
+  bpMitAntwort({ geschmackszuege: [], vokabular: [] });
+  const r = await bpRuf();
+  gleich(r.status, 200, "Status");
+  gleich(r.daten.ok, true, "Erfolgshuelle");
+  gleich(r.daten.responseMode, "structured", "kein degradierter Ersatz");
+  const data = r.daten.data as {
+    geschmackszuege: unknown[];
+    vokabular: unknown[];
+  };
+  gleich(Array.isArray(data.geschmackszuege), true, "Geschmackszuege bleiben Liste");
+  gleich(Array.isArray(data.vokabular), true, "Vokabular bleibt Liste");
+  gleich(data.geschmackszuege.length, 0, "keine erfundenen Geschmackszuege");
+  gleich(data.vokabular.length, 0, "kein erfundenes Vokabular");
+  wahr(!!r.daten.providerReceipt, "normaler Providerbeleg bleibt erhalten");
+});
+
 test("BP5 Outputgrenzen retten gueltige Einzelitems und verwerfen nur kaputte", () => {
   const eingabe = leseBlogProfileEingabe(bpPayload());
   const tolerant = pruefeBlogProfileErgebnis({

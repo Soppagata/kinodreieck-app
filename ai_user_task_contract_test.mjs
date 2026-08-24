@@ -253,6 +253,17 @@ check("blog-profile-extract liest Profil und Vokabular über Produktionsverträg
   assert.equal(gelesen.profil.signale.at(-1).wert, "präzise");
   assert.equal(gelesen.vokabular.at(-1).wort, "Nachtkino");
 });
+check("blog-profile-extract liest ein legitimes 0/0-Ergebnis als leeres strukturiertes data bis zum Readback", () => {
+  const leer = pruefeAiUserTaskReadback({
+    task: "blog-profile-extract",
+    antwort: huelle("blog-profile-extract", { geschmackszuege: [], vokabular: [] }),
+    kontext: { artikelPayload, profil, vokabular: [], vorschaukopf },
+  });
+  assert.equal(leer.ok, true);
+  assert.equal(leer.persistenz, "lokales-json");
+  assert.equal(leer.gelesen.profil.signale.length, profil.signale.length);
+  assert.deepEqual(leer.gelesen.vokabular, []);
+});
 
 scheitert("unbekannte Nutzeraufgabe wird geschlossen abgelehnt", "TASK_UNBEKANNT", () =>
   pruefeAiUserTaskReadback({ task: "health", antwort: huelle("health", {}) }));
@@ -329,6 +340,25 @@ scheitert("Blogbeleg außerhalb des Artikels scheitert am Produktionsparser", "P
     kontext: { artikelPayload, profil, vokabular: [], vorschaukopf },
   });
 });
+scheitert("fehlendes Blog-data bleibt eine formfremde Erfolgshülle", "ERFOLGSHUELLE_FORM", () => {
+  const antwort = clone(blogAntwort);
+  delete antwort.data;
+  pruefeAiUserTaskReadback({
+    task: "blog-profile-extract", antwort,
+    kontext: { artikelPayload, profil, vokabular: [], vorschaukopf },
+  });
+});
+scheitert("null statt Blog-data bleibt DATA_FORM", "DATA_FORM", () =>
+  pruefeAiUserTaskReadback({
+    task: "blog-profile-extract", antwort: { ...blogAntwort, data: null },
+    kontext: { artikelPayload, profil, vokabular: [], vorschaukopf },
+  }));
+scheitert("unvollständiges Blog-data bleibt ein Produktionsparserfehler", "PRODUKTIONSPARSER", () =>
+  pruefeAiUserTaskReadback({
+    task: "blog-profile-extract",
+    antwort: { ...blogAntwort, data: { geschmackszuege: [] } },
+    kontext: { artikelPayload, profil, vokabular: [], vorschaukopf },
+  }));
 
 const cacheHitOhneVerbrauch = {
   ok: true,

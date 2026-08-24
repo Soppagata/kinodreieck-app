@@ -452,6 +452,14 @@ const p22AbschnittsEnde = p22Start >= 0
 const p22Abschnitt = p22Start >= 0 && p22AbschnittsEnde > p22Start
   ? smokeSkript.slice(p22Start, p22AbschnittsEnde)
   : "";
+const readbackFehlerAbschnitt = smokeSkript.slice(
+  smokeSkript.indexOf("function pruefeNutzerTaskReadback"),
+  smokeSkript.indexOf("// Capabilities werden nur einmal"),
+);
+const p24P25Abschnitt = smokeSkript.slice(
+  smokeSkript.indexOf("S7: Entdecken-Tagesfeed"),
+  smokeSkript.indexOf("bestaetigeExakteAnbieterPfadfolge();"),
+);
 check("Migration erzwingt den 500-Cent-Zaun atomar vor der Anbieter-RPC",
   /anbieter_request_max_usd_cent/.test(kostenMigration)
   && /::numeric > 500/.test(kostenMigration)
@@ -551,6 +559,16 @@ check("Jede belegbare Nutzerszene besitzt genau einen Produktionsparser- und Rea
   && JSON.stringify([...readbackTasks].sort()) === JSON.stringify([...NUTZER_TASKS_SOLL].sort())
   && /pruefeAiUserTaskReadback/.test(smokeSkript)
   && /persistenz/.test(smokeSkript));
+check("Bekannte Produkt- und Readbackfehler werden zentral rot abgeschlossen statt als Budget unbekannt zu stoppen",
+  /pfadErgebnis:\s*"FAIL\/UNPROVEN"/.test(readbackFehlerAbschnitt)
+  && !/stoppeLiveLauf\(/.test(readbackFehlerAbschnitt)
+  && (smokeSkript.match(/schliesseAnbieterPfad\(/g) || []).length === 9
+  && (smokeSkript.match(/anbieterMessungNachLabel\.set\(/g) || []).length === 2
+  && !/stoppeLiveLauf\(/.test(p24P25Abschnitt)
+  && !/ergebnis\.status !== 200|!antwort\?\.ok/.test(smokeSkript.slice(
+    smokeSkript.indexOf("async function rufAnbieterBewacht"),
+    smokeSkript.indexOf("/* --- P9:"),
+  )));
 check("P12 beurteilt Parser und Persistenz nur mit normalem Providerbeleg",
   /const p12ProviderBelegt = istProviderPfadBelegt\("P12 intelligent-search"\)/.test(p12Abschnitt)
   && /const d12 = p12ProviderBelegt \? p12\.daten\?\.data : null;/.test(p12Abschnitt)

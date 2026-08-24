@@ -9,7 +9,16 @@ import {
   erstelleAnbieterPfadBelege,
   istTerminalerAnbieterPfadHttpStatus,
   providerReceiptBelegAusAntwort,
+  schliesseBekanntenAnbieterPfad,
 } from "./tools/ai_smoke_contract.mjs";
+import {
+  AiUserTaskContractError,
+  pruefeAiUserTaskReadback,
+} from "./tools/ai_user_task_contract.mjs";
+import {
+  AUTONOMIE_STOPP_EXIT,
+  LiveSicherheitsStopp,
+} from "./tools/ai_budget_guard.mjs";
 
 let checks = 0;
 async function check(name, fn) {
@@ -234,6 +243,94 @@ await check("Bekannte Receipt-Fehlkosten lassen exakt den naechsten seriellen Pf
   assert.deepEqual(complete.offen, []);
 });
 
+await check("Bekannte Kosten plus gueltiger Receipt machen DATA_FORM rot und starten den Folgepfad genau einmal", async () => {
+  const paths = ["blog-profile-extract", "media-batch-extract"];
+  const proofs = erstelleAnbieterPfadBelege(paths, {
+    maxPotentialRequests: 2,
+    requireProviderReceipt: true,
+  });
+  const blogReceipt = await createProviderReceipt({
+    ...receiptInput,
+    webSearchRequests: null,
+    resultMode: "partial",
+  });
+  const blogAntwort = {
+    ok: true,
+    task: paths[0],
+    vorgangId: "11111111-2222-4333-8444-555555555555",
+    modellAlias: "klein",
+    modell: "claude-haiku-4-5",
+    data: null,
+    responseMode: "partial",
+    displayText: "Keine sicher belegten Vorschlaege.",
+    warnings: ["no-safe-structure"],
+    providerReceipt: blogReceipt,
+    verbrauch: {
+      inputTokens: 120,
+      outputTokens: 80,
+      kostenUsdCent: 1.052,
+      dauerMs: 150,
+      stopReason: "end_turn",
+    },
+  };
+
+  proofs.registriere(paths[0]);
+  const provider = proofs.erfasseProviderReceipt(
+    paths[0],
+    providerReceiptBelegAusAntwort(paths[0], blogAntwort, 1.052),
+  );
+  assert.equal(provider.providerProof, "proven");
+  let readbackCode = null;
+  try {
+    pruefeAiUserTaskReadback({ task: paths[0], antwort: blogAntwort });
+  } catch (error) {
+    assert.equal(error instanceof AiUserTaskContractError, true);
+    readbackCode = error.code;
+  }
+  assert.equal(readbackCode, "DATA_FORM");
+  const failed = schliesseBekanntenAnbieterPfad({
+    belege: proofs,
+    pfad: paths[0],
+    ok: false,
+    reason: `readback-${readbackCode}`,
+    requestKostenUsdCent: 1.052,
+  });
+  assert.equal(failed.ergebnis, "FAIL/UNPROVEN");
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.providerProof, "proven");
+  assert.equal(failed.reason, "readback-DATA_FORM");
+
+  const nextReceipt = await createProviderReceipt({
+    ...receiptInput,
+    providerResponseText: '{"kandidaten":[{"titel":"Alien"}]}',
+    webSearchRequests: null,
+    resultMode: "structured",
+    serverLogId: 72,
+    costUsdCent: 0.42,
+  });
+  proofs.registriere(paths[1]);
+  proofs.erfasseProviderReceipt(
+    paths[1],
+    providerReceiptBelegAusAntwort(paths[1], {
+      ok: true,
+      responseMode: "structured",
+      providerReceipt: nextReceipt,
+      verbrauch: { kostenUsdCent: 0.42 },
+    }, 0.42),
+  );
+  schliesseBekanntenAnbieterPfad({
+    belege: proofs,
+    pfad: paths[1],
+    ok: true,
+    requestKostenUsdCent: 0.42,
+  });
+  const complete = proofs.abschluss();
+  assert.deepEqual(complete.ausgefuehrt, paths);
+  assert.equal(complete.attemptedProviderRequests, 2);
+  assert.deepEqual(complete.fehlgeschlagen, [paths[0]]);
+  assert.deepEqual(complete.offen, []);
+});
+
 await check("Unbekannte Kosten bleiben terminal und lassen den Folgepfad unangetastet", async () => {
   const paths = ["intelligent-search", "media-batch-extract"];
   const proofs = erstelleAnbieterPfadBelege(paths, {
@@ -251,6 +348,29 @@ await check("Unbekannte Kosten bleiben terminal und lassen den Folgepfad unanget
   assert.equal(stopped.attemptedProviderRequests, 1);
   assert.equal(stopped.potentialProviderRequests, 1);
   assert.equal(stopped.pfade[1].status, "not-attempted");
+});
+
+await check("Unbekannter Pfadabschluss und Exit75 bleiben terminal", async () => {
+  const paths = ["blog-profile-extract", "media-batch-extract"];
+  const proofs = erstelleAnbieterPfadBelege(paths, {
+    maxPotentialRequests: 2,
+    requireProviderReceipt: true,
+  });
+  proofs.registriere(paths[0]);
+  assert.throws(() => schliesseBekanntenAnbieterPfad({
+    belege: proofs,
+    pfad: paths[0],
+    ok: false,
+    reason: "readback-DATA_FORM",
+    requestKostenUsdCent: Number.NaN,
+  }), (error) => error instanceof ProviderReceiptEvidenceError
+    && error.terminalCode === "BUDGET_UNBEKANNT");
+  assert.deepEqual(proofs.abschluss().ausgefuehrt, [paths[0]]);
+  assert.equal(proofs.abschluss().pfade[1].status, "not-attempted");
+
+  const exit75 = new LiveSicherheitsStopp("limit", "Testlimit erreicht");
+  assert.equal(exit75.exitCode, AUTONOMIE_STOPP_EXIT);
+  assert.equal(exit75.exitCode, 75);
 });
 
 await check("Timeout-, Lock-, Owner- und Limitstatus bleiben trotz Receipt-Fortsetzung terminal", async () => {
