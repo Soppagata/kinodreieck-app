@@ -5,9 +5,13 @@ on:
     - cron: "17 6 */3 * *"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Anon-Read gegen kd_store
         env:
@@ -20,3 +24,71 @@ jobs:
           curl -fsS "${SUPABASE_URL}/rest/v1/kd_store?scope=eq.demo&select=key&limit=1" \
             -H "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
             && echo "keep-alive ok"
+
+  entdecken-weekly-trigger:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Entdecken-Wochenfeed planmaessig anstossen
+        if: ${{ github.event_name == 'schedule' }}
+        timeout-minutes: 3
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY nicht gesetzt."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          response_meta="$(
+            curl --silent --show-error \
+              --request GET \
+              --connect-timeout 10 \
+              --max-time 150 \
+              --output "$response_file" \
+              --write-out "%{http_code} %{content_type}" \
+              "${SUPABASE_URL%/}/functions/v1/entdecken-daily-task" \
+              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}"
+          )"
+
+          http_status="${response_meta%% *}"
+          content_type="${response_meta#* }"
+          if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
+            echo "::error::Entdecken-Wochenfeed antwortete nicht mit HTTP 200 JSON (HTTP ${http_status})."
+            exit 1
+          fi
+
+          if ! outcome="$(node -e '
+            const { readFileSync } = require("node:fs");
+            let body;
+            try { body = JSON.parse(readFileSync(process.argv[1], "utf8")); }
+            catch { process.exit(2); }
+            const statuses = new Set(["fresh", "stale", "empty"]);
+            const modes = new Set(["structured", "partial", "degraded"]);
+            if (!body || body.ok !== true || !statuses.has(body.status)
+                || !modes.has(body.responseMode)
+                || !Number.isInteger(body.providerRequests)
+                || body.providerRequests < 0 || body.providerRequests > 1
+                || !Number.isInteger(body.writes) || body.writes < 0 || body.writes > 1) {
+              process.exit(3);
+            }
+            if (body.responseMode === "degraded") process.stdout.write("degraded");
+            else if (body.providerRequests === 0 && body.writes === 0) process.stdout.write("claim-held");
+            else if (body.providerRequests === 1 && body.writes === 1 && body.status === "fresh") {
+              process.stdout.write("refreshed");
+            } else process.exit(4);
+          ' "$response_file")"; then
+            echo "::error::Entdecken-Wochenfeed lieferte keinen gueltigen Produktvertrag."
+            exit 1
+          fi
+
+          case "$outcome" in
+            refreshed) echo "Entdecken-Wochenfeed: Wochenrefresh gespeichert." ;;
+            claim-held) echo "Entdecken-Wochenfeed: Wochenclaim bereits gehalten oder Feed aktuell; kein Providerrequest." ;;
+            degraded) echo "::warning::Entdecken-Wochenfeed: begrenzter Versuch endete degraded; kein Retry." ;;
+          esac

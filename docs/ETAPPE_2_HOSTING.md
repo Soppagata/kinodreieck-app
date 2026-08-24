@@ -67,6 +67,27 @@ Environment zugewiesen, weil der erforderliche Production-Reviewer sonst jeden
 Cron-Lauf blockieren würde. Beide Werte sind öffentlich; es entsteht kein
 Secret auf Repository-Ebene.
 
+### Entdecken-Wochenanstoß im Keep-alive
+
+Der bestehende Drei-Tage-Zeitplan stößt im `schedule`-Event zusätzlich genau
+einen accountlosen `GET` auf `entdecken-daily-task` an. Der Step hat eine harte
+Zeitgrenze, folgt keinen Redirects und besitzt weder Schleife noch Curl-Retry.
+Ein manueller `workflow_dispatch` führt weiterhin den harmlosen Keep-alive-Read
+aus, den providerpotenziellen Entdecken-Step aber nicht.
+
+Die mehreren Cron-Aufrufe sind keine Kostendeduplizierung. Ausschließlich der
+atomare Datenbankclaim über `last_attempt_iso_week` und `refreshed_iso_week`
+entscheidet, ob der normale Aufruf dieser ISO-Woche noch einen Providerrequest
+erhält. Ein bereits gehaltener Claim liest nur den Cache; der Workflow sendet
+weder den Owner-Recovery-Header noch ein Service-Role-, Sitzungs- oder
+Anbieter-Secret. Ein `degraded`-Ergebnis wird ohne Retry als Workflow-Warnung
+sichtbar, während HTTP-, Auth-, HTML- und ungültige JSON-/Vertragsantworten den
+Lauf rot markieren.
+
+Wiederkehrende Wirkung entsteht erst nach Aufnahme in den GitHub-Default-Branch.
+Ein Staging- oder Feature-Branch aktiviert für sich keinen Zeitplan automatisch;
+auch ein manueller Lauf dieses Branches umgeht die `schedule`-Bedingung nicht.
+
 ### Server-/Deployment-Secrets
 
 | Name | Ablage | Zweck |
