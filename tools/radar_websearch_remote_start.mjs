@@ -66,6 +66,8 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/contract.js`,
   ENTDECKEN_FUNCTION_ENTRY,
+  `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`,
+  `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/runner.js`,
   "tools/keychain_runner.mjs",
   "tools/entdecken_daily_live.mjs",
@@ -164,18 +166,20 @@ export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "fa09ae27b42a964e172997081f67666
    Provider-Receipt-Runtime. Historische Deployvertraege oben bleiben
    unangetastet; diese Closure bindet beide Websearch-Functions samt allen
    drei transitiven Shared-Modulen und enthaelt keine Migration. */
-export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "be65f68b0e7b943df556e996d85f9606da5fbc15643b9f3778ffa423488ec4a8";
+export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "b53fbbd729ff6b09602d637d83e271089def3a54c14ab616af2fe58bb4ff688d";
 export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
   Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "e4f2ebb119e95a062f60fca2f3125cbaaf7edca85fb3986f5bc04ee032ec38d4" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "d02ef620bea5fa0ddf4532b750470d009e630b5f4245ea66e87825412d5670e4" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "81c9045d0f90e9c0bca28d4fe1948b980f67234ab6e0a2f0c6dbfe7f1da3c8d7" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "97d46ba29b5056ece036f0049e8a6af8ab3889182fc0d65be6d8a17f8212a8ef" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "1a043bf2c6b9d62d2605afd1a976857c235cd1d4d0f3cd49b018954e8a70c55f" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "78056e57b8cf04883a497c6330604a64482e261a34c9fc3c7fb6920349b0ed63" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "d91de5cd6f600a35e74591615aa9b97d52f223aceec2d46e81134c0354ce55c7" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "676fb4fcd8cabc519895eadffe9ed0e5f37125ba5bf234658571ae18f2663ce3" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "30d4eebfb51879986f8e2f2299fc1b5e1eb90854c9275e6be9b77b86de2d91f9" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "e1d9cc7ea0cf7c18032bf3c4d9729c986bb4583371d237e99b33c6ddc302c87a" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "413a306c7ccea51c0137339ba19929c2f0780a191f6250cae35d473790a8892f" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "d52463a4a24e9723b31e16b33ce432ea88f01cab1339d35983cf1c9e0a19967b" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "c92b0c65f68fd8083d534134682e0a46eb36373b41b66cc4e107302322730408" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
-  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "0651a7cfa51f5a802e360b292271f5d034fc9c2b2f21802be935584be03ca3b2" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
 ]);
 
