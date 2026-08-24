@@ -4985,6 +4985,102 @@ test("MB6 leerer konsumierter Providertext bleibt degraded und traegt seinen nor
   gleich(anbieterAufrufe().length, 1, "kein automatischer Retry");
 });
 
+test("MB6a abgeschnittenes sicheres Teilobjekt bleibt nutzbar und receipt-gebunden", async () => {
+  const konsumierterText = JSON.stringify({
+    kandidaten: [{
+      eingabeIndex: 0,
+      titel: "Alien",
+      typ: "film",
+      jahr: 1979,
+      quelle: "bluray",
+      staffeln: null,
+      vorbeurteilung: "offen",
+      begruendung: "",
+      sicherheit: "hoch",
+    }],
+    warnungen: [],
+  });
+  z.anbieter = () => antwort({
+    model: "claude-haiku-4-5-20251001",
+    stop_reason: "max_tokens",
+    content: [{ type: "text", text: konsumierterText }],
+    usage: { input_tokens: 100, output_tokens: 20 },
+  });
+  const r = await ruf({
+    task: "media-batch-extract",
+    vorgangId: neueVorgangId(),
+    payload: medienPayload(false),
+  });
+  gleich(r.status, 200, "konsumierte 200er-Antwort bleibt normale Huelle");
+  gleich(r.daten.responseMode, "partial", "Stopgrund erzwingt sichtbares Partial");
+  gleich((r.daten.data as Record<string, unknown[]>).kandidaten.length, 1, "sicheres Item bleibt nutzbar");
+  gleich((r.daten.data as Record<string, unknown[]>).fehlmenge.length, 2, "offene Zeilen bleiben separat");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  wahr(isProviderReceipt(receipt), "normaler Receipt vorhanden");
+  gleich(receipt.responseSha256, await sha256Hex(konsumierterText), "Receipt bindet exakt den konsumierten Teiltext");
+  gleich(receipt.resultMode, "partial", "Receipt bindet die Teilantwortform");
+  gleich(genauEinAbschluss().p_status, "fertig", "dieselbe Logzeile ist abgeschlossen");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+});
+
+test("MB6b Refusal und unsicherer konsumierter Text degradieren ohne Rohtext, aber mit Receipt", async () => {
+  const faelle = [
+    ["refusal", "Diese Liste kann ich nicht bearbeiten."],
+    ["end_turn", "token=synthetischer-geheimer-wert"],
+  ] as const;
+  for (const [stopReason, konsumierterText] of faelle) {
+    stelleZurueck();
+    z.anbieter = () => antwort({
+      model: "claude-haiku-4-5-20251001",
+      stop_reason: stopReason,
+      content: [{ type: "text", text: konsumierterText }],
+      usage: { input_tokens: 100, output_tokens: 20 },
+    });
+    const r = await ruf({
+      task: "media-batch-extract",
+      vorgangId: neueVorgangId(),
+      payload: medienPayload(false),
+    });
+    gleich(r.status, 200, `${stopReason}: normale degradierte Huelle`);
+    gleich(r.daten.responseMode, "degraded", `${stopReason}: degraded`);
+    gleich(r.daten.data, null, `${stopReason}: keine Importdaten`);
+    falsch(JSON.stringify(r.daten).includes(konsumierterText), `${stopReason}: kein Rohtext sichtbar`);
+    const receipt = r.daten.providerReceipt as Record<string, unknown>;
+    wahr(isProviderReceipt(receipt), `${stopReason}: normaler Receipt`);
+    gleich(receipt.responseSha256, await sha256Hex(konsumierterText), `${stopReason}: exakte Textbindung`);
+    gleich(receipt.resultMode, "degraded", `${stopReason}: Receiptmodus`);
+    gleich(anbieterAufrufe().length, 1, `${stopReason}: kein Retry`);
+  }
+});
+
+test("MB6c uebergrosser konsumierter Text traegt Receipt; echte Provider-HTTP-Fehlerhuelle nicht", async () => {
+  const konsumierterText = "x".repeat(200);
+  z.konfig.antwort_max_bytes = 100;
+  z.anbieter = () => anbieterErfolg(konsumierterText);
+  let r = await ruf({
+    task: "media-batch-extract",
+    vorgangId: neueVorgangId(),
+    payload: medienPayload(false),
+  });
+  gleich(r.status, 200, "gelesener Text bleibt normale degradierte Huelle");
+  gleich(r.daten.responseMode, "degraded", "zu gross wird nicht geparst");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  wahr(isProviderReceipt(receipt), "gelesener Text traegt Receipt");
+  gleich(receipt.responseSha256, await sha256Hex(konsumierterText), "Receipt bindet den gelesenen Text");
+
+  stelleZurueck();
+  z.anbieter = () => antwort({ error: { type: "overloaded_error" } }, 529);
+  r = await ruf({
+    task: "media-batch-extract",
+    vorgangId: neueVorgangId(),
+    payload: medienPayload(false),
+  });
+  gleich(r.status, 500, "echter Provider-HTTP-Fehler bleibt Fehlerhuelle");
+  gleich(r.daten.ok, false, "kein fingierter Erfolg ohne Providertext");
+  falsch("providerReceipt" in r.daten, "ohne konsumierten Providertext kein Receipt");
+  gleich(anbieterAufrufe().length, 1, "kein Retry");
+});
+
 test("MB-E2E normale Partial-Huelle belegt Receipt, Fehlmenge und nur die ausgewaehlte Persistenz", async () => {
   const providerJson = {
     kandidaten: [
@@ -8868,6 +8964,94 @@ test("FW5a JSON-Codeblock behaelt zwei einzeln belegte Claims und verwirft den k
   falsch(items.some((item) => /unbelegte fremde/.test(item)), "kaputter Claim wird nicht persistiert");
 });
 
+test("FW5c allein der institutionelle LOC-Claim publiziert mit harter Strukturidentitaet bis zum Readback", async () => {
+  stelleZurueck();
+  const auftragId = crypto.randomUUID();
+  const versionId = crypto.randomUUID();
+  z.filmwissenAdapterStart = { status: "neu", auftragId };
+  z.filmwissenAbschluss = { status: "fertig", versionId };
+  const locClaim = "Alien (1979) wurde 2002 in das National Film Registry aufgenommen.";
+  z.anbieter = () => anbieterErfolg({
+    format: "filmwissen-synthese-v1",
+    warum: 5,
+    sicherheit: "hoch",
+    claims: [filmwissenClaim("F2", locClaim)],
+  });
+
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status, "belegt", "Version publiziert");
+  gleich((r.daten.data as Record<string, unknown>).versionId, versionId, "exakte Version");
+  const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
+    .koerper as Record<string, unknown>;
+  const version = abschluss.p_version as Record<string, unknown>;
+  const belege = abschluss.p_belege as Array<Record<string, unknown>>;
+  gleich(belege.length, 2, "Strukturidentitaet und LOC bilden das volle Paket");
+  const struktur = belege.find((beleg) => beleg.quelle === "wikidata")!;
+  const institutionell = belege.find((beleg) => beleg.quelle === "loc-nfr")!;
+  gleich((struktur.kernaussagen as string[]).length, 1, "Strukturquelle behaelt genau eine Adapteraussage");
+  falsch((struktur.kernaussagen as string[]).includes(locClaim), "kein fingierter Strukturclaim");
+  gleich((institutionell.kernaussagen as string[]).join("|"), locClaim, "nur der gebundene LOC-Claim wird Wissensitem");
+
+  const rpcReadback = {
+    format: "filmwissen-cache-v1",
+    status: "belegt",
+    werk: {
+      id: crypto.randomUUID(),
+      typ: "film",
+      titel: filmwissenWerkClaim.titel,
+      originaltitel: "Alien",
+      jahr: 1979,
+    },
+    version: {
+      id: versionId,
+      nr: 1,
+      schemaVersion: version.schemaVersion,
+      rubrikVersion: version.rubrikVersion,
+      stand: "2026-08-24T12:00:00.000Z",
+    },
+    warum: {
+      wert: version.warum,
+      sicherheit: version.sicherheit,
+      kurztext: version.kurztext,
+    },
+    fundstellen: belege.map((beleg) => ({
+      quelle: beleg.quelle,
+      domain: new URL(String(beleg.url)).hostname,
+      titel: beleg.titel,
+      url: beleg.url,
+      veroeffentlichtAm: beleg.veroeffentlichtAm,
+      abgerufenAm: beleg.abgerufenAm,
+      attribution: beleg.quelle,
+      kernaussagen: beleg.kernaussagen,
+    })),
+  };
+  const gelesen = pruefeAiUserTaskReadback({
+    task: "filmwissen-synthese",
+    antwort: r.daten,
+    kontext: { rpcReadback },
+  });
+  gleich(gelesen.persistenz, "providerfreie-rpc", "Produktionsreadback erreicht");
+  gleich(
+    ((gelesen.gelesen as Record<string, Record<string, unknown>>).version).id,
+    versionId,
+    "Readback bindet dieselbe Version",
+  );
+
+  stelleZurueck();
+  z.filmwissenAdapterStart = { status: "neu", auftragId: crypto.randomUUID() };
+  z.anbieter = () => anbieterErfolg({
+    format: "filmwissen-synthese-v1",
+    warum: 5,
+    sicherheit: "hoch",
+    claims: [filmwissenClaim("F2", "Nicht in der festen Adapterfundstelle.")],
+  });
+  const malformed = await filmwissenRuf();
+  gleich(malformed.status, 200, "malformed bleibt sicher beantwortet");
+  gleich(rpc("kd_filmwissen_synthese_abschliessen").length, 0, "keine Version fuer malformed");
+  gleich(rpc("kd_filmwissen_synthese_fehlgeschlagen").length, 1, "Auftrag wird sauber geschlossen");
+});
+
 test("FW6 Film ohne LOC-Treffer endet ehrlich vor KI-Kosten", async () => {
   stelleZurueck();
   const snapshot = locSnapshotAlien() as Record<string, unknown>;
@@ -9271,6 +9455,10 @@ test("BP4a ausdrueckliches 0/0 bleibt durch ai-task ein strukturiertes leeres da
   gleich(data.geschmackszuege.length, 0, "keine erfundenen Geschmackszuege");
   gleich(data.vokabular.length, 0, "kein erfundenes Vokabular");
   wahr(!!r.daten.providerReceipt, "normaler Providerbeleg bleibt erhalten");
+  wahr(
+    systemtext().includes("geschmackszuege: [] und vokabular: []"),
+    "Prompt verlangt die explizite leere Objektform statt null oder Wurzelliste",
+  );
 });
 
 test("BP5 Outputgrenzen retten gueltige Einzelitems und verwerfen nur kaputte", () => {

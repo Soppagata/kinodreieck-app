@@ -138,5 +138,33 @@ check("D11 der alte belegIds-Vertrag bleibt fail-closed lesbar, freier Kurztext 
     && result.daten.kurztext === "Praegte das Genre. Wurde breit rezipiert."
     && !result.daten.kurztext.includes("Modellparaphrase");
 });
+check("D12 Strukturidentitaet braucht keinen erfundenen Relevanzclaim", () => {
+  const struktur = {
+    ...fundstellen[0],
+    quelle: "wikidata",
+    domain: "www.wikidata.org",
+    belegklasse: "strukturiert",
+    ursprung: "wikidata-community",
+  };
+  const institution = {
+    ...fundstellen[1],
+    quelle: "loc-nfr",
+    domain: "www.loc.gov",
+    belegklasse: "institutionell",
+    ursprung: "loc-national-film-registry",
+  };
+  const result = bereinigeSyntheseAusgabe({
+    format: FILMWISSEN_SYNTHESE_FORMAT,
+    warum: 5,
+    sicherheit: "hoch",
+    claims: [claim("F2", institution.kernaussagen[0])],
+  }, werk, [struktur, institution], [
+    { id: "F1", url: "https://www.wikidata.org/wiki/Q24962" },
+    { id: "F2", url: "https://www.loc.gov/item/alien" },
+  ]);
+  return result.daten?.publizierbar === true
+    && result.daten.claims.length === 1
+    && result.daten.belegIds.join(",") === "F2";
+});
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Synthesevertrag-Checks bestanden.`);
 if (fehler.length) process.exit(1);

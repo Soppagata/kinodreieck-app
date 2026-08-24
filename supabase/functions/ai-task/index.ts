@@ -405,6 +405,7 @@ type AnbieterErgebnis = {
   inputTokens: number;
   outputTokens: number;
   stopReason: string;
+  abbruch: { code: string; grund: string } | null;
 };
 
 async function rufeAnbieter(
@@ -539,12 +540,7 @@ async function rufeAnbieter(
      Serverfehler und darf nicht als solcher erscheinen. Der Verbrauch wird
      VORHER ausgelesen: diese Tokens sind abgerechnet, auch wenn nichts
      Brauchbares herauskam. */
-  const verbrauch = {
-    modell: modellAusAntwort,
-    inputTokens: inputTokens as number,
-    outputTokens: outputTokens as number,
-  };
-
+  let abbruch: AnbieterErgebnis["abbruch"] = null;
   if (stopReason === "refusal") {
     /* Die Policy-Kategorie ist ein Enum des Anbieters, kein Freitext und keine
        Nutzereingabe — sie darf ins Protokoll und unterscheidet einen echten
@@ -556,11 +552,10 @@ async function rufeAnbieter(
        `unklassifiziert` fallen lassen — samt Code, also genau die Diagnose
        gelöscht, für die die Kategorie mitgenommen wird. */
     const rein = typeof kategorie === "string" && /^[a-z0-9_-]{1,30}$/i.test(kategorie) ? ":" + kategorie.toLowerCase() : "";
-    throw new AufrufFehler(
-      CODES.AI_REFUSED,
-      "modell-hat-abgelehnt" + rein,
-      verbrauch,
-    );
+    abbruch = {
+      code: CODES.AI_REFUSED,
+      grund: "modell-hat-abgelehnt" + rein,
+    };
   }
 
   /* Alle drei Fälle liefern unvollständiges JSON und landeten bisher erst bei
@@ -568,25 +563,22 @@ async function rufeAnbieter(
      etwas ganz anderes mit klarer Abhilfe. Der Verbrauch reist mit: diese
      Tokens sind abgerechnet. */
   if (stopReason === "max_tokens") {
-    throw new AufrufFehler(
-      CODES.INVALID_RESPONSE,
-      "antwort-abgeschnitten",
-      verbrauch,
-    );
+    abbruch = {
+      code: CODES.INVALID_RESPONSE,
+      grund: "antwort-abgeschnitten",
+    };
   }
   if (stopReason === "model_context_window_exceeded") {
-    throw new AufrufFehler(
-      CODES.INVALID_RESPONSE,
-      "kontextfenster-ueberschritten",
-      verbrauch,
-    );
+    abbruch = {
+      code: CODES.INVALID_RESPONSE,
+      grund: "kontextfenster-ueberschritten",
+    };
   }
   if (stopReason === "pause_turn") {
-    throw new AufrufFehler(
-      CODES.INVALID_RESPONSE,
-      "antwort-pausiert",
-      verbrauch,
-    );
+    abbruch = {
+      code: CODES.INVALID_RESPONSE,
+      grund: "antwort-pausiert",
+    };
   }
 
   return {
@@ -599,6 +591,7 @@ async function rufeAnbieter(
     inputTokens: inputTokens as number,
     outputTokens: outputTokens as number,
     stopReason,
+    abbruch,
   };
 }
 
@@ -3665,6 +3658,7 @@ export const AUFGABEN: Record<string, Aufgabe> = {
         "Gib ausschliesslich das vorgegebene JSON-Objekt zurueck. Keine Artikel-ID, keinen Hash, keine Herkunft und keine sonstige Provenienz.",
         "Jeder beleg muss eine rohe, zusammenhaengende, zeichengetreue Textstelle von 16 bis 96 UTF-8-Bytes aus artikel.text sein.",
         "Erfinde, normalisiere oder paraphrasiere Belege nicht. Ohne exakten Beleg gibt es keinen Eintrag.",
+        "Wenn der Artikel keinen sicheren Eintrag traegt, gib trotzdem das Objekt mit geschmackszuege: [] und vokabular: [] zurueck. Gib niemals null, eine Wurzelliste oder ein fehlendes Listenfeld zurueck.",
         "geschmackszuege: hoechstens 12. art, richtung und sicherheit nur aus dem Schema; staerke ganzzahlig 1 bis 5.",
         "Bei art=genre muss wert exakt, einschliesslich Schreibweise, aus listen.genres stammen.",
         "vokabular: hoechstens 6. genres und tags zusammen 1 bis 3 unterschiedliche Werte, exakt aus den jeweils gesendeten Listen.",
@@ -4968,55 +4962,128 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
   }
   const preisVermerk = gemeldeterPreis.sicher ? null : "kosten-geschaetzt";
 
-  /* 4) Fachliche Prüfung NACH der strukturellen. Ein technisch gültiges JSON
-        ist noch kein brauchbares Ergebnis. */
-  const antwortBytes = new TextEncoder().encode(ergebnis.text).length;
-  if (antwortBytes > zahl(konfig, "antwort_max_bytes", 262144)) {
+  /* Stop-Antworten mit gueltiger Usage sind bereits konsumierte und bezahlte
+     Providerantworten. Fuer die bestehenden strikten Aufgaben bleibt ihr
+     bisheriger Fehlervertrag unveraendert. Media kann dagegen sichere
+     Teilobjekte retten oder mit einem inhaltsfreien Hinweis degradieren; sein
+     Receipt entsteht weiter unten aus exakt demselben Text und Logeintrag. */
+  if (ergebnis.abbruch && task !== "media-batch-extract") {
     await beende("fehler", {
       modell: ergebnis.modell,
       inputTokens: ergebnis.inputTokens,
       outputTokens: ergebnis.outputTokens,
-      kosten: Number.isFinite(kosten) ? kosten : null,
-      fehlerklasse: CODES.INVALID_RESPONSE + ":zu-gross",
+      kosten,
+      fehlerklasse: ergebnis.abbruch.code + ":" + ergebnis.abbruch.grund,
     });
-    return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
-      grund: "antwort-zu-gross",
+    return fehlerAntwort(ergebnis.abbruch.code, origin, {
+      grund: ergebnis.abbruch.grund,
       vorgangId,
       ...providerRawExtra(),
     });
   }
 
+  /* 4) Fachliche Prüfung NACH der strukturellen. Ein technisch gültiges JSON
+        ist noch kein brauchbares Ergebnis. */
+  const antwortBytes = new TextEncoder().encode(ergebnis.text).length;
   let inhalt: unknown = null;
   let providerDarstellung: ErgebnisDarstellung | null = null;
-  if (TOLERANTE_JSON_AUFGABEN.has(task)) {
-    try {
-      const parsed = parseProviderLooseJsonText(ergebnis.text);
-      inhalt = parsed.value;
-      const hinweise = hinweiseFuerAufgabe(task);
+  let mediaParserUeberspringen = false;
+  if (antwortBytes > zahl(konfig, "antwort_max_bytes", 262144)) {
+    if (task === "media-batch-extract") {
+      mediaParserUeberspringen = true;
+      providerRawResponse = null;
       providerDarstellung = {
-        responseMode: parsed.mode,
-        displayText: parsed.mode === "degraded"
-          ? (parsed.displayText || hinweise.degraded)
-          : parsed.mode === "partial" ? hinweise.partial : null,
-        warnings: sichereAiWarnings([...parsed.warnings]),
+        responseMode: "degraded",
+        displayText: MEDIA_DEGRADED_NOTICE,
+        warnings: ["no-safe-structure"],
       };
-    } catch {
-      /* Geheimnis-, Thinking-/Prompt- oder API-Huellenverdacht bleibt ein
-         harter Ausgabestopp. Gerade hier darf auch der Owner-Diagnosepfad den
-         Rohtext nicht in die Antwort zurueckreichen. */
+    } else {
       await beende("fehler", {
         modell: ergebnis.modell,
         inputTokens: ergebnis.inputTokens,
         outputTokens: ergebnis.outputTokens,
-        kosten,
-        fehlerklasse: CODES.INVALID_RESPONSE + ":provider-text-unsafe",
+        kosten: Number.isFinite(kosten) ? kosten : null,
+        fehlerklasse: CODES.INVALID_RESPONSE + ":zu-gross",
       });
       return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
-        grund: "antwort-verletzt-schema",
+        grund: "antwort-zu-gross",
         vorgangId,
+        ...providerRawExtra(),
       });
     }
-  } else {
+  }
+
+  if (task === "media-batch-extract" && ergebnis.abbruch?.code === CODES.AI_REFUSED) {
+    /* Ein Refusal-Text ist keine Teilantwort. Selbst wenn er zufaellig wie JSON
+       aussieht, wird daraus kein Importitem und kein sichtbarer Rohtext. */
+    mediaParserUeberspringen = true;
+    providerRawResponse = null;
+    providerDarstellung = {
+      responseMode: "degraded",
+      displayText: MEDIA_DEGRADED_NOTICE,
+      warnings: ["no-safe-structure"],
+    };
+  }
+
+  if (!mediaParserUeberspringen && TOLERANTE_JSON_AUFGABEN.has(task)) {
+    try {
+      const parsed = parseProviderLooseJsonText(ergebnis.text);
+      inhalt = parsed.value;
+      const hinweise = hinweiseFuerAufgabe(task);
+      if (task === "media-batch-extract" && ergebnis.abbruch) {
+        providerRawResponse = null;
+        providerDarstellung = parsed.mode === "degraded"
+          ? {
+            responseMode: "degraded",
+            displayText: hinweise.degraded,
+            warnings: ["no-safe-structure"],
+          }
+          : {
+            responseMode: "partial",
+            displayText: hinweise.partial,
+            warnings: sichereAiWarnings([
+              ...parsed.warnings,
+              "invalid-items-ignored",
+            ]),
+          };
+        if (parsed.mode === "degraded") inhalt = null;
+      } else {
+        providerDarstellung = {
+          responseMode: parsed.mode,
+          displayText: parsed.mode === "degraded"
+            ? (parsed.displayText || hinweise.degraded)
+            : parsed.mode === "partial" ? hinweise.partial : null,
+          warnings: sichereAiWarnings([...parsed.warnings]),
+        };
+      }
+    } catch {
+      /* Geheimnis-, Thinking-/Prompt- oder API-Huellenverdacht darf nie
+         Rohtext ausgeben. Strikte Aufgaben stoppen hart; Media kann den schon
+         konsumierten, kostenbekannten Request nur inhaltsfrei degradieren und
+         unten an seinen normalen Receipt binden. */
+      if (task === "media-batch-extract") {
+        providerRawResponse = null;
+        inhalt = null;
+        providerDarstellung = {
+          responseMode: "degraded",
+          displayText: MEDIA_DEGRADED_NOTICE,
+          warnings: ["no-safe-structure"],
+        };
+      } else {
+        await beende("fehler", {
+          modell: ergebnis.modell,
+          inputTokens: ergebnis.inputTokens,
+          outputTokens: ergebnis.outputTokens,
+          kosten,
+          fehlerklasse: CODES.INVALID_RESPONSE + ":provider-text-unsafe",
+        });
+        return fehlerAntwort(CODES.INVALID_RESPONSE, origin, {
+          grund: "antwort-verletzt-schema",
+          vorgangId,
+        });
+      }
+    }
+  } else if (!mediaParserUeberspringen) {
     try {
       inhalt = JSON.parse(ergebnis.text);
     } catch {
@@ -5189,19 +5256,29 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       modell: ergebnis.modell,
       kostenUsdCent: Number(kosten.toFixed(6)),
     };
-    const belege = filmwissenLauf.belege.map((beleg) => ({
-      quelle: beleg.quelle,
-      url: beleg.url,
-      titel: beleg.titel,
-      veroeffentlichtAm: beleg.veroeffentlichtAm,
-      abgerufenAm: beleg.abgerufenAm,
-      /* Nur die einzeln an dieses Werk, diese Quelle, dieses exakte Zitat und
-         die serverseitige URL gebundenen Claims werden Wissensitems. */
-      kernaussagen: synthese.claims
-        .filter((claim) => claim.belegId === beleg.id)
-        .map((claim) => claim.aussage),
-      abrufSha256: beleg.abrufSha256,
-    }));
+    const belege = filmwissenLauf.belege
+      .filter((beleg) =>
+        beleg.belegklasse === "strukturiert" ||
+        synthese.belegIds.includes(beleg.id)
+      )
+      .map((beleg) => ({
+        quelle: beleg.quelle,
+        url: beleg.url,
+        titel: beleg.titel,
+        veroeffentlichtAm: beleg.veroeffentlichtAm,
+        abgerufenAm: beleg.abgerufenAm,
+        /* Verantwortete Quellen speichern nur einzeln an dieses Werk, diese
+           Quelle, dieses exakte Zitat und die serverseitige URL gebundene
+           Claims. Der Strukturbeleg behaelt genau seine deterministische erste
+           Adapteraussage, damit Identitaet und vollstaendiges Belegpaket ohne
+           fingierten Modellclaim versioniert werden. */
+        kernaussagen: beleg.belegklasse === "strukturiert"
+          ? beleg.kernaussagen.slice(0, 1)
+          : synthese.claims
+            .filter((claim) => claim.belegId === beleg.id)
+            .map((claim) => claim.aussage),
+        abrufSha256: beleg.abrufSha256,
+      }));
     const { data: abschlussRoh, error: abschlussFehler } = await admin.rpc(
       "kd_filmwissen_synthese_abschliessen",
       {
