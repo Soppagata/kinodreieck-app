@@ -4,6 +4,10 @@ const sql = readFileSync(
   new URL("./supabase/migrations/20260730210000_etappe8_filmwissen_adapter_betrieb.sql", import.meta.url),
   "utf8",
 );
+const locV2Sql = readFileSync(
+  new URL("./supabase/migrations/20260824130000_filmwissen_loc_nfr_v2.sql", import.meta.url),
+  "utf8",
+);
 let ok = 0;
 const fehler = [];
 function check(name, fn) {
@@ -70,6 +74,33 @@ check("B8 Synthese ist explizit auf Sonnet und 2048 Tokens geroutet", () => {
     && /'\{filmwissen-synthese\}'[\s\S]+?'2048'[\s\S]+?where schluessel = 'task_max_tokens'/i.test(routing)
     && /if not found then[\s\S]+?task_modell fehlt/i.test(routing)
     && /if not found then[\s\S]+?task_max_tokens fehlt/i.test(routing);
+});
+check("B9 LOC-v2 aktualisiert nur den exakt belegten institutionellen Quellenentscheid", () => {
+  const update = locV2Sql.match(/update public\.kd_filmwissen_quellen[\s\S]+?get diagnostics/i)?.[0] ?? "";
+  return /slug = 'loc-nfr'/i.test(update)
+    && /domain = 'www\.loc\.gov'/i.test(update)
+    && /betreiber = 'Library of Congress'/i.test(update)
+    && /adapter_key = 'loc-nfr-listing-v1'/i.test(update)
+    && /set adapter_key = 'loc-nfr-listing-v2'/i.test(update)
+    && /ursprung = 'loc-national-film-registry'/i.test(update)
+    && /belegklasse = 'institutionell'/i.test(update)
+    && /v_anzahl <> 1/i.test(locV2Sql);
+});
+check("B10 v1-Snapshot bleibt erhalten und v2 nutzt einen eigenen Cache-Key", () =>
+  /adapter_key in \('loc-nfr-listing-v1', 'loc-nfr-listing-v2'\)/i.test(locV2Sql)
+  && /where adapter_key = 'loc-nfr-listing-v2'[\s\S]+gueltig_bis > now\(\)/i.test(locV2Sql)
+  && /'loc-nfr-listing-v2','loc-nfr-listing-v2',v_eintraege/i.test(locV2Sql)
+  && /on conflict \(adapter_key\) do update/i.test(locV2Sql)
+  && !/delete\s+from\s+public\.kd_filmwissen_adapter_snapshots/i.test(locV2Sql)
+  && !/update\s+public\.kd_filmwissen_adapter_snapshots/i.test(locV2Sql));
+check("B11 v2-Speichervertrag bleibt eng, service-only und 24 Stunden gueltig", () => {
+  const speichern = locV2Sql.match(/create or replace function public\.kd_filmwissen_loc_snapshot_speichern[\s\S]+?end\n\$\$;/i)?.[0] ?? "";
+  return /adapterVersion' is distinct from 'loc-nfr-listing-v2'/i.test(speichern)
+    && /jsonb_array_length\(p_snapshot->'eintraege'\) not between 900 and 1200/i.test(speichern)
+    && /octet_length\(\(p_snapshot->'eintraege'\)::text\) > 262144/i.test(speichern)
+    && /v_abgerufen \+ interval '24 hours'/i.test(speichern)
+    && (locV2Sql.match(/revoke all on function public\.kd_filmwissen_loc_snapshot_(?:lesen|speichern)[\s\S]+?from public, anon, authenticated;/gi) || []).length === 2
+    && (locV2Sql.match(/grant execute on function public\.kd_filmwissen_loc_snapshot_(?:lesen|speichern)[\s\S]+?to service_role;/gi) || []).length === 2;
 });
 
 console.log(`\n${ok}/${ok + fehler.length} Filmwissen-Adapterbetriebs-Checks bestanden.`);

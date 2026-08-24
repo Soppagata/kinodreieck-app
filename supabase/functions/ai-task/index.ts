@@ -52,7 +52,7 @@ import {
   type SyntheseEvidenz,
   type Werk,
 } from "../filmwissen-task/vertrag.ts";
-import { type AdapterFundstelle, fundstelleAusLocNfrSnapshot, fundstellenFuerSynthese, holeLocNfrSnapshot, holeWikidataFundstelle, LOC_NFR_ADAPTER_VERSION, type LocNfrSnapshot, pruefeLocNfrSnapshot, QuellenFehler, type StarkeFilmkennung } from "../filmwissen-task/quellen.ts";
+import { type AdapterFundstelle, fundstelleAusLocNfrSnapshot, fundstellenFuerSynthese, holeLocNfrSnapshot, holeWikidataFundstelle, type LocNfrSnapshot, pruefeLocNfrSnapshot, QuellenFehler, type StarkeFilmkennung } from "../filmwissen-task/quellen.ts";
 import {
   AufrufFehler,
   CODES,
@@ -4481,6 +4481,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
       const snapshotAntwort = snapshotRoh as Record<string, unknown> | null;
       if (snapshotAntwort?.status === "hit") {
         locSnapshot = pruefeLocNfrSnapshot({
+          adapterVersion: snapshotAntwort.adapterVersion,
           eintraege: snapshotAntwort.eintraege,
           abgerufenAm: snapshotAntwort.abgerufenAm,
           abrufSha256: snapshotAntwort.abrufSha256,
@@ -4493,10 +4494,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
         const { error: speichernFehler } = await admin.rpc(
           "kd_filmwissen_loc_snapshot_speichern",
           {
-            p_snapshot: {
-              adapterVersion: LOC_NFR_ADAPTER_VERSION,
-              ...locSnapshot,
-            },
+            p_snapshot: locSnapshot,
           },
         );
         if (speichernFehler) {
@@ -5183,7 +5181,7 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     const version = {
       schemaVersion: "filmwissen-cache-v1",
       rubrikVersion: "warum-v1",
-      pipelineVersion: "wikidata-loc-v1",
+      pipelineVersion: "wikidata-loc-v2",
       promptVersion: FILMWISSEN_PROMPT_VERSION,
       warum: synthese.warum as number,
       sicherheit: synthese.sicherheit as string,

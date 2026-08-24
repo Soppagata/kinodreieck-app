@@ -1,14 +1,18 @@
 import {
+  LOC_NFR_ADAPTER_VERSION,
   LOC_NFR_URL,
   QuellenFehler,
   WIKIDATA_ACTION_URL,
   findeLocNfrEintrag,
   fundstellenFuerSynthese,
   holeLocNfrFundstelle,
+  holeLocNfrSnapshot,
   holeWikidataFundstelle,
   normalisiereLocTitel,
+  parseLocNfrAntwort,
   parseLocNfrTabelle,
 } from "./supabase/functions/filmwissen-task/quellen.ts";
+import { baueLocNfrComponentsV2Fixture } from "./tests/fixtures/loc_nfr_components_v2.js";
 
 let ok = 0;
 const fehler = [];
@@ -280,6 +284,42 @@ await check("Q10 LOC-Snapshot wird vollstaendig validiert und ergibt starken Bel
     && /2002/.test(beleg.kernaussagen[0]) && /^[a-f0-9]{64}$/.test(beleg.abrufSha256);
 });
 
+await check("Q10b aktuelles LOC-components/items-Schema bleibt eng, sauber und deterministisch", async () => {
+  const marker = "IGNORIERTER-FREMDTEXT-771";
+  const body = baueLocNfrComponentsV2Fixture({ ignorierterMarker: marker });
+  body["content.components.items"][1].items[1].title = "<b>Alien</b>";
+  const raw = JSON.stringify(body);
+  const rawBytes = new TextEncoder().encode(raw);
+  const hashBytes = new Uint8Array(8 + rawBytes.byteLength);
+  new DataView(hashBytes.buffer).setBigUint64(0, BigInt(rawBytes.byteLength));
+  hashBytes.set(rawBytes, 8);
+  const erwarteterHash = [...new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    hashBytes,
+  ))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hole = () => holeLocNfrSnapshot({
+    fetcher: async () => new Response(raw, {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(raw)),
+        etag: "\"loc-v2-test\"",
+      },
+    }),
+    now: () => new Date("2026-08-24T10:00:00Z"),
+  });
+  const [a, b] = await Promise.all([hole(), hole()]);
+  return a.adapterVersion === LOC_NFR_ADAPTER_VERSION
+    && LOC_NFR_ADAPTER_VERSION === "loc-nfr-listing-v2"
+    && a.eintraege.length === 900
+    && a.eintraege[0].titel === "Alien"
+    && Object.keys(a.eintraege[0]).join(",") === "titel,erscheinungsjahr,aufnahmejahr"
+    && !JSON.stringify(a.eintraege).includes(marker)
+    && a.abrufSha256 === erwarteterHash
+    && b.abrufSha256 === a.abrufSha256
+    && JSON.stringify(b.eintraege) === JSON.stringify(a.eintraege);
+});
+
 await check("Q11 Schema-Drift und doppelte LOC-Identitaeten blockieren", () => {
   const faelle = [
     miniMarkup([row("A", "1979", "2002")]).replace("Year Inducted", "Status"),
@@ -293,6 +333,60 @@ await check("Q11 Schema-Drift und doppelte LOC-Identitaeten blockieren", () => {
       return error instanceof QuellenFehler;
     }
   });
+});
+
+await check("Q11b current-Schema bleibt bei unbekannten Typen und leerer Form fail-closed", () => {
+  const falscherJahrtyp = baueLocNfrComponentsV2Fixture();
+  falscherJahrtyp["content.components.items"][1].items[1].year_inducted = 2002;
+  const fehlenderJahrgang = baueLocNfrComponentsV2Fixture();
+  for (const item of fehlenderJahrgang["content.components.items"][1].items) {
+    if (item.year_inducted === "1989") item.year_inducted = "1990";
+  }
+  const faelle = [
+    {},
+    { "content.markup": {} },
+    { "content.components.items": {} },
+    { "content.components.items": [null] },
+    falscherJahrtyp,
+    fehlenderJahrgang,
+  ];
+  return faelle.every((wert) => {
+    try {
+      parseLocNfrAntwort(wert);
+      return false;
+    } catch (error) {
+      return error instanceof QuellenFehler;
+    }
+  });
+});
+
+await check("Q11c current-Schema begrenzt kumulativ nur die drei akzeptierten Textfelder", () => {
+  try {
+    parseLocNfrAntwort(baueLocNfrComponentsV2Fixture({
+      titelSuffix: "x".repeat(80),
+    }));
+    return false;
+  } catch (error) {
+    return error instanceof QuellenFehler
+      && error.code === "loc-komponenten-text-zu-gross";
+  }
+});
+
+await check("Q11d LOC-v2-Antwortzaun stoppt vor Parser und Rohtextausgabe", async () => {
+  try {
+    await holeLocNfrSnapshot({
+      fetcher: async () => new Response("{}", {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(2 * 1024 * 1024 + 1),
+        },
+      }),
+    });
+    return false;
+  } catch (error) {
+    return error instanceof QuellenFehler && error.code === "antwort-zu-gross";
+  }
 });
 
 await check("Q12 ohne LOC-Treffer gibt es keine scheinbar belegte Synthese", async () => {

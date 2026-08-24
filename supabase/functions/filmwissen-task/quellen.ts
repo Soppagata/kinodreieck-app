@@ -6,9 +6,9 @@
 import type { Fundstelle, Werk } from "./vertrag.ts";
 
 export const WIKIDATA_ADAPTER_VERSION = "wikidata-action-v1";
-export const LOC_NFR_ADAPTER_VERSION = "loc-nfr-listing-v1";
+export const LOC_NFR_ADAPTER_VERSION = "loc-nfr-listing-v2";
 export const WIKIDATA_ACTION_URL = "https://www.wikidata.org/w/api.php";
-export const LOC_NFR_URL = "https://www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/?fo=json&at=content.markup";
+export const LOC_NFR_URL = "https://www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/?fo=json&at=content.markup,content.components.items";
 
 const QID = /^Q[1-9][0-9]{0,17}$/;
 const IMDB = /^tt[0-9]{7,10}$/;
@@ -17,6 +17,20 @@ const STEUERZEICHEN = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/;
 const UNGUELTIGE_MARKUP_ZEICHEN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u2028\u2029]/;
 const FILMTYPEN = new Set(["Q11424", "Q24862", "Q506240"]);
 const LOC_ORGANISATION = "Q131454";
+const LOC_LEGACY_MARKUP_FELD = "content.markup";
+const LOC_COMPONENTS_ITEMS_FELD = "content.components.items";
+/* Providerfreier Schema-Spike 24.08.2026: 1_779_153 Antwortbytes,
+   2 Komponenten, 925 Items, 23_466 Bytes in den drei akzeptierten Feldern
+   und 900 exakt datierbare Eintraege; die lueckenlosen Aufnahmejahrgaenge
+   1989-2025 enthalten je 23-26 Rohitems. Die Grenzen geben begrenzte
+   Driftluft, ohne Beschreibungen, Templates oder Links zum Nutztext zu machen. */
+const LOC_ANTWORT_MAX_BYTES = 2 * 1024 * 1024;
+const LOC_KOMPONENTEN_MAX = 4;
+const LOC_ITEMS_MIN = 900;
+const LOC_ITEMS_MAX = 1_200;
+const LOC_TITEL_MAX_BYTES = 512;
+const LOC_JAHR_TEXT_MAX_BYTES = 32;
+const LOC_NUTZTEXT_MAX_BYTES = 64 * 1024;
 
 export type StarkeFilmkennung =
   | { namespace: "wikidata"; kennung: string }
@@ -583,6 +597,7 @@ export type LocEintrag = {
   aufnahmejahr: number;
 };
 export type LocNfrSnapshot = {
+  adapterVersion: string;
   eintraege: LocEintrag[];
   abgerufenAm: string;
   abrufSha256: string;
@@ -615,6 +630,143 @@ function ohneTags(html: string): string | null {
   const text = decodeHtml(html.replace(/<[^>]*>/g, "")).replace(/\u00A0/g, " ")
     .replace(/\s+/g, " ").trim().normalize("NFKC");
   return normalisiereText(text, 300);
+}
+
+function utf8Laenge(text: string): number {
+  return new TextEncoder().encode(text).byteLength;
+}
+
+function parseLocNfrKomponenten(rohKomponenten: unknown): LocEintrag[] {
+  if (
+    !Array.isArray(rohKomponenten) || rohKomponenten.length < 1 ||
+    rohKomponenten.length > LOC_KOMPONENTEN_MAX
+  ) {
+    throw new QuellenFehler("loc-komponenten-schema");
+  }
+  const eintraege: LocEintrag[] = [];
+  let itemAnzahl = 0;
+  let nutztextBytes = 0;
+  let itemListeGefunden = false;
+  const rohProAufnahmejahr = new Map<number, number>();
+
+  for (const rohKomponente of rohKomponenten) {
+    const komponente = objekt(rohKomponente);
+    if (!komponente) throw new QuellenFehler("loc-komponenten-schema");
+    if (!("items" in komponente)) continue;
+    if (!Array.isArray(komponente.items)) {
+      throw new QuellenFehler("loc-komponenten-schema");
+    }
+    itemListeGefunden = true;
+    itemAnzahl += komponente.items.length;
+    if (itemAnzahl > LOC_ITEMS_MAX) {
+      throw new QuellenFehler("loc-komponenten-items-zu-viele");
+    }
+
+    for (const rohItem of komponente.items) {
+      const item = objekt(rohItem);
+      if (!item) throw new QuellenFehler("loc-komponenten-item-schema");
+      const titelRoh = item.title;
+      const erscheinungsjahrRoh = item.year_released;
+      const aufnahmejahrRoh = item.year_inducted;
+      for (const [index, feld] of [
+        titelRoh,
+        erscheinungsjahrRoh,
+        aufnahmejahrRoh,
+      ].entries()) {
+        if (feld !== undefined && typeof feld !== "string") {
+          throw new QuellenFehler("loc-komponenten-item-schema");
+        }
+        if (typeof feld === "string") {
+          const bytes = utf8Laenge(feld);
+          if (
+            bytes > (index === 0 ? LOC_TITEL_MAX_BYTES : LOC_JAHR_TEXT_MAX_BYTES)
+          ) throw new QuellenFehler("loc-komponenten-text-zu-gross");
+          nutztextBytes += bytes;
+        }
+      }
+      if (nutztextBytes > LOC_NUTZTEXT_MAX_BYTES) {
+        throw new QuellenFehler("loc-komponenten-text-zu-gross");
+      }
+
+      /* Der echte v2-Payload enthaelt genau eine reine Titelzeile sowie
+         einzelne nicht exakt datierbare Werke. Nur die drei belegten
+         Textfelder werden betrachtet; Beschreibungen, Templates, Links und
+         sonstige Felder werden weder normalisiert noch weitergegeben. */
+      if (typeof titelRoh !== "string") {
+        throw new QuellenFehler("loc-komponenten-item-schema");
+      }
+      const titel = ohneTags(titelRoh);
+      if (!titel) throw new QuellenFehler("loc-komponenten-titel");
+      if (aufnahmejahrRoh === undefined) {
+        if (erscheinungsjahrRoh === undefined) continue;
+        throw new QuellenFehler("loc-komponenten-item-schema");
+      }
+      if (typeof aufnahmejahrRoh !== "string") {
+        throw new QuellenFehler("loc-komponenten-item-schema");
+      }
+      const aufnahmejahrText = ohneTags(aufnahmejahrRoh);
+      if (!/^[0-9]{4}$/.test(aufnahmejahrText ?? "")) {
+        throw new QuellenFehler("loc-jahr-ungueltig");
+      }
+      const aufnahmejahr = Number(aufnahmejahrText);
+      if (
+        aufnahmejahr < 1989 || aufnahmejahr > new Date().getUTCFullYear()
+      ) throw new QuellenFehler("loc-jahr-ungueltig");
+      rohProAufnahmejahr.set(
+        aufnahmejahr,
+        (rohProAufnahmejahr.get(aufnahmejahr) ?? 0) + 1,
+      );
+      if (erscheinungsjahrRoh === undefined) continue;
+      if (typeof erscheinungsjahrRoh !== "string") {
+        throw new QuellenFehler("loc-komponenten-item-schema");
+      }
+      const erscheinungsjahrText = ohneTags(erscheinungsjahrRoh);
+      if (!/^[0-9]{4}$/.test(erscheinungsjahrText ?? "")) {
+        continue;
+      }
+      const erscheinungsjahr = Number(erscheinungsjahrText);
+      if (
+        erscheinungsjahr < 1870 || erscheinungsjahr > 2200
+      ) {
+        throw new QuellenFehler("loc-jahr-ungueltig");
+      }
+      eintraege.push({ titel, erscheinungsjahr, aufnahmejahr });
+    }
+  }
+
+  if (!itemListeGefunden || itemAnzahl < LOC_ITEMS_MIN) {
+    throw new QuellenFehler("loc-komponenten-items-anzahl");
+  }
+  if (eintraege.length < LOC_ITEMS_MIN || eintraege.length > LOC_ITEMS_MAX) {
+    throw new QuellenFehler("loc-zeilenanzahl");
+  }
+  const maxJahr = Math.max(...rohProAufnahmejahr.keys());
+  if (maxJahr < new Date().getUTCFullYear() - 1) {
+    throw new QuellenFehler("loc-jahrgang-fehlt");
+  }
+  for (let jahr = 1989; jahr <= maxJahr; jahr++) {
+    const anzahl = rohProAufnahmejahr.get(jahr) ?? 0;
+    if (anzahl < 20 || anzahl > 30) {
+      throw new QuellenFehler("loc-jahrgang-unvollstaendig");
+    }
+  }
+  const keys = eintraege.map((eintrag) =>
+    `${normalisiereLocTitel(eintrag.titel)}\0${eintrag.erscheinungsjahr}`
+  );
+  if (new Set(keys).size !== keys.length) {
+    throw new QuellenFehler("loc-doppelte-identitaet");
+  }
+  return eintraege;
+}
+
+export function parseLocNfrAntwort(wert: unknown): LocEintrag[] {
+  const json = objekt(wert);
+  if (!json) throw new QuellenFehler("loc-json-schema");
+  const komponenten = json[LOC_COMPONENTS_ITEMS_FELD];
+  if (Array.isArray(komponenten)) return parseLocNfrKomponenten(komponenten);
+  const markup = json[LOC_LEGACY_MARKUP_FELD];
+  if (typeof markup === "string") return parseLocNfrTabelle(markup);
+  throw new QuellenFehler("loc-json-schema");
 }
 
 export function parseLocNfrTabelle(
@@ -714,6 +866,7 @@ export function pruefeLocNfrSnapshot(wert: unknown): LocNfrSnapshot {
   const snapshot = objekt(wert);
   if (
     !snapshot || !Array.isArray(snapshot.eintraege) ||
+    snapshot.adapterVersion !== LOC_NFR_ADAPTER_VERSION ||
     typeof snapshot.abgerufenAm !== "string" ||
     !Number.isFinite(Date.parse(snapshot.abgerufenAm)) ||
     typeof snapshot.abrufSha256 !== "string" ||
@@ -759,6 +912,7 @@ export function pruefeLocNfrSnapshot(wert: unknown): LocNfrSnapshot {
     throw new QuellenFehler("loc-snapshot-jahrgang-fehlt");
   }
   return {
+    adapterVersion: LOC_NFR_ADAPTER_VERSION,
     eintraege,
     abgerufenAm: snapshot.abgerufenAm,
     abrufSha256: snapshot.abrufSha256,
@@ -783,19 +937,13 @@ export function findeLocNfrEintrag(
 export async function holeLocNfrSnapshot(
   optionen: AbrufOptionen = {},
 ): Promise<LocNfrSnapshot> {
-  const abruf = await holeJson(LOC_NFR_URL, LOC_NFR_URL, 192 * 1024, {
+  const abruf = await holeJson(LOC_NFR_URL, LOC_NFR_URL, LOC_ANTWORT_MAX_BYTES, {
     "Accept": "application/json",
     "User-Agent": "KinodreieckFilmwissenBot/1.0",
   }, optionen);
-  const json = objekt(abruf.json);
-  if (
-    !json || Object.keys(json).join(",") !== "content.markup" ||
-    typeof json["content.markup"] !== "string"
-  ) {
-    throw new QuellenFehler("loc-json-schema");
-  }
-  const eintraege = parseLocNfrTabelle(json["content.markup"]);
+  const eintraege = parseLocNfrAntwort(abruf.json);
   return pruefeLocNfrSnapshot({
+    adapterVersion: LOC_NFR_ADAPTER_VERSION,
     eintraege,
     abgerufenAm: (optionen.now ?? (() => new Date()))().toISOString(),
     abrufSha256: await sha256([abruf.bytes]),
@@ -826,7 +974,7 @@ export function fundstelleAusLocNfrSnapshot(
     ],
     abgerufenAm: snapshot.abgerufenAm,
     abrufSha256: snapshot.abrufSha256,
-    adapterVersion: LOC_NFR_ADAPTER_VERSION,
+    adapterVersion: snapshot.adapterVersion,
     lizenz: "US-federal-facts-only",
     etag: snapshot.etag,
   };

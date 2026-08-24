@@ -35,6 +35,7 @@ import {
   PROVIDER_DIAGNOSTIC_HEADER_VALUE,
 } from "./supabase/functions/_shared/providerDiagnostic.js";
 import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
+import { baueLocNfrComponentsV2Fixture } from "./tests/fixtures/loc_nfr_components_v2.js";
 
 /* ---------- kleine Prüfhilfen (bewusst ohne fremde Abhängigkeit) ------------ */
 function gleich(ist: unknown, soll: unknown, was = "Wert") {
@@ -162,7 +163,7 @@ function locSnapshotAlien(): Record<string, unknown> {
   }
   return {
     status: "hit",
-    adapterVersion: "loc-nfr-listing-v1",
+    adapterVersion: "loc-nfr-listing-v2",
     eintraege,
     abrufSha256: "a".repeat(64),
     etag: '"loc-test"',
@@ -252,6 +253,7 @@ const z = {
   } as unknown,
   filmwissenQuellenReservierung: { ok: true } as unknown,
   filmwissenSnapshot: locSnapshotAlien() as unknown,
+  filmwissenLocAntwort: baueLocNfrComponentsV2Fixture() as unknown,
   filmwissenAdapterStart: {
     status: "neu",
     auftragId: crypto.randomUUID(),
@@ -298,6 +300,7 @@ function stelleZurueck() {
   };
   z.filmwissenQuellenReservierung = { ok: true };
   z.filmwissenSnapshot = locSnapshotAlien();
+  z.filmwissenLocAntwort = baueLocNfrComponentsV2Fixture();
   z.filmwissenAdapterStart = { status: "neu", auftragId: crypto.randomUUID() };
   z.filmwissenAbschluss = { status: "fertig", versionId: crypto.randomUUID() };
   z.filmwissenFehlerabschluss = { status: "fehler" };
@@ -409,6 +412,9 @@ globalThis.fetch = (async (eingabe: string | URL | Request, init?: RequestInit) 
     return antwort({ status: "fehler" });
   }
   if (url.includes("www.wikidata.org/w/api.php")) return wikidataAntwort(url);
+  if (url.includes("www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/")) {
+    return antwort(z.filmwissenLocAntwort);
+  }
 
   if (url.includes("api.anthropic.com/v1/messages")) {
     return await z.anbieter(init);
@@ -8741,7 +8747,7 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   gleich(version.warum, 5, "inhaltlich begründeter WARUM-Wert");
   gleich(
     version.pipelineVersion,
-    "wikidata-loc-v1",
+    "wikidata-loc-v2",
     "Pipelineversion bleibt innerhalb des Datenbankvertrags",
   );
   wahr(
@@ -8754,6 +8760,69 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   wahr(
     belege.some((b) => b.quelle === "loc-nfr"),
     "institutioneller Beleg gespeichert",
+  );
+});
+
+test("FW5b LOC-v2 Cache-Miss erreicht genau einen Provider-Mock samt Receipt", async () => {
+  stelleZurueck();
+  const marker = "LOC-FREMDTEXT-DARF-NICHT-WEITER-884";
+  z.filmwissenSnapshot = { status: "miss" };
+  z.filmwissenLocAntwort = baueLocNfrComponentsV2Fixture({
+    ignorierterMarker: marker,
+  });
+  z.filmwissenAdapterStart = {
+    status: "neu",
+    auftragId: crypto.randomUUID(),
+  };
+  z.filmwissenAbschluss = {
+    status: "fertig",
+    versionId: crypto.randomUUID(),
+  };
+  z.anbieter = () => anbieterErfolg(filmwissenAnbieterAntwort());
+
+  const r = await filmwissenRuf();
+  gleich(r.status, 200, "Status");
+  gleich((r.daten.data as Record<string, unknown>).status, "belegt", "belegter Abschluss");
+  gleich(anbieterAufrufe().length, 1, "genau ein Provider-Mock");
+  wahr(isProviderReceipt(r.daten.providerReceipt), "gueltiger Provider-Receipt");
+  const receipt = r.daten.providerReceipt as Record<string, unknown>;
+  gleich(receipt.resultMode, "structured", "Receipt bindet den strukturierten Erfolg");
+
+  const locAbrufe = aufrufe.filter((aufruf) =>
+    aufruf.url.includes("www.loc.gov/programs/national-film-preservation-board/film-registry/complete-national-film-registry-listing/")
+  );
+  gleich(locAbrufe.length, 1, "genau ein providerfreier LOC-Abruf");
+  const reservierungen = rpc("kd_filmwissen_quelle_abruf_reservieren")
+    .map((aufruf) => aufruf.koerper?.p_quelle);
+  gleich(reservierungen.join(","), "wikidata,loc-nfr", "beide Quellen fest reserviert");
+
+  const speichern = rpc("kd_filmwissen_loc_snapshot_speichern");
+  gleich(speichern.length, 1, "v2-Snapshot genau einmal gespeichert");
+  const snapshot = speichern[0].koerper?.p_snapshot as Record<string, unknown>;
+  gleich(snapshot.adapterVersion, "loc-nfr-listing-v2", "v2-Provenienz gespeichert");
+  gleich((snapshot.eintraege as unknown[]).length, 900, "nur exakt datierbare Eintraege gespeichert");
+  falsch(JSON.stringify(snapshot).includes(marker), "ignorierte LOC-Felder verlassen den Adapter nicht");
+
+  const vorbereiten = rpc("kd_filmwissen_adapter_vorbereiten")[0]
+    .koerper as Record<string, unknown>;
+  const werk = vorbereiten.p_werk as Record<string, unknown>;
+  const kennungen = vorbereiten.p_kennungen as Record<string, unknown>;
+  gleich(werk.typ, "film", "Werktyp bleibt Wikidata-gebunden");
+  gleich(werk.jahr, 1979, "Werkjahr bleibt Wikidata-gebunden");
+  gleich(kennungen.wikidata, "Q24962", "kanonische Identitaet bleibt hart");
+  gleich(kennungen.imdb, "tt0078748", "angeforderte starke Kennung bleibt hart");
+  gleich((vorbereiten.p_quellen as string[]).join(","), "wikidata,loc-nfr", "nur feste Belegquellen");
+
+  const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
+    .koerper as Record<string, unknown>;
+  gleich(
+    (abschluss.p_version as Record<string, unknown>).pipelineVersion,
+    "wikidata-loc-v2",
+    "deterministische Pipelineprovenienz",
+  );
+  falsch(
+    JSON.stringify(anbieterAufrufe()[0].koerper).includes(marker),
+    "ignorierter Fremdtext erreicht den Provider-Mock nicht",
   );
 });
 
