@@ -1,5 +1,6 @@
 import { sigAusSchema } from "../src/lib/finder.js";
 import { ausExtraktion } from "../src/lib/extraktion.js";
+import { normalisiereAiErgebnis } from "../src/services/ai.js";
 import {
   erteileEinwilligung,
   leeresProfil,
@@ -16,6 +17,7 @@ import { dekodiereFilmwissen } from "../src/lib/filmwissen.js";
 import { normalisiereStapelAntwort, baueStapelUebernahme } from "../src/lib/stapelimport.js";
 import { pruefeBlogProfilAnalyseAntwort } from "../src/lib/blogProfilAnalyse.js";
 import { uebernimmBlogVokabular, vokabularZuMap } from "../src/lib/vokabular.js";
+import { normalizeProviderReceipt } from "../supabase/functions/_shared/providerReceipt.js";
 
 export const AI_USER_TASKS = Object.freeze([
   "intelligent-search",
@@ -33,6 +35,9 @@ const VERBRAUCH_KEYS = Object.freeze([
 const BASIS_KEYS = Object.freeze([
   "data", "modell", "modellAlias", "ok", "task", "verbrauch", "vorgangId",
 ]);
+const DARSTELLUNG_KEYS = Object.freeze([
+  "displayText", "responseMode", "warnings",
+]);
 
 export class AiUserTaskContractError extends Error {
   constructor(code, detail = "") {
@@ -46,6 +51,28 @@ const fail = (code, detail) => { throw new AiUserTaskContractError(code, detail)
 const objekt = (wert) => !!wert && typeof wert === "object" && !Array.isArray(wert);
 const gleicheKeys = (wert, keys) => objekt(wert)
   && Object.keys(wert).sort().join("|") === [...keys].sort().join("|");
+const hatEigenesFeld = (wert, key) => objekt(wert)
+  && Object.prototype.hasOwnProperty.call(wert, key);
+
+function liesAdditiveErfolgshuelle(antwort) {
+  const darstellungsFelder = DARSTELLUNG_KEYS.filter((key) => hatEigenesFeld(antwort, key));
+  if (![0, DARSTELLUNG_KEYS.length].includes(darstellungsFelder.length)) {
+    fail("ERFOLGSHUELLE_FORM");
+  }
+  const hatDarstellung = darstellungsFelder.length === DARSTELLUNG_KEYS.length;
+  const hatProviderReceipt = hatEigenesFeld(antwort, "providerReceipt");
+  /* Der aktuelle ai-task erzeugt den Receipt erst nach der Ergebnisdarstellung.
+     Ein Receipt ohne diese Korrelation ist deshalb keine bekannte Produktform. */
+  if (hatProviderReceipt && !hatDarstellung) fail("ERFOLGSHUELLE_FORM");
+  return Object.freeze({
+    hatDarstellung,
+    hatProviderReceipt,
+    keys: Object.freeze([
+      ...(hatDarstellung ? DARSTELLUNG_KEYS : []),
+      ...(hatProviderReceipt ? ["providerReceipt"] : []),
+    ]),
+  });
+}
 
 function pruefeVerbrauch(verbrauch) {
   if (!gleicheKeys(verbrauch, VERBRAUCH_KEYS)) fail("VERBRAUCH_FORM");
@@ -73,9 +100,14 @@ function pruefeErfolgshuelle(task, antwort) {
     if (antwort.task !== task) fail("TASK_ABWEICHUNG", String(antwort.task));
     if (!UUID.test(antwort.vorgangId || "")) fail("VORGANG_ID");
     if (Object.hasOwn(antwort, "verbrauch") && antwort.verbrauch !== null) fail("VERBRAUCH_CACHE_HIT");
-    return;
+    return antwort;
   }
-  const keys = task === "film-forecast" ? [...BASIS_KEYS, "provenienz"] : BASIS_KEYS;
+  const additive = liesAdditiveErfolgshuelle(antwort);
+  const keys = [
+    ...BASIS_KEYS,
+    ...(task === "film-forecast" ? ["provenienz"] : []),
+    ...additive.keys,
+  ];
   if (!gleicheKeys(antwort, keys)) fail("ERFOLGSHUELLE_FORM");
   if (antwort.ok !== true) fail("KEIN_ERFOLG");
   if (antwort.task !== task) fail("TASK_ABWEICHUNG", String(antwort.task));
@@ -100,6 +132,26 @@ function pruefeErfolgshuelle(task, antwort) {
   if (antwort.verbrauch.inputTokens <= 0
       || antwort.verbrauch.outputTokens <= 0
       || antwort.verbrauch.kostenUsdCent <= 0) fail("VERBRAUCH_NICHT_POSITIV");
+
+  let normalisiert = antwort;
+  if (additive.hatDarstellung) {
+    try { normalisiert = normalisiereAiErgebnis(task, antwort); }
+    catch { fail("ERFOLGSHUELLE_DARSTELLUNG"); }
+  }
+  if (additive.hatProviderReceipt) {
+    const receipt = normalizeProviderReceipt(antwort.providerReceipt);
+    if (!receipt) fail("PROVIDER_RECEIPT_FORM");
+    if (receipt.model !== antwort.modell
+        || receipt.usage.inputTokens !== antwort.verbrauch.inputTokens
+        || receipt.usage.outputTokens !== antwort.verbrauch.outputTokens
+        || Object.prototype.hasOwnProperty.call(receipt.usage, "webSearchRequests")
+        || receipt.resultMode !== antwort.responseMode
+        || receipt.server.costUsdCent !== antwort.verbrauch.kostenUsdCent) {
+      fail("PROVIDER_RECEIPT_KORRELATION");
+    }
+    normalisiert = { ...normalisiert, providerReceipt: receipt };
+  }
+  return normalisiert;
 }
 
 function jsonRoundtrip(wert) {
@@ -235,13 +287,15 @@ const PRUEFER = Object.freeze({
 });
 
 export function pruefeAiUserTaskReadback({ task, antwort, kontext = {} } = {}) {
-  pruefeErfolgshuelle(task, antwort);
-  const auswertung = PRUEFER[task](antwort, kontext);
+  const normalisierteAntwort = pruefeErfolgshuelle(task, antwort);
+  const auswertung = PRUEFER[task](normalisierteAntwort, kontext);
   return Object.freeze({
     ok: true,
     task,
-    vorgangId: antwort.vorgangId,
-    verbrauch: antwort.verbrauch == null ? null : jsonRoundtrip(antwort.verbrauch),
+    vorgangId: normalisierteAntwort.vorgangId,
+    verbrauch: normalisierteAntwort.verbrauch == null
+      ? null
+      : jsonRoundtrip(normalisierteAntwort.verbrauch),
     ...auswertung,
   });
 }

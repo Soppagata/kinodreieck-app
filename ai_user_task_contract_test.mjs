@@ -31,6 +31,20 @@ const VERBRAUCH = Object.freeze({
   dauerMs: 150,
   stopReason: "end_turn",
 });
+const PROVIDER_RECEIPT = Object.freeze({
+  schemaVersion: "provider-receipt-v1",
+  provider: "anthropic",
+  model: "claude-test-20260823",
+  usage: Object.freeze({ inputTokens: 120, outputTokens: 40 }),
+  responseSha256: "a".repeat(64),
+  resultMode: "structured",
+  server: Object.freeze({
+    logId: 71,
+    providerRequests: 1,
+    reservationUsdCent: 1.5,
+    costUsdCent: 0.42,
+  }),
+});
 const huelle = (task, data, extra = {}) => ({
   ok: true,
   task,
@@ -38,6 +52,10 @@ const huelle = (task, data, extra = {}) => ({
   modellAlias: task === "media-batch-extract" || task === "blog-profile-extract" ? "klein" : "gross",
   modell: "claude-test-20260823",
   data,
+  responseMode: "structured",
+  displayText: null,
+  warnings: [],
+  providerReceipt: PROVIDER_RECEIPT,
   verbrauch: { ...VERBRAUCH },
   ...extra,
 });
@@ -161,7 +179,11 @@ check("alle sechs Nutzeraufgaben besitzen einen erfolgreichen Roundtrip", () => 
   assert.deepEqual([...ergebnisse.keys()], AI_USER_TASKS);
   assert.ok([...ergebnisse.values()].every((wert) => wert.ok === true));
 });
-check("intelligent-search bleibt ausdrücklich Sitzungszustand", () => {
+check("intelligent-search liest die exakte normale ai-task-Hülle bis zum Sitzungs-Readback", () => {
+  assert.deepEqual(Object.keys(finderAntwort).sort(), [
+    "data", "displayText", "modell", "modellAlias", "ok", "providerReceipt",
+    "responseMode", "task", "verbrauch", "vorgangId", "warnings",
+  ]);
   assert.equal(ergebnisse.get("intelligent-search").persistenz, "sitzung");
   assert.equal(ergebnisse.get("intelligent-search").gelesen.sig.titel[0].id, "film-alien");
 });
@@ -191,6 +213,28 @@ scheitert("unbekannte Nutzeraufgabe wird geschlossen abgelehnt", "TASK_UNBEKANNT
   pruefeAiUserTaskReadback({ task: "health", antwort: huelle("health", {}) }));
 scheitert("Zusatzfeld in der Erfolgshülle wird abgelehnt", "ERFOLGSHUELLE_FORM", () =>
   pruefeAiUserTaskReadback({ task: "intelligent-search", antwort: { ...finderAntwort, fremd: true }, kontext: { master } }));
+scheitert("unvollständige additive Darstellungshülle wird abgelehnt", "ERFOLGSHUELLE_FORM", () => {
+  const antwort = clone(finderAntwort);
+  delete antwort.warnings;
+  pruefeAiUserTaskReadback({ task: "intelligent-search", antwort, kontext: { master } });
+});
+scheitert("formfremde Darstellungshülle scheitert am Produktionsparser", "ERFOLGSHUELLE_DARSTELLUNG", () => {
+  const antwort = clone(finderAntwort);
+  antwort.warnings = ["nicht-erlaubter-hinweis"];
+  pruefeAiUserTaskReadback({ task: "intelligent-search", antwort, kontext: { master } });
+});
+scheitert("formfremder Provider-Receipt wird abgelehnt", "PROVIDER_RECEIPT_FORM", () => {
+  const antwort = clone(finderAntwort);
+  antwort.providerReceipt.responseSha256 = "zu-kurz";
+  pruefeAiUserTaskReadback({ task: "intelligent-search", antwort, kontext: { master } });
+});
+scheitert("unkorrelierter Provider-Receipt wird abgelehnt", "PROVIDER_RECEIPT_KORRELATION", () => {
+  const antwort = clone(finderAntwort);
+  antwort.providerReceipt.server.costUsdCent = 0.41;
+  pruefeAiUserTaskReadback({ task: "intelligent-search", antwort, kontext: { master } });
+});
+scheitert("Fehlerhülle wird nicht als erfolgreicher Readback behandelt", "KEIN_ERFOLG", () =>
+  pruefeAiUserTaskReadback({ task: "intelligent-search", antwort: { ...finderAntwort, ok: false }, kontext: { master } }));
 scheitert("abweichende Task-Kennung wird abgelehnt", "TASK_ABWEICHUNG", () =>
   pruefeAiUserTaskReadback({ task: "intelligent-search", antwort: { ...finderAntwort, task: "profile-extract" }, kontext: { master } }));
 scheitert("formfremde Vorgangs-ID wird abgelehnt", "VORGANG_ID", () =>
