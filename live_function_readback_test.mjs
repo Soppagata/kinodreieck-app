@@ -20,6 +20,7 @@ const PUBLIC = Object.freeze({
   KD_MAIL_DOMAIN: "login.kinodreieck.at",
   KD_AI_FUNKTION: "ai-task",
   KD_ORIGIN: "https://staging.kinodreieck.at",
+  KD_FILMWISSEN_TARGET_ID: "imdb:tt0081505",
 });
 
 function antwort(status, daten) {
