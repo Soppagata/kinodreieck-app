@@ -33,9 +33,15 @@ function kurzeSichereDiagnose(value, fallback = null) {
   return SAFE_DIAGNOSTIC_FORM.test(normalized) ? normalized : fallback;
 }
 
-const PENDING_NO_RAW_TASK_BY_FILE = Object.freeze({
-  "01-intelligent-search.json": "intelligent-search",
-  "04-filmwissen-synthese.json": "filmwissen-synthese",
+const PROVIDER_CAPTURE_PATH_BY_FILE = Object.freeze({
+  "01-intelligent-search.json": Object.freeze({ task: "intelligent-search", vorgangId: true }),
+  "02-profile-extract.json": Object.freeze({ task: "profile-extract", vorgangId: true }),
+  "03-film-forecast.json": Object.freeze({ task: "film-forecast", vorgangId: true }),
+  "04-filmwissen-synthese.json": Object.freeze({ task: "filmwissen-synthese", vorgangId: true }),
+  "05-blog-profile-extract.json": Object.freeze({ task: "blog-profile-extract", vorgangId: true }),
+  "06-media-batch-extract.json": Object.freeze({ task: "media-batch-extract", vorgangId: true }),
+  "07-entdecken-weekly-websearch.json": Object.freeze({ task: "entdecken-daily-task", vorgangId: false }),
+  "08-radar-websearch.json": Object.freeze({ task: "radar-websearch-task", vorgangId: false }),
 });
 
 function pendingProviderCapture(
@@ -45,10 +51,10 @@ function pendingProviderCapture(
   expectedTask,
   expectedVorgangId,
 ) {
-  const task = PENDING_NO_RAW_TASK_BY_FILE[fileName];
-  if (!task
-      || expectedTask !== task
-      || !UUID_FORM.test(expectedVorgangId || "")) {
+  const path = PROVIDER_CAPTURE_PATH_BY_FILE[fileName];
+  if (!path
+      || expectedTask !== path.task
+      || (path.vorgangId && !UUID_FORM.test(expectedVorgangId || ""))) {
     return null;
   }
   const responseBody = body && typeof body === "object" && !Array.isArray(body)
@@ -62,10 +68,13 @@ function pendingProviderCapture(
   return Object.freeze({
     captureState: "pending-no-raw",
     proofState: "pending",
-    task,
+    task: path.task,
     filePath: null,
     bytes: 0,
     providerRequests: null,
+    attemptedProviderRequests: 1,
+    potentialProviderRequests: 1,
+    provenProviderRequests: 0,
     httpStatus: Number.isInteger(responseStatus) ? responseStatus : null,
     fachstatus: kurzeSichereDiagnose(
       data.status ?? responseBody.status ?? responseBody.code,
@@ -73,6 +82,16 @@ function pendingProviderCapture(
     ),
     fachgrund: kurzeSichereDiagnose(data.grund ?? responseBody.grund),
   });
+}
+
+function expectedCapturePath(fileName, expectedTask, expectedVorgangId) {
+  const path = PROVIDER_CAPTURE_PATH_BY_FILE[fileName];
+  if (!path || (expectedTask !== null && expectedTask !== path.task)
+      || (expectedTask !== null && path.vorgangId
+        && !UUID_FORM.test(expectedVorgangId || ""))) {
+    throw new Error("Provider-Capture ist nicht an den erwarteten Live-Pfad gebunden.");
+  }
+  return path;
 }
 
 function modeBits(stats) {
@@ -146,6 +165,7 @@ export function captureProviderRawResponse(
   if (!FILE_NAME_FORM.test(fileName) || basename(fileName) !== fileName) {
     throw new Error("Provider-Dateiname ist nicht fest begrenzt.");
   }
+  const path = expectedCapturePath(fileName, expectedTask, expectedVorgangId);
   const responseBody = body && typeof body === "object" && !Array.isArray(body)
     ? body
     : null;
@@ -194,9 +214,13 @@ export function captureProviderRawResponse(
   return Object.freeze({
     captureState: "raw",
     proofState: "proven",
+    task: path.task,
     filePath,
     bytes,
     providerRequests: 1,
+    attemptedProviderRequests: 1,
+    potentialProviderRequests: 1,
+    provenProviderRequests: 1,
     httpStatus: Number.isInteger(responseStatus) ? responseStatus : null,
     fachstatus: null,
     fachgrund: null,
@@ -208,31 +232,19 @@ export function finalizeProviderCapture(capture, measuredCostUsdCent) {
   if (!Number.isFinite(measuredCostUsdCent) || measuredCostUsdCent !== 0) {
     throw new Error("Fehlender Providerrohpayload war kostenfuehrend oder nicht messbar.");
   }
-  if (capture.task === "intelligent-search") {
-    return Object.freeze({
-      ...capture,
-      proofState: "unproven",
-      providerRequests: 0,
-    });
-  }
-  if (capture.task !== "filmwissen-synthese") {
-    throw new Error("Pending-Capture ist keinem erlaubten Providerpfad zugeordnet.");
-  }
   return Object.freeze({
     ...capture,
-    captureState: "provider-free",
-    proofState: "provider-free",
-    providerRequests: 0,
+    proofState: "unproven",
+    measuredCostUsdCent: 0,
   });
-}
-
-export function isZeroCostProviderFreeCapture(capture) {
-  return capture?.captureState === "provider-free"
-    && capture.providerRequests === 0;
 }
 
 export function isZeroCostUnprovenCapture(capture) {
   return capture?.proofState === "unproven"
     && capture.captureState === "pending-no-raw"
-    && capture.providerRequests === 0;
+    && capture.measuredCostUsdCent === 0
+    && capture.providerRequests === null
+    && capture.attemptedProviderRequests === 1
+    && capture.potentialProviderRequests === 1
+    && capture.provenProviderRequests === 0;
 }

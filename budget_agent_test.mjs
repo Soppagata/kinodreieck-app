@@ -552,7 +552,7 @@ check("Jede belegbare Nutzerszene besitzt genau einen Produktionsparser- und Rea
   && /pruefeAiUserTaskReadback/.test(smokeSkript)
   && /persistenz/.test(smokeSkript));
 check("P12 beurteilt Parser und Persistenz nur mit privatem Providerbeleg",
-  /const p12ProviderBelegt = !OWNER_CORE_SIX/.test(p12Abschnitt)
+  /const p12ProviderBelegt = istProviderPfadBelegt\("P12 intelligent-search"\)/.test(p12Abschnitt)
   && /const d12 = p12ProviderBelegt \? p12\.daten\?\.data : null;/.test(p12Abschnitt)
   && /if \(p12ProviderBelegt\) \{[\s\S]*pruefeNutzerTaskReadback\("S1 intelligent-search"/.test(p12Abschnitt)
   && /else \{[\s\S]*Produktionsparser, Speicherung und Readback bleiben offen/.test(p12Abschnitt)

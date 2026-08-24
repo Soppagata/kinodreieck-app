@@ -75,7 +75,10 @@ import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
 import { validateEntdeckenDailyFeed } from "../supabase/functions/entdecken-daily-task/contract.js";
 import { readFileSync } from "node:fs";
 import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
-import { erstelleAnbieterPfadBelege } from "./ai_smoke_contract.mjs";
+import {
+  erstelleAnbieterPfadBelege,
+  formatiereAnbieterPfadZusammenfassung,
+} from "./ai_smoke_contract.mjs";
 import {
   ENTDECKEN_DAILY_ONCE_ENV,
   RADAR_TARGET_AUTO_RESOLVE_ENV,
@@ -87,7 +90,6 @@ import {
   OWNER_CORE_SIX_GUARD_VALUE,
   captureProviderRawResponse,
   finalizeProviderCapture,
-  isZeroCostProviderFreeCapture,
   isZeroCostUnprovenCapture,
   providerDiagnosticHeaders,
   providerRawCaptureEnabled,
@@ -145,7 +147,11 @@ const LIVE_VERBINDUNG = Object.freeze({
 });
 let fehler = 0;
 let nummer = 0;
-const anbieterPfadBelege = erstelleAnbieterPfadBelege(ERWARTETE_ANBIETER_PFADE);
+const anbieterPfadBelege = erstelleAnbieterPfadBelege(ERWARTETE_ANBIETER_PFADE, {
+  maxPotentialRequests: SMOKE_MAX_ANBIETER_REQUESTS,
+  requireProviderCapture: OWNER_CORE_SIX,
+});
+let anbieterStatusGedruckt = false;
 
 function pruefe(name, bedingung, details) {
   nummer += 1;
@@ -153,6 +159,16 @@ function pruefe(name, bedingung, details) {
   if (!ok) fehler += 1;
   console.log(`${ok ? "✓" : "✗"} P${nummer} ${name}`);
   if (details) console.log(`     ${details}`);
+}
+
+function druckeAnbieterPfadStatus() {
+  if (anbieterStatusGedruckt) return anbieterPfadBelege.abschluss();
+  const abschluss = anbieterPfadBelege.abschluss();
+  for (const zeile of formatiereAnbieterPfadZusammenfassung(abschluss)) {
+    console.log(zeile);
+  }
+  anbieterStatusGedruckt = true;
+  return abschluss;
 }
 
 async function ruf(
@@ -270,6 +286,7 @@ function pruefeNutzerTaskReadback(label, task, antwort, kontext = {}) {
   } catch (error) {
     const code = typeof error?.code === "string" ? error.code : "UNBEKANNT";
     pruefe(`${label}: Produktionsparser, Speicherung und Readback sind grün`, false, `Code ${code}`);
+    try { anbieterPfadBelege.erfassePfadFehler(task, `readback-${code}`); } catch { /* Stopp unten bleibt massgeblich. */ }
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
       `${label}: Parser-/Persistenz-/Readback-Vertrag scheiterte (${code}).`,
@@ -289,6 +306,7 @@ function stoppeLiveLauf(error) {
   const kennung = stopp.exitCode === BUDGET_UNBEKANNT_EXIT
     ? "BUDGET_UNBEKANNT"
     : "AUTONOMIE_STOPP";
+  druckeAnbieterPfadStatus();
   console.error(`${kennung}: ${stopp.message}`);
   console.error("Keine automatische Wiederholung; keine weiteren echten KI-Requests.");
   process.exit(stopp.exitCode);
@@ -306,7 +324,7 @@ function registriereAnbieterPfad(pfad) {
 }
 
 function bestaetigeExakteAnbieterPfadfolge() {
-  const abschluss = anbieterPfadBelege.abschluss();
+  const abschluss = druckeAnbieterPfadStatus();
   if (!abschluss.pfadeVollstaendig) {
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
@@ -317,11 +335,11 @@ function bestaetigeExakteAnbieterPfadfolge() {
     `LIVE-ANBIETERPFADE: ${abschluss.ausgefuehrt.length}/${abschluss.erwartet.length} seriell · kein Retry`,
   );
   pruefe(
-    "Alle Anbieterpfade sind privat providerbelegt oder sicher providerfrei",
-    abschluss.providerBelegeVollstaendig,
-    abschluss.providerBelegeVollstaendig
-      ? `${abschluss.erwartet.length}/${abschluss.erwartet.length} belegt`
-      : `${abschluss.unbelegt.length} Pfad unproven/pending-no-raw, providerRequests=0`,
+    "Alle Anbieterpfade sind vollständig belegt",
+    abschluss.ok,
+    `${abschluss.provenPaths}/${abschluss.erwartet.length} Pfade belegt, `
+      + `${abschluss.unbelegt.length} unproven, ${abschluss.fehlgeschlagen.length} failed, `
+      + `${abschluss.offen.length} offen`,
   );
 }
 
@@ -488,11 +506,34 @@ try {
 
 const providerCaptureNachLabel = new Map();
 
+function istProviderPfadBelegt(label) {
+  if (!OWNER_CORE_SIX) return true;
+  const capture = providerCaptureNachLabel.get(label);
+  return capture?.captureState === "raw"
+    && capture?.proofState === "proven"
+    && capture?.providerRequests === 1;
+}
+
+function istProviderPfadUnbelegt(label) {
+  return isZeroCostUnprovenCapture(providerCaptureNachLabel.get(label));
+}
+
+function erfassePfadErgebnis(pfad, ok, reason) {
+  try {
+    anbieterPfadBelege.erfassePfadErgebnis(pfad, { ok, reason });
+  } catch (error) {
+    stoppeLiveLauf(new LiveSicherheitsStopp(
+      "unbekannt",
+      error?.message || `${pfad}: Pfadstatus konnte nicht sicher abgeschlossen werden.`,
+    ));
+  }
+}
+
 async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {}) {
   let markierung;
   try {
-    registriereAnbieterPfad(koerper?.task);
     markierung = await laufWache.vorAnbieterRequest(label);
+    registriereAnbieterPfad(koerper?.task);
     const ergebnis = await ruf(methode, kopf, koerper, {
       ...extraKopf,
       ...PROVIDER_DIAGNOSTIC_HEADERS,
@@ -540,12 +581,9 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
       );
     }
     if (captureError) throw captureError;
-    const lokalerKostenfreierP18Fehler = label === "P18 filmwissen-synthese"
-      && isZeroCostProviderFreeCapture(capture);
-    const lokalerUnbelegterP12 = label === "P12 intelligent-search"
-      && isZeroCostUnprovenCapture(capture);
+    const lokalerNullkostenPfadUnbelegt = isZeroCostUnprovenCapture(capture);
     if (ergebnis.status === 429
-        || (ergebnis.status !== 200 && !lokalerKostenfreierP18Fehler && !lokalerUnbelegterP12)) {
+        || (ergebnis.status !== 200 && !lokalerNullkostenPfadUnbelegt)) {
       throw new LiveSicherheitsStopp(
         ergebnis.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${ergebnis.status}.`,
@@ -568,11 +606,12 @@ async function rufProduktAnbieterBewacht({
 }) {
   let markierung;
   try {
-    registriereAnbieterPfad(pfad);
     markierung = await laufWache.vorAnbieterRequest(label);
+    registriereAnbieterPfad(pfad);
     let antwort = null;
     let daten = null;
     let requestError = null;
+    let capture = null;
     try {
       antwort = await fetchMitZeitgrenze(endpunkt, {
         method: methode,
@@ -587,10 +626,11 @@ async function rufProduktAnbieterBewacht({
     let captureError = null;
     if (!requestError && OWNER_COMBINED_EIGHT) {
       try {
-        captureProviderRawResponse(daten, captureDatei, {
+        capture = captureProviderRawResponse(daten, captureDatei, {
           env: process.env,
           repoRoot: new URL("..", import.meta.url).pathname.replace(/\/$/, ""),
           responseStatus: antwort?.status ?? null,
+          expectedTask: pfad,
         });
       } catch {
         captureError = new LiveSicherheitsStopp(
@@ -601,13 +641,26 @@ async function rufProduktAnbieterBewacht({
     }
 
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, null);
+    try {
+      capture = finalizeProviderCapture(capture, kostenMessung.requestKostenUsdCent);
+      if (capture) {
+        providerCaptureNachLabel.set(label, capture);
+        anbieterPfadBelege.erfasseProviderCapture(pfad, capture);
+      }
+    } catch {
+      captureError = new LiveSicherheitsStopp(
+        "unbekannt",
+        `${label}: Antwort ohne Providerrohpayload war kostenfuehrend oder nicht messbar.`,
+      );
+    }
     if (requestError) {
       throw requestError instanceof LiveSicherheitsStopp
         ? requestError
         : new LiveSicherheitsStopp("unbekannt", `${label} war nicht verlaesslich erreichbar.`);
     }
     if (captureError) throw captureError;
-    if (!antwort?.ok) {
+    const lokalerNullkostenPfadUnbelegt = isZeroCostUnprovenCapture(capture);
+    if (antwort?.status === 429 || (!antwort?.ok && !lokalerNullkostenPfadUnbelegt)) {
       throw new LiveSicherheitsStopp(
         antwort?.status === 429 ? "limit" : "unbekannt",
         `${label} endete mit HTTP ${antwort?.status ?? "?"}.`,
@@ -665,37 +718,40 @@ const p12 = await rufAnbieterBewacht(
   },
 );
 const p12Capture = providerCaptureNachLabel.get("P12 intelligent-search");
-const p12ProviderBelegt = !OWNER_CORE_SIX
-  || (p12Capture?.captureState === "raw"
-    && p12Capture?.proofState === "proven"
-    && p12Capture?.providerRequests === 1);
+const p12ProviderBelegt = istProviderPfadBelegt("P12 intelligent-search");
 const p12Unbelegt = isZeroCostUnprovenCapture(p12Capture);
 const d12 = p12ProviderBelegt ? p12.daten?.data : null;
+const p12SchemaOk = p12ProviderBelegt && p12.status === 200 && !!d12
+  && ausListe(d12.harte_filter?.genres, SUCH_LISTEN.genres)
+  && ausListe(d12.ausschluesse?.genres, SUCH_LISTEN.genres)
+  && ausListe(d12.weiche_wuensche?.stimmungen, SUCH_LISTEN.stimmungen)
+  && ausListe(d12.harte_filter?.kategorien, SUCH_LISTEN.kategorien)
+  && Array.isArray(d12.nicht_unterstuetzt)
+  && p12.daten?.modellAlias === "gross"
+  && p12.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
   "Intelligente Suche liefert ein gueltiges Filterschema aus erlaubten Werten",
-  p12ProviderBelegt && p12.status === 200 && !!d12
-    && ausListe(d12.harte_filter?.genres, SUCH_LISTEN.genres)
-    && ausListe(d12.ausschluesse?.genres, SUCH_LISTEN.genres)
-    && ausListe(d12.weiche_wuensche?.stimmungen, SUCH_LISTEN.stimmungen)
-    && ausListe(d12.harte_filter?.kategorien, SUCH_LISTEN.kategorien)
-    && Array.isArray(d12.nicht_unterstuetzt)
-    && p12.daten?.modellAlias === "gross"
-    && p12.daten?.verbrauch?.kostenUsdCent > 0,
+  p12SchemaOk,
   p12Unbelegt
-    ? "Providerbeleg unproven/pending-no-raw, providerRequests=0"
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
     : `HTTP ${p12.status}, Modell ${p12.daten?.modellAlias}, ${p12.daten?.verbrauch?.kostenUsdCent} US-Cent`,
 );
+let p12ReadbackOk = false;
 if (p12ProviderBelegt) {
-  pruefeNutzerTaskReadback("S1 intelligent-search", "intelligent-search", p12.daten, {
+  const p12Readback = pruefeNutzerTaskReadback("S1 intelligent-search", "intelligent-search", p12.daten, {
     master: [],
     zusatzGenres: SUCH_LISTEN.genres,
   });
+  p12ReadbackOk = p12Readback?.ok === true;
 } else {
   pruefe(
     "S1 intelligent-search: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
     "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
   );
+}
+if (!p12Unbelegt) {
+  erfassePfadErgebnis("intelligent-search", p12SchemaOk && p12ReadbackOk, "quality-or-readback-failed");
 }
 
 /* ===========================================================================
@@ -717,27 +773,45 @@ const p14 = await rufAnbieterBewacht(
     payload: { antworten: PROFILE_ANTWORTEN, listen: SUCH_LISTEN },
   },
 );
-const d14 = p14.daten?.data;
+const p14ProviderBelegt = istProviderPfadBelegt("P14 profile-extract");
+const p14Unbelegt = istProviderPfadUnbelegt("P14 profile-extract");
+const d14 = p14ProviderBelegt ? p14.daten?.data : null;
 const profileBelegeSindWoertlich = (d14?.signale ?? []).every((signal) =>
   typeof signal?.beleg === "string"
   && typeof PROFILE_ANTWORTEN[signal?.quelle] === "string"
   && PROFILE_ANTWORTEN[signal.quelle].includes(signal.beleg));
+const p14SchemaOk = p14ProviderBelegt && p14.status === 200 && p14.daten?.ok === true
+  && Array.isArray(d14?.signale) && d14.signale.length > 0
+  && Array.isArray(d14?.filme)
+  && Array.isArray(d14?.nicht_deutbar)
+  && d14?.achsen_tendenz && typeof d14.achsen_tendenz === "object"
+  && profileBelegeSindWoertlich
+  && p14.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
   "Profilextraktion liefert ein striktes Schema mit wörtlich zuordenbaren Belegen",
-  p14.status === 200 && p14.daten?.ok === true
-    && Array.isArray(d14?.signale) && d14.signale.length > 0
-    && Array.isArray(d14?.filme)
-    && Array.isArray(d14?.nicht_deutbar)
-    && d14?.achsen_tendenz && typeof d14.achsen_tendenz === "object"
-    && profileBelegeSindWoertlich
-    && p14.daten?.verbrauch?.kostenUsdCent > 0,
-  p14.status === 200
+  p14SchemaOk,
+  p14Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    : p14.status === 200
     ? `${d14?.signale?.length ?? 0} Signal(e), alle Belege wörtlich: ${profileBelegeSindWoertlich}`
     : `HTTP ${p14.status}: ${JSON.stringify(p14.daten)?.slice(0, 300)}`,
 );
-pruefeNutzerTaskReadback("S2 profile-extract", "profile-extract", p14.daten, {
-  jetzt: READBACK_ZEIT,
-});
+let p14ReadbackOk = false;
+if (p14ProviderBelegt) {
+  const p14Readback = pruefeNutzerTaskReadback("S2 profile-extract", "profile-extract", p14.daten, {
+    jetzt: READBACK_ZEIT,
+  });
+  p14ReadbackOk = p14Readback?.ok === true;
+} else {
+  pruefe(
+    "S2 profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+  );
+}
+if (!p14Unbelegt) {
+  erfassePfadErgebnis("profile-extract", p14SchemaOk && p14ReadbackOk, "quality-or-readback-failed");
+}
 
 /* ===========================================================================
    S3: Vorbewertung — genau ein potenziell zahlender Nutzerfall
@@ -781,33 +855,51 @@ const p17 = await rufAnbieterBewacht(
     },
   },
 );
-const d17 = p17.daten?.data;
+const p17ProviderBelegt = istProviderPfadBelegt("P17 film-forecast");
+const p17Unbelegt = istProviderPfadUnbelegt("P17 film-forecast");
+const d17 = p17ProviderBelegt ? p17.daten?.data : null;
+const p17SchemaOk = p17ProviderBelegt && p17.status === 200 && p17.daten?.ok === true
+  && p17.daten?.modellAlias === "gross"
+  && typeof p17.daten?.modell === "string"
+  && p17.daten.modell.length > 0
+  && d17?.format === "film-prognose-v1"
+  && (d17?.achsen?.warum === null
+    || (Number.isInteger(d17.achsen.warum) && d17.achsen.warum >= 0 && d17.achsen.warum <= 5))
+  && Number.isInteger(d17?.passung)
+  && d17.passung >= 0 && d17.passung <= 100
+  && Array.isArray(d17?.verwendete_signale)
+  && d17.verwendete_signale.length > 0
+  && d17.verwendete_signale.every((s) =>
+    /^S[1-9][0-9]*$/.test(s?.id)
+    && Object.keys(s || {}).sort().join(",") === "art,id,richtung,wert")
+  && p17.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
   "Echte Vorbewertung bleibt getrennt, nachvollziehbar und weist reale Kosten aus",
-  p17.status === 200 && p17.daten?.ok === true
-    && p17.daten?.modellAlias === "gross"
-    && typeof p17.daten?.modell === "string"
-    && p17.daten.modell.length > 0
-    && d17?.format === "film-prognose-v1"
-    && (d17?.achsen?.warum === null
-      || (Number.isInteger(d17.achsen.warum) && d17.achsen.warum >= 0 && d17.achsen.warum <= 5))
-    && Number.isInteger(d17?.passung)
-    && d17.passung >= 0 && d17.passung <= 100
-    && Array.isArray(d17?.verwendete_signale)
-    && d17.verwendete_signale.length > 0
-    && d17.verwendete_signale.every((s) =>
-      /^S[1-9][0-9]*$/.test(s?.id)
-      && Object.keys(s || {}).sort().join(",") === "art,id,richtung,wert")
-    && p17.daten?.verbrauch?.kostenUsdCent > 0,
-  p17.status === 200
+  p17SchemaOk,
+  p17Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    : p17.status === 200
     ? `Modell ${p17.daten?.modell}, ${p17.daten?.verbrauch?.kostenUsdCent} US-Cent, Sicherheit ${d17?.sicherheit}`
     : `HTTP ${p17.status}: ${JSON.stringify(p17.daten)?.slice(0, 300)}`,
 );
-pruefeNutzerTaskReadback("S3 film-forecast", "film-forecast", p17.daten, {
-  profilVersion: "p-test",
-  promptVersion: "v1",
-  jetzt: READBACK_ZEIT,
-});
+let p17ReadbackOk = false;
+if (p17ProviderBelegt) {
+  const p17Readback = pruefeNutzerTaskReadback("S3 film-forecast", "film-forecast", p17.daten, {
+    profilVersion: "p-test",
+    promptVersion: "v1",
+    jetzt: READBACK_ZEIT,
+  });
+  p17ReadbackOk = p17Readback?.ok === true;
+} else {
+  pruefe(
+    "S3 film-forecast: Produktionsparser, Speicherung und Readback bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+  );
+}
+if (!p17Unbelegt) {
+  erfassePfadErgebnis("film-forecast", p17SchemaOk && p17ReadbackOk, "quality-or-readback-failed");
+}
 
 /* ===========================================================================
    S4: gemeinsames Filmwissen und seine enge providerfreie Lese-RPC
@@ -842,18 +934,10 @@ const p18 = await rufAnbieterBewacht(
     payload: FILMWISSEN_KENNUNG,
   },
 );
-const d18 = p18.daten?.data;
-const p18Capture = providerCaptureNachLabel.get("P18 filmwissen-synthese") ?? null;
-const p18ProviderfreierFachstatus = p18Capture?.providerRequests === 0
-  ? p18Capture.fachstatus
-  : null;
-const p18ProviderfreierFachgrund = p18Capture?.providerRequests === 0
-  ? p18Capture.fachgrund
-  : null;
-const p18Fachdiagnose = `HTTP ${p18.status}, Fachstatus ${p18ProviderfreierFachstatus}`
-  + (p18ProviderfreierFachgrund ? `, Grund ${p18ProviderfreierFachgrund}` : "")
-  + ", providerRequests=0";
-const p18Erfolg = p18.status === 200
+const p18ProviderBelegt = istProviderPfadBelegt("P18 filmwissen-synthese");
+const p18Unbelegt = istProviderPfadUnbelegt("P18 filmwissen-synthese");
+const d18 = p18ProviderBelegt ? p18.daten?.data : null;
+const p18Erfolg = p18ProviderBelegt && p18.status === 200
   && p18.daten?.ok === true
   && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
   && typeof d18?.versionId === "string"
@@ -864,14 +948,14 @@ const p18Erfolg = p18.status === 200
 pruefe(
   "Quellengeführte Synthese veröffentlicht Alien oder findet dieselbe Cache-Version",
   p18Erfolg,
-  p18ProviderfreierFachstatus
-    ? `${p18Fachdiagnose}; keine Providerrohhuelle erwartet`
+  p18Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
     : p18.status === 200
     ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
     : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
 );
 
-const p18CacheReadback = p18ProviderfreierFachstatus === "cache_hit"
+const p18CacheReadback = !OWNER_CORE_SIX && d18?.status === "cache_hit"
   && p18.status === 200
   && p18.daten?.ok === true
   && typeof d18?.versionId === "string";
@@ -881,26 +965,35 @@ const p20 = (p18Erfolg || p18CacheReadback)
     p_kennung: FILMWISSEN_KENNUNG.kennung,
   })
   : null;
-if (p18ProviderfreierFachstatus && !p18CacheReadback) {
+let p18ReadbackOk = false;
+let p18RpcOk = false;
+if (p18Unbelegt) {
   pruefe(
-    "Providerfreier Filmwissen-Fachstatus ist explizit erfasst; der Sechserlauf läuft weiter",
-    true,
-    p18Fachdiagnose,
+    "S4 filmwissen-synthese: Parser, Persistenz, Readback und Qualität bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird weder Antwort noch Lese-RPC fachlich beurteilt.",
   );
 } else {
+  p18RpcOk = p20?.status === 200
+    && p20?.daten?.status === "belegt"
+    && p20?.daten?.version?.id === d18?.versionId
+    && Number.isInteger(p20?.daten?.warum?.wert);
   pruefe(
     "Der veröffentlichte gemeinsame Bericht ist über die enge Lese-RPC sichtbar",
-    p20?.status === 200
-      && p20?.daten?.status === "belegt"
-      && p20?.daten?.version?.id === d18?.versionId
-      && Number.isInteger(p20?.daten?.warum?.wert),
+    p18RpcOk,
     p20
       ? `HTTP ${p20.status}, WARUM ${p20.daten?.warum?.wert}, Version ${p20.daten?.version?.id}`
       : "übersprungen, weil P18 fehlgeschlagen ist",
   );
-  pruefeNutzerTaskReadback("S4 filmwissen-synthese", "filmwissen-synthese", p18.daten, {
+  const p18Readback = pruefeNutzerTaskReadback("S4 filmwissen-synthese", "filmwissen-synthese", p18.daten, {
     rpcReadback: p20?.daten,
   });
+  p18ReadbackOk = p18Readback?.ok === true;
+  erfassePfadErgebnis(
+    "filmwissen-synthese",
+    p18Erfolg && p18RpcOk && p18ReadbackOk,
+    "quality-or-readback-failed",
+  );
 }
 
 /* ===========================================================================
@@ -931,33 +1024,51 @@ const p22 = await rufAnbieterBewacht(
     },
   },
 );
-const d22 = p22.daten?.data;
+const p22ProviderBelegt = istProviderPfadBelegt("P22 blog-profile-extract");
+const p22Unbelegt = istProviderPfadUnbelegt("P22 blog-profile-extract");
+const d22 = p22ProviderBelegt ? p22.daten?.data : null;
+const p22SchemaOk = p22ProviderBelegt && p22.status === 200 && p22.daten?.ok === true
+  && Array.isArray(d22?.geschmackszuege)
+  && Array.isArray(d22?.vokabular)
+  && (d22.geschmackszuege.length > 0 || d22.vokabular.length > 0)
+  && p22.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
   "Synthetische Ein-Artikel-Profilextraktion bleibt ein bezahlter Pfad mit belegten Ergebnissen",
-  p22.status === 200 && p22.daten?.ok === true
-    && Array.isArray(d22?.geschmackszuege)
-    && Array.isArray(d22?.vokabular)
-    && (d22.geschmackszuege.length > 0 || d22.vokabular.length > 0)
-    && p22.daten?.verbrauch?.kostenUsdCent > 0,
-  p22.status === 200
+  p22SchemaOk,
+  p22Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    : p22.status === 200
     ? `${d22?.geschmackszuege?.length ?? 0} Geschmackszug, ${d22?.vokabular?.length ?? 0} Vokabular, ${p22.daten?.verbrauch?.kostenUsdCent} US-Cent`
     : `HTTP ${p22.status}: ${JSON.stringify(p22.daten)?.slice(0, 300)}`,
 );
-pruefeNutzerTaskReadback("S5 blog-profile-extract", "blog-profile-extract", p22.daten, {
-  artikelPayload: {
-    artikel: BLOG_PROFILE_ARTIKEL,
-    listen: BLOG_PROFILE_LISTEN,
-  },
-  profil: erteileEinwilligung(leeresProfil(), READBACK_ZEIT),
-  vokabular: [],
-  vorschaukopf: {
-    quelle: "bloganalyse",
-    articleId: BLOG_PROFILE_ARTIKEL.id,
-    contentHash: "a".repeat(64),
-    analyzedAt: READBACK_ZEIT,
-    promptVersion: BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
-  },
-});
+let p22ReadbackOk = false;
+if (p22ProviderBelegt) {
+  const p22Readback = pruefeNutzerTaskReadback("S5 blog-profile-extract", "blog-profile-extract", p22.daten, {
+    artikelPayload: {
+      artikel: BLOG_PROFILE_ARTIKEL,
+      listen: BLOG_PROFILE_LISTEN,
+    },
+    profil: erteileEinwilligung(leeresProfil(), READBACK_ZEIT),
+    vokabular: [],
+    vorschaukopf: {
+      quelle: "bloganalyse",
+      articleId: BLOG_PROFILE_ARTIKEL.id,
+      contentHash: "a".repeat(64),
+      analyzedAt: READBACK_ZEIT,
+      promptVersion: BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
+    },
+  });
+  p22ReadbackOk = p22Readback?.ok === true;
+} else {
+  pruefe(
+    "S5 blog-profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+  );
+}
+if (!p22Unbelegt) {
+  erfassePfadErgebnis("blog-profile-extract", p22SchemaOk && p22ReadbackOk, "quality-or-readback-failed");
+}
 
 /* ===========================================================================
    S6: Text-Stapelimport strukturiert synthetische Medien ohne Bildpfad
@@ -982,27 +1093,45 @@ const p23 = await rufAnbieterBewacht(
     },
   },
 );
-const d23 = p23.daten?.data;
+const p23ProviderBelegt = istProviderPfadBelegt("P23 media-batch-extract text-only");
+const p23Unbelegt = istProviderPfadUnbelegt("P23 media-batch-extract text-only");
+const d23 = p23ProviderBelegt ? p23.daten?.data : null;
+const p23SchemaOk = p23ProviderBelegt && p23.status === 200 && p23.daten?.ok === true
+  && p23.daten?.modellAlias === "klein"
+  && Array.isArray(d23?.kandidaten)
+  && d23.kandidaten.length > 0
+  && d23.kandidaten.every((kandidat) =>
+    typeof kandidat?.titel === "string" && kandidat.titel.length > 0
+    && ["film", "serie", "musik"].includes(kandidat?.typ)
+    && kandidat?.vorbeurteilung === "offen"
+    && kandidat?.begruendung === "")
+  && Array.isArray(d23?.warnungen)
+  && p23.daten?.verbrauch?.kostenUsdCent > 0;
 pruefe(
   "Text-Stapelimport ist live gebaut, bleibt unbewertet und benötigt keinen Bildpfad",
-  p23.status === 200 && p23.daten?.ok === true
-    && p23.daten?.modellAlias === "klein"
-    && Array.isArray(d23?.kandidaten)
-    && d23.kandidaten.length > 0
-    && d23.kandidaten.every((kandidat) =>
-      typeof kandidat?.titel === "string" && kandidat.titel.length > 0
-      && ["film", "serie", "musik"].includes(kandidat?.typ)
-      && kandidat?.vorbeurteilung === "offen"
-      && kandidat?.begruendung === "")
-    && Array.isArray(d23?.warnungen)
-    && p23.daten?.verbrauch?.kostenUsdCent > 0,
-  p23.status === 200
+  p23SchemaOk,
+  p23Unbelegt
+    ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+    : p23.status === 200
     ? `${d23?.kandidaten?.length ?? 0} Kandidat(en), ${p23.daten?.verbrauch?.kostenUsdCent} US-Cent`
     : `HTTP ${p23.status}: ${JSON.stringify(p23.daten)?.slice(0, 300)}`,
 );
-pruefeNutzerTaskReadback("S6 media-batch-extract", "media-batch-extract", p23.daten, {
-  master: [],
-});
+let p23ReadbackOk = false;
+if (p23ProviderBelegt) {
+  const p23Readback = pruefeNutzerTaskReadback("S6 media-batch-extract", "media-batch-extract", p23.daten, {
+    master: [],
+  });
+  p23ReadbackOk = p23Readback?.ok === true;
+} else {
+  pruefe(
+    "S6 media-batch-extract: Produktionsparser, Speicherung und Readback bleiben offen",
+    false,
+    "Ohne privaten Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+  );
+}
+if (!p23Unbelegt) {
+  erfassePfadErgebnis("media-batch-extract", p23SchemaOk && p23ReadbackOk, "quality-or-readback-failed");
+}
 
 /* ===========================================================================
    S7: Entdecken-Tagesfeed — genau ein potenziell zahlender Websearch
@@ -1022,11 +1151,14 @@ if (OWNER_COMBINED_EIGHT) {
     },
     captureDatei: "07-entdecken-weekly-websearch.json",
   });
+  const p24ProviderBelegt = istProviderPfadBelegt("P24 entdecken-daily-task");
+  const p24Unbelegt = istProviderPfadUnbelegt("P24 entdecken-daily-task");
   let entdeckenFeedGueltig = false;
   try {
+    if (!p24ProviderBelegt) throw new Error("provider-unproven");
     entdeckenFeedGueltig = validateEntdeckenDailyFeed(p24.daten?.feed).ok === true;
   } catch { /* Formfehler wird unten fail-closed klassifiziert. */ }
-  const entdeckenOk = p24.status === 200
+  const entdeckenOk = p24ProviderBelegt && p24.status === 200
     && JSON.stringify(Object.keys(p24.daten || {}).sort())
       === JSON.stringify(["feed", "ok", "providerRequests", "searchRequests", "status", "writes"])
     && p24.daten?.ok === true
@@ -1038,13 +1170,19 @@ if (OWNER_COMBINED_EIGHT) {
   pruefe(
     "Entdecken liefert genau einen frischen, validierten Websearch-Write",
     entdeckenOk,
-    `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
+    p24Unbelegt
+      ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+      : `HTTP ${p24.status}, Status ${p24.daten?.status ?? "?"}, Providerrequests ${p24.daten?.providerRequests ?? "?"}`,
   );
-  if (!entdeckenOk) {
+  if (!entdeckenOk && !p24Unbelegt) {
+    try { anbieterPfadBelege.erfassePfadFehler("entdecken-daily-task", "quality-contract-failed"); } catch { /* Stopp unten. */ }
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
       "Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite.",
     ));
+  }
+  if (!p24Unbelegt) {
+    erfassePfadErgebnis("entdecken-daily-task", entdeckenOk, "quality-contract-failed");
   }
 
   /* ===========================================================================
@@ -1064,7 +1202,9 @@ if (OWNER_COMBINED_EIGHT) {
     koerper: { targetId: RADAR_TARGET_ID },
     captureDatei: "08-radar-websearch.json",
   });
-  const radarOk = p25.status === 200
+  const p25ProviderBelegt = istProviderPfadBelegt("P25 radar-websearch-task");
+  const p25Unbelegt = istProviderPfadUnbelegt("P25 radar-websearch-task");
+  const radarOk = p25ProviderBelegt && p25.status === 200
     && JSON.stringify(Object.keys(p25.daten || {}).sort())
       === JSON.stringify(["ok", "providerRequests", "searchRequests", "status", "writes"])
     && p25.daten?.ok === true
@@ -1075,13 +1215,19 @@ if (OWNER_COMBINED_EIGHT) {
   pruefe(
     "Radar liefert genau einen bestaetigten Websearch-Write fuer das starke Ziel",
     radarOk,
-    `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
+    p25Unbelegt
+      ? "Providerbeleg unproven/pending-no-raw; Qualität offen; potentialProviderRequests=1"
+      : `HTTP ${p25.status}, Status ${p25.daten?.status ?? "?"}, Providerrequests ${p25.daten?.providerRequests ?? "?"}`,
   );
-  if (!radarOk) {
+  if (!radarOk && !p25Unbelegt) {
+    try { anbieterPfadBelege.erfassePfadFehler("radar-websearch-task", "quality-contract-failed"); } catch { /* Stopp unten. */ }
     stoppeLiveLauf(new LiveSicherheitsStopp(
       "unbekannt",
       "Radar-Websearch endete ohne bestaetigten Einzelwrite.",
     ));
+  }
+  if (!p25Unbelegt) {
+    erfassePfadErgebnis("radar-websearch-task", radarOk, "quality-contract-failed");
   }
 }
 
