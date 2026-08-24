@@ -6,6 +6,7 @@ import {
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
+import { normalizeEntdeckenPersistenceReadback } from "./readbackContract.js";
 
 const SAFE_FAILURE_CODES = new Set([
   "provider_error", "invalid_response", "storage_error", "source_registry_unavailable",
@@ -129,7 +130,29 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       ...providerEvidence,
     });
   }
-  try { await repository.saveFeed(evaluated.feed, { fenceToken }); }
+  if (!normalizedReceipt) {
+    await failSafely(repository, "invalid_response", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "invalid_response", ...degradedPresentation("provider-receipt-invalid"),
+    });
+  }
+  let persisted;
+  try {
+    await repository.saveFeed(evaluated.feed, {
+      fenceToken,
+      providerReceipt: normalizedReceipt,
+    });
+    if (typeof repository.readFeed !== "function") throw new Error("entdecken-readback-missing");
+    persisted = normalizeEntdeckenPersistenceReadback(await repository.readFeed({
+      fenceToken,
+      providerReceipt: normalizedReceipt,
+    }), {
+      expectedFeed: evaluated.feed,
+      fenceToken,
+      providerReceipt: normalizedReceipt,
+    });
+    if (!persisted) throw new Error("entdecken-readback-invalid");
+  }
   catch {
     await failSafely(repository, "storage_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -137,7 +160,10 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       ...providerEvidence,
     });
   }
-  return frozen("fresh", evaluated.feed, {
-    writes: 1, ...evaluatedPresentation(evaluated), ...providerEvidence,
+  return frozen("fresh", persisted.feed, {
+    writes: 1,
+    feedReadback: persisted.readback,
+    ...evaluatedPresentation(evaluated),
+    ...providerEvidence,
   });
 }

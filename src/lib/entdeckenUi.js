@@ -86,6 +86,17 @@ function seenTargetIds(master, entdeckenStatus) {
   return uniqueText(ids);
 }
 
+function discoveryRecordIdsWithExcludedStrongId(webDiscoveryFeed, excludedTargetIds) {
+  const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
+  if (!checked.ok) return new Set();
+  const watchmodeIds = new Set([...excludedTargetIds]
+    .filter((targetId) => targetId.startsWith("watchmode:"))
+    .map((targetId) => targetId.slice("watchmode:".length)));
+  return new Set(checked.value.items
+    .filter((record) => watchmodeIds.has(record.externalIds?.watchmode))
+    .map((record) => record.recordId));
+}
+
 function structuredCatalogAttributes(entry) {
   const genres = [...list(entry?.genres), ...list(entry?.genre)];
   const tags = [...list(entry?.tags)];
@@ -142,6 +153,7 @@ export function createCatalogSearchActions(input = {}) {
 
 export function localRecommendationCandidates(streamingEntdecken, {
   streamingKnown = null, selectedServices = [], entdeckenStatus = {},
+  includeSeenForMatching = false,
 } = {}) {
   const region = streamingEntdecken?.region || streamingKnown?.region;
   if (region !== "AT") return Object.freeze([]);
@@ -157,7 +169,7 @@ export function localRecommendationCandidates(streamingEntdecken, {
     .map((entry) => {
       const watchmodeId = positiveInteger(entry?.watchmode_id);
       if (watchmodeId == null || !text(entry?.titel)) return null;
-      if (statusIsSeen(entdeckenStatus?.[watchmodeId])) return null;
+      if (!includeSeenForMatching && statusIsSeen(entdeckenStatus?.[watchmodeId])) return null;
       const availableServices = list(entry.dienste);
       if (!availableServices.length) return null;
       if (services.size && !matchingServices({ services: availableServices }, services).length) return null;
@@ -399,9 +411,13 @@ export function createEntdeckenRecommendations({
 } = {}) {
   const excludedTargetIds = seenTargetIds(master, entdeckenStatus);
   const excluded = new Set(excludedTargetIds);
+  const excludedDiscoveryRecordIds = discoveryRecordIdsWithExcludedStrongId(
+    webDiscoveryFeed,
+    excludedTargetIds,
+  );
   const catalogCandidates = localRecommendationCandidates(streamingEntdecken, {
-    streamingKnown, selectedServices, entdeckenStatus,
-  }).filter((candidate) => !excluded.has(candidate.targetId));
+    streamingKnown, selectedServices, entdeckenStatus, includeSeenForMatching: true,
+  });
   const external = webDiscoveryCandidates({ webDiscoveryFeed, catalogCandidates });
   /* Beide sichtbaren Listen stammen aus genau demselben belegten Webfeed.
      Der lokale Katalog bestaetigt nur Identitaet und AT-Verfuegbarkeit; er
@@ -416,6 +432,8 @@ export function createEntdeckenRecommendations({
   const personalIds = new Set(personal.map((entry) => entry.targetId));
   const seenFurther = new Set();
   const remaining = webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates }).filter((candidate) => {
+    if (excludedDiscoveryRecordIds.has(candidate.discoveryRecordId)) return false;
+    if (candidate.matchStatus === "matched" && excluded.has(candidate.targetId)) return false;
     if (candidate.matchStatus === "matched" && personalIds.has(candidate.targetId)) return false;
     const identity = candidate.matchStatus === "matched" ? candidate.targetId
       : `${normalized(candidate.title)}|${candidate.year}|${normalized(candidate.type)}`;

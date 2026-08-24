@@ -174,7 +174,10 @@ function parseProviderText(content, warnings) {
   const parsedBlocks = [];
   try {
     for (const block of content.filter((entry) => entry?.type === "text" && text(entry.text))) {
-      parsedBlocks.push(parseProviderLooseJsonText(block.text));
+      parsedBlocks.push(Object.freeze({
+        parsed: parseProviderLooseJsonText(block.text),
+        consumedText: block.text,
+      }));
     }
   } catch (error) {
     if (error instanceof ProviderTextSafetyError) {
@@ -184,12 +187,13 @@ function parseProviderText(content, warnings) {
   }
   if (!parsedBlocks.length) {
     addWarning(warnings, "provider-text-missing");
-    return Object.freeze({ mode: "degraded", value: null });
+    return Object.freeze({ mode: "degraded", value: null, consumedText: null });
   }
   if (parsedBlocks.length > 1) addWarning(warnings, "multiple-text-blocks-normalized");
-  const selected = [...parsedBlocks].reverse().find((entry) => entry.value) || parsedBlocks.at(-1);
-  for (const warning of selected.warnings) addWarning(warnings, warning);
-  return selected;
+  const selected = [...parsedBlocks].reverse().find((entry) => entry.parsed.value)
+    || parsedBlocks.at(-1);
+  for (const warning of selected.parsed.warnings) addWarning(warnings, warning);
+  return Object.freeze({ ...selected.parsed, consumedText: selected.consumedText });
 }
 function normalizedTextList(value, warnings) {
   if (value === undefined) {
@@ -382,7 +386,27 @@ export function parseAnthropicEntdeckenDailyResponse(value, setupInput, checkedA
       response: Object.freeze({ checkedAt, items: Object.freeze(items) }),
     }),
     usage,
+    consumedProviderText: parsedText.consumedText,
   });
+}
+
+function settledCostReadback(value, {
+  logId, operationId, usage, costUsdCent,
+}) {
+  const operationForm = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!plain(value)
+      || Object.keys(value).sort().join(",") !== [
+        "costUsdCent", "inputTokens", "logId", "model", "operationId",
+        "outputTokens", "status", "task",
+      ].sort().join(",")
+      || value.logId !== logId
+      || value.operationId !== operationId || !operationForm.test(value.operationId)
+      || value.task !== ENTDECKEN_DAILY_PROVIDER_TASK || value.status !== "fertig"
+      || value.model !== usage.model
+      || value.inputTokens !== usage.inputTokens
+      || value.outputTokens !== usage.outputTokens
+      || value.costUsdCent !== costUsdCent || !finitePositive(value.costUsdCent)) return null;
+  return Object.freeze({ ...value });
 }
 
 async function responseJson(response, onRawResponse = () => {}) {
@@ -401,6 +425,7 @@ async function responseJson(response, onRawResponse = () => {}) {
  *   loadSetup?: (() => Promise<unknown>) | null,
  *   reserveCost?: ((input: {operationId: string, reservationUsdCent: number, providerRequests: number}) => Promise<{ok?: boolean, logId?: unknown}>) | null,
  *   settleCost?: ((input: Record<string, unknown>) => Promise<void>) | null,
+ *   readSettledCost?: ((input: {logId: number, operationId: string}) => Promise<unknown>) | null,
  *   fetchImpl?: typeof fetch,
  *   now?: () => string,
  *   operationId?: () => string
@@ -411,6 +436,7 @@ export function createAnthropicEntdeckenDailyAdapter({
   loadSetup = null,
   reserveCost = null,
   settleCost = null,
+  readSettledCost = null,
   fetchImpl = fetch,
   now = () => new Date().toISOString(),
   operationId = () => crypto.randomUUID(),
@@ -423,14 +449,16 @@ export function createAnthropicEntdeckenDailyAdapter({
     used = true;
     if (typeof apiKey !== "string" || !apiKey || typeof loadSetup !== "function"
         || typeof reserveCost !== "function" || typeof settleCost !== "function"
+        || typeof readSettledCost !== "function"
         || typeof fetchImpl !== "function") setupError();
     const setup = validateEntdeckenDailyProviderSetup(await loadSetup());
     const queryContext = validateEntdeckenWeeklyQueryContext(queryContextInput);
     if (!queryContext) throw new EntdeckenDailyProviderError("provider-query-context-invalid");
     const body = buildAnthropicEntdeckenDailyBody(setup, queryContext);
     const reservationUsdCent = estimateEntdeckenDailyReservation(body, setup);
+    const requestOperationId = operationId();
     const reservation = await reserveCost({
-      operationId: operationId(), reservationUsdCent, providerRequests: 1,
+      operationId: requestOperationId, reservationUsdCent, providerRequests: 1,
     });
     const logId = Number(reservation?.logId);
     if (reservation?.ok !== true) throw new EntdeckenDailyProviderError("cost-gate-rejected");
@@ -438,7 +466,6 @@ export function createAnthropicEntdeckenDailyAdapter({
 
     let usage = null;
     let costUsdCent = null;
-    let providerRawForReceipt = "";
     let settled = false;
     const settle = async (status, code = null) => {
       if (settled) throw new EntdeckenDailyProviderError("cost-settlement-failed");
@@ -473,7 +500,6 @@ export function createAnthropicEntdeckenDailyAdapter({
       }
       const providerBody = await responseJson(response, (raw) => {
         providerRawResponse = raw;
-        providerRawForReceipt = raw;
       });
       usage = providerUsage(providerBody);
       if (!response?.ok) throw new EntdeckenDailyProviderError("http-error", usage);
@@ -484,26 +510,37 @@ export function createAnthropicEntdeckenDailyAdapter({
           || costUsdCent > setup.globalRequestCapUsdCent) {
         throw new EntdeckenDailyProviderError("provider-cost-invalid", usage);
       }
+      await settle("fertig");
+      let persistedCost = null;
+      try {
+        persistedCost = settledCostReadback(
+          await readSettledCost({ logId, operationId: requestOperationId }),
+          { logId, operationId: requestOperationId, usage, costUsdCent },
+        );
+      } catch { /* Der Serverlog ist der einzige gueltige Kostenbeleg. */ }
+      if (!persistedCost || typeof parsed.consumedProviderText !== "string"
+          || !parsed.consumedProviderText) {
+        throw new EntdeckenDailyProviderError("provider-receipt-invalid", usage);
+      }
       let providerReceipt = null;
       try {
         providerReceipt = await createProviderReceipt({
           provider: "anthropic",
-          providerResponseText: providerRawForReceipt,
-          model: usage.model,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
+          providerResponseText: parsed.consumedProviderText,
+          model: persistedCost.model,
+          inputTokens: persistedCost.inputTokens,
+          outputTokens: persistedCost.outputTokens,
           webSearchRequests: usage.searchRequests,
           resultMode: parsed.envelope.responseMode,
-          serverLogId: logId,
+          serverLogId: persistedCost.logId,
           providerRequests: 1,
           reservationUsdCent,
-          costUsdCent,
+          costUsdCent: persistedCost.costUsdCent,
         });
       } catch { /* Der Hash ist Teil des fail-closed Produktvertrags. */ }
       if (!providerReceipt) {
         throw new EntdeckenDailyProviderError("provider-receipt-invalid", usage);
       }
-      await settle("fertig");
       telemetry.searchRequests = usage.searchRequests;
       telemetry.resultCount = parsed.envelope.searchResultCount;
       telemetry.costUsdCent = costUsdCent;

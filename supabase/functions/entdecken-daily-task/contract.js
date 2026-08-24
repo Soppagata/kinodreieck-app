@@ -5,7 +5,11 @@
 export const ENTDECKEN_WEEKLY_FEED_FORMAT = 4;
 export const ENTDECKEN_WEEKLY_FEED_ID = "websearch:weekly-positive-at";
 export const ENTDECKEN_WEEKLY_SOURCE_ID = "websearch:weekly-positive";
+/* Breite Lesekompatibilitaet fuer bereits gespeicherte Feeds; ein neuer
+   Refresh darf darunter nur den engeren Produktumfang schreiben. */
 export const ENTDECKEN_WEEKLY_MAX_ITEMS = 20;
+export const ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS = 5;
+export const ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS = 7;
 export const ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS = 20;
 export const ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS = 35;
 export const ENTDECKEN_WEEKLY_MAX_SOURCES = 10;
@@ -16,7 +20,7 @@ export const ENTDECKEN_WEEKLY_DEGRADED_NOTICE = "Die neuen Wochentipps waren nic
 export const ENTDECKEN_DAILY_FEED_FORMAT = ENTDECKEN_WEEKLY_FEED_FORMAT;
 export const ENTDECKEN_DAILY_FEED_ID = ENTDECKEN_WEEKLY_FEED_ID;
 export const ENTDECKEN_DAILY_SOURCE_ID = ENTDECKEN_WEEKLY_SOURCE_ID;
-export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_MAX_ITEMS;
+export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS;
 export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS;
 export const ENTDECKEN_DAILY_VALID_DAYS = 7;
 
@@ -351,8 +355,8 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   const records = new Map();
   const itemErrors = [];
   const warnings = [];
-  const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_MAX_ITEMS);
-  if (envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) warnings.push("items-truncated");
+  const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS);
+  if (envelope.response.items.length > ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS) warnings.push("items-truncated");
   rawItems.forEach((item, index) => {
     const shapeErrors = [];
     validateProviderItem(item, index, shapeErrors, retrievedOn);
@@ -392,9 +396,9 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     return result("invalid_response", ["opinion-url-count-exceeds-search-results"], null,
       mergePresentation(presentation, ["result-count-invalid"], true));
   }
-  if (!records.size) {
+  if (records.size < ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS) {
     return result("insufficient_evidence", itemErrors.length ? itemErrors : ["records-empty"], null,
-      mergePresentation(presentation, ["records-empty"], true));
+      mergePresentation(presentation, ["records-insufficient"], true));
   }
   const items = [...records.values()]
     .sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"))

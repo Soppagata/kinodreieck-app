@@ -7,6 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { createAnthropicEntdeckenDailyAdapter } from "./anthropicAdapter.js";
 import { validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
+import { createEntdeckenDailyResponse } from "./responseContract.js";
 import {
   PROVIDER_DIAGNOSTIC_ENV,
   PROVIDER_DIAGNOSTIC_HEADER,
@@ -117,6 +118,7 @@ export function createEntdeckenDailyHandler({
     });
     let preclaimedRecovery: Record<string, unknown> | null = null;
     let ownerRecoveryConfirmed = false;
+    let ownerRecoveryAccountId: string | null = null;
     let providerDiagnostic = providerDiagnosticAccess({
       headerValue: providerDiagnosticHeader,
       enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
@@ -148,6 +150,7 @@ export function createEntdeckenDailyHandler({
         return json({ ok: false, status: "disabled", feed: null }, 403, origin);
       }
       ownerRecoveryConfirmed = true;
+      ownerRecoveryAccountId = accountId;
       providerDiagnostic = providerDiagnosticAccess({
         headerValue: providerDiagnosticHeader,
         enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
@@ -208,6 +211,21 @@ export function createEntdeckenDailyHandler({
           p_fence_token: fenceToken,
         });
         if (error || data?.ok !== true) throw error || new Error("entdecken-daily-save-rejected");
+      },
+      async readFeed({ fenceToken, providerReceipt }: {
+        fenceToken: number;
+        providerReceipt: { server?: { logId?: unknown } };
+      }) {
+        const logId = Number(providerReceipt?.server?.logId);
+        if (!Number.isSafeInteger(logId) || logId <= 0) {
+          throw new Error("entdecken-weekly-readback-log-invalid");
+        }
+        const { data, error } = await admin.rpc("kd_entdecken_weekly_feed_readback", {
+          p_fence_token: fenceToken,
+          p_provider_log_id: logId,
+        });
+        if (error) throw error;
+        return data;
       },
       async markFailure({ code, fenceToken }: { code: string; fenceToken: number }) {
         const { error } = await admin.rpc("kd_entdecken_daily_fail", {
@@ -278,6 +296,11 @@ export function createEntdeckenDailyHandler({
              der Kostenreservierung enthalten und werden danach gemessen. */
           p_search_requests: providerRequests,
           p_fence_token: claimContext?.fenceToken,
+          /* Nur der explizite Owner-Recoverylauf wird fuer die bereits
+             vorgeschriebene kontogebundene Vor-/Nachmessung verbucht. Der
+             globale Browserfeed bleibt accountlos und sendet die ID nie an
+             den Provider. */
+          p_account: ownerRecoveryAccountId,
         });
         if (error) throw error;
         return { ok: data?.ok === true, logId: data?.log_id };
@@ -296,6 +319,32 @@ export function createEntdeckenDailyHandler({
         });
         if (error) throw error;
       },
+      async readSettledCost({ logId, operationId }: {
+        logId: number;
+        operationId: string;
+      }) {
+        const { data, error } = await admin.from("kd_ai_log")
+          .select("id,account_id,vorgang_id,task,status,modell,input_tokens,output_tokens,kosten_usd_cent")
+          .eq("id", logId)
+          .eq("vorgang_id", operationId)
+          .maybeSingle();
+        if (error || !data
+            || (ownerRecoveryAccountId === null
+              ? data.account_id !== null
+              : data.account_id !== ownerRecoveryAccountId)) {
+          throw error || new Error("entdecken-provider-log-unavailable");
+        }
+        return {
+          logId: data.id,
+          operationId: data.vorgang_id,
+          task: data.task,
+          status: data.status,
+          model: data.modell,
+          inputTokens: data.input_tokens,
+          outputTokens: data.output_tokens,
+          costUsdCent: Number(data.kosten_usd_cent),
+        };
+      },
     });
 
     const result = await runEntdeckenDailyRefresh({ repository, adapter: productAdapter });
@@ -309,18 +358,7 @@ export function createEntdeckenDailyHandler({
       return json({ ok: false, status: "provider_error", feed: result.feed, writes: 0 }, 500, origin);
     }
     return json({
-      ok: true,
-      status: result.status,
-      feed: result.feed,
-      writes: Number.isInteger(result.writes) ? result.writes : 0,
-      providerRequests: Number.isInteger(telemetry?.providerRequests) ? telemetry.providerRequests : 0,
-      searchRequests: Number.isInteger(telemetry?.searchRequests) ? telemetry.searchRequests : 0,
-      responseMode: result.responseMode,
-      displayText: result.displayText,
-      warnings: result.warnings,
-      ...(result.providerReceipt
-        ? { providerReceipt: result.providerReceipt }
-        : {}),
+      ...createEntdeckenDailyResponse(result, telemetry),
       ...(providerDiagnostic.allowed
         ? providerDiagnosticField(providerRawResponse)
         : {}),

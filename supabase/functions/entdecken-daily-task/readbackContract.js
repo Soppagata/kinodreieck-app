@@ -1,0 +1,129 @@
+/* Inhaltsfreier Beleg fuer den unabhaengig aus der Datenbank gelesenen
+   Entdecken-Wochenfeed. Titel, URLs, Konten und Providerrohtext bleiben im
+   normalen Feed beziehungsweise im Server und erscheinen nie im Beleg. */
+
+import {
+  ENTDECKEN_WEEKLY_FEED_FORMAT,
+  ENTDECKEN_WEEKLY_FEED_ID,
+  ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS,
+  ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS,
+  validateEntdeckenDailyFeed,
+} from "./contract.js";
+import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
+
+export const ENTDECKEN_WEEKLY_READBACK_VERSION = "entdecken-weekly-readback-v1";
+
+const OPERATION_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function plain(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function exactKeys(value, keys) {
+  return plain(value)
+    && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+function nonNegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+function positiveInteger(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+function finitePositive(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) freezeDeep(nested);
+  return Object.freeze(value);
+}
+function freshFeed(value) {
+  const checked = validateEntdeckenDailyFeed(value);
+  return checked.ok
+    && checked.value.format === ENTDECKEN_WEEKLY_FEED_FORMAT
+    && checked.value.feedId === ENTDECKEN_WEEKLY_FEED_ID
+    && checked.value.items.length >= ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS
+    && checked.value.items.length <= ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS
+    ? checked.value : null;
+}
+function evidenceCount(feed) {
+  return feed.items.reduce((sum, item) => sum + item.evidence.length, 0);
+}
+export function normalizeEntdeckenFeedReadback(value, {
+  feed,
+  providerReceipt,
+} = {}) {
+  const checkedFeed = freshFeed(feed);
+  const receipt = normalizeProviderReceipt(providerReceipt);
+  if (!checkedFeed || !receipt || !exactKeys(value, [
+    "schemaVersion", "feedId", "region", "isoWeek", "refreshedOn",
+    "validUntil", "itemCount", "evidenceCount", "sourceCount",
+    "approvedSourceCount", "providerLogId", "costUsdCent",
+  ])
+      || value.schemaVersion !== ENTDECKEN_WEEKLY_READBACK_VERSION
+      || value.feedId !== checkedFeed.feedId || value.region !== "AT"
+      || value.isoWeek !== checkedFeed.isoWeek
+      || value.refreshedOn !== checkedFeed.refreshedOn
+      || value.validUntil !== checkedFeed.validUntil
+      || value.itemCount !== checkedFeed.items.length
+      || value.evidenceCount !== evidenceCount(checkedFeed)
+      || !positiveInteger(value.sourceCount)
+      || value.sourceCount > value.evidenceCount
+      || !positiveInteger(value.approvedSourceCount)
+      || value.approvedSourceCount < value.sourceCount
+      || value.approvedSourceCount > 10
+      || value.providerLogId !== receipt.server.logId
+      || value.costUsdCent !== receipt.server.costUsdCent) return null;
+  return freezeDeep({ ...value });
+}
+
+export function normalizeEntdeckenPersistenceReadback(value, {
+  expectedFeed,
+  fenceToken,
+  providerReceipt,
+} = {}) {
+  const receipt = normalizeProviderReceipt(providerReceipt);
+  const persistedFeed = freshFeed(value?.feed);
+  if (!receipt || !persistedFeed || !positiveInteger(fenceToken)
+      || !exactKeys(value, [
+        "ok", "status", "feed", "fenceToken", "providerLog", "provenance",
+      ])
+      || value.ok !== true || value.status !== "verified"
+      || value.fenceToken !== fenceToken
+      || JSON.stringify(persistedFeed) !== JSON.stringify(freshFeed(expectedFeed))
+      || !exactKeys(value.providerLog, [
+        "logId", "operationId", "task", "status", "model", "inputTokens",
+        "outputTokens", "costUsdCent",
+      ])
+      || value.providerLog.logId !== receipt.server.logId
+      || typeof value.providerLog.operationId !== "string"
+      || !OPERATION_ID_FORM.test(value.providerLog.operationId)
+      || value.providerLog.task !== "entdecken-daily"
+      || value.providerLog.status !== "fertig"
+      || value.providerLog.model !== receipt.model
+      || value.providerLog.inputTokens !== receipt.usage.inputTokens
+      || value.providerLog.outputTokens !== receipt.usage.outputTokens
+      || value.providerLog.costUsdCent !== receipt.server.costUsdCent
+      || !finitePositive(value.providerLog.costUsdCent)
+      || !exactKeys(value.provenance, [
+        "evidenceCount", "sourceCount", "approvedSourceCount",
+      ])
+      || !nonNegativeInteger(value.provenance.evidenceCount)
+      || !positiveInteger(value.provenance.sourceCount)
+      || !positiveInteger(value.provenance.approvedSourceCount)) return null;
+
+  const readback = normalizeEntdeckenFeedReadback({
+    schemaVersion: ENTDECKEN_WEEKLY_READBACK_VERSION,
+    feedId: persistedFeed.feedId,
+    region: persistedFeed.region,
+    isoWeek: persistedFeed.isoWeek,
+    refreshedOn: persistedFeed.refreshedOn,
+    validUntil: persistedFeed.validUntil,
+    itemCount: persistedFeed.items.length,
+    evidenceCount: value.provenance.evidenceCount,
+    sourceCount: value.provenance.sourceCount,
+    approvedSourceCount: value.provenance.approvedSourceCount,
+    providerLogId: value.providerLog.logId,
+    costUsdCent: value.providerLog.costUsdCent,
+  }, { feed: persistedFeed, providerReceipt: receipt });
+  return readback ? freezeDeep({ feed: persistedFeed, readback }) : null;
+}

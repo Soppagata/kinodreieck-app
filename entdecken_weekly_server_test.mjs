@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   createEntdeckenWeeklyQueryContext,
+  ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS,
+  ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS,
   evaluateEntdeckenDailyResponse,
   validateEntdeckenDailyFeed,
   validateEntdeckenSourceRegistry,
@@ -19,7 +21,11 @@ import {
   validateEntdeckenDailyProviderSetup,
 } from "./supabase/functions/entdecken-daily-task/anthropicAdapter.js";
 import { runEntdeckenDailyRefresh } from "./supabase/functions/entdecken-daily-task/runner.js";
-import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
+import { normalizeEntdeckenPersistenceReadback } from "./supabase/functions/entdecken-daily-task/readbackContract.js";
+import {
+  createProviderReceipt,
+  isProviderReceipt,
+} from "./supabase/functions/_shared/providerReceipt.js";
 import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
 import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
 import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
@@ -81,7 +87,11 @@ function providerItem(index = 1) {
   });
 }
 
-function envelope(items = [providerItem()]) {
+function providerItems(count = ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS) {
+  return Array.from({ length: count }, (_, index) => providerItem(index + 1));
+}
+
+function envelope(items = providerItems()) {
   return {
     searchResultCount: new Set(items.map((item) => item.evidence.url)).size,
     queryContext,
@@ -89,7 +99,7 @@ function envelope(items = [providerItem()]) {
   };
 }
 
-function evaluated(items = [providerItem()], day = "2026-08-20", isoWeek = "2026-W34") {
+function evaluated(items = providerItems(), day = "2026-08-20", isoWeek = "2026-W34") {
   const context = createEntdeckenWeeklyQueryContext(day, isoWeek);
   return evaluateEntdeckenDailyResponse({ ...envelope(items), queryContext: context }, sources, {
     retrievedOn: day,
@@ -112,6 +122,59 @@ const providerSetup = Object.freeze({
   outputPriceUsdCentPerMtok: 500,
   sourceRegistry: sources,
 });
+
+async function mockReceipt({
+  providerResponseText = JSON.stringify({ items: providerItems() }),
+  responseMode = "structured",
+  logId = 71,
+  inputTokens = 120,
+  outputTokens = 240,
+  searchRequests = 1,
+  costUsdCent = 1.1321,
+} = {}) {
+  return await createProviderReceipt({
+    provider: "anthropic",
+    providerResponseText,
+    model: "claude-haiku-4-5",
+    inputTokens,
+    outputTokens,
+    webSearchRequests: searchRequests,
+    resultMode: responseMode,
+    serverLogId: logId,
+    providerRequests: 1,
+    reservationUsdCent: 3.5,
+    costUsdCent,
+  });
+}
+
+function persistenceReadback(feed, receipt, fenceToken) {
+  const evidence = feed.items.flatMap((item) => item.evidence);
+  const usedSources = sources.filter((source) => evidence.some((entry) => (
+    entry.domain === source.domain
+      || (source.subdomainsAllowed && entry.domain.endsWith(`.${source.domain}`))
+  )));
+  return {
+    ok: true,
+    status: "verified",
+    feed,
+    fenceToken,
+    providerLog: {
+      logId: receipt.server.logId,
+      operationId: `00000000-0000-4000-8000-${String(receipt.server.logId).padStart(12, "0")}`,
+      task: "entdecken-daily",
+      status: "fertig",
+      model: receipt.model,
+      inputTokens: receipt.usage.inputTokens,
+      outputTokens: receipt.usage.outputTokens,
+      costUsdCent: receipt.server.costUsdCent,
+    },
+    provenance: {
+      evidenceCount: evidence.length,
+      sourceCount: usedSources.length,
+      approvedSourceCount: sources.length,
+    },
+  };
+}
 
 function anthropicResponse(items = [providerItem()]) {
   const urls = [...new Set(items.map((item) => item.evidence.url))];
@@ -160,7 +223,7 @@ await check("Quellenregister akzeptiert eine kleine freigegebene Redaktionsliste
 await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lokalen Daten", () => {
   const body = buildAnthropicEntdeckenDailyBody(providerSetup, queryContext);
   const input = JSON.parse(body.messages[0].content);
-  assert.deepEqual(input, { queryContext, region: "AT", language: "de", maxItems: 20 });
+  assert.deepEqual(input, { queryContext, region: "AT", language: "de", maxItems: 7 });
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
     allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
@@ -204,12 +267,26 @@ await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach
   let providerRequests = 0;
   let reservations = 0;
   let settlements = 0;
+  let settledReadbacks = 0;
   let reservationInput = null;
   const adapter = createAnthropicEntdeckenDailyAdapter({
     apiKey: "mock-key",
     loadSetup: async () => providerSetup,
     reserveCost: async (input) => { reservations += 1; reservationInput = input; return { ok: true, logId: 71 }; },
     settleCost: async () => { settlements += 1; },
+    readSettledCost: async ({ logId, operationId }) => {
+      settledReadbacks += 1;
+      return {
+        logId,
+        operationId,
+        task: "entdecken-daily",
+        status: "fertig",
+        model: "claude-haiku-4-5",
+        inputTokens: 120,
+        outputTokens: 240,
+        costUsdCent: 1.1321,
+      };
+    },
     fetchImpl: async () => {
       providerRequests += 1;
       return { ok: true, async text() { return JSON.stringify(anthropicResponse()); } };
@@ -236,6 +313,10 @@ await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach
   assert.equal(reservations, 1);
   assert.equal(reservationInput.providerRequests, 1);
   assert.equal(settlements, 1);
+  assert.equal(settledReadbacks, 1);
+  const consumedText = anthropicResponse().content.find((block) => block.type === "text").text;
+  const expectedReceipt = await mockReceipt({ providerResponseText: consumedText });
+  assert.equal(result.providerReceipt.responseSha256, expectedReceipt.responseSha256);
   assert.equal(adapter.takeProviderRawResponse(), JSON.stringify(anthropicResponse()));
   assert.equal(adapter.takeProviderRawResponse(), null);
 });
@@ -287,6 +368,21 @@ await check("Weicher Websearch-Mock speichert sechs sichere Titel und projiziert
   );
   assert.equal(parsed.envelope.responseMode, "partial");
   assert.equal(parsed.envelope.response.items.length, 6);
+  const evaluatedParsed = evaluateEntdeckenDailyResponse(parsed.envelope, sources, {
+    retrievedOn: "2026-08-20",
+    claimedIsoWeek: "2026-W34",
+  });
+  assert.equal(evaluatedParsed.ok, true, JSON.stringify(evaluatedParsed.errors));
+  const receipt = await mockReceipt({
+    providerResponseText: parsed.consumedProviderText,
+    responseMode: parsed.envelope.responseMode,
+    logId: 81,
+    inputTokens: 180,
+    outputTokens: 420,
+    searchRequests: 2,
+    costUsdCent: 2.228,
+  });
+  assert.equal(isProviderReceipt(receipt), true);
 
   let saves = 0;
   const run = await runEntdeckenDailyRefresh({
@@ -298,19 +394,32 @@ await check("Weicher Websearch-Mock speichert sechs sichere Titel und projiziert
         };
       },
       async loadSources() { return sources; },
-      async saveFeed(feed) {
+      async saveFeed(feed, options) {
         assert.equal(validateEntdeckenDailyFeed(feed).ok, true);
+        assert.deepEqual(options.providerReceipt, receipt);
         endToEndFeed = feed;
         saves += 1;
       },
+      async readFeed({ fenceToken, providerReceipt }) {
+        assert.deepEqual(providerReceipt, receipt);
+        const readback = persistenceReadback(endToEndFeed, receipt, fenceToken);
+        assert.ok(normalizeEntdeckenPersistenceReadback(readback, {
+          expectedFeed: endToEndFeed,
+          fenceToken,
+          providerReceipt,
+        }));
+        return readback;
+      },
       async markFailure() { throw new Error("unerwartet"); },
     },
-    adapter: { async search() { return parsed.envelope; } },
+    adapter: { async search() { return { ...parsed.envelope, providerReceipt: receipt }; } },
   });
   assert.equal(run.status, "fresh");
   assert.equal(run.responseMode, "partial");
   assert.equal(saves, 1);
   assert.equal(endToEndFeed.items.length, 6);
+  assert.equal(run.feedReadback.itemCount, 6);
+  assert.equal(run.feedReadback.providerLogId, receipt.server.logId);
 
   const selection = createEntdeckenRecommendations({
     streamingEntdecken: {
@@ -391,10 +500,10 @@ await check("Unparsebarer sicherer Text ersetzt den Feed nicht und liefert nur d
   assert.equal(loaded.feed.items.length, 6);
 });
 
-await check("Wochenvertrag akzeptiert hoechstens 20 belegte Titel und den Clientvertrag", () => {
+await check("Neuer Wochenrefresh speichert exakt fuenf bis sieben belegte Titel", () => {
   const items = Array.from({ length: 20 }, (_, index) => providerItem(index + 1));
   const feed = evaluated(items);
-  assert.equal(feed.items.length, 20);
+  assert.equal(feed.items.length, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS);
   assert.equal(feed.isoWeek, "2026-W34");
   assert.equal(feed.validUntil, "2026-08-23");
   assert.equal(feed.items[0].title, "The Ninth Jedi");
@@ -406,8 +515,11 @@ await check("Wochenvertrag akzeptiert hoechstens 20 belegte Titel und den Client
     retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
   });
   assert.equal(truncated.ok, true);
-  assert.equal(truncated.feed.items.length, 20);
+  assert.equal(truncated.feed.items.length, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS);
   assert.equal(truncated.responseMode, "partial");
+  assert.equal(evaluateEntdeckenDailyResponse(envelope(providerItems(4)), sources, {
+    retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
+  }).ok, false);
 });
 
 await check("Unbelegte, zu alte oder identitaetswiderspruechliche Ergebnisse bleiben fail-closed", () => {
@@ -422,9 +534,9 @@ await check("Unbelegte, zu alte oder identitaetswiderspruechliche Ergebnisse ble
   const duplicateResult = evaluateEntdeckenDailyResponse(envelope([providerItem(), duplicate]), sources, {
     retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
   });
-  assert.equal(duplicateResult.ok, true);
-  assert.equal(duplicateResult.feed.items.length, 1);
-  assert.equal(duplicateResult.responseMode, "partial");
+  assert.equal(duplicateResult.ok, false);
+  assert.equal(duplicateResult.feed, null);
+  assert.equal(duplicateResult.responseMode, "degraded");
 });
 
 await check("Runner bindet Query und Save an denselben Fencing-Token und sucht nur einmal je Woche", async () => {
@@ -432,6 +544,7 @@ await check("Runner bindet Query und Save an denselben Fencing-Token und sucht n
   let attempted = false;
   let adapterCalls = 0;
   const savedFences = [];
+  const receipt = await mockReceipt({ logId: 41 });
   const repository = {
     async claimRefresh() {
       const refresh = !attempted;
@@ -442,13 +555,21 @@ await check("Runner bindet Query und Save an denselben Fencing-Token und sucht n
       };
     },
     async loadSources() { return sources; },
-    async saveFeed(feed, options) { stored = feed; savedFences.push(options.fenceToken); },
+    async saveFeed(feed, options) {
+      assert.deepEqual(options.providerReceipt, receipt);
+      stored = feed;
+      savedFences.push(options.fenceToken);
+    },
+    async readFeed({ fenceToken, providerReceipt }) {
+      assert.deepEqual(providerReceipt, receipt);
+      return persistenceReadback(stored, receipt, fenceToken);
+    },
     async markFailure() { throw new Error("unerwartet"); },
   };
   const adapter = { async search(context) {
     adapterCalls += 1;
     assert.deepEqual(context, queryContext);
-    return envelope();
+    return { ...envelope(), providerReceipt: receipt };
   } };
   assert.equal((await runEntdeckenDailyRefresh({ repository, adapter })).status, "fresh");
   assert.equal((await runEntdeckenDailyRefresh({ repository, adapter })).status, "fresh");
@@ -458,12 +579,12 @@ await check("Runner bindet Query und Save an denselben Fencing-Token und sucht n
 
 await check("Providerfehler behaelt den letzten erfolgreichen Vorwochenfeed ohne Retry", async () => {
   const oldContext = createEntdeckenWeeklyQueryContext("2026-08-13", "2026-W33");
-  const oldItem = {
-    ...providerItem(),
-    evidence: { ...providerItem().evidence, publishedOn: "2026-08-12" },
-  };
+  const oldItems = providerItems().map((item) => ({
+    ...item,
+    evidence: { ...item.evidence, publishedOn: "2026-08-12" },
+  }));
   const oldFeed = evaluateEntdeckenDailyResponse({
-    ...envelope([oldItem]), queryContext: oldContext,
+    ...envelope(oldItems), queryContext: oldContext,
   }, sources, {
     retrievedOn: "2026-08-13", claimedIsoWeek: "2026-W33",
   }).feed;
@@ -551,6 +672,7 @@ await check("Browserdienst sendet accountlos genau einen bodylosen GET", async (
 const migration = fs.readFileSync("./supabase/migrations/20260822190000_entdecken_weekly_feed.sql", "utf8");
 const recoveryMigration = fs.readFileSync("./supabase/migrations/20260822210000_entdecken_weekly_recovery.sql", "utf8");
 const recoveryClaimMigration = fs.readFileSync("./supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql", "utf8");
+const liveProofMigration = fs.readFileSync("./supabase/migrations/20260824120000_entdecken_weekly_live_proof.sql", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
@@ -571,6 +693,9 @@ await check("Normaler Browser-GET bleibt accountlos; nur der interne Recoveryhea
   assert.match(functionSource, /ownerRecoveryConfirmed/);
   assert.doesNotMatch(functionSource, /profile|seen|gesehen|watchlist|selectedServices|radar/i);
   assert.match(functionSource, /p_fence_token: claimContext\?\.fenceToken/);
+  assert.match(functionSource, /p_account: ownerRecoveryAccountId/);
+  assert.match(functionSource, /\.from\("kd_ai_log"\)/);
+  assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_readback"/);
   assert.equal((runnerSource.match(/adapter\.search\(queryContext\)/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setInterval|setTimeout|while\s*\(/i);
 });
@@ -615,6 +740,20 @@ await check("Owner-Recovery autorisiert und claimt atomar in genau einem service
   assert.match(recoveryClaimMigration, /grant execute on function public\.kd_entdecken_daily_recovery_claim\(\)\s+to service_role/i);
   assert.match(recoveryClaimMigration, /revoke all on function public\.kd_entdecken_daily_recovery_claim\(\)\s+from public, anon, authenticated/i);
   assert.doesNotMatch(recoveryClaimCode, /setInterval|setTimeout|scheduler|loop\s|while\s/i);
+});
+
+await check("Live-Beleg bindet Ownerkosten, fertigen Log und unabhaengigen 5-bis-7-Readback", () => {
+  const liveProofCode = liveProofMigration.replace(/^--.*$/gm, "");
+  assert.match(liveProofMigration, /kd_entdecken_daily_auftrag_starten\([\s\S]*p_account uuid/i);
+  assert.match(liveProofMigration, /account_id = p_account and role = 'owner'[\s\S]*active and personal_ai/i);
+  assert.match(liveProofMigration, /return public\.kd_ai_auftrag_starten\([\s\S]*p_account/i);
+  assert.match(liveProofMigration, /v_count < 5 or v_count > 7/i);
+  assert.match(liveProofMigration, /vorgang_id = v_operation_id[\s\S]*status = 'fertig'/i);
+  assert.match(liveProofMigration, /create function public\.kd_entdecken_weekly_feed_readback/i);
+  assert.match(liveProofMigration, /l\.id = p_provider_log_id/i);
+  assert.match(liveProofMigration, /'sourceCount',v_source_count/i);
+  assert.match(liveProofMigration, /grant execute on function public\.kd_entdecken_weekly_feed_readback\(bigint,bigint\)[\s\S]*to service_role/i);
+  assert.doesNotMatch(liveProofCode, /providerDiagnostic|rawResponse|profile|seen|gesehen|selectedServices/i);
 });
 
 await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {

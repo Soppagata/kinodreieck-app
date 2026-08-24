@@ -140,10 +140,38 @@ check("Persönliche Passung zeigt sechs verfügbare, ungesehene Titel in Passung
   assert.equal(new Set(stableSelection.personal.map((entry) => entry.targetId)).size, 6);
 });
 check("Explizit gesehene Titel bleiben aus persönlicher und weiterer Auswahl", () => {
+  const seenTitle = catalogTruthInput.titel.find((entry) => entry.watchmode_id === 92)?.titel;
   const result = createEntdeckenRecommendations({
     ...dailyInput, entdeckenStatus: { 92: "gesehen" }, selectionDay: "2026-08-20",
   });
-  assert.ok(![...result.personal, ...result.further].some((entry) => entry.targetId === "watchmode:92"));
+  const visible = [...result.personal, ...result.further];
+  assert.ok(!visible.some((entry) => entry.targetId === "watchmode:92"));
+  assert.ok(!visible.some((entry) => entry.title === seenTitle));
+
+  const withoutCurrentAvailability = createEntdeckenRecommendations({
+    ...dailyInput,
+    streamingEntdecken: {
+      ...catalogTruthInput,
+      titel: catalogTruthInput.titel.filter((entry) => entry.watchmode_id !== 92),
+    },
+    entdeckenStatus: { 92: "gesehen" },
+    webDiscoveryFeed: {
+      ...webDiscoveryFeed,
+      format: 4,
+      feedId: "websearch:weekly-positive-at",
+      sourceId: "websearch:weekly-positive",
+      isoWeek: "2026-W34",
+      validUntil: "2026-08-23",
+      items: webDiscoveryFeed.items.map((item, index) => ({
+        ...item,
+        externalIds: { watchmode: String(92 + index) },
+        attributes: { genres: item.attributes.genres, tones: [], themes: [] },
+      })),
+    },
+    selectionDay: "2026-08-20",
+  });
+  assert.ok(![...withoutCurrentAvailability.personal, ...withoutCurrentAvailability.further]
+    .some((entry) => entry.title === seenTitle));
 });
 check("Ein bloßer Mediathek-Eintrag bleibt auffindbar, eine vollständige Bewertung gilt als Sehbeleg", () => {
   const known = {

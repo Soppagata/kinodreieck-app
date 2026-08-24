@@ -65,7 +65,7 @@ function frozen(status, feed = null, response = null) {
 function exactResult(value, today) {
   const allowed = [
     "ok", "status", "feed", "writes", "providerRequests", "searchRequests",
-    "responseMode", "displayText", "warnings",
+    "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback",
   ];
   if (!plain(value) || !["ok", "status", "feed"].every((key) => key in value)
       || Object.keys(value).some((key) => !allowed.includes(key))
@@ -73,6 +73,12 @@ function exactResult(value, today) {
   for (const key of ["writes", "providerRequests", "searchRequests"]) {
     if (key in value && (!Number.isInteger(value[key]) || value[key] < 0)) return null;
   }
+  /* Der Browser benoetigt die inhaltsfreien Live-/Persistenzbelege nicht,
+     darf eine normale frische Functionantwort mit diesen eigenen Feldern aber
+     auch nicht als fremde Form verwerfen. Sie werden nach dieser Huelle nicht
+     in den UI-State uebernommen. */
+  if (("providerReceipt" in value && !plain(value.providerReceipt))
+      || ("feedReadback" in value && !plain(value.feedReadback))) return null;
   const response = presentation(value);
   if (!response) return null;
   if (value.status === "empty" || value.status === "disabled") {
