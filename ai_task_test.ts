@@ -443,6 +443,7 @@ const {
   ganzzahlImBereich,
   leseAntworten,
   baueAnbieterKoerper,
+  findeNichtUnterstuetzteAnbieterSchemaGrenze,
   schaetzeAnbieterEingabeTokens,
   EXTRAKT_ARTEN,
   EXTRAKT_RICHTUNGEN,
@@ -506,6 +507,9 @@ const {
     maxTokens: number,
     schema: Record<string, unknown> | null,
   ) => Record<string, unknown>;
+  findeNichtUnterstuetzteAnbieterSchemaGrenze: (
+    schema: Record<string, unknown> | null,
+  ) => { keyword: string; pfad: string } | null;
   schaetzeAnbieterEingabeTokens: (
     modell: string,
     system: string,
@@ -4873,6 +4877,48 @@ test("MB1 der Stapelimport sendet nur Text und hält Einträge ohne Prognose off
   falsch(systemtext().includes("Kind of Blue"), "Nutzerliste steht nicht im Systemprompt");
   const schema = AUFGABEN["media-batch-extract"].bauAuftrag(medienPayload(false)).schema as any;
   wahr(schema.properties.kandidaten.items.required.includes("eingabeIndex"), "Anbieterschema bindet jedes Item an seine Eingabezeile");
+  gleich(
+    findeNichtUnterstuetzteAnbieterSchemaGrenze(schema),
+    null,
+    "Media-Schema verwendet nur vom Anbieter akzeptierte Grenzen",
+  );
+  const providerSchema = anbieterKoerper().output_config.format.schema;
+  falsch(
+    JSON.stringify(providerSchema).includes('"minimum"') ||
+      JSON.stringify(providerSchema).includes('"maximum"'),
+    "providerseitiger eingabeIndex hat keine unsupported Wertebereichsgrenze",
+  );
+});
+
+test("MB1a zentraler Schema-Guard findet unsupported Grenzen verschachtelt, aber keine gleichnamigen Nutzfelder", () => {
+  const fehler = findeNichtUnterstuetzteAnbieterSchemaGrenze({
+    type: "object",
+    properties: {
+      kandidaten: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            eingabeIndex: { type: "integer", minimum: 0 },
+          },
+        },
+      },
+    },
+  });
+  gleich(fehler?.keyword, "minimum", "unsupported Keyword");
+  gleich(
+    fehler?.pfad,
+    "$.kandidaten.items.eingabeIndex",
+    "verschachtelter Schemapfad",
+  );
+  gleich(
+    findeNichtUnterstuetzteAnbieterSchemaGrenze({
+      type: "object",
+      properties: { minimum: { type: "integer" } },
+    }),
+    null,
+    "ein Nutzfeld namens minimum ist kein Schema-Keyword",
+  );
 });
 
 test("MB2 fünf Kurzbewertungen erlauben einen begründeten KI-Voreindruck, keine echte Bewertung", async () => {

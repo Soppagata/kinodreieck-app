@@ -408,6 +408,93 @@ type AnbieterErgebnis = {
   abbruch: { code: string; grund: string } | null;
 };
 
+/* Anthropic Structured Outputs akzeptiert nur einen Teil von JSON Schema.
+   Diese Grenzen werden von SDKs lokal nachgeprueft, beim rohen REST-Aufruf
+   dieses Endpunkts aber als 400 abgelehnt. Deshalb pruefen wir jedes
+   Anbieter-Schema zentral und noch vor Reservierung beziehungsweise Netzruf.
+   Wertebereiche bleiben Teil der fachlichen Ergebnispruefung. */
+const NICHT_UNTERSTUETZTE_ANBIETER_SCHEMA_GRENZEN = new Set([
+  "minimum",
+  "maximum",
+  "minLength",
+  "maxLength",
+  "minItems",
+  "maxItems",
+]);
+
+export type AnbieterSchemaGrenzenFehler = {
+  keyword: string;
+  pfad: string;
+};
+
+export function findeNichtUnterstuetzteAnbieterSchemaGrenze(
+  schema: Record<string, unknown> | null,
+): AnbieterSchemaGrenzenFehler | null {
+  const besuche = (
+    knoten: unknown,
+    pfad: string,
+  ): AnbieterSchemaGrenzenFehler | null => {
+    if (!knoten || typeof knoten !== "object" || Array.isArray(knoten)) {
+      return null;
+    }
+    const objekt = knoten as Record<string, unknown>;
+    for (const keyword of NICHT_UNTERSTUETZTE_ANBIETER_SCHEMA_GRENZEN) {
+      if (Object.prototype.hasOwnProperty.call(objekt, keyword)) {
+        return { keyword, pfad };
+      }
+    }
+
+    /* Namen unter `properties` sind Nutzfeldnamen, keine Schema-Keywords.
+       Nur ihre Werte sind wieder Schemaknoten. Dasselbe gilt fuer Definitionen
+       und die weiteren Schema-Landkarten. */
+    for (
+      const mapName of [
+        "properties",
+        "$defs",
+        "definitions",
+        "patternProperties",
+        "dependentSchemas",
+      ]
+    ) {
+      const map = objekt[mapName];
+      if (!map || typeof map !== "object" || Array.isArray(map)) continue;
+      for (const [name, kind] of Object.entries(map)) {
+        const fehler = besuche(kind, `${pfad}.${name}`);
+        if (fehler) return fehler;
+      }
+    }
+
+    for (const listenName of ["allOf", "anyOf", "oneOf", "prefixItems"]) {
+      const liste = objekt[listenName];
+      if (!Array.isArray(liste)) continue;
+      for (const [index, kind] of liste.entries()) {
+        const fehler = besuche(kind, `${pfad}.${listenName}[${index}]`);
+        if (fehler) return fehler;
+      }
+    }
+
+    for (
+      const kindName of [
+        "items",
+        "additionalProperties",
+        "contains",
+        "not",
+        "if",
+        "then",
+        "else",
+        "propertyNames",
+        "unevaluatedProperties",
+      ]
+    ) {
+      const fehler = besuche(objekt[kindName], `${pfad}.${kindName}`);
+      if (fehler) return fehler;
+    }
+    return null;
+  };
+
+  return besuche(schema, "$");
+}
+
 async function rufeAnbieter(
   modell: string,
   system: string,
@@ -881,7 +968,7 @@ const MEDIA_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          eingabeIndex: { type: "integer", minimum: 0, maximum: 59 },
+          eingabeIndex: { type: "integer" },
           titel: { type: "string" },
           typ: { type: "string", enum: MEDIA_TYPEN },
           jahr: { type: ["integer", "null"] },
@@ -4641,6 +4728,18 @@ export async function handhabeAnfrage(req: Request): Promise<Response> {
     return fehlerAntwort(f.code ?? CODES.INVALID_RESPONSE, origin, {
       grund: f.grund ?? "payload-ungueltig",
       status: 400,
+      vorgangId,
+    });
+  }
+
+  const schemaGrenzenFehler = findeNichtUnterstuetzteAnbieterSchemaGrenze(
+    auftrag.schema,
+  );
+  if (schemaGrenzenFehler) {
+    await schliesseFilmwissenVorAi("server:anbieter-schema");
+    return fehlerAntwort(CODES.SERVER, origin, {
+      grund: "anbieter-schema-nicht-unterstuetzt:" +
+        schemaGrenzenFehler.keyword,
       vorgangId,
     });
   }
