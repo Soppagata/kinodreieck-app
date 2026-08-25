@@ -19,6 +19,7 @@ import {
 } from "./src/lib/entdeckenUi.js";
 import {
   EntdeckenLiveProofError,
+  formatiereEntdeckenLiveDiagnose,
   pruefeEntdeckenLiveAntwort,
 } from "./tools/entdecken_live_proof.mjs";
 
@@ -362,8 +363,25 @@ await check("Echter Vier-Kandidaten-Fehler bleibt providerbewiesen und diagnosti
   assert.throws(() => pruefeEntdeckenLiveAntwort(response, {
     measuredCostUsdCent: response.providerReceipt.server.costUsdCent,
     readbackResponse: null,
-  }), (error) => error instanceof EntdeckenLiveProofError
-    && error.code === "RESULT_INSUFFICIENT_EVIDENCE");
+  }), (error) => {
+    assert.ok(error instanceof EntdeckenLiveProofError);
+    assert.equal(error.code, "RESULT_INSUFFICIENT_EVIDENCE");
+    assert.deepEqual(error.diagnostic, {
+      stage: "provider-underfilled",
+      searchResults: 4,
+      citations: 4,
+      raw: 4,
+      normalized: 4,
+      candidates: 4,
+      eligible: 4,
+      rejected: 0,
+      duplicates: 0,
+    });
+    const rendered = formatiereEntdeckenLiveDiagnose(error.diagnostic);
+    assert.match(rendered, /provider-underfilled[\s\S]*Roh 4[\s\S]*geeignet 4/);
+    assert.doesNotMatch(rendered, /https?:|Aktueller AT-Tipp|account|providerReceipt/i);
+    return true;
+  });
 });
 
 await check("Read-only-Fehler behaelt den bisherigen Browservertrag ohne Diagnosefeld", () => {
@@ -429,6 +447,7 @@ await check("Acht-Pfade-Smoke verwendet den korrelierten Entdecken-Livebeleg", (
   assert.match(smoke, /pruefeEntdeckenLiveAntwort\(p24\.daten/);
   assert.match(smoke, /measuredCostUsdCent:\s*p24\.kostenMessung\?\.requestKostenUsdCent/);
   assert.match(smoke, /readbackResponse:\s*p24Readback\.daten/);
+  assert.match(smoke, /formatiereEntdeckenLiveDiagnose\(error\?\.diagnostic\)/);
   assert.match(smoke, /methode:\s*"POST"/);
   assert.doesNotMatch(smoke, /entdeckenFeedGueltig\s*=\s*validateEntdeckenDailyFeed/);
 });

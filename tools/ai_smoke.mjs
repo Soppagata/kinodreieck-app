@@ -74,7 +74,10 @@ import { normalisiereFilmkennung } from "../src/lib/filmwissen.js";
 import { erteileEinwilligung, leeresProfil } from "../src/lib/profil.js";
 import { readFileSync } from "node:fs";
 import { pruefeEntdeckenOwnerZugang } from "./entdecken_daily_live.mjs";
-import { pruefeEntdeckenLiveAntwort } from "./entdecken_live_proof.mjs";
+import {
+  formatiereEntdeckenLiveDiagnose,
+  pruefeEntdeckenLiveAntwort,
+} from "./entdecken_live_proof.mjs";
 import {
   ProviderReceiptEvidenceError,
   erstelleAnbieterPfadBelege,
@@ -84,7 +87,13 @@ import {
   schliesseBekanntenAnbieterPfad,
 } from "./ai_smoke_contract.mjs";
 import {
+  BLOG_PROFILE_LIVE_TASK,
+  FILMWISSEN_LIVE_TASK,
+  klassifiziereAiTaskLiveForm,
+} from "./ai_task_live_forms_contract.mjs";
+import {
   MEDIA_BATCH_LIVE_TASK,
+  klassifiziereMediaBatchLiveAntwort,
   formatiereMediaBatchLiveKlassifikation,
 } from "./media_batch_live_contract.mjs";
 import {
@@ -522,6 +531,7 @@ try {
 
 const providerBelegNachLabel = new Map();
 const anbieterMessungNachLabel = new Map();
+const aiTaskLiveFormNachLabel = new Map();
 
 function istProviderPfadBelegt(label) {
   if (!OWNER_CORE_SIX) return true;
@@ -624,11 +634,29 @@ async function rufAnbieterBewacht(label, methode, kopf, koerper, extraKopf = {})
     const kosten = kostenRoh === undefined || kostenRoh === null ? null : kostenRoh;
     const kostenMessung = await laufWache.nachAnbieterRequest(markierung, kosten);
     anbieterMessungNachLabel.set(label, kostenMessung);
+    if (ergebnis && [FILMWISSEN_LIVE_TASK, BLOG_PROFILE_LIVE_TASK]
+      .includes(koerper?.task)) {
+      const klassifikation = klassifiziereAiTaskLiveForm({
+        task: koerper.task,
+        antwort: ergebnis.daten,
+        status: ergebnis.status,
+        measuredCostUsdCent: kostenMessung.requestKostenUsdCent,
+      });
+      aiTaskLiveFormNachLabel.set(label, klassifikation);
+      const marker = koerper.task === FILMWISSEN_LIVE_TASK
+        ? "FILMWISSEN_LIVE_SHAPE" : "BLOG_PROFILE_LIVE_SHAPE";
+      console.log(`${marker} ${JSON.stringify(klassifikation)}`);
+    }
     if (koerper?.task === MEDIA_BATCH_LIVE_TASK && ergebnis) {
       /* Dauerhafter, wertfreier Integrationshook: Der fruehere Live-Lauf konnte
          nur `providerReceipt=absent` festhalten. Diese Klassifikation bewahrt
          fuer den naechsten Lauf Root-Keynamen/Typklassen und einen stabilen
          Zweig, aber weder Provider-/Nutzerwerte noch Rohtext. */
+      aiTaskLiveFormNachLabel.set(label, klassifiziereMediaBatchLiveAntwort({
+        antwort: ergebnis.daten,
+        status: ergebnis.status,
+        measuredCostUsdCent: kostenMessung.requestKostenUsdCent,
+      }));
       console.log(`MEDIA_BATCH_LIVE_SHAPE ${formatiereMediaBatchLiveKlassifikation({
         antwort: ergebnis.daten,
         status: ergebnis.status,
@@ -1003,8 +1031,11 @@ const p18 = await rufAnbieterBewacht(
 );
 const p18ProviderBelegt = istProviderPfadBelegt("P18 filmwissen-synthese");
 const p18Unbelegt = istProviderPfadUnbelegt("P18 filmwissen-synthese");
-const d18 = p18ProviderBelegt ? p18.daten?.data : null;
+const p18LiveForm = aiTaskLiveFormNachLabel.get("P18 filmwissen-synthese");
+const d18 = p18ProviderBelegt && p18LiveForm?.parserEligible
+  ? p18.daten?.data : null;
 const p18Erfolg = p18ProviderBelegt && p18.status === 200
+  && p18LiveForm?.parserEligible === true
   && p18.daten?.ok === true
   && (OWNER_CORE_SIX ? d18?.status === "belegt" : ["belegt", "cache_hit"].includes(d18?.status))
   && typeof d18?.versionId === "string"
@@ -1019,7 +1050,7 @@ pruefe(
     ? providerPfadUnbelegtHinweis("P18 filmwissen-synthese")
     : p18.status === 200
     ? `Status ${d18?.status}, Version ${d18?.versionId}, Kosten ${p18.daten?.verbrauch?.kostenUsdCent ?? 0} US-Cent`
-    : `HTTP ${p18.status}: ${JSON.stringify(p18.daten)?.slice(0, 300)}`,
+    : `HTTP ${p18.status}, sicherer Antwortzweig ${p18LiveForm?.branch ?? "unknown"}`,
 );
 
 const p18CacheReadback = !OWNER_CORE_SIX && d18?.status === "cache_hit"
@@ -1041,6 +1072,15 @@ if (p18Unbelegt) {
     false,
     "Ohne normalen Providerbeleg wird weder Antwort noch Lese-RPC fachlich beurteilt.",
   );
+} else if (!p18LiveForm?.parserEligible) {
+  p18ReadbackReason = p18LiveForm?.branch ?? "quality-contract-failed";
+  pruefe(
+    "S4 filmwissen-synthese: Parser, Persistenz, Readback und Qualität bleiben offen",
+    false,
+    `Sicherer Antwortzweig ${p18LiveForm?.branch ?? "unknown"}; `
+      + `Modus ${p18LiveForm?.responseMode ?? "unknown"}; Warncodes `
+      + `${p18LiveForm?.warningCodes?.join(",") || "keine"}.`,
+  );
 } else {
   p18RpcOk = p20?.status === 200
     && p20?.daten?.status === "belegt"
@@ -1058,6 +1098,8 @@ if (p18Unbelegt) {
   });
   p18ReadbackOk = p18Readback?.ok === true;
   p18ReadbackReason = p18Readback?.reason ?? null;
+}
+if (!p18Unbelegt) {
   schliesseAnbieterPfad(
     "P18 filmwissen-synthese",
     "filmwissen-synthese",
@@ -1096,8 +1138,11 @@ const p22 = await rufAnbieterBewacht(
 );
 const p22ProviderBelegt = istProviderPfadBelegt("P22 blog-profile-extract");
 const p22Unbelegt = istProviderPfadUnbelegt("P22 blog-profile-extract");
-const d22 = p22ProviderBelegt ? p22.daten?.data : null;
+const p22LiveForm = aiTaskLiveFormNachLabel.get("P22 blog-profile-extract");
+const d22 = p22ProviderBelegt && p22LiveForm?.parserEligible
+  ? p22.daten?.data : null;
 const p22SchemaOk = p22ProviderBelegt && p22.status === 200 && p22.daten?.ok === true
+  && p22LiveForm?.parserEligible === true
   && Array.isArray(d22?.geschmackszuege)
   && Array.isArray(d22?.vokabular)
   && p22.daten?.verbrauch?.kostenUsdCent > 0;
@@ -1108,11 +1153,11 @@ pruefe(
     ? providerPfadUnbelegtHinweis("P22 blog-profile-extract")
     : p22.status === 200
     ? `${d22?.geschmackszuege?.length ?? 0} Geschmackszug, ${d22?.vokabular?.length ?? 0} Vokabular, ${p22.daten?.verbrauch?.kostenUsdCent} US-Cent`
-    : `HTTP ${p22.status}: ${JSON.stringify(p22.daten)?.slice(0, 300)}`,
+    : `HTTP ${p22.status}, sicherer Antwortzweig ${p22LiveForm?.branch ?? "unknown"}`,
 );
 let p22ReadbackOk = false;
 let p22ReadbackReason = null;
-if (p22ProviderBelegt) {
+if (p22ProviderBelegt && p22LiveForm?.parserEligible) {
   const p22Readback = pruefeNutzerTaskReadback("S5 blog-profile-extract", "blog-profile-extract", p22.daten, {
     artikelPayload: {
       artikel: BLOG_PROFILE_ARTIKEL,
@@ -1131,10 +1176,17 @@ if (p22ProviderBelegt) {
   p22ReadbackOk = p22Readback?.ok === true;
   p22ReadbackReason = p22Readback?.reason ?? null;
 } else {
+  if (!p22Unbelegt) {
+    p22ReadbackReason = p22LiveForm?.branch ?? "quality-contract-failed";
+  }
   pruefe(
     "S5 blog-profile-extract: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    p22Unbelegt
+      ? "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt."
+      : `Sicherer Antwortzweig ${p22LiveForm?.branch ?? "unknown"}; `
+        + `Modus ${p22LiveForm?.responseMode ?? "unknown"}; Warncodes `
+        + `${p22LiveForm?.warningCodes?.join(",") || "keine"}.`,
   );
 }
 if (!p22Unbelegt) {
@@ -1171,8 +1223,11 @@ const p23 = await rufAnbieterBewacht(
 );
 const p23ProviderBelegt = istProviderPfadBelegt("P23 media-batch-extract text-only");
 const p23Unbelegt = istProviderPfadUnbelegt("P23 media-batch-extract text-only");
-const d23 = p23ProviderBelegt ? p23.daten?.data : null;
+const p23LiveForm = aiTaskLiveFormNachLabel.get("P23 media-batch-extract text-only");
+const d23 = p23ProviderBelegt && p23LiveForm?.parserEligible
+  ? p23.daten?.data : null;
 const p23SchemaOk = p23ProviderBelegt && p23.status === 200 && p23.daten?.ok === true
+  && p23LiveForm?.parserEligible === true
   && p23.daten?.modellAlias === "klein"
   && Array.isArray(d23?.kandidaten)
   && d23.kandidaten.length > 0
@@ -1190,21 +1245,28 @@ pruefe(
     ? providerPfadUnbelegtHinweis("P23 media-batch-extract text-only")
     : p23.status === 200
     ? `${d23?.kandidaten?.length ?? 0} Kandidat(en), ${p23.daten?.verbrauch?.kostenUsdCent} US-Cent`
-    : `HTTP ${p23.status}: ${JSON.stringify(p23.daten)?.slice(0, 300)}`,
+    : `HTTP ${p23.status}, sicherer Antwortzweig ${p23LiveForm?.branch ?? "unknown"}`,
 );
 let p23ReadbackOk = false;
 let p23ReadbackReason = null;
-if (p23ProviderBelegt) {
+if (p23ProviderBelegt && p23LiveForm?.parserEligible) {
   const p23Readback = pruefeNutzerTaskReadback("S6 media-batch-extract", "media-batch-extract", p23.daten, {
     master: [],
   });
   p23ReadbackOk = p23Readback?.ok === true;
   p23ReadbackReason = p23Readback?.reason ?? null;
 } else {
+  if (!p23Unbelegt) {
+    p23ReadbackReason = p23LiveForm?.branch ?? "quality-contract-failed";
+  }
   pruefe(
     "S6 media-batch-extract: Produktionsparser, Speicherung und Readback bleiben offen",
     false,
-    "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt.",
+    p23Unbelegt
+      ? "Ohne normalen Providerbeleg wird die Antwort nicht fachlich beurteilt."
+      : `Sicherer Antwortzweig ${p23LiveForm?.branch ?? "unknown"}; `
+        + `Modus ${p23LiveForm?.responseMode ?? "unknown"}; Warncodes `
+        + `${p23LiveForm?.warningCodes?.join(",") || "keine"}.`,
   );
 }
 if (!p23Unbelegt) {
@@ -1240,6 +1302,7 @@ async function pruefeKritischeEntdeckenRadarPfade() {
   const p24Unbelegt = istProviderPfadUnbelegt("P24 entdecken-daily-task");
   let entdeckenLiveBeleg = null;
   let entdeckenLiveGrund = "quality-contract-failed";
+  let entdeckenLiveDiagnose = null;
   try {
     if (!p24ProviderBelegt) throw new Error("provider-unproven");
     entdeckenLiveBeleg = pruefeEntdeckenLiveAntwort(p24.daten, {
@@ -1251,6 +1314,7 @@ async function pruefeKritischeEntdeckenRadarPfade() {
        Providertext und URLs bleiben in Function und Datenbank. */
     entdeckenLiveGrund = typeof error?.code === "string"
       ? error.code : "quality-contract-failed";
+    entdeckenLiveDiagnose = formatiereEntdeckenLiveDiagnose(error?.diagnostic);
   }
   const entdeckenOk = p24ProviderBelegt && p24.status === 200
     && entdeckenLiveBeleg?.ok === true;
@@ -1262,7 +1326,8 @@ async function pruefeKritischeEntdeckenRadarPfade() {
       : entdeckenLiveBeleg
         ? `HTTP ${p24.status}, Items ${entdeckenLiveBeleg.itemCount}, Belege ${entdeckenLiveBeleg.evidenceCount}, `
           + `Quellen ${entdeckenLiveBeleg.sourceCount}, Websuchen ${entdeckenLiveBeleg.searchRequests}`
-        : `HTTP ${p24.status}, Livebeleg ${entdeckenLiveGrund}`,
+        : `HTTP ${p24.status}, Livebeleg ${entdeckenLiveGrund}`
+          + (entdeckenLiveDiagnose ? ` · ${entdeckenLiveDiagnose}` : ""),
   );
   if (!p24Unbelegt) {
     schliesseAnbieterPfad(

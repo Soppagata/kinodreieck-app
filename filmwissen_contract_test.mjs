@@ -47,8 +47,8 @@ check("D1a eine ausdrueckliche institutionelle Einordnung darf allein tragen", (
 check("D2 Auftrag enthaelt keine URLs oder persoenliche Felder", () => {
   const body = baueSyntheseAuftrag(werk, fundstellen); const serialisiert = JSON.stringify(body);
   return !/https?:\/\//.test(serialisiert) && !/account|profil|notiz|passung/i.test(serialisiert)
-    && body.schema.properties.claims.items.properties.belegId.items === undefined
-    && body.schema.properties.claims.items.properties.belegId.enum.join(",") === "F1,F2";
+    && body.schema.properties.claimIds.items.enum.join(",") === "K001,K002"
+    && /claimAnker/.test(serialisiert);
 });
 check("D3 ungueltige Eingabe stoppt vor dem Anbieter", () => {
   try { baueSyntheseAuftrag(werk, [{ ...fundstellen[0], kernaussagen: [] }, fundstellen[1]]); return false; } catch { return true; }
@@ -104,6 +104,18 @@ check("D9 einzelne sichere Claims bleiben trotz kaputtem Nachbarn erhalten", () 
     && result.daten.belegIds.join(",") === "F1,F2"
     && result.warnings.includes("invalid-items-ignored")
     && result.warnings.includes("extra-fields-ignored");
+});
+check("D9a Claim-IDs werden serverseitig auf exakte Quellenaussagen zurueckgebunden", () => {
+  const result = bereinigeSyntheseAusgabe({
+    format: FILMWISSEN_SYNTHESE_FORMAT,
+    warum: 4,
+    sicherheit: "mittel",
+    claimIds: ["K001", "K002", "K999"],
+  }, werk, fundstellen, evidenz);
+  return result.daten?.publizierbar === true
+    && result.daten.claims.length === 2
+    && result.daten.kurztext === "Praegte das Genre. Wurde breit rezipiert."
+    && result.warnings.includes("invalid-items-ignored");
 });
 check("D10 falsche Werkidentitaet, Quelle, Zitat oder URL werden nie publizierbar", () => {
   const roh = {

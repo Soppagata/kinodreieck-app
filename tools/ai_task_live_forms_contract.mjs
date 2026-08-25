@@ -36,7 +36,26 @@ const NORMAL_ROOT_KEYS_WITHOUT_RECEIPT = Object.freeze(
   NORMAL_ROOT_KEYS.filter((key) => key !== "providerReceipt"),
 );
 const ERROR_ROOT_KEYS = Object.freeze(["code", "grund", "ok", "vorgangId"]);
+const KNOWN_ROOT_KEYS = new Set([...NORMAL_ROOT_KEYS, ...ERROR_ROOT_KEYS]);
+const DATA_KEYS = Object.freeze({
+  [FILMWISSEN_LIVE_TASK]: new Set([
+    "claims", "format", "status", "versionId",
+  ]),
+  [BLOG_PROFILE_LIVE_TASK]: new Set(["geschmackszuege", "vokabular"]),
+  [MEDIA_BATCH_LIVE_TASK]: new Set(["fehlmenge", "kandidaten", "warnungen"]),
+});
 const RESPONSE_MODES = new Set(["structured", "partial", "degraded"]);
+const SAFE_WARNING_CODES = new Set([
+  "json-extracted-from-text",
+  "unstructured-provider-text",
+  "display-text-truncated",
+  "extra-fields-ignored",
+  "missing-fields-defaulted",
+  "invalid-fields-ignored",
+  "invalid-items-ignored",
+  "unknown-values-ignored",
+  "no-safe-structure",
+]);
 const FEHLERZWEIGE = new Map([
   ["invalid-response|provider-receipt-invalid", "receipt-construction-failed"],
   ["invalid-response|antwort-zu-gross", "provider-response-too-large"],
@@ -71,16 +90,21 @@ function typeClass(value) {
   return "other";
 }
 
-function shape(value) {
+function shape(value, allowedKeys) {
   if (!plain(value)) return Object.freeze([]);
   return Object.freeze(
-    Object.keys(value).sort().map((key) =>
+    Object.keys(value).filter((key) => allowedKeys.has(key)).sort().map((key) =>
       Object.freeze({
         key,
         type: typeClass(value[key]),
       })
     ),
   );
+}
+
+function unknownKeyCount(value, allowedKeys) {
+  if (!plain(value)) return 0;
+  return Object.keys(value).filter((key) => !allowedKeys.has(key)).length;
 }
 
 function exactKeys(value, expected) {
@@ -190,6 +214,15 @@ function errorBranch(antwort) {
     FEHLERZWEIGE.get(`${code}|`) ?? "unclassified-function-error";
 }
 
+function warningCodes(antwort) {
+  if (!Array.isArray(antwort?.warnings)) return Object.freeze([]);
+  return Object.freeze([...new Set(
+    antwort.warnings.filter((code) =>
+      typeof code === "string" && SAFE_WARNING_CODES.has(code)
+    ),
+  )].slice(0, 12));
+}
+
 export function klassifiziereAiTaskLiveForm({
   task,
   antwort,
@@ -224,13 +257,19 @@ export function klassifiziereAiTaskLiveForm({
     httpClass: httpClass(status),
     envelopeClass,
     branch,
-    rootShape: shape(antwort),
-    dataShape: normal ? shape(antwort.data) : Object.freeze([]),
+    rootShape: shape(antwort, KNOWN_ROOT_KEYS),
+    dataShape: normal ? shape(antwort.data, DATA_KEYS[task]) : Object.freeze([]),
+    unknownRootKeyCount: unknownKeyCount(antwort, KNOWN_ROOT_KEYS),
+    unknownDataKeyCount: normal
+      ? unknownKeyCount(antwort.data, DATA_KEYS[task]) : 0,
     dataClass: klasse,
+    responseMode: normal ? antwort.responseMode : null,
+    warningCodes: normal ? warningCodes(antwort) : Object.freeze([]),
     receiptState: proof.receiptState,
     providerProof: proof.providerProof,
     costState: proof.costState,
-    parserEligible: datenErwartet && proof.providerProof === "proven",
+    parserEligible: datenErwartet && antwort.responseMode !== "degraded" &&
+      proof.providerProof === "proven",
   });
 }
 

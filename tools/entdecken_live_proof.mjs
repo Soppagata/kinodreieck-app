@@ -12,10 +12,11 @@ const COST_EPSILON_USD_CENT = 0.000001;
 const OWNER_REFRESH_MAX_ATTEMPTS = new Set([3, 100]);
 
 export class EntdeckenLiveProofError extends Error {
-  constructor(code) {
+  constructor(code, diagnostic = null) {
     super(code);
     this.name = "EntdeckenLiveProofError";
     this.code = code;
+    this.diagnostic = diagnostic;
   }
 }
 function plain(value) {
@@ -36,6 +37,45 @@ function insufficientQuality(value) {
     && value.eligibleUniqueCount < 5
     && value.candidateItemCount === value.eligibleUniqueCount
       + value.rejectedItemCount + value.duplicateItemCount;
+}
+
+function insufficientQualityDiagnostic(value) {
+  if (!insufficientQuality(value)) return null;
+  const stage = value.rawItemCount < 5
+    ? "provider-underfilled"
+    : value.normalizedItemCount < 5
+    ? "adapter-rejection"
+    : value.rejectedItemCount > 0
+    ? "contract-rejection"
+    : value.duplicateItemCount > 0
+    ? "deduplication"
+    : "underfilled";
+  return Object.freeze({
+    stage,
+    searchResults: value.searchResultCount,
+    citations: value.citationUrlCount,
+    raw: value.rawItemCount,
+    normalized: value.normalizedItemCount,
+    candidates: value.candidateItemCount,
+    eligible: value.eligibleUniqueCount,
+    rejected: value.rejectedItemCount,
+    duplicates: value.duplicateItemCount,
+  });
+}
+
+export function formatiereEntdeckenLiveDiagnose(value) {
+  if (!plain(value) || Object.keys(value).sort().join(",") !== [
+    "candidates", "citations", "duplicates", "eligible", "normalized",
+    "raw", "rejected", "searchResults", "stage",
+  ].sort().join(",") || ![
+    "provider-underfilled", "adapter-rejection", "contract-rejection",
+    "deduplication", "underfilled",
+  ].includes(value.stage) || Object.entries(value).some(([key, entry]) => (
+    key !== "stage" && (!Number.isSafeInteger(entry) || entry < 0 || entry > 100)
+  ))) return null;
+  return `Stufe ${value.stage}; Suche ${value.searchResults}; Zitate ${value.citations}; `
+    + `Roh ${value.raw}; normalisiert ${value.normalized}; Kandidaten ${value.candidates}; `
+    + `geeignet ${value.eligible}; verworfen ${value.rejected}; Dubletten ${value.duplicates}`;
 }
 
 export function pruefeEntdeckenLiveAntwort(antwort, {
@@ -71,10 +111,12 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
         || antwort.searchRequests < 0 || antwort.searchRequests > 2) {
       throw new EntdeckenLiveProofError("FUNCTION_RESULT");
     }
+    const qualityDiagnostic = safeReason === "insufficient_evidence"
+      ? insufficientQualityDiagnostic(antwort.quality) : null;
     if (safeReason === "insufficient_evidence"
         && (antwort.status === "fresh" || antwort.responseMode !== "degraded"
           || Object.prototype.hasOwnProperty.call(antwort, "feedReadback")
-          || !insufficientQuality(antwort.quality))) {
+          || !qualityDiagnostic)) {
       throw new EntdeckenLiveProofError("FUNCTION_RESULT");
     }
     if (["insufficient_evidence", "invalid_response"].includes(safeReason)) {
@@ -86,7 +128,10 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
         throw new EntdeckenLiveProofError("RECEIPT_UNCORRELATED");
       }
     }
-    throw new EntdeckenLiveProofError(`RESULT_${safeReason?.toUpperCase() || "UNKNOWN"}`);
+    throw new EntdeckenLiveProofError(
+      `RESULT_${safeReason?.toUpperCase() || "UNKNOWN"}`,
+      qualityDiagnostic,
+    );
   }
   if (antwort.refresh.status !== "refreshed") {
     const safeStatus = typeof antwort.refresh.status === "string"

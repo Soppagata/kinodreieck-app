@@ -8879,7 +8879,7 @@ test("FW5 feste Adapter, Snapshot und Sonnet schliessen atomar als belegt ab", a
   );
   gleich(
     start.p_prompt_version,
-    "filmwissen-war-v2",
+    "filmwissen-war-v3",
     "Promptversion kommt vom Server",
   );
   const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
@@ -9021,13 +9021,24 @@ test("FW5c allein der institutionelle LOC-Claim publiziert mit harter Strukturid
     format: "filmwissen-synthese-v1",
     warum: 5,
     sicherheit: "hoch",
-    claims: [filmwissenClaim("F2", locClaim)],
+    claimIds: ["K001"],
   });
 
   const r = await filmwissenRuf();
   gleich(r.status, 200, "Status");
   gleich((r.daten.data as Record<string, unknown>).status, "belegt", "Version publiziert");
   gleich((r.daten.data as Record<string, unknown>).versionId, versionId, "exakte Version");
+  const providerSchema = (anbieterKoerper().output_config as Record<
+    string,
+    Record<string, unknown>
+  >).format.schema as Record<string, Record<string, unknown>>;
+  const providerProperties = providerSchema.properties as Record<string, Record<string, unknown>>;
+  gleich(
+    ((providerProperties.claimIds.items as Record<string, unknown>).enum as string[]).join(","),
+    "K001,K002",
+    "Provider darf nur feste LOC-Claim-IDs waehlen",
+  );
+  falsch("claims" in providerProperties, "freie Claims sind kein Provider-Ausgabefeld mehr");
   const abschluss = rpc("kd_filmwissen_synthese_abschliessen")[0]
     .koerper as Record<string, unknown>;
   const version = abschluss.p_version as Record<string, unknown>;
