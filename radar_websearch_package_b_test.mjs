@@ -20,6 +20,13 @@ import { erstelleAnbieterPfadBelege } from "./tools/ai_smoke_contract.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
+  PROVIDER_RECEIPT_RUNTIME_FILES,
+  PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
+  RADAR_DAILY_COMMIT,
+  RADAR_DAILY_FILES,
+  RADAR_DAILY_MIGRATION,
+  RADAR_DAILY_RELEASE_SHA256,
+  RADAR_DAILY_WORKFLOW,
   RADAR_TEXT_TARGET_COMMIT,
   RADAR_TEXT_TARGET_FILES,
   REPO_ROOT,
@@ -32,6 +39,7 @@ import {
   createRadarRemotePreflightOnce,
   deriveRadarPackageBReleaseClosure,
   requireProviderReceiptRuntimeProvenance,
+  requireRadarDailyReleaseProvenance,
   runRadarSupabaseVersionProbe,
   validateRadarSupabaseCliEnvironment,
   validateRadarLedgerBaseline,
@@ -691,12 +699,27 @@ await check("Historischer Radar-Deployzaun blockiert die neue Runtime statt sie 
   )), false);
 });
 
-await check("Historischer Receipt-Deployzaun blockiert die neue Daily-Runtime bis zur Integration", () => {
-  assert.throws(
-    () => requireProviderReceiptRuntimeProvenance(),
-    (error) => error instanceof RadarRemoteStartStop
-      && error.code === "PROVIDER_RECEIPT_RUNTIME_PROVENANCE_DRIFT",
-  );
+await check("Aktueller Receipt-Runtimebeleg bindet Radar und Entdecken bytegenau", () => {
+  const proof = requireProviderReceiptRuntimeProvenance();
+  assert.equal(proof.bundleSha256, PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256);
+  assert.deepEqual(proof.files, PROVIDER_RECEIPT_RUNTIME_FILES);
+});
+
+await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {
+  const proof = requireRadarDailyReleaseProvenance();
+  assert.equal(proof.commit, RADAR_DAILY_COMMIT);
+  assert.equal(proof.releaseSha256, RADAR_DAILY_RELEASE_SHA256);
+  assert.deepEqual(proof.files, RADAR_DAILY_FILES);
+  assert.deepEqual(proof.migration, RADAR_DAILY_MIGRATION);
+  assert.deepEqual(proof.workflow, RADAR_DAILY_WORKFLOW);
+  assert.throws(() => requireRadarDailyReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("radar-daily.yml")
+        ? Buffer.concat([bytes, Buffer.from("\n# drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT");
 });
 
 await check("Der echte JS-CLI-Startmodus findet Node im engen lokalen Lesepfad", () => {

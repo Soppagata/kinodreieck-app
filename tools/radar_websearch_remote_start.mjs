@@ -166,14 +166,14 @@ export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "fa09ae27b42a964e172997081f67666
    Provider-Receipt-Runtime. Historische Deployvertraege oben bleiben
    unangetastet; diese Closure bindet beide Websearch-Functions samt allen
    drei transitiven Shared-Modulen und enthaelt keine Migration. */
-export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "dfc89e5ce1efa235b197b172ab4be67e0784cc3379f040ea1fe9d2d368192672";
+export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "2acf332b312968841ccead9f0a4c07f5741ad2e4ed64a37209cb3a0463ebe04f";
 export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
-  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "e4f2ebb119e95a062f60fca2f3125cbaaf7edca85fb3986f5bc04ee032ec38d4" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "52b9e59cfbb7e223e68a823daa32597e8d5e634249a423699162d4883babf870" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "d02ef620bea5fa0ddf4532b750470d009e630b5f4245ea66e87825412d5670e4" }),
-  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "81c9045d0f90e9c0bca28d4fe1948b980f67234ab6e0a2f0c6dbfe7f1da3c8d7" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "fccd386a07fc3bd6480d85fa3de1adbf2af1471aafdb4ddfb382940403e8a564" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "97d46ba29b5056ece036f0049e8a6af8ab3889182fc0d65be6d8a17f8212a8ef" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "30d4eebfb51879986f8e2f2299fc1b5e1eb90854c9275e6be9b77b86de2d91f9" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "e1d9cc7ea0cf7c18032bf3c4d9729c986bb4583371d237e99b33c6ddc302c87a" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "29dcf43275e8bbb9448d7cb19c7edd906cccb85bdbc53fccbd41c07174cb89ee" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "81fb9d7be98a68e9916cf3edaf03b00e178c9f00452f15426e81f8c9a4af1014" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "b2cdd6cf20a8796c367718af48c6d5909728db89a3327505aa8107996640d9dc" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "a0a599ab0c6eb40c693902ea0ffc62863b26b57cd227f59563a1b3f3088b0843" }),
@@ -182,6 +182,34 @@ export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
 ]);
+
+/* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
+   Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
+   bindet stattdessen die aktuelle Runtime, genau eine additive Migration und
+   den ausschliesslich zeitgesteuerten Workflow an den Integrationscommit. */
+export const RADAR_DAILY_COMMIT = "4ce2f4b0664ff56e90ebf7a825e4eac7c205714f";
+export const RADAR_DAILY_SOURCE_BUNDLE_SHA256 = "78b0af8767426025557daef7c111f2dd331e1285957d9a3b722598131eedf029";
+export const RADAR_DAILY_FILES = Object.freeze([
+  Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "52b9e59cfbb7e223e68a823daa32597e8d5e634249a423699162d4883babf870" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "d02ef620bea5fa0ddf4532b750470d009e630b5f4245ea66e87825412d5670e4" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "fccd386a07fc3bd6480d85fa3de1adbf2af1471aafdb4ddfb382940403e8a564" }),
+  Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "97d46ba29b5056ece036f0049e8a6af8ab3889182fc0d65be6d8a17f8212a8ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
+]);
+export const RADAR_DAILY_MIGRATION = Object.freeze({
+  version: "20260825120000",
+  name: "radar_daily_schedule",
+  path: "supabase/migrations/20260825120000_radar_daily_schedule.sql",
+  sha256: "a84928ac3ccb20d7ed67adac3fb68f556cd2d8c0c0b7fc2a05dd313b5d25bc72",
+});
+export const RADAR_DAILY_WORKFLOW = Object.freeze({
+  name: "radar-daily",
+  path: ".github/workflows/radar-daily.yml",
+  sha256: "adc631f785beba1e26bad107611b3dd8af68a09c112faae9c664baf597350ac0",
+});
+export const RADAR_DAILY_RELEASE_SHA256 = "c08d20286ce2fdebd8e0bbd9436454aa553f28b273714cda58cace01acd92c4c";
 
 const REQUIRED_PROVENANCE = Object.freeze({
   [RADAR_PACKAGE_A_COMMIT]: Object.freeze([
@@ -596,6 +624,61 @@ export function requireProviderReceiptRuntimeProvenance(options = {}) {
   return Object.freeze({
     bundleSha256: PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
     files,
+  });
+}
+
+export function requireRadarDailyReleaseProvenance(options = {}) {
+  requireAncestor(RADAR_DAILY_COMMIT, "HEAD", options);
+  const immutableEntries = [
+    ...RADAR_DAILY_FILES,
+    RADAR_DAILY_MIGRATION,
+    RADAR_DAILY_WORKFLOW,
+  ];
+  requireCommitFileRows(
+    RADAR_DAILY_COMMIT,
+    immutableEntries,
+    "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT",
+    options,
+  );
+  const files = requireExactFileRows(
+    RADAR_DAILY_FILES,
+    RADAR_DAILY_SOURCE_BUNDLE_SHA256,
+    "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT",
+    options,
+  );
+  const migrationSha256 = createHash("sha256")
+    .update(readRegularFile(RADAR_DAILY_MIGRATION.path, options)).digest("hex");
+  const workflowSha256 = createHash("sha256")
+    .update(readRegularFile(RADAR_DAILY_WORKFLOW.path, options)).digest("hex");
+  if (migrationSha256 !== RADAR_DAILY_MIGRATION.sha256
+      || workflowSha256 !== RADAR_DAILY_WORKFLOW.sha256) {
+    stop(
+      "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT",
+      "Radar-Tagesmigration oder Zeitplan weicht vom exakten Bytevertrag ab.",
+    );
+  }
+  const rows = [
+    { kind: "function", name: "radar-websearch-task", sha256: RADAR_DAILY_SOURCE_BUNDLE_SHA256 },
+    {
+      kind: "migration",
+      name: `${RADAR_DAILY_MIGRATION.version}_${RADAR_DAILY_MIGRATION.name}`,
+      sha256: migrationSha256,
+    },
+    { kind: "workflow", name: RADAR_DAILY_WORKFLOW.name, sha256: workflowSha256 },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== RADAR_DAILY_RELEASE_SHA256) {
+    stop(
+      "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT",
+      "Lokaler Radar-Tagesreleasevertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    commit: RADAR_DAILY_COMMIT,
+    releaseSha256,
+    files,
+    migration: RADAR_DAILY_MIGRATION,
+    workflow: RADAR_DAILY_WORKFLOW,
   });
 }
 

@@ -16,6 +16,12 @@ import { resolveCanonicalFranchiseRadarTarget } from "./src/lib/titleGroupRadar.
 import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
 import {
   ENTDECKEN_WEEKLY_SOURCE_BUNDLE_SHA256,
+  RADAR_DAILY_COMMIT,
+  RADAR_DAILY_FILES,
+  RADAR_DAILY_MIGRATION,
+  RADAR_DAILY_RELEASE_SHA256,
+  RADAR_DAILY_SOURCE_BUNDLE_SHA256,
+  RADAR_DAILY_WORKFLOW,
   RADAR_ENTDECKEN_V6_RELEASE_MIGRATIONS,
   RADAR_ENTDECKEN_V6_RELEASE_SHA256,
   RADAR_TEXT_TARGET_COMMIT,
@@ -26,6 +32,7 @@ import {
   RADAR_TEXT_TARGET_SOURCE_BUNDLE_SHA256,
   RADAR_V6_SOURCE_BUNDLE_SHA256,
   requireRadarDeployedV5Provenance,
+  requireRadarDailyReleaseProvenance,
   requireRadarEntdeckenV6ReleaseProvenance,
   requireRadarTextTargetReleaseProvenance,
 } from "./tools/radar_websearch_remote_start.mjs";
@@ -180,6 +187,34 @@ await check("Aktueller Radar-Text-Target-Zaun bindet Quellcommit, sechs Runtime-
       return pathname === sharedPath ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
     },
   }), (error) => error?.code === "RADAR_TEXT_TARGET_RELEASE_PROVENANCE_DRIFT");
+});
+
+await check("Radar-Tagesrelease bindet sieben Runtime-Dateien, Migration und Schedule an den Integrationscommit", () => {
+  assert.equal(RADAR_DAILY_COMMIT, "4ce2f4b0664ff56e90ebf7a825e4eac7c205714f");
+  assert.deepEqual(RADAR_DAILY_FILES.map(({ path: pathname }) => pathname), [
+    "supabase/functions/radar-websearch-task/anthropicAdapter.js",
+    "supabase/functions/radar-websearch-task/contract.js",
+    "supabase/functions/radar-websearch-task/index.ts",
+    "supabase/functions/radar-websearch-task/runner.js",
+    "supabase/functions/_shared/providerDiagnostic.js",
+    "supabase/functions/_shared/providerReceipt.js",
+    "supabase/functions/_shared/providerText.js",
+  ]);
+  for (const { path: pathname, sha256: digest } of [
+    ...RADAR_DAILY_FILES,
+    RADAR_DAILY_MIGRATION,
+    RADAR_DAILY_WORKFLOW,
+  ]) {
+    const committed = execFileSync("/usr/bin/git", [
+      "show", `${RADAR_DAILY_COMMIT}:${pathname}`,
+    ], { cwd: process.cwd(), encoding: null });
+    assert.equal(sha256(committed), digest, pathname);
+  }
+  const release = requireRadarDailyReleaseProvenance();
+  assert.equal(release.releaseSha256, RADAR_DAILY_RELEASE_SHA256);
+  assert.equal(sha256(JSON.stringify(release.files)), RADAR_DAILY_SOURCE_BUNDLE_SHA256);
+  assert.deepEqual(release.migration, RADAR_DAILY_MIGRATION);
+  assert.deepEqual(release.workflow, RADAR_DAILY_WORKFLOW);
 });
 
 const franchiseCatalog = Object.freeze([
