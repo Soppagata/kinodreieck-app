@@ -168,7 +168,7 @@ const validHealth = {
     blogProfileExtract: {
       ready: true,
       task: "blog-profile-extract",
-      promptVersion: "blog-profile-v1",
+      promptVersion: "blog-profile-v2",
       modelAlias: "klein",
       maxTokens: 2048,
       taskMaxReservationUsdCent: 5,
@@ -571,7 +571,7 @@ await checkAsync("Vorschau liefert Status und Provenienz-Kopf", (async () => {
   const firstWord = preview.payload.vokabular[0];
   const secondWord = preview.payload.vokabular[1];
   return preview.payload.quelle === "bloganalyse"
-    && preview.payload.promptVersion === "blog-profile-v1"
+    && preview.payload.promptVersion === "blog-profile-v2"
     && preview.payload.articleId === responseBasePayload.artikel.id
     && preview.payload.contentHash === "a".repeat(64)
     && preview.payload.status === "konflikt"

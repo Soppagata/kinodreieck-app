@@ -149,7 +149,7 @@ const vorschaukopf = {
   articleId: artikelPayload.artikel.id,
   contentHash: "a".repeat(64),
   analyzedAt: JETZT,
-  promptVersion: "blog-profile-v1",
+  promptVersion: "blog-profile-v2",
 };
 const profil = erteileEinwilligung(leeresProfil(), JETZT);
 

@@ -13,7 +13,11 @@ function eindeutig(werte) {
 }
 
 const BLOG_VOKABULAR_QUELLE = "bloganalyse";
-const BLOG_VOKABULAR_PROMPT_VERSION = "blog-profile-v1";
+const BLOG_VOKABULAR_PROMPT_VERSION = "blog-profile-v2";
+const BLOG_VOKABULAR_PROMPT_VERSIONEN = new Set([
+  "blog-profile-v1",
+  BLOG_VOKABULAR_PROMPT_VERSION,
+]);
 const BLOG_VOKABULAR_ARTICLE_ID = /^[a-z0-9][a-z0-9_]{0,119}$/;
 const BLOG_VOKABULAR_CONTENT_HASH = /^[a-f0-9]{64}$/;
 const BLOG_VOKABULAR_NULL_HASH = /^0{64}$/;
@@ -102,7 +106,7 @@ const pruefeVorschaukopf = (vorschaukopf) => {
     fehler.push("Vorschaukopf hat einen ungueltigen contentHash");
   }
   if (!istCanonicalUtc(vorschaukopf.analyzedAt)) fehler.push("Vorschaukopf hat kein canonical UTC analyzedAt");
-  if (vorschaukopf.promptVersion !== BLOG_VOKABULAR_PROMPT_VERSION) {
+  if (!BLOG_VOKABULAR_PROMPT_VERSIONEN.has(vorschaukopf.promptVersion)) {
     fehler.push("Vorschaukopf hat eine ungueltige promptVersion");
   }
   return fehler;

@@ -80,7 +80,11 @@ export const QUELLEN = [
 ];
 
 export const BLOG_SIGNAL_QUELLE = "bloganalyse";
-export const BLOG_SIGNAL_PROMPT_VERSION = "blog-profile-v1";
+export const BLOG_SIGNAL_PROMPT_VERSION = "blog-profile-v2";
+const BLOG_SIGNAL_PROMPT_VERSIONEN = new Set([
+  "blog-profile-v1",
+  BLOG_SIGNAL_PROMPT_VERSION,
+]);
 
 /* Profilversion als kurzes Token: Die Edge Function validiert sie gegen
    /^[A-Za-z0-9._-]{1,20}$/ (ai-task/index.ts:443) und weist längere oder
@@ -128,7 +132,7 @@ const pruefeBlogMeta = (s, fehler) => {
     fehler.push("contentHash ungueltig");
   }
   if (!istCanonicalUtc(s.analyzedAt)) fehler.push("analyzedAt nicht canonical UTC ISO");
-  if (s.promptVersion !== BLOG_SIGNAL_PROMPT_VERSION) fehler.push("promptVersion ungueltig");
+  if (!BLOG_SIGNAL_PROMPT_VERSIONEN.has(s.promptVersion)) fehler.push("promptVersion ungueltig");
 };
 
 /* Vereinheitlicht Weißraum. Zweite Schranke, bewusst REDUNDANT zur

@@ -35,6 +35,118 @@ export type AnbieterBild = {
   data: string;
 };
 
+/* Blog-Belege werden vor dem Provider deterministisch in kurze, exakte
+   Artikelanker zerlegt. Das Modell waehlt nur eine wertfreie B-ID; erst der
+   Server setzt danach wieder den unveraenderten Wortlaut ein. */
+export const BLOG_BELEGANKER_MAX_ANZAHL = 256;
+export type BlogBeleganker = Readonly<{ id: string; text: string }>;
+const BLOG_BELEGANKER_UTF8 = new TextEncoder();
+const BLOG_BELEGANKER_TRENNER = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u;
+const BLOG_BELEGANKER_UEBERLAPPUNG_BYTES = 24;
+
+function blogBelegankerBytes(wert: string): number {
+  return BLOG_BELEGANKER_UTF8.encode(wert).length;
+}
+
+function blogPrefixEnde(wert: string, maxBytes: number): number {
+  let ende = 0;
+  for (const zeichen of wert) {
+    const naechstesEnde = ende + zeichen.length;
+    if (blogBelegankerBytes(wert.slice(0, naechstesEnde)) > maxBytes) break;
+    ende = naechstesEnde;
+  }
+  return ende;
+}
+
+function blogSchrittMitUeberlappung(wert: string, belegEnde: number): number {
+  const beleg = wert.slice(0, belegEnde);
+  const belegBytes = blogBelegankerBytes(beleg);
+  if (belegBytes <= BLOG_BELEGANKER_UEBERLAPPUNG_BYTES + 16) return belegEnde;
+  const zielBytes = belegBytes - BLOG_BELEGANKER_UEBERLAPPUNG_BYTES;
+  let ende = 0;
+  let bytes = 0;
+  let letzteGrenze = 0;
+  for (const zeichen of beleg) {
+    const naechstesEnde = ende + zeichen.length;
+    const naechsteBytes = bytes + blogBelegankerBytes(zeichen);
+    if (naechsteBytes > zielBytes) break;
+    ende = naechstesEnde;
+    bytes = naechsteBytes;
+    if (/[\s,;:.!?]/u.test(zeichen)) letzteGrenze = ende;
+  }
+  const schritt = letzteGrenze > 0 ? letzteGrenze : ende;
+  return schritt > 0 && schritt < belegEnde ? schritt : belegEnde;
+}
+
+export function baueBlogBeleganker(text: string): BlogBeleganker[] {
+  if (typeof text !== "string" || !text) return [];
+  const texte: string[] = [];
+  const gesehen = new Set<string>();
+  const aufnehmen = (roh: string) => {
+    const kandidat = roh.trim();
+    const bytes = blogBelegankerBytes(kandidat);
+    if (bytes < 16 || bytes > 96 || BLOG_BELEGANKER_TRENNER.test(kandidat) ||
+        !text.includes(kandidat) || gesehen.has(kandidat)) return;
+    gesehen.add(kandidat);
+    texte.push(kandidat);
+  };
+
+  for (const abschnitt of text.split(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/u)) {
+    let rest = abschnitt.trim();
+    while (rest) {
+      if (blogBelegankerBytes(rest) <= 96) {
+        aufnehmen(rest);
+        break;
+      }
+      const maximalesEnde = blogPrefixEnde(rest, 96);
+      if (maximalesEnde <= 0) break;
+      const praefix = rest.slice(0, maximalesEnde);
+      let kandidatEnde = maximalesEnde;
+      let verbraucht = maximalesEnde;
+      for (let i = 1; i <= praefix.length; i += 1) {
+        const zeichen = praefix[i - 1];
+        if (!/[\s,;:.!?]/u.test(zeichen)) continue;
+        const moeglichesEnde = /\s/u.test(zeichen) ? i - 1 : i;
+        if (blogBelegankerBytes(praefix.slice(0, moeglichesEnde).trim()) >= 16) {
+          kandidatEnde = moeglichesEnde;
+          verbraucht = i;
+        }
+      }
+      aufnehmen(rest.slice(0, kandidatEnde));
+      const hatWeiterenText = rest.slice(verbraucht).trim().length > 0;
+      const schritt = hatWeiterenText
+        ? blogSchrittMitUeberlappung(rest, kandidatEnde)
+        : verbraucht;
+      rest = rest.slice(schritt).trimStart();
+    }
+  }
+
+  /* Bei vielen kurzen Abschnitten bleibt die Abdeckung gleichmaessig ueber
+     den ganzen Artikel verteilt; insbesondere gehen Anfang und Ende nie nur
+     wegen des Providerlimits verloren. */
+  const auswahl = texte.length <= BLOG_BELEGANKER_MAX_ANZAHL
+    ? texte
+    : Array.from({ length: BLOG_BELEGANKER_MAX_ANZAHL }, (_, index) =>
+      texte[Math.round(
+        index * (texte.length - 1) / (BLOG_BELEGANKER_MAX_ANZAHL - 1),
+      )]
+    );
+  return auswahl.map((ankertext, index) => Object.freeze({
+    id: `B${String(index + 1).padStart(3, "0")}`,
+    text: ankertext,
+  }));
+}
+
+export function loeseBlogBeleganker(
+  anker: readonly BlogBeleganker[],
+  id: unknown,
+): string | null {
+  if (typeof id !== "string") return null;
+  const normalisiert = id.toUpperCase();
+  if (!/^B\d{3}$/.test(normalisiert)) return null;
+  return anker.find((eintrag) => eintrag.id === normalisiert)?.text ?? null;
+}
+
 /* Owner-Sicherheitsgrenze fuer jeden einzelnen zahlenden Anbieterrequest.
    Die Datenbank darf darunter einen engeren Betriebswert setzen, aber niemals
    darueber. Der Wert steht hier im puren Vertragsmodul, damit dieselbe

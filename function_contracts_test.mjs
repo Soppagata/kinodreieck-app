@@ -22,7 +22,10 @@ import {
   anbieterOwnerPreisboden,
   anbieterBildTokenMax,
   baueAnbieterKoerper,
+  baueBlogBeleganker,
+  BLOG_BELEGANKER_MAX_ANZAHL,
   liesAnbieterRequestTimeoutMs,
+  loeseBlogBeleganker,
   pruefeAnbieterKostenzaun,
   schaetzeAnbieterEingabeTokens,
 } from "./supabase/functions/ai-task/providerContract.ts";
@@ -155,6 +158,39 @@ check("Provider-Zeitgrenze ist ganzzahlig, positiv und unabhaengig von Konfigura
   && liesAnbieterRequestTimeoutMs(135001) === null
   && liesAnbieterRequestTimeoutMs("120000") === null);
 
+const blogArtikel =
+  "Die Kamera bleibt lange still und beobachtet, wie sich jede kleinste Bewegung verändert.";
+const blogBeleganker = baueBlogBeleganker(blogArtikel);
+const blogUtf8 = new TextEncoder();
+check("Blog-Beleganker bleiben exakte, einzeilige Artikelstellen im Bytefenster",
+  blogBeleganker.length >= 1
+  && blogBeleganker.every((anker, index) =>
+    anker.id === `B${String(index + 1).padStart(3, "0")}`
+    && blogArtikel.includes(anker.text)
+    && blogUtf8.encode(anker.text).length >= 16
+    && blogUtf8.encode(anker.text).length <= 96
+    && !/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/u.test(anker.text)));
+const blogVieleAbschnitte = Array.from(
+  { length: BLOG_BELEGANKER_MAX_ANZAHL + 20 },
+  (_, index) => `Abschnitt ${String(index + 1).padStart(3, "0")} beschreibt präzise ein anderes filmisches Detail.`,
+).join("\n");
+const blogVieleBeleganker = baueBlogBeleganker(blogVieleAbschnitte);
+check("Blog-Beleganker sind auch bei Unicode und langen Artikeln hart begrenzt",
+  blogVieleBeleganker.length === BLOG_BELEGANKER_MAX_ANZAHL
+  && blogVieleBeleganker[0].text.includes("Abschnitt 001")
+  && blogVieleBeleganker.at(-1).text.includes(
+    `Abschnitt ${String(BLOG_BELEGANKER_MAX_ANZAHL + 20).padStart(3, "0")}`,
+  )
+  && blogVieleBeleganker.every((anker) =>
+    blogVieleAbschnitte.includes(anker.text)
+    && blogUtf8.encode(anker.text).length >= 16
+    && blogUtf8.encode(anker.text).length <= 96));
+check("Blog-Beleg-IDs werden nur serverseitig und fail-closed aufgeloest",
+  loeseBlogBeleganker(blogBeleganker, blogBeleganker[0]?.id) === blogBeleganker[0]?.text
+  && loeseBlogBeleganker(blogBeleganker, blogBeleganker[0]?.id.toLowerCase()) === blogBeleganker[0]?.text
+  && loeseBlogBeleganker(blogBeleganker, "B999") === null
+  && loeseBlogBeleganker(blogBeleganker, null) === null);
+
 const index = fs.readFileSync("supabase/functions/ai-task/index.ts", "utf8");
 check("Der Endpunkt importiert den Vertrag statt Fehlercodes zu duplizieren",
   /from\s+"\.\/requestContract\.ts"/.test(index)
@@ -188,12 +224,18 @@ const blogBlock = index.slice(
   index.indexOf('"film-forecast":', index.indexOf('"blog-profile-extract":')),
 );
 check("Blog-Profil nutzt einen serverseitigen versionierten Prompt ohne Inhaltslogs",
-  blogBlock.includes("blog-profile-v1")
+  blogBlock.includes("blog-profile-v2")
   && !/console\.(?:log|info|warn|error)/.test(blogBlock));
 check("Blog-Profil verlangt die feste kleine Modell-, Token- und Task-Cap-Konfiguration",
   blogBlock.includes('modellAliasPflicht: "klein"')
   && blogBlock.includes("maxTokensExakt: 2048")
   && blogBlock.includes("taskCapExakt: 5"));
+check("Blog-Profil bindet Modellbelege ueber neutrale IDs an Serveranker",
+  blogBlock.includes("const beleganker = baueBlogBeleganker(eingabe.artikel.text)")
+  && blogBlock.includes("belege: beleganker")
+  && !blogBlock.includes("text: eingabe.artikel.text")
+  && blogBlock.includes("belegId exakt die id")
+  && blogBlock.includes("schema: blogProfileSchema(beleganker)"));
 
 const blogKostenpfad = index.slice(
   index.indexOf("const maxTokensJeTask"),

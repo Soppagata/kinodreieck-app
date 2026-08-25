@@ -9194,7 +9194,7 @@ const bpGeschmackszug = (zusatz: Record<string, unknown> = {}) => ({
   richtung: "zieht_an",
   staerke: 4,
   sicherheit: "hoch",
-  beleg: BP_BELEG,
+  belegId: "B001",
   ...zusatz,
 });
 const bpVokabular = (zusatz: Record<string, unknown> = {}) => ({
@@ -9202,7 +9202,7 @@ const bpVokabular = (zusatz: Record<string, unknown> = {}) => ({
   beschreibung: "Bezeichnung fuer den ruhigen Rhythmus der beschriebenen Szene.",
   genres: ["Drama"],
   tags: ["ruhig"],
-  beleg: BP_BELEG,
+  belegId: "B001",
   ...zusatz,
 });
 const bpAntwort = (zusatz: Record<string, unknown> = {}) => ({
@@ -9226,10 +9226,6 @@ const BP_SICHTBARE_UNICODE_SEQUENZEN = [
   ["Variation-Selector", "✈️"],
   ["Keycap", "1️⃣"],
   ["Persisch mit ZWNJ", "می‌خواهم"],
-] as const;
-const BP_UNSICHTBARE_BELEGE = [
-  ["sechs U+200B", "\u200B".repeat(6), 18],
-  ["gemischte DICP", "\u200C\u200D\u00AD\uFE0F\u2066\u202E", 17],
 ] as const;
 const bpRuf = (
   payload: Record<string, unknown> = bpPayload(),
@@ -9271,7 +9267,7 @@ function bpOutputIstUngueltig(
 
 test("BP1 stabiler Task-, Prompt-, Modell-, Token- und Cap-Vertrag", () => {
   gleich(BLOG_PROFILE_TASK, "blog-profile-extract", "Taskname");
-  gleich(BLOG_PROFILE_PROMPT_VERSION, "blog-profile-v1", "Promptversion");
+  gleich(BLOG_PROFILE_PROMPT_VERSION, "blog-profile-v2", "Promptversion");
   gleich(BLOG_PROFILE_MAX_TOKENS, 2048, "Max Tokens");
   gleich(BLOG_PROFILE_TASK_CAP_USD_CENT, 5, "Taskcap");
   gleich(AUFGABEN[BLOG_PROFILE_TASK].modellAliasPflicht, "klein", "Alias");
@@ -9473,13 +9469,30 @@ test("BP4 Provider-Schema und Erfolgspfad sind strikt und provenienzfrei", async
   const koerper = anbieterKoerper();
   gleich(koerper.max_tokens, 2048, "Provider-Max-Tokens");
   gleich(startKoerper().p_modell_alias, "klein", "kleiner Alias");
-  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "serverseitige Logprovenienz");
+  gleich(startKoerper().p_prompt_version, "blog-profile-v2", "serverseitige Logprovenienz");
   gleich(startKoerper().p_profil_version, null, "keine clientseitige Profilprovenienz im Log");
   const schema = koerper.output_config.format.schema as Record<string, unknown>;
   gleich(schema.additionalProperties, false, "Wurzel geschlossen");
   const props = schema.properties as Record<string, Record<string, unknown>>;
-  gleich((props.geschmackszuege.items as Record<string, unknown>).additionalProperties, false, "Geschmackszug geschlossen");
-  gleich((props.vokabular.items as Record<string, unknown>).additionalProperties, false, "Vokabular geschlossen");
+  const geschmackItem = props.geschmackszuege.items as Record<string, unknown>;
+  const vokabularItem = props.vokabular.items as Record<string, unknown>;
+  gleich(geschmackItem.additionalProperties, false, "Geschmackszug geschlossen");
+  gleich(vokabularItem.additionalProperties, false, "Vokabular geschlossen");
+  const geschmackProps = geschmackItem.properties as Record<string, Record<string, unknown>>;
+  const vokabularProps = vokabularItem.properties as Record<string, Record<string, unknown>>;
+  wahr(Array.isArray(geschmackProps.belegId.enum), "Schema bindet nur neutrale Beleg-IDs");
+  falsch("enum" in ((vokabularProps.genres.items as Record<string, unknown>)), "Genres stehen nicht im gecachten Schema");
+  falsch("enum" in ((vokabularProps.tags.items as Record<string, unknown>)), "Tags stehen nicht im gecachten Schema");
+  const anfang = nutzertext().indexOf("\n") + 1;
+  const ende = nutzertext().lastIndexOf("\n</blog_profile_json>");
+  const providerEingabe = JSON.parse(nutzertext().slice(anfang, ende));
+  gleich(JSON.stringify(Object.keys(providerEingabe.artikel)), JSON.stringify(["titel", "belege"]), "Providerartikel bleibt geschlossen");
+  wahr(Array.isArray(providerEingabe.artikel.belege) && providerEingabe.artikel.belege.length > 0, "Provider erhaelt Serveranker");
+  gleich(
+    ((r.daten.data as Record<string, Array<Record<string, unknown>>>).geschmackszuege[0]).beleg,
+    providerEingabe.artikel.belege[0].text,
+    "Server setzt die neutrale ID auf den exakten Artikelanker zurueck",
+  );
   const providerRoh = JSON.stringify(koerper);
   falsch(providerRoh.includes("artikel_17a"), "Artikel-ID erreicht das Modell nicht");
   falsch(/(?:hash|herkunft|provenienz)/i.test(JSON.stringify(r.daten.data)), "keine Modellprovenienz");
@@ -9512,7 +9525,7 @@ test("BP5 Outputgrenzen retten gueltige Einzelitems und verwerfen nur kaputte", 
   const tolerant = pruefeBlogProfileErgebnis({
     geschmackszuege: [
       { ...bpGeschmackszug(), ignoriert: true },
-      bpGeschmackszug({ beleg: "Dieser Beleg steht nicht im Artikeltext." }),
+      bpGeschmackszug({ belegId: "B999" }),
     ],
     vokabular: [
       { ...bpVokabular(), ignoriert: "Zusatz" },
@@ -9622,37 +9635,33 @@ test("BP5b echte Unicode-Sequenzen bleiben in Outputfeldern roh identisch", () =
   }
 });
 
-test("BP6 Belege sind rohe UTF-8-Bytefolgen von 16 bis 96 aus artikel.text", () => {
-  const min = "x".repeat(16);
-  const max = "ä".repeat(48);
-  const payload = bpPayload({
-    artikel: { id: "a", titel: "T", text: `Anfang ${min} Mitte ${max} Ende` },
-  });
-  falsch(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: min, art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "16 Bytes erlaubt");
-  falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [bpVokabular({ beleg: max })] }, payload), "96 UTF-8-Bytes erlaubt");
-  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "x".repeat(15), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "15 Bytes blockiert");
-  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "ä".repeat(49), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "98 Bytes blockiert");
-  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: min.toUpperCase(), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine normalisierte Suche");
-  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: "x".repeat(8) + "\n" + "x".repeat(8), art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "keine Zeilentrenner");
-  const leerBeleg = " ".repeat(16);
-  const leerPayload = bpPayload({
-    artikel: { id: "a", titel: "T", text: `Anfang${leerBeleg}Ende` },
-  });
-  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ beleg: leerBeleg, art: "ton", wert: "ruhig" })], vokabular: [] }, leerPayload), "16-Spaces-Beleg bleibt trotz echtem Rohsubstring gesperrt");
+test("BP6 Beleg-IDs loesen nur exakte Serveranker auf und ueberlappen lange Saetze", () => {
+  const text = `${"Ruhige Bilder tragen den langen Auftakt. ".repeat(5)}Der Film ist nicht langweilig, sondern praezise beobachtet.`;
+  const payload = bpPayload({ artikel: { id: "a", titel: "T", text } });
+  const auftrag = AUFGABEN[BLOG_PROFILE_TASK].bauAuftrag(payload);
+  const anfang = auftrag.nutzertext.indexOf("\n") + 1;
+  const ende = auftrag.nutzertext.lastIndexOf("\n</blog_profile_json>");
+  const providerEingabe = JSON.parse(auftrag.nutzertext.slice(anfang, ende));
+  const belege = providerEingabe.artikel.belege as Array<{ id: string; text: string }>;
+  wahr(belege.some((beleg) => beleg.text.includes("nicht langweilig")), "Wortbezug bleibt in einem ueberlappenden Anker");
+  wahr(belege.every((beleg) => text.includes(beleg.text)
+    && new TextEncoder().encode(beleg.text).length >= 16
+    && new TextEncoder().encode(beleg.text).length <= 96), "jeder Anker ist ein exaktes Rohsubstring im Bytefenster");
+  const id = belege[0].id;
+  falsch(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ belegId: id, art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "gesendete ID erlaubt");
+  falsch(bpOutputIstUngueltig({ geschmackszuege: [], vokabular: [bpVokabular({ belegId: id.toLowerCase() })] }, payload), "Enum-Casing wird robust aufgeloest");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [bpGeschmackszug({ belegId: "B999", art: "ton", wert: "ruhig" })], vokabular: [] }, payload), "unbekannte ID blockiert");
+  wahr(bpOutputIstUngueltig({ geschmackszuege: [{ ...bpGeschmackszug(), belegId: undefined, beleg: belege[0].text }], vokabular: [] }, payload), "roher Modellbeleg ist kein Ersatz fuer eine ID");
+});
 
-  for (const [name, beleg, bytes] of BP_UNSICHTBARE_BELEGE) {
-    gleich(new TextEncoder().encode(beleg).length, bytes, `${name}: belegte UTF-8-Bytelaenge`);
-    const belegPayload = bpPayload({
-      artikel: { id: "a", titel: "T", text: `Anfang${beleg}Ende` },
-    });
-    wahr(
-      bpOutputIstUngueltig({
-        geschmackszuege: [bpGeschmackszug({ beleg, art: "ton", wert: "ruhig" })],
-        vokabular: [],
-      }, belegPayload),
-      `${name}: Beleg bleibt trotz exaktem Rohsubstring gesperrt`,
-    );
-  }
+test("BP6a Artikel ohne einzigen sicheren Anker stoppen vor jedem Kostenpfad", async () => {
+  stelleZurueck();
+  const r = await bpRuf(bpPayload({ artikel: { id: "a", titel: "T", text: "Zu kurz" } }));
+  gleich(r.status, 400, "Status");
+  gleich(r.daten.grund, "blog-artikel-ohne-beleganker", "inhaltsfreie Diagnose");
+  gleich(rpc("kd_private_provider_allowed").length, 0, "kein Providercheck");
+  gleich(starten().length, 0, "keine Reservierung");
+  gleich(anbieterAufrufe().length, 0, "kein Providerfetch");
 });
 
 test("BP7 JSON-Codeblock behaelt zwei belegte Vorschlaege und verwirft den kaputten", async () => {
@@ -9660,7 +9669,7 @@ test("BP7 JSON-Codeblock behaelt zwei belegte Vorschlaege und verwirft den kaput
   const providerJson = {
     geschmackszuege: [
       { ...bpGeschmackszug(), ignoriertesItemFeld: true },
-      bpGeschmackszug({ beleg: "frei erfundener Beleg" }),
+      bpGeschmackszug({ belegId: "B999" }),
     ],
     vokabular: [bpVokabular()],
     ignoriertesWurzelfeld: "kein Profilmerkmal",
@@ -9731,7 +9740,7 @@ test("BP9 Health-Capability ist exakt und bei jedem alten/falschen Feld fail-clo
   gleich(JSON.stringify(cap), JSON.stringify({
     ready: true,
     task: "blog-profile-extract",
-    promptVersion: "blog-profile-v1",
+    promptVersion: "blog-profile-v2",
     modelAlias: "klein",
     maxTokens: 2048,
     taskMaxReservationUsdCent: 5,
@@ -9862,7 +9871,7 @@ test("BP10 verworfene Artikel- und Modellinhalte erreichen weder Hinweis noch DB
     },
   });
   bpMitAntwort({
-    geschmackszuege: [bpGeschmackszug({ wert: geheim, beleg: "frei erfundener Beleg" })],
+    geschmackszuege: [bpGeschmackszug({ wert: geheim, belegId: "B999" })],
     vokabular: [],
   });
   const r = await bpRuf(payload, null);
@@ -9874,6 +9883,6 @@ test("BP10 verworfene Artikel- und Modellinhalte erreichen weder Hinweis noch DB
   const logRoh = JSON.stringify([...starten(), ...beenden()].map((a) => a.koerper));
   falsch(logRoh.includes(geheim), "kein Artikel-/Modellwert im DB-Log");
   falsch(logRoh.includes("privater_artikel_17a"), "keine Artikel-ID im DB-Log");
-  gleich(startKoerper().p_prompt_version, "blog-profile-v1", "nur der Server bestimmt die Provenienz");
+  gleich(startKoerper().p_prompt_version, "blog-profile-v2", "nur der Server bestimmt die Provenienz");
   pruefeKeinInhaltImProtokoll([geheim, "privater_artikel_17a", "frei erfundener Beleg"]);
 });

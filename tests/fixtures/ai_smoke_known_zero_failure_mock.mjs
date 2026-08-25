@@ -61,7 +61,7 @@ function health(vorgangId) {
       blogProfileExtract: {
         ready: true,
         task: "blog-profile-extract",
-        promptVersion: "blog-profile-v1",
+        promptVersion: "blog-profile-v2",
         modelAlias: "klein",
         maxTokens: 2048,
         taskMaxReservationUsdCent: 5,

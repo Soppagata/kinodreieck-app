@@ -154,7 +154,7 @@ const BLOG_META = Object.freeze({
   articleId: "artikel_17",
   contentHash: "a".repeat(64),
   analyzedAt: "2026-08-17T08:00:00.000Z",
-  promptVersion: "blog-profile-v1",
+  promptVersion: "blog-profile-v2",
 });
 const sigFuerQuelle = (quelle, o = {}) => sig({
   quelle,
@@ -1764,8 +1764,10 @@ check("K", "Blog-Metafelder sind vollständig und typstreng",
   () => [
     { articleId: undefined }, { articleId: "A" }, { contentHash: "A".repeat(64) },
     { contentHash: "0".repeat(64) }, { analyzedAt: "2026-08-17T08:00:00Z" },
-    { analyzedAt: "2026-02-30T08:00:00.000Z" }, { promptVersion: "blog-profile-v2" },
+    { analyzedAt: "2026-02-30T08:00:00.000Z" }, { promptVersion: "blog-profile-v3" },
   ].every((aenderung) => P.pruefeSignal(blogSignal(aenderung)).length > 0));
+check("K", "gespeicherte v1-Blogsignale bleiben nach dem v2-Upgrade lesbar",
+  () => P.pruefeSignal(blogSignal({ promptVersion: "blog-profile-v1" })).length === 0);
 check("K", "articleId akzeptiert exakt die vereinbarte Form bis 120 Zeichen",
   () => P.pruefeSignal(blogSignal({ articleId: "a" + "_".repeat(119) })).length === 0
     && P.pruefeSignal(blogSignal({ articleId: "a" + "_".repeat(120) })).length > 0);

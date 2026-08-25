@@ -1617,7 +1617,7 @@ sp.topf.signale[0] = {
   articleId: "blogartikel_1",
   contentHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   analyzedAt: "2026-08-16T00:00:00.000Z",
-  promptVersion: "blog-profile-v1",
+  promptVersion: "blog-profile-v2",
 };
 await neuMontieren({ speicher: sp.api });
 await klickT("Ändern");
@@ -2073,7 +2073,7 @@ const AI_HEALTH = {
     blogProfileExtract: {
       ready: true,
       task: "blog-profile-extract",
-      promptVersion: "blog-profile-v1",
+      promptVersion: "blog-profile-v2",
       modelAlias: "klein",
       maxTokens: 2048,
       taskMaxReservationUsdCent: 5,

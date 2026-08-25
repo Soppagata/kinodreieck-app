@@ -19,7 +19,11 @@ const BLOG_PROFILE_RICHTUNGEN = Object.freeze(["zieht_an", "stoesst_ab", "ambiva
 const BLOG_PROFILE_SICHERHEITEN = Object.freeze(["hoch", "mittel", "niedrig"]);
 
 export const BLOG_PROFILE_ANALYSE_SOURCE = "bloganalyse";
-export const BLOG_PROFILE_ANALYSE_PROMPT_VERSION = "blog-profile-v1";
+export const BLOG_PROFILE_ANALYSE_PROMPT_VERSION = "blog-profile-v2";
+const BLOG_PROFILE_ANALYSE_PROMPT_VERSIONEN = new Set([
+  "blog-profile-v1",
+  BLOG_PROFILE_ANALYSE_PROMPT_VERSION,
+]);
 export const BLOG_PROFILE_IDMUSTER = BLOG_PROFILE_ID;
 export const BLOG_PROFILE_ARTEN_SET = BLOG_PROFILE_ARTEN;
 export const BLOG_PROFILE_RICHTUNG_SET = BLOG_PROFILE_RICHTUNGEN;
@@ -501,7 +505,7 @@ const validierePreserveMetadata = (modelAntwort, articlePayload) => {
   if (typeof modelAntwort.analyzedAt !== "string" || !isCanonicalIsoDate(modelAntwort.analyzedAt)) {
     return null;
   }
-  if (modelAntwort.promptVersion !== BLOG_PROFILE_ANALYSE_PROMPT_VERSION) {
+  if (!BLOG_PROFILE_ANALYSE_PROMPT_VERSIONEN.has(modelAntwort.promptVersion)) {
     return null;
   }
   if (modelAntwort.quelle !== BLOG_PROFILE_ANALYSE_SOURCE) {
@@ -862,7 +866,7 @@ export function hatBlogProfileAnalyseCapability(healthAntwort) {
 
   if (eintrag.ready !== true) return false;
   if (eintrag.task !== "blog-profile-extract") return false;
-  if (eintrag.promptVersion !== "blog-profile-v1") return false;
+  if (eintrag.promptVersion !== BLOG_PROFILE_ANALYSE_PROMPT_VERSION) return false;
   if (eintrag.modelAlias !== "klein") return false;
   if (eintrag.maxTokens !== 2048 || !istGanzzahl(eintrag.maxTokens)) return false;
   if (eintrag.taskMaxReservationUsdCent !== 5 || !istGanzzahl(eintrag.taskMaxReservationUsdCent)) return false;

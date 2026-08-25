@@ -43,7 +43,7 @@ const KOPF = Object.freeze({
   articleId: "eigener_blog_17",
   contentHash: "a".repeat(64),
   analyzedAt: "2026-08-17T14:00:00.000Z",
-  promptVersion: "blog-profile-v1",
+  promptVersion: "blog-profile-v2",
 });
 
 const kandidat = (wort, aenderung = {}) => ({
@@ -203,11 +203,13 @@ const kopfFaelle = [
   { ...KOPF, contentHash: "A".repeat(64) },
   { ...KOPF, contentHash: "0".repeat(64) },
   { ...KOPF, analyzedAt: "2026-08-17T14:00:00Z" },
-  { ...KOPF, promptVersion: "blog-profile-v2" },
+  { ...KOPF, promptVersion: "blog-profile-v3" },
   { ...KOPF, extra: true },
 ];
 check("Quelle, articleId, Hash, canonical UTC, Promptversion und Kopfschlüssel sind fail-closed",
   kopfFaelle.every((kopf) => abgewiesen(uebernimmBlogVokabular([], kopf, [kandidat("wort")]))));
+check("Gespeicherte v1-Vokabularkandidaten bleiben nach dem v2-Upgrade lesbar",
+  !abgewiesen(uebernimmBlogVokabular([], { ...KOPF, promptVersion: "blog-profile-v1" }, [kandidat("alt")])));
 
 const malformedFaelle = [
   () => uebernimmBlogVokabular(null, KOPF, []),
