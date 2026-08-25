@@ -3,6 +3,28 @@
 Stand: 25. August 2026. Dieser Auftrag ist zum Ausführen gedacht, nicht für eine
 neue Planung oder einen breiten Audit.
 
+## OFFENER PUNKT: globales Staging-Tageslimit zwingend auf 30 zurueckstellen
+
+Damit die noch offene Empfehlungsabnahme nicht am allgemeinen Bauphasenlimit
+scheitert, steht auf **Staging**
+`kd_ai_limits['tageslimit_auftraege']=200`. Das ist eine temporaere direkte
+Staging-Konfiguration und absichtlich **keine Migration**: Default-Branch und
+Produktion duerfen diesen Wert nicht uebernehmen. Die serverseitige Notiz der
+Zeile bezeichnet den Zustand ausdruecklich als temporaer und nennt den
+Rueckbau auf 30.
+
+Dieser Punkt ist erst erledigt, wenn nach einer belastbaren 8/8-Abnahme der Wert
+auf Staging wieder exakt auf `30` gesetzt und als numerische `30` zurueckgelesen
+wurde. Vor Default-Branch oder Produktion ist der Rueckbau unabhaengig vom
+Testergebnis zwingend. Monatsbudget, 500-US-Cent-Request-Zaun, Task-Caps,
+Parallelitaet, `ai_aktiv` und Not-Aus wurden beim Anheben nicht gelockert.
+
+**Festgelegtes Intervall nach dem Rueckbau:** Radar prueft aktive Ziele einmal
+taeglich (`radar-daily.yml`, 04:37 UTC). Entdecken wird alle drei Tage vom
+Keep-alive angestossen, darf durch den DB-Wochenzaun aber nur einmal je
+ISO-Woche einen erfolgreichen Empfehlungs-Websearch speichern; nur Fehler
+koennen innerhalb der drei begrenzten Wochenversuche erneut geprueft werden.
+
 ## OFFENER PUNKT: temporaeren Staging-Override wieder schliessen
 
 Fuer die kontrollierte Empfehlungsabnahme kann ausschliesslich auf Staging

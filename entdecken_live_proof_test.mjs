@@ -208,7 +208,12 @@ await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kost
     adapter,
   });
   normalResponse = createEntdeckenDailyResponse(run, adapter.telemetry());
-  const { providerReceipt: _providerReceipt, ...readProjection } = normalResponse;
+  const {
+    providerReceipt: _providerReceipt,
+    quality: _quality,
+    failureReason: _failureReason,
+    ...readProjection
+  } = normalResponse;
   independentResponse = Object.freeze({
     ...readProjection,
     writes: 0,
@@ -228,6 +233,16 @@ await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kost
   assert.deepEqual(normalResponse.feed, storedFeed);
   assert.notEqual(normalResponse.feed, storedFeed);
   assert.equal(normalResponse.feedReadback.itemCount, 7);
+  assert.deepEqual(normalResponse.quality, {
+    searchResultCount: 7,
+    citationUrlCount: 7,
+    rawItemCount: 7,
+    normalizedItemCount: 7,
+    candidateItemCount: 7,
+    eligibleUniqueCount: 7,
+    rejectedItemCount: 0,
+    duplicateItemCount: 0,
+  });
   assert.equal(receipt.responseSha256, createHash("sha256").update(consumedText).digest("hex"));
   assert.notEqual(receipt.responseSha256, createHash("sha256").update(rawProviderBody).digest("hex"));
   assert.equal(requestBody.messages[0].content.includes("account"), false);
@@ -268,6 +283,99 @@ await check("Abweichender Serverlog erzeugt keinen Receipt und keinen Provider-R
   assert.equal(settlements, 1);
   assert.equal(settledReadbacks, 1);
   assert.equal(adapter.telemetry().providerRequests, 1);
+});
+
+await check("Echter Vier-Kandidaten-Fehler bleibt providerbewiesen und diagnostisch inhaltsfrei", async () => {
+  const insufficientItems = providerItems.slice(0, 4);
+  const insufficientText = JSON.stringify({ items: insufficientItems });
+  const insufficientBody = {
+    ...providerBody,
+    content: [
+      providerBody.content[0],
+      {
+        ...providerBody.content[1],
+        content: providerBody.content[1].content.slice(0, 4),
+      },
+      {
+        ...providerBody.content[2],
+        text: insufficientText,
+        citations: providerBody.content[2].citations.slice(0, 4),
+      },
+    ],
+  };
+  let settlement = null;
+  let failures = 0;
+  let saves = 0;
+  const adapter = createAnthropicEntdeckenDailyAdapter({
+    apiKey: "synthetic-key",
+    loadSetup: async () => setup,
+    reserveCost: async () => ({ ok: true, logId: 904 }),
+    settleCost: async (input) => { settlement = input; },
+    readSettledCost: async ({ logId, operationId }) => ({
+      logId,
+      operationId,
+      task: "entdecken-daily",
+      status: "fertig",
+      model: settlement.model,
+      inputTokens: settlement.inputTokens,
+      outputTokens: settlement.outputTokens,
+      costUsdCent: settlement.costUsdCent,
+    }),
+    fetchImpl: async () => ({
+      ok: true,
+      async text() { return JSON.stringify(insufficientBody); },
+    }),
+    now: () => "2026-08-20T09:00:00.000Z",
+    operationId: () => "00000000-0000-4000-8000-000000000904",
+  });
+  const run = await runEntdeckenDailyRefresh({
+    repository: {
+      async claimRefresh() {
+        return {
+          feedEnabled: true, providerEnabled: true,
+          today: "2026-08-20", isoWeek: "2026-W34",
+          refresh: true, fenceToken: 904, feed: null,
+          requestMode: "owner", claimStatus: "claimed",
+          attemptCount: 4, maxAttempts: 100,
+        };
+      },
+      async loadSources() { return sources; },
+      async saveFeed() { saves += 1; },
+      async markFailure({ code, fenceToken }) {
+        assert.equal(code, "invalid_response");
+        assert.equal(fenceToken, 904);
+        failures += 1;
+      },
+    },
+    adapter,
+  });
+  const response = createEntdeckenDailyResponse(run, adapter.telemetry());
+  assert.equal(response.refresh.status, "failed");
+  assert.equal(response.failureReason, "insufficient_evidence");
+  assert.equal(response.writes, 0);
+  assert.equal(response.providerRequests, 1);
+  assert.equal(response.quality.rawItemCount, 4);
+  assert.equal(response.quality.eligibleUniqueCount, 4);
+  assert.equal(failures, 1);
+  assert.equal(saves, 0);
+  assert.doesNotMatch(JSON.stringify(response.quality), /https?:|Aktueller AT-Tipp/i);
+  assert.throws(() => pruefeEntdeckenLiveAntwort(response, {
+    measuredCostUsdCent: response.providerReceipt.server.costUsdCent,
+    readbackResponse: null,
+  }), (error) => error instanceof EntdeckenLiveProofError
+    && error.code === "RESULT_INSUFFICIENT_EVIDENCE");
+});
+
+await check("Read-only-Fehler behaelt den bisherigen Browservertrag ohne Diagnosefeld", () => {
+  const response = createEntdeckenDailyResponse({
+    status: "empty", feed: null, writes: 0, reason: "storage_error",
+    responseMode: "degraded", displayText: null, warnings: [],
+    refresh: {
+      requested: false, mode: "read", status: "unavailable",
+      attemptCount: 0, maxAttempts: 3,
+    },
+  });
+  assert.equal("failureReason" in response, false);
 });
 
 await check("Zentraler Harnesshook beweist 5-bis-7, Provenienz und Korrelation ohne Inhaltsausgabe", () => {
@@ -326,6 +434,31 @@ await check("Acht-Pfade-Smoke verwendet den korrelierten Entdecken-Livebeleg", (
 });
 
 await check("Manipulierter Readback oder nicht korrelierte Kosten fallen geschlossen aus", () => {
+  assert.throws(() => pruefeEntdeckenLiveAntwort({
+    ...normalResponse,
+    failureReason: "insufficient_evidence",
+    refresh: {
+      requested: true, mode: "owner", status: "failed",
+      attemptCount: 3, maxAttempts: 100,
+    },
+  }, {
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
+  }), (error) => error instanceof EntdeckenLiveProofError
+    && error.code === "FUNCTION_RESULT");
+  assert.throws(() => pruefeEntdeckenLiveAntwort({
+    ...normalResponse,
+    writes: 0,
+    failureReason: "insufficient_evidence",
+    refresh: {
+      requested: true, mode: "owner", status: "failed",
+      attemptCount: 3, maxAttempts: 100,
+    },
+  }, {
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
+  }), (error) => error instanceof EntdeckenLiveProofError
+    && error.code === "FUNCTION_RESULT");
   assert.throws(() => pruefeEntdeckenLiveAntwort({
     ...normalResponse,
     feedReadback: { ...normalResponse.feedReadback, itemCount: 6 },

@@ -244,14 +244,19 @@ await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lok
   const input = JSON.parse(body.messages[0].content);
   assert.deepEqual(input, {
     queryContext, region: "AT", language: "de", maxItems: ENTDECKEN_WEEKLY_MAX_CANDIDATES,
+    allowedDomains: ["derstandard.at", "film.at", "orf.at"],
   });
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
     allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
-    user_location: { type: "approximate", country: "AT", timezone: "Europe/Vienna" },
+    user_location: {
+      type: "approximate", city: "Vienna", region: "Vienna",
+      country: "AT", timezone: "Europe/Vienna",
+    },
   }]);
   assert.match(body.system, /ausschliesslich mit einem einzigen JSON-Objekt/);
-  assert.match(body.system, /mindestens fuenf belegte Titel/);
+  assert.match(body.system, /sieben bis zehn unterschiedliche belegte Titel/);
+  assert.match(body.system, /vorherigen 35 Tagen/);
   assert.match(body.system, /evidence\.url ist unveraendert exakt eine URL aus den Websearch-Ergebnissen/);
   assert.match(body.system, /automatischen Websearch-Zitate auch in der strukturierten JSON-Antwort/);
   assert.match(body.system, /weniger statt Fuellmaterial oder erfundener Daten/);
@@ -333,6 +338,64 @@ await check("Automatische Websearch-Zitate duerfen ein valides JSON ueber mehrer
   });
   assert.equal(evaluatedParsed.ok, true, JSON.stringify(evaluatedParsed.errors));
   assert.equal(evaluatedParsed.feed.items.length, 6);
+});
+
+await check("Realer Zwei-Quellen-Pfad normalisiert sichere Formabweichungen zu sieben Empfehlungen", () => {
+  const twoSourceSetup = Object.freeze({
+    ...providerSetup,
+    sourceRegistry: Object.freeze([standardSource, filmAtSource]),
+  });
+  const flexibleItems = providerItems(8).map((item, index) => ({
+    ...item,
+    title: index === 4 ? `  ${item.title}  ` : item.title,
+    mediaType: index === 0 ? "movie" : index === 1 ? "serie" : item.mediaType,
+    releaseYear: index === 2 ? String(item.releaseYear) : item.releaseYear,
+    evidence: {
+      ...item.evidence,
+      url: index % 2 ? "https://www.derstandard.at" : "https://www.film.at",
+      publishedOn: index === 3 ? "2026-08-18T06:00:00.000Z"
+        : index === 7 ? "2026-08-18Tnot-a-time" : item.evidence.publishedOn,
+    },
+  }));
+  const resultUrls = ["https://www.film.at/", "https://www.derstandard.at/"];
+  const response = {
+    model: "claude-haiku-4-5",
+    stop_reason: "end_turn",
+    usage: { input_tokens: 180, output_tokens: 420, server_tool_use: { web_search_requests: 1 } },
+    content: [
+      { type: "server_tool_use", id: "tool-1", name: "web_search", input: { query: queryContext.query } },
+      {
+        type: "web_search_tool_result",
+        tool_use_id: "tool-1",
+        content: resultUrls.map((url) => ({ type: "web_search_result", url, title: "Aktuelle Tipps" })),
+      },
+      {
+        type: "text",
+        text: JSON.stringify(flexibleItems),
+        citations: resultUrls.map((url) => ({
+          type: "web_search_result_location", url, title: "Aktuelle Tipps",
+        })),
+      },
+    ],
+  };
+  const parsed = parseAnthropicEntdeckenDailyResponse(
+    response, twoSourceSetup, "2026-08-20T09:00:00.000Z", queryContext,
+  );
+  assert.equal(parsed.quality.rawItemCount, 8);
+  assert.equal(parsed.quality.normalizedItemCount, 7);
+  assert.ok(parsed.envelope.warnings.includes("top-level-array-normalized"));
+  assert.ok(parsed.envelope.warnings.includes("media-type-normalized"));
+  assert.ok(parsed.envelope.warnings.includes("release-year-normalized"));
+  assert.ok(parsed.envelope.warnings.includes("published-day-normalized"));
+  assert.ok(parsed.envelope.warnings.includes("evidence-url-normalized"));
+  const evaluatedParsed = evaluateEntdeckenDailyResponse(
+    parsed.envelope, twoSourceSetup.sourceRegistry, {
+      retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
+    },
+  );
+  assert.equal(evaluatedParsed.ok, true, JSON.stringify(evaluatedParsed.errors));
+  assert.equal(evaluatedParsed.quality.eligibleUniqueCount, 7);
+  assert.equal(evaluatedParsed.feed.items.length, 7);
 });
 
 await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach verbraucht", async () => {
@@ -826,6 +889,7 @@ const recoveryClaimMigration = fs.readFileSync("./supabase/migrations/2026082222
 const liveProofMigration = fs.readFileSync("./supabase/migrations/20260824120000_entdecken_weekly_live_proof.sql", "utf8");
 const refreshLeaseMigration = fs.readFileSync("./supabase/migrations/20260824140000_entdecken_weekly_refresh_lease.sql", "utf8");
 const ownerRefreshOverrideMigration = fs.readFileSync("./supabase/migrations/20260825130000_entdecken_staging_owner_refresh_override.sql", "utf8");
+const promptV2Migration = fs.readFileSync("./supabase/migrations/20260825200000_entdecken_weekly_prompt_v2.sql", "utf8");
 const aiLiveHandoff = fs.readFileSync("./docs/KI_LIVE_TEST_UEBERGABE.md", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
@@ -939,6 +1003,12 @@ await check("Temporaerer Owner-Override bleibt fail-closed und aendert weder Sch
   assert.doesNotMatch(code, /set\s+payload\s*=\s*null|\bloop\b|\bwhile\b|setInterval|setTimeout/i);
   assert.match(refreshLeaseMigration, /create function public\.kd_entdecken_weekly_feed_status\(\)[\s\S]*'maxAttempts',3/i);
   assert.match(aiLiveHandoff, /OFFENER PUNKT: temporaeren Staging-Override wieder schliessen/i);
+  assert.match(aiLiveHandoff, /OFFENER PUNKT: globales Staging-Tageslimit zwingend auf 30 zurueckstellen/i);
+  assert.match(aiLiveHandoff, /tageslimit_auftraege'\]=200`[\s\S]*keine Migration/i);
+  assert.match(aiLiveHandoff, /wieder exakt auf `30` gesetzt[\s\S]*numerische `30` zurueckgelesen/i);
+  assert.match(aiLiveHandoff, /Monatsbudget, 500-US-Cent-Request-Zaun, Task-Caps,[\s\S]*nicht gelockert/i);
+  assert.match(aiLiveHandoff, /Festgelegtes Intervall[\s\S]*Radar prueft aktive Ziele einmal[\s\S]*taeglich/i);
+  assert.match(aiLiveHandoff, /Entdecken wird alle drei Tage[\s\S]*nur einmal je[\s\S]*ISO-Woche/i);
   assert.match(aiLiveHandoff, /staging_owner_refresh_override=false`[\s\S]*als `false`[\s\S]*zurueckgelesen/i);
   assert.match(aiLiveHandoff, /Default-Branch oder einem[\s\S]*Produktionsfenster darf das Flag niemals `true` sein/i);
 });
@@ -955,6 +1025,19 @@ await check("Live-Beleg bindet Ownerkosten, fertigen Log und unabhaengigen 5-bis
   assert.match(liveProofMigration, /'sourceCount',v_source_count/i);
   assert.match(liveProofMigration, /grant execute on function public\.kd_entdecken_weekly_feed_readback\(bigint,bigint\)[\s\S]*to service_role/i);
   assert.doesNotMatch(liveProofCode, /providerDiagnostic|rawResponse|profile|seen|gesehen|selectedServices/i);
+});
+
+await check("Prompt-v2-Migration aendert nur die protokollierte Promptversion und behaelt alle Zaune", () => {
+  const code = promptV2Migration.replace(/^--.*$/gm, "");
+  assert.match(promptV2Migration, /create or replace function public\.kd_entdecken_daily_auftrag_starten\([\s\S]*p_account uuid/i);
+  assert.match(promptV2Migration, /account_id = p_account and role = 'owner'[\s\S]*active and personal_ai/i);
+  assert.match(promptV2Migration, /status = 'refreshing'[\s\S]*fence_token = p_fence_token[\s\S]*lease_expires_at >= v_now/i);
+  assert.match(promptV2Migration, /v_source_count is distinct from 2/i);
+  assert.match(promptV2Migration, /v_fee is distinct from 1 or v_task_cap is distinct from 5/i);
+  assert.match(promptV2Migration, /return public\.kd_ai_auftrag_starten\([\s\S]*'entdecken-weekly-v2'/i);
+  assert.match(promptV2Migration, /revoke all on function public\.kd_entdecken_daily_auftrag_starten\(uuid,numeric,integer,bigint,uuid\)[\s\S]*from public, anon, authenticated/i);
+  assert.match(promptV2Migration, /grant execute on function public\.kd_entdecken_daily_auftrag_starten\(uuid,numeric,integer,bigint,uuid\)[\s\S]*to service_role/i);
+  assert.doesNotMatch(code, /update\s+public\.kd_ai_limits|staging_owner_refresh_override\s*=|create\s+extension|scheduler|cron\./i);
 });
 
 await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {

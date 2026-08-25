@@ -163,7 +163,7 @@ function mergePresentation(base, warnings = [], degraded = false) {
   }
   return freezeDeep({ responseMode: "structured", displayText: null, warnings: [] });
 }
-function result(status, errors = [], feed = null, presentation = null) {
+function result(status, errors = [], feed = null, presentation = null, quality = null) {
   const safe = presentation || mergePresentation(null, ["response-invalid"], true);
   return Object.freeze({
     ok: status === "confirmed",
@@ -171,6 +171,7 @@ function result(status, errors = [], feed = null, presentation = null) {
     errors: Object.freeze([...new Set(errors)]),
     feed,
     ...safe,
+    ...(quality ? { quality: freezeDeep({ ...quality }) } : {}),
   });
 }
 
@@ -374,18 +375,22 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   const records = new Map();
   const itemErrors = [];
   const warnings = [];
+  let rejectedItemCount = 0;
+  let duplicateItemCount = 0;
   const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_MAX_CANDIDATES);
   if (envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_CANDIDATES) warnings.push("candidates-truncated");
   rawItems.forEach((item, index) => {
     const shapeErrors = [];
     validateProviderItem(item, index, shapeErrors, retrievedOn);
     if (shapeErrors.length) {
+      rejectedItemCount += 1;
       itemErrors.push(...shapeErrors);
       warnings.push("item-dropped");
       return;
     }
     const source = sourceForUrl(item.evidence.url, sources.value);
     if (!source) {
+      rejectedItemCount += 1;
       itemErrors.push(`provider-item-${index}-source-unavailable`);
       warnings.push("item-dropped");
       return;
@@ -393,6 +398,7 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     const next = canonicalRecord(item, index + 1, retrievedOn);
     const previous = records.get(next.key);
     if (!previous) { records.set(next.key, next); return; }
+    duplicateItemCount += 1;
     const idConflict = Object.entries(next.externalIds).some(([namespace, id]) => (
       previous.externalIds[namespace] && previous.externalIds[namespace] !== id
     ));
@@ -410,14 +416,20 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
       previous.attributes[key] = [...new Set([...previous.attributes[key], ...next.attributes[key]])].slice(0, 8);
     }
   });
+  const quality = Object.freeze({
+    candidateItemCount: rawItems.length,
+    eligibleUniqueCount: records.size,
+    rejectedItemCount,
+    duplicateItemCount,
+  });
   const uniqueUrls = new Set([...records.values()].flatMap((record) => record.evidence.map((entry) => entry.url)));
   if (uniqueUrls.size > envelope.searchResultCount) {
     return result("invalid_response", ["opinion-url-count-exceeds-search-results"], null,
-      mergePresentation(presentation, ["result-count-invalid"], true));
+      mergePresentation(presentation, ["result-count-invalid"], true), quality);
   }
   if (records.size < ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS) {
     return result("insufficient_evidence", itemErrors.length ? itemErrors : ["records-empty"], null,
-      mergePresentation(presentation, ["records-insufficient"], true));
+      mergePresentation(presentation, ["records-insufficient"], true), quality);
   }
   const rankedRecords = [...records.values()]
     .sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"))
@@ -434,7 +446,7 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     validUntil: week.validUntil,
     items,
   });
-  return result("confirmed", itemErrors, feed, mergePresentation(presentation, warnings));
+  return result("confirmed", itemErrors, feed, mergePresentation(presentation, warnings), quality);
 }
 
 function validateEvidence(evidence, feed, evidenceUrls, weekly) {

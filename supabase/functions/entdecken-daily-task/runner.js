@@ -169,6 +169,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: evaluated.status, ...evaluatedPresentation(evaluated),
       ...providerEvidence,
+      ...(evaluated.quality ? { quality: evaluated.quality } : {}),
       refresh: refreshState(context, "failed"),
     });
   }
@@ -177,6 +178,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "invalid_response", ...degradedPresentation("provider-receipt-invalid"),
       refresh: refreshState(context, "failed"),
+      ...(evaluated.quality ? { quality: evaluated.quality } : {}),
     });
   }
   let persisted;
@@ -207,6 +209,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   return frozen("fresh", persisted.feed, {
     writes: 1,
     feedReadback: persisted.readback,
+    ...(evaluated.quality ? { quality: evaluated.quality } : {}),
     ...evaluatedPresentation(evaluated),
     ...providerEvidence,
     refresh: refreshState(context, "refreshed"),
