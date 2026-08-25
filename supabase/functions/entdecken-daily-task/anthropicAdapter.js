@@ -103,9 +103,11 @@ const SYSTEM_PROMPT = [
   "Genres, Ton und Themen sind kurze neutrale Eigenschaften aus der Fundstelle; erfinde keine externe ID und kein Nutzerurteil.",
   "externalIds enthaelt nur direkt belegte imdb-, tmdb- oder watchmode-IDs als Strings; sonst bleibt das Objekt leer.",
   "Gib niemals Rezensionstext, Zitat, Zusammenfassung, Bild, Logo, Autor oder redaktionelle Ueberschrift aus.",
-  "Antworte mit einem JSON-Objekt mit dem Schluessel items.",
+  "Antworte ausschliesslich mit einem einzigen JSON-Objekt mit dem Schluessel items; kein Vorspann, kein Markdown und kein Nachsatz.",
+  "Wenn die sichere Quellenlage es erlaubt, liefere mindestens fuenf belegte Titel; andernfalls liefere weniger statt Fuellmaterial oder erfundener Daten.",
   "Jedes Item enthaelt exakt title, mediaType (film oder series), releaseYear, externalIds, attributes mit genres/tones/themes und evidence.",
-  "evidence enthaelt exakt url, publishedOn im Format YYYY-MM-DD und positiveRecommendation mit dem booleschen Wert true.",
+  "evidence enthaelt exakt url, publishedOn im Format YYYY-MM-DD und positiveRecommendation mit dem booleschen Wert true; evidence.url ist unveraendert exakt eine URL aus den Websearch-Ergebnissen.",
+  "Nutze die automatischen Websearch-Zitate auch in der strukturierten JSON-Antwort; jeder evidence.url-Wert muss von einer solchen Websearch-Zitation getragen sein.",
 ].join(" ");
 
 export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) {
@@ -129,6 +131,11 @@ export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) 
       max_uses: ENTDECKEN_DAILY_MAX_SEARCH_USES,
       allowed_domains: setup.allowedDomains,
       allowed_callers: Object.freeze(["direct"]),
+      user_location: Object.freeze({
+        type: "approximate",
+        country: "AT",
+        timezone: "Europe/Vienna",
+      }),
     })]),
   });
 }
@@ -172,29 +179,28 @@ function parseProviderText(content, warnings) {
   if (content.some((block) => ["thinking", "redacted_thinking"].includes(block?.type))) {
     throw new EntdeckenDailyProviderError("provider-output-invalid");
   }
-  const parsedBlocks = [];
+  const textBlocks = [];
   try {
-    for (const block of content.filter((entry) => entry?.type === "text" && text(entry.text))) {
-      parsedBlocks.push(Object.freeze({
-        parsed: parseProviderLooseJsonText(block.text),
-        consumedText: block.text,
-      }));
+    for (const block of content.filter((entry) => entry?.type === "text")) {
+      if (block.text === undefined || block.text === null || block.text === "") continue;
+      if (typeof block.text !== "string") throw new ProviderTextSafetyError();
+      if (text(block.text)) textBlocks.push(block.text);
     }
+    if (!textBlocks.length) {
+      addWarning(warnings, "provider-text-missing");
+      return Object.freeze({ mode: "degraded", value: null, consumedText: null });
+    }
+    if (textBlocks.length > 1) addWarning(warnings, "multiple-text-blocks-normalized");
+    const consumedText = textBlocks.join("");
+    const parsed = parseProviderLooseJsonText(consumedText);
+    for (const warning of parsed.warnings) addWarning(warnings, warning);
+    return Object.freeze({ ...parsed, consumedText });
   } catch (error) {
     if (error instanceof ProviderTextSafetyError) {
       throw new EntdeckenDailyProviderError("provider-output-invalid");
     }
     throw error;
   }
-  if (!parsedBlocks.length) {
-    addWarning(warnings, "provider-text-missing");
-    return Object.freeze({ mode: "degraded", value: null, consumedText: null });
-  }
-  if (parsedBlocks.length > 1) addWarning(warnings, "multiple-text-blocks-normalized");
-  const selected = [...parsedBlocks].reverse().find((entry) => entry.parsed.value)
-    || parsedBlocks.at(-1);
-  for (const warning of selected.parsed.warnings) addWarning(warnings, warning);
-  return Object.freeze({ ...selected.parsed, consumedText: selected.consumedText });
 }
 function normalizedTextList(value, warnings) {
   if (value === undefined) {

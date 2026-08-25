@@ -3,6 +3,23 @@
 Stand: 25. August 2026. Dieser Auftrag ist zum Ausführen gedacht, nicht für eine
 neue Planung oder einen breiten Audit.
 
+## OFFENER PUNKT: temporaeren Staging-Override wieder schliessen
+
+Fuer die kontrollierte Empfehlungsabnahme kann ausschliesslich auf Staging
+`kd_entdecken_daily_settings.staging_owner_refresh_override=true` gesetzt
+werden. Das hebt nur fuer explizite Owner-Refreshes den Wochenzaun temporaer
+von 3 auf den technischen Hoechstwert 100; Scheduled-Claims bleiben bei 3 und
+ein erfolgreicher Feed sperrt weiterhin alle weiteren Wochenrefreshes. Nach
+einem sauber verbuchten Fehler darf nur dieser explizite Owner-Staging-Pfad
+sofort erneut claimen; Scheduled-Claims behalten den 15-Minuten-Cooldown.
+
+Dieser Punkt ist erst erledigt, wenn nach der Empfehlungsabnahme auf Staging
+`staging_owner_refresh_override=false` gesetzt und anschliessend als `false`
+zurueckgelesen wurde. Vor einer Aufnahme in den Default-Branch oder einem
+Produktionsfenster darf das Flag niemals `true` sein. Die Migration
+`20260825130000_entdecken_staging_owner_refresh_override.sql` aktiviert es
+nicht; Fresh-DB und Produktion starten immer fail-closed mit `default false`.
+
 ## Ziel und unveränderlicher Kandidat
 
 Der neue Chat soll den finalen Kandidaten bauen/deployen und anschließend genau

@@ -230,7 +230,13 @@ await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lok
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
     allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
+    user_location: { type: "approximate", country: "AT", timezone: "Europe/Vienna" },
   }]);
+  assert.match(body.system, /ausschliesslich mit einem einzigen JSON-Objekt/);
+  assert.match(body.system, /mindestens fuenf belegte Titel/);
+  assert.match(body.system, /evidence\.url ist unveraendert exakt eine URL aus den Websearch-Ergebnissen/);
+  assert.match(body.system, /automatischen Websearch-Zitate auch in der strukturierten JSON-Antwort/);
+  assert.match(body.system, /weniger statt Fuellmaterial oder erfundener Daten/);
   assert.doesNotMatch(JSON.stringify(input), /account|profile|seen|gesehen|dienst|service|mediathek|catalog|watchlist|radar/i);
 });
 
@@ -264,6 +270,51 @@ await check("Anthropic-Transport behält sichere Items und begrenzt Suchrequests
   }, providerSetup, "2026-08-20T09:00:00.000Z", queryContext);
   assert.equal(withoutCitation.envelope.responseMode, "degraded");
   assert.deepEqual(withoutCitation.envelope.response.items, []);
+});
+
+await check("Automatische Websearch-Zitate duerfen ein valides JSON ueber mehrere Textbloecke teilen", () => {
+  const items = providerItems(6);
+  const providerText = JSON.stringify({ items });
+  const urls = [...new Set(items.map((item) => item.evidence.url))];
+  const splitAt = [
+    providerText.indexOf("Ninth Jedi") + 3,
+    providerText.indexOf("Positiver Wochentipp 04") + 11,
+  ];
+  assert.ok(splitAt[0] > 2);
+  assert.ok(splitAt[1] > splitAt[0]);
+  const response = anthropicResponse(items);
+  response.content = [
+    ...response.content.slice(0, 2),
+    {
+      type: "text",
+      text: providerText.slice(0, splitAt[0]),
+      citations: [{ type: "web_search_result_location", url: urls[0], title: "Wochentipps A" }],
+    },
+    {
+      type: "text",
+      text: providerText.slice(splitAt[0], splitAt[1]),
+      citations: [{ type: "web_search_result_location", url: urls[1], title: "Wochentipps B" }],
+    },
+    {
+      type: "text",
+      text: providerText.slice(splitAt[1]),
+      citations: urls.map((url) => ({
+        type: "web_search_result_location", url, title: "Wochentipps",
+      })),
+    },
+  ];
+  const parsed = parseAnthropicEntdeckenDailyResponse(
+    response, providerSetup, "2026-08-20T09:00:00.000Z", queryContext,
+  );
+  assert.equal(parsed.consumedProviderText, providerText);
+  assert.equal(parsed.envelope.response.items.length, 6);
+  assert.ok(parsed.envelope.warnings.includes("multiple-text-blocks-normalized"));
+  const evaluatedParsed = evaluateEntdeckenDailyResponse(parsed.envelope, sources, {
+    retrievedOn: "2026-08-20",
+    claimedIsoWeek: "2026-W34",
+  });
+  assert.equal(evaluatedParsed.ok, true, JSON.stringify(evaluatedParsed.errors));
+  assert.equal(evaluatedParsed.feed.items.length, 6);
 });
 
 await check("Adapter macht ohne Retry genau einen Providerrequest und ist danach verbraucht", async () => {
@@ -756,6 +807,8 @@ const recoveryMigration = fs.readFileSync("./supabase/migrations/20260822210000_
 const recoveryClaimMigration = fs.readFileSync("./supabase/migrations/20260822220000_entdecken_weekly_recovery_claim.sql", "utf8");
 const liveProofMigration = fs.readFileSync("./supabase/migrations/20260824120000_entdecken_weekly_live_proof.sql", "utf8");
 const refreshLeaseMigration = fs.readFileSync("./supabase/migrations/20260824140000_entdecken_weekly_refresh_lease.sql", "utf8");
+const ownerRefreshOverrideMigration = fs.readFileSync("./supabase/migrations/20260825130000_entdecken_staging_owner_refresh_override.sql", "utf8");
+const aiLiveHandoff = fs.readFileSync("./docs/KI_LIVE_TEST_UEBERGABE.md", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
 const clientSource = fs.readFileSync("./src/services/entdeckenDailyFeed.js", "utf8");
@@ -848,6 +901,28 @@ await check("Additive Refresh-Lease trennt read-only GET von drei begrenzten Woc
   assert.match(refreshLeaseMigration, /ready_provider_operation_id = v_operation_id/i);
   assert.match(refreshLeaseMigration, /ready_fence_token = p_fence_token/i);
   assert.doesNotMatch(code, /set\s+payload\s*=\s*null|\bloop\b|\bwhile\b|setInterval|setTimeout/i);
+});
+
+await check("Temporaerer Owner-Override bleibt fail-closed und aendert weder Scheduler noch Erfolgssperre", () => {
+  const code = ownerRefreshOverrideMigration.replace(/^--.*$/gm, "");
+  assert.match(ownerRefreshOverrideMigration, /add column staging_owner_refresh_override boolean not null default false/i);
+  assert.match(ownerRefreshOverrideMigration, /attempt_count between 1 and 100/i);
+  assert.match(ownerRefreshOverrideMigration, /create or replace function public\.kd_entdecken_weekly_refresh_claim/i);
+  assert.match(ownerRefreshOverrideMigration, /when p_source = 'owner' and coalesce\(v_owner_refresh_override,false\) then 100[\s\S]*else 3/i);
+  assert.match(ownerRefreshOverrideMigration, /v_feed\.refreshed_iso_week = v_iso_week[\s\S]*v_claim_status := 'already_fresh'[\s\S]*v_attempt_count >= v_max_attempts/i);
+  assert.match(ownerRefreshOverrideMigration, /last_failure_at <= v_now - interval '15 minutes'/i);
+  assert.match(ownerRefreshOverrideMigration, /p_source = 'owner' and coalesce\(v_owner_refresh_override,false\)[\s\S]*or v_feed\.last_failure_at <= v_now - interval '15 minutes'/i);
+  assert.match(ownerRefreshOverrideMigration, /lease_expires_at = v_now \+ interval '180 seconds'/i);
+  assert.match(ownerRefreshOverrideMigration, /fence_token = fence_token \+ 1/i);
+  assert.match(ownerRefreshOverrideMigration, /'maxAttempts',v_max_attempts/i);
+  assert.match(ownerRefreshOverrideMigration, /grant execute on function public\.kd_entdecken_weekly_refresh_claim\(text\)[\s\S]*to service_role/i);
+  assert.doesNotMatch(code, /update\s+public\.kd_entdecken_daily_settings[\s\S]*staging_owner_refresh_override\s*=\s*true/i);
+  assert.doesNotMatch(code, /kd_ai_limits|kosten_usd_cent|task_cap|global_request_cap/i);
+  assert.doesNotMatch(code, /set\s+payload\s*=\s*null|\bloop\b|\bwhile\b|setInterval|setTimeout/i);
+  assert.match(refreshLeaseMigration, /create function public\.kd_entdecken_weekly_feed_status\(\)[\s\S]*'maxAttempts',3/i);
+  assert.match(aiLiveHandoff, /OFFENER PUNKT: temporaeren Staging-Override wieder schliessen/i);
+  assert.match(aiLiveHandoff, /staging_owner_refresh_override=false`[\s\S]*als `false`[\s\S]*zurueckgelesen/i);
+  assert.match(aiLiveHandoff, /Default-Branch oder einem[\s\S]*Produktionsfenster darf das Flag niemals `true` sein/i);
 });
 
 await check("Live-Beleg bindet Ownerkosten, fertigen Log und unabhaengigen 5-bis-7-Readback", () => {

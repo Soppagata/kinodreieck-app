@@ -261,8 +261,8 @@ const AKTIONEN = [
 
 const FALLBACK = {
   id: "allgemeine-hilfe",
-  titel: "Hilfe zu Kinodreieck",
-  text: "Die ausführliche Anleitung findest du in Settings unter Über & Rechtliches → Über Kinodreieck & Anleitung.",
+  titel: "Kinodreieck kurz erklärt",
+  text: "Kinodreieck bündelt Kinoprogramm, deine Mediathek und Streaming in einer App. Entdecken zeigt Empfehlungen und Radar-Neuigkeiten; die Suche findet Filme und beantwortet Fragen zur App. Einstellungen, Konto, Quellen und optionale KI-Funktionen verwaltest du in Settings. Die ausführliche Anleitung findest du dort unter Über & Rechtliches → Über Kinodreieck & Anleitung.",
   bereichId: "daten",
   ziel: "daten",
 };

@@ -9,6 +9,7 @@ import { normalizeEntdeckenFeedReadback } from
   "../supabase/functions/entdecken-daily-task/readbackContract.js";
 
 const COST_EPSILON_USD_CENT = 0.000001;
+const OWNER_REFRESH_MAX_ATTEMPTS = new Set([3, 100]);
 
 export class EntdeckenLiveProofError extends Error {
   constructor(code) {
@@ -35,8 +36,9 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
   if (!plain(antwort.refresh) || antwort.refresh.requested !== true
       || antwort.refresh.mode !== "owner" || antwort.refresh.status !== "refreshed"
       || !Number.isSafeInteger(antwort.refresh.attemptCount)
-      || antwort.refresh.attemptCount < 1 || antwort.refresh.attemptCount > 3
-      || antwort.refresh.maxAttempts !== 3) {
+      || antwort.refresh.attemptCount < 1
+      || !OWNER_REFRESH_MAX_ATTEMPTS.has(antwort.refresh.maxAttempts)
+      || antwort.refresh.attemptCount > antwort.refresh.maxAttempts) {
     const safeStatus = typeof antwort?.refresh?.status === "string"
       && /^[a-z_]+$/.test(antwort.refresh.status)
       ? antwort.refresh.status.toUpperCase() : "INVALID";

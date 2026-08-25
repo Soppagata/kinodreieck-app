@@ -27,6 +27,15 @@ const EINSTELLUNGS_FRAGEN = Object.freeze([
 const ERKLAERUNGS_INTENT = Object.freeze([
   "wie funktioniert", "wie geht",
 ]);
+const APP_ERKLAERUNGS_INTENT = Object.freeze([
+  ...ERKLAERUNGS_INTENT,
+  "was kann",
+  "erkläre mir", "erklaere mir", "erklär mir", "erklaer mir",
+]);
+const APP_GEGENSTAENDE = Object.freeze(new Set([
+  "app", "die app", "diese app",
+  "kinodreieck", "kinodreieck app", "die kinodreieck app",
+]));
 const ORTS_INTENT = Object.freeze([
   "wo kann ich", "wo finde ich", "wo finde", "wo ist",
 ]);
@@ -93,7 +102,21 @@ function erkenneAllgemeinenHilfeIntent(text) {
   return null;
 }
 
+function erkenneAppErklaerungsIntent(text) {
+  for (const phrase of APP_ERKLAERUNGS_INTENT) {
+    const rest = restNachStartPhrase(text, phrase);
+    if (rest !== null && APP_GEGENSTAENDE.has(rest)) {
+      return {
+        art: "app-erklaerung", phrase, rest, gegenstand: rest, stark: true,
+      };
+    }
+  }
+  return null;
+}
+
 function erkenneHilfeIntent(text) {
+  const appErklaerung = erkenneAppErklaerungsIntent(text);
+  if (appErklaerung) return appErklaerung;
   const allgemein = erkenneAllgemeinenHilfeIntent(text);
   if (allgemein) return allgemein;
   for (const phrase of EINSTELLUNGS_INTENT) {
@@ -436,7 +459,8 @@ export function appHilfeAntwort(frage) {
   if (treffer?.art === "bereich") {
     return sichereAntwort(treffer.inhalt, treffer.inhalt.kurztext);
   }
-  return intent?.art === "allgemein" && istNurHuelle(intent.rest)
+  return (intent?.art === "allgemein" && istNurHuelle(intent.rest))
+    || intent?.art === "app-erklaerung"
     ? sichereAntwort(HILFE_FALLBACK, HILFE_FALLBACK.text)
     : null;
 }

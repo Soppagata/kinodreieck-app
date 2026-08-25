@@ -314,6 +314,33 @@ for (const { query, expectedId } of [
   }));
 }
 
+const APP_ERKLAERUNGS_ERWARTUNG = {
+  id: HILFE_FALLBACK.id,
+  titel: HILFE_FALLBACK.titel,
+  text: HILFE_FALLBACK.text,
+  ziel: HILFE_FALLBACK.ziel,
+  bereichId: HILFE_FALLBACK.bereichId,
+  bereichTitel: BEREICHE_BY_ID.get(HILFE_FALLBACK.bereichId)?.titel || "",
+};
+
+for (const query of [
+  "Wie funktioniert die App?",
+  "Was kann Kinodreieck?",
+  "Erkläre mir die App",
+  "Wie geht Kinodreieck?",
+]) {
+  repeatThree(`App-Erklärung ${query}`, () =>
+    antwortSchemaSicher(antwortVon(query), APP_ERKLAERUNGS_ERWARTUNG));
+}
+
+check(
+  "App-Erklärung beschreibt die zentralen Bereiche und verweist auf die Anleitung",
+  containsAllWords(HILFE_FALLBACK.text.toLowerCase(), [
+    "kinoprogramm", "mediathek", "streaming", "empfehlungen", "radar",
+    "suche", "settings", "anleitung",
+  ]),
+);
+
 const POSITIVE_AKTIONEN = [
   { query: "Schriftgröße", erwarteteId: "schriftgroesse-aendern" },
   { query: "Wie kann ich die Schriftgröße ändern?", erwarteteId: "schriftgroesse-aendern" },
@@ -446,6 +473,9 @@ const FAIL_CLOSED = [
   "Settings Konto Backup",
   "Settings Schriftgröße Darstellung ändern",
   "Wie ändere ich Schriftgröße Darstellung?",
+  "Was kann der Film Kinodreieck?",
+  "Erkläre mir die App Nacht der Glut",
+  "Wie funktioniert die App Hilfe, ich bin ein Fisch?",
 ];
 
 for (const query of FAIL_CLOSED) {

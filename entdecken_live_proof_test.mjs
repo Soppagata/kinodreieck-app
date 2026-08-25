@@ -292,6 +292,30 @@ await check("Zentraler Harnesshook beweist 5-bis-7, Provenienz und Korrelation o
   assert.doesNotMatch(JSON.stringify(proof), /https?:|Aktueller AT-Tipp|account|providerLogId/i);
 });
 
+await check("Zentraler Harnesshook akzeptiert den expliziten Owner-Staging-Hoechstwert", () => {
+  const proof = pruefeEntdeckenLiveAntwort({
+    ...normalResponse,
+    refresh: {
+      ...normalResponse.refresh,
+      maxAttempts: 100,
+    },
+  }, {
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
+  });
+  assert.equal(proof.result, "PROVEN");
+  assert.throws(() => pruefeEntdeckenLiveAntwort({
+    ...normalResponse,
+    refresh: {
+      ...normalResponse.refresh,
+      maxAttempts: 99,
+    },
+  }, {
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+    readbackResponse: independentResponse,
+  }), (error) => error instanceof EntdeckenLiveProofError && error.code === "CLAIM_REFRESHED");
+});
+
 await check("Acht-Pfade-Smoke verwendet den korrelierten Entdecken-Livebeleg", () => {
   const smoke = readFileSync(new URL("./tools/ai_smoke.mjs", import.meta.url), "utf8");
   assert.match(smoke, /pruefeEntdeckenLiveAntwort\(p24\.daten/);
