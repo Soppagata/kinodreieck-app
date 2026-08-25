@@ -224,24 +224,13 @@ function isErrorStatus(status) {
   return ["forbidden", "unresolved", "unavailable", "provider_error", "timeout", "invalid_response", "storage_error"].includes(status);
 }
 
-function radarResultText(result, kind) {
-  const base = statusText(result?.status, kind);
-  if (!["partial", "degraded"].includes(result?.responseMode)
-      || typeof result?.displayText !== "string" || !result.displayText) return base;
-  return `${base} ${result.displayText}`;
-}
-
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
-  radarPilotEvents = [], radarCheckAvailable = false,
-  onRadarPilotReceipt, onRadarWebsearchCheck,
-  personRadarCheckAvailable = false, onPersonRadarCheck, onRadarTextAdd,
+  radarPilotEvents = [], onRadarPilotReceipt, onRadarTextAdd,
 }) {
   const [targetQuery, setTargetQuery] = useState("");
   const [targetAddBusy, setTargetAddBusy] = useState(false);
   const targetAddLockRef = useRef(false);
-  const [busyKey, setBusyKey] = useState("");
-  const checkLockRef = useRef(false);
   const [message, setMessage] = useState(null);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
@@ -274,31 +263,12 @@ function RadarView({
       setMessage({ status: "storage_error", text: statusText("storage_error") });
     } finally { targetAddLockRef.current = false; setTargetAddBusy(false); }
   };
-  const checkWork = async (entry) => {
-    if (!radarCheckAvailable || checkLockRef.current) return;
-    checkLockRef.current = true;
-    setBusyKey(`work|${entry.targetId}`); setMessage(null);
-    try {
-      const result = await onRadarWebsearchCheck?.(entry.targetId);
-      setMessage({ status: result?.status, text: radarResultText(result, entry.targetType) });
-    } catch { setMessage({ status: "provider_error", text: statusText("provider_error") }); }
-    finally { checkLockRef.current = false; setBusyKey(""); }
-  };
-  const checkPerson = async (entry) => {
-    if (!personRadarCheckAvailable || checkLockRef.current) return;
-    checkLockRef.current = true;
-    setBusyKey(`person|${entry.personExternalId}|${entry.role}`); setMessage(null);
-    try {
-      const result = await onPersonRadarCheck?.(entry);
-      setMessage({ status: result?.status, text: radarResultText(result, "person") });
-    } catch { setMessage({ status: "provider_error", text: statusText("provider_error", "person") }); }
-    finally { checkLockRef.current = false; setBusyKey(""); }
-  };
-
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
-      <p>{accountMode ? "Bestätigte Ziele aus deinem Konto." : "Deine Ziele bleiben auf diesem Gerät."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
+      <p>{accountMode
+        ? "Ein täglicher automatischer Lauf prüft deine aktiven Ziele."
+        : "Deine Ziele bleiben auf diesem Gerät. Die automatische tägliche Prüfung ist im Kontomodus verfügbar."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
     </div>
     <article className="kd-entdecken-panel kd-radar-zielsuche">
       <h3>Radarziel hinzufügen</h3>
@@ -307,7 +277,7 @@ function RadarView({
         <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
           autoComplete="off" spellCheck={false} placeholder="Zum Beispiel Mutter Teresa"
           onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
-        <small>Beliebiger Text, maximal 160 Zeichen. Gespeichert wird erst beim Absenden; geprüft nur auf deinen Klick.</small>
+        <small>Beliebiger Text, maximal 160 Zeichen. Gespeichert wird erst beim Absenden; aktive Kontoziele prüft der nächste Tageslauf automatisch.</small>
         <button type="submit" className="kd-entdecken-primaer"
           disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? "Wird gespeichert…" : "Im Radar speichern"}</button>
       </form>
@@ -320,23 +290,15 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"}{entry.targetType === "text" ? "" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
-          {entry.status === "active" && radarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={!!busyKey} onClick={() => checkWork(entry)}>
-            {busyKey === `work|${entry.targetId}` ? "Wird geprüft…" : "Jetzt prüfen"}
-          </button> : null}
+          <span>{entry.status === "active" ? "Aktiv · tägliche Prüfung" : "Pausiert"}{entry.targetType === "text" ? "" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
-          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
-          {entry.status === "active" && personRadarCheckAvailable ? <button type="button" className="kd-entdecken-sekundaer"
-            disabled={!!busyKey} onClick={() => checkPerson(entry)}>
-            {busyKey === `person|${entry.personExternalId}|${entry.role}` ? "Wird geprüft…" : "Jetzt prüfen"}
-          </button> : null}
+          <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv · tägliche Prüfung" : "Pausiert"}</span>
         </li>)}</ul> : null}
         {(radarState?.outbox || []).length ? <p className="kd-entdecken-pending" role="status">Eine Änderung wartet noch auf Bestätigung.</p> : null}
       </article>
       <article className="kd-entdecken-panel">
-        <h3>Neue Funde</h3>
+        <h3>Tagesaktuelle Neuigkeiten</h3>
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
           <span>{entry.date} · {entry.region} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
@@ -349,7 +311,7 @@ function RadarView({
             onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "accepted_week" })}>
             {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week" ? "Angepinnt" : "Fund anpinnen"}
           </button> : null}
-        </li>)}</ul> : <p className="kd-entdecken-leer">Noch kein neuer belegter Fund für deine aktiven Ziele.</p>}
+        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit aus den täglichen Prüfungen.</p>}
         {personResults.map((result) => {
           const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
           return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
@@ -368,10 +330,8 @@ export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
-  radarPilotEvents = [], radarCheckAvailable = false,
-  onRadarPilotReceipt, onRadarWebsearchCheck, onRadarTextAdd,
-  personRadarAvailable = false, personRadarCheckAvailable = personRadarAvailable,
-  onPersonRadarAdd, onPersonRadarChange, onPersonRadarCheck,
+  radarPilotEvents = [], onRadarPilotReceipt, onRadarTextAdd,
+  personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
 }) {
@@ -410,11 +370,8 @@ export function EntdeckenTab({
       onObserveToggle={onObserveToggle} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
-      radarPilotEvents={radarPilotEvents} radarCheckAvailable={radarCheckAvailable}
-      onRadarPilotReceipt={onRadarPilotReceipt} onRadarWebsearchCheck={onRadarWebsearchCheck}
-      onRadarTextAdd={onRadarTextAdd}
+      radarPilotEvents={radarPilotEvents} onRadarPilotReceipt={onRadarPilotReceipt} onRadarTextAdd={onRadarTextAdd}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
-      personRadarCheckAvailable={personRadarCheckAvailable} onPersonRadarCheck={onPersonRadarCheck}
       franchiseRadarAvailable={franchiseRadarAvailable}
       onFranchiseRadarAdd={onFranchiseRadarAdd} /> : null}
     {ansicht === "meinungen" ? <div role="tabpanel" aria-label="Blog"><BlogTab {...blogProps} fokusId={fokusId} /></div> : null}

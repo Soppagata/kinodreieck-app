@@ -271,7 +271,9 @@ async function loadEsbuild() {
   catch { return createRequire(import.meta.resolve("vite"))("esbuild"); }
 }
 
-const cacheDir = path.join(wurzel, ".tmp");
+const cacheDir = process.env.KD_ENTDECKEN_TEST_TMPDIR
+  ? path.resolve(process.env.KD_ENTDECKEN_TEST_TMPDIR)
+  : path.join(wurzel, ".tmp");
 let outputDir = null;
 let dom = null;
 try {
@@ -482,27 +484,22 @@ try {
     events, receipts: [], operationAcks: [], radarReview: true,
   });
   let accountState = reconcileAccountRadarPilotFeed(createEmptyLocalRadar({ authority: "account-cache" }), feed()).state;
-  let workResolve;
-  const workCheck = new Promise((resolve) => { workResolve = resolve; });
-  let workCalls = 0;
   const renderWorkProps = () => ({
     ...baseProps, accountMode: true, radarState: accountState,
-    radarPilotEvents: accountState.pilot.events, radarCheckAvailable: true,
-    onRadarWebsearchCheck: async () => { workCalls += 1; return workCheck; },
+    radarPilotEvents: accountState.pilot.events,
   });
   const workUi = await mount(EntdeckenTab, renderWorkProps());
   await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
-  await act(async () => { button(workUi.container, "Jetzt prüfen").click(); await tick(); });
-  check("Radarprüfung zeigt einen klaren Ladezustand und startet genau einmal", () => {
-    assert.equal(workCalls, 1);
-    assert.ok(button(workUi.container, "Wird geprüft…")?.disabled);
+  check("Kontoradar erklärt den täglichen Lauf und bietet keinen manuellen Prüfknopf", () => {
+    assert.match(workUi.container.textContent, /täglicher automatischer Lauf prüft/i);
+    assert.match(workUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
+    assert.equal(button(workUi.container, "Jetzt prüfen"), undefined);
   });
   const confirmedEvent = {
     eventId, eventVersionId, targetId: workTarget.targetId, eventType: "kinostart_at", date: "2026-09-03",
     region: "AT", platform: "-", lifecycleStatus: "scheduled", verificationStatus: "confirmed",
     evidence: [{ sourceId: "film-at", sourceDomain: "film.at", url: "https://film.at/start", retrievedAt: now }],
   };
-  await act(async () => { workResolve({ status: "confirmed", writes: 1 }); await workCheck; await tick(); });
   accountState = reconcileAccountRadarPilotFeed(accountState, feed([confirmedEvent])).state;
   await workUi.render(renderWorkProps());
   check("Bestätigter Film-Treffer zeigt Titel, Datum und Quelle", () => {
@@ -516,7 +513,7 @@ try {
   await workUi.cleanup();
   const workReloadUi = await mount(EntdeckenTab, {
     ...baseProps, accountMode: true, radarState: accountReload.state,
-    radarPilotEvents: accountReload.state.pilot.events, radarCheckAvailable: true,
+    radarPilotEvents: accountReload.state.pilot.events,
   });
   await act(async () => { button(workReloadUi.container, "Radar").click(); await tick(); });
   check("Film-Titel und validiertes Feed-Ereignis bleiben nach Reload sichtbar", () => {
@@ -531,13 +528,9 @@ try {
   let personState = upsertGuestPersonRadarSubscription(
     createEmptyLocalRadar(), { identity, now },
   ).state;
-  let personCheckCalls = 0;
-  let personResolve;
-  const personCheckPromise = new Promise((resolve) => { personResolve = resolve; });
   let personUi;
   const renderPersonProps = () => ({
-    ...baseProps, radarState: personState, personRadarCheckAvailable: true,
-    onPersonRadarCheck: async () => { personCheckCalls += 1; return personCheckPromise; },
+    ...baseProps, radarState: personState,
   });
   personUi = await mount(EntdeckenTab, renderPersonProps());
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
@@ -545,15 +538,7 @@ try {
     assert.match(personUi.container.textContent, /Nicolas Cage/);
     assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
-  });
-  await act(async () => {
-    const personButton = [...personUi.container.querySelectorAll("button")]
-      .filter((entry) => entry.textContent.trim() === "Jetzt prüfen").at(-1);
-    personButton.click(); await tick();
-  });
-  check("Personenprüfung zeigt Ladezustand und startet keinen zweiten Aufruf", () => {
-    assert.equal(personCheckCalls, 1);
-    assert.ok(button(personUi.container, "Wird geprüft…")?.disabled);
+    assert.equal(button(personUi.container, "Jetzt prüfen"), undefined);
   });
   const personResponse = {
     status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z",
@@ -568,7 +553,6 @@ try {
   const applied = applyPersonRadarCheckResult(personState, { identity, response: personResponse, catalog: personCatalog });
   assert.equal(applied.ok, true);
   personState = applied.state;
-  await act(async () => { personResolve({ status: "confirmed", writes: 1 }); await personCheckPromise; await tick(); });
   await personUi.render(renderPersonProps());
   check("Validierter Personen-Treffer bleibt Vorschlag ohne Film-Abo", () => {
     assert.match(personUi.container.textContent, /Dream Scenario/);
@@ -612,22 +596,21 @@ try {
   });
   await franchiseUi.cleanup();
 
-  const errorUi = await mount(EntdeckenTab, {
+  let forbiddenManualCalls = 0;
+  const automaticUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
       target: workTarget, now,
     }).state,
-    radarCheckAvailable: true,
-    onRadarWebsearchCheck: async () => { throw new Error("mock failure"); },
+    onRadarWebsearchCheck: async () => { forbiddenManualCalls += 1; },
   });
-  await act(async () => { button(errorUi.container, "Radar").click(); await tick(); });
-  await act(async () => { button(errorUi.container, "Jetzt prüfen").click(); await tick(); });
-  check("Fehlerzustand bleibt verständlich und enthält keine Rohantwort", () => {
-    const alert = errorUi.container.querySelector('[role="alert"]');
-    assert.equal(alert?.textContent, "Die Suche ist derzeit nicht erreichbar.");
-    assert.doesNotMatch(errorUi.container.textContent, /mock failure/);
+  await act(async () => { button(automaticUi.container, "Radar").click(); await tick(); });
+  check("Auch ein injizierter alter Prüfhandler ist über die Oberfläche nicht erreichbar", () => {
+    assert.equal(forbiddenManualCalls, 0);
+    assert.equal(button(automaticUi.container, "Jetzt prüfen"), undefined);
+    assert.match(automaticUi.container.textContent, /automatische tägliche Prüfung ist im Kontomodus verfügbar/i);
   });
-  await errorUi.cleanup();
+  await automaticUi.cleanup();
 } finally {
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });
   if (dom) dom.window.close();

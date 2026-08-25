@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   createEntdeckenWeeklyQueryContext,
+  ENTDECKEN_WEEKLY_MAX_CANDIDATES,
   ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS,
   ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS,
   evaluateEntdeckenDailyResponse,
@@ -223,7 +224,9 @@ await check("Quellenregister akzeptiert eine kleine freigegebene Redaktionsliste
 await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lokalen Daten", () => {
   const body = buildAnthropicEntdeckenDailyBody(providerSetup, queryContext);
   const input = JSON.parse(body.messages[0].content);
-  assert.deepEqual(input, { queryContext, region: "AT", language: "de", maxItems: 7 });
+  assert.deepEqual(input, {
+    queryContext, region: "AT", language: "de", maxItems: ENTDECKEN_WEEKLY_MAX_CANDIDATES,
+  });
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
     allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
@@ -523,6 +526,22 @@ await check("Neuer Wochenrefresh speichert exakt fuenf bis sieben belegte Titel"
   assert.equal(evaluateEntdeckenDailyResponse(envelope(providerItems(4)), sources, {
     retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
   }).ok, false);
+});
+
+await check("Kandidatenpuffer wird vor Evidenzfilterung genutzt und der sichtbare Feed bleibt auf sieben begrenzt", () => {
+  const dropped = [1, 2, 3].map((index) => ({
+    ...providerItem(index),
+    evidence: { ...providerItem(index).evidence, publishedOn: "2026-06-01" },
+  }));
+  const safe = Array.from({ length: 7 }, (_, index) => providerItem(index + 10));
+  const result = evaluateEntdeckenDailyResponse(envelope([...dropped, ...safe]), sources, {
+    retrievedOn: "2026-08-20", claimedIsoWeek: "2026-W34",
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.feed.items.length, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS);
+  assert.deepEqual(result.feed.items.map((item) => item.rank), [1, 2, 3, 4, 5, 6, 7]);
+  assert.ok(result.errors.some((error) => /evidence-age-invalid$/.test(error)));
+  assert.equal(result.responseMode, "partial");
 });
 
 await check("Unbelegte, zu alte oder identitaetswiderspruechliche Ergebnisse bleiben fail-closed", () => {

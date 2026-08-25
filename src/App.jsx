@@ -1310,9 +1310,9 @@ export default function App() {
   const { radarAuthority, sichtbarerRadarState, radarPreviewTarget, setRadarPreviewTarget, schliesseRadarPreview,
     aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
     beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
-    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, radarCheckAvailable, fuegeRadarTextHinzu,
-    fuehreRadarPilotReceipt, fuehreRadarPilotImport, fuehreRadarPilotSync, fuehreRadarWebsearchCheck,
-    personRadarAvailable, personRadarCheckAvailable, fuegePersonRadarHinzu, aenderePersonRadar, fuehrePersonRadarCheck, franchiseRadarAvailable, fuegeFranchiseRadarHinzu, } = useEntdeckenRadarController({
+    radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
+    fuehreRadarPilotReceipt, fuehreRadarPilotImport, fuehreRadarPilotSync,
+    personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, franchiseRadarAvailable, fuegeFranchiseRadarHinzu, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
     entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr, });
   const {
@@ -2076,10 +2076,9 @@ export default function App() {
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
-            onRadarWebsearchCheck={fuehreRadarWebsearchCheck} onRadarTextAdd={fuegeRadarTextHinzu}
-            radarCheckAvailable={radarCheckAvailable}
-            personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} personRadarCheckAvailable={personRadarCheckAvailable}
-            onPersonRadarChange={aenderePersonRadar} onPersonRadarCheck={fuehrePersonRadarCheck} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}
+            onRadarTextAdd={fuegeRadarTextHinzu}
+            personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu}
+            onPersonRadarChange={aenderePersonRadar} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}
             blogProps={{
               artikel: artikelListe, master: refUniversum, angemeldet: remoteKontoAktiv,
               onFokusVerbraucht: () => setBlogFokus(null),

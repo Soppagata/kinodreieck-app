@@ -451,7 +451,7 @@ try {
   await act(async () => { button(textUi.container, "Radar").click(); await tick(); });
   const textInput = textUi.container.querySelector("#kd-radar-target-search");
   await setControl(textInput, "Mutter Teresa");
-  await check("Freitext wird unverändert lokal gespeichert und erst auf Jetzt prüfen exakt einmal übergeben", async () => {
+  await check("Freitext wird unverändert gespeichert, aber die Oberfläche startet keinen manuellen Anbieterpfad", async () => {
     assert.equal(textChecks.length, 0);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-search").length, 1);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-results").length, 0);
@@ -462,19 +462,10 @@ try {
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions.length, 1);
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetText, "Mutter Teresa");
     assert.equal(JSON.parse(localStorage.getItem("kd:radar")).subscriptions[0].targetText, "Mutter Teresa");
-    assert.ok(button(textUi.container, "Jetzt prüfen"));
-    await act(async () => {
-      button(textUi.container, "Jetzt prüfen").click();
-      button(textUi.container, "Jetzt prüfen").click();
-      await tick();
-    });
-    await settle();
-    assert.equal(textChecks.length, 1);
-    assert.equal(textChecks[0].target.targetText, "Mutter Teresa");
-    assert.match(textUi.container.textContent, /Ein bestätigter Treffer wurde gespeichert/);
-    assert.match(textUi.container.textContent, /Nur belegte Funde wurden berücksichtigt/);
-    assert.match(textUi.container.textContent, /Mother Teresa: No Greater Love/);
-    assert.doesNotMatch(textUi.container.textContent, /Suche ist derzeit nicht verfügbar/);
+    assert.equal(button(textUi.container, "Jetzt prüfen"), undefined);
+    assert.equal(textChecks.length, 0);
+    assert.match(textUi.container.textContent, /automatische tägliche Prüfung ist im Kontomodus verfügbar/i);
+    assert.match(textUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
   });
   await textUi.cleanup();
 
@@ -498,16 +489,12 @@ try {
   const degradedUi = await mount(degradedExecutor);
   await act(async () => { button(degradedUi.container, "Radar").click(); await tick(); });
   await setControl(degradedUi.container.querySelector("#kd-radar-target-search"), "Tommy Wiseau");
-  await check("Unstrukturierter sicherer Hinweis bleibt sichtbar und persistiert keinen Fund", async () => {
+  await check("Auch ein alter lokaler Prüfexecutor bleibt ohne manuellen UI-Einstieg unaufgerufen", async () => {
     await act(async () => { button(degradedUi.container, "Im Radar speichern").click(); await tick(); });
     await settle();
-    await act(async () => { button(degradedUi.container, "Jetzt prüfen").click(); await tick(); });
-    await settle();
-    assert.equal(degradedChecks.length, 1);
-    assert.equal(degradedChecks[0].target.targetText, "Tommy Wiseau");
-    assert.match(degradedUi.container.textContent, /Kein belegter neuer Fund/);
-    assert.match(degradedUi.container.textContent, /Keine eindeutig belegte Zuordnung/);
-    assert.match(degradedUi.container.textContent, /Noch kein neuer belegter Fund/);
+    assert.equal(degradedChecks.length, 0);
+    assert.equal(button(degradedUi.container, "Jetzt prüfen"), undefined);
+    assert.match(degradedUi.container.textContent, /Noch keine belegte Neuigkeit aus den täglichen Prüfungen/);
     assert.doesNotMatch(degradedUi.container.textContent, /Mother Teresa: No Greater Love/);
   });
   await degradedUi.cleanup();

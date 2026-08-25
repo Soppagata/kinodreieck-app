@@ -981,6 +981,7 @@ await check("Daily-Migration claimt Konto/Ziel pro Wiener Tag atomar und retryfr
   assert.match(dailyMigration, /auth\.role\(\) is distinct from 'service_role'/);
   assert.match(dailyMigration, /kd_radar_daily_assert_lease/);
   assert.match(dailyMigration, /kd_radar_daily_finish/);
+  assert.match(dailyMigration, /p_safe_status is null or p_safe_status not in \(/);
   assert.doesNotMatch(dailyMigration, /pg_cron|cron\.|http_post|net\.http/i);
 });
 
@@ -1002,6 +1003,8 @@ await check("Scheduled-Function ist bodylos, service-role-only und antwortet ohn
   assert.match(functionIndex, /scheduledMode && \(req\.body !== null/);
   assert.match(functionIndex, /req\.headers\.get\("apikey"\) !== serviceKey \|\| token !== serviceKey/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_claim"\)/);
+  assert.match(functionIndex, /claim\?\.claim !== false \|\| !\["idle", "disabled"\]\.includes\(claim\?\.status\)/);
+  assert.match(functionIndex, /claim\?\.claim !== false[\s\S]*?status: "failed" \}, 500/);
   assert.match(functionIndex, /status: 204/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_assert_lease"/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_finish"/);

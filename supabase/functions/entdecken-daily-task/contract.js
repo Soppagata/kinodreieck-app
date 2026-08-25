@@ -10,6 +10,10 @@ export const ENTDECKEN_WEEKLY_SOURCE_ID = "websearch:weekly-positive";
 export const ENTDECKEN_WEEKLY_MAX_ITEMS = 20;
 export const ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS = 5;
 export const ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS = 7;
+/* Der Anbieter liefert einen kleinen Kandidatenpuffer. Erst danach werden
+   Quellenalter, Evidenz, Identitaet und Dubletten geprueft; sichtbar und
+   gespeichert bleiben weiterhin hoechstens sieben Titel. */
+export const ENTDECKEN_WEEKLY_MAX_CANDIDATES = 12;
 export const ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS = 20;
 export const ENTDECKEN_WEEKLY_MAX_SOURCE_AGE_DAYS = 35;
 export const ENTDECKEN_WEEKLY_MAX_SOURCES = 10;
@@ -20,7 +24,7 @@ export const ENTDECKEN_WEEKLY_DEGRADED_NOTICE = "Die neuen Wochentipps waren nic
 export const ENTDECKEN_DAILY_FEED_FORMAT = ENTDECKEN_WEEKLY_FEED_FORMAT;
 export const ENTDECKEN_DAILY_FEED_ID = ENTDECKEN_WEEKLY_FEED_ID;
 export const ENTDECKEN_DAILY_SOURCE_ID = ENTDECKEN_WEEKLY_SOURCE_ID;
-export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS;
+export const ENTDECKEN_DAILY_MAX_ITEMS = ENTDECKEN_WEEKLY_MAX_CANDIDATES;
 export const ENTDECKEN_DAILY_MAX_SEARCH_RESULTS = ENTDECKEN_WEEKLY_MAX_SEARCH_RESULTS;
 export const ENTDECKEN_DAILY_VALID_DAYS = 7;
 
@@ -355,8 +359,8 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
   const records = new Map();
   const itemErrors = [];
   const warnings = [];
-  const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS);
-  if (envelope.response.items.length > ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS) warnings.push("items-truncated");
+  const rawItems = envelope.response.items.slice(0, ENTDECKEN_WEEKLY_MAX_CANDIDATES);
+  if (envelope.response.items.length > ENTDECKEN_WEEKLY_MAX_CANDIDATES) warnings.push("candidates-truncated");
   rawItems.forEach((item, index) => {
     const shapeErrors = [];
     validateProviderItem(item, index, shapeErrors, retrievedOn);
@@ -400,9 +404,11 @@ export function evaluateEntdeckenDailyResponse(envelope, sourceRegistry, {
     return result("insufficient_evidence", itemErrors.length ? itemErrors : ["records-empty"], null,
       mergePresentation(presentation, ["records-insufficient"], true));
   }
-  const items = [...records.values()]
+  const rankedRecords = [...records.values()]
     .sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"))
-    .map(({ key: _key, ...record }) => freezeDeep(record));
+  if (rankedRecords.length > ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS) warnings.push("items-truncated");
+  const items = rankedRecords.slice(0, ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS)
+    .map(({ key: _key, ...record }, rank) => freezeDeep({ ...record, rank: rank + 1 }));
   const feed = freezeDeep({
     format: ENTDECKEN_WEEKLY_FEED_FORMAT,
     feedId: ENTDECKEN_WEEKLY_FEED_ID,

@@ -232,6 +232,9 @@ export function createRadarWebsearchHandler({
       const { data: claim, error: claimError } = await admin.rpc("kd_radar_daily_claim");
       if (claimError) return json({ ok: false, status: "failed" }, 500, origin);
       if (claim?.claim !== true) {
+        if (claim?.claim !== false || !["idle", "disabled"].includes(claim?.status)) {
+          return json({ ok: false, status: "failed" }, 500, origin);
+        }
         return new Response(null, {
           status: 204,
           headers: { ...cors(origin), "Cache-Control": "no-store" },
