@@ -20,6 +20,9 @@ import { erstelleAnbieterPfadBelege } from "./tools/ai_smoke_contract.mjs";
 import { RADAR_WEBSEARCH_ONCE_ENV } from "./tools/keychain_runner.mjs";
 import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
+  ENTDECKEN_EDITORIAL_SOURCE_FILES,
+  ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
+  ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
   PROVIDER_RECEIPT_RUNTIME_FILES,
   PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
   RADAR_DAILY_COMMIT,
@@ -38,6 +41,7 @@ import {
   createRadarCliWorkspace,
   createRadarRemotePreflightOnce,
   deriveRadarPackageBReleaseClosure,
+  requireEntdeckenEditorialSourceReleaseProvenance,
   requireProviderReceiptRuntimeProvenance,
   requireRadarDailyReleaseProvenance,
   runRadarSupabaseVersionProbe,
@@ -703,6 +707,24 @@ await check("Aktueller Receipt-Runtimebeleg bindet Radar und Entdecken bytegenau
   const proof = requireProviderReceiptRuntimeProvenance();
   assert.equal(proof.bundleSha256, PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256);
   assert.deepEqual(proof.files, PROVIDER_RECEIPT_RUNTIME_FILES);
+});
+
+await check("Entdecken-Quellenrelease bindet nur Runtime und Quellenmigration bytegenau", () => {
+  const proof = requireEntdeckenEditorialSourceReleaseProvenance();
+  assert.equal(proof.releaseSha256, ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256);
+  assert.deepEqual(proof.files, ENTDECKEN_EDITORIAL_SOURCE_FILES);
+  assert.deepEqual(proof.migration, ENTDECKEN_EDITORIAL_SOURCE_MIGRATION);
+  assert.equal(ENTDECKEN_EDITORIAL_SOURCE_FILES.some(({ path: pathname }) => (
+    pathname.includes("radar-websearch-task")
+  )), false);
+  assert.throws(() => requireEntdeckenEditorialSourceReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("20260825210000_entdecken_editorial_sources_v2.sql")
+        ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT");
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {

@@ -58,14 +58,23 @@ const filmAtSource = Object.freeze({
   publisherFamily: "film.at / k-digital Medien",
   termsUrl: "https://www.film.at/kontakt-impressum-redaktion-filmat/401835922",
 });
-const orfSource = Object.freeze({
+const kurierSource = Object.freeze({
   ...standardSource,
-  sourceId: "editorial:orf",
-  domain: "orf.at",
-  publisherFamily: "ORF",
-  termsUrl: "https://orf.at/stories/impressum/",
+  sourceId: "editorial:kurier",
+  domain: "kurier.at",
+  publisherFamily: "KURIER / k-digital Medien GmbH & Co KG",
+  termsUrl: "https://kurier.at/info/anb/254619647",
+  termsCheckedOn: "2026-08-25",
 });
-const sources = Object.freeze([standardSource, filmAtSource, orfSource]);
+const filmstartsSource = Object.freeze({
+  ...standardSource,
+  sourceId: "editorial:filmstarts",
+  domain: "filmstarts.de",
+  publisherFamily: "FILMSTARTS / Webedia GmbH",
+  termsUrl: "https://www.filmstarts.de/services/nutzungsbedingungen/",
+  termsCheckedOn: "2026-08-25",
+});
+const sources = Object.freeze([standardSource, filmAtSource, kurierSource, filmstartsSource]);
 const queryContext = createEntdeckenWeeklyQueryContext("2026-08-20", "2026-W34");
 
 await check("leerer Edge-POST mit Content-Length 0 bleibt zulaessig, Nutzlast bleibt verboten", () => {
@@ -244,11 +253,11 @@ await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lok
   const input = JSON.parse(body.messages[0].content);
   assert.deepEqual(input, {
     queryContext, region: "AT", language: "de", maxItems: ENTDECKEN_WEEKLY_MAX_CANDIDATES,
-    allowedDomains: ["derstandard.at", "film.at", "orf.at"],
+    allowedDomains: ["derstandard.at", "film.at", "filmstarts.de", "kurier.at"],
   });
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
-    allowed_domains: ["derstandard.at", "film.at", "orf.at"], allowed_callers: ["direct"],
+    allowed_domains: ["derstandard.at", "film.at", "filmstarts.de", "kurier.at"], allowed_callers: ["direct"],
     user_location: {
       type: "approximate", city: "Vienna", region: "Vienna",
       country: "AT", timezone: "Europe/Vienna",
@@ -462,7 +471,7 @@ await check("Weicher Websearch-Mock speichert sechs sichere Titel und projiziert
     ...validItems[5],
     evidence: {
       ...validItems[5].evidence,
-      url: "https://tv.orf.at/stories/film-serien-tipps-kw-34",
+      url: "https://kurier.at/kultur/film-serien-tipps-kw-34",
     },
   };
   const flexibleItems = validItems.map((item, index) => {
@@ -890,6 +899,7 @@ const liveProofMigration = fs.readFileSync("./supabase/migrations/20260824120000
 const refreshLeaseMigration = fs.readFileSync("./supabase/migrations/20260824140000_entdecken_weekly_refresh_lease.sql", "utf8");
 const ownerRefreshOverrideMigration = fs.readFileSync("./supabase/migrations/20260825130000_entdecken_staging_owner_refresh_override.sql", "utf8");
 const promptV2Migration = fs.readFileSync("./supabase/migrations/20260825200000_entdecken_weekly_prompt_v2.sql", "utf8");
+const editorialSourcesV2Migration = fs.readFileSync("./supabase/migrations/20260825210000_entdecken_editorial_sources_v2.sql", "utf8");
 const aiLiveHandoff = fs.readFileSync("./docs/KI_LIVE_TEST_UEBERGABE.md", "utf8");
 const functionSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/entdecken-daily-task/runner.js", "utf8");
@@ -1038,6 +1048,23 @@ await check("Prompt-v2-Migration aendert nur die protokollierte Promptversion un
   assert.match(promptV2Migration, /revoke all on function public\.kd_entdecken_daily_auftrag_starten\(uuid,numeric,integer,bigint,uuid\)[\s\S]*from public, anon, authenticated/i);
   assert.match(promptV2Migration, /grant execute on function public\.kd_entdecken_daily_auftrag_starten\(uuid,numeric,integer,bigint,uuid\)[\s\S]*to service_role/i);
   assert.doesNotMatch(code, /update\s+public\.kd_ai_limits|staging_owner_refresh_override\s*=|create\s+extension|scheduler|cron\./i);
+});
+
+await check("Quellen-v2 erweitert fail-closed auf exakt vier Domains und behaelt Kosten, Lease und Prompt-v2", () => {
+  const code = editorialSourcesV2Migration.replace(/^--.*$/gm, "");
+  assert.match(editorialSourcesV2Migration, /lock table public\.kd_entdecken_sources in share row exclusive mode/i);
+  assert.match(editorialSourcesV2Migration, /select count\(\*\) from public\.kd_entdecken_sources\) is distinct from 2/i);
+  assert.match(editorialSourcesV2Migration, /editorial:derstandard[\s\S]*derstandard\.at[\s\S]*editorial:filmat[\s\S]*film\.at/i);
+  assert.match(editorialSourcesV2Migration, /except[\s\S]*values[\s\S]*except[\s\S]*select source_id, domain/i);
+  assert.match(editorialSourcesV2Migration, /'editorial:kurier', 'kurier\.at', 'KURIER \/ k-digital Medien GmbH & Co KG'[\s\S]*'https:\/\/kurier\.at\/info\/anb\/254619647', date '2026-08-25'/i);
+  assert.match(editorialSourcesV2Migration, /'editorial:filmstarts', 'filmstarts\.de', 'FILMSTARTS \/ Webedia GmbH'[\s\S]*'https:\/\/www\.filmstarts\.de\/services\/nutzungsbedingungen\/', date '2026-08-25'/i);
+  assert.match(editorialSourcesV2Migration, /'editorial:derstandard', 'derstandard\.at'[\s\S]*'editorial:filmat', 'film\.at'[\s\S]*'editorial:kurier', 'kurier\.at'[\s\S]*'editorial:filmstarts', 'filmstarts\.de'/i);
+  assert.match(editorialSourcesV2Migration, /v_source_count is distinct from 4/i);
+  assert.match(editorialSourcesV2Migration, /status = 'refreshing'[\s\S]*fence_token = p_fence_token[\s\S]*lease_expires_at >= v_now/i);
+  assert.match(editorialSourcesV2Migration, /account_id = p_account and role = 'owner'[\s\S]*active and personal_ai/i);
+  assert.match(editorialSourcesV2Migration, /v_fee is distinct from 1 or v_task_cap is distinct from 5/i);
+  assert.match(editorialSourcesV2Migration, /return public\.kd_ai_auftrag_starten\([\s\S]*'entdecken-weekly-v2'/i);
+  assert.doesNotMatch(code, /on\s+conflict|update\s+public\.kd_ai_limits|staging_owner_refresh_override\s*=|create\s+extension|scheduler|cron\./i);
 });
 
 await check("App ruft den globalen Feed ohne Owner-Gate auf und behaelt lokale Daten lokal", () => {

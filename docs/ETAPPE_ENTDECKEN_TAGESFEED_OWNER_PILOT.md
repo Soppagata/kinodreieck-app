@@ -1,7 +1,8 @@
 # Entdecken-Tagesfeed · Etappe 3 · privater Owner-Pilot
 
-Stand: 20.08.2026
+Stand: 25.08.2026
 Basis: `7d4fa9f47bb16e74eb4676ac252e964fb6675f1c`
+Quellenerweiterungsbasis: `e0faef9da91676249f5389b66e27f8615e5d80f1`
 Arbeitsbranch: `codex/entdecken-tagesfeed-etappe3`
 
 ## Wirkung
@@ -19,22 +20,29 @@ Provider- und einen Websearch-Request je Wiener Kalendertag auslösen.
 
 ## Erlaubte Quellen
 
-Das serverseitige Register enthält exakt zwei voneinander unabhängige
-österreichische Redaktionen:
+Das serverseitige Register enthält für den privaten, nichtkommerziellen Pilot
+exakt vier freigegebene Redaktionsdomains:
 
 - `derstandard.at` · DER STANDARD
 - `film.at` · k-digital Medien GmbH & Co KG / KURIER-Gruppe
+- `kurier.at` · KURIER / k-digital Medien GmbH & Co KG
+- `filmstarts.de` · FILMSTARTS / Webedia GmbH
 
-Primärbelege, geprüft am 20.08.2026:
+Primärbelege der Bestandsquellen, geprüft am 20.08.2026:
 
 - [DER STANDARD · Nutzung von Inhalten](https://about.derstandard.at/nutzungsbedingungen/)
 - [DER STANDARD · AGB](https://about.derstandard.at/agb/)
 - [film.at · Kontakt und Impressum der Redaktion](https://www.film.at/kontakt-impressum-redaktion-filmat/401835922)
+
+Primärbelege der Erweiterung, geprüft am 25.08.2026:
+
 - [KURIER · Allgemeine Nutzungsbedingungen](https://kurier.at/info/anb/254619647)
+- [FILMSTARTS · Nutzungsbedingungen](https://www.filmstarts.de/services/nutzungsbedingungen/)
 
 Die Entscheidung gilt nur für diesen privaten, nichtkommerziellen Pilot. Eine
-öffentliche oder kommerzielle Nutzung braucht eine neue Rechteprüfung und eine
-additive Freigabemigration; diese Etappe kann sie nicht per Flag einschalten.
+öffentliche oder kommerzielle Nutzung braucht für alle vier Domains eine neue
+Betreiber- und Rechteprüfung sowie eine additive Freigabemigration; diese
+Etappe kann sie nicht per Flag einschalten.
 
 ## Datenminimierung
 

@@ -183,6 +183,30 @@ export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
 ]);
 
+/* Additiver Bytevertrag nur fuer die freigegebene Entdecken-Quellenerweiterung.
+   Er bindet die unveraenderte Entdecken-Runtime samt Shared-Modulen an genau
+   die Forward-Migration; Radar-Quellen, -Migrationen und -Deploys gehoeren
+   ausdruecklich nicht zu diesem Release. */
+export const ENTDECKEN_EDITORIAL_SOURCE_BUNDLE_SHA256 = "664748e139f94e09e7bf203ff0e5d45b28eea9eb50ab431f214b594c1e614279";
+export const ENTDECKEN_EDITORIAL_SOURCE_FILES = Object.freeze([
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "91e014fb00e3cfda0652f535feb3befd9d5ad1ce5dfb19638a741abb445184a0" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "4b45893b81481840c54eb3a5c27244348d39bf42942c94f20b60f45c0b6a153e" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "f2ed529bffaff356a891e35d1bd0d86af24449844552125c5d80c044931da989" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "9b27a21a963d6c334da50bcb49897e360f80998f7fbe2eedb55ae1714ffd2554" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "2c6f3448559db2b87693e89b075ea02825e63999fd0bd95866d66ff0d0ee5bfe" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
+]);
+export const ENTDECKEN_EDITORIAL_SOURCE_MIGRATION = Object.freeze({
+  version: "20260825210000",
+  name: "entdecken_editorial_sources_v2",
+  path: "supabase/migrations/20260825210000_entdecken_editorial_sources_v2.sql",
+  sha256: "31cd2bc5aa7f0ed0b287e0b6fc43affd59dbb3a514aa22d415a2ca2026c517f4",
+});
+export const ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256 = "b97406976abefb5656ffaf724cdff3eb850e789745a96c3ed343f84c3e40f4ee";
+
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
    bindet stattdessen die aktuelle Runtime, genau eine additive Migration und
@@ -624,6 +648,43 @@ export function requireProviderReceiptRuntimeProvenance(options = {}) {
   return Object.freeze({
     bundleSha256: PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
     files,
+  });
+}
+
+export function requireEntdeckenEditorialSourceReleaseProvenance(options = {}) {
+  const files = requireExactFileRows(
+    ENTDECKEN_EDITORIAL_SOURCE_FILES,
+    ENTDECKEN_EDITORIAL_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT",
+    options,
+  );
+  const migrationSha256 = createHash("sha256")
+    .update(readRegularFile(ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.path, options)).digest("hex");
+  if (migrationSha256 !== ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.sha256) {
+    stop(
+      "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT",
+      "Entdecken-Quellenmigration weicht vom exakten Bytevertrag ab.",
+    );
+  }
+  const rows = [
+    { kind: "function", name: "entdecken-daily-task", sha256: ENTDECKEN_EDITORIAL_SOURCE_BUNDLE_SHA256 },
+    {
+      kind: "migration",
+      name: `${ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.version}_${ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.name}`,
+      sha256: migrationSha256,
+    },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256) {
+    stop(
+      "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT",
+      "Lokaler Entdecken-Quellenreleasevertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    releaseSha256,
+    files,
+    migration: ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
   });
 }
 
