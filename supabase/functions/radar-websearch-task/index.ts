@@ -21,12 +21,15 @@ const ALLOWED_ORIGINS = new Set([
   "https://staging.kinodreieck.at",
   "http://localhost:5173",
 ]);
+const RADAR_REFRESH_HEADER = "x-kd-radar-refresh";
+const SCHEDULED_REFRESH_VALUE = "scheduled-v1";
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VIENNA_DAY_FORM = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": `authorization, x-client-info, apikey, content-type, ${PROVIDER_DIAGNOSTIC_HEADER}`,
+    "Access-Control-Allow-Headers": `authorization, x-client-info, apikey, content-type, ${RADAR_REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}`,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -179,29 +182,76 @@ export function createRadarWebsearchHandler({
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
     const serviceKey = envKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
-    const accountId = await accountFromRequest(req, supabaseUrl, publishableKey);
-    if (!accountId || !serviceKey) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+    const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
+    const refreshHeader = req.headers.get(RADAR_REFRESH_HEADER);
+    const scheduledMode = refreshHeader === SCHEDULED_REFRESH_VALUE;
+    if (!supabaseUrl || !publishableKey || !serviceKey
+        || (refreshHeader !== null && !scheduledMode)) {
+      return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+    }
+    if (scheduledMode && (req.body !== null || origin !== null
+        || providerDiagnosticHeader !== null
+        || req.headers.get("apikey") !== serviceKey || token !== serviceKey)) {
+      return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+    }
 
-    let body: unknown;
-    try { body = await req.json(); } catch { return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin); }
-    if (!body || typeof body !== "object" || Array.isArray(body)
-        || ![1, 2].includes(Object.keys(body).length)
-        || typeof (body as { targetId?: unknown }).targetId !== "string"
-        || Object.keys(body).some((key) => !["targetId", "targetText"].includes(key))) {
-      return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
+    let accountId = "";
+    let targetId = "";
+    let rawTargetText: string | null = null;
+    let dailyClaim: {
+      targetRowId: string;
+      viennaDay: string;
+      fenceToken: string;
+    } | null = null;
+
+    if (!scheduledMode) {
+      accountId = await accountFromRequest(req, supabaseUrl, publishableKey);
+      if (!accountId) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      let body: unknown;
+      try { body = await req.json(); } catch { return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin); }
+      if (!body || typeof body !== "object" || Array.isArray(body)
+          || ![1, 2].includes(Object.keys(body).length)
+          || typeof (body as { targetId?: unknown }).targetId !== "string"
+          || Object.keys(body).some((key) => !["targetId", "targetText"].includes(key))) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
+      }
+      targetId = text((body as { targetId: string }).targetId);
+      const hasTargetText = Object.prototype.hasOwnProperty.call(body, "targetText");
+      const targetText = hasTargetText ? (body as { targetText?: unknown }).targetText : null;
+      if (!targetId || targetId.length > 160
+          || (hasTargetText && (typeof targetText !== "string" || !targetText.trim() || targetText.length > 160))) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
+      }
+      rawTargetText = hasTargetText ? targetText as string : null;
     }
-    const targetId = text((body as { targetId: string }).targetId);
-    const hasTargetText = Object.prototype.hasOwnProperty.call(body, "targetText");
-    const targetText = hasTargetText ? (body as { targetText?: unknown }).targetText : null;
-    if (!targetId || targetId.length > 160
-        || (hasTargetText && (typeof targetText !== "string" || !targetText.trim() || targetText.length > 160))) {
-      return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
-    }
-    const rawTargetText: string | null = hasTargetText ? targetText as string : null;
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    if (scheduledMode) {
+      const { data: claim, error: claimError } = await admin.rpc("kd_radar_daily_claim");
+      if (claimError) return json({ ok: false, status: "failed" }, 500, origin);
+      if (claim?.claim !== true) {
+        return new Response(null, {
+          status: 204,
+          headers: { ...cors(origin), "Cache-Control": "no-store" },
+        });
+      }
+      accountId = typeof claim.accountId === "string" ? claim.accountId : "";
+      targetId = typeof claim.targetId === "string" ? claim.targetId : "";
+      const targetRowId = typeof claim.targetRowId === "string" ? claim.targetRowId : "";
+      const viennaDay = typeof claim.viennaDay === "string" ? claim.viennaDay : "";
+      const fenceToken = typeof claim.fenceToken === "string" ? claim.fenceToken : "";
+      rawTargetText = claim.targetText === null ? null
+        : typeof claim.targetText === "string" ? claim.targetText : "";
+      if (!UUID_FORM.test(accountId) || !UUID_FORM.test(targetRowId)
+          || !UUID_FORM.test(fenceToken) || !VIENNA_DAY_FORM.test(viennaDay)
+          || !targetId || targetId.length > 160
+          || (rawTargetText !== null && (!rawTargetText.trim() || rawTargetText.length > 160))) {
+        return json({ ok: false, status: "failed" }, 500, origin);
+      }
+      dailyClaim = { targetRowId, viennaDay, fenceToken };
+    }
     let providerDiagnostic = providerDiagnosticAccess({
       headerValue: providerDiagnosticHeader,
       enabled: Deno.env.get(PROVIDER_DIAGNOSTIC_ENV) === "true",
@@ -223,11 +273,20 @@ export function createRadarWebsearchHandler({
         return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
       }
     }
-    const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
-    const user = createClient(supabaseUrl, publishableKey, {
+    const user = scheduledMode ? null : createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
+    const assertDailyLease = async () => {
+      if (!dailyClaim) return;
+      const { data, error } = await admin.rpc("kd_radar_daily_assert_lease", {
+        p_account_id: accountId,
+        p_target_id: dailyClaim.targetRowId,
+        p_vienna_day: dailyClaim.viennaDay,
+        p_fence_token: dailyClaim.fenceToken,
+      });
+      if (error || data?.ok !== true) throw error || new Error("radar-daily-lease-invalid");
+    };
     let cachedSources: Array<Record<string, unknown>> | null = null;
     const loadSources = async () => {
       if (cachedSources) return cachedSources;
@@ -270,6 +329,7 @@ export function createRadarWebsearchHandler({
         titleGroupContext?: Record<string, unknown> | null;
         textContext?: Record<string, unknown> | null;
       }) {
+        await assertDailyLease();
         const { data, error } = await admin.rpc(
           textContext
             ? "kd_radar_websearch_upsert_text_event"
@@ -288,6 +348,7 @@ export function createRadarWebsearchHandler({
         return data;
       },
       async loadFeed() {
+        if (!user) return null;
         const { data, error } = await user.rpc("kd_radar_pilot_feed", { p_operation_ids: [] });
         if (error) throw error;
         return data;
@@ -350,6 +411,7 @@ export function createRadarWebsearchHandler({
       async reserveCost({ operationId, reservationUsdCent, searchRequests }: {
         operationId: string; reservationUsdCent: number; searchRequests: number;
       }) {
+        await assertDailyLease();
         const { data, error } = await admin.rpc("kd_radar_websearch_auftrag_starten", {
           p_account_id: accountId,
           p_target_key: targetId,
@@ -379,9 +441,31 @@ export function createRadarWebsearchHandler({
         if (error) throw error;
       },
     });
-    const result = await runRadarWebsearchCheck({
-      accountId, targetId, targetText: rawTargetText, adapter: productAdapter, repository,
-    });
+    let result;
+    try {
+      result = await runRadarWebsearchCheck({
+        accountId, targetId, targetText: rawTargetText, adapter: productAdapter, repository,
+      });
+    } catch (error) {
+      if (!scheduledMode) throw error;
+      result = { status: "unavailable", writes: 0 };
+    }
+    if (dailyClaim) {
+      const safeStatus = [
+        "confirmed", "no_change", "insufficient_evidence", "provider_error",
+        "storage_error", "forbidden", "unavailable",
+      ].includes(result.status) ? result.status : "unavailable";
+      const { data: finish, error: finishError } = await admin.rpc("kd_radar_daily_finish", {
+        p_account_id: accountId,
+        p_target_id: dailyClaim.targetRowId,
+        p_vienna_day: dailyClaim.viennaDay,
+        p_fence_token: dailyClaim.fenceToken,
+        p_safe_status: safeStatus,
+      });
+      return finishError || finish?.ok !== true
+        ? json({ ok: false, status: "failed" }, 500, origin)
+        : json({ ok: true, status: "processed" }, 200, origin);
+    }
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;
     const telemetry = typeof productAdapter.telemetry === "function"

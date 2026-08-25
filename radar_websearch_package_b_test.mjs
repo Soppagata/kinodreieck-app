@@ -1,6 +1,7 @@
 /* Paket B: ausschließlich lokale Mocks. Kein Provider-, Supabase- oder
    sonstiger Netzwerkzugriff. */
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { delimiter, dirname, resolve } from "node:path";
 import {
@@ -21,8 +22,6 @@ import {
   ANTHROPIC_PROVIDER_KEYCHAIN,
   RADAR_TEXT_TARGET_COMMIT,
   RADAR_TEXT_TARGET_FILES,
-  PROVIDER_RECEIPT_RUNTIME_FILES,
-  PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
   REPO_ROOT,
   SUPABASE_INFRA_KEYCHAIN,
   RadarRemoteStartStop,
@@ -520,11 +519,21 @@ await check("Zusätzliche Resultate und fremde Citation werden weich begrenzt, E
   assert.equal(foreign.fetchCalls.length, 1);
 });
 
-await check("Radar-, Provider-, Scheduler-, Allowlist- und lokale Kostengates stoppen vor Reservierung und Fetch", async () => {
+await check("Scheduler-Setup akzeptiert den manuellen und den taeglichen Bool-Zustand", async () => {
+  for (const radarSchedulerEnabled of [false, true]) {
+    const harness = adapterHarness({ setupPatch: { radarSchedulerEnabled } });
+    const result = await harness.adapter.search(target);
+    assert.equal(result.response.status, "confirmed");
+    assert.equal(harness.reserveCalls.length, 1);
+    assert.equal(harness.fetchCalls.length, 1);
+  }
+});
+
+await check("Radar-, Provider-, Scheduler-Typ-, Allowlist- und lokale Kostengates stoppen vor Reservierung und Fetch", async () => {
   const gates = [
     { radarEnabled: false },
     { radarProviderEnabled: false },
-    { radarSchedulerEnabled: true },
+    { radarSchedulerEnabled: "true" },
     { providerAllowed: false },
     { sourceRegistry: [] },
     { searchFeeUsdCent: 2 },
@@ -682,16 +691,12 @@ await check("Historischer Radar-Deployzaun blockiert die neue Runtime statt sie 
   )), false);
 });
 
-await check("Neue Receipt-Runtime bindet Radar und Entdecken samt Shared-Helper bytegenau", () => {
-  const closure = requireProviderReceiptRuntimeProvenance();
-  assert.equal(closure.bundleSha256, PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256);
-  assert.deepEqual(closure.files, PROVIDER_RECEIPT_RUNTIME_FILES);
-  assert.equal(closure.files.some(({ path: pathname }) => (
-    pathname.endsWith("providerReceipt.js")
-  )), true);
-  assert.equal(closure.files.some(({ path: pathname }) => (
-    pathname.endsWith("mockAdapter.js")
-  )), false);
+await check("Historischer Receipt-Deployzaun blockiert die neue Daily-Runtime bis zur Integration", () => {
+  assert.throws(
+    () => requireProviderReceiptRuntimeProvenance(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "PROVIDER_RECEIPT_RUNTIME_PROVENANCE_DRIFT",
+  );
 });
 
 await check("Der echte JS-CLI-Startmodus findet Node im engen lokalen Lesepfad", () => {
@@ -930,6 +935,11 @@ const migration = fs.readFileSync(
 const config = fs.readFileSync("./supabase/config.toml", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const adapterSource = fs.readFileSync("./supabase/functions/radar-websearch-task/anthropicAdapter.js", "utf8");
+const dailyMigration = fs.readFileSync(
+  "./supabase/migrations/20260825120000_radar_daily_schedule.sql",
+  "utf8",
+);
+const dailyWorkflow = fs.readFileSync("./.github/workflows/radar-daily.yml", "utf8");
 const liveSource = fs.readFileSync("./tools/radar_websearch_live.mjs", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
 
@@ -957,6 +967,68 @@ await check("Function-Konfiguration erzwingt JWT und Produktcode enthält keine 
   assert.match(functionIndex, /PROVIDER_DIAGNOSTIC_ENV/);
   assert.match(functionIndex, /takeProviderRawResponse/);
   assert.match(functionIndex, /access\?\.role === "owner"/);
+});
+
+await check("Daily-Migration claimt Konto/Ziel pro Wiener Tag atomar und retryfrei", () => {
+  assert.match(dailyMigration, /create table public\.kd_radar_daily_runs/);
+  assert.match(dailyMigration, /primary key \(account_id, target_id, vienna_day\)/);
+  assert.match(dailyMigration, /at time zone 'Europe\/Vienna'/);
+  assert.match(dailyMigration, /safe_status\s+text\s+not null default 'attempt_consumed'/);
+  assert.match(dailyMigration, /lease_expires_at[\s\S]*?fence_token/);
+  assert.match(dailyMigration, /not exists \([\s\S]*?run\.vienna_day = v_today/);
+  assert.match(dailyMigration, /for update of subscription skip locked/);
+  assert.match(dailyMigration, /on conflict \(account_id, target_id, vienna_day\) do nothing/);
+  assert.match(dailyMigration, /auth\.role\(\) is distinct from 'service_role'/);
+  assert.match(dailyMigration, /kd_radar_daily_assert_lease/);
+  assert.match(dailyMigration, /kd_radar_daily_finish/);
+  assert.doesNotMatch(dailyMigration, /pg_cron|cron\.|http_post|net\.http/i);
+});
+
+await check("Daily-Aktivierung stoppt bei Settings-Drift und behaelt alle bestehenden Kostenzaeune", () => {
+  assert.match(dailyMigration, /v_radar_aktiv is distinct from true/);
+  assert.match(dailyMigration, /v_provider_aktiv is distinct from true/);
+  assert.match(dailyMigration, /v_scheduler_aktiv is distinct from false/);
+  assert.match(dailyMigration, /set radar_scheduler_aktiv = true/);
+  assert.match(dailyMigration, /radar_aktiv is true[\s\S]*?radar_provider_aktiv is true[\s\S]*?radar_scheduler_aktiv is false/);
+  assert.doesNotMatch(dailyMigration, /kd_ai_limits|task_max_reservierung|anbieter_request_max/i);
+  assert.match(functionIndex, /await assertDailyLease\(\);[\s\S]*?kd_radar_websearch_auftrag_starten/);
+  assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
+  assert.match(migration, /return public\.kd_ai_auftrag_starten\(/);
+});
+
+await check("Scheduled-Function ist bodylos, service-role-only und antwortet ohne Konto- oder Zielpayload", () => {
+  assert.match(functionIndex, /const RADAR_REFRESH_HEADER = "x-kd-radar-refresh"/);
+  assert.match(functionIndex, /const SCHEDULED_REFRESH_VALUE = "scheduled-v1"/);
+  assert.match(functionIndex, /scheduledMode && \(req\.body !== null/);
+  assert.match(functionIndex, /req\.headers\.get\("apikey"\) !== serviceKey \|\| token !== serviceKey/);
+  assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_claim"\)/);
+  assert.match(functionIndex, /status: 204/);
+  assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_assert_lease"/);
+  assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_finish"/);
+  assert.match(functionIndex, /json\(\{ ok: true, status: "processed" \}, 200, origin\)/);
+  assert.doesNotMatch(functionIndex, /console\.(?:log|error)/);
+});
+
+await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal und loggt keine Antwort", () => {
+  assert.deepEqual(
+    [...dailyWorkflow.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]),
+    ["37 4 * * *"],
+  );
+  assert.doesNotMatch(dailyWorkflow, /workflow_dispatch|push:|pull_request:/);
+  assert.equal((dailyWorkflow.match(/^\s*curl\b/gm) || []).length, 1);
+  assert.match(dailyWorkflow, /for claim_number in \$\(seq 1 10\)/);
+  assert.match(dailyWorkflow, /--request POST/);
+  assert.match(dailyWorkflow, /--connect-timeout 10/);
+  assert.match(dailyWorkflow, /--max-time 150/);
+  assert.match(dailyWorkflow, /--output \/dev\/null/);
+  assert.match(dailyWorkflow, /x-kd-radar-refresh: scheduled-v1/);
+  assert.match(dailyWorkflow, /if \[ "\$http_status" = "204" \]; then[\s\S]*?exit 0/);
+  assert.doesNotMatch(dailyWorkflow, /--retry|--location|response_file|JSON\.parse|\bcat\b/);
+  assert.doesNotMatch(dailyWorkflow, /targetId|target_id|accountId|account_id|console\.|set -x|printenv/);
+  const shell = (dailyWorkflow.match(/\n        run: \|\n([\s\S]*)$/)?.[1] || "")
+    .replace(/^          /gm, "");
+  assert.ok(shell);
+  assert.equal(spawnSync("bash", ["-n"], { input: shell }).status, 0);
 });
 
 await check("Einziger freigegebener Einstieg ist das vorhandene Live-npm-Skript mit engem Flag", () => {

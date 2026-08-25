@@ -122,7 +122,7 @@ export function validateRadarWebsearchProviderSetup(value) {
   if (!plain(value)
       || value.radarEnabled !== true
       || value.radarProviderEnabled !== true
-      || value.radarSchedulerEnabled !== false
+      || typeof value.radarSchedulerEnabled !== "boolean"
       || value.providerAllowed !== true
       || value.modelAlias !== "klein"
       || !MODEL_FORM.test(value.model)

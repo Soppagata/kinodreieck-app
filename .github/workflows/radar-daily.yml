@@ -1,0 +1,51 @@
+name: Radar daily refresh
+
+on:
+  schedule:
+    - cron: "37 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kinodreieck-radar-daily
+  cancel-in-progress: false
+
+jobs:
+  radar-daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Aktive Radar-Ziele einmal taeglich seriell pruefen
+        timeout-minutes: 30
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nicht gesetzt."
+            exit 1
+          fi
+
+          for claim_number in $(seq 1 10); do
+            http_status="$(
+              curl --silent --show-error \
+                --request POST \
+                --connect-timeout 10 \
+                --max-time 150 \
+                --output /dev/null \
+                --write-out "%{http_code}" \
+                "${SUPABASE_URL%/}/functions/v1/radar-websearch-task" \
+                --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+                --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                --header "x-kd-radar-refresh: scheduled-v1"
+            )"
+            if [ "$http_status" = "204" ]; then
+              exit 0
+            fi
+            if [ "$http_status" != "200" ]; then
+              echo "::error::Radar-Tageslauf endete mit HTTP ${http_status}; kein Retry."
+              exit 1
+            fi
+          done
