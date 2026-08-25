@@ -40,6 +40,21 @@ const RESPONSE_MODES = new Set(["structured", "partial", "degraded"]);
 const WARNING_FORM = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_WARNINGS = 8;
 
+/* Supabase Edge stellt bei einem real leeren POST einen Body-Stream bereit,
+   obwohl Content-Length 0 ist. Deshalb entscheidet der deklarierte Umfang;
+   fehlt er, bleibt jeder vorhandene Stream fail-closed verboten. */
+export function requestHasForbiddenBody(request) {
+  try {
+    const declaredLength = request?.headers?.get?.("content-length");
+    if (declaredLength !== null && declaredLength !== undefined) {
+      return !/^0+$/.test(String(declaredLength).trim());
+    }
+    return request?.body !== null;
+  } catch {
+    return true;
+  }
+}
+
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function exactKeys(value, required, optional = []) {

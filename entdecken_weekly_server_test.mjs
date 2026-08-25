@@ -8,6 +8,7 @@ import {
   ENTDECKEN_WEEKLY_REFRESH_MAX_ITEMS,
   ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS,
   evaluateEntdeckenDailyResponse,
+  requestHasForbiddenBody,
   validateEntdeckenDailyFeed,
   validateEntdeckenSourceRegistry,
 } from "./supabase/functions/entdecken-daily-task/contract.js";
@@ -66,6 +67,23 @@ const orfSource = Object.freeze({
 });
 const sources = Object.freeze([standardSource, filmAtSource, orfSource]);
 const queryContext = createEntdeckenWeeklyQueryContext("2026-08-20", "2026-W34");
+
+await check("leerer Edge-POST mit Content-Length 0 bleibt zulaessig, Nutzlast bleibt verboten", () => {
+  const edgeEmptyPost = new Request("https://project.supabase.co/functions/v1/entdecken-daily-task", {
+    method: "POST",
+    headers: { "content-length": "0" },
+    body: "",
+  });
+  const bodyPost = new Request("https://project.supabase.co/functions/v1/entdecken-daily-task", {
+    method: "POST",
+    headers: { "content-length": "2" },
+    body: "{}",
+  });
+  assert.equal(edgeEmptyPost.body === null, false);
+  assert.equal(requestHasForbiddenBody(edgeEmptyPost), false);
+  assert.equal(requestHasForbiddenBody(bodyPost), true);
+  assert.equal(requestHasForbiddenBody(new Request("https://project.supabase.co")), false);
+});
 
 function providerItem(index = 1) {
   return Object.freeze({
@@ -817,7 +835,7 @@ const appSource = fs.readFileSync("./src/App.jsx", "utf8");
 
 await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf claimen", () => {
   assert.match(functionSource, /\["GET", "POST"\]\.includes\(req\.method\)/);
-  assert.match(functionSource, /req\.body !== null/);
+  assert.match(functionSource, /requestHasForbiddenBody\(req\)/);
   assert.match(functionSource, /scheduledAuthorized = requestMode === "scheduled"/);
   assert.match(functionSource, /req\.headers\.get\("apikey"\) === serviceKey && bearerToken === serviceKey/);
   assert.match(functionSource, /publicKeyAuthorized = requestMode !== "scheduled"/);

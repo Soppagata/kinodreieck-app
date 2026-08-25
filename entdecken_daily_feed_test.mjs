@@ -399,7 +399,7 @@ await check("Migration beansprucht atomar, seedet nur zwei Quellen und hält Pub
 
 await check("Function erzwingt Own-Row-Owner plus personal_ai und bleibt schleifenfrei", () => {
   assert.match(functionSource, /req\.method !== "GET"/);
-  assert.match(functionSource, /req\.body !== null/);
+  assert.match(functionSource, /requestHasForbiddenBody\(req\)/);
   assert.match(functionSource, /kd_entdecken_daily_claim/);
   assert.match(functionSource, /kd_entdecken_daily_auftrag_starten/);
   assert.match(functionSource, /Authorization/);

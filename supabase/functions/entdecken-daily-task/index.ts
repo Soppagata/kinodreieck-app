@@ -5,7 +5,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createAnthropicEntdeckenDailyAdapter } from "./anthropicAdapter.js";
-import { validateEntdeckenDailyFeed } from "./contract.js";
+import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
 import { createEntdeckenDailyResponse } from "./responseContract.js";
 import {
@@ -96,7 +96,7 @@ export function createEntdeckenDailyHandler({
       if (!origin || !ALLOWED_ORIGINS.has(origin)) return new Response(null, { status: 403, headers: cors(origin) });
       return new Response(null, { status: 204, headers: cors(origin) });
     }
-    if (!["GET", "POST"].includes(req.method) || req.body !== null
+    if (!["GET", "POST"].includes(req.method) || requestHasForbiddenBody(req)
         || (origin !== null && !ALLOWED_ORIGINS.has(origin))) {
       return json({ ok: false, status: "disabled", feed: null }, 405, origin);
     }
