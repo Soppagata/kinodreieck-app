@@ -34,6 +34,17 @@ const REFRESH_HEADER = "X-KD-Entdecken-Refresh";
 const OWNER_REFRESH_VALUE = "owner-v1";
 const OWNER_ACCESS_KEYS = Object.freeze(["active", "personal_ai", "role"]);
 
+export class EntdeckenDailyLiveProduktfehler extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = "EntdeckenDailyLiveProduktfehler";
+    this.code = typeof code === "string" && /^[A-Z0-9_]{1,64}$/.test(code)
+      ? code : "ENTDECKEN_UNPROVEN";
+    this.exitCode = 1;
+    this.terminalCode = "ENTDECKEN_UNPROVEN";
+  }
+}
+
 export async function pruefeEntdeckenOwnerZugang({
   verbindung,
   token,
@@ -73,11 +84,33 @@ export async function pruefeEntdeckenOwnerZugang({
   return Object.freeze({ status: "owner-confirmed" });
 }
 
-function validateFunctionResponse(response, body, readbackBody, measuredCostUsdCent) {
-  if (!response?.ok) {
+/* Erst nach der serverseitigen Nachmessung darf ein fachlicher Fehler hier
+   landen. Er bleibt rot und ohne Retry, ist bei einem endlichen Kostendelta
+   aber kein unbekannter Budgetstand. */
+export function pruefeGemessenenEntdeckenAbschluss({
+  response,
+  body,
+  readbackResponse,
+  readbackBody,
+  measuredCostUsdCent,
+} = {}) {
+  if (typeof measuredCostUsdCent !== "number" || !Number.isFinite(measuredCostUsdCent)
+      || measuredCostUsdCent < 0) {
     throw new LiveSicherheitsStopp(
       "unbekannt",
+      "Entdecken-Kosten waren nach dem Providerfenster nicht verlaesslich messbar.",
+    );
+  }
+  if (!response?.ok) {
+    throw new EntdeckenDailyLiveProduktfehler(
+      "FUNCTION_HTTP",
       `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (HTTP ${response?.status ?? "?"}).`,
+    );
+  }
+  if (!readbackResponse?.ok) {
+    throw new EntdeckenDailyLiveProduktfehler(
+      "READBACK_HTTP",
+      "Entdecken-Persistenzreadback war nach dem Einzelwrite nicht verlaesslich lesbar.",
     );
   }
   try {
@@ -87,8 +120,8 @@ function validateFunctionResponse(response, body, readbackBody, measuredCostUsdC
     });
   } catch (error) {
     const diagnostic = formatiereEntdeckenLiveDiagnose(error?.diagnostic);
-    throw new LiveSicherheitsStopp(
-      "unbekannt",
+    throw new EntdeckenDailyLiveProduktfehler(
+      typeof error?.code === "string" ? error.code : "LIVE_PROOF",
       `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (${error?.code || "LIVE_PROOF"})`
         + `${diagnostic ? `: ${diagnostic}` : "."}`,
     );
@@ -170,7 +203,12 @@ export async function runEntdeckenDailyOnce({
       ? requestError
       : new LiveSicherheitsStopp("unbekannt", "Entdecken-Function war nicht verlaesslich erreichbar.");
   }
-  if (captureError) throw captureError;
+  if (captureError) {
+    throw new EntdeckenDailyLiveProduktfehler(
+      "RAW_CAPTURE_MISSING",
+      captureError.message,
+    );
+  }
   let readbackResponse;
   let readbackBody;
   try {
@@ -191,18 +229,13 @@ export async function runEntdeckenDailyOnce({
     readbackResponse = null;
     readbackBody = null;
   }
-  if (!readbackResponse?.ok) {
-    throw new LiveSicherheitsStopp(
-      "unbekannt",
-      "Entdecken-Persistenzreadback war nach dem Einzelwrite nicht verlaesslich lesbar.",
-    );
-  }
-  const proof = validateFunctionResponse(
+  const proof = pruefeGemessenenEntdeckenAbschluss({
     response,
     body,
+    readbackResponse,
     readbackBody,
-    costs.laufKostenUsdCent,
-  );
+    measuredCostUsdCent: costs.laufKostenUsdCent,
+  });
   ausgabe(
     `ENTDECKEN-TAGESFEED-EINMAL: fresh · 1 Providerrequest · 1 Suchrequest · 1 Write · Laufdelta ${costs.laufKostenUsdCent.toFixed(4)} US-Cent`,
   );
@@ -220,6 +253,11 @@ export async function main() {
     await runEntdeckenDailyOnce();
     return 0;
   } catch (error) {
+    if (error instanceof EntdeckenDailyLiveProduktfehler) {
+      console.error(`${error.terminalCode}: ${error.message}`);
+      console.error("Keine automatische Wiederholung; keine weiteren echten KI-Requests.");
+      return error.exitCode;
+    }
     const stopp = error instanceof LiveSicherheitsStopp
       ? error
       : new LiveSicherheitsStopp("unbekannt", "Entdecken-Tagesfeed-Abnahme ist fehlgeschlagen.");

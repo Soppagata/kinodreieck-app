@@ -22,6 +22,10 @@ import {
   formatiereEntdeckenLiveDiagnose,
   pruefeEntdeckenLiveAntwort,
 } from "./tools/entdecken_live_proof.mjs";
+import {
+  EntdeckenDailyLiveProduktfehler,
+  pruefeGemessenenEntdeckenAbschluss,
+} from "./tools/entdecken_daily_live.mjs";
 
 let checks = 0;
 async function check(name, fn) {
@@ -266,6 +270,7 @@ function persistedReadback(feed, receipt, fenceToken) {
 let normalResponse = null;
 let independentResponse = null;
 let storedFeed = null;
+let underfilledResponse = null;
 
 await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kosten, Save und Readback", async () => {
   let operationId = null;
@@ -475,6 +480,7 @@ await check("Echter Vier-Kandidaten-Fehler bleibt providerbewiesen und diagnosti
     adapter,
   });
   const response = createEntdeckenDailyResponse(run, adapter.telemetry());
+  underfilledResponse = response;
   assert.equal(response.refresh.status, "failed");
   assert.equal(response.failureReason, "insufficient_evidence");
   assert.equal(response.writes, 0);
@@ -506,6 +512,50 @@ await check("Echter Vier-Kandidaten-Fehler bleibt providerbewiesen und diagnosti
     assert.doesNotMatch(rendered, /https?:|Aktueller AT-Tipp|account|providerReceipt/i);
     return true;
   });
+});
+
+await check("Gemessener Unterfuellungsfehler bleibt Produktfehler statt Budget unbekannt", () => {
+  assert.ok(underfilledResponse);
+  assert.throws(() => pruefeGemessenenEntdeckenAbschluss({
+    response: { ok: true, status: 200 },
+    body: underfilledResponse,
+    readbackResponse: { ok: true, status: 200 },
+    readbackBody: null,
+    measuredCostUsdCent: underfilledResponse.providerReceipt.server.costUsdCent,
+  }), (error) => {
+    assert.ok(error instanceof EntdeckenDailyLiveProduktfehler);
+    assert.equal(error.code, "RESULT_INSUFFICIENT_EVIDENCE");
+    assert.equal(error.terminalCode, "ENTDECKEN_UNPROVEN");
+    assert.equal(error.exitCode, 1);
+    assert.match(error.message, /provider-underfilled/);
+    return true;
+  });
+});
+
+await check("Gemessener Readback-Fehler bleibt Produktfehler ohne zweiten Providerlauf", () => {
+  assert.ok(normalResponse);
+  assert.throws(() => pruefeGemessenenEntdeckenAbschluss({
+    response: { ok: true, status: 200 },
+    body: normalResponse,
+    readbackResponse: { ok: false, status: 503 },
+    readbackBody: null,
+    measuredCostUsdCent: normalResponse.providerReceipt.server.costUsdCent,
+  }), (error) => {
+    assert.ok(error instanceof EntdeckenDailyLiveProduktfehler);
+    assert.equal(error.code, "READBACK_HTTP");
+    assert.equal(error.exitCode, 1);
+    return true;
+  });
+});
+
+await check("Nicht messbarer Abschluss bleibt weiterhin BUDGET_UNBEKANNT", () => {
+  assert.throws(() => pruefeGemessenenEntdeckenAbschluss({
+    response: { ok: true, status: 200 },
+    body: normalResponse,
+    readbackResponse: { ok: true, status: 200 },
+    readbackBody: independentResponse,
+    measuredCostUsdCent: Number.NaN,
+  }), (error) => error?.name === "LiveSicherheitsStopp" && error?.exitCode === 74);
 });
 
 await check("Read-only-Fehler behaelt den bisherigen Browservertrag ohne Diagnosefeld", () => {

@@ -237,7 +237,7 @@ export const ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256 = "b8994216fc47b8002780894
    Providerrequest; der Keychain-Runner prueft ihn vor Credential- und Lockzugriff. */
 export const ENTDECKEN_SINGLE_LIVE_COMMAND =
   "npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget";
-export const ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "42b65bb7cee92a0d5d75814095fec0396cc60fdabe7045373b7a3c5465a92829";
+export const ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "b4d3e62af100647c5e029e58fc38b49475ad77926a9a2c34abff91407e9ba88a";
 export const ENTDECKEN_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "AGENTS.md", sha256: "c78326afd5d1d44654580a95462fb141ac5f49257f765d67fe782ee275a2c19f" }),
   Object.freeze({ path: "package.json", sha256: "e199a4b5741008e70cd2e1e2d13751af0d41f0c7a26d84de79b28582f5006aae" }),
@@ -248,20 +248,20 @@ export const ENTDECKEN_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerProbe.js`, sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
   Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
-  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "9482410878ac059a727be1cc8017cc04f894478cd1dbc65af185c112ff9c5546" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "47c7914765cf068de867fc522e7e9cd8b95fd9101fc924bd4139535e19c6b893" }),
   Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "e2afc606b8656a1cec38f911b50100f89b317634c20c130e52e43063af1eb623" }),
   Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
   Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "5a69b61c4ce0cb5458dc2c1cbe7e1f48979c41b4e4341da30ed8c57d43c99a9b" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
 ]);
-export const ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256 = "59582e676f38f52d43ea9dce7e5b4976f753b4d612c200404863ca5eced04c96";
+export const ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256 = "0dddfe096d67f040143b8fb8f98bb5d14792a1b598249a1801e4fc2bfcd634f0";
 
 /* Separater Exact-once-Vertrag fuer die minimale Messages-Trennprobe. Der
    Functionrelease ist derselbe wie oben; der Laufweg bindet ausschliesslich
    Owner-Keychain, Budgetwache, private Rawsenke und den einen Probe-Client. */
 export const ENTDECKEN_PROVIDER_PROBE_COMMAND =
   "npm run test:ai:live -- --entdecken-provider-probe-once --owner-approved-server-budget";
-export const ENTDECKEN_PROVIDER_PROBE_SOURCE_BUNDLE_SHA256 = "bae319d6fe1d016d841a7a60308b7cc5cad326f08f21b8541ef060aec37cf112";
+export const ENTDECKEN_PROVIDER_PROBE_SOURCE_BUNDLE_SHA256 = "32b4d1fcd5fd39edbcf673ec42d6134d906e6bcac01beeacd09e9f9e36e3a42e";
 export const ENTDECKEN_PROVIDER_PROBE_FILES = Object.freeze([
   Object.freeze({ path: "AGENTS.md", sha256: "c78326afd5d1d44654580a95462fb141ac5f49257f765d67fe782ee275a2c19f" }),
   Object.freeze({ path: "package.json", sha256: "e199a4b5741008e70cd2e1e2d13751af0d41f0c7a26d84de79b28582f5006aae" }),
@@ -272,14 +272,14 @@ export const ENTDECKEN_PROVIDER_PROBE_FILES = Object.freeze([
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerProbe.js`, sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
   Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
-  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "9482410878ac059a727be1cc8017cc04f894478cd1dbc65af185c112ff9c5546" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "47c7914765cf068de867fc522e7e9cd8b95fd9101fc924bd4139535e19c6b893" }),
   Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "e2afc606b8656a1cec38f911b50100f89b317634c20c130e52e43063af1eb623" }),
   Object.freeze({ path: "tools/entdecken_provider_probe_live.mjs", sha256: "c7846ceb1ea13ecfda7d4aae594f02cf45c24d6823284449763d79b900ce2aae" }),
   Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
   Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "5a69b61c4ce0cb5458dc2c1cbe7e1f48979c41b4e4341da30ed8c57d43c99a9b" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
 ]);
-export const ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256 = "aa12ad2382969e381c26982ef8be01c10876bcc0e755aac27278fc3277c3144e";
+export const ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256 = "6753a5f6c9e48f49604b6fc5e023dc851f0fc3170032bcf6cfb9c4d6db5f07dc";
 
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
