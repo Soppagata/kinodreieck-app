@@ -42,6 +42,7 @@ const PROVIDER_CAPTURE_PATH_BY_FILE = Object.freeze({
   "06-media-batch-extract.json": Object.freeze({ task: "media-batch-extract", vorgangId: true }),
   "07-entdecken-weekly-websearch.json": Object.freeze({ task: "entdecken-daily-task", vorgangId: false }),
   "08-radar-websearch.json": Object.freeze({ task: "radar-websearch-task", vorgangId: false }),
+  "09-entdecken-provider-probe.json": Object.freeze({ task: "entdecken-provider-probe", vorgangId: false }),
 });
 
 function pendingProviderCapture(

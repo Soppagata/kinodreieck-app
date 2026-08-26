@@ -13,6 +13,8 @@ import {
   EXIT_KONFIG,
   ENTDECKEN_DAILY_ONCE_ENV,
   ENTDECKEN_DAILY_ONCE_FLAG,
+  ENTDECKEN_PROVIDER_PROBE_ONCE_ENV,
+  ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG,
   KEYCHAIN_ACCOUNTS,
   KeychainFehler,
   KEYCHAIN_SERVICE,
@@ -180,6 +182,7 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   for (const name of [
     "KD_TESTA_PASS", "KD_OWNER_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
     ENTDECKEN_DAILY_ONCE_ENV,
+    ENTDECKEN_PROVIDER_PROBE_ONCE_ENV,
     RADAR_TARGET_AUTO_RESOLVE_ENV,
     OWNER_CORE_SIX_GUARD_ENV, PROVIDER_RAW_CAPTURE_DIR_ENV,
     PROVIDER_RAW_CAPTURE_GUARD_ENV, "KD_EVAL_JA",
@@ -651,6 +654,48 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
 }
 
 {
+  const gelesen = [];
+  const env = baueKindUmgebung({
+    modus: "ai-live",
+    ambientEnv: {
+      [ENTDECKEN_PROVIDER_PROBE_ONCE_ENV]: "ambient-verboten",
+      [PROVIDER_RAW_CAPTURE_GUARD_ENV]: "ambient-verboten",
+      [PROVIDER_RAW_CAPTURE_DIR_ENV]: "/private/tmp/ambient-verboten",
+    },
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return OWNER_GEHEIMNIS;
+    },
+    ownerApprovedServerBudget: true,
+    entdeckenProviderProbeOnce: true,
+  });
+  pruefe("Schmale Providerprobe liest ausschliesslich den Owner und setzt nur ihren internen Guard",
+    gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV] === "keychain-budget-guard-v1"
+      && !(ENTDECKEN_DAILY_ONCE_ENV in env)
+      && !(RADAR_WEBSEARCH_ONCE_ENV in env)
+      && !(PROVIDER_RAW_CAPTURE_GUARD_ENV in env)
+      && !(PROVIDER_RAW_CAPTURE_DIR_ENV in env)
+      && !(OWNER_CORE_SIX_GUARD_ENV in env));
+  let gemischtGesperrt = false;
+  try {
+    baueKindUmgebung({
+      modus: "ai-live", ambientEnv: {}, lokaleKonfig: PUBLIC,
+      keychainLeser: () => OWNER_GEHEIMNIS,
+      ownerApprovedServerBudget: true,
+      entdeckenProviderProbeOnce: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch { gemischtGesperrt = true; }
+  pruefe("Providerprobe und Produktlauf sind auch bei direkter Umgebungsbildung exklusiv",
+    gemischtGesperrt);
+}
+
+{
   const ohneOwnerUser = { ...PUBLIC };
   delete ohneOwnerUser.KD_OWNER_USER;
   let keychainGelesen = false;
@@ -932,6 +977,48 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     lokaleKonfig: PUBLIC,
     keychainLeser(account) {
       gelesen.push(account);
+      return OWNER_GEHEIMNIS;
+    },
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    entdeckenProviderProbeOnce: true,
+  });
+  pruefe("Providerprobe startet genau ihren fest verdrahteten Client hinter der Budgetwache",
+    code === 0
+      && starts.length === 1
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenProviderProbeOnceArgv.join("|")
+      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_provider_probe_live.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Providerprobe erhaelt nur Owner, Serverbudget und ihren einen internen Guard",
+    starts[0].optionen.env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
+      && !(ENTDECKEN_DAILY_ONCE_ENV in starts[0].optionen.env)
+      && !(RADAR_WEBSEARCH_ONCE_ENV in starts[0].optionen.env)
+      && !(OWNER_CORE_SIX_GUARD_ENV in starts[0].optionen.env)
+      && !(PROVIDER_RAW_CAPTURE_DIR_ENV in starts[0].optionen.env)
+      && !(PROVIDER_RAW_CAPTURE_GUARD_ENV in starts[0].optionen.env)
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !starts[0].argv.join(" ").includes(OWNER_GEHEIMNIS));
+}
+
+{
+  const starts = [];
+  const gelesen = [];
+  const spawnImpl = (programm, argv, optionen) => {
+    starts.push({ programm, argv, optionen });
+    const kind = new EventEmitter();
+    queueMicrotask(() => kind.emit("exit", 0, null));
+    return kind;
+  };
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
       return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
     },
     spawnImpl,
@@ -1025,6 +1112,34 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     fehlerAusgabe: (x) => err.push(String(x)),
   });
   pruefe("Entdecken-Einmalflag ist ohne exakte Owner-Budgetfreigabe gesperrt",
+    code === EXIT_KONFIG && err.length === 1);
+}
+
+{
+  const err = [];
+  const code = await main(["ai-live", ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG], {
+    fehlerAusgabe: (x) => err.push(String(x)),
+  });
+  pruefe("Providerprobe ist ohne exakte Owner-Budgetfreigabe gesperrt",
+    code === EXIT_KONFIG && err.length === 1);
+}
+
+{
+  const err = [];
+  const code = await main([
+    "ai-live", OWNER_SERVER_BUDGET_FLAG, ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Providerprobe akzeptiert nur die exakt freigegebene Reihenfolge",
+    code === EXIT_KONFIG && err.length === 1);
+}
+
+{
+  const err = [];
+  const code = await main([
+    "ai-live", ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG,
+    ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG, OWNER_SERVER_BUDGET_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Providerprobe darf nicht doppelt vorkommen",
     code === EXIT_KONFIG && err.length === 1);
 }
 

@@ -25,6 +25,9 @@ import {
   ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
   ENTDECKEN_HTTP_DIAGNOSTIC_FILES,
   ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256,
+  ENTDECKEN_PROVIDER_PROBE_COMMAND,
+  ENTDECKEN_PROVIDER_PROBE_FILES,
+  ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256,
   ENTDECKEN_SINGLE_LIVE_COMMAND,
   ENTDECKEN_SINGLE_LIVE_FILES,
   ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256,
@@ -48,6 +51,7 @@ import {
   deriveRadarPackageBReleaseClosure,
   requireEntdeckenEditorialSourceReleaseProvenance,
   requireEntdeckenHttpDiagnosticReleaseProvenance,
+  requireEntdeckenProviderProbeReleaseProvenance,
   requireEntdeckenSingleLiveReleaseProvenance,
   requireProviderReceiptRuntimeProvenance,
   requireRadarDailyReleaseProvenance,
@@ -765,6 +769,57 @@ await check("Entdecken-Einmallauf bindet exakten CLI-, Budget- und Quellenvertra
     },
   }), (error) => error instanceof RadarRemoteStartStop
     && error.code === "ENTDECKEN_SINGLE_LIVE_PROVENANCE_DRIFT");
+
+  const probe = requireEntdeckenProviderProbeReleaseProvenance();
+  assert.equal(
+    probe.command,
+    "npm run test:ai:live -- --entdecken-provider-probe-once --owner-approved-server-budget",
+  );
+  assert.equal(probe.command, ENTDECKEN_PROVIDER_PROBE_COMMAND);
+  assert.equal(probe.releaseSha256, ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256);
+  assert.deepEqual(probe.files, ENTDECKEN_PROVIDER_PROBE_FILES);
+  assert.equal(probe.functionReleaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
+  assert.throws(() => requireEntdeckenProviderProbeReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("tools/entdecken_provider_probe_live.mjs")
+        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_PROVIDER_PROBE_PROVENANCE_DRIFT");
+  assert.throws(() => requireEntdeckenProviderProbeReleaseProvenance({
+    requireCleanVerifier: true,
+    spawn(_program, args) {
+      if (args[0] === "ls-files") {
+        const separator = args.indexOf("--");
+        return {
+          status: 0,
+          signal: null,
+          stdout: Buffer.from(`${args.slice(separator + 1).join("\n")}\n`),
+          stderr: Buffer.alloc(0),
+        };
+      }
+      return {
+        status: 0,
+        signal: null,
+        stdout: Buffer.from(" M tools/radar_websearch_remote_start.mjs\n"),
+        stderr: Buffer.alloc(0),
+      };
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "RELEASE_CLOSURE_DIRTY");
+  assert.throws(() => requireEntdeckenProviderProbeReleaseProvenance({
+    requireCleanVerifier: true,
+    spawn() {
+      return {
+        status: 1,
+        signal: null,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.alloc(0),
+      };
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "RELEASE_CLOSURE_UNTRACKED");
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {

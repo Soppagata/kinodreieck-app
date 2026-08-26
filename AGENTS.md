@@ -14,6 +14,9 @@
   `--owner-approved-server-budget` ignoriert werden. Zulässig bleiben nur
   `npm run test:ai:live -- --owner-approved-server-budget` und
   `npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget`
+  sowie exakt einmal fuer die vom Owner am 26.08.2026 freigegebene schmale
+  Trennprobe
+  `npm run test:ai:live -- --entdecken-provider-probe-once --owner-approved-server-budget`
   sowie
   `npm run test:ai:eval -- --owner-approved-server-budget`; der atomare
   Serverdeckel, die Vor-/Nachmessung und die serielle Ausführung bleiben aktiv.
@@ -28,7 +31,12 @@
   Der explizite Entdecken-Einmallauf besitzt genau einen potenziell zahlenden
   Anbieterrequest, keinen Filmwissen-, Radar- oder sonstigen KI-Nebenpfad und
   braucht zusätzlich seinen bytegenauen lokalen Provenienznachweis.
-  Alle drei Laufwege laufen durch einen prozessübergreifenden lokalen
+  Die explizite Entdecken-Providerprobe besitzt ebenfalls genau einen
+  potenziell zahlenden Anbieterrequest: eine minimale Messages-Anfrage ohne
+  Websearch, Feed-, Lease- oder Empfehlungswrite. Sie verwirft den Text,
+  erlaubt keinen Retry oder Entdecken-Folgelauf und braucht ihren eigenen
+  bytegenauen lokalen Provenienznachweis.
+  Alle vier Laufwege laufen durch einen prozessübergreifenden lokalen
   Exklusiv-Lock strikt seriell, besitzen 135 Sekunden Request- und 15 Minuten
   Kindprozess-Zeitgrenze; Vor-/Nachmessungen sind separat auf 20 Sekunden
   begrenzt. Sie starten keine automatischen Retries. Unbekannter

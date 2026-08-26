@@ -54,6 +54,8 @@ export const RADAR_TARGET_AUTO_RESOLVE_VALUE = "owner-session-feed-v1";
 export const RADAR_ENTDECKEN_ONCE_FLAG = "--radar-entdecken-once";
 export const ENTDECKEN_DAILY_ONCE_FLAG = "--entdecken-daily-once";
 export const ENTDECKEN_DAILY_ONCE_ENV = "KD_ENTDECKEN_DAILY_ONCE_GUARD";
+export const ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG = "--entdecken-provider-probe-once";
+export const ENTDECKEN_PROVIDER_PROBE_ONCE_ENV = "KD_ENTDECKEN_PROVIDER_PROBE_ONCE_GUARD";
 
 const DATEI = fileURLToPath(import.meta.url);
 export const REPO_ROOT = resolve(dirname(DATEI), "..");
@@ -83,6 +85,7 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   RADAR_WEBSEARCH_ONCE_ENV,
   RADAR_TARGET_AUTO_RESOLVE_ENV,
   ENTDECKEN_DAILY_ONCE_ENV,
+  ENTDECKEN_PROVIDER_PROBE_ONCE_ENV,
   OWNER_CORE_SIX_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_DIR_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_ENV,
@@ -114,6 +117,15 @@ export async function pruefeEntdeckenDailyOnceProvenienz() {
   return requireEntdeckenSingleLiveReleaseProvenance();
 }
 
+export async function pruefeEntdeckenProviderProbeProvenienz({
+  requireCleanVerifier = false,
+} = {}) {
+  const { requireEntdeckenProviderProbeReleaseProvenance } = await import(
+    "./radar_websearch_remote_start.mjs"
+  );
+  return requireEntdeckenProviderProbeReleaseProvenance({ requireCleanVerifier });
+}
+
 export const MODI = Object.freeze({
   "budget-check": {
     accounts: [KEYCHAIN_ACCOUNTS.testa],
@@ -138,6 +150,12 @@ export const MODI = Object.freeze({
       "--",
       process.execPath,
       SKRIPT("entdecken_daily_live.mjs"),
+    ],
+    entdeckenProviderProbeOnceArgv: [
+      SKRIPT("ai_budget_guard.mjs"),
+      "--",
+      process.execPath,
+      SKRIPT("entdecken_provider_probe_live.mjs"),
     ],
     radarEntdeckenOnceArgv: [
       SKRIPT("ai_budget_guard.mjs"),
@@ -464,6 +482,7 @@ export function baueOwnerReadbackUmgebung({
   delete env[OWNER_CORE_SIX_GUARD_ENV];
   delete env[RADAR_WEBSEARCH_ONCE_ENV];
   delete env[ENTDECKEN_DAILY_ONCE_ENV];
+  delete env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV];
   return env;
 }
 
@@ -476,6 +495,7 @@ export function baueKindUmgebung({
   ownerApprovedServerBudget = false,
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
+  entdeckenProviderProbeOnce = false,
   radarEntdeckenOnce = false,
   ownerCoreSix = false,
 }) {
@@ -488,22 +508,29 @@ export function baueKindUmgebung({
     throw new Error("Der einmalige Radar-Websearch ist nur im AI-Live-Pfad erlaubt.");
   }
   if (entdeckenDailyOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
-      || radarWebsearchOnce || radarEntdeckenOnce)) {
+      || radarWebsearchOnce || radarEntdeckenOnce || entdeckenProviderProbeOnce)) {
     throw new Error("Der einmalige Entdecken-Lauf braucht den AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
+  if (entdeckenProviderProbeOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
+      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce)) {
+    throw new Error("Die einmalige Entdecken-Providerprobe braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
+  }
   if (radarEntdeckenOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
-      || radarWebsearchOnce || entdeckenDailyOnce)) {
+      || radarWebsearchOnce || entdeckenDailyOnce || entdeckenProviderProbeOnce)) {
     throw new Error("Der kombinierte Radar-/Entdecken-Lauf braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
   const effectiveOwnerCoreSix = ownerCoreSix
     || (modus === "ai-live" && ownerApprovedServerBudget
-      && !radarWebsearchOnce && !entdeckenDailyOnce && !radarEntdeckenOnce);
+      && !radarWebsearchOnce && !entdeckenDailyOnce
+      && !entdeckenProviderProbeOnce && !radarEntdeckenOnce);
   if (effectiveOwnerCoreSix && (modus !== "ai-live" || !ownerApprovedServerBudget
-      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce)) {
+      || radarWebsearchOnce || entdeckenDailyOnce
+      || entdeckenProviderProbeOnce || radarEntdeckenOnce)) {
     throw new Error("Die Owner-Kernphase braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
   const ownerCredentialLane = modus === "ai-live"
-    && (effectiveOwnerCoreSix || entdeckenDailyOnce || radarEntdeckenOnce);
+    && (effectiveOwnerCoreSix || entdeckenDailyOnce
+      || entdeckenProviderProbeOnce || radarEntdeckenOnce);
 
   const env = harmloseBasis(ambientEnv);
   for (const name of OEFFENTLICHE_NAMEN) {
@@ -588,6 +615,9 @@ export function baueKindUmgebung({
     env[RADAR_WEBSEARCH_ONCE_ENV] = "keychain-budget-guard-v1";
   }
   if (entdeckenDailyOnce) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
+  if (entdeckenProviderProbeOnce) {
+    env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV] = "keychain-budget-guard-v1";
+  }
   if (radarEntdeckenOnce) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
   if (effectiveOwnerCoreSix) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
   return env;
@@ -603,13 +633,21 @@ export async function starteModus({
   ownerApprovedServerBudget = false,
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
+  entdeckenProviderProbeOnce = false,
   radarEntdeckenOnce = false,
+  requireCleanProbeProvenance = false,
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
   if (entdeckenDailyOnce) await pruefeEntdeckenDailyOnceProvenienz();
+  if (entdeckenProviderProbeOnce) {
+    await pruefeEntdeckenProviderProbeProvenienz({
+      requireCleanVerifier: requireCleanProbeProvenance,
+    });
+  }
   const ownerCoreSix = modus === "ai-live" && ownerApprovedServerBudget
-    && !radarWebsearchOnce && !entdeckenDailyOnce && !radarEntdeckenOnce;
+    && !radarWebsearchOnce && !entdeckenDailyOnce
+    && !entdeckenProviderProbeOnce && !radarEntdeckenOnce;
   const env = baueKindUmgebung({
     modus,
     ambientEnv,
@@ -619,6 +657,7 @@ export async function starteModus({
     ownerApprovedServerBudget,
     radarWebsearchOnce,
     entdeckenDailyOnce,
+    entdeckenProviderProbeOnce,
     radarEntdeckenOnce,
     ownerCoreSix,
   });
@@ -631,7 +670,9 @@ export async function starteModus({
         ? definition.radarWebsearchOnceArgv
         : (entdeckenDailyOnce
           ? definition.entdeckenDailyOnceArgv
-          : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv));
+          : (entdeckenProviderProbeOnce
+            ? definition.entdeckenProviderProbeOnceArgv
+            : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv)));
       const kind = spawnImpl(process.execPath, argv, {
         cwd: REPO_ROOT,
         env,
@@ -675,16 +716,22 @@ export async function main(
   const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
   const entdeckenDailyOnce = rest.includes(ENTDECKEN_DAILY_ONCE_FLAG);
+  const entdeckenProviderProbeOnce = rest.includes(ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG);
   const radarEntdeckenOnce = rest.includes(RADAR_ENTDECKEN_ONCE_FLAG);
   const entdeckenBefehlExakt = modus === "ai-live"
     && rest.length === 2
     && rest[0] === ENTDECKEN_DAILY_ONCE_FLAG
+    && rest[1] === OWNER_SERVER_BUDGET_FLAG;
+  const entdeckenProviderProbeBefehlExakt = modus === "ai-live"
+    && rest.length === 2
+    && rest[0] === ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG
     && rest[1] === OWNER_SERVER_BUDGET_FLAG;
   /* Der exakte Ownerbefehl ohne Sonderflag startet einen einzigen Smoke mit
      der Sechser-Kernphase sowie je genau einem Entdecken- und Radar-Pfad. */
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
       && arg !== ENTDECKEN_DAILY_ONCE_FLAG && arg !== RADAR_ENTDECKEN_ONCE_FLAG
+      && arg !== ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG
   ));
   const confirmPaid = bezahlt
     && ohneSonderflags.length === 1
@@ -694,21 +741,25 @@ export async function main(
   const radarFlagErlaubt = !radarWebsearchOnce || modus === "ai-live";
   const entdeckenFlagErlaubt = !entdeckenDailyOnce
     || (ownerApprovedServerBudget && entdeckenBefehlExakt);
+  const entdeckenProviderProbeFlagErlaubt = !entdeckenProviderProbeOnce
+    || (ownerApprovedServerBudget && entdeckenProviderProbeBefehlExakt);
   const combinedFlagErlaubt = !radarEntdeckenOnce || modus === "ai-live";
   const liveSonderpfade = [
-    radarWebsearchOnce, entdeckenDailyOnce, radarEntdeckenOnce,
+    radarWebsearchOnce, entdeckenDailyOnce, entdeckenProviderProbeOnce, radarEntdeckenOnce,
   ].filter(Boolean).length;
   const argumenteGueltig = bezahlt
     ? confirmPaid && ohneSonderflags.length === 1
     : ohneSonderflags.length === 0;
   if (!MODI[modus] || !flagErlaubt || !radarFlagErlaubt || !entdeckenFlagErlaubt
-    || !combinedFlagErlaubt || !argumenteGueltig || liveSonderpfade > 1
+    || !entdeckenProviderProbeFlagErlaubt || !combinedFlagErlaubt
+    || !argumenteGueltig || liveSonderpfade > 1
     || rest.filter((arg) => arg === OWNER_SERVER_BUDGET_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_WEBSEARCH_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === ENTDECKEN_DAILY_ONCE_FLAG).length > 1
+    || rest.filter((arg) => arg === ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_ENTDECKEN_ONCE_FLAG).length > 1) {
     fehlerAusgabe(
-      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${ENTDECKEN_DAILY_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
+      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${ENTDECKEN_DAILY_ONCE_FLAG}|${ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
       + `[${OWNER_SERVER_BUDGET_FLAG}] | `
       + "profile-contract | "
       + `ai-eval --confirm-paid [${OWNER_SERVER_BUDGET_FLAG}] | rls`,
@@ -724,7 +775,9 @@ export async function main(
       ownerApprovedServerBudget,
       radarWebsearchOnce,
       entdeckenDailyOnce,
+      entdeckenProviderProbeOnce,
       radarEntdeckenOnce,
+      requireCleanProbeProvenance: entdeckenProviderProbeOnce,
     });
   } catch (error) {
     const keychain = error instanceof KeychainFehler;

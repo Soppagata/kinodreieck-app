@@ -9,6 +9,13 @@ import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.
 import { runEntdeckenDailyRefresh } from "./runner.js";
 import { createEntdeckenDailyResponse } from "./responseContract.js";
 import {
+  createAnthropicEntdeckenProviderProbe,
+  ENTDECKEN_PROVIDER_PROBE_HEADER,
+  ENTDECKEN_PROVIDER_PROBE_HEADER_VALUE,
+  ENTDECKEN_PROVIDER_PROBE_PROMPT_VERSION,
+  ENTDECKEN_PROVIDER_PROBE_TASK,
+} from "./providerProbe.js";
+import {
   PROVIDER_DIAGNOSTIC_ENV,
   PROVIDER_DIAGNOSTIC_HEADER,
   providerDiagnosticAccess,
@@ -29,7 +36,7 @@ const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}`,
+    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}, ${ENTDECKEN_PROVIDER_PROBE_HEADER}`,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -92,6 +99,7 @@ export function createEntdeckenDailyHandler({
   return async function handler(req: Request): Promise<Response> {
     const origin = req.headers.get("Origin");
     const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
+    const providerProbeHeader = req.headers.get(ENTDECKEN_PROVIDER_PROBE_HEADER);
     if (req.method === "OPTIONS") {
       if (!origin || !ALLOWED_ORIGINS.has(origin)) return new Response(null, { status: 403, headers: cors(origin) });
       return new Response(null, { status: 204, headers: cors(origin) });
@@ -106,6 +114,11 @@ export function createEntdeckenDailyHandler({
       : req.method === "POST" && refreshHeader === OWNER_REFRESH_VALUE ? "owner"
       : null;
     if (!requestMode) {
+      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
+    if (providerProbeHeader !== null
+        && (requestMode !== "owner"
+          || providerProbeHeader !== ENTDECKEN_PROVIDER_PROBE_HEADER_VALUE)) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
@@ -170,6 +183,115 @@ export function createEntdeckenDailyHandler({
     }
     if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
+
+    /* Der Probeheader wird nur im bereits voll bestaetigten Ownerpfad und nur
+       zusammen mit der privaten Providerdiagnose akzeptiert. Der fruehe
+       Ruecksprung liegt bewusst vor Repository, Claim und Feedlogik. */
+    if (providerProbeHeader === ENTDECKEN_PROVIDER_PROBE_HEADER_VALUE) {
+      if (requestMode !== "owner" || !ownerRefreshConfirmed
+          || !ownerRefreshAccountId || !providerDiagnostic.allowed) {
+        return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+      }
+      try {
+        const probe = createAnthropicEntdeckenProviderProbe({
+          apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
+          fetchImpl,
+          async loadSetup() {
+            const [providerResult, limitsResult] = await Promise.all([
+              admin.rpc("kd_private_provider_allowed", { p_provider_id: "anthropic" }),
+              admin.from("kd_ai_limits")
+                .select("schluessel,wert")
+                .in("schluessel", [
+                  "anbieter_request_max_usd_cent",
+                  "modell_alias",
+                  "preise_usd_cent_pro_mtok",
+                  "task_max_reservierung_usd_cent",
+                  "task_modell",
+                  "timeout_ms",
+                ]),
+            ]);
+            if (providerResult.error || limitsResult.error) {
+              throw new Error("entdecken-provider-probe-setup-unavailable");
+            }
+            const limits = limitRows(limitsResult.data);
+            const taskModels = limits.get("task_modell") as Record<string, unknown> | undefined;
+            const aliases = limits.get("modell_alias") as Record<string, unknown> | undefined;
+            const taskCaps = limits.get("task_max_reservierung_usd_cent") as Record<string, unknown> | undefined;
+            const prices = limits.get("preise_usd_cent_pro_mtok") as Record<string, Record<string, unknown>> | undefined;
+            const modelAlias = taskModels?.["entdecken-daily"];
+            const model = typeof modelAlias === "string" ? aliases?.[modelAlias] : null;
+            const price = typeof model === "string" ? prices?.[model] : null;
+            return {
+              providerAllowed: providerResult.data?.ok === true
+                && providerResult.data?.code === "PROVIDER_ALLOWED",
+              modelAlias,
+              model,
+              inputPriceUsdCentPerMtok: price?.in,
+              outputPriceUsdCentPerMtok: price?.out,
+              taskCapUsdCent: taskCaps?.["entdecken-daily"],
+              globalRequestCapUsdCent: limits.get("anbieter_request_max_usd_cent"),
+              timeoutMs: limits.get("timeout_ms"),
+            };
+          },
+          async reserveCost({ operationId, reservationUsdCent, providerRequests }) {
+            if (providerRequests !== 1) return { ok: false, logId: null };
+            const { data, error } = await admin.rpc("kd_ai_auftrag_starten", {
+              p_account: ownerRefreshAccountId,
+              p_task: ENTDECKEN_PROVIDER_PROBE_TASK,
+              p_vorgang: operationId,
+              p_modell_alias: "klein",
+              p_prompt_version: ENTDECKEN_PROVIDER_PROBE_PROMPT_VERSION,
+              p_profil_version: null,
+              p_reservierung: reservationUsdCent,
+            });
+            if (error) throw error;
+            return { ok: data?.ok === true, logId: data?.log_id };
+          },
+          async settleCost({
+            logId, status, model, inputTokens, outputTokens, costUsdCent, errorClass,
+          }) {
+            const { error } = await admin.rpc("kd_ai_auftrag_beenden", {
+              p_id: logId,
+              p_status: status,
+              p_modell: model,
+              p_input_tokens: inputTokens,
+              p_output_tokens: outputTokens,
+              p_kosten: costUsdCent,
+              p_fehlerklasse: errorClass,
+            });
+            if (error) throw error;
+          },
+          async readSettledCost({ logId, operationId }) {
+            const { data, error } = await admin.from("kd_ai_log")
+              .select("id,account_id,vorgang_id,task,status,kosten_usd_cent")
+              .eq("id", logId)
+              .eq("vorgang_id", operationId)
+              .maybeSingle();
+            if (error || !data || data.account_id !== ownerRefreshAccountId) {
+              throw error || new Error("entdecken-provider-probe-log-unavailable");
+            }
+            return {
+              logId: data.id,
+              operationId: data.vorgang_id,
+              task: data.task,
+              status: data.status,
+              costUsdCent: Number(data.kosten_usd_cent),
+            };
+          },
+        });
+        const outcome = await probe.run();
+        return json({
+          ok: outcome.safe.cause === "authenticated",
+          status: "provider_probe",
+          probe: outcome.safe,
+          ...(typeof outcome.rawResponse === "string"
+            ? providerDiagnosticField(outcome.rawResponse)
+            : {}),
+        }, 200, origin);
+      } catch {
+        return json({ ok: false, status: "provider_probe_error", probe: null }, 503, origin);
+      }
     }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
