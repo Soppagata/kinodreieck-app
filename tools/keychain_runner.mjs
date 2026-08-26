@@ -52,7 +52,7 @@ export const RADAR_WEBSEARCH_ONCE_ENV = "KD_RADAR_WEBSEARCH_ONCE_GUARD";
 export const RADAR_TARGET_AUTO_RESOLVE_ENV = "KD_RADAR_TARGET_AUTO_RESOLVE_GUARD";
 export const RADAR_TARGET_AUTO_RESOLVE_VALUE = "owner-session-feed-v1";
 export const RADAR_ENTDECKEN_ONCE_FLAG = "--radar-entdecken-once";
-export const ENTDECKEN_DAILY_ONCE_REQUEST_ENV = "KD_ENTDECKEN_DAILY_ONCE_REQUEST";
+export const ENTDECKEN_DAILY_ONCE_FLAG = "--entdecken-daily-once";
 export const ENTDECKEN_DAILY_ONCE_ENV = "KD_ENTDECKEN_DAILY_ONCE_GUARD";
 
 const DATEI = fileURLToPath(import.meta.url);
@@ -82,7 +82,6 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   OWNER_SERVER_BUDGET_ENV,
   RADAR_WEBSEARCH_ONCE_ENV,
   RADAR_TARGET_AUTO_RESOLVE_ENV,
-  ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
   ENTDECKEN_DAILY_ONCE_ENV,
   OWNER_CORE_SIX_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_DIR_ENV,
@@ -107,6 +106,13 @@ const RADAR_TARGET_FORM = /^[a-z][a-z0-9_-]{1,31}:[^\s]{1,150}$/i;
 const RADAR_AUTO_TARGET_TYPES = new Set(["work", "series", "person", "franchise"]);
 
 const SKRIPT = (name) => resolve(REPO_ROOT, "tools", name);
+
+export async function pruefeEntdeckenDailyOnceProvenienz() {
+  const { requireEntdeckenSingleLiveReleaseProvenance } = await import(
+    "./radar_websearch_remote_start.mjs"
+  );
+  return requireEntdeckenSingleLiveReleaseProvenance();
+}
 
 export const MODI = Object.freeze({
   "budget-check": {
@@ -601,6 +607,7 @@ export async function starteModus({
 }) {
   const definition = MODI[modus];
   if (!definition) throw new Error("Unbekannter Schlüsselbund-Lauf.");
+  if (entdeckenDailyOnce) await pruefeEntdeckenDailyOnceProvenienz();
   const ownerCoreSix = modus === "ai-live" && ownerApprovedServerBudget
     && !radarWebsearchOnce && !entdeckenDailyOnce && !radarEntdeckenOnce;
   const env = baueKindUmgebung({
@@ -667,14 +674,17 @@ export async function main(
   const bezahlt = MODI[modus]?.bezahlt === true;
   const ownerApprovedServerBudget = rest.includes(OWNER_SERVER_BUDGET_FLAG);
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
+  const entdeckenDailyOnce = rest.includes(ENTDECKEN_DAILY_ONCE_FLAG);
   const radarEntdeckenOnce = rest.includes(RADAR_ENTDECKEN_ONCE_FLAG);
+  const entdeckenBefehlExakt = modus === "ai-live"
+    && rest.length === 2
+    && rest[0] === ENTDECKEN_DAILY_ONCE_FLAG
+    && rest[1] === OWNER_SERVER_BUDGET_FLAG;
   /* Der exakte Ownerbefehl ohne Sonderflag startet einen einzigen Smoke mit
      der Sechser-Kernphase sowie je genau einem Entdecken- und Radar-Pfad. */
-  const entdeckenDailyOnce = process.env[ENTDECKEN_DAILY_ONCE_REQUEST_ENV]
-    === "remote-window-v1";
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
-      && arg !== RADAR_ENTDECKEN_ONCE_FLAG
+      && arg !== ENTDECKEN_DAILY_ONCE_FLAG && arg !== RADAR_ENTDECKEN_ONCE_FLAG
   ));
   const confirmPaid = bezahlt
     && ohneSonderflags.length === 1
@@ -682,17 +692,23 @@ export async function main(
   const flagErlaubt = !ownerApprovedServerBudget
     || ["ai-live", "ai-eval"].includes(modus);
   const radarFlagErlaubt = !radarWebsearchOnce || modus === "ai-live";
+  const entdeckenFlagErlaubt = !entdeckenDailyOnce
+    || (ownerApprovedServerBudget && entdeckenBefehlExakt);
   const combinedFlagErlaubt = !radarEntdeckenOnce || modus === "ai-live";
+  const liveSonderpfade = [
+    radarWebsearchOnce, entdeckenDailyOnce, radarEntdeckenOnce,
+  ].filter(Boolean).length;
   const argumenteGueltig = bezahlt
     ? confirmPaid && ohneSonderflags.length === 1
     : ohneSonderflags.length === 0;
-  if (!MODI[modus] || !flagErlaubt || !radarFlagErlaubt || !combinedFlagErlaubt
-    || !argumenteGueltig || (radarWebsearchOnce && radarEntdeckenOnce)
+  if (!MODI[modus] || !flagErlaubt || !radarFlagErlaubt || !entdeckenFlagErlaubt
+    || !combinedFlagErlaubt || !argumenteGueltig || liveSonderpfade > 1
     || rest.filter((arg) => arg === OWNER_SERVER_BUDGET_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_WEBSEARCH_ONCE_FLAG).length > 1
+    || rest.filter((arg) => arg === ENTDECKEN_DAILY_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_ENTDECKEN_ONCE_FLAG).length > 1) {
     fehlerAusgabe(
-      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
+      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${ENTDECKEN_DAILY_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
       + `[${OWNER_SERVER_BUDGET_FLAG}] | `
       + "profile-contract | "
       + `ai-eval --confirm-paid [${OWNER_SERVER_BUDGET_FLAG}] | rls`,

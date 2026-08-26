@@ -12,7 +12,7 @@ import {
   EXIT_KEYCHAIN,
   EXIT_KONFIG,
   ENTDECKEN_DAILY_ONCE_ENV,
-  ENTDECKEN_DAILY_ONCE_REQUEST_ENV,
+  ENTDECKEN_DAILY_ONCE_FLAG,
   KEYCHAIN_ACCOUNTS,
   KeychainFehler,
   KEYCHAIN_SERVICE,
@@ -179,7 +179,7 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && config.KD_ORIGIN === PUBLIC.KD_ORIGIN);
   for (const name of [
     "KD_TESTA_PASS", "KD_OWNER_PASS", "KD_AI_AUTONOM_LIMIT_USD_CENT", OWNER_SERVER_BUDGET_ENV,
-    ENTDECKEN_DAILY_ONCE_REQUEST_ENV, ENTDECKEN_DAILY_ONCE_ENV,
+    ENTDECKEN_DAILY_ONCE_ENV,
     RADAR_TARGET_AUTO_RESOLVE_ENV,
     OWNER_CORE_SIX_GUARD_ENV, PROVIDER_RAW_CAPTURE_DIR_ENV,
     PROVIDER_RAW_CAPTURE_GUARD_ENV, "KD_EVAL_JA",
@@ -425,6 +425,8 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && !keychainSource.includes("createPrivateProviderRawDirectory")
       && !keychainSource.includes("rawCaptureDirectoryFactory")
       && !smokeSource.includes(PROVIDER_DIAGNOSTIC_HEADER));
+  pruefe("Entdecken-Einmallauf besitzt keinen versteckten Environment-Einstieg mehr",
+    !keychainSource.includes("KD_ENTDECKEN_DAILY_ONCE_REQUEST"));
 }
 
 {
@@ -1019,6 +1021,24 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
 
 {
   const err = [];
+  const code = await main(["ai-live", ENTDECKEN_DAILY_ONCE_FLAG], {
+    fehlerAusgabe: (x) => err.push(String(x)),
+  });
+  pruefe("Entdecken-Einmalflag ist ohne exakte Owner-Budgetfreigabe gesperrt",
+    code === EXIT_KONFIG && err.length === 1);
+}
+
+{
+  const err = [];
+  const code = await main([
+    "ai-live", OWNER_SERVER_BUDGET_FLAG, ENTDECKEN_DAILY_ONCE_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Entdecken-Einmalflag akzeptiert nur die exakt freigegebene Reihenfolge",
+    code === EXIT_KONFIG && err.length === 1);
+}
+
+{
+  const err = [];
   const code = await main(["ai-live", RADAR_WEBSEARCH_ONCE_FLAG, RADAR_ENTDECKEN_ONCE_FLAG], {
     fehlerAusgabe: (x) => err.push(String(x)),
   });
@@ -1028,10 +1048,40 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
 
 {
   const err = [];
+  const code = await main([
+    "ai-live", RADAR_WEBSEARCH_ONCE_FLAG, ENTDECKEN_DAILY_ONCE_FLAG,
+    OWNER_SERVER_BUDGET_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Radar- und Entdecken-Einzelpfad sind gegenseitig exklusiv",
+    code === EXIT_KONFIG && err.length > 0);
+}
+
+{
+  const err = [];
+  const code = await main([
+    "ai-live", ENTDECKEN_DAILY_ONCE_FLAG, ENTDECKEN_DAILY_ONCE_FLAG,
+    OWNER_SERVER_BUDGET_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Entdecken-Einmalflag darf nicht doppelt vorkommen",
+    code === EXIT_KONFIG && err.length > 0);
+}
+
+{
+  const err = [];
   const code = await main(["ai-eval", "--confirm-paid", RADAR_WEBSEARCH_ONCE_FLAG], {
     fehlerAusgabe: (x) => err.push(String(x)),
   });
   pruefe("Radar-Einmalflag ist außerhalb von ai-live gesperrt",
+    code === EXIT_KONFIG && err.length > 0);
+}
+
+{
+  const err = [];
+  const code = await main([
+    "ai-eval", "--confirm-paid", ENTDECKEN_DAILY_ONCE_FLAG,
+    OWNER_SERVER_BUDGET_FLAG,
+  ], { fehlerAusgabe: (x) => err.push(String(x)) });
+  pruefe("Entdecken-Einmalflag ist außerhalb von ai-live gesperrt",
     code === EXIT_KONFIG && err.length > 0);
 }
 

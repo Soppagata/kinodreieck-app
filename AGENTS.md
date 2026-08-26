@@ -13,6 +13,8 @@
   500-US-Cent-Ersatzgrenze darf mit dem exakten Zusatz
   `--owner-approved-server-budget` ignoriert werden. Zulässig bleiben nur
   `npm run test:ai:live -- --owner-approved-server-budget` und
+  `npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget`
+  sowie
   `npm run test:ai:eval -- --owner-approved-server-budget`; der atomare
   Serverdeckel, die Vor-/Nachmessung und die serielle Ausführung bleiben aktiv.
 - Unabhängig von dieser Owner-Freigabe gilt je zahlendem Anbieterrequest ein
@@ -23,8 +25,11 @@
 - Rauchprobe und Eval haben feste maximale zahlende/potenziell zahlende
   Anbieterrequest-Zahlen (9 bzw. 20). Die Rauchprobe besitzt zusätzlich genau
   eine tokenfreie, ebenfalls gelockte und zeitbegrenzte Modelldiagnose (P8).
-  Beide laufen durch einen prozessübergreifenden lokalen Exklusiv-Lock strikt
-  seriell, besitzen 135 Sekunden Request- und 15 Minuten
+  Der explizite Entdecken-Einmallauf besitzt genau einen potenziell zahlenden
+  Anbieterrequest, keinen Filmwissen-, Radar- oder sonstigen KI-Nebenpfad und
+  braucht zusätzlich seinen bytegenauen lokalen Provenienznachweis.
+  Alle drei Laufwege laufen durch einen prozessübergreifenden lokalen
+  Exklusiv-Lock strikt seriell, besitzen 135 Sekunden Request- und 15 Minuten
   Kindprozess-Zeitgrenze; Vor-/Nachmessungen sind separat auf 20 Sekunden
   begrenzt. Sie starten keine automatischen Retries. Unbekannter
   Kostenstand, Timeout oder Limit beendet den Lauf sofort.

@@ -207,6 +207,28 @@ export const ENTDECKEN_EDITORIAL_SOURCE_MIGRATION = Object.freeze({
 });
 export const ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256 = "b97406976abefb5656ffaf724cdff3eb850e789745a96c3ed343f84c3e40f4ee";
 
+/* Eigener Bytevertrag fuer den autorisierten Entdecken-Einmallauf. Er bindet
+   den erlaubten npm-Einstieg, Budget-/Keychain-/Readback-Waechter und den
+   aktuellen Entdecken-Quellenrelease. Er deployt nichts und startet keinen
+   Providerrequest; der Keychain-Runner prueft ihn vor Credential- und Lockzugriff. */
+export const ENTDECKEN_SINGLE_LIVE_COMMAND =
+  "npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget";
+export const ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "0206434c600303a0435ebeb8697a816c21ba811a14370182602cc42a2b030d74";
+export const ENTDECKEN_SINGLE_LIVE_FILES = Object.freeze([
+  Object.freeze({ path: "AGENTS.md", sha256: "58cce032492b212cc09171f96a626143c166dad2d86ee0ee1867ff4ef67ea859" }),
+  Object.freeze({ path: "package.json", sha256: "cd9fbe6bc248645cc280f8e0991098f914b13e38cd403819664eaae4646ff1a8" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
+  Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "c8d6f4f0fbb18b2d743f68ea872f5cc70346ada06de1dbfabe841e32e12fb5f9" }),
+  Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "f8946f4ec3520c886e0efd8323470b7a21c2409980bb94a3b2b869c52c320c86" }),
+  Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
+  Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "8455d14982903ec27c07fdc38338188be947aacbc2231fabd0cdbdb5c7555037" }),
+  Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "f29718f9da9518794e5354aa88e83b3b0264274426bf2f4183523ce63b5b8d06" }),
+]);
+export const ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256 = "67b02601d36f8632eb2e94606b153904ad6834f9f56a58d61280177ef8613003";
+
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
    bindet stattdessen die aktuelle Runtime, genau eine additive Migration und
@@ -685,6 +707,36 @@ export function requireEntdeckenEditorialSourceReleaseProvenance(options = {}) {
     releaseSha256,
     files,
     migration: ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
+  });
+}
+
+export function requireEntdeckenSingleLiveReleaseProvenance(options = {}) {
+  const sourceRelease = requireEntdeckenEditorialSourceReleaseProvenance(options);
+  const files = requireExactFileRows(
+    ENTDECKEN_SINGLE_LIVE_FILES,
+    ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_SINGLE_LIVE_PROVENANCE_DRIFT",
+    options,
+  );
+  const commandSha256 = createHash("sha256")
+    .update(ENTDECKEN_SINGLE_LIVE_COMMAND).digest("hex");
+  const rows = [
+    { kind: "entdecken-source-release", name: "entdecken-editorial-sources-v2", sha256: sourceRelease.releaseSha256 },
+    { kind: "live-tooling", name: "entdecken-daily-once", sha256: ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 },
+    { kind: "command", name: ENTDECKEN_SINGLE_LIVE_COMMAND, sha256: commandSha256 },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256) {
+    stop(
+      "ENTDECKEN_SINGLE_LIVE_PROVENANCE_DRIFT",
+      "Lokaler Entdecken-Einmallaufvertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    command: ENTDECKEN_SINGLE_LIVE_COMMAND,
+    releaseSha256,
+    files,
+    sourceReleaseSha256: sourceRelease.releaseSha256,
   });
 }
 

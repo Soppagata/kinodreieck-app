@@ -23,6 +23,9 @@ import {
   ENTDECKEN_EDITORIAL_SOURCE_FILES,
   ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
   ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
+  ENTDECKEN_SINGLE_LIVE_COMMAND,
+  ENTDECKEN_SINGLE_LIVE_FILES,
+  ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256,
   PROVIDER_RECEIPT_RUNTIME_FILES,
   PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256,
   RADAR_DAILY_COMMIT,
@@ -42,6 +45,7 @@ import {
   createRadarRemotePreflightOnce,
   deriveRadarPackageBReleaseClosure,
   requireEntdeckenEditorialSourceReleaseProvenance,
+  requireEntdeckenSingleLiveReleaseProvenance,
   requireProviderReceiptRuntimeProvenance,
   requireRadarDailyReleaseProvenance,
   runRadarSupabaseVersionProbe,
@@ -725,6 +729,26 @@ await check("Entdecken-Quellenrelease bindet nur Runtime und Quellenmigration by
     },
   }), (error) => error instanceof RadarRemoteStartStop
     && error.code === "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT");
+});
+
+await check("Entdecken-Einmallauf bindet exakten CLI-, Budget- und Quellenvertrag bytegenau", () => {
+  const proof = requireEntdeckenSingleLiveReleaseProvenance();
+  assert.equal(
+    proof.command,
+    "npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget",
+  );
+  assert.equal(proof.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
+  assert.equal(proof.releaseSha256, ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256);
+  assert.deepEqual(proof.files, ENTDECKEN_SINGLE_LIVE_FILES);
+  assert.equal(proof.sourceReleaseSha256, ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256);
+  assert.throws(() => requireEntdeckenSingleLiveReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("tools/keychain_runner.mjs")
+        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_SINGLE_LIVE_PROVENANCE_DRIFT");
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {
