@@ -50,6 +50,8 @@ import {
   captureProviderRawResponse,
   createPrivateProviderRawDirectory,
   finalizeProviderCapture,
+  finalizeProviderFreeCapture,
+  isProviderFreeCapture,
   isZeroCostUnprovenCapture,
   providerDiagnosticHeaders,
 } from "./tools/provider_raw_capture.mjs";
@@ -312,6 +314,10 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
   pruefe("Alter Rawcapture-Helfer bleibt bei exaktem Nulldelta unbelegt und blockiert keinen Aufrufer",
     isZeroCostUnprovenCapture(finalisiert)
       && naechsterPfadLaeufe === 1);
+  const providerfrei = finalizeProviderFreeCapture(pending, 0);
+  pruefe("Nur der explizite Vor-Provider-Abschluss macht ein Nulldelta providerfrei",
+    isProviderFreeCapture(providerfrei, "provider-probe-not-started")
+      && !isZeroCostUnprovenCapture(providerfrei));
   pruefe("P12 mit positiven Kosten ohne Rawpayload stoppt weiterhin fail-closed",
     positiveKostenGesperrt);
   pruefe("P12 mit unbekannten Kosten ohne Rawpayload stoppt weiterhin fail-closed",

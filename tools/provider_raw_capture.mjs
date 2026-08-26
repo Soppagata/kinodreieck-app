@@ -240,6 +240,33 @@ export function finalizeProviderCapture(capture, measuredCostUsdCent) {
   });
 }
 
+/* Ein Nulldelta allein belegt noch nicht, ob der Provider erreicht wurde. Nur
+   ein separater, pfadspezifischer Vor-Provider-Beleg darf deshalb aus einem
+   pending Capture einen providerfreien Abschluss machen. Der allgemeine
+   `finalizeProviderCapture` bleibt fuer alle anderen Nulldelta-Faelle bewusst
+   UNPROVEN. */
+export function finalizeProviderFreeCapture(
+  capture,
+  measuredCostUsdCent,
+  { failureClass = "provider-probe-not-started" } = {},
+) {
+  const finalized = finalizeProviderCapture(capture, measuredCostUsdCent);
+  if (finalized?.proofState !== "unproven"
+      || finalized.providerRequests !== null
+      || typeof failureClass !== "string"
+      || !SAFE_DIAGNOSTIC_FORM.test(failureClass)) {
+    throw new Error("Providerfreier Capture-Abschluss besitzt keinen sicheren Vor-Provider-Beleg.");
+  }
+  return Object.freeze({
+    ...finalized,
+    proofState: "provider-free",
+    providerRequests: 0,
+    attemptedProviderRequests: 0,
+    providerReached: false,
+    failureClass,
+  });
+}
+
 export function isZeroCostUnprovenCapture(capture) {
   return capture?.proofState === "unproven"
     && capture.captureState === "pending-no-raw"
@@ -248,4 +275,16 @@ export function isZeroCostUnprovenCapture(capture) {
     && capture.attemptedProviderRequests === 1
     && capture.potentialProviderRequests === 1
     && capture.provenProviderRequests === 0;
+}
+
+export function isProviderFreeCapture(capture, failureClass = null) {
+  return capture?.proofState === "provider-free"
+    && capture.captureState === "pending-no-raw"
+    && capture.measuredCostUsdCent === 0
+    && capture.providerRequests === 0
+    && capture.attemptedProviderRequests === 0
+    && capture.potentialProviderRequests === 1
+    && capture.provenProviderRequests === 0
+    && capture.providerReached === false
+    && (failureClass === null || capture.failureClass === failureClass);
 }

@@ -36,6 +36,9 @@
   Websearch, Feed-, Lease- oder Empfehlungswrite. Sie verwirft den Text,
   erlaubt keinen Retry oder Entdecken-Folgelauf und braucht ihren eigenen
   bytegenauen lokalen Provenienznachweis.
+  Websearch-Trefferzahlen sind kein Budgetparameter: Vorab begrenzt werden die
+  Zahl der Toolaufrufe (`max_uses`), die Ausgabetokens (`max_tokens`), die
+  hinterlegten Modell-/Toolpreise sowie die festen Request- und Laufdeckel.
   Alle vier Laufwege laufen durch einen prozessübergreifenden lokalen
   Exklusiv-Lock strikt seriell, besitzen 135 Sekunden Request- und 15 Minuten
   Kindprozess-Zeitgrenze; Vor-/Nachmessungen sind separat auf 20 Sekunden
@@ -48,7 +51,18 @@
   echten KI-Tests sofort einzustellen. Der Agent muss Max im Chat den Stand
   mitteilen und auf ausdrückliche Freigabe warten. Die Grenze darf nicht
   autonom erhöht, zurückgesetzt oder umgangen werden.
-- Bei `BUDGET_UNBEKANNT` gilt dieselbe Sperre: Ein nicht messbarer Verbrauch
-  ist keine Erlaubnis.
+- `BUDGET_UNBEKANNT` ist ausschliesslich fuer einen tatsaechlich nicht
+  verlaesslich lesbaren oder unmonotonen serverseitigen Vor-/Nachstand, eine
+  fehlgeschlagene Kostenmessung, einen Timeout mit unsicherem Ausgang oder
+  einen moeglich bezahlten, nicht konservativ verbuchbaren Versuch reserviert.
+  Dann gilt dieselbe Sperre: Ein nicht messbarer Verbrauch ist keine Erlaubnis.
+  Ein vor dem Provider belegter Stopp mit exakt numerischem Kostendelta `0`
+  endet stattdessen providerfrei als `PROVIDER_PROBE_NOT_STARTED`. Fehlender
+  Rawcapture bei exaktem Nulldelta bleibt `RAW_CAPTURE_MISSING`/Provenienz
+  `UNPROVEN`; bei positivem oder nicht messbarem Delta bleibt er fail-closed.
+  Ein Provider-HTTP-Fehler mit serverseitig konservativ verbuchter Reservierung
+  endet als `PROVIDER_ERROR_COST_RESERVED`. Diese Klassen sind terminal fuer
+  ihren Lauf und erlauben ebenfalls keinen Retry, behaupten aber keinen
+  unbekannten Budgetstand.
 - Zugangsdaten, Testpasswörter, Sitzungs-, Service-Role-, Cloudflare- oder
   Anbieter-Keys gehören weder in den Chat noch ins Repository.
