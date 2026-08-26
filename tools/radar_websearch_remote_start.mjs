@@ -66,6 +66,7 @@ const FIXED_RELEASE_PATHS = Object.freeze([
   `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/contract.js`,
   ENTDECKEN_FUNCTION_ENTRY,
+  `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`,
   `${ENTDECKEN_FUNCTION_ROOT}/runner.js`,
@@ -166,18 +167,19 @@ export const RADAR_TEXT_TARGET_RELEASE_SHA256 = "fa09ae27b42a964e172997081f67666
    Provider-Receipt-Runtime. Historische Deployvertraege oben bleiben
    unangetastet; diese Closure bindet beide Websearch-Functions samt allen
    drei transitiven Shared-Modulen und enthaelt keine Migration. */
-export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "4bd8b7949532992d8815dfef93a9bd80dcd0b244187271fe2d6a0098e1ca06fd";
+export const PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256 = "3690c551d5ae742b8d44299103efb3384a58d24b03b74c7d3283cf4e4dd338e8";
 export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
   Object.freeze({ path: `${FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "52b9e59cfbb7e223e68a823daa32597e8d5e634249a423699162d4883babf870" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/contract.js`, sha256: "d02ef620bea5fa0ddf4532b750470d009e630b5f4245ea66e87825412d5670e4" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/index.ts`, sha256: "fccd386a07fc3bd6480d85fa3de1adbf2af1471aafdb4ddfb382940403e8a564" }),
   Object.freeze({ path: `${FUNCTION_ROOT}/runner.js`, sha256: "97d46ba29b5056ece036f0049e8a6af8ab3889182fc0d65be6d8a17f8212a8ef" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "91e014fb00e3cfda0652f535feb3befd9d5ad1ce5dfb19638a741abb445184a0" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "21348a30804db332069b0512b674dc5f4cc14e3cc5fd8e8917d068ec42551b63" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "4b45893b81481840c54eb3a5c27244348d39bf42942c94f20b60f45c0b6a153e" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "f2ed529bffaff356a891e35d1bd0d86af24449844552125c5d80c044931da989" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "9b27a21a963d6c334da50bcb49897e360f80998f7fbe2eedb55ae1714ffd2554" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "2c6f3448559db2b87693e89b075ea02825e63999fd0bd95866d66ff0d0ee5bfe" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "97ff49f75c04053734534ac6e14197a47822727ce893a20433f36c18a5b5de55" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "87d2cd384cf5caf36c73cf9364603d8074a1bbf05671b66a51e73e9475b268d4" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
@@ -187,14 +189,15 @@ export const PROVIDER_RECEIPT_RUNTIME_FILES = Object.freeze([
    Er bindet die unveraenderte Entdecken-Runtime samt Shared-Modulen an genau
    die Forward-Migration; Radar-Quellen, -Migrationen und -Deploys gehoeren
    ausdruecklich nicht zu diesem Release. */
-export const ENTDECKEN_EDITORIAL_SOURCE_BUNDLE_SHA256 = "664748e139f94e09e7bf203ff0e5d45b28eea9eb50ab431f214b594c1e614279";
+export const ENTDECKEN_EDITORIAL_SOURCE_BUNDLE_SHA256 = "272ee49eea3995dd9657c2cad7707bcbdacef54a40d8f8537178a50808cf2639";
 export const ENTDECKEN_EDITORIAL_SOURCE_FILES = Object.freeze([
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "91e014fb00e3cfda0652f535feb3befd9d5ad1ce5dfb19638a741abb445184a0" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "21348a30804db332069b0512b674dc5f4cc14e3cc5fd8e8917d068ec42551b63" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "4b45893b81481840c54eb3a5c27244348d39bf42942c94f20b60f45c0b6a153e" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "f2ed529bffaff356a891e35d1bd0d86af24449844552125c5d80c044931da989" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "9b27a21a963d6c334da50bcb49897e360f80998f7fbe2eedb55ae1714ffd2554" }),
-  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "2c6f3448559db2b87693e89b075ea02825e63999fd0bd95866d66ff0d0ee5bfe" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "97ff49f75c04053734534ac6e14197a47822727ce893a20433f36c18a5b5de55" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "87d2cd384cf5caf36c73cf9364603d8074a1bbf05671b66a51e73e9475b268d4" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
@@ -205,7 +208,25 @@ export const ENTDECKEN_EDITORIAL_SOURCE_MIGRATION = Object.freeze({
   path: "supabase/migrations/20260825210000_entdecken_editorial_sources_v2.sql",
   sha256: "31cd2bc5aa7f0ed0b287e0b6fc43affd59dbb3a514aa22d415a2ca2026c517f4",
 });
-export const ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256 = "b97406976abefb5656ffaf724cdff3eb850e789745a96c3ed343f84c3e40f4ee";
+export const ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256 = "e2c6aee683bb7061db64d4123ed0024b6b3dc154647b00d25a718433ad80326c";
+
+/* Eigener Bytevertrag fuer die inhaltsfreie HTTP-/Fetch-Diagnose. Er bindet
+   die neue Functionruntime weiterhin an exakt dieselbe bereits angewandte
+   Quellenmigration und enthaelt keine weitere Backendmutation. */
+export const ENTDECKEN_HTTP_DIAGNOSTIC_SOURCE_BUNDLE_SHA256 = "272ee49eea3995dd9657c2cad7707bcbdacef54a40d8f8537178a50808cf2639";
+export const ENTDECKEN_HTTP_DIAGNOSTIC_FILES = Object.freeze([
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/anthropicAdapter.js`, sha256: "21348a30804db332069b0512b674dc5f4cc14e3cc5fd8e8917d068ec42551b63" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/contract.js`, sha256: "4b45893b81481840c54eb3a5c27244348d39bf42942c94f20b60f45c0b6a153e" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/index.ts`, sha256: "f2ed529bffaff356a891e35d1bd0d86af24449844552125c5d80c044931da989" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/responseContract.js`, sha256: "97ff49f75c04053734534ac6e14197a47822727ce893a20433f36c18a5b5de55" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/runner.js`, sha256: "87d2cd384cf5caf36c73cf9364603d8074a1bbf05671b66a51e73e9475b268d4" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: "supabase/functions/_shared/providerText.js", sha256: "e175b2a77e78c007906e8277993910c1987e658e71ecf2e36ca4e5ee339732cf" }),
+]);
+export const ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256 = "f45c9a46c5642534e3eb8ba1be9c00d46636df9b6ae006fbd49d6ea6f0823a24";
 
 /* Eigener Bytevertrag fuer den autorisierten Entdecken-Einmallauf. Er bindet
    den erlaubten npm-Einstieg, Budget-/Keychain-/Readback-Waechter und den
@@ -213,21 +234,22 @@ export const ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256 = "b97406976abefb5656ffaf
    Providerrequest; der Keychain-Runner prueft ihn vor Credential- und Lockzugriff. */
 export const ENTDECKEN_SINGLE_LIVE_COMMAND =
   "npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget";
-export const ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "0206434c600303a0435ebeb8697a816c21ba811a14370182602cc42a2b030d74";
+export const ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "3f15424a0dd37bc5ef2024d9e0f17e7e33e3c8a33aa23c336baec135fc9c7c29";
 export const ENTDECKEN_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "AGENTS.md", sha256: "58cce032492b212cc09171f96a626143c166dad2d86ee0ee1867ff4ef67ea859" }),
   Object.freeze({ path: "package.json", sha256: "cd9fbe6bc248645cc280f8e0991098f914b13e38cd403819664eaae4646ff1a8" }),
   Object.freeze({ path: "supabase/functions/_shared/providerDiagnostic.js", sha256: "9ecc10121d51991613bb27a2c0070c4a09bde778874d0ce43753b66824cb69ef" }),
   Object.freeze({ path: "supabase/functions/_shared/providerReceipt.js", sha256: "9e17168a3aa38e99ff4c47c8aa2976516087fba62cfccd7eeb5d8ae1ddd5b3b8" }),
+  Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/providerFailureContract.js`, sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: `${ENTDECKEN_FUNCTION_ROOT}/readbackContract.js`, sha256: "302052a7ddaca8a3efc37ade24a2d2998256d812448bcffe50e847ad1b7f796b" }),
   Object.freeze({ path: "tools/ai_budget_guard.mjs", sha256: "d9de85711a0f9767c2ed310a27915d9b9e9bf3308310e004180c902a27beb920" }),
-  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "c8d6f4f0fbb18b2d743f68ea872f5cc70346ada06de1dbfabe841e32e12fb5f9" }),
-  Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "f8946f4ec3520c886e0efd8323470b7a21c2409980bb94a3b2b869c52c320c86" }),
+  Object.freeze({ path: "tools/entdecken_daily_live.mjs", sha256: "9482410878ac059a727be1cc8017cc04f894478cd1dbc65af185c112ff9c5546" }),
+  Object.freeze({ path: "tools/entdecken_live_proof.mjs", sha256: "e2afc606b8656a1cec38f911b50100f89b317634c20c130e52e43063af1eb623" }),
   Object.freeze({ path: "tools/filmwissen_live_target.mjs", sha256: "e4fcad77cbee2fef1930a78d1e78d155b23b704ab7c3ec20e5d84f1f3a46015c" }),
   Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "8455d14982903ec27c07fdc38338188be947aacbc2231fabd0cdbdb5c7555037" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "f29718f9da9518794e5354aa88e83b3b0264274426bf2f4183523ce63b5b8d06" }),
 ]);
-export const ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256 = "67b02601d36f8632eb2e94606b153904ad6834f9f56a58d61280177ef8613003";
+export const ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256 = "550c714b803675597f177761fb4ff6663074fe4aa11399d65cfb3dcf0be827c3";
 
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag
@@ -710,8 +732,49 @@ export function requireEntdeckenEditorialSourceReleaseProvenance(options = {}) {
   });
 }
 
+export function requireEntdeckenHttpDiagnosticReleaseProvenance(options = {}) {
+  const files = requireExactFileRows(
+    ENTDECKEN_HTTP_DIAGNOSTIC_FILES,
+    ENTDECKEN_HTTP_DIAGNOSTIC_SOURCE_BUNDLE_SHA256,
+    "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT",
+    options,
+  );
+  const migrationSha256 = createHash("sha256")
+    .update(readRegularFile(ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.path, options)).digest("hex");
+  if (migrationSha256 !== ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.sha256) {
+    stop(
+      "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT",
+      "Entdecken-Diagnoseruntime ist nicht an die erwartete Quellenmigration gebunden.",
+    );
+  }
+  const rows = [
+    {
+      kind: "function",
+      name: "entdecken-daily-task-http-diagnostic",
+      sha256: ENTDECKEN_HTTP_DIAGNOSTIC_SOURCE_BUNDLE_SHA256,
+    },
+    {
+      kind: "migration",
+      name: `${ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.version}_${ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.name}`,
+      sha256: migrationSha256,
+    },
+  ];
+  const releaseSha256 = createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  if (releaseSha256 !== ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256) {
+    stop(
+      "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT",
+      "Lokaler Entdecken-Diagnosereleasevertrag driftet.",
+    );
+  }
+  return Object.freeze({
+    releaseSha256,
+    files,
+    migration: ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
+  });
+}
+
 export function requireEntdeckenSingleLiveReleaseProvenance(options = {}) {
-  const sourceRelease = requireEntdeckenEditorialSourceReleaseProvenance(options);
+  const functionRelease = requireEntdeckenHttpDiagnosticReleaseProvenance(options);
   const files = requireExactFileRows(
     ENTDECKEN_SINGLE_LIVE_FILES,
     ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256,
@@ -721,7 +784,7 @@ export function requireEntdeckenSingleLiveReleaseProvenance(options = {}) {
   const commandSha256 = createHash("sha256")
     .update(ENTDECKEN_SINGLE_LIVE_COMMAND).digest("hex");
   const rows = [
-    { kind: "entdecken-source-release", name: "entdecken-editorial-sources-v2", sha256: sourceRelease.releaseSha256 },
+    { kind: "entdecken-function-release", name: "entdecken-http-diagnostic", sha256: functionRelease.releaseSha256 },
     { kind: "live-tooling", name: "entdecken-daily-once", sha256: ENTDECKEN_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 },
     { kind: "command", name: ENTDECKEN_SINGLE_LIVE_COMMAND, sha256: commandSha256 },
   ];
@@ -736,7 +799,7 @@ export function requireEntdeckenSingleLiveReleaseProvenance(options = {}) {
     command: ENTDECKEN_SINGLE_LIVE_COMMAND,
     releaseSha256,
     files,
-    sourceReleaseSha256: sourceRelease.releaseSha256,
+    functionReleaseSha256: functionRelease.releaseSha256,
   });
 }
 

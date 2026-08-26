@@ -118,6 +118,130 @@ const setup = Object.freeze({
   sourceRegistry: sources,
 });
 
+async function failedProviderResponse({ fetchImpl, logId }) {
+  let settlement = null;
+  let markedFailure = null;
+  const adapter = createAnthropicEntdeckenDailyAdapter({
+    apiKey: "synthetic-key",
+    loadSetup: async () => setup,
+    reserveCost: async () => ({ ok: true, logId }),
+    settleCost: async (input) => { settlement = input; },
+    readSettledCost: async () => { throw new Error("unexpected-settled-readback"); },
+    fetchImpl,
+    operationId: () => `00000000-0000-4000-8000-${String(logId).padStart(12, "0")}`,
+  });
+  const run = await runEntdeckenDailyRefresh({
+    repository: {
+      async claimRefresh() {
+        return {
+          feedEnabled: true, providerEnabled: true,
+          today: "2026-08-20", isoWeek: "2026-W34",
+          refresh: true, fenceToken: logId, feed: null,
+          requestMode: "owner", claimStatus: "claimed",
+          attemptCount: 5, maxAttempts: 100,
+        };
+      },
+      async loadSources() { return sources; },
+      async saveFeed() { throw new Error("unexpected-save"); },
+      async markFailure(value) { markedFailure = value; },
+    },
+    adapter,
+  });
+  return {
+    response: createEntdeckenDailyResponse(run, adapter.telemetry()),
+    settlement,
+    markedFailure,
+    rawResponse: adapter.takeProviderRawResponse(),
+  };
+}
+
+await check("HTTP-Providerfehler belegt nur Stufe, Status und allowgelisteten Typ", async () => {
+  const rawPrivate = JSON.stringify({
+    type: "error",
+    error: { type: "authentication_error", message: "SECRET_PROVIDER_MESSAGE" },
+    request_id: "SECRET_REQUEST_ID",
+    url: "https://secret.invalid/private",
+  });
+  const failed = await failedProviderResponse({
+    logId: 905,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      async text() { return rawPrivate; },
+    }),
+  });
+  assert.deepEqual(failed.response.providerFailure, {
+    stage: "http", httpStatus: 401, providerErrorType: "authentication_error",
+  });
+  assert.deepEqual(failed.markedFailure, { code: "provider_error", fenceToken: 905 });
+  assert.equal(failed.settlement.errorClass, "http-error");
+  assert.equal(failed.settlement.inputTokens, null);
+  assert.equal(failed.settlement.outputTokens, null);
+  assert.equal(failed.rawResponse, null);
+  const serialized = JSON.stringify({ response: failed.response, settlement: failed.settlement });
+  assert.doesNotMatch(serialized, /SECRET_|secret\.invalid/i);
+  assert.throws(() => pruefeEntdeckenLiveAntwort(failed.response, {
+    measuredCostUsdCent: 4.0814,
+    readbackResponse: null,
+  }), (error) => {
+    assert.ok(error instanceof EntdeckenLiveProofError);
+    assert.equal(error.code, "RESULT_PROVIDER_ERROR");
+    assert.deepEqual(error.diagnostic, failed.response.providerFailure);
+    assert.equal(
+      formatiereEntdeckenLiveDiagnose(error.diagnostic),
+      "Stufe http; HTTP 401; Providertyp authentication_error",
+    );
+    return true;
+  });
+});
+
+await check("Fetchfehler und unbekannter HTTP-Typ bleiben geschlossen und inhaltsfrei", async () => {
+  const fetchFailure = await failedProviderResponse({
+    logId: 906,
+    fetchImpl: async () => { throw new Error("SECRET_SOCKET_DETAIL"); },
+  });
+  assert.deepEqual(fetchFailure.response.providerFailure, {
+    stage: "fetch", httpStatus: null, providerErrorType: null,
+  });
+  assert.equal(fetchFailure.rawResponse, null);
+  assert.doesNotMatch(JSON.stringify(fetchFailure), /SECRET_SOCKET_DETAIL/);
+
+  const unknownHttp = await failedProviderResponse({
+    logId: 907,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 529,
+      async text() {
+        return JSON.stringify({
+          type: "error",
+          error: { type: "future_private_type", message: "SECRET_FUTURE_MESSAGE" },
+          request_id: "SECRET_FUTURE_REQUEST",
+        });
+      },
+    }),
+  });
+  assert.deepEqual(unknownHttp.response.providerFailure, {
+    stage: "http", httpStatus: 529, providerErrorType: null,
+  });
+  assert.equal(unknownHttp.rawResponse, null);
+  assert.doesNotMatch(JSON.stringify(unknownHttp), /future_private_type|SECRET_/);
+
+  const injected = createEntdeckenDailyResponse({
+    status: "empty", feed: null, writes: 0, reason: "provider_error",
+    responseMode: "degraded", displayText: null, warnings: ["provider-error"],
+    refresh: {
+      requested: true, mode: "owner", status: "failed",
+      attemptCount: 5, maxAttempts: 100,
+    },
+    providerFailure: {
+      stage: "http", httpStatus: 401,
+      providerErrorType: "authentication_error", secret: "SECRET_INJECTED",
+    },
+  }, { providerRequests: 1, searchRequests: 0 });
+  assert.equal("providerFailure" in injected, false);
+  assert.doesNotMatch(JSON.stringify(injected), /SECRET_INJECTED/);
+});
+
 function persistedReadback(feed, receipt, fenceToken) {
   const evidenceCount = feed.items.reduce((sum, item) => sum + item.evidence.length, 0);
   return {

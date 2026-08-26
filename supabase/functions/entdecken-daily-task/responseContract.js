@@ -2,6 +2,8 @@
    Qualitaetsklasse bewahrt keine Titel, URLs oder Providertexte, verhindert
    aber, dass ein bezahlter Fehllauf nur als unspezifisches CLAIM_FAILED endet. */
 
+import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js";
+
 const FAILURE_REASONS = new Set([
   "setup-invalid", "storage_error", "source_registry_unavailable",
   "provider_error", "invalid_response", "insufficient_evidence",
@@ -35,6 +37,8 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
     });
   const failureReason = refresh.requested === true && FAILURE_REASONS.has(result?.reason)
     ? result.reason : null;
+  const providerFailure = failureReason === "provider_error"
+    ? normalizeEntdeckenProviderFailure(result?.providerFailure) : null;
   const quality = qualitySummary(result, telemetry);
   return Object.freeze({
     ok: true,
@@ -50,6 +54,7 @@ export function createEntdeckenDailyResponse(result = {}, telemetry = {}) {
     warnings: result.warnings,
     refresh,
     ...(failureReason ? { failureReason } : {}),
+    ...(providerFailure ? { providerFailure } : {}),
     ...(quality ? { quality } : {}),
     ...(result.feedReadback ? { feedReadback: result.feedReadback } : {}),
     ...(result.providerReceipt ? { providerReceipt: result.providerReceipt } : {}),

@@ -11,6 +11,11 @@ import {
   ProviderTextSafetyError,
 } from "../_shared/providerText.js";
 import { createProviderReceipt } from "../_shared/providerReceipt.js";
+import {
+  createEntdeckenProviderFetchFailure,
+  createEntdeckenProviderHttpFailure,
+  normalizeEntdeckenProviderFailure,
+} from "./providerFailureContract.js";
 
 export const ENTDECKEN_DAILY_PROVIDER_TASK = "entdecken-daily";
 export const ENTDECKEN_DAILY_PROVIDER_VERSION = "anthropic-web-search-20250305";
@@ -62,12 +67,13 @@ function costFromUsage(setup, inputTokens, outputTokens, searchRequests) {
 }
 
 export class EntdeckenDailyProviderError extends Error {
-  constructor(code, usage = null) {
+  constructor(code, usage = null, providerFailure = null) {
     const safe = SAFE_ERROR_CODES.has(code) ? code : "provider-body-invalid";
     super(safe);
     this.name = "EntdeckenDailyProviderError";
     this.code = safe;
     this.usage = usage;
+    this.providerFailure = normalizeEntdeckenProviderFailure(providerFailure);
   }
 }
 
@@ -612,13 +618,33 @@ export function createAnthropicEntdeckenDailyAdapter({
           signal: controller.signal,
         });
       } catch (error) {
-        throw new EntdeckenDailyProviderError(error?.name === "AbortError" ? "provider-timeout" : "http-error");
+        throw new EntdeckenDailyProviderError(
+          error?.name === "AbortError" ? "provider-timeout" : "http-error",
+          null,
+          createEntdeckenProviderFetchFailure(),
+        );
       }
-      const providerBody = await responseJson(response, (raw) => {
-        providerRawResponse = raw;
-      });
+      let providerBody;
+      try {
+        providerBody = await responseJson(response, (raw) => {
+          if (response?.ok) providerRawResponse = raw;
+        });
+      } catch (error) {
+        if (!response?.ok) {
+          throw new EntdeckenDailyProviderError(
+            "http-error", null, createEntdeckenProviderHttpFailure(response?.status, null),
+          );
+        }
+        throw error;
+      }
       usage = providerUsage(providerBody);
-      if (!response?.ok) throw new EntdeckenDailyProviderError("http-error", usage);
+      if (!response?.ok) {
+        throw new EntdeckenDailyProviderError(
+          "http-error",
+          usage,
+          createEntdeckenProviderHttpFailure(response?.status, providerBody),
+        );
+      }
       const parsed = parseAnthropicEntdeckenDailyResponse(providerBody, setup, now(), queryContext);
       usage = parsed.usage;
       telemetry.rawItemCount = parsed.quality.rawItemCount;

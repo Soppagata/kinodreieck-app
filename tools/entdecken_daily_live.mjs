@@ -18,7 +18,10 @@ import {
   meldeTestkontoAn,
 } from "./ai_budget_guard.mjs";
 import { ENTDECKEN_DAILY_ONCE_ENV } from "./keychain_runner.mjs";
-import { pruefeEntdeckenLiveAntwort } from "./entdecken_live_proof.mjs";
+import {
+  formatiereEntdeckenLiveDiagnose,
+  pruefeEntdeckenLiveAntwort,
+} from "./entdecken_live_proof.mjs";
 import {
   captureProviderRawResponse,
   providerDiagnosticHeaders,
@@ -83,9 +86,11 @@ function validateFunctionResponse(response, body, readbackBody, measuredCostUsdC
       readbackResponse: readbackBody,
     });
   } catch (error) {
+    const diagnostic = formatiereEntdeckenLiveDiagnose(error?.diagnostic);
     throw new LiveSicherheitsStopp(
       "unbekannt",
-      `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (${error?.code || "LIVE_PROOF"}).`,
+      `Entdecken-Tagesfeed endete ohne bestaetigten Einzelwrite (${error?.code || "LIVE_PROOF"})`
+        + `${diagnostic ? `: ${diagnostic}` : "."}`,
     );
   }
 }

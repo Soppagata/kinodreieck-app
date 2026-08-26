@@ -7,6 +7,8 @@ import { normalizeProviderReceipt } from
   "../supabase/functions/_shared/providerReceipt.js";
 import { normalizeEntdeckenFeedReadback } from
   "../supabase/functions/entdecken-daily-task/readbackContract.js";
+import { normalizeEntdeckenProviderFailure } from
+  "../supabase/functions/entdecken-daily-task/providerFailureContract.js";
 
 const COST_EPSILON_USD_CENT = 0.000001;
 const OWNER_REFRESH_MAX_ATTEMPTS = new Set([3, 100]);
@@ -64,6 +66,12 @@ function insufficientQualityDiagnostic(value) {
 }
 
 export function formatiereEntdeckenLiveDiagnose(value) {
+  const providerFailure = normalizeEntdeckenProviderFailure(value);
+  if (providerFailure) {
+    return providerFailure.stage === "fetch"
+      ? "Stufe fetch; HTTP keiner; Providertyp keiner"
+      : `Stufe http; HTTP ${providerFailure.httpStatus}; Providertyp ${providerFailure.providerErrorType || "keiner"}`;
+  }
   if (!plain(value) || Object.keys(value).sort().join(",") !== [
     "candidates", "citations", "duplicates", "eligible", "normalized",
     "raw", "rejected", "searchResults", "stage",
@@ -113,6 +121,8 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
     }
     const qualityDiagnostic = safeReason === "insufficient_evidence"
       ? insufficientQualityDiagnostic(antwort.quality) : null;
+    const providerFailure = safeReason === "provider_error"
+      ? normalizeEntdeckenProviderFailure(antwort.providerFailure) : null;
     if (safeReason === "insufficient_evidence"
         && (antwort.status === "fresh" || antwort.responseMode !== "degraded"
           || Object.prototype.hasOwnProperty.call(antwort, "feedReadback")
@@ -128,9 +138,12 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
         throw new EntdeckenLiveProofError("RECEIPT_UNCORRELATED");
       }
     }
+    if (safeReason === "provider_error" && !providerFailure) {
+      throw new EntdeckenLiveProofError("FUNCTION_RESULT");
+    }
     throw new EntdeckenLiveProofError(
       `RESULT_${safeReason?.toUpperCase() || "UNKNOWN"}`,
-      qualityDiagnostic,
+      qualityDiagnostic || providerFailure,
     );
   }
   if (antwort.refresh.status !== "refreshed") {

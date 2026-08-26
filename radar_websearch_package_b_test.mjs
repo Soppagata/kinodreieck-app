@@ -23,6 +23,8 @@ import {
   ENTDECKEN_EDITORIAL_SOURCE_FILES,
   ENTDECKEN_EDITORIAL_SOURCE_MIGRATION,
   ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
+  ENTDECKEN_HTTP_DIAGNOSTIC_FILES,
+  ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256,
   ENTDECKEN_SINGLE_LIVE_COMMAND,
   ENTDECKEN_SINGLE_LIVE_FILES,
   ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256,
@@ -45,6 +47,7 @@ import {
   createRadarRemotePreflightOnce,
   deriveRadarPackageBReleaseClosure,
   requireEntdeckenEditorialSourceReleaseProvenance,
+  requireEntdeckenHttpDiagnosticReleaseProvenance,
   requireEntdeckenSingleLiveReleaseProvenance,
   requireProviderReceiptRuntimeProvenance,
   requireRadarDailyReleaseProvenance,
@@ -732,6 +735,19 @@ await check("Entdecken-Quellenrelease bindet nur Runtime und Quellenmigration by
 });
 
 await check("Entdecken-Einmallauf bindet exakten CLI-, Budget- und Quellenvertrag bytegenau", () => {
+  const diagnostic = requireEntdeckenHttpDiagnosticReleaseProvenance();
+  assert.equal(diagnostic.releaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
+  assert.deepEqual(diagnostic.files, ENTDECKEN_HTTP_DIAGNOSTIC_FILES);
+  assert.deepEqual(diagnostic.migration, ENTDECKEN_EDITORIAL_SOURCE_MIGRATION);
+  assert.throws(() => requireEntdeckenHttpDiagnosticReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("providerFailureContract.js")
+        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT");
+
   const proof = requireEntdeckenSingleLiveReleaseProvenance();
   assert.equal(
     proof.command,
@@ -740,7 +756,7 @@ await check("Entdecken-Einmallauf bindet exakten CLI-, Budget- und Quellenvertra
   assert.equal(proof.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
   assert.equal(proof.releaseSha256, ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256);
   assert.deepEqual(proof.files, ENTDECKEN_SINGLE_LIVE_FILES);
-  assert.equal(proof.sourceReleaseSha256, ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256);
+  assert.equal(proof.functionReleaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
   assert.throws(() => requireEntdeckenSingleLiveReleaseProvenance({
     readFile(absolutePath) {
       const bytes = fs.readFileSync(absolutePath);

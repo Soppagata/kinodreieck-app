@@ -7,6 +7,7 @@ import {
 } from "./contract.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 import { normalizeEntdeckenPersistenceReadback } from "./readbackContract.js";
+import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js";
 
 const SAFE_FAILURE_CODES = new Set([
   "provider_error", "invalid_response", "storage_error", "source_registry_unavailable",
@@ -146,10 +147,12 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
 
   let envelope;
   try { envelope = await adapter.search(queryContext); }
-  catch {
+  catch (error) {
+    const providerFailure = normalizeEntdeckenProviderFailure(error?.providerFailure);
     await failSafely(repository, "provider_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "provider_error", ...degradedPresentation("provider-error"),
+      ...(providerFailure ? { providerFailure } : {}),
       refresh: refreshState(context, "failed"),
     });
   }
