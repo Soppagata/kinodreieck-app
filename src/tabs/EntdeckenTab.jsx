@@ -139,7 +139,7 @@ function RecommendationsView({
     entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
   }), [dailyVariety, entdeckenStatus, master, profile, selectedServices, selectionDay,
     streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed]);
-  const { personal, further } = selection;
+  const { personal, popular } = selection;
   const source = (entry) => entry.externalEvidence?.[0] || null;
   const mediaLabel = (entry) => ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase())
     ? "Serie" : "Film";
@@ -152,7 +152,9 @@ function RecommendationsView({
       ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
       : null;
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
+  const weekLabel = webDiscoveryFeed?.format === 5 && webDiscoveryFeed?.refreshedOn
+    ? `Stand ${new Date(`${webDiscoveryFeed.refreshedOn}T12:00:00`).toLocaleDateString("de-AT")}`
+    : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     {feedNotice ? <p className="kd-entdecken-pending" role="status">{feedNotice}</p> : null}
     <div className="kd-entdecken-sektionskopf">
@@ -166,7 +168,11 @@ function RecommendationsView({
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
         <h3>{entry.title}</h3>
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
-        <small>{meta(entry)}{source(entry) ? ` · Webtipp: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
+        <small>{meta(entry)}{source(entry) ? ` · Quelle: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
+        {source(entry) ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+          rel="noopener noreferrer" target="_blank">
+          {webDiscoveryFeed?.format === 5 ? "Bei Joyn ansehen" : "Quelle ansehen"}
+        </a> : null}
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
         {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
           aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
@@ -177,17 +183,23 @@ function RecommendationsView({
     })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
-        <div><span>Von anderen empfohlen</span><h2 id="kd-entdecken-weitere">Weitere Entdeckungen</h2></div>
-        <p>Aktuell positiv belegte Wochentipps aus dem Feed.{weekLabel ? ` · ${weekLabel}` : ""}</p>
+        <div><span>Aktuelle österreichische Liste</span><h2 id="kd-entdecken-weitere">Diese Woche beliebt</h2></div>
+        <p>{webDiscoveryFeed?.format === 5
+          ? "Bei Joyn in Österreich aktuell weit oben. Die Listenposition ist kein persönlicher Passungsgrund."
+          : "Aktuelle belegte österreichische Tipps. Die Quellenreihenfolge ist kein persönlicher Passungsgrund."}
+          {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
-      {further.length ? <div className="kd-entdecken-karten">{further.map((entry) => {
+      {popular.length ? <div className="kd-entdecken-karten">{popular.map((entry) => {
         const evidence = source(entry);
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
         return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
-          <span className="kd-entdecken-kicker">{evidence?.domain || "Webtipp"}</span>
+          <span className="kd-entdecken-kicker">{entry.sourcePosition
+            ? `Joyn · Listenplatz ${entry.sourcePosition}` : evidence?.domain || "Aktuelle Liste"}</span>
           <h3>{entry.title}</h3>
           <p>{meta(entry)}</p>
-          {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
+          {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">
+            {webDiscoveryFeed?.format === 5 ? "Bei Joyn ansehen" : "Quelle ansehen"}
+          </a> : null}
           {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
           {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
             aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
@@ -195,7 +207,7 @@ function RecommendationsView({
             {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
           </button> : null}
         </article>;
-      })}</div> : <p className="kd-entdecken-leer gross">Noch keine belegten Webtipps geladen.</p>}
+      })}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
     </section>
   </section>;
 }

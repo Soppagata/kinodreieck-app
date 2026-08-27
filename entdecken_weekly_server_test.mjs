@@ -643,13 +643,15 @@ await check("Unparsebarer sicherer Text ersetzt den Feed nicht; spaeterer GET li
         providerRequests: 0, searchRequests: 0, responseMode: "structured",
         displayText: null, warnings: [], refresh: {
           requested: false, mode: "read", status: "read_only",
-          attemptCount: 1, maxAttempts: 3,
+          /* Forward-Uebergang: alter Format-4-Payload, neuer Ein-Versuch-RPC. */
+          attemptCount: 0, maxAttempts: 1,
         } };
     } }),
   });
   const loaded = await service.load();
   assert.equal(loaded.responseMode, "structured");
   assert.equal(loaded.refresh.status, "read_only");
+  assert.equal(loaded.refresh.maxAttempts, 1);
   assert.equal(loaded.feed.items.length, 6);
 });
 
@@ -931,11 +933,14 @@ await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf cla
   assert.match(functionSource, /takeProviderRawResponse/);
   assert.match(functionSource, /ownerRefreshConfirmed/);
   assert.doesNotMatch(functionSource, /profile|seen|gesehen|watchlist|selectedServices|radar/i);
-  assert.match(functionSource, /p_fence_token: claimContext\?\.fenceToken/);
+  assert.match(functionSource, /p_fence_token: fenceToken/);
   assert.match(functionSource, /p_account: ownerRefreshAccountId/);
   assert.match(functionSource, /\.from\("kd_ai_log"\)/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_readback"/);
-  assert.equal((runnerSource.match(/adapter\.search\(queryContext\)/g) || []).length, 1);
+  assert.match(functionSource, /createJoynPublicChartAdapter/);
+  assert.match(functionSource, /\.rpc\("kd_entdecken_public_feed_readback"/);
+  assert.match(functionSource, /\.from\("kd_entdecken_wikidata_cache"\)/);
+  assert.equal((runnerSource.match(/adapter\.search\(queryContext,/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setInterval|setTimeout|while\s*\(/i);
 });
 

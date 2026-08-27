@@ -731,7 +731,7 @@ await check("Entdecken-Quellenrelease bindet nur Runtime und Quellenmigration by
   assert.throws(() => requireEntdeckenEditorialSourceReleaseProvenance({
     readFile(absolutePath) {
       const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("20260825210000_entdecken_editorial_sources_v2.sql")
+      return String(absolutePath).endsWith("20260827140000_entdecken_public_six_day_pool.sql")
         ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
     },
   }), (error) => error instanceof RadarRemoteStartStop

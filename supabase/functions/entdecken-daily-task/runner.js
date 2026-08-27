@@ -2,20 +2,25 @@ import {
   createEntdeckenWeeklyQueryContext,
   ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
   evaluateEntdeckenDailyResponse,
+  evaluateEntdeckenPublicResponse,
   validateEntdeckenDailyFeed,
+  validateEntdeckenPublicSourceRegistry,
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
-import { normalizeEntdeckenPersistenceReadback } from "./readbackContract.js";
+import {
+  normalizeEntdeckenPersistenceReadback,
+  normalizeEntdeckenPublicPersistenceReadback,
+} from "./readbackContract.js";
 import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js";
 
 const SAFE_FAILURE_CODES = new Set([
-  "provider_error", "invalid_response", "storage_error", "source_registry_unavailable",
+  "provider_error", "source_error", "invalid_response", "storage_error", "source_registry_unavailable",
 ]);
 const REFRESH_MODES = new Set(["read", "scheduled", "owner"]);
 const REFRESH_STATUSES = new Set([
   "read_only", "claimed", "already_fresh", "in_progress", "cooldown",
-  "exhausted", "held", "disabled", "failed", "refreshed", "unavailable",
+  "exhausted", "held", "not_due", "outside_window", "disabled", "failed", "refreshed", "unavailable",
 ]);
 
 function validDay(value) {
@@ -25,6 +30,7 @@ function validDay(value) {
 }
 function weekStatus(feed, today, isoWeek) {
   if (!feed) return "empty";
+  if (feed.format === 5) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
   if (feed.format === 4) return feed.isoWeek === isoWeek ? "fresh" : "stale";
   return feed.refreshedOn === today ? "fresh" : "stale";
 }
@@ -134,9 +140,23 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     });
   }
 
-  let sources;
-  try { sources = validateEntdeckenSourceRegistry(await repository.loadSources()); }
-  catch { sources = { ok: false }; }
+  let sourceRows;
+  try { sourceRows = await repository.loadSources(); }
+  catch { sourceRows = null; }
+  if (!Array.isArray(sourceRows)) {
+    await failSafely(repository, "source_registry_unavailable", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "source_registry_unavailable", ...degradedPresentation("sources-unavailable"),
+      refresh: refreshState(context, "failed"),
+    });
+  }
+  /* Quellenpolitik wird vor dem ersten externen GET validiert. Ein driftendes
+     Register darf weder die zwei Joyn-Reads noch optionale Wikidata-Reads
+     ausloesen und verbraucht nur den bereits atomar geclaimten Versuch. */
+  const expectedPublicMode = adapter?.mode === "public-chart";
+  const sources = expectedPublicMode
+    ? validateEntdeckenPublicSourceRegistry(sourceRows)
+    : validateEntdeckenSourceRegistry(sourceRows);
   if (!sources.ok) {
     await failSafely(repository, "source_registry_unavailable", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -146,27 +166,58 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   }
 
   let envelope;
-  try { envelope = await adapter.search(queryContext); }
+  try {
+    envelope = await adapter.search(queryContext, {
+      retrievedOn: context.today,
+      claimedIsoWeek: context.isoWeek,
+    });
+  }
   catch (error) {
+    const publicFailure = adapter?.mode === "public-chart"
+      || String(error?.message || "").startsWith("public_chart_");
     const providerFailure = normalizeEntdeckenProviderFailure(error?.providerFailure);
-    await failSafely(repository, "provider_error", fenceToken);
+    await failSafely(repository, publicFailure ? "source_error" : "provider_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
-      reason: "provider_error", ...degradedPresentation("provider-error"),
-      ...(providerFailure ? { providerFailure } : {}),
+      reason: publicFailure ? "source_error" : "provider_error",
+      ...degradedPresentation(publicFailure ? "source-error" : "provider-error"),
+      ...(!publicFailure && providerFailure ? { providerFailure } : {}),
       refresh: refreshState(context, "failed"),
     });
   }
-  const normalizedReceipt = normalizeProviderReceipt(envelope?.providerReceipt);
+  const publicSourceMode = envelope?.sourceMode === "public-chart";
+  if (publicSourceMode !== expectedPublicMode) {
+    await failSafely(repository, "invalid_response", fenceToken);
+    return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
+      reason: "invalid_response", ...degradedPresentation("response-invalid"),
+      refresh: refreshState(context, "failed"),
+    });
+  }
+  if (publicSourceMode) {
+    let annotations = [];
+    try {
+      if (typeof repository.enrichPublicItems === "function") {
+        const resolved = await repository.enrichPublicItems(envelope.items);
+        if (Array.isArray(resolved)) annotations = resolved;
+      }
+    } catch { /* Wikidata ist optional; der belegte Joyn-Pool bleibt speicherbar. */ }
+    envelope = Object.freeze({ ...envelope, annotations: Object.freeze([...annotations]) });
+  }
+  const normalizedReceipt = publicSourceMode ? null : normalizeProviderReceipt(envelope?.providerReceipt);
   const providerEvidence = normalizedReceipt
     ? Object.freeze({ providerReceipt: normalizedReceipt })
     : Object.freeze({});
   const providerEnvelope = envelope && typeof envelope === "object" && !Array.isArray(envelope)
     ? Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "providerReceipt"))
     : envelope;
-  const evaluated = evaluateEntdeckenDailyResponse(providerEnvelope, sources.value, {
-    retrievedOn: context.today,
-    claimedIsoWeek: context.isoWeek,
-  });
+  const evaluated = publicSourceMode
+    ? evaluateEntdeckenPublicResponse(providerEnvelope, sources.value, {
+      retrievedOn: context.today,
+      claimedIsoWeek: context.isoWeek,
+    })
+    : evaluateEntdeckenDailyResponse(providerEnvelope, sources.value, {
+      retrievedOn: context.today,
+      claimedIsoWeek: context.isoWeek,
+    });
   if (!evaluated.ok) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -176,7 +227,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       refresh: refreshState(context, "failed"),
     });
   }
-  if (!normalizedReceipt) {
+  if (!publicSourceMode && !normalizedReceipt) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "invalid_response", ...degradedPresentation("provider-receipt-invalid"),
@@ -188,17 +239,25 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   try {
     await repository.saveFeed(evaluated.feed, {
       fenceToken,
-      providerReceipt: normalizedReceipt,
+      ...(normalizedReceipt ? { providerReceipt: normalizedReceipt } : {}),
+      sourceMode: publicSourceMode ? "public-chart" : "provider",
     });
     if (typeof repository.readFeed !== "function") throw new Error("entdecken-readback-missing");
-    persisted = normalizeEntdeckenPersistenceReadback(await repository.readFeed({
+    const rawReadback = await repository.readFeed({
       fenceToken,
-      providerReceipt: normalizedReceipt,
-    }), {
-      expectedFeed: evaluated.feed,
-      fenceToken,
-      providerReceipt: normalizedReceipt,
+      ...(normalizedReceipt ? { providerReceipt: normalizedReceipt } : {}),
+      sourceMode: publicSourceMode ? "public-chart" : "provider",
     });
+    persisted = publicSourceMode
+      ? normalizeEntdeckenPublicPersistenceReadback(rawReadback, {
+        expectedFeed: evaluated.feed,
+        fenceToken,
+      })
+      : normalizeEntdeckenPersistenceReadback(rawReadback, {
+        expectedFeed: evaluated.feed,
+        fenceToken,
+        providerReceipt: normalizedReceipt,
+      });
     if (!persisted) throw new Error("entdecken-readback-invalid");
   }
   catch {

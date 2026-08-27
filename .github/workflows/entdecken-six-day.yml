@@ -1,0 +1,94 @@
+name: Entdecken providerfreier Sechs-Tage-Pool
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  entdecken-six-day-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Entdecken um 02 Uhr UTC faelligkeitsgeprueft anstossen
+        timeout-minutes: 3
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nicht gesetzt."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          response_meta="$(
+            curl --silent --show-error \
+              --request POST \
+              --connect-timeout 10 \
+              --max-time 150 \
+              --output "$response_file" \
+              --write-out "%{http_code} %{content_type}" \
+              "${SUPABASE_URL%/}/functions/v1/entdecken-daily-task" \
+              --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "x-kd-entdecken-refresh: scheduled-v1"
+          )"
+
+          http_status="${response_meta%% *}"
+          content_type="${response_meta#* }"
+          if [ "$http_status" != "200" ] || [[ "$content_type" != application/json* ]]; then
+            echo "::error::Entdecken antwortete nicht mit HTTP 200 JSON (HTTP ${http_status})."
+            exit 1
+          fi
+
+          if ! outcome="$(node -e '
+            const { readFileSync } = require("node:fs");
+            let body;
+            try { body = JSON.parse(readFileSync(process.argv[1], "utf8")); }
+            catch { process.exit(2); }
+            const statuses = new Set(["fresh", "stale", "empty"]);
+            const modes = new Set(["structured", "partial", "degraded"]);
+            const refreshStatuses = new Set([
+              "refreshed", "not_due", "outside_window", "in_progress", "held", "failed",
+            ]);
+            const countsValid = Number.isInteger(body?.providerRequests) && body.providerRequests === 0
+              && Number.isInteger(body?.searchRequests) && body.searchRequests === 0
+              && Number.isInteger(body?.sourceRequests) && body.sourceRequests >= 0 && body.sourceRequests <= 2
+              && Number.isInteger(body?.wikidataRequests) && body.wikidataRequests >= 0 && body.wikidataRequests <= 40
+              && Number.isInteger(body?.writes) && body.writes >= 0 && body.writes <= 1;
+            if (!body || body.ok !== true || !statuses.has(body.status)
+                || !modes.has(body.responseMode) || !countsValid
+                || !body.refresh || body.refresh.requested !== true
+                || body.refresh.mode !== "scheduled"
+                || !refreshStatuses.has(body.refresh.status)
+                || !Number.isInteger(body.refresh.attemptCount)
+                || body.refresh.attemptCount < 0 || body.refresh.attemptCount > 1
+                || body.refresh.maxAttempts !== 1) process.exit(3);
+            if (body.refresh.status === "refreshed" && body.status === "fresh"
+                && body.sourceRequests === 2 && body.writes === 1) {
+              process.stdout.write("refreshed");
+            } else if (body.refresh.status === "failed" && body.responseMode === "degraded"
+                && body.writes === 0) {
+              process.stdout.write("failed");
+            } else if (["not_due", "outside_window", "in_progress", "held"].includes(body.refresh.status)
+                && body.sourceRequests === 0 && body.wikidataRequests === 0 && body.writes === 0) {
+              process.stdout.write(body.refresh.status);
+            } else process.exit(4);
+          ' "$response_file")"; then
+            echo "::error::Entdecken lieferte keinen gueltigen providerfreien Produktvertrag."
+            exit 1
+          fi
+
+          case "$outcome" in
+            refreshed) echo "Entdecken: neuer Joyn-Pool gespeichert." ;;
+            not_due) echo "Entdecken: naechster Sechs-Tage-Lauf noch nicht faellig." ;;
+            outside_window) echo "Entdecken: verspaeteter Trigger ausserhalb des UTC-02-Uhr-Fensters." ;;
+            in_progress) echo "Entdecken: eine aktive Lease laeuft; kein zweiter Abruf." ;;
+            held) echo "Entdecken: Claim nicht frei; kein Abruf." ;;
+            failed) echo "::warning::Entdecken: Quellen-/Anreicherungsversuch endete degraded; kein Retry in diesem Fenster." ;;
+          esac

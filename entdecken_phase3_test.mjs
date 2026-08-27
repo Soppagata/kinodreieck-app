@@ -404,10 +404,10 @@ try {
     assert.ok([...beforeFurther.querySelectorAll(".kd-entdecken-hub-karte")]
       .every((card) => !card.querySelector("ul") && /Profil:/.test(card.textContent)));
   });
-  check("Weitere Entdeckungen zeigen ausschließlich belegte Webtipps mit Quellenlink", () => {
+  check("Diese Woche beliebt zeigt ausschließlich belegte Webtipps mit Quellenlink", () => {
     const section = catalogUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
     const cards = [...(section?.querySelectorAll(".kd-entdecken-neutral") || [])];
-    assert.match(section?.textContent || "", /Weitere Entdeckungen/);
+    assert.match(section?.textContent || "", /Diese Woche beliebt/);
     assert.equal(cards.length, 1);
     assert.ok(cards.every((card) => {
       const link = card.querySelector('a[href^="https://"]');

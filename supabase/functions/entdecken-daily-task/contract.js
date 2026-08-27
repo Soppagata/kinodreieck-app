@@ -2,6 +2,13 @@
    Der historische Function-/Exportname bleibt kompatibel. Konten, Profile,
    Seen-Staende, Dienste und lokale Kataloglisten gehoeren nie in diesen Pfad. */
 
+import {
+  ENTDECKEN_PUBLIC_FEED_FORMAT,
+  ENTDECKEN_PUBLIC_FEED_ID,
+  ENTDECKEN_PUBLIC_POOL_SIZE,
+  ENTDECKEN_PUBLIC_SOURCE_ID,
+} from "./publicChartAdapter.js";
+
 export const ENTDECKEN_WEEKLY_FEED_FORMAT = 4;
 export const ENTDECKEN_WEEKLY_FEED_ID = "websearch:weekly-positive-at";
 export const ENTDECKEN_WEEKLY_SOURCE_ID = "websearch:weekly-positive";
@@ -105,6 +112,9 @@ function directUrl(value) {
 }
 function stableSourceId(value) {
   return typeof value === "string" && /^editorial:[a-z0-9][a-z0-9_-]{1,95}$/.test(value);
+}
+function stablePublicSourceId(value) {
+  return typeof value === "string" && /^chart:[a-z0-9][a-z0-9_-]{1,95}$/.test(value);
 }
 function normalizedTitle(value) {
   return text(value).normalize("NFKC").toLocaleLowerCase("de-AT")
@@ -271,6 +281,138 @@ export function validateEntdeckenSourceRegistry(value) {
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
+}
+
+/* Der private kostenlose Produktpfad besitzt absichtlich einen eigenen
+   Quellenstatus. `owner_private` ist keine behauptete Betreiberfreigabe und
+   kann deshalb nie mit einem kommerziellen Produktmodus verwechselt werden. */
+export function validateEntdeckenPublicSourceRegistry(value) {
+  if (!Array.isArray(value) || value.length !== 1) {
+    return Object.freeze({ ok: false, errors: Object.freeze(["public-source-registry-size-invalid"]), value: null });
+  }
+  const source = value[0];
+  const errors = [];
+  if (!exactKeys(source, [
+    "sourceId", "domain", "publisherFamily", "sourceClass", "rightsStatus",
+    "attributionApproved", "subdomainsAllowed", "active", "termsUrl", "termsCheckedOn",
+  ])) errors.push("public-source-shape-invalid");
+  if (!stablePublicSourceId(source?.sourceId) || source?.sourceId !== ENTDECKEN_PUBLIC_SOURCE_ID) {
+    errors.push("public-source-id-invalid");
+  }
+  if (source?.domain !== "joyn.at" || !validDomain(source?.domain)) errors.push("public-source-domain-invalid");
+  if (source?.publisherFamily !== "Joyn AT / ProSiebenSat.1 PULS 4") errors.push("public-source-family-invalid");
+  if (source?.sourceClass !== "chart" || source?.rightsStatus !== "owner_private"
+      || source?.attributionApproved !== true || source?.subdomainsAllowed !== true
+      || source?.active !== true) errors.push("public-source-policy-invalid");
+  if (!directUrl(source?.termsUrl) || !validDay(source?.termsCheckedOn)) errors.push("public-source-terms-invalid");
+  return errors.length
+    ? Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null })
+    : Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
+}
+
+function publicMediaTypeForUrl(value) {
+  const parsed = directUrl(value);
+  if (!parsed || parsed.hostname !== "www.joyn.at") return null;
+  if (parsed.pathname.startsWith("/filme/") && parsed.pathname.length > "/filme/".length) return "film";
+  if (parsed.pathname.startsWith("/serien/") && parsed.pathname.length > "/serien/".length) return "series";
+  return null;
+}
+function validatePublicFeedItem(item, retrievedOn, checkedAt) {
+  return exactKeys(item, [
+    "title", "sourceItemId", "mediaType", "genres", "licenseTypes",
+    "sourcePosition", "listDate", "sourceUrl", "fetchedAt",
+  ])
+    && typeof item.title === "string" && item.title === text(item.title)
+    && item.title.length >= 1 && item.title.length <= 200
+    && typeof item.sourceItemId === "string"
+    && /^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.sourceItemId)
+    && item.sourceItemId.length <= 182
+    && ["film", "series"].includes(item.mediaType)
+    && unique(item.genres, 80) !== null && item.genres.length <= 8
+    && unique(item.licenseTypes, 20) !== null && item.licenseTypes.length >= 1
+    && item.licenseTypes.length <= 4
+    && item.licenseTypes.every((license) => ["AVOD", "FVOD", "SVOD"].includes(license))
+    && Number.isInteger(item.sourcePosition) && item.sourcePosition >= 1 && item.sourcePosition <= 50
+    && item.listDate === retrievedOn && item.fetchedAt === checkedAt
+    && validInstant(item.fetchedAt) && new Date(item.fetchedAt).toISOString() === item.fetchedAt
+    && publicMediaTypeForUrl(item.sourceUrl) === item.mediaType;
+}
+function sixDaysAfter(day) {
+  if (!validDay(day)) return null;
+  const value = new Date(`${day}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + 6);
+  return value.toISOString().slice(0, 10);
+}
+function validPublicAnnotation(value, itemsById) {
+  if (!exactKeys(value, ["sourceItemId", "qid", "mediaType", "releaseYear", "externalIds", "resolvedAt"])
+      || !itemsById.has(value.sourceItemId) || !/^Q[1-9]\d*$/.test(value.qid)
+      || value.mediaType !== itemsById.get(value.sourceItemId).mediaType
+      || (value.releaseYear !== null && !validYear(value.releaseYear))
+      || !exactKeys(value.externalIds, [], ["imdb", "tmdb"])
+      || ("imdb" in value.externalIds && !/^tt\d{7,10}$/.test(value.externalIds.imdb))
+      || ("tmdb" in value.externalIds && !/^[1-9]\d{0,8}$/.test(value.externalIds.tmdb))
+      || !validInstant(value.resolvedAt) || new Date(value.resolvedAt).toISOString() !== value.resolvedAt) return false;
+  return value.releaseYear !== null || Object.keys(value.externalIds).length > 0;
+}
+
+export function evaluateEntdeckenPublicResponse(envelope, sourceRegistry, {
+  retrievedOn,
+  claimedIsoWeek = null,
+} = {}) {
+  const sources = validateEntdeckenPublicSourceRegistry(sourceRegistry);
+  const week = isoWeekData(retrievedOn);
+  const expectedQuery = createEntdeckenWeeklyQueryContext(retrievedOn, claimedIsoWeek);
+  if (!sources.ok) return result("invalid_response", sources.errors);
+  if (!week || !expectedQuery || !exactKeys(envelope, [
+    "sourceMode", "sourceId", "queryContext", "checkedAt", "retrievedOn", "isoWeek", "items",
+  ], ["annotations"]) || envelope.sourceMode !== "public-chart" || envelope.sourceId !== ENTDECKEN_PUBLIC_SOURCE_ID
+      || envelope.retrievedOn !== retrievedOn || envelope.isoWeek !== week.isoWeek
+      || !validInstant(envelope.checkedAt) || new Date(envelope.checkedAt).toISOString() !== envelope.checkedAt
+      || JSON.stringify(validateEntdeckenWeeklyQueryContext(envelope.queryContext)) !== JSON.stringify(expectedQuery)
+      || !Array.isArray(envelope.items) || envelope.items.length !== ENTDECKEN_PUBLIC_POOL_SIZE) {
+    return result("invalid_response", ["public-chart-envelope-invalid"]);
+  }
+  const identities = new Set();
+  const sourceItemIds = new Set();
+  const positions = new Set();
+  const urls = new Set();
+  for (const item of envelope.items) {
+    if (!validatePublicFeedItem(item, retrievedOn, envelope.checkedAt)) {
+      return result("invalid_response", ["public-chart-item-invalid"]);
+    }
+    const mediaType = publicMediaTypeForUrl(item.sourceUrl);
+    const identity = normalizedTitle(item.title);
+    const position = `${mediaType}|${item.sourcePosition}`;
+    if (!normalizedTitle(item.title) || identities.has(identity) || sourceItemIds.has(item.sourceItemId)
+        || positions.has(position) || urls.has(item.sourceUrl)) {
+      return result("invalid_response", ["public-chart-identity-invalid"]);
+    }
+    identities.add(identity); sourceItemIds.add(item.sourceItemId); positions.add(position); urls.add(item.sourceUrl);
+  }
+  const itemsById = new Map(envelope.items.map((item) => [item.sourceItemId, item]));
+  const annotations = envelope.annotations ?? [];
+  if (!Array.isArray(annotations) || annotations.length > ENTDECKEN_PUBLIC_POOL_SIZE
+      || annotations.some((entry) => !validPublicAnnotation(entry, itemsById))
+      || new Set(annotations.map((entry) => entry.sourceItemId)).size !== annotations.length) {
+    return result("invalid_response", ["public-chart-annotations-invalid"]);
+  }
+  const feed = freezeDeep({
+    format: ENTDECKEN_PUBLIC_FEED_FORMAT,
+    feedId: ENTDECKEN_PUBLIC_FEED_ID,
+    region: "AT",
+    sourceId: ENTDECKEN_PUBLIC_SOURCE_ID,
+    isoWeek: week.isoWeek,
+    refreshedOn: retrievedOn,
+    validUntil: sixDaysAfter(retrievedOn),
+    items: JSON.parse(JSON.stringify(envelope.items)),
+    annotations: JSON.parse(JSON.stringify(annotations)),
+  });
+  return result("confirmed", [], feed, mergePresentation(null), {
+    candidateItemCount: envelope.items.length,
+    eligibleUniqueCount: identities.size,
+    rejectedItemCount: 0,
+    duplicateItemCount: 0,
+  });
 }
 
 function validateProviderItem(item, index, errors, retrievedOn) {
@@ -491,16 +633,22 @@ function validateFeedItem(item, feed, weekly) {
 }
 
 export function validateEntdeckenDailyFeed(value) {
+  const publicWeekly = value?.format === ENTDECKEN_PUBLIC_FEED_FORMAT;
   const weekly = value?.format === ENTDECKEN_WEEKLY_FEED_FORMAT;
   const legacy = value?.format === LEGACY_FEED.format;
   const required = ["format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items"];
-  if ((!weekly && !legacy) || !exactKeys(value, weekly ? [...required, "isoWeek"] : required)
-      || value.feedId !== (weekly ? ENTDECKEN_WEEKLY_FEED_ID : LEGACY_FEED.feedId)
+  if ((!publicWeekly && !weekly && !legacy)
+      || !exactKeys(value, publicWeekly ? [...required, "isoWeek", "annotations"]
+        : weekly ? [...required, "isoWeek"] : required)
+      || value.feedId !== (publicWeekly ? ENTDECKEN_PUBLIC_FEED_ID
+        : weekly ? ENTDECKEN_WEEKLY_FEED_ID : LEGACY_FEED.feedId)
       || value.region !== "AT"
-      || value.sourceId !== (weekly ? ENTDECKEN_WEEKLY_SOURCE_ID : LEGACY_FEED.sourceId)
+      || value.sourceId !== (publicWeekly ? ENTDECKEN_PUBLIC_SOURCE_ID
+        : weekly ? ENTDECKEN_WEEKLY_SOURCE_ID : LEGACY_FEED.sourceId)
       || !validDay(value.refreshedOn) || !validDay(value.validUntil)
       || value.validUntil < value.refreshedOn
-      || !Array.isArray(value.items) || value.items.length < 1 || value.items.length > ENTDECKEN_WEEKLY_MAX_ITEMS) {
+      || !Array.isArray(value.items) || value.items.length < 1
+      || value.items.length > (publicWeekly ? ENTDECKEN_PUBLIC_POOL_SIZE : ENTDECKEN_WEEKLY_MAX_ITEMS)) {
     return Object.freeze({ ok: false, value: null });
   }
   if (weekly) {
@@ -508,6 +656,36 @@ export function validateEntdeckenDailyFeed(value) {
     if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== week.validUntil) {
       return Object.freeze({ ok: false, value: null });
     }
+  }
+  if (publicWeekly) {
+    const week = isoWeekData(value.refreshedOn);
+    if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== sixDaysAfter(value.refreshedOn)
+        || value.items.length !== ENTDECKEN_PUBLIC_POOL_SIZE) return Object.freeze({ ok: false, value: null });
+    const identities = new Set();
+    const sourceItemIds = new Set();
+    const positions = new Set();
+    const urls = new Set();
+    const fetchedAt = value.items[0]?.fetchedAt;
+    for (const item of value.items) {
+      if (!validatePublicFeedItem(item, value.refreshedOn, fetchedAt)) {
+        return Object.freeze({ ok: false, value: null });
+      }
+      const mediaType = publicMediaTypeForUrl(item.sourceUrl);
+      const identity = normalizedTitle(item.title);
+      const position = `${mediaType}|${item.sourcePosition}`;
+      if (!normalizedTitle(item.title) || identities.has(identity) || sourceItemIds.has(item.sourceItemId)
+          || positions.has(position) || urls.has(item.sourceUrl)) {
+        return Object.freeze({ ok: false, value: null });
+      }
+      identities.add(identity); sourceItemIds.add(item.sourceItemId); positions.add(position); urls.add(item.sourceUrl);
+    }
+    const itemsById = new Map(value.items.map((item) => [item.sourceItemId, item]));
+    if (!Array.isArray(value.annotations) || value.annotations.length > ENTDECKEN_PUBLIC_POOL_SIZE
+        || value.annotations.some((entry) => !validPublicAnnotation(entry, itemsById))
+        || new Set(value.annotations.map((entry) => entry.sourceItemId)).size !== value.annotations.length) {
+      return Object.freeze({ ok: false, value: null });
+    }
+    return Object.freeze({ ok: true, value: freezeDeep(JSON.parse(JSON.stringify(value))) });
   }
   const recordIds = new Set();
   const ranks = new Set();

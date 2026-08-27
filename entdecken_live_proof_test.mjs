@@ -368,6 +368,7 @@ await check("Normale Functionhuelle bindet konsumierten Text, fertigen Log, Kost
     citationUrlCount: 7,
     rawItemCount: 7,
     normalizedItemCount: 7,
+    sourceItemCount: 0,
     candidateItemCount: 7,
     eligibleUniqueCount: 7,
     rejectedItemCount: 0,

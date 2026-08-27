@@ -956,9 +956,9 @@ test("Entdecken bleibt kompakt und erfindet ohne injizierten Webfeed keine Tipps
   await expect(persoenlich).not.toContainText("Kataloggröße");
   await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
-  await expect(weitere.getByRole("heading", { name: "Weitere Entdeckungen" })).toBeVisible();
+  await expect(weitere.getByRole("heading", { name: "Diese Woche beliebt" })).toBeVisible();
   await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(0);
-  await expect(weitere).toContainText("Noch keine belegten Webtipps geladen");
+  await expect(weitere).toContainText("Noch keine aktuelle beliebte Liste geladen");
   await expect.poll(() => entdeckenRequests).toBe(1);
   await keineDokumentUeberbreite(page);
 

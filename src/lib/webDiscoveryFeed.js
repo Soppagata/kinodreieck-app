@@ -6,6 +6,10 @@ export const WEB_DISCOVERY_FEED_FORMAT = 4;
 export const WEB_DISCOVERY_FEED_ID = "websearch:weekly-positive-at";
 export const WEB_DISCOVERY_SOURCE_ID = "websearch:weekly-positive";
 export const WEB_DISCOVERY_MAX_ITEMS = 20;
+export const PUBLIC_DISCOVERY_FEED_FORMAT = 5;
+export const PUBLIC_DISCOVERY_FEED_ID = "public:weekly-popular-at";
+export const PUBLIC_DISCOVERY_SOURCE_ID = "chart:joyn-at";
+export const PUBLIC_DISCOVERY_POOL_SIZE = 50;
 export const WEB_DISCOVERY_MATCH_STATUSES = Object.freeze([
   "matched", "unmatched", "ambiguous",
 ]);
@@ -81,6 +85,25 @@ function boundedTextArray(value, maxItems) {
   const values = unique(value);
   if (values.length !== value.length || values.some((entry) => entry.length > 80)) return null;
   return values;
+}
+function validInstant(value) {
+  return typeof value === "string" && text(value) === value
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+function sixDaysAfter(day) {
+  const value = calendarDay(day) ? new Date(`${day}T00:00:00.000Z`) : null;
+  if (!value) return null;
+  value.setUTCDate(value.getUTCDate() + 6);
+  return value.toISOString().slice(0, 10);
+}
+function publicMediaTypeForUrl(value) {
+  const normalized = httpsUrl(value);
+  if (!normalized) return null;
+  const url = new URL(normalized);
+  if (url.hostname !== "www.joyn.at") return null;
+  if (url.pathname.startsWith("/filme/") && url.pathname.length > 8) return "film";
+  if (url.pathname.startsWith("/serien/") && url.pathname.length > 9) return "series";
+  return null;
 }
 
 export function normalizeDiscoveryMediaType(value) {
@@ -186,18 +209,63 @@ function validateRecord(value, feed, errors, index) {
   }
 }
 
+function validatePublicRecord(value, feed, errors, index) {
+  const prefix = `item-${index}`;
+  if (!exactKeys(value, [
+    "title", "sourceItemId", "mediaType", "genres", "licenseTypes",
+    "sourcePosition", "listDate", "sourceUrl", "fetchedAt",
+  ])) { errors.push(`${prefix}-shape-invalid`); return; }
+  if (!text(value.title) || value.title !== text(value.title) || value.title.length > 200) errors.push(`${prefix}-title-invalid`);
+  if (!/^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.sourceItemId)
+      || value.sourceItemId.length > 182) errors.push(`${prefix}-source-item-id-invalid`);
+  if (!normalizeDiscoveryMediaType(value.mediaType) || value.mediaType !== normalizeDiscoveryMediaType(value.mediaType)
+      || publicMediaTypeForUrl(value.sourceUrl) !== value.mediaType) errors.push(`${prefix}-media-type-invalid`);
+  if (!boundedTextArray(value.genres, 8)) errors.push(`${prefix}-genres-invalid`);
+  const licenses = boundedTextArray(value.licenseTypes, 4);
+  if (!licenses || !licenses.length || licenses.some((license) => !["AVOD", "FVOD", "SVOD"].includes(license))) {
+    errors.push(`${prefix}-licenses-invalid`);
+  }
+  if (!Number.isInteger(value.sourcePosition) || value.sourcePosition < 1 || value.sourcePosition > 50) {
+    errors.push(`${prefix}-position-invalid`);
+  }
+  if (value.listDate !== feed.refreshedOn || !validInstant(value.fetchedAt)) errors.push(`${prefix}-date-invalid`);
+}
+
+function validatePublicAnnotations(value, feed, errors) {
+  if (!Array.isArray(value) || value.length > PUBLIC_DISCOVERY_POOL_SIZE) {
+    errors.push("annotations-invalid"); return;
+  }
+  const items = new Map(feed.items.map((item) => [item.sourceItemId, item]));
+  const sourceIds = new Set();
+  for (const [index, annotation] of value.entries()) {
+    const prefix = `annotation-${index}`;
+    if (!exactKeys(annotation, ["sourceItemId", "qid", "mediaType", "releaseYear", "externalIds", "resolvedAt"])
+        || !items.has(annotation?.sourceItemId) || sourceIds.has(annotation?.sourceItemId)
+        || !/^Q[1-9]\d*$/.test(annotation?.qid)
+        || annotation?.mediaType !== items.get(annotation?.sourceItemId)?.mediaType
+        || (annotation?.releaseYear !== null && !validYear(annotation?.releaseYear))
+        || !normalizeDiscoveryExternalIds(annotation?.externalIds)
+        || (annotation?.releaseYear === null && Object.keys(annotation?.externalIds || {}).length === 0)
+        || !validInstant(annotation?.resolvedAt)) errors.push(`${prefix}-invalid`);
+    sourceIds.add(annotation?.sourceItemId);
+  }
+}
+
 export function validateWebDiscoveryFeed(value) {
   const errors = [];
+  const publicWeekly = value?.format === PUBLIC_DISCOVERY_FEED_FORMAT;
   const weekly = value?.format === WEB_DISCOVERY_FEED_FORMAT;
   const legacy = value?.format === LEGACY_FEED.format;
   const required = [
     "format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items",
-    ...(weekly ? ["isoWeek"] : []),
+    ...(publicWeekly ? ["isoWeek", "annotations"] : weekly ? ["isoWeek"] : []),
   ];
-  if ((!weekly && !legacy) || !exactKeys(value, required)) {
+  if ((!publicWeekly && !weekly && !legacy) || !exactKeys(value, required)) {
     return Object.freeze({ ok: false, errors: Object.freeze(["feed-shape-invalid"]), value: null });
   }
-  const expected = weekly ? {
+  const expected = publicWeekly ? {
+    feedId: PUBLIC_DISCOVERY_FEED_ID, sourceId: PUBLIC_DISCOVERY_SOURCE_ID,
+  } : weekly ? {
     feedId: WEB_DISCOVERY_FEED_ID, sourceId: WEB_DISCOVERY_SOURCE_ID,
   } : LEGACY_FEED;
   if (value.feedId !== expected.feedId) errors.push("feed-id-invalid");
@@ -207,19 +275,37 @@ export function validateWebDiscoveryFeed(value) {
   const validUntil = calendarDay(value.validUntil);
   if (!refreshed) errors.push("feed-refreshed-on-invalid");
   if (!validUntil || (refreshed && validUntil < refreshed)) errors.push("feed-valid-until-invalid");
+  if (publicWeekly && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
+      || isoWeekForDay(refreshed) !== value.isoWeek
+      || validUntil !== sixDaysAfter(refreshed))) errors.push("feed-public-period-invalid");
   if (weekly && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek
       || isoWeekForDay(validUntil) !== value.isoWeek)) errors.push("feed-iso-week-invalid");
-  if (!Array.isArray(value.items) || value.items.length < 1 || value.items.length > WEB_DISCOVERY_MAX_ITEMS) {
+  if (!Array.isArray(value.items) || (publicWeekly
+    ? value.items.length !== PUBLIC_DISCOVERY_POOL_SIZE
+    : value.items.length < 1 || value.items.length > WEB_DISCOVERY_MAX_ITEMS)) {
     errors.push("feed-items-invalid");
   } else {
-    value.items.forEach((item, index) => validateRecord(item, value, errors, index));
-    if (new Set(value.items.map((item) => item?.recordId)).size !== value.items.length) errors.push("feed-record-id-duplicate");
-    if (new Set(value.items.map((item) => item?.rank)).size !== value.items.length) errors.push("feed-rank-duplicate");
+    if (publicWeekly) {
+      value.items.forEach((item, index) => validatePublicRecord(item, value, errors, index));
+      if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
+      if (new Set(value.items.map((item) => item?.sourceUrl)).size !== value.items.length) errors.push("feed-source-url-duplicate");
+      if (new Set(value.items.map((item) => `${item?.mediaType}|${item?.sourcePosition}`)).size !== value.items.length) {
+        errors.push("feed-position-duplicate");
+      }
+      if (new Set(value.items.map((item) => normalizeDiscoveryTitle(item?.title))).size !== value.items.length) {
+        errors.push("feed-title-duplicate");
+      }
+      validatePublicAnnotations(value.annotations, value, errors);
+    } else {
+      value.items.forEach((item, index) => validateRecord(item, value, errors, index));
+      if (new Set(value.items.map((item) => item?.recordId)).size !== value.items.length) errors.push("feed-record-id-duplicate");
+      if (new Set(value.items.map((item) => item?.rank)).size !== value.items.length) errors.push("feed-rank-duplicate");
+    }
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   const clone = JSON.parse(JSON.stringify(value));
-  clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
+  if (!publicWeekly) clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(clone) });
 }
 
@@ -239,10 +325,27 @@ function hasOverlap(left, right) {
 export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
+  const publicWeekly = checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT;
+  const annotations = new Map((publicWeekly ? checked.value.annotations : [])
+    .map((entry) => [entry.sourceItemId, entry]));
+  const records = publicWeekly ? checked.value.items.map((item, index) => {
+    const facts = annotations.get(item.sourceItemId);
+    return Object.freeze({
+      ...item,
+      recordId: `joyn:${item.sourceItemId}`,
+      rank: index + 1,
+      releaseYear: facts?.releaseYear ?? null,
+      externalIds: facts?.externalIds || Object.freeze({}),
+      wikidata: facts || null,
+    });
+  }) : checked.value.items;
   const catalog = list(catalogCandidates).filter((candidate) => (
     text(candidate?.targetId) && normalizeDiscoveryMediaType(candidate?.type) && validYear(candidate?.year)
   ));
-  return Object.freeze(checked.value.items.map((record) => {
+  return Object.freeze(records.map((record) => {
+    if (publicWeekly && !record.wikidata) {
+      return freezeDeep({ record, status: "unmatched", matchedBy: null, candidate: null });
+    }
     const titles = recordTitles(record);
     const recordIds = normalizeDiscoveryExternalIds(record.externalIds || {}) || {};
     const idRows = catalog.map((candidate) => {
@@ -259,7 +362,7 @@ export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) 
       const consistent = hits.filter((row) => (
         !row.conflict
         && normalizeDiscoveryMediaType(row.candidate.type) === record.mediaType
-        && row.candidate.year === record.releaseYear
+        && (record.releaseYear === null || row.candidate.year === record.releaseYear)
       ));
       const hitTargets = new Set(hits.map((row) => row.candidate.targetId));
       const status = consistent.length === 1 && hitTargets.size === 1
@@ -273,6 +376,8 @@ export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) 
       });
     }
     const matches = catalog.filter((candidate) => (
+      validYear(record.releaseYear)
+      &&
       normalizeDiscoveryMediaType(candidate.type) === record.mediaType
       && candidate.year === record.releaseYear
       && hasOverlap(titles, candidateTitles(candidate))

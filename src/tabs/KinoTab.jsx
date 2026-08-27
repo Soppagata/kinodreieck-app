@@ -11,6 +11,7 @@ import { FilmForm } from "../components/EintragForm.jsx";
 import { filmwissenRechercheKennung } from "../lib/filmwissen.js";
 import { formatiereTermin } from "../lib/programm.js";
 import { filtereAktiveKinoPins } from "../lib/libraryProjection.js";
+import { rankKinoProgramRecommendations } from "../lib/kinoRecommendations.js";
 
 /* ================= KINO (Dashboard) =================
    Programmquellen: public/programm.json (Job) · Nonstop-HTML-Import ·
@@ -37,6 +38,7 @@ export function KinoTab({
   onFilmwissenLaden, onFilmwissenRecherchieren,
   kinoPins = [], toggleKinoPin, datenGesperrt = false,
   programmInfo = null, angemeldet = false, autorName,
+  geschmacksprofil = null,
   fokusTreffer = null, onFokusVerbraucht,
 }) {
   const bereichRef = useRef(null);
@@ -173,11 +175,28 @@ export function KinoTab({
       .sort((a, b) => nachTermin(zeitenGefiltert(a.prog), zeitenGefiltert(b.prog))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [kinoMatches, kinoF, tagF, aboFilter, fassungF, nq]);
+  const kinoEmpfehlungen = useMemo(() => rankKinoProgramRecommendations({
+    programEntries: restSichtbar,
+    programArchived: programm?.status?.archiviert === true,
+    programExpired: programmInfo?.abgelaufen === true,
+    profile: geschmacksprofil,
+    master,
+  }), [geschmacksprofil, master, programm?.status?.archiviert, programmInfo?.abgelaufen, restSichtbar]);
+  const kinoEmpfehlungsIds = useMemo(
+    () => new Set(kinoEmpfehlungen.map((entry) => String(entry.filmAtId))),
+    [kinoEmpfehlungen],
+  );
+  const empfohleneGefiltert = useMemo(() => kinoEmpfehlungen.filter(({ program: pf }) => (
+    passtFilter(pf) && (!nq || norm(pf.t).includes(nq))
+  )).sort((a, b) => nachTermin(zeitenGefiltert(a.program), zeitenGefiltert(b.program))),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [kinoEmpfehlungen, kinoF, tagF, aboFilter, fassungF, nq]);
   const restGefiltert = useMemo(() =>
-    restSichtbar.filter((pf) => passtFilter(pf) && (!nq || norm(pf.t).includes(nq)))
+    restSichtbar.filter((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))
+      && passtFilter(pf) && (!nq || norm(pf.t).includes(nq)))
       .sort((a, b) => nachTermin(zeitenGefiltert(a), zeitenGefiltert(b))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [restSichtbar, kinoF, tagF, aboFilter, fassungF, nq]);
+    [restSichtbar, kinoEmpfehlungsIds, kinoF, tagF, aboFilter, fassungF, nq]);
 
   const programmFilterAktiv = Boolean(kinoF || tagF || aboFilter !== "alle" || fassungF);
   const filterAktiv = Boolean(sucheK || programmFilterAktiv);
@@ -340,9 +359,9 @@ export function KinoTab({
           {master && (
             <>
               <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, letterSpacing: "0.08em", textTransform: "uppercase", color: T.wolfram, margin: "10px 0 10px" }}>
-                Läuft & passt zu dir ({matchedGefiltert.length}{matchedGefiltert.length !== kinoMatches.matched.length ? " von " + kinoMatches.matched.length : ""})
+                Läuft & passt zu dir ({matchedGefiltert.length + empfohleneGefiltert.length})
               </h2>
-              {matchedGefiltert.length === 0 && (
+              {matchedGefiltert.length === 0 && empfohleneGefiltert.length === 0 && (
                 <p style={{ color: T.rauch, fontSize: 14 }}>{filterAktiv ? "Kein Treffer mit diesen Filtern." : "Kein Titel aus deiner Liste im aktuellen Programm."}</p>
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -404,6 +423,17 @@ export function KinoTab({
                     </div>
                   );
                 })}
+                {empfohleneGefiltert.map((entry) => (
+                  <div key={entry.targetId} data-testid="kino-personal-ausserhalb-mediathek">
+                    <p className="kd-entdecken-grund" style={{ margin: "0 0 5px" }}>{entry.reasons[0]}</p>
+                    <KompaktEintrag
+                      pf={entry.program} zeiten={zeitenGefiltert(entry.program)} kinos={kinoF ? [kinoF] : entry.program.k}
+                      addFilm={addFilm} addFilmMitPrognose={addFilmMitPrognose}
+                      vorbewertungAktiv={vorbewertungAktiv} prognoseSperrgrund={prognoseSperrgrund}
+                      autorName={autorName} istGepinnt={istGepinnt} togglePin={toggleKinoPin}
+                      master={master} updateFilm={updateFilm} />
+                  </div>
+                ))}
               </div>
             </>
           )}
@@ -449,10 +479,10 @@ export function KinoTab({
           )}
 
           {/* ---- Läuft auch: gefilterte Liste statt zugeklapptem Block ---- */}
-          {kinoMatches.rest.length > 0 && (
+          {kinoMatches.rest.some((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))) && (
             <>
               <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch, margin: "26px 0 8px" }}>
-                Läuft auch{master ? ", nicht in deiner Liste" : ""} ({restGefiltert.length}{restGefiltert.length < kinoMatches.rest.length ? " von " + kinoMatches.rest.length : ""})
+                Läuft auch{master ? ", nicht in deiner Liste" : ""} ({restGefiltert.length})
               </h2>
               {restSichtbar.length < kinoMatches.rest.length && !zeigeAlles && (
                 <div style={{ marginBottom: 8, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>

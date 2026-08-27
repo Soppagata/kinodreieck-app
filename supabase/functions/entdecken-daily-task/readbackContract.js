@@ -9,9 +9,16 @@ import {
   ENTDECKEN_WEEKLY_REFRESH_MIN_ITEMS,
   validateEntdeckenDailyFeed,
 } from "./contract.js";
+import {
+  ENTDECKEN_PUBLIC_FEED_FORMAT,
+  ENTDECKEN_PUBLIC_FEED_ID,
+  ENTDECKEN_PUBLIC_POOL_SIZE,
+  ENTDECKEN_PUBLIC_SOURCE_ID,
+} from "./publicChartAdapter.js";
 import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
 export const ENTDECKEN_WEEKLY_READBACK_VERSION = "entdecken-weekly-readback-v1";
+export const ENTDECKEN_PUBLIC_READBACK_VERSION = "entdecken-public-weekly-readback-v1";
 
 const OPERATION_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -35,6 +42,14 @@ function freezeDeep(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const nested of Object.values(value)) freezeDeep(nested);
   return Object.freeze(value);
+}
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (!plain(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]))
+}
+function sameJson(left, right) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
 }
 function freshFeed(value) {
   const checked = validateEntdeckenDailyFeed(value);
@@ -89,7 +104,7 @@ export function normalizeEntdeckenPersistenceReadback(value, {
       ])
       || value.ok !== true || value.status !== "verified"
       || value.fenceToken !== fenceToken
-      || JSON.stringify(persistedFeed) !== JSON.stringify(freshFeed(expectedFeed))
+      || !sameJson(persistedFeed, freshFeed(expectedFeed))
       || !exactKeys(value.providerLog, [
         "logId", "operationId", "task", "status", "model", "inputTokens",
         "outputTokens", "costUsdCent",
@@ -126,4 +141,46 @@ export function normalizeEntdeckenPersistenceReadback(value, {
     costUsdCent: value.providerLog.costUsdCent,
   }, { feed: persistedFeed, providerReceipt: receipt });
   return readback ? freezeDeep({ feed: persistedFeed, readback }) : null;
+}
+
+/* Providerfreier Readback: Er bindet denselben gespeicherten 50er-Payload an
+   Fence und owner_private-Quellenstatus, ohne einen erfundenen Kosten- oder
+   Anbieterbeleg zu verlangen. */
+export function normalizeEntdeckenPublicPersistenceReadback(value, {
+  expectedFeed,
+  fenceToken,
+} = {}) {
+  const persisted = validateEntdeckenDailyFeed(value?.feed);
+  const expected = validateEntdeckenDailyFeed(expectedFeed);
+  if (!persisted.ok || !expected.ok
+      || persisted.value.format !== ENTDECKEN_PUBLIC_FEED_FORMAT
+      || persisted.value.feedId !== ENTDECKEN_PUBLIC_FEED_ID
+      || persisted.value.sourceId !== ENTDECKEN_PUBLIC_SOURCE_ID
+      || persisted.value.items.length !== ENTDECKEN_PUBLIC_POOL_SIZE
+      || !positiveInteger(fenceToken)
+      || !exactKeys(value, ["ok", "status", "feed", "fenceToken", "provenance"])
+      || value.ok !== true || value.status !== "verified"
+      || value.fenceToken !== fenceToken
+      || !sameJson(persisted.value, expected.value)
+      || !exactKeys(value.provenance, ["itemCount", "sourceCount", "sourceId", "rightsStatus"])
+      || value.provenance.itemCount !== ENTDECKEN_PUBLIC_POOL_SIZE
+      || value.provenance.sourceCount !== 1
+      || value.provenance.sourceId !== ENTDECKEN_PUBLIC_SOURCE_ID
+      || value.provenance.rightsStatus !== "owner_private") return null;
+  return freezeDeep({
+    feed: persisted.value,
+    readback: {
+      schemaVersion: ENTDECKEN_PUBLIC_READBACK_VERSION,
+      feedId: persisted.value.feedId,
+      region: persisted.value.region,
+      isoWeek: persisted.value.isoWeek,
+      refreshedOn: persisted.value.refreshedOn,
+      validUntil: persisted.value.validUntil,
+      itemCount: persisted.value.items.length,
+      sourceCount: 1,
+      sourceId: ENTDECKEN_PUBLIC_SOURCE_ID,
+      rightsStatus: "owner_private",
+      providerRequests: 0,
+    },
+  });
 }

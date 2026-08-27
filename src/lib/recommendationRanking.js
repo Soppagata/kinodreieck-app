@@ -154,11 +154,14 @@ export function rankRecommendations(candidates, context = {}) {
       negativeMatches: row.analysis.negativeCount,
       sourceId: row.candidate.sourceId,
       sourceRank: row.candidate.sourceRank ?? null,
+      sourcePosition: row.candidate.sourcePosition ?? null,
       watchmodeId: row.candidate.watchmodeId ?? null,
+      sourceItemId: row.candidate.sourceItemId ?? null,
       services: Object.freeze([...list(row.candidate.services)]),
       year: row.candidate.year ?? null,
       type: row.candidate.type ?? null,
       externalDiscovery: row.candidate.externalDiscovery === true,
+      wikidata: row.candidate.wikidata ? Object.freeze({ ...row.candidate.wikidata }) : null,
       externalEvidence: Object.freeze(list(row.candidate.externalEvidence).map((entry) => Object.freeze({ ...entry }))),
     }));
 }

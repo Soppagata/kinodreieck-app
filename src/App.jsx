@@ -2010,6 +2010,7 @@ export default function App() {
         {tab === "kino" && bootDone && (
           <KinoTab
             programm={programm} progStand={progStand} master={master}
+            geschmacksprofil={aktuellesProfil}
             kinoMatches={kinoMatches} restSichtbar={restSichtbar}
             zeitgrenze={zeitgrenze} saveZeitgrenze={saveZeitgrenze}
             zeigeAlles={zeigeAlles} setZeigeAlles={setZeigeAlles}

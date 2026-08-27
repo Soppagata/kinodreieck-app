@@ -63,33 +63,31 @@ Zusätzlich müssen `SUPABASE_URL` und `SUPABASE_PUBLISHABLE_KEY` auch als
 **Repository-Variablen** (Ebene Repository, nicht Environment) angelegt werden:
 Der zeitgesteuerte Keep-alive-Workflow (`keepalive.yml`) läuft ohne
 GitHub-Environment. Für den reinen Keep-alive-Read genügen diese öffentlichen
-Werte. Der Entdecken-Scheduler benötigt zusätzlich das bereits für private
-Betriebsprüfungen verwendete Repository-Secret `SUPABASE_SERVICE_ROLE_KEY`; der
-Wert wird weder ausgegeben noch Teil des Function-Payloads.
+Werte. Der getrennte Entdecken-Scheduler (`entdecken-six-day.yml`) benötigt
+zusätzlich das bereits für private Betriebsprüfungen verwendete Repository-
+Secret `SUPABASE_SERVICE_ROLE_KEY`; der Wert wird weder ausgegeben noch Teil
+des Function-Payloads.
 
-### Entdecken-Wochenanstoß im Keep-alive
+### Providerfreier Entdecken-Anstoß alle 144 Stunden
 
-Der bestehende Drei-Tage-Zeitplan stößt im `schedule`-Event zusätzlich genau
-einen service-role-authentifizierten, bodylosen Refresh-`POST` auf
-`entdecken-daily-task` an. Der Step hat eine harte Zeitgrenze, folgt keinen
-Redirects und besitzt weder Schleife noch Curl-Retry. Ein manueller
-`workflow_dispatch` führt weiterhin den harmlosen Keep-alive-Read aus, den
-providerpotenziellen Entdecken-Step aber nicht. Normale Browser-, Health- und
-Readback-`GET`s bleiben strikt read-only und konsumieren keinen Claim.
+Der getrennte Schedule sendet täglich um `02:00 UTC` genau einen service-role-
+authentifizierten, bodylosen Refresh-`POST` an `entdecken-daily-task`. Das ist
+`03:00` in der Wiener Normalzeit und `04:00` in der Sommerzeit. Der Step hat
+eine harte Zeitgrenze, folgt keinen Redirects und besitzt weder Schleife noch
+Curl-Retry. Es gibt absichtlich keinen manuellen Workflow-Einstieg. Normale
+Browser-, Health- und Readback-`GET`s bleiben strikt read-only.
 
-Die mehreren Cron-Aufrufe sind keine Kostendeduplizierung. Ausschließlich der
-atomare Datenbankclaim mit Fencing-Lease entscheidet, ob ein ausdrücklicher
-Refresh noch einen Providerrequest erhält. Nach Fehler oder abgelaufener Lease
-ist frühestens nach dem Cooldown ein späterer Workflowlauf erlaubt; pro
-ISO-Woche gibt es höchstens drei Versuche und höchstens einen erfolgreichen
-Providerrefresh. Ein einzelner Lauf wiederholt keinen Request. Gehaltene,
-abkühlende und erschöpfte Claims werden getrennt vom erfolgreichen Refresh
-gemeldet; HTTP-, Auth-, HTML- und ungültige JSON-/Vertragsantworten markieren
-den Lauf rot. Der letzte gute Feed wird durch einen Folgefehler nicht ersetzt.
+Ausschließlich der atomare Datenbankclaim mit Fencing-Lease entscheidet, ob
+seit dem letzten erfolgreichen oder verbrauchten Versuch mindestens exakt 144
+Stunden vergangen sind. Ein fälliger Lauf liest genau zwei öffentliche Joyn-
+Listen; Anbieter- und Websearchrequests bleiben bei null. Unbekannte Titel
+dürfen danach seriell und gecacht über die offizielle Wikidata-API ergänzt
+werden. Quellenblock, Timeout oder 429 führen zu keinem Retry im selben
+Zeitfenster und ersetzen den letzten guten Feed nicht.
 
 Wiederkehrende Wirkung entsteht erst nach Aufnahme in den GitHub-Default-Branch.
 Ein Staging- oder Feature-Branch aktiviert für sich keinen Zeitplan automatisch;
-auch ein manueller Lauf dieses Branches umgeht die `schedule`-Bedingung nicht.
+lokale Workflowdatei, Migration oder grüne Mocks sind noch keine Aktivierung.
 
 ### Server-/Deployment-Secrets
 

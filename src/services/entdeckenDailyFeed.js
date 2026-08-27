@@ -56,14 +56,20 @@ function presentation(value) {
     warnings: Object.freeze([...new Set(warnings)]),
   });
 }
-function refreshState(value) {
+function refreshState(value, feedFormat = null) {
+  /* Direkt nach der Forward-Migration darf der letzte gute Format-3/4-Feed
+     noch unter dem neuen Ein-Versuch-Serververtrag sichtbar sein. Format 5
+     selbst ist dagegen ausschliesslich mit maxAttempts=1 gueltig. */
+  const expectedAttempts = feedFormat === 5 ? 1 : null;
   if (!plain(value)
       || Object.keys(value).sort().join(",")
         !== ["attemptCount", "maxAttempts", "mode", "requested", "status"].sort().join(",")
       || value.requested !== false || value.mode !== "read"
       || !READ_REFRESH_STATUSES.has(value.status)
       || !Number.isInteger(value.attemptCount) || value.attemptCount < 0
-      || value.maxAttempts !== 3 || value.attemptCount > value.maxAttempts) return null;
+      || ![1, 3].includes(value.maxAttempts)
+      || (expectedAttempts !== null && value.maxAttempts !== expectedAttempts)
+      || value.attemptCount > value.maxAttempts) return null;
   return Object.freeze({ ...value });
 }
 function frozen(status, feed = null, response = null, refresh = null) {
@@ -77,12 +83,12 @@ function frozen(status, feed = null, response = null, refresh = null) {
 function exactResult(value, today) {
   const allowed = [
     "ok", "status", "feed", "writes", "providerRequests", "searchRequests",
-    "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback", "refresh",
+    "sourceRequests", "wikidataRequests", "responseMode", "displayText", "warnings", "providerReceipt", "feedReadback", "refresh",
   ];
   if (!plain(value) || !["ok", "status", "feed"].every((key) => key in value)
       || Object.keys(value).some((key) => !allowed.includes(key))
       || value.ok !== true || !["fresh", "stale", "empty", "disabled"].includes(value.status)) return null;
-  for (const key of ["writes", "providerRequests", "searchRequests"]) {
+  for (const key of ["writes", "providerRequests", "searchRequests", "sourceRequests", "wikidataRequests"]) {
     if (key in value && (!Number.isInteger(value[key]) || value[key] < 0)) return null;
   }
   /* Der Browser benoetigt die inhaltsfreien Live-/Persistenzbelege nicht,
@@ -92,7 +98,7 @@ function exactResult(value, today) {
   if (("providerReceipt" in value && !plain(value.providerReceipt))
       || ("feedReadback" in value && !plain(value.feedReadback))) return null;
   const response = presentation(value);
-  const refresh = refreshState(value.refresh);
+  const refresh = refreshState(value.refresh, value.feed?.format ?? null);
   if (!response || !refresh) return null;
   if (value.status === "empty" || value.status === "disabled") {
     return value.feed === null ? frozen(value.status, null, response, refresh) : null;
@@ -103,6 +109,10 @@ function exactResult(value, today) {
     const currentWeek = isoWeekForDay(today);
     if (!currentWeek || (value.status === "fresh") !== (checked.value.isoWeek === currentWeek)) return null;
     if (value.status === "fresh" && checked.value.validUntil < today) return null;
+  } else if (checked.value.format === 5) {
+    if ((value.status === "fresh") !== (
+      checked.value.refreshedOn <= today && checked.value.validUntil >= today
+    )) return null;
   } else {
     if (checked.value.validUntil < today) return null;
     if ((value.status === "fresh") !== (checked.value.refreshedOn === today)) return null;

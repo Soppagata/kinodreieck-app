@@ -556,8 +556,8 @@ check("No-Config-file:// zeigt die kompakte Entdecken-Fläche ohne erfundene Web
   !!dateiEntdeckenBereich
   && /Für mich/.test(dateiText())
   && /Noch keine bestätigte Passung/.test(dateiText())
-  && /Weitere Entdeckungen/.test(dateiText())
-  && /Noch keine belegten Webtipps geladen/.test(dateiText())
+  && /Diese Woche beliebt/.test(dateiText())
+  && /Noch keine aktuelle beliebte Liste geladen/.test(dateiText())
   && !dateiDoc.querySelector(".kd-entdecken-hub-karte")
   && !/Kataloggröße|Aktuelle Treffermenge/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);

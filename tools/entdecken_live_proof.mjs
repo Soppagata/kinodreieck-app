@@ -27,13 +27,15 @@ function plain(value) {
 function insufficientQuality(value) {
   const keys = [
     "searchResultCount", "citationUrlCount", "rawItemCount", "normalizedItemCount",
-    "candidateItemCount", "eligibleUniqueCount", "rejectedItemCount", "duplicateItemCount",
+    "sourceItemCount", "candidateItemCount", "eligibleUniqueCount", "rejectedItemCount",
+    "duplicateItemCount",
   ];
   if (!plain(value) || Object.keys(value).sort().join(",") !== keys.sort().join(",")
       || keys.some((key) => !Number.isSafeInteger(value[key]) || value[key] < 0)) return false;
   return value.searchResultCount <= 20
     && value.citationUrlCount <= value.searchResultCount
     && value.rawItemCount <= 100
+    && value.sourceItemCount <= 100
     && value.normalizedItemCount <= 12
     && value.candidateItemCount === value.normalizedItemCount
     && value.eligibleUniqueCount < 5
