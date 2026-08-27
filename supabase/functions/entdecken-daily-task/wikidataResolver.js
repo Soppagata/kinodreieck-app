@@ -1,17 +1,18 @@
-/* Optionale, kostenfreie Wikidata-Anreicherung fuer unbekannte Joyn-IDs.
-   ---------------------------------------------------------------------
-   - nur offizielle Wikibase-Action-API, seriell und ohne Retry
-   - maximal 20 unbekannte Titel / 40 Requests pro Sechs-Tage-Lauf
-   - positive und fachlich negative Entscheidungen werden vor dem naechsten
-     Titel persistent geschrieben und bei unveraendertem Joyn-Fingerprint nie
-     erneut angefragt
-   - 429, maxlag, Timeout oder Cachefehler beendet nur die Anreicherung; der
-     bereits belegte Joyn-Basispool bleibt davon unabhaengig */
+/* Optionale, kostenfreie Wikidata-Anreicherung fuer den oeffentlichen Pool.
+   ------------------------------------------------------------------------
+   - offizielle stabile Wikibase-REST-API v1, seriell und ohne Retry
+   - exakt ein Titel-Suchergebnis, bevor eine Entity gelesen wird
+   - Typ, Jahr und externe IDs werden nur bei eindeutigen Aussagen uebernommen
+   - positive und zeitlich begrenzte negative Entscheidungen werden persistent
+     gecacht; Rohpayloads und Beschreibungen gelangen nie in den Cache
+   - 429, Timeout, Transport- oder Cachefehler stoppt nur die Anreicherung;
+     der letzte belegte Basispool bleibt davon unabhaengig */
 
-export const WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php";
-export const WIKIDATA_RESOLVER_VERSION = 1;
+export const WIKIDATA_REST_API_URL = "https://www.wikidata.org/w/rest.php/wikibase/v1";
+export const WIKIDATA_RESOLVER_VERSION = 2;
 export const WIKIDATA_MAX_UNKNOWN_ITEMS = 20;
 export const WIKIDATA_MAX_REQUESTS = 40;
+export const WIKIDATA_NEGATIVE_CACHE_DAYS = 30;
 
 const FILM_TYPES = new Set([
   "Q11424", "Q24862", "Q24869", "Q202866", "Q506240", "Q93204", "Q229390", "Q226730",
@@ -24,6 +25,10 @@ const MAX_JSON_BYTES = 512_000;
 function text(value) { return String(value == null ? "" : value).trim(); }
 function list(value) { return Array.isArray(value) ? value : []; }
 function unique(values) { return [...new Set(values.filter(Boolean))]; }
+function validInstant(value) {
+  return typeof value === "string" && value === text(value)
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
 function normalizedTitle(value) {
   return text(value).normalize("NFKC").toLocaleLowerCase("de-AT")
     .replace(/[‐‑‒–—―]/gu, "-").replace(/[‘’‚‛`´]/gu, "'").replace(/…/gu, "...")
@@ -39,26 +44,22 @@ export function wikidataTitleFingerprint(item) {
   }
   return hash.toString(16).padStart(16, "0");
 }
-function activeClaims(entity, property) {
-  return list(entity?.claims?.[property]).filter((claim) => (
-    claim?.rank !== "deprecated" && claim?.mainsnak?.snaktype === "value"
-    && claim?.mainsnak?.datavalue?.value != null
-  ));
+function activeStatementValues(entity, property) {
+  return list(entity?.statements?.[property]).filter((statement) => (
+    statement?.rank !== "deprecated" && statement?.value?.type === "value"
+    && statement.value.content != null
+  )).map((statement) => statement.value.content);
 }
-function stringClaims(entity, property, form) {
-  return unique(activeClaims(entity, property).map((claim) => (
-    typeof claim.mainsnak.datavalue.value === "string" ? claim.mainsnak.datavalue.value : null
-  ))).filter((value) => form.test(value));
+function stringStatements(entity, property, form) {
+  return unique(activeStatementValues(entity, property)
+    .filter((value) => typeof value === "string" && form.test(value)));
 }
-function itemClaims(entity, property) {
-  return unique(activeClaims(entity, property).map((claim) => {
-    const value = claim.mainsnak.datavalue.value;
-    return value && typeof value === "object" && QID_FORM.test(value.id) ? value.id : null;
-  }));
+function itemStatements(entity, property) {
+  return unique(activeStatementValues(entity, property)
+    .filter((value) => typeof value === "string" && QID_FORM.test(value)));
 }
-function claimYears(entity, property) {
-  return unique(activeClaims(entity, property).map((claim) => {
-    const value = claim.mainsnak.datavalue.value;
+function statementYears(entity, property) {
+  return unique(activeStatementValues(entity, property).map((value) => {
     const match = value && typeof value === "object" && typeof value.time === "string"
       ? /^\+?(\d{4})-/u.exec(value.time) : null;
     const year = match ? Number(match[1]) : null;
@@ -66,48 +67,48 @@ function claimYears(entity, property) {
   })).sort((left, right) => left - right);
 }
 function entityNames(entity) {
-  const names = [];
-  for (const language of ["de", "en"]) {
-    if (entity?.labels?.[language]?.value) names.push(entity.labels[language].value);
-    for (const alias of list(entity?.aliases?.[language])) if (alias?.value) names.push(alias.value);
-  }
-  return unique(names);
+  return unique(["de", "en"].flatMap((language) => [
+    typeof entity?.labels?.[language] === "string" ? entity.labels[language] : null,
+    ...list(entity?.aliases?.[language]).filter((value) => typeof value === "string"),
+  ]));
 }
 function resolvedMediaType(entity) {
-  const movieIds = stringClaims(entity, "P4947", /^[1-9]\d{0,8}$/u);
-  const tvIds = stringClaims(entity, "P4983", /^[1-9]\d{0,8}$/u);
-  const types = itemClaims(entity, "P31");
+  const movieIds = stringStatements(entity, "P4947", /^[1-9]\d{0,8}$/u);
+  const tvIds = stringStatements(entity, "P4983", /^[1-9]\d{0,8}$/u);
+  const types = itemStatements(entity, "P31");
   const film = (movieIds.length === 1 && tvIds.length === 0) || types.some((qid) => FILM_TYPES.has(qid));
   const series = (tvIds.length === 1 && movieIds.length === 0) || types.some((qid) => SERIES_TYPES.has(qid));
   return film !== series ? (film ? "film" : "series") : null;
 }
 function factsForEntity(entity, expectedTitle, expectedType, resolvedAt) {
-  if (!entity || entity.missing !== undefined || entity.type !== "item"
+  if (!entity || entity.type !== "item" || !QID_FORM.test(entity.id || "")
       || !entityNames(entity).some((name) => normalizedTitle(name) === expectedTitle)
       || resolvedMediaType(entity) !== expectedType) return null;
-  const imdb = stringClaims(entity, "P345", /^tt\d{7,10}$/u);
+  const imdb = stringStatements(entity, "P345", /^tt\d{7,10}$/u);
   const tmdb = expectedType === "film"
-    ? stringClaims(entity, "P4947", /^[1-9]\d{0,8}$/u)
-    : stringClaims(entity, "P4983", /^[1-9]\d{0,8}$/u);
+    ? stringStatements(entity, "P4947", /^[1-9]\d{0,8}$/u)
+    : stringStatements(entity, "P4983", /^[1-9]\d{0,8}$/u);
   const years = expectedType === "film"
-    ? claimYears(entity, "P577")
-    : unique([...claimYears(entity, "P580"), ...claimYears(entity, "P577")]).sort((a, b) => a - b);
-  const complete = years.length > 0 || imdb.length === 1 || tmdb.length === 1;
+    ? statementYears(entity, "P577")
+    : unique([...statementYears(entity, "P580"), ...statementYears(entity, "P577")]).sort((a, b) => a - b);
+  const releaseYear = years.length === 1 ? years[0] : null;
+  const externalIds = Object.freeze({
+    ...(imdb.length === 1 ? { imdb: imdb[0] } : {}),
+    ...(tmdb.length === 1 ? { tmdb: tmdb[0] } : {}),
+  });
   return Object.freeze({
     qid: entity.id,
     mediaType: expectedType,
-    releaseYear: years[0] ?? null,
-    externalIds: Object.freeze({
-      ...(imdb.length === 1 ? { imdb: imdb[0] } : {}),
-      ...(tmdb.length === 1 ? { tmdb: tmdb[0] } : {}),
-    }),
-    revisionId: Number.isSafeInteger(entity.lastrevid) ? entity.lastrevid : null,
+    releaseYear,
+    externalIds,
+    revisionId: null,
     resolvedAt,
-    complete,
+    complete: releaseYear !== null || Object.keys(externalIds).length > 0,
   });
 }
 function annotation(sourceItemId, facts) {
-  if (!facts || !QID_FORM.test(facts.qid) || !["film", "series"].includes(facts.mediaType)) return null;
+  if (!facts || !QID_FORM.test(facts.qid) || !["film", "series"].includes(facts.mediaType)
+      || !facts.complete) return null;
   return Object.freeze({
     sourceItemId,
     qid: facts.qid,
@@ -117,18 +118,25 @@ function annotation(sourceItemId, facts) {
     resolvedAt: facts.resolvedAt,
   });
 }
-function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+function negativeCacheFresh(row, checkedAt) {
+  if (!validInstant(row?.checkedAt) || !validInstant(checkedAt)) return false;
+  const age = Date.parse(checkedAt) - Date.parse(row.checkedAt);
+  return age >= 0 && age <= WIKIDATA_NEGATIVE_CACHE_DAYS * 86_400_000;
 }
+function sleep(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
 async function boundedJson(response, abort) {
   const contentLength = Number(response.headers?.get?.("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_JSON_BYTES) {
     abort?.(); throw new Error("wikidata_response_too_large");
   }
-  if (!response.body?.getReader) return await response.json();
+  if (!response.body?.getReader) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_JSON_BYTES) { abort?.(); throw new Error("wikidata_response_too_large"); }
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
-  let textPayload = "";
+  let payload = "";
   let length = 0;
   try {
     while (true) {
@@ -141,10 +149,10 @@ async function boundedJson(response, abort) {
         try { await reader.cancel("wikidata_response_too_large"); } catch { /* beendet */ }
         throw new Error("wikidata_response_too_large");
       }
-      textPayload += decoder.decode(value, { stream: true });
+      payload += decoder.decode(value, { stream: true });
     }
-    textPayload += decoder.decode();
-    return JSON.parse(textPayload);
+    payload += decoder.decode();
+    return JSON.parse(payload);
   } finally { try { reader.releaseLock(); } catch { /* beendet */ } }
 }
 
@@ -172,111 +180,107 @@ export function createWikidataResolver({
 } = {}) {
   let telemetry = Object.freeze({ requests: 0, cacheHits: 0, negativeHits: 0, resolved: 0, stopped: false });
 
-  async function request(params, deadline, state) {
+  async function request(path, searchParams, deadline, state) {
     if (state.requests >= WIKIDATA_MAX_REQUESTS || Date.now() >= deadline) {
       const error = new Error("wikidata_deadline"); error.stopEnrichment = true; throw error;
     }
-    const url = new URL(WIKIDATA_API_URL);
-    for (const [key, value] of Object.entries({
-      ...params, format: "json", formatversion: "2", maxlag: "1",
-    })) url.searchParams.set(key, String(value));
+    const url = new URL(`${WIKIDATA_REST_API_URL}${path}`);
+    for (const [key, value] of Object.entries(searchParams || {})) url.searchParams.set(key, String(value));
     const controller = new AbortController();
     const remaining = Math.max(1, Math.min(requestTimeoutMs, deadline - Date.now()));
     const timer = setTimeout(() => controller.abort(), remaining);
-    let payload;
     try {
       state.requests += 1;
       const response = await fetchImpl(url.toString(), {
         method: "GET",
         headers: {
           Accept: "application/json",
-          "Api-User-Agent": "Kinodreieck/1.0 (https://kinodreieck.at)",
+          "User-Agent": "Kinodreieck/1.0 (https://kinodreieck.at)",
         },
         redirect: "error",
         signal: controller.signal,
       });
-      if (!response?.ok || response.status === 429) {
+      if (!response?.ok) {
         const error = new Error(response?.status === 429 ? "wikidata_rate_limited" : "wikidata_http_error");
         error.stopEnrichment = true; throw error;
       }
-      try {
-        payload = await boundedJson(response, () => controller.abort());
-      } catch (error) {
+      let payload;
+      try { payload = await boundedJson(response, () => controller.abort()); }
+      catch (error) {
         if (controller.signal.aborted || error?.name === "AbortError") throw error;
-        const invalid = new Error("wikidata_invalid_payload");
-        invalid.stopEnrichment = true; throw invalid;
+        const invalid = new Error("wikidata_invalid_payload"); invalid.stopEnrichment = true; throw invalid;
       }
-      if (!payload || payload.error) {
-        const error = new Error(payload?.error?.code === "maxlag" ? "wikidata_maxlag" : "wikidata_invalid_payload");
-        error.stopEnrichment = true; throw error;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        const error = new Error("wikidata_invalid_payload"); error.stopEnrichment = true; throw error;
       }
+      if (serialPauseMs > 0) await sleep(serialPauseMs);
+      return payload;
     } catch (error) {
       if (error?.stopEnrichment === true) throw error;
       const stopped = new Error(controller.signal.aborted || error?.name === "AbortError"
         ? "wikidata_timeout" : "wikidata_transport");
       stopped.stopEnrichment = true; throw stopped;
     } finally { clearTimeout(timer); }
-    if (serialPauseMs > 0) await sleep(serialPauseMs);
-    return payload;
   }
 
   async function resolve(items) {
-    const started = Date.now();
-    const deadline = started + Math.max(1, totalTimeoutMs);
+    const deadline = Date.now() + Math.max(1, totalTimeoutMs);
+    const checkedAt = now();
     const state = { requests: 0, cacheHits: 0, negativeHits: 0, resolved: 0, stopped: false, stopReason: null };
+    if (!validInstant(checkedAt)) { state.stopped = true; state.stopReason = "resolver_clock_invalid"; }
     let cachedRows = [];
-    try { cachedRows = await loadCache(items.map((item) => item.sourceItemId)); }
-    catch { state.stopped = true; state.stopReason = "cache_read_error"; }
+    if (!state.stopped) {
+      try { cachedRows = await loadCache(list(items).map((item) => item.sourceItemId)); }
+      catch { state.stopped = true; state.stopReason = "cache_read_error"; }
+    }
     const cache = new Map(list(cachedRows).map((row) => [row?.sourceItemId, row]));
     const annotations = [];
     const unknown = [];
-    for (const item of items) {
-      const expectedFingerprint = wikidataTitleFingerprint(item);
+    for (const item of list(items)) {
+      const titleFingerprint = wikidataTitleFingerprint(item);
       const cached = cache.get(item.sourceItemId);
-      if (cached && cached.resolverVersion === WIKIDATA_RESOLVER_VERSION
-          && cached.titleFingerprint === expectedFingerprint && cached.mediaType === item.mediaType
-          && CACHE_STATUSES.has(cached.status)) {
+      const reusable = cached && cached.resolverVersion === WIKIDATA_RESOLVER_VERSION
+        && cached.titleFingerprint === titleFingerprint && cached.mediaType === item.mediaType
+        && CACHE_STATUSES.has(cached.status)
+        && (cached.status === "resolved" || negativeCacheFresh(cached, checkedAt));
+      if (reusable) {
         if (cached.status === "resolved") {
-          const value = annotation(item.sourceItemId, cached.facts);
-          if (value) annotations.push(value);
-          state.cacheHits += 1;
+          const value = annotation(item.sourceItemId, { ...cached.facts, complete: true });
+          if (value) { annotations.push(value); state.cacheHits += 1; }
+          else unknown.push({ item, titleFingerprint });
         } else state.negativeHits += 1;
-      } else unknown.push({ item, titleFingerprint: expectedFingerprint });
+      } else unknown.push({ item, titleFingerprint });
     }
 
     if (!state.stopped) {
-      for (const pending of unknown.slice(0, Math.max(0, Math.min(WIKIDATA_MAX_UNKNOWN_ITEMS, maxUnknownItems)))) {
-        const { item, titleFingerprint } = pending;
+      for (const { item, titleFingerprint } of unknown
+        .slice(0, Math.max(0, Math.min(WIKIDATA_MAX_UNKNOWN_ITEMS, maxUnknownItems)))) {
         const resolvedAt = now();
+        if (!validInstant(resolvedAt)) { state.stopped = true; state.stopReason = "resolver_clock_invalid"; break; }
         try {
-          const searchPayload = await request({
-            action: "wbsearchentities", search: item.title, language: "de", uselang: "de",
-            type: "item", limit: "10", strictlanguage: "1",
+          const search = await request("/search/items", {
+            q: item.title, language: "de", limit: "10",
           }, deadline, state);
+          if (!Array.isArray(search.results)) {
+            const error = new Error("wikidata_invalid_payload"); error.stopEnrichment = true; throw error;
+          }
           const expectedTitle = normalizedTitle(item.title);
-          const qids = unique(list(searchPayload.search).filter((candidate) => (
-            normalizedTitle(candidate?.label) === expectedTitle
+          const qids = unique(search.results.filter((candidate) => (
+            normalizedTitle(candidate?.["display-label"]?.value) === expectedTitle
             || normalizedTitle(candidate?.match?.text) === expectedTitle
           )).map((candidate) => QID_FORM.test(candidate?.id || "") ? candidate.id : null));
-          if (!qids.length) {
+          if (qids.length !== 1) {
             await saveCache({
               sourceItemId: item.sourceItemId, titleFingerprint, mediaType: item.mediaType,
-              resolverVersion: WIKIDATA_RESOLVER_VERSION, status: "not_found", facts: null, checkedAt: resolvedAt,
+              resolverVersion: WIKIDATA_RESOLVER_VERSION,
+              status: qids.length ? "ambiguous_blocked" : "not_found", facts: null, checkedAt: resolvedAt,
             });
             continue;
           }
-          const entitiesPayload = await request({
-            action: "wbgetentities", ids: qids.join("|"), props: "info|labels|aliases|claims",
-            languages: "de|en", languagefallback: "1",
-          }, deadline, state);
-          const candidates = qids.map((qid) => factsForEntity(
-            entitiesPayload.entities?.[qid], expectedTitle, item.mediaType, resolvedAt,
-          )).filter(Boolean);
-          const complete = candidates.filter((candidate) => candidate.complete);
-          const status = candidates.length > 1 ? "ambiguous_blocked"
-            : candidates.length === 1 && complete.length === 0 ? "incomplete_blocked"
-              : candidates.length === 1 && complete.length === 1 ? "resolved" : "not_found";
-          const facts = status === "resolved" ? complete[0] : null;
+          const entity = await request(`/entities/items/${encodeURIComponent(qids[0])}`, {}, deadline, state);
+          const candidate = factsForEntity(entity, expectedTitle, item.mediaType, resolvedAt);
+          const status = candidate?.complete ? "resolved" : "incomplete_blocked";
+          const facts = status === "resolved" ? candidate : null;
           await saveCache({
             sourceItemId: item.sourceItemId, titleFingerprint, mediaType: item.mediaType,
             resolverVersion: WIKIDATA_RESOLVER_VERSION, status, facts, checkedAt: resolvedAt,

@@ -2,8 +2,10 @@ import {
   createEntdeckenWeeklyQueryContext,
   ENTDECKEN_WEEKLY_DEGRADED_NOTICE,
   evaluateEntdeckenDailyResponse,
+  evaluateEntdeckenMixedResponse,
   evaluateEntdeckenPublicResponse,
   validateEntdeckenDailyFeed,
+  validateEntdeckenMixedSourceRegistry,
   validateEntdeckenPublicSourceRegistry,
   validateEntdeckenSourceRegistry,
 } from "./contract.js";
@@ -30,7 +32,7 @@ function validDay(value) {
 }
 function weekStatus(feed, today, isoWeek) {
   if (!feed) return "empty";
-  if (feed.format === 5) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
+  if ([5, 6].includes(feed.format)) return feed.refreshedOn <= today && feed.validUntil >= today ? "fresh" : "stale";
   if (feed.format === 4) return feed.isoWeek === isoWeek ? "fresh" : "stale";
   return feed.refreshedOn === today ? "fresh" : "stale";
 }
@@ -153,10 +155,11 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   /* Quellenpolitik wird vor dem ersten externen GET validiert. Ein driftendes
      Register darf weder die zwei Joyn-Reads noch optionale Wikidata-Reads
      ausloesen und verbraucht nur den bereits atomar geclaimten Versuch. */
-  const expectedPublicMode = adapter?.mode === "public-chart";
-  const sources = expectedPublicMode
-    ? validateEntdeckenPublicSourceRegistry(sourceRows)
-    : validateEntdeckenSourceRegistry(sourceRows);
+  const expectedPublicMode = ["public-chart", "public-mix"].includes(adapter?.mode);
+  const sources = adapter?.mode === "public-mix"
+    ? validateEntdeckenMixedSourceRegistry(sourceRows)
+    : expectedPublicMode ? validateEntdeckenPublicSourceRegistry(sourceRows)
+      : validateEntdeckenSourceRegistry(sourceRows);
   if (!sources.ok) {
     await failSafely(repository, "source_registry_unavailable", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -173,8 +176,8 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     });
   }
   catch (error) {
-    const publicFailure = adapter?.mode === "public-chart"
-      || String(error?.message || "").startsWith("public_chart_");
+    const publicFailure = expectedPublicMode
+      || /^public_(?:chart|mix)_/.test(String(error?.message || ""));
     const providerFailure = normalizeEntdeckenProviderFailure(error?.providerFailure);
     await failSafely(repository, publicFailure ? "source_error" : "provider_error", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
@@ -184,8 +187,8 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
       refresh: refreshState(context, "failed"),
     });
   }
-  const publicSourceMode = envelope?.sourceMode === "public-chart";
-  if (publicSourceMode !== expectedPublicMode) {
+  const publicSourceMode = ["public-chart", "public-mix"].includes(envelope?.sourceMode);
+  if (publicSourceMode !== expectedPublicMode || (publicSourceMode && envelope.sourceMode !== adapter.mode)) {
     await failSafely(repository, "invalid_response", fenceToken);
     return frozen(weekStatus(cached, context.today, context.isoWeek), cached, {
       reason: "invalid_response", ...degradedPresentation("response-invalid"),
@@ -209,8 +212,12 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
   const providerEnvelope = envelope && typeof envelope === "object" && !Array.isArray(envelope)
     ? Object.fromEntries(Object.entries(envelope).filter(([key]) => key !== "providerReceipt"))
     : envelope;
-  const evaluated = publicSourceMode
-    ? evaluateEntdeckenPublicResponse(providerEnvelope, sources.value, {
+  const evaluated = envelope?.sourceMode === "public-mix"
+    ? evaluateEntdeckenMixedResponse(providerEnvelope, sources.value, {
+      retrievedOn: context.today,
+      claimedIsoWeek: context.isoWeek,
+    })
+    : publicSourceMode ? evaluateEntdeckenPublicResponse(providerEnvelope, sources.value, {
       retrievedOn: context.today,
       claimedIsoWeek: context.isoWeek,
     })
@@ -240,13 +247,13 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     await repository.saveFeed(evaluated.feed, {
       fenceToken,
       ...(normalizedReceipt ? { providerReceipt: normalizedReceipt } : {}),
-      sourceMode: publicSourceMode ? "public-chart" : "provider",
+      sourceMode: publicSourceMode ? envelope.sourceMode : "provider",
     });
     if (typeof repository.readFeed !== "function") throw new Error("entdecken-readback-missing");
     const rawReadback = await repository.readFeed({
       fenceToken,
       ...(normalizedReceipt ? { providerReceipt: normalizedReceipt } : {}),
-      sourceMode: publicSourceMode ? "public-chart" : "provider",
+      sourceMode: publicSourceMode ? envelope.sourceMode : "provider",
     });
     persisted = publicSourceMode
       ? normalizeEntdeckenPublicPersistenceReadback(rawReadback, {

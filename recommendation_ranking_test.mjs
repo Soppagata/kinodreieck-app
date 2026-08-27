@@ -88,14 +88,14 @@ check("Mediatheksprojektion kann vollständig deaktiviert werden", () => {
   assert.ok(!rows[0].reasons.some((reason) => /Mediathek|Reihe/.test(reason)));
 });
 
-check("Quellenrang entscheidet nur innerhalb derselben Quelle", () => {
+check("Quellenrang entscheidet auch innerhalb derselben Quelle nie persoenliche Gleichstaende", () => {
   const rankingContext = {
     profile: { signale: [{ art: "genre", wert: "noir", richtung: "zieht_an", staerke: 3 }] },
     library: [],
   };
   const sameSource = rankRecommendations([
-    candidate("fixture:z", { sourceId: "fixture:source:same", sourceRank: 2, genres: ["noir"] }),
-    candidate("fixture:a", { sourceId: "fixture:source:same", sourceRank: 1, genres: ["noir"] }),
+    candidate("fixture:z", { sourceId: "fixture:source:same", sourceRank: 1, genres: ["noir"] }),
+    candidate("fixture:a", { sourceId: "fixture:source:same", sourceRank: 99, genres: ["noir"] }),
   ], rankingContext);
   assert.deepEqual(sameSource.map((row) => row.targetId), ["fixture:a", "fixture:z"]);
 

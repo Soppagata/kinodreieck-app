@@ -939,33 +939,27 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  const code = await starteModus({
-    modus: "ai-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser(account) {
-      gelesen.push(account);
-      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-    },
-    spawnImpl,
-    ownerApprovedServerBudget: true,
-    entdeckenDailyOnce: true,
-  });
-  pruefe("Entdecken-Einmallauf startet nur sein fest verdrahtetes Skript hinter dem Budgetwächter",
-    code === 0
-      && starts.length === 1
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
-      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
-      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Entdecken-Einmallauf erhält nur internen Guard und Owner-Serverbudgetfreigabe",
-    starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
-      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
-      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
-      && !starts[0].argv.join(" ").includes(OWNER_GEHEIMNIS)
-      && !("KD_OWNER_USER" in starts[0].optionen.env)
-      && !("KD_OWNER_PASS" in starts[0].optionen.env));
+  let stopp = null;
+  try {
+    await starteModus({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser(account) {
+        gelesen.push(account);
+        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+      },
+      spawnImpl,
+      ownerApprovedServerBudget: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch (error) { stopp = error; }
+  pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
+    MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+      && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Nicht deployter Format-6-Stand stoppt vor Keychain und Spawn am Bytevertrag",
+    stopp?.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT"
+      && starts.length === 0 && gelesen.length === 0);
 }
 
 {
@@ -977,37 +971,28 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  const code = await starteModus({
-    modus: "ai-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser(account) {
-      gelesen.push(account);
-      return OWNER_GEHEIMNIS;
-    },
-    spawnImpl,
-    ownerApprovedServerBudget: true,
-    entdeckenProviderProbeOnce: true,
-  });
-  pruefe("Providerprobe startet genau ihren fest verdrahteten Client hinter der Budgetwache",
-    code === 0
-      && starts.length === 1
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenProviderProbeOnceArgv.join("|")
-      && starts[0].argv.some((arg) => arg.endsWith("/entdecken_provider_probe_live.mjs"))
-      && !starts[0].argv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
-      && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Providerprobe erhaelt nur Owner, Serverbudget und ihren einen internen Guard",
-    starts[0].optionen.env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env[OWNER_SERVER_BUDGET_ENV] === "1"
-      && !(ENTDECKEN_DAILY_ONCE_ENV in starts[0].optionen.env)
-      && !(RADAR_WEBSEARCH_ONCE_ENV in starts[0].optionen.env)
-      && !(OWNER_CORE_SIX_GUARD_ENV in starts[0].optionen.env)
-      && !(PROVIDER_RAW_CAPTURE_DIR_ENV in starts[0].optionen.env)
-      && !(PROVIDER_RAW_CAPTURE_GUARD_ENV in starts[0].optionen.env)
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
-      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
-      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
-      && !starts[0].argv.join(" ").includes(OWNER_GEHEIMNIS));
+  let stopp = null;
+  try {
+    await starteModus({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser(account) {
+        gelesen.push(account);
+        return OWNER_GEHEIMNIS;
+      },
+      spawnImpl,
+      ownerApprovedServerBudget: true,
+      entdeckenProviderProbeOnce: true,
+    });
+  } catch (error) { stopp = error; }
+  pruefe("Providerprobe bleibt fest auf ihren einzelnen Client verdrahtet",
+    MODI["ai-live"].entdeckenProviderProbeOnceArgv.some((arg) => arg.endsWith("/entdecken_provider_probe_live.mjs"))
+      && !MODI["ai-live"].entdeckenProviderProbeOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
+      && !MODI["ai-live"].entdeckenProviderProbeOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
+  pruefe("Providerprobe stoppt am nicht deployten Function-Bytevertrag vor Keychain und Spawn",
+    stopp?.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT"
+      && starts.length === 0 && gelesen.length === 0);
 }
 
 {

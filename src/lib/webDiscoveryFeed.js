@@ -10,6 +10,14 @@ export const PUBLIC_DISCOVERY_FEED_FORMAT = 5;
 export const PUBLIC_DISCOVERY_FEED_ID = "public:weekly-popular-at";
 export const PUBLIC_DISCOVERY_SOURCE_ID = "chart:joyn-at";
 export const PUBLIC_DISCOVERY_POOL_SIZE = 50;
+export const MIXED_DISCOVERY_FEED_FORMAT = 6;
+export const MIXED_DISCOVERY_FEED_ID = "public:weekly-market-mix-at";
+export const MIXED_DISCOVERY_SOURCE_ID = "chart:market-mix-at";
+export const MIXED_DISCOVERY_SOURCE_IDS = Object.freeze(["chart:joyn-at", "chart:oefi-weekend-at"]);
+export const MIXED_DISCOVERY_POOL_SIZE = 50;
+export const MIXED_DISCOVERY_MARKET_COUNTS = Object.freeze({
+  cinema: 15, streamingFilm: 18, streamingSeries: 17,
+});
 export const WEB_DISCOVERY_MATCH_STATUSES = Object.freeze([
   "matched", "unmatched", "ambiguous",
 ]);
@@ -231,6 +239,53 @@ function validatePublicRecord(value, feed, errors, index) {
   if (value.listDate !== feed.refreshedOn || !validInstant(value.fetchedAt)) errors.push(`${prefix}-date-invalid`);
 }
 
+function validateMixedRecord(value, feed, errors, index) {
+  const prefix = `item-${index}`;
+  if (!exactKeys(value, [
+    "title", "sourceItemId", "sourceId", "sourceLabel", "mediaType", "genres",
+    "availability", "popularity", "sourceUrl", "fetchedAt",
+  ])) { errors.push(`${prefix}-shape-invalid`); return; }
+  if (!text(value.title) || value.title !== text(value.title) || value.title.length > 200) errors.push(`${prefix}-title-invalid`);
+  if (!/^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.sourceItemId)
+      || value.sourceItemId.length > 182) errors.push(`${prefix}-source-item-id-invalid`);
+  if (!normalizeDiscoveryMediaType(value.mediaType) || value.mediaType !== normalizeDiscoveryMediaType(value.mediaType)) {
+    errors.push(`${prefix}-media-type-invalid`);
+  }
+  if (!boundedTextArray(value.genres, 8)) errors.push(`${prefix}-genres-invalid`);
+  if (!validInstant(value.fetchedAt)) errors.push(`${prefix}-fetched-at-invalid`);
+  if (!exactKeys(value.availability, ["region", "market", "service", "licenseTypes"])
+      || value.availability.region !== "AT" || !["cinema", "streaming"].includes(value.availability.market)) {
+    errors.push(`${prefix}-availability-invalid`);
+  }
+  const licenses = boundedTextArray(value.availability?.licenseTypes, 4);
+  if (!licenses || licenses.some((license) => !["AVOD", "FVOD", "SVOD"].includes(license))) {
+    errors.push(`${prefix}-licenses-invalid`);
+  }
+  if (!exactKeys(value.popularity, ["metric", "rank", "measuredOn", "value"])
+      || !Number.isInteger(value.popularity.rank) || value.popularity.rank < 1 || value.popularity.rank > 50
+      || !calendarDay(value.popularity.measuredOn) || value.popularity.measuredOn > feed.refreshedOn) {
+    errors.push(`${prefix}-popularity-invalid`);
+  }
+  const sourceUrl = httpsUrl(value.sourceUrl);
+  const url = sourceUrl ? new URL(sourceUrl) : null;
+  if (value.sourceId === PUBLIC_DISCOVERY_SOURCE_ID) {
+    if (value.sourceLabel !== "Joyn Österreich" || publicMediaTypeForUrl(value.sourceUrl) !== value.mediaType
+        || value.availability?.market !== "streaming" || value.availability?.service !== "Joyn"
+        || !licenses?.length || value.popularity?.metric !== "source-chart-rank"
+        || value.popularity?.value !== null || value.popularity?.measuredOn !== feed.refreshedOn) {
+      errors.push(`${prefix}-joyn-facts-invalid`);
+    }
+  } else if (value.sourceId === "chart:oefi-weekend-at") {
+    if (value.sourceLabel !== "Österreichisches Filminstitut" || value.mediaType !== "film"
+        || url?.hostname !== "filminstitut.at" || url?.pathname !== "/charts"
+        || value.availability?.market !== "cinema" || value.availability?.service !== null
+        || licenses?.length !== 0 || value.popularity?.metric !== "weekend-admissions"
+        || !Number.isSafeInteger(value.popularity?.value) || value.popularity.value < 0) {
+      errors.push(`${prefix}-oefi-facts-invalid`);
+    }
+  } else errors.push(`${prefix}-source-invalid`);
+}
+
 function validatePublicAnnotations(value, feed, errors) {
   if (!Array.isArray(value) || value.length > PUBLIC_DISCOVERY_POOL_SIZE) {
     errors.push("annotations-invalid"); return;
@@ -253,17 +308,21 @@ function validatePublicAnnotations(value, feed, errors) {
 
 export function validateWebDiscoveryFeed(value) {
   const errors = [];
+  const mixedWeekly = value?.format === MIXED_DISCOVERY_FEED_FORMAT;
   const publicWeekly = value?.format === PUBLIC_DISCOVERY_FEED_FORMAT;
   const weekly = value?.format === WEB_DISCOVERY_FEED_FORMAT;
   const legacy = value?.format === LEGACY_FEED.format;
   const required = [
     "format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items",
-    ...(publicWeekly ? ["isoWeek", "annotations"] : weekly ? ["isoWeek"] : []),
+    ...(mixedWeekly ? ["sourceIds", "isoWeek", "annotations"]
+      : publicWeekly ? ["isoWeek", "annotations"] : weekly ? ["isoWeek"] : []),
   ];
-  if ((!publicWeekly && !weekly && !legacy) || !exactKeys(value, required)) {
+  if ((!mixedWeekly && !publicWeekly && !weekly && !legacy) || !exactKeys(value, required)) {
     return Object.freeze({ ok: false, errors: Object.freeze(["feed-shape-invalid"]), value: null });
   }
-  const expected = publicWeekly ? {
+  const expected = mixedWeekly ? {
+    feedId: MIXED_DISCOVERY_FEED_ID, sourceId: MIXED_DISCOVERY_SOURCE_ID,
+  } : publicWeekly ? {
     feedId: PUBLIC_DISCOVERY_FEED_ID, sourceId: PUBLIC_DISCOVERY_SOURCE_ID,
   } : weekly ? {
     feedId: WEB_DISCOVERY_FEED_ID, sourceId: WEB_DISCOVERY_SOURCE_ID,
@@ -275,18 +334,38 @@ export function validateWebDiscoveryFeed(value) {
   const validUntil = calendarDay(value.validUntil);
   if (!refreshed) errors.push("feed-refreshed-on-invalid");
   if (!validUntil || (refreshed && validUntil < refreshed)) errors.push("feed-valid-until-invalid");
-  if (publicWeekly && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
+  if ((mixedWeekly || publicWeekly) && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek
       || validUntil !== sixDaysAfter(refreshed))) errors.push("feed-public-period-invalid");
+  if (mixedWeekly && (!Array.isArray(value.sourceIds)
+      || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify([...MIXED_DISCOVERY_SOURCE_IDS].sort()))) {
+    errors.push("feed-source-ids-invalid");
+  }
   if (weekly && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek
       || isoWeekForDay(validUntil) !== value.isoWeek)) errors.push("feed-iso-week-invalid");
-  if (!Array.isArray(value.items) || (publicWeekly
-    ? value.items.length !== PUBLIC_DISCOVERY_POOL_SIZE
+  if (!Array.isArray(value.items) || (mixedWeekly
+    ? value.items.length !== MIXED_DISCOVERY_POOL_SIZE : publicWeekly
+      ? value.items.length !== PUBLIC_DISCOVERY_POOL_SIZE
     : value.items.length < 1 || value.items.length > WEB_DISCOVERY_MAX_ITEMS)) {
     errors.push("feed-items-invalid");
   } else {
-    if (publicWeekly) {
+    if (mixedWeekly) {
+      value.items.forEach((item, index) => validateMixedRecord(item, value, errors, index));
+      if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
+      if (new Set(value.items.map((item) => normalizeDiscoveryTitle(item?.title))).size !== value.items.length) {
+        errors.push("feed-title-duplicate");
+      }
+      if (new Set(value.items.map((item) => `${item?.sourceId}|${item?.mediaType}|${item?.popularity?.rank}`)).size
+          !== value.items.length) errors.push("feed-position-duplicate");
+      const counts = {
+        cinema: value.items.filter((item) => item?.availability?.market === "cinema").length,
+        streamingFilm: value.items.filter((item) => item?.availability?.market === "streaming" && item?.mediaType === "film").length,
+        streamingSeries: value.items.filter((item) => item?.availability?.market === "streaming" && item?.mediaType === "series").length,
+      };
+      if (JSON.stringify(counts) !== JSON.stringify(MIXED_DISCOVERY_MARKET_COUNTS)) errors.push("feed-market-counts-invalid");
+      validatePublicAnnotations(value.annotations, value, errors);
+    } else if (publicWeekly) {
       value.items.forEach((item, index) => validatePublicRecord(item, value, errors, index));
       if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
       if (new Set(value.items.map((item) => item?.sourceUrl)).size !== value.items.length) errors.push("feed-source-url-duplicate");
@@ -305,7 +384,7 @@ export function validateWebDiscoveryFeed(value) {
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   const clone = JSON.parse(JSON.stringify(value));
-  if (!publicWeekly) clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
+  if (!mixedWeekly && !publicWeekly) clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(clone) });
 }
 
@@ -325,14 +404,14 @@ function hasOverlap(left, right) {
 export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  const publicWeekly = checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT;
+  const publicWeekly = [PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format);
   const annotations = new Map((publicWeekly ? checked.value.annotations : [])
     .map((entry) => [entry.sourceItemId, entry]));
   const records = publicWeekly ? checked.value.items.map((item, index) => {
     const facts = annotations.get(item.sourceItemId);
     return Object.freeze({
       ...item,
-      recordId: `joyn:${item.sourceItemId}`,
+      recordId: `${checked.value.format === MIXED_DISCOVERY_FEED_FORMAT ? "market" : "joyn"}:${item.sourceItemId}`,
       rank: index + 1,
       releaseYear: facts?.releaseYear ?? null,
       externalIds: facts?.externalIds || Object.freeze({}),

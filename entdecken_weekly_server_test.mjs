@@ -937,7 +937,7 @@ await check("GET bleibt read-only; nur explizites scheduled-/owner-POST darf cla
   assert.match(functionSource, /p_account: ownerRefreshAccountId/);
   assert.match(functionSource, /\.from\("kd_ai_log"\)/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_weekly_feed_readback"/);
-  assert.match(functionSource, /createJoynPublicChartAdapter/);
+  assert.match(functionSource, /createMixedPublicChartAdapter/);
   assert.match(functionSource, /\.rpc\("kd_entdecken_public_feed_readback"/);
   assert.match(functionSource, /\.from\("kd_entdecken_wikidata_cache"\)/);
   assert.equal((runnerSource.match(/adapter\.search\(queryContext,/g) || []).length, 1);

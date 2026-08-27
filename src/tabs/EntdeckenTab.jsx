@@ -143,7 +143,13 @@ function RecommendationsView({
   const source = (entry) => entry.externalEvidence?.[0] || null;
   const mediaLabel = (entry) => ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase())
     ? "Serie" : "Film";
-  const meta = (entry) => [...(entry.services || []).slice(0, 2), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
+  const availabilityLabel = (entry) => entry.availability?.market === "cinema"
+    ? "Kino Österreich"
+    : entry.availability?.service ? `${entry.availability.service} · Streaming`
+      : "Streaming Österreich";
+  const meta = (entry) => [availabilityLabel(entry), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
+  const sourceLabel = (entry) => entry.sourceLabel || source(entry)?.sourceLabel || source(entry)?.domain || "Aktuelle Liste";
+  const publicPool = [5, 6].includes(webDiscoveryFeed?.format);
   const observeAction = (entry) => entry.watchmodeId
     && ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase());
   const feedNotice = webDiscoveryStatus?.responseMode === "partial"
@@ -152,14 +158,14 @@ function RecommendationsView({
       ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
       : null;
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = webDiscoveryFeed?.format === 5 && webDiscoveryFeed?.refreshedOn
+  const weekLabel = [5, 6].includes(webDiscoveryFeed?.format) && webDiscoveryFeed?.refreshedOn
     ? `Stand ${new Date(`${webDiscoveryFeed.refreshedOn}T12:00:00`).toLocaleDateString("de-AT")}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     {feedNotice ? <p className="kd-entdecken-pending" role="status">{feedNotice}</p> : null}
     <div className="kd-entdecken-sektionskopf">
       <div><span>Dein lokaler Abgleich</span><h2 id="kd-entdecken-empfehlungen">Für mich</h2></div>
-      <p>Verfügbar und noch nicht gesehen.{dailyVariety ? " Heute neu gemischt." : " Beste Passung zuerst."}</p>
+      <p>Verfügbar und noch nicht gesehen. Beste Passung zuerst.</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
     {personal.length ? <div className="kd-entdecken-karten">{personal.map((entry) => {
@@ -168,11 +174,9 @@ function RecommendationsView({
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
         <h3>{entry.title}</h3>
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
-        <small>{meta(entry)}{source(entry) ? ` · Quelle: ${source(entry).domain}` : " · Streamingkatalog Österreich"}</small>
-        {source(entry) ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
-          rel="noopener noreferrer" target="_blank">
-          {webDiscoveryFeed?.format === 5 ? "Bei Joyn ansehen" : "Quelle ansehen"}
-        </a> : null}
+        <small>{meta(entry)} · Quelle: {sourceLabel(entry)}</small>
+        {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+          rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
         {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
           aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
@@ -184,22 +188,21 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Aktuelle österreichische Liste</span><h2 id="kd-entdecken-weitere">Diese Woche beliebt</h2></div>
-        <p>{webDiscoveryFeed?.format === 5
-          ? "Bei Joyn in Österreich aktuell weit oben. Die Listenposition ist kein persönlicher Passungsgrund."
-          : "Aktuelle belegte österreichische Tipps. Die Quellenreihenfolge ist kein persönlicher Passungsgrund."}
+        <p>{webDiscoveryFeed?.format === 6
+          ? "Aktuelle Kino-, Streamingfilm- und Serientitel für Österreich. Popularität ist kein persönlicher Passungsgrund."
+          : "Aktuelle belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
       {popular.length ? <div className="kd-entdecken-karten">{popular.map((entry) => {
-        const evidence = source(entry);
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
         return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
-          <span className="kd-entdecken-kicker">{entry.sourcePosition
-            ? `Joyn · Listenplatz ${entry.sourcePosition}` : evidence?.domain || "Aktuelle Liste"}</span>
+          <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
+            ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
           <h3>{entry.title}</h3>
           <p>{meta(entry)}</p>
-          {evidence ? <a className="kd-entdecken-quellenlink" href={evidence.url} rel="noopener noreferrer" target="_blank">
-            {webDiscoveryFeed?.format === 5 ? "Bei Joyn ansehen" : "Quelle ansehen"}
-          </a> : null}
+          <small>Quelle: {sourceLabel(entry)}</small>
+          {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+            rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
           {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
             aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}

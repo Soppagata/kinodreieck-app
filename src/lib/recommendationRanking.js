@@ -119,12 +119,8 @@ function compareRows(a, b) {
   for (const [left, right, direction] of pairs) {
     if (left !== right) return (left < right ? -1 : 1) * direction;
   }
-  /* Ein Quellenrang ist nur innerhalb derselben Quelle vergleichbar. */
-  if (a.candidate.sourceId === b.candidate.sourceId) {
-    const rankA = Number.isInteger(a.candidate.sourceRank) ? a.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-    const rankB = Number.isInteger(b.candidate.sourceRank) ? b.candidate.sourceRank : Number.MAX_SAFE_INTEGER;
-    if (rankA !== rankB) return rankA - rankB;
-  }
+  /* Popularitaet und persoenliche Passung bleiben getrennte Fakten. Auch ein
+     Rang innerhalb derselben Quelle darf keinen Profil-Gleichstand brechen. */
   return text(a.candidate.targetId).localeCompare(text(b.candidate.targetId), "de-AT");
 }
 
@@ -153,11 +149,16 @@ export function rankRecommendations(candidates, context = {}) {
       reasons: Object.freeze([...row.analysis.reasons]),
       negativeMatches: row.analysis.negativeCount,
       sourceId: row.candidate.sourceId,
+      sourceLabel: row.candidate.sourceLabel ?? null,
       sourceRank: row.candidate.sourceRank ?? null,
       sourcePosition: row.candidate.sourcePosition ?? null,
       watchmodeId: row.candidate.watchmodeId ?? null,
       sourceItemId: row.candidate.sourceItemId ?? null,
       services: Object.freeze([...list(row.candidate.services)]),
+      availability: row.candidate.availability
+        ? Object.freeze({ ...row.candidate.availability,
+          licenseTypes: Object.freeze([...list(row.candidate.availability.licenseTypes)]) }) : null,
+      popularity: row.candidate.popularity ? Object.freeze({ ...row.candidate.popularity }) : null,
       year: row.candidate.year ?? null,
       type: row.candidate.type ?? null,
       externalDiscovery: row.candidate.externalDiscovery === true,

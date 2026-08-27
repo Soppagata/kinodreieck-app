@@ -30,6 +30,13 @@ const feed = {
   validUntil: "2026-09-02",
   items,
   annotations: [{
+    sourceItemId: items[0].sourceItemId,
+    qid: "Q122",
+    mediaType: "film",
+    releaseYear: 2024,
+    externalIds: {},
+    resolvedAt: "2026-08-27T02:01:00.000Z",
+  }, {
     sourceItemId: items[1].sourceItemId,
     qid: "Q123",
     mediaType: "series",
@@ -43,7 +50,7 @@ check("Format 5 akzeptiert exakt 50 belegte Joyn-Faktenkarten und getrennte Anno
   const result = validateWebDiscoveryFeed(feed);
   assert.equal(result.ok, true);
   assert.equal(result.value.items.length, 50);
-  assert.equal(result.value.annotations.length, 1);
+  assert.equal(result.value.annotations.length, 2);
   assert.equal(validateWebDiscoveryFeed({ ...feed, validUntil: "2026-08-31" }).ok, false);
   assert.equal(validateWebDiscoveryFeed({ ...feed, items: feed.items.slice(0, 49) }).ok, false);
   assert.equal(validateWebDiscoveryFeed({
@@ -85,7 +92,7 @@ const selection = createEntdeckenRecommendations({
     signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 4 }],
   },
   master: [{
-    id: "seen", titel: "Schon gesehen", typ: "film", gesehen: true,
+    id: "seen", titel: "Schon gesehen", jahr: 2024, typ: "film", gesehen: true,
     bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
   }],
   selectedServices: ["Joyn"],

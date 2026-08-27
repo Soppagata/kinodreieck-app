@@ -145,7 +145,15 @@ await checkAsync("Adapter macht genau zwei retryfreie GETs und erzeugt 50 Minima
     sourceRequests: 2, sourceItemCount: 100, eligibleUniqueCount: 50,
   });
 
-  const evaluated = evaluateEntdeckenPublicResponse(envelope, publicSourceRegistry, {
+  const seenFixture = envelope.items.find((item) => item.genres.includes("Drama"));
+  const evaluated = evaluateEntdeckenPublicResponse({ ...envelope, annotations: [{
+    sourceItemId: seenFixture.sourceItemId,
+    qid: "Q123",
+    mediaType: seenFixture.mediaType,
+    releaseYear: 2025,
+    externalIds: {},
+    resolvedAt: "2026-08-27T07:31:00.000Z",
+  }] }, publicSourceRegistry, {
     retrievedOn: "2026-08-27", claimedIsoWeek: "2026-W35",
   });
   assert.equal(evaluated.ok, true);
@@ -162,7 +170,7 @@ check("Ein Mockpfad verbindet Quellenadapter, 50er-Feed, Gesehenfilter, Top-6 un
     streamingEntdecken: { region: "AT", titel: [] },
     streamingKnown: { region: "AT", titel: [] },
     master: [{
-      id: "seen-joyn", titel: seen.title, typ: seen.mediaType, gesehen: true,
+      id: "seen-joyn", titel: seen.title, jahr: 2025, typ: seen.mediaType, gesehen: true,
       bewertung: { wie: 4, was: 4, warum: 4 }, genre: ["Drama"],
     }],
     profile: { signale: [{ art: "genre", wert: "Drama", richtung: "zieht_an", staerke: 4 }] },

@@ -714,79 +714,63 @@ await check("Historischer Radar-Deployzaun blockiert die neue Runtime statt sie 
   )), false);
 });
 
-await check("Aktueller Receipt-Runtimebeleg bindet Radar und Entdecken bytegenau", () => {
-  const proof = requireProviderReceiptRuntimeProvenance();
-  assert.equal(proof.bundleSha256, PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256);
-  assert.deepEqual(proof.files, PROVIDER_RECEIPT_RUNTIME_FILES);
+await check("Lokaler Entdecken-Kandidat lässt den gemeinsamen Receipt-Bytebeleg fail-closed driften", () => {
+  assert.throws(
+    () => requireProviderReceiptRuntimeProvenance(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "PROVIDER_RECEIPT_RUNTIME_PROVENANCE_DRIFT",
+  );
+  assert.equal(PROVIDER_RECEIPT_RUNTIME_SOURCE_BUNDLE_SHA256.length, 64);
+  assert.equal(PROVIDER_RECEIPT_RUNTIME_FILES.some(({ path: pathname }) => (
+    pathname.includes("radar-websearch-task")
+  )), true);
+  assert.equal(PROVIDER_RECEIPT_RUNTIME_FILES.some(({ path: pathname }) => (
+    pathname.includes("entdecken-daily-task")
+  )), true);
 });
 
-await check("Entdecken-Quellenrelease bindet nur Runtime und Quellenmigration bytegenau", () => {
-  const proof = requireEntdeckenEditorialSourceReleaseProvenance();
-  assert.equal(proof.releaseSha256, ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256);
-  assert.deepEqual(proof.files, ENTDECKEN_EDITORIAL_SOURCE_FILES);
-  assert.deepEqual(proof.migration, ENTDECKEN_EDITORIAL_SOURCE_MIGRATION);
+await check("Nicht deployter Entdecken-Mix hält den Quellenrelease-Zaun unverändert geschlossen", () => {
+  assert.throws(
+    () => requireEntdeckenEditorialSourceReleaseProvenance(),
+    (error) => error instanceof RadarRemoteStartStop
+      && error.code === "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT",
+  );
+  assert.equal(ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256.length, 64);
   assert.equal(ENTDECKEN_EDITORIAL_SOURCE_FILES.some(({ path: pathname }) => (
     pathname.includes("radar-websearch-task")
   )), false);
-  assert.throws(() => requireEntdeckenEditorialSourceReleaseProvenance({
-    readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("20260827140000_entdecken_public_six_day_pool.sql")
-        ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
-    },
-  }), (error) => error instanceof RadarRemoteStartStop
-    && error.code === "ENTDECKEN_EDITORIAL_SOURCE_RELEASE_PROVENANCE_DRIFT");
+  assert.equal(
+    ENTDECKEN_EDITORIAL_SOURCE_MIGRATION.path,
+    "supabase/migrations/20260827140000_entdecken_public_six_day_pool.sql",
+  );
 });
 
-await check("Entdecken-Einmallauf bindet exakten CLI-, Budget- und Quellenvertrag bytegenau", () => {
-  const diagnostic = requireEntdeckenHttpDiagnosticReleaseProvenance();
-  assert.equal(diagnostic.releaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
-  assert.deepEqual(diagnostic.files, ENTDECKEN_HTTP_DIAGNOSTIC_FILES);
-  assert.deepEqual(diagnostic.migration, ENTDECKEN_EDITORIAL_SOURCE_MIGRATION);
-  assert.throws(() => requireEntdeckenHttpDiagnosticReleaseProvenance({
-    readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("providerFailureContract.js")
-        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
-    },
-  }), (error) => error instanceof RadarRemoteStartStop
-    && error.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT");
-
-  const proof = requireEntdeckenSingleLiveReleaseProvenance();
+await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vor Start geschlossen", () => {
   assert.equal(
-    proof.command,
+    ENTDECKEN_SINGLE_LIVE_COMMAND,
     "npm run test:ai:live -- --entdecken-daily-once --owner-approved-server-budget",
   );
-  assert.equal(proof.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
-  assert.equal(proof.releaseSha256, ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256);
-  assert.deepEqual(proof.files, ENTDECKEN_SINGLE_LIVE_FILES);
-  assert.equal(proof.functionReleaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
-  assert.throws(() => requireEntdeckenSingleLiveReleaseProvenance({
-    readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("tools/keychain_runner.mjs")
-        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
-    },
-  }), (error) => error instanceof RadarRemoteStartStop
-    && error.code === "ENTDECKEN_SINGLE_LIVE_PROVENANCE_DRIFT");
-
-  const probe = requireEntdeckenProviderProbeReleaseProvenance();
   assert.equal(
-    probe.command,
+    ENTDECKEN_PROVIDER_PROBE_COMMAND,
     "npm run test:ai:live -- --entdecken-provider-probe-once --owner-approved-server-budget",
   );
-  assert.equal(probe.command, ENTDECKEN_PROVIDER_PROBE_COMMAND);
-  assert.equal(probe.releaseSha256, ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256);
-  assert.deepEqual(probe.files, ENTDECKEN_PROVIDER_PROBE_FILES);
-  assert.equal(probe.functionReleaseSha256, ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256);
-  assert.throws(() => requireEntdeckenProviderProbeReleaseProvenance({
-    readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("tools/entdecken_provider_probe_live.mjs")
-        ? Buffer.concat([bytes, Buffer.from("\n// drift")]) : bytes;
-    },
-  }), (error) => error instanceof RadarRemoteStartStop
-    && error.code === "ENTDECKEN_PROVIDER_PROBE_PROVENANCE_DRIFT");
+  assert.equal(ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256.length, 64);
+  assert.equal(ENTDECKEN_HTTP_DIAGNOSTIC_FILES.length > 0, true);
+  assert.equal(ENTDECKEN_SINGLE_LIVE_RELEASE_SHA256.length, 64);
+  assert.equal(ENTDECKEN_SINGLE_LIVE_FILES.length > 0, true);
+  assert.equal(ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256.length, 64);
+  assert.equal(ENTDECKEN_PROVIDER_PROBE_FILES.length > 0, true);
+  for (const prove of [
+    requireEntdeckenHttpDiagnosticReleaseProvenance,
+    requireEntdeckenSingleLiveReleaseProvenance,
+    requireEntdeckenProviderProbeReleaseProvenance,
+  ]) {
+    assert.throws(
+      () => prove(),
+      (error) => error instanceof RadarRemoteStartStop
+        && error.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT",
+    );
+  }
   assert.throws(() => requireEntdeckenProviderProbeReleaseProvenance({
     requireCleanVerifier: true,
     spawn(_program, args) {

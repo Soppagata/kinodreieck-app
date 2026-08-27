@@ -60,7 +60,7 @@ function refreshState(value, feedFormat = null) {
   /* Direkt nach der Forward-Migration darf der letzte gute Format-3/4-Feed
      noch unter dem neuen Ein-Versuch-Serververtrag sichtbar sein. Format 5
      selbst ist dagegen ausschliesslich mit maxAttempts=1 gueltig. */
-  const expectedAttempts = feedFormat === 5 ? 1 : null;
+  const expectedAttempts = [5, 6].includes(feedFormat) ? 1 : null;
   if (!plain(value)
       || Object.keys(value).sort().join(",")
         !== ["attemptCount", "maxAttempts", "mode", "requested", "status"].sort().join(",")
@@ -109,7 +109,7 @@ function exactResult(value, today) {
     const currentWeek = isoWeekForDay(today);
     if (!currentWeek || (value.status === "fresh") !== (checked.value.isoWeek === currentWeek)) return null;
     if (value.status === "fresh" && checked.value.validUntil < today) return null;
-  } else if (checked.value.format === 5) {
+  } else if ([5, 6].includes(checked.value.format)) {
     if ((value.status === "fresh") !== (
       checked.value.refreshedOn <= today && checked.value.validUntil >= today
     )) return null;

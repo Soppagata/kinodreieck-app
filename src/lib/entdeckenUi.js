@@ -19,6 +19,7 @@ import { profileCompatibleGenres } from "./profileGenreVocabulary.js";
 import {
   discoveryExternalIdsFromCatalog,
   matchWebDiscoveryFeed,
+  MIXED_DISCOVERY_FEED_FORMAT,
   normalizeDiscoveryTitle,
   PUBLIC_DISCOVERY_FEED_FORMAT,
   validateWebDiscoveryFeed,
@@ -96,7 +97,7 @@ function discoveryRecordIdsWithExcludedStrongId(webDiscoveryFeed, excludedTarget
   const watchmodeIds = new Set([...excludedTargetIds]
     .filter((targetId) => targetId.startsWith("watchmode:"))
     .map((targetId) => targetId.slice("watchmode:".length)));
-  if (checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT) return new Set();
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format)) return new Set();
   return new Set(checked.value.items
     .filter((record) => watchmodeIds.has(record.externalIds?.watchmode))
     .map((record) => record.recordId));
@@ -330,17 +331,23 @@ export function webDiscoveryCandidates({
 }
 
 function sourceEvidence(item) {
+  let domain = "";
+  try { domain = new URL(item.sourceUrl).hostname.replace(/^www\./, ""); } catch { /* validierter Feed */ }
   return Object.freeze({
-    domain: "joyn.at",
+    sourceId: item.sourceId || "chart:joyn-at",
+    sourceLabel: item.sourceLabel || "Joyn Österreich",
+    domain: domain || "joyn.at",
     url: item.sourceUrl,
-    retrievedOn: item.listDate,
-    sourcePosition: item.sourcePosition,
+    retrievedOn: item.popularity?.measuredOn || item.listDate,
+    market: item.availability?.market || "streaming",
+    service: item.availability?.service ?? "Joyn",
   });
 }
 function strongIds(entry) {
   const external = entry?.externalIds || {};
   return Object.freeze({
     joyn: text(entry?.sourceItemId ?? entry?.joyn_id ?? entry?.joynId) || null,
+    qid: text(entry?.qid ?? entry?.wikidata?.qid ?? external.qid) || null,
     imdb: text(external.imdb ?? entry?.imdb_id ?? entry?.imdbId).toLowerCase() || null,
     tmdb: text(external.tmdb ?? entry?.tmdb_id ?? entry?.tmdbId) || null,
   });
@@ -357,62 +364,84 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
   ];
   return seenEntries.some((entry) => {
     const entryIds = strongIds(entry);
-    const comparable = ["joyn", "imdb", "tmdb"].filter((namespace) => (
+    const comparable = ["joyn", "qid", "imdb", "tmdb"].filter((namespace) => (
       itemIds[namespace] && entryIds[namespace]
     ));
     if (comparable.length) {
       return comparable.every((namespace) => itemIds[namespace] === entryIds[namespace]);
     }
     const entryType = radarTargetTypeForCatalogType(entry?.typ ?? entry?.type) === "series" ? "series" : "film";
-    if (entryType !== itemType || !itemTitle) return false;
+    const itemYear = Number(annotation?.releaseYear ?? item?.year);
+    const entryYear = Number(entry?.jahr ?? entry?.year);
+    if (entryType !== itemType || !itemTitle || !Number.isInteger(itemYear)
+        || !Number.isInteger(entryYear) || itemYear !== entryYear) return false;
     return [entry?.titel, entry?.title, entry?.originaltitel, entry?.originalTitle]
       .map(normalizeDiscoveryTitle).filter(Boolean).includes(itemTitle);
   });
 }
 
-/* Joyn selbst belegt stabile Werk-ID, Typ, Genres und aktuelle AT-
-   Verfuegbarkeit. Ein Kandidat braucht mindestens ein Genre; ob dieses mit
-   dem Profil kompatibel ist, entscheidet ausschliesslich das bestehende
-   lokale Ranking. Listenposition ist niemals ein Passungsgrund. */
+/* Der Quellenpool belegt Quellenschluessel, Typ, Popularitaet und Marktstatus.
+   Wikidata beziehungsweise ein eindeutiger lokaler ID-/Titel-Jahr-Typ-Match
+   duerfen Metadaten ergaenzen. Quellenrang bleibt niemals Passungsgrund. */
 export function publicDiscoveryCandidates({
   webDiscoveryFeed, master = [], catalogCandidates = [], selectedServices = [],
+  includeSeen = false, requireMetadata = true,
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
-  if (!checked.ok || checked.value.format !== PUBLIC_DISCOVERY_FEED_FORMAT) return Object.freeze([]);
+  if (!checked.ok || ![PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT]
+    .includes(checked.value.format)) return Object.freeze([]);
+  const mixed = checked.value.format === MIXED_DISCOVERY_FEED_FORMAT;
   const services = selectedServiceSet(selectedServices);
-  if (services.size && !services.has("joyn")) return Object.freeze([]);
+  if (!mixed && services.size && !services.has("joyn")) return Object.freeze([]);
   const annotations = new Map(checked.value.annotations.map((entry) => [entry.sourceItemId, entry]));
-  return Object.freeze(checked.value.items.filter((item) => (
-    item.genres.length > 0
-    && !sourceItemSeen(item, master, catalogCandidates, annotations.get(item.sourceItemId))
-  )).map((item) => {
+  const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
+    .map((decision) => [decision.record.sourceItemId, decision]));
+  const projected = checked.value.items.map((item) => {
     const facts = annotations.get(item.sourceItemId);
+    const local = decisions.get(item.sourceItemId)?.status === "matched"
+      ? decisions.get(item.sourceItemId).candidate : null;
+    const genres = profileCompatibleGenres(uniqueText([...item.genres, ...list(local?.genres)]));
+    const tags = uniqueText(list(local?.tags));
+    const franchiseId = local?.franchiseId || null;
+    const seen = sourceItemSeen(item, master, catalogCandidates, facts);
+    const availability = mixed ? item.availability : Object.freeze({
+      region: "AT", market: "streaming", service: "Joyn", licenseTypes: [...item.licenseTypes],
+    });
     return Object.freeze({
-      targetId: `joyn:${item.sourceItemId}`,
+      targetId: local?.targetId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
+      watchmodeId: local?.watchmodeId ?? null,
       sourceItemId: item.sourceItemId,
       title: item.title,
       matchStatus: "matched",
       region: "AT",
       availabilityConfirmed: true,
       eligible: true,
-      genres: profileCompatibleGenres(item.genres),
-      tags: Object.freeze([]),
-      franchiseId: null,
+      genres: Object.freeze(genres),
+      tags: Object.freeze(tags),
+      franchiseId,
       freshnessAt: item.fetchedAt,
-      sourceId: webDiscoveryFeed.sourceId,
-      /* Quellenposition bleibt nur sichtbare Popularitaetsmetrik und darf
-         auch bei gleichem Passungsscore nie den persoenlichen Rang brechen. */
+      sourceId: item.sourceId || webDiscoveryFeed.sourceId,
+      sourceLabel: item.sourceLabel || "Joyn Österreich",
       sourceRank: null,
-      sourcePosition: item.sourcePosition,
-      services: Object.freeze(["Joyn"]),
-      year: facts?.releaseYear ?? null,
+      sourcePosition: item.popularity?.rank ?? item.sourcePosition,
+      services: Object.freeze(availability.service ? [availability.service] : []),
+      availability: Object.freeze({ ...availability, licenseTypes: Object.freeze([...availability.licenseTypes]) }),
+      popularity: Object.freeze({ ...(item.popularity || {
+        metric: "source-chart-rank", rank: item.sourcePosition, measuredOn: item.listDate, value: null,
+      }) }),
+      year: facts?.releaseYear ?? local?.year ?? null,
       type: item.mediaType,
+      externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
       externalDiscovery: true,
       externalEvidence: Object.freeze([sourceEvidence(item)]),
-      discoveryRecordId: `joyn:${item.sourceItemId}`,
+      discoveryRecordId: `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
       wikidata: facts || null,
+      metadataReady: genres.length > 0 || tags.length > 0 || !!franchiseId,
+      seen,
     });
-  }));
+  }).filter((candidate) => (includeSeen || !candidate.seen)
+    && (!requireMetadata || candidate.metadataReady));
+  return Object.freeze([...new Map(projected.map((candidate) => [candidate.targetId, candidate])).values()]);
 }
 
 function discoveryEvidence(record) {
@@ -432,27 +461,45 @@ function discoveryEvidence(record) {
 export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = [] } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  if (checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT) {
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format)) {
+    const mixed = checked.value.format === MIXED_DISCOVERY_FEED_FORMAT;
     const annotations = new Map(checked.value.annotations.map((entry) => [entry.sourceItemId, entry]));
-    return Object.freeze(checked.value.items.map((item, index) => {
+    const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
+      .map((decision) => [decision.record.sourceItemId, decision]));
+    const projected = checked.value.items.map((item) => {
       const facts = annotations.get(item.sourceItemId);
+      const local = decisions.get(item.sourceItemId)?.status === "matched"
+        ? decisions.get(item.sourceItemId).candidate : null;
+      const availability = mixed ? item.availability : Object.freeze({
+        region: "AT", market: "streaming", service: "Joyn", licenseTypes: [...item.licenseTypes],
+      });
       return Object.freeze({
-        targetId: `joyn:${item.sourceItemId}`,
+        targetId: local?.targetId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
+        watchmodeId: local?.watchmodeId ?? null,
         sourceItemId: item.sourceItemId,
-        discoveryRecordId: `joyn:${item.sourceItemId}`,
+        discoveryRecordId: `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
         title: item.title,
-        year: facts?.releaseYear ?? null,
+        year: facts?.releaseYear ?? local?.year ?? null,
         type: item.mediaType,
-        services: Object.freeze(["Joyn"]),
-        sourceRank: index + 1,
-        sourcePosition: item.sourcePosition,
+        services: Object.freeze(availability.service ? [availability.service] : []),
+        sourceId: item.sourceId || checked.value.sourceId,
+        sourceLabel: item.sourceLabel || "Joyn Österreich",
+        sourceRank: null,
+        sourcePosition: item.popularity?.rank ?? item.sourcePosition,
+        availability: Object.freeze({ ...availability, licenseTypes: Object.freeze([...availability.licenseTypes]) }),
+        popularity: Object.freeze({ ...(item.popularity || {
+          metric: "source-chart-rank", rank: item.sourcePosition, measuredOn: item.listDate, value: null,
+        }) }),
         externalEvidence: Object.freeze([sourceEvidence(item)]),
         matchStatus: "source-confirmed",
-        genres: Object.freeze([...item.genres]),
-        licenseTypes: Object.freeze([...item.licenseTypes]),
+        genres: Object.freeze(uniqueText([...item.genres, ...list(local?.genres)])),
+        tags: Object.freeze(uniqueText(list(local?.tags))),
+        licenseTypes: Object.freeze([...availability.licenseTypes]),
+        externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
         wikidata: facts || null,
       });
-    }));
+    });
+    return Object.freeze([...new Map(projected.map((candidate) => [candidate.targetId, candidate])).values()]);
   }
   return Object.freeze(matchWebDiscoveryFeed(checked.value, catalogCandidates).map((decision) => {
     const { record } = decision;
@@ -495,6 +542,54 @@ function stableHash(value) {
   return hash >>> 0;
 }
 
+function popularityGroup(entry) {
+  if (entry?.availability?.market === "cinema") return "cinema";
+  return radarTargetTypeForCatalogType(entry?.type) === "series"
+    ? "streaming-series" : "streaming-film";
+}
+
+/* Die sichtbare Popularitaetslane mischt die drei belegten Teilmaerkte
+   deterministisch. Derselbe Pool am selben Kalendertag bleibt identisch;
+   ein neuer Tag darf die Auswahl aendern, ohne Quellenrang in persoenliche
+   Passung umzudeuten. */
+export function selectStablePopularCards(rows, {
+  webDiscoveryFeed = null, selectionDay = null, limit = ENTDECKEN_POPULAR_LIMIT,
+} = {}) {
+  const safeLimit = Math.max(0, Math.min(ENTDECKEN_POPULAR_LIMIT, Number(limit) || 0));
+  const day = calendarDay(selectionDay) || calendarDay(webDiscoveryFeed?.refreshedOn);
+  const poolIdentity = list(webDiscoveryFeed?.items).map((item) => item?.sourceItemId).filter(Boolean).join("|");
+  const seed = `${webDiscoveryFeed?.feedId || "feed"}|${webDiscoveryFeed?.refreshedOn || "day"}|${day || "stable"}|${poolIdentity}`;
+  const groups = new Map();
+  for (const row of list(rows)) {
+    const key = popularityGroup(row);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  const preferred = ["cinema", "streaming-film", "streaming-series"].filter((key) => groups.has(key));
+  for (const key of preferred) {
+    groups.get(key).sort((left, right) => (
+      stableHash(`${seed}|${key}|${left.targetId}`) - stableHash(`${seed}|${key}|${right.targetId}`)
+      || left.targetId.localeCompare(right.targetId, "de-AT")
+    ));
+  }
+  if (!preferred.length) return Object.freeze([]);
+  const start = stableHash(`${seed}|group-start`) % preferred.length;
+  const order = [...preferred.slice(start), ...preferred.slice(0, start)];
+  const selected = [];
+  for (let index = 0; selected.length < safeLimit; index += 1) {
+    let added = false;
+    for (const key of order) {
+      const row = groups.get(key)?.[index];
+      if (!row) continue;
+      selected.push(Object.freeze({ ...row }));
+      added = true;
+      if (selected.length === safeLimit) break;
+    }
+    if (!added) break;
+  }
+  return Object.freeze(selected);
+}
+
 /* Die tägliche Abwechslung wählt stabil aus höchstens zwanzig bereits
    gerankten Treffern. Nach der Auswahl wird wieder nach Passungsrang sortiert:
    Zufall entscheidet nur, welche Titel heute vorkommen, nie über ihre Aussage. */
@@ -533,27 +628,57 @@ export function createEntdeckenRecommendations({
     streamingKnown, selectedServices, entdeckenStatus, includeSeenForMatching: true,
   });
   const checkedFeed = validateWebDiscoveryFeed(webDiscoveryFeed);
-  if (checkedFeed.ok && checkedFeed.value.format === PUBLIC_DISCOVERY_FEED_FORMAT) {
-    const direct = publicDiscoveryCandidates({
-      webDiscoveryFeed: checkedFeed.value, master, catalogCandidates, selectedServices,
+  if (checkedFeed.ok && [PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT]
+    .includes(checkedFeed.value.format)) {
+    /* Fuer den marktuebergreifenden Feed ist die lokale Streaming-Dienstewahl
+       kein Quellenfilter. Sie beschreibt Verfuegbarkeit, nicht Geschmack. */
+    const broadCatalog = checkedFeed.value.format === MIXED_DISCOVERY_FEED_FORMAT
+      ? localRecommendationCandidates(streamingEntdecken, {
+        streamingKnown, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
+      }) : catalogCandidates;
+    const allDirect = publicDiscoveryCandidates({
+      webDiscoveryFeed: checkedFeed.value, master, catalogCandidates: broadCatalog, selectedServices,
+      includeSeen: true, requireMetadata: false,
     });
+    const withMetadata = allDirect.filter((candidate) => candidate.metadataReady);
+    const direct = withMetadata.filter((candidate) => !candidate.seen);
     const ranked = profile?.beschaedigt === true ? [] : rankRecommendations(direct, {
       profile: profile && profile.beschaedigt !== true ? profile : {},
       library: localLibraryProjection(master), useLibrary, excludedTargetIds: [],
     });
-    const personal = selectDailyRecommendations(ranked, { dailyVariety, selectionDay });
+    const mixed = checkedFeed.value.format === MIXED_DISCOVERY_FEED_FORMAT;
+    const personal = selectDailyRecommendations(ranked, {
+      /* Persoenliche Auswahl bleibt im neuen Pfad immer bestes, stabiles
+         Profilranking. Tagesmischung gehoert allein zur Popularitaetslane. */
+      dailyVariety: mixed ? false : dailyVariety,
+      selectionDay,
+    });
     const personalIds = new Set(personal.map((entry) => entry.targetId));
-    const popular = webDiscoveryFeedCards({ webDiscoveryFeed: checkedFeed.value })
+    const popularPool = webDiscoveryFeedCards({
+      webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog,
+    })
       .filter((candidate) => !personalIds.has(candidate.targetId)
-        && !sourceItemSeen(candidate, master, catalogCandidates))
-      .slice(0, ENTDECKEN_POPULAR_LIMIT)
-      .map((candidate) => Object.freeze({ ...candidate }));
+        && !sourceItemSeen(candidate, master, broadCatalog));
+    const popular = mixed
+      ? selectStablePopularCards(popularPool, {
+        webDiscoveryFeed: checkedFeed.value, selectionDay,
+      })
+      : Object.freeze(popularPool.slice(0, ENTDECKEN_POPULAR_LIMIT).map((candidate) => Object.freeze({ ...candidate })));
+    const diagnostics = Object.freeze({
+      candidates: allDirect.length,
+      metadata: withMetadata.length,
+      afterExclusions: direct.length,
+      profileMatches: ranked.length,
+      visible: personal.length,
+      duplicatesRemoved: checkedFeed.value.items.length - allDirect.length,
+    });
     return Object.freeze({
       personal,
-      popular: Object.freeze(popular),
+      popular,
+      diagnostics,
       /* Uebergangskompatibilitaet fuer alte lokale Aufrufer; die UI verwendet
          nur noch den fachlich benannten separaten Popularitaetspfad. */
-      further: Object.freeze(popular),
+      further: popular,
     });
   }
   const external = webDiscoveryCandidates({ webDiscoveryFeed, catalogCandidates });

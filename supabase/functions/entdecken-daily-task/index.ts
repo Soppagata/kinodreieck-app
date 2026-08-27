@@ -8,7 +8,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { requestHasForbiddenBody, validateEntdeckenDailyFeed } from "./contract.js";
 import { runEntdeckenDailyRefresh } from "./runner.js";
 import { createEntdeckenDailyResponse } from "./responseContract.js";
-import { createJoynPublicChartAdapter } from "./publicChartAdapter.js";
+import { createMixedPublicChartAdapter } from "./publicMixAdapter.js";
 import { createWikidataResolver } from "./wikidataResolver.js";
 import {
   createAnthropicEntdeckenProviderProbe,
@@ -101,13 +101,15 @@ function normalizedWikidataCacheRows(rows: unknown): Array<Record<string, unknow
     const mediaType = text(row.media_type);
     const resolverVersion = Number(row.resolver_version);
     const status = text(row.status);
+    const checkedAt = canonicalInstant(row.checked_at);
     if (!/^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sourceItemId) || sourceItemId.length > 182
         || !/^[a-f0-9]{16}$/.test(titleFingerprint)
         || !["film", "series"].includes(mediaType)
         || !Number.isSafeInteger(resolverVersion) || resolverVersion <= 0
-        || !["resolved", "not_found", "ambiguous_blocked", "incomplete_blocked"].includes(status)) continue;
+        || !["resolved", "not_found", "ambiguous_blocked", "incomplete_blocked"].includes(status)
+        || !checkedAt) continue;
     if (status !== "resolved") {
-      result.push({ sourceItemId, titleFingerprint, mediaType, resolverVersion, status, facts: null });
+      result.push({ sourceItemId, titleFingerprint, mediaType, resolverVersion, status, facts: null, checkedAt });
       continue;
     }
     const qid = text(row.qid);
@@ -122,6 +124,7 @@ function normalizedWikidataCacheRows(rows: unknown): Array<Record<string, unknow
         || (releaseYear === null && imdb === null && tmdb === null)) continue;
     result.push({
       sourceItemId, titleFingerprint, mediaType, resolverVersion, status,
+      checkedAt,
       facts: {
         qid, mediaType, releaseYear,
         externalIds: { ...(imdb ? { imdb } : {}), ...(tmdb ? { tmdb } : {}) },
@@ -343,7 +346,7 @@ export function createEntdeckenDailyHandler({
     }
     let claimContext: Record<string, unknown> | null = null;
     let cachedSources: Array<Record<string, unknown>> | null = null;
-    const publicProduct = adapter === null || adapter?.mode === "public-chart";
+    const publicProduct = adapter === null || ["public-chart", "public-mix"].includes(adapter?.mode || "");
     const loadSources = async () => {
       if (cachedSources) return cachedSources;
       let query = admin.from("kd_entdecken_sources")
@@ -384,7 +387,7 @@ export function createEntdeckenDailyHandler({
         providerReceipt?: { server?: { logId?: unknown } };
         sourceMode?: string;
       }) {
-        if (sourceMode === "public-chart") {
+        if (["public-chart", "public-mix"].includes(sourceMode || "")) {
           const { data, error } = await admin.rpc("kd_entdecken_public_feed_readback", {
             p_fence_token: fenceToken,
           });
@@ -418,7 +421,7 @@ export function createEntdeckenDailyHandler({
       async loadCache(sourceItemIds: Array<string> = []) {
         if (!sourceItemIds.length) return [];
         const { data, error } = await admin.from("kd_entdecken_wikidata_cache")
-          .select("source_item_id,title_fingerprint,media_type,resolver_version,status,qid,release_year,imdb_id,tmdb_id,resolved_at")
+          .select("source_item_id,title_fingerprint,media_type,resolver_version,status,qid,release_year,imdb_id,tmdb_id,resolved_at,checked_at")
           .in("source_item_id", sourceItemIds);
         if (error) throw error;
         return normalizedWikidataCacheRows(data);
@@ -443,7 +446,7 @@ export function createEntdeckenDailyHandler({
         if (error) throw error;
       },
     });
-    const productAdapter = (adapter ?? createJoynPublicChartAdapter({ fetchImpl })) as {
+    const productAdapter = (adapter ?? createMixedPublicChartAdapter({ fetchImpl })) as {
       mode?: string;
       search(...args: Array<unknown>): Promise<unknown>;
       telemetry?: () => Record<string, unknown>;

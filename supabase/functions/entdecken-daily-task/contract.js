@@ -8,6 +8,14 @@ import {
   ENTDECKEN_PUBLIC_POOL_SIZE,
   ENTDECKEN_PUBLIC_SOURCE_ID,
 } from "./publicChartAdapter.js";
+import {
+  ENTDECKEN_MIXED_FEED_FORMAT,
+  ENTDECKEN_MIXED_FEED_ID,
+  ENTDECKEN_MIXED_MARKET_COUNTS,
+  ENTDECKEN_MIXED_POOL_SIZE,
+  ENTDECKEN_MIXED_SOURCE_ID,
+  ENTDECKEN_OEFI_SOURCE_ID,
+} from "./publicMixAdapter.js";
 
 export const ENTDECKEN_WEEKLY_FEED_FORMAT = 4;
 export const ENTDECKEN_WEEKLY_FEED_ID = "websearch:weekly-positive-at";
@@ -310,6 +318,49 @@ export function validateEntdeckenPublicSourceRegistry(value) {
     : Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
 }
 
+/* Der neue Mix ist weiterhin ein privater, providerfreier Produktpfad. Beide
+   Quellen werden explizit gebunden; eine zusaetzliche aktive Chartquelle oder
+   ein geaenderter Rechte-/Betreiberstatus stoppt vor dem ersten GET. */
+export function validateEntdeckenMixedSourceRegistry(value) {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return Object.freeze({ ok: false, errors: Object.freeze(["mixed-source-registry-size-invalid"]), value: null });
+  }
+  const byId = new Map(value.map((source) => [source?.sourceId, source]));
+  const expected = Object.freeze({
+    [ENTDECKEN_PUBLIC_SOURCE_ID]: Object.freeze({
+      domain: "joyn.at", publisherFamily: "Joyn AT / ProSiebenSat.1 PULS 4", subdomainsAllowed: true,
+    }),
+    [ENTDECKEN_OEFI_SOURCE_ID]: Object.freeze({
+      domain: "filminstitut.at", publisherFamily: "Österreichisches Filminstitut", subdomainsAllowed: false,
+    }),
+  });
+  const errors = [];
+  for (const sourceId of Object.keys(expected)) {
+    const source = byId.get(sourceId);
+    const policy = expected[sourceId];
+    if (!exactKeys(source, [
+      "sourceId", "domain", "publisherFamily", "sourceClass", "rightsStatus",
+      "attributionApproved", "subdomainsAllowed", "active", "termsUrl", "termsCheckedOn",
+    ])) { errors.push(`${sourceId}-shape-invalid`); continue; }
+    if (!stablePublicSourceId(source.sourceId) || source.sourceId !== sourceId) errors.push(`${sourceId}-id-invalid`);
+    if (source.domain !== policy.domain || !validDomain(source.domain)) errors.push(`${sourceId}-domain-invalid`);
+    if (source.publisherFamily !== policy.publisherFamily) errors.push(`${sourceId}-family-invalid`);
+    if (source.sourceClass !== "chart" || source.rightsStatus !== "owner_private"
+        || source.attributionApproved !== true || source.subdomainsAllowed !== policy.subdomainsAllowed
+        || source.active !== true) errors.push(`${sourceId}-policy-invalid`);
+    const terms = directUrl(source.termsUrl);
+    const termsHostAllowed = terms && (terms.hostname === policy.domain
+      || (policy.subdomainsAllowed && terms.hostname.endsWith(`.${policy.domain}`)));
+    if (!termsHostAllowed || !validDay(source.termsCheckedOn)) {
+      errors.push(`${sourceId}-terms-invalid`);
+    }
+  }
+  if (byId.size !== 2) errors.push("mixed-source-id-duplicate");
+  return errors.length
+    ? Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null })
+    : Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(JSON.parse(JSON.stringify(value))) });
+}
+
 function publicMediaTypeForUrl(value) {
   const parsed = directUrl(value);
   if (!parsed || parsed.hostname !== "www.joyn.at") return null;
@@ -336,6 +387,45 @@ function validatePublicFeedItem(item, retrievedOn, checkedAt) {
     && item.listDate === retrievedOn && item.fetchedAt === checkedAt
     && validInstant(item.fetchedAt) && new Date(item.fetchedAt).toISOString() === item.fetchedAt
     && publicMediaTypeForUrl(item.sourceUrl) === item.mediaType;
+}
+function mixedSourceUrl(item) {
+  const parsed = directUrl(item?.sourceUrl);
+  if (!parsed) return false;
+  if (item.sourceId === ENTDECKEN_PUBLIC_SOURCE_ID) {
+    return item.sourceLabel === "Joyn Österreich" && publicMediaTypeForUrl(item.sourceUrl) === item.mediaType;
+  }
+  return item.sourceId === ENTDECKEN_OEFI_SOURCE_ID
+    && item.sourceLabel === "Österreichisches Filminstitut"
+    && item.mediaType === "film" && parsed.hostname === "filminstitut.at" && parsed.pathname === "/charts";
+}
+function validateMixedFeedItem(item, retrievedOn, checkedAt) {
+  if (!exactKeys(item, [
+    "title", "sourceItemId", "sourceId", "sourceLabel", "mediaType", "genres",
+    "availability", "popularity", "sourceUrl", "fetchedAt",
+  ]) || typeof item.title !== "string" || item.title !== text(item.title)
+      || item.title.length < 1 || item.title.length > 200
+      || typeof item.sourceItemId !== "string"
+      || !/^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.sourceItemId)
+      || item.sourceItemId.length > 182 || !["film", "series"].includes(item.mediaType)
+      || unique(item.genres, 80) === null || item.genres.length > 8
+      || item.fetchedAt !== checkedAt || !validInstant(item.fetchedAt)
+      || new Date(item.fetchedAt).toISOString() !== item.fetchedAt || !mixedSourceUrl(item)
+      || !exactKeys(item.availability, ["region", "market", "service", "licenseTypes"])
+      || item.availability.region !== "AT" || !["cinema", "streaming"].includes(item.availability.market)
+      || !exactKeys(item.popularity, ["metric", "rank", "measuredOn", "value"])
+      || !Number.isInteger(item.popularity.rank) || item.popularity.rank < 1 || item.popularity.rank > 50
+      || !validDay(item.popularity.measuredOn) || item.popularity.measuredOn > retrievedOn) return false;
+  const licenses = unique(item.availability.licenseTypes, 20);
+  if (!licenses || licenses.length > 4
+      || licenses.some((license) => !["AVOD", "FVOD", "SVOD"].includes(license))) return false;
+  if (item.sourceId === ENTDECKEN_PUBLIC_SOURCE_ID) {
+    return item.availability.market === "streaming" && item.availability.service === "Joyn"
+      && licenses.length >= 1 && item.popularity.metric === "source-chart-rank"
+      && item.popularity.value === null && item.popularity.measuredOn === retrievedOn;
+  }
+  return item.availability.market === "cinema" && item.availability.service === null
+    && licenses.length === 0 && item.popularity.metric === "weekend-admissions"
+    && Number.isSafeInteger(item.popularity.value) && item.popularity.value >= 0;
 }
 function sixDaysAfter(day) {
   if (!validDay(day)) return null;
@@ -412,6 +502,76 @@ export function evaluateEntdeckenPublicResponse(envelope, sourceRegistry, {
     eligibleUniqueCount: identities.size,
     rejectedItemCount: 0,
     duplicateItemCount: 0,
+  });
+}
+
+export function evaluateEntdeckenMixedResponse(envelope, sourceRegistry, {
+  retrievedOn,
+  claimedIsoWeek = null,
+} = {}) {
+  const sources = validateEntdeckenMixedSourceRegistry(sourceRegistry);
+  const week = isoWeekData(retrievedOn);
+  const expectedQuery = createEntdeckenWeeklyQueryContext(retrievedOn, claimedIsoWeek);
+  if (!sources.ok) return result("invalid_response", sources.errors);
+  if (!week || !expectedQuery || !exactKeys(envelope, [
+    "sourceMode", "sourceId", "sourceIds", "queryContext", "checkedAt", "retrievedOn", "isoWeek", "items",
+  ], ["annotations"]) || envelope.sourceMode !== "public-mix" || envelope.sourceId !== ENTDECKEN_MIXED_SOURCE_ID
+      || !Array.isArray(envelope.sourceIds)
+      || JSON.stringify([...envelope.sourceIds].sort()) !== JSON.stringify([
+        ENTDECKEN_PUBLIC_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID,
+      ].sort())
+      || envelope.retrievedOn !== retrievedOn || envelope.isoWeek !== week.isoWeek
+      || !validInstant(envelope.checkedAt) || new Date(envelope.checkedAt).toISOString() !== envelope.checkedAt
+      || JSON.stringify(validateEntdeckenWeeklyQueryContext(envelope.queryContext)) !== JSON.stringify(expectedQuery)
+      || !Array.isArray(envelope.items) || envelope.items.length !== ENTDECKEN_MIXED_POOL_SIZE) {
+    return result("invalid_response", ["public-mix-envelope-invalid"]);
+  }
+  const identities = new Set();
+  const sourceItemIds = new Set();
+  const positions = new Set();
+  const marketCounts = { cinema: 0, streamingFilm: 0, streamingSeries: 0 };
+  for (const item of envelope.items) {
+    if (!validateMixedFeedItem(item, retrievedOn, envelope.checkedAt)) {
+      return result("invalid_response", ["public-mix-item-invalid"]);
+    }
+    const identity = normalizedTitle(item.title);
+    const position = `${item.sourceId}|${item.mediaType}|${item.popularity.rank}`;
+    if (!identity || identities.has(identity) || sourceItemIds.has(item.sourceItemId) || positions.has(position)) {
+      return result("invalid_response", ["public-mix-identity-invalid"]);
+    }
+    identities.add(identity); sourceItemIds.add(item.sourceItemId); positions.add(position);
+    if (item.availability.market === "cinema") marketCounts.cinema += 1;
+    else if (item.mediaType === "film") marketCounts.streamingFilm += 1;
+    else marketCounts.streamingSeries += 1;
+  }
+  if (JSON.stringify(marketCounts) !== JSON.stringify(ENTDECKEN_MIXED_MARKET_COUNTS)) {
+    return result("invalid_response", ["public-mix-market-counts-invalid"]);
+  }
+  const itemsById = new Map(envelope.items.map((item) => [item.sourceItemId, item]));
+  const annotations = envelope.annotations ?? [];
+  if (!Array.isArray(annotations) || annotations.length > ENTDECKEN_MIXED_POOL_SIZE
+      || annotations.some((entry) => !validPublicAnnotation(entry, itemsById))
+      || new Set(annotations.map((entry) => entry.sourceItemId)).size !== annotations.length) {
+    return result("invalid_response", ["public-mix-annotations-invalid"]);
+  }
+  const feed = freezeDeep({
+    format: ENTDECKEN_MIXED_FEED_FORMAT,
+    feedId: ENTDECKEN_MIXED_FEED_ID,
+    region: "AT",
+    sourceId: ENTDECKEN_MIXED_SOURCE_ID,
+    sourceIds: [...envelope.sourceIds],
+    isoWeek: week.isoWeek,
+    refreshedOn: retrievedOn,
+    validUntil: sixDaysAfter(retrievedOn),
+    items: JSON.parse(JSON.stringify(envelope.items)),
+    annotations: JSON.parse(JSON.stringify(annotations)),
+  });
+  return result("confirmed", [], feed, mergePresentation(null), {
+    candidateItemCount: envelope.items.length,
+    eligibleUniqueCount: identities.size,
+    rejectedItemCount: 0,
+    duplicateItemCount: 0,
+    marketCounts,
   });
 }
 
@@ -633,22 +793,25 @@ function validateFeedItem(item, feed, weekly) {
 }
 
 export function validateEntdeckenDailyFeed(value) {
+  const mixedWeekly = value?.format === ENTDECKEN_MIXED_FEED_FORMAT;
   const publicWeekly = value?.format === ENTDECKEN_PUBLIC_FEED_FORMAT;
   const weekly = value?.format === ENTDECKEN_WEEKLY_FEED_FORMAT;
   const legacy = value?.format === LEGACY_FEED.format;
   const required = ["format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items"];
-  if ((!publicWeekly && !weekly && !legacy)
-      || !exactKeys(value, publicWeekly ? [...required, "isoWeek", "annotations"]
+  if ((!mixedWeekly && !publicWeekly && !weekly && !legacy)
+      || !exactKeys(value, mixedWeekly ? [...required, "sourceIds", "isoWeek", "annotations"]
+        : publicWeekly ? [...required, "isoWeek", "annotations"]
         : weekly ? [...required, "isoWeek"] : required)
-      || value.feedId !== (publicWeekly ? ENTDECKEN_PUBLIC_FEED_ID
+      || value.feedId !== (mixedWeekly ? ENTDECKEN_MIXED_FEED_ID : publicWeekly ? ENTDECKEN_PUBLIC_FEED_ID
         : weekly ? ENTDECKEN_WEEKLY_FEED_ID : LEGACY_FEED.feedId)
       || value.region !== "AT"
-      || value.sourceId !== (publicWeekly ? ENTDECKEN_PUBLIC_SOURCE_ID
+      || value.sourceId !== (mixedWeekly ? ENTDECKEN_MIXED_SOURCE_ID : publicWeekly ? ENTDECKEN_PUBLIC_SOURCE_ID
         : weekly ? ENTDECKEN_WEEKLY_SOURCE_ID : LEGACY_FEED.sourceId)
       || !validDay(value.refreshedOn) || !validDay(value.validUntil)
       || value.validUntil < value.refreshedOn
       || !Array.isArray(value.items) || value.items.length < 1
-      || value.items.length > (publicWeekly ? ENTDECKEN_PUBLIC_POOL_SIZE : ENTDECKEN_WEEKLY_MAX_ITEMS)) {
+      || value.items.length > (mixedWeekly ? ENTDECKEN_MIXED_POOL_SIZE
+        : publicWeekly ? ENTDECKEN_PUBLIC_POOL_SIZE : ENTDECKEN_WEEKLY_MAX_ITEMS)) {
     return Object.freeze({ ok: false, value: null });
   }
   if (weekly) {
@@ -681,6 +844,44 @@ export function validateEntdeckenDailyFeed(value) {
     }
     const itemsById = new Map(value.items.map((item) => [item.sourceItemId, item]));
     if (!Array.isArray(value.annotations) || value.annotations.length > ENTDECKEN_PUBLIC_POOL_SIZE
+        || value.annotations.some((entry) => !validPublicAnnotation(entry, itemsById))
+        || new Set(value.annotations.map((entry) => entry.sourceItemId)).size !== value.annotations.length) {
+      return Object.freeze({ ok: false, value: null });
+    }
+    return Object.freeze({ ok: true, value: freezeDeep(JSON.parse(JSON.stringify(value))) });
+  }
+  if (mixedWeekly) {
+    const week = isoWeekData(value.refreshedOn);
+    const expectedSourceIds = [ENTDECKEN_PUBLIC_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID].sort();
+    if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== sixDaysAfter(value.refreshedOn)
+        || value.items.length !== ENTDECKEN_MIXED_POOL_SIZE || !Array.isArray(value.sourceIds)
+        || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify(expectedSourceIds)) {
+      return Object.freeze({ ok: false, value: null });
+    }
+    const identities = new Set();
+    const sourceItemIds = new Set();
+    const positions = new Set();
+    const marketCounts = { cinema: 0, streamingFilm: 0, streamingSeries: 0 };
+    const fetchedAt = value.items[0]?.fetchedAt;
+    for (const item of value.items) {
+      if (!validateMixedFeedItem(item, value.refreshedOn, fetchedAt)) {
+        return Object.freeze({ ok: false, value: null });
+      }
+      const identity = normalizedTitle(item.title);
+      const position = `${item.sourceId}|${item.mediaType}|${item.popularity.rank}`;
+      if (!identity || identities.has(identity) || sourceItemIds.has(item.sourceItemId) || positions.has(position)) {
+        return Object.freeze({ ok: false, value: null });
+      }
+      identities.add(identity); sourceItemIds.add(item.sourceItemId); positions.add(position);
+      if (item.availability.market === "cinema") marketCounts.cinema += 1;
+      else if (item.mediaType === "film") marketCounts.streamingFilm += 1;
+      else marketCounts.streamingSeries += 1;
+    }
+    if (JSON.stringify(marketCounts) !== JSON.stringify(ENTDECKEN_MIXED_MARKET_COUNTS)) {
+      return Object.freeze({ ok: false, value: null });
+    }
+    const itemsById = new Map(value.items.map((item) => [item.sourceItemId, item]));
+    if (!Array.isArray(value.annotations) || value.annotations.length > ENTDECKEN_MIXED_POOL_SIZE
         || value.annotations.some((entry) => !validPublicAnnotation(entry, itemsById))
         || new Set(value.annotations.map((entry) => entry.sourceItemId)).size !== value.annotations.length) {
       return Object.freeze({ ok: false, value: null });
