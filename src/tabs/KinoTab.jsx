@@ -186,6 +186,10 @@ export function KinoTab({
     () => new Set(kinoEmpfehlungen.map((entry) => String(entry.filmAtId))),
     [kinoEmpfehlungen],
   );
+  const restNeutralGesamt = useMemo(
+    () => kinoMatches.rest.filter((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))).length,
+    [kinoMatches.rest, kinoEmpfehlungsIds],
+  );
   const empfohleneGefiltert = useMemo(() => kinoEmpfehlungen.filter(({ program: pf }) => (
     passtFilter(pf) && (!nq || norm(pf.t).includes(nq))
   )).sort((a, b) => nachTermin(zeitenGefiltert(a.program), zeitenGefiltert(b.program))),
@@ -479,10 +483,10 @@ export function KinoTab({
           )}
 
           {/* ---- Läuft auch: gefilterte Liste statt zugeklapptem Block ---- */}
-          {kinoMatches.rest.some((pf) => !kinoEmpfehlungsIds.has(String(pf.film_at_id))) && (
+          {restNeutralGesamt > 0 && (
             <>
               <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 17, letterSpacing: "0.06em", textTransform: "uppercase", color: T.rauch, margin: "26px 0 8px" }}>
-                Läuft auch{master ? ", nicht in deiner Liste" : ""} ({restGefiltert.length})
+                Läuft auch{master ? ", nicht in deiner Liste" : ""} ({restGefiltert.length}{restGefiltert.length < restNeutralGesamt ? " von " + restNeutralGesamt : ""})
               </h2>
               {restSichtbar.length < kinoMatches.rest.length && !zeigeAlles && (
                 <div style={{ marginBottom: 8, fontFamily: "'Space Mono', monospace", fontSize: 11, color: T.rauch }}>
