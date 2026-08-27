@@ -29,6 +29,10 @@ export const ENTDECKEN_DAILY_MAX_SEARCH_USES = 2;
 
 const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
+/* DER STANDARD untersagt Anthropic-Crawler in robots.txt. Die Domain bleibt
+   im freigegebenen Produkt-Provenienzregister, wird aber nie an Anthropic als
+   Websearch-Ziel gesendet. */
+const ANTHROPIC_WEBSEARCH_EXCLUDED_DOMAINS = Object.freeze(["derstandard.at"]);
 const MODEL_FORM = /^claude-haiku-4-5(?:-[0-9]{8})?$/;
 const MODEL_PRICE_FLOOR = Object.freeze({ input: 100, output: 500 });
 const SAFE_ERROR_CODES = new Set([
@@ -92,10 +96,16 @@ export function validateEntdeckenDailyProviderSetup(value) {
       || !finitePositive(value.inputPriceUsdCentPerMtok) || value.inputPriceUsdCentPerMtok < MODEL_PRICE_FLOOR.input
       || !finitePositive(value.outputPriceUsdCentPerMtok) || value.outputPriceUsdCentPerMtok < MODEL_PRICE_FLOOR.output
       || !sourceCheck.ok) setupError();
+  const allowedDomains = Object.freeze(sourceCheck.value.map((source) => source.domain).sort());
+  const providerAllowedDomains = Object.freeze(allowedDomains.filter((domain) => (
+    !ANTHROPIC_WEBSEARCH_EXCLUDED_DOMAINS.includes(domain)
+  )));
+  if (providerAllowedDomains.length < 1) setupError();
   return Object.freeze({
     ...value,
     sourceRegistry: sourceCheck.value,
-    allowedDomains: Object.freeze(sourceCheck.value.map((source) => source.domain).sort()),
+    allowedDomains,
+    providerAllowedDomains,
   });
 }
 
@@ -125,7 +135,7 @@ export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) 
     region: "AT",
     language: "de",
     maxItems: ENTDECKEN_DAILY_MAX_ITEMS,
-    allowedDomains: setup.allowedDomains,
+    allowedDomains: setup.providerAllowedDomains,
   });
   return Object.freeze({
     model: setup.model,
@@ -136,15 +146,8 @@ export function buildAnthropicEntdeckenDailyBody(setupInput, queryContextInput) 
       type: "web_search_20250305",
       name: "web_search",
       max_uses: ENTDECKEN_DAILY_MAX_SEARCH_USES,
-      allowed_domains: setup.allowedDomains,
+      allowed_domains: setup.providerAllowedDomains,
       allowed_callers: Object.freeze(["direct"]),
-      user_location: Object.freeze({
-        type: "approximate",
-        city: "Vienna",
-        region: "Vienna",
-        country: "AT",
-        timezone: "Europe/Vienna",
-      }),
     })]),
   });
 }

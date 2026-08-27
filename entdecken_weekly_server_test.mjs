@@ -248,21 +248,24 @@ await check("Quellenregister akzeptiert eine kleine freigegebene Redaktionsliste
   assert.equal(validateEntdeckenSourceRegistry([{ ...standardSource, active: false }, filmAtSource]).ok, false);
 });
 
-await check("Anthropic-Body erlaubt zwei begrenzte AT-Wochensuchen und keine lokalen Daten", () => {
+await check("Anthropic-Body schliesst gesperrte Providerdomain und optionale Ortsdaten aus", () => {
+  const setup = validateEntdeckenDailyProviderSetup(providerSetup);
   const body = buildAnthropicEntdeckenDailyBody(providerSetup, queryContext);
   const input = JSON.parse(body.messages[0].content);
+  assert.deepEqual(setup.allowedDomains, ["derstandard.at", "film.at", "filmstarts.de", "kurier.at"]);
+  assert.deepEqual(setup.providerAllowedDomains, ["film.at", "filmstarts.de", "kurier.at"]);
   assert.deepEqual(input, {
     queryContext, region: "AT", language: "de", maxItems: ENTDECKEN_WEEKLY_MAX_CANDIDATES,
-    allowedDomains: ["derstandard.at", "film.at", "filmstarts.de", "kurier.at"],
+    allowedDomains: ["film.at", "filmstarts.de", "kurier.at"],
   });
   assert.deepEqual(body.tools, [{
     type: "web_search_20250305", name: "web_search", max_uses: 2,
-    allowed_domains: ["derstandard.at", "film.at", "filmstarts.de", "kurier.at"], allowed_callers: ["direct"],
-    user_location: {
-      type: "approximate", city: "Vienna", region: "Vienna",
-      country: "AT", timezone: "Europe/Vienna",
-    },
+    allowed_domains: ["film.at", "filmstarts.de", "kurier.at"], allowed_callers: ["direct"],
   }]);
+  assert.equal(Object.hasOwn(body.tools[0], "user_location"), false);
+  assert.throws(() => validateEntdeckenDailyProviderSetup({
+    ...providerSetup, sourceRegistry: [standardSource],
+  }), /setup-invalid/);
   assert.match(body.system, /ausschliesslich mit einem einzigen JSON-Objekt/);
   assert.match(body.system, /sieben bis zehn unterschiedliche belegte Titel/);
   assert.match(body.system, /vorherigen 35 Tagen/);
@@ -349,11 +352,14 @@ await check("Automatische Websearch-Zitate duerfen ein valides JSON ueber mehrer
   assert.equal(evaluatedParsed.feed.items.length, 6);
 });
 
-await check("Realer Zwei-Quellen-Pfad normalisiert sichere Formabweichungen zu sieben Empfehlungen", () => {
+await check("Providerausschluss lockert den freigegebenen Produkt-Provenienzpfad nicht", () => {
   const twoSourceSetup = Object.freeze({
     ...providerSetup,
     sourceRegistry: Object.freeze([standardSource, filmAtSource]),
   });
+  const checkedSetup = validateEntdeckenDailyProviderSetup(twoSourceSetup);
+  assert.deepEqual(checkedSetup.allowedDomains, ["derstandard.at", "film.at"]);
+  assert.deepEqual(checkedSetup.providerAllowedDomains, ["film.at"]);
   const flexibleItems = providerItems(8).map((item, index) => ({
     ...item,
     title: index === 4 ? `  ${item.title}  ` : item.title,
