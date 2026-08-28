@@ -289,7 +289,7 @@ export const ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256 = "0599f19a1c82fdcd1b3fda13
 
 /* Additiver Format-6-Vertrag. Alle historischen Entdecken-Hashes und Guards
    bleiben oben unverändert als Rückfall-/Rollbackprovenienz erhalten. */
-export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "f55e576a7e2dfce87a0cd910f883a0ccdbfd77ad9cdbada0349af933bd8e1ac2";
+export const ENTDECKEN_MIXED_POOL_SOURCE_BUNDLE_SHA256 = "928efd8a9e1d6d13d4cabc7435fc38d5945f0677be850d11e5bdd6eb568733dc";
 export const ENTDECKEN_MIXED_POOL_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/anthropicAdapter.js", sha256: "d58ee4413cddcd590a44fb4534cd94f2c2fcffa21fed64007fd143135751b6f8" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/contract.js", sha256: "780ffbcac9566e3569127f64084cd5231957f5f4bcbe443474a7c2513556a39f" }),
@@ -297,7 +297,7 @@ export const ENTDECKEN_MIXED_POOL_FILES = Object.freeze([
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerFailureContract.js", sha256: "84c662962115a0ff93ff25013d6ba96721bd34a2a9ba6e1c5bb6c7bf4332a2fe" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/providerProbe.js", sha256: "b8ed6898e187f5fecd54cb7f08d8e6b9b761b3d58764bcf0b607d35180078dc4" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicChartAdapter.js", sha256: "7e8403c919ae4096c403958e45ed1967068154f975a0d5ac8db599c80ad8952a" }),
-  Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicMixAdapter.js", sha256: "85f3d9325064f718c5ec95f84056c25b19b9ea31c652b2918d191b8c71628162" }),
+  Object.freeze({ path: "supabase/functions/entdecken-daily-task/publicMixAdapter.js", sha256: "cbeea2256879888b68b85aae0f0721383206c3ad0e36902f87bbe4baf2b512e2" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/readbackContract.js", sha256: "daba1e59dfefd74c4c87c19ca657fcb823efd9173ebb37547356e7c353bc7e1f" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/responseContract.js", sha256: "fc3122ba40d1d32e46356627158cb0ba37f2e84ac7f38aa871edd61c42b1cbba" }),
   Object.freeze({ path: "supabase/functions/entdecken-daily-task/runner.js", sha256: "3b0c5ca5f2d61d79f55863e3df49c292be36c35706d4a505f97431fa380cf77e" }),
@@ -312,7 +312,7 @@ export const ENTDECKEN_MIXED_POOL_MIGRATION = Object.freeze({
   path: "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql",
   sha256: "fa5491d5bb6457aadbb1b5a3da97b818c9e1654ffcb94e5e8986af520b228297",
 });
-export const ENTDECKEN_MIXED_POOL_RELEASE_SHA256 = "36eb5fb79ce4d3f6915678ea5ffa3fc69e717bdbfa8daebf68151c3ba612a2e2";
+export const ENTDECKEN_MIXED_POOL_RELEASE_SHA256 = "aa4f0fc0ab29914df7b7913e3ae9c0028eb120ab501eeed280203e315c679cbb";
 
 export const ENTDECKEN_MIXED_SINGLE_LIVE_SOURCE_BUNDLE_SHA256 = "ae45744e2067e4e472a8dc21e771061e393ed721666d9eb6f4b0a3b69a7e7237";
 export const ENTDECKEN_MIXED_SINGLE_LIVE_FILES = Object.freeze([
@@ -331,7 +331,7 @@ export const ENTDECKEN_MIXED_SINGLE_LIVE_FILES = Object.freeze([
   Object.freeze({ path: "tools/keychain_runner.mjs", sha256: "6e6a39d789cab0cae2c95dd5eb0f6595cea7c048207576c618f20628fd57dd86" }),
   Object.freeze({ path: "tools/provider_raw_capture.mjs", sha256: "359b761b920385c348be47da91c3690cf43e4170447075f7f466a5eb010a1fa0" }),
 ]);
-export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "252567886047ba9a1742fc40bf7b3e930353de4813b58775a1f423a2f8600c0a";
+export const ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256 = "21b4ebfdebb87f67445508dfaf1728829d2575f403f9bb2856d5bd9073a2174a";
 
 /* Bytegenauer Releasebeleg fuer den ersten automatischen Radar-Tageslauf.
    Der historische E18-/Text-Target-Zaun bleibt unveraendert; dieser Vertrag

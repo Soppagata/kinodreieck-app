@@ -115,15 +115,17 @@ function weekendPeriod(value) {
   return Number.isInteger(duration) && duration >= 0 && duration <= 4
     ? Object.freeze({ start, end }) : null;
 }
-function sourcePeriodLabel(period) {
+function sourcePeriodLabels(period) {
   const startDay = period.start.slice(8, 10);
   const startMonth = period.start.slice(5, 7);
   const endDay = period.end.slice(8, 10);
   const endMonth = period.end.slice(5, 7);
   const endYear = period.end.slice(0, 4);
-  return period.start.slice(0, 7) === period.end.slice(0, 7)
+  const compact = period.start.slice(0, 7) === period.end.slice(0, 7)
     ? `${startDay}.-${endDay}.${endMonth}.${endYear}`
     : `${startDay}.${startMonth}.-${endDay}.${endMonth}.${endYear}`;
+  const explicit = `${startDay}.${startMonth}.-${endDay}.${endMonth}.${endYear}`;
+  return Object.freeze(compact === explicit ? [compact] : [compact, explicit]);
 }
 
 export function extractOefiWeekendChartItems(html) {
@@ -142,7 +144,7 @@ export function extractOefiWeekendChartItems(html) {
   const table = block.match(/<table\b[^>]*>[\s\S]*?<\/table>/iu)?.[0];
   const sourceNote = visibleText(block.match(/<span\b[^>]*tablepress-table-description[^>]*>[\s\S]*?<\/span>/iu)?.[0]);
   if (!period || !table || !/Quelle:\s*Comscore,\s*Wochenendcharts/iu.test(sourceNote)
-      || !sourceNote.includes(`Zeitraum: ${sourcePeriodLabel(period)}`)) {
+      || !sourcePeriodLabels(period).some((label) => sourceNote.includes(`Zeitraum: ${label}`))) {
     return Object.freeze([]);
   }
   const headers = (table.match(/<th\b[^>]*>[\s\S]*?<\/th>/giu) || []).map(visibleText);

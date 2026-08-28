@@ -51,7 +51,7 @@ function joynHtml(chart) {
     + `<body><h1>${chart.heading}</h1><ul>${cards}</ul>`
     + `<script>self.__next_f.push(${JSON.stringify([1, rsc])})</script></body></html>`;
 }
-function oefiHtml(count = 15) {
+function oefiHtml(count = 15, { explicitStartMonth = false } = {}) {
   const rows = Array.from({ length: count }, (_, index) => (
     `<tr><td>${index + 1}</td><td>Kinotitel ${String(index + 1).padStart(2, "0")}</td>`
     + `<td>Verleih</td><td>${10_000 - index * 100}</td><td>${20_000 - index * 100}</td></tr>`
@@ -61,7 +61,7 @@ function oefiHtml(count = 15) {
     + `<div class="charts-shortcode__description">TOP 15 vom 14.08. - 16.08.2026</div>`
     + `<table><thead><tr><th>Rang</th><th>Filmtitel</th><th>Verleih</th>`
     + `<th>Besuche Wochenende</th><th>Besuche gesamt</th></tr></thead><tbody>${rows}</tbody></table>`
-    + `<span class="tablepress-table-description">WE Wochenende, Zeitraum: 14.-16.08.2026<br>`
+    + `<span class="tablepress-table-description">WE Wochenende, Zeitraum: ${explicitStartMonth ? "14.08.-16.08.2026" : "14.-16.08.2026"}<br>`
     + `Stand: 17.08.2026<br>Quelle: Comscore, Wochenendcharts</span></div></body></html>`;
 }
 const sourceRegistry = Object.freeze([
@@ -107,6 +107,8 @@ check("ÖFI-Parser akzeptiert 15 aktuelle Comscore-Zeilen und failt bei Drift", 
   assert.equal(rows.length, 15);
   assert.deepEqual(rows.map((row) => row.sourcePosition), Array.from({ length: 15 }, (_, index) => index + 1));
   assert.ok(rows.every((row) => row.measuredOn === "2026-08-16"));
+  assert.equal(extractOefiWeekendChartItems(oefiHtml(15, { explicitStartMonth: true })).length, 15);
+  assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("14.-16.08.2026", "14.07.-16.08.2026")).length, 0);
   assert.equal(extractOefiWeekendChartItems(oefiHtml(14)).length, 0);
   assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Unbekannt")).length, 0);
 });
