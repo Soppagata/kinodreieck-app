@@ -5,13 +5,25 @@
 
 import { normalizeProviderReceipt } from
   "../supabase/functions/_shared/providerReceipt.js";
-import { normalizeEntdeckenFeedReadback } from
+import {
+  ENTDECKEN_MIXED_READBACK_VERSION,
+  normalizeEntdeckenFeedReadback,
+} from
   "../supabase/functions/entdecken-daily-task/readbackContract.js";
 import { normalizeEntdeckenProviderFailure } from
   "../supabase/functions/entdecken-daily-task/providerFailureContract.js";
+import { validateEntdeckenDailyFeed } from
+  "../supabase/functions/entdecken-daily-task/contract.js";
+import {
+  ENTDECKEN_MIXED_FEED_FORMAT,
+  ENTDECKEN_MIXED_MARKET_COUNTS,
+  ENTDECKEN_MIXED_POOL_SIZE,
+  ENTDECKEN_MIXED_SOURCE_REQUESTS,
+} from "../supabase/functions/entdecken-daily-task/publicMixAdapter.js";
 
 const COST_EPSILON_USD_CENT = 0.000001;
-const OWNER_REFRESH_MAX_ATTEMPTS = new Set([3, 100]);
+const OWNER_REFRESH_MAX_ATTEMPTS = new Set([1, 3, 100]);
+const PROVIDER_OWNER_REFRESH_MAX_ATTEMPTS = new Set([3, 100]);
 
 export class EntdeckenLiveProofError extends Error {
   constructor(code, diagnostic = null) {
@@ -23,6 +35,89 @@ export class EntdeckenLiveProofError extends Error {
 }
 function plain(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+function exactKeys(value, keys) {
+  return plain(value)
+    && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+function mixedMarketCounts(feed) {
+  return feed.items.reduce((counts, item) => {
+    const key = item.availability.market === "cinema"
+      ? "cinema" : item.mediaType === "series" ? "streamingSeries" : "streamingFilm";
+    counts[key] += 1;
+    return counts;
+  }, { cinema: 0, streamingFilm: 0, streamingSeries: 0 });
+}
+function normalizeMixedLiveReadback(value, feed) {
+  if (!exactKeys(value, [
+    "schemaVersion", "feedId", "region", "isoWeek", "refreshedOn", "validUntil",
+    "itemCount", "sourceCount", "sourceIds", "rightsStatus", "providerRequests",
+  ])
+      || value.schemaVersion !== ENTDECKEN_MIXED_READBACK_VERSION
+      || value.feedId !== feed.feedId || value.region !== "AT"
+      || value.isoWeek !== feed.isoWeek || value.refreshedOn !== feed.refreshedOn
+      || value.validUntil !== feed.validUntil || value.itemCount !== ENTDECKEN_MIXED_POOL_SIZE
+      || value.sourceCount !== 2 || value.rightsStatus !== "owner_private"
+      || value.providerRequests !== 0 || !Array.isArray(value.sourceIds)
+      || !sameJson([...value.sourceIds].sort(), [...feed.sourceIds].sort())) return null;
+  return Object.freeze({ ...value, sourceIds: Object.freeze([...value.sourceIds]) });
+}
+function proveMixedProviderFreeResponse(antwort, {
+  measuredCostUsdCent,
+  readbackResponse,
+  feed,
+} = {}) {
+  const requestReadback = normalizeMixedLiveReadback(antwort.feedReadback, feed);
+  if (measuredCostUsdCent > COST_EPSILON_USD_CENT
+      || antwort.ok !== true || antwort.status !== "fresh" || antwort.writes !== 1
+      || antwort.providerRequests !== 0 || antwort.searchRequests !== 0
+      || antwort.sourceRequests !== ENTDECKEN_MIXED_SOURCE_REQUESTS
+      || !Number.isSafeInteger(antwort.wikidataRequests)
+      || antwort.wikidataRequests < 0 || antwort.wikidataRequests > ENTDECKEN_MIXED_POOL_SIZE
+      || antwort.responseMode !== "structured" || !requestReadback
+      || Object.prototype.hasOwnProperty.call(antwort, "providerReceipt")
+      || antwort.refresh.maxAttempts !== 1) {
+    throw new EntdeckenLiveProofError("PROVIDER_FREE_RESULT");
+  }
+  const checkedReadbackFeed = validateEntdeckenDailyFeed(readbackResponse?.feed);
+  if (!plain(readbackResponse)
+      || Object.prototype.hasOwnProperty.call(readbackResponse, "providerDiagnostic")
+      || Object.prototype.hasOwnProperty.call(readbackResponse, "providerReceipt")
+      || readbackResponse.ok !== true || readbackResponse.status !== "fresh"
+      || readbackResponse.writes !== 0 || readbackResponse.providerRequests !== 0
+      || readbackResponse.searchRequests !== 0 || readbackResponse.sourceRequests !== 0
+      || readbackResponse.wikidataRequests !== 0
+      || !plain(readbackResponse.refresh)
+      || readbackResponse.refresh.requested !== false
+      || readbackResponse.refresh.mode !== "read"
+      || readbackResponse.refresh.status !== "read_only"
+      || readbackResponse.refresh.attemptCount !== 0
+      || readbackResponse.refresh.maxAttempts !== 1
+      || !checkedReadbackFeed.ok
+      || !sameJson(checkedReadbackFeed.value, feed)) {
+    throw new EntdeckenLiveProofError("INDEPENDENT_READBACK");
+  }
+  const marketCounts = mixedMarketCounts(feed);
+  if (!sameJson(marketCounts, ENTDECKEN_MIXED_MARKET_COUNTS)) {
+    throw new EntdeckenLiveProofError("MARKET_COUNTS");
+  }
+  return Object.freeze({
+    ok: true,
+    result: "PROVEN",
+    status: "fresh",
+    itemCount: ENTDECKEN_MIXED_POOL_SIZE,
+    sourceCount: 2,
+    marketCounts: Object.freeze(marketCounts),
+    providerRequests: 0,
+    sourceRequests: ENTDECKEN_MIXED_SOURCE_REQUESTS,
+    wikidataRequests: antwort.wikidataRequests,
+    responseMode: "structured",
+    receiptState: "provider-free",
+    costState: "zero",
+  });
 }
 function insufficientQuality(value) {
   const keys = [
@@ -110,6 +205,15 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
       ? antwort.refresh.status.toUpperCase() : "INVALID";
     throw new EntdeckenLiveProofError(`CLAIM_${safeStatus}`);
   }
+  const checkedFeed = validateEntdeckenDailyFeed(antwort.feed);
+  if (antwort.refresh.status === "refreshed" && checkedFeed.ok
+      && checkedFeed.value.format === ENTDECKEN_MIXED_FEED_FORMAT) {
+    return proveMixedProviderFreeResponse(antwort, {
+      measuredCostUsdCent,
+      readbackResponse,
+      feed: checkedFeed.value,
+    });
+  }
   if (antwort.refresh.status === "failed") {
     const safeReason = typeof antwort.failureReason === "string"
       && /^(?:insufficient_evidence|invalid_response|provider_error|storage_error|source_registry_unavailable)$/.test(antwort.failureReason)
@@ -153,6 +257,9 @@ export function pruefeEntdeckenLiveAntwort(antwort, {
       && /^[a-z_]+$/.test(antwort.refresh.status)
       ? antwort.refresh.status.toUpperCase() : "INVALID";
     throw new EntdeckenLiveProofError(`CLAIM_${safeStatus}`);
+  }
+  if (!PROVIDER_OWNER_REFRESH_MAX_ATTEMPTS.has(antwort.refresh.maxAttempts)) {
+    throw new EntdeckenLiveProofError("CLAIM_REFRESHED");
   }
   const receipt = normalizeProviderReceipt(antwort.providerReceipt);
   if (!receipt || receipt.server.costUsdCent <= 0

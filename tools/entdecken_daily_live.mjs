@@ -236,13 +236,20 @@ export async function runEntdeckenDailyOnce({
     readbackBody,
     measuredCostUsdCent: costs.laufKostenUsdCent,
   });
+  const providerStatus = proof.providerRequests === 0
+    ? "providerfrei · 0 bezahlte Providerrequests"
+    : `${proof.providerRequests} Providerrequest`;
   ausgabe(
-    `ENTDECKEN-TAGESFEED-EINMAL: fresh · 1 Providerrequest · 1 Suchrequest · 1 Write · Laufdelta ${costs.laufKostenUsdCent.toFixed(4)} US-Cent`,
+    `ENTDECKEN-TAGESFEED-EINMAL: fresh · ${providerStatus}`
+      + ` · ${body.sourceRequests} Quellenrequests · ${body.wikidataRequests} Wikidatarequests`
+      + ` · 1 Write · Laufdelta ${costs.laufKostenUsdCent.toFixed(4)} US-Cent`,
   );
   return Object.freeze({
     status: proof.status,
     providerRequests: body.providerRequests,
     searchRequests: body.searchRequests,
+    sourceRequests: body.sourceRequests,
+    wikidataRequests: body.wikidataRequests,
     writes: body.writes,
     laufKostenUsdCent: costs.laufKostenUsdCent,
   });

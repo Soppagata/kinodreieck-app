@@ -13,6 +13,7 @@ import {
 } from "./supabase/functions/entdecken-daily-task/publicMixAdapter.js";
 import { JOYN_PUBLIC_CHARTS } from "./supabase/functions/entdecken-daily-task/publicChartAdapter.js";
 import { runEntdeckenDailyRefresh } from "./supabase/functions/entdecken-daily-task/runner.js";
+import { pruefeEntdeckenLiveAntwort } from "./tools/entdecken_live_proof.mjs";
 import {
   createEntdeckenRecommendations,
   publicDiscoveryCandidates,
@@ -256,6 +257,47 @@ await checkAsync("Runner persistiert Format 6 mit zwei Quellen und unabhängigem
   assert.equal(result.feed.format, 6);
   assert.equal(result.feedReadback.sourceCount, 2);
   assert.equal(result.feedReadback.providerRequests, 0);
+});
+
+check("Livebeleg akzeptiert Format 6 nur mit Nulldelta und unabhängigem Readback", () => {
+  const feedReadback = {
+    schemaVersion: "entdecken-mixed-weekly-readback-v1",
+    feedId: mixedFeed.feedId,
+    region: mixedFeed.region,
+    isoWeek: mixedFeed.isoWeek,
+    refreshedOn: mixedFeed.refreshedOn,
+    validUntil: mixedFeed.validUntil,
+    itemCount: 50,
+    sourceCount: 2,
+    sourceIds: [...mixedFeed.sourceIds],
+    rightsStatus: "owner_private",
+    providerRequests: 0,
+  };
+  const response = {
+    ok: true, status: "fresh", feed: mixedFeed, writes: 1,
+    providerRequests: 0, searchRequests: 0, sourceRequests: 3, wikidataRequests: 5,
+    responseMode: "structured", displayText: null, warnings: [], feedReadback,
+    refresh: { requested: true, mode: "owner", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
+  };
+  const independent = {
+    ok: true, status: "fresh", feed: structuredClone(mixedFeed), writes: 0,
+    providerRequests: 0, searchRequests: 0, sourceRequests: 0, wikidataRequests: 0,
+    responseMode: "structured", displayText: null, warnings: [],
+    refresh: { requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1 },
+  };
+  assert.deepEqual(pruefeEntdeckenLiveAntwort(response, {
+    measuredCostUsdCent: 0,
+    readbackResponse: independent,
+  }), {
+    ok: true, result: "PROVEN", status: "fresh", itemCount: 50, sourceCount: 2,
+    marketCounts: { cinema: 15, streamingFilm: 18, streamingSeries: 17 },
+    providerRequests: 0, sourceRequests: 3, wikidataRequests: 5,
+    responseMode: "structured", receiptState: "provider-free", costState: "zero",
+  });
+  assert.throws(() => pruefeEntdeckenLiveAntwort(response, {
+    measuredCostUsdCent: 0.0001,
+    readbackResponse: independent,
+  }), (error) => error?.code === "PROVIDER_FREE_RESULT");
 });
 
 await checkAsync("ÖFI-Ausfall behält den letzten guten Pool und startet keinen Retry", async () => {
