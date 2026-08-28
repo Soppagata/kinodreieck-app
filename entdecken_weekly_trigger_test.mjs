@@ -18,6 +18,9 @@ const migration = readFileSync(
 const mixedPoolMigration = readFileSync(
   "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql", "utf8",
 );
+const currentDiversePoolMigration = readFileSync(
+  "supabase/migrations/20260828233000_entdecken_current_diverse_pool.sql", "utf8",
+);
 const scheduleBlock = workflow.match(/^on:\n([\s\S]*?)^permissions:/m)?.[1] || "";
 const cronExpressions = [...scheduleBlock.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]);
 const stepStart = workflow.indexOf("      - name: Entdecken um 02 Uhr UTC");
@@ -124,7 +127,7 @@ check("Format 5, owner_private Quelle und Cache sind DB-seitig fail-closed", () 
   assert.match(migration, /create function public\.kd_entdecken_public_feed_readback/u);
 });
 
-check("Format 6 ist eine additive Dualformat-Migration mit festem 50er-Marktmix", () => {
+check("Historische Format-6-Migration bleibt als additiver 50er-Marktmix belegt", () => {
   assert.match(mixedPoolMigration, /^begin;$/mu);
   assert.match(mixedPoolMigration, /^commit;$/mu);
   assert.match(mixedPoolMigration, /rename to kd_entdecken_public_payload_valid_v5/u);
@@ -140,6 +143,28 @@ check("Format 6 ist eine additive Dualformat-Migration mit festem 50er-Marktmix"
   assert.match(mixedPoolMigration, /p_source = 'scheduled' and not v_due/u);
   assert.match(mixedPoolMigration, /not provider_enabled and not commercial_enabled/u);
   assert.doesNotMatch(mixedPoolMigration, /cron\.schedule|radar-websearch-task|ANTHROPIC_API_KEY/u);
+});
+
+check("Forward-Migration bindet den aktuellen 25er-Pool mit hartem Quellen-Cap", () => {
+  assert.match(currentDiversePoolMigration, /^begin;$/mu);
+  assert.match(currentDiversePoolMigration, /^commit;$/mu);
+  assert.match(currentDiversePoolMigration, /create or replace function public\.kd_entdecken_public_payload_valid_v6/u);
+  assert.match(currentDiversePoolMigration, /create or replace function public\.kd_entdecken_mixed_sources_ready/u);
+  assert.match(currentDiversePoolMigration, /create or replace function public\.kd_entdecken_public_feed_readback/u);
+  assert.match(currentDiversePoolMigration, /jsonb_array_length\(p_payload->'items'\) is distinct from 25/u);
+  assert.match(currentDiversePoolMigration, /v_cinema is distinct from 15/u);
+  assert.match(currentDiversePoolMigration, /v_streaming_film is distinct from 5/u);
+  assert.match(currentDiversePoolMigration, /v_streaming_series is distinct from 5/u);
+  assert.match(currentDiversePoolMigration, /v_netflix is distinct from 10/u);
+  assert.match(currentDiversePoolMigration, /v_oefi is distinct from 15/u);
+  assert.match(currentDiversePoolMigration, /'chart:netflix-weekly-at','chart:oefi-weekend-at'/u);
+  assert.match(currentDiversePoolMigration, /source_id not in \('chart:netflix-weekly-at','chart:oefi-weekend-at'\)/u);
+  assert.match(currentDiversePoolMigration, /https:\/\/www\.netflix\.com\/tudum\/top10\/austria\/films/u);
+  assert.match(currentDiversePoolMigration, /https:\/\/www\.netflix\.com\/tudum\/top10\/austria\/tv/u);
+  assert.match(currentDiversePoolMigration, /https:\/\/filminstitut\.at\/charts/u);
+  assert.match(currentDiversePoolMigration, /'itemCount',25,'sourceCount',2/u);
+  assert.match(currentDiversePoolMigration, /Netflix-Quellenanteil maximal 40 Prozent/u);
+  assert.doesNotMatch(currentDiversePoolMigration, /cron\.schedule|radar-websearch-task|ANTHROPIC_API_KEY/u);
 });
 
 check("Fehlerpfad behaelt Payload und verbrauchten Versuch ohne Retry", () => {

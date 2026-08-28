@@ -418,6 +418,7 @@ export function createEntdeckenDailyHandler({
     };
     const wikidataResolver = createWikidataResolver({
       fetchImpl,
+      maxUnknownItems: 12,
       async loadCache(sourceItemIds: Array<string> = []) {
         if (!sourceItemIds.length) return [];
         const { data, error } = await admin.from("kd_entdecken_wikidata_cache")

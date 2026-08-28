@@ -45,3 +45,27 @@ Der neue Format-6-Mockpfad belegt mit ausschließlich synthetischen Titeln:
 - Format 6 benötigt vor einer Außenwirkung noch Quellenregister-/Persistenz-
   Migration, Deployment und reale Produktabnahme; diese Etappe führt keines
   davon aus.
+
+## Additiver Quellenentscheid E4
+
+Stand: 28. August 2026. Nutzerfeedback hat die Joyn-Stream-TV-Liste als
+Popularitätsquelle fachlich verworfen: In der initialen iPhone-Auswahl war sie
+dominant und enthielt keine belastbar aktuellen Charttitel. Historische
+Format-5-Verträge bleiben als bytehistorischer Failover lesbar, aber Joyn ist
+keine aktive Quelle für einen neu erzeugten Format-6-Pool und erscheint nicht
+mehr in der sichtbaren Popularitätslane. Die persönliche Matchingstrecke bleibt
+für den Übergang unverändert lesbar.
+
+| Quelle | Empirischer Vertrag ohne Titel/Rohpayload | Rechte-/Betriebsgrenze | Entscheidung |
+|---|---|---|---|
+| Netflix Top 10, offizieller Länder-TSV | HTTP 200, TSV mit exakt 8 belegten Feldern; aktuelle AT-Woche mit je Rang 1–10 für Film und TV | nur owner-privater Pilot; öffentliche oder kommerzielle Weiterverwendung braucht eine eigene Rechteentscheidung; großes Archiv wird nur bis zum aktuellen AT-Block gestreamt | 5 Filme plus 5 Serien, harte Obergrenze 10/25 |
+| Österreichisches Filminstitut / Comscore | 15 aktuelle, streng lesbare AT-Wochenendchart-Zeilen | owner-privater Pilot; Struktur- oder Aktualitätsdrift stoppt den gesamten neuen Pool | 15 Kinofilme, weiterhin aktiv |
+| Apple RSS | aktueller offizieller Generator bietet keine Film-/TV-Charts | alte Links sind kein belastbarer Betriebsvertrag; Scraping ist ausgeschlossen | verworfen |
+| Disney+ Top 10 | offizielle länderspezifische Liste nur in der App, kein öffentlicher Datenpfad | kein ratenbarer oder scrape-basierter Adapter | verworfen |
+| AGF Streaming | öffentliche Monatslisten für Deutschland; gemischte Events/Episoden | Datenbezug und Nutzung sind angebotspflichtig; kein AT-Wochenvertrag | verworfen |
+| JustWatch Partner API | dokumentierte Partner-API mit Token | ohne Partnervertrag, Token und Rechtefreigabe kein owner-privater Gratispfad | verworfen |
+
+Der neue ehrliche Format-6-Vertrag umfasst deshalb 25 statt 50 Titel: 15 Kino,
+5 Streamingfilme und 5 Serien. Keine Quelle darf mehr als 40 Prozent des Pools
+stellen. Der Refresh ist unteilbar und retryfrei; bei fehlender, veralteter
+oder strukturell gedrifteter Quelle bleibt der letzte gute Pool sichtbar.

@@ -25,7 +25,7 @@ import { normalizeProviderReceipt } from "../_shared/providerReceipt.js";
 
 export const ENTDECKEN_WEEKLY_READBACK_VERSION = "entdecken-weekly-readback-v1";
 export const ENTDECKEN_PUBLIC_READBACK_VERSION = "entdecken-public-weekly-readback-v1";
-export const ENTDECKEN_MIXED_READBACK_VERSION = "entdecken-mixed-weekly-readback-v1";
+export const ENTDECKEN_MIXED_READBACK_VERSION = "entdecken-mixed-weekly-readback-v2";
 
 const OPERATION_ID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -150,7 +150,7 @@ export function normalizeEntdeckenPersistenceReadback(value, {
   return readback ? freezeDeep({ feed: persistedFeed, readback }) : null;
 }
 
-/* Providerfreier Readback: Er bindet denselben gespeicherten 50er-Payload an
+/* Providerfreier Readback: Er bindet denselben gespeicherten Format-6-Payload an
    Fence und owner_private-Quellenstatus, ohne einen erfundenen Kosten- oder
    Anbieterbeleg zu verlangen. */
 export function normalizeEntdeckenPublicPersistenceReadback(value, {

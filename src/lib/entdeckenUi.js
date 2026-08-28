@@ -555,7 +555,7 @@ function popularityGroup(entry) {
 export function selectStablePopularCards(rows, {
   webDiscoveryFeed = null, selectionDay = null, limit = ENTDECKEN_POPULAR_LIMIT,
 } = {}) {
-  const safeLimit = Math.max(0, Math.min(ENTDECKEN_POPULAR_LIMIT, Number(limit) || 0));
+  const safeLimit = Math.max(0, Math.min(list(rows).length, Number(limit) || 0));
   const day = calendarDay(selectionDay) || calendarDay(webDiscoveryFeed?.refreshedOn);
   const poolIdentity = list(webDiscoveryFeed?.items).map((item) => item?.sourceItemId).filter(Boolean).join("|");
   const seed = `${webDiscoveryFeed?.feedId || "feed"}|${webDiscoveryFeed?.refreshedOn || "day"}|${day || "stable"}|${poolIdentity}`;
@@ -659,11 +659,15 @@ export function createEntdeckenRecommendations({
     })
       .filter((candidate) => !personalIds.has(candidate.targetId)
         && !sourceItemSeen(candidate, master, broadCatalog));
-    const popular = mixed
+    const orderedPopularPool = mixed
       ? selectStablePopularCards(popularPool, {
-        webDiscoveryFeed: checkedFeed.value, selectionDay,
-      })
-      : Object.freeze(popularPool.slice(0, ENTDECKEN_POPULAR_LIMIT).map((candidate) => Object.freeze({ ...candidate })));
+        webDiscoveryFeed: checkedFeed.value, selectionDay, limit: popularPool.length,
+      }) : null;
+    const popular = mixed
+      ? Object.freeze(orderedPopularPool.slice(0, ENTDECKEN_POPULAR_LIMIT))
+      /* Format 5 bleibt fuer die unveraenderte persoenliche Matchingstrecke
+         lesbar, ist nach E4 aber keine sichtbare Popularitaetsquelle mehr. */
+      : Object.freeze([]);
     const diagnostics = Object.freeze({
       candidates: allDirect.length,
       metadata: withMetadata.length,
@@ -675,6 +679,7 @@ export function createEntdeckenRecommendations({
     return Object.freeze({
       personal,
       popular,
+      ...(mixed ? { popularPool: orderedPopularPool } : {}),
       diagnostics,
       /* Uebergangskompatibilitaet fuer alte lokale Aufrufer; die UI verwendet
          nur noch den fachlich benannten separaten Popularitaetspfad. */

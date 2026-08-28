@@ -813,7 +813,7 @@ await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vo
     && error.code === "RELEASE_CLOSURE_UNTRACKED");
 });
 
-await check("Additiver Format-6-Zaun bindet nur Mix-Function, Forward-Migration und Einmallauf", () => {
+await check("Aktueller Format-6-Zaun bindet nur Mix-Function, Forward-Migration und Einmallauf", () => {
   const functionProof = requireEntdeckenMixedPoolReleaseProvenance();
   const liveProof = requireEntdeckenMixedPoolSingleLiveReleaseProvenance();
   assert.equal(functionProof.releaseSha256, ENTDECKEN_MIXED_POOL_RELEASE_SHA256);
@@ -821,7 +821,7 @@ await check("Additiver Format-6-Zaun bindet nur Mix-Function, Forward-Migration 
   assert.deepEqual(functionProof.migration, ENTDECKEN_MIXED_POOL_MIGRATION);
   assert.equal(
     functionProof.migration.path,
-    "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql",
+    "supabase/migrations/20260828233000_entdecken_current_diverse_pool.sql",
   );
   assert.equal(liveProof.releaseSha256, ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256);
   assert.deepEqual(liveProof.files, ENTDECKEN_MIXED_SINGLE_LIVE_FILES);
@@ -830,7 +830,7 @@ await check("Additiver Format-6-Zaun bindet nur Mix-Function, Forward-Migration 
   assert.throws(() => requireEntdeckenMixedPoolReleaseProvenance({
     readFile(absolutePath) {
       const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("20260828180000_entdecken_mixed_pool_format_6.sql")
+      return String(absolutePath).endsWith("20260828233000_entdecken_current_diverse_pool.sql")
         ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
     },
   }), (error) => error instanceof RadarRemoteStartStop

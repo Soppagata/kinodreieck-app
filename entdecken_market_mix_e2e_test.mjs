@@ -8,10 +8,16 @@ import {
 import {
   createMixedPublicChartAdapter,
   ENTDECKEN_MIXED_MARKET_COUNTS,
+  ENTDECKEN_MIXED_MAX_SOURCE_SHARE,
+  ENTDECKEN_MIXED_POOL_SIZE,
+  ENTDECKEN_MIXED_SOURCE_COUNTS,
+  ENTDECKEN_MIXED_SOURCE_REQUESTS,
+  ENTDECKEN_NETFLIX_SOURCE_ID,
+  extractNetflixAustriaWeeklyItems,
   extractOefiWeekendChartItems,
+  NETFLIX_AT_WEEKLY_CHART,
   OEFI_WEEKEND_CHART,
 } from "./supabase/functions/entdecken-daily-task/publicMixAdapter.js";
-import { JOYN_PUBLIC_CHARTS } from "./supabase/functions/entdecken-daily-task/publicChartAdapter.js";
 import { runEntdeckenDailyRefresh } from "./supabase/functions/entdecken-daily-task/runner.js";
 import { pruefeEntdeckenLiveAntwort } from "./tools/entdecken_live_proof.mjs";
 import {
@@ -31,25 +37,34 @@ function htmlResponse(body, status = 200) {
     headers: { "content-type": "text/html; charset=utf-8", "content-length": String(new TextEncoder().encode(body).byteLength) },
   });
 }
-function joynHtml(chart) {
-  const assets = Array.from({ length: 50 }, (_, index) => ({
-    id: `${chart.mediaType === "film" ? "b" : "d"}_mix${String(index + 1).padStart(3, "0")}`,
-    title: `${chart.mediaType === "film" ? "Streamingfilm" : "Serie"} ${String(index + 1).padStart(2, "0")}`,
-    __typename: chart.mediaType === "film" ? "Movie" : "Series",
-    genres: [{ name: index % 3 === 0 ? "Drama" : index % 3 === 1 ? "Comedy" : "Action" }],
-    licenseTypes: [index % 2 ? "AVOD" : "SVOD"],
-    path: `${chart.itemPathPrefix}mix-${index + 1}`,
-  }));
-  const cards = assets.map((asset) => (
-    `<li><a data-testid="CSP" href="${asset.path}"><div data-testid="VISH">${asset.title}</div></a></li>`
-  )).join("");
-  const rsc = `9:["$",{}, {"initialData":${JSON.stringify({
-    page: { blocks: [{ __typename: "Grid", headline: chart.heading, assets }] },
-  })}}]`;
-  return `<!doctype html><html><head><meta property="og:locale" content="de_AT">`
-    + `<link rel="canonical" href="https://www.joyn.at${chart.canonicalPath}"></head>`
-    + `<body><h1>${chart.heading}</h1><ul>${cards}</ul>`
-    + `<script>self.__next_f.push(${JSON.stringify([1, rsc])})</script></body></html>`;
+function tsvResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/tab-separated-values",
+      "content-length": String(new TextEncoder().encode(body).byteLength),
+    },
+  });
+}
+function netflixTsv({ week = "2026-08-23", header = null, filmCount = 10, seriesCount = 10 } = {}) {
+  const columns = header || [
+    "country_name", "country_iso2", "week", "category", "weekly_rank",
+    "show_title", "season_title", "cumulative_weeks_in_top_10",
+  ].join("\t");
+  const rows = [
+    ["Argentina", "AR", week, "Films", 1, "Anderer Markt", "N/A", 1],
+    ...Array.from({ length: filmCount }, (_, index) => [
+      "Austria", "AT", week, "Films", index + 1,
+      `Streamingfilm ${String(index + 1).padStart(2, "0")}`, "N/A", index + 1,
+    ]),
+    ...Array.from({ length: seriesCount }, (_, index) => [
+      "Austria", "AT", week, "TV", index + 1,
+      `Serie ${String(index + 1).padStart(2, "0")}`, `Serie ${index + 1}: Season 1`, index + 1,
+    ]),
+    ["Austria", "AT", "2026-08-16", "Films", 1, "Historischer Titel", "N/A", 2],
+    ["Bahamas", "BS", week, "Films", 1, "Spaeterer Markt", "N/A", 1],
+  ];
+  return `${columns}\n${rows.map((row) => row.join("\t")).join("\n")}\n`;
 }
 function oefiHtml(count = 15, { explicitStartMonth = false } = {}) {
   const rows = Array.from({ length: count }, (_, index) => (
@@ -66,10 +81,10 @@ function oefiHtml(count = 15, { explicitStartMonth = false } = {}) {
 }
 const sourceRegistry = Object.freeze([
   Object.freeze({
-    sourceId: "chart:joyn-at", domain: "joyn.at",
-    publisherFamily: "Joyn AT / ProSiebenSat.1 PULS 4", sourceClass: "chart",
+    sourceId: ENTDECKEN_NETFLIX_SOURCE_ID, domain: "netflix.com",
+    publisherFamily: "Netflix, Inc.", sourceClass: "chart",
     rightsStatus: "owner_private", attributionApproved: true, subdomainsAllowed: true, active: true,
-    termsUrl: "https://www.joyn.at/nutzungsbedingungen", termsCheckedOn: "2026-08-27",
+    termsUrl: "https://help.netflix.com/legal/termsofuse", termsCheckedOn: "2026-08-28",
   }),
   Object.freeze({
     sourceId: "chart:oefi-weekend-at", domain: "filminstitut.at",
@@ -78,28 +93,42 @@ const sourceRegistry = Object.freeze([
     termsUrl: "https://filminstitut.at/impressum", termsCheckedOn: "2026-08-27",
   }),
 ]);
-function adapterFor({ oefiStatus = 200, calls = [] } = {}) {
+function adapterFor({ oefiStatus = 200, netflixWeek = "2026-08-23", calls = [] } = {}) {
   return createMixedPublicChartAdapter({
     now: () => "2026-08-27T07:30:00.000Z",
     fetchImpl: async (url, init) => {
       calls.push({ url, init });
-      const chart = JOYN_PUBLIC_CHARTS.find((entry) => entry.listUrl === url);
-      if (chart) return htmlResponse(joynHtml(chart));
+      if (url === NETFLIX_AT_WEEKLY_CHART.dataUrl) return tsvResponse(netflixTsv({ week: netflixWeek }));
       assert.equal(url, OEFI_WEEKEND_CHART.listUrl);
       return htmlResponse(oefiStatus === 200 ? oefiHtml() : "nicht verfuegbar", oefiStatus);
     },
   });
 }
 function annotationsFor(items) {
-  const cinema = items.find((item) => item.sourceId === "chart:oefi-weekend-at");
-  const joyn = items.find((item) => item.sourceId === "chart:joyn-at" && item.genres.includes("Drama"));
-  return Object.freeze([{
-    sourceItemId: cinema.sourceItemId, qid: "Q101", mediaType: "film", releaseYear: 2026,
-    externalIds: { imdb: "tt1111111", tmdb: "101" }, resolvedAt: "2026-08-27T07:31:00.000Z",
-  }, {
-    sourceItemId: joyn.sourceItemId, qid: "Q102", mediaType: joyn.mediaType, releaseYear: 2025,
-    externalIds: { imdb: "tt2222222", tmdb: "102" }, resolvedAt: "2026-08-27T07:31:00.000Z",
-  }]);
+  return Object.freeze(items.map((item, index) => ({
+    sourceItemId: item.sourceItemId,
+    qid: `Q${index + 101}`,
+    mediaType: item.mediaType,
+    releaseYear: 2000 + index,
+    externalIds: {
+      imdb: `tt${String(index + 1_000_001)}`,
+      tmdb: String(index + 101),
+    },
+    resolvedAt: "2026-08-27T07:31:00.000Z",
+  })));
+}
+function netflixCatalog(feed) {
+  const facts = new Map(feed.annotations.map((entry) => [entry.sourceItemId, entry]));
+  return feed.items.filter((item) => item.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID).map((item, index) => ({
+    watchmode_id: 8_000 + index,
+    titel: item.title,
+    typ: item.mediaType,
+    jahr: facts.get(item.sourceItemId).releaseYear,
+    imdb_id: facts.get(item.sourceItemId).externalIds.imdb,
+    tmdb_id: facts.get(item.sourceItemId).externalIds.tmdb,
+    dienste: ["Netflix"],
+    genres: ["Drama"],
+  }));
 }
 
 check("ÖFI-Parser akzeptiert 15 aktuelle Comscore-Zeilen und failt bei Drift", () => {
@@ -113,14 +142,29 @@ check("ÖFI-Parser akzeptiert 15 aktuelle Comscore-Zeilen und failt bei Drift", 
   assert.equal(extractOefiWeekendChartItems(oefiHtml().replace("Comscore", "Unbekannt")).length, 0);
 });
 
+check("Netflix-Parser bindet den echten 8-Felder-Vertrag an die aktuelle AT-Woche", () => {
+  const rows = extractNetflixAustriaWeeklyItems(netflixTsv(), { retrievedOn: "2026-08-27" });
+  assert.equal(rows.length, 20);
+  assert.deepEqual(rows.reduce((counts, row) => {
+    counts[row.mediaType] += 1; return counts;
+  }, { film: 0, series: 0 }), { film: 10, series: 10 });
+  assert.ok(rows.every((row) => row.measuredOn === "2026-08-23"));
+  assert.equal(extractNetflixAustriaWeeklyItems(netflixTsv({
+    header: "country_name\tcountry_iso2\tweek\tcategory\tweekly_rank\tshow_title",
+  }), { retrievedOn: "2026-08-27" }).length, 0);
+  assert.equal(extractNetflixAustriaWeeklyItems(netflixTsv({ week: "2026-07-05" }), {
+    retrievedOn: "2026-08-27",
+  }).length, 0);
+});
+
 let mixedFeed = null;
-await checkAsync("Drei retryfreie GETs ergeben exakt den gemischten 50er-Pool", async () => {
+await checkAsync("Zwei retryfreie GETs ergeben den ehrlichen 25er-Pool mit hartem Source-Cap", async () => {
   const calls = [];
   const adapter = adapterFor({ calls });
   const query = createEntdeckenWeeklyQueryContext("2026-08-27", "2026-W35");
   const raw = await adapter.search(query, { retrievedOn: "2026-08-27", claimedIsoWeek: "2026-W35" });
-  assert.equal(calls.length, 3);
-  assert.deepEqual(calls.map((call) => call.url), [...JOYN_PUBLIC_CHARTS.map((chart) => chart.listUrl), OEFI_WEEKEND_CHART.listUrl]);
+  assert.equal(calls.length, ENTDECKEN_MIXED_SOURCE_REQUESTS);
+  assert.deepEqual(calls.map((call) => call.url), [NETFLIX_AT_WEEKLY_CHART.dataUrl, OEFI_WEEKEND_CHART.listUrl]);
   assert.ok(calls.every((call) => call.init.method === "GET" && call.init.redirect === "error"));
   assert.ok(calls.every((call) => !Object.keys(call.init.headers).some((name) => /authorization|cookie|user-agent/i.test(name))));
   const envelope = { ...raw, annotations: annotationsFor(raw.items) };
@@ -129,11 +173,38 @@ await checkAsync("Drei retryfreie GETs ergeben exakt den gemischten 50er-Pool", 
   });
   assert.equal(evaluated.ok, true);
   assert.deepEqual(evaluated.quality.marketCounts, ENTDECKEN_MIXED_MARKET_COUNTS);
-  assert.equal(evaluated.feed.items.length, 50);
-  assert.equal(evaluated.feed.annotations.length, 2);
+  assert.equal(evaluated.feed.items.length, ENTDECKEN_MIXED_POOL_SIZE);
+  assert.equal(evaluated.feed.annotations.length, ENTDECKEN_MIXED_POOL_SIZE);
+  const sourceCounts = evaluated.feed.items.reduce((counts, item) => {
+    counts[item.sourceId] = (counts[item.sourceId] || 0) + 1; return counts;
+  }, {});
+  assert.deepEqual(sourceCounts, ENTDECKEN_MIXED_SOURCE_COUNTS);
+  assert.equal(sourceCounts[ENTDECKEN_NETFLIX_SOURCE_ID] / evaluated.feed.items.length,
+    ENTDECKEN_MIXED_MAX_SOURCE_SHARE);
   assert.equal(validateEntdeckenDailyFeed(evaluated.feed).ok, true);
   assert.equal(validateWebDiscoveryFeed(evaluated.feed).ok, true);
   mixedFeed = evaluated.feed;
+});
+
+await checkAsync("Netflix-Prefixgrenze stoppt auch einen einzelnen übergroßen Chunk vor ÖFI", async () => {
+  const calls = [];
+  const adapter = createMixedPublicChartAdapter({
+    now: () => "2026-08-27T07:30:00.000Z",
+    maxNetflixPrefixBytes: 128,
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return tsvResponse(netflixTsv());
+    },
+  });
+  await assert.rejects(
+    () => adapter.search(createEntdeckenWeeklyQueryContext("2026-08-27", "2026-W35"), {
+      retrievedOn: "2026-08-27", claimedIsoWeek: "2026-W35",
+    }),
+    (error) => error?.message === "public_mix_source_prefix_too_large",
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, NETFLIX_AT_WEEKLY_CHART.dataUrl);
+  assert.equal(adapter.telemetry().sourceRequests, 1);
 });
 
 await checkAsync("Accountloser Client liest Format 6 bodylos und unverändert", async () => {
@@ -165,10 +236,13 @@ await checkAsync("Accountloser Client liest Format 6 bodylos und unverändert", 
 });
 
 check("Für mich nutzt den breiten Pool, das echte Profil und liefert anonymisierte Funnel-Zähler", () => {
-  const seen = mixedFeed.annotations.find((entry) => entry.externalIds.imdb === "tt2222222");
+  const catalog = netflixCatalog(mixedFeed);
+  const seen = mixedFeed.annotations.find((entry) => (
+    entry.sourceItemId === mixedFeed.items.find((item) => item.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID).sourceItemId
+  ));
   const result = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] },
-    streamingKnown: { region: "AT", titel: [] },
+    streamingKnown: { region: "AT", titel: catalog },
     selectedServices: ["Netflix"],
     master: [{
       titel: "abweichender lokaler Titel", typ: seen.mediaType, imdb_id: seen.externalIds.imdb,
@@ -181,7 +255,7 @@ check("Für mich nutzt den breiten Pool, das echte Profil und liefert anonymisie
   assert.ok(result.personal.every((entry) => entry.reasons.some((reason) => reason.startsWith("Profil:"))));
   assert.ok(result.personal.every((entry) => !/rang|platz|beliebt/i.test(entry.reasons.join(" "))));
   assert.deepEqual(result.diagnostics, {
-    candidates: 50, metadata: 35, afterExclusions: 34, profileMatches: 11, visible: 6,
+    candidates: 25, metadata: 10, afterExclusions: 9, profileMatches: 9, visible: 6,
     duplicatesRemoved: 0,
   });
   assert.ok(!result.personal.some((entry) => entry.sourceItemId === seen.sourceItemId));
@@ -190,7 +264,7 @@ check("Für mich nutzt den breiten Pool, das echte Profil und liefert anonymisie
 check("Beliebte Karten sind pro Pool und Tag stabil, marktgemischt und duplikatfrei", () => {
   const input = {
     streamingEntdecken: { region: "AT", titel: [] }, master: [],
-    profile: { signale: [{ art: "genre", wert: "Drama", richtung: "zieht_an", staerke: 4 }] },
+    profile: {},
     webDiscoveryFeed: mixedFeed, selectedServices: ["Netflix"], selectionDay: "2026-08-27",
   };
   const first = createEntdeckenRecommendations(input);
@@ -200,6 +274,8 @@ check("Beliebte Karten sind pro Pool und Tag stabil, marktgemischt und duplikatf
   assert.deepEqual(ids(first.popular), ids(same.popular));
   assert.notDeepEqual(ids(first.popular), ids(next.popular));
   assert.equal(new Set(ids(first.popular)).size, 6);
+  assert.equal(first.popularPool.length, 25);
+  assert.equal(first.popularPool.filter((entry) => entry.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID).length, 10);
   assert.deepEqual(first.popular.reduce((counts, entry) => {
     const key = entry.availability.market === "cinema" ? "cinema"
       : entry.type === "series" ? "streamingSeries" : "streamingFilm";
@@ -218,7 +294,12 @@ check("Titel-Fallback braucht Jahr und Typ; starke IDs bleiben vorrangig", () =>
   assert.ok(withoutYear.some((entry) => entry.sourceItemId === annotated.sourceItemId));
   const withYear = publicDiscoveryCandidates({
     webDiscoveryFeed: mixedFeed, includeSeen: false, requireMetadata: false,
-    master: [{ titel: annotated.title, jahr: 2026, typ: annotated.mediaType, gesehen: true }],
+    master: [{
+      titel: annotated.title,
+      jahr: mixedFeed.annotations[0].releaseYear,
+      typ: annotated.mediaType,
+      gesehen: true,
+    }],
   });
   assert.ok(!withYear.some((entry) => entry.sourceItemId === annotated.sourceItemId));
 });
@@ -247,7 +328,7 @@ await checkAsync("Runner persistiert Format 6 mit zwei Quellen und unabhängigem
         return {
           ok: true, status: "verified", feed: structuredClone(saved), fenceToken: 41,
           provenance: {
-            itemCount: 50, sourceCount: 2, sourceIds: [...saved.sourceIds], rightsStatus: "owner_private",
+            itemCount: 25, sourceCount: 2, sourceIds: [...saved.sourceIds], rightsStatus: "owner_private",
           },
         };
       },
@@ -263,13 +344,13 @@ await checkAsync("Runner persistiert Format 6 mit zwei Quellen und unabhängigem
 
 check("Livebeleg akzeptiert Format 6 nur mit Nulldelta und unabhängigem Readback", () => {
   const feedReadback = {
-    schemaVersion: "entdecken-mixed-weekly-readback-v1",
+    schemaVersion: "entdecken-mixed-weekly-readback-v2",
     feedId: mixedFeed.feedId,
     region: mixedFeed.region,
     isoWeek: mixedFeed.isoWeek,
     refreshedOn: mixedFeed.refreshedOn,
     validUntil: mixedFeed.validUntil,
-    itemCount: 50,
+    itemCount: 25,
     sourceCount: 2,
     sourceIds: [...mixedFeed.sourceIds],
     rightsStatus: "owner_private",
@@ -277,7 +358,7 @@ check("Livebeleg akzeptiert Format 6 nur mit Nulldelta und unabhängigem Readbac
   };
   const response = {
     ok: true, status: "fresh", feed: mixedFeed, writes: 1,
-    providerRequests: 0, searchRequests: 0, sourceRequests: 3, wikidataRequests: 5,
+    providerRequests: 0, searchRequests: 0, sourceRequests: 2, wikidataRequests: 5,
     responseMode: "structured", displayText: null, warnings: [], feedReadback,
     refresh: { requested: true, mode: "owner", status: "refreshed", attemptCount: 1, maxAttempts: 1 },
   };
@@ -291,9 +372,9 @@ check("Livebeleg akzeptiert Format 6 nur mit Nulldelta und unabhängigem Readbac
     measuredCostUsdCent: 0,
     readbackResponse: independent,
   }), {
-    ok: true, result: "PROVEN", status: "fresh", itemCount: 50, sourceCount: 2,
-    marketCounts: { cinema: 15, streamingFilm: 18, streamingSeries: 17 },
-    providerRequests: 0, sourceRequests: 3, wikidataRequests: 5,
+    ok: true, result: "PROVEN", status: "fresh", itemCount: 25, sourceCount: 2,
+    marketCounts: { cinema: 15, streamingFilm: 5, streamingSeries: 5 },
+    providerRequests: 0, sourceRequests: 2, wikidataRequests: 5,
     responseMode: "structured", receiptState: "provider-free", costState: "zero",
   });
   assert.throws(() => pruefeEntdeckenLiveAntwort(response, {
@@ -306,7 +387,7 @@ await checkAsync("ÖFI-Ausfall behält den letzten guten Pool und startet keinen
   const calls = [];
   let failures = 0;
   const result = await runEntdeckenDailyRefresh({
-    adapter: adapterFor({ oefiStatus: 503, calls }),
+    adapter: adapterFor({ oefiStatus: 503, netflixWeek: "2026-08-30", calls }),
     repository: {
       async claimRefresh() {
         return {
@@ -323,14 +404,17 @@ await checkAsync("ÖFI-Ausfall behält den letzten guten Pool und startet keinen
   assert.equal(result.status, "stale");
   assert.deepEqual(result.feed, mixedFeed);
   assert.equal(result.writes, 0);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 2);
   assert.equal(failures, 1);
 });
 
-check("UI enthält weder Rangnummer noch werblichen Joyn-CTA", () => {
+check("UI verlinkt Titel neutral und klappt den restlichen Pool zugänglich auf", () => {
   const source = fs.readFileSync("./src/tabs/EntdeckenTab.jsx", "utf8");
   assert.doesNotMatch(source, /Bei Joyn ansehen|Listenplatz|Listenposition/);
   assert.match(source, /Quelle: \{sourceLabel\(entry\)\}/);
+  assert.match(source, /kd-entdecken-titellink/);
+  assert.match(source, /aria-expanded=\{showAllPopular\}/);
+  assert.match(source, /Weitere \$\{popularPool\.length - popular\.length\} Titel anzeigen/);
 });
 
 console.log(`\n${checks}/${checks} marktuebergreifende Entdecken-E2E-Checks bestanden.`);

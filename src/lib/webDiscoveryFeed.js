@@ -13,10 +13,10 @@ export const PUBLIC_DISCOVERY_POOL_SIZE = 50;
 export const MIXED_DISCOVERY_FEED_FORMAT = 6;
 export const MIXED_DISCOVERY_FEED_ID = "public:weekly-market-mix-at";
 export const MIXED_DISCOVERY_SOURCE_ID = "chart:market-mix-at";
-export const MIXED_DISCOVERY_SOURCE_IDS = Object.freeze(["chart:joyn-at", "chart:oefi-weekend-at"]);
-export const MIXED_DISCOVERY_POOL_SIZE = 50;
+export const MIXED_DISCOVERY_SOURCE_IDS = Object.freeze(["chart:netflix-weekly-at", "chart:oefi-weekend-at"]);
+export const MIXED_DISCOVERY_POOL_SIZE = 25;
 export const MIXED_DISCOVERY_MARKET_COUNTS = Object.freeze({
-  cinema: 15, streamingFilm: 18, streamingSeries: 17,
+  cinema: 15, streamingFilm: 5, streamingSeries: 5,
 });
 export const WEB_DISCOVERY_MATCH_STATUSES = Object.freeze([
   "matched", "unmatched", "ambiguous",
@@ -268,12 +268,21 @@ function validateMixedRecord(value, feed, errors, index) {
   }
   const sourceUrl = httpsUrl(value.sourceUrl);
   const url = sourceUrl ? new URL(sourceUrl) : null;
-  if (value.sourceId === PUBLIC_DISCOVERY_SOURCE_ID) {
-    if (value.sourceLabel !== "Joyn Österreich" || publicMediaTypeForUrl(value.sourceUrl) !== value.mediaType
-        || value.availability?.market !== "streaming" || value.availability?.service !== "Joyn"
-        || !licenses?.length || value.popularity?.metric !== "source-chart-rank"
-        || value.popularity?.value !== null || value.popularity?.measuredOn !== feed.refreshedOn) {
-      errors.push(`${prefix}-joyn-facts-invalid`);
+  if (value.sourceId === "chart:netflix-weekly-at") {
+    const expectedPath = value.mediaType === "film"
+      ? "/tudum/top10/austria/films" : value.mediaType === "series"
+        ? "/tudum/top10/austria/tv" : null;
+    const ageDays = calendarDay(value.popularity?.measuredOn) && calendarDay(feed.refreshedOn)
+      ? (Date.parse(`${feed.refreshedOn}T00:00:00.000Z`)
+        - Date.parse(`${value.popularity.measuredOn}T00:00:00.000Z`)) / 86_400_000 : null;
+    if (value.sourceLabel !== "Netflix Top 10 Österreich"
+        || url?.hostname !== "www.netflix.com" || url?.pathname !== expectedPath || url?.search
+        || value.availability?.market !== "streaming" || value.availability?.service !== "Netflix"
+        || JSON.stringify(licenses) !== JSON.stringify(["SVOD"])
+        || value.popularity?.metric !== "weekly-country-rank" || value.popularity?.value !== null
+        || !Number.isInteger(ageDays) || ageDays < 0 || ageDays > 9
+        || new Date(`${value.popularity?.measuredOn}T00:00:00.000Z`).getUTCDay() !== 0) {
+      errors.push(`${prefix}-netflix-facts-invalid`);
     }
   } else if (value.sourceId === "chart:oefi-weekend-at") {
     if (value.sourceLabel !== "Österreichisches Filminstitut" || value.mediaType !== "film"

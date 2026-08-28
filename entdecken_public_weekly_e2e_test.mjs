@@ -109,23 +109,20 @@ check("Persoenliche Lane nutzt Joyn-Genres, nie Popularitaet, und ist auf sechs 
   assert.ok(!selection.personal.some((entry) => entry.title === "Schon gesehen"));
 });
 
-check("Beliebtheitslane ist separat, gefuellt, quellengeordnet und duplikatfrei", () => {
-  assert.equal(selection.popular.length, 6);
-  assert.equal(new Set([...selection.personal, ...selection.popular].map((entry) => entry.targetId)).size, 12);
-  assert.ok(selection.popular.every((entry) => entry.externalEvidence[0].domain === "joyn.at"));
-  assert.ok(selection.popular.every((entry) => entry.externalEvidence[0].url === entry.externalEvidence[0].url.trim()));
-  assert.ok(!selection.popular.some((entry) => entry.title === "Schon gesehen"));
-  assert.deepEqual(selection.further, selection.popular);
+check("Historischer Joyn-Feed bleibt persoenlich lesbar, aber ist keine Popularitaetslane mehr", () => {
+  assert.deepEqual(selection.popular, []);
+  assert.deepEqual(selection.further, []);
+  assert.equal(new Set(selection.personal.map((entry) => entry.targetId)).size, 6);
 });
 
-check("Ohne kompatibles Profil bleibt Fuer mich leer, Popular bleibt gefuellt", () => {
+check("Ohne kompatibles Profil bleibt der historische Joyn-Pfad vollstaendig leer", () => {
   const neutral = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] },
     profile: { signals: [{ kind: "genre", value: "horror", direction: "positive", confirmed: true, strength: 4 }] },
     master: [], selectedServices: ["Joyn"], webDiscoveryFeed: feed,
   });
   assert.deepEqual(neutral.personal, []);
-  assert.equal(neutral.popular.length, 6);
+  assert.deepEqual(neutral.popular, []);
 });
 
 check("Persistierte Profilwerte und ein beschaedigtes Profil bleiben fail-closed", () => {
@@ -142,17 +139,17 @@ check("Persistierte Profilwerte und ein beschaedigtes Profil bleiben fail-closed
     master: [{ bewertung: { wie: 5, was: 5, warum: 5 }, genre: ["Drama"] }],
   });
   assert.deepEqual(damaged.personal, []);
-  assert.equal(damaged.popular.length, 6);
+  assert.deepEqual(damaged.popular, []);
 });
 
-check("Eine andere Dienstewahl sperrt nur persoenliche Joyn-Verfuegbarkeit, nicht die aktuelle Liste", () => {
+check("Eine andere Dienstewahl kann den historischen Joyn-Pfad nicht als Popularitaet reaktivieren", () => {
   const otherService = createEntdeckenRecommendations({
     streamingEntdecken: { region: "AT", titel: [] },
     profile: { signals: [{ kind: "genre", value: "drama", direction: "positive", confirmed: true, strength: 4 }] },
     selectedServices: ["Netflix"], webDiscoveryFeed: feed,
   });
   assert.deepEqual(otherService.personal, []);
-  assert.equal(otherService.popular.length, 6);
+  assert.deepEqual(otherService.popular, []);
 });
 
 console.log(`\n${checks}/${checks} providerfreie Entdecken-E2E-Checks bestanden.`);

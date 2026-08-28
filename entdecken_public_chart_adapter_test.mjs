@@ -163,7 +163,7 @@ await checkAsync("Adapter macht genau zwei retryfreie GETs und erzeugt 50 Minima
   endToEndFeed = evaluated.feed;
 });
 
-check("Ein Mockpfad verbindet Quellenadapter, 50er-Feed, Gesehenfilter, Top-6 und Popular-Lane", () => {
+check("Historischer 50er-Feed bleibt fuer Fuer mich lesbar, aber aus der Popular-Lane entfernt", () => {
   assert.ok(endToEndFeed);
   const seen = endToEndFeed.items.find((item) => item.genres.includes("Drama"));
   const result = createEntdeckenRecommendations({
@@ -177,10 +177,10 @@ check("Ein Mockpfad verbindet Quellenadapter, 50er-Feed, Gesehenfilter, Top-6 un
     selectedServices: ["Joyn"], webDiscoveryFeed: endToEndFeed,
   });
   assert.equal(result.personal.length, 6);
-  assert.equal(result.popular.length, 6);
+  assert.equal(result.popular.length, 0);
   assert.ok(result.personal.every((item) => item.reasons.length > 0));
   assert.ok(![...result.personal, ...result.popular].some((item) => item.title === seen.title));
-  assert.equal(new Set([...result.personal, ...result.popular].map((item) => item.targetId)).size, 12);
+  assert.equal(new Set(result.personal.map((item) => item.targetId)).size, 6);
 });
 
 await checkAsync("Runner speichert den 50er-Pool providerfrei und liest ihn unabhaengig zurueck", async () => {

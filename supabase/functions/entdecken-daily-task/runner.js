@@ -153,7 +153,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
     });
   }
   /* Quellenpolitik wird vor dem ersten externen GET validiert. Ein driftendes
-     Register darf weder die zwei Joyn-Reads noch optionale Wikidata-Reads
+     Register darf weder die zwei gebundenen Chart-Reads noch optionale Wikidata-Reads
      ausloesen und verbraucht nur den bereits atomar geclaimten Versuch. */
   const expectedPublicMode = ["public-chart", "public-mix"].includes(adapter?.mode);
   const sources = adapter?.mode === "public-mix"
@@ -202,7 +202,7 @@ export async function runEntdeckenDailyRefresh({ repository, adapter } = {}) {
         const resolved = await repository.enrichPublicItems(envelope.items);
         if (Array.isArray(resolved)) annotations = resolved;
       }
-    } catch { /* Wikidata ist optional; der belegte Joyn-Pool bleibt speicherbar. */ }
+    } catch { /* Wikidata ist optional; der belegte Basispool bleibt speicherbar. */ }
     envelope = Object.freeze({ ...envelope, annotations: Object.freeze([...annotations]) });
   }
   const normalizedReceipt = publicSourceMode ? null : normalizeProviderReceipt(envelope?.providerReceipt);

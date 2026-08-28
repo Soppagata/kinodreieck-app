@@ -292,6 +292,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-karten { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { min-width:0; padding:14px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
 .kd-entdecken-hub-karte h3,.kd-entdecken-panel h3,.kd-entdecken-parked h3 { margin:5px 0 8px; color:var(--leinwand,#ece8df); font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.03em; text-transform:uppercase; }
+.kd-entdecken-titellink { color:inherit; text-decoration-color:rgba(227,166,59,.58); text-decoration-thickness:1px; text-underline-offset:3px; }
+.kd-entdecken-titellink:hover,.kd-entdecken-titellink:focus-visible { color:var(--wolfram,#e3a63b); text-decoration-color:currentColor; }
 .kd-entdecken-hub-karte p,.kd-entdecken-parked p,.kd-entdecken-panel p { color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
 .kd-entdecken-hub-karte .kd-entdecken-grund { margin:4px 0 8px; color:var(--leinwandTief,#dfdacd); }
 .kd-entdecken-hub-karte ul { min-height:45px; margin:8px 0 12px; padding-left:19px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
@@ -307,6 +309,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-katalogzahlen dd { margin:3px 0 0; color:var(--leinwand,#ece8df); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.025em; }
 .kd-entdecken-katalogwahrheit>p { margin:10px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.5; }
 .kd-entdecken-weitere { margin-top:22px; padding-top:16px; border-top:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-mehr { display:block; min-height:44px; margin:14px auto 0; border-color:var(--rauch,#948fa0); color:var(--leinwandTief,#dfdacd); }
 .kd-entdecken-einleitung.kompakt { margin-bottom:14px; }
 .kd-entdecken-neutral p { margin:7px 0 10px; }
 .kd-entdecken-warnung,.kd-entdecken-fehler { padding:10px 12px; border:1px solid var(--kd-gefahr,#c85b51); border-radius:7px; color:var(--kd-gefahr,#c85b51); font-size:13px; }

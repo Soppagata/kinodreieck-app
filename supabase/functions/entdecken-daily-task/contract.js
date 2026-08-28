@@ -14,6 +14,7 @@ import {
   ENTDECKEN_MIXED_MARKET_COUNTS,
   ENTDECKEN_MIXED_POOL_SIZE,
   ENTDECKEN_MIXED_SOURCE_ID,
+  ENTDECKEN_NETFLIX_SOURCE_ID,
   ENTDECKEN_OEFI_SOURCE_ID,
 } from "./publicMixAdapter.js";
 
@@ -327,8 +328,8 @@ export function validateEntdeckenMixedSourceRegistry(value) {
   }
   const byId = new Map(value.map((source) => [source?.sourceId, source]));
   const expected = Object.freeze({
-    [ENTDECKEN_PUBLIC_SOURCE_ID]: Object.freeze({
-      domain: "joyn.at", publisherFamily: "Joyn AT / ProSiebenSat.1 PULS 4", subdomainsAllowed: true,
+    [ENTDECKEN_NETFLIX_SOURCE_ID]: Object.freeze({
+      domain: "netflix.com", publisherFamily: "Netflix, Inc.", subdomainsAllowed: true,
     }),
     [ENTDECKEN_OEFI_SOURCE_ID]: Object.freeze({
       domain: "filminstitut.at", publisherFamily: "Österreichisches Filminstitut", subdomainsAllowed: false,
@@ -391,8 +392,13 @@ function validatePublicFeedItem(item, retrievedOn, checkedAt) {
 function mixedSourceUrl(item) {
   const parsed = directUrl(item?.sourceUrl);
   if (!parsed) return false;
-  if (item.sourceId === ENTDECKEN_PUBLIC_SOURCE_ID) {
-    return item.sourceLabel === "Joyn Österreich" && publicMediaTypeForUrl(item.sourceUrl) === item.mediaType;
+  if (item.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID) {
+    const expectedPath = item.mediaType === "film"
+      ? "/tudum/top10/austria/films" : item.mediaType === "series"
+        ? "/tudum/top10/austria/tv" : null;
+    return item.sourceLabel === "Netflix Top 10 Österreich"
+      && parsed.hostname === "www.netflix.com" && parsed.pathname === expectedPath
+      && !parsed.search;
   }
   return item.sourceId === ENTDECKEN_OEFI_SOURCE_ID
     && item.sourceLabel === "Österreichisches Filminstitut"
@@ -418,10 +424,13 @@ function validateMixedFeedItem(item, retrievedOn, checkedAt) {
   const licenses = unique(item.availability.licenseTypes, 20);
   if (!licenses || licenses.length > 4
       || licenses.some((license) => !["AVOD", "FVOD", "SVOD"].includes(license))) return false;
-  if (item.sourceId === ENTDECKEN_PUBLIC_SOURCE_ID) {
-    return item.availability.market === "streaming" && item.availability.service === "Joyn"
-      && licenses.length >= 1 && item.popularity.metric === "source-chart-rank"
-      && item.popularity.value === null && item.popularity.measuredOn === retrievedOn;
+  if (item.sourceId === ENTDECKEN_NETFLIX_SOURCE_ID) {
+    const ageDays = daysBetween(item.popularity.measuredOn, retrievedOn);
+    return item.availability.market === "streaming" && item.availability.service === "Netflix"
+      && JSON.stringify(licenses) === JSON.stringify(["SVOD"])
+      && item.popularity.metric === "weekly-country-rank"
+      && item.popularity.value === null && ageDays >= 0 && ageDays <= 9
+      && new Date(`${item.popularity.measuredOn}T00:00:00.000Z`).getUTCDay() === 0;
   }
   return item.availability.market === "cinema" && item.availability.service === null
     && licenses.length === 0 && item.popularity.metric === "weekend-admissions"
@@ -518,7 +527,7 @@ export function evaluateEntdeckenMixedResponse(envelope, sourceRegistry, {
   ], ["annotations"]) || envelope.sourceMode !== "public-mix" || envelope.sourceId !== ENTDECKEN_MIXED_SOURCE_ID
       || !Array.isArray(envelope.sourceIds)
       || JSON.stringify([...envelope.sourceIds].sort()) !== JSON.stringify([
-        ENTDECKEN_PUBLIC_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID,
+        ENTDECKEN_NETFLIX_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID,
       ].sort())
       || envelope.retrievedOn !== retrievedOn || envelope.isoWeek !== week.isoWeek
       || !validInstant(envelope.checkedAt) || new Date(envelope.checkedAt).toISOString() !== envelope.checkedAt
@@ -852,7 +861,7 @@ export function validateEntdeckenDailyFeed(value) {
   }
   if (mixedWeekly) {
     const week = isoWeekData(value.refreshedOn);
-    const expectedSourceIds = [ENTDECKEN_PUBLIC_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID].sort();
+    const expectedSourceIds = [ENTDECKEN_NETFLIX_SOURCE_ID, ENTDECKEN_OEFI_SOURCE_ID].sort();
     if (!week || value.isoWeek !== week.isoWeek || value.validUntil !== sixDaysAfter(value.refreshedOn)
         || value.items.length !== ENTDECKEN_MIXED_POOL_SIZE || !Array.isArray(value.sourceIds)
         || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify(expectedSourceIds)) {

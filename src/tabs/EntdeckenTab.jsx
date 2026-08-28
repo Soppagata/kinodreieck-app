@@ -134,12 +134,15 @@ function RecommendationsView({
   entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
   onRadarPreview, onObserveToggle,
 }) {
+  const [showAllPopular, setShowAllPopular] = useState(false);
   const selection = useMemo(() => createEntdeckenRecommendations({
     streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
     entdeckenStatus, webDiscoveryFeed, dailyVariety, selectionDay,
   }), [dailyVariety, entdeckenStatus, master, profile, selectedServices, selectionDay,
     streamingEntdecken, streamingKnown, useLibrary, webDiscoveryFeed]);
   const { personal, popular } = selection;
+  const popularPool = selection.popularPool || popular;
+  const visiblePopular = showAllPopular ? popularPool : popular;
   const source = (entry) => entry.externalEvidence?.[0] || null;
   const mediaLabel = (entry) => ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase())
     ? "Serie" : "Film";
@@ -149,6 +152,9 @@ function RecommendationsView({
       : "Streaming Österreich";
   const meta = (entry) => [availabilityLabel(entry), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
   const sourceLabel = (entry) => entry.sourceLabel || source(entry)?.sourceLabel || source(entry)?.domain || "Aktuelle Liste";
+  const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
+    href={source(entry).url} rel="noopener noreferrer" target="_blank"
+    aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6].includes(webDiscoveryFeed?.format);
   const observeAction = (entry) => entry.watchmodeId
     && ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase());
@@ -172,7 +178,7 @@ function RecommendationsView({
       const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
       return <article key={entry.targetId} className="kd-entdecken-hub-karte">
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
-        <h3>{entry.title}</h3>
+        {titleHeading(entry)}
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
@@ -193,12 +199,12 @@ function RecommendationsView({
           : "Aktuelle belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
-      {popular.length ? <div className="kd-entdecken-karten">{popular.map((entry) => {
+      {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-karten">{visiblePopular.map((entry) => {
         const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
         return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
           <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
             ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
-          <h3>{entry.title}</h3>
+          {titleHeading(entry)}
           <p>{meta(entry)}</p>
           <small>Quelle: {sourceLabel(entry)}</small>
           {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
@@ -211,6 +217,11 @@ function RecommendationsView({
           </button> : null}
         </article>;
       })}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
+      {popularPool.length > popular.length ? <button type="button" className="kd-entdecken-mehr"
+        aria-expanded={showAllPopular} aria-controls="kd-entdecken-beliebt-karten"
+        onClick={() => setShowAllPopular((value) => !value)}>
+        {showAllPopular ? "Weniger Titel anzeigen" : `Weitere ${popularPool.length - popular.length} Titel anzeigen`}
+      </button> : null}
     </section>
   </section>;
 }
