@@ -111,10 +111,10 @@ const RADAR_AUTO_TARGET_TYPES = new Set(["work", "series", "person", "franchise"
 const SKRIPT = (name) => resolve(REPO_ROOT, "tools", name);
 
 export async function pruefeEntdeckenDailyOnceProvenienz() {
-  const { requireEntdeckenSingleLiveReleaseProvenance } = await import(
+  const { requireEntdeckenMixedPoolSingleLiveReleaseProvenance } = await import(
     "./radar_websearch_remote_start.mjs"
   );
-  return requireEntdeckenSingleLiveReleaseProvenance();
+  return requireEntdeckenMixedPoolSingleLiveReleaseProvenance();
 }
 
 export async function pruefeEntdeckenProviderProbeProvenienz({

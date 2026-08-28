@@ -25,6 +25,11 @@ import {
   ENTDECKEN_EDITORIAL_SOURCE_RELEASE_SHA256,
   ENTDECKEN_HTTP_DIAGNOSTIC_FILES,
   ENTDECKEN_HTTP_DIAGNOSTIC_RELEASE_SHA256,
+  ENTDECKEN_MIXED_POOL_FILES,
+  ENTDECKEN_MIXED_POOL_MIGRATION,
+  ENTDECKEN_MIXED_POOL_RELEASE_SHA256,
+  ENTDECKEN_MIXED_SINGLE_LIVE_FILES,
+  ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256,
   ENTDECKEN_PROVIDER_PROBE_COMMAND,
   ENTDECKEN_PROVIDER_PROBE_FILES,
   ENTDECKEN_PROVIDER_PROBE_RELEASE_SHA256,
@@ -51,6 +56,8 @@ import {
   deriveRadarPackageBReleaseClosure,
   requireEntdeckenEditorialSourceReleaseProvenance,
   requireEntdeckenHttpDiagnosticReleaseProvenance,
+  requireEntdeckenMixedPoolReleaseProvenance,
+  requireEntdeckenMixedPoolSingleLiveReleaseProvenance,
   requireEntdeckenProviderProbeReleaseProvenance,
   requireEntdeckenSingleLiveReleaseProvenance,
   requireProviderReceiptRuntimeProvenance,
@@ -804,6 +811,30 @@ await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vo
     },
   }), (error) => error instanceof RadarRemoteStartStop
     && error.code === "RELEASE_CLOSURE_UNTRACKED");
+});
+
+await check("Additiver Format-6-Zaun bindet nur Mix-Function, Forward-Migration und Einmallauf", () => {
+  const functionProof = requireEntdeckenMixedPoolReleaseProvenance();
+  const liveProof = requireEntdeckenMixedPoolSingleLiveReleaseProvenance();
+  assert.equal(functionProof.releaseSha256, ENTDECKEN_MIXED_POOL_RELEASE_SHA256);
+  assert.deepEqual(functionProof.files, ENTDECKEN_MIXED_POOL_FILES);
+  assert.deepEqual(functionProof.migration, ENTDECKEN_MIXED_POOL_MIGRATION);
+  assert.equal(
+    functionProof.migration.path,
+    "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql",
+  );
+  assert.equal(liveProof.releaseSha256, ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256);
+  assert.deepEqual(liveProof.files, ENTDECKEN_MIXED_SINGLE_LIVE_FILES);
+  assert.equal(liveProof.functionReleaseSha256, functionProof.releaseSha256);
+  assert.equal(liveProof.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
+  assert.throws(() => requireEntdeckenMixedPoolReleaseProvenance({
+    readFile(absolutePath) {
+      const bytes = fs.readFileSync(absolutePath);
+      return String(absolutePath).endsWith("20260828180000_entdecken_mixed_pool_format_6.sql")
+        ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
+    },
+  }), (error) => error instanceof RadarRemoteStartStop
+    && error.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT");
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {

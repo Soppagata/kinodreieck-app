@@ -939,27 +939,30 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  let stopp = null;
-  try {
-    await starteModus({
-      modus: "ai-live",
-      ambientEnv: {},
-      lokaleKonfig: PUBLIC,
-      keychainLeser(account) {
-        gelesen.push(account);
-        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-      },
-      spawnImpl,
-      ownerApprovedServerBudget: true,
-      entdeckenDailyOnce: true,
-    });
-  } catch (error) { stopp = error; }
+  const code = await starteModus({
+    modus: "ai-live",
+    ambientEnv: {},
+    lokaleKonfig: PUBLIC,
+    keychainLeser(account) {
+      gelesen.push(account);
+      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+    },
+    spawnImpl,
+    ownerApprovedServerBudget: true,
+    entdeckenDailyOnce: true,
+  });
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
     MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Nicht deployter Format-6-Stand stoppt vor Keychain und Spawn am Bytevertrag",
-    stopp?.code === "ENTDECKEN_HTTP_DIAGNOSTIC_PROVENANCE_DRIFT"
-      && starts.length === 0 && gelesen.length === 0);
+  pruefe("Format-6-Einmallauf startet nach additivem Bytevertrag nur den providerfreien Client",
+    code === 0
+      && starts.length === 1
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
+      && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
+      && !("KD_OWNER_USER" in starts[0].optionen.env));
 }
 
 {

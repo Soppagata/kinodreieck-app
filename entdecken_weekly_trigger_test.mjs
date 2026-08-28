@@ -15,6 +15,9 @@ const hostingDoc = readFileSync("docs/ETAPPE_2_HOSTING.md", "utf8");
 const migration = readFileSync(
   "supabase/migrations/20260827140000_entdecken_public_six_day_pool.sql", "utf8",
 );
+const mixedPoolMigration = readFileSync(
+  "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql", "utf8",
+);
 const scheduleBlock = workflow.match(/^on:\n([\s\S]*?)^permissions:/m)?.[1] || "";
 const cronExpressions = [...scheduleBlock.matchAll(/cron:\s*["']([^"']+)["']/g)].map((match) => match[1]);
 const stepStart = workflow.indexOf("      - name: Entdecken um 02 Uhr UTC");
@@ -119,6 +122,24 @@ check("Format 5, owner_private Quelle und Cache sind DB-seitig fail-closed", () 
   assert.match(migration, /'resolved','not_found','ambiguous_blocked','incomplete_blocked'/u);
   assert.match(migration, /force row level security/u);
   assert.match(migration, /create function public\.kd_entdecken_public_feed_readback/u);
+});
+
+check("Format 6 ist eine additive Dualformat-Migration mit festem 50er-Marktmix", () => {
+  assert.match(mixedPoolMigration, /^begin;$/mu);
+  assert.match(mixedPoolMigration, /^commit;$/mu);
+  assert.match(mixedPoolMigration, /rename to kd_entdecken_public_payload_valid_v5/u);
+  assert.match(mixedPoolMigration, /create function public\.kd_entdecken_public_payload_valid_v6/u);
+  assert.match(mixedPoolMigration, /when '6' then public\.kd_entdecken_public_payload_valid_v6/u);
+  assert.match(mixedPoolMigration, /when '5' then public\.kd_entdecken_public_payload_valid_v5/u);
+  assert.match(mixedPoolMigration, /jsonb_array_length\(p_payload->'items'\) is distinct from 50/u);
+  assert.match(mixedPoolMigration, /v_cinema is distinct from 15/u);
+  assert.match(mixedPoolMigration, /v_streaming_film is distinct from 18/u);
+  assert.match(mixedPoolMigration, /v_streaming_series is distinct from 17/u);
+  assert.match(mixedPoolMigration, /'chart:joyn-at','chart:oefi-weekend-at'/u);
+  assert.match(mixedPoolMigration, /p_source = 'owner' and not coalesce\(v_owner_override,false\)/u);
+  assert.match(mixedPoolMigration, /p_source = 'scheduled' and not v_due/u);
+  assert.match(mixedPoolMigration, /not provider_enabled and not commercial_enabled/u);
+  assert.doesNotMatch(mixedPoolMigration, /cron\.schedule|radar-websearch-task|ANTHROPIC_API_KEY/u);
 });
 
 check("Fehlerpfad behaelt Payload und verbrauchten Versuch ohne Retry", () => {
