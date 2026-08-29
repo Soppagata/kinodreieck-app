@@ -26,6 +26,7 @@ import {
 import {
   ENTDECKEN_FACTS_HEADER,
   ENTDECKEN_FACTS_HEADER_VALUE,
+  createEntdeckenFactsErrorResponse,
   runEntdeckenFactsRequest,
 } from "./factsRequest.js";
 
@@ -263,8 +264,8 @@ export function createEntdeckenDailyHandler({
           fetchImpl,
         });
         return json(result, 200, origin);
-      } catch {
-        return json({ ok: false, status: "facts_error", items: [] }, 503, origin);
+      } catch (error) {
+        return json(createEntdeckenFactsErrorResponse(error), 503, origin);
       }
     }
 

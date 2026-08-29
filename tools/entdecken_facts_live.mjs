@@ -28,6 +28,7 @@ import {
   ENTDECKEN_FACTS_HEADER,
   ENTDECKEN_FACTS_HEADER_VALUE,
   ENTDECKEN_FACTS_REQUEST_VERSION,
+  validateEntdeckenFactsErrorResponse,
 } from "../supabase/functions/entdecken-daily-task/factsRequest.js";
 import {
   LAUF_LIMIT_USD_CENT,
@@ -49,6 +50,17 @@ function plain(value) { return !!value && typeof value === "object" && !Array.is
 function exactKeys(value, keys) {
   return plain(value)
     && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+}
+
+export function formatEntdeckenFactsRemoteFailure(functionHttpStatus, body) {
+  const safeFunctionHttpStatus = Number.isSafeInteger(functionHttpStatus)
+    && functionHttpStatus >= 400 && functionHttpStatus <= 599 ? functionHttpStatus : null;
+  const failure = validateEntdeckenFactsErrorResponse(body)?.failure;
+  return "FACTS_REMOTE_FAILED"
+    + ` function_http=${safeFunctionHttpStatus ?? "unknown"}`
+    + ` code=${failure?.code ?? "facts-function-error"}`
+    + ` provider_http=${failure?.providerHttpStatus ?? "unknown"}`
+    + ` provider_code=${failure?.providerErrorCode ?? "unknown"}`;
 }
 
 export function readEntdeckenFactsSnapshot(path = ENTDECKEN_FACTS_SNAPSHOT_PATH) {
@@ -258,7 +270,9 @@ export async function runEntdeckenFactsLive({
         body: JSON.stringify({ schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION, items }),
       }, { fetchImpl, timeoutMs: 135_000 });
       const body = await responseJson(response);
-      if (!response.ok || response.status !== 200) throw new Error("FACTS_REMOTE_FAILED");
+      if (!response.ok || response.status !== 200) {
+        throw new Error(formatEntdeckenFactsRemoteFailure(response.status, body));
+      }
       return body;
     },
     persistSnapshot: async (snapshot) => writeEntdeckenFactsSnapshotAtomic(snapshot),

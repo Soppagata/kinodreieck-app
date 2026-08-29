@@ -13,6 +13,11 @@ import {
   parseProviderLooseJsonText,
   ProviderTextSafetyError,
 } from "../_shared/providerText.js";
+import {
+  createEntdeckenProviderFetchFailure,
+  createEntdeckenProviderHttpFailure,
+  normalizeEntdeckenProviderFailure,
+} from "./providerFailureContract.js";
 
 export const ENTDECKEN_FACTS_CONFIG_TASK = "entdecken-daily";
 export const ENTDECKEN_FACTS_PROVIDER_TASK = "entdecken-facts-once";
@@ -26,6 +31,12 @@ const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const MODEL_FORM = /^claude-haiku-4-5(?:-[0-9]{8})?$/;
 const MODEL_PRICE_FLOOR = Object.freeze({ input: 100, output: 500 });
+const SAFE_ERROR_CODES = new Set([
+  "already-used", "batch-invalid", "cost-gate-rejected", "cost-settlement-failed",
+  "http-error", "provider-body-invalid", "provider-cost-invalid",
+  "provider-envelope-invalid", "provider-output-invalid", "provider-receipt-invalid",
+  "provider-timeout", "provider-tool-shape-invalid", "setup-invalid",
+]);
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function finitePositive(value) { return typeof value === "number" && Number.isFinite(value) && value > 0; }
@@ -49,11 +60,13 @@ function costFromUsage(setup, inputTokens, outputTokens, searchRequests) {
 }
 
 export class EntdeckenFactsProviderError extends Error {
-  constructor(code, usage = null) {
-    super(code);
+  constructor(code, usage = null, providerFailure = null) {
+    const safe = SAFE_ERROR_CODES.has(code) ? code : "provider-body-invalid";
+    super(safe);
     this.name = "EntdeckenFactsProviderError";
-    this.code = code;
+    this.code = safe;
     this.usage = usage;
+    this.providerFailure = normalizeEntdeckenProviderFailure(providerFailure);
   }
 }
 
@@ -289,11 +302,30 @@ export function createAnthropicEntdeckenFactsAdapter({
       } catch (error) {
         throw new EntdeckenFactsProviderError(
           error?.name === "AbortError" ? "provider-timeout" : "http-error",
+          null,
+          createEntdeckenProviderFetchFailure(),
         );
       }
-      const providerBody = await responseJson(response);
+      let providerBody;
+      try { providerBody = await responseJson(response); }
+      catch (error) {
+        if (!response?.ok) {
+          throw new EntdeckenFactsProviderError(
+            "http-error",
+            null,
+            createEntdeckenProviderHttpFailure(response?.status, null),
+          );
+        }
+        throw error;
+      }
       usage = providerUsage(providerBody, items.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM);
-      if (!response?.ok) throw new EntdeckenFactsProviderError("http-error", usage);
+      if (!response?.ok) {
+        throw new EntdeckenFactsProviderError(
+          "http-error",
+          usage,
+          createEntdeckenProviderHttpFailure(response?.status, providerBody),
+        );
+      }
       const parsed = parseAnthropicEntdeckenFactsResponse(providerBody, items, now());
       usage = parsed.usage;
       costUsdCent = costFromUsage(

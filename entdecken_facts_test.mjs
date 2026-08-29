@@ -22,14 +22,18 @@ import {
   ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
   buildAnthropicEntdeckenFactsBody,
   createAnthropicEntdeckenFactsAdapter,
+  EntdeckenFactsProviderError,
   estimateEntdeckenFactsReservation,
   parseAnthropicEntdeckenFactsResponse,
 } from "./supabase/functions/entdecken-daily-task/anthropicFactsAdapter.js";
 import {
   ENTDECKEN_FACTS_REQUEST_VERSION,
+  createEntdeckenFactsErrorResponse,
+  validateEntdeckenFactsErrorResponse,
   validateEntdeckenFactsRequest,
 } from "./supabase/functions/entdecken-daily-task/factsRequest.js";
 import {
+  formatEntdeckenFactsRemoteFailure,
   runEntdeckenFactsBatchPlan,
 } from "./tools/entdecken_facts_live.mjs";
 import {
@@ -214,6 +218,7 @@ await check("Providerbody sendet nur Poolidentitaet und Chartquelle, nie Profil 
   const body = buildAnthropicEntdeckenFactsBody(setup, inputs.slice(0, 9));
   assert.equal(body.tools[0].type, "web_search_20250305");
   assert.equal(body.tools[0].max_uses, 9);
+  assert.deepEqual(body.tools[0].allowed_callers, ["direct"]);
   assert.equal(body.max_tokens, 2800);
   const userInput = body.messages[0].content;
   assert.match(userInput, /chartSource/);
@@ -303,6 +308,74 @@ await check("Adapter bindet einen Request an Serverkostenbeleg und macht keinen 
   assert.equal(result.receipt.searchRequests, 2);
   await assert.rejects(() => adapter.resolve(batch), /already-used/);
   assert.equal(fetches, 1);
+});
+
+await check("Provider-HTTP-Fehler zeigt nur Status und erlaubte Codes", async () => {
+  const batch = inputs.slice(0, 9);
+  const privateText = `${batch[0].title} fixture-secret kompletter Prompt`;
+  let settlement = null;
+  const adapter = createAnthropicEntdeckenFactsAdapter({
+    apiKey: "fixture-secret",
+    loadSetup: async () => setup,
+    reserveCost: async () => ({ ok: true, logId: 42 }),
+    settleCost: async (value) => { settlement = value; },
+    readSettledCost: async () => null,
+    fetchImpl: async () => new Response(JSON.stringify({
+      type: "error",
+      error: { type: "invalid_request_error", message: privateText },
+      request_id: "req_private_fixture",
+      injected: { token: "fixture-secret", titles: batch.map((item) => item.title) },
+    }), {
+      status: 400,
+      headers: { "x-private-fixture": "fixture-secret" },
+    }),
+  });
+  let caught = null;
+  try { await adapter.resolve(batch); } catch (error) { caught = error; }
+  assert.ok(caught instanceof EntdeckenFactsProviderError);
+  assert.equal(caught.code, "http-error");
+  assert.deepEqual(caught.providerFailure, {
+    stage: "http", httpStatus: 400, providerErrorType: "invalid_request_error",
+  });
+  assert.equal(settlement.errorClass, "http-error");
+
+  const functionBody = createEntdeckenFactsErrorResponse(caught);
+  assert.deepEqual(functionBody.failure, {
+    code: "http-error",
+    providerHttpStatus: 400,
+    providerErrorCode: "invalid_request_error",
+  });
+  assert.equal(validateEntdeckenFactsErrorResponse({
+    ...functionBody,
+    ignored: privateText,
+  }), null);
+  const visible = formatEntdeckenFactsRemoteFailure(503, functionBody);
+  assert.equal(visible,
+    "FACTS_REMOTE_FAILED function_http=503 code=http-error"
+      + " provider_http=400 provider_code=invalid_request_error");
+  assert.doesNotMatch(visible, new RegExp([
+    privateText, "fixture-secret", "req_private_fixture", batch[0].title,
+  ].map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")));
+});
+
+await check("Nicht-JSON-Providerfehler behält nur den HTTP-Status", async () => {
+  const adapter = createAnthropicEntdeckenFactsAdapter({
+    apiKey: "fixture-secret",
+    loadSetup: async () => setup,
+    reserveCost: async () => ({ ok: true, logId: 43 }),
+    settleCost: async () => {},
+    readSettledCost: async () => null,
+    fetchImpl: async () => new Response("private upstream body", { status: 502 }),
+  });
+  await assert.rejects(() => adapter.resolve(inputs.slice(0, 9)), (error) => {
+    assert.equal(error.code, "http-error");
+    assert.deepEqual(error.providerFailure, {
+      stage: "http", httpStatus: 502, providerErrorType: null,
+    });
+    assert.doesNotMatch(JSON.stringify(createEntdeckenFactsErrorResponse(error)),
+      /private upstream body|fixture-secret/);
+    return true;
+  });
 });
 
 await check("Teilfortschritt wird je Item gesichert und Wiederanlauf enthaelt nur 41 Fehlende", async () => {

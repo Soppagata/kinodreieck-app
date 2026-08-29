@@ -5,15 +5,27 @@ import {
 } from "../_shared/entdeckenFacts.js";
 import {
   createAnthropicEntdeckenFactsAdapter,
+  EntdeckenFactsProviderError,
   ENTDECKEN_FACTS_CONFIG_TASK,
   ENTDECKEN_FACTS_MAX_TOKENS,
   ENTDECKEN_FACTS_PROVIDER_TASK,
   ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
 } from "./anthropicFactsAdapter.js";
+import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js";
 
 export const ENTDECKEN_FACTS_HEADER = "x-kd-entdecken-facts";
 export const ENTDECKEN_FACTS_HEADER_VALUE = "owner-v1";
 export const ENTDECKEN_FACTS_REQUEST_VERSION = "entdecken-facts-request-v1";
+
+const SAFE_FACTS_ERROR_CODES = new Set([
+  "already-used", "batch-invalid", "cost-gate-rejected", "cost-settlement-failed",
+  "entdecken-facts-log-unavailable",
+  "entdecken-facts-request-invalid",
+  "entdecken-facts-setup-unavailable",
+  "facts-function-error", "http-error", "provider-body-invalid", "provider-cost-invalid",
+  "provider-envelope-invalid", "provider-output-invalid", "provider-receipt-invalid",
+  "provider-timeout", "provider-tool-shape-invalid", "setup-invalid",
+]);
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function exactKeys(value, keys) {
@@ -34,6 +46,50 @@ export function validateEntdeckenFactsRequest(value) {
       || value.schemaVersion !== ENTDECKEN_FACTS_REQUEST_VERSION) return null;
   const items = validateEntdeckenFactsInputs(value.items);
   return items ? Object.freeze({ schemaVersion: value.schemaVersion, items }) : null;
+}
+
+export function createEntdeckenFactsErrorResponse(error) {
+  const providerError = error instanceof EntdeckenFactsProviderError;
+  const candidate = providerError ? error.code : error?.message;
+  const code = SAFE_FACTS_ERROR_CODES.has(candidate) ? candidate : "facts-function-error";
+  const providerFailure = providerError
+    ? normalizeEntdeckenProviderFailure(error.providerFailure) : null;
+  return Object.freeze({
+    ok: false,
+    status: "facts_error",
+    items: Object.freeze([]),
+    failure: Object.freeze({
+      code,
+      providerHttpStatus: providerFailure?.httpStatus ?? null,
+      providerErrorCode: providerFailure?.providerErrorType ?? null,
+    }),
+  });
+}
+
+export function validateEntdeckenFactsErrorResponse(value) {
+  if (!exactKeys(value, ["ok", "status", "items", "failure"])
+      || value.ok !== false || value.status !== "facts_error"
+      || !Array.isArray(value.items) || value.items.length !== 0
+      || !exactKeys(value.failure, ["code", "providerHttpStatus", "providerErrorCode"])
+      || !SAFE_FACTS_ERROR_CODES.has(value.failure.code)) return null;
+  const { providerHttpStatus, providerErrorCode } = value.failure;
+  const providerFailure = providerHttpStatus === null && providerErrorCode === null
+    ? null : normalizeEntdeckenProviderFailure({
+      stage: "http",
+      httpStatus: providerHttpStatus,
+      providerErrorType: providerErrorCode,
+    });
+  if ((providerHttpStatus !== null || providerErrorCode !== null) && !providerFailure) return null;
+  return Object.freeze({
+    ok: false,
+    status: "facts_error",
+    items: Object.freeze([]),
+    failure: Object.freeze({
+      code: value.failure.code,
+      providerHttpStatus: providerFailure?.httpStatus ?? null,
+      providerErrorCode: providerFailure?.providerErrorType ?? null,
+    }),
+  });
 }
 
 /**
