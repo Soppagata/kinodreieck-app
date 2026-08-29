@@ -247,7 +247,7 @@ await check("Outbox-Vorgangs-ID ist idempotent und kollisionsfest", () => {
   assert.equal(conflict.reason, "operation-id-conflict");
 });
 
-await check("Quota-Ablehnung bleibt sichtbar und wiederaufnehmbar", () => {
+await check("Terminale Ablehnung bleibt zielbezogen und kann exakt verworfen werden", () => {
   const queued = R.queueAccountRadarChange(R.createEmptyLocalRadar({ authority: "account-cache" }), {
     operationId: "fixture:operation:reject", action: "upsert", target: target(), now: instant,
   });
@@ -255,6 +255,13 @@ await check("Quota-Ablehnung bleibt sichtbar und wiederaufnehmbar", () => {
   assert.equal(rejected.ok, true);
   assert.equal(rejected.state.outbox[0].status, "rejected");
   assert.equal(rejected.state.outbox[0].reason, "quota-exceeded");
+  const wrongOperation = R.discardRejectedAccountRadarChange(rejected.state, "fixture:operation:other");
+  assert.equal(wrongOperation.ok, false);
+  assert.equal(wrongOperation.state.outbox.length, 1);
+  const discarded = R.discardRejectedAccountRadarChange(rejected.state, "fixture:operation:reject");
+  assert.equal(discarded.ok, true);
+  assert.equal(discarded.state.outbox.length, 0);
+  assert.equal(discarded.state.subscriptions.length, 0);
 });
 
 await check("Reconciliation ersetzt nur Servercache und bestätigte Outboxmenge", () => {

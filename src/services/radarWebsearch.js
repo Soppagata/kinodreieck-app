@@ -3,6 +3,7 @@ import { authDriver, authService } from "./auth.js";
 import { validatePersonIdentity } from "../lib/personDiscoveryContracts.js";
 import { createPersonRadarTargetId } from "../lib/personRadarCatalog.js";
 import { normalizeProviderReceipt } from "../../supabase/functions/_shared/providerReceipt.js";
+import { validateRadarPilotFeed } from "../lib/radarPilotContracts.js";
 
 export const RADAR_WEBSEARCH_ENDPOINT = "radar-websearch-task";
 export const RADAR_WEBSEARCH_SINGLE_FILE_DISABLED = typeof __KD_SINGLE_FILE__ !== "undefined"
@@ -15,11 +16,17 @@ export const RADAR_WEBSEARCH_CLIENT_RESPONSE_MAX_BYTES = 64 * 1024;
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+function freezeDeep(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeDeep(child);
+  return Object.freeze(value);
+}
+function frozenClone(value) { return freezeDeep(JSON.parse(JSON.stringify(value))); }
 function exactResult(value, expectedPerson = null) {
   const allowed = [
     "ok", "status", "writes", "providerRequests", "searchRequests", "phaseCode", "personResult",
     "reservationStatus", "reservationUsdCent", "reservationDecision",
-    "responseMode", "displayText", "warnings", "providerReceipt",
+    "responseMode", "displayText", "warnings", "providerReceipt", "feed",
   ];
   if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return null;
   if (value.ok !== true || !RADAR_WEBSEARCH_CLIENT_STATUSES.includes(value.status)
@@ -90,16 +97,20 @@ function exactResult(value, expectedPerson = null) {
   }
   if (providerReceipt && presentationCount !== 0
       && providerReceipt.resultMode !== value.responseMode) return null;
+  const feed = value.feed === undefined ? null : validateRadarPilotFeed(value.feed).ok
+    ? frozenClone(value.feed) : null;
+  if (value.feed !== undefined && !feed) return null;
+  const feedResult = feed ? { feed } : {};
   if (!expectedPerson) {
     if (value.personResult !== undefined) return null;
-    return Object.freeze({ status: value.status, writes: value.writes, ...presentation });
+    return Object.freeze({ status: value.status, writes: value.writes, ...presentation, ...feedResult });
   }
   const result = value.personResult;
   if (!plain(result) || !validatePersonIdentity(result.person).ok
       || result.person.personExternalId !== expectedPerson.personExternalId
       || result.person.name !== expectedPerson.name || result.person.role !== expectedPerson.role
       || result.status !== value.status || value.writes > 3) return null;
-  return Object.freeze({ status: value.status, writes: value.writes, personResult: result, ...presentation });
+  return Object.freeze({ status: value.status, writes: value.writes, personResult: result, ...presentation, ...feedResult });
 }
 
 /* Der Browser sendet die starke Zielkennung und nur bei einem lokalen

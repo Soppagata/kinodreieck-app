@@ -81,6 +81,18 @@ const liveProviderReceipt = await createProviderReceipt({
   reservationUsdCent: 2,
   costUsdCent: 1.1,
 });
+const emptyPilotFeed = Object.freeze({
+  format: "kd-radar-pilot-feed-v2",
+  revision: 0,
+  checksum: null,
+  reconciledAt: checkedAt,
+  subscriptions: Object.freeze([]),
+  events: Object.freeze([]),
+  receipts: Object.freeze([]),
+  operationAcks: Object.freeze([]),
+  radarReview: true,
+  personResults: Object.freeze([]),
+});
 
 function evidence(source, path = "start") {
   return {
@@ -469,15 +481,42 @@ await check("Browserdienst sendet nur targetId und macht keinen Retry", async ()
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
       return { ok: true, status: 200, async json() {
-        return { ok: true, status: "confirmed", writes: 1, providerRequests: 1, searchRequests: 1 };
+        return {
+          ok: true, status: "confirmed", writes: 1,
+          providerRequests: 1, searchRequests: 1, feed: emptyPilotFeed,
+        };
       } };
     },
   });
   const result = await service.checkNow(target.targetId);
   assert.equal(result.status, "confirmed");
+  assert.deepEqual(result.feed, emptyPilotFeed);
+  assert.ok(Object.isFrozen(result.feed) && Object.isFrozen(result.feed.events));
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), { targetId: target.targetId });
   assert.equal(calls[0].options.body.includes("max-account"), false);
+});
+
+await check("Browserdienst verwirft einen Feed außerhalb des bestehenden exakten Vertrags", async () => {
+  const session = { mode: "account", state: "ready", account: { id: "max-account" } };
+  const service = createRadarWebsearchService({
+    config: {
+      radarPilotClientEnabled: true,
+      supabaseUrl: "https://project.example.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => session },
+    getAccount: () => session.account,
+    getAccessToken: async () => "session-token",
+    fetchImpl: async () => ({ ok: true, status: 200, async json() {
+      return {
+        ok: true, status: "confirmed", writes: 1,
+        providerRequests: 1, searchRequests: 1,
+        feed: { ...emptyPilotFeed, accountId: "verboten" },
+      };
+    } }),
+  });
+  assert.deepEqual(await service.checkNow(target.targetId), { status: "unavailable", writes: 0 });
 });
 
 await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check genau einmal und unverändert", async () => {
@@ -523,6 +562,7 @@ await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check
 
 const migration = fs.readFileSync("./supabase/migrations/20260817180000_radar_websearch_mvp_package_a.sql", "utf8");
 const textMigration = fs.readFileSync("./supabase/migrations/20260823120000_radar_text_target.sql", "utf8");
+const feedTitleMigration = fs.readFileSync("./supabase/migrations/20260829120000_radar_feed_work_title.sql", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
 const runnerSource = fs.readFileSync("./supabase/functions/radar-websearch-task/runner.js", "utf8");
 
@@ -559,12 +599,23 @@ await check("Freitextmigration nutzt nur bestehende Radarpfade und sperrt Rohtex
   assert.doesNotMatch(textMigration, /anthropic|pg_net|http_post|curl/i);
 });
 
+await check("Additiver Radarfeed ergaenzt nur den kanonischen Werktitel bereits sichtbarer Events", () => {
+  assert.match(feedTitleMigration, /rename to kd_radar_pilot_feed_work_title_internal/i);
+  assert.match(feedTitleMigration, /v_feed\s*:=\s*public\.kd_radar_pilot_feed_work_title_internal\(p_operation_ids\)/i);
+  assert.match(feedTitleMigration, /jsonb_array_elements\(coalesce\(v_feed -> 'events','\[\]'::jsonb\)\)/i);
+  assert.match(feedTitleMigration, /target\.target_key\s*=\s*item\.value\s*->>\s*'targetId'/i);
+  assert.match(feedTitleMigration, /jsonb_build_object\('title',target\.canonical_title\)/i);
+  assert.match(feedTitleMigration, /when item\.value \? 'title' then item\.value/i);
+  assert.doesNotMatch(feedTitleMigration, /insert\s+into|update\s+public|delete\s+from|anthropic|http|cron\./i);
+});
+
 await check("Function prüft JWT selbst und der Runner übergibt nur den validierten Request", () => {
   assert.match(functionIndex, /auth\.getClaims\(token\)/);
   assert.match(functionIndex, /claims\?\.role\s*===\s*"authenticated"/);
   assert.match(functionIndex, /createAnthropicRadarWebsearchAdapter/);
   assert.match(functionIndex, /ANTHROPIC_API_KEY/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
+  assert.match(functionIndex, /result\.feed\s*\?\s*\{\s*feed:\s*result\.feed\s*\}/);
   assert.equal((runnerSource.match(/adapter\.search\(request\)/g) || []).length, 1);
   assert.doesNotMatch(runnerSource, /setTimeout|while\s*\(/i);
 });

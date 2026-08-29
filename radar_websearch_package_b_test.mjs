@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import { delimiter, dirname, resolve } from "node:path";
+import { delimiter, dirname, relative, resolve } from "node:path";
 import {
   RADAR_WEBSEARCH_FEE_USD_CENT,
   RADAR_WEBSEARCH_MAX_TOKENS,
@@ -831,15 +831,28 @@ await check("Nicht freigegebener Format-6-Functionpfad bleibt hinter seinem alte
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {
-  const proof = requireRadarDailyReleaseProvenance();
+  const readCommitted = (absolutePath) => {
+    const pathname = relative(REPO_ROOT, String(absolutePath)).split("\\").join("/");
+    const result = spawnSync("/usr/bin/git", ["show", `${RADAR_DAILY_COMMIT}:${pathname}`], {
+      cwd: REPO_ROOT,
+      encoding: null,
+    });
+    assert.equal(result.status, 0, pathname);
+    return result.stdout;
+  };
+  const proof = requireRadarDailyReleaseProvenance({ readFile: readCommitted });
   assert.equal(proof.commit, RADAR_DAILY_COMMIT);
   assert.equal(proof.releaseSha256, RADAR_DAILY_RELEASE_SHA256);
   assert.deepEqual(proof.files, RADAR_DAILY_FILES);
   assert.deepEqual(proof.migration, RADAR_DAILY_MIGRATION);
   assert.deepEqual(proof.workflow, RADAR_DAILY_WORKFLOW);
+  assert.throws(() => requireRadarDailyReleaseProvenance(), (error) => (
+    error instanceof RadarRemoteStartStop
+      && error.code === "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT"
+  ));
   assert.throws(() => requireRadarDailyReleaseProvenance({
     readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
+      const bytes = readCommitted(absolutePath);
       return String(absolutePath).endsWith("radar-daily.yml")
         ? Buffer.concat([bytes, Buffer.from("\n# drift")]) : bytes;
     },

@@ -6,11 +6,13 @@ import {
   changeLocalTextRadarSubscription,
   createEmptyLocalRadar,
   decodeLocalRadar,
+  discardRejectedAccountRadarChange,
   queueAccountPersonRadarChange,
   queueAccountRadarChange,
   queueAccountRadarPilotImport,
   queueAccountRadarPilotReceipt,
   queueAccountRadarShareChange,
+  reconcileAccountRadarPilotFeed,
   removeGuestPersonRadarSubscription,
   removeGuestRadarSubscription,
   setLocalRadarReceipt,
@@ -30,6 +32,7 @@ import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 import { projectVisibleRadarWebsearchEvents, validateRadarWebsearchTarget } from "../lib/radarWebsearchFlow.js";
 import {
   CANONICAL_FRANCHISE_RADAR_CATALOG,
+  resolveCanonicalFranchiseRadarInput,
   resolveCanonicalFranchiseRadarTarget,
   validateTitleGroupMetadata,
 } from "../lib/titleGroupRadar.js";
@@ -266,7 +269,7 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const fuegeRadarTextHinzu = useCallback(async (targetText) => {
+  const fuegeRadarFreitextHinzu = useCallback(async (targetText) => {
     let reason = "text-subscription-invalid";
     const saved = await schreibeRadarState((previous) => {
       if (previous.authority !== radarAuthority) { reason = "authority-mismatch"; return null; }
@@ -427,6 +430,15 @@ export function useEntdeckenRadarController({
       : { status: "storage_error", writes: 0 });
   }, [aendereRadar, franchiseRadarAvailable, franchiseRadarResolver, localRadarWebsearchAvailable,
     personRadarCatalog, radarAuthority, radarStateRef, radarWebsearchExecutor]);
+
+  const fuegeRadarTextHinzu = useCallback(async (targetText) => {
+    const canonical = resolveCanonicalFranchiseRadarInput(targetText);
+    if (canonical && franchiseRadarAvailable) {
+      const result = await fuegeFranchiseRadarHinzu(canonical);
+      if (!["unavailable", "unresolved", "provider_error", "forbidden"].includes(result?.status)) return result;
+    }
+    return fuegeRadarFreitextHinzu(targetText);
+  }, [franchiseRadarAvailable, fuegeFranchiseRadarHinzu, fuegeRadarFreitextHinzu]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {
     if (!personRadarAvailable) return Object.freeze({ status: "unavailable", writes: 0 });
@@ -618,6 +630,17 @@ export function useEntdeckenRadarController({
     return syncRadarPilot();
   }, [syncRadarPilot]);
 
+  const verwerfeAbgelehnteRadarAenderung = useCallback(async (operationId) => {
+    let reason = "rejected-operation-invalid";
+    const saved = await schreibeRadarState((previous) => {
+      const result = discardRejectedAccountRadarChange(previous, operationId);
+      reason = result.reason;
+      return result.ok ? result.state : null;
+    });
+    if (saved !== false) return Object.freeze({ status: "resolved", writes: 1 });
+    return Object.freeze({ status: "storage_error", writes: 0, reason });
+  }, [schreibeRadarState]);
+
   const fuehreRadarWebsearchCheck = useCallback(async (targetId) => {
     const state = radarStateRef.current;
     const activeMatches = (state?.subscriptions || []).filter((entry) => (
@@ -688,8 +711,15 @@ export function useEntdeckenRadarController({
     let result;
     try { result = await radarServerService.checkNow(targetId, activeMatches[0].targetText); }
     catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
-    if (["confirmed", "insufficient_evidence", "no_change"].includes(result?.status)) {
-      await syncRadarPilot();
+    if (result?.feed) {
+      let reason = "pilot-feed-invalid";
+      const saved = await schreibeRadarState((previous) => {
+        const reconciled = reconcileAccountRadarPilotFeed(previous, result.feed);
+        reason = reconciled.reason;
+        return reconciled.ok ? reconciled.state : null;
+      });
+      if (saved === false) return Object.freeze({ status: "storage_error", writes: 0, reason });
+      setRadarPilotSyncStatus("ready");
     }
     return result;
   }, [
@@ -701,7 +731,7 @@ export function useEntdeckenRadarController({
     radarStateRef,
     radarWebsearchExecutor,
     remoteKontoAktiv,
-    syncRadarPilot,
+    schreibeRadarState,
   ]);
 
   const bestaetigeRadarVorschau = useCallback(async (target, { shareEnabled = false } = {}) => {
@@ -803,6 +833,7 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotReceipt,
     fuehreRadarPilotImport,
     fuehreRadarPilotSync,
+    verwerfeAbgelehnteRadarAenderung,
     fuehreRadarWebsearchCheck,
     franchiseRadarAvailable,
     fuegeFranchiseRadarHinzu,

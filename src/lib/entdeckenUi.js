@@ -246,10 +246,6 @@ export function radarSubscriptionForEvent(event, subscriptions = []) {
    werden. Fachlich abgelehnte Operationen bleiben davon getrennt sichtbar. */
 export function radarSyncProblem(outbox = [], syncStatus = "idle") {
   const rows = list(outbox);
-  const rejected = rows.filter((entry) => entry?.status === "rejected").length;
-  if (rejected > 0 || syncStatus === "rejected") {
-    return Object.freeze({ kind: "rejected", count: Math.max(1, rejected), retryable: false });
-  }
   const pending = rows.filter((entry) => entry?.status === "pending").length;
   if (pending > 0 && ["pending", "pilot-unavailable"].includes(syncStatus)) {
     return Object.freeze({ kind: "sync", count: pending, retryable: true });

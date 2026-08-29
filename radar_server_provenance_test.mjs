@@ -210,11 +210,20 @@ await check("Radar-Tagesrelease bindet sieben Runtime-Dateien, Migration und Sch
     ], { cwd: process.cwd(), encoding: null });
     assert.equal(sha256(committed), digest, pathname);
   }
-  const release = requireRadarDailyReleaseProvenance();
+  const release = requireRadarDailyReleaseProvenance({
+    readFile(absolutePath) {
+      return execFileSync("/usr/bin/git", [
+        "show", `${RADAR_DAILY_COMMIT}:${provenancePath(absolutePath)}`,
+      ], { cwd: process.cwd(), encoding: null });
+    },
+  });
   assert.equal(release.releaseSha256, RADAR_DAILY_RELEASE_SHA256);
   assert.equal(sha256(JSON.stringify(release.files)), RADAR_DAILY_SOURCE_BUNDLE_SHA256);
   assert.deepEqual(release.migration, RADAR_DAILY_MIGRATION);
   assert.deepEqual(release.workflow, RADAR_DAILY_WORKFLOW);
+  assert.throws(() => requireRadarDailyReleaseProvenance(), (error) => (
+    error?.code === "RADAR_DAILY_RELEASE_PROVENANCE_DRIFT"
+  ));
 });
 
 const franchiseCatalog = Object.freeze([

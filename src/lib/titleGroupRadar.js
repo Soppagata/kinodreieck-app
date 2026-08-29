@@ -79,6 +79,36 @@ function normalizedAlias(value) {
     .toLocaleLowerCase("de-AT").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
+const CANONICAL_RADAR_EVENT_WORDS = Object.freeze([
+  "kinostart", "streamingstart", "serienstart", "staffelstart",
+]);
+const CANONICAL_RADAR_AT_WORDS = Object.freeze(["osterreich", "austria"]);
+
+/* Die sichtbare Freitexteingabe wird nur bei einem engen, belegten Vertrag
+   kanonisiert: exakter Alias oder Alias + klarer Terminauftrag fuer AT. Ein
+   beliebiger Titel, der die Reihe nur erwaehnt, bleibt ehrlicher Freitext. */
+export function resolveCanonicalFranchiseRadarInput(value) {
+  const normalized = normalizedAlias(value);
+  if (!normalized) return null;
+  const matches = CANONICAL_FRANCHISE_RADAR_CATALOG.filter((entry) => (
+    entry.aliases.some((alias) => {
+      const normalizedEntry = normalizedAlias(alias);
+      if (normalized === normalizedEntry) return true;
+      if (!normalized.startsWith(`${normalizedEntry} `)) return false;
+      const rest = normalized.slice(normalizedEntry.length + 1);
+      return CANONICAL_RADAR_EVENT_WORDS.some((word) => rest.split(" ").includes(word))
+        && CANONICAL_RADAR_AT_WORDS.some((word) => rest.split(" ").includes(word));
+    })
+  ));
+  if (matches.length !== 1) return null;
+  const match = matches[0];
+  return Object.freeze({
+    name: match.title,
+    franchiseId: match.franchiseId,
+    targetId: match.targetId,
+  });
+}
+
 function canonicalFranchiseMember(entry, franchiseId) {
   if (text(entry?.franchiseId) !== franchiseId) return null;
   return memberFromIndexEntry({

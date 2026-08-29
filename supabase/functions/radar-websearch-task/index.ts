@@ -491,6 +491,7 @@ export function createRadarWebsearchHandler({
       reservationUsdCent: typeof telemetry.reservationUsdCent === "number"
         ? telemetry.reservationUsdCent : null,
       reservationDecision: telemetry.reservationDecision || "unknown",
+      ...(result.feed ? { feed: result.feed } : {}),
       ...(result.personResult ? { personResult: result.personResult } : {}),
       ...(result.responseMode ? {
         responseMode: result.responseMode,

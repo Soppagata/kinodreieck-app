@@ -17,6 +17,11 @@ import {
   radarWebsearchResponseFor,
   radarWebsearchWorkRelation,
 } from "./src/lib/radarWebsearchFlow.js";
+import {
+  createEmptyLocalRadar,
+  reconcileAccountRadarPilotFeed,
+} from "./src/lib/localEventRadar.js";
+import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
 
 let checks = 0;
 async function check(name, fn) {
@@ -317,7 +322,7 @@ try {
   };
   const controllerRef = { current: null };
 
-  function Harness({ flowExecutor }) {
+  function Harness({ flowExecutor, accountHarness = null }) {
     const [entdeckenStatus, setEntdeckenStatus] = useState({});
     const statusRef = useRef(entdeckenStatus);
     statusRef.current = entdeckenStatus;
@@ -331,9 +336,11 @@ try {
       return next;
     }, []);
     const setErr = useCallback(() => {}, []);
+    const session = accountHarness?.session
+      || { mode: "guest", state: "ready", account: null };
     const controller = useEntdeckenRadarController({
-      session: { mode: "guest", state: "ready", account: null },
-      remoteKontoAktiv: false,
+      session,
+      remoteKontoAktiv: accountHarness !== null,
       bootDone: true,
       master: [],
       streamingKnown: null,
@@ -344,6 +351,9 @@ try {
       serienKatalog: streamingDiscover.titel,
       setErr,
       radarWebsearchExecutor: flowExecutor,
+      radarServerService: accountHarness?.serverService,
+      radarPilotAdapter: accountHarness?.pilotAdapter,
+      radarPilotEnabled: accountHarness !== null,
     });
     controllerRef.current = controller;
     return h(EntdeckenTab, {
@@ -355,7 +365,7 @@ try {
       streamingKnown: null,
       streamingDiscover,
       selectedServices: ["Teststream"],
-      accountMode: false,
+      accountMode: accountHarness !== null,
       radarPilotEvents: controller.radarPilotEvents,
       radarCheckAvailable: controller.radarCheckAvailable,
       onObserveToggle: controller.aendereSerienBeobachtung,
@@ -374,11 +384,11 @@ try {
     });
   }
 
-  async function mount(flowExecutor) {
+  async function mount(flowExecutor, accountHarness = null) {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
-    await act(async () => { root.render(h(Harness, { flowExecutor })); await tick(); });
+    await act(async () => { root.render(h(Harness, { flowExecutor, accountHarness })); await tick(); });
     await settle();
     return {
       container,
@@ -451,7 +461,7 @@ try {
   await act(async () => { button(textUi.container, "Radar").click(); await tick(); });
   const textInput = textUi.container.querySelector("#kd-radar-target-search");
   await setControl(textInput, "Mutter Teresa");
-  await check("Freitext wird unverändert gespeichert, aber die Oberfläche startet keinen manuellen Anbieterpfad", async () => {
+  await check("Freitext bleibt unverändert und startet erst über den manuellen Einmal-Check", async () => {
     assert.equal(textChecks.length, 0);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-search").length, 1);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-results").length, 0);
@@ -462,9 +472,16 @@ try {
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions.length, 1);
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetText, "Mutter Teresa");
     assert.equal(JSON.parse(localStorage.getItem("kd:radar")).subscriptions[0].targetText, "Mutter Teresa");
-    assert.equal(button(textUi.container, "Jetzt prüfen"), undefined);
-    assert.equal(textChecks.length, 0);
-    assert.match(textUi.container.textContent, /automatische tägliche Prüfung ist im Kontomodus verfügbar/i);
+    assert.ok(button(textUi.container, "Jetzt prüfen"));
+    await act(async () => {
+      button(textUi.container, "Jetzt prüfen").click();
+      button(textUi.container, "Jetzt prüfen")?.click();
+      await tick();
+    });
+    await settle();
+    assert.equal(textChecks.length, 1);
+    assert.match(textUi.container.textContent, /Mother Teresa: No Greater Love/);
+    assert.match(textUi.container.textContent, /Gefunden für: Mutter Teresa/);
     assert.match(textUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
   });
   await textUi.cleanup();
@@ -489,15 +506,194 @@ try {
   const degradedUi = await mount(degradedExecutor);
   await act(async () => { button(degradedUi.container, "Radar").click(); await tick(); });
   await setControl(degradedUi.container.querySelector("#kd-radar-target-search"), "Tommy Wiseau");
-  await check("Auch ein alter lokaler Prüfexecutor bleibt ohne manuellen UI-Einstieg unaufgerufen", async () => {
+  await check("Unzureichender manueller Check erzeugt keinen Fund und keinen zweiten Aufruf", async () => {
     await act(async () => { button(degradedUi.container, "Im Radar speichern").click(); await tick(); });
     await settle();
     assert.equal(degradedChecks.length, 0);
-    assert.equal(button(degradedUi.container, "Jetzt prüfen"), undefined);
-    assert.match(degradedUi.container.textContent, /Noch keine belegte Neuigkeit aus den täglichen Prüfungen/);
+    assert.ok(button(degradedUi.container, "Jetzt prüfen"));
+    await act(async () => {
+      button(degradedUi.container, "Jetzt prüfen").click();
+      button(degradedUi.container, "Jetzt prüfen")?.click();
+      await tick();
+    });
+    await settle();
+    assert.equal(degradedChecks.length, 1);
+    assert.match(degradedUi.container.textContent, /Noch keine belegte Neuigkeit\. Prüfe ein aktives Ziel bei Bedarf/);
+    assert.match(degradedUi.container.textContent, /Kein belegter neuer Fund/);
     assert.doesNotMatch(degradedUi.container.textContent, /Mother Teresa: No Greater Love/);
   });
   await degradedUi.cleanup();
+
+  localStorage.removeItem("kd:radar");
+  const fallbackUi = await mount(degradedExecutor);
+  await act(async () => { button(fallbackUi.container, "Radar").click(); await tick(); });
+  const fallbackText = "Star Wars: Starfighter Kinostart Österreich";
+  await setControl(fallbackUi.container.querySelector("#kd-radar-target-search"), fallbackText);
+  await act(async () => { button(fallbackUi.container, "Im Radar speichern").click(); await tick(); });
+  await settle();
+  await check("Eindeutige Star-Wars-Terminfrage bleibt Freitext, wenn der strukturierte Pfad fehlt", async () => {
+    const [subscription] = controllerRef.current.sichtbarerRadarState.subscriptions;
+    assert.equal(subscription.targetType, "text");
+    assert.equal(subscription.targetText, fallbackText);
+    assert.match(fallbackUi.container.textContent, /Freitext/);
+  });
+  await fallbackUi.cleanup();
+
+  localStorage.removeItem("kd:radar");
+  const starfighterResponses = new Map([[
+    createRadarWebsearchTargetKey(franchiseTarget),
+    (request) => radarWebsearchResponseFor(request, [franchiseEvent(request, {
+      work: { targetId: "imdb:tt13622970", targetType: "work", title: "Star Wars: Starfighter", year: 2027 },
+      eventType: "kinostart_at", date: request.windowEnd, region: "AT", platform: "-",
+    })]),
+  ]]);
+  const starfighterExecutor = createRadarWebsearchExecutor({
+    adapter: createRadarWebsearchMockAdapter({ franchises: [franchiseTarget], responses: starfighterResponses }),
+    store: createRadarWebsearchMemoryStore(), sources: [officialSource],
+    now: () => checkedAt, timeoutMs: 2_000, leaseMs: 3_000,
+  });
+  const starfighterUi = await mount(starfighterExecutor);
+  await act(async () => { button(starfighterUi.container, "Radar").click(); await tick(); });
+  await setControl(starfighterUi.container.querySelector("#kd-radar-target-search"), "Star Wars: Starfighter Kinostart Österreich");
+  await act(async () => { button(starfighterUi.container, "Im Radar speichern").click(); await tick(); });
+  await settle();
+  await check("Sichtbare Terminfrage speichert nur das kanonische Star-Wars-Ziel", async () => {
+    const [subscription] = controllerRef.current.sichtbarerRadarState.subscriptions;
+    assert.equal(subscription.targetType, "franchise");
+    assert.equal(subscription.title, "Star Wars");
+    assert.equal("targetText" in subscription, false);
+    const targets = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Meine Ziele/.test(entry.textContent));
+    assert.match(targets.textContent, /Star Wars/);
+    assert.doesNotMatch(targets.textContent, /Starfighter|Kinostart Österreich/);
+  });
+  await act(async () => { button(starfighterUi.container, "Jetzt prüfen").click(); await tick(); });
+  await settle();
+  await check("Ein Mockcheck zeigt Starfighter nur als AT-Fund mit Datum und direkten Quellen", async () => {
+    const targets = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Meine Ziele/.test(entry.textContent));
+    const news = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Tagesaktuelle Neuigkeiten/.test(entry.textContent));
+    assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
+    assert.match(news.textContent, /Star Wars: Starfighter/);
+    assert.match(news.textContent, /Gefunden für: Star Wars/);
+    assert.match(news.textContent, /AT · Kinostart in Österreich/);
+    assert.equal(news.querySelectorAll("a.kd-pilot-quellen-link").length, 2);
+  });
+  const storedStarWars = localStorage.getItem("kd:radar");
+  await starfighterUi.cleanup();
+  localStorage.setItem("kd:radar", storedStarWars);
+  const starfighterReload = await mount(starfighterExecutor);
+  await act(async () => { button(starfighterReload.container, "Radar").click(); await tick(); });
+  await settle();
+  await check("Kanonisches Ziel und Starfighter-Fund bleiben nach Reload getrennt", async () => {
+    assert.match(starfighterReload.container.textContent, /Gefunden für: Star Wars/);
+    assert.match(starfighterReload.container.textContent, /Star Wars: Starfighter/);
+    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].title, "Star Wars");
+  });
+  await starfighterReload.cleanup();
+
+  localStorage.removeItem("kd:radar");
+  const accountTargetId = "title-group:v1:star-wars";
+  const accountBaseMembers = Object.freeze([
+    Object.freeze({ targetId: "watchmode:71001", targetType: "work", title: "Star Wars: Episode I", year: 1999 }),
+    Object.freeze({ targetId: "watchmode:71004", targetType: "work", title: "Star Wars: Episode IV", year: 1977 }),
+  ]);
+  const accountStarfighterMember = Object.freeze({
+    targetId: "imdb:tt13622970", targetType: "work", title: "Star Wars: Starfighter", year: 2027,
+  });
+  const accountTitleGroup = (members) => Object.freeze({
+    format: "kd-radar-title-group-v1", queryVersion: "title-group-query-v1",
+    queryKey: "star wars", displayName: "Star Wars", members: Object.freeze([...members]),
+  });
+  const accountSubscription = (members) => Object.freeze({
+    targetId: accountTargetId, targetType: "franchise", title: "Star Wars",
+    region: "AT", scope: "all", status: "active", updatedAt: checkedAt,
+    titleGroup: accountTitleGroup(members),
+  });
+  const accountInitialFeed = Object.freeze({
+    format: "kd-radar-pilot-feed-v2", revision: 1, checksum: "a".repeat(64),
+    reconciledAt: checkedAt, subscriptions: Object.freeze([accountSubscription(accountBaseMembers)]),
+    events: Object.freeze([]), receipts: Object.freeze([]), operationAcks: Object.freeze([]),
+    radarReview: true, personResults: Object.freeze([]),
+  });
+  const accountStarfighterFeed = Object.freeze({
+    ...accountInitialFeed,
+    revision: 2,
+    checksum: "b".repeat(64),
+    subscriptions: Object.freeze([accountSubscription([...accountBaseMembers, accountStarfighterMember])]),
+    events: Object.freeze([Object.freeze({
+      eventId: "33333333-3333-4333-8333-333333333333",
+      eventVersionId: "44444444-4444-4444-8444-444444444444",
+      targetId: accountStarfighterMember.targetId,
+      title: accountStarfighterMember.title,
+      eventType: "kinostart_at", date: "2027-05-20", region: "AT", platform: "-",
+      lifecycleStatus: "scheduled", verificationStatus: "confirmed",
+      evidence: Object.freeze([
+        Object.freeze({ sourceId: "source:official", sourceDomain: "starwars.com", url: "https://starwars.com/starfighter", retrievedAt: checkedAt }),
+        Object.freeze({ sourceId: "source:trade", sourceDomain: "variety.com", url: "https://variety.com/starfighter-at", retrievedAt: checkedAt }),
+      ]),
+    })]),
+  });
+  const accountInitialState = reconcileAccountRadarPilotFeed(
+    createEmptyLocalRadar({ authority: "account-cache" }), accountInitialFeed,
+  );
+  assert.equal(accountInitialState.ok, true, accountInitialState.errors?.join(","));
+  localStorage.setItem("kd:radar", JSON.stringify(accountInitialState.state));
+  const accountSession = Object.freeze({
+    mode: "account", state: "ready", account: Object.freeze({ id: "max-account" }),
+  });
+  const accountFunctionCalls = [];
+  const accountServerService = createRadarWebsearchService({
+    config: {
+      radarPilotClientEnabled: true,
+      supabaseUrl: "https://project.example.supabase.co",
+      supabasePublishableKey: "public-key",
+    },
+    auth: { getSnapshot: () => accountSession },
+    getAccount: () => accountSession.account,
+    getAccessToken: async () => "session-token",
+    fetchImpl: async (url, options) => {
+      accountFunctionCalls.push({ url, options });
+      return { ok: true, status: 200, async json() {
+        return {
+          ok: true, status: "confirmed", writes: 1,
+          providerRequests: 1, searchRequests: 1, phaseCode: "provider-complete",
+          feed: accountStarfighterFeed,
+        };
+      } };
+    },
+    singleFile: false,
+  });
+  const accountHarness = Object.freeze({
+    session: accountSession,
+    serverService: accountServerService,
+    pilotAdapter: Object.freeze({ async sync({ state }) { return { status: "ready", state }; } }),
+  });
+  const accountUi = await mount(null, accountHarness);
+  await act(async () => { button(accountUi.container, "Radar").click(); await tick(); });
+  await act(async () => { button(accountUi.container, "Jetzt prüfen").click(); await tick(); });
+  await settle();
+  await check("Account-Klick übernimmt Starfighter aus genau einer Function-Antwort sichtbar und gespeichert", async () => {
+    assert.equal(accountFunctionCalls.length, 1);
+    assert.deepEqual(JSON.parse(accountFunctionCalls[0].options.body), { targetId: accountTargetId });
+    assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
+    assert.match(accountUi.container.textContent, /Gefunden für: Star Wars/);
+    assert.match(accountUi.container.textContent, /2027-05-20 · AT · Kinostart in Österreich/);
+    assert.equal(accountUi.container.querySelectorAll("a.kd-pilot-quellen-link").length, 2);
+    const stored = JSON.parse(localStorage.getItem("kd:radar"));
+    assert.equal(stored.pilot.events[0].title, "Star Wars: Starfighter");
+  });
+  await accountUi.cleanup();
+  const accountReload = await mount(null, accountHarness);
+  await act(async () => { button(accountReload.container, "Radar").click(); await tick(); });
+  await settle();
+  await check("Account-Feedfund bleibt ohne zweiten Function-Aufruf nach Reload sichtbar", async () => {
+    assert.equal(accountFunctionCalls.length, 1);
+    assert.match(accountReload.container.textContent, /Star Wars: Starfighter/);
+    assert.match(accountReload.container.textContent, /Gefunden für: Star Wars/);
+  });
+  await accountReload.cleanup();
 } finally {
   if (dom) dom.window.close();
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });

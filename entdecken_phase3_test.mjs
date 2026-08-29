@@ -34,6 +34,7 @@ import {
   createEmptyLocalRadar,
   decodeLocalRadar,
   queueAccountPersonRadarChange,
+  rejectAccountRadarChange,
   reconcileAccountRadarPilotFeed,
   upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
@@ -382,6 +383,11 @@ check("Verwaltung nutzt SVG, 44-Pixel-Ziel und App-Font im Portal", () => {
   assert.doesNotMatch(entdeckenSource, /⚙/);
   assert.match(cssSource, /\.kd-entdecken-tabs \.kd-entdecken-verwalten[^}]*44px/);
   assert.match(cssSource, /\.kd-entdecken-layer[^}]*font-family:'Space Grotesk'/);
+});
+check("Radar bleibt bei 393 CSS-Pixel einspaltig, umbruchfest und mit 44-Pixel-Aktionen", () => {
+  assert.match(cssSource, /@media \(max-width:760px\)[\s\S]*\.kd-entdecken-radar-grid[\s\S]*grid-template-columns:1fr/);
+  assert.match(cssSource, /\.kd-radar-ablehnungen li[^}]*overflow-wrap:anywhere/);
+  assert.match(cssSource, /\.kd-entdecken-panel li>\.kd-entdecken-sekundaer[^}]*min-height:44px/);
 });
 check("Tägliche Abwechslung ist eine persistierte Einstellung ohne Timer- oder Netzwerk-Loop", () => {
   assert.match(datenSource, /Täglich neue Entdecken-Auswahl/);
@@ -780,8 +786,8 @@ try {
   });
   const workUi = await mount(EntdeckenTab, renderWorkProps());
   await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
-  check("Kontoradar erklärt den täglichen Lauf und bietet keinen manuellen Prüfknopf", () => {
-    assert.match(workUi.container.textContent, /täglicher automatischer Lauf prüft/i);
+  check("Kontoradar verspricht ohne verdrahteten Handler keine Automatik", () => {
+    assert.match(workUi.container.textContent, /Prüfe ein aktives Ziel bewusst/i);
     assert.match(workUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
     assert.equal(button(workUi.container, "Jetzt prüfen"), undefined);
   });
@@ -881,6 +887,24 @@ try {
     targetId: "person:wikidata:Q42869:actor", now,
   });
   assert.equal(cageQueued.ok, true);
+  const cageRejected = rejectAccountRadarChange(cageQueued.state, cageOperationId, "radar_person_target_unavailable");
+  assert.equal(cageRejected.ok, true);
+  let rejectedDismissed = null;
+  const rejectedUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: cageRejected.state, syncStatus: "rejected",
+    onRadarRejectedDismiss: async (operationId) => { rejectedDismissed = operationId; },
+  });
+  await act(async () => { button(rejectedUi.container, "Radar").click(); await tick(); });
+  check("Terminale Nicolas-Ablehnung nennt Ziel, Vorgang und gemappten Grund statt globalem Banner", () => {
+    assert.match(rejectedUi.container.textContent, /Nicolas Cage/);
+    assert.match(rejectedUi.container.textContent, /Vorgang: Ziel speichern/);
+    assert.match(rejectedUi.container.textContent, /auf dem Server nicht mehr in der erwarteten Form verfügbar/);
+    assert.doesNotMatch(rejectedUi.container.textContent, /Radar-Änderung abgelehnt|Entdecken verwalten/);
+    assert.doesNotMatch(rejectedUi.container.innerHTML, /wikidata:Q42869|radar_person_target_unavailable/);
+  });
+  await act(async () => { button(rejectedUi.container, "Abgelehnte Änderung verwerfen").click(); await tick(); });
+  assert.equal(rejectedDismissed, cageOperationId);
+  await rejectedUi.cleanup();
   let cageSyncCalls = 0;
   const cageUi = await mount(EntdeckenTab, {
     ...baseProps, accountMode: true, radarState: cageQueued.state, syncStatus: "ready",
@@ -933,6 +957,7 @@ try {
   check("Bestehende Person bleibt mit Name und Rolle, aber ohne Roh-ID sichtbar", () => {
     assert.match(personUi.container.textContent, /Nicolas Cage/);
     assert.match(personUi.container.textContent, /Schauspiel · Aktiv/);
+    assert.doesNotMatch(personUi.container.textContent, /tägliche Prüfung|täglichen Prüfungen/i);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
     assert.equal(button(personUi.container, "Jetzt prüfen"), undefined);
   });
@@ -992,19 +1017,30 @@ try {
   });
   await franchiseUi.cleanup();
 
-  let forbiddenManualCalls = 0;
+  let manualCalls = 0;
   const automaticUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
       target: workTarget, now,
     }).state,
-    onRadarWebsearchCheck: async () => { forbiddenManualCalls += 1; },
+    radarCheckAvailable: true,
+    onRadarWebsearchCheck: async () => { manualCalls += 1; return { status: "no_change", writes: 0 }; },
   });
   await act(async () => { button(automaticUi.container, "Radar").click(); await tick(); });
-  check("Auch ein injizierter alter Prüfhandler ist über die Oberfläche nicht erreichbar", () => {
-    assert.equal(forbiddenManualCalls, 0);
-    assert.equal(button(automaticUi.container, "Jetzt prüfen"), undefined);
-    assert.match(automaticUi.container.textContent, /automatische tägliche Prüfung ist im Kontomodus verfügbar/i);
+  check("Aktives Ziel bietet den manuellen Einmal-Check statt eines Automatikversprechens", () => {
+    assert.equal(manualCalls, 0);
+    assert.ok(button(automaticUi.container, "Jetzt prüfen"));
+    assert.match(automaticUi.container.textContent, /nur durch „Jetzt prüfen“ gestartet/i);
+    assert.doesNotMatch(automaticUi.container.textContent, /automatische tägliche Prüfung|nächste Tageslauf|täglichen Prüfungen/i);
+  });
+  await act(async () => {
+    button(automaticUi.container, "Jetzt prüfen").click();
+    button(automaticUi.container, "Jetzt prüfen")?.click();
+    await tick();
+  });
+  check("Doppelklick bleibt single-flight und zeigt das verständliche Ergebnis", () => {
+    assert.equal(manualCalls, 1);
+    assert.match(automaticUi.container.textContent, /Keine neue bestätigte Änderung gefunden/);
   });
   await automaticUi.cleanup();
 } finally {

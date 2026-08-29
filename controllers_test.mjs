@@ -557,7 +557,15 @@ check("App leitet Radarpilot-Flags und Callbacks auf EntdeckenTab durch", /<Entd
   && /onRadarPilotReceipt=\{fuehreRadarPilotReceipt\}/.test(app)
   && /onRadarPilotImport=\{fuehreRadarPilotImport\}/.test(app)
   && /onRadarPilotSync=\{fuehreRadarPilotSync\}/.test(app)
+  && /radarCheckAvailable=\{radarCheckAvailable\}/.test(app)
+  && /onRadarWebsearchCheck=\{fuehreRadarWebsearchCheck\}/.test(app)
+  && /onRadarRejectedDismiss=\{verwerfeAbgelehnteRadarAenderung\}/.test(app)
   && /onRadarTextAdd=\{fuegeRadarTextHinzu\}/.test(app));
+check("Manueller Radarcheck reconciliert den Function-Feed nach genau einem Serveraufruf ohne Folgeread",
+  /radarServerService\.checkNow\(targetId, activeMatches\[0\]\.targetText\)/.test(radarController)
+  && /reconcileAccountRadarPilotFeed\(previous, result\.feed\)/.test(radarController)
+  && /const saved = await schreibeRadarState/.test(radarController)
+  && !/radarServerService\.checkNow\([\s\S]{0,500}syncRadarPilot\(\)/.test(radarController));
   check("Controller liest Radar-Initialwert aus localStorage und decodiert ihn pro Authority", /const radarInitial = useMemo\(\(\) => \{[\s\S]*decodeLocalRadar\(localStorage\.getItem\(K\.radar\), \{ authority: radarAuthority \}\)[\s\S]*return decoded\.ok \? decoded\.state/.test(radarController));
   check("Controller liest Kd-Radar-Boot aus Store und decodiert pro Authority", /store\.get\(K\.radar\)/.test(radarController)
     && /decodeLocalRadar\(gespeicherterRadar\?\.value/.test(radarController)

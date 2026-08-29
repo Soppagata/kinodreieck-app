@@ -971,6 +971,24 @@ export function rejectAccountRadarChange(state, operationId, reason) {
   return Object.freeze({ ok: true, reason: "rejected", state: freezeDeep(next), changed: true });
 }
 
+export function discardRejectedAccountRadarChange(state, operationId) {
+  const id = text(operationId);
+  if (!validateLocalRadarState(state).ok || state.authority !== "account-cache" || !id) {
+    return Object.freeze({ ok: false, reason: "rejected-operation-invalid", state, changed: false });
+  }
+  const rejected = state.outbox.find((entry) => entry.operationId === id && entry.status === "rejected");
+  if (!rejected) {
+    return Object.freeze({ ok: false, reason: "rejected-operation-not-found", state, changed: false });
+  }
+  const next = clone(state);
+  next.outbox = next.outbox.filter((entry) => entry.operationId !== id);
+  const checked = validateLocalRadarState(next);
+  if (!checked.ok) {
+    return Object.freeze({ ok: false, reason: "rejected-operation-result-invalid", state, changed: false });
+  }
+  return Object.freeze({ ok: true, reason: "discarded", state: freezeDeep(next), changed: true });
+}
+
 export function queueAccountRadarShareChange(state, {
   operationId, targetId, shareEnabled, now = new Date().toISOString(),
 } = {}) {
