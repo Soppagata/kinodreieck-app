@@ -526,10 +526,18 @@ try {
     webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
     selectionDay: "2026-08-29",
   });
-  check("Für mich prüft alle 50, matcht nur Titel/Jahr/Typ und verändert den vollständigen Popularitätspool nicht", () => {
-    assert.equal(versionedRecommendations.diagnostics.candidates, 50);
-    assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), ["Reacher"]);
+  check("Für mich prüft alle 50, nutzt belegte Snapshot-Fakten und verändert den vollständigen Popularitätspool nicht", () => {
+    assert.deepEqual(versionedRecommendations.diagnostics, {
+      candidates: 50, metadata: 39, afterExclusions: 39,
+      profileMatches: 5, visible: 5, duplicatesRemoved: 0,
+    });
+    assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), [
+      "Reacher", "Blood Sacrifice", "The Shards", "Sterling Point", "Facing El Chapo",
+    ]);
     assert.equal(versionedRecommendations.personal[0].watchmodeId, 9901);
+    assert.ok(versionedRecommendations.personal.every((item) => (
+      item.reasons.includes("Profil: drama")
+    )));
     assert.equal(versionedRecommendations.popular.length, 6);
     assert.equal(versionedRecommendations.popularPool.length, 50);
   });

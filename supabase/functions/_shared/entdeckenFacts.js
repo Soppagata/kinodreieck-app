@@ -7,6 +7,8 @@ export const ENTDECKEN_FACTS_CONTRACT_VERSION = "entdecken-facts-batch-v1";
 export const ENTDECKEN_FACTS_SNAPSHOT_VERSION = "entdecken-facts-snapshot-v1";
 export const ENTDECKEN_FACTS_PROVIDER_VERSION = "anthropic-web-search-20250305";
 export const ENTDECKEN_FACTS_PROMPT_VERSION = "entdecken-facts-v2";
+export const ENTDECKEN_WIKIDATA_PROVIDER_VERSION = "wikidata-action-v1";
+export const ENTDECKEN_WIKIDATA_LICENSE = "CC0-1.0";
 export const ENTDECKEN_FACTS_BATCH_SIZE = 9;
 export const ENTDECKEN_FACTS_MAX_BATCH_SIZE = 11;
 export const ENTDECKEN_FACTS_RESUME_BATCH_SIZES = Object.freeze([9, 11, 10, 10, 10]);
@@ -33,6 +35,9 @@ const PERSON_ROLES = new Set(["actor", "director", "creator", "writer"]);
 const RESULT_STATUSES = new Set(["resolved", "ambiguous", "unresolved"]);
 const CACHE_STATUSES = new Set(["ok", "ambiguous", "unresolved"]);
 const MODEL_FORM = /^claude-haiku-4-5(?:-[0-9]{8})?$/;
+const QID_FORM = /^Q[1-9]\d*$/;
+const IMDB_FORM = /^tt\d{7,10}$/;
+const TMDB_FORM = /^[1-9]\d{0,8}$/;
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function text(value) { return String(value == null ? "" : value).trim(); }
@@ -62,6 +67,46 @@ function directHttpsUrl(value) {
     return parsed.protocol === "https:" && !parsed.username && !parsed.password
       && !parsed.port && !parsed.hash ? parsed.href : null;
   } catch { return null; }
+}
+
+function wikidataEvidenceQid(value) {
+  const url = directHttpsUrl(value);
+  if (!url) return null;
+  const match = /^https:\/\/www\.wikidata\.org\/wiki\/(Q[1-9]\d*)$/u.exec(url);
+  return match ? match[1] : null;
+}
+
+function normalizedWikidataExternalIds(value) {
+  if (!plain(value) || Object.keys(value).some((key) => !["imdb", "tmdb"].includes(key))) return null;
+  const normalized = {};
+  if ("imdb" in value) {
+    if (typeof value.imdb !== "string" || !IMDB_FORM.test(value.imdb)) return null;
+    normalized.imdb = value.imdb;
+  }
+  if ("tmdb" in value) {
+    if (typeof value.tmdb !== "string" || !TMDB_FORM.test(value.tmdb)) return null;
+    normalized.tmdb = value.tmdb;
+  }
+  return Object.freeze(normalized);
+}
+
+function validSnapshotProvider(provider) {
+  if (provider?.id === "anthropic") {
+    return exactKeys(provider, [
+      "id", "model", "origin", "version", "promptVersion", "userJudgment",
+    ])
+      && MODEL_FORM.test(provider.model)
+      && provider.origin === "provider_model_generated"
+      && provider.version === ENTDECKEN_FACTS_PROVIDER_VERSION
+      && provider.promptVersion === ENTDECKEN_FACTS_PROMPT_VERSION
+      && provider.userJudgment === false;
+  }
+  return provider?.id === "wikidata"
+    && exactKeys(provider, ["id", "origin", "version", "license", "userJudgment"])
+    && provider.origin === "wikidata_structured_data"
+    && provider.version === ENTDECKEN_WIKIDATA_PROVIDER_VERSION
+    && provider.license === ENTDECKEN_WIKIDATA_LICENSE
+    && provider.userJudgment === false;
 }
 
 export function normalizeStrongExternalId(value) {
@@ -156,15 +201,7 @@ function validSnapshotEntry(entry, key) {
       || !exactKeys(entry.input, [
         "poolId", "title", "releaseYear", "mediaType", "sourceId", "sourceUrl",
         "sourceStand", "provider",
-      ]) || !exactKeys(entry.provider, [
-        "id", "model", "origin", "version", "promptVersion", "userJudgment",
-      ])
-      || entry.provider.id !== "anthropic"
-      || !MODEL_FORM.test(entry.provider.model)
-      || entry.provider.origin !== "provider_model_generated"
-      || entry.provider.version !== ENTDECKEN_FACTS_PROVIDER_VERSION
-      || entry.provider.promptVersion !== ENTDECKEN_FACTS_PROMPT_VERSION
-      || entry.provider.userJudgment !== false
+      ]) || !validSnapshotProvider(entry.provider)
       || !exactKeys(entry.validation, ["status", "identity", "taxonomy", "evidence"])
       || entry.validation.status !== "machine_validated"
       || !directHttpsUrl(entry.input.sourceUrl) || !canonicalInstant(entry.input.sourceStand)
@@ -180,13 +217,22 @@ function validSnapshotEntry(entry, key) {
         mediaType: entry.input.mediaType,
       }) || !canonicalInstant(entry.checkedAt) || !canonicalInstant(entry.expiresAt)
       || !Array.isArray(entry.evidenceUrls)
-      || entry.evidenceUrls.some((url) => !directHttpsUrl(url))) return false;
+      || entry.evidenceUrls.some((url) => !directHttpsUrl(url))
+      || (entry.provider.id === "wikidata"
+        && entry.evidenceUrls.some((url) => !wikidataEvidenceQid(url)))) return false;
   if (entry.status === "ok") {
+    const wikidata = entry.provider.id === "wikidata";
+    const factsShape = wikidata
+      ? exactKeys(entry.facts, ["genres", "tags", "franchise", "persons", "externalIds"])
+        && !!normalizedWikidataExternalIds(entry.facts.externalIds)
+      : exactKeys(entry.facts, ["genres", "tags", "franchise", "persons"]);
     return normalizeStrongExternalId(entry.strongId) === key
-      && entry.validation.identity === "exact"
+      && (wikidata
+        ? ["strong_id", "exact", "title_type_year_missing"].includes(entry.validation.identity)
+        : entry.validation.identity === "exact")
       && entry.validation.taxonomy === "normalized"
       && entry.validation.evidence === "direct"
-      && exactKeys(entry.facts, ["genres", "tags", "franchise", "persons"])
+      && factsShape
       && Array.isArray(entry.facts.genres)
       && entry.facts.genres.every((value) => GENRES.has(value))
       && Array.isArray(entry.facts.tags)
@@ -459,6 +505,104 @@ export function mergeEntdeckenFactsSnapshot(snapshot, input, result) {
   };
 }
 
+export function mergeEntdeckenWikidataFactsSnapshot(snapshot, input, result) {
+  const checked = validateEntdeckenFactsSnapshot(snapshot, {
+    poolId: snapshot?.poolId,
+    poolVersion: snapshot?.poolVersion,
+  });
+  const status = result?.status === "resolved" ? "ok" : result?.status;
+  const checkedAt = canonicalInstant(result?.checkedAt);
+  const evidenceUrls = Array.isArray(result?.evidenceUrls)
+    ? unique(result.evidenceUrls.map(directHttpsUrl).filter(Boolean)) : null;
+  const validation = result?.validation;
+  if (!checked || input?.preResolutionKey !== result?.preResolutionKey
+      || input?.poolId !== result?.poolId || !["ok", "ambiguous", "unresolved"].includes(status)
+      || !checkedAt || !evidenceUrls
+      || evidenceUrls.some((url) => !wikidataEvidenceQid(url))
+      || !exactKeys(validation, ["status", "identity", "taxonomy", "evidence"])
+      || validation.status !== "machine_validated") return null;
+
+  let strongId = null;
+  let facts = null;
+  if (status === "ok") {
+    strongId = normalizeStrongExternalId(result.strongId);
+    const expectedQid = strongId?.startsWith("wikidata:") ? strongId.slice("wikidata:".length) : null;
+    if (!expectedQid || !QID_FORM.test(expectedQid)
+        || !["strong_id", "exact", "title_type_year_missing"].includes(validation.identity)
+        || validation.taxonomy !== "normalized" || validation.evidence !== "direct"
+        || !evidenceUrls.includes(`https://www.wikidata.org/wiki/${expectedQid}`)
+        || !exactKeys(result.facts, ["genres", "tags", "franchise", "persons", "externalIds"])) return null;
+    const genres = normalizedTaxonomyList(result.facts.genres, GENRES, new Set(), "invalid");
+    const tags = normalizedTaxonomyList(result.facts.tags, TAGS, new Set(), "invalid");
+    const franchise = result.facts.franchise === null ? null : normalizedEntity(result.facts.franchise);
+    const persons = Array.isArray(result.facts.persons)
+      ? result.facts.persons.map((person) => normalizedEntity(person, true)) : [];
+    const externalIds = normalizedWikidataExternalIds(result.facts.externalIds);
+    if (!genres || genres.length !== result.facts.genres.length
+        || !tags || tags.length !== result.facts.tags.length
+        || (result.facts.franchise !== null && !franchise)
+        || !Array.isArray(result.facts.persons) || persons.some((person) => !person)
+        || persons.length !== result.facts.persons.length || !externalIds) return null;
+    facts = {
+      genres: [...genres], tags: [...tags], franchise,
+      persons: persons.slice(0, 8), externalIds: { ...externalIds },
+    };
+  } else if (result.strongId !== null || result.facts !== null
+      || validation.identity !== "not_resolved"
+      || validation.taxonomy !== "not_applicable"
+      || !["direct", "none"].includes(validation.evidence)) return null;
+
+  const cacheKey = status === "ok" ? strongId : `pre:${input.preResolutionKey}`;
+  const oldKey = checked.preResolution[input.preResolutionKey];
+  const entries = { ...checked.entries };
+  if (oldKey && oldKey !== cacheKey) delete entries[oldKey];
+  const existing = entries[cacheKey];
+  if (existing && existing.preResolutionKey !== input.preResolutionKey) return null;
+  const ttl = status === "ok" ? ENTDECKEN_FACTS_OK_TTL_DAYS : ENTDECKEN_FACTS_NEGATIVE_TTL_DAYS;
+  entries[cacheKey] = {
+    cacheKey,
+    preResolutionKey: input.preResolutionKey,
+    poolId: checked.poolId,
+    input: {
+      poolId: input.poolId,
+      title: input.title,
+      releaseYear: input.releaseYear,
+      mediaType: input.mediaType,
+      sourceId: input.sourceId,
+      sourceUrl: input.sourceUrl,
+      sourceStand: input.sourceStand,
+      provider: input.provider,
+    },
+    status,
+    strongId: status === "ok" ? strongId : null,
+    facts: status === "ok" ? facts : null,
+    evidenceUrls,
+    checkedAt,
+    expiresAt: plusDays(checkedAt, ttl),
+    validation: { ...validation },
+    provider: {
+      id: "wikidata",
+      origin: "wikidata_structured_data",
+      version: ENTDECKEN_WIKIDATA_PROVIDER_VERSION,
+      license: ENTDECKEN_WIKIDATA_LICENSE,
+      userJudgment: false,
+    },
+  };
+  const next = {
+    schemaVersion: checked.schemaVersion,
+    poolId: checked.poolId,
+    poolVersion: checked.poolVersion,
+    updatedAt: checkedAt,
+    pilot: checked.pilot,
+    preResolution: { ...checked.preResolution, [input.preResolutionKey]: cacheKey },
+    entries,
+  };
+  return validateEntdeckenFactsSnapshot(next, {
+    poolId: checked.poolId,
+    poolVersion: checked.poolVersion,
+  });
+}
+
 export function markEntdeckenFactsPilot(snapshot, {
   status,
   resolvedReady,
@@ -496,6 +640,8 @@ export function projectEntdeckenFacts(snapshot, item, options = {}) {
   const [namespace, value] = cached.strongId.split(":", 2);
   if (["imdb", "tmdb"].includes(namespace)) externalIds[namespace] = value;
   const facts = cached.facts;
+  const wikidataExternalIds = normalizedWikidataExternalIds(facts.externalIds || {});
+  if (wikidataExternalIds) Object.assign(externalIds, wikidataExternalIds);
   return Object.freeze({
     strongId: cached.strongId,
     externalIds: Object.freeze(externalIds),

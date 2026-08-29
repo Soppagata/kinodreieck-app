@@ -2,8 +2,4272 @@
   "schemaVersion": "entdecken-facts-snapshot-v1",
   "poolId": "public:versioned-market-mix-at",
   "poolVersion": "2026-08-29-at-v1",
-  "updatedAt": null,
+  "updatedAt": "2026-08-29T17:00:22.425Z",
   "pilot": null,
-  "preResolution": {},
-  "entries": {}
+  "preResolution": {
+    "f_oefi-08|film|2026|vaiana (live action)": "pre:f_oefi-08|film|2026|vaiana (live action)",
+    "f_oefi-11|film|2026|obsession - du sollst mich lieben": "pre:f_oefi-11|film|2026|obsession - du sollst mich lieben",
+    "s_netflix-05|series|2026|conversations with a killer: the charles manson tapes": "pre:s_netflix-05|series|2026|conversations with a killer: the charles manson tapes",
+    "f_oefi-15|film|2025|chéri, ich komme! - die erfindung der lust": "pre:f_oefi-15|film|2025|chéri, ich komme! - die erfindung der lust",
+    "f_netflix-05|film|2026|to the max": "pre:f_netflix-05|film|2026|to the max",
+    "f_prime-03|film|2024|summer camp": "pre:f_prime-03|film|2024|summer camp",
+    "f_prime-05|film|2026|back to the 90s": "pre:f_prime-05|film|2026|back to the 90s",
+    "s_disney-02|series|2026|furious": "pre:s_disney-02|series|2026|furious",
+    "s_disney-03|series|2026|lion": "pre:s_disney-03|series|2026|lion",
+    "f_apple-04|film|2023|napoleon": "pre:f_apple-04|film|2023|napoleon",
+    "f_oefi-01|film|2026|steckerlfischfiasko": "wikidata:Q121287805",
+    "f_oefi-02|film|2026|spider-man: brand new day": "wikidata:Q113244935",
+    "f_oefi-03|film|2026|die odyssee": "wikidata:Q131547207",
+    "f_oefi-04|film|2026|insidious: out of the further": "wikidata:Q136311783",
+    "f_oefi-05|film|2026|paw patrol: der dino film": "wikidata:Q132802215",
+    "f_oefi-06|film|2026|toy story 5": "wikidata:Q113641997",
+    "f_oefi-07|film|2026|the end of oak street": "wikidata:Q124804916",
+    "f_oefi-09|film|2026|minions & monster": "wikidata:Q127605787",
+    "f_oefi-10|film|2026|marsupilami": "wikidata:Q129344299",
+    "f_oefi-12|film|2026|the invite": "wikidata:Q134083296",
+    "f_oefi-13|film|2025|exit 8": "wikidata:Q134480207",
+    "f_oefi-14|film|2026|teenage sex and death at camp miasma": "wikidata:Q134434223",
+    "f_netflix-01|film|2026|my best friend, his girlfriend and me": "wikidata:Q140467227",
+    "f_netflix-02|film|2026|facing el chapo": "wikidata:Q141165617",
+    "f_netflix-03|film|2026|don't say good luck": "wikidata:Q135220006",
+    "f_netflix-04|film|2026|the last house": "wikidata:Q129165193",
+    "s_netflix-01|series|2026|blood sacrifice": "wikidata:Q136404689",
+    "s_netflix-02|series|2020|outer banks": "wikidata:Q89414035",
+    "s_netflix-03|series|2023|my life with the walter boys": "wikidata:Q113570499",
+    "s_netflix-04|series|2026|my brilliant career": "wikidata:Q135011543",
+    "f_prime-01|film|2026|the last sunrise": "wikidata:Q136807764",
+    "f_prime-02|film|2025|murder at the embassy": "wikidata:Q131523345",
+    "f_prime-04|film|2023|the retirement plan": "wikidata:Q117842570",
+    "s_prime-01|series|2022|reacher": "wikidata:Q109901438",
+    "s_prime-02|series|2026|sterling point": "wikidata:Q137917795",
+    "s_prime-03|series|2021|dan brown's the lost symbol": "wikidata:Q97577197",
+    "s_prime-04|series|2026|off campus": "wikidata:Q138862091",
+    "s_prime-05|series|2018|lol: last one laughing": "wikidata:Q106393743",
+    "f_disney-01|film|2026|yellow mirror": "wikidata:Q141192242",
+    "f_disney-02|film|2026|the devil wears prada 2": "wikidata:Q134611972",
+    "f_disney-03|film|2026|camp rock 3": "wikidata:Q136342622",
+    "f_disney-04|film|2018|avengers: infinity war": "wikidata:Q23780914",
+    "f_disney-05|film|2019|avengers: endgame": "wikidata:Q23781155",
+    "s_disney-01|series|2026|the shards": "wikidata:Q136722498",
+    "s_disney-04|series|2024|high potential": "wikidata:Q129206932",
+    "s_disney-05|series|2021|loki": "wikidata:Q64349029",
+    "f_apple-01|film|2026|the dink": "wikidata:Q131313219",
+    "f_apple-02|film|2025|f1": "wikidata:Q114246242",
+    "f_apple-03|film|2025|the gorge": "wikidata:Q116971304",
+    "f_apple-05|film|2025|fountain of youth": "wikidata:Q124256460"
+  },
+  "entries": {
+    "pre:f_oefi-08|film|2026|vaiana (live action)": {
+      "cacheKey": "pre:f_oefi-08|film|2026|vaiana (live action)",
+      "preResolutionKey": "f_oefi-08|film|2026|vaiana (live action)",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-08",
+        "title": "Vaiana (Live Action)",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "none"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_oefi-11|film|2026|obsession - du sollst mich lieben": {
+      "cacheKey": "pre:f_oefi-11|film|2026|obsession - du sollst mich lieben",
+      "preResolutionKey": "f_oefi-11|film|2026|obsession - du sollst mich lieben",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-11",
+        "title": "Obsession - Du sollst mich lieben",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "none"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:s_netflix-05|series|2026|conversations with a killer: the charles manson tapes": {
+      "cacheKey": "pre:s_netflix-05|series|2026|conversations with a killer: the charles manson tapes",
+      "preResolutionKey": "s_netflix-05|series|2026|conversations with a killer: the charles manson tapes",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_netflix-05",
+        "title": "Conversations with a Killer: The Charles Manson Tapes",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/tv",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "none"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_oefi-15|film|2025|chéri, ich komme! - die erfindung der lust": {
+      "cacheKey": "pre:f_oefi-15|film|2025|chéri, ich komme! - die erfindung der lust",
+      "preResolutionKey": "f_oefi-15|film|2025|chéri, ich komme! - die erfindung der lust",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-15",
+        "title": "Chéri, ich komme! - Die Erfindung der Lust",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q139382781"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_netflix-05|film|2026|to the max": {
+      "cacheKey": "pre:f_netflix-05|film|2026|to the max",
+      "preResolutionKey": "f_netflix-05|film|2026|to the max",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_netflix-05",
+        "title": "To the Max",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/films",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q7811286",
+        "https://www.wikidata.org/wiki/Q7811284",
+        "https://www.wikidata.org/wiki/Q122821256",
+        "https://www.wikidata.org/wiki/Q30542983",
+        "https://www.wikidata.org/wiki/Q12971960",
+        "https://www.wikidata.org/wiki/Q29588881"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_prime-03|film|2024|summer camp": {
+      "cacheKey": "pre:f_prime-03|film|2024|summer camp",
+      "preResolutionKey": "f_prime-03|film|2024|summer camp",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_prime-03",
+        "title": "Summer Camp",
+        "releaseYear": 2024,
+        "mediaType": "film",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ambiguous",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q25415656",
+        "https://www.wikidata.org/wiki/Q88917703",
+        "https://www.wikidata.org/wiki/Q12811969"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_prime-05|film|2026|back to the 90s": {
+      "cacheKey": "pre:f_prime-05|film|2026|back to the 90s",
+      "preResolutionKey": "f_prime-05|film|2026|back to the 90s",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_prime-05",
+        "title": "Back to the 90s",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q19752155"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:s_disney-02|series|2026|furious": {
+      "cacheKey": "pre:s_disney-02|series|2026|furious",
+      "preResolutionKey": "s_disney-02|series|2026|furious",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_disney-02",
+        "title": "Furious",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q105767051",
+        "https://www.wikidata.org/wiki/Q5509549",
+        "https://www.wikidata.org/wiki/Q125470891",
+        "https://www.wikidata.org/wiki/Q5509550",
+        "https://www.wikidata.org/wiki/Q27198272"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:s_disney-03|series|2026|lion": {
+      "cacheKey": "pre:s_disney-03|series|2026|lion",
+      "preResolutionKey": "s_disney-03|series|2026|lion",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_disney-03",
+        "title": "Lion",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q6555385",
+        "https://www.wikidata.org/wiki/Q456",
+        "https://www.wikidata.org/wiki/Q21056446",
+        "https://www.wikidata.org/wiki/Q8853",
+        "https://www.wikidata.org/wiki/Q140",
+        "https://www.wikidata.org/wiki/Q17022009",
+        "https://www.wikidata.org/wiki/Q338814",
+        "https://www.wikidata.org/wiki/Q6555387",
+        "https://www.wikidata.org/wiki/Q11757631",
+        "https://www.wikidata.org/wiki/Q44081175"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "pre:f_apple-04|film|2023|napoleon": {
+      "cacheKey": "pre:f_apple-04|film|2023|napoleon",
+      "preResolutionKey": "f_apple-04|film|2023|napoleon",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_apple-04",
+        "title": "Napoleon",
+        "releaseYear": 2023,
+        "mediaType": "film",
+        "sourceId": "snapshot:apple-tv-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/apple-tv/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Apple TV+"
+      },
+      "status": "unresolved",
+      "strongId": null,
+      "facts": null,
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q17522194",
+        "https://www.wikidata.org/wiki/Q986312",
+        "https://www.wikidata.org/wiki/Q3534639",
+        "https://www.wikidata.org/wiki/Q1632158",
+        "https://www.wikidata.org/wiki/Q2394507",
+        "https://www.wikidata.org/wiki/Q996166",
+        "https://www.wikidata.org/wiki/Q517",
+        "https://www.wikidata.org/wiki/Q36982451",
+        "https://www.wikidata.org/wiki/Q3201635"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-09-28T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "not_resolved",
+        "taxonomy": "not_applicable",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q121287805": {
+      "cacheKey": "wikidata:Q121287805",
+      "preResolutionKey": "f_oefi-01|film|2026|steckerlfischfiasko",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-01",
+        "title": "Steckerlfischfiasko",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q121287805",
+      "facts": {
+        "genres": [
+          "krimi",
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": {
+          "id": "wikidata:Q28836231",
+          "name": "Franz-Eberhofer-Filmreihe"
+        },
+        "persons": [
+          {
+            "id": "wikidata:Q1282375",
+            "name": "Ed Herzog",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt38884015",
+          "tmdb": "1328335"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q121287805",
+        "https://www.wikidata.org/wiki/Q959790",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q1282375",
+        "https://www.wikidata.org/wiki/Q28836231"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q113244935": {
+      "cacheKey": "wikidata:Q113244935",
+      "preResolutionKey": "f_oefi-02|film|2026|spider-man: brand new day",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-02",
+        "title": "Spider-Man: Brand New Day",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q113244935",
+      "facts": {
+        "genres": [
+          "abenteuer",
+          "fantasy",
+          "action",
+          "scifi",
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q15972939",
+            "name": "Destin Daniel Cretton",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q2023710",
+            "name": "Tom Holland",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q189489",
+            "name": "Zendaya",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q26213909",
+            "name": "Jacob Batalon",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q27452406",
+            "name": "Sadie Sink",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q11833191",
+            "name": "Liza Colón-Zayas",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q362616",
+            "name": "Jon Bernthal",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q41422",
+            "name": "Mark Ruffalo",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt22084616",
+          "tmdb": "969681"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q113244935",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q157394",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q471839",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q15972939",
+        "https://www.wikidata.org/wiki/Q2023710",
+        "https://www.wikidata.org/wiki/Q189489",
+        "https://www.wikidata.org/wiki/Q26213909",
+        "https://www.wikidata.org/wiki/Q27452406",
+        "https://www.wikidata.org/wiki/Q11833191",
+        "https://www.wikidata.org/wiki/Q362616",
+        "https://www.wikidata.org/wiki/Q41422"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q131547207": {
+      "cacheKey": "wikidata:Q131547207",
+      "preResolutionKey": "f_oefi-03|film|2026|die odyssee",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-03",
+        "title": "Die Odyssee",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q131547207",
+      "facts": {
+        "genres": [
+          "fantasy",
+          "abenteuer",
+          "action"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q25191",
+            "name": "Christopher Nolan",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q175535",
+            "name": "Matt Damon",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q36301",
+            "name": "Anne Hathaway",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q2023710",
+            "name": "Tom Holland",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3840847",
+            "name": "Lupita Nyong’o",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q36767",
+            "name": "Robert Pattinson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q80046",
+            "name": "Charlize Theron",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q189489",
+            "name": "Zendaya",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt33764258",
+          "tmdb": "1368337"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q131547207",
+        "https://www.wikidata.org/wiki/Q157394",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q25191",
+        "https://www.wikidata.org/wiki/Q175535",
+        "https://www.wikidata.org/wiki/Q36301",
+        "https://www.wikidata.org/wiki/Q2023710",
+        "https://www.wikidata.org/wiki/Q3840847",
+        "https://www.wikidata.org/wiki/Q36767",
+        "https://www.wikidata.org/wiki/Q80046",
+        "https://www.wikidata.org/wiki/Q189489"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q136311783": {
+      "cacheKey": "wikidata:Q136311783",
+      "preResolutionKey": "f_oefi-04|film|2026|insidious: out of the further",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-04",
+        "title": "Insidious: Out of the Further",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q136311783",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": {
+          "id": "wikidata:Q16997013",
+          "name": "Insidious"
+        },
+        "persons": [
+          {
+            "id": "wikidata:Q3157528",
+            "name": "Jacob Chase",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q62505213",
+            "name": "Brandon Perea",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q449822",
+            "name": "Lin Shaye",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q100295554",
+            "name": "Amelia Eve",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q19896733",
+            "name": "Maisie Richardson-Sellers",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q1433961",
+            "name": "Sam Spruell",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3218688",
+            "name": "Laura Gordon",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt32393988",
+          "tmdb": "1291595"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q136311783",
+        "https://www.wikidata.org/wiki/Q3157528",
+        "https://www.wikidata.org/wiki/Q62505213",
+        "https://www.wikidata.org/wiki/Q449822",
+        "https://www.wikidata.org/wiki/Q100295554",
+        "https://www.wikidata.org/wiki/Q19896733",
+        "https://www.wikidata.org/wiki/Q1433961",
+        "https://www.wikidata.org/wiki/Q3218688",
+        "https://www.wikidata.org/wiki/Q16997013"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q132802215": {
+      "cacheKey": "wikidata:Q132802215",
+      "preResolutionKey": "f_oefi-05|film|2026|paw patrol: der dino film",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-05",
+        "title": "Paw Patrol: Der Dino Film",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q132802215",
+      "facts": {
+        "genres": [
+          "action",
+          "abenteuer"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q23553923",
+            "name": "Cal Brunker",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt29356163",
+          "tmdb": "1185806"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q132802215",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q23553923"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q113641997": {
+      "cacheKey": "wikidata:Q113641997",
+      "preResolutionKey": "f_oefi-06|film|2026|toy story 5",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-06",
+        "title": "Toy Story 5",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q113641997",
+      "facts": {
+        "genres": [
+          "abenteuer",
+          "komoedie",
+          "familie"
+        ],
+        "tags": [],
+        "franchise": {
+          "id": "wikidata:Q2316015",
+          "name": "Toy Story"
+        },
+        "persons": [
+          {
+            "id": "wikidata:Q328723",
+            "name": "Andrew Stanton",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt29355505",
+          "tmdb": "1084244"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q113641997",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q1361932",
+        "https://www.wikidata.org/wiki/Q328723",
+        "https://www.wikidata.org/wiki/Q2316015"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q124804916": {
+      "cacheKey": "wikidata:Q124804916",
+      "preResolutionKey": "f_oefi-07|film|2026|the end of oak street",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-07",
+        "title": "The End of Oak Street",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q124804916",
+      "facts": {
+        "genres": [
+          "scifi"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q19815594",
+            "name": "David Robert Mitchell",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q36301",
+            "name": "Anne Hathaway",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q165518",
+            "name": "Ewan McGregor",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q62871834",
+            "name": "Maisy Stella",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q63349125",
+            "name": "Christian Convery",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q141016023",
+            "name": "Jordan Alexa Davis",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q12200303",
+            "name": "P. J. Byrne",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q131560482",
+            "name": "Hudson Meek",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt27165187",
+          "tmdb": "1101383"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q124804916",
+        "https://www.wikidata.org/wiki/Q471839",
+        "https://www.wikidata.org/wiki/Q19815594",
+        "https://www.wikidata.org/wiki/Q36301",
+        "https://www.wikidata.org/wiki/Q165518",
+        "https://www.wikidata.org/wiki/Q62871834",
+        "https://www.wikidata.org/wiki/Q63349125",
+        "https://www.wikidata.org/wiki/Q141016023",
+        "https://www.wikidata.org/wiki/Q12200303",
+        "https://www.wikidata.org/wiki/Q131560482"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q127605787": {
+      "cacheKey": "wikidata:Q127605787",
+      "preResolutionKey": "f_oefi-09|film|2026|minions & monster",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-09",
+        "title": "Minions & Monster",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q127605787",
+      "facts": {
+        "genres": [
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q3384479",
+            "name": "Pierre Coffin",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt32890033",
+          "tmdb": "1315772"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q127605787",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q3384479"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q129344299": {
+      "cacheKey": "wikidata:Q129344299",
+      "preResolutionKey": "f_oefi-10|film|2026|marsupilami",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-10",
+        "title": "Marsupilami",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q129344299",
+      "facts": {
+        "genres": [
+          "komoedie",
+          "abenteuer",
+          "familie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q3380121",
+            "name": "Philippe Lacheau",
+            "roles": [
+              "director",
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q312661",
+            "name": "Jamel Debbouze",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q43697",
+            "name": "Jean Reno",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q17175096",
+            "name": "Tarek Boudali",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3588002",
+            "name": "Élodie Fontan",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q28105126",
+            "name": "Julien Arruti",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q2830765",
+            "name": "Alban Ivanov",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3423028",
+            "name": "Reem Kherici",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt33029380",
+          "tmdb": "1145899"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q129344299",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q1361932",
+        "https://www.wikidata.org/wiki/Q3380121",
+        "https://www.wikidata.org/wiki/Q312661",
+        "https://www.wikidata.org/wiki/Q43697",
+        "https://www.wikidata.org/wiki/Q17175096",
+        "https://www.wikidata.org/wiki/Q3588002",
+        "https://www.wikidata.org/wiki/Q28105126",
+        "https://www.wikidata.org/wiki/Q2830765",
+        "https://www.wikidata.org/wiki/Q3423028"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q134083296": {
+      "cacheKey": "wikidata:Q134083296",
+      "preResolutionKey": "f_oefi-12|film|2026|the invite",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-12",
+        "title": "The Invite",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q134083296",
+      "facts": {
+        "genres": [
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q200355",
+            "name": "Olivia Wilde",
+            "roles": [
+              "director",
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q220308",
+            "name": "Seth Rogen",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q39666",
+            "name": "Penélope Cruz",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q125904",
+            "name": "Edward Norton",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt14173636",
+          "tmdb": "950028"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q134083296",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q200355",
+        "https://www.wikidata.org/wiki/Q220308",
+        "https://www.wikidata.org/wiki/Q39666",
+        "https://www.wikidata.org/wiki/Q125904"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q134480207": {
+      "cacheKey": "wikidata:Q134480207",
+      "preResolutionKey": "f_oefi-13|film|2025|exit 8",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-13",
+        "title": "Exit 8",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q134480207",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q11478754",
+            "name": "Genki Kawamura",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q362277",
+            "name": "Kazunari Ninomiya",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q123405494",
+            "name": "Yamato Kouchi",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q11461244",
+            "name": "Nana Komatsu",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q108110352",
+            "name": "Kotone Hanase",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt35222590",
+          "tmdb": "1408208"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q134480207",
+        "https://www.wikidata.org/wiki/Q11478754",
+        "https://www.wikidata.org/wiki/Q362277",
+        "https://www.wikidata.org/wiki/Q123405494",
+        "https://www.wikidata.org/wiki/Q11461244",
+        "https://www.wikidata.org/wiki/Q108110352"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q134434223": {
+      "cacheKey": "wikidata:Q134434223",
+      "preResolutionKey": "f_oefi-14|film|2026|teenage sex and death at camp miasma",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_oefi-14",
+        "title": "Teenage Sex and Death at Camp Miasma",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:oefi-weekend-at",
+        "sourceUrl": "https://filminstitut.at/charts",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": null
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q134434223",
+      "facts": {
+        "genres": [
+          "horror",
+          "satire",
+          "romantik"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q61641240",
+            "name": "Jane Schoenbrun",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q485298",
+            "name": "Gillian Anderson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q106873503",
+            "name": "Hannah Einbinder",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q123739722",
+            "name": "Amanda Fix",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q130251776",
+            "name": "Arthur Conti",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q77359137",
+            "name": "Eva Victor",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q63382252",
+            "name": "Zach Cherry",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q108739322",
+            "name": "Sarah Sherman",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt35298123",
+          "tmdb": "1240889"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q134434223",
+        "https://www.wikidata.org/wiki/Q200092",
+        "https://www.wikidata.org/wiki/Q138603203",
+        "https://www.wikidata.org/wiki/Q1054574",
+        "https://www.wikidata.org/wiki/Q61641240",
+        "https://www.wikidata.org/wiki/Q485298",
+        "https://www.wikidata.org/wiki/Q106873503",
+        "https://www.wikidata.org/wiki/Q123739722",
+        "https://www.wikidata.org/wiki/Q130251776",
+        "https://www.wikidata.org/wiki/Q77359137",
+        "https://www.wikidata.org/wiki/Q63382252",
+        "https://www.wikidata.org/wiki/Q108739322"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q140467227": {
+      "cacheKey": "wikidata:Q140467227",
+      "preResolutionKey": "f_netflix-01|film|2026|my best friend, his girlfriend and me",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_netflix-01",
+        "title": "My Best Friend, His Girlfriend and Me",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/films",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q140467227",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q1893857",
+            "name": "Marco Petry",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q72046",
+            "name": "Kostja Ullmann",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q106423",
+            "name": "Janina Uhse",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q20995334",
+            "name": "Ferdinand Hofer",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q58065",
+            "name": "David Kross",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt38662472",
+          "tmdb": "1589248"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q140467227",
+        "https://www.wikidata.org/wiki/Q1893857",
+        "https://www.wikidata.org/wiki/Q72046",
+        "https://www.wikidata.org/wiki/Q106423",
+        "https://www.wikidata.org/wiki/Q20995334",
+        "https://www.wikidata.org/wiki/Q58065"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q141165617": {
+      "cacheKey": "wikidata:Q141165617",
+      "preResolutionKey": "f_netflix-02|film|2026|facing el chapo",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_netflix-02",
+        "title": "Facing El Chapo",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/films",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q141165617",
+      "facts": {
+        "genres": [
+          "drama",
+          "action"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q113699465",
+            "name": "Chava Cartas",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt39390497",
+          "tmdb": "1621552"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q141165617",
+        "https://www.wikidata.org/wiki/Q25372",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q113699465"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q135220006": {
+      "cacheKey": "wikidata:Q135220006",
+      "preResolutionKey": "f_netflix-03|film|2026|don't say good luck",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_netflix-03",
+        "title": "Don't Say Good Luck",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/films",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q135220006",
+      "facts": {
+        "genres": [
+          "musikfilm",
+          "romantik"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q26904157",
+            "name": "Julia Hart",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q235905",
+            "name": "Melanie Lynskey",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q891796",
+            "name": "Max Greenfield",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q16832110",
+            "name": "Stephanie Beatriz",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q47892618",
+            "name": "Sunny Sandler",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q232985",
+            "name": "Bebe Neuwirth",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q104061",
+            "name": "Steve Buscemi",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q65966450",
+            "name": "Jack Champion",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt36590417",
+          "tmdb": "1504358"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q135220006",
+        "https://www.wikidata.org/wiki/Q842256",
+        "https://www.wikidata.org/wiki/Q1054574",
+        "https://www.wikidata.org/wiki/Q26904157",
+        "https://www.wikidata.org/wiki/Q235905",
+        "https://www.wikidata.org/wiki/Q891796",
+        "https://www.wikidata.org/wiki/Q16832110",
+        "https://www.wikidata.org/wiki/Q47892618",
+        "https://www.wikidata.org/wiki/Q232985",
+        "https://www.wikidata.org/wiki/Q104061",
+        "https://www.wikidata.org/wiki/Q65966450"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q129165193": {
+      "cacheKey": "wikidata:Q129165193",
+      "preResolutionKey": "f_netflix-04|film|2026|the last house",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_netflix-04",
+        "title": "The Last House",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/films",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q129165193",
+      "facts": {
+        "genres": [
+          "scifi",
+          "horror",
+          "thriller"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q525332",
+            "name": "Louis Leterrier",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q24572132",
+            "name": "Kingsley Ben-Adir",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q19517962",
+            "name": "Greta Lee",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q922503",
+            "name": "Wagner Moura",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q615910",
+            "name": "Sam Lerner",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q4787920",
+            "name": "Arden Cho",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt32268156",
+          "tmdb": "1284041"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q129165193",
+        "https://www.wikidata.org/wiki/Q471839",
+        "https://www.wikidata.org/wiki/Q200092",
+        "https://www.wikidata.org/wiki/Q2484376",
+        "https://www.wikidata.org/wiki/Q525332",
+        "https://www.wikidata.org/wiki/Q24572132",
+        "https://www.wikidata.org/wiki/Q19517962",
+        "https://www.wikidata.org/wiki/Q922503",
+        "https://www.wikidata.org/wiki/Q615910",
+        "https://www.wikidata.org/wiki/Q4787920"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q136404689": {
+      "cacheKey": "wikidata:Q136404689",
+      "preResolutionKey": "s_netflix-01|series|2026|blood sacrifice",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_netflix-01",
+        "title": "Blood Sacrifice",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/tv",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q136404689",
+      "facts": {
+        "genres": [
+          "drama",
+          "krimi"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [],
+        "externalIds": {
+          "imdb": "tt38553367",
+          "tmdb": "303351"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q136404689",
+        "https://www.wikidata.org/wiki/Q1366112",
+        "https://www.wikidata.org/wiki/Q9335577"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q89414035": {
+      "cacheKey": "wikidata:Q89414035",
+      "preResolutionKey": "s_netflix-02|series|2020|outer banks",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_netflix-02",
+        "title": "Outer Banks",
+        "releaseYear": 2020,
+        "mediaType": "series",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/tv",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q89414035",
+      "facts": {
+        "genres": [
+          "action",
+          "abenteuer",
+          "thriller"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q6272209",
+            "name": "Jonas Pate",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q5091950",
+            "name": "Cherie Nowlan",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q22097117",
+            "name": "Valerie Weiss",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q1064297",
+            "name": "Charles Esten",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q91944568",
+            "name": "Madison Bailey",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q16509244",
+            "name": "Austin North",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q91600162",
+            "name": "Madelyn Cline",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q94993175",
+            "name": "Rudy Pankow",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt10293938",
+          "tmdb": "100757"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q89414035",
+        "https://www.wikidata.org/wiki/Q343782",
+        "https://www.wikidata.org/wiki/Q56064758",
+        "https://www.wikidata.org/wiki/Q67175872",
+        "https://www.wikidata.org/wiki/Q6272209",
+        "https://www.wikidata.org/wiki/Q5091950",
+        "https://www.wikidata.org/wiki/Q22097117",
+        "https://www.wikidata.org/wiki/Q1064297",
+        "https://www.wikidata.org/wiki/Q91944568",
+        "https://www.wikidata.org/wiki/Q16509244",
+        "https://www.wikidata.org/wiki/Q91600162",
+        "https://www.wikidata.org/wiki/Q94993175"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q113570499": {
+      "cacheKey": "wikidata:Q113570499",
+      "preResolutionKey": "s_netflix-03|series|2023|my life with the walter boys",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_netflix-03",
+        "title": "My Life With the Walter Boys",
+        "releaseYear": 2023,
+        "mediaType": "series",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/tv",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q113570499",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q180247",
+            "name": "Jerry Ciccoritti",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q24589614",
+            "name": "Nimisha Mukerji",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q96739448",
+            "name": "Winnifred Jong",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q311769",
+            "name": "Jason Priestley",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q123536799",
+            "name": "Noah LaLonde",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q123701381",
+            "name": "Ashby Gentry",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q15229529",
+            "name": "Corey Fogelmanis",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q72910547",
+            "name": "Connor Stanhope",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt8323628",
+          "tmdb": "199001"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q113570499",
+        "https://www.wikidata.org/wiki/Q180247",
+        "https://www.wikidata.org/wiki/Q24589614",
+        "https://www.wikidata.org/wiki/Q96739448",
+        "https://www.wikidata.org/wiki/Q311769",
+        "https://www.wikidata.org/wiki/Q123536799",
+        "https://www.wikidata.org/wiki/Q123701381",
+        "https://www.wikidata.org/wiki/Q15229529",
+        "https://www.wikidata.org/wiki/Q72910547"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q135011543": {
+      "cacheKey": "wikidata:Q135011543",
+      "preResolutionKey": "s_netflix-04|series|2026|my brilliant career",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_netflix-04",
+        "title": "My Brilliant Career",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "chart:netflix-weekly-at",
+        "sourceUrl": "https://www.netflix.com/tudum/top10/austria/tv",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Netflix"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q135011543",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q4738769",
+            "name": "Alyssa McClelland",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q16301332",
+            "name": "Philippa Northeast",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q16202945",
+            "name": "Christopher Chung",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q433089",
+            "name": "Anna Chancellor",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q438161",
+            "name": "Genevieve O’Reilly",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q22007082",
+            "name": "Kate Mulvany",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q141028258",
+            "name": "Jake Dunn",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q5666149",
+            "name": "Alexander England",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt37352716",
+          "tmdb": "309798"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q135011543",
+        "https://www.wikidata.org/wiki/Q4738769",
+        "https://www.wikidata.org/wiki/Q16301332",
+        "https://www.wikidata.org/wiki/Q16202945",
+        "https://www.wikidata.org/wiki/Q433089",
+        "https://www.wikidata.org/wiki/Q438161",
+        "https://www.wikidata.org/wiki/Q22007082",
+        "https://www.wikidata.org/wiki/Q141028258",
+        "https://www.wikidata.org/wiki/Q5666149"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q136807764": {
+      "cacheKey": "wikidata:Q136807764",
+      "preResolutionKey": "f_prime-01|film|2026|the last sunrise",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_prime-01",
+        "title": "The Last Sunrise",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q136807764",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q3660187",
+            "name": "Carlson Young",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q163263",
+            "name": "Eva Longoria",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q46409964",
+            "name": "Maia Reficco",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q115048260",
+            "name": "Fernando Lindez",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q25160412",
+            "name": "Sabrina Bartlett",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q1060011",
+            "name": "Andrés Velencoso",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt37654096",
+          "tmdb": "1516698"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q136807764",
+        "https://www.wikidata.org/wiki/Q3660187",
+        "https://www.wikidata.org/wiki/Q163263",
+        "https://www.wikidata.org/wiki/Q46409964",
+        "https://www.wikidata.org/wiki/Q115048260",
+        "https://www.wikidata.org/wiki/Q25160412",
+        "https://www.wikidata.org/wiki/Q1060011"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q131523345": {
+      "cacheKey": "wikidata:Q131523345",
+      "preResolutionKey": "f_prime-02|film|2025|murder at the embassy",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_prime-02",
+        "title": "Murder at the Embassy",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q131523345",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q113365853",
+            "name": "Stephen Shimek",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q207458",
+            "name": "Mischa Barton",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q96316",
+            "name": "Mido Hamada",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q2857087",
+            "name": "Antonia Bernath",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q1591382",
+            "name": "Richard Dillane",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt22772712",
+          "tmdb": "1310568"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q131523345",
+        "https://www.wikidata.org/wiki/Q113365853",
+        "https://www.wikidata.org/wiki/Q207458",
+        "https://www.wikidata.org/wiki/Q96316",
+        "https://www.wikidata.org/wiki/Q2857087",
+        "https://www.wikidata.org/wiki/Q1591382"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q117842570": {
+      "cacheKey": "wikidata:Q117842570",
+      "preResolutionKey": "f_prime-04|film|2023|the retirement plan",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_prime-04",
+        "title": "The Retirement Plan",
+        "releaseYear": 2023,
+        "mediaType": "film",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q117842570",
+      "facts": {
+        "genres": [
+          "thriller",
+          "krimi"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q122733554",
+            "name": "Tim Brown",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q42869",
+            "name": "Nicolas Cage",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q220698",
+            "name": "Ron Perlman",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q189992",
+            "name": "Ashley Greene",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q314841",
+            "name": "Jackie Earle Haley",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q371786",
+            "name": "Joel David Moore",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt14827638",
+          "tmdb": "866346"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q117842570",
+        "https://www.wikidata.org/wiki/Q2484376",
+        "https://www.wikidata.org/wiki/Q959790",
+        "https://www.wikidata.org/wiki/Q122733554",
+        "https://www.wikidata.org/wiki/Q42869",
+        "https://www.wikidata.org/wiki/Q220698",
+        "https://www.wikidata.org/wiki/Q189992",
+        "https://www.wikidata.org/wiki/Q314841",
+        "https://www.wikidata.org/wiki/Q371786"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q109901438": {
+      "cacheKey": "wikidata:Q109901438",
+      "preResolutionKey": "s_prime-01|series|2022|reacher",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_prime-01",
+        "title": "Reacher",
+        "releaseYear": 2022,
+        "mediaType": "series",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q109901438",
+      "facts": {
+        "genres": [
+          "action",
+          "thriller",
+          "krimi",
+          "drama"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q3525635",
+            "name": "Thomas Vincent",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q926963",
+            "name": "Alan Ritchson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q10879432",
+            "name": "Malcolm Goodwin",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q19878230",
+            "name": "Willa Fitzgerald",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt9288030",
+          "tmdb": "108978"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q109901438",
+        "https://www.wikidata.org/wiki/Q343782",
+        "https://www.wikidata.org/wiki/Q67175872",
+        "https://www.wikidata.org/wiki/Q9335577",
+        "https://www.wikidata.org/wiki/Q1366112",
+        "https://www.wikidata.org/wiki/Q3525635",
+        "https://www.wikidata.org/wiki/Q926963",
+        "https://www.wikidata.org/wiki/Q10879432",
+        "https://www.wikidata.org/wiki/Q19878230"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q137917795": {
+      "cacheKey": "wikidata:Q137917795",
+      "preResolutionKey": "s_prime-02|series|2026|sterling point",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_prime-02",
+        "title": "Sterling Point",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q137917795",
+      "facts": {
+        "genres": [
+          "drama"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q292214",
+            "name": "Megan Park",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q18352210",
+            "name": "Andrew Ahn",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q4822544",
+            "name": "Aurora Guerrero",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q111536404",
+            "name": "Ella Rubin",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q61625367",
+            "name": "Jacob Whiteduck-Lavoie",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q110497876",
+            "name": "Bo Bragason",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q132200860",
+            "name": "Daniel Quinn-Toye",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q124738698",
+            "name": "Amélie Hoeferle",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt35618070",
+          "tmdb": "283297"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q137917795",
+        "https://www.wikidata.org/wiki/Q1366112",
+        "https://www.wikidata.org/wiki/Q292214",
+        "https://www.wikidata.org/wiki/Q18352210",
+        "https://www.wikidata.org/wiki/Q4822544",
+        "https://www.wikidata.org/wiki/Q111536404",
+        "https://www.wikidata.org/wiki/Q61625367",
+        "https://www.wikidata.org/wiki/Q110497876",
+        "https://www.wikidata.org/wiki/Q132200860",
+        "https://www.wikidata.org/wiki/Q124738698"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q97577197": {
+      "cacheKey": "wikidata:Q97577197",
+      "preResolutionKey": "s_prime-03|series|2021|dan brown's the lost symbol",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_prime-03",
+        "title": "Dan Brown's The Lost Symbol",
+        "releaseYear": 2021,
+        "mediaType": "series",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q97577197",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q4805651",
+            "name": "Ashley Zukerman",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q20740615",
+            "name": "Beau Knapp",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q254022",
+            "name": "Suzy Eddie Izzard",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q1370072",
+            "name": "Rick Gonzalez",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q7636928",
+            "name": "Sumalee Montano",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q11833408",
+            "name": "Valorie Curry",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt10478054",
+          "tmdb": "120452"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q97577197",
+        "https://www.wikidata.org/wiki/Q4805651",
+        "https://www.wikidata.org/wiki/Q20740615",
+        "https://www.wikidata.org/wiki/Q254022",
+        "https://www.wikidata.org/wiki/Q1370072",
+        "https://www.wikidata.org/wiki/Q7636928",
+        "https://www.wikidata.org/wiki/Q11833408"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q138862091": {
+      "cacheKey": "wikidata:Q138862091",
+      "preResolutionKey": "s_prime-04|series|2026|off campus",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_prime-04",
+        "title": "Off Campus",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q138862091",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q110735703",
+            "name": "Sam Bailey",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q17088184",
+            "name": "Silver Tree",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q103819183",
+            "name": "Ella Bright",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q109408139",
+            "name": "Belmont Cameli",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q64216382",
+            "name": "Mika Abdalla",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q139827317",
+            "name": "Stephen Kalyn",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q84598780",
+            "name": "Antonio Cipriano",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q112174929",
+            "name": "Jalen Thomas Brooks",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt33546863",
+          "tmdb": "273240"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q138862091",
+        "https://www.wikidata.org/wiki/Q110735703",
+        "https://www.wikidata.org/wiki/Q17088184",
+        "https://www.wikidata.org/wiki/Q103819183",
+        "https://www.wikidata.org/wiki/Q109408139",
+        "https://www.wikidata.org/wiki/Q64216382",
+        "https://www.wikidata.org/wiki/Q139827317",
+        "https://www.wikidata.org/wiki/Q84598780",
+        "https://www.wikidata.org/wiki/Q112174929"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q106393743": {
+      "cacheKey": "wikidata:Q106393743",
+      "preResolutionKey": "s_prime-05|series|2018|lol: last one laughing",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_prime-05",
+        "title": "LOL: Last One Laughing",
+        "releaseYear": 2018,
+        "mediaType": "series",
+        "sourceId": "snapshot:prime-video-at",
+        "sourceUrl": "https://flixpatrol.com/top10/amazon-prime/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Prime Video"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q106393743",
+      "facts": {
+        "genres": [
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [],
+        "externalIds": {
+          "imdb": "tt8783862",
+          "tmdb": "84969"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q106393743",
+        "https://www.wikidata.org/wiki/Q40831"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q141192242": {
+      "cacheKey": "wikidata:Q141192242",
+      "preResolutionKey": "f_disney-01|film|2026|yellow mirror",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_disney-01",
+        "title": "Yellow Mirror",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q141192242",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q3299707",
+            "name": "Matthew Faughnan",
+            "roles": [
+              "director"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt43141030",
+          "tmdb": "1729723"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q141192242",
+        "https://www.wikidata.org/wiki/Q3299707"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q134611972": {
+      "cacheKey": "wikidata:Q134611972",
+      "preResolutionKey": "f_disney-02|film|2026|the devil wears prada 2",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_disney-02",
+        "title": "The Devil Wears Prada 2",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q134611972",
+      "facts": {
+        "genres": [
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": {
+          "id": "wikidata:Q136770863",
+          "name": "The Devil Wears Prada"
+        },
+        "persons": [
+          {
+            "id": "wikidata:Q934964",
+            "name": "David Frankel",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q873",
+            "name": "Meryl Streep",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q36301",
+            "name": "Anne Hathaway",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q193517",
+            "name": "Emily Blunt",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q223117",
+            "name": "Stanley Tucci",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q241160",
+            "name": "Tracie Thoms",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q7800474",
+            "name": "Tibor Feldman",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q55294",
+            "name": "Kenneth Branagh",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt33612209",
+          "tmdb": "1314481"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q134611972",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q934964",
+        "https://www.wikidata.org/wiki/Q873",
+        "https://www.wikidata.org/wiki/Q36301",
+        "https://www.wikidata.org/wiki/Q193517",
+        "https://www.wikidata.org/wiki/Q223117",
+        "https://www.wikidata.org/wiki/Q241160",
+        "https://www.wikidata.org/wiki/Q7800474",
+        "https://www.wikidata.org/wiki/Q55294",
+        "https://www.wikidata.org/wiki/Q136770863"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q136342622": {
+      "cacheKey": "wikidata:Q136342622",
+      "preResolutionKey": "f_disney-03|film|2026|camp rock 3",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_disney-03",
+        "title": "Camp Rock 3",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q136342622",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": {
+          "id": "wikidata:Q12478211",
+          "name": "Camp Rock"
+        },
+        "persons": [
+          {
+            "id": "wikidata:Q141003694",
+            "name": "Veronica Rodriguez",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q24068200",
+            "name": "Malachi Barton",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q191088",
+            "name": "Joe Jonas",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q201656",
+            "name": "Nick Jonas",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q210172",
+            "name": "Kevin Jonas",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q230289",
+            "name": "Maria Canals-Barrera",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q70980043",
+            "name": "Sherry Cola",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt6743524",
+          "tmdb": "1493400"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q136342622",
+        "https://www.wikidata.org/wiki/Q141003694",
+        "https://www.wikidata.org/wiki/Q24068200",
+        "https://www.wikidata.org/wiki/Q191088",
+        "https://www.wikidata.org/wiki/Q201656",
+        "https://www.wikidata.org/wiki/Q210172",
+        "https://www.wikidata.org/wiki/Q230289",
+        "https://www.wikidata.org/wiki/Q70980043",
+        "https://www.wikidata.org/wiki/Q12478211"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q23780914": {
+      "cacheKey": "wikidata:Q23780914",
+      "preResolutionKey": "f_disney-04|film|2018|avengers: infinity war",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_disney-04",
+        "title": "Avengers: Infinity War",
+        "releaseYear": 2018,
+        "mediaType": "film",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q23780914",
+      "facts": {
+        "genres": [
+          "scifi",
+          "action",
+          "abenteuer"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q18018415",
+            "name": "Anthony Russo",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q20675767",
+            "name": "Joe Russo",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q54314",
+            "name": "Chris Hemsworth",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q41422",
+            "name": "Mark Ruffalo",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q178348",
+            "name": "Chris Evans",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q41396",
+            "name": "Josh Brolin",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q295803",
+            "name": "Tom Hiddleston",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q165219",
+            "name": "Robert Downey Jr.",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt4154756",
+          "tmdb": "299536"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q23780914",
+        "https://www.wikidata.org/wiki/Q471839",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q18018415",
+        "https://www.wikidata.org/wiki/Q20675767",
+        "https://www.wikidata.org/wiki/Q54314",
+        "https://www.wikidata.org/wiki/Q41422",
+        "https://www.wikidata.org/wiki/Q178348",
+        "https://www.wikidata.org/wiki/Q41396",
+        "https://www.wikidata.org/wiki/Q295803",
+        "https://www.wikidata.org/wiki/Q165219"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q23781155": {
+      "cacheKey": "wikidata:Q23781155",
+      "preResolutionKey": "f_disney-05|film|2019|avengers: endgame",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_disney-05",
+        "title": "Avengers: Endgame",
+        "releaseYear": 2019,
+        "mediaType": "film",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q23781155",
+      "facts": {
+        "genres": [
+          "action",
+          "abenteuer"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q18018415",
+            "name": "Anthony Russo",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q20675767",
+            "name": "Joe Russo",
+            "roles": [
+              "director",
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q54314",
+            "name": "Chris Hemsworth",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q41422",
+            "name": "Mark Ruffalo",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q178348",
+            "name": "Chris Evans",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q41396",
+            "name": "Josh Brolin",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q295803",
+            "name": "Tom Hiddleston",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q165219",
+            "name": "Robert Downey Jr.",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt4154796",
+          "tmdb": "299534"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q23781155",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q18018415",
+        "https://www.wikidata.org/wiki/Q20675767",
+        "https://www.wikidata.org/wiki/Q54314",
+        "https://www.wikidata.org/wiki/Q41422",
+        "https://www.wikidata.org/wiki/Q178348",
+        "https://www.wikidata.org/wiki/Q41396",
+        "https://www.wikidata.org/wiki/Q295803",
+        "https://www.wikidata.org/wiki/Q165219"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q136722498": {
+      "cacheKey": "wikidata:Q136722498",
+      "preResolutionKey": "s_disney-01|series|2026|the shards",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_disney-01",
+        "title": "The Shards",
+        "releaseYear": 2026,
+        "mediaType": "series",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q136722498",
+      "facts": {
+        "genres": [
+          "drama",
+          "krimi"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q108700341",
+            "name": "Igby Rigney",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q139979180",
+            "name": "Homer Gere",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q22673974",
+            "name": "Kaia Gerber",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q132645533",
+            "name": "Hayes Warner",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q140570282",
+            "name": "Graham Campbell",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q6276964",
+            "name": "Jordan Roth",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q229230",
+            "name": "Evan Rachel Wood",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q368037",
+            "name": "Wes Bentley",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt27543562",
+          "tmdb": "298168"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q136722498",
+        "https://www.wikidata.org/wiki/Q1366112",
+        "https://www.wikidata.org/wiki/Q9335577",
+        "https://www.wikidata.org/wiki/Q108700341",
+        "https://www.wikidata.org/wiki/Q139979180",
+        "https://www.wikidata.org/wiki/Q22673974",
+        "https://www.wikidata.org/wiki/Q132645533",
+        "https://www.wikidata.org/wiki/Q140570282",
+        "https://www.wikidata.org/wiki/Q6276964",
+        "https://www.wikidata.org/wiki/Q229230",
+        "https://www.wikidata.org/wiki/Q368037"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q129206932": {
+      "cacheKey": "wikidata:Q129206932",
+      "preResolutionKey": "s_disney-04|series|2024|high potential",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_disney-04",
+        "title": "High Potential",
+        "releaseYear": 2024,
+        "mediaType": "series",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q129206932",
+      "facts": {
+        "genres": [],
+        "tags": [],
+        "franchise": null,
+        "persons": [],
+        "externalIds": {
+          "imdb": "tt22091076",
+          "tmdb": "226637"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q129206932"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q64349029": {
+      "cacheKey": "wikidata:Q64349029",
+      "preResolutionKey": "s_disney-05|series|2021|loki",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "s_disney-05",
+        "title": "Loki",
+        "releaseYear": 2021,
+        "mediaType": "series",
+        "sourceId": "snapshot:disney-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/disney/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Disney+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q64349029",
+      "facts": {
+        "genres": [
+          "fantasy",
+          "abenteuer",
+          "action"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q106975347",
+            "name": "Kate Herron",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q295803",
+            "name": "Tom Hiddleston",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q161916",
+            "name": "Owen Wilson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3119298",
+            "name": "Gugu Mbatha-Raw",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q7562868",
+            "name": "Sophia Di Martino",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q541803",
+            "name": "Wunmi Mosaku",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q380856",
+            "name": "Richard E. Grant",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q2686633",
+            "name": "DeObia Oparei",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt9140554",
+          "tmdb": "84958"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q64349029",
+        "https://www.wikidata.org/wiki/Q98526245",
+        "https://www.wikidata.org/wiki/Q56064758",
+        "https://www.wikidata.org/wiki/Q343782",
+        "https://www.wikidata.org/wiki/Q106975347",
+        "https://www.wikidata.org/wiki/Q295803",
+        "https://www.wikidata.org/wiki/Q161916",
+        "https://www.wikidata.org/wiki/Q3119298",
+        "https://www.wikidata.org/wiki/Q7562868",
+        "https://www.wikidata.org/wiki/Q541803",
+        "https://www.wikidata.org/wiki/Q380856",
+        "https://www.wikidata.org/wiki/Q2686633"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q131313219": {
+      "cacheKey": "wikidata:Q131313219",
+      "preResolutionKey": "f_apple-01|film|2026|the dink",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_apple-01",
+        "title": "The Dink",
+        "releaseYear": 2026,
+        "mediaType": "film",
+        "sourceId": "snapshot:apple-tv-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/apple-tv/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Apple TV+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q131313219",
+      "facts": {
+        "genres": [
+          "komoedie"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q23984517",
+            "name": "Josh Greenbaum",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q171525",
+            "name": "Jake Johnson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q108935",
+            "name": "Mary Steenburgen",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q104791",
+            "name": "Ed Harris",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q67452053",
+            "name": "Chloe Fineman",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q374065",
+            "name": "Patton Oswalt",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q115806032",
+            "name": "Aaron Chen",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q508795",
+            "name": "Martin Kove",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt33499146",
+          "tmdb": "1361774"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q131313219",
+        "https://www.wikidata.org/wiki/Q157443",
+        "https://www.wikidata.org/wiki/Q23984517",
+        "https://www.wikidata.org/wiki/Q171525",
+        "https://www.wikidata.org/wiki/Q108935",
+        "https://www.wikidata.org/wiki/Q104791",
+        "https://www.wikidata.org/wiki/Q67452053",
+        "https://www.wikidata.org/wiki/Q374065",
+        "https://www.wikidata.org/wiki/Q115806032",
+        "https://www.wikidata.org/wiki/Q508795"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q114246242": {
+      "cacheKey": "wikidata:Q114246242",
+      "preResolutionKey": "f_apple-02|film|2025|f1",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_apple-02",
+        "title": "F1",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "snapshot:apple-tv-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/apple-tv/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Apple TV+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q114246242",
+      "facts": {
+        "genres": [
+          "action"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q2444076",
+            "name": "Joseph Kosinski",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q35332",
+            "name": "Brad Pitt",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q30218855",
+            "name": "Damson Idris",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q257625",
+            "name": "Kerry Condon",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q1852090",
+            "name": "Tobias Menzies",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q134895",
+            "name": "Javier Bardem",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q7422640",
+            "name": "Sarah Niles",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q66362723",
+            "name": "Samson Kayo",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt16311594",
+          "tmdb": "911430"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q114246242",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q2444076",
+        "https://www.wikidata.org/wiki/Q35332",
+        "https://www.wikidata.org/wiki/Q30218855",
+        "https://www.wikidata.org/wiki/Q257625",
+        "https://www.wikidata.org/wiki/Q1852090",
+        "https://www.wikidata.org/wiki/Q134895",
+        "https://www.wikidata.org/wiki/Q7422640",
+        "https://www.wikidata.org/wiki/Q66362723"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q116971304": {
+      "cacheKey": "wikidata:Q116971304",
+      "preResolutionKey": "f_apple-03|film|2025|the gorge",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_apple-03",
+        "title": "The Gorge",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "snapshot:apple-tv-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/apple-tv/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Apple TV+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q116971304",
+      "facts": {
+        "genres": [
+          "scifi",
+          "action",
+          "horror",
+          "romantik"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q558806",
+            "name": "Scott Derrickson",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q267330",
+            "name": "Miles Teller",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q20882479",
+            "name": "Anya Taylor-Joy",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q102124",
+            "name": "Sigourney Weaver",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q24006329",
+            "name": "Sope Dirisu",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q3568711",
+            "name": "William Houston",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q27601640",
+            "name": "Kobna Holdbrook-Smith",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q132832963",
+            "name": "James Marlowe",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt13654226",
+          "tmdb": "950396"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q116971304",
+        "https://www.wikidata.org/wiki/Q471839",
+        "https://www.wikidata.org/wiki/Q188473",
+        "https://www.wikidata.org/wiki/Q200092",
+        "https://www.wikidata.org/wiki/Q1054574",
+        "https://www.wikidata.org/wiki/Q558806",
+        "https://www.wikidata.org/wiki/Q267330",
+        "https://www.wikidata.org/wiki/Q20882479",
+        "https://www.wikidata.org/wiki/Q102124",
+        "https://www.wikidata.org/wiki/Q24006329",
+        "https://www.wikidata.org/wiki/Q3568711",
+        "https://www.wikidata.org/wiki/Q27601640",
+        "https://www.wikidata.org/wiki/Q132832963"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    },
+    "wikidata:Q124256460": {
+      "cacheKey": "wikidata:Q124256460",
+      "preResolutionKey": "f_apple-05|film|2025|fountain of youth",
+      "poolId": "public:versioned-market-mix-at",
+      "input": {
+        "poolId": "f_apple-05",
+        "title": "Fountain of Youth",
+        "releaseYear": 2025,
+        "mediaType": "film",
+        "sourceId": "snapshot:apple-tv-plus-at",
+        "sourceUrl": "https://flixpatrol.com/top10/apple-tv/austria/",
+        "sourceStand": "2026-08-29T10:00:00.000Z",
+        "provider": "Apple TV+"
+      },
+      "status": "ok",
+      "strongId": "wikidata:Q124256460",
+      "facts": {
+        "genres": [
+          "fantasy",
+          "abenteuer"
+        ],
+        "tags": [],
+        "franchise": null,
+        "persons": [
+          {
+            "id": "wikidata:Q192990",
+            "name": "Guy Ritchie",
+            "roles": [
+              "director"
+            ]
+          },
+          {
+            "id": "wikidata:Q313039",
+            "name": "John Krasinski",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q37876",
+            "name": "Natalie Portman",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q572761",
+            "name": "Eiza González",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q456047",
+            "name": "Domhnall Gleeson",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q391536",
+            "name": "Carmen Ejogo",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q4790207",
+            "name": "Arian Moayed",
+            "roles": [
+              "actor"
+            ]
+          },
+          {
+            "id": "wikidata:Q302335",
+            "name": "Laz Alonso",
+            "roles": [
+              "actor"
+            ]
+          }
+        ],
+        "externalIds": {
+          "imdb": "tt27075958",
+          "tmdb": "1098006"
+        }
+      },
+      "evidenceUrls": [
+        "https://www.wikidata.org/wiki/Q124256460",
+        "https://www.wikidata.org/wiki/Q157394",
+        "https://www.wikidata.org/wiki/Q319221",
+        "https://www.wikidata.org/wiki/Q192990",
+        "https://www.wikidata.org/wiki/Q313039",
+        "https://www.wikidata.org/wiki/Q37876",
+        "https://www.wikidata.org/wiki/Q572761",
+        "https://www.wikidata.org/wiki/Q456047",
+        "https://www.wikidata.org/wiki/Q391536",
+        "https://www.wikidata.org/wiki/Q4790207",
+        "https://www.wikidata.org/wiki/Q302335"
+      ],
+      "checkedAt": "2026-08-29T17:00:22.425Z",
+      "expiresAt": "2026-11-27T17:00:22.425Z",
+      "validation": {
+        "status": "machine_validated",
+        "identity": "exact",
+        "taxonomy": "normalized",
+        "evidence": "direct"
+      },
+      "provider": {
+        "id": "wikidata",
+        "origin": "wikidata_structured_data",
+        "version": "wikidata-action-v1",
+        "license": "CC0-1.0",
+        "userJudgment": false
+      }
+    }
+  }
 }

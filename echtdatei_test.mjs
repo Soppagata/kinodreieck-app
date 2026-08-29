@@ -555,7 +555,6 @@ dateiEntdeckenBereich?.click(); await warte(700);
 check("No-Config-file:// zeigt den eingebetteten, providerfreien 50er-Pool kompakt",
   !!dateiEntdeckenBereich
   && /Für mich/.test(dateiText())
-  && /Noch keine bestätigte Passung/.test(dateiText())
   && /Diese Woche beliebt/.test(dateiText())
   && dateiDoc.querySelectorAll(".kd-entdecken-neutral").length === 6
   && !!dateiKnopf(/^Weitere 44 Titel anzeigen$/)
