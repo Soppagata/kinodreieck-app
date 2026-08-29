@@ -7,6 +7,8 @@ import {
   createEntdeckenRecommendations,
   localCalendarDay,
   localRadarTargetLabel,
+  radarSubscriptionForEvent,
+  radarSyncProblem,
 } from "../lib/entdeckenUi.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
 import { istBeobachtet, serienBeobachten } from "../lib/staffeln.js";
@@ -35,7 +37,7 @@ function focusableElements(root) {
 function ManageDialog({
   radarState, seriesCatalog, entdeckenStatus, master, useLibrary, accountMode,
   onUseLibrary, onObserveToggle, onRadarChange, onPersonRadarChange, onShareChange,
-  onBlog, onClose, returnFocusRef,
+  syncStatus, onRadarPilotSync, onBlog, onClose, returnFocusRef,
 }) {
   const dialogRef = useRef(null);
   const beobachtet = useMemo(
@@ -45,6 +47,7 @@ function ManageDialog({
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const pending = radarState?.outbox || [];
+  const syncProblem = radarSyncProblem(pending, syncStatus);
 
   useEffect(() => {
     const vorher = returnFocusRef?.current || document.activeElement;
@@ -111,7 +114,7 @@ function ManageDialog({
                 <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Entfernen</button>
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
             </li>)}</ul> : null}
-            {pending.length ? <div className="kd-entdecken-pending" role="status"><strong>{pending.length} Änderung{pending.length === 1 ? "" : "en"}</strong> warten noch auf Bestätigung.</div> : null}
+            {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
           </section>
           <section>
             <h3>Empfehlungen</h3>
@@ -128,6 +131,20 @@ function ManageDialog({
     </div>,
     document.body,
   );
+}
+
+function RadarSyncProblem({ problem, onRetry }) {
+  if (!problem) return null;
+  const rejected = problem.kind === "rejected";
+  return <div className="kd-entdecken-fehler" role="alert">
+    <strong>{rejected ? "Radar-Änderung abgelehnt." : "Radar konnte die Änderung nicht synchronisieren."}</strong>
+    <span>{rejected
+      ? "Prüfe das Ziel und passe es in Entdecken verwalten an."
+      : "Prüfe die Verbindung und versuche die Synchronisierung erneut."}</span>
+    {!rejected && problem.retryable && typeof onRetry === "function"
+      ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRetry()}>Erneut synchronisieren</button>
+      : null}
+  </div>;
 }
 
 function RecommendationsView({
@@ -259,7 +276,7 @@ function isErrorStatus(status) {
 
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
-  radarPilotEvents = [], onRadarPilotReceipt, onRadarTextAdd,
+  radarPilotEvents = [], syncStatus, onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
 }) {
   const [targetQuery, setTargetQuery] = useState("");
   const [targetAddBusy, setTargetAddBusy] = useState(false);
@@ -268,13 +285,14 @@ function RadarView({
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
   const personResults = radarState?.personResults || [];
+  const syncProblem = radarSyncProblem(radarState?.outbox, syncStatus);
   const receiptByEvent = useMemo(() => new Map((radarState?.receipts || []).map((entry) => [
     `${entry.eventId}|${entry.versionId}`, entry,
   ])), [radarState?.receipts]);
   const events = useMemo(() => (radarPilotEvents || [])
     .filter((entry) => entry.verificationStatus === "confirmed")
     .map((entry) => {
-      const target = subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId;
+      const target = radarSubscriptionForEvent(entry, subscriptions) || entry.targetId;
       const targetLabel = localRadarTargetLabel(target, {
         master, streamingKnown, streamingDiscover,
       });
@@ -333,7 +351,7 @@ function RadarView({
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv · tägliche Prüfung" : "Pausiert"}</span>
         </li>)}</ul> : null}
-        {(radarState?.outbox || []).length ? <p className="kd-entdecken-pending" role="status">Eine Änderung wartet noch auf Bestätigung.</p> : null}
+        {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
       </article>
       <article className="kd-entdecken-panel">
         <h3>Tagesaktuelle Neuigkeiten</h3>
@@ -369,7 +387,7 @@ export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
-  radarPilotEvents = [], onRadarPilotReceipt, onRadarTextAdd,
+  radarPilotEvents = [], syncStatus = "idle", onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
@@ -409,7 +427,8 @@ export function EntdeckenTab({
       onObserveToggle={onObserveToggle} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
-      radarPilotEvents={radarPilotEvents} onRadarPilotReceipt={onRadarPilotReceipt} onRadarTextAdd={onRadarTextAdd}
+      radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
+      onRadarPilotReceipt={onRadarPilotReceipt} onRadarTextAdd={onRadarTextAdd}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
       franchiseRadarAvailable={franchiseRadarAvailable}
       onFranchiseRadarAdd={onFranchiseRadarAdd} /> : null}
@@ -417,6 +436,7 @@ export function EntdeckenTab({
     {manageOffen ? <ManageDialog radarState={radarState} seriesCatalog={seriesCatalog} entdeckenStatus={entdeckenStatus}
       master={master} useLibrary={useLibrary} accountMode={accountMode} onUseLibrary={setUseLibrary}
       onObserveToggle={onObserveToggle} onRadarChange={onRadarChange} onPersonRadarChange={onPersonRadarChange}
-      onShareChange={onShareChange} onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
+      onShareChange={onShareChange} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
+      onBlog={openBlog} onClose={closeManage} returnFocusRef={manageButtonRef} /> : null}
   </section>;
 }

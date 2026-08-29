@@ -15,6 +15,8 @@ import {
   createCatalogSearchActions,
   createEntdeckenRecommendations,
   localRecommendationCandidates,
+  radarSubscriptionForEvent,
+  radarSyncProblem,
   rankLocalEntdeckenRecommendations,
   selectDailyRecommendations,
   shouldRefreshWebDiscovery,
@@ -22,8 +24,10 @@ import {
 } from "./src/lib/entdeckenUi.js";
 import {
   applyPersonRadarCheckResult,
+  acknowledgeAccountRadarPilotSubscription,
   createEmptyLocalRadar,
   decodeLocalRadar,
+  queueAccountPersonRadarChange,
   reconcileAccountRadarPilotFeed,
   upsertGuestPersonRadarSubscription,
   upsertGuestRadarSubscription,
@@ -691,35 +695,111 @@ try {
   });
   await workReloadUi.cleanup();
 
-  const targetFoundState = upsertGuestRadarSubscription(createEmptyLocalRadar(), {
-    target: {
-      targetId: "watchmode:462", targetType: "work", targetStatus: "active",
-      title: "Star Wars", canonical: true,
+  const starWarsTarget = {
+    targetId: "title-group:v1:star-wars", targetType: "franchise", targetStatus: "active",
+    title: "Star Wars", canonical: true,
+    titleGroup: {
+      format: "kd-radar-title-group-v1", queryVersion: "title-group-query-v1",
+      queryKey: "star wars", displayName: "Star Wars",
+      members: [
+        { targetId: "imdb:tt0076759", targetType: "work", title: "Star Wars", year: 1977 },
+        { targetId: "imdb:tt12345678", targetType: "work", title: "Star Wars: Starfighter", year: 2027 },
+      ],
     },
+  };
+  const starfighterEvent = {
+    eventId: "00000000-0000-4000-8000-000000000021",
+    eventVersionId: "00000000-0000-4000-8000-000000000022",
+    targetId: "imdb:tt12345678",
+    title: "Star Wars: Starfighter",
+    eventType: "kinostart_at",
+    date: "2027-05-26",
+    region: "AT",
+    platform: "-",
+    verificationStatus: "confirmed",
+    evidence: [],
+  };
+  const targetFoundState = upsertGuestRadarSubscription(createEmptyLocalRadar(), {
+    target: starWarsTarget,
     now,
   }).state;
+  check("Abgeleiteter Reihenfund bindet über die starke Mitglieds-ID eindeutig an das Radarziel", () => {
+    assert.equal(radarSubscriptionForEvent(starfighterEvent, targetFoundState.subscriptions)?.title, "Star Wars");
+    assert.equal(radarSubscriptionForEvent({ ...starfighterEvent, targetId: "imdb:tt99999999" }, targetFoundState.subscriptions), null);
+  });
   const targetFoundUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: targetFoundState,
-    radarPilotEvents: [{
-      eventId: "00000000-0000-4000-8000-000000000021",
-      eventVersionId: "00000000-0000-4000-8000-000000000022",
-      targetId: "watchmode:462",
-      title: "Star Wars: Starfighter",
-      eventType: "kinostart_at",
-      date: "2027-05-26",
-      region: "AT",
-      platform: "-",
-      verificationStatus: "confirmed",
-      evidence: [],
-    }],
+    radarPilotEvents: [starfighterEvent],
   });
   await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
   check("Radar trennt abgeleiteten Fund und Suchziel mit dem sichtbaren Zielbezug", () => {
-    assert.match(targetFoundUi.container.textContent, /Star Wars: Starfighter/);
-    assert.match(targetFoundUi.container.textContent, /Gefunden für: Star Wars/);
+    const targets = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Meine Ziele/.test(entry.textContent));
+    const news = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
+      .find((entry) => /Tagesaktuelle Neuigkeiten/.test(entry.textContent));
+    assert.match(targets.textContent, /Star Wars/);
+    assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
+    assert.match(news.textContent, /Star Wars: Starfighter/);
+    assert.match(news.textContent, /Gefunden für: Star Wars/);
   });
   await targetFoundUi.cleanup();
+
+  const targetFoundReload = decodeLocalRadar(JSON.stringify(targetFoundState), { authority: "guest" });
+  const targetFoundReloadUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: targetFoundReload.state, radarPilotEvents: [starfighterEvent],
+  });
+  await act(async () => { button(targetFoundReloadUi.container, "Radar").click(); await tick(); });
+  check("Reihen-Suchziel und abgeleiteter Fund bleiben nach Reload getrennt", () => {
+    assert.match(targetFoundReloadUi.container.textContent, /Gefunden für: Star Wars/);
+    assert.match(targetFoundReloadUi.container.textContent, /Star Wars: Starfighter/);
+  });
+  await targetFoundReloadUi.cleanup();
+
+  const cageIdentity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
+  const cageOperationId = "10000000-0000-4000-8000-000000000099";
+  const cageQueued = queueAccountPersonRadarChange(createEmptyLocalRadar({ authority: "account-cache" }), {
+    operationId: cageOperationId, action: "upsert", identity: cageIdentity,
+    targetId: "person:wikidata:Q42869:actor", now,
+  });
+  assert.equal(cageQueued.ok, true);
+  let cageSyncCalls = 0;
+  const cageUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: cageQueued.state, syncStatus: "ready",
+    onRadarPilotSync: async () => { cageSyncCalls += 1; },
+  });
+  await act(async () => { button(cageUi.container, "Radar").click(); await tick(); });
+  check("Normale Nicolas-Cage-Outbox zeigt keinen irreführenden Bestätigungsbanner", () => {
+    assert.equal(radarSyncProblem(cageQueued.state.outbox, "ready"), null);
+    assert.doesNotMatch(cageUi.container.textContent, /Eine Änderung wartet noch auf Bestätigung/);
+    assert.doesNotMatch(cageUi.container.textContent, /nicht synchronisieren/);
+  });
+  await cageUi.render({
+    ...baseProps, accountMode: true, radarState: cageQueued.state, syncStatus: "pending",
+    onRadarPilotSync: async () => { cageSyncCalls += 1; },
+  });
+  check("Echter Sync-Fehler bleibt sichtbar und erneut ausführbar", () => {
+    assert.match(cageUi.container.textContent, /Radar konnte die Änderung nicht synchronisieren/);
+    assert.ok(button(cageUi.container, "Erneut synchronisieren"));
+  });
+  await act(async () => { button(cageUi.container, "Erneut synchronisieren").click(); await tick(); });
+  assert.equal(cageSyncCalls, 1);
+  const cageAcked = acknowledgeAccountRadarPilotSubscription(cageQueued.state, cageOperationId, {
+    operationId: cageOperationId, targetId: "person:wikidata:Q42869:actor",
+    status: "active", revision: 1, checksum,
+  });
+  assert.equal(cageAcked.ok, true);
+  const cageReload = decodeLocalRadar(JSON.stringify(cageAcked.state), { authority: "account-cache" });
+  await cageUi.render({
+    ...baseProps, accountMode: true, radarState: cageReload.state, syncStatus: "ready",
+    onRadarPilotSync: async () => { cageSyncCalls += 1; },
+  });
+  check("Bestätigte Personen-Outbox ist nach Reload leer und Nicolas Cage bleibt Ziel", () => {
+    assert.equal(cageReload.state.outbox.length, 0);
+    assert.match(cageUi.container.textContent, /Nicolas Cage/);
+    assert.doesNotMatch(cageUi.container.textContent, /Bestätigung|nicht synchronisieren/);
+  });
+  await cageUi.cleanup();
 
   const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
   const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];

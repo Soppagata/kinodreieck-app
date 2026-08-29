@@ -973,6 +973,70 @@ test("Entdecken zeigt den eingebetteten providerfreien Pool ohne Fremdnetz kompa
   await keineDokumentUeberbreite(page);
 });
 
+test("Radar trennt Ziel und Fund und behandelt die Outbox über Reload fail-closed", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await blockiereFremdnetz(page);
+  await seedAppMitDarstellung(page);
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const {
+      acknowledgeAccountRadarPilotSubscription,
+      createEmptyLocalRadar,
+      decodeLocalRadar,
+      queueAccountPersonRadarChange,
+      upsertGuestRadarSubscription,
+    } = await import("/src/lib/localEventRadar.js");
+    const { radarSubscriptionForEvent, radarSyncProblem } = await import("/src/lib/entdeckenUi.js");
+    const now = "2026-08-29T10:00:00.000Z";
+    const target = {
+      targetId: "title-group:v1:star-wars", targetType: "franchise", targetStatus: "active",
+      title: "Star Wars", canonical: true,
+      titleGroup: {
+        format: "kd-radar-title-group-v1", queryVersion: "title-group-query-v1",
+        queryKey: "star wars", displayName: "Star Wars",
+        members: [
+          { targetId: "imdb:tt0076759", targetType: "work", title: "Star Wars", year: 1977 },
+          { targetId: "imdb:tt12345678", targetType: "work", title: "Star Wars: Starfighter", year: 2027 },
+        ],
+      },
+    };
+    const targetState = upsertGuestRadarSubscription(createEmptyLocalRadar(), { target, now }).state;
+    const targetReload = decodeLocalRadar(JSON.stringify(targetState), { authority: "guest" });
+    const event = { targetId: "imdb:tt12345678", title: "Star Wars: Starfighter" };
+    const bound = radarSubscriptionForEvent(event, targetReload.state.subscriptions);
+
+    const operationId = "10000000-0000-4000-8000-000000000099";
+    const personTargetId = "person:wikidata:Q42869:actor";
+    const queued = queueAccountPersonRadarChange(createEmptyLocalRadar({ authority: "account-cache" }), {
+      operationId, action: "upsert", targetId: personTargetId, now,
+      identity: { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true },
+    });
+    const normalProblem = radarSyncProblem(queued.state.outbox, "ready");
+    const failedProblem = radarSyncProblem(queued.state.outbox, "pending");
+    const acked = acknowledgeAccountRadarPilotSubscription(queued.state, operationId, {
+      operationId, targetId: personTargetId, status: "active", revision: 1, checksum: "a".repeat(64),
+    });
+    const personReload = decodeLocalRadar(JSON.stringify(acked.state), { authority: "account-cache" });
+    return {
+      targetTitle: bound?.title || null,
+      foundTitle: event.title,
+      normalProblem,
+      failedProblem,
+      reloadOutbox: personReload.state.outbox.length,
+      reloadPersonCount: personReload.state.personSubscriptions.length,
+    };
+  });
+  expect(result).toEqual({
+    targetTitle: "Star Wars",
+    foundTitle: "Star Wars: Starfighter",
+    normalProblem: null,
+    failedProblem: { kind: "sync", count: 1, retryable: true },
+    reloadOutbox: 0,
+    reloadPersonCount: 1,
+  });
+  await keineDokumentUeberbreite(page);
+});
+
 test("Pilot-Quellen-Links umfließen mobil ohne Dokumentüberbreite", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await blockiereFremdnetz(page);

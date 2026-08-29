@@ -218,6 +218,40 @@ export function localLibraryProjection(master) {
   })));
 }
 
+/* Ein Radarereignis beschreibt den gefundenen Titel. Das sichtbare Suchziel
+   bleibt dagegen die aktive Subscription. Starke IDs gewinnen; bei einer
+   Titelgruppe darf nur eine exakt enthaltene Werk-ID den Fund zurück auf das
+   Gruppenziel abbilden. Ohne eindeutige Bindung wird nichts geraten. */
+export function radarSubscriptionForEvent(event, subscriptions = []) {
+  const rows = list(subscriptions).filter((entry) => entry?.status === "active");
+  const directSource = text(event?.sourceTargetKey);
+  const sourceTargetId = directSource.match(/^(?:work|franchise):(.+)$/)?.[1] || null;
+  const matches = rows.filter((entry) => (
+    entry.targetId === event?.targetId
+    || (sourceTargetId && entry.targetId === sourceTargetId)
+    || (entry.targetType === "franchise" && list(entry.titleGroup?.members)
+      .some((member) => member?.targetId === event?.targetId))
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/* Eine normale, kurzlebige Outbox ist kein Nutzerfehler und braucht keinen
+   Bestätigungsbanner. Sichtbar wird sie nur zusammen mit einem belegten
+   Sync-Fehler; dann kann der vorhandene Syncpfad gezielt erneut angestoßen
+   werden. Fachlich abgelehnte Operationen bleiben davon getrennt sichtbar. */
+export function radarSyncProblem(outbox = [], syncStatus = "idle") {
+  const rows = list(outbox);
+  const rejected = rows.filter((entry) => entry?.status === "rejected").length;
+  if (rejected > 0 || syncStatus === "rejected") {
+    return Object.freeze({ kind: "rejected", count: Math.max(1, rejected), retryable: false });
+  }
+  const pending = rows.filter((entry) => entry?.status === "pending").length;
+  if (pending > 0 && ["pending", "pilot-unavailable"].includes(syncStatus)) {
+    return Object.freeze({ kind: "sync", count: pending, retryable: true });
+  }
+  return null;
+}
+
 export function rankLocalEntdeckenRecommendations({
   streamingEntdecken, streamingKnown = null, profile, master, useLibrary = true,
   selectedServices = [], entdeckenStatus = {},
