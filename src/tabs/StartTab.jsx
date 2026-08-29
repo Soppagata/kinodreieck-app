@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { T } from "../lib/tokens.js";
 import { useSyncStatus } from "../components/SyncStatusChip.jsx";
 import { formatiereTermin } from "../lib/programm.js";
@@ -7,6 +7,8 @@ import { Wochenplan } from "../components/Wochenplan.jsx";
 import { beobachteteSerien, neueStaffeln } from "../lib/staffeln.js";
 import { findeKinoPinImKatalog, folgenstandText } from "../lib/wochenplan.js";
 import { mustwatchVerfuegbarkeit, sortiereMustwatch } from "../lib/mustwatch.js";
+import { localRecommendationCandidates, webDiscoveryFeedCards } from "../lib/entdeckenUi.js";
+import { resolveEntdeckenPins } from "../lib/entdeckenPins.js";
 
 /* ================= START =================
    Das Dashboard ist die einzige Startansicht. Alle Module entstehen
@@ -28,7 +30,7 @@ const pinSortWert = (p) => {
    Modul-Reihenfolge und -Zuschnitt: Entscheidung Max 18.07.2026.
    Datenquellen (alles vorhandener App-State, keine neuen Fetches, kein LLM):
    · Vertrauens-Zeile: useSyncStatus (Muster SyncStatusChip) + progStand + streamingBekannt
-   · Pinboard & Radar: kinoPins + ausdrücklich beobachtete Serien; Updates zuerst
+   · Pinboard & Radar: Entdecken-Titel + kinoPins + ausdrücklich beobachtete Serien
    · Deine Woche:      persönliche Reminder + Kinopins + passende Kinovorschläge,
                        rollierende sieben Tage
    · Must-Watch:       mustwatch (oberste 5 = Listenreihenfolge)
@@ -117,6 +119,7 @@ function VertrauensZeile({ progStand, streamingBekannt, programmInfo = null, str
 
 function StartDashboard({
   kinoPins = [], merkliste = [], onNavigiere, zeigeEintrag,
+  entdeckenPins = [], webDiscoveryFeed = null, onEntdeckenPinsBereinigen, onSpringeZuEntdecken,
   kinoMatches = { matched: [] }, mustwatch = [], mwKandidaten = null,
   streamingEntdecken = null, streamingBekannt = null, progStand = null,
   programmInfo = null, streamingInfo = null, onHilfe,
@@ -197,6 +200,27 @@ function StartDashboard({
     ...((((streamingEntdecken || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "entdecken" }))),
     ...((((streamingBekannt || {}).titel) || []).map((titel) => ({ ...titel, wochen_bereich: "programm" }))),
   ], [streamingBekannt, streamingEntdecken]);
+  const empfehlungsKatalog = useMemo(() => localRecommendationCandidates(streamingEntdecken, {
+    streamingKnown: streamingBekannt, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
+  }), [entdeckenStatus, streamingBekannt, streamingEntdecken]);
+  const aktuelleEmpfehlungen = useMemo(() => webDiscoveryFeedCards({
+    webDiscoveryFeed, catalogCandidates: empfehlungsKatalog,
+  }), [empfehlungsKatalog, webDiscoveryFeed]);
+  const entdeckenPinAufloesung = useMemo(() => resolveEntdeckenPins(entdeckenPins, {
+    recommendations: aktuelleEmpfehlungen,
+    streaming: serienKatalog,
+    cinema: kinoKatalog.map((entry) => ({ ...entry, type: "film" })),
+    recommendationReady: !!webDiscoveryFeed,
+    streamingReady: !!streamingEntdecken && !!streamingBekannt,
+    cinemaReady: !!progStand,
+  }), [aktuelleEmpfehlungen, entdeckenPins, kinoKatalog, progStand, serienKatalog,
+    streamingBekannt, streamingEntdecken, webDiscoveryFeed]);
+  useEffect(() => {
+    if (entdeckenPinAufloesung.discardedPinIds.length) {
+      onEntdeckenPinsBereinigen?.(entdeckenPinAufloesung.discardedPinIds);
+    }
+  }, [entdeckenPinAufloesung.discardedPinIds, onEntdeckenPinsBereinigen]);
+  const titelPins = entdeckenPinAufloesung.resolved;
   const serienRadar = useMemo(() => neueStaffeln(serienKatalog, entdeckenStatus), [serienKatalog, entdeckenStatus]);
   const serienRadarMap = useMemo(() => new Map(serienRadar.map((hinweis) => [String(hinweis.watchmode_id), hinweis])), [serienRadar]);
   const serienPins = useMemo(() => beobachteteSerien(entdeckenStatus, serienKatalog)
@@ -240,10 +264,25 @@ function StartDashboard({
       <span className="kd-dash-strip" aria-hidden="true" />
 
       <div className="kd-dash-grid">
-        {/* ---- 1 · Gemeinsames Pinboard: Serien-Updates vor Kinoterminen ---- */}
+        {/* ---- 1 · Gemeinsames Pinboard: Titelpins, Serien-Updates, Kinotermine ---- */}
         <Modul name="Pinboard & Serienradar" ziel="streaming" linkLabel="Streaming" onNavigiere={onNavigiere} tour="pinboard">
-          {serienPins.length > 0 || pins.length > 0 ? (
+          {titelPins.length > 0 || serienPins.length > 0 || pins.length > 0 ? (
             <div className="kd-dash-karte kd-pinboard-radar">
+              {titelPins.map((pin) => (
+                <button key={`entdecken-${pin.pinId}`} className="kd-dash-zeile kd-pinboard-titel" onClick={() => {
+                  if (pin.destination === "streaming") onSpringeZuStreaming?.(pin.target);
+                  else if (pin.destination === "kino") onSpringeZuKino?.(pin.target);
+                  else onSpringeZuEntdecken?.(pin.target);
+                }}>
+                  <span className="kd-pinboard-kino-titel">
+                    <span className="kd-pinboard-kino-marker" aria-hidden="true">◆</span>
+                    <span className="kd-pinboard-kino-name">{pin.title}
+                      {pin.year ? <span className="kd-pinboard-kino-jahr"> ({pin.year})</span> : null}
+                    </span>
+                  </span>
+                  <span className="kd-pinboard-kino-meta">{pin.label}</span>
+                </button>
+              ))}
               {serienPins.map((serie) => {
                 const hinweis = serie.radar;
                 const kommendeStaffel = !hinweis && serie.naechste_staffel_am && new Date(serie.naechste_staffel_am).getTime() >= Date.now();
@@ -279,7 +318,7 @@ function StartDashboard({
               ))}
             </div>
           ) : (
-            <p className="kd-dash-leer">Noch leer. Kinotermine pinnst du mit ◇; Serien setzt du im ausgeklappten Streaming-Eintrag auf ⚑ Beobachten.</p>
+            <p className="kd-dash-leer">Noch leer. Titel pinnst du in Entdecken mit dem Pin-Symbol; Kinotermine mit ◇ und Serien mit ⚑ Beobachten.</p>
           )}
         </Modul>
 

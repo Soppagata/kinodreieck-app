@@ -290,7 +290,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-sektionskopf h2 { margin:2px 0 0; color:var(--leinwand,#ece8df); font:700 25px 'Barlow Condensed',sans-serif; letter-spacing:.04em; text-transform:uppercase; }
 .kd-entdecken-sektionskopf p { margin:0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.4; text-align:right; }
 .kd-entdecken-karten { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { min-width:0; padding:14px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
+.kd-entdecken-hub-karte,.kd-entdecken-panel,.kd-entdecken-parked,.kd-entdecken-proposal { position:relative; min-width:0; padding:14px; border:1px solid var(--saalHoch,#3c3742); border-radius:9px; background:var(--saal,#17151a); }
 .kd-entdecken-hub-karte h3,.kd-entdecken-panel h3,.kd-entdecken-parked h3 { margin:5px 0 8px; color:var(--leinwand,#ece8df); font:700 22px 'Barlow Condensed',sans-serif; letter-spacing:.03em; text-transform:uppercase; }
 .kd-entdecken-titellink { color:inherit; text-decoration-color:rgba(227,166,59,.58); text-decoration-thickness:1px; text-underline-offset:3px; }
 .kd-entdecken-titellink:hover,.kd-entdecken-titellink:focus-visible { color:var(--wolfram,#e3a63b); text-decoration-color:currentColor; }
@@ -299,6 +299,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-hub-karte ul { min-height:45px; margin:8px 0 12px; padding-left:19px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
 .kd-entdecken-hub-karte small,.kd-entdecken-panel small { display:block; color:var(--rauch,#948fa0); font:10px/1.55 'Space Mono',monospace; }
 .kd-entdecken-hub-karte button { margin-top:13px; }
+.kd-entdecken-auswahlkarten { gap:14px; }
+.kd-entdecken-auswahlkarte { padding:17px 52px 17px 17px; border-color:color-mix(in srgb,var(--wolfram,#e3a63b) 46%,var(--leinwandTief,#dfdacd)); background:var(--leinwand,#ece8df); color:var(--tinte,#1c1a1e); box-shadow:0 4px 16px rgba(0,0,0,.2); }
+.kd-entdecken-auswahlkarte h3 { color:var(--tinte,#1c1a1e); font-family:'Fraunces',Georgia,serif; font-size:21px; line-height:1.08; text-transform:none; }
+.kd-entdecken-auswahlkarte .kd-entdecken-kicker { color:color-mix(in srgb,var(--wolfram,#e3a63b) 74%,var(--tinte,#1c1a1e)); }
+.kd-entdecken-auswahlkarte .kd-entdecken-grund { color:var(--tinte,#1c1a1e); }
+.kd-entdecken-auswahlkarte small { color:color-mix(in srgb,var(--rauch,#948fa0) 74%,var(--tinte,#1c1a1e)); }
+.kd-entdecken-auswahlkarte .kd-entdecken-titellink { color:inherit; }
+.kd-entdecken-pin { display:grid; place-items:center; width:36px; height:36px; min-width:36px; min-height:36px; margin:0; padding:0; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 62%,transparent); border-radius:50%; background:transparent; color:var(--rauch,#948fa0); cursor:pointer; }
+.kd-entdecken-pin:hover,.kd-entdecken-pin:focus-visible,.kd-entdecken-pin.aktiv { border-color:var(--wolfram,#e3a63b); color:var(--wolfram,#e3a63b); }
+.kd-entdecken-auswahlkarte>.kd-entdecken-pin { position:absolute; top:12px; right:12px; color:color-mix(in srgb,var(--rauch,#948fa0) 70%,var(--tinte,#1c1a1e)); }
+.kd-entdecken-auswahlkarte>.kd-entdecken-pin.aktiv { color:color-mix(in srgb,var(--wolfram,#e3a63b) 76%,var(--tinte,#1c1a1e)); }
 .kd-entdecken-quellenlink { display:inline-block; margin-top:2px; color:var(--wolfram,#e3a63b); font:600 11px 'Space Grotesk',sans-serif; }
 .kd-entdecken-leer { margin:9px 0; color:var(--rauch,#948fa0); font-size:13px; line-height:1.55; }
 .kd-entdecken-leer.gross { padding:20px; border:1px dashed var(--rauch,#948fa0); border-radius:8px; text-align:center; }
@@ -308,7 +319,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-katalogzahlen dt { color:var(--rauch,#948fa0); font:700 9px 'Space Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
 .kd-entdecken-katalogzahlen dd { margin:3px 0 0; color:var(--leinwand,#ece8df); font:700 18px 'Barlow Condensed',sans-serif; letter-spacing:.025em; }
 .kd-entdecken-katalogwahrheit>p { margin:10px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.5; }
-.kd-entdecken-weitere { margin-top:22px; padding-top:16px; border-top:1px solid rgba(148,143,160,.3); }
+.kd-entdecken-weitere { margin-top:34px; padding-top:22px; border-top:3px solid color-mix(in srgb,var(--wolfram,#e3a63b) 70%,var(--saalHoch,#3c3742)); }
+.kd-entdecken-weitere>.kd-entdecken-sektionskopf { margin-bottom:14px; padding:11px 13px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:0 7px 7px 0; background:color-mix(in srgb,var(--saalHoch,#3c3742) 72%,transparent); }
+.kd-entdecken-beliebtliste { display:grid; grid-template-columns:minmax(0,1fr); border-block:1px solid color-mix(in srgb,var(--rauch,#948fa0) 28%,transparent); }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:11px 8px; border:0; border-radius:0; background:transparent; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral+.kd-entdecken-neutral { border-top:1px solid color-mix(in srgb,var(--rauch,#948fa0) 24%,transparent); }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral h3 { margin:3px 0 2px; font-size:18px; line-height:1.12; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral p { margin:2px 0 3px; font-size:12px; line-height:1.35; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral small { font-size:9px; line-height:1.4; }
+.kd-entdecken-listeninhalt { min-width:0; }
+.kd-entdecken-listenaktionen { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
+.kd-entdecken-listenaktionen .kd-entdecken-pin,.kd-entdecken-listenaktionen .kd-entdecken-sekundaer { margin:0; }
 .kd-entdecken-mehr { display:block; min-height:44px; margin:14px auto 0; border-color:var(--rauch,#948fa0); color:var(--leinwandTief,#dfdacd); }
 .kd-entdecken-einleitung.kompakt { margin-bottom:14px; }
 .kd-entdecken-neutral p { margin:7px 0 10px; }
@@ -387,6 +408,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
   .kd-entdecken-tabs .kd-entdecken-verwalten { flex:0 0 44px; width:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-sektionskopf { align-items:flex-start; flex-direction:column; gap:4px; }.kd-entdecken-sektionskopf p { text-align:left; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-radar-add-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
+  .kd-entdecken-auswahlkarte { padding:15px 56px 15px 15px; }.kd-entdecken-auswahlkarte>.kd-entdecken-pin { top:10px; right:10px; }.kd-entdecken-pin { width:44px; height:44px; min-width:44px; min-height:44px; }.kd-entdecken-weitere { margin-top:30px; }.kd-entdecken-beliebtliste .kd-entdecken-neutral { gap:8px; padding:11px 2px; }.kd-entdecken-listenaktionen { align-self:start; }.kd-entdecken-listenaktionen .kd-entdecken-sekundaer { min-height:44px; padding:6px 8px; font-size:11px; }
   .kd-entdecken-layer { align-items:flex-end; padding:0; }.kd-entdecken-dialog { width:100%; height:100dvh; max-height:100dvh; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border-inline:0; border-bottom:0; border-radius:0; }
   .kd-entdecken-manage-grid,.kd-entdecken-katalogzahlen { grid-template-columns:1fr; }.kd-entdecken-verwalten-liste li { align-items:flex-start; flex-direction:column; }.kd-entdecken-verwalten-liste li>div { justify-content:flex-start; }
   .kd-entdecken-dialog-aktionen { position:sticky; bottom:calc(-20px - env(safe-area-inset-bottom)); margin:16px -16px calc(-20px - env(safe-area-inset-bottom)); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--saalHoch,#211e26); border-top:1px solid var(--saal,#3c3742); }
@@ -1146,13 +1168,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    Folgenstände bekommen die stärkste visuelle Priorität. */
 .kd-pinboard-radar { cursor:default; }
 .kd-pinboard-serie.ist-neu { margin-inline:-14px; padding-inline:14px; background:color-mix(in srgb,var(--kd-wolfram) 16%,transparent); }
-.kd-pinboard-ziel,.kd-pinboard-kino { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
+.kd-pinboard-ziel,.kd-pinboard-kino,.kd-pinboard-titel { appearance:none; border:0; background:none; color:inherit; cursor:pointer; text-align:left; }
 .kd-pinboard-ziel { display:flex; flex:1 1 auto; min-width:0; flex-direction:column; gap:2px; padding:0; }
-.kd-pinboard-ziel:hover .kd-dash-ztitel,.kd-pinboard-kino:hover .kd-dash-ztitel { color:var(--kd-wolfram); }
+.kd-pinboard-ziel:hover .kd-dash-ztitel,.kd-pinboard-kino:hover .kd-dash-ztitel,.kd-pinboard-titel:hover .kd-pinboard-kino-name { color:var(--kd-wolfram); }
 .kd-pinboard-meta { color:var(--kd-rauch); font:10px 'Space Mono',monospace; }
 .kd-dash-badge--neu { color:var(--kd-tinte); border-color:var(--kd-wolfram); background:var(--kd-wolfram); }
 .kd-pinboard-bestaetigen { flex:0 0 auto; padding:5px 7px; border:1px solid var(--kd-rauch); border-radius:4px; background:transparent; color:var(--kd-tinte); cursor:pointer; font:600 9px 'Space Mono',monospace; }
-.kd-pinboard-kino { display:grid; width:100%; min-width:0; grid-template-columns:minmax(0,1fr); gap:4px; padding:9px 0; }
+.kd-pinboard-kino,.kd-pinboard-titel { display:grid; width:100%; min-width:0; grid-template-columns:minmax(0,1fr); gap:4px; padding:9px 0; }
 .kd-pinboard-kino-titel { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:7px; min-width:0; }
 .kd-pinboard-kino-marker { color:var(--kd-tinte); font:17px/1.18 'Barlow Condensed',sans-serif; }
 .kd-pinboard-kino-name { min-width:0; overflow:hidden; overflow-wrap:break-word; word-break:normal;

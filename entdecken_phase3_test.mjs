@@ -23,6 +23,12 @@ import {
   webDiscoveryCandidates,
 } from "./src/lib/entdeckenUi.js";
 import {
+  createEntdeckenPin,
+  isEntdeckenPinned,
+  resolveEntdeckenPins,
+  toggleEntdeckenPin,
+} from "./src/lib/entdeckenPins.js";
+import {
   applyPersonRadarCheckResult,
   acknowledgeAccountRadarPilotSubscription,
   createEmptyLocalRadar,
@@ -92,6 +98,63 @@ check("Person und Reihe erscheinen nur als kanonische, typisierte ID-Treffer", (
   assert.deepEqual(franchise.entries.map((entry) => [entry.category, entry.stableId]), [
     ["Reihe", "title-group:v1:star-wars"],
   ]);
+});
+
+const pinTitel = { targetId: "watchmode:4711", watchmodeId: 4711, title: "Pin Film", year: 2026, type: "film" };
+const pin = createEntdeckenPin(pinTitel, 1234);
+check("Empfehlungspin schaltet mit stabilem, barrierefrei abfragbarem Zustand an und aus", () => {
+  const an = toggleEntdeckenPin([], pinTitel, 1234);
+  assert.equal(an.length, 1);
+  assert.equal(isEntdeckenPinned(an, pinTitel), true);
+  assert.deepEqual(toggleEntdeckenPin(an, pinTitel, 1234), []);
+});
+check("Empfehlungspin bleibt beim Refresh über den eindeutigen Streaming-Eintrag erreichbar", () => {
+  const result = resolveEntdeckenPins([pin], {
+    recommendations: [],
+    streaming: [{ watchmode_id: 4711, titel: "Pin Film", jahr: 2026, typ: "movie", dienste: ["Testdienst"] }],
+    cinema: [], recommendationReady: true, streamingReady: true, cinemaReady: true,
+  });
+  assert.equal(result.resolved[0]?.destination, "streaming");
+  assert.equal(result.resolved[0]?.target.ref, 4711);
+  assert.deepEqual(result.discardedPinIds, []);
+});
+check("Eine neue Feed-Record-ID desselben eindeutigen Titels löst den Pin weiterhin nach Entdecken auf", () => {
+  const sourcePin = createEntdeckenPin({
+    title: "Feed Pin", year: 2026, type: "film", sourceId: "quelle:a", sourceItemId: "alt",
+  }, 1234);
+  const result = resolveEntdeckenPins([sourcePin], {
+    recommendations: [{
+      title: "Feed Pin", year: 2026, type: "film", sourceId: "quelle:a", sourceItemId: "neu",
+    }], recommendationReady: true,
+  });
+  assert.equal(result.resolved[0]?.destination, "entdecken");
+  assert.deepEqual(result.discardedPinIds, []);
+});
+check("Empfehlungspin fällt nach dem Refresh eindeutig auf den Kinoprogramm-Eintrag zurück", () => {
+  const cinemaPin = createEntdeckenPin({ title: "Kino Pin", year: 2026, type: "film" }, 1234);
+  const result = resolveEntdeckenPins([cinemaPin], {
+    recommendations: [], streaming: [],
+    cinema: [{ titel: "Kino Pin", jahr: 2026, type: "film", programm_ref: "film-at-17" }],
+    recommendationReady: true, streamingReady: true, cinemaReady: true,
+  });
+  assert.equal(result.resolved[0]?.destination, "kino");
+  assert.equal(result.resolved[0]?.target.programm_ref, "film-at-17");
+});
+check("Nicht mehr vorhandene und mehrdeutige Pins verschwinden still statt geraten zu werden", () => {
+  const stale = resolveEntdeckenPins([pin], {
+    recommendations: [], streaming: [], cinema: [],
+    recommendationReady: true, streamingReady: true, cinemaReady: true,
+  });
+  assert.deepEqual(stale.discardedPinIds, [pin.pinId]);
+  const ambiguousPin = createEntdeckenPin({ title: "Doppel", year: 2026, type: "film" }, 1234);
+  const ambiguous = resolveEntdeckenPins([ambiguousPin], {
+    recommendations: [], streaming: [
+      { watchmode_id: 1, titel: "Doppel", jahr: 2026, typ: "movie" },
+      { watchmode_id: 2, titel: "Doppel", jahr: 2026, typ: "movie" },
+    ], cinema: [], recommendationReady: true, streamingReady: true, cinemaReady: true,
+  });
+  assert.deepEqual(ambiguous.resolved, []);
+  assert.deepEqual(ambiguous.discardedPinIds, [ambiguousPin.pinId]);
 });
 
 const recommendationInput = {
@@ -345,14 +408,16 @@ try {
     stdin: {
       contents: [
         'export { EntdeckenTab } from "./src/tabs/EntdeckenTab.jsx";',
+        'export { StartTab } from "./src/tabs/StartTab.jsx";',
         'export { RadarSubscriptionPreview } from "./src/components/RadarSubscriptionPreview.jsx";',
       ].join("\n"),
       loader: "js", resolveDir: wurzel,
     },
     bundle: true, format: "esm", outfile: output, jsx: "automatic", target: "es2022", logLevel: "warning",
+    define: { "import.meta.env.BASE_URL": '"/"' },
     external: ["react", "react-dom", "react/jsx-runtime", "react-dom/client"],
   });
-  const { EntdeckenTab, RadarSubscriptionPreview } = await import(output);
+  const { EntdeckenTab, StartTab, RadarSubscriptionPreview } = await import(output);
 
   dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
   for (const name of [
@@ -460,6 +525,8 @@ try {
     const beforeFurther = [...personal.children].filter((element) => element.matches(".kd-entdecken-karten"))[0];
     assert.match(personal?.textContent || "", /Persönliche Passung/);
     assert.equal(beforeFurther?.querySelectorAll(".kd-entdecken-hub-karte").length, 6);
+    assert.ok(beforeFurther?.classList.contains("kd-entdecken-auswahlkarten"));
+    assert.ok(beforeFurther?.querySelector(".kd-entdecken-auswahlkarte"));
     assert.doesNotMatch(personal?.textContent || "", /Kataloggröße|Aktuelle Treffermenge|Kein LLM|Profil-Write/);
     assert.ok([...beforeFurther.querySelectorAll(".kd-entdecken-hub-karte")]
       .every((card) => !card.querySelector("ul") && /Profil:/.test(card.textContent)));
@@ -542,10 +609,13 @@ try {
     assert.equal(versionedRecommendations.popularPool.length, 50);
   });
 
-  const versionedUi = await mount(EntdeckenTab, {
+  let angepinnterEintrag = null;
+  const versionedProps = {
     ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: { region: "AT", titel: [] },
     selectedServices: [], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, calendarDay: "2026-08-29",
-  });
+    recommendationPins: [], onRecommendationPinToggle(entry) { angepinnterEintrag = entry; },
+  };
+  const versionedUi = await mount(EntdeckenTab, versionedProps);
   await act(async () => { await tick(); await tick(); });
   const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
   const expandVersioned = button(versionedSection, "Weitere 44 Titel anzeigen");
@@ -556,6 +626,33 @@ try {
     assert.match(versionedSection.textContent, /Prime-Video|Disney\+|Apple-TV\+/);
     assert.match(versionedSection.textContent, /Stand/);
   });
+  const ersterPinKnopf = versionedSection.querySelector('button[aria-label$="am Pinboard anpinnen"]');
+  await act(async () => { ersterPinKnopf.click(); await tick(); });
+  const gesetztePins = toggleEntdeckenPin([], angepinnterEintrag, 1234);
+  await versionedUi.render({ ...versionedProps, recommendationPins: gesetztePins });
+  check("Echter Mock-Nutzerweg ersetzt Radar durch einen kompakten Pin mit gedrücktem Zustand", () => {
+    assert.ok(angepinnterEintrag);
+    assert.equal(versionedUi.container.querySelector(`button[aria-label="${angepinnterEintrag.title} vom Pinboard lösen"]`)?.getAttribute("aria-pressed"), "true");
+    assert.doesNotMatch(versionedUi.container.textContent, /Ins Radar/i);
+    assert.ok(versionedUi.container.querySelector(".kd-entdecken-beliebtliste"));
+  });
+  let pinboardSprung = null;
+  const startUi = await mount(StartTab, {
+    entdeckenPins: gesetztePins, webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+    streamingEntdecken: { region: "AT", titel: [] }, streamingBekannt: { region: "AT", titel: [] },
+    progStand: Date.now(), kinoMatches: { matched: [], rest: [] },
+    wochenplan: { version: 1, eintraege: [] }, onWochenplanAendern() {},
+    onSpringeZuEntdecken(target) { pinboardSprung = target; }, onEntdeckenPinsBereinigen() {},
+  });
+  await act(async () => { await tick(); });
+  const pinboardEintrag = startUi.container.querySelector(".kd-pinboard-titel");
+  await act(async () => { pinboardEintrag.click(); await tick(); });
+  check("Der Pin erscheint im bestehenden Start-Pinboard und verweist zurück auf Entdecken", () => {
+    assert.match(pinboardEintrag.textContent, new RegExp(angepinnterEintrag.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(pinboardEintrag.textContent, /Entdecken/);
+    assert.equal(pinboardSprung?.pinId, gesetztePins[0].pinId);
+  });
+  await startUi.cleanup();
   await act(async () => { expandVersioned.click(); await tick(); });
   check("Ausgeklappt sind alle 50 Karten mit HTTPS-Quelllink sichtbar", () => {
     const cards = [...versionedSection.querySelectorAll(".kd-entdecken-neutral")];

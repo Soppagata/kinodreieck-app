@@ -105,6 +105,7 @@ import { GlobalSearchBar } from "./components/GlobalSearchBar.jsx";
 import { GlobalErrorQueue } from "./components/GlobalErrorQueue.jsx";
 import { RadarSubscriptionPreview } from "./components/RadarSubscriptionPreview.jsx";
 import { normalisiereWochenplan, LEERER_WOCHENPLAN } from "./lib/wochenplan.js";
+import { useEntdeckenPins } from "./controllers/useEntdeckenPins.js";
 import { bestaetigeStaffel, initialisiereStaffelstaende, serienBeobachten } from "./lib/staffeln.js";
 import { seriesWatchService } from "./services/seriesWatch.js";
 import { useVokabularController } from "./controllers/useVokabularController.js";
@@ -316,11 +317,9 @@ export default function App() {
   /* ---- Eigenes Suche-Vokabular: [{wort, genres[], tags[]}] ---- */
   const { vokabular, setVokabular, saveVokabular } = useVokabularController({ setErr });
 
-  /* ---- Kinotermin-Pins ----
-     Pin = {t, j, z, seit} — z ist der komplette Terminstring inkl. Kino.
-     Vergangene Termine werden beim Boot aufgeräumt (Jahres-Wrap beachtet:
-     ein im Dezember gepinnter Januar-Termin gehört ins Folgejahr). */
+  /* Lokale Start-Pins: Kinotermine mit Jahres-Wrap; Entdecken-Titel werden gerätelokal gegen aktuelle Bereiche aufgelöst. */
   const [kinoPins, setKinoPins] = useState([]);
+  const { entdeckenPins, toggleRecommendationPin, bereinigeEntdeckenPins } = useEntdeckenPins();
   const wochenplanInitial = useMemo(() => {
     try { return normalisiereWochenplan(JSON.parse(localStorage.getItem(K.wochenplan) || "null")); }
     catch { return LEERER_WOCHENPLAN; }
@@ -399,7 +398,6 @@ export default function App() {
     setKinoPins(next);
     void persistPins(next);
   }, [kinoPins, persistPins]);
-
   /* ---- Entdecken-Merkliste (in den App-State geliftet, damit Streaming und
      Dashboard live synchron sind — vorher zwei getrennte localStorage-Leser).
      Struktur: {watchmode_id, titel, jahr, hinzugefuegt_am}. ---- */
@@ -1988,6 +1986,7 @@ export default function App() {
 
         {tab === "start" && bootDone && (
           <StartTab kinoPins={kinoPins} toggleKinoPin={toggleKinoPin} merkliste={merkliste} toggleMerk={toggleMerk} onNavigiere={navigiere} zeigeEintrag={springeZuFilm} onHilfe={() => setHilfeOffen(true)}
+            entdeckenPins={entdeckenPins} webDiscoveryFeed={webDiscoveryState.feed} onEntdeckenPinsBereinigen={bereinigeEntdeckenPins} onSpringeZuEntdecken={() => navigiere("blog")}
             wochenplan={wochenplan} onWochenplanAendern={persistWochenplan}
             entdeckenStatus={entdeckenStatus} onEntdeckenStatusAendern={bestaetigeSerienHinweis}
             master={master || []} onSpringeZuStreaming={springeZuStreaming} onFilmAnlegen={addFilm}
@@ -2078,6 +2077,7 @@ export default function App() {
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
             onRadarTextAdd={fuegeRadarTextHinzu}
+            recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu}
             onPersonRadarChange={aenderePersonRadar} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}
             blogProps={{

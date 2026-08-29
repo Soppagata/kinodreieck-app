@@ -161,6 +161,7 @@ export const K = {
   exportStand: "kd:export-stand",    // Export-Wächter: wann zuletzt Master/Artikel exportiert
   zeitgrenze: "kd:zeitgrenze",       // Kino-Tab: Zeitfilter für "Läuft auch" (Default 14:00)
   kinoPins: "kd:kino-pins",          // Angepinnte Kinotermine [{t,j,z,seit}] — Basis fürs Dashboard-Pinboard
+  entdeckenPins: "kd:entdecken-pins", // Geraetelokale Titelpins aus Entdecken — werden auf Start gegen aktuelle Bereiche aufgeloest
   wochenplan: "kd:wochenplan",        // Persönlicher Folgen-/Staffelkalender {version,eintraege[]}
   radar: "kd:radar",                  // Lokaler Event-Radar: Gastabos oder accountgebundener Cache/Outbox/Receipts
   autorName: "kd:autor-name",        // Teilen & Tauschen: steht in jedem Paket-Export und im KI-Prompt

@@ -3,13 +3,13 @@ import { createPortal } from "react-dom";
 import { BlogTab } from "./BlogTab.jsx";
 import { ladeProfil } from "../lib/profil.js";
 import {
-  createCatalogRadarTarget,
   createEntdeckenRecommendations,
   localCalendarDay,
   localRadarTargetLabel,
   radarSubscriptionForEvent,
   radarSyncProblem,
 } from "../lib/entdeckenUi.js";
+import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
 import { istBeobachtet, serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
@@ -150,7 +150,7 @@ function RadarSyncProblem({ problem, onRetry }) {
 function RecommendationsView({
   streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
   entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
-  onRadarPreview, onObserveToggle,
+  recommendationPins, onRecommendationPinToggle, onObserveToggle,
 }) {
   const [showAllPopular, setShowAllPopular] = useState(false);
   const selection = useMemo(() => createEntdeckenRecommendations({
@@ -191,6 +191,18 @@ function RecommendationsView({
     && webDiscoveryFeed?.refreshedOn
     ? `Stand ${new Date(`${webDiscoveryFeed.refreshedOn}T12:00:00`).toLocaleDateString("de-AT")}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
+  const pinButton = (entry) => {
+    const pinned = isEntdeckenPinned(recommendationPins, entry);
+    return <button type="button" className={`kd-entdecken-pin${pinned ? " aktiv" : ""}`}
+      aria-label={pinned ? `${entry.title} vom Pinboard lösen` : `${entry.title} am Pinboard anpinnen`}
+      aria-pressed={pinned} title={pinned ? "Vom Pinboard lösen" : "Am Pinboard anpinnen"}
+      onClick={() => onRecommendationPinToggle?.(entry)}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill={pinned ? "currentColor" : "none"}
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 4h8l-1 6 3 3v1H6v-1l3-3-1-6Z" /><path d="M12 14v6" />
+      </svg>
+    </button>;
+  };
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
     {feedNotice ? <p className="kd-entdecken-pending" role="status">{feedNotice}</p> : null}
     <div className="kd-entdecken-sektionskopf">
@@ -198,23 +210,22 @@ function RecommendationsView({
       <p>Verfügbar und noch nicht gesehen. Beste Passung zuerst.</p>
     </div>
     {profile?.beschaedigt ? <p className="kd-entdecken-warnung" role="status">Das Geschmacksprofil ist nicht lesbar. Empfehlungen bleiben vorsichtshalber leer.</p> : null}
-    {personal.length ? <div className="kd-entdecken-karten">{personal.map((entry) => {
-      const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
-      return <article key={entry.targetId} className="kd-entdecken-hub-karte">
+    {personal.length ? <div className="kd-entdecken-karten kd-entdecken-auswahlkarten">{personal.map((entry) => (
+      <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-auswahlkarte">
+        {pinButton(entry)}
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
         {titleHeading(entry)}
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
-        {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
         {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
           aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
           onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
           {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
         </button> : null}
-      </article>;
-    })}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
+      </article>
+    ))}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Aktuelle österreichische Liste</span><h2 id="kd-entdecken-weitere">Diese Woche beliebt</h2></div>
@@ -223,24 +234,27 @@ function RecommendationsView({
           : "Aktuelle belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
-      {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-karten">{visiblePopular.map((entry) => {
-        const target = createCatalogRadarTarget({ watchmodeId: entry.watchmodeId, title: entry.title, type: entry.type });
-        return <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
-          <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
-            ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
-          {titleHeading(entry)}
-          <p>{meta(entry)}</p>
-          <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
-          {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
-            rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
-          {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
-          {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
-            aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
-            onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
-            {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
-          </button> : null}
-        </article>;
-      })}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
+      {visiblePopular.length ? <div id="kd-entdecken-beliebt-karten" className="kd-entdecken-beliebtliste">{visiblePopular.map((entry) => (
+        <article key={entry.targetId} className="kd-entdecken-hub-karte kd-entdecken-neutral">
+          <div className="kd-entdecken-listeninhalt">
+            <span className="kd-entdecken-kicker">{entry.availability?.market === "cinema"
+              ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
+            {titleHeading(entry)}
+            <p>{meta(entry)}</p>
+            <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
+            {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
+              rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
+          </div>
+          <div className="kd-entdecken-listenaktionen">
+            {pinButton(entry)}
+            {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
+              aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
+              onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
+              {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
+            </button> : null}
+          </div>
+        </article>
+      ))}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
       {popularPool.length > popular.length ? <button type="button" className="kd-entdecken-mehr"
         aria-expanded={showAllPopular} aria-controls="kd-entdecken-beliebt-karten"
         onClick={() => setShowAllPopular((value) => !value)}>
@@ -391,6 +405,7 @@ export function EntdeckenTab({
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
   onObserveToggle, onRadarChange, onRadarPreview, onShareChange,
+  recommendationPins = [], onRecommendationPinToggle,
 }) {
   const [ansicht, setAnsicht] = useState(fokusId ? "meinungen" : "empfehlungen");
   const [manageOffen, setManageOffen] = useState(false);
@@ -423,7 +438,8 @@ export function EntdeckenTab({
     {ansicht === "empfehlungen" ? <RecommendationsView streamingEntdecken={streamingDiscover} streamingKnown={streamingKnown}
       master={master} profile={profile} useLibrary={useLibrary} selectedServices={selectedServices}
       entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
-      dailyVariety={dailyVariety} selectionDay={selectionDay} onRadarPreview={onRadarPreview}
+      dailyVariety={dailyVariety} selectionDay={selectionDay} recommendationPins={recommendationPins}
+      onRecommendationPinToggle={onRecommendationPinToggle}
       onObserveToggle={onObserveToggle} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
