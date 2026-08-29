@@ -12,7 +12,6 @@ import {
   queueAccountRadarPilotImport,
   queueAccountRadarPilotReceipt,
   queueAccountRadarShareChange,
-  reconcileAccountRadarPilotFeed,
   removeGuestPersonRadarSubscription,
   removeGuestRadarSubscription,
   setLocalRadarReceipt,
@@ -38,10 +37,7 @@ import {
 } from "../lib/titleGroupRadar.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
-import {
-  RADAR_WEBSEARCH_SINGLE_FILE_DISABLED,
-  radarWebsearchService,
-} from "../services/radarWebsearch.js";
+import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED } from "../services/radarWebsearch.js";
 
 export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
@@ -71,14 +67,14 @@ function katalogFranchiseId(entry) {
 
 /* Grenze für alle persönlichen Entdecken-/Radar-Mutationen. Ein optional
    injizierter lokaler Executor trägt ausschließlich den begrenzten Mockpfad;
-   Scheduler, freie Katalogsuche und automatische Werk-Abos bleiben verboten.
+   Browser-Scheduler und freie Katalogsuche bleiben verboten. Automatische
+   Prüfungen laufen ausschließlich im vorhandenen serverseitigen Claim-Pfad.
    Sichtbarer State folgt exakt der Gast- bzw. Kontocache-Autorität und wird
    erst nach bestätigtem Storage-Write übernommen. */
 export function useEntdeckenRadarController({
   session, remoteKontoAktiv, bootDone, master, streamingKnown, streamingDiscover,
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
   radarWebsearchExecutor = null,
-  radarServerService = radarWebsearchService,
   radarPilotAdapter = radarPilotService,
   radarPilotEnabled = runtimeConfig.radarPilotClientEnabled,
   franchiseRadarResolver = resolveCanonicalFranchiseRadarTarget,
@@ -318,15 +314,9 @@ export function useEntdeckenRadarController({
     && typeof radarWebsearchExecutor?.resolvePerson === "function";
   const accountRadarServerAvailable = !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED
     && radarAuthority === "account-cache" && remoteKontoAktiv
-    && radarPilotClientEnabled
-    && typeof radarServerService?.checkNow === "function";
+    && radarPilotClientEnabled;
   const personRadarAvailable = localPersonRadarAvailable
-    || (accountRadarServerAvailable && session?.capabilities?.personalAi === true
-      && typeof radarServerService?.checkPersonNow === "function");
-  const personRadarCheckAvailable = localPersonRadarAvailable
-    || (accountRadarServerAvailable && typeof radarServerService?.checkPersonNow === "function"
-      && radarState?.pilot?.status === "ready"
-      && radarState.pilot.radarReview === true);
+    || (accountRadarServerAvailable && session?.capabilities?.personalAi === true);
   const franchiseRadarAvailable = (localRadarWebsearchAvailable
     && typeof radarWebsearchExecutor?.resolveFranchise === "function")
     || (accountRadarServerAvailable && typeof franchiseRadarResolver === "function");
@@ -471,62 +461,6 @@ export function useEntdeckenRadarController({
     });
   }, [localPersonRadarAvailable, personRadarAvailable, radarAuthority, schreibeRadarState, syncRadarPilot]);
 
-  const fuehrePersonRadarCheck = useCallback(async (identity) => {
-    const state = radarStateRef.current;
-    const matches = (state?.personSubscriptions || []).filter((entry) => (
-      entry.personExternalId === identity?.personExternalId && entry.role === identity?.role && entry.status === "active"
-    ));
-    const targetId = createPersonRadarTargetId(matches[0]?.personExternalId, matches[0]?.role);
-    const hasPendingTargetChange = (state?.outbox || []).some((entry) => (
-      entry.targetId === targetId && entry.status === "pending"
-    ));
-    if (!personRadarCheckAvailable || matches.length !== 1 || hasPendingTargetChange) {
-      return Object.freeze({ status: "forbidden", writes: 0 });
-    }
-    if (localPersonRadarAvailable) {
-      const result = await radarWebsearchExecutor.check({
-        target: Object.freeze({
-          kind: "person",
-          personExternalId: matches[0].personExternalId,
-          name: matches[0].name,
-          role: matches[0].role,
-          canonical: true,
-        }),
-        catalog: personRadarCatalog,
-      });
-      if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
-      return result;
-    }
-    let response;
-    try {
-      response = await radarServerService.checkPersonNow(Object.freeze({
-        targetId,
-        personExternalId: matches[0].personExternalId,
-        name: matches[0].name,
-        role: matches[0].role,
-        canonical: true,
-      }));
-    } catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
-    if (!response?.personResult) return Object.freeze({ status: response?.status || "invalid_response", writes: 0 });
-    const synced = await syncRadarPilot(state);
-    if (synced?.status !== "ready") return Object.freeze({ status: "storage_error", writes: 0 });
-    if (response.status === "confirmed") {
-      const visible = (synced.state?.personResults || []).find((entry) => (
-        entry.personExternalId === matches[0].personExternalId && entry.role === matches[0].role
-      ));
-      if (!visible?.decisions?.length) return Object.freeze({ status: "storage_error", writes: 0 });
-    }
-    return Object.freeze({ status: response.status, writes: response.writes });
-  }, [
-    localPersonRadarAvailable,
-    personRadarCheckAvailable,
-    personRadarCatalog,
-    radarServerService,
-    radarStateRef,
-    radarWebsearchExecutor,
-    syncRadarPilot,
-  ]);
-
   const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {
     if (radarAuthority !== "account-cache" || !remoteKontoAktiv) {
       setErr("Anonymes Teilen braucht ein aktives Konto und ein serverbestätigtes Radarziel.");
@@ -641,99 +575,6 @@ export function useEntdeckenRadarController({
     return Object.freeze({ status: "storage_error", writes: 0, reason });
   }, [schreibeRadarState]);
 
-  const fuehreRadarWebsearchCheck = useCallback(async (targetId) => {
-    const state = radarStateRef.current;
-    const activeMatches = (state?.subscriptions || []).filter((entry) => (
-      entry.targetId === targetId && entry.status === "active"
-    ));
-    const hasPendingTargetChange = (state?.outbox || []).some((entry) => (
-      entry.targetId === targetId && entry.status === "pending"
-    ));
-    if (localRadarWebsearchAvailable && state?.authority === "guest") {
-      if (activeMatches.length !== 1 || hasPendingTargetChange
-          || !["work", "series", "franchise", "text"].includes(activeMatches[0].targetType)) {
-        return Object.freeze({ status: "forbidden", writes: 0 });
-      }
-      if (activeMatches[0].targetType === "text") {
-        const result = await radarWebsearchExecutor.check({
-          target: Object.freeze({
-            kind: "text",
-            targetId,
-            targetType: "text",
-            targetText: activeMatches[0].targetText,
-            title: activeMatches[0].targetText,
-          }),
-          catalog: personRadarCatalog,
-        });
-        if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
-        return result;
-      }
-      if (activeMatches[0].targetType === "franchise") {
-        let resolved;
-        try { resolved = await radarWebsearchExecutor.resolveFranchise?.({ name: activeMatches[0].title }); }
-        catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
-        if (!validateRadarWebsearchTarget(resolved).ok || resolved.kind !== "franchise"
-            || resolved.franchiseId !== targetId || resolved.title !== activeMatches[0].title) {
-          return Object.freeze({ status: "forbidden", writes: 0 });
-        }
-        const result = await radarWebsearchExecutor.check({ target: resolved, catalog: personRadarCatalog });
-        if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
-        return result;
-      }
-      const catalogEntry = personRadarCatalog.find((entry) => entry.targetId === targetId);
-      const title = catalogEntry?.title || activeMatches[0].title;
-      if (!title) return Object.freeze({ status: "forbidden", writes: 0 });
-      const result = await radarWebsearchExecutor.check({
-        target: Object.freeze({
-          kind: "work",
-          targetId,
-          targetType: activeMatches[0].targetType,
-          title,
-          year: catalogEntry?.year ?? null,
-          canonical: true,
-        }),
-        catalog: personRadarCatalog,
-      });
-      if (Array.isArray(result?.events)) setLocalRadarWebsearchEvents(result.events);
-      return result;
-    }
-    if (!radarPilotClientEnabled || !remoteKontoAktiv || radarAuthority !== "account-cache"
-        || state?.authority !== "account-cache" || state?.pilot?.status !== "ready"
-        || state?.pilot?.radarReview !== true || activeMatches.length !== 1
-        || hasPendingTargetChange
-        || !["work", "series", "franchise", "text"].includes(activeMatches[0].targetType)
-        || (activeMatches[0].targetType === "franchise"
-          && !validateTitleGroupMetadata(activeMatches[0].titleGroup, {
-            targetId: activeMatches[0].targetId, title: activeMatches[0].title,
-          }))) {
-      return Object.freeze({ status: "forbidden", writes: 0 });
-    }
-    let result;
-    try { result = await radarServerService.checkNow(targetId, activeMatches[0].targetText); }
-    catch { return Object.freeze({ status: "provider_error", writes: 0 }); }
-    if (result?.feed) {
-      let reason = "pilot-feed-invalid";
-      const saved = await schreibeRadarState((previous) => {
-        const reconciled = reconcileAccountRadarPilotFeed(previous, result.feed);
-        reason = reconciled.reason;
-        return reconciled.ok ? reconciled.state : null;
-      });
-      if (saved === false) return Object.freeze({ status: "storage_error", writes: 0, reason });
-      setRadarPilotSyncStatus("ready");
-    }
-    return result;
-  }, [
-    localRadarWebsearchAvailable,
-    personRadarCatalog,
-    radarAuthority,
-    radarPilotClientEnabled,
-    radarServerService,
-    radarStateRef,
-    radarWebsearchExecutor,
-    remoteKontoAktiv,
-    schreibeRadarState,
-  ]);
-
   const bestaetigeRadarVorschau = useCallback(async (target, { shareEnabled = false } = {}) => {
     if (radarAuthority === "account-cache" && !remoteKontoAktiv) {
       setErr("Radar-Änderungen im Kontomodus brauchen einen fachlich aktiven Kontozugriff.");
@@ -798,8 +639,8 @@ export function useEntdeckenRadarController({
     ...accountRadarPilotProjection,
     events: radarAuthority === "guest" ? visibleLocalRadarEvents : visiblePilotRadarEvents,
   }), [accountRadarPilotProjection, radarAuthority, visibleLocalRadarEvents, visiblePilotRadarEvents]);
-  const radarCheckAvailable = localRadarWebsearchAvailable || (accountRadarServerAvailable
-    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true);
+  const radarAutomaticAvailable = accountRadarServerAvailable
+    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true;
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;
@@ -819,7 +660,7 @@ export function useEntdeckenRadarController({
     radarPilotActive: radarPilotProjection.active,
     radarPilotEvents: radarPilotProjection.events,
     radarReview: radarPilotProjection.radarReview,
-    radarCheckAvailable,
+    radarAutomaticAvailable,
     radarPilotSyncStatus,
     setRadarPreviewTarget,
     schliesseRadarPreview,
@@ -834,14 +675,11 @@ export function useEntdeckenRadarController({
     fuehreRadarPilotImport,
     fuehreRadarPilotSync,
     verwerfeAbgelehnteRadarAenderung,
-    fuehreRadarWebsearchCheck,
     franchiseRadarAvailable,
     fuegeFranchiseRadarHinzu,
     personRadarAvailable,
-    personRadarCheckAvailable,
     fuegePersonRadarHinzu,
     aenderePersonRadar,
-    fuehrePersonRadarCheck,
     fuehreGlobaleSuchaktionAus,
   };
 }

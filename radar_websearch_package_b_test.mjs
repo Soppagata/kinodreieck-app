@@ -1100,6 +1100,10 @@ const dailyMigration = fs.readFileSync(
   "./supabase/migrations/20260825120000_radar_daily_schedule.sql",
   "utf8",
 );
+const sixDayMigration = fs.readFileSync(
+  "./supabase/migrations/20260830120000_radar_six_day_schedule.sql",
+  "utf8",
+);
 const dailyWorkflow = fs.readFileSync("./.github/workflows/radar-daily.yml", "utf8");
 const liveSource = fs.readFileSync("./tools/radar_websearch_live.mjs", "utf8");
 const packageJson = JSON.parse(fs.readFileSync("./package.json", "utf8"));
@@ -1144,6 +1148,24 @@ await check("Daily-Migration claimt Konto/Ziel pro Wiener Tag atomar und retryfr
   assert.match(dailyMigration, /kd_radar_daily_finish/);
   assert.match(dailyMigration, /p_safe_status is null or p_safe_status not in \(/);
   assert.doesNotMatch(dailyMigration, /pg_cron|cron\.|http_post|net\.http/i);
+});
+
+await check("Additive 144h-Migration nutzt denselben Claim generisch und setzt die Folgefaelligkeit am Abschluss", () => {
+  assert.match(sixDayMigration, /^begin;$/mu);
+  assert.match(sixDayMigration, /^commit;$/mu);
+  assert.match(sixDayMigration, /add column next_check_at timestamptz not null default clock_timestamp\(\)/u);
+  assert.match(sixDayMigration, /subscription\.next_check_at <= v_now/u);
+  assert.match(sixDayMigration, /order by subscription\.next_check_at/u);
+  assert.match(sixDayMigration, /for update of subscription skip locked/u);
+  assert.match(sixDayMigration, /active_run\.worker_status = 'leased'[\s\S]*active_run\.lease_expires_at >= v_now/u);
+  assert.match(sixDayMigration, /on conflict \(account_id, target_id, vienna_day\) do nothing/u);
+  assert.equal((sixDayMigration.match(/next_check_at = v_now \+ interval '144 hours'/gu) || []).length, 2);
+  assert.match(sixDayMigration, /next_check_at = expired\.terminal_at \+ interval '144 hours'/u);
+  assert.match(sixDayMigration, /create or replace function public\.kd_radar_daily_claim\(\)/u);
+  assert.match(sixDayMigration, /create or replace function public\.kd_radar_daily_finish\(/u);
+  assert.doesNotMatch(sixDayMigration, /pg_cron|cron\.|http_post|net\.http|attempt_count\s*\+|--retry|Nicolas Cage|Star Wars|Starfighter/iu);
+  const plus144 = (instant) => new Date(new Date(instant).getTime() + 144 * 60 * 60 * 1000).toISOString();
+  assert.equal(plus144("2026-08-30T04:37:00.000Z"), "2026-09-05T04:37:00.000Z");
 });
 
 await check("Daily-Aktivierung stoppt bei Settings-Drift und behaelt alle bestehenden Kostenzaeune", () => {

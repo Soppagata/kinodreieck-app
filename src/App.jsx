@@ -1309,7 +1309,7 @@ export default function App() {
     aendereSerienBeobachtung, aendereRadar, aendereRadarShare, bestaetigeRadarVorschau,
     beobachteteWatchmodeIds, radarTargetIds, fuehreGlobaleSuchaktionAus,
     radarPilotClientEnabled, radarPilotActive, radarPilotEvents, radarReview, radarPilotSyncStatus, fuegeRadarTextHinzu,
-    radarCheckAvailable, fuehreRadarWebsearchCheck, fuehreRadarPilotReceipt, fuehreRadarPilotImport,
+    radarAutomaticAvailable, fuehreRadarPilotReceipt, fuehreRadarPilotImport,
     fuehreRadarPilotSync, verwerfeAbgelehnteRadarAenderung,
     personRadarAvailable, fuegePersonRadarHinzu, aenderePersonRadar, franchiseRadarAvailable, fuegeFranchiseRadarHinzu, } = useEntdeckenRadarController({
     session, remoteKontoAktiv, bootDone, master, streamingKnown: streamingBekannt, streamingDiscover: streamingEntdecken,
@@ -2077,7 +2077,7 @@ export default function App() {
             syncStatus={radarPilotSyncStatus} onObserveToggle={aendereSerienBeobachtung} onRadarChange={aendereRadar}
             onRadarPreview={setRadarPreviewTarget} onShareChange={aendereRadarShare}
             onRadarPilotReceipt={fuehreRadarPilotReceipt} onRadarPilotImport={fuehreRadarPilotImport} onRadarPilotSync={fuehreRadarPilotSync}
-            radarCheckAvailable={radarCheckAvailable} onRadarWebsearchCheck={fuehreRadarWebsearchCheck} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
+            radarAutomaticAvailable={radarAutomaticAvailable} onRadarRejectedDismiss={verwerfeAbgelehnteRadarAenderung}
             onRadarTextAdd={fuegeRadarTextHinzu} recommendationPins={entdeckenPins} onRecommendationPinToggle={toggleRecommendationPin}
             personRadarAvailable={personRadarAvailable} onPersonRadarAdd={fuegePersonRadarHinzu} onPersonRadarChange={aenderePersonRadar} franchiseRadarAvailable={franchiseRadarAvailable} onFranchiseRadarAdd={fuegeFranchiseRadarHinzu}
             blogProps={{

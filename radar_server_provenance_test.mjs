@@ -390,12 +390,14 @@ await check("Nur belegte neue Events werden idempotent projiziert; Pin entsteht 
   assert.equal(rejected.state, pinned.state);
 });
 
-await check("Controller nutzt den echten Radar-Service standardmäßig; Injektion bleibt Testnaht", () => {
+await check("Controller besitzt keinen manuellen Browser-Suchpfad; der gefencete Serverrunner bleibt erhalten", () => {
   const source = fs.readFileSync("src/controllers/useEntdeckenRadarController.js", "utf8");
-  assert.match(source, /radarServerService\s*=\s*radarWebsearchService/);
-  assert.match(source, /radarServerService\.checkPersonNow/);
-  assert.match(source, /radarServerService\.checkNow/);
-  assert.doesNotMatch(source, /personRadarAdapter/);
+  const functionSource = fs.readFileSync("supabase/functions/radar-websearch-task/index.ts", "utf8");
+  assert.doesNotMatch(source, /radarServerService|\.checkNow\(|\.checkPersonNow\(/);
+  assert.match(functionSource, /admin\.rpc\("kd_radar_daily_claim"\)/);
+  assert.match(functionSource, /await assertDailyLease\(\)/);
+  assert.match(functionSource, /runRadarWebsearchCheck\(/);
+  assert.match(functionSource, /admin\.rpc\("kd_radar_daily_finish"/);
 });
 
 console.log(`\n${checks} Radar-Serverprovenienz-Checks bestanden.`);

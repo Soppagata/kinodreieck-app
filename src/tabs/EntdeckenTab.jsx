@@ -320,15 +320,13 @@ function isErrorStatus(status) {
 
 function RadarView({
   radarState, master, streamingKnown, streamingDiscover, accountMode,
-  radarPilotEvents = [], syncStatus, radarCheckAvailable = true,
-  onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd, onRadarWebsearchCheck,
+  radarPilotEvents = [], syncStatus, radarAutomaticAvailable = false,
+  onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
 }) {
   const [targetQuery, setTargetQuery] = useState("");
   const [targetAddBusy, setTargetAddBusy] = useState(false);
   const targetAddLockRef = useRef(false);
-  const targetCheckLocksRef = useRef(new Set());
-  const [targetChecks, setTargetChecks] = useState({});
   const [message, setMessage] = useState(null);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
@@ -367,32 +365,14 @@ function RadarView({
       setMessage({ status: "storage_error", text: statusText("storage_error") });
     } finally { targetAddLockRef.current = false; setTargetAddBusy(false); }
   };
-  const checkTarget = async (entry) => {
-    if (entry.status !== "active" || radarCheckAvailable !== true
-        || typeof onRadarWebsearchCheck !== "function"
-        || targetCheckLocksRef.current.has(entry.targetId)) return;
-    targetCheckLocksRef.current.add(entry.targetId);
-    setTargetChecks((previous) => ({ ...previous, [entry.targetId]: { status: "busy", text: "Radar prüft dieses Ziel einmal…" } }));
-    try {
-      const result = await onRadarWebsearchCheck(entry.targetId);
-      setTargetChecks((previous) => ({ ...previous, [entry.targetId]: {
-        status: result?.status,
-        text: statusText(result?.status, entry.targetType),
-      } }));
-    } catch {
-      setTargetChecks((previous) => ({ ...previous, [entry.targetId]: {
-        status: "provider_error", text: statusText("provider_error", entry.targetType),
-      } }));
-    } finally {
-      targetCheckLocksRef.current.delete(entry.targetId);
-    }
-  };
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
-      <p>{accountMode
-        ? "Prüfe ein aktives Ziel bewusst mit „Jetzt prüfen“."
-        : "Deine Ziele bleiben auf diesem Gerät; ein verfügbarer lokaler Testpfad wird nur durch „Jetzt prüfen“ gestartet."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
+      <p>{radarAutomaticAvailable
+        ? "Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft."
+        : accountMode
+          ? "Deine Ziele bleiben gespeichert; die automatische Prüfung ist für dieses Konto derzeit nicht verfügbar."
+          : "Deine Ziele bleiben auf diesem Gerät; eine automatische Prüfung ist im Gastmodus nicht verfügbar."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
     </div>
     <article className="kd-entdecken-panel kd-radar-zielsuche">
       <h3>Radarziel hinzufügen</h3>
@@ -401,7 +381,7 @@ function RadarView({
         <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
           autoComplete="off" spellCheck={false} placeholder="Zum Beispiel Mutter Teresa"
           onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
-        <small>Beliebiger Text bleibt Freitext. Eindeutig bekannte Reihen werden als kanonisches Ziel gespeichert. Eine Prüfung startet erst über „Jetzt prüfen“.</small>
+        <small>Beliebiger Text bleibt Freitext. Eindeutig bekannte Reihen werden als kanonisches Ziel gespeichert.{radarAutomaticAvailable ? " Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft." : ""}</small>
         <button type="submit" className="kd-entdecken-primaer"
           disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? "Wird gespeichert…" : "Im Radar speichern"}</button>
       </form>
@@ -414,13 +394,7 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? "Aktiv · manuell prüfbar" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
-          {entry.status === "active" && typeof onRadarWebsearchCheck === "function" ? <button type="button"
-            className="kd-entdecken-sekundaer" disabled={radarCheckAvailable !== true || targetCheckLocksRef.current.has(entry.targetId)}
-            aria-label={`${localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })} jetzt prüfen`}
-            onClick={() => void checkTarget(entry)}>{targetChecks[entry.targetId]?.status === "busy" ? "Wird geprüft…" : "Jetzt prüfen"}</button> : null}
-          {targetChecks[entry.targetId] ? <span className={isErrorStatus(targetChecks[entry.targetId].status)
-            ? "kd-entdecken-fehler" : "kd-entdecken-pending"} role="status">{targetChecks[entry.targetId].text}</span> : null}
+          <span>{entry.status === "active" ? `Aktiv${radarAutomaticAvailable ? " · automatische Prüfung alle 6 Tage" : ""}` : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
@@ -429,7 +403,7 @@ function RadarView({
         {syncProblem ? <RadarSyncProblem problem={syncProblem} onRetry={onRadarPilotSync} /> : null}
       </article>
       <article className="kd-entdecken-panel">
-        <h3>Tagesaktuelle Neuigkeiten</h3>
+        <h3>Neuigkeiten</h3>
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
           <span>Gefunden für: {entry.targetLabel}</span>
@@ -443,7 +417,7 @@ function RadarView({
             onClick={() => onRadarPilotReceipt({ eventId: entry.eventId, eventVersionId: entry.eventVersionId, status: "accepted_week" })}>
             {receiptByEvent.get(`${entry.eventId}|${entry.eventVersionId}`)?.status === "accepted_week" ? "Angepinnt" : "Fund anpinnen"}
           </button> : null}
-        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit. Prüfe ein aktives Ziel bei Bedarf mit „Jetzt prüfen“.</p>}
+        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit.{radarAutomaticAvailable ? " Aktive Ziele werden automatisch alle sechs Tage geprüft." : ""}</p>}
         {personResults.map((result) => {
           const matches = result.decisions.filter((entry) => entry.status === "matched" && entry.work);
           return <section className="kd-entdecken-person-result" key={`${result.personExternalId}|${result.role}`}>
@@ -462,8 +436,8 @@ export function EntdeckenTab({
   blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
-  radarPilotEvents = [], syncStatus = "idle", radarCheckAvailable = false,
-  onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd, onRadarWebsearchCheck,
+  radarPilotEvents = [], syncStatus = "idle", radarAutomaticAvailable = false,
+  onRadarPilotSync, onRadarPilotReceipt, onRadarTextAdd,
   onRadarRejectedDismiss,
   personRadarAvailable = false, onPersonRadarAdd, onPersonRadarChange,
   franchiseRadarAvailable = false, onFranchiseRadarAdd,
@@ -506,8 +480,8 @@ export function EntdeckenTab({
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
-      radarCheckAvailable={radarCheckAvailable} onRadarPilotReceipt={onRadarPilotReceipt}
-      onRadarTextAdd={onRadarTextAdd} onRadarWebsearchCheck={onRadarWebsearchCheck}
+      radarAutomaticAvailable={radarAutomaticAvailable} onRadarPilotReceipt={onRadarPilotReceipt}
+      onRadarTextAdd={onRadarTextAdd}
       onRadarRejectedDismiss={onRadarRejectedDismiss}
       personRadarAvailable={personRadarAvailable} onPersonRadarAdd={onPersonRadarAdd}
       franchiseRadarAvailable={franchiseRadarAvailable}

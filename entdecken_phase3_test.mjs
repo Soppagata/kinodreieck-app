@@ -740,7 +740,8 @@ try {
     assert.equal(workPicker.container.querySelectorAll("#kd-radar-target-search").length, 1);
     assert.equal(workPicker.container.querySelectorAll(".kd-radar-zielsuche select").length, 0);
     assert.equal(workPicker.container.querySelectorAll(".kd-radar-zieltreffer li").length, 0);
-    assert.doesNotMatch(workPicker.container.textContent, /nicht verfügbar|Werk hinzufügen/i);
+    assert.doesNotMatch(workPicker.container.textContent, /Werk hinzufügen/i);
+    assert.match(workPicker.container.textContent, /automatische Prüfung ist im Gastmodus nicht verfügbar/i);
   });
   await setControl(workPicker.container.querySelector("#kd-radar-target-search"), "Passender Film");
   await act(async () => {
@@ -786,9 +787,9 @@ try {
   });
   const workUi = await mount(EntdeckenTab, renderWorkProps());
   await act(async () => { button(workUi.container, "Radar").click(); await tick(); });
-  check("Kontoradar verspricht ohne verdrahteten Handler keine Automatik", () => {
-    assert.match(workUi.container.textContent, /Prüfe ein aktives Ziel bewusst/i);
-    assert.match(workUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
+  check("Kontoradar bleibt ohne bestätigte Fachverfügbarkeit ehrlich", () => {
+    assert.match(workUi.container.textContent, /automatische Prüfung ist für dieses Konto derzeit nicht verfügbar/i);
+    assert.match(workUi.container.textContent, /Neuigkeiten/);
     assert.equal(button(workUi.container, "Jetzt prüfen"), undefined);
   });
   const confirmedEvent = {
@@ -861,7 +862,7 @@ try {
     const targets = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
       .find((entry) => /Meine Ziele/.test(entry.textContent));
     const news = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Tagesaktuelle Neuigkeiten/.test(entry.textContent));
+      .find((entry) => /Neuigkeiten/.test(entry.textContent));
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
     assert.match(news.textContent, /Star Wars: Starfighter/);
@@ -1017,32 +1018,36 @@ try {
   });
   await franchiseUi.cleanup();
 
-  let manualCalls = 0;
   const automaticUi = await mount(EntdeckenTab, {
     ...baseProps,
     radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
       target: workTarget, now,
     }).state,
-    radarCheckAvailable: true,
-    onRadarWebsearchCheck: async () => { manualCalls += 1; return { status: "no_change", writes: 0 }; },
+    accountMode: true,
+    radarAutomaticAvailable: true,
   });
   await act(async () => { button(automaticUi.container, "Radar").click(); await tick(); });
-  check("Aktives Ziel bietet den manuellen Einmal-Check statt eines Automatikversprechens", () => {
-    assert.equal(manualCalls, 0);
-    assert.ok(button(automaticUi.container, "Jetzt prüfen"));
-    assert.match(automaticUi.container.textContent, /nur durch „Jetzt prüfen“ gestartet/i);
-    assert.doesNotMatch(automaticUi.container.textContent, /automatische tägliche Prüfung|nächste Tageslauf|täglichen Prüfungen/i);
-  });
-  await act(async () => {
-    button(automaticUi.container, "Jetzt prüfen").click();
-    button(automaticUi.container, "Jetzt prüfen")?.click();
-    await tick();
-  });
-  check("Doppelklick bleibt single-flight und zeigt das verständliche Ergebnis", () => {
-    assert.equal(manualCalls, 1);
-    assert.match(automaticUi.container.textContent, /Keine neue bestätigte Änderung gefunden/);
+  check("Verfügbarer Kontopfad erklärt die automatische Sechs-Tage-Prüfung ohne manuelle Aktion", () => {
+    assert.equal(button(automaticUi.container, "Jetzt prüfen"), undefined);
+    assert.match(automaticUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
+    assert.match(automaticUi.container.textContent, /automatische Prüfung alle 6 Tage/i);
+    assert.doesNotMatch(automaticUi.container.textContent, /manuell prüfbar|nur durch|Tagesaktuelle Neuigkeiten/i);
   });
   await automaticUi.cleanup();
+
+  const guestAutomaticUi = await mount(EntdeckenTab, {
+    ...baseProps,
+    radarState: upsertGuestRadarSubscription(createEmptyLocalRadar(), {
+      target: workTarget, now,
+    }).state,
+  });
+  await act(async () => { button(guestAutomaticUi.container, "Radar").click(); await tick(); });
+  check("Gastzustand behauptet keine automatische Prüfung", () => {
+    assert.equal(button(guestAutomaticUi.container, "Jetzt prüfen"), undefined);
+    assert.match(guestAutomaticUi.container.textContent, /automatische Prüfung ist im Gastmodus nicht verfügbar/i);
+    assert.doesNotMatch(guestAutomaticUi.container.textContent, /alle sechs Tage geprüft|alle 6 Tage/i);
+  });
+  await guestAutomaticUi.cleanup();
 } finally {
   if (outputDir) fs.rmSync(outputDir, { recursive: true, force: true });
   if (dom) dom.window.close();

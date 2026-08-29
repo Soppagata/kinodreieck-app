@@ -21,7 +21,6 @@ import {
   createEmptyLocalRadar,
   reconcileAccountRadarPilotFeed,
 } from "./src/lib/localEventRadar.js";
-import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
 
 let checks = 0;
 async function check(name, fn) {
@@ -351,7 +350,6 @@ try {
       serienKatalog: streamingDiscover.titel,
       setErr,
       radarWebsearchExecutor: flowExecutor,
-      radarServerService: accountHarness?.serverService,
       radarPilotAdapter: accountHarness?.pilotAdapter,
       radarPilotEnabled: accountHarness !== null,
     });
@@ -367,18 +365,16 @@ try {
       selectedServices: ["Teststream"],
       accountMode: accountHarness !== null,
       radarPilotEvents: controller.radarPilotEvents,
-      radarCheckAvailable: controller.radarCheckAvailable,
+      radarAutomaticAvailable: controller.radarAutomaticAvailable,
       onObserveToggle: controller.aendereSerienBeobachtung,
       onRadarChange: controller.aendereRadar,
       onRadarPreview: (target) => { void controller.bestaetigeRadarVorschau(target); },
       onShareChange: controller.aendereRadarShare,
       onRadarPilotReceipt: controller.fuehreRadarPilotReceipt,
-      onRadarWebsearchCheck: controller.fuehreRadarWebsearchCheck,
       onRadarTextAdd: controller.fuegeRadarTextHinzu,
       personRadarAvailable: controller.personRadarAvailable,
       onPersonRadarAdd: controller.fuegePersonRadarHinzu,
       onPersonRadarChange: controller.aenderePersonRadar,
-      onPersonRadarCheck: controller.fuehrePersonRadarCheck,
       franchiseRadarAvailable: controller.franchiseRadarAvailable,
       onFranchiseRadarAdd: controller.fuegeFranchiseRadarHinzu,
     });
@@ -461,7 +457,7 @@ try {
   await act(async () => { button(textUi.container, "Radar").click(); await tick(); });
   const textInput = textUi.container.querySelector("#kd-radar-target-search");
   await setControl(textInput, "Mutter Teresa");
-  await check("Freitext bleibt unverändert und startet erst über den manuellen Einmal-Check", async () => {
+  await check("Freitext bleibt unverändert, ohne einen Browser-Check zu starten", async () => {
     assert.equal(textChecks.length, 0);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-search").length, 1);
     assert.equal(textUi.container.querySelectorAll("#kd-radar-target-results").length, 0);
@@ -472,17 +468,9 @@ try {
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions.length, 1);
     assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].targetText, "Mutter Teresa");
     assert.equal(JSON.parse(localStorage.getItem("kd:radar")).subscriptions[0].targetText, "Mutter Teresa");
-    assert.ok(button(textUi.container, "Jetzt prüfen"));
-    await act(async () => {
-      button(textUi.container, "Jetzt prüfen").click();
-      button(textUi.container, "Jetzt prüfen")?.click();
-      await tick();
-    });
-    await settle();
-    assert.equal(textChecks.length, 1);
-    assert.match(textUi.container.textContent, /Mother Teresa: No Greater Love/);
-    assert.match(textUi.container.textContent, /Gefunden für: Mutter Teresa/);
-    assert.match(textUi.container.textContent, /Tagesaktuelle Neuigkeiten/);
+    assert.equal(button(textUi.container, "Jetzt prüfen"), undefined);
+    assert.equal(textChecks.length, 0);
+    assert.match(textUi.container.textContent, /automatische Prüfung ist im Gastmodus nicht verfügbar/i);
   });
   await textUi.cleanup();
 
@@ -506,20 +494,13 @@ try {
   const degradedUi = await mount(degradedExecutor);
   await act(async () => { button(degradedUi.container, "Radar").click(); await tick(); });
   await setControl(degradedUi.container.querySelector("#kd-radar-target-search"), "Tommy Wiseau");
-  await check("Unzureichender manueller Check erzeugt keinen Fund und keinen zweiten Aufruf", async () => {
+  await check("Gast-Freitext bleibt ohne verdeckten Suchaufruf und ohne Fund", async () => {
     await act(async () => { button(degradedUi.container, "Im Radar speichern").click(); await tick(); });
     await settle();
     assert.equal(degradedChecks.length, 0);
-    assert.ok(button(degradedUi.container, "Jetzt prüfen"));
-    await act(async () => {
-      button(degradedUi.container, "Jetzt prüfen").click();
-      button(degradedUi.container, "Jetzt prüfen")?.click();
-      await tick();
-    });
-    await settle();
-    assert.equal(degradedChecks.length, 1);
-    assert.match(degradedUi.container.textContent, /Noch keine belegte Neuigkeit\. Prüfe ein aktives Ziel bei Bedarf/);
-    assert.match(degradedUi.container.textContent, /Kein belegter neuer Fund/);
+    assert.equal(button(degradedUi.container, "Jetzt prüfen"), undefined);
+    assert.equal(degradedChecks.length, 0);
+    assert.match(degradedUi.container.textContent, /Noch keine belegte Neuigkeit/);
     assert.doesNotMatch(degradedUi.container.textContent, /Mother Teresa: No Greater Love/);
   });
   await degradedUi.cleanup();
@@ -567,31 +548,11 @@ try {
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Starfighter|Kinostart Österreich/);
   });
-  await act(async () => { button(starfighterUi.container, "Jetzt prüfen").click(); await tick(); });
-  await settle();
-  await check("Ein Mockcheck zeigt Starfighter nur als AT-Fund mit Datum und direkten Quellen", async () => {
-    const targets = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Meine Ziele/.test(entry.textContent));
-    const news = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Tagesaktuelle Neuigkeiten/.test(entry.textContent));
-    assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
-    assert.match(news.textContent, /Star Wars: Starfighter/);
-    assert.match(news.textContent, /Gefunden für: Star Wars/);
-    assert.match(news.textContent, /AT · Kinostart in Österreich/);
-    assert.equal(news.querySelectorAll("a.kd-pilot-quellen-link").length, 2);
+  await check("Der kanonische Gastpfad bietet keinen manuellen Suchknopf", async () => {
+    assert.equal(button(starfighterUi.container, "Jetzt prüfen"), undefined);
+    assert.doesNotMatch(starfighterUi.container.textContent, /Star Wars: Starfighter/);
   });
-  const storedStarWars = localStorage.getItem("kd:radar");
   await starfighterUi.cleanup();
-  localStorage.setItem("kd:radar", storedStarWars);
-  const starfighterReload = await mount(starfighterExecutor);
-  await act(async () => { button(starfighterReload.container, "Radar").click(); await tick(); });
-  await settle();
-  await check("Kanonisches Ziel und Starfighter-Fund bleiben nach Reload getrennt", async () => {
-    assert.match(starfighterReload.container.textContent, /Gefunden für: Star Wars/);
-    assert.match(starfighterReload.container.textContent, /Star Wars: Starfighter/);
-    assert.equal(controllerRef.current.sichtbarerRadarState.subscriptions[0].title, "Star Wars");
-  });
-  await starfighterReload.cleanup();
 
   localStorage.removeItem("kd:radar");
   const accountTargetId = "title-group:v1:star-wars";
@@ -643,40 +604,25 @@ try {
   const accountSession = Object.freeze({
     mode: "account", state: "ready", account: Object.freeze({ id: "max-account" }),
   });
-  const accountFunctionCalls = [];
-  const accountServerService = createRadarWebsearchService({
-    config: {
-      radarPilotClientEnabled: true,
-      supabaseUrl: "https://project.example.supabase.co",
-      supabasePublishableKey: "public-key",
-    },
-    auth: { getSnapshot: () => accountSession },
-    getAccount: () => accountSession.account,
-    getAccessToken: async () => "session-token",
-    fetchImpl: async (url, options) => {
-      accountFunctionCalls.push({ url, options });
-      return { ok: true, status: 200, async json() {
-        return {
-          ok: true, status: "confirmed", writes: 1,
-          providerRequests: 1, searchRequests: 1, phaseCode: "provider-complete",
-          feed: accountStarfighterFeed,
-        };
-      } };
-    },
-    singleFile: false,
-  });
+  let accountFeedSyncs = 0;
   const accountHarness = Object.freeze({
     session: accountSession,
-    serverService: accountServerService,
-    pilotAdapter: Object.freeze({ async sync({ state }) { return { status: "ready", state }; } }),
+    pilotAdapter: Object.freeze({ async sync({ state, commit }) {
+      accountFeedSyncs += 1;
+      const reconciled = reconcileAccountRadarPilotFeed(state, accountStarfighterFeed);
+      assert.equal(reconciled.ok, true, reconciled.errors?.join(","));
+      localStorage.setItem("kd:radar", JSON.stringify(reconciled.state));
+      await commit(reconciled.state);
+      return { status: "ready", state: reconciled.state };
+    } }),
   });
   const accountUi = await mount(null, accountHarness);
   await act(async () => { button(accountUi.container, "Radar").click(); await tick(); });
-  await act(async () => { button(accountUi.container, "Jetzt prüfen").click(); await tick(); });
   await settle();
-  await check("Account-Klick übernimmt Starfighter aus genau einer Function-Antwort sichtbar und gespeichert", async () => {
-    assert.equal(accountFunctionCalls.length, 1);
-    assert.deepEqual(JSON.parse(accountFunctionCalls[0].options.body), { targetId: accountTargetId });
+  await check("Automatisch erzeugter Account-Feed wird beim normalen Sync sichtbar und gespeichert", async () => {
+    assert.equal(accountFeedSyncs, 1);
+    assert.equal(button(accountUi.container, "Jetzt prüfen"), undefined);
+    assert.match(accountUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
     assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
     assert.match(accountUi.container.textContent, /Gefunden für: Star Wars/);
     assert.match(accountUi.container.textContent, /2027-05-20 · AT · Kinostart in Österreich/);
@@ -688,8 +634,9 @@ try {
   const accountReload = await mount(null, accountHarness);
   await act(async () => { button(accountReload.container, "Radar").click(); await tick(); });
   await settle();
-  await check("Account-Feedfund bleibt ohne zweiten Function-Aufruf nach Reload sichtbar", async () => {
-    assert.equal(accountFunctionCalls.length, 1);
+  await check("Account-Feedfund bleibt nach Reload sichtbar, ohne Browser-Suchpfad", async () => {
+    assert.equal(accountFeedSyncs, 2);
+    assert.equal(button(accountReload.container, "Jetzt prüfen"), undefined);
     assert.match(accountReload.container.textContent, /Star Wars: Starfighter/);
     assert.match(accountReload.container.textContent, /Gefunden für: Star Wars/);
   });
