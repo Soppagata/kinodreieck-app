@@ -939,30 +939,28 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
     queueMicrotask(() => kind.emit("exit", 0, null));
     return kind;
   };
-  const code = await starteModus({
-    modus: "ai-live",
-    ambientEnv: {},
-    lokaleKonfig: PUBLIC,
-    keychainLeser(account) {
-      gelesen.push(account);
-      return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
-    },
-    spawnImpl,
-    ownerApprovedServerBudget: true,
-    entdeckenDailyOnce: true,
-  });
+  let fehler = null;
+  try {
+    await starteModus({
+      modus: "ai-live",
+      ambientEnv: {},
+      lokaleKonfig: PUBLIC,
+      keychainLeser(account) {
+        gelesen.push(account);
+        return account === KEYCHAIN_ACCOUNTS.owner ? OWNER_GEHEIMNIS : SONDERGEHEIMNIS;
+      },
+      spawnImpl,
+      ownerApprovedServerBudget: true,
+      entdeckenDailyOnce: true,
+    });
+  } catch (error) { fehler = error; }
   pruefe("Entdecken-Einmallauf bleibt fest auf seinen einzelnen Client verdrahtet",
     MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/entdecken_daily_live.mjs"))
       && !MODI["ai-live"].entdeckenDailyOnceArgv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Format-6-Einmallauf startet nach additivem Bytevertrag nur den providerfreien Client",
-    code === 0
-      && starts.length === 1
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
-      && starts[0].argv.join("|") === MODI["ai-live"].entdeckenDailyOnceArgv.join("|")
-      && starts[0].optionen.env[ENTDECKEN_DAILY_ONCE_ENV] === "keychain-budget-guard-v1"
-      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
-      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
-      && !("KD_OWNER_USER" in starts[0].optionen.env));
+  pruefe("Nicht freigegebener Format-6-Einmallauf stoppt vor Keychain und Kindprozess",
+    fehler?.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT"
+      && starts.length === 0
+      && gelesen.length === 0);
 }
 
 {
