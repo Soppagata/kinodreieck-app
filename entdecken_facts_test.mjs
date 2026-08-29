@@ -6,6 +6,8 @@ import {
   ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
   ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
   ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL,
+  ENTDECKEN_FACTS_RESUME_BATCH_SIZES,
+  ENTDECKEN_FACTS_RESUME_SEARCH_USES,
   createEntdeckenFactsBatchPlan,
   createEntdeckenFactsInput,
   emptyEntdeckenFactsSnapshot,
@@ -33,6 +35,8 @@ import {
   validateEntdeckenFactsRequest,
 } from "./supabase/functions/entdecken-daily-task/factsRequest.js";
 import {
+  ENTDECKEN_FACTS_RESUME_LIMIT_USD_CENT,
+  createEntdeckenFactsResumeGuard,
   formatEntdeckenFactsRemoteFailure,
   runEntdeckenFactsBatchPlan,
 } from "./tools/entdecken_facts_live.mjs";
@@ -47,8 +51,6 @@ import {
 } from "./tools/keychain_runner.mjs";
 import {
   ANBIETER_REQUEST_LIMIT_USD_CENT,
-  LAUF_LIMIT_USD_CENT,
-  LiveLaufWache,
 } from "./tools/ai_budget_guard.mjs";
 
 let checks = 0;
@@ -198,29 +200,39 @@ function serverBatch(batch, results, { searchRequests = batch.length } = {}) {
   };
 }
 
-await check("50 Titel ergeben Batches 9/9/9/9/9/5 und höchstens eine Suche je Item", () => {
+await check("Restplan bearbeitet 50 Titel in fünf Batches mit höchstens 41 Websuchen", () => {
   const plan = createEntdeckenFactsBatchPlan(ENTDECKEN_MARKET_POOL_50, emptySnapshot(), { now: NOW });
-  assert.deepEqual(plan.batches.map((batch) => batch.length), [9, 9, 9, 9, 9, 5]);
+  assert.deepEqual(plan.batches.map((batch) => batch.length), [9, 11, 10, 10, 10]);
+  assert.deepEqual(plan.maxSearchUsesByBatch, [9, 8, 8, 8, 8]);
+  assert.deepEqual(ENTDECKEN_FACTS_RESUME_BATCH_SIZES, [9, 11, 10, 10, 10]);
+  assert.deepEqual(ENTDECKEN_FACTS_RESUME_SEARCH_USES, [9, 8, 8, 8, 8]);
   assert.equal(plan.providerRequests, ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS);
-  assert.equal(plan.maxSearchUses, 50);
+  assert.equal(plan.maxSearchUses, 41);
   assert.equal(ENTDECKEN_FACTS_BATCH_SIZE, 9);
   assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM, 1);
-  assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL, 50);
-  const reservations = plan.batches.map((batch) => (
-    estimateEntdeckenFactsReservation(buildAnthropicEntdeckenFactsBody(setup, batch), setup)
+  assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL, 41);
+  assert.equal(ENTDECKEN_FACTS_RESUME_LIMIT_USD_CENT, 1483.5933);
+  const reservations = plan.batches.map((batch, index) => (
+    estimateEntdeckenFactsReservation(buildAnthropicEntdeckenFactsBody(
+      setup,
+      batch,
+      plan.maxSearchUsesByBatch[index],
+    ), setup)
   ));
   assert.ok(reservations.every((cost) => cost > 5 && cost <= ANBIETER_REQUEST_LIMIT_USD_CENT));
-  assert.ok(reservations.reduce((sum, cost) => sum + cost, 0) <= LAUF_LIMIT_USD_CENT);
-  assert.equal(plan.maxSearchUses * ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT, 50);
+  assert.ok(reservations.reduce((sum, cost) => sum + cost, 0)
+    <= ENTDECKEN_FACTS_RESUME_LIMIT_USD_CENT);
+  assert.equal(plan.maxSearchUses * ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT, 41);
 });
 
 await check("Providerbody sendet nur Poolidentitaet und Chartquelle, nie Profil oder Score", () => {
-  const body = buildAnthropicEntdeckenFactsBody(setup, inputs.slice(0, 9));
+  const body = buildAnthropicEntdeckenFactsBody(setup, inputs.slice(0, 9), 9);
   assert.equal(body.tools[0].type, "web_search_20250305");
   assert.equal(body.tools[0].max_uses, 9);
   assert.deepEqual(body.tools[0].allowed_callers, ["direct"]);
   assert.equal(body.max_tokens, 2800);
   const userInput = body.messages[0].content;
+  assert.equal(JSON.parse(userInput).maxSearchUses, 9);
   assert.match(userInput, /chartSource/);
   assert.doesNotMatch(userInput, /profile|geschmack|score|seen|gesehen|account/i);
 });
@@ -228,7 +240,7 @@ await check("Providerbody sendet nur Poolidentitaet und Chartquelle, nie Profil 
 await check("Vollstaendige echte Envelope-Form wird strikt normalisiert", () => {
   const batch = inputs.slice(0, 2);
   const response = providerEnvelope(batch, batch.map((item, index) => providerResolved(item, index)));
-  const parsed = parseAnthropicEntdeckenFactsResponse(response, batch, NOW);
+  const parsed = parseAnthropicEntdeckenFactsResponse(response, batch, NOW, 2);
   assert.equal(parsed.accepted, 2);
   assert.equal(parsed.missing, 0);
   assert.equal(parsed.usage.searchRequests, 2);
@@ -237,6 +249,7 @@ await check("Vollstaendige echte Envelope-Form wird strikt normalisiert", () => 
     providerEnvelope(batch, batch.map((item, index) => providerResolved(item, index)), 3),
     batch,
     NOW,
+    2,
   ), /provider-envelope-invalid/);
 });
 
@@ -250,7 +263,9 @@ await check("Falsche Identitaet bleibt offen; Mehrdeutiges wird terminal negativ
     { poolId: batch[2].poolId, status: "ambiguous", identity: null, facts: null,
       evidenceUrls: [evidenceUrl(batch[2])] },
   ];
-  const parsed = parseAnthropicEntdeckenFactsResponse(providerEnvelope(batch, output), batch, NOW);
+  const parsed = parseAnthropicEntdeckenFactsResponse(
+    providerEnvelope(batch, output), batch, NOW, 3,
+  );
   assert.equal(parsed.accepted, 2);
   assert.equal(parsed.missing, 1);
   assert.ok(parsed.warnings.includes("identity-dropped"));
@@ -302,11 +317,11 @@ await check("Adapter bindet einen Request an Serverkostenbeleg und macht keinen 
       )), { status: 200 });
     },
   });
-  const result = await adapter.resolve(batch);
+  const result = await adapter.resolve(batch, 2);
   assert.equal(fetches, 1);
   assert.equal(result.items.length, 2);
   assert.equal(result.receipt.searchRequests, 2);
-  await assert.rejects(() => adapter.resolve(batch), /already-used/);
+  await assert.rejects(() => adapter.resolve(batch, 2), /already-used/);
   assert.equal(fetches, 1);
 });
 
@@ -331,7 +346,7 @@ await check("Provider-HTTP-Fehler zeigt nur Status und erlaubte Codes", async ()
     }),
   });
   let caught = null;
-  try { await adapter.resolve(batch); } catch (error) { caught = error; }
+  try { await adapter.resolve(batch, 9); } catch (error) { caught = error; }
   assert.ok(caught instanceof EntdeckenFactsProviderError);
   assert.equal(caught.code, "http-error");
   assert.deepEqual(caught.providerFailure, {
@@ -367,7 +382,7 @@ await check("Nicht-JSON-Providerfehler behält nur den HTTP-Status", async () =>
     readSettledCost: async () => null,
     fetchImpl: async () => new Response("private upstream body", { status: 502 }),
   });
-  await assert.rejects(() => adapter.resolve(inputs.slice(0, 9)), (error) => {
+  await assert.rejects(() => adapter.resolve(inputs.slice(0, 9), 9), (error) => {
     assert.equal(error.code, "http-error");
     assert.deepEqual(error.providerFailure, {
       stage: "http", httpStatus: 502, providerErrorType: null,
@@ -385,10 +400,14 @@ await check("Teilfortschritt wird je Item gesichert und Wiederanlauf enthaelt nu
   await assert.rejects(() => runEntdeckenFactsBatchPlan({
     snapshot: persisted,
     now: NOW,
-    requestBatch: async (batch) => {
+    requestBatch: async (batch, { maxSearchUses }) => {
       requests += 1;
       if (requests === 2) throw new Error("fixture-transport");
-      return serverBatch(batch, batch.map((item, index) => normalizedResult(item, index)));
+      return serverBatch(
+        batch,
+        batch.map((item, index) => normalizedResult(item, index)),
+        { searchRequests: maxSearchUses },
+      );
     },
     persistSnapshot: async (snapshot) => { persisted = snapshot; writes += 1; },
   }), /fixture-transport/);
@@ -399,10 +418,12 @@ await check("Teilfortschritt wird je Item gesichert und Wiederanlauf enthaelt nu
   const resume = createEntdeckenFactsBatchPlan(ENTDECKEN_MARKET_POOL_50, persisted, { now: NOW });
   assert.equal(resume.pending.length, 41);
   assert.equal(resume.batches.length, 5);
+  assert.deepEqual(resume.batches.map((batch) => batch.length), [9, 11, 10, 10, 1]);
+  assert.deepEqual(resume.maxSearchUsesByBatch, [9, 8, 8, 8, 1]);
   assert.ok(resume.pending.every((item) => !inputs.slice(0, 9).some((done) => done.poolId === item.poolId)));
 });
 
-await check("Vollstaendiger Mocklauf versucht alle 50 genau einmal in sechs Requests", async () => {
+await check("Vollstaendiger Mocklauf versucht alle 50 genau einmal in fünf Requests", async () => {
   let snapshot = emptySnapshot();
   let offset = 0;
   let writes = 0;
@@ -420,17 +441,17 @@ await check("Vollstaendiger Mocklauf versucht alle 50 genau einmal in sechs Requ
       assert.equal(marker.requestNumber, measuredAfter);
       assert.ok(costUsdCent > 0 && costUsdCent <= ANBIETER_REQUEST_LIMIT_USD_CENT);
     },
-    requestBatch: async (batch) => {
+    requestBatch: async (batch, { maxSearchUses }) => {
       const rows = batch.map((item, index) => normalizedResult(item, offset + index));
       offset += batch.length;
-      return serverBatch(batch, rows);
+      return serverBatch(batch, rows, { searchRequests: maxSearchUses });
     },
     persistSnapshot: async (next) => { snapshot = next; writes += 1; },
   });
-  assert.equal(result.providerRequests, 6);
-  assert.equal(result.searchRequests, 50);
-  assert.equal(measuredBefore, 6);
-  assert.equal(measuredAfter, 6);
+  assert.equal(result.providerRequests, 5);
+  assert.equal(result.searchRequests, 41);
+  assert.equal(measuredBefore, 5);
+  assert.equal(measuredAfter, 5);
   assert.equal(result.accepted, 50);
   assert.equal(writes, 51);
   assert.deepEqual(snapshot.pilot, {
@@ -447,19 +468,19 @@ await check("Pilot 7/9 geht weiter; ambiguous und unresolved zählen nicht", asy
   const result = await runEntdeckenFactsBatchPlan({
     snapshot,
     now: NOW,
-    requestBatch: async (batch) => {
+    requestBatch: async (batch, { maxSearchUses }) => {
       requests += 1;
       const rows = batch.map((item, index) => (
         requests === 1 && index === 7 ? normalizedResult(item, index, "ambiguous")
           : requests === 1 && index === 8 ? normalizedResult(item, index, "unresolved")
             : normalizedResult(item, requests * 100 + index)
       ));
-      return serverBatch(batch, rows);
+      return serverBatch(batch, rows, { searchRequests: maxSearchUses });
     },
     persistSnapshot: async (next) => { snapshot = next; },
   });
-  assert.equal(requests, 6);
-  assert.equal(result.providerRequests, 6);
+  assert.equal(requests, 5);
+  assert.equal(result.providerRequests, 5);
   assert.equal(snapshot.pilot.status, "passed");
   assert.equal(snapshot.pilot.resolvedReady, 7);
 });
@@ -471,13 +492,13 @@ await check("Pilot 6/9 stoppt nach exakt einem Providerrequest und behält Teils
   await assert.rejects(() => runEntdeckenFactsBatchPlan({
     snapshot,
     now: NOW,
-    requestBatch: async (batch) => {
+    requestBatch: async (batch, { maxSearchUses }) => {
       requests += 1;
       const rows = batch.map((item, index) => (
         index < 6 ? normalizedResult(item, index)
           : normalizedResult(item, index, index === 6 ? "unresolved" : "ambiguous")
       ));
-      return serverBatch(batch, rows);
+      return serverBatch(batch, rows, { searchRequests: maxSearchUses });
     },
     persistSnapshot: async (next) => { snapshot = next; writes += 1; },
   }), /FACTS_PILOT_THRESHOLD/);
@@ -491,18 +512,16 @@ await check("Pilot 6/9 stoppt nach exakt einem Providerrequest und behält Teils
   assert.equal(snapshot.entries[strongId(0)].validation.status, "machine_validated");
 });
 
-await check("Servermessung erzwingt seriell 500-Cent-Requestzaun und 500-Cent-Laufpuffer", async () => {
+await check("Restwache erzwingt fünf Requests, 1483,5933 Cent und 500-Cent-Puffer", async () => {
   const values = [0, 0, 400, 400, 800, 800, 1_001, 1_001];
-  const wache = new LiveLaufWache({
-    maxAnbieterRequests: 6,
-    laufLimitUsdCent: LAUF_LIMIT_USD_CENT,
-    standLeser: async () => ({
+  const wache = createEntdeckenFactsResumeGuard(async () => ({
       verbrauchtUsdCent: values.shift(),
       globalesBudgetErschoepft: false,
       anbieterRequestLimitUsdCent: ANBIETER_REQUEST_LIMIT_USD_CENT,
       anbieterRequestTimeoutMs: 135_000,
-    }),
-  });
+    }));
+  assert.equal(wache.maxAnbieterRequests, 5);
+  assert.equal(wache.laufLimitUsdCent, 1483.5933);
   await wache.initialisiere();
   for (const cost of [400, 400, 201]) {
     const marker = await wache.vorAnbieterRequest("fixture");
@@ -610,11 +629,18 @@ await check("Requestvertrag akzeptiert nur die vollständige pre-resolution Iden
   const request = validateEntdeckenFactsRequest({
     schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION,
     items: inputs.slice(0, 9),
+    maxSearchUses: 9,
   });
   assert.equal(request.items.length, 9);
   assert.equal(validateEntdeckenFactsRequest({
     schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION,
     items: [{ ...inputs[0], title: "anderer Titel" }],
+    maxSearchUses: 1,
+  }), null);
+  assert.equal(validateEntdeckenFactsRequest({
+    schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION,
+    items: inputs.slice(0, 11),
+    maxSearchUses: 10,
   }), null);
 });
 

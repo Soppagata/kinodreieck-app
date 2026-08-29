@@ -6,11 +6,14 @@
 export const ENTDECKEN_FACTS_CONTRACT_VERSION = "entdecken-facts-batch-v1";
 export const ENTDECKEN_FACTS_SNAPSHOT_VERSION = "entdecken-facts-snapshot-v1";
 export const ENTDECKEN_FACTS_PROVIDER_VERSION = "anthropic-web-search-20250305";
-export const ENTDECKEN_FACTS_PROMPT_VERSION = "entdecken-facts-v1";
+export const ENTDECKEN_FACTS_PROMPT_VERSION = "entdecken-facts-v2";
 export const ENTDECKEN_FACTS_BATCH_SIZE = 9;
-export const ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS = 6;
+export const ENTDECKEN_FACTS_MAX_BATCH_SIZE = 11;
+export const ENTDECKEN_FACTS_RESUME_BATCH_SIZES = Object.freeze([9, 11, 10, 10, 10]);
+export const ENTDECKEN_FACTS_RESUME_SEARCH_USES = Object.freeze([9, 8, 8, 8, 8]);
+export const ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS = 5;
 export const ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM = 1;
-export const ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL = 50;
+export const ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL = 41;
 export const ENTDECKEN_FACTS_PILOT_RESOLVED_MIN = 7;
 export const ENTDECKEN_FACTS_OK_TTL_DAYS = 90;
 export const ENTDECKEN_FACTS_NEGATIVE_TTL_DAYS = 30;
@@ -107,7 +110,7 @@ export function createEntdeckenFactsInput(item, poolVersion) {
 }
 
 export function validateEntdeckenFactsInputs(value) {
-  if (!Array.isArray(value) || value.length < 1 || value.length > ENTDECKEN_FACTS_BATCH_SIZE) return null;
+  if (!Array.isArray(value) || value.length < 1 || value.length > ENTDECKEN_FACTS_MAX_BATCH_SIZE) return null;
   const seen = new Set();
   const accepted = [];
   for (const input of value) {
@@ -242,15 +245,24 @@ export function createEntdeckenFactsBatchPlan(pool, snapshot, { now = new Date()
   const pending = pool.items.map((item) => createEntdeckenFactsInput(item, pool.poolVersion))
     .filter((item) => item && !cachedEntdeckenFacts(checked, item, { now }));
   const batches = [];
-  for (let index = 0; index < pending.length; index += ENTDECKEN_FACTS_BATCH_SIZE) {
-    batches.push(Object.freeze(pending.slice(index, index + ENTDECKEN_FACTS_BATCH_SIZE)));
+  const maxSearchUsesByBatch = [];
+  let offset = 0;
+  for (let index = 0; offset < pending.length; index += 1) {
+    const size = ENTDECKEN_FACTS_RESUME_BATCH_SIZES[index];
+    const searchUses = ENTDECKEN_FACTS_RESUME_SEARCH_USES[index];
+    if (!Number.isInteger(size) || !Number.isInteger(searchUses)) return null;
+    const batch = Object.freeze(pending.slice(offset, offset + size));
+    batches.push(batch);
+    maxSearchUsesByBatch.push(Math.min(batch.length, searchUses));
+    offset += size;
   }
   if (batches.length > ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS) return null;
   return Object.freeze({
     pending: Object.freeze(pending),
     batches: Object.freeze(batches),
+    maxSearchUsesByBatch: Object.freeze(maxSearchUsesByBatch),
     providerRequests: batches.length,
-    maxSearchUses: pending.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
+    maxSearchUses: maxSearchUsesByBatch.reduce((sum, value) => sum + value, 0),
   });
 }
 

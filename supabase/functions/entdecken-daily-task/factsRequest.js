@@ -15,7 +15,7 @@ import { normalizeEntdeckenProviderFailure } from "./providerFailureContract.js"
 
 export const ENTDECKEN_FACTS_HEADER = "x-kd-entdecken-facts";
 export const ENTDECKEN_FACTS_HEADER_VALUE = "owner-v1";
-export const ENTDECKEN_FACTS_REQUEST_VERSION = "entdecken-facts-request-v1";
+export const ENTDECKEN_FACTS_REQUEST_VERSION = "entdecken-facts-request-v2";
 
 const SAFE_FACTS_ERROR_CODES = new Set([
   "already-used", "batch-invalid", "cost-gate-rejected", "cost-settlement-failed",
@@ -42,10 +42,16 @@ function limitRows(rows) {
 }
 
 export function validateEntdeckenFactsRequest(value) {
-  if (!exactKeys(value, ["schemaVersion", "items"])
+  if (!exactKeys(value, ["schemaVersion", "items", "maxSearchUses"])
       || value.schemaVersion !== ENTDECKEN_FACTS_REQUEST_VERSION) return null;
   const items = validateEntdeckenFactsInputs(value.items);
-  return items ? Object.freeze({ schemaVersion: value.schemaVersion, items }) : null;
+  if (!items || !Number.isInteger(value.maxSearchUses) || value.maxSearchUses < 1
+      || value.maxSearchUses > items.length || value.maxSearchUses > 9) return null;
+  return Object.freeze({
+    schemaVersion: value.schemaVersion,
+    items,
+    maxSearchUses: value.maxSearchUses,
+  });
 }
 
 export function createEntdeckenFactsErrorResponse(error) {
@@ -204,7 +210,7 @@ export async function runEntdeckenFactsRequest({
       };
     },
   });
-  const result = await adapter.resolve(request.items);
+  const result = await adapter.resolve(request.items, request.maxSearchUses);
   return Object.freeze({
     ok: true,
     status: "facts",

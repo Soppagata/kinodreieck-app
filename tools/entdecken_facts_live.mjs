@@ -31,7 +31,6 @@ import {
   validateEntdeckenFactsErrorResponse,
 } from "../supabase/functions/entdecken-daily-task/factsRequest.js";
 import {
-  LAUF_LIMIT_USD_CENT,
   LiveLaufWache,
   fetchMitZeitgrenze,
   holeBudgetStand,
@@ -41,6 +40,7 @@ import {
 
 export const ENTDECKEN_FACTS_ONCE_ENV = "KD_ENTDECKEN_FACTS_ONCE_GUARD";
 export const ENTDECKEN_FACTS_ONCE_VALUE = "keychain-budget-guard-v1";
+export const ENTDECKEN_FACTS_RESUME_LIMIT_USD_CENT = 1483.5933;
 export const ENTDECKEN_FACTS_SNAPSHOT_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../src/data/entdeckenFactsSnapshot.json",
@@ -96,7 +96,7 @@ export function writeEntdeckenFactsSnapshotAtomic(
   }
 }
 
-function validateSafeServerBatch(value, batch) {
+function validateSafeServerBatch(value, batch, maxSearchUses) {
   if (!exactKeys(value, ["ok", "status", "schemaVersion", "items", "quality", "receipt"])
       || value.ok !== true || value.status !== "facts"
       || value.schemaVersion !== ENTDECKEN_FACTS_CONTRACT_VERSION
@@ -108,7 +108,7 @@ function validateSafeServerBatch(value, batch) {
       || !/^claude-haiku-4-5(?:-[0-9]{8})?$/.test(value.receipt.model)
       || !Number.isInteger(value.receipt.searchRequests)
       || value.receipt.searchRequests < 0
-      || value.receipt.searchRequests > batch.length
+      || value.receipt.searchRequests > maxSearchUses
       || !Number.isFinite(value.receipt.reservationUsdCent)
       || value.receipt.reservationUsdCent <= 0
       || value.receipt.reservationUsdCent > 500
@@ -144,6 +144,14 @@ function pilotReady(item) {
     );
 }
 
+export function createEntdeckenFactsResumeGuard(standLeser) {
+  return new LiveLaufWache({
+    maxAnbieterRequests: ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
+    laufLimitUsdCent: ENTDECKEN_FACTS_RESUME_LIMIT_USD_CENT,
+    standLeser,
+  });
+}
+
 export async function runEntdeckenFactsBatchPlan({
   pool = ENTDECKEN_MARKET_POOL_50,
   snapshot,
@@ -171,15 +179,18 @@ export async function runEntdeckenFactsBatchPlan({
       throw new Error("FACTS_REQUEST_LIMIT");
     }
     providerRequests += 1;
+    const maxSearchUses = plan.maxSearchUsesByBatch[batchIndex];
+    if (!Number.isInteger(maxSearchUses) || maxSearchUses < 1
+        || maxSearchUses > batch.length) throw new Error("FACTS_SEARCH_PLAN_INVALID");
     const requestMarker = await beforeRequest({ batch, requestNumber: providerRequests });
     let rawResponse;
     try {
-      rawResponse = await requestBatch(batch);
+      rawResponse = await requestBatch(batch, { maxSearchUses });
     } catch (error) {
       await afterRequest(requestMarker, null);
       throw error;
     }
-    const response = validateSafeServerBatch(rawResponse, batch);
+    const response = validateSafeServerBatch(rawResponse, batch, maxSearchUses);
     if (!response) {
       await afterRequest(requestMarker, null);
       throw new Error("FACTS_BATCH_RESPONSE_INVALID");
@@ -241,11 +252,9 @@ export async function runEntdeckenFactsLive({
   }
   const connection = liesBudgetVerbindung(env);
   const token = await meldeTestkontoAn(connection, fetchImpl);
-  const laufWache = new LiveLaufWache({
-    maxAnbieterRequests: ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
-    laufLimitUsdCent: LAUF_LIMIT_USD_CENT,
-    standLeser: () => holeBudgetStand({ verbindung: connection, token, fetchImpl }),
-  });
+  const laufWache = createEntdeckenFactsResumeGuard(
+    () => holeBudgetStand({ verbindung: connection, token, fetchImpl }),
+  );
   await laufWache.initialisiere();
   const initial = readEntdeckenFactsSnapshot();
   const endpoint = `${connection.urlBasis}/functions/v1/entdecken-daily-task`;
@@ -255,7 +264,7 @@ export async function runEntdeckenFactsLive({
       `Entdecken-Fakten Batch ${requestNumber}`,
     ),
     afterRequest: (marker, costUsdCent) => laufWache.nachAnbieterRequest(marker, costUsdCent),
-    requestBatch: async (items) => {
+    requestBatch: async (items, { maxSearchUses }) => {
       const response = await fetchMitZeitgrenze(endpoint, {
         method: "POST",
         redirect: "error",
@@ -267,7 +276,11 @@ export async function runEntdeckenFactsLive({
           "X-KD-Entdecken-Refresh": "owner-v1",
           [ENTDECKEN_FACTS_HEADER]: ENTDECKEN_FACTS_HEADER_VALUE,
         },
-        body: JSON.stringify({ schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION, items }),
+        body: JSON.stringify({
+          schemaVersion: ENTDECKEN_FACTS_REQUEST_VERSION,
+          items,
+          maxSearchUses,
+        }),
       }, { fetchImpl, timeoutMs: 135_000 });
       const body = await responseJson(response);
       if (!response.ok || response.status !== 200) {
