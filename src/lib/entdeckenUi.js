@@ -16,6 +16,11 @@ import {
 } from "./localEventRadar.js";
 import { rankRecommendations } from "./recommendationRanking.js";
 import { profileCompatibleGenres } from "./profileGenreVocabulary.js";
+import entdeckenFactsSnapshot from "../data/entdeckenFactsSnapshot.json" with { type: "json" };
+import {
+  projectEntdeckenFacts,
+  validateEntdeckenFactsSnapshot,
+} from "./entdeckenFacts.js";
 import {
   discoveryExternalIdsFromCatalog,
   matchWebDiscoveryFeed,
@@ -421,7 +426,7 @@ function sourceItemSeen(item, master, catalogCandidates, annotation = item?.wiki
    duerfen Metadaten ergaenzen. Quellenrang bleibt niemals Passungsgrund. */
 export function publicDiscoveryCandidates({
   webDiscoveryFeed, master = [], catalogCandidates = [], selectedServices = [],
-  includeSeen = false, requireMetadata = true,
+  includeSeen = false, requireMetadata = true, factsSnapshot = entdeckenFactsSnapshot,
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok || ![
@@ -433,23 +438,34 @@ export function publicDiscoveryCandidates({
   const services = selectedServiceSet(selectedServices);
   if (!mixed && services.size && !services.has("joyn")) return Object.freeze([]);
   const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
+  const checkedFactsSnapshot = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT
+    ? validateEntdeckenFactsSnapshot(factsSnapshot, {
+      poolId: checked.value.feedId,
+      poolVersion: checked.value.poolVersion,
+    }) : null;
   const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
     .map((decision) => [decision.record.sourceItemId, decision]));
   const projected = checked.value.items.map((item) => {
+    const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
     const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
-      qid: null, releaseYear: item.releaseYear, externalIds: item.externalIds,
+      qid: enriched?.strongId?.startsWith("wikidata:")
+        ? enriched.strongId.slice("wikidata:".length) : null,
+      releaseYear: item.releaseYear,
+      externalIds: Object.freeze({ ...item.externalIds, ...(enriched?.externalIds || {}) }),
     }) : annotations.get(item.sourceItemId);
     const local = decisions.get(item.sourceItemId)?.status === "matched"
       ? decisions.get(item.sourceItemId).candidate : null;
-    const genres = profileCompatibleGenres(uniqueText([...item.genres, ...list(local?.genres)]));
-    const tags = uniqueText(list(local?.tags));
-    const franchiseId = local?.franchiseId || null;
+    const genres = profileCompatibleGenres(uniqueText([
+      ...item.genres, ...list(enriched?.genres), ...list(local?.genres),
+    ]));
+    const tags = uniqueText([...list(enriched?.tags), ...list(local?.tags)]);
+    const franchiseId = enriched?.franchiseId || local?.franchiseId || null;
     const seen = sourceItemSeen(item, master, catalogCandidates, facts);
     const availability = mixed ? item.availability : Object.freeze({
       region: "AT", market: "streaming", service: "Joyn", licenseTypes: [...item.licenseTypes],
     });
     return Object.freeze({
-      targetId: local?.targetId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
+      targetId: local?.targetId || enriched?.strongId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
       watchmodeId: local?.watchmodeId ?? null,
       sourceItemId: item.sourceItemId,
       title: item.title,
@@ -474,7 +490,16 @@ export function publicDiscoveryCandidates({
       type: item.mediaType,
       externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
       externalDiscovery: true,
-      externalEvidence: Object.freeze([sourceEvidence(item)]),
+      externalEvidence: Object.freeze([
+        sourceEvidence(item),
+        ...list(enriched?.evidenceUrls).map((url) => Object.freeze({
+          domain: new URL(url).hostname,
+          url,
+          publishedOn: null,
+          retrievedOn: enriched.checkedAt,
+          positiveRecommendation: false,
+        })),
+      ]),
       discoveryRecordId: `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
       wikidata: facts || null,
       metadataReady: genres.length > 0 || tags.length > 0 || !!franchiseId,
@@ -499,7 +524,9 @@ function discoveryEvidence(record) {
    Wochenfeeds. Ein sicherer lokaler Match reichert die Karte mit
    Verfuegbarkeit und bestehenden Aktionen an; unklare Matches bleiben reine
    Webtipps und loesen keinerlei Pin-/Persistenzaktion aus. */
-export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = [] } = {}) {
+export function webDiscoveryFeedCards({
+  webDiscoveryFeed, catalogCandidates = [], factsSnapshot = entdeckenFactsSnapshot,
+} = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
   if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
@@ -507,11 +534,20 @@ export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = []
     const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
       .includes(checked.value.format);
     const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
+    const checkedFactsSnapshot = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT
+      ? validateEntdeckenFactsSnapshot(factsSnapshot, {
+        poolId: checked.value.feedId,
+        poolVersion: checked.value.poolVersion,
+      }) : null;
     const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
       .map((decision) => [decision.record.sourceItemId, decision]));
     const projected = checked.value.items.map((item) => {
+      const enriched = checkedFactsSnapshot ? projectEntdeckenFacts(checkedFactsSnapshot, item) : null;
       const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
-        qid: null, releaseYear: item.releaseYear, externalIds: item.externalIds,
+        qid: enriched?.strongId?.startsWith("wikidata:")
+          ? enriched.strongId.slice("wikidata:".length) : null,
+        releaseYear: item.releaseYear,
+        externalIds: Object.freeze({ ...item.externalIds, ...(enriched?.externalIds || {}) }),
       }) : annotations.get(item.sourceItemId);
       const local = decisions.get(item.sourceItemId)?.status === "matched"
         ? decisions.get(item.sourceItemId).candidate : null;
@@ -519,7 +555,7 @@ export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = []
         region: "AT", market: "streaming", service: "Joyn", licenseTypes: [...item.licenseTypes],
       });
       return Object.freeze({
-        targetId: local?.targetId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
+        targetId: local?.targetId || enriched?.strongId || `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
         watchmodeId: local?.watchmodeId ?? null,
         sourceItemId: item.sourceItemId,
         discoveryRecordId: `${mixed ? "market" : "joyn"}:${item.sourceItemId}`,
@@ -535,10 +571,21 @@ export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = []
         popularity: Object.freeze({ ...(item.popularity || {
           metric: "source-chart-rank", rank: item.sourcePosition, measuredOn: item.listDate, value: null,
         }) }),
-        externalEvidence: Object.freeze([sourceEvidence(item)]),
+        externalEvidence: Object.freeze([
+          sourceEvidence(item),
+          ...list(enriched?.evidenceUrls).map((url) => Object.freeze({
+            domain: new URL(url).hostname,
+            url,
+            publishedOn: null,
+            retrievedOn: enriched.checkedAt,
+            positiveRecommendation: false,
+          })),
+        ]),
         matchStatus: "source-confirmed",
-        genres: Object.freeze(uniqueText([...item.genres, ...list(local?.genres)])),
-        tags: Object.freeze(uniqueText(list(local?.tags))),
+        genres: Object.freeze(uniqueText([
+          ...item.genres, ...list(enriched?.genres), ...list(local?.genres),
+        ])),
+        tags: Object.freeze(uniqueText([...list(enriched?.tags), ...list(local?.tags)])),
         licenseTypes: Object.freeze([...availability.licenseTypes]),
         externalIds: Object.freeze({ ...(facts?.externalIds || {}) }),
         wikidata: facts || null,
@@ -661,7 +708,7 @@ export function selectDailyRecommendations(rows, {
 export function createEntdeckenRecommendations({
   streamingEntdecken, streamingKnown = null, profile, master, useLibrary = true,
   selectedServices = [], entdeckenStatus = {}, webDiscoveryFeed = null,
-  dailyVariety = false, selectionDay = null,
+  dailyVariety = false, selectionDay = null, factsSnapshot = entdeckenFactsSnapshot,
 } = {}) {
   const excludedTargetIds = seenTargetIds(master, entdeckenStatus);
   const excluded = new Set(excludedTargetIds);
@@ -686,7 +733,7 @@ export function createEntdeckenRecommendations({
       }) : catalogCandidates;
     const allDirect = publicDiscoveryCandidates({
       webDiscoveryFeed: checkedFeed.value, master, catalogCandidates: broadCatalog, selectedServices,
-      includeSeen: true, requireMetadata: false,
+      includeSeen: true, requireMetadata: false, factsSnapshot,
     });
     const withMetadata = allDirect.filter((candidate) => candidate.metadataReady);
     const direct = withMetadata.filter((candidate) => !candidate.seen);
@@ -703,7 +750,7 @@ export function createEntdeckenRecommendations({
       selectionDay,
     });
     const popularPool = webDiscoveryFeedCards({
-      webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog,
+      webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog, factsSnapshot,
     });
     const orderedPopularPool = mixed
       ? selectStablePopularCards(popularPool, {

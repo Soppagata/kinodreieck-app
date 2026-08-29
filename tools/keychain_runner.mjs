@@ -56,6 +56,8 @@ export const ENTDECKEN_DAILY_ONCE_FLAG = "--entdecken-daily-once";
 export const ENTDECKEN_DAILY_ONCE_ENV = "KD_ENTDECKEN_DAILY_ONCE_GUARD";
 export const ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG = "--entdecken-provider-probe-once";
 export const ENTDECKEN_PROVIDER_PROBE_ONCE_ENV = "KD_ENTDECKEN_PROVIDER_PROBE_ONCE_GUARD";
+export const ENTDECKEN_FACTS_ONCE_FLAG = "--entdecken-facts-once";
+export const ENTDECKEN_FACTS_ONCE_ENV = "KD_ENTDECKEN_FACTS_ONCE_GUARD";
 
 const DATEI = fileURLToPath(import.meta.url);
 export const REPO_ROOT = resolve(dirname(DATEI), "..");
@@ -86,6 +88,7 @@ const VERBOTENE_LOKALE_NAMEN = new Set([
   RADAR_TARGET_AUTO_RESOLVE_ENV,
   ENTDECKEN_DAILY_ONCE_ENV,
   ENTDECKEN_PROVIDER_PROBE_ONCE_ENV,
+  ENTDECKEN_FACTS_ONCE_ENV,
   OWNER_CORE_SIX_GUARD_ENV,
   PROVIDER_RAW_CAPTURE_DIR_ENV,
   PROVIDER_RAW_CAPTURE_GUARD_ENV,
@@ -156,6 +159,12 @@ export const MODI = Object.freeze({
       "--",
       process.execPath,
       SKRIPT("entdecken_provider_probe_live.mjs"),
+    ],
+    entdeckenFactsOnceArgv: [
+      SKRIPT("ai_budget_guard.mjs"),
+      "--",
+      process.execPath,
+      SKRIPT("entdecken_facts_live.mjs"),
     ],
     radarEntdeckenOnceArgv: [
       SKRIPT("ai_budget_guard.mjs"),
@@ -483,6 +492,7 @@ export function baueOwnerReadbackUmgebung({
   delete env[RADAR_WEBSEARCH_ONCE_ENV];
   delete env[ENTDECKEN_DAILY_ONCE_ENV];
   delete env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV];
+  delete env[ENTDECKEN_FACTS_ONCE_ENV];
   return env;
 }
 
@@ -496,6 +506,7 @@ export function baueKindUmgebung({
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
   entdeckenProviderProbeOnce = false,
+  entdeckenFactsOnce = false,
   radarEntdeckenOnce = false,
   ownerCoreSix = false,
 }) {
@@ -512,8 +523,13 @@ export function baueKindUmgebung({
     throw new Error("Der einmalige Entdecken-Lauf braucht den AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
   if (entdeckenProviderProbeOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
-      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce)) {
+      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce || entdeckenFactsOnce)) {
     throw new Error("Die einmalige Entdecken-Providerprobe braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
+  }
+  if (entdeckenFactsOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
+      || radarWebsearchOnce || entdeckenDailyOnce || radarEntdeckenOnce
+      || entdeckenProviderProbeOnce)) {
+    throw new Error("Der einmalige Entdecken-Faktenlauf braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
   if (radarEntdeckenOnce && (modus !== "ai-live" || !ownerApprovedServerBudget
       || radarWebsearchOnce || entdeckenDailyOnce || entdeckenProviderProbeOnce)) {
@@ -522,15 +538,15 @@ export function baueKindUmgebung({
   const effectiveOwnerCoreSix = ownerCoreSix
     || (modus === "ai-live" && ownerApprovedServerBudget
       && !radarWebsearchOnce && !entdeckenDailyOnce
-      && !entdeckenProviderProbeOnce && !radarEntdeckenOnce);
+      && !entdeckenProviderProbeOnce && !entdeckenFactsOnce && !radarEntdeckenOnce);
   if (effectiveOwnerCoreSix && (modus !== "ai-live" || !ownerApprovedServerBudget
       || radarWebsearchOnce || entdeckenDailyOnce
-      || entdeckenProviderProbeOnce || radarEntdeckenOnce)) {
+      || entdeckenProviderProbeOnce || entdeckenFactsOnce || radarEntdeckenOnce)) {
     throw new Error("Die Owner-Kernphase braucht den exklusiven AI-Live-Pfad und die exakte Owner-Budgetfreigabe.");
   }
   const ownerCredentialLane = modus === "ai-live"
     && (effectiveOwnerCoreSix || entdeckenDailyOnce
-      || entdeckenProviderProbeOnce || radarEntdeckenOnce);
+      || entdeckenProviderProbeOnce || entdeckenFactsOnce || radarEntdeckenOnce);
 
   const env = harmloseBasis(ambientEnv);
   for (const name of OEFFENTLICHE_NAMEN) {
@@ -618,6 +634,7 @@ export function baueKindUmgebung({
   if (entdeckenProviderProbeOnce) {
     env[ENTDECKEN_PROVIDER_PROBE_ONCE_ENV] = "keychain-budget-guard-v1";
   }
+  if (entdeckenFactsOnce) env[ENTDECKEN_FACTS_ONCE_ENV] = "keychain-budget-guard-v1";
   if (radarEntdeckenOnce) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
   if (effectiveOwnerCoreSix) env[ENTDECKEN_DAILY_ONCE_ENV] = "keychain-budget-guard-v1";
   return env;
@@ -634,6 +651,7 @@ export async function starteModus({
   radarWebsearchOnce = false,
   entdeckenDailyOnce = false,
   entdeckenProviderProbeOnce = false,
+  entdeckenFactsOnce = false,
   radarEntdeckenOnce = false,
   requireCleanProbeProvenance = false,
 }) {
@@ -647,7 +665,7 @@ export async function starteModus({
   }
   const ownerCoreSix = modus === "ai-live" && ownerApprovedServerBudget
     && !radarWebsearchOnce && !entdeckenDailyOnce
-    && !entdeckenProviderProbeOnce && !radarEntdeckenOnce;
+    && !entdeckenProviderProbeOnce && !entdeckenFactsOnce && !radarEntdeckenOnce;
   const env = baueKindUmgebung({
     modus,
     ambientEnv,
@@ -658,6 +676,7 @@ export async function starteModus({
     radarWebsearchOnce,
     entdeckenDailyOnce,
     entdeckenProviderProbeOnce,
+    entdeckenFactsOnce,
     radarEntdeckenOnce,
     ownerCoreSix,
   });
@@ -672,7 +691,9 @@ export async function starteModus({
           ? definition.entdeckenDailyOnceArgv
           : (entdeckenProviderProbeOnce
             ? definition.entdeckenProviderProbeOnceArgv
-            : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv)));
+            : (entdeckenFactsOnce
+              ? definition.entdeckenFactsOnceArgv
+              : (radarEntdeckenOnce ? definition.radarEntdeckenOnceArgv : definition.argv))));
       const kind = spawnImpl(process.execPath, argv, {
         cwd: REPO_ROOT,
         env,
@@ -717,6 +738,7 @@ export async function main(
   const radarWebsearchOnce = rest.includes(RADAR_WEBSEARCH_ONCE_FLAG);
   const entdeckenDailyOnce = rest.includes(ENTDECKEN_DAILY_ONCE_FLAG);
   const entdeckenProviderProbeOnce = rest.includes(ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG);
+  const entdeckenFactsOnce = rest.includes(ENTDECKEN_FACTS_ONCE_FLAG);
   const radarEntdeckenOnce = rest.includes(RADAR_ENTDECKEN_ONCE_FLAG);
   const entdeckenBefehlExakt = modus === "ai-live"
     && rest.length === 2
@@ -726,12 +748,17 @@ export async function main(
     && rest.length === 2
     && rest[0] === ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG
     && rest[1] === OWNER_SERVER_BUDGET_FLAG;
+  const entdeckenFactsBefehlExakt = modus === "ai-live"
+    && rest.length === 2
+    && rest[0] === ENTDECKEN_FACTS_ONCE_FLAG
+    && rest[1] === OWNER_SERVER_BUDGET_FLAG;
   /* Der exakte Ownerbefehl ohne Sonderflag startet einen einzigen Smoke mit
      der Sechser-Kernphase sowie je genau einem Entdecken- und Radar-Pfad. */
   const ohneSonderflags = rest.filter((arg) => (
     arg !== OWNER_SERVER_BUDGET_FLAG && arg !== RADAR_WEBSEARCH_ONCE_FLAG
       && arg !== ENTDECKEN_DAILY_ONCE_FLAG && arg !== RADAR_ENTDECKEN_ONCE_FLAG
       && arg !== ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG
+      && arg !== ENTDECKEN_FACTS_ONCE_FLAG
   ));
   const confirmPaid = bezahlt
     && ohneSonderflags.length === 1
@@ -743,23 +770,27 @@ export async function main(
     || (ownerApprovedServerBudget && entdeckenBefehlExakt);
   const entdeckenProviderProbeFlagErlaubt = !entdeckenProviderProbeOnce
     || (ownerApprovedServerBudget && entdeckenProviderProbeBefehlExakt);
+  const entdeckenFactsFlagErlaubt = !entdeckenFactsOnce
+    || (ownerApprovedServerBudget && entdeckenFactsBefehlExakt);
   const combinedFlagErlaubt = !radarEntdeckenOnce || modus === "ai-live";
   const liveSonderpfade = [
-    radarWebsearchOnce, entdeckenDailyOnce, entdeckenProviderProbeOnce, radarEntdeckenOnce,
+    radarWebsearchOnce, entdeckenDailyOnce, entdeckenProviderProbeOnce, entdeckenFactsOnce,
+    radarEntdeckenOnce,
   ].filter(Boolean).length;
   const argumenteGueltig = bezahlt
     ? confirmPaid && ohneSonderflags.length === 1
     : ohneSonderflags.length === 0;
   if (!MODI[modus] || !flagErlaubt || !radarFlagErlaubt || !entdeckenFlagErlaubt
-    || !entdeckenProviderProbeFlagErlaubt || !combinedFlagErlaubt
+    || !entdeckenProviderProbeFlagErlaubt || !entdeckenFactsFlagErlaubt || !combinedFlagErlaubt
     || !argumenteGueltig || liveSonderpfade > 1
     || rest.filter((arg) => arg === OWNER_SERVER_BUDGET_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_WEBSEARCH_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === ENTDECKEN_DAILY_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG).length > 1
+    || rest.filter((arg) => arg === ENTDECKEN_FACTS_ONCE_FLAG).length > 1
     || rest.filter((arg) => arg === RADAR_ENTDECKEN_ONCE_FLAG).length > 1) {
     fehlerAusgabe(
-      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${ENTDECKEN_DAILY_ONCE_FLAG}|${ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
+      `Erlaubt: keychain-check | budget-check | ai-live [${RADAR_WEBSEARCH_ONCE_FLAG}|${ENTDECKEN_DAILY_ONCE_FLAG}|${ENTDECKEN_PROVIDER_PROBE_ONCE_FLAG}|${ENTDECKEN_FACTS_ONCE_FLAG}|${RADAR_ENTDECKEN_ONCE_FLAG}] `
       + `[${OWNER_SERVER_BUDGET_FLAG}] | `
       + "profile-contract | "
       + `ai-eval --confirm-paid [${OWNER_SERVER_BUDGET_FLAG}] | rls`,
@@ -776,6 +807,7 @@ export async function main(
       radarWebsearchOnce,
       entdeckenDailyOnce,
       entdeckenProviderProbeOnce,
+      entdeckenFactsOnce,
       radarEntdeckenOnce,
       requireCleanProbeProvenance: entdeckenProviderProbeOnce,
     });

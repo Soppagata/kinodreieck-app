@@ -23,6 +23,11 @@ import {
   providerDiagnosticAccess,
   providerDiagnosticField,
 } from "../_shared/providerDiagnostic.js";
+import {
+  ENTDECKEN_FACTS_HEADER,
+  ENTDECKEN_FACTS_HEADER_VALUE,
+  runEntdeckenFactsRequest,
+} from "./factsRequest.js";
 
 const ALLOWED_ORIGINS = new Set([
   "https://kinodreieck.at",
@@ -38,7 +43,7 @@ const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 function text(value: unknown): string { return String(value == null ? "" : value).trim(); }
 function cors(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}, ${ENTDECKEN_PROVIDER_PROBE_HEADER}`,
+    "Access-Control-Allow-Headers": `authorization, apikey, content-type, ${REFRESH_HEADER}, ${PROVIDER_DIAGNOSTIC_HEADER}, ${ENTDECKEN_PROVIDER_PROBE_HEADER}, ${ENTDECKEN_FACTS_HEADER}`,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -151,11 +156,13 @@ export function createEntdeckenDailyHandler({
     const origin = req.headers.get("Origin");
     const providerDiagnosticHeader = req.headers.get(PROVIDER_DIAGNOSTIC_HEADER);
     const providerProbeHeader = req.headers.get(ENTDECKEN_PROVIDER_PROBE_HEADER);
+    const factsHeader = req.headers.get(ENTDECKEN_FACTS_HEADER);
     if (req.method === "OPTIONS") {
       if (!origin || !ALLOWED_ORIGINS.has(origin)) return new Response(null, { status: 403, headers: cors(origin) });
       return new Response(null, { status: 204, headers: cors(origin) });
     }
-    if (!["GET", "POST"].includes(req.method) || requestHasForbiddenBody(req)
+    const factsBodyAllowed = req.method === "POST" && factsHeader === ENTDECKEN_FACTS_HEADER_VALUE;
+    if (!["GET", "POST"].includes(req.method) || (requestHasForbiddenBody(req) && !factsBodyAllowed)
         || (origin !== null && !ALLOWED_ORIGINS.has(origin))) {
       return json({ ok: false, status: "disabled", feed: null }, 405, origin);
     }
@@ -170,6 +177,11 @@ export function createEntdeckenDailyHandler({
     if (providerProbeHeader !== null
         && (requestMode !== "owner"
           || providerProbeHeader !== ENTDECKEN_PROVIDER_PROBE_HEADER_VALUE)) {
+      return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
+    if (factsHeader !== null
+        && (requestMode !== "owner" || factsHeader !== ENTDECKEN_FACTS_HEADER_VALUE
+          || providerProbeHeader !== null || providerDiagnosticHeader !== null)) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
     }
 
@@ -234,6 +246,26 @@ export function createEntdeckenDailyHandler({
     }
     if (providerDiagnostic.requested && !providerDiagnostic.allowed) {
       return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+    }
+
+    if (factsHeader === ENTDECKEN_FACTS_HEADER_VALUE) {
+      if (requestMode !== "owner" || !ownerRefreshConfirmed || !ownerRefreshAccountId) {
+        return json({ ok: false, status: "disabled", feed: null }, 403, origin);
+      }
+      let body: unknown = null;
+      try { body = await req.json(); } catch { /* fail closed below */ }
+      try {
+        const result = await runEntdeckenFactsRequest({
+          body,
+          admin,
+          accountId: ownerRefreshAccountId,
+          apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
+          fetchImpl,
+        });
+        return json(result, 200, origin);
+      } catch {
+        return json({ ok: false, status: "facts_error", items: [] }, 503, origin);
+      }
     }
 
     /* Der Probeheader wird nur im bereits voll bestaetigten Ownerpfad und nur
