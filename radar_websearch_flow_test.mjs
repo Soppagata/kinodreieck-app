@@ -622,6 +622,22 @@ try {
     assert.doesNotMatch(unattestedUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
   });
   await unattestedUi.cleanup();
+  const inactiveUi = await mount(null, Object.freeze({
+    session: accountSession,
+    pilotAdapter: Object.freeze({ async sync({ state }) {
+      return {
+        status: "ready", state,
+        automation: Object.freeze({ ...accountAutomation, schedulerActive: false }),
+      };
+    } }),
+  }));
+  await act(async () => { button(inactiveUi.container, "Radar").click(); await tick(); });
+  await settle();
+  await check("Server-attestiertes Flag- oder Provider-Off bleibt als Automatik nicht verfügbar", async () => {
+    assert.match(inactiveUi.container.textContent, /automatische Prüfung ist für dieses Konto derzeit nicht verfügbar/i);
+    assert.doesNotMatch(inactiveUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
+  });
+  await inactiveUi.cleanup();
   const accountHarness = Object.freeze({
     session: accountSession,
     pilotAdapter: Object.freeze({ async sync({ state, commit }) {

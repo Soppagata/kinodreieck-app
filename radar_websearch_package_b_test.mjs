@@ -1167,9 +1167,16 @@ await check("Additive 144h-Migration nutzt denselben Claim generisch und setzt d
   assert.match(sixDayMigration, /check \(radar_scheduler_interval_hours = 144\)/u);
   assert.match(sixDayMigration, /rename to kd_radar_pilot_feed_six_day_internal/u);
   assert.match(sixDayMigration, /'contractVersion','radar-auto-v1'/u);
-  assert.match(sixDayMigration, /'schedulerActive',coalesce\(v_scheduler_active,false\)/u);
+  assert.match(sixDayMigration, /'schedulerActive',v_effective_scheduler_active/u);
   assert.match(sixDayMigration, /'intervalHours',coalesce\(v_interval_hours,0\)/u);
-  assert.match(sixDayMigration, /select radar_scheduler_aktiv, radar_scheduler_interval_hours/u);
+  assert.match(sixDayMigration, /select radar_aktiv, radar_provider_aktiv, radar_scheduler_aktiv,[\s\S]*radar_scheduler_interval_hours/u);
+  assert.match(sixDayMigration, /v_effective_scheduler_active := coalesce\(v_radar_active,false\)[\s\S]*and coalesce\(v_radar_provider_active,false\)[\s\S]*and coalesce\(v_scheduler_active,false\)[\s\S]*and coalesce\(v_interval_hours,0\) = 144[\s\S]*v_provider_allowed -> 'ok' = 'true'::jsonb[\s\S]*v_provider_allowed ->> 'code' = 'PROVIDER_ALLOWED'/u);
+  assert.equal((sixDayMigration.match(/public\.kd_private_provider_allowed\('anthropic'\)/gu) || []).length, 2);
+  const claimProviderGate = sixDayMigration.indexOf("v_provider_freigabe := public.kd_private_provider_allowed('anthropic')");
+  assert.ok(claimProviderGate > sixDayMigration.indexOf("select radar_aktiv, radar_provider_aktiv, radar_scheduler_aktiv"));
+  assert.ok(claimProviderGate < sixDayMigration.indexOf("with expired as"));
+  assert.ok(claimProviderGate < sixDayMigration.indexOf("insert into public.kd_radar_daily_runs"));
+  assert.match(sixDayMigration, /v_provider_freigabe -> 'ok' is distinct from 'true'::jsonb[\s\S]*v_provider_freigabe ->> 'code' is distinct from 'PROVIDER_ALLOWED'[\s\S]*return jsonb_build_object\('claim',false,'status','disabled'/u);
   assert.match(sixDayMigration, /grant execute on function public\.kd_radar_pilot_feed\(uuid\[\]\)[\s\S]*to authenticated, service_role/u);
   assert.match(sixDayMigration, /revoke all on function public\.kd_radar_pilot_feed_six_day_internal\(uuid\[\]\)[\s\S]*from public, anon, authenticated/u);
   assert.doesNotMatch(sixDayMigration, /pg_cron|cron\.|http_post|net\.http|attempt_count\s*\+|--retry|Nicolas Cage|Star Wars|Starfighter/iu);

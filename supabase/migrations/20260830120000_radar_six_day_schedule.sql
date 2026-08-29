@@ -17,7 +17,8 @@ begin
      or to_regprocedure('public.kd_radar_daily_claim()') is null
      or to_regprocedure('public.kd_radar_daily_assert_lease(uuid,uuid,date,uuid)') is null
      or to_regprocedure('public.kd_radar_daily_finish(uuid,uuid,date,uuid,text)') is null
-     or to_regprocedure('public.kd_radar_pilot_feed(uuid[])') is null then
+     or to_regprocedure('public.kd_radar_pilot_feed(uuid[])') is null
+     or to_regprocedure('public.kd_private_provider_allowed(text)') is null then
     raise exception 'Radar 144h scheduler Baseline fehlt';
   end if;
 end
@@ -56,6 +57,7 @@ declare
   v_radar_aktiv boolean;
   v_provider_aktiv boolean;
   v_scheduler_aktiv boolean;
+  v_provider_freigabe jsonb;
 begin
   if auth.role() is distinct from 'service_role' then
     return jsonb_build_object('claim',false,'status','forbidden','viennaDay',v_today);
@@ -70,6 +72,13 @@ begin
      or v_radar_aktiv is distinct from true
      or v_provider_aktiv is distinct from true
      or v_scheduler_aktiv is distinct from true then
+    return jsonb_build_object('claim',false,'status','disabled','viennaDay',v_today);
+  end if;
+
+  v_provider_freigabe := public.kd_private_provider_allowed('anthropic');
+  if v_provider_freigabe is null
+     or v_provider_freigabe -> 'ok' is distinct from 'true'::jsonb
+     or v_provider_freigabe ->> 'code' is distinct from 'PROVIDER_ALLOWED' then
     return jsonb_build_object('claim',false,'status','disabled','viennaDay',v_today);
   end if;
 
@@ -278,20 +287,37 @@ set search_path = pg_catalog, public
 as $$
 declare
   v_feed jsonb;
+  v_radar_active boolean := false;
+  v_radar_provider_active boolean := false;
   v_scheduler_active boolean := false;
   v_interval_hours integer := 0;
+  v_provider_allowed jsonb;
+  v_effective_scheduler_active boolean := false;
 begin
   v_feed := public.kd_radar_pilot_feed_six_day_internal(p_operation_ids);
 
-  select radar_scheduler_aktiv, radar_scheduler_interval_hours
-    into v_scheduler_active, v_interval_hours
+  select radar_aktiv, radar_provider_aktiv, radar_scheduler_aktiv,
+         radar_scheduler_interval_hours
+    into v_radar_active, v_radar_provider_active, v_scheduler_active,
+         v_interval_hours
     from public.kd_radar_settings
    where singleton;
+
+  v_provider_allowed := public.kd_private_provider_allowed('anthropic');
+  v_effective_scheduler_active := coalesce(v_radar_active,false)
+    and coalesce(v_radar_provider_active,false)
+    and coalesce(v_scheduler_active,false)
+    and coalesce(v_interval_hours,0) = 144
+    and coalesce(
+      v_provider_allowed -> 'ok' = 'true'::jsonb
+      and v_provider_allowed ->> 'code' = 'PROVIDER_ALLOWED',
+      false
+    );
 
   return v_feed || jsonb_build_object(
     'automation',jsonb_build_object(
       'contractVersion','radar-auto-v1',
-      'schedulerActive',coalesce(v_scheduler_active,false),
+      'schedulerActive',v_effective_scheduler_active,
       'intervalHours',coalesce(v_interval_hours,0)
     )
   );
