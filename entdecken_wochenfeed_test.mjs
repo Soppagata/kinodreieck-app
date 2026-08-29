@@ -318,7 +318,8 @@ try {
     assert.match(furtherSection?.textContent || "", /KW 34\/2026/);
     assert.match(container.textContent, /bisherige Feed bleibt sichtbar/);
     assert.doesNotMatch(container.textContent, /freie Text darf nicht direkt/);
-    assert.ok([...container.querySelectorAll("button")].some((button) => button.textContent === "Beobachten"));
+    assert.ok([...container.querySelectorAll('button[aria-label*="Pinboard"]')].length > 0);
+    assert.ok([...container.querySelectorAll("button")].every((button) => !/^(?:Beobachten|Beobachtet)$/.test(button.textContent.trim())));
     assert.ok([...furtherSection.querySelectorAll('a[href^="https://"]')]
       .every((link) => /derstandard\.at|film\.at/.test(new URL(link.href).hostname)));
     assert.doesNotMatch(container.textContent, /Nur im lokalen Katalog/);

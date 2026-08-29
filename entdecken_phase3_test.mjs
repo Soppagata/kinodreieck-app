@@ -367,6 +367,7 @@ const appNavigation = fs.readFileSync(path.join(wurzel, "src/components/AppNavig
 const appSource = fs.readFileSync(path.join(wurzel, "src/App.jsx"), "utf8");
 const datenSource = fs.readFileSync(path.join(wurzel, "src/tabs/DatenTab.jsx"), "utf8");
 const entdeckenSource = fs.readFileSync(path.join(wurzel, "src/tabs/EntdeckenTab.jsx"), "utf8");
+const kinoSource = fs.readFileSync(path.join(wurzel, "src/tabs/KinoTab.jsx"), "utf8");
 const entdeckenUiSource = fs.readFileSync(path.join(wurzel, "src/lib/entdeckenUi.js"), "utf8");
 const cssSource = fs.readFileSync(path.join(wurzel, "src/index.css"), "utf8");
 check("Sichtbar heißt es Blog; technischer blog/meinungen-Deep-Link bleibt kompatibel", () => {
@@ -387,6 +388,16 @@ check("Tägliche Abwechslung ist eine persistierte Einstellung ohne Timer- oder 
   assert.match(datenSource, /setzeEinstellung\("entdeckenTaeglich"/);
   assert.match(appSource, /dailyVariety=\{einstellungen\.entdeckenTaeglich === true\}/);
   assert.doesNotMatch(entdeckenUiSource, /fetch\s*\(|setInterval\s*\(|setTimeout\s*\(/);
+});
+check("Empfehlungen übernehmen ausschließlich die echten Kino-Stile und keine Kino-Funktionen", () => {
+  assert.match(cssSource, /\.kd-dash-ticket[^}]*background:var\(--kd-leinwand\)[^}]*border-radius:8px[^}]*box-shadow:\s*0 3px 14px rgba\(0,0,0,\.4\)/);
+  assert.match(cssSource, /\.kd-dash-film[^}]*font-family:\s*'Fraunces'[^}]*font-weight:\s*900[^}]*font-size:\s*20px[^}]*line-height:\s*1\.05/);
+  assert.match(cssSource, /\.kd-entdecken-auswahlkarte[^}]*padding:11px 58px 11px 13px[^}]*border-radius:8px[^}]*background:var\(--leinwand[^}]*box-shadow:0 3px 14px rgba\(0,0,0,\.4\)/);
+  assert.match(cssSource, /\.kd-entdecken-auswahlkarte h3[^}]*font:900 20px\/1\.05 'Fraunces'/);
+  assert.match(kinoSource, /background:\s*T\.saalHoch, borderRadius:\s*6, padding:\s*"8px 12px"/);
+  assert.match(cssSource, /\.kd-entdecken-beliebtliste \.kd-entdecken-neutral[^}]*padding:8px 12px[^}]*border-radius:6px[^}]*background:var\(--saalHoch/);
+  assert.match(cssSource, /\.kd-entdecken-beliebtliste \.kd-entdecken-neutral h3[^}]*font:600 14px\/1\.3 'Space Grotesk'/);
+  assert.doesNotMatch(entdeckenSource, /kd-kino-ticket|kd-dash-showtime|<KinoTicket|<KinoLinks|kd-quellenbadge/);
 });
 
 async function loadEsbuild() {
@@ -634,6 +645,8 @@ try {
     assert.ok(angepinnterEintrag);
     assert.equal(versionedUi.container.querySelector(`button[aria-label="${angepinnterEintrag.title} vom Pinboard lösen"]`)?.getAttribute("aria-pressed"), "true");
     assert.doesNotMatch(versionedUi.container.textContent, /Ins Radar/i);
+    assert.ok([...versionedUi.container.querySelectorAll("button")]
+      .every((entry) => !/^(?:Beobachten|Beobachtet)$/.test(entry.textContent.trim())));
     assert.ok(versionedUi.container.querySelector(".kd-entdecken-beliebtliste"));
   });
   let pinboardSprung = null;

@@ -11,7 +11,7 @@ import {
 } from "../lib/entdeckenUi.js";
 import { isEntdeckenPinned } from "../lib/entdeckenPins.js";
 import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
-import { istBeobachtet, serienBeobachten } from "../lib/staffeln.js";
+import { serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
 const ANSICHTEN = Object.freeze([
@@ -150,7 +150,7 @@ function RadarSyncProblem({ problem, onRetry }) {
 function RecommendationsView({
   streamingEntdecken, streamingKnown, master, profile, useLibrary, selectedServices,
   entdeckenStatus, webDiscoveryFeed, webDiscoveryStatus, dailyVariety, selectionDay,
-  recommendationPins, onRecommendationPinToggle, onObserveToggle,
+  recommendationPins, onRecommendationPinToggle,
 }) {
   const [showAllPopular, setShowAllPopular] = useState(false);
   const selection = useMemo(() => createEntdeckenRecommendations({
@@ -179,8 +179,6 @@ function RecommendationsView({
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
   const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
-  const observeAction = (entry) => entry.watchmodeId
-    && ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase());
   const feedNotice = webDiscoveryStatus?.responseMode === "partial"
     ? "Einige Wochentipps waren unvollständig. Angezeigt werden nur sicher belegte Titel."
     : webDiscoveryStatus?.responseMode === "degraded"
@@ -219,11 +217,6 @@ function RecommendationsView({
         <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
-        {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
-          aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
-          onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
-          {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
-        </button> : null}
       </article>
     ))}</div> : <p className="kd-entdecken-leer gross">Noch keine bestätigte Passung.</p>}
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
@@ -247,11 +240,6 @@ function RecommendationsView({
           </div>
           <div className="kd-entdecken-listenaktionen">
             {pinButton(entry)}
-            {observeAction(entry) ? <button type="button" className="kd-entdecken-sekundaer"
-              aria-pressed={istBeobachtet(entdeckenStatus?.[entry.watchmodeId])}
-              onClick={() => onObserveToggle?.(entry, !istBeobachtet(entdeckenStatus?.[entry.watchmodeId]))}>
-              {istBeobachtet(entdeckenStatus?.[entry.watchmodeId]) ? "Beobachtet" : "Beobachten"}
-            </button> : null}
           </div>
         </article>
       ))}</div> : <p className="kd-entdecken-leer gross">Noch keine aktuelle beliebte Liste geladen.</p>}
@@ -439,8 +427,7 @@ export function EntdeckenTab({
       master={master} profile={profile} useLibrary={useLibrary} selectedServices={selectedServices}
       entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
       dailyVariety={dailyVariety} selectionDay={selectionDay} recommendationPins={recommendationPins}
-      onRecommendationPinToggle={onRecommendationPinToggle}
-      onObserveToggle={onObserveToggle} /> : null}
+      onRecommendationPinToggle={onRecommendationPinToggle} /> : null}
     {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}

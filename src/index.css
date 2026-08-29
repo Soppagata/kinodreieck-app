@@ -299,12 +299,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-hub-karte ul { min-height:45px; margin:8px 0 12px; padding-left:19px; color:var(--leinwandTief,#dfdacd); font-size:13px; line-height:1.5; }
 .kd-entdecken-hub-karte small,.kd-entdecken-panel small { display:block; color:var(--rauch,#948fa0); font:10px/1.55 'Space Mono',monospace; }
 .kd-entdecken-hub-karte button { margin-top:13px; }
-.kd-entdecken-auswahlkarten { gap:14px; }
-.kd-entdecken-auswahlkarte { padding:17px 52px 17px 17px; border-color:color-mix(in srgb,var(--wolfram,#e3a63b) 46%,var(--leinwandTief,#dfdacd)); background:var(--leinwand,#ece8df); color:var(--tinte,#1c1a1e); box-shadow:0 4px 16px rgba(0,0,0,.2); }
-.kd-entdecken-auswahlkarte h3 { color:var(--tinte,#1c1a1e); font-family:'Fraunces',Georgia,serif; font-size:21px; line-height:1.08; text-transform:none; }
-.kd-entdecken-auswahlkarte .kd-entdecken-kicker { color:color-mix(in srgb,var(--wolfram,#e3a63b) 74%,var(--tinte,#1c1a1e)); }
-.kd-entdecken-auswahlkarte .kd-entdecken-grund { color:var(--tinte,#1c1a1e); }
-.kd-entdecken-auswahlkarte small { color:color-mix(in srgb,var(--rauch,#948fa0) 74%,var(--tinte,#1c1a1e)); }
+.kd-entdecken-auswahlkarten { gap:10px; }
+/* Der helle Auswahlblock übernimmt exakt das Kinoticket-Grundmuster aus
+   .kd-dash-ticket/.kd-dash-tbody: Leinwand, 8px-Radius, Schatten und Innenabstand.
+   Es werden bewusst keine Ticket-Trigger, Pfeile oder Termin-Funktionen übernommen. */
+.kd-entdecken-auswahlkarte { padding:11px 58px 11px 13px; border:0; border-radius:8px; background:var(--leinwand,#ece8df); color:var(--tinte,#1c1a1e); box-shadow:0 3px 14px rgba(0,0,0,.4); }
+.kd-entdecken-auswahlkarte h3 { margin:3px 0 0; color:var(--tinte,#1c1a1e); font:900 20px/1.05 'Fraunces',Georgia,serif; letter-spacing:normal; text-transform:none; }
+.kd-entdecken-auswahlkarte .kd-entdecken-kicker { color:var(--rauch,#948fa0); font:400 8px 'Space Mono',monospace; letter-spacing:.14em; }
+.kd-entdecken-auswahlkarte .kd-entdecken-grund { margin:8px 0 0; color:var(--tinte,#1c1a1e); font-size:13px; line-height:1.5; }
+.kd-entdecken-auswahlkarte small { margin-top:4px; color:var(--rauch,#948fa0); font:400 12px/1.4 'Space Mono',monospace; }
 .kd-entdecken-auswahlkarte .kd-entdecken-titellink { color:inherit; }
 .kd-entdecken-pin { display:grid; place-items:center; width:36px; height:36px; min-width:36px; min-height:36px; margin:0; padding:0; border:1px solid color-mix(in srgb,var(--rauch,#948fa0) 62%,transparent); border-radius:50%; background:transparent; color:var(--rauch,#948fa0); cursor:pointer; }
 .kd-entdecken-pin:hover,.kd-entdecken-pin:focus-visible,.kd-entdecken-pin.aktiv { border-color:var(--wolfram,#e3a63b); color:var(--wolfram,#e3a63b); }
@@ -321,12 +324,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .kd-entdecken-katalogwahrheit>p { margin:10px 0 0; color:var(--rauch,#948fa0); font-size:12px; line-height:1.5; }
 .kd-entdecken-weitere { margin-top:34px; padding-top:22px; border-top:3px solid color-mix(in srgb,var(--wolfram,#e3a63b) 70%,var(--saalHoch,#3c3742)); }
 .kd-entdecken-weitere>.kd-entdecken-sektionskopf { margin-bottom:14px; padding:11px 13px; border-left:3px solid var(--wolfram,#e3a63b); border-radius:0 7px 7px 0; background:color-mix(in srgb,var(--saalHoch,#3c3742) 72%,transparent); }
-.kd-entdecken-beliebtliste { display:grid; grid-template-columns:minmax(0,1fr); border-block:1px solid color-mix(in srgb,var(--rauch,#948fa0) 28%,transparent); }
-.kd-entdecken-beliebtliste .kd-entdecken-neutral { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:11px 8px; border:0; border-radius:0; background:transparent; }
-.kd-entdecken-beliebtliste .kd-entdecken-neutral+.kd-entdecken-neutral { border-top:1px solid color-mix(in srgb,var(--rauch,#948fa0) 24%,transparent); }
-.kd-entdecken-beliebtliste .kd-entdecken-neutral h3 { margin:3px 0 2px; font-size:18px; line-height:1.12; }
-.kd-entdecken-beliebtliste .kd-entdecken-neutral p { margin:2px 0 3px; font-size:12px; line-height:1.35; }
-.kd-entdecken-beliebtliste .kd-entdecken-neutral small { font-size:9px; line-height:1.4; }
+.kd-entdecken-beliebtliste { display:flex; flex-direction:column; gap:6px; }
+/* Der kompakte Rest übernimmt die echten Werte des Kino-Kompakteintrags:
+   SaalHoch, 6px-Radius, 8x12px, Grotesk-Titel und Mono-Metadaten. */
+.kd-entdecken-beliebtliste .kd-entdecken-neutral { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 12px; border:0; border-radius:6px; background:var(--saalHoch,#211e26); }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral h3 { margin:1px 0; color:var(--leinwand,#ece8df); font:600 14px/1.3 'Space Grotesk',sans-serif; letter-spacing:0; text-transform:none; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral .kd-entdecken-kicker { color:var(--wolfram,#e3a63b); font:400 10px 'Space Mono',monospace; letter-spacing:.04em; text-transform:none; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral p { margin:3px 0 1px; color:var(--leinwandTief,#dfdacd); font:400 12px/1.4 'Space Mono',monospace; }
+.kd-entdecken-beliebtliste .kd-entdecken-neutral small { color:var(--rauch,#948fa0); font:400 10px/1.4 'Space Mono',monospace; }
 .kd-entdecken-listeninhalt { min-width:0; }
 .kd-entdecken-listenaktionen { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
 .kd-entdecken-listenaktionen .kd-entdecken-pin,.kd-entdecken-listenaktionen .kd-entdecken-sekundaer { margin:0; }
@@ -408,7 +413,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .kd-app main input,.kd-app main select,.kd-app main textarea { max-width:100%; box-sizing:border-box; }
   .kd-entdecken-toolbar { align-items:stretch; flex-direction:column; }.kd-entdecken-tabs { width:100%; box-sizing:border-box; overflow-x:auto; }.kd-entdecken-tabs button { flex:1 0 auto; min-height:44px; }
   .kd-entdecken-tabs .kd-entdecken-verwalten { flex:0 0 44px; width:44px; }.kd-entdecken-einleitung { grid-template-columns:1fr; gap:8px; }.kd-entdecken-sektionskopf { align-items:flex-start; flex-direction:column; gap:4px; }.kd-entdecken-sektionskopf p { text-align:left; }.kd-entdecken-karten,.kd-entdecken-radar-grid,.kd-entdecken-radar-add-grid,.kd-entdecken-quellenblock { grid-template-columns:1fr; }
-  .kd-entdecken-auswahlkarte { padding:15px 56px 15px 15px; }.kd-entdecken-auswahlkarte>.kd-entdecken-pin { top:10px; right:10px; }.kd-entdecken-pin { width:44px; height:44px; min-width:44px; min-height:44px; }.kd-entdecken-weitere { margin-top:30px; }.kd-entdecken-beliebtliste .kd-entdecken-neutral { gap:8px; padding:11px 2px; }.kd-entdecken-listenaktionen { align-self:start; }.kd-entdecken-listenaktionen .kd-entdecken-sekundaer { min-height:44px; padding:6px 8px; font-size:11px; }
+  .kd-entdecken-auswahlkarte { padding:10px 58px 10px 10px; }.kd-entdecken-auswahlkarte>.kd-entdecken-pin { top:10px; right:10px; }.kd-entdecken-pin { width:44px; height:44px; min-width:44px; min-height:44px; }.kd-entdecken-weitere { margin-top:30px; }.kd-entdecken-beliebtliste .kd-entdecken-neutral { gap:8px; padding:8px 12px; }.kd-entdecken-listenaktionen { align-self:start; }
   .kd-entdecken-layer { align-items:flex-end; padding:0; }.kd-entdecken-dialog { width:100%; height:100dvh; max-height:100dvh; padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left)); border-inline:0; border-bottom:0; border-radius:0; }
   .kd-entdecken-manage-grid,.kd-entdecken-katalogzahlen { grid-template-columns:1fr; }.kd-entdecken-verwalten-liste li { align-items:flex-start; flex-direction:column; }.kd-entdecken-verwalten-liste li>div { justify-content:flex-start; }
   .kd-entdecken-dialog-aktionen { position:sticky; bottom:calc(-20px - env(safe-area-inset-bottom)); margin:16px -16px calc(-20px - env(safe-area-inset-bottom)); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); background:var(--saalHoch,#211e26); border-top:1px solid var(--saal,#3c3742); }
