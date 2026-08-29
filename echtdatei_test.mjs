@@ -552,13 +552,15 @@ check("No-Config-file:// enthält beide Streaming-Snapshots",
 const dateiEntdeckenBereich = [...dateiDoc.querySelectorAll('nav[aria-label="Hauptnavigation"] button')]
   .find((button) => (button.textContent || "").trim() === "Entdecken");
 dateiEntdeckenBereich?.click(); await warte(700);
-check("No-Config-file:// zeigt die kompakte Entdecken-Fläche ohne erfundene Webtipps",
+check("No-Config-file:// zeigt den eingebetteten, providerfreien 50er-Pool kompakt",
   !!dateiEntdeckenBereich
   && /Für mich/.test(dateiText())
   && /Noch keine bestätigte Passung/.test(dateiText())
   && /Diese Woche beliebt/.test(dateiText())
-  && /Noch keine aktuelle beliebte Liste geladen/.test(dateiText())
-  && !dateiDoc.querySelector(".kd-entdecken-hub-karte")
+  && dateiDoc.querySelectorAll(".kd-entdecken-neutral").length === 6
+  && !!dateiKnopf(/^Weitere 44 Titel anzeigen$/)
+  && [...dateiDoc.querySelectorAll(".kd-entdecken-neutral h3 > a")]
+    .every((link) => link.href.startsWith("https://"))
   && !/Kataloggröße|Aktuelle Treffermenge/.test(dateiText()));
 dateiKnopf(/^settings$/i)?.click(); await warte(500);
 const katalogStatusDatei = [...dateiDoc.querySelectorAll("summary")]
