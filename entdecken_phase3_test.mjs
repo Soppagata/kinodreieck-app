@@ -7,6 +7,11 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import {
+  ENTDECKEN_MARKET_POOL_50,
+  VERSIONED_DISCOVERY_SEGMENT_COUNTS,
+  VERSIONED_DISCOVERY_SOURCE_COUNTS,
+} from "./src/data/entdeckenMarketPool50.js";
+import {
   createCatalogSearchActions,
   createEntdeckenRecommendations,
   localRecommendationCandidates,
@@ -27,6 +32,8 @@ import {
   RADAR_TARGET_SEARCH_MAX_RESULTS,
   searchRadarTargets,
 } from "./src/lib/radarTargetSearch.js";
+import { validateWebDiscoveryFeed } from "./src/lib/webDiscoveryFeed.js";
+import { createEntdeckenDailyFeedService } from "./src/services/entdeckenDailyFeed.js";
 import "./radar_websearch_mvp_test.mjs";
 
 let checks = 0;
@@ -467,6 +474,85 @@ try {
   await catalogUi.cleanup();
   localStorage.removeItem("kd:geschmacksprofil");
 
+  const versionedCheck = validateWebDiscoveryFeed(ENTDECKEN_MARKET_POOL_50);
+  check("Versionierter Staging-Pool hält exakt 50 deduplizierte Titel und den 15/10/10/10/5-Quellenmix", () => {
+    assert.equal(versionedCheck.ok, true);
+    assert.equal(versionedCheck.value.items.length, 50);
+    assert.equal(new Set(versionedCheck.value.items.map((item) => item.title.toLocaleLowerCase("de-AT"))).size, 50);
+    assert.deepEqual(Object.fromEntries(versionedCheck.value.sourceIds.map((sourceId) => [
+      sourceId, versionedCheck.value.items.filter((item) => item.sourceId === sourceId).length,
+    ])), VERSIONED_DISCOVERY_SOURCE_COUNTS);
+    assert.deepEqual({
+      cinema: versionedCheck.value.items.filter((item) => item.sourceId === "chart:oefi-weekend-at").length,
+      netflixFilm: versionedCheck.value.items.filter((item) => item.sourceId === "chart:netflix-weekly-at" && item.mediaType === "film").length,
+      netflixSeries: versionedCheck.value.items.filter((item) => item.sourceId === "chart:netflix-weekly-at" && item.mediaType === "series").length,
+      primeFilm: versionedCheck.value.items.filter((item) => item.sourceId === "snapshot:prime-video-at" && item.mediaType === "film").length,
+      primeSeries: versionedCheck.value.items.filter((item) => item.sourceId === "snapshot:prime-video-at" && item.mediaType === "series").length,
+      disneyFilm: versionedCheck.value.items.filter((item) => item.sourceId === "snapshot:disney-plus-at" && item.mediaType === "film").length,
+      disneySeries: versionedCheck.value.items.filter((item) => item.sourceId === "snapshot:disney-plus-at" && item.mediaType === "series").length,
+      appleTotal: versionedCheck.value.items.filter((item) => item.sourceId === "snapshot:apple-tv-plus-at").length,
+    }, VERSIONED_DISCOVERY_SEGMENT_COUNTS);
+    assert.equal(versionedCheck.value.items.some((item) => /joyn/i.test(`${item.sourceId}|${item.sourceLabel}|${item.sourceUrl}`)), false);
+  });
+
+  let fallbackFetches = 0;
+  const fallbackResult = await createEntdeckenDailyFeedService({
+    fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+    currentDay: () => "2026-08-29",
+    fetchImpl: async () => { fallbackFetches += 1; throw new Error("network-forbidden"); },
+  }).load();
+  check("Frontend-Fallback liefert den 50er-Pool ohne Runtime- oder Providerrequest", () => {
+    assert.equal(fallbackResult.status, "fresh");
+    assert.equal(fallbackResult.feed.items.length, 50);
+    assert.equal(fallbackFetches, 0);
+    assert.deepEqual(fallbackResult.refresh, {
+      requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
+    });
+  });
+
+  const versionedRecommendations = createEntdeckenRecommendations({
+    streamingEntdecken: { region: "AT", titel: [] },
+    streamingKnown: { region: "AT", titel: [{
+      watchmode_id: 9901, titel: "Reacher", typ: "tv_series", jahr: 2022,
+      dienste: ["Prime Video"], genres: ["drama"],
+    }] },
+    selectedServices: ["Netflix"],
+    master: [],
+    profile: { signale: [{ art: "genre", wert: "drama", richtung: "zieht_an", staerke: 4 }] },
+    webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50,
+    selectionDay: "2026-08-29",
+  });
+  check("Für mich prüft alle 50, matcht nur Titel/Jahr/Typ und verändert den vollständigen Popularitätspool nicht", () => {
+    assert.equal(versionedRecommendations.diagnostics.candidates, 50);
+    assert.deepEqual(versionedRecommendations.personal.map((item) => item.title), ["Reacher"]);
+    assert.equal(versionedRecommendations.personal[0].watchmodeId, 9901);
+    assert.equal(versionedRecommendations.popular.length, 6);
+    assert.equal(versionedRecommendations.popularPool.length, 50);
+  });
+
+  const versionedUi = await mount(EntdeckenTab, {
+    ...baseProps, radarState: createEmptyLocalRadar(), streamingDiscover: { region: "AT", titel: [] },
+    selectedServices: [], webDiscoveryFeed: ENTDECKEN_MARKET_POOL_50, calendarDay: "2026-08-29",
+  });
+  await act(async () => { await tick(); await tick(); });
+  const versionedSection = versionedUi.container.querySelector('[aria-labelledby="kd-entdecken-weitere"]');
+  const expandVersioned = button(versionedSection, "Weitere 44 Titel anzeigen");
+  check("50er-UI startet unnummeriert mit sechs Karten, ehrlichem Stand und 44er-Ausklapper", () => {
+    assert.equal(versionedSection.querySelectorAll(".kd-entdecken-neutral").length, 6);
+    assert.equal(versionedSection.querySelector("ol"), null);
+    assert.equal(expandVersioned?.getAttribute("aria-expanded"), "false");
+    assert.match(versionedSection.textContent, /Prime-Video|Disney\+|Apple-TV\+/);
+    assert.match(versionedSection.textContent, /Stand/);
+  });
+  await act(async () => { expandVersioned.click(); await tick(); });
+  check("Ausgeklappt sind alle 50 Karten mit HTTPS-Quelllink sichtbar", () => {
+    const cards = [...versionedSection.querySelectorAll(".kd-entdecken-neutral")];
+    assert.equal(cards.length, 50);
+    assert.equal(cards.filter((card) => card.querySelector('h3 > a[href^="https://"]')).length, 50);
+    assert.equal(expandVersioned.textContent.trim(), "Weniger Titel anzeigen");
+  });
+  await versionedUi.cleanup();
+
   const mixedUi = await mount(EntdeckenTab, {
     ...baseProps, radarState: createEmptyLocalRadar(),
     streamingDiscover: { region: "AT", titel: [] }, selectedServices: ["Netflix"],
@@ -604,6 +690,36 @@ try {
     assert.doesNotMatch(workReloadUi.container.textContent, /watchmode:|fixture:|work:/i);
   });
   await workReloadUi.cleanup();
+
+  const targetFoundState = upsertGuestRadarSubscription(createEmptyLocalRadar(), {
+    target: {
+      targetId: "watchmode:462", targetType: "work", targetStatus: "active",
+      title: "Star Wars", canonical: true,
+    },
+    now,
+  }).state;
+  const targetFoundUi = await mount(EntdeckenTab, {
+    ...baseProps,
+    radarState: targetFoundState,
+    radarPilotEvents: [{
+      eventId: "00000000-0000-4000-8000-000000000021",
+      eventVersionId: "00000000-0000-4000-8000-000000000022",
+      targetId: "watchmode:462",
+      title: "Star Wars: Starfighter",
+      eventType: "kinostart_at",
+      date: "2027-05-26",
+      region: "AT",
+      platform: "-",
+      verificationStatus: "confirmed",
+      evidence: [],
+    }],
+  });
+  await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
+  check("Radar trennt abgeleiteten Fund und Suchziel mit dem sichtbaren Zielbezug", () => {
+    assert.match(targetFoundUi.container.textContent, /Star Wars: Starfighter/);
+    assert.match(targetFoundUi.container.textContent, /Gefunden für: Star Wars/);
+  });
+  await targetFoundUi.cleanup();
 
   const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
   const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];

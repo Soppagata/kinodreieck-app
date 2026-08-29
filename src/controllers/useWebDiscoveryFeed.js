@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { entdeckenDailyFeedService } from "../services/entdeckenDailyFeed.js";
 
-/* Genau ein globaler Feed-GET je App-Lauf. Der Service selbst kennt weder
-   Konto noch Profil/Katalog; bei Fehler bleibt ein bereits sichtbarer Feed. */
+/* Genau ein globaler Feed-Ladevorgang je App-Lauf. Der versionierte
+   Staging-Fallback ist netzfrei; der Service kennt weder Konto noch
+   Profil/Katalog. Bei Fehler bleibt ein bereits sichtbarer Feed. */
 export function useWebDiscoveryFeed(active) {
   const [state, setState] = useState(() => Object.freeze({
     status: "idle", feed: null, responseMode: "structured", displayText: null,

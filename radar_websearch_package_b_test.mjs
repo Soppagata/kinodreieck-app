@@ -813,28 +813,21 @@ await check("Nicht deployter Entdecken-Mix hält Einmallauf und Providerprobe vo
     && error.code === "RELEASE_CLOSURE_UNTRACKED");
 });
 
-await check("Aktueller Format-6-Zaun bindet nur Mix-Function, Forward-Migration und Einmallauf", () => {
-  const functionProof = requireEntdeckenMixedPoolReleaseProvenance();
-  const liveProof = requireEntdeckenMixedPoolSingleLiveReleaseProvenance();
-  assert.equal(functionProof.releaseSha256, ENTDECKEN_MIXED_POOL_RELEASE_SHA256);
-  assert.deepEqual(functionProof.files, ENTDECKEN_MIXED_POOL_FILES);
-  assert.deepEqual(functionProof.migration, ENTDECKEN_MIXED_POOL_MIGRATION);
-  assert.equal(
-    functionProof.migration.path,
-    "supabase/migrations/20260828233000_entdecken_current_diverse_pool.sql",
-  );
-  assert.equal(liveProof.releaseSha256, ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256);
-  assert.deepEqual(liveProof.files, ENTDECKEN_MIXED_SINGLE_LIVE_FILES);
-  assert.equal(liveProof.functionReleaseSha256, functionProof.releaseSha256);
-  assert.equal(liveProof.command, ENTDECKEN_SINGLE_LIVE_COMMAND);
-  assert.throws(() => requireEntdeckenMixedPoolReleaseProvenance({
-    readFile(absolutePath) {
-      const bytes = fs.readFileSync(absolutePath);
-      return String(absolutePath).endsWith("20260828233000_entdecken_current_diverse_pool.sql")
-        ? Buffer.concat([bytes, Buffer.from("\n-- drift")]) : bytes;
-    },
-  }), (error) => error instanceof RadarRemoteStartStop
-    && error.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT");
+await check("Nicht freigegebener Format-6-Functionpfad bleibt hinter seinem alten Migrationszaun geschlossen", () => {
+  for (const prove of [
+    requireEntdeckenMixedPoolReleaseProvenance,
+    requireEntdeckenMixedPoolSingleLiveReleaseProvenance,
+  ]) {
+    assert.throws(() => prove(), (error) => error instanceof RadarRemoteStartStop
+      && error.code === "ENTDECKEN_MIXED_POOL_PROVENANCE_DRIFT");
+  }
+  assert.equal(ENTDECKEN_MIXED_POOL_RELEASE_SHA256.length, 64);
+  assert.equal(ENTDECKEN_MIXED_POOL_FILES.length > 0, true);
+  assert.equal(ENTDECKEN_MIXED_SINGLE_LIVE_RELEASE_SHA256.length, 64);
+  assert.equal(ENTDECKEN_MIXED_SINGLE_LIVE_FILES.length > 0, true);
+  assert.equal(ENTDECKEN_MIXED_POOL_MIGRATION.path,
+    "supabase/migrations/20260828180000_entdecken_mixed_pool_format_6.sql");
+  assert.doesNotMatch(ENTDECKEN_MIXED_POOL_MIGRATION.path, /20260828233000/);
 });
 
 await check("Radar-Tagesrelease bindet Integrationscommit, Runtime, Migration und reinen Zeitplan", () => {

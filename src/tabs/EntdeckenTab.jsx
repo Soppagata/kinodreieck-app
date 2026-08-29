@@ -8,6 +8,7 @@ import {
   localCalendarDay,
   localRadarTargetLabel,
 } from "../lib/entdeckenUi.js";
+import { VERSIONED_DISCOVERY_FEED_FORMAT } from "../lib/webDiscoveryFeed.js";
 import { istBeobachtet, serienBeobachten } from "../lib/staffeln.js";
 import { sperreDokumentScroll } from "../lib/documentScrollLock.js";
 
@@ -152,10 +153,15 @@ function RecommendationsView({
       : "Streaming Österreich";
   const meta = (entry) => [availabilityLabel(entry), entry.year, mediaLabel(entry)].filter(Boolean).join(" · ");
   const sourceLabel = (entry) => entry.sourceLabel || source(entry)?.sourceLabel || source(entry)?.domain || "Aktuelle Liste";
+  const sourceStand = (entry) => {
+    const day = entry.popularity?.measuredOn || source(entry)?.retrievedOn;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) return null;
+    return new Date(`${day}T12:00:00`).toLocaleDateString("de-AT");
+  };
   const titleHeading = (entry) => <h3>{source(entry) ? <a className="kd-entdecken-titellink"
     href={source(entry).url} rel="noopener noreferrer" target="_blank"
     aria-label={`${entry.title}: Referenz bei ${sourceLabel(entry)} öffnen`}>{entry.title}</a> : entry.title}</h3>;
-  const publicPool = [5, 6].includes(webDiscoveryFeed?.format);
+  const publicPool = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format);
   const observeAction = (entry) => entry.watchmodeId
     && ["series", "serie", "tv_series"].includes(String(entry.type || "").toLowerCase());
   const feedNotice = webDiscoveryStatus?.responseMode === "partial"
@@ -164,7 +170,8 @@ function RecommendationsView({
       ? "Die neuen Wochentipps waren nicht verlässlich lesbar. Der bisherige Feed bleibt sichtbar."
       : null;
   const weekMatch = String(webDiscoveryFeed?.isoWeek || "").match(/^(\d{4})-W(\d{2})$/);
-  const weekLabel = [5, 6].includes(webDiscoveryFeed?.format) && webDiscoveryFeed?.refreshedOn
+  const weekLabel = [5, 6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
+    && webDiscoveryFeed?.refreshedOn
     ? `Stand ${new Date(`${webDiscoveryFeed.refreshedOn}T12:00:00`).toLocaleDateString("de-AT")}`
     : weekMatch ? `KW ${Number(weekMatch[2])}/${weekMatch[1]}` : null;
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-empfehlungen">
@@ -180,7 +187,7 @@ function RecommendationsView({
         <span className="kd-entdecken-kicker">{entry.reasons[0] ? "Persönliche Passung" : "Aus dem Wochenfeed"}</span>
         {titleHeading(entry)}
         {entry.reasons[0] ? <p className="kd-entdecken-grund">{entry.reasons[0]}</p> : null}
-        <small>{meta(entry)} · Quelle: {sourceLabel(entry)}</small>
+        <small>{meta(entry)} · Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
         {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
           rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
         {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
@@ -194,8 +201,8 @@ function RecommendationsView({
     <section className="kd-entdecken-weitere" aria-labelledby="kd-entdecken-weitere">
       <div className="kd-entdecken-sektionskopf">
         <div><span>Aktuelle österreichische Liste</span><h2 id="kd-entdecken-weitere">Diese Woche beliebt</h2></div>
-        <p>{webDiscoveryFeed?.format === 6
-          ? "Aktuelle Kino-, Streamingfilm- und Serientitel für Österreich. Popularität ist kein persönlicher Passungsgrund."
+        <p>{[6, VERSIONED_DISCOVERY_FEED_FORMAT].includes(webDiscoveryFeed?.format)
+          ? "Aktuelle Kino-, Netflix-, Prime-Video-, Disney+- und Apple-TV+-Titel für Österreich. Popularität ist kein persönlicher Passungsgrund."
           : "Aktuelle belegte österreichische Titel. Popularität ist kein persönlicher Passungsgrund."}
           {weekLabel ? ` · ${weekLabel}` : ""}</p>
       </div>
@@ -206,7 +213,7 @@ function RecommendationsView({
             ? "Im Kino beliebt" : mediaLabel(entry) === "Serie" ? "Beliebte Serie" : "Beliebter Streamingfilm"}</span>
           {titleHeading(entry)}
           <p>{meta(entry)}</p>
-          <small>Quelle: {sourceLabel(entry)}</small>
+          <small>Quelle: {sourceLabel(entry)}{sourceStand(entry) ? ` · Stand ${sourceStand(entry)}` : ""}</small>
           {source(entry) && !publicPool ? <a className="kd-entdecken-quellenlink" href={source(entry).url}
             rel="noopener noreferrer" target="_blank">Quelle ansehen</a> : null}
           {target ? <button type="button" className="kd-entdecken-sekundaer" onClick={() => onRadarPreview?.(target)}>Ins Radar</button> : null}
@@ -266,12 +273,17 @@ function RadarView({
   ])), [radarState?.receipts]);
   const events = useMemo(() => (radarPilotEvents || [])
     .filter((entry) => entry.verificationStatus === "confirmed")
-    .map((entry) => ({
-      ...entry,
-      title: entry.title || localRadarTargetLabel(subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId, {
+    .map((entry) => {
+      const target = subscriptions.find((item) => item.targetId === entry.targetId) || entry.targetId;
+      const targetLabel = localRadarTargetLabel(target, {
         master, streamingKnown, streamingDiscover,
-      }),
-    }))
+      });
+      return {
+        ...entry,
+        targetLabel,
+        title: entry.title || targetLabel,
+      };
+    })
     .sort((a, b) => `${a.date}|${a.title}`.localeCompare(`${b.date}|${b.title}`, "de-AT")),
   [master, radarPilotEvents, streamingDiscover, streamingKnown, subscriptions]);
 
@@ -327,6 +339,7 @@ function RadarView({
         <h3>Tagesaktuelle Neuigkeiten</h3>
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
+          <span>Gefunden für: {entry.targetLabel}</span>
           <span>{entry.date} · {entry.region} · {EREIGNIS_LABEL[entry.eventType] || "Bestätigter Termin"}{entry.platform && entry.platform !== "-" ? ` · ${entry.platform}` : ""}</span>
           {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].length ? <div className="kd-pilot-quellen"><span>Quellen</span><div className="kd-pilot-quellen-links">
             {[...(entry.evidence || []), ...(entry.franchiseEvidence || [])].map((item, index) => <a className="kd-pilot-quellen-link" href={item.url}

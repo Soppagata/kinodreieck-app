@@ -69,3 +69,38 @@ Der neue ehrliche Format-6-Vertrag umfasst deshalb 25 statt 50 Titel: 15 Kino,
 5 Streamingfilme und 5 Serien. Keine Quelle darf mehr als 40 Prozent des Pools
 stellen. Der Refresh ist unteilbar und retryfrei; bei fehlender, veralteter
 oder strukturell gedrifteter Quelle bleibt der letzte gute Pool sichtbar.
+
+## Versionierter 50er-Staging-Pool E5
+
+Stand: 29. August 2026. Die erneute, auf insgesamt 30 Minuten begrenzte
+Quellenphase prüfte Prime Video, Disney+ und Apple TV+ jeweils genau einmal.
+Die öffentliche Prime-Video-Oberfläche zeigte aktuelle Top-10-Markierungen,
+aber keinen stabil getrennten österreichischen Film-/Serienpayload. Für
+Disney+ und Apple TV+ war keine automatisierbare offizielle öffentliche
+AT-Chartquelle verfügbar. Deshalb nutzt die Staging-PWA den ausdrücklich
+erlaubten kleinsten Workaround: einen im Frontend versionierten, datierten
+Snapshot mit sichtbarer Referenz; zur Laufzeit wird keine dieser Seiten
+abgerufen.
+
+| Segment | Anzahl | Stand und Referenz | Ehrliche Bezeichnung |
+|---|---:|---|---|
+| ÖFI Kino | 15 | 23.08.2026 · https://filminstitut.at/charts | Österreichisches Filminstitut |
+| Netflix Filme | 5 | Woche 23.08.2026 · https://www.netflix.com/tudum/top10/austria | Netflix Top 10 Österreich |
+| Netflix Serien | 5 | Woche 23.08.2026 · https://www.netflix.com/tudum/top10/austria | Netflix Top 10 Österreich |
+| Prime Video Filme | 5 | 29.08.2026 · https://flixpatrol.com/top10/amazon-prime/austria/ | Aktuell beliebt (FlixPatrol) |
+| Prime Video Serien | 5 | 29.08.2026 · https://flixpatrol.com/top10/amazon-prime/austria/ | Aktuell beliebt (FlixPatrol) |
+| Disney+ Filme | 5 | 29.08.2026 · https://flixpatrol.com/top10/disney/austria/ | Aktuell beliebt (FlixPatrol) |
+| Disney+ Serien | 5 | 29.08.2026 · https://flixpatrol.com/top10/disney/austria/ | Aktuell beliebt (FlixPatrol) |
+| Apple TV+ gesamt | 5 | 27.08.2026 · https://flixpatrol.com/top10/apple-tv/austria/ | Aktuell beliebt (FlixPatrol) |
+
+Der Pool enthält exakt 50 normalisiert deduplizierte Titel und 0 Joyn-
+Popularitätstitel. Er ist ein owner-privater, zeitlich enger Staging-Snapshot,
+keine behauptete Betreiberfreigabe und keine dauerhafte Lizenz für öffentliche
+oder kommerzielle Weiterverwendung. Die FlixPatrol-Seiten nennen tägliche
+Aktualisierung und Kontakt/API-Zugang, aber ihre öffentliche Terms-Seite
+enthielt bei der Prüfung keinen belastbaren Wiederverwendungsvertrag. Deshalb
+werden nur Titel, Rang, Datum und Referenzlink im begrenzten Testpfad genutzt.
+
+Die Auslieferung erfolgt als Frontend-Fallbackformat 7. Es entsteht kein
+Shared-DB-Write, keine Function-Mutation und kein Refresh; die nicht
+freigegebene 25er-Migration `20260828233000` ist aus dem Kandidaten entfernt.

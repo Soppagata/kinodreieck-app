@@ -2,6 +2,25 @@
    Der Feed enthaelt ausschliesslich globale, belegte Webtipps. Aktuelle
    Verfuegbarkeit und persoenliche Passung werden erst im Browser bestimmt. */
 
+import {
+  VERSIONED_DISCOVERY_FEED_FORMAT,
+  VERSIONED_DISCOVERY_FEED_ID,
+  VERSIONED_DISCOVERY_POOL_SIZE,
+  VERSIONED_DISCOVERY_POOL_VERSION,
+  VERSIONED_DISCOVERY_SOURCE_COUNTS,
+  VERSIONED_DISCOVERY_SOURCE_ID,
+  VERSIONED_DISCOVERY_SOURCE_IDS,
+} from "../data/entdeckenMarketPool50.js";
+
+export {
+  VERSIONED_DISCOVERY_FEED_FORMAT,
+  VERSIONED_DISCOVERY_FEED_ID,
+  VERSIONED_DISCOVERY_POOL_SIZE,
+  VERSIONED_DISCOVERY_POOL_VERSION,
+  VERSIONED_DISCOVERY_SOURCE_ID,
+  VERSIONED_DISCOVERY_SOURCE_IDS,
+};
+
 export const WEB_DISCOVERY_FEED_FORMAT = 4;
 export const WEB_DISCOVERY_FEED_ID = "websearch:weekly-positive-at";
 export const WEB_DISCOVERY_SOURCE_ID = "websearch:weekly-positive";
@@ -21,6 +40,32 @@ export const MIXED_DISCOVERY_MARKET_COUNTS = Object.freeze({
 export const WEB_DISCOVERY_MATCH_STATUSES = Object.freeze([
   "matched", "unmatched", "ambiguous",
 ]);
+
+const VERSIONED_SOURCE_POLICY = Object.freeze({
+  "chart:oefi-weekend-at": Object.freeze({
+    sourceLabel: "Österreichisches Filminstitut", service: null, market: "cinema",
+    metric: "weekend-chart-rank", url: "https://filminstitut.at/charts",
+  }),
+  "chart:netflix-weekly-at": Object.freeze({
+    sourceLabel: "Netflix Top 10 Österreich", service: "Netflix", market: "streaming",
+    metric: "weekly-country-rank", urls: Object.freeze({
+      film: "https://www.netflix.com/tudum/top10/austria/films",
+      series: "https://www.netflix.com/tudum/top10/austria/tv",
+    }),
+  }),
+  "snapshot:prime-video-at": Object.freeze({
+    sourceLabel: "Prime Video · Aktuell beliebt (FlixPatrol)", service: "Prime Video", market: "streaming",
+    metric: "daily-provider-rank", url: "https://flixpatrol.com/top10/amazon-prime/austria/",
+  }),
+  "snapshot:disney-plus-at": Object.freeze({
+    sourceLabel: "Disney+ · Aktuell beliebt (FlixPatrol)", service: "Disney+", market: "streaming",
+    metric: "daily-provider-rank", url: "https://flixpatrol.com/top10/disney/austria/",
+  }),
+  "snapshot:apple-tv-plus-at": Object.freeze({
+    sourceLabel: "Apple TV+ · Aktuell beliebt (FlixPatrol)", service: "Apple TV+", market: "streaming",
+    metric: "daily-provider-rank", url: "https://flixpatrol.com/top10/apple-tv/austria/",
+  }),
+});
 
 const EXTERNAL_ID_NAMESPACES = Object.freeze(["imdb", "tmdb", "watchmode"]);
 const LEGACY_FEED = Object.freeze({
@@ -295,6 +340,44 @@ function validateMixedRecord(value, feed, errors, index) {
   } else errors.push(`${prefix}-source-invalid`);
 }
 
+function validateVersionedRecord(value, feed, errors, index) {
+  const prefix = `item-${index}`;
+  if (!exactKeys(value, [
+    "title", "sourceItemId", "sourceId", "sourceLabel", "mediaType", "releaseYear",
+    "externalIds", "genres", "availability", "popularity", "sourceUrl", "fetchedAt",
+  ])) { errors.push(`${prefix}-shape-invalid`); return; }
+  const policy = VERSIONED_SOURCE_POLICY[value.sourceId];
+  const expectedSourceUrl = policy?.urls?.[value.mediaType] || policy?.url;
+  if (!text(value.title) || value.title !== text(value.title) || value.title.length > 200) {
+    errors.push(`${prefix}-title-invalid`);
+  }
+  if (!/^[fs]_[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.sourceItemId)
+      || value.sourceItemId.length > 182) errors.push(`${prefix}-source-item-id-invalid`);
+  if (!policy || value.sourceLabel !== policy.sourceLabel || value.sourceUrl !== expectedSourceUrl) {
+    errors.push(`${prefix}-source-invalid`);
+  }
+  if (!normalizeDiscoveryMediaType(value.mediaType) || value.mediaType !== normalizeDiscoveryMediaType(value.mediaType)) {
+    errors.push(`${prefix}-media-type-invalid`);
+  }
+  if (!validYear(value.releaseYear) || !normalizeDiscoveryExternalIds(value.externalIds)
+      || !boundedTextArray(value.genres, 8)) errors.push(`${prefix}-metadata-invalid`);
+  if (!validInstant(value.fetchedAt) || !httpsUrl(value.sourceUrl)) errors.push(`${prefix}-fetch-invalid`);
+  if (!exactKeys(value.availability, ["region", "market", "service", "licenseTypes"])
+      || value.availability.region !== "AT" || value.availability.market !== policy?.market
+      || value.availability.service !== policy?.service) errors.push(`${prefix}-availability-invalid`);
+  const licenses = boundedTextArray(value.availability?.licenseTypes, 4);
+  const expectedLicenses = policy?.market === "streaming" ? ["SVOD"] : [];
+  if (!licenses || JSON.stringify(licenses) !== JSON.stringify(expectedLicenses)) {
+    errors.push(`${prefix}-licenses-invalid`);
+  }
+  if (!exactKeys(value.popularity, ["metric", "rank", "measuredOn", "value"])
+      || value.popularity.metric !== policy?.metric || value.popularity.value !== null
+      || !Number.isInteger(value.popularity.rank) || value.popularity.rank < 1 || value.popularity.rank > 15
+      || !calendarDay(value.popularity.measuredOn) || value.popularity.measuredOn > feed.refreshedOn) {
+    errors.push(`${prefix}-popularity-invalid`);
+  }
+}
+
 function validatePublicAnnotations(value, feed, errors) {
   if (!Array.isArray(value) || value.length > PUBLIC_DISCOVERY_POOL_SIZE) {
     errors.push("annotations-invalid"); return;
@@ -317,19 +400,23 @@ function validatePublicAnnotations(value, feed, errors) {
 
 export function validateWebDiscoveryFeed(value) {
   const errors = [];
+  const versionedWeekly = value?.format === VERSIONED_DISCOVERY_FEED_FORMAT;
   const mixedWeekly = value?.format === MIXED_DISCOVERY_FEED_FORMAT;
   const publicWeekly = value?.format === PUBLIC_DISCOVERY_FEED_FORMAT;
   const weekly = value?.format === WEB_DISCOVERY_FEED_FORMAT;
   const legacy = value?.format === LEGACY_FEED.format;
   const required = [
     "format", "feedId", "region", "sourceId", "refreshedOn", "validUntil", "items",
-    ...(mixedWeekly ? ["sourceIds", "isoWeek", "annotations"]
+    ...(versionedWeekly ? ["sourceIds", "poolVersion"]
+      : mixedWeekly ? ["sourceIds", "isoWeek", "annotations"]
       : publicWeekly ? ["isoWeek", "annotations"] : weekly ? ["isoWeek"] : []),
   ];
-  if ((!mixedWeekly && !publicWeekly && !weekly && !legacy) || !exactKeys(value, required)) {
+  if ((!versionedWeekly && !mixedWeekly && !publicWeekly && !weekly && !legacy) || !exactKeys(value, required)) {
     return Object.freeze({ ok: false, errors: Object.freeze(["feed-shape-invalid"]), value: null });
   }
-  const expected = mixedWeekly ? {
+  const expected = versionedWeekly ? {
+    feedId: VERSIONED_DISCOVERY_FEED_ID, sourceId: VERSIONED_DISCOVERY_SOURCE_ID,
+  } : mixedWeekly ? {
     feedId: MIXED_DISCOVERY_FEED_ID, sourceId: MIXED_DISCOVERY_SOURCE_ID,
   } : publicWeekly ? {
     feedId: PUBLIC_DISCOVERY_FEED_ID, sourceId: PUBLIC_DISCOVERY_SOURCE_ID,
@@ -343,6 +430,12 @@ export function validateWebDiscoveryFeed(value) {
   const validUntil = calendarDay(value.validUntil);
   if (!refreshed) errors.push("feed-refreshed-on-invalid");
   if (!validUntil || (refreshed && validUntil < refreshed)) errors.push("feed-valid-until-invalid");
+  if (versionedWeekly && (value.poolVersion !== VERSIONED_DISCOVERY_POOL_VERSION
+      || validUntil !== sixDaysAfter(refreshed)
+      || !Array.isArray(value.sourceIds)
+      || JSON.stringify([...value.sourceIds].sort()) !== JSON.stringify([...VERSIONED_DISCOVERY_SOURCE_IDS].sort()))) {
+    errors.push("feed-versioned-contract-invalid");
+  }
   if ((mixedWeekly || publicWeekly) && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek
       || validUntil !== sixDaysAfter(refreshed))) errors.push("feed-public-period-invalid");
@@ -353,13 +446,42 @@ export function validateWebDiscoveryFeed(value) {
   if (weekly && (!/^\d{4}-W\d{2}$/.test(value.isoWeek)
       || isoWeekForDay(refreshed) !== value.isoWeek
       || isoWeekForDay(validUntil) !== value.isoWeek)) errors.push("feed-iso-week-invalid");
-  if (!Array.isArray(value.items) || (mixedWeekly
+  if (!Array.isArray(value.items) || (versionedWeekly
+    ? value.items.length !== VERSIONED_DISCOVERY_POOL_SIZE : mixedWeekly
     ? value.items.length !== MIXED_DISCOVERY_POOL_SIZE : publicWeekly
       ? value.items.length !== PUBLIC_DISCOVERY_POOL_SIZE
     : value.items.length < 1 || value.items.length > WEB_DISCOVERY_MAX_ITEMS)) {
     errors.push("feed-items-invalid");
   } else {
-    if (mixedWeekly) {
+    if (versionedWeekly) {
+      value.items.forEach((item, index) => validateVersionedRecord(item, value, errors, index));
+      if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
+      if (new Set(value.items.map((item) => normalizeDiscoveryTitle(item?.title))).size !== value.items.length) {
+        errors.push("feed-title-duplicate");
+      }
+      if (new Set(value.items.map((item) => `${item?.sourceId}|${item?.mediaType}|${item?.popularity?.rank}`)).size
+          !== value.items.length) errors.push("feed-position-duplicate");
+      const sourceCounts = Object.fromEntries(VERSIONED_DISCOVERY_SOURCE_IDS.map((sourceId) => [
+        sourceId, value.items.filter((item) => item?.sourceId === sourceId).length,
+      ]));
+      if (JSON.stringify(sourceCounts) !== JSON.stringify(VERSIONED_DISCOVERY_SOURCE_COUNTS)) {
+        errors.push("feed-source-counts-invalid");
+      }
+      const segmentCounts = {
+        cinema: value.items.filter((item) => item?.sourceId === "chart:oefi-weekend-at" && item?.mediaType === "film").length,
+        netflixFilm: value.items.filter((item) => item?.sourceId === "chart:netflix-weekly-at" && item?.mediaType === "film").length,
+        netflixSeries: value.items.filter((item) => item?.sourceId === "chart:netflix-weekly-at" && item?.mediaType === "series").length,
+        primeFilm: value.items.filter((item) => item?.sourceId === "snapshot:prime-video-at" && item?.mediaType === "film").length,
+        primeSeries: value.items.filter((item) => item?.sourceId === "snapshot:prime-video-at" && item?.mediaType === "series").length,
+        disneyFilm: value.items.filter((item) => item?.sourceId === "snapshot:disney-plus-at" && item?.mediaType === "film").length,
+        disneySeries: value.items.filter((item) => item?.sourceId === "snapshot:disney-plus-at" && item?.mediaType === "series").length,
+        appleTotal: value.items.filter((item) => item?.sourceId === "snapshot:apple-tv-plus-at").length,
+      };
+      if (JSON.stringify(segmentCounts) !== JSON.stringify({
+        cinema: 15, netflixFilm: 5, netflixSeries: 5, primeFilm: 5,
+        primeSeries: 5, disneyFilm: 5, disneySeries: 5, appleTotal: 5,
+      })) errors.push("feed-segment-counts-invalid");
+    } else if (mixedWeekly) {
       value.items.forEach((item, index) => validateMixedRecord(item, value, errors, index));
       if (new Set(value.items.map((item) => item?.sourceItemId)).size !== value.items.length) errors.push("feed-source-id-duplicate");
       if (new Set(value.items.map((item) => normalizeDiscoveryTitle(item?.title))).size !== value.items.length) {
@@ -393,7 +515,7 @@ export function validateWebDiscoveryFeed(value) {
   }
   if (errors.length) return Object.freeze({ ok: false, errors: Object.freeze([...new Set(errors)]), value: null });
   const clone = JSON.parse(JSON.stringify(value));
-  if (!mixedWeekly && !publicWeekly) clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
+  if (!versionedWeekly && !mixedWeekly && !publicWeekly) clone.items.sort((left, right) => left.rank - right.rank || left.recordId.localeCompare(right.recordId, "de-AT"));
   return Object.freeze({ ok: true, errors: Object.freeze([]), value: freezeDeep(clone) });
 }
 
@@ -413,14 +535,21 @@ function hasOverlap(left, right) {
 export function matchWebDiscoveryFeed(webDiscoveryFeed, catalogCandidates = []) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  const publicWeekly = [PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format);
-  const annotations = new Map((publicWeekly ? checked.value.annotations : [])
+  const versionedWeekly = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT;
+  const publicWeekly = [
+    PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+  ].includes(checked.value.format);
+  const annotations = new Map((publicWeekly ? (checked.value.annotations || []) : [])
     .map((entry) => [entry.sourceItemId, entry]));
   const records = publicWeekly ? checked.value.items.map((item, index) => {
-    const facts = annotations.get(item.sourceItemId);
+    const facts = versionedWeekly ? Object.freeze({
+      qid: null,
+      releaseYear: item.releaseYear,
+      externalIds: item.externalIds,
+    }) : annotations.get(item.sourceItemId);
     return Object.freeze({
       ...item,
-      recordId: `${checked.value.format === MIXED_DISCOVERY_FEED_FORMAT ? "market" : "joyn"}:${item.sourceItemId}`,
+      recordId: `${checked.value.format === PUBLIC_DISCOVERY_FEED_FORMAT ? "joyn" : "market"}:${item.sourceItemId}`,
       rank: index + 1,
       releaseYear: facts?.releaseYear ?? null,
       externalIds: facts?.externalIds || Object.freeze({}),

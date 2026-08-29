@@ -1,4 +1,5 @@
 import { runtimeConfig } from "../config/runtime.js";
+import { ENTDECKEN_MARKET_POOL_50 } from "../data/entdeckenMarketPool50.js";
 import { validateWebDiscoveryFeed } from "../lib/webDiscoveryFeed.js";
 
 export const ENTDECKEN_DAILY_ENDPOINT = "entdecken-daily-task";
@@ -120,14 +121,26 @@ function exactResult(value, today) {
   return frozen(value.status, checked.value, response, refresh);
 }
 
-/* Ein App-Lauf startet hoechstens einen accountlosen GET. Body, Sitzung,
-   Profil, Seen-Stand, Dienste und Katalogdaten bleiben vollstaendig lokal. */
+/* Der versionierte Staging-Fallback startet keinen GET. Ohne Fallback startet
+   ein App-Lauf hoechstens einen accountlosen GET. Body, Sitzung, Profil,
+   Seen-Stand, Dienste und Katalogdaten bleiben vollstaendig lokal. */
 export function createEntdeckenDailyFeedService({
   config = runtimeConfig,
   fetchImpl = globalThis.fetch,
   currentDay = () => viennaDay(new Date()),
+  fallbackFeed = null,
 } = {}) {
   async function load() {
+    if (fallbackFeed !== null) {
+      const today = currentDay();
+      const checked = validateWebDiscoveryFeed(fallbackFeed);
+      if (!checked.ok || !today) return frozen("invalid_response");
+      const status = checked.value.refreshedOn <= today && checked.value.validUntil >= today
+        ? "fresh" : "stale";
+      return frozen(status, checked.value, presentation({}), Object.freeze({
+        requested: false, mode: "read", status: "read_only", attemptCount: 0, maxAttempts: 1,
+      }));
+    }
     if (config.entdeckenDailyFeedEnabled !== true || typeof fetchImpl !== "function") {
       return frozen("disabled");
     }
@@ -154,4 +167,6 @@ export function createEntdeckenDailyFeedService({
   return Object.freeze({ load });
 }
 
-export const entdeckenDailyFeedService = createEntdeckenDailyFeedService();
+export const entdeckenDailyFeedService = createEntdeckenDailyFeedService({
+  fallbackFeed: ENTDECKEN_MARKET_POOL_50,
+});

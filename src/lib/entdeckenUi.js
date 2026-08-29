@@ -22,6 +22,7 @@ import {
   MIXED_DISCOVERY_FEED_FORMAT,
   normalizeDiscoveryTitle,
   PUBLIC_DISCOVERY_FEED_FORMAT,
+  VERSIONED_DISCOVERY_FEED_FORMAT,
   validateWebDiscoveryFeed,
 } from "./webDiscoveryFeed.js";
 
@@ -97,7 +98,8 @@ function discoveryRecordIdsWithExcludedStrongId(webDiscoveryFeed, excludedTarget
   const watchmodeIds = new Set([...excludedTargetIds]
     .filter((targetId) => targetId.startsWith("watchmode:"))
     .map((targetId) => targetId.slice("watchmode:".length)));
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format)) return new Set();
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    .includes(checked.value.format)) return new Set();
   return new Set(checked.value.items
     .filter((record) => watchmodeIds.has(record.externalIds?.watchmode))
     .map((record) => record.recordId));
@@ -388,16 +390,21 @@ export function publicDiscoveryCandidates({
   includeSeen = false, requireMetadata = true,
 } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
-  if (!checked.ok || ![PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT]
+  if (!checked.ok || ![
+    PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+  ]
     .includes(checked.value.format)) return Object.freeze([]);
-  const mixed = checked.value.format === MIXED_DISCOVERY_FEED_FORMAT;
+  const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    .includes(checked.value.format);
   const services = selectedServiceSet(selectedServices);
   if (!mixed && services.size && !services.has("joyn")) return Object.freeze([]);
-  const annotations = new Map(checked.value.annotations.map((entry) => [entry.sourceItemId, entry]));
+  const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
   const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
     .map((decision) => [decision.record.sourceItemId, decision]));
   const projected = checked.value.items.map((item) => {
-    const facts = annotations.get(item.sourceItemId);
+    const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
+      qid: null, releaseYear: item.releaseYear, externalIds: item.externalIds,
+    }) : annotations.get(item.sourceItemId);
     const local = decisions.get(item.sourceItemId)?.status === "matched"
       ? decisions.get(item.sourceItemId).candidate : null;
     const genres = profileCompatibleGenres(uniqueText([...item.genres, ...list(local?.genres)]));
@@ -461,13 +468,17 @@ function discoveryEvidence(record) {
 export function webDiscoveryFeedCards({ webDiscoveryFeed, catalogCandidates = [] } = {}) {
   const checked = validateWebDiscoveryFeed(webDiscoveryFeed);
   if (!checked.ok) return Object.freeze([]);
-  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT].includes(checked.value.format)) {
-    const mixed = checked.value.format === MIXED_DISCOVERY_FEED_FORMAT;
-    const annotations = new Map(checked.value.annotations.map((entry) => [entry.sourceItemId, entry]));
+  if ([PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+    .includes(checked.value.format)) {
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+      .includes(checked.value.format);
+    const annotations = new Map((checked.value.annotations || []).map((entry) => [entry.sourceItemId, entry]));
     const decisions = new Map(matchWebDiscoveryFeed(checked.value, catalogCandidates)
       .map((decision) => [decision.record.sourceItemId, decision]));
     const projected = checked.value.items.map((item) => {
-      const facts = annotations.get(item.sourceItemId);
+      const facts = checked.value.format === VERSIONED_DISCOVERY_FEED_FORMAT ? Object.freeze({
+        qid: null, releaseYear: item.releaseYear, externalIds: item.externalIds,
+      }) : annotations.get(item.sourceItemId);
       const local = decisions.get(item.sourceItemId)?.status === "matched"
         ? decisions.get(item.sourceItemId).candidate : null;
       const availability = mixed ? item.availability : Object.freeze({
@@ -628,11 +639,14 @@ export function createEntdeckenRecommendations({
     streamingKnown, selectedServices, entdeckenStatus, includeSeenForMatching: true,
   });
   const checkedFeed = validateWebDiscoveryFeed(webDiscoveryFeed);
-  if (checkedFeed.ok && [PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT]
+  if (checkedFeed.ok && [
+    PUBLIC_DISCOVERY_FEED_FORMAT, MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT,
+  ]
     .includes(checkedFeed.value.format)) {
     /* Fuer den marktuebergreifenden Feed ist die lokale Streaming-Dienstewahl
        kein Quellenfilter. Sie beschreibt Verfuegbarkeit, nicht Geschmack. */
-    const broadCatalog = checkedFeed.value.format === MIXED_DISCOVERY_FEED_FORMAT
+    const broadCatalog = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+      .includes(checkedFeed.value.format)
       ? localRecommendationCandidates(streamingEntdecken, {
         streamingKnown, selectedServices: [], entdeckenStatus, includeSeenForMatching: true,
       }) : catalogCandidates;
@@ -646,19 +660,17 @@ export function createEntdeckenRecommendations({
       profile: profile && profile.beschaedigt !== true ? profile : {},
       library: localLibraryProjection(master), useLibrary, excludedTargetIds: [],
     });
-    const mixed = checkedFeed.value.format === MIXED_DISCOVERY_FEED_FORMAT;
+    const mixed = [MIXED_DISCOVERY_FEED_FORMAT, VERSIONED_DISCOVERY_FEED_FORMAT]
+      .includes(checkedFeed.value.format);
     const personal = selectDailyRecommendations(ranked, {
       /* Persoenliche Auswahl bleibt im neuen Pfad immer bestes, stabiles
          Profilranking. Tagesmischung gehoert allein zur Popularitaetslane. */
       dailyVariety: mixed ? false : dailyVariety,
       selectionDay,
     });
-    const personalIds = new Set(personal.map((entry) => entry.targetId));
     const popularPool = webDiscoveryFeedCards({
       webDiscoveryFeed: checkedFeed.value, catalogCandidates: broadCatalog,
-    })
-      .filter((candidate) => !personalIds.has(candidate.targetId)
-        && !sourceItemSeen(candidate, master, broadCatalog));
+    });
     const orderedPopularPool = mixed
       ? selectStablePopularCards(popularPool, {
         webDiscoveryFeed: checkedFeed.value, selectionDay, limit: popularPool.length,
