@@ -9,7 +9,9 @@ export const ENTDECKEN_FACTS_PROVIDER_VERSION = "anthropic-web-search-20250305";
 export const ENTDECKEN_FACTS_PROMPT_VERSION = "entdecken-facts-v1";
 export const ENTDECKEN_FACTS_BATCH_SIZE = 9;
 export const ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS = 6;
-export const ENTDECKEN_FACTS_MAX_SEARCH_USES = 1;
+export const ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM = 1;
+export const ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL = 50;
+export const ENTDECKEN_FACTS_PILOT_RESOLVED_MIN = 7;
 export const ENTDECKEN_FACTS_OK_TTL_DAYS = 90;
 export const ENTDECKEN_FACTS_NEGATIVE_TTL_DAYS = 30;
 
@@ -27,6 +29,7 @@ const TAGS = new Set(ENTDECKEN_FACT_TAGS);
 const PERSON_ROLES = new Set(["actor", "director", "creator", "writer"]);
 const RESULT_STATUSES = new Set(["resolved", "ambiguous", "unresolved"]);
 const CACHE_STATUSES = new Set(["ok", "ambiguous", "unresolved"]);
+const MODEL_FORM = /^claude-haiku-4-5(?:-[0-9]{8})?$/;
 
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
 function text(value) { return String(value == null ? "" : value).trim(); }
@@ -136,6 +139,7 @@ export function emptyEntdeckenFactsSnapshot({ poolId, poolVersion } = {}) {
     poolId: text(poolId),
     poolVersion: text(poolVersion),
     updatedAt: null,
+    pilot: null,
     preResolution: Object.freeze({}),
     entries: Object.freeze({}),
   });
@@ -144,15 +148,22 @@ export function emptyEntdeckenFactsSnapshot({ poolId, poolVersion } = {}) {
 function validSnapshotEntry(entry, key) {
   if (!exactKeys(entry, [
     "cacheKey", "preResolutionKey", "poolId", "input", "status", "strongId",
-    "facts", "evidenceUrls", "checkedAt", "expiresAt", "provider",
+    "facts", "evidenceUrls", "checkedAt", "expiresAt", "provider", "validation",
   ]) || entry.cacheKey !== key || !CACHE_STATUSES.has(entry.status)
       || !exactKeys(entry.input, [
         "poolId", "title", "releaseYear", "mediaType", "sourceId", "sourceUrl",
         "sourceStand", "provider",
-      ]) || !exactKeys(entry.provider, ["id", "version", "promptVersion"])
+      ]) || !exactKeys(entry.provider, [
+        "id", "model", "origin", "version", "promptVersion", "userJudgment",
+      ])
       || entry.provider.id !== "anthropic"
+      || !MODEL_FORM.test(entry.provider.model)
+      || entry.provider.origin !== "provider_model_generated"
       || entry.provider.version !== ENTDECKEN_FACTS_PROVIDER_VERSION
       || entry.provider.promptVersion !== ENTDECKEN_FACTS_PROMPT_VERSION
+      || entry.provider.userJudgment !== false
+      || !exactKeys(entry.validation, ["status", "identity", "taxonomy", "evidence"])
+      || entry.validation.status !== "machine_validated"
       || !directHttpsUrl(entry.input.sourceUrl) || !canonicalInstant(entry.input.sourceStand)
       || !entdeckenFactsPreResolutionKey({
         sourceItemId: entry.input?.poolId,
@@ -169,6 +180,9 @@ function validSnapshotEntry(entry, key) {
       || entry.evidenceUrls.some((url) => !directHttpsUrl(url))) return false;
   if (entry.status === "ok") {
     return normalizeStrongExternalId(entry.strongId) === key
+      && entry.validation.identity === "exact"
+      && entry.validation.taxonomy === "normalized"
+      && entry.validation.evidence === "direct"
       && exactKeys(entry.facts, ["genres", "tags", "franchise", "persons"])
       && Array.isArray(entry.facts.genres)
       && entry.facts.genres.every((value) => GENRES.has(value))
@@ -178,14 +192,28 @@ function validSnapshotEntry(entry, key) {
       && Array.isArray(entry.facts.persons)
       && entry.facts.persons.every((person) => !!normalizedEntity(person, true));
   }
-  return key === `pre:${entry.preResolutionKey}` && entry.strongId === null && entry.facts === null;
+  return key === `pre:${entry.preResolutionKey}` && entry.strongId === null && entry.facts === null
+    && entry.validation.identity === "not_resolved"
+    && entry.validation.taxonomy === "not_applicable"
+    && ["direct", "none"].includes(entry.validation.evidence);
 }
 
 export function validateEntdeckenFactsSnapshot(value, { poolId, poolVersion } = {}) {
-  if (!exactKeys(value, ["schemaVersion", "poolId", "poolVersion", "updatedAt", "preResolution", "entries"])
+  if (!exactKeys(value, [
+    "schemaVersion", "poolId", "poolVersion", "updatedAt", "pilot", "preResolution", "entries",
+  ])
       || value.schemaVersion !== ENTDECKEN_FACTS_SNAPSHOT_VERSION
       || value.poolId !== text(poolId) || value.poolVersion !== text(poolVersion)
       || (value.updatedAt !== null && !canonicalInstant(value.updatedAt))
+      || (value.pilot !== null && (!exactKeys(value.pilot, [
+        "status", "batchSize", "threshold", "resolvedReady", "evaluatedAt", "providerRequests",
+      ]) || !["passed", "failed"].includes(value.pilot.status)
+        || value.pilot.batchSize !== ENTDECKEN_FACTS_BATCH_SIZE
+        || value.pilot.threshold !== ENTDECKEN_FACTS_PILOT_RESOLVED_MIN
+        || !Number.isInteger(value.pilot.resolvedReady) || value.pilot.resolvedReady < 0
+        || value.pilot.resolvedReady > ENTDECKEN_FACTS_BATCH_SIZE
+        || !canonicalInstant(value.pilot.evaluatedAt)
+        || value.pilot.providerRequests !== 1))
       || !plain(value.preResolution) || !plain(value.entries)) return null;
   for (const [key, entry] of Object.entries(value.entries)) {
     if (!validSnapshotEntry(entry, key) || entry.poolId !== value.poolId) return null;
@@ -222,7 +250,7 @@ export function createEntdeckenFactsBatchPlan(pool, snapshot, { now = new Date()
     pending: Object.freeze(pending),
     batches: Object.freeze(batches),
     providerRequests: batches.length,
-    maxSearchUses: batches.length * ENTDECKEN_FACTS_MAX_SEARCH_USES,
+    maxSearchUses: pending.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
   });
 }
 
@@ -294,6 +322,12 @@ export function validateEntdeckenFactsBatchOutput(
         facts: null,
         evidenceUrls: Object.freeze(urls),
         checkedAt: canonicalInstant(checkedAt),
+        validation: Object.freeze({
+          status: "machine_validated",
+          identity: "not_resolved",
+          taxonomy: "not_applicable",
+          evidence: urls.length ? "direct" : "none",
+        }),
       }));
       continue;
     }
@@ -333,6 +367,12 @@ export function validateEntdeckenFactsBatchOutput(
       }),
       evidenceUrls: Object.freeze(urls),
       checkedAt: canonicalInstant(checkedAt),
+      validation: Object.freeze({
+        status: "machine_validated",
+        identity: "exact",
+        taxonomy: "normalized",
+        evidence: "direct",
+      }),
     }));
   }
   return Object.freeze({
@@ -355,7 +395,8 @@ export function mergeEntdeckenFactsSnapshot(snapshot, input, result) {
     poolVersion: snapshot?.poolVersion,
   });
   if (!checked || input?.preResolutionKey !== result?.preResolutionKey
-      || input?.poolId !== result?.poolId) return null;
+      || input?.poolId !== result?.poolId || !MODEL_FORM.test(result?.providerModel)
+      || result?.validation?.status !== "machine_validated") return null;
   const cacheStatus = result.status === "resolved" ? "ok" : result.status;
   const cacheKey = cacheStatus === "ok" ? result.strongId : `pre:${input.preResolutionKey}`;
   if (!cacheKey || (cacheStatus === "ok" && normalizeStrongExternalId(cacheKey) !== cacheKey)) return null;
@@ -385,10 +426,14 @@ export function mergeEntdeckenFactsSnapshot(snapshot, input, result) {
     evidenceUrls: [...result.evidenceUrls],
     checkedAt: result.checkedAt,
     expiresAt: plusDays(result.checkedAt, ttl),
+    validation: { ...result.validation },
     provider: {
       id: "anthropic",
+      model: result.providerModel,
+      origin: "provider_model_generated",
       version: ENTDECKEN_FACTS_PROVIDER_VERSION,
       promptVersion: ENTDECKEN_FACTS_PROMPT_VERSION,
+      userJudgment: false,
     },
   };
   return {
@@ -396,9 +441,40 @@ export function mergeEntdeckenFactsSnapshot(snapshot, input, result) {
     poolId: checked.poolId,
     poolVersion: checked.poolVersion,
     updatedAt: result.checkedAt,
+    pilot: checked.pilot,
     preResolution: { ...checked.preResolution, [input.preResolutionKey]: cacheKey },
     entries,
   };
+}
+
+export function markEntdeckenFactsPilot(snapshot, {
+  status,
+  resolvedReady,
+  evaluatedAt,
+} = {}) {
+  const checked = validateEntdeckenFactsSnapshot(snapshot, {
+    poolId: snapshot?.poolId,
+    poolVersion: snapshot?.poolVersion,
+  });
+  if (!checked || checked.pilot !== null || !["passed", "failed"].includes(status)
+      || !Number.isInteger(resolvedReady) || resolvedReady < 0
+      || resolvedReady > ENTDECKEN_FACTS_BATCH_SIZE || !canonicalInstant(evaluatedAt)) return null;
+  const next = {
+    ...checked,
+    updatedAt: canonicalInstant(evaluatedAt),
+    pilot: {
+      status,
+      batchSize: ENTDECKEN_FACTS_BATCH_SIZE,
+      threshold: ENTDECKEN_FACTS_PILOT_RESOLVED_MIN,
+      resolvedReady,
+      evaluatedAt: canonicalInstant(evaluatedAt),
+      providerRequests: 1,
+    },
+  };
+  return validateEntdeckenFactsSnapshot(next, {
+    poolId: checked.poolId,
+    poolVersion: checked.poolVersion,
+  });
 }
 
 export function projectEntdeckenFacts(snapshot, item, options = {}) {

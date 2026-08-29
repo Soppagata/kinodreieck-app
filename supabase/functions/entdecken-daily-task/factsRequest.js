@@ -5,6 +5,7 @@ import {
 } from "../_shared/entdeckenFacts.js";
 import {
   createAnthropicEntdeckenFactsAdapter,
+  ENTDECKEN_FACTS_CONFIG_TASK,
   ENTDECKEN_FACTS_MAX_TOKENS,
   ENTDECKEN_FACTS_PROVIDER_TASK,
   ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
@@ -70,7 +71,6 @@ export async function runEntdeckenFactsRequest({
             "anbieter_request_max_usd_cent",
             "modell_alias",
             "preise_usd_cent_pro_mtok",
-            "task_max_reservierung_usd_cent",
             "task_modell",
             "timeout_ms",
           ]),
@@ -81,9 +81,8 @@ export async function runEntdeckenFactsRequest({
       const limits = limitRows(limitsResult.data);
       const taskModels = limits.get("task_modell");
       const aliases = limits.get("modell_alias");
-      const taskCaps = limits.get("task_max_reservierung_usd_cent");
       const prices = limits.get("preise_usd_cent_pro_mtok");
-      const modelAlias = taskModels?.[ENTDECKEN_FACTS_PROVIDER_TASK];
+      const modelAlias = taskModels?.[ENTDECKEN_FACTS_CONFIG_TASK];
       const model = typeof modelAlias === "string" ? aliases?.[modelAlias] : null;
       const price = typeof model === "string" ? prices?.[model] : null;
       return {
@@ -94,7 +93,7 @@ export async function runEntdeckenFactsRequest({
         maxTokens: ENTDECKEN_FACTS_MAX_TOKENS,
         inputPriceUsdCentPerMtok: price?.in,
         outputPriceUsdCentPerMtok: price?.out,
-        taskCapUsdCent: taskCaps?.[ENTDECKEN_FACTS_PROVIDER_TASK],
+        taskCapUsdCent: limits.get("anbieter_request_max_usd_cent"),
         globalRequestCapUsdCent: limits.get("anbieter_request_max_usd_cent"),
         searchFeeUsdCent: ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
         timeoutMs: limits.get("timeout_ms"),

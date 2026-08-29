@@ -14,10 +14,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   ENTDECKEN_FACTS_CONTRACT_VERSION,
   ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
-  ENTDECKEN_FACTS_MAX_SEARCH_USES,
+  ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL,
+  ENTDECKEN_FACTS_PILOT_RESOLVED_MIN,
   createEntdeckenFactsBatchPlan,
   entdeckenFactsDiagnostics,
+  markEntdeckenFactsPilot,
   mergeEntdeckenFactsSnapshot,
+  normalizeStrongExternalId,
   validateEntdeckenFactsSnapshot,
 } from "../src/lib/entdeckenFacts.js";
 import { ENTDECKEN_MARKET_POOL_50 } from "../src/data/entdeckenMarketPool50.js";
@@ -27,7 +30,10 @@ import {
   ENTDECKEN_FACTS_REQUEST_VERSION,
 } from "../supabase/functions/entdecken-daily-task/factsRequest.js";
 import {
+  LAUF_LIMIT_USD_CENT,
+  LiveLaufWache,
   fetchMitZeitgrenze,
+  holeBudgetStand,
   liesBudgetVerbindung,
   meldeTestkontoAn,
 } from "./ai_budget_guard.mjs";
@@ -85,22 +91,45 @@ function validateSafeServerBatch(value, batch) {
       || !Array.isArray(value.items)
       || !exactKeys(value.quality, ["returned", "accepted", "dropped", "missing", "warnings"])
       || !exactKeys(value.receipt, [
-        "providerRequests", "searchRequests", "reservationUsdCent", "costUsdCent", "serverLogId",
+        "model", "providerRequests", "searchRequests", "reservationUsdCent", "costUsdCent", "serverLogId",
       ]) || value.receipt.providerRequests !== 1
-      || value.receipt.searchRequests !== ENTDECKEN_FACTS_MAX_SEARCH_USES
+      || !/^claude-haiku-4-5(?:-[0-9]{8})?$/.test(value.receipt.model)
+      || !Number.isInteger(value.receipt.searchRequests)
+      || value.receipt.searchRequests < 0
+      || value.receipt.searchRequests > batch.length
+      || !Number.isFinite(value.receipt.reservationUsdCent)
+      || value.receipt.reservationUsdCent <= 0
+      || value.receipt.reservationUsdCent > 500
       || !Number.isFinite(value.receipt.costUsdCent) || value.receipt.costUsdCent <= 0
-      || value.receipt.costUsdCent > 5
+      || value.receipt.costUsdCent > value.receipt.reservationUsdCent
       || !Number.isInteger(value.receipt.serverLogId) || value.receipt.serverLogId <= 0) return null;
   const inputs = new Map(batch.map((item) => [item.poolId, item]));
   const seen = new Set();
   for (const item of value.items) {
     if (!exactKeys(item, [
       "poolId", "preResolutionKey", "status", "strongId", "facts",
-      "evidenceUrls", "checkedAt",
-    ]) || seen.has(item.poolId) || inputs.get(item.poolId)?.preResolutionKey !== item.preResolutionKey) return null;
+      "evidenceUrls", "checkedAt", "validation", "providerModel",
+    ]) || seen.has(item.poolId) || inputs.get(item.poolId)?.preResolutionKey !== item.preResolutionKey
+      || item.providerModel !== value.receipt.model) return null;
     seen.add(item.poolId);
   }
   return value;
+}
+
+function pilotReady(item) {
+  const facts = item?.facts;
+  return item?.status === "resolved"
+    && normalizeStrongExternalId(item.strongId) === item.strongId
+    && item.providerModel
+    && item.validation?.status === "machine_validated"
+    && item.validation.identity === "exact"
+    && item.validation.taxonomy === "normalized"
+    && item.validation.evidence === "direct"
+    && Array.isArray(item.evidenceUrls) && item.evidenceUrls.length > 0
+    && facts && (
+      facts.genres?.length > 0 || facts.tags?.length > 0
+      || !!facts.franchise?.name || facts.persons?.length > 0
+    );
 }
 
 export async function runEntdeckenFactsBatchPlan({
@@ -108,24 +137,46 @@ export async function runEntdeckenFactsBatchPlan({
   snapshot,
   now = new Date().toISOString(),
   requestBatch,
+  beforeRequest = async () => null,
+  afterRequest = async () => {},
   persistSnapshot = async () => {},
 } = {}) {
   const plan = createEntdeckenFactsBatchPlan(pool, snapshot, { now });
-  if (!plan || typeof requestBatch !== "function" || typeof persistSnapshot !== "function") {
+  if (!plan || typeof requestBatch !== "function" || typeof persistSnapshot !== "function"
+      || typeof beforeRequest !== "function" || typeof afterRequest !== "function") {
     throw new Error("FACTS_PLAN_INVALID");
+  }
+  if (snapshot.pilot?.status === "failed") throw new Error("FACTS_PILOT_PREVIOUSLY_FAILED");
+  if (snapshot.pilot === null && plan.batches[0]?.length !== 9) {
+    throw new Error("FACTS_PILOT_BATCH_INVALID");
   }
   let current = snapshot;
   let providerRequests = 0;
   let searchRequests = 0;
   let accepted = 0;
-  for (const batch of plan.batches) {
+  for (const [batchIndex, batch] of plan.batches.entries()) {
     if (providerRequests >= ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS) {
       throw new Error("FACTS_REQUEST_LIMIT");
     }
     providerRequests += 1;
-    const response = validateSafeServerBatch(await requestBatch(batch), batch);
-    if (!response) throw new Error("FACTS_BATCH_RESPONSE_INVALID");
+    const requestMarker = await beforeRequest({ batch, requestNumber: providerRequests });
+    let rawResponse;
+    try {
+      rawResponse = await requestBatch(batch);
+    } catch (error) {
+      await afterRequest(requestMarker, null);
+      throw error;
+    }
+    const response = validateSafeServerBatch(rawResponse, batch);
+    if (!response) {
+      await afterRequest(requestMarker, null);
+      throw new Error("FACTS_BATCH_RESPONSE_INVALID");
+    }
+    await afterRequest(requestMarker, response.receipt.costUsdCent);
     searchRequests += response.receipt.searchRequests;
+    if (searchRequests > ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL) {
+      throw new Error("FACTS_SEARCH_LIMIT");
+    }
     const inputById = new Map(batch.map((item) => [item.poolId, item]));
     for (const result of response.items) {
       const merged = mergeEntdeckenFactsSnapshot(current, inputById.get(result.poolId), result);
@@ -137,6 +188,20 @@ export async function runEntdeckenFactsBatchPlan({
       current = checked;
       await persistSnapshot(current, result);
       accepted += 1;
+    }
+    if (batchIndex === 0 && current.pilot === null) {
+      const resolvedReady = response.items.filter(pilotReady).length;
+      const pilotStatus = resolvedReady >= ENTDECKEN_FACTS_PILOT_RESOLVED_MIN
+        ? "passed" : "failed";
+      const marked = markEntdeckenFactsPilot(current, {
+        status: pilotStatus,
+        resolvedReady,
+        evaluatedAt: now,
+      });
+      if (!marked) throw new Error("FACTS_PILOT_STATE_INVALID");
+      current = marked;
+      await persistSnapshot(current, Object.freeze({ kind: "pilot", status: pilotStatus }));
+      if (pilotStatus !== "passed") throw new Error("FACTS_PILOT_THRESHOLD");
     }
   }
   return Object.freeze({
@@ -164,10 +229,20 @@ export async function runEntdeckenFactsLive({
   }
   const connection = liesBudgetVerbindung(env);
   const token = await meldeTestkontoAn(connection, fetchImpl);
+  const laufWache = new LiveLaufWache({
+    maxAnbieterRequests: ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
+    laufLimitUsdCent: LAUF_LIMIT_USD_CENT,
+    standLeser: () => holeBudgetStand({ verbindung: connection, token, fetchImpl }),
+  });
+  await laufWache.initialisiere();
   const initial = readEntdeckenFactsSnapshot();
   const endpoint = `${connection.urlBasis}/functions/v1/entdecken-daily-task`;
   const result = await runEntdeckenFactsBatchPlan({
     snapshot: initial,
+    beforeRequest: ({ requestNumber }) => laufWache.vorAnbieterRequest(
+      `Entdecken-Fakten Batch ${requestNumber}`,
+    ),
+    afterRequest: (marker, costUsdCent) => laufWache.nachAnbieterRequest(marker, costUsdCent),
     requestBatch: async (items) => {
       const response = await fetchMitZeitgrenze(endpoint, {
         method: "POST",

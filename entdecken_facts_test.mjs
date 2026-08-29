@@ -4,7 +4,8 @@ import {
   ENTDECKEN_FACTS_BATCH_SIZE,
   ENTDECKEN_FACTS_CONTRACT_VERSION,
   ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS,
-  ENTDECKEN_FACTS_MAX_SEARCH_USES,
+  ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
+  ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL,
   createEntdeckenFactsBatchPlan,
   createEntdeckenFactsInput,
   emptyEntdeckenFactsSnapshot,
@@ -16,8 +17,9 @@ import { ENTDECKEN_MARKET_POOL_50 } from "./src/data/entdeckenMarketPool50.js";
 import { createEntdeckenRecommendations } from "./src/lib/entdeckenUi.js";
 import {
   ENTDECKEN_FACTS_MAX_TOKENS,
+  ENTDECKEN_FACTS_PROVIDER_TASK,
+  ENTDECKEN_FACTS_REQUEST_CAP_USD_CENT,
   ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
-  ENTDECKEN_FACTS_TASK_CAP_USD_CENT,
   buildAnthropicEntdeckenFactsBody,
   createAnthropicEntdeckenFactsAdapter,
   estimateEntdeckenFactsReservation,
@@ -31,12 +33,19 @@ import {
   runEntdeckenFactsBatchPlan,
 } from "./tools/entdecken_facts_live.mjs";
 import {
+  EXIT_KONFIG,
   ENTDECKEN_FACTS_ONCE_ENV,
   ENTDECKEN_FACTS_ONCE_FLAG,
   MODI,
   OWNER_SERVER_BUDGET_FLAG,
   baueKindUmgebung,
+  main as keychainMain,
 } from "./tools/keychain_runner.mjs";
+import {
+  ANBIETER_REQUEST_LIMIT_USD_CENT,
+  LAUF_LIMIT_USD_CENT,
+  LiveLaufWache,
+} from "./tools/ai_budget_guard.mjs";
 
 let checks = 0;
 async function check(name, test) {
@@ -56,7 +65,7 @@ const setup = Object.freeze({
   modelAlias: "klein",
   model: "claude-haiku-4-5",
   maxTokens: ENTDECKEN_FACTS_MAX_TOKENS,
-  taskCapUsdCent: ENTDECKEN_FACTS_TASK_CAP_USD_CENT,
+  taskCapUsdCent: ENTDECKEN_FACTS_REQUEST_CAP_USD_CENT,
   globalRequestCapUsdCent: 500,
   searchFeeUsdCent: ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT,
   timeoutMs: 135_000,
@@ -93,17 +102,27 @@ function providerResolved(input, index, overrides = {}) {
     ...overrides,
   };
 }
-function providerEnvelope(batch, outputItems) {
+function providerEnvelope(batch, outputItems, searchRequests = batch.length) {
   const urls = [...new Set(outputItems.flatMap((item) => item.evidenceUrls || []))];
+  const uses = Array.from({ length: searchRequests }, (_, index) => ({
+    type: "server_tool_use", id: `tool-${index + 1}`, name: "web_search",
+    input: { query: `fixture ${index + 1}` },
+  }));
+  const results = uses.map((use, index) => ({
+    type: "web_search_tool_result",
+    tool_use_id: use.id,
+    content: urls.filter((_, urlIndex) => urlIndex % uses.length === index).map((url) => ({
+      type: "web_search_result", url, title: "Beleg",
+    })),
+  }));
   return {
     model: "claude-haiku-4-5",
     stop_reason: "end_turn",
-    usage: { input_tokens: 220, output_tokens: 410, server_tool_use: { web_search_requests: 1 } },
+    usage: { input_tokens: 220, output_tokens: 410,
+      server_tool_use: { web_search_requests: searchRequests } },
     content: [
-      { type: "server_tool_use", id: "tool-1", name: "web_search", input: { query: "fixture" } },
-      { type: "web_search_tool_result", tool_use_id: "tool-1", content: urls.map((url) => ({
-        type: "web_search_result", url, title: "Beleg",
-      })) },
+      ...uses,
+      ...results,
       {
         type: "text",
         text: JSON.stringify({ schemaVersion: ENTDECKEN_FACTS_CONTRACT_VERSION, items: outputItems }),
@@ -121,6 +140,13 @@ function normalizedResult(input, index, status = "resolved") {
     facts: null,
     evidenceUrls: status === "ambiguous" ? [evidenceUrl(input)] : [],
     checkedAt: NOW,
+    validation: Object.freeze({
+      status: "machine_validated",
+      identity: "not_resolved",
+      taxonomy: "not_applicable",
+      evidence: status === "ambiguous" ? "direct" : "none",
+    }),
+    providerModel: "claude-haiku-4-5",
   });
   return Object.freeze({
     poolId: input.poolId,
@@ -135,9 +161,16 @@ function normalizedResult(input, index, status = "resolved") {
     }),
     evidenceUrls: Object.freeze([evidenceUrl(input)]),
     checkedAt: NOW,
+    validation: Object.freeze({
+      status: "machine_validated",
+      identity: "exact",
+      taxonomy: "normalized",
+      evidence: "direct",
+    }),
+    providerModel: "claude-haiku-4-5",
   });
 }
-function serverBatch(batch, results) {
+function serverBatch(batch, results, { searchRequests = batch.length } = {}) {
   return {
     ok: true,
     status: "facts",
@@ -151,31 +184,36 @@ function serverBatch(batch, results) {
       warnings: [],
     },
     receipt: {
+      model: "claude-haiku-4-5",
       providerRequests: 1,
-      searchRequests: 1,
-      reservationUsdCent: 4.5,
-      costUsdCent: 1.25,
+      searchRequests,
+      reservationUsdCent: 20,
+      costUsdCent: 12.25,
       serverLogId: 41,
     },
   };
 }
 
-await check("50 Titel ergeben sechs serielle Batches 9/9/9/9/9/5 mit je einer Suche", () => {
+await check("50 Titel ergeben Batches 9/9/9/9/9/5 und höchstens eine Suche je Item", () => {
   const plan = createEntdeckenFactsBatchPlan(ENTDECKEN_MARKET_POOL_50, emptySnapshot(), { now: NOW });
   assert.deepEqual(plan.batches.map((batch) => batch.length), [9, 9, 9, 9, 9, 5]);
   assert.equal(plan.providerRequests, ENTDECKEN_FACTS_MAX_PROVIDER_REQUESTS);
-  assert.equal(plan.maxSearchUses, 6);
+  assert.equal(plan.maxSearchUses, 50);
   assert.equal(ENTDECKEN_FACTS_BATCH_SIZE, 9);
-  assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES, 1);
-  assert.ok(plan.batches.every((batch) => (
-    estimateEntdeckenFactsReservation(buildAnthropicEntdeckenFactsBody(setup, batch), setup) <= 5
-  )));
+  assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM, 1);
+  assert.equal(ENTDECKEN_FACTS_MAX_SEARCH_USES_TOTAL, 50);
+  const reservations = plan.batches.map((batch) => (
+    estimateEntdeckenFactsReservation(buildAnthropicEntdeckenFactsBody(setup, batch), setup)
+  ));
+  assert.ok(reservations.every((cost) => cost > 5 && cost <= ANBIETER_REQUEST_LIMIT_USD_CENT));
+  assert.ok(reservations.reduce((sum, cost) => sum + cost, 0) <= LAUF_LIMIT_USD_CENT);
+  assert.equal(plan.maxSearchUses * ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT, 50);
 });
 
 await check("Providerbody sendet nur Poolidentitaet und Chartquelle, nie Profil oder Score", () => {
   const body = buildAnthropicEntdeckenFactsBody(setup, inputs.slice(0, 9));
   assert.equal(body.tools[0].type, "web_search_20250305");
-  assert.equal(body.tools[0].max_uses, 1);
+  assert.equal(body.tools[0].max_uses, 9);
   assert.equal(body.max_tokens, 2800);
   const userInput = body.messages[0].content;
   assert.match(userInput, /chartSource/);
@@ -188,8 +226,13 @@ await check("Vollstaendige echte Envelope-Form wird strikt normalisiert", () => 
   const parsed = parseAnthropicEntdeckenFactsResponse(response, batch, NOW);
   assert.equal(parsed.accepted, 2);
   assert.equal(parsed.missing, 0);
-  assert.equal(parsed.usage.searchRequests, 1);
+  assert.equal(parsed.usage.searchRequests, 2);
   assert.deepEqual(parsed.items[0].facts.genres, ["action"]);
+  assert.throws(() => parseAnthropicEntdeckenFactsResponse(
+    providerEnvelope(batch, batch.map((item, index) => providerResolved(item, index)), 3),
+    batch,
+    NOW,
+  ), /provider-envelope-invalid/);
 });
 
 await check("Falsche Identitaet bleibt offen; Mehrdeutiges wird terminal negativ", () => {
@@ -238,7 +281,7 @@ await check("Adapter bindet einen Request an Serverkostenbeleg und macht keinen 
     readSettledCost: async () => ({
       logId: 41,
       operationId,
-      task: "entdecken-daily",
+      task: ENTDECKEN_FACTS_PROVIDER_TASK,
       status: "fertig",
       model: "claude-haiku-4-5",
       inputTokens: 220,
@@ -257,7 +300,7 @@ await check("Adapter bindet einen Request an Serverkostenbeleg und macht keinen 
   const result = await adapter.resolve(batch);
   assert.equal(fetches, 1);
   assert.equal(result.items.length, 2);
-  assert.equal(result.receipt.searchRequests, 1);
+  assert.equal(result.receipt.searchRequests, 2);
   await assert.rejects(() => adapter.resolve(batch), /already-used/);
   assert.equal(fetches, 1);
 });
@@ -277,7 +320,9 @@ await check("Teilfortschritt wird je Item gesichert und Wiederanlauf enthaelt nu
     persistSnapshot: async (snapshot) => { persisted = snapshot; writes += 1; },
   }), /fixture-transport/);
   assert.equal(requests, 2);
-  assert.equal(writes, 9);
+  assert.equal(writes, 10);
+  assert.equal(persisted.pilot.status, "passed");
+  assert.equal(persisted.pilot.resolvedReady, 9);
   const resume = createEntdeckenFactsBatchPlan(ENTDECKEN_MARKET_POOL_50, persisted, { now: NOW });
   assert.equal(resume.pending.length, 41);
   assert.equal(resume.batches.length, 5);
@@ -288,9 +333,20 @@ await check("Vollstaendiger Mocklauf versucht alle 50 genau einmal in sechs Requ
   let snapshot = emptySnapshot();
   let offset = 0;
   let writes = 0;
+  let measuredBefore = 0;
+  let measuredAfter = 0;
   const result = await runEntdeckenFactsBatchPlan({
     snapshot,
     now: NOW,
+    beforeRequest: async ({ requestNumber }) => {
+      measuredBefore += 1;
+      return Object.freeze({ requestNumber });
+    },
+    afterRequest: async (marker, costUsdCent) => {
+      measuredAfter += 1;
+      assert.equal(marker.requestNumber, measuredAfter);
+      assert.ok(costUsdCent > 0 && costUsdCent <= ANBIETER_REQUEST_LIMIT_USD_CENT);
+    },
     requestBatch: async (batch) => {
       const rows = batch.map((item, index) => normalizedResult(item, offset + index));
       offset += batch.length;
@@ -299,11 +355,88 @@ await check("Vollstaendiger Mocklauf versucht alle 50 genau einmal in sechs Requ
     persistSnapshot: async (next) => { snapshot = next; writes += 1; },
   });
   assert.equal(result.providerRequests, 6);
-  assert.equal(result.searchRequests, 6);
+  assert.equal(result.searchRequests, 50);
+  assert.equal(measuredBefore, 6);
+  assert.equal(measuredAfter, 6);
   assert.equal(result.accepted, 50);
-  assert.equal(writes, 50);
+  assert.equal(writes, 51);
+  assert.deepEqual(snapshot.pilot, {
+    status: "passed", batchSize: 9, threshold: 7, resolvedReady: 9,
+    evaluatedAt: NOW, providerRequests: 1,
+  });
   assert.equal(result.diagnostics.ok, 50);
   assert.equal(result.diagnostics.unknownOrExpired, 0);
+});
+
+await check("Pilot 7/9 geht weiter; ambiguous und unresolved zählen nicht", async () => {
+  let snapshot = emptySnapshot();
+  let requests = 0;
+  const result = await runEntdeckenFactsBatchPlan({
+    snapshot,
+    now: NOW,
+    requestBatch: async (batch) => {
+      requests += 1;
+      const rows = batch.map((item, index) => (
+        requests === 1 && index === 7 ? normalizedResult(item, index, "ambiguous")
+          : requests === 1 && index === 8 ? normalizedResult(item, index, "unresolved")
+            : normalizedResult(item, requests * 100 + index)
+      ));
+      return serverBatch(batch, rows);
+    },
+    persistSnapshot: async (next) => { snapshot = next; },
+  });
+  assert.equal(requests, 6);
+  assert.equal(result.providerRequests, 6);
+  assert.equal(snapshot.pilot.status, "passed");
+  assert.equal(snapshot.pilot.resolvedReady, 7);
+});
+
+await check("Pilot 6/9 stoppt nach exakt einem Providerrequest und behält Teilstand", async () => {
+  let snapshot = emptySnapshot();
+  let requests = 0;
+  let writes = 0;
+  await assert.rejects(() => runEntdeckenFactsBatchPlan({
+    snapshot,
+    now: NOW,
+    requestBatch: async (batch) => {
+      requests += 1;
+      const rows = batch.map((item, index) => (
+        index < 6 ? normalizedResult(item, index)
+          : normalizedResult(item, index, index === 6 ? "unresolved" : "ambiguous")
+      ));
+      return serverBatch(batch, rows);
+    },
+    persistSnapshot: async (next) => { snapshot = next; writes += 1; },
+  }), /FACTS_PILOT_THRESHOLD/);
+  assert.equal(requests, 1);
+  assert.equal(writes, 10);
+  assert.equal(Object.keys(snapshot.entries).length, 9);
+  assert.equal(snapshot.pilot.status, "failed");
+  assert.equal(snapshot.pilot.resolvedReady, 6);
+  assert.equal(snapshot.entries[strongId(0)].provider.origin, "provider_model_generated");
+  assert.equal(snapshot.entries[strongId(0)].provider.userJudgment, false);
+  assert.equal(snapshot.entries[strongId(0)].validation.status, "machine_validated");
+});
+
+await check("Servermessung erzwingt seriell 500-Cent-Requestzaun und 500-Cent-Laufpuffer", async () => {
+  const values = [0, 0, 400, 400, 800, 800, 1_001, 1_001];
+  const wache = new LiveLaufWache({
+    maxAnbieterRequests: 6,
+    laufLimitUsdCent: LAUF_LIMIT_USD_CENT,
+    standLeser: async () => ({
+      verbrauchtUsdCent: values.shift(),
+      globalesBudgetErschoepft: false,
+      anbieterRequestLimitUsdCent: ANBIETER_REQUEST_LIMIT_USD_CENT,
+      anbieterRequestTimeoutMs: 135_000,
+    }),
+  });
+  await wache.initialisiere();
+  for (const cost of [400, 400, 201]) {
+    const marker = await wache.vorAnbieterRequest("fixture");
+    await wache.nachAnbieterRequest(marker, cost);
+  }
+  await assert.rejects(() => wache.vorAnbieterRequest("batch 4"), /500-Cent-Sicherheitspuffer/);
+  assert.equal(wache.anzahl, 3);
 });
 
 await check("Mehrdeutig und ungelöst werden negativ gecacht und nicht erneut angefragt", () => {
@@ -353,7 +486,7 @@ await check("Ein belegtes ungesehenes Poolitem erreicht Für mich ohne Rankerän
   assert.equal(result.diagnostics.metadata, 1);
 });
 
-await check("AGENTS-konformer Wrapper erlaubt exakt einen neuen Fakten-Sonderpfad", () => {
+await check("AGENTS-konformer Wrapper akzeptiert exakt Owner-Zusatz zuerst und startet nur Fakten", async () => {
   assert.equal(ENTDECKEN_FACTS_ONCE_FLAG, "--entdecken-facts-once");
   assert.deepEqual(MODI["ai-live"].entdeckenFactsOnceArgv.slice(-1), [
     new URL("./tools/entdecken_facts_live.mjs", import.meta.url).pathname,
@@ -373,8 +506,31 @@ await check("AGENTS-konformer Wrapper erlaubt exakt einen neuen Fakten-Sonderpfa
   });
   assert.equal(env[ENTDECKEN_FACTS_ONCE_ENV], "keychain-budget-guard-v1");
   assert.equal(env.KD_AI_OWNER_APPROVED_SERVER_BUDGET, "1");
-  assert.equal(`${ENTDECKEN_FACTS_ONCE_FLAG} ${OWNER_SERVER_BUDGET_FLAG}`,
-    "--entdecken-facts-once --owner-approved-server-budget");
+  let started = null;
+  const exact = await keychainMain([
+    "ai-live", OWNER_SERVER_BUDGET_FLAG, ENTDECKEN_FACTS_ONCE_FLAG,
+  ], {
+    modusStarter: async (value) => { started = value; return 0; },
+    fehlerAusgabe: () => {},
+  });
+  assert.equal(exact, 0);
+  assert.equal(started.entdeckenFactsOnce, true);
+  assert.equal(started.ownerApprovedServerBudget, true);
+  assert.equal(started.entdeckenDailyOnce, false);
+  assert.equal(started.entdeckenProviderProbeOnce, false);
+  assert.equal(started.radarWebsearchOnce, false);
+  assert.equal(started.radarEntdeckenOnce, false);
+  let wrongStarted = false;
+  const wrongOrder = await keychainMain([
+    "ai-live", ENTDECKEN_FACTS_ONCE_FLAG, OWNER_SERVER_BUDGET_FLAG,
+  ], {
+    modusStarter: async () => { wrongStarted = true; return 0; },
+    fehlerAusgabe: () => {},
+  });
+  assert.equal(wrongOrder, EXIT_KONFIG);
+  assert.equal(wrongStarted, false);
+  assert.equal(`npm run test:ai:live -- ${OWNER_SERVER_BUDGET_FLAG} ${ENTDECKEN_FACTS_ONCE_FLAG}`,
+    "npm run test:ai:live -- --owner-approved-server-budget --entdecken-facts-once");
 });
 
 await check("Requestvertrag akzeptiert nur die vollständige pre-resolution Identitaet", () => {

@@ -5,7 +5,7 @@
 
 import {
   ENTDECKEN_FACTS_CONTRACT_VERSION,
-  ENTDECKEN_FACTS_MAX_SEARCH_USES,
+  ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
   ENTDECKEN_FACTS_PROMPT_VERSION,
   validateEntdeckenFactsBatchOutput,
 } from "../_shared/entdeckenFacts.js";
@@ -14,9 +14,10 @@ import {
   ProviderTextSafetyError,
 } from "../_shared/providerText.js";
 
-export const ENTDECKEN_FACTS_PROVIDER_TASK = "entdecken-daily";
+export const ENTDECKEN_FACTS_CONFIG_TASK = "entdecken-daily";
+export const ENTDECKEN_FACTS_PROVIDER_TASK = "entdecken-facts-once";
 export const ENTDECKEN_FACTS_MAX_TOKENS = 2800;
-export const ENTDECKEN_FACTS_TASK_CAP_USD_CENT = 5;
+export const ENTDECKEN_FACTS_REQUEST_CAP_USD_CENT = 500;
 export const ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT = 1;
 export const ENTDECKEN_FACTS_TIMEOUT_MAX_MS = 135_000;
 export const ENTDECKEN_FACTS_RESPONSE_MAX_BYTES = 512_000;
@@ -61,7 +62,7 @@ function setupError() { throw new EntdeckenFactsProviderError("setup-invalid"); 
 export function validateEntdeckenFactsProviderSetup(value) {
   if (!plain(value) || value.providerAllowed !== true || value.modelAlias !== "klein"
       || !MODEL_FORM.test(value.model) || value.maxTokens !== ENTDECKEN_FACTS_MAX_TOKENS
-      || value.taskCapUsdCent !== ENTDECKEN_FACTS_TASK_CAP_USD_CENT
+      || value.taskCapUsdCent !== ENTDECKEN_FACTS_REQUEST_CAP_USD_CENT
       || value.searchFeeUsdCent !== ENTDECKEN_FACTS_SEARCH_FEE_USD_CENT
       || !finitePositive(value.globalRequestCapUsdCent) || value.globalRequestCapUsdCent > 500
       || value.taskCapUsdCent > value.globalRequestCapUsdCent
@@ -77,7 +78,7 @@ export function validateEntdeckenFactsProviderSetup(value) {
 const SYSTEM_PROMPT = [
   "Du loest ausschliesslich die Identitaet oeffentlich gelisteter Filme und Serien auf und extrahierst neutrale Fakten.",
   "Du bewertest niemals Geschmack, Qualitaet, Relevanz oder Passung und erzeugst keinen Score.",
-  "Fuehre genau eine kleine Websuche fuer die gesamte uebergebene Teilmenge aus.",
+  "Fuehre pro Item hoechstens eine gezielte Websuche aus; vermische keine Identitaeten.",
   "Antworte ausschliesslich mit einem JSON-Objekt mit schemaVersion und items, ohne Markdown oder Freitext.",
   `schemaVersion ist exakt ${ENTDECKEN_FACTS_CONTRACT_VERSION}.`,
   "Jedes Item enthaelt exakt poolId, status, identity, facts und evidenceUrls.",
@@ -119,7 +120,7 @@ export function buildAnthropicEntdeckenFactsBody(setupInput, items) {
     tools: Object.freeze([Object.freeze({
       type: "web_search_20250305",
       name: "web_search",
-      max_uses: ENTDECKEN_FACTS_MAX_SEARCH_USES,
+      max_uses: items.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM,
       allowed_callers: Object.freeze(["direct"]),
     })]),
   });
@@ -132,7 +133,7 @@ export function estimateEntdeckenFactsReservation(body, setupInput) {
     setup,
     conservativeInputTokens,
     setup.maxTokens,
-    ENTDECKEN_FACTS_MAX_SEARCH_USES,
+    body.tools[0].max_uses,
   );
   if (!finitePositive(cost) || cost > setup.taskCapUsdCent) {
     throw new EntdeckenFactsProviderError("provider-cost-invalid");
@@ -140,12 +141,12 @@ export function estimateEntdeckenFactsReservation(body, setupInput) {
   return cost;
 }
 
-function providerUsage(value) {
+function providerUsage(value, maxSearchUses) {
   const usage = value?.usage;
   const websearch = usage?.server_tool_use?.web_search_requests;
   if (!plain(usage) || !Number.isInteger(usage.input_tokens) || usage.input_tokens < 0
       || !Number.isInteger(usage.output_tokens) || usage.output_tokens < 0
-      || !Number.isInteger(websearch) || websearch !== ENTDECKEN_FACTS_MAX_SEARCH_USES
+      || !Number.isInteger(websearch) || websearch < 0 || websearch > maxSearchUses
       || typeof value?.model !== "string" || !MODEL_FORM.test(value.model)) return null;
   return Object.freeze({
     model: value.model,
@@ -156,7 +157,8 @@ function providerUsage(value) {
 }
 
 export function parseAnthropicEntdeckenFactsResponse(value, requestedItems, checkedAt) {
-  const usage = providerUsage(value);
+  const maxSearchUses = requestedItems.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM;
+  const usage = providerUsage(value, maxSearchUses);
   if (!usage || value?.stop_reason !== "end_turn" || !Array.isArray(value?.content)
       || value.content.some((block) => ["thinking", "redacted_thinking"].includes(block?.type))) {
     throw new EntdeckenFactsProviderError("provider-envelope-invalid", usage);
@@ -164,11 +166,16 @@ export function parseAnthropicEntdeckenFactsResponse(value, requestedItems, chec
   const uses = value.content.filter((block) => block?.type === "server_tool_use"
     && block?.name === "web_search" && typeof block?.id === "string" && block.id);
   const results = value.content.filter((block) => block?.type === "web_search_tool_result");
-  if (uses.length !== 1 || results.length !== 1 || results[0]?.tool_use_id !== uses[0].id
-      || !Array.isArray(results[0]?.content)) {
+  const useIds = new Set(uses.map((entry) => entry.id));
+  const resultIds = new Set(results.map((entry) => entry?.tool_use_id));
+  if (uses.length !== usage.searchRequests || useIds.size !== uses.length
+      || results.length !== usage.searchRequests || resultIds.size !== results.length
+      || [...useIds].some((id) => !resultIds.has(id))
+      || results.some((result) => !useIds.has(result?.tool_use_id)
+        || !Array.isArray(result?.content))) {
     throw new EntdeckenFactsProviderError("provider-tool-shape-invalid", usage);
   }
-  const resultUrls = new Set(results[0].content
+  const resultUrls = new Set(results.flatMap((result) => result.content)
     .filter((entry) => entry?.type === "web_search_result")
     .map((entry) => directUrl(entry.url)).filter(Boolean));
   const textBlocks = value.content.filter((block) => block?.type === "text");
@@ -194,7 +201,14 @@ export function parseAnthropicEntdeckenFactsResponse(value, requestedItems, chec
     checkedAt,
   });
   if (!normalized) throw new EntdeckenFactsProviderError("provider-output-invalid", usage);
-  return Object.freeze({ ...normalized, usage });
+  return Object.freeze({
+    ...normalized,
+    items: Object.freeze(normalized.items.map((item) => Object.freeze({
+      ...item,
+      providerModel: usage.model,
+    }))),
+    usage,
+  });
 }
 
 async function responseJson(response) {
@@ -278,7 +292,7 @@ export function createAnthropicEntdeckenFactsAdapter({
         );
       }
       const providerBody = await responseJson(response);
-      usage = providerUsage(providerBody);
+      usage = providerUsage(providerBody, items.length * ENTDECKEN_FACTS_MAX_SEARCH_USES_PER_ITEM);
       if (!response?.ok) throw new EntdeckenFactsProviderError("http-error", usage);
       const parsed = parseAnthropicEntdeckenFactsResponse(providerBody, items, now());
       usage = parsed.usage;
@@ -311,6 +325,7 @@ export function createAnthropicEntdeckenFactsAdapter({
           warnings: parsed.warnings,
         }),
         receipt: Object.freeze({
+          model: usage.model,
           providerRequests: 1,
           searchRequests: usage.searchRequests,
           reservationUsdCent,

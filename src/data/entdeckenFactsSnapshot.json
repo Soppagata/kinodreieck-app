@@ -3,6 +3,7 @@
   "poolId": "public:versioned-market-mix-at",
   "poolVersion": "2026-08-29-at-v1",
   "updatedAt": null,
+  "pilot": null,
   "preResolution": {},
   "entries": {}
 }

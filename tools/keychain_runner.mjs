@@ -717,6 +717,7 @@ export async function main(
     ausgabe = console.log,
     fehlerAusgabe = console.error,
     keychainLeser = liesKeychainEintrag,
+    modusStarter = starteModus,
   } = {},
 ) {
   if (argv.length === 1 && argv[0] === "keychain-check") {
@@ -750,8 +751,8 @@ export async function main(
     && rest[1] === OWNER_SERVER_BUDGET_FLAG;
   const entdeckenFactsBefehlExakt = modus === "ai-live"
     && rest.length === 2
-    && rest[0] === ENTDECKEN_FACTS_ONCE_FLAG
-    && rest[1] === OWNER_SERVER_BUDGET_FLAG;
+    && rest[0] === OWNER_SERVER_BUDGET_FLAG
+    && rest[1] === ENTDECKEN_FACTS_ONCE_FLAG;
   /* Der exakte Ownerbefehl ohne Sonderflag startet einen einzigen Smoke mit
      der Sechser-Kernphase sowie je genau einem Entdecken- und Radar-Pfad. */
   const ohneSonderflags = rest.filter((arg) => (
@@ -799,7 +800,7 @@ export async function main(
   }
 
   try {
-    return await starteModus({
+    return await modusStarter({
       modus,
       keychainLeser,
       confirmPaid,
