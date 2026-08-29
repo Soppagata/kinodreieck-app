@@ -13,6 +13,8 @@ import { validateTitleGroupMetadata } from "./titleGroupRadar.js";
 
 export const RADAR_PILOT_FEED_FORMAT = "kd-radar-pilot-feed-v2";
 export const RADAR_PILOT_LEGACY_FEED_FORMAT = "kd-radar-pilot-feed-v1";
+export const RADAR_AUTOMATION_CONTRACT_VERSION = "radar-auto-v1";
+export const RADAR_AUTOMATION_INTERVAL_HOURS = 144;
 export const RADAR_PILOT_SUBSCRIPTION_ACK_KEYS = Object.freeze([
   "operationId", "targetId", "status", "revision", "checksum",
 ]);
@@ -30,6 +32,9 @@ export const RADAR_PILOT_FEED_KEYS = Object.freeze([
 ]);
 export const RADAR_PILOT_FEED_V2_KEYS = Object.freeze([
   ...RADAR_PILOT_FEED_KEYS, "personResults",
+]);
+export const RADAR_PILOT_AUTOMATION_KEYS = Object.freeze([
+  "contractVersion", "schedulerActive", "intervalHours",
 ]);
 export const RADAR_PILOT_SUBSCRIPTION_KEYS = Object.freeze([
   "targetId", "targetType", "title", "region", "scope", "status", "updatedAt",
@@ -369,7 +374,10 @@ export function projectRadarPilotPersonResult(value, subscriptions = []) {
 export function validateRadarPilotFeed(value) {
   const v2 = value?.format === RADAR_PILOT_FEED_FORMAT;
   const v1 = value?.format === RADAR_PILOT_LEGACY_FEED_FORMAT;
-  if ((!v2 && !v1) || !exactKeys(value, v2 ? RADAR_PILOT_FEED_V2_KEYS : RADAR_PILOT_FEED_KEYS)) {
+  const shapeValid = v2
+    ? exactKeysWithOptional(value, RADAR_PILOT_FEED_V2_KEYS, ["automation"])
+    : exactKeys(value, RADAR_PILOT_FEED_KEYS);
+  if ((!v2 && !v1) || !shapeValid) {
     return result(["feed-shape-invalid"]);
   }
   const errors = [];
@@ -377,6 +385,9 @@ export function validateRadarPilotFeed(value) {
   if (!validChecksum(value.revision, value.checksum)) errors.push("feed-checksum-invalid");
   if (!validInstant(value.reconciledAt)) errors.push("feed-time-invalid");
   if (typeof value.radarReview !== "boolean") errors.push("feed-review-invalid");
+  if (value.automation !== undefined && !radarAutomationAttested(value.automation, { allowInactive: true })) {
+    errors.push("feed-automation-invalid");
+  }
   if (!Array.isArray(value.subscriptions)) errors.push("feed-subscriptions-invalid");
   else {
     const seen = new Set();
@@ -431,6 +442,14 @@ export function validateRadarPilotFeed(value) {
     }
   }
   return result(errors);
+}
+
+export function radarAutomationAttested(value, { allowInactive = false } = {}) {
+  return exactKeys(value, RADAR_PILOT_AUTOMATION_KEYS)
+    && value.contractVersion === RADAR_AUTOMATION_CONTRACT_VERSION
+    && typeof value.schedulerActive === "boolean"
+    && (allowInactive || value.schedulerActive === true)
+    && value.intervalHours === RADAR_AUTOMATION_INTERVAL_HOURS;
 }
 
 export function projectEntdeckenRadarPilot({

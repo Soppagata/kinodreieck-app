@@ -12,6 +12,7 @@ import {
   validateLocalRadarState,
 } from "../lib/localEventRadar.js";
 import {
+  radarAutomationAttested,
   validateRadarPilotFeed,
   validateRadarPilotImportResult,
   validateRadarPilotSubscriptionAck,
@@ -276,6 +277,7 @@ export function createRadarPilotService({
     }
 
     let current = state;
+    let automation = null;
     const importedEventVersionIds = new Set();
     let rejected = false;
     const runSubscriptionIds = state.outbox.filter((entry) => entry.status === "pending").map((entry) => entry.operationId);
@@ -297,6 +299,8 @@ export function createRadarPilotService({
             reason: response.reason || "pilot-feed-invalid",
           });
         }
+        automation = radarAutomationAttested(response.payload.automation, { allowInactive: true })
+          ? Object.freeze({ ...response.payload.automation }) : null;
         const reconciled = reconcileAccountRadarPilotFeed(current, response.payload);
         if (!reconciled.ok) return Object.freeze({ kind: "pending", state: current, reason: reconciled.reason });
         if (!reconciled.changed) return Object.freeze({ kind: "ok", state: current });
@@ -448,7 +452,11 @@ export function createRadarPilotService({
         }
       }
 
-      return Object.freeze({ status: rejected ? "rejected" : "ready", state: current });
+      return Object.freeze({
+        status: rejected ? "rejected" : "ready",
+        state: current,
+        ...(automation ? { automation } : {}),
+      });
     } catch (error) {
       if (error?.code === "RADAR_PILOT_CONTEXT_CHANGED") {
         return Object.freeze({ status: "context-changed", state });

@@ -16,7 +16,8 @@ begin
      or to_regclass('public.kd_radar_daily_runs') is null
      or to_regprocedure('public.kd_radar_daily_claim()') is null
      or to_regprocedure('public.kd_radar_daily_assert_lease(uuid,uuid,date,uuid)') is null
-     or to_regprocedure('public.kd_radar_daily_finish(uuid,uuid,date,uuid,text)') is null then
+     or to_regprocedure('public.kd_radar_daily_finish(uuid,uuid,date,uuid,text)') is null
+     or to_regprocedure('public.kd_radar_pilot_feed(uuid[])') is null then
     raise exception 'Radar 144h scheduler Baseline fehlt';
   end if;
 end
@@ -24,6 +25,10 @@ $$;
 
 alter table public.kd_radar_subscriptions
   add column next_check_at timestamptz not null default clock_timestamp();
+
+alter table public.kd_radar_settings
+  add column radar_scheduler_interval_hours integer not null default 144
+  check (radar_scheduler_interval_hours = 144);
 
 create index kd_radar_subscriptions_due
   on public.kd_radar_subscriptions (next_check_at, account_id, target_id)
@@ -251,5 +256,54 @@ comment on function public.kd_radar_daily_claim() is
   'Claimt atomar hoechstens ein faelliges aktives AT-Konto/Ziel-Abo; Scheduler-Ticks zwischen den 144h bleiben idle.';
 comment on function public.kd_radar_daily_finish(uuid,uuid,date,uuid,text) is
   'Schliesst den gefenceten Versuch terminal ab und setzt dessen naechste Konto/Ziel-Faelligkeit auf Abschluss plus 144 Stunden.';
+
+-- Erst dieselbe atomare Migration, die den 144h-Claim installiert, darf den
+-- Browserfeed attestieren. Alte Server liefern das optionale Feld nicht und
+-- bleiben damit clientseitig automatisch fail-closed.
+alter function public.kd_radar_pilot_feed(uuid[])
+  rename to kd_radar_pilot_feed_six_day_internal;
+
+revoke all on function public.kd_radar_pilot_feed_six_day_internal(uuid[])
+  from public, anon, authenticated;
+grant execute on function public.kd_radar_pilot_feed_six_day_internal(uuid[])
+  to service_role;
+
+create function public.kd_radar_pilot_feed(
+  p_operation_ids uuid[]
+) returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_feed jsonb;
+  v_scheduler_active boolean := false;
+  v_interval_hours integer := 0;
+begin
+  v_feed := public.kd_radar_pilot_feed_six_day_internal(p_operation_ids);
+
+  select radar_scheduler_aktiv, radar_scheduler_interval_hours
+    into v_scheduler_active, v_interval_hours
+    from public.kd_radar_settings
+   where singleton;
+
+  return v_feed || jsonb_build_object(
+    'automation',jsonb_build_object(
+      'contractVersion','radar-auto-v1',
+      'schedulerActive',coalesce(v_scheduler_active,false),
+      'intervalHours',coalesce(v_interval_hours,0)
+    )
+  );
+end
+$$;
+
+revoke all on function public.kd_radar_pilot_feed(uuid[])
+  from public, anon, authenticated;
+grant execute on function public.kd_radar_pilot_feed(uuid[])
+  to authenticated, service_role;
+
+comment on function public.kd_radar_pilot_feed(uuid[]) is
+  'Ergaenzt den bestehenden kontogebundenen Radarfeed um die exakte serverseitige Scheduler-/144h-Attestation.';
 
 commit;

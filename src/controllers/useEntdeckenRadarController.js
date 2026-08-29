@@ -27,7 +27,7 @@ import {
   findPersonRadarCatalogIdentity,
   resolvePersonRadarCatalogIdentity,
 } from "../lib/personRadarCatalog.js";
-import { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
+import { projectEntdeckenRadarPilot, radarAutomationAttested } from "../lib/radarPilotContracts.js";
 import { projectVisibleRadarWebsearchEvents, validateRadarWebsearchTarget } from "../lib/radarWebsearchFlow.js";
 import {
   CANONICAL_FRANCHISE_RADAR_CATALOG,
@@ -107,6 +107,7 @@ export function useEntdeckenRadarController({
   });
   const [radarPreviewTarget, setRadarPreviewTarget] = useState(null);
   const [radarPilotSyncStatus, setRadarPilotSyncStatus] = useState(radarPilotClientEnabled ? "idle" : "disabled");
+  const [radarAutomationAttestation, setRadarAutomationAttestation] = useState(null);
   const [localRadarWebsearchEvents, setLocalRadarWebsearchEvents] = useState([]);
   const localRadarWebsearchAvailable = radarAuthority === "guest"
     && radarWebsearchExecutor?.valid === true
@@ -132,18 +133,25 @@ export function useEntdeckenRadarController({
     const state = stateForSync || radarStateRef.current;
     if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) {
       setRadarPilotSyncStatus("disabled");
+      setRadarAutomationAttestation(null);
       return { status: "disabled", state };
     }
     setRadarPilotSyncStatus("syncing");
+    setRadarAutomationAttestation(null);
     try {
       const status = await radarPilotAdapter.sync({
         state,
         commit: (next) => setRadarState(next),
       });
       setRadarPilotSyncStatus(status?.status || "pending");
+      setRadarAutomationAttestation(
+        status?.status === "ready" && radarAutomationAttested(status.automation, { allowInactive: true })
+          ? status.automation : null,
+      );
       return status;
     } catch {
       setRadarPilotSyncStatus("pending");
+      setRadarAutomationAttestation(null);
       return { status: "pending", state, reason: "pilot-unknown" };
     }
   }, [radarPilotAdapter, radarPilotClientEnabled, radarAuthority, remoteKontoAktiv, radarStateRef, setRadarState]);
@@ -153,6 +161,7 @@ export function useEntdeckenRadarController({
       return undefined;
     }
     let aktiv = true;
+    setRadarAutomationAttestation(null);
     void (async () => {
       try {
         const gespeicherterRadar = await store.get(K.radar);
@@ -173,8 +182,15 @@ export function useEntdeckenRadarController({
           });
           if (!aktiv) return;
           setRadarPilotSyncStatus(status?.status || "pending");
+          setRadarAutomationAttestation(
+            status?.status === "ready" && radarAutomationAttested(status.automation, { allowInactive: true })
+              ? status.automation : null,
+          );
         } catch {
-          if (aktiv) setRadarPilotSyncStatus("pending");
+          if (aktiv) {
+            setRadarPilotSyncStatus("pending");
+            setRadarAutomationAttestation(null);
+          }
         }
       } catch {
         if (!aktiv) return;
@@ -640,7 +656,9 @@ export function useEntdeckenRadarController({
     events: radarAuthority === "guest" ? visibleLocalRadarEvents : visiblePilotRadarEvents,
   }), [accountRadarPilotProjection, radarAuthority, visibleLocalRadarEvents, visiblePilotRadarEvents]);
   const radarAutomaticAvailable = accountRadarServerAvailable
-    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true;
+    && radarPilotSyncStatus === "ready"
+    && radarPilotProjection.active === true && radarPilotProjection.radarReview === true
+    && radarAutomationAttested(radarAutomationAttestation);
   const fuehreGlobaleSuchaktionAus = useCallback((treffer, intent) => {
     const action = treffer?.searchActions?.[intent];
     if (!action) return;

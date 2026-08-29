@@ -61,6 +61,12 @@ const feed = (extra = {}) => ({
   }],
   events: [event()], receipts: [], operationAcks: [], radarReview: false, ...extra,
 });
+const automation = Object.freeze({
+  contractVersion: "radar-auto-v1", schedulerActive: true, intervalHours: 144,
+});
+const v2Feed = (extra = {}) => feed({
+  format: "kd-radar-pilot-feed-v2", personResults: [], ...extra,
+});
 const importPayload = (extra = {}) => ({
   targetKey: targetId, eventType: "kinostart_at", date: "2026-08-20", region: "AT", platform: "-",
   evidence: [
@@ -127,6 +133,26 @@ await check("Alle Pilot-Dokumente verlangen exakt ihre kanonischen Keysets", () 
   assert.equal(C.validateRadarPilotFeed(feed({
     operationAcks: [{ ...subscriptionAck(), title: "verboten" }],
   })).ok, false);
+});
+
+await check("Feed-Attestation bleibt rueckwaertskompatibel und akzeptiert nur den exakten 144h-Serververtrag", () => {
+  assert.equal(C.validateRadarPilotFeed(feed()).ok, true);
+  assert.equal(C.validateRadarPilotFeed(v2Feed()).ok, true);
+  assert.equal(C.validateRadarPilotFeed(v2Feed({ automation })).ok, true);
+  assert.equal(C.radarAutomationAttested(automation), true);
+  const inactive = { ...automation, schedulerActive: false };
+  assert.equal(C.validateRadarPilotFeed(v2Feed({ automation: inactive })).ok, true);
+  assert.equal(C.radarAutomationAttested(inactive, { allowInactive: true }), true);
+  assert.equal(C.radarAutomationAttested(inactive), false);
+  for (const invalid of [
+    { ...automation, contractVersion: "radar-auto-v0" },
+    { ...automation, intervalHours: 24 },
+    { ...automation, schedulerActive: "true" },
+    { ...automation, extra: true },
+  ]) {
+    assert.equal(C.validateRadarPilotFeed(v2Feed({ automation: invalid })).ok, false);
+  }
+  assert.equal(C.validateRadarPilotFeed(feed({ automation })).ok, false);
 });
 
 await check("Pilot-Event-Evidence trägt ein oder zwei sichere, eindeutige Quellen-Objekte", () => {
@@ -374,6 +400,22 @@ for (const enabled of [false, undefined]) {
   });
 }
 
+await check("Pilot-Sync reicht nur die exakt validierte Feed-Attestation an den Controller weiter", async () => {
+  const h = harness({
+    fetchImpl: async (url, init) => {
+      if (url.endsWith("kd_radar_pilot_set_subscription")) {
+        const body = JSON.parse(init.body);
+        return response(200, subscriptionAck({ operationId: body.p_operation_id }));
+      }
+      if (url.endsWith("kd_radar_pilot_feed")) return response(200, v2Feed({ automation }));
+      throw new Error("unexpected rpc");
+    },
+  });
+  const result = await h.service.sync({ state: h.state, commit: h.commit });
+  assert.equal(result.status, "ready", JSON.stringify(result));
+  assert.deepEqual(result.automation, automation);
+});
+
 await check("Gast erzeugt null Aufrufe aller vier Pilot-RPCs", async () => {
   const h = harness({ mode: "guest" });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
@@ -409,11 +451,13 @@ await check("Subscription-Outbox läuft seriell mit maximaler Parallelität eins
         }));
       }
       activeRequests -= 1;
-      return response(200, feed({ subscriptions: [], events: [] }));
+      return response(200, feed({
+        revision: bodies.length, subscriptions: [], events: [],
+      }));
     },
   });
   const result = await h.service.sync({ state: h.state, commit: h.commit });
-  assert.equal(result.status, "ready");
+  assert.equal(result.status, "ready", JSON.stringify(result));
   assert.equal(maxActiveRequests, 1);
   assert.equal(bodies.filter((entry) => entry.url.endsWith("set_subscription")).length, 2);
   assert.equal(h.state.outbox.length, 0);
@@ -516,7 +560,7 @@ await check("Busy-Sync bewahrt eine während des aktiven Laufs lokal ergänzte O
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: "66666666-6666-4666-8666-666666666666", status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
   assert.deepEqual(rpcCalls.filter((call) => call.rpc === "kd_radar_pilot_set_subscription")
     .map((call) => call.body.p_operation_id), [operationId]);
@@ -590,7 +634,7 @@ await check("Busy-Sync während Storage-await landet im Resultat und im dauerhaf
     })), [{ operationId: importOperationId, status: "pending" }]);
   }
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
 });
 
@@ -698,7 +742,7 @@ await check("Späterer Busy-Sync mit Basisstate entfernt keinen zuvor gemerkten 
     operationId: entry.operationId, status: entry.status,
   })), [{ operationId: operationId2, status: "pending" }]);
   assert.deepEqual(rpcCalls.map((call) => call.rpc), [
-    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription",
+    "kd_radar_pilot_feed", "kd_radar_pilot_set_subscription", "kd_radar_pilot_feed",
   ]);
 });
 

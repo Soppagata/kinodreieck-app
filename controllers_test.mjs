@@ -646,7 +646,9 @@ check("Mehrtopf-Löschungen warten fail-closed auf den sicheren Must-Watch-Lades
 check("Radarcontroller projiziert den Kontopilot getrennt und lässt Gast-Fixtures lokal",
   /projectEntdeckenRadarPilot/.test(radarController)
   && /radarPilotEvents: radarPilotProjection\.events/.test(radarController)
-  && /radarReview: radarPilotProjection\.radarReview/.test(radarController));
+  && /radarReview: radarPilotProjection\.radarReview/.test(radarController)
+  && /radarPilotSyncStatus === "ready"/.test(radarController)
+  && /radarAutomationAttested\(radarAutomationAttestation\)/.test(radarController));
 const pilotImportProjectionQueued = R.queueAccountRadarPilotImport(
   R.reconcileAccountRadarPilotFeed(
     R.createEmptyLocalRadar({ authority: "account-cache" }),

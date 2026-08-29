@@ -578,8 +578,12 @@ try {
     events: Object.freeze([]), receipts: Object.freeze([]), operationAcks: Object.freeze([]),
     radarReview: true, personResults: Object.freeze([]),
   });
+  const accountAutomation = Object.freeze({
+    contractVersion: "radar-auto-v1", schedulerActive: true, intervalHours: 144,
+  });
   const accountStarfighterFeed = Object.freeze({
     ...accountInitialFeed,
+    automation: accountAutomation,
     revision: 2,
     checksum: "b".repeat(64),
     subscriptions: Object.freeze([accountSubscription([...accountBaseMembers, accountStarfighterMember])]),
@@ -605,6 +609,19 @@ try {
     mode: "account", state: "ready", account: Object.freeze({ id: "max-account" }),
   });
   let accountFeedSyncs = 0;
+  const unattestedUi = await mount(null, Object.freeze({
+    session: accountSession,
+    pilotAdapter: Object.freeze({ async sync({ state }) {
+      return { status: "ready", state };
+    } }),
+  }));
+  await act(async () => { button(unattestedUi.container, "Radar").click(); await tick(); });
+  await settle();
+  await check("Alter Account-Feed ohne Server-Attestation verspricht keine Sechs-Tage-Automatik", async () => {
+    assert.match(unattestedUi.container.textContent, /automatische Prüfung ist für dieses Konto derzeit nicht verfügbar/i);
+    assert.doesNotMatch(unattestedUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
+  });
+  await unattestedUi.cleanup();
   const accountHarness = Object.freeze({
     session: accountSession,
     pilotAdapter: Object.freeze({ async sync({ state, commit }) {
@@ -613,7 +630,7 @@ try {
       assert.equal(reconciled.ok, true, reconciled.errors?.join(","));
       localStorage.setItem("kd:radar", JSON.stringify(reconciled.state));
       await commit(reconciled.state);
-      return { status: "ready", state: reconciled.state };
+      return { status: "ready", state: reconciled.state, automation: accountAutomation };
     } }),
   });
   const accountUi = await mount(null, accountHarness);

@@ -1163,6 +1163,15 @@ await check("Additive 144h-Migration nutzt denselben Claim generisch und setzt d
   assert.match(sixDayMigration, /next_check_at = expired\.terminal_at \+ interval '144 hours'/u);
   assert.match(sixDayMigration, /create or replace function public\.kd_radar_daily_claim\(\)/u);
   assert.match(sixDayMigration, /create or replace function public\.kd_radar_daily_finish\(/u);
+  assert.match(sixDayMigration, /add column radar_scheduler_interval_hours integer not null default 144/u);
+  assert.match(sixDayMigration, /check \(radar_scheduler_interval_hours = 144\)/u);
+  assert.match(sixDayMigration, /rename to kd_radar_pilot_feed_six_day_internal/u);
+  assert.match(sixDayMigration, /'contractVersion','radar-auto-v1'/u);
+  assert.match(sixDayMigration, /'schedulerActive',coalesce\(v_scheduler_active,false\)/u);
+  assert.match(sixDayMigration, /'intervalHours',coalesce\(v_interval_hours,0\)/u);
+  assert.match(sixDayMigration, /select radar_scheduler_aktiv, radar_scheduler_interval_hours/u);
+  assert.match(sixDayMigration, /grant execute on function public\.kd_radar_pilot_feed\(uuid\[\]\)[\s\S]*to authenticated, service_role/u);
+  assert.match(sixDayMigration, /revoke all on function public\.kd_radar_pilot_feed_six_day_internal\(uuid\[\]\)[\s\S]*from public, anon, authenticated/u);
   assert.doesNotMatch(sixDayMigration, /pg_cron|cron\.|http_post|net\.http|attempt_count\s*\+|--retry|Nicolas Cage|Star Wars|Starfighter/iu);
   const plus144 = (instant) => new Date(new Date(instant).getTime() + 144 * 60 * 60 * 1000).toISOString();
   assert.equal(plus144("2026-08-30T04:37:00.000Z"), "2026-09-05T04:37:00.000Z");
