@@ -906,7 +906,7 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
-test("Entdecken bleibt kompakt und erfindet ohne injizierten Webfeed keine Tipps", async ({ page }) => {
+test("Entdecken zeigt den eingebetteten providerfreien Pool ohne Fremdnetz kompakt", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await blockiereFremdnetz(page);
   let entdeckenRequests = 0;
@@ -957,8 +957,13 @@ test("Entdecken bleibt kompakt und erfindet ohne injizierten Webfeed keine Tipps
   await expect(persoenlich).not.toContainText("Aktuelle Treffermenge");
   const weitere = page.locator('[aria-labelledby="kd-entdecken-weitere"]');
   await expect(weitere.getByRole("heading", { name: "Diese Woche beliebt" })).toBeVisible();
-  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(0);
-  await expect(weitere).toContainText("Noch keine aktuelle beliebte Liste geladen");
+  await expect(weitere.locator(".kd-entdecken-neutral")).toHaveCount(6);
+  const mehrTitel = weitere.getByRole("button", { name: "Weitere 44 Titel anzeigen" });
+  await expect(mehrTitel).toBeVisible();
+  await expect(mehrTitel).toHaveAttribute("aria-expanded", "false");
+  const quellenlinks = weitere.locator(".kd-entdecken-neutral h3 > a.kd-entdecken-titellink");
+  await expect(quellenlinks).toHaveCount(6);
+  for (const link of await quellenlinks.all()) await expect(link).toHaveAttribute("href", /^https:\/\//);
   await expect.poll(() => entdeckenRequests).toBe(1);
   await keineDokumentUeberbreite(page);
 
