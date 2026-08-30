@@ -576,7 +576,8 @@ check("Browser verdrahtet keinen manuellen Radar- oder zweiten Websearch-Pfad",
     && /await radarPilotAdapter\.sync\(\{[\s\S]*state: stateForSync,[\s\S]*commit: \(next\) => \(aktiv \? setRadarState\(next\) : false\)[\s\S]*\}\)/.test(radarController));
   check("Store-Lesefehler wird vorläufig unmounted-safe abgefangen", /} catch \{[\s\S]*if \(!aktiv\) return;[\s\S]*setRadarState\(createEmptyLocalRadar\(\{ authority: radarAuthority \}\)\);[\s\S]*setErr\("Der lokale Radar-Stand konnte nicht gelesen werden\. Es wurde nichts verändert\."\)/.test(radarController));
   check("Controller-Sync ruft den Pilot-Adapter exakt mit state und commit auf", /const syncRadarPilot = useCallback\(async \(stateForSync = null\) => \{[\s\S]*radarPilotAdapter\.sync\(\{[\s\S]*state,/.test(radarController)
-    && /commit:\s*\(next\) => setRadarState\(next\)/.test(radarController));
+    && /commit:\s*\(next\) => current\(\) \? setRadarState\(next\) : false/.test(radarController)
+    && /const current = \(\) => mountedRef\.current && contextRef\.current === context && storage\.isCurrent\(\)/.test(radarController));
   check("Manualer Pilot-Sync mapped unerwartete Errors auf pending/pilot-unknown ohne globale Fehlerqueue", /const syncRadarPilot = useCallback\(async \(stateForSync = null\) => \{[\s\S]*catch \{[\s\S]*setRadarPilotSyncStatus\("pending"\);[\s\S]*return \{ status: "pending", state, reason: "pilot-unknown" \}/.test(radarController));
   check("Share-Pfad bleibt ohne Pilot-Sync", (() => {
     const start = radarController.indexOf("const aendereRadarShare = useCallback(async (targetId, shareEnabled) => {");

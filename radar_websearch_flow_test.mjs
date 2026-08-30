@@ -543,7 +543,7 @@ try {
     assert.equal(subscription.targetType, "text");
     assert.equal(subscription.targetText, "Star Wars: Starfighter Kinostart Österreich");
     const targets = [...starfighterUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Meine Ziele/.test(entry.textContent));
+      .find((entry) => entry.querySelector("h3")?.textContent === "Meine Ziele");
     assert.match(targets.textContent, /Star Wars: Starfighter Kinostart Österreich/);
   });
   await check("Der kanonische Gastpfad bietet keinen manuellen Suchknopf", async () => {
@@ -653,13 +653,13 @@ try {
   await check("Automatisch erzeugter Account-Feed wird beim normalen Sync sichtbar und gespeichert", async () => {
     assert.equal(accountFeedSyncs, 1);
     assert.equal(button(accountUi.container, "Jetzt prüfen"), undefined);
-    assert.match(accountUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
+    assert.match(accountUi.container.textContent, /automatisch auf dem Laufenden/i);
     assert.match(accountUi.container.textContent, /Star Wars: Starfighter/);
     assert.doesNotMatch(accountUi.container.textContent, /Gefunden für:/);
     assert.match(accountUi.container.textContent, /2027-05-20 · Film · Kinostart Österreich/);
     assert.equal(accountUi.container.querySelectorAll(".kd-pilot-quellen").length, 0);
     const news = [...accountUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Neuigkeiten/.test(entry.textContent));
+      .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
     assert.equal(news.querySelectorAll("a").length, 0);
     assert.equal(news.querySelectorAll("button").length, 0);
     const stored = JSON.parse(localStorage.getItem("kd:radar"));

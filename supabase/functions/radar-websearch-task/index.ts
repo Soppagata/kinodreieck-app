@@ -230,6 +230,7 @@ export function createRadarWebsearchHandler({
     let userToken = "";
     let targetId = "";
     let rawTargetText: string | null = null;
+    let initialMode = false;
     let dailyClaim: {
       targetRowId: string;
       viennaDay: string;
@@ -244,15 +245,18 @@ export function createRadarWebsearchHandler({
       let body: unknown;
       try { body = await req.json(); } catch { return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin); }
       if (!body || typeof body !== "object" || Array.isArray(body)
-          || ![1, 2].includes(Object.keys(body).length)
+          || ![1, 2, 3].includes(Object.keys(body).length)
           || typeof (body as { targetId?: unknown }).targetId !== "string"
-          || Object.keys(body).some((key) => !["targetId", "targetText"].includes(key))) {
+          || Object.keys(body).some((key) => !["targetId", "targetText", "initial"].includes(key))) {
         return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
       }
       targetId = text((body as { targetId: string }).targetId);
       const hasTargetText = Object.prototype.hasOwnProperty.call(body, "targetText");
       const targetText = hasTargetText ? (body as { targetText?: unknown }).targetText : null;
+      const hasInitial = Object.prototype.hasOwnProperty.call(body, "initial");
+      initialMode = hasInitial && (body as { initial?: unknown }).initial === true;
       if (!targetId || targetId.length > 160
+          || (hasInitial && (!initialMode || !hasTargetText || !/^text:[a-f0-9]{16}$/.test(targetId)))
           || (hasTargetText && (typeof targetText !== "string" || !targetText.trim() || targetText.length > 160))) {
         return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin);
       }
@@ -314,6 +318,25 @@ export function createRadarWebsearchHandler({
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { Authorization: `Bearer ${userToken}` } },
     });
+    if (initialMode) {
+      const { data: claim, error: claimError } = await admin.rpc("kd_radar_initial_claim", {
+        p_account_id: accountId, p_target_key: targetId, p_target_text: rawTargetText,
+      });
+      if (claimError) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      if (claim?.claim !== true) {
+        if (claim?.claim !== false || !["no_change", "busy", "disabled", "forbidden"].includes(claim.status)) {
+          return json({ ok: false, status: "unavailable", writes: 0 }, 500, origin);
+        }
+        const status = claim.status === "disabled" ? "unavailable" : claim.status;
+        return json({ ok: true, status, writes: 0, providerRequests: 0, searchRequests: 0 }, status === "forbidden" ? 403 : 200, origin);
+      }
+      if (claim.accountId !== accountId || claim.targetId !== targetId || claim.targetText !== rawTargetText
+        || claim.targetType !== "text" || !UUID_FORM.test(claim.targetRowId)
+        || !UUID_FORM.test(claim.fenceToken) || !VIENNA_DAY_FORM.test(claim.viennaDay)) {
+        return json({ ok: false, status: "unavailable", writes: 0 }, 500, origin);
+      }
+      dailyClaim = { targetRowId: claim.targetRowId, viennaDay: claim.viennaDay, fenceToken: claim.fenceToken };
+    }
     const assertDailyLease = async () => {
       if (!dailyClaim) return;
       const { data, error } = await admin.rpc("kd_radar_daily_assert_lease", {
@@ -484,7 +507,7 @@ export function createRadarWebsearchHandler({
         accountId, targetId, targetText: rawTargetText, adapter: productAdapter, repository,
       });
     } catch (error) {
-      if (!scheduledMode) throw error;
+      if (!scheduledMode && !initialMode) throw error;
       result = { status: "unavailable", writes: 0 };
     }
     if (dailyClaim) {
@@ -499,9 +522,10 @@ export function createRadarWebsearchHandler({
         p_fence_token: dailyClaim.fenceToken,
         p_safe_status: safeStatus,
       });
-      return finishError || finish?.ok !== true
-        ? json({ ok: false, status: "failed" }, 500, origin)
-        : json({ ok: true, status: "processed" }, 200, origin);
+      if (finishError || finish?.ok !== true) {
+        return json({ ok: false, status: scheduledMode ? "failed" : "storage_error", writes: result.writes || 0 }, 500, origin);
+      }
+      if (scheduledMode) return json({ ok: true, status: "processed" }, 200, origin);
     }
     const status = result.status;
     const httpStatus = status === "forbidden" ? 403 : 200;

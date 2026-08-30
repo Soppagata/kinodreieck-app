@@ -312,9 +312,10 @@ function statusText(status, kind = "work") {
   const freeText = kind === "text";
   return ({
     active: freeText ? "Ziel gespeichert." : person ? "Person ist jetzt im Radar." : franchise ? "Reihe ist jetzt im Radar." : "Ziel ist jetzt im Radar.",
+    pending: "Ziel lokal gespeichert. Die Bestätigung im Konto steht noch aus; die Suche wurde noch nicht gestartet.",
     confirmed: person ? "Bestätigte Filme oder Serien wurden gespeichert." : "Ein bestätigter Treffer wurde gespeichert.",
     no_change: "Keine neue bestätigte Änderung gefunden.",
-    insufficient_evidence: freeText ? "Kein belegter neuer Fund." : person ? "Noch keine ausreichend belegten Filme oder Serien gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
+    insufficient_evidence: freeText ? "Noch keinen passenden Starttermin gefunden." : person ? "Noch keine ausreichend belegten Filme oder Serien gefunden." : "Noch keine ausreichend belegte Änderung gefunden.",
     busy: "Dieses Ziel wird bereits geprüft.",
     forbidden: "Dieses Ziel kann gerade nicht geprüft werden.",
     unresolved: franchise ? "Die Reihe konnte nicht eindeutig bestätigt werden." : "Die Person konnte nicht eindeutig bestätigt werden.",
@@ -339,6 +340,8 @@ function RadarView({
   const [targetQuery, setTargetQuery] = useState("");
   const [targetAddBusy, setTargetAddBusy] = useState(false);
   const targetAddLockRef = useRef(false);
+  const activeRef = useRef(true);
+  useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);
   const [message, setMessage] = useState(null);
   const subscriptions = radarState?.subscriptions || [];
   const people = radarState?.personSubscriptions || [];
@@ -355,34 +358,38 @@ function RadarView({
     if (!targetQuery.trim() || targetQuery.length > 160 || targetAddLockRef.current) return;
     targetAddLockRef.current = true;
     setTargetAddBusy(true);
-    setMessage(null);
+    setMessage({ status: "saving", text: "Ziel wird gespeichert…" });
     try {
-      const result = await onRadarTextAdd?.(targetQuery);
-      setMessage({ status: result?.status, text: statusText(result?.status, "text") });
-      if (["active", "pending"].includes(result?.status)) setTargetQuery("");
+      const result = await onRadarTextAdd?.(targetQuery, { onProgress: (status) => {
+        if (activeRef.current && status === "searching") setMessage({ status, text: "Ziel gespeichert. Suche nach passenden Starts…" });
+      } });
+      if (!activeRef.current) return;
+      const prefix = result?.saved && !["active", "pending"].includes(result.status) ? "Ziel bleibt gespeichert. " : "";
+      setMessage({ status: result?.status, text: prefix + statusText(result?.status, "text") });
+      if (result?.saved || ["active", "pending"].includes(result?.status)) setTargetQuery("");
     } catch {
-      setMessage({ status: "storage_error", text: statusText("storage_error") });
-    } finally { targetAddLockRef.current = false; setTargetAddBusy(false); }
+      if (activeRef.current) setMessage({ status: "storage_error", text: statusText("storage_error") });
+    } finally { targetAddLockRef.current = false; if (activeRef.current) setTargetAddBusy(false); }
   };
   return <section className="kd-entdecken-ansicht" aria-labelledby="kd-entdecken-radar">
     <div className="kd-entdecken-einleitung">
       <div><span>Deine Starttermine</span><h2 id="kd-entdecken-radar">Mein Radar</h2></div>
       <p>{radarAutomaticAvailable
-        ? "Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft."
+        ? "Dein Radar sucht nach dem Speichern und hält aktive Ziele automatisch auf dem Laufenden."
         : accountMode
           ? "Deine Ziele bleiben gespeichert; die automatische Prüfung ist für dieses Konto derzeit nicht verfügbar."
-          : "Deine Ziele bleiben auf diesem Gerät; eine automatische Prüfung ist im Gastmodus nicht verfügbar."} Ein Fund erscheint erst, wenn Zielbezug, Österreich-Bezug und Datum eindeutig belegt sind.</p>
+          : "Deine Ziele bleiben auf diesem Gerät; eine automatische Prüfung ist im Gastmodus nicht verfügbar."} Neuigkeiten zeigen passende Werke mit Titel, Startdatum und Kategorie. Eine erkannte Plattform steht dabei.</p>
     </div>
     <article className="kd-entdecken-panel kd-radar-zielsuche">
       <h3>Radarziel hinzufügen</h3>
       <form className="kd-entdecken-formzeile" onSubmit={addTarget}>
         <label htmlFor="kd-radar-target-search">Wonach soll dein Radar suchen?</label>
-        <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160}
+        <input id="kd-radar-target-search" type="search" value={targetQuery} maxLength={160} disabled={targetAddBusy}
           autoComplete="off" spellCheck={false} placeholder="Person, Reihe, Titel oder Thema"
           onChange={(event) => { setTargetQuery(event.target.value); setMessage(null); }} />
-        <small>Beliebiger Text bleibt Freitext und wird als eigenes Radarziel gespeichert.{radarAutomaticAvailable ? " Aktive, serverbestätigte Ziele werden automatisch alle sechs Tage geprüft." : ""}</small>
+        <small>Dein Suchtext bleibt unter „Meine Ziele“. Gefundene Werke erscheinen unter „Neuigkeiten“.</small>
         <button type="submit" className="kd-entdecken-primaer"
-          disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? "Wird gespeichert…" : "Im Radar speichern"}</button>
+          disabled={targetAddBusy || !targetQuery.trim()}>{targetAddBusy ? message?.status === "searching" ? "Suche läuft…" : "Wird gespeichert…" : "Im Radar speichern"}</button>
       </form>
     </article>
     {message ? <p className={isErrorStatus(message.status) ? "kd-entdecken-fehler" : "kd-entdecken-pending"}
@@ -393,7 +400,7 @@ function RadarView({
         {!subscriptions.length && !people.length ? <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p> : null}
         {subscriptions.length ? <ul>{subscriptions.map((entry) => <li key={entry.targetId}>
           <strong>{localRadarTargetLabel(entry, { master, streamingKnown, streamingDiscover })}</strong>
-          <span>{entry.status === "active" ? `Aktiv${radarAutomaticAvailable ? " · automatische Prüfung alle 6 Tage" : ""}` : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
+          <span>{entry.status === "active" ? "Aktiv" : "Pausiert"}{entry.targetType === "text" ? " · Freitext" : ` · ${entry.targetType === "franchise" ? "Reihe" : entry.targetType === "series" ? "Serie" : "Film"}`}</span>
         </li>)}</ul> : null}
         {people.length ? <ul>{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
           <strong>{entry.name}</strong><span>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</span>
@@ -406,14 +413,14 @@ function RadarView({
         {events.length ? <ul>{events.map((entry) => <li key={entry.eventVersionId}>
           <strong>{entry.title}</strong>
           <span>{entry.date} · {ereignisLabel(entry)}{sichtbarePlattform(entry.platform) ? ` · ${sichtbarePlattform(entry.platform)}` : ""}</span>
-        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit.{radarAutomaticAvailable ? " Aktive Ziele werden automatisch alle sechs Tage geprüft." : ""}</p>}
+        </li>)}</ul> : <p className="kd-entdecken-leer">Noch keine belegte Neuigkeit. Dein Radar zeigt hier gefundene Starttermine.</p>}
       </article>
     </div>
   </section>;
 }
 
 export function EntdeckenTab({
-  blogProps, fokusId, radarState, seriesCatalog = [], entdeckenStatus = {}, master = [],
+  blogProps, fokusId, radarState, datenKontextKey = "local", seriesCatalog = [], entdeckenStatus = {}, master = [],
   streamingKnown = null, streamingDiscover = null, selectedServices = [], accountMode = false,
   webDiscoveryFeed = null, webDiscoveryStatus = null, dailyVariety = false, calendarDay = null,
   radarPilotEvents = [], syncStatus = "idle", radarAutomaticAvailable = false,
@@ -456,7 +463,7 @@ export function EntdeckenTab({
       entdeckenStatus={entdeckenStatus} webDiscoveryFeed={webDiscoveryFeed} webDiscoveryStatus={webDiscoveryStatus}
       dailyVariety={dailyVariety} selectionDay={selectionDay} recommendationPins={recommendationPins}
       onRecommendationPinToggle={onRecommendationPinToggle} /> : null}
-    {ansicht === "radar" ? <RadarView radarState={radarState} master={master} streamingKnown={streamingKnown}
+    {ansicht === "radar" ? <RadarView key={datenKontextKey} radarState={radarState} master={master} streamingKnown={streamingKnown}
       streamingDiscover={streamingDiscover} accountMode={accountMode} onRadarPreview={onRadarPreview}
       radarPilotEvents={radarPilotEvents} syncStatus={syncStatus} onRadarPilotSync={onRadarPilotSync}
       radarAutomaticAvailable={radarAutomaticAvailable} onRadarPilotReceipt={onRadarPilotReceipt}

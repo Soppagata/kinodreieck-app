@@ -190,6 +190,76 @@ try {
     ack("removed"); assert.equal(sql(`select count(*) from public.kd_radar_text_findings where account_id='${a}'`),"0");
     assert.equal(feed().subscriptions.length,0);
   });
+  const initial = (id=b,key=targetId,value=targetText) => JSON.parse(session(id,
+    `select public.kd_radar_initial_claim('${id}',${quote(key)},${quote(value)})`,"service_role"));
+  check("Initialclaim ist service-only und verlangt eigenes bestätigtes Textabo",() => {
+    assert.throws(() => session(b,`select public.kd_radar_initial_claim('${b}',${quote(targetId)},${quote(targetText)})`),/permission denied/);
+    assert.throws(() => initial(),/radar_websearch_forbidden/);
+    session(b,`select public.kd_radar_pilot_set_text_subscription(${quote(targetText)},'active',gen_random_uuid())`);
+    assert.throws(() => initial(b,targetId,"Fremder Suchtext"),/radar_websearch_forbidden/);
+    assert.throws(() => initial(b,"imdb:tt0000001",targetText),/radar_websearch_forbidden/);
+  });
+  check("Capability, Account und Providerflags stoppen vor Verbrauch des Initialclaims",() => {
+    for (const [table,column] of [["kd_radar_capabilities","radar_review"],["kd_radar_capabilities","radar_pilot"],["kd_account_access","personal_ai"],["kd_account_access","active"]]) {
+      const dependency=column==="radar_pilot"?",radar_review=false":column==="active"?",personal_ai=false":"";
+      sql(`update public.${table} set ${column}=false${dependency} where account_id='${b}'`);
+      assert.throws(() => initial(),/radar_websearch_forbidden/);
+      sql(`update public.${table} set ${column}=true${dependency.replaceAll("false","true")} where account_id='${b}'`);
+    }
+    for(const flag of ["radar_aktiv","radar_provider_aktiv"]){
+      sql(`update public.kd_radar_settings set radar_scheduler_aktiv=false,radar_provider_aktiv=false${flag==="radar_aktiv"?",radar_aktiv=false":""}`);
+      assert.equal(initial().status,"disabled");
+      sql("update public.kd_radar_settings set radar_aktiv=true,radar_provider_aktiv=true,radar_scheduler_aktiv=true");
+    }
+    sql("update public.kd_private_settings set provider_requests_enabled=false");assert.equal(initial().status,"disabled");
+    sql("update public.kd_private_settings set provider_requests_enabled=true");
+    assert.equal(sql(`select count(*) from public.kd_radar_daily_runs where account_id='${b}'`),"0");
+  });
+  check("Altes unangetastetes Abo ist keine neue Erstsuche",() => {
+    sql(`update public.kd_radar_subscriptions set created_at=now()-interval '16 minutes' where account_id='${b}'`);
+    assert.equal(initial().status,"no_change");
+    sql(`update public.kd_radar_subscriptions set created_at=now() where account_id='${b}'`);
+  });
+  const initialClaim=initial();
+  check("Initialclaim teilt Lease und Tageszaun mit Scheduler, ohne Abo zu mutieren",() => {
+    assert.equal(initialClaim.claim,true);assert.equal(initialClaim.accountId,b);assert.equal(initialClaim.targetId,targetId);
+    assert.equal(initial().status,"busy");
+    assert.equal(JSON.parse(session(a,"select public.kd_radar_daily_claim()","service_role")).claim,false);
+    assert.equal(feed(b).subscriptions.length,1);
+  });
+  const initialAdapter=createAnthropicRadarWebsearchAdapter({apiKey:"mock-key",loadSetup:async()=>setup,
+    now:()=>checkedAt,reserveCost:async()=>{
+      assert.equal(JSON.parse(session(b,`select public.kd_radar_daily_assert_lease('${b}',${quote(initialClaim.targetRowId)},${quote(initialClaim.viennaDay)},${quote(initialClaim.fenceToken)})`,"service_role")).ok,true);
+      return {ok:true,logId:1};},settleCost:async()=>{},fetchImpl:async()=>new Response(JSON.stringify(providerMessage({url})))});
+  const initialResult=await runRadarWebsearchCheck({accountId:b,targetId,adapter:initialAdapter,repository:{
+    async loadAuthorizedTarget(){return JSON.parse(session(b,`select public.kd_radar_websearch_prepare_text('${b}',${quote(targetId)},${quote(targetText)},gen_random_uuid())`,"service_role"));},
+    async resolveSources(){return [];},async upsertConfirmedEvent({event}){
+      assert.equal(JSON.parse(session(b,`select public.kd_radar_daily_assert_lease('${b}',${quote(initialClaim.targetRowId)},${quote(initialClaim.viennaDay)},${quote(initialClaim.fenceToken)})`,"service_role")).ok,true);
+      return persist(b,{...payload,targetKey:event.targetKey,workTitle:event.title,workTargetType:event.targetType,
+        category:event.category,eventType:event.eventType,date:event.date,region:event.region,platform:event.platform,evidence:event.evidence});},
+    async loadFeed(){return feed(b);},
+  }});
+  check("Initialclaim → echter Adaptermock → SQL-Persistenz → Feed → bestehender 144h-Abschluss",() => {
+    assert.equal(initialResult.status,"confirmed");assert.equal(initialResult.feed.events[0].title,payload.workTitle);
+    assert.equal(initialResult.feed.subscriptions[0].title,targetText);
+    const finish=JSON.parse(session(b,`select public.kd_radar_daily_finish('${b}',${quote(initialClaim.targetRowId)},${quote(initialClaim.viennaDay)},${quote(initialClaim.fenceToken)},'confirmed')`,"service_role"));
+    assert.equal(finish.ok,true);assert.equal(initial().claim,false);
+    assert.equal(Number(sql(`select extract(epoch from(s.next_check_at-r.terminal_at))/3600 from public.kd_radar_subscriptions s join public.kd_radar_daily_runs r using(account_id,target_id) where s.account_id='${b}'`)),144);
+  });
+  check("Entfernen und Neuanlegen umgeht denselben Tageszaun nicht",() => {
+    for(const status of ["removed","active"])session(b,`select public.kd_radar_pilot_set_text_subscription(${quote(targetText)},'${status}',gen_random_uuid())`);
+    assert.equal(initial().claim,false);
+  });
+  check("Abgestürzter Initialclaim wird ausschließlich durch bestehende Lease-Expiry finalisiert",() => {
+    const crashText="Unabhängiges synthetisches Thema",crashKey=createLocalTextRadarTargetId(crashText);
+    session(b,`select public.kd_radar_pilot_set_text_subscription(${quote(crashText)},'active',gen_random_uuid())`);
+    const crash=initial(b,crashKey,crashText);assert.equal(crash.claim,true);
+    sql(`update public.kd_radar_daily_runs set claimed_at=now()-interval '4 minutes',lease_expires_at=now()-interval '1 minute' where fence_token=${quote(crash.fenceToken)}`);
+    assert.equal(initial(b,crashKey,crashText).claim,false);
+    assert.equal(JSON.parse(session(b,"select public.kd_radar_daily_claim()","service_role")).claim,false);
+    assert.equal(sql(`select safe_status from public.kd_radar_daily_runs where fence_token=${quote(crash.fenceToken)}`),"timeout");
+    assert.equal(Number(sql(`select extract(epoch from(s.next_check_at-r.terminal_at))/3600 from public.kd_radar_subscriptions s join public.kd_radar_daily_runs r using(account_id,target_id) where r.fence_token=${quote(crash.fenceToken)}`)),144);
+  });
   check("Accountlöschung kaskadiert den gesamten neuen Pfad",() => {
     ack("active"); persist(); sql(`delete from auth.users where id='${a}'`);
     assert.equal(sql(`select count(*) from public.kd_radar_text_findings where account_id='${a}'`),"0");

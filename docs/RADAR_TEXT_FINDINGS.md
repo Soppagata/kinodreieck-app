@@ -108,3 +108,45 @@ werden beim Verschieben in die Profil-Lane als Multiset verglichen. Damit
 bleiben Text, Ziel, target, rel, Anzahl und Duplikate exakt geprüft, ohne eine
 uhrzeitabhängige globale DOM-Reihenfolge vorauszusetzen. Kein Kino-Produktcode
 und keine Uhrzeitmanipulation wurden dafür geändert.
+
+## Explizite Erstsuche nach Speichern
+
+Neue Freitexteingaben starten nach bestätigter eigener Server-Subscription
+genau einen `checkNow(targetId, targetText, { initial: true })`. Doppelsubmit,
+bereits aktiver Text, Gastmodus, fehlende Capability oder Speicherbestätigung
+starten keinen Anbieter. Boot/Hydration synchronisieren weiterhin nur Daten.
+Kontowechsel und Entfernen während des Auftrags verhindern eine verspätete
+Übernahme. Der bestehende gefencete Pilot-Sync liest und persistiert den Feed;
+Modellkandidaten werden niemals direkt als UI-Funde installiert. Leerfund oder
+Suchfehler lassen das gespeicherte Ziel bestehen. Die Anzeige unterscheidet
+Speichern, Suche, Leerfund und Fehler ohne Intervall-Techniktext.
+
+Additive Migration `20260830150000_radar_initial_text_claim.sql` ergänzt nur
+die service-role-only RPC `kd_radar_initial_claim`. Sie bindet den intern
+validierten JWT-Account an das eigene aktive TEXT-Abo und prüft Capabilities,
+Radar-/Providerflags und Providerfreigabe vor dem Claim. Ein höchstens
+15 Minuten altes, noch unbearbeitetes Abo ist initial berechtigt. Wiederanlage
+kann den vorhandenen Konto/Ziel/Tag-Zaun nicht umgehen. Subscription-Lock,
+180-Sekunden-Lease, Reserve-/Write-Fencing und `kd_radar_daily_finish` sind
+dieselben wie beim Scheduler; Abschluss und Lease-Expiry verschieben die
+nächste Fälligkeit um exakt 144h. Historische RPCs und Migrationen bleiben
+unverändert. Weder neue Queue noch Retry noch Browser-Scheduler.
+
+Der Browser akzeptiert die bereits vorhandene TEXT-Antwort inklusive
+`textResult`/`textDiagnostics`, maximal vier Suchtools und 20 Cent nur bei
+exakter Text-/Zielbindung; Feed und aktive Textsubscription werden validiert.
+Strukturierte Altpfade behalten 1/5-Grenzen. Auth-/Account-Fences gelten auch
+nach dem asynchronen JSON-Read.
+
+Zusätzliche lokale Belege: `node radar_initial_search_test.mjs` verwendet
+den echten Controller, Browserdienst, Pilot-Sync und Function-Handler mit
+ausschließlich synthetischen Mocks. Der normale Freitext-npm-Test umfasst
+diesen Test. `radar_text_findings_pg17_test.mjs` prüft auch Initialclaim,
+Auth-/Capability-Negatives vor Claim, echten Adapter/SQL/Feed-Roundtrip,
+Tageszaun und Absturzabschluss. Schmale bestehende UI-/Controller-Tests wurden
+an Erstsuche und kontogefencete Commits angepasst; keine Fremdproduktänderung.
+
+Diese Etappe benötigt genau die neue Migration, den aktualisierten
+`radar-websearch-task` und Frontendbuild. Keine Änderungen an Modell, Prompt,
+Budget, Provideradapter, JWT-Konfiguration oder Schedulerworkflow. Die lokale
+Mock-/PG-Abnahme ist kein bezahlter oder praktischer PWA-Livebeleg.

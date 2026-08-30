@@ -801,7 +801,7 @@ try {
     assert.match(workUi.container.textContent, /2026-09-03/);
     assert.match(workUi.container.textContent, /Film · Kinostart Österreich/);
     const news = [...workUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Neuigkeiten/.test(entry.textContent));
+      .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
     assert.equal(news.querySelectorAll("a").length, 0);
     assert.doesNotMatch(news.textContent, /film\.at|Quelle/);
   });
@@ -860,9 +860,9 @@ try {
   await act(async () => { button(targetFoundUi.container, "Radar").click(); await tick(); });
   check("Radar trennt abgeleiteten Fund und Suchziel ohne Zusatzmetadaten im Fund", () => {
     const targets = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Meine Ziele/.test(entry.textContent));
+      .find((entry) => entry.querySelector("h3")?.textContent === "Meine Ziele");
     const news = [...targetFoundUi.container.querySelectorAll(".kd-entdecken-panel")]
-      .find((entry) => /Neuigkeiten/.test(entry.textContent));
+      .find((entry) => entry.querySelector("h3")?.textContent === "Neuigkeiten");
     assert.match(targets.textContent, /Star Wars/);
     assert.doesNotMatch(targets.textContent, /Star Wars: Starfighter/);
     assert.match(news.textContent, /Star Wars: Starfighter/);
@@ -1107,10 +1107,10 @@ try {
     radarAutomaticAvailable: true,
   });
   await act(async () => { button(automaticUi.container, "Radar").click(); await tick(); });
-  check("Verfügbarer Kontopfad erklärt die automatische Sechs-Tage-Prüfung ohne manuelle Aktion", () => {
+  check("Verfügbarer Kontopfad erklärt Suche und Automatik ohne Intervall-Techniktext", () => {
     assert.equal(button(automaticUi.container, "Jetzt prüfen"), undefined);
-    assert.match(automaticUi.container.textContent, /automatisch alle sechs Tage geprüft/i);
-    assert.match(automaticUi.container.textContent, /automatische Prüfung alle 6 Tage/i);
+    assert.match(automaticUi.container.textContent, /automatisch auf dem Laufenden/i);
+    assert.doesNotMatch(automaticUi.container.textContent, /alle sechs Tage|alle 6 Tage/i);
     assert.doesNotMatch(automaticUi.container.textContent, /manuell prüfbar|nur durch|Tagesaktuelle Neuigkeiten/i);
   });
   await automaticUi.cleanup();

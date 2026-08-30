@@ -2068,7 +2068,7 @@ export default function App() {
         )}
 
         {tab === "blog" && (
-          <EntdeckenTab
+          <EntdeckenTab datenKontextKey={`${session.mode}:${session.state}:${session.account?.id || ""}`}
             fokusId={blogFokus} radarState={sichtbarerRadarState} seriesCatalog={serienKatalog} entdeckenStatus={entdeckenStatus}
             master={master || []} streamingKnown={streamingBekannt} streamingDiscover={streamingEntdecken} selectedServices={auswahl} webDiscoveryFeed={webDiscoveryState.feed} webDiscoveryStatus={webDiscoveryState}
             dailyVariety={einstellungen.entdeckenTaeglich === true}

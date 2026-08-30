@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runtimeConfig } from "../config/runtime.js";
-import { K, store } from "../services/storage.js";
+import { K, store, captureStorageContext } from "../services/storage.js";
 import { useConfirmedStorageState } from "./useConfirmedStorageState.js";
 import {
   changeLocalTextRadarSubscription,
@@ -34,7 +34,7 @@ import { projectEntdeckenRadarPilot, radarAutomationAttested } from "../lib/rada
 import { projectVisibleRadarWebsearchEvents } from "../lib/radarWebsearchFlow.js";
 import { istBeobachtet, serienBeobachten, setzeSerienBeobachtung } from "../lib/staffeln.js";
 import { radarPilotService } from "../services/radarPilot.js";
-import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED } from "../services/radarWebsearch.js";
+import { RADAR_WEBSEARCH_SINGLE_FILE_DISABLED, radarWebsearchService } from "../services/radarWebsearch.js";
 
 export { projectEntdeckenRadarPilot } from "../lib/radarPilotContracts.js";
 
@@ -56,10 +56,21 @@ export function useEntdeckenRadarController({
   entdeckenStatus, entdeckenStatusRef, schreibeEntdeckenStatus, serienKatalog, setErr,
   radarWebsearchExecutor = null,
   radarPilotAdapter = radarPilotService,
+  radarWebsearchAdapter = radarWebsearchService,
   radarPilotEnabled = runtimeConfig.radarPilotClientEnabled,
 }) {
   const radarAuthority = session.mode === "account" ? "account-cache" : "guest";
   const radarPilotClientEnabled = radarPilotEnabled === true;
+  const contextKey = JSON.stringify([session.mode, session.state, session.account?.id,
+    session.capabilities?.personalAi, remoteKontoAktiv, radarPilotClientEnabled]);
+  const contextRef = useRef({ key: contextKey });
+  if (contextRef.current.key !== contextKey) contextRef.current = { key: contextKey };
+  const mountedRef = useRef(true);
+  const textAddLockRef = useRef(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   const radarInitial = useMemo(() => {
     try {
       const decoded = decodeLocalRadar(localStorage.getItem(K.radar), { authority: radarAuthority });
@@ -110,6 +121,9 @@ export function useEntdeckenRadarController({
 
   const syncRadarPilot = useCallback(async (stateForSync = null) => {
     const state = stateForSync || radarStateRef.current;
+    const context = contextRef.current;
+    const storage = captureStorageContext();
+    const current = () => mountedRef.current && contextRef.current === context && storage.isCurrent();
     if (!radarPilotClientEnabled || radarAuthority !== "account-cache" || !remoteKontoAktiv) {
       setRadarPilotSyncStatus("disabled");
       setRadarAutomationAttestation(null);
@@ -120,8 +134,9 @@ export function useEntdeckenRadarController({
     try {
       const status = await radarPilotAdapter.sync({
         state,
-        commit: (next) => setRadarState(next),
+        commit: (next) => current() ? setRadarState(next) : false,
       });
+      if (!current()) return { status: "forbidden", state: null };
       setRadarPilotSyncStatus(status?.status || "pending");
       setRadarAutomationAttestation(
         status?.status === "ready" && radarAutomationAttested(status.automation, { allowInactive: true })
@@ -129,6 +144,7 @@ export function useEntdeckenRadarController({
       );
       return status;
     } catch {
+      if (!current()) return { status: "forbidden", state: null };
       setRadarPilotSyncStatus("pending");
       setRadarAutomationAttestation(null);
       return { status: "pending", state, reason: "pilot-unknown" };
@@ -282,34 +298,70 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const fuegeRadarFreitextHinzu = useCallback(async (targetText) => {
+  const fuegeRadarFreitextHinzu = useCallback(async (targetText, { onProgress } = {}) => {
     const normalizedTargetText = String(targetText || "").trim();
-    let reason = "text-subscription-invalid";
-    const saved = await schreibeRadarState((previous) => {
-      if (previous.authority !== radarAuthority) { reason = "authority-mismatch"; return null; }
-      const result = previous.authority === "account-cache"
-        ? queueAccountTextRadarChange(previous, {
-          operationId: neueLokaleOperationId(), action: "upsert", targetText: normalizedTargetText,
-        })
-        : changeLocalTextRadarSubscription(previous, { targetText: normalizedTargetText, action: "upsert" });
-      reason = result.reason;
-      return result.ok ? result.state : null;
-    });
-    if (saved !== false && radarAuthority === "account-cache") {
-      const synced = await syncRadarPilot(saved);
-      const targetId = createLocalTextRadarTargetId(normalizedTargetText);
-      const active = (synced?.state?.subscriptions || []).some((entry) => (
-        entry.targetId === targetId && entry.targetType === "text"
-          && entry.status === "active" && entry.authority === "server"
-      ));
-      return Object.freeze({ status: active ? "active" : "pending", writes: 1 });
-    }
-    if (saved !== false) return Object.freeze({ status: "active", writes: 1 });
-    if (reason === "quota-exceeded") {
-      setErr("Dein lokaler Radar hat bereits zehn aktive Ziele. Pausiere oder entferne zuerst eines.");
-    }
-    return Object.freeze({ status: reason === "quota-exceeded" ? "forbidden" : "storage_error", writes: 0 });
-  }, [radarAuthority, schreibeRadarState, setErr, syncRadarPilot]);
+    const targetId = createLocalTextRadarTargetId(normalizedTargetText);
+    const context = contextRef.current;
+    const storage = captureStorageContext();
+    const current = () => mountedRef.current && contextRef.current === context && storage.isCurrent();
+    if (textAddLockRef.current?.context === context) return Object.freeze({ status: "busy", writes: 0 });
+    const operation = { context };
+    textAddLockRef.current = operation;
+    const progress = (status) => { if (current() && typeof onProgress === "function") onProgress(status); };
+    try {
+      progress("saving");
+      let reason = "text-subscription-invalid";
+      let newlyAdded = false;
+      const saved = await schreibeRadarState((previous) => {
+        if (!current() || previous.authority !== radarAuthority) { reason = "authority-mismatch"; return null; }
+        const existing = previous.subscriptions.find((entry) => entry.targetId === targetId);
+        const pending = previous.outbox.some((entry) => entry.targetId === targetId && entry.status === "pending");
+        if (existing?.status === "active" || pending) { reason = pending ? "pending" : "active"; return previous; }
+        newlyAdded = !existing;
+        const result = previous.authority === "account-cache"
+          ? queueAccountTextRadarChange(previous, {
+            operationId: neueLokaleOperationId(), action: "upsert", targetText: normalizedTargetText,
+          })
+          : changeLocalTextRadarSubscription(previous, { targetText: normalizedTargetText, action: "upsert" });
+        reason = result.reason;
+        return result.ok ? result.state : null;
+      });
+      if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
+      if (["active", "pending"].includes(reason)) return Object.freeze({ status: reason, saved: true, writes: 0 });
+      if (saved !== false && radarAuthority === "account-cache") {
+        const synced = await syncRadarPilot(saved);
+        if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
+        const activeTarget = (state) => (state?.subscriptions || []).some((entry) => (
+          entry.targetId === targetId && entry.targetType === "text"
+            && entry.status === "active" && entry.authority === "server"
+            && entry.targetText === normalizedTargetText
+        )) && !(state?.outbox || []).some((entry) => entry.targetId === targetId && entry.status === "pending");
+        const active = synced?.status === "ready" && activeTarget(synced.state) && activeTarget(radarStateRef.current);
+        const canSearch = newlyAdded && active && remoteKontoAktiv && radarPilotClientEnabled
+          && !RADAR_WEBSEARCH_SINGLE_FILE_DISABLED && session.state === "ready"
+          && session.capabilities?.personalAi === true && synced.state.pilot?.radarReview === true
+          && storage.owner === `account:${session.account?.id}`;
+        if (!canSearch) return Object.freeze({ status: active ? "active" : "pending", saved: true, writes: 1 });
+        progress("searching");
+        let result;
+        try { result = await radarWebsearchAdapter.checkNow(targetId, normalizedTargetText, { initial: true }); }
+        catch { result = { status: "unavailable" }; }
+        if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
+        // Removal/pause while the request runs wins. No raw result is ever
+        // installed; only the existing account-fenced, persisted feed sync is used.
+        if (!activeTarget(radarStateRef.current)) return Object.freeze({ status: "no_change", saved: true, writes: 1 });
+        const refreshed = await syncRadarPilot();
+        if (!current()) return Object.freeze({ status: "forbidden", writes: 0 });
+        return Object.freeze({ status: refreshed?.status === "ready" ? result?.status || "unavailable" : "storage_error", saved: true, writes: 1 });
+      }
+      if (saved !== false) return Object.freeze({ status: "active", saved: true, writes: 1 });
+      if (reason === "quota-exceeded") {
+        setErr("Dein lokaler Radar hat bereits zehn aktive Ziele. Pausiere oder entferne zuerst eines.");
+      }
+      return Object.freeze({ status: reason === "quota-exceeded" ? "forbidden" : "storage_error", writes: 0 });
+    } finally { if (textAddLockRef.current === operation) textAddLockRef.current = null; }
+  }, [radarAuthority, schreibeRadarState, setErr, syncRadarPilot, radarStateRef,
+    remoteKontoAktiv, radarPilotClientEnabled, session, radarWebsearchAdapter]);
 
   const localPersonRadarAvailable = localRadarWebsearchAvailable
     && typeof radarWebsearchExecutor?.resolvePerson === "function";
@@ -371,8 +423,8 @@ export function useEntdeckenRadarController({
     syncRadarPilot,
   ]);
 
-  const fuegeRadarTextHinzu = useCallback(async (targetText) => {
-    return fuegeRadarFreitextHinzu(targetText);
+  const fuegeRadarTextHinzu = useCallback(async (targetText, options) => {
+    return fuegeRadarFreitextHinzu(targetText, options);
   }, [fuegeRadarFreitextHinzu]);
 
   const aenderePersonRadar = useCallback(async (identity, action) => {

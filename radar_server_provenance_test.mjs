@@ -402,10 +402,17 @@ await check("Nur belegte neue Events werden idempotent projiziert; Pin entsteht 
   assert.equal(rejected.state, pinned.state);
 });
 
-await check("Controller besitzt keinen manuellen Browser-Suchpfad; der gefencete Serverrunner bleibt erhalten", () => {
+await check("Nur explizites neues Textsave startet initial; Boot und gefenceter Scheduler bleiben getrennt", () => {
   const source = fs.readFileSync("src/controllers/useEntdeckenRadarController.js", "utf8");
   const functionSource = fs.readFileSync("supabase/functions/radar-websearch-task/index.ts", "utf8");
-  assert.doesNotMatch(source, /radarServerService|\.checkNow\(|\.checkPersonNow\(/);
+  assert.doesNotMatch(source, /radarServerService|\.checkPersonNow\(/);
+  assert.equal((source.match(/\.checkNow\(/g) || []).length, 1);
+  const start = source.indexOf("const fuegeRadarFreitextHinzu = useCallback");
+  const end = source.indexOf("const localPersonRadarAvailable", start);
+  assert.doesNotMatch(source.slice(0,start) + source.slice(end), /\.checkNow\(/);
+  assert.match(source.slice(start,end), /const canSearch = newlyAdded && active/);
+  assert.match(source.slice(start,end), /if \(!canSearch\) return[\s\S]*\.checkNow\(targetId, normalizedTargetText, \{ initial: true \}\)/);
+  assert.match(functionSource, /admin\.rpc\("kd_radar_initial_claim"/);
   assert.match(functionSource, /admin\.rpc\("kd_radar_daily_claim"\)/);
   assert.match(functionSource, /await assertDailyLease\(\)/);
   assert.match(functionSource, /runRadarWebsearchCheck\(/);

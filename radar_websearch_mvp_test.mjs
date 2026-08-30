@@ -14,6 +14,7 @@ import {
 } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
 import { createProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
 import { createRadarWebsearchService } from "./src/services/radarWebsearch.js";
+import { createLocalTextRadarTargetId } from "./src/lib/localEventRadar.js";
 
 let checks = 0;
 async function check(name, fn) {
@@ -548,14 +549,15 @@ await check("Browserdienst übergibt gespeicherten Freitext beim manuellen Check
       } };
     },
   });
-  const result = await service.checkNow("text:0123456789abcdef", "Mutter Teresa");
+  const query = "Synthetisches Thema";
+  const result = await service.checkNow(createLocalTextRadarTargetId(query), query);
   assert.equal(result.status, "insufficient_evidence");
   assert.equal(result.responseMode, "degraded");
   assert.equal(result.displayText, "Keine eindeutig belegte Zuordnung gefunden.");
   assert.equal("providerReceipt" in result, false);
   assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse(calls[0].options.body), {
-    targetId: "text:0123456789abcdef", targetText: "Mutter Teresa",
+    targetId: createLocalTextRadarTargetId(query), targetText: query,
   });
 });
 
