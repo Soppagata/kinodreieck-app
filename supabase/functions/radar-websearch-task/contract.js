@@ -37,6 +37,64 @@ const SOURCE_CLASSES = new Set(["official", "editorial", "aggregator", "unknown"
 
 function text(value) { return String(value == null ? "" : value).trim(); }
 function plain(value) { return !!value && typeof value === "object" && !Array.isArray(value); }
+
+function validModernSupabaseSecret(value) {
+  return typeof value === "string"
+    && value === text(value)
+    && value.startsWith("sb_secret_")
+    && value.length > "sb_secret_".length
+    && value.length <= 512
+    && !/[\s\u0000-\u001f\u007f-\u009f]/u.test(value);
+}
+
+export function parseSupabaseSecretKeys(rawValue) {
+  if (typeof rawValue !== "string" || !rawValue) return Object.freeze([]);
+  let parsed;
+  try { parsed = JSON.parse(rawValue); } catch { return Object.freeze([]); }
+  if (!plain(parsed)) return Object.freeze([]);
+  const values = Object.values(parsed);
+  if (!values.length || values.some((value) => !validModernSupabaseSecret(value))) {
+    return Object.freeze([]);
+  }
+  return Object.freeze([...new Set(values)]);
+}
+
+export function resolveSupabaseAdminKey(secretKeysRaw, legacyServiceRoleKey) {
+  if (typeof secretKeysRaw === "string" && secretKeysRaw) {
+    return parseSupabaseSecretKeys(secretKeysRaw)[0] || "";
+  }
+  return typeof legacyServiceRoleKey === "string"
+    && legacyServiceRoleKey === text(legacyServiceRoleKey)
+    && legacyServiceRoleKey.length > 0
+    && legacyServiceRoleKey.length <= 2048
+    && !/[\s\u0000-\u001f\u007f-\u009f]/u.test(legacyServiceRoleKey)
+    ? legacyServiceRoleKey
+    : "";
+}
+
+export function authorizeScheduledRadarRequest({
+  refreshHeader,
+  expectedRefreshHeader,
+  apiKey,
+  authorizationHeaderPresent,
+  bodyPresent,
+  originPresent,
+  providerDiagnosticPresent,
+  secretKeysRaw,
+}) {
+  const configuredKeys = parseSupabaseSecretKeys(secretKeysRaw);
+  const matchedKey = typeof apiKey === "string"
+    ? configuredKeys.find((candidate) => candidate === apiKey)
+    : undefined;
+  const ok = refreshHeader === expectedRefreshHeader
+    && authorizationHeaderPresent === false
+    && bodyPresent === false
+    && originPresent === false
+    && providerDiagnosticPresent === false
+    && typeof matchedKey === "string";
+  return Object.freeze({ ok, serviceKey: ok ? matchedKey : "" });
+}
+
 function freezeDeep(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   for (const nested of Object.values(value)) freezeDeep(nested);

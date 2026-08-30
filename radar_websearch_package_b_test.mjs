@@ -11,7 +11,12 @@ import {
   RadarWebsearchProviderError,
   createAnthropicRadarWebsearchAdapter,
 } from "./supabase/functions/radar-websearch-task/anthropicAdapter.js";
-import { evaluateRadarWebsearchResponse } from "./supabase/functions/radar-websearch-task/contract.js";
+import {
+  authorizeScheduledRadarRequest,
+  evaluateRadarWebsearchResponse,
+  parseSupabaseSecretKeys,
+  resolveSupabaseAdminKey,
+} from "./supabase/functions/radar-websearch-task/contract.js";
 import { runRadarWebsearchCheck } from "./supabase/functions/radar-websearch-task/runner.js";
 import { createRadarWebsearchMemoryRepository } from "./supabase/functions/radar-websearch-task/mockAdapter.js";
 import { isProviderReceipt } from "./supabase/functions/_shared/providerReceipt.js";
@@ -1095,6 +1100,7 @@ const migration = fs.readFileSync(
 );
 const config = fs.readFileSync("./supabase/config.toml", "utf8");
 const functionIndex = fs.readFileSync("./supabase/functions/radar-websearch-task/index.ts", "utf8");
+const contractSource = fs.readFileSync("./supabase/functions/radar-websearch-task/contract.js", "utf8");
 const adapterSource = fs.readFileSync("./supabase/functions/radar-websearch-task/anthropicAdapter.js", "utf8");
 const dailyMigration = fs.readFileSync(
   "./supabase/migrations/20260825120000_radar_daily_schedule.sql",
@@ -1122,8 +1128,54 @@ await check("Additive Migration konfiguriert default-off und bindet alle servers
   assert.doesNotMatch(migration, /update\s+public\.kd_radar_settings|update\s+public\.kd_private_settings|cron\.|pg_cron/i);
 });
 
-await check("Function-Konfiguration erzwingt JWT und Produktcode enthält keine Rohlogs", () => {
-  assert.match(config, /\[functions\.radar-websearch-task\][\s\S]*?verify_jwt\s*=\s*true/);
+await check("Moderner Scheduler-Key ist strikt apikey-only und alle Negativpfade bleiben vor Außenwirkung", () => {
+  const currentKey = "sb_secret_synthetic_current_key";
+  const rotatedKey = "sb_secret_synthetic_rotated_key";
+  const secretKeysRaw = JSON.stringify({ current: currentKey, rotated: rotatedKey });
+  const base = {
+    refreshHeader: "scheduled-144h-v1",
+    expectedRefreshHeader: "scheduled-144h-v1",
+    apiKey: rotatedKey,
+    authorizationHeaderPresent: false,
+    bodyPresent: false,
+    originPresent: false,
+    providerDiagnosticPresent: false,
+    secretKeysRaw,
+  };
+  assert.deepEqual(parseSupabaseSecretKeys(secretKeysRaw), [currentKey, rotatedKey]);
+  assert.deepEqual(authorizeScheduledRadarRequest(base), { ok: true, serviceKey: rotatedKey });
+  for (const rejected of [
+    { refreshHeader: "scheduled-v1" },
+    { apiKey: "sb_secret_synthetic_unknown_key" },
+    { apiKey: "synthetic.legacy.service.role" },
+    { authorizationHeaderPresent: true },
+    { bodyPresent: true },
+    { originPresent: true },
+    { providerDiagnosticPresent: true },
+    { secretKeysRaw: "" },
+    { secretKeysRaw: "{invalid" },
+    { secretKeysRaw: JSON.stringify([currentKey]) },
+  ]) {
+    assert.deepEqual(
+      authorizeScheduledRadarRequest({ ...base, ...rejected }),
+      { ok: false, serviceKey: "" },
+    );
+  }
+  assert.equal(resolveSupabaseAdminKey(secretKeysRaw, "synthetic.legacy.service.role"), currentKey);
+  assert.equal(resolveSupabaseAdminKey("", "synthetic.legacy.service.role"), "synthetic.legacy.service.role");
+  assert.equal(resolveSupabaseAdminKey("{invalid", "synthetic.legacy.service.role"), "");
+  const gatePosition = functionIndex.indexOf("const scheduledAccess = authorizeScheduledRadarRequest");
+  assert.ok(gatePosition >= 0);
+  assert.ok(gatePosition < functionIndex.indexOf("const admin = createClient(supabaseUrl, serviceKey"));
+  assert.ok(gatePosition < functionIndex.indexOf('admin.rpc("kd_radar_daily_claim")'));
+  assert.ok(gatePosition < functionIndex.indexOf("result = await runRadarWebsearchCheck"));
+  assert.doesNotMatch(contractSource, /SUPABASE_SERVICE_ROLE_KEY|Deno\.env/);
+});
+
+await check("Function-Konfiguration delegiert JWT-Prüfung an den Handler und Produktcode enthält keine Rohlogs", () => {
+  assert.match(config, /\[functions\.radar-websearch-task\][\s\S]*?verify_jwt\s*=\s*false/);
+  assert.match(functionIndex, /client\.auth\.getClaims\(token\)[\s\S]*?claims\?\.role === "authenticated"/);
+  assert.match(functionIndex, /accountId = await accountFromRequest\(req, supabaseUrl, publishableKey\)/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.match(functionIndex, /kd_private_provider_allowed/);
   assert.equal((adapterSource.match(/\bfetchImpl\(/g) || []).length, 1);
@@ -1196,13 +1248,16 @@ await check("Daily-Aktivierung stoppt bei Settings-Drift und behaelt alle besteh
   assert.match(migration, /return public\.kd_ai_auftrag_starten\(/);
 });
 
-await check("Scheduled-Function ist bodylos, service-role-only und antwortet ohne Konto- oder Zielpayload", () => {
+await check("Scheduled-Function ist bodylos, Secret-Key-only und antwortet ohne Konto- oder Zielpayload", () => {
   assert.match(functionIndex, /const RADAR_REFRESH_HEADER = "x-kd-radar-refresh"/);
   const functionContract = functionIndex.match(/const SCHEDULED_REFRESH_VALUE = "([^"]+)"/)?.[1];
   assert.equal(functionContract, "scheduled-144h-v1");
   assert.doesNotMatch(functionIndex, /const SCHEDULED_REFRESH_VALUE = "scheduled-v1"/);
-  assert.match(functionIndex, /scheduledMode && \(req\.body !== null/);
-  assert.match(functionIndex, /req\.headers\.get\("apikey"\) !== serviceKey \|\| token !== serviceKey/);
+  assert.match(functionIndex, /secretKeysRaw = Deno\.env\.get\("SUPABASE_SECRET_KEYS"\) \|\| ""/);
+  assert.match(functionIndex, /apiKey: req\.headers\.get\("apikey"\)/);
+  assert.match(functionIndex, /authorizationHeaderPresent: req\.headers\.has\("Authorization"\)/);
+  assert.match(functionIndex, /bodyPresent: req\.body !== null/);
+  assert.match(functionIndex, /serviceKey = scheduledAccess\.serviceKey/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_claim"\)/);
   assert.match(functionIndex, /claim\?\.claim !== false \|\| !\["idle", "disabled"\]\.includes\(claim\?\.status\)/);
   assert.match(functionIndex, /claim\?\.claim !== false[\s\S]*?status: "failed" \}, 500/);
@@ -1225,6 +1280,12 @@ await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal 
   assert.match(dailyWorkflow, /--connect-timeout 10/);
   assert.match(dailyWorkflow, /--max-time 150/);
   assert.match(dailyWorkflow, /--output \/dev\/null/);
+  assert.match(dailyWorkflow, /SUPABASE_RADAR_SCHEDULER: \$\{\{ secrets\.SUPABASE_RADAR_SCHEDULER \}\}/);
+  assert.doesNotMatch(dailyWorkflow, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(dailyWorkflow, /case "\$SUPABASE_RADAR_SCHEDULER" in[\s\S]*?sb_secret_\*\) ;;/);
+  assert.match(dailyWorkflow, /--header "apikey: \$\{SUPABASE_RADAR_SCHEDULER\}"/);
+  assert.doesNotMatch(dailyWorkflow, /--header "Authorization:/);
+  assert.equal((dailyWorkflow.match(/--header /g) || []).length, 2);
   const workflowContract = dailyWorkflow.match(/x-kd-radar-refresh: ([^"\s]+)/)?.[1];
   const functionContract = functionIndex.match(/const SCHEDULED_REFRESH_VALUE = "([^"]+)"/)?.[1];
   assert.equal(workflowContract, "scheduled-144h-v1");

@@ -10,6 +10,10 @@ import {
 } from "./anthropicAdapter.js";
 import { runRadarWebsearchCheck } from "./runner.js";
 import {
+  authorizeScheduledRadarRequest,
+  resolveSupabaseAdminKey,
+} from "./contract.js";
+import {
   PROVIDER_DIAGNOSTIC_ENV,
   PROVIDER_DIAGNOSTIC_HEADER,
   providerDiagnosticAccess,
@@ -180,19 +184,39 @@ export function createRadarWebsearchHandler({
     if (req.method !== "POST") return json({ ok: false, status: "forbidden", writes: 0 }, 405, origin);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
-    const serviceKey = envKey("SUPABASE_SECRET_KEYS", "SUPABASE_SERVICE_ROLE_KEY");
-    const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
     const refreshHeader = req.headers.get(RADAR_REFRESH_HEADER);
     const scheduledMode = refreshHeader === SCHEDULED_REFRESH_VALUE;
-    if (!supabaseUrl || !publishableKey || !serviceKey
-        || (refreshHeader !== null && !scheduledMode)) {
+    if (!supabaseUrl || (refreshHeader !== null && !scheduledMode)) {
       return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
     }
-    if (scheduledMode && (req.body !== null || origin !== null
-        || providerDiagnosticHeader !== null
-        || req.headers.get("apikey") !== serviceKey || token !== serviceKey)) {
-      return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+
+    const secretKeysRaw = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
+    let publishableKey = "";
+    let serviceKey = "";
+    if (scheduledMode) {
+      const scheduledAccess = authorizeScheduledRadarRequest({
+        refreshHeader,
+        expectedRefreshHeader: SCHEDULED_REFRESH_VALUE,
+        apiKey: req.headers.get("apikey"),
+        authorizationHeaderPresent: req.headers.has("Authorization"),
+        bodyPresent: req.body !== null,
+        originPresent: origin !== null,
+        providerDiagnosticPresent: providerDiagnosticHeader !== null,
+        secretKeysRaw,
+      });
+      if (!scheduledAccess.ok) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      }
+      serviceKey = scheduledAccess.serviceKey;
+    } else {
+      publishableKey = envKey("SUPABASE_PUBLISHABLE_KEYS", "SUPABASE_ANON_KEY");
+      serviceKey = resolveSupabaseAdminKey(
+        secretKeysRaw,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+      );
+      if (!publishableKey || !serviceKey) {
+        return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      }
     }
 
     let accountId = "";

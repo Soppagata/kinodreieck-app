@@ -21,9 +21,11 @@ project_id = "bscjgwcntapobyxsiyce"
 verify_jwt = true
 
 [functions.radar-websearch-task]
-# Paket B nutzt denselben doppelten JWT-Vertrag wie ai-task: Plattformpruefung
-# plus eigene authenticated-Claims-Pruefung in der Function.
-verify_jwt = true
+# New API Keys sind keine JWTs. Der geplante Scheduler authentifiziert sich
+# deshalb ausschließlich im Handler über einen internen sb_secret_-API-Key;
+# Browseraufrufe bleiben dort an die eigene authenticated-Claims-Prüfung
+# gebunden.
+verify_jwt = false
 
 [functions.entdecken-daily-task]
 # Globaler, nicht personalisierter Nur-Lese-Endpunkt. Die Function prueft den

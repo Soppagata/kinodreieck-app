@@ -20,13 +20,20 @@ jobs:
         timeout-minutes: 30
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_RADAR_SCHEDULER: ${{ secrets.SUPABASE_RADAR_SCHEDULER }}
         run: |
           set -euo pipefail
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error::SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY nicht gesetzt."
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_RADAR_SCHEDULER" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_RADAR_SCHEDULER nicht gesetzt."
             exit 1
           fi
+          case "$SUPABASE_RADAR_SCHEDULER" in
+            sb_secret_*) ;;
+            *)
+              echo "::error::SUPABASE_RADAR_SCHEDULER hat nicht das erwartete Secret-Key-Format."
+              exit 1
+              ;;
+          esac
 
           for claim_number in $(seq 1 10); do
             http_status="$(
@@ -37,8 +44,7 @@ jobs:
                 --output /dev/null \
                 --write-out "%{http_code}" \
                 "${SUPABASE_URL%/}/functions/v1/radar-websearch-task" \
-                --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-                --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+                --header "apikey: ${SUPABASE_RADAR_SCHEDULER}" \
                 --header "x-kd-radar-refresh: scheduled-144h-v1"
             )"
             if [ "$http_status" = "204" ]; then
