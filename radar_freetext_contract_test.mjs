@@ -202,12 +202,49 @@ check("Providerquery entsteht ausschließlich aus dem gespeicherten Freitext", (
   assert.equal(input.asOf, checkedAt);
   assert.match(input.dateFollowup, /brauchbar.*US/);
   assert.match(body.system, /evidence ist immer eine nichtleere JSON-Liste von Objekten mit dem Pflichtfeld url/);
-  assert.equal(input.discoveryQueries.length, 2);
+  assert.deepEqual(input.discoveryQueries, [
+    `${targetText} upcoming movies release schedule`,
+    `${targetText} announced TV series new seasons spin-offs`,
+    `${targetText} angekündigte Projekte Übersicht`,
+  ]);
   assert.ok(input.discoveryQueries.every((query) => query.startsWith(targetText) && !query.includes("Österreich")));
   assert.ok(input.englishFallback.startsWith(targetText));
   assert.equal(body.tools.length, 1);
   assert.equal(body.tools[0].max_uses, 4);
   assert.equal("allowed_domains" in body.tools[0], false);
+});
+
+check("TEXT-Prompt steuert Suchauswahl, Zukunft und Werkvielfalt statt einer festen Pipeline", () => {
+  const genericTargets = ["Person Ada Beispiel", "Synthetische Sternenreihe", "Berggeschichten nächste Staffel", "Erfundenes Special"];
+  for (const value of genericTargets) {
+    const ownRequest = { ...request, targetText: value, targetId: createLocalTextRadarTargetId(value) };
+    const body = buildAnthropicRadarWebsearchBody(ownRequest, setup, checkedAt);
+    const input = JSON.parse(body.messages[0].content);
+    assert.deepEqual(Object.keys(input).sort(), ["asOf", "dateFollowup", "discoveryQueries", "englishFallback", "region", "scopes", "targetText"]);
+    assert.equal(input.targetText, value);
+    assert.equal(input.asOf, checkedAt);
+    assert.ok(input.discoveryQueries.every((query) => query.startsWith(value)));
+    assert.ok(input.englishFallback.startsWith(value));
+    assert.match(body.system, /Deutsch UND Englisch/);
+    assert.match(body.system, /Auswahl.*keine vorgeschriebene Abfolge/);
+    assert.match(body.system, /Person.*kommenden Beteiligungen/);
+    assert.match(body.system, /Serie.*weiteren Staffeln und Ablegern/);
+    assert.match(body.system, /grossen Franchise.*Uebersichten angekuendigter Projekte und Veroeffentlichungsplaenen/);
+    assert.match(body.system, /weiter entfernte Zukunft.*kein fixes Jahr/);
+    assert.match(body.system, /Dominiert ein Werk.*weitere angekuendigte Projekte/);
+    assert.match(body.system, /Budget fuer verschiedene Werke statt fuer weitere Belege zum selben Werk/);
+    assert.match(body.system, /vollstaendig.*sofort ohne Pflicht-Zusatzrunde/);
+    assert.match(body.system, /kein Artikel-Neuheitsfilter/);
+    assert.match(body.system, /Keine zweite Quelle oder separate relationEvidence/);
+    assert.match(body.system, /lasse nur unklare Einzelergebnisse weg, behalte gueltige Geschwister/);
+    assert.match(input.dateFollowup, /\{gefundener Werktitel\} Startdatum Österreich/);
+    assert.match(input.dateFollowup, /Nur ohne brauchbaren Starttermin/);
+    assert.doesNotMatch(body.system, /in zwei Schritten|wenn deutsch duenn|\b20\d\d\b/);
+    for (const fixture of genericTargets) assert.equal(body.system.includes(fixture), false);
+    assert.equal(body.tools[0].max_uses, 4);
+    assert.equal(body.tools.length, 1);
+    assert.equal("allowed_domains" in body.tools[0], false);
+  }
 });
 
 check("Interne starke Werk-ID bleibt aus der sichtbaren Fundkarte heraus", () => {

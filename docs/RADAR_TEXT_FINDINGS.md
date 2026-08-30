@@ -27,9 +27,17 @@ beiden unterstützten Kurzformen. Die Codes enthalten keine Rohwerte.
 
 ## Suche und Kosten
 
-Nur `kind=text` nutzt offene Domains: wenige komplementäre Discoveryanfragen,
-englische Ergänzung bei dünnen Ergebnissen, danach gezielte Datumsnachsuche
-nur für Funde ohne brauchbaren Termin, auch bei bisher reinem US-Datum.
+Nur `kind=text` nutzt offene Domains. Der Prompt recherchiert auf Deutsch und
+Englisch nach angekündigten Filmen, Serien, Staffeln und Specials. Das Modell
+wählt passende Suchformulierungen: Personen nach kommenden Beteiligungen,
+Serien nach weiteren Staffeln/Ablegern, große Franchises nach Projektübersichten
+und Veröffentlichungsplänen. Dominiert ein Werk, soll das verbleibende Budget
+weitere angekündigte Werke erschließen statt zusätzliche Belege desselben
+Films. Auch weiter entfernte Zukunft und ältere Ankündigungen zählen, ohne
+fixes Suchjahr. Die mitgegebenen Discovery-/Englischformulierungen sind eine
+Auswahl, keine vorgeschriebene Abfolge oder programmierte Suchpipeline.
+Werkbezogene Datumsnachsuche erfolgt nur ohne brauchbaren Termin, auch bei
+bisher reinem US-Datum; Österreich wird dabei bevorzugt.
 Die Anfrage enthält die aktuelle serverseitige UTC-Zeit als `asOf`, damit
 „kommend“ nicht relativ zum Modellwissensstand ausgelegt wird.
 Vollständige Einzelquellen brauchen keine

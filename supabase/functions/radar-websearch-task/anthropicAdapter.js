@@ -200,10 +200,12 @@ const TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT = [
   "Jede Evidence enthaelt url, sourceDomain, sourceTitle, optional publishedAt und claim; keine Bewertungen oder Urteile.",
 ].join(" ");
 const TEXT_SYSTEM_PROMPT = [
-  "Du suchst neue belegte Starttermine, die sich eindeutig auf den unveraenderten Freitext der Nutzerin beziehen.",
+  "Recherchiere zum unveraenderten Freitext angekuendigte Filme, Serien, Staffeln und Specials mit kuenftigem Werkstart und eindeutigem Bezug zum Freitext.",
   "asOf ist die aktuelle serverseitige UTC-Zeit; beurteile kommende Starts relativ dazu, nicht relativ zu deinem Wissensstand.",
   "Der Freitext kann eine Person, Titelgruppe, Serie oder ein Werk nennen; rate keine Kategorie und erfinde keine Identitaet.",
-  "Nutze offene Websuche in zwei Schritten innerhalb von maximal vier Toolaufrufen: erst wenige komplementaere Discoveryanfragen zu neuen Filmen, Serien, Staffeln und Specials. Nutze englische Suchbegriffe wenn deutsch duenn bleibt, ohne erzwungenes Oesterreich-Keyword in Discovery.",
+  "Nutze offene Websuche auf Deutsch UND Englisch innerhalb von maximal vier Toolaufrufen. discoveryQueries und englishFallback sind Formulierungsvorschlaege zur modellseitigen Auswahl, keine vorgeschriebene Abfolge. Passe sie an die Bedeutung des Freitexts an, ohne starren Laendersuchterm in Discovery.",
+  "Suche bei einer Person nach kommenden Beteiligungen, bei einer Serie nach weiteren Staffeln und Ablegern, bei einer grossen Franchise nach Uebersichten angekuendigter Projekte und Veroeffentlichungsplaenen. Beruecksichtige auch die weiter entfernte Zukunft, kein fixes Jahr und keinen Filter nach Artikelalter.",
+  "Dominiert ein Werk die Treffer, suche ausdruecklich weitere angekuendigte Projekte zum Freitext. Nutze das verbleibende Budget fuer verschiedene Werke statt fuer weitere Belege zum selben Werk.",
   "Danach nur fuer gefundene Titel ohne brauchbaren Starttermin gezielt Datum nachsuchen, auch wenn bisher nur ein US-Datum vorliegt. Ist eine gelesene Quelle bereits vollstaendig, uebernimm den Fund sofort ohne Pflicht-Zusatzrunde. Keine Endlossuche, keine Retries. Keine IMDb/TMDB-ID oder Werkjahr erforderlich.",
   "Ein Websearch-Beleg in evidence darf sowohl Bezug zum Freitext als auch Starttermin belegen. Keine zweite Quelle oder separate relationEvidence erforderlich.",
   "eventDate ist ausschliesslich der explizite Starttag DES WERKS in YYYY-MM-DD, niemals das Publikationsdatum des Artikels. Alte Ankuendigungen duerfen kommende Starts belegen; kein Artikel-Neuheitsfilter. Bevorzuge oesterreichische Termine. US-only Daten niemals als AT ausgeben; solche Funde ohne brauchbaren Termin weglassen. region AT nur mit AT-Beleg, global fuer belegten weltweiten Start, sonst unspecified ohne Laenderbehauptung.",
@@ -225,11 +227,12 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput, asOf = new
     targetText: request.targetText,
     asOf,
     discoveryQueries: [
-      `${request.targetText} neue Filme kommende Projekte`,
-      `${request.targetText} neue Serien Staffeln Specials`,
+      `${request.targetText} upcoming movies release schedule`,
+      `${request.targetText} announced TV series new seasons spin-offs`,
+      `${request.targetText} angekündigte Projekte Übersicht`,
     ],
-    englishFallback: `${request.targetText} upcoming movie series season release`,
-    dateFollowup: "Nur ohne brauchbaren Starttermin gezielt nachschlagen, auch bei bisher reinem US-Datum; AT bevorzugen.",
+    englishFallback: `${request.targetText} upcoming projects announced films series seasons specials`,
+    dateFollowup: "Nur ohne brauchbaren Starttermin werkbezogen nachschlagen, auch bei bisher reinem US-Datum; AT bevorzugen. Suchvorschlag zur Auswahl: {gefundener Werktitel} Startdatum Österreich. Vollständige Treffer sofort übernehmen, keine weiteren Belege dafür suchen.",
     region: request.region,
     scopes: request.scopes,
   } : person ? {
