@@ -21,6 +21,10 @@ const ANSICHTEN = Object.freeze([
 
 const ROLLEN_LABEL = Object.freeze({ actor: "Schauspiel", director: "Regie" });
 function ereignisLabel(entry) {
+  if (entry?.targetId?.startsWith("release:v1:")) {
+    const category = { film: "Film", series: "Serie", season: "Staffel", special: "Special" }[entry.category] || "Film/Serie";
+    return `${category} · Start${entry.region === "AT" ? " Österreich" : entry.region === "global" ? " weltweit" : ""}`;
+  }
   if (entry?.eventType === "kinostart_at") return "Film · Kinostart Österreich";
   if (entry?.eventType === "serienstart") return "Serie · Start Österreich";
   if (entry?.eventType === "staffelstart") return "Staffel · Start Österreich";

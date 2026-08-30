@@ -116,9 +116,16 @@ function rpcEvent(
   titleGroupContext: Record<string, unknown> | null = null,
   textContext: Record<string, unknown> | null = null,
 ) {
+  if (textContext) return {
+    targetKey: event.targetKey, textTargetKey: textContext.targetId,
+    targetText: textContext.targetText, workTitle: event.title, workTargetType: event.targetType,
+    category: event.category, eventType: event.eventType, date: event.date, region: event.region,
+    platform: event.platform, seasonNumber: event.seasonNumber, checkedAt: textContext.checkedAt,
+    evidence: event.evidence,
+  };
   const titleGroupDiscovery = titleGroupContext?.discoveryMode === "canonical-group-v1";
   return {
-    targetKey: textContext ? textContext.targetId : event.targetKey,
+    targetKey: event.targetKey,
     eventType: event.eventType,
     date: event.date,
     region: event.region,
@@ -129,20 +136,7 @@ function rpcEvent(
       url: entry.url,
       retrievedAt: entry.retrievedAt,
     })) : [],
-    ...(textContext ? {
-      textTargetKey: textContext.targetId,
-      targetText: textContext.targetText,
-      workTargetType: event.targetType,
-      workTitle: event.title,
-      workYear: event.year,
-      checkedAt: textContext.checkedAt,
-      relationEvidence: Array.isArray(textContext.relationEvidence)
-        ? textContext.relationEvidence.map((entry: Record<string, unknown>) => ({
-          sourceId: entry.sourceId,
-          url: entry.url,
-          retrievedAt: entry.retrievedAt,
-        })) : [],
-    } : personContext ? {
+    ...(personContext ? {
       personTargetKey: personContext.targetId,
       personExternalId: personContext.personExternalId,
       personRole: personContext.role,
@@ -375,14 +369,14 @@ export function createRadarWebsearchHandler({
         await assertDailyLease();
         const { data, error } = await admin.rpc(
           textContext
-            ? "kd_radar_websearch_upsert_text_event"
+            ? "kd_radar_websearch_upsert_text_finding"
             : personContext
             ? "kd_radar_websearch_upsert_person_event"
             : titleGroupContext?.discoveryMode === "canonical-group-v1"
               ? "kd_radar_websearch_upsert_title_group_discovery_event"
               : titleGroupContext ? "kd_radar_websearch_upsert_title_group_event" : "kd_radar_websearch_upsert_event",
           {
-          p_account_id: actor,
+          ...(textContext ? { p_user_id: actor } : { p_account_id: actor }),
           p_operation_id: operationId,
           p_payload: rpcEvent(event, personContext, titleGroupContext, textContext),
           },
@@ -400,7 +394,7 @@ export function createRadarWebsearchHandler({
     const productAdapter = adapter ?? createAnthropicRadarWebsearchAdapter({
       apiKey: Deno.env.get("ANTHROPIC_API_KEY") || "",
       fetchImpl,
-      async loadSetup() {
+      async loadSetup(request: { kind?: string }) {
         const [radarResult, providerResult, limitsResult, sources] = await Promise.all([
           admin.from("kd_radar_settings")
             .select("radar_aktiv,radar_provider_aktiv,radar_scheduler_aktiv")
@@ -419,7 +413,7 @@ export function createRadarWebsearchHandler({
               "timeout_ms",
               "websearch_usd_cent_pro_request",
             ]),
-          loadSources(),
+          request.kind === "text" ? [] : loadSources(),
         ]);
         if (radarResult.error || providerResult.error || limitsResult.error) {
           throw new Error("radar-websearch-setup-unavailable");

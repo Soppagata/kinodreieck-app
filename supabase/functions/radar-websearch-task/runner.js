@@ -91,15 +91,13 @@ export async function runRadarWebsearchCheck({
     const findings = ["person", "title_group", "text"].includes(request.kind)
       ? providerEnvelope?.response?.candidates
       : providerEnvelope?.response?.events;
-    const domains = [...new Set((findings || []).flatMap((finding) => (
-      [
-        ...(finding?.evidence || []),
-        ...(finding?.membershipEvidence || []),
-        ...(finding?.relationEvidence || []),
-      ]
+    const domains = [...new Set((Array.isArray(findings) ? findings : []).flatMap((finding) => (
+      ["evidence", "membershipEvidence", "relationEvidence"].flatMap((key) => (
+        Array.isArray(finding?.[key]) ? finding[key] : []
+      ))
         .map((entry) => entry?.sourceDomain).filter(Boolean)
     )))];
-    sources = await repository.resolveSources(domains);
+    sources = request.kind === "text" ? [] : await repository.resolveSources(domains);
   } catch {
     return frozenResult({
       status: "insufficient_evidence", writes: 0,
@@ -149,6 +147,8 @@ export async function runRadarWebsearchCheck({
 
   let writes = 0;
   let changed = false;
+  let storageFailures = 0;
+  let storedResults = 0;
   try {
     const catalogResult = request.kind === "person"
       ? evaluated.personResult
@@ -160,6 +160,7 @@ export async function runRadarWebsearchCheck({
         targetType: candidate.targetType,
         title: candidate.title,
         year: candidate.year,
+        ...(request.kind === "text" ? { category: candidate.category } : {}),
         eventType: candidate.eventType,
         date: candidate.date,
         region: candidate.region,
@@ -174,7 +175,9 @@ export async function runRadarWebsearchCheck({
       }))
       : evaluated.events;
     for (const event of events) {
-      const upsert = await repository.upsertConfirmedEvent({
+      let upsert;
+      try {
+        upsert = await repository.upsertConfirmedEvent({
         accountId,
         operationId: operationId(event),
         event,
@@ -211,16 +214,23 @@ export async function runRadarWebsearchCheck({
             relationEvidence: event.relationEvidence,
           },
         } : {}),
-      });
+        });
+      } catch (error) {
+        if (request.kind !== "text") throw error;
+        storageFailures += 1;
+        continue;
+      }
       if (upsert?.status === "confirmed") {
         writes += 1;
         changed = true;
       } else if (upsert?.status !== "no_change") {
+        if (request.kind === "text") { storageFailures += 1; continue; }
         return frozenResult({
           status: "storage_error", writes, feed: null,
           ...presentation, ...providerEvidence,
         });
       }
+      storedResults += 1;
     }
   } catch {
     return frozenResult({
@@ -249,10 +259,15 @@ export async function runRadarWebsearchCheck({
     });
   }
   return frozenResult({
-    status: changed ? "confirmed" : "no_change",
+    status: storageFailures && !storedResults ? "storage_error" : changed ? "confirmed" : "no_change",
     writes,
     feed: await loadFeedSafely(repository, accountId),
     ...presentation,
+    ...(storageFailures && storedResults ? {
+      responseMode: "partial",
+      displayText: "Einzelne Funde konnten nicht gespeichert werden. Andere belegte Funde bleiben erhalten.",
+      warnings: [...(presentation.warnings || []), "text-finding-storage-dropped"].slice(0, 8),
+    } : {}),
     ...providerEvidence,
   });
 }

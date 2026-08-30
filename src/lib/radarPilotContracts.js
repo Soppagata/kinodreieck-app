@@ -45,7 +45,7 @@ export const RADAR_PILOT_EVENT_KEYS = Object.freeze([
   "eventId", "eventVersionId", "targetId", "eventType", "date", "region", "platform",
   "lifecycleStatus", "verificationStatus", "evidence",
 ]);
-export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title", "targetType"]);
+export const RADAR_PILOT_EVENT_OPTIONAL_KEYS = Object.freeze(["seasonNumber", "title", "targetType", "category"]);
 export const RADAR_PILOT_RECEIPT_KEYS = Object.freeze(["eventVersionId", "status", "updatedAt"]);
 
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -286,6 +286,7 @@ export function validateRadarPilotEvent(value) {
   if (!exactKeysWithOptional(value, RADAR_PILOT_EVENT_KEYS, RADAR_PILOT_EVENT_OPTIONAL_KEYS)) {
     return result(["feed-event-shape-invalid"]);
   }
+  const textFinding = typeof value.targetId === "string" && /^release:v1:[a-f0-9]{16}$/.test(value.targetId);
   if (!validUuid(value.eventId)) errors.push("feed-event-id-invalid");
   if (!validUuid(value.eventVersionId)) errors.push("feed-event-version-invalid");
   if (!validTargetKey(value.targetId)) errors.push("feed-event-target-invalid");
@@ -295,8 +296,14 @@ export function validateRadarPilotEvent(value) {
   }
   if (!RADAR_EVENT_TYPES.includes(value.eventType)) errors.push("feed-event-type-invalid");
   if (!validDay(value.date)) errors.push("feed-event-date-invalid");
-  if (value.region !== RADAR_DEFAULT_REGION) errors.push("feed-event-region-invalid");
-  if (!validPlatform(value.eventType, value.platform)) errors.push("feed-event-platform-invalid");
+  if (value.region !== RADAR_DEFAULT_REGION
+    && !(textFinding && ["global", "unspecified"].includes(value.region))) errors.push("feed-event-region-invalid");
+  if (value.category !== undefined && (!textFinding || !["film", "series", "season", "special"].includes(value.category))) errors.push("feed-event-category-invalid");
+  if (textFinding ? (typeof value.platform !== "string" || !value.platform || value.platform !== text(value.platform)
+      || value.platform.length > 80 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.platform))
+    : !validPlatform(value.eventType, value.platform)) {
+    errors.push("feed-event-platform-invalid");
+  }
   if (value.eventType === "staffelstart") {
     if (value.seasonNumber !== undefined
         && (!Number.isInteger(value.seasonNumber) || value.seasonNumber < 1 || value.seasonNumber > 999)) {

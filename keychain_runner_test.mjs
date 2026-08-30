@@ -920,12 +920,12 @@ pruefe("der einzige Standard-Livebefehl bleibt exakt auf den Keychain-Runner ver
       && starts[0].argv.join("|") === MODI["ai-live"].radarWebsearchOnceArgv.join("|")
       && starts[0].argv.some((arg) => arg.endsWith("/radar_websearch_live.mjs"))
       && !starts[0].argv.some((arg) => arg.endsWith("/ai_smoke.mjs")));
-  pruefe("Radar-Einmallauf erhält nur den internen Guard und das starke öffentliche Ziel",
+  pruefe("Owner-Radar-Einmallauf erhält nur den internen Guard, eigenes Ziel und bestehende Owner-Credentiallane",
     starts[0].optionen.env[RADAR_WEBSEARCH_ONCE_ENV] === "keychain-budget-guard-v1"
       && starts[0].optionen.env.KD_RADAR_TARGET_ID === PUBLIC.KD_RADAR_TARGET_ID
-      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.testa
-      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_TESTA_USER
-      && starts[0].optionen.env.KD_TESTA_PASS === SONDERGEHEIMNIS
+      && gelesen.join(",") === KEYCHAIN_ACCOUNTS.owner
+      && starts[0].optionen.env.KD_TESTA_USER === PUBLIC.KD_OWNER_USER
+      && starts[0].optionen.env.KD_TESTA_PASS === OWNER_GEHEIMNIS
       && !("KD_OWNER_USER" in starts[0].optionen.env)
       && !("KD_OWNER_PASS" in starts[0].optionen.env));
 }

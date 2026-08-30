@@ -472,7 +472,7 @@ function validSourceRow(source) {
     && typeof source.rightsStatus === "string";
 }
 
-function selectEvidence(event, sourceRegistry, checkedAt, errors) {
+function selectEvidence(event, sourceRegistry, checkedAt, errors, minimum = 2) {
   const resolved = [];
   const seenUrls = new Set();
   for (const evidence of event.evidence) {
@@ -501,8 +501,8 @@ function selectEvidence(event, sourceRegistry, checkedAt, errors) {
     ))) {
       if (!familyWinner.has(item.source.publisherFamily)) familyWinner.set(item.source.publisherFamily, item);
     }
-    selected.push(...[...familyWinner.values()].slice(0, 2));
-    if (selected.length < 2) errors.push("response-evidence-independent-sources-insufficient");
+    selected.push(...[...familyWinner.values()].slice(0, minimum));
+    if (selected.length < minimum) errors.push("response-evidence-independent-sources-insufficient");
   }
   return selected.map(({ evidence, source }) => Object.freeze({
     sourceId: source.sourceId,
@@ -517,23 +517,40 @@ function selectEvidence(event, sourceRegistry, checkedAt, errors) {
   }));
 }
 
+// Internal release identity, never a fabricated catalogue ID. ASCII folding is
+// deliberately identical to the SQL implementation; no fuzzy title matching.
+export function createTextRadarReleaseId(candidate) {
+  const title = candidate.title.trim().replace(/ +/g, " ").replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const basis = [title, candidate.eventDate, candidate.eventType, candidate.targetType, candidate.seasonNumber ?? "-"].join("|");
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  const bytes = new TextEncoder().encode(basis);
+  for (let index = 0; index < bytes.length; index += 1) {
+    first = Math.imul(first ^ bytes[index], 0x01000193) >>> 0;
+    second = Math.imul(second ^ (bytes[index] + index), 0x85ebca6b) >>> 0;
+  }
+  return `release:v1:${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+}
+
 function validateTextCandidateShape(candidate, request, errors) {
-  const required = [
-    "targetId", "targetType", "title", "year", "eventType", "eventDate",
-    "region", "platform", "seasonNumber", "relationEvidence", "evidence",
-  ];
-  if (!exactKeys(candidate, required) || Object.keys(candidate || {}).length !== required.length) {
+  const required = ["title", "eventType", "eventDate", "evidence"];
+  const optional = ["targetId", "targetType", "year", "region", "platform", "seasonNumber", "relationEvidence", "category"];
+  if (!exactKeys(candidate, required, optional)) {
     errors.push("response-text-candidate-shape-invalid");
     return;
   }
-  if (!validStrongExternalWorkId(candidate.targetId, candidate.targetType)
-      || typeof candidate.title !== "string" || text(candidate.title) !== candidate.title
-      || !candidate.title || candidate.title.length > 200 || !validYear(candidate.year)) {
+  if (typeof candidate.title !== "string" || text(candidate.title) !== candidate.title
+      || !candidate.title || candidate.title.length > 200
+      || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(candidate.title)) {
     errors.push("response-text-work-invalid");
   }
   if (!RADAR_WEBSEARCH_EVENT_TYPES.includes(candidate.eventType)) errors.push("response-text-event-type-invalid");
   if (!validDay(candidate.eventDate)) errors.push("response-text-date-invalid");
-  if (candidate.region !== "AT") errors.push("response-text-region-invalid");
+  if (candidate.region != null && !["AT", "global", "unspecified"].includes(candidate.region)) errors.push("response-text-region-invalid");
+  if (candidate.category != null && !["film", "series", "season", "special"].includes(candidate.category)) errors.push("response-text-category-invalid");
+  if (candidate.targetType != null && !["work", "series"].includes(candidate.targetType)) errors.push("response-text-work-invalid");
+  if (candidate.eventType === "streamingstart_at" && !["work", "series"].includes(candidate.targetType)
+    && !["film", "series", "special"].includes(candidate.category)) errors.push("response-text-work-invalid");
   const neededScope = EVENT_SCOPE[candidate.eventType];
   if (neededScope && !request.scopes.includes(neededScope)) errors.push("response-text-scope-invalid");
   if (candidate.targetType === "work" && ["serienstart", "staffelstart"].includes(candidate.eventType)) {
@@ -542,18 +559,17 @@ function validateTextCandidateShape(candidate, request, errors) {
   if (candidate.targetType === "series" && candidate.eventType === "kinostart_at") {
     errors.push("response-text-work-type-conflict");
   }
-  if (candidate.eventType === "streamingstart_at") {
-    if (typeof candidate.platform !== "string" || text(candidate.platform) !== candidate.platform
-        || !candidate.platform || candidate.platform === "-" || candidate.platform.length > 80) {
-      errors.push("response-text-platform-invalid");
-    }
-  } else if (candidate.platform !== "-") errors.push("response-text-platform-invalid");
-  if (candidate.eventType === "staffelstart") {
+  if (candidate.platform != null && (typeof candidate.platform !== "string"
+      || text(candidate.platform) !== candidate.platform || !candidate.platform || candidate.platform.length > 80
+      || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(candidate.platform))) {
+    errors.push("response-text-platform-invalid");
+  }
+  if (candidate.eventType === "staffelstart" && candidate.seasonNumber != null) {
     if (!Number.isInteger(candidate.seasonNumber) || candidate.seasonNumber < 1 || candidate.seasonNumber > 999) {
       errors.push("response-text-season-invalid");
     }
-  } else if (candidate.seasonNumber !== null) errors.push("response-text-season-invalid");
-  for (const [field, error] of [["relationEvidence", "relation"], ["evidence", "event"]]) {
+  } else if (candidate.eventType !== "staffelstart" && candidate.seasonNumber != null) errors.push("response-text-season-invalid");
+  for (const [field, error] of [["evidence", "event"]]) {
     if (!Array.isArray(candidate[field]) || candidate[field].length < 1
         || candidate[field].length > RADAR_WEBSEARCH_MAX_RESULTS) {
       errors.push(`response-text-${error}-evidence-invalid`);
@@ -591,7 +607,18 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
     const candidateErrors = [];
     validateTextCandidateShape(candidate, request, candidateErrors);
     if (candidateErrors.length) droppedErrors.push(...candidateErrors, "response-text-candidate-dropped");
-    else shapeValidCandidates.push(candidate);
+    else {
+      const targetType = candidate.targetType || (["series", "season"].includes(candidate.category)
+        || ["serienstart", "staffelstart"].includes(candidate.eventType) ? "series" : "work");
+      const normalized = { ...candidate, targetType, seasonNumber: candidate.seasonNumber ?? null };
+      shapeValidCandidates.push({
+        ...normalized,
+        targetId: createTextRadarReleaseId(normalized),
+        year: validYear(candidate.year) ? candidate.year : null,
+        category: candidate.category || (candidate.eventType === "staffelstart" ? "season" : targetType === "series" ? "series" : "film"),
+        platform: !candidate.platform || /^(?:-|unknown|unbekannt|n\/a)$/iu.test(candidate.platform) ? "-" : candidate.platform,
+      });
+    }
   }
   const checkedDay = validInstant(response.checkedAt)
     ? Math.floor(Date.parse(response.checkedAt.slice(0, 10) + "T00:00:00.000Z") / 86400000) : null;
@@ -617,13 +644,6 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
   }
   const fatalErrors = [...hardErrors];
   if (!shapeValidCandidates.length) fatalErrors.push("response-confirmed-candidates-required");
-  const allUrls = shapeValidCandidates.flatMap((candidate) => [
-    ...(candidate.relationEvidence || []).map((entry) => entry.url),
-    ...(candidate.evidence || []).map((entry) => entry.url),
-  ]);
-  if (new Set(allUrls).size > envelope.searchResultCount) fatalErrors.push("response-evidence-count-exceeds-results");
-  const registry = Array.isArray(sourceRegistryInput) ? sourceRegistryInput : [];
-  if (registry.some((source) => !validSourceRow(source))) fatalErrors.push("source-registry-invalid");
   if (fatalErrors.length) {
     return Object.freeze({
       status: "insufficient_evidence",
@@ -633,8 +653,11 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
   }
   const seen = new Map();
   const conflicts = new Set();
+  const candidateKey = (candidate) => [candidate.title.toLocaleLowerCase("de").replace(/ +/g, " "),
+    candidate.targetType, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
   for (const candidate of shapeValidCandidates) {
-    const key = [candidate.targetId, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
+    if (outsidePracticalWindow.has(candidate)) continue;
+    const key = candidateKey(candidate);
     if (seen.has(key) && seen.get(key) !== candidate.eventDate) conflicts.add(key);
     else seen.set(key, candidate.eventDate);
   }
@@ -643,24 +666,27 @@ export function evaluateTextRadarWebsearchResponse(envelope, requestInput, sourc
   for (const candidate of shapeValidCandidates) {
     if (outsidePracticalWindow.has(candidate)) continue;
     const candidateErrors = [];
-    const key = [candidate.targetId, candidate.eventType, candidate.platform, candidate.seasonNumber ?? "-"].join("|");
+    const key = candidateKey(candidate);
     if (conflicts.has(key)) { droppedErrors.push("response-text-candidate-ambiguous"); continue; }
     if (seen.has(key)) { droppedErrors.push("response-text-candidate-duplicate"); continue; }
-    seen.set(key, candidate.eventDate);
-    const eventUrls = new Set(candidate.evidence.map((entry) => entry.url));
-    if (candidate.relationEvidence.some((entry) => eventUrls.has(entry.url))) {
-      candidateErrors.push("response-text-relation-evidence-not-separate");
+    if (new Set(candidate.evidence.map((entry) => entry.url)).size > envelope.searchResultCount) {
+      candidateErrors.push("response-evidence-count-exceeds-results");
     }
-    const relationEvidence = selectEvidence({ evidence: candidate.relationEvidence }, registry, response.checkedAt, candidateErrors);
-    const evidence = selectEvidence({ evidence: candidate.evidence }, registry, response.checkedAt, candidateErrors);
+    // The provider adapter already binds every URL to a real tool result.
+    // Text discovery is open web: no editorial registry or second source gate.
+    const evidence = candidate.evidence.slice(0, 1).map((entry) => ({
+      ...entry, sourceId: `web:${entry.sourceDomain}`.slice(0, 128), retrievedAt: response.checkedAt,
+    }));
     if (candidateErrors.length) {
       droppedErrors.push(...candidateErrors, "response-text-candidate-dropped");
       continue;
     }
+    seen.set(key, candidate.eventDate);
     candidates.push({
       targetId: candidate.targetId, targetType: candidate.targetType, title: candidate.title, year: candidate.year,
-      eventType: candidate.eventType, date: candidate.eventDate, region: "AT", platform: candidate.platform,
-      seasonNumber: candidate.seasonNumber, relationEvidence, evidence,
+      eventType: candidate.eventType, date: candidate.eventDate, region: candidate.region || "unspecified", platform: candidate.platform,
+      category: candidate.category,
+      seasonNumber: candidate.seasonNumber, relationEvidence: evidence, evidence,
     });
   }
   if (!candidates.length) {

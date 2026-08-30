@@ -546,6 +546,7 @@ export function baueKindUmgebung({
   }
   const ownerCredentialLane = modus === "ai-live"
     && (effectiveOwnerCoreSix || entdeckenDailyOnce
+      || (radarWebsearchOnce && ownerApprovedServerBudget)
       || entdeckenProviderProbeOnce || entdeckenFactsOnce || radarEntdeckenOnce);
 
   const env = harmloseBasis(ambientEnv);
@@ -620,7 +621,7 @@ export function baueKindUmgebung({
     if (targetRoh && !targetId) {
       throw new Error("KD_RADAR_TARGET_ID ist kein starkes reales Ziel.");
     }
-    if (!targetId && !effectiveOwnerCoreSix) {
+    if (!targetId && !effectiveOwnerCoreSix && !radarWebsearchOnce) {
       throw new Error("KD_RADAR_TARGET_ID fehlt oder ist kein starkes reales Ziel.");
     }
     if (targetId) env.KD_RADAR_TARGET_ID = targetId;

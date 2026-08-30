@@ -15,6 +15,9 @@ export const RADAR_WEBSEARCH_MAX_TOKENS = 1200;
 export const RADAR_WEBSEARCH_TASK_CAP_USD_CENT = 5;
 export const RADAR_WEBSEARCH_FEE_USD_CENT = 1;
 export const RADAR_WEBSEARCH_MAX_DOMAINS = 10;
+export const RADAR_TEXT_MAX_USES = 4;
+export const RADAR_TEXT_MAX_TOKENS = 2400;
+export const RADAR_TEXT_TASK_CAP_USD_CENT = 20;
 export const RADAR_WEBSEARCH_TIMEOUT_MAX_MS = 135_000;
 export const RADAR_WEBSEARCH_RESPONSE_MAX_BYTES = 512_000;
 export const RADAR_WEBSEARCH_PHASE_CODES = Object.freeze([
@@ -118,7 +121,7 @@ function setupError() {
   throw new RadarWebsearchProviderError("setup-invalid");
 }
 
-export function validateRadarWebsearchProviderSetup(value) {
+export function validateRadarWebsearchProviderSetup(value, { textTarget = false } = {}) {
   if (!plain(value)
       || value.radarEnabled !== true
       || value.radarProviderEnabled !== true
@@ -126,8 +129,8 @@ export function validateRadarWebsearchProviderSetup(value) {
       || value.providerAllowed !== true
       || value.modelAlias !== "klein"
       || !MODEL_FORM.test(value.model)
-      || value.maxTokens !== RADAR_WEBSEARCH_MAX_TOKENS
-      || value.taskCapUsdCent !== RADAR_WEBSEARCH_TASK_CAP_USD_CENT
+      || ![RADAR_WEBSEARCH_MAX_TOKENS, RADAR_TEXT_MAX_TOKENS].includes(value.maxTokens)
+      || ![RADAR_WEBSEARCH_TASK_CAP_USD_CENT, RADAR_TEXT_TASK_CAP_USD_CENT].includes(value.taskCapUsdCent)
       || value.searchFeeUsdCent !== RADAR_WEBSEARCH_FEE_USD_CENT
       || !finitePositive(value.globalRequestCapUsdCent)
       || value.globalRequestCapUsdCent > 500
@@ -138,12 +141,12 @@ export function validateRadarWebsearchProviderSetup(value) {
       || value.inputPriceUsdCentPerMtok < MODEL_PRICE_FLOOR.input
       || !finitePositive(value.outputPriceUsdCentPerMtok)
       || value.outputPriceUsdCentPerMtok < MODEL_PRICE_FLOOR.output
-      || !Array.isArray(value.sourceRegistry)
-      || value.sourceRegistry.length < 1
-      || value.sourceRegistry.length > RADAR_WEBSEARCH_MAX_DOMAINS) setupError();
+      || (!textTarget && (!Array.isArray(value.sourceRegistry)
+        || value.sourceRegistry.length < 1
+        || value.sourceRegistry.length > RADAR_WEBSEARCH_MAX_DOMAINS))) setupError();
 
   const domains = [];
-  for (const source of value.sourceRegistry) {
+  for (const source of textTarget ? [] : value.sourceRegistry) {
     if (!plain(source) || !validDomain(source.domain)
         || source.active !== true || source.rightsStatus !== "approved"
         || source.attributionApproved !== true
@@ -153,7 +156,7 @@ export function validateRadarWebsearchProviderSetup(value) {
   if (new Set(domains).size !== domains.length) setupError();
   return Object.freeze({
     ...value,
-    sourceRegistry: Object.freeze(value.sourceRegistry.map((source) => Object.freeze({ ...source }))),
+    sourceRegistry: Object.freeze((textTarget ? [] : value.sourceRegistry).map((source) => Object.freeze({ ...source }))),
     allowedDomains: Object.freeze([...domains].sort()),
   });
 }
@@ -199,15 +202,19 @@ const TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT = [
 const TEXT_SYSTEM_PROMPT = [
   "Du suchst neue belegte Starttermine, die sich eindeutig auf den unveraenderten Freitext der Nutzerin beziehen.",
   "Der Freitext kann eine Person, Titelgruppe, Serie oder ein Werk nennen; rate keine Kategorie und erfinde keine Identitaet.",
-  "Nutze genau eine Websuche mit searchQuery und nur erlaubte Domains. Jeder Fund braucht intern eine starke IMDb- oder TMDB-Werk-ID; sie wird nicht in der App angezeigt.",
-  "relationEvidence belegt die eindeutige Beziehung des Werks zum Freitext; evidence belegt separat Datum, Region AT und gegebenenfalls Plattform.",
+  "Nutze offene Websuche in zwei Schritten innerhalb von maximal vier Toolaufrufen: erst wenige komplementaere Discoveryanfragen zu neuen Filmen, Serien, Staffeln und Specials. Nutze englische Suchbegriffe wenn deutsch duenn bleibt, ohne erzwungenes Oesterreich-Keyword in Discovery.",
+  "Danach nur fuer gefundene Titel mit fehlendem Startdatum gezielt Datum nachsuchen. Ist eine gelesene Quelle bereits vollstaendig, uebernimm den Fund sofort ohne Pflicht-Zusatzrunde. Keine Endlossuche, keine Retries. Keine IMDb/TMDB-ID oder Werkjahr erforderlich.",
+  "Ein Websearch-Beleg in evidence darf sowohl Bezug zum Freitext als auch Starttermin belegen. Keine zweite Quelle oder separate relationEvidence erforderlich.",
+  "eventDate ist ausschliesslich der explizite Starttag DES WERKS in YYYY-MM-DD, niemals das Publikationsdatum des Artikels. Alte Ankuendigungen duerfen kommende Starts belegen; kein Artikel-Neuheitsfilter. Bevorzuge oesterreichische Termine. US-only Daten niemals als AT ausgeben; solche Funde ohne brauchbaren Termin weglassen. region AT nur mit AT-Beleg, global fuer belegten weltweiten Start, sonst unspecified ohne Laenderbehauptung.",
   "Antworte im letzten Textblock ausschliesslich als JSON mit status und candidates.",
-  "status ist confirmed, insufficient_evidence oder no_change; Unsicherheit ergibt eine leere candidates-Liste.",
-  "Jeder Kandidat enthaelt targetId, targetType, title, year, eventType, eventDate, region, platform, seasonNumber, relationEvidence und evidence.",
+  "status ist confirmed, insufficient_evidence oder no_change; lasse nur unklare Einzelergebnisse weg, behalte gueltige Geschwister. Maximal sechs Kandidaten.",
+  "Pflicht je Kandidat: title, eventDate, eventType und evidence. eventType: kinostart_at, streamingstart_at, serienstart oder staffelstart. Bei streamingstart_at nenne category film, series oder special (alternativ targetType work oder series).",
+  "Optional: targetType, region, seasonNumber, category (film, series, season, special) und platform. Behalte erkannte Plattformen auch bei Serien- und Staffelstarts, sonst weglassen. Specials als Kategorie special mit passender Startart. Keine Links fuer die Anzeige noetig.",
+  "evidence enthaelt url, sourceDomain, sourceTitle, claim und optional publishedAt. claim benennt den Starttermin und den Bezug; url muss aus der verwendeten Websuche stammen.",
 ].join(" ");
 
 export function buildAnthropicRadarWebsearchBody(request, setupInput) {
-  const setup = validateRadarWebsearchProviderSetup(setupInput);
+  const setup = validateRadarWebsearchProviderSetup(setupInput, { textTarget: request.kind === "text" });
   const person = request.kind === "person";
   const titleGroup = request.kind === "title_group";
   const textTarget = request.kind === "text";
@@ -215,7 +222,12 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE;
   const providerInput = textTarget ? {
     targetText: request.targetText,
-    searchQuery: `${request.targetText} neuer Film neue Serie Start Österreich`,
+    discoveryQueries: [
+      `${request.targetText} neue Filme kommende Projekte`,
+      `${request.targetText} neue Serien Staffeln Specials`,
+    ],
+    englishFallback: `${request.targetText} upcoming movie series season release`,
+    dateFollowup: "Nur fehlende Startdaten gefundener Titel gezielt nachschlagen; AT bevorzugen.",
     region: request.region,
     scopes: request.scopes,
   } : person ? {
@@ -254,7 +266,7 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
   };
   return Object.freeze({
     model: setup.model,
-    max_tokens: setup.maxTokens,
+    max_tokens: textTarget ? setup.maxTokens : RADAR_WEBSEARCH_MAX_TOKENS,
     system: textTarget ? TEXT_SYSTEM_PROMPT : person ? PERSON_SYSTEM_PROMPT
       : titleGroupDiscovery ? TITLE_GROUP_DISCOVERY_SYSTEM_PROMPT
         : titleGroup ? TITLE_GROUP_SYSTEM_PROMPT : SYSTEM_PROMPT,
@@ -265,24 +277,26 @@ export function buildAnthropicRadarWebsearchBody(request, setupInput) {
     tools: Object.freeze([Object.freeze({
       type: "web_search_20250305",
       name: "web_search",
-      max_uses: 1,
-      allowed_domains: setup.allowedDomains,
+      max_uses: textTarget ? RADAR_TEXT_MAX_USES : 1,
+      ...(textTarget ? {} : { allowed_domains: setup.allowedDomains }),
       allowed_callers: Object.freeze(["direct"]),
     })]),
   });
 }
 
 export function estimateRadarWebsearchReservation(body, setupInput) {
-  const setup = validateRadarWebsearchProviderSetup(setupInput);
+  const setup = validateRadarWebsearchProviderSetup(setupInput, { textTarget: body.tools[0].max_uses > 1 });
   const bytes = new TextEncoder().encode(JSON.stringify(body)).length;
-  const conservativeInputTokens = bytes + 4096;
+  const maxUses = body.tools[0].max_uses;
+  const conservativeInputTokens = bytes + (maxUses > 1 ? maxUses * 16384 : 4096);
   const cost = costFromUsage(
     setup,
     conservativeInputTokens,
-    setup.maxTokens,
-    1,
+    body.max_tokens,
+    maxUses,
   );
-  if (!finitePositive(cost) || cost > setup.taskCapUsdCent) {
+  if (!finitePositive(cost) || cost > Math.min(setup.taskCapUsdCent,
+    maxUses > 1 ? RADAR_TEXT_TASK_CAP_USD_CENT : RADAR_WEBSEARCH_TASK_CAP_USD_CENT)) {
     throw new RadarWebsearchProviderError("provider-cost-invalid");
   }
   return cost;
@@ -343,7 +357,7 @@ function parseProviderText(content, warnings) {
   return selected;
 }
 
-function normalizeEvidenceList(value, resultUrls, citationUrls, warnings) {
+function normalizeEvidenceList(value, resultUrls, citationUrls, warnings, requireCitation = true) {
   if (!Array.isArray(value)) {
     addWarning(warnings, "evidence-list-dropped");
     return [];
@@ -357,7 +371,7 @@ function normalizeEvidenceList(value, resultUrls, citationUrls, warnings) {
     const parsedUrl = directUrl(entry.url);
     const sourceDomain = typeof entry.sourceDomain === "string" ? entry.sourceDomain : "";
     if (!parsedUrl || parsedUrl.hostname.toLowerCase() !== sourceDomain
-        || !resultUrls.has(entry.url) || !citationUrls.has(entry.url)
+        || !resultUrls.has(entry.url) || (requireCitation && !citationUrls.has(entry.url))
         || typeof entry.sourceTitle !== "string" || !text(entry.sourceTitle)
         || typeof entry.claim !== "string" || !text(entry.claim)) {
       addWarning(warnings, "evidence-item-dropped");
@@ -390,10 +404,17 @@ function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnin
     addWarning(warnings, "finding-dropped");
     return null;
   }
-  const evidence = normalizeEvidenceList(value.evidence, resultUrls, citationUrls, warnings);
+  const evidence = normalizeEvidenceList(value.evidence, resultUrls, citationUrls, warnings, kind !== "text");
   if (!evidence.length) {
     addWarning(warnings, "finding-dropped");
     return null;
+  }
+  if (kind === "text") {
+    return {
+      title: value.title, eventType: value.eventType, eventDate: value.eventDate, evidence,
+      ...Object.fromEntries(["targetId", "targetType", "year", "region", "platform", "seasonNumber", "category"]
+        .filter((key) => value[key] != null).map((key) => [key, value[key]])),
+    };
   }
   if (kind === "work") {
     const allowed = ["eventType", "eventDate", "platform", "seasonNumber", "evidence"];
@@ -438,16 +459,6 @@ function normalizeFinding(value, kind, request, resultUrls, citationUrls, warnin
   }
   if (kind !== "person" && value.seasonNumber === undefined && value.eventType !== "staffelstart") {
     addWarning(warnings, "optional-fields-filled");
-  }
-  if (kind === "text") {
-    const relationEvidence = normalizeEvidenceList(
-      value.relationEvidence, resultUrls, citationUrls, warnings,
-    );
-    if (!relationEvidence.length) {
-      addWarning(warnings, "finding-dropped");
-      return null;
-    }
-    return { ...base, relationEvidence };
   }
   if (kind === "title_group"
       && request.discoveryMode === RADAR_WEBSEARCH_TITLE_GROUP_DISCOVERY_MODE) {
@@ -505,9 +516,11 @@ function responsePresentation(parsedText, warnings) {
 }
 
 export function parseAnthropicRadarWebsearchResponse(value, request, setupInput, checkedAt) {
-  const setup = validateRadarWebsearchProviderSetup(setupInput);
+  const setup = validateRadarWebsearchProviderSetup(setupInput, { textTarget: request.kind === "text" });
   const usage = providerUsage(value);
-  if (!usage || usage.searchRequests !== 1) {
+  const textTarget = request.kind === "text";
+  const maxUses = textTarget ? RADAR_TEXT_MAX_USES : 1;
+  if (!usage || usage.searchRequests < 1 || usage.searchRequests > maxUses) {
     throw new RadarWebsearchProviderError("provider-usage-invalid", usage);
   }
   if (!Array.isArray(value?.content)) {
@@ -520,26 +533,31 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
     block?.type === "server_tool_use" && block?.name === "web_search"
   ));
   const results = value.content.filter((block) => block?.type === "web_search_tool_result");
-  if (uses.length !== 1 || results.length !== 1) addWarning(warnings, "tool-blocks-normalized");
+  if (textTarget && (uses.length > maxUses || results.length > maxUses)) throw new RadarWebsearchProviderError("provider-tool-shape-invalid", usage);
+  if (uses.length !== usage.searchRequests || results.length !== uses.length) addWarning(warnings, "tool-blocks-normalized");
   const useIds = new Set(uses.map((entry) => entry.id).filter((entry) => typeof entry === "string"));
 
   const resultUrls = new Set();
   for (const result of results) {
     if (plain(result.content) && result.content.type === "web_search_tool_result_error") {
+      if (textTarget) { addWarning(warnings, "search-step-failed"); continue; }
       throw new RadarWebsearchProviderError("provider-tool-error", usage);
     }
     if (!Array.isArray(result.content)) {
       addWarning(warnings, "tool-blocks-normalized");
       continue;
     }
-    if (useIds.size && !useIds.has(result.tool_use_id)) addWarning(warnings, "tool-blocks-normalized");
+    if (useIds.size && !useIds.has(result.tool_use_id)) {
+      addWarning(warnings, "tool-blocks-normalized");
+      if (textTarget) continue;
+    }
     for (const item of result.content) {
       const parsed = item?.type === "web_search_result" ? directUrl(item.url) : null;
-      if (!parsed || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
+      if (!parsed || (!textTarget && !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains))) {
         addWarning(warnings, "search-result-dropped");
         continue;
       }
-      if (resultUrls.size < RADAR_WEBSEARCH_MAX_RESULTS) resultUrls.add(item.url);
+      if (resultUrls.size < (textTarget ? 100 : RADAR_WEBSEARCH_MAX_RESULTS)) resultUrls.add(item.url);
       else addWarning(warnings, "search-results-truncated");
     }
   }
@@ -555,7 +573,7 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
       const parsed = citation?.type === "web_search_result_location"
         ? directUrl(citation.url) : null;
       if (!parsed || !resultUrls.has(citation.url)
-          || !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains)) {
+          || (!textTarget && !hostAllowed(parsed.hostname.toLowerCase(), setup.allowedDomains))) {
         addWarning(warnings, "citation-dropped");
         continue;
       }
@@ -615,7 +633,7 @@ export function parseAnthropicRadarWebsearchResponse(value, request, setupInput,
   if (kind === "text") {
     return Object.freeze({
       envelope: Object.freeze({
-        searchResultCount: resultUrls.size,
+        searchResultCount: Math.min(resultUrls.size, RADAR_WEBSEARCH_MAX_RESULTS),
         ...presentation,
         response: Object.freeze({
           status: parsed.status,
@@ -702,7 +720,7 @@ export function createAnthropicRadarWebsearchAdapter({
         || typeof reserveCost !== "function" || typeof settleCost !== "function"
         || typeof fetchImpl !== "function") setupError();
 
-    const setup = validateRadarWebsearchProviderSetup(await loadSetup());
+    const setup = validateRadarWebsearchProviderSetup(await loadSetup(request), { textTarget: request.kind === "text" });
     const body = buildAnthropicRadarWebsearchBody(request, setup);
     const reservationUsdCent = estimateRadarWebsearchReservation(body, setup);
     telemetry.phaseCode = "cost-reservation";
@@ -713,7 +731,7 @@ export function createAnthropicRadarWebsearchAdapter({
         targetId: request.targetId,
         operationId: providerOperationId,
         reservationUsdCent,
-        searchRequests: 1,
+        searchRequests: body.tools[0].max_uses,
       });
     } catch {
       telemetry.reservationStatus = "unknown";

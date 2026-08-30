@@ -277,7 +277,7 @@ function adapterHarness({
   const fetchCalls = [];
   const reserveCalls = [];
   const settleCalls = [];
-  const effectiveSetup = { ...setup, ...setupPatch };
+  const effectiveSetup = { ...setup, maxTokens: 2400, taskCapUsdCent: 20, ...setupPatch };
   const adapter = createAnthropicRadarWebsearchAdapter({
     apiKey: "mock-api-key-never-logged",
     loadSetup: async () => effectiveSetup,
@@ -442,7 +442,7 @@ await check("Freitext-Codeblock rettet einen belegten Fund und verwirft ein kapu
   assert.match(result.displayText, /Nur belegte Funde/);
   assert.ok(result.warnings.includes("json-extracted-from-text"));
   assert.equal(repository.calls.upserts, 1);
-  assert.equal(result.feed.events[0].targetKey, "imdb:tt14409336");
+  assert.match(result.feed.events[0].targetKey, /^release:v1:/);
   assert.equal(harness.fetchCalls.length, 1);
   assert.equal(harness.reserveCalls.length, 1);
   assert.equal(harness.settleCalls.length, 1);
@@ -680,6 +680,36 @@ await check("Direkter Live-Skriptaufruf ohne internen Runner-Guard bleibt netzfr
     /fest verdrahteten npm-Budgetweg/,
   );
   assert.equal(fetches, 0);
+});
+
+await check("Radar-Once wählt ausschließlich eigenes Textziel, sucht mehrstufig und liest echten Feedvertrag zurück", async () => {
+  const env={KD_SB_URL:"https://projekt-ref.supabase.co",KD_SB_ANON:"sb_publishable_test_1234567890",
+    KD_TESTA_USER:"testa",KD_TESTA_PASS:"mock-only-password",KD_MAIL_DOMAIN:"login.kinodreieck.at",
+    KD_AI_FUNKTION:"ai-task",KD_ORIGIN:"https://staging.kinodreieck.at",
+    [RADAR_WEBSEARCH_ONCE_ENV]:"keychain-budget-guard-v1"};
+  for (const status of ["confirmed","insufficient_evidence"]) {
+    let providerCalls=0, feedCalls=0;
+    const found={eventId:"01000000-0000-4000-8000-000000000001",eventVersionId:"02000000-0000-4000-8000-000000000002",
+      targetId:"release:v1:0000111122223333",title:"Neues Beispielwerk",targetType:"series",category:"special",
+      eventType:"serienstart",date:"2026-10-10",region:"global",platform:"-",lifecycleStatus:"scheduled",verificationStatus:"confirmed",
+      evidence:[{sourceId:"web:public.example",sourceDomain:"public.example",url:"https://public.example/start",retrievedAt:"2026-08-30T10:00:00Z"}]};
+    const feed=() => ({format:"kd-radar-pilot-feed-v2",revision:1,checksum:"a".repeat(64),reconciledAt:"2026-08-30T10:00:00Z",
+      subscriptions:[{targetId:textTarget.targetId,targetType:"text",title:textTarget.targetText,region:"AT",scope:"all",status:"active",updatedAt:"2026-08-30T10:00:00Z"}],
+      events:providerCalls && status==="confirmed" ? [found] : [],receipts:[],operationAcks:[],radarReview:true,personResults:[]});
+    const output=[];
+    const result=await runRadarWebsearchOnce({env,ausgabe:(line) => output.push(line),fetchImpl:async (url,options) => {
+      if (String(url).includes("/auth/v1/token")) return response({access_token:"mock-session-token"});
+      if (String(url).endsWith("/functions/v1/ai-task")) {assert.equal(JSON.parse(options.body).task,"health");return response(budgetBody(providerCalls?3:0));}
+      if (String(url).endsWith("/rpc/kd_radar_pilot_feed")) {feedCalls++;return response(feed());}
+      if (String(url).endsWith("/functions/v1/radar-websearch-task")) {
+        providerCalls++; assert.deepEqual(JSON.parse(options.body),{targetId:textTarget.targetId,targetText:textTarget.targetText});
+        return response({ok:true,status,writes:status==="confirmed"?1:0,providerRequests:1,searchRequests:3,feed:feed()});
+      }
+      throw new Error("unexpected-mock-url");
+    }});
+    assert.equal(result.status,status);assert.equal(providerCalls,1);assert.equal(feedCalls,2);
+    assert.ok(output.every((line) => !line.includes(textTarget.targetText) && !line.includes(textTarget.targetId)));
+  }
 });
 
 const expectedLedgerBaseline = Object.freeze([
