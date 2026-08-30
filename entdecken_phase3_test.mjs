@@ -944,6 +944,72 @@ try {
   });
   await cageUi.cleanup();
 
+  const serverPersonIdentity = {
+    personExternalId: "wikidata:Q999999", name: "Beispiel Person", role: "director", canonical: true,
+  };
+  const serverPersonTargetId = "person:wikidata:Q999999:director";
+  const serverPersonUpsertId = "20000000-0000-4000-8000-000000000001";
+  const serverPersonRemoveId = "20000000-0000-4000-8000-000000000002";
+  const serverPersonQueued = queueAccountPersonRadarChange(
+    createEmptyLocalRadar({ authority: "account-cache" }),
+    {
+      operationId: serverPersonUpsertId, action: "upsert", identity: serverPersonIdentity,
+      targetId: serverPersonTargetId, now,
+    },
+  );
+  assert.equal(serverPersonQueued.ok, true);
+  const serverPersonAcked = acknowledgeAccountRadarPilotSubscription(serverPersonQueued.state, serverPersonUpsertId, {
+    operationId: serverPersonUpsertId, targetId: serverPersonTargetId,
+    status: "active", revision: 1, checksum,
+  });
+  assert.equal(serverPersonAcked.ok, true);
+  const serverPersonChanges = [];
+  let serverPersonRemoveQueue = null;
+  const serverPersonUi = await mount(EntdeckenTab, {
+    ...baseProps, accountMode: true, radarState: serverPersonAcked.state,
+    onPersonRadarChange(entry, action) {
+      serverPersonChanges.push({ entry, action });
+      serverPersonRemoveQueue = queueAccountPersonRadarChange(serverPersonAcked.state, {
+        operationId: serverPersonRemoveId, action,
+        identity: {
+          personExternalId: entry.personExternalId, name: entry.name, role: entry.role, canonical: true,
+        },
+        targetId: `person:${entry.personExternalId}:${entry.role}`, now,
+      });
+    },
+  });
+  await act(async () => {
+    serverPersonUi.container.querySelector('button[aria-label="Entdecken verwalten"]').click();
+    await tick();
+  });
+  const serverPersonRow = [...document.querySelectorAll(".kd-entdecken-verwalten-liste li")]
+    .find((entry) => /Beispiel Person/.test(entry.textContent));
+  check("Serverbestätigte Person bietet in Entdecken verwalten ausschließlich Entfernen an", () => {
+    assert.ok(serverPersonRow);
+    assert.deepEqual([...serverPersonRow.querySelectorAll("button")].map((entry) => entry.textContent), ["Entfernen"]);
+  });
+  await act(async () => { button(serverPersonRow, "Entfernen").click(); await tick(); });
+  check("Serverbestätigte Person löst genau einen remove-Aufruf derselben Identity ohne Providerarbeit aus", () => {
+    assert.equal(serverPersonChanges.length, 1);
+    assert.equal(serverPersonChanges[0].action, "remove");
+    assert.deepEqual({
+      personExternalId: serverPersonChanges[0].entry.personExternalId,
+      name: serverPersonChanges[0].entry.name,
+      role: serverPersonChanges[0].entry.role,
+    }, {
+      personExternalId: serverPersonIdentity.personExternalId,
+      name: serverPersonIdentity.name,
+      role: serverPersonIdentity.role,
+    });
+    assert.equal(serverPersonRemoveQueue.ok, true);
+    assert.equal(serverPersonRemoveQueue.createsProviderJob, false);
+    assert.equal(serverPersonRemoveQueue.state.outbox.length, 1);
+    assert.equal(serverPersonRemoveQueue.state.outbox[0].action, "remove");
+    assert.equal(serverPersonRemoveQueue.state.outbox[0].personExternalId, serverPersonIdentity.personExternalId);
+    assert.equal(serverPersonRemoveQueue.state.outbox[0].personRole, serverPersonIdentity.role);
+  });
+  await serverPersonUi.cleanup();
+
   const identity = { personExternalId: "wikidata:Q42869", name: "Nicolas Cage", role: "actor", canonical: true };
   const personCatalog = [{ targetId: "watchmode:101", targetType: "work", title: "Dream Scenario", year: 2023 }];
   let personState = upsertGuestPersonRadarSubscription(
@@ -951,7 +1017,7 @@ try {
   ).state;
   let personUi;
   const renderPersonProps = () => ({
-    ...baseProps, radarState: personState,
+    ...baseProps, radarState: personState, onPersonRadarChange() {},
   });
   personUi = await mount(EntdeckenTab, renderPersonProps());
   await act(async () => { button(personUi.container, "Radar").click(); await tick(); });
@@ -961,6 +1027,19 @@ try {
     assert.doesNotMatch(personUi.container.textContent, /tägliche Prüfung|täglichen Prüfungen/i);
     assert.doesNotMatch(personUi.container.innerHTML, /wikidata:Q42869/);
     assert.equal(button(personUi.container, "Jetzt prüfen"), undefined);
+  });
+  await act(async () => {
+    personUi.container.querySelector('button[aria-label="Entdecken verwalten"]').click();
+    await tick();
+  });
+  check("Lokale Person behält Pausieren und Entfernen in Entdecken verwalten", () => {
+    const row = [...document.querySelectorAll(".kd-entdecken-verwalten-liste li")]
+      .find((entry) => /Nicolas Cage/.test(entry.textContent));
+    assert.deepEqual([...row.querySelectorAll("button")].map((entry) => entry.textContent), ["Pausieren", "Entfernen"]);
+  });
+  await act(async () => {
+    document.querySelector('button[aria-label="Entdecken verwalten schließen und zurück"]').click();
+    await tick();
   });
   const personResponse = {
     status: "confirmed", checkedAt: "2026-08-18T10:01:00.000Z",

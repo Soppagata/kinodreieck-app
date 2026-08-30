@@ -109,8 +109,8 @@ function ManageDialog({
             })}</ul> : <p className="kd-entdecken-leer">Noch kein Ziel im Radar.</p>}
             {people.length ? <ul className="kd-entdecken-verwalten-liste">{people.map((entry) => <li key={`${entry.personExternalId}|${entry.role}`}>
               <span><strong>{entry.name}</strong><small>{ROLLEN_LABEL[entry.role]} · {entry.status === "active" ? "Aktiv" : "Pausiert"}</small></span>
-              {entry.authority === "local" && onPersonRadarChange ? <div>
-                <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button>
+              {onPersonRadarChange ? <div>
+                {entry.authority === "local" ? <button type="button" onClick={() => onPersonRadarChange(entry, entry.status === "active" ? "pause" : "upsert")}>{entry.status === "active" ? "Pausieren" : "Fortsetzen"}</button> : null}
                 <button type="button" onClick={() => onPersonRadarChange(entry, "remove")}>Entfernen</button>
               </div> : <small>Änderung derzeit nicht verfügbar.</small>}
             </li>)}</ul> : null}
