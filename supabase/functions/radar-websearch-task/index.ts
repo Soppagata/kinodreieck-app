@@ -59,9 +59,15 @@ function envKey(newName: string, legacyName: string): string {
   return Deno.env.get(legacyName) || "";
 }
 
-async function accountFromRequest(req: Request, supabaseUrl: string, publishableKey: string): Promise<string> {
+type AuthenticatedRadarRequest = Readonly<{ accountId: string; token: string }>;
+
+async function accountFromRequest(
+  req: Request,
+  supabaseUrl: string,
+  publishableKey: string,
+): Promise<AuthenticatedRadarRequest | null> {
   const token = req.headers.get("Authorization")?.match(/^Bearer\s+(\S+)$/i)?.[1] || "";
-  if (!token || !supabaseUrl || !publishableKey) return "";
+  if (!token || !supabaseUrl || !publishableKey) return null;
   try {
     const client = createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -69,8 +75,10 @@ async function accountFromRequest(req: Request, supabaseUrl: string, publishable
     const { data, error } = await client.auth.getClaims(token);
     const claims = (data as { claims?: Record<string, unknown> } | null)?.claims;
     const accountId = typeof claims?.sub === "string" ? claims.sub : "";
-    return !error && claims?.role === "authenticated" && UUID_FORM.test(accountId) ? accountId : "";
-  } catch { return ""; }
+    return !error && claims?.role === "authenticated" && UUID_FORM.test(accountId)
+      ? { accountId, token }
+      : null;
+  } catch { return null; }
 }
 
 function sourceRows(rows: unknown): Array<Record<string, unknown>> {
@@ -225,6 +233,7 @@ export function createRadarWebsearchHandler({
     }
 
     let accountId = "";
+    let userToken = "";
     let targetId = "";
     let rawTargetText: string | null = null;
     let dailyClaim: {
@@ -234,8 +243,10 @@ export function createRadarWebsearchHandler({
     } | null = null;
 
     if (!scheduledMode) {
-      accountId = await accountFromRequest(req, supabaseUrl, publishableKey);
-      if (!accountId) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      const authenticatedRequest = await accountFromRequest(req, supabaseUrl, publishableKey);
+      if (!authenticatedRequest) return json({ ok: false, status: "forbidden", writes: 0 }, 403, origin);
+      accountId = authenticatedRequest.accountId;
+      userToken = authenticatedRequest.token;
       let body: unknown;
       try { body = await req.json(); } catch { return json({ ok: false, status: "forbidden", writes: 0 }, 400, origin); }
       if (!body || typeof body !== "object" || Array.isArray(body)
@@ -307,7 +318,7 @@ export function createRadarWebsearchHandler({
     }
     const user = scheduledMode ? null : createClient(supabaseUrl, publishableKey, {
       auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
+      global: { headers: { Authorization: `Bearer ${userToken}` } },
     });
     const assertDailyLease = async () => {
       if (!dailyClaim) return;

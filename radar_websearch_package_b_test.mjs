@@ -1184,7 +1184,10 @@ await check("Moderner Scheduler-Key ist strikt apikey-only und alle Negativpfade
 await check("Function-Konfiguration delegiert JWT-Prüfung an den Handler und Produktcode enthält keine Rohlogs", () => {
   assert.match(config, /\[functions\.radar-websearch-task\][\s\S]*?verify_jwt\s*=\s*false/);
   assert.match(functionIndex, /client\.auth\.getClaims\(token\)[\s\S]*?claims\?\.role === "authenticated"/);
-  assert.match(functionIndex, /accountId = await accountFromRequest\(req, supabaseUrl, publishableKey\)/);
+  assert.match(functionIndex, /const authenticatedRequest = await accountFromRequest\(req, supabaseUrl, publishableKey\)/);
+  assert.match(functionIndex, /accountId = authenticatedRequest\.accountId;[\s\S]*?userToken = authenticatedRequest\.token;/);
+  assert.match(functionIndex, /Authorization: `Bearer \$\{userToken\}`/);
+  assert.doesNotMatch(functionIndex, /Authorization: `Bearer \$\{token\}`/);
   assert.match(functionIndex, /kd_radar_websearch_auftrag_starten/);
   assert.match(functionIndex, /kd_private_provider_allowed/);
   assert.equal((adapterSource.match(/\bfetchImpl\(/g) || []).length, 1);
