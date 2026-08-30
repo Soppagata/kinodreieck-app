@@ -1198,7 +1198,9 @@ await check("Daily-Aktivierung stoppt bei Settings-Drift und behaelt alle besteh
 
 await check("Scheduled-Function ist bodylos, service-role-only und antwortet ohne Konto- oder Zielpayload", () => {
   assert.match(functionIndex, /const RADAR_REFRESH_HEADER = "x-kd-radar-refresh"/);
-  assert.match(functionIndex, /const SCHEDULED_REFRESH_VALUE = "scheduled-v1"/);
+  const functionContract = functionIndex.match(/const SCHEDULED_REFRESH_VALUE = "([^"]+)"/)?.[1];
+  assert.equal(functionContract, "scheduled-144h-v1");
+  assert.doesNotMatch(functionIndex, /const SCHEDULED_REFRESH_VALUE = "scheduled-v1"/);
   assert.match(functionIndex, /scheduledMode && \(req\.body !== null/);
   assert.match(functionIndex, /req\.headers\.get\("apikey"\) !== serviceKey \|\| token !== serviceKey/);
   assert.match(functionIndex, /admin\.rpc\("kd_radar_daily_claim"\)/);
@@ -1223,7 +1225,16 @@ await check("Daily-Workflow laeuft nur per Zeitplan, seriell hoechstens zehnmal 
   assert.match(dailyWorkflow, /--connect-timeout 10/);
   assert.match(dailyWorkflow, /--max-time 150/);
   assert.match(dailyWorkflow, /--output \/dev\/null/);
-  assert.match(dailyWorkflow, /x-kd-radar-refresh: scheduled-v1/);
+  const workflowContract = dailyWorkflow.match(/x-kd-radar-refresh: ([^"\s]+)/)?.[1];
+  const functionContract = functionIndex.match(/const SCHEDULED_REFRESH_VALUE = "([^"]+)"/)?.[1];
+  assert.equal(workflowContract, "scheduled-144h-v1");
+  assert.equal(workflowContract, functionContract);
+  assert.notEqual(workflowContract, "scheduled-v1");
+  assert.match(functionIndex, /\(refreshHeader !== null && !scheduledMode\)\) \{[\s\S]*?return json\(\{ ok: false, status: "forbidden", writes: 0 \}, 403, origin\);/u);
+  const rejectsScheduledHeaderBeforeClient = functionIndex.indexOf("(refreshHeader !== null && !scheduledMode)");
+  assert.ok(rejectsScheduledHeaderBeforeClient >= 0);
+  assert.ok(rejectsScheduledHeaderBeforeClient < functionIndex.indexOf("createClient(supabaseUrl, serviceKey"));
+  assert.ok(rejectsScheduledHeaderBeforeClient < functionIndex.indexOf('admin.rpc("kd_radar_daily_claim")'));
   assert.match(dailyWorkflow, /if \[ "\$http_status" = "204" \]; then[\s\S]*?exit 0/);
   assert.doesNotMatch(dailyWorkflow, /--retry|--location|response_file|JSON\.parse|\bcat\b/);
   assert.doesNotMatch(dailyWorkflow, /targetId|target_id|accountId|account_id|console\.|set -x|printenv/);

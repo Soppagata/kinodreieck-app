@@ -22,7 +22,7 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:5173",
 ]);
 const RADAR_REFRESH_HEADER = "x-kd-radar-refresh";
-const SCHEDULED_REFRESH_VALUE = "scheduled-v1";
+const SCHEDULED_REFRESH_VALUE = "scheduled-144h-v1";
 const UUID_FORM = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VIENNA_DAY_FORM = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
